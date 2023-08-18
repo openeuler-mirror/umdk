@@ -1,0 +1,307 @@
+// SPDX-License-Identifier: GPL-2.0
+/* Huawei UDMA Linux driver
+ * Copyright (c) 2023-2023 Hisilicon Limited.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ *
+ */
+
+#include "hns3_udma_u_common.h"
+#include "hns3_udma_u_db.h"
+#include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_segment.h"
+#include "hns3_udma_u_jfr.h"
+
+static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
+				const urma_jfr_cfg_t *cfg)
+{
+	if (!cfg->max_sge ||
+	    !cfg->depth || cfg->depth > udma_ctx->max_jfr_wr ||
+	    cfg->max_sge > udma_ctx->max_jfr_sge) {
+		URMA_LOG_ERR("invalid jfr cfg, depth = %u, max_sge = %u.\n",
+			     cfg->depth, cfg->max_sge);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static void init_jfr_param(struct udma_u_jfr *jfr, const urma_jfr_cfg_t *cfg)
+{
+	jfr->wqe_cnt = roundup_pow_of_two(cfg->depth);
+
+	if (cfg->trans_mode == URMA_TM_UM) {
+		/* reserved for UM header */
+		jfr->max_sge = roundup_pow_of_two(cfg->max_sge + 1);
+		jfr->user_max_sge = jfr->max_sge - 1;
+	} else {
+		jfr->max_sge = roundup_pow_of_two(cfg->max_sge);
+		jfr->user_max_sge = jfr->max_sge;
+	}
+
+	jfr->wqe_shift = udma_ilog32(roundup_pow_of_two(UDMA_HW_SGE_SIZE *
+						       jfr->max_sge));
+	jfr->trans_mode = cfg->trans_mode;
+}
+
+static int alloc_jfr_idx_que(struct udma_u_jfr *jfr)
+{
+	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
+	uint32_t buf_size;
+
+	idx_que->entry_shift = udma_ilog32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
+	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
+	if (!idx_que->bitmap)
+		return ENOMEM;
+
+	buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, idx_que->entry_shift);
+	if (udma_alloc_buf(&idx_que->idx_buf, buf_size, UDMA_HW_PAGE_SIZE)) {
+		udma_bitmap_free(idx_que->bitmap);
+		idx_que->bitmap = NULL;
+		return ENOMEM;
+	}
+
+	idx_que->head = 0;
+	idx_que->tail = 0;
+
+	return 0;
+}
+
+static int alloc_jfr_wqe_buf(struct udma_u_jfr *jfr)
+{
+	int buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, jfr->wqe_shift);
+
+	return udma_alloc_buf(&jfr->wqe_buf, buf_size, UDMA_HW_PAGE_SIZE);
+}
+
+static int alloc_jfr_buf(struct udma_u_jfr *jfr)
+{
+	int ret;
+
+	ret = alloc_jfr_idx_que(jfr);
+	if (ret) {
+		URMA_LOG_ERR("failed to alloc jfr idx que.\n");
+		return ENOMEM;
+	}
+
+	ret = alloc_jfr_wqe_buf(jfr);
+	if (ret) {
+		URMA_LOG_ERR("failed to alloc jfr wqe buf.\n");
+		goto err_alloc_buf;
+	}
+
+	jfr->wrid = (uint64_t *)calloc(jfr->wqe_cnt, sizeof(*jfr->wrid));
+	if (!jfr->wrid) {
+		URMA_LOG_ERR("failed to alloc jfr wrid.\n");
+		goto err_alloc_wrid;
+	}
+
+	return 0;
+
+err_alloc_wrid:
+	udma_free_buf(&jfr->wqe_buf);
+err_alloc_buf:
+	udma_free_buf(&jfr->idx_que.idx_buf);
+	udma_bitmap_free(jfr->idx_que.bitmap);
+
+	return ENOMEM;
+}
+
+static void free_jfr_buf(struct udma_u_jfr *jfr)
+{
+	free(jfr->wrid);
+	udma_free_buf(&jfr->wqe_buf);
+	udma_free_buf(&jfr->idx_que.idx_buf);
+	udma_bitmap_free(jfr->idx_que.bitmap);
+}
+
+static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
+			       const urma_jfr_cfg_t *cfg)
+{
+	struct udma_create_jfr_resp resp = {};
+	struct udma_create_jfr_ucmd cmd = {};
+	urma_cmd_udrv_priv_t udata = {};
+	int ret;
+
+	cmd.buf_addr = (uintptr_t)jfr->wqe_buf.buf;
+	cmd.idx_addr = (uintptr_t)jfr->idx_que.idx_buf.buf;
+	cmd.db_addr = (uintptr_t)jfr->db;
+
+	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
+	ret = urma_cmd_create_jfr(ctx, &jfr->urma_jfr, cfg, &udata);
+	if (ret)
+		return ret;
+	jfr->jfrn = jfr->urma_jfr.jfr_id.id;
+	jfr->cap_flags = resp.jfr_caps;
+
+	return 0;
+}
+
+static int insert_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
+{
+	struct udma_jfr_node *jfr_node;
+
+	jfr_node = (struct udma_jfr_node *)malloc(sizeof(struct udma_jfr_node));
+	if (!jfr_node) {
+		URMA_LOG_ERR("failed to alloc jfr node.\n");
+		return ENOMEM;
+	}
+	jfr_node->jfr = jfr;
+	(void)pthread_rwlock_wrlock(&ctx->jfr_table_lock);
+	if (!udma_hmap_insert(&ctx->jfr_table, &jfr_node->node, jfr->urma_jfr.jfr_id.id)) {
+		free(jfr_node);
+		jfr_node = NULL;
+		URMA_LOG_ERR("failed to insert jfr_node");
+		(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
+		return EINVAL;
+	}
+	(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
+
+	return 0;
+}
+
+static void delete_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
+{
+	struct udma_jfr_node *jfr_node;
+	struct udma_hmap_node *node;
+
+	(void)pthread_rwlock_wrlock(&ctx->jfr_table_lock);
+	node = udma_hmap_first_with_hash(&ctx->jfr_table, jfr->urma_jfr.jfr_id.id);
+	if (node) {
+		jfr_node = to_udma_jfr_node(node);
+		if (jfr_node->jfr == jfr) {
+			udma_hmap_remove(&ctx->jfr_table, node);
+			(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
+			free(jfr_node);
+			return;
+		}
+	}
+	(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
+	URMA_LOG_ERR("failed to find jfr node.\n");
+}
+
+int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
+{
+	urma_seg_cfg_t seg_cfg = {};
+	urma_key_t key;
+
+	jfr->um_header_que = (struct um_header *)calloc(jfr->wqe_cnt,
+							sizeof(struct um_header));
+	if (!jfr->um_header_que) {
+		URMA_LOG_ERR("failed to alloc jfr grh head que.\n");
+		return ENOMEM;
+	}
+
+	seg_cfg.flag.bs.key_policy = 1;
+	seg_cfg.flag.bs.cacheable = 0;
+	seg_cfg.flag.bs.access = URMA_ACCESS_LOCAL_WRITE;
+	seg_cfg.va = (uint64_t)jfr->um_header_que;
+	seg_cfg.len = jfr->wqe_cnt * UDMA_JFR_GRH_HEAD_SZ;
+	seg_cfg.key = &key;
+
+	jfr->um_header_seg = udma_u_register_seg(ctx, &seg_cfg);
+	if (!jfr->um_header_seg) {
+		free(jfr->um_header_que);
+		URMA_LOG_ERR("failed to register seg for grh head que.\n");
+		return ENOMEM;
+	}
+
+	return 0;
+}
+
+void free_um_header_que(struct udma_u_jfr *jfr)
+{
+	udma_u_unregister_seg(jfr->um_header_seg, true);
+	jfr->um_header_seg = NULL;
+
+	free(jfr->um_header_que);
+	jfr->um_header_que = NULL;
+}
+
+urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, const urma_jfr_cfg_t *cfg)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
+	struct udma_u_jfr *jfr;
+
+	if (verify_jfr_init_attr(udma_ctx, cfg))
+		return NULL;
+
+	jfr = (struct udma_u_jfr *)calloc(1, sizeof(*jfr));
+	if (!jfr)
+		return NULL;
+
+	jfr->lock_free = cfg->flag.bs.lock_free;
+	if (pthread_spin_init(&jfr->lock, PTHREAD_PROCESS_PRIVATE))
+		goto err_init_lock;
+
+	init_jfr_param(jfr, cfg);
+	if (alloc_jfr_buf(jfr))
+		goto err_alloc_buf;
+
+	jfr->db = (uint32_t *)udma_alloc_sw_db(udma_ctx, UDMA_JFR_TYPE_DB);
+	if (!jfr->db)
+		goto err_alloc_db;
+
+	if (exec_jfr_create_cmd(ctx, jfr, cfg)) {
+		URMA_LOG_ERR("ubcore create jfr failed.\n");
+		goto err_create_jfr;
+	}
+
+	if (insert_jfr_node(udma_ctx, jfr)) {
+		URMA_LOG_ERR("insert jfr node failed.\n");
+		goto err_insert_jfr;
+	}
+
+	if (cfg->trans_mode == URMA_TM_UM) {
+		if (alloc_um_header_que(ctx, jfr)) {
+			URMA_LOG_ERR("alloc grh que failed.\n");
+			goto err_insert_jfr;
+		}
+	}
+
+	return &jfr->urma_jfr;
+
+err_insert_jfr:
+	urma_cmd_delete_jfr(&jfr->urma_jfr);
+err_create_jfr:
+	udma_free_sw_db(udma_ctx, jfr->db, UDMA_JFR_TYPE_DB);
+err_alloc_db:
+	free_jfr_buf(jfr);
+err_alloc_buf:
+	pthread_spin_destroy(&jfr->lock);
+err_init_lock:
+	free(jfr);
+
+	return NULL;
+}
+
+urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(jfr->urma_ctx);
+	struct udma_u_jfr *udma_jfr = to_udma_jfr(jfr);
+	int ret;
+
+	if (udma_jfr->trans_mode == URMA_TM_UM)
+		free_um_header_que(udma_jfr);
+
+	delete_jfr_node(udma_ctx, udma_jfr);
+	ret = urma_cmd_delete_jfr(jfr);
+	if (ret) {
+		URMA_LOG_ERR("urma_cmd_delete_jfr failed, ret:%d.\n", ret);
+		return URMA_FAIL;
+	}
+
+	udma_free_sw_db(udma_ctx, udma_jfr->db, UDMA_JFR_TYPE_DB);
+	free_jfr_buf(udma_jfr);
+	pthread_spin_destroy(&udma_jfr->lock);
+	free(udma_jfr);
+
+	return URMA_SUCCESS;
+}

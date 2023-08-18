@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdint.h>
+#include "hns3_udma_u_jfr.h"
 #include "hns3_udma_u_jfc.h"
 #include "hns3_udma_u_jfs.h"
 #include "hns3_udma_u_segment.h"
@@ -30,6 +31,8 @@ static urma_ops_t g_udma_u_ops = {
 	.delete_jfc = udma_u_delete_jfc,
 	.create_jfs = udma_u_create_jfs,
 	.delete_jfs = udma_u_delete_jfs,
+	.create_jfr = udma_u_create_jfr,
+	.delete_jfr = udma_u_delete_jfr,
 	.register_seg = udma_u_register_seg,
 	.unregister_seg = udma_u_unregister_seg,
 };
