@@ -72,10 +72,6 @@ struct udma_jfr_node {
 	struct udma_hmap_node	node;
 };
 
-struct udma_jfs_qp_node {
-	struct udma_hmap_node	node;
-};
-
 struct udma_jetty_node {
 	struct udma_hmap_node	node;
 };

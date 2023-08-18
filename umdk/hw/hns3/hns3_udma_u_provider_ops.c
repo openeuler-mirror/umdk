@@ -17,11 +17,15 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdint.h>
+#include "hns3_udma_u_jfs.h"
 #include "hns3_udma_u_provider_ops.h"
 
 static urma_ops_t g_udma_u_ops = {
 	/* OPs name */
 	.name = "UDMA_CP_OPS",
+
+	.create_jfs = udma_u_create_jfs,
+	.delete_jfs = udma_u_delete_jfs,
 };
 
 static urma_match_entry_t match_table[] = {
