@@ -1,0 +1,70 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Huawei UDMA Linux driver
+ * Copyright (c) 2023-2023 Hisilicon Limited.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ *
+ */
+
+#ifndef _UDMA_U_JETTY_H
+#define _UDMA_U_JETTY_H
+
+#include "urma_types.h"
+#include "urma_provider.h"
+#include "hns3_udma_u_common.h"
+#include "hns3_udma_u_jfr.h"
+#include "hns3_udma_u_jfs.h"
+
+#define UDMA_TGT_NODE_TABLE_SIZE 64
+
+struct rc_node {
+	struct udma_qp			*qp;
+	const urma_target_jetty_t	*tjetty;
+};
+
+struct tgt_node_table {
+	pthread_rwlock_t	rwlock;
+	struct udma_hmap	hmap;
+};
+
+struct udma_u_jetty {
+	urma_jetty_t			urma_jetty;
+	bool				share_jfr;
+	struct udma_u_jfr		*udma_jfr;
+	urma_transport_mode_t		tp_mode;
+	uint32_t			jfs_lock_free;
+	pthread_spinlock_t		lock;
+	union {
+		struct tgt_node_table	*tjetty_tbl;
+		struct rc_node		*rc_node;
+		struct udma_qp		*um_qp;
+	};
+};
+
+struct udma_jetty_node {
+	struct udma_hmap_node	node;
+	struct udma_u_jetty	*jetty;
+};
+
+static inline struct udma_u_jetty *to_udma_jetty(const urma_jetty_t *jetty)
+{
+	return container_of(jetty, struct udma_u_jetty, urma_jetty);
+}
+
+static inline struct udma_jetty_node *to_udma_jetty_node(struct udma_hmap_node *node)
+{
+	return container_of(node, struct udma_jetty_node, node);
+}
+
+urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
+				  const urma_jetty_cfg_t *jetty_cfg);
+urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
+
+#endif /* _UDMA_U_JETTY_H */

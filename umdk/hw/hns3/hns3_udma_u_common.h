@@ -176,6 +176,19 @@ static inline struct udma_hmap_node *udma_hmap_first_with_hash(const struct udma
 	return node;
 }
 
+static inline struct udma_hmap_node *udma_table_first_with_hash(const struct udma_hmap *hmap,
+								pthread_rwlock_t *rwlock,
+								uint32_t hash)
+{
+	struct udma_hmap_node *node;
+
+	(void)pthread_rwlock_rdlock(rwlock);
+	node = udma_hmap_first_with_hash(hmap, hash);
+	(void)pthread_rwlock_unlock(rwlock);
+
+	return node;
+}
+
 static inline bool udma_hmap_insert(struct udma_hmap *hmap, struct udma_hmap_node *node,
 				  uint32_t hash)
 {

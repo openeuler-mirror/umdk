@@ -107,5 +107,8 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, const urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
 				   const urma_jfs_cfg_t *cfg);
+struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
+			      const urma_jfs_cfg_t *jfs_cfg,
+			      uint32_t jetty_id, bool is_jetty);
 
 #endif /* _UDMA_JFS_H */

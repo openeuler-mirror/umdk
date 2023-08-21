@@ -20,6 +20,7 @@
 #include "hns3_udma_u_jfr.h"
 #include "hns3_udma_u_jfc.h"
 #include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
 #include "hns3_udma_u_provider_ops.h"
 
@@ -33,6 +34,8 @@ static urma_ops_t g_udma_u_ops = {
 	.delete_jfs = udma_u_delete_jfs,
 	.create_jfr = udma_u_create_jfr,
 	.delete_jfr = udma_u_delete_jfr,
+	.create_jetty = udma_u_create_jetty,
+	.delete_jetty = udma_u_delete_jetty,
 	.register_seg = udma_u_register_seg,
 	.unregister_seg = udma_u_unregister_seg,
 };

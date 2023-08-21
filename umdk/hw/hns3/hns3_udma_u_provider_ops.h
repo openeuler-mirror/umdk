@@ -68,10 +68,6 @@ struct udma_u_context {
 	void			*reset_state;
 };
 
-struct udma_jetty_node {
-	struct udma_hmap_node	node;
-};
-
 struct udma_reset_state {
 	uint32_t is_reset;
 };
