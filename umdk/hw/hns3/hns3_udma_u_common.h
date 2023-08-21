@@ -34,6 +34,10 @@
 #define BIT_CNT_PER_BYTE	8
 #define BIT_CNT_PER_LONG	(BIT_CNT_PER_BYTE * sizeof(uint64_t))
 
+/* get the structure object from the pointer of the given field by struct type */
+#define CONTAINER_OF_FIELD(field_ptr, struct_type, field) \
+	((struct_type *)(void *)((char *)(field_ptr) - offsetof(struct_type, field)))
+
 #if INT_MAX >= 2147483647
 #define builtin_ilog32_nz(v) \
 	(((int)sizeof(uint32_t) * CHAR_BIT) - __builtin_clz(v))
