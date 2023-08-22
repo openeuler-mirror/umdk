@@ -53,6 +53,11 @@ struct udma_jetty_node {
 	struct udma_u_jetty	*jetty;
 };
 
+struct udma_u_target_jetty {
+	urma_target_jetty_t urma_target_jetty;
+	atomic_uint         refcnt;
+};
+
 static inline struct udma_u_jetty *to_udma_jetty(const urma_jetty_t *jetty)
 {
 	return container_of(jetty, struct udma_u_jetty, urma_jetty);
@@ -61,6 +66,11 @@ static inline struct udma_u_jetty *to_udma_jetty(const urma_jetty_t *jetty)
 static inline struct udma_jetty_node *to_udma_jetty_node(struct udma_hmap_node *node)
 {
 	return container_of(node, struct udma_jetty_node, node);
+}
+
+static inline struct udma_u_target_jetty *to_udma_target_jetty(const urma_target_jetty_t *tjetty)
+{
+	return container_of(tjetty, struct udma_u_target_jetty, urma_target_jetty);
 }
 
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,

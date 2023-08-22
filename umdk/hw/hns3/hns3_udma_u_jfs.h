@@ -55,6 +55,8 @@ struct udma_qp {
 	uint32_t		qp_num;
 	/* shared by jfs and jetty */
 	uint32_t		jetty_id;
+	uint32_t		flags;
+	void			*dwqe_page;
 	struct udma_buf		buf;
 	struct udma_wq		sq;
 	struct udma_sge_ex	ex_sge;
@@ -62,6 +64,12 @@ struct udma_qp {
 	uint32_t		max_inline_data;
 	struct udp_srcport	um_srcport;
 	uint32_t		*sdb;
+};
+
+struct connect_node {
+	struct udma_hmap_node	hmap_node;
+	struct udma_qp		*qp;
+	urma_target_jetty_t	*tjfr;
 };
 
 struct udma_jfs_qp_node {

@@ -72,5 +72,9 @@ static inline struct udma_jfr_node *to_udma_jfr_node(struct udma_hmap_node *node
 
 urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, const urma_jfr_cfg_t *cfg);
 urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr);
+urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
+				       const urma_rjfr_t *rjfr,
+				       const urma_key_t *key);
+urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr, bool force);
 
 #endif /* _UDMA_U_JFR_H */

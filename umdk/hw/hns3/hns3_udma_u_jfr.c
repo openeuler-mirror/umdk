@@ -16,6 +16,7 @@
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
 #include "hns3_udma_u_jfr.h"
 
@@ -302,6 +303,63 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 	free_jfr_buf(udma_jfr);
 	pthread_spin_destroy(&udma_jfr->lock);
 	free(udma_jfr);
+
+	return URMA_SUCCESS;
+}
+
+urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
+				       const urma_rjfr_t *rjfr,
+				       const urma_key_t *key)
+{
+	struct udma_u_target_jetty *udma_target_jfr;
+	urma_cmd_udrv_priv_t udata = {};
+	urma_target_jetty_t *tjfr;
+	urma_tjfr_cfg_t cfg = {};
+	int ret;
+
+	udma_target_jfr = (struct udma_u_target_jetty *)
+			  calloc(1, sizeof(struct udma_u_target_jetty));
+	if (!udma_target_jfr) {
+		URMA_LOG_ERR("udma_target_jfr alloc failed.\n");
+		return NULL;
+	}
+
+	tjfr = &udma_target_jfr->urma_target_jetty;
+	tjfr->urma_ctx = ctx;
+	tjfr->id = rjfr->jfr_id;
+	tjfr->trans_mode = rjfr->trans_mode;
+	cfg.jfr_id = rjfr->jfr_id;
+	cfg.key = key;
+	cfg.trans_mode = rjfr->trans_mode;
+	udma_set_udata(&udata, NULL, 0, NULL, 0);
+	ret = urma_cmd_import_jfr(ctx, tjfr, &cfg, &udata);
+	if (ret) {
+		URMA_LOG_ERR("import jfr failed.\n");
+		free(tjfr);
+		return NULL;
+	}
+
+	atomic_init(&udma_target_jfr->refcnt, 1);
+	return tjfr;
+}
+
+urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr, bool force)
+{
+	struct udma_u_target_jetty *udma_target_jfr = to_udma_target_jetty(target_jfr);
+	int ret;
+
+	if (udma_target_jfr->refcnt > 1) {
+		URMA_LOG_ERR("the target jfr is still being used, id = %d.\n",
+			     target_jfr->id.id);
+		return URMA_FAIL;
+	}
+
+	ret = urma_cmd_unimport_jfr(target_jfr);
+	if (ret != 0) {
+		URMA_LOG_ERR("unimport jfr failed.\n");
+		return URMA_FAIL;
+	}
+	free(target_jfr);
 
 	return URMA_SUCCESS;
 }
