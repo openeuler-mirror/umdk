@@ -33,7 +33,9 @@
 #define UDMA_HW_SGE_SHIFT	4
 #define BIT_CNT_PER_BYTE	8
 #define BIT_CNT_PER_LONG	(BIT_CNT_PER_BYTE * sizeof(uint64_t))
+#define UDMA_DB_CFG0_OFFSET	0x0230
 #define BITS_PER_UINT32		32
+#define BITS_PER_LONG		64
 
 /* get the structure object from the pointer of the given field by struct type */
 #define CONTAINER_OF_FIELD(field_ptr, struct_type, field) \
@@ -63,6 +65,38 @@
 #define check_types_match(expr1, expr2)		\
 	((typeof(expr1) *)0 != (typeof(expr2) *)0)
 
+#define __bf_shf(x) (__builtin_ffsll(x) - 1)
+
+#define BUILD_ASSERT(cond) ((void)sizeof(char[1 - 2 * !(cond)]))
+
+#define GENMASK(h, l) \
+	(((~0UL) << (l)) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
+
+#define FIELD_PREP(_mask, _val)                                                \
+	({                                                                     \
+		((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask);          \
+	})
+
+#define udma_reg_clear(ptr, field)                                             \
+	({                                                                     \
+		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+			((((field) << 32) >> 32) / 32));                       \
+		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
+		*((uint32_t *)_ptr + ((field) >> 32) / 32) &=                  \
+			~htole32(GENMASK(((field) >> 32) % 32,                 \
+			(((field) << 32) >> 32) % 32));                        \
+	})
+
+#define udma_reg_write(ptr, field, val)                                        \
+	({                                                                     \
+		const uint32_t _val = val;                                     \
+		udma_reg_clear(ptr, field);                                    \
+		*((uint32_t *)(ptr) + ((field) >> 32) / 32) |=                 \
+			htole32(FIELD_PREP(GENMASK(((field) >> 32) % 32,       \
+			(((field) << 32) >> 32) % 32), _val));                 \
+	})
+
 #ifndef container_of
 #define container_off(containing_type, member)	\
 	offsetof(containing_type, member)
@@ -72,6 +106,8 @@
 	   - container_off(containing_type, member))			\
 	  + check_types_match(*(member_ptr), ((containing_type *)0)->member))
 #endif
+
+#define udma_to_device_barrier() asm volatile("dsb st" ::: "memory")
 
 struct udma_buf {
 	void			*buf;
@@ -95,6 +131,31 @@ struct udma_db_page {
 	uintptr_t		*bitmap;
 	uint32_t		bitmap_cnt;
 };
+
+struct udma_u_db {
+	uint32_t byte_4;
+	uint32_t parameter;
+};
+
+enum {
+	UDMA_SQ_DB,
+	UDMA_RQ_DB,
+	UDMA_SRQ_DB,
+	UDMA_CQ_DB_PTR,
+	UDMA_CQ_DB_NTR,
+};
+
+struct udma_wqe_data_seg {
+	uint32_t len;
+	uint32_t lkey;
+	uint64_t addr;
+};
+
+#define UDMA_DB_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
+#define UDMA_DB_TAG UDMA_DB_FIELD_LOC(23, 0)
+#define UDMA_DB_CMD UDMA_DB_FIELD_LOC(27, 24)
+#define UDMA_DB_PI UDMA_DB_FIELD_LOC(47, 32)
+#define UDMA_DB_PROD_IDX_M GENMASK(23, 0)
 
 static inline uint64_t roundup_pow_of_two(uint64_t n)
 {
