@@ -218,6 +218,9 @@ static void rc_free_node(struct udma_u_jetty *udma_jetty)
 	if (udma_jetty->rc_node) {
 		qp = udma_jetty->rc_node->qp;
 		if (qp) {
+			if (udma_jetty->rc_node->tjetty)
+				udma_u_unbind_jetty(&udma_jetty->urma_jetty,
+						    false);
 			udma_ctx = to_udma_ctx(udma_jetty->urma_jetty.urma_ctx);
 			udma_free_sw_db(udma_ctx, qp->sdb,
 					UDMA_JETTY_TYPE_DB);
@@ -689,6 +692,130 @@ urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
 	udma_remove_from_qp_table(udma_ctx, tjetty_node->qp->qp_num);
 
 	free_tgt_node(udma_ctx, tjetty_node);
+
+	return URMA_SUCCESS;
+}
+
+static urma_status_t verify_jetty_bind(struct udma_u_jetty *udma_jetty)
+{
+	if (udma_jetty->tp_mode != URMA_TM_RC) {
+		URMA_LOG_ERR("Invalid jetty type.\n");
+		return URMA_EINVAL;
+	}
+
+	if (udma_jetty->rc_node == NULL) {
+		URMA_LOG_ERR("RC node is invalid.\n");
+		return URMA_EINVAL;
+	}
+
+	if (udma_jetty->rc_node->qp == NULL) {
+		URMA_LOG_ERR("RC node qp is null.\n");
+		return URMA_EINVAL;
+	}
+
+	return URMA_SUCCESS;
+}
+
+static urma_status_t exec_jetty_bind_cmd(urma_jetty_t *jetty,
+					 urma_target_jetty_t *tjetty,
+					 struct udma_qp *qp)
+{
+	struct udma_create_tp_resp resp = {};
+	struct udma_create_tp_ucmd cmd = {};
+	urma_cmd_udrv_priv_t udata = {};
+	int ret;
+
+	cmd.is_jetty = true;
+	cmd.ini_id.jetty_id = jetty->jetty_id.id;
+	cmd.tgt_id.jetty_id = tjetty->id.id;
+	cmd.buf_addr = (uint64_t)qp->buf.buf;
+
+	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
+	ret = urma_cmd_bind_jetty(jetty, tjetty, &udata);
+	if (ret)
+		return URMA_FAIL;
+
+	qp->qp_num = resp.qpn;
+	qp->flags = resp.cap_flags;
+	qp->path_mtu = (urma_mtu_t)resp.path_mtu;
+	qp->sq.priority = resp.priority;
+
+	return URMA_SUCCESS;
+}
+
+urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
+				urma_target_jetty_t *tjetty)
+{
+	struct udma_u_target_jetty *udma_target_jetty = to_udma_target_jetty(tjetty);
+	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	int ret;
+
+	ret = verify_jetty_bind(udma_jetty);
+	if (ret) {
+		URMA_LOG_ERR("Invalid input parameters of bind_jetty.\n");
+		return URMA_EINVAL;
+	}
+
+	if (udma_jetty->rc_node->tjetty != NULL) {
+		URMA_LOG_ERR("The jetty has already bind a remote jetty.\n");
+		return URMA_EEXIST;
+	}
+
+	ret = exec_jetty_bind_cmd(jetty, tjetty, udma_jetty->rc_node->qp);
+	if (ret) {
+		URMA_LOG_ERR("exec jetty bind cmd failed.\n");
+		return URMA_FAIL;
+	}
+
+	ret = udma_add_to_qp_table(udma_ctx, jetty, udma_jetty->rc_node->qp,
+				   udma_jetty->rc_node->qp->qp_num);
+	if (ret) {
+		URMA_LOG_ERR("add to qp table failed when bind jetty, ret = %d.\n", ret);
+		goto err_add_to_qp_table;
+	}
+
+	udma_jetty->rc_node->tjetty = tjetty;
+	jetty->remote_jetty = (urma_target_jetty_t *)tjetty;
+	(void)atomic_fetch_add(&udma_target_jetty->refcnt, 1);
+	return URMA_SUCCESS;
+
+err_add_to_qp_table:
+	urma_cmd_unbind_jetty(jetty);
+
+	return URMA_FAIL;
+}
+
+urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty, bool force)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	struct udma_u_target_jetty *udma_target_jetty;
+	int ret;
+
+	ret = verify_jetty_bind(udma_jetty);
+	if (ret) {
+		URMA_LOG_ERR("Invalid input parameters of unbind_jetty.\n");
+		return URMA_EINVAL;
+	}
+
+	if (udma_jetty->rc_node->tjetty == NULL) {
+		URMA_LOG_ERR("The jetty has not bind a remote jetty.\n");
+		return URMA_FAIL;
+	}
+
+	udma_target_jetty = to_udma_target_jetty(udma_jetty->rc_node->tjetty);
+	udma_remove_from_qp_table(udma_ctx, udma_jetty->rc_node->qp->qp_num);
+
+	ret = urma_cmd_unbind_jetty(jetty);
+	if (ret) {
+		URMA_LOG_ERR("urma_cmd_unbind_jetty failed.\n");
+		return URMA_FAIL;
+	}
+
+	(void)atomic_fetch_sub(&udma_target_jetty->refcnt, 1);
+	jetty->remote_jetty = NULL;
+	udma_jetty->rc_node->tjetty = NULL;
 
 	return URMA_SUCCESS;
 }

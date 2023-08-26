@@ -109,5 +109,8 @@ urma_status_t udma_u_advise_jetty(urma_jetty_t *jetty,
 urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
 				    urma_target_jetty_t *remote_jetty,
 				    bool force);
+urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
+				urma_target_jetty_t *remote_jetty);
+urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty, bool force);
 
 #endif /* _UDMA_U_JETTY_H */
