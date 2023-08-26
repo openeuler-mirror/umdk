@@ -29,6 +29,12 @@ struct rc_node {
 	const urma_target_jetty_t	*tjetty;
 };
 
+struct tgt_node {
+	struct udma_hmap_node	hmap_node;
+	struct udma_qp		*qp;
+	urma_target_jetty_t	*tjetty;
+};
+
 struct tgt_node_table {
 	pthread_rwlock_t	rwlock;
 	struct udma_hmap	hmap;
@@ -63,6 +69,11 @@ static inline struct udma_u_jetty *to_udma_jetty(const urma_jetty_t *jetty)
 	return container_of(jetty, struct udma_u_jetty, urma_jetty);
 }
 
+static inline struct tgt_node *to_tgt_node(struct udma_hmap_node *hmap_node)
+{
+	return container_of(hmap_node, struct tgt_node, hmap_node);
+}
+
 static inline struct udma_jetty_node *to_udma_jetty_node(struct udma_hmap_node *node)
 {
 	return container_of(node, struct udma_jetty_node, node);
@@ -89,5 +100,14 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 				  const urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
+urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
+					 const urma_rjetty_t *rjetty,
+					 const urma_key_t *rjetty_key);
+urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty, bool force);
+urma_status_t udma_u_advise_jetty(urma_jetty_t *jetty,
+				  const urma_target_jetty_t *remote_jetty);
+urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
+				    urma_target_jetty_t *remote_jetty,
+				    bool force);
 
 #endif /* _UDMA_U_JETTY_H */
