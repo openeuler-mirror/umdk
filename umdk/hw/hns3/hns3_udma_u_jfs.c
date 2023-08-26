@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_common.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_tp.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfs.h"
@@ -518,6 +519,100 @@ static void set_rc_sge(struct udma_wqe_data_seg *dseg, struct udma_qp *qp,
 	}
 }
 
+void set_um_sge(struct udma_qp *qp, uint32_t num_sge,
+		struct udma_sge *sg_list, struct udma_sge_info *sge_info)
+{
+	struct udma_wqe_data_seg *dseg;
+	uint32_t i;
+
+	for (i = 0; i < num_sge; i++) {
+		dseg = (struct udma_wqe_data_seg *)
+			get_send_sge_ex(qp, sge_info->start_idx &
+					(qp->ex_sge.sge_cnt - 1));
+		set_data_seg(dseg, sg_list + i);
+		sge_info->start_idx++;
+	}
+}
+
+static void udma_set_um_wqe_udpspn(struct udma_jfs_um_wqe *jfs_wqe,
+				   struct udma_qp *qp)
+{
+	uint16_t data_udp_start_l, data_udp_start_h;
+
+	udma_reg_write(jfs_wqe, UDMAUMWQE_UDPSPN, qp->um_srcport.um_data_udp_start);
+	data_udp_start_l = (qp->um_srcport.um_data_udp_start + 1) &
+			   (BIT(qp->um_srcport.um_udp_range) - 1);
+	data_udp_start_h = qp->um_srcport.um_data_udp_start >>
+			   qp->um_srcport.um_udp_range;
+	qp->um_srcport.um_data_udp_start = data_udp_start_l |
+					   data_udp_start_h <<
+					   qp->um_srcport.um_udp_range;
+}
+
+static urma_status_t udma_set_um_wqe(struct udma_u_context *udma_ctx, void *wqe,
+			     struct udma_qp *qp, urma_jfs_wr_t *wr,
+			     struct udma_sge_info *sge_info)
+{
+	struct udma_jfs_um_wqe *jfs_wqe = (struct udma_jfs_um_wqe *)wqe;
+	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
+	struct udma_jfs_wr_info wr_info = {};
+	urma_status_t ret = URMA_SUCCESS;
+	uint32_t qpn, qpn_shift;
+
+	memset(jfs_wqe, 0, sizeof(struct udma_jfs_um_wqe));
+
+	wr_info.num_sge = 1;
+
+	if (udma_parse_jfs_wr(wr, &wr_info, &sg_list[0]) != 0) {
+		URMA_LOG_ERR("Failed to parse wr\n");
+		return URMA_EINVAL;
+	}
+
+	sge_info->total_len = wr_info.total_len;
+	if (sge_info->total_len == 0)
+		wr_info.num_sge = 0;
+
+	udma_reg_write(jfs_wqe, UDMAUMWQE_OPCODE, wr_info.opcode);
+	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_CQE, wr->flag.bs.complete_enable);
+	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_SE, wr->flag.bs.solicited_enable);
+	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_INLINE, wr->flag.bs.inline_flag);
+	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_START_SGE_IDX, sge_info->start_idx &
+		       (qp->ex_sge.sge_cnt - 1));
+	udma_reg_write(jfs_wqe, UDMAUMWQE_IMMT_DATA,
+		       (uint32_t)(wr_info.inv_key_immtdata));
+	udma_reg_write(jfs_wqe, UDMAUMWQE_SGE_NUM, wr_info.num_sge);
+	udma_reg_write(jfs_wqe, UDMAUMWQE_HOPLIMIT, UDMA_HOPLIMIT_NUM);
+
+	qpn_shift = udma_ctx->num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM -
+		    udma_ctx->num_jetty_shift;
+	if (is_jetty(udma_ctx, qp->qp_num)) {
+		qpn = gen_qpn(UDMA_JETTY_QPN_PREFIX <<
+			      (udma_ctx->num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM),
+			      wr->tjetty->id.id << qpn_shift, 0);
+		udma_reg_write(jfs_wqe, UDMAUMWQE_DGID_H,
+			       *(uint32_t *)(wr->tjetty->id.eid.raw + GID_H_SHIFT));
+	} else {
+		qpn = gen_qpn(UDMA_JFR_QPN_PREFIX <<
+			      (udma_ctx->num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM),
+			      wr->tjetty->id.id << qpn_shift, 0);
+		udma_reg_write(jfs_wqe, UDMAUMWQE_DGID_H,
+			       *(uint32_t *)(wr->tjetty->id.eid.raw + GID_H_SHIFT));
+	}
+
+	if (qp->um_srcport.um_spray_en)
+		udma_set_um_wqe_udpspn(jfs_wqe, qp);
+
+	udma_reg_write(jfs_wqe, UDMAUMWQE_DQPN, qpn);
+	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_LEN, htole32(sge_info->total_len));
+
+	if (wr->flag.bs.inline_flag == 0)
+		set_um_sge(qp, wr_info.num_sge, &sg_list[0], sge_info);
+
+	enable_wqe(qp, wqe, qp->sq.head);
+
+	return ret;
+}
+
 static urma_status_t udma_set_rm_wqe(void *wqe, struct udma_qp *qp, urma_jfs_wr_t *wr,
 			   struct udma_sge_info *sge_info)
 {
@@ -628,6 +723,9 @@ static struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 		return NULL;
 	}
 
+	if (udma_jfs->tp_mode == URMA_TM_UM)
+		return udma_jfs->um_qp;
+
 	switch (wr->opcode) {
 	case URMA_OPC_SEND:
 	case URMA_OPC_SEND_IMM:
@@ -690,7 +788,9 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 	wqe = get_send_wqe(udma_qp, wqe_idx);
 	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
 
-	if (tp_mode == URMA_TM_RM)
+	if (tp_mode == URMA_TM_UM)
+		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr, &sge_info);
+	else
 		ret = udma_set_rm_wqe(wqe, udma_qp, wr, &sge_info);
 	if (ret)
 		goto out;

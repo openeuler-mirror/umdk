@@ -22,6 +22,7 @@
 #include "hns3_udma_u_provider_ops.h"
 
 #define UDMA_SIZE_CONNECT_NODE_TABLE 99
+#define GID_H_SHIFT 12
 #define UDMA_SGE_IN_WQE 2
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -43,6 +44,11 @@ struct udma_jfs_wqe {
 	uint32_t         byte_20;
 	uint32_t         rkey;
 	uint64_t         va;
+};
+
+struct udma_jfs_um_wqe {
+	struct udma_jfs_wqe	jfs_wqe;
+	uint32_t		data[8];
 };
 
 struct udma_spinlock {
@@ -184,7 +190,25 @@ enum udma_jfs_opcode {
 #define UDMAWQE_MW_RR_EN UDMAWQE_FIELD_LOC(259, 259)
 #define UDMAWQE_MW_RW_EN UDMAWQE_FIELD_LOC(260, 260)
 
+#define UDMAUMWQE_OPCODE UDMAUMWQE_FIELD_LOC(4, 0)
+#define UDMAUMWQE_CQE UDMAUMWQE_FIELD_LOC(8, 8)
+#define UDMAUMWQE_SE UDMAUMWQE_FIELD_LOC(11, 11)
+#define UDMAUMWQE_INLINE UDMAUMWQE_FIELD_LOC(12, 12)
+#define UDMAUMWQE_MSG_LEN UDMAUMWQE_FIELD_LOC(63, 32)
+#define UDMAUMWQE_IMMT_DATA UDMAUMWQE_FIELD_LOC(95, 64)
+#define UDMAUMWQE_SGE_NUM UDMAUMWQE_FIELD_LOC(127, 120)
+#define UDMAUMWQE_MSG_START_SGE_IDX UDMAUMWQE_FIELD_LOC(151, 128)
+#define UDMAUMWQE_INLINE_TYPE UDMAUMWQE_FIELD_LOC(159, 159)
+#define UDMAUMWQE_UDPSPN UDMAUMWQE_FIELD_LOC(191, 176)
+#define UDMAUMWQE_DQPN UDMAUMWQE_FIELD_LOC(247, 224)
+#define UDMAUMWQE_HOPLIMIT UDMAUMWQE_FIELD_LOC(279, 272)
+#define UDMAUMWQE_DGID_H UDMAUMWQE_FIELD_LOC(511, 480)
+
+#define gen_qpn(high, mid, low) ((high) | (mid) | (low))
+
 #define UDMA_MIN_JFS_DEPTH 64
+
+#define UDMA_HOPLIMIT_NUM 0xff
 
 #define UDMA_MAX_SGE_NUM 64
 

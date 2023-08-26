@@ -73,6 +73,19 @@ static inline struct udma_u_target_jetty *to_udma_target_jetty(const urma_target
 	return container_of(tjetty, struct udma_u_target_jetty, urma_target_jetty);
 }
 
+static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
+{
+	uint8_t qpn_prefix;
+	int hight, low;
+
+	hight = udma_ctx->num_qps_shift - 1; /* length and real idx diff 1 */
+	low = hight - UDMA_JETTY_X_PREFIX_BIT_NUM + 1; /* need top 2 bits */
+
+	qpn_prefix = FIELD_GET(GENMASK(hight, low), qpn);
+
+	return qpn_prefix == UDMA_JETTY_QPN_PREFIX;
+}
+
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 				  const urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);

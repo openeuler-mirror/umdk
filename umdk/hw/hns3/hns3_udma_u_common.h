@@ -81,6 +81,11 @@
 
 #define BIT(nr) (1UL << (nr))
 
+#define FIELD_GET(_mask, _reg)						       \
+	({								       \
+		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask));        \
+	})
+
 #define udma_reg_enable(ptr, field)                                            \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
