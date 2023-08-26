@@ -122,6 +122,17 @@
 			(((field) << 32) >> 32) % 32), _val));                 \
 	})
 
+#define udma_reg_read(ptr, field)                                              \
+	({                                                                     \
+		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+			((((field) << 32) >> 32) / 32));                       \
+		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
+		FIELD_GET(GENMASK(((field) >> 32) % 32,                        \
+			(((field) << 32) >> 32) % 32),                         \
+			le32toh(*((uint32_t *)_ptr + ((field) >> 32) / 32)));  \
+	})
+
 #ifndef container_of
 #define container_off(containing_type, member)	\
 	offsetof(containing_type, member)
@@ -133,6 +144,7 @@
 #endif
 
 #define udma_to_device_barrier() asm volatile("dsb st" ::: "memory")
+#define udma_from_device_barrier() asm volatile("dsb ld" ::: "memory")
 
 #define MMIO_MEMCPY_X64_LEN 64
 static inline void _mmio_memcpy_x64_64b(void *dest, const void *src)
@@ -205,6 +217,9 @@ struct udma_wqe_data_seg {
 #define UDMA_DB_CMD UDMA_DB_FIELD_LOC(27, 24)
 #define UDMA_DB_PI UDMA_DB_FIELD_LOC(47, 32)
 #define UDMA_DB_SL UDMA_DB_FIELD_LOC(50, 48)
+#define UDMA_DB_JFC_CI UDMA_DB_FIELD_LOC(55, 32)
+#define UDMA_DB_JFC_CMD_SN UDMA_DB_FIELD_LOC(58, 57)
+#define UDMA_DB_CONS_IDX_M GENMASK(23, 0)
 #define UDMA_DB_PROD_IDX_M GENMASK(23, 0)
 
 static inline uint64_t roundup_pow_of_two(uint64_t n)
@@ -374,6 +389,8 @@ static inline struct udma_hmap_node *udma_hmap_next(const struct udma_hmap *hmap
 		((((NODE) != OBJ_CONTAINING(NULL, (NODE), MEMBER)) || ((NODE) = NULL)) ? \
 		INIT_CONTAINER_PTR(NEXT, udma_hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 : 0); \
 		(NODE) = (NEXT))
+
+#define ARRAY_SIZE(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
 
 static inline uint32_t calc_mask(uint32_t capacity)
 {

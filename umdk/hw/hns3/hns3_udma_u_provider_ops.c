@@ -45,6 +45,7 @@ static urma_ops_t g_udma_u_ops = {
 	.unregister_seg = udma_u_unregister_seg,
 	.post_jfs_wr = udma_u_post_jfs_wr,
 	.post_jfr_wr = udma_u_post_jfr_wr,
+	.poll_jfc = udma_u_poll_jfc,
 };
 
 static urma_match_entry_t match_table[] = {
