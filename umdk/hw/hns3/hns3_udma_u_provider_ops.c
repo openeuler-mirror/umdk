@@ -43,6 +43,7 @@ static urma_ops_t g_udma_u_ops = {
 	.delete_jetty = udma_u_delete_jetty,
 	.register_seg = udma_u_register_seg,
 	.unregister_seg = udma_u_unregister_seg,
+	.post_jfs_wr = udma_u_post_jfs_wr,
 	.post_jfr_wr = udma_u_post_jfr_wr,
 };
 

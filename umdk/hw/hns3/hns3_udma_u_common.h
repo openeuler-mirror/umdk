@@ -16,6 +16,7 @@
 #ifndef _UDMA_U_COMMON_H
 #define _UDMA_U_COMMON_H
 
+#include <arm_neon.h>
 #include <limits.h>
 #include <string.h>
 #include <stddef.h>
@@ -23,6 +24,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <linux/kernel.h>
 #include "urma_provider.h"
 #include "hns3_udma_u_abi.h"
 
@@ -77,6 +79,18 @@
 		((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask);          \
 	})
 
+#define BIT(nr) (1UL << (nr))
+
+#define udma_reg_enable(ptr, field)                                            \
+	({                                                                     \
+		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+			((((field) << 32) >> 32) / 32));                       \
+		BUILD_ASSERT(((field) >> 32) == (((field) << 32) >> 32));      \
+		*((uint32_t *)_ptr + ((field) >> 32) / 32) |=                  \
+			htole32(BIT((((field) << 32) >> 32) % 32));            \
+	})
+
 #define udma_reg_clear(ptr, field)                                             \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
@@ -86,6 +100,12 @@
 		*((uint32_t *)_ptr + ((field) >> 32) / 32) &=                  \
 			~htole32(GENMASK(((field) >> 32) % 32,                 \
 			(((field) << 32) >> 32) % 32));                        \
+	})
+
+#define udma_reg_write_bool(ptr, field, val)                                   \
+	({                                                                     \
+		(val) ? udma_reg_enable(ptr, field) :                          \
+			udma_reg_clear(ptr, field);                            \
 	})
 
 #define udma_reg_write(ptr, field, val)                                        \
@@ -108,6 +128,30 @@
 #endif
 
 #define udma_to_device_barrier() asm volatile("dsb st" ::: "memory")
+
+#define MMIO_MEMCPY_X64_LEN 64
+static inline void _mmio_memcpy_x64_64b(void *dest, const void *src)
+{
+	vst4q_u64((uint64_t *)dest, vld4q_u64((const uint64_t *)src));
+}
+
+static inline void _mmio_memcpy_x64(void *dest, const void *src, size_t bytecnt)
+{
+	do {
+		_mmio_memcpy_x64_64b(dest, src);
+		bytecnt -= sizeof(uint64x2x4_t);
+		src += sizeof(uint64x2x4_t);
+		dest += sizeof(uint64x2x4_t);
+	} while (bytecnt > 0);
+}
+
+static inline void mmio_memcpy_x64(void *dest, const void *src, size_t bytecount)
+{
+	if (__builtin_constant_p((bytecount) == MMIO_MEMCPY_X64_LEN))
+		_mmio_memcpy_x64_64b((dest), (src));
+	else
+		_mmio_memcpy_x64((dest), (src), (bytecount));
+}
 
 struct udma_buf {
 	void			*buf;
@@ -155,6 +199,7 @@ struct udma_wqe_data_seg {
 #define UDMA_DB_TAG UDMA_DB_FIELD_LOC(23, 0)
 #define UDMA_DB_CMD UDMA_DB_FIELD_LOC(27, 24)
 #define UDMA_DB_PI UDMA_DB_FIELD_LOC(47, 32)
+#define UDMA_DB_SL UDMA_DB_FIELD_LOC(50, 48)
 #define UDMA_DB_PROD_IDX_M GENMASK(23, 0)
 
 static inline uint64_t roundup_pow_of_two(uint64_t n)
