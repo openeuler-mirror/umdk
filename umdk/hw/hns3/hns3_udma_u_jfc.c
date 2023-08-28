@@ -281,6 +281,9 @@ static void udma_parse_opcode_for_res(struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 		break;
 	case HW_CQE_OPC_RDMA_WRITE_WITH_IMM:
 	case HW_CQE_OPC_PERSISTENCE_WRITE_WITH_IMM:
+		cr->imm_data = udma_reg_read(cqe, CQE_RKEY_IMMTDATA);
+		cr->opcode = URMA_CR_OPC_WRITE_WITH_IMM;
+		break;
 	case HW_CQE_OPC_SEND_WITH_INV:
 		cr->invalid_key.key_id = udma_reg_read(cqe, CQE_RKEY_IMMTDATA);
 		cr->opcode = URMA_CR_OPC_SEND_WITH_INV;

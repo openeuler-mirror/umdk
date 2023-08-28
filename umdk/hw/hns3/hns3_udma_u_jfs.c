@@ -525,6 +525,9 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE;
 		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE_IMM:
+		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE_WITH_IMM;
+		wr_info->inv_key_immtdata = wr->rw.notify_data;
+		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE_NOTIFY:
 	case URMA_OPC_READ:
 	case URMA_OPC_CAS:
