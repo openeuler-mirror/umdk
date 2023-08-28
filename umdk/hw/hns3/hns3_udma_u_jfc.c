@@ -483,3 +483,21 @@ int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 
 	return npolled;
 }
+
+urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr)
+{
+	int ret;
+
+	if (!(attr->mask & (JFC_MODERATE_COUNT | JFC_MODERATE_PERIOD))) {
+		URMA_LOG_ERR("JFC modify mask is not set or invalid.\n");
+		return URMA_FAIL;
+	}
+
+	ret = urma_cmd_modify_jfc(jfc, attr, NULL);
+	if (ret != 0) {
+		URMA_LOG_ERR("modify jfc failed.\n");
+		return URMA_FAIL;
+	}
+
+	return URMA_SUCCESS;
+}

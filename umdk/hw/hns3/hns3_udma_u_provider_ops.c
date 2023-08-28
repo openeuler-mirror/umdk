@@ -30,6 +30,7 @@ static urma_ops_t g_udma_u_ops = {
 	.name = "UDMA_CP_OPS",
 
 	.create_jfc = udma_u_create_jfc,
+	.modify_jfc = udma_u_modify_jfc,
 	.delete_jfc = udma_u_delete_jfc,
 	.create_jfs = udma_u_create_jfs,
 	.delete_jfs = udma_u_delete_jfs,
