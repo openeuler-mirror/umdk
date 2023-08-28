@@ -428,6 +428,45 @@ static void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
 	return get_wqe(qp, qp->ex_sge.offset + (n << qp->ex_sge.sge_shift));
 }
 
+static inline uint32_t udma_get_sgl_total_len(const urma_sg_t *sg)
+{
+	uint32_t len = 0;
+
+	for (uint32_t i = 0; i < sg->num_sge; i++)
+		len += sg->sge[i].len;
+
+	return len;
+}
+
+static int udma_parse_write_wr(const urma_rw_wr_t *rw,
+			       struct udma_jfs_wr_info *wr_info,
+			       struct udma_sge *sg_list, bool is_inline)
+{
+	if (!rw->src.sge || !rw->dst.sge || !rw->dst.sge[0].tseg) {
+		URMA_LOG_ERR("parse write wr failed, invalid rw parameters.\n");
+		return EINVAL;
+	}
+
+	wr_info->num_sge = rw->src.num_sge;
+	for (uint32_t i = 0; i < wr_info->num_sge; i++) {
+		sg_list->len = rw->src.sge[i].len;
+		sg_list->addr = rw->src.sge[i].addr;
+		if (!is_inline) {
+			if (!rw->src.sge[i].tseg) {
+				URMA_LOG_ERR("parse write wr failed, tseg is null.\n");
+				return EINVAL;
+			}
+			sg_list->lkey = rw->src.sge[i].tseg->seg.key_id;
+		}
+		sg_list++;
+	}
+	wr_info->dst_addr = rw->dst.sge[0].addr;
+	wr_info->total_len = udma_get_sgl_total_len(&rw->src);
+	wr_info->rkey = rw->dst.sge[0].tseg->seg.key_id;
+
+	return 0;
+}
+
 static int udma_parse_send_wr(const urma_send_wr_t *send,
 			      struct udma_jfs_wr_info *wr_info,
 			      struct udma_sge *sg_list, bool is_inline)
@@ -483,6 +522,8 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 		wr_info->inv_key_immtdata = wr->send.tseg->seg.key_id;
 		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE:
+		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE;
+		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE_IMM:
 	case URMA_OPC_WRITE_NOTIFY:
 	case URMA_OPC_READ:
