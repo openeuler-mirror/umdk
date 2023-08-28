@@ -50,6 +50,8 @@ static urma_ops_t g_udma_u_ops = {
 	.unadvise_jetty = udma_u_unadvise_jetty,
 	.bind_jetty = udma_u_bind_jetty,
 	.unbind_jetty = udma_u_unbind_jetty,
+	.create_jfce = udma_u_create_jfce,
+	.delete_jfce = udma_u_delete_jfce,
 	.register_seg = udma_u_register_seg,
 	.unregister_seg = udma_u_unregister_seg,
 	.post_jfs_wr = udma_u_post_jfs_wr,
@@ -58,6 +60,8 @@ static urma_ops_t g_udma_u_ops = {
 	.post_jetty_recv_wr = udma_u_post_jetty_recv_wr,
 	.poll_jfc = udma_u_poll_jfc,
 	.rearm_jfc = udma_u_rearm_jfc,
+	.wait_jfc = udma_u_wait_jfc,
+	.ack_jfc = udma_u_ack_jfc,
 };
 
 static urma_match_entry_t match_table[] = {

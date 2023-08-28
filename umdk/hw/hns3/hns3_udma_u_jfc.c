@@ -14,6 +14,7 @@
  */
 
 #include <math.h>
+#include <unistd.h>
 #include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfr.h"
@@ -521,4 +522,72 @@ urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
 		     (uint64_t *)&jfc_db);
 
 	return URMA_SUCCESS;
+}
+
+urma_jfce_t *udma_u_create_jfce(urma_context_t *ctx)
+{
+	struct udma_jfce *jfce = (struct udma_jfce *)calloc(1, sizeof(struct udma_jfce));
+
+	if (jfce == NULL) {
+		URMA_LOG_ERR("memory allocation failed.\n");
+		return NULL;
+	}
+	jfce->base.urma_ctx = ctx;
+
+	/* get jetty_id of jfce from ubcore */
+	jfce->base.fd = urma_cmd_create_jfce(ctx);
+	if (jfce->base.fd < 0) {
+		URMA_LOG_ERR("ubcore create jfce failed, fd = %d.\n",
+			     jfce->base.fd);
+		free(jfce);
+		return NULL;
+	}
+
+	return &jfce->base;
+}
+
+urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce)
+{
+	if (jfce->fd < 0) {
+		URMA_LOG_ERR("Invalid parameter, fd = %d.\n", jfce->fd);
+		return URMA_EINVAL;
+	}
+	(void)close(jfce->fd);
+
+	struct udma_jfce *udma_jfce = container_of(jfce, struct udma_jfce, base);
+
+	free(udma_jfce);
+
+	return URMA_SUCCESS;
+}
+
+int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+		   urma_jfc_t *jfc[])
+{
+	struct udma_jfce *udma_jfce;
+
+	if (jfce == NULL || jfc_cnt == 0 || jfc == NULL) {
+		URMA_LOG_ERR("Invalid parameter, jfce = 0x%p, jfc_cnt = %u, jfc = 0x%p.\n",
+			     jfce, jfc_cnt, jfc);
+		return -1;
+	}
+
+	udma_jfce = container_of(jfce, struct udma_jfce, base);
+
+	return urma_cmd_wait_jfc(udma_jfce->base.fd, jfc_cnt, time_out, jfc);
+}
+
+void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt)
+{
+	struct udma_u_jfc *udma_jfc;
+	uint32_t i;
+
+	for (i = 0; i < jfc_cnt; i++) {
+		if (jfc[i] == NULL || nevents[i] == 0)
+			continue;
+		udma_jfc = to_udma_jfc(jfc[i]);
+		udma_jfc->arm_sn++;
+	}
+
+	return urma_cmd_ack_jfc(jfc, nevents, jfc_cnt);
 }

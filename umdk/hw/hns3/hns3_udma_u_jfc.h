@@ -109,6 +109,10 @@ struct udma_u_jfc {
 	uint32_t		caps_flag;
 };
 
+struct udma_jfce {
+	urma_jfce_t base;
+};
+
 static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
 					uint32_t num_jetty_x_shift)
 {
@@ -147,5 +151,10 @@ urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
 int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
 urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr);
 urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
+urma_jfce_t *udma_u_create_jfce(urma_context_t *ctx);
+urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
+int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+		    urma_jfc_t *jfc[]);
+void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
 
 #endif  /* _UDMA_U_JFC_H */
