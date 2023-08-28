@@ -118,5 +118,7 @@ urma_status_t udma_u_post_jetty_send_wr(const urma_jetty_t *jetty,
 urma_status_t udma_u_post_jetty_recv_wr(const urma_jetty_t *jetty,
 					urma_jfr_wr_t *wr,
 					urma_jfr_wr_t **bad_wr);
+urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
+				  const urma_jetty_attr_t *jetty_attr);
 
 #endif /* _UDMA_U_JETTY_H */

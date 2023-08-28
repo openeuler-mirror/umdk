@@ -938,3 +938,20 @@ urma_status_t udma_u_post_jetty_recv_wr(const urma_jetty_t *jetty,
 
 	return ret;
 }
+
+urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
+				  const urma_jetty_attr_t *jetty_attr)
+{
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	urma_jfr_attr_t jfr_attr;
+
+	if (udma_jetty->share_jfr) {
+		URMA_LOG_ERR("modify jetty failed, jfr is shared.\n");
+		return URMA_FAIL;
+	}
+
+	jfr_attr.mask = jetty_attr->mask;
+	jfr_attr.rx_threshold = jetty_attr->rx_threshold;
+
+	return udma_u_modify_jfr(&udma_jetty->udma_jfr->urma_jfr, &jfr_attr);
+}
