@@ -52,6 +52,7 @@ static urma_ops_t g_udma_u_ops = {
 	.post_jfs_wr = udma_u_post_jfs_wr,
 	.post_jfr_wr = udma_u_post_jfr_wr,
 	.post_jetty_send_wr = udma_u_post_jetty_send_wr,
+	.post_jetty_recv_wr = udma_u_post_jetty_recv_wr,
 	.poll_jfc = udma_u_poll_jfc,
 };
 

@@ -924,3 +924,17 @@ out:
 
 	return ret;
 }
+
+urma_status_t udma_u_post_jetty_recv_wr(const urma_jetty_t *jetty,
+					urma_jfr_wr_t *wr,
+					urma_jfr_wr_t **bad_wr)
+{
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	urma_status_t ret = URMA_SUCCESS;
+
+	ret = udma_u_post_jfr_wr(&udma_jetty->udma_jfr->urma_jfr, wr, bad_wr);
+	if (ret)
+		URMA_LOG_ERR("post jfr wr failed, ret = %d.\n", ret);
+
+	return ret;
+}
