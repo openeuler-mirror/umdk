@@ -819,3 +819,108 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty, bool force)
 
 	return URMA_SUCCESS;
 }
+
+static struct udma_qp *get_qp_for_tjetty(struct udma_u_jetty *udma_jetty,
+					 urma_target_jetty_t *tjetty)
+{
+	struct udma_hmap_node *hmap_node;
+	struct udma_qp *udma_qp = NULL;
+	uint32_t tjetty_index;
+
+	if (udma_jetty->tp_mode == URMA_TM_RM) {
+		tjetty_index = udma_get_tgt_hash(&tjetty->id);
+		hmap_node = udma_table_first_with_hash(&udma_jetty->tjetty_tbl->hmap,
+						       &udma_jetty->tjetty_tbl->rwlock,
+						       tjetty_index);
+		if (!hmap_node) {
+			URMA_LOG_ERR("failed to find target RM jetty, tjetty_id = %u.\n",
+				     tjetty->id.id);
+			return NULL;
+		}
+		udma_qp = to_tgt_node(hmap_node)->qp;
+	} else {
+		if (udma_jetty->rc_node->tjetty == NULL) {
+			URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %d.\n",
+				     udma_jetty->urma_jetty.jetty_id.id);
+			return NULL;
+		}
+
+		udma_qp = udma_jetty->rc_node->qp;
+	}
+
+	return udma_qp;
+}
+
+/* get qp related to target jetty when post send */
+static struct udma_qp *get_qp_of_jetty(struct udma_u_jetty *udma_jetty,
+				       urma_jfs_wr_t *wr)
+{
+	struct udma_qp *udma_qp = NULL;
+
+	if (udma_jetty->tp_mode != URMA_TM_RC && !wr->tjetty) {
+		URMA_LOG_ERR("Failed to get jetty qp, tjetty of wr is null.\n");
+		return NULL;
+	}
+
+	if (udma_jetty->tp_mode == URMA_TM_UM)
+		return udma_jetty->um_qp;
+
+	switch (wr->opcode) {
+	case URMA_OPC_SEND:
+	case URMA_OPC_SEND_IMM:
+	case URMA_OPC_SEND_INVALIDATE:
+	case URMA_OPC_WRITE:
+	case URMA_OPC_WRITE_IMM:
+	case URMA_OPC_WRITE_NOTIFY:
+		udma_qp = get_qp_for_tjetty(udma_jetty, wr->tjetty);
+		break;
+	case URMA_OPC_READ:
+	case URMA_OPC_CAS:
+	case URMA_OPC_CAS_WITH_MASK:
+	case URMA_OPC_FAA:
+	case URMA_OPC_FAA_WITH_MASK:
+		URMA_LOG_ERR("Alpha doesn't support opcode :%u\n",
+			     (uint32_t)wr->opcode);
+		return NULL;
+	default:
+		URMA_LOG_ERR("Invalid opcode: %u\n", (uint32_t)wr->opcode);
+		return NULL;
+	}
+
+	return udma_qp;
+}
+
+urma_status_t udma_u_post_jetty_send_wr(const urma_jetty_t *jetty,
+					urma_jfs_wr_t *wr,
+					urma_jfs_wr_t **bad_wr)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	struct udma_qp *udma_qp;
+	urma_status_t ret;
+	urma_jfs_wr_t *it;
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_lock(&udma_jetty->lock);
+
+	for (it = wr; it != NULL; it = it->next) {
+		udma_qp = get_qp_of_jetty(udma_jetty, it);
+		if (!udma_qp) {
+			URMA_LOG_ERR("failed to find qp for target jetty");
+			ret = URMA_EINVAL;
+			*bad_wr = it;
+			goto out;
+		}
+
+		ret = udma_u_post_qp_wr(udma_ctx, udma_qp, it, udma_jetty->tp_mode);
+		if (ret) {
+			*bad_wr = it;
+			goto out;
+		}
+	}
+out:
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_unlock(&udma_jetty->lock);
+
+	return ret;
+}
