@@ -282,6 +282,9 @@ static void udma_parse_opcode_for_res(struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 	case HW_CQE_OPC_RDMA_WRITE_WITH_IMM:
 	case HW_CQE_OPC_PERSISTENCE_WRITE_WITH_IMM:
 	case HW_CQE_OPC_SEND_WITH_INV:
+		cr->invalid_key.key_id = udma_reg_read(cqe, CQE_RKEY_IMMTDATA);
+		cr->opcode = URMA_CR_OPC_SEND_WITH_INV;
+		break;
 	default:
 		cr->opcode = (urma_cr_opcode_t)UINT8_MAX;
 		URMA_LOG_ERR("Receive invalid opcode :%u\n", opcode);

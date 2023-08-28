@@ -475,6 +475,13 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 		wr_info->inv_key_immtdata = wr->send.imm_data;
 		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
 	case URMA_OPC_SEND_INVALIDATE:
+		if (!wr->send.tseg) {
+			URMA_LOG_ERR("parse wr failed, tseg of send is null.\n");
+			return EINVAL;
+		}
+		wr_info->opcode = UDMA_OPCODE_SEND_WITH_INV;
+		wr_info->inv_key_immtdata = wr->send.tseg->seg.key_id;
+		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE:
 	case URMA_OPC_WRITE_IMM:
 	case URMA_OPC_WRITE_NOTIFY:
