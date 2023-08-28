@@ -539,3 +539,30 @@ urma_status_t udma_u_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 
 	return ret;
 }
+
+urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, const urma_jfr_attr_t *attr)
+{
+	struct udma_u_jfr *udma_jfr = to_udma_jfr(jfr);
+	uint32_t jfr_limit;
+	int ret;
+
+	if (!(attr->mask & JFR_RX_THRESHOLD)) {
+		URMA_LOG_ERR("JFR threshold mask is not set.\n");
+		return URMA_FAIL;
+	}
+
+	jfr_limit = attr->rx_threshold;
+	if (jfr_limit > udma_jfr->wqe_cnt) {
+		URMA_LOG_ERR("JFR limit(%u) larger than wqe num(%u).\n",
+			     jfr_limit, udma_jfr->wqe_cnt);
+		return URMA_FAIL;
+	}
+
+	ret = urma_cmd_modify_jfr(jfr, attr, NULL);
+	if (ret != 0) {
+		URMA_LOG_ERR("modify jfr failed.\n");
+		return URMA_FAIL;
+	}
+
+	return URMA_SUCCESS;
+}

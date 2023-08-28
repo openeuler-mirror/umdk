@@ -35,6 +35,7 @@ static urma_ops_t g_udma_u_ops = {
 	.create_jfs = udma_u_create_jfs,
 	.delete_jfs = udma_u_delete_jfs,
 	.create_jfr = udma_u_create_jfr,
+	.modify_jfr = udma_u_modify_jfr,
 	.delete_jfr = udma_u_delete_jfr,
 	.import_jfr = udma_u_import_jfr,
 	.unimport_jfr = udma_u_unimport_jfr,

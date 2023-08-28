@@ -78,5 +78,6 @@ urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr, bool force);
 urma_status_t udma_u_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 				 urma_jfr_wr_t **bad_wr);
+urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, const urma_jfr_attr_t *attr);
 
 #endif /* _UDMA_U_JFR_H */
