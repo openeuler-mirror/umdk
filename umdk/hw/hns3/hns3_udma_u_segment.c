@@ -74,3 +74,48 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg, bool force)
 
 	return ret;
 }
+
+urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, const urma_seg_t *seg,
+				     const urma_key_t *key, uint64_t addr,
+				     urma_import_seg_flag_t flag)
+{
+	urma_cmd_udrv_priv_t udata = {};
+	urma_import_tseg_cfg_t cfg = {};
+	urma_target_seg_t *tseg;
+	int ret;
+
+	tseg = (urma_target_seg_t *)calloc(1, sizeof(urma_target_seg_t));
+	if (!tseg) {
+		URMA_LOG_ERR("target seg alloc failed.\n");
+		return NULL;
+	}
+
+	cfg.ubva = seg->ubva;
+	cfg.len = seg->len;
+	cfg.attr = seg->attr;
+	cfg.key_id = seg->key_id;
+	cfg.key = key;
+	udma_set_udata(&udata, NULL, 0, NULL, 0);
+	ret = urma_cmd_import_seg(ctx, tseg, &cfg, &udata);
+	if (ret) {
+		URMA_LOG_ERR("import seg failed.\n");
+		free(tseg);
+		return NULL;
+	}
+
+	return tseg;
+}
+
+urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg, bool force)
+{
+	int ret;
+
+	ret = urma_cmd_unimport_seg(target_seg);
+	if (ret != 0) {
+		URMA_LOG_ERR("unimport seg failed.\n");
+		return URMA_FAIL;
+	}
+	free(target_seg);
+
+	return URMA_SUCCESS;
+}
