@@ -57,6 +57,7 @@ static urma_ops_t g_udma_u_ops = {
 	.post_jetty_send_wr = udma_u_post_jetty_send_wr,
 	.post_jetty_recv_wr = udma_u_post_jetty_recv_wr,
 	.poll_jfc = udma_u_poll_jfc,
+	.rearm_jfc = udma_u_rearm_jfc,
 };
 
 static urma_match_entry_t match_table[] = {

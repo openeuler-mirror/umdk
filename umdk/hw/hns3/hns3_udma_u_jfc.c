@@ -501,3 +501,24 @@ urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr)
 
 	return URMA_SUCCESS;
 }
+
+urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(jfc->urma_ctx);
+	struct udma_u_jfc *udma_jfc = to_udma_jfc(jfc);
+	struct udma_u_db jfc_db = {};
+	uint32_t ci;
+
+	ci = udma_jfc->ci & UDMA_DB_CONS_IDX_M;
+
+	udma_reg_write(&jfc_db, UDMA_DB_TAG, jfc->jfc_id.id);
+	udma_reg_write(&jfc_db, UDMA_DB_CMD, UDMA_CQ_DB_NTR);
+	udma_reg_write(&jfc_db, UDMA_DB_JFC_CI, ci);
+	udma_reg_write(&jfc_db, UDMA_DB_JFC_NOTIFY, !!solicited_only);
+	udma_reg_write(&jfc_db, UDMA_DB_JFC_CMD_SN, udma_jfc->arm_sn);
+
+	udma_write64(udma_ctx, (uint64_t *)(udma_ctx->uar + UDMA_DB_CFG0_OFFSET),
+		     (uint64_t *)&jfc_db);
+
+	return URMA_SUCCESS;
+}

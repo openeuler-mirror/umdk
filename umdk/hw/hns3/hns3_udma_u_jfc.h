@@ -146,5 +146,6 @@ urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, const urma_jfc_cfg_t *cfg);
 urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
 int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
 urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr);
+urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
 
 #endif  /* _UDMA_U_JFC_H */
