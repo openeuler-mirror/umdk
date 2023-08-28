@@ -156,5 +156,8 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
 int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		    urma_jfc_t *jfc[]);
 void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
+urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
+				     urma_async_event_t *event);
+void udma_u_ack_async_event(urma_async_event_t *event);
 
 #endif  /* _UDMA_U_JFC_H */
