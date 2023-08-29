@@ -439,11 +439,42 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 	return ret;
 }
 
+int exec_jfc_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+			   struct udma_jfc_cqe *cqe)
+{
+	urma_context_t *ctx = &(udma_ctx->urma_ctx);
+	struct udma_jfs_qp_node *qp_node;
+	struct flush_cqe_param fcp = {};
+	urma_user_ctl_out_t out = {};
+	struct udma_hmap_node *node;
+	urma_user_ctl_in_t in = {};
+	urma_udrv_t udrv_data = {};
+	static struct udma_qp *qp;
+
+	in.opcode = (uint32_t)UDMA_USER_CTL_FLUSH_CQE;
+	in.addr = (uint64_t)&fcp;
+	in.len = (uint32_t)sizeof(struct flush_cqe_param);
+
+	fcp.qpn = udma_reg_read(cqe, CQE_LCL_QPN);
+	if (udma_reg_read(cqe, CQE_S_R) == CQE_FOR_SEND) {
+		node = udma_table_first_with_hash(&(udma_ctx->jfs_qp_table),
+						  &(udma_ctx->jfs_qp_table_lock),
+						  fcp.qpn);
+		qp_node = to_udma_jfs_qp_node(node);
+		qp = qp_node->jfs_qp;
+		qp->flush_status = UDMA_FLUSH_STATUS_ERR;
+		fcp.sq_producer_idx = qp->sq.head;
+	}
+
+	return urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
+}
+
 static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 			   struct udma_u_jfc *udma_u_jfc,
 			   urma_cr_t *cr)
 {
 	struct udma_jfc_cqe *cqe;
+	uint8_t status;
 
 	cqe = next_cqe_sw(udma_u_jfc);
 	if (!cqe)
@@ -456,6 +487,12 @@ static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 
 	if (parse_cqe_for_jfc(udma_ctx, udma_u_jfc, cr))
 		return JFC_POLL_ERR;
+
+	status = udma_reg_read(cqe, CQE_STATUS);
+	if (status != UDMA_CQE_SUCCESS && status != UDMA_CQE_WR_FLUSH_ERR) {
+		if (exec_jfc_flush_cqe_cmd(udma_ctx, cqe))
+			URMA_LOG_ERR("flush cqe failed.\n");
+	}
 
 	return JFC_OK;
 }

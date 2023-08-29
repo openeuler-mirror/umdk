@@ -22,6 +22,7 @@
 #include "hns3_udma_u_provider_ops.h"
 
 #define UDMA_SIZE_CONNECT_NODE_TABLE 99
+#define UDMA_FLUSH_STATUS_ERR 1
 #define GID_H_SHIFT 12
 #define UDMA_SGE_IN_WQE 2
 
@@ -104,6 +105,7 @@ struct udma_qp {
 	uint32_t		next_sge;
 	urma_mtu_t		path_mtu;
 	uint32_t		max_inline_data;
+	uint32_t		flush_status;
 	struct udp_srcport	um_srcport;
 	uint32_t		*sdb;
 };

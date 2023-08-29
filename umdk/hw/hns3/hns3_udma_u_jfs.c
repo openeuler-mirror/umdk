@@ -1014,6 +1014,25 @@ static struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 	return udma_qp;
 }
 
+static int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+				  struct udma_qp *qp)
+{
+	urma_context_t *ctx = &udma_ctx->urma_ctx;
+	struct flush_cqe_param fcp = {};
+	urma_user_ctl_out_t out = {};
+	urma_user_ctl_in_t in = {};
+	urma_udrv_t udrv_data = {};
+
+	in.opcode = (uint32_t)UDMA_USER_CTL_FLUSH_CQE;
+	in.addr = (uint64_t)&fcp;
+	in.len = (uint32_t)sizeof(struct flush_cqe_param);
+
+	fcp.qpn = qp->qp_num;
+	fcp.sq_producer_idx = qp->sq.head;
+
+	return urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
+}
+
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp,
 				urma_jfs_wr_t *wr,
@@ -1057,6 +1076,8 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 		udma_update_sq_db(udma_ctx, udma_qp);
 
 	*udma_qp->sdb = udma_qp->sq.head;
+	if (udma_qp->flush_status == UDMA_FLUSH_STATUS_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
 	return ret;
