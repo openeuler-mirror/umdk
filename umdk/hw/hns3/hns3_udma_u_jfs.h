@@ -84,6 +84,13 @@ struct verbs_qp {
 	struct udma_cq cq;
 };
 
+#define UDMA_MTU_NUM_256  256
+#define UDMA_MTU_NUM_512  512
+#define UDMA_MTU_NUM_1024 1024
+#define UDMA_MTU_NUM_2048 2048
+#define UDMA_MTU_NUM_4096 4096
+#define UDMA_MTU_NUM_8192 8192
+
 struct udma_qp {
 	uint32_t		qp_num;
 	/* shared by jfs and jetty */
@@ -203,6 +210,18 @@ enum udma_jfs_opcode {
 #define UDMAUMWQE_DQPN UDMAUMWQE_FIELD_LOC(247, 224)
 #define UDMAUMWQE_HOPLIMIT UDMAUMWQE_FIELD_LOC(279, 272)
 #define UDMAUMWQE_DGID_H UDMAUMWQE_FIELD_LOC(511, 480)
+
+#define UDMAUMWQE_INLINE_DATA_15_0 UDMAUMWQE_FIELD_LOC(63, 48)
+#define UDMAUMWQE_INLINE_DATA_23_16 UDMAUMWQE_FIELD_LOC(127, 120)
+#define UDMAUMWQE_INLINE_DATA_47_24 UDMAUMWQE_FIELD_LOC(151, 128)
+#define UDMAUMWQE_INLINE_DATA_63_48 UDMAUMWQE_FIELD_LOC(175, 160)
+
+#define UDMAUMWQE_INLINE_SHIFT1 8
+#define UDMAUMWQE_INLINE_SHIFT2 16
+#define UDMAUMWQE_INLINE_SHIFT3 24
+
+#define UDMA_MAX_RC_INL_INN_SZ 32
+#define UDMA_MAX_UM_INL_INN_SZ 8
 
 #define gen_qpn(high, mid, low) ((high) | (mid) | (low))
 

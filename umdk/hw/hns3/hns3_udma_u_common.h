@@ -390,6 +390,10 @@ static inline struct udma_hmap_node *udma_hmap_next(const struct udma_hmap *hmap
 		INIT_CONTAINER_PTR(NEXT, udma_hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 : 0); \
 		(NODE) = (NEXT))
 
+#ifndef DIV_ROUND_UP
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#endif
+
 #define ARRAY_SIZE(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
 
 static inline uint32_t calc_mask(uint32_t capacity)
