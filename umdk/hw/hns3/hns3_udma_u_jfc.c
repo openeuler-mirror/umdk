@@ -196,6 +196,34 @@ static enum urma_cr_status get_cr_status(uint8_t status)
 	return URMA_CR_GENERAL_ERR;
 }
 
+static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr,
+				urma_cr_t *cr)
+{
+	uint32_t wqe_idx, data_len, sge_idx;
+	struct udma_wqe_data_seg *sge_list;
+	uint8_t *cqe_inl_buf;
+	uint32_t size;
+
+	wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
+	sge_list = (struct udma_wqe_data_seg *)((char *)jfr->wqe_buf.buf +
+					       (wqe_idx << jfr->wqe_shift));
+	cqe_inl_buf = (uint8_t *)cqe->pld_in_cqe;
+	data_len = le32toh(cqe->byte_cnt);
+
+	for (sge_idx = 0; (sge_idx < jfr->max_sge) && (data_len); sge_idx++) {
+		size = sge_list[sge_idx].len < data_len ?
+		       sge_list[sge_idx].len : data_len;
+		memcpy((void *)(uintptr_t)sge_list[sge_idx].addr,
+		       (void *)cqe_inl_buf, size);
+		data_len -= size;
+		cqe_inl_buf += size;
+	}
+	cr->completion_len = cqe->byte_cnt - data_len;
+
+	if (data_len)
+		udma_reg_write(cqe, CQE_STATUS, UDMA_CQE_LOCAL_LENGTH_ERR);
+}
+
 static struct udma_u_jfr *get_jfr_from_cqe(struct udma_u_context *ctx,
 					   struct udma_jfc_cqe *cqe)
 {
@@ -361,11 +389,35 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 			     urma_cr_t *cr)
 {
 	struct udma_jfc_cqe *cqe = jfc->cqe;
+	static struct udma_u_jetty *jetty;
+	static struct udma_u_jfr *jfr;
 	int ret = JFC_OK;
 	uint8_t status;
+	uint32_t qpn;
 
 	memset(cr, 0, sizeof(urma_cr_t));
 	cr->completion_len = udma_reg_read(cqe, CQE_BYTE_CNT);
+
+	if (udma_reg_read(cqe, CQE_CQE_INLINE) == CQE_INLINE_ENABLE) {
+		qpn = udma_reg_read(cqe, CQE_LCL_QPN);
+		cr->flag.bs.inline_flag = 1;
+		if (is_jetty(udma_ctx, qpn)) {
+			jetty = get_jetty_from_cqe(udma_ctx, cqe);
+			if (jetty == NULL) {
+				URMA_LOG_INFO("Failed! jetty QP 0x%x has been destroyed", qpn);
+				return JFC_POLL_ERR;
+			}
+			jfr = jetty->udma_jfr;
+		} else {
+			jfr = get_jfr_from_cqe(udma_ctx, cqe);
+			if (jfr == NULL) {
+				URMA_LOG_INFO("Failed! jfr QP 0x%x has been destroyed", qpn);
+				return JFC_POLL_ERR;
+			}
+		}
+		handle_recv_inl_cqe(cqe, jfr, cr);
+	}
+
 	status = udma_reg_read(cqe, CQE_STATUS);
 	cr->status = get_cr_status(status);
 

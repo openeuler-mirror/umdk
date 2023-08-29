@@ -28,6 +28,7 @@
 #define CQE_STATUS CQE_FIELD_LOC(15, 8)
 #define CQE_WQE_IDX CQE_FIELD_LOC(31, 16)
 #define CQE_RKEY_IMMTDATA CQE_FIELD_LOC(63, 32)
+#define CQE_CQE_INLINE CQE_FIELD_LOC(89, 88)
 #define CQE_LCL_QPN CQE_FIELD_LOC(119, 96)
 #define CQE_BYTE_CNT CQE_FIELD_LOC(159, 128)
 #define CQE_PORT_TYPE CQE_FIELD_LOC(209, 208)
@@ -73,6 +74,7 @@ enum jfc_poll_state {
 	JFC_POLL_ERR         = 2,
 };
 
+#define	CQE_INLINE_ENABLE	1
 #define	UM_HEADER_DEID		8
 
 struct udma_jfc_cqe {
