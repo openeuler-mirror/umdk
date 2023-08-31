@@ -284,6 +284,8 @@ urma_status_t udma_u_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
 				urma_transport_mode_t tp_mode);
+int udma_u_post_jfs_wr_ex(const urma_context_t *ctx,
+			  urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 			      const urma_jfs_cfg_t *jfs_cfg,
 			      uint32_t jetty_id, bool is_jetty);

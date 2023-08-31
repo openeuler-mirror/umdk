@@ -1142,3 +1142,99 @@ out:
 
 	return ret;
 }
+
+static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
+					  struct udma_qp *udma_qp,
+					  urma_jfs_wr_t *wr,
+					  urma_transport_mode_t tp_mode)
+{
+	struct udma_sge_info sge_info = {};
+	urma_status_t ret = URMA_SUCCESS;
+	uint32_t wqe_idx;
+	void *wqe;
+
+	sge_info.start_idx = udma_qp->next_sge;
+	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
+		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
+		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
+		goto out;
+	}
+	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
+		URMA_LOG_ERR("JFS overflow. pi = %d, ci = %d.\n",
+			     udma_qp->sq.head, udma_qp->sq.tail);
+		ret = URMA_ENOMEM;
+		goto out;
+	}
+	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
+	wqe = get_send_wqe(udma_qp, wqe_idx);
+	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
+
+	if (tp_mode == URMA_TM_UM)
+		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr, &sge_info);
+	else
+		ret = udma_set_rm_wqe(wqe, udma_qp, wr, &sge_info);
+	if (ret)
+		goto out;
+
+	udma_qp->sq.head += 1;
+	udma_qp->next_sge = sge_info.start_idx;
+
+	udma_to_device_barrier();
+
+	if (udma_qp->flush_status == UDMA_FLUSH_STATUS_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
+
+out:
+	return ret;
+}
+
+int udma_u_post_jfs_wr_ex(const urma_context_t *ctx,
+			  urma_user_ctl_in_t *in,
+			  urma_user_ctl_out_t *out)
+{
+	urma_post_and_ret_db_out_t ex_out;
+	urma_status_t ret = URMA_SUCCESS;
+	urma_post_and_ret_db_in_t ex_in;
+	struct udma_u_context *udma_ctx;
+	struct udma_u_jfs *udma_jfs;
+	struct udma_qp *udma_qp;
+	urma_jfs_wr_t **it;
+
+	memcpy(&ex_in, (void *)in->addr, in->len);
+	if (ex_in.wr == NULL) {
+		URMA_LOG_ERR("wr of ex_in is NULL!\n");
+		return EINVAL;
+	}
+
+	udma_jfs = to_udma_jfs(ex_in.jfs);
+	udma_ctx = to_udma_ctx((urma_context_t *)ctx);
+
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_lock(&udma_jfs->lock);
+
+	for (it = &ex_in.wr; *it != NULL; *it = (*it)->next) {
+		udma_qp = get_qp(udma_jfs, *it);
+		if (udma_qp == NULL) {
+			URMA_LOG_ERR("Failed to get qp, opcode = 0x%x.\n",
+				     (*it)->opcode);
+			ret = URMA_EINVAL;
+			ex_out.bad_wr = it;
+			goto out;
+		}
+
+		ret = udma_u_post_qp_wr_ex(udma_ctx, udma_qp, *it, udma_jfs->tp_mode);
+		if (ret) {
+			ex_out.bad_wr = it;
+			goto out;
+		}
+	}
+
+	ex_out.db_addr = (uint64_t)(udma_ctx->db_addr);
+	ex_out.db_data = (uint64_t)udma_qp->qp_num;
+	memcpy((void *)out->addr, &ex_out, out->len);
+out:
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_unlock(&udma_jfs->lock);
+
+	return ret == URMA_SUCCESS ? 0 : EINVAL;
+}

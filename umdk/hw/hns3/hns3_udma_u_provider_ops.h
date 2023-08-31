@@ -38,6 +38,7 @@ extern urma_provider_ops_t g_udma_u_provider_ops;
 
 enum udma_u_user_ctl_handlers {
 	UDMA_U_USER_CRTL_INVALID,
+	UDMA_U_USER_CRTL_POST_JFS_EX,
 	UDMA_U_USER_CRTL_CONFIG_POE,
 	UDMA_U_USER_CRTL_QUERY_POE,
 	UDMA_U_USER_CRTL_CREATE_JFC_EX,

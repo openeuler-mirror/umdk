@@ -31,6 +31,7 @@ typedef int (*udma_u_user_ctl_opcode)(const urma_context_t *ctx,
 
 static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
 	[UDMA_U_USER_CRTL_INVALID] = NULL,
+	[UDMA_U_USER_CRTL_POST_JFS_EX] = udma_u_post_jfs_wr_ex,
 	[UDMA_U_USER_CRTL_CONFIG_POE] = udma_u_config_poe_channel,
 	[UDMA_U_USER_CRTL_QUERY_POE] = udma_u_query_poe_channel,
 	[UDMA_U_USER_CRTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
@@ -48,6 +49,9 @@ int udma_u_user_ctl(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 	}
 
 	switch (in->opcode) {
+	case URMA_USER_CTL_POST_SEND_AND_RET_DB:
+		user_crtl_opcode = UDMA_U_USER_CRTL_POST_JFS_EX;
+		break;
 	case URMA_USER_CTL_CONFIG_POE_CHANNEL:
 		user_crtl_opcode = UDMA_U_USER_CRTL_CONFIG_POE;
 		break;
