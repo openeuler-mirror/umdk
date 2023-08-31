@@ -47,4 +47,9 @@ struct udma_config_poe_channel_in {
 	uint8_t				poe_channel;
 };
 
+struct udma_update_jfs_ci_in {
+	urma_jfs_t	*jfs;
+	uint32_t	wqe_cnt;
+};
+
 #endif /* _UDMA_U_POE_H */

@@ -35,6 +35,7 @@ static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
 	[UDMA_U_USER_CRTL_CONFIG_POE] = udma_u_config_poe_channel,
 	[UDMA_U_USER_CRTL_QUERY_POE] = udma_u_query_poe_channel,
 	[UDMA_U_USER_CRTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
+	[UDMA_U_USER_CRTL_UPDATE_JFS_CI] = udma_u_update_jfs_ci,
 	[UDMA_U_USER_CRTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
 };
 
@@ -60,6 +61,9 @@ int udma_u_user_ctl(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 		break;
 	case URMA_USER_CTL_CREATE_JFC_EX:
 		user_crtl_opcode = UDMA_U_USER_CRTL_CREATE_JFC_EX;
+		break;
+	case URMA_USER_CTL_UPDATE_JFS_CI:
+		user_crtl_opcode = UDMA_U_USER_CRTL_UPDATE_JFS_CI;
 		break;
 	case URMA_USER_CTL_DELETE_JFC_EX:
 		user_crtl_opcode = UDMA_U_USER_CRTL_DELETE_JFC_EX;

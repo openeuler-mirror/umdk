@@ -163,6 +163,8 @@ int udma_u_query_poe_channel(const urma_context_t *ctx,
 			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
 int udma_u_create_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
+int udma_u_update_jfs_ci(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+			 urma_user_ctl_out_t *out);
 int udma_u_delete_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
 urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
