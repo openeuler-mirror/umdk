@@ -25,6 +25,45 @@
 #include "hns3_udma_u_segment.h"
 #include "hns3_udma_u_provider_ops.h"
 
+typedef int (*udma_u_user_ctl_opcode)(const urma_context_t *ctx,
+				      urma_user_ctl_in_t *in,
+				      urma_user_ctl_out_t *out);
+
+static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
+	[UDMA_U_USER_CRTL_INVALID] = NULL,
+	[UDMA_U_USER_CRTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
+	[UDMA_U_USER_CRTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
+};
+
+int udma_u_user_ctl(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+		    urma_user_ctl_out_t *out)
+{
+	uint32_t user_crtl_opcode = 0;
+
+	if ((ctx == NULL) || (in == NULL) || (out == NULL)) {
+		URMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
+		return EINVAL;
+	}
+
+	switch (in->opcode) {
+	case URMA_USER_CTL_CREATE_JFC_EX:
+		user_crtl_opcode = UDMA_U_USER_CRTL_CREATE_JFC_EX;
+		break;
+	case URMA_USER_CTL_DELETE_JFC_EX:
+		user_crtl_opcode = UDMA_U_USER_CRTL_DELETE_JFC_EX;
+		break;
+	default:
+		user_crtl_opcode = UDMA_U_USER_CRTL_INVALID;
+	}
+
+	if (g_udma_u_user_ctl_opcodes[user_crtl_opcode] == NULL) {
+		URMA_LOG_ERR("invalid udma_u_user_ctl_opcode: 0x%x.\n",
+			     (int)in->opcode);
+		return URMA_ENOPERM;
+	}
+	return g_udma_u_user_ctl_opcodes[user_crtl_opcode](ctx, in, out);
+}
+
 static urma_ops_t g_udma_u_ops = {
 	/* OPs name */
 	.name = "UDMA_CP_OPS",
@@ -58,6 +97,7 @@ static urma_ops_t g_udma_u_ops = {
 	.unimport_seg = udma_u_unimport_seg,
 	.get_async_event = udma_u_get_async_event,
 	.ack_async_event = udma_u_ack_async_event,
+	.user_ctl = udma_u_user_ctl,
 	.post_jfs_wr = udma_u_post_jfs_wr,
 	.post_jfr_wr = udma_u_post_jfr_wr,
 	.post_jetty_send_wr = udma_u_post_jetty_send_wr,

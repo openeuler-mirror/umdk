@@ -497,6 +497,22 @@ static int udma_parse_send_wr(const urma_send_wr_t *send,
 	return 0;
 }
 
+static int udma_parse_notify_params(urma_rw_wr_t *rw,
+				    struct udma_jfs_wr_info *wr_info)
+{
+	if (rw->dst.sge) {
+		if (rw->dst.sge[1].addr % NOTIFY_OFFSET_4B_ALIGN) {
+			URMA_LOG_ERR("notify offset %uB should be aligned to 4B.\n",
+				     rw->dst.sge[1].addr);
+			return EINVAL;
+		}
+		wr_info->inv_key_immtdata = UDMA_GET_NOTIFY_DATA(rw->dst.sge[1].addr,
+								 rw->notify_data);
+	}
+
+	return 0;
+}
+
 static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info,
 			     struct udma_sge *sg_list)
 {
@@ -529,6 +545,12 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 		wr_info->inv_key_immtdata = wr->rw.notify_data;
 		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE_NOTIFY:
+		if (udma_parse_notify_params(&wr->rw, wr_info)) {
+			URMA_LOG_ERR("parse wr failed, invalid notify parameters.\n");
+			return EINVAL;
+		}
+		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY;
+		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
 	case URMA_OPC_READ:
 	case URMA_OPC_CAS:
 	case URMA_OPC_CAS_WITH_MASK:

@@ -113,6 +113,24 @@ struct udma_jfce {
 	urma_jfce_t base;
 };
 
+struct udma_jfc_notify_init_attr {
+	uint64_t	notify_addr;
+	uint8_t		notify_mode; /* Use enum udma_jfc_notify_mode */
+	uint8_t		reserved[7];
+};
+
+struct udma_jfc_init_attr {
+	uint64_t	jfc_ex_mask; /* Use enum udma_jfc_init_attr_mask */
+	uint64_t	create_flags; /* Use enum udma_jfc_create_flags */
+	uint64_t	reserved;
+	struct udma_jfc_notify_init_attr notify_init_attr;
+};
+
+struct udma_create_jfc_ex {
+	urma_jfc_cfg_t			*cfg;
+	struct udma_jfc_init_attr	*attr;
+};
+
 static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
 					uint32_t num_jetty_x_shift)
 {
@@ -156,6 +174,10 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
 int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		    urma_jfc_t *jfc[]);
 void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
+int udma_u_create_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+			 urma_user_ctl_out_t *out);
+int udma_u_delete_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+			 urma_user_ctl_out_t *out);
 urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
 				     urma_async_event_t *event);
 void udma_u_ack_async_event(urma_async_event_t *event);

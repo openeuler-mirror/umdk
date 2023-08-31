@@ -36,6 +36,12 @@
 
 extern urma_provider_ops_t g_udma_u_provider_ops;
 
+enum udma_u_user_ctl_handlers {
+	UDMA_U_USER_CRTL_INVALID,
+	UDMA_U_USER_CRTL_CREATE_JFC_EX,
+	UDMA_U_USER_CRTL_DELETE_JFC_EX,
+};
+
 struct udma_u_context {
 	urma_context_t		urma_ctx;
 	void			*uar;

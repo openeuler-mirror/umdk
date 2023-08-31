@@ -25,6 +25,7 @@
 #define UDMA_FLUSH_STATUS_ERR 1
 #define GID_H_SHIFT 12
 #define UDMA_SGE_IN_WQE 2
+#define NOTIFY_OFFSET_4B_ALIGN 4
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
@@ -224,6 +225,11 @@ enum udma_jfs_opcode {
 
 #define UDMA_MAX_RC_INL_INN_SZ 32
 #define UDMA_MAX_UM_INL_INN_SZ 8
+
+#define UDMA_NOTIFY_ADDR_MASK 0xffffffUL
+#define UDMA_NOTIFY_GET_ADDR(a) ((uint64_t)((a) & UDMA_NOTIFY_ADDR_MASK))
+#define UDMA_NOTIFY_SHIFT_DATA(d) ((uint64_t)(((d) << 16) << 8))
+#define UDMA_GET_NOTIFY_DATA(a, d) (UDMA_NOTIFY_GET_ADDR(a) | UDMA_NOTIFY_SHIFT_DATA(d))
 
 #define gen_qpn(high, mid, low) ((high) | (mid) | (low))
 
