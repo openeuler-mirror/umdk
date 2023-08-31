@@ -74,16 +74,25 @@ static int udma_u_check_notify_attr(struct udma_jfc_notify_init_attr *notify_att
 
 static int udma_u_check_jfc_attr_ex(struct udma_jfc_init_attr *attr)
 {
+	int ret = 0;
+
 	if (attr->jfc_ex_mask != UDMA_JFC_NOTIFY_OR_POE_CREATE_FLAGS) {
 		URMA_LOG_ERR("Invalid comp mask %u\n", attr->jfc_ex_mask);
 		return EINVAL;
 	}
 
-	if (attr->create_flags == UDMA_JFC_CREATE_ENABLE_NOTIFY)
-		return udma_u_check_notify_attr(&attr->notify_init_attr);
+	switch (attr->create_flags) {
+	case UDMA_JFC_CREATE_ENABLE_POE_MODE:
+		break;
+	case UDMA_JFC_CREATE_ENABLE_NOTIFY:
+		ret = udma_u_check_notify_attr(&attr->notify_init_attr);
+		break;
+	default:
+		URMA_LOG_ERR("Invalid create flags %u\n", attr->create_flags);
+		return EINVAL;
+	}
 
-	URMA_LOG_ERR("Invalid create flags %u\n", attr->create_flags);
-	return EINVAL;
+	return ret;
 }
 
 static struct udma_u_jfc *udma_u_create_jfc_common(const urma_jfc_cfg_t *cfg,
@@ -185,6 +194,7 @@ static urma_jfc_t *create_jfc_ex(urma_context_t *ctx,
 	cmd.db_addr = (uintptr_t)jfc->db;
 	cmd.jfc_attr_ex.jfc_ex_mask = cfg_ex->attr->jfc_ex_mask;
 	cmd.jfc_attr_ex.create_flags = cfg_ex->attr->create_flags;
+	cmd.jfc_attr_ex.poe_channel = cfg_ex->attr->poe_channel;
 	cmd.jfc_attr_ex.notify_addr = cfg_ex->attr->notify_init_attr.notify_addr;
 	cmd.jfc_attr_ex.notify_mode = cfg_ex->attr->notify_init_attr.notify_mode;
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));

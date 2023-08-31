@@ -19,6 +19,7 @@
 #include "urma_types.h"
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_poe.h"
 
 #define CQE_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
 
@@ -111,24 +112,6 @@ struct udma_u_jfc {
 
 struct udma_jfce {
 	urma_jfce_t base;
-};
-
-struct udma_jfc_notify_init_attr {
-	uint64_t	notify_addr;
-	uint8_t		notify_mode; /* Use enum udma_jfc_notify_mode */
-	uint8_t		reserved[7];
-};
-
-struct udma_jfc_init_attr {
-	uint64_t	jfc_ex_mask; /* Use enum udma_jfc_init_attr_mask */
-	uint64_t	create_flags; /* Use enum udma_jfc_create_flags */
-	uint64_t	reserved;
-	struct udma_jfc_notify_init_attr notify_init_attr;
-};
-
-struct udma_create_jfc_ex {
-	urma_jfc_cfg_t			*cfg;
-	struct udma_jfc_init_attr	*attr;
 };
 
 static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
