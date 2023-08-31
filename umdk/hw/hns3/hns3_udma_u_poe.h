@@ -37,4 +37,14 @@ struct udma_create_jfc_ex {
 	struct udma_jfc_init_attr	*attr;
 };
 
+struct udma_poe_init_attr {
+	uint64_t rsv; /* reserved for extension, now must be 0 */
+	uint64_t poe_addr; /* 0 for disable */
+};
+
+struct udma_config_poe_channel_in {
+	struct udma_poe_init_attr	*init_attr;
+	uint8_t				poe_channel;
+};
+
 #endif /* _UDMA_U_POE_H */

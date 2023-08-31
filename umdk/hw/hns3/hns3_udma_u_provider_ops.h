@@ -38,6 +38,8 @@ extern urma_provider_ops_t g_udma_u_provider_ops;
 
 enum udma_u_user_ctl_handlers {
 	UDMA_U_USER_CRTL_INVALID,
+	UDMA_U_USER_CRTL_CONFIG_POE,
+	UDMA_U_USER_CRTL_QUERY_POE,
 	UDMA_U_USER_CRTL_CREATE_JFC_EX,
 	UDMA_U_USER_CRTL_DELETE_JFC_EX,
 };
@@ -71,6 +73,7 @@ struct udma_u_context {
 	pthread_rwlock_t	jetty_table_lock;
 	struct udma_hmap	jetty_table;
 
+	uint8_t			poe_ch_num;
 	void			*reset_state;
 };
 

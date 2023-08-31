@@ -157,6 +157,10 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
 int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		    urma_jfc_t *jfc[]);
 void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
+int udma_u_config_poe_channel(const urma_context_t *ctx,
+			      urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
+int udma_u_query_poe_channel(const urma_context_t *ctx,
+			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
 int udma_u_create_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
 int udma_u_delete_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,

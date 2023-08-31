@@ -762,6 +762,114 @@ void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt)
 	return urma_cmd_ack_jfc(jfc, nevents, jfc_cnt);
 }
 
+static int udma_u_check_poe_cfg(struct udma_u_context *udma_ctx, uint8_t poe_channel,
+				struct udma_poe_init_attr *init_attr)
+{
+	if (!init_attr || !udma_ctx) {
+		URMA_LOG_ERR("invalid ctx or attr\n");
+		return EINVAL;
+	}
+
+	if (poe_channel >= udma_ctx->poe_ch_num) {
+		URMA_LOG_ERR("invalid POE channel %u >= %u\n",
+			     poe_channel, udma_ctx->poe_ch_num);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static int config_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
+			      struct udma_poe_init_attr *init_attr)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
+	struct udma_poe_info poe_channel_info = {};
+	urma_user_ctl_out_t out = {};
+	urma_user_ctl_in_t in = {};
+	urma_udrv_t udrv_data = {};
+	int ret;
+
+	ret = udma_u_check_poe_cfg(udma_ctx, poe_channel, init_attr);
+	if (ret)
+		return EINVAL;
+
+	poe_channel_info.poe_channel = poe_channel;
+	poe_channel_info.en = !!init_attr->poe_addr;
+	poe_channel_info.poe_addr = init_attr->poe_addr;
+
+	in.opcode = (uint32_t)UDMA_CONFIG_POE_CHANNEL;
+	in.addr = (uint64_t)&poe_channel_info;
+	in.len = (uint32_t)sizeof(struct udma_poe_info);
+
+	ret = urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
+	if (ret)
+		URMA_LOG_ERR("failed to config POE channel %u, ret = %d\n",
+			     poe_channel, ret);
+
+	return ret;
+}
+
+int udma_u_config_poe_channel(const urma_context_t *ctx,
+			      urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+	struct udma_config_poe_channel_in poe_in;
+	int ret;
+
+	memcpy(&poe_in, (void *)in->addr, in->len);
+	ret = config_poe_channel((urma_context_t *)ctx,
+				 poe_in.poe_channel, poe_in.init_attr);
+
+	return ret;
+}
+
+static int query_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
+			     struct udma_poe_init_attr *init_attr)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
+	struct udma_poe_info poe_channel_info_out = {};
+	struct udma_poe_info poe_channel_info_in = {};
+	urma_user_ctl_out_t out = {};
+	urma_user_ctl_in_t in = {};
+	urma_udrv_t udrv_data = {};
+	int ret;
+
+	ret = udma_u_check_poe_cfg(udma_ctx, poe_channel, init_attr);
+	if (ret)
+		return EINVAL;
+
+	poe_channel_info_in.poe_channel = poe_channel;
+
+	in.opcode = (uint32_t)UDMA_QUERY_POE_CHANNEL;
+	in.addr = (uint64_t)&poe_channel_info_in;
+	in.len = (uint32_t)sizeof(struct udma_poe_info);
+	out.addr = (uint64_t)&poe_channel_info_out;
+	out.len = (uint32_t)sizeof(struct udma_poe_info);
+
+	ret = urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
+	if (ret) {
+		URMA_LOG_ERR("failed to query POE channel %u, ret = %d\n",
+			     poe_channel, ret);
+		return ret;
+	}
+	init_attr->poe_addr = poe_channel_info_out.en ?
+			      poe_channel_info_out.poe_addr : 0;
+
+	return ret;
+}
+
+int udma_u_query_poe_channel(const urma_context_t *ctx,
+			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+	uint8_t poe_channel;
+	int ret;
+
+	memcpy(&poe_channel, (void *)in->addr, in->len);
+	ret = query_poe_channel((urma_context_t *)ctx, poe_channel,
+				(struct udma_poe_init_attr *)out->addr);
+
+	return ret;
+}
+
 urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
 				     urma_async_event_t *event)
 {

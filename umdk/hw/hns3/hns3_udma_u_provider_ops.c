@@ -31,6 +31,8 @@ typedef int (*udma_u_user_ctl_opcode)(const urma_context_t *ctx,
 
 static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
 	[UDMA_U_USER_CRTL_INVALID] = NULL,
+	[UDMA_U_USER_CRTL_CONFIG_POE] = udma_u_config_poe_channel,
+	[UDMA_U_USER_CRTL_QUERY_POE] = udma_u_query_poe_channel,
 	[UDMA_U_USER_CRTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
 	[UDMA_U_USER_CRTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
 };
@@ -46,6 +48,12 @@ int udma_u_user_ctl(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 	}
 
 	switch (in->opcode) {
+	case URMA_USER_CTL_CONFIG_POE_CHANNEL:
+		user_crtl_opcode = UDMA_U_USER_CRTL_CONFIG_POE;
+		break;
+	case URMA_USER_CTL_QUERY_POE_CHANNEL:
+		user_crtl_opcode = UDMA_U_USER_CRTL_QUERY_POE;
+		break;
 	case URMA_USER_CTL_CREATE_JFC_EX:
 		user_crtl_opcode = UDMA_U_USER_CRTL_CREATE_JFC_EX;
 		break;
@@ -197,6 +205,7 @@ static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 	udma_u_ctx->max_jfr_sge = resp->max_jfr_sge;
 	udma_u_ctx->max_jfs_wr = resp->max_jfs_wr;
 	udma_u_ctx->max_jfs_sge = resp->max_jfs_sge;
+	udma_u_ctx->poe_ch_num = resp->poe_ch_num;
 	udma_u_ctx->db_addr = resp->db_addr;
 
 	ret = udma_u_alloc_db(udma_u_ctx, cmd_fd);
