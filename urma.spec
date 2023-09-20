@@ -1,3 +1,5 @@
+# add --with transport_service_disable option, i.e. enable TPS by default
+%bcond_with transport_service_disable
 
 %if %{defined kernel_version}
     %define kernel_build_path /lib/modules/%{kernel_version}/build
@@ -52,11 +54,23 @@ This package contains all necessary include files and libraries needed
 to develop applications that require the provided includes and
 libraries.
 
+%if %{without transport_service_disable}
+%package bin
+Summary:        binary file of urma
+BuildRequires:  gcc
+Requires:       glibc
+%description bin
+binary file of urma, contains tpsa_daemon.
+%endif
+
 %prep
 %setup -c -n %{name}-%{version}
 
 %build
     cmake ./ -DCMAKE_INSTALL_PREFIX=/usr \
+%if %{with transport_service_disable}
+    -DTPS="disable" \
+%endif
 %if %{defined kernel_version}
     -DKERNEL_RELEASE=%{kernel_version} \
     -DKERNEL_PATH=%{kernel_build_path} \
@@ -97,6 +111,20 @@ fi
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
     %{_includedir}/umdk/common/compiler.h
+
+%if %{without transport_service_disable}
+%files bin
+%defattr(-,root,root)
+    %{_sbindir}/tpsa_daemon
+    /etc/rsyslog.d/tpsa.conf
+    /etc/logrotate.d/tpsa
+    %dir /etc/tpsa
+%config(noreplace) /etc/tpsa/tpsa.ini
+%post bin
+if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
+    %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
+fi
+%endif
 
 %changelog
 * Tue Sep 17 2021 huawei

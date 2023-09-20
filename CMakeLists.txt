@@ -13,6 +13,14 @@ if("${PERF_CYCLE}" STREQUAL "enable")
     set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} -DPERF_CYCLE_FLAG")
 endif("${PERF_CYCLE}" STREQUAL "enable")
 
+# TPS DISABLE
+if("${TPS}" STREQUAL "disable")
+    set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} -Dtransport_service_disable")
+    message(STATUS "TPS disable!")
+elseif("${TPS}" STREQUAL "")
+    set(TPS "enable")
+endif()
+
 set(CMAKE_FLAGS_ARM64 " -march=armv8-a+crc -DUB_ARCH_ARM64")
 set(CMAKE_FLAGS_x86_64 " -msse4.2 -DUB_ARCH_X86_64")
 if("${X86_CROSS_COMPILATION}" STREQUAL "enable")
@@ -35,6 +43,10 @@ include_directories(include)
 add_subdirectory(include)
 add_subdirectory(common)
 add_subdirectory(lib)
+
+if("${TPS}" STREQUAL "enable")
+    add_subdirectory(transport_service)
+endif()
 
 # uninstall target
 if(NOT TARGET uninstall)
