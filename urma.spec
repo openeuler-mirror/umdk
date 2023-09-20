@@ -54,6 +54,12 @@ This package contains all necessary include files and libraries needed
 to develop applications that require the provided includes and
 libraries.
 
+%package tools
+Summary:        tools of urma
+Requires:       umdk-urma-lib = %{version}
+%description tools
+tools of urma, contains  urma_perftest, urma_admin.
+
 %if %{without transport_service_disable}
 %package bin
 Summary:        binary file of urma
@@ -111,6 +117,17 @@ fi
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
     %{_includedir}/umdk/common/compiler.h
+
+%files tools
+%defattr(-,root,root)
+    %{_bindir}/urma_perftest
+    %{_bindir}/urma_admin
+    /etc/rsyslog.d/urma_admin.conf
+
+%post tools
+if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
+    %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
+fi
 
 %if %{without transport_service_disable}
 %files bin

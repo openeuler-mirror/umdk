@@ -43,6 +43,7 @@ include_directories(include)
 add_subdirectory(include)
 add_subdirectory(common)
 add_subdirectory(lib)
+add_subdirectory(tools)
 
 if("${TPS}" STREQUAL "enable")
     add_subdirectory(transport_service)

@@ -1,0 +1,19 @@
+find_package(GLIB REQUIRED COMPONENTS)
+include_directories(${GLIB_INCLUDE_DIRS})
+
+add_subdirectory(config)
+
+add_executable(urma_admin
+        urma_admin.c
+        urma_admin_log.c
+        admin_parameters.c
+        admin_file_ops.c
+        admin_cmd.c
+)
+
+include_directories(../../include)
+include_directories(../../include/common)
+target_link_libraries(urma_admin glib-2.0)
+
+set_target_properties(urma_admin PROPERTIES C_STANDARD 99)
+install(TARGETS urma_admin DESTINATION /usr/bin)
