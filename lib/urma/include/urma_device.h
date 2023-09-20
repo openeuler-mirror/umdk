@@ -1,0 +1,24 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+ * Description: urma device header file
+ * Author: Yan Fangfang
+ * Create: 2022-07-08
+ * Note:
+ * History: 2021-07-08   Create File
+ */
+
+#ifndef URMA_DEVICE_H
+#define URMA_DEVICE_H
+
+#include <dirent.h>
+#include "ub_list.h"
+#include "urma_provider.h"
+#include "urma_private.h"
+
+void urma_update_port_attr(urma_sysfs_dev_t *sysfs_dev);
+uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_list);
+urma_device_t *urma_find_dev_by_name(struct ub_list *dev_list, const char *dev_name);
+void urma_free_devices(struct ub_list *dev_list);
+ssize_t urma_write_sysfs_file(const char *dir, char *buf, size_t size);
+urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent);
+#endif
