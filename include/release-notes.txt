@@ -1,0 +1,295 @@
+Release notes for UMDK api
+-----------------------------------------------
+
+This is the first release of UMDK API. It provides API change records, including change time, change
+reason, change items, etc.
+
+%changelog
+* Thur Jun 8 2023 huawei
+- add urma_alloc_key_id and urma_free_key_id functions in urma_api.h
+- add urma_key_id_t in urma_types.h
+
+* Wed May 16 2023 huawei
+- add urma_log_get_level and urma_log_set_level api
+
+* Mon May 15 2023 huawei
+- Added URMA_USER_CTL_DELETE_JFC_EX opcode in urma_ex_api.h
+
+* Wed Apr 26 2023 huawei
+- modify urma_congestion_ctrl_alg and urma_device_cap in urma_types.h
+
+* Tue Apr 18 2023 huawei
+- delete jfc and add key_id in urma_seg_cfg_t in urma_types.h
+
+* Thur Apr 6 2023 huawei
+- delete urma_advise_seg/urma_advise_seg_async/urma_unadvise_seg/urma_advise_jetty_seg/urma_unadvise_jetty_seg interface
+
+* Thur Mar 23 2023 huawei
+- add urma_advise_jfr_async/urma_advise_jetty_async.
+
+* Thur Mar 23 2023 huawei
+- add URMA_CR_REM_ABORT_ERR to urma_cr_status
+
+* Fri Mar 17 2023 huawei
+- remove berth_cnt in urma_jfr_cfg_t.
+
+* Thur Mar 16 2023 huawei
+- add UBCORE_LINK_X32 in ubcore_link_width_t.
+- remove ib_legacy in urma_jfs_flag_t/urma_jfr_flag_t/urma_jfc_flag_t/ubcore_jfc_flag_t/ubcore_jfr_flag_t/ubcore_jfs_flag_t.
+- add remote invalidate in access flag of urma_reg_seg_flag_t/urma_import_seg_flag_t/urma_seg_attr_t.
+
+* Wed Mar 15 2023 huawei
+- Delete the id of ubcore_jfc_cfg, the id of ubcore_jfs_cfg, the jfs/jfc/jfr/jetty bitmap of ubcore_device
+
+* Thue Mar 9 2023 huawei
+- Add tjetty in urma_write and urma_read API input parameter
+- Add tjetty in urma_jfs_wr_t
+
+* Thur Mar 8 2023 huawei
+- Revise timeout in urma_wait_jfc api: timeout = 0 means no wait, timeout = -1 means infinite timeout
+
+* Thur Mar 2 2023 huawei
+- add urma register log func api.
+
+* Fri Feb 24 2023 huawei
+- add dsva in ubcore_reg_seg_flag_t.
+- add dsva in urma_reg_seg_flag_t.
+
+* Thur Feb 16 2023 huawei
+- delete jfc in urma_seg_cfg_t in urma_types.h
+
+* Fri Feb 10 2023 huawei
+- add urma_advise_jetty_seg and urma_unadvise_jetty_seg interface
+
+* Mon Feb 10 2023 huawei
+- Discard const from jfc[] in urma_ack_jfc.
+
+* Mon Feb 6 2023 huawei
+- add urma_rjfr_t in urma_types.h.
+- change the second parameter of urma_import_jfr from urma_jfr_t to urma_rjfr_t.
+- change mode(urma_transport_type_t) to trans_mode(urma_transport_type_t) in urma_target_jetty_t/urma_rjetty_t/urma_rjfr_t.
+
+* Mon Feb 6 2023 huawei
+- modify urma_register_seg api, merge multiple parameters into urma_seg_cfg_t.
+- rename buff in urma_jfr_wr_t to src.
+- modify urma_seg_attr_t/urma_jetty_stats_t/urma_jfr_flag_t/urma_device_t/urma_device_attr_t/urma_link_width_t
+- add urma_congestion_ctrl_alg_t
+
+* Mon Feb 6 2023 huawei
+- merge urma_target_jfr_t into urma_target_jetty_t in urma_send_wr_t.
+- add urma_target_jetty_t to urma_rw_wr_t.
+- replace jetty_id with id in urma_target_jetty_t.
+- merge ubcore_tjfr_t into ubcore_tjetty_t.
+
+* Fri Feb 3 2023 huawei
+- add urma_user_ctl_ops_t to support specified AI mode;
+- add urma_post_jfs_wr_ex and urma_post_jetty_wr_ex api to return doorbell information.
+
+* Thur Feb 2 2023 huawei
+- add urma_modify_jetty api
+
+* Thur Feb 2 2023 huawei
+- urma_ack_jfc add parameters, support multiple events ack for each jfc;
+
+* Thur Feb 2 2023 huawei
+- modify urma_key_t to uint32_t, and add parameters on urma_jfc_flag_t/urma_reg_seg_flag_t;
+
+* Thur Feb 2 2023 huawei
+- Change the tp_mode to trans_mode
+
+* Wed Feb 1 2023 huawei
+- add target_hint in urma_send_wr_t.
+- replace imm_data with notify_data in urma_rw_wr_t.
+
+* Thur Feb 2 2023 huawei
+- Change the tp_mode to trans_mode
+
+* Tues Jan 31 2023 huawei
+- modify urma_cr_t, including urma_cr_status_t/urma_cr_opcode_t/urma_cr_flag_t/completion.
+
+* Tues Jan 31 2023 huawei
+- delete URMA_OPC_SEND_JETTY/URMA_OPC_SEND_JETTY_IMM/URMA_OPC_SEND_JETTY_INVALIDATE.
+- change URMA_OPC_FAO to FAA in urma_opcode_t and adjustment of jurma.
+
+* Tues Jan 31 2023 huawei
+- modify urma_order_type_t/urma_jfs_wr_flag_t/urma_jfr_wr_t, and delete urma_comp_addr_t.
+- mainly modify order and remove CF.
+
+* Mon Jan 30 2023 huawei
+- delete urma_cas_t/urma_cas_mask_t/urma_fao_t, and change urma_cas_wr_t/urma_fao_wr_t.
+- delete URMA_OPC_CAS/FAO_IMM and URMA_OPC_COPY, change URMA_OPC_FAO to FAA in urma_opcode_t.
+
+* Mon Jan 13 2023 huawei
+- Change ooo of urma_device_feat to oor.
+
+* Mon Jan 9 2023 huawei
+- delete urma_read/write/send/copy_imm/sgl and urma_nop api.
+
+* Fri Jan 6 2023 huawei
+- delete urma_fao and urma_cas api
+
+* Thur Jan 5 2023 huawei
+- merge urma_wr_base_t to urma_jfs_wr_t, and add urma_faa_mask_wr_t/urma_cas_mask_wr_t
+
+* Thur Dec 28 2022 huawei
+- replace URMA_TM_SRM with URMA_TM_RM
+
+* Thur Dec 15 2022 huawei
+- In the urma_types.h file, add a urma_target_type parameter to the urma_target_jetty data structure
+
+* Thur Dec 9 2022 huawei
+- Delete stride related content
+
+* Thur Dec 8 2022 huawei
+- add a bool parameter in proc_get_cpu_mhz to decide whether to print warnings
+
+* Thur Dec 8 2022 huawei
+- add force parameter in urma_unadvise_jetty
+
+* Thur Dec 7 2022 huawei
+- add force parameter in urma_unadvise_jfr and urma_unadvise_seg
+
+* Thur Dec 7 2022 huawei
+- add URMA_IGNORE_JETTY_IN_CR opcode for user_ctl API to support ignore jetty in parse cr
+
+* Tues Dec 6 2022 huawei
+- add urma_modify_jfc/jfr api
+
+* Thur Dec 1 2022 huawei
+- remove enum urma_mode in struct urma_init_attr
+
+* Tues Nov 15 2022 huawei
+- jfs/jfr/jfc_flag add lock_free bit.
+
+* Mon Nov 14 2022 huawei
+- Revise access flag for import segment flag and seg attr: remove local_read and local_atomic
+
+* Thur Nov 11 2022 huawei
+- add bind/unbind apis for jetty under RC transport mode.
+- remove rjetty_flag in import_jetty api.
+
+* Thur Nov 3 2022 huawei
+- Add tp to urma target jfr/segment/jetty
+
+* Fri Oct 21 2022 huawei
+- modify the definition of urma_jfs_wr_flag and urma_jfr_wr_flag in urma_types.h
+
+* Tues Oct 18 2022 huawei
+- move the strings in urma_types.h  to a new header file,
+- to solve the problem that C++ does not support disordered initialization.
+
+* Sat Oct 15 2022 huawei
+- Add string translation of enumeration value in urma_types.h
+
+* Wed Oct 12 2022 huawei
+- Change API urma_get_asyn_event/urma_reg_asyn_event_cb to urma_get_async_event/urma_reg_async_event_cb.
+- Change struct urma_asyn_event_t to urma_async_event_t.
+- Add jetty event type and jetty pointer to urma_async_event_t.
+- Revert urma_port_id in urma_async_event_t to uint32_t.
+
+* Tues Oct 11 2022 huawei
+- Change the name of jfp to jetty
+
+* Sun Oct 9 2022 huawei
+- modify name of speed and width in urma_port_attr
+
+* Thur Sep 29 2022 huawei
+- Remove reduntant completion_record_data in urma_cr_t
+
+* Sat Sep 24 2022 huawei
+- Remove reliable from urma_jfs_flag;
+- Remove reliable and conn_less from urma_jfp_flag
+
+* Fri Sep 23 2022 huawei
+- Add typical values of min_rnr_timer, err_timeout, revise retry_cnt and rnr_retry typical values
+- revise max jfs priority to be URMA_MAX_PRIORITY (15)
+
+* Fri Sep 16 2022 huawei
+- Add transport mode to jfs/jfr config and device capability.
+
+* Thur Sep 15 2022 huawei
+- Add err_timeout to jfs config and min_rnr_timer to jfr config
+
+* Thur Aug 25 2022 huawei
+- Change URMA opcode comments for jfs and jfp, including urma_opcode.h
+
+* Thur Aug 25 2022 huawei
+- Change URMA opcode and add invalid segment key id macro, include the following files:
+-URMA: urma_opcode.h, urma_types.h
+
+* Mon Aug 22 2022 huawei
+- Add typical values of retry cnt and rnr_retry for jfs config.
+
+* Thur Aug 18 2022 huawei
+- Add retry cnt and rnr_retry to jfs config.
+
+* Sat July 30 2022 huawei
+- Add cr opcode according to work request operation codes.
+
+* Wed July 27 2022 huawei
+- Assert that jfc is not NULL for urma_register_seg
+
+* Tues July 26 2022 huawei
+- Add jfc_cfg to jfc, add comments about cr_cnt for urma_poll_jfc
+
+* Fri July 15 2022 huawei
+- modify the management api of urma.
+  1. uint32_t urma_get_device_list(char **dev_name_list);                                  ->    urma_device_t **urma_get_device_list(int *num_devices);
+  2. urma_status_t urma_query_device(const char *dev_name, urma_device_attr_t *dev_attr);  ->    urma_status_t urma_query_device(const urma_device_t *dev, urma_device_attr_t *dev_attr);
+  3. urma_context_t *urma_create_context(uint32_t eid);                                    ->    urma_context_t *urma_create_context(urma_device_t *dev);
+  4. add new api to free device_list: void urma_free_device_list(urma_device_t **device_list);
+  5. add new api to get device by dev_name: urma_device_t *urma_get_device_by_name(const char *dev_name);
+  6. add new api to get device by dev_eid: urma_device_t *urma_get_device_by_eid(uint32_t eid, urma_transport_type_t type);
+
+* Tues July 12 2022 huawei
+- Add urma ops to urma context, set URMA_UB_MODE to 0 as the defaut mode.
+
+* Wed June 29 2022 huawei
+- Modify the name of argument of urma_import_jfp, modify jfp_id to rjfp_id, modify flag to rjfp_flag, modify
+  key to rjfp_key.
+
+* Thur June 24 2022 huawei
+- Remove urma_create_jetty and modify dev attribute members and type.
+
+* Thur June 23 2022 huawei
+- Add solicited_only flag into urma_rearm_jfc api.
+
+* Thur June 22 2022 huawei
+- Add fence, strong order and solicited enable etc 3 bits in urma_jfs_wr_flag_t.
+
+* Thur June 22 2022 huawei
+- Remove urma_*_cf api and urma_fence urma api.
+
+* Tues June 21 2022 huawei
+- Add src_jfs_id in urma_cr_t.completion.notify, support source jfs id identify capability when write immediate data
+
+* Thur June 16 2022 huawei
+- Revise completion_record_data in urma_cr_t, remove reduntant user_ctx in urma_jfs_t and urma_jfr_t
+
+* Thur June 9 2022 huawei
+-Add JFP api.
+
+* Fri May 27 2022 huawei
+-Add urma_post_jfr_wr api.
+
+* Thur May 26 2022 huawei
+- urma_advise_jfr/urma_advise_seg APIs return URMA_EEXIST under IB mode, if the jfr/segment has been advised before.
+
+* Fri May 20 2022 huawei
+-Remove ub_usmp.h from UMDK api
+
+* Wed May 18 2022 huawei
+- add urma_ib.h, the file mainly includes some private interfaces under IB mode
+
+* Wed May 18 2022 huawei
+- Add urma_jfs_wr_flag_t parameter in urma related API, including urma_api.h.
+
+* Wed May 11 2022 huawei
+-Introduce URPC API files, including urpc.h
+
+* Sun May 1 2022 huawei
+-Baseline UMDK's API files, include the following files:
+-COMMON: ub_errno.h
+-URMA: urma_types.h, urma_api.h, urma_opcode.h, urma_ub_driver.h, ub_usmp.h
+-UTM: utm_types.h, utm_api.h
+-DMO: atomic_obj_api.h, common_types.h

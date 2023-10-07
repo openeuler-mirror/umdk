@@ -1,0 +1,17 @@
+#Please note:
+#nocreate and copytruncate in configuration file are mutually exclusive and can't be configured at the same time, otherwise nocreate have no effect
+#create and copytruncate in configuration file are mutually exclusive and can't be configured at the same time, otherwise create have no effect
+/var/log/umdk/urma/*.log
+{
+    maxage 365
+    rotate 30
+    notifempty
+    compress
+    copytruncate
+    missingok
+    size +1024k
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+    endscript
+}

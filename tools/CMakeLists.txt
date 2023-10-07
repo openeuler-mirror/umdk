@@ -1,0 +1,2 @@
+add_subdirectory(urma_admin)
+add_subdirectory(urma_perftest)

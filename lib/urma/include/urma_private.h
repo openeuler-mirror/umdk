@@ -1,0 +1,51 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2021-2021. All rights reserved.
+ * Description: URMA common header file
+ * Author: Ouyang Changchun, Bojie Li, Yan Fangfang, Qian Guoxin
+ * Create: 2021-07-14
+ * Note:
+ * History: 2021-07-14   Create File
+ */
+
+#ifndef URMA_PRIVATE_H
+#define URMA_PRIVATE_H
+
+#include <stdint.h>
+#include <stdatomic.h>
+
+#include "ub_list.h"
+#include "urma_provider.h"
+
+#define URMA_MAX_SYSFS_PATH 256
+
+typedef struct urma_ref {
+    atomic_ulong atomic_cnt;
+} urma_ref_t;
+
+typedef struct urma_driver {
+    struct urma_provider_ops *ops;
+    struct ub_list node; /* Add to driver list */
+} urma_driver_t;
+
+typedef struct urma_sysfs_dev {
+    char dev_name[URMA_MAX_NAME];
+    char sysfs_path[URMA_MAX_SYSFS_PATH];
+    char driver_name[URMA_MAX_NAME];
+    urma_transport_type_t transport_type; /* transport type */
+    urma_driver_t *driver;
+    urma_device_t *urma_device;
+    urma_device_attr_t dev_attr;
+    uint16_t device_id;
+    uint16_t vendor_id;
+    struct ub_list node; /* Add to device list */
+} urma_sysfs_dev_t;
+
+typedef struct urma_sysfs_dev_name {
+    char dev_name[URMA_MAX_NAME];
+    struct ub_list node; /* Add to dev_name_list */
+} urma_sysfs_dev_name_t;
+
+int urma_init_jetty_cfg(urma_jetty_cfg_t *p, const urma_jetty_cfg_t *cfg);
+void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
+
+#endif // URMA_PRIVATE_H
