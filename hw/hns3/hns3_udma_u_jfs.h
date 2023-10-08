@@ -20,6 +20,7 @@
 #include "urma_provider.h"
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
+#include "hns3_udma_u_buf.h"
 
 #define UDMA_SIZE_CONNECT_NODE_TABLE 99
 #define UDMA_FLUSH_STATUS_ERR 1
@@ -101,8 +102,10 @@ struct udma_qp {
 	void			*dwqe_page;
 	struct verbs_qp		verbs_qp;
 	struct udma_buf		buf;
+	struct udma_dca_buf	dca_wqe;
 	struct udma_wq		sq;
 	struct udma_sge_ex	ex_sge;
+	uint32_t		buf_size;
 	uint32_t		next_sge;
 	urma_mtu_t		path_mtu;
 	uint32_t		max_inline_data;
@@ -233,6 +236,9 @@ enum udma_jfs_opcode {
 
 #define gen_qpn(high, mid, low) ((high) | (mid) | (low))
 
+#define UDMA_BIT_MASK(nr) (1UL << ((nr) % 64))
+#define UDMA_BIT_WORD(nr) ((nr) / 64)
+
 #define UDMA_MIN_JFS_DEPTH 64
 
 #define UDMA_HOPLIMIT_NUM 0xff
@@ -259,6 +265,37 @@ struct udma_jfs_wr_info {
 	uint64_t            dst_addr;
 	uint32_t            rkey;
 };
+
+#define udma_page_align(x) align(x, UDMA_HW_PAGE_SIZE)
+#define udma_page_count(x) (udma_page_align(x) / UDMA_HW_PAGE_SIZE)
+
+static inline bool atomic_test_bit(atomic_ulong *p, uint32_t nr)
+{
+	atomic_ulong *map = p;
+
+	map += UDMA_BIT_WORD(nr);
+	return !!(atomic_load(map) & UDMA_BIT_MASK(nr));
+}
+
+static inline bool test_and_set_bit_lock(atomic_ulong *p, uint32_t nr)
+{
+	uint64_t mask = UDMA_BIT_MASK(nr);
+	atomic_ulong *map = p;
+
+	map += UDMA_BIT_WORD(nr);
+	if (atomic_load(map) & mask)
+		return true;
+
+	return (atomic_fetch_or(map, mask) & mask) != 0;
+}
+
+static inline void clear_bit_unlock(atomic_ulong *p, uint32_t nr)
+{
+	atomic_ulong *map = p;
+
+	map += UDMA_BIT_WORD(nr);
+	atomic_fetch_and(map, ~UDMA_BIT_MASK(nr));
+}
 
 static inline struct udma_u_jfs *to_udma_jfs(const urma_jfs_t *jfs)
 {

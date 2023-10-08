@@ -33,8 +33,49 @@
 #define UDMA_JFR_TABLE_SIZE			8
 #define UDMA_JETTY_TABLE_SIZE			8
 #define UDMA_JFS_QP_TABLE_SIZE			99
+#define UDMA_DCA_BITS_PER_STATUS		1
+#define DCA_BITS_HALF 2
+
+#define MAX_TP_CNT				0x8000
+#define ALIGN_OVER_BOUND(val, align_size)\
+	(((val + align_size - 1) & ~(align_size - 1)) < val ? false : true)
+
+#define ALIGN_OVER_UNIT_SIZE(val, align_size)\
+	((DIV_ROUND_UP(val, align_size) * align_size) < val ? false : true)
+
+#define list_entry(LINK, TYPE, MEMBER) \
+	((TYPE *)((char *)(LINK)-(uint64_t)(&((TYPE *)0)->MEMBER)))
+
+#define list_tail(LIST, TYPE, MEMBER)		\
+	list_entry((LIST)->prev, TYPE, MEMBER)
+
+#define list_next_entry(POS, MEMBER) \
+	list_entry((POS)->MEMBER.next, typeof(*(POS)), MEMBER)
+
+#define list_first_entry(PTR, TYPE, MEMBER) \
+	list_entry((PTR)->next, TYPE, MEMBER)
+
+#define list_for_each_entry(POS, HEAD, MEMBER)				\
+	for ((POS) = list_first_entry(HEAD, typeof(*(POS)), MEMBER);	\
+	     &(POS)->MEMBER != (HEAD);					\
+	     (POS) = list_next_entry(POS, MEMBER))
+
+#define min_t(t, a, b) \
+	({ \
+		t _ta = (a); \
+		t _tb = (b); \
+		_ta > _tb ? _tb : _ta; \
+	})
 
 extern urma_provider_ops_t g_udma_u_provider_ops;
+
+struct udma_dca_context_attr {
+	uint64_t comp_mask;
+	uint32_t dca_prime_qps;
+	uint32_t dca_unit_size;
+	uint64_t dca_max_size;
+	uint64_t dca_min_size;
+};
 
 enum udma_u_user_ctl_handlers {
 	UDMA_U_USER_CRTL_INVALID,
@@ -44,6 +85,25 @@ enum udma_u_user_ctl_handlers {
 	UDMA_U_USER_CRTL_CREATE_JFC_EX,
 	UDMA_U_USER_CRTL_UPDATE_JFS_CI,
 	UDMA_U_USER_CRTL_DELETE_JFC_EX,
+};
+
+struct list_head {
+	struct list_head *next;
+	struct list_head *prev;
+};
+
+struct udma_u_dca_ctx {
+	struct list_head	mem_list;
+	pthread_spinlock_t	lock;
+	uint32_t		mem_cnt;
+	uint32_t		unit_size;
+	uint64_t		max_size;
+	uint64_t		min_size;
+	uint64_t		curr_size;
+	uint32_t		max_qps;
+	uint32_t		status_size;
+	atomic_ulong		*buf_status;
+	atomic_ulong		*sync_status;
 };
 
 struct udma_u_context {
@@ -77,6 +137,7 @@ struct udma_u_context {
 
 	uint8_t			poe_ch_num;
 	void			*reset_state;
+	struct udma_u_dca_ctx	dca_ctx;
 };
 
 struct udma_reset_state {
@@ -98,6 +159,35 @@ static inline void udma_write64(struct udma_u_context *ctx,
 
 	atomic_store_explicit((_Atomic(uint64_t) *)dest,
 			      (uint64_t)(*val), memory_order_relaxed);
+}
+
+static inline void INIT_LIST_HEAD(struct list_head *list)
+{
+	list->next = list;
+	list->prev = list;
+}
+
+static inline void list_del(struct list_head *entry)
+{
+	entry->next->prev = entry->prev;
+	entry->prev->next = entry->next;
+	entry->next = NULL;
+	entry->prev = NULL;
+}
+
+static inline void __list_add(struct list_head *new_node,
+			      struct list_head *prev,
+			      struct list_head *next)
+{
+	next->prev = new_node;
+	new_node->next = next;
+	new_node->prev = prev;
+	prev->next = new_node;
+}
+
+static inline void list_add_tail(struct list_head *head, struct list_head *tail)
+{
+	__list_add(tail, head->prev, head);
 }
 
 #endif /* _UDMA_PROVIDER_OPS_H */

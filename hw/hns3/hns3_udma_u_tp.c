@@ -236,7 +236,10 @@ static void free_tgt_conn_node(struct udma_u_context *udma_u_ctx,
 			       struct connect_node *tgt_conn_node)
 {
 	udma_free_sw_db(udma_u_ctx, tgt_conn_node->qp->sdb, UDMA_JFS_TYPE_DB);
-	udma_free_buf(&tgt_conn_node->qp->buf);
+	if (udma_u_ctx->dca_ctx.unit_size > 0)
+		free(tgt_conn_node->qp->dca_wqe.bufs);
+	else
+		udma_free_buf(&tgt_conn_node->qp->buf);
 	free(tgt_conn_node->qp->sq.wrid);
 	free(tgt_conn_node->qp);
 	free(tgt_conn_node);

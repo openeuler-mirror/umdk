@@ -481,6 +481,24 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 	return JFC_OK;
 }
 
+static void dca_detach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
+{
+	struct udma_dca_detach_attr attr = {};
+	bool is_empty;
+
+	(void)pthread_spin_lock(&qp->sq.lock);
+
+	is_empty = qp->sq.head == qp->sq.tail;
+	if (is_empty && qp->sq.wqe_cnt > 0)
+		attr.sq_idx = qp->sq.head & (qp->sq.wqe_cnt - 1);
+	attr.qpn = qp->qp_num;
+
+	(void)pthread_spin_unlock(&qp->sq.lock);
+
+	if (is_empty)
+		exec_detach_dca_mem_cmd(ctx, &attr);
+}
+
 static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 			     struct udma_jfc_cqe *cqe,
 			     urma_cr_t *cr)
@@ -515,6 +533,8 @@ static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 	cr->tpn = qpn;
 
 	sqp->sq.tail++;
+	if (sqp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		dca_detach_qp_buf(udma_ctx, sqp);
 
 	return 0;
 }
@@ -651,6 +671,10 @@ int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 
 	if (!udma_u_jfc->lock_free)
 		pthread_spin_unlock(&udma_u_jfc->lock);
+
+	/* Try to shrink the DCA mem */
+	if (udma_ctx->dca_ctx.mem_cnt > 0)
+		udma_u_shrink_dca_mem(udma_ctx);
 
 	return npolled;
 }
