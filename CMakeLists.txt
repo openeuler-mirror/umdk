@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.12.1)
 project(UBus)
 
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "cmake")
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 set(CMAKE_FLAGS_PUBILC " -Wall -Werror -Wfloat-equal -Wtrampolines -g -O2 -rdynamic -Wl,-z,noexecstack,-z,relro,-z,now \
