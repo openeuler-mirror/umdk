@@ -44,6 +44,12 @@ Summary:        Basic URMA libraries of UMDK
 %description lib
 This package contains basic URMA libraries of UMDK, such as liburma.so.
 
+%package compat-hns-lib
+Summary:	Libraries of hns
+
+%description compat-hns-lib
+This pachage contains libraries of hns, such as liburma-hns3.so.
+
 %package devel
 Summary:        Include Files and Libraries mandatory for URMA
 Requires:       umdk-urma-lib = %{version}
@@ -106,6 +112,10 @@ make install DESTDIR=%{buildroot}
 if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
     %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
 fi
+
+%files compat-hns-lib
+%defattr(-,root,root)
+    %{_libdir}/liburma-hns3.so
 
 %files devel
 %defattr(-,root,root)
