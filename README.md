@@ -4,8 +4,10 @@
 统一内存开发工具包（UMDK）是一套以内存语义为核心的分布式通信软件栈。旨在通过软硬件协同设计新一代网络架构，颠覆传统通信形式，构建以内存语义互联为中心的计算原生网络。
 #### 软件架构
 
-urma                                : URMA (Unified Remote Memory Access，统一远端内存访问)
-                                          URMA子系统在UBUS系统中提供高带宽低时延的数据服务。主要用于对数据中心的各种业务提供消息通信，数据转发的基础功能。对于大数据业务，减少端到端的通信时延。对于HPC和AI业务，提供高带宽、低时延的服务。
+```text
+
+urma                          : URMA (Unified Remote Memory Access，统一远端内存访问)
+                                URMA子系统在UBUS系统中提供高带宽低时延的数据服务。主要用于对数据中心的各种业务提供消息通信，数据转发的基础功能。对于大数据业务，减少端到端的通信时延。对于HPC和AI业务，提供高带宽、低时延的服务。
 ├── cmake                     : Cmake 配置文件, 包含如查找 kernel 版本等.
 ├── CMakeLists.txt            : Cmake 根文件.
 ├── cmake_uninstall.cmake.in  : Cmake 卸载文件.
@@ -16,48 +18,57 @@ urma                                : URMA (Unified Remote Memory Access，统�
 ├── transport_service         : TPS deamon
 └── urma.spec                 : 执行 spec 文件以生成 RPM 包.
 
+```
 
 #### urma 安装教程
 
 1. 编译环境要求
 - 你需要安装以下依赖包：
-  $ yum install -y rpm-build
-  $ yum install -y cmake
-  $ yum install -y make
-  $ yum install -y gcc
-  $ yum install -y gcc-c++
-  $ yum install -y glib2-devel
-  $ yum install -y libsecurec-devel
-  $ yum install -y elfutils-devel
-  $ yum install -y rdma-core-devel   # You may need to provide it yourself
 
-- 您需要找到并安装与操作系统版本匹配的软件包。
-  $ rpm -ivh kernel-devel*.rpm
-  $ rpm -ivh kernel-headers*.rpm
-  $ rpm -ivh ksecurec-devel*.rpm
+```bash
+  yum install -y rpm-build
+  yum install -y cmake
+  yum install -y make
+  yum install -y gcc
+  yum install -y gcc-c++
+  yum install -y glib2-devel
+  yum install -y libsecurec-devel
+  yum install -y elfutils-devel
+  yum install -y rdma-core-devel   # You may need to provide it yourself
+```
 
 2. 编译安装
 - 您可以通过以下方式构建和安装ubus rpm包：
-  $ cd urma
-  $ tar -czf /root/rpmbuild/SOURCES/umdk-1.3.0.tar.gz --exclude=.git `ls -A`
-  $ rpmbuild -ba umdk.spec
-  $ rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
 
+```bash
+  tar -czf /root/rpmbuild/SOURCES/umdk-urma-1.3.0.tar.gz --exclude=.git `ls -A`
+  rpmbuild -ba urma.spec
+  rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
+```
 - 或者，您可以在代码文件夹中手动构建程序以进行调试：
-  $ mkdir build
-  $ cd build
-  $ cmake ..
-  $ make install
+
+```bash
+  mkdir build
+  cd build
+  cmake ..
+  make install
+```
 
 3. 编译选项
 - RPM 编译选项
+
+```bash
   $ --with transport_service_disable                  可选, i.e. 默认使能 TPS 功能
   $ --define 'kernel_version 4.19.90'                 可选, 指定 kernel 版本
   $ --define 'rpm_version 1.4.0'                      可选, 指定 rpm 版本
   $ --define 'rpm_release  B002'                      可选, 指定发布版本
+```
 
 - cmake 编译选项
+
+```bash
   $ -DTPS=disable                                     可选, i.e. 默认使能 TPS 功能
+```
 
 #### 参与贡献
 
