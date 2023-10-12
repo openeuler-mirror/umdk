@@ -5,13 +5,14 @@ The Unified Memory Development Kit(UMDK) is a set of distributed communication s
 
 #### Software Architecture
 
-urma                                 : URMA (Unified Remote Memory Access)
-                                          The URMA subsystem provides high-bandwidth and low-latency data
-                                          services in the UBUS system. Provides basic functions of message
-                                          communication and data forwarding for various services in the data
-                                          center. For big data services, the end-to-end communication delay
-                                          is reduced. High-bandwidth and low-latency services are provided for
-                                          HPC and AI services.
+```text
+urma                          : URMA (Unified Remote Memory Access)
+                                The URMA subsystem provides high-bandwidth and low-latency data
+                                services in the UBUS system. Provides basic functions of message
+                                communication and data forwarding for various services in the data
+                                center. For big data services, the end-to-end communication delay
+                                is reduced. High-bandwidth and low-latency services are provided for
+                                HPC and AI services.
 ├── cmake                     : Cmake configuration files, such as looking for kernel version, etc.
 ├── CMakeLists.txt            : Cmake root file.
 ├── cmake_uninstall.cmake.in  : Cmake uninstall file.
@@ -21,49 +22,58 @@ urma                                 : URMA (Unified Remote Memory Access)
 ├── tools                     : UMDK tools, including perftest, admin
 ├── transport_service         : TPS deamon
 └── urma.spec                 : Execute the spec file that generates the RPM package.
-
+```
 
 #### URMA Installation
 
 1. Compile environment configuration
 - You need to install the following dependency packages
-  $ yum install -y rpm-build
-  $ yum install -y cmake
-  $ yum install -y make
-  $ yum install -y gcc
-  $ yum install -y gcc-c++
-  $ yum install -y glib2-devel
-  $ yum install -y libsecurec-devel
-  $ yum install -y elfutils-devel
-  $ yum install -y rdma-core-devel   # You may need to provide it yourself
 
-- You need to find and install the package that matches the OS version.
-  $ rpm -ivh kernel-devel*.rpm
-  $ rpm -ivh kernel-headers*.rpm
-  $ rpm -ivh ksecurec-devel*.rpm
+```bash
+  yum install -y rpm-build
+  yum install -y cmake
+  yum install -y make
+  yum install -y gcc
+  yum install -y gcc-c++
+  yum install -y glib2-devel
+  yum install -y libsecurec-devel
+  yum install -y elfutils-devel
+  yum install -y rdma-core-devel   # You may need to provide it yourself
+```
 
 2. Build and install
 - You can build and install the ubus rpm packages by:
-  $ cd urma
-  $ tar -czf /root/rpmbuild/SOURCES/umdk-1.3.0.tar.gz --exclude=.git `ls -A`
-  $ rpmbuild -ba umdk.spec
-  $ rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
+
+```bash
+  tar -czf /root/rpmbuild/SOURCES/umdk-urma-1.3.0.tar.gz --exclude=.git `ls -A`
+  rpmbuild -ba umdk.spec
+  rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
+```
 
 - Alternately, you can build your programs manually in the code folder for debug.
-  $ mkdir build
-  $ cd build
-  $ cmake ..
-  $ make install
+
+```bash
+  mkdir build
+  cd build
+  cmake ..
+  make install
+```
 
 3. Compilation Options
 - RPM compilation Options
+
+```bash
   $ --with transport_service_disable                  option, i.e. enable TPS by default
   $ --define 'kernel_version 4.19.90'                 option, specify kernel version
   $ --define 'rpm_version 1.4.0'                      option, specify rpm version
   $ --define 'rpm_release  B002'                      option, specify release version
+```
 
 - cmake compilation Options
+
+```bash
   $ -DTPS=disable                                     option, i.e. enable tps service by default
+```
 
 #### Contribution
 

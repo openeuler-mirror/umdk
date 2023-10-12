@@ -320,7 +320,7 @@ void urma_free_device_list(urma_device_t **device_list)
 
 urma_status_t urma_query_device(const urma_device_t *dev, urma_device_attr_t *dev_attr)
 {
-    if (dev == NULL || dev->name == NULL || dev->sysfs_dev == NULL || dev_attr == NULL) {
+    if (dev == NULL || dev->sysfs_dev == NULL || dev_attr == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
