@@ -15,4 +15,4 @@ set(CMAKE_C_FLAGS "-Wall -Wextra -Wfloat-equal -fno-common -std=gnu99 \
 -D_FORTIFY_SOURCE=2 -O2 -fstack-protector-all -s -ftrapv -Wl,-z,relro,-z,now")
 set(CMAKE_LD_FLAGS "-s")
 
-install(TARGETS UDMA_SO LIBRARY DESTINATION lib OPTIONAL)
+install(TARGETS UDMA_SO LIBRARY DESTINATION /usr/lib64 OPTIONAL)
