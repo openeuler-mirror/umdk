@@ -15,6 +15,6 @@
 
 #ifndef _UDMA_U_ABI_H
 #define _UDMA_U_ABI_H
-#include <hns3_udma_abi.h>
+#include "hns3_udma_abi.h"
 
 #endif /* _UDMA_U_ABI_H */
