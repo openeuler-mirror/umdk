@@ -16,6 +16,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <ctype.h>
+#include <stdio.h>
 #include <stdint.h>
 #include "hns3_udma_u_jfr.h"
 #include "hns3_udma_u_jfc.h"
@@ -23,6 +25,7 @@
 #include "hns3_udma_u_tp.h"
 #include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
+#include "hns3_udma_u_buf.h"
 #include "hns3_udma_u_provider_ops.h"
 
 typedef int (*udma_u_user_ctl_opcode)(const urma_context_t *ctx,
@@ -237,6 +240,39 @@ static void udma_u_uninit_context(struct udma_u_context *udma_u_ctx)
 	udma_u_free_db(udma_u_ctx);
 }
 
+void udma_cleanup_dca_mem(struct udma_u_context *ctx)
+{
+	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	struct udma_dca_dereg_attr dereg_attr = {};
+	struct udma_u_dca_mem *mem;
+
+	list_for_each_entry(mem, &dca_ctx->mem_list, entry) {
+		dereg_attr.free_key = dca_mem_to_key(mem);
+		exec_deregister_dca_mem_cmd(ctx, &dereg_attr);
+	}
+}
+
+static void uninit_dca_context(struct udma_u_context *udma_u_ctx)
+{
+	struct udma_u_dca_ctx *dca_ctx = &udma_u_ctx->dca_ctx;
+	int ret;
+
+	if (!dca_ctx->unit_size)
+		return;
+
+	pthread_spin_lock(&dca_ctx->lock);
+	udma_cleanup_dca_mem(udma_u_ctx);
+	pthread_spin_unlock(&dca_ctx->lock);
+
+	if (dca_ctx->buf_status) {
+		ret = munmap(dca_ctx->buf_status, (size_t)udma_u_ctx->page_size);
+		if (ret != 0)
+			URMA_LOG_ERR("Failed to munmap dca.\n");
+	}
+
+	pthread_spin_destroy(&dca_ctx->lock);
+}
+
 static void udma_u_destroy_jfr_table(struct udma_u_context *ctx)
 {
 	struct udma_jfr_node *cur, *next;
@@ -318,8 +354,174 @@ err_init_jfs_table:
 	return ret;
 }
 
+static uint64_t get_env_val(char *env)
+{
+	uint64_t val = 0;
+	char *end = NULL;
+
+	errno = 0;
+	if (env) {
+		while (*env != '\0' && isspace(*env))
+			env++;
+
+		if (*env != '-')
+			val = strtoul(env, &end, 0);
+
+		if (errno == ERANGE || *env == '-' || *end) {
+			URMA_LOG_ERR("The env val is error!\n");
+			return 0;
+		}
+	}
+
+	return val;
+}
+
+static void load_dca_config_from_env_var(struct udma_dca_context_attr *attr)
+{
+	uint32_t align_unit_size;
+	uint64_t unit_size;
+	uint64_t max_size;
+	uint64_t min_size;
+	uint64_t tp_num;
+	char *env;
+
+	unit_size = get_env_val(getenv("UDMA_DCA_UNIT_SIZE"));
+	if (unit_size == 0)
+		return; /* Disable DCA only for this process */
+
+	if (unit_size <= UINT32_MAX &&
+	    ALIGN_OVER_BOUND((uint32_t)unit_size, (uint32_t)sysconf(_SC_PAGESIZE))) {
+		attr->comp_mask |= UDMA_CONTEXT_MASK_DCA_UNIT_SIZE;
+		attr->dca_unit_size = unit_size;
+	} else {
+		URMA_LOG_ERR("The DCA_UNIT_SIZE is too large!\n");
+		return;
+	}
+
+	align_unit_size = align(unit_size, sysconf(_SC_PAGESIZE));
+	/*
+	 * not set OR 0: Unlimited memory pool increase.
+	 * others: Maximum memory pool size to be increased.
+	 */
+	max_size = get_env_val(getenv("UDMA_DCA_MAX_SIZE"));
+	if (max_size > 0 && ALIGN_OVER_UNIT_SIZE(max_size, align_unit_size)) {
+		attr->comp_mask |= UDMA_CONTEXT_MASK_DCA_MAX_SIZE;
+		attr->dca_max_size = max_size;
+	}
+
+	/*
+	 * not set: The memory pool cannot be reduced.
+	 * others: The size of free memory in the pool cannot exceed this value.
+	 * 0: Always reduce the free memory in the pool.
+	 */
+	min_size = get_env_val(getenv("UDMA_DCA_MIN_SIZE"));
+	if (min_size > 0 && ALIGN_OVER_UNIT_SIZE(min_size, align_unit_size)) {
+		attr->comp_mask |= UDMA_CONTEXT_MASK_DCA_MIN_SIZE;
+		attr->dca_min_size = min_size;
+	}
+
+	env = getenv("UDMA_DCA_PRIME_TP_NUM");
+	if (env) {
+		attr->comp_mask |= UDMA_CONTEXT_MASK_DCA_PRIME_QPS;
+		tp_num = get_env_val(env);
+		if (tp_num <= MAX_TP_CNT)
+			attr->dca_prime_qps = tp_num;
+		else
+			URMA_LOG_ERR("The DCA_PRIME_TP_NUM is too large!\n");
+	}
+}
+
+static void ucontext_set_cmd(struct udma_create_ctx_ucmd *cmd,
+			     struct udma_dca_context_attr *attr)
+{
+	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_UNIT_SIZE)
+		cmd->dca_unit_size = attr->dca_unit_size;
+
+	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_PRIME_QPS) {
+		cmd->comp |= UDMA_CONTEXT_MASK_DCA_PRIME_QPS;
+		cmd->dca_max_qps = attr->dca_prime_qps;
+	}
+}
+
+static void set_dca_pool_param(struct udma_u_context *ctx,
+			       struct udma_dca_context_attr *attr)
+{
+	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+
+	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_UNIT_SIZE)
+		dca_ctx->unit_size = align(attr->dca_unit_size, ctx->page_size);
+
+	/* If not set, the memory pool can be expanded unlimitedly. */
+	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_MAX_SIZE)
+		dca_ctx->max_size = DIV_ROUND_UP(attr->dca_max_size,
+					dca_ctx->unit_size) * dca_ctx->unit_size;
+	else
+		dca_ctx->max_size = UDMA_DCA_MAX_MEM_SIZE;
+
+	/* If not set, the memory pool cannot be shrunk. */
+	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_MIN_SIZE)
+		dca_ctx->min_size = DIV_ROUND_UP(attr->dca_min_size,
+					dca_ctx->unit_size) * dca_ctx->unit_size;
+	else
+		dca_ctx->min_size = UDMA_DCA_MAX_MEM_SIZE;
+
+	printf("Support DCA, unit %u, max %lu, min %lu Bytes.\n",
+	       dca_ctx->unit_size, dca_ctx->max_size, dca_ctx->min_size);
+}
+
+static int mmap_dca(struct udma_u_context *ctx, int cmd_fd, size_t size)
+{
+	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	off_t offset;
+	void *addr;
+
+	offset = get_mmap_offset(0, ctx->page_size, UDMA_MMAP_TYPE_DCA);
+
+	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, cmd_fd, offset);
+	if (addr == MAP_FAILED) {
+		URMA_LOG_ERR("failed to mmap() dca addr.\n");
+		return URMA_FAIL;
+	}
+
+	dca_ctx->buf_status = (atomic_ulong *)addr;
+	dca_ctx->sync_status = (atomic_ulong *)(addr + size / DCA_BITS_HALF);
+
+	return 0;
+}
+
+static int init_dca_context(struct udma_u_context *ctx, int cmd_fd,
+			    struct udma_create_ctx_resp *resp,
+			    struct udma_dca_context_attr *attr)
+{
+	const uint32_t bits_per_qp = 2 * UDMA_DCA_BITS_PER_STATUS;
+	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	int mmap_size = resp->dca_mmap_size;
+	int max_qps = resp->dca_qps;
+	int ret;
+
+	if (!resp->dca_mode || !attr->dca_unit_size)
+		return 0;
+
+	INIT_LIST_HEAD(&dca_ctx->mem_list);
+	ret = pthread_spin_init(&dca_ctx->lock, PTHREAD_PROCESS_PRIVATE);
+	if (ret) {
+		URMA_LOG_ERR("Failed to init DCA spin lock ret %d.\n", ret);
+		return ret;
+	}
+
+	set_dca_pool_param(ctx, attr);
+	if (!mmap_dca(ctx, cmd_fd, mmap_size)) {
+		dca_ctx->status_size = mmap_size;
+		dca_ctx->max_qps = min_t(int, max_qps,
+					 mmap_size * BIT_CNT_PER_BYTE / bits_per_qp);
+	}
+
+	return 0;
+}
+
 static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uint32_t uasid)
 {
+	struct udma_dca_context_attr udma_env_attr = {};
 	struct udma_create_ctx_resp resp = {};
 	struct udma_create_ctx_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udrv_data = {};
@@ -339,6 +541,8 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uin
 		goto err_init_urma_ctx_cfg;
 	}
 
+	load_dca_config_from_env_var(&udma_env_attr);
+	ucontext_set_cmd(&cmd, &udma_env_attr);
 	udma_set_udata(&udrv_data, &cmd, sizeof(cmd), &resp, sizeof(resp));
 
 	if (urma_cmd_create_context(&udma_u_ctx->urma_ctx, &cfg, &udrv_data))
@@ -350,6 +554,9 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uin
 		goto err_init_context;
 	}
 
+	if (init_dca_context(udma_u_ctx, cmd_fd, &resp, &udma_env_attr))
+		goto err_init_dca_context;
+
 	ret = init_jetty_x_table(udma_u_ctx);
 	if (ret)
 		goto err_init_jetty_x_table;
@@ -357,6 +564,8 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uin
 	return &udma_u_ctx->urma_ctx;
 
 err_init_jetty_x_table:
+	uninit_dca_context(udma_u_ctx);
+err_init_dca_context:
 	udma_u_uninit_context(udma_u_ctx);
 err_init_context:
 	(void)urma_cmd_delete_context(&udma_u_ctx->urma_ctx);
@@ -373,6 +582,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	udma_u_destroy_jfr_table(udma_u_ctx);
 	udma_u_destroy_jfs_qp_table(udma_u_ctx);
 	udma_u_destroy_jetty_table(udma_u_ctx);
+	uninit_dca_context(udma_u_ctx);
 	udma_u_uninit_context(udma_u_ctx);
 	if (urma_cmd_delete_context(&udma_u_ctx->urma_ctx))
 		URMA_LOG_ERR("udma_u destroy ctx failed.\n");

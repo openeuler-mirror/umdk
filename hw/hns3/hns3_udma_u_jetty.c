@@ -226,7 +226,10 @@ static void rc_free_node(struct udma_u_jetty *udma_jetty)
 					UDMA_JETTY_TYPE_DB);
 			free(qp->sq.wrid);
 			qp->sq.wrid = NULL;
-			udma_free_buf(&qp->buf);
+			if (qp->dca_wqe.bufs)
+				free(qp->dca_wqe.bufs);
+			else
+				udma_free_buf(&qp->buf);
 			free(qp);
 			qp = NULL;
 		}
@@ -586,7 +589,10 @@ static void free_tgt_node(struct udma_u_context *udma_ctx,
 	udma_free_sw_db(udma_ctx, tgt_node->qp->sdb, UDMA_JETTY_TYPE_DB);
 	free(tgt_node->qp->sq.wrid);
 	tgt_node->qp->sq.wrid = NULL;
-	udma_free_buf(&tgt_node->qp->buf);
+	if (udma_ctx->dca_ctx.unit_size > 0)
+		free(tgt_node->qp->dca_wqe.bufs);
+	else
+		udma_free_buf(&tgt_node->qp->buf);
 	free(tgt_node->qp);
 	tgt_node->qp = NULL;
 	free(tgt_node);

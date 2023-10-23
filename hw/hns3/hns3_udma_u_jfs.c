@@ -48,7 +48,8 @@ static int udma_jfs_init_connect_table(struct udma_u_jfs *jfs)
 	return ret;
 }
 
-static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp *qp)
+static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp *qp,
+				      bool check_dca)
 {
 	int buf_size = to_udma_hem_entries_size(qp->sq.wqe_cnt, qp->sq.wqe_shift);
 
@@ -56,7 +57,20 @@ static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp
 	buf_size += to_udma_hem_entries_size(qp->ex_sge.sge_cnt,
 					    qp->ex_sge.sge_shift);
 
-	if (udma_alloc_buf(&qp->buf, buf_size, UDMA_HW_PAGE_SIZE)) {
+	if (check_dca && ctx->dca_ctx.unit_size > 0) {
+		/* when DCA enable, use a buffer list to store page address */
+		qp->buf.buf = NULL;
+		qp->buf_size = buf_size;
+		qp->dca_wqe.max_cnt = udma_page_count(buf_size);
+		qp->dca_wqe.shift = UDMA_HW_PAGE_SHIFT;
+		qp->dca_wqe.dcan = UDMA_DCA_INVALID_DCA_NUM;
+		qp->dca_wqe.bufs = (void **)calloc(qp->dca_wqe.max_cnt,
+						   sizeof(void *));
+		if (!qp->dca_wqe.bufs) {
+			URMA_LOG_ERR("DCA wqe bufs alloc failed!\n");
+			return URMA_ENOMEM;
+		}
+	} else if (udma_alloc_buf(&qp->buf, buf_size, UDMA_HW_PAGE_SIZE)) {
 		URMA_LOG_ERR("qp wqe buf alloc failed!\n");
 		return URMA_ENOMEM;
 	}
@@ -114,7 +128,7 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 		return URMA_ENOMEM;
 	}
 
-	ret = alloc_qp_wqe_buf(udma_ctx, qp);
+	ret = alloc_qp_wqe_buf(udma_ctx, qp, jfs_cfg->trans_mode != URMA_TM_UM);
 	if (ret) {
 		URMA_LOG_ERR("alloc_jetty_wqe_buf failed.\n");
 		free(qp->sq.wrid);
@@ -412,7 +426,10 @@ static inline void enable_wqe(struct udma_qp *qp, void *sq_wqe, uint32_t index)
 
 static inline void *get_wqe(struct udma_qp *qp, uint32_t offset)
 {
-	if (qp->buf.buf)
+	if (!!qp->dca_wqe.bufs)
+		return qp->dca_wqe.bufs[offset >> qp->dca_wqe.shift] +
+			(offset & ((1 << qp->dca_wqe.shift) - 1));
+	else if (qp->buf.buf)
 		return (char *)qp->buf.buf + offset;
 	else
 		return NULL;
@@ -952,6 +969,16 @@ static void udma_write512(uint64_t *dest, uint64_t *val)
 	mmio_memcpy_x64(dest, val, sizeof(uint64x2x4_t));
 }
 
+static void udma_write_dca_wqe(struct udma_qp *qp, void *wqe)
+{
+#define RCWQE_SQPN_L_WIDTH 2
+	struct udma_jfs_wqe *udma_wqe = (struct udma_jfs_wqe *)wqe;
+
+	udma_reg_write(udma_wqe, UDMAWQE_SQPN_L, qp->qp_num);
+	udma_reg_write(udma_wqe, UDMAWQE_SQPN_H,
+		       qp->qp_num >> RCWQE_SQPN_L_WIDTH);
+}
+
 static void udma_write_dwqe(struct udma_u_context *ctx, struct udma_qp *qp,
 			    void *wqe)
 {
@@ -1055,6 +1082,57 @@ static int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 	return urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
 }
 
+static int dca_attach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
+{
+	struct udma_dca_attach_attr attr = {};
+	uint32_t idx;
+	bool force;
+	int ret;
+
+	(void)pthread_spin_lock(&qp->sq.lock);
+
+	if (qp->sq.wqe_cnt > 0) {
+		idx = qp->sq.head & (qp->sq.wqe_cnt - 1);
+		attr.sq_offset = idx << qp->sq.wqe_shift;
+	}
+
+	if (qp->ex_sge.sge_cnt > 0) {
+		idx = qp->next_sge & (qp->ex_sge.sge_cnt - 1);
+		attr.sge_offset = idx << qp->ex_sge.sge_shift;
+	}
+
+	attr.qpn = qp->qp_num;
+
+	if (!udma_dca_start_post(&ctx->dca_ctx, qp->dca_wqe.dcan))
+		/* Force attach if failed to sync dca status */
+		force = true;
+
+	ret = udma_u_attach_dca_mem(ctx, &attr, qp->buf_size, &qp->dca_wqe,
+				    force);
+	if (ret)
+		udma_dca_stop_post(&ctx->dca_ctx, qp->dca_wqe.dcan);
+
+	(void)pthread_spin_unlock(&qp->sq.lock);
+
+	return ret;
+}
+
+static urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp)
+{
+	int ret;
+
+	if (qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH) {
+		ret = dca_attach_qp_buf(udma_ctx, qp);
+		if (ret) {
+			URMA_LOG_ERR("failed to attach DCA for QP %lu send!\n",
+				     qp->qp_num);
+			return URMA_ENOMEM;
+		}
+	}
+
+	return URMA_SUCCESS;
+}
+
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp,
 				urma_jfs_wr_t *wr,
@@ -1064,6 +1142,12 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx;
 	void *wqe;
+
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret) {
+		URMA_LOG_ERR("Failed to check send, qpn = %lu.\n", udma_qp->qp_num);
+		goto out;
+	}
 
 	sge_info.start_idx = udma_qp->next_sge;
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
@@ -1090,6 +1174,9 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 	udma_qp->sq.head += 1;
 	udma_qp->next_sge = sge_info.start_idx;
 
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_write_dca_wqe(udma_qp, wqe);
+
 	udma_to_device_barrier();
 
 	if (udma_qp->flags & UDMA_QP_CAP_DIRECT_WQE)
@@ -1102,6 +1189,9 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_dca_stop_post(&udma_ctx->dca_ctx, udma_qp->dca_wqe.dcan);
+
 	return ret;
 }
 
@@ -1153,6 +1243,13 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	uint32_t wqe_idx;
 	void *wqe;
 
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret) {
+		URMA_LOG_ERR("failed to check send, qpn = %lu.\n",
+			     udma_qp->qp_num);
+		goto out;
+	}
+
 	sge_info.start_idx = udma_qp->next_sge;
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
@@ -1179,12 +1276,18 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	udma_qp->sq.head += 1;
 	udma_qp->next_sge = sge_info.start_idx;
 
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_write_dca_wqe(udma_qp, wqe);
+
 	udma_to_device_barrier();
 
 	if (udma_qp->flush_status == UDMA_FLUSH_STATUS_ERR)
 		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_dca_stop_post(&udma_ctx->dca_ctx, udma_qp->dca_wqe.dcan);
+
 	return ret;
 }
 
