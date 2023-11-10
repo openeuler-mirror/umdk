@@ -27,7 +27,7 @@ urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 
 	if (!cfg->depth || cfg->depth > udma_ctx->max_jfs_wr ||
-	    !cfg->max_sge || cfg->max_sge > udma_ctx->max_jfs_sge) {
+	    cfg->max_sge > udma_ctx->max_jfs_sge) {
 		URMA_LOG_ERR("Invalid jfs cfg: sq depth: %u, sq max_sge: %u.\n",
 			     cfg->depth, cfg->max_sge);
 		return URMA_EINVAL;
