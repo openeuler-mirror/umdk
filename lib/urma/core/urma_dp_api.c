@@ -14,7 +14,7 @@
 #include "urma_private.h"
 #include "urma_provider.h"
 
-static inline urma_ops_t *get_ops_by_urma_jfc(const urma_jfc_t *jfc)
+static inline urma_ops_t *get_ops_by_urma_jfc(urma_jfc_t *jfc)
 {
     if (jfc == NULL || jfc->urma_ctx == NULL) {
         return NULL;
@@ -22,7 +22,7 @@ static inline urma_ops_t *get_ops_by_urma_jfc(const urma_jfc_t *jfc)
     return jfc->urma_ctx->ops;
 }
 
-static inline urma_ops_t *get_ops_by_urma_jfs(const urma_jfs_t *jfs)
+static inline urma_ops_t *get_ops_by_urma_jfs(urma_jfs_t *jfs)
 {
     if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.jfc == NULL) {
         return NULL;
@@ -30,7 +30,7 @@ static inline urma_ops_t *get_ops_by_urma_jfs(const urma_jfs_t *jfs)
     return jfs->urma_ctx->ops;
 }
 
-static inline urma_ops_t *get_ops_by_urma_jfr(const urma_jfr_t *jfr)
+static inline urma_ops_t *get_ops_by_urma_jfr(urma_jfr_t *jfr)
 {
     if (jfr == NULL || jfr->urma_ctx == NULL || jfr->jfr_cfg.jfc == NULL) {
         return NULL;
@@ -38,7 +38,7 @@ static inline urma_ops_t *get_ops_by_urma_jfr(const urma_jfr_t *jfr)
     return jfr->urma_ctx->ops;
 }
 
-static inline urma_ops_t *get_ops_by_urma_jfce(const urma_jfce_t *jfce)
+static inline urma_ops_t *get_ops_by_urma_jfce(urma_jfce_t *jfce)
 {
     if (jfce == NULL || jfce->urma_ctx == NULL) {
         return NULL;
@@ -46,7 +46,7 @@ static inline urma_ops_t *get_ops_by_urma_jfce(const urma_jfce_t *jfce)
     return jfce->urma_ctx->ops;
 }
 
-static inline urma_ops_t *get_ops_by_urma_jetty(const urma_jetty_t *jetty)
+static inline urma_ops_t *get_ops_by_urma_jetty(urma_jetty_t *jetty)
 {
     if (jetty == NULL || jetty->urma_ctx == NULL || jetty->urma_ctx->dev == NULL) {
         return NULL;
@@ -55,7 +55,7 @@ static inline urma_ops_t *get_ops_by_urma_jetty(const urma_jetty_t *jetty)
     return jetty->urma_ctx->ops;
 }
 
-static inline urma_status_t checkout_valid_tjfr(const urma_target_jetty_t *tjfr)
+static inline urma_status_t checkout_valid_tjfr(urma_target_jetty_t *tjfr)
 {
     if (tjfr == NULL || tjfr->urma_ctx == NULL || tjfr->urma_ctx->dev == NULL) {
         return URMA_EINVAL;
@@ -74,7 +74,7 @@ static inline int check_valid_sgl(urma_sg_t sg)
     return 0;
 }
 
-static int check_valid_jfr_wr(const urma_jfr_t *jfr, const urma_jfr_wr_t *wr)
+static int check_valid_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr)
 {
     if (jfr == NULL || wr == NULL) {
         URMA_LOG_ERR("There are invalid parameters.\n");
@@ -87,9 +87,9 @@ static int check_valid_jfr_wr(const urma_jfr_t *jfr, const urma_jfr_wr_t *wr)
     return 0;
 }
 
-urma_status_t urma_write(const urma_jfs_t *jfs, const urma_target_jetty_t *target_jfr,
-    const urma_target_seg_t *dst_tseg, const urma_target_seg_t *src_tseg,
-    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uintptr_t user_ctx)
+urma_status_t urma_write(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
+    urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
+    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
@@ -123,10 +123,10 @@ urma_status_t urma_write(const urma_jfs_t *jfs, const urma_target_jetty_t *targe
     wr.next = NULL;
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
-
-urma_status_t urma_read(const urma_jfs_t *jfs, const urma_target_jetty_t *target_jfr,
-    const urma_target_seg_t *dst_tseg, const urma_target_seg_t *src_tseg,
-    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uintptr_t user_ctx)
+ 
+urma_status_t urma_read(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
+    urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
+    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
@@ -160,9 +160,9 @@ urma_status_t urma_read(const urma_jfs_t *jfs, const urma_target_jetty_t *target
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
 
-urma_status_t urma_send(const urma_jfs_t *jfs, const urma_target_jetty_t *target_jfr,
-    const urma_target_seg_t *src_tseg, uint64_t src, uint32_t len,
-    urma_jfs_wr_flag_t flag, uintptr_t user_ctx)
+urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
+    urma_target_seg_t *src_tseg, uint64_t src, uint32_t len,
+    urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     if (checkout_valid_tjfr(target_jfr) != URMA_SUCCESS) {
@@ -193,8 +193,8 @@ urma_status_t urma_send(const urma_jfs_t *jfs, const urma_target_jetty_t *target
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
 
-urma_status_t urma_recv(const urma_jfr_t *jfr, urma_target_seg_t *recv_tseg,
-    uint64_t buf, uint32_t len, uintptr_t user_ctx)
+urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg,
+    uint64_t buf, uint32_t len, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfr(jfr);
@@ -223,7 +223,7 @@ urma_status_t urma_recv(const urma_jfr_t *jfr, urma_target_seg_t *recv_tseg,
     return dp_ops->post_jfr_wr(jfr, &wr, &bad_wr);
 }
 
-int urma_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
+int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfc(jfc);
     if (dp_ops == NULL || dp_ops->poll_jfc == NULL || cr == NULL || cr_cnt < 0) {
@@ -245,7 +245,7 @@ urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
     return dp_ops->rearm_jfc(jfc, solicited_only);
 }
 
-int urma_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
     urma_jfc_t *jfc[])
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfce(jfce);
@@ -268,11 +268,10 @@ void urma_ack_jfc(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt)
         URMA_LOG_ERR("Invalid parameter.\n");
         return;
     }
-
     dp_ops->ack_jfc(jfc, nevents, jfc_cnt);
 }
 
-urma_status_t urma_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
+urma_status_t urma_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
@@ -283,7 +282,7 @@ urma_status_t urma_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jf
     return dp_ops->post_jfs_wr(jfs, wr, bad_wr);
 }
 
-urma_status_t urma_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
+urma_status_t urma_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfr(jfr);
@@ -294,7 +293,7 @@ urma_status_t urma_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jf
     return dp_ops->post_jfr_wr(jfr, wr, bad_wr);
 }
 
-urma_status_t urma_post_jetty_send_wr(const urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
+urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
@@ -306,7 +305,7 @@ urma_status_t urma_post_jetty_send_wr(const urma_jetty_t *jetty, urma_jfs_wr_t *
     return dp_ops->post_jetty_send_wr(jetty, wr, bad_wr);
 }
 
-urma_status_t urma_post_jetty_recv_wr(const urma_jetty_t *jetty, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
+urma_status_t urma_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
@@ -318,8 +317,8 @@ urma_status_t urma_post_jetty_recv_wr(const urma_jetty_t *jetty, urma_jfr_wr_t *
     return dp_ops->post_jetty_recv_wr(jetty, wr, bad_wr);
 }
 
-urma_status_t urma_post_jfs_wr_ex(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    const urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
+urma_status_t urma_post_jfs_wr_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
+    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
@@ -343,15 +342,15 @@ urma_status_t urma_post_jfs_wr_ex(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma
     };
     urma_user_ctl_in_t in = {
         .addr = (uint64_t)&wr_in,
-        .len = sizeof(urma_post_and_ret_db_in_t),
+        .len = (uint32_t)sizeof(urma_post_and_ret_db_in_t),
         .opcode = user_in->opcode,
     };
 
     urma_post_and_ret_db_out_t wr_out = {0};
     urma_user_ctl_out_t out = {
         .addr = (uint64_t)&wr_out,
-        .len = sizeof(urma_post_and_ret_db_out_t),
-        .rsv = 0,
+        .len = (uint32_t)sizeof(urma_post_and_ret_db_out_t),
+        .reserved = 0,
     };
 
     int ret = dp_ops->user_ctl(jfs->urma_ctx, &in, &out);
@@ -366,8 +365,8 @@ urma_status_t urma_post_jfs_wr_ex(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma
     return (urma_status_t)ret;
 }
 
-urma_status_t urma_post_jetty_wr_ex(const urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    const urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
+urma_status_t urma_post_jetty_wr_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
+    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
@@ -391,15 +390,15 @@ urma_status_t urma_post_jetty_wr_ex(const urma_jetty_t *jetty, urma_jfs_wr_t *wr
     };
     urma_user_ctl_in_t in = {
         .addr = (uint64_t)&wr_in,
-        .len = sizeof(urma_post_and_ret_db_in_t),
+        .len = (uint32_t)sizeof(urma_post_and_ret_db_in_t),
         .opcode = user_in->opcode,
     };
 
     urma_post_and_ret_db_out_t wr_out = {0};
     urma_user_ctl_out_t out = {
         .addr = (uint64_t)&wr_out,
-        .len = sizeof(urma_post_and_ret_db_out_t),
-        .rsv = 0,
+        .len = (uint32_t)sizeof(urma_post_and_ret_db_out_t),
+        .reserved = 0,
     };
 
     int ret = dp_ops->user_ctl(jetty->urma_ctx, &in, &out);

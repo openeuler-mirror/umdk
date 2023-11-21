@@ -14,7 +14,7 @@ urma                          : URMA (Unified Remote Memory Access，统一远�
 ├── common                    : 一些 C 语言公共组件, 像 list, hmap, etc.
 ├── include                   : 头文件，包含内外部所需的头文件
 ├── lib                       : 用户库, 包含 liburma.
-├── tools                     : UMDK 工具, 包括 perftest, admin
+├── tools                     : UMDK 工具, 包括 perftest, admin, uvs_admin
 ├── transport_service         : TPS deamon
 └── urma.spec                 : 执行 spec 文件以生成 RPM 包.
 
@@ -59,6 +59,7 @@ urma                          : URMA (Unified Remote Memory Access，统一远�
 
 ```bash
   $ --with transport_service_disable                  可选, i.e. 默认使能 TPS 功能
+  $ --with hw_disable                                 可选, i.e. 默认使能编译硬件驱动
   $ --define 'kernel_version 4.19.90'                 可选, 指定 kernel 版本
   $ --define 'rpm_version 1.4.0'                      可选, 指定 rpm 版本
   $ --define 'rpm_release  B002'                      可选, 指定发布版本
@@ -68,6 +69,7 @@ urma                          : URMA (Unified Remote Memory Access，统一远�
 
 ```bash
   $ -DTPS=disable                                     可选, i.e. 默认使能 TPS 功能
+  $ -DHW=disable                                      可选, i.e. 默认使能编译硬件驱动
 ```
 
 #### 参与贡献

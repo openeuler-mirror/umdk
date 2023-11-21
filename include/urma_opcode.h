@@ -11,11 +11,14 @@
 #define URMA_OPCODE_H
 
 /* urma bit field value */
-#define URMA_KEY_NONE             0              /* Indicates the verification policy of the key. */
-#define URMA_KEY_PLAIN_TEXT       1
-#define URMA_KEY_SIGNED           2
-#define URMA_KEY_ALL_ENCRYPTED    3
-#define URMA_KEY_RESERVED         4
+#define URMA_TOKEN_NONE             0              /* Indicates the verification policy of the key. */
+#define URMA_TOKEN_PLAIN_TEXT       1
+#define URMA_TOKEN_SIGNED           2
+#define URMA_TOKEN_ALL_ENCRYPTED    3
+#define URMA_TOKEN_RESERVED         4
+
+#define URMA_TOKEN_ID_INVALID       0
+#define URMA_TOKEN_ID_VALID         1
 
 #define URMA_DSVA_DISABLE         0              /* Indicates whether it is a segment of dsva. */
 #define URMA_DSVA_ENABLE          1
@@ -71,10 +74,6 @@
 #define URMA_NO_TAG_MATCHING      0
 #define URMA_WITH_TAG_MATCHING    1
 
-#define URMA_IDC_MODE             0
-#define URMA_DC_MODE              1
-#define URMA_LS_MODE              2
-
 #define URMA_NONPOST_LS           0
 #define URMA_POST_LS              1
 
@@ -87,7 +86,7 @@
 #define URMA_TYPICAL_MIN_RNR_TIMER 12           /* typical value of min_rnr_timer for jfr cfg */
 #define URMA_MAX_PRIORITY 15
 
-/* operation infomation */
+/* operation information */
 typedef enum urma_order_type {
     URMA_NO_ORDER = 0,     // No order
     URMA_RELAX_ORDER,      // Relax order
@@ -101,9 +100,12 @@ typedef enum urma_opcode {
     URMA_OPC_WRITE_NOTIFY       = 0x02, // not support result will return for URMA_OPC_WRITE_NOTIFY
     URMA_OPC_READ               = 0x10,
     URMA_OPC_CAS                = 0x20,
-    URMA_OPC_FAA                = 0x21,
-    URMA_OPC_CAS_WITH_MASK      = 0x24,
-    URMA_OPC_FAA_WITH_MASK      = 0x25,
+    URMA_OPC_SWAP               = 0x21,
+    URMA_OPC_FADD               = 0x22,
+    URMA_OPC_FSUB               = 0x23,
+    URMA_OPC_FAND               = 0x24,
+    URMA_OPC_FOR                = 0x25,
+    URMA_OPC_FXOR               = 0x26,
     URMA_OPC_SEND               = 0x40, // remote JFR/jetty ID
     URMA_OPC_SEND_IMM           = 0x41, // remote JFR/jetty ID
     URMA_OPC_SEND_INVALIDATE    = 0x42, // remote JFR/jetty ID and seg token id
@@ -122,24 +124,23 @@ typedef enum urma_status {
     URMA_FAIL,
 } urma_status_t;
 
-/* completion infomation */
+/* completion information */
 typedef enum urma_cr_status { // completion record status
     URMA_CR_SUCCESS = 0,
-    URMA_CR_LOC_LEN_ERR,           // Local data too long error
-    URMA_CR_LOC_OPERATION_ERR,     // Local operation err
-    URMA_CR_LOC_PROTECTION_ERR,    // Local memory protection error
-    URMA_CR_LOC_ACCESS_ERR,        // Access to local memory error when WRITE_WITH_IMM
-    URMA_CR_REM_INVALID_REQ_ERR,   // The work request is detected as invalid by the remote side
-    URMA_CR_REM_ACCESS_ERR,        // Memory access protection error occurred in the remote node
-    URMA_CR_REM_OPERATION_ERR,     // Error when target jetty can not complete the operation
-    URMA_CR_REM_ABORT_ERR,         // Error when target jetty abort the operation
-    URMA_CR_RETRY_CNT_EXC_ERR,     // Retransmission exceeds the maximum number of times
-    URMA_CR_RNR_RETRY_CNT_EXC_ERR, // RNR retries exceeded the maximum number: remote jfr has no buffer
-    URMA_CR_FATAL_ERR,
-    URMA_CR_WR_FLUSH_ERR,
-    URMA_CR_RESP_TIMEOUT_ERR,
-    URMA_CR_MORE_TO_POLL_ERR,
-    URMA_CR_GENERAL_ERR
+    URMA_CR_UNSUPPORTED_OPCODE_ERR,   /* Opcode in the WR is not supported */
+    URMA_CR_LOC_LEN_ERR,              /* Local data too long error */
+    URMA_CR_LOC_OPERATION_ERR,        /* Local operation err */
+    URMA_CR_LOC_ACCESS_ERR,           /* Access to local memory error */
+    URMA_CR_REM_RESP_LEN_ERR,         /* Local Operation Error, with sub-status of Remote Response Length Error */
+    URMA_CR_REM_UNSUPPORTED_REQ_ERR,
+    URMA_CR_REM_OPERATION_ERR,        /* Error when target jetty can not complete the operation */
+    URMA_CR_REM_ACCESS_ABORT_ERR,     /* Error when target jetty access memory error or abort the operation */
+    URMA_CR_ACK_TIMEOUT_ERR,          /* Retransmission exceeds the maximum number of times */
+    URMA_CR_RNR_RETRY_CNT_EXC_ERR,    /* RNR retries exceeded the maximum number: remote jfr has no buffer */
+    URMA_CR_WR_FLUSH_ERR,             /* Jetty in the error state, and the hardware has processed the WR. */
+    URMA_CR_WR_SUSPEND_DONE,          /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_FLUSH_ERR_DONE,        /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_UNHANDLED,             /* Return of flush jetty/jfs, and the hardware has not processed the WR. */
 } urma_cr_status_t;
 
 typedef enum urma_cr_opcode {
@@ -149,19 +150,21 @@ typedef enum urma_cr_opcode {
     URMA_CR_OPC_WRITE_WITH_IMM,
 } urma_cr_opcode_t;
 
-/* event infomation */
+/* event information */
 typedef enum urma_async_event_type {
     URMA_EVENT_JFC_ERR,
-    URMA_EVENT_JFS_FATAL,
-    URMA_EVENT_JFS_ACCESS_ERR,
-    URMA_EVENT_JFR_FATAL,
-    URMA_EVENT_JFR_ACCESS_ERR,
-    URMA_EVENT_JETTY_FATAL,
-    URMA_EVENT_JETTY_ACCESS_ERR,
+    URMA_EVENT_JFS_ERR,
+    URMA_EVENT_JFR_ERR,
+    URMA_EVENT_JFR_LIMIT,
+    URMA_EVENT_JETTY_ERR,
+    URMA_EVENT_JETTY_LIMIT,
+    URMA_EVENT_JETTY_GRP_ERR,
     URMA_EVENT_PORT_ACTIVE,
-    URMA_EVENT_PORT_ERR,
+    URMA_EVENT_PORT_DOWN,
     URMA_EVENT_DEV_FATAL,
-    URMA_EVENT_ID_CHANGE     // eid | cid change, HNM and other management roles will be modified.
+    URMA_EVENT_EID_CHANGE,     // eid change, HNM and other management roles will be modified.
+    URMA_EVENT_ELR_ERR,        /* Entity level error */
+    URMA_EVENT_ELR_DONE        /* Entitu flush done */
 } urma_async_event_type_t;
 
 typedef enum urma_jfc_state {

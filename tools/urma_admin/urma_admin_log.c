@@ -28,8 +28,7 @@ static int urma_admin_vlog(const char *function, int line, const char *format, v
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
     /* add log head info, "URMA_LOG_TAG|function|[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s",
-                     URMA_ADMIN_LOG_TAG, function, line, format);
+    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s", URMA_ADMIN_LOG_TAG, function, line, format);
     if (ret <= 0 || ret >= (int)sizeof(newformat)) {
         return ret;
     }

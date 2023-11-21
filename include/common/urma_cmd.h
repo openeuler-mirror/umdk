@@ -11,6 +11,7 @@
 #ifndef URMA_CMD_H
 #define URMA_CMD_H
 #include <linux/types.h>
+#include "urma_types.h"
 
 typedef struct urma_cmd_hdr {
     uint32_t command;
@@ -27,29 +28,14 @@ typedef struct urma_cmd_hdr {
 #define URMA_MAX_UASID  (1 << 24)
 
 typedef enum urma_core_cmd {
-    URMA_CORE_CMD_SET_UASID = 1,
-    URMA_CORE_CMD_PUT_UASID,
-    URMA_CORE_CMD_SET_UTP,
-	URMA_CORE_CMD_SHOW_UTP,
+    URMA_CORE_CMD_SET_UTP = 1,
+    URMA_CORE_CMD_SHOW_UTP,
     URMA_CORE_CMD_QUERY_STATS,
-    URMA_CORE_CMD_QUERY_RES
+    URMA_CORE_CMD_QUERY_RES,
+    URMA_CORE_CMD_ADD_EID,
+    URMA_CORE_CMD_DEL_EID,
+    URMA_CORE_CMD_SET_EID_MODE
 } urma_core_cmd_t;
-
-typedef struct urma_core_cmd_set_uasid {
-    struct {
-        uint64_t token;
-        uint32_t uasid;
-    } in;
-    struct {
-        uint32_t uasid;
-    } out;
-} urma_core_cmd_set_uasid_t;
-
-typedef struct urma_core_cmd_put_uasid {
-    struct {
-        uint32_t uasid;
-    } in;
-} urma_core_cmd_put_uasid_t;
 
 /* only for uburma device ioctl */
 #define URMA_CMD_MAGIC 'U'
@@ -58,16 +44,19 @@ typedef struct urma_core_cmd_put_uasid {
 typedef enum urma_cmd {
     URMA_CMD_CREATE_CTX = 1,
     URMA_CMD_DESTORY_CTX,
-    URMA_CMD_ALLOC_KEY_ID,
-    URMA_CMD_FREE_KEY_ID,
+    URMA_CMD_ALLOC_TOKEN_ID,
+    URMA_CMD_FREE_TOKEN_ID,
     URMA_CMD_REGISTER_SEG,
     URMA_CMD_UNREGISTER_SEG,
     URMA_CMD_IMPORT_SEG,
     URMA_CMD_UNIMPORT_SEG,
     URMA_CMD_CREATE_JFS,
+    URMA_CMD_MODIFY_JFS,
+    URMA_CMD_QUERY_JFS,
     URMA_CMD_DELETE_JFS,
     URMA_CMD_CREATE_JFR,
     URMA_CMD_MODIFY_JFR,
+    URMA_CMD_QUERY_JFR,
     URMA_CMD_DELETE_JFR,
     URMA_CMD_CREATE_JFC,
     URMA_CMD_MODIFY_JFC,
@@ -77,6 +66,7 @@ typedef enum urma_cmd {
     URMA_CMD_UNIMPORT_JFR,
     URMA_CMD_CREATE_JETTY,
     URMA_CMD_MODIFY_JETTY,
+    URMA_CMD_QUERY_JETTY,
     URMA_CMD_DELETE_JETTY,
     URMA_CMD_IMPORT_JETTY,
     URMA_CMD_UNIMPORT_JETTY,
@@ -86,9 +76,10 @@ typedef enum urma_cmd {
     URMA_CMD_UNADVISE_JETTY,
     URMA_CMD_BIND_JETTY,
     URMA_CMD_UNBIND_JETTY,
+    URMA_CMD_CREATE_JETTY_GRP,
+    URMA_CMD_DESTROY_JETTY_GRP,
     URMA_CMD_USER_CTL
 } urma_cmd_t;
-
 
 #ifndef URMA_CMD_UDRV_PRIV
 #define URMA_CMD_UDRV_PRIV
@@ -102,7 +93,8 @@ typedef struct urma_cmd_udrv_priv {
 
 typedef struct urma_cmd_create_ctx {
     struct {
-        uint32_t uasid;
+        uint8_t eid[URMA_CMD_EID_SIZE];
+        uint32_t eid_index;
     } in;
     struct {
         int async_fd;
@@ -110,32 +102,33 @@ typedef struct urma_cmd_create_ctx {
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_create_ctx_t;
 
-typedef struct urma_cmd_alloc_key_id {
+typedef struct urma_cmd_alloc_token_id {
     struct {
-        uint32_t key_id;
-        uint64_t handle; /* handle of the allocated key_id obj in kernel */
+        uint32_t token_id;
+        uint64_t handle; /* handle of the allocated token_id obj in kernel */
     } out;
     urma_cmd_udrv_priv_t udata;
-} urma_cmd_alloc_key_id_t;
+} urma_cmd_alloc_token_id_t;
 
-typedef struct urma_cmd_free_key_id {
+typedef struct urma_cmd_free_token_id {
     struct {
-        uint64_t handle; /* handle of the allocated key_id obj in kernel */
+        uint64_t handle; /* handle of the allocated token_id obj in kernel */
+        uint32_t token_id;
     } in;
     urma_cmd_udrv_priv_t udata;
-} urma_cmd_free_key_id_t;
+} urma_cmd_free_token_id_t;
 
 typedef struct urma_cmd_register_seg {
     struct {
         uint64_t va;
         uint64_t len;
-        uint32_t key_id;
-        uint64_t keyid_handle;
-        uint32_t key;
+        uint32_t token_id;
+        uint64_t token_id_handle;
+        uint32_t token;
         uint32_t flag;
     } in;
     struct {
-        uint32_t key_id;
+        uint32_t token_id;
         uint64_t handle; /* handle of the allocated seg obj in kernel */
     } out;
     urma_cmd_udrv_priv_t udata;
@@ -150,12 +143,11 @@ typedef struct urma_cmd_unregister_seg {
 typedef struct urma_cmd_import_seg {
     struct {
         uint8_t eid[URMA_CMD_EID_SIZE];
-        uint32_t uasid;
         uint64_t va;
         uint64_t len;
         uint32_t flag;
-        uint32_t key;
-        uint32_t key_id;
+        uint32_t token;
+        uint32_t token_id;
         uint64_t mva;
     } in;
     struct {
@@ -172,14 +164,14 @@ typedef struct urma_cmd_unimport_seg {
 
 typedef struct urma_cmd_create_jfr {
     struct {
-        uint32_t depth; /* in terms of WQEBB */
+        uint32_t depth;
         uint32_t flag;
         uint32_t trans_mode;
         uint8_t max_sge;
         uint8_t min_rnr_timer;
         uint32_t jfc_id;
         uint64_t jfc_handle;
-        uint32_t key;
+        uint32_t token;
         uint32_t id;
         uint64_t urma_jfr; /* urma jfr pointer */
     } in;
@@ -197,9 +189,29 @@ typedef struct urma_cmd_modify_jfr {
         uint64_t handle;          /* handle of jfr, used to find jfr obj in kernel */
         uint32_t mask;            /* see urma_jfr_attr_mask_t */
         uint32_t rx_threshold;
+        uint32_t state;
     } in;
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_modify_jfr_t;
+
+typedef struct urma_cmd_query_jfr {
+    struct {
+        uint64_t handle; /* handle of the allocated jfr obj in kernel */
+    } in;
+    struct {
+        uint32_t depth;
+        uint32_t flag;
+        uint32_t trans_mode;
+        uint8_t max_sge;
+        uint8_t min_rnr_timer;
+        uint32_t token;
+        uint32_t id;
+
+        uint32_t rx_threshold;
+        uint32_t state;
+    } out;
+} urma_cmd_query_jfr_t;
+
 
 typedef struct urma_cmd_delete_jfr {
     struct {
@@ -212,7 +224,7 @@ typedef struct urma_cmd_delete_jfr {
 
 typedef struct urma_cmd_create_jfs {
     struct {
-        uint32_t depth;  /* in terms of WQEBB */
+        uint32_t depth;
         uint32_t flag;
         uint32_t trans_mode;
         uint8_t priority;
@@ -236,6 +248,36 @@ typedef struct urma_cmd_create_jfs {
     } out;
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_create_jfs_t;
+
+typedef struct urma_cmd_modify_jfs {
+    struct {
+        uint64_t handle;          /* handle of jfs, used to find jfs obj in kernel */
+        uint32_t mask;            /* see urma_jfr_attr_mask_t */
+        uint32_t state;           /* urma_jetty_state_t */
+    } in;
+    urma_cmd_udrv_priv_t udata;
+} urma_cmd_modify_jfs_t;
+
+
+typedef struct urma_cmd_query_jfs {
+    struct {
+        uint64_t handle; /* handle of the allocated jfs obj in kernel */
+    } in;
+    struct {
+        uint32_t depth;
+        uint32_t flag;
+        uint32_t trans_mode;
+        uint8_t priority;
+        uint8_t max_sge;
+        uint8_t max_rsge;
+        uint32_t max_inline_data;
+        uint8_t retry_cnt;
+        uint8_t rnr_retry;
+        uint8_t err_timeout;
+
+        uint32_t state;
+    } out;
+} urma_cmd_query_jfs_t;
 
 typedef struct urma_cmd_delete_jfs {
     struct {
@@ -291,14 +333,12 @@ typedef struct urma_cmd_import_jfr {
     struct {
         /* correspond to urma_jfr_id */
         uint8_t eid[URMA_CMD_EID_SIZE];
-        uint32_t uasid;
         uint32_t id;
-        /* correspond to urma_key_t */
-        uint32_t key;
+        /* correspond to urma_token_t */
+        uint32_t token;
         uint32_t trans_mode;
     } in;
     struct {
-        uint8_t tp_type; /* TP or TPG */
         uint32_t tpn;
         uint64_t handle; /* handle of the allocated tjfr obj in kernel */
     } out;
@@ -314,26 +354,35 @@ typedef struct urma_cmd_unimport_jfr {
 typedef struct urma_cmd_create_jetty {
     struct {
         uint32_t id; /* user may assign id */
+        uint32_t jetty_flag;
+
         uint32_t jfs_depth;
-        uint32_t jfr_depth;
-        uint32_t flag;
+        uint32_t jfs_flag;
         uint32_t trans_mode;
-        uint32_t send_jfc_id;
-        uint32_t recv_jfc_id;
-        uint32_t jfr_id; /* shared jfr */
+        uint8_t priority;
         uint8_t max_send_sge;
         uint8_t max_send_rsge;
-        uint8_t max_recv_sge;
         uint32_t max_inline_data;
-        uint8_t priority;
-        uint8_t retry_cnt;
         uint8_t rnr_retry;
         uint8_t err_timeout;
-        uint8_t min_rnr_timer;
-        uint32_t key;
+        uint32_t send_jfc_id;
         uint64_t send_jfc_handle; /* handle of the related send jfc */
+
+        uint32_t jfr_depth;
+        uint32_t jfr_flag;
+        uint8_t max_recv_sge;
+        uint8_t min_rnr_timer;
+
+        uint32_t recv_jfc_id;
         uint64_t recv_jfc_handle; /* handle of the related recv jfc */
+        uint32_t token;
+
+        uint32_t jfr_id; /* shared jfr */
         uint64_t jfr_handle; /* handle of the shared jfr */
+
+        uint64_t jetty_grp_handle; /* handle of the related jetty group */
+        uint8_t  is_jetty_grp;
+
         uint64_t urma_jetty; /* urma jetty pointer */
     } in;
     struct {
@@ -354,9 +403,40 @@ typedef struct urma_cmd_modify_jetty {
         uint64_t handle;          /* handle of jetty, used to find jetty obj in kernel */
         uint32_t mask;            /* see urma_jetty_attr_mask_t */
         uint32_t rx_threshold;
+        uint32_t state;
     } in;
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_modify_jetty_t;
+
+typedef struct urma_cmd_query_jetty {
+    struct {
+        uint64_t handle; /* handle of the allocated jetty obj in kernel */
+    } in;
+    struct {
+        uint32_t id; /* user may assign id */
+        uint32_t jetty_flag;
+
+        uint32_t jfs_depth;
+        uint32_t jfr_depth;
+        uint32_t jfs_flag;
+        uint32_t jfr_flag;
+        uint32_t trans_mode;
+        uint8_t max_send_sge;
+        uint8_t max_send_rsge;
+        uint8_t max_recv_sge;
+        uint32_t max_inline_data;
+        uint8_t priority;
+        uint8_t retry_cnt;
+        uint8_t rnr_retry;
+        uint8_t err_timeout;
+        uint8_t min_rnr_timer;
+        uint32_t jfr_id;
+        uint32_t token;
+
+        uint32_t rx_threshold;
+        uint32_t state;
+    } out;
+} urma_cmd_query_jetty_t;
 
 typedef struct urma_cmd_delete_jetty {
     struct {
@@ -371,15 +451,15 @@ typedef struct urma_cmd_import_jetty {
     struct {
         /* correspond to urma_jetty_id */
         uint8_t eid[URMA_CMD_EID_SIZE];
-        uint32_t uasid;
         uint32_t id;
         uint32_t flag;
-        /* correspond to urma_key_t */
-        uint32_t key;
+        /* correspond to urma_token_t */
+        uint32_t token;
         uint32_t trans_mode;
+        uint32_t policy;
+        uint32_t type;
     } in;
     struct {
-        uint8_t tp_type; /* TP or TPG */
         uint32_t tpn;
         uint64_t handle; /* handle of the allocated tjetty obj in kernel */
     } out;
@@ -400,12 +480,53 @@ typedef struct urma_cmd_advise_jetty {
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_advise_jetty_t;
 
+typedef struct urma_cmd_bind_jetty {
+    struct {
+        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
+    } in;
+    struct {
+        uint32_t tpn;
+    } out;
+    urma_cmd_udrv_priv_t udata;
+} urma_cmd_bind_jetty_t;
+
+typedef struct urma_cmd_unbind_jetty {
+    struct {
+        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+    } in;
+} urma_cmd_unbind_jetty_t;
+
 typedef struct urma_cmd_unadvise_jetty {
     struct {
         uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
     } in;
 } urma_cmd_unadvise_jetty_t;
+
+typedef struct urma_cmd_create_jetty_grp {
+    struct {
+        char name[URMA_MAX_NAME];
+        uint32_t token;
+        uint32_t id;
+        uint32_t policy;
+        uint64_t urma_jetty_grp; /* urma jetty group pointer */
+    } in;
+    struct {
+        uint32_t id; /* jetty group id allocated by ubcore */
+        uint64_t handle; /* handle of the allocated jetty group obj in kernel */
+    } out;
+    urma_cmd_udrv_priv_t udata;
+} urma_cmd_create_jetty_grp_t;
+
+typedef struct urma_cmd_delete_jetty_grp {
+    struct {
+        uint64_t handle; /* handle of jetty group, used to find jetty group obj in kernel */
+    } in;
+    struct {
+        uint32_t async_events_reported;
+    } out;
+} urma_cmd_delete_jetty_grp_t;
 
 typedef struct urma_cmd_user_ctl {
     struct {
@@ -416,7 +537,7 @@ typedef struct urma_cmd_user_ctl {
     struct {
         uint64_t addr;
         uint32_t len;
-        uint32_t rsv;
+        uint32_t reserved;
     } out;  /* struct [out] should be consistent with [urma_user_ctl_out_t] */
     struct {
         uint64_t in_addr;

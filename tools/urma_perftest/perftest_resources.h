@@ -32,7 +32,7 @@ typedef enum duration_states {
 
 typedef struct run_test_ctx {
     uint32_t duration;
-    duration_states_t state;
+    volatile duration_states_t state;
     uint64_t rid;
     uint64_t *tposted;    // cycles
     uint64_t *tcompleted;  // cycles
@@ -51,6 +51,7 @@ typedef struct perftest_context {
     uint32_t uasid;
     urma_context_t *urma_ctx;
     urma_device_attr_t dev_attr;
+    urma_token_id_t **token_id;
 
     // jetty
     urma_jfce_t *jfce_r;

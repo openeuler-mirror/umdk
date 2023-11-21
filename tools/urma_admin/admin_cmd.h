@@ -15,8 +15,7 @@
 typedef struct admin_core_cmd_set_utp {
     struct {
         char dev_name[URMA_MAX_NAME];
-        uint8_t eid[URMA_EID_SIZE];
-        uint32_t transport_type;
+        uint8_t utp_id;
         bool spray_en;
         uint16_t data_udp_start;
         uint8_t udp_range;
@@ -26,16 +25,17 @@ typedef struct admin_core_cmd_set_utp {
 typedef struct admin_core_cmd_show_utp {
     struct {
         char dev_name[URMA_MAX_NAME];
-        uint8_t eid[URMA_EID_SIZE];
-        uint32_t transport_type;
+        uint8_t utp_id;
     } in;
+    struct {
+        uint64_t addr;
+        uint32_t len;
+    } out;
 } admin_core_cmd_show_utp_t;
 
 typedef struct admin_cmd_query_stats {
     struct {
         char dev_name[URMA_MAX_NAME];
-        uint8_t eid[URMA_EID_SIZE];
-        uint32_t tp_type;
         uint32_t type;
         uint32_t key;
     } in;
@@ -52,10 +52,10 @@ typedef struct admin_cmd_query_stats {
 typedef struct admin_cmd_query_res {
     struct {
         char dev_name[URMA_MAX_NAME];
-        uint8_t eid[URMA_EID_SIZE];
-        uint32_t tp_type;
         uint32_t type;
         uint32_t key;
+        uint32_t key_ext;
+        uint32_t key_cnt;
     } in;
     struct {
         uint64_t addr;
@@ -63,9 +63,27 @@ typedef struct admin_cmd_query_res {
     } out;
 } admin_cmd_query_res_t;
 
+typedef struct admin_core_cmd_add_eid {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+        uint32_t eid_index;
+    } in;
+} admin_core_cmd_add_eid_t;
+
+typedef struct admin_core_cmd_add_eid admin_core_cmd_del_eid_t;
+
+typedef struct admin_core_cmd_set_eid_mode {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+        bool eid_mode;
+    } in;
+} admin_core_cmd_set_eid_mode_t;
+
 int admin_set_utp(const tool_config_t *cfg);
 int admin_show_udp(const tool_config_t *cfg);
 int admin_show_stats(const tool_config_t *cfg);
 int admin_show_res(const tool_config_t *cfg);
-
+int admin_add_eid(const tool_config_t *cfg);
+int admin_del_eid(const tool_config_t *cfg);
+int admin_set_eid_mode(const tool_config_t *cfg);
 #endif

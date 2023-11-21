@@ -94,6 +94,7 @@ static void usage(const char *argv0)
     (void)printf("  -h, --help                  Show help info.\n");
     (void)printf("  -i, --ignore_jetty_in_cr    NOT to fill jetty_id in parse cr.\n");
     (void)printf("  -I, --inline_size <size>    Max size of message to be sent in inline.\n");
+    (void)printf("  -j, --share_jfr <true/false> share jfr on create jetty(default false on IB/IP, true on UB).\n");
     (void)printf("  -J, --jettys <num of jetty> Num of jettys(default 1).\n");
     (void)printf("  -m, --mtu <mtu>             MTU size : 256 - 4096 (default port mtu).\n");
     (void)printf("  -n, --iters <iters>         Number of exchanges (at least 5, default 10000).\n");
@@ -110,9 +111,6 @@ static void usage(const char *argv0)
     (void)printf("  -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .\n");
     (void)printf("  -t, --ib_tm_mode <mode>     IB transport mode: 0 for RC(default), 1 for XRC, 2 for UD.\n");
     (void)printf("  -T, --jfs-depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n");
-    (void)printf("  -U, --retry_cnt <cnt>       number of times that jfs will resend packets before report error,\n"
-                 "                              when the remote side does not response, ranging from [0, 7], \n"
-                 "                              the value 0 means never retry.\n");
     (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
@@ -251,9 +249,9 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->inf_period = PERFTEST_DEF_INF_PERIOD;
     cfg->order = PERFTEST_SIZE_ORDER;
     cfg->err_timeout = URMA_TYPICAL_ERR_TIMEOUT;
-    cfg->retry_cnt = URMA_TYPICAL_RETRY_CNT;
     cfg->lock_free = false;
     cfg->priority = URMA_MAX_PRIORITY;
+    cfg->share_jfr = false;
 }
 
 static perftest_trans_mode_offset_t get_offset_by_trans_mode(urma_transport_mode_t trans_mode)
@@ -376,7 +374,6 @@ static int check_cfg_range(perftest_config_t *cfg)
         { cfg->cq_mod,       PERFTEST_CQ_MOD_MIN,        PERFTEST_CQ_MOD_MAX,       "Cq mod" },
         { cfg->order,        PERFTEST_MIN_ORDER,         PERFTEST_MAX_ORDER,        "Order" },
         { cfg->err_timeout,  PERFTEST_ERR_TIMEOUT_MIN,   PERFTEST_ERR_TIMEOUT_MAX,  "err_timeout" },
-        { cfg->retry_cnt,    PERFTEST_RETRY_CNT_MIN,     PERFTEST_RETRY_CNT_MAX,    "retry_cnt" },
         { cfg->priority,     PERFTEST_PRIORITY_MIN,      PERFTEST_PRIORITY_MAX,     "priority" }
     };
     for (uint32_t i = 0; i < sizeof(value_range) / sizeof(perftest_value_range_t); i++) {
@@ -427,12 +424,14 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"help",          no_argument,       NULL, 'h'},
         {"ignore_jetty_in_cr", no_argument,  NULL, 'i'},
         {"inline_size",   required_argument, NULL, 'I'},
+        {"share_jfr",     required_argument, NULL, 'j'},
         {"jettys",        required_argument, NULL, 'J'},
         {"mtu",           required_argument, NULL, 'm'},
         {"iters",         required_argument, NULL, 'n'},
         {"no_peak",       no_argument,       NULL, 'N'},
         {"jfs_post_list", required_argument, NULL, 'l'},
         {"lock_free",     no_argument,       NULL, 'L'},
+        {"io_thread_num", required_argument, NULL, 'o'},
         {"priority",      required_argument, NULL, 'O'},
         {"trans_mode",    required_argument, NULL, 'p'},
         {"port",          required_argument, NULL, 'P'},
@@ -443,7 +442,6 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"server",        required_argument, NULL, 'S'},
         {"jfs_depth",     required_argument, NULL, 'T'},
         {"ib_tm_mode",    required_argument, NULL, 't'},
-        {"retry_cnt",     required_argument, NULL, 'U'},
         {"warm_up",       no_argument,       NULL, 'w'},
         {"infinite",      optional_argument, NULL, 'y'},
         {NULL,            no_argument,       NULL, '\0'}
@@ -451,7 +449,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 
     /* Second parse the options */
     while (1) {
-        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhiI:J:m:n:Nl:LO:p:P:Q:r:R:s:S:t:T:U:wy::",
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhiI:j:J:m:n:Nl:Lo:O:p:P:Q:r:R:s:S:t:T:wy::",
             long_options, NULL);
         if (c == -1) {
             break;
@@ -527,6 +525,12 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 }
                 (void)ub_str_to_u32(optarg, &cfg->inline_size);
                 break;
+            case 'j':
+                if (ub_str_to_bool(optarg, &cfg->share_jfr) != 0) {
+                    (void)fprintf(stderr, "Invalid parameter :%s.\n", optarg);
+                    return -1;
+                }
+                break;
             case 'J':
                 if (cfg->type != PERFTEST_BW) {
                     (void)fprintf(stderr, "Multiple jettys only available on band width tests.\n");
@@ -553,6 +557,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'L':
                 cfg->lock_free = true;
+                break;
+            case 'o':
+                (void)ub_str_to_u32(optarg, &cfg->io_thread_num);
                 break;
             case 'O':
                 (void)ub_str_to_u8(optarg, &cfg->priority);
@@ -592,9 +599,6 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'T':
                 (void)ub_str_to_u32(optarg, &cfg->jfs_depth);
-                break;
-            case 'U':
-                (void)ub_str_to_u8(optarg, &cfg->retry_cnt);
                 break;
             case 'w':
                 cfg->warm_up = true;

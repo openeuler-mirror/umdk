@@ -2,15 +2,37 @@ find_package(GLIB REQUIRED COMPONENTS gobject)
 include_directories(${GLIB_INCLUDE_DIRS})
 link_directories(${CMAKE_BINARY_DIR})
 
-add_executable(tpsa_daemon "")
+file(GLOB_RECURSE SRC_FILES
+    "daemon/*.c"
+)
+
+add_executable(tpsa_daemon ${SRC_FILES})
+add_executable(uvs_daemon ${SRC_FILES})
 add_subdirectory(config)
 add_subdirectory(core)
-include_directories(include)
-include_directories(../include/common)
+add_subdirectory(daemon)
+include_directories(${PROJECT_SOURCE_DIR}/include/common)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/core/tpsa/include)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/tpservice_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/vport_table_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/sip_table_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/live_migrate_table_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/global_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include/dip_table_cfg)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/daemon/include)
 
 set_target_properties(tpsa_daemon PROPERTIES
     C_STANDARD 99
     )
 
-target_link_libraries(tpsa_daemon glib-2.0 pthread urma_common)
+set_target_properties(uvs_daemon PROPERTIES
+    C_STANDARD 99
+    )
+
+target_link_libraries(tpsa_daemon tpsa glib-2.0 pthread urma_common)
+
 install(TARGETS tpsa_daemon DESTINATION /usr/sbin)
+
+target_link_libraries(uvs_daemon tpsa glib-2.0 pthread urma_common)
+
+install(TARGETS uvs_daemon DESTINATION /usr/sbin)

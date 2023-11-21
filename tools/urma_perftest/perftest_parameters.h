@@ -79,9 +79,7 @@
 // value range of perftest err_timeout
 #define PERFTEST_ERR_TIMEOUT_MIN  (0)
 #define PERFTEST_ERR_TIMEOUT_MAX  (31)
-// value range of perftest retry_cnt
-#define PERFTEST_RETRY_CNT_MIN  (0)
-#define PERFTEST_RETRY_CNT_MAX  (7)
+
 // value range of perftest priority
 #define PERFTEST_PRIORITY_MIN  (0)
 #define PERFTEST_PRIORITY_MAX  (15)
@@ -176,9 +174,10 @@ typedef struct perftest_config {
     uint32_t inf_period;                /* Print period for infinite mode, default 2 seconds. */
     uint32_t order;                     /* Set max order of 2, only used for ALL. */
     uint8_t err_timeout;
-    uint8_t retry_cnt;
     bool lock_free;
     uint8_t priority;
+    bool share_jfr;
+    uint32_t io_thread_num;
     perftest_comm_t comm;
 } perftest_config_t;
 

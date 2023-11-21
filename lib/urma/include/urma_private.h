@@ -11,16 +11,11 @@
 #define URMA_PRIVATE_H
 
 #include <stdint.h>
-#include <stdatomic.h>
 
 #include "ub_list.h"
 #include "urma_provider.h"
 
 #define URMA_MAX_SYSFS_PATH 256
-
-typedef struct urma_ref {
-    atomic_ulong atomic_cnt;
-} urma_ref_t;
 
 typedef struct urma_driver {
     struct urma_provider_ops *ops;
@@ -45,7 +40,7 @@ typedef struct urma_sysfs_dev_name {
     struct ub_list node; /* Add to dev_name_list */
 } urma_sysfs_dev_name_t;
 
-int urma_init_jetty_cfg(urma_jetty_cfg_t *p, const urma_jetty_cfg_t *cfg);
+int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
-
+int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 #endif // URMA_PRIVATE_H

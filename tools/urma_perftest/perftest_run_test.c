@@ -23,6 +23,8 @@
 #define PERFTEST_HALF (2)
 #define PERFTEST_ITERS_99 (0.99)
 #define PERFTEST_ITERS_99_9 (0.999)
+#define PERFTEST_ITERS_99_99 (0.9999)
+#define PERFTEST_ITERS_99_99_9 (0.99999)
 #define PERFTEST_SGE_NUM_PRE_WR (2)
 #define PERFTEST_POLL_BATCH (16)
 #define PERFTEST_M (1000000)
@@ -32,14 +34,14 @@
 
 #define BI_JETTYS_MULTIPLE (2)
 #define LAT_MEASURE_TAIL (2)  // Remove the two max value
-#define RESULT_LAT_FMT " bytes iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]   " \
-                        "99""%"" percentile[usec]   99.9""%"" percentile[usec]"
-#define RESULT_LAT_DUR_FMT " bytes        iterations       t_avg[usec]        pps"
-#define RESULT_BW_FMT  " bytes     iterations    BW peak[MB/sec]    BW average[MB/sec]   MsgRate[Mpps]"
-#define REPORT_LAT_FMT " %-7u   %-7lu          %-7.2lf        %-7.2lf      %-7.3lf          %-7.2lf          " \
-                        "%-7.2lf          %-7.2lf"
-#define REPORT_LAT_DUR_FMT " %-7u       %-7lu            %-7.2f        %-7.2f"
-#define REPORT_BW_FMT " %-7u    %-10lu       %-7.2lf            %-7.2lf         %-7.6lf"
+#define RESULT_LAT_FMT " bytes   iterations  t_min[us]  t_max[us]  t_median[us]  t_avg[us]  t_stdev[us]  " \
+                        "99""%""[us]  99.9""%""[us]  99.99""%""[us]  99.999""%""[us]"
+#define RESULT_LAT_DUR_FMT " bytes   iterations  t_avg[us]  pps"
+#define RESULT_BW_FMT  " bytes   iterations  BW peak[MB/sec]  BW average[MB/sec]  MsgRate[Mpps]"
+#define REPORT_LAT_FMT " %-7u %-10lu  %-7.2lf    %-7.2lf    %-7.2lf       %-7.2lf    %-7.2lf      " \
+                        "%-7.2lf  %-7.2lf    %-7.2lf     %-7.2lf"
+#define REPORT_LAT_DUR_FMT " %-7u %-10lu  %-7.2f    %-7.2f"
+#define REPORT_BW_FMT " %-7u %-10lu  %-7.2lf          %-7.2lf             %-7.6lf"
 
 #define INF_BI_FACTOR_SEND (1)
 #define INF_BI_FACTOR_OTHER (2)
@@ -324,7 +326,7 @@ static int run_once_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     int first_rx = 1;
     int poll = 0;
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    int size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
+    uint32_t size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
     uint64_t send_va = (uint64_t)ctx->local_buf[0] + ctx->buf_size;    // Second half for send
     urma_jfs_wr_flag_t flag = {0};
 
@@ -524,7 +526,7 @@ static int run_once_atomic_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     return 0;
 }
 
-static inline uint64_t get_median_delta(int num, uint64_t *delta_arr)
+static inline uint64_t get_median_delta(uint64_t num, uint64_t *delta_arr)
 {
     if ((num - 1) % PERFTEST_HALF != 0) {
         return (delta_arr[num / PERFTEST_HALF] + delta_arr[num / PERFTEST_HALF - 1]) / PERFTEST_HALF;
@@ -549,16 +551,14 @@ static int cycles_compare(const void *src, const void *dst)
 
 static void print_lat_report(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
-    int i;
-    double average_sum = 0.0, average = 0.0;
-    int iters_99, iters_99_9;
+    uint64_t i;
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
 
     int rtt_factor = (cfg->cmd == PERFTEST_READ_LAT || cfg->cmd == PERFTEST_ATOMIC_LAT) ? 1 : 2;
     double cycles_to_units = get_cpu_mhz(cfg->cpu_freq_f);
     double cycles_rtt_quotient = cycles_to_units * rtt_factor;
 
-    int measure_cnt = (int)(cfg->iters - 1);
+    uint64_t measure_cnt = cfg->iters - 1;
     uint64_t *delta = calloc(1, sizeof(uint64_t) * (uint32_t)measure_cnt);
     if (delta == NULL) {
         (void)fprintf(stderr, "Failed to calloc delta memory\n");
@@ -573,20 +573,38 @@ static void print_lat_report(perftest_context_t *ctx, const perftest_config_t *c
     qsort(delta, (size_t)measure_cnt, sizeof(uint64_t), cycles_compare);
     measure_cnt = measure_cnt - LAT_MEASURE_TAIL;  // Remove the two largest values
 
+    /* median lat */
     double median = get_median_delta(measure_cnt, delta) / cycles_rtt_quotient;
 
+    /* average lat */
+    double average_sum = 0.0, average = 0.0;
     for (i = 0; i < measure_cnt; i++) {
         average_sum += (delta[i] / cycles_rtt_quotient);
     }
     average = average_sum / measure_cnt;
 
-    iters_99 = ceil((measure_cnt) * PERFTEST_ITERS_99);
-    iters_99_9 = ceil((measure_cnt) * PERFTEST_ITERS_99_9);
+    /* variance lat */
+#define PERFTEST_SQUARE  (2)
+    double stdev, temp_var, pow_var, stdev_sum = 0;
+    for (i = 0; i < measure_cnt; i++) {
+        temp_var = average - (delta[i] / cycles_rtt_quotient);
+        pow_var = pow(temp_var, PERFTEST_SQUARE);
+        stdev_sum += pow_var;
+    }
+    stdev = sqrt(stdev_sum / measure_cnt);
+
+    /* tail lat */
+    uint64_t iters_99, iters_99_9, iters_99_99, iters_99_99_9;
+    iters_99 = (uint64_t)ceil((measure_cnt) * PERFTEST_ITERS_99);
+    iters_99_9 = (uint64_t)ceil((measure_cnt) * PERFTEST_ITERS_99_9);
+    iters_99_99 = (uint64_t)ceil((measure_cnt) * PERFTEST_ITERS_99_99);
+    iters_99_99_9 = (uint64_t)ceil((measure_cnt) * PERFTEST_ITERS_99_99_9);
 
     // " %-7u   %-7u          %-7.3lf        %-7.3lf      %-7.3lf          %-7.3lf          %-7.3lf          %-7.3lf"
     (void)printf(REPORT_LAT_FMT, cfg->size, cfg->iters,
         delta[0] / cycles_rtt_quotient, delta[measure_cnt] / cycles_rtt_quotient,
-        median, average, delta[iters_99] / cycles_rtt_quotient, delta[iters_99_9] / cycles_rtt_quotient);
+        median, average, stdev, delta[iters_99] / cycles_rtt_quotient, delta[iters_99_9] / cycles_rtt_quotient,
+        delta[iters_99_99] / cycles_rtt_quotient, delta[iters_99_99_9] / cycles_rtt_quotient);
     (void)printf("\n");
     free(delta);
 }
@@ -616,8 +634,8 @@ static int run_jfs_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     if (cfg->all == true) {
         for (uint32_t i = 1; i < cfg->order; i++) {
             cfg->size = (1U << i);
-            int size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
-            if (send_lat_post_recv(ctx, cfg, size_of_jfr) != 0) {
+            uint32_t size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
+            if (send_lat_post_recv(ctx, cfg, (int)size_of_jfr) != 0) {
                 (void)fprintf(stderr, "Failed to post recv, size: %u.\n", cfg->size);
                 return -1;
             }
@@ -636,8 +654,8 @@ static int run_jfs_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
             cfg->time_type.bs.iterations == 1 ? print_lat_report(ctx, cfg) : print_lat_duration_report(ctx, cfg);
         }
     } else {
-        int size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
-        if (send_lat_post_recv(ctx, cfg, size_of_jfr) != 0) {
+        uint32_t size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
+        if (send_lat_post_recv(ctx, cfg, (int)size_of_jfr) != 0) {
             (void)fprintf(stderr, "Failed to post recv, size: %u.\n", cfg->size);
             return -1;
         }
@@ -669,7 +687,7 @@ static void init_jfs_wr_base(urma_jfs_wr_t *wr, perftest_context_t *ctx,
             wr->opcode = URMA_OPC_SEND;
             break;
         case PERFTEST_ATOMIC_LAT:
-            wr->opcode = (cfg->atomic_type == PERFTEST_CAS ? URMA_OPC_CAS : URMA_OPC_FAA);
+            wr->opcode = (cfg->atomic_type == PERFTEST_CAS ? URMA_OPC_CAS : URMA_OPC_FADD);
             break;
         case PERFTEST_READ_BW:
             wr->opcode = URMA_OPC_READ;
@@ -681,10 +699,10 @@ static void init_jfs_wr_base(urma_jfs_wr_t *wr, perftest_context_t *ctx,
             wr->opcode = URMA_OPC_SEND;
             break;
         case PERFTEST_ATOMIC_BW:
-            wr->opcode = (cfg->atomic_type == PERFTEST_CAS ? URMA_OPC_CAS : URMA_OPC_FAA);
+            wr->opcode = (cfg->atomic_type == PERFTEST_CAS ? URMA_OPC_CAS : URMA_OPC_FADD);
             break;
         default:
-            (void)fprintf(stderr, "invaild opcode.\n");
+            (void)fprintf(stderr, "invalid opcode.\n");
             break;
     }
     wr->flag.bs.complete_enable = ((jfs_wr_index + 1) % cfg->cq_mod == 0) ? 1 : 0;
@@ -908,7 +926,7 @@ static void init_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perftest_
             init_atomic_jfs_wr(wr, ctx, cfg, i, j);
             return;
         default:
-            (void)fprintf(stderr, "invaild opcode.\n");
+            (void)fprintf(stderr, "invalid opcode.\n");
             return;
     }
 }
@@ -1431,7 +1449,7 @@ static int run_once_jetty_send_lat(perftest_context_t *ctx, perftest_config_t *c
     int first_rx = 1;
     int poll = 0;
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    int size_of_jetty = cfg->jfr_depth / cfg->jfr_post_list;
+    uint32_t size_of_jetty = cfg->jfr_depth / cfg->jfr_post_list;
 
     urma_jfs_wr_t *wr = run_ctx->jfs_wr;
     wr->tjetty = ctx->import_tjetty[0];
@@ -1543,12 +1561,12 @@ static int run_once_jetty_send_lat(perftest_context_t *ctx, perftest_config_t *c
 
 static int run_one_post_send(perftest_context_t *ctx, perftest_config_t *cfg)
 {
-    int size_of_jetty = cfg->jfr_depth / cfg->jfr_post_list;
+    uint32_t size_of_jetty = cfg->jfr_depth / cfg->jfr_post_list;
     int ret;
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
-        ret = send_lat_post_recv(ctx, cfg, size_of_jetty);
+        ret = send_lat_post_recv(ctx, cfg, (int)size_of_jetty);
     } else {
-        ret = send_lat_post_jetty_recv(ctx, cfg, size_of_jetty);
+        ret = send_lat_post_jetty_recv(ctx, cfg, (int)size_of_jetty);
     }
     if (ret != 0) {
         (void)fprintf(stderr, "Failed to post recv, size: %u.\n", cfg->size);
@@ -1901,7 +1919,7 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
     uint64_t rcnt = 0;
     int cqe_cnt = 0;
     int first_rx = 1;
-    int i;
+    uint32_t i;
     uint32_t cr_id;
     urma_jfr_wr_t *bad_wr = NULL;
     int ret = 0;
@@ -2208,7 +2226,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                     goto free_unused_recv_for_jetty;
                 }
 
-                if (cr_send[i].opcode == UINT8_MAX) {
+                if (cr_send[i].flag.bs.s_r == 0) {
                     tot_ccnt += cfg->cq_mod;
                     run_ctx->ccnt[cr_id] += cfg->cq_mod;
 

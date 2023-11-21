@@ -257,6 +257,7 @@ static inline char *get_string_from_int(const struct str_int *array, int array_s
 bool hexits_value(const char *s, size_t n, uintmax_t *value);
 
 bool is_valid_digit(const char *digit_str);
+int ub_str_to_bool(const char *buf, bool *bool_res);
 int ub_str_to_u8(const char *buf, uint8_t *u8);
 int ub_str_to_u16(const char *buf, uint16_t *u16);
 int ub_str_to_u32(const char *buf, uint32_t *u32);

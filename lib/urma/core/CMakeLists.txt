@@ -1,7 +1,7 @@
 # Find required packages
 find_package(GLIB REQUIRED COMPONENTS gobject)
 
-aux_source_directory(. URMA_DIR_SRCS)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR} URMA_DIR_SRCS)
 
 add_library(urma SHARED
     ${URMA_DIR_SRCS}
