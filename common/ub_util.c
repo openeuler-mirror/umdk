@@ -212,6 +212,23 @@ int memcpy_s_large_buf(void *dest, size_t destMax, const void *src, size_t count
     return 0;
 }
 
+int ub_str_to_bool(const char *buf, bool *bool_res)
+{
+    if (buf == NULL || strlen(buf) == 0) {
+        return -EINVAL;
+    }
+
+    if (!strcmp(buf, "true")) {
+        *bool_res = true;
+    } else if (!strcmp(buf, "false")) {
+        *bool_res = false;
+    } else {
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 int ub_str_to_u8(const char *buf, uint8_t *u8)
 {
     unsigned long ret;

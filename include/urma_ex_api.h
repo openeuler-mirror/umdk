@@ -22,6 +22,8 @@ typedef enum urma_user_control_opcode {
     URMA_USER_CTL_IGNORE_JETTY_IN_CR,
     URMA_USER_CTL_SET_AI_MODE,
     URMA_USER_CTL_IP_NON_BLOCK_SEND,                       /* only available for IP mode */
+    URMA_USER_CTL_IP_STOP_RECV,                            /* only IP mode, referred before destroy context */
+    URMA_USER_CTL_IP_STOP_SEND,                        /* only IP mode */
     URMA_USER_CTL_POST_SEND_AND_RET_DB         = 10,
     URMA_USER_CTL_UPDATE_JFS_CI                = 11,
     URMA_USER_CTL_CONFIG_POE_CHANNEL           = 20,
@@ -65,7 +67,7 @@ typedef enum urma_user_ctl_jfc_notify_mode {
 
 typedef struct urma_user_ctl_jfc_notify_init_attr {
     uint64_t notify_addr;
-    uint8_t notify_mode;     /* use urma_jfc_notify_mode */
+    uint8_t notify_mode;     /* use urma_user_ctl_jfc_notify_mode */
     uint8_t reserved[7];
 } urma_user_ctl_jfc_notify_init_attr_t;
 
@@ -126,8 +128,8 @@ typedef struct urma_user_ctl_ip_io_send_in {
  * @param[out] user_out: result of execution;
  * Return: 0 on success, other value on error
  */
-urma_status_t urma_post_jfs_wr_ex(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    const urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out);
+urma_status_t urma_post_jfs_wr_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
+    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out);
 
 /**
  * post a request to read, write, atomic or send data.
@@ -138,11 +140,15 @@ urma_status_t urma_post_jfs_wr_ex(const urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma
  * @param[out] user_out: result of execution;
  * Return: 0 on success, other value on error
  */
-urma_status_t urma_post_jetty_wr_ex(const urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    const urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out);
+urma_status_t urma_post_jetty_wr_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
+    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out);
 
 // Called by the user to determine the use of a different transmission mode
 urma_status_t urma_ib_set_transport_mode(urma_context_t *ctx, urma_ib_tm_t mode);
+
+typedef struct urma_user_ctl_ip_stop_send_in {
+    urma_target_jetty_t *tjfr;
+} urma_user_ctl_ip_stop_send_in_t;
 
 #ifdef __cplusplus
 }

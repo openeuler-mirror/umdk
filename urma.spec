@@ -1,6 +1,9 @@
 # add --with transport_service_disable option, i.e. enable TPS by default
 %bcond_with transport_service_disable
 
+# add --with hw_disable option, i.e. enable HW by default
+%bcond_with hw_disable
+
 %if %{defined kernel_version}
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %else
@@ -44,11 +47,13 @@ Summary:        Basic URMA libraries of UMDK
 %description lib
 This package contains basic URMA libraries of UMDK, such as liburma.so.
 
+%if %{without hw_disable}
 %package compat-hns-lib
 Summary:	Libraries of hns
 
 %description compat-hns-lib
 This pachage contains libraries of hns, such as liburma-hns3.so.
+%endif
 
 %package devel
 Summary:        Include Files and Libraries mandatory for URMA
@@ -72,7 +77,7 @@ Summary:        binary file of urma
 BuildRequires:  gcc
 Requires:       glibc
 %description bin
-binary file of urma, contains tpsa_daemon.
+binary file of urma, contains tpsa_daemon, uvs_admin
 %endif
 
 %prep
@@ -82,6 +87,9 @@ binary file of urma, contains tpsa_daemon.
     cmake ./ -DCMAKE_INSTALL_PREFIX=/usr \
 %if %{with transport_service_disable}
     -DTPS="disable" \
+%endif
+%if %{with hw_disable}
+    -DHW="disable" \
 %endif
 %if %{defined kernel_version}
     -DKERNEL_RELEASE=%{kernel_version} \
@@ -113,9 +121,11 @@ if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
     %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
 fi
 
+%if %{without hw_disable}
 %files compat-hns-lib
 %defattr(-,root,root)
     %{_libdir}/liburma-hns3.so
+%endif
 
 %files devel
 %defattr(-,root,root)
@@ -126,7 +136,6 @@ fi
     %{_includedir}/umdk/urma_provider.h
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
-    %{_includedir}/umdk/common/compiler.h
 
 %files tools
 %defattr(-,root,root)
@@ -143,11 +152,21 @@ fi
 %files bin
 %defattr(-,root,root)
     %{_sbindir}/tpsa_daemon
+    %{_sbindir}/uvs_daemon
+    %attr(0700,-,-) %{_bindir}/uvs_admin
     /etc/rsyslog.d/tpsa.conf
+    /etc/rsyslog.d/uvs_admin.conf
     /etc/logrotate.d/tpsa
     %dir /etc/tpsa
+    %{_libdir}/libtpsa.so
+    %{_libdir}/libtpsa.so.0
+    %{_libdir}/libtpsa.so.0.0.1
+    %attr(0644,-,-) %{_unitdir}/uvsd.service
 %config(noreplace) /etc/tpsa/tpsa.ini
 %post bin
+if [ -x %{_bindir}/systemctl ]; then
+    %{_bindir}/systemctl daemon-reload >/dev/null  2>&1
+fi
 if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
     %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
 fi

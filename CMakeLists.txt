@@ -21,6 +21,13 @@ elseif("${TPS}" STREQUAL "")
     set(TPS "enable")
 endif()
 
+# HW DISABLE
+if("${HW}" STREQUAL "disable")
+    message(STATUS "HW disable!")
+elseif("${HW}" STREQUAL "")
+    set(HW "enable")
+endif()
+
 set(CMAKE_FLAGS_ARM64 " -march=armv8-a+crc -DUB_ARCH_ARM64")
 set(CMAKE_FLAGS_x86_64 " -msse4.2 -DUB_ARCH_X86_64")
 if("${X86_CROSS_COMPILATION}" STREQUAL "enable")
@@ -44,8 +51,9 @@ add_subdirectory(include)
 add_subdirectory(common)
 add_subdirectory(lib)
 add_subdirectory(tools)
-add_subdirectory(hw)
-
+if("${HW}" STREQUAL "enable")
+    add_subdirectory(hw)
+endif()
 if("${TPS}" STREQUAL "enable")
     add_subdirectory(transport_service)
 endif()
@@ -53,7 +61,7 @@ endif()
 # uninstall target
 if(NOT TARGET uninstall)
     configure_file(
-        "cmake_uninstall.cmake.in"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
         IMMEDIATE @ONLY)
 

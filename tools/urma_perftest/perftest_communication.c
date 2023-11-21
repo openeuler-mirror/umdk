@@ -52,7 +52,7 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
     uint32_t times = 0;
     for (int i = 1; i <= PERFTEST_CONNECT_COUNT; i++) {
         if (connect(sockfd, addr, size) != 0) {
-            times += i * ERFTEST_SLEEP_TIME;
+            times += i * (uint32_t)ERFTEST_SLEEP_TIME;
             (void)usleep(times);
             continue;
         }

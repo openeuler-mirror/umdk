@@ -21,19 +21,22 @@
 
 #define PERFTEST_DEF_ACCESS (URMA_ACCESS_LOCAL_WRITE | URMA_ACCESS_REMOTE_READ | \
                         URMA_ACCESS_REMOTE_WRITE | URMA_ACCESS_REMOTE_ATOMIC)
-#define PERFTEST_DEF_KEY_POLICY URMA_KEY_PLAIN_TEXT
+#define PERFTEST_DEF_KEY_POLICY URMA_TOKEN_PLAIN_TEXT
 
 #define PERFTEST_DEF_UM_MAX_SGE (2) /* there is one more sge in IB UD mode */
 
-static const urma_key_t g_perftest_ukey = {
-    .key = 0xABCDEF,
+#define MAX_RETRY_TIME 5
+#define RETRY_INTERVAL 100
+
+static urma_token_t g_perftest_token = {
+    .token = 0xABCDEF,
 };
 
 static int ignore_jetty(perftest_context_t *ctx)
 {
     urma_user_ctl_in_t in = {
         .addr = (uint64_t)ctx->urma_ctx,
-        .len = sizeof(urma_context_t),
+        .len = (uint32_t)sizeof(urma_context_t),
         .opcode = URMA_USER_CTL_IGNORE_JETTY_IN_CR
     };
     urma_user_ctl_out_t out = {0};
@@ -95,13 +98,43 @@ static void check_ib_tm_mode(perftest_config_t *cfg)
     }
 }
 
+static void check_share_jfr(perftest_config_t *cfg, urma_device_t *urma_dev)
+{
+    if (urma_dev->type == URMA_TRANSPORT_UB && cfg->share_jfr == false) {
+        (void)printf("Warning: URMA_TRANSPORT_UB only support share_jfr.\n");
+        cfg->share_jfr = true;
+    }
+
+    /* URMA_TRANSPORT_IP only support share_jfr */
+    if (urma_dev->type == URMA_TRANSPORT_IP && cfg->share_jfr == true) {
+        cfg->share_jfr = false;
+    }
+
+    /* Current, UM of URMA_TRANSPORT_IB only support share_jfr */
+    if (urma_dev->type == URMA_TRANSPORT_IB && cfg->trans_mode == URMA_TM_UM &&
+        cfg->share_jfr == true) {
+        cfg->share_jfr = false;
+    }
+}
+
+static inline urma_status_t ip_user_ctl_io_thread(urma_context_t *urma_ctx, uint32_t num)
+{
+    urma_user_ctl_ip_io_send_in_t io_send_in = { .io_thread_num = num };
+    urma_user_ctl_in_t in = {
+        .addr = (uint64_t)&io_send_in,
+        .len = (uint32_t)sizeof(urma_user_ctl_ip_io_send_in_t),
+        .opcode = URMA_USER_CTL_IP_NON_BLOCK_SEND
+    };
+    urma_user_ctl_out_t out = { 0 };
+    return urma_user_ctl(urma_ctx, &in, &out);
+}
+
 static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_status_t status;
     urma_init_attr_t init_attr = {
         .token = 0,
-        .uasid = 0,
-        .enable_uds = 0
+        .uasid = 0
     };
 
     status = urma_init(&init_attr);
@@ -131,8 +164,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         (void)fprintf(stderr, "Failed to query device, name: %s.\n", cfg->dev_name);
         goto uninit;
     }
-    ctx->eid = ctx->dev_attr.eid;
-    ctx->urma_ctx = urma_create_context(urma_dev);
+    ctx->urma_ctx = urma_create_context(urma_dev, 0);
     if (ctx->urma_ctx == NULL) {
         (void)fprintf(stderr, "Failed to create urma instance!\n");
         goto uninit;
@@ -142,6 +174,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         (void)printf("Warning: device NOT support jfc_inline.\n");
         cfg->jfc_inline = false;
     }
+    check_share_jfr(cfg, urma_dev);
 
     cfg->tp_type = urma_dev->type;
     check_device_inline(cfg);
@@ -155,6 +188,10 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
     if (cfg->ignore_jetty_in_cr && ignore_jetty(ctx) != 0) {
+        goto del_ctx;
+    }
+
+    if (cfg->io_thread_num && ip_user_ctl_io_thread(ctx->urma_ctx, cfg->io_thread_num) != URMA_SUCCESS) {
         goto del_ctx;
     }
     return 0;
@@ -205,7 +242,7 @@ static int create_jfc(perftest_context_t *ctx, perftest_config_t *cfg)
         .depth = cfg->jfc_depth,
         .flag = {.value = 0},
         .jfce = NULL,
-        .user_ctx = NULL,
+        .user_ctx = (uint64_t)NULL,
     };
     jfc_cfg.flag.bs.lock_free = cfg->lock_free ? 1 : 0;
     if (cfg->jfc_inline) {
@@ -269,17 +306,15 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
 
     urma_jfs_cfg_t jfs_cfg = {
         .depth = cfg->jfs_depth,
-        .flag.bs.mode = URMA_IDC_MODE,
         .flag.bs.lock_free = cfg->lock_free ? 1 : 0,
         .trans_mode = cfg->trans_mode,
         .priority = cfg->priority, /* Highest priority */
         .max_sge = 1,
         .max_inline_data = jfs_max_inline_data,
-        .retry_cnt = cfg->retry_cnt,
         .rnr_retry = URMA_TYPICAL_RNR_RETRY,
         .err_timeout = cfg->err_timeout,
         .jfc = ctx->jfc_s,
-        .user_ctx = NULL
+        .user_ctx = (uint64_t)NULL
     };
     if (cfg->trans_mode == URMA_TM_UM && cfg->tp_type == URMA_TRANSPORT_IB) {
         jfs_cfg.max_sge = PERFTEST_DEF_UM_MAX_SGE;
@@ -309,7 +344,12 @@ delete_jfs:
 static inline void destroy_jfr(perftest_context_t *ctx, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_delete_jfr(ctx->jfr[k]);
+        int cnt = 0;
+        /* retry as cm threads maybe dealing with disconnect req */
+        while (urma_delete_jfr(ctx->jfr[k]) == URMA_EAGAIN && cnt < MAX_RETRY_TIME) {
+            (void)usleep(RETRY_INTERVAL);
+            ++cnt;
+        }
     }
 
     free(ctx->jfr);
@@ -326,9 +366,9 @@ static int create_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
         .min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER,
         .max_sge = 1,
         .jfc = ctx->jfc_r,
-        .ukey = g_perftest_ukey,
+        .token_value = g_perftest_token,
         .id = 0,
-        .user_ctx = NULL
+        .user_ctx = (uint64_t)NULL
     };
     if (cfg->trans_mode == URMA_TM_UM && cfg->tp_type == URMA_TRANSPORT_IB) {
         jfr_cfg.max_sge = PERFTEST_DEF_UM_MAX_SGE;
@@ -359,21 +399,20 @@ static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     urma_jfs_cfg_t *jfs_cfg)
 {
     jfs_cfg->depth = cfg->jfs_depth;
-    jfs_cfg->flag.bs.mode = URMA_IDC_MODE;
+    jfs_cfg->flag.value = 0;
     jfs_cfg->flag.bs.lock_free = cfg->lock_free ? 1 : 0;
     jfs_cfg->trans_mode = cfg->trans_mode;
     jfs_cfg->priority = cfg->priority; /* Highest priority */
     jfs_cfg->max_sge = 1;
     jfs_cfg->max_rsge = 1;
     jfs_cfg->max_inline_data = jfs_max_inline_data;
-    jfs_cfg->retry_cnt = cfg->retry_cnt;
     jfs_cfg->rnr_retry = URMA_TYPICAL_RNR_RETRY;
     jfs_cfg->err_timeout = cfg->err_timeout;
     jfs_cfg->jfc = ctx->jfc_s;
-    jfs_cfg->user_ctx = NULL;
+    jfs_cfg->user_ctx = (uint64_t)NULL;
     if (cfg->trans_mode == URMA_TM_UM && cfg->tp_type == URMA_TRANSPORT_IB) {
         jfs_cfg->max_sge = PERFTEST_DEF_UM_MAX_SGE;
-        jfs_cfg->max_rsge = PERFTEST_DEF_UM_MAX_SGE;
+        jfs_cfg->max_rsge = 1;
     }
 }
 
@@ -386,7 +425,7 @@ static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     jfr_cfg->min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER;
     jfr_cfg->max_sge = 1;
     jfr_cfg->jfc = ctx->jfc_r;
-    jfr_cfg->ukey = g_perftest_ukey;
+    jfr_cfg->token_value = g_perftest_token;
     jfr_cfg->id = 0;
     if (cfg->trans_mode == URMA_TM_UM && cfg->tp_type == URMA_TRANSPORT_IB) {
         jfr_cfg->max_sge = PERFTEST_DEF_UM_MAX_SGE;
@@ -396,18 +435,21 @@ static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
 static inline void destroy_jetty(perftest_context_t *ctx, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_delete_jetty(ctx->jetty[k]);
+        int cnt = 0;
+        /* retry as cm threads maybe dealing with disconnect req */
+        while (urma_delete_jetty(ctx->jetty[k]) == URMA_EAGAIN && cnt < MAX_RETRY_TIME) {
+            (void)usleep(RETRY_INTERVAL);
+            ++cnt;
+        }
     }
-
     free(ctx->jetty);
+    ctx->jetty = NULL;
 }
 
 static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     int i;
-    urma_jetty_flag_t jetty_flag = {
-        .bs.share_jfr = 0,  /* No shared jfr */
-    };
+    urma_jetty_flag_t jetty_flag = {0};
     uint32_t jfs_max_inline_data = cfg->inline_size;
     if (jfs_max_inline_data > ctx->dev_attr.dev_cap.max_jfs_inline_len) {
         (void)fprintf(stderr, "Failed parameter, jfs_max_inline_data %u exceeds the device max_inline_data %u\n",
@@ -421,15 +463,34 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
     urma_jfr_cfg_t jfr_cfg = { 0 };
     fill_jfr_cfg(ctx, cfg, &jfr_cfg);
 
-    urma_jetty_cfg_t jetty_cfg = {
-        .flag = jetty_flag,
-        .jfs_cfg = &jfs_cfg,
-        .jfr_cfg = &jfr_cfg,
-    };
+    urma_jetty_cfg_t jetty_cfg = {0};
+    if (cfg->share_jfr == false) {
+        jetty_flag.bs.share_jfr = 0;   /* No shared jfr */
+        jetty_cfg.flag = jetty_flag;
+        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.jfr_cfg = &jfr_cfg;
+    } else {
+        ctx->jfr = calloc(1, sizeof(urma_jfr_t *));
+        if (ctx->jfr == NULL) {
+            (void)fprintf(stderr, "Failed to calloc jfr memory!\n");
+            return -1;
+        }
+        ctx->jfr[0] = urma_create_jfr(ctx->urma_ctx, &jfr_cfg);
+        if (ctx->jfr[0] == NULL) {
+            (void)fprintf(stderr, "Failed to create share_jfr!\n");
+            free(ctx->jfr);
+            return -1;
+        }
+        jetty_flag.bs.share_jfr = 1;
+        jetty_cfg.flag = jetty_flag;
+        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.shared.jfr = ctx->jfr[0];
+        jetty_cfg.shared.jfc = ctx->jfc_r;
+    }
     ctx->jetty = calloc(1, sizeof(urma_jetty_t *) * cfg->jettys);
     if (ctx->jetty == NULL) {
         (void)fprintf(stderr, "Failed to calloc jetty memory!\n");
-        return -1;
+        goto err_delete_jfr;
     }
     for (i = 0; i < (int)cfg->jettys; i++) {
         ctx->jetty[i] = urma_create_jetty(ctx->urma_ctx, &jetty_cfg);
@@ -442,6 +503,12 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
     return 0;
 err_delete_jetty:
     destroy_jetty(ctx, i);
+err_delete_jfr:
+    if (cfg->share_jfr == true) {
+        (void)urma_delete_jfr(ctx->jfr[0]);
+        free(ctx->jfr);
+        ctx->jfr = NULL;
+    }
     return -1;
 }
 
@@ -493,6 +560,11 @@ static inline void destroy_simplex_jettys(perftest_context_t *ctx, perftest_conf
 static inline void destroy_duplex_jettys(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     destroy_jetty(ctx, (int)ctx->jetty_num);
+    if (cfg->share_jfr == true && ctx->jfr != NULL) {
+        (void)urma_delete_jfr(ctx->jfr[0]);
+        free(ctx->jfr);
+        ctx->jfr = NULL;
+    }
     destroy_jfc(ctx, cfg);
     ctx->jetty_num = 0;
 }
@@ -500,10 +572,19 @@ static inline void destroy_duplex_jettys(perftest_context_t *ctx, perftest_confi
 static inline void unregister_seg(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_unregister_seg(ctx->local_tseg[k], true);
+        (void)urma_unregister_seg(ctx->local_tseg[k]);
     }
     free(ctx->local_tseg);
     ctx->local_tseg = NULL;
+}
+
+static inline void free_token_id(perftest_context_t *ctx, const int idx)
+{
+    for (int k = 0; k < idx; k++) {
+        (void)urma_free_token_id(ctx->token_id[k]);
+    }
+    free(ctx->token_id);
+    ctx->token_id = NULL;
 }
 
 static inline void free_memory(perftest_context_t *ctx, const int idx)
@@ -517,7 +598,7 @@ static inline void free_memory(perftest_context_t *ctx, const int idx)
 
 static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
 {
-    int i, j;
+    int i = 0, j = 0, k = 0;
     ctx->local_buf = calloc(1, sizeof(void *) * cfg->jettys);
     if (ctx->local_buf == NULL) {
         (void)fprintf(stderr, "Failed to calloc local buff memory!\n");
@@ -541,28 +622,47 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
 
+    if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
+        ctx->token_id = calloc(1, sizeof(urma_token_id_t *) * cfg->jettys);
+        if (ctx->token_id == NULL) {
+            (void)fprintf(stderr, "Failed to calloc token_id array!\n");
+            goto free_memory;
+        }
+        for (k = 0; k < (int)cfg->jettys; k++) {
+            ctx->token_id[k] = urma_alloc_token_id(ctx->urma_ctx);
+            if (ctx->token_id[k] == NULL) {
+                (void)fprintf(stderr, "Failed to alloc token id, loop:%d!\n", k);
+                goto free_token_id;
+            }
+        }
+    }
+
     ctx->local_tseg = calloc(1, sizeof(urma_target_seg_t *) * cfg->jettys);
     if (ctx->local_tseg == NULL) {
         (void)fprintf(stderr, "Failed to calloc local_tseg!\n");
-            goto free_memory;
+            goto free_token_id;
     }
 
     urma_reg_seg_flag_t flag = {
-        .bs.key_policy = PERFTEST_DEF_KEY_POLICY,
+        .bs.token_policy = PERFTEST_DEF_KEY_POLICY,
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.access = PERFTEST_DEF_ACCESS,
+        .bs.token_id_valid = URMA_TOKEN_ID_VALID,
         .bs.reserved = 0
     };
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
         .len = ctx->buf_size  * PERFTEST_BUF_NUM,
-        .key = &g_perftest_ukey,
+        .token_value = &g_perftest_token,
         .flag = flag,
         .user_ctx = (uintptr_t)NULL,
         .iova = 0
     };
     for (j = 0; j < (int)cfg->jettys; j++) {
         seg_cfg.va = (uint64_t)ctx->local_buf[j];
+        if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
+            seg_cfg.token_id = ctx->token_id[j];
+        }
         ctx->local_tseg[j] = urma_register_seg(ctx->urma_ctx, &seg_cfg);
         if (ctx->local_tseg[j] == NULL) {
             (void)fprintf(stderr, "Failed to register seg, loop:%d!\n", j);
@@ -574,6 +674,10 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
 
 unregister_seg:
     unregister_seg(ctx, cfg, j);
+free_token_id:
+    if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
+        free_token_id(ctx, k);
+    }
 free_memory:
     free_memory(ctx, i);
     return -1;
@@ -582,6 +686,9 @@ free_memory:
 static void unregister_mem(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     unregister_seg(ctx, cfg, (int)ctx->jetty_num);
+    if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
+        free_token_id(ctx, (int)ctx->jetty_num);
+    }
     free_memory(ctx, (int)ctx->jetty_num);
 }
 
@@ -746,7 +853,7 @@ static void destroy_duplex_remote_info(perftest_context_t *ctx)
 static inline void unimport_seg(perftest_context_t *ctx, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_unimport_seg(ctx->import_tseg[k], true);
+        (void)urma_unimport_seg(ctx->import_tseg[k]);
     }
     if (ctx->import_tseg != NULL) {
         free(ctx->import_tseg);
@@ -773,7 +880,7 @@ static int import_seg_for_simplex(perftest_context_t *ctx, perftest_config_t *cf
     };
 
     for (i = 0; i < (int)ctx->jetty_num; i++) {
-        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_ukey, 0, flag);
+        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_token, 0, flag);
         if (ctx->import_tseg[i] == NULL) {
             (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
             goto unimp_simp_seg;
@@ -805,7 +912,7 @@ static int import_seg_for_duplex(perftest_context_t *ctx)
     };
 
     for (i = 0; i < (int)ctx->jetty_num; i++) {
-        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_ukey, 0, flag);
+        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_token, 0, flag);
         if (ctx->import_tseg[i] == NULL) {
             (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
             goto unimp_dup_seg;
@@ -822,14 +929,14 @@ unimp_dup_seg:
 static inline void unadvise_jfr(perftest_context_t *ctx, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_unadvise_jfr(ctx->jfs[k], ctx->import_tjfr[k], true);
+        (void)urma_unadvise_jfr(ctx->jfs[k], ctx->import_tjfr[k]);
     }
 }
 
 static inline void unimport_jfr(perftest_context_t *ctx, const int idx)
 {
     for (int k = 0; k < idx; k++) {
-        (void)urma_unimport_jfr(ctx->import_tjfr[k], true);
+        (void)urma_unimport_jfr(ctx->import_tjfr[k]);
     }
     free(ctx->import_tjfr);
     ctx->import_tjfr = NULL;
@@ -850,13 +957,13 @@ static int import_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
     for (i = 0; i < (int)ctx->jetty_num; i++) {
         rjfr.jfr_id = ctx->remote_jfr[i]->jfr_id;
         rjfr.trans_mode = ctx->remote_jfr[i]->jfr_cfg.trans_mode;
-        ctx->import_tjfr[i] = urma_import_jfr(ctx->urma_ctx, &rjfr, &g_perftest_ukey);
+        ctx->import_tjfr[i] = urma_import_jfr(ctx->urma_ctx, &rjfr, &g_perftest_token);
         if (ctx->import_tjfr[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jfr, loop:%d!\n", i);
             goto unimp_jfr;
         }
         // advise_jfr not called for UM mode
-        if (cfg->trans_mode == URMA_TM_RM) {
+        if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
             ret = urma_advise_jfr(ctx->jfs[i], ctx->import_tjfr[i]);
             if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
                 (void)fprintf(stderr, "Failed to advise jfr, loop:%d!\n", i);
@@ -869,7 +976,7 @@ static int import_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
     return 0;
 unadvise_jfr:
     /* in this error branch [i > 0] */
-    if (cfg->trans_mode == URMA_TM_RM || cfg->trans_mode == URMA_TM_RC) {
+    if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         unadvise_jfr(ctx, i - 1);
     }
 unimp_jfr:
@@ -880,21 +987,21 @@ unimp_jfr:
 static inline void unbind_jetty(perftest_context_t *ctx, const int idx)
 {
     for (int jetty_idx = 0; jetty_idx < idx; jetty_idx++) {
-        (void)urma_unbind_jetty(ctx->jetty[jetty_idx], true);
+        (void)urma_unbind_jetty(ctx->jetty[jetty_idx]);
     }
 }
 
 static inline void unadvise_jetty(perftest_context_t *ctx, const int idx)
 {
     for (int jetty_idx = 0; jetty_idx < idx; jetty_idx++) {
-        (void)urma_unadvise_jetty(ctx->jetty[jetty_idx], ctx->import_tjetty[jetty_idx], true);
+        (void)urma_unadvise_jetty(ctx->jetty[jetty_idx], ctx->import_tjetty[jetty_idx]);
     }
 }
 
 static inline void unimport_jetty(perftest_context_t *ctx, const int idx)
 {
     for (int jetty_idx = 0; jetty_idx < idx; jetty_idx++) {
-        (void)urma_unimport_jetty(ctx->import_tjetty[jetty_idx], true);
+        (void)urma_unimport_jetty(ctx->import_tjetty[jetty_idx]);
     }
     free(ctx->import_tjetty);
     ctx->import_tjetty = NULL;
@@ -914,7 +1021,8 @@ static int import_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
     for (i = 0; i < (int)ctx->jetty_num; i++) {
         rjetty.jetty_id = ctx->remote_jetty[i]->jetty_id;
         rjetty.trans_mode = cfg->trans_mode;
-        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, &rjetty, &g_perftest_ukey);
+        rjetty.type = URMA_JETTY;
+        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, &rjetty, &g_perftest_token);
         if (ctx->import_tjetty[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jetty, loop:%d!\n", i);
             goto unimp_jetty;
@@ -927,7 +1035,7 @@ static int import_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
                 k = i++;
                 goto disconn_jetty;
             }
-        } else if (cfg->trans_mode == URMA_TM_RM) {
+        } else if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
             ret = urma_advise_jetty(ctx->jetty[i], ctx->import_tjetty[i]);
             if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
                 (void)fprintf(stderr, "Failed to advise jetty, loop:%d, trans_mode: %d.\n", i,
@@ -943,7 +1051,7 @@ disconn_jetty:
     // only unimport_jetty for UM mode
     if (cfg->trans_mode == URMA_TM_RC) {
         unbind_jetty(ctx, k);
-    } else if (cfg->trans_mode == URMA_TM_RM) {
+    } else if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         unadvise_jetty(ctx, k);
     }
 unimp_jetty:
@@ -956,7 +1064,7 @@ static inline void force_unimport_jetty(perftest_context_t *ctx, const perftest_
     // only unimport_jetty for UM mode
     if (cfg->trans_mode == URMA_TM_RC) {
         unbind_jetty(ctx, (int)ctx->jetty_num);
-    } else if (cfg->trans_mode == URMA_TM_RM) {
+    } else if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         unadvise_jetty(ctx, (int)ctx->jetty_num);
     }
 
@@ -1048,7 +1156,7 @@ static int create_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     return 0;
 unimp_jfr_simp:
-    if (cfg->trans_mode == URMA_TM_RM || cfg->trans_mode == URMA_TM_RC) {
+    if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         unadvise_jfr(ctx, (int)ctx->jetty_num);
     }
     unimport_jfr(ctx, (int)ctx->jetty_num);
@@ -1121,11 +1229,12 @@ int create_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
 static void destroy_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     destroy_run_ctx(ctx);
-    if (cfg->trans_mode == URMA_TM_RM) {
+    if (cfg->trans_mode == URMA_TM_RM && ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         unadvise_jfr(ctx, (int)ctx->jetty_num);
     }
     unimport_jfr(ctx, (int)ctx->jetty_num);
     unimport_seg(ctx, (int)ctx->jetty_num);
+    (void)sync_time(cfg->comm.sock_fd, "unimport_jfr");
     destroy_simplex_remote_info(ctx);
     unregister_mem(ctx, cfg);
     destroy_simplex_jettys(ctx, cfg);
@@ -1137,6 +1246,7 @@ static void destroy_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     destroy_run_ctx(ctx);
     force_unimport_jetty(ctx, cfg);
+    (void)sync_time(cfg->comm.sock_fd, "unimport_jetty");
     unimport_seg(ctx, (int)ctx->jetty_num);
     destroy_duplex_remote_info(ctx);
     unregister_mem(ctx, cfg);

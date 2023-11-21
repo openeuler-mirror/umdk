@@ -19,7 +19,7 @@ urma                          : URMA (Unified Remote Memory Access)
 ├── common                    : Some public functions of C language, such as list, hmap, etc. Each library will use.
 ├── include                   : Header files for external use and internal public use.
 ├── lib                       : User library, including liburma.
-├── tools                     : UMDK tools, including perftest, admin
+├── tools                     : UMDK tools, including perftest, admin, uvs_admin
 ├── transport_service         : TPS deamon
 └── urma.spec                 : Execute the spec file that generates the RPM package.
 ```
@@ -46,7 +46,7 @@ urma                          : URMA (Unified Remote Memory Access)
 
 ```bash
   tar -czf /root/rpmbuild/SOURCES/umdk-urma-1.3.0.tar.gz --exclude=.git `ls -A`
-  rpmbuild -ba umdk.spec
+  rpmbuild -ba urma.spec
   rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
 ```
 
@@ -64,6 +64,7 @@ urma                          : URMA (Unified Remote Memory Access)
 
 ```bash
   $ --with transport_service_disable                  option, i.e. enable TPS by default
+  $ --with hw_disable                                 option, i.e. enable to compile hw driver by default
   $ --define 'kernel_version 4.19.90'                 option, specify kernel version
   $ --define 'rpm_version 1.4.0'                      option, specify rpm version
   $ --define 'rpm_release  B002'                      option, specify release version
@@ -73,6 +74,7 @@ urma                          : URMA (Unified Remote Memory Access)
 
 ```bash
   $ -DTPS=disable                                     option, i.e. enable tps service by default
+  $ -DHW=disable                                      option, i.e. enable to compile hw driver by default
 ```
 
 #### Contribution

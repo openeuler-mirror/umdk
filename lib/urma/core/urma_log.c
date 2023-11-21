@@ -46,8 +46,7 @@ urma_status_t urma_register_log_func(urma_log_cb_t func)
 urma_status_t urma_unregister_log_func(void)
 {
     char logmsg[MAX_LOG_LEN + 1] = {0};
-    (void)snprintf(logmsg, MAX_LOG_LEN, "%s|%s|unregister log succeed.\n",
-                     URMA_LOG_TAG, __func__);
+    (void)snprintf(logmsg, MAX_LOG_LEN, "%s|%s|unregister log succeed.\n", URMA_LOG_TAG, __func__);
     (*g_urma_log_func)((int)URMA_VLOG_LEVEL_INFO, logmsg);
     g_urma_log_func = urma_default_log_func;
     return URMA_SUCCESS;
@@ -132,8 +131,7 @@ static int urma_vlog(const char *function, int line, urma_vlog_level_t level, co
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
     /* add log head info, "URMA_LOG_TAG|function|[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s",
-                     URMA_LOG_TAG, function, line, format);
+    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s", URMA_LOG_TAG, function, line, format);
     if (ret <= 0 || ret >= sizeof(newformat)) {
         return ret;
     }

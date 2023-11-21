@@ -87,8 +87,8 @@ ssize_t urma_write_sysfs_file(const char *dir, char *buf, size_t size)
     }
 
     len = write(fd, buf, size);
-    if (len <= 0 || len >= (ssize_t)size) {
-        URMA_LOG_ERR("Failed write file: %s, ret:%d, errno:%d.\n", file_path, len, errno);
+    if (len <= 0 || len > (ssize_t)size) {
+        URMA_LOG_ERR("Failed write file: %s, ret:%d, size:%d, errno:%d.\n", file_path, len, size, errno);
         free(file_path);
         (void)close(fd);
         return -1;
@@ -174,16 +174,8 @@ void urma_update_port_attr(urma_sysfs_dev_t *sysfs_dev)
 
 static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
 {
-    char tmp_value[URMA_MAX_VALUE_LEN];
     char *sysfs_path = sysfs_dev->sysfs_path;
     urma_device_attr_t *attr = &sysfs_dev->dev_attr;
-
-    urma_parse_string(sysfs_dev->sysfs_path, "eid", tmp_value, URMA_MAX_VALUE_LEN);
-
-    if (urma_str_to_eid(tmp_value, &attr->eid) != 0) {
-        attr->eid.in4.prefix = 0;  // invalid
-        URMA_LOG_ERR("read eid failed: %s.\n", tmp_value);
-    }
 
     attr->guid = urma_parse_value_u64(sysfs_path, "guid");
     attr->dev_cap.feature.value = urma_parse_value_u32(sysfs_path, "feature");
@@ -191,6 +183,8 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.max_jfs = urma_parse_value_u32(sysfs_path, "max_jfs");
     attr->dev_cap.max_jfr = urma_parse_value_u32(sysfs_path, "max_jfr");
     attr->dev_cap.max_jetty = urma_parse_value_u32(sysfs_path, "max_jetty");
+    attr->dev_cap.max_jetty_grp = urma_parse_value_u32(sysfs_path, "max_jetty_grp");
+    attr->dev_cap.max_jetty_in_jetty_grp = urma_parse_value_u32(sysfs_path, "max_jetty_in_jetty_grp");
     attr->dev_cap.max_jfc_depth = urma_parse_value_u32(sysfs_path, "max_jfc_depth");
     attr->dev_cap.max_jfs_depth = urma_parse_value_u32(sysfs_path, "max_jfs_depth");
     attr->dev_cap.max_jfr_depth = urma_parse_value_u32(sysfs_path, "max_jfr_depth");
@@ -199,9 +193,13 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.max_jfs_rsge = urma_parse_value_u32(sysfs_path, "max_jfs_rsge");
     attr->dev_cap.max_jfr_sge = urma_parse_value_u32(sysfs_path, "max_jfr_sge");
     attr->dev_cap.max_msg_size = urma_parse_value_u64(sysfs_path, "max_msg_size");
+    attr->dev_cap.max_atomic_size = urma_parse_value_u32(sysfs_path, "max_atomic_size");
+    attr->dev_cap.atomic_feat.value = urma_parse_value_u32(sysfs_path, "atomic_feat");
     attr->dev_cap.trans_mode = urma_parse_value_u16(sysfs_path, "trans_mode");
+    attr->dev_cap.congestion_ctrl_alg = urma_parse_value_u16(sysfs_path, "congestion_ctrl_alg");
+    attr->dev_cap.ceq_cnt = urma_parse_value_u32(sysfs_path, "ceq_cnt");
     attr->port_cnt = urma_parse_value_u8(sysfs_path, "port_count");
-    attr->vf_cnt = urma_parse_value_u16(sysfs_path, "vf_cnt");
+    attr->max_eid_cnt = urma_parse_value_u16(sysfs_path, "max_eid_cnt");
 
     if (attr->port_cnt > 0 && attr->port_cnt != MAX_PORT_CNT) {
         urma_parse_port_attr(sysfs_path, attr);
@@ -288,32 +286,6 @@ static bool urma_match_driver(urma_sysfs_dev_t *sysfs_dev, struct ub_list *drive
     return false;
 }
 
-static int urma_parse_eid_to_sysfs(urma_sysfs_dev_t *sysfs_dev, urma_device_t *dev)
-{
-    char eid_buf[URMA_MAX_VALUE_LEN] = {0};
-    char eid_sysfs_path[URMA_MAX_SYSFS_PATH] = {0};
-
-    if (sysfs_dev->dev_attr.eid.in4.addr != 0) {
-        if (snprintf(eid_buf, URMA_MAX_VALUE_LEN, EID_FMT, EID_ARGS(sysfs_dev->dev_attr.eid)) <= 0) {
-            URMA_LOG_ERR("Failed to parse eid(string format).\n");
-            return -1;
-        }
-
-        /* parse eid sysfs path */
-        if (snprintf(eid_sysfs_path, URMA_MAX_SYSFS_PATH, "%s/%s/%s", URMA_CLASS_PATH, dev->name, "eid") <= 0) {
-            URMA_LOG_ERR("Failed to parse eid sysfs path.\n");
-            return -1;
-        }
-
-        /* write eid to sysfs */
-        if (urma_write_sysfs_file(eid_sysfs_path, eid_buf, strlen(eid_buf) + 1) <= 0) {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
 static urma_device_t *urma_alloc_device(urma_sysfs_dev_t *sysfs_dev)
 {
     urma_device_t *dev = calloc(1, sizeof(urma_device_t));
@@ -330,20 +302,8 @@ static urma_device_t *urma_alloc_device(urma_sysfs_dev_t *sysfs_dev)
         goto FAIL_OUT;
     }
     sysfs_dev->urma_device = dev;
-
-    dev->eid = sysfs_dev->dev_attr.eid;
-    if (dev->eid.in4.addr == 0 && sysfs_dev->driver->ops->query_device != NULL) {
-        if (sysfs_dev->driver->ops->query_device(dev, &sysfs_dev->dev_attr) != URMA_SUCCESS) {
-            goto FAIL_OUT;
-        }
-
-        if (urma_parse_eid_to_sysfs(sysfs_dev, dev) != 0) {
-            goto FAIL_OUT;
-        }
-        dev->eid = sysfs_dev->dev_attr.eid;
-    }
-
     return dev;
+
 FAIL_OUT:
     sysfs_dev->urma_device = NULL;
     free(dev);
@@ -354,7 +314,7 @@ static int urma_check_loaded_devices(const char *dev_name, struct ub_list *dev_n
 {
     urma_sysfs_dev_name_t *sysfs_dev_name = NULL;
     urma_sysfs_dev_name_t *next = NULL;
-
+    
     UB_LIST_FOR_EACH_SAFE(sysfs_dev_name, next, node, dev_name_list) {
         if (strcmp(sysfs_dev_name->dev_name, dev_name) == 0) {
             return 0;
@@ -409,8 +369,6 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
         urma_device_t *device = NULL;
         device = urma_find_dev_by_name(dev_list, sysfs_dev->dev_name);
         if (device != NULL) {
-            /* update the eid of dev */
-            (void)memcpy(&device->eid, &sysfs_dev->dev_attr.eid, sizeof(urma_eid_t));
             urma_get_dev_name_list(&dev_name_list, sysfs_dev);
             free(sysfs_dev);
             continue;
@@ -427,7 +385,6 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
         urma_get_dev_name_list(&dev_name_list, sysfs_dev);
         cnt++;
     }
-
     if (closedir(class_dir) < 0) {
         URMA_LOG_ERR("Failed close dir: %s, errno: %d.\n", URMA_CLASS_PATH, errno);
     }

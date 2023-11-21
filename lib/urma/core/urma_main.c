@@ -106,7 +106,7 @@ int urma_register_provider_ops(urma_provider_ops_t *provider_ops)
     return 0;
 }
 
-int urma_unregister_provider_ops(const urma_provider_ops_t *provider_ops)
+int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
 {
     if (provider_ops == NULL || provider_ops->name == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
@@ -169,7 +169,7 @@ static int urma_open_drivers(void)
     return n_loaded_drivers;
 }
 
-urma_status_t urma_init(const urma_init_attr_t *conf)
+urma_status_t urma_init(urma_init_attr_t *conf)
 {
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
@@ -247,7 +247,7 @@ urma_status_t urma_ib_set_transport_mode(urma_context_t *ctx, urma_ib_tm_t mode)
     input_ctx.tm_mode = mode;
     urma_user_ctl_in_t in = {
         .addr = (uint64_t)&input_ctx,
-        .len = sizeof(input_ctx),
+        .len = (uint32_t)sizeof(input_ctx),
         .opcode = URMA_USER_CTL_SET_CTX_TM
     };
     if (ctx->ops->user_ctl == NULL) {
@@ -318,9 +318,71 @@ void urma_free_device_list(urma_device_t **device_list)
     return;
 }
 
-urma_status_t urma_query_device(const urma_device_t *dev, urma_device_attr_t *dev_attr)
+static uint32_t urma_get_eid_cnt(urma_device_t *dev)
 {
-    if (dev == NULL || dev->sysfs_dev == NULL || dev_attr == NULL) {
+    char tmp_eid[URMA_MAX_NAME] = {0};
+    char tmp_value[URMA_MAX_NAME] = {0};
+    urma_device_attr_t *dev_attr;
+    urma_eid_t eid_invalid = {0};
+    urma_eid_t eid = {0};
+    uint32_t cnt = 0;
+
+    dev_attr = &dev->sysfs_dev->dev_attr;
+    for (uint32_t i = 0; i < dev_attr->max_eid_cnt; i++) {
+        if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
+            URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
+        }
+        (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
+        if (urma_str_to_eid(tmp_value, &eid) != 0 || memcmp(&eid_invalid, &eid, sizeof(urma_eid_t)) == 0) {
+            continue;
+        }
+        cnt++;
+    }
+    return cnt;
+}
+
+urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
+{
+    char tmp_eid[URMA_MAX_NAME] = {0};
+    char tmp_value[URMA_MAX_NAME] = {0};
+    urma_eid_info_t *eid_list;
+    uint32_t cnt_idx = 0;
+    urma_eid_t eid = {0};
+
+    *cnt = urma_get_eid_cnt(dev);
+    if (*cnt == 0) {
+        URMA_LOG_WARN("get valid eid cnt: %d.\n", *cnt);
+        return NULL;
+    }
+    eid_list = calloc(1, (*cnt) * sizeof(urma_eid_info_t));
+    if (eid_list == NULL) {
+        URMA_LOG_ERR("alloc memory request failed.\n");
+        return NULL;
+    }
+    for (uint32_t i = 0; i < *cnt; i++) {
+        if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
+            URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
+        }
+        (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
+        if (urma_str_to_eid(tmp_value, &eid) != 0) {
+            continue;
+        }
+        eid_list[cnt_idx].eid_index = i;
+        (void)memcpy(&eid_list[cnt_idx++].eid, &eid, sizeof(urma_eid_t));
+    }
+    return eid_list;
+}
+
+void urma_free_eid_list(urma_eid_info_t *eid_list)
+{
+    if (eid_list != NULL) {
+        free(eid_list);
+    }
+}
+
+urma_status_t urma_query_device(urma_device_t *dev, urma_device_attr_t *dev_attr)
+{
+    if (dev == NULL || dev->name == NULL || dev->sysfs_dev == NULL || dev_attr == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -331,7 +393,7 @@ urma_status_t urma_query_device(const urma_device_t *dev, urma_device_attr_t *de
     return URMA_SUCCESS;
 }
 
-urma_device_t *urma_get_device_by_name(const char *dev_name)
+urma_device_t *urma_get_device_by_name(char *dev_name)
 {
     if (dev_name == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
@@ -362,6 +424,9 @@ urma_device_t *urma_get_device_by_name(const char *dev_name)
 urma_device_t *urma_get_device_by_eid(urma_eid_t eid, urma_transport_type_t type)
 {
     int device_num = 0;
+    urma_eid_info_t *eid_list;
+    uint32_t cnt = 0;
+
     urma_device_t **device_list = urma_get_device_list(&device_num);
     if (device_list == NULL || device_num == 0) {
         URMA_LOG_ERR("urma get device list failed!\n");
@@ -370,16 +435,25 @@ urma_device_t *urma_get_device_by_eid(urma_eid_t eid, urma_transport_type_t type
 
     urma_device_t *urma_dev = NULL;
     for (int i = 0; i < device_num; i++) {
-        if (memcmp(&device_list[i]->eid, &eid, sizeof(urma_eid_t)) == 0 && device_list[i]->type == type) {
-            urma_dev = device_list[i];
-            break;
+        if (device_list[i]->type != type) {
+            continue;
         }
+        eid_list = urma_get_eid_list(device_list[i], &cnt);
+        for (uint32_t j = 0; eid_list != NULL && j < cnt; j++) {
+            if (memcmp(&eid_list[j].eid, &eid, sizeof(urma_eid_t)) == 0) {
+                urma_dev = device_list[i];
+                urma_free_eid_list(eid_list);
+                urma_free_device_list(device_list);
+                return urma_dev;
+            }
+        }
+        urma_free_eid_list(eid_list);
     }
     urma_free_device_list(device_list);
     return urma_dev;
 }
 
-static int urma_open_cdev(const char *path)
+static int urma_open_cdev(char *path)
 {
     char *file_path = NULL;
     int fd = -1;
@@ -394,20 +468,41 @@ static int urma_open_cdev(const char *path)
     return fd;
 }
 
-urma_context_t *urma_create_context(urma_device_t *dev)
+int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid)
+{
+    char tmp_eid[URMA_MAX_NAME] = {0};
+    char tmp_value[URMA_MAX_NAME] = {0};
+    urma_eid_t eid_invalid = {0};
+
+    if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", eid_index) <= 0) {
+        URMA_LOG_ERR("snprintf failed, eid idx: %u.\n", eid_index);
+    }
+    (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
+    if (urma_str_to_eid(tmp_value, eid) != 0 || memcmp(&eid_invalid, eid, sizeof(urma_eid_t)) == 0) {
+        URMA_LOG_ERR("Failed to read eid value\n");
+        return -1;
+    }
+    return 0;
+}
+
+urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 {
     if (dev == NULL || dev->ops == NULL || dev->ops->create_context == NULL) {
         URMA_LOG_ERR("Failed to find device by eid.\n");
         return NULL;
     }
 
+    urma_eid_t eid;
+    if (urma_query_eid(dev, eid_index, &eid) != 0) {
+        URMA_LOG_ERR("Failed to query eid.\n");
+        return NULL;
+    }
     int dev_fd = urma_open_cdev(dev->path);
     if (dev_fd < 0 && dev->type != URMA_TRANSPORT_IP) {
         URMA_LOG_ERR("Failed to open urma cdev with path %s\n", dev->path);
         return NULL;
     }
-
-    urma_context_t *ctx = dev->ops->create_context(dev, dev_fd, g_uasid);
+    urma_context_t *ctx = dev->ops->create_context(dev, eid_index, dev_fd);
     if (ctx == NULL) {
         URMA_LOG_ERR("Failed to create urma context.\n");
         if (dev_fd >= 0) {
@@ -417,7 +512,9 @@ urma_context_t *urma_create_context(urma_device_t *dev)
     }
     /* Save dev_fd in the context, in case that driver did not do this */
     ctx->dev_fd = dev_fd;
-    atomic_init(&ctx->ref->atomic_cnt, 1);
+    ctx->eid_index = eid_index;
+    ctx->eid = eid;
+    atomic_init(&ctx->ref.atomic_cnt, 1);
 
     return ctx;
 }
@@ -430,9 +527,10 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
         return URMA_EINVAL;
     }
 
-    if (atomic_load(&ctx->ref->atomic_cnt) > 1) {
-        URMA_LOG_ERR("already in use.\n");
-        return URMA_EINVAL;
+    uint64_t atomic_cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
+    if (atomic_cnt > 1) {
+        URMA_LOG_ERR("already in use, atomic_cnt: %lu.\n", atomic_cnt);
+        return URMA_EAGAIN;
     }
 
     int dev_fd = ctx->dev_fd;

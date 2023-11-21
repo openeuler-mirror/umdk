@@ -1,0 +1,28 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
+#
+# Description: uvs service files
+# Author: Jilei
+# Create: 2023-6-27
+# Note:
+# History: 2023-6-27 Jilei create for uvsd
+#
+
+[Unit]
+Description=uVS
+After=network-pre.target
+After=haveged.service
+Before=network.target  network.service
+PartOf=network.target
+
+[Service]
+Type=forking
+Restart=on-failure
+ExecStart=uvs_daemon
+ExecStop=/usr/bin/kill -20 $MAINPID
+LimitCORE=infinity
+RestartSec=1
+TimeoutStopSec=100
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

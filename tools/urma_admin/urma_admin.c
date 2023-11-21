@@ -35,9 +35,10 @@
 
 typedef struct admin_show_ubep {
     struct ub_list node;
-    char dev_name[DEV_NAME_MAX];
+    char dev_name[URMA_ADMIN_MAX_DEV_NAME];
     urma_device_attr_t dev_attr;
     urma_transport_type_t tp_type;
+    urma_eid_info_t *eid_list;
 } admin_show_ubep_t;
 
 static void admin_parse_port_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
@@ -69,11 +70,7 @@ static void admin_parse_port_attr(const char *sysfs_path, admin_show_ubep_t *ube
 static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
 {
     char tmp_value[VALUE_LEN_MAX];
-
-    if (admin_parse_file_str(sysfs_path, "eid", tmp_value, VALUE_LEN_MAX) <= 0 ||
-        admin_str_to_eid(tmp_value, &ubep->dev_attr.eid) != 0) {
-        ubep->dev_attr.eid.in4.prefix = 0;  // invalid
-    }
+    char tmp_eid[VALUE_LEN_MAX] = {0};
 
     urma_device_attr_t *dev_attr = &ubep->dev_attr;
     (void)admin_parse_file_value_u64(sysfs_path, "guid", &dev_attr->guid);
@@ -83,6 +80,8 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfs", &dev_attr->dev_cap.max_jfs);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfr", &dev_attr->dev_cap.max_jfr);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jetty", &dev_attr->dev_cap.max_jetty);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_jetty_grp", &dev_attr->dev_cap.max_jetty_grp);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_jetty_in_jetty_grp", &dev_attr->dev_cap.max_jetty_in_jetty_grp);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfc_depth", &dev_attr->dev_cap.max_jfc_depth);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfs_depth", &dev_attr->dev_cap.max_jfs_depth);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfr_depth", &dev_attr->dev_cap.max_jfr_depth);
@@ -91,11 +90,29 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfs_rsge", &dev_attr->dev_cap.max_jfs_rsge);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfr_sge", &dev_attr->dev_cap.max_jfr_sge);
     (void)admin_parse_file_value_u64(sysfs_path, "max_msg_size", &dev_attr->dev_cap.max_msg_size);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_atomic_size", &dev_attr->dev_cap.max_atomic_size);
+    (void)admin_parse_file_value_u32(sysfs_path, "atomic_feat", &dev_attr->dev_cap.atomic_feat.value);
     (void)admin_parse_file_value_u16(sysfs_path, "trans_mode", &dev_attr->dev_cap.trans_mode);
     (void)admin_parse_file_value_u16(sysfs_path, "congestion_ctrl_alg", &dev_attr->dev_cap.congestion_ctrl_alg);
-    (void)admin_parse_file_value_u32(sysfs_path, "comp_vector_cnt", &dev_attr->dev_cap.comp_vector_cnt);
+    (void)admin_parse_file_value_u32(sysfs_path, "ceq_cnt", &dev_attr->dev_cap.ceq_cnt);
     (void)admin_parse_file_value_u8(sysfs_path, "port_count", &dev_attr->port_cnt);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->max_eid_cnt);
 
+    ubep->eid_list = calloc(1, dev_attr->max_eid_cnt * sizeof(urma_eid_info_t));
+    if (ubep->eid_list == NULL) {
+        (void)printf("alloc memory request failed.\n");
+        return;
+    }
+    for (uint32_t i = 0; i < dev_attr->max_eid_cnt; i++) {
+        if (snprintf(tmp_eid, VALUE_LEN_MAX, "eid%u/eid", i) <= 0) {
+            (void)printf("snprintf failed, eid idx: %u.\n", i);
+        }
+        ubep->eid_list[i].eid_index = i;
+        if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
+            admin_str_to_eid(tmp_value, &ubep->eid_list[i].eid) != 0) {
+            ubep->eid_list[i].eid.in4.prefix = 0;  // invalid
+        }
+    }
     if (ubep->dev_attr.port_cnt > 0 && ubep->dev_attr.port_cnt != UINT8_INVALID) {
         admin_parse_port_attr(sysfs_path, ubep);
     }
@@ -124,7 +141,7 @@ static admin_show_ubep_t *admin_get_ubep_info(const struct dirent *dent)
         goto free_sysfs_path;
     }
 
-    if (admin_read_dev_file(dent->d_name, "ubdev", ubep->dev_name, DEV_NAME_MAX) <= 0) {
+    if (admin_read_dev_file(dent->d_name, "ubdev", ubep->dev_name, URMA_ADMIN_MAX_DEV_NAME) <= 0) {
         ubep->dev_name[0] = 0;
     }
 
@@ -179,12 +196,19 @@ static int find_ubep_list(struct ub_list *ubep_list, const tool_config_t *cfg)
 
 static inline void print_ubep_simple_info(const admin_show_ubep_t *ubep, int index, const tool_config_t *cfg)
 {
-    (void)printf("%-3d  %-16s    %-8s    "EID_FMT"    %-8s    \n",
-        index, ubep->dev_name, urma_tp_type_to_string(ubep->tp_type), EID_ARGS(ubep->dev_attr.eid),
-        urma_port_state_to_string(ubep->dev_attr.port_attr[0].state));
+    urma_eid_t eid = {0};
+
+    for (uint32_t i = 0; i < ubep->dev_attr.max_eid_cnt; i++) {
+        if (i > 0 && memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
+            continue;
+        }
+        (void)printf("%-3d  %-16s    %-8s    eid%u "EID_FMT"    %-8s    \n",
+            index, ubep->dev_name, urma_tp_type_to_string(ubep->tp_type), ubep->eid_list[i].eid_index,
+            EID_ARGS(ubep->eid_list[i].eid), urma_port_state_to_string(ubep->dev_attr.port_attr[0].state));
+    }
 }
 
-static inline void print_device_feat_str(urma_device_feat_t feat)
+static inline void print_device_feat_str(urma_device_feature_t feat)
 {
     uint8_t i;
 
@@ -192,6 +216,19 @@ static inline void print_device_feat_str(urma_device_feat_t feat)
     for (i = 0; i < URMA_DEVICE_FEAT_NUM; i++) {
         if (!!(feat.value & (1 << i))) {
             (void)printf("%s ", urma_device_feat_to_string(i));
+        }
+    }
+    (void)printf("]\n");
+}
+
+static inline void print_atomic_feat_str(urma_atomic_feature_t feat)
+{
+    uint8_t i;
+
+    (void)printf("atomic_feature             : 0x%x [", feat.value);
+    for (i = 0; i < URMA_ATOMIC_FEAT_NUM; i++) {
+        if (!!(feat.value & (1 << i))) {
+            (void)printf("%s ", urma_atomic_feat_to_string(i));
         }
     }
     (void)printf("]\n");
@@ -229,11 +266,19 @@ static void print_trans_mode_str(uint16_t trans_mode)
 
 static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, const tool_config_t *cfg)
 {
-    uint8_t i;
+    urma_eid_t eid = {0};
+    uint32_t i;
+
     (void)printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
     (void)printf("name                       : %-16s\n", ubep->dev_name);
     (void)printf("transport_type             : %u [%s]\n", ubep->tp_type, urma_tp_type_to_string(ubep->tp_type));
-    (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(ubep->dev_attr.eid));
+    for (i = 0; i < ubep->dev_attr.max_eid_cnt; i++) {
+        if (i > 0 && memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
+            continue;
+        }
+        (void)printf("eid%u                       : "EID_FMT"\n", ubep->eid_list[i].eid_index,
+        EID_ARGS(ubep->eid_list[i].eid));
+    }
     (void)printf("guid                       : %lu\n", ubep->dev_attr.guid);
     print_device_feat_str(ubep->dev_attr.dev_cap.feature);
 
@@ -241,6 +286,8 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     (void)printf("max_jfs                    : %u\n", ubep->dev_attr.dev_cap.max_jfs);
     (void)printf("max_jfr                    : %u\n", ubep->dev_attr.dev_cap.max_jfr);
     (void)printf("max_jetty                  : %u\n", ubep->dev_attr.dev_cap.max_jetty);
+    (void)printf("max_jetty_grp              : %u\n", ubep->dev_attr.dev_cap.max_jetty_grp);
+    (void)printf("max_jetty_in_jetty_grp     : %u\n", ubep->dev_attr.dev_cap.max_jetty_in_jetty_grp);
     (void)printf("max_jfc_depth              : %u\n", ubep->dev_attr.dev_cap.max_jfc_depth);
     (void)printf("max_jfs_depth              : %u\n", ubep->dev_attr.dev_cap.max_jfs_depth);
     (void)printf("max_jfr_depth              : %u\n", ubep->dev_attr.dev_cap.max_jfr_depth);
@@ -249,9 +296,11 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     (void)printf("max_jfs_rsge               : %u\n", ubep->dev_attr.dev_cap.max_jfs_rsge);
     (void)printf("max_jfr_sge                : %u\n", ubep->dev_attr.dev_cap.max_jfr_sge);
     (void)printf("max_msg_size               : %lu\n", ubep->dev_attr.dev_cap.max_msg_size);
+    (void)printf("max_atomic_size            : %u\n", ubep->dev_attr.dev_cap.max_atomic_size);
+    print_atomic_feat_str(ubep->dev_attr.dev_cap.atomic_feat);
     print_trans_mode_str(ubep->dev_attr.dev_cap.trans_mode);
     print_congestion_ctrl_alg_str(ubep->dev_attr.dev_cap.congestion_ctrl_alg);
-    (void)printf("comp_vector_cnt            : %u\n", ubep->dev_attr.dev_cap.comp_vector_cnt);
+    (void)printf("ceq_cnt                    : %u\n", ubep->dev_attr.dev_cap.ceq_cnt);
 
     (void)printf("port_count                 : %u\n", ubep->dev_attr.port_cnt);
     for (i = 0; i < ubep->dev_attr.port_cnt && ubep->dev_attr.port_cnt != UINT8_INVALID; i++) {
@@ -300,6 +349,7 @@ static void free_ubep_list(struct ub_list *ubep_list)
             return;
         }
         ub_list_remove(&ubep->node);
+        free(ubep->eid_list);
         free(ubep);
     }
 }
@@ -321,25 +371,6 @@ static int admin_show_ubep(const tool_config_t *cfg)
 
 free_list:
     free_ubep_list(&ubep_list);
-    return ret;
-}
-
-static int admin_set_ubep_eid(const tool_config_t *cfg)
-{
-    int ret;
-    char tmp_value[VALUE_LEN_MAX] = {0};
-
-    if (cfg->dev_name[0] == 0 || cfg->eid.in4.addr == 0) {
-        (void)printf("set ubep eid failed, invalid parameter.\n");
-        return -1;
-    }
-    if (snprintf(tmp_value, URMA_EID_STR_LEN + 1, EID_FMT, EID_ARGS(cfg->eid)) <= 0) {
-        (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-        return -1;
-    }
-
-    ret = admin_write_dev_file(cfg->dev_name, "eid", tmp_value, (uint32_t)URMA_EID_STR_LEN);
-
     return ret;
 }
 
@@ -373,13 +404,13 @@ static int admin_set_ubep_upi(const tool_config_t *cfg)
         return -1;
     }
 
-    if (cfg->vf_id == OWN_VF_ID) {
+    if (cfg->fe_idx == OWN_FE_IDX) {
         if (snprintf(tmp_path, FILE_PATH_MAX - 1, "upi") <= 0) {
             (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
             return -1;
         }
     } else {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "vf%u/upi", cfg->vf_id) <= 0) {
+        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "fe%u/upi", cfg->fe_idx) <= 0) {
             (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
             return -1;
         }
@@ -394,7 +425,6 @@ static int admin_set_ubep_upi(const tool_config_t *cfg)
 
     return ret;
 }
-
 
 static inline void print_ubep_upi(const char *upi_str)
 {
@@ -413,13 +443,13 @@ static int admin_show_ubep_upi(const tool_config_t *cfg)
         return -1;
     }
 
-    if (cfg->vf_id == OWN_VF_ID) {
+    if (cfg->fe_idx == OWN_FE_IDX) {
         if (snprintf(tmp_path, FILE_PATH_MAX - 1, "upi") <= 0) {
             (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
             return -1;
         }
     } else {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "vf%u/upi", cfg->vf_id) <= 0) {
+        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "fe%u/upi", cfg->fe_idx) <= 0) {
             (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
             return -1;
         }
@@ -456,8 +486,14 @@ static int execute_command(const tool_config_t *cfg)
         case TOOL_CMD_SHOW:
             ret = admin_show_ubep(cfg);
             break;
-        case TOOL_CMD_SET_EID:
-            ret = admin_set_ubep_eid(cfg);
+        case TOOL_CMD_ADD_EID:
+            ret = admin_add_eid(cfg);
+            break;
+        case TOOL_CMD_DEL_EID:
+            ret = admin_del_eid(cfg);
+            break;
+        case TOOL_CMD_SET_EID_MODE:
+            ret = admin_set_eid_mode(cfg);
             break;
         case TOOL_CMD_SET_CC_ALG:
             ret = admin_set_ubep_cc_alg(cfg);
@@ -496,7 +532,7 @@ static int admin_check_cmd_len(int argc, char *argv[])
     for (int i = 0; i < argc; i++) {
         len += strlen(argv[i]);
     }
-    if (len + argc > MAX_CMDLINE_LEN) {
+    if ((int)len + argc > MAX_CMDLINE_LEN) {
         URMA_ADMIN_LOG("user: %s, cmd len out of range.\n", getlogin());
         return -1;
     }

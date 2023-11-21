@@ -22,7 +22,7 @@
 
 void urma_u32_to_eid(uint32_t ipv4, urma_eid_t *eid)
 {
-    eid->in4.resv = 0;
+    eid->in4.reserved = 0;
     eid->in4.prefix = htobe32(URMA_IPV4_MAP_IPV6_PREFIX);
     eid->in4.addr = htobe32(ipv4);
 }

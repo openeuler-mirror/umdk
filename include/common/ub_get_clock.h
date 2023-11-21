@@ -13,6 +13,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #define CLOCK_SIZE_OF_INT (32)
 
 #if defined(__x86_64__)
@@ -38,5 +43,9 @@ static inline uint64_t get_cycles(void)
 #endif
 
 extern double get_cpu_mhz(bool cpu_freq_warn);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -110,6 +110,26 @@ static inline const char *urma_device_feat_to_string(uint8_t bit)
     return g_urma_device_feat_str[bit];
 }
 
+#define URMA_ATOMIC_FEAT_NUM 7
+
+static const char * const g_urma_atomic_feat_str[URMA_ATOMIC_FEAT_NUM] = {
+    "compare_and_swap",
+    "swap",
+    "fetch_and_add",
+    "fetch_and_sub",
+    "fetch_and_and",
+    "fetch_and_or",
+    "fetch_and_xor"
+};
+
+static inline const char *urma_atomic_feat_to_string(uint8_t bit)
+{
+    if (bit >= URMA_ATOMIC_FEAT_NUM) {
+        return "Invalid Value";
+    }
+    return g_urma_atomic_feat_str[bit];
+}
+
 static const char * const g_urma_trans_mode_str[] = {
     [URMA_TM_RM] =      "RM(Reliable message)",
     [URMA_TM_RC] =      "RC(Reliable connection)",
@@ -139,7 +159,7 @@ static inline const char *urma_tp_type_to_string(urma_transport_type_t type)
 }
 
 static const char * const g_urma_congestion_ctrl_alg_str[] = {
-    [URMA_TP_CC_PFC]                   =      "PFC",
+    [URMA_TP_CC_NONE]                  =      "NONE",
     [URMA_TP_CC_DCQCN]                 =      "DCQCN",
     [URMA_TP_CC_DCQCN_AND_NETWORK_CC]  =      "DCQCN_AND_NETWORK_CC",
     [URMA_TP_CC_LDCP]                  =      "LDCP",

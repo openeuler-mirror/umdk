@@ -1,0 +1,8 @@
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR} DAEMON)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/tpservice_cfg TPSERVICE_CFG)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/vport_table_cfg VPORT_TABLE_CFG)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/sip_table_cfg SIP_TABLE_CFG)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/live_migrate_table_cfg LIVE_MIGRATE_TABLE_CFG)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/dip_table_cfg DIP_TABLE_CFG)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/daemon/global_cfg GLOBAL_CFG)
+target_sources(tpsa_daemon PRIVATE ${DAEMON} ${TPSERVICE_CFG} ${VPORT_TABLE_CFG} ${SIP_TABLE_CFG} ${LIVE_MIGRATE_TABLE_CFG} ${DIP_TABLE_CFG} ${GLOBAL_CFG}) 

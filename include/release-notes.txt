@@ -5,9 +5,14 @@ This is the first release of UMDK API. It provides API change records, including
 reason, change items, etc.
 
 %changelog
+* Thur Jun 15 2023 huawei
+- add urma_modify_jfs/urma_query_jfs/urma_flush_jfs/urma_query_jetty/urma_flush_jetty/
+  urma_create_jetty_grp/urma_delete_jetty_grp and delete urma_reg_async_event_cb and
+  modify urma_dsva_alloc/urma_dsva_free functions in urma_api.h
+
 * Thur Jun 8 2023 huawei
-- add urma_alloc_key_id and urma_free_key_id functions in urma_api.h
-- add urma_key_id_t in urma_types.h
+- add urma_alloc_token_id and urma_free_token_id functions in urma_api.h
+- add urma_token_id_t in urma_types.h
 
 * Wed May 16 2023 huawei
 - add urma_log_get_level and urma_log_set_level api
@@ -17,9 +22,9 @@ reason, change items, etc.
 
 * Wed Apr 26 2023 huawei
 - modify urma_congestion_ctrl_alg and urma_device_cap in urma_types.h
-
+ 
 * Tue Apr 18 2023 huawei
-- delete jfc and add key_id in urma_seg_cfg_t in urma_types.h
+- delete jfc and add token_id in urma_seg_cfg_t in urma_types.h
 
 * Thur Apr 6 2023 huawei
 - delete urma_advise_seg/urma_advise_seg_async/urma_unadvise_seg/urma_advise_jetty_seg/urma_unadvise_jetty_seg interface
@@ -52,7 +57,7 @@ reason, change items, etc.
 - add urma register log func api.
 
 * Fri Feb 24 2023 huawei
-- add dsva in ubcore_reg_seg_flag_t.
+- add dsva in union ubcore_reg_seg_flag.
 - add dsva in urma_reg_seg_flag_t.
 
 * Thur Feb 16 2023 huawei
@@ -79,7 +84,7 @@ reason, change items, etc.
 - merge urma_target_jfr_t into urma_target_jetty_t in urma_send_wr_t.
 - add urma_target_jetty_t to urma_rw_wr_t.
 - replace jetty_id with id in urma_target_jetty_t.
-- merge ubcore_tjfr_t into ubcore_tjetty_t.
+- merge ubcore_tjfr_t into struct ubcore_tjetty.
 
 * Fri Feb 3 2023 huawei
 - add urma_user_ctl_ops_t to support specified AI mode;

@@ -1,8 +1,8 @@
 find_package(GLIB REQUIRED COMPONENTS gobject)
 
-aux_source_directory(. URMA_COMMON_SRCS)
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR} URMA_COMMON_SRCS)
 if(NOT "${PERF_CYCLE}" STREQUAL "enable")
-    list(REMOVE_ITEM URMA_COMMON_SRCS "ub_perf_cycle.c")
+    list(REMOVE_ITEM URMA_COMMON_SRCS "${CMAKE_CURRENT_LIST_DIR}/ub_perf_cycle.c")
 endif(NOT "${PERF_CYCLE}" STREQUAL "enable")
 
 add_library(urma_common SHARED

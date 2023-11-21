@@ -129,6 +129,43 @@ static inline uint32_t ub_hmap_count(const struct ub_hmap *hmap)
         INIT_CONTAINER_PTR(NEXT, ub_hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 : 0); \
         (NODE) = (NEXT))
 
+/*
+* Find target in table.
+* key_len is length of byte.
+*/
+#define HMAP_FIND(table, key, key_len, target)                                           \
+    do {                                                                                 \
+        typeof(target) cur = NULL;                                                       \
+        (target) = NULL;                                                                 \
+        uint32_t hash = ub_hash_bytes((key), (key_len), 0);                              \
+        HMAP_FOR_EACH_WITH_HASH(cur, node, hash, &(table)->hmap) {                       \
+            if (memcmp(&(cur)->key, (key), (key_len)) == 0) {                            \
+                (target) = cur;                                                          \
+                break;                                                                   \
+            }                                                                            \
+        }                                                                                \
+    } while (0)
+
+#define HMAP_DESTROY(table, entry_type)                                                  \
+    do {                                                                                 \
+        typeof(entry_type) *cur = NULL;                                                  \
+        typeof(entry_type) *next = NULL;                                                 \
+        HMAP_FOR_EACH_SAFE(cur, next, node, &(table)->hmap) {                            \
+            ub_hmap_remove(&(table)->hmap, &cur->node);                                  \
+            free(cur);                                                                   \
+        }                                                                                \
+        ub_hmap_destroy(&(table)->hmap);                                                 \
+    } while (0)
+
+/*
+* Insert entry in table.
+* key_len is length of byte
+*/
+#define HMAP_INSERT(table, entry, key, key_len)                                          \
+    do {                                                                                 \
+        uint32_t hash = ub_hash_bytes((key), (key_len), 0);                              \
+        ub_hmap_insert(&(table)->hmap, &(entry)->node, hash);                            \
+    } while (0)
 
 static inline uint32_t calc_mask(uint32_t capacity)
 {
