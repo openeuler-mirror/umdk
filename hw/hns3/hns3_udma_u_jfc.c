@@ -20,7 +20,7 @@
 #include "hns3_udma_u_jfr.h"
 #include "hns3_udma_u_jfc.h"
 
-static int check_jfc_cfg(struct udma_u_context *udma_ctx, const urma_jfc_cfg_t *cfg)
+static int check_jfc_cfg(struct udma_u_context *udma_ctx, urma_jfc_cfg_t *cfg)
 {
 	if (!cfg->depth || roundup_pow_of_two(cfg->depth) > udma_ctx->max_jfc_cqe) {
 		URMA_LOG_ERR("invalid jfc cfg, cfg->depth = %d, udma_ctx->max_jfc_cqe = %d.\n",
@@ -32,7 +32,7 @@ static int check_jfc_cfg(struct udma_u_context *udma_ctx, const urma_jfc_cfg_t *
 }
 
 static void set_jfc_size(struct udma_u_context *udma_ctx, struct udma_u_jfc *jfc,
-			 const urma_jfc_cfg_t *cfg)
+			 urma_jfc_cfg_t *cfg)
 {
 	jfc->cqe_cnt = roundup_pow_of_two(cfg->depth);
 	jfc->cqe_size = udma_ctx->cqe_size;
@@ -95,7 +95,7 @@ static int udma_u_check_jfc_attr_ex(struct udma_jfc_init_attr *attr)
 	return ret;
 }
 
-static struct udma_u_jfc *udma_u_create_jfc_common(const urma_jfc_cfg_t *cfg,
+static struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
 						   struct udma_u_context *udma_ctx)
 {
 	struct udma_u_jfc *jfc;
@@ -146,7 +146,7 @@ static void free_err_jfc(struct udma_u_jfc *jfc, struct udma_u_context *udma_ctx
 	free(jfc);
 }
 
-urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, const urma_jfc_cfg_t *cfg)
+urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 	struct udma_create_jfc_resp resp = {};
@@ -164,7 +164,7 @@ urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, const urma_jfc_cfg_t *cfg)
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 	ret = urma_cmd_create_jfc(ctx, &jfc->urma_jfc, cfg, &udata);
 	if (ret) {
-		URMA_LOG_ERR("urma cmd create jfc failed.\n");
+		URMA_LOG_ERR("urma cmd create jfc failed, ret = %d.\n", ret);
 		free_err_jfc(jfc, udma_ctx);
 		return NULL;
 	}
@@ -212,7 +212,7 @@ static urma_jfc_t *create_jfc_ex(urma_context_t *ctx,
 	return &jfc->urma_jfc;
 }
 
-int udma_u_create_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out)
 {
 	struct udma_create_jfc_ex cfg_ex;
@@ -242,6 +242,15 @@ urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc)
 	struct udma_u_jfc *udma_jfc = to_udma_jfc(jfc);
 	int ret;
 
+	if (udma_jfc->reserved_jfr) {
+		ret = udma_u_delete_jfr(&udma_jfc->reserved_jfr->urma_jfr);
+		if (ret) {
+			URMA_LOG_ERR("delete reserved jfr of jfc failed, \
+				     ret:%d, errno:%d.\n", ret, errno);
+			return URMA_FAIL;
+		}
+	}
+
 	ret = urma_cmd_delete_jfc(jfc);
 	if (ret) {
 		URMA_LOG_ERR("delete jfc failed, ret:%d, errno:%d.\n",
@@ -257,7 +266,7 @@ urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc)
 	return URMA_SUCCESS;
 }
 
-int udma_u_delete_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_delete_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out)
 {
 	urma_status_t ret;
@@ -298,19 +307,18 @@ static enum urma_cr_status get_cr_status(uint8_t status)
 		{ UDMA_CQE_SUCCESS, URMA_CR_SUCCESS },
 		{ UDMA_CQE_LOCAL_LENGTH_ERR, URMA_CR_LOC_LEN_ERR },
 		{ UDMA_CQE_LOCAL_QP_OP_ERR, URMA_CR_LOC_OPERATION_ERR },
-		{ UDMA_CQE_LOCAL_PROT_ERR, URMA_CR_LOC_PROTECTION_ERR },
+		{ UDMA_CQE_LOCAL_PROT_ERR, URMA_CR_LOC_ACCESS_ERR },
 		{ UDMA_CQE_WR_FLUSH_ERR, URMA_CR_WR_FLUSH_ERR },
-		{ UDMA_CQE_MEM_MANAGERENT_OP_ERR, URMA_CR_GENERAL_ERR },
-		{ UDMA_CQE_BAD_RESP_ERR, URMA_CR_GENERAL_ERR },
+		{ UDMA_CQE_MEM_MANAGERENT_OP_ERR, URMA_CR_LOC_ACCESS_ERR },
+		{ UDMA_CQE_BAD_RESP_ERR, URMA_CR_REM_RESP_LEN_ERR },
 		{ UDMA_CQE_LOCAL_ACCESS_ERR, URMA_CR_LOC_ACCESS_ERR },
-		{ UDMA_CQE_REMOTE_INVAL_REQ_ERR, URMA_CR_REM_INVALID_REQ_ERR },
-		{ UDMA_CQE_REMOTE_ACCESS_ERR, URMA_CR_REM_ACCESS_ERR },
+		{ UDMA_CQE_REMOTE_INVAL_REQ_ERR, URMA_CR_REM_UNSUPPORTED_REQ_ERR },
+		{ UDMA_CQE_REMOTE_ACCESS_ERR, URMA_CR_REM_ACCESS_ABORT_ERR },
 		{ UDMA_CQE_REMOTE_OP_ERR, URMA_CR_REM_OPERATION_ERR },
-		{ UDMA_CQE_TRANSPORT_RETRY_EXC_ERR, URMA_CR_RETRY_CNT_EXC_ERR },
+		{ UDMA_CQE_TRANSPORT_RETRY_EXC_ERR, URMA_CR_ACK_TIMEOUT_ERR },
 		{ UDMA_CQE_RNR_RETRY_EXC_ERR, URMA_CR_RNR_RETRY_CNT_EXC_ERR },
-		{ UDMA_CQE_REMOTE_ABORTED_ERR, URMA_CR_REM_ABORT_ERR },
-		{ UDMA_CQE_XRC_VIOLATION_ERR, URMA_CR_REM_INVALID_REQ_ERR },
-		{ UDMA_CQE_GENERAL_ERR, URMA_CR_GENERAL_ERR },
+		{ UDMA_CQE_REMOTE_ABORTED_ERR, URMA_CR_REM_ACCESS_ABORT_ERR },
+		{ UDMA_CQE_GENERAL_ERR, URMA_CR_LOC_LEN_ERR },
 	};
 
 	for (uint32_t i = 0; i < ARRAY_SIZE(map); ++i) {
@@ -318,7 +326,8 @@ static enum urma_cr_status get_cr_status(uint8_t status)
 			return map[i].cr_status;
 	}
 
-	return URMA_CR_GENERAL_ERR;
+	URMA_LOG_ERR("Invalid CQE status.\n");
+	return URMA_CR_LOC_ACCESS_ERR;
 }
 
 static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr,
@@ -409,13 +418,13 @@ static void udma_parse_opcode_for_res(struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 		cr->opcode = URMA_CR_OPC_WRITE_WITH_IMM;
 		break;
 	case HW_CQE_OPC_SEND_WITH_INV:
-		cr->invalid_key.key_id = udma_reg_read(cqe, CQE_RKEY_IMMTDATA);
+		cr->invalid_token.token_id = udma_reg_read(cqe, CQE_RKEY_IMMTDATA);
 		cr->opcode = URMA_CR_OPC_SEND_WITH_INV;
 		break;
 	default:
 		cr->opcode = (urma_cr_opcode_t)UINT8_MAX;
 		URMA_LOG_ERR("Receive invalid opcode :%u\n", opcode);
-		cr->status = URMA_CR_GENERAL_ERR;
+		cr->status = URMA_CR_UNSUPPORTED_OPCODE_ERR;
 		break;
 	}
 }
@@ -515,7 +524,6 @@ static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 		node = udma_table_first_with_hash(&(udma_ctx->jfs_qp_table),
 						  &(udma_ctx->jfs_qp_table_lock), qpn);
 		if (!node) {
-			cr->status = URMA_CR_GENERAL_ERR;
 			URMA_LOG_INFO("Poll jfc failed, QP 0x%x of jfs has been destroyed", qpn);
 			return JFC_POLL_ERR;
 		}
@@ -554,7 +562,6 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 
 	if (udma_reg_read(cqe, CQE_CQE_INLINE) == CQE_INLINE_ENABLE) {
 		qpn = udma_reg_read(cqe, CQE_LCL_QPN);
-		cr->flag.bs.inline_flag = 1;
 		if (is_jetty(udma_ctx, qpn)) {
 			jetty = get_jetty_from_cqe(udma_ctx, cqe);
 			if (jetty == NULL) {
@@ -583,6 +590,16 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 	return ret;
 }
 
+static void dump_err_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfc *udma_u_jfc)
+{
+	uint32_t *temp_cqe = (uint32_t *)cqe;
+
+	URMA_LOG_ERR("CQ(0x%lx) CQE(0x%x): 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x\n",
+		     udma_u_jfc->cqn, udma_u_jfc->ci - 1, *(temp_cqe),
+		     *(++temp_cqe), *(++temp_cqe), *(++temp_cqe), *(++temp_cqe),
+		     *(++temp_cqe), *(++temp_cqe), *(++temp_cqe));
+}
+
 int exec_jfc_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 			   struct udma_jfc_cqe *cqe)
 {
@@ -606,7 +623,7 @@ int exec_jfc_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 						  fcp.qpn);
 		qp_node = to_udma_jfs_qp_node(node);
 		qp = qp_node->jfs_qp;
-		qp->flush_status = UDMA_FLUSH_STATUS_ERR;
+		qp->flush_status = UDMA_FLUSH_STATU_ERR;
 		fcp.sq_producer_idx = qp->sq.head;
 	}
 
@@ -634,6 +651,7 @@ static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 
 	status = udma_reg_read(cqe, CQE_STATUS);
 	if (status != UDMA_CQE_SUCCESS && status != UDMA_CQE_WR_FLUSH_ERR) {
+		dump_err_cqe(cqe, udma_u_jfc);
 		if (exec_jfc_flush_cqe_cmd(udma_ctx, cqe))
 			URMA_LOG_ERR("flush cqe failed.\n");
 	}
@@ -641,7 +659,7 @@ static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 	return JFC_OK;
 }
 
-int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
+int udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(jfc->urma_ctx);
 	struct udma_u_jfc *udma_u_jfc = to_udma_jfc(jfc);
@@ -679,7 +697,7 @@ int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 	return npolled;
 }
 
-urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr)
+urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr)
 {
 	int ret;
 
@@ -755,7 +773,7 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce)
 	return URMA_SUCCESS;
 }
 
-int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+int udma_u_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		   urma_jfc_t *jfc[])
 {
 	struct udma_jfce *udma_jfce;
@@ -833,7 +851,7 @@ static int config_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
 	return ret;
 }
 
-int udma_u_config_poe_channel(const urma_context_t *ctx,
+int udma_u_config_poe_channel(urma_context_t *ctx,
 			      urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
 	struct udma_config_poe_channel_in poe_in;
@@ -881,7 +899,7 @@ static int query_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
 	return ret;
 }
 
-int udma_u_query_poe_channel(const urma_context_t *ctx,
+int udma_u_query_poe_channel(urma_context_t *ctx,
 			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
 	uint8_t poe_channel;
@@ -934,7 +952,7 @@ static void update_jfs_ci(urma_jfs_t *jfs, uint32_t wqe_cnt)
 	qp->sq.tail += wqe_cnt;
 }
 
-int udma_u_update_jfs_ci(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_update_jfs_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out)
 {
 	struct udma_update_jfs_ci_in update_in;
@@ -945,7 +963,7 @@ int udma_u_update_jfs_ci(const urma_context_t *ctx, urma_user_ctl_in_t *in,
 	return 0;
 }
 
-urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
+urma_status_t udma_u_get_async_event(urma_context_t *ctx,
 				     urma_async_event_t *event)
 {
 	return urma_cmd_get_async_event(ctx, event);

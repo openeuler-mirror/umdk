@@ -124,7 +124,8 @@ fi
 %if %{without hw_disable}
 %files compat-hns-lib
 %defattr(-,root,root)
-    %{_libdir}/liburma-hns3.so
+    %dir %{_libdir}/urma
+    %{_libdir}/urma/liburma-hns3.so
 %endif
 
 %files devel

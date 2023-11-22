@@ -98,6 +98,7 @@ struct udma_u_jfc {
 	pthread_spinlock_t	lock;
 	uint32_t		lock_free;
 	uint32_t		cqn;
+	uint32_t		pi;
 	uint32_t		ci;
 	uint32_t		depth;
 	uint32_t		cqe_cnt;
@@ -105,6 +106,7 @@ struct udma_u_jfc {
 	uint32_t		cqe_shift;
 	struct udma_buf		buf;
 	struct udma_jfc_cqe	*cqe;
+	struct udma_u_jfr	*reserved_jfr;
 	uint32_t		*db;
 	uint32_t		arm_sn;
 	uint32_t		caps_flag;
@@ -142,32 +144,32 @@ static inline void update_cq_db(struct udma_u_context *udma_ctx,
 		    (uint64_t *)&cq_db);
 }
 
-static inline struct udma_u_jfc *to_udma_jfc(const urma_jfc_t *jfc)
+static inline struct udma_u_jfc *to_udma_jfc(urma_jfc_t *jfc)
 {
 	return container_of(jfc, struct udma_u_jfc, urma_jfc);
 }
 
-urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, const urma_jfc_cfg_t *cfg);
+urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg);
 urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
-int udma_u_poll_jfc(const urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
-urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, const urma_jfc_attr_t *attr);
+urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
+int udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
 urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
 urma_jfce_t *udma_u_create_jfce(urma_context_t *ctx);
 urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
-int udma_u_wait_jfc(const urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+int udma_u_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		    urma_jfc_t *jfc[]);
 void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
-int udma_u_config_poe_channel(const urma_context_t *ctx,
+int udma_u_config_poe_channel(urma_context_t *ctx,
 			      urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
-int udma_u_query_poe_channel(const urma_context_t *ctx,
+int udma_u_query_poe_channel(urma_context_t *ctx,
 			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
-int udma_u_create_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
-int udma_u_update_jfs_ci(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_update_jfs_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
-int udma_u_delete_jfc_ex(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_delete_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			 urma_user_ctl_out_t *out);
-urma_status_t udma_u_get_async_event(const urma_context_t *ctx,
+urma_status_t udma_u_get_async_event(urma_context_t *ctx,
 				     urma_async_event_t *event);
 void udma_u_ack_async_event(urma_async_event_t *event);
 

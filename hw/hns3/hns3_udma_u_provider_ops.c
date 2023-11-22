@@ -28,7 +28,7 @@
 #include "hns3_udma_u_buf.h"
 #include "hns3_udma_u_provider_ops.h"
 
-typedef int (*udma_u_user_ctl_opcode)(const urma_context_t *ctx,
+typedef int (*udma_u_user_ctl_opcode)(urma_context_t *ctx,
 				      urma_user_ctl_in_t *in,
 				      urma_user_ctl_out_t *out);
 
@@ -42,7 +42,7 @@ static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
 	[UDMA_U_USER_CRTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
 };
 
-int udma_u_user_ctl(const urma_context_t *ctx, urma_user_ctl_in_t *in,
+int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		    urma_user_ctl_out_t *out)
 {
 	uint32_t user_crtl_opcode = 0;
@@ -133,7 +133,7 @@ static urma_match_entry_t match_table[] = {
 	{}
 };
 
-static urma_status_t udma_u_query_device(const urma_device_t *dev,
+static urma_status_t udma_u_query_device(urma_device_t *dev,
 					 urma_device_attr_t *dev_attr)
 {
 	return URMA_SUCCESS;
@@ -141,23 +141,23 @@ static urma_status_t udma_u_query_device(const urma_device_t *dev,
 
 static urma_status_t udma_u_init_urma_ctx_cfg(urma_device_t *dev,
 					      urma_context_cfg_t *cfg,
-					      int cmd_fd, uint32_t uasid)
+					      int dev_fd, uint32_t eid_index)
 {
 	cfg->dev = dev;
 	cfg->ops = &g_udma_u_ops;
-	cfg->dev_fd = cmd_fd;
-	cfg->uasid = uasid;
+	cfg->dev_fd = dev_fd;
+	cfg->eid_index = eid_index;
 
 	return URMA_SUCCESS;
 }
 
-static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int cmd_fd)
+static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int dev_fd)
 {
 	off_t offset;
 
 	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_UAR_PAGE);
 	udma_u_ctx->uar = mmap(NULL, udma_u_ctx->page_size, PROT_READ | PROT_WRITE,
-			       MAP_SHARED, cmd_fd, offset);
+			       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->uar == MAP_FAILED) {
 		URMA_LOG_ERR("failed to mmap uar page, errno:%d.\n", errno);
 		return URMA_FAIL;
@@ -175,13 +175,13 @@ static void udma_u_free_db(struct udma_u_context *udma_u_ctx)
 		URMA_LOG_ERR("failed to munmap uar.\n");
 }
 
-static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int cmd_fd)
+static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int dev_fd)
 {
 	off_t offset;
 
 	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_RESET_PAGE);
 	udma_u_ctx->reset_state = mmap(NULL, (size_t)udma_u_ctx->page_size, PROT_READ,
-				       MAP_SHARED, cmd_fd, offset);
+				       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->reset_state == MAP_FAILED) {
 		URMA_LOG_ERR("failed to mmap reset page, errno:%d.\n", errno);
 		return URMA_FAIL;
@@ -201,7 +201,7 @@ static void uninit_reset_state(struct udma_u_context *udma_u_ctx)
 
 static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 					 struct udma_create_ctx_resp *resp,
-					 int cmd_fd)
+					 int dev_fd)
 {
 	urma_status_t ret;
 
@@ -219,13 +219,13 @@ static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 	udma_u_ctx->poe_ch_num = resp->poe_ch_num;
 	udma_u_ctx->db_addr = resp->db_addr;
 
-	ret = udma_u_alloc_db(udma_u_ctx, cmd_fd);
+	ret = udma_u_alloc_db(udma_u_ctx, dev_fd);
 	if (ret) {
 		URMA_LOG_ERR("failed to alloc db.\n");
 		return ret;
 	}
 
-	ret = init_reset_state(udma_u_ctx, cmd_fd);
+	ret = init_reset_state(udma_u_ctx, dev_fd);
 	if (ret) {
 		URMA_LOG_ERR("failed to init reset state.\n");
 		udma_u_free_db(udma_u_ctx);
@@ -469,7 +469,7 @@ static void set_dca_pool_param(struct udma_u_context *ctx,
 	       dca_ctx->unit_size, dca_ctx->max_size, dca_ctx->min_size);
 }
 
-static int mmap_dca(struct udma_u_context *ctx, int cmd_fd, size_t size)
+static int mmap_dca(struct udma_u_context *ctx, int dev_fd, size_t size)
 {
 	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
 	off_t offset;
@@ -477,7 +477,7 @@ static int mmap_dca(struct udma_u_context *ctx, int cmd_fd, size_t size)
 
 	offset = get_mmap_offset(0, ctx->page_size, UDMA_MMAP_TYPE_DCA);
 
-	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, cmd_fd, offset);
+	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd, offset);
 	if (addr == MAP_FAILED) {
 		URMA_LOG_ERR("failed to mmap() dca addr.\n");
 		return URMA_FAIL;
@@ -489,7 +489,7 @@ static int mmap_dca(struct udma_u_context *ctx, int cmd_fd, size_t size)
 	return 0;
 }
 
-static int init_dca_context(struct udma_u_context *ctx, int cmd_fd,
+static int init_dca_context(struct udma_u_context *ctx, int dev_fd,
 			    struct udma_create_ctx_resp *resp,
 			    struct udma_dca_context_attr *attr)
 {
@@ -510,7 +510,7 @@ static int init_dca_context(struct udma_u_context *ctx, int cmd_fd,
 	}
 
 	set_dca_pool_param(ctx, attr);
-	if (!mmap_dca(ctx, cmd_fd, mmap_size)) {
+	if (!mmap_dca(ctx, dev_fd, mmap_size)) {
 		dca_ctx->status_size = mmap_size;
 		dca_ctx->max_qps = min_t(int, max_qps,
 					 mmap_size * BIT_CNT_PER_BYTE / bits_per_qp);
@@ -519,7 +519,8 @@ static int init_dca_context(struct udma_u_context *ctx, int cmd_fd,
 	return 0;
 }
 
-static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uint32_t uasid)
+static urma_context_t *udma_u_create_context(urma_device_t *dev,
+					     uint32_t eid_index, int dev_fd)
 {
 	struct udma_dca_context_attr udma_env_attr = {};
 	struct udma_create_ctx_resp resp = {};
@@ -535,10 +536,10 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uin
 		return NULL;
 	}
 
-	ret = udma_u_init_urma_ctx_cfg(dev, &cfg, cmd_fd, uasid);
+	ret = udma_u_init_urma_ctx_cfg(dev, &cfg, dev_fd, eid_index);
 	if (ret != URMA_SUCCESS) {
 		URMA_LOG_ERR("udma_u init urma ctx failed.");
-		goto err_init_urma_ctx_cfg;
+		goto free_ctx;
 	}
 
 	load_dca_config_from_env_var(&udma_env_attr);
@@ -546,30 +547,30 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, int cmd_fd, uin
 	udma_set_udata(&udrv_data, &cmd, sizeof(cmd), &resp, sizeof(resp));
 
 	if (urma_cmd_create_context(&udma_u_ctx->urma_ctx, &cfg, &udrv_data))
-		goto err_init_urma_ctx_cfg;
+		goto free_ctx;
 
-	ret = udma_u_init_context(udma_u_ctx, &resp, cmd_fd);
+	ret = udma_u_init_context(udma_u_ctx, &resp, dev_fd);
 	if (ret != URMA_SUCCESS) {
 		URMA_LOG_ERR("udma_u init ctx failed.");
-		goto err_init_context;
+		goto err_cmd;
 	}
 
-	if (init_dca_context(udma_u_ctx, cmd_fd, &resp, &udma_env_attr))
-		goto err_init_dca_context;
+	if (init_dca_context(udma_u_ctx, dev_fd, &resp, &udma_env_attr))
+		goto err_init_context;
 
 	ret = init_jetty_x_table(udma_u_ctx);
 	if (ret)
-		goto err_init_jetty_x_table;
+		goto err_init_dca;
 
 	return &udma_u_ctx->urma_ctx;
 
-err_init_jetty_x_table:
+err_init_dca:
 	uninit_dca_context(udma_u_ctx);
-err_init_dca_context:
-	udma_u_uninit_context(udma_u_ctx);
 err_init_context:
+	udma_u_uninit_context(udma_u_ctx);
+err_cmd:
 	(void)urma_cmd_delete_context(&udma_u_ctx->urma_ctx);
-err_init_urma_ctx_cfg:
+free_ctx:
 	free(udma_u_ctx);
 
 	return NULL;
@@ -592,7 +593,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	return URMA_SUCCESS;
 }
 
-static urma_status_t udma_u_init(const urma_init_attr_t *conf)
+static urma_status_t udma_u_init(urma_init_attr_t *conf)
 {
 	return URMA_SUCCESS;
 }

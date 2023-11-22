@@ -30,6 +30,16 @@ struct udma_u_jfr_idx_que {
 	uint32_t		tail;
 };
 
+struct udma_u_inl_sge {
+	void			*addr;
+	uint32_t		len;
+};
+
+struct udma_u_inl_wqe {
+	struct udma_u_inl_sge	*sg_list;
+	uint32_t		sge_cnt;
+};
+
 struct um_header {
 	char data[UDMA_JFR_GRH_HEAD_SZ];
 };
@@ -60,7 +70,7 @@ struct udma_jfr_node {
 
 #define UDMA_JFR_IDX_QUE_ENTRY_SZ	4
 
-static inline struct udma_u_jfr *to_udma_jfr(const urma_jfr_t *jfr)
+static inline struct udma_u_jfr *to_udma_jfr(urma_jfr_t *jfr)
 {
 	return container_of(jfr, struct udma_u_jfr, urma_jfr);
 }
@@ -70,14 +80,14 @@ static inline struct udma_jfr_node *to_udma_jfr_node(struct udma_hmap_node *node
 	return container_of(node, struct udma_jfr_node, node);
 }
 
-urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, const urma_jfr_cfg_t *cfg);
+urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg);
 urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr);
 urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
-				       const urma_rjfr_t *rjfr,
-				       const urma_key_t *key);
-urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr, bool force);
-urma_status_t udma_u_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr,
+				       urma_rjfr_t *rjfr,
+				       urma_token_t *token);
+urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr);
+urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
+urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 				 urma_jfr_wr_t **bad_wr);
-urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, const urma_jfr_attr_t *attr);
 
 #endif /* _UDMA_U_JFR_H */

@@ -26,7 +26,7 @@
 
 struct rc_node {
 	struct udma_qp			*qp;
-	const urma_target_jetty_t	*tjetty;
+	urma_target_jetty_t	*tjetty;
 };
 
 struct tgt_node {
@@ -64,7 +64,7 @@ struct udma_u_target_jetty {
 	atomic_uint         refcnt;
 };
 
-static inline struct udma_u_jetty *to_udma_jetty(const urma_jetty_t *jetty)
+static inline struct udma_u_jetty *to_udma_jetty(urma_jetty_t *jetty)
 {
 	return container_of(jetty, struct udma_u_jetty, urma_jetty);
 }
@@ -79,9 +79,10 @@ static inline struct udma_jetty_node *to_udma_jetty_node(struct udma_hmap_node *
 	return container_of(node, struct udma_jetty_node, node);
 }
 
-static inline struct udma_u_target_jetty *to_udma_target_jetty(const urma_target_jetty_t *tjetty)
+static inline struct udma_u_target_jetty *to_udma_target_jetty(urma_target_jetty_t *urma_target_jetty)
 {
-	return container_of(tjetty, struct udma_u_target_jetty, urma_target_jetty);
+	return container_of(urma_target_jetty, struct udma_u_target_jetty,
+			    urma_target_jetty);
 }
 
 static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
@@ -98,27 +99,32 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 }
 
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
-				  const urma_jetty_cfg_t *jetty_cfg);
+				  urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
-urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
-					 const urma_rjetty_t *rjetty,
-					 const urma_key_t *rjetty_key);
-urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty, bool force);
 urma_status_t udma_u_advise_jetty(urma_jetty_t *jetty,
-				  const urma_target_jetty_t *remote_jetty);
+				  urma_target_jetty_t *remote_jetty);
 urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
-				    urma_target_jetty_t *remote_jetty,
-				    bool force);
+				    urma_target_jetty_t *remote_jetty);
+urma_status_t udma_u_advise_jetty_seg(urma_jetty_t *jetty,
+				      urma_target_seg_t *tseg);
+urma_status_t udma_u_unadvise_jetty_seg(urma_jetty_t *jetty,
+					urma_target_seg_t *tseg);
 urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 				urma_target_jetty_t *remote_jetty);
-urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty, bool force);
-urma_status_t udma_u_post_jetty_send_wr(const urma_jetty_t *jetty,
+urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty);
+urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
+					 urma_rjetty_t *rjetty,
+					 urma_token_t *rjetty_token);
+urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty);
+urma_status_t udma_u_post_jetty_send_wr(urma_jetty_t *jetty,
 					urma_jfs_wr_t *wr,
 					urma_jfs_wr_t **bad_wr);
-urma_status_t udma_u_post_jetty_recv_wr(const urma_jetty_t *jetty,
+urma_status_t udma_u_post_jetty_recv_wr(urma_jetty_t *jetty,
 					urma_jfr_wr_t *wr,
 					urma_jfr_wr_t **bad_wr);
+urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
+				   urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
-				  const urma_jetty_attr_t *jetty_attr);
+				  urma_jetty_attr_t *jetty_attr);
 
 #endif /* _UDMA_U_JETTY_H */

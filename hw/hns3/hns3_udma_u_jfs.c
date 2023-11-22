@@ -21,21 +21,6 @@
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfs.h"
 
-urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
-				   const urma_jfs_cfg_t *cfg)
-{
-	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
-
-	if (!cfg->depth || cfg->depth > udma_ctx->max_jfs_wr ||
-	    cfg->max_sge > udma_ctx->max_jfs_sge) {
-		URMA_LOG_ERR("Invalid jfs cfg: sq depth: %u, sq max_sge: %u.\n",
-			     cfg->depth, cfg->max_sge);
-		return URMA_EINVAL;
-	}
-
-	return URMA_SUCCESS;
-}
-
 static int udma_jfs_init_connect_table(struct udma_u_jfs *jfs)
 {
 	int ret;
@@ -78,7 +63,7 @@ static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp
 	return URMA_SUCCESS;
 }
 
-static void init_sq_param(struct udma_qp *qp, const urma_jfs_cfg_t *cfg)
+static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg)
 {
 	uint32_t max_inline_data;
 	uint32_t total_sge_cnt;
@@ -116,7 +101,7 @@ static void init_sq_param(struct udma_qp *qp, const urma_jfs_cfg_t *cfg)
 
 static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp,
-				  const urma_jfs_cfg_t *jfs_cfg)
+				  urma_jfs_cfg_t *jfs_cfg)
 {
 	urma_status_t ret;
 
@@ -139,7 +124,7 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 }
 
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
-			      const urma_jfs_cfg_t *jfs_cfg,
+			      urma_jfs_cfg_t *jfs_cfg,
 			      uint32_t jetty_id, bool is_jetty)
 {
 	enum udma_db_type db_type;
@@ -177,7 +162,7 @@ err_alloc_qp:
 }
 
 static int alloc_table_qp(struct udma_u_jfs *jfs, urma_context_t *ctx,
-			  const urma_jfs_cfg_t *cfg)
+			  urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx;
 	int ret;
@@ -209,8 +194,7 @@ static int alloc_table_qp(struct udma_u_jfs *jfs, urma_context_t *ctx,
 }
 
 static urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx,
-					  urma_jfs_t *jfs, struct udma_qp *qp,
-					  uint32_t qpn)
+					  struct udma_qp *qp, uint32_t qpn)
 {
 	struct udma_jfs_qp_node *qp_node;
 
@@ -257,7 +241,7 @@ static void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn)
 }
 
 static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
-			       const urma_jfs_cfg_t *cfg)
+			       urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 	struct udma_create_jfs_resp resp = {};
@@ -285,7 +269,7 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 		jfs->um_qp->sq.priority = resp.create_tp_resp.priority;
 		memcpy(&jfs->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
 		       sizeof(struct udp_srcport));
-		ret = udma_add_to_qp_table(udma_ctx, &jfs->base, jfs->um_qp,
+		ret = udma_add_to_qp_table(udma_ctx, jfs->um_qp,
 					   jfs->um_qp->qp_num);
 		if (ret)
 			URMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
@@ -301,7 +285,7 @@ static void udma_jfs_free_table(struct udma_u_jfs *jfs)
 	(void)pthread_rwlock_rdlock(&jfs->tjfr_tbl.rwlock);
 	HMAP_FOR_EACH_SAFE(cur, next, hmap_node, &jfs->tjfr_tbl.hmap) {
 		(void)pthread_rwlock_unlock(&jfs->tjfr_tbl.rwlock);
-		udma_u_unadvise_jfr(&jfs->base, cur->tjfr, false);
+		udma_u_unadvise_jfr(&jfs->base, cur->tjfr);
 		(void)pthread_rwlock_rdlock(&jfs->tjfr_tbl.rwlock);
 	}
 	(void)pthread_rwlock_unlock(&jfs->tjfr_tbl.rwlock);
@@ -331,7 +315,7 @@ static void delete_qp_node_table(struct udma_u_jfs *jfs)
 		um_free_qp(jfs);
 }
 
-urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, const urma_jfs_cfg_t *cfg)
+urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_jfs *jfs;
 	int ret;
@@ -445,7 +429,7 @@ static void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
 	return get_wqe(qp, qp->ex_sge.offset + (n << qp->ex_sge.sge_shift));
 }
 
-static inline uint32_t udma_get_sgl_total_len(const urma_sg_t *sg)
+static inline uint32_t udma_get_sgl_total_len(urma_sg_t *sg)
 {
 	uint32_t len = 0;
 
@@ -455,7 +439,7 @@ static inline uint32_t udma_get_sgl_total_len(const urma_sg_t *sg)
 	return len;
 }
 
-static int udma_parse_write_wr(const urma_rw_wr_t *rw,
+static int udma_parse_write_wr(urma_rw_wr_t *rw,
 			       struct udma_jfs_wr_info *wr_info,
 			       struct udma_sge *sg_list, bool is_inline)
 {
@@ -473,18 +457,18 @@ static int udma_parse_write_wr(const urma_rw_wr_t *rw,
 				URMA_LOG_ERR("parse write wr failed, tseg is null.\n");
 				return EINVAL;
 			}
-			sg_list->lkey = rw->src.sge[i].tseg->seg.key_id;
+			sg_list->lkey = rw->src.sge[i].tseg->seg.token_id;
 		}
 		sg_list++;
 	}
 	wr_info->dst_addr = rw->dst.sge[0].addr;
 	wr_info->total_len = udma_get_sgl_total_len(&rw->src);
-	wr_info->rkey = rw->dst.sge[0].tseg->seg.key_id;
+	wr_info->rkey = rw->dst.sge[0].tseg->seg.token_id;
 
 	return 0;
 }
 
-static int udma_parse_send_wr(const urma_send_wr_t *send,
+static int udma_parse_send_wr(urma_send_wr_t *send,
 			      struct udma_jfs_wr_info *wr_info,
 			      struct udma_sge *sg_list, bool is_inline)
 {
@@ -503,7 +487,7 @@ static int udma_parse_send_wr(const urma_send_wr_t *send,
 				URMA_LOG_ERR("parse send wr failed, tseg is null.\n");
 				return EINVAL;
 			}
-			sg_list->lkey = send->src.sge[i].tseg->seg.key_id;
+			sg_list->lkey = send->src.sge[i].tseg->seg.token_id;
 		}
 		sg_list->addr = send->src.sge[i].addr;
 		total_length += send->src.sge[i].len;
@@ -552,7 +536,7 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 			return EINVAL;
 		}
 		wr_info->opcode = UDMA_OPCODE_SEND_WITH_INV;
-		wr_info->inv_key_immtdata = wr->send.tseg->seg.key_id;
+		wr_info->inv_key_immtdata = wr->send.tseg->seg.token_id;
 		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
 	case URMA_OPC_WRITE:
 		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE;
@@ -568,18 +552,9 @@ static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info
 		}
 		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY;
 		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
-	case URMA_OPC_READ:
-	case URMA_OPC_CAS:
-	case URMA_OPC_CAS_WITH_MASK:
-	case URMA_OPC_FAA:
-	case URMA_OPC_FAA_WITH_MASK:
-		URMA_LOG_ERR("Alpha doesn't support opcode :%u\n",
-			     (uint32_t)wr->opcode);
-		return EINVAL;
-	case URMA_OPC_NOP:
-	case URMA_OPC_LAST:
 	default:
-		URMA_LOG_ERR("Invalid opcode :%u\n", (uint32_t)wr->opcode);
+		URMA_LOG_ERR("Unsupported or invalid opcode :%u\n",
+			     (uint32_t)wr->opcode);
 		return EINVAL;
 	}
 }
@@ -995,7 +970,7 @@ static void udma_write_dwqe(struct udma_u_context *ctx, struct udma_qp *qp,
 	udma_reg_write(udma_wqe, UDMAWQE_DB_SL_H, qp->sq.priority >> PRIORITY_OFFSET);
 	udma_reg_write(udma_wqe, UDMAWQE_WQE_IDX, qp->sq.head);
 
-	udma_write512((uint64_t *)qp->dwqe_page, (uint64_t *)wqe);
+	udma_write512((uint64_t *)qp->dwqe_page, (uint64_t *)udma_wqe);
 }
 
 static void udma_update_sq_db(struct udma_u_context *ctx, struct udma_qp *qp)
@@ -1038,18 +1013,9 @@ static struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 						       &udma_jfs->tjfr_tbl.rwlock,
 						       tjfr_index);
 		break;
-	case URMA_OPC_READ:
-	case URMA_OPC_CAS:
-	case URMA_OPC_CAS_WITH_MASK:
-	case URMA_OPC_FAA:
-	case URMA_OPC_FAA_WITH_MASK:
-		URMA_LOG_ERR("Alpha doesn't support opcode :%u\n",
-			     (uint32_t)wr->opcode);
-		return NULL;
-	case URMA_OPC_NOP:
-	case URMA_OPC_LAST:
 	default:
-		URMA_LOG_ERR("Invalid opcode: %u\n", (uint32_t)wr->opcode);
+		URMA_LOG_ERR("Unsupported or invalid opcode: %u\n",
+			     (uint32_t)wr->opcode);
 		return NULL;
 	}
 
@@ -1133,15 +1099,23 @@ static urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udm
 	return URMA_SUCCESS;
 }
 
+void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
+			     struct udma_qp *udma_qp, void *wqe, uint32_t num)
+{
+	if (num == 1 && udma_qp->flags & UDMA_QP_CAP_DIRECT_WQE)
+		udma_write_dwqe(udma_ctx, udma_qp, wqe);
+	else
+		udma_update_sq_db(udma_ctx, udma_qp);
+}
+
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp,
-				urma_jfs_wr_t *wr,
+				urma_jfs_wr_t *wr, void **wqe,
 				urma_transport_mode_t tp_mode)
 {
 	struct udma_sge_info sge_info = {};
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx;
-	void *wqe;
 
 	ret = check_dca_valid(udma_ctx, udma_qp);
 	if (ret) {
@@ -1161,13 +1135,13 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
-	wqe = get_send_wqe(udma_qp, wqe_idx);
+	*wqe = get_send_wqe(udma_qp, wqe_idx);
 	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
 
 	if (tp_mode == URMA_TM_UM)
-		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_um_wqe(udma_ctx, *wqe, udma_qp, wr, &sge_info);
 	else
-		ret = udma_set_rm_wqe(wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_rm_wqe(*wqe, udma_qp, wr, &sge_info);
 	if (ret)
 		goto out;
 
@@ -1175,17 +1149,15 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 	udma_qp->next_sge = sge_info.start_idx;
 
 	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
-		udma_write_dca_wqe(udma_qp, wqe);
+		udma_write_dca_wqe(udma_qp, *wqe);
 
 	udma_to_device_barrier();
 
-	if (udma_qp->flags & UDMA_QP_CAP_DIRECT_WQE)
-		udma_write_dwqe(udma_ctx, udma_qp, wqe);
-	else
-		udma_update_sq_db(udma_ctx, udma_qp);
+	if (tp_mode != URMA_TM_RC)
+		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, *wqe, 1);
 
 	*udma_qp->sdb = udma_qp->sq.head;
-	if (udma_qp->flush_status == UDMA_FLUSH_STATUS_ERR)
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
 		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
@@ -1195,7 +1167,7 @@ out:
 	return ret;
 }
 
-urma_status_t udma_u_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr,
+urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 				 urma_jfs_wr_t **bad_wr)
 {
 	struct udma_u_context *udma_ctx;
@@ -1203,6 +1175,7 @@ urma_status_t udma_u_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	struct udma_qp *udma_qp;
 	urma_status_t ret;
 	urma_jfs_wr_t *it;
+	void *wqe;
 
 	udma_jfs = to_udma_jfs(jfs);
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
@@ -1220,7 +1193,8 @@ urma_status_t udma_u_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 			goto out;
 		}
 
-		ret = udma_u_post_qp_wr(udma_ctx, udma_qp, it, udma_jfs->tp_mode);
+		ret = udma_u_post_qp_wr(udma_ctx, udma_qp, it, &wqe,
+					udma_jfs->tp_mode);
 		if (ret) {
 			*bad_wr = (urma_jfs_wr_t *)it;
 			goto out;
@@ -1240,7 +1214,7 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 {
 	struct udma_sge_info sge_info = {};
 	urma_status_t ret = URMA_SUCCESS;
-	uint32_t wqe_idx;
+	uint32_t wqe_index;
 	void *wqe;
 
 	ret = check_dca_valid(udma_ctx, udma_qp);
@@ -1262,9 +1236,9 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 		ret = URMA_ENOMEM;
 		goto out;
 	}
-	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
-	wqe = get_send_wqe(udma_qp, wqe_idx);
-	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
+	wqe_index = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
+	wqe = get_send_wqe(udma_qp, wqe_index);
+	udma_qp->sq.wrid[wqe_index] = wr->user_ctx;
 
 	if (tp_mode == URMA_TM_UM)
 		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr, &sge_info);
@@ -1273,7 +1247,7 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	if (ret)
 		goto out;
 
-	udma_qp->sq.head += 1;
+	udma_qp->sq.head = udma_qp->sq.head + 1;
 	udma_qp->next_sge = sge_info.start_idx;
 
 	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
@@ -1281,7 +1255,7 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 
 	udma_to_device_barrier();
 
-	if (udma_qp->flush_status == UDMA_FLUSH_STATUS_ERR)
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
 		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
@@ -1291,24 +1265,20 @@ out:
 	return ret;
 }
 
-int udma_u_post_jfs_wr_ex(const urma_context_t *ctx,
+int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
 			  urma_user_ctl_in_t *in,
 			  urma_user_ctl_out_t *out)
 {
 	urma_post_and_ret_db_out_t ex_out;
-	urma_status_t ret = URMA_SUCCESS;
 	urma_post_and_ret_db_in_t ex_in;
 	struct udma_u_context *udma_ctx;
 	struct udma_u_jfs *udma_jfs;
 	struct udma_qp *udma_qp;
 	urma_jfs_wr_t **it;
+	urma_status_t ret;
 
+	ret = URMA_SUCCESS;
 	memcpy(&ex_in, (void *)in->addr, in->len);
-	if (ex_in.wr == NULL) {
-		URMA_LOG_ERR("wr of ex_in is NULL!\n");
-		return EINVAL;
-	}
-
 	udma_jfs = to_udma_jfs(ex_in.jfs);
 	udma_ctx = to_udma_ctx((urma_context_t *)ctx);
 

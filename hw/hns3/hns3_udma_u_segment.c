@@ -18,12 +18,12 @@
 #include "hns3_udma_u_segment.h"
 
 urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
-				       const urma_seg_cfg_t *seg_cfg)
+				       urma_seg_cfg_t *seg_cfg)
 {
 	urma_cmd_udrv_priv_t udata = {};
 	struct udma_u_seg *seg;
 
-	if (!seg_cfg->key || seg_cfg->flag.bs.access >= URMA_SEG_ACCESS_GUARD) {
+	if (!seg_cfg->token_value || seg_cfg->flag.bs.access >= URMA_SEG_ACCESS_GUARD) {
 		URMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
 			     seg_cfg->flag.bs.access);
 		return NULL;
@@ -38,12 +38,12 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	seg->urma_seg.seg.ubva.uasid = ctx->uasid;
 	seg->urma_seg.seg.ubva.va = seg_cfg->va;
 	seg->urma_seg.seg.len = seg_cfg->len;
-	seg->urma_seg.seg.attr.bs.key_policy = seg_cfg->flag.bs.key_policy;
+	seg->urma_seg.seg.attr.bs.token_policy = seg_cfg->flag.bs.token_policy;
 	seg->urma_seg.seg.attr.bs.cacheable = seg_cfg->flag.bs.cacheable;
 	seg->urma_seg.seg.attr.bs.dsva = false;
 	seg->urma_seg.seg.attr.bs.access = seg_cfg->flag.bs.access;
-	seg->urma_seg.seg.user_ctx = seg_cfg->user_ctx;
-	(void)memcpy(&seg->ukey, seg_cfg->key, sizeof(urma_key_t));
+	seg->urma_seg.user_ctx = seg_cfg->user_ctx;
+	(void)memcpy(&seg->token, seg_cfg->token_value, sizeof(urma_token_t));
 	seg->urma_seg.urma_ctx = ctx;
 
 	if (urma_cmd_register_seg(ctx, &seg->urma_seg, seg_cfg, &udata) != 0) {
@@ -55,7 +55,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	return &seg->urma_seg;
 }
 
-urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg, bool force)
+urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 {
 	urma_status_t ret = URMA_SUCCESS;
 	struct udma_u_seg *seg;
@@ -75,8 +75,8 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg, bool force)
 	return ret;
 }
 
-urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, const urma_seg_t *seg,
-				     const urma_key_t *key, uint64_t addr,
+urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
+				     urma_token_t *token, uint64_t addr,
 				     urma_import_seg_flag_t flag)
 {
 	urma_cmd_udrv_priv_t udata = {};
@@ -93,8 +93,8 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, const urma_seg_t *seg,
 	cfg.ubva = seg->ubva;
 	cfg.len = seg->len;
 	cfg.attr = seg->attr;
-	cfg.key_id = seg->key_id;
-	cfg.key = key;
+	cfg.token_id = seg->token_id;
+	cfg.token = token;
 	udma_set_udata(&udata, NULL, 0, NULL, 0);
 	ret = urma_cmd_import_seg(ctx, tseg, &cfg, &udata);
 	if (ret) {
@@ -106,7 +106,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, const urma_seg_t *seg,
 	return tseg;
 }
 
-urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg, bool force)
+urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg)
 {
 	int ret;
 
