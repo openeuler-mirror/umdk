@@ -20,17 +20,18 @@
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_jfc.h"
 
+#define UDMA_RESERVED_JFR_SGE	1
+
 struct udma_u_seg {
-	urma_target_seg_t urma_seg;
-	urma_key_t        ukey;
+	urma_target_seg_t	urma_seg;
+	urma_token_t		token;
 };
 
 urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
-				       const urma_seg_cfg_t *seg_cfg);
-urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg, bool force);
-urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, const urma_seg_t *seg,
-				     const urma_key_t *key, uint64_t addr,
+				       urma_seg_cfg_t *seg_cfg);
+urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg);
+urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
+				     urma_token_t *token, uint64_t addr,
 				     urma_import_seg_flag_t flag);
-urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg, bool force);
-
+urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg);
 #endif /* _UDMA_U_SEGMENT_H */

@@ -40,7 +40,7 @@ static int alloc_jfs_conn_nodes(struct jfs_conn_node *conn_nodes)
 }
 
 static void fill_qp_conn_node(struct jfs_conn_node *conn_nodes, urma_jfs_t *jfs,
-			      const urma_target_jetty_t *tjfr,
+			      urma_target_jetty_t *tjfr,
 			      struct udma_create_tp_resp *udma_tp_resp)
 {
 	struct udma_u_jfs *udma_jfs;
@@ -116,7 +116,7 @@ static int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
 	return 0;
 }
 
-static urma_status_t alloc_jfs_node(const urma_target_jetty_t *tjfr, urma_jfs_t *jfs,
+static urma_status_t alloc_jfs_node(urma_target_jetty_t *tjfr, urma_jfs_t *jfs,
 			  struct jfs_conn_node *conn_nodes,
 			  struct connect_node_table *tbl)
 {
@@ -155,7 +155,7 @@ err_free_tgt_conn_node:
 
 static void fill_udma_tp_info(struct udma_create_tp_ucmd *udma_tp_info,
 			      struct connect_node *tgt_conn_node, urma_jfs_t *jfs,
-			      const urma_target_jetty_t *tjfr)
+			      urma_target_jetty_t *tjfr)
 {
 	udma_tp_info->ini_id.jfs_id = jfs->jfs_id.id;
 	udma_tp_info->tgt_id.jfr_id = tjfr->id.id;
@@ -165,7 +165,7 @@ static void fill_udma_tp_info(struct udma_create_tp_ucmd *udma_tp_info,
 }
 
 static int exec_jfs_advise_jfr_cmd(urma_jfs_t *jfs,
-				   const urma_target_jetty_t *tjfr,
+				   urma_target_jetty_t *tjfr,
 				   struct jfs_conn_node *conn_nodes)
 {
 	struct udma_create_tp_ucmd udma_tp_info = {};
@@ -195,8 +195,7 @@ static int exec_jfs_advise_jfr_cmd(urma_jfs_t *jfs,
 	return ret;
 }
 
-static int verify_advise_jfr(const urma_jfs_t *jfs,
-			     const urma_target_jetty_t *tjfr)
+static int verify_advise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr)
 {
 	struct udma_u_jfs *udma_jfs;
 
@@ -217,14 +216,14 @@ static int verify_advise_jfr(const urma_jfs_t *jfs,
 static void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn)
 {
 	struct udma_jfs_qp_node *qp_node;
-	struct udma_hmap_node *node;
+	struct udma_hmap_node *hmap_node;
 
-	node = udma_table_first_with_hash(&ctx->jfs_qp_table,
+	hmap_node = udma_table_first_with_hash(&ctx->jfs_qp_table,
 					  &ctx->jfs_qp_table_lock, qpn);
-	if (node) {
-		qp_node = to_udma_jfs_qp_node(node);
+	if (hmap_node) {
+		qp_node = to_udma_jfs_qp_node(hmap_node);
 		(void)pthread_rwlock_wrlock(&ctx->jfs_qp_table_lock);
-		udma_hmap_remove(&ctx->jfs_qp_table, node);
+		udma_hmap_remove(&ctx->jfs_qp_table, hmap_node);
 		(void)pthread_rwlock_unlock(&ctx->jfs_qp_table_lock);
 		free(qp_node);
 		return;
@@ -245,7 +244,7 @@ static void free_tgt_conn_node(struct udma_u_context *udma_u_ctx,
 	free(tgt_conn_node);
 }
 
-urma_status_t udma_u_advise_jfr(urma_jfs_t *jfs, const urma_target_jetty_t *tjfr)
+urma_status_t udma_u_advise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr)
 {
 	struct udma_u_target_jetty *target_udma_jfr;
 	struct connect_node_table *tjfr_tbl;
@@ -301,8 +300,7 @@ err_free_jfs_node:
 	return URMA_FAIL;
 }
 
-urma_status_t udma_u_unadvise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr,
-				  bool force)
+urma_status_t udma_u_unadvise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr)
 {
 	struct udma_u_target_jetty *udma_target_jfr = to_udma_target_jetty(tjfr);
 	struct udma_hmap_node *tjfr_hmap_node;

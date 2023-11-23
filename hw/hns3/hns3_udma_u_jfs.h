@@ -23,12 +23,10 @@
 #include "hns3_udma_u_buf.h"
 
 #define UDMA_SIZE_CONNECT_NODE_TABLE 99
-#define UDMA_FLUSH_STATUS_ERR 1
+#define UDMA_JFS_QP_TABLE_SIZE 99
+#define UDMA_FLUSH_STATU_ERR 1
 #define GID_H_SHIFT 12
-#define UDMA_SGE_IN_WQE 2
 #define NOTIFY_OFFSET_4B_ALIGN 4
-
-#define max(a, b) ((a) > (b) ? (a) : (b))
 
 struct connect_node_table {
 	pthread_rwlock_t	rwlock;
@@ -71,6 +69,11 @@ struct udma_wq {
 	uint32_t            shift;
 	int                 offset;
 	uint8_t             priority;
+};
+
+struct udma_qp_buf {
+	void     *buf;
+	uint32_t length;
 };
 
 struct udma_cq {
@@ -128,6 +131,7 @@ struct udma_jfs_qp_node {
 struct udma_u_jfs {
 	urma_jfs_t				base;
 	uint32_t				jfs_id;
+	struct udma_qp_buf			wqe_buf;
 	urma_transport_mode_t			tp_mode;
 	uint32_t				lock_free;
 	pthread_spinlock_t			lock;
@@ -226,6 +230,10 @@ enum udma_jfs_opcode {
 #define UDMAUMWQE_INLINE_SHIFT2 16
 #define UDMAUMWQE_INLINE_SHIFT3 24
 
+#define UDMAWQE_SQPN_L_WIDTH 2
+
+#define UDMA_SGE_IN_WQE 2
+
 #define UDMA_MAX_RC_INL_INN_SZ 32
 #define UDMA_MAX_UM_INL_INN_SZ 8
 
@@ -297,7 +305,7 @@ static inline void clear_bit_unlock(atomic_ulong *p, uint32_t nr)
 	atomic_fetch_and(map, ~UDMA_BIT_MASK(nr));
 }
 
-static inline struct udma_u_jfs *to_udma_jfs(const urma_jfs_t *jfs)
+static inline struct udma_u_jfs *to_udma_jfs(urma_jfs_t *jfs)
 {
 	return container_of(jfs, struct udma_u_jfs, base);
 }
@@ -312,19 +320,19 @@ static inline struct udma_jfs_node *to_udma_jfs_node(struct udma_hmap_node *node
 	return container_of(node, struct udma_jfs_node, node);
 }
 
-urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, const urma_jfs_cfg_t *cfg);
+urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
-urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
-				   const urma_jfs_cfg_t *cfg);
-urma_status_t udma_u_post_jfs_wr(const urma_jfs_t *jfs, urma_jfs_wr_t *wr,
+urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 				 urma_jfs_wr_t **bad_wr);
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
-				urma_transport_mode_t tp_mode);
-int udma_u_post_jfs_wr_ex(const urma_context_t *ctx,
+				void **wqe, urma_transport_mode_t tp_mode);
+int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
 			  urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
-			      const urma_jfs_cfg_t *jfs_cfg,
+			      urma_jfs_cfg_t *jfs_cfg,
 			      uint32_t jetty_id, bool is_jetty);
+void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
+			     struct udma_qp *udma_qp, void *wqe, uint32_t num);
 
 #endif /* _UDMA_JFS_H */

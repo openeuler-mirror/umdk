@@ -21,7 +21,7 @@
 #include "hns3_udma_u_jfr.h"
 
 static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
-				const urma_jfr_cfg_t *cfg)
+				urma_jfr_cfg_t *cfg)
 {
 	if (!cfg->max_sge ||
 	    !cfg->depth || cfg->depth > udma_ctx->max_jfr_wr ||
@@ -34,7 +34,7 @@ static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
 	return 0;
 }
 
-static void init_jfr_param(struct udma_u_jfr *jfr, const urma_jfr_cfg_t *cfg)
+static void init_jfr_param(struct udma_u_jfr *jfr, urma_jfr_cfg_t *cfg)
 {
 	jfr->wqe_cnt = roundup_pow_of_two(cfg->depth);
 
@@ -124,7 +124,7 @@ static void free_jfr_buf(struct udma_u_jfr *jfr)
 }
 
 static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
-			       const urma_jfr_cfg_t *cfg)
+			       urma_jfr_cfg_t *cfg)
 {
 	struct udma_create_jfr_resp resp = {};
 	struct udma_create_jfr_ucmd cmd = {};
@@ -191,7 +191,7 @@ static void delete_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 {
 	urma_seg_cfg_t seg_cfg = {};
-	urma_key_t key;
+	urma_token_t token;
 
 	jfr->um_header_que = (struct um_header *)calloc(jfr->wqe_cnt,
 							sizeof(struct um_header));
@@ -200,12 +200,12 @@ int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 		return ENOMEM;
 	}
 
-	seg_cfg.flag.bs.key_policy = 1;
+	seg_cfg.flag.bs.token_policy = 1;
 	seg_cfg.flag.bs.cacheable = 0;
 	seg_cfg.flag.bs.access = URMA_ACCESS_LOCAL_WRITE;
 	seg_cfg.va = (uint64_t)jfr->um_header_que;
 	seg_cfg.len = jfr->wqe_cnt * UDMA_JFR_GRH_HEAD_SZ;
-	seg_cfg.key = &key;
+	seg_cfg.token_value = &token;
 
 	jfr->um_header_seg = udma_u_register_seg(ctx, &seg_cfg);
 	if (!jfr->um_header_seg) {
@@ -219,14 +219,14 @@ int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 
 void free_um_header_que(struct udma_u_jfr *jfr)
 {
-	udma_u_unregister_seg(jfr->um_header_seg, true);
+	udma_u_unregister_seg(jfr->um_header_seg);
 	jfr->um_header_seg = NULL;
 
 	free(jfr->um_header_que);
 	jfr->um_header_que = NULL;
 }
 
-urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, const urma_jfr_cfg_t *cfg)
+urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 	struct udma_u_jfr *jfr;
@@ -308,8 +308,8 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 }
 
 urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
-				       const urma_rjfr_t *rjfr,
-				       const urma_key_t *key)
+				       urma_rjfr_t *rjfr,
+				       urma_token_t *token)
 {
 	struct udma_u_target_jetty *udma_target_jfr;
 	urma_cmd_udrv_priv_t udata = {};
@@ -329,7 +329,7 @@ urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 	tjfr->id = rjfr->jfr_id;
 	tjfr->trans_mode = rjfr->trans_mode;
 	cfg.jfr_id = rjfr->jfr_id;
-	cfg.key = key;
+	cfg.token = token;
 	cfg.trans_mode = rjfr->trans_mode;
 	udma_set_udata(&udata, NULL, 0, NULL, 0);
 	ret = urma_cmd_import_jfr(ctx, tjfr, &cfg, &udata);
@@ -343,7 +343,7 @@ urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 	return tjfr;
 }
 
-urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr, bool force)
+urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr)
 {
 	struct udma_u_target_jetty *udma_target_jfr = to_udma_target_jetty(target_jfr);
 	int ret;
@@ -372,7 +372,7 @@ static inline bool udma_jfrwq_overflow(struct udma_u_jfr *jfr)
 }
 
 static urma_status_t check_post_jfr_valid(struct udma_u_jfr *jfr,
-					  const urma_jfr_wr_t *wr,
+					  urma_jfr_wr_t *wr,
 					  uint32_t max_sge)
 {
 	if (udma_jfrwq_overflow(jfr)) {
@@ -406,9 +406,9 @@ static urma_status_t get_wqe_idx(struct udma_u_jfr *jfr, uint32_t *wqe_idx)
 }
 
 static inline void set_data_seg(struct udma_wqe_data_seg *dseg,
-				const urma_sge_t *sg)
+				urma_sge_t *sg)
 {
-	dseg->lkey = htole32(sg->tseg->seg.key_id);
+	dseg->lkey = htole32(sg->tseg->seg.token_id);
 	dseg->addr = htole64(sg->addr);
 	dseg->len = htole32(sg->len);
 }
@@ -439,13 +439,13 @@ static void *set_um_header_sge(struct udma_u_jfr *jfr,
 
 	dseg->addr = htole64((uint64_t)&jfr->um_header_que[wqe_idx]);
 	dseg->len = htole32(UDMA_JFR_GRH_HEAD_SZ);
-	dseg->lkey = htole32(jfr->um_header_seg->seg.key_id);
+	dseg->lkey = htole32(jfr->um_header_seg->seg.token_id);
 	dseg++;
 
 	return dseg;
 }
 
-static void fill_recv_sge_to_wqe(const urma_jfr_wr_t *wr, void *wqe,
+static void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe,
 				 uint32_t max_sge)
 {
 	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)wqe;
@@ -464,7 +464,7 @@ static void fill_recv_sge_to_wqe(const urma_jfr_wr_t *wr, void *wqe,
 }
 
 static urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr,
-				   const urma_jfr_wr_t *wr)
+				   urma_jfr_wr_t *wr)
 {
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx, max_sge;
@@ -507,7 +507,7 @@ static void update_srq_db(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 		    (uint64_t *)&db);
 }
 
-urma_status_t udma_u_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr,
+urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 				 urma_jfr_wr_t **bad_wr)
 {
 	struct udma_u_context *ctx = to_udma_ctx(jfr->urma_ctx);
@@ -540,11 +540,16 @@ urma_status_t udma_u_post_jfr_wr(const urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 	return ret;
 }
 
-urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, const urma_jfr_attr_t *attr)
+urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
 {
 	struct udma_u_jfr *udma_jfr = to_udma_jfr(jfr);
 	uint32_t jfr_limit;
 	int ret;
+
+	if (attr->mask & JFR_STATE) {
+		URMA_LOG_ERR("JFR status change is not supported.\n");
+		return URMA_FAIL;
+	}
 
 	if (!(attr->mask & JFR_RX_THRESHOLD)) {
 		URMA_LOG_ERR("JFR threshold mask is not set.\n");
