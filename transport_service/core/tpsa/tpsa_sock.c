@@ -634,8 +634,8 @@ static void tpsa_swap_jetty(struct tpsa_jetty_id *jetty, struct tpsa_jetty_id *t
 tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_nl_msg_t *nlmsg, uint32_t tpgn,
     tpsa_net_addr_t *dip, uint32_t upi, uint32_t tp_cnt, struct tpsa_ta_data *ta_data)
 {
-    tpsa_msg_t *msg = (tpsa_msg_t *)nlmsg->payload;
-    tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)msg->data;
+    tpsa_nl_req_host_t *msg = (tpsa_nl_req_host_t *)nlmsg->payload;
+    tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)msg->req.data;
 
     tpsa_sock_msg_t *req = calloc(1, sizeof(tpsa_sock_msg_t));
     if (req == NULL) {
@@ -661,9 +661,9 @@ tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_nl_msg_t *nlmsg, uint32_t tpgn,
     req->migrateThird = false;
     req->content.dreq.trans_type = TPSA_TRANSPORT_UB;
     req->content.dreq.net_addr = *dip;
-    req->content.dreq.msg_id = msg->hdr.msg_id;
+    req->content.dreq.msg_id = msg->req.msg_id;
     req->content.dreq.nlmsg_seq = nlmsg->nlmsg_seq;
-    req->content.dreq.src_function_id = msg->hdr.ep.src_function_id;
+    req->content.dreq.src_function_id = msg->src_fe_idx;
     req->content.dreq.tp_cnt = tp_cnt;
     req->content.dreq.ta_data = *ta_data;
     req->content.dreq.ta_data.is_target = true;

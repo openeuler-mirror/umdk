@@ -155,6 +155,20 @@ typedef union tpsa_tp_flag {
     uint32_t value;
 } tpsa_tp_flag_t;
 
+typedef union tpsa_tp_cfg_flag {
+    struct {
+        uint32_t target : 1;          /* 0: initiator, 1: target */
+        uint32_t loopback : 1;
+        uint32_t ack_resp : 1;
+        uint32_t dca_enable : 1;
+        uint32_t bonding : 1;         /* for the bonding case, the hardware selects the port
+                                         ignoring the port of tp context and selects the port based on hash value
+                                         along with the information in the bonding group table. */
+        uint32_t reserved : 27;
+    } bs;
+    uint32_t value;
+} tpsa_tp_cfg_flag_t;
+
 typedef struct tpsa_multipath_tp_cfg {
     tpsa_tp_flag_t flag;
     uint16_t data_rctp_start;
@@ -198,7 +212,10 @@ typedef union tpsa_tp_mod_flag {
         uint32_t cc_en : 1;
         uint32_t cc_alg : 4;
         uint32_t spray_en : 1;
-        uint32_t dca_enable : 1;
+        uint32_t dca_enable : 1;   /* Inconsistent with ubcore_tp_mod_flag and combined.
+                                    * If ubcore_tp_cfg_flag parameter needs to be set,
+                                    * the parameter must be set separately.
+                                    */
         uint32_t reserved : 23;
     } bs;
     uint32_t value;
@@ -369,9 +386,9 @@ typedef enum tpsa_resp_status {
 typedef enum tpsa_msg_opcode {
     TPSA_MSG_CREATE_VTP = 0,
     TPSA_MSG_DESTROY_VTP,
-    TPSA_MSG_CONFIG_DEVICE,
     TPSA_MSG_ALLOC_EID,
     TPSA_MSG_DEALLOC_EID,
+    TPSA_MSG_CONFIG_DEVICE,
     TPSA_MSG_STOP_PROC_VTP_MSG = 0x10, /* should be all migrate op after this opcode */
     TPSA_MSG_QUERY_VTP_MIG_STATUS,
     TPSA_MSG_FLOW_STOPPED,
@@ -397,23 +414,29 @@ typedef enum tpsa_table_opcode {
     TPSA_TABLE_REMOVE,
 } tpsa_table_opcode_t;
 
-typedef union tpsa_msg_ep {
-    uint16_t src_function_id;
-    uint16_t dst_function_id;
-} tpsa_msg_ep_t;
-
-typedef struct tpsa_msg_hdr {
-    tpsa_msg_type_t type;
-    tpsa_msg_ep_t ep;
-    uint32_t len;    // data len
+typedef struct tpsa_nl_req {
     uint32_t msg_id;
     tpsa_msg_opcode_t opcode;
-} tpsa_msg_hdr_t;
-
-typedef struct tpsa_msg {
-    tpsa_msg_hdr_t hdr;
+    uint32_t len;
     uint8_t data[0];
-} tpsa_msg_t;
+} tpsa_nl_req_t;
+
+typedef struct tpsa_nl_req_host {
+    uint16_t src_fe_idx;
+    tpsa_nl_req_t req;
+} tpsa_nl_req_host_t;
+
+typedef struct tpsa_nl_resp {
+    uint32_t msg_id;
+    tpsa_msg_opcode_t opcode;
+    uint32_t len;
+    uint8_t data[0];
+} tpsa_nl_resp_t;
+
+typedef struct tpsa_nl_resp_host {
+    uint16_t src_fe_idx;
+    tpsa_nl_resp_t resp;
+} tpsa_nl_resp_host_t;
 
 struct tpsa_ta_data {
     enum tpsa_transport_type trans_type;

@@ -25,6 +25,7 @@ extern "C" {
 #define TPSA_SIP_IDX_TABLE_SIZE  10240
 #define TPSA_EID_IDX_TABLE_SIZE  10240
 #define TPSA_MAX_PORT_CNT 16
+#define MAX_VTP_NODE_STATE 4
 
 typedef struct vport_key {
     char dev_name[TPSA_MAX_DEV_NAME];
@@ -35,7 +36,8 @@ typedef vport_key_t live_migrate_table_key_t;
 
 /* Record the vtp node status of the migrate destination and migrateThird */
 typedef enum vtp_node_state {
-    STATE_NORMAL,
+    STATE_NORMAL = 0,
+    STATE_READY,
     STATE_MIGRATING,
     STATE_ROLLBACK
 } vtp_node_state_t;
@@ -234,7 +236,9 @@ typedef struct rc_tpg_entry {
     rc_tpg_table_key_t key;
     int type;
     uint32_t tpgn;
+    uint32_t vice_tpgn;
     uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
+    uint32_t vice_tpn[TPSA_MAX_TP_CNT_IN_GRP];
     tpsa_tpg_status_t status;
     uint32_t use_cnt;
     uint32_t ljetty_id;
@@ -382,6 +386,17 @@ typedef struct vport_table {
     struct ub_hmap hmap;
     pthread_rwlock_t rwlock;
 } vport_table_t;
+
+/*
+ * vport param
+ * to cache vport table, avoid frequent find operation
+ */
+typedef struct vport_param {
+    uint32_t sip_idx;
+    uint32_t tp_cnt;
+    tpsa_tp_mod_cfg_t tp_cfg;
+    tpsa_rc_cfg_t rc_cfg;
+} vport_param_t;
 
 /*
  * sip table
@@ -558,6 +573,7 @@ typedef struct tpsa_vtp_table_index {
     /* On the basis of sip==dip,for rm mode, sig_loop is true, which means seid==deid */
     /* for rc mode, sig_loop is true, which means seid=deid and local_jetty==peer_jetty */
     bool sig_loop;
+    tpsa_transport_mode_t trans_mode;
 } tpsa_vtp_table_index_t;
 
 typedef struct tpsa_vtp_table_param {
@@ -605,6 +621,7 @@ typedef struct tpg_table_param {
     urma_eid_t leid;
     tpsa_net_addr_t dip;
     bool isLoopback;
+    bool liveMigrate;
 } tpsa_tpg_table_param_t;
 
 typedef struct tpsa_tpg_info {

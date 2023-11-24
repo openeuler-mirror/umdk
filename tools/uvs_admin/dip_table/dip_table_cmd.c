@@ -288,7 +288,7 @@ static void uvs_admin_print_dip(uvs_admin_dip_table_show_rsp_t *show_rsp)
 
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("dip                        : "EID_FMT"\n", EID_ARGS(show_rsp->dip));
-    (void)printf("peer_tps_ip                : "EID_FMT"\n", EID_ARGS(show_rsp->peer_tpsa_ip));
+    (void)printf("peer_tpsa_ip               : "EID_FMT"\n", EID_ARGS(show_rsp->peer_tpsa_ip));
     (void)printf("underlay_eid               : "EID_FMT"\n", EID_ARGS(show_rsp->underlay_eid));
     (void)printf("net_addr_base_eid          : "EID_FMT"\n", EID_ARGS(show_rsp->net_addr.base));
     (void)printf("net_addr_mac               : %s\n", mac_str);

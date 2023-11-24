@@ -27,6 +27,7 @@ typedef struct tpsa_live_migrate_show_rsp {
     int res;
     urma_eid_t dip;
     int flag;
+    char dev_name[TPSA_MAX_DEV_NAME];
 } tpsa_live_migrate_show_rsp_t;
 
 typedef struct tpsa_live_migrate_add_req {

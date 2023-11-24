@@ -19,8 +19,10 @@
 
 #include "urma_types.h"
 #include "urma_types_str.h"
+#include "urma_cmd.h"
 
 #define URMA_ADMIN_MAX_DEV_NAME 64
+#define URMA_ADMIN_MAX_NS_PATH 128 /* /proc/$pid/ns/net */
 #define OWN_FE_IDX (0xffff)
 
 typedef enum tool_cmd_type {
@@ -31,7 +33,6 @@ typedef enum tool_cmd_type {
     TOOL_CMD_SET_CC_ALG,
     TOOL_CMD_SET_UPI,
     TOOL_CMD_SHOW_UPI,
-    TOOL_CMD_SET_UTP,
     TOOL_CMD_SHOW_UTP,
     TOOL_CMD_SHOW_STATS,
     TOOL_CMD_SHOW_RES,
@@ -44,10 +45,10 @@ typedef struct tool_cmd {
 } tool_cmd_t;
 
 typedef struct utp_port {
-    uint8_t utp_id;
-    bool spray_en;
+    uint32_t utpn;
     uint16_t src_port_start;
     uint8_t range_port;
+    bool spray_en;
 } utp_port_t;
 
 /* refer to enum ubcore_stats_key_type */
@@ -151,10 +152,10 @@ typedef struct tool_res_tpg_val {
 
 /* refer to struct ubcore_res_utp_val */
 typedef struct tool_res_utp_val {
-    uint8_t utp;
-    bool spray_en;
+    uint32_t utpn;
     uint16_t data_udp_start;
     uint8_t udp_range;
+    bool spray_en;
 } tool_res_utp_val_t;
 
 /* refer to struct ubcore_res_jfs_val */
@@ -261,7 +262,10 @@ typedef struct tool_config {
     urma_eid_t eid;
     bool dynamic_eid_mode;
     uint16_t fe_idx;
-    uint16_t idx;
+    /* eid start */
+    uint16_t idx; /* eid idx */
+    char ns[URMA_ADMIN_MAX_NS_PATH]; /* /proc/$pid/ns/net */
+    /* eid end */
     uint32_t upi;
     utp_port_t utp_port;
     tool_query_key_t key;

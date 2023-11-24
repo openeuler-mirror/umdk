@@ -7,6 +7,7 @@
  * History: 2023-03-14   create file
  */
 
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sched.h>
 
 #include "urma_types.h"
 #include "admin_parameters.h"
@@ -26,63 +28,46 @@
 
 #define UBCORE_DEV_PATH "/dev/ubcore"
 
-static int urma_admin_cmd_set_utp(int ubcore_fd, const tool_config_t *cfg)
+static int urma_admin_set_ns(const char *ns)
 {
-    int ret;
-    urma_cmd_hdr_t hdr;
-    admin_core_cmd_set_utp_t arg = {0};
-
-    hdr.command = (uint32_t)URMA_CORE_CMD_SET_UTP;
-    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_set_utp_t);
-    hdr.args_addr = (uint64_t)&arg;
-
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-    arg.in.utp_id = cfg->utp_port.utp_id;
-    arg.in.spray_en = cfg->utp_port.spray_en;
-    arg.in.data_udp_start = cfg->utp_port.src_port_start;
-    arg.in.udp_range = cfg->utp_port.range_port;
-
-    ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
-        return ret;
+    /* todo: validate input */
+    int ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
+    if (ns_fd == -1) {
+        (void)printf("failed to open ns file %s, errno:%d", ns,  errno);
+        return ns_fd;
     }
-    return 0;
-}
-
-int admin_set_utp(const tool_config_t *cfg)
-{
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+    if (setns(ns_fd, CLONE_NEWNET) == -1) {
+        (void)close(ns_fd);
+        (void)printf("failed to setns");
         return -1;
     }
-    if (urma_admin_cmd_set_utp(dev_fd, cfg) != 0) {
-        (void)printf("Failed to urma admin set utp, errno:%d\n", errno);
-        (void)close(dev_fd);
-        return -1;
-    }
-    (void)close(dev_fd);
-    return 0;
+    return ns_fd;
 }
 
 static int urma_admin_cmd_add_eid(int ubcore_fd, const tool_config_t *cfg)
 {
     int ret;
     urma_cmd_hdr_t hdr;
-    admin_core_cmd_add_eid_t arg = {0};
+    admin_core_cmd_update_eid_t arg = {0};
+    int ns_fd = -1;
 
     hdr.command = (uint32_t)URMA_CORE_CMD_ADD_EID;
-    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_add_eid_t);
+    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_update_eid_t);
     hdr.args_addr = (uint64_t)&arg;
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_index = cfg->idx;
+    if (strlen(cfg->ns) > 0 && (ns_fd = urma_admin_set_ns(cfg->ns)) < 0) {
+        (void)printf("set ns failed, cmd:%u, ns %s.\n", hdr.command, cfg->ns);
+        return -1;
+    }
     ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
     if (ret != 0) {
+        (void)close(ns_fd);
         (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
+    (void)close(ns_fd);
     return 0;
 }
 
@@ -90,10 +75,10 @@ static int urma_admin_cmd_del_eid(int ubcore_fd, const tool_config_t *cfg)
 {
     int ret;
     urma_cmd_hdr_t hdr;
-    admin_core_cmd_del_eid_t arg = {0};
+    admin_core_cmd_update_eid_t arg = {0};
 
     hdr.command = (uint32_t)URMA_CORE_CMD_DEL_EID;
-    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_del_eid_t);
+    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_update_eid_t);
     hdr.args_addr = (uint64_t)&arg;
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
@@ -103,38 +88,6 @@ static int urma_admin_cmd_del_eid(int ubcore_fd, const tool_config_t *cfg)
         (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
-    return 0;
-}
-
-int admin_add_eid(const tool_config_t *cfg)
-{
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
-        return -1;
-    }
-    if (urma_admin_cmd_add_eid(dev_fd, cfg) != 0) {
-        (void)printf("Failed to urma admin add eid, errno:%d\n", errno);
-        (void)close(dev_fd);
-        return -1;
-    }
-    (void)close(dev_fd);
-    return 0;
-}
-
-int admin_del_eid(const tool_config_t *cfg)
-{
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
-        return -1;
-    }
-    if (urma_admin_cmd_del_eid(dev_fd, cfg) != 0) {
-        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
-        (void)close(dev_fd);
-        return -1;
-    }
-    (void)close(dev_fd);
     return 0;
 }
 
@@ -155,6 +108,50 @@ static int urma_admin_cmd_set_eid_mode(int ubcore_fd, const tool_config_t *cfg)
         (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
+    return 0;
+}
+
+int admin_add_eid(const tool_config_t *cfg)
+{
+    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+        return -1;
+    }
+    /* Automatically switch to static mode */
+    if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
+        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
+        (void)close(dev_fd);
+        return -1;
+    }
+    if (urma_admin_cmd_add_eid(dev_fd, cfg) != 0) {
+        (void)printf("Failed to urma admin add eid, errno:%d\n", errno);
+        (void)close(dev_fd);
+        return -1;
+    }
+    (void)close(dev_fd);
+    return 0;
+}
+
+int admin_del_eid(const tool_config_t *cfg)
+{
+    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+        return -1;
+    }
+    /* Automatically switch to static mode */
+    if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
+        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
+        (void)close(dev_fd);
+        return -1;
+    }
+    if (urma_admin_cmd_del_eid(dev_fd, cfg) != 0) {
+        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
+        (void)close(dev_fd);
+        return -1;
+    }
+    (void)close(dev_fd);
     return 0;
 }
 
@@ -195,7 +192,7 @@ static int urma_admin_cmd_show_utp(int ubcore_fd, const tool_config_t *cfg)
         return ret;
     }
     (void)printf("*************utp info**************\n");
-    (void)printf("tpn                 : %u\n", (uint32_t)utp_info.utp);
+    (void)printf("tpn                 : %u\n", (uint32_t)utp_info.utpn);
     (void)printf("spray_en            : %d\n", utp_info.spray_en);
     (void)printf("data_udp_start      : %hu\n", utp_info.data_udp_start);
     (void)printf("udp_range           : %u\n", (uint32_t)utp_info.udp_range);
@@ -337,13 +334,8 @@ static void admin_print_res_vtp(const admin_cmd_query_res_t *arg)
         return;
     }
 
-    if (val->trans_mode == URMA_TM_RM) {
+    if (val->trans_mode == URMA_TM_RM || val->trans_mode == URMA_TM_RC) {
         (void)printf("tpgn                : %u\n", val->tpgn);
-        return;
-    }
-
-    if (val->trans_mode == URMA_TM_RC) {
-        (void)printf("tpn                 : %u\n", val->tpn);
         return;
     }
 
@@ -385,7 +377,7 @@ static void admin_print_res_tpg(const admin_cmd_query_res_t *arg)
 static void admin_print_res_utp(const admin_cmd_query_res_t *arg)
 {
     tool_res_utp_val_t *val = (tool_res_utp_val_t *)arg->out.addr;
-    (void)printf("utp                 : %u\n", (uint32_t)val->utp);
+    (void)printf("utp                 : %u\n", (uint32_t)val->utpn);
     (void)printf("spray_en            : %s\n", val->spray_en ? "true" : "false");
     (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
     (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);

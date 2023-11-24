@@ -63,7 +63,7 @@ static const struct option g_live_migrate_table_show_long_options[] = {
 static const uvs_admin_opt_usage_t g_live_migrate_table_show_cmd_opt_usage[] = {
     {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           "display this help and exit\n" },
     {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,           "fe_idx\n" },
+    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,           "fe_idx need specify\n" },
 };
 
 static const uvs_admin_cmd_usage_t g_live_migrate_table_show_cmd_usage = {
@@ -114,6 +114,7 @@ static const uvs_admin_cmd_usage_t g_live_migrate_table_del_cmd_usage = {
 static inline int parse_dev_name(uvs_admin_live_migrate_table_args_t *args, const char *_optarg)
 {
     (void)memcpy(args->dev_name, _optarg, strlen(_optarg));
+    args->mask.bs.dev_name = 1;
     return 0;
 }
 
@@ -128,6 +129,7 @@ static inline int parse_fe_idx(uvs_admin_live_migrate_table_args_t *args, const 
     }
 
     args->fe_idx = num;
+    args->mask.bs.fe_idx = 1;
     return 0;
 }
 
@@ -139,6 +141,7 @@ static inline int parse_dip(uvs_admin_live_migrate_table_args_t *args, const cha
     if (ret != 0) {
         return -EINVAL;
     }
+    args->mask.bs.dip = 1;
     return 0;
 }
 
@@ -195,6 +198,7 @@ static void uvs_admin_print_live_migrate(uint16_t fe_idx, uvs_admin_live_migrate
 {
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("fe_idx                     : %hu\n", fe_idx);
+    (void)printf("dev_name                     : %s\n", show_rsp->dev_name);
     (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->dip));
     (void)printf("live_migrate_flag          : %d\n", show_rsp->flag);
 }
@@ -211,6 +215,11 @@ static int32_t uvs_admin_live_migrate_table_showcmd_exec(uvs_admin_cmd_ctx_t *ct
                                            g_live_migrate_table_opt_args, &args);
     if (ret != 0) {
         return ret;
+    }
+
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0) {
+        (void)printf("Invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
+        return -EINVAL;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_show_req_t));
@@ -258,6 +267,11 @@ static int32_t uvs_admin_live_migrate_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx
         return ret;
     }
 
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.dip == 0) {
+        (void)printf("Invalid parameter, must set dev_name/fe_idx/dip, mask:%x\n", args.mask.value);
+        return -EINVAL;
+    }
+
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_add_req_t));
     if (req == NULL) {
         (void)printf("Can not alloc mem\n");
@@ -299,6 +313,11 @@ static int32_t uvs_admin_live_migrate_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx
                                            g_live_migrate_table_opt_args, &args);
     if (ret != 0) {
         return ret;
+    }
+
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0) {
+        (void)printf("Invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
+        return -EINVAL;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_del_req_t));

@@ -59,6 +59,7 @@ tpsa_response_t *process_live_migrate_table_show(tpsa_request_t *req, ssize_t re
     } else {
         ret = 0;
         (void)memcpy(&show_rsp->dip, &entry->dip, TPSA_EID_SIZE);
+        (void)memcpy(show_rsp->dev_name, entry->key.dev_name, TPSA_MAX_DEV_NAME);
         show_rsp->flag = entry->live_migrate_flag;
     }
     show_rsp->res = ret;

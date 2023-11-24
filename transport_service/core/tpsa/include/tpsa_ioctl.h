@@ -43,8 +43,6 @@ typedef enum tpsa_cmd {
     TPSA_CMD_DESTROY_TPG,
     TPSA_CMD_ADD_SIP,
     TPSA_CMD_DEL_SIP,
-    TPSA_CMD_ALLOC_EID,
-    TPSA_CMD_DEALLOC_EID,
     TPSA_CMD_MAP_VTP,
     TPSA_CMD_CREATE_UTP,
     TPSA_CMD_DESTROY_UTP,
@@ -86,7 +84,7 @@ typedef struct tpsa_cmd_tpf {
 } tpsa_cmd_tpf_t;
 
 typedef struct tpsa_cmd_tp_cfg {
-    tpsa_tp_flag_t flag; /* flag of initial tp */
+    tpsa_tp_cfg_flag_t flag; /* flag of initial tp */
     /* transaction layer attributes */
     union {
         urma_eid_t local_eid;
@@ -203,13 +201,9 @@ typedef struct tpsa_cmd_modify_tpg {
 
 typedef struct tpsa_cmd_get_dev_info {
     struct {
-        tpsa_cmd_tpf_t tpf;
-        union urma_eid peer_eid;
-        uint32_t eid_index;
+        char target_tpf_name[TPSA_MAX_DEV_NAME];
     } in;
     struct {
-        char target_tpf_name[TPSA_MAX_DEV_NAME];
-        char target_pf_name[TPSA_MAX_DEV_NAME];
         bool port_is_active;
     } out;
 } tpsa_cmd_get_dev_info_t;
@@ -254,16 +248,6 @@ typedef struct tpsa_cmd_op_sip {
         tpsa_op_sip_parm_t parm;
     } in;
 } tpsa_cmd_op_sip_t;
-
-typedef struct tpsa_cmd_op_eid {
-    struct {
-        char dev_name[TPSA_MAX_DEV_NAME];
-        uint32_t upi;
-        uint16_t fe_idx;
-        urma_eid_t eid;
-        uint32_t eid_index;
-    } in;
-} tpsa_cmd_op_eid_t;
 
 typedef struct tpsa_cmd_map_vtp {
     struct {
@@ -468,7 +452,6 @@ typedef struct tpsa_ioctl_cfg {
         tpsa_cmd_destroy_vtp_t destroy_vtp;
         tpsa_cmd_destroy_tpg_t destroy_tpg;
         tpsa_cmd_op_sip_t op_sip;
-        tpsa_cmd_op_eid_t op_eid;
         tpsa_cmd_map_vtp_t map_vtp;
         tpsa_cmd_create_utp_t create_utp;
         tpsa_cmd_destroy_utp_t destroy_utp;
@@ -520,12 +503,11 @@ int tpsa_ioctl(int ubcore_fd, tpsa_ioctl_cfg_t *cfg);
 
 /* ioctl cmd init */
 void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
-                               tpsa_net_addr_t sip, vport_table_entry_t *vport_entry);
+                               tpsa_net_addr_t *sip, vport_param_t *vport_param, tpsa_net_addr_t *dip);
 void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
                                       tpsa_init_tpg_cmd_param_t *param);
 void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, tpsa_net_addr_t *sip);
-void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *netaddr, tpsa_transport_type_t type,
-                                 urma_eid_t peer_eid, uint32_t eid_index);
+void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_tpf_name);
 void tpsa_ioctl_cmd_map_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, uint32_t number,
                             tpsa_net_addr_t *sip);
 void tpsa_ioctl_cmd_create_lb_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, tpsa_cmd_create_tpg_t *cmd,
@@ -535,8 +517,9 @@ void tpsa_ioctl_cmd_destroy_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *sip, uin
 void tpsa_ioctl_cmd_destroy_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *sip, urma_transport_mode_t mode,
                                 urma_eid_t local_eid, urma_eid_t peer_eid, uint32_t peer_jetty);
 
-void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vport_entry,
+void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
                                tpsa_create_param_t *cparam, utp_table_key_t *key);
+
 void tpsa_ioctl_cmd_destroy_utp(tpsa_ioctl_cfg_t *cfg, utp_table_key_t *key,
                                 uint32_t utp_idx);
 void tpsa_ioctl_cmd_config_state(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vport_entry,

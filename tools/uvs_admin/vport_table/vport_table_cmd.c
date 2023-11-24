@@ -1591,7 +1591,7 @@ static void uvs_admin_print_upi(char *dev_name, uvs_admin_vport_table_show_upi_r
 {
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("dev_name                   : %s\n", dev_name);
-    (void)printf("upi(dynamic mode) : 0x%x\n", ntohs(show_rsp->upi));
+    (void)printf("upi(dynamic mode) : 0x%x\n", show_rsp->upi);
 }
 
 static int32_t uvs_admin_vport_table_showupi_cmd_exec(uvs_admin_cmd_ctx_t *ctx)

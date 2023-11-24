@@ -80,7 +80,7 @@ static void uvs_admin_print_tpservice(uvs_admin_service_show_rsp_t *show_rsp)
     (void)inet_ntop(AF_INET, &show_rsp->service_ip, listen_ip, INET_ADDRSTRLEN);
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("server_ip                  : %s\n", listen_ip);
-    (void)printf("port_id                    : %d\n", ntohs(show_rsp->port_id));
+    (void)printf("port_id                    : %hu\n", show_rsp->port_id);
 }
 
 static int32_t uvs_admin_tpservice_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)

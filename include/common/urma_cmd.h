@@ -28,8 +28,7 @@ typedef struct urma_cmd_hdr {
 #define URMA_MAX_UASID  (1 << 24)
 
 typedef enum urma_core_cmd {
-    URMA_CORE_CMD_SET_UTP = 1,
-    URMA_CORE_CMD_SHOW_UTP,
+    URMA_CORE_CMD_SHOW_UTP = 1,
     URMA_CORE_CMD_QUERY_STATS,
     URMA_CORE_CMD_QUERY_RES,
     URMA_CORE_CMD_ADD_EID,
@@ -43,7 +42,7 @@ typedef enum urma_core_cmd {
 
 typedef enum urma_cmd {
     URMA_CMD_CREATE_CTX = 1,
-    URMA_CMD_DESTORY_CTX,
+    URMA_CMD_DESTROY_CTX,
     URMA_CMD_ALLOC_TOKEN_ID,
     URMA_CMD_FREE_TOKEN_ID,
     URMA_CMD_REGISTER_SEG,
