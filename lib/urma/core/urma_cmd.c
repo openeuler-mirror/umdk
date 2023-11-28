@@ -92,7 +92,7 @@ int urma_cmd_delete_context(urma_context_t *ctx)
     int ret;
     urma_cmd_hdr_t hdr;
 
-    hdr.command = (uint32_t)URMA_CMD_DESTORY_CTX;
+    hdr.command = (uint32_t)URMA_CMD_DESTROY_CTX;
     hdr.args_len = 0;
     hdr.args_addr = (uint64_t)NULL;
 

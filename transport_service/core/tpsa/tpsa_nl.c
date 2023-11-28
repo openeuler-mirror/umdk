@@ -157,9 +157,9 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_fast(tpsa_nl_msg_t *nlreq, tpsa_nl_resp_s
     urma_eid_t dst_eid = nlreq->dst_eid;
 
     tpsa_nl_msg_t *nlresp = NULL;
-    tpsa_msg_t *reqmsg = (tpsa_msg_t *)nlreq->payload;
+    tpsa_nl_req_host_t *reqmsg = (tpsa_nl_req_host_t *)nlreq->payload;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_create_vtp_resp_t), &src_eid, &dst_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t), &src_eid, &dst_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -171,14 +171,13 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_fast(tpsa_nl_msg_t *nlreq, tpsa_nl_resp_s
     nlresp->nlmsg_seq = nlreq->nlmsg_seq;
     nlresp->transport_type = nlreq->transport_type;
 
-    tpsa_msg_t *msg = (tpsa_msg_t *)nlresp->payload;
-    msg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    msg->hdr.ep = reqmsg->hdr.ep;
-    msg->hdr.len = (uint32_t)sizeof(tpsa_nl_create_vtp_resp_t);
-    msg->hdr.msg_id = reqmsg->hdr.msg_id;
-    msg->hdr.opcode = reqmsg->hdr.opcode;
+    tpsa_nl_resp_host_t *resp_host = (tpsa_nl_resp_host_t *)nlresp->payload;
+    resp_host->src_fe_idx = reqmsg->src_fe_idx;
+    resp_host->resp.len = (uint32_t)sizeof(tpsa_nl_create_vtp_resp_t);
+    resp_host->resp.msg_id = reqmsg->req.msg_id;
+    resp_host->resp.opcode = reqmsg->req.opcode;
 
-    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)msg->data;
+    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)resp_host->resp.data;
     create_vtp_resp->ret = status;
     create_vtp_resp->vtpn = vtpn;
 
@@ -191,8 +190,8 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     urma_eid_t local_eid = msg->local_eid;
     urma_eid_t peer_eid = msg->peer_eid;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_create_vtp_resp_t) + msg->content.finish.udrv_out_len,
-        &local_eid, &peer_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t) +
+        msg->content.finish.udrv_out_len, &local_eid, &peer_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -206,18 +205,14 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     nlresp->transport_type = TPSA_TRANSPORT_UB;
 
     /* tpsa msg */
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)nlresp->payload;
-    tpsa_msg_ep_t ep = {
-        .src_function_id = msg->content.finish.src_function_id,
-    };
-    nlmsg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    nlmsg->hdr.ep = ep;
-    nlmsg->hdr.len = (uint32_t)(sizeof(tpsa_nl_create_vtp_resp_t) + msg->content.finish.udrv_out_len);
-    nlmsg->hdr.msg_id = msg->content.finish.msg_id;
-    nlmsg->hdr.opcode = TPSA_MSG_CREATE_VTP;
+    tpsa_nl_resp_host_t *resp_host = (tpsa_nl_resp_host_t *)nlresp->payload;
+    resp_host->src_fe_idx = msg->content.finish.src_function_id;
+    resp_host->resp.len = (uint32_t)(sizeof(tpsa_nl_create_vtp_resp_t) + msg->content.finish.udrv_out_len);
+    resp_host->resp.msg_id = msg->content.finish.msg_id;
+    resp_host->resp.opcode = TPSA_MSG_CREATE_VTP;
 
     /* resp msg */
-    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)nlmsg->data;
+    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)resp_host->resp.data;
     create_vtp_resp->ret = TPSA_NL_RESP_SUCCESS;
     create_vtp_resp->vtpn = vtpn;
     /* for alpha */
@@ -237,7 +232,7 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_wait(uint32_t vtpn, tpsa_create_param_t *
     urma_eid_t local_eid = cparam->local_eid;
     urma_eid_t peer_eid = cparam->peer_eid;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_create_vtp_resp_t), &local_eid, &peer_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t), &local_eid, &peer_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -249,18 +244,13 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_wait(uint32_t vtpn, tpsa_create_param_t *
     nlresp->nlmsg_seq = cparam->nlmsg_seq;
     nlresp->transport_type = TPSA_TRANSPORT_UB;
 
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)nlresp->payload;
-    tpsa_msg_ep_t ep = {
-        .src_function_id = cparam->fe_idx,
-    };
+    tpsa_nl_resp_host_t *nlmsg = (tpsa_nl_resp_host_t *)nlresp->payload;
+    nlmsg->src_fe_idx = cparam->fe_idx;
+    nlmsg->resp.len = (uint32_t)sizeof(tpsa_nl_create_vtp_resp_t);
+    nlmsg->resp.msg_id = cparam->msg_id;
+    nlmsg->resp.opcode = TPSA_MSG_CREATE_VTP;
 
-    nlmsg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    nlmsg->hdr.ep = ep;
-    nlmsg->hdr.len = (uint32_t)sizeof(tpsa_nl_create_vtp_resp_t);
-    nlmsg->hdr.msg_id = cparam->msg_id;
-    nlmsg->hdr.opcode = TPSA_MSG_CREATE_VTP;
-
-    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)nlmsg->data;
+    tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)nlmsg->resp.data;
     create_vtp_resp->ret = TPSA_NL_RESP_SUCCESS;
     create_vtp_resp->vtpn = vtpn;
 
@@ -269,14 +259,14 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_wait(uint32_t vtpn, tpsa_create_param_t *
 
 tpsa_nl_msg_t *tpsa_nl_destroy_vtp_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status)
 {
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)req->payload;
-    tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)nlmsg->data;
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)req->payload;
+    tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)nlmsg->req.data;
 
     urma_eid_t local_eid = nlreq->local_eid;
     urma_eid_t peer_eid = nlreq->peer_eid;
     tpsa_nl_msg_t *nlresp = NULL;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_destroy_vtp_resp_t), &local_eid, &peer_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_destroy_vtp_resp_t), &local_eid, &peer_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -288,15 +278,14 @@ tpsa_nl_msg_t *tpsa_nl_destroy_vtp_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_
     nlresp->nlmsg_seq = req->nlmsg_seq;
     nlresp->transport_type = req->transport_type;
 
-    tpsa_msg_t *nlresp_msg = (tpsa_msg_t *)nlresp->payload;
+    tpsa_nl_resp_host_t *nlresp_msg = (tpsa_nl_resp_host_t *)nlresp->payload;
 
-    nlresp_msg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    nlresp_msg->hdr.ep = nlmsg->hdr.ep;
-    nlresp_msg->hdr.len = (uint32_t)sizeof(tpsa_nl_destroy_vtp_resp_t);
-    nlresp_msg->hdr.msg_id = nlmsg->hdr.msg_id;
-    nlresp_msg->hdr.opcode = nlmsg->hdr.opcode;
+    nlresp_msg->src_fe_idx = nlmsg->src_fe_idx;
+    nlresp_msg->resp.len = (uint32_t)sizeof(tpsa_nl_destroy_vtp_resp_t);
+    nlresp_msg->resp.msg_id = nlmsg->req.msg_id;
+    nlresp_msg->resp.opcode = nlmsg->req.opcode;
 
-    tpsa_nl_destroy_vtp_resp_t *destroy_vtp_resp = (tpsa_nl_destroy_vtp_resp_t *)nlresp_msg->data;
+    tpsa_nl_destroy_vtp_resp_t *destroy_vtp_resp = (tpsa_nl_destroy_vtp_resp_t *)nlresp_msg->resp.data;
     destroy_vtp_resp->ret = status;
 
     return nlresp;
@@ -308,9 +297,9 @@ tpsa_nl_msg_t *tpsa_nl_config_device_resp(tpsa_nl_msg_t *req, tpsa_nl_config_dev
     urma_eid_t dst_eid = req->dst_eid;
 
     tpsa_nl_msg_t *nlresp = NULL;
-    tpsa_msg_t *reqmsg = (tpsa_msg_t *)req->payload;
+    tpsa_nl_req_host_t *reqmsg = (tpsa_nl_req_host_t *)req->payload;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_config_device_resp_t), &src_eid, &dst_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_config_device_resp_t), &src_eid, &dst_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -322,14 +311,13 @@ tpsa_nl_msg_t *tpsa_nl_config_device_resp(tpsa_nl_msg_t *req, tpsa_nl_config_dev
     nlresp->nlmsg_seq = req->nlmsg_seq;
     nlresp->transport_type = req->transport_type;
 
-    tpsa_msg_t *msg = (tpsa_msg_t *)nlresp->payload;
-    msg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    msg->hdr.ep = reqmsg->hdr.ep;
-    msg->hdr.len = (uint32_t)sizeof(tpsa_nl_config_device_resp_t);
-    msg->hdr.msg_id = reqmsg->hdr.msg_id;
-    msg->hdr.opcode = reqmsg->hdr.opcode;
+    tpsa_nl_resp_host_t *msg = (tpsa_nl_resp_host_t *)nlresp->payload;
+    msg->src_fe_idx = reqmsg->src_fe_idx;
+    msg->resp.len = (uint32_t)sizeof(tpsa_nl_config_device_resp_t);
+    msg->resp.msg_id = reqmsg->req.msg_id;
+    msg->resp.opcode = reqmsg->req.opcode;
 
-    tpsa_nl_config_device_resp_t *config_vtp_resp = (tpsa_nl_config_device_resp_t *)msg->data;
+    tpsa_nl_config_device_resp_t *config_vtp_resp = (tpsa_nl_config_device_resp_t *)msg->resp.data;
     memcpy(config_vtp_resp, resp, sizeof(tpsa_nl_config_device_resp_t));
 
     return nlresp;
@@ -341,7 +329,7 @@ tpsa_nl_msg_t *tpsa_nl_update_tpf_dev_info_resp(tpsa_nl_msg_t *req, tpsa_nl_upda
     urma_eid_t dst_eid = req->dst_eid;
     tpsa_nl_msg_t *nlresp = NULL;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t), &src_eid, &dst_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t), &src_eid, &dst_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -362,13 +350,13 @@ tpsa_nl_msg_t *tpsa_nl_update_tpf_dev_info_resp(tpsa_nl_msg_t *req, tpsa_nl_upda
 
 tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_status_t status)
 {
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)req->payload;
-    tpsa_nl_mig_req_t *nlreq = (tpsa_nl_mig_req_t *)nlmsg->data;
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)req->payload;
+    tpsa_nl_mig_req_t *nlreq = (tpsa_nl_mig_req_t *)nlmsg->req.data;
 
     urma_eid_t null_eid = {0};
     tpsa_nl_msg_t *nlresp = NULL;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_mig_resp_t), &null_eid, &null_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_mig_resp_t), &null_eid, &null_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -380,15 +368,14 @@ tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_statu
     nlresp->nlmsg_seq = req->nlmsg_seq;
     nlresp->transport_type = req->transport_type;
 
-    tpsa_msg_t *nlresp_msg = (tpsa_msg_t *)nlresp->payload;
+    tpsa_nl_resp_host_t *nlresp_msg = (tpsa_nl_resp_host_t *)nlresp->payload;
 
-    nlresp_msg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    nlresp_msg->hdr.ep = nlmsg->hdr.ep;
-    nlresp_msg->hdr.len = (uint32_t)sizeof(tpsa_nl_mig_resp_t);
-    nlresp_msg->hdr.msg_id = nlmsg->hdr.msg_id;
-    nlresp_msg->hdr.opcode = nlmsg->hdr.opcode;
+    nlresp_msg->src_fe_idx = nlmsg->src_fe_idx;
+    nlresp_msg->resp.len = (uint32_t)sizeof(tpsa_nl_mig_resp_t);
+    nlresp_msg->resp.msg_id = nlmsg->req.msg_id;
+    nlresp_msg->resp.opcode = nlmsg->req.opcode;
 
-    tpsa_nl_mig_resp_t *msg_resp = (tpsa_nl_mig_resp_t *)nlresp_msg->data;
+    tpsa_nl_mig_resp_t *msg_resp = (tpsa_nl_mig_resp_t *)nlresp_msg->resp.data;
     msg_resp->mig_fe_idx = nlreq->mig_fe_idx;
     msg_resp->status = status;
 
@@ -416,7 +403,7 @@ tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req)
 
     tpsa_nl_msg_t *resp = NULL;
 
-    resp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t), &src_eid, &dst_eid);
+    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t), &src_eid, &dst_eid);
     if (resp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -441,7 +428,7 @@ tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req)
 
     tpsa_nl_msg_t *resp = NULL;
 
-    resp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t), &src_eid, &dst_eid);
+    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t), &src_eid, &dst_eid);
     if (resp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -459,15 +446,16 @@ tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req)
     return resp;
 }
 
-tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index)
+tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index,
+    bool virtualization)
 {
     urma_eid_t src_eid = req->src_eid;
     urma_eid_t dst_eid = req->dst_eid;
 
     tpsa_nl_msg_t *nlresp = NULL;
-    tpsa_msg_t *reqmsg = (tpsa_msg_t *)req->payload;
+    tpsa_nl_req_host_t *reqmsg = (tpsa_nl_req_host_t *)req->payload;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_msg_t) + sizeof(tpsa_nl_alloc_eid_resp_t), &src_eid, &dst_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_alloc_eid_resp_t), &src_eid, &dst_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -479,17 +467,18 @@ tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *
     nlresp->nlmsg_seq = req->nlmsg_seq;
     nlresp->transport_type = req->transport_type;
 
-    tpsa_msg_t *msg = (tpsa_msg_t *)nlresp->payload;
-    msg->hdr.type = TPSA_MSG_TYPE_TPF2FE;
-    msg->hdr.ep = reqmsg->hdr.ep;
-    msg->hdr.len = (uint32_t)sizeof(tpsa_nl_alloc_eid_resp_t);
-    msg->hdr.msg_id = reqmsg->hdr.msg_id;
-    msg->hdr.opcode = reqmsg->hdr.opcode;
+    tpsa_nl_resp_host_t *msg = (tpsa_nl_resp_host_t *)nlresp->payload;
+    msg->src_fe_idx = reqmsg->src_fe_idx;
+    msg->resp.len = (uint32_t)sizeof(tpsa_nl_alloc_eid_resp_t);
+    msg->resp.msg_id = reqmsg->req.msg_id;
+    msg->resp.opcode = reqmsg->req.opcode;
 
-    tpsa_nl_alloc_eid_resp_t *create_eid_resp = (tpsa_nl_alloc_eid_resp_t *)msg->data;
+    tpsa_nl_alloc_eid_resp_t *create_eid_resp = (tpsa_nl_alloc_eid_resp_t *)msg->resp.data;
     create_eid_resp->ret = TPSA_NL_RESP_SUCCESS;
     create_eid_resp->eid = ueid->eid;
     create_eid_resp->eid_index = index;
     create_eid_resp->upi = ueid->upi;
+    create_eid_resp->fe_idx = (virtualization == true ? reqmsg->src_fe_idx : TPSA_NON_VIRTUALIZATION_FE_IDX);
+
     return nlresp;
 }

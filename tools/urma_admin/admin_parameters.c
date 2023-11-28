@@ -123,7 +123,7 @@ static void usage(const char *argv0)
     (void)printf("\n");
     (void)printf("Command syntax:\n");
     (void)printf("  show [--dev] [--whole]                                 show all ubep devices info.\n");
-    (void)printf("  add_eid <--dev> <--idx>                                add the eid of UB function entity\n");
+    (void)printf("  add_eid <--dev> <--idx> [--ns /proc/$pid/ns/net]       add the eid of UB function entity\n");
     (void)printf("  del_eid <--dev> <--idx>                                del the eid of UB function entity.\n");
     (void)printf("  set_eid_mode <--dev> <--eid_mode>                      change the eid mode of pf ubep device.\n");
     (void)printf("  set_cc_alg <--dev> <--cc_alg>                          set one or more congestion control/\n");
@@ -173,7 +173,6 @@ static tool_cmd_type_t parse_command(const char *argv1)
         {"set_cc_alg",      TOOL_CMD_SET_CC_ALG},
         {"set_upi",         TOOL_CMD_SET_UPI},
         {"show_upi",        TOOL_CMD_SHOW_UPI},
-        {"set_utp",         TOOL_CMD_SET_UTP},
         {"show_utp",        TOOL_CMD_SHOW_UTP},
         {"show_stats",      TOOL_CMD_SHOW_STATS},
         {"show_res",        TOOL_CMD_SHOW_RES}
@@ -292,6 +291,8 @@ static bool check_dev_name(char *dev_name)
 
 int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
 {
+    int ret = 0;
+
     if (argc == 1 || cfg == NULL) {
         usage(argv[0]);
         return -1;
@@ -319,22 +320,23 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
         {"key",               required_argument, NULL, 'k'},
         {"key_ext",           required_argument, NULL, 'K'},
         {"key_cnt",           required_argument, NULL, 'C'},
+        {"ns",                required_argument, NULL, 'n'},
         {NULL,                no_argument,       NULL, '\0'}
     };
 
     /* Second parse the options */
     while (1) {
         int c;
-        c = getopt_long(argc, argv, "c:C:hd:e:Emv:i:u:ws:r:R:p:k:K:", long_options, NULL);
+        c = getopt_long(argc, argv, "c:C:hd:e:Emv:i:u:ws:r:R:p:k:K:n:", long_options, NULL);
         if (c == -1) {
             break;
         }
         switch (c) {
             case 'c':
-                (void)admin_str_to_u16(optarg, &cfg->cc_alg);
+                ret = admin_str_to_u16(optarg, &cfg->cc_alg);
                 break;
             case 'C':
-                (void)admin_str_to_u32(optarg, &cfg->key.key_cnt);
+                ret = admin_str_to_u32(optarg, &cfg->key.key_cnt);
                 break;
             case 'h':
                 usage(argv[0]);
@@ -354,13 +356,13 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 cfg->dynamic_eid_mode = true;
                 break;
             case 'v':
-                (void)admin_str_to_u16(optarg, &cfg->fe_idx);
+                ret = admin_str_to_u16(optarg, &cfg->fe_idx);
                 break;
             case 'i':
-                (void)admin_str_to_u16(optarg, &cfg->idx);
+                ret = admin_str_to_u16(optarg, &cfg->idx);
                 break;
             case 'u':
-                (void)admin_str_to_u32(optarg, &cfg->upi);
+                ret = admin_str_to_u32(optarg, &cfg->upi);
                 break;
             case 'w':
                 cfg->whole_info = true;
@@ -369,30 +371,41 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 cfg->utp_port.spray_en = true;
                 break;
             case 's':
-                (void)admin_str_to_u16(optarg, &cfg->utp_port.src_port_start);
+                ret = admin_str_to_u16(optarg, &cfg->utp_port.src_port_start);
                 break;
             case 'r':
-                (void)admin_str_to_u8(optarg, &cfg->utp_port.range_port);
+                ret = admin_str_to_u8(optarg, &cfg->utp_port.range_port);
                 break;
             case 'p':
-                (void)admin_str_to_u8(optarg, &cfg->utp_port.utp_id);
+                ret = admin_str_to_u32(optarg, &cfg->utp_port.utpn);
                 break;
             case 'R':
-                (void)admin_str_to_u32(optarg, &cfg->key.type);
+                ret = admin_str_to_u32(optarg, &cfg->key.type);
                 if (check_query_type(cfg) != 0) {
                     (void)printf("Failed to check query type: %u.\n", cfg->key.type);
                     return -1;
                 }
                 break;
             case 'k':
-                (void)admin_str_to_u32(optarg, &cfg->key.key);
+                ret = admin_str_to_u32(optarg, &cfg->key.key);
                 break;
             case 'K':
                 (void)admin_str_to_u32(optarg, &cfg->key.key_ext);
                 break;
+            case 'n':
+                if (strlen(optarg) + 1 > URMA_ADMIN_MAX_NS_PATH) {
+                    (void)printf("ns path:%s out of range(%d) or invalid.\n", optarg, URMA_ADMIN_MAX_NS_PATH);
+                    return -1;
+                }
+                strncpy(cfg->ns, optarg, URMA_ADMIN_MAX_NS_PATH - 1);
+                break;
             default:
                 usage(argv[0]);
                 return -1;
+        }
+        if (ret != 0) {
+            (void)printf("Please check the legality of parameters\n");
+            return -1;
         }
     }
 

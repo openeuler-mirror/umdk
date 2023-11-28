@@ -79,7 +79,10 @@ typedef union uvs_admin_tp_mod_flag {
         uint32_t cc_en : 1;
         uint32_t cc_alg : 4;
         uint32_t spray_en : 1;
-        uint32_t dca_enable : 1;
+        uint32_t dca_enable : 1;     /* Inconsistent with ubcore_tp_mod_flag and combined.
+                                      * If ubcore_tp_cfg_flag parameter needs to be set,
+                                      * the parameter must be set separately.
+                                      */
         uint32_t reserved : 23;
     } bs;
     uint32_t value;

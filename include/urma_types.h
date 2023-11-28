@@ -141,7 +141,10 @@ typedef union urma_device_feature {
         uint32_t jfc_inline        :   1;  /* [Public] URMA_JFC_INLINE. */
         uint32_t spray_en          :   1;  /* [Public] URMA_SPRAY_ENABLE for UDP port. */
         uint32_t selective_retrans :   1;  /* [Public] URMA_SELECTIVE_RETRANS. */
-        uint32_t reserved          :   23;
+        uint32_t jetty_grp         :   1;  /* [Public] support jetty group. */
+        uint32_t error_suspend     :   1;  /* [Public] support suspend jetty or jfs on error. */
+        uint32_t outorder_comp     :   1;  /* [Public] support out-of-order completion. */
+        uint32_t reserved          :   20;
     } bs;
     uint32_t value;
 } urma_device_feature_t;
@@ -399,6 +402,8 @@ typedef union urma_jfr_flag {
 } urma_jfr_flag_t;
 
 typedef struct urma_jfr_cfg {
+    uint32_t id;           /* [Optional] specify jfr id. If the parameter is 0,
+                              the system will randomly assign a non-0 value. */
     uint32_t depth;        /* [Required] total depth, include berth, defaut urma_device_cap_t->jfr_depth. */
     urma_jfr_flag_t flag;  /* [Optional] whether is in TAG_matching, whether is in DC/IDC mode. */
     urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
@@ -407,8 +412,6 @@ typedef struct urma_jfr_cfg {
                               the time before jfr sends NACK to the sender for the reason of "ready to receive" */
     urma_jfc_t *jfc;       /* [Required] need to specify jfc. */
     urma_token_t token_value;       /* [Required] specify token_value for jfr. */
-    uint32_t id;           /* [Optional] specify jfr id. If the parameter is 0,
-                              the system will randomly assign a non-0 value. */
     uint64_t user_ctx;     /* [Optional] private data of jfr */
 } urma_jfr_cfg_t;
 

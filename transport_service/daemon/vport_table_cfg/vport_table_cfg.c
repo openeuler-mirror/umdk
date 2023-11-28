@@ -431,8 +431,8 @@ static int tpsa_ioctl_set_upi(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
     hdr.args_len = (uint32_t)sizeof(tpsa_cmd_set_upi_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    (void)memcpy(arg.in.dev_name, cfg->cmd.op_eid.in.dev_name, TPSA_MAX_DEV_NAME);
-    arg.in.upi = cfg->cmd.op_eid.in.upi;
+    (void)memcpy(arg.in.dev_name, cfg->cmd.set_upi.in.dev_name, TPSA_MAX_DEV_NAME);
+    arg.in.upi = cfg->cmd.set_upi.in.upi;
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
         TPSA_LOG_ERR("set pattern3 upi ioctl failed, ret:%d, cmd:%u.\n", ret, hdr.command);
@@ -493,7 +493,7 @@ static int tpsa_ioctl_show_upi(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     hdr.args_len = (uint32_t)sizeof(tpsa_cmd_show_upi_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    (void)memcpy(arg.in.dev_name, cfg->cmd.op_eid.in.dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(arg.in.dev_name, cfg->cmd.show_upi.in.dev_name, TPSA_MAX_DEV_NAME);
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
         TPSA_LOG_ERR("show pattern3 upi ioctl failed, ret:%d, cmd:%u.\n", ret, hdr.command);

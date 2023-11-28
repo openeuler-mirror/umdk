@@ -29,6 +29,8 @@ extern "C" {
 #define TPSA_NET_LINK_PORT 100
 #define TPSA_LM_REQ_SIZE 15  /* TODO: fix */
 #define TPSA_MAX_SOCKET_MSG_LEN 12000
+#define TPSA_NON_VIRTUALIZATION_FE_IDX 0xffff
+
 typedef enum tpsa_nlmsg_type {
     TPSA_NL_CREATE_TP_REQ = NLMSG_MIN_TYPE, /* 0x10 */
     TPSA_NL_CREATE_TP_RESP,
@@ -46,7 +48,7 @@ typedef enum tpsa_nlmsg_type {
     TPSA_NL_DEL_SIP_REQ,
     TPSA_NL_DEL_SIP_RESP,
     TPSA_NL_TP_ERROR_REQ,
-	TPSA_NL_TP_SUSPEND_REQ,
+    TPSA_NL_TP_SUSPEND_REQ,
     TPSA_NL_MIGRATE_VTP_SWITCH,
     TPSA_NL_MIGRATE_VTP_ROLLBACK,
     TPSA_NL_QUERY_TPF_DEV_INFO,
@@ -140,6 +142,7 @@ typedef struct tpsa_nl_alloc_eid_resp {
     urma_eid_t eid;
     uint32_t eid_index;
     uint32_t upi;
+    uint16_t fe_idx;
 } tpsa_nl_alloc_eid_resp_t;
 
 typedef struct tpsa_nl_alloc_eid_req tpsa_nl_dealloc_eid_req_t;
@@ -154,18 +157,6 @@ typedef struct tpsa_nl_mig_resp {
     uint16_t mig_fe_idx;
     tpsa_mig_resp_status_t status;
 } tpsa_nl_mig_resp_t;
-
-typedef tpsa_nl_mig_req_t tpsa_nl_stop_proc_vtp_req_t;
-typedef tpsa_nl_mig_req_t tpsa_nl_query_vtp_mig_status_t;
-typedef tpsa_nl_mig_req_t tpsa_nl_flow_stopped_t;
-typedef tpsa_nl_mig_req_t tpsa_nl_mig_rollback_t;
-typedef tpsa_nl_mig_req_t tpsa_nl_mig_vm_start_t;
-
-typedef tpsa_nl_mig_resp_t tpsa_nl_stop_proc_vtp_resp_t;
-typedef tpsa_nl_mig_resp_t tpsa_nl_query_vtp_stop_status_resp_t;
-typedef tpsa_nl_mig_resp_t tpsa_nl_flow_stopped_resp_t;
-typedef tpsa_nl_mig_resp_t tpsa_nl_mig_rollback_resp_t;
-typedef tpsa_nl_mig_resp_t tpsa_nl_mig_vm_start_resp_t;
 
 typedef struct tpsa_nl_config_device_req {
     char dev_name[TPSA_MAX_DEV_NAME];
@@ -384,7 +375,8 @@ tpsa_nl_msg_t *tpsa_nl_update_tpf_dev_info_resp(tpsa_nl_msg_t *req, tpsa_nl_upda
 
 tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_status_t status);
 
-tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index);
+tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index,
+    bool virtualization);
 #ifdef __cplusplus
 }
 #endif

@@ -12,20 +12,10 @@
 
 #include "admin_parameters.h"
 
-typedef struct admin_core_cmd_set_utp {
-    struct {
-        char dev_name[URMA_MAX_NAME];
-        uint8_t utp_id;
-        bool spray_en;
-        uint16_t data_udp_start;
-        uint8_t udp_range;
-    } in;
-} admin_core_cmd_set_utp_t;
-
 typedef struct admin_core_cmd_show_utp {
     struct {
         char dev_name[URMA_MAX_NAME];
-        uint8_t utp_id;
+        uint32_t utpn;
     } in;
     struct {
         uint64_t addr;
@@ -63,14 +53,12 @@ typedef struct admin_cmd_query_res {
     } out;
 } admin_cmd_query_res_t;
 
-typedef struct admin_core_cmd_add_eid {
+typedef struct admin_core_cmd_update_eid {
     struct {
         char dev_name[URMA_MAX_NAME];
         uint32_t eid_index;
     } in;
-} admin_core_cmd_add_eid_t;
-
-typedef struct admin_core_cmd_add_eid admin_core_cmd_del_eid_t;
+} admin_core_cmd_update_eid_t;
 
 typedef struct admin_core_cmd_set_eid_mode {
     struct {
@@ -79,7 +67,6 @@ typedef struct admin_core_cmd_set_eid_mode {
     } in;
 } admin_core_cmd_set_eid_mode_t;
 
-int admin_set_utp(const tool_config_t *cfg);
 int admin_show_udp(const tool_config_t *cfg);
 int admin_show_stats(const tool_config_t *cfg);
 int admin_show_res(const tool_config_t *cfg);

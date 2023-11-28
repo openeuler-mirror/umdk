@@ -25,12 +25,41 @@
 #define TPSA_MAX_EPOLL_WAIT 16
 #define TPSA_EVENT_MAX_WAIT_MS 10 // 10ms
 #define TPSA_SOCK_TIMEOUT 10 /* 10s */
-#define TPSA_NON_VIRTUALIZATION_FE_IDX 0xffff
 
 #define TPSA_DEFAULT_SUSPEND_PERIOD 1000 // us
 #define TPSA_DEFAULT_SUSPEND_CNT 3
 #define TPSA_DEFAULT_SUS2ERR_PERIOD 30000000
 #define TPSA_MTU_BITS_BASE_SHIFT 7
+
+static int tpsa_handle_event_invalid(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, char *dev_name)
+{
+    /* invalid state and event combination. Do nothing. */
+    return 0;
+}
+
+/* TODO: refresh function pointer when we handle delete and refresh event in third node */
+static tpsa_vtp_event_handler g_tpsa_vtp_event_handler[MAX_VTP_NODE_STATE][MAX_VTP_EVENT_SIZE] = {
+    [STATE_NORMAL][VTP_EVENT_SWITCH] = tpsa_handle_event_invalid,
+    [STATE_NORMAL][VTP_EVENT_ROLLBACK] = tpsa_handle_event_invalid,
+    [STATE_NORMAL][VTP_EVENT_SRC_DELETE] = tpsa_handle_event_invalid, /* need to adapt */
+    [STATE_NORMAL][VTP_EVENT_DST_DELETE] = tpsa_handle_event_invalid,
+    [STATE_NORMAL][VTP_EVENT_DIP_REFRESH] = tpsa_handle_event_invalid,
+    [STATE_READY][VTP_EVENT_SWITCH] = uvs_lm_swap_tpg,
+    [STATE_READY][VTP_EVENT_ROLLBACK] = uvs_lm_handle_ready_rollback,
+    [STATE_READY][VTP_EVENT_SRC_DELETE] = tpsa_handle_event_invalid,
+    [STATE_READY][VTP_EVENT_DST_DELETE] = tpsa_handle_event_invalid,
+    [STATE_READY][VTP_EVENT_DIP_REFRESH] = tpsa_handle_event_invalid,
+    [STATE_MIGRATING][VTP_EVENT_SWITCH] = tpsa_handle_event_invalid,
+    [STATE_MIGRATING][VTP_EVENT_ROLLBACK] = uvs_lm_swap_tpg,
+    [STATE_MIGRATING][VTP_EVENT_SRC_DELETE] = tpsa_handle_event_invalid,
+    [STATE_MIGRATING][VTP_EVENT_DST_DELETE] = tpsa_handle_event_invalid,
+    [STATE_MIGRATING][VTP_EVENT_DIP_REFRESH] = tpsa_handle_event_invalid,
+    [STATE_ROLLBACK][VTP_EVENT_SWITCH] = tpsa_handle_event_invalid,
+    [STATE_ROLLBACK][VTP_EVENT_ROLLBACK] = tpsa_handle_event_invalid,
+    [STATE_ROLLBACK][VTP_EVENT_SRC_DELETE] = tpsa_handle_event_invalid,
+    [STATE_ROLLBACK][VTP_EVENT_DST_DELETE] = tpsa_handle_event_invalid,
+    [STATE_ROLLBACK][VTP_EVENT_DIP_REFRESH] = tpsa_handle_event_invalid,
+};
 
 static void tpsa_config_device_default_value(tpsa_nl_config_device_resp_t *resp, tpsa_nl_config_device_req_t *req)
 {
@@ -41,15 +70,15 @@ static void tpsa_config_device_default_value(tpsa_nl_config_device_resp_t *resp,
 
 static int tpsa_worker_config_device(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)msg->payload;
-    tpsa_nl_config_device_req_t *nlreq = (tpsa_nl_config_device_req_t *)nlmsg->data;
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
+    tpsa_nl_config_device_req_t *nlreq = (tpsa_nl_config_device_req_t *)nlmsg->req.data;
     vport_table_entry_t entry = {0};
     tpsa_nl_config_device_resp_t rsp = {0};
 
     tpsa_config_device_default_value(&rsp, nlreq);
 
     vport_key_t vport_key = {0};
-    vport_key.fe_idx = nlmsg->hdr.ep.src_function_id;
+    vport_key.fe_idx = nlmsg->src_fe_idx;
     (void)memcpy(vport_key.dev_name, (nlreq->virtualization == true ?
         nlreq->tpfdev_name : nlreq->dev_name), TPSA_MAX_DEV_NAME);
 
@@ -57,7 +86,7 @@ static int tpsa_worker_config_device(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
                                       &worker->table_ctx.vport_table,
                                       &entry);
     if (res != 0) {
-        TPSA_LOG_ERR("Not find vport config in fe_idx %hu, use default value\n", nlmsg->hdr.ep.src_function_id);
+        TPSA_LOG_ERR("Not find vport config in fe_idx %hu, use default value\n", nlmsg->src_fe_idx);
     } else {
         if (rsp.rc_cnt != 0 && entry.rc_cfg.rc_cnt < nlreq->max_rc_cnt) {
             rsp.rc_cnt = entry.rc_cfg.rc_cnt;
@@ -239,129 +268,45 @@ tpsa_nl_msg_t *tpsa_handle_nl_del_sip_req(sip_table_t *table, tpsa_nl_msg_t *msg
     return tpsa_get_del_sip_resp(msg);
 }
 
-static void tpsa_init_ueid_cfg(tpsa_ioctl_cfg_t *cfg, tpsa_nl_dealloc_eid_req_t *nlreq,
-    uint16_t fe_idx, tpsa_ueid_t value)
+static int tpsa_worker_lookup_ueid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    if (nlreq->virtualization) {
-        cfg->cmd.op_eid.in.fe_idx = fe_idx;
-    } else {
-        cfg->cmd.op_eid.in.fe_idx = TPSA_NON_VIRTUALIZATION_FE_IDX;
-    }
-    cfg->cmd.op_eid.in.upi = value.upi;
-    cfg->cmd.op_eid.in.eid = value.eid;
-    cfg->cmd.op_eid.in.eid_index = nlreq->eid_index;
-}
-
-static int tpsa_worker_alloc_eid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
-{
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)msg->payload;
-    tpsa_nl_alloc_eid_req_t *nlreq = (tpsa_nl_alloc_eid_req_t *)nlmsg->data;
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
+    tpsa_nl_alloc_eid_req_t *nlreq = (tpsa_nl_alloc_eid_req_t *)nlmsg->req.data;
     vport_key_t key;
-    tpsa_ueid_t *ueid = NULL;
     tpsa_ueid_t value;
     int ret = 0;
 
-    key.fe_idx = nlmsg->hdr.ep.src_function_id;
+    key.fe_idx = nlmsg->src_fe_idx;
     (void)memcpy(key.dev_name, (nlreq->virtualization == true ?
         nlreq->tpfdev_name : nlreq->dev_name), TPSA_MAX_DEV_NAME);
-    (void)pthread_rwlock_rdlock(&worker->table_ctx.vport_table.rwlock);
-    ueid = tpsa_lookup_vport_table_ueid(&key, nlreq->eid_index, &worker->table_ctx.vport_table);
-    if (ueid == NULL) {
-        (void)pthread_rwlock_unlock(&worker->table_ctx.vport_table.rwlock);
+    if (tpsa_lookup_vport_table_ueid(&key, &worker->table_ctx.vport_table, nlreq->eid_index, &value) < 0) {
         return -1;
-    }
-    value = *ueid;
-    (void)pthread_rwlock_unlock(&worker->table_ctx.vport_table.rwlock);
-
-    /* IOCTL to add ueid */
-    tpsa_ioctl_cfg_t *cfg = calloc(1, sizeof(tpsa_ioctl_cfg_t));
-    if (cfg == NULL) {
-        TPSA_LOG_ERR("Fail to create cfg request");
-        return -1;
-    }
-    cfg->cmd_type = TPSA_CMD_ALLOC_EID;
-    tpsa_init_ueid_cfg(cfg, nlreq, nlmsg->hdr.ep.src_function_id, value);
-    (void)memcpy(cfg->cmd.op_eid.in.dev_name, (nlreq->virtualization == true ? nlreq->tpfdev_name : nlreq->dev_name),
-        TPSA_MAX_DEV_NAME);
-    if (nlreq->virtualization && tpsa_ioctl(worker->ioctl_ctx.ubcore_fd, cfg) != 0) {
-        TPSA_LOG_ERR("Fail to ioctl to alloc eid in worker");
-        ret = -1;
-        goto free_cfg;
     }
 
     /* Netlink to notify vtpn */
-    tpsa_nl_msg_t *nlresp = tpsa_nl_create_dicover_eid_resp(msg, &value, nlreq->eid_index);
+    tpsa_nl_msg_t *nlresp = tpsa_nl_create_dicover_eid_resp(msg, &value, nlreq->eid_index, nlreq->virtualization);
     if (nlresp == NULL) {
-        ret = -1;
-        goto free_cfg;
+        return -1;
     }
-
     if (tpsa_nl_send_msg(&worker->nl_ctx, nlresp) != 0) {
         ret = -1;
         goto free_resp;
     }
-    TPSA_LOG_INFO("success add ueid msg send pf.\n");
+    TPSA_LOG_INFO("success resp ueid msg to pf.\n");
 
 free_resp:
     free(nlresp);
-free_cfg:
-    free(cfg);
     return ret;
 }
 
-static int tpsa_worker_dealloc_eid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
+static int tpsa_worker_alloc_ueid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)msg->payload;
-    tpsa_nl_dealloc_eid_req_t *nlreq = (tpsa_nl_dealloc_eid_req_t *)nlmsg->data;
-    vport_key_t key;
-    tpsa_ueid_t *ueid = NULL;
-    tpsa_ueid_t value;
-    int ret = 0;
+    return tpsa_worker_lookup_ueid(worker, msg);
+}
 
-    key.fe_idx = nlmsg->hdr.ep.src_function_id;
-    (void)memcpy(key.dev_name, (nlreq->virtualization == true ?
-        nlreq->tpfdev_name : nlreq->dev_name), TPSA_MAX_DEV_NAME);
-    (void)pthread_rwlock_rdlock(&worker->table_ctx.vport_table.rwlock);
-    ueid = tpsa_lookup_vport_table_ueid(&key, nlreq->eid_index, &worker->table_ctx.vport_table);
-    if (ueid == NULL) {
-        (void)pthread_rwlock_unlock(&worker->table_ctx.vport_table.rwlock);
-        return -1;
-    }
-    value = *ueid;
-    (void)pthread_rwlock_unlock(&worker->table_ctx.vport_table.rwlock);
-
-    /* IOCTL to add ueid */
-    tpsa_ioctl_cfg_t *cfg = calloc(1, sizeof(tpsa_ioctl_cfg_t));
-    if (cfg == NULL) {
-        TPSA_LOG_ERR("Fail to create cfg request");
-        return -1;
-    }
-    cfg->cmd_type = TPSA_CMD_DEALLOC_EID;
-    tpsa_init_ueid_cfg(cfg, nlreq, nlmsg->hdr.ep.src_function_id, value);
-    (void)memcpy(cfg->cmd.op_eid.in.dev_name, (nlreq->virtualization == true ? nlreq->tpfdev_name : nlreq->dev_name),
-        TPSA_MAX_DEV_NAME);
-    if (nlreq->virtualization && tpsa_ioctl(worker->ioctl_ctx.ubcore_fd, cfg) != 0) {
-        TPSA_LOG_ERR("Fail to ioctl to dealloc eid in worker");
-        ret = -1;
-        goto free_cfg;
-    }
-    /* Netlink to notify resp */
-    tpsa_nl_msg_t *nlresp = tpsa_nl_create_dicover_eid_resp(msg, &value, nlreq->eid_index);
-    if (nlresp == NULL) {
-        ret = -1;
-        goto free_cfg;
-    }
-    if (tpsa_nl_send_msg(&worker->nl_ctx, nlresp) != 0) {
-        ret = -1;
-        goto free_resp;
-    }
-    TPSA_LOG_INFO("success add ueid msg send pf.\n");
-
-free_resp:
-    free(nlresp);
-free_cfg:
-    free(cfg);
-    return ret;
+static int tpsa_worker_dealloc_ueid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
+{
+    return tpsa_worker_lookup_ueid(worker, msg);
 }
 
 static int tpsa_worker_update_tpf_dev_info_resp(tpsa_worker_t *worker, tpsa_nl_msg_t *msg,
@@ -510,8 +455,8 @@ static void tpsa_live_migrate_begin(tpsa_worker_t *worker)
 
 static int tpsa_worker_stop_proc_vtp_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    tpsa_msg_t *nlmsg = (tpsa_msg_t *)msg->payload;
-    tpsa_nl_stop_proc_vtp_req_t *nlreq = (tpsa_nl_stop_proc_vtp_req_t *)nlmsg->data;
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
+    tpsa_nl_mig_req_t *nlreq = (tpsa_nl_mig_req_t *)nlmsg->req.data;
     vport_key_t key = {0};
 
     key.fe_idx = nlreq->mig_fe_idx;
@@ -563,7 +508,7 @@ static int tpsa_worker_stop_proc_vtp_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *m
 
 static int tpsa_handle_fe2tpf_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    tpsa_msg_t *tmsg = (tpsa_msg_t *)msg->payload;
+    tpsa_nl_req_host_t *tmsg = (tpsa_nl_req_host_t *)msg->payload;
     int ret = 0;
 
     uvs_ctx_t ctx = {
@@ -574,7 +519,7 @@ static int tpsa_handle_fe2tpf_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
         .sock_ctx = &worker->sock_ctx,
     };
 
-    switch (tmsg->hdr.opcode) {
+    switch (tmsg->req.opcode) {
         case TPSA_MSG_CREATE_VTP:
             ret = uvs_create_vtp(&ctx, msg);
             break;
@@ -585,28 +530,25 @@ static int tpsa_handle_fe2tpf_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
             ret = tpsa_worker_config_device(worker, msg);
             break;
         case TPSA_MSG_ALLOC_EID:
-            ret = tpsa_worker_alloc_eid(worker, msg);
+            ret = tpsa_worker_alloc_ueid(worker, msg);
             break;
         case TPSA_MSG_DEALLOC_EID:
-            ret = tpsa_worker_dealloc_eid(worker, msg);
+            ret = tpsa_worker_dealloc_ueid(worker, msg);
             break;
         case TPSA_MSG_STOP_PROC_VTP_MSG:
             ret = tpsa_worker_stop_proc_vtp_msg(worker, msg);
             break;
         case TPSA_MSG_QUERY_VTP_MIG_STATUS:
-            TPSA_LOG_WARN("Currently not implement this msg handle\n");
-            ret = 0;
+            ret = uvs_lm_handle_query_status(&ctx, msg);
             break;
         case TPSA_MSG_FLOW_STOPPED:
-            TPSA_LOG_WARN("Currently not implement this msg handle\n");
-            ret = 0;
+            ret = uvs_lm_config_migrate_state_local(&ctx, msg, TPSA_MIG_STATE_START);
             break;
         case TPSA_MSG_MIG_ROLLBACK:
-            TPSA_LOG_WARN("Currently not implement this msg handle\n");
-            ret = 0;
+            ret = uvs_lm_handle_rollback(&ctx, msg);
             break;
         case TPSA_MSG_MIG_VM_START:
-            ret =  uvs_lm_handle_vm_start(&ctx, msg);
+            ret = uvs_lm_config_migrate_state_local(&ctx, msg, TPSA_MIG_STATE_FINISH);
             break;
         default:
             TPSA_LOG_ERR("There is an unrecognized message type.\n");
@@ -625,35 +567,22 @@ static int tpsa_handle_migrate_async(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
         .nl_ctx = &worker->nl_ctx,
         .sock_ctx = &worker->sock_ctx,
     };
-    vtp_node_state_t node_status;
 
-    int res = uvs_lm_handle_async_proprocess(msg, &ctx, &node_status);
-    if (res < 0) {
-        TPSA_LOG_ERR("uvs lm preprocess lm switch failed\n");
+    tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
+    tpsa_nl_migrate_vtp_req_t *mig_req = (tpsa_nl_migrate_vtp_req_t *)nlmsg->req.data;
+    tpsa_vtp_cfg_t *vtp_cfg = (tpsa_vtp_cfg_t *)&mig_req->vtp_cfg;
+
+    vtp_node_state_t node_status;
+    if (uvs_lm_query_vtp_entry_status(msg, &ctx, &node_status) < 0) {
+        TPSA_LOG_ERR("uvs lm query vtp entry status failed\n");
         return -1;
     }
 
     if (msg->msg_type == TPSA_NL_MIGRATE_VTP_SWITCH) {
-        if (node_status != STATE_NORMAL) {
-            TPSA_LOG_ERR("Ignore this switch async event processing\n");
-            return 0;
-        }
-        if (uvs_lm_handle_async_event(&ctx, msg) < 0) {
-            TPSA_LOG_ERR("Fail to handle lm async vtp switch\n");
-            return -1;
-        }
+        return g_tpsa_vtp_event_handler[node_status][VTP_EVENT_SWITCH](&ctx, vtp_cfg, mig_req->dev_name);
     } else {
-        if (node_status != STATE_MIGRATING) {
-            TPSA_LOG_ERR("Ignore this rollback async event processing\n");
-            return 0;
-        }
-        if (uvs_lm_handle_async_event(&ctx, msg) < 0) {
-            TPSA_LOG_ERR("Fail to handle lm async vtp rollback\n");
-            return -1;
-        }
+        return g_tpsa_vtp_event_handler[node_status][VTP_EVENT_ROLLBACK](&ctx, vtp_cfg, mig_req->dev_name);
     }
-
-    return 0;
 }
 
 static int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)

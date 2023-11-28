@@ -157,6 +157,9 @@ void *ub_hugemalloc(size_t i_length, urma_huge_page_size_t hps, void *p_addr_hin
  */
 int ub_hugefree(void *p_addr, size_t i_length)
 {
+    if (p_addr == NULL) {
+        return -EINVAL;
+    }
     return munmap(p_addr, i_length);
 }
 

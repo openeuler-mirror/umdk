@@ -341,6 +341,11 @@ static uint32_t urma_get_eid_cnt(urma_device_t *dev)
     return cnt;
 }
 
+static inline bool urma_eid_is_valid(urma_eid_t *eid)
+{
+    return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
+}
+
 urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
@@ -364,7 +369,7 @@ urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
             URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
         }
         (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
-        if (urma_str_to_eid(tmp_value, &eid) != 0) {
+        if (urma_str_to_eid(tmp_value, &eid) != 0 || !urma_eid_is_valid(&eid)) {
             continue;
         }
         eid_list[cnt_idx].eid_index = i;
@@ -472,13 +477,12 @@ int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
-    urma_eid_t eid_invalid = {0};
 
     if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", eid_index) <= 0) {
         URMA_LOG_ERR("snprintf failed, eid idx: %u.\n", eid_index);
     }
     (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
-    if (urma_str_to_eid(tmp_value, eid) != 0 || memcmp(&eid_invalid, eid, sizeof(urma_eid_t)) == 0) {
+    if (urma_str_to_eid(tmp_value, eid) != 0 || !urma_eid_is_valid(eid)) {
         URMA_LOG_ERR("Failed to read eid value\n");
         return -1;
     }

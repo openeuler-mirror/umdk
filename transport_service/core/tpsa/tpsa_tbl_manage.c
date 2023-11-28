@@ -16,45 +16,37 @@
 #include "tpsa_log.h"
 #include "tpsa_tbl_manage.h"
 
-tpsa_ueid_t *tpsa_lookup_vport_table_ueid(vport_key_t *key, uint32_t eid_index, vport_table_t *table)
+int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid)
 {
-    tpsa_ueid_t *res = NULL;
-
     (void)pthread_rwlock_rdlock(&table->rwlock);
     vport_table_entry_t *entry = vport_table_lookup(table, key);
     if (entry == NULL) {
         TPSA_LOG_ERR("Failed to lookup vport table, dev_name:%s, fe_idx:%hu.\n", key->dev_name, key->fe_idx);
         (void)pthread_rwlock_unlock(&table->rwlock);
-        return NULL;
+        return -1;
     }
 
     if (eid_index >= entry->ueid_max_cnt || entry->ueid[eid_index].is_valid == false) {
         TPSA_LOG_ERR("Failed to lookup eid by index, idx:%u, max_idx:%u, %u.\n",
             eid_index, entry->ueid_max_cnt, entry->ueid[eid_index].is_valid);
         (void)pthread_rwlock_unlock(&table->rwlock);
-        return NULL;
+        return -1;
     }
 
-    res = &entry->ueid[eid_index];
+    *ueid = entry->ueid[eid_index];
     (void)pthread_rwlock_unlock(&table->rwlock);
-    return res;
+    return 0;
 }
 
-int tpsa_get_upi(char *dev_name, uint16_t fe_idx, uint32_t eid_index, vport_table_t *table)
+int tpsa_get_upi(vport_key_t *key, vport_table_t *table, uint32_t eid_index, uint32_t *upi)
 {
-    int32_t res = -1;
-
-    vport_key_t key;
-    key.fe_idx = fe_idx;
-    (void)memcpy(key.dev_name, dev_name, TPSA_MAX_DEV_NAME);
-    (void)pthread_rwlock_rdlock(&table->rwlock);
-    tpsa_ueid_t *ueid = tpsa_lookup_vport_table_ueid(&key, eid_index, table);
-    if (ueid != NULL) {
-        res = (int32_t)ueid->upi;
+    tpsa_ueid_t ueid;
+    int ret = tpsa_lookup_vport_table_ueid(key, table, eid_index, &ueid);
+    if (ret != 0) {
+        return ret;
     }
-    (void)pthread_rwlock_unlock(&table->rwlock);
-
-    return res;
+    *upi = ueid.upi;
+    return 0;
 }
 
 /* rc_fe_vtp lookup/add opts */
@@ -598,12 +590,12 @@ int tpsa_lookup_rc_vtp_table(tpsa_nl_create_vtp_req_t *nlreq, tpsa_table_t *tabl
 }
 
 /* vtp table */
-int tpsa_lookup_vtp_table(uint32_t location, tpsa_msg_t*msg, tpsa_table_t *table_ctx)
+int tpsa_lookup_vtp_table(uint32_t location, tpsa_nl_req_host_t *req_host, tpsa_table_t *table_ctx)
 {
     int status = TPSA_LOOKUP_NULL;
-    tpsa_nl_create_vtp_req_t *nlreq = (tpsa_nl_create_vtp_req_t *)msg->data;
+    tpsa_nl_create_vtp_req_t *nlreq = (tpsa_nl_create_vtp_req_t *)req_host->req.data;
     vport_key_t fe_key = {0};
-    fe_key.fe_idx = msg->hdr.ep.src_function_id;
+    fe_key.fe_idx = req_host->src_fe_idx;
     (void)memcpy(fe_key.dev_name, (nlreq->virtualization == true ?
         nlreq->tpfdev_name : nlreq->dev_name), TPSA_MAX_DEV_NAME);
 
@@ -659,31 +651,37 @@ int tpsa_noloopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
                                      vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key, tpsa_create_param_t *cparam)
 {
     rm_vtp_table_entry_t *entry = rm_fe_vtp_table_lookup(&table_ctx->fe_table, fe_key, vtp_key);
-    if (entry != NULL) {
-        if (!entry->valid) {
-            TPSA_LOG_WARN("Error: Add duplicate invalid entry to rm vtp table. Maybe duplicate create vtp");
-            return TPSA_ADD_INVALID;
-        } else {
-            if (entry->location == TPSA_DUPLEX) {
-                TPSA_LOG_INFO("duplex vtp node already exists, no need to add it repeatedly");
-            } else if (entry->vtpn == UINT32_MAX && entry->location == TPSA_TARGET) {
-                entry->vtpn = vtp_table_data->vtpn;
-                entry->location = TPSA_DUPLEX;
-                TPSA_LOG_INFO("Add vtp client node when server node exist, only change the value of vtpn and location");
-            } else {
-                TPSA_LOG_INFO("Add vtp server node when client node exist, only change the location to duplex");
-                entry->location = TPSA_DUPLEX;
-            }
 
-            if (cparam->liveMigrate && entry->tpgn != UINT32_MAX) {
-                entry->vice_tpgn = vtp_table_data->tpgn;
-                TPSA_LOG_INFO("Live migration rm add vice tpgn process");
-            }
-        }
-    } else {
+    if (entry == NULL) {
         TPSA_LOG_INFO("when vtp node not exist, add vtp node, location is: %u", vtp_table_data->location);
         if (rm_fe_vtp_table_add(&table_ctx->fe_table, fe_key, vtp_key, vtp_table_data) != 0) {
             return TPSA_ADD_NOMEM;
+        }
+        return 0;
+    } else if (!entry->valid) {
+        TPSA_LOG_WARN("Error: Add duplicate invalid entry to rm vtp table. Maybe duplicate create vtp");
+        return TPSA_ADD_INVALID;
+    }
+
+    if (entry->location == TPSA_DUPLEX) {
+        TPSA_LOG_INFO("duplex vtp node already exists, no need to add it repeatedly");
+    } else if (entry->vtpn == UINT32_MAX && entry->location == TPSA_TARGET) {
+        entry->vtpn = vtp_table_data->vtpn;
+        entry->location = TPSA_DUPLEX;
+        TPSA_LOG_INFO("Add vtp client node when server node exist, only change the value of vtpn and location");
+    } else {
+        TPSA_LOG_INFO("Add vtp server node when client node exist, only change the location to duplex");
+        entry->location = TPSA_DUPLEX;
+    }
+
+    if (cparam->liveMigrate && entry->tpgn != UINT32_MAX) {
+        if (entry->node_status != STATE_NORMAL) {
+            TPSA_LOG_ERR("Wrong status when add vice tpgn");
+            return TPSA_ADD_INVALID;
+        } else {
+            entry->vice_tpgn = vtp_table_data->tpgn;
+            entry->node_status = STATE_READY;
+            TPSA_LOG_INFO("Live migration rm add vice tpgn process");
         }
     }
 
@@ -773,31 +771,36 @@ int tpsa_noloopback_add_rc_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
 {
     rc_vtp_table_entry_t *entry = rc_fe_vtp_table_lookup(&table_ctx->fe_table, fe_key, vtp_key);
 
-    if (entry != NULL) {
-        if (!entry->valid) {
-            TPSA_LOG_WARN("Error: Add duplicate invalid entry to rc tpg table. Maybe duplicate create vtp");
-            return TPSA_ADD_INVALID;
-        } else {
-            if (entry->location == TPSA_DUPLEX) {
-                TPSA_LOG_INFO("duplex vtp node already exists, no need to add it repeatedly");
-            } else if (entry->vtpn == UINT32_MAX && entry->location == TPSA_TARGET) {
-                entry->vtpn = vtp_table_data->vtpn;
-                entry->location = TPSA_DUPLEX;
-                TPSA_LOG_INFO("Add vtp client node when server node exist, only change the value of vtpn and location");
-            } else {
-                TPSA_LOG_INFO("Add vtp server node when client node exist, only change the location to duplex");
-                entry->location = TPSA_DUPLEX;
-            }
-
-            if (cparam->liveMigrate && entry->tpgn != UINT32_MAX) {
-                entry->vice_tpgn = vtp_table_data->tpgn;
-                TPSA_LOG_INFO("Live migration add rc vice tpgn process");
-            }
-        }
-    } else {
+    if (entry == NULL) {
         TPSA_LOG_INFO("when vtp node not exist, add vtp node, location is: %u", vtp_table_data->location);
         if (rc_fe_vtp_table_add(&table_ctx->fe_table, fe_key, vtp_key, vtp_table_data) != 0) {
             return TPSA_ADD_NOMEM;
+        }
+        return 0;
+    } else if (!entry->valid) {
+        TPSA_LOG_WARN("Error: Add duplicate invalid entry to rc tpg table. Maybe duplicate create vtp");
+        return TPSA_ADD_INVALID;
+    }
+
+    if (entry->location == TPSA_DUPLEX) {
+        TPSA_LOG_INFO("duplex vtp node already exists, no need to add it repeatedly");
+    } else if (entry->vtpn == UINT32_MAX && entry->location == TPSA_TARGET) {
+        entry->vtpn = vtp_table_data->vtpn;
+        entry->location = TPSA_DUPLEX;
+        TPSA_LOG_INFO("Add vtp client node when server node exist, only change the value of vtpn and location");
+    } else {
+        TPSA_LOG_INFO("Add vtp server node when client node exist, only change the location to duplex");
+        entry->location = TPSA_DUPLEX;
+    }
+
+    if (cparam->liveMigrate && entry->tpgn != UINT32_MAX) {
+        if (entry->node_status != STATE_NORMAL) {
+            TPSA_LOG_ERR("Wrong status when add vice tpgn");
+            return TPSA_ADD_INVALID;
+        } else {
+            entry->vice_tpgn = vtp_table_data->tpgn;
+            entry->node_status = STATE_READY;
+            TPSA_LOG_INFO("Live migration rc add vice tpgn process");
         }
     }
 
@@ -881,6 +884,33 @@ int tpsa_add_rc_vtp_table(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *v
     return tpsa_loopback_add_rc_vtp_table(vtp_table_data, table_ctx, cparam);
 }
 
+static int tpsa_update_rm_vtp_table_exist(rm_vtp_table_entry_t *entry, uint32_t location, uint32_t vtpn,
+                                          uint32_t tpgn, bool liveMigrate)
+{
+    if (entry->vtpn == UINT32_MAX) {
+        entry->vtpn = vtpn;
+    }
+
+    if (liveMigrate && entry->tpgn != UINT32_MAX) {
+        if (entry->node_status != STATE_NORMAL) {
+            TPSA_LOG_ERR("Wrong status when update vice tpgn");
+            return TPSA_ADD_INVALID;
+        } else {
+            entry->vice_tpgn = tpgn;
+            entry->node_status = STATE_READY;
+            TPSA_LOG_INFO("Live migration rm add vice tpgn process");
+        }
+    } else {
+        entry->tpgn = tpgn;
+    }
+
+    entry->valid = true;
+    if (entry->location != location) {
+        entry->location = TPSA_DUPLEX;
+    }
+    
+    return 0;
+}
 
 static int tpsa_update_rm_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t vtpn,
                                     uint32_t tpgn, tpsa_table_t *table_ctx)
@@ -930,20 +960,34 @@ static int tpsa_update_rm_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uin
             return TPSA_ADD_NOMEM;
         }
     } else {
-        if (entry->vtpn == UINT32_MAX) {
-            entry->vtpn = vtpn;
-        }
-
-        if (msg->liveMigrate && entry->tpgn != UINT32_MAX) {
-            entry->vice_tpgn = tpgn;
-        } else {
-            entry->tpgn = tpgn;
-        }
-        entry->valid = true;
-        if (entry->location != location) {
-            entry->location = TPSA_DUPLEX;
+        if (tpsa_update_rm_vtp_table_exist(entry, location, vtpn, tpgn, msg->liveMigrate) < 0) {
+            TPSA_LOG_ERR("Fail to update rm vtp table");
+            return TPSA_ADD_INVALID;
         }
     }
+
+    return 0;
+}
+
+static int tpsa_update_rc_vtp_table_exist(rc_vtp_table_entry_t *entry, uint32_t location, uint32_t vtpn,
+                                          uint32_t tpgn, bool liveMigrate)
+{
+    entry->vtpn = (entry->vtpn == UINT32_MAX) ? vtpn : entry->vtpn;
+
+    if (liveMigrate && entry->tpgn != UINT32_MAX) {
+        if (entry->node_status != STATE_NORMAL) {
+            TPSA_LOG_ERR("Wrong status when update vice tpgn");
+            return TPSA_ADD_INVALID;
+        } else {
+            entry->vice_tpgn = tpgn;
+            entry->node_status = STATE_READY;
+            TPSA_LOG_INFO("Live migration rc add vice tpgn process");
+        }
+    } else {
+        entry->tpgn = tpgn;
+    }
+    entry->valid = true;
+    entry->location = (entry->location != location) ? TPSA_DUPLEX : entry->location;
 
     return 0;
 }
@@ -992,15 +1036,10 @@ static int tpsa_update_rc_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uin
             return TPSA_ADD_NOMEM;
         }
     } else {
-        entry->vtpn = (entry->vtpn == UINT32_MAX) ? vtpn : entry->vtpn;
-
-        if (msg->liveMigrate && entry->tpgn != UINT32_MAX) {
-            entry->vice_tpgn = tpgn;
-        } else {
-            entry->tpgn = tpgn;
+        if (tpsa_update_rc_vtp_table_exist(entry, location, vtpn, tpgn, msg->liveMigrate) < 0) {
+            TPSA_LOG_ERR("Fail to update rc vtp table");
+            return TPSA_ADD_INVALID;
         }
-        entry->valid = true;
-        entry->location = (entry->location != location) ? TPSA_DUPLEX : entry->location;
     }
 
     return 0;
@@ -1026,7 +1065,8 @@ int tpsa_update_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t vtpn
 
     return 0;
 }
-static int tpsa_rc_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe_table)
+static int tpsa_rc_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe_table,
+                                          vtp_node_state_t state)
 {
     rc_vtp_table_key_t vtp_key = {
         .dst_eid = vtp_idx->peer_eid,
@@ -1039,12 +1079,13 @@ static int tpsa_rc_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_ta
         return TPSA_LOOKUP_NULL;
     }
 
-    vtp_entry->node_status = STATE_ROLLBACK;
+    vtp_entry->node_status = state;
 
     return 0;
 }
 
-static int tpsa_rm_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe_table)
+static int tpsa_rm_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe_table,
+                                          vtp_node_state_t state)
 {
     rm_vtp_table_key_t vtp_key = {
         .src_eid = vtp_idx->local_eid,
@@ -1057,20 +1098,20 @@ static int tpsa_rm_vtp_node_status_change(tpsa_vtp_table_index_t *vtp_idx, fe_ta
         return TPSA_LOOKUP_NULL;
     }
 
-    vtp_entry->node_status = STATE_ROLLBACK;
+    vtp_entry->node_status = state;
 
     return 0;
 }
 
 int tpsa_vtp_node_status_change(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
-                                tpsa_table_t *table_ctx)
+                                tpsa_table_t *table_ctx, vtp_node_state_t state)
 {
     int ret;
 
     if (trans_mode == TPSA_TP_RM) {
-        ret = tpsa_rm_vtp_node_status_change(vtp_idx, &table_ctx->fe_table);
+        ret = tpsa_rm_vtp_node_status_change(vtp_idx, &table_ctx->fe_table, state);
     } else {
-        ret = tpsa_rc_vtp_node_status_change(vtp_idx, &table_ctx->fe_table);
+        ret = tpsa_rc_vtp_node_status_change(vtp_idx, &table_ctx->fe_table, state);
     }
 
     return ret;
@@ -1100,7 +1141,11 @@ static int tpsa_rm_vtp_tpgn_swap(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe
     vtp_entry->tpgn = vtp_entry->vice_tpgn;
     vtp_entry->vice_tpgn = tmp;
 
-    vtp_entry->node_status = STATE_MIGRATING;
+    if (vtp_entry->node_status == STATE_READY) {
+        vtp_entry->node_status = STATE_MIGRATING;
+    } else { /* status is MIGRATING */
+        vtp_entry->node_status = STATE_ROLLBACK;
+    }
 
     return 0;
 }
@@ -1129,7 +1174,11 @@ static int tpsa_rc_vtp_tpgn_swap(tpsa_vtp_table_index_t *vtp_idx, fe_table_t *fe
     vtp_entry->tpgn = vtp_entry->vice_tpgn;
     vtp_entry->vice_tpgn = tmp;
 
-    vtp_entry->node_status = STATE_MIGRATING;
+    if (vtp_entry->node_status == STATE_READY) {
+        vtp_entry->node_status = STATE_MIGRATING;
+    } else { /* status is MIGRATING */
+        vtp_entry->node_status = STATE_ROLLBACK;
+    }
 
     return 0;
 }
@@ -1316,6 +1365,12 @@ int tpsa_add_rc_tpg_table(urma_eid_t peer_eid, uint32_t peer_jetty, tpsa_tpg_tab
 
     rc_tpg_table_entry_t *entry = rc_tpg_table_lookup(table, &k);
     if (entry != NULL) {
+        /* for lm, need to add alternative channels */
+        if (param->liveMigrate == true && entry->vice_tpgn == UINT32_MAX) {
+            entry->vice_tpgn = param->tpgn;
+            (void)memcpy(entry->vice_tpn, param->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+        }
+
         if (entry->status == TPSA_TPG_LOOKUP_IN_PROGRESS) {
             TPSA_LOG_ERR("Error: Add duplicate invalid entry to rc tpg table. Maybe duplicate create vtp");
             return TPSA_ADD_INVALID;
@@ -1379,7 +1434,7 @@ int tpsa_remove_rm_tpg_table(rm_tpg_table_entry_t *entry, rm_tpg_table_t *table)
     return TPSA_REMOVE_NULL;
 }
 
-int tpsa_remove_rc_tpg_table(rc_tpg_table_entry_t *entry, tpsa_tpg_table_index_t *tpg_idx, rc_tpg_table_t *table)
+int tpsa_remove_rc_tpg_table(rc_tpg_table_entry_t *entry, rc_tpg_table_t *table)
 {
     if (entry != NULL) {
         if (entry->status != TPSA_TPG_LOOKUP_EXIST) {
@@ -1482,6 +1537,7 @@ static int tpsa_update_rc_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tps
         param.use_cnt = 1;
         param.ljetty_id = msg->local_jetty;
         param.leid = msg->local_eid;
+        param.liveMigrate = msg->liveMigrate;
 
         if (location == TPSA_TARGET) {
             param.tpgn = msg->peer_tpgn;
@@ -1583,23 +1639,26 @@ void tpsa_lookup_sip_table(uint32_t sip_idx, sip_table_entry_t *sip_entry, sip_t
     (void)pthread_rwlock_unlock(&table->rwlock);
 }
 
-int tpsa_lookup_vport_sip(vport_key_t *fe_key, tpsa_table_t *table_ctx, sip_table_entry_t *sip_entry)
+void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_param)
 {
-    vport_table_entry_t *vport_entry = calloc(1, sizeof(vport_table_entry_t));
-    if (vport_entry == NULL) {
-        TPSA_LOG_ERR("Fail to alloc vport entry %u\n");
+    vport_param->sip_idx = entry->sip_idx;
+    vport_param->rc_cfg = entry->rc_cfg;
+    vport_param->tp_cnt = entry->tp_cnt;
+    vport_param->tp_cfg = entry->tp_cfg;
+}
+
+int tpsa_lookup_vport_param(vport_key_t *key, vport_table_t *table, vport_param_t *vport_param)
+{
+    (void)pthread_rwlock_rdlock(&table->rwlock);
+    vport_table_entry_t *entry = vport_table_lookup(table, key);
+    if (entry == NULL) {
+        TPSA_LOG_ERR("Failed to lookup vport table to vport param, dev:%s fe_idx:%hu\n", key->dev_name, key->fe_idx);
+        (void)pthread_rwlock_unlock(&table->rwlock);
         return -1;
     }
+    tpsa_fill_vport_param(entry, vport_param);
+    (void)pthread_rwlock_unlock(&table->rwlock);
 
-    int ret = tpsa_lookup_vport_table(fe_key, &table_ctx->vport_table, vport_entry);
-    if (ret < 0) {
-        TPSA_LOG_ERR("Can not find vport_table by key %u\n", fe_key->fe_idx);
-        free(vport_entry);
-        return -1;
-    }
-
-    tpsa_lookup_sip_table(vport_entry->sip_idx, sip_entry, &table_ctx->sip_table);
-    free(vport_entry);
     return 0;
 }
 

@@ -288,42 +288,6 @@ static int tpsa_ioctl_del_sip(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
     return tpsa_ioctl_op_sip(ubcore_fd, cfg, TPSA_CMD_DEL_SIP);
 }
 
-static int tpsa_ioctl_op_eid(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg, uint32_t commands)
-{
-    int ret;
-    urma_cmd_hdr_t hdr;
-    tpsa_cmd_op_eid_t arg = {0};
-
-    hdr.command = (uint32_t)commands;
-    hdr.args_len = (uint32_t)sizeof(tpsa_cmd_op_eid_t);
-    hdr.args_addr = (uint64_t)&arg;
-
-    (void)memcpy(arg.in.dev_name, cfg->cmd.op_eid.in.dev_name, TPSA_MAX_DEV_NAME);
-    arg.in.upi = cfg->cmd.op_eid.in.upi;
-    arg.in.eid = cfg->cmd.op_eid.in.eid;
-    arg.in.fe_idx = cfg->cmd.op_eid.in.fe_idx;
-    arg.in.eid_index = cfg->cmd.op_eid.in.eid_index;
-
-    ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
-    if (ret != 0) {
-        TPSA_LOG_ERR("update eid ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
-        return ret;
-    }
-
-    TPSA_LOG_INFO("alloc ueid ioctl success");
-    return ret;
-}
-
-static int tpsa_ioctl_alloc_ueid(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
-{
-    return tpsa_ioctl_op_eid(ubcore_fd, cfg, TPSA_CMD_ALLOC_EID);
-}
-
-static int tpsa_ioctl_dealloc_ueid(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
-{
-    return tpsa_ioctl_op_eid(ubcore_fd, cfg, TPSA_CMD_DEALLOC_EID);
-}
-
 static int tpsa_ioctl_map_vtp(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
 {
     tpsa_cmd_map_vtp_t arg = {0};
@@ -706,22 +670,20 @@ static int tpsa_ioctl_get_dev_info(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     hdr.args_len = (uint32_t)sizeof(tpsa_cmd_get_dev_info_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    arg.in.tpf = cfg->cmd.get_dev_info.in.tpf;
-    arg.in.peer_eid = cfg->cmd.get_dev_info.in.peer_eid;
-    arg.in.eid_index = cfg->cmd.get_dev_info.in.eid_index;
+    (void)strcpy(arg.in.target_tpf_name,
+        cfg->cmd.get_dev_info.in.target_tpf_name);
 
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
-        TPSA_LOG_ERR("get dev info ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+        TPSA_LOG_ERR("get dev info ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret,
+            errno, hdr.command);
         return ret;
     }
 
-    (void)strcpy(cfg->cmd.get_dev_info.out.target_tpf_name,  arg.out.target_tpf_name);
-    (void)strcpy(cfg->cmd.get_dev_info.out.target_pf_name, arg.out.target_pf_name);
     cfg->cmd.get_dev_info.out.port_is_active = arg.out.port_is_active;
 
-    TPSA_LOG_INFO("get dev info ioctl success with target tpf name %s and pf name %s",
-        cfg->cmd.get_dev_info.out.target_tpf_name,  cfg->cmd.get_dev_info.out.target_pf_name);
+    TPSA_LOG_INFO("get dev info ioctl success with target tpf name %s",
+        cfg->cmd.get_dev_info.in.target_tpf_name);
     return 0;
 }
 
@@ -759,12 +721,6 @@ int tpsa_ioctl(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
             break;
         case TPSA_CMD_DEL_SIP:
             ret = tpsa_ioctl_del_sip(ubcore_fd, cfg);
-            break;
-        case TPSA_CMD_ALLOC_EID:
-            ret = tpsa_ioctl_alloc_ueid(ubcore_fd, cfg);
-            break;
-        case TPSA_CMD_DEALLOC_EID:
-            ret = tpsa_ioctl_dealloc_ueid(ubcore_fd, cfg);
             break;
         case TPSA_CMD_MAP_VTP:
             ret = tpsa_ioctl_map_vtp(ubcore_fd, cfg);
@@ -857,12 +813,12 @@ static inline bool uvs_is_nic_loopback(tpsa_net_addr_t *sip, tpsa_net_addr_t *di
 }
 
 void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
-                               tpsa_net_addr_t sip, vport_table_entry_t *vport_entry)
+                               tpsa_net_addr_t *sip, vport_param_t *vport_param, tpsa_net_addr_t *dip)
 {
     tpsa_cmd_tpf_t tpf = {0};
 
     tpf.trans_type = URMA_TRANSPORT_UB;
-    (void)memcpy(&tpf.netaddr, &sip, sizeof(tpsa_net_addr_t));
+    (void)memcpy(&tpf.netaddr, sip, sizeof(tpsa_net_addr_t));
 
     urma_eid_t null_eid = {
         .in6.interface_id = 0,
@@ -872,36 +828,31 @@ void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cpara
     tpsa_tpg_cfg_t tpg_cfg = {
         .local_eid = null_eid,
         .peer_eid = null_eid,
-        .tp_cnt = cparam->trans_mode == TPSA_TP_RC ? TPSA_MIN_TP_NUM : vport_entry->tp_cnt,
+        .tp_cnt = cparam->trans_mode == TPSA_TP_RC ? TPSA_MIN_TP_NUM : vport_param->tp_cnt,
         .trans_mode = cparam->trans_mode,
-        .dscp = vport_entry->tp_cfg.dscp,
+        .dscp = vport_param->tp_cfg.dscp,
         .cc_alg = TPSA_TP_CC_LDCP,
-        .cc_pattern_idx = vport_entry->tp_cfg.cc_pattern_idx,
+        .cc_pattern_idx = vport_param->tp_cfg.cc_pattern_idx,
     };
 
     /* TODO: lookup vport table to fill tp_flag */
-    tpsa_tp_flag_t tp_flag = {
+    tpsa_tp_cfg_flag_t tp_flag = {
         .bs.target = TPSA_INITIATOR,
-        .bs.oor_en = vport_entry->tp_cfg.tp_mod_flag.bs.oor_en,
-        .bs.sr_en = vport_entry->tp_cfg.tp_mod_flag.bs.sr_en,
-        .bs.cc_en = vport_entry->tp_cfg.tp_mod_flag.bs.cc_en,
-        .bs.cc_alg = TPSA_TP_CC_LDCP,
-        .bs.spray_en = vport_entry->tp_cfg.tp_mod_flag.bs.spray_en,
-        .bs.loopback = (vport_entry->tp_cfg.loop_back && uvs_is_nic_loopback(&sip, &cparam->dip)),
-        .bs.ack_resp = vport_entry->tp_cfg.ack_resp,
-        .bs.dca_enable = vport_entry->tp_cfg.tp_mod_flag.bs.dca_enable,
-        .bs.bonding = vport_entry->tp_cfg.bonding,
+        .bs.loopback = (vport_param->tp_cfg.loop_back && uvs_is_nic_loopback(sip, dip)),
+        .bs.ack_resp = vport_param->tp_cfg.ack_resp,
+        .bs.dca_enable = vport_param->tp_cfg.tp_mod_flag.bs.dca_enable,
+        .bs.bonding = vport_param->tp_cfg.bonding,
     };
 
     tpsa_cmd_tp_cfg_t tp_cfg = {
         .flag = tp_flag,
         .trans_mode = cparam->trans_mode,
         .fe_idx = cparam->fe_idx,
-        .retry_num = vport_entry->tp_cfg.retry_num,
-        .retry_factor = vport_entry->tp_cfg.retry_factor,
-        .ack_timeout = vport_entry->tp_cfg.ack_timeout,
-        .dscp = vport_entry->tp_cfg.dscp,
-        .oor_cnt = vport_entry->tp_cfg.oor_cnt,
+        .retry_num = vport_param->tp_cfg.retry_num,
+        .retry_factor = vport_param->tp_cfg.retry_factor,
+        .ack_timeout = vport_param->tp_cfg.ack_timeout,
+        .dscp = vport_param->tp_cfg.dscp,
+        .oor_cnt = vport_param->tp_cfg.oor_cnt,
     };
 
     if (cparam->trans_mode == TPSA_TP_RM) {
@@ -1111,13 +1062,8 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
 
     uint32_t i = 0;
     for (; i < req->tpg_cfg.tp_cnt; i++) {
-        tpsa_tp_flag_t tp_flag = {
+        tpsa_tp_cfg_flag_t tp_flag = {
             .bs.target = TPSA_TARGET,
-            .bs.oor_en = param->tp_cfg.tp_mod_flag.bs.oor_en,
-            .bs.sr_en = param->tp_cfg.tp_mod_flag.bs.sr_en,
-            .bs.cc_en = cc_en,
-            .bs.cc_alg = cc_alg,
-            .bs.spray_en = param->tp_cfg.tp_mod_flag.bs.spray_en,
             .bs.loopback = (req->tp_param[i].local_tp_cfg.loop_back && uvs_is_nic_loopback(&param->sip, &param->dip)),
             .bs.ack_resp = req->tp_param[i].local_tp_cfg.ack_resp,
             .bs.dca_enable = param->tp_cfg.tp_mod_flag.bs.dca_enable,
@@ -1150,6 +1096,8 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
         cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.value = req->tp_param[i].local_tp_cfg.tp_mod_flag.value &
             param->tp_cfg.tp_mod_flag.value;
         cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.cc_alg = cc_alg;
+        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.cc_en = cc_en;
+
         req->tp_param[i].remote_tp_cfg = param->tp_cfg;
         req->tp_param[i].remote_tp_cfg.tp_mod_flag.bs.cc_en = cc_en;
         req->tp_param[i].remote_tp_cfg.tp_mod_flag.bs.cc_alg = cc_alg;
@@ -1265,18 +1213,11 @@ void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, tpsa
     cfg->cmd.modify_tpg.in.tpgn = msg->local_tpgn;
 }
 
-void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *netaddr, tpsa_transport_type_t type,
-                                 urma_eid_t peer_eid, uint32_t eid_index)
+void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_tpf_name)
 {
-    tpsa_cmd_tpf_t tpf = {
-        .trans_type = type,
-        .netaddr = *netaddr,
-    };
-
     cfg->cmd_type = TPSA_CMD_GET_DEV_INFO;
-    cfg->cmd.get_dev_info.in.tpf = tpf;
-    cfg->cmd.get_dev_info.in.peer_eid = peer_eid;
-    cfg->cmd.get_dev_info.in.eid_index = eid_index;
+    (void)strcpy(cfg->cmd.get_dev_info.in.target_tpf_name,
+        target_tpf_name);
 }
 
 void tpsa_ioctl_cmd_map_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
@@ -1427,7 +1368,7 @@ void tpsa_ioctl_cmd_destroy_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *sip, urm
     cfg->cmd.destroy_vtp.in.peer_jetty = peer_jetty;
 }
 
-void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vport_entry,
+void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
                                tpsa_create_param_t *cparam, utp_table_key_t *key)
 {
     tpsa_vtp_cfg_flag_t vtp_flag = {
@@ -1454,8 +1395,8 @@ void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vport
     };
 
     tpsa_utp_cfg_flag_t utp_flag = {
-        .bs.loopback = (vport_entry->tp_cfg.loop_back && uvs_is_nic_loopback(&key->sip, &key->dip)),
-        .bs.spray_en = vport_entry->tp_cfg.tp_mod_flag.bs.spray_en,
+        .bs.loopback = (vport_param->tp_cfg.loop_back && uvs_is_nic_loopback(&key->sip, &key->dip)),
+        .bs.spray_en = vport_param->tp_cfg.tp_mod_flag.bs.spray_en,
     };
 
     tpsa_utp_cfg_t utp_cfg = {
@@ -1463,11 +1404,11 @@ void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vport
         .flag = utp_flag,
         .udp_start = 0,
         .udp_range = 1,
-        .local_net_addr_idx = vport_entry->sip_idx,
+        .local_net_addr_idx = vport_param->sip_idx,
         .peer_net_addr = key->dip,
-        .dscp = vport_entry->tp_cfg.dscp,
-        .flow_label = vport_entry->tp_cfg.flow_label,
-        .hop_limit = vport_entry->tp_cfg.hop_limit,
+        .dscp = vport_param->tp_cfg.dscp,
+        .flow_label = vport_param->tp_cfg.flow_label,
+        .hop_limit = vport_param->tp_cfg.hop_limit,
         .port_id = cparam->port_id,
     };
 
@@ -1565,7 +1506,7 @@ void tpsa_ioctl_cmd_config_state(tpsa_ioctl_cfg_t *cfg, vport_table_entry_t *vpo
         cfg->cmd.config_state.in.config[i].upi = vport_entry->ueid[(i + begin_idx)].upi;
         cfg->cmd.config_state.in.config[i].eid_index = (i + begin_idx);
     }
- 
+
     cfg->cmd.config_state.in.tpf = *tpf;
     cfg->cmd.config_state.in.config_cnt = i;
     cfg->cmd.config_state.in.state = state;
@@ -1614,20 +1555,19 @@ int uvs_ioctl_cmd_set_vport_cfg(tpsa_ioctl_ctx_t *ioctl_ctx,
     cfg->cmd.vport_cfg.in.set_cfg.mask.bs.max_jetty_cnt = add_entry->mask.bs.max_jetty_cnt;
     cfg->cmd.vport_cfg.in.set_cfg.mask.bs.min_jfr_cnt = add_entry->mask.bs.min_jfr_cnt;
     cfg->cmd.vport_cfg.in.set_cfg.mask.bs.max_jfr_cnt = add_entry->mask.bs.max_jfr_cnt;
+    cfg->cmd.vport_cfg.in.set_cfg.mask.bs.slice = global_cfg->mask.bs.slice;
     cfg->cmd.vport_cfg.in.set_cfg.pattern = add_entry->pattern;
     cfg->cmd.vport_cfg.in.set_cfg.virtualization = add_entry->virtualization;
     cfg->cmd.vport_cfg.in.set_cfg.min_jetty_cnt = add_entry->min_jetty_cnt;
     cfg->cmd.vport_cfg.in.set_cfg.max_jetty_cnt = add_entry->max_jetty_cnt;
     cfg->cmd.vport_cfg.in.set_cfg.min_jfr_cnt = add_entry->min_jfr_cnt;
     cfg->cmd.vport_cfg.in.set_cfg.max_jfr_cnt = add_entry->max_jfr_cnt;
+    cfg->cmd.vport_cfg.in.set_cfg.slice = global_cfg->slice;
 
     if (cfg->cmd.vport_cfg.in.set_cfg.mask.value == 0) {
         free(cfg);
         return 0;
     }
-
-    cfg->cmd.vport_cfg.in.set_cfg.mask.bs.slice = global_cfg->mask.bs.slice;
-    cfg->cmd.vport_cfg.in.set_cfg.slice = global_cfg->slice;
 
     if (tpsa_ioctl(ioctl_ctx->ubcore_fd, cfg) != 0) {
         TPSA_LOG_ERR("Fail to ioctl to ubcore");

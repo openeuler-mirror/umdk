@@ -46,11 +46,11 @@ typedef struct tpsa_table {
 int tpsa_table_init(tpsa_table_t *tpsa_table);
 void tpsa_table_uninit(tpsa_table_t *tpsa_table);
 
-tpsa_ueid_t *tpsa_lookup_vport_table_ueid(vport_key_t *key, uint32_t eid_index, vport_table_t *table);
-int tpsa_get_upi(char *dev_name, uint16_t fe_idx, uint32_t eid_index, vport_table_t *table);
+int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid);
+int tpsa_get_upi(vport_key_t *key, vport_table_t *table, uint32_t eid_index, uint32_t *upi);
 
 /* vtp table */
-int tpsa_lookup_vtp_table(uint32_t location, tpsa_msg_t *msg, tpsa_table_t *table_ctx);
+int tpsa_lookup_vtp_table(uint32_t location, tpsa_nl_req_host_t *req_host, tpsa_table_t *table_ctx);
 int tpsa_remove_vtp_table(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
                           tpsa_table_t *table_ctx);
 int tpsa_add_rm_vtp_table(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *vtp_table_data,
@@ -62,7 +62,7 @@ int tpsa_update_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t vtpn
 int tpsa_vtp_tpgn_swap(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
                        tpsa_table_t *table_ctx, uint32_t *vice_tpgn);
 int tpsa_vtp_node_status_change(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
-                                tpsa_table_t *table_ctx);
+                                tpsa_table_t *table_ctx, vtp_node_state_t state);
 int tpsa_get_vtp_idx(uint16_t fe_idx, char *dev_name, tpsa_vtp_table_index_t *vtp_idx, tpsa_table_t *table_ctx);
 
 /* dip table */
@@ -75,7 +75,7 @@ int tpsa_add_rm_tpg_table(tpsa_tpg_table_param_t *param, rm_tpg_table_t *table);
 int tpsa_add_rc_tpg_table(urma_eid_t peer_eid, uint32_t peer_jetty, tpsa_tpg_table_param_t *param,
                           rc_tpg_table_t *table);
 int tpsa_remove_rm_tpg_table(rm_tpg_table_entry_t *entry, rm_tpg_table_t *table);
-int tpsa_remove_rc_tpg_table(rc_tpg_table_entry_t *entry, tpsa_tpg_table_index_t *tpg_idx, rc_tpg_table_t *table);
+int tpsa_remove_rc_tpg_table(rc_tpg_table_entry_t *entry, rc_tpg_table_t *table);
 int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx);
 
 /* tpf dev table */
@@ -83,11 +83,11 @@ int tpsa_lookup_tpf_dev_table(char *dev_name, tpf_dev_table_t *table, tpf_dev_ta
 
 /* vport table */
 int tpsa_lookup_vport_table(vport_key_t *key, vport_table_t *table, vport_table_entry_t *return_entry);
+int tpsa_lookup_vport_param(vport_key_t *key, vport_table_t *table, vport_param_t *vport_param);
+void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_param);
 
 /* sip table */
 void tpsa_lookup_sip_table(uint32_t sip_idx, sip_table_entry_t *sip_entry, sip_table_t *table);
-
-int tpsa_lookup_vport_sip(vport_key_t *fe_key, tpsa_table_t *table_ctx, sip_table_entry_t *sip_entry);
 
 /* jetty peer table */
 int tpsa_worker_jetty_peer_table_add(tpsa_table_t *table_ctx, tpsa_transport_mode_t trans_mode,

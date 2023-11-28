@@ -800,8 +800,8 @@ static rc_tpg_table_entry_t *alloc_rc_tpg_table_entry(const rc_tpg_table_key_t *
     entry->key = *key;
     entry->type = param->type;
     entry->tpgn = param->tpgn;
-    (void)memcpy(entry->tpn, param->tpn,
-        TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+    entry->vice_tpgn = UINT32_MAX;
+    (void)memcpy(entry->tpn, param->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
     entry->status = param->status;
     entry->ljetty_id = param->ljetty_id;
     entry->leid = param->leid;

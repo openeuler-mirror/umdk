@@ -504,9 +504,6 @@ static int execute_command(const tool_config_t *cfg)
         case TOOL_CMD_SHOW_UPI:
             ret = admin_show_ubep_upi(cfg);
             break;
-        case TOOL_CMD_SET_UTP:
-            ret = admin_set_utp(cfg);
-            break;
         case TOOL_CMD_SHOW_UTP:
             ret = admin_show_udp(cfg);
             break;

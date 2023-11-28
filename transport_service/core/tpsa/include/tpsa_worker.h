@@ -25,7 +25,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define MAX_VTP_EVENT_SIZE 5
 
+enum uvs_vtp_event {
+    VTP_EVENT_SWITCH = 0,
+    VTP_EVENT_ROLLBACK,
+    VTP_EVENT_SRC_DELETE,
+    VTP_EVENT_DST_DELETE,
+    VTP_EVENT_DIP_REFRESH,
+};
 typedef struct tpsa_worker {
     tpsa_global_cfg_t global_cfg_ctx;
     tpsa_table_t table_ctx;
@@ -36,6 +44,8 @@ typedef struct tpsa_worker {
     pthread_t thread;
     int epollfd;
 } tpsa_worker_t;
+
+typedef int (*tpsa_vtp_event_handler)(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, char *dev_name);
 
 tpsa_worker_t *tpsa_worker_init(uvs_init_attr_t *attr);
 void tpsa_worker_uninit(tpsa_worker_t *worker);
