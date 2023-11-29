@@ -29,10 +29,10 @@ static int ip_set_sockopts(int sockfd)
 
     /* Set socket reuse. When the server is restarted,
      * the problem of the connection failure of the client is solved */
-    ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable_reuse, sizeof(enable_reuse));
+    ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &enable_reuse, sizeof(enable_reuse));
     if (ret < 0) {
         (void)fprintf(stderr, "server socket set_opt failed. enable_reuse:%d, ret: %d, err: [%d]%s.\n",
-            SO_REUSEADDR, ret, errno, strerror(errno));
+            SO_REUSEPORT, ret, errno, strerror(errno));
         return ret;
     }
 
