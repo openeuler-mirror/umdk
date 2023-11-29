@@ -53,10 +53,10 @@ static int tpsa_set_socket_opt(int fd, bool is_noblock)
     int reuse = 1;
     /* Set socket reuse. When the server is restarted,
      * the problem of address already in use is solved */
-    ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    ret = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
     if (ret < 0) {
         TPSA_LOG_ERR("Failed to set reuse port, enable_reuse:%d, ret: %d, err: %d.\n",
-            SO_REUSEADDR, ret, errno);
+            SO_REUSEPORT, ret, errno);
         return ret;
     }
 
