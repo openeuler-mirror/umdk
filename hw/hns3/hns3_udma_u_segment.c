@@ -82,7 +82,6 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 	urma_cmd_udrv_priv_t udata = {};
 	urma_import_tseg_cfg_t cfg = {};
 	urma_target_seg_t *tseg;
-	int ret;
 
 	tseg = (urma_target_seg_t *)calloc(1, sizeof(urma_target_seg_t));
 	if (!tseg) {
@@ -96,8 +95,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 	cfg.token_id = seg->token_id;
 	cfg.token = token;
 	udma_set_udata(&udata, NULL, 0, NULL, 0);
-	ret = urma_cmd_import_seg(ctx, tseg, &cfg, &udata);
-	if (ret) {
+	if (urma_cmd_import_seg(ctx, tseg, &cfg, &udata)) {
 		URMA_LOG_ERR("import seg failed.\n");
 		free(tseg);
 		return NULL;
@@ -108,10 +106,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
 urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg)
 {
-	int ret;
-
-	ret = urma_cmd_unimport_seg(target_seg);
-	if (ret != 0) {
+	if (urma_cmd_unimport_seg(target_seg)) {
 		URMA_LOG_ERR("unimport seg failed.\n");
 		return URMA_FAIL;
 	}

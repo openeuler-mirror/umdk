@@ -87,21 +87,21 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 		jetty->um_qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
 					     jetty->urma_jetty.jetty_id.id, true);
 		if (!jetty->um_qp) {
-			URMA_LOG_ERR("um qp alloc failed, jetty_id = %d.\n",
+			URMA_LOG_ERR("UM qp alloc failed, jetty_id = %u.\n",
 				     jetty->urma_jetty.jetty_id.id);
 			return URMA_ENOMEM;
 		}
 	} else if (jetty->tp_mode == URMA_TM_RM) {
 		ret = udma_init_tgt_connect_table(jetty);
 		if (ret) {
-			URMA_LOG_ERR("connect jetty table init failed, jetty_id = %d.\n",
+			URMA_LOG_ERR("connect jetty table init failed, jetty_id = %u.\n",
 				     jetty->urma_jetty.jetty_id.id);
 			return URMA_ENOMEM;
 		}
 	} else {
 		jetty->rc_node = (struct rc_node *)calloc(1, sizeof(struct rc_node));
 		if (!jetty->rc_node) {
-			URMA_LOG_ERR("RC node alloc failed, jetty_id = %d.\n",
+			URMA_LOG_ERR("RC node alloc failed, jetty_id = %u.\n",
 				     jetty->urma_jetty.jetty_id.id);
 			return URMA_ENOMEM;
 		}
@@ -857,7 +857,7 @@ static struct udma_qp *get_qp_for_tjetty(struct udma_u_jetty *udma_jetty,
 		udma_qp = to_tgt_node(hmap_node)->qp;
 	} else {
 		if (udma_jetty->rc_node->tjetty == NULL) {
-			URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %d.\n",
+			URMA_LOG_ERR("the jetty not bind a remote jetty, jetty_id = %u.\n",
 				     udma_jetty->urma_jetty.jetty_id.id);
 			return NULL;
 		}

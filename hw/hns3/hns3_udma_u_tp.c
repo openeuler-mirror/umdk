@@ -188,7 +188,7 @@ static int exec_jfs_advise_jfr_cmd(urma_jfs_t *jfs,
 		ret = mmap_dwqe(jfs->urma_ctx, conn_nodes->tgt_conn_node->qp);
 		if (ret) {
 			urma_cmd_unadvise_jfr(jfs, (urma_target_jetty_t *)tjfr);
-			URMA_LOG_ERR("mmap_dwqe failed\n");
+			URMA_LOG_ERR("mmap dwqe failed\n");
 		}
 	}
 
@@ -277,8 +277,8 @@ urma_status_t udma_u_advise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr)
 	ret = udma_add_conn(&tjfr_tbl->rwlock, &tjfr_tbl->hmap, tjfr_index,
 			   &conn_nodes.tgt_conn_node->hmap_node);
 	if (ret) {
-		URMA_LOG_INFO("connection existed. jfs: 0x%x, tjfr: 0x%x\n",
-			      jfs->jfs_id.id, tjfr->id.id);
+		URMA_LOG_INFO("jfr connection existed. jfs id = 0x%x, tjfr id = 0x%x\n",
+				  jfs->jfs_id.id, tjfr->id.id);
 		return ret;
 	}
 
