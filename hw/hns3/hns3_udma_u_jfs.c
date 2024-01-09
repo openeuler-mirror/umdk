@@ -154,7 +154,7 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 	return qp;
 
 err_alloc_sw_db:
-	udma_free_sw_db(udma_ctx, qp->sdb, UDMA_JETTY_TYPE_DB);
+	udma_free_sw_db(udma_ctx, qp->sdb, db_type);
 err_alloc_qp:
 	free(qp);
 
@@ -194,7 +194,8 @@ static int alloc_table_qp(struct udma_u_jfs *jfs, urma_context_t *ctx,
 }
 
 static urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx,
-					  struct udma_qp *qp, uint32_t qpn)
+					  urma_jfs_t *jfs, struct udma_qp *qp,
+					  uint32_t qpn)
 {
 	struct udma_jfs_qp_node *qp_node;
 
@@ -269,7 +270,7 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 		jfs->um_qp->sq.priority = resp.create_tp_resp.priority;
 		memcpy(&jfs->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
 		       sizeof(struct udp_srcport));
-		ret = udma_add_to_qp_table(udma_ctx, jfs->um_qp,
+		ret = udma_add_to_qp_table(udma_ctx, &jfs->base, jfs->um_qp,
 					   jfs->um_qp->qp_num);
 		if (ret)
 			URMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
@@ -290,6 +291,7 @@ static void udma_jfs_free_table(struct udma_u_jfs *jfs)
 	}
 	(void)pthread_rwlock_unlock(&jfs->tjfr_tbl.rwlock);
 	udma_hmap_destroy(&jfs->tjfr_tbl.hmap);
+	(void)pthread_rwlock_destroy(&jfs->tjfr_tbl.rwlock);
 }
 
 static void um_free_qp(struct udma_u_jfs *jfs)
@@ -392,6 +394,7 @@ urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 	pthread_spin_destroy(&udma_jfs->lock);
 
 	free(udma_jfs);
+
 	return URMA_SUCCESS;
 }
 
@@ -439,169 +442,6 @@ static inline uint32_t udma_get_sgl_total_len(urma_sg_t *sg)
 	return len;
 }
 
-static int udma_parse_write_wr(urma_rw_wr_t *rw,
-			       struct udma_jfs_wr_info *wr_info,
-			       struct udma_sge *sg_list, bool is_inline)
-{
-	if (!rw->src.sge || !rw->dst.sge || !rw->dst.sge[0].tseg) {
-		URMA_LOG_ERR("parse write wr failed, invalid rw parameters.\n");
-		return EINVAL;
-	}
-
-	wr_info->num_sge = rw->src.num_sge;
-	for (uint32_t i = 0; i < wr_info->num_sge; i++) {
-		sg_list->len = rw->src.sge[i].len;
-		sg_list->addr = rw->src.sge[i].addr;
-		if (!is_inline) {
-			if (!rw->src.sge[i].tseg) {
-				URMA_LOG_ERR("parse write wr failed, tseg is null.\n");
-				return EINVAL;
-			}
-			sg_list->lkey = rw->src.sge[i].tseg->seg.token_id;
-		}
-		sg_list++;
-	}
-	wr_info->dst_addr = rw->dst.sge[0].addr;
-	wr_info->total_len = udma_get_sgl_total_len(&rw->src);
-	wr_info->rkey = rw->dst.sge[0].tseg->seg.token_id;
-
-	return 0;
-}
-
-static int udma_parse_send_wr(urma_send_wr_t *send,
-			      struct udma_jfs_wr_info *wr_info,
-			      struct udma_sge *sg_list, bool is_inline)
-{
-	uint32_t total_length = 0;
-
-	if (!send->src.sge) {
-		URMA_LOG_ERR("parse send wr failed, invalid send parameters.\n");
-		return EINVAL;
-	}
-
-	wr_info->num_sge = send->src.num_sge;
-	for (uint32_t i = 0; i < wr_info->num_sge; i++) {
-		sg_list->len = send->src.sge[i].len;
-		if (!is_inline) {
-			if (!send->src.sge[i].tseg) {
-				URMA_LOG_ERR("parse send wr failed, tseg is null.\n");
-				return EINVAL;
-			}
-			sg_list->lkey = send->src.sge[i].tseg->seg.token_id;
-		}
-		sg_list->addr = send->src.sge[i].addr;
-		total_length += send->src.sge[i].len;
-		sg_list++;
-	}
-	wr_info->total_len = total_length;
-
-	return 0;
-}
-
-static int udma_parse_notify_params(urma_rw_wr_t *rw,
-				    struct udma_jfs_wr_info *wr_info)
-{
-	if (rw->dst.sge) {
-		if (rw->dst.sge[1].addr % NOTIFY_OFFSET_4B_ALIGN) {
-			URMA_LOG_ERR("notify offset %uB should be aligned to 4B.\n",
-				     rw->dst.sge[1].addr);
-			return EINVAL;
-		}
-		wr_info->inv_key_immtdata = UDMA_GET_NOTIFY_DATA(rw->dst.sge[1].addr,
-								 rw->notify_data);
-	}
-
-	return 0;
-}
-
-static int udma_parse_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wr_info *wr_info,
-			     struct udma_sge *sg_list)
-{
-	bool is_inline = false;
-
-	if (wr->flag.bs.inline_flag == 1)
-		is_inline = true;
-
-	switch (wr->opcode) {
-	case URMA_OPC_SEND:
-		wr_info->opcode = UDMA_OPCODE_SEND;
-		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
-	case URMA_OPC_SEND_IMM:
-		wr_info->opcode = UDMA_OPCODE_SEND_WITH_IMM;
-		wr_info->inv_key_immtdata = wr->send.imm_data;
-		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
-	case URMA_OPC_SEND_INVALIDATE:
-		if (!wr->send.tseg) {
-			URMA_LOG_ERR("parse wr failed, tseg of send is null.\n");
-			return EINVAL;
-		}
-		wr_info->opcode = UDMA_OPCODE_SEND_WITH_INV;
-		wr_info->inv_key_immtdata = wr->send.tseg->seg.token_id;
-		return udma_parse_send_wr(&wr->send, wr_info, sg_list, is_inline);
-	case URMA_OPC_WRITE:
-		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE;
-		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
-	case URMA_OPC_WRITE_IMM:
-		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE_WITH_IMM;
-		wr_info->inv_key_immtdata = wr->rw.notify_data;
-		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
-	case URMA_OPC_WRITE_NOTIFY:
-		if (udma_parse_notify_params(&wr->rw, wr_info)) {
-			URMA_LOG_ERR("parse wr failed, invalid notify parameters.\n");
-			return EINVAL;
-		}
-		wr_info->opcode = UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY;
-		return udma_parse_write_wr(&wr->rw, wr_info, sg_list, is_inline);
-	default:
-		URMA_LOG_ERR("Unsupported or invalid opcode :%u\n",
-			     (uint32_t)wr->opcode);
-		return EINVAL;
-	}
-}
-
-static inline void set_data_seg(struct udma_wqe_data_seg *dseg,
-				struct udma_sge *sg_list)
-{
-	dseg->lkey = htole32(sg_list->lkey);
-	dseg->addr = htole64(sg_list->addr);
-	dseg->len = htole32(sg_list->len);
-}
-
-static void set_rc_sge(struct udma_wqe_data_seg *dseg, struct udma_qp *qp,
-		       uint32_t num_sge, struct udma_sge *sg_list,
-		       struct udma_sge_info *sge_info)
-{
-	uint32_t i;
-
-	for (i = 0; i < num_sge; i++) {
-		if (i < UDMA_SGE_IN_WQE) {
-			set_data_seg(dseg, sg_list + i);
-			dseg++;
-		} else {
-			dseg = (struct udma_wqe_data_seg *)
-				get_send_sge_ex(qp, sge_info->start_idx &
-						(qp->ex_sge.sge_cnt - 1));
-			set_data_seg(dseg, sg_list + i);
-			sge_info->start_idx++;
-		}
-	}
-}
-
-void set_um_sge(struct udma_qp *qp, uint32_t num_sge,
-		struct udma_sge *sg_list, struct udma_sge_info *sge_info)
-{
-	struct udma_wqe_data_seg *dseg;
-	uint32_t i;
-
-	for (i = 0; i < num_sge; i++) {
-		dseg = (struct udma_wqe_data_seg *)
-			get_send_sge_ex(qp, sge_info->start_idx &
-					(qp->ex_sge.sge_cnt - 1));
-		set_data_seg(dseg, sg_list + i);
-		sge_info->start_idx++;
-	}
-}
-
 static uint32_t mtu_enum_to_int(urma_mtu_t mtu)
 {
 	switch (mtu) {
@@ -636,21 +476,20 @@ static void get_src_buf_info(void **src_addr, uint32_t *src_len,
 	*src_len = sg_list[buf_idx].len;
 }
 
-static urma_status_t fill_ext_sge_inl_data(struct udma_qp *qp,
-					   struct udma_sge_info *sge_info,
-					   struct udma_sge *sg_list,
-					   uint32_t num_buf)
+static int fill_ext_sge_inl_data(struct udma_qp *qp, uint32_t total_len,
+				 struct udma_sge *sg_list, uint32_t num_buf)
 {
 	uint32_t sge_sz = sizeof(struct udma_wqe_data_seg);
 	void *dst_addr, *src_addr, *tail_bound_addr;
 	uint32_t sge_mask = qp->ex_sge.sge_cnt - 1;
 	uint32_t src_len, tail_len;
+	uint32_t valid_num;
 	uint32_t i;
 
-	if (sge_info->total_len > qp->sq.ext_sge_cnt * sge_sz)
-		return URMA_EINVAL;
+	if (total_len > qp->sq.ext_sge_cnt * sge_sz)
+		return EINVAL;
 
-	dst_addr = get_send_sge_ex(qp, sge_info->start_idx & sge_mask);
+	dst_addr = get_send_sge_ex(qp, qp->next_sge & sge_mask);
 	tail_bound_addr = get_send_sge_ex(qp, qp->ex_sge.sge_cnt);
 
 	for (i = 0; i < num_buf; i++) {
@@ -674,38 +513,31 @@ static urma_status_t fill_ext_sge_inl_data(struct udma_qp *qp,
 		}
 	}
 
-	sge_info->valid_num = DIV_ROUND_UP(sge_info->total_len, sge_sz);
-	sge_info->start_idx += sge_info->valid_num;
+	valid_num = DIV_ROUND_UP(total_len, sge_sz);
+	qp->next_sge += valid_num;
 
-	return URMA_SUCCESS;
+	return 0;
 }
 
-static urma_status_t set_rc_inl(struct udma_qp *qp, struct udma_jfs_wr_info *wr_info,
-				struct udma_jfs_wqe *wqe,
-				struct udma_sge_info *sge_info,
-				struct udma_sge *sg_list)
+static int set_rc_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
+		      struct udma_jfs_wqe *wqe, struct udma_sge *sg_list)
 {
-	urma_status_t ret;
 	void *dseg = wqe;
 	uint32_t i;
+	int ret;
 
-	if (wr_info->opcode == UDMA_OPCODE_RDMA_READ) {
-		URMA_LOG_ERR("send inline not support opcode READ\n");
-		return URMA_EINVAL;
-	}
-
-	if (!check_inl_data_len(qp, sge_info->total_len)) {
+	if (!check_inl_data_len(qp, total_len)) {
 		URMA_LOG_ERR("Invalid inline data len 0x%x, max inline data len 0x%x, mtu 0x%x\n",
-			     sge_info->total_len, qp->max_inline_data, qp->path_mtu);
-		return URMA_EINVAL;
+			     total_len, qp->max_inline_data, qp->path_mtu);
+		return EINVAL;
 	}
 
 	dseg = (char *)dseg + sizeof(struct udma_jfs_wqe);
 
-	if (sge_info->total_len <= UDMA_MAX_RC_INL_INN_SZ) {
+	if (total_len <= UDMA_MAX_RC_INL_INN_SZ) {
 		udma_reg_clear(wqe, UDMAWQE_INLINE_TYPE);
 
-		for (i = 0; i < wr_info->num_sge; i++) {
+		for (i = 0; i < num_sge; i++) {
 			memcpy(dseg, (void *)(uintptr_t)(sg_list[i].addr),
 			       sg_list[i].len);
 			dseg = (char *)dseg + sg_list[i].len;
@@ -713,17 +545,14 @@ static urma_status_t set_rc_inl(struct udma_qp *qp, struct udma_jfs_wr_info *wr_
 	} else {
 		udma_reg_enable(wqe, UDMAWQE_INLINE_TYPE);
 
-		ret = fill_ext_sge_inl_data(qp, sge_info, sg_list,
-					    wr_info->num_sge);
+		ret = fill_ext_sge_inl_data(qp, total_len, sg_list, num_sge);
 		if (ret) {
 			URMA_LOG_ERR("Fill extra sge fail\n");
 			return ret;
 		}
-
-		udma_reg_write(wqe, UDMAWQE_SGE_NUM, sge_info->valid_num);
 	}
 
-	return URMA_SUCCESS;
+	return 0;
 }
 
 static void set_um_inl_seg(struct udma_jfs_um_wqe *wqe, uint8_t *data)
@@ -744,15 +573,14 @@ static void set_um_inl_seg(struct udma_jfs_um_wqe *wqe, uint8_t *data)
 		      *loc >> UDMAUMWQE_INLINE_SHIFT2);
 }
 
-static void fill_ud_inn_inl_data(struct udma_jfs_wr_info *wr_info,
-				 struct udma_jfs_um_wqe *wqe,
+static void fill_ud_inn_inl_data(uint32_t num_sge, struct udma_jfs_um_wqe *wqe,
 				 struct udma_sge *sg_list)
 {
 	uint8_t data[UDMA_MAX_UM_INL_INN_SZ] = {};
 	void *tmp = data;
 	uint32_t i;
 
-	for (i = 0; i < wr_info->num_sge; i++) {
+	for (i = 0; i < num_sge; i++) {
 		memcpy(tmp, (void *)(uintptr_t)sg_list[i].addr, sg_list[i].len);
 		tmp += sg_list[i].len;
 	}
@@ -760,39 +588,257 @@ static void fill_ud_inn_inl_data(struct udma_jfs_wr_info *wr_info,
 	set_um_inl_seg(wqe, data);
 }
 
-static urma_status_t set_um_inl(struct udma_qp *qp,
-				struct udma_jfs_wr_info *wr_info,
-				struct udma_jfs_um_wqe *wqe,
-				struct udma_sge_info *sge_info,
-				struct udma_sge *sg_list)
+static int set_um_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
+		      struct udma_jfs_um_wqe *wqe, struct udma_sge *sg_list)
 {
-	urma_status_t ret;
+	int ret;
 
-	if (!check_inl_data_len(qp, sge_info->total_len)) {
+	if (!check_inl_data_len(qp, total_len)) {
 		URMA_LOG_ERR("Invalid inline data len 0x%x, max inline data len 0x%x, mtu 0x%x\n",
-			     sge_info->total_len, qp->max_inline_data,
-			     qp->path_mtu);
-		return URMA_EINVAL;
+			     total_len, qp->max_inline_data, qp->path_mtu);
+		return EINVAL;
 	}
 
-	if (sge_info->total_len <= UDMA_MAX_UM_INL_INN_SZ) {
+	if (total_len <= UDMA_MAX_UM_INL_INN_SZ) {
 		udma_reg_clear(wqe, UDMAUMWQE_INLINE_TYPE);
 
-		fill_ud_inn_inl_data(wr_info, wqe, sg_list);
+		fill_ud_inn_inl_data(num_sge, wqe, sg_list);
 	} else {
 		udma_reg_enable(wqe, UDMAUMWQE_INLINE_TYPE);
 
-		ret = fill_ext_sge_inl_data(qp, sge_info, sg_list,
-					    wr_info->num_sge);
+		ret = fill_ext_sge_inl_data(qp, total_len, sg_list, num_sge);
 		if (ret) {
 			URMA_LOG_ERR("Fill extra sge fail\n");
 			return ret;
 		}
-
-		udma_reg_write(wqe, UDMAUMWQE_SGE_NUM, sge_info->valid_num);
 	}
 
-	return URMA_SUCCESS;
+	return 0;
+}
+
+static inline void set_data_seg(struct udma_wqe_data_seg *dseg,
+				struct udma_sge *sg_list)
+{
+	dseg->lkey = htole32(sg_list->lkey);
+	dseg->addr = htole64(sg_list->addr);
+	dseg->len = htole32(sg_list->len);
+}
+
+static void set_rc_sge(struct udma_wqe_data_seg *dseg, struct udma_qp *qp,
+		       uint32_t num_sge, struct udma_sge *sg_list)
+{
+	uint32_t i;
+
+	for (i = 0; i < num_sge; i++) {
+		if (i < UDMA_SGE_IN_WQE) {
+			set_data_seg(dseg, sg_list + i);
+			dseg++;
+		} else {
+			dseg = (struct udma_wqe_data_seg *)
+				get_send_sge_ex(qp, qp->next_sge &
+						(qp->ex_sge.sge_cnt - 1));
+			set_data_seg(dseg, sg_list + i);
+			qp->next_sge++;
+		}
+	}
+}
+
+void set_um_sge(struct udma_qp *qp, uint32_t num_sge, struct udma_sge *sg_list)
+{
+	struct udma_wqe_data_seg *dseg;
+	uint32_t i;
+
+	for (i = 0; i < num_sge; i++) {
+		dseg = (struct udma_wqe_data_seg *)
+			get_send_sge_ex(qp, qp->next_sge &
+					(qp->ex_sge.sge_cnt - 1));
+		set_data_seg(dseg, sg_list + i);
+		qp->next_sge++;
+	}
+}
+
+static int udma_parse_rm_write_wr(urma_rw_wr_t *rw, struct udma_jfs_wqe *jfs_wqe,
+				  struct udma_qp *qp, bool is_inline)
+{
+	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)(jfs_wqe + 1);
+	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
+	uint32_t total_length = 0;
+	uint32_t valid_num = 0;
+	int ret = 0;
+
+	for (uint32_t i = 0; i < rw->src.num_sge; i++) {
+		if (rw->src.sge[i].len == 0)
+			continue;
+		sg_list[valid_num].len = rw->src.sge[i].len;
+		sg_list[valid_num].addr = rw->src.sge[i].addr;
+		if (!is_inline)
+			sg_list[valid_num].lkey = rw->src.sge[i].tseg->seg.token_id;
+		total_length += rw->src.sge[i].len;
+		valid_num++;
+	}
+	jfs_wqe->va = htole64(rw->dst.sge[0].addr);
+	jfs_wqe->rkey = htole32(rw->dst.sge[0].tseg->seg.token_id);
+	jfs_wqe->msg_len = htole32(total_length);
+	udma_reg_write(jfs_wqe, UDMAWQE_SGE_NUM, valid_num);
+
+	if (is_inline)
+		ret = set_rc_inl(qp, valid_num, total_length, jfs_wqe, &sg_list[0]);
+	else
+		set_rc_sge(dseg, qp, valid_num, &sg_list[0]);
+
+	return ret;
+}
+
+static int udma_parse_rm_send_wr(urma_send_wr_t *send, struct udma_jfs_wqe *jfs_wqe,
+				 struct udma_qp *qp, bool is_inline)
+{
+	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)(jfs_wqe + 1);
+	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
+	uint32_t total_length = 0;
+	uint32_t valid_num = 0;
+	int ret = 0;
+
+	for (uint32_t i = 0; i < send->src.num_sge; i++) {
+		if (send->src.sge[i].len == 0)
+			continue;
+		sg_list[valid_num].len = send->src.sge[i].len;
+		if (!is_inline)
+			sg_list[valid_num].lkey = send->src.sge[i].tseg->seg.token_id;
+		sg_list[valid_num].addr = send->src.sge[i].addr;
+		total_length += send->src.sge[i].len;
+		valid_num++;
+	}
+
+	jfs_wqe->msg_len = htole32(total_length);
+	udma_reg_write(jfs_wqe, UDMAWQE_SGE_NUM, valid_num);
+
+	if (is_inline)
+		ret = set_rc_inl(qp, valid_num, total_length, jfs_wqe, &sg_list[0]);
+	else
+		set_rc_sge(dseg, qp, valid_num, &sg_list[0]);
+
+	return ret;
+}
+
+static int udma_parse_um_send_wr(urma_send_wr_t *send, struct udma_jfs_um_wqe *jfs_wqe,
+				 struct udma_qp *qp, bool is_inline)
+{
+	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)(jfs_wqe + 1);
+	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
+	uint32_t total_length = 0;
+	uint32_t valid_num = 0;
+	int ret = 0;
+
+	for (uint32_t i = 0; i < send->src.num_sge; i++) {
+		if (send->src.sge[i].len == 0)
+			continue;
+		sg_list[valid_num].len = send->src.sge[i].len;
+		if (!is_inline)
+			sg_list[valid_num].lkey = send->src.sge[i].tseg->seg.token_id;
+		sg_list[valid_num].addr = send->src.sge[i].addr;
+		total_length += send->src.sge[i].len;
+		valid_num++;
+	}
+
+	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_LEN, htole32(total_length));
+	udma_reg_write(jfs_wqe, UDMAUMWQE_SGE_NUM, valid_num);
+
+	if (is_inline)
+		ret = set_um_inl(qp, valid_num, total_length, jfs_wqe, &sg_list[0]);
+	else
+		set_um_sge(qp, valid_num, &sg_list[0]);
+
+	return ret;
+}
+
+static int udma_parse_notify_params(urma_rw_wr_t *rw,
+				    struct udma_jfs_wqe *jfs_wqe)
+{
+	uint64_t notify_data;
+
+	if (rw->dst.sge) {
+		if (rw->dst.sge[1].addr % NOTIFY_OFFSET_4B_ALIGN) {
+			URMA_LOG_ERR("notify offset %uB should be aligned to 4B.\n",
+				     rw->dst.sge[1].addr);
+			return EINVAL;
+		}
+		notify_data = UDMA_GET_NOTIFY_DATA(rw->dst.sge[1].addr,
+						   rw->notify_data);
+		udma_reg_write(jfs_wqe, UDMAWQE_INV_KEY_IMMTDATA,
+			      (uint32_t)notify_data);
+	}
+
+	return 0;
+}
+
+static int udma_parse_rm_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wqe *jfs_wqe,
+				struct udma_qp *qp)
+{
+	bool is_inline = false;
+
+	if (wr->flag.bs.inline_flag == 1)
+		is_inline = true;
+
+	switch (wr->opcode) {
+	case URMA_OPC_SEND:
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_SEND);
+		return udma_parse_rm_send_wr(&wr->send, jfs_wqe, qp, is_inline);
+	case URMA_OPC_SEND_IMM:
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_SEND_WITH_IMM);
+		udma_reg_write(jfs_wqe, UDMAWQE_INV_KEY_IMMTDATA,
+			       (uint32_t)(wr->send.imm_data));
+		return udma_parse_rm_send_wr(&wr->send, jfs_wqe, qp, is_inline);
+	case URMA_OPC_SEND_INVALIDATE:
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_SEND_WITH_INV);
+		udma_reg_write(jfs_wqe, UDMAWQE_INV_KEY_IMMTDATA,
+			       (uint32_t)(wr->send.tseg->seg.token_id));
+		return udma_parse_rm_send_wr(&wr->send, jfs_wqe, qp, is_inline);
+	case URMA_OPC_WRITE:
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_RDMA_WRITE);
+		return udma_parse_rm_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
+	case URMA_OPC_WRITE_IMM:
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE,
+			       UDMA_OPCODE_RDMA_WRITE_WITH_IMM);
+		udma_reg_write(jfs_wqe, UDMAWQE_INV_KEY_IMMTDATA,
+			       (uint32_t)(wr->rw.notify_data));
+		return udma_parse_rm_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
+	case URMA_OPC_WRITE_NOTIFY:
+		if (udma_parse_notify_params(&wr->rw, jfs_wqe)) {
+			URMA_LOG_ERR("parse wr failed, invalid notify parameters.\n");
+			return EINVAL;
+		}
+		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE,
+			       UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY);
+		return udma_parse_rm_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
+	default:
+		URMA_LOG_ERR("Unsupported or invalid opcode :%u\n",
+			     (uint32_t)wr->opcode);
+		return EINVAL;
+	}
+}
+
+static int udma_parse_um_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_um_wqe *jfs_wqe,
+				struct udma_qp *qp)
+{
+	bool is_inline = false;
+
+	if (wr->flag.bs.inline_flag == 1)
+		is_inline = true;
+
+	switch (wr->opcode) {
+	case URMA_OPC_SEND:
+		udma_reg_write(jfs_wqe, UDMAUMWQE_OPCODE, UDMA_OPCODE_SEND);
+		return udma_parse_um_send_wr(&wr->send, jfs_wqe, qp, is_inline);
+	case URMA_OPC_SEND_IMM:
+		udma_reg_write(jfs_wqe, UDMAUMWQE_OPCODE, UDMA_OPCODE_SEND_WITH_IMM);
+		udma_reg_write(jfs_wqe, UDMAUMWQE_IMMT_DATA,
+			       (uint32_t)(wr->send.imm_data));
+		return udma_parse_um_send_wr(&wr->send, jfs_wqe, qp, is_inline);
+	default:
+		URMA_LOG_ERR("Unsupported or invalid opcode :%u\n",
+			     (uint32_t)wr->opcode);
+		return EINVAL;
+	}
 }
 
 static void udma_set_um_wqe_udpspn(struct udma_jfs_um_wqe *jfs_wqe,
@@ -811,37 +857,24 @@ static void udma_set_um_wqe_udpspn(struct udma_jfs_um_wqe *jfs_wqe,
 }
 
 static urma_status_t udma_set_um_wqe(struct udma_u_context *udma_ctx, void *wqe,
-			     struct udma_qp *qp, urma_jfs_wr_t *wr,
-			     struct udma_sge_info *sge_info)
+				     struct udma_qp *qp, urma_jfs_wr_t *wr)
 {
 	struct udma_jfs_um_wqe *jfs_wqe = (struct udma_jfs_um_wqe *)wqe;
-	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
-	struct udma_jfs_wr_info wr_info = {};
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t qpn, qpn_shift;
 
 	memset(jfs_wqe, 0, sizeof(struct udma_jfs_um_wqe));
+	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_START_SGE_IDX,
+		       qp->next_sge & (qp->ex_sge.sge_cnt - 1));
 
-	wr_info.num_sge = 1;
-
-	if (udma_parse_jfs_wr(wr, &wr_info, &sg_list[0]) != 0) {
+	if (udma_parse_um_jfs_wr(wr, jfs_wqe, qp) != 0) {
 		URMA_LOG_ERR("Failed to parse wr\n");
 		return URMA_EINVAL;
 	}
 
-	sge_info->total_len = wr_info.total_len;
-	if (sge_info->total_len == 0)
-		wr_info.num_sge = 0;
-
-	udma_reg_write(jfs_wqe, UDMAUMWQE_OPCODE, wr_info.opcode);
 	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_CQE, wr->flag.bs.complete_enable);
 	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_SE, wr->flag.bs.solicited_enable);
 	udma_reg_write_bool(jfs_wqe, UDMAUMWQE_INLINE, wr->flag.bs.inline_flag);
-	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_START_SGE_IDX, sge_info->start_idx &
-		       (qp->ex_sge.sge_cnt - 1));
-	udma_reg_write(jfs_wqe, UDMAUMWQE_IMMT_DATA,
-		       (uint32_t)(wr_info.inv_key_immtdata));
-	udma_reg_write(jfs_wqe, UDMAUMWQE_SGE_NUM, wr_info.num_sge);
 	udma_reg_write(jfs_wqe, UDMAUMWQE_HOPLIMIT, UDMA_HOPLIMIT_NUM);
 
 	qpn_shift = udma_ctx->num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM -
@@ -864,60 +897,30 @@ static urma_status_t udma_set_um_wqe(struct udma_u_context *udma_ctx, void *wqe,
 		udma_set_um_wqe_udpspn(jfs_wqe, qp);
 
 	udma_reg_write(jfs_wqe, UDMAUMWQE_DQPN, qpn);
-	udma_reg_write(jfs_wqe, UDMAUMWQE_MSG_LEN, htole32(sge_info->total_len));
-
-	if (wr->flag.bs.inline_flag == 1)
-		ret = set_um_inl(qp, &wr_info, jfs_wqe, sge_info, &sg_list[0]);
-	else
-		set_um_sge(qp, wr_info.num_sge, &sg_list[0], sge_info);
 
 	enable_wqe(qp, wqe, qp->sq.head);
 
 	return ret;
 }
 
-static urma_status_t udma_set_rm_wqe(void *wqe, struct udma_qp *qp, urma_jfs_wr_t *wr,
-			   struct udma_sge_info *sge_info)
+static urma_status_t udma_set_rm_wqe(void *wqe, struct udma_qp *qp,
+				     urma_jfs_wr_t *wr)
 {
-	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
-	struct udma_jfs_wr_info wr_info = {};
+	struct udma_jfs_wqe *jfs_wqe = (struct udma_jfs_wqe *)wqe;
 	urma_status_t ret = URMA_SUCCESS;
-	struct udma_wqe_data_seg *dseg;
-	struct udma_jfs_wqe *jfs_wqe;
 
-	jfs_wqe = (struct udma_jfs_wqe *)wqe;
-	dseg = (struct udma_wqe_data_seg *)(jfs_wqe + 1);
+	udma_reg_write(jfs_wqe, UDMAWQE_MSG_START_SGE_IDX,
+		       qp->next_sge & (qp->ex_sge.sge_cnt - 1));
 
-	wr_info.num_sge = 1;
-
-	if (udma_parse_jfs_wr(wr, &wr_info, &sg_list[0]) != 0) {
+	if (udma_parse_rm_jfs_wr(wr, jfs_wqe, qp) != 0) {
 		URMA_LOG_ERR("Failed to parse wr\n");
 		return URMA_EINVAL;
 	}
 
-	udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, wr_info.opcode);
 	udma_reg_write_bool(jfs_wqe, UDMAWQE_CQE, wr->flag.bs.complete_enable);
 	udma_reg_write_bool(jfs_wqe, UDMAWQE_FENCE, wr->flag.bs.fence);
 	udma_reg_write_bool(jfs_wqe, UDMAWQE_SE, wr->flag.bs.solicited_enable);
 	udma_reg_write_bool(jfs_wqe, UDMAWQE_INLINE, wr->flag.bs.inline_flag);
-	udma_reg_write(jfs_wqe, UDMAWQE_MSG_START_SGE_IDX,
-		       sge_info->start_idx & (qp->ex_sge.sge_cnt - 1));
-	udma_reg_write(jfs_wqe, UDMAWQE_INV_KEY_IMMTDATA,
-		       (uint32_t)(wr_info.inv_key_immtdata));
-
-	sge_info->valid_num = wr_info.num_sge;
-	sge_info->total_len = wr_info.total_len;
-	if (sge_info->total_len == 0)
-		sge_info->valid_num = 0;
-	jfs_wqe->va = htole64(wr_info.dst_addr);
-	jfs_wqe->msg_len = htole32(sge_info->total_len);
-	jfs_wqe->rkey = htole32(wr_info.rkey);
-	udma_reg_write(jfs_wqe, UDMAWQE_SGE_NUM, sge_info->valid_num);
-
-	if (wr->flag.bs.inline_flag == 1)
-		ret = set_rc_inl(qp, &wr_info, jfs_wqe, sge_info, &sg_list[0]);
-	else
-		set_rc_sge(dseg, qp, wr_info.num_sge, &sg_list[0], sge_info);
 
 	enable_wqe(qp, wqe, qp->sq.head);
 
@@ -939,9 +942,13 @@ static int udma_wq_overflow(struct udma_wq *wq, struct udma_cq *cq)
 	return cur >= wq->wqe_cnt;
 }
 
-static void udma_write512(uint64_t *dest, uint64_t *val)
+static void udma_sve_write512(uint64_t *dest, uint64_t *val)
 {
-	mmio_memcpy_x64(dest, val, sizeof(uint64x2x4_t));
+	asm volatile(
+		"ldr z0, [%0]\n" \
+		"str z0, [%1]\n"  \
+		::"r" (val), "r"(dest):"cc", "memory"
+	);
 }
 
 static void udma_write_dca_wqe(struct udma_qp *qp, void *wqe)
@@ -970,7 +977,7 @@ static void udma_write_dwqe(struct udma_u_context *ctx, struct udma_qp *qp,
 	udma_reg_write(udma_wqe, UDMAWQE_DB_SL_H, qp->sq.priority >> PRIORITY_OFFSET);
 	udma_reg_write(udma_wqe, UDMAWQE_WQE_IDX, qp->sq.head);
 
-	udma_write512((uint64_t *)qp->dwqe_page, (uint64_t *)udma_wqe);
+	udma_sve_write512((uint64_t *)qp->dwqe_page, (uint64_t *)udma_wqe);
 }
 
 static void udma_update_sq_db(struct udma_u_context *ctx, struct udma_qp *qp)
@@ -1051,8 +1058,8 @@ static int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 static int dca_attach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
 {
 	struct udma_dca_attach_attr attr = {};
+	bool force = false;
 	uint32_t idx;
-	bool force;
 	int ret;
 
 	(void)pthread_spin_lock(&qp->sq.lock);
@@ -1102,18 +1109,17 @@ static urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udm
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num)
 {
+	udma_to_device_barrier();
 	if (num == 1 && udma_qp->flags & UDMA_QP_CAP_DIRECT_WQE)
 		udma_write_dwqe(udma_ctx, udma_qp, wqe);
 	else
 		udma_update_sq_db(udma_ctx, udma_qp);
 }
 
-urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
-				struct udma_qp *udma_qp,
-				urma_jfs_wr_t *wr, void **wqe,
-				urma_transport_mode_t tp_mode)
+urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
+				  struct udma_qp *udma_qp,
+				  urma_jfs_wr_t *wr, void **wqe)
 {
-	struct udma_sge_info sge_info = {};
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx;
 
@@ -1123,38 +1129,85 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 
-	sge_info.start_idx = udma_qp->next_sge;
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
 		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
 		goto out;
 	}
+
 	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
 		URMA_LOG_ERR("JFS overflow.\n");
 		ret = URMA_ENOMEM;
 		goto out;
 	}
+
+	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
+	*wqe = get_send_wqe(udma_qp, wqe_idx);
+	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
+
+	ret = udma_set_rm_wqe(*wqe, udma_qp, wr);
+	if (ret)
+		goto out;
+
+	udma_qp->sq.head += 1;
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_write_dca_wqe(udma_qp, *wqe);
+
+	*udma_qp->sdb = udma_qp->sq.head;
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
+
+out:
+	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+		udma_dca_stop_post(&udma_ctx->dca_ctx, udma_qp->dca_wqe.dcan);
+
+	return ret;
+}
+
+urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
+				struct udma_qp *udma_qp,
+				urma_jfs_wr_t *wr, void **wqe,
+				urma_transport_mode_t tp_mode)
+{
+	urma_status_t ret = URMA_SUCCESS;
+	uint32_t wqe_idx;
+
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret) {
+		URMA_LOG_ERR("Failed to check send, qpn = %lu.\n", udma_qp->qp_num);
+		goto out;
+	}
+
+	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
+		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
+		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
+		goto out;
+	}
+
+	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
+		URMA_LOG_ERR("JFS overflow.\n");
+		ret = URMA_ENOMEM;
+		goto out;
+	}
+
 	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
 	*wqe = get_send_wqe(udma_qp, wqe_idx);
 	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
 
 	if (tp_mode == URMA_TM_UM)
-		ret = udma_set_um_wqe(udma_ctx, *wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_um_wqe(udma_ctx, *wqe, udma_qp, wr);
 	else
-		ret = udma_set_rm_wqe(*wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_rm_wqe(*wqe, udma_qp, wr);
 	if (ret)
 		goto out;
 
 	udma_qp->sq.head += 1;
-	udma_qp->next_sge = sge_info.start_idx;
-
 	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
 		udma_write_dca_wqe(udma_qp, *wqe);
 
 	udma_to_device_barrier();
 
-	if (tp_mode != URMA_TM_RC)
-		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, *wqe, 1);
+	udma_u_ring_sq_doorbell(udma_ctx, udma_qp, *wqe, 1);
 
 	*udma_qp->sdb = udma_qp->sq.head;
 	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
@@ -1212,7 +1265,6 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 					  urma_jfs_wr_t *wr,
 					  urma_transport_mode_t tp_mode)
 {
-	struct udma_sge_info sge_info = {};
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_index;
 	void *wqe;
@@ -1224,7 +1276,6 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 
-	sge_info.start_idx = udma_qp->next_sge;
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
 		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
@@ -1241,14 +1292,13 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	udma_qp->sq.wrid[wqe_index] = wr->user_ctx;
 
 	if (tp_mode == URMA_TM_UM)
-		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr);
 	else
-		ret = udma_set_rm_wqe(wqe, udma_qp, wr, &sge_info);
+		ret = udma_set_rm_wqe(wqe, udma_qp, wr);
 	if (ret)
 		goto out;
 
 	udma_qp->sq.head = udma_qp->sq.head + 1;
-	udma_qp->next_sge = sge_info.start_idx;
 
 	if (udma_qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
 		udma_write_dca_wqe(udma_qp, wqe);
@@ -1272,8 +1322,8 @@ int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
 	urma_post_and_ret_db_out_t ex_out;
 	urma_post_and_ret_db_in_t ex_in;
 	struct udma_u_context *udma_ctx;
+	struct udma_qp *udma_qp = NULL;
 	struct udma_u_jfs *udma_jfs;
-	struct udma_qp *udma_qp;
 	urma_jfs_wr_t **it;
 	urma_status_t ret;
 
@@ -1303,7 +1353,8 @@ int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
 	}
 
 	ex_out.db_addr = (uint64_t)(udma_ctx->db_addr);
-	ex_out.db_data = (uint64_t)udma_qp->qp_num;
+	if (udma_qp != NULL)
+		ex_out.db_data = (uint64_t)udma_qp->qp_num;
 	memcpy((void *)out->addr, &ex_out, out->len);
 out:
 	if (!udma_jfs->lock_free)

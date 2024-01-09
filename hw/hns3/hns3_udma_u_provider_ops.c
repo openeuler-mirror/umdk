@@ -139,16 +139,14 @@ static urma_status_t udma_u_query_device(urma_device_t *dev,
 	return URMA_SUCCESS;
 }
 
-static urma_status_t udma_u_init_urma_ctx_cfg(urma_device_t *dev,
-					      urma_context_cfg_t *cfg,
-					      int dev_fd, uint32_t eid_index)
+static void udma_u_init_urma_ctx_cfg(urma_device_t *dev,
+				     urma_context_cfg_t *cfg,
+				     int dev_fd, uint32_t eid_index)
 {
 	cfg->dev = dev;
 	cfg->ops = &g_udma_u_ops;
 	cfg->dev_fd = dev_fd;
 	cfg->eid_index = eid_index;
-
-	return URMA_SUCCESS;
 }
 
 static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int dev_fd)
@@ -301,23 +299,10 @@ static void udma_u_destroy_jfs_qp_table(struct udma_u_context *ctx)
 	(void)pthread_rwlock_destroy(&ctx->jfs_qp_table_lock);
 }
 
-static void udma_u_destroy_jetty_table(struct udma_u_context *ctx)
-{
-	struct udma_jetty_node *cur, *next;
-
-	(void)pthread_rwlock_wrlock(&ctx->jetty_table_lock);
-	HMAP_FOR_EACH_SAFE(cur, next, node, &ctx->jetty_table) {
-		udma_hmap_remove(&ctx->jetty_table, &cur->node);
-		free(cur);
-	}
-	(void)pthread_rwlock_unlock(&ctx->jetty_table_lock);
-	udma_hmap_destroy(&ctx->jetty_table);
-	(void)pthread_rwlock_destroy(&ctx->jetty_table_lock);
-}
-
 static urma_status_t init_jetty_x_table(struct udma_u_context *udma_u_ctx)
 {
 	urma_status_t ret = URMA_SUCCESS;
+	int i;
 
 	(void)pthread_rwlock_init(&udma_u_ctx->jfs_qp_table_lock, NULL);
 	if (udma_hmap_init(&udma_u_ctx->jfs_qp_table, UDMA_JFS_QP_TABLE_SIZE)) {
@@ -332,19 +317,17 @@ static urma_status_t init_jetty_x_table(struct udma_u_context *udma_u_ctx)
 		ret = URMA_ENOMEM;
 		goto err_init_jfr_table;
 	}
+	if (udma_u_ctx->num_jetty_shift > UDMA_JETTY_TABLE_SHIFT)
+		udma_u_ctx->jettys_in_tbl_shift = udma_u_ctx->num_jetty_shift - UDMA_JETTY_TABLE_SHIFT;
+	else
+		udma_u_ctx->jettys_in_tbl_shift = 0;
 
+	udma_u_ctx->jettys_in_tbl = 1 << udma_u_ctx->jettys_in_tbl_shift;
+	for (i = 0; i < UDMA_JETTY_TABLE_NUM; i++)
+		udma_u_ctx->jetty_table[i].refcnt = 0;
 	(void)pthread_rwlock_init(&udma_u_ctx->jetty_table_lock, NULL);
-	if (udma_hmap_init(&udma_u_ctx->jetty_table, UDMA_JETTY_TABLE_SIZE)) {
-		URMA_LOG_ERR("init jetty table failed.\n");
-		ret = URMA_ENOMEM;
-		goto err_init_jetty_table;
-	}
-
 	return ret;
 
-err_init_jetty_table:
-	pthread_rwlock_destroy(&udma_u_ctx->jetty_table_lock);
-	udma_hmap_destroy(&udma_u_ctx->jfr_table);
 err_init_jfr_table:
 	pthread_rwlock_destroy(&udma_u_ctx->jfr_table_lock);
 	udma_hmap_destroy(&udma_u_ctx->jfs_qp_table);
@@ -536,11 +519,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 		return NULL;
 	}
 
-	ret = udma_u_init_urma_ctx_cfg(dev, &cfg, dev_fd, eid_index);
-	if (ret != URMA_SUCCESS) {
-		URMA_LOG_ERR("udma_u init urma ctx failed.");
-		goto free_ctx;
-	}
+	udma_u_init_urma_ctx_cfg(dev, &cfg, dev_fd, eid_index);
 
 	load_dca_config_from_env_var(&udma_env_attr);
 	ucontext_set_cmd(&cmd, &udma_env_attr);
@@ -579,18 +558,20 @@ free_ctx:
 static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 {
 	struct udma_u_context *udma_u_ctx = to_udma_ctx(ctx);
+	urma_status_t ret = URMA_SUCCESS;
 
 	udma_u_destroy_jfr_table(udma_u_ctx);
 	udma_u_destroy_jfs_qp_table(udma_u_ctx);
-	udma_u_destroy_jetty_table(udma_u_ctx);
 	uninit_dca_context(udma_u_ctx);
 	udma_u_uninit_context(udma_u_ctx);
-	if (urma_cmd_delete_context(&udma_u_ctx->urma_ctx))
+	if (urma_cmd_delete_context(&udma_u_ctx->urma_ctx)) {
 		URMA_LOG_ERR("udma_u destroy ctx failed.\n");
+		ret = URMA_FAIL;
+	}
 
 	free(udma_u_ctx);
 
-	return URMA_SUCCESS;
+	return ret;
 }
 
 static urma_status_t udma_u_init(urma_init_attr_t *conf)

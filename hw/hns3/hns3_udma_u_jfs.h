@@ -324,6 +324,9 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 				 urma_jfs_wr_t **bad_wr);
+urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
+				  struct udma_qp *udma_qp,
+				  urma_jfs_wr_t *wr, void **wqe);
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
 				void **wqe, urma_transport_mode_t tp_mode);

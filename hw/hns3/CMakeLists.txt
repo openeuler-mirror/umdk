@@ -12,7 +12,8 @@ set(UDMA_NAME urma-hns3)
 set_target_properties(UDMA_SO PROPERTIES OUTPUT_NAME ${UDMA_NAME})
 
 set(CMAKE_C_FLAGS "-Wall -Wextra -Wfloat-equal -fno-common -std=gnu99 \
--D_FORTIFY_SOURCE=2 -O2 -fstack-protector-all -s -ftrapv -Wl,-z,relro,-z,now")
+-D_FORTIFY_SOURCE=2 -O2 -fstack-protector-all -s -ftrapv -Wl,-z,relro,-z,now \
+-march=armv8.3-a+crc+crypto+fp+sve")
 set(CMAKE_LD_FLAGS "-s")
 
 install(TARGETS UDMA_SO LIBRARY DESTINATION /usr/lib64/urma OPTIONAL)
