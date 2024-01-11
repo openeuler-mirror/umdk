@@ -99,10 +99,8 @@ static struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
 						   struct udma_u_context *udma_ctx)
 {
 	struct udma_u_jfc *jfc;
-	int ret;
 
-	ret = check_jfc_cfg(udma_ctx, cfg);
-	if (ret)
+	if (check_jfc_cfg(udma_ctx, cfg))
 		goto err;
 
 	jfc = (struct udma_u_jfc *)calloc(1, sizeof(*jfc));
@@ -112,8 +110,8 @@ static struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
 	}
 
 	jfc->lock_free = cfg->flag.bs.lock_free;
-	ret = pthread_spin_init(&jfc->lock, PTHREAD_PROCESS_PRIVATE);
-	if (ret) {
+	if (!jfc->lock_free &&
+	    pthread_spin_init(&jfc->lock, PTHREAD_PROCESS_PRIVATE)) {
 		URMA_LOG_ERR("alloc udma_ctx spinlock failed.\n");
 		goto err_lock;
 	}
@@ -131,7 +129,8 @@ static struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
 err_db:
 	udma_free_buf(&jfc->buf);
 err_buf:
-	pthread_spin_destroy(&jfc->lock);
+	if (!jfc->lock_free)
+		pthread_spin_destroy(&jfc->lock);
 err_lock:
 	free(jfc);
 err:
@@ -466,7 +465,8 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 	} else {
 		jfr = get_jfr_from_cqe(udma_ctx, cqe);
 		if (jfr == NULL) {
-			URMA_LOG_INFO("Poll jfc failed, QP 0x%x of jfr has been destroyed", qpn);
+			URMA_LOG_INFO("failed to poll jfc for jfr. QP 0x%x destroyed",
+					qpn);
 			return JFC_POLL_ERR;
 		}
 		cr->local_id = jfr->jfrn;
@@ -524,7 +524,8 @@ static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 		node = udma_table_first_with_hash(&(udma_ctx->jfs_qp_table),
 						  &(udma_ctx->jfs_qp_table_lock), qpn);
 		if (!node) {
-			URMA_LOG_INFO("Poll jfc failed, QP 0x%x of jfs has been destroyed", qpn);
+			URMA_LOG_INFO("failed to poll jfc for req. QP 0x%x destroyed",
+				       qpn);
 			return JFC_POLL_ERR;
 		}
 		qp_node = to_udma_jfs_qp_node(node);
