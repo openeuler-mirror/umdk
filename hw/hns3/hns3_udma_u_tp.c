@@ -98,7 +98,7 @@ static struct udma_hmap_node *udma_delete_conn(pthread_rwlock_t *rwlock,
 	return hmap_node;
 }
 
-static int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
+int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(urma_ctx);
 	off_t offset;
@@ -322,7 +322,14 @@ urma_status_t udma_u_unadvise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr)
 	tgt_index = udma_get_tgt_hash(&tjfr->id);
 
 	(void)atomic_fetch_sub(&udma_target_jfr->refcnt, 1);
-	urma_cmd_unadvise_jfr(jfs, tjfr);
+
+	ret = urma_cmd_unadvise_jfr(jfs, tjfr);
+	if (ret) {
+		URMA_LOG_ERR("urma cmd unadvise jfr failed, ret is %d.\n",
+			     ret);
+		return URMA_FAIL;
+	}
+
 	tjfr_hmap_node = udma_delete_conn(&tjfr_tbl->rwlock, &tjfr_tbl->hmap,
 					  tgt_index);
 	if (tjfr_hmap_node == NULL) {

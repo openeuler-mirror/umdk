@@ -105,7 +105,8 @@ struct udma_u_dca_ctx {
 	atomic_ulong		*buf_status;
 	atomic_ulong		*sync_status;
 };
-
+#define UDMA_JETTY_TABLE_SHIFT 5
+#define UDMA_JETTY_TABLE_NUM (1 << UDMA_JETTY_TABLE_SHIFT)
 struct udma_u_context {
 	urma_context_t		urma_ctx;
 	void			*uar;
@@ -133,7 +134,12 @@ struct udma_u_context {
 	pthread_rwlock_t	jfs_qp_table_lock;
 	struct udma_hmap	jfs_qp_table;
 	pthread_rwlock_t	jetty_table_lock;
-	struct udma_hmap	jetty_table;
+	struct {
+		struct udma_u_jetty	**table;
+		int			refcnt;
+	} jetty_table[UDMA_JETTY_TABLE_NUM];
+	uint32_t		jettys_in_tbl_shift;
+	uint32_t		jettys_in_tbl;
 
 	uint8_t			poe_ch_num;
 	void			*reset_state;
