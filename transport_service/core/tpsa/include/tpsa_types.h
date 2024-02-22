@@ -58,16 +58,21 @@ extern "C" {
 #define TPSA_SUSPEND2ERROR_CNT 3
 #define TPSA_SUSPEND2ERROR_PERIOD_US 30000000
 
-#define TPSA_CAPABILITY_OOR "out of order receive"
-#define TPSA_CAPABILITY_SR "selective retransmission"
-#define TPSA_CAPABILITY_SPRAY "spray with src udp port"
-#define TPSA_CAPABILITY_DCA "administrate dynamic connection"
-
 #define TPSA_CC_IDX_TABLE_SIZE 64 /* support 8 priorities and 8 algorithms */
                                   /* same as UBCORE_CC_IDX_TABLE_SIZE */
                                   /* same as URMA_CC_IDX_TABLE_SIZE */
 
 #define TPSA_UDRV_DATA_LEN 120
+
+typedef enum tpsa_cap_type {
+    TPSA_CAP_OOR = 0,
+    TPSA_CAP_SR,
+    TPSA_CAP_SPRAY,
+    TPSA_CAP_DCA,
+    TPSA_CAP_NUM
+} tpsa_cap_type_t;
+
+extern const char *g_tpsa_capability[TPSA_CAP_NUM];
 
 typedef enum tpsa_tp_cc_alg {
     TPSA_TP_CC_NONE = 0,
@@ -242,7 +247,6 @@ typedef struct tpsa_tp_mod_cfg {
     uint32_t oos_cnt;
     uint16_t cc_alg;
     bool set_cc_alg;
-    char dev_name[URMA_MAX_DEV_NAME];
     uint8_t cc_priority;
     bool set_cc_priority;
     bool force_g_domain;
@@ -357,8 +361,7 @@ typedef struct tpsa_tpg_cfg {
     uint32_t tp_cnt;
 } tpsa_tpg_cfg_t;
 
-/* Struct used for tp parameter negotiation */
-typedef struct tpsa_tp_param {
+typedef struct tpsa_tp_param_common {
     /*
      * The negotiation function is not complete.
      * Add it temporarily(local_tp_cfg)
@@ -372,10 +375,21 @@ typedef struct tpsa_tp_param {
     uint32_t rx_psn;
     uvs_mtu_t local_mtu;
     uvs_mtu_t peer_mtu;
-    uint32_t local_tpn;
-    uint32_t peer_tpn;
     uint64_t local_seg_size;
     uint64_t peer_seg_size;
+} tpsa_tp_param_common_t;
+
+typedef struct tpsa_tp_param_unique {
+    uint32_t local_tpn;
+    uint32_t peer_tpn;
+} tpsa_tp_param_unique_t;
+
+/* Struct used for tp parameter negotiation */
+typedef struct tpsa_tp_param {
+    // common param of tp in tpg
+    tpsa_tp_param_common_t com;
+    // unique param of tp in tpg
+    tpsa_tp_param_unique_t uniq[TPSA_MAX_TP_CNT_IN_GRP]; // UBCORE_MAX_TP_CNT_IN_GRP=32
 } tpsa_tp_param_t;
 
 typedef enum tpsa_resp_status {
@@ -454,7 +468,7 @@ typedef struct tpsa_create_resp {
 
     tpsa_resp_status_t ret;
     tpsa_tpg_cfg_t tpg_cfg;
-    tpsa_tp_param_t tp_param[TPSA_MAX_TP_CNT_IN_GRP]; // UBCORE_MAX_TP_CNT_IN_GRP=32
+    tpsa_tp_param_t tp_param;
     bool is_target;
     uint32_t target_cc_cnt;
     tpsa_tp_cc_entry_t target_cc_arr[TPSA_CC_IDX_TABLE_SIZE]; // stores the query results
@@ -464,10 +478,8 @@ typedef struct tpsa_create_resp {
     bool local_cc_en;
     /* for alpha */
     struct tpsa_ta_data ta_data;
-    uint32_t udrv_in_len;
-    uint32_t udrv_out_len;
-    uint32_t udrv_ext_len;
-    uint8_t udrv_data[TPSA_UDRV_DATA_LEN];
+    uint32_t ext_len;
+    uint8_t ext[TPSA_UDRV_DATA_LEN];
 } tpsa_create_resp_t;
 
 typedef struct tpsa_create_req {
@@ -476,7 +488,7 @@ typedef struct tpsa_create_req {
     uint16_t src_function_id;
 
     tpsa_tpg_cfg_t tpg_cfg;
-    tpsa_tp_param_t tp_param[TPSA_MAX_TP_CNT_IN_GRP]; // UBCORE_MAX_TP_CNT_IN_GRP=32
+    tpsa_tp_param_t tp_param; // UBCORE_MAX_TP_CNT_IN_GRP=32
     bool is_target;
     char dev_name[TPSA_MAX_DEV_NAME];
     uint32_t cc_array_cnt;
@@ -485,9 +497,8 @@ typedef struct tpsa_create_req {
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uint32_t udrv_in_len;
-    uint32_t udrv_out_len;
-    uint32_t udrv_ext_len;
-    uint8_t udrv_data[TPSA_UDRV_DATA_LEN];
+    uint32_t ext_len;
+    uint8_t udrv_ext[TPSA_UDRV_DATA_LEN];
 } tpsa_create_req_t;
 
 typedef tpsa_create_req_t tpsa_create_ack_t;
@@ -497,12 +508,9 @@ typedef struct tpsa_create_finish {
     uint32_t nlmsg_seq;
     char dev_name[TPSA_MAX_DEV_NAME];
     uint16_t src_function_id;
+    tpsa_tp_param_t tp_param; // UBCORE_MAX_TP_CNT_IN_GRP=32
     /* for alpha */
     struct tpsa_ta_data ta_data;
-    uint32_t udrv_in_len;
-    uint32_t udrv_out_len;
-    uint32_t udrv_ext_len;
-    uint8_t udrv_data[TPSA_UDRV_DATA_LEN];
 } tpsa_create_finish_t;
 
 typedef struct tpsa_destroy_req {
@@ -511,9 +519,10 @@ typedef struct tpsa_destroy_req {
     uint16_t src_function_id;
     uint32_t tp_cnt;
     tpsa_transport_type_t trans_type;
-    tpsa_net_addr_t net_addr;
+    tpsa_net_addr_t net_addr; /* Record the IP information of the source that sends req */
     /* for alpha */
     struct tpsa_ta_data ta_data;
+    bool delete_trigger; /* true means the delete request comes from client */
 } tpsa_destroy_req_t;
 
 typedef struct tpsa_table_sync {
@@ -536,7 +545,11 @@ typedef union uvs_global_cfg_mask {
         uint32_t suspend_period : 1;
         uint32_t suspend_cnt    : 1;
         uint32_t sus2err_period : 1;
-        uint32_t reserved       : 27;
+        uint32_t hop_limit      : 1;
+        uint32_t udp_port_start : 1;
+        uint32_t udp_port_end   : 1;
+        uint32_t udp_range      : 1;
+        uint32_t reserved       : 23;
     } bs;
     uint32_t value;
 } uvs_global_cfg_mask_t;
@@ -548,6 +561,12 @@ typedef struct tpsa_global_cfg {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+
+    /* cfg by gaea, for all tp */
+    uint8_t hop_limit;
+    uint16_t udp_port_start;
+    uint16_t udp_port_end;
+    uint16_t udp_range;  // src udp port range
 } tpsa_global_cfg_t;
 
 typedef struct tpsa_create_param {
@@ -563,8 +582,8 @@ typedef struct tpsa_create_param {
     uint16_t fe_idx;
     uint32_t upi;
     uint32_t vtpn;
-    bool liveMigrate;
-    bool migrateThird;
+    bool live_migrate;
+    bool dip_valid;
     bool clan_tp;
     uint8_t port_id;
     tpsa_global_cfg_t *global_cfg;
@@ -576,9 +595,8 @@ typedef struct tpsa_create_param {
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uint32_t udrv_in_len;
-    uint32_t udrv_out_len;
-    uint32_t udrv_ext_len;
-    uint8_t udrv_data[0];
+    uint32_t ext_len;
+    uint8_t udrv_ext[0];
 } tpsa_create_param_t;
 
 typedef union tpsa_vtp_cfg_flag {
@@ -622,6 +640,12 @@ typedef enum tpsa_mig_resp_status {
     TPSA_VTP_MIG_COMPLETE,
     TPSA_VTP_MIG_UNCOMPLETE
 } tpsa_mig_resp_status_t;
+
+typedef struct uvs_end_point {
+    tpsa_net_addr_t ip;
+    urma_eid_t eid;
+    uint32_t jetty_id;
+} uvs_end_point_t;
 
 #ifdef __cplusplus
 }

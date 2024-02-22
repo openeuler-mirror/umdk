@@ -35,7 +35,6 @@ tpsa_response_t *process_global_cfg_show(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_global_cfg_show_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         free(global_cfg);
         return NULL;
     }
@@ -47,6 +46,7 @@ tpsa_response_t *process_global_cfg_show(tpsa_request_t *req, ssize_t read_len)
     show_rsp->suspend_period = global_cfg->suspend_period;
     show_rsp->suspend_cnt = global_cfg->suspend_cnt;
     show_rsp->sus2err_period = global_cfg->sus2err_period;
+    show_rsp->tp_fast_destroy = tpsa_get_tp_fast_destroy();
 
     rsp->cmd_type = GLOBAL_CFG_SHOW;
     rsp->rsp_len = (ssize_t)sizeof(tpsa_global_cfg_show_rsp_t);
@@ -71,16 +71,22 @@ tpsa_response_t *process_global_cfg_set(tpsa_request_t *req, ssize_t read_len)
 
     global_cfg = (uvs_global_info_t *)calloc(1, sizeof(uvs_global_info_t));
     if (global_cfg == NULL) {
-        TPSA_LOG_ERR("failed to allocate gloabl_cfg\n");
         return NULL;
     }
 
-    global_cfg->mask.value = set_req->mask.value;
+    /* global_cfg->mask and local global mask is different */
+    global_cfg->mask.bs.mtu = set_req->mask.bs.mtu;
+    global_cfg->mask.bs.slice = set_req->mask.bs.slice;
+    global_cfg->mask.bs.suspend_period = set_req->mask.bs.suspend_period;
+    global_cfg->mask.bs.suspend_cnt = set_req->mask.bs.suspend_cnt;
+    global_cfg->mask.bs.sus2err_period = set_req->mask.bs.sus2err_period;
+
     global_cfg->mtu = set_req->mtu_set;
     global_cfg->slice = set_req->slice;
     global_cfg->suspend_period = set_req->suspend_period;
     global_cfg->suspend_cnt = set_req->suspend_cnt;
     global_cfg->sus2err_period = set_req->sus2err_period;
+    tpsa_set_tp_fast_destroy(set_req->tp_fast_destroy);
 
     ret = uvs_add_global_info(global_cfg);
     if (ret == -1) {
@@ -91,7 +97,6 @@ tpsa_response_t *process_global_cfg_set(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_global_cfg_set_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         free(global_cfg);
         return NULL;
     }

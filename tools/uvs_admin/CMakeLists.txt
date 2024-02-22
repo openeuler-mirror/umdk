@@ -45,4 +45,6 @@ target_link_libraries(uvs_admin /usr/local/lib64/libSecodefuzz.a)
 endif("${FUZZ}" STREQUAL "enable")
 
 set_target_properties(uvs_admin PROPERTIES C_STANDARD 99)
-install(TARGETS uvs_admin DESTINATION /usr/bin PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE)
+if("${URMA_INSTALL}" STREQUAL "enable")
+    install(TARGETS uvs_admin DESTINATION /usr/bin PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE)
+endif()

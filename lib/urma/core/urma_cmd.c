@@ -1187,6 +1187,7 @@ int urma_cmd_query_jetty(urma_jetty_t *jetty, urma_jetty_cfg_t *cfg, urma_jetty_
         cfg->shared.jfc               = jetty->jetty_cfg.shared.jfc;
     }
     cfg->user_ctx                     = jetty->jetty_cfg.user_ctx;
+    cfg->jetty_grp                    = jetty->jetty_cfg.jetty_grp;
 
     attr->mask                        = 0;
     attr->rx_threshold                = arg.out.rx_threshold;

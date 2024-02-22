@@ -42,9 +42,8 @@ static inline tpsa_netaddr_entry_t *tpsa_lookup_map_entry_nolock(tpsa_netaddr_tb
 static tpsa_netaddr_entry_t *tpsa_alloc_map_entry(const urma_eid_t *eid, tpsa_underlay_info_t *underlay)
 {
     size_t len = underlay->netaddr_cnt * sizeof(tpsa_net_addr_t);
-    tpsa_netaddr_entry_t *entry = calloc(1, sizeof(tpsa_netaddr_entry_t) + len);
+    tpsa_netaddr_entry_t *entry = (tpsa_netaddr_entry_t *)calloc(1, sizeof(tpsa_netaddr_entry_t) + len);
     if (entry == NULL) {
-        TPSA_LOG_ERR("Failed to calloc tpsa netaddr entry");
         return NULL;
     }
     entry->eid = *eid;
@@ -100,8 +99,7 @@ int tpsa_add_underlay_info(urma_eid_t *eid, tpsa_underlay_info_t *underlay)
     uint32_t hash = ub_hash_bytes(eid, sizeof(urma_eid_t), 0);
     tpsa_netaddr_entry_t *entry = tpsa_alloc_map_entry(eid, underlay);
     if (entry == NULL) {
-        TPSA_LOG_ERR("Failed to calloc tpsa netaddr entry");
-        return -1;
+        return -ENOMEM;
     }
 
     (void)pthread_rwlock_wrlock(&tbl->rwlock);

@@ -62,8 +62,7 @@ static int tpsa_find_process_name(void)
     tpsa_process_path = (char*)calloc(MAX_PROCESS_NAME_LEN + 1, sizeof(char));
     if (tpsa_process_path == NULL) {
         /* TPSA_LOG cannot be used, otherwise, it will enter the dead cycle and burst the stack. */
-        (void)printf("tpsa_process_path is empty, errno: %d.\n", errno);
-        return -1;
+        return -ENOMEM;
     }
     ssize_t lenth = readlink(TPSA_PROCESS_PATH, tpsa_process_path, MAX_PROCESS_NAME_LEN);
     if (lenth <= 0) {

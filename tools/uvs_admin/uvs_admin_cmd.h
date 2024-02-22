@@ -32,6 +32,7 @@ enum UVS_ADMIN_CMD_PARA_NUM {
     UVS_ADMIN_CMD_PARM_SIX = 6,
     UVS_ADMIN_CMD_PARM_SEVEN = 7,
     UVS_ADMIN_CMD_PARM_EIGHT = 8,
+    UVS_ADMIN_CMD_PARM_NINE = 9,
 };
 
 typedef struct uvs_admin_cmd_ctx {

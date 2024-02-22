@@ -32,7 +32,6 @@
 #define PERFTEST_WAIT_JFC_TIME  (1000)  // 1s
 #define PERFTEST_BW_MB 0x100000 // 2^20
 
-#define BI_JETTYS_MULTIPLE (2)
 #define LAT_MEASURE_TAIL (2)  // Remove the two max value
 #define RESULT_LAT_FMT " bytes   iterations  t_min[us]  t_max[us]  t_median[us]  t_avg[us]  t_stdev[us]  " \
                         "99""%""[us]  99.9""%""[us]  99.99""%""[us]  99.999""%""[us]"
@@ -561,7 +560,6 @@ static void print_lat_report(perftest_context_t *ctx, const perftest_config_t *c
     uint64_t measure_cnt = cfg->iters - 1;
     uint64_t *delta = calloc(1, sizeof(uint64_t) * (uint32_t)measure_cnt);
     if (delta == NULL) {
-        (void)fprintf(stderr, "Failed to calloc delta memory\n");
         return;
     }
 
@@ -632,7 +630,7 @@ static int run_jfs_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             uint32_t size_of_jfr = cfg->jfr_depth / cfg->jfr_post_list;
             if (send_lat_post_recv(ctx, cfg, (int)size_of_jfr) != 0) {
@@ -939,12 +937,10 @@ static int prepare_jfs_wr(perftest_context_t *ctx, perftest_config_t *cfg)
 
     run_ctx->jfs_wr = calloc(1, sizeof(urma_jfs_wr_t) * cfg->jettys * cfg->jfs_post_list);
     if (run_ctx->jfs_wr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc jfs wr.\n");
         return -1;
     }
     run_ctx->jfs_sge = calloc(1, sizeof(urma_sge_t) * cfg->jettys * cfg->jfs_post_list * PERFTEST_SGE_NUM_PRE_WR);
     if (run_ctx->jfs_sge == NULL) {
-        (void)fprintf(stderr, "Failed to calloc jfs sge.\n");
         goto free_wr;
     }
 
@@ -994,18 +990,15 @@ static int alloc_jfr_ctx_buffer(perftest_context_t *ctx, const perftest_config_t
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
     run_ctx->jfr_wr = calloc(1, sizeof(urma_jfr_wr_t) * cfg->jettys * cfg->jfr_post_list);
     if (run_ctx->jfr_wr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc jfr wr.\n");
         return -1;
     }
     run_ctx->jfr_sge = calloc(1, sizeof(urma_sge_t) * cfg->jettys * cfg->jfr_post_list * PERFTEST_SGE_NUM_PRE_WR);
     if (run_ctx->jfr_sge == NULL) {
-        (void)fprintf(stderr, "Failed to calloc jfr sge.\n");
         goto free_jfr_wr;
     }
 
     run_ctx->rx_buf_addr = calloc(1, sizeof(uint64_t) * cfg->jettys);
     if (run_ctx->rx_buf_addr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc recv buffer addr.\n");
         goto free_jfr_sge;
     }
     return 0;
@@ -1033,7 +1026,10 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     urma_jfr_wr_t *wr, *bad_wr;
     uint32_t size_per_jetty = cfg->jfr_depth / cfg->jfr_post_list;
 
-    run_ctx->rposted = (int)cfg->jfr_depth;
+    if (cfg->share_jfr) {
+        size_per_jetty /= cfg->jettys;
+    }
+    run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     if (alloc_jfr_ctx_buffer(ctx, cfg) != 0) {
         (void)fprintf(stderr, "Failed to calloc jfr ctx buffer.\n");
@@ -1106,7 +1102,7 @@ static int run_simplex_read_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (cfg->use_flat_api) {
                 ret = run_once_read_lat(ctx, cfg);
@@ -1219,7 +1215,7 @@ static int run_duplex_read_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             ret = run_one_jetty_read_lat(ctx, cfg);
             if (ret != 0) {
@@ -1269,7 +1265,7 @@ static int run_simplex_write_lat(perftest_context_t *ctx, perftest_config_t *cfg
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (cfg->use_flat_api) {
                 ret = run_once_write_lat(ctx, cfg);
@@ -1392,7 +1388,7 @@ static int run_duplex_write_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             ret = run_one_jetty_write_lat(ctx, cfg);
             if (ret != 0) {
@@ -1623,7 +1619,7 @@ static int run_post_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", cfg->time_type.bs.iterations == 1 ? RESULT_LAT_FMT : RESULT_LAT_DUR_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             ret = run_one_post_send_lat(ctx, cfg);
             if (ret != 0) {
@@ -1791,7 +1787,6 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
 
     urma_cr_t *cr = calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc cr.\n");
         return -1;
     }
 
@@ -1925,18 +1920,15 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
     int ret = 0;
     uint32_t *posted_per_jetty = calloc(1, sizeof(uint32_t) * cfg->jettys);
     if (posted_per_jetty == NULL) {
-        (void)fprintf(stderr, "Failed to calloc posted_per_jetty.\n");
         return -1;
     }
     urma_cr_t *cr = calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc cr.\n");
         ret = -1;
         goto free_recv_jetty;
     }
     uint32_t *unused_recv_for_jetty = calloc(1, sizeof(uint32_t) * cfg->jettys);
     if (unused_recv_for_jetty == NULL) {
-        (void)fprintf(stderr, "Failed to calloc unused_recv_for_jetty.\n");
         ret = -1;
         goto free_recv_cr;
     }
@@ -1996,7 +1988,7 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
                                 &run_ctx->jfr_wr[cr_id * cfg->jfr_post_list], &bad_wr);
                         }
                         if (status != 0) {
-                            (void)fprintf(stderr, "Failed to post jfr wr, status: %d, i: %d, rcnt: %lu, cr_id: %u.\n",
+                            (void)fprintf(stderr, "Failed to post jfr wr, status: %d, i: %u, rcnt: %lu, cr_id: %u.\n",
                                 status, i, rcnt, cr_id);
                             ret = -1;
                             goto free_u_recv_jetty;
@@ -2054,18 +2046,15 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
 
     urma_cr_t *cr_recv = (urma_cr_t *)calloc(1, sizeof(urma_cr_t) * cfg->jfr_depth);
     if (cr_recv == NULL) {
-        (void)fprintf(stderr, "Failed to alloc cr_recv.\n");
         return -1;
     }
     urma_cr_t *cr_send = (urma_cr_t *)calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr_send == NULL) {
-        (void)fprintf(stderr, "Failed to alloc cr_send.\n");
         ret = -1;
         goto free_cr_recv;
     }
     uint32_t *posted_per_jetty = (uint32_t *)calloc(1, sizeof(uint32_t) * jettys);
     if (posted_per_jetty == NULL) {
-        (void)fprintf(stderr, "Failed to alloc posted_per_jetty.\n");
         ret = -1;
         goto free_cr_send;
     }
@@ -2075,7 +2064,6 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     uint32_t *unused_recv_for_jetty = (uint32_t *)calloc(1, sizeof(uint32_t) * cfg->jettys);
     if (unused_recv_for_jetty == NULL) {
-        (void)fprintf(stderr, "Failed to alloc unused_recv_for_jetty.\n");
         ret = -1;
         goto free_posted_per_jetty;
     }
@@ -2090,9 +2078,6 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
 
-    if (cfg->bidirection && cfg->ib_tm_mode == URMA_IB_XRC) {
-        jettys /= BI_JETTYS_MULTIPLE;
-    }
     uint64_t tot_iters = cfg->iters * jettys;
 
     while ((cfg->time_type.bs.duration == 1 && run_ctx->state != END_STATE) ||
@@ -2380,7 +2365,6 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
 
     urma_cr_t *cr = calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr == NULL) {
-        (void)fprintf(stderr, "Failed to calloc cr.\n");
         return -1;
     }
 
@@ -2396,10 +2380,6 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     cfg->iters = 0;
     cfg->last_iters = 0;
-
-    if (cfg->bidirection && cfg->ib_tm_mode == URMA_IB_XRC) {
-        jettys /= BI_JETTYS_MULTIPLE;
-    }
 
     if (cfg->time_type.bs.duration == 1) {
         update_duration_state(ctx, cfg);
@@ -2480,12 +2460,10 @@ static int run_once_bw_recv_infinite(perftest_context_t *ctx, perftest_config_t 
 
     urma_cr_t *cr = (urma_cr_t *)calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr == NULL) {
-        (void)fprintf(stderr, "Failed to alloc cr.\n");
         return -1;
     }
     uint32_t *unused_recv_for_jetty = (uint32_t *)calloc(1, sizeof(uint32_t) * cfg->jettys);
     if (unused_recv_for_jetty == NULL) {
-        (void)fprintf(stderr, "Failed to alloc unused_recv_for_jetty.\n");
         ret = -1;
         goto inf_recv_free_cr;
     }
@@ -2677,7 +2655,7 @@ int run_read_bw(perftest_context_t *ctx, perftest_config_t *cfg)
 
     /* WRITE BW test run in both sides */
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (run_bw_once(ctx, cfg) != 0) {
                 return -1;
@@ -2697,7 +2675,7 @@ int run_write_bw(perftest_context_t *ctx, perftest_config_t *cfg)
     /* WRITE BW test run in both sides */
     (void)printf("%s\n", RESULT_BW_FMT);
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (run_bw_once(ctx, cfg) != 0) {
                 return -1;
@@ -2819,7 +2797,7 @@ int run_send_bw(perftest_context_t *ctx, perftest_config_t *cfg)
     (void)printf("%s\n", RESULT_BW_FMT);
 
     if (cfg->all == true) {
-        for (uint32_t i = 1; i < cfg->order; i++) {
+        for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (run_send_bw_one_size(ctx, cfg) != 0) {
                 return -1;

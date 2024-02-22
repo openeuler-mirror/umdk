@@ -51,4 +51,9 @@ int tpsa_add_underlay_info(urma_eid_t *eid, tpsa_underlay_info_t *underlay);
 
 int tpsa_net_init(void);
 void tpsa_net_uninit(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -12,12 +12,13 @@
 #include "uvs_types.h"
 
 static const char * const g_uvs_mtu_str[] = {
+    [0] = "",
     [UVS_MTU_256] = "256",
     [UVS_MTU_512] = "512",
     [UVS_MTU_1024] = "1024",
     [UVS_MTU_2048] = "2048",
     [UVS_MTU_4096] = "4096",
-    [UVS_MTU_8192] = "8192",
+    [UVS_MTU_8192] = "8192"
 };
 
 static inline const char *uvs_mtu_to_str(uvs_mtu_t mtu)

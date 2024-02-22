@@ -80,7 +80,6 @@
 #define URMA_NO_SHARE_JFR         0
 #define URMA_SHARE_JFR            1
 
-#define URMA_TYPICAL_RETRY_CNT    7             /* typical value of retry cnt for jfs cfg */
 #define URMA_TYPICAL_RNR_RETRY    7             /* typical value of rnr retry for jfs cfg */
 #define URMA_TYPICAL_ERR_TIMEOUT   17           /* typical value of err_timeout for jfs cfg */
 #define URMA_TYPICAL_MIN_RNR_TIMER 12           /* typical value of min_rnr_timer for jfr cfg */
@@ -164,7 +163,7 @@ typedef enum urma_async_event_type {
     URMA_EVENT_DEV_FATAL,
     URMA_EVENT_EID_CHANGE,     // eid change, HNM and other management roles will be modified.
     URMA_EVENT_ELR_ERR,        /* Entity level error */
-    URMA_EVENT_ELR_DONE        /* Entitu flush done */
+    URMA_EVENT_ELR_DONE        /* Entity flush done */
 } urma_async_event_type_t;
 
 typedef enum urma_jfc_state {

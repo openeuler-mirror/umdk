@@ -116,7 +116,6 @@ typedef struct uvs_admin_tp_mod_cfg {
     uint32_t oos_cnt;
     uint16_t cc_alg;
     bool set_cc_alg;
-    char dev_name[URMA_MAX_DEV_NAME];
     uint8_t cc_priority;
     bool set_cc_priority;
     bool force_g_domain;

@@ -4,8 +4,8 @@
  * Author: Lilijun
  * Create: 2020-8-7
  * Note:
- * History: 2019-8-7  Lilijun  define atomic types
- *          2019-9-21 Lilijun  fix atomic types
+ * History: 2020-8-7  Lilijun  define atomic types
+ *          2020-9-21 Lilijun  fix atomic types
  */
 
 #ifndef UB_BARRIER_H

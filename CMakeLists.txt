@@ -3,11 +3,29 @@ cmake_minimum_required(VERSION 3.12.1)
 project(UBus)
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 set(CMAKE_FLAGS_PUBILC " -Wall -Werror -Wfloat-equal -Wtrampolines -g -O2 -rdynamic -Wl,-z,noexecstack,-z,relro,-z,now \
 -fno-strict-aliasing -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -fPIC")
 
+if(CROSS_COMPILE)
+    set(CMAKE_C_COMPILER "${CROSS_COMPILE}")
+    message(STATUS "CMAKE_C_COMPILER: ${CROSS_COMPILE}")
+else()
+    set(CMAKE_C_COMPILER "/usr/bin/gcc")
+endif()
+
+if(CROSS_COMPILE_LINK)
+    link_directories(${CROSS_COMPILE_LINK})
+    set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} -L${CROSS_COMPILE_LINK}")
+    message(STATUS "CROSS_COMPILE_LINK: ${CROSS_COMPILE_LINK}")
+endif()
+
+# URMA_INSTALL DISABLE
+if("${URMA_INSTALL}" STREQUAL "disable")
+    message(STATUS "URMA install disable!")
+else()
+    set(URMA_INSTALL "enable")
+endif()
 # PERF_CYCLE ENABLE
 if("${PERF_CYCLE}" STREQUAL "enable")
     set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} -DPERF_CYCLE_FLAG")

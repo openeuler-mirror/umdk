@@ -50,7 +50,7 @@
 
 #define PERFTEST_MIN_ORDER  (1)
 #define PERFTEST_SIZE_ORDER  (16)    // 2^16
-#define PERFTEST_MAX_ORDER  (18)
+#define PERFTEST_MAX_ORDER  (23)
 
 // value range of perftest iterations
 #define PERFTEST_ITERS_MIN  (5)
@@ -148,6 +148,7 @@ typedef struct perftest_config {
     perftest_time_type_t time_type;
     uint32_t inline_size;              /* Max size of message to be sent in inline. */
     uint32_t jettys;                   /* Num of jetty's(default 1). */
+    uint32_t token_policy;
     uint32_t mtu;
     urma_transport_type_t tp_type;
     uint64_t iters;                    /* Number of exchanges (at least 5, default 1000). */
@@ -160,7 +161,6 @@ typedef struct perftest_config {
     uint32_t jfr_depth;
     uint32_t size;
     uint32_t jfs_depth;
-    urma_ib_tm_t ib_tm_mode;
     urma_transport_mode_t trans_mode;
 
     uint32_t cache_line_size;

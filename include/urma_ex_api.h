@@ -18,8 +18,7 @@ extern "C" {
 #endif
 
 typedef enum urma_user_control_opcode {
-    URMA_USER_CTL_SET_CTX_TM                   = 0,
-    URMA_USER_CTL_IGNORE_JETTY_IN_CR,
+    URMA_USER_CTL_IGNORE_JETTY_IN_CR           = 0,
     URMA_USER_CTL_SET_AI_MODE,
     URMA_USER_CTL_IP_NON_BLOCK_SEND,                       /* only available for IP mode */
     URMA_USER_CTL_IP_STOP_RECV,                            /* only IP mode, referred before destroy context */
@@ -36,17 +35,6 @@ typedef struct urma_post_and_ret_db_user_out {
     uint64_t db_addr;
     uint64_t db_data;
 } urma_post_and_ret_db_user_out_t;
-
-typedef enum urma_ib_tm {
-    URMA_IB_RC,
-    URMA_IB_XRC,
-    URMA_IB_UD
-} urma_ib_tm_t;
-
-typedef struct urma_set_tm_context {
-    urma_context_t *ctx;
-    urma_ib_tm_t tm_mode;
-} urma_set_tm_ctx_t;
 
 typedef enum urma_user_ctl_jfc_init_attr_mask {
     URMA_USER_CTL_JFC_INIT_ATTR_MASK_CREATE_FLAGS = 1
@@ -142,9 +130,6 @@ urma_status_t urma_post_jfs_wr_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_w
  */
 urma_status_t urma_post_jetty_wr_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
     urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out);
-
-// Called by the user to determine the use of a different transmission mode
-urma_status_t urma_ib_set_transport_mode(urma_context_t *ctx, urma_ib_tm_t mode);
 
 typedef struct urma_user_ctl_ip_stop_send_in {
     urma_target_jetty_t *tjfr;

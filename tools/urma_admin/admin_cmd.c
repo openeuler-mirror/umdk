@@ -24,22 +24,20 @@
 #include "admin_file_ops.h"
 #include "ub_util.h"
 #include "urma_cmd.h"
+#include "admin_netlink.h"
 #include "admin_cmd.h"
 
 #define UBCORE_DEV_PATH "/dev/ubcore"
 
-static int urma_admin_set_ns(const char *ns)
+static int urma_admin_get_ns_fd(const char *ns)
 {
+    int ns_fd;
+
     /* todo: validate input */
-    int ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
+    ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
     if (ns_fd == -1) {
         (void)printf("failed to open ns file %s, errno:%d", ns,  errno);
         return ns_fd;
-    }
-    if (setns(ns_fd, CLONE_NEWNET) == -1) {
-        (void)close(ns_fd);
-        (void)printf("failed to setns");
-        return -1;
     }
     return ns_fd;
 }
@@ -57,10 +55,11 @@ static int urma_admin_cmd_add_eid(int ubcore_fd, const tool_config_t *cfg)
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_index = cfg->idx;
-    if (strlen(cfg->ns) > 0 && (ns_fd = urma_admin_set_ns(cfg->ns)) < 0) {
+    if (strlen(cfg->ns) > 0 && (ns_fd = urma_admin_get_ns_fd(cfg->ns)) < 0) {
         (void)printf("set ns failed, cmd:%u, ns %s.\n", hdr.command, cfg->ns);
         return -1;
     }
+    arg.in.ns_fd = ns_fd;
     ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
     if (ret != 0) {
         (void)close(ns_fd);
@@ -83,6 +82,7 @@ static int urma_admin_cmd_del_eid(int ubcore_fd, const tool_config_t *cfg)
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_index = cfg->idx;
+    arg.in.ns_fd = -1;
     ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
     if (ret != 0) {
         (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
@@ -120,7 +120,7 @@ int admin_add_eid(const tool_config_t *cfg)
     }
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
-        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
+        (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
         (void)close(dev_fd);
         return -1;
     }
@@ -142,7 +142,7 @@ int admin_del_eid(const tool_config_t *cfg)
     }
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
-        (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
+        (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
         (void)close(dev_fd);
         return -1;
     }
@@ -579,11 +579,10 @@ static inline void admin_dealloc_res_tp_list(const tool_config_t *cfg, uint64_t 
 
 static inline int admin_alloc_res_tp_list(const tool_config_t *cfg, uint64_t addr)
 {
-#define ADMIN_MAX_TP_CNT_IN_GRP 32
     tool_res_tpg_val_t *tpg = (tool_res_tpg_val_t *)addr;
-    tpg->tp_list = calloc(1, sizeof(uint32_t) * ADMIN_MAX_TP_CNT_IN_GRP);
+
+    tpg->tp_list = calloc(1, sizeof(uint32_t) * tpg->tp_cnt);
     if (tpg->tp_list == NULL) {
-        (void)printf("Failed to alloc tp_list.\n");
         return -1;
     }
 
@@ -603,11 +602,9 @@ static inline void admin_dealloc_res_jetty_list(const tool_config_t *cfg, uint64
 static inline int admin_alloc_res_jetty_list(const tool_config_t *cfg, uint64_t addr)
 {
     tool_res_jetty_grp_val_t *jetty_grp = (tool_res_jetty_grp_val_t *)addr;
-    uint32_t max_jetty_in_grp = admin_read_dev_file_value_u32(cfg->dev_name, "max_jetty_in_jetty_grp");
 
-    jetty_grp->jetty_list = calloc(1, sizeof(uint32_t) * max_jetty_in_grp);
+    jetty_grp->jetty_list = calloc(1, sizeof(uint32_t) * jetty_grp->jetty_cnt);
     if (jetty_grp->jetty_list == NULL) {
-        (void)printf("Failed to alloc jetty_list.\n");
         return -1;
     }
 
@@ -666,63 +663,56 @@ static void admin_dealloc_res_dev(const tool_config_t *cfg, uint64_t addr)
 static int admin_alloc_res_dev(const tool_config_t *cfg, uint64_t addr)
 {
     tool_res_dev_val_t *dev = (tool_res_dev_val_t *)addr;
-    uint32_t max_jfs = admin_read_dev_file_value_u32(cfg->dev_name, "max_jfs");
-    uint32_t max_jfr = admin_read_dev_file_value_u32(cfg->dev_name, "max_jfr");
-    uint32_t max_jfc = admin_read_dev_file_value_u32(cfg->dev_name, "max_jfc");
-    uint32_t max_len = max_jfs > max_jfr ? max_jfs : max_jfr;
 
-    dev->seg_cnt = max_len;
-    dev->seg_list = (tool_seg_info_t *)calloc(1, sizeof(tool_seg_info_t) * max_len);
+    dev->seg_list = (tool_seg_info_t *)calloc(1, sizeof(tool_seg_info_t) * dev->seg_cnt);
     if (dev->seg_list == NULL) {
         return -1;
     }
-    dev->jfs_cnt = max_jfs;
-    dev->jfs_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_jfs);
+    dev->jfs_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfs_cnt);
     if (dev->jfs_list == NULL) {
         goto free_seg_list;
     }
-    dev->jfr_cnt = max_jfr;
-    dev->jfr_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_jfr);
+    dev->jfr_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfr_cnt);
     if (dev->jfr_list == NULL) {
         goto free_jfs_list;
     }
-    dev->jfc_cnt = max_jfc;
-    dev->jfc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_jfc);
+
+    dev->jfc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfc_cnt);
     if (dev->jfc_list == NULL) {
         goto free_jfr_list;
     }
-    dev->jetty_cnt = max_len;
-    dev->jetty_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->jetty_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jetty_cnt);
     if (dev->jetty_list == NULL) {
         goto free_jfc_list;
     }
-    dev->jetty_group_cnt = max_len;
-    dev->jetty_group_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->jetty_group_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jetty_group_cnt);
     if (dev->jetty_group_list == NULL) {
         goto free_jetty_list;
     }
-    dev->rc_cnt = max_len;
-    dev->rc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->rc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->rc_cnt);
     if (dev->rc_list == NULL) {
         goto free_jetty_group_list;
     }
-    dev->vtp_cnt = max_len;
-    dev->vtp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->vtp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->vtp_cnt);
     if (dev->vtp_list == NULL) {
         goto free_rc_list;
     }
-    dev->tp_cnt = max_len;
-    dev->tp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->tp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->tp_cnt);
     if (dev->tp_list == NULL) {
         goto free_vtp_list;
     }
-    dev->tpg_cnt = max_len;
-    dev->tpg_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->tpg_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->tpg_cnt);
     if (dev->tpg_list == NULL) {
         goto free_tp_list;
     }
-    dev->utp_cnt = max_len;
-    dev->utp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * max_len);
+
+    dev->utp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->utp_cnt);
     if (dev->utp_list == NULL) {
         goto free_tpg_list;
     }
@@ -760,31 +750,46 @@ static int admin_cmd_ioctl_res(int dev_fd, const tool_config_t *cfg, uint64_t ad
     hdr.args_len = (uint32_t)sizeof(admin_cmd_query_res_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    if (cfg->key.type == TOOL_RES_KEY_TPG && admin_alloc_res_tp_list(cfg, addr) != 0) {
-        return -1;
-    }
-    if (cfg->key.type == TOOL_RES_KEY_JETTY_GROUP && admin_alloc_res_jetty_list(cfg, addr) != 0) {
-        return -1;
-    }
-    if (cfg->key.type == TOOL_RES_KEY_DEV_CTX && admin_alloc_res_dev(cfg, addr) != 0) {
-        return -1;
-    }
-
     arg.in.key = cfg->key.key;
     arg.in.type = cfg->key.type;
     arg.in.key_ext = cfg->key.key_ext;
     arg.in.key_cnt = cfg->key.key_cnt;
     (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
+    arg.in.query_cnt = true;
     arg.out.addr = addr;
     arg.out.len = (uint32_t)g_query_res_size[cfg->key.type];
 
+    /* first ioctl to query cnt */
     int ret = ioctl(dev_fd, URMA_CORE_CMD, &hdr);
     if (ret != 0) {
         (void)printf("Failed to ioctl, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
         goto deaalloc;
     }
 
+    /* use size from query_cnt to alloc memory */
+    if (cfg->key.type == TOOL_RES_KEY_TPG && admin_alloc_res_tp_list(cfg, addr) != 0) {
+        (void)printf("Failed to alloc res tp list");
+        return -1;
+    }
+    if (cfg->key.type == TOOL_RES_KEY_JETTY_GROUP && admin_alloc_res_jetty_list(cfg, addr) != 0) {
+        (void)printf("Failed to alloc res jetty list");
+        return -1;
+    }
+    if (cfg->key.type == TOOL_RES_KEY_DEV_CTX && admin_alloc_res_dev(cfg, addr) != 0) {
+        (void)printf("Failed to alloc res dev");
+        return -1;
+    }
+
+    arg.in.query_cnt = false;
+
+    ret = ioctl(dev_fd, URMA_CORE_CMD, &hdr);
+    if (ret != 0) {
+        (void)printf("Failed to ioctl, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+        goto deaalloc;
+    }
+
     admin_print_res(&arg);
+
 deaalloc:
     if (cfg->key.type == TOOL_RES_KEY_TPG) {
         admin_dealloc_res_tp_list(cfg, addr);
@@ -802,8 +807,7 @@ static int admin_cmd_query_res(int dev_fd, const tool_config_t *cfg)
 {
     void *addr = calloc(1, g_query_res_size[cfg->key.type]);
     if (addr == NULL) {
-        (void)printf("Failed to alloc res addr, type: %u.\n", cfg->key.type);
-        return -1;
+        return -ENOMEM;
     }
 
     if (admin_cmd_ioctl_res(dev_fd, cfg, (uint64_t)addr) != 0) {
@@ -838,4 +842,49 @@ int admin_show_res(const tool_config_t *cfg)
 
     (void)close(dev_fd);
     return 0;
+}
+
+int admin_set_ns_mode(const tool_config_t *cfg)
+{
+    admin_nl_set_ns_mode_t req = {0};
+    admin_nl_resp resp = {0};
+
+    req.ns_mode = cfg->ns_mode;
+    int ret = admin_nl_talk(&req, sizeof(admin_nl_set_ns_mode_t), ADMIN_NL_SET_NS_MODE, &resp);
+    if (ret != 0 || resp.ret != 0) {
+        printf("failed to set ns mode.\n");
+        return -1;
+    }
+    return 0;
+}
+
+int admin_set_dev_ns(const tool_config_t *cfg)
+{
+    admin_nl_set_dev_ns_t req = {0};
+    admin_nl_resp resp = {0};
+    int ns_fd = -1;
+
+    memcpy(req.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
+
+    if (strlen(cfg->ns) == 0) {
+        (void)printf("invalid ns path %s.\n", cfg->ns);
+        return -1;
+    }
+    ns_fd = urma_admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("set ns failed, ns %s.\n", cfg->ns);
+        return -1;
+    }
+    req.ns_fd = ns_fd;
+
+    int ret = admin_nl_talk(&req, sizeof(admin_nl_set_dev_ns_t), ADMIN_NL_SET_DEV_NS, &resp);
+    if (ret != 0 || resp.ret != 0) {
+        ret = -1;
+        printf("failed to set ns %s for dev %s.\n", cfg->ns, cfg->dev_name);
+    }
+
+    if (ns_fd >= 0) {
+        (void)close(ns_fd);
+    }
+    return ret;
 }

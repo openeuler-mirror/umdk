@@ -33,6 +33,7 @@ typedef struct uvs_admin_global_cfg_args {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    bool tp_fast_destroy;
 } uvs_admin_global_cfg_args_t;
 
 typedef struct uvs_admin_global_cfg_show_rsp {
@@ -41,6 +42,7 @@ typedef struct uvs_admin_global_cfg_show_rsp {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    bool tp_fast_destroy;
 } uvs_admin_global_cfg_show_rsp_t;
 
 // must be the same as that of uvs_admin_global_cfg_args.
@@ -51,6 +53,7 @@ typedef struct uvs_admin_global_cfg_set_req {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    bool tp_fast_destroy;
 } uvs_admin_global_cfg_set_req_t;
 
 typedef struct uvs_admin_global_cfg_set_rsp {

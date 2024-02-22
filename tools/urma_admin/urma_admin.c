@@ -46,7 +46,6 @@ static void admin_parse_port_attr(const char *sysfs_path, admin_show_ubep_t *ube
     uint8_t i;
     char *port_path = calloc(1, DEV_PATH_MAX);
     if (port_path == NULL) {
-        (void)printf("port_patht malloc failed.\n");
         return;
     }
 
@@ -97,10 +96,10 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u32(sysfs_path, "ceq_cnt", &dev_attr->dev_cap.ceq_cnt);
     (void)admin_parse_file_value_u8(sysfs_path, "port_count", &dev_attr->port_cnt);
     (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->max_eid_cnt);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_tp_in_tpg", &dev_attr->dev_cap.max_tp_in_tpg);
 
     ubep->eid_list = calloc(1, dev_attr->max_eid_cnt * sizeof(urma_eid_info_t));
     if (ubep->eid_list == NULL) {
-        (void)printf("alloc memory request failed.\n");
         return;
     }
     for (uint32_t i = 0; i < dev_attr->max_eid_cnt; i++) {
@@ -129,7 +128,6 @@ static admin_show_ubep_t *admin_get_ubep_info(const struct dirent *dent)
 
     ubep = calloc(1, sizeof(admin_show_ubep_t));
     if (ubep == NULL) {
-        (void)printf("ubep struct malloc failed.\n");
         return NULL;
     }
 
@@ -301,6 +299,7 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     print_trans_mode_str(ubep->dev_attr.dev_cap.trans_mode);
     print_congestion_ctrl_alg_str(ubep->dev_attr.dev_cap.congestion_ctrl_alg);
     (void)printf("ceq_cnt                    : %u\n", ubep->dev_attr.dev_cap.ceq_cnt);
+    (void)printf("max_tp_in_tpg              : %u\n", ubep->dev_attr.dev_cap.max_tp_in_tpg);
 
     (void)printf("port_count                 : %u\n", ubep->dev_attr.port_cnt);
     for (i = 0; i < ubep->dev_attr.port_cnt && ubep->dev_attr.port_cnt != UINT8_INVALID; i++) {
@@ -464,8 +463,7 @@ static int admin_show_ubep_upi(const tool_config_t *cfg)
     buf_len = (uint64_t)max_upi_cnt * ADMIN_UPI_STR_LEN + 1;
     tmp_buf = calloc(1, buf_len);
     if (tmp_buf == NULL) {
-        (void)printf("alloc upi str buf failed, dev_name: %s.\n", cfg->dev_name);
-        return -1;
+        return -ENOMEM;
     }
 
     if (admin_read_dev_file(cfg->dev_name, tmp_path, tmp_buf, (uint32_t)buf_len) <= 0) {
@@ -512,6 +510,12 @@ static int execute_command(const tool_config_t *cfg)
             break;
         case TOOL_CMD_SHOW_RES:
             ret = admin_show_res(cfg);
+            break;
+        case TOOL_CMD_SET_NS_MODE:
+            ret = admin_set_ns_mode(cfg);
+            break;
+        case TOOL_CMD_SET_DEV_NS:
+            ret = admin_set_dev_ns(cfg);
             break;
         case TOOL_CMD_NUM:
         default:

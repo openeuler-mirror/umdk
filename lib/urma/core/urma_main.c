@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <dlfcn.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "urma_ex_api.h"
 #include "urma_log.h"
@@ -72,8 +73,7 @@ static int urma_open_provider(const char *file)
     urma_so_t *so = calloc(1, sizeof(urma_so_t));
     if (so == NULL) {
         free(canonicalized_path);
-        URMA_LOG_ERR("calloc failed");
-        return -1;
+        return -ENOMEM;
     }
     (void)strncpy(so->path, file, URMA_MAX_LIB_PATH);
     so->dl = dlopen(canonicalized_path, RTLD_NOW);
@@ -98,7 +98,7 @@ int urma_register_provider_ops(urma_provider_ops_t *provider_ops)
     }
     urma_driver_t *driver = calloc(1, sizeof(urma_driver_t));
     if (driver == NULL) {
-        return -1;
+        return -ENOMEM;
     }
     driver->ops = provider_ops;
     ub_list_push_back(&g_driver_list, &driver->node);
@@ -230,44 +230,11 @@ urma_status_t urma_uninit(void)
     return ret;
 }
 
-urma_status_t urma_ib_set_transport_mode(urma_context_t *ctx, urma_ib_tm_t mode)
-{
-    if ((ctx == NULL) || (ctx->ops == NULL)) {
-        URMA_LOG_ERR("parameter invalid in urma_ib_set_transport_mode.\n");
-        return URMA_EINVAL;
-    }
-
-    if (strcmp(ctx->dev->ops->name, "provider_ib") != 0) {
-        URMA_LOG_WARN("Only provider_ib can configure ib_tm.\n");
-        return URMA_SUCCESS;
-    }
-
-    urma_set_tm_ctx_t input_ctx;
-    input_ctx.ctx = ctx;
-    input_ctx.tm_mode = mode;
-    urma_user_ctl_in_t in = {
-        .addr = (uint64_t)&input_ctx,
-        .len = (uint32_t)sizeof(input_ctx),
-        .opcode = URMA_USER_CTL_SET_CTX_TM
-    };
-    if (ctx->ops->user_ctl == NULL) {
-        URMA_LOG_ERR("Invalid parameter with user_ctl null_ptr.\n");
-        return URMA_FAIL;
-    }
-    int ret = ctx->ops->user_ctl(ctx, &in, NULL);
-    if ((urma_status_t)ret != URMA_SUCCESS && (urma_status_t)ret != URMA_ENOPERM) {
-        URMA_LOG_ERR("Failed to excecute user_ctl, ret: %d.\n", ret);
-        return URMA_FAIL;
-    }
-    return (urma_status_t)ret;
-}
-
 static urma_device_t **get_urma_device_list(int *num_devices)
 {
     urma_device_t **device_list;
     device_list = calloc(1, (uint64_t)(*num_devices) * sizeof(urma_device_t *));
     if (device_list == NULL) {
-        URMA_LOG_ERR("Failed to allocate memory.\n");
         goto out;
     }
 
@@ -318,29 +285,6 @@ void urma_free_device_list(urma_device_t **device_list)
     return;
 }
 
-static uint32_t urma_get_eid_cnt(urma_device_t *dev)
-{
-    char tmp_eid[URMA_MAX_NAME] = {0};
-    char tmp_value[URMA_MAX_NAME] = {0};
-    urma_device_attr_t *dev_attr;
-    urma_eid_t eid_invalid = {0};
-    urma_eid_t eid = {0};
-    uint32_t cnt = 0;
-
-    dev_attr = &dev->sysfs_dev->dev_attr;
-    for (uint32_t i = 0; i < dev_attr->max_eid_cnt; i++) {
-        if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
-            URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
-        }
-        (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
-        if (urma_str_to_eid(tmp_value, &eid) != 0 || memcmp(&eid_invalid, &eid, sizeof(urma_eid_t)) == 0) {
-            continue;
-        }
-        cnt++;
-    }
-    return cnt;
-}
-
 static inline bool urma_eid_is_valid(urma_eid_t *eid)
 {
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
@@ -348,23 +292,22 @@ static inline bool urma_eid_is_valid(urma_eid_t *eid)
 
 urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
 {
+    if (dev == NULL || cnt == NULL) {
+        URMA_LOG_WARN("invalid parameter with null_ptr.\n");
+        return NULL;
+    }
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
     urma_eid_info_t *eid_list;
     uint32_t cnt_idx = 0;
     urma_eid_t eid = {0};
+    uint32_t max_eid_cnt = dev->sysfs_dev->dev_attr.max_eid_cnt;
 
-    *cnt = urma_get_eid_cnt(dev);
-    if (*cnt == 0) {
-        URMA_LOG_WARN("get valid eid cnt: %d.\n", *cnt);
-        return NULL;
-    }
-    eid_list = calloc(1, (*cnt) * sizeof(urma_eid_info_t));
+    eid_list = calloc(1, max_eid_cnt * sizeof(urma_eid_info_t));
     if (eid_list == NULL) {
-        URMA_LOG_ERR("alloc memory request failed.\n");
         return NULL;
     }
-    for (uint32_t i = 0; i < *cnt; i++) {
+    for (uint32_t i = 0; i < max_eid_cnt; i++) {
         if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
             URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
         }
@@ -375,6 +318,7 @@ urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
         eid_list[cnt_idx].eid_index = i;
         (void)memcpy(&eid_list[cnt_idx++].eid, &eid, sizeof(urma_eid_t));
     }
+    *cnt = cnt_idx;
     return eid_list;
 }
 
@@ -483,7 +427,7 @@ int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid)
     }
     (void)urma_read_sysfs_file(dev->sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME);
     if (urma_str_to_eid(tmp_value, eid) != 0 || !urma_eid_is_valid(eid)) {
-        URMA_LOG_ERR("Failed to read eid value\n");
+        URMA_LOG_ERR("Failed to read eid value, dev name:%s, eid idx:%u\n", dev->name, eid_index);
         return -1;
     }
     return 0;

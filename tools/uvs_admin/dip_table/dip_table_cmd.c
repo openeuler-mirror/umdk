@@ -33,6 +33,9 @@ enum dip_table_opts {
 #define DIP_TABLE_OPT_DIP_LONG "dip"
     DIP_TABLE_OPT_DIP_NUM,
 
+#define DIP_TABLE_OPT_UPI_LONG "upi"
+    DIP_TABLE_OPT_UPI_NUM,
+
 #define DIP_TABLE_OPT_PEER_TPSA_IP_LONG "peer_tpsa_ip"
     DIP_TABLE_OPT_PEER_TPSA_IP_NUM,
 
@@ -51,6 +54,9 @@ enum dip_table_opts {
 #define DIP_TABLE_OPT_NEW_DIP_LONG "new_dip"
     DIP_TABLE_OPT_NEW_DIP_NUM,
 
+#define DIP_TABLE_OPT_NEW_UPI_LONG "new_upi"
+    DIP_TABLE_OPT_NEW_UPI_NUM,
+
     DIP_TABLE_OPT_MAX_NUM,
 };
 
@@ -59,24 +65,28 @@ enum dip_table_opts {
 static const struct opt_arg g_dip_table_opt_args[DIP_TABLE_OPT_MAX_NUM] = {
     [DIP_TABLE_OPT_HELP_NUM] = {DIP_TABLE_OPT_HELP_LONG, ARG_TYPE_OTHERS},
     [DIP_TABLE_OPT_DIP_NUM] = {DIP_TABLE_OPT_DIP_LONG, ARG_TYPE_STR},
+    [DIP_TABLE_OPT_UPI_NUM] = {DIP_TABLE_OPT_UPI_LONG, ARG_TYPE_NUM},
     [DIP_TABLE_OPT_PEER_TPSA_IP_NUM] = {DIP_TABLE_OPT_PEER_TPSA_IP_LONG, ARG_TYPE_STR},
     [DIP_TABLE_OPT_UNDERLAY_EID_NUM] = {DIP_TABLE_OPT_UNDERLAY_EID_LONG, ARG_TYPE_STR},
     [DIP_TABLE_OPT_NETADDR_BASE_EID_NUM] = {DIP_TABLE_OPT_NETADDR_BASE_EID_LONG, ARG_TYPE_STR},
     [DIP_TABLE_OPT_NETADDR_MAC_NUM] = {DIP_TABLE_OPT_NETADDR_MAC_LONG, ARG_TYPE_STR},
     [DIP_TABLE_OPT_NETADDR_IP_TYPE_NUM] = {DIP_TABLE_OPT_NETADDR_IP_TYPE_LONG, ARG_TYPE_NUM},
     [DIP_TABLE_OPT_NEW_DIP_NUM] = {DIP_TABLE_OPT_NEW_DIP_LONG, ARG_TYPE_STR},
+    [DIP_TABLE_OPT_NEW_UPI_NUM] = {DIP_TABLE_OPT_NEW_UPI_LONG, ARG_TYPE_NUM},
 };
 
 /* dip_table_show long options */
 static const struct option g_dip_table_show_long_options[] = {
     {DIP_TABLE_OPT_HELP_LONG,  no_argument,       NULL, DIP_TABLE_OPT_HELP_NUM },
     {DIP_TABLE_OPT_DIP_LONG,   required_argument, NULL, DIP_TABLE_OPT_DIP_NUM },
+    {DIP_TABLE_OPT_UPI_LONG,   required_argument, NULL, DIP_TABLE_OPT_UPI_NUM },
     {0,                            0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_dip_table_show_cmd_opt_usage[] = {
     {DIP_TABLE_OPT_HELP_LONG,    "display this help and exit" },
     {DIP_TABLE_OPT_DIP_LONG,     "dip" },
+    {DIP_TABLE_OPT_UPI_LONG,     "upi" },
 };
 
 static const uvs_admin_cmd_usage_t g_dip_table_show_cmd_usage = {
@@ -88,6 +98,7 @@ static const uvs_admin_cmd_usage_t g_dip_table_show_cmd_usage = {
 static const struct option g_dip_table_add_long_options[] = {
     {DIP_TABLE_OPT_HELP_LONG,              no_argument,       NULL, DIP_TABLE_OPT_HELP_NUM },
     {DIP_TABLE_OPT_DIP_LONG,               required_argument, NULL, DIP_TABLE_OPT_DIP_NUM },
+    {DIP_TABLE_OPT_UPI_LONG,               required_argument, NULL, DIP_TABLE_OPT_UPI_NUM },
     {DIP_TABLE_OPT_PEER_TPSA_IP_LONG,      required_argument, NULL, DIP_TABLE_OPT_PEER_TPSA_IP_NUM },
     {DIP_TABLE_OPT_UNDERLAY_EID_LONG,      required_argument, NULL, DIP_TABLE_OPT_UNDERLAY_EID_NUM },
     {DIP_TABLE_OPT_NETADDR_BASE_EID_LONG,  required_argument, NULL, DIP_TABLE_OPT_NETADDR_BASE_EID_NUM },
@@ -99,6 +110,7 @@ static const struct option g_dip_table_add_long_options[] = {
 static const uvs_admin_opt_usage_t g_dip_table_add_cmd_opt_usage[] = {
     {DIP_TABLE_OPT_HELP_LONG,             "display this help and exit" },
     {DIP_TABLE_OPT_DIP_LONG,              "dip need add" },
+    {DIP_TABLE_OPT_UPI_LONG,              "upi need add" },
     {DIP_TABLE_OPT_PEER_TPSA_IP_LONG,     "peer tpsa ip need add" },
     {DIP_TABLE_OPT_UNDERLAY_EID_LONG,     "underylay eid need add" },
     {DIP_TABLE_OPT_NETADDR_BASE_EID_LONG, "netaddr base eid add" },
@@ -115,12 +127,14 @@ static const uvs_admin_cmd_usage_t g_dip_table_add_cmd_usage = {
 static const struct option g_dip_table_del_long_options[] = {
     {DIP_TABLE_OPT_HELP_LONG,  no_argument,       NULL, DIP_TABLE_OPT_HELP_NUM },
     {DIP_TABLE_OPT_DIP_LONG,   required_argument, NULL, DIP_TABLE_OPT_DIP_NUM },
+    {DIP_TABLE_OPT_UPI_LONG,   required_argument, NULL, DIP_TABLE_OPT_UPI_NUM },
     {0,                            0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_dip_table_del_cmd_opt_usage[] = {
     {DIP_TABLE_OPT_HELP_LONG,    "display this help and exit" },
     {DIP_TABLE_OPT_DIP_LONG,     "dip need del" },
+    {DIP_TABLE_OPT_UPI_LONG,     "upi need del" },
 };
 
 static const uvs_admin_cmd_usage_t g_dip_table_del_cmd_usage = {
@@ -132,24 +146,28 @@ static const uvs_admin_cmd_usage_t g_dip_table_del_cmd_usage = {
 static const struct option g_dip_table_modify_long_options[] = {
     {DIP_TABLE_OPT_HELP_LONG,              no_argument,       NULL, DIP_TABLE_OPT_HELP_NUM },
     {DIP_TABLE_OPT_DIP_LONG,               required_argument, NULL, DIP_TABLE_OPT_DIP_NUM },
+    {DIP_TABLE_OPT_UPI_LONG,               required_argument, NULL, DIP_TABLE_OPT_UPI_NUM },
     {DIP_TABLE_OPT_PEER_TPSA_IP_LONG,      required_argument, NULL, DIP_TABLE_OPT_PEER_TPSA_IP_NUM },
     {DIP_TABLE_OPT_UNDERLAY_EID_LONG,      required_argument, NULL, DIP_TABLE_OPT_UNDERLAY_EID_NUM },
     {DIP_TABLE_OPT_NETADDR_BASE_EID_LONG,  required_argument, NULL, DIP_TABLE_OPT_NETADDR_BASE_EID_NUM },
     {DIP_TABLE_OPT_NETADDR_MAC_LONG,       required_argument, NULL, DIP_TABLE_OPT_NETADDR_MAC_NUM },
     {DIP_TABLE_OPT_NETADDR_IP_TYPE_LONG,   required_argument, NULL, DIP_TABLE_OPT_NETADDR_IP_TYPE_NUM },
     {DIP_TABLE_OPT_NEW_DIP_LONG,           required_argument, NULL, DIP_TABLE_OPT_NEW_DIP_NUM },
+    {DIP_TABLE_OPT_NEW_UPI_LONG,           required_argument, NULL, DIP_TABLE_OPT_NEW_UPI_NUM },
     {0,                                    0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_dip_table_modify_cmd_opt_usage[] = {
     {DIP_TABLE_OPT_HELP_LONG,             "display this help and exit" },
     {DIP_TABLE_OPT_DIP_LONG,              "dip need modify" },
+    {DIP_TABLE_OPT_UPI_LONG,              "upi need modify" },
     {DIP_TABLE_OPT_PEER_TPSA_IP_LONG,     "peer tpsa ip need modify" },
     {DIP_TABLE_OPT_UNDERLAY_EID_LONG,     "underylay eid need modify" },
     {DIP_TABLE_OPT_NETADDR_BASE_EID_LONG, "netaddr base eid modify" },
     {DIP_TABLE_OPT_NETADDR_MAC_LONG,      "netaddr mac need modify" },
     {DIP_TABLE_OPT_NETADDR_IP_TYPE_LONG,  "netaddr ip type need modify" },
     {DIP_TABLE_OPT_NEW_DIP_LONG,          "new dip need modify" },
+    {DIP_TABLE_OPT_NEW_UPI_LONG,          "new upi need modify" },
 };
 
 static const uvs_admin_cmd_usage_t g_dip_table_modify_cmd_usage = {
@@ -172,19 +190,35 @@ static int dip_table_input_valid_num(uvs_admin_dip_table_args_t *args, const cha
     int ret;
     ret = ub_str_to_u32(_optarg, &num);
     if (ret != 0) {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
     }
     if (!strcmp(arg_name, DIP_TABLE_OPT_NETADDR_IP_TYPE_LONG)) {
         if (dip_table_input_range_check(num, 0, VALID_IS_IPV6_FLAG) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, VALID_IS_IPV6_FLAG);
             return -EINVAL;
         }
         args->net_addr.type = (bool)num;
         args->mask.bs.netaddr = 1;
+    } else if (!strcmp(arg_name, DIP_TABLE_OPT_UPI_LONG)) {
+        if (dip_table_input_range_check(num, 0, UINT32_MAX) != 0) {
+            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+                arg_name, num, 0, UINT32_MAX);
+            return -EINVAL;
+        }
+        args->upi = num;
+        args->mask.bs.upi = 1;
+    } else if (!strcmp(arg_name, DIP_TABLE_OPT_NEW_UPI_LONG)) {
+        if (dip_table_input_range_check(num, 0, UINT32_MAX) != 0) {
+            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+                arg_name, num, 0, UINT32_MAX);
+            return -EINVAL;
+        }
+        args->new_upi = num;
+        args->mask.bs.upi = 1;
     } else {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
     }
 
@@ -217,7 +251,7 @@ static int dip_table_input_valid_str(uvs_admin_dip_table_args_t *args, const cha
     }
 
     if (ret != 0) {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -ret;
     }
 
@@ -283,11 +317,12 @@ static void uvs_admin_print_dip(uvs_admin_dip_table_show_rsp_t *show_rsp)
 
     ret = mac_n2p(mac_str, MAC_STR_LEN, show_rsp->net_addr.mac);
     if (ret < 0) {
-        (void)printf("mac address error\n");
+        (void)printf("ERR: mac address error\n");
     }
 
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("dip                        : "EID_FMT"\n", EID_ARGS(show_rsp->dip));
+    (void)printf("upi                        : %u\n", show_rsp->upi);
     (void)printf("peer_tpsa_ip               : "EID_FMT"\n", EID_ARGS(show_rsp->peer_tpsa_ip));
     (void)printf("underlay_eid               : "EID_FMT"\n", EID_ARGS(show_rsp->underlay_eid));
     (void)printf("net_addr_base_eid          : "EID_FMT"\n", EID_ARGS(show_rsp->net_addr.base));
@@ -310,7 +345,6 @@ static int32_t uvs_admin_dip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_dip_table_show_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -319,6 +353,7 @@ static int32_t uvs_admin_dip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_show_req_t *dip_table_req = (uvs_admin_dip_table_show_req_t *)req->req;
     dip_table_req->dip = args.dip;
+    dip_table_req->upi = args.upi;
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -328,7 +363,8 @@ static int32_t uvs_admin_dip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_show_rsp_t *show_rsp = (uvs_admin_dip_table_show_rsp_t *)rsp->rsp;
     if (show_rsp->res != 0) {
-        (void)printf("can not find dip_table info by dip: "EID_FMT"\n", EID_ARGS(dip_table_req->dip));
+        (void)printf("ERR: failed to show dip info, ret: %d, dip: "EID_FMT".\n",
+            show_rsp->res, EID_ARGS(dip_table_req->dip));
     } else {
         uvs_admin_print_dip(show_rsp);
     }
@@ -352,7 +388,6 @@ static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_dip_table_add_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -361,6 +396,7 @@ static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_add_req_t *dip_table_req = (uvs_admin_dip_table_add_req_t *)req->req;
     dip_table_req->dip = args.dip;
+    dip_table_req->upi = args.upi;
     dip_table_req->peer_tpsa_ip = args.peer_tpsa_ip;
     dip_table_req->underlay_eid = args.underlay_eid;
     dip_table_req->net_addr = args.net_addr;
@@ -373,7 +409,7 @@ static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_add_rsp_t *add_rsp = (uvs_admin_dip_table_add_rsp_t *)rsp->rsp;
     if (add_rsp->res != 0) {
-        (void)printf("add dip_table table failed, ret %d\n", add_rsp->res);
+        (void)printf("ERR: failed to add dip info, ret: %d.\n", add_rsp->res);
     }
 
     free(req);
@@ -395,7 +431,6 @@ static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_dip_table_del_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -404,6 +439,7 @@ static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_del_req_t *dip_table_req = (uvs_admin_dip_table_del_req_t *)req->req;
     dip_table_req->dip = args.dip;
+    dip_table_req->upi = args.upi;
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -413,7 +449,7 @@ static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_del_rsp_t *del_rsp = (uvs_admin_dip_table_del_rsp_t *)rsp->rsp;
     if (del_rsp->res != 0) {
-        (void)printf("del dip_table table failed, ret %d\n", del_rsp->res);
+        (void)printf("ERR: failed to del dip info, ret: %d.\n", del_rsp->res);
     }
 
     free(req);
@@ -435,7 +471,6 @@ static int32_t uvs_admin_dip_table_modifycmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_dip_table_modify_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc req mem\n");
         return -ENOMEM;
     }
 
@@ -444,15 +479,16 @@ static int32_t uvs_admin_dip_table_modifycmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_modify_req_t *dip_table_req = (uvs_admin_dip_table_modify_req_t *)req->req;
     dip_table_req->old_dip = args.dip;
+    dip_table_req->old_upi = args.upi;
     dip_table_req->new_peer_tpsa = args.peer_tpsa_ip;
     dip_table_req->new_underlay_eid = args.underlay_eid;
     dip_table_req->new_netaddr = args.net_addr;
     dip_table_req->new_dip = args.new_dip;
+    dip_table_req->new_upi = args.new_upi;
     dip_table_req->mask = args.mask;
 
     buf = malloc(MAX_MSG_LEN);
     if (buf == NULL) {
-        (void)printf("Can not alloc buf mem\n");
         free(req);
         return -ENOMEM;
     }
@@ -465,7 +501,7 @@ static int32_t uvs_admin_dip_table_modifycmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_dip_table_modify_rsp_t *modify_rsp = (uvs_admin_dip_table_modify_rsp_t *)rsp->rsp;
     if (modify_rsp->res != 0) {
-        (void)printf("modify dip_table table failed, ret %d\n", modify_rsp->res);
+        (void)printf("ERR: failed to modify dip info, ret: %d.\n", modify_rsp->res);
     }
 
 free_and_exit:
@@ -481,7 +517,7 @@ uvs_admin_cmd_t g_uvs_admin_dip_table_show_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_dip_table_show_cmd.subcmds)),
     .run = uvs_admin_dip_table_showcmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_TWO,
+    .min_argc = UVS_ADMIN_CMD_PARM_TWO + UVS_ADMIN_CMD_PARM_TWO,
 };
 
 uvs_admin_cmd_t g_uvs_admin_dip_table_add_cmd = {
@@ -491,7 +527,7 @@ uvs_admin_cmd_t g_uvs_admin_dip_table_add_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_dip_table_add_cmd.subcmds)),
     .run = uvs_admin_dip_table_addcmd_exec,
-    .min_argc = (int)UVS_ADMIN_CMD_PARM_SIX + (int)UVS_ADMIN_CMD_PARM_SIX,
+    .min_argc = (int)UVS_ADMIN_CMD_PARM_SEVEN + (int)UVS_ADMIN_CMD_PARM_SEVEN,
 };
 
 uvs_admin_cmd_t g_uvs_admin_dip_table_del_cmd = {
@@ -501,7 +537,7 @@ uvs_admin_cmd_t g_uvs_admin_dip_table_del_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_dip_table_del_cmd.subcmds)),
     .run = uvs_admin_dip_table_delcmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_TWO,
+    .min_argc = UVS_ADMIN_CMD_PARM_TWO + UVS_ADMIN_CMD_PARM_TWO,
 };
 
 uvs_admin_cmd_t g_uvs_admin_dip_table_modify_cmd = {
@@ -511,7 +547,7 @@ uvs_admin_cmd_t g_uvs_admin_dip_table_modify_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_dip_table_modify_cmd.subcmds)),
     .run = uvs_admin_dip_table_modifycmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_THREE,
+    .min_argc = UVS_ADMIN_CMD_PARM_NINE + UVS_ADMIN_CMD_PARM_NINE,
 };
 
 static uvs_admin_cmd_t *g_uvs_admin_dip_table_subcmds[] = {

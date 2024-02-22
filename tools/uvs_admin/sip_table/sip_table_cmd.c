@@ -160,34 +160,34 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
     int ret;
     ret = ub_str_to_u32(_optarg, &num);
     if (ret != 0) {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
     }
 
     if (!strcmp(arg_name, SIP_TABLE_OPT_SIP_IDX_LONG)) {
         if (sip_table_input_range_check(num, 0, SIP_IDX_MAX) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, SIP_IDX_MAX);
             return -EINVAL;
         }
         args->sip_idx = num;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_VLAN_LONG) && num <= MAX_VLAN_ID) {
         if (sip_table_input_range_check(num, 0, MAX_VLAN_ID) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, MAX_VLAN_ID);
             return -EINVAL;
         }
         args->vlan = (uint16_t)num;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_PORT_LONG)) {
         if (sip_table_input_range_check(num, 0, UINT8_MAX) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, (uint32_t)UINT8_MAX);
             return -EINVAL;
         }
         args->port_id = (uint8_t)num;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_IS_IPV6_LONG) && num <= VALID_IS_IPV6_FLAG) {
         if (sip_table_input_range_check(num, 0, IS_IPV6_MAX) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, IS_IPV6_MAX);
             return -EINVAL;
         }
@@ -201,13 +201,13 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
         }
 
         if (sip_table_input_range_check(num, 0, prefix_len_max) != 0) {
-            (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, (uint32_t)0, prefix_len_max);
             return -EINVAL;
         }
         args->prefix_len = num;
     } else {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
     }
 
@@ -251,7 +251,7 @@ static int sip_table_input_valid_str(uvs_admin_sip_table_args_t *args, const cha
         ret = str_to_eid(_optarg, &args->sip);
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_DEV_NAME_LONG)) {
         if (sip_table_input_str_range_check((uint32_t)UVS_ADMIN_MAX_DEV_NAME, (uint32_t)strlen(_optarg)) != 0) {
-            (void)printf("invalid parameter range --%s %s; valid range = [%u, %u]\n",
+            (void)printf("ERR: invalid parameter range --%s %s; valid range = [%u, %u]\n",
                 arg_name, _optarg, 0, UVS_ADMIN_MAX_DEV_NAME);
             return -EINVAL;
         }
@@ -265,7 +265,7 @@ static int sip_table_input_valid_str(uvs_admin_sip_table_args_t *args, const cha
     }
 
     if (ret != 0) {
-        (void)printf("invalid parameter --%s %s\n", arg_name, _optarg);
+        (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -ret;
     }
 
@@ -330,7 +330,7 @@ static void uvs_admin_print_sip(uint32_t sip_idx, uvs_admin_sip_table_show_rsp_t
     char mac_str[MAC_STR_LEN] = {0};
     ret = mac_n2p(mac_str, MAC_STR_LEN, show_rsp->mac);
     if (ret < 0) {
-        (void)printf("mac address error\n");
+        (void)printf("ERR: mac address error\n");
     }
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("sip_idx                    : %u\n", sip_idx);
@@ -362,7 +362,6 @@ static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_sip_table_show_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -380,7 +379,8 @@ static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_sip_table_show_rsp_t *show_rsp = (uvs_admin_sip_table_show_rsp_t *)rsp->rsp;
     if (show_rsp->res != 0) {
-        (void)printf("can not find sip_table info by sip_idx %u\n", sip_table_req->sip_idx);
+        (void)printf("ERR: failed to show sip info, ret: %d, sip_idx: %u.\n",
+            show_rsp->res, sip_table_req->sip_idx);
     } else {
         uvs_admin_print_sip(sip_table_req->sip_idx, show_rsp);
     }
@@ -404,7 +404,6 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_sip_table_add_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -429,7 +428,7 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_sip_table_add_rsp_t *add_rsp = (uvs_admin_sip_table_add_rsp_t *)rsp->rsp;
     if (add_rsp->res != 0) {
-        (void)printf("add sip_table table failed, ret %d\n", add_rsp->res);
+        (void)printf("ERR: failed to add sip info, ret: %d.\n", add_rsp->res);
     }
 
     free(req);
@@ -451,7 +450,6 @@ static int32_t uvs_admin_sip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_sip_table_del_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -469,7 +467,7 @@ static int32_t uvs_admin_sip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_sip_table_del_rsp_t *del_rsp = (uvs_admin_sip_table_del_rsp_t *)rsp->rsp;
     if (del_rsp->res != 0) {
-        (void)printf("del sip_table table failed, ret %d\n", del_rsp->res);
+        (void)printf("ERR: failed to del sip info, ret: %d.\n", del_rsp->res);
     }
 
     free(req);

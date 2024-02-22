@@ -27,6 +27,7 @@ extern "C" {
  */
 typedef struct tpsa_table {
     fe_table_t fe_table;
+    deid_vtp_table_t deid_vtp_table;
     rm_tpg_table_t rm_tpg_table;
     rc_tpg_table_t rc_tpg_table;
     utp_table_t utp_table;
@@ -49,24 +50,27 @@ void tpsa_table_uninit(tpsa_table_t *tpsa_table);
 int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid);
 int tpsa_get_upi(vport_key_t *key, vport_table_t *table, uint32_t eid_index, uint32_t *upi);
 
-/* vtp table */
-int tpsa_lookup_vtp_table(uint32_t location, tpsa_nl_req_host_t *req_host, tpsa_table_t *table_ctx);
 int tpsa_remove_vtp_table(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
                           tpsa_table_t *table_ctx);
 int tpsa_add_rm_vtp_table(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *vtp_table_data,
                           tpsa_table_t *table_ctx, bool isLoopback);
+int tpsa_lookup_rm_vtp_table(tpsa_table_t *table_ctx, vport_key_t *fe_key,
+                             uvs_end_point_t *src, uvs_end_point_t *dst, uint32_t *vtpn);
+
 int tpsa_add_rc_vtp_table(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *vtp_table_data,
                           tpsa_table_t *table_ctx, bool isLoopback);
+int tpsa_lookup_rc_vtp_table(tpsa_table_t *table_ctx, vport_key_t *fe_key,
+                             uvs_end_point_t *src, uvs_end_point_t *dst, uint32_t *vtpn);
+
 int tpsa_update_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t vtpn,
                           uint32_t tpgn, tpsa_table_t *table_ctx);
-int tpsa_vtp_tpgn_swap(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
-                       tpsa_table_t *table_ctx, uint32_t *vice_tpgn);
-int tpsa_vtp_node_status_change(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index_t *vtp_idx,
-                                tpsa_table_t *table_ctx, vtp_node_state_t state);
+int tpsa_vtp_tpgn_swap(tpsa_table_t *table_ctx, uint32_t *vice_tpgn, tpsa_lm_vtp_entry_t *lm_vtp_entry);
+int tpsa_vtp_node_status_change(vtp_node_state_t state, tpsa_lm_vtp_entry_t *lm_vtp_entry);
 int tpsa_get_vtp_idx(uint16_t fe_idx, char *dev_name, tpsa_vtp_table_index_t *vtp_idx, tpsa_table_t *table_ctx);
 
 /* dip table */
-void tpsa_lookup_dip_table(dip_table_t *dip_table, urma_eid_t remote_eid, urma_eid_t *peer_tps, tpsa_net_addr_t *dip);
+void tpsa_lookup_dip_table(dip_table_t *dip_table, urma_eid_t remote_eid, uint32_t upi,
+    urma_eid_t *peer_tps, tpsa_net_addr_t *dip);
 
 /* tpg table */
 tpsa_tpg_status_t tpsa_lookup_tpg_table(tpsa_tpg_table_index_t *tpg_idx, tpsa_transport_mode_t trans_mode,
@@ -74,8 +78,8 @@ tpsa_tpg_status_t tpsa_lookup_tpg_table(tpsa_tpg_table_index_t *tpg_idx, tpsa_tr
 int tpsa_add_rm_tpg_table(tpsa_tpg_table_param_t *param, rm_tpg_table_t *table);
 int tpsa_add_rc_tpg_table(urma_eid_t peer_eid, uint32_t peer_jetty, tpsa_tpg_table_param_t *param,
                           rc_tpg_table_t *table);
-int tpsa_remove_rm_tpg_table(rm_tpg_table_entry_t *entry, rm_tpg_table_t *table);
-int tpsa_remove_rc_tpg_table(rc_tpg_table_entry_t *entry, rc_tpg_table_t *table);
+int tpsa_remove_rm_tpg_table(rm_tpg_table_t *table, rm_tpg_table_key_t *key, tpsa_tpg_info_t *find_tpg_info);
+int tpsa_remove_rc_tpg_table(tpsa_table_t *table_ctx, rc_tpg_table_key_t *key, tpsa_tpg_info_t *find_tpg_info);
 int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx);
 
 /* tpf dev table */
@@ -89,11 +93,6 @@ void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_para
 /* sip table */
 void tpsa_lookup_sip_table(uint32_t sip_idx, sip_table_entry_t *sip_entry, sip_table_t *table);
 
-/* jetty peer table */
-int tpsa_worker_jetty_peer_table_add(tpsa_table_t *table_ctx, tpsa_transport_mode_t trans_mode,
-                                     jetty_peer_table_param_t *param);
-int tpsa_worker_jetty_peer_table_remove(tpsa_table_t *table_ctx, tpsa_transport_mode_t trans_mode,
-                                        uint32_t local_jetty, urma_eid_t *local_eid);
 /* table operation */
 int uvs_table_add(tpsa_create_param_t *cparam, tpsa_table_t *table_ctx, tpsa_tpg_table_param_t *tpg,
     tpsa_vtp_table_param_t *vtp_table_data);
@@ -107,7 +106,7 @@ int uvs_add_wait(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t 
  * rc vtp table opts(Encapsulate the operations of primary and secondary tables)
  */
 rc_vtp_table_entry_t *rc_fe_vtp_table_lookup(fe_table_t *fe_table, vport_key_t *fe_key, rc_vtp_table_key_t *vtp_key);
-int rc_fe_vtp_table_add(fe_table_t *fe_table, vport_key_t *fe_key, rc_vtp_table_key_t *vtp_key,
+int rc_fe_vtp_table_add(tpsa_table_t *table_ctx, vport_key_t *fe_key, rc_vtp_table_key_t *vtp_key,
                         tpsa_vtp_table_param_t *vtp_table_data);
 int rc_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx);
 
@@ -115,7 +114,7 @@ int rc_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx
  * rm vtp table opts(Encapsulate the operations of primary and secondary tables)
  */
 rm_vtp_table_entry_t *rm_fe_vtp_table_lookup(fe_table_t *fe_table, vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key);
-int rm_fe_vtp_table_add(fe_table_t *fe_table, vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key,
+int rm_fe_vtp_table_add(tpsa_table_t *table_ctx, vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key,
                         tpsa_vtp_table_param_t *vtp_table_data);
 int rm_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx);
 
@@ -123,7 +122,7 @@ int rm_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx
  * um vtp table opts(Encapsulate the operations of primary and secondary tables)
  */
 um_vtp_table_entry_t *um_fe_vtp_table_lookup(fe_table_t *fe_table, vport_key_t *fe_key, um_vtp_table_key_t *vtp_key);
-int um_fe_vtp_table_add(fe_table_t *fe_table, vport_key_t *fe_key, um_vtp_table_key_t *vtp_key,
+int um_fe_vtp_table_add(tpsa_table_t *table_ctx, vport_key_t *fe_key, um_vtp_table_key_t *vtp_key,
                         tpsa_um_vtp_table_param_t *uparam);
 
 /*
@@ -134,6 +133,8 @@ clan_vtp_table_entry_t *clan_fe_vtp_table_lookup(fe_table_t *fe_table, vport_key
 int clan_fe_vtp_table_add(fe_table_t *fe_table, vport_key_t *fe_key, clan_vtp_table_key_t *vtp_key,
                           tpsa_clan_vtp_table_param_t *uparam);
 
+int tpsa_rc_tpg_swap(tpsa_table_t *table_ctx, uint32_t *vice_tpgn, tpsa_lm_vtp_entry_t *lm_vtp_entry);
+int tpsa_rm_vtp_tpgn_swap(uint32_t *vice_tpgn, tpsa_lm_vtp_entry_t *lm_vtp_entry);
 #ifdef __cplusplus
 }
 #endif

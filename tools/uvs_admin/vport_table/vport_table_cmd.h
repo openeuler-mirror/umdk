@@ -120,6 +120,7 @@ typedef struct uvs_admin_vport_table_add_ueid_req {
     uint16_t fe_idx;
     uint32_t upi;
     urma_eid_t eid;
+    uint32_t eid_index;
 } uvs_admin_vport_table_add_ueid_req_t;
 
 typedef struct uvs_admin_vport_table_add_ueid_rsp {

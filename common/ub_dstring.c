@@ -227,3 +227,4 @@ bool dstring_chomp(struct dstring *ds, int c)
         return false;
     }
 }
+

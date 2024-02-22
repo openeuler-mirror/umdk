@@ -184,6 +184,7 @@ typedef struct urma_device_cap {
     uint16_t trans_mode;               /* [Public] bit OR of supported transport modes */
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
+    uint32_t max_tp_in_tpg;
 } urma_device_cap_t;
 
 typedef struct urma_device_attr {
@@ -653,6 +654,7 @@ typedef struct urma_token_id {
     urma_context_t *urma_ctx;
     uint32_t token_id;
     uint64_t handle;
+    urma_ref_t ref;
 } urma_token_id_t;
 
 typedef struct urma_seg_cfg {

@@ -54,12 +54,6 @@ typedef struct uvs_ctx {
     tpsa_ioctl_ctx_t *ioctl_ctx;
 } uvs_ctx_t;
 
-typedef struct uvs_end_point {
-    tpsa_net_addr_t ip;
-    urma_eid_t eid;
-    uint32_t jetty_id;
-} uvs_end_point_t;
-
 typedef struct uvs_vport_ctx {
     vport_key_t key;
     vport_param_t param;
@@ -88,10 +82,6 @@ int uvs_response_destroy_fast(tpsa_nl_msg_t *msg, tpsa_nl_ctx_t *nl_ctx,
 /* table operation */
 void uvs_table_remove_initiator(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index_t *tpg_idx,
                                 tpsa_vtp_table_index_t *vtp_idx, tpsa_table_t *table_ctx);
-void uvs_table_remove_target(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index_t *tpg_idx,
-                             tpsa_sock_msg_t *msg, tpsa_table_t *table_ctx);
-void uvs_reverse_lookup_ip(tpsa_sock_msg_t *msg, sip_table_entry_t *sip_entry, tpsa_net_addr_t *dip,
-                           urma_eid_t *peer_tpsa_eid, tpsa_table_t *table_ctx);
 int uvs_handle_table_sync(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 
 /* tp connection management */
@@ -112,8 +102,8 @@ int uvs_destroy_ctp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_table_t *table_ctx,
 int uvs_create_um_vtp_base(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
                            tpsa_create_param_t *cparam, uint32_t *vtpn);
 
-int uvs_create_um_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx);
-int uvs_destroy_um_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx);
+int uvs_create_um_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_t *upi);
+int uvs_destroy_um_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_transport_mode_t trans_mode);
 
 int uvs_sync_table(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, urma_eid_t *peer_tpsa_eid);
 int uvs_rc_valid_check(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, bool isLoopback);
@@ -129,8 +119,13 @@ int uvs_create_vtp_ack(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_create_vtp_finish(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_destroy_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg);
 int uvs_destroy_target_vtp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
+int uvs_destroy_vtp_base(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, uvs_tp_msg_ctx_t *tp_msg_ctx,
+                         int32_t vtpn, int32_t tpgn);
 
 bool uvs_is_loopback(tpsa_transport_mode_t trans_mode, uvs_end_point_t *local, uvs_end_point_t *peer);
+bool uvs_is_sig_loop(tpsa_transport_mode_t trans_mode, uvs_end_point_t *local, uvs_end_point_t *peer);
+int uvs_destroy_vtp_and_tpg(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, uvs_tp_msg_ctx_t *tp_msg_ctx,
+                            int32_t vtpn, int32_t tpgn);
 
 #ifdef __cplusplus
 }

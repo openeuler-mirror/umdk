@@ -18,30 +18,35 @@
 union tpsa_dip_table_modify_mask {
     struct {
         uint32_t dip            : 1;
+        uint32_t upi            : 1;
         uint32_t peer_tpsa      : 1;
         uint32_t underlay_eid   : 1;
         uint32_t netaddr        : 1;
-        uint32_t reserved       : 28;
+        uint32_t reserved       : 27;
     } bs;
     uint32_t value;
 };
 
 typedef struct uvs_admin_dip_table_args {
     urma_eid_t dip;
+    uint32_t upi;
     urma_eid_t peer_tpsa_ip;
     urma_eid_t underlay_eid;
     uvs_admin_net_addr_t net_addr;
     urma_eid_t new_dip;
+    uint32_t new_upi;
     union tpsa_dip_table_modify_mask mask;
 } uvs_admin_dip_table_args_t;
 
 typedef struct uvs_admin_dip_table_show_req {
     urma_eid_t dip;
+    uint32_t upi;
 } uvs_admin_dip_table_show_req_t;
 
 typedef struct uvs_admin_dip_table_show_rsp {
     int res;
     urma_eid_t dip;
+    uint32_t upi;
     urma_eid_t peer_tpsa_ip;
     urma_eid_t underlay_eid;
     uvs_admin_net_addr_t net_addr;
@@ -49,6 +54,7 @@ typedef struct uvs_admin_dip_table_show_rsp {
 
 typedef struct uvs_admin_dip_table_add_req {
     urma_eid_t dip;
+    uint32_t upi;
     urma_eid_t peer_tpsa_ip;
     urma_eid_t underlay_eid;
     uvs_admin_net_addr_t net_addr;
@@ -60,6 +66,7 @@ typedef struct uvs_admin_dip_table_add_rsp {
 
 typedef struct uvs_admin_dip_table_del_req {
     urma_eid_t dip;
+    uint32_t upi;
 } uvs_admin_dip_table_del_req_t;
 
 typedef struct uvs_admin_dip_table_del_rsp {
@@ -68,7 +75,9 @@ typedef struct uvs_admin_dip_table_del_rsp {
 
 typedef struct uvs_admin_dip_table_modify_req {
     urma_eid_t old_dip;
+    uint32_t old_upi;
     urma_eid_t new_dip;
+    uint32_t new_upi;
     urma_eid_t new_peer_tpsa;
     urma_eid_t new_underlay_eid;
     uvs_admin_net_addr_t new_netaddr;

@@ -28,7 +28,7 @@ typedef struct uvs_admin_live_migrate_table_args {
     uvs_admin_lm_table_mask_t mask;
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint16_t fe_idx;
-    urma_eid_t dip;
+    urma_eid_t dip; /* the tpsa_ip of migration destination */
 } uvs_admin_live_migrate_table_args_t;
 
 typedef struct uvs_admin_live_migrate_table_show_req {

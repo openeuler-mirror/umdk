@@ -16,4 +16,7 @@ set_property(TARGET urma PROPERTY C_STANDARD 99)
 set_target_properties(urma PROPERTIES VERSION 0.0.1 SOVERSION 0)
 add_dependencies(urma urma_common)
 target_link_libraries(urma urma_common gobject-2.0 glib-2.0 -ldl -lrt)
-install(TARGETS urma DESTINATION /usr/lib64)
+
+if("${URMA_INSTALL}" STREQUAL "enable")
+    install(TARGETS urma DESTINATION /usr/lib64)
+endif()

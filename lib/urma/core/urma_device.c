@@ -198,6 +198,7 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.trans_mode = urma_parse_value_u16(sysfs_path, "trans_mode");
     attr->dev_cap.congestion_ctrl_alg = urma_parse_value_u16(sysfs_path, "congestion_ctrl_alg");
     attr->dev_cap.ceq_cnt = urma_parse_value_u32(sysfs_path, "ceq_cnt");
+    attr->dev_cap.max_tp_in_tpg = urma_parse_value_u32(sysfs_path, "max_tp_in_tpg");
     attr->port_cnt = urma_parse_value_u8(sysfs_path, "port_count");
     attr->max_eid_cnt = urma_parse_value_u16(sysfs_path, "max_eid_cnt");
 
@@ -230,7 +231,6 @@ urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
 
     sysfs_dev = calloc(1, sizeof(urma_sysfs_dev_t));
     if (sysfs_dev == NULL) {
-        URMA_LOG_ERR("sysfs_dev malloc failed.\n");
         return NULL;
     }
 
@@ -290,7 +290,6 @@ static urma_device_t *urma_alloc_device(urma_sysfs_dev_t *sysfs_dev)
 {
     urma_device_t *dev = calloc(1, sizeof(urma_device_t));
     if (dev == NULL) {
-        URMA_LOG_ERR("failed to calloc urma_device");
         return NULL;
     }
     dev->ops = sysfs_dev->driver->ops;
@@ -314,7 +313,7 @@ static int urma_check_loaded_devices(const char *dev_name, struct ub_list *dev_n
 {
     urma_sysfs_dev_name_t *sysfs_dev_name = NULL;
     urma_sysfs_dev_name_t *next = NULL;
-    
+
     UB_LIST_FOR_EACH_SAFE(sysfs_dev_name, next, node, dev_name_list) {
         if (strcmp(sysfs_dev_name->dev_name, dev_name) == 0) {
             return 0;
@@ -327,7 +326,6 @@ static void urma_get_dev_name_list(struct ub_list *dev_name_list, urma_sysfs_dev
 {
     urma_sysfs_dev_name_t *sysfs_dev_name = calloc(1, sizeof(urma_sysfs_dev_t));
     if (sysfs_dev_name == NULL) {
-        URMA_LOG_ERR("sysfs_dev_name malloc failed.\n");
         return;
     }
     (void)strcpy(sysfs_dev_name->dev_name, sysfs_dev->dev_name);
