@@ -23,6 +23,7 @@ typedef struct tpsa_global_cfg_show_rsp {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    bool tp_fast_destroy;
 } tpsa_global_cfg_show_rsp_t;
 
 typedef struct tpsa_global_cfg_set_req {
@@ -32,6 +33,7 @@ typedef struct tpsa_global_cfg_set_req {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    bool tp_fast_destroy;
 } tpsa_global_cfg_set_req_t;
 
 typedef struct tpsa_global_cfg_set_rsp {

@@ -14,13 +14,48 @@
 
 #include "ub_util.h"
 #include "ub_hash.h"
-#include "tpsa_config.h"
 #include "tpsa_log.h"
 #include "tpsa_net.h"
 #include "tpsa_ioctl.h"
 #include "tpsa_sock.h"
 
 #define TPSA_SOCK_TABLE_SIZE 10240
+
+#define TPSA_SOCK_KEEP_IDLE      (5)     // if no data exchanged within 5 seconds, start detection.
+#define TPSA_SOCK_KEEP_INTERVAL  (5)     // interval for sending detection packets is 5 seconds.
+#define TPSA_SOCK_KEEP_COUNT     (3)     // number of detection retry times.
+
+/* Set fd to be keepalive */
+int tpsa_set_keepalive_opt(int fd)
+{
+    int ret;
+    int keep_alive = 1;
+    int keep_idle = TPSA_SOCK_KEEP_IDLE;
+    int keep_interval = TPSA_SOCK_KEEP_INTERVAL;
+    int keep_count = TPSA_SOCK_KEEP_COUNT;
+
+    ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keep_alive, sizeof(keep_alive));
+    if (ret < 0) {
+        TPSA_LOG_ERR("Failed to set keepalive, ret: %d, err: %d.\n", ret, errno);
+        return ret;
+    }
+    ret = setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
+    if (ret < 0) {
+        TPSA_LOG_ERR("Failed to set keep_idle, ret: %d, err: %d.\n", ret, errno);
+        return ret;
+    }
+    ret = setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &keep_interval, sizeof(keep_interval));
+    if (ret < 0) {
+        TPSA_LOG_ERR("Failed to set keep_interval, ret: %d, err: %d.\n", ret, errno);
+        return ret;
+    }
+    ret = setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &keep_count, sizeof(keep_count));
+    if (ret < 0) {
+        TPSA_LOG_ERR("Failed to set keep_count, ret: %d, err: %d.\n", ret, errno);
+        return ret;
+    }
+    return 0;
+}
 
 /* Set fd to be nonblocking */
 int tpsa_set_nonblock_opt(int fd)
@@ -46,8 +81,12 @@ static int tpsa_set_socket_opt(int fd, bool is_noblock)
         ret = tpsa_set_nonblock_opt(fd);
         if (ret != 0) {
             TPSA_LOG_ERR("Failed to set socket nonblock, ret: %d, err: %d.\n", ret, errno);
-            return -1;
+            return ret;
         }
+    }
+    ret = tpsa_set_keepalive_opt(fd);
+    if (ret != 0) {
+        return ret;
     }
 
     int reuse = 1;
@@ -137,7 +176,7 @@ static int tpsa_sock_connect(const urma_eid_t *remote_eid, uint32_t cfg_port)
     addr.sin_port = (uint16_t)cfg_port;
     int ret = connect(fd, (struct sockaddr *)&addr, sizeof(struct sockaddr));
     if (ret != 0) {
-        TPSA_LOG_ERR("Failed to connect socket to eid 0x"EID_FMT" cfg_port 0x%x, ret: %d, err: [%d]%s.\n",
+        TPSA_LOG_ERR("Failed to connect socket to eid 0x" EID_FMT " cfg_port 0x%x, ret: %d, err: [%d]%s.\n",
             EID_ARGS(*remote_eid), cfg_port, ret, errno, ub_strerror(errno));
         (void)close(fd);
         return -1;
@@ -189,9 +228,8 @@ static tpsa_sock_node_t *tpsa_lookup_socket(sock_table_t *table, const urma_eid_
 
 static tpsa_sock_node_t *tpsa_add_socket(sock_table_t *table, int fd, const urma_eid_t *remote_eid)
 {
-    tpsa_sock_node_t *sock_node = calloc(1, sizeof(tpsa_sock_node_t));
+    tpsa_sock_node_t *sock_node = (tpsa_sock_node_t *)calloc(1, sizeof(tpsa_sock_node_t));
     if (sock_node == NULL) {
-        TPSA_LOG_ERR("Memory allocation failed.\n");
         return NULL;
     }
     sock_node->eid = *remote_eid;
@@ -264,8 +302,8 @@ int tpsa_handle_accept_fd(int epollfd, tpsa_sock_ctx_t *sock_ctx)
     return 0;
 }
 
-int tpsa_sock_send_msg(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
-                       size_t len, urma_eid_t remote_eid)
+static int tpsa_sock_send_msg_impl(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
+                                   size_t len, urma_eid_t remote_eid)
 {
     if (len > sizeof(tpsa_sock_msg_t)) {
         TPSA_LOG_ERR("Maximum message length exceeded\n");
@@ -274,7 +312,7 @@ int tpsa_sock_send_msg(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
 
     tpsa_sock_node_t *sock_node = tpsa_get_conn_fd(sock_ctx, remote_eid, sock_ctx->listen_port);
     if (sock_node == NULL) {
-        TPSA_LOG_ERR("Failed to get socket to eid 0x"EID_FMT", port 0x%x\n",
+        TPSA_LOG_ERR("Failed to get socket to eid 0x" EID_FMT ", port 0x%x\n",
                      EID_ARGS(remote_eid), sock_ctx->listen_port);
         return -1;
     }
@@ -287,6 +325,21 @@ int tpsa_sock_send_msg(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
     }
     return 0;
 }
+
+int tpsa_sock_send_msg(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
+                       size_t len, urma_eid_t remote_eid)
+{
+    /* tcp keep alive will detech bad connection, and close socket.
+    *  Add one more try when send msg failed
+    */
+    int ret = tpsa_sock_send_msg_impl(sock_ctx, msg, len, remote_eid);
+    if (ret == 0) {
+        return ret;
+    }
+
+    return tpsa_sock_send_msg_impl(sock_ctx, msg, len, remote_eid);
+}
+
 
 int tpsa_sock_recv_msg_timeout(int fd, char *buf, uint32_t len, int timeout, int epollfd)
 {
@@ -399,14 +452,13 @@ void tpsa_sock_server_uninit(tpsa_sock_ctx_t *sock_ctx)
     tpsa_sock_table_uninit(sock_ctx);
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_init_sock_param_t *param)
+tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_init_sock_req_param_t *param)
 {
-    tpsa_sock_msg_t *req = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *req = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (req == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request req");
         return NULL;
     }
-    if (cparam->udrv_ext_len > TPSA_UDRV_DATA_LEN) {
+    if (cparam->udrv_in_len + cparam->ext_len > TPSA_UDRV_DATA_LEN) {
         TPSA_LOG_ERR("udrv data buffer is short\n");
         return NULL;
     }
@@ -422,8 +474,8 @@ tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_ini
     req->local_tpgn = param->tpgn;
     req->peer_tpgn = 0;
     req->upi = param->upi;
-    req->liveMigrate = cparam->liveMigrate;
-    req->migrateThird = cparam->migrateThird;
+    req->live_migrate = cparam->live_migrate;
+    req->dip_valid = cparam->dip_valid;
     req->content.req.msg_id = cparam->msg_id;
     req->content.req.nlmsg_seq = cparam->nlmsg_seq;
     req->content.req.src_function_id = cparam->fe_idx;
@@ -435,101 +487,105 @@ tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_ini
     req->content.req.cc_en = param->cc_en;
     req->content.req.ta_data = cparam->ta_data;
     req->content.req.udrv_in_len = cparam->udrv_in_len;
-    req->content.req.udrv_out_len = cparam->udrv_out_len;
-    req->content.req.udrv_ext_len = cparam->udrv_ext_len;
-    (void)memcpy(req->content.req.udrv_data, cparam->udrv_data, TPSA_UDRV_DATA_LEN);
+    req->content.req.ext_len = cparam->ext_len;
+    (void)memcpy(req->content.req.udrv_ext, cparam->udrv_ext, cparam->udrv_in_len + cparam->ext_len);
+
+    req->content.req.tp_param.com.local_net_addr_idx = param->local_net_addr_idx; /* Need to fix */
+    req->content.req.tp_param.com.peer_net_addr = param->peer_net_addr;
+    req->content.req.tp_param.com.state = TPSA_TP_STATE_RTR;
+    req->content.req.tp_param.com.tx_psn = 0;
+    req->content.req.tp_param.com.rx_psn = param->rx_psn;
+    req->content.req.tp_param.com.local_mtu = param->local_mtu;
+    req->content.req.tp_param.com.peer_mtu = param->local_mtu;
+    req->content.req.tp_param.com.local_seg_size = param->local_seg_size;
+    req->content.req.tp_param.com.peer_seg_size = 0;
+    req->content.req.tp_param.com.local_tp_cfg = param->local_tp_cfg;
+    req->content.req.tp_param.com.remote_tp_cfg = param->local_tp_cfg;
 
     uint32_t i = 0;
     for (; i < param->tp_cnt; i++) {
-        req->content.req.tp_param[i].local_net_addr_idx = param->local_net_addr_idx; /* Need to fix */
-        req->content.req.tp_param[i].peer_net_addr = param->peer_net_addr;
-        req->content.req.tp_param[i].state = TPSA_TP_STATE_RTR;
-        req->content.req.tp_param[i].tx_psn = 0;
-        req->content.req.tp_param[i].rx_psn = param->rx_psn;
-        req->content.req.tp_param[i].local_mtu = param->local_mtu;
-        req->content.req.tp_param[i].peer_mtu = param->local_mtu;
-        req->content.req.tp_param[i].local_tpn = param->local_tpn[i];
-        req->content.req.tp_param[i].peer_tpn = 0;
-        req->content.req.tp_param[i].local_seg_size = param->local_seg_size;
-        req->content.req.tp_param[i].peer_seg_size = 0;
-        req->content.req.tp_param[i].local_tp_cfg = param->local_tp_cfg;
-        req->content.req.tp_param[i].remote_tp_cfg = param->local_tp_cfg;
+        req->content.req.tp_param.uniq[i].local_tpn = param->local_tpn[i];
+        req->content.req.tp_param.uniq[i].peer_tpn = 0;
     }
 
     return req;
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, uint32_t tpgn, uint32_t *tpn,
-    tpsa_tpg_cfg_t *tpg_cfg, uvs_mtu_t mtu, tpsa_cc_param_t *resp_param)
+void tpsa_sock_init_destroy_resp(tpsa_sock_msg_t *resp)
+{
+    free(resp);
+}
+
+tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, struct tpsa_init_sock_resp_param* param)
 {
     tpsa_create_req_t *req = &msg->content.req;
 
-    tpsa_sock_msg_t *resp = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *resp = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (resp == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request resp");
         return NULL;
     }
-
+    resp->content.resp.is_target = param->is_target;
     resp->msg_type = TPSA_CREATE_RESP;
     resp->trans_mode = msg->trans_mode;
-    resp->dip = msg->dip;
+    resp->dip = param->sip;
     resp->local_eid = msg->local_eid;
     resp->peer_eid = msg->peer_eid;
     resp->local_jetty = msg->local_jetty;
     resp->peer_jetty = msg->peer_jetty;
     resp->vtpn = msg->vtpn;
     resp->local_tpgn = msg->local_tpgn;
-    resp->peer_tpgn = tpgn;
+    resp->peer_tpgn = param->tpgn;
     resp->upi = msg->upi;
-    resp->liveMigrate = msg->liveMigrate;
-    resp->migrateThird = msg->migrateThird;
-    resp->content.resp.tpg_cfg = *tpg_cfg;
+    resp->live_migrate = msg->live_migrate;
+    resp->dip_valid = msg->msg_type == TPSA_LM_TRANSFER ? true : msg->dip_valid;
+    resp->content.resp.tpg_cfg = *param->tpg_cfg;
     resp->content.resp.msg_id = req->msg_id;
     resp->content.resp.nlmsg_seq = req->nlmsg_seq;
     resp->content.resp.src_function_id = req->src_function_id;
     (void)memcpy(resp->content.resp.dev_name, req->dev_name, TPSA_MAX_DEV_NAME);
-    resp->content.resp.target_cc_cnt = resp_param->target_cc_cnt;
-    (void)memcpy(resp->content.resp.target_cc_arr,
-        resp_param->cc_result_array, resp_param->target_cc_cnt * sizeof(tpsa_tp_cc_entry_t));
-    resp->content.resp.target_cc_en = resp_param->target_cc_en;
+    resp->content.resp.target_cc_cnt = param->resp_param->target_cc_cnt;
+    (void)memcpy(resp->content.resp.target_cc_arr, param->resp_param->cc_result_array,
+        param->resp_param->target_cc_cnt * sizeof(tpsa_tp_cc_entry_t));
+    resp->content.resp.target_cc_en = param->resp_param->target_cc_en;
     resp->content.resp.local_cc_cnt = req->cc_array_cnt;
     (void)memcpy(resp->content.resp.local_cc_arr,
         req->cc_result_array, req->cc_array_cnt * sizeof(tpsa_tp_cc_entry_t));
     resp->content.resp.local_cc_en = req->cc_en;
     resp->content.resp.ta_data = req->ta_data;
+    (void)memcpy((char *)resp->content.resp.ext, (char *)req->udrv_ext, TPSA_UDRV_DATA_LEN);
+
+    resp->content.resp.tp_param.com.local_tp_cfg = req->tp_param.com.local_tp_cfg;
+    resp->content.resp.tp_param.com.remote_tp_cfg = req->tp_param.com.remote_tp_cfg;
+    resp->content.resp.tp_param.com.local_net_addr_idx = req->tp_param.com.local_net_addr_idx;
+    resp->content.resp.tp_param.com.peer_net_addr = req->tp_param.com.peer_net_addr; /* Need to fix */
+    resp->content.resp.tp_param.com.state = TPSA_TP_STATE_RTR;
+    resp->content.resp.tp_param.com.tx_psn = 0; /* Need to check */
+    resp->content.resp.tp_param.com.rx_psn = req->tp_param.com.rx_psn;
+    resp->content.resp.tp_param.com.local_mtu = req->tp_param.com.local_mtu;
+    resp->content.resp.tp_param.com.peer_mtu = param->mtu;
+    resp->content.resp.tp_param.com.local_seg_size = req->tp_param.com.local_seg_size;
+    resp->content.resp.tp_param.com.peer_seg_size = SEG_SIZE;
 
     uint32_t i = 0;
     for (; i < req->tpg_cfg.tp_cnt; i++) {
-        resp->content.resp.tp_param[i].local_tp_cfg = req->tp_param[i].local_tp_cfg;
-        resp->content.resp.tp_param[i].remote_tp_cfg = req->tp_param[i].remote_tp_cfg;
-        resp->content.resp.tp_param[i].local_net_addr_idx = req->tp_param[i].local_net_addr_idx;
-        resp->content.resp.tp_param[i].peer_net_addr = req->tp_param[i].peer_net_addr; /* Need to fix */
-        resp->content.resp.tp_param[i].state = TPSA_TP_STATE_RTR;
-        resp->content.resp.tp_param[i].tx_psn = 0; /* Need to check */
-        resp->content.resp.tp_param[i].rx_psn = req->tp_param[i].rx_psn;
-        resp->content.resp.tp_param[i].local_mtu = req->tp_param[i].local_mtu;
-        resp->content.resp.tp_param[i].peer_mtu = mtu;
-        resp->content.resp.tp_param[i].local_tpn = req->tp_param[i].local_tpn;
-        resp->content.resp.tp_param[i].peer_tpn = tpn[i];
-        resp->content.resp.tp_param[i].local_seg_size = req->tp_param[i].local_seg_size;
-        resp->content.resp.tp_param[i].peer_seg_size = SEG_SIZE;
+        resp->content.resp.tp_param.uniq[i].local_tpn = req->tp_param.uniq[i].local_tpn;
+        resp->content.resp.tp_param.uniq[i].peer_tpn = param->tpn[i];
     }
 
     return resp;
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t* msg)
+tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t* msg, tpsa_net_addr_t *sip)
 {
     tpsa_create_resp_t *resp = &msg->content.resp;
-    tpsa_sock_msg_t *ack = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *ack = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (ack == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request ack");
         return NULL;
     }
 
     ack->msg_type = TPSA_CREATE_ACK;
     ack->trans_mode = msg->trans_mode;
-    ack->dip = msg->dip;
+    ack->dip = *sip;
     ack->local_eid = msg->local_eid;
     ack->peer_eid = msg->peer_eid;
     ack->local_jetty = msg->local_jetty;
@@ -538,8 +594,8 @@ tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t* msg)
     ack->local_tpgn = msg->local_tpgn;
     ack->peer_tpgn = msg->peer_tpgn;
     ack->upi = msg->upi;
-    ack->liveMigrate = msg->liveMigrate;
-    ack->migrateThird = msg->migrateThird;
+    ack->live_migrate = msg->live_migrate;
+    ack->dip_valid = msg->dip_valid;
     ack->content.ack.msg_id = msg->content.resp.msg_id;
     ack->content.ack.nlmsg_seq = msg->content.resp.nlmsg_seq;
     (void)memcpy(ack->content.ack.dev_name, msg->content.resp.dev_name, TPSA_MAX_DEV_NAME);
@@ -547,30 +603,26 @@ tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t* msg)
     ack->content.ack.tpg_cfg = msg->content.resp.tpg_cfg;
     ack->content.ack.is_target = msg->content.resp.is_target;
     ack->content.ack.ta_data = resp->ta_data;
-    ack->content.ack.udrv_in_len = resp->udrv_in_len;
-    ack->content.ack.udrv_out_len = resp->udrv_out_len;
-    ack->content.ack.udrv_ext_len = resp->udrv_ext_len;
-    (void)memcpy((char*)ack->content.ack.udrv_data,
-        (char*)resp->udrv_data, TPSA_UDRV_DATA_LEN);
 
+    ack->content.ack.tp_param.com = msg->content.resp.tp_param.com;
     uint32_t i = 0;
     for (; i < msg->content.resp.tpg_cfg.tp_cnt; i++) {
-        ack->content.ack.tp_param[i] = msg->content.resp.tp_param[i];
+        ack->content.ack.tp_param.uniq[i] = msg->content.resp.tp_param.uniq[i];
     }
 
     return ack;
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg)
+tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg, tpsa_net_addr_t *sip)
 {
-    tpsa_sock_msg_t *finish = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *finish = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (finish == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request finish");
         return NULL;
     }
 
     finish->msg_type = TPSA_CREATE_FINISH;
     finish->trans_mode = msg->trans_mode;
+    finish->dip = *sip;
     finish->local_eid = msg->local_eid;
     finish->peer_eid = msg->peer_eid;
     finish->local_jetty = msg->local_jetty;
@@ -579,17 +631,18 @@ tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg)
     finish->local_tpgn = msg->local_tpgn;
     finish->peer_tpgn = msg->peer_tpgn;
     finish->upi = msg->upi;
-    finish->liveMigrate = msg->liveMigrate;
+    finish->live_migrate = msg->live_migrate;
+    finish->dip_valid = msg->dip_valid;
     finish->content.finish.msg_id = msg->content.ack.msg_id;
     finish->content.finish.nlmsg_seq = msg->content.ack.nlmsg_seq;
     finish->content.finish.src_function_id = msg->content.ack.src_function_id;
     (void)memcpy(finish->content.finish.dev_name, msg->content.ack.dev_name, TPSA_MAX_DEV_NAME);
     finish->content.finish.ta_data = msg->content.ack.ta_data;
-    finish->content.finish.udrv_in_len = msg->content.ack.udrv_in_len;
-    finish->content.finish.udrv_out_len = msg->content.ack.udrv_out_len;
-    finish->content.finish.udrv_ext_len = msg->content.ack.udrv_ext_len;
-    (void)memcpy((char*)finish->content.finish.udrv_data,
-        (char*)msg->content.ack.udrv_data, TPSA_UDRV_DATA_LEN);
+
+    uint32_t i = 0;
+    for (; i < msg->content.ack.tpg_cfg.tp_cnt; i++) {
+        finish->content.finish.tp_param.uniq[i] = msg->content.ack.tp_param.uniq[i];
+    }
 
     return finish;
 }
@@ -597,9 +650,8 @@ tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg)
 tpsa_sock_msg_t *tpsa_sock_init_table_sync(tpsa_create_param_t *cparam, uint32_t vtpn, tpsa_table_opcode_t opcode,
                                            uint32_t upi, vport_table_t *vport_table)
 {
-    tpsa_sock_msg_t *tsync = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *tsync = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (tsync == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request ack");
         return NULL;
     }
 
@@ -614,8 +666,8 @@ tpsa_sock_msg_t *tpsa_sock_init_table_sync(tpsa_create_param_t *cparam, uint32_t
     tsync->local_tpgn = 0;
     tsync->peer_tpgn = 0;
     tsync->upi = upi;
-    tsync->liveMigrate = cparam->liveMigrate;
-    tsync->migrateThird = cparam->migrateThird;
+    tsync->live_migrate = cparam->live_migrate;
+    tsync->dip_valid = cparam->dip_valid;
  
     tsync->content.tsync.opcode = opcode;
 
@@ -631,15 +683,11 @@ static void tpsa_swap_jetty(struct tpsa_jetty_id *jetty, struct tpsa_jetty_id *t
     *tjetty = tmp;
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_nl_msg_t *nlmsg, uint32_t tpgn,
-    tpsa_net_addr_t *dip, uint32_t upi, uint32_t tp_cnt, struct tpsa_ta_data *ta_data)
+tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_create_param_t *cparam, uint32_t tpgn,
+                                            tpsa_net_addr_t *sip, uint32_t tp_cnt, bool delete_trigger)
 {
-    tpsa_nl_req_host_t *msg = (tpsa_nl_req_host_t *)nlmsg->payload;
-    tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)msg->req.data;
-
-    tpsa_sock_msg_t *req = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *req = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (req == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request req");
         return NULL;
     }
 
@@ -647,26 +695,27 @@ tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_nl_msg_t *nlmsg, uint32_t tpgn,
     (void)memset(&lmdip, 0, sizeof(tpsa_net_addr_t));
  
     req->msg_type = TPSA_DESTROY_REQ;
-    req->local_eid = nlreq->local_eid;
-    req->peer_eid = nlreq->peer_eid;
-    req->local_jetty = nlreq->local_jetty;
-    req->peer_jetty = nlreq->peer_jetty;
-    req->trans_mode = nlreq->trans_mode;
+    req->local_eid = cparam->local_eid;
+    req->peer_eid = cparam->peer_eid;
+    req->local_jetty = cparam->local_jetty;
+    req->peer_jetty = cparam->peer_jetty;
+    req->trans_mode = cparam->trans_mode;
     req->dip = lmdip;
-    req->vtpn = nlreq->vtpn;
+    req->vtpn = cparam->vtpn;
     req->local_tpgn = tpgn;
     req->peer_tpgn = 0;
-    req->upi = upi;
-    req->liveMigrate = false;
-    req->migrateThird = false;
+    req->upi = cparam->upi;
+    req->live_migrate = cparam->live_migrate;
+    req->dip_valid = false;
     req->content.dreq.trans_type = TPSA_TRANSPORT_UB;
-    req->content.dreq.net_addr = *dip;
-    req->content.dreq.msg_id = msg->req.msg_id;
-    req->content.dreq.nlmsg_seq = nlmsg->nlmsg_seq;
-    req->content.dreq.src_function_id = msg->src_fe_idx;
+    req->content.dreq.net_addr = *sip;
+    req->content.dreq.msg_id = cparam->msg_id;
+    req->content.dreq.nlmsg_seq = cparam->nlmsg_seq;
+    req->content.dreq.src_function_id = cparam->fe_idx;
     req->content.dreq.tp_cnt = tp_cnt;
-    req->content.dreq.ta_data = *ta_data;
+    req->content.dreq.ta_data = cparam->ta_data;
     req->content.dreq.ta_data.is_target = true;
+    req->content.dreq.delete_trigger = delete_trigger;
     tpsa_swap_jetty(&req->content.dreq.ta_data.jetty_id, &req->content.dreq.ta_data.tjetty_id);
 
     return req;

@@ -36,6 +36,8 @@ typedef enum tool_cmd_type {
     TOOL_CMD_SHOW_UTP,
     TOOL_CMD_SHOW_STATS,
     TOOL_CMD_SHOW_RES,
+    TOOL_CMD_SET_NS_MODE,
+    TOOL_CMD_SET_DEV_NS,
     TOOL_CMD_NUM
 } tool_cmd_type_t;
 
@@ -270,6 +272,7 @@ typedef struct tool_config {
     utp_port_t utp_port;
     tool_query_key_t key;
     uint16_t cc_alg;
+    uint8_t ns_mode; /* 0: exclusive, 1: shared */
 } tool_config_t;
 
 int admin_str_to_eid(const char *buf, urma_eid_t *eid);

@@ -58,7 +58,6 @@ tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_show_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -83,7 +82,8 @@ tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
     return rsp;
 }
 
-static int tpsa_get_dev_feature_ioctl(tpsa_daemon_ctx_t *ctx, char* dev_name, tpsa_device_feat_t *feat)
+static int tpsa_get_dev_feature_ioctl(tpsa_daemon_ctx_t *ctx, char* dev_name, tpsa_device_feat_t *feat,
+    uint32_t *max_ueid_cnt)
 {
     tpsa_ioctl_cfg_t cfg = {0};
     int ret;
@@ -93,11 +93,11 @@ static int tpsa_get_dev_feature_ioctl(tpsa_daemon_ctx_t *ctx, char* dev_name, tp
 
     ret = tpsa_ioctl(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     *feat = cfg.cmd.get_dev_feature.out.feature;
-
+    *max_ueid_cnt = cfg.cmd.get_dev_feature.out.max_ueid_cnt;
     return ret;
 }
 
-static int tpsa_verify_single_capability(uint32_t config_feat, uint32_t local_cap, char* cap_name)
+static int tpsa_verify_single_capability(uint32_t config_feat, uint32_t local_cap, const char* cap_name)
 {
     if (config_feat == 1) {
         if (local_cap == 0) {
@@ -114,22 +114,23 @@ static int tpsa_verify_local_device_capability(tpsa_tp_mod_flag_t config, tpsa_d
 {
     int ret;
 
-    ret = tpsa_verify_single_capability(config.bs.oor_en, feat.bs.oor, TPSA_CAPABILITY_OOR);
+    ret = tpsa_verify_single_capability(config.bs.oor_en, feat.bs.oor, g_tpsa_capability[TPSA_CAP_OOR]);
     if (ret != 0) {
         return ret;
     }
 
-    ret = tpsa_verify_single_capability(config.bs.sr_en, feat.bs.selective_retrans, TPSA_CAPABILITY_SR);
+    ret = tpsa_verify_single_capability(config.bs.sr_en, feat.bs.selective_retrans,
+        g_tpsa_capability[TPSA_CAP_SR]);
     if (ret != 0) {
         return ret;
     }
 
-    ret = tpsa_verify_single_capability(config.bs.spray_en, feat.bs.spray_en, TPSA_CAPABILITY_SPRAY);
+    ret = tpsa_verify_single_capability(config.bs.spray_en, feat.bs.spray_en, g_tpsa_capability[TPSA_CAP_SPRAY]);
     if (ret != 0) {
         return ret;
     }
 
-    ret = tpsa_verify_single_capability(config.bs.dca_enable, feat.bs.dca, TPSA_CAPABILITY_DCA);
+    ret = tpsa_verify_single_capability(config.bs.dca_enable, feat.bs.dca, g_tpsa_capability[TPSA_CAP_DCA]);
     if (ret != 0) {
         return ret;
     }
@@ -137,14 +138,7 @@ static int tpsa_verify_local_device_capability(tpsa_tp_mod_flag_t config, tpsa_d
     return 0;
 }
 
-static inline bool tpsa_check_config(tpsa_tp_mod_flag_t tp_mod_flag)
-{
-    if (tp_mod_flag.bs.oor_en || tp_mod_flag.bs.sr_en || tp_mod_flag.bs.spray_en || tp_mod_flag.bs.dca_enable) {
-        return true;
-    }
-    return false;
-}
-static void fill_vport_info(vport_table_entry_t *entry, tpsa_vport_args_t *args)
+static void fill_vport_info(vport_table_entry_t *entry, tpsa_vport_args_t *args, uint32_t max_ueid_cnt)
 {
     (void)memcpy(entry->key.dev_name, args->dev_name, TPSA_MAX_DEV_NAME);
     entry->key.fe_idx = args->fe_idx;
@@ -159,6 +153,7 @@ static void fill_vport_info(vport_table_entry_t *entry, tpsa_vport_args_t *args)
     entry->max_jetty_cnt = args->max_jetty_cnt;
     entry->min_jfr_cnt = args->min_jfr_cnt;
     entry->max_jfr_cnt = args->max_jfr_cnt;
+    entry->ueid_max_cnt = max_ueid_cnt;
 }
 
 tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
@@ -169,6 +164,7 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
     vport_table_t *vport_table = NULL;
     vport_table_entry_t entry = {0};
     tpsa_device_feat_t feat;
+    uint32_t max_ueid_cnt;
 
     int ret;
 
@@ -185,21 +181,18 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
 
     add_req = (tpsa_vport_add_req_t *)req->req;
 
-    if (tpsa_check_config(add_req->args.tp_cfg.tp_mod_flag)) {
-        ret = tpsa_get_dev_feature_ioctl(ctx, add_req->args.dev_name, &feat);
-        if (ret != 0) {
-            TPSA_LOG_ERR("failed to get sr en\n");
-            goto create_rsp;
-        }
-
-        ret = tpsa_verify_local_device_capability(add_req->args.tp_cfg.tp_mod_flag, feat);
-        if (ret != 0) {
-            goto create_rsp;
-        }
+    ret = tpsa_get_dev_feature_ioctl(ctx, add_req->args.dev_name, &feat, &max_ueid_cnt);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to get sr en\n");
+        goto create_rsp;
+    }
+    ret = tpsa_verify_local_device_capability(add_req->args.tp_cfg.tp_mod_flag, feat);
+    if (ret != 0) {
+        goto create_rsp;
     }
 
     vport_table = &ctx->worker->table_ctx.vport_table;
-    fill_vport_info(&entry, &add_req->args);
+    fill_vport_info(&entry, &add_req->args, max_ueid_cnt);
 
     ret = vport_table_add(vport_table, &entry);
     if (ret != 0) {
@@ -219,7 +212,6 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
 create_rsp:
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_add_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -232,6 +224,30 @@ create_rsp:
     return rsp;
 }
 
+int vport_table_handle_delete_list(vport_table_t *vport_table, vport_table_entry_t *entry)
+{
+    int ret = 0;
+
+    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
+    vport_table->vf_destroy = true;
+    vport_del_list_node_t *node = vport_del_list_lookup(&vport_table->vport_delete_list, &entry->key);
+    if (node != NULL) {
+        TPSA_LOG_INFO("this vport delete info has been added to the list.\n");
+        (void)pthread_rwlock_unlock(&vport_table->rwlock);
+        return 0;
+    }
+
+    ret = vport_del_list_add(&vport_table->vport_delete_list, entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("vport delete list add failed, %d.\n", ret);
+        (void)pthread_rwlock_unlock(&vport_table->rwlock);
+        return ret;
+    }
+
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+
+    return 0;
+}
 tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
 {
     tpsa_response_t *rsp;
@@ -257,6 +273,13 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
     (void)memcpy(key.dev_name, del_req->dev_name, TPSA_MAX_DEV_NAME);
     key.fe_idx = del_req->fe_idx;
 
+    vport_table_entry_t *entry = vport_table_lookup(vport_table, &key);
+    if (entry != NULL) {
+        ret = vport_table_handle_delete_list(vport_table, entry);
+        if (ret != 0) {
+            TPSA_LOG_ERR("vport table handle delere list failed, %d.\n", ret);
+        }
+    }
     ret = vport_table_remove(vport_table, &key);
     if (ret != 0) {
         TPSA_LOG_ERR("can not del vport by key dev_name:%s, fe_idx %hu\n", key.dev_name, key.fe_idx);
@@ -264,7 +287,6 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_del_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -309,7 +331,6 @@ tpsa_response_t *process_vport_table_show_ueid(tpsa_request_t *req, ssize_t read
     }
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_show_ueid_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -332,7 +353,7 @@ tpsa_response_t *process_vport_table_add_ueid(tpsa_request_t *req, ssize_t read_
     tpsa_vport_add_ueid_req_t *add_req = NULL;
     vport_table_t *vport_table = NULL;
     vport_key_t key = {0};
-    tpsa_ueid_t ueid = {0};
+    tpsa_ueid_cfg_t ueid;
     int ret;
 
     if (read_len != (req->req_len + (ssize_t)sizeof(tpsa_request_t))) {
@@ -353,15 +374,14 @@ tpsa_response_t *process_vport_table_add_ueid(tpsa_request_t *req, ssize_t read_
 
     ueid.eid = add_req->eid;
     ueid.upi = add_req->upi;
-    ueid.is_valid = true;
+    ueid.eid_index = add_req->eid_index;
     ret = vport_table_add_ueid(vport_table, &key, &ueid);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not add vport by key fe_idx %hu\n", key.fe_idx);
+        TPSA_LOG_ERR("can not add vport by key dev_name: %s fe_idx %hu\n", key.dev_name, key.fe_idx);
     }
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_add_ueid_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -408,7 +428,6 @@ tpsa_response_t *process_vport_table_del_ueid(tpsa_request_t *req, ssize_t read_
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_del_ueid_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -472,7 +491,6 @@ tpsa_response_t *process_vport_table_set_upi(tpsa_request_t *req, ssize_t read_l
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_set_upi_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
     tpsa_set_upi_rsp_t *set_rsp = (tpsa_set_upi_rsp_t *)(rsp->rsp);
@@ -531,7 +549,6 @@ tpsa_response_t *process_vport_table_show_upi(tpsa_request_t *req, ssize_t read_
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_show_upi_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
     tpsa_show_upi_rsp_t *show_rsp = (tpsa_show_upi_rsp_t *)(rsp->rsp);

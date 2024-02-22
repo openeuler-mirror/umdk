@@ -17,10 +17,10 @@
 extern "C" {
 #endif
 
-typedef union uvs_vport_mask {
+typedef union uvs_vport_args_mask {
     struct {
         uint64_t dev_name            : 1;
-        uint64_t fe_idx                : 1;
+        uint64_t fe_idx              : 1;
         uint64_t sip_idx             : 1;
         uint64_t tp_cnt              : 1;
         uint64_t flow_label          : 1;
@@ -55,10 +55,10 @@ typedef union uvs_vport_mask {
         uint64_t reserved            : 27;
     } bs;
     uint64_t value;
-} uvs_vport_mask_t;
+} uvs_vport_args_mask_t;
 
 typedef struct tpsa_vport_args {
-    uvs_vport_mask_t mask;
+    uvs_vport_args_mask_t mask;
     char dev_name[TPSA_MAX_DEV_NAME];
     uint16_t fe_idx;
     uint32_t sip_idx;
@@ -120,6 +120,7 @@ typedef struct tpsa_vport_add_ueid_req {
     uint16_t fe_idx;
     uint32_t upi;
     urma_eid_t eid;
+    uint32_t eid_index;
 } tpsa_vport_add_ueid_req_t;
 
 typedef struct tpsa_vport_add_ueid_rsp {

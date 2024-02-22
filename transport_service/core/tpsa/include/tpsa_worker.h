@@ -45,7 +45,8 @@ typedef struct tpsa_worker {
     int epollfd;
 } tpsa_worker_t;
 
-typedef int (*tpsa_vtp_event_handler)(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, char *dev_name);
+typedef int (*tpsa_vtp_event_handler)(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg,
+                                      char *dev_name, tpsa_lm_vtp_entry_t *lm_vtp_entry);
 
 tpsa_worker_t *tpsa_worker_init(uvs_init_attr_t *attr);
 void tpsa_worker_uninit(tpsa_worker_t *worker);
@@ -56,6 +57,9 @@ void tpsa_worker_uninit(tpsa_worker_t *worker);
  */
 tpsa_worker_t *uvs_get_worker(void);   /* obselete, not to be exposed in the future */
 
+bool tpsa_get_tp_fast_destroy(void);
+void tpsa_set_tp_fast_destroy(bool tp_fast_destory);
+user_ops_t get_user_ops_type(const char *user_ops);
 #ifdef __cplusplus
 }
 #endif

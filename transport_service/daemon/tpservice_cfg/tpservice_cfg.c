@@ -28,7 +28,6 @@ tpsa_response_t *process_tpservice_show(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(struct tpsa_service_show_rsp));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem");
         return NULL;
     }
     tpsa_service_show_rsp_t *show_rsp = (tpsa_service_show_rsp_t *)(rsp->rsp);

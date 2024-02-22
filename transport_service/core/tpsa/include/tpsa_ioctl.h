@@ -31,7 +31,7 @@ extern "C" {
 #define TPSA_CHANNEL_INIT_SIZE 32
 #define TPSA_MAX_EID_CONFIG_CNT 32
 #define TPSA_MAX_VTP_CFG_CNT 32
-
+#define TPSA_MAX_DSCP_VL_NUM 64
 typedef enum tpsa_cmd {
     TPSA_CMD_CHANNEL_INIT = 1,
     TPSA_CMD_CREATE_TPG,
@@ -45,6 +45,7 @@ typedef enum tpsa_cmd {
     TPSA_CMD_DEL_SIP,
     TPSA_CMD_MAP_VTP,
     TPSA_CMD_CREATE_UTP,
+    TPSA_CMD_ONLY_CREATE_UTP,
     TPSA_CMD_DESTROY_UTP,
     TPSA_CMD_GET_DEV_FEATURE,
     TPSA_CMD_RESTORE_TP_ERROR_RSP,
@@ -62,8 +63,22 @@ typedef enum tpsa_cmd {
     TPSA_CMD_CREATE_CTP,
     TPSA_CMD_DESTROY_CTP,
     TPSA_CMD_CHANGE_TPG_TO_ERROR,
+    TPSA_CMD_ALLOC_EID,
+    TPSA_CMD_DEALLOC_EID,
+    TPSA_CMD_QUERY_FE_IDX,
+    TPSA_CMD_CONFIG_DSCP_VL,
     TPSA_CMD_LAST
 } tpsa_cmd_t;
+
+typedef struct tpsa_cmd_op_eid {
+    struct {
+        char dev_name[TPSA_MAX_DEV_NAME];
+        uint32_t upi;
+        uint16_t fe_idx;
+        urma_eid_t eid;
+        uint32_t eid_index;
+    } in;
+} tpsa_cmd_op_eid_t;
 
 typedef struct tpsa_cmd_channel_init {
     struct {
@@ -157,8 +172,6 @@ typedef struct tpsa_cmd_create_tpg {
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uvs_mtu_t local_mtu;
-    struct tpsa_cmd_udrv_priv udata;
-    struct tpsa_udrv_ext udrv_ext;
 } tpsa_cmd_create_tpg_t;
 
 typedef struct tpsa_cmd_create_vtp {
@@ -201,10 +214,12 @@ typedef struct tpsa_cmd_modify_tpg {
 
 typedef struct tpsa_cmd_get_dev_info {
     struct {
-        char target_tpf_name[TPSA_MAX_DEV_NAME];
+        char target_pf_name[TPSA_MAX_DEV_NAME];
+        tpsa_cmd_tpf_t tpf;
     } in;
     struct {
         bool port_is_active;
+        char target_tpf_name[TPSA_MAX_DEV_NAME];
     } out;
 } tpsa_cmd_get_dev_info_t;
 
@@ -302,8 +317,28 @@ typedef struct tpsa_cmd_get_dev_feature {
     } in;
     struct {
         tpsa_device_feat_t feature;
+        uint32_t max_ueid_cnt;
     } out;
 } tpsa_cmd_get_dev_feature_t;
+
+typedef struct tpsa_cmd_query_fe_idx {
+    struct {
+        char dev_name[URMA_MAX_DEV_NAME];
+        uvs_devid_t devid;
+    } in;
+    struct {
+        uint16_t fe_idx;
+    } out;
+} tpsa_cmd_query_fe_idx_t;
+
+typedef struct tpsa_cmd_config_dscp_vl {
+    struct {
+        char dev_name[URMA_MAX_DEV_NAME];
+        uint8_t dscp[TPSA_MAX_DSCP_VL_NUM];
+        uint8_t vl[TPSA_MAX_DSCP_VL_NUM];
+        uint8_t num;
+    } in;
+} tpsa_cmd_config_dscp_vl_t;
 
 /* destroy utp */
 typedef struct tpsa_cmd_destroy_utp {
@@ -324,6 +359,7 @@ typedef struct tpsa_cmd_modify_vtp {
 
 typedef struct tpsa_cmd_restore_tp_error {
     struct {
+        tpsa_cmd_tpf_t tpf;
         uint32_t tpgn;
         uint32_t tpn;
         uint16_t data_udp_start;
@@ -335,6 +371,7 @@ typedef struct tpsa_cmd_restore_tp_error {
 
 typedef struct tpsa_cmd_restore_tp_suspend {
     struct {
+        tpsa_cmd_tpf_t tpf;
         uint32_t tpgn;
         uint32_t tpn;
         uint16_t data_udp_start;
@@ -360,6 +397,7 @@ typedef struct tpsa_cmd_show_upi {
 
 typedef struct tpsa_cmd_change_tp_to_error {
     struct {
+        tpsa_cmd_tpf_t tpf;
         uint32_t tpgn;
         uint32_t tpn;
     } in;
@@ -407,8 +445,9 @@ typedef union uvs_set_vport_cfg_mask {
         uint32_t max_jetty_cnt       : 1;
         uint32_t min_jfr_cnt         : 1;
         uint32_t max_jfr_cnt         : 1;
+        uint32_t tp_cnt              : 1;
         uint32_t slice               : 1;
-        uint32_t reserved            : 25;
+        uint32_t reserved            : 24;
     } bs;
     uint32_t value;
 } uvs_set_vport_cfg_mask_t;
@@ -423,6 +462,7 @@ typedef struct uvs_set_vport_cfg {
     uint32_t max_jetty_cnt;
     uint32_t min_jfr_cnt;
     uint32_t max_jfr_cnt;
+    uint32_t tp_cnt;
     uint32_t slice;
 } uvs_set_vport_cfg_t;
 
@@ -452,6 +492,7 @@ typedef struct tpsa_ioctl_cfg {
         tpsa_cmd_destroy_vtp_t destroy_vtp;
         tpsa_cmd_destroy_tpg_t destroy_tpg;
         tpsa_cmd_op_sip_t op_sip;
+        tpsa_cmd_op_eid_t op_eid;
         tpsa_cmd_map_vtp_t map_vtp;
         tpsa_cmd_create_utp_t create_utp;
         tpsa_cmd_destroy_utp_t destroy_utp;
@@ -507,7 +548,8 @@ void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cpara
 void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
                                       tpsa_init_tpg_cmd_param_t *param);
 void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, tpsa_net_addr_t *sip);
-void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_tpf_name);
+void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_pf_name,
+    tpsa_net_addr_t *netaddr, tpsa_transport_type_t type);
 void tpsa_ioctl_cmd_map_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, uint32_t number,
                             tpsa_net_addr_t *sip);
 void tpsa_ioctl_cmd_create_lb_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, tpsa_cmd_create_tpg_t *cmd,
@@ -532,6 +574,7 @@ void tpsa_ioctl_cmd_destroy_ctp(tpsa_ioctl_cfg_t *cfg, ctp_table_key_t *key,
 void tpsa_ioctl_cmd_change_tpg_to_error(tpsa_ioctl_cfg_t *cfg, tpsa_net_addr_t *sip, uint32_t tpgn);
 
 int uvs_ioctl_cmd_set_global_cfg(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_global_cfg_t *global_cfg);
+int uvs_ioctl_op_sip_table(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry, uint32_t command);
 int uvs_ioctl_cmd_set_vport_cfg(tpsa_ioctl_ctx_t *ioctl_ctx,
     vport_table_entry_t *add_entry, tpsa_global_cfg_t *global_cfg);
 int uvs_ioctl_cmd_modify_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_vtp_cfg_t *vtp_cfg,
@@ -539,6 +582,10 @@ int uvs_ioctl_cmd_modify_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_vtp_cfg_t *vtp_cf
 int tpsa_negotiate_optimal_cc_alg(uint32_t target_cc_cnt, tpsa_tp_cc_entry_t *target_cc_arr, bool target_cc_en,
                                   uint32_t local_cc_cnt, tpsa_tp_cc_entry_t *local_cc_arr, bool local_cc_en,
                                   urma_tp_cc_alg_t *alg, uint8_t *cc_pattern_idx);
+void tpsa_lm_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
+                                  sip_table_entry_t *sip_entry, utp_table_key_t *key);
+int uvs_ioctl_query_fe_idx(int ubcore_fd, tpsa_cmd_query_fe_idx_t *cfg);
+int uvs_ioctl_config_dscp_vl(int ubcore_fd, tpsa_cmd_config_dscp_vl_t *cfg);
 
 #ifdef __cplusplus
 }

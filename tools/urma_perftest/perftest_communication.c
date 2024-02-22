@@ -209,8 +209,7 @@ int sync_time(int sock_fd, char *a)
     char *b = calloc(1, (unsigned long)len + 1);
     int ret = 0;
     if (b == NULL) {
-        (void)fprintf(stderr, "alloc memory error.\n");
-        return -1;
+        return -ENOMEM;
     }
     ret = sock_sync_data(sock_fd, len, a, b);
     if (ret != 0) {

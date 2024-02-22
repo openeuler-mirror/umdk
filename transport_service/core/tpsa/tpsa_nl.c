@@ -86,69 +86,14 @@ int tpsa_nl_send_msg(tpsa_nl_ctx_t *nl, tpsa_nl_msg_t *msg)
 
 tpsa_nl_msg_t *tpsa_alloc_nlmsg(uint32_t payload_len, const urma_eid_t *src_eid, const urma_eid_t *dst_eid)
 {
-    tpsa_nl_msg_t *msg = calloc(1, sizeof(tpsa_nl_msg_t) + payload_len);
+    tpsa_nl_msg_t *msg = (tpsa_nl_msg_t *)calloc(1, sizeof(tpsa_nl_msg_t) + payload_len);
     if (msg == NULL) {
-        TPSA_LOG_ERR("Fail to alloc nl message.");
         return NULL;
     }
     msg->src_eid = *src_eid;
     msg->dst_eid = *dst_eid;
     msg->payload_len = payload_len;
     return msg;
-}
-
-static void tpsa_query_tp(tpsa_nl_query_tp_resp_t *query_tp_resp, urma_eid_t src_eid, urma_eid_t dst_eid)
-{
-    /* TODO: table check and assignment */
-    query_tp_resp->dst_eid = dst_eid;
-    query_tp_resp->src_addr.eid = src_eid;
-    query_tp_resp->src_addr.type = TPSA_NET_ADDR_TYPE_IPV4;
-    query_tp_resp->dst_addr.eid = dst_eid;
-    query_tp_resp->dst_addr.type = TPSA_NET_ADDR_TYPE_IPV4;
-    query_tp_resp->tp_exist = false;
-    query_tp_resp->tpn = 0;
-    query_tp_resp->ret = TPSA_NL_RESP_SUCCESS;
-
-    return;
-}
-
-tpsa_nl_msg_t *tpsa_handle_nl_query_tp_req(tpsa_nl_msg_t *req)
-{
-    urma_eid_t src_eid = req->src_eid;
-    urma_eid_t dst_eid = req->dst_eid;
-
-    tpsa_nl_msg_t *resp = NULL;
-
-    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_query_tp_resp_t), &src_eid, &dst_eid);
-    if (resp == NULL) {
-        TPSA_LOG_ERR("Fail to alloc nl msg");
-        return NULL;
-    }
-
-    resp->hdr.nlmsg_type = TPSA_NL_QUERY_TP_RESP;
-    resp->msg_type = TPSA_NL_QUERY_TP_RESP;
-    resp->hdr.nlmsg_len = tpsa_netlink_msg_len((const tpsa_nl_msg_t *)resp);
-    resp->nlmsg_seq = req->nlmsg_seq;
-    resp->transport_type = req->transport_type;
-
-    tpsa_nl_query_tp_resp_t *query_tp_resp = (tpsa_nl_query_tp_resp_t *)resp->payload;
-
-    /* to delete later */
-    if (req->transport_type == TPSA_TRANSPORT_IB) {
-        tpsa_netaddr_entry_t *src = NULL, *dst = NULL;
-        if (tpsa_get_underlay_info(&src_eid, &dst_eid, &src, &dst) != 0) {
-            TPSA_LOG_WARN("Failed to look up underlay info.\n");
-        } else {
-            query_tp_resp->dst_eid =  dst->underlay.eid;
-            query_tp_resp->src_addr = src->underlay.netaddr[0];
-            query_tp_resp->dst_addr = dst->underlay.netaddr[0];
-            query_tp_resp->cfg = dst->underlay.cfg;
-        }
-    }
-
-    tpsa_query_tp(query_tp_resp, src_eid, dst_eid);
-
-    return resp;
 }
 
 tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_fast(tpsa_nl_msg_t *nlreq, tpsa_nl_resp_status_t status, uint32_t vtpn)
@@ -190,8 +135,8 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     urma_eid_t local_eid = msg->local_eid;
     urma_eid_t peer_eid = msg->peer_eid;
 
-    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t) +
-        msg->content.finish.udrv_out_len, &local_eid, &peer_eid);
+    nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t),
+        &local_eid, &peer_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -207,7 +152,7 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     /* tpsa msg */
     tpsa_nl_resp_host_t *resp_host = (tpsa_nl_resp_host_t *)nlresp->payload;
     resp_host->src_fe_idx = msg->content.finish.src_function_id;
-    resp_host->resp.len = (uint32_t)(sizeof(tpsa_nl_create_vtp_resp_t) + msg->content.finish.udrv_out_len);
+    resp_host->resp.len = (uint32_t)(sizeof(tpsa_nl_create_vtp_resp_t));
     resp_host->resp.msg_id = msg->content.finish.msg_id;
     resp_host->resp.opcode = TPSA_MSG_CREATE_VTP;
 
@@ -215,14 +160,7 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)resp_host->resp.data;
     create_vtp_resp->ret = TPSA_NL_RESP_SUCCESS;
     create_vtp_resp->vtpn = vtpn;
-    /* for alpha */
-    create_vtp_resp->udrv_out_len = msg->content.finish.udrv_out_len;
-    (void)memcpy((char *)create_vtp_resp->udrv_out_data,
-        (char *)msg->content.finish.udrv_data + msg->content.finish.udrv_in_len, msg->content.finish.udrv_out_len);
 
-    create_vtp_resp->udrv_out_len = msg->content.finish.udrv_out_len;
-    (void)memcpy((char *)create_vtp_resp->udrv_out_data,
-        (char *)msg->content.finish.udrv_data + msg->content.finish.udrv_in_len, msg->content.finish.udrv_out_len);
     return nlresp;
 }
 
@@ -351,7 +289,7 @@ tpsa_nl_msg_t *tpsa_nl_update_tpf_dev_info_resp(tpsa_nl_msg_t *req, tpsa_nl_upda
 tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_status_t status)
 {
     tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)req->payload;
-    tpsa_nl_mig_req_t *nlreq = (tpsa_nl_mig_req_t *)nlmsg->req.data;
+    tpsa_nl_function_mig_req_t *nlreq = (tpsa_nl_function_mig_req_t *)nlmsg->req.data;
 
     urma_eid_t null_eid = {0};
     tpsa_nl_msg_t *nlresp = NULL;
@@ -384,9 +322,8 @@ tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_statu
 
 tpsa_sock_msg_t *tpsa_handle_nl_create_tp_req(tpsa_nl_msg_t *req)
 {
-    tpsa_sock_msg_t *info = calloc(1, sizeof(tpsa_sock_msg_t));
+    tpsa_sock_msg_t *info = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (info == NULL) {
-        TPSA_LOG_ERR("Fail to create tp request");
         return NULL;
     }
 

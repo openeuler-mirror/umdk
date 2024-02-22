@@ -45,7 +45,6 @@ tpsa_response_t *process_live_migrate_table_show(tpsa_request_t *req, ssize_t re
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_show_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -106,7 +105,6 @@ tpsa_response_t *process_live_migrate_table_add(tpsa_request_t *req, ssize_t rea
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_add_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -151,7 +149,6 @@ tpsa_response_t *process_live_migrate_table_del(tpsa_request_t *req, ssize_t rea
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_del_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 

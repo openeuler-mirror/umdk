@@ -180,7 +180,7 @@ static int32_t live_migrate_table_cmd_prep_args(uvs_admin_cmd_ctx_t *ctx, const 
             }
             status = g_live_migrate_table_parse[ret](args, optarg);
             if (status != 0) {
-                (void)printf("invalid parameter --%s %s\n", optargs[ret].arg_name, optarg);
+                (void)printf("ERR: invalid parameter --%s %s\n", optargs[ret].arg_name, optarg);
             }
         } else {
             status = -EINVAL;
@@ -198,7 +198,7 @@ static void uvs_admin_print_live_migrate(uint16_t fe_idx, uvs_admin_live_migrate
 {
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("fe_idx                     : %hu\n", fe_idx);
-    (void)printf("dev_name                     : %s\n", show_rsp->dev_name);
+    (void)printf("dev_name                   : %s\n", show_rsp->dev_name);
     (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->dip));
     (void)printf("live_migrate_flag          : %d\n", show_rsp->flag);
 }
@@ -218,13 +218,12 @@ static int32_t uvs_admin_live_migrate_table_showcmd_exec(uvs_admin_cmd_ctx_t *ct
     }
 
     if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0) {
-        (void)printf("Invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
+        (void)printf("ERR: invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
         return -EINVAL;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_show_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -244,7 +243,8 @@ static int32_t uvs_admin_live_migrate_table_showcmd_exec(uvs_admin_cmd_ctx_t *ct
 
     uvs_admin_live_migrate_table_show_rsp_t *show_rsp = (uvs_admin_live_migrate_table_show_rsp_t *)rsp->rsp;
     if (show_rsp->res != 0) {
-        (void)printf("can not find live_migrate_table info by fe_idx %hu\n", live_migrate_table_req->fe_idx);
+        (void)printf("ERR: failed to show live_migrate_table info, ret: %d, fe_idx: %hu\n",
+            show_rsp->res, live_migrate_table_req->fe_idx);
     } else {
         uvs_admin_print_live_migrate(live_migrate_table_req->fe_idx, show_rsp);
     }
@@ -268,13 +268,12 @@ static int32_t uvs_admin_live_migrate_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx
     }
 
     if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.dip == 0) {
-        (void)printf("Invalid parameter, must set dev_name/fe_idx/dip, mask:%x\n", args.mask.value);
+        (void)printf("ERR: invalid parameter, must set dev_name/fe_idx/dip, mask:%x\n", args.mask.value);
         return -EINVAL;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_add_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -294,7 +293,7 @@ static int32_t uvs_admin_live_migrate_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx
 
     uvs_admin_live_migrate_table_add_rsp_t *add_rsp = (uvs_admin_live_migrate_table_add_rsp_t *)rsp->rsp;
     if (add_rsp->res != 0) {
-        (void)printf("add live migrate table failed, ret %d\n", add_rsp->res);
+        (void)printf("ERR: failed to add live migrate, ret: %d.\n", add_rsp->res);
     }
 
     free(req);
@@ -316,13 +315,12 @@ static int32_t uvs_admin_live_migrate_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx
     }
 
     if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0) {
-        (void)printf("Invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
+        (void)printf("ERR: invalid parameter, must set dev_name/fe_idx, mask:%x\n", args.mask.value);
         return -EINVAL;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_live_migrate_table_del_req_t));
     if (req == NULL) {
-        (void)printf("Can not alloc mem\n");
         return -ENOMEM;
     }
 
@@ -341,7 +339,7 @@ static int32_t uvs_admin_live_migrate_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx
 
     uvs_admin_live_migrate_table_del_rsp_t *del_rsp = (uvs_admin_live_migrate_table_del_rsp_t *)rsp->rsp;
     if (del_rsp->res != 0) {
-        (void)printf("del live migrate table failed, ret %d\n", del_rsp->res);
+        (void)printf("ERR: failed to del live migrate, ret: %d.\n", del_rsp->res);
     }
 
     free(req);

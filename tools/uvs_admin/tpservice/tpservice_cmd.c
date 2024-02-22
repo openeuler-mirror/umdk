@@ -105,6 +105,7 @@ static int32_t uvs_admin_tpservice_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, &req, buf);
     if (rsp == NULL) {
+        (void)printf("ERR: failed to show tp_service.\n");
         return -EIO;
     }
 

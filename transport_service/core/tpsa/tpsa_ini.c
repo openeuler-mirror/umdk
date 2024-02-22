@@ -7,6 +7,7 @@
  * History:
  */
 
+#include <errno.h>
 #include <arpa/inet.h>
 
 #include "tpsa_log.h"
@@ -370,7 +371,7 @@ static int tpsa_parse_netaddrs(char *str, tpsa_underlay_info_t *info)
 }
 
 typedef struct tpsa_map_table_parser {
-    char *match;
+    const char *match;
     int (*cb)(char *value, urma_eid_t *eid, tpsa_underlay_info_t *info);
 } tpsa_map_tbl_parser_t;
 
@@ -503,11 +504,10 @@ static int tpsa_parse_map_entry_kv(char *key, char *value, urma_eid_t *eid, tpsa
 static int tpsa_parse_add_map_entry(char *entry)
 {
     urma_eid_t eid;
-    tpsa_underlay_info_t *info = calloc(1, sizeof(tpsa_underlay_info_t) +
+    tpsa_underlay_info_t *info = (tpsa_underlay_info_t *)calloc(1, sizeof(tpsa_underlay_info_t) +
         TPSA_MAX_NETADDR_CNT * sizeof(tpsa_net_addr_t));
     if (info == NULL) {
-        TPSA_LOG_INFO("Failed to calloc underlay info");
-        return -1;
+        return -ENOMEM;
     }
 
     bool parsed[TPSA_MAP_TBL_MAX] = {0};

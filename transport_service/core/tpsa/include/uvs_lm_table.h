@@ -83,6 +83,13 @@ int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, urma_eid_t *peer
 int tpsa_notify_table_remove(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify_table_key_t *key);
 void tpsa_notify_table_destroy(tpsa_notify_table_t *tpsa_notify_table);
 
+/*
+ * vport del list opts
+ */
+void vport_del_list_destroy(struct ub_list *list);
+vport_del_list_node_t *vport_del_list_lookup(struct ub_list *list, vport_key_t *key);
+int vport_del_list_add(struct ub_list *list, vport_table_entry_t *entry);
+
 #ifdef __cplusplus
 }
 #endif

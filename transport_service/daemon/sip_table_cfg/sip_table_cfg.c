@@ -45,7 +45,6 @@ tpsa_response_t *process_sip_table_show(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_sip_table_show_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -131,7 +130,6 @@ tpsa_response_t *process_sip_table_add(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_sip_table_add_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 
@@ -179,7 +177,6 @@ tpsa_response_t *process_sip_table_del(tpsa_request_t *req, ssize_t read_len)
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_sip_table_del_rsp_t));
     if (rsp == NULL) {
-        TPSA_LOG_ERR("can not alloc rsp mem\n");
         return NULL;
     }
 

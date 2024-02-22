@@ -388,13 +388,16 @@ urma_status_t urma_delete_jfce(urma_jfce_t *jfce)
     return URMA_SUCCESS;
 }
 
-static int urma_create_jetty_check_trans_mode(urma_jetty_cfg_t *jetty_cfg)
+static int urma_create_jetty_check_trans_mode(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg)
 {
     if (urma_check_trans_mode_valid(jetty_cfg->jfs_cfg->trans_mode) != true) {
         URMA_LOG_ERR("Invalid parameter, trans_mode: %d.\n", (int)jetty_cfg->jfs_cfg->trans_mode);
         return -1;
     }
-
+    if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR && ctx->dev->type == URMA_TRANSPORT_UB) {
+        URMA_LOG_ERR("UB dev should use share jfr!");
+        return -1;
+    }
     if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR &&
         (jetty_cfg->jfr_cfg == NULL || urma_check_trans_mode_valid(jetty_cfg->jfr_cfg->trans_mode) != true ||
         jetty_cfg->jfs_cfg->trans_mode != jetty_cfg->jfr_cfg->trans_mode)) {
@@ -535,7 +538,7 @@ urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg
         return NULL;
     }
 
-    if (urma_create_jetty_check_trans_mode(jetty_cfg) != 0) {
+    if (urma_create_jetty_check_trans_mode(ctx, jetty_cfg) != 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return NULL;
     }
@@ -602,6 +605,12 @@ urma_status_t urma_delete_jetty(urma_jetty_t *jetty)
     if (jetty == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
+    }
+
+    if (jetty->jetty_cfg.jfs_cfg == NULL ||
+        (jetty->jetty_cfg.jfs_cfg->trans_mode == URMA_TM_RC && jetty->remote_jetty != NULL)) {
+        URMA_LOG_ERR("Failed to delete jetty because it has remote jetty, try unbind first");
+        return URMA_ENOPERM;
     }
 
     urma_context_t *urma_ctx = jetty->urma_ctx;
@@ -790,7 +799,6 @@ urma_jetty_grp_t *urma_create_jetty_grp(urma_context_t *ctx, urma_jetty_grp_cfg_
             URMA_LOG_ERR("delete_jetty_grp failed.\n");
             return NULL;
         }
-        URMA_LOG_ERR("alloc jetty_list failed.\n");
         return NULL;
     }
     jetty_grp->jetty_cnt = 0;
@@ -904,6 +912,11 @@ urma_status_t urma_free_token_id(urma_token_id_t *token_id)
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+    if (atomic_load(&token_id->ref.atomic_cnt) != 0) {
+        URMA_LOG_ERR("free token id :%d, ref:%d, not zero\n",
+            token_id->token_id, atomic_load(&token_id->ref.atomic_cnt));
+        return URMA_EINVAL;
+    }
     urma_ops_t *ops = NULL;
     urma_context_t *urma_ctx = token_id->urma_ctx;
 
@@ -916,6 +929,28 @@ urma_status_t urma_free_token_id(urma_token_id_t *token_id)
     return ret;
 }
 
+static bool urma_check_seg_cfg(urma_transport_type_t transport_type, urma_seg_cfg_t *seg_cfg)
+{
+    if (seg_cfg->flag.bs.token_policy != URMA_TOKEN_NONE && seg_cfg->token_value == NULL) {
+        URMA_LOG_ERR("Key must be set when token_policy is not URMA_TOKEN_NONE.\n");
+        return false;
+    }
+
+    if (transport_type == URMA_TRANSPORT_UB &&
+        ((seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_VALID && seg_cfg->token_id == NULL) ||
+        (seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID && seg_cfg->token_id != NULL))) {
+        URMA_LOG_ERR("token_id must set when token_id_valid is true, or must NULL when token_id_valid is false.\n");
+        return false;
+    }
+
+    if ((seg_cfg->flag.bs.access & (URMA_ACCESS_REMOTE_WRITE | URMA_ACCESS_REMOTE_ATOMIC)) &&
+        !(seg_cfg->flag.bs.access & URMA_ACCESS_LOCAL_WRITE)) {
+        URMA_LOG_ERR("Local write must be set when either remote write or remote atomic is declared.\n");
+        return false;
+    }
+    return true;
+}
+
 urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cfg)
 {
     if (ctx == NULL || seg_cfg == NULL || seg_cfg->va == 0) {
@@ -923,21 +958,7 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
         return NULL;
     }
 
-    if (seg_cfg->flag.bs.token_policy != URMA_TOKEN_NONE && seg_cfg->token_value == NULL) {
-        URMA_LOG_ERR("Key must be set when token_policy is not URMA_TOKEN_NONE.\n");
-        return NULL;
-    }
-
-    if (ctx->dev->type == URMA_TRANSPORT_UB &&
-        ((seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_VALID && seg_cfg->token_id == NULL) ||
-        (seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID && seg_cfg->token_id != NULL))) {
-        URMA_LOG_ERR("token_id must set when token_id_valid is true, or must NULL when token_id_valid is false.\n");
-        return NULL;
-    }
-
-    if ((seg_cfg->flag.bs.access & (URMA_ACCESS_REMOTE_WRITE | URMA_ACCESS_REMOTE_ATOMIC)) &&
-        !(seg_cfg->flag.bs.access & URMA_ACCESS_LOCAL_WRITE)) {
-        URMA_LOG_ERR("Local write must be set when either remote write or remote atomic is declared.\n");
+    if (!urma_check_seg_cfg(ctx->dev->type, seg_cfg)) {
         return NULL;
     }
 
@@ -966,6 +987,9 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
     seg->seg.attr.bs.user_token_id = seg_cfg->flag.bs.token_id_valid;
     atomic_fetch_add(&seg->urma_ctx->ref.atomic_cnt, 1);
 
+    if (ctx->dev->type == URMA_TRANSPORT_UB && seg->token_id != NULL) {
+        atomic_fetch_add(&seg->token_id->ref.atomic_cnt, 1);
+    }
     return seg;
 }
 
@@ -978,6 +1002,7 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
     }
 
     urma_token_id_t *token_id = target_seg->token_id;
+    urma_transport_type_t type = target_seg->urma_ctx->dev->type;
     bool free_token_id = false;
     if (target_seg->seg.attr.bs.user_token_id == URMA_TOKEN_ID_INVALID &&
         target_seg->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
@@ -991,6 +1016,10 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
     ret = ops->unregister_seg(target_seg);
     if (ret == URMA_SUCCESS) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
+
+        if (type == URMA_TRANSPORT_UB && token_id != NULL) {
+            atomic_fetch_sub(&token_id->ref.atomic_cnt, 1);
+        }
     }
 
     if (free_token_id == true) {
@@ -1139,7 +1168,6 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg)
     /* deep copy of jfs cfg */
     jfs_cfg = calloc(1, sizeof(urma_jfs_cfg_t));
     if (jfs_cfg == NULL) {
-        URMA_LOG_ERR("Failed to calloc jfs cfg.\n");
         return -1;
     }
     *jfs_cfg = *(cfg->jfs_cfg);
@@ -1149,7 +1177,6 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg)
         p->jfr_cfg = calloc(1, sizeof(urma_jfr_cfg_t));
         if (p->jfr_cfg == NULL) {
             free(jfs_cfg);
-            URMA_LOG_ERR("Failed to calloc jfs cfg.\n");
             return -1;
         }
         (void)memcpy(p->jfr_cfg, cfg->jfr_cfg, sizeof(urma_jfr_cfg_t));

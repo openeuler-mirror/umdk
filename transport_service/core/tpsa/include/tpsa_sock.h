@@ -16,6 +16,7 @@
 #include "uvs_types.h"
 #include "tpsa_types.h"
 #include "tpsa_table.h"
+#include "tpsa_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,7 +41,7 @@ typedef struct tpsa_sock_context {
 } tpsa_sock_ctx_t;
 
 /* Struct used for init create socket message */
-typedef struct tpsa_init_sock_param {
+typedef struct tpsa_init_sock_req_param {
     tpsa_tp_mod_cfg_t local_tp_cfg;
     tpsa_net_addr_t peer_net_addr;
     uvs_mtu_t local_mtu;
@@ -55,7 +56,17 @@ typedef struct tpsa_init_sock_param {
     uint32_t cc_array_cnt;
     tpsa_tp_cc_entry_t cc_result_array[TPSA_CC_IDX_TABLE_SIZE]; // stores the query results
     bool cc_en;
-} tpsa_init_sock_param_t;
+} tpsa_init_sock_req_param_t;
+
+struct tpsa_init_sock_resp_param {
+    uint32_t tpgn;
+    uint32_t *tpn;
+    tpsa_tpg_cfg_t *tpg_cfg;
+    uvs_mtu_t mtu;
+    tpsa_cc_param_t *resp_param;
+    bool is_target;
+    tpsa_net_addr_t sip;
+};
 
 int tpsa_add_epoll_event(int epollfd, int fd, uint32_t events);
 int tpsa_set_nonblock_opt(int fd);
@@ -71,16 +82,15 @@ int tpsa_sock_server_init(tpsa_sock_ctx_t *sock_ctx, uvs_init_attr_t *attr);
 void tpsa_sock_server_uninit(tpsa_sock_ctx_t *sock_ctx);
 
 /* socket msg init */
-tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_init_sock_param_t *param);
-tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, uint32_t tpgn, uint32_t *tpn,
-    tpsa_tpg_cfg_t *tpg_cfg, uvs_mtu_t mtu, tpsa_cc_param_t *resp_param);
-tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t* msg);
-tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg);
+tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_init_sock_req_param_t *param);
+tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t *msg, struct tpsa_init_sock_resp_param* param);
+void tpsa_sock_init_destroy_resp(tpsa_sock_msg_t *resp);
+tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t *msg, tpsa_net_addr_t *sip);
+tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg, tpsa_net_addr_t *sip);
 tpsa_sock_msg_t *tpsa_sock_init_table_sync(tpsa_create_param_t *cparam, uint32_t vtpn, tpsa_table_opcode_t opcode,
                                            uint32_t upi, vport_table_t *vport_table);
-tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_nl_msg_t *nlmsg, uint32_t tpgn,
-                                            tpsa_net_addr_t *dip, uint32_t upi, uint32_t tp_cnt,
-                                            struct tpsa_ta_data *ta_data);
+tpsa_sock_msg_t *tpsa_sock_init_destroy_req(tpsa_create_param_t *cparam, uint32_t tpgn,
+                                            tpsa_net_addr_t *sip, uint32_t tp_cnt, bool delete_trigger);
 
 #ifdef __cplusplus
 }

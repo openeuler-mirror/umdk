@@ -125,13 +125,17 @@ static void usage(const char *argv0)
     (void)printf("  show [--dev] [--whole]                                 show all ubep devices info.\n");
     (void)printf("  add_eid <--dev> <--idx> [--ns /proc/$pid/ns/net]       add the eid of UB function entity\n");
     (void)printf("  del_eid <--dev> <--idx>                                del the eid of UB function entity.\n");
-    (void)printf("  set_eid_mode <--dev> <--eid_mode>                      change the eid mode of pf ubep device.\n");
+    (void)printf("  set_eid_mode <--dev> [--eid_mode]                      change the eid mode of pf ubep device.\n");
     (void)printf("  set_cc_alg <--dev> <--cc_alg>                          set one or more congestion control/\n");
     (void)printf("                                                         algorithms for ubep device.\n");
     (void)printf("  set_upi <--dev> [--fe_idx] <--idx> <--upi>             set the upi of ubep device.\n");
     (void)printf("  show_upi <--dev> [--fe_idx]                            show the upi of ubep device.\n");
-    (void)printf("  show_stats <--type> <--key>                            show run stats of ubep device.\n");
-    (void)printf("  show_res <--type> <--key> [--key_ext] [--key_cnt]      show resources of ubep device.\n");
+    (void)printf("  show_stats <--dev> <--type> <--key>                    show run stats of ubep device.\n");
+    (void)printf("  show_res <--dev> <--type> <--key> [--key_ext]                                        \n");
+    (void)printf("           [--key_cnt]                                   show resources of ubep device.\n");
+    (void)printf("  set_ns_mode <--ns_mode (exclusive: 0) | (shared: 1) >  set ns mode for UB devices, \n");
+    (void)printf("                                                         not support IB and IP currently.\n");
+    (void)printf("  set_dev_ns <--dev> <--ns /proc/$pid/ns/net>            set net namespace of UB device.\n");
     (void)printf("Options:\n");
     (void)printf("  -c, --cc_alg                                algorithmic value: ((CC_PFC: 1) | (CC_DCQCN: 2) |/\n");
     (void)printf("                                              (CC_DCQCN_AND_NETWORK_CC: 4) | (CC_LDCP: 8) |/\n");
@@ -159,6 +163,8 @@ static void usage(const char *argv0)
     (void)printf("  -k, --key <key>                             config stats/res key.\n");
     (void)printf("  -K, --key_ext <key_ext>                     config key_ext for vtp res.\n");
     (void)printf("  -C, --key_cnt <key>                         config key_cnt for rc res.\n");
+    (void)printf("  -n, --ns </proc/$pid/ns/net>                ns path.\n");
+    (void)printf("  -M, --ns_mode <0 or 1>                      ns_mode with (shared: 0) | (exclusive: 1).\n");
 }
 
 static tool_cmd_type_t parse_command(const char *argv1)
@@ -175,7 +181,9 @@ static tool_cmd_type_t parse_command(const char *argv1)
         {"show_upi",        TOOL_CMD_SHOW_UPI},
         {"show_utp",        TOOL_CMD_SHOW_UTP},
         {"show_stats",      TOOL_CMD_SHOW_STATS},
-        {"show_res",        TOOL_CMD_SHOW_RES}
+        {"show_res",        TOOL_CMD_SHOW_RES},
+        {"set_ns_mode",     TOOL_CMD_SET_NS_MODE},
+        {"set_dev_ns",      TOOL_CMD_SET_DEV_NS}
     };
 
     for (i = 0; i < (int)TOOL_CMD_NUM; i++) {
@@ -267,24 +275,24 @@ static int check_query_type(const tool_config_t *cfg)
 static bool check_dev_name(char *dev_name)
 {
     bool ret = false;
-    DIR *class_dir;
+    DIR *cdev_dir;
     struct dirent *dent;
 
-    class_dir = opendir(SYS_CLASS_PATH);
-    if (class_dir == NULL) {
-        (void)printf("%s open failed, errno: %d.\n", SYS_CLASS_PATH, errno);
+    cdev_dir = opendir(CDEV_PATH);
+    if (cdev_dir == NULL) {
+        (void)printf("%s open failed, errno: %d.\n", CDEV_PATH, errno);
         return false;
     }
 
-    while ((dent = readdir(class_dir)) != NULL) {
+    while ((dent = readdir(cdev_dir)) != NULL) {
         if (strcmp(dent->d_name, dev_name) == 0) {
             ret = true;
             break;
         }
     }
 
-    if (closedir(class_dir) < 0) {
-        (void)printf("Failed to close dir: %s, errno: %d.\n", SYS_CLASS_PATH, errno);
+    if (closedir(cdev_dir) < 0) {
+        (void)printf("Failed to close dir: %s, errno: %d.\n", CDEV_PATH, errno);
     }
     return ret;
 }
@@ -321,13 +329,14 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
         {"key_ext",           required_argument, NULL, 'K'},
         {"key_cnt",           required_argument, NULL, 'C'},
         {"ns",                required_argument, NULL, 'n'},
+        {"ns_mode",           required_argument, NULL, 'M'},
         {NULL,                no_argument,       NULL, '\0'}
     };
 
     /* Second parse the options */
     while (1) {
         int c;
-        c = getopt_long(argc, argv, "c:C:hd:e:Emv:i:u:ws:r:R:p:k:K:n:", long_options, NULL);
+        c = getopt_long(argc, argv, "c:C:hd:e:Emv:i:u:ws:r:R:p:k:K:n:M:", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -398,6 +407,9 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                     return -1;
                 }
                 strncpy(cfg->ns, optarg, URMA_ADMIN_MAX_NS_PATH - 1);
+                break;
+            case 'M':
+                ret = admin_str_to_u8(optarg, &cfg->ns_mode);
                 break;
             default:
                 usage(argv[0]);

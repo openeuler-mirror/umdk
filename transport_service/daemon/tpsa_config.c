@@ -28,9 +28,8 @@ int tpsa_parse_config_file(tpsa_config_t *cfg)
     unsigned int server_port;
     file_info_t *file = NULL;
 
-    file = calloc(1, sizeof(file_info_t));
+    file = (file_info_t *)calloc(1, sizeof(file_info_t));
     if (file == NULL) {
-        TPSA_LOG_ERR("Failed to malloc memory.\n");
         return -1;
     }
 
