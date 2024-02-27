@@ -282,6 +282,15 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 
 	if (jfs->tp_mode == URMA_TM_UM) {
 		jfs->um_qp->qp_num = resp.create_tp_resp.qpn;
+		jfs->um_qp->flags = resp.create_tp_resp.cap_flags;
+		if (resp.create_tp_resp.cap_flags & UDMA_QP_CAP_DIRECT_WQE) {
+			ret = mmap_dwqe(ctx, jfs->um_qp);
+			if (ret) {
+				urma_cmd_delete_jfs(&jfs->base);
+				URMA_LOG_ERR("mmap dwqe failed\n");
+				return URMA_FAIL;
+			}
+		}
 		jfs->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
 		jfs->um_qp->sq.priority = resp.create_tp_resp.priority;
 		memcpy(&jfs->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
@@ -1037,7 +1046,7 @@ static struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 						       tjfr_index);
 		break;
 	default:
-		URMA_LOG_ERR("Unsupported or invalid opcode: %u\n",
+		URMA_LOG_ERR("Unsupported or invalid opcode: %u.\n",
 			     (uint32_t)wr->opcode);
 		return NULL;
 	}
@@ -1113,7 +1122,7 @@ static urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udm
 	if (qp->flags & UDMA_QP_CAP_DYNAMIC_CTX_ATTACH) {
 		ret = dca_attach_qp_buf(udma_ctx, qp);
 		if (ret) {
-			URMA_LOG_ERR("failed to attach DCA for QP %lu send!\n",
+			URMA_LOG_ERR("failed to attach DCA for QP %u send!\n",
 				     qp->qp_num);
 			return URMA_ENOMEM;
 		}

@@ -20,10 +20,10 @@
 #include "hns3_udma_u_db.h"
 
 static const uint32_t db_size[] = {
-	[UDMA_JFS_TYPE_DB]	= 4,
-	[UDMA_JFR_TYPE_DB]	= 4,
-	[UDMA_JETTY_TYPE_DB]	= 4,
-	[UDMA_JFC_TYPE_DB]	= 4,
+	[UDMA_JFS_TYPE_DB]	= 64,
+	[UDMA_JFR_TYPE_DB]	= 64,
+	[UDMA_JETTY_TYPE_DB]	= 64,
+	[UDMA_JFC_TYPE_DB]	= 64,
 };
 
 static struct udma_db_page *udma_add_db_page(struct udma_u_context *ctx,

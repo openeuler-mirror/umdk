@@ -351,10 +351,10 @@ static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr
 		data_len -= size;
 		cqe_inl_buf += size;
 	}
-	cr->completion_len = cqe->byte_cnt - data_len;
 
+	cr->completion_len = cqe->byte_cnt - data_len;
 	if (data_len)
-		udma_reg_write(cqe, CQE_STATUS, UDMA_CQE_LOCAL_LENGTH_ERR);
+		cr->status = URMA_CR_LOC_LEN_ERR;
 }
 
 static struct udma_u_jfr *get_jfr_from_cqe(struct udma_u_context *ctx,
@@ -438,7 +438,7 @@ static void handle_um_header(struct udma_u_jfr *jfr, uint32_t wqe_idx,
 }
 
 static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
-				       struct udma_jfc_cqe *cqe, urma_cr_t *cr)
+			     struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
 	static struct udma_u_jetty *jetty;
 	static struct udma_u_jfr *jfr;
@@ -461,21 +461,6 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 			URMA_LOG_INFO("failed to poll jfc. QP 0x%x has been destroyed", qpn);
 			return JFC_POLL_ERR;
 		}
-	}
-
-	if (udma_reg_read(cqe, CQE_CQE_INLINE) == CQE_INLINE_ENABLE) {
-		if (if_jetty) {
-			jfr = jetty->udma_jfr;
-		} else {
-			jfr = get_jfr_from_cqe(udma_ctx, cqe);
-			if (jfr == NULL) {
-				URMA_LOG_INFO("failed to poll jfc. QP 0x%x has been destroyed", qpn);
-				return JFC_POLL_ERR;
-			}
-		}
-		handle_recv_inl_cqe(cqe, jfr, cr);
-	}
-	if (if_jetty) {
 		jfr = jetty->udma_jfr;
 		cr->local_id = jetty->urma_jetty.jetty_id.id;
 		cr->remote_id.id = get_jid_from_qpn(rmt_qpn,
@@ -493,13 +478,22 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 						    udma_ctx->num_qps_shift,
 						    udma_ctx->num_jfs_shift);
 	}
-	if (!jfr->lock_free)
-		pthread_spin_lock(&jfr->lock);
-	udma_bitmap_free_idx(jfr->idx_que.bitmap,
-			     jfr->idx_que.bitmap_cnt, wqe_idx);
-	jfr->idx_que.tail++;
-	if (!jfr->lock_free)
-		pthread_spin_unlock(&jfr->lock);
+
+	if (udma_reg_read(cqe, CQE_CQE_INLINE) == CQE_INLINE_ENABLE)
+		handle_recv_inl_cqe(cqe, jfr, cr);
+
+	if (jfr->share_jfr == UDMA_NO_SHARE_JFR && jfr->trans_mode == URMA_TM_RC) {
+		jfr->idx_que.tail++;
+	} else {
+		if (!jfr->lock_free)
+			pthread_spin_lock(&jfr->lock);
+		udma_bitmap_free_idx(jfr->idx_que.bitmap,
+				     jfr->idx_que.bitmap_cnt, wqe_idx);
+		jfr->idx_que.tail++;
+		if (!jfr->lock_free)
+			pthread_spin_unlock(&jfr->lock);
+	}
+
 	cr->user_ctx = jfr->wrid[wqe_idx];
 
 	if (jfr->trans_mode == URMA_TM_UM)
@@ -601,7 +595,6 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 	uint8_t status;
 	uint32_t qpn;
 
-	memset(cr, 0, sizeof(urma_cr_t));
 	cr->completion_len = udma_reg_read(cqe, CQE_BYTE_CNT);
 	qpn = udma_reg_read(cqe, CQE_LCL_QPN);
 	status = udma_reg_read(cqe, CQE_STATUS);

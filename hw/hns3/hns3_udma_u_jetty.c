@@ -206,6 +206,14 @@ static urma_status_t exec_jetty_create_cmd(urma_context_t *ctx,
 
 	if (jetty->tp_mode == URMA_TM_UM) {
 		jetty->um_qp->qp_num = resp.create_tp_resp.qpn;
+		jetty->um_qp->flags = resp.create_tp_resp.cap_flags;
+		if (resp.create_tp_resp.cap_flags & UDMA_QP_CAP_DIRECT_WQE) {
+			if (mmap_dwqe(ctx, jetty->um_qp)) {
+				urma_cmd_delete_jetty(&jetty->urma_jetty);
+				URMA_LOG_ERR("mmap dwqe failed\n");
+				return URMA_FAIL;
+			}
+		}
 		jetty->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
 		jetty->um_qp->um_srcport = resp.create_tp_resp.um_srcport;
 		jetty->um_qp->sq.priority = resp.create_tp_resp.priority;
@@ -874,6 +882,12 @@ urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 		return URMA_EINVAL;
 	}
 
+	if (udma_jetty->rc_node->tjetty == tjetty) {
+		URMA_LOG_INFO("reentry bind jetty, jetty_id = %u, tjetty_id = %u.\n",
+			      jetty->jetty_id.id, tjetty->id.id);
+		return URMA_SUCCESS;
+	}
+
 	if (udma_jetty->rc_node->tjetty != NULL) {
 		URMA_LOG_ERR("The jetty has already bind a remote jetty.\n");
 		return URMA_EEXIST;
@@ -1011,11 +1025,6 @@ static urma_status_t udma_u_post_jetty_rc_wr(struct udma_u_context *udma_ctx,
 	urma_jfs_wr_t *it;
 	void *wqe;
 
-	if (udma_jetty->rc_node->tjetty == NULL) {
-		URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %u.\n",
-			     udma_jetty->urma_jetty.jetty_id.id);
-		return URMA_EINVAL;
-	}
 	udma_qp = udma_jetty->rc_node->qp;
 
 	for (it = wr; it != NULL; it = it->next) {

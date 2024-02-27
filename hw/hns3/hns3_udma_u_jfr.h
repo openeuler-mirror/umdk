@@ -83,6 +83,11 @@ static inline struct udma_jfr_node *to_udma_jfr_node(struct udma_hmap_node *node
 	return container_of(node, struct udma_jfr_node, node);
 }
 
+static inline void *get_jfr_wqe(struct udma_u_jfr *jfr, uint32_t n)
+{
+	return (char *)jfr->wqe_buf.buf + (n << jfr->wqe_shift);
+}
+
 urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg);
 struct udma_u_jetty;
 urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,

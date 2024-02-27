@@ -467,11 +467,6 @@ static urma_status_t check_post_jfr_valid(struct udma_u_jfr *jfr,
 	return URMA_SUCCESS;
 }
 
-static void *get_jfr_wqe(struct udma_u_jfr *jfr, uint32_t n)
-{
-	return (char *)jfr->wqe_buf.buf + (n << jfr->wqe_shift);
-}
-
 static urma_status_t get_wqe_idx(struct udma_u_jfr *jfr, uint32_t *wqe_idx)
 {
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
