@@ -34,13 +34,19 @@ static int udma_jfs_init_connect_table(struct udma_u_jfs *jfs)
 }
 
 static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp *qp,
-				      bool check_dca)
+				      bool check_dca, urma_jfr_cfg_t *jfr_cfg)
 {
 	int buf_size = to_udma_hem_entries_size(qp->sq.wqe_cnt, qp->sq.wqe_shift);
 
 	qp->ex_sge.offset = buf_size;
 	buf_size += to_udma_hem_entries_size(qp->ex_sge.sge_cnt,
-					    qp->ex_sge.sge_shift);
+					     qp->ex_sge.sge_shift);
+
+	/* RC RQ */
+	if (jfr_cfg != NULL) {
+		qp->rq.offset = buf_size;
+		buf_size += to_udma_hem_entries_size(qp->rq.wqe_cnt, qp->rq.wqe_shift);
+	}
 
 	if (check_dca && ctx->dca_ctx.unit_size > 0) {
 		/* when DCA enable, use a buffer list to store page address */
@@ -63,7 +69,7 @@ static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp
 	return URMA_SUCCESS;
 }
 
-static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg)
+static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg, urma_jfr_cfg_t *jfr_cfg)
 {
 	uint32_t max_inline_data;
 	uint32_t total_sge_cnt;
@@ -97,15 +103,23 @@ static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg)
 
 	qp->ex_sge.sge_shift = UDMA_HW_SGE_SHIFT;
 	qp->ex_sge.sge_cnt = qp->sq.ext_sge_cnt;
+
+	/* rc rq param */
+	if (jfr_cfg != NULL) {
+		qp->rq.wqe_cnt = roundup_pow_of_two(jfr_cfg->depth);
+		qp->rq.wqe_shift = udma_ilog32(roundup_pow_of_two(UDMA_HW_SGE_SIZE *
+					       roundup_pow_of_two(jfr_cfg->max_sge)));
+	}
 }
 
 static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp,
-				  urma_jfs_cfg_t *jfs_cfg)
+				  urma_jfs_cfg_t *jfs_cfg,
+				  urma_jfr_cfg_t *jfr_cfg)
 {
 	urma_status_t ret;
 
-	init_sq_param(qp, jfs_cfg);
+	init_sq_param(qp, jfs_cfg, jfr_cfg);
 
 	qp->sq.wrid = (uintptr_t *)calloc(qp->sq.wqe_cnt, sizeof(uintptr_t));
 	if (qp->sq.wrid == NULL) {
@@ -113,7 +127,8 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 		return URMA_ENOMEM;
 	}
 
-	ret = alloc_qp_wqe_buf(udma_ctx, qp, jfs_cfg->trans_mode != URMA_TM_UM);
+	ret = alloc_qp_wqe_buf(udma_ctx, qp, jfs_cfg->trans_mode != URMA_TM_UM,
+			       jfr_cfg);
 	if (ret) {
 		URMA_LOG_ERR("alloc_jetty_wqe_buf failed.\n");
 		free(qp->sq.wrid);
@@ -125,6 +140,7 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 			      urma_jfs_cfg_t *jfs_cfg,
+			      urma_jfr_cfg_t *jfr_cfg,
 			      uint32_t jetty_id, bool is_jetty)
 {
 	enum udma_db_type db_type;
@@ -144,7 +160,7 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 		goto err_alloc_qp;
 	}
 
-	ret = alloc_qp_wqe(udma_ctx, qp, jfs_cfg);
+	ret = alloc_qp_wqe(udma_ctx, qp, jfs_cfg, jfr_cfg);
 	if (ret) {
 		URMA_LOG_ERR("alloc_qp_wqe failed.\n");
 		goto err_alloc_sw_db;
@@ -180,7 +196,7 @@ static int alloc_table_qp(struct udma_u_jfs *jfs, urma_context_t *ctx,
 			return ENOMEM;
 		}
 	}  else if (jfs->tp_mode == URMA_TM_UM) {
-		jfs->um_qp = udma_alloc_qp(udma_ctx, cfg, jfs->jfs_id, false);
+		jfs->um_qp = udma_alloc_qp(udma_ctx, cfg, NULL, jfs->jfs_id, false);
 		if (!jfs->um_qp) {
 			URMA_LOG_ERR("alloc qp failed.\n");
 			return ENOMEM;

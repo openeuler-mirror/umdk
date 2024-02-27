@@ -139,7 +139,7 @@ static urma_status_t alloc_jfs_node(urma_target_jetty_t *tjfr, urma_jfs_t *jfs,
 
 	udma_u_ctx = to_udma_ctx(jfs->urma_ctx);
 	conn_nodes->tgt_conn_node->qp = udma_alloc_qp(udma_u_ctx, &jfs->jfs_cfg,
-						      jfs->jfs_id.id, false);
+						      NULL, jfs->jfs_id.id, false);
 	if (!conn_nodes->tgt_conn_node->qp) {
 		URMA_LOG_ERR("alloc qp for jfs node failed.\n");
 		goto err_free_tgt_conn_node;

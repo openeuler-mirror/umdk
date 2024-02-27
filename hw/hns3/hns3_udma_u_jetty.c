@@ -57,15 +57,20 @@ static urma_status_t udma_init_tgt_connect_table(struct udma_u_jetty *udma_jetty
 static urma_status_t alloc_jfr(struct udma_u_jetty *jetty, urma_context_t *ctx,
 			       urma_jetty_cfg_t *jetty_cfg)
 {
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 	urma_jfr_t *urma_jfr;
 
 	if (jetty->share_jfr) {
 		jetty->udma_jfr = to_udma_jfr(jetty_cfg->shared.jfr);
 	} else {
-		urma_jfr = udma_u_create_jfr(ctx, jetty_cfg->jfr_cfg);
+		if (jetty_cfg->jfr_cfg->trans_mode == URMA_TM_RC &&
+		    udma_ctx->dca_ctx.unit_size == 0)
+			urma_jfr = udma_u_create_jfr_rq(ctx, jetty_cfg->jfr_cfg, jetty);
+		else
+			urma_jfr = udma_u_create_jfr(ctx, jetty_cfg->jfr_cfg);
 		if (!urma_jfr) {
 			URMA_LOG_ERR("failed to create jfr.\n");
-			return URMA_ENOMEM;
+			return URMA_FAIL;
 		}
 		jetty->udma_jfr = to_udma_jfr(urma_jfr);
 	}
@@ -84,7 +89,7 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 		return ret;
 
 	if (jetty->tp_mode == URMA_TM_UM) {
-		jetty->um_qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
+		jetty->um_qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg, NULL,
 					     jetty->urma_jetty.jetty_id.id, true);
 		if (!jetty->um_qp) {
 			URMA_LOG_ERR("UM qp alloc failed, jetty_id = %u.\n",
@@ -106,9 +111,15 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 			return URMA_ENOMEM;
 		}
 
-		jetty->rc_node->qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
-						   jetty->urma_jetty.jetty_id.id,
-						   true);
+		if (jetty->udma_jfr == NULL)
+			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
+						jetty_cfg->jfr_cfg,
+						jetty->urma_jetty.jetty_id.id,
+						true);
+		else
+			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
+						NULL, jetty->urma_jetty.jetty_id.id,
+						true);
 		if (!jetty->rc_node->qp) {
 			URMA_LOG_ERR("alloc rc_node failed.\n");
 			goto err_alloc_rc_node_qp;
@@ -336,14 +347,23 @@ urma_status_t verify_jetty_trans_mode(urma_jetty_cfg_t *jetty_cfg)
 	if (jfs_trans_mode == jfr_trans_mode)
 		return URMA_SUCCESS;
 
-	URMA_LOG_ERR("jfs_trans_mode: %d is different from jfr_trans_mode: %d.\n",
+	URMA_LOG_ERR("jfs_trans_mode: %u is different from jfr_trans_mode: %u.\n",
 		     jfs_trans_mode, jfr_trans_mode);
 
 	return URMA_EINVAL;
 }
 
-urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
-				  urma_jetty_cfg_t *jetty_cfg)
+static void init_jetty_param(struct udma_u_jetty *udma_jetty,
+			     urma_jetty_cfg_t *jetty_cfg)
+{
+	udma_jetty->tp_mode = jetty_cfg->jfs_cfg->trans_mode;
+	udma_jetty->share_jfr = jetty_cfg->flag.bs.share_jfr;
+	udma_jetty->jfs_lock_free = jetty_cfg->jfs_cfg->flag.bs.lock_free;
+	udma_jetty->urma_jetty.jetty_cfg = *jetty_cfg;
+}
+
+static urma_jetty_t *udma_u_create_jetty_rq(urma_context_t *ctx,
+					    urma_jetty_cfg_t *jetty_cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 	struct udma_u_jetty *udma_jetty;
@@ -361,10 +381,72 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 		goto err_alloc_jetty;
 	}
 
-	udma_jetty->tp_mode = jetty_cfg->jfs_cfg->trans_mode;
-	udma_jetty->share_jfr = jetty_cfg->flag.bs.share_jfr;
-	udma_jetty->jfs_lock_free = jetty_cfg->jfs_cfg->flag.bs.lock_free;
-	udma_jetty->urma_jetty.jetty_cfg = *jetty_cfg;
+	init_jetty_param(udma_jetty, jetty_cfg);
+
+	ret = alloc_qp_node_table(udma_jetty, udma_ctx, jetty_cfg);
+	if (ret)
+		goto err_alloc_jetty;
+
+	ret = alloc_jfr(udma_jetty, ctx, jetty_cfg);
+	if (ret)
+		goto err_alloc_qp_node_table;
+
+	ret = exec_jetty_create_cmd(ctx, udma_jetty, jetty_cfg);
+	if (ret) {
+		URMA_LOG_ERR("exec jetty create cmd failed.\n");
+		goto err_exec_jetty_create_cmd;
+	}
+
+	if (pthread_spin_init(&udma_jetty->lock, PTHREAD_PROCESS_PRIVATE))
+		goto err_init_lock;
+
+	ret = insert_jetty_node(udma_ctx, udma_jetty);
+	if (ret) {
+		URMA_LOG_ERR("insert jetty node failed.\n");
+		goto err_insert_jetty_node;
+	}
+
+	return &udma_jetty->urma_jetty;
+
+err_insert_jetty_node:
+	pthread_spin_destroy(&udma_jetty->lock);
+err_init_lock:
+	urma_cmd_delete_jetty(&udma_jetty->urma_jetty);
+err_exec_jetty_create_cmd:
+	if (!udma_jetty->share_jfr)
+		udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
+err_alloc_qp_node_table:
+	delete_qp_node_table(udma_jetty);
+err_alloc_jetty:
+	free(udma_jetty);
+
+	return NULL;
+}
+
+urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
+				  urma_jetty_cfg_t *jetty_cfg)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
+	struct udma_u_jetty *udma_jetty;
+	urma_status_t ret;
+
+	if (!jetty_cfg->flag.bs.share_jfr && udma_ctx->dca_ctx.unit_size == 0 &&
+	    jetty_cfg->jfs_cfg->trans_mode == URMA_TM_RC)
+		return udma_u_create_jetty_rq(ctx, jetty_cfg);
+
+	udma_jetty = (struct udma_u_jetty *)calloc(1, sizeof(*udma_jetty));
+	if (!udma_jetty) {
+		URMA_LOG_ERR("failed to alloc jetty.\n");
+		return NULL;
+	}
+
+	ret = verify_jetty_trans_mode(jetty_cfg);
+	if (ret) {
+		URMA_LOG_ERR("failed verify jetty trans mode.\n");
+		goto err_alloc_jetty;
+	}
+
+	init_jetty_param(udma_jetty, jetty_cfg);
 
 	ret = alloc_jfr(udma_jetty, ctx, jetty_cfg);
 	if (ret)
@@ -545,7 +627,7 @@ static struct tgt_node *alloc_tgt_node(urma_target_jetty_t *tjetty,
 
 	tgt_node->tjetty = tjetty;
 
-	tgt_node->qp = udma_alloc_qp(udma_ctx, jetty->jetty_cfg.jfs_cfg,
+	tgt_node->qp = udma_alloc_qp(udma_ctx, jetty->jetty_cfg.jfs_cfg, NULL,
 				     jetty->jetty_id.id, true);
 	if (tgt_node->qp == NULL) {
 		URMA_LOG_ERR("the qp for jetty advise alloc failed.\n");

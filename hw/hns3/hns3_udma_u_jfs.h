@@ -108,6 +108,7 @@ struct udma_qp {
 	struct udma_dca_buf	dca_wqe;
 	struct udma_wq		sq;
 	struct udma_sge_ex	ex_sge;
+	struct udma_wq		rq;
 	uint32_t		buf_size;
 	uint32_t		next_sge;
 	urma_mtu_t		path_mtu;
@@ -334,6 +335,7 @@ int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
 			  urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 			      urma_jfs_cfg_t *jfs_cfg,
+			      urma_jfr_cfg_t *jfr_cfg,
 			      uint32_t jetty_id, bool is_jetty);
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num);

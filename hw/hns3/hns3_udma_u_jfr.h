@@ -21,6 +21,8 @@
 
 #define UDMA_JFR_GRH_HEAD_SZ		40
 
+#define UDMA_NO_SHARE_JFR		1
+
 struct udma_u_jfr_idx_que {
 	struct udma_buf		idx_buf;
 	uint32_t		entry_shift;
@@ -61,6 +63,7 @@ struct udma_u_jfr {
 	urma_transport_mode_t     trans_mode;
 	struct um_header          *um_header_que;
 	urma_target_seg_t         *um_header_seg;
+	uint8_t                   share_jfr;
 };
 
 struct udma_jfr_node {
@@ -81,6 +84,9 @@ static inline struct udma_jfr_node *to_udma_jfr_node(struct udma_hmap_node *node
 }
 
 urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg);
+struct udma_u_jetty;
+urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,
+				 struct udma_u_jetty *jetty);
 urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr);
 urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 				       urma_rjfr_t *rjfr,
