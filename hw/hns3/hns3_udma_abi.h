@@ -26,7 +26,7 @@
 #define UDMA_JFS_QPN_PREFIX		0x2
 #define UDMA_JFR_QPN_PREFIX		0x1
 #define UDMA_JETTY_QPN_PREFIX		0x3
-#define UDMA_ADDR_4K_MASK		0xfffUL
+#define HNS3_UDMA_ADDR_4K_MASK			0xfffUL
 #define URMA_SEG_ACCESS_GUARD		(1UL << 5)
 #define UDMA_DCA_ATTACH_FLAGS_NEW_BUFFER BIT(0)
 #define UDMA_DCA_INVALID_DCA_NUM ~0U
@@ -39,20 +39,20 @@ enum {
 	UDMA_MMAP_TYPE_DCA
 };
 
-enum udma_jfc_init_attr_mask {
-	UDMA_JFC_NOTIFY_OR_POE_CREATE_FLAGS = 1 << 0,
+enum hns3_udma_jfc_init_attr_mask {
+	HNS3_UDMA_JFC_NOTIFY_OR_POE_CREATE_FLAGS = 1 << 0,
 };
 
-enum udma_jfc_create_flags {
-	UDMA_JFC_CREATE_ENABLE_POE_MODE = 1 << 0,
-	UDMA_JFC_CREATE_ENABLE_NOTIFY = 1 << 1,
+enum hns3_udma_jfc_create_flags {
+	HNS3_UDMA_JFC_CREATE_ENABLE_POE_MODE = 1 << 0,
+	HNS3_UDMA_JFC_CREATE_ENABLE_NOTIFY = 1 << 1,
 };
 
-enum udma_jfc_notify_mode {
-	UDMA_JFC_NOTIFY_MODE_64B_ALIGN,
-	UDMA_JFC_NOTIFY_MODE_4B_ALIGN,
-	UDMA_JFC_NOTIFY_MODE_DDR_64B_ALIGN,
-	UDMA_JFC_NOTIFY_MODE_DDR_4B_ALIGN,
+enum hns3_udma_jfc_notify_mode {
+	HNS3_UDMA_JFC_NOTIFY_MODE_64B_ALIGN,
+	HNS3_UDMA_JFC_NOTIFY_MODE_4B_ALIGN,
+	HNS3_UDMA_JFC_NOTIFY_MODE_DDR_64B_ALIGN,
+	HNS3_UDMA_JFC_NOTIFY_MODE_DDR_4B_ALIGN,
 };
 
 struct udma_create_jfr_ucmd {
@@ -74,25 +74,25 @@ struct udma_create_jfr_resp {
 	uint32_t jfr_caps;
 };
 
-struct udma_jfc_attr_ex {
-	uint64_t	jfc_ex_mask; /* Use enum udma_jfc_init_attr_mask */
-	uint64_t	create_flags; /* Use enum udma_jfc_create_flags */
-	uint8_t		poe_channel; /* poe channel to use */
+struct hns3_udma_jfc_attr_ex {
+	uint64_t	jfc_ex_mask; /* Use enum hns3_udma_jfc_init_attr_mask */
+	uint64_t	create_flags; /* Use enum hns3_udma_jfc_create_flags */
 	uint64_t	notify_addr;
-	uint8_t		notify_mode; /* Use enum udma_jfc_notify_mode */
+	uint8_t		poe_channel; /* poe channel to use */
+	uint8_t		notify_mode; /* Use enum hns3_udma_jfc_notify_mode */
 };
 
-struct udma_create_jfc_ucmd {
+struct hns3_udma_create_jfc_ucmd {
 	uint64_t		buf_addr;
 	uint64_t		db_addr;
-	struct udma_jfc_attr_ex	jfc_attr_ex;
+	struct hns3_udma_jfc_attr_ex	jfc_attr_ex;
 };
 
 enum udma_jfc_cap_flags {
 	UDMA_JFC_CAP_RECORD_DB = 1 << 0,
 };
 
-struct udma_create_jfc_resp {
+struct hns3_udma_create_jfc_resp {
 	uint32_t jfc_caps;
 };
 

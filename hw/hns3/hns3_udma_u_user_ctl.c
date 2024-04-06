@@ -16,8 +16,133 @@
 #include <string.h>
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
+#include "hns3_udma_u_jfc.h"
 #include "hns3_udma_u_abi.h"
 #include "hns3_udma_u_user_ctl_api.h"
+
+static int udma_u_check_notify_attr(struct hns3_udma_jfc_notify_init_attr *notify_attr)
+{
+	switch (notify_attr->notify_mode) {
+	case HNS3_UDMA_JFC_NOTIFY_MODE_4B_ALIGN:
+	case HNS3_UDMA_JFC_NOTIFY_MODE_DDR_4B_ALIGN:
+		break;
+	case HNS3_UDMA_JFC_NOTIFY_MODE_64B_ALIGN:
+	case HNS3_UDMA_JFC_NOTIFY_MODE_DDR_64B_ALIGN:
+		URMA_LOG_ERR("Doesn't support notify mode %u\n",
+			     notify_attr->notify_mode);
+		return EINVAL;
+	default:
+		URMA_LOG_ERR("Invalid notify mode %u\n",
+			     notify_attr->notify_mode);
+		return EINVAL;
+	}
+
+	if (notify_attr->notify_addr & HNS3_UDMA_ADDR_4K_MASK) {
+		URMA_LOG_ERR("Notify addr should be aligned to 4k.\n",
+			     notify_attr->notify_addr);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static int udma_u_check_jfc_attr_ex(struct hns3_udma_jfc_init_attr *attr)
+{
+	int ret = 0;
+
+	if (attr->jfc_ex_mask != HNS3_UDMA_JFC_NOTIFY_OR_POE_CREATE_FLAGS) {
+		URMA_LOG_ERR("Invalid comp mask %u\n", attr->jfc_ex_mask);
+		return EINVAL;
+	}
+
+	switch (attr->create_flags) {
+	case HNS3_UDMA_JFC_CREATE_ENABLE_POE_MODE:
+		break;
+	case HNS3_UDMA_JFC_CREATE_ENABLE_NOTIFY:
+		ret = udma_u_check_notify_attr(&attr->notify_init_attr);
+		break;
+	default:
+		URMA_LOG_ERR("Invalid create flags %u\n", attr->create_flags);
+		return EINVAL;
+	}
+
+	return ret;
+}
+
+static urma_jfc_t *create_jfc_ex(urma_context_t *ctx,
+				 struct hns3_udma_create_jfc_ex_in *cfg_ex)
+{
+	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
+	struct hns3_udma_create_jfc_resp resp = {};
+	struct hns3_udma_create_jfc_ucmd cmd = {};
+	urma_cmd_udrv_priv_t udata = {};
+	struct udma_u_jfc *jfc;
+	int ret;
+
+	jfc = udma_u_create_jfc_common(cfg_ex->cfg, udma_ctx);
+	if (!jfc)
+		return NULL;
+
+	cmd.buf_addr = (uintptr_t)jfc->buf.buf;
+	cmd.db_addr = (uintptr_t)jfc->db;
+	cmd.jfc_attr_ex.jfc_ex_mask = cfg_ex->attr->jfc_ex_mask;
+	cmd.jfc_attr_ex.create_flags = cfg_ex->attr->create_flags;
+	cmd.jfc_attr_ex.poe_channel = cfg_ex->attr->poe_channel;
+	cmd.jfc_attr_ex.notify_addr = cfg_ex->attr->notify_init_attr.notify_addr;
+	cmd.jfc_attr_ex.notify_mode = cfg_ex->attr->notify_init_attr.notify_mode;
+	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
+	ret = urma_cmd_create_jfc(ctx, &jfc->urma_jfc, cfg_ex->cfg, &udata);
+	if (ret) {
+		URMA_LOG_ERR("urma cmd create jfc failed.\n");
+		free_err_jfc(jfc, udma_ctx);
+		return NULL;
+	}
+	jfc->ci = 0;
+	jfc->arm_sn = 1;
+	jfc->cqn = jfc->urma_jfc.jfc_id.id;
+	jfc->caps_flag = resp.jfc_caps;
+
+	return &jfc->urma_jfc;
+}
+
+static int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
+				urma_user_ctl_out_t *out)
+{
+	struct hns3_udma_create_jfc_ex_in cfg_ex;
+	urma_jfc_t *jfc;
+	int ret;
+
+	memcpy(&cfg_ex, (void *)in->addr, min(in->len, sizeof(struct hns3_udma_create_jfc_ex_in)));
+
+	ret = udma_u_check_jfc_attr_ex(cfg_ex.attr);
+	if (ret) {
+		URMA_LOG_ERR("Invalid jfc attr ex\n");
+		return EINVAL;
+	}
+
+	jfc = create_jfc_ex((urma_context_t *)ctx, &cfg_ex);
+	if (jfc == NULL)
+		return EFAULT;
+
+	memcpy((void *)out->addr, &jfc, sizeof(urma_jfc_t *));
+
+	return 0;
+}
+
+static int udma_u_delete_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
+				urma_user_ctl_out_t *out)
+{
+	urma_status_t ret;
+	urma_jfc_t *jfc;
+
+	memcpy(&jfc, (void *)in->addr, min(in->len, sizeof(urma_jfc_t)));
+
+	ret = udma_u_delete_jfc(jfc);
+	if (ret)
+		return EFAULT;
+
+	return 0;
+}
 
 static int udma_u_query_hw_id(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			      urma_user_ctl_out_t *out)
@@ -37,6 +162,8 @@ typedef int (*udma_u_user_ctl_ops)(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				   urma_user_ctl_out_t *out);
 
 static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
+	[HNS3_UDMA_U_USER_CTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
+	[HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
 	[HNS3_UDMA_U_USER_CTL_QUERY_HW_ID] = udma_u_query_hw_id,
 };
 

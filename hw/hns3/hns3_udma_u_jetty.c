@@ -13,7 +13,9 @@
  *
  */
 
+#include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
+#include "hns3_udma_u_tp.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jetty.h"
 
