@@ -39,6 +39,8 @@
 #define BITS_PER_UINT32		32
 #define BITS_PER_LONG		64
 
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 /* get the structure object from the pointer of the given field by struct type */
 #define CONTAINER_OF_FIELD(field_ptr, struct_type, field) \
 	((struct_type *)(void *)((char *)(field_ptr) - offsetof(struct_type, field)))

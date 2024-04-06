@@ -45,6 +45,24 @@ struct hns3_udma_user_ctl_delete_jfc_ex_in {
 	urma_jfc_t *jfc;
 };
 
+struct hns3_udma_poe_init_attr {
+	uint64_t rsv; /* reserved for extension, now must be 0 */
+	uint64_t poe_addr; /* 0 for disable */
+};
+
+struct hns3_udma_config_poe_channel_in {
+	struct hns3_udma_poe_init_attr	*init_attr;
+	uint8_t				poe_channel;
+};
+
+struct hns3_udma_user_ctl_query_poe_channel_in {
+	uint8_t poe_channel;
+};
+
+struct hns3_udma_user_ctl_query_poe_channel_out {
+	struct hns3_udma_poe_init_attr *init_attr;
+};
+
 struct hns3_udma_query_hw_id_out {
 	uint32_t chip_id;
 	uint32_t die_id;
@@ -53,6 +71,8 @@ struct hns3_udma_query_hw_id_out {
 };
 
 enum hns3_udma_u_user_ctl_opcode {
+	HNS3_UDMA_U_USER_CTL_CONFIG_POE_CHANNEL,
+	HNS3_UDMA_U_USER_CTL_QUERY_POE_CHANNEL,
 	HNS3_UDMA_U_USER_CTL_CREATE_JFC_EX,
 	HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX,
 	HNS3_UDMA_U_USER_CTL_QUERY_HW_ID,
