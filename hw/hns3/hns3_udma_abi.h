@@ -183,6 +183,9 @@ struct udma_create_ctx_resp {
 	uint32_t dca_qps;
 	uint32_t dca_mmap_size;
 	uint32_t dca_mode;
+	uint8_t chip_id;
+	uint8_t die_id;
+	uint8_t func_id;
 };
 
 struct flush_cqe_param {

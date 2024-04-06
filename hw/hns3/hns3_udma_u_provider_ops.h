@@ -144,6 +144,9 @@ struct udma_u_context {
 	uint8_t			poe_ch_num;
 	void			*reset_state;
 	struct udma_u_dca_ctx	dca_ctx;
+	uint8_t			chip_id;
+	uint8_t			die_id;
+	uint8_t			func_id;
 };
 
 struct udma_reset_state {
