@@ -63,6 +63,36 @@ struct hns3_udma_user_ctl_query_poe_channel_out {
 	struct hns3_udma_poe_init_attr *init_attr;
 };
 
+enum hns3_queue_type {
+	JFS_TYPE,
+	JETTY_TYPE,
+};
+
+struct hns3_udma_update_queue_ci_in {
+	enum hns3_queue_type		type;
+	union {
+		urma_jfs_t	*jfs;
+		urma_jetty_t	*jetty;
+	};
+	uint32_t		wqe_cnt;
+	urma_target_jetty_t	*tjetty;
+};
+
+struct hns3_udma_post_and_ret_db_in {
+	enum hns3_queue_type		type;
+	union {
+		urma_jfs_t	*jfs;
+		urma_jetty_t	*jetty;
+	};
+	urma_jfs_wr_t		*wr;
+};
+
+struct hns3_udma_post_and_ret_db_out {
+	urma_jfs_wr_t		**bad_wr;
+	uint64_t		db_addr;
+	uint64_t		db_data;
+};
+
 struct hns3_udma_query_hw_id_out {
 	uint32_t chip_id;
 	uint32_t die_id;
@@ -71,10 +101,12 @@ struct hns3_udma_query_hw_id_out {
 };
 
 enum hns3_udma_u_user_ctl_opcode {
+	HNS3_UDMA_U_USER_CTL_POST_SEND_AND_RET_DB,
 	HNS3_UDMA_U_USER_CTL_CONFIG_POE_CHANNEL,
 	HNS3_UDMA_U_USER_CTL_QUERY_POE_CHANNEL,
 	HNS3_UDMA_U_USER_CTL_CREATE_JFC_EX,
 	HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX,
+	HNS3_UDMA_U_USER_CTL_UPDATE_QUEUE_CI,
 	HNS3_UDMA_U_USER_CTL_QUERY_HW_ID,
 	HNS3_UDMA_U_USER_CTL_MAX,
 };

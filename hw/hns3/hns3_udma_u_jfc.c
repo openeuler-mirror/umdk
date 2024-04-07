@@ -699,63 +699,6 @@ void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt)
 	return urma_cmd_ack_jfc(jfc, nevents, jfc_cnt);
 }
 
-static struct udma_qp *poe_find_qp(urma_jfs_t *jfs)
-{
-	struct connect_node *udma_connect_node;
-	struct udma_hmap_node *hmap_node;
-	struct udma_hmap *hmap_tjfr;
-	struct udma_u_jfs *udma_jfs;
-	pthread_rwlock_t *rwlock;
-	struct udma_qp *qp;
-
-	udma_jfs = to_udma_jfs(jfs);
-	hmap_tjfr = &(udma_jfs->tjfr_tbl.hmap);
-	rwlock = &(udma_jfs->tjfr_tbl.rwlock);
-	(void)pthread_rwlock_rdlock(rwlock);
-	hmap_node = udma_hmap_first(hmap_tjfr);
-	(void)pthread_rwlock_unlock(rwlock);
-	if (hmap_node != NULL) {
-		udma_connect_node = CONTAINER_OF_FIELD(hmap_node,
-						       struct connect_node,
-						       hmap_node);
-		qp = udma_connect_node->qp;
-		return qp;
-	}
-
-	return NULL;
-}
-
-static void update_jfs_ci(urma_jfs_t *jfs, uint32_t wqe_cnt)
-{
-	struct udma_qp *qp;
-
-	if (!jfs)
-		return;
-
-	qp = poe_find_qp(jfs);
-	if (!qp)
-		return;
-
-	qp->sq.tail += wqe_cnt;
-}
-
-int udma_u_update_jfs_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
-			 urma_user_ctl_out_t *out)
-{
-	struct udma_update_jfs_ci_in update_in;
-
-	if (in->len > sizeof(update_in)) {
-		URMA_LOG_ERR("the length of the input parameter is too long, len = %u.\n",
-			     in->len);
-		return EINVAL;
-	}
-
-	memcpy(&update_in, (void *)in->addr, in->len);
-	update_jfs_ci(update_in.jfs, update_in.wqe_cnt);
-
-	return 0;
-}
-
 urma_status_t udma_u_get_async_event(urma_context_t *ctx,
 				     urma_async_event_t *event)
 {

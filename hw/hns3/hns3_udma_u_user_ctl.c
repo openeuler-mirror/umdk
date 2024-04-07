@@ -17,8 +17,127 @@
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_jfc.h"
+#include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_abi.h"
 #include "hns3_udma_u_user_ctl_api.h"
+
+static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
+			      struct hns3_udma_post_and_ret_db_out *ex_out)
+{
+	struct udma_u_context *udma_ctx;
+	struct udma_u_jfs *udma_jfs;
+	struct udma_qp *udma_qp;
+	urma_jfs_wr_t *it;
+	urma_status_t ret;
+
+	ret = URMA_SUCCESS;
+	udma_jfs = to_udma_jfs(jfs);
+	udma_ctx = to_udma_ctx(jfs->urma_ctx);
+
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_lock(&udma_jfs->lock);
+
+	for (it = wr; it != NULL; it = it->next) {
+		udma_qp = get_qp(udma_jfs, it);
+		if (!udma_qp) {
+			URMA_LOG_ERR("failed to get qp, opcode = 0x%x.\n",
+				     it->opcode);
+			ret = URMA_EINVAL;
+			*(ex_out->bad_wr) = it;
+			goto out;
+		}
+
+		ret = udma_u_post_qp_wr_ex(udma_ctx, udma_qp, it, udma_jfs->tp_mode);
+		if (ret) {
+			*(ex_out->bad_wr) = it;
+			goto out;
+		}
+	}
+
+	ex_out->db_addr = (uint64_t)udma_ctx->db_addr;
+	ex_out->db_data = (uint64_t)udma_qp->qp_num;
+out:
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_unlock(&udma_jfs->lock);
+
+	return ret == URMA_SUCCESS ? 0 : EINVAL;
+}
+
+static int udma_u_post_jetty_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr,
+				struct hns3_udma_post_and_ret_db_out *ex_out)
+{
+	struct udma_u_context *udma_ctx;
+	struct udma_u_jetty *udma_jetty;
+	struct udma_qp *udma_qp;
+	urma_jfs_wr_t *it;
+	urma_status_t ret;
+
+	ret = URMA_SUCCESS;
+	udma_jetty = to_udma_jetty(jetty);
+	udma_ctx = to_udma_ctx(jetty->urma_ctx);
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_lock(&udma_jetty->lock);
+
+	for (it = wr; it != NULL; it = it->next) {
+		udma_qp = get_qp_of_jetty(udma_jetty, it);
+		if (!udma_qp) {
+			URMA_LOG_ERR("failed to find qp, opcode = 0x%x.\n",
+				     it->opcode);
+			ret = URMA_EINVAL;
+			*(ex_out->bad_wr) = it;
+			goto out;
+		}
+
+		ret = udma_u_post_qp_wr_ex(udma_ctx, udma_qp, it, udma_jetty->tp_mode);
+		if (ret) {
+			*(ex_out->bad_wr) = it;
+			goto out;
+		}
+	}
+
+	ex_out->db_addr = (uint64_t)udma_ctx->db_addr;
+	ex_out->db_data = (uint64_t)udma_qp->qp_num;
+out:
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_unlock(&udma_jetty->lock);
+
+	return ret == URMA_SUCCESS ? 0 : EINVAL;
+}
+
+static int udma_u_post_send_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
+			       urma_user_ctl_out_t *out)
+{
+	struct hns3_udma_post_and_ret_db_out ex_out;
+	struct hns3_udma_post_and_ret_db_in ex_in;
+	int ret;
+
+	if (!in->addr || !out->addr) {
+		URMA_LOG_ERR("input is invalid.\n");
+		return EINVAL;
+	}
+	memcpy(&ex_in, (void *)in->addr,
+	       min(in->len, sizeof(struct hns3_udma_post_and_ret_db_in)));
+	if (!ex_in.jfs || !ex_in.wr) {
+		URMA_LOG_ERR("jetty or wr is invalid.\n");
+		return EINVAL;
+	}
+	if (ex_in.type == JFS_TYPE) {
+		ret = udma_u_post_jfs_ex(ex_in.jfs, ex_in.wr, &ex_out);
+	} else if (ex_in.type == JETTY_TYPE) {
+		ret = udma_u_post_jetty_ex(ex_in.jetty, ex_in.wr, &ex_out);
+	} else {
+		URMA_LOG_ERR("failed to post send ex, type = 0x%x.\n", ex_in.type);
+		ret = EINVAL;
+		goto out;
+	}
+	memcpy((void *)out->addr, &ex_out,
+	       min(out->len, sizeof(struct hns3_udma_post_and_ret_db_out)));
+out:
+	return ret;
+}
+
 static int udma_u_check_poe_cfg(struct udma_u_context *udma_ctx, uint8_t poe_channel,
 				struct hns3_udma_poe_init_attr *init_attr)
 {
@@ -129,6 +248,113 @@ static int udma_u_query_poe_channel(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	return ret;
 }
 
+static struct udma_qp *find_jfs_qp(struct udma_u_jfs *jfs,
+				   urma_target_jetty_t *tjetty)
+{
+	struct udma_hmap_node *hmap_node = NULL;
+	struct connect_node *udma_connect_node;
+	uint32_t tjfr_index;
+
+	if (jfs->tp_mode == URMA_TM_UM)
+		return jfs->um_qp;
+
+	if (!tjetty) {
+		URMA_LOG_ERR("tjetty is null.\n");
+		return NULL;
+	}
+	tjfr_index = udma_get_tgt_hash(&tjetty->id);
+	hmap_node = udma_table_first_with_hash(&jfs->tjfr_tbl.hmap,
+					       &jfs->tjfr_tbl.rwlock,
+					       tjfr_index);
+	if (!hmap_node)
+		return NULL;
+
+	udma_connect_node = CONTAINER_OF_FIELD(hmap_node, struct connect_node,
+					       hmap_node);
+	return udma_connect_node->qp;
+}
+
+static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
+			 uint32_t wqe_cnt)
+{
+	struct udma_qp *qp;
+
+	if (!jfs) {
+		URMA_LOG_ERR("jfs is null.\n");
+		return EINVAL;
+	}
+
+	qp = find_jfs_qp(to_udma_jfs(jfs), tjetty);
+	if (!qp) {
+		URMA_LOG_ERR("can't find qp by jfs.\n");
+		return EINVAL;
+	}
+
+	qp->sq.tail += wqe_cnt;
+	return 0;
+}
+
+static struct udma_qp *find_jetty_qp(struct udma_u_jetty *jetty,
+				     urma_target_jetty_t *tjetty)
+{
+	if (jetty->tp_mode == URMA_TM_RC) {
+		if (jetty->rc_node->tjetty == NULL) {
+			URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %d.\n",
+				     jetty->urma_jetty.jetty_id.id);
+			return NULL;
+		}
+
+		return jetty->rc_node->qp;
+	}
+
+	if (jetty->tp_mode == URMA_TM_UM)
+		return jetty->um_qp;
+
+	return NULL;
+}
+
+static int update_jetty_ci(urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
+			   uint32_t wqe_cnt)
+{
+	struct udma_qp *qp;
+
+	if (!jetty) {
+		URMA_LOG_ERR("jetty is null.\n");
+		return EINVAL;
+	}
+
+	qp = find_jetty_qp(to_udma_jetty(jetty), tjetty);
+	if (!qp) {
+		URMA_LOG_ERR("can't find qp by jetty.\n");
+		return EINVAL;
+	}
+
+	qp->sq.tail += wqe_cnt;
+	return 0;
+}
+
+static int udma_u_update_queue_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
+				  urma_user_ctl_out_t *out)
+{
+	struct hns3_udma_update_queue_ci_in update_in;
+	int ret;
+
+	memcpy(&update_in, (void *)in->addr,
+		min(in->len, sizeof(struct hns3_udma_update_queue_ci_in)));
+	if (update_in.type == JFS_TYPE) {
+		ret = update_jfs_ci(update_in.jfs, update_in.tjetty,
+				    update_in.wqe_cnt);
+	} else if (update_in.type == JETTY_TYPE) {
+		ret = update_jetty_ci(update_in.jetty, update_in.tjetty,
+				      update_in.wqe_cnt);
+	} else {
+		URMA_LOG_ERR("failed to update ci, type = 0x%x.\n",
+			     update_in.type);
+		ret = EINVAL;
+	}
+
+	return ret;
+}
 
 static int udma_u_check_notify_attr(struct hns3_udma_jfc_notify_init_attr *notify_attr)
 {
@@ -272,10 +498,12 @@ typedef int (*udma_u_user_ctl_ops)(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				   urma_user_ctl_out_t *out);
 
 static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
+	[HNS3_UDMA_U_USER_CTL_POST_SEND_AND_RET_DB] = udma_u_post_send_ex,
 	[HNS3_UDMA_U_USER_CTL_CONFIG_POE_CHANNEL] = udma_u_config_poe_channel,
 	[HNS3_UDMA_U_USER_CTL_QUERY_POE_CHANNEL] = udma_u_query_poe_channel,
 	[HNS3_UDMA_U_USER_CTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
 	[HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
+	[HNS3_UDMA_U_USER_CTL_UPDATE_QUEUE_CI] = udma_u_update_queue_ci,
 	[HNS3_UDMA_U_USER_CTL_QUERY_HW_ID] = udma_u_query_hw_id,
 };
 

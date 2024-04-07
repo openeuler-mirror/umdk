@@ -985,8 +985,8 @@ static struct udma_qp *get_qp_for_tjetty(struct udma_u_jetty *udma_jetty,
 }
 
 /* get qp related to target jetty when post send */
-static struct udma_qp *get_qp_of_jetty(struct udma_u_jetty *udma_jetty,
-				       urma_jfs_wr_t *wr)
+struct udma_qp *get_qp_of_jetty(struct udma_u_jetty *udma_jetty,
+				urma_jfs_wr_t *wr)
 {
 	struct udma_qp *udma_qp = NULL;
 

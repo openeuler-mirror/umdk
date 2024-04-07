@@ -952,17 +952,11 @@ static urma_status_t udma_set_rm_wqe(void *wqe, struct udma_qp *qp,
 	return ret;
 }
 
-static int udma_wq_overflow(struct udma_wq *wq, struct udma_cq *cq)
+static int udma_wq_overflow(struct udma_wq *wq)
 {
 	uint32_t cur;
 
 	cur = wq->head - wq->tail;
-	if (cur < wq->wqe_cnt)
-		return 0;
-
-	pthread_spin_lock(&cq->udma_lock.lock);
-	cur = wq->head - wq->tail;
-	pthread_spin_unlock(&cq->udma_lock.lock);
 
 	return cur >= wq->wqe_cnt;
 }
@@ -1018,7 +1012,7 @@ static void udma_update_sq_db(struct udma_u_context *ctx, struct udma_qp *qp)
 		     (uint64_t *)&sq_db);
 }
 
-static struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
+struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 {
 	struct udma_hmap_node *hmap_node = NULL;
 	struct connect_node *udma_connect_node;
@@ -1160,7 +1154,7 @@ urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 
-	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
+	if (udma_wq_overflow(&udma_qp->sq)) {
 		URMA_LOG_ERR("JFS overflow.\n");
 		ret = URMA_ENOMEM;
 		goto out;
@@ -1209,7 +1203,7 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 
-	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
+	if (udma_wq_overflow(&udma_qp->sq)) {
 		URMA_LOG_ERR("JFS overflow.\n");
 		ret = URMA_ENOMEM;
 		goto out;
@@ -1285,10 +1279,9 @@ out:
 	return ret;
 }
 
-static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
-					  struct udma_qp *udma_qp,
-					  urma_jfs_wr_t *wr,
-					  urma_transport_mode_t tp_mode)
+urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
+				   struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
+				   urma_transport_mode_t tp_mode)
 {
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_index;
@@ -1306,9 +1299,9 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
 		goto out;
 	}
-	if (udma_wq_overflow(&udma_qp->sq, &udma_qp->verbs_qp.cq)) {
-		URMA_LOG_ERR("JFS overflow. pi = %d, ci = %d.\n",
-			     udma_qp->sq.head, udma_qp->sq.tail);
+	if (udma_wq_overflow(&udma_qp->sq)) {
+		URMA_LOG_ERR("JFS overflow. pi = %u, ci = %u.\n",
+				udma_qp->sq.head, udma_qp->sq.tail);
 		ret = URMA_ENOMEM;
 		goto out;
 	}
@@ -1330,6 +1323,7 @@ static urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 
 	udma_to_device_barrier();
 
+	*udma_qp->sdb = udma_qp->sq.head;
 	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
 		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
@@ -1338,52 +1332,4 @@ out:
 		udma_dca_stop_post(&udma_ctx->dca_ctx, udma_qp->dca_wqe.dcan);
 
 	return ret;
-}
-
-int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
-			  urma_user_ctl_in_t *in,
-			  urma_user_ctl_out_t *out)
-{
-	urma_post_and_ret_db_out_t ex_out;
-	urma_post_and_ret_db_in_t ex_in;
-	struct udma_u_context *udma_ctx;
-	struct udma_qp *udma_qp = NULL;
-	struct udma_u_jfs *udma_jfs;
-	urma_jfs_wr_t **it;
-	urma_status_t ret;
-
-	ret = URMA_SUCCESS;
-	memcpy(&ex_in, (void *)in->addr, in->len);
-	udma_jfs = to_udma_jfs(ex_in.jfs);
-	udma_ctx = to_udma_ctx((urma_context_t *)ctx);
-
-	if (!udma_jfs->lock_free)
-		(void)pthread_spin_lock(&udma_jfs->lock);
-
-	for (it = &ex_in.wr; *it != NULL; *it = (*it)->next) {
-		udma_qp = get_qp(udma_jfs, *it);
-		if (udma_qp == NULL) {
-			URMA_LOG_ERR("Failed to get qp, opcode = 0x%x.\n",
-				     (*it)->opcode);
-			ret = URMA_EINVAL;
-			ex_out.bad_wr = it;
-			goto out;
-		}
-
-		ret = udma_u_post_qp_wr_ex(udma_ctx, udma_qp, *it, udma_jfs->tp_mode);
-		if (ret) {
-			ex_out.bad_wr = it;
-			goto out;
-		}
-	}
-
-	ex_out.db_addr = (uint64_t)(udma_ctx->db_addr);
-	if (udma_qp != NULL)
-		ex_out.db_data = (uint64_t)udma_qp->qp_num;
-	memcpy((void *)out->addr, &ex_out, out->len);
-out:
-	if (!udma_jfs->lock_free)
-		(void)pthread_spin_unlock(&udma_jfs->lock);
-
-	return ret == URMA_SUCCESS ? 0 : EINVAL;
 }

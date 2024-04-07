@@ -116,6 +116,8 @@ urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
 					 urma_rjetty_t *rjetty,
 					 urma_token_t *rjetty_token);
 urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty);
+struct udma_qp *get_qp_of_jetty(struct udma_u_jetty *udma_jetty,
+				urma_jfs_wr_t *wr);
 urma_status_t udma_u_post_jetty_send_wr(urma_jetty_t *jetty,
 					urma_jfs_wr_t *wr,
 					urma_jfs_wr_t **bad_wr);
