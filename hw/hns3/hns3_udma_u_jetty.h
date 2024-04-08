@@ -101,14 +101,6 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 				  urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
-urma_status_t udma_u_advise_jetty(urma_jetty_t *jetty,
-				  urma_target_jetty_t *remote_jetty);
-urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
-				    urma_target_jetty_t *remote_jetty);
-urma_status_t udma_u_advise_jetty_seg(urma_jetty_t *jetty,
-				      urma_target_seg_t *tseg);
-urma_status_t udma_u_unadvise_jetty_seg(urma_jetty_t *jetty,
-					urma_target_seg_t *tseg);
 urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 				urma_target_jetty_t *remote_jetty);
 urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty);
