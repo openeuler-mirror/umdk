@@ -306,14 +306,6 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 
 static void udma_jfs_free_table(struct udma_u_jfs *jfs)
 {
-	struct connect_node *cur, *next;
-
-	(void)pthread_rwlock_rdlock(&jfs->tjfr_tbl.rwlock);
-	HMAP_FOR_EACH_SAFE(cur, next, hmap_node, &jfs->tjfr_tbl.hmap) {
-		(void)pthread_rwlock_unlock(&jfs->tjfr_tbl.rwlock);
-		udma_u_unadvise_jfr(&jfs->base, cur->tjfr);
-		(void)pthread_rwlock_rdlock(&jfs->tjfr_tbl.rwlock);
-	}
 	(void)pthread_rwlock_unlock(&jfs->tjfr_tbl.rwlock);
 	udma_hmap_destroy(&jfs->tjfr_tbl.hmap);
 	(void)pthread_rwlock_destroy(&jfs->tjfr_tbl.rwlock);

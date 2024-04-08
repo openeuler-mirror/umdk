@@ -27,11 +27,5 @@ struct jfs_conn_node {
 	struct udma_jfs_qp_node	*qp_conn_node;
 };
 
-urma_status_t udma_u_advise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr);
-urma_status_t udma_u_unadvise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr);
-urma_status_t udma_u_advise_seg(urma_jfs_t *jfs,
-				urma_target_seg_t *target_seg);
-urma_status_t udma_u_unadvise_seg(urma_jfs_t *jfs, urma_target_seg_t *target_seg,
-				  bool force);
 int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp);
 #endif /* _UDMA_U_TP_H */
