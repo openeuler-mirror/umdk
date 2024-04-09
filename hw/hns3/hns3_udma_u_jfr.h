@@ -63,6 +63,7 @@ struct udma_u_jfr {
 	urma_transport_mode_t     trans_mode;
 	struct um_header          *um_header_que;
 	urma_target_seg_t         *um_header_seg;
+	uint32_t                  srqn;
 	uint8_t                   share_jfr;
 };
 

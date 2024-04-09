@@ -269,7 +269,7 @@ static struct udma_u_jetty *get_jetty_from_cqe(struct udma_u_context *ctx,
 	mask = (1 << ctx->jettys_in_tbl_shift) - 1;
 
 	if (ctx->jetty_table[table_id].refcnt)
-		jetty = ctx->jetty_table[table_id].table[jid & mask];
+		jetty = ctx->jetty_table[table_id].table[jid & mask].jetty;
 
 	return jetty;
 }

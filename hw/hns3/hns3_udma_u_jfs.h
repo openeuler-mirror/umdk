@@ -76,18 +76,10 @@ struct udma_qp_buf {
 	uint32_t length;
 };
 
-struct udma_cq {
-	struct udma_spinlock udma_lock;
-};
-
 struct udma_sge_ex {
-	int      offset;
-	uint32_t sge_cnt;
-	int      sge_shift;
-};
-
-struct verbs_qp {
-	struct udma_cq cq;
+	int		offset;
+	uint32_t	sge_cnt;
+	int		sge_shift;
 };
 
 #define UDMA_MTU_NUM_256  256
@@ -103,7 +95,7 @@ struct udma_qp {
 	uint32_t		jetty_id;
 	uint32_t		flags;
 	void			*dwqe_page;
-	struct verbs_qp		verbs_qp;
+	struct udma_spinlock	udma_lock;
 	struct udma_buf		buf;
 	struct udma_dca_buf	dca_wqe;
 	struct udma_wq		sq;
@@ -116,6 +108,7 @@ struct udma_qp {
 	uint32_t		flush_status;
 	struct udp_srcport	um_srcport;
 	uint32_t		*sdb;
+	bool			is_jetty;
 };
 
 struct connect_node {
@@ -274,6 +267,14 @@ struct udma_jfs_wr_info {
 	uint64_t            dst_addr;
 	uint32_t            rkey;
 };
+
+#if __GNUC__ >= 3
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif
 
 #define udma_page_align(x) align(x, UDMA_HW_PAGE_SIZE)
 #define udma_page_count(x) (udma_page_align(x) / UDMA_HW_PAGE_SIZE)
