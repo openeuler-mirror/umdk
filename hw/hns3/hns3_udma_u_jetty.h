@@ -25,7 +25,7 @@
 #define UDMA_TGT_NODE_TABLE_SIZE 64
 
 struct rc_node {
-	struct udma_qp			*qp;
+	struct udma_qp		*qp;
 	urma_target_jetty_t	*tjetty;
 };
 
@@ -91,11 +91,11 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 	int hight, low;
 
 	hight = udma_ctx->num_qps_shift - 1; /* length and real idx diff 1 */
-	low = hight - UDMA_JETTY_X_PREFIX_BIT_NUM + 1; /* need top 2 bits */
+	low = hight - HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM + 1; /* need top 2 bits */
 
 	qpn_prefix = FIELD_GET(GENMASK(hight, low), qpn);
 
-	return qpn_prefix == UDMA_JETTY_QPN_PREFIX;
+	return qpn_prefix == HNS3_UDMA_JETTY_QPN_PREFIX;
 }
 
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,

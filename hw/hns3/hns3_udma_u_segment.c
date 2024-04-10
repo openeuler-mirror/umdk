@@ -23,7 +23,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	urma_cmd_udrv_priv_t udata = {};
 	struct udma_u_seg *seg;
 
-	if (!seg_cfg->token_value || seg_cfg->flag.bs.access >= URMA_SEG_ACCESS_GUARD) {
+	if (seg_cfg->flag.bs.access >= HNS3_URMA_SEG_ACCESS_GUARD) {
 		URMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
 			     seg_cfg->flag.bs.access);
 		return NULL;

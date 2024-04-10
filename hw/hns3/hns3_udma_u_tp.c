@@ -26,11 +26,11 @@ int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
 	off_t offset;
 
 	offset = get_mmap_offset(qp->qp_num, udma_ctx->page_size,
-				 UDMA_MMAP_DWQE_PAGE);
-	qp->dwqe_page = mmap(NULL, UDMA_DWQE_PAGE_SIZE, PROT_WRITE,
+				 HNS3_UDMA_MMAP_DWQE_PAGE);
+	qp->dwqe_page = mmap(NULL, HNS3_UDMA_DWQE_PAGE_SIZE, PROT_WRITE,
 			     MAP_SHARED, urma_ctx->dev_fd, offset);
 	if (qp->dwqe_page == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap direct wqe page, QPN = %u.",
+		URMA_LOG_ERR("failed to mmap direct wqe page, QPN = %lu.\n",
 			     qp->qp_num);
 		return EINVAL;
 	}

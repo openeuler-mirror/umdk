@@ -95,7 +95,7 @@ static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int dev_
 {
 	off_t offset;
 
-	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_UAR_PAGE);
+	offset = get_mmap_offset(0, udma_u_ctx->page_size, HNS3_UDMA_MMAP_UAR_PAGE);
 	udma_u_ctx->uar = mmap(NULL, udma_u_ctx->page_size, PROT_READ | PROT_WRITE,
 			       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->uar == MAP_FAILED) {
@@ -119,7 +119,7 @@ static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int dev
 {
 	off_t offset;
 
-	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_RESET_PAGE);
+	offset = get_mmap_offset(0, udma_u_ctx->page_size, HNS3_UDMA_MMAP_RESET_PAGE);
 	udma_u_ctx->reset_state = mmap(NULL, (size_t)udma_u_ctx->page_size, PROT_READ,
 				       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->reset_state == MAP_FAILED) {
@@ -140,7 +140,7 @@ static void uninit_reset_state(struct udma_u_context *udma_u_ctx)
 }
 
 static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
-					 struct udma_create_ctx_resp *resp,
+					 struct hns3_udma_create_ctx_resp *resp,
 					 int dev_fd)
 {
 	urma_status_t ret;
@@ -359,7 +359,7 @@ static void load_dca_config_from_env_var(struct udma_dca_context_attr *attr)
 	}
 }
 
-static void ucontext_set_cmd(struct udma_create_ctx_ucmd *cmd,
+static void ucontext_set_cmd(struct hns3_udma_create_ctx_ucmd *cmd,
 			     struct udma_dca_context_attr *attr)
 {
 	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_UNIT_SIZE)
@@ -403,22 +403,22 @@ static int mmap_dca(struct udma_u_context *ctx, int dev_fd, size_t size)
 	off_t offset;
 	void *addr;
 
-	offset = get_mmap_offset(0, ctx->page_size, UDMA_MMAP_TYPE_DCA);
+	offset = get_mmap_offset(0, ctx->page_size, HNS3_UDMA_MMAP_TYPE_DCA);
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd, offset);
 	if (addr == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap() dca addr.\n");
+		URMA_LOG_ERR("failed to mmap dca addr.\n");
 		return URMA_FAIL;
 	}
 
 	dca_ctx->buf_status = (atomic_ulong *)addr;
 	dca_ctx->sync_status = (atomic_ulong *)(addr + size / DCA_BITS_HALF);
 
-	return 0;
+	return URMA_SUCCESS;
 }
 
 static int init_dca_context(struct udma_u_context *ctx, int dev_fd,
-			    struct udma_create_ctx_resp *resp,
+			    struct hns3_udma_create_ctx_resp *resp,
 			    struct udma_dca_context_attr *attr)
 {
 	const uint32_t bits_per_qp = 2 * UDMA_DCA_BITS_PER_STATUS;
@@ -451,8 +451,8 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 					     uint32_t eid_index, int dev_fd)
 {
 	struct udma_dca_context_attr udma_env_attr = {};
-	struct udma_create_ctx_resp resp = {};
-	struct udma_create_ctx_ucmd cmd = {};
+	struct hns3_udma_create_ctx_resp resp = {};
+	struct hns3_udma_create_ctx_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udrv_data = {};
 	struct udma_u_context *udma_u_ctx;
 	urma_context_cfg_t cfg = {};
@@ -475,7 +475,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 
 	ret = udma_u_init_context(udma_u_ctx, &resp, dev_fd);
 	if (ret != URMA_SUCCESS) {
-		URMA_LOG_ERR("udma_u init ctx failed.");
+		URMA_LOG_ERR("udma_u init ctx failed.\n");
 		goto err_cmd;
 	}
 

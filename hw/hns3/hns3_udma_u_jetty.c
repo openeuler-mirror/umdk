@@ -155,8 +155,8 @@ static urma_status_t exec_jetty_create_cmd(urma_context_t *ctx,
 					   urma_jetty_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
-	struct udma_create_jetty_resp resp = {};
-	struct udma_create_jetty_ucmd cmd = {};
+	struct hns3_udma_create_jetty_resp resp = {};
+	struct hns3_udma_create_jetty_ucmd cmd = {};
 	urma_status_t ret = URMA_SUCCESS;
 	urma_cmd_udrv_priv_t udata = {};
 
@@ -182,7 +182,7 @@ static urma_status_t exec_jetty_create_cmd(urma_context_t *ctx,
 	if (jetty->tp_mode == URMA_TM_UM) {
 		jetty->um_qp->qp_num = resp.create_tp_resp.qpn;
 		jetty->um_qp->flags = resp.create_tp_resp.cap_flags;
-		if (resp.create_tp_resp.cap_flags & UDMA_QP_CAP_DIRECT_WQE) {
+		if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
 			if (mmap_dwqe(ctx, jetty->um_qp)) {
 				urma_cmd_delete_jetty(&jetty->urma_jetty);
 				URMA_LOG_ERR("mmap dwqe failed\n");
@@ -530,7 +530,7 @@ urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty)
 	int ret;
 
 	if (udma_target_jetty->refcnt > 1) {
-		URMA_LOG_ERR("the terget jetty is still being used, id = %d.\n",
+		URMA_LOG_ERR("the terget jetty is still being used, id = %u.\n",
 			     target_jetty->id.id);
 		return URMA_FAIL;
 	}
@@ -569,8 +569,8 @@ static urma_status_t exec_jetty_bind_cmd(urma_jetty_t *jetty,
 					 urma_target_jetty_t *tjetty,
 					 struct udma_qp *qp)
 {
-	struct udma_create_tp_resp resp = {};
-	struct udma_create_tp_ucmd cmd = {};
+	struct hns3_udma_create_tp_resp resp = {};
+	struct hns3_udma_create_tp_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
@@ -581,15 +581,17 @@ static urma_status_t exec_jetty_bind_cmd(urma_jetty_t *jetty,
 
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 	ret = urma_cmd_bind_jetty(jetty, tjetty, &udata);
-	if (ret)
+	if (ret) {
+		URMA_LOG_ERR("urma cmd bind jetty failed, ret = %d.\n", ret);
 		return URMA_FAIL;
+	}
 
 	qp->qp_num = resp.qpn;
 	qp->flags = resp.cap_flags;
 	qp->path_mtu = (urma_mtu_t)resp.path_mtu;
 	qp->sq.priority = resp.priority;
 
-	if (resp.cap_flags & UDMA_QP_CAP_DIRECT_WQE) {
+	if (resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
 		ret = mmap_dwqe(jetty->urma_ctx, qp);
 		if (ret) {
 			urma_cmd_unbind_jetty(jetty);

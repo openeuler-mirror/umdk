@@ -59,11 +59,14 @@ static int alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 
 	idx_que->entry_shift = udma_ilog32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
 	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
-	if (!idx_que->bitmap)
+	if (!idx_que->bitmap) {
+		URMA_LOG_ERR("failed to alloc jfr idx que bitmap.\n");
 		return ENOMEM;
+	}
 
 	buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, idx_que->entry_shift);
 	if (udma_alloc_buf(&idx_que->idx_buf, buf_size, UDMA_HW_PAGE_SIZE)) {
+		URMA_LOG_ERR("failed to alloc jfr idx que buf.\n");
 		udma_bitmap_free(idx_que->bitmap);
 		idx_que->bitmap = NULL;
 		return ENOMEM;
@@ -77,7 +80,7 @@ static int alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 
 static int alloc_jfr_wqe_buf(struct udma_u_jfr *jfr)
 {
-	int buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, jfr->wqe_shift);
+	uint32_t buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, jfr->wqe_shift);
 
 	return udma_alloc_buf(&jfr->wqe_buf, buf_size, UDMA_HW_PAGE_SIZE);
 }
@@ -131,10 +134,10 @@ static void free_jfr_buf(struct udma_u_jfr *jfr)
 }
 
 static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
-				  urma_jfr_cfg_t *cfg, struct udma_u_jetty *jetty)
+			       urma_jfr_cfg_t *cfg, struct udma_u_jetty *jetty)
 {
-	struct udma_create_jfr_resp resp = {};
-	struct udma_create_jfr_ucmd cmd = {};
+	struct hns3_udma_create_jfr_resp resp = {};
+	struct hns3_udma_create_jfr_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
@@ -173,7 +176,7 @@ static int insert_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 	if (!udma_hmap_insert(&ctx->jfr_table, &jfr_node->node, jfr->urma_jfr.jfr_id.id)) {
 		free(jfr_node);
 		jfr_node = NULL;
-		URMA_LOG_ERR("failed to insert jfr_node");
+		URMA_LOG_ERR("failed to insert jfr_node.\n");
 		(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
 		return EINVAL;
 	}
@@ -472,7 +475,7 @@ static urma_status_t get_wqe_idx(struct udma_u_jfr *jfr, uint32_t *wqe_idx)
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
 
 	if (udma_bitmap_use_idx(idx_que->bitmap, idx_que->bitmap_cnt,
-				   jfr->wqe_cnt, wqe_idx))
+				jfr->wqe_cnt, wqe_idx))
 		return URMA_ENOMEM;
 
 	return URMA_SUCCESS;
@@ -633,7 +636,7 @@ urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 
 	if (nreq) {
 		udma_to_device_barrier();
-		if (udma_jfr->cap_flags & UDMA_JFR_CAP_RECORD_DB)
+		if (udma_jfr->cap_flags & HNS3_UDMA_JFR_CAP_RECORD_DB)
 			*udma_jfr->db = udma_jfr->idx_que.head & UDMA_DB_PROD_IDX_M;
 		else
 			update_srq_db(ctx, udma_jfr);

@@ -119,10 +119,11 @@ struct udma_jfce {
 static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
 					uint32_t num_jetty_x_shift)
 {
-	int high, low;
+	uint32_t high;
+	int low;
 
-	/* num_qps_shift must be greater than UDMA_JETTY_X_PREFIX_BIT_NUM */
-	high = num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM;
+	/* num_qps_shift must be greater than HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM */
+	high = num_qps_shift - HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM;
 	low = high - num_jetty_x_shift;
 	if (low < 0)
 		return FIELD_GET(GENMASK(num_jetty_x_shift - 1, 0), qpn);
