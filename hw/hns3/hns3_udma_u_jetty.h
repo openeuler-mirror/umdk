@@ -25,7 +25,7 @@
 #define UDMA_TGT_NODE_TABLE_SIZE 64
 
 struct rc_node {
-	struct udma_qp			*qp;
+	struct udma_qp		*qp;
 	urma_target_jetty_t	*tjetty;
 };
 
@@ -91,24 +91,16 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 	int hight, low;
 
 	hight = udma_ctx->num_qps_shift - 1; /* length and real idx diff 1 */
-	low = hight - UDMA_JETTY_X_PREFIX_BIT_NUM + 1; /* need top 2 bits */
+	low = hight - HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM + 1; /* need top 2 bits */
 
 	qpn_prefix = FIELD_GET(GENMASK(hight, low), qpn);
 
-	return qpn_prefix == UDMA_JETTY_QPN_PREFIX;
+	return qpn_prefix == HNS3_UDMA_JETTY_QPN_PREFIX;
 }
 
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 				  urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
-urma_status_t udma_u_advise_jetty(urma_jetty_t *jetty,
-				  urma_target_jetty_t *remote_jetty);
-urma_status_t udma_u_unadvise_jetty(urma_jetty_t *jetty,
-				    urma_target_jetty_t *remote_jetty);
-urma_status_t udma_u_advise_jetty_seg(urma_jetty_t *jetty,
-				      urma_target_seg_t *tseg);
-urma_status_t udma_u_unadvise_jetty_seg(urma_jetty_t *jetty,
-					urma_target_seg_t *tseg);
 urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 				urma_target_jetty_t *remote_jetty);
 urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty);
@@ -116,6 +108,8 @@ urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
 					 urma_rjetty_t *rjetty,
 					 urma_token_t *rjetty_token);
 urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty);
+struct udma_qp *get_qp_of_jetty(struct udma_u_jetty *udma_jetty,
+				urma_jfs_wr_t *wr);
 urma_status_t udma_u_post_jetty_send_wr(urma_jetty_t *jetty,
 					urma_jfs_wr_t *wr,
 					urma_jfs_wr_t **bad_wr);
@@ -126,5 +120,9 @@ urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
 				   urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
 				  urma_jetty_attr_t *jetty_attr);
+void delete_jetty_node(struct udma_u_context *udma_ctx, uint32_t id);
+urma_status_t insert_jetty_node(struct udma_u_context *udma_ctx,
+				void *pointer, bool is_jetty, uint32_t id);
+int udma_u_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
 
 #endif /* _UDMA_U_JETTY_H */

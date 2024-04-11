@@ -76,18 +76,10 @@ struct udma_qp_buf {
 	uint32_t length;
 };
 
-struct udma_cq {
-	struct udma_spinlock udma_lock;
-};
-
 struct udma_sge_ex {
-	int      offset;
-	uint32_t sge_cnt;
-	int      sge_shift;
-};
-
-struct verbs_qp {
-	struct udma_cq cq;
+	int		offset;
+	uint32_t	sge_cnt;
+	int		sge_shift;
 };
 
 #define UDMA_MTU_NUM_256  256
@@ -103,11 +95,12 @@ struct udma_qp {
 	uint32_t		jetty_id;
 	uint32_t		flags;
 	void			*dwqe_page;
-	struct verbs_qp		verbs_qp;
+	struct udma_spinlock	udma_lock;
 	struct udma_buf		buf;
 	struct udma_dca_buf	dca_wqe;
 	struct udma_wq		sq;
 	struct udma_sge_ex	ex_sge;
+	struct udma_wq		rq;
 	uint32_t		buf_size;
 	uint32_t		next_sge;
 	urma_mtu_t		path_mtu;
@@ -115,6 +108,7 @@ struct udma_qp {
 	uint32_t		flush_status;
 	struct udp_srcport	um_srcport;
 	uint32_t		*sdb;
+	bool			is_jetty;
 };
 
 struct connect_node {
@@ -274,6 +268,14 @@ struct udma_jfs_wr_info {
 	uint32_t            rkey;
 };
 
+#if __GNUC__ >= 3
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif
+
 #define udma_page_align(x) align(x, UDMA_HW_PAGE_SIZE)
 #define udma_page_count(x) (udma_page_align(x) / UDMA_HW_PAGE_SIZE)
 
@@ -330,11 +332,14 @@ urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
 				void **wqe, urma_transport_mode_t tp_mode);
-int udma_u_post_jfs_wr_ex(urma_context_t *ctx,
-			  urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
+urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
+				   struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
+				   urma_transport_mode_t tp_mode);
 struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 			      urma_jfs_cfg_t *jfs_cfg,
+			      urma_jfr_cfg_t *jfr_cfg,
 			      uint32_t jetty_id, bool is_jetty);
+struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr);
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num);
 

@@ -39,6 +39,8 @@
 #define BITS_PER_UINT32		32
 #define BITS_PER_LONG		64
 
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 /* get the structure object from the pointer of the given field by struct type */
 #define CONTAINER_OF_FIELD(field_ptr, struct_type, field) \
 	((struct_type *)(void *)((char *)(field_ptr) - offsetof(struct_type, field)))
@@ -89,7 +91,7 @@
 #define udma_reg_enable(ptr, field)                                            \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) == (((field) << 32) >> 32));      \
 		*((uint32_t *)_ptr + ((field) >> 32) / 32) |=                  \
@@ -99,7 +101,7 @@
 #define udma_reg_clear(ptr, field)                                             \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
 		*((uint32_t *)_ptr + ((field) >> 32) / 32) &=                  \
@@ -125,7 +127,7 @@
 #define udma_reg_read(ptr, field)                                              \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                         \
+		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
 		FIELD_GET(GENMASK(((field) >> 32) % 32,                        \
@@ -253,13 +255,13 @@ static inline void udma_set_udata(urma_cmd_udrv_priv_t *udrv_data, void *in_addr
 /* command value is offset[7:0] */
 static inline void udma_mmap_set_command(int command, off_t *offset)
 {
-	*offset |= (command & MAP_COMMAND_MASK);
+	*offset |= (command & HNS3_UDMA_MAP_COMMAND_MASK);
 }
 
 /* index value is offset[32:8] */
 static inline void udma_mmap_set_index(unsigned long index, off_t *offset)
 {
-	*offset |= ((index & MAP_INDEX_MASK) << MAP_INDEX_SHIFT);
+	*offset |= ((index & HNS3_UDMA_MAP_INDEX_MASK) << HNS3_UDMA_MAP_INDEX_SHIFT);
 }
 
 static inline off_t get_mmap_offset(uint32_t idx, int page_size, int cmd)

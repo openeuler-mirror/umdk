@@ -17,9 +17,9 @@
 #define _UDMA_U_JFC_H
 
 #include "urma_types.h"
+#include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_jfs.h"
-#include "hns3_udma_u_poe.h"
 
 #define CQE_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
 
@@ -119,10 +119,11 @@ struct udma_jfce {
 static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
 					uint32_t num_jetty_x_shift)
 {
-	int high, low;
+	uint32_t high;
+	int low;
 
-	/* num_qps_shift must be greater than UDMA_JETTY_X_PREFIX_BIT_NUM */
-	high = num_qps_shift - UDMA_JETTY_X_PREFIX_BIT_NUM;
+	/* num_qps_shift must be greater than HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM */
+	high = num_qps_shift - HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM;
 	low = high - num_jetty_x_shift;
 	if (low < 0)
 		return FIELD_GET(GENMASK(num_jetty_x_shift - 1, 0), qpn);
@@ -149,6 +150,9 @@ static inline struct udma_u_jfc *to_udma_jfc(urma_jfc_t *jfc)
 	return container_of(jfc, struct udma_u_jfc, urma_jfc);
 }
 
+struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
+					    struct udma_u_context *udma_ctx);
+void free_err_jfc(struct udma_u_jfc *jfc, struct udma_u_context *udma_ctx);
 urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg);
 urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
 urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
@@ -159,16 +163,6 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
 int udma_u_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
 		    urma_jfc_t *jfc[]);
 void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
-int udma_u_config_poe_channel(urma_context_t *ctx,
-			      urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
-int udma_u_query_poe_channel(urma_context_t *ctx,
-			     urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
-int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
-			 urma_user_ctl_out_t *out);
-int udma_u_update_jfs_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
-			 urma_user_ctl_out_t *out);
-int udma_u_delete_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
-			 urma_user_ctl_out_t *out);
 urma_status_t udma_u_get_async_event(urma_context_t *ctx,
 				     urma_async_event_t *event);
 void udma_u_ack_async_event(urma_async_event_t *event);

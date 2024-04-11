@@ -26,62 +26,8 @@
 #include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
 #include "hns3_udma_u_buf.h"
+#include "hns3_udma_u_user_ctl.h"
 #include "hns3_udma_u_provider_ops.h"
-
-typedef int (*udma_u_user_ctl_opcode)(urma_context_t *ctx,
-				      urma_user_ctl_in_t *in,
-				      urma_user_ctl_out_t *out);
-
-static udma_u_user_ctl_opcode g_udma_u_user_ctl_opcodes[] = {
-	[UDMA_U_USER_CRTL_INVALID] = NULL,
-	[UDMA_U_USER_CRTL_POST_JFS_EX] = udma_u_post_jfs_wr_ex,
-	[UDMA_U_USER_CRTL_CONFIG_POE] = udma_u_config_poe_channel,
-	[UDMA_U_USER_CRTL_QUERY_POE] = udma_u_query_poe_channel,
-	[UDMA_U_USER_CRTL_CREATE_JFC_EX] = udma_u_create_jfc_ex,
-	[UDMA_U_USER_CRTL_UPDATE_JFS_CI] = udma_u_update_jfs_ci,
-	[UDMA_U_USER_CRTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
-};
-
-int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
-		    urma_user_ctl_out_t *out)
-{
-	uint32_t user_crtl_opcode = 0;
-
-	if ((ctx == NULL) || (in == NULL) || (out == NULL)) {
-		URMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
-		return EINVAL;
-	}
-
-	switch (in->opcode) {
-	case URMA_USER_CTL_POST_SEND_AND_RET_DB:
-		user_crtl_opcode = UDMA_U_USER_CRTL_POST_JFS_EX;
-		break;
-	case URMA_USER_CTL_CONFIG_POE_CHANNEL:
-		user_crtl_opcode = UDMA_U_USER_CRTL_CONFIG_POE;
-		break;
-	case URMA_USER_CTL_QUERY_POE_CHANNEL:
-		user_crtl_opcode = UDMA_U_USER_CRTL_QUERY_POE;
-		break;
-	case URMA_USER_CTL_CREATE_JFC_EX:
-		user_crtl_opcode = UDMA_U_USER_CRTL_CREATE_JFC_EX;
-		break;
-	case URMA_USER_CTL_UPDATE_JFS_CI:
-		user_crtl_opcode = UDMA_U_USER_CRTL_UPDATE_JFS_CI;
-		break;
-	case URMA_USER_CTL_DELETE_JFC_EX:
-		user_crtl_opcode = UDMA_U_USER_CRTL_DELETE_JFC_EX;
-		break;
-	default:
-		user_crtl_opcode = UDMA_U_USER_CRTL_INVALID;
-	}
-
-	if (g_udma_u_user_ctl_opcodes[user_crtl_opcode] == NULL) {
-		URMA_LOG_ERR("invalid udma_u_user_ctl_opcode: 0x%x.\n",
-			     (int)in->opcode);
-		return URMA_ENOPERM;
-	}
-	return g_udma_u_user_ctl_opcodes[user_crtl_opcode](ctx, in, out);
-}
 
 static urma_ops_t g_udma_u_ops = {
 	/* OPs name */
@@ -97,15 +43,11 @@ static urma_ops_t g_udma_u_ops = {
 	.delete_jfr = udma_u_delete_jfr,
 	.import_jfr = udma_u_import_jfr,
 	.unimport_jfr = udma_u_unimport_jfr,
-	.advise_jfr = udma_u_advise_jfr,
-	.unadvise_jfr = udma_u_unadvise_jfr,
 	.create_jetty = udma_u_create_jetty,
 	.modify_jetty = udma_u_modify_jetty,
 	.delete_jetty = udma_u_delete_jetty,
 	.import_jetty = udma_u_import_jetty,
 	.unimport_jetty = udma_u_unimport_jetty,
-	.advise_jetty = udma_u_advise_jetty,
-	.unadvise_jetty = udma_u_unadvise_jetty,
 	.bind_jetty = udma_u_bind_jetty,
 	.unbind_jetty = udma_u_unbind_jetty,
 	.create_jfce = udma_u_create_jfce,
@@ -153,7 +95,7 @@ static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int dev_
 {
 	off_t offset;
 
-	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_UAR_PAGE);
+	offset = get_mmap_offset(0, udma_u_ctx->page_size, HNS3_UDMA_MMAP_UAR_PAGE);
 	udma_u_ctx->uar = mmap(NULL, udma_u_ctx->page_size, PROT_READ | PROT_WRITE,
 			       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->uar == MAP_FAILED) {
@@ -177,7 +119,7 @@ static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int dev
 {
 	off_t offset;
 
-	offset = get_mmap_offset(0, udma_u_ctx->page_size, UDMA_MMAP_RESET_PAGE);
+	offset = get_mmap_offset(0, udma_u_ctx->page_size, HNS3_UDMA_MMAP_RESET_PAGE);
 	udma_u_ctx->reset_state = mmap(NULL, (size_t)udma_u_ctx->page_size, PROT_READ,
 				       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->reset_state == MAP_FAILED) {
@@ -198,7 +140,7 @@ static void uninit_reset_state(struct udma_u_context *udma_u_ctx)
 }
 
 static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
-					 struct udma_create_ctx_resp *resp,
+					 struct hns3_udma_create_ctx_resp *resp,
 					 int dev_fd)
 {
 	urma_status_t ret;
@@ -216,6 +158,9 @@ static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 	udma_u_ctx->max_jfs_sge = resp->max_jfs_sge;
 	udma_u_ctx->poe_ch_num = resp->poe_ch_num;
 	udma_u_ctx->db_addr = resp->db_addr;
+	udma_u_ctx->chip_id = resp->chip_id;
+	udma_u_ctx->die_id = resp->die_id;
+	udma_u_ctx->func_id = resp->func_id;
 
 	ret = udma_u_alloc_db(udma_u_ctx, dev_fd);
 	if (ret) {
@@ -414,7 +359,7 @@ static void load_dca_config_from_env_var(struct udma_dca_context_attr *attr)
 	}
 }
 
-static void ucontext_set_cmd(struct udma_create_ctx_ucmd *cmd,
+static void ucontext_set_cmd(struct hns3_udma_create_ctx_ucmd *cmd,
 			     struct udma_dca_context_attr *attr)
 {
 	if (attr->comp_mask & UDMA_CONTEXT_MASK_DCA_UNIT_SIZE)
@@ -458,22 +403,22 @@ static int mmap_dca(struct udma_u_context *ctx, int dev_fd, size_t size)
 	off_t offset;
 	void *addr;
 
-	offset = get_mmap_offset(0, ctx->page_size, UDMA_MMAP_TYPE_DCA);
+	offset = get_mmap_offset(0, ctx->page_size, HNS3_UDMA_MMAP_TYPE_DCA);
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd, offset);
 	if (addr == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap() dca addr.\n");
+		URMA_LOG_ERR("failed to mmap dca addr.\n");
 		return URMA_FAIL;
 	}
 
 	dca_ctx->buf_status = (atomic_ulong *)addr;
 	dca_ctx->sync_status = (atomic_ulong *)(addr + size / DCA_BITS_HALF);
 
-	return 0;
+	return URMA_SUCCESS;
 }
 
 static int init_dca_context(struct udma_u_context *ctx, int dev_fd,
-			    struct udma_create_ctx_resp *resp,
+			    struct hns3_udma_create_ctx_resp *resp,
 			    struct udma_dca_context_attr *attr)
 {
 	const uint32_t bits_per_qp = 2 * UDMA_DCA_BITS_PER_STATUS;
@@ -506,8 +451,8 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 					     uint32_t eid_index, int dev_fd)
 {
 	struct udma_dca_context_attr udma_env_attr = {};
-	struct udma_create_ctx_resp resp = {};
-	struct udma_create_ctx_ucmd cmd = {};
+	struct hns3_udma_create_ctx_resp resp = {};
+	struct hns3_udma_create_ctx_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udrv_data = {};
 	struct udma_u_context *udma_u_ctx;
 	urma_context_cfg_t cfg = {};
@@ -530,7 +475,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 
 	ret = udma_u_init_context(udma_u_ctx, &resp, dev_fd);
 	if (ret != URMA_SUCCESS) {
-		URMA_LOG_ERR("udma_u init ctx failed.");
+		URMA_LOG_ERR("udma_u init ctx failed.\n");
 		goto err_cmd;
 	}
 

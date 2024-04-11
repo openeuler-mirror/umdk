@@ -75,9 +75,9 @@ static bool check_dca_is_attached(struct udma_u_dca_ctx *ctx, uint32_t dcan)
 	return atomic_test_bit(st, DCAN_TO_STAT_BIT(dcan));
 }
 
-int exec_attach_dca_mem_cmd(struct udma_u_context *ctx,
-			    struct udma_dca_attach_attr *attr,
-			    struct udma_dca_attach_resp *resp)
+static int exec_attach_dca_mem_cmd(struct udma_u_context *ctx,
+				   struct udma_dca_attach_attr *attr,
+				   struct udma_dca_attach_resp *resp)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
@@ -142,7 +142,6 @@ static int exec_register_dca_mem_cmd(struct udma_u_context *ctx,
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
-	int ret;
 
 	attr.addr = (uintptr_t)dca_mem_addr(mem, 0);
 	attr.key = dca_mem_to_key(mem);
@@ -152,9 +151,7 @@ static int exec_register_dca_mem_cmd(struct udma_u_context *ctx,
 	in.addr = (uint64_t)&attr;
 	in.len = (uint32_t)sizeof(struct udma_dca_reg_attr);
 
-	ret = urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
-
-	return ret;
+	return  urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
 static void ubn_u_free_dca_mem(struct udma_u_dca_mem *mem)
@@ -301,7 +298,7 @@ int udma_u_attach_dca_mem(struct udma_u_context *ctx,
 
 		if (resp.alloc_pages >= buf_pages) {
 			is_new_buf = !!(resp.alloc_flags &
-					UDMA_DCA_ATTACH_FLAGS_NEW_BUFFER);
+					HNS3_UDMA_DCA_ATTACH_FLAGS_NEW_BUFFER);
 			break;
 		}
 
