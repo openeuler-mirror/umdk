@@ -127,7 +127,7 @@ err_alloc_buf:
 static void free_jfr_buf(struct udma_u_jfr *jfr)
 {
 	free(jfr->wrid);
-	if (!(jfr->share_jfr == UDMA_NO_SHARE_JFR && jfr->trans_mode == URMA_TM_RC))
+	if (!jfr->rq_en)
 		udma_free_buf(&jfr->wqe_buf);
 	udma_free_buf(&jfr->idx_que.idx_buf);
 	udma_bitmap_free(jfr->idx_que.bitmap);
@@ -150,6 +150,7 @@ static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
 		cmd.sqe_shift = jetty->rc_node->qp->sq.wqe_shift;
 		cmd.sge_cnt = jetty->rc_node->qp->ex_sge.sge_cnt;
 		cmd.sge_shift = jetty->rc_node->qp->ex_sge.sge_shift;
+		cmd.share_jfr = jetty->share_jfr;
 	}
 
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
@@ -158,6 +159,7 @@ static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
 		return ret;
 	jfr->jfrn = jfr->urma_jfr.jfr_id.id;
 	jfr->cap_flags = resp.jfr_caps;
+	jfr->srqn = resp.srqn;
 
 	return 0;
 }
@@ -257,7 +259,7 @@ urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,
 		return NULL;
 
 	jfr->lock_free = cfg->flag.bs.lock_free;
-	jfr->share_jfr = UDMA_NO_SHARE_JFR;
+	jfr->rq_en = UDMA_JFR_RQ_EN;
 	if (pthread_spin_init(&jfr->lock, PTHREAD_PROCESS_PRIVATE))
 		goto err_init_lock_rq;
 
@@ -623,7 +625,7 @@ urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 
 	for (nreq = 0; wr; ++nreq, wr = wr->next) {
 		if (udma_jfr->trans_mode == URMA_TM_RC &&
-		    udma_jfr->share_jfr == UDMA_NO_SHARE_JFR) {
+		    udma_jfr->rq_en) {
 			ret = post_recv_one_rq(udma_jfr, wr, nreq);
 		} else {
 			ret = post_recv_one(udma_jfr, wr);

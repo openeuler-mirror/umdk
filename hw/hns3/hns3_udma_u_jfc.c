@@ -15,9 +15,14 @@
 
 #include <math.h>
 #include <unistd.h>
+#include "hns3_udma_u_common.h"
+#include "hns3_udma_u_provider_ops.h"
+#include "hns3_udma_u_segment.h"
 #include "hns3_udma_u_jetty.h"
+#include "hns3_udma_u_abi.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfr.h"
+#include "hns3_udma_u_jfs.h"
 #include "hns3_udma_u_jfc.h"
 
 static int check_jfc_cfg(struct udma_u_context *udma_ctx, urma_jfc_cfg_t *cfg)
@@ -163,7 +168,7 @@ static void *get_sw_cqe(struct udma_u_jfc *jfc, int n)
 {
 	struct udma_jfc_cqe *cqe = get_cqe(jfc, n & (jfc->cqe_cnt - 1));
 
-	return (udma_reg_read(cqe, CQE_OWNER) ^ (!!(n & jfc->cqe_cnt))) ? cqe : NULL;
+	return (cqe->owner ^ (!!(n & jfc->cqe_cnt))) ? cqe : NULL;
 }
 
 static struct udma_jfc_cqe *next_cqe_sw(struct udma_u_jfc *jfc)
@@ -206,14 +211,14 @@ static enum urma_cr_status get_cr_status(uint8_t status)
 static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr,
 				urma_cr_t *cr)
 {
-	uint32_t wqe_idx, data_len, sge_idx;
 	struct udma_wqe_data_seg *sge_list;
 	uint8_t *cqe_inl_buf;
+	uint32_t data_len;
+	uint32_t sge_idx;
 	uint32_t size;
 
-	wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
 	sge_list = (struct udma_wqe_data_seg *)((char *)jfr->wqe_buf.buf +
-					       (wqe_idx << jfr->wqe_shift));
+					       (cqe->wqe_idx << jfr->wqe_shift));
 	cqe_inl_buf = (uint8_t *)cqe->pld_in_cqe;
 	data_len = le32toh(cqe->byte_cnt);
 
@@ -231,50 +236,9 @@ static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr
 		cr->status = URMA_CR_LOC_LEN_ERR;
 }
 
-static struct udma_u_jfr *get_jfr_from_cqe(struct udma_u_context *ctx,
-					   struct udma_jfc_cqe *cqe)
-{
-	struct udma_jfr_node *jfr_node;
-	struct udma_hmap_node *node;
-	struct udma_u_jfr *jfr;
-	uint32_t qpn;
-	uint32_t jid;
-
-	qpn = udma_reg_read(cqe, CQE_LCL_QPN);
-	jid = get_jid_from_qpn(qpn, ctx->num_qps_shift, ctx->num_jfr_shift);
-	(void)pthread_rwlock_rdlock(&ctx->jfr_table_lock);
-	node = udma_hmap_first_with_hash(&ctx->jfr_table, jid);
-	(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
-	if (!node)
-		return NULL;
-	jfr_node = to_udma_jfr_node(node);
-	jfr = jfr_node->jfr;
-
-	return jfr;
-}
-
-static struct udma_u_jetty *get_jetty_from_cqe(struct udma_u_context *ctx,
-					       struct udma_jfc_cqe *cqe, uint32_t qpn,
-					       uint32_t jid)
-{
-	struct udma_jetty_node *jetty_node;
-	struct udma_u_jetty *jetty = NULL;
-	struct udma_hmap_node *node;
-	uint32_t table_id;
-	uint32_t mask;
-
-	table_id = jid >> ctx->jettys_in_tbl_shift;
-	mask = (1 << ctx->jettys_in_tbl_shift) - 1;
-
-	if (ctx->jetty_table[table_id].refcnt)
-		jetty = ctx->jetty_table[table_id].table[jid & mask].jetty;
-
-	return jetty;
-}
-
 static void udma_parse_opcode_for_res(struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
-	uint8_t opcode = udma_reg_read(cqe, CQE_OPCODE);
+	uint8_t opcode = cqe->opcode;
 
 	switch (opcode) {
 	case HW_CQE_OPC_SEND:
@@ -311,54 +275,72 @@ static void handle_um_header(struct udma_u_jfr *jfr, uint32_t wqe_idx,
 	urma_u32_to_eid(deid, &cr->remote_id.eid);
 }
 
+static struct udma_u_jfr *get_common_jfr(struct udma_u_context *udma_ctx,
+					 struct udma_jfc_cqe *cqe,
+					 urma_cr_t *cr)
+{
+	static struct udma_u_jetty *jetty = NULL;
+	struct common_jetty *jetty_table;
+	uint32_t qpn = cr->tpn;
+	struct udma_u_jfr *jfr;
+	uint32_t table_id;
+	uint32_t mask;
+	bool is_jetty;
+
+	cr->remote_id.id = cqe->rmt_qpn;
+	if ((jetty != NULL) && (jetty->urma_jetty.jetty_id.id == qpn)) {
+		cr->local_id = qpn;
+		return jetty->udma_jfr;
+	}
+
+	table_id = qpn >> udma_ctx->jettys_in_tbl_shift;
+	mask = (1 << udma_ctx->jettys_in_tbl_shift) - 1;
+	if (udma_ctx->jetty_table[table_id].refcnt) {
+		jetty_table = udma_ctx->jetty_table[table_id].table;
+		is_jetty = jetty_table[qpn & mask].is_jetty;
+	} else {
+		URMA_LOG_ERR("Failed to get jfr. QP 0x%x not found.\n", qpn);
+		return NULL;
+	}
+	if (is_jetty) {
+		jetty = (struct udma_u_jetty *)jetty_table[qpn & mask].jetty;
+		if (!jetty) {
+			URMA_LOG_ERR("Failed to get jetty by QP 0x%x.\n", qpn);
+			return NULL;
+		}
+		jfr = jetty->udma_jfr;
+		cr->local_id = qpn;
+	} else {
+		jfr = (struct udma_u_jfr *)jetty_table[qpn & mask].jetty;
+		if (jfr == NULL) {
+			URMA_LOG_ERR("Failed to get share jfr by QP 0x%x.\n", qpn);
+			return NULL;
+		}
+		cr->local_id = jfr->jfrn;
+	}
+
+	return jfr;
+}
+
 static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 			     struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
-	static struct udma_u_jetty *jetty;
-	static struct udma_u_jfr *jfr;
+	struct udma_u_jfr *jfr;
 	uint32_t wqe_idx;
-	uint32_t rmt_qpn;
-	bool if_jetty;
-	uint32_t qpn;
-	uint32_t jid;
 
-	wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
-	qpn = udma_reg_read(cqe, CQE_LCL_QPN);
-	rmt_qpn = udma_reg_read(cqe, CQE_RMT_QPN);
+	jfr = get_common_jfr(udma_ctx, cqe, cr);
+	if (!jfr)
+		return JFC_POLL_ERR;
 
-	if_jetty = is_jetty(udma_ctx, qpn);
-	if (if_jetty) {
-		jid = get_jid_from_qpn(qpn, udma_ctx->num_qps_shift, udma_ctx->num_jetty_shift);
-		if ((jetty == NULL) || (jetty->urma_jetty.jetty_id.id != jid))
-			jetty = get_jetty_from_cqe(udma_ctx, cqe, qpn, jid);
-		if (jetty == NULL) {
-			URMA_LOG_INFO("failed to poll jfc. QP 0x%x has been destroyed", qpn);
-			return JFC_POLL_ERR;
-		}
-		jfr = jetty->udma_jfr;
-		cr->local_id = jetty->urma_jetty.jetty_id.id;
-		cr->remote_id.id = get_jid_from_qpn(rmt_qpn,
-						    udma_ctx->num_qps_shift,
-						    udma_ctx->num_jetty_shift);
-	} else {
-		jfr = get_jfr_from_cqe(udma_ctx, cqe);
-		if (jfr == NULL) {
-			URMA_LOG_INFO("failed to poll jfc for jfr. QP 0x%x destroyed",
-					qpn);
-			return JFC_POLL_ERR;
-		}
-		cr->local_id = jfr->jfrn;
-		cr->remote_id.id = get_jid_from_qpn(rmt_qpn,
-						    udma_ctx->num_qps_shift,
-						    udma_ctx->num_jfs_shift);
-	}
-
-	if (udma_reg_read(cqe, CQE_CQE_INLINE) == CQE_INLINE_ENABLE)
+	if (cqe->cqe_inline == CQE_INLINE_ENABLE)
 		handle_recv_inl_cqe(cqe, jfr, cr);
 
-	if (jfr->share_jfr == UDMA_NO_SHARE_JFR && jfr->trans_mode == URMA_TM_RC) {
+	if (jfr->rq_en) {
+		cr->user_ctx = jfr->wrid[jfr->idx_que.tail & (jfr->wqe_cnt - 1)];
 		jfr->idx_que.tail++;
 	} else {
+		wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
+		cr->user_ctx = jfr->wrid[wqe_idx];
 		if (!jfr->lock_free)
 			pthread_spin_lock(&jfr->lock);
 		udma_bitmap_free_idx(jfr->idx_que.bitmap,
@@ -368,12 +350,13 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 			pthread_spin_unlock(&jfr->lock);
 	}
 
-	cr->user_ctx = jfr->wrid[wqe_idx];
-
-	if (jfr->trans_mode == URMA_TM_UM)
+	if (jfr->trans_mode == URMA_TM_UM) {
+		wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
 		handle_um_header(jfr, wqe_idx, cr);
+	}
 
 	udma_parse_opcode_for_res(cqe, cr);
+	cr->flag.bs.s_r = 1;
 
 	return JFC_OK;
 }
@@ -396,19 +379,51 @@ static void dca_detach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
 		exec_detach_dca_mem_cmd(ctx, &attr);
 }
 
-static struct udma_qp *get_sqp_in_hash(struct udma_u_context *udma_ctx, uint32_t qpn)
+static struct udma_qp *get_qp_from_cqe(struct udma_u_context *udma_ctx,
+				       struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
-	struct udma_jfs_qp_node *qp_node;
-	struct udma_hmap_node *node;
+	struct common_jetty *jetty_table;
+	struct udma_u_jetty *jetty;
+	static struct udma_qp *sqp;
+	struct udma_u_jfs *jfs;
+	uint32_t qpn = cr->tpn;
+	uint32_t table_id;
+	uint32_t mask;
+	bool is_jetty;
 
-	node = udma_table_first_with_hash(&(udma_ctx->jfs_qp_table),
-					  &(udma_ctx->jfs_qp_table_lock), qpn);
-	if (!node) {
-		URMA_LOG_ERR("failed to search for node. QP 0x%x has been destroyed.\n", qpn);
+	if ((sqp != NULL) && (sqp->qp_num == qpn))
+		return sqp;
+
+	table_id = qpn >> udma_ctx->jettys_in_tbl_shift;
+	mask = (1 << udma_ctx->jettys_in_tbl_shift) - 1;
+	if (udma_ctx->jetty_table[table_id].refcnt) {
+		jetty_table = udma_ctx->jetty_table[table_id].table;
+		is_jetty = jetty_table[qpn & mask].is_jetty;
+	} else {
+		URMA_LOG_ERR("Failed get qp. QP 0x%x been destroyed.\n", qpn);
 		return NULL;
 	}
-	qp_node = to_udma_jfs_qp_node(node);
-	return qp_node->jfs_qp;
+
+	if (is_jetty) {
+		jetty = (struct udma_u_jetty *)jetty_table[qpn & mask].jetty;
+		if (jetty == NULL) {
+			URMA_LOG_ERR("Failed toget jetty from QP 0x%x.\n", qpn);
+			return NULL;
+		}
+		if (jetty->tp_mode == URMA_TM_RC)
+			sqp = jetty->rc_node->qp;
+		else
+			sqp = jetty->um_qp;
+	} else {
+		jfs = (struct udma_u_jfs *)jetty_table[qpn & mask].jetty;
+		if (jfs == NULL) {
+			URMA_LOG_ERR("Failed to get jfs from QP 0x%x.\n", qpn);
+			return NULL;
+		}
+		sqp = jfs->um_qp;
+	}
+
+	return sqp;
 }
 
 static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
@@ -416,43 +431,22 @@ static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 			     urma_cr_t *cr)
 {
 	static struct udma_qp *sqp;
-	struct udma_u_jetty *jetty;
-	uint32_t wqe_idx;
-	bool if_jetty;
-	uint32_t jid;
-	uint32_t qpn;
 
-	qpn = udma_reg_read(cqe, CQE_LCL_QPN);
-	wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
-	if_jetty = is_jetty(udma_ctx, qpn);
-	if ((sqp == NULL) || sqp->qp_num != qpn) {
-		if (if_jetty) {
-			jid = get_jid_from_qpn(qpn, udma_ctx->num_qps_shift, udma_ctx->num_jetty_shift);
-			jetty = get_jetty_from_cqe(udma_ctx, cqe, qpn, jid);
-			if (jetty == NULL) {
-				URMA_LOG_ERR("Failed to poll jfc for jetty. QP 0x%x has been destroyed", qpn);
-				return JFC_POLL_ERR;
-			}
-			if (jetty->tp_mode == URMA_TM_RC)
-				sqp = jetty->rc_node->qp;
-			else
-				sqp = get_sqp_in_hash(udma_ctx, qpn);
-		} else {
-			sqp = get_sqp_in_hash(udma_ctx, qpn);
-		}
+	if ((sqp == NULL) || (sqp->qp_num != cr->tpn)) {
+		sqp = get_qp_from_cqe(udma_ctx, cqe, cr);
+		if (sqp == NULL)
+			return JFC_POLL_ERR;
 	}
-	if (sqp == NULL)
-		return JFC_POLL_ERR;
-	sqp->sq.tail += (wqe_idx - sqp->sq.tail) & (sqp->sq.wqe_cnt - 1);
 
-	cr->flag.bs.jetty = if_jetty ? 1 : 0;
+	sqp->sq.tail += (cqe->wqe_idx - sqp->sq.tail) & (sqp->sq.wqe_cnt - 1);
+
 	/* jfs also uses jetty_id */
 	cr->local_id = sqp->jetty_id;
 	cr->user_ctx = sqp->sq.wrid[sqp->sq.tail & (sqp->sq.wqe_cnt - 1)];
-	cr->flag.bs.s_r = 1;
-	cr->tpn = qpn;
+	cr->flag.bs.s_r = 0;
+	cr->flag.bs.jetty = sqp->is_jetty;
 
-	sqp->sq.tail++;
+	++sqp->sq.tail;
 	if (sqp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
 		dca_detach_qp_buf(udma_ctx, sqp);
 
@@ -463,19 +457,13 @@ static int parse_cqe_for_jfc(struct udma_u_context *udma_ctx, struct udma_u_jfc 
 			     urma_cr_t *cr)
 {
 	struct udma_jfc_cqe *cqe = jfc->cqe;
-	static struct udma_u_jetty *jetty;
-	static struct udma_u_jfr *jfr;
-	int ret = JFC_OK;
-	uint8_t status;
-	uint32_t qpn;
+	int ret;
 
-	cr->completion_len = udma_reg_read(cqe, CQE_BYTE_CNT);
-	qpn = udma_reg_read(cqe, CQE_LCL_QPN);
-	status = udma_reg_read(cqe, CQE_STATUS);
-	cr->status = get_cr_status(status);
+	cr->completion_len = cqe->byte_cnt;
+	cr->tpn = cqe->lcl_qpn;
+	cr->status = get_cr_status(cqe->status);
 
-	cr->tpn = qpn;
-	if (udma_reg_read(cqe, CQE_S_R) == CQE_FOR_SEND)
+	if (cqe->s_r == CQE_FOR_SEND)
 		ret = parse_cqe_for_req(udma_ctx, cqe, cr);
 	else
 		ret = parse_cqe_for_res(udma_ctx, cqe, cr);
@@ -528,7 +516,6 @@ static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 			   urma_cr_t *cr)
 {
 	struct udma_jfc_cqe *cqe;
-	uint8_t status;
 
 	cqe = next_cqe_sw(udma_u_jfc);
 	if (!cqe)
@@ -542,8 +529,7 @@ static int udma_u_poll_one(struct udma_u_context *udma_ctx,
 	if (parse_cqe_for_jfc(udma_ctx, udma_u_jfc, cr))
 		return JFC_POLL_ERR;
 
-	status = udma_reg_read(cqe, CQE_STATUS);
-	if (status != UDMA_CQE_SUCCESS && status != UDMA_CQE_WR_FLUSH_ERR) {
+	if (cr->status != URMA_CR_SUCCESS && cr->status != URMA_CR_WR_FLUSH_ERR) {
 		dump_err_cqe(cqe, udma_u_jfc);
 		if (exec_jfc_flush_cqe_cmd(udma_ctx, cqe))
 			URMA_LOG_ERR("flush cqe failed.\n");
@@ -559,6 +545,13 @@ int udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 	bool need_cq_clean = false;
 	int err = JFC_POLL_ERR;
 	int npolled;
+
+	if (udma_state_reseted(udma_ctx)) {
+		cr->status = URMA_CR_WR_FLUSH_ERR_DONE;
+		npolled = UDMA_POLL_SCR_CNT;
+
+		return npolled;
+	}
 
 	if (!udma_u_jfc->lock_free)
 		pthread_spin_lock(&udma_u_jfc->lock);

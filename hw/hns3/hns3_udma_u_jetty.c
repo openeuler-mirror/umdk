@@ -689,9 +689,7 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 static struct udma_qp *get_qp_for_tjetty(struct udma_u_jetty *udma_jetty,
 					 urma_target_jetty_t *tjetty)
 {
-	struct udma_hmap_node *hmap_node;
 	struct udma_qp *udma_qp = NULL;
-	uint32_t tjetty_index;
 
 	if (udma_jetty->rc_node->tjetty == NULL) {
 		URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %u.\n",
