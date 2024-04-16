@@ -16,6 +16,7 @@
 #ifndef _UDMA_U_JETTY_H
 #define _UDMA_U_JETTY_H
 
+#include <stdatomic.h>
 #include "urma_types.h"
 #include "urma_provider.h"
 #include "hns3_udma_u_common.h"

@@ -519,7 +519,7 @@ static int set_rc_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 	dseg = (char *)dseg + sizeof(struct udma_jfs_wqe);
 
 	if (total_len <= UDMA_MAX_RC_INL_INN_SZ) {
-		udma_reg_clear(wqe, UDMAWQE_INLINE_TYPE);
+		wqe->inline_type = 0;
 
 		for (i = 0; i < num_sge; i++) {
 			memcpy(dseg, (void *)(uintptr_t)(sg_list[i].addr),
@@ -527,7 +527,7 @@ static int set_rc_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 			dseg = (char *)dseg + sg_list[i].len;
 		}
 	} else {
-		udma_reg_enable(wqe, UDMAWQE_INLINE_TYPE);
+		wqe->inline_type = 1;
 
 		ret = fill_ext_sge_inl_data(qp, total_len, sg_list, num_sge);
 		if (ret) {
@@ -554,7 +554,7 @@ static void set_um_inl_seg(struct udma_jfs_um_wqe *wqe, uint8_t *data)
 
 	udma_reg_write(wqe, UDMAUMWQE_INLINE_DATA_47_24, tmp_data);
 	udma_reg_write(wqe, UDMAUMWQE_INLINE_DATA_63_48,
-		      *loc >> UDMAUMWQE_INLINE_SHIFT2);
+		       *loc >> UDMAUMWQE_INLINE_SHIFT2);
 }
 
 static void fill_ud_inn_inl_data(uint32_t num_sge, struct udma_jfs_um_wqe *wqe,
@@ -646,12 +646,13 @@ static int udma_parse_rc_write_wr(urma_rw_wr_t *rw, struct udma_jfs_wqe *jfs_wqe
 {
 	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)(jfs_wqe + 1);
 	struct udma_sge sg_list[UDMA_MAX_SGE_NUM];
+	uint32_t total_num_sge =  rw->src.num_sge;
 	uint32_t total_length = 0;
 	uint32_t valid_num = 0;
 	int ret = 0;
 
-	for (uint32_t i = 0; i < rw->src.num_sge; i++) {
-		if (rw->src.sge[i].len == 0)
+	for (uint32_t i = 0; i < total_num_sge; i++) {
+		if (unlikely(rw->src.sge[i].len == 0))
 			continue;
 		sg_list[valid_num].len = rw->src.sge[i].len;
 		sg_list[valid_num].addr = rw->src.sge[i].addr;
@@ -663,7 +664,7 @@ static int udma_parse_rc_write_wr(urma_rw_wr_t *rw, struct udma_jfs_wqe *jfs_wqe
 	jfs_wqe->va = htole64(rw->dst.sge[0].addr);
 	jfs_wqe->rkey = htole32(rw->dst.sge[0].tseg->seg.token_id);
 	jfs_wqe->msg_len = htole32(total_length);
-	udma_reg_write(jfs_wqe, UDMAWQE_SGE_NUM, valid_num);
+	jfs_wqe->sge_num = valid_num;
 
 	if (is_inline)
 		ret = set_rc_inl(qp, valid_num, total_length, jfs_wqe, &sg_list[0]);
@@ -694,7 +695,7 @@ static int udma_parse_rc_send_wr(urma_send_wr_t *send, struct udma_jfs_wqe *jfs_
 	}
 
 	jfs_wqe->msg_len = htole32(total_length);
-	udma_reg_write(jfs_wqe, UDMAWQE_SGE_NUM, valid_num);
+	jfs_wqe->sge_num = valid_num;
 
 	if (is_inline)
 		ret = set_rc_inl(qp, valid_num, total_length, jfs_wqe, &sg_list[0]);
@@ -757,14 +758,11 @@ static int udma_parse_notify_params(urma_rw_wr_t *rw,
 static int udma_parse_rc_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wqe *jfs_wqe,
 				struct udma_qp *qp)
 {
-	bool is_inline = false;
-
-	if (wr->flag.bs.inline_flag == 1)
-		is_inline = true;
+	bool is_inline = wr->flag.bs.inline_flag == 1;
 
 	switch (wr->opcode) {
 	case URMA_OPC_SEND:
-		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_SEND);
+		jfs_wqe->opcode = UDMA_OPCODE_SEND;
 		return udma_parse_rc_send_wr(&wr->send, jfs_wqe, qp, is_inline);
 	case URMA_OPC_SEND_IMM:
 		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_SEND_WITH_IMM);
@@ -777,7 +775,7 @@ static int udma_parse_rc_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wqe *jfs_wqe,
 			       (uint32_t)(wr->send.tseg->seg.token_id));
 		return udma_parse_rc_send_wr(&wr->send, jfs_wqe, qp, is_inline);
 	case URMA_OPC_WRITE:
-		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE, UDMA_OPCODE_RDMA_WRITE);
+		jfs_wqe->opcode = UDMA_OPCODE_RDMA_WRITE;
 		return udma_parse_rc_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
 	case URMA_OPC_WRITE_IMM:
 		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE,
@@ -803,10 +801,7 @@ static int udma_parse_rc_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wqe *jfs_wqe,
 static int udma_parse_um_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_um_wqe *jfs_wqe,
 				struct udma_qp *qp)
 {
-	bool is_inline = false;
-
-	if (wr->flag.bs.inline_flag == 1)
-		is_inline = true;
+	bool is_inline = wr->flag.bs.inline_flag == 1;
 
 	switch (wr->opcode) {
 	case URMA_OPC_SEND:
@@ -874,26 +869,24 @@ static urma_status_t udma_set_um_wqe(struct udma_u_context *udma_ctx, void *wqe,
 }
 
 static urma_status_t udma_set_rc_wqe(void *wqe, struct udma_qp *qp,
-				     urma_jfs_wr_t *wr)
+				     urma_jfs_wr_t *wr, uint32_t nreq)
 {
 	struct udma_jfs_wqe *jfs_wqe = (struct udma_jfs_wqe *)wqe;
-	urma_status_t ret = URMA_SUCCESS;
 
-	udma_reg_write(jfs_wqe, UDMAWQE_MSG_START_SGE_IDX,
-		       qp->next_sge & (qp->ex_sge.sge_cnt - 1));
+	jfs_wqe->msg_start_sge_idx = qp->next_sge & (qp->ex_sge.sge_cnt - 1);
 
 	if (udma_parse_rc_jfs_wr(wr, jfs_wqe, qp) != 0) {
 		URMA_LOG_ERR("Failed to parse wr.\n");
 		return URMA_EINVAL;
 	}
 
-	udma_reg_write_bool(jfs_wqe, UDMAWQE_CQE, wr->flag.bs.complete_enable);
-	udma_reg_write_bool(jfs_wqe, UDMAWQE_FENCE, wr->flag.bs.fence);
-	udma_reg_write_bool(jfs_wqe, UDMAWQE_SE, wr->flag.bs.solicited_enable);
-	udma_reg_write_bool(jfs_wqe, UDMAWQE_INLINE, wr->flag.bs.inline_flag);
+	jfs_wqe->cqe = wr->flag.bs.complete_enable;
+	jfs_wqe->fence = wr->flag.bs.fence;
+	jfs_wqe->se = wr->flag.bs.solicited_enable;
+	jfs_wqe->inline_flag = wr->flag.bs.inline_flag;
+	jfs_wqe->owner = !((qp->sq.head + nreq) & BIT(qp->sq.shift));
 
-
-	return ret;
+	return URMA_SUCCESS;
 }
 
 static int udma_wq_overflow(struct udma_wq *wq)
@@ -999,7 +992,7 @@ struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
 	return udma_qp;
 }
 
-static int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp)
 {
 	urma_context_t *ctx = &udma_ctx->urma_ctx;
@@ -1053,7 +1046,7 @@ static int dca_attach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
 	return ret;
 }
 
-static urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp)
+urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp)
 {
 	int ret;
 
@@ -1082,16 +1075,11 @@ void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 
 urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 				  struct udma_qp *udma_qp,
-				  urma_jfs_wr_t *wr, void **wqe)
+				  urma_jfs_wr_t *wr, void **wqe, uint32_t nreq)
 {
+	bool dca_enable = udma_qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH;
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx;
-
-	ret = check_dca_valid(udma_ctx, udma_qp);
-	if (ret) {
-		URMA_LOG_ERR("Failed to check send, qpn = %lu.\n", udma_qp->qp_num);
-		goto out;
-	}
 
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
@@ -1105,24 +1093,21 @@ urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 		goto out;
 	}
 
-	wqe_idx = udma_qp->sq.head & (udma_qp->sq.wqe_cnt - 1);
+	wqe_idx = (udma_qp->sq.head + nreq) & (udma_qp->sq.wqe_cnt - 1);
 	*wqe = get_send_wqe(udma_qp, wqe_idx);
 	udma_qp->sq.wrid[wqe_idx] = wr->user_ctx;
 
-	ret = udma_set_rc_wqe(*wqe, udma_qp, wr);
+	ret = udma_set_rc_wqe(*wqe, udma_qp, wr, nreq);
 	if (ret)
 		goto out;
 
-	udma_qp->sq.head += 1;
-	if (udma_qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+	if (dca_enable)
 		udma_write_dca_wqe(udma_qp, *wqe);
 
-	*udma_qp->sdb = udma_qp->sq.head;
-	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
-		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
+	*udma_qp->sdb = udma_qp->sq.head + nreq;
 
 out:
-	if (udma_qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
+	if (dca_enable)
 		udma_dca_stop_post(&udma_ctx->dca_ctx, udma_qp->dca_wqe.dcan);
 
 	return ret;
@@ -1243,7 +1228,7 @@ urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	}
 	if (udma_wq_overflow(&udma_qp->sq)) {
 		URMA_LOG_ERR("JFS overflow. pi = %u, ci = %u.\n",
-				udma_qp->sq.head, udma_qp->sq.tail);
+			     udma_qp->sq.head, udma_qp->sq.tail);
 		ret = URMA_ENOMEM;
 		goto out;
 	}
@@ -1254,7 +1239,7 @@ urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 	if (tp_mode == URMA_TM_UM)
 		ret = udma_set_um_wqe(udma_ctx, wqe, udma_qp, wr);
 	else
-		ret = udma_set_rc_wqe(wqe, udma_qp, wr);
+		ret = udma_set_rc_wqe(wqe, udma_qp, wr, 0);
 	if (ret)
 		goto out;
 

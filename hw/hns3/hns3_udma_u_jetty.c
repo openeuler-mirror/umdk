@@ -515,7 +515,7 @@ urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
 	ret = urma_cmd_import_jetty(ctx, tjetty, &cfg, &udata);
 	if (ret) {
 		URMA_LOG_ERR("import jetty failed, ret = %d.\n", ret);
-		free(tjetty);
+		free(udma_target_jetty);
 		return NULL;
 	}
 
@@ -740,24 +740,31 @@ static urma_status_t udma_u_post_jetty_rc_wr(struct udma_u_context *udma_ctx,
 					     urma_jfs_wr_t **bad_wr)
 {
 	struct udma_qp *udma_qp;
-	uint32_t wr_cnt = 0;
 	urma_status_t ret;
-	urma_jfs_wr_t *it;
+	uint32_t nreq;
 	void *wqe;
 
 	udma_qp = udma_jetty->rc_node->qp;
 
-	for (it = wr; it != NULL; it = it->next) {
-		ret = udma_u_post_rcqp_wr(udma_ctx, udma_qp, it, &wqe);
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret)
+		return ret;
+
+	for (nreq = 0; wr; ++nreq, wr = wr->next) {
+		ret = udma_u_post_rcqp_wr(udma_ctx, udma_qp, wr, &wqe, nreq);
 		if (ret) {
-			*bad_wr = it;
+			*bad_wr = wr;
 			break;
 		}
-		wr_cnt++;
 	}
 
-	if (wr_cnt > 0)
-		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, wr_cnt);
+	if (likely(nreq)) {
+		udma_qp->sq.head += nreq;
+		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, nreq);
+	}
+
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 	return ret;
 }
