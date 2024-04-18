@@ -37,6 +37,7 @@ static urma_ops_t g_udma_u_ops = {
 	.modify_jfc = udma_u_modify_jfc,
 	.delete_jfc = udma_u_delete_jfc,
 	.create_jfs = udma_u_create_jfs,
+	.flush_jfs = udma_u_flush_jfs,
 	.delete_jfs = udma_u_delete_jfs,
 	.create_jfr = udma_u_create_jfr,
 	.modify_jfr = udma_u_modify_jfr,
@@ -45,6 +46,7 @@ static urma_ops_t g_udma_u_ops = {
 	.unimport_jfr = udma_u_unimport_jfr,
 	.create_jetty = udma_u_create_jetty,
 	.modify_jetty = udma_u_modify_jetty,
+	.flush_jetty = udma_u_flush_jetty,
 	.delete_jetty = udma_u_delete_jetty,
 	.import_jetty = udma_u_import_jetty,
 	.unimport_jetty = udma_u_unimport_jetty,
@@ -262,8 +264,10 @@ static urma_status_t init_jetty_x_table(struct udma_u_context *udma_u_ctx)
 		ret = URMA_ENOMEM;
 		goto err_init_jfr_table;
 	}
-	if (udma_u_ctx->num_jetty_shift > UDMA_JETTY_TABLE_SHIFT)
-		udma_u_ctx->jettys_in_tbl_shift = udma_u_ctx->num_jetty_shift - UDMA_JETTY_TABLE_SHIFT;
+
+	if (udma_u_ctx->num_qps_shift > UDMA_JETTY_TABLE_SHIFT)
+		udma_u_ctx->jettys_in_tbl_shift =
+			udma_u_ctx->num_qps_shift - UDMA_JETTY_TABLE_SHIFT;
 	else
 		udma_u_ctx->jettys_in_tbl_shift = 0;
 

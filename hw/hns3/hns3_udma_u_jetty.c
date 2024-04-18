@@ -853,3 +853,32 @@ urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
 
 	return udma_u_modify_jfr(&udma_jetty->udma_jfr->urma_jfr, &jfr_attr);
 }
+
+int udma_u_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
+{
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	struct udma_qp *qp;
+	int n_flushed = 0;
+
+	if (udma_jetty->tp_mode == URMA_TM_RC)
+		qp = udma_jetty->rc_node->qp;
+	else if (udma_jetty->tp_mode == URMA_TM_UM)
+		qp = udma_jetty->um_qp;
+	else
+		return n_flushed;
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_lock(&udma_jetty->lock);
+
+	for (; n_flushed < cr_cnt; ++n_flushed) {
+		if (qp->sq.head == qp->sq.tail)
+			break;
+
+		udma_fill_scr(qp, cr + n_flushed);
+	}
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_unlock(&udma_jetty->lock);
+
+	return n_flushed;
+}

@@ -342,6 +342,20 @@ static inline struct udma_jfs_node *to_udma_jfs_node(struct udma_hmap_node *node
 	return container_of(node, struct udma_jfs_node, node);
 }
 
+inline void udma_fill_scr(struct udma_qp *qp, urma_cr_t *cr)
+{
+	struct udma_wq *wq = &qp->sq;
+
+	cr->local_id = qp->jetty_id;
+	cr->user_ctx = wq->wrid[wq->tail & (wq->wqe_cnt - 1)];
+	cr->flag.bs.s_r = 0;
+	cr->flag.bs.jetty = qp->is_jetty;
+	cr->tpn = qp->qp_num;
+	cr->status = URMA_CR_WR_FLUSH_ERR;
+
+	++wq->tail;
+}
+
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
@@ -365,5 +379,6 @@ void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp);
 urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp);
+int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
 
 #endif /* _UDMA_JFS_H */

@@ -1260,3 +1260,25 @@ out:
 
 	return ret;
 }
+
+int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_jfs(jfs);
+	struct udma_qp *qp = udma_jfs->um_qp;
+	int n_flushed;
+
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_lock(&udma_jfs->lock);
+
+	for (n_flushed = 0; n_flushed < cr_cnt; ++n_flushed) {
+		if (qp->sq.head == qp->sq.tail)
+			break;
+
+		udma_fill_scr(qp, cr + n_flushed);
+	}
+
+	if (!udma_jfs->lock_free)
+		(void)pthread_spin_unlock(&udma_jfs->lock);
+
+	return n_flushed;
+}
