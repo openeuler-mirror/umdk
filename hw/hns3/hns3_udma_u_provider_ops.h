@@ -76,16 +76,6 @@ struct udma_dca_context_attr {
 	uint64_t dca_min_size;
 };
 
-enum udma_u_user_ctl_handlers {
-	UDMA_U_USER_CRTL_INVALID,
-	UDMA_U_USER_CRTL_POST_JFS_EX,
-	UDMA_U_USER_CRTL_CONFIG_POE,
-	UDMA_U_USER_CRTL_QUERY_POE,
-	UDMA_U_USER_CRTL_CREATE_JFC_EX,
-	UDMA_U_USER_CRTL_UPDATE_JFS_CI,
-	UDMA_U_USER_CRTL_DELETE_JFC_EX,
-};
-
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
@@ -142,7 +132,7 @@ struct udma_u_context {
 	pthread_rwlock_t	jetty_table_lock;
 	struct {
 		struct common_jetty	*table;
-		int					refcnt;
+		int			refcnt;
 	} jetty_table[UDMA_JETTY_TABLE_NUM];
 	uint32_t		jettys_in_tbl_shift;
 	uint32_t		jettys_in_tbl;
