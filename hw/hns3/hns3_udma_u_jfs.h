@@ -18,9 +18,9 @@
 
 #include "urma_types.h"
 #include "urma_provider.h"
+#include "hns3_udma_u_buf.h"
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
-#include "hns3_udma_u_buf.h"
 
 #define UDMA_SIZE_CONNECT_NODE_TABLE 99
 #define UDMA_JFS_QP_TABLE_SIZE 99
@@ -34,17 +34,37 @@ struct connect_node_table {
 };
 
 struct udma_jfs_wqe {
-	uint32_t         byte_4;
-	uint32_t         msg_len;
+	/* byte4 */
+	uint32_t		opcode : 5;
+	uint32_t		db_sl_l : 2;
+	uint32_t		owner : 1;
+	uint32_t		cqe : 1;
+	uint32_t		fence : 1;
+	uint32_t		so : 1;
+	uint32_t		se : 1;
+	uint32_t		inline_flag : 1;
+	uint32_t		db_sl_h : 2;
+	uint32_t		wqe_idx : 16;
+	uint32_t		flag : 1;
+
+	uint32_t		msg_len;
 	union {
-		uint32_t inv_key;
-		uint32_t immtdata;
-		uint32_t new_rkey;
+		uint32_t	inv_key;
+		uint32_t	immtdata;
+		uint32_t	new_rkey;
 	};
-	uint32_t         byte_16;
-	uint32_t         byte_20;
-	uint32_t         rkey;
-	uint64_t         va;
+
+	/* byte16 */
+	uint32_t		byte_16 : 24;
+	uint32_t		sge_num : 8;
+
+	/* byte20 */
+	uint32_t		msg_start_sge_idx : 24;
+	uint32_t		reduce_core : 7;
+	uint32_t		inline_type : 1;
+
+	uint32_t		rkey;
+	uint64_t		va;
 };
 
 struct udma_jfs_um_wqe {
@@ -53,27 +73,27 @@ struct udma_jfs_um_wqe {
 };
 
 struct udma_spinlock {
-	pthread_spinlock_t lock;
-	int                need_lock;
+	pthread_spinlock_t	lock;
+	int			need_lock;
 };
 
 struct udma_wq {
-	pthread_spinlock_t  lock;
-	uintptr_t           *wrid;
-	uint32_t            wqe_cnt;
-	uint32_t            head;
-	uint32_t            tail;
-	uint32_t            max_gs;
-	uint32_t            ext_sge_cnt;
-	uint32_t            wqe_shift;
-	uint32_t            shift;
-	int                 offset;
-	uint8_t             priority;
+	pthread_spinlock_t	lock;
+	uintptr_t		*wrid;
+	uint32_t		wqe_cnt;
+	uint32_t		head;
+	uint32_t		tail;
+	uint32_t		max_gs;
+	uint32_t		ext_sge_cnt;
+	uint32_t		wqe_shift;
+	uint32_t		shift;
+	int			offset;
+	uint8_t			priority;
 };
 
 struct udma_qp_buf {
-	void     *buf;
-	uint32_t length;
+	void		*buf;
+	uint32_t	length;
 };
 
 struct udma_sge_ex {
@@ -141,24 +161,24 @@ struct udma_jfs_node {
 };
 
 enum udma_jfs_opcode {
-	UDMA_OPCODE_SEND                       = 0x00,
-	UDMA_OPCODE_SEND_WITH_INV              = 0x01,
-	UDMA_OPCODE_SEND_WITH_IMM              = 0x02,
-	UDMA_OPCODE_RDMA_WRITE                 = 0x03,
-	UDMA_OPCODE_RDMA_WRITE_WITH_IMM        = 0x04,
-	UDMA_OPCODE_RDMA_READ                  = 0x05,
-	UDMA_OPCODE_ATOM_CMP_AND_SWAP          = 0x06,
-	UDMA_OPCODE_ATOM_FETCH_AND_ADD         = 0x07,
-	UDMA_OPCODE_ATOM_MSK_CMP_AND_SWAP      = 0x08,
-	UDMA_OPCODE_ATOM_MSK_FETCH_AND_ADD     = 0x09,
-	UDMA_OPCODE_FAST_REG_PMR               = 0x0a,
-	UDMA_OPCODE_BIND_MW                    = 0x0c,
-	UDMA_OPCODE_NOP                        = 0x13,
-	UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY     = 0x16,
-	UDMA_OPCODE_ATOMIC_WRITE               = 0x17,
-	UDMA_OPCODE_PERSISTENCE_WRITE          = 0x19,
-	UDMA_OPCODE_PERSISTENCE_WRITE_WITH_IMM = 0x1a,
-	UDMA_OPCODE_JFS_MAX                    = 0x1f,
+	UDMA_OPCODE_SEND			= 0x00,
+	UDMA_OPCODE_SEND_WITH_INV		= 0x01,
+	UDMA_OPCODE_SEND_WITH_IMM		= 0x02,
+	UDMA_OPCODE_RDMA_WRITE			= 0x03,
+	UDMA_OPCODE_RDMA_WRITE_WITH_IMM		= 0x04,
+	UDMA_OPCODE_RDMA_READ			= 0x05,
+	UDMA_OPCODE_ATOM_CMP_AND_SWAP		= 0x06,
+	UDMA_OPCODE_ATOM_FETCH_AND_ADD		= 0x07,
+	UDMA_OPCODE_ATOM_MSK_CMP_AND_SWAP	= 0x08,
+	UDMA_OPCODE_ATOM_MSK_FETCH_AND_ADD	= 0x09,
+	UDMA_OPCODE_FAST_REG_PMR		= 0x0a,
+	UDMA_OPCODE_BIND_MW			= 0x0c,
+	UDMA_OPCODE_NOP				= 0x13,
+	UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY	= 0x16,
+	UDMA_OPCODE_ATOMIC_WRITE		= 0x17,
+	UDMA_OPCODE_PERSISTENCE_WRITE		= 0x19,
+	UDMA_OPCODE_PERSISTENCE_WRITE_WITH_IMM	= 0x1a,
+	UDMA_OPCODE_JFS_MAX			= 0x1f,
 };
 
 #define UDMAWQE_FIELD_LOC(h, l)		((uint64_t)(h) << 32 | (l))
@@ -248,24 +268,24 @@ enum udma_jfs_opcode {
 #define UDMA_MAX_SGE_NUM 64
 
 struct udma_sge_info {
-	uint32_t valid_num; /* sge length is not 0 */
-	uint32_t start_idx; /* start position of extend sge */
-	uint32_t total_len; /* total length of valid sges */
+	uint32_t	valid_num; /* sge length is not 0 */
+	uint32_t	start_idx; /* start position of extend sge */
+	uint32_t	total_len; /* total length of valid sges */
 };
 
 struct udma_sge {
-	uint32_t len;
-	uint32_t lkey;
-	uint64_t addr;
+	uint32_t	len;
+	uint32_t	lkey;
+	uint64_t	addr;
 };
 
 struct udma_jfs_wr_info {
-	uint32_t            total_len;
-	uint64_t            inv_key_immtdata;
-	uint8_t             opcode;
-	uint32_t            num_sge;
-	uint64_t            dst_addr;
-	uint32_t            rkey;
+	uint32_t	total_len;
+	uint64_t	inv_key_immtdata;
+	uint8_t		opcode;
+	uint32_t	num_sge;
+	uint64_t	dst_addr;
+	uint32_t	rkey;
 };
 
 #if __GNUC__ >= 3
@@ -322,13 +342,27 @@ static inline struct udma_jfs_node *to_udma_jfs_node(struct udma_hmap_node *node
 	return container_of(node, struct udma_jfs_node, node);
 }
 
+inline void udma_fill_scr(struct udma_qp *qp, urma_cr_t *cr)
+{
+	struct udma_wq *wq = &qp->sq;
+
+	cr->local_id = qp->jetty_id;
+	cr->user_ctx = wq->wrid[wq->tail & (wq->wqe_cnt - 1)];
+	cr->flag.bs.s_r = 0;
+	cr->flag.bs.jetty = qp->is_jetty;
+	cr->tpn = qp->qp_num;
+	cr->status = URMA_CR_WR_FLUSH_ERR;
+
+	++wq->tail;
+}
+
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 				 urma_jfs_wr_t **bad_wr);
 urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 				  struct udma_qp *udma_qp,
-				  urma_jfs_wr_t *wr, void **wqe);
+				  urma_jfs_wr_t *wr, void **wqe, uint32_t nreq);
 urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
 				void **wqe, urma_transport_mode_t tp_mode);
@@ -342,5 +376,9 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr);
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num);
+int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+				  struct udma_qp *qp);
+urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp);
+int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
 
 #endif /* _UDMA_JFS_H */

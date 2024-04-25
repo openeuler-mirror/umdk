@@ -515,7 +515,7 @@ urma_target_jetty_t *udma_u_import_jetty(urma_context_t *ctx,
 	ret = urma_cmd_import_jetty(ctx, tjetty, &cfg, &udata);
 	if (ret) {
 		URMA_LOG_ERR("import jetty failed, ret = %d.\n", ret);
-		free(tjetty);
+		free(udma_target_jetty);
 		return NULL;
 	}
 
@@ -689,9 +689,7 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 static struct udma_qp *get_qp_for_tjetty(struct udma_u_jetty *udma_jetty,
 					 urma_target_jetty_t *tjetty)
 {
-	struct udma_hmap_node *hmap_node;
 	struct udma_qp *udma_qp = NULL;
-	uint32_t tjetty_index;
 
 	if (udma_jetty->rc_node->tjetty == NULL) {
 		URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %u.\n",
@@ -742,24 +740,31 @@ static urma_status_t udma_u_post_jetty_rc_wr(struct udma_u_context *udma_ctx,
 					     urma_jfs_wr_t **bad_wr)
 {
 	struct udma_qp *udma_qp;
-	uint32_t wr_cnt = 0;
 	urma_status_t ret;
-	urma_jfs_wr_t *it;
+	uint32_t nreq;
 	void *wqe;
 
 	udma_qp = udma_jetty->rc_node->qp;
 
-	for (it = wr; it != NULL; it = it->next) {
-		ret = udma_u_post_rcqp_wr(udma_ctx, udma_qp, it, &wqe);
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret)
+		return ret;
+
+	for (nreq = 0; wr; ++nreq, wr = wr->next) {
+		ret = udma_u_post_rcqp_wr(udma_ctx, udma_qp, wr, &wqe, nreq);
 		if (ret) {
-			*bad_wr = it;
+			*bad_wr = wr;
 			break;
 		}
-		wr_cnt++;
 	}
 
-	if (wr_cnt > 0)
-		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, wr_cnt);
+	if (likely(nreq)) {
+		udma_qp->sq.head += nreq;
+		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, nreq);
+	}
+
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 	return ret;
 }
@@ -847,4 +852,33 @@ urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
 	jfr_attr.rx_threshold = jetty_attr->rx_threshold;
 
 	return udma_u_modify_jfr(&udma_jetty->udma_jfr->urma_jfr, &jfr_attr);
+}
+
+int udma_u_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
+{
+	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	struct udma_qp *qp;
+	int n_flushed = 0;
+
+	if (udma_jetty->tp_mode == URMA_TM_RC)
+		qp = udma_jetty->rc_node->qp;
+	else if (udma_jetty->tp_mode == URMA_TM_UM)
+		qp = udma_jetty->um_qp;
+	else
+		return n_flushed;
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_lock(&udma_jetty->lock);
+
+	for (; n_flushed < cr_cnt; ++n_flushed) {
+		if (qp->sq.head == qp->sq.tail)
+			break;
+
+		udma_fill_scr(qp, cr + n_flushed);
+	}
+
+	if (!udma_jetty->jfs_lock_free)
+		(void)pthread_spin_unlock(&udma_jetty->lock);
+
+	return n_flushed;
 }

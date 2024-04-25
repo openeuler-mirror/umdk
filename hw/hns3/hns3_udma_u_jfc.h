@@ -41,55 +41,74 @@ enum {
 };
 
 enum {
-	UDMA_CQE_SUCCESS					= 0x00,
-	UDMA_CQE_LOCAL_LENGTH_ERR			= 0x01,
-	UDMA_CQE_LOCAL_QP_OP_ERR			= 0x02,
-	UDMA_CQE_LOCAL_PROT_ERR				= 0x04,
-	UDMA_CQE_WR_FLUSH_ERR				= 0x05,
+	UDMA_CQE_SUCCESS			= 0x00,
+	UDMA_CQE_LOCAL_LENGTH_ERR		= 0x01,
+	UDMA_CQE_LOCAL_QP_OP_ERR		= 0x02,
+	UDMA_CQE_LOCAL_PROT_ERR			= 0x04,
+	UDMA_CQE_WR_FLUSH_ERR			= 0x05,
 	UDMA_CQE_MEM_MANAGERENT_OP_ERR		= 0x06,
-	UDMA_CQE_BAD_RESP_ERR				= 0x10,
-	UDMA_CQE_LOCAL_ACCESS_ERR			= 0x11,
+	UDMA_CQE_BAD_RESP_ERR			= 0x10,
+	UDMA_CQE_LOCAL_ACCESS_ERR		= 0x11,
 	UDMA_CQE_REMOTE_INVAL_REQ_ERR		= 0x12,
-	UDMA_CQE_REMOTE_ACCESS_ERR			= 0x13,
-	UDMA_CQE_REMOTE_OP_ERR				= 0x14,
+	UDMA_CQE_REMOTE_ACCESS_ERR		= 0x13,
+	UDMA_CQE_REMOTE_OP_ERR			= 0x14,
 	UDMA_CQE_TRANSPORT_RETRY_EXC_ERR	= 0x15,
-	UDMA_CQE_RNR_RETRY_EXC_ERR			= 0x16,
-	UDMA_CQE_REMOTE_ABORTED_ERR			= 0x22,
-	UDMA_CQE_GENERAL_ERR				= 0x23,
-	UDMA_CQE_XRC_VIOLATION_ERR			= 0x24,
+	UDMA_CQE_RNR_RETRY_EXC_ERR		= 0x16,
+	UDMA_CQE_REMOTE_ABORTED_ERR		= 0x22,
+	UDMA_CQE_GENERAL_ERR			= 0x23,
 };
 
 enum hw_cqe_opcode {
-	HW_CQE_OPC_RDMA_WRITE_WITH_IMM            = 0x00,
-	HW_CQE_OPC_SEND                           = 0x01,
-	HW_CQE_OPC_SEND_WITH_IMM                  = 0x02,
-	HW_CQE_OPC_SEND_WITH_INV                  = 0x03,
-	HW_CQE_OPC_PERSISTENCE_WRITE_WITH_IMM     = 0x04,
-	HW_CQE_OPC_RESIZE_CODING                  = 0x16,
-	HW_CQE_OPC_ERROR_CODING                   = 0x1e,
+	HW_CQE_OPC_RDMA_WRITE_WITH_IMM		= 0x00,
+	HW_CQE_OPC_SEND				= 0x01,
+	HW_CQE_OPC_SEND_WITH_IMM		= 0x02,
+	HW_CQE_OPC_SEND_WITH_INV		= 0x03,
+	HW_CQE_OPC_PERSISTENCE_WRITE_WITH_IMM	= 0x04,
+	HW_CQE_OPC_RESIZE_CODING		= 0x16,
+	HW_CQE_OPC_ERROR_CODING			= 0x1e,
 };
 
 enum jfc_poll_state {
-	JFC_OK               = 0,
-	JFC_EMPTY            = 1,
-	JFC_POLL_ERR         = 2,
+	JFC_OK			= 0,
+	JFC_EMPTY		= 1,
+	JFC_POLL_ERR		= 2,
 };
 
 #define	CQE_INLINE_ENABLE	1
 #define	UM_HEADER_DEID		8
+#define UDMA_POLL_SCR_CNT	1
 
 struct udma_jfc_cqe {
-	uint32_t		byte_4;
+	/* byte4 */
+	uint32_t		opcode : 5;
+	uint32_t		rq_inline : 1;
+	uint32_t		s_r : 1;
+	uint32_t		owner : 1;
+	uint32_t		status : 8;
+	uint32_t		wqe_idx : 16;
+
 	union {
 		uint32_t	rkey;
 		uint32_t	immtdata;
 	};
-	uint32_t		byte_12;
-	uint32_t		byte_16;
+
+	/* byte12 */
+	uint32_t		xrc_srqn : 24;
+	uint32_t		cqe_inline : 2;
+	uint32_t		rsv0 : 6;
+
+	/* byte16 */
+	uint32_t		lcl_qpn : 24;
+	uint32_t		sub_status : 8;
+
 	uint32_t		byte_cnt;
 	uint32_t		smac;
 	uint32_t		byte_28;
-	uint32_t		byte_32;
+
+	/* byte32 */
+	uint32_t		rmt_qpn : 24;
+	uint32_t		byte_35 : 8;
+
 	uint32_t		pld_in_cqe[8];
 };
 
@@ -148,6 +167,16 @@ static inline void update_cq_db(struct udma_u_context *udma_ctx,
 static inline struct udma_u_jfc *to_udma_jfc(urma_jfc_t *jfc)
 {
 	return container_of(jfc, struct udma_u_jfc, urma_jfc);
+}
+
+static inline bool udma_state_reseted(struct udma_u_context *ctx)
+{
+	struct udma_reset_state *state = (struct udma_reset_state *)ctx->reset_state;
+
+	if (state && state->is_reset)
+		return true;
+
+	return false;
 }
 
 struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,

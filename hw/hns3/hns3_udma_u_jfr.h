@@ -21,7 +21,7 @@
 
 #define UDMA_JFR_GRH_HEAD_SZ		40
 
-#define UDMA_NO_SHARE_JFR		1
+#define UDMA_JFR_RQ_EN			1
 
 struct udma_u_jfr_idx_que {
 	struct udma_buf		idx_buf;
@@ -64,7 +64,7 @@ struct udma_u_jfr {
 	struct um_header          *um_header_que;
 	urma_target_seg_t         *um_header_seg;
 	uint32_t                  srqn;
-	uint8_t                   share_jfr;
+	bool                      rq_en;
 };
 
 struct udma_jfr_node {
