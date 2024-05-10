@@ -20,6 +20,7 @@
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_jfs.h"
+#include "hns3_udma_u_jfr.h"
 
 #define CQE_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
 

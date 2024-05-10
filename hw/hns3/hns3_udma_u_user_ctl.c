@@ -35,11 +35,14 @@ static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	udma_jfs = to_udma_jfs(jfs);
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
+	if (udma_jfs->tp_mode != URMA_TM_UM)
+		return URMA_EINVAL;
+
 	if (!udma_jfs->lock_free)
 		(void)pthread_spin_lock(&udma_jfs->lock);
 
 	for (it = wr; it != NULL; it = it->next) {
-		udma_qp = get_qp(udma_jfs, it);
+		udma_qp = udma_jfs->um_qp;
 		if (!udma_qp) {
 			URMA_LOG_ERR("failed to get qp, opcode = 0x%x.\n",
 				     it->opcode);

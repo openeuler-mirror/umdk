@@ -18,7 +18,6 @@
 
 #include <arm_neon.h>
 #include <limits.h>
-#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -71,7 +70,11 @@
 
 #define __bf_shf(x) (__builtin_ffsll(x) - 1)
 
-#define BUILD_ASSERT(cond) ((void)sizeof(char[1 - 2 * !(cond)]))
+#define BUILD_ASSERT(cond) \
+	((void)sizeof(char[1 - 2 * !(cond)]))
+
+#define BUILD_ASSERT_OR_ZERO(cond) \
+	(sizeof(char [1 - 2 * !(cond)]) - 1)
 
 #define GENMASK(h, l) \
 	(((~0UL) << (l)) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
@@ -91,7 +94,7 @@
 #define udma_reg_enable(ptr, field)                                            \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
+		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) == (((field) << 32) >> 32));      \
 		*((uint32_t *)_ptr + ((field) >> 32) / 32) |=                  \
@@ -101,7 +104,7 @@
 #define udma_reg_clear(ptr, field)                                             \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
+		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
 		*((uint32_t *)_ptr + ((field) >> 32) / 32) &=                  \
@@ -127,7 +130,7 @@
 #define udma_reg_read(ptr, field)                                              \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
-		BUILD_ASSERT((((field) >> 32) / 32) ==                 \
+		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
 			((((field) << 32) >> 32) / 32));                       \
 		BUILD_ASSERT(((field) >> 32) >= (((field) << 32) >> 32));      \
 		FIELD_GET(GENMASK(((field) >> 32) % 32,                        \
@@ -274,6 +277,10 @@ static inline off_t get_mmap_offset(uint32_t idx, int page_size, int cmd)
 	return offset * page_size;
 }
 
+/*
+ * Hmap uses list to resolve hash conflicts in a bucket
+ * NOT multi-thread safe in the current version
+ */
 struct udma_hmap_node {
 	struct udma_hmap_node	*next;
 	uint32_t		hash;
@@ -289,14 +296,13 @@ struct udma_hmap {
 	struct udma_hmap_head	*bucket;
 };
 
+void udma_hmap_remove(struct udma_hmap *hmap, const struct udma_hmap_node *node);
+
 static inline struct udma_hmap_node *udma_hmap_first_with_hash(const struct udma_hmap *hmap,
 							       uint32_t hash)
 {
 	struct udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
 	struct udma_hmap_node *node;
-
-	if (head == NULL)
-		return NULL;
 
 	node = head->next;
 
@@ -320,7 +326,7 @@ static inline struct udma_hmap_node *udma_table_first_with_hash(const struct udm
 }
 
 static inline bool udma_hmap_insert(struct udma_hmap *hmap, struct udma_hmap_node *node,
-				  uint32_t hash)
+				    uint32_t hash)
 {
 	struct udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
 
@@ -527,8 +533,6 @@ static inline uint32_t udma_get_tgt_hash(const urma_jetty_id_t *id)
 
 	return udma_hash_uint64(idx);
 }
-
-void udma_hmap_remove(struct udma_hmap *hmap, const struct udma_hmap_node *node);
 
 uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt);
 void udma_bitmap_free(uint64_t *bitmap);

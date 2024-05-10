@@ -53,7 +53,7 @@ static void init_jfr_param(struct udma_u_jfr *jfr, urma_jfr_cfg_t *cfg)
 	}
 
 	jfr->wqe_shift = udma_ilog32(roundup_pow_of_two(UDMA_HW_SGE_SIZE *
-						       jfr->max_sge));
+							jfr->max_sge));
 	jfr->trans_mode = cfg->trans_mode;
 }
 
@@ -92,17 +92,13 @@ static int alloc_jfr_wqe_buf(struct udma_u_jfr *jfr)
 
 static int alloc_jfr_buf(struct udma_u_jfr *jfr, struct udma_u_jetty *jetty)
 {
-	int ret;
-
-	ret = alloc_jfr_idx_que(jfr);
-	if (ret) {
+	if (alloc_jfr_idx_que(jfr)) {
 		URMA_LOG_ERR("failed to alloc jfr idx que.\n");
 		return ENOMEM;
 	}
 
 	if (jetty == NULL) {
-		ret = alloc_jfr_wqe_buf(jfr);
-		if (ret) {
+		if (alloc_jfr_wqe_buf(jfr)) {
 			URMA_LOG_ERR("failed to alloc jfr wqe buf.\n");
 			goto err_alloc_buf;
 		}
@@ -149,6 +145,7 @@ static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
 	cmd.buf_addr = (uintptr_t)jfr->wqe_buf.buf;
 	cmd.idx_addr = (uintptr_t)jfr->idx_que.idx_buf.buf;
 	cmd.db_addr = (uintptr_t)jfr->db;
+	cmd.share_jfr = !jfr->rq_en;
 	if (jetty != NULL) {
 		cmd.wqe_buf_addr = (uintptr_t)jetty->rc_node->qp->buf.buf;
 		cmd.sqe_cnt = jetty->rc_node->qp->sq.wqe_cnt;
@@ -310,10 +307,10 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 	if (verify_jfr_init_attr(udma_ctx, cfg))
 		return NULL;
 
-	jfr = (struct udma_u_jfr *)calloc(1, sizeof(*jfr));
+	jfr = (struct udma_u_jfr *)memalign(UDMA_HW_PAGE_SIZE, sizeof(*jfr));
 	if (!jfr)
 		return NULL;
-
+	memset(jfr, 0, sizeof(*jfr));
 	jfr->lock_free = cfg->flag.bs.lock_free;
 	if (pthread_spin_init(&jfr->lock, PTHREAD_PROCESS_PRIVATE))
 		goto err_init_lock;
@@ -458,9 +455,9 @@ static inline bool udma_jfrwq_overflow(struct udma_u_jfr *jfr)
 	return (idx_que->head - idx_que->tail) >= jfr->wqe_cnt;
 }
 
-static urma_status_t check_post_jfr_valid(struct udma_u_jfr *jfr,
-					  urma_jfr_wr_t *wr,
-					  uint32_t max_sge)
+static inline urma_status_t check_post_jfr_valid(struct udma_u_jfr *jfr,
+						 urma_jfr_wr_t *wr,
+						 uint32_t max_sge)
 {
 	if (udma_jfrwq_overflow(jfr)) {
 		URMA_LOG_ERR("failed to check jfrwq status, jfrwq is full.\n");
@@ -500,7 +497,7 @@ static void *get_idx_buf(struct udma_u_jfr_idx_que *idx_que, uint32_t n)
 	return (char *)idx_que->idx_buf.buf + (n << idx_que->entry_shift);
 }
 
-static void fill_wqe_idx(struct udma_u_jfr *jfr, uint32_t wqe_idx)
+static inline void fill_wqe_idx(struct udma_u_jfr *jfr, uint32_t wqe_idx)
 {
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
 	uint32_t *idx_buf;
@@ -527,8 +524,8 @@ static void *set_um_header_sge(struct udma_u_jfr *jfr,
 	return dseg;
 }
 
-static void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe,
-				 uint32_t max_sge)
+static inline void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe,
+					uint32_t max_sge)
 {
 	struct udma_wqe_data_seg *dseg = (struct udma_wqe_data_seg *)wqe;
 	uint32_t i, cnt;
@@ -545,8 +542,7 @@ static void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe,
 		memset(dseg + cnt, 0, (max_sge - cnt) * UDMA_HW_SGE_SIZE);
 }
 
-static urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr,
-				      urma_jfr_wr_t *wr)
+urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 {
 	uint32_t wqe_idx, max_sge;
 	urma_status_t ret;
@@ -572,8 +568,7 @@ static urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr,
 	return ret;
 }
 
-static urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr,
-				   urma_jfr_wr_t *wr)
+urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 {
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx, max_sge;
@@ -581,19 +576,19 @@ static urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr,
 
 	max_sge = udma_jfr->user_max_sge;
 	ret = check_post_jfr_valid(udma_jfr, wr, max_sge);
-	if (ret) {
+	if (unlikely(ret)) {
 		URMA_LOG_ERR("failed to check post, jfrn = %u.\n",
 			     udma_jfr->urma_jfr.jfr_id.id);
 		return ret;
 	}
 
 	ret = get_wqe_idx(udma_jfr, &wqe_idx);
-	if (ret) {
+	if (unlikely(ret)) {
 		URMA_LOG_ERR("failed to get jfr wqe idx.\n");
 		return ret;
 	}
 	wqe = get_jfr_wqe(udma_jfr, wqe_idx);
-	if (udma_jfr->trans_mode == URMA_TM_UM)
+	if (unlikely(udma_jfr->trans_mode == URMA_TM_UM))
 		wqe = set_um_header_sge(udma_jfr, wqe_idx, wqe);
 
 	fill_recv_sge_to_wqe(wr, wqe, max_sge);
@@ -604,7 +599,7 @@ static urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr,
 	return ret;
 }
 
-static void update_srq_db(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
+void update_srq_db(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 {
 	struct udma_u_db db = {};
 

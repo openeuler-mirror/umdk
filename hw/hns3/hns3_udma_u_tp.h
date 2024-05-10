@@ -17,15 +17,11 @@
 #define _UDMA_U_TP_H
 
 #include "hns3_udma_u_jfs.h"
-#include "hns3_udma_u_jetty.h"
 #include "urma_provider.h"
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-struct jfs_conn_node {
-	struct connect_node	*tgt_conn_node;
-	struct udma_jfs_qp_node	*qp_conn_node;
-};
-
 int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp);
+void munmap_dwqe(struct udma_qp *qp);
+
 #endif /* _UDMA_U_TP_H */

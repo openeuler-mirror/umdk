@@ -298,9 +298,6 @@ static struct udma_u_jfr *get_common_jfr(struct udma_u_context *udma_ctx,
 	if (udma_ctx->jetty_table[table_id].refcnt) {
 		jetty_table = udma_ctx->jetty_table[table_id].table;
 		is_jetty = jetty_table[qpn & mask].is_jetty;
-	} else {
-		URMA_LOG_ERR("Failed to get jfr. QP 0x%x not found.\n", qpn);
-		return NULL;
 	}
 	if (is_jetty) {
 		jetty = (struct udma_u_jetty *)jetty_table[qpn & mask].jetty;
@@ -383,8 +380,8 @@ static struct udma_qp *get_qp_from_cqe(struct udma_u_context *udma_ctx,
 				       struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
 	struct common_jetty *jetty_table;
-	struct udma_u_jetty *jetty;
 	static struct udma_qp *sqp;
+	struct udma_u_jetty *jetty;
 	struct udma_u_jfs *jfs;
 	uint32_t qpn = cr->tpn;
 	uint32_t table_id;
@@ -399,9 +396,6 @@ static struct udma_qp *get_qp_from_cqe(struct udma_u_context *udma_ctx,
 	if (udma_ctx->jetty_table[table_id].refcnt) {
 		jetty_table = udma_ctx->jetty_table[table_id].table;
 		is_jetty = jetty_table[qpn & mask].is_jetty;
-	} else {
-		URMA_LOG_ERR("Failed get qp. QP 0x%x been destroyed.\n", qpn);
-		return NULL;
 	}
 
 	if (is_jetty) {
