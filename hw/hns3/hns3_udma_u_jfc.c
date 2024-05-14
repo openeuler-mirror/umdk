@@ -347,10 +347,8 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 			pthread_spin_unlock(&jfr->lock);
 	}
 
-	if (jfr->trans_mode == URMA_TM_UM) {
-		wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
+	if (jfr->trans_mode == URMA_TM_UM)
 		handle_um_header(jfr, wqe_idx, cr);
-	}
 
 	udma_parse_opcode_for_res(cqe, cr);
 	cr->flag.bs.s_r = 1;
@@ -380,16 +378,13 @@ static struct udma_qp *get_qp_from_cqe(struct udma_u_context *udma_ctx,
 				       struct udma_jfc_cqe *cqe, urma_cr_t *cr)
 {
 	struct common_jetty *jetty_table;
-	static struct udma_qp *sqp;
 	struct udma_u_jetty *jetty;
+	struct udma_qp *sqp = NULL;
 	struct udma_u_jfs *jfs;
 	uint32_t qpn = cr->tpn;
 	uint32_t table_id;
 	uint32_t mask;
 	bool is_jetty;
-
-	if ((sqp != NULL) && (sqp->qp_num == qpn))
-		return sqp;
 
 	table_id = qpn >> udma_ctx->jettys_in_tbl_shift;
 	mask = (1 << udma_ctx->jettys_in_tbl_shift) - 1;
@@ -424,13 +419,11 @@ static int parse_cqe_for_req(struct udma_u_context *udma_ctx,
 			     struct udma_jfc_cqe *cqe,
 			     urma_cr_t *cr)
 {
-	static struct udma_qp *sqp;
+	struct udma_qp *sqp = NULL;
 
-	if ((sqp == NULL) || (sqp->qp_num != cr->tpn)) {
-		sqp = get_qp_from_cqe(udma_ctx, cqe, cr);
-		if (sqp == NULL)
-			return JFC_POLL_ERR;
-	}
+	sqp = get_qp_from_cqe(udma_ctx, cqe, cr);
+	if (sqp == NULL)
+		return JFC_POLL_ERR;
 
 	sqp->sq.tail += (cqe->wqe_idx - sqp->sq.tail) & (sqp->sq.wqe_cnt - 1);
 
@@ -588,7 +581,7 @@ urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr)
 
 	ret = urma_cmd_modify_jfc(jfc, attr, NULL);
 	if (ret != 0) {
-		URMA_LOG_ERR("modify jfc failed.\n");
+		URMA_LOG_ERR("modify jfc failed. ret = %d\n", ret);
 		return URMA_FAIL;
 	}
 

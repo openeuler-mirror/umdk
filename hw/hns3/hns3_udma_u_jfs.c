@@ -350,12 +350,12 @@ static inline void *get_wqe(struct udma_qp *qp, uint32_t offset)
 		return NULL;
 }
 
-static void *get_send_wqe(struct udma_qp *qp, uint32_t n)
+void *get_send_wqe(struct udma_qp *qp, uint32_t n)
 {
 	return get_wqe(qp, qp->sq.offset + (n << qp->sq.wqe_shift));
 }
 
-static void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
+void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
 {
 	return get_wqe(qp, qp->ex_sge.offset + (n << qp->ex_sge.sge_shift));
 }

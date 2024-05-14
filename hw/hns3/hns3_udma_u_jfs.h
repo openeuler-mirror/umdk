@@ -377,5 +377,7 @@ int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp);
 urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp);
 int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
+void *get_send_wqe(struct udma_qp *qp, uint32_t n);
+void *get_send_sge_ex(struct udma_qp *qp, uint32_t n);
 
 #endif /* _UDMA_JFS_H */

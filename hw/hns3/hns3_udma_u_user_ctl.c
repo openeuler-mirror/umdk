@@ -36,7 +36,7 @@ static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
 	if (udma_jfs->tp_mode != URMA_TM_UM)
-		return URMA_EINVAL;
+		return -URMA_EINVAL;
 
 	if (!udma_jfs->lock_free)
 		(void)pthread_spin_lock(&udma_jfs->lock);
@@ -497,6 +497,54 @@ static int udma_u_query_hw_id(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	return 0;
 }
 
+static void udma_u_get_jetty_info_set_info_out(struct hns3_u_udma_get_jetty_info_out *info_out,
+					       struct udma_qp *qp,
+					       struct udma_u_context *udma_ctx)
+{
+	info_out->queue_addr = qp->buf.buf + qp->sq.offset;
+	info_out->ext_sge_addr = qp->buf.buf + qp->ex_sge.offset;
+	info_out->user_ctx_addr = (void *)qp->sq.wrid;
+	info_out->head_idx = &qp->sq.head;
+	info_out->sl = qp->sq.priority;
+	info_out->queue_length = qp->sq.wqe_cnt;
+	info_out->ext_sge_length = qp->ex_sge.sge_cnt;
+	info_out->user_ctx_length = qp->sq.wqe_cnt;
+	info_out->db_addr = udma_ctx->uar + UDMA_DB_CFG0_OFFSET;
+	info_out->dwqe_addr = qp->dwqe_page;
+	info_out->ext_sge_tail_addr = get_send_sge_ex(qp, qp->ex_sge.sge_cnt);
+}
+
+int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
+				  urma_user_ctl_out_t *out)
+{
+	struct hns3_u_udma_get_jetty_info_out *info_out;
+	struct hns3_u_udma_get_jetty_info_in *info_in;
+	struct udma_u_jetty *udma_jetty;
+	struct udma_u_context *udma_ctx;
+	struct udma_qp *qp;
+
+	if (in->len != sizeof(struct hns3_u_udma_get_jetty_info_in)) {
+		URMA_LOG_ERR("Invalid buffer size(%u) for getting jetty info.\n", in->len);
+		return EINVAL;
+	}
+
+	info_in = (struct hns3_u_udma_get_jetty_info_in *)in->addr;
+
+	if (!info_in->jetty) {
+		URMA_LOG_ERR("Jetty is null.\n");
+		return EINVAL;
+	}
+
+	udma_jetty = to_udma_jetty(info_in->jetty);
+	udma_ctx = to_udma_ctx(ctx);
+	qp = udma_jetty->rc_node->qp;
+
+	udma_u_get_jetty_info_set_info_out((struct hns3_u_udma_get_jetty_info_out *)out->addr,
+					    qp, udma_ctx);
+
+	return 0;
+}
+
 typedef int (*udma_u_user_ctl_ops)(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				   urma_user_ctl_out_t *out);
 
@@ -508,6 +556,7 @@ static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
 	[HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX] = udma_u_delete_jfc_ex,
 	[HNS3_UDMA_U_USER_CTL_UPDATE_QUEUE_CI] = udma_u_update_queue_ci,
 	[HNS3_UDMA_U_USER_CTL_QUERY_HW_ID] = udma_u_query_hw_id,
+	[HNS3_UDMA_U_USER_CTL_GET_JETTY_INFO] = udma_u_get_jetty_info,
 };
 
 int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,

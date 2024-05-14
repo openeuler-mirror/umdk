@@ -100,6 +100,28 @@ struct hns3_udma_query_hw_id_out {
 	uint32_t reserved;
 };
 
+struct hns3_u_udma_get_jetty_info_in {
+	enum hns3_queue_type		type;
+	union {
+		urma_jfs_t	*jfs;
+		urma_jetty_t	*jetty;
+	};
+};
+
+struct hns3_u_udma_get_jetty_info_out {
+	void		*queue_addr;
+	uint32_t	queue_length;
+	void		*ext_sge_addr;
+	uint32_t	ext_sge_length;
+	void		*user_ctx_addr;
+	uint32_t	user_ctx_length;
+	void		*db_addr;
+	void		*dwqe_addr;
+	void		*ext_sge_tail_addr;
+	uint32_t	sl;
+	void		*head_idx;
+};
+
 enum hns3_udma_u_user_ctl_opcode {
 	HNS3_UDMA_U_USER_CTL_POST_SEND_AND_RET_DB,
 	HNS3_UDMA_U_USER_CTL_CONFIG_POE_CHANNEL,
@@ -108,6 +130,7 @@ enum hns3_udma_u_user_ctl_opcode {
 	HNS3_UDMA_U_USER_CTL_DELETE_JFC_EX,
 	HNS3_UDMA_U_USER_CTL_UPDATE_QUEUE_CI,
 	HNS3_UDMA_U_USER_CTL_QUERY_HW_ID,
+	HNS3_UDMA_U_USER_CTL_GET_JETTY_INFO,
 	HNS3_UDMA_U_USER_CTL_MAX,
 };
 
