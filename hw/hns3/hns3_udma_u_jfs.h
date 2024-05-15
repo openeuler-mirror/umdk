@@ -157,7 +157,7 @@ struct udma_u_jfs {
 
 struct udma_jfs_node {
 	struct udma_hmap_node	node;
-	struct udma_u_jfs		*jfs;
+	struct udma_u_jfs	*jfs;
 };
 
 enum udma_jfs_opcode {
@@ -363,22 +363,21 @@ urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 				  struct udma_qp *udma_qp,
 				  urma_jfs_wr_t *wr, void **wqe, uint32_t nreq);
-urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
-				struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
-				void **wqe, urma_transport_mode_t tp_mode);
+urma_status_t udma_u_post_umqp_wr(struct udma_u_context *udma_ctx,
+				  struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
+				  void **wqe_addr);
 urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 				   struct udma_qp *udma_qp, urma_jfs_wr_t *wr,
 				   urma_transport_mode_t tp_mode);
-struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
-			      urma_jfs_cfg_t *jfs_cfg,
-			      urma_jfr_cfg_t *jfr_cfg,
-			      uint32_t jetty_id, bool is_jetty);
-struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr);
+struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx, bool is_jetty,
+			      urma_jfs_cfg_t *jfs_cfg, urma_jfr_cfg_t *jfr_cfg);
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num);
 int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp);
 urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp);
 int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
+void *get_send_wqe(struct udma_qp *qp, uint32_t n);
+void *get_send_sge_ex(struct udma_qp *qp, uint32_t n);
 
 #endif /* _UDMA_JFS_H */

@@ -18,7 +18,6 @@
 
 #include "urma_types.h"
 #include "hns3_udma_u_common.h"
-#include "hns3_udma_u_jfc.h"
 
 #define UDMA_RESERVED_JFR_SGE	1
 

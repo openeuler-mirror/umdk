@@ -16,7 +16,6 @@
 #ifndef _UDMA_U_DB_H
 #define _UDMA_U_DB_H
 
-#include "hns3_udma_u_buf.h"
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 

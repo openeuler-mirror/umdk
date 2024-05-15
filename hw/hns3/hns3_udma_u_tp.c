@@ -16,8 +16,6 @@
 #include <sys/mman.h>
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_common.h"
-#include "hns3_udma_u_jfs.h"
-#include "hns3_udma_u_db.h"
 #include "hns3_udma_u_tp.h"
 
 int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
@@ -38,3 +36,12 @@ int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp)
 	return 0;
 }
 
+void munmap_dwqe(struct udma_qp *qp)
+{
+	if (qp->dwqe_page) {
+		if (!(munmap(qp->dwqe_page, HNS3_UDMA_DWQE_PAGE_SIZE)))
+			URMA_LOG_ERR("failed to munmap direct wqe page, QPN = %lu.\n",
+				     qp->qp_num);
+		qp->dwqe_page = NULL;
+	}
+}

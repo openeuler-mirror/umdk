@@ -126,10 +126,8 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 	return ret;
 }
 
-struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
-			      urma_jfs_cfg_t *jfs_cfg,
-			      urma_jfr_cfg_t *jfr_cfg,
-			      uint32_t jetty_id, bool is_jetty)
+struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx, bool is_jetty,
+			      urma_jfs_cfg_t *jfs_cfg, urma_jfr_cfg_t *jfr_cfg)
 {
 	enum udma_db_type db_type;
 	struct udma_qp *qp;
@@ -153,7 +151,6 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx,
 		URMA_LOG_ERR("alloc_qp_wqe failed.\n");
 		goto err_alloc_sw_db;
 	}
-	qp->jetty_id = jetty_id;
 	qp->is_jetty = is_jetty;
 
 	return qp;
@@ -166,8 +163,8 @@ err_alloc_qp:
 	return NULL;
 }
 
-static int alloc_table_qp(struct udma_u_jfs *jfs,
-			  struct udma_u_context *udma_ctx, urma_jfs_cfg_t *cfg)
+static int alloc_table_qp(struct udma_u_jfs *jfs, struct udma_u_context *udma_ctx,
+			  urma_jfs_cfg_t *cfg)
 {
 	int ret;
 
@@ -175,66 +172,13 @@ static int alloc_table_qp(struct udma_u_jfs *jfs,
 	if (ret)
 		return ret;
 
-	if (jfs->tp_mode == URMA_TM_UM) {
-		jfs->um_qp = udma_alloc_qp(udma_ctx, cfg, NULL, jfs->jfs_id, false);
-		if (!jfs->um_qp) {
-			URMA_LOG_ERR("alloc qp failed.\n");
-			return ENOMEM;
-		}
-	} else {
-		URMA_LOG_ERR("do not support this tp_mode.\n");
+	jfs->um_qp = udma_alloc_qp(udma_ctx, false, cfg, NULL);
+	if (!jfs->um_qp) {
+		URMA_LOG_ERR("alloc qp failed.\n");
 		return ENOMEM;
 	}
 
 	return ret;
-}
-
-static urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx,
-					  urma_jfs_t *jfs, struct udma_qp *qp,
-					  uint32_t qpn)
-{
-	struct udma_jfs_qp_node *qp_node;
-
-	if (!ctx || !qp) {
-		URMA_LOG_ERR("ctx or qp is NULL.\n");
-		return URMA_EINVAL;
-	}
-
-	qp_node = (struct udma_jfs_qp_node *)calloc(1, sizeof(*qp_node));
-	if (!qp_node) {
-		URMA_LOG_ERR("failed to calloc qp_node.\n");
-		return URMA_ENOMEM;
-	}
-	qp_node->jfs_qp = qp;
-
-	(void)pthread_rwlock_wrlock(&ctx->jfs_qp_table_lock);
-	if (!udma_hmap_insert(&ctx->jfs_qp_table, &qp_node->node, qpn)) {
-		free(qp_node);
-		qp_node = NULL;
-		(void)pthread_rwlock_unlock(&ctx->jfs_qp_table_lock);
-		URMA_LOG_ERR("failed to insert qp_node into jfs qp table.\n");
-		return URMA_EINVAL;
-	}
-	(void)pthread_rwlock_unlock(&ctx->jfs_qp_table_lock);
-
-	return URMA_SUCCESS;
-}
-
-static void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn)
-{
-	struct udma_jfs_qp_node *qp_node;
-	struct udma_hmap_node *node;
-
-	(void)pthread_rwlock_wrlock(&ctx->jfs_qp_table_lock);
-	node = udma_hmap_first_with_hash(&ctx->jfs_qp_table, qpn);
-	if (node) {
-		qp_node = to_udma_jfs_qp_node(node);
-		udma_hmap_remove(&ctx->jfs_qp_table, node);
-		(void)pthread_rwlock_unlock(&ctx->jfs_qp_table_lock);
-		free(qp_node);
-		return;
-	}
-	(void)pthread_rwlock_unlock(&ctx->jfs_qp_table_lock);
 }
 
 static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
@@ -246,10 +190,8 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
-	if (jfs->tp_mode == URMA_TM_UM) {
-		cmd.create_tp_ucmd.buf_addr = (uintptr_t)jfs->um_qp->buf.buf;
-		cmd.create_tp_ucmd.sdb_addr = (uintptr_t)jfs->um_qp->sdb;
-	}
+	cmd.create_tp_ucmd.buf_addr = (uintptr_t)jfs->um_qp->buf.buf;
+	cmd.create_tp_ucmd.sdb_addr = (uintptr_t)jfs->um_qp->sdb;
 
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
@@ -259,47 +201,55 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	}
 
 	jfs->jfs_id = jfs->base.jfs_id.id;
+	jfs->um_qp->qp_num = resp.create_tp_resp.qpn;
+	jfs->um_qp->flags = resp.create_tp_resp.cap_flags;
+	jfs->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
+	jfs->um_qp->sq.priority = resp.create_tp_resp.priority;
 
-	if (jfs->tp_mode == URMA_TM_UM) {
-		jfs->um_qp->qp_num = resp.create_tp_resp.qpn;
-		jfs->um_qp->flags = resp.create_tp_resp.cap_flags;
-		if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
-			ret = mmap_dwqe(ctx, jfs->um_qp);
-			if (ret) {
-				urma_cmd_delete_jfs(&jfs->base);
-				URMA_LOG_ERR("mmap dwqe failed\n");
-				return URMA_FAIL;
-			}
+	if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
+		ret = mmap_dwqe(ctx, jfs->um_qp);
+		if (ret) {
+			URMA_LOG_ERR("mmap dwqe failed\n");
+			goto err_mmap_dwqe;
 		}
-		jfs->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
-		jfs->um_qp->sq.priority = resp.create_tp_resp.priority;
-		memcpy(&jfs->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
-		       sizeof(struct udp_srcport));
-		ret = udma_add_to_qp_table(udma_ctx, &jfs->base, jfs->um_qp,
-					   jfs->um_qp->qp_num);
-		if (ret)
-			URMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
+	}
+
+	memcpy(&jfs->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
+		sizeof(struct udp_srcport));
+	ret = udma_add_to_qp_table(udma_ctx, jfs->um_qp, jfs->um_qp->qp_num);
+	if (ret) {
+		URMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
+		goto err_add_qp_table;
 	}
 
 	return ret;
+
+err_add_qp_table:
+	if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+		munmap_dwqe(jfs->um_qp);
+err_mmap_dwqe:
+	urma_cmd_delete_jfs(&jfs->base);
+	return ret;
 }
 
-static void um_free_qp(struct udma_u_context *udma_ctx, struct udma_u_jfs *jfs)
+static void delete_jfs_qp_node(struct udma_u_context *udma_ctx, struct udma_u_jfs *jfs)
 {
-	if (jfs->um_qp) {
-		udma_free_sw_db(udma_ctx, jfs->um_qp->sdb, UDMA_JFS_TYPE_DB);
-		free(jfs->um_qp->sq.wrid);
-		jfs->um_qp->sq.wrid = NULL;
-		udma_free_buf(&jfs->um_qp->buf);
-		free(jfs->um_qp);
-		jfs->um_qp = NULL;
-	}
+	udma_free_sw_db(udma_ctx, jfs->um_qp->sdb, UDMA_JFS_TYPE_DB);
+	free(jfs->um_qp->sq.wrid);
+	jfs->um_qp->sq.wrid = NULL;
+	udma_free_buf(&jfs->um_qp->buf);
+	free(jfs->um_qp);
+	jfs->um_qp = NULL;
 }
 
-void delete_qp_node_table(struct udma_u_context *udma_ctx, struct udma_u_jfs *jfs)
+static int exec_jfs_delete_cmd(struct udma_u_context *ctx, struct udma_u_jfs *jfs)
 {
-	if (jfs->tp_mode == URMA_TM_UM)
-		um_free_qp(udma_ctx, jfs);
+	udma_remove_from_qp_table(ctx, jfs->um_qp->qp_num);
+
+	if (jfs->um_qp->flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+		munmap_dwqe(jfs->um_qp);
+
+	return urma_cmd_delete_jfs(&jfs->base);
 }
 
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
@@ -308,7 +258,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	struct udma_u_jfs *jfs;
 	int ret;
 
-	if (!ctx) {
+	if (!ctx || cfg->trans_mode != URMA_TM_UM) {
 		URMA_LOG_ERR("Invalid parameter.\n");
 		return NULL;
 	}
@@ -340,8 +290,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	ret = insert_jetty_node(udma_ctx, jfs, false, jfs->jfs_id);
 	if (ret) {
-		URMA_LOG_ERR("failed to insert jetty node, ret = %d.\n",
-			     ret);
+		URMA_LOG_ERR("failed to insert jetty node, ret = %d.\n", ret);
 		goto error_insert;
 	}
 
@@ -353,9 +302,9 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 error_init_lock:
 	delete_jetty_node(udma_ctx, jfs->jfs_id);
 error_insert:
-	urma_cmd_delete_jfs(&jfs->base);
+	(void)exec_jfs_delete_cmd(udma_ctx, jfs);
 error_create_jfs:
-	delete_qp_node_table(udma_ctx, jfs);
+	delete_jfs_qp_node(udma_ctx, jfs);
 error:
 	free(jfs);
 
@@ -366,9 +315,8 @@ urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 {
 	struct udma_u_context *udma_ctx;
 	struct udma_u_jfs *udma_jfs;
-	int ret;
 
-	if (jfs == NULL || jfs->urma_ctx == NULL) {
+	if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.trans_mode != URMA_TM_UM) {
 		URMA_LOG_ERR("Invalid parameter.\n");
 		return URMA_EINVAL;
 	}
@@ -376,19 +324,15 @@ urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 	udma_jfs = to_udma_jfs(jfs);
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
-	if (udma_jfs->tp_mode == URMA_TM_UM)
-		udma_remove_from_qp_table(udma_ctx, udma_jfs->um_qp->qp_num);
-
+	pthread_spin_destroy(&udma_jfs->lock);
 	delete_jetty_node(udma_ctx, udma_jfs->jfs_id);
-	delete_qp_node_table(udma_ctx, udma_jfs);
 
-	ret = urma_cmd_delete_jfs(jfs);
-	if (ret) {
-		URMA_LOG_ERR("jfs delete failed!\n");
+	if (exec_jfs_delete_cmd(udma_ctx, udma_jfs)) {
+		URMA_LOG_ERR("delete jfs cmd failed!\n");
 		return URMA_FAIL;
 	}
 
-	pthread_spin_destroy(&udma_jfs->lock);
+	delete_jfs_qp_node(udma_ctx, udma_jfs);
 
 	free(udma_jfs);
 
@@ -406,12 +350,12 @@ static inline void *get_wqe(struct udma_qp *qp, uint32_t offset)
 		return NULL;
 }
 
-static void *get_send_wqe(struct udma_qp *qp, uint32_t n)
+void *get_send_wqe(struct udma_qp *qp, uint32_t n)
 {
 	return get_wqe(qp, qp->sq.offset + (n << qp->sq.wqe_shift));
 }
 
-static void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
+void *get_send_sge_ex(struct udma_qp *qp, uint32_t n)
 {
 	return get_wqe(qp, qp->ex_sge.offset + (n << qp->ex_sge.sge_shift));
 }
@@ -945,51 +889,7 @@ static void udma_update_sq_db(struct udma_u_context *ctx, struct udma_qp *qp)
 	udma_reg_write(&sq_db, UDMA_DB_PI, qp->sq.head);
 	udma_reg_write(&sq_db, UDMA_DB_SL, qp->sq.priority);
 
-	udma_write64(ctx, (uint64_t *)(ctx->uar + UDMA_DB_CFG0_OFFSET),
-		     (uint64_t *)&sq_db);
-}
-
-struct udma_qp *get_qp(struct udma_u_jfs *udma_jfs, urma_jfs_wr_t *wr)
-{
-	struct udma_hmap_node *hmap_node = NULL;
-	struct connect_node *udma_connect_node;
-	struct udma_qp *udma_qp = NULL;
-	uint32_t tjfr_index;
-
-	if (!wr->tjetty) {
-		URMA_LOG_ERR("Failed to get jfs qp, tjetty of wr is null.\n");
-		return NULL;
-	}
-
-	if (udma_jfs->tp_mode == URMA_TM_UM)
-		return udma_jfs->um_qp;
-
-	switch (wr->opcode) {
-	case URMA_OPC_SEND:
-	case URMA_OPC_SEND_IMM:
-	case URMA_OPC_SEND_INVALIDATE:
-	case URMA_OPC_WRITE:
-	case URMA_OPC_WRITE_IMM:
-	case URMA_OPC_WRITE_NOTIFY:
-		tjfr_index = udma_get_tgt_hash(&wr->tjetty->id);
-		hmap_node = udma_table_first_with_hash(&udma_jfs->tjfr_tbl.hmap,
-						       &udma_jfs->tjfr_tbl.rwlock,
-						       tjfr_index);
-		break;
-	default:
-		URMA_LOG_ERR("Unsupported or invalid opcode: %u.\n",
-			     (uint32_t)wr->opcode);
-		return NULL;
-	}
-
-	if (!hmap_node)
-		return NULL;
-
-	udma_connect_node = CONTAINER_OF_FIELD(hmap_node, struct connect_node,
-					       hmap_node);
-	udma_qp = udma_connect_node->qp;
-
-	return udma_qp;
+	udma_write64(ctx, (uint64_t *)(ctx->uar + UDMA_DB_CFG0_OFFSET), (uint64_t *)&sq_db);
 }
 
 int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
@@ -1113,19 +1013,12 @@ out:
 	return ret;
 }
 
-urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
-				struct udma_qp *udma_qp,
-				urma_jfs_wr_t *wr, void **wqe,
-				urma_transport_mode_t tp_mode)
+urma_status_t udma_u_post_umqp_wr(struct udma_u_context *udma_ctx,
+				  struct udma_qp *udma_qp,
+				  urma_jfs_wr_t *wr, void **wqe)
 {
 	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx;
-
-	ret = check_dca_valid(udma_ctx, udma_qp);
-	if (ret) {
-		URMA_LOG_ERR("Failed to check send, qpn = %lu.\n", udma_qp->qp_num);
-		goto out;
-	}
 
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
@@ -1151,13 +1044,7 @@ urma_status_t udma_u_post_qp_wr(struct udma_u_context *udma_ctx,
 	if (udma_qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
 		udma_write_dca_wqe(udma_qp, *wqe);
 
-	udma_to_device_barrier();
-
-	udma_u_ring_sq_doorbell(udma_ctx, udma_qp, *wqe, 1);
-
 	*udma_qp->sdb = udma_qp->sq.head;
-	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
-		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 out:
 	if (udma_qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH)
@@ -1172,6 +1059,7 @@ urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	struct udma_u_context *udma_ctx;
 	struct udma_u_jfs *udma_jfs;
 	struct udma_qp *udma_qp;
+	uint32_t wr_cnt = 0;
 	urma_status_t ret;
 	urma_jfs_wr_t *it;
 	void *wqe;
@@ -1179,27 +1067,30 @@ urma_status_t udma_u_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	udma_jfs = to_udma_jfs(jfs);
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
+	if (udma_jfs->tp_mode != URMA_TM_UM)
+		return URMA_EINVAL;
+
 	if (!udma_jfs->lock_free)
 		(void)pthread_spin_lock(&udma_jfs->lock);
 
-	for (it = wr; it != NULL; it = (urma_jfs_wr_t *)(void *)it->next) {
-		udma_qp = get_qp(udma_jfs, it);
-		if (!udma_qp) {
-			URMA_LOG_ERR("failed to get qp, opcode = 0x%x.\n",
-				     it->opcode);
-			ret = URMA_EINVAL;
-			*bad_wr = (urma_jfs_wr_t *)it;
-			goto out;
-		}
+	udma_qp = udma_jfs->um_qp;
 
-		ret = udma_u_post_qp_wr(udma_ctx, udma_qp, it, &wqe,
-					udma_jfs->tp_mode);
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret)
+		return ret;
+
+	for (it = wr; it != NULL; it = (urma_jfs_wr_t *)(void *)it->next) {
+		ret = udma_u_post_umqp_wr(udma_ctx, udma_qp, it, &wqe);
 		if (ret) {
 			*bad_wr = (urma_jfs_wr_t *)it;
-			goto out;
+			break;
 		}
+		wr_cnt++;
 	}
 out:
+	if (likely(wr_cnt))
+		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, wr_cnt);
+
 	if (!udma_jfs->lock_free)
 		(void)pthread_spin_unlock(&udma_jfs->lock);
 

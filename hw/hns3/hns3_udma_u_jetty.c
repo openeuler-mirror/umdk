@@ -19,8 +19,7 @@
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jetty.h"
 
-urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
-				   urma_jfs_cfg_t *cfg)
+urma_status_t verify_jfs_init_attr(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(ctx);
 
@@ -69,8 +68,8 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 		return ret;
 
 	if (jetty->tp_mode == URMA_TM_UM) {
-		jetty->um_qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg, NULL,
-					     jetty->urma_jetty.jetty_id.id, true);
+		jetty->um_qp = udma_alloc_qp(udma_ctx, true, &jetty_cfg->jfs_cfg,
+					     NULL);
 		if (!jetty->um_qp) {
 			URMA_LOG_ERR("UM qp alloc failed, jetty_id = %u.\n",
 				     jetty->urma_jetty.jetty_id.id);
@@ -85,14 +84,12 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 		}
 
 		if (jetty->udma_jfr == NULL)
-			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
-						jetty_cfg->jfr_cfg,
-						jetty->urma_jetty.jetty_id.id,
-						true);
+			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, true,
+							   &jetty_cfg->jfs_cfg,
+							   jetty_cfg->jfr_cfg);
 		else
-			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, jetty_cfg->jfs_cfg,
-						NULL, jetty->urma_jetty.jetty_id.id,
-						true);
+			jetty->rc_node->qp = udma_alloc_qp(udma_ctx, true,
+							   &jetty_cfg->jfs_cfg, NULL);
 		if (!jetty->rc_node->qp) {
 			URMA_LOG_ERR("alloc rc_node failed.\n");
 			goto err_alloc_rc_node_qp;
@@ -107,9 +104,8 @@ err_alloc_rc_node_qp:
 	return URMA_ENOMEM;
 }
 
-static urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx,
-					  urma_jetty_t *jetty, struct udma_qp *qp,
-					  uint32_t qpn)
+urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx, struct udma_qp *qp,
+				   uint32_t qpn)
 {
 	struct udma_jfs_qp_node *qp_node;
 
@@ -132,7 +128,7 @@ static urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx,
 	return URMA_SUCCESS;
 }
 
-static void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn)
+void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn)
 {
 	struct udma_jfs_qp_node *qp_node;
 	struct udma_hmap_node *node;
@@ -168,7 +164,7 @@ static urma_status_t exec_jetty_create_cmd(urma_context_t *ctx,
 	if (jetty->tp_mode == URMA_TM_UM) {
 		cmd.create_tp_ucmd.buf_addr = (uint64_t)jetty->um_qp->buf.buf;
 		cmd.create_tp_ucmd.sdb_addr = (uint64_t)jetty->um_qp->sdb;
-	} else if (jetty->tp_mode == URMA_TM_RC) {
+	} else {
 		cmd.buf_addr = (uint64_t)jetty->rc_node->qp->buf.buf;
 		cmd.sdb_addr = (uint64_t)jetty->rc_node->qp->sdb;
 	}
@@ -180,72 +176,67 @@ static urma_status_t exec_jetty_create_cmd(urma_context_t *ctx,
 	}
 
 	if (jetty->tp_mode == URMA_TM_UM) {
-		jetty->um_qp->qp_num = resp.create_tp_resp.qpn;
-		jetty->um_qp->flags = resp.create_tp_resp.cap_flags;
+		fill_um_jetty_qp(jetty, resp);
 		if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
-			if (mmap_dwqe(ctx, jetty->um_qp)) {
-				urma_cmd_delete_jetty(&jetty->urma_jetty);
+			ret = mmap_dwqe(ctx, jetty->um_qp);
+			if (ret) {
 				URMA_LOG_ERR("mmap dwqe failed\n");
-				return URMA_FAIL;
+				goto err_mmap_dwqe;
 			}
 		}
-		jetty->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
-		jetty->um_qp->um_srcport = resp.create_tp_resp.um_srcport;
-		jetty->um_qp->sq.priority = resp.create_tp_resp.priority;
+
 		memcpy(&jetty->um_qp->um_srcport, &resp.create_tp_resp.um_srcport,
 		       sizeof(struct udp_srcport));
-		ret = udma_add_to_qp_table(udma_ctx, &jetty->urma_jetty,
-					   jetty->um_qp, jetty->um_qp->qp_num);
-		if (ret)
+		ret = udma_add_to_qp_table(udma_ctx, jetty->um_qp, jetty->um_qp->qp_num);
+		if (ret) {
 			URMA_LOG_ERR("add to qp table failed for um jetty, ret = %d.\n", ret);
+			goto err_add_qp_table;
+		}
+	} else {
+		jetty->rc_node->qp->jetty_id = jetty->urma_jetty.jetty_id.id;
 	}
 
+	return ret;
+
+err_add_qp_table:
+	if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+		munmap_dwqe(jetty->um_qp);
+err_mmap_dwqe:
+	urma_cmd_delete_jetty(&jetty->urma_jetty);
 	return ret;
 }
 
 static void rc_free_node(struct udma_u_context *udma_ctx, struct udma_u_jetty *udma_jetty)
 {
-	struct udma_qp *qp;
+	struct udma_qp *qp = udma_jetty->rc_node->qp;
 
-	if (udma_jetty->rc_node) {
-		qp = udma_jetty->rc_node->qp;
-		if (qp) {
-			if (udma_jetty->rc_node->tjetty)
-				udma_u_unbind_jetty(&udma_jetty->urma_jetty);
-			udma_free_sw_db(udma_ctx, qp->sdb,
-					UDMA_JETTY_TYPE_DB);
-			free(qp->sq.wrid);
-			qp->sq.wrid = NULL;
-			if (qp->dca_wqe.bufs)
-				free(qp->dca_wqe.bufs);
-			else
-				udma_free_buf(&qp->buf);
-			free(qp);
-			qp = NULL;
-		}
+	if (udma_jetty->rc_node->tjetty)
+		udma_u_unbind_jetty(&udma_jetty->urma_jetty);
 
-		free(udma_jetty->rc_node);
-		udma_jetty->rc_node = NULL;
-	}
+	udma_free_sw_db(udma_ctx, qp->sdb, UDMA_JETTY_TYPE_DB);
+
+	if (qp->dca_wqe.bufs)
+		free(qp->dca_wqe.bufs);
+	else
+		udma_free_buf(&qp->buf);
+
+	free(qp->sq.wrid);
+	free(qp);
+	free(udma_jetty->rc_node);
 }
 
 static void um_free_qp(struct udma_u_jetty *udma_jetty)
 {
-	struct udma_u_context *udma_ctx;
+	struct udma_u_context *udma_ctx = to_udma_ctx(udma_jetty->urma_jetty.urma_ctx);
 
-	if (udma_jetty->um_qp) {
-		udma_ctx = to_udma_ctx(udma_jetty->urma_jetty.urma_ctx);
-		udma_free_sw_db(udma_ctx, udma_jetty->um_qp->sdb,
-				UDMA_JETTY_TYPE_DB);
-		free(udma_jetty->um_qp->sq.wrid);
-		udma_jetty->um_qp->sq.wrid = NULL;
-		udma_free_buf(&udma_jetty->um_qp->buf);
-		free(udma_jetty->um_qp);
-		udma_jetty->um_qp = NULL;
-	}
+	udma_free_sw_db(udma_ctx, udma_jetty->um_qp->sdb, UDMA_JETTY_TYPE_DB);
+	udma_free_buf(&udma_jetty->um_qp->buf);
+	free(udma_jetty->um_qp->sq.wrid);
+	free(udma_jetty->um_qp);
 }
 
-static void delete_qp_node_table(struct udma_u_context *udma_ctx, struct udma_u_jetty *udma_jetty)
+static void delete_jetty_qp_node(struct udma_u_context *udma_ctx,
+				 struct udma_u_jetty *udma_jetty)
 {
 	if (udma_jetty->tp_mode == URMA_TM_UM)
 		um_free_qp(udma_jetty);
@@ -319,13 +310,24 @@ urma_status_t verify_jetty_trans_mode(urma_jetty_cfg_t *jetty_cfg)
 	return URMA_SUCCESS;
 }
 
-static void init_jetty_param(struct udma_u_jetty *udma_jetty,
-			     urma_jetty_cfg_t *jetty_cfg)
+static inline void init_jetty_param(struct udma_u_jetty *udma_jetty,
+				    urma_jetty_cfg_t *jetty_cfg)
 {
 	udma_jetty->tp_mode = jetty_cfg->jfs_cfg->trans_mode;
 	udma_jetty->share_jfr = jetty_cfg->flag.bs.share_jfr;
 	udma_jetty->jfs_lock_free = jetty_cfg->jfs_cfg->flag.bs.lock_free;
 	udma_jetty->urma_jetty.jetty_cfg = *jetty_cfg;
+}
+
+static int exec_jetty_delete_cmd(struct udma_u_context *ctx, struct udma_u_jetty *jetty)
+{
+	if (jetty->tp_mode == URMA_TM_UM) {
+		udma_remove_from_qp_table(ctx, jetty->um_qp->qp_num);
+		if (jetty->um_qp->flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+			munmap_dwqe(jetty->um_qp);
+	}
+
+	return urma_cmd_delete_jetty(&jetty->urma_jetty);
 }
 
 static urma_jetty_t *udma_u_create_jetty_rq(urma_context_t *ctx,
@@ -378,12 +380,12 @@ static urma_jetty_t *udma_u_create_jetty_rq(urma_context_t *ctx,
 err_insert_jetty_node:
 	pthread_spin_destroy(&udma_jetty->lock);
 err_init_lock:
-	urma_cmd_delete_jetty(&udma_jetty->urma_jetty);
+	(void)exec_jetty_delete_cmd(udma_ctx, udma_jetty);
 err_exec_jetty_create_cmd:
 	if (!udma_jetty->share_jfr)
 		udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
 err_alloc_qp_node_table:
-	delete_qp_node_table(udma_ctx, udma_jetty);
+	delete_jetty_qp_node(udma_ctx, udma_jetty);
 err_alloc_jetty:
 	free(udma_jetty);
 
@@ -444,9 +446,9 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 err_insert_jetty_node:
 	pthread_spin_destroy(&udma_jetty->lock);
 err_init_lock:
-	urma_cmd_delete_jetty(&udma_jetty->urma_jetty);
+	(void)exec_jetty_delete_cmd(udma_ctx, udma_jetty);
 err_exec_jetty_create_cmd:
-	delete_qp_node_table(udma_ctx, udma_jetty);
+	delete_jetty_qp_node(udma_ctx, udma_jetty);
 err_alloc_qp_node_table:
 	if (!udma_jetty->share_jfr)
 		udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
@@ -460,27 +462,21 @@ urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
-	int ret;
 
-	if (udma_jetty->tp_mode == URMA_TM_UM)
-		udma_remove_from_qp_table(udma_ctx, udma_jetty->um_qp->qp_num);
-
-	delete_qp_node_table(udma_ctx, udma_jetty);
 	delete_jetty_node(udma_ctx, udma_jetty->urma_jetty.jetty_id.id);
 	pthread_spin_destroy(&udma_jetty->lock);
 
-	ret = urma_cmd_delete_jetty(jetty);
-	if (ret) {
+	if (exec_jetty_delete_cmd(udma_ctx, udma_jetty)) {
 		URMA_LOG_ERR("jetty delete failed!\n");
 		return URMA_FAIL;
 	}
 
 	if (!udma_jetty->share_jfr) {
-		if (udma_jetty->udma_jfr) {
-			udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
-			udma_jetty->udma_jfr = NULL;
-		}
+		udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
+		udma_jetty->udma_jfr = NULL;
 	}
+
+	delete_jetty_qp_node(udma_ctx, udma_jetty);
 
 	free(udma_jetty);
 
@@ -603,8 +599,7 @@ static urma_status_t exec_jetty_bind_cmd(urma_jetty_t *jetty,
 	return URMA_SUCCESS;
 }
 
-urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
-				urma_target_jetty_t *tjetty)
+urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
 {
 	struct udma_u_target_jetty *udma_target_jetty = to_udma_target_jetty(tjetty);
 	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
@@ -634,7 +629,7 @@ urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 		return URMA_FAIL;
 	}
 
-	ret = udma_add_to_qp_table(udma_ctx, jetty, udma_jetty->rc_node->qp,
+	ret = udma_add_to_qp_table(udma_ctx, udma_jetty->rc_node->qp,
 				   udma_jetty->rc_node->qp->qp_num);
 	if (ret) {
 		URMA_LOG_ERR("add to qp table failed when bind jetty, ret = %d.\n", ret);
@@ -647,6 +642,8 @@ urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty,
 	return URMA_SUCCESS;
 
 err_add_to_qp_table:
+	if (udma_jetty->rc_node->qp->flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+		munmap_dwqe(udma_jetty->rc_node->qp);
 	urma_cmd_unbind_jetty(jetty);
 
 	return URMA_FAIL;
@@ -672,6 +669,9 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 
 	udma_target_jetty = to_udma_target_jetty(udma_jetty->rc_node->tjetty);
 	udma_remove_from_qp_table(udma_ctx, udma_jetty->rc_node->qp->qp_num);
+
+	if (udma_jetty->rc_node->qp->flags & HNS3_UDMA_QP_CAP_DIRECT_WQE)
+		munmap_dwqe(udma_jetty->rc_node->qp);
 
 	ret = urma_cmd_unbind_jetty(jetty);
 	if (ret) {
@@ -769,7 +769,7 @@ static urma_status_t udma_u_post_jetty_rc_wr(struct udma_u_context *udma_ctx,
 	return ret;
 }
 
-static urma_status_t udma_u_post_jetty_qp_wr(struct udma_u_context *udma_ctx,
+static urma_status_t udma_u_post_jetty_um_wr(struct udma_u_context *udma_ctx,
 					     struct udma_u_jetty *udma_jetty,
 					     urma_jfs_wr_t *wr,
 					     urma_jfs_wr_t **bad_wr)
@@ -780,23 +780,26 @@ static urma_status_t udma_u_post_jetty_qp_wr(struct udma_u_context *udma_ctx,
 	urma_jfs_wr_t *it;
 	void *wqe;
 
-	for (it = wr; it != NULL; it = it->next) {
-		udma_qp = get_qp_of_jetty(udma_jetty, it);
-		if (!udma_qp) {
-			URMA_LOG_ERR("failed to find qp for target jetty");
-			ret = URMA_EINVAL;
-			*bad_wr = it;
-			break;
-		}
+	udma_qp = udma_jetty->um_qp;
 
-		ret = udma_u_post_qp_wr(udma_ctx, udma_qp, it, &wqe,
-					udma_jetty->tp_mode);
+	ret = check_dca_valid(udma_ctx, udma_qp);
+	if (ret)
+		return ret;
+
+	for (it = wr; it != NULL; it = it->next) {
+		ret = udma_u_post_umqp_wr(udma_ctx, udma_qp, it, &wqe);
 		if (ret) {
 			*bad_wr = it;
 			break;
 		}
 		wr_cnt++;
 	}
+
+	if (likely(wr_cnt))
+		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, wr_cnt);
+
+	if (udma_qp->flush_status == UDMA_FLUSH_STATU_ERR)
+		exec_jfs_flush_cqe_cmd(udma_ctx, udma_qp);
 
 	return ret;
 }
@@ -815,7 +818,7 @@ urma_status_t udma_u_post_jetty_send_wr(urma_jetty_t *jetty,
 	if (udma_jetty->tp_mode == URMA_TM_RC)
 		ret = udma_u_post_jetty_rc_wr(udma_ctx, udma_jetty, wr, bad_wr);
 	else
-		ret = udma_u_post_jetty_qp_wr(udma_ctx, udma_jetty, wr, bad_wr);
+		ret = udma_u_post_jetty_um_wr(udma_ctx, udma_jetty, wr, bad_wr);
 
 	if (!udma_jetty->jfs_lock_free)
 		(void)pthread_spin_unlock(&udma_jetty->lock);
@@ -827,12 +830,43 @@ urma_status_t udma_u_post_jetty_recv_wr(urma_jetty_t *jetty,
 					urma_jfr_wr_t *wr,
 					urma_jfr_wr_t **bad_wr)
 {
+	struct udma_u_context *ctx = to_udma_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	struct udma_u_jfr *udma_jfr = udma_jetty->udma_jfr;
 	urma_status_t ret = URMA_SUCCESS;
+	uint32_t nreq;
 
-	ret = udma_u_post_jfr_wr(&udma_jetty->udma_jfr->urma_jfr, wr, bad_wr);
-	if (ret)
-		URMA_LOG_ERR("post jfr wr failed, ret = %d.\n", ret);
+	if (!udma_jfr->lock_free)
+		(void)pthread_spin_lock(&udma_jfr->lock);
+
+	if (udma_jfr->rq_en) {
+		for (nreq = 0; wr; ++nreq, wr = wr->next) {
+			ret = post_recv_one_rq(udma_jfr, wr);
+			if (ret) {
+				*bad_wr = wr;
+				break;
+			}
+		}
+	} else {
+		for (nreq = 0; wr; ++nreq, wr = wr->next) {
+			ret = post_recv_one(udma_jfr, wr);
+			if (ret) {
+				*bad_wr = wr;
+				break;
+			}
+		}
+	}
+
+	if (nreq) {
+		udma_to_device_barrier();
+		if (udma_jfr->cap_flags & HNS3_UDMA_JFR_CAP_RECORD_DB)
+			*udma_jfr->db = udma_jfr->idx_que.head & UDMA_DB_PROD_IDX_M;
+		else
+			update_srq_db(ctx, udma_jfr);
+	}
+
+	if (!udma_jfr->lock_free)
+		(void)pthread_spin_unlock(&udma_jfr->lock);
 
 	return ret;
 }

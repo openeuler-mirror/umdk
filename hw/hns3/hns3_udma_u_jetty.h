@@ -99,6 +99,17 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 	return qpn_prefix == HNS3_UDMA_JETTY_QPN_PREFIX;
 }
 
+static inline void fill_um_jetty_qp(struct udma_u_jetty *jetty,
+				    struct hns3_udma_create_jetty_resp resp)
+{
+	jetty->um_qp->qp_num = resp.create_tp_resp.qpn;
+	jetty->um_qp->flags = resp.create_tp_resp.cap_flags;
+	jetty->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
+	jetty->um_qp->um_srcport = resp.create_tp_resp.um_srcport;
+	jetty->um_qp->sq.priority = resp.create_tp_resp.priority;
+	jetty->um_qp->jetty_id = jetty->urma_jetty.jetty_id.id;
+}
+
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 				  urma_jetty_cfg_t *jetty_cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
@@ -121,6 +132,9 @@ urma_status_t verify_jfs_init_attr(urma_context_t *ctx,
 				   urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_modify_jetty(urma_jetty_t *jetty,
 				  urma_jetty_attr_t *jetty_attr);
+urma_status_t udma_add_to_qp_table(struct udma_u_context *ctx, struct udma_qp *qp,
+				   uint32_t qpn);
+void udma_remove_from_qp_table(struct udma_u_context *ctx, uint32_t qpn);
 void delete_jetty_node(struct udma_u_context *udma_ctx, uint32_t id);
 urma_status_t insert_jetty_node(struct udma_u_context *udma_ctx,
 				void *pointer, bool is_jetty, uint32_t id);

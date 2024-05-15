@@ -48,22 +48,22 @@ struct um_header {
 
 struct udma_u_jfr {
 	urma_jfr_t                urma_jfr;
-	pthread_spinlock_t        lock;
+	urma_transport_mode_t     trans_mode;
 	uint32_t                  lock_free;
-	uint32_t                  wqe_cnt;
-	uint32_t                  wqe_shift;
+	pthread_spinlock_t        lock;
 	uint32_t                  max_sge;
 	uint32_t                  user_max_sge; /* max sge allow user assign */
 	uint64_t                  *wrid;
-	struct udma_u_jfr_idx_que idx_que;
-	struct udma_buf           wqe_buf;
 	uint32_t                  *db;
 	uint32_t                  jfrn;
 	uint32_t                  cap_flags;
-	urma_transport_mode_t     trans_mode;
 	struct um_header          *um_header_que;
 	urma_target_seg_t         *um_header_seg;
 	uint32_t                  srqn;
+	struct udma_u_jfr_idx_que idx_que;
+	struct udma_buf           wqe_buf;
+	uint32_t                  wqe_cnt;
+	uint32_t                  wqe_shift;
 	bool                      rq_en;
 };
 
@@ -101,5 +101,10 @@ urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr);
 urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
 urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 				 urma_jfr_wr_t **bad_wr);
+urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr,
+				      urma_jfr_wr_t *wr);
+urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr,
+				   urma_jfr_wr_t *wr);
+void update_srq_db(struct udma_u_context *ctx, struct udma_u_jfr *jfr);
 
 #endif /* _UDMA_U_JFR_H */
