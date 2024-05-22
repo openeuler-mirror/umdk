@@ -27,6 +27,11 @@ tpsa_worker_t *g_uvs_worker = NULL;
 int uvs_so_init(uvs_init_attr_t *attr)
 {
     tpsa_worker_t *worker;
+
+    if (attr == NULL) {
+        return -1;
+    }
+
     /* tpsa log init */
     tpsa_log_init();
     tpsa_log_set_level((unsigned)TPSA_VLOG_LEVEL_INFO);
@@ -35,7 +40,9 @@ int uvs_so_init(uvs_init_attr_t *attr)
     if (tpsa_net_init() != 0) {
         goto tpsa_log_uninit;
     }
-
+    if (tpsa_check_cpu_core(attr->cpu_core) != 0) {
+        attr->cpu_core = -1;
+    }
     worker = tpsa_worker_init(attr);
     if (worker == NULL) {
         goto tpsa_net_uninit;
@@ -91,10 +98,9 @@ void uvs_socket_uninit(void)
     tpsa_sock_server_uninit(&worker->sock_ctx);
 }
 
-int uvs_restore_table()
+int uvs_restore_table(void)
 {
-    if (tpsa_restore_vtp_table(g_uvs_worker) != 0 ||
-        tpsa_restore_wait_list(&g_uvs_worker->table_ctx, g_uvs_worker->global_cfg_ctx.wait_restored_timeout) != 0) {
+    if (tpsa_restore_vtp_table(g_uvs_worker) != 0) {
         return -1;
     }
     return 0;

@@ -240,13 +240,13 @@ static int create_jettys(tp_test_context_t *ctx, tp_test_config_t *cfg)
     if (ctx->tp_type == URMA_TRANSPORT_UB) {
         jetty_flag.bs.share_jfr = 1;
         jetty_cfg.flag = jetty_flag;
-        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.jfs_cfg = jfs_cfg;
         jetty_cfg.shared.jfr = NULL;
         jetty_cfg.shared.jfc = NULL;
     } else {
         jetty_flag.bs.share_jfr = 0;   /* No shared jfr */
         jetty_cfg.flag = jetty_flag;
-        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.jfs_cfg = jfs_cfg;
         jetty_cfg.jfr_cfg = &jfr_cfg;
     }
 
@@ -255,7 +255,7 @@ static int create_jettys(tp_test_context_t *ctx, tp_test_config_t *cfg)
         goto destroy_jfr;
     }
     for (i = 0; i < ctx->jetty_num; i++) {
-        jetty_cfg.jfs_cfg->jfc = ctx->jfc[i];
+        jetty_cfg.jfs_cfg.jfc = ctx->jfc[i];
         if (ctx->tp_type == URMA_TRANSPORT_UB) {
             jetty_cfg.shared.jfr = ctx->jfr[i];
             jetty_cfg.shared.jfc = ctx->jfc[i];

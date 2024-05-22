@@ -29,7 +29,7 @@ static live_migrate_table_entry_t *alloc_live_migrate_table_entry(const live_mig
 
 int live_migrate_table_create(live_migrate_table_t *live_migrate_table)
 {
-    if (ub_hmap_init(&live_migrate_table->hmap, TPSA_TABLE_SIZE) != 0) {
+    if (ub_hmap_init(&live_migrate_table->hmap, TPSA_LIVE_MIGRATE_TABLE_SIZE) != 0) {
         TPSA_LOG_ERR("live_migrate_table init failed.\n");
         return -ENOMEM;
     }

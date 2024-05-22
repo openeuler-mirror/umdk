@@ -40,7 +40,7 @@ tpsa_response_t *process_live_migrate_table_show(tpsa_request_t *req, ssize_t re
 
     show_req = (tpsa_live_migrate_show_req_t *)req->req;
     if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", show_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -97,7 +97,7 @@ tpsa_response_t *process_live_migrate_table_add(tpsa_request_t *req, ssize_t rea
 
     add_req = (tpsa_live_migrate_add_req_t *)req->req;
     if (strnlen(add_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", add_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -147,7 +147,7 @@ tpsa_response_t *process_live_migrate_table_del(tpsa_request_t *req, ssize_t rea
 
     del_req = (tpsa_live_migrate_del_req_t *)req->req;
     if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", del_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 

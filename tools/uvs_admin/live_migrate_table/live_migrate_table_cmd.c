@@ -113,7 +113,10 @@ static const uvs_admin_cmd_usage_t g_live_migrate_table_del_cmd_usage = {
 
 static inline int parse_dev_name(uvs_admin_live_migrate_table_args_t *args, const char *_optarg)
 {
-    (void)memcpy(args->dev_name, _optarg, strlen(_optarg));
+    if (strnlen(_optarg, UVS_ADMIN_MAX_DEV_NAME) >= UVS_ADMIN_MAX_DEV_NAME) {
+        return -EINVAL;
+    }
+    strcpy(args->dev_name, _optarg);
     args->mask.bs.dev_name = 1;
     return 0;
 }

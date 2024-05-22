@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -181,7 +182,7 @@ uint32_t admin_read_dev_file_value_u32(const char *dev_name, const char *file)
     ret = admin_str_to_u32(tmp_value, &value);
     if (ret != 0) {
         (void)printf("file %s: str %s to u64 failed, ret:%d.\n", file, tmp_value, ret);
-        goto free_sysfs_path;
+        return 0;
     }
     return value;
 
@@ -258,4 +259,88 @@ int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64)
          return -1;
     }
     return admin_str_to_u64(tmp_value, u64);
+}
+
+static inline bool eid_is_valid(urma_eid_t *eid)
+{
+    return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
+}
+
+static int admin_parse_eid_info(char *buf, uint32_t *eid_index, urma_eid_t *eid)
+{
+    char *eid_index_str = NULL;
+    char *eid_str = NULL;
+
+    if (buf[strlen(buf) - 1] == '\n') {
+        buf[strlen(buf) - 1] = '\0';
+    } else {
+        return -1;
+    }
+
+    eid_index_str = strtok_r(buf, " ", &eid_str);
+    if (eid_index_str == NULL || admin_str_to_u32(eid_index_str, eid_index) != 0) {
+        return -1;
+    }
+    if (eid_str == NULL || admin_str_to_eid(eid_str, eid) != 0 ||
+        !eid_is_valid(eid)) {
+        return -1;
+    }
+    return 0;
+}
+
+static FILE *admin_fopen_sysfs_file(const char *dir, const char *file, char *rwx)
+{
+    char *path = calloc(1, DEV_PATH_MAX);
+    if (path == NULL) {
+        return NULL;
+    }
+
+    if (snprintf(path, DEV_PATH_MAX, "%s/%s", dir, file) < 0) {
+        free(path);
+        printf("snprintf failed");
+        return NULL;
+    }
+
+    char *file_path = realpath(path, NULL);
+    if (file_path == NULL) {
+        free(path);
+        printf("file_path:%s/%s is not standardize.\n", dir, file);
+        return NULL;
+    }
+
+    FILE *fp = fopen(file_path, rwx);
+    if (!fp) {
+        printf("Failed open file: %s, errno: %d.\n", file_path, errno);
+    }
+
+    free(file_path);
+    free(path);
+    return fp;
+}
+
+void admin_read_eid_list(const char *dir, const char *file,
+    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+{
+    FILE *fp = admin_fopen_sysfs_file(dir, file, "r");
+    if (!fp) {
+        printf("Failed open file: %s/%s \n", dir, file);
+        return;
+    }
+
+    char buf[URMA_MAX_NAME] = {0};
+    uint32_t cnt_idx = 0;
+    while (cnt_idx < max_eid_cnt && !feof(fp)) {
+        if (!fgets(buf, URMA_MAX_NAME, fp)) {
+            continue;
+        }
+
+        if (admin_parse_eid_info(buf, &eid_list[cnt_idx].eid_index, &eid_list[cnt_idx].eid) != 0) {
+            continue;
+        }
+
+        cnt_idx++;
+    }
+
+    (void)fclose(fp);
+    return;
 }

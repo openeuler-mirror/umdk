@@ -89,12 +89,6 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         return -1;
     }
 
-    status = urma_get_uasid(&ctx->uasid);
-    if (status != URMA_SUCCESS) {
-        (void)fprintf(stderr, "Failed to get uasid, status:%d!\n", (int)status);
-        goto uninit;
-    }
-
     if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
         (void)fprintf(stderr, "dev name invailed!\n");
         goto uninit;
@@ -335,6 +329,11 @@ static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
         jfs_cfg->max_sge = PERFTEST_DEF_UM_MAX_SGE;
         jfs_cfg->max_rsge = 1;
     }
+    jfs_cfg->flag.bs.sub_trans_mode = cfg->sub_trans_mode;
+    if (jfs_cfg->trans_mode == URMA_TM_RC &&
+        (jfs_cfg->flag.bs.sub_trans_mode & URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE)) {
+        jfs_cfg->flag.bs.rc_share_tp = 1;
+    }
 }
 
 static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, urma_jfr_cfg_t *jfr_cfg)
@@ -343,6 +342,7 @@ static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     jfr_cfg->flag.bs.tag_matching = URMA_NO_TAG_MATCHING;
     jfr_cfg->flag.bs.lock_free = cfg->lock_free ? 1 : 0;
     jfr_cfg->trans_mode = cfg->trans_mode;
+    jfr_cfg->flag.bs.sub_trans_mode = cfg->sub_trans_mode;
     jfr_cfg->min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER;
     jfr_cfg->max_sge = 1;
     jfr_cfg->jfc = ctx->jfc_r;
@@ -383,7 +383,7 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
     if (cfg->share_jfr == false) {
         jetty_flag.bs.share_jfr = 0;   /* No shared jfr */
         jetty_cfg.flag = jetty_flag;
-        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.jfs_cfg = jfs_cfg;
         jetty_cfg.jfr_cfg = &jfr_cfg;
     } else {
         ctx->jfr = calloc(1, sizeof(urma_jfr_t *));
@@ -398,7 +398,7 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
         }
         jetty_flag.bs.share_jfr = 1;
         jetty_cfg.flag = jetty_flag;
-        jetty_cfg.jfs_cfg = &jfs_cfg;
+        jetty_cfg.jfs_cfg = jfs_cfg;
         jetty_cfg.shared.jfr = ctx->jfr[0];
         jetty_cfg.shared.jfc = ctx->jfc_r;
     }
@@ -564,7 +564,7 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
         .len = ctx->buf_size  * PERFTEST_BUF_NUM,
-        .token_value = &g_perftest_token,
+        .token_value = g_perftest_token,
         .flag = flag,
         .user_ctx = (uintptr_t)NULL,
         .iova = 0

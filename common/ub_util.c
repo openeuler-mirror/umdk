@@ -304,6 +304,30 @@ int ub_str_to_u32(const char *buf, uint32_t *u32)
     return 0;
 }
 
+int ub_str_to_int(const char *buf, int *integer)
+{
+    long ret;
+    char *end = NULL;
+
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+
+    errno = 0;
+    ret = strtol(buf, &end, 0);
+    if (errno == ERANGE && ret == LONG_MAX) {
+        return -EFAULT;
+    }
+    if (end == NULL || *end != '\0' || end == buf) {
+        return -ENOEXEC;
+    }
+    if (ret > LONG_MAX) {
+        return -ERANGE;
+    }
+    *integer = (int)ret;
+    return 0;
+}
+
 int ub_str_to_u64(const char *buf, uint64_t *u64)
 {
     unsigned long ret;

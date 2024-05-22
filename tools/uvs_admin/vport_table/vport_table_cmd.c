@@ -314,8 +314,8 @@ static const uvs_admin_opt_usage_t g_vport_table_add_cmd_opt_usage[] = {
     {VPORT_TABLE_OPT_SLICE_LONG,          "slice", false},
     {VPORT_TABLE_OPT_TP_CNT_LONG,         "tp_cnt(default 2)", false},
     {VPORT_TABLE_OPT_OOS_CNT_LONG,        "oos_cnt(default 0)", false},
-    {VPORT_TABLE_OPT_PATTERN_LONG,        "share_mode(default 1)", false},
-    {VPORT_TABLE_OPT_SHARE_MODE_LONG,     "pattern(default 3)", false},
+    {VPORT_TABLE_OPT_PATTERN_LONG,        "pattern (0: pattern1; 1: pattern3)", false},
+    {VPORT_TABLE_OPT_SHARE_MODE_LONG,     "share_mode(default 1, share_mode)", false},
     {VPORT_TABLE_OPT_VIRTUALIZE_LONG,     "supports virtualization(default disable)", false},
     {VPORT_TABLE_OPT_MIN_JETTR_CNT_LONG,  "min jetty cnt supported by a FE", false},
     {VPORT_TABLE_OPT_MAX_JETTY_CNT_LONG,  "max jetty cnt supported by a FE", false},
@@ -999,7 +999,7 @@ static inline int parse_eid(uvs_admin_vport_table_args_t *args, const char *_opt
 
 static inline int vport_table_input_str_range_check(uint32_t str_len_max, uint32_t input_str_len)
 {
-    if (input_str_len > str_len_max) {
+    if (input_str_len >= str_len_max) {
         return -1;
     }
     return 0;
@@ -1010,7 +1010,7 @@ static inline int parse_dev_name(uvs_admin_vport_table_args_t *args, const char 
     if (vport_table_input_str_range_check((uint32_t)UVS_ADMIN_MAX_DEV_NAME, (uint32_t)strlen(_optarg)) != 0) {
         return -EINVAL;
     }
-    (void)memcpy(args->dev_name, _optarg, strlen(_optarg));
+    (void)strcpy(args->dev_name, _optarg);
     args->mask.bs.dev_name = 1;
     return 0;
 }
@@ -1306,6 +1306,7 @@ static int32_t uvs_admin_vport_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
+        (void)printf("err: failed to recv resp: vport_table show\n");
         free(req);
         return -EIO;
     }
@@ -1406,6 +1407,7 @@ static int32_t uvs_admin_vport_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
+        (void)printf("err: failed to recv resp: vport_table add\n");
         free(req);
         return -EIO;
     }
@@ -1447,6 +1449,7 @@ static int32_t uvs_admin_vport_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
+        (void)printf("err: failed to recv resp: vport_table del\n");
         free(req);
         return -EIO;
     }
@@ -1505,6 +1508,7 @@ static int32_t uvs_admin_vport_table_showueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
+        (void)printf("err: failed to recv resp: vport_table show_ueid\n");
         free(req);
         return -EIO;
     }
@@ -1551,6 +1555,7 @@ static int32_t uvs_admin_vport_table_addueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
+        (void)printf("err: failed to recv resp: vport_table add_ueid\n");
         free(req);
         return -EIO;
     }
@@ -1593,6 +1598,7 @@ static int32_t uvs_admin_vport_table_delueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
         free(req);
+        (void)printf("err: failed to recv resp: vport_table del_ueid\n");
         return -EIO;
     }
 
@@ -1600,6 +1606,8 @@ static int32_t uvs_admin_vport_table_delueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     if (del_rsp->res != 0) {
         (void)printf("ERR: failed to del ueid, ret: %d.\n", del_rsp->res);
     }
+
+    (void)printf("SUCCESS to del ueid, ret: %d.\n", del_rsp->res);
 
     free(req);
     return 0;

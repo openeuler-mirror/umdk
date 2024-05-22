@@ -20,6 +20,7 @@ typedef struct tpsa_config {
     uvs_net_addr_type_t tpsa_ip_type;
     uvs_net_addr_t tpsa_server_ip;
     uint16_t tpsa_server_port;
+    int tpsa_worker_cpu_core;
 } tpsa_config_t;
 
 int tpsa_parse_config_file(tpsa_config_t *cfg);

@@ -47,13 +47,14 @@ typedef union uvs_admin_vport_table_mask {
         uint64_t eid_idx             : 1;
         uint64_t upi                 : 1;
         uint64_t pattern             : 1;
-        uint64_t share_mode          : 1;
         uint64_t virtualization      : 1;
         uint64_t min_jetty_cnt       : 1;
         uint64_t max_jetty_cnt       : 1;
         uint64_t min_jfr_cnt         : 1;
         uint64_t max_jfr_cnt         : 1;
-        uint64_t reserved            : 30;
+        uint64_t um_en               : 1;
+        uint64_t share_mode          : 1;
+        uint64_t reserved            : 29;
     } bs;
     uint64_t value;
 } uvs_admin_vport_table_mask_t;

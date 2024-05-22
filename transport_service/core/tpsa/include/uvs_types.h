@@ -26,6 +26,16 @@ extern "C" {
 #define UVS_MAX_CC_CNT 64
 #define UVS_DEVID_SIZE (16)
 
+enum uvs_event_type {
+    UVS_EVENT_HANG,
+    UVS_EVENT_RESUME,
+    UVS_EVENT_MAX,
+};
+
+struct uvs_event {
+    enum uvs_event_type type;
+};
+
 typedef enum uvs_mtu {
     UVS_MTU_256 = 1,
     UVS_MTU_512,
@@ -66,6 +76,7 @@ typedef struct uvs_ueid {
 
 typedef struct uvs_tpf {
     char name[UVS_MAX_DEV_NAME];
+    char netdev_name[UVS_MAX_DEV_NAME];
 } uvs_tpf_t;
 
 typedef union uvs_net_addr {
@@ -278,7 +289,7 @@ typedef union uvs_vport_mask {
         uint32_t flag_pattern : 1;
         uint32_t flag_um_en : 1;
         uint32_t vtp_per_second : 1;
-        uint32_t reserved : 11;
+        uint32_t reserved : 10;
     } bs;
     uint32_t value;
 } uvs_vport_mask_t;
@@ -346,6 +357,7 @@ typedef struct uvs_net_addr_info {
     uvs_net_addr_t net_addr;
     uint64_t vlan; /* available for UBOE */
     uint8_t mac[ETH_ADDR_LEN]; /* available for UBOE */
+    uint32_t prefix_len;
 } uvs_net_addr_info_t;
 
 typedef struct uvs_net_addr_info uvs_dip_info_t;
@@ -362,6 +374,7 @@ typedef enum {
 
 typedef struct uvs_init_attr {
     bool statistic;
+    int cpu_core;
 } uvs_init_attr_t;
 
 typedef struct uvs_socket_init_attr {
@@ -401,6 +414,13 @@ typedef struct uvs_tpf_statistic {
     uint64_t tp_closing; /* closing statisitc Increases only */
 } uvs_tpf_statistic_t;
 
+/**
+ * Callback function for UVS event.
+ * @param[in] event:        event details;
+ * @param[in] arg:          argument provided by user;
+ * Return: void.
+ */
+typedef void (*uvs_event_cb_t)(struct uvs_event *event, void *arg);
 #ifdef __cplusplus
 }
 #endif

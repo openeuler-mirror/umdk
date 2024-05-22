@@ -15,6 +15,7 @@
 #include <sys/syscall.h>
 #include <pthread.h>
 
+#include "uvs_health.h"
 #include "uvs_stats.h"
 #include "uvs_types.h"
 #include "tpsa_log.h"
@@ -34,14 +35,9 @@
 #define TPSA_DEFAULT_SUSPEND_PERIOD 1000 // us
 #define TPSA_DEFAULT_SUSPEND_CNT 3
 #define TPSA_DEFAULT_SUS2ERR_PERIOD 30000000 // us
-#define TPSA_DEFAULT_WAIT_RESTORE_PERIOD 20000000 // us
-#define TPSA_S2US 1000000L
-#define TPSA_NS2US 1000L
-#define TPSA_WAIT_LIST_RESTORE_INTERVAL 10000
 
 /* add temporarily for 1650 not support flush tp */
 static bool g_tp_fast_destroy = false;
-static bool g_start_restore = false;
 void tpsa_set_tp_fast_destroy(bool tp_fast_destory)
 {
     g_tp_fast_destroy = tp_fast_destory;
@@ -148,7 +144,7 @@ static int tpsa_worker_config_device(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
         return -1;
     }
 
-    if (tpsa_nl_send_msg(&worker->nl_ctx, nlresp) != 0) {
+    if (tpsa_genl_send_msg(&worker->genl_ctx, nlresp) != 0) {
         free(nlresp);
         return -1;
     }
@@ -167,7 +163,7 @@ static int tpsa_sock_handle_event(tpsa_worker_t *worker, struct epoll_event *ev)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -187,9 +183,6 @@ static int tpsa_sock_handle_event(tpsa_worker_t *worker, struct epoll_event *ev)
         }
         int ret;
         switch (msg->msg_type) {
-            case TPSA_FORWARD: /* Adapt to Alpha version */
-                ret = tpsa_nl_send_msg(&worker->nl_ctx, &msg->content.nlmsg);
-                break;
             case TPSA_CREATE_REQ:
             case TPSA_LM_TRANSFER:
                 ret = uvs_handle_create_vtp_req(&ctx, msg);
@@ -199,9 +192,6 @@ static int tpsa_sock_handle_event(tpsa_worker_t *worker, struct epoll_event *ev)
                 break;
             case TPSA_CREATE_ACK:
                 ret = uvs_create_vtp_ack(&ctx, msg);
-                break;
-            case TPSA_CREATE_FINISH:
-                ret = uvs_create_vtp_finish(&ctx, msg);
                 break;
             case TPSA_CREATE_FAIL_RESP:
                 ret = uvs_hanlde_create_fail_resp(&ctx, msg);
@@ -255,47 +245,70 @@ static int tpsa_sock_handle_event(tpsa_worker_t *worker, struct epoll_event *ev)
     return 0;
 }
 
-tpsa_nl_msg_t *tpsa_handle_nl_add_sip_req(tpf_dev_table_t *table, tpsa_nl_msg_t *msg)
+static int tpsa_handle_nl_add_sip_req(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
     sip_table_entry_t entry_add = {0};
     tpsa_nl_add_sip_req_t *req;
+    tpf_dev_table_t *table;
+    tpsa_nl_msg_t *resp = NULL;
 
+    table = &worker->table_ctx.tpf_dev_table;
     req = (tpsa_nl_add_sip_req_t *)(void *)msg->payload;
     if (strnlen(req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
         TPSA_LOG_ERR("Invalid parameter, %s", req->dev_name);
-        return NULL;
+        return -1;
     }
     (void)memcpy(entry_add.dev_name, req->dev_name, UVS_MAX_DEV_NAME);
     (void)memcpy(&entry_add.addr, &req->netaddr, sizeof(uvs_net_addr_info_t));
     entry_add.port_cnt = req->port_cnt;
     (void)memcpy(entry_add.port_id, req->port_id, TPSA_MAX_PORT_CNT);
-    entry_add.prefix_len = req->prefix_len;
     entry_add.mtu = (uvs_mtu_t)req->mtu;
     (void)memcpy(entry_add.netdev_name, req->netdev_name, UVS_MAX_DEV_NAME);
 
     if (tpsa_sip_table_add(table, req->index, &entry_add) != 0) {
-        return tpsa_get_add_sip_resp(msg, TPSA_NL_RESP_FAIL);
+        resp = tpsa_get_add_sip_resp(msg, TPSA_NL_RESP_FAIL);
+    } else {
+        resp = tpsa_get_add_sip_resp(msg, TPSA_NL_RESP_SUCCESS);
     }
-    return tpsa_get_add_sip_resp(msg, TPSA_NL_RESP_SUCCESS);
+    int ret = tpsa_genl_send_msg(&worker->genl_ctx, resp);
+    if (ret != 0) {
+        free(resp);
+        return ret;
+    }
+    free(resp);
+    return 0;
 }
 
-tpsa_nl_msg_t *tpsa_handle_nl_del_sip_req(tpf_dev_table_t *table, tpsa_nl_msg_t *msg)
+static int tpsa_handle_nl_del_sip_req(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
+    tpf_dev_table_t *table;
     tpsa_nl_del_sip_req_t *req;
     req = (tpsa_nl_del_sip_req_t *)(void *)msg->payload;
+    tpsa_nl_msg_t *resp = NULL;
 
+    table = &worker->table_ctx.tpf_dev_table;
     if (tpsa_sip_table_del(table, req->dev_name, req->index) != 0) {
-        return tpsa_get_del_sip_resp(msg, TPSA_NL_RESP_FAIL);
+        resp = tpsa_get_del_sip_resp(msg, TPSA_NL_RESP_FAIL);
+    } else {
+        resp = tpsa_get_del_sip_resp(msg, TPSA_NL_RESP_SUCCESS);
     }
-    return tpsa_get_del_sip_resp(msg, TPSA_NL_RESP_SUCCESS);
+    int ret = tpsa_genl_send_msg(&worker->genl_ctx, resp);
+    if (ret != 0) {
+        free(resp);
+        return ret;
+    }
+    free(resp);
+    return 0;
 }
 
 static int tpsa_worker_process_ueid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
     tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
     tpsa_nl_alloc_eid_req_t *nlreq = (tpsa_nl_alloc_eid_req_t *)nlmsg->req.data;
+    vport_table_t *vport_table = &worker->table_ctx.vport_table;
     vport_key_t key;
-    tpsa_ueid_t value;
+    tpsa_ueid_t ueid;
+    bool is_add_ueid;
     int ret = 0;
 
     if (strnlen(nlreq->tpf_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
@@ -304,23 +317,25 @@ static int tpsa_worker_process_ueid(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
     }
 
     key.fe_idx = nlmsg->src_fe_idx;
-    memcpy(key.tpf_name, nlreq->tpf_name, UVS_MAX_DEV_NAME);
-    if (tpsa_lookup_vport_table_ueid(&key, &worker->table_ctx.vport_table, nlreq->eid_index, &value) < 0) {
+    (void)memcpy(key.tpf_name, nlreq->tpf_name, UVS_MAX_DEV_NAME);
+
+    is_add_ueid = (nlmsg->req.opcode == TPSA_MSG_ALLOC_EID) ? true : false;
+    if (tpsa_update_vport_table_ueid(vport_table, &key, nlreq->eid_index, is_add_ueid, &ueid) < 0) {
         return -1;
     }
 
     tpsa_cmd_t cmd_type = (nlmsg->req.opcode == TPSA_MSG_ALLOC_EID) ? TPSA_CMD_ALLOC_EID : TPSA_CMD_DEALLOC_EID;
-    if (tpsa_ioctl_op_ueid(&worker->ioctl_ctx, cmd_type, &key, &value, nlreq->eid_index) != 0) {
+    if (tpsa_ioctl_op_ueid(&worker->ioctl_ctx, cmd_type, &key, &ueid, nlreq->eid_index) != 0) {
         TPSA_LOG_ERR("Fail to ioctl to alloc/dealloc eid in worker");
         return -1;
     }
 
     /* Netlink to notify vtpn */
-    tpsa_nl_msg_t *nlresp = tpsa_nl_create_dicover_eid_resp(msg, &value, nlreq->eid_index, nlreq->virtualization);
+    tpsa_nl_msg_t *nlresp = tpsa_nl_create_dicover_eid_resp(msg, &ueid, nlreq->eid_index, nlreq->virtualization);
     if (nlresp == NULL) {
         return -1;
     }
-    if (tpsa_nl_send_msg(&worker->nl_ctx, nlresp) != 0) {
+    if (tpsa_genl_send_msg(&worker->genl_ctx, nlresp) != 0) {
         ret = -1;
         goto free_resp;
     }
@@ -350,7 +365,7 @@ static int tpsa_worker_update_tpf_dev_info_resp(tpsa_worker_t *worker, tpsa_nl_m
         return -1;
     }
 
-    if (tpsa_nl_send_msg(&worker->nl_ctx, nlresp) != 0) {
+    if (tpsa_genl_send_msg(&worker->genl_ctx, nlresp) != 0) {
         free(nlresp);
         TPSA_LOG_INFO("failed to send tpsa nl msg\n");
         return -1;
@@ -420,6 +435,7 @@ static int tpsa_worker_add_tpf_dev_info(tpsa_worker_t *worker, tpsa_nl_msg_t *ms
     }
     (void)memcpy(key.dev_name, nlreq->dev_name, UVS_MAX_DEV_NAME);
 
+    (void)memcpy(add_entry.netdev_name, nlreq->netdev_name, UVS_MAX_DEV_NAME);
     add_entry.dev_fea = nlreq->dev_fea;
     add_entry.cc_entry_cnt = cc_entry_cnt;
     TPSA_LOG_INFO("update tpf: %s dev info, clan:%d", key.dev_name, add_entry.dev_fea.bs.clan);
@@ -464,7 +480,7 @@ static void tpsa_check_lm_begin(tpsa_worker_t *worker)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -493,7 +509,7 @@ static void tpsa_check_lm_begin(tpsa_worker_t *worker)
     return;
 }
 
-void uvs_rm_vtp_table_check_switch(uvs_ctx_t *ctx)
+static void uvs_rm_vtp_table_check_switch(uvs_ctx_t *ctx)
 {
     deid_vtp_table_key_t deid_key = {
         .dst_eid = ctx->table_ctx->dip_table.refresh_entry->key.deid,
@@ -527,7 +543,7 @@ void uvs_rm_vtp_table_check_switch(uvs_ctx_t *ctx)
     return;
 }
 
-void uvs_rc_vtp_table_check_switch(uvs_ctx_t *ctx)
+static void uvs_rc_vtp_table_check_switch(uvs_ctx_t *ctx)
 {
     deid_vtp_table_key_t deid_key = {
         .dst_eid = ctx->table_ctx->dip_table.refresh_entry->key.deid,
@@ -561,7 +577,7 @@ void uvs_rc_vtp_table_check_switch(uvs_ctx_t *ctx)
     return;
 }
 
-void uvs_um_vtp_table_check_switch(uvs_ctx_t *ctx)
+static void uvs_um_vtp_table_check_switch(uvs_ctx_t *ctx)
 {
     deid_vtp_table_key_t deid_key = {
         .dst_eid = ctx->table_ctx->dip_table.refresh_entry->key.deid,
@@ -600,7 +616,7 @@ static void tpsa_check_tbl_refresh(tpsa_worker_t *worker)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -628,7 +644,7 @@ static void tpsa_check_vf_delete(tpsa_worker_t *worker)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -643,7 +659,7 @@ static void tpsa_clean_rebooted_fe(tpsa_worker_t *worker)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -660,16 +676,24 @@ static int tpsa_handle_fe2tpf_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
 
     switch (tmsg->req.opcode) {
         case TPSA_MSG_CREATE_VTP:
+            if (msg->transport_type != TPSA_TRANSPORT_IB && !worker->global_cfg_ctx.vtp_restore_finished) {
+                TPSA_LOG_WARN("vtp restore not finished, abandon create vtp message");
+                return -1;
+            }
             ret = uvs_create_vtp(&ctx, msg);
             break;
         case TPSA_MSG_DESTROY_VTP:
+            if (msg->transport_type != TPSA_TRANSPORT_IB && !worker->global_cfg_ctx.vtp_restore_finished) {
+                TPSA_LOG_WARN("vtp restore not finished, abandon destroy vtp message");
+                return -1;
+            }
             ret = uvs_destroy_vtp(&ctx, msg);
             break;
         case TPSA_MSG_CONFIG_DEVICE:
@@ -711,7 +735,7 @@ static int tpsa_handle_migrate_async(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
         .global_cfg_ctx = &worker->global_cfg_ctx,
         .table_ctx = &worker->table_ctx,
         .sock_ctx = &worker->sock_ctx,
-        .nl_ctx = &worker->nl_ctx,
+        .genl_ctx = &worker->genl_ctx,
         .ioctl_ctx = &worker->ioctl_ctx,
         .tpsa_attr = worker->tpsa_attr,
     };
@@ -733,8 +757,9 @@ static int tpsa_handle_migrate_async(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
     }
 
     if (strnlen(mig_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-            TPSA_LOG_ERR("Invalid parameter, %s", mig_req->dev_name);
-            return -EINVAL;
+        TPSA_LOG_ERR("Invalid parameter, %s", mig_req->dev_name);
+        free(lm_vtp_entry);
+        return -EINVAL;
     }
     vport_key_t vport_key = {0};
     vport_key.fe_idx = vtp_cfg->fe_idx;
@@ -797,7 +822,7 @@ int uvs_destroy_target_vtp_for_lm(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
     return 0;
 }
 
-static tpsa_nl_msg_t *tpsa_handle_nl_query_tp_req(tpsa_worker_t *worker, tpsa_nl_msg_t *req)
+static int tpsa_handle_nl_query_tp_req(tpsa_worker_t *worker, tpsa_nl_msg_t *req)
 {
     urma_eid_t src_eid = req->src_eid;
     urma_eid_t dst_eid = req->dst_eid;
@@ -809,12 +834,12 @@ static tpsa_nl_msg_t *tpsa_handle_nl_query_tp_req(tpsa_worker_t *worker, tpsa_nl
 
     if (strnlen(query_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
             TPSA_LOG_ERR("Invalid parameter, %s", query_req->dev_name);
-            return NULL;
+            return -1;
     }
 
     return_entry = (vport_table_entry_t *)calloc(1, sizeof(vport_table_entry_t));
     if (return_entry == NULL) {
-        return NULL;
+        return -ENOMEM;
     }
     (void)memcpy(key.tpf_name, query_req->dev_name, UVS_MAX_DEV_NAME);
     key.fe_idx = query_req->fe_idx;
@@ -822,13 +847,12 @@ static tpsa_nl_msg_t *tpsa_handle_nl_query_tp_req(tpsa_worker_t *worker, tpsa_nl
     if (ret != 0) {
         free(return_entry);
         TPSA_LOG_ERR("Failed to query vport entry\n");
-        return NULL;
+        return -1;
     }
     resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_query_tp_resp_t), &src_eid, &dst_eid);
     if (resp == NULL) {
         free(return_entry);
-        TPSA_LOG_ERR("Fail to alloc nl msg");
-        return NULL;
+        return -ENOMEM;
     }
     resp->hdr.nlmsg_type = TPSA_NL_QUERY_TP_RESP;
     resp->msg_type = TPSA_NL_QUERY_TP_RESP;
@@ -845,14 +869,25 @@ static tpsa_nl_msg_t *tpsa_handle_nl_query_tp_req(tpsa_worker_t *worker, tpsa_nl
     query_tp_resp->oor_cnt = return_entry->tp_cfg.oor_cnt;
     free(return_entry);
 
-    return resp;
+    ret = tpsa_genl_send_msg(&worker->genl_ctx, resp);
+    if (ret != 0) {
+        free(resp);
+        return ret;
+    }
+    free(resp);
+    return 0;
 }
 
-static int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
+int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
 {
-    tpsa_nl_msg_t *resp = NULL;
-    tpsa_sock_msg_t *info = NULL;
-    int ret = 0;
+    uvs_ctx_t ctx = {
+        .global_cfg_ctx = &worker->global_cfg_ctx,
+        .table_ctx = &worker->table_ctx,
+        .sock_ctx = &worker->sock_ctx,
+        .genl_ctx = &worker->genl_ctx,
+        .ioctl_ctx = &worker->ioctl_ctx,
+        .tpsa_attr = worker->tpsa_attr,
+    };
 
     switch (msg->msg_type) {
         case TPSA_NL_FE2TPF_REQ:
@@ -862,26 +897,18 @@ static int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
             return tpsa_handle_migrate_async(worker, msg);
         /* Alpha begins */
         case TPSA_NL_QUERY_TP_REQ:
-            resp = tpsa_handle_nl_query_tp_req(worker, msg);
-            break;
-        case TPSA_NL_CREATE_TP_REQ:
-        case TPSA_NL_DESTROY_TP_REQ:
+            return tpsa_handle_nl_query_tp_req(worker, msg);
         case TPSA_NL_RESTORE_TP_REQ:
-        case TPSA_NL_SET_AGENT_PID:
-        case TPSA_NL_CREATE_TP_RESP:
-        case TPSA_NL_DESTROY_TP_RESP:
+        case TPSA_NL_SET_GENL_PID:
         case TPSA_NL_QUERY_TP_RESP:
         case TPSA_NL_RESTORE_TP_RESP:
-            info = tpsa_handle_nl_create_tp_req(msg);
             break;
         case TPSA_NL_ADD_SIP_REQ:
-            resp = tpsa_handle_nl_add_sip_req(&worker->table_ctx.tpf_dev_table, msg);
-            break;
+            return tpsa_handle_nl_add_sip_req(worker, msg);
         case TPSA_NL_DEL_SIP_REQ:
-            resp = tpsa_handle_nl_del_sip_req(&worker->table_ctx.tpf_dev_table, msg);
-            break;
+            return tpsa_handle_nl_del_sip_req(worker, msg);
         case TPSA_NL_TP_ERROR_REQ:
-            return uvs_handle_nl_tp_error_req(&worker->table_ctx, &worker->sock_ctx, &worker->ioctl_ctx, msg);
+            return uvs_handle_nl_tp_error_req(&ctx, msg);
         case TPSA_NL_TP_SUSPEND_REQ:
             return uvs_handle_nl_tp_suspend_req(&worker->table_ctx, &worker->ioctl_ctx, msg);
         case TPSA_NL_UPDATE_TPF_DEV_INFO_REQ:
@@ -890,43 +917,6 @@ static int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg)
             TPSA_LOG_ERR("Unexpected nl msg id %d type %d received\n", msg->nlmsg_seq, msg->msg_type);
             return -1;
     }
-
-    if (msg->msg_type == TPSA_NL_QUERY_TP_REQ || msg->msg_type == TPSA_NL_ADD_SIP_REQ ||
-        msg->msg_type == TPSA_NL_DEL_SIP_REQ) {
-        if (tpsa_nl_send_msg(&worker->nl_ctx, resp) != 0) {
-            ret = -1;
-            goto free_msg_buf;
-        }
-        TPSA_LOG_INFO("[Enqueue local resp]---msg_id: %d\n", resp->nlmsg_seq);
-    }
-
-free_msg_buf:
-    if (resp != NULL) {
-        free(resp);
-    }
-    if (info != NULL) {
-        free(info);
-    }
-    return ret;
-}
-
-static int tpsa_nl_handle_event(tpsa_worker_t *worker, const struct epoll_event *ev)
-{
-    if (!(ev->events & EPOLLIN)) {
-        return 0;
-    }
-    static_assert(sizeof(tpsa_nl_msg_t) < TPSA_MAX_SOCKET_MSG_LEN, "nl msg size over max value");
-    tpsa_nl_msg_t msg = { 0 };
-    ssize_t recv_len = tpsa_nl_recv_msg(&worker->nl_ctx, &msg, sizeof(tpsa_nl_msg_t), worker->epollfd);
-    if (recv_len < 0) {
-        TPSA_LOG_ERR("Recv len is zero, event 0x%x fd = %d.\n", ev->events, ev->data.fd);
-        return -1;
-    }
-
-    if (tpsa_handle_nl_msg(worker, &msg) != 0) {
-        return -1;
-    }
-
     return 0;
 }
 
@@ -971,6 +961,7 @@ static int get_vtp_table_from_ubcore(int ubcore_fd, tpsa_ioctl_cfg_t **restore_v
 
     *vtp_cnt = cnt;
     *restore_vtp_tbl_cfg = ioctl_cfg;
+    free(get_tbl_cnt_cfg);
     return 0;
 
 free_restore_vtp_tbl_cfg:
@@ -981,79 +972,56 @@ free_get_tbl_cnt_cfg:
     return ret;
 }
 
-static int find_restored_table_param(tpsa_table_t *table_ctx, char *dev_name, dip_table_key_t *dip_key,
-    uint32_t sip_idx, tpsa_restored_table_param_t *rparam)
-{
-    dip_table_entry_t *dip_entry = NULL;
-    sip_table_entry_t sip_entry = {0};
-
-    (void)pthread_rwlock_rdlock(&table_ctx->dip_table.rwlock);
-    dip_entry = dip_table_lookup(&table_ctx->dip_table, dip_key);
-    if (dip_entry != NULL) {
-        rparam->dip = dip_entry->netaddr;
-    } else {
-        (void)pthread_rwlock_unlock(&table_ctx->dip_table.rwlock);
-        TPSA_LOG_INFO("can not find dip_idx, peer_eid: " EID_FMT ", upi: %u\n", EID_ARGS(dip_key->deid), dip_key->upi);
-        return -1;
-    }
-    (void)pthread_rwlock_unlock(&table_ctx->dip_table.rwlock);
-
-    tpsa_sip_table_lookup(&table_ctx->tpf_dev_table, dev_name, sip_idx, &sip_entry);
-    if (sip_entry.used) {
-        rparam->sip = sip_entry.addr;
-    } else {
-        TPSA_LOG_INFO("can not find sip entry by key sip_idx %d, dev_name: %s, add to wait list\n",
-            sip_idx, dev_name);
-        return -1;
-    }
-
-    return 0;
-}
-
-static int insert_rm_tpg_table(tpsa_table_t *table_ctx, tpsa_restored_table_param_t* rparam,
-    wait_restored_entry_t *restored_entry)
+static int insert_rm_tpg_table(tpsa_table_t *table_ctx, tpsa_restored_vtp_entry_t *restored_entry)
 {
     tpsa_tpg_table_param_t tpsa_tpg_table_param = {0};
     rm_tpg_table_entry_t *rm_tpg_table_entry;
     rm_tpg_table_key_t rm_tpg_table_key;
 
     // first lookup, then add
-    rm_tpg_table_key.dip = rparam->dip;
+    rm_tpg_table_key.dip = restored_entry->dip.net_addr;
     rm_tpg_table_entry = rm_tpg_table_lookup(&table_ctx->rm_tpg_table, &rm_tpg_table_key);
     if (rm_tpg_table_entry != NULL) {
         rm_tpg_table_entry->use_cnt++;
         return 0;
     }
 
-    tpsa_tpg_table_param.tpgn = restored_entry->entry.index.tpgn;
-    tpsa_tpg_table_param.tp_cnt = restored_entry->entry.tp_cnt;
+    tpsa_tpg_table_param.tpgn = restored_entry->index.tpgn;
+    tpsa_tpg_table_param.tp_cnt = restored_entry->tp_cnt;
     tpsa_tpg_table_param.status = TPSA_TPG_LOOKUP_EXIST;
     tpsa_tpg_table_param.use_cnt = 1;
-    tpsa_tpg_table_param.ljetty_id = restored_entry->entry.local_jetty;
-    tpsa_tpg_table_param.leid = restored_entry->entry.local_eid;
-    tpsa_tpg_table_param.dip = rparam->dip;
-    tpsa_tpg_table_param.isLoopback = memcmp(&rparam->sip, &rparam->dip, sizeof(uvs_net_addr_info_t)) == 0;
-    (void)memcpy(tpsa_tpg_table_param.tpn, restored_entry->entry.tpn,
-                 TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+    tpsa_tpg_table_param.ljetty_id = restored_entry->local_jetty;
+    tpsa_tpg_table_param.leid = restored_entry->local_eid;
+    tpsa_tpg_table_param.dip = restored_entry->dip;
+
+    uvs_end_point_t local = { restored_entry->sip, restored_entry->local_eid, restored_entry->local_jetty };
+    uvs_end_point_t peer = { restored_entry->dip, restored_entry->peer_eid, restored_entry->peer_jetty };
+    tpsa_tpg_table_param.isLoopback = uvs_is_loopback(restored_entry->trans_mode, &local, &peer);
+
+    for (uint32_t i = 0; i < restored_entry->tp_cnt; i++) {
+        tpsa_tpg_table_param.tp[i].tpn = restored_entry->tpn[i];
+        tpsa_tpg_table_param.tp[i].tp_state = TPSA_TP_STATE_RTS;
+    }
+
     if (rm_tpg_table_add(&table_ctx->rm_tpg_table, &rm_tpg_table_key, &tpsa_tpg_table_param) < 0) {
         TPSA_LOG_WARN("Fail to add rm_tpg_table");
         return -1;
     } else {
-        TPSA_LOG_INFO("rm_tpg_table succeed, key: {" EID_FMT "}", EID_ARGS(rparam->dip.net_addr));
+        TPSA_LOG_INFO("rm tpg table add succeed, key: {" EID_FMT "}", EID_ARGS(restored_entry->dip.net_addr));
     }
 
     return 0;
 }
 
-static int insert_um_utp_table(tpsa_table_t *table_ctx, tpsa_restored_table_param_t *rparam,
-    uint32_t utp_idx)
+static int insert_um_utp_table(tpsa_table_t *table_ctx, uint32_t utp_idx,
+    uvs_net_addr_info_t *sip, uvs_net_addr_info_t *dip)
 {
     utp_table_entry_t *utp_table_entry = NULL;
     utp_table_key_t utp_key;
 
     // first lookup, then add
-    utp_key.sip = rparam->sip;
-    utp_key.dip = rparam->dip;
+    utp_key.sip = *sip;
+    utp_key.dip = *dip;
     utp_table_entry = utp_table_lookup(&table_ctx->utp_table, &utp_key);
     if (utp_table_entry != NULL) {
         utp_table_entry->use_cnt++;
@@ -1071,47 +1039,34 @@ static int insert_um_utp_table(tpsa_table_t *table_ctx, tpsa_restored_table_para
     return 0;
 }
 
-static int insert_rm_vtp_table(tpsa_table_t *table_ctx, wait_restored_entry_t *restored_entry,
-    uint32_t upi, bool share_mode)
+static int insert_rm_vtp_table(tpsa_table_t *table_ctx, tpsa_restored_vtp_entry_t *restored_entry)
 {
     rm_vtp_table_entry_t *vtp_table_entry;
+    rm_vtp_table_key_t vtp_key = {0};
     vport_key_t vport_key = {0};
-    rm_vtp_table_key_t vtp_key;
-    uint32_t eid_index;
     int ret;
 
-    vport_key.fe_idx = restored_entry->entry.fe_idx;
-    (void)memcpy(vport_key.tpf_name, restored_entry->entry.dev_name, UVS_MAX_DEV_NAME);
+    vport_key.fe_idx = restored_entry->fe_idx;
+    (void)memcpy(vport_key.tpf_name, restored_entry->dev_name, UVS_MAX_DEV_NAME);
 
-    vtp_key.src_eid = restored_entry->entry.local_eid;
-    vtp_key.dst_eid = restored_entry->entry.peer_eid;
+    vtp_key.src_eid = restored_entry->local_eid;
+    vtp_key.dst_eid = restored_entry->peer_eid;
 
     vtp_table_entry = rm_fe_vtp_table_lookup(&table_ctx->fe_table, &vport_key, &vtp_key);
     if (vtp_table_entry != NULL) {
         TPSA_LOG_INFO("VTP table already exists, fe_idx: %d, tpf_name: %s", vport_key.fe_idx, vport_key.tpf_name);
     } else {
-        if (vport_table_lookup_by_ueid_return_key(&table_ctx->vport_table, upi, &restored_entry->entry.local_eid,
-            &vport_key, &eid_index) != 0) {
-            TPSA_LOG_INFO("find eid index failed");
-            return -1;
-        }
-
         tpsa_vtp_table_param_t vtp_param = {
-            .vtpn = restored_entry->entry.vtpn,
-            .tpgn = restored_entry->entry.index.tpgn,
+            .vtpn = restored_entry->vtpn,
+            .tpgn = restored_entry->index.tpgn,
             .valid = true,
-            .location = restored_entry->entry.location,
-            .local_jetty = restored_entry->entry.local_jetty,
-            .eid_index = eid_index,
-            .upi = upi,
-            .local_eid = restored_entry->entry.local_eid,
-            .share_mode = share_mode,
-            .tpg_param = {0},
+            .location = restored_entry->location,
+            .local_jetty = restored_entry->local_jetty,
+            .eid_index = restored_entry->eid_idx,
+            .upi = restored_entry->upi,
+            .local_eid = restored_entry->local_eid,
+            .share_mode = restored_entry->share_mode,
         };
-        vtp_param.tpg_param.tp_cnt = restored_entry->entry.tp_cnt;
-        vtp_param.tpg_param.tpgn = restored_entry->entry.index.tpgn;
-        (void)memcpy(vtp_param.tpg_param.tpn, restored_entry->entry.tpn,
-            TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
 
         // RM VTP table insert
         ret = rm_fe_vtp_table_add(table_ctx, &vport_key, &vtp_key, &vtp_param);
@@ -1123,26 +1078,25 @@ static int insert_rm_vtp_table(tpsa_table_t *table_ctx, wait_restored_entry_t *r
     return 0;
 }
 
-static int insert_um_vtp_table(tpsa_table_t *table_ctx, wait_restored_entry_t *restored_entry,
-    uint32_t upi)
+static int insert_um_vtp_table(tpsa_table_t *table_ctx, tpsa_restored_vtp_entry_t *restored_entry)
 {
     um_vtp_table_entry_t *vtp_table_entry;
     um_vtp_table_key_t vtp_key;
     vport_key_t vport_key = {0};
     int ret;
 
-    vport_key.fe_idx = restored_entry->entry.fe_idx;
-    (void)memcpy(vport_key.tpf_name, restored_entry->entry.dev_name, UVS_MAX_DEV_NAME);
-    vtp_key.src_eid = restored_entry->entry.local_eid;
-    vtp_key.dst_eid = restored_entry->entry.peer_eid;
+    vport_key.fe_idx = restored_entry->fe_idx;
+    (void)memcpy(vport_key.tpf_name, restored_entry->dev_name, UVS_MAX_DEV_NAME);
+    vtp_key.src_eid = restored_entry->local_eid;
+    vtp_key.dst_eid = restored_entry->peer_eid;
     vtp_table_entry = um_fe_vtp_table_lookup(&table_ctx->fe_table, &vport_key, &vtp_key);
     if (vtp_table_entry != NULL) {
         TPSA_LOG_INFO("VTP table already exists, fe_idx: %d, tpf_name: %s", vport_key.fe_idx, vport_key.tpf_name);
     } else {
         tpsa_um_vtp_table_param_t uvtp_param = {
-            .vtpn = restored_entry->entry.vtpn,
-            .utp_idx = restored_entry->entry.index.utp_idx,
-            .upi = upi,
+            .vtpn = restored_entry->vtpn,
+            .utp_idx = restored_entry->index.utp_idx,
+            .upi = restored_entry->upi,
         };
 
         ret = um_fe_vtp_table_add(table_ctx, &vport_key, &vtp_key, &uvtp_param);
@@ -1155,171 +1109,118 @@ static int insert_um_vtp_table(tpsa_table_t *table_ctx, wait_restored_entry_t *r
     return 0;
 }
 
-static int insert_restored_table(tpsa_table_t *table_ctx, wait_restored_entry_t *restored_entry,
-    tpsa_restored_table_param_t* rparam, uint32_t upi)
+static int handle_single_tbl_restore(tpsa_table_t *table_ctx, tpsa_restored_vtp_entry_t *restored_entry)
 {
-    vport_table_entry_t *vport_entry = NULL;
-    vport_key_t vport_key = {0};
-    bool share_mode = false;
-
     int ret = 0;
 
-    if (restored_entry->entry.trans_mode == URMA_TM_UM) {
-        ret = insert_um_utp_table(table_ctx, rparam, restored_entry->entry.index.utp_idx);
+    if (restored_entry->trans_mode == TPSA_TP_UM) {
+        ret = insert_um_utp_table(table_ctx, restored_entry->index.utp_idx,
+            &restored_entry->sip, &restored_entry->dip);
         if (ret != 0) {
             return ret;
         }
 
-        return insert_um_vtp_table(table_ctx, restored_entry, upi);
-    } else if (restored_entry->entry.trans_mode == URMA_TM_RM) {
-        vport_key.fe_idx = restored_entry->entry.fe_idx;
-        (void)memcpy(vport_key.tpf_name, restored_entry->entry.dev_name, UVS_MAX_DEV_NAME);
-        vport_entry = vport_table_lookup(&table_ctx->vport_table, &vport_key);
-        if (vport_entry == NULL) {
-            TPSA_LOG_ERR("cannot find vport entry, dev_name: %s, fe_idx: %u", vport_key.tpf_name, vport_key.fe_idx);
-            return -1;
-        }
-        share_mode = vport_entry->tp_cfg.tp_mod_flag.bs.share_mode;
-        if (share_mode) {
-            ret = insert_rm_tpg_table(table_ctx, rparam, restored_entry);
+        return insert_um_vtp_table(table_ctx, restored_entry);
+    } else if (restored_entry->trans_mode == TPSA_TP_RM) {
+        if (restored_entry->share_mode) {
+            ret = insert_rm_tpg_table(table_ctx, restored_entry);
             if (ret != 0) {
                 return ret;
             }
         }
         // RM VTP table restore
-        return insert_rm_vtp_table(table_ctx, restored_entry, upi, share_mode);
-    }
-    return 0;
-}
-
-static int handle_single_tbl_restore(tpsa_table_t *tbl_ctx, wait_restored_entry_t *restored_entry,
-    bool sleep_when_fail)
-{
-    tpsa_restored_table_param_t rparam;
-    tpsa_restored_vtp_entry_t *e;
-    vport_key_t vport_key = {0};
-    dip_table_key_t dip_key = {0};
-    uint32_t upi;
-
-    e = &restored_entry->entry;
-    vport_key.fe_idx = e->fe_idx;
-    (void)memcpy(vport_key.tpf_name, e->dev_name, UVS_MAX_DEV_NAME);
-    if (tpsa_lookup_upi_by_eid(&vport_key, &tbl_ctx->vport_table, &e->local_eid, &upi) != 0) {
-        TPSA_LOG_WARN("cannot find upi, fe_idx: %d, tpf_name: %s, local_eid: " EID_FMT "\n", vport_key.fe_idx,
-            vport_key.tpf_name, EID_ARGS(e->local_eid));
-        // add to tail of wait list
-        wait_restored_list_add_restored_entry(&tbl_ctx->wait_restored_list, restored_entry);
-        (void)(sleep_when_fail && usleep(TPSA_WAIT_LIST_RESTORE_INTERVAL));
-        return -1;
+        return insert_rm_vtp_table(table_ctx, restored_entry);
     }
 
-    dip_key.deid = e->peer_eid;
-    dip_key.upi = upi;
-    if (find_restored_table_param(tbl_ctx, e->dev_name, &dip_key, e->sip_idx, &rparam) != 0) {
-        TPSA_LOG_WARN("cannot find utp key, tpf_name: %s, peer_eid: " EID_FMT ", upi: %d, sip_idx: %d\n",
-            e->dev_name, EID_ARGS(dip_key.deid), dip_key.upi, e->sip_idx);
-        // add to tail of wait list
-        wait_restored_list_add_restored_entry(&tbl_ctx->wait_restored_list, restored_entry);
-        (void)(sleep_when_fail && usleep(TPSA_WAIT_LIST_RESTORE_INTERVAL));
-    } else {
-        TPSA_LOG_INFO("utp key found, tpf_name: %s, peer_eid: " EID_FMT ", upi: %d, sip_idx: %d\n",
-            e->dev_name, EID_ARGS(dip_key.deid), dip_key.upi, e->sip_idx);
-
-        if (insert_restored_table(tbl_ctx, restored_entry, &rparam, upi) != 0) {
-            TPSA_LOG_WARN("Fail to insert restored vtp table");
-        } else {
-            TPSA_LOG_INFO("VTP table add success, fe_idx: %d, tpf_name: %s", e->fe_idx, e->dev_name);
-        }
-        free(restored_entry);
-    }
+    TPSA_LOG_INFO("VTP table add success, fe_idx: %d, tpf_name: %s",
+        restored_entry->fe_idx, restored_entry->dev_name);
     return 0;
 }
 
 int tpsa_restore_vtp_table(tpsa_worker_t *worker)
 {
-    tpsa_restored_vtp_entry_t *restored_vtp_entry;
-    wait_restored_entry_t *wait_restored_entry;
     tpsa_ioctl_cfg_t *restore_vtp_tbl_cfg = NULL;
     uint32_t vtp_cnt = 0, i;
-    int ret = 0;
 
     if (get_vtp_table_from_ubcore(worker->ioctl_ctx.ubcore_fd, &restore_vtp_tbl_cfg, &vtp_cnt) != 0) {
         TPSA_LOG_ERR("Fail to get vtp table from ubcore");
         return -1;
     }
 
+    TPSA_LOG_ERR("succeed to get vtp table from ubcore, cnt: %u", vtp_cnt);
+    if (vtp_cnt == 0) {
+        return 0;
+    }
+
     // got tables from ubcore, then we should restore these tables
     for (i = 0; i < vtp_cnt; i++) {
-        restored_vtp_entry = &restore_vtp_tbl_cfg->cmd.restore_vtp_table.out.entry[i];
-        wait_restored_entry = (wait_restored_entry_t *)calloc(1, sizeof(wait_restored_entry_t));
-        if (wait_restored_entry == NULL) {
-            TPSA_LOG_ERR("Fail to malloc wait_restored_entry_t when add entry.\n");
-            continue;
-        }
-
-        if (clock_gettime(CLOCK_REALTIME, &wait_restored_entry->start_timeval) != 0) {
-            TPSA_LOG_ERR("Failed to clock_gettime when add entry.\n");
-            free(wait_restored_entry);
-            continue;
-        }
-
-        (void)memcpy(&wait_restored_entry->entry, restored_vtp_entry, sizeof(tpsa_restored_vtp_entry_t));
-        (void)handle_single_tbl_restore(&worker->table_ctx, wait_restored_entry, false);
-    }
-
-    if (restore_vtp_tbl_cfg != NULL) {
-        free(restore_vtp_tbl_cfg);
-    }
-
-    return ret;
-}
-
-static bool tpsa_is_wait_entry_timeout(struct timespec* start_timeval, uint32_t wait_restored_timeout)
-{
-    long time_diff;
-    struct timespec now;
-
-    if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
-        TPSA_LOG_WARN("Failed to clock_gettime.\n");
-        return true;
-    }
-
-    time_diff = (now.tv_sec - start_timeval->tv_sec) * TPSA_S2US +
-        (now.tv_nsec - start_timeval->tv_nsec) / TPSA_NS2US;
-    return time_diff > wait_restored_timeout;
-}
-
-int tpsa_restore_wait_list(tpsa_table_t *tbl_ctx, uint32_t wait_restored_timeout)
-{
-    wait_restored_entry_t *restored_entry;
-    tpsa_restored_vtp_entry_t *e;
-
-    UB_LIST_FOR_EACH_POP_FRONT(restored_entry, node, &tbl_ctx->wait_restored_list.list) {
-        e = &restored_entry->entry;
-        if (tpsa_is_wait_entry_timeout(&restored_entry->start_timeval, wait_restored_timeout)) {
-            TPSA_LOG_INFO("table entry timeout, fe_idx: %d, vtpn: %d, local_jetty: %d, peer_jetty: %d, sip_idx: %d, \
-                trans_mode: %d, tpgn: %d, dev_name: %s\n", e->fe_idx, e->vtpn, e->local_jetty, e->peer_jetty,
-                e->sip_idx, (int)e->trans_mode, e->index.tpgn, e->dev_name);
-            free(restored_entry);
-            continue;
-        }
-
-        if (handle_single_tbl_restore(tbl_ctx, restored_entry, true) != 0) {
-            return 0;
+        if (handle_single_tbl_restore(&worker->table_ctx,
+            &restore_vtp_tbl_cfg->cmd.restore_vtp_table.out.entry[i]) != 0) {
+            TPSA_LOG_ERR("Fail to handle single table restore");
+        } else {
+            TPSA_LOG_DEBUG("Succeed to handle single table restore");
         }
     }
+
+    free(restore_vtp_tbl_cfg);
     return 0;
+}
+
+static int tpsa_set_cpu_core(int cpu_core)
+{
+    cpu_set_t mask;
+    int cpus;
+
+    cpus = (int)sysconf(_SC_NPROCESSORS_CONF);
+    TPSA_LOG_INFO("This system has %d processor(s).\n", cpus);
+
+    CPU_ZERO(&mask);
+    CPU_SET((size_t)cpu_core, &mask);
+
+    if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) != 0) {
+        TPSA_LOG_ERR("pthread_setaffinity_np failed! cpu_core to set: %d\n", cpu_core);
+        return -1;
+    }
+    TPSA_LOG_INFO("Set core affinity: %d.\n", cpu_core);
+    return 0;
+}
+
+static void tpsa_get_affinity(void)
+{
+    cpu_set_t get;
+    int i, cpus;
+
+    cpus = (int)sysconf(_SC_NPROCESSORS_CONF);
+    CPU_ZERO(&get);
+    if (pthread_getaffinity_np(pthread_self(), sizeof(get), &get) < 0) {
+        TPSA_LOG_ERR("get thread affinity failed.\n");
+    }
+
+    for (i = 0; i < cpus; i++) {
+        if (CPU_ISSET((size_t)i, &get)) {
+            TPSA_LOG_INFO("This thread %lu is running in processor %d.\n", (unsigned long)pthread_self(), i);
+        }
+    }
 }
 
 static void *tpsa_thread_main(void *arg)
 {
     tpsa_worker_t *worker = (tpsa_worker_t *)arg;
+    int ret;
     if (worker == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return NULL;
     }
 
     (void)pthread_setname_np(pthread_self(), (const char *)"uvs_worker");
+
+    if (worker->cpu_core >= 0) {
+        if (tpsa_set_cpu_core(worker->cpu_core) != 0) {
+            return NULL;
+        }
+        tpsa_get_affinity();
+    }
+
     pid_t tid = (pid_t)syscall(SYS_gettid);
     if (setpriority(PRIO_PROCESS, (id_t)tid, TPSA_CM_THREAD_PRIORITY) != 0) {
         TPSA_LOG_ERR("set priority failed: %s.\n", ub_strerror(errno));
@@ -1328,6 +1229,7 @@ static void *tpsa_thread_main(void *arg)
 
     struct epoll_event events[TPSA_MAX_EPOLL_WAIT];
     while (worker->stop == false) {
+        uvs_health_update_event_time();
         int num_events = epoll_wait(worker->epollfd, events, TPSA_MAX_EPOLL_WAIT, TPSA_EVENT_MAX_WAIT_MS);
         if (num_events == -1) {
             continue;
@@ -1341,11 +1243,13 @@ static void *tpsa_thread_main(void *arg)
                 continue;
             }
             /* An abnormal event causes err, but the daemon service does not exit */
-            if (events[i].data.fd == worker->nl_ctx.fd && tpsa_nl_handle_event(worker, &events[i]) != 0) {
-                TPSA_LOG_ERR("Failed to handle nl event.\n");
+            if (events[i].data.fd == worker->genl_ctx.fd) {
+                ret = tpsa_genl_handle_event(&worker->genl_ctx);
+            } else {
+                ret = tpsa_sock_handle_event(worker, &events[i]);
             }
-            if (events[i].data.fd != worker->nl_ctx.fd && tpsa_sock_handle_event(worker, &events[i]) != 0) {
-                TPSA_LOG_ERR("Failed to handle sock event\n");
+            if (ret != 0) {
+                TPSA_LOG_ERR("Failed to handle sock event %u ret %d\n", events[i].data.fd, ret);
             }
         }
 
@@ -1353,18 +1257,11 @@ static void *tpsa_thread_main(void *arg)
         tpsa_check_tbl_refresh(worker);
         tpsa_check_vf_delete(worker);
         tpsa_clean_rebooted_fe(worker);
-        if (g_start_restore) {
-            static bool restore_flag = true;
-            if (restore_flag) {
-                if (tpsa_restore_vtp_table(worker) != 0) {
-                    continue;
-                }
-                restore_flag = false;
+        if (!worker->global_cfg_ctx.vtp_restore_finished) {
+            if (tpsa_restore_vtp_table(worker) != 0) {
+                TPSA_LOG_ERR("Failed to restore vtp and tpg\n");
             }
-            if (tpsa_restore_wait_list(&worker->table_ctx, worker->global_cfg_ctx.wait_restored_timeout) != 0) {
-                TPSA_LOG_ERR("restore table from ubcore failed\n");
-                continue;
-            }
+            worker->global_cfg_ctx.vtp_restore_finished = true;
         }
     }
     return NULL;
@@ -1389,13 +1286,15 @@ static int tpsa_worker_thread_init(tpsa_worker_t *worker)
         return -1;
     }
 
-    if (tpsa_add_epoll_event(epollfd, worker->nl_ctx.fd, EPOLLIN) != 0) {
-        uvs_ops_lock_uninit();
-        TPSA_LOG_ERR("Add epoll event failed.\n");
-        (void)close(epollfd);
-        return -1;
+    if (worker->genl_ctx.fd != 0) {
+        if (tpsa_nl_set_nonblock_opt(worker->genl_ctx.fd) != 0 ||
+            tpsa_add_epoll_event(epollfd, worker->genl_ctx.fd, EPOLLIN) != 0) {
+            uvs_ops_lock_uninit();
+            TPSA_LOG_ERR("Add genl sock epoll event failed.\n");
+            (void)close(epollfd);
+            return -1;
+        }
     }
-
     (void)pthread_attr_init(&attr);
     worker->stop = false;
     worker->epollfd = epollfd;
@@ -1403,7 +1302,7 @@ static int tpsa_worker_thread_init(tpsa_worker_t *worker)
     if (ret != 0) {
         TPSA_LOG_ERR("pthread create failed. ret: %d, err: [%d]%s.\n", ret, errno, ub_strerror(errno));
     } else {
-        TPSA_LOG_INFO("thread listen (ep_fd=%d, ADD, nl_fd=%d) succeed.\n", epollfd, worker->nl_ctx.fd);
+        TPSA_LOG_INFO("thread listen (ep_fd=%d, ADD) succeed.\n", epollfd);
     }
     (void)pthread_attr_destroy(&attr);
     return ret;
@@ -1430,34 +1329,37 @@ static inline void tpsa_global_cfg_init(tpsa_global_cfg_t *global_cfg)
     global_cfg->suspend_period = TPSA_DEFAULT_SUSPEND_PERIOD;
     global_cfg->suspend_cnt = TPSA_DEFAULT_SUSPEND_CNT;
     global_cfg->sus2err_period = TPSA_DEFAULT_SUS2ERR_PERIOD;
-    global_cfg->wait_restored_timeout = TPSA_DEFAULT_WAIT_RESTORE_PERIOD;
+    global_cfg->vtp_restore_finished = false;
 }
 
-static int tpsa_set_nl_port(tpsa_nl_ctx_t *nl)
+static int tpsa_set_nl_port(tpsa_genl_ctx_t *genl)
 {
     /* set nl agent pid */
     tpsa_nl_msg_t msg = {0};
-    msg.hdr.nlmsg_type = TPSA_NL_SET_AGENT_PID;
+    msg.hdr.nlmsg_type = TPSA_NL_SET_GENL_PID;
     msg.hdr.nlmsg_pid = (uint32_t)getpid();
     msg.hdr.nlmsg_len = tpsa_netlink_msg_len((const tpsa_nl_msg_t *)&msg);
-    ssize_t ret = sendto(nl->fd, &msg.hdr, msg.hdr.nlmsg_len, 0,
-        (struct sockaddr *)&nl->dst_addr, sizeof(struct sockaddr_nl));
-    if (ret == -1) {
-        (void)close(nl->fd);
+    msg.msg_type = TPSA_NL_SET_GENL_PID;
+    if (tpsa_genl_send_msg(genl, &msg)) {
         TPSA_LOG_ERR("Failed to sendto err: %s.\n", ub_strerror(errno));
         return -1;
     }
     TPSA_LOG_INFO("Finish sync ubcore table info\n");
-    g_start_restore = true;
     return 0;
+}
+
+int tpsa_check_cpu_core(int cpu_core)
+{
+    int cpus = (int)sysconf(_SC_NPROCESSORS_CONF);
+    if (cpu_core < cpus) {
+        return 0;
+    }
+    TPSA_LOG_WARN("Wrong cpu_core: %d, total cpu process num: %d", cpu_core, cpus);
+    return -1;
 }
 
 tpsa_worker_t *tpsa_worker_init(uvs_init_attr_t *attr)
 {
-    if (attr == NULL) {
-        return NULL;
-    }
-
     tpsa_worker_t *worker = (tpsa_worker_t *)calloc(1, sizeof(tpsa_worker_t));
     if (worker == NULL) {
         return NULL;
@@ -1470,23 +1372,34 @@ tpsa_worker_t *tpsa_worker_init(uvs_init_attr_t *attr)
         goto free_work;
     }
 
-    if (tpsa_nl_server_init(&worker->nl_ctx) != 0) {
+    worker->genl_ctx.args = worker;
+    if (tpsa_genl_init(&worker->genl_ctx) != 0) {
         goto free_table;
     }
 
     if (tpsa_ioctl_init(&worker->ioctl_ctx) != 0) {
-        goto free_nl_server;
+        goto free_genl_ctx;
     }
 
     if (uvs_statistic_ctx_init(&worker->statistic_ctx) != 0) {
         goto free_ioctl;
     }
 
+    uvs_set_global_statistic_enable(attr->statistic);
+    worker->cpu_core = attr->cpu_core;
+
+    if (tpsa_get_init_res(&worker->genl_ctx)) {
+        goto free_statistic_ctx;
+    }
+    if (tpsa_set_nl_port(&worker->genl_ctx) != 0) {
+        goto free_statistic_ctx;
+    }
+
     if (tpsa_worker_thread_init(worker) != 0) {
         goto free_statistic_ctx;
     }
 
-    if (tpsa_set_nl_port(&worker->nl_ctx) != 0) {
+    if (uvs_health_check_service_init() != 0) {
         goto uninit_thread_work;
     }
 
@@ -1500,8 +1413,8 @@ free_statistic_ctx:
     uvs_statistic_ctx_uninit(&worker->statistic_ctx);
 free_ioctl:
     tpsa_ioctl_uninit(&worker->ioctl_ctx);
-free_nl_server:
-    tpsa_nl_server_uninit(&worker->nl_ctx);
+free_genl_ctx:
+    tpsa_genl_uninit(worker->genl_ctx.sock);
 free_table:
     tpsa_table_uninit(&worker->table_ctx);
 free_work:
@@ -1515,10 +1428,13 @@ void tpsa_worker_uninit(tpsa_worker_t *worker)
         return;
     }
     uvs_tp_exception_uninit();
+    uvs_health_check_service_uninit();
     tpsa_worker_thread_uninit(worker);
     uvs_statistic_ctx_uninit(&worker->statistic_ctx);
     tpsa_ioctl_uninit(&worker->ioctl_ctx);
-    tpsa_nl_server_uninit(&worker->nl_ctx);
+    tpsa_genl_uninit(worker->genl_ctx.sock);
+    /* If epollfd exits abnormally, the sock fd event on the epoll fd
+       is cleared and then epollfd is closed. */
     tpsa_epollfd_close(worker);
     tpsa_table_uninit(&worker->table_ctx);
     free(worker);

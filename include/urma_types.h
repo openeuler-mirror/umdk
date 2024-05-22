@@ -27,7 +27,7 @@ extern "C" {
 #define URMA_GET_VERSION(a, b) (((a) << 16) + ((b) > 65535 ? 65535 : (b)))
 #define URMA_API_VERSION ((0 << 16) + 9)        // Current Version: 0.9
 #define MAX_PORT_CNT 8
-#define URMA_MAX_JETTY_IN_JETTY_GRP 16U
+#define URMA_MAX_JETTY_IN_JETTY_GRP 32U // 1650: 32
 #define URMA_MAX_NAME 64
 #define URMA_MAX_PATH 4096
 #define URMA_EID_SIZE (16)
@@ -164,6 +164,11 @@ typedef union urma_atomic_feature {
     uint32_t value;
 } urma_atomic_feature_t;
 
+typedef enum urma_sub_trans_mode_cap {
+    URMA_RC_TP_DST_ORDERING = 0x1,      /* ?rc mode with tp dst ordering? */
+    URMA_RC_TA_DST_ORDERING = 0x1 << 1, /* ?rc mode with ta dst ordering? */
+} urma_sub_trans_mode_cap_t;
+
 typedef struct urma_device_cap {
     urma_device_feature_t feature;     /* [Public] support feature of device, such as OOO, LS etc. */
     uint32_t max_jfc;                  /* [Public] max number of jfc supported by the device. */
@@ -183,6 +188,7 @@ typedef struct urma_device_cap {
     uint32_t max_atomic_size;          /* [Public] in terms of bytes, e.g. 8 or 64 */
     urma_atomic_feature_t atomic_feat; /* [Public] support atomic feature of device */
     uint16_t trans_mode;               /* [Public] bit OR of supported transport modes */
+    uint16_t sub_trans_mode_cap;       /* [Public]?bit?OR?of?supported?transport?modes cap, urma_sub_trans_mode_cap_t */
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
     uint32_t max_tp_in_tpg;
@@ -340,12 +346,17 @@ typedef struct urma_jfc {
     uint32_t async_events_acked;
 } urma_jfc_t;
 
+#define URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
+
 typedef union urma_jfs_flag {
     struct {
         uint32_t lock_free      : 1;  /* default as 0, lock protected */
         uint32_t error_suspend  : 1;  /* 0: error continue; 1: error suspend */
         uint32_t outorder_comp  : 1;  /* 0: not support; 1: support out-of-order completion */
-        uint32_t reserved       : 29;
+        uint32_t sub_trans_mode : 8;  /* (0x1): URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE */
+        uint32_t rc_share_tp    : 1;  /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
+                                       * this flag can only be set to 0. */
+        uint32_t reserved       : 20;
     } bs;
     uint32_t value;
 } urma_jfs_flag_t;
@@ -402,7 +413,8 @@ typedef union urma_jfr_flag {
         uint32_t tag_matching   : 1;  /* 0: URMA_NO_TAG_MATCHING.
                                          1: URMA_WITH_TAG_MATCHING. */
         uint32_t lock_free      : 1;
-        uint32_t reserved       : 27;
+        uint32_t sub_trans_mode : 8;  /* (0x1): URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE */
+        uint32_t reserved       : 19;
     } bs;
     uint32_t value;
 } urma_jfr_flag_t;
@@ -444,8 +456,11 @@ typedef struct urma_jfr {
 
 typedef union urma_import_jetty_flag {
     struct {
-        uint32_t token_policy : 3;
-        uint32_t reserved   : 29;
+        uint32_t token_policy   : 3;
+        uint32_t sub_trans_mode : 8; /* (0x1): URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE */
+        uint32_t rc_share_tp    : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
+                                        this flag can only be set to 0. */
+        uint32_t reserved       : 20;
     } bs;
     uint32_t value;
 } urma_import_jetty_flag_t;
@@ -476,7 +491,7 @@ typedef struct urma_jetty_cfg {
     urma_jetty_flag_t flag;      /* [Optional] Connection or connection less */
 
     /* send configuration */
-    urma_jfs_cfg_t *jfs_cfg;     /* [Required] see urma_jfs_cfg_t */
+    urma_jfs_cfg_t jfs_cfg;     /* [Required] see urma_jfs_cfg_t */
 
     /* recv configuration */
     union {
@@ -567,7 +582,7 @@ typedef struct urma_jetty_grp_cfg {
 
 struct urma_jetty_grp {
     urma_context_t *urma_ctx;
-    uint32_t id;         /* Jetty group id */
+    urma_jetty_id_t jetty_grp_id;
     urma_jetty_grp_cfg_t cfg;
     uint32_t jetty_cnt;
     urma_jetty_t **jetty_list;
@@ -666,7 +681,7 @@ typedef struct urma_seg_cfg {
     uint64_t va;                  /* specify the address of the segment to be registered */
     uint64_t len;                 /* specify the length of the segment to be registered */
     urma_token_id_t *token_id;
-    const urma_token_t *token_value;        /* Security authentication for access */
+    urma_token_t token_value;        /* Security authentication for access */
     urma_reg_seg_flag_t flag;
     uint64_t user_ctx;
     uint64_t iova;                /* user iova, maybe zero-based-address */

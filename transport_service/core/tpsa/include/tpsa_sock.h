@@ -67,7 +67,7 @@ typedef struct tpsa_init_sock_req_param {
 
 struct tpsa_init_sock_resp_param {
     uint32_t tpgn;
-    uint32_t *tpn;
+    tp_entry_t *tp;
     tpsa_tpg_cfg_t *tpg_cfg;
     uvs_mtu_t mtu;
     tpsa_cc_param_t *resp_param;
@@ -96,9 +96,8 @@ tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_ini
     uvs_net_addr_info_t *sip, uvs_socket_init_attr_t *tpsa_attr);
 tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t *msg, struct tpsa_init_sock_resp_param* param);
 void tpsa_sock_init_destroy_resp(tpsa_sock_msg_t *resp);
-tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t *msg, uvs_net_addr_info_t *sip,
-    uvs_socket_init_attr_t *tpsa_attr);
-tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg, uvs_net_addr_info_t *sip);
+int tpsa_sock_send_create_ack(tpsa_sock_ctx_t *sock_ctx, tpsa_sock_msg_t *msg, uvs_net_addr_info_t *sip,
+    uvs_socket_init_attr_t *tpsa_attr, uvs_net_addr_t *remote_uvs_ip);
 tpsa_sock_msg_t *tpsa_sock_init_destroy_finish(tpsa_sock_msg_t* msg, uvs_net_addr_info_t *sip);
 
 tpsa_sock_msg_t *tpsa_sock_init_table_sync(tpsa_create_param_t *cparam, tpsa_table_opcode_t opcode, uint32_t src_vtpn,

@@ -178,7 +178,8 @@ static tool_cmd_type_t parse_command(const char *argv1)
         {"show_stats",      TOOL_CMD_SHOW_STATS},
         {"show_res",        TOOL_CMD_SHOW_RES},
         {"set_ns_mode",     TOOL_CMD_SET_NS_MODE},
-        {"set_dev_ns",      TOOL_CMD_SET_DEV_NS}
+        {"set_dev_ns",      TOOL_CMD_SET_DEV_NS},
+        {"list_res",        TOOL_CMD_LIST_RES}
     };
 
     for (i = 0; i < (int)TOOL_CMD_NUM; i++) {
@@ -259,7 +260,7 @@ static int check_query_type(const tool_config_t *cfg)
         }
     }
     if (cfg->cmd == TOOL_CMD_SHOW_RES) {
-        if (cfg->key.type < TOOL_RES_KEY_UPI || cfg->key.type > TOOL_RES_KEY_DEV_CTX) {
+        if (cfg->key.type < TOOL_RES_KEY_VTP || cfg->key.type > TOOL_RES_KEY_DEV_TA) {
             (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
             return -1;
         }

@@ -215,6 +215,7 @@ static void service_main_process_request()
     }
 
     if (rsp == NULL) {
+        TPSA_LOG_ERR("fail to get rsp");
         (void)close(connfd);
         return;
     }

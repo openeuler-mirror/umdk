@@ -38,7 +38,7 @@ typedef struct tpsa_netaddr_tbl {
     pthread_rwlock_t rwlock;
 } tpsa_netaddr_tbl_t;
 
-int str_to_net_addr(const char *buf, uvs_net_addr_t *eid);
+int str_to_net_addr(const char *buf, uvs_net_addr_t *net_addr);
 /* Lookup underlay info with local or remote eid */
 tpsa_netaddr_entry_t *tpsa_lookup_underlay_info(urma_eid_t *eid);
 

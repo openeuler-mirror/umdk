@@ -20,7 +20,6 @@ extern "C" {
 
 #define TPSA_MAX_TP_CNT_IN_GRP 32
 #define TPSA_EID_SIZE (16)
-#define TPSA_TABLE_SIZE          2000000
 #define TPSA_MIN_TP_NUM 2
 #define TPSA_PORT_CNT_MAX 16
 #define PAGE_SIZE 4096
@@ -203,6 +202,7 @@ typedef union tpsa_tp_mod_flag {
         uint32_t cc_en : 1;
         uint32_t cc_alg : 4;
         uint32_t spray_en : 1;
+        uint32_t clan : 1;
         uint32_t dca_enable : 1;
         uint32_t um_en : 1;
         uint32_t share_mode : 1;
@@ -210,7 +210,7 @@ typedef union tpsa_tp_mod_flag {
                                     * If ubcore_tp_cfg_flag parameter needs to be set,
                                     * the parameter must be set separately.
                                     */
-        uint32_t reserved : 21;
+        uint32_t reserved : 20;
     } bs;
     uint32_t value;
 } tpsa_tp_mod_flag_t;
@@ -245,7 +245,8 @@ typedef union tpsa_utp_cfg_flag {
     struct {
         uint32_t loopback : 1;
         uint32_t spray_en : 1;
-        uint32_t reserved : 30;
+        uint32_t clan     : 1;
+        uint32_t reserved : 29;
     } bs;
     uint32_t value;
 } tpsa_utp_cfg_flag_t;
@@ -281,6 +282,7 @@ typedef enum tpsa_tp_state {
     TPSA_TP_STATE_RTS,
     TPSA_TP_STATE_SUSPENDED,
     TPSA_TP_STATE_ERR,
+    TPSA_TP_STATE_WAIT_VERIFY,
 } tpsa_tp_state_t;
 
 typedef struct tpsa_tp_ext {
@@ -536,6 +538,8 @@ typedef struct tpsa_destroy_finish {
     tpsa_resp_id_t resp_id;
     /* for alpha */
     struct tpsa_ta_data ta_data;
+    uint16_t src_fe_idx;
+    char src_tpf_name[UVS_MAX_DEV_NAME];
 } tpsa_destroy_finish_t;
 
 typedef struct tpsa_destroy_req {
@@ -543,6 +547,8 @@ typedef struct tpsa_destroy_req {
     tpsa_resp_id_t resp_id;
     /* for alpha */
     struct tpsa_ta_data ta_data;
+    uint16_t src_fe_idx;
+    char src_tpf_name[UVS_MAX_DEV_NAME];
 } tpsa_destroy_req_t;
 
 typedef struct tpsa_table_sync {
@@ -562,11 +568,11 @@ typedef struct tpsa_table_sync_resp {
 typedef struct tpsa_op_sip_parm {
     char dev_name[UVS_MAX_DEV_NAME];
     uvs_net_addr_info_t netaddr;
-    uint32_t prefix_len;
     uint8_t port_cnt;
     uint8_t port_id[TPSA_PORT_CNT_MAX];
     uint32_t mtu;
     char netdev_name[UVS_MAX_DEV_NAME]; /* for change mtu */
+    bool is_active;
 } tpsa_op_sip_parm_t;
 
 typedef union uvs_global_cfg_mask {
@@ -593,7 +599,7 @@ typedef struct tpsa_global_cfg {
     uint32_t suspend_period;        // us
     uint32_t suspend_cnt;
     uint32_t sus2err_period;        // us
-    uint32_t wait_restored_timeout; // us
+    bool vtp_restore_finished;
 
     /* cfg by gaea, for all tp */
     uint8_t hop_limit;
@@ -692,7 +698,7 @@ typedef struct tpsa_restored_vtp_entry {
     uint32_t sip_idx;
     urma_eid_t local_eid;
     urma_eid_t peer_eid;
-    urma_transport_mode_t trans_mode;
+    tpsa_transport_mode_t trans_mode;
     union {
         uint32_t tpgn;
         uint32_t utp_idx;
@@ -703,12 +709,30 @@ typedef struct tpsa_restored_vtp_entry {
     uint32_t tp_cnt;
     uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
     uint32_t location;
+    uvs_net_addr_info_t sip;
+    uvs_net_addr_info_t dip;
+    uint32_t eid_idx;
+    uint32_t upi;
+    bool share_mode;
 } tpsa_restored_vtp_entry_t;
 
 typedef struct tpsa_restored_table_param {
     uvs_net_addr_info_t sip;
     uvs_net_addr_info_t dip;
 } tpsa_restored_table_param_t;
+
+#define TPSA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
+
+static inline bool is_uvs_create_rc_shared_tp(tpsa_transport_mode_t trans_mode, uint32_t sub_trans_mode,
+    uint32_t rc_share_tp)
+{
+    if (trans_mode == TPSA_TP_RC &&
+		(sub_trans_mode & TPSA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE) &&
+        rc_share_tp == 1) {
+        return true;
+    }
+    return false;
+}
 
 #ifdef __cplusplus
 }

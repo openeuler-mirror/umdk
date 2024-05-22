@@ -37,6 +37,7 @@ typedef enum tpsa_cmd {
     TPSA_CMD_CREATE_TPG,
     TPSA_CMD_CREATE_VTP,
     TPSA_CMD_MODIFY_TPG,
+    TPSA_CMD_MODIFY_TPG_TP_CNT,
     TPSA_CMD_CREATE_TARGET_TPG,
     TPSA_CMD_MODIFY_TARGET_TPG,
     TPSA_CMD_DESTROY_VTP,
@@ -98,7 +99,7 @@ typedef struct tpsa_ioctl_ctx {
 
 typedef struct tpsa_cmd_tpf {
     tpsa_transport_type_t trans_type;
-    uvs_net_addr_info_t netaddr;
+    uvs_net_addr_t netaddr;
 } tpsa_cmd_tpf_t;
 
 typedef struct tpsa_cmd_tp_cfg {
@@ -172,6 +173,7 @@ typedef struct tpsa_cmd_create_tpg {
     struct {
         uint32_t tpgn;
         uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
+        uvs_mtu_t max_mtu;
     } out;
     /* for alpha */
     struct tpsa_ta_data ta_data;
@@ -200,6 +202,7 @@ typedef struct tpsa_cmd_create_vtp {
 typedef struct tpsa_cmd_modify_tpg {
     struct {
         tpsa_cmd_tpf_t tpf;
+        uint32_t peer_tp_cnt;
         /* modify tp to RTR */
         uint32_t tpgn;
         tpsa_tp_attr_t rtr_attr[TPSA_MAX_TP_CNT_IN_GRP];
@@ -224,8 +227,20 @@ typedef struct tpsa_cmd_get_dev_info {
     struct {
         bool port_is_active;
         char target_tpf_name[UVS_MAX_DEV_NAME];
+        uvs_mtu_t max_mtu;
     } out;
 } tpsa_cmd_get_dev_info_t;
+
+typedef struct tpsa_cmd_modify_tpg_tp_cnt {
+    struct {
+        tpsa_cmd_tpf_t tpf;
+        uint32_t tpgn_for_modify;
+        uint32_t tp_cnt;
+    } in;
+    struct {
+        uint32_t tpgn;
+    } out;
+} tpsa_cmd_modify_tpg_tp_cnt_t;
 
 /* create tpg, create and modify tps in it to RTR at target */
 typedef struct tpsa_cmd_create_target_tpg {
@@ -241,6 +256,7 @@ typedef struct tpsa_cmd_create_target_tpg {
     struct {
         uint32_t tpgn;
         uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
+        uint32_t rts_tp_cnt;
     } out;
     /* for alpha */
     struct tpsa_ta_data ta_data;
@@ -250,16 +266,20 @@ typedef struct tpsa_cmd_create_target_tpg {
     struct tpsa_udrv_ext udrv_ext;
 } tpsa_cmd_create_target_tpg_t;
 
+/* modify tps in the tpg to RTS at target */
 typedef struct tpsa_cmd_modify_target_tpg {
     struct {
         tpsa_cmd_tpf_t tpf;
+        /* modify tp to RTR */
+        uint32_t peer_tp_cnt;
         uint32_t tpgn;
+        tpsa_tp_attr_t rtr_attr[TPSA_MAX_TP_CNT_IN_GRP];
+        tpsa_tp_attr_mask_t rtr_mask[TPSA_MAX_TP_CNT_IN_GRP];
     } in;
     struct {
+        uint32_t rtr_tp_cnt;
         uint32_t rts_tp_cnt;
     } out;
-    /* for alpha */
-    struct tpsa_ta_data ta_data;
 } tpsa_cmd_modify_target_tpg_t;
 
 typedef struct tpsa_cmd_map_target_vtp {
@@ -274,6 +294,10 @@ typedef struct tpsa_cmd_op_sip {
     struct {
         tpsa_op_sip_parm_t parm;
     } in;
+    struct {
+        /* only valid in add succeed or add exist */
+        uint32_t sip_idx;
+    } out;
 } tpsa_cmd_op_sip_t;
 
 typedef struct tpsa_cmd_map_vtp {
@@ -281,6 +305,9 @@ typedef struct tpsa_cmd_map_vtp {
         tpsa_cmd_tpf_t tpf;
         tpsa_vtp_cfg_t vtp;
         uint32_t location;
+        uint32_t eid_idx;
+        uint32_t upi;
+        bool share_mode;
     } in;
     struct {
         uint32_t vtpn;
@@ -373,7 +400,6 @@ typedef struct tpsa_cmd_modify_vtp {
 typedef struct tpsa_cmd_restore_tp_error {
     struct {
         tpsa_cmd_tpf_t tpf;
-        uint32_t tpgn;
         uint32_t tpn;
         uint16_t data_udp_start;
         uint16_t ack_udp_start;
@@ -411,7 +437,6 @@ typedef struct tpsa_cmd_show_upi {
 typedef struct tpsa_cmd_change_tp_to_error {
     struct {
         tpsa_cmd_tpf_t tpf;
-        uint32_t tpgn;
         uint32_t tpn;
     } in;
 } tpsa_cmd_change_tp_to_error_t;
@@ -519,6 +544,7 @@ typedef struct tpsa_ioctl_cfg {
         tpsa_cmd_create_tpg_t create_tpg;
         tpsa_cmd_create_vtp_t create_vtp;
         tpsa_cmd_modify_tpg_t modify_tpg;
+        tpsa_cmd_modify_tpg_tp_cnt_t modify_tpg_tp_cnt;
         tpsa_cmd_get_dev_info_t get_dev_info;
         tpsa_cmd_create_target_tpg_t create_target_tpg;
         tpsa_cmd_modify_target_tpg_t modify_target_tpg;
@@ -572,6 +598,8 @@ typedef struct tpsa_init_tpg_cmd_param {
     uvs_mtu_t mtu;
     uint32_t cc_array_cnt;
     tpsa_tp_cc_entry_t cc_result_array[TPSA_CC_IDX_TABLE_SIZE]; // stores the query results
+    uint32_t tp_cnt;
+    tpsa_transport_mode_t trans_mode;
 } tpsa_init_tpg_cmd_param_t;
 
 int tpsa_ioctl_init(tpsa_ioctl_ctx_t *ioctl_context);
@@ -584,8 +612,12 @@ void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cpara
 void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
                                       tpsa_init_tpg_cmd_param_t *param);
 void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, uvs_net_addr_info_t *sip);
+void tpsa_ioctl_cmd_modify_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
+                                      tpsa_init_tpg_cmd_param_t *param, uint32_t tpgn);
 void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_pf_name,
     uvs_net_addr_info_t *netaddr, tpsa_transport_type_t type);
+void tpsa_ioctl_cmd_modify_tpg_tp_cnt(
+    tpsa_ioctl_cfg_t *cfg, tpsa_init_tpg_cmd_param_t *param, uint32_t tpgn, uint32_t tp_cnt);
 void tpsa_ioctl_cmd_map_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, uint32_t number,
                             uvs_net_addr_info_t *sip);
 void tpsa_ioctl_cmd_create_lb_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam, tpsa_cmd_create_tpg_t *cmd,
@@ -596,7 +628,7 @@ void tpsa_ioctl_cmd_destroy_vtp(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info_t *sip,
                                 urma_eid_t local_eid, urma_eid_t peer_eid, uint32_t peer_jetty, uint32_t location);
 
 void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
-                               tpsa_create_param_t *cparam, utp_table_key_t *key);
+                               tpsa_create_param_t *cparam, utp_table_key_t *key, bool clan);
 
 void tpsa_ioctl_cmd_destroy_utp(tpsa_ioctl_cfg_t *cfg, utp_table_key_t *key,
                                 uint32_t utp_idx);
@@ -610,7 +642,8 @@ void tpsa_ioctl_cmd_destroy_ctp(tpsa_ioctl_cfg_t *cfg, ctp_table_key_t *key,
 void tpsa_ioctl_cmd_change_tpg_to_error(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info_t *sip, uint32_t tpgn);
 
 int uvs_ioctl_cmd_set_global_cfg(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_global_cfg_t *global_cfg);
-int sip_table_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry, tpsa_cmd_t cmd_type);
+int sip_table_add_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry, uint32_t *sip_idx);
+int sip_table_del_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry);
 int uvs_ioctl_cmd_set_vport_cfg(tpsa_ioctl_ctx_t *ioctl_ctx,
     vport_table_entry_t *add_entry, tpsa_global_cfg_t *global_cfg);
 int uvs_ioctl_cmd_clear_vport_cfg(tpsa_ioctl_ctx_t *ioctl_ctx, vport_key_t *key);
@@ -620,7 +653,7 @@ int tpsa_negotiate_optimal_cc_alg(uint32_t target_cc_cnt, tpsa_tp_cc_entry_t *ta
                                   uint32_t local_cc_cnt, tpsa_tp_cc_entry_t *local_cc_arr, bool local_cc_en,
                                   urma_tp_cc_alg_t *alg, uint8_t *cc_pattern_idx);
 void tpsa_lm_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
-                                  sip_table_entry_t *sip_entry, utp_table_key_t *key);
+                                  sip_table_entry_t *sip_entry, utp_table_key_t *key, bool clan);
 
 int tpsa_ioctl_op_ueid(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_cmd_t cmd_type, vport_key_t *vport_key,
                        tpsa_ueid_t *ueid, uint32_t eid_idx);

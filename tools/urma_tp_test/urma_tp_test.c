@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
         return -1;
     }
     tp_test_context_t *ctx = calloc(1, sizeof(tp_test_context_t));
-    if (cfg == NULL) {
+    if (ctx == NULL) {
         ret = -1;
         goto free_cfg;
     }

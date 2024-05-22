@@ -80,7 +80,7 @@ static void usage(const char *argv0)
 {
     command_usage(argv0);
     (void)printf("Options:\n");
-    (void)printf("  -a, --all[order]            Run sizes from 2 till 2^15, order: exponent of 2.\n");
+    (void)printf("  -a, --all[order]            Run sizes from 2 till 2^23 (default 2^16), order: exponent of 2.\n");
     (void)printf("  -A, --atomic_type <type>    Specify atomic type, {cas|faa}.\n");
     (void)printf("  -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.\n");
     (void)printf("  -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).\n");
@@ -118,6 +118,11 @@ static void usage(const char *argv0)
     (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
+    (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
+    (void)printf("  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n");
+    (void)printf("  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n");
+    (void)printf("  --sub_trans_mode <sub_mode>     Sub transport mode: 0 for non ordering(default),\
+                    1 for TA dest ordering (only valid for trans_mode RC).\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -246,6 +251,10 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->lock_free = false;
     cfg->priority = URMA_MAX_PRIORITY;
     cfg->share_jfr = false;
+    cfg->is_rate_limit = false;
+    cfg->rate_limit = 0;
+    cfg->burst_size = 0;
+    cfg->rate_units = PERFTEST_RATE_LIMIT_GIGA_BIT;
 }
 
 void print_cfg(const perftest_config_t *cfg)
@@ -417,6 +426,10 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"warm_up",       no_argument,       NULL, 'w'},
         {"infinite",      optional_argument, NULL, 'y'},
         {"eid_idx",       required_argument, NULL, PERFTEST_OPT_EID_IDX},
+        {"rate_limit",    required_argument, NULL, PERFTEST_OPT_RATE_LIMIT},
+        {"rate_units",    required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
+        {"burst_size",    required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
+        {"sub_trans_mode",    required_argument, NULL, PERFTEST_OPT_SUB_TRANS_MODE},
         {NULL,            no_argument,       NULL, '\0'}
     };
 
@@ -585,6 +598,31 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     (void)ub_str_to_u32(optarg, &cfg->inf_period);
                 }
                 break;
+            case PERFTEST_OPT_RATE_LIMIT:
+                cfg->rate_limit = atof(optarg);
+                if (cfg->rate_limit <= 0) {
+                    (void)fprintf(stderr, " Rate limit must be non-negative\n");
+                    return -1;
+                }
+                cfg->is_rate_limit = true;
+                break;
+            case PERFTEST_OPT_RATE_UNITS:
+                if (strcmp("M", optarg) == 0) {
+                    cfg->rate_units = PERFTEST_RATE_LIMIT_MEGA_BYTE;
+                } else if (strcmp("G", optarg) == 0) {
+                    cfg->rate_units = PERFTEST_RATE_LIMIT_GIGA_BIT;
+                } else if (strcmp("P", optarg) == 0) {
+                    cfg->rate_units = PERFTEST_RATE_LIMIT_PS;
+                } else {
+                    (void)fprintf(stderr, " Invalid rate limit units. Please use M, G or P\n");
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_BURST_SIZE:
+                (void)ub_str_to_u32(optarg, &cfg->burst_size);
+                break;
+            case PERFTEST_OPT_SUB_TRANS_MODE:
+                (void)ub_str_to_u32(optarg, &cfg->sub_trans_mode);
             default:
                 usage(argv[0]);
                 return -1;
@@ -678,6 +716,16 @@ int check_local_cfg(perftest_config_t *cfg)
 
     if (cfg->tp_type != URMA_TRANSPORT_UB && cfg->token_policy != URMA_TOKEN_NONE) {
         (void)printf("Warning: only UB can be configured token_policy.\n");
+    }
+
+    if (cfg->sub_trans_mode > 1) {
+        (void)fprintf(stderr, "Only support 0 or 1 for sub_trans_mode.\n");
+        exit(1);
+    }
+
+    if ((cfg->sub_trans_mode != 0) && (cfg->tp_type != URMA_TRANSPORT_UB || cfg->trans_mode != URMA_TM_RC)) {
+        (void)fprintf(stderr, "Only UB dev of URMA_TM_RC can set sub_trans_mode.\n");
+        exit(1);
     }
 
     if (cfg->api_type == PERFTEST_READ || cfg->api_type == PERFTEST_ATOMIC) {
@@ -813,6 +861,18 @@ int check_local_cfg(perftest_config_t *cfg)
             (void)printf("Info: Infinite with duration, period: %u, inf_period: %u.\n",
                 cfg->duration, cfg->inf_period);
         }
+        if (cfg->is_rate_limit == true) {
+            (void)fprintf(stderr, "run_infinitely does not support rate limit feature yet\n");
+            exit(1);
+        }
+    }
+
+    if (cfg->share_jfr == true && cfg->type == PERFTEST_BW && cfg->api_type == PERFTEST_SEND) {
+        if (cfg->jettys > cfg->jfr_depth / cfg->jfr_post_list) {
+            (void)fprintf(stderr, "size per jetty will be zero, please check the parameters: \
+                jettys, jfr_depth and jfr_post_list\n");
+            exit(1);
+        }
     }
 
     if (cfg->jfs_depth > (cfg->jfc_depth * cfg->cq_mod)) {
@@ -826,6 +886,21 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->trans_mode == URMA_TM_RC && cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
         (void)fprintf(stderr, "RC transport mode does NOT support SIMPLEX jetty mode.\n");
         exit(1);
+    }
+    if (cfg->burst_size > 0 && cfg->is_rate_limit == false) {
+        (void)fprintf(stderr, "Can't enable burst mode when rate limiter is off\n");
+        exit(1);
+    }
+    if (cfg->burst_size == 0 && cfg->is_rate_limit == true) {
+        cfg->burst_size = cfg->jfs_depth;
+        (void)fprintf(stderr, "Setting burst size to jfs depth = %u\n", cfg->jfs_depth);
+    }
+    if (cfg->is_rate_limit == true) {
+        if (cfg->type != PERFTEST_BW || cfg->api_type == PERFTEST_ATOMIC ||
+            (cfg->cmd == PERFTEST_SEND_BW && cfg->bidirection == true)) {
+            (void)fprintf(stderr, "Rate limiter cann't be executed on non-BW, ATOMIC or bidirectional SEND tests\n");
+            exit(1);
+        }
     }
     return 0;
 }

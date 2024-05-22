@@ -29,7 +29,7 @@ set_target_properties(uvs_daemon PROPERTIES
     C_STANDARD 99
     )
 
-target_link_libraries(tpsa_daemon tpsa glib-2.0 pthread urma_common)
+target_link_libraries(tpsa_daemon tpsa glib-2.0 pthread urma_common_static)
 if(CROSS_COMPILE)
     target_link_libraries(tpsa_daemon pcre2-8 ffi)
 endif()
@@ -38,7 +38,7 @@ if("${URMA_INSTALL}" STREQUAL "enable")
     install(TARGETS tpsa_daemon DESTINATION /usr/sbin)
 endif()
 
-target_link_libraries(uvs_daemon tpsa glib-2.0 pthread urma_common)
+target_link_libraries(uvs_daemon tpsa glib-2.0 pthread urma_common_static)
 if(CROSS_COMPILE)
     target_link_libraries(uvs_daemon pcre2-8 ffi)
 endif()

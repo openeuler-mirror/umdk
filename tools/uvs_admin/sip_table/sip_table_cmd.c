@@ -220,7 +220,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
 
 static inline int sip_table_input_str_range_check(uint32_t str_len_max, uint32_t input_str_len)
 {
-    if (input_str_len > str_len_max) {
+    if (input_str_len >= str_len_max) {
         return -1;
     }
     return 0;
@@ -240,6 +240,12 @@ static int parse_mtu(const char *_optarg, uvs_admin_mtu_t *mtu)
     int i;
     for (i = 1; i < UVS_ADMIN_MTU_CNT; i++) {
         if (!strcmp(_optarg, g_mtu_str[i])) {
+            if (i != UVS_ADMIN_MTU_1024 && i != UVS_ADMIN_MTU_4096 && i != UVS_ADMIN_MTU_8192) {
+                (void)printf("ERR: invalid parameter mtu %s; valid range = [1024, 4096, 8192]\n",
+                    g_mtu_str[i]);
+                return -1;
+            }
+
             *mtu = (uvs_admin_mtu_t)i;
             return 0;
         }
@@ -259,7 +265,7 @@ static int sip_table_input_valid_str(uvs_admin_sip_table_args_t *args, const cha
                 arg_name, _optarg, 0, UVS_ADMIN_MAX_DEV_NAME);
             return -EINVAL;
         }
-        (void)memcpy(args->dev_name, _optarg, strlen(_optarg));
+        (void)strcpy(args->dev_name, _optarg);
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_MAC_LONG)) {
         ret = parse_mac(_optarg, args->mac);
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_MTU_LONG)) {
@@ -432,7 +438,9 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     }
 
     uvs_admin_sip_table_add_rsp_t *add_rsp = (uvs_admin_sip_table_add_rsp_t *)rsp->rsp;
-    if (add_rsp->res != 0) {
+    if (add_rsp->res == EEXIST) {
+        (void)printf("sip already exist, index %u, update entry will not effect.\n", add_rsp->index);
+    } else if (add_rsp->res != 0) {
         (void)printf("ERR: failed to add sip info, ret: %d.\n", add_rsp->res);
     } else {
         (void)printf("Success: add index: %u sip info.\n", add_rsp->index);

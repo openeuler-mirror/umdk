@@ -34,14 +34,80 @@
 #include "admin_cmd.h"
 typedef struct netlink_cb_par {
     uint32_t type;
+    uint32_t key;
 } netlink_cb_par;
 
+#define ADMIN_NET_NS_PATH_MAX_LEN 256
+/* Path1 format: /var/run/netns/$ns_name */
+#define ADMIN_NET_NS_PATH1_PREFIX "/var/run/netns/"
+#define ADMIN_NET_NS_PATH1_MIN_LEN strlen(ADMIN_NET_NS_PATH1_PREFIX)
+/* Path2 format: /proc/$pid/ns/net */
+#define ADMIN_NET_NS_PATH2_PREFIX "/proc/"
+#define ADMIN_NET_NS_PATH2_SUFFIX "/ns/net"
+/* The minimum length of path2: $pid occupies at least 1 character */
+#define ADMIN_NET_NS_PATH2_MIN_LEN 14
+
+static bool urma_validate_ns_path(const char *path)
+{
+    /* ns path is a special symbolic link, cannot be checked by realpath */
+    /* check path format1: /var/run/netns/$ns_name->/proc/$pid/ns/net */
+    size_t path_len = strnlen(path, ADMIN_NET_NS_PATH_MAX_LEN);
+    if (path_len > ADMIN_NET_NS_PATH1_MIN_LEN && path_len < ADMIN_NET_NS_PATH_MAX_LEN &&
+        (strncmp(path, ADMIN_NET_NS_PATH1_PREFIX, ADMIN_NET_NS_PATH1_MIN_LEN) == 0)) {
+        /* check if there is still "/./" or "/../" after "ns/"-> check if there is any sub_str can be
+           splitted by "/" */
+        char ns_name[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
+        /* check ns_name not containing "/" */
+        int ret = sscanf(path + ADMIN_NET_NS_PATH1_MIN_LEN, "%[^/]", ns_name);
+        if (ret < 0 || strlen(ns_name) + ADMIN_NET_NS_PATH1_MIN_LEN != path_len) {
+            (void)printf("path 1 is invalid, ns_name: %s, ret: %d, errno: %d.\n", ns_name, ret, errno);
+            return false;
+        }
+        return true;
+    }
+
+    /* check path format2: /proc/$pid/ns/net */
+    if (path_len < ADMIN_NET_NS_PATH2_MIN_LEN || path_len >= ADMIN_NET_NS_PATH_MAX_LEN) {
+        (void)printf("The len of ns realpath:%s is invalid, len: %lu.\n", path, path_len);
+        return false;
+    }
+
+    /* /proc/ */
+    size_t sub_str_len = strlen(ADMIN_NET_NS_PATH2_PREFIX);
+    uint64_t offset = sub_str_len;
+    if (offset >= path_len || strncmp(path, ADMIN_NET_NS_PATH2_PREFIX, sub_str_len) != 0) {
+        (void)printf("path 2 is invalid, should start with '/proc/', path: %s.\n", path);
+        return false;
+    }
+
+    /* pid */
+    char num_str[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
+    /* check sub_str only containing number */
+    int success_len = sscanf(path + offset, "%[0-9]", num_str);
+    /* The return vaule of sscanf_s is the number of string successfully matched */
+    if (success_len != 1) {
+        (void)printf("failed to get pid.\n");
+        return false;
+    }
+    sub_str_len = strnlen(num_str, ADMIN_NET_NS_PATH_MAX_LEN);
+    offset += sub_str_len;
+
+    /* /ns/net */
+    if (strcmp(path + offset, ADMIN_NET_NS_PATH2_SUFFIX) != 0) {
+        (void)printf("path is not valid: should be /proc/pid/ns/net.\n");
+        return false;
+    }
+    return true;
+}
 
 static int urma_admin_get_ns_fd(const char *ns)
 {
     int ns_fd;
+    /* validate input */
+    if (urma_validate_ns_path(ns) == false) {
+        return -1;
+    }
 
-    /* todo: validate input */
     ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
     if (ns_fd == -1) {
         (void)printf("failed to open ns file %s, errno:%d", ns,  errno);
@@ -62,7 +128,9 @@ static int cmd_nlsend(struct nl_sock *sock, int genl_id, urma_cmd_hdr_t *hdr)
         return -1;
     }
 
-    if (hdr->command == URMA_CORE_CMD_QUERY_RES) {
+    if (hdr->command == URMA_CORE_CMD_QUERY_RES ||
+        hdr->command == URMA_CORE_CMD_ADD_EID ||
+        hdr->command == URMA_CORE_CMD_DEL_EID) {
         nlmsg_flags = NLM_F_DUMP;
     }
 
@@ -147,6 +215,10 @@ static int urma_admin_cmd_add_eid(struct nl_sock *sock, const tool_config_t *cfg
         (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+    }
     (void)close(ns_fd);
     return 0;
 }
@@ -169,6 +241,10 @@ static int urma_admin_cmd_del_eid(struct nl_sock *sock, const tool_config_t *cfg
         (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+    }
     return 0;
 }
 
@@ -189,6 +265,29 @@ static int urma_admin_cmd_set_eid_mode(struct nl_sock *sock, const tool_config_t
         (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+    }
+    return 0;
+}
+
+static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attr_ptr = genlmsg_data(genlhdr);
+    int ret;
+
+    if (genlhdr->cmd == (int)URMA_CORE_CMD_ADD_EID ||
+        genlhdr->cmd == (int)URMA_CORE_CMD_DEL_EID) {
+        ret = nla_get_s32(attr_ptr);
+        if (ret != 0) {
+            (void)usleep(1);
+        } else {
+            (void)printf("recv update eid type %d success\n", (int)genlhdr->cmd);
+        }
+    }
     return 0;
 }
 
@@ -201,6 +300,7 @@ int admin_add_eid(const tool_config_t *cfg)
     if (sock == NULL) {
         return -1;
     }
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, NULL);
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
@@ -228,6 +328,7 @@ int admin_del_eid(const tool_config_t *cfg)
     if (sock == NULL) {
         return -1;
     }
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, NULL);
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
@@ -353,6 +454,10 @@ int admin_show_stats(const tool_config_t *cfg)
     struct nl_sock *sock = NULL;
     int genl_id;
 
+    if (cfg->key.type >= TOOL_STATS_KEY_VTP && cfg->key.type <= TOOL_STATS_KEY_TPG) {
+        (void)printf("urma_admin do not support query tp stats .\n");
+        return -1;
+    }
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
         return -1;
@@ -371,7 +476,6 @@ int admin_show_stats(const tool_config_t *cfg)
 
 static const char *g_query_res_type[] = {
     [0]                        = NULL,
-    [TOOL_RES_KEY_UPI]         = "RES_UPI",
     [TOOL_RES_KEY_VTP]         = "RES_VTP",
     [TOOL_RES_KEY_TP]          = "RES_TP",
     [TOOL_RES_KEY_TPG]         = "RES_TPG",
@@ -383,15 +487,8 @@ static const char *g_query_res_type[] = {
     [TOOL_RES_KEY_JFC]         = "RES_JFC",
     [TOOL_RES_KEY_RC]          = "RES_RC",
     [TOOL_RES_KEY_SEG]         = "RES_SEG",
-    [TOOL_RES_KEY_DEV_CTX]     = "RES_DEV_CTX"
-};
-
-static const char *g_admin_tp_state[] = {
-    "RESET",
-    "RTR",
-    "RTS",
-    "SUSPENDED",
-    "ERR"
+    [TOOL_RES_KEY_DEV_TA]     = "RES_DEV_TA",
+    [TOOL_RES_KEY_DEV_TP]     = "RES_DEV_TP"
 };
 
 static inline void admin_print_res_upi(struct nlattr *head)
@@ -400,90 +497,6 @@ static inline void admin_print_res_upi(struct nlattr *head)
     if (type == UBCORE_RES_UPI_VAL) {
         tool_res_upi_val_t *val = (tool_res_upi_val_t *)nla_data(head);
         (void)printf("upi                 : %u\n", val->upi);
-    }
-}
-
-static void admin_print_res_vtp(struct nlattr *head)
-{
-    int type = nla_type(head);
-    if (type == UBCORE_RES_VTP_VAL) {
-        tool_res_vtp_val_t *val = (tool_res_vtp_val_t *)nla_data(head);
-        (void)printf("fe_idx              : %hu\n", val->fe_idx);
-        (void)printf("vtpn                : %u\n", val->vtpn);
-        (void)printf("local_eid           : "EID_FMT"\n", EID_ARGS(val->local_eid));
-        (void)printf("local_jetty         : %u\n", val->local_jetty);
-        (void)printf("peer_eid            : "EID_FMT"\n", EID_ARGS(val->peer_eid));
-        (void)printf("per_jetty           : %u\n", val->peer_jetty);
-        (void)printf("clan                : %s\n", val->flag.bs.clan_tp == 1 ? "TRUE" : "FALSE");
-        (void)printf("migrate             : %s\n", val->flag.bs.migrate == 1 ? "TRUE" : "FALSE");
-        (void)printf("trans_mode          : %u [%s]\n", (uint32_t)val->trans_mode,
-            urma_trans_mode_to_string(val->trans_mode));
-        if (val->flag.bs.clan_tp == 1) {
-            (void)printf("ctpn                : %u\n", val->ctpn);
-            return;
-        }
-        if (val->trans_mode == URMA_TM_RM || val->trans_mode == URMA_TM_RC) {
-            (void)printf("tpgn                : %u\n", val->tpgn);
-            return;
-        }
-        if (val->trans_mode == URMA_TM_UM) {
-            (void)printf("utpn                : %u\n", val->utpn);
-            return;
-        }
-    }
-}
-
-static void admin_print_res_tp(struct nlattr *head)
-{
-    int type = nla_type(head);
-    if (type == UBCORE_RES_TP_VAL) {
-        tool_res_tp_val_t *val = (tool_res_tp_val_t *)nla_data(head);
-        (void)printf("tpn                 : %u\n", val->tpn);
-        (void)printf("tx_psn              : %u\n", val->tx_psn);
-        (void)printf("rx_psn              : %u\n", val->rx_psn);
-        (void)printf("dscp                : %u\n", (uint32_t)val->dscp);
-        (void)printf("oor_en              : %u\n", (uint32_t)val->oor_en);
-        (void)printf("selective_retrans_en: %u\n", (uint32_t)val->selective_retrans_en);
-        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, g_admin_tp_state[val->state]);
-        (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
-        (void)printf("ack_udp_start       : %hu\n", val->ack_udp_start);
-        (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
-        (void)printf("spray_en            : %u\n", val->spray_en);
-    }
-}
-
-static void admin_print_res_tpg(struct nlattr *head, int len)
-{
-    struct nlattr *nla;
-    int rem;
-
-    nla_for_each_attr(nla, head, len, rem) {
-        int type = nla_type(nla);
-        if (type == UBCORE_RES_TPG_TP_CNT) {
-            (void)printf("tp_cnt              : %u\n", nla_get_u32(nla));
-        }
-
-        if (type == UBCORE_RES_TPG_DSCP) {
-            (void)printf("dscp                : %u\n", (uint32_t)nla_get_u8(nla));
-            (void)printf("tp_list             : ");
-        }
-
-        if (type == UBCORE_RES_TPG_TP_VAL) {
-            (void)printf("%u ", nla_get_u32(nla));
-        }
-    }
-    (void)printf("\n");
-}
-
-static void admin_print_res_utp(struct nlattr *head)
-{
-    int type = nla_type(head);
-    if (type == UBCORE_RES_UTP_VAL) {
-        tool_res_utp_val_t *val = (tool_res_utp_val_t *)nla_data(head);
-        (void)printf("utp                 : %u\n", (uint32_t)val->utpn);
-        (void)printf("flag                : %u\n", val->flag.value);
-        (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
-        (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
     }
 }
 
@@ -538,7 +551,7 @@ static void admin_print_res_jetty_grp(struct nlattr *head, int len)
         int type = nla_type(nla);
         if (type == UBCORE_RES_JTGRP_JETTY_CNT) {
             (void)printf("jetty_cnt           : %u\n", nla_get_u32(nla));
-            (void)printf("jetty_list             : ");
+            (void)printf("jetty               : ");
         }
 
         if (type == UBCORE_RES_JTGRP_JETTY_VAL) {
@@ -581,7 +594,7 @@ static void admin_print_res_seg(struct nlattr *head, int len)
         int type = nla_type(nla);
         if (type == UBCORE_RES_SEGVAL_SEG_CNT) {
             (void)printf("seg_cnt             : %u\n", nla_get_u32(nla));
-            (void)printf("seg_list            : \n");
+            (void)printf("seg                 : \n");
         }
 
         if (type == UBCORE_RES_SEGVAL_SEG_VAL) {
@@ -601,7 +614,6 @@ static void admin_print_res_seg(struct nlattr *head, int len)
 static void admin_print_res_dev(struct nlattr *head, int len)
 {
     int rem;
-    uint32_t i = 0;
     struct nlattr *nla;
 
     nla_for_each_attr(nla, head, len, rem)
@@ -613,123 +625,54 @@ static void admin_print_res_dev(struct nlattr *head, int len)
                 (void)printf("seg_cnt             :%u \n", nla_get_u32(nla));
                 break;
             }
-            case UBCORE_RES_DEV_SEG_VAL: {
-                tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
-                (void)printf("seg[%u].ubva.eid    \t:" EID_FMT "\n", i, EID_ARGS(val->ubva.eid));
-                (void)printf("seg[%u].ubva.va     \t:%lu\n", i, val->ubva.va);
-                (void)printf("seg[%u].len         \t:%lu\n", i, val->len);
-                (void)printf("seg[%u].token_id      \t:%u\n", i, val->token_id);
-                i++;
-                break;
-            }
             case UBCORE_RES_DEV_JFS_CNT: {
                 (void)printf("\n----------JFS----------\n");
                 (void)printf("jfs_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_JFS_VAL: {
-                (void)printf("jfs_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_JFR_CNT: {
                 (void)printf("\n----------JFR----------\n");
                 (void)printf("jfr_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_JFR_VAL: {
-                (void)printf("jfr_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_JFC_CNT: {
-                (void)printf("\n----------JFR----------\n");
+                (void)printf("\n----------JFC----------\n");
                 (void)printf("jfc_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_JFC_VAL: {
-                (void)printf("jfc_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_JETTY_CNT: {
                 (void)printf("\n---------JETTY---------\n");
                 (void)printf("jetty_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_JETTY_VAL: {
-                (void)printf("jetty_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_JTGRP_CNT: {
                 (void)printf("\n------JETTY_GROUP------\n");
                 (void)printf("jetty_group_cnt     :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_JTGRP_VAL: {
-                (void)printf("jetty_group_id[%u]   \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_RC_CNT: {
                 (void)printf("\n----------RC-----------\n");
                 (void)printf("rc_cnt              :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_RC_VAL: {
-                (void)printf("rc_id[%u]           \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_VTP_CNT: {
                 (void)printf("\n----------VTP----------\n");
                 (void)printf("vtp_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_VTP_VAL: {
-                (void)printf("vtp_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_TP_CNT: {
                 (void)printf("\n----------TP-----------\n");
                 (void)printf("tp_cnt              :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_TP_VAL: {
-                (void)printf("tp_id[%u]           \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_TPG_CNT: {
                 (void)printf("\n----------TPG----------\n");
                 (void)printf("tpg_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_TPG_VAL: {
-                (void)printf("tpg_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             case UBCORE_RES_DEV_UTP_CNT: {
                 (void)printf("\n----------UTP----------\n");
                 (void)printf("utp_cnt             :%u \n", nla_get_u32(nla));
-                i = 0;
-                break;
-            }
-            case UBCORE_RES_DEV_UTP_VAL: {
-                (void)printf("utp_id[%u]          \t:%u\n", i, nla_get_u32(nla));
-                i++;
                 break;
             }
             default:
@@ -743,29 +686,14 @@ static void print_query_res(struct nlattr *attr_ptr, netlink_cb_par *cb_par, int
 {
     (void)printf("**********%s**********\n", g_query_res_type[cb_par->type]);
     switch (cb_par->type) {
-        case TOOL_RES_KEY_TPG:
-            admin_print_res_tpg(attr_ptr, len);
-            break;
         case TOOL_RES_KEY_JETTY_GROUP:
             admin_print_res_jetty_grp(attr_ptr, len);
             break;
         case TOOL_RES_KEY_SEG:
             admin_print_res_seg(attr_ptr, len);
             break;
-        case TOOL_RES_KEY_DEV_CTX:
+        case TOOL_RES_KEY_DEV_TA:
             admin_print_res_dev(attr_ptr, len);
-            break;
-        case TOOL_RES_KEY_UPI:
-            admin_print_res_upi(attr_ptr);
-            break;
-        case TOOL_RES_KEY_VTP:
-            admin_print_res_vtp(attr_ptr);
-            break;
-        case TOOL_RES_KEY_TP:
-            admin_print_res_tp(attr_ptr);
-            break;
-        case TOOL_RES_KEY_UTP:
-            admin_print_res_utp(attr_ptr);
             break;
         case TOOL_RES_KEY_JFS:
             admin_print_res_jfs(attr_ptr);
@@ -789,7 +717,6 @@ static void print_query_res(struct nlattr *attr_ptr, netlink_cb_par *cb_par, int
 
 static int cb_handler(struct nl_msg *msg, void *arg)
 {
-    (void)printf("enter cb\n");
     struct nlmsghdr *hdr = nlmsg_hdr(msg);
     struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
@@ -797,6 +724,190 @@ static int cb_handler(struct nl_msg *msg, void *arg)
 
     netlink_cb_par *cb_par = (netlink_cb_par *)arg;
     print_query_res(attr_ptr, cb_par, len);
+
+    return 0;
+}
+
+static void admin_list_res_jfs(struct nlattr *head, int len)
+{
+    int rem;
+    struct nlattr *nla;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_DEV_JFS_CNT) {
+            (void)printf("\n----------JFS----------\n");
+            (void)printf("jfs_cnt             :%u \n", nla_get_u32(nla));
+        }
+        if (type == UBCORE_RES_DEV_JFS_VAL) {
+            (void)printf("jfs_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_jfr(struct nlattr *head, int len)
+{
+    int rem;
+    struct nlattr *nla;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_DEV_JFR_CNT) {
+            (void)printf("\n----------JFR----------\n");
+            (void)printf("jfr_cnt             :%u \n", nla_get_u32(nla));
+        }
+        if (type == UBCORE_RES_DEV_JFR_VAL) {
+            (void)printf("jfr_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_jetty(struct nlattr *head, int len)
+{
+    int rem;
+    struct nlattr *nla;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_DEV_JETTY_CNT) {
+            (void)printf("\n---------JETTY---------\n");
+            (void)printf("jetty_cnt             :%u \n", nla_get_u32(nla));
+            i = 0;
+        }
+        if (type == UBCORE_RES_DEV_JETTY_VAL) {
+            (void)printf("jetty_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_jetty_grp(struct nlattr *head, int len)
+{
+    struct nlattr *nla;
+    int rem;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_JTGRP_JETTY_CNT) {
+            (void)printf("\n------JETTY_GROUP------\n");
+            (void)printf("jetty_group_cnt     :%u \n", nla_get_u32(nla));
+        }
+
+        if (type == UBCORE_RES_JTGRP_JETTY_VAL) {
+            (void)printf("jetty_group_id[%u]   \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_jfc(struct nlattr *head, int len)
+{
+    int rem;
+    struct nlattr *nla;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_DEV_JFC_CNT) {
+            (void)printf("\n----------JFC----------\n");
+            (void)printf("jfc_cnt             :%u \n", nla_get_u32(nla));
+        }
+        if (type == UBCORE_RES_DEV_JFC_VAL) {
+            (void)printf("jfc_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_rc(struct nlattr *head, int len)
+{
+    int rem;
+    struct nlattr *nla;
+    uint32_t i = 0;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_DEV_RC_CNT) {
+            (void)printf("\n----------RC-----------\n");
+            (void)printf("rc_cnt              :%u \n", nla_get_u32(nla));
+        }
+        if (type == UBCORE_RES_DEV_RC_VAL) {
+            (void)printf("rc_id[%u]           \t:%u\n", i, nla_get_u32(nla));
+            i++;
+        }
+    }
+}
+
+static void admin_list_res_seg(struct nlattr *head, int len)
+{
+    int rem;
+    uint32_t i = 0;
+    struct nlattr *nla;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_SEGVAL_SEG_CNT) {
+            (void)printf("seg_cnt             : %u\n", nla_get_u32(nla));
+        }
+
+        if (type == UBCORE_RES_SEGVAL_SEG_VAL) {
+            tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
+            (void)printf("seg_list idx: %u\n", i);
+            (void)printf("eid                 :"EID_FMT" \n", EID_ARGS(val->ubva.eid));
+            (void)printf("va                  : %lu\n", val->ubva.va);
+            (void)printf("len                 : %lu\n", val->len);
+            (void)printf("token_id            : %u\n", val->token_id);
+            (void)printf("\n");
+            i++;
+        }
+    }
+}
+
+static void print_list_res(struct nlattr *attr_ptr, netlink_cb_par *cb_par, int len)
+{
+    (void)printf("**********%s**********\n", g_query_res_type[cb_par->type]);
+    switch (cb_par->type) {
+        case TOOL_RES_KEY_JETTY_GROUP:
+            admin_list_res_jetty_grp(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_SEG:
+            admin_list_res_seg(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_JFS:
+            admin_list_res_jfs(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_JFR:
+            admin_list_res_jfr(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_JETTY:
+            admin_list_res_jetty(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_JFC:
+            admin_list_res_jfc(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_RC:
+            admin_list_res_rc(attr_ptr, len);
+            break;
+        default:
+            break;
+    }
+}
+
+static int cb_handler_list(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attr_ptr = genlmsg_data(genlhdr);
+    int len = genlmsg_attrlen(genlhdr, 0);
+
+    netlink_cb_par *cb_par = (netlink_cb_par *)arg;
+    print_list_res(attr_ptr, cb_par, len);
 
     return 0;
 }
@@ -816,6 +927,7 @@ static int admin_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, i
     arg->in.key_cnt = cfg->key.key_cnt;
     (void)memcpy(arg->in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
     cb_arg->type = arg->in.type;
+    cb_arg->key = arg->in.key;
 
     hdr.command = (uint32_t)URMA_CORE_CMD_QUERY_RES;
     hdr.args_len = (uint32_t)sizeof(admin_cmd_query_res_t);
@@ -842,12 +954,89 @@ int admin_show_res(const tool_config_t *cfg)
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
+    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TA) {
+        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
+        return -1;
+    }
+    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
+        cfg->key.type == TOOL_RES_KEY_DEV_TP) {
+        (void)printf("urma_admin do not support query tp stats.\n");
+        return -1;
+    }
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
         return -1;
     }
     (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_handler, &nl_cb_agr);
     if (admin_cmd_query_res(sock, cfg, genl_id, &nl_cb_agr) < 0) {
+        (void)printf("Failed to query stats by ioctl.\n");
+        nl_close(sock);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nl_close(sock);
+    nl_socket_free(sock);
+    return 0;
+}
+
+static int admin_cmd_list_res(struct nl_sock *sock, const tool_config_t *cfg, int genl_id, netlink_cb_par *cb_arg)
+{
+    admin_cmd_query_res_t *arg;
+    urma_cmd_hdr_t hdr;
+    arg = calloc(1, sizeof(admin_cmd_query_res_t));
+    if (arg == NULL) {
+        return -1;
+    }
+
+    arg->in.key = cfg->key.key;
+    arg->in.type = cfg->key.type;
+    arg->in.key_ext = cfg->key.key_ext;
+    arg->in.key_cnt = cfg->key.key_cnt;
+    (void)memcpy(arg->in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
+    cb_arg->type = arg->in.type;
+    cb_arg->key = arg->in.key;
+
+    hdr.command = (uint32_t)URMA_CORE_CMD_QUERY_RES;
+    hdr.args_len = (uint32_t)sizeof(admin_cmd_query_res_t);
+    hdr.args_addr = (uint64_t)arg;
+
+    int ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+        free(arg);
+        return ret;
+    }
+
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+    }
+    free(arg);
+    return 0;
+}
+
+int admin_list_res(const tool_config_t *cfg)
+{
+    struct nl_sock *sock = NULL;
+    int genl_id;
+    netlink_cb_par nl_cb_agr;
+
+    if (cfg->key.key_cnt != 0) {
+        (void)printf("key_cnt in list_res should equal 0.\n");
+        return -1;
+    }
+    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
+        cfg->key.type >= TOOL_RES_KEY_DEV_TA) {
+        (void)printf("urma_admin do not support query tp and dev stats.\n");
+        return -1;
+    }
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
+        return -1;
+    }
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_handler_list, &nl_cb_agr);
+    if (admin_cmd_list_res(sock, cfg, genl_id, &nl_cb_agr) < 0) {
         (void)printf("Failed to query stats by ioctl.\n");
         nl_close(sock);
         nl_socket_free(sock);

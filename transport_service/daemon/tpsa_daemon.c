@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    uvs_init_attr_t attr = {true};
+    uvs_init_attr_t attr = {true, uvs_cfg.tpsa_worker_cpu_core};
     uvs_socket_init_attr_t socket_attr = {
         .type = uvs_cfg.tpsa_ip_type,
         .server_ip = uvs_cfg.tpsa_server_ip,

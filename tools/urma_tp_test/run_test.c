@@ -19,8 +19,14 @@
 #include "tp_test_res.h"
 
 #define TP_TEST_ITERS_99 (0.99)
+#define TP_TEST_KPPS (1000)
+
 #define TP_RESULT_LAT_FMT "                 iterations  t_min[us]  t_max[us]  t_avg[us]  99""%""[us]"
 #define TP_REPORT_LAT_FMT " %u       %-7.2lf    %-7.2lf    %-7.2lf    %-7.2lf\n"
+
+#define TP_RESULT_BW_FMT "                 iterations    min[kpps]   max[kpps]   avg[kpps]   99""%""[kpps]"
+#define TP_REPORT_BW_FMT " %u         %-7.6lf      %-7.6lf      %-7.6lf       %-7.6lf\n"
+
 static int run_lat_test(tp_test_context_t *ctx, tp_test_config_t *cfg, uint32_t idx)
 {
     uint32_t i, j, k;
@@ -38,7 +44,7 @@ static int run_lat_test(tp_test_context_t *ctx, tp_test_config_t *cfg, uint32_t 
         for (j = 0; j < cfg->jettys_pre_ctx; j++) {
             for (k = 0; k < cfg->iters; k++) {
                 ctx_cnt = idx * ctx_num_pre_thread + i;
-                jetty_cnt = (idx * ctx_num_pre_thread + i) * cfg->jettys_pre_ctx + j;
+                jetty_cnt = ctx_cnt * cfg->jettys_pre_ctx + j;
                 test_cnt = i * cfg->jettys_pre_ctx * cfg->iters + j * cfg->iters + k;  // pre thread
                 ctx->before[idx][test_cnt] = get_cycles();
                 ctx->tjetty[jetty_cnt] = urma_import_jetty(ctx->urma_ctx[ctx_cnt], &rjetty, &g_tp_test_token);
@@ -59,6 +65,41 @@ static int run_lat_test(tp_test_context_t *ctx, tp_test_config_t *cfg, uint32_t 
 
 static int run_bw_test(tp_test_context_t *ctx, tp_test_config_t *cfg, uint32_t idx)
 {
+    uint32_t i, j, k;
+    uint32_t ctx_num_pre_thread = ctx->ctx_num / cfg->thread_num;
+    urma_rjetty_t rjetty = {0};
+    uint32_t ctx_cnt;
+    uint32_t jetty_cnt;
+
+    rjetty.jetty_id = ctx->remote_jetty.jetty_id;
+    rjetty.trans_mode = cfg->tp_mode;
+    rjetty.type = URMA_JETTY;
+
+    for (i = 0; i < cfg->iters; i++) {
+        ctx->before[idx][i] = get_cycles();
+        for (j = 0; j < ctx_num_pre_thread; j++) {
+            for (k = 0; k < cfg->jettys_pre_ctx; k++) {
+                ctx_cnt = idx * ctx_num_pre_thread + j;
+                jetty_cnt = ctx_cnt * cfg->jettys_pre_ctx + k;
+                ctx->tjetty[jetty_cnt] = urma_import_jetty(ctx->urma_ctx[ctx_cnt], &rjetty, &g_tp_test_token);
+                if (ctx->tp_type != URMA_TRANSPORT_UB) {
+                    (void)urma_advise_jetty(ctx->jetty[jetty_cnt], ctx->tjetty[jetty_cnt]);
+                }
+            }
+        }
+        ctx->middle[idx][i] = get_cycles();
+        for (j = 0; j < ctx_num_pre_thread; j++) {
+            for (k = 0; k < cfg->jettys_pre_ctx; k++) {
+                ctx_cnt = idx * ctx_num_pre_thread + j;
+                jetty_cnt = ctx_cnt * cfg->jettys_pre_ctx + k;
+                if (ctx->tp_type != URMA_TRANSPORT_UB) {
+                    (void)urma_unadvise_jetty(ctx->jetty[jetty_cnt], ctx->tjetty[jetty_cnt]);
+                }
+                (void)urma_unimport_jetty(ctx->tjetty[jetty_cnt]);
+            }
+        }
+        ctx->after[idx][i] = get_cycles();
+    }
     return 0;
 }
 
@@ -225,7 +266,55 @@ static void print_lat_report(tp_test_context_t *ctx, tp_test_config_t *cfg)
 
 static void print_bw_report(tp_test_context_t *ctx, tp_test_config_t *cfg)
 {
-    return;
+    uint32_t i, j, k = 0;
+    uint32_t measure_cnt = cfg->thread_num * cfg->iters;
+    uint32_t jetty_num_pre_thread = ctx->jetty_num / cfg->thread_num;
+    double cycles_to_units = get_cpu_mhz(true);
+
+    double *import_delta = calloc(1, sizeof(double) * (uint32_t)measure_cnt);
+    if (import_delta == NULL) {
+        return;
+    }
+    double *unimport_delta = calloc(1, sizeof(double) * (uint32_t)measure_cnt);
+    if (unimport_delta == NULL) {
+        free(import_delta);
+        return;
+    }
+
+    for (i = 0; i < cfg->thread_num; i++) {
+        for (j = 0; j < cfg->iters; j++) {
+            import_delta[k] = TP_TEST_KPPS * jetty_num_pre_thread * cycles_to_units /
+                (ctx->middle[i][j] - ctx->before[i][j]);    // kpps = 1ms / ((tsc / units) / num)
+            unimport_delta[k] = TP_TEST_KPPS * jetty_num_pre_thread * cycles_to_units /
+                (ctx->after[i][j] - ctx->middle[i][j]);
+            k++;
+        }
+    }
+    qsort(import_delta, (size_t)measure_cnt, sizeof(uint64_t), cycles_compare);
+    qsort(unimport_delta, (size_t)measure_cnt, sizeof(uint64_t), cycles_compare);
+
+    /* average lat */
+    double import_average_sum = 0.0, import_average = 0.0;
+    for (i = 0; i < measure_cnt; i++) {
+        import_average_sum += import_delta[i];
+    }
+    import_average = import_average_sum / measure_cnt;
+    double unimport_average_sum = 0.0, unimport_average = 0.0;
+    for (i = 0; i < measure_cnt; i++) {
+        unimport_average_sum += unimport_delta[i];
+    }
+    unimport_average = unimport_average_sum / measure_cnt;
+
+    /* tail lat */
+    uint64_t iters_99 = measure_cnt - (uint64_t)ceil((measure_cnt) * TP_TEST_ITERS_99);
+
+    (void)printf("%s\n", TP_RESULT_BW_FMT);
+    (void)printf("import_jetty   : " TP_REPORT_BW_FMT, measure_cnt, import_delta[0],
+        import_delta[measure_cnt - 1], import_average, import_delta[iters_99]);
+    (void)printf("unimport_jetty : " TP_REPORT_BW_FMT, measure_cnt, unimport_delta[0],
+        unimport_delta[measure_cnt - 1], unimport_average, unimport_delta[iters_99]);
+    free(import_delta);
+    free(unimport_delta);
 }
 
 static void print_report(tp_test_context_t *ctx, tp_test_config_t *cfg)

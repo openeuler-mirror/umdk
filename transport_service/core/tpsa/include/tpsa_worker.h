@@ -39,13 +39,14 @@ typedef struct tpsa_worker {
     tpsa_global_cfg_t global_cfg_ctx;
     tpsa_table_t table_ctx;
     tpsa_sock_ctx_t sock_ctx;
-    tpsa_nl_ctx_t nl_ctx;
+    tpsa_genl_ctx_t genl_ctx;
     tpsa_ioctl_ctx_t ioctl_ctx;
     uvs_socket_init_attr_t tpsa_attr; /* IP information of local uvs module */
     uvs_statistic_ctx_t statistic_ctx; // statistic_ctx table
     bool stop;
     pthread_t thread;
     int epollfd;
+    int cpu_core;
 } tpsa_worker_t;
 
 typedef int (*tpsa_vtp_event_handler)(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg,
@@ -68,6 +69,8 @@ user_ops_t get_user_ops_type(const char *user_ops);
 
 int tpsa_restore_vtp_table(tpsa_worker_t *worker);
 int tpsa_restore_wait_list(tpsa_table_t *tbl_ctx, uint32_t wait_restored_timeout);
+int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg);
+int tpsa_check_cpu_core(int cpu_core);
 
 #ifdef __cplusplus
 }

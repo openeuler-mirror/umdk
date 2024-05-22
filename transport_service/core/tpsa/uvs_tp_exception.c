@@ -26,7 +26,6 @@ static int uvs_ioctl_cmd_restore_target_tp_error_req(tpsa_ioctl_ctx_t *ioctl_ctx
     }
 
     cfg->cmd_type = TPSA_CMD_RESTORE_TARGET_TP_ERROR_REQ;
-    cfg->cmd.restore_tp_error.in.tpgn = entry->tpgn;
     cfg->cmd.restore_tp_error.in.tpn = entry->tpn;
     cfg->cmd.restore_tp_error.in.data_udp_start = next_port(entry->data_udp_start, entry->tpn);
     cfg->cmd.restore_tp_error.in.ack_udp_start = next_port(entry->ack_udp_start, entry->tpn);
@@ -54,7 +53,6 @@ static int uvs_ioctl_cmd_restore_tp_error_resp(tpsa_ioctl_ctx_t *ioctl_ctx, tp_s
     }
 
     cfg->cmd_type = TPSA_CMD_RESTORE_TP_ERROR_RSP;
-    cfg->cmd.restore_tp_error.in.tpgn = entry->tpgn;
     cfg->cmd.restore_tp_error.in.tpn = entry->tpn;
     cfg->cmd.restore_tp_error.in.data_udp_start = next_port(entry->data_udp_start, entry->tpn);
     cfg->cmd.restore_tp_error.in.ack_udp_start = next_port(entry->ack_udp_start, entry->tpn);
@@ -81,7 +79,6 @@ static int uvs_ioctl_cmd_restore_target_tp_error_ack(tpsa_ioctl_ctx_t *ioctl_ctx
     }
 
     cfg->cmd_type = TPSA_CMD_RESTORE_TARGET_TP_ERROR_ACK;
-    cfg->cmd.restore_tp_error.in.tpgn = entry->tpgn;
     cfg->cmd.restore_tp_error.in.tpn = entry->tpn;
     cfg->cmd.restore_tp_error.in.tpf.netaddr = entry->key.sip;
     cfg->cmd.restore_tp_error.in.tpf.trans_type = TPSA_TRANSPORT_UB;
@@ -105,7 +102,6 @@ static int uvs_ioctl_cmd_restore_lb_tp_error(tpsa_ioctl_ctx_t *ioctl_ctx, tp_sta
     }
 
     cfg->cmd_type = TPSA_CMD_RESTORE_TP_ERROR_RSP;
-    cfg->cmd.restore_tp_error.in.tpgn = entry->tpgn;
     cfg->cmd.restore_tp_error.in.tpn = entry->tpn;
     cfg->cmd.restore_tp_error.in.data_udp_start = next_port(entry->data_udp_start, entry->tpn);
     cfg->cmd.restore_tp_error.in.ack_udp_start = next_port(entry->ack_udp_start, entry->tpn);
@@ -135,7 +131,6 @@ static int uvs_ioctl_cmd_change_tp_to_error(tpsa_ioctl_ctx_t *ioctl_ctx,
     cfg->cmd_type = TPSA_CMD_CHANGE_TP_TO_ERROR;
     cfg->cmd.change_tp_to_error.in.tpf.trans_type = TPSA_TRANSPORT_UB;
     cfg->cmd.change_tp_to_error.in.tpf.netaddr = entry->key.sip;
-    cfg->cmd.change_tp_to_error.in.tpgn = entry->tpgn;
     cfg->cmd.change_tp_to_error.in.tpn = entry->tpn;
 
     int ret = tpsa_ioctl(ioctl_ctx->ubcore_fd, cfg);
@@ -178,7 +173,7 @@ static int uvs_ioctl_cmd_restore_tp_suspend(tpsa_ioctl_ctx_t *ctx, tpsa_nl_tp_su
 
 /* socket operations */
 static int uvs_sock_restore_tp_error_req_to_peer(tpsa_sock_ctx_t *sock_ctx, tpsa_nl_tp_error_req_t *error_req,
-                                                 tp_state_table_entry_t *entry)
+                                                 tp_state_table_entry_t *entry, uvs_socket_init_attr_t *tpsa_attr)
 {
     tpsa_sock_msg_t *req_msg = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (req_msg == NULL) {
@@ -186,6 +181,9 @@ static int uvs_sock_restore_tp_error_req_to_peer(tpsa_sock_ctx_t *sock_ctx, tpsa
     }
 
     req_msg->msg_type = TPSA_TP_ERROR_REQ;
+    req_msg->sip.net_addr = entry->key.sip;
+    req_msg->src_uvs_ip = tpsa_attr->server_ip;
+
     req_msg->content.tp_err_msg.nl_tp_err_req = *error_req;
     req_msg->content.tp_err_msg.dip = entry->dip;
     int ret = tpsa_sock_send_msg(sock_ctx, req_msg, sizeof(tpsa_sock_msg_t), entry->peer_uvs_ip);
@@ -282,9 +280,8 @@ static tpsa_tp_state_t uvs_handle_nl_suspend_need_to_err(tp_state_table_entry_t 
 }
 
 /* handle netlink */
-static int nl_tp_error_req_handle_entry(tpsa_sock_ctx_t *sock_ctx, tpsa_ioctl_ctx_t *ioctl_ctx,
-                                        tpsa_nl_tp_error_req_t *error_req, tp_state_table_entry_t *entry,
-                                        bool isLoopback)
+static int nl_tp_error_req_handle_entry(uvs_ctx_t *ctx, tpsa_nl_tp_error_req_t *error_req,
+                                        tp_state_table_entry_t *entry, bool isLoopback)
 {
     switch (entry->tp_exc_state) {
         case INITIATOR_TP_STATE_RESET:
@@ -306,14 +303,14 @@ static int nl_tp_error_req_handle_entry(tpsa_sock_ctx_t *sock_ctx, tpsa_ioctl_ct
                 (a) (non-loopback)tp_exc_state = INITIATOR_TP_STATE_RESET, ubcore already modified tp state to RESET;
                     (loopback)tp_exc_state = INITIATOR_TP_STATE_RTS, loopback does not need to change tp to error; */
             if (isLoopback) {
-                if (uvs_ioctl_cmd_restore_lb_tp_error(ioctl_ctx, entry) != 0) {
+                if (uvs_ioctl_cmd_restore_lb_tp_error(ctx->ioctl_ctx, entry) != 0) {
                     TPSA_LOG_ERR("Failed to restore lb tp error req in worker\n");
                     return -1;
                 }
 
                 entry->tp_exc_state = INITIATOR_TP_STATE_RTS;
             } else {
-                if (uvs_sock_restore_tp_error_req_to_peer(sock_ctx, error_req, entry) != 0) {
+                if (uvs_sock_restore_tp_error_req_to_peer(ctx->sock_ctx, error_req, entry, &ctx->tpsa_attr) != 0) {
                     TPSA_LOG_ERR("Failed to report tp error to peer\n");
                     return -1;
                 }
@@ -331,14 +328,14 @@ static int nl_tp_error_req_handle_entry(tpsa_sock_ctx_t *sock_ctx, tpsa_ioctl_ct
             2. modify state to TPSA_TP_STATE_RTR;
             3. send resp to peer; */
             TPSA_LOG_DEBUG("TARGET_TP_STATE_ERR event\n");
-            if (uvs_ioctl_cmd_restore_target_tp_error_req(ioctl_ctx, entry) != 0) {
+            if (uvs_ioctl_cmd_restore_target_tp_error_req(ctx->ioctl_ctx, entry) != 0) {
                 TPSA_LOG_ERR("Failed to restore target tp error\n");
                 return -1;
             }
 
             entry->tp_exc_state = TARGET_TP_STATE_RTR;
 
-            if (uvs_sock_restore_tp_error_resp_to_peer(sock_ctx, entry) != 0) {
+            if (uvs_sock_restore_tp_error_resp_to_peer(ctx->sock_ctx, entry) != 0) {
                 TPSA_LOG_ERR("Failed to send tp error resp to peer\n");
                 return -1;
             }
@@ -361,7 +358,7 @@ static bool uvs_handle_destroy_tpg(tpsa_nl_tp_error_req_t *error_req, uvs_net_ad
     tpg_state_table_key_t tpg_key = {0};
 
     tpg_key.tpgn = error_req->tpgn;
-    tpg_key.sip = *sip;
+    tpg_key.sip = sip->net_addr;
 
     tpg_state_table_entry_t *tpg_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_key);
     if (tpg_entry != NULL && tpg_entry->tpg_exc_state == TPG_STATE_DEL) {
@@ -369,7 +366,7 @@ static bool uvs_handle_destroy_tpg(tpsa_nl_tp_error_req_t *error_req, uvs_net_ad
 
         tp_state_table_key_t tp_state_key = {
             .tpn = error_req->tpn,
-            .sip = *sip
+            .sip = sip->net_addr
         };
 
         (void)tp_state_table_remove(&table_ctx->tp_state_table, &tp_state_key);
@@ -387,9 +384,7 @@ static bool uvs_handle_destroy_tpg(tpsa_nl_tp_error_req_t *error_req, uvs_net_ad
                 free(cfg);
                 return true;
             }
-            uvs_cal_multi_tp_statistic(error_req->tpf_dev_name, error_req->trans_mode,
-                UVS_TP_DESTROY_STATE, cfg->cmd.destroy_tpg.out.destroyed_tp_cnt);
-            (void)tpg_state_table_remove(&table_ctx->tpg_state_table, &tpg_key);
+            tpg_state_table_remove(&table_ctx->tpg_state_table, &tpg_key);
 
             TPSA_LOG_INFO("Finish IOCTL to destroy tpg %u when\n", error_req->tpgn);
             free(cfg);
@@ -399,8 +394,7 @@ static bool uvs_handle_destroy_tpg(tpsa_nl_tp_error_req_t *error_req, uvs_net_ad
     return false;
 }
 
-int uvs_handle_nl_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_t *sock_ctx, tpsa_ioctl_ctx_t *ioctl_ctx,
-                               tpsa_nl_msg_t *msg)
+int uvs_handle_nl_tp_error_req(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
 {
     tpsa_nl_tp_error_req_t *error_req = (tpsa_nl_tp_error_req_t *)(void *)msg->payload;
     tpg_state_table_key_t tpg_key = {0};
@@ -408,31 +402,37 @@ int uvs_handle_nl_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_t *sock_ct
     tp_state_table_key_t key = {0};
     bool isLoopback = false;
 
-    tpsa_sip_table_lookup(&table_ctx->tpf_dev_table, error_req->tpf_dev_name, error_req->sip_idx, &sip_entry);
+    int ret = tpsa_sip_table_lookup(&ctx->table_ctx->tpf_dev_table, error_req->tpf_dev_name,
+        error_req->sip_idx, &sip_entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Can not find sip by tpf name %s and sip_idx %u\n",
+            error_req->tpf_dev_name,  error_req->sip_idx);
+        return -1;
+    }
 
     tpg_key.tpgn = error_req->tpgn;
-    tpg_key.sip = sip_entry.addr;
+    tpg_key.sip = sip_entry.addr.net_addr;
 
-    tpg_state_table_entry_t *tpg_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_key);
+    tpg_state_table_entry_t *tpg_entry = tpg_state_table_lookup(&ctx->table_ctx->tpg_state_table, &tpg_key);
     if (tpg_entry == NULL) {
         TPSA_LOG_ERR("Fail to find tpg state entry tpgn:%d", tpg_key.tpgn);
         return -1;
     }
 
-    if (uvs_handle_destroy_tpg(error_req, &sip_entry.addr, table_ctx, ioctl_ctx)) {
+    if (uvs_handle_destroy_tpg(error_req, &sip_entry.addr, ctx->table_ctx, ctx->ioctl_ctx)) {
         return 0;
     }
 
     key.tpn = error_req->tpn;
-    key.sip = sip_entry.addr;
-    tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
+    key.sip = sip_entry.addr.net_addr;
+    tp_state_table_entry_t *entry = tp_state_table_lookup(&ctx->table_ctx->tp_state_table, &key);
     if (entry == NULL) {
         tp_state_table_entry_t add_entry = {0};
         add_entry.key = key;
         add_entry.tp_exc_state = INITIATOR_TP_STATE_ERR;
         add_entry.dip = tpg_entry->dip;
         add_entry.peer_uvs_ip = tpg_entry->peer_uvs_ip;
-        entry = tp_state_table_add(&table_ctx->tp_state_table, &key, &add_entry);
+        entry = tp_state_table_add(&ctx->table_ctx->tp_state_table, &key, &add_entry);
         if (entry == NULL) {
             TPSA_LOG_ERR("Fail to add tp state entry");
             return -1;
@@ -450,14 +450,14 @@ int uvs_handle_nl_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_t *sock_ct
     uvs_end_point_t local = { sip_entry.addr, error_req->peer_eid, error_req->local_jetty_id };
     uvs_end_point_t peer = { entry->dip, error_req->local_eid, error_req->peer_jetty_id };
     isLoopback = uvs_is_loopback(error_req->trans_mode, &local, &peer);
-    if (nl_tp_error_req_handle_entry(sock_ctx, ioctl_ctx, error_req, entry, isLoopback) != 0) {
+    if (nl_tp_error_req_handle_entry(ctx, error_req, entry, isLoopback) != 0) {
         TPSA_LOG_ERR("Failed to handle netlink tp error req tp state table entry\n");
         return -1;
     }
 
     /* If tp state == INITIATOR_TP_STATE_RTS, means tp is already restored under loopback scenario */
     if (entry->tp_exc_state == INITIATOR_TP_STATE_RTS &&
-        tp_state_table_remove(&table_ctx->tp_state_table, &entry->key) != 0) {
+        tp_state_table_remove(&ctx->table_ctx->tp_state_table, &entry->key) != 0) {
         TPSA_LOG_ERR("Failed to remove tp state table entry\n");
         return -1;
     }
@@ -520,10 +520,16 @@ int uvs_handle_nl_tp_suspend_req(tpsa_table_t *table_ctx, tpsa_ioctl_ctx_t *ioct
     sip_table_entry_t sip_entry = {0};
     tp_state_table_key_t key = {0};
 
-    tpsa_sip_table_lookup(&table_ctx->tpf_dev_table, suspend_req->tpf_dev_name, suspend_req->sip_idx, &sip_entry);
+    int ret = tpsa_sip_table_lookup(&table_ctx->tpf_dev_table, suspend_req->tpf_dev_name,
+        suspend_req->sip_idx, &sip_entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Can not find sip by tpf name %s and sip_idx %u\n",
+            suspend_req->tpf_dev_name,  suspend_req->sip_idx);
+        return -1;
+    }
 
     tpg_key.tpgn = suspend_req->tpgn;
-    tpg_key.sip = sip_entry.addr;
+    tpg_key.sip = sip_entry.addr.net_addr;
 
     tpg_state_table_entry_t *tpg_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_key);
     if (tpg_entry == NULL) {
@@ -532,7 +538,7 @@ int uvs_handle_nl_tp_suspend_req(tpsa_table_t *table_ctx, tpsa_ioctl_ctx_t *ioct
     }
 
     key.tpn = suspend_req->tpn;
-    key.sip = sip_entry.addr;
+    key.sip = sip_entry.addr.net_addr;
 
     tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
     if (entry == NULL) {
@@ -585,7 +591,7 @@ static int sock_restore_target_tp_error_req_handle_entry(tpsa_ioctl_ctx_t *ioctl
             TPSA_LOG_DEBUG("socket INITIATOR_TP_STATE_RESET\n");
             /* Tp error is triggered at both ends. Only one side needs to continue to handle this tp error */
             key.tpn = entry->peer_tpn;
-            key.sip = entry->dip;
+            key.sip = entry->dip.net_addr;
             if (memcmp(&entry->key, &key, sizeof(tp_state_table_key_t)) > 0) {
                 TPSA_LOG_INFO("Tp error is triggered at both ends, ignore this req at this end. tpn %u\n", entry->tpn);
                 return 0;
@@ -633,45 +639,26 @@ int uvs_handle_sock_restore_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_
                                          tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_sock_msg_t *msg)
 {
     tpsa_nl_tp_error_req_t *error_req = (tpsa_nl_tp_error_req_t *)(void *)&msg->content.tp_err_msg.nl_tp_err_req;
-    tpsa_tpg_status_t status;
-    tpsa_tpg_info_t tpg = {0};
-
-    tpg_state_table_key_t tpg_entry_key = {
-        .tpgn = error_req->tpgn,
-        .sip = msg->content.tp_err_msg.dip,
-    };
-
-    tpg_state_table_entry_t *tpg_state_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_entry_key);
-    if (tpg_state_entry == NULL) {
-        TPSA_LOG_ERR("tpgn %d, eid " EID_FMT " not exist", tpg_entry_key.tpgn, EID_ARGS(tpg_entry_key.sip.net_addr));
-        return -1;
-    }
 
     tpsa_tpg_table_index_t tpg_idx;
     (void)memset(&tpg_idx, 0, sizeof(tpsa_tpg_table_index_t));
-    tpg_idx.dip = tpg_state_entry->dip;
+    tpg_idx.dip = msg->sip;
     tpg_idx.local_eid = error_req->peer_eid;
     tpg_idx.peer_eid = error_req->local_eid;
     tpg_idx.ljetty_id = error_req->peer_jetty_id;
     tpg_idx.djetty_id = error_req->local_jetty_id;
     tpg_idx.isLoopback = false;
 
-    status = tpsa_lookup_tpg_table(&tpg_idx, error_req->trans_mode, table_ctx, &tpg);
-    if (status != TPSA_TPG_LOOKUP_EXIST) {
-        TPSA_LOG_ERR("Wrong tpg number find when dealing with socket tp error req");
-        return -1;
-    }
-
     tp_state_table_key_t key = {0};
     key.tpn = error_req->peer_tpn;
-    key.sip = msg->content.tp_err_msg.dip;
+    key.sip = msg->content.tp_err_msg.dip.net_addr;
     tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
     if (entry == NULL) {
         tp_state_table_entry_t add_entry = {0};
         add_entry.key = key;
         add_entry.tp_exc_state = INITIATOR_TP_STATE_RTS;
-        add_entry.dip = tpg_state_entry->dip;
-        add_entry.peer_uvs_ip = tpg_state_entry->peer_uvs_ip;
+        add_entry.dip = msg->sip;
+        add_entry.peer_uvs_ip = msg->src_uvs_ip;
         entry = tp_state_table_add(&table_ctx->tp_state_table, &key, &add_entry);
         if (entry == NULL) {
             TPSA_LOG_ERR("Fail to add tp state table in suspend request");
@@ -679,7 +666,6 @@ int uvs_handle_sock_restore_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_
         }
     }
 
-    entry->tpgn = tpg.tpgn;
     entry->tpn = error_req->peer_tpn;
     entry->rx_psn = error_req->tx_psn + 1;
     entry->peer_tpn = error_req->tpn;
@@ -693,7 +679,7 @@ int uvs_handle_sock_restore_tp_error_resp(tpsa_table_t *table_ctx, tpsa_sock_ctx
     tpsa_nl_tp_error_req_t *error_req = (tpsa_nl_tp_error_req_t *)(void *)&msg->content.tp_err_msg.nl_tp_err_req;
     tp_state_table_key_t key = {0};
     key.tpn = error_req->peer_tpn;
-    key.sip = msg->content.tp_err_msg.dip;
+    key.sip = msg->content.tp_err_msg.dip.net_addr;
     tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
     if (entry != NULL) {
         if (entry->tp_exc_state == INITIATOR_TP_STATE_RESET) {
@@ -742,7 +728,7 @@ int uvs_handle_sock_restore_tp_error_ack(tpsa_table_t *table_ctx, tpsa_ioctl_ctx
     tpsa_nl_tp_error_req_t *error_req = (tpsa_nl_tp_error_req_t *)(void *)&msg->content.tp_err_msg.nl_tp_err_req;
     tp_state_table_key_t key = {0};
     key.tpn = error_req->peer_tpn;
-    key.sip = msg->content.tp_err_msg.dip;
+    key.sip = msg->content.tp_err_msg.dip.net_addr;
     tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
     if (entry != NULL) {
         if (entry->tp_exc_state == TARGET_TP_STATE_RTR) {

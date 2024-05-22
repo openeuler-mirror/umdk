@@ -136,7 +136,17 @@ typedef enum perftest_jetty_mode {
 
 enum perftest_opts {
     PERFTEST_OPT_EID_IDX = 1,
+    PERFTEST_OPT_RATE_LIMIT,
+    PERFTEST_OPT_BURST_SIZE,
+    PERFTEST_OPT_RATE_UNITS,
+    PERFTEST_OPT_SUB_TRANS_MODE
 };
+
+typedef enum perftest_rate_limiter_units {
+    PERFTEST_RATE_LIMIT_MEGA_BYTE,
+    PERFTEST_RATE_LIMIT_GIGA_BIT,
+    PERFTEST_RATE_LIMIT_PS
+} perftest_rate_limiter_units_t;
 
 typedef struct perftest_config {
     perftest_cmd_type_t cmd;
@@ -166,6 +176,7 @@ typedef struct perftest_config {
     uint32_t size;
     uint32_t jfs_depth;
     urma_transport_mode_t trans_mode;
+    uint32_t sub_trans_mode;
 
     uint32_t cache_line_size;
     uint64_t page_size;
@@ -183,6 +194,12 @@ typedef struct perftest_config {
     bool share_jfr;
     uint32_t io_thread_num;
     perftest_comm_t comm;
+
+    /* Rate Limiter */
+    bool is_rate_limit;
+    double rate_limit;
+    uint32_t burst_size;
+    perftest_rate_limiter_units_t rate_units;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

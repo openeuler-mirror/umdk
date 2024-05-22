@@ -39,7 +39,6 @@ typedef struct uvs_admin_live_migrate_table_show_req {
 typedef struct uvs_admin_live_migrate_table_show_rsp {
     int res;
     uvs_admin_net_addr_t uvs_ip;
-    int flag;
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
 } uvs_admin_live_migrate_table_show_rsp_t;
 

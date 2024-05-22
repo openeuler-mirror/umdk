@@ -28,7 +28,6 @@ static void sip_init_show_rsp(tpsa_sip_table_show_rsp_t *show_rsp, sip_table_ent
     (void)memcpy(&show_rsp->net_addr, &entry->addr.net_addr, TPSA_EID_SIZE);
     (void)memcpy(show_rsp->mac, entry->addr.mac, ETH_ADDR_LEN);
     (void)memcpy(show_rsp->dev_name, entry->dev_name, UVS_MAX_DEV_NAME);
-    show_rsp->prefix_len = entry->prefix_len;
     show_rsp->mtu = entry->mtu;
 }
 
@@ -55,6 +54,10 @@ tpsa_response_t *process_sip_table_show(tpsa_request_t *req, ssize_t read_len)
     show_req = (tpsa_sip_table_show_req_t *)req->req;
     if (show_req->sip_idx >= TPSA_SIP_IDX_TABLE_SIZE) {
         TPSA_LOG_ERR("Invalid parameter\n");
+        return NULL;
+    }
+    if (strnlen(show_req->tpf_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
     (void)pthread_rwlock_wrlock(&ctx->worker->table_ctx.tpf_dev_table.rwlock);
@@ -106,7 +109,7 @@ tpsa_response_t *process_sip_table_add(tpsa_request_t *req, ssize_t read_len)
 
     add_req = (tpsa_sip_table_add_req_t *)req->req;
     if (strnlen(add_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", add_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -117,20 +120,29 @@ tpsa_response_t *process_sip_table_add(tpsa_request_t *req, ssize_t read_len)
     (void)memcpy(&entry.addr.net_addr, &add_req->net_addr, TPSA_EID_SIZE);
     (void)memcpy(entry.addr.mac, add_req->mac, ETH_ADDR_LEN);
     (void)memcpy(entry.dev_name, add_req->dev_name, UVS_MAX_DEV_NAME);
-    entry.prefix_len = add_req->prefix_len;
     entry.mtu = add_req->mtu;
     entry.used = true;
 
-    ret = tpsa_sip_table_query_unused_idx(&ctx->worker->table_ctx, add_req->dev_name, &index);
+    ret = tpsa_sip_lookup_by_entry(&ctx->worker->table_ctx, entry.dev_name, &entry, &index);
     if (ret != 0) {
-        TPSA_LOG_ERR("failed to query unused sip index\n");
+        if (ret == EEXIST) {
+            TPSA_LOG_INFO("sip already exist, sip_index is %d\n", index);
+        } else {
+            TPSA_LOG_WARN("failed to lookup sip by entry, tpf table not ready\n");
+        }
+        goto send_rsp;
     }
 
-    ret = sip_table_ioctl(&ctx->worker->ioctl_ctx, &entry, TPSA_CMD_ADD_SIP);
+    ret = sip_table_add_ioctl(&ctx->worker->ioctl_ctx, &entry, &index);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not add sip to ubcore.\n");
+        if (ret == EEXIST) {
+            TPSA_LOG_INFO("sip in ubcore already exist, sip_idx %u.\n", index);
+        } else {
+            TPSA_LOG_ERR("can not add sip to ubcore.\n");
+        }
     }
 
+send_rsp:
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_sip_table_add_rsp_t));
     if (rsp == NULL) {
         return NULL;
@@ -171,6 +183,10 @@ tpsa_response_t *process_sip_table_del(tpsa_request_t *req, ssize_t read_len)
         TPSA_LOG_ERR("Invalid parameter\n");
         return NULL;
     }
+    if (strnlen(del_req->tpf_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
     (void)pthread_rwlock_wrlock(&ctx->worker->table_ctx.tpf_dev_table.rwlock);
     ret = tpsa_lookup_tpf_dev_table(del_req->tpf_name, &ctx->worker->table_ctx.tpf_dev_table, &tpf_dev_table_entry);
     if (ret != 0) {
@@ -185,7 +201,7 @@ tpsa_response_t *process_sip_table_del(tpsa_request_t *req, ssize_t read_len)
         TPSA_LOG_ERR("sip_idx: %u has been deleted\n", del_req->sip_idx);
         ret = -ENXIO;
     } else {
-        ret = sip_table_ioctl(&ctx->worker->ioctl_ctx, &entry, TPSA_CMD_DEL_SIP);
+        ret = sip_table_del_ioctl(&ctx->worker->ioctl_ctx, &entry);
     }
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_sip_table_del_rsp_t));

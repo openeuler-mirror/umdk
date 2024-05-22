@@ -142,16 +142,30 @@ static int uvs_init_tp_msg_ctx(uvs_ctx_t *ctx, tpsa_vtp_table_index_t *vtp_idx,
 
     tp_msg_ctx->vport_ctx.key = vtp_idx->fe_key;
 
-    int ret = tpsa_lookup_vport_param(&tp_msg_ctx->vport_ctx.key, &ctx->table_ctx->vport_table,
-                                      &tp_msg_ctx->vport_ctx.param);
+    uint32_t eid_idx = 0;
+    if (vport_table_lookup_by_ueid_return_key(&ctx->table_ctx->vport_table,
+                                              vtp_idx->upi, &vtp_idx->local_eid,
+                                              &vtp_idx->fe_key, &eid_idx) != 0) {
+        TPSA_LOG_INFO("vport key lookup failed, upi:%u, eid:" EID_FMT "\n",
+                      vtp_idx->upi, EID_ARGS(vtp_idx->local_eid));
+        return -1;
+    }
+
+    int ret = tpsa_lookup_vport_param_with_eid_idx(&vtp_idx->fe_key, &ctx->table_ctx->vport_table,
+                                                   eid_idx, &tp_msg_ctx->vport_ctx.param);
     if (ret != 0) {
         TPSA_LOG_INFO("can't faind vport dev_name:%s, fe_idx:%d when clean fe\n",
             vtp_idx->fe_key.tpf_name, vtp_idx->fe_key.fe_idx);
         return ret;
     }
     sip_table_entry_t sip_entry = {0};
-    tpsa_sip_table_lookup(&ctx->table_ctx->tpf_dev_table, tp_msg_ctx->vport_ctx.key.tpf_name,
+    ret = tpsa_sip_table_lookup(&ctx->table_ctx->tpf_dev_table, tp_msg_ctx->vport_ctx.key.tpf_name,
         tp_msg_ctx->vport_ctx.param.sip_idx, &sip_entry);
+    if (ret != 0 && tp_msg_ctx->trans_type == TPSA_TRANSPORT_UB) {
+        TPSA_LOG_ERR("Can not find sip by tpf name %s and sip_idx %u\n",
+            tp_msg_ctx->vport_ctx.key.tpf_name, tp_msg_ctx->vport_ctx.param.sip_idx);
+        return ret;
+    }
 
     tp_msg_ctx->src.eid = vtp_idx->local_eid;
     tp_msg_ctx->src.jetty_id = vtp_idx->local_jetty;
@@ -182,7 +196,7 @@ static int uvs_destroy_targe_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
     return ret;
 }
 
-void uvs_get_fe_list_to_clean(fe_table_t *fe_table, struct ub_list *fe_list)
+static void uvs_get_fe_list_to_clean(fe_table_t *fe_table, struct ub_list *fe_list)
 {
     fe_table_entry_t *cur, *next;
     HMAP_FOR_EACH_SAFE(cur, next, node, &fe_table->hmap) {
@@ -199,7 +213,7 @@ void uvs_get_fe_list_to_clean(fe_table_t *fe_table, struct ub_list *fe_list)
     }
 }
 
-void uvs_get_vport_list_to_clean(vport_table_t *vport_table, struct ub_list *vport_list)
+static void uvs_get_vport_list_to_clean(vport_table_t *vport_table, struct ub_list *vport_list)
 {
     vport_table_entry_t *cur, *next;
 
@@ -219,7 +233,7 @@ void uvs_get_vport_list_to_clean(vport_table_t *vport_table, struct ub_list *vpo
     (void)pthread_rwlock_unlock(&vport_table->rwlock);
 }
 
-void uvs_free_fe_list(struct ub_list *fe_list)
+static void uvs_free_fe_list(struct ub_list *fe_list)
 {
     fe_list_node_t *cur, *next;
     UB_LIST_FOR_EACH_SAFE(cur, next, node, fe_list) {
@@ -232,7 +246,7 @@ void uvs_free_fe_list(struct ub_list *fe_list)
 /*
 * Destory target side loopback VTP.
 */
-int uvs_destroy_lb_target_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
+static int uvs_destroy_lb_target_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
 {
     /*
     * For Loopback, client and server in same UVS.
@@ -251,8 +265,8 @@ int uvs_destroy_lb_target_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
         return -1;
     }
 
-    if (tpsa_lookup_vport_param(&initial_ctx.vport_ctx.key, &ctx->table_ctx->vport_table,
-                                &initial_ctx.vport_ctx.param) != 0) {
+    if (tpsa_lookup_vport_param_with_eid_idx(&initial_ctx.vport_ctx.key, &ctx->table_ctx->vport_table,
+        eid_idx, &initial_ctx.vport_ctx.param) != 0) {
         TPSA_LOG_WARN("vport not exit, dev_name:%s, fe_idx:%d\n",
             initial_ctx.vport_ctx.key.tpf_name, initial_ctx.vport_ctx.key.fe_idx);
         return -1;
@@ -261,7 +275,7 @@ int uvs_destroy_lb_target_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
     return uvs_destroy_initial_vtp(ctx, &initial_ctx, NULL);
 }
 
-void uvs_clean_single_fe(uvs_ctx_t *ctx, vport_key_t *vport_key)
+static void uvs_clean_single_fe(uvs_ctx_t *ctx, vport_key_t *vport_key)
 {
     uvs_tp_msg_ctx_t tp_msg_ctx = {0};
     vtp_idx_list_node_t *cur, *next;
@@ -306,12 +320,30 @@ void uvs_clean_single_fe(uvs_ctx_t *ctx, vport_key_t *vport_key)
             ret = 0;
         }
     }
-
-    // 3. Update fe_rebooted flag of FE
-    tpsa_update_fe_rebooted(&ctx->table_ctx->fe_table, vport_key, false);
-
     // 4. Free VTP list
     uvs_free_vtp_list(&vtp_list);
+}
+
+void uvs_clear_vport_ueid(uvs_ctx_t *ctx, vport_key_t *vport_key)
+{
+    (void)pthread_rwlock_rdlock(&ctx->table_ctx->vport_table.rwlock);
+    vport_table_entry_t *vport_entry = vport_table_lookup(&ctx->table_ctx->vport_table, vport_key);
+    if (vport_entry == NULL) {
+        TPSA_LOG_ERR("Fail to lookup vport entry");
+        (void)pthread_rwlock_unlock(&ctx->table_ctx->vport_table.rwlock);
+        return;
+    }
+    for (uint32_t i = 0; i < vport_entry->ueid_max_cnt && i < TPSA_EID_IDX_TABLE_SIZE; i++) {
+        if (!vport_entry->ueid[i].is_valid) {
+            continue;
+        }
+        if (vport_entry->ueid[i].used == false) {
+            continue;
+        }
+        (void)tpsa_ioctl_op_ueid(ctx->ioctl_ctx, TPSA_CMD_DEALLOC_EID, vport_key, &vport_entry->ueid[i], i);
+        vport_entry->ueid[i].used = false;
+    }
+    (void)pthread_rwlock_unlock(&ctx->table_ctx->vport_table.rwlock);
 }
 
 void uvs_clean_rebooted_fe(uvs_ctx_t *ctx)
@@ -325,10 +357,12 @@ void uvs_clean_rebooted_fe(uvs_ctx_t *ctx)
     ub_list_init(&fe_list);
     uvs_get_fe_list_to_clean(&ctx->table_ctx->fe_table, &fe_list);
 
-    // 2. Clean rebooted fe VTP resource.
+    // 2. Clean rebooted fe VTP resource, clear ueid
     fe_list_node_t *cur, *next;
     UB_LIST_FOR_EACH_SAFE(cur, next, node, &fe_list) {
         uvs_clean_single_fe(ctx, &cur->vport_key);
+        uvs_clear_vport_ueid(ctx, &cur->vport_key);
+        tpsa_update_fe_rebooted(&ctx->table_ctx->fe_table, &cur->vport_key, false);
     }
 
     // 3. Free FE list
@@ -338,20 +372,7 @@ void uvs_clean_rebooted_fe(uvs_ctx_t *ctx)
     uvs_update_fe_table_clean_res(&ctx->table_ctx->fe_table);
 }
 
-void uvs_clear_vport_ueid(uvs_ctx_t *ctx, vport_key_t *vport_key)
-{
-    (void)pthread_rwlock_rdlock(&ctx->table_ctx->vport_table.rwlock);
-    vport_table_entry_t *vport_entry = vport_table_lookup(&ctx->table_ctx->vport_table, vport_key);
-    for (uint32_t i = 0; i < vport_entry->ueid_max_cnt && i < TPSA_EID_IDX_TABLE_SIZE; i++) {
-        if (!vport_entry->ueid[i].is_valid) {
-            continue;
-        }
-        (void)tpsa_ioctl_op_ueid(ctx->ioctl_ctx, TPSA_CMD_DEALLOC_EID, vport_key, &vport_entry->ueid[i], i);
-    }
-    (void)pthread_rwlock_unlock(&ctx->table_ctx->vport_table.rwlock);
-}
-
-void uvs_clean_single_vport(uvs_ctx_t *ctx, vport_key_t *vport_key)
+static void uvs_clean_single_vport(uvs_ctx_t *ctx, vport_key_t *vport_key)
 {
     // 1. Clean VTP resource of vport
     if (live_migrate_table_lookup(&ctx->table_ctx->live_migrate_table, vport_key) != NULL) {
@@ -368,7 +389,7 @@ void uvs_clean_single_vport(uvs_ctx_t *ctx, vport_key_t *vport_key)
     return;
 }
 
-bool uvs_is_need_clean_vport(vport_table_t *vport_table)
+static bool uvs_is_need_clean_vport(vport_table_t *vport_table)
 {
     bool clean_res = false;
     (void)pthread_rwlock_wrlock(&vport_table->rwlock);

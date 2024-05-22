@@ -5,6 +5,15 @@ This is the first release of UMDK API. It provides API change records, including
 reason, change items, etc.
 
 %changelog
+* Mon Mar 18 2024 huawei
+- add urma_import_jetty_flag_t in urma_tjetty_cfg_t, add urma_import_jfr_flag_t in urma_tjfr_cfg_t.
+
+* Thur Mar 14 2024 huawei
+- add sub_trans_mode to urma_jfs_flag_t/urma_jfr_flag_t/ubcore_jfs_flag/ubcore_jfr_flag/ubcore_jetty_flag/
+  urma_import_jetty_flag/ubcore_import_jetty_flag
+- add rc_share_tp to urma_jfs_flag_t/ubcore_jetty_flag/urma_import_jetty_flag/ubcore_import_jetty_flag
+- add sub_trans_mode_cap to urma_device_cap_t/ubcore_device_cap.
+
 * Mon Jan 8 2024 huawei
 - deletion of urma_ex_api.h and redundant enums and structures
 

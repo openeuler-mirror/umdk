@@ -11,6 +11,7 @@
 
 #include "uvs_admin_cmd_trace.h"
 #include "uvs_admin_rootcmd.h"
+#include "query_res_cmd.h"
 #include "uvs_admin_cmd.h"
 
 void uvs_admin_register_subcmd(uvs_admin_cmd_t *parent,
@@ -123,6 +124,9 @@ int32_t uvs_admin_exec(int argc, char **argv)
 {
     int32_t status = 0;
 
+    if (query_res_cmd_exec(argc, argv) == 0) {
+        return 0;
+    }
     uvs_admin_cmd_ctx_t ctx = {
         .argc     = argc,
         .argv     = argv,

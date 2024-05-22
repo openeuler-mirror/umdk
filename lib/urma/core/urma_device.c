@@ -23,10 +23,13 @@
 #include "urma_private.h"
 
 #define URMA_MAX_VALUE_LEN 64   // value length for urma_read_sysfs_device tmp_value arry
-#define URMA_CLASS_PATH  "/sys/class/ubcore"
+#define URMA_CLASS_PATH "/sys/class/ubcore"
+#define URMA_CLASS_PATH_OBSOLETED "/sys/class/uburma"
 #define URMA_DEV_PATH "/dev/uburma"
 #define URMA_PORT_LEN 16
 #define URMA_DEV_PATH_MAX  (URMA_MAX_SYSFS_PATH + URMA_PORT_LEN)
+
+static char g_urma_class_path[URMA_MAX_SYSFS_PATH] = URMA_CLASS_PATH;
 
 ssize_t urma_read_sysfs_file(const char *dir, const char *file, char *buf, size_t size)
 {
@@ -73,36 +76,181 @@ ssize_t urma_read_sysfs_file(const char *dir, const char *file, char *buf, size_
     return len;
 }
 
-ssize_t urma_write_sysfs_file(const char *dir, char *buf, size_t size)
+static inline bool urma_eid_is_valid(urma_eid_t *eid)
 {
-    int fd = -1;
-    ssize_t len;
+    return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
+}
+
+static int urma_parse_eid_info(char *buf, uint32_t *eid_index, urma_eid_t *eid)
+{
+    char *eid_index_str = NULL;
+    char *eid_str = NULL;
+
+    if (buf[strlen(buf) - 1] == '\n') {
+        buf[strlen(buf) - 1] = '\0';
+    } else {
+        return -1;
+    }
+
+    eid_index_str = strtok_r(buf, " ", &eid_str);
+    if (eid_index_str == NULL || ub_str_to_u32(eid_index_str, eid_index) != 0) {
+        return -1;
+    }
+
+    if (eid_str == NULL || urma_str_to_eid(eid_str, eid) != 0 ||
+        !urma_eid_is_valid(eid)) {
+        return -1;
+    }
+    return 0;
+}
+
+static FILE *urma_fopen_sysfs_file(const char *dir, const char *file, char *rwx)
+{
+    char path[URMA_MAX_SYSFS_PATH] = {0};
     char *file_path;
 
-    file_path = realpath(dir, NULL);
+    if (snprintf(path, URMA_MAX_SYSFS_PATH, "%s/%s", dir, file) < 0) {
+        URMA_LOG_ERR("snprintf failed");
+        return NULL;
+    }
+
+    file_path = realpath(path, NULL);
     if (file_path == NULL) {
-        URMA_LOG_ERR("file_path:%s is not standardize.\n", dir);
-        return -1;
+        URMA_LOG_WARN("file_path:%s is not standardize.\n", path);
+        return NULL;
     }
-    fd = open(file_path, O_RDWR);
-    if (fd < 0) {
+
+    FILE *fp = fopen(file_path, rwx);
+    if (!fp) {
         URMA_LOG_ERR("Failed open file: %s, errno: %d.\n", file_path, errno);
-        free(file_path);
-        return -1;
     }
 
-    len = write(fd, buf, size);
-    if (len <= 0 || len > (ssize_t)size) {
-        URMA_LOG_ERR("Failed write file: %s, ret:%d, size:%d, errno:%d.\n", file_path, len, size, errno);
-        free(file_path);
-        (void)close(fd);
-        return -1;
-    }
     free(file_path);
-    (void)close(fd);
+    return fp;
+}
 
-    buf[len] = '\0';
-    return len;
+static uint32_t read_eid_list_obselete(urma_sysfs_dev_t *sysfs_dev,
+    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+{
+    char tmp_eid[URMA_MAX_NAME] = {0};
+    char tmp_value[URMA_MAX_NAME] = {0};
+    uint32_t cnt_idx = 0;
+    urma_eid_t eid = {0};
+
+    for (uint32_t i = 0; i < max_eid_cnt; i++) {
+        if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
+            URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
+            continue;
+        }
+        if (urma_read_sysfs_file(sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME) <= 0) {
+            URMA_LOG_ERR("Failed to read sysfs file");
+            continue;
+        }
+        if (urma_str_to_eid(tmp_value, &eid) != 0 || !urma_eid_is_valid(&eid)) {
+            continue;
+        }
+        eid_list[cnt_idx].eid_index = i;
+        (void)memcpy(&eid_list[cnt_idx++].eid, &eid, sizeof(urma_eid_t));
+    }
+    return cnt_idx;
+}
+
+static uint32_t read_eid_list(urma_sysfs_dev_t *sysfs_dev,
+    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+{
+    FILE *fp = urma_fopen_sysfs_file(sysfs_dev->sysfs_path, "eid", "r");
+    if (!fp) {
+        URMA_LOG_ERR("Failed open eid file\n");
+        return 0;
+    }
+
+    char buf[URMA_MAX_NAME] = {0};
+    uint32_t cnt_idx = 0;
+    while (cnt_idx < max_eid_cnt && !feof(fp)) {
+        if (!fgets(buf, URMA_MAX_NAME, fp)) {
+            continue;
+        }
+
+        if (urma_parse_eid_info(buf, &eid_list[cnt_idx].eid_index, &eid_list[cnt_idx].eid) != 0) {
+            continue;
+        }
+
+        cnt_idx++;
+    }
+
+    (void)fclose(fp);
+    return cnt_idx;
+}
+
+static int read_eid_with_index_obselete(urma_sysfs_dev_t *sysfs_dev,
+    uint32_t eid_index, urma_eid_t *eid)
+{
+    char tmp_eid[URMA_MAX_NAME] = {0};
+    char tmp_value[URMA_MAX_NAME] = {0};
+
+    if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", eid_index) <= 0) {
+        URMA_LOG_ERR("snprintf failed, eid idx: %u.\n", eid_index);
+        return -1;
+    }
+    if (urma_read_sysfs_file(sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME) <= 0) {
+        URMA_LOG_ERR("Failed to read sysfs file");
+        return -1;
+    }
+    if (urma_str_to_eid(tmp_value, eid) != 0 || !urma_eid_is_valid(eid)) {
+        URMA_LOG_ERR("Failed to parse eid value, dev name:%s, eid idx:%u\n", sysfs_dev->dev_name, eid_index);
+        return -1;
+    }
+    return 0;
+}
+
+static int read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
+    uint32_t eid_index, urma_eid_t *eid)
+{
+    FILE *fp = urma_fopen_sysfs_file(sysfs_dev->sysfs_path, "eid", "r");
+    if (!fp) {
+        URMA_LOG_ERR("Failed open eid file\n");
+        return -1;
+    }
+
+    char buf[URMA_MAX_NAME] = {0};
+    uint32_t tmp_eid_index;
+    while (!feof(fp)) {
+        if (!fgets(buf, URMA_MAX_NAME, fp)) {
+            continue;
+        }
+
+        if (urma_parse_eid_info(buf, &tmp_eid_index, eid) != 0) {
+            continue;
+        }
+
+        if (eid_index == tmp_eid_index) {
+            (void)fclose(fp);
+            return 0;
+        }
+    }
+
+    (void)fclose(fp);
+    return -1;
+}
+
+uint32_t urma_read_eid_list(urma_sysfs_dev_t *sysfs_dev,
+    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+{
+    uint32_t eid_cnt = read_eid_list(sysfs_dev, eid_list, max_eid_cnt);
+    if (eid_cnt > 0) {
+        return eid_cnt;
+    }
+
+    return read_eid_list_obselete(sysfs_dev, eid_list, max_eid_cnt);
+}
+
+int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
+    uint32_t eid_index, urma_eid_t *eid)
+{
+    if (read_eid_with_index(sysfs_dev, eid_index, eid) == 0) {
+        return 0;
+    }
+    return read_eid_with_index_obselete(sysfs_dev, eid_index, eid);
 }
 
 static inline uint8_t urma_parse_value_u8(const char *sysfs_path, char *file)
@@ -183,8 +331,9 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     char *sysfs_path = sysfs_dev->sysfs_path;
     urma_device_attr_t *attr = &sysfs_dev->dev_attr;
 
-    (void)urma_read_sysfs_file(sysfs_path, "guid", tmp_value, URMA_MAX_VALUE_LEN);
-    (void)urma_str_to_eid(tmp_value, (urma_eid_t *)&attr->guid);
+    if (urma_read_sysfs_file(sysfs_path, "guid", tmp_value, URMA_MAX_VALUE_LEN) != -1) {
+        (void)urma_str_to_eid(tmp_value, (urma_eid_t *)&attr->guid);
+    }
 
     attr->dev_cap.feature.value = urma_parse_value_u32(sysfs_path, "feature");
     attr->dev_cap.max_jfc = urma_parse_value_u32(sysfs_path, "max_jfc");
@@ -227,6 +376,26 @@ static void urma_read_sysfs_dev_attrs(urma_sysfs_dev_t *sysfs_dev)
     urma_parse_device_attr(sysfs_dev);
 }
 
+void urma_discover_sysfs_path(void)
+{
+    struct stat stat_buf;
+    int ret;
+
+    ret = stat(g_urma_class_path, &stat_buf);
+    if (ret == 0) {
+        return;
+    }
+
+    ret = stat(URMA_CLASS_PATH_OBSOLETED, &stat_buf);
+    if (ret == 0) {
+        (void)strcpy(g_urma_class_path, URMA_CLASS_PATH_OBSOLETED);
+        URMA_LOG_WARN("urma sysfs path is obseleted");
+        return;
+    }
+    URMA_LOG_WARN("urma sysfs path is not found");
+    return;
+}
+
 urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
 {
     int ret;
@@ -242,7 +411,7 @@ urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
         return NULL;
     }
 
-    ret = snprintf(sysfs_dev->sysfs_path, URMA_MAX_SYSFS_PATH - 1, "%s/%s", URMA_CLASS_PATH, dent->d_name);
+    ret = snprintf(sysfs_dev->sysfs_path, URMA_MAX_SYSFS_PATH - 1, "%s/%s",  g_urma_class_path, dent->d_name);
     if (ret <= 0) {
         URMA_LOG_ERR("snprintf failed, dev_name: %s.\n", dent->d_name);
         goto out;
@@ -361,9 +530,9 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
     struct ub_list dev_name_list = UB_LIST_INITIALIZER(&dev_name_list);
     uint32_t cnt = (uint32_t)ub_list_size(dev_list);
 
-    class_dir = opendir(URMA_CLASS_PATH);
+    class_dir = opendir(g_urma_class_path);
     if (class_dir == NULL) {
-        URMA_LOG_ERR("%s open failed, errno: %d.\n", URMA_CLASS_PATH, errno);
+        URMA_LOG_ERR("%s open failed, errno: %d.\n", g_urma_class_path, errno);
         return 0;
     }
 
@@ -392,7 +561,7 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
         cnt++;
     }
     if (closedir(class_dir) < 0) {
-        URMA_LOG_ERR("Failed close dir: %s, errno: %d.\n", URMA_CLASS_PATH, errno);
+        URMA_LOG_ERR("Failed close dir: %s, errno: %d.\n", g_urma_class_path, errno);
     }
 
     /* remove unloaded urma_device in dev_list */

@@ -72,20 +72,18 @@ int uvs_add_vport(uvs_vport_info_t *info);
 
 /**
  * Delete the vport table entry.
- * @param[in] [Required] tpf_name: tpf device name;
- * @param[in] [Required] fe_idx: the id of vf;
+ * @param[in] [Required] key: name;
  * Return: 0 on success, other value on error.
  */
-int uvs_del_vport(const char *tpf_name, uint16_t fe_idx);
+int uvs_del_vport(uvs_vport_info_key_t *key);
 
 /**
  * Show the vport table entry.
- * @param[in] [Required] tpf_name: tpf device name;
- * @param[in] [Required] fe_idx: the id of vf;
+ * @param[in] [Required] name: info key;
  * @param[out] [Required] info: the vport entry;
  * Return: 0 on success, other value on error.
  */
-int uvs_show_vport(char *tpf_name, uint16_t fe_idx, uvs_vport_info_t *info);
+int uvs_show_vport(uvs_vport_info_key_t *key, uvs_vport_info_t *info);
 
 /**
  * Modify the vport table entry.
@@ -188,6 +186,20 @@ int uvs_query_vport_statistic(const char* tpf_name, uvs_vport_info_key_t *vport,
 * Return: 0 on success, other value on error.
 */
 int uvs_query_tpf_statistic(const char* tpf_name, uvs_tpf_statistic_t *st);
+
+/**
+ * Register a callback function
+ * @cb_func: user supplied event callback function
+ * @cb_arg: pointer to the user defined parameters for the callback
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_register_event_cb(uvs_event_cb_t cb_func, void *cb_arg);
+
+/**
+ * Unregister the callback function
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_unregister_event_cb(void);
 #ifdef __cplusplus
 }
 #endif

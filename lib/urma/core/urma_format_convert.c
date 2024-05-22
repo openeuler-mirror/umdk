@@ -32,7 +32,7 @@ int urma_str_to_eid(const char *buf, urma_eid_t *eid)
     int ret;
     uint32_t ipv4;
 
-    if (buf == NULL || strlen(buf) <= URMA_EID_STR_MIN_LEN || eid == NULL) {
+    if (buf == NULL || strlen(buf) < URMA_EID_STR_MIN_LEN || eid == NULL) {
         URMA_LOG_ERR("Invalid argument.\n");
         return -EINVAL;
     }

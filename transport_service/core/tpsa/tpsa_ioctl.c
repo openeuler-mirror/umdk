@@ -68,6 +68,7 @@ static int tpsa_ioctl_create_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     for (i = 0; i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
         cfg->cmd.create_tpg.out.tpn[i] = arg.out.tpn[i];
     }
+    cfg->cmd.create_tpg.out.max_mtu = arg.out.max_mtu;
     cfg->cmd.create_tpg.local_mtu = arg.local_mtu;
 
     TPSA_LOG_INFO("create tpg ioctl success");
@@ -128,6 +129,7 @@ static int tpsa_ioctl_modify_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     arg.in.tpf = cfg->cmd.modify_tpg.in.tpf;
     arg.ta_data = cfg->cmd.modify_tpg.ta_data;
     arg.udrv_ext = cfg->cmd.modify_tpg.udrv_ext;
+    arg.in.peer_tp_cnt = cfg->cmd.modify_tpg.in.peer_tp_cnt;
 
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
@@ -136,6 +138,34 @@ static int tpsa_ioctl_modify_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     }
 
     TPSA_LOG_INFO("modify tpg ioctl success");
+    return 0;
+}
+
+static int tpsa_ioctl_modify_tpg_tp_cnt(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
+{
+    tpsa_cmd_modify_tpg_tp_cnt_t arg;
+    urma_cmd_hdr_t hdr;
+    int ret;
+
+    hdr.command = (uint32_t)TPSA_CMD_MODIFY_TPG_TP_CNT;
+    hdr.args_len = (uint32_t)sizeof(tpsa_cmd_modify_tpg_tp_cnt_t);
+    hdr.args_addr = (uint64_t)&arg;
+
+    (void)memset(&arg, 0, sizeof(tpsa_cmd_modify_tpg_tp_cnt_t));
+
+    arg.in.tpf = cfg->cmd.modify_tpg_tp_cnt.in.tpf;
+    arg.in.tp_cnt = cfg->cmd.modify_tpg_tp_cnt.in.tp_cnt;
+    arg.in.tpgn_for_modify = cfg->cmd.modify_tpg_tp_cnt.in.tpgn_for_modify;
+
+    TPSA_LOG_INFO("modify tpgn %d tp_cnt %d", arg.in.tpgn_for_modify, arg.in.tp_cnt);
+    ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
+    if (ret != 0) {
+        TPSA_LOG_ERR("modify tpg ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+        return ret;
+    }
+    cfg->cmd.modify_tpg_tp_cnt.out.tpgn = arg.out.tpgn;
+
+    TPSA_LOG_INFO("modify tpg: %d ioctl success", arg.out.tpgn);
     return 0;
 }
 
@@ -183,7 +213,7 @@ static int tpsa_ioctl_create_target_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     return 0;
 }
 
-static int tpsa_ioctl_modify_target_tpg(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
+static int tpsa_ioctl_modify_target_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
 {
     tpsa_cmd_modify_target_tpg_t arg;
     urma_cmd_hdr_t hdr;
@@ -196,18 +226,25 @@ static int tpsa_ioctl_modify_target_tpg(int ubcore_fd, const tpsa_ioctl_cfg_t *c
 
     arg.in.tpf = cfg->cmd.modify_target_tpg.in.tpf;
     arg.in.tpgn = cfg->cmd.modify_target_tpg.in.tpgn;
-    arg.ta_data = cfg->cmd.modify_target_tpg.ta_data;
+    arg.in.peer_tp_cnt = cfg->cmd.modify_target_tpg.in.peer_tp_cnt;
+
+    uint32_t i = 0;
+    for (; i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
+        (void)memcpy(&arg.in.rtr_attr[i], &cfg->cmd.modify_target_tpg.in.rtr_attr[i],
+            sizeof(tpsa_tp_attr_t));
+        arg.in.rtr_mask[i] = cfg->cmd.modify_target_tpg.in.rtr_mask[i];
+    }
 
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
-        TPSA_LOG_ERR("modify target tpg ioctl failed, ret:%d, errno:%d, cmd:%u, tpgn:%u\n",
-            ret, errno, hdr.command, arg.in.tpgn);
+        TPSA_LOG_ERR("modify target tpg ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
 
-    TPSA_LOG_INFO("modify target tpg ioctl success");
+    TPSA_LOG_INFO("modify target tpgn: %d ioctl success", arg.in.tpgn);
     return 0;
 }
+
 
 static int tpsa_ioctl_destroy_vtp(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
 {
@@ -261,7 +298,7 @@ static int tpsa_ioctl_destroy_tpg(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     return 0;
 }
 
-static int tpsa_ioctl_op_sip(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg, uint32_t commands)
+static int tpsa_ioctl_op_sip(int ubcore_fd, tpsa_ioctl_cfg_t *cfg, uint32_t commands)
 {
     int ret;
     urma_cmd_hdr_t hdr;
@@ -273,21 +310,28 @@ static int tpsa_ioctl_op_sip(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg, uint32_
     arg.in.parm = cfg->cmd.op_sip.in.parm;
 
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
-    if (ret != 0) {
+    /* EEXIST need return sip_idx to uvs */
+    if (ret != 0 && errno != EEXIST) {
         TPSA_LOG_ERR("update sip ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
 
-    TPSA_LOG_INFO("update sip ioctl success");
+    if (commands == TPSA_CMD_ADD_SIP) {
+        cfg->cmd.op_sip.out.sip_idx = arg.out.sip_idx;
+        if (errno == EEXIST) {
+            ret = errno;
+        }
+    }
+    TPSA_LOG_INFO("update sip ioctl success, sip idx %u", cfg->cmd.op_sip.out.sip_idx);
     return ret;
 }
 
-static int tpsa_ioctl_add_sip(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
+static int tpsa_ioctl_add_sip(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
 {
     return tpsa_ioctl_op_sip(ubcore_fd, cfg, TPSA_CMD_ADD_SIP);
 }
 
-static int tpsa_ioctl_del_sip(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
+static int tpsa_ioctl_del_sip(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
 {
     return tpsa_ioctl_op_sip(ubcore_fd, cfg, TPSA_CMD_DEL_SIP);
 }
@@ -306,6 +350,9 @@ static int tpsa_ioctl_map_vtp(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     arg.in.tpf = cfg->cmd.map_vtp.in.tpf;
     arg.in.vtp = cfg->cmd.map_vtp.in.vtp;
     arg.in.location = cfg->cmd.map_vtp.in.location;
+    arg.in.eid_idx = cfg->cmd.map_vtp.in.eid_idx;
+    arg.in.upi = cfg->cmd.map_vtp.in.upi;
+    arg.in.share_mode = cfg->cmd.map_vtp.in.share_mode;
 
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
@@ -659,6 +706,11 @@ static int tpsa_ioctl_modify_vtp(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     tpsa_cmd_modify_vtp_t *arg;
     urma_cmd_hdr_t hdr;
     int ret;
+
+    if (cfg == NULL || cfg->cmd.modify_vtp.in.cfg_cnt > TPSA_MAX_VTP_CFG_CNT) {
+        TPSA_LOG_ERR("Input invalid");
+        return -EINVAL;
+    }
     arg = (tpsa_cmd_modify_vtp_t *)calloc(1, sizeof(tpsa_cmd_modify_vtp_t));
     if (arg == NULL) {
         return -ENOMEM;
@@ -712,6 +764,7 @@ static int tpsa_ioctl_get_dev_info(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     cfg->cmd.get_dev_info.out.port_is_active = arg.out.port_is_active;
     (void)memcpy(cfg->cmd.get_dev_info.out.target_tpf_name,
         arg.out.target_tpf_name, UVS_MAX_DEV_NAME);
+    cfg->cmd.get_dev_info.out.max_mtu = arg.out.max_mtu;
 
     TPSA_LOG_INFO("get dev info ioctl success with target tpf name %s",
         cfg->cmd.get_dev_info.out.target_tpf_name);
@@ -840,6 +893,9 @@ int tpsa_ioctl(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
         case TPSA_CMD_MODIFY_TPG:
             ret = tpsa_ioctl_modify_tpg(ubcore_fd, cfg);
             break;
+        case TPSA_CMD_MODIFY_TPG_TP_CNT:
+            ret = tpsa_ioctl_modify_tpg_tp_cnt(ubcore_fd, cfg);
+            break;
         case TPSA_CMD_CREATE_TARGET_TPG:
             ret = tpsa_ioctl_create_target_tpg(ubcore_fd, cfg);
             break;
@@ -957,7 +1013,8 @@ void tpsa_ioctl_uninit(tpsa_ioctl_ctx_t *ioctl_context)
 
 static inline bool uvs_is_nic_loopback(uvs_net_addr_info_t *sip, uvs_net_addr_info_t *dip)
 {
-    return (memcmp(sip, dip, sizeof(uvs_net_addr_info_t)) == 0);
+    return (memcmp(&sip->net_addr, &dip->net_addr, sizeof(uvs_net_addr_t)) == 0 &&
+            memcmp(sip->mac, dip->mac, sizeof(sip->mac)) == 0);
 }
 
 void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
@@ -967,7 +1024,7 @@ void tpsa_ioctl_cmd_create_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cpara
 
     (void)memset(&tpf, 0, sizeof(tpsa_cmd_tpf_t));
     tpf.trans_type = TPSA_TRANSPORT_UB;
-    (void)memcpy(&tpf.netaddr, sip, sizeof(uvs_net_addr_info_t));
+    tpf.netaddr = sip->net_addr;
 
     urma_eid_t null_eid;
     null_eid.in6.interface_id = 0;
@@ -1127,6 +1184,19 @@ static urma_tp_cc_alg_t tpsa_ib_negotiate_optimal_cc_alg(uint16_t local_congesti
     return URMA_TP_CC_NONE;
 }
 
+void tpsa_ioctl_cmd_modify_tpg_tp_cnt(
+    tpsa_ioctl_cfg_t *cfg, tpsa_init_tpg_cmd_param_t *param, uint32_t tpgn, uint32_t tp_cnt)
+{
+    cfg->cmd_type = TPSA_CMD_MODIFY_TPG_TP_CNT;
+    cfg->cmd.modify_tpg_tp_cnt.in.tp_cnt = tp_cnt;
+    tpsa_cmd_tpf_t tpf = {
+        .trans_type = TPSA_TRANSPORT_UB,
+        .netaddr = param->sip.net_addr,
+    };
+    cfg->cmd.modify_tpg_tp_cnt.in.tpf = tpf;
+    cfg->cmd.modify_tpg_tp_cnt.in.tpgn_for_modify = tpgn;
+}
+
 void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
                                       tpsa_init_tpg_cmd_param_t *param)
 {
@@ -1137,7 +1207,7 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = param->sip,
+        .netaddr = param->sip.net_addr,
     };
 
     urma_eid_t null_eid;
@@ -1151,8 +1221,9 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
         .dscp = req->tpg_cfg.dscp,
         .cc_alg = TPSA_TP_CC_LDCP,
         .cc_pattern_idx = req->tpg_cfg.cc_pattern_idx,
-        .tp_cnt = req->tpg_cfg.tp_cnt
-    };
+        .tp_cnt = param->trans_mode == TPSA_TP_RC       ? TPSA_MIN_TP_NUM
+                  : req->tpg_cfg.tp_cnt < param->tp_cnt ? req->tpg_cfg.tp_cnt
+                                                        : param->tp_cnt};
 
     tpsa_tp_attr_mask_t tp_attr_mask = {
         .value = 0xffffffff,
@@ -1197,7 +1268,11 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
     cfg->cmd.create_target_tpg.udrv_ext.out_len = TPSA_UDRV_DATA_LEN;
 
     uint32_t i = 0;
-    for (; i < req->tpg_cfg.tp_cnt; i++) {
+    if (tpg_cfg.tp_cnt > TPSA_MAX_TP_CNT_IN_GRP) {
+        TPSA_LOG_ERR("Invalid tp_cnt: %u.\n", tpg_cfg.tp_cnt);
+        return;
+    }
+    for (; i < tpg_cfg.tp_cnt; i++) {
         tpsa_tp_cfg_flag_t tp_flag;
         tp_flag.bs.target = TPSA_TARGET;
         tp_flag.bs.loopback = (req->tp_param.com.local_tp_cfg.loop_back &&
@@ -1227,9 +1302,14 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
         }
 
         cfg->cmd.create_target_tpg.in.tp_cfg[i] = tp_cfg;
-        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag = req->tp_param.com.local_tp_cfg.tp_mod_flag;
-        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.value = req->tp_param.com.local_tp_cfg.tp_mod_flag.value &
-            param->tp_cfg.tp_mod_flag.value;
+        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.value = param->tp_cfg.tp_mod_flag.value;
+        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.sr_en =
+            param->tp_cfg.tp_mod_flag.bs.sr_en & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.spray_en =
+            param->tp_cfg.tp_mod_flag.bs.spray_en & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.clan =
+            param->tp_cfg.tp_mod_flag.bs.clan & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.clan;
+
         cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.cc_alg = (uint32_t)cc_alg;
         cfg->cmd.create_target_tpg.in.rtr_attr[i].flag.bs.cc_en = cc_en;
         req->tp_param.com.remote_tp_cfg = param->tp_cfg;
@@ -1264,6 +1344,96 @@ void tpsa_ioctl_cmd_create_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *ms
         if (i == 0) {
             cfg->cmd.create_target_tpg.in.tp_cfg[i].flag.bs.ack_resp = 1;
         }
+    }
+    uvs_mtu_t final_mtu = cfg->cmd.create_target_tpg.in.rtr_attr[0].mtu;
+    TPSA_LOG_INFO("final mtu is %u", (uint32_t)final_mtu);
+    TPSA_LOG_INFO("final flag is %x", cfg->cmd.create_target_tpg.in.rtr_attr[0].flag.value);
+}
+
+void tpsa_ioctl_cmd_modify_target_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg,
+                                      tpsa_init_tpg_cmd_param_t *param, uint32_t tpgn)
+{
+    tpsa_create_req_t *req = &msg->content.req;
+    urma_tp_cc_alg_t cc_alg = URMA_TP_CC_NONE;
+    uint8_t cc_pattern_idx = 0;
+    bool cc_en = true;
+
+    tpsa_cmd_tpf_t tpf = {
+        .trans_type = TPSA_TRANSPORT_UB,
+        .netaddr = param->sip.net_addr,
+    };
+
+    tpsa_tp_attr_mask_t tp_attr_mask = {
+        .value = 0xffffffff,
+    }; /* Need to fix */
+
+    tpsa_tp_ext_t tp_ext = {
+        .addr = 0,
+        .len = 0,
+    };
+
+    cfg->cmd_type = TPSA_CMD_MODIFY_TARGET_TPG;
+    cfg->cmd.modify_target_tpg.in.tpf = tpf;
+    cfg->cmd.modify_target_tpg.in.peer_tp_cnt = req->tpg_cfg.tp_cnt;
+    cfg->cmd.modify_target_tpg.in.tpgn = tpgn;
+
+    if (req->ta_data.trans_type == TPSA_TRANSPORT_UB &&
+        tpsa_negotiate_optimal_cc_alg(param->cc_array_cnt, param->cc_result_array,
+        param->tp_cfg.tp_mod_flag.bs.cc_en, req->cc_array_cnt, req->cc_result_array,
+        req->cc_en, &cc_alg, &cc_pattern_idx) != 0) {
+        param->tp_cfg.tp_mod_flag.bs.cc_en = false;
+        cc_en = false;
+        cc_alg = (urma_tp_cc_alg_t)TPSA_TP_CC_NONE;
+        cc_pattern_idx = 0;
+        TPSA_LOG_WARN("Failed to negotiate cc algorithm");
+    }
+    if (req->ta_data.trans_type == TPSA_TRANSPORT_IB) {
+        cc_alg = tpsa_ib_negotiate_optimal_cc_alg(param->tp_cfg.cc_alg, req->tp_param.com.local_tp_cfg.cc_alg);
+        cc_en = (bool)(param->tp_cfg.tp_mod_flag.bs.cc_en & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.cc_en);
+    }
+
+    uint32_t i = 0;
+    if (param->tp_cnt > TPSA_MAX_TP_CNT_IN_GRP) {
+        TPSA_LOG_ERR("Invalid tp_cnt: %u.\n", param->tp_cnt);
+        return;
+    }
+    for (; i < param->tp_cnt; i++) {
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flag.value = param->tp_cfg.tp_mod_flag.value;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flag.bs.sr_en =
+            param->tp_cfg.tp_mod_flag.bs.sr_en & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flag.bs.spray_en =
+            param->tp_cfg.tp_mod_flag.bs.spray_en & req->tp_param.com.local_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flag.bs.cc_alg = (uint32_t)cc_alg;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flag.bs.cc_en = cc_en;
+        req->tp_param.com.remote_tp_cfg = param->tp_cfg;
+        req->tp_param.com.remote_tp_cfg.tp_mod_flag.bs.cc_en = cc_en;
+        req->tp_param.com.remote_tp_cfg.tp_mod_flag.bs.cc_alg = (uint32_t)cc_alg;
+        req->tp_param.com.remote_tp_cfg.cc_pattern_idx = cc_pattern_idx;
+
+        /* should fill in target side param */
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].cc_pattern_idx = cc_pattern_idx;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].local_net_addr_idx = param->sip_idx;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].peer_net_addr = param->dip;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].state = req->tp_param.com.state;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].tx_psn = req->tp_param.com.rx_psn;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].rx_psn = 0; /* Need to fix */
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].mtu = tpsa_mtu_min(req->tp_param.com.local_mtu,
+            param->mtu);
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].peer_tpn = req->tp_param.uniq[i].local_tpn;
+
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].peer_ext = tp_ext;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].oos_cnt = req->tp_param.com.local_tp_cfg.oos_cnt;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].data_udp_start = req->tp_param.com.local_tp_cfg.data_udp_start;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].ack_udp_start = req->tp_param.com.local_tp_cfg.ack_udp_start;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].udp_range = req->tp_param.com.local_tp_cfg.udp_range;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].hop_limit = req->tp_param.com.local_tp_cfg.hop_limit;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].flow_label = req->tp_param.com.local_tp_cfg.data_udp_start;
+        req->tp_param.com.remote_tp_cfg.port = param->tp_cfg.port; /* modify remote portid */
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].port = req->tp_param.com.remote_tp_cfg.port;
+        cfg->cmd.modify_target_tpg.in.rtr_attr[i].mn = tpsa_mn_min(req->tp_param.com.local_tp_cfg.mn,
+            param->tp_cfg.mn);
+
+        cfg->cmd.modify_target_tpg.in.rtr_mask[i] = tp_attr_mask;
     }
 }
 
@@ -1304,12 +1474,21 @@ void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, uvs_
     cfg->cmd.modify_tpg.udrv_ext.in_len = resp->ext_len;
     cfg->cmd.modify_tpg.udrv_ext.out_addr = 0;
     cfg->cmd.modify_tpg.udrv_ext.out_len = 0;
+    cfg->cmd.modify_tpg.in.peer_tp_cnt = resp->tpg_cfg.tp_cnt;
 
     /* should fill in local side param */
     uint32_t i = 0;
     for (; i < resp->tpg_cfg.tp_cnt && i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
-        cfg->cmd.modify_tpg.in.rtr_attr[i].flag.value = resp->tp_param.com.local_tp_cfg.tp_mod_flag.value &
-            resp->tp_param.com.remote_tp_cfg.tp_mod_flag.value;
+        cfg->cmd.modify_tpg.in.rtr_attr[i].flag.value = resp->tp_param.com.local_tp_cfg.tp_mod_flag.value;
+        cfg->cmd.modify_tpg.in.rtr_attr[i].flag.bs.sr_en =
+            resp->tp_param.com.local_tp_cfg.tp_mod_flag.bs.sr_en &
+            resp->tp_param.com.remote_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.modify_tpg.in.rtr_attr[i].flag.bs.spray_en =
+            resp->tp_param.com.local_tp_cfg.tp_mod_flag.bs.spray_en &
+            resp->tp_param.com.remote_tp_cfg.tp_mod_flag.bs.oor_en;
+        cfg->cmd.modify_tpg.in.rtr_attr[i].flag.bs.clan =
+            resp->tp_param.com.local_tp_cfg.tp_mod_flag.bs.clan &
+            resp->tp_param.com.remote_tp_cfg.tp_mod_flag.bs.clan;
         cfg->cmd.modify_tpg.in.rtr_attr[i].flag.bs.cc_alg = cc_alg;
         cfg->cmd.modify_tpg.in.rtr_attr[i].flag.bs.cc_en = cc_en;
         cfg->cmd.modify_tpg.in.rtr_attr[i].cc_pattern_idx = cc_pattern_idx;
@@ -1338,9 +1517,13 @@ void tpsa_ioctl_cmd_modify_tpg(tpsa_ioctl_cfg_t *cfg, tpsa_sock_msg_t *msg, uvs_
 
     TPSA_LOG_INFO("cfg->cmd.modify_tpg.in.rtr_attr[i].port = %u", resp->tp_param.com.local_tp_cfg.port);
 
+    uvs_mtu_t final_mtu = cfg->cmd.modify_tpg.in.rtr_attr[0].mtu;
+    TPSA_LOG_INFO("final mtu is %u", (uint32_t)final_mtu);
+    TPSA_LOG_INFO("final flag is %x", cfg->cmd.modify_tpg.in.rtr_attr[0].flag.value);
+
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_MODIFY_TPG;
@@ -1353,7 +1536,7 @@ void tpsa_ioctl_cmd_get_dev_info(tpsa_ioctl_cfg_t *cfg, char *target_pf_name,
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = type,
-        .netaddr = *netaddr,
+        .netaddr = netaddr->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_GET_DEV_INFO;
@@ -1384,13 +1567,16 @@ void tpsa_ioctl_cmd_map_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_MAP_VTP;
     cfg->cmd.map_vtp.in.tpf = tpf;
     cfg->cmd.map_vtp.in.vtp = vtp_cfg;
     cfg->cmd.map_vtp.in.location = cparam->location;
+    cfg->cmd.map_vtp.in.eid_idx = cparam->eid_index;
+    cfg->cmd.map_vtp.in.upi = cparam->upi;
+    cfg->cmd.map_vtp.in.share_mode = cparam->share_mode;
 }
 
 void tpsa_ioctl_cmd_create_lb_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cparam,
@@ -1468,7 +1654,7 @@ void tpsa_ioctl_cmd_create_lb_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cp
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = param->sip,
+        .netaddr = param->sip.net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_CREATE_VTP;
@@ -1482,7 +1668,7 @@ void tpsa_ioctl_cmd_destroy_tpg(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info_t *sip,
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_DESTROY_TPG;
@@ -1498,7 +1684,7 @@ void tpsa_ioctl_cmd_destroy_vtp(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info_t *sip,
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_DESTROY_VTP;
@@ -1511,7 +1697,7 @@ void tpsa_ioctl_cmd_destroy_vtp(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info_t *sip,
 }
 
 void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
-                               tpsa_create_param_t *cparam, utp_table_key_t *key)
+                               tpsa_create_param_t *cparam, utp_table_key_t *key, bool clan)
 {
     tpsa_vtp_cfg_flag_t vtp_flag;
     vtp_flag.bs.clan_tp = 0;
@@ -1532,12 +1718,13 @@ void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = key->sip,
+        .netaddr = key->sip.net_addr,
     };
 
     tpsa_utp_cfg_flag_t utp_flag;
     utp_flag.bs.loopback = (vport_param->tp_cfg.loop_back && uvs_is_nic_loopback(&key->sip, &key->dip));
     utp_flag.bs.spray_en = vport_param->tp_cfg.tp_mod_flag.bs.spray_en;
+    utp_flag.bs.clan = clan;
 
     tpsa_utp_cfg_t utp_cfg;
     /* transaction layer attributes */
@@ -1560,16 +1747,17 @@ void tpsa_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param
 
 /* For live migration scenarios, only create utp but not create vtp. */
 void tpsa_lm_ioctl_cmd_create_utp(tpsa_ioctl_cfg_t *cfg, vport_param_t *vport_param,
-                                  sip_table_entry_t *sip_entry, utp_table_key_t *key)
+                                  sip_table_entry_t *sip_entry, utp_table_key_t *key, bool clan)
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = key->sip,
+        .netaddr = key->sip.net_addr,
     };
 
     tpsa_utp_cfg_flag_t utp_flag;
     utp_flag.bs.loopback = (vport_param->tp_cfg.loop_back && uvs_is_nic_loopback(&key->sip, &key->dip));
     utp_flag.bs.spray_en = vport_param->tp_cfg.tp_mod_flag.bs.spray_en;
+    utp_flag.bs.spray_en = clan;
 
     tpsa_utp_cfg_t utp_cfg = {
         /* transaction layer attributes */
@@ -1595,7 +1783,7 @@ void tpsa_ioctl_cmd_destroy_utp(tpsa_ioctl_cfg_t *cfg, utp_table_key_t *key,
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = key->sip,
+        .netaddr = key->sip.net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_DESTROY_UTP;
@@ -1625,7 +1813,7 @@ void tpsa_ioctl_cmd_create_ctp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *cpara
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     tpsa_ctp_cfg_t ctp_cfg = {
@@ -1644,7 +1832,7 @@ void tpsa_ioctl_cmd_destroy_ctp(tpsa_ioctl_cfg_t *cfg, ctp_table_key_t *key,
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_DESTROY_CTP;
@@ -1656,7 +1844,7 @@ void tpsa_ioctl_cmd_change_tpg_to_error(tpsa_ioctl_cfg_t *cfg, uvs_net_addr_info
 {
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_CHANGE_TPG_TO_ERROR;
@@ -1705,23 +1893,45 @@ int uvs_ioctl_cmd_set_global_cfg(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_global_cfg_t 
     return 0;
 }
 
-int sip_table_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry, tpsa_cmd_t cmd_type)
+static int sip_table_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_ioctl_cfg_t *cfg,
+                           sip_table_entry_t *entry, tpsa_cmd_t cmd_type)
 {
-    tpsa_ioctl_cfg_t cfg;
     tpsa_op_sip_parm_t parm = {0};
 
-    (void)memset(&cfg, 0, sizeof(tpsa_ioctl_cfg_t));
     (void)memcpy(&parm.netaddr, &entry->addr, sizeof(uvs_net_addr_info_t));
     (void)memcpy(parm.dev_name, entry->dev_name, UVS_MAX_DEV_NAME);
+
     parm.port_cnt = entry->port_cnt;
     (void)memcpy(parm.port_id, entry->port_id, TPSA_PORT_CNT_MAX);
-    parm.prefix_len = entry->prefix_len;
     parm.mtu = (uint32_t)entry->mtu;
-    (void)memcpy(parm.netdev_name, entry->netdev_name, UVS_MAX_DEV_NAME);
-    cfg.cmd_type = cmd_type;
-    cfg.cmd.op_sip.in.parm = parm;
 
-    return tpsa_ioctl(ioctl_ctx->ubcore_fd, &cfg);
+    (void)memcpy(parm.netdev_name, entry->netdev_name, UVS_MAX_DEV_NAME);
+    cfg->cmd_type = cmd_type;
+    cfg->cmd.op_sip.in.parm = parm;
+
+    return tpsa_ioctl(ioctl_ctx->ubcore_fd, cfg);
+}
+
+int sip_table_add_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry, uint32_t *sip_idx)
+{
+    tpsa_ioctl_cfg_t cfg;
+    int ret;
+
+    (void)memset(&cfg, 0, sizeof(cfg));
+
+    ret = sip_table_ioctl(ioctl_ctx, &cfg, entry, TPSA_CMD_ADD_SIP);
+    *sip_idx = cfg.cmd.op_sip.out.sip_idx;
+
+    return ret;
+}
+
+int sip_table_del_ioctl(tpsa_ioctl_ctx_t *ioctl_ctx, sip_table_entry_t *entry)
+{
+    tpsa_ioctl_cfg_t cfg;
+
+    (void)memset(&cfg, 0, sizeof(cfg));
+
+    return sip_table_ioctl(ioctl_ctx, &cfg, entry, TPSA_CMD_DEL_SIP);
 }
 
 int uvs_ioctl_cmd_set_vport_cfg(tpsa_ioctl_ctx_t *ioctl_ctx,
@@ -1855,7 +2065,7 @@ int uvs_ioctl_cmd_modify_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_vtp_cfg_t *vtp_cf
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     /* check whether we need to modify multiple vtp at one time */
@@ -1911,7 +2121,7 @@ void tpsa_ioctl_cmd_map_target_vtp(tpsa_ioctl_cfg_t *cfg, tpsa_create_param_t *c
 
     tpsa_cmd_tpf_t tpf = {
         .trans_type = TPSA_TRANSPORT_UB,
-        .netaddr = *sip,
+        .netaddr = sip->net_addr,
     };
 
     cfg->cmd_type = TPSA_CMD_MAP_TARGET_VTP;

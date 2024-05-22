@@ -36,6 +36,7 @@ typedef enum tool_cmd_type {
     TOOL_CMD_SHOW_RES,
     TOOL_CMD_SET_NS_MODE,
     TOOL_CMD_SET_DEV_NS,
+    TOOL_CMD_LIST_RES,
     TOOL_CMD_NUM
 } tool_cmd_type_t;
 
@@ -65,8 +66,7 @@ typedef enum tool_stats_key_type {
 
 /* refer to enum ubcore_res_key_type */
 typedef enum tool_res_key_type {
-    TOOL_RES_KEY_UPI = 1,
-    TOOL_RES_KEY_VTP,
+    TOOL_RES_KEY_VTP = 1,
     TOOL_RES_KEY_TP,
     TOOL_RES_KEY_TPG,
     TOOL_RES_KEY_UTP,
@@ -77,7 +77,8 @@ typedef enum tool_res_key_type {
     TOOL_RES_KEY_JFC,
     TOOL_RES_KEY_RC,
     TOOL_RES_KEY_SEG,
-    TOOL_RES_KEY_DEV_CTX
+    TOOL_RES_KEY_DEV_TA,
+    TOOL_RES_KEY_DEV_TP
 } tool_res_key_type_t;
 
 /* refer to struct ubcore_stats_key and struct ubcore_res_key */

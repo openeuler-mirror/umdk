@@ -125,12 +125,14 @@ typedef struct urma_import_tseg_cfg {
 
 typedef struct urma_tjfr_cfg {
     urma_jfr_id_t jfr_id;
+    urma_import_jetty_flag_t flag;
     urma_token_t *token;
     urma_transport_mode_t trans_mode;
 } urma_tjfr_cfg_t;
 
 typedef struct urma_tjetty_cfg {
     urma_jetty_id_t jetty_id;
+    urma_import_jetty_flag_t flag;
     urma_token_t *token;
     urma_transport_mode_t trans_mode;
     urma_jetty_grp_policy_t policy;

@@ -43,7 +43,7 @@ tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
     }
     show_req = (tpsa_vport_show_req_t *)req->req;
     if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", show_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -193,7 +193,7 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
 
     add_req = (tpsa_vport_add_req_t *)req->req;
     if (strnlen(add_req->args.dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", add_req->args.dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -262,7 +262,7 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
 
     del_req = (tpsa_vport_del_req_t *)req->req;
     if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", del_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter");
         return NULL;
     }
     vport_table = &ctx->worker->table_ctx.vport_table;
@@ -313,7 +313,7 @@ tpsa_response_t *process_vport_table_show_ueid(tpsa_request_t *req, ssize_t read
 
     show_req = (tpsa_vport_show_ueid_req_t *)req->req;
     if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", show_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
 
@@ -365,7 +365,7 @@ tpsa_response_t *process_vport_table_add_ueid(tpsa_request_t *req, ssize_t read_
 
     add_req = (tpsa_vport_add_ueid_req_t *)req->req;
     if (strnlen(add_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", add_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
     vport_table = &ctx->worker->table_ctx.vport_table;
@@ -417,7 +417,7 @@ tpsa_response_t *process_vport_table_del_ueid(tpsa_request_t *req, ssize_t read_
 
     del_req = (tpsa_vport_del_ueid_req_t *)req->req;
     if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", del_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
     vport_table = &ctx->worker->table_ctx.vport_table;
@@ -486,7 +486,7 @@ tpsa_response_t *process_vport_table_set_upi(tpsa_request_t *req, ssize_t read_l
     }
     set_req = (tpsa_set_upi_req_t *)req->req;
     if (strnlen(set_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
-        TPSA_LOG_ERR("Invalid parameter, %s", set_req->dev_name);
+        TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
     cfg.cmd.set_upi.in.upi = set_req->upi;
@@ -549,7 +549,11 @@ tpsa_response_t *process_vport_table_show_upi(tpsa_request_t *req, ssize_t read_
         return NULL;
     }
     show_req = (tpsa_show_upi_req_t *)req->req;
-    (void)memcpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name, UVS_MAX_DEV_NAME);
+    if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+    (void)strcpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name);
     ret = tpsa_ioctl_show_upi(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     if (ret != 0) {
         TPSA_LOG_WARN("failed to ioctl show upi\n");

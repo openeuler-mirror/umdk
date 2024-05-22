@@ -41,13 +41,15 @@ typedef struct tpsa_table {
     tp_state_table_t tp_state_table;
     tpg_state_table_t tpg_state_table;
     tpf_dev_table_t tpf_dev_table;
-    wait_restored_list_t wait_restored_list;
 } tpsa_table_t;
 
 int tpsa_table_init(tpsa_table_t *tpsa_table);
 void tpsa_table_uninit(tpsa_table_t *tpsa_table);
 
 int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid);
+int tpsa_update_vport_table_ueid(vport_table_t *table, vport_key_t *key, uint32_t eid_index,
+    bool is_add, tpsa_ueid_t *find_ueid);
+
 int tpsa_get_upi(vport_key_t *key, vport_table_t *table, uint32_t eid_index, uint32_t *upi);
 int tpsa_lookup_upi_by_eid(vport_key_t *key, vport_table_t *table, urma_eid_t *local_eid, uint32_t *upi);
 
@@ -78,6 +80,7 @@ bool uvs_is_need_clean_fe(fe_table_t *fe_table);
 /* dip table */
 void tpsa_lookup_dip_table(dip_table_t *dip_table, urma_eid_t remote_eid, uint32_t upi,
     uvs_net_addr_t *peer_uvs_ip, uvs_net_addr_info_t *dip);
+int tpsa_update_rm_tpg_table_tp_cnt(tpg_table_update_index_t *tpg_update_idx, tpsa_table_t *table_ctx);
 
 /* tpg table */
 tpsa_tpg_status_t tpsa_lookup_tpg_table(tpsa_tpg_table_index_t *tpg_idx, tpsa_transport_mode_t trans_mode,
@@ -87,7 +90,10 @@ int tpsa_add_rc_tpg_table(urma_eid_t peer_eid, uint32_t peer_jetty, tpsa_tpg_tab
                           rc_tpg_table_t *table);
 int tpsa_remove_rm_tpg_table(rm_tpg_table_t *table, rm_tpg_table_key_t *key, tpsa_tpg_info_t *find_tpg_info);
 int tpsa_remove_rc_tpg_table(tpsa_table_t *table_ctx, rc_tpg_table_key_t *key, tpsa_tpg_info_t *find_tpg_info);
-int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx);
+int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                          tpsa_tp_state_t tp_state);
+int tpsa_update_tpg_tp_state(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                             tpsa_tp_state_t tp_state);
 
 /* tpg state table */
 int uvs_add_tpg_state_table(tpsa_table_t *table_ctx, tpg_state_table_entry_t *add_entry);
@@ -97,23 +103,33 @@ int tpsa_lookup_tpf_dev_table(char *dev_name, tpf_dev_table_t *table, tpf_dev_ta
 
 /* vport table */
 int tpsa_lookup_vport_table(vport_key_t *key, vport_table_t *table, vport_table_entry_t *return_entry);
+int tpsa_lookup_vport_table_with_eid_idx(vport_key_t *key, vport_table_t *table, uint32_t eid_idx,
+    vport_table_entry_t *return_entry);
+int tpsa_vport_del_check(vport_table_entry_t *entry);
+int tpsa_vport_find_del_port_key(vport_table_t *table, uvs_vport_info_key_t *key);
+vport_table_entry_t *tpsa_vport_lookup_by_port_key_no_look(vport_table_t *table,
+    uvs_vport_info_key_t *key);
 int tpsa_lookup_vport_param(vport_key_t *key, vport_table_t *table, vport_param_t *vport_param);
+int tpsa_lookup_vport_param_with_eid_idx(vport_key_t *key, vport_table_t *table,
+    uint32_t eid_idx, vport_param_t *vport_param);
 void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_param);
 
 /* sip table */
-void tpsa_sip_table_lookup(tpf_dev_table_t *tpf_dev_table, char *tpf_name, uint32_t sip_idx,
+int tpsa_sip_table_lookup(tpf_dev_table_t *tpf_dev_table, char *tpf_name, uint32_t sip_idx,
     sip_table_entry_t *target_entry);
 int tpsa_sip_table_add(tpf_dev_table_t *tpf_dev_table, uint32_t sip_idx, sip_table_entry_t *entry_add);
 int tpsa_sip_table_del(tpf_dev_table_t *tpf_dev_table, char *tpf_key, uint32_t sip_idx);
 int tpsa_sip_table_query_unused_idx(tpsa_table_t *table_ctx, char *tpf_key, uint32_t *sip_idx);
+int tpsa_sip_lookup_by_entry(tpsa_table_t *table_ctx, char *tpf_key, sip_table_entry_t *add_entry,
+                             uint32_t *sip_idx);
 sip_table_entry_t *tpsa_get_sip_entry_list(tpsa_table_t *table_ctx, char *tpf_key, uint32_t *max_sip_cnt);
 void tpsa_free_sip_entry_list(sip_table_entry_t *sip_entry_list);
 
 /* table operation */
 int uvs_table_add(tpsa_create_param_t *cparam, tpsa_table_t *table_ctx, tpsa_tpg_table_param_t *tpg,
     tpsa_vtp_table_param_t *vtp_table_data);
-int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location,
-                     tpsa_sock_msg_t *msg, tpsa_table_t *table_ctx);
+int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location, tpsa_sock_msg_t *msg,
+                     tpsa_table_t *table_ctx, tpsa_tp_state_t tp_state);
 
 /* wait table */
 int uvs_add_wait(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t location);

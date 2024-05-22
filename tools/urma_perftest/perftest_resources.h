@@ -48,7 +48,6 @@ typedef struct run_test_ctx {
 
 typedef struct perftest_context {
     urma_eid_t eid;
-    uint32_t uasid;
     urma_context_t *urma_ctx;
     urma_device_attr_t dev_attr;
     urma_token_id_t **token_id;

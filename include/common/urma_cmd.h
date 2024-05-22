@@ -44,7 +44,6 @@ typedef enum urma_core_cmd {
 
 typedef enum urma_cmd {
     URMA_CMD_CREATE_CTX = 1,
-    URMA_CMD_DESTROY_CTX,
     URMA_CMD_ALLOC_TOKEN_ID,
     URMA_CMD_FREE_TOKEN_ID,
     URMA_CMD_REGISTER_SEG,
@@ -337,6 +336,7 @@ typedef struct urma_cmd_import_jfr {
         /* correspond to urma_jfr_id */
         uint8_t eid[URMA_CMD_EID_SIZE];
         uint32_t id;
+        uint32_t flag;
         /* correspond to urma_token_t */
         uint32_t token;
         uint32_t trans_mode;
@@ -513,6 +513,7 @@ typedef struct urma_cmd_create_jetty_grp {
         uint32_t token;
         uint32_t id;
         uint32_t policy;
+        uint32_t flag;
         uint64_t urma_jetty_grp; /* urma jetty group pointer */
     } in;
     struct {

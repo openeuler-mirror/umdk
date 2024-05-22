@@ -14,7 +14,7 @@
 #include "ub_dstring.h"
 
 #define DSTRING_MIN_LEN 8
-#define DSTRING_MAX_LEN (1024 * 1024) /* Max memory by one dstring limited to 1M bytes */
+#define DSTRING_MAX_LEN (1024 * 1024 * 1024) /* Max memory by one dstring limited to 1G bytes */
 #define DSTRING_DOUBLE 2
 
 /* Initializes the dstring. */
@@ -121,7 +121,10 @@ void dstring_put_char(struct dstring *dstr, char c)
     }
 
     if (dstr->buf_used >= dstr->buf_len) {
-        *dstring_push_buf(dstr, 1) = c;
+        char *res_str = dstring_push_buf(dstr, 1);
+        if (res_str != NULL) {
+            *res_str = c;
+        }
     } else {
         dstr->string[dstr->buf_used++] = c;
         dstr->string[dstr->buf_used] = '\0';

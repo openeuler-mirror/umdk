@@ -19,7 +19,7 @@
 #include "tpsa_ioctl.h"
 #include "tpsa_sock.h"
 
-#define TPSA_SOCK_TABLE_SIZE 10240
+#define TPSA_SOCK_TABLE_SIZE 2048
 
 #define TPSA_SOCK_KEEP_IDLE      (5)     // if no data exchanged within 5 seconds, start detection.
 #define TPSA_SOCK_KEEP_INTERVAL  (5)     // interval for sending detection packets is 5 seconds.
@@ -156,13 +156,13 @@ static int tpsa_sock_bind(tpsa_sock_ctx_t *sock_ctx, uvs_socket_init_attr_t *att
     }
 
     if (is_ipv6) {
-        addr_len = sizeof(struct sockaddr_in6);
+        addr_len = (socklen_t)sizeof(struct sockaddr_in6);
         src_addr = &src_addr6;
         src_addr6.sin6_family = domain;
         (void)memcpy(&src_addr6.sin6_addr, &attr->server_ip, sizeof(uvs_net_addr_t));
         src_addr6.sin6_port = attr->server_port;
     } else {
-        addr_len = sizeof(struct sockaddr_in);
+        addr_len = (socklen_t)sizeof(struct sockaddr_in);
         src_addr = &src_addr4;
         src_addr4.sin_family = domain;
         src_addr4.sin_addr.s_addr = attr->server_ip.in4.addr;
@@ -201,13 +201,13 @@ static int tpsa_sock_connect(const uvs_net_addr_t *remote_uvs_ip, uint32_t cfg_p
     }
 
     if (is_ipv6) {
-        addr_len = sizeof(struct sockaddr_in6);
+        addr_len = (socklen_t)sizeof(struct sockaddr_in6);
         addr = &addr6;
         addr6.sin6_family = domain;
         (void)memcpy(&addr6.sin6_addr, remote_uvs_ip, sizeof(uvs_net_addr_t));
         addr6.sin6_port = (uint16_t)cfg_port;
     } else {
-        addr_len = sizeof(struct sockaddr_in);
+        addr_len = (socklen_t)sizeof(struct sockaddr_in);
         addr = &addr4;
         addr4.sin_family = domain;
         addr4.sin_addr.s_addr = remote_uvs_ip->in4.addr;
@@ -667,10 +667,7 @@ tpsa_sock_msg_t *tpsa_sock_init_create_req(tpsa_create_param_t *cparam, tpsa_ini
     req->trans_mode = cparam->trans_mode;
     req->src_uvs_ip = tpsa_attr->server_ip;
     req->migrate_third = cparam->migrate_third;
-    /* For lm scenario, the local IP information is sent to the peer. */
-    if (cparam->live_migrate) {
-        req->dip = *sip;
-    }
+    req->sip = *sip;
 
     req->local_eid = cparam->local_eid;
     req->peer_eid = cparam->peer_eid;
@@ -709,9 +706,7 @@ tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, struct tpsa_in
     resp->trans_mode = msg->trans_mode;
     resp->src_uvs_ip = param->src_uvs_ip;
     resp->migrate_third = msg->migrate_third;
-    if (msg->live_migrate) {
-        resp->dip = param->sip;
-    }
+    resp->sip = param->sip;
     resp->local_eid = msg->local_eid;
     resp->peer_eid = msg->peer_eid;
     resp->local_jetty = msg->local_jetty;
@@ -753,28 +748,27 @@ tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, struct tpsa_in
     uint32_t i = 0;
     for (; i < req->tpg_cfg.tp_cnt && i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
         resp->content.resp.tp_param.uniq[i].local_tpn = req->tp_param.uniq[i].local_tpn;
-        resp->content.resp.tp_param.uniq[i].peer_tpn = param->tpn[i];
+        resp->content.resp.tp_param.uniq[i].peer_tpn = param->tp[i].tpn;
     }
 
     return resp;
 }
 
-tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t *msg, uvs_net_addr_info_t *sip,
-    uvs_socket_init_attr_t *tpsa_attr)
+int tpsa_sock_send_create_ack(tpsa_sock_ctx_t *sock_ctx, tpsa_sock_msg_t *msg, uvs_net_addr_info_t *sip,
+    uvs_socket_init_attr_t *tpsa_attr, uvs_net_addr_t *remote_uvs_ip)
 {
     tpsa_create_resp_t *resp = &msg->content.resp;
     tpsa_sock_msg_t *ack = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
     if (ack == NULL) {
-        return NULL;
+        return -1;
     }
 
     ack->msg_type = TPSA_CREATE_ACK;
     ack->trans_mode = msg->trans_mode;
     ack->src_uvs_ip = tpsa_attr->server_ip;
     ack->migrate_third = msg->migrate_third;
-    if (msg->live_migrate) {
-        ack->dip = *sip;
-    }
+    ack->sip = *sip;
+
     ack->local_eid = msg->local_eid;
     ack->peer_eid = msg->peer_eid;
     ack->local_jetty = msg->local_jetty;
@@ -799,43 +793,13 @@ tpsa_sock_msg_t *tpsa_sock_init_create_ack(tpsa_sock_msg_t *msg, uvs_net_addr_in
         ack->content.ack.tp_param.uniq[i] = msg->content.resp.tp_param.uniq[i];
     }
 
-    return ack;
-}
-
-tpsa_sock_msg_t *tpsa_sock_init_create_finish(tpsa_sock_msg_t* msg, uvs_net_addr_info_t *sip)
-{
-    tpsa_sock_msg_t *finish = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
-    if (finish == NULL) {
-        return NULL;
+    int ret = tpsa_sock_send_msg(sock_ctx, ack, sizeof(tpsa_sock_msg_t), *remote_uvs_ip);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to send create vtp ack in worker\n");
     }
 
-    finish->msg_type = TPSA_CREATE_FINISH;
-    finish->trans_mode = msg->trans_mode;
-    finish->migrate_third = msg->migrate_third;
-    finish->dip = *sip;
-    finish->local_eid = msg->local_eid;
-    finish->peer_eid = msg->peer_eid;
-    finish->local_jetty = msg->local_jetty;
-    finish->peer_jetty = msg->peer_jetty;
-    finish->vtpn = msg->vtpn;
-    finish->local_tpgn = msg->local_tpgn;
-    finish->peer_tpgn = msg->peer_tpgn;
-    finish->upi = msg->upi;
-    finish->live_migrate = msg->live_migrate;
-    finish->content.finish.msg_id = msg->content.ack.msg_id;
-    finish->content.finish.nlmsg_seq = msg->content.ack.nlmsg_seq;
-    finish->content.finish.src_function_id = msg->content.ack.src_function_id;
-    (void)memcpy(finish->content.finish.dev_name, msg->content.ack.dev_name, UVS_MAX_DEV_NAME);
-    finish->content.finish.ta_data = msg->content.ack.ta_data;
-    finish->content.finish.tpg_cfg = msg->content.ack.tpg_cfg;
-    finish->content.finish.share_mode = msg->content.ack.share_mode;
-
-    uint32_t i = 0;
-    for (; i < msg->content.ack.tpg_cfg.tp_cnt; i++) {
-        finish->content.finish.tp_param.uniq[i] = msg->content.ack.tp_param.uniq[i];
-    }
-
-    return finish;
+    free(ack);
+    return ret;
 }
 
 tpsa_sock_msg_t *tpsa_sock_init_destroy_finish(tpsa_sock_msg_t* msg, uvs_net_addr_info_t *sip)
@@ -847,7 +811,7 @@ tpsa_sock_msg_t *tpsa_sock_init_destroy_finish(tpsa_sock_msg_t* msg, uvs_net_add
 
     finish->msg_type = TPSA_DESTROY_FINISH;
     finish->trans_mode = msg->trans_mode;
-    finish->dip = *sip;
+    finish->sip = *sip;
     finish->local_eid = msg->local_eid;
     finish->peer_eid = msg->peer_eid;
     finish->local_jetty = msg->local_jetty;
@@ -859,7 +823,9 @@ tpsa_sock_msg_t *tpsa_sock_init_destroy_finish(tpsa_sock_msg_t* msg, uvs_net_add
     finish->live_migrate = msg->live_migrate;
     finish->content.dfinish.resp_id = msg->content.dreq.resp_id;
     finish->content.dfinish.ta_data = msg->content.dreq.ta_data;
-
+    finish->content.dfinish.src_fe_idx = msg->content.dreq.src_fe_idx;
+    (void)memcpy(finish->content.dfinish.src_tpf_name,
+        msg->content.dreq.src_tpf_name, UVS_MAX_DEV_NAME);
     return finish;
 }
 
@@ -873,7 +839,7 @@ tpsa_sock_msg_t *tpsa_sock_init_table_sync(tpsa_create_param_t *cparam, tpsa_tab
 
     tsync->msg_type = TPSA_TABLE_SYC;
     tsync->trans_mode = cparam->trans_mode;
-    tsync->dip = *sip;
+    tsync->sip = *sip;
     tsync->src_uvs_ip = tpsa_attr->server_ip;
     tsync->local_eid = cparam->local_eid;
     tsync->peer_eid = cparam->peer_eid;

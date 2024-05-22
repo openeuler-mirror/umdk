@@ -21,24 +21,51 @@
 #include "tpsa_worker.h"
 #include "tpsa_tbl_manage.h"
 
-int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid)
+static tpsa_ueid_t *tpsa_lookup_vport_table_ueid_nolock(vport_table_t *table, vport_key_t *key, uint32_t eid_index)
 {
-    (void)pthread_rwlock_rdlock(&table->rwlock);
     vport_table_entry_t *entry = vport_table_lookup(table, key);
     if (entry == NULL) {
         TPSA_LOG_ERR("Failed to lookup vport table, dev_name:%s, fe_idx:%hu.\n", key->tpf_name, key->fe_idx);
-        (void)pthread_rwlock_unlock(&table->rwlock);
-        return -1;
+        return NULL;
     }
 
     if (eid_index >= entry->ueid_max_cnt || entry->ueid[eid_index].is_valid == false) {
         TPSA_LOG_ERR("Failed to lookup eid by index, idx:%u, max_idx:%u, %u.\n",
             eid_index, entry->ueid_max_cnt, entry->ueid[eid_index].is_valid);
+        return NULL;
+    }
+
+    return &entry->ueid[eid_index];
+}
+
+int tpsa_lookup_vport_table_ueid(vport_key_t *key, vport_table_t *table, uint32_t eid_index, tpsa_ueid_t *ueid)
+{
+    tpsa_ueid_t *find_ueid;
+    (void)pthread_rwlock_rdlock(&table->rwlock);
+    find_ueid = tpsa_lookup_vport_table_ueid_nolock(table, key, eid_index);
+    if (find_ueid == NULL) {
         (void)pthread_rwlock_unlock(&table->rwlock);
         return -1;
     }
 
-    *ueid = entry->ueid[eid_index];
+    *ueid = *find_ueid;
+    (void)pthread_rwlock_unlock(&table->rwlock);
+    return 0;
+}
+
+int tpsa_update_vport_table_ueid(vport_table_t *table, vport_key_t *key, uint32_t eid_index,
+    bool is_add, tpsa_ueid_t *find_ueid)
+{
+    tpsa_ueid_t *ueid;
+    (void)pthread_rwlock_wrlock(&table->rwlock);
+    ueid = tpsa_lookup_vport_table_ueid_nolock(table, key, eid_index);
+    if (ueid == NULL) {
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    *find_ueid = *ueid;
+    ueid->used = is_add;
     (void)pthread_rwlock_unlock(&table->rwlock);
     return 0;
 }
@@ -245,7 +272,7 @@ static int rc_loopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_
     return TPSA_REMOVE_SERVER;
 }
 
-int rc_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx)
+static int rc_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx)
 {
     int32_t vtpn = 0;
     rc_vtp_table_key_t vtp_key = {
@@ -275,7 +302,7 @@ int rc_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index
 
     /* If location is duplex, only need to modify the location, but cannot delete the vtp node */
     if (vtp_entry->location == TPSA_DUPLEX) {
-        TPSA_LOG_INFO("when location is duplex, remove location %d from rc_vtp table", vtp_idx->location);
+        TPSA_LOG_INFO("when location is duplex, remove location %u from rc_vtp table", vtp_idx->location);
         vtp_entry->location = (vtp_idx->location == TPSA_TARGET) ? TPSA_INITIATOR : TPSA_TARGET;
         if (vtp_entry->location == TPSA_TARGET) {
             vtp_entry->vtpn = UINT32_MAX;
@@ -402,23 +429,17 @@ static int rm_loopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_
     }
 
     vtp_idx->share_mode = vtp_entry->share_mode;
+    vtp_idx->tpgn = vtp_entry->tpgn;
     if (!vtp_entry->share_mode) {
-        if (vtp_entry->tpg_param != NULL) {
-            (void)memcpy(&vtp_idx->tpg_param,
-                vtp_entry->tpg_param, sizeof(tpsa_tpg_info_t));
-            if (vtp_entry->use_cnt > 0) {
-                vtp_entry->use_cnt--;
-                TPSA_LOG_INFO("use cnt decrease by 1 is %u\n", vtp_entry->use_cnt);
-            } else {
-                TPSA_LOG_ERR("failed to maintain rm vtp cnt, now is %u\n", vtp_entry->use_cnt);
-            }
-
-            vtp_idx->use_cnt = vtp_entry->use_cnt;
-            TPSA_LOG_INFO("remove vtp in non_share_mode, tpgn = %u, use_cnt decrease by 1 is %u\n",
-                vtp_idx->tpg_param.tpgn, vtp_idx->use_cnt);
+        if (vtp_entry->use_cnt > 0) {
+            vtp_entry->use_cnt--;
+            TPSA_LOG_INFO("use cnt decrease by 1 is %u\n", vtp_entry->use_cnt);
         } else {
-            TPSA_LOG_WARN("unexpected situation");
+            TPSA_LOG_ERR("failed to maintain rm vtp cnt, now is %u\n", vtp_entry->use_cnt);
         }
+        vtp_idx->use_cnt = vtp_entry->use_cnt;
+        TPSA_LOG_INFO("remove vtp in non_share_mode, tpgn = %u, use_cnt decrease by 1 is %u\n",
+            vtp_idx->tpgn, vtp_idx->use_cnt);
     }
 
     deid_vtp_table_key_t deid_key = {
@@ -448,17 +469,11 @@ static int rm_loopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_
     /* Before deleting vtp entry, need to delete the corresponding node in the linked list. */
     deid_rm_vtp_list_remove(&table_ctx->deid_vtp_table, &deid_key, &vtp_key);
     ub_hmap_remove(&fe_entry->rm_vtp_table.hmap, &vtp_entry->node);
-
-    if (vtp_entry->tpg_param != NULL) {
-        free(vtp_entry->tpg_param);
-        vtp_entry->tpg_param = NULL;
-    }
-
     free(vtp_entry);
     return TPSA_REMOVE_SERVER;
 }
 
-int rm_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx)
+static int rm_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index_t *vtp_idx)
 {
     int32_t vtpn = 0;
     rm_vtp_table_key_t vtp_key = {
@@ -482,22 +497,17 @@ int rm_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index
     }
 
     vtp_idx->share_mode = vtp_entry->share_mode;
+    vtp_idx->tpgn = vtp_entry->tpgn;
     if (!vtp_entry->share_mode) {
-        if (vtp_entry->tpg_param != NULL) {
-            (void)memcpy(&vtp_idx->tpg_param,
-                vtp_entry->tpg_param, sizeof(tpsa_tpg_info_t));
-            if (vtp_entry->use_cnt > 0) {
-                vtp_entry->use_cnt--;
-                TPSA_LOG_INFO("use cnt decrease by 1 is %u\n", vtp_entry->use_cnt);
-            } else {
-                TPSA_LOG_ERR("failed to maintain rm vtp cnt, now is %u\n", vtp_entry->use_cnt);
-            }
-            vtp_idx->use_cnt = vtp_entry->use_cnt;
-            TPSA_LOG_INFO("remove vtp in non share mode, tpgn = %u, use_cnt decrease by 1 is %u\n",
-                vtp_idx->tpg_param.tpgn, vtp_idx->use_cnt);
+        if (vtp_entry->use_cnt > 0) {
+            vtp_entry->use_cnt--;
+            TPSA_LOG_INFO("use cnt decrease by 1 is %u\n", vtp_entry->use_cnt);
         } else {
-            TPSA_LOG_WARN("unexpected situation");
+            TPSA_LOG_ERR("failed to maintain rm vtp cnt, now is %u\n", vtp_entry->use_cnt);
         }
+        vtp_idx->use_cnt = vtp_entry->use_cnt;
+        TPSA_LOG_INFO("remove vtp in non share mode, tpgn = %u, use_cnt decrease by 1 is %u\n",
+            vtp_idx->tpgn, vtp_idx->use_cnt);
     }
 
     /* for server, not alloc vtpn, so return TPSA_REMOVE_SERVER to avoid destroying vtp */
@@ -519,10 +529,6 @@ int rm_noloopback_vtp_table_remove(tpsa_table_t *table_ctx, tpsa_vtp_table_index
     deid_rm_vtp_list_remove(&table_ctx->deid_vtp_table, &deid_key, &vtp_key);
 
     ub_hmap_remove(&fe_entry->rm_vtp_table.hmap, &vtp_entry->node);
-    if (vtp_entry->tpg_param != NULL) {
-        free(vtp_entry->tpg_param);
-        vtp_entry->tpg_param = NULL;
-    }
     free(vtp_entry);
 
     return vtpn;
@@ -600,7 +606,7 @@ int um_fe_vtp_table_add(tpsa_table_t *table_ctx, vport_key_t *fe_key, um_vtp_tab
 
 /* fe_vtp_table remove */
 
-void fe_vtp_table_destroy(fe_table_t *fe_table)
+static void fe_vtp_table_destroy(fe_table_t *fe_table)
 {
     fe_table_entry_t *fe_cur, *fe_next;
 
@@ -758,10 +764,10 @@ int tpsa_remove_vtp_table(tpsa_transport_mode_t trans_mode, tpsa_vtp_table_index
 
 static void tpsa_increase_use_cnt_in_non_share_mode(rm_vtp_table_entry_t *entry)
 {
-    if (entry->tpg_param != NULL && !entry->share_mode) {
+    if (!entry->share_mode) {
         entry->use_cnt++;
         TPSA_LOG_INFO("entry use_cnt increase by 1 is %u and tpgn %u",
-            entry->use_cnt, entry->tpg_param->tpgn);
+            entry->use_cnt, entry->tpgn);
     }
 }
 
@@ -770,14 +776,13 @@ static void tpsa_increase_use_cnt_in_non_share_mode(rm_vtp_table_entry_t *entry)
 *   2. the client node has been added
 *   3. when add the clent node ,the server node already exists
 */
-int tpsa_noloopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
-                                     vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key, tpsa_create_param_t *cparam)
+static int tpsa_noloopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
+    vport_key_t *fe_key, rm_vtp_table_key_t *vtp_key, tpsa_create_param_t *cparam)
 {
     rm_vtp_table_entry_t *entry = rm_fe_vtp_table_lookup(&table_ctx->fe_table, fe_key, vtp_key);
 
     if (entry == NULL) {
         TPSA_LOG_INFO("when vtp node not exist, add vtp node, location is: %u", vtp_table_data->location);
-        TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpg_param.tpgn);
         if (rm_fe_vtp_table_add(table_ctx, fe_key, vtp_key, vtp_table_data) != 0) {
             return TPSA_ADD_NOMEM;
         }
@@ -805,7 +810,7 @@ int tpsa_noloopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
             TPSA_LOG_ERR("Wrong status when add vice tpgn");
             return TPSA_ADD_INVALID;
         } else {
-            entry->vice_tpgn = vtp_table_data->tpg_param.tpgn;
+            entry->vice_tpgn = vtp_table_data->tpgn;
             entry->node_status = STATE_READY;
             TPSA_LOG_INFO("Live migration rm add vice tpgn:%u", entry->vice_tpgn);
         }
@@ -814,8 +819,8 @@ int tpsa_noloopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
     return 0;
 }
 
-int tpsa_loopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
-                                   tpsa_create_param_t *cparam)
+static int tpsa_loopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
+    tpsa_create_param_t *cparam)
 {
     int ret = -1;
     rm_vtp_table_key_t vtp_key = {
@@ -832,13 +837,13 @@ int tpsa_loopback_add_rm_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_
     if (cparam->sig_loop == true) {
         TPSA_LOG_INFO("when is sigle loop, create dumplex vtp node, fe_idx is %hu\n", cparam->fe_idx);
         vtp_table_data->location = TPSA_DUPLEX;
-        TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpg_param.tpgn);
+        TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpgn);
         return tpsa_noloopback_add_rm_vtp_table(vtp_table_data, table_ctx, &fe_key, &vtp_key, cparam);
     }
 
     /* if is isLoopback and seid != deid, first add a vtp node for client */
     TPSA_LOG_INFO("when is not sigle loop, create client vtp node, fe_idx is %hu\n", fe_key.fe_idx);
-    TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpg_param.tpgn);
+    TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpgn);
     ret = tpsa_noloopback_add_rm_vtp_table(vtp_table_data, table_ctx, &fe_key, &vtp_key, cparam);
     if (ret != 0) {
         TPSA_LOG_ERR("tpsa add client vtp node failed, ret %d", ret);
@@ -888,7 +893,6 @@ int tpsa_add_rm_vtp_table(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *v
         vport_key_t fe_key = {0};
         fe_key.fe_idx = cparam->fe_idx;
         (void)memcpy(fe_key.tpf_name, cparam->tpf_name, UVS_MAX_DEV_NAME);
-        TPSA_LOG_DEBUG("adding rm entry with tpgn: %u", vtp_table_data->tpg_param.tpgn);
         return tpsa_noloopback_add_rm_vtp_table(vtp_table_data, table_ctx, &fe_key, &vtp_key, cparam);
     }
 
@@ -927,7 +931,7 @@ int tpsa_noloopback_add_rc_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
             TPSA_LOG_ERR("Wrong status when add vice tpgn");
             return TPSA_ADD_INVALID;
         } else {
-            entry->vice_tpgn = vtp_table_data->tpg_param.tpgn;
+            entry->vice_tpgn = vtp_table_data->tpgn;
             entry->node_status = STATE_READY;
             TPSA_LOG_INFO("Live migration rc add vice tpgn:%u", entry->vice_tpgn);
         }
@@ -936,8 +940,8 @@ int tpsa_noloopback_add_rc_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tps
     return 0;
 }
 
-int tpsa_loopback_add_rc_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
-                                   tpsa_create_param_t *cparam)
+static int tpsa_loopback_add_rc_vtp_table(tpsa_vtp_table_param_t *vtp_table_data, tpsa_table_t *table_ctx,
+    tpsa_create_param_t *cparam)
 {
     int ret = -1;
     rc_vtp_table_key_t vtp_key = {
@@ -1058,10 +1062,9 @@ int tpsa_update_rm_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t v
     vtp_table_data.local_eid = msg->local_eid;
     vtp_table_data.share_mode = true;
     if (tpg_param != NULL) {
-        vtp_table_data.tpg_param = *tpg_param;
         vtp_table_data.share_mode = false;
         TPSA_LOG_INFO("update rm vtp table in non_share_mode and vtpn = %u, tpgn = %u",
-            vtp_table_data.vtpn, vtp_table_data.tpg_param.tpgn);
+            vtp_table_data.vtpn, vtp_table_data.tpgn);
     }
 
     vport_key_t fe_key;
@@ -1069,8 +1072,8 @@ int tpsa_update_rm_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t v
     uint32_t eid_idx;
 
     if (location == TPSA_INITIATOR) {
-        fe_key.fe_idx = msg->content.finish.src_function_id;
-        (void)memcpy(fe_key.tpf_name, msg->content.finish.dev_name, UVS_MAX_DEV_NAME);
+        fe_key.fe_idx = msg->content.resp.src_function_id;
+        (void)memcpy(fe_key.tpf_name, msg->content.resp.dev_name, UVS_MAX_DEV_NAME);
         vtp_key.src_eid = msg->local_eid;
         vtp_key.dst_eid = msg->peer_eid;
     } else {
@@ -1093,12 +1096,12 @@ int tpsa_update_rm_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uint32_t v
     rm_vtp_table_entry_t *entry = rm_fe_vtp_table_lookup(&table_ctx->fe_table, &fe_key, &vtp_key);
     if (entry == NULL) {
         TPSA_LOG_WARN("RM VTP table have no this entry. Update is ADD now. and tpgn = %u\n",
-            vtp_table_data.tpg_param.tpgn);
+            vtp_table_data.tpgn);
         if (rm_fe_vtp_table_add(table_ctx, &fe_key, &vtp_key, &vtp_table_data) != 0) {
             return TPSA_ADD_NOMEM;
         }
     } else {
-        TPSA_LOG_DEBUG("rm vtp is already exist and tpgn = %u\n", entry->tpg_param->tpgn);
+        TPSA_LOG_DEBUG("rm vtp is already exist and tpgn = %u\n", entry->tpgn);
         if (tpsa_update_rm_vtp_table_exist(entry, location, vtpn, tpgn, msg->live_migrate) < 0) {
             TPSA_LOG_ERR("Fail to update rm vtp table");
             return TPSA_ADD_INVALID;
@@ -1149,8 +1152,8 @@ static int tpsa_update_rc_vtp_table(tpsa_sock_msg_t *msg, uint32_t location, uin
 
     vport_key_t fe_key;
     if (location == TPSA_INITIATOR) {
-        fe_key.fe_idx = msg->content.finish.src_function_id;
-        (void)memcpy(fe_key.tpf_name, msg->content.finish.dev_name, UVS_MAX_DEV_NAME);
+        fe_key.fe_idx = msg->content.resp.src_function_id;
+        (void)memcpy(fe_key.tpf_name, msg->content.resp.dev_name, UVS_MAX_DEV_NAME);
         vtp_key.dst_eid = msg->peer_eid;
         vtp_key.jetty_id = msg->peer_jetty;
     } else {
@@ -1284,10 +1287,10 @@ static int tpsa_rc_tpg_table_tpn_swap(tpsa_table_t *table_ctx, tpsa_lm_vtp_entry
     tpg_entry->tpgn = tpg_entry->vice_tpgn;
     tpg_entry->vice_tpgn = tmp;
 
-    uint32_t tmp_tpn[TPSA_MAX_TP_CNT_IN_GRP];
-    (void)memcpy(tmp_tpn, tpg_entry->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
-    (void)memcpy(tpg_entry->tpn, tpg_entry->vice_tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
-    (void)memcpy(tpg_entry->vice_tpn, tmp_tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+    tp_entry_t tmp_tpn[TPSA_MAX_TP_CNT_IN_GRP];
+    (void)memcpy(tmp_tpn, tpg_entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
+    (void)memcpy(tpg_entry->tp, tpg_entry->vice_tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
+    (void)memcpy(tpg_entry->vice_tpn, tmp_tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
 
     return 0;
 }
@@ -1474,14 +1477,14 @@ static tpsa_tpg_status_t tpsa_lookup_rm_tpg_table(uvs_net_addr_info_t *dip, tpsa
     tpsa_tpg_info_t *tpsa_tpg_info)
 {
     rm_tpg_table_key_t k = {
-        .dip = *dip,
+        .dip = dip->net_addr,
     };
 
     rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(&table_ctx->rm_tpg_table, &k);
     if (entry != NULL) {
         tpsa_tpg_info->tpgn = entry->tpgn;
         tpsa_tpg_info->tp_cnt = entry->tp_cnt;
-        (void)memcpy(tpsa_tpg_info->tpn, entry->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+        (void)memcpy(tpsa_tpg_info->tp, entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
         return entry->status;
     }
 
@@ -1508,8 +1511,7 @@ static tpsa_tpg_status_t tpsa_lookup_rc_tpg_table(tpsa_tpg_table_index_t *tpg_id
         }
         tpsa_tpg_info->tpgn = entry->tpgn;
         tpsa_tpg_info->tp_cnt = entry->tp_cnt;
-        (void)memcpy(tpsa_tpg_info->tpn, entry->tpn,
-            TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+        (void)memcpy(tpsa_tpg_info->tp, entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
         return entry->status;
     }
 
@@ -1529,8 +1531,7 @@ static tpsa_tpg_status_t tpsa_lookup_rc_tpg_table(tpsa_tpg_table_index_t *tpg_id
                 return TPSA_TPG_LOOKUP_ALREADY_BIND;
             }
             tpsa_tpg_info->tpgn = entry->tpgn;
-            (void)memcpy(tpsa_tpg_info->tpn, entry->tpn,
-                TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+            (void)memcpy(tpsa_tpg_info->tp, entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
             return entry->status;
         }
     }
@@ -1552,10 +1553,23 @@ tpsa_tpg_status_t tpsa_lookup_tpg_table(tpsa_tpg_table_index_t *tpg_idx, tpsa_tr
     return TPSA_TPG_LOOKUP_NULL;
 }
 
+int tpsa_update_rm_tpg_table_tp_cnt(tpg_table_update_index_t *tpg_update_idx, tpsa_table_t *table_ctx)
+{
+    if (tpg_update_idx->trans_mode != TPSA_TP_RM) {
+        TPSA_LOG_WARN("Wrong trans_mode input when lookup tpg table. return -1");
+        return -1;
+    }
+    if (rm_tpg_table_update_tp_cnt(&table_ctx->rm_tpg_table, &tpg_update_idx->dip, tpg_update_idx->tp_cnt) != 0 ||
+        tpg_state_table_update_tp_cnt(&table_ctx->tpg_state_table, tpg_update_idx) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
 int tpsa_add_rm_tpg_table(tpsa_tpg_table_param_t *param, rm_tpg_table_t *table)
 {
     rm_tpg_table_key_t k = {
-        .dip = param->dip,
+        .dip = param->dip.net_addr,
     };
 
     rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(table, &k);
@@ -1589,7 +1603,7 @@ int tpsa_add_rc_tpg_table(urma_eid_t peer_eid, uint32_t peer_jetty, tpsa_tpg_tab
         if (param->live_migrate == true && entry->vice_tpgn == UINT32_MAX) {
             TPSA_LOG_INFO("In lm sescenario, add alternative tpg %u in rc_tpg_table.\n", entry->vice_tpgn);
             entry->vice_tpgn = param->tpgn;
-            (void)memcpy(entry->vice_tpn, param->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+            (void)memcpy(entry->vice_tpn, param->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
             return 0;
         }
 
@@ -1633,13 +1647,13 @@ int tpsa_remove_rm_tpg_table(rm_tpg_table_t *table, rm_tpg_table_key_t *key, tps
 {
     rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("Rmv tpg, Can't find entry, key dip: " EID_FMT "", EID_ARGS(key->dip.net_addr));
+        TPSA_LOG_WARN("Rmv tpg, Can't find entry, key dip: " EID_FMT "", EID_ARGS(key->dip));
         return TPSA_REMOVE_NULL;
     }
 
     find_tpg_info->tpgn = entry->tpgn;
     find_tpg_info->tp_cnt = entry->tp_cnt;
-    memcpy(find_tpg_info->tpn, entry->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+    (void)memcpy(find_tpg_info->tp, entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
 
     if (entry->use_cnt != 0) {
         entry->use_cnt -= 1;
@@ -1664,7 +1678,7 @@ int tpsa_remove_rc_tpg_table(tpsa_table_t *table_ctx, rc_tpg_table_key_t *key, t
 
     find_tpg_info->tpgn = entry->tpgn;
     find_tpg_info->tp_cnt = entry->tp_cnt;
-    memcpy(find_tpg_info->tpn, entry->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
+    (void)memcpy(find_tpg_info->tp, entry->tp, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
 
     if (entry->use_cnt != 0) {
         entry->use_cnt -= 1;
@@ -1677,14 +1691,15 @@ int tpsa_remove_rc_tpg_table(tpsa_table_t *table_ctx, rc_tpg_table_key_t *key, t
     jetty_peer_table_key_t jetty_peer_key;
     jetty_peer_key.ljetty_id = entry->ljetty_id;
     jetty_peer_key.seid = entry->leid;
-    (void)jetty_peer_table_remove(&table_ctx->jetty_peer_table, &jetty_peer_key);
+    jetty_peer_table_remove(&table_ctx->jetty_peer_table, &jetty_peer_key);
 
     ub_hmap_remove(&table_ctx->rc_tpg_table.hmap, &entry->node);
     free(entry);
     return 0;
 }
 
-static int tpsa_update_rm_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx)
+static int tpsa_update_rm_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                                    tpsa_tp_state_t tp_state)
 {
     uvs_net_addr_t peer_uvs_ip = {0};
     uvs_net_addr_info_t dip;
@@ -1697,7 +1712,7 @@ static int tpsa_update_rm_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tps
     }
 
     rm_tpg_table_key_t k = {
-        .dip = dip,
+        .dip = dip.net_addr,
     };
 
     rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(&table_ctx->rm_tpg_table, &k);
@@ -1734,10 +1749,15 @@ static int tpsa_update_rm_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tps
         }
     }
 
+    for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+        entry->tp[i].tp_state = tp_state;
+    }
+
     return 0;
 }
 
-static int tpsa_update_rc_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx)
+static int tpsa_update_rc_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                                    tpsa_tp_state_t tp_state)
 {
     rc_tpg_table_key_t k = {
         .deid = msg->peer_eid,
@@ -1776,6 +1796,9 @@ static int tpsa_update_rc_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tps
 
     if (entry->status == TPSA_TPG_LOOKUP_EXIST) {
         entry->use_cnt += 1;
+        for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+            entry->tp[i].tp_state = tp_state;
+        }
     } else {
         entry->tpgn = msg->local_tpgn;
         entry->type = 0;
@@ -1789,20 +1812,74 @@ static int tpsa_update_rc_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tps
     return 0;
 }
 
-int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx)
+int tpsa_update_tpg_table(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                          tpsa_tp_state_t tp_state)
 {
     int res = -1;
     if (msg->trans_mode == TPSA_TP_RM) {
-        res = tpsa_update_rm_tpg_table(msg, location, table_ctx);
+        res = tpsa_update_rm_tpg_table(msg, location, table_ctx, tp_state);
         if (res < 0) {
             TPSA_LOG_ERR("Fail to update rm tpg table");
             return res;
         }
     } else if (msg->trans_mode == TPSA_TP_RC) {
-        res = tpsa_update_rc_tpg_table(msg, location, table_ctx);
+        res = tpsa_update_rc_tpg_table(msg, location, table_ctx, tp_state);
         if (res < 0) {
             TPSA_LOG_ERR("Fail to update rc tpg table");
             return res;
+        }
+    }
+
+    return 0;
+}
+
+int tpsa_update_tpg_tp_state(tpsa_sock_msg_t *msg, uint32_t location, tpsa_table_t *table_ctx,
+                             tpsa_tp_state_t tp_state)
+{
+    if (msg->trans_mode == TPSA_TP_RM) {
+        uvs_net_addr_t peer_uvs_ip;
+        uvs_net_addr_info_t dip;
+
+        (void)memset(&peer_uvs_ip, 0, sizeof(uvs_net_addr_t));
+        (void)memset(&dip, 0, sizeof(uvs_net_addr_info_t));
+        if (location == TPSA_TARGET) {
+            tpsa_lookup_dip_table(&table_ctx->dip_table, msg->local_eid, msg->upi, &peer_uvs_ip, &dip);
+        } else {
+            tpsa_lookup_dip_table(&table_ctx->dip_table, msg->peer_eid, msg->upi, &peer_uvs_ip, &dip);
+        }
+
+        rm_tpg_table_key_t k = {
+            .dip = dip.net_addr,
+        };
+
+        rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(&table_ctx->rm_tpg_table, &k);
+        if (entry == NULL) {
+            TPSA_LOG_ERR("Fail to update rm tpg table tp state, tpg can't find");
+            return -1;
+        }
+
+        for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+            entry->tp[i].tp_state = tp_state;
+        }
+    } else {
+        rc_tpg_table_key_t k;
+        (void)memset(&k, 0, sizeof(rc_tpg_table_key_t));
+
+        if (location == TPSA_TARGET) {
+            k.deid = msg->local_eid;
+            k.djetty_id = msg->local_jetty;
+        } else {
+            k.deid = msg->peer_eid;
+            k.djetty_id = msg->peer_jetty;
+        }
+
+        rc_tpg_table_entry_t *entry = rc_tpg_table_lookup(&table_ctx->rc_tpg_table, &k);
+        if (entry == NULL) {
+            TPSA_LOG_ERR("Fail to update rc tpg table tp state, tpg can't find");
+            return -1;
+        }
+        for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+            entry->tp[i].tp_state = tp_state;
         }
     }
 
@@ -1843,6 +1920,91 @@ int tpsa_lookup_vport_table(vport_key_t *key, vport_table_t *table, vport_table_
     return 0;
 }
 
+int tpsa_lookup_vport_table_with_eid_idx(vport_key_t *key, vport_table_t *table, uint32_t eid_idx,
+    vport_table_entry_t *return_entry)
+{
+    (void)pthread_rwlock_rdlock(&table->rwlock);
+    vport_table_entry_t *entry = vport_table_lookup(table, key);
+    if (entry == NULL) {
+        TPSA_LOG_ERR("Failed to lookup vport table to get vport, dev:%s fe_idx:%hu\n",
+            key->tpf_name, key->fe_idx);
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    if (entry->ueid[eid_idx].entry == NULL) {
+        TPSA_LOG_ERR("Failed to lookup vport table to get ueid entry, dev:%s fe_idx:%hu, eid_idx:%u\n",
+            key->tpf_name, key->fe_idx, eid_idx);
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    *return_entry = *(entry->ueid[eid_idx].entry);
+    (void)pthread_rwlock_unlock(&table->rwlock);
+
+    return 0;
+}
+
+static void tpsa_vport_count_valid_ueid_entry(vport_table_entry_t *entry,
+    uint32_t *subport_cnt, uint32_t *vport_cnt)
+{
+    for (uint32_t i = 0; i < entry->ueid_max_cnt; i++) {
+        if (entry->ueid[i].is_valid && entry->ueid[i].entry != NULL) {
+            if (memcmp(&entry->ueid[i].entry->port_key, &entry->port_key, sizeof(uvs_vport_info_key_t)) == 0) {
+                (*vport_cnt)++;
+            } else {
+                (*subport_cnt)++;
+                TPSA_LOG_DEBUG("ueid[%u] port_key name = %s and entry->port key name = %s\n",
+                    i, entry->ueid[i].entry->port_key.name, entry->port_key.name);
+            }
+        }
+    }
+}
+
+int tpsa_vport_del_check(vport_table_entry_t *entry)
+{
+    uint32_t subport_cnt = 0;
+    uint32_t vport_cnt = 0;
+
+    tpsa_vport_count_valid_ueid_entry(entry, &subport_cnt, &vport_cnt);
+
+    /* if vport has subports, it cannot be deleted  */
+    if (vport_cnt == 1 && subport_cnt == 0) {
+        return 0;
+    }
+
+    TPSA_LOG_ERR("failed to remove vport entry name %s, vport_cnt %u, subport_cnt %u!\n",
+        entry->port_key.name, vport_cnt, subport_cnt);
+    return -1;
+}
+
+int tpsa_vport_find_del_port_key(vport_table_t *table, uvs_vport_info_key_t *key)
+{
+    int ret;
+    ret = vport_table_find_del_by_info_key(table, key);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to find vport table by name:%s\n", key->name);
+        return ret;
+    } else {
+        TPSA_LOG_INFO("find vport table by name:%s\n", key->name);
+    }
+    return ret;
+}
+
+vport_table_entry_t *tpsa_vport_lookup_by_port_key_no_look(vport_table_t *table,
+    uvs_vport_info_key_t *key)
+{
+    vport_table_entry_t *entry = vport_table_lookup_by_info_key(table, key);
+    if (entry == NULL) {
+        TPSA_LOG_ERR("Failed to find vport table by name:%s\n", key->name);
+        return NULL;
+    } else {
+        TPSA_LOG_INFO("find vport table by name:%s\n", key->name);
+    }
+
+    return entry;
+}
+
 void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_param)
 {
     vport_param->sip_idx = entry->sip_idx;
@@ -1850,6 +2012,52 @@ void tpsa_fill_vport_param(vport_table_entry_t *entry, vport_param_t *vport_para
     vport_param->tp_cnt = entry->tp_cnt;
     vport_param->tp_cfg = entry->tp_cfg;
     vport_param->pattern = entry->pattern;
+}
+
+static bool tpsa_check_eid_idx_valid(vport_table_entry_t *entry, uint32_t eid_idx)
+{
+    if (eid_idx >= entry->ueid_max_cnt) {
+        TPSA_LOG_ERR("failed to check eid_idx %u, max_eid_cnt: %u.\n",
+            eid_idx, entry->ueid_max_cnt);
+        return false;
+    }
+
+    if (entry->ueid[eid_idx].is_valid == false) {
+        TPSA_LOG_ERR("eid_idx: %u has not been added: (eid " EID_FMT " upi %u)\n", eid_idx,
+            EID_ARGS(entry->ueid[eid_idx].eid), entry->ueid[eid_idx].upi);
+        return false;
+    }
+    return true;
+}
+
+int tpsa_lookup_vport_param_with_eid_idx(vport_key_t *key, vport_table_t *table,
+    uint32_t eid_idx, vport_param_t *vport_param)
+{
+    (void)pthread_rwlock_rdlock(&table->rwlock);
+    vport_table_entry_t *entry = vport_table_lookup(table, key);
+    if (entry == NULL) {
+        TPSA_LOG_ERR("Failed to lookup vport table to vport param, dev:%s fe_idx:%hu\n", key->tpf_name, key->fe_idx);
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    if (!tpsa_check_eid_idx_valid(entry, eid_idx)) {
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    if (entry->ueid[eid_idx].entry == NULL) {
+        TPSA_LOG_ERR("Failed to lookup vport table to vport param, dev:%s fe_idx:%hu, eid_idx:%u\n",
+            key->tpf_name, key->fe_idx, eid_idx);
+        (void)pthread_rwlock_unlock(&table->rwlock);
+        return -1;
+    }
+
+    entry = entry->ueid[eid_idx].entry;
+    tpsa_fill_vport_param(entry, vport_param);
+    (void)pthread_rwlock_unlock(&table->rwlock);
+
+    return 0;
 }
 
 int tpsa_lookup_vport_param(vport_key_t *key, vport_table_t *table, vport_param_t *vport_param)
@@ -1891,10 +2099,6 @@ int uvs_table_add(tpsa_create_param_t *cparam, tpsa_table_t *table_ctx, tpsa_tpg
         so use local variable instead
     */
     tpsa_vtp_table_param_t vtp_table_data_tmp = *vtp_table_data;
-    vtp_table_data_tmp.tpg_param.tp_cnt = tpg->tp_cnt;
-    vtp_table_data_tmp.tpg_param.tpgn = tpg->tpgn;
-    (void)memcpy(vtp_table_data_tmp.tpg_param.tpn,
-        tpg->tpn, sizeof(uint32_t) * TPSA_MAX_TP_CNT_IN_GRP);
     if (cparam->trans_mode == TPSA_TP_RM) {
         if (tpsa_add_rm_vtp_table(cparam, &vtp_table_data_tmp, table_ctx, tpg->isLoopback)) {
             TPSA_LOG_ERR("Failed to add rm vtp table\n");
@@ -1910,8 +2114,7 @@ int uvs_table_add(tpsa_create_param_t *cparam, tpsa_table_t *table_ctx, tpsa_tpg
     }
 
     if (!vtp_table_data->share_mode) {
-        TPSA_LOG_INFO("now is in non_share_mode and update with tpgn %u",
-            vtp_table_data_tmp.tpg_param.tpgn);
+        TPSA_LOG_INFO("now is in non_share_mode and update with tpgn %u", vtp_table_data_tmp.tpgn);
         return 0;
     }
 
@@ -1943,8 +2146,8 @@ int uvs_table_add(tpsa_create_param_t *cparam, tpsa_table_t *table_ctx, tpsa_tpg
 }
 
 /* location is only allowed to be initiator or target, NO DUPLEX! */
-int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location,
-                     tpsa_sock_msg_t *msg, tpsa_table_t *table_ctx)
+int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location, tpsa_sock_msg_t *msg,
+                     tpsa_table_t *table_ctx, tpsa_tp_state_t tp_state)
 {
     TPSA_LOG_INFO("Update vtp table when resp receive. vtpn: %u\n", vtpn);
     if (tpsa_update_vtp_table(msg, location, vtpn, tpgn, table_ctx)) {
@@ -1953,7 +2156,7 @@ int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location,
     }
 
     TPSA_LOG_INFO("Update tpg table when resp receive. tpgn: %d\n", tpgn);
-    if (tpsa_update_tpg_table(msg, location, table_ctx)) {
+    if (tpsa_update_tpg_table(msg, location, table_ctx, tp_state)) {
         TPSA_LOG_ERR("Failed to update tpg table\n");
         return -1;
     }
@@ -1962,13 +2165,13 @@ int uvs_table_update(uint32_t vtpn, uint32_t tpgn, uint32_t location,
 }
 
 /* wait table */
-int uvs_add_wait_rm(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t location)
+static int uvs_add_wait_rm(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t location)
 {
     rm_wait_table_entry_t wait_entry = {0};
     rm_wait_table_key_t wait_key;
 
     (void)memset(&wait_key, 0, sizeof(rm_wait_table_key_t));
-    wait_key.dip = cparam->dip;
+    wait_key.dip = cparam->dip.net_addr;
     (void)memcpy(&wait_entry.cparam, cparam, sizeof(tpsa_create_param_t));
 
     if (rm_wait_table_add(&table_ctx->rm_wait_table, &wait_key, &wait_entry) < 0) {
@@ -1979,7 +2182,7 @@ int uvs_add_wait_rm(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32
     return 0;
 }
 
-int uvs_add_wait_rc(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t location)
+static int uvs_add_wait_rc(tpsa_table_t *table_ctx, tpsa_create_param_t *cparam, uint32_t location)
 {
     rc_wait_table_entry_t wait_entry = {0};
     rc_wait_table_key_t wait_key = {0};
@@ -2108,7 +2311,6 @@ int tpsa_table_init(tpsa_table_t *tpsa_table)
         goto free_deid_vtp_table;
     }
 
-    wait_restored_list_create(&tpsa_table->wait_restored_list);
     TPSA_LOG_INFO("tpsa table init success");
     return 0;
 
@@ -2146,7 +2348,6 @@ free_fe_table:
 
 void tpsa_table_uninit(tpsa_table_t *tpsa_table)
 {
-    wait_restored_list_destroy(&tpsa_table->wait_restored_list);
     dip_table_destroy(&tpsa_table->dip_table);
     tp_state_table_destroy(&tpsa_table->tp_state_table);
     jetty_peer_table_destroy(&tpsa_table->jetty_peer_table);

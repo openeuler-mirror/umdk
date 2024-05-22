@@ -56,7 +56,7 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
     uint32_t times = 0;
     for (int i = 1; i <= TP_TEST_CONNECT_COUNT; i++) {
         if (connect(sockfd, addr, size) != 0) {
-            times += i * (uint32_t)TP_TEST_SLEEP_TIME;
+            times += (uint32_t)i * (uint32_t)TP_TEST_SLEEP_TIME;
             (void)usleep(times);
             continue;
         }
@@ -135,7 +135,7 @@ static int server_accept(tp_test_config_t *cfg, int listen_fd)
 
         (void)getpeername(sock_fd, (struct sockaddr *)&peer_addr, &len);
         (void)printf("New Connection: %s:%d.\n",
-            inet_ntop(AF_INET, &peer_addr.sin_addr, ip_addr, sizeof(ip_addr)), ntohs(peer_addr.sin_port));
+            inet_ntop(AF_INET, &peer_addr.sin_addr, ip_addr, sizeof(ip_addr)), (int)ntohs(peer_addr.sin_port));
     }
     return 0;
 close_fd:

@@ -107,7 +107,7 @@ static const struct option g_global_cfg_set_long_options[] = {
 
 static const uvs_admin_opt_usage_t g_global_cfg_set_cmd_opt_usage[] = {
     {GLOBAL_CFG_OPT_HELP_LONG,              "display this help and exit", false},
-    {GLOBAL_CFG_OPT_MTU_LONG,               "mtu [256, 512, 1024, 2048, 4096, 8192]", true},
+    {GLOBAL_CFG_OPT_MTU_LONG,               "mtu [1024, 4096, 8192]", true},
     {GLOBAL_CFG_OPT_SLICE_LONG,             "packet fragment size[32, 64, 128, 256]", true},
     {GLOBAL_CFG_OPT_SUSPEND_PERIOD_LONG,    "suspend_period, default: 1000 us", false},
     {GLOBAL_CFG_OPT_SUSPEND_CNT_LONG,       "suspend_cnt, defalut: 3", false},
@@ -125,6 +125,12 @@ static int global_cfg_input_valid_mtu(uvs_admin_global_cfg_args_t *args, const c
     int i;
     for (i = 1; i < UVS_ADMIN_MTU_CNT; i++) {
         if (!strcmp(_optarg, g_mtu_str[i])) {
+            if (i != UVS_ADMIN_MTU_1024 && i != UVS_ADMIN_MTU_4096 && i != UVS_ADMIN_MTU_8192) {
+                (void)printf("ERR: invalid parameter mtu %s; valid range = [1024, 4096, 8192]\n",
+                    g_mtu_str[i]);
+                return -1;
+            }
+
             args->mtu = (uvs_admin_mtu_t)i;
             args->mask.bs.mtu = 1;
             return 0;
@@ -351,6 +357,7 @@ static int32_t uvs_admin_global_cfg_set_exec(uvs_admin_cmd_ctx_t *ctx)
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
         free(req);
+        (void)printf("ERR: failed to implement global cfg\n");
         return -EIO;
     }
 

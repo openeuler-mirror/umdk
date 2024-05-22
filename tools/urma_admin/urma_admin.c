@@ -68,7 +68,6 @@ static void admin_parse_port_attr(const char *sysfs_path, admin_show_ubep_t *ube
 static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
 {
     char tmp_value[VALUE_LEN_MAX];
-    char tmp_eid[VALUE_LEN_MAX] = {0};
 
     urma_device_attr_t *dev_attr = &ubep->dev_attr;
     (void)admin_parse_file_str(sysfs_path, "guid", tmp_value, VALUE_LEN_MAX);
@@ -92,26 +91,37 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u32(sysfs_path, "max_atomic_size", &dev_attr->dev_cap.max_atomic_size);
     (void)admin_parse_file_value_u32(sysfs_path, "atomic_feat", &dev_attr->dev_cap.atomic_feat.value);
     (void)admin_parse_file_value_u16(sysfs_path, "trans_mode", &dev_attr->dev_cap.trans_mode);
-    (void)admin_parse_file_value_u16(sysfs_path, "congestion_ctrl_alg", &dev_attr->dev_cap.congestion_ctrl_alg);
     (void)admin_parse_file_value_u32(sysfs_path, "ceq_cnt", &dev_attr->dev_cap.ceq_cnt);
     (void)admin_parse_file_value_u8(sysfs_path, "port_count", &dev_attr->port_cnt);
     (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->dev_cap.max_eid_cnt);
     (void)admin_parse_file_value_u32(sysfs_path, "max_tp_in_tpg", &dev_attr->dev_cap.max_tp_in_tpg);
 
+    if (dev_attr->dev_cap.max_jetty_in_jetty_grp > URMA_MAX_JETTY_IN_JETTY_GRP) {
+        (void)printf("max_jetty_in_jetty_grp %u is larger than URMA_MAX_JETTY_IN_JETTY_GRP %u."
+                     " Use URMA_MAX_JETTY_IN_JETTY_GRP.\n",
+                     dev_attr->dev_cap.max_jetty_in_jetty_grp, URMA_MAX_JETTY_IN_JETTY_GRP);
+        dev_attr->dev_cap.max_jetty_in_jetty_grp = URMA_MAX_JETTY_IN_JETTY_GRP;
+    }
+
+    if (dev_attr->port_cnt > MAX_PORT_CNT) {
+        (void)printf("port_cnt %u is larger than MAX_PORT_CNT %u. Use MAX_PORT_CNT.\n",
+            (uint32_t)dev_attr->port_cnt, (uint32_t)MAX_PORT_CNT);
+        dev_attr->port_cnt = MAX_PORT_CNT;
+    }
+
+    if (dev_attr->dev_cap.max_eid_cnt > URMA_MAX_EID_CNT) {
+        (void)printf("max_eid_cnt %u is larger than URMA_MAX_EID_CNT %d. Use URMA_MAX_EID_CNT.\n",
+            dev_attr->dev_cap.max_eid_cnt, URMA_MAX_EID_CNT);
+        dev_attr->dev_cap.max_eid_cnt = URMA_MAX_EID_CNT;
+    }
+
     ubep->eid_list = calloc(1, dev_attr->dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
     if (ubep->eid_list == NULL) {
         return;
     }
-    for (uint32_t i = 0; i < dev_attr->dev_cap.max_eid_cnt; i++) {
-        if (snprintf(tmp_eid, VALUE_LEN_MAX, "eid%u/eid", i) <= 0) {
-            (void)printf("snprintf failed, eid idx: %u.\n", i);
-        }
-        ubep->eid_list[i].eid_index = i;
-        if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
-            admin_str_to_eid(tmp_value, &ubep->eid_list[i].eid) != 0) {
-            ubep->eid_list[i].eid.in4.prefix = 0;  // invalid
-        }
-    }
+
+    admin_read_eid_list(sysfs_path, "eid", ubep->eid_list, dev_attr->dev_cap.max_eid_cnt);
+
     if (ubep->dev_attr.port_cnt > 0 && ubep->dev_attr.port_cnt != UINT8_INVALID) {
         admin_parse_port_attr(sysfs_path, ubep);
     }
@@ -297,7 +307,6 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     (void)printf("max_atomic_size            : %u\n", ubep->dev_attr.dev_cap.max_atomic_size);
     print_atomic_feat_str(ubep->dev_attr.dev_cap.atomic_feat);
     print_trans_mode_str(ubep->dev_attr.dev_cap.trans_mode);
-    print_congestion_ctrl_alg_str(ubep->dev_attr.dev_cap.congestion_ctrl_alg);
     (void)printf("ceq_cnt                    : %u\n", ubep->dev_attr.dev_cap.ceq_cnt);
     (void)printf("max_tp_in_tpg              : %u\n", ubep->dev_attr.dev_cap.max_tp_in_tpg);
 
@@ -427,6 +436,9 @@ static int execute_command(const tool_config_t *cfg)
         case TOOL_CMD_SET_DEV_NS:
             ret = admin_set_dev_ns(cfg);
             break;
+        case TOOL_CMD_LIST_RES:
+            ret = admin_list_res(cfg);
+            break;
         case TOOL_CMD_NUM:
         default:
             ret = -1;
@@ -441,7 +453,13 @@ static int admin_check_cmd_len(int argc, char *argv[])
 {
     uint32_t len = 0;
     for (int i = 0; i < argc; i++) {
-        len += strlen(argv[i]);
+        uint32_t tmp_len = (uint32_t)strnlen(argv[i], MAX_CMDLINE_LEN + 1);
+        if (tmp_len == MAX_CMDLINE_LEN + 1) {
+            URMA_ADMIN_LOG("user: %s, single args len out of range.\n", getlogin());
+            return -1;
+        }
+
+        len += tmp_len;
     }
     if ((int)len + argc > MAX_CMDLINE_LEN) {
         URMA_ADMIN_LOG("user: %s, cmd len out of range.\n", getlogin());

@@ -134,4 +134,5 @@ int admin_del_eid(const tool_config_t *cfg);
 int admin_set_eid_mode(const tool_config_t *cfg);
 int admin_set_ns_mode(const tool_config_t *cfg);
 int admin_set_dev_ns(const tool_config_t *cfg);
+int admin_list_res(const tool_config_t *cfg);
 #endif
