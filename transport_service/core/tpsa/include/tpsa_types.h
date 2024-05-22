@@ -18,12 +18,10 @@
 extern "C" {
 #endif
 
-#define TPSA_MAC_BYTES 6
 #define TPSA_MAX_TP_CNT_IN_GRP 32
 #define TPSA_EID_SIZE (16)
 #define TPSA_TABLE_SIZE          2000000
 #define TPSA_MIN_TP_NUM 2
-#define TPSA_MAX_DEV_NAME 64
 #define TPSA_PORT_CNT_MAX 16
 #define PAGE_SIZE 4096
 #define SEG_SIZE (PAGE_SIZE * 4000)
@@ -198,18 +196,6 @@ typedef enum tpsa_transport_type {
     TPSA_TRANSPORT_MAX
 } tpsa_transport_type_t;
 
-typedef enum tpsa_net_addr_type {
-    TPSA_NET_ADDR_TYPE_IPV4 = 0,
-    TPSA_NET_ADDR_TYPE_IPV6
-} tpsa_net_addr_type_t;
-
-typedef struct tpsa_net_addr {
-    tpsa_net_addr_type_t type;
-    urma_eid_t eid;
-    uint64_t vlan; /* available for UBOE */
-    uint8_t mac[TPSA_MAC_BYTES]; /* available for UBOE */
-} tpsa_net_addr_t;
-
 typedef union tpsa_tp_mod_flag {
     struct {
         uint32_t oor_en : 1;
@@ -217,11 +203,14 @@ typedef union tpsa_tp_mod_flag {
         uint32_t cc_en : 1;
         uint32_t cc_alg : 4;
         uint32_t spray_en : 1;
-        uint32_t dca_enable : 1;   /* Inconsistent with ubcore_tp_mod_flag and combined.
+        uint32_t dca_enable : 1;
+        uint32_t um_en : 1;
+        uint32_t share_mode : 1;
+                                   /* Inconsistent with ubcore_tp_mod_flag and combined.
                                     * If ubcore_tp_cfg_flag parameter needs to be set,
                                     * the parameter must be set separately.
                                     */
-        uint32_t reserved : 23;
+        uint32_t reserved : 21;
     } bs;
     uint32_t value;
 } tpsa_tp_mod_flag_t;
@@ -267,7 +256,7 @@ typedef struct tpsa_utp_cfg {
     uint16_t udp_start;     // src udp port start
     uint8_t udp_range;     // src udp port range
     uint32_t local_net_addr_idx;
-    tpsa_net_addr_t peer_net_addr;
+    uvs_net_addr_info_t peer_net_addr;
     uint32_t flow_label;
     uint8_t dscp;
     uint8_t hop_limit;
@@ -276,7 +265,7 @@ typedef struct tpsa_utp_cfg {
 } tpsa_utp_cfg_t;
 
 typedef struct tpsa_ctp_cfg {
-    tpsa_net_addr_t peer_net_addr;
+    uvs_net_addr_info_t peer_net_addr;
     uint32_t cna_len;
 } tpsa_ctp_cfg_t;
 
@@ -312,7 +301,7 @@ typedef struct tpsa_tp_attr {
     tpsa_tp_ext_t peer_ext;
     uint32_t oos_cnt;
     uint32_t local_net_addr_idx;
-    tpsa_net_addr_t peer_net_addr;
+    uvs_net_addr_info_t peer_net_addr;
     /* Need to negotiate end */
     uint16_t data_udp_start;
     uint16_t ack_udp_start;
@@ -369,7 +358,7 @@ typedef struct tpsa_tp_param_common {
     tpsa_tp_mod_cfg_t local_tp_cfg;
     tpsa_tp_mod_cfg_t remote_tp_cfg;
     uint32_t local_net_addr_idx;
-    tpsa_net_addr_t peer_net_addr;
+    uvs_net_addr_info_t peer_net_addr;
     tpsa_tp_state_t state;
     uint32_t tx_psn;
     uint32_t rx_psn;
@@ -464,7 +453,7 @@ typedef struct tpsa_create_resp {
     uint32_t msg_id;
     uint32_t nlmsg_seq;
     uint16_t src_function_id;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 
     tpsa_resp_status_t ret;
     tpsa_tpg_cfg_t tpg_cfg;
@@ -476,6 +465,7 @@ typedef struct tpsa_create_resp {
     uint32_t local_cc_cnt;
     tpsa_tp_cc_entry_t local_cc_arr[TPSA_CC_IDX_TABLE_SIZE]; // stores the query results
     bool local_cc_en;
+    bool share_mode;
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uint32_t ext_len;
@@ -490,10 +480,12 @@ typedef struct tpsa_create_req {
     tpsa_tpg_cfg_t tpg_cfg;
     tpsa_tp_param_t tp_param; // UBCORE_MAX_TP_CNT_IN_GRP=32
     bool is_target;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint32_t cc_array_cnt;
     tpsa_tp_cc_entry_t cc_result_array[TPSA_CC_IDX_TABLE_SIZE]; // stores the query results
     bool cc_en;
+    bool share_mode;
+    uint32_t pattern;
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uint32_t udrv_in_len;
@@ -503,39 +495,78 @@ typedef struct tpsa_create_req {
 
 typedef tpsa_create_req_t tpsa_create_ack_t;
 
+
+typedef struct tpsa_create_fail_resp {
+    uint32_t msg_id;
+    uint32_t nlmsg_seq;
+    char dev_name[UVS_MAX_DEV_NAME];
+    uint16_t src_function_id;
+    /* for alpha */
+    struct tpsa_ta_data ta_data;
+    uint32_t udrv_in_len;
+    uint32_t ext_len;
+    uint8_t udrv_ext[TPSA_UDRV_DATA_LEN];
+} tpsa_create_fail_resp_t;
+
 typedef struct tpsa_create_finish {
     uint32_t msg_id;
     uint32_t nlmsg_seq;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t src_function_id;
     tpsa_tp_param_t tp_param; // UBCORE_MAX_TP_CNT_IN_GRP=32
+    tpsa_tpg_cfg_t tpg_cfg;
+    bool share_mode;
     /* for alpha */
     struct tpsa_ta_data ta_data;
 } tpsa_create_finish_t;
 
-typedef struct tpsa_destroy_req {
-    uint32_t msg_id;
+typedef enum uvs_direction {
+    TPSA_FROM_CLIENT_TO_SERVER = 0,
+    TPSA_FROM_SERVER_TO_CLIENT = 1,
+} uvs_direction_t;
+
+typedef struct tpsa_resp_id {
+    bool is_need_resp;
     uint32_t nlmsg_seq;
-    uint16_t src_function_id;
-    uint32_t tp_cnt;
-    tpsa_transport_type_t trans_type;
-    tpsa_net_addr_t net_addr; /* Record the IP information of the source that sends req */
+    uint32_t msg_id;
+    uint16_t src_fe_idx;
+} tpsa_resp_id_t;
+
+typedef struct tpsa_destroy_finish {
+    tpsa_resp_id_t resp_id;
     /* for alpha */
     struct tpsa_ta_data ta_data;
-    bool delete_trigger; /* true means the delete request comes from client */
+} tpsa_destroy_finish_t;
+
+typedef struct tpsa_destroy_req {
+    uvs_direction_t direction;
+    tpsa_resp_id_t resp_id;
+    /* for alpha */
+    struct tpsa_ta_data ta_data;
 } tpsa_destroy_req_t;
 
 typedef struct tpsa_table_sync {
     tpsa_table_opcode_t opcode;
+    tpsa_resp_id_t nl_resp_id;
+    char dev_name[UVS_MAX_DEV_NAME];
+    bool share_mode;
 } tpsa_table_sync_t;
 
+typedef struct tpsa_table_sync_resp {
+    tpsa_resp_status_t ret;
+    tpsa_table_opcode_t opcode;
+    tpsa_resp_id_t nl_resp_id;
+    char dev_name[UVS_MAX_DEV_NAME];
+} tpsa_table_sync_resp_t;
+
 typedef struct tpsa_op_sip_parm {
-    char dev_name[TPSA_MAX_DEV_NAME];
-    tpsa_net_addr_t netaddr;
+    char dev_name[UVS_MAX_DEV_NAME];
+    uvs_net_addr_info_t netaddr;
     uint32_t prefix_len;
     uint8_t port_cnt;
     uint8_t port_id[TPSA_PORT_CNT_MAX];
     uint32_t mtu;
+    char netdev_name[UVS_MAX_DEV_NAME]; /* for change mtu */
 } tpsa_op_sip_parm_t;
 
 typedef union uvs_global_cfg_mask {
@@ -549,7 +580,8 @@ typedef union uvs_global_cfg_mask {
         uint32_t udp_port_start : 1;
         uint32_t udp_port_end   : 1;
         uint32_t udp_range      : 1;
-        uint32_t reserved       : 23;
+        uint32_t flag_um_en     : 1;
+        uint32_t reserved       : 22;
     } bs;
     uint32_t value;
 } uvs_global_cfg_mask_t;
@@ -558,36 +590,41 @@ typedef struct tpsa_global_cfg {
     uvs_global_cfg_mask_t mask;
     uvs_mtu_t mtu;
     uint32_t slice;
-    uint32_t suspend_period;
+    uint32_t suspend_period;        // us
     uint32_t suspend_cnt;
-    uint32_t sus2err_period;
+    uint32_t sus2err_period;        // us
+    uint32_t wait_restored_timeout; // us
 
     /* cfg by gaea, for all tp */
     uint8_t hop_limit;
     uint16_t udp_port_start;
     uint16_t udp_port_end;
     uint16_t udp_range;  // src udp port range
+    uvs_global_flag_t flag;
 } tpsa_global_cfg_t;
 
 typedef struct tpsa_create_param {
     tpsa_transport_mode_t trans_mode;
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
+    uvs_net_addr_t dst_uvs_ip; /* In lm scenario, dip and dst_uvs_ip used when deleting and establishing link */
     urma_eid_t local_eid;
     urma_eid_t peer_eid;
     uint32_t local_jetty;
     uint32_t peer_jetty;
-    char dev_name[TPSA_MAX_DEV_NAME];
-    char local_tpf_name[TPSA_MAX_DEV_NAME];
+    char tpf_name[UVS_MAX_DEV_NAME];
     uint32_t eid_index;
     uint16_t fe_idx;
     uint32_t upi;
     uint32_t vtpn;
     bool live_migrate;
-    bool dip_valid;
+    bool migrate_third;
     bool clan_tp;
     uint8_t port_id;
     tpsa_global_cfg_t *global_cfg;
     uvs_mtu_t mtu;
+    bool share_mode;
+    uint32_t pattern;
+    uint32_t location;
     /* used when we need to response nl msg */
     uint32_t msg_id;
     uint32_t nlmsg_seq;
@@ -642,10 +679,36 @@ typedef enum tpsa_mig_resp_status {
 } tpsa_mig_resp_status_t;
 
 typedef struct uvs_end_point {
-    tpsa_net_addr_t ip;
+    uvs_net_addr_info_t ip;
     urma_eid_t eid;
     uint32_t jetty_id;
 } uvs_end_point_t;
+
+typedef struct tpsa_restored_vtp_entry {
+    uint16_t fe_idx;
+    uint32_t vtpn;
+    uint32_t local_jetty;
+    uint32_t peer_jetty;
+    uint32_t sip_idx;
+    urma_eid_t local_eid;
+    urma_eid_t peer_eid;
+    urma_transport_mode_t trans_mode;
+    union {
+        uint32_t tpgn;
+        uint32_t utp_idx;
+        uint32_t ctp_idx;
+    } index;
+    char dev_name[UVS_MAX_DEV_NAME];
+    bool target;
+    uint32_t tp_cnt;
+    uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
+    uint32_t location;
+} tpsa_restored_vtp_entry_t;
+
+typedef struct tpsa_restored_table_param {
+    uvs_net_addr_info_t sip;
+    uvs_net_addr_info_t dip;
+} tpsa_restored_table_param_t;
 
 #ifdef __cplusplus
 }

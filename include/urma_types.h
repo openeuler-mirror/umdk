@@ -26,13 +26,13 @@ extern "C" {
 
 #define URMA_GET_VERSION(a, b) (((a) << 16) + ((b) > 65535 ? 65535 : (b)))
 #define URMA_API_VERSION ((0 << 16) + 9)        // Current Version: 0.9
-
 #define MAX_PORT_CNT 8
+#define URMA_MAX_JETTY_IN_JETTY_GRP 16U
 #define URMA_MAX_NAME 64
 #define URMA_MAX_PATH 4096
 #define URMA_EID_SIZE (16)
 #define URMA_IPV4_MAP_IPV6_PREFIX (0x0000ffff)
-#define URMA_MAX_EID_CNT 1000
+#define URMA_MAX_EID_CNT 1024
 #define URMA_CC_IDX_TABLE_SIZE 64 /* support 8 priorities and 8 algorithms */
                                   /* same as UBCORE_CC_IDX_TABLE_SIZE */
 
@@ -46,6 +46,7 @@ extern "C" {
 
 /* refer to UBCORE_MAX_DEV_NAME */
 #define URMA_MAX_DEV_NAME 64
+#define URMA_GUID_SIZE (16)
 
 typedef struct urma_init_attr {
     uint64_t token;        /* [Optional] security token */
@@ -185,11 +186,15 @@ typedef struct urma_device_cap {
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
     uint32_t max_tp_in_tpg;
+    uint32_t max_eid_cnt;
 } urma_device_cap_t;
 
+typedef struct urma_guid {
+    uint8_t raw[URMA_GUID_SIZE];
+} urma_guid_t;
+
 typedef struct urma_device_attr {
-    uint32_t max_eid_cnt;
-    uint64_t guid;                    /* [Public] */
+    urma_guid_t guid;                 /* [Public] */
     urma_device_cap_t dev_cap;        /* [Public] capabilities of device. */
     uint8_t port_cnt;                 /* [Public] port number of device. */
     struct urma_port_attr port_attr[MAX_PORT_CNT];
@@ -455,19 +460,6 @@ typedef struct urma_tp {
     uint32_t tpn; /* vtpn */
 } urma_tp_t;
 
-typedef struct urma_stats {
-    uint64_t bytes;          /* [Public] Bytes of recv/send. */
-    uint64_t packets;        /* [Public] pkts of recv/send. */
-    uint64_t err_packets;    /* [Public] error pkts of recv/send. */
-} urma_stats_t;
-
-typedef struct urma_jetty_stats {
-    urma_stats_t jfs_stats;
-    urma_stats_t jfr_stats;
-    urma_stats_t jetty_send_stats;
-    urma_stats_t jetty_recv_stats;
-} urma_jetty_stats_t;
-
 typedef union urma_jetty_flag {
     struct {
         uint32_t share_jfr : 1; /* 0: URMA_NO_SHARE_JFR.
@@ -551,8 +543,21 @@ typedef struct urma_jetty {
     uint32_t async_events_acked;
 } urma_jetty_t;
 
+typedef union urma_jetty_grp_flag {
+    struct {
+        uint32_t token_policy : 3;   /* 0: URMA_TOKEN_NONE
+                                        1: URMA_TOKEN_PLAIN_TEXT
+                                        2: URMA_TOKEN_SIGNED
+                                        3: URMA_TOKEN_ALL_ENCRYPTED
+                                        4: URMA_TOKEN_RESERVED */
+        uint32_t reserved     : 29;
+    } bs;
+    uint32_t value;
+} urma_jetty_grp_flag_t;
+
 typedef struct urma_jetty_grp_cfg {
     char name[URMA_MAX_NAME];
+    urma_jetty_grp_flag_t flag;
     urma_token_t token_value;       /* [Required] specify token_value for Jetty group. */
     uint32_t id;                    /* [Optional] specify Jetty group id.
                                        If the parameter is 0, UMDK will assign a non_0 value. */

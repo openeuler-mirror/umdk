@@ -44,15 +44,16 @@ typedef union uvs_admin_vport_table_mask {
         uint64_t rc_depth            : 1;
         uint64_t slice               : 1;
         uint64_t eid                 : 1;
-        uint64_t eid_index           : 1;
+        uint64_t eid_idx             : 1;
         uint64_t upi                 : 1;
         uint64_t pattern             : 1;
+        uint64_t share_mode          : 1;
         uint64_t virtualization      : 1;
         uint64_t min_jetty_cnt       : 1;
         uint64_t max_jetty_cnt       : 1;
         uint64_t min_jfr_cnt         : 1;
         uint64_t max_jfr_cnt         : 1;
-        uint64_t reserved            : 27;
+        uint64_t reserved            : 30;
     } bs;
     uint64_t value;
 } uvs_admin_vport_table_mask_t;
@@ -66,7 +67,7 @@ typedef struct uvs_admin_vport_table_args {
     uvs_admin_tp_mod_cfg_t tp_cfg;
     uvs_admin_rc_cfg_t rc_cfg;
     urma_eid_t eid;
-    uint32_t eid_index;
+    uint32_t eid_idx;
     uint32_t upi;
     uint32_t pattern;
     uint32_t virtualization;
@@ -106,7 +107,7 @@ typedef struct uvs_admin_vport_table_del_rsp {
 typedef struct uvs_admin_vport_table_show_ueid_req {
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint16_t fe_idx;
-    uint32_t eid_index;
+    uint32_t eid_idx;
 } uvs_admin_vport_table_show_ueid_req_t;
 
 typedef struct uvs_admin_vport_table_show_ueid_rsp {
@@ -120,7 +121,7 @@ typedef struct uvs_admin_vport_table_add_ueid_req {
     uint16_t fe_idx;
     uint32_t upi;
     urma_eid_t eid;
-    uint32_t eid_index;
+    uint32_t eid_idx;
 } uvs_admin_vport_table_add_ueid_req_t;
 
 typedef struct uvs_admin_vport_table_add_ueid_rsp {
@@ -130,7 +131,7 @@ typedef struct uvs_admin_vport_table_add_ueid_rsp {
 typedef struct uvs_admin_vport_table_del_ueid_req {
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint16_t fe_idx;
-    uint32_t eid_index;
+    uint32_t eid_idx;
 } uvs_admin_vport_table_del_ueid_req_t;
 
 typedef struct uvs_admin_vport_table_del_ueid_rsp {

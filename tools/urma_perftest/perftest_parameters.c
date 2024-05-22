@@ -89,6 +89,7 @@ static void usage(const char *argv0)
     (void)printf("  -d, --dev <dev_name>        The name of ubep device.\n");
     (void)printf("  -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.\n");
     (void)printf("  -e, --use_jfce              use jfc event.\n");
+    (void)printf("  --eid_idx                   Specified eid index of device.\n");
     (void)printf("  -E, --err_timeout <time>    the timeout before report error, ranging from [0, 31],\n"
                  "                              the actual timeout in usec is caculated by: 4.096*(2^err_timeout).\n");
     (void)printf("  -f, --use_flat_api          Choose to use flat API, only works in SIMPLEX mode.\n");
@@ -172,7 +173,7 @@ static int get_cache_line_size(void)
 
     size = (int)sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
     if (size == 0) {
-        char *file = "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size";
+        const char *file = "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size";
         FILE *f;
         char file_line[PERFTEST_CACHE_LINE_FILE_SIZE] = {0};
         f = fopen(file, "r");
@@ -200,6 +201,7 @@ static void init_cfg(perftest_config_t *cfg)
     }
     cfg->type = cfg->cmd > PERFTEST_ATOMIC_LAT ? PERFTEST_BW : PERFTEST_LAT;
     init_cfg_api_type(cfg);
+    cfg->eid_idx = 0;
     cfg->all = false;
     cfg->atomic_type = PERFTEST_CAS;
     cfg->jfc_depth = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_JFC_DEPTH_BW : PERFTEST_DEF_JFC_DEPTH_LAT;
@@ -414,6 +416,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"jfs_depth",     required_argument, NULL, 'T'},
         {"warm_up",       no_argument,       NULL, 'w'},
         {"infinite",      optional_argument, NULL, 'y'},
+        {"eid_idx",       required_argument, NULL, PERFTEST_OPT_EID_IDX},
         {NULL,            no_argument,       NULL, '\0'}
     };
 
@@ -472,6 +475,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'E':
                 (void)ub_str_to_u8(optarg, &cfg->err_timeout);
+                break;
+            case PERFTEST_OPT_EID_IDX:
+                (void)ub_str_to_u32(optarg, &cfg->eid_idx);
                 break;
             case 'f':
                 if (cfg->api_type == PERFTEST_ATOMIC) {
@@ -629,7 +635,7 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
-    if (strlen(cfg->dev_name) == 0) {
+    if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
         (void)fprintf(stderr, "No device specified, name: %s.\n", cfg->dev_name);
         return -1;
     }
@@ -696,6 +702,11 @@ int check_local_cfg(perftest_config_t *cfg)
         if (cfg->type == PERFTEST_BW) {
             if (cfg->time_type.bs.iterations == 1 && (cfg->iters % cfg->jfs_post_list) != 0) {
                 (void)fprintf(stderr, "Number of iterations must be a multiple of jfs post list size\n");
+                exit(1);
+            }
+
+            if (cfg->jfs_post_list > cfg->jfs_depth) {
+                (void)fprintf(stderr, "jfs depth must be greater than jfs_post_list in PERFTEST_BW mode.\n");
                 exit(1);
             }
 

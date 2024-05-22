@@ -17,7 +17,6 @@
 #include <stddef.h>
 
 #include "urma_api.h"
-#include "urma_ex_api.h"
 #include "perftest_resources.h"
 
 #define PERFTEST_DEF_ACCESS (URMA_ACCESS_LOCAL_WRITE | URMA_ACCESS_REMOTE_READ | \
@@ -28,22 +27,6 @@
 static urma_token_t g_perftest_token = {
     .token = 0xABCDEF,
 };
-
-static int ignore_jetty(perftest_context_t *ctx)
-{
-    urma_user_ctl_in_t in = {
-        .addr = (uint64_t)ctx->urma_ctx,
-        .len = (uint32_t)sizeof(urma_context_t),
-        .opcode = URMA_USER_CTL_IGNORE_JETTY_IN_CR
-    };
-    urma_user_ctl_out_t out = {0};
-    urma_status_t ret = urma_user_ctl(ctx->urma_ctx, &in, &out);
-    if (ret != URMA_SUCCESS && ret != URMA_ENOPERM) {
-        (void)fprintf(stderr, "Failed to ignore_jetty_in_cr by user_ctl, ret: %d.\n", (int)ret);
-        return -1;
-    }
-    return 0;
-}
 
 static void check_device_inline(perftest_config_t *cfg)
 {
@@ -92,18 +75,6 @@ static void check_share_jfr(perftest_config_t *cfg, urma_device_t *urma_dev)
     }
 }
 
-static inline urma_status_t ip_user_ctl_io_thread(urma_context_t *urma_ctx, uint32_t num)
-{
-    urma_user_ctl_ip_io_send_in_t io_send_in = { .io_thread_num = num };
-    urma_user_ctl_in_t in = {
-        .addr = (uint64_t)&io_send_in,
-        .len = (uint32_t)sizeof(urma_user_ctl_ip_io_send_in_t),
-        .opcode = URMA_USER_CTL_IP_NON_BLOCK_SEND
-    };
-    urma_user_ctl_out_t out = { 0 };
-    return urma_user_ctl(urma_ctx, &in, &out);
-}
-
 static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_status_t status;
@@ -124,7 +95,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         goto uninit;
     }
 
-    if (strlen(cfg->dev_name) == 0) {
+    if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
         (void)fprintf(stderr, "dev name invailed!\n");
         goto uninit;
     }
@@ -139,7 +110,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         (void)fprintf(stderr, "Failed to query device, name: %s.\n", cfg->dev_name);
         goto uninit;
     }
-    ctx->urma_ctx = urma_create_context(urma_dev, 0);
+    ctx->urma_ctx = urma_create_context(urma_dev, cfg->eid_idx);
     if (ctx->urma_ctx == NULL) {
         (void)fprintf(stderr, "Failed to create urma instance!\n");
         goto uninit;
@@ -154,16 +125,6 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     cfg->tp_type = urma_dev->type;
     check_device_inline(cfg);
 
-    if (cfg->ignore_jetty_in_cr && ignore_jetty(ctx) != 0) {
-        goto del_ctx;
-    }
-
-    if (cfg->io_thread_num && ip_user_ctl_io_thread(ctx->urma_ctx, cfg->io_thread_num) != URMA_SUCCESS) {
-        goto del_ctx;
-    }
-    return 0;
-del_ctx:
-    (void)urma_delete_context(ctx->urma_ctx);
 uninit:
     (void)urma_uninit();
     return -1;
@@ -895,6 +856,7 @@ static int import_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
     }
 
     urma_rjfr_t rjfr;
+    rjfr.flag.value = 0;
     for (i = 0; i < (int)ctx->jetty_num; i++) {
         rjfr.jfr_id = ctx->remote_jfr[i]->jfr_id;
         rjfr.trans_mode = ctx->remote_jfr[i]->jfr_cfg.trans_mode;

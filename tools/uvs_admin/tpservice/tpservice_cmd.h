@@ -10,11 +10,11 @@
 #ifndef TPSERVICE_CMD_H
 #define TPSERVICE_CMD_H
 
-#include <netinet/in.h>
+#include "uvs_admin_types.h"
 #include "uvs_admin_cmd.h"
 
 typedef struct uvs_admin_service_show_rsp {
-    struct in_addr service_ip;
+    uvs_admin_net_addr_t service_ip;
     uint16_t port_id;
 } uvs_admin_service_show_rsp_t;
 

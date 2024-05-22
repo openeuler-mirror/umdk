@@ -28,6 +28,7 @@
 static pthread_mutex_t g_tpsa_log_lock = PTHREAD_MUTEX_INITIALIZER;
 unsigned g_tpsa_log_level = TPSA_VLOG_LEVEL_INFO;
 
+char g_tpsa_process_path[MAX_PROCESS_NAME_LEN + 1] = {0};
 char *g_tpsa_process_name = NULL;
 
 void tpsa_log_init(void)
@@ -56,27 +57,21 @@ inline bool tpsa_log_drop(unsigned int level)
 
 static int tpsa_find_process_name(void)
 {
-    char *tpsa_process_path;
     char *tpsa_process_name;
 
-    tpsa_process_path = (char*)calloc(MAX_PROCESS_NAME_LEN + 1, sizeof(char));
-    if (tpsa_process_path == NULL) {
-        /* TPSA_LOG cannot be used, otherwise, it will enter the dead cycle and burst the stack. */
-        return -ENOMEM;
-    }
-    ssize_t lenth = readlink(TPSA_PROCESS_PATH, tpsa_process_path, MAX_PROCESS_NAME_LEN);
-    if (lenth <= 0) {
+    ssize_t lenth = readlink(TPSA_PROCESS_PATH, g_tpsa_process_path, MAX_PROCESS_NAME_LEN);
+    if (lenth <= 0 || lenth > MAX_PROCESS_NAME_LEN) {
         (void)printf("/proc/self/exe invalid, errno:%d.\n", errno);
-        free(tpsa_process_path);
         return -1;
     }
-    tpsa_process_path[lenth + 1] = '\0';
-    tpsa_process_name = strrchr(tpsa_process_path, '/');
+
+    g_tpsa_process_path[lenth] = '\0';
+    tpsa_process_name = strrchr(g_tpsa_process_path, '/');
     if (tpsa_process_name == NULL) {
         (void)printf("tpsa_process_name strrchr failed, errno: %d.\n", errno);
-        free(tpsa_process_path);
         return -1;
     }
+
     tpsa_process_name++;
     g_tpsa_process_name = tpsa_process_name;
     return 0;
@@ -104,7 +99,7 @@ static int tpsa_vlog(const char *function, int line, unsigned int level, const c
     }
     ret = vsnprintf(logmsg, sizeof(logmsg), newformat, va);
     if (ret < 0) {
-        TPSA_LOG_ERR("logmsg size exceeds MAX_LOG_LEN size :\n");
+        TPSA_LOG_ERR("logmsg size exceeds MAX_LOG_LEN size : %d\n", MAX_LOG_LEN);
         return ret;
     }
     syslog(level, "%s", logmsg);

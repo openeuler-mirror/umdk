@@ -49,17 +49,55 @@ tpsa_net_uninit:
 tpsa_log_uninit:
     tpsa_log_uninit();
 
-    TPSA_LOG_ERR("tpsa so init failed!\n");
     return -1;
 }
 
 void uvs_so_uninit(void)
 {
     tpsa_worker_uninit(g_uvs_worker);
+    g_uvs_worker = NULL;
     tpsa_net_uninit();
     tpsa_log_uninit();
-    TPSA_LOG_INFO("tpsa so uninit successfully!\n");
     return;
+}
+
+int uvs_socket_init(uvs_socket_init_attr_t *attr)
+{
+    tpsa_worker_t *worker = g_uvs_worker;
+    if (worker == NULL || attr == NULL) {
+        TPSA_LOG_ERR("tpsa socket init failed, worker or attr is NULL!\n");
+        return -1;
+    }
+
+    worker->tpsa_attr = *attr;
+    worker->sock_ctx.epollfd = worker->epollfd;
+    if (tpsa_sock_server_init(&worker->sock_ctx, attr) != 0) {
+        return -1;
+    }
+
+    if (tpsa_worker_socket_init(worker) != 0) {
+        tpsa_sock_server_uninit(&worker->sock_ctx);
+        return -1;
+    }
+    return 0;
+}
+
+void uvs_socket_uninit(void)
+{
+    tpsa_worker_t *worker = g_uvs_worker;
+    if (worker == NULL) {
+        return;
+    }
+    tpsa_sock_server_uninit(&worker->sock_ctx);
+}
+
+int uvs_restore_table()
+{
+    if (tpsa_restore_vtp_table(g_uvs_worker) != 0 ||
+        tpsa_restore_wait_list(&g_uvs_worker->table_ctx, g_uvs_worker->global_cfg_ctx.wait_restored_timeout) != 0) {
+        return -1;
+    }
+    return 0;
 }
 
 tpsa_worker_t *uvs_get_worker(void)

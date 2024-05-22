@@ -16,7 +16,6 @@
 #include "urma_private.h"
 #include "urma_provider.h"
 #include "urma_api.h"
-#include "urma_ex_api.h"
 
 #define URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx)  \
         do {  \
@@ -453,11 +452,13 @@ static int urma_check_jetty_cfg_with_jetty_grp(urma_jetty_cfg_t *cfg)
 
     if (cfg->flag.bs.share_jfr == 1) {
         if (cfg->jetty_grp->cfg.token_value.token != cfg->shared.jfr->jfr_cfg.token_value.token ||
+            cfg->jetty_grp->cfg.flag.bs.token_policy != cfg->shared.jfr->jfr_cfg.flag.bs.token_policy ||
             cfg->shared.jfr->jfr_cfg.trans_mode != URMA_TM_RM) {
             return -1;
         }
     } else {
         if (cfg->jetty_grp->cfg.token_value.token != cfg->jfr_cfg->token_value.token ||
+            cfg->jetty_grp->cfg.flag.bs.token_policy != cfg->jfr_cfg->flag.bs.token_policy ||
             cfg->jfr_cfg->trans_mode != URMA_TM_RM) {
             return -1;
         }
@@ -565,6 +566,7 @@ urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg
 
     if (jetty_cfg->jetty_grp != NULL && urma_add_jetty_to_jetty_grp(jetty, jetty_cfg->jetty_grp) != 0) {
         ops->delete_jetty(jetty);
+        atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
         return NULL;
     }
 
@@ -636,7 +638,8 @@ urma_status_t urma_delete_jetty(urma_jetty_t *jetty)
 
 int urma_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
 {
-    if (jetty == NULL || cr == NULL || cr_cnt <= 0 || (uint32_t)cr_cnt > jetty->jetty_cfg.jfs_cfg->depth) {
+    if (jetty == NULL || cr == NULL || cr_cnt <= 0 ||
+        jetty->jetty_cfg.jfs_cfg == NULL || (uint32_t)cr_cnt > jetty->jetty_cfg.jfs_cfg->depth) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return (int)(-URMA_EINVAL);
     }
@@ -785,6 +788,11 @@ urma_jetty_grp_t *urma_create_jetty_grp(urma_context_t *ctx, urma_jetty_grp_cfg_
 
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jetty_grp);
+    uint32_t max_jetty_in_jetty_grp = ctx->dev->sysfs_dev->dev_attr.dev_cap.max_jetty_in_jetty_grp;
+    if (max_jetty_in_jetty_grp == 0 || max_jetty_in_jetty_grp > URMA_MAX_JETTY_IN_JETTY_GRP) {
+        URMA_LOG_ERR("max_jetty_in_jetty_grp %u is err.\n", max_jetty_in_jetty_grp);
+        return NULL;
+    }
 
     urma_jetty_grp_t *jetty_grp = ops->create_jetty_grp(ctx, cfg);
     if (jetty_grp == NULL) {
@@ -792,12 +800,11 @@ urma_jetty_grp_t *urma_create_jetty_grp(urma_context_t *ctx, urma_jetty_grp_cfg_
         return NULL;
     }
 
-    urma_device_cap_t *cap = &ctx->dev->sysfs_dev->dev_attr.dev_cap;
-    jetty_grp->jetty_list = calloc(1, sizeof(urma_jetty_t *) * cap->max_jetty_in_jetty_grp);
+    jetty_grp->jetty_list = calloc(1, sizeof(urma_jetty_t *) * max_jetty_in_jetty_grp);
     if (jetty_grp->jetty_list == NULL) {
+        URMA_LOG_ERR("alloc jetty list failed.\n");
         if (ops->delete_jetty_grp == NULL || ops->delete_jetty_grp(jetty_grp) != 0) {
             URMA_LOG_ERR("delete_jetty_grp failed.\n");
-            return NULL;
         }
         return NULL;
     }
@@ -913,7 +920,7 @@ urma_status_t urma_free_token_id(urma_token_id_t *token_id)
         return URMA_EINVAL;
     }
     if (atomic_load(&token_id->ref.atomic_cnt) != 0) {
-        URMA_LOG_ERR("free token id :%d, ref:%d, not zero\n",
+        URMA_LOG_ERR("free token id :%u, ref:%d, not zero\n",
             token_id->token_id, atomic_load(&token_id->ref.atomic_cnt));
         return URMA_EINVAL;
     }
@@ -996,7 +1003,8 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
 urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
 {
     urma_status_t ret;
-    if (target_seg == NULL || target_seg->urma_ctx == NULL) {
+    if (target_seg == NULL || target_seg->urma_ctx == NULL ||
+        target_seg->urma_ctx->dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -1139,17 +1147,6 @@ urma_status_t urma_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_us
 
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, user_ctl);
-
-    if (in->opcode == URMA_USER_CTL_IGNORE_JETTY_IN_CR &&
-        strcmp(ops->name, "IB_OPS") != 0) {
-        URMA_LOG_WARN("Only provider_ib can configure URMA_USER_CTL_IGNORE_JETTY_IN_CR.\n");
-        return URMA_SUCCESS;
-    }
-    if ((in->opcode == URMA_USER_CTL_IP_NON_BLOCK_SEND || in->opcode == URMA_USER_CTL_IP_STOP_RECV) &&
-        ctx->dev->type != URMA_TRANSPORT_IP) {
-        URMA_LOG_WARN("Only in IP mode can configure opcode: %d.\n", (int)in->opcode);
-        return URMA_SUCCESS;
-    }
 
     int ret = ops->user_ctl(ctx, in, out);
     if ((urma_status_t)ret != URMA_SUCCESS && (urma_status_t)ret != URMA_ENOPERM) {

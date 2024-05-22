@@ -32,10 +32,12 @@ typedef struct uvs_lm_vtp_info {
     uint32_t upi;
 } uvs_lm_vtp_info_t;
 
-int uvs_lm_swap_tpg(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, char *dev_name, tpsa_lm_vtp_entry_t *lm_vtp_entry);
-int uvs_lm_refresh_tpg(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, char *dev_name, tpsa_lm_vtp_entry_t *lm_vtp_entry);
+int uvs_lm_swap_tpg(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_key_t *vport_key,
+                    tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
+int uvs_lm_refresh_tpg(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_key_t *vport_key,
+                       tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
 int uvs_lm_handle_ready_rollback(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg,
-                                 char *dev_name, tpsa_lm_vtp_entry_t *lm_vtp_entry);
+    vport_key_t *vport_key, tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
 int uvs_lm_handle_mig_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_lm_handle_notify(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_lm_config_migrate_state_local(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, tpsa_mig_state_t state);
@@ -50,6 +52,7 @@ int uvs_lm_send_mig_req(uvs_ctx_t *ctx, live_migrate_table_entry_t *cur, fe_tabl
 int uvs_lm_handle_stop_proc_vtp_msg(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg);
 int uvs_lm_start_transfer_create_msg(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, vport_key_t *key);
 void uvs_lm_clean_up_resource(uvs_ctx_t *ctx);
+void uvs_lm_clean_vport(uvs_ctx_t *ctx, vport_key_t *vport_key);
 
 #ifdef __cplusplus
 }

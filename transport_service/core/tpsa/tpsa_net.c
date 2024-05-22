@@ -41,7 +41,7 @@ static inline tpsa_netaddr_entry_t *tpsa_lookup_map_entry_nolock(tpsa_netaddr_tb
 
 static tpsa_netaddr_entry_t *tpsa_alloc_map_entry(const urma_eid_t *eid, tpsa_underlay_info_t *underlay)
 {
-    size_t len = underlay->netaddr_cnt * sizeof(tpsa_net_addr_t);
+    size_t len = underlay->netaddr_cnt * sizeof(uvs_net_addr_info_t);
     tpsa_netaddr_entry_t *entry = (tpsa_netaddr_entry_t *)calloc(1, sizeof(tpsa_netaddr_entry_t) + len);
     if (entry == NULL) {
         return NULL;
@@ -119,30 +119,30 @@ int tpsa_add_underlay_info(urma_eid_t *eid, tpsa_underlay_info_t *underlay)
     return 0;
 }
 
-static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
+static inline void ipv4_map_to_net_addr(uint32_t ipv4, uvs_net_addr_t *net_addr)
 {
-    eid->in4.reserved = 0;
-    eid->in4.prefix = htobe32(IPV4_MAP_IPV6_PREFIX);
-    eid->in4.addr = htobe32(ipv4);
+    net_addr->in4.resv = 0;
+    net_addr->in4.prefix = htobe32(IPV4_MAP_IPV6_PREFIX);
+    net_addr->in4.addr = htobe32(ipv4);
 }
 
-int str_to_eid(const char *buf, urma_eid_t *eid)
+int str_to_net_addr(const char *buf, uvs_net_addr_t *net_addr)
 {
     uint32_t ipv4;
 
-    if (buf == NULL || strlen(buf) <= EID_STR_MIN_LEN || eid == NULL) {
+    if (buf == NULL || strlen(buf) <= EID_STR_MIN_LEN || net_addr == NULL) {
         TPSA_LOG_ERR("Invalid argument");
         return -EINVAL;
     }
 
     // ipv4 addr: xx.xx.xx.xx
     if (inet_pton(AF_INET, buf, &ipv4) > 0) {
-        ipv4_map_to_eid(be32toh(ipv4), eid);
+        ipv4_map_to_net_addr(be32toh(ipv4), net_addr);
         return 0;
     }
 
     // ipv6 addr
-    if (inet_pton(AF_INET6, buf, eid) <= 0) {
+    if (inet_pton(AF_INET6, buf, net_addr) <= 0) {
         TPSA_LOG_ERR("Eid format error: %s, errno:%u.", buf, errno);
         return -EINVAL;
     }

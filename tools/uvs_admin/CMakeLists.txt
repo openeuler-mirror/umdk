@@ -40,6 +40,10 @@ ${UVS_ADMIN_SUBCOMMAND_OBJS}
 
 target_link_libraries(uvs_admin urma_common glib-2.0)
 
+if(CROSS_COMPILE)
+    target_link_libraries(uvs_admin pcre2-8 ffi)
+endif()
+
 if("${FUZZ}" STREQUAL "enable")
 target_link_libraries(uvs_admin /usr/local/lib64/libSecodefuzz.a)
 endif("${FUZZ}" STREQUAL "enable")

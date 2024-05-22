@@ -42,6 +42,11 @@ static void tpsa_register_signal(void)
     psa.sa_flags = 0;
     psa.sa_handler = tpsa_sig_cb_func;
     (void)sigaction(SIGTSTP, &psa, NULL); /* need SIGTSTP to kill */
+
+    // Ignore SIGPIPE
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        TPSA_LOG_WARN("register SIGPIPE callback failed");
+    }
 }
 
 static int lock_file(FILE *file)
@@ -266,16 +271,23 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    uvs_init_attr_t attr = {
+    uvs_init_attr_t attr = {true};
+    uvs_socket_init_attr_t socket_attr = {
+        .type = uvs_cfg.tpsa_ip_type,
         .server_ip = uvs_cfg.tpsa_server_ip,
         .server_port = uvs_cfg.tpsa_server_port
     };
     if (uvs_so_init(&attr) != 0) {
         return -1;
     }
+    if (uvs_socket_init(&socket_attr) != 0) {
+        uvs_so_uninit();
+        return -1;
+    }
     g_tpsa_daemon_ctx.worker = uvs_get_worker();
 
     if (tpsa_socket_service_init() != 0) {
+        uvs_socket_uninit();
         uvs_so_uninit();
         return -1;
     }
@@ -290,6 +302,7 @@ int main(int argc, char *argv[])
     TPSA_LOG_INFO("tpsa daemon start to exit!\n");
 
     tpsa_socket_service_uninit();
+    uvs_socket_uninit();
     uvs_so_uninit();
     TPSA_LOG_INFO("uvs daemon exited!\n");
 

@@ -20,6 +20,7 @@
 #define UVS_ADMIN_DEFAULT_OOR_CNT 1024
 #define UVS_ADMIN_DEFAULT_ACK_UDP_SRCPORT 0x12b8
 #define UVS_AMIND_DEFAULT_UDP_RANGE 1
+#define UVS_AMIND_DEFAULT_SHARE_MODE 1
 #define UVS_AMIND_DEFAULT_CC_ALG (0x1 << 3) /* LDCP */
 #define SIP_IDX_MAX 10239
 #define EID_IDX_MAX 10239
@@ -132,7 +133,7 @@ enum vport_table_table_opts {
 #define VPORT_TABLE_OPT_EID_LONG "eid"
     VPORT_TABLE_OPT_EID_NUM,
 
-#define VPORT_TABLE_OPT_EID_IDX_LONG "eid_index"
+#define VPORT_TABLE_OPT_EID_IDX_LONG "eid_idx"
     VPORT_TABLE_OPT_EID_IDX_NUM,
 
 #define VPORT_TABLE_OPT_UPI_LONG "upi"
@@ -140,6 +141,9 @@ enum vport_table_table_opts {
 
 #define VPORT_TABLE_OPT_PATTERN_LONG "pattern"
     VPORT_TABLE_OPT_PATTERN_NUM,
+
+#define VPORT_TABLE_OPT_SHARE_MODE_LONG "share_mode"
+    VPORT_TABLE_OPT_SHARE_MODE_NUM,
 
 /* virtualization */
 #define VPORT_TABLE_OPT_VIRTUALIZE_LONG "virtualization"
@@ -202,6 +206,7 @@ static const struct opt_arg g_vport_table_opt_args[VPORT_TABLE_OPT_MAX_NUM] = {
     [VPORT_TABLE_OPT_EID_IDX_NUM] = {VPORT_TABLE_OPT_EID_IDX_LONG, ARG_TYPE_NUM},
     [VPORT_TABLE_OPT_UPI_NUM] = {VPORT_TABLE_OPT_UPI_LONG, ARG_TYPE_NUM},
     [VPORT_TABLE_OPT_PATTERN_NUM] = {VPORT_TABLE_OPT_PATTERN_LONG, ARG_TYPE_NUM},
+    [VPORT_TABLE_OPT_SHARE_MODE_NUM] = {VPORT_TABLE_OPT_SHARE_MODE_LONG, ARG_TYPE_NUM},
     [VPORT_TABLE_OPT_VIRTUALIZE_NUM] = {VPORT_TABLE_OPT_VIRTUALIZE_LONG, ARG_TYPE_NUM},
     [VPORT_TABLE_OPT_MIN_JETTY_CNT_NUM] = {VPORT_TABLE_OPT_MIN_JETTR_CNT_LONG, ARG_TYPE_NUM},
     [VPORT_TABLE_OPT_MAX_JETTY_CNT_NUM] = {VPORT_TABLE_OPT_MAX_JETTY_CNT_LONG, ARG_TYPE_NUM},
@@ -220,9 +225,9 @@ static const struct option g_vport_table_show_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_show_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,           "display this help and exit" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,         "fe_idx" },
+    {VPORT_TABLE_OPT_HELP_LONG,           "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,         "fe_idx is determined by tpf device", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_show_cmd_usage = {
@@ -262,6 +267,7 @@ static const struct option g_vport_table_add_long_options[] = {
     {VPORT_TABLE_OPT_TP_CNT_LONG,         required_argument,   NULL, VPORT_TABLE_OPT_TP_NUM },
     {VPORT_TABLE_OPT_OOS_CNT_LONG,        required_argument,   NULL, VPORT_TABLE_OPT_OOS_CNT_NUM },
     {VPORT_TABLE_OPT_PATTERN_LONG,        required_argument,   NULL, VPORT_TABLE_OPT_PATTERN_NUM },
+    {VPORT_TABLE_OPT_SHARE_MODE_LONG,     required_argument,   NULL, VPORT_TABLE_OPT_SHARE_MODE_NUM },
     {VPORT_TABLE_OPT_VIRTUALIZE_LONG,     required_argument,   NULL, VPORT_TABLE_OPT_VIRTUALIZE_NUM },
     {VPORT_TABLE_OPT_MIN_JETTR_CNT_LONG,  required_argument,   NULL, VPORT_TABLE_OPT_MIN_JETTY_CNT_NUM },
     {VPORT_TABLE_OPT_MAX_JETTY_CNT_LONG,  required_argument,   NULL, VPORT_TABLE_OPT_MAX_JETTY_CNT_NUM },
@@ -278,43 +284,44 @@ static const struct option g_vport_table_add_long_options[] = {
     \t\t\t\t(CC_HC3: 64) | (CC_DIP: 128))(default: CC_LDCP)"
 
 static const uvs_admin_opt_usage_t g_vport_table_add_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,           "display this help and exit" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,         "fe_idx need add" },
-    {VPORT_TABLE_OPT_SIP_IDX_LONG,        "sip_idx need add" },
-    {VPORT_TABLE_OPT_OOR_EN_LONG,         "out of order receive(default disable)" },
-    {VPORT_TABLE_OPT_SR_EN_LONG,          "selective retransmission(default disable)" },
-    {VPORT_TABLE_OPT_CC_EN_LONG,          "congestion control algorithm(default disable)" },
-    {VPORT_TABLE_OPT_CC_ALG_LONG,         CC_ALG_HELP },
-    {VPORT_TABLE_OPT_CC_PRIORITY_LONG,    "selective retransmission priority" },
-    {VPORT_TABLE_OPT_SPRAY_EN_LONG,       "spray with src udp port(default disable)" },
-    {VPORT_TABLE_OPT_DCA_ENABLE_LONG,     "dynamic connection administrate(default disable)" },
-    {VPORT_TABLE_OPT_FLOW_LABEL_LONG,     "IPv6 Flow Label[0 - 1048575]" },
-    {VPORT_TABLE_OPT_OOR_CNT_LONG,        "oor_cnt(default 4)" },
-    {VPORT_TABLE_OPT_RETRY_NUM_LONG,      "retry num[0 - 7]" },
-    {VPORT_TABLE_OPT_RETRY_FACTOR_LONG,   "retry factor[0 - 7]" },
-    {VPORT_TABLE_OPT_ACK_TIMEOUT_LONG,    "ack timeout[0 - 31]" },
-    {VPORT_TABLE_OPT_DSCP_LONG,           "differentiated Services Code Point[0 - 63]" },
-    {VPORT_TABLE_OPT_DATA_UDP_START_LONG, "data_udp_start(default 0)"},
-    {VPORT_TABLE_OPT_ACK_UDP_START_LONG,  "ack_udp_start(default 0x12b8)" },
-    {VPORT_TABLE_OPT_UDP_RANGE_LONG,      "udp range(default 1)" },
-    {VPORT_TABLE_OPT_HOP_LIMIT_LONG,      "hop_limit(default 0)" },
-    {VPORT_TABLE_OPT_MN_LONG,             "mn(default 0)"},
-    {VPORT_TABLE_OPT_LOOP_BACK_LONG,      "loop_back(default 0)" },
-    {VPORT_TABLE_OPT_ACK_RESP_LONG,       "ack_resp(default 0)" },
-    {VPORT_TABLE_OPT_BONDING_LONG,        "bonding(default 0)" },
-    {VPORT_TABLE_OPT_RC_CNT_LONG,         "rc cnt(default 2)" },
-    {VPORT_TABLE_OPT_RC_DEPTH_LONG,       "rc depth" },
-    {VPORT_TABLE_OPT_SLICE_LONG,          "slice" },
-    {VPORT_TABLE_OPT_TP_CNT_LONG,         "tp_cnt(default 2)"},
-    {VPORT_TABLE_OPT_OOS_CNT_LONG,        "oos_cnt(default 0)"},
-    {VPORT_TABLE_OPT_PATTERN_LONG,        "pattern(default 3)"},
-    {VPORT_TABLE_OPT_VIRTUALIZE_LONG,     "supports virtualization(default disable)"},
-    {VPORT_TABLE_OPT_MIN_JETTR_CNT_LONG,  "min jetty cnt supported by a FE"},
-    {VPORT_TABLE_OPT_MAX_JETTY_CNT_LONG,  "max jetty cnt supported by a FE"},
-    {VPORT_TABLE_OPT_MIN_JFR_CNT_LONG,    "min jfr cnt supported by a FE"},
-    {VPORT_TABLE_OPT_MAX_JFR_CNT_LONG,    "max jfr cnt supported by a FE"},
-    {VPORT_TABLE_OPT_FORCE_G_DOMAIN_LONG, "force link in global domain mode(default disable)" },
+    {VPORT_TABLE_OPT_HELP_LONG,           "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,         "fe_idx is determined by tpf device", true},
+    {VPORT_TABLE_OPT_SIP_IDX_LONG,        "index of the entry in sip_table, allocated by ubcore", true},
+    {VPORT_TABLE_OPT_OOR_EN_LONG,         "out of order receive(default disable)", false},
+    {VPORT_TABLE_OPT_SR_EN_LONG,          "selective retransmission(default disable)", false},
+    {VPORT_TABLE_OPT_CC_EN_LONG,          "congestion control algorithm(default disable)", false},
+    {VPORT_TABLE_OPT_CC_ALG_LONG,         CC_ALG_HELP, false},
+    {VPORT_TABLE_OPT_CC_PRIORITY_LONG,    "selective retransmission priority", false},
+    {VPORT_TABLE_OPT_SPRAY_EN_LONG,       "spray with src udp port(default disable)", false},
+    {VPORT_TABLE_OPT_DCA_ENABLE_LONG,     "dynamic connection administrate(default disable)", false},
+    {VPORT_TABLE_OPT_FLOW_LABEL_LONG,     "IPv6 Flow Label[0 - 1048575]", false},
+    {VPORT_TABLE_OPT_OOR_CNT_LONG,        "oor_cnt(default 4)", false},
+    {VPORT_TABLE_OPT_RETRY_NUM_LONG,      "retry num[0 - 7]", false},
+    {VPORT_TABLE_OPT_RETRY_FACTOR_LONG,   "retry factor[0 - 7]", false},
+    {VPORT_TABLE_OPT_ACK_TIMEOUT_LONG,    "ack timeout[0 - 31]", false},
+    {VPORT_TABLE_OPT_DSCP_LONG,           "differentiated Services Code Point[0 - 63]", false},
+    {VPORT_TABLE_OPT_DATA_UDP_START_LONG, "data_udp_start(default 0)", true},
+    {VPORT_TABLE_OPT_ACK_UDP_START_LONG,  "ack_udp_start(default 0x12b8)", false},
+    {VPORT_TABLE_OPT_UDP_RANGE_LONG,      "udp range(default 1)", false},
+    {VPORT_TABLE_OPT_HOP_LIMIT_LONG,      "hop_limit(default 0)", false},
+    {VPORT_TABLE_OPT_MN_LONG,             "mn(default 0)", false},
+    {VPORT_TABLE_OPT_LOOP_BACK_LONG,      "loop_back(default 0)", false},
+    {VPORT_TABLE_OPT_ACK_RESP_LONG,       "ack_resp(default 0)", false},
+    {VPORT_TABLE_OPT_BONDING_LONG,        "bonding(default 0)", false},
+    {VPORT_TABLE_OPT_RC_CNT_LONG,         "rc cnt(default 2)", false},
+    {VPORT_TABLE_OPT_RC_DEPTH_LONG,       "rc depth", false},
+    {VPORT_TABLE_OPT_SLICE_LONG,          "slice", false},
+    {VPORT_TABLE_OPT_TP_CNT_LONG,         "tp_cnt(default 2)", false},
+    {VPORT_TABLE_OPT_OOS_CNT_LONG,        "oos_cnt(default 0)", false},
+    {VPORT_TABLE_OPT_PATTERN_LONG,        "share_mode(default 1)", false},
+    {VPORT_TABLE_OPT_SHARE_MODE_LONG,     "pattern(default 3)", false},
+    {VPORT_TABLE_OPT_VIRTUALIZE_LONG,     "supports virtualization(default disable)", false},
+    {VPORT_TABLE_OPT_MIN_JETTR_CNT_LONG,  "min jetty cnt supported by a FE", false},
+    {VPORT_TABLE_OPT_MAX_JETTY_CNT_LONG,  "max jetty cnt supported by a FE", false},
+    {VPORT_TABLE_OPT_MIN_JFR_CNT_LONG,    "min jfr cnt supported by a FE", false},
+    {VPORT_TABLE_OPT_MAX_JFR_CNT_LONG,    "max jfr cnt supported by a FE", false},
+    {VPORT_TABLE_OPT_FORCE_G_DOMAIN_LONG, "force link in global domain mode(default disable)", false},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_add_cmd_usage = {
@@ -331,9 +338,9 @@ static const struct option g_vport_table_del_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_del_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,    "display this help and exit" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,    "fe_idx need del" },
+    {VPORT_TABLE_OPT_HELP_LONG,     "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG, "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,   "fe_idx is determined by tpf device", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_del_cmd_usage = {
@@ -351,10 +358,10 @@ static const struct option g_vport_table_show_ueid_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_show_ueid_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,      "display this help and exit\n" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,      "fe_idx\n" },
-    {VPORT_TABLE_OPT_EID_IDX_LONG,   "eid_index\n" },
+    {VPORT_TABLE_OPT_HELP_LONG,      "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG,  "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,    "fe_idx is determined by tpf device", true},
+    {VPORT_TABLE_OPT_EID_IDX_LONG,   "index of the entry in ueid_table", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_show_ueid_cmd_usage = {
@@ -365,8 +372,8 @@ static const uvs_admin_cmd_usage_t g_vport_table_show_ueid_cmd_usage = {
 /* vport table add ueid long options */
 static const struct option g_vport_table_add_ueid_long_options[] = {
     {VPORT_TABLE_OPT_HELP_LONG,      no_argument,       NULL, VPORT_TABLE_OPT_HELP_NUM },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,  required_argument,   NULL, VPORT_TABLE_OPT_DEV_NAME_NUM },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,      required_argument, NULL, VPORT_TABLE_OPT_FE_IDX_NUM },
+    {VPORT_TABLE_OPT_DEV_NAME_LONG,  required_argument, NULL, VPORT_TABLE_OPT_DEV_NAME_NUM },
+    {VPORT_TABLE_OPT_FE_IDX_LONG,    required_argument, NULL, VPORT_TABLE_OPT_FE_IDX_NUM },
     {VPORT_TABLE_OPT_EID_LONG,       required_argument, NULL, VPORT_TABLE_OPT_EID_NUM },
     {VPORT_TABLE_OPT_UPI_LONG,       required_argument, NULL, VPORT_TABLE_OPT_UPI_NUM },
     {VPORT_TABLE_OPT_EID_IDX_LONG,   required_argument, NULL, VPORT_TABLE_OPT_EID_IDX_NUM},
@@ -374,12 +381,12 @@ static const struct option g_vport_table_add_ueid_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_add_ueid_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,    "display this help and exit\n" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,    "fe_idx need add\n" },
-    {VPORT_TABLE_OPT_EID_LONG,     "eid need add\n" },
-    {VPORT_TABLE_OPT_UPI_LONG,     "virtual or pattern3 static mode need set upi\n" },
-    {VPORT_TABLE_OPT_EID_IDX_LONG, "eid inex need add\n" },
+    {VPORT_TABLE_OPT_HELP_LONG,     "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG, "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,   "fe_idx is determined by tpf device", true},
+    {VPORT_TABLE_OPT_EID_LONG,      "config the eid for UB device", true},
+    {VPORT_TABLE_OPT_UPI_LONG,      "virtual or pattern3 static mode need set(default 0)", true},
+    {VPORT_TABLE_OPT_EID_IDX_LONG,  "index of the entry in ueid_table", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_add_ueid_cmd_usage = {
@@ -397,10 +404,10 @@ static const struct option g_vport_table_del_ueid_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_del_eid_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,    "display this help and exit\n" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {VPORT_TABLE_OPT_FE_IDX_LONG,    "fe_idx need del\n" },
-    {VPORT_TABLE_OPT_EID_IDX_LONG,  "eid inex need del\n" },
+    {VPORT_TABLE_OPT_HELP_LONG,     "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG, "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_FE_IDX_LONG,   "fe_idx is determined by tpf device", true},
+    {VPORT_TABLE_OPT_EID_IDX_LONG,  "index of the entry in ueid_table", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_del_ueid_cmd_usage = {
@@ -417,9 +424,9 @@ static const struct option g_vport_table_set_upi_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_set_upi_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,    "display this help and exit\n" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG, "ub dev name need set\n" },
-    {VPORT_TABLE_OPT_UPI_LONG,      "pattern3 dynamic mode upi need set\n" },
+    {VPORT_TABLE_OPT_HELP_LONG,     "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG, "specifies the name of tpf device", true},
+    {VPORT_TABLE_OPT_UPI_LONG,      "pattern3 dynamic mode upi need set", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_set_upi_cmd_usage = {
@@ -434,8 +441,8 @@ static const struct option g_vport_table_show_upi_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_vport_table_show_upi_cmd_opt_usage[] = {
-    {VPORT_TABLE_OPT_HELP_LONG,    "display this help and exit\n" },
-    {VPORT_TABLE_OPT_DEV_NAME_LONG, "ub dev name need set\n" },
+    {VPORT_TABLE_OPT_HELP_LONG,     "display this help and exit", false},
+    {VPORT_TABLE_OPT_DEV_NAME_LONG, "specifies the name of tpf device", true},
 };
 
 static const uvs_admin_cmd_usage_t g_vport_table_show_upi_cmd_usage = {
@@ -972,8 +979,8 @@ static inline int parse_eid_index(uvs_admin_vport_table_args_t *args, const char
         return -EINVAL;
     }
 
-    args->eid_index = num;
-    args->mask.bs.eid_index = 1;
+    args->eid_idx = num;
+    args->mask.bs.eid_idx = 1;
     return 0;
 }
 
@@ -1020,6 +1027,25 @@ static inline int parse_pattern(uvs_admin_vport_table_args_t *args, const char *
 
     args->pattern = num;
     args->mask.bs.pattern = 1;
+    return 0;
+}
+
+static inline int parse_share_mode(uvs_admin_vport_table_args_t *args, const char *_optarg)
+{
+    int ret;
+    uint32_t num;
+
+    ret = ub_str_to_u32(_optarg, &num);
+    if (ret != 0) {
+        return -EINVAL;
+    }
+
+    if (vport_table_input_range_check(num, 0, 1) != 0) {
+        return -EINVAL;
+    }
+
+    args->tp_cfg.tp_mod_flag.bs.share_mode = num;
+    args->mask.bs.share_mode = 1;
     return 0;
 }
 
@@ -1160,6 +1186,7 @@ static const vport_table_parse g_vport_table_parse[VPORT_TABLE_OPT_MAX_NUM] = {
     [VPORT_TABLE_OPT_EID_IDX_NUM] = parse_eid_index,
     [VPORT_TABLE_OPT_UPI_NUM] = parse_upi,
     [VPORT_TABLE_OPT_PATTERN_NUM] = parse_pattern,
+    [VPORT_TABLE_OPT_SHARE_MODE_NUM] = parse_share_mode,
     [VPORT_TABLE_OPT_VIRTUALIZE_NUM] = parse_virtualize,
     [VPORT_TABLE_OPT_MIN_JETTY_CNT_NUM] = parse_min_jetty_cnt,
     [VPORT_TABLE_OPT_MAX_JETTY_CNT_NUM] = parse_max_jetty_cnt,
@@ -1309,12 +1336,41 @@ static void uvs_admin_set_default_para(uvs_admin_vport_table_add_req_t *vport_ta
         UVS_AMIND_DEFAULT_CC_ALG : args->tp_cfg.cc_alg;
     args->tp_cfg.udp_range = args->mask.bs.udp_range == 0 ?
         UVS_AMIND_DEFAULT_UDP_RANGE : args->tp_cfg.udp_range;
+    args->tp_cfg.tp_mod_flag.bs.share_mode = args->mask.bs.share_mode == 0 ?
+        UVS_AMIND_DEFAULT_SHARE_MODE : args->tp_cfg.tp_mod_flag.bs.share_mode;
 
     args->mask.bs.tp_cnt = 1;
     args->mask.bs.ack_udp_start = 1;
     args->mask.bs.oor_cnt = 1;
     args->mask.bs.udp_range = 1;
     args->tp_cfg.set_cc_alg = 1;
+    args->mask.bs.share_mode = 1;
+}
+
+static int uvs_admin_vport_check_tp_cnt_valid(uint32_t tp_cnt)
+{
+    if (tp_cnt <= 1) {
+        return -1;
+    }
+    /* check if tp_cnt is the power of 2 */
+    if ((tp_cnt & (tp_cnt - 1)) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int uvs_admin_vport_table_addcmd_validation(uvs_admin_vport_table_args_t args)
+{
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.sip_idx == 0) {
+        (void)printf("ERR: invalid parameter, must set dev_name/fe_idx/sip_idx, mask:%lx\n", args.mask.value);
+        return -EINVAL;
+    }
+
+    if (args.mask.bs.tp_cnt == 1 && (uvs_admin_vport_check_tp_cnt_valid(args.tp_cnt) < 0)) {
+        (void)printf("ERR: invalid parameter, tp_cnt: %u, it should be the power of 2\n", args.tp_cnt);
+        return -EINVAL;
+    }
+    return 0;
 }
 
 static int32_t uvs_admin_vport_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
@@ -1330,9 +1386,9 @@ static int32_t uvs_admin_vport_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
         return ret;
     }
 
-    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.sip_idx == 0) {
-        (void)printf("ERR: invalid parameter, must set dev_name/fe_idx/sip_idx, mask:%lx\n", args.mask.value);
-        return -EINVAL;
+    ret = uvs_admin_vport_table_addcmd_validation(args);
+    if (ret != 0) {
+        return ret;
     }
 
     req = malloc(sizeof(uvs_admin_request_t) + sizeof(uvs_admin_vport_table_add_req_t));
@@ -1411,7 +1467,7 @@ static void uvs_admin_print_ueid(uvs_admin_vport_table_show_ueid_req_t *req,
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("dev_name                   : %s\n", req->dev_name);
     (void)printf("fe_idx                     : %hu\n", req->fe_idx);
-    (void)printf("eid_idx                    : %u\n", req->eid_index);
+    (void)printf("eid_idx                    : %u\n", req->eid_idx);
     (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->eid));
     (void)printf("upi(static mode)           : %u\n", show_rsp->upi);
 }
@@ -1429,7 +1485,7 @@ static int32_t uvs_admin_vport_table_showueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
         return ret;
     }
 
-    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.eid_index == 0) {
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.eid_idx == 0) {
         (void)printf("ERR: invalid parameter, must set dev_name/fe_idx/eid_idx, mask:%lx\n", args.mask.value);
         return -EINVAL;
     }
@@ -1445,7 +1501,7 @@ static int32_t uvs_admin_vport_table_showueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_vport_table_show_ueid_req_t *vport_table_req = (uvs_admin_vport_table_show_ueid_req_t *)req->req;
     (void)memcpy(vport_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
     vport_table_req->fe_idx = args.fe_idx;
-    vport_table_req->eid_index = args.eid_index;
+    vport_table_req->eid_idx = args.eid_idx;
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -1456,7 +1512,7 @@ static int32_t uvs_admin_vport_table_showueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_vport_table_show_ueid_rsp_t *show_rsp = (uvs_admin_vport_table_show_ueid_rsp_t *)rsp->rsp;
     if (show_rsp->res != 0) {
         (void)printf("ERR: failed to show ueid, ret: %d, dev_name: %s, fe_idx: %hu, eid_index: %u.\n",
-            show_rsp->res, vport_table_req->dev_name, vport_table_req->fe_idx, args.eid_index);
+            show_rsp->res, vport_table_req->dev_name, vport_table_req->fe_idx, args.eid_idx);
     } else {
         uvs_admin_print_ueid(vport_table_req, show_rsp);
     }
@@ -1491,7 +1547,7 @@ static int32_t uvs_admin_vport_table_addueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     vport_table_req->fe_idx = args.fe_idx;
     vport_table_req->eid = args.eid;
     vport_table_req->upi = args.upi;
-    vport_table_req->eid_index = args.eid_index;
+    vport_table_req->eid_idx = args.eid_idx;
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -1532,7 +1588,7 @@ static int32_t uvs_admin_vport_table_delueid_cmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_vport_table_del_ueid_req_t *vport_table_req = (uvs_admin_vport_table_del_ueid_req_t *)req->req;
     (void)memcpy(vport_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
     vport_table_req->fe_idx = args.fe_idx;
-    vport_table_req->eid_index = args.eid_index;
+    vport_table_req->eid_idx = args.eid_idx;
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {

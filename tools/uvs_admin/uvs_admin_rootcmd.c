@@ -28,7 +28,7 @@ static const struct option g_rootcmd_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_rootcmd_opt_usage[] = {
-    {ROOT_OPT_HELP_LONG, "display this help and exit"},
+    {ROOT_OPT_HELP_LONG, "display this help and exit", false},
 };
 
 static const uvs_admin_cmd_usage_t g_rootcmd_usage = {

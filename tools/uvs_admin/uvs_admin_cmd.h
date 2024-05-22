@@ -22,6 +22,7 @@ extern "C"
 typedef struct uvs_admin_cmd uvs_admin_cmd_t;
 
 #define NEXT_CMD 256
+#define UVS_ADMIN_MAX_CMD_LEN    (22)
 
 enum UVS_ADMIN_CMD_PARA_NUM {
     UVS_ADMIN_CMD_PARM_ONE = 1,
@@ -46,6 +47,7 @@ typedef struct uvs_admin_cmd_ctx {
 typedef struct uvs_admin_opt_usage {
     const char *opt_long;
     const char *desc;
+    bool is_mandatory;       /* Whether this option must be configured */
 } uvs_admin_opt_usage_t;
 
 typedef struct uvs_admin_cmd_usage {
@@ -80,7 +82,7 @@ int32_t uvs_admin_branch_subcmd_exec(uvs_admin_cmd_ctx_t *ctx);
 
 #define UVS_ADMIN_BRANCH_SUBCMD_USAGE(name)                        \
     static const uvs_admin_opt_usage_t name##_opt_usage[] = { \
-        {"help", "display this help and exit"},                 \
+        {"help", "display this help and exit", false},                 \
     };                                                          \
     static const uvs_admin_cmd_usage_t name##_usage = {       \
         .opt_usage = name##_opt_usage,                          \

@@ -85,7 +85,7 @@ static const struct option g_global_cfg_show_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_global_cfg_show_cmd_opt_usage[] = {
-    {GLOBAL_CFG_OPT_HELP_LONG,    "display this help and exit" },
+    {GLOBAL_CFG_OPT_HELP_LONG,    "display this help and exit", false},
 };
 
 static const uvs_admin_cmd_usage_t g_global_cfg_show_cmd_usage = {
@@ -106,13 +106,13 @@ static const struct option g_global_cfg_set_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_global_cfg_set_cmd_opt_usage[] = {
-    {GLOBAL_CFG_OPT_HELP_LONG,              "display this help and exit" },
-    {GLOBAL_CFG_OPT_MTU_LONG,               "mtu need set [256, 512, 1024, 2048, 4096, 8192]" },
-    {GLOBAL_CFG_OPT_SLICE_LONG,             "slice need set [32, 64, 128, 256]" },
-    {GLOBAL_CFG_OPT_SUSPEND_PERIOD_LONG,    "suspend_period need set, default: 1000 us" },
-    {GLOBAL_CFG_OPT_SUSPEND_CNT_LONG,       "suspend_cnt need set, defalut: 3" },
-    {GLOBAL_CFG_OPT_SUS2ERR_PERIOD_LONG,    "sus2eer_period(optional), defalut: 30000000us" },
-    {GLOBAL_CFG_OPT_TP_FAST_DESTROY,        "tp_fast_destroy(optional), defalut: 0" },
+    {GLOBAL_CFG_OPT_HELP_LONG,              "display this help and exit", false},
+    {GLOBAL_CFG_OPT_MTU_LONG,               "mtu [256, 512, 1024, 2048, 4096, 8192]", true},
+    {GLOBAL_CFG_OPT_SLICE_LONG,             "packet fragment size[32, 64, 128, 256]", true},
+    {GLOBAL_CFG_OPT_SUSPEND_PERIOD_LONG,    "suspend_period, default: 1000 us", false},
+    {GLOBAL_CFG_OPT_SUSPEND_CNT_LONG,       "suspend_cnt, defalut: 3", false},
+    {GLOBAL_CFG_OPT_SUS2ERR_PERIOD_LONG,    "sus2eer_period, defalut: 30000000us", false},
+    {GLOBAL_CFG_OPT_TP_FAST_DESTROY,        "tp_fast_destroy[0, 1], defalut: 0", false},
 };
 
 static const uvs_admin_cmd_usage_t g_global_cfg_set_cmd_usage = {

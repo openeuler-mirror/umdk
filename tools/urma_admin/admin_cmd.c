@@ -19,6 +19,12 @@
 #include <sys/types.h>
 #include <sched.h>
 
+#include <netlink/netlink.h>
+#include <netlink/socket.h>
+#include <netlink/msg.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
+
 #include "urma_types.h"
 #include "admin_parameters.h"
 #include "admin_file_ops.h"
@@ -26,8 +32,10 @@
 #include "urma_cmd.h"
 #include "admin_netlink.h"
 #include "admin_cmd.h"
+typedef struct netlink_cb_par {
+    uint32_t type;
+} netlink_cb_par;
 
-#define UBCORE_DEV_PATH "/dev/ubcore"
 
 static int urma_admin_get_ns_fd(const char *ns)
 {
@@ -42,7 +50,80 @@ static int urma_admin_get_ns_fd(const char *ns)
     return ns_fd;
 }
 
-static int urma_admin_cmd_add_eid(int ubcore_fd, const tool_config_t *cfg)
+static int cmd_nlsend(struct nl_sock *sock, int genl_id, urma_cmd_hdr_t *hdr)
+{
+    void *msg_hdr;
+    struct nl_msg *msg;
+    int ret = 0, nlmsg_flags = 0;
+
+    msg = nlmsg_alloc();
+    if (msg == NULL) {
+        (void)printf("Unable to allocate netlink message\n");
+        return -1;
+    }
+
+    if (hdr->command == URMA_CORE_CMD_QUERY_RES) {
+        nlmsg_flags = NLM_F_DUMP;
+    }
+
+    msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, (uint8_t)hdr->command,
+        UBCORE_GENL_FAMILY_VERSION);
+    if (msg_hdr == NULL) {
+        (void)printf("Unable to write genl header\n");
+        nlmsg_free(msg);
+        return -1;
+    }
+
+    ret = nla_put_u32(msg, UBCORE_HDR_ARGS_LEN, hdr->args_len);
+    if (ret < 0) {
+        (void)printf("Unable to add args_len: %d\n", ret);
+        nlmsg_free(msg);
+        return ret;
+    }
+
+    ret = nla_put_u64(msg, UBCORE_HDR_ARGS_ADDR, hdr->args_addr);
+    if (ret < 0) {
+        (void)printf("Unable to add args_addr: %d\n", ret);
+        nlmsg_free(msg);
+        return ret;
+    }
+
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        (void)printf("Netlink send failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr->command);
+        nlmsg_free(msg);
+        return ret;
+    }
+
+    nlmsg_free(msg);
+    return ret;
+}
+
+static struct nl_sock *alloc_and_connect_nl(int *genl_id)
+{
+    int ret;
+    struct nl_sock *sock = nl_socket_alloc();
+    if (!sock) {
+        (void)printf("Failed to nl_socket_alloc\n");
+        return NULL;
+    }
+    ret = genl_connect(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_connect, ret:%d, errno:%d\n", ret, errno);
+        nl_socket_free(sock);
+        return NULL;
+    }
+    *genl_id = genl_ctrl_resolve(sock, UBCORE_GENL_FAMILY_NAME);
+    if (*genl_id < 0) {
+        (void)printf("Resolving of \"%s\" failed, ret:%d\n", UBCORE_GENL_FAMILY_NAME, *genl_id);
+        nl_close(sock);
+        nl_socket_free(sock);
+        return NULL;
+    }
+    return sock;
+}
+
+static int urma_admin_cmd_add_eid(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
 {
     int ret;
     urma_cmd_hdr_t hdr;
@@ -60,17 +141,17 @@ static int urma_admin_cmd_add_eid(int ubcore_fd, const tool_config_t *cfg)
         return -1;
     }
     arg.in.ns_fd = ns_fd;
-    ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
+    ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
         (void)close(ns_fd);
-        (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+        (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
     (void)close(ns_fd);
     return 0;
 }
 
-static int urma_admin_cmd_del_eid(int ubcore_fd, const tool_config_t *cfg)
+static int urma_admin_cmd_del_eid(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
 {
     int ret;
     urma_cmd_hdr_t hdr;
@@ -83,15 +164,15 @@ static int urma_admin_cmd_del_eid(int ubcore_fd, const tool_config_t *cfg)
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_index = cfg->idx;
     arg.in.ns_fd = -1;
-    ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+    ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
     return 0;
 }
 
-static int urma_admin_cmd_set_eid_mode(int ubcore_fd, const tool_config_t *cfg)
+static int urma_admin_cmd_set_eid_mode(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
 {
     int ret;
     urma_cmd_hdr_t hdr;
@@ -103,9 +184,9 @@ static int urma_admin_cmd_set_eid_mode(int ubcore_fd, const tool_config_t *cfg)
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_mode = cfg->dynamic_eid_mode;
-    ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+    ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
     return 0;
@@ -113,65 +194,79 @@ static int urma_admin_cmd_set_eid_mode(int ubcore_fd, const tool_config_t *cfg)
 
 int admin_add_eid(const tool_config_t *cfg)
 {
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+    struct nl_sock *sock = NULL;
+    int genl_id;
+
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
     /* Automatically switch to static mode */
-    if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
+    if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    if (urma_admin_cmd_add_eid(dev_fd, cfg) != 0) {
+    if (urma_admin_cmd_add_eid(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin add eid, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    (void)close(dev_fd);
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
 }
 
 int admin_del_eid(const tool_config_t *cfg)
 {
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+    struct nl_sock *sock = NULL;
+    int genl_id;
+
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
     /* Automatically switch to static mode */
-    if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
+    if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    if (urma_admin_cmd_del_eid(dev_fd, cfg) != 0) {
+    if (urma_admin_cmd_del_eid(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    (void)close(dev_fd);
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
 }
 
 int admin_set_eid_mode(const tool_config_t *cfg)
 {
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+    struct nl_sock *sock = NULL;
+    int genl_id;
+
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
-    if (urma_admin_cmd_set_eid_mode(dev_fd, cfg) != 0) {
+    if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin del eid, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    (void)close(dev_fd);
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
 }
 
-static int urma_admin_cmd_show_utp(int ubcore_fd, const tool_config_t *cfg)
+static int urma_admin_cmd_show_utp(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
 {
     int ret;
     urma_cmd_hdr_t hdr;
@@ -186,32 +281,38 @@ static int urma_admin_cmd_show_utp(int ubcore_fd, const tool_config_t *cfg)
     arg.out.addr = (uint64_t)&utp_info;
     arg.out.len = (uint32_t)sizeof(tool_res_utp_val_t);
 
-    ret = ioctl(ubcore_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+    ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
         return ret;
     }
     (void)printf("*************utp info**************\n");
     (void)printf("tpn                 : %u\n", (uint32_t)utp_info.utpn);
-    (void)printf("spray_en            : %d\n", utp_info.spray_en);
+    (void)printf("flag                : %u\n", utp_info.flag.value);
     (void)printf("data_udp_start      : %hu\n", utp_info.data_udp_start);
     (void)printf("udp_range           : %u\n", (uint32_t)utp_info.udp_range);
     return 0;
 }
 
-int admin_show_udp(const tool_config_t *cfg)
+int admin_show_utp(const tool_config_t *cfg)
 {
-    int dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        (void)printf("Failed to open %s, errno:%d\n", UBCORE_DEV_PATH, errno);
+    struct nl_sock *sock = NULL;
+    int genl_id;
+
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
-    if (urma_admin_cmd_show_utp(dev_fd, cfg) != 0) {
+
+    if (urma_admin_cmd_show_utp(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin show utp, errno:%d\n", errno);
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
-    (void)close(dev_fd);
+
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
 }
 
@@ -225,7 +326,7 @@ static inline void admin_print_stats(const admin_cmd_query_stats_t *arg)
     (void)printf("rx_pkt_err          : %lu\n", arg->out.rx_pkt_err);
 }
 
-static int admin_cmd_query_stats(int dev_fd, const tool_config_t *cfg)
+static int admin_cmd_query_stats(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
 {
     urma_cmd_hdr_t hdr;
     admin_cmd_query_stats_t arg = {0};
@@ -238,9 +339,9 @@ static int admin_cmd_query_stats(int dev_fd, const tool_config_t *cfg)
     arg.in.key = cfg->key.key;
     arg.in.type = (uint32_t)cfg->key.type;
 
-    int ret = ioctl(dev_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("Failed to ioctl, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+    int ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
         return ret;
     }
     admin_print_stats(&arg);
@@ -249,40 +350,24 @@ static int admin_cmd_query_stats(int dev_fd, const tool_config_t *cfg)
 
 int admin_show_stats(const tool_config_t *cfg)
 {
-    char dev_path[FILE_PATH_MAX] = {0};
-    int dev_fd;
+    struct nl_sock *sock = NULL;
+    int genl_id;
 
-    dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd < 0) {
-        (void)printf("Failed to open dev_path: %s, errno: %d.\n", dev_path, errno);
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
-    if (admin_cmd_query_stats(dev_fd, cfg) != 0) {
+    if (admin_cmd_query_stats(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to query stats by ioctl.\n");
-        (void)close(dev_fd);
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
 
-    (void)close(dev_fd);
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
 }
-
-static const size_t g_query_res_size[] = {
-    [0]                        = 0,
-    [TOOL_RES_KEY_UPI]         = sizeof(tool_res_upi_val_t),
-    [TOOL_RES_KEY_VTP]         = sizeof(tool_res_vtp_val_t),
-    [TOOL_RES_KEY_TP]          = sizeof(tool_res_tp_val_t),
-    [TOOL_RES_KEY_TPG]         = sizeof(tool_res_tpg_val_t),
-    [TOOL_RES_KEY_UTP]         = sizeof(tool_res_utp_val_t),
-    [TOOL_RES_KEY_JFS]         = sizeof(tool_res_jfs_val_t),
-    [TOOL_RES_KEY_JFR]         = sizeof(tool_res_jfr_val_t),
-    [TOOL_RES_KEY_JETTY]       = sizeof(tool_res_jetty_val_t),
-    [TOOL_RES_KEY_JETTY_GROUP] = sizeof(tool_res_jetty_grp_val_t),
-    [TOOL_RES_KEY_JFC]         = sizeof(tool_res_jfc_val_t),
-    [TOOL_RES_KEY_RC]          = sizeof(tool_res_rc_val_t),
-    [TOOL_RES_KEY_SEG]         = sizeof(tool_res_seg_val_t),
-    [TOOL_RES_KEY_DEV_CTX]     = sizeof(tool_res_dev_val_t)
-};
 
 static const char *g_query_res_type[] = {
     [0]                        = NULL,
@@ -309,562 +394,542 @@ static const char *g_admin_tp_state[] = {
     "ERR"
 };
 
-static inline void admin_print_res_upi(const admin_cmd_query_res_t *arg)
+static inline void admin_print_res_upi(struct nlattr *head)
 {
-    tool_res_upi_val_t *val = (tool_res_upi_val_t *)arg->out.addr;
-    (void)printf("upi                 : %u\n", val->upi);
-}
-
-static void admin_print_res_vtp(const admin_cmd_query_res_t *arg)
-{
-    tool_res_vtp_val_t *val = (tool_res_vtp_val_t *)arg->out.addr;
-    (void)printf("fe_idx              : %hu\n", val->fe_idx);
-    (void)printf("vtpn                : %u\n", val->vtpn);
-    (void)printf("local_eid           : "EID_FMT"\n", EID_ARGS(val->local_eid));
-    (void)printf("local_jetty         : %u\n", val->local_jetty);
-    (void)printf("peer_eid            : "EID_FMT"\n", EID_ARGS(val->peer_eid));
-    (void)printf("per_jetty           : %u\n", val->peer_jetty);
-    (void)printf("clan                : %s\n", val->flag.bs.clan_tp == 1 ? "TRUE" : "FALSE");
-    (void)printf("migrate             : %s\n", val->flag.bs.migrate == 1 ? "TRUE" : "FALSE");
-    (void)printf("trans_mode          : %u [%s]\n", (uint32_t)val->trans_mode,
-        urma_trans_mode_to_string(val->trans_mode));
-
-    if (val->flag.bs.clan_tp == 1) {
-        (void)printf("ctpn                : %u\n", val->ctpn);
-        return;
-    }
-
-    if (val->trans_mode == URMA_TM_RM || val->trans_mode == URMA_TM_RC) {
-        (void)printf("tpgn                : %u\n", val->tpgn);
-        return;
-    }
-
-    if (val->trans_mode == URMA_TM_UM) {
-        (void)printf("utpn                : %u\n", val->utpn);
-        return;
+    int type = nla_type(head);
+    if (type == UBCORE_RES_UPI_VAL) {
+        tool_res_upi_val_t *val = (tool_res_upi_val_t *)nla_data(head);
+        (void)printf("upi                 : %u\n", val->upi);
     }
 }
 
-static void admin_print_res_tp(const admin_cmd_query_res_t *arg)
+static void admin_print_res_vtp(struct nlattr *head)
 {
-    tool_res_tp_val_t *val = (tool_res_tp_val_t *)arg->out.addr;
-    (void)printf("tpn                 : %u\n", val->tpn);
-    (void)printf("tx_psn              : %u\n", val->tx_psn);
-    (void)printf("rx_psn              : %u\n", val->rx_psn);
-    (void)printf("dscp                : %u\n", (uint32_t)val->dscp);
-    (void)printf("oor_en              : %u\n", (uint32_t)val->oor_en);
-    (void)printf("selective_retrans_en: %u\n", (uint32_t)val->selective_retrans_en);
-    (void)printf("state               : %u [%s]\n", (uint32_t)val->state, g_admin_tp_state[val->state]);
-    (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
-    (void)printf("ack_udp_start       : %hu\n", val->ack_udp_start);
-    (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
-    (void)printf("spray_en            : %u\n", val->spray_en);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_VTP_VAL) {
+        tool_res_vtp_val_t *val = (tool_res_vtp_val_t *)nla_data(head);
+        (void)printf("fe_idx              : %hu\n", val->fe_idx);
+        (void)printf("vtpn                : %u\n", val->vtpn);
+        (void)printf("local_eid           : "EID_FMT"\n", EID_ARGS(val->local_eid));
+        (void)printf("local_jetty         : %u\n", val->local_jetty);
+        (void)printf("peer_eid            : "EID_FMT"\n", EID_ARGS(val->peer_eid));
+        (void)printf("per_jetty           : %u\n", val->peer_jetty);
+        (void)printf("clan                : %s\n", val->flag.bs.clan_tp == 1 ? "TRUE" : "FALSE");
+        (void)printf("migrate             : %s\n", val->flag.bs.migrate == 1 ? "TRUE" : "FALSE");
+        (void)printf("trans_mode          : %u [%s]\n", (uint32_t)val->trans_mode,
+            urma_trans_mode_to_string(val->trans_mode));
+        if (val->flag.bs.clan_tp == 1) {
+            (void)printf("ctpn                : %u\n", val->ctpn);
+            return;
+        }
+        if (val->trans_mode == URMA_TM_RM || val->trans_mode == URMA_TM_RC) {
+            (void)printf("tpgn                : %u\n", val->tpgn);
+            return;
+        }
+        if (val->trans_mode == URMA_TM_UM) {
+            (void)printf("utpn                : %u\n", val->utpn);
+            return;
+        }
+    }
 }
 
-static void admin_print_res_tpg(const admin_cmd_query_res_t *arg)
+static void admin_print_res_tp(struct nlattr *head)
 {
-    tool_res_tpg_val_t *val = (tool_res_tpg_val_t *)arg->out.addr;
-    (void)printf("tp_cnt              : %u\n", val->tp_cnt);
-    (void)printf("dscp                : %u\n", (uint32_t)val->dscp);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_TP_VAL) {
+        tool_res_tp_val_t *val = (tool_res_tp_val_t *)nla_data(head);
+        (void)printf("tpn                 : %u\n", val->tpn);
+        (void)printf("tx_psn              : %u\n", val->tx_psn);
+        (void)printf("rx_psn              : %u\n", val->rx_psn);
+        (void)printf("dscp                : %u\n", (uint32_t)val->dscp);
+        (void)printf("oor_en              : %u\n", (uint32_t)val->oor_en);
+        (void)printf("selective_retrans_en: %u\n", (uint32_t)val->selective_retrans_en);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, g_admin_tp_state[val->state]);
+        (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
+        (void)printf("ack_udp_start       : %hu\n", val->ack_udp_start);
+        (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
+        (void)printf("spray_en            : %u\n", val->spray_en);
+    }
+}
 
-    (void)printf("tp_list             : ");
-    for (uint32_t i = 0; i < val->tp_cnt; i++) {
-        (void)printf("%u ", val->tp_list[i]);
+static void admin_print_res_tpg(struct nlattr *head, int len)
+{
+    struct nlattr *nla;
+    int rem;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_TPG_TP_CNT) {
+            (void)printf("tp_cnt              : %u\n", nla_get_u32(nla));
+        }
+
+        if (type == UBCORE_RES_TPG_DSCP) {
+            (void)printf("dscp                : %u\n", (uint32_t)nla_get_u8(nla));
+            (void)printf("tp_list             : ");
+        }
+
+        if (type == UBCORE_RES_TPG_TP_VAL) {
+            (void)printf("%u ", nla_get_u32(nla));
+        }
     }
     (void)printf("\n");
 }
 
-static void admin_print_res_utp(const admin_cmd_query_res_t *arg)
+static void admin_print_res_utp(struct nlattr *head)
 {
-    tool_res_utp_val_t *val = (tool_res_utp_val_t *)arg->out.addr;
-    (void)printf("utp                 : %u\n", (uint32_t)val->utpn);
-    (void)printf("spray_en            : %s\n", val->spray_en ? "true" : "false");
-    (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
-    (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_UTP_VAL) {
+        tool_res_utp_val_t *val = (tool_res_utp_val_t *)nla_data(head);
+        (void)printf("utp                 : %u\n", (uint32_t)val->utpn);
+        (void)printf("flag                : %u\n", val->flag.value);
+        (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
+        (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
+    }
 }
 
-static void admin_print_res_jfs(const admin_cmd_query_res_t *arg)
+static void admin_print_res_jfs(struct nlattr *head)
 {
-    tool_res_jfs_val_t *val = (tool_res_jfs_val_t *)arg->out.addr;
-    (void)printf("jfs_id              : %u\n", val->jfs_id);
-    (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jetty_state_to_string(val->state));
-    (void)printf("depth               : %u\n", val->depth);
-    (void)printf("pri                 : %u\n", (uint32_t)val->pri);
-    (void)printf("jfc_id              : %u\n", val->jfc_id);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_JFS_VAL) {
+        tool_res_jfs_val_t *val = (tool_res_jfs_val_t *)nla_data(head);
+        (void)printf("jfs_id              : %u\n", val->jfs_id);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state,
+            urma_jetty_state_to_string(val->state));
+        (void)printf("depth               : %u\n", val->depth);
+        (void)printf("pri                 : %u\n", (uint32_t)val->pri);
+        (void)printf("jfc_id              : %u\n", val->jfc_id);
+    }
 }
 
-static void admin_print_res_jfr(const admin_cmd_query_res_t *arg)
+static void admin_print_res_jfr(struct nlattr *head)
 {
-    tool_res_jfr_val_t *val = (tool_res_jfr_val_t *)arg->out.addr;
-    (void)printf("jfr_id              : %u\n", val->jfr_id);
-    (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jfr_state_to_string(val->state));
-    (void)printf("depth               : %u\n", val->depth);
-    (void)printf("pri                 : %u\n", (uint32_t)val->pri);
-    (void)printf("jfc_id              : %u\n", val->jfc_id);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_JFR_VAL) {
+        tool_res_jfr_val_t *val = (tool_res_jfr_val_t *)nla_data(head);
+        (void)printf("jfr_id              : %u\n", val->jfr_id);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jfr_state_to_string(val->state));
+        (void)printf("depth               : %u\n", val->depth);
+        (void)printf("jfc_id              : %u\n", val->jfc_id);
+    }
 }
 
-static void admin_print_res_jetty(const admin_cmd_query_res_t *arg)
+static void admin_print_res_jetty(struct nlattr *head)
 {
-    tool_res_jetty_val_t *val = (tool_res_jetty_val_t *)arg->out.addr;
-    (void)printf("jetty_id            : %u\n", val->jetty_id);
-    (void)printf("send_jfc_id         : %u\n", val->send_jfc_id);
-    (void)printf("recv_jfc_id         : %u\n", val->recv_jfc_id);
-    (void)printf("jfr_id              : %u\n", val->jfr_id);
-    (void)printf("jfs_depth           : %u\n", val->jfs_depth);
-    (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jetty_state_to_string(val->state));
-    (void)printf("pri                 : %u\n", (uint32_t)val->pri);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_JETTY_VAL) {
+        tool_res_jetty_val_t *val = (tool_res_jetty_val_t *)nla_data(head);
+        (void)printf("jetty_id            : %u\n", val->jetty_id);
+        (void)printf("send_jfc_id         : %u\n", val->send_jfc_id);
+        (void)printf("recv_jfc_id         : %u\n", val->recv_jfc_id);
+        (void)printf("jfr_id              : %u\n", val->jfr_id);
+        (void)printf("jfs_depth           : %u\n", val->jfs_depth);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state,
+            urma_jetty_state_to_string(val->state));
+        (void)printf("pri                 : %u\n", (uint32_t)val->pri);
+    }
 }
 
-static void admin_print_res_jetty_grp(const admin_cmd_query_res_t *arg)
+static void admin_print_res_jetty_grp(struct nlattr *head, int len)
 {
-    tool_res_jetty_grp_val_t *val = (tool_res_jetty_grp_val_t *)arg->out.addr;
-    (void)printf("jetty_cnt           : %hu\n", val->jetty_cnt);
-    (void)printf("jetty_list             : ");
-    for (uint32_t i = 0; i < val->jetty_cnt; i++) {
-        (void)printf("%u ", val->jetty_list[i]);
+    struct nlattr *nla;
+    int rem;
+
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_JTGRP_JETTY_CNT) {
+            (void)printf("jetty_cnt           : %u\n", nla_get_u32(nla));
+            (void)printf("jetty_list             : ");
+        }
+
+        if (type == UBCORE_RES_JTGRP_JETTY_VAL) {
+            (void)printf("%u ", nla_get_u32(nla));
+        }
     }
     (void)printf("\n");
 }
 
-static void admin_print_res_jfc(const admin_cmd_query_res_t *arg)
+static void admin_print_res_jfc(struct nlattr *head)
 {
-    tool_res_jfc_val_t *val = (tool_res_jfc_val_t *)arg->out.addr;
-    (void)printf("jfc_id              : %u\n", val->jfc_id);
-    (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jfc_state_to_string(val->state));
-    (void)printf("depth               : %u\n", val->depth);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_JFC_VAL) {
+        tool_res_jfc_val_t *val = (tool_res_jfc_val_t *)nla_data(head);
+        (void)printf("jfc_id              : %u\n", val->jfc_id);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jfc_state_to_string(val->state));
+        (void)printf("depth               : %u\n", val->depth);
+    }
 }
 
-static void admin_print_res_rc(const admin_cmd_query_res_t *arg)
+static void admin_print_res_rc(struct nlattr *head)
 {
-    tool_res_rc_val_t *val = (tool_res_rc_val_t *)arg->out.addr;
-    (void)printf("type                : %u\n", val->type);
-    (void)printf("rc_id               : %u\n", val->rc_id);
-    (void)printf("depth               : %hu\n", val->depth);
-    (void)printf("state               : %u\n", (uint32_t)val->state);
+    int type = nla_type(head);
+    if (type == UBCORE_RES_RC_VAL) {
+        tool_res_rc_val_t *val = (tool_res_rc_val_t *)nla_data(head);
+        (void)printf("type                : %u\n", val->type);
+        (void)printf("rc_id               : %u\n", val->rc_id);
+        (void)printf("depth               : %hu\n", val->depth);
+        (void)printf("state               : %u\n", (uint32_t)val->state);
+    }
 }
 
-static void admin_print_res_seg(const admin_cmd_query_res_t *arg)
+static void admin_print_res_seg(struct nlattr *head, int len)
 {
-    tool_res_seg_val_t *val = (tool_res_seg_val_t *)arg->out.addr;
-    (void)printf("eid                 :"EID_FMT" \n", EID_ARGS(val->ubva.eid));
-    (void)printf("va                  : %lu\n", val->ubva.va);
-    (void)printf("len                 : %lu\n", val->len);
-    (void)printf("token_id            : %u\n", val->token_id);
-    (void)printf("token_value         : %u\n", val->token_value.token);
-}
+    struct nlattr *nla;
+    int rem;
+    uint32_t i = 0;
 
-static void admin_print_res_dev(const admin_cmd_query_res_t *arg)
-{
-    uint32_t i;
-    tool_res_dev_val_t *val = (tool_res_dev_val_t *)arg->out.addr;
+    nla_for_each_attr(nla, head, len, rem) {
+        int type = nla_type(nla);
+        if (type == UBCORE_RES_SEGVAL_SEG_CNT) {
+            (void)printf("seg_cnt             : %u\n", nla_get_u32(nla));
+            (void)printf("seg_list            : \n");
+        }
 
-    (void)printf("----------SEG----------\n");
-    (void)printf("seg_cnt             :%u \n", val->seg_cnt);
-    for (i = 0; i < val->seg_cnt; i++) {
-        (void)printf("seg[%u].ubva.eid    \t:"EID_FMT"\n", i, EID_ARGS(val->seg_list[i].ubva.eid));
-        (void)printf("seg[%u].ubva.va     \t:%lu\n", i, val->seg_list[i].ubva.va);
-        (void)printf("seg[%u].len         \t:%lu\n", i, val->seg_list[i].len);
-        (void)printf("seg[%u].token_id      \t:%u\n", i, val->seg_list[i].token_id);
-    }
-    (void)printf("\n----------JFS----------\n");
-    (void)printf("jfs_cnt             :%u \n", val->jfs_cnt);
-    for (i = 0; i < val->jfs_cnt; i++) {
-        (void)printf("jfs_id[%u]          \t:%u\n", i, val->jfs_list[i]);
-    }
-    (void)printf("\n----------JFR----------\n");
-    (void)printf("jfr_cnt             :%u \n", val->jfr_cnt);
-    for (i = 0; i < val->jfr_cnt; i++) {
-        (void)printf("jfr_id[%u]           \t:%u\n", i, val->jfr_list[i]);
-    }
-    (void)printf("\n----------JFC----------\n");
-    (void)printf("jfc_cnt             :%u \n", val->jfc_cnt);
-    for (i = 0; i < val->jfc_cnt; i++) {
-        (void)printf("jfc_id[%u]           \t:%u\n", i, val->jfc_list[i]);
-    }
-    (void)printf("\n---------JETTY---------\n");
-    (void)printf("jetty_cnt           :%u \n", val->jetty_cnt);
-    for (i = 0; i < val->jetty_cnt; i++) {
-        (void)printf("jetty_id[%u]         \t:%u\n", i, val->jetty_list[i]);
-    }
-    (void)printf("\n------JETTY_GROUP------\n");
-    (void)printf("jetty_group_cnt     :%u \n", val->jetty_group_cnt);
-    for (i = 0; i < val->jetty_group_cnt; i++) {
-        (void)printf("jetty_group_id[%u]   \t:%u\n", i, val->jetty_group_list[i]);
-    }
-    (void)printf("\n----------RC-----------\n");
-    (void)printf("rc_cnt              :%u \n", val->rc_cnt);
-    for (i = 0; i < val->rc_cnt; i++) {
-        (void)printf("rc_id[%u]           \t:%u\n", i, val->rc_list[i]);
-    }
-    (void)printf("\n----------VTP----------\n");
-    (void)printf("vtp_cnt             :%u \n", val->vtp_cnt);
-    for (i = 0; i < val->vtp_cnt; i++) {
-        (void)printf("vtp_id[%u]          \t:%u\n", i, val->vtp_list[i]);
-    }
-    (void)printf("\n----------TP-----------\n");
-    (void)printf("tp_cnt              :%u \n", val->tp_cnt);
-    for (i = 0; i < val->tp_cnt; i++) {
-        (void)printf("tp_id[%u]           \t:%u\n", i, val->tp_list[i]);
-    }
-    (void)printf("\n----------TPG----------\n");
-    (void)printf("tpg_cnt             :%u \n", val->tpg_cnt);
-    for (i = 0; i < val->tpg_cnt; i++) {
-        (void)printf("tpg_id[%u]          \t:%u\n", i, val->tpg_list[i]);
-    }
-    (void)printf("\n----------UTP----------\n");
-    (void)printf("utp_cnt             :%u \n", val->utp_cnt);
-    for (i = 0; i < val->utp_cnt; i++) {
-        (void)printf("utp_id[%u]          \t:%u\n", i, val->utp_list[i]);
+        if (type == UBCORE_RES_SEGVAL_SEG_VAL) {
+            tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
+            (void)printf("seg_list idx: %u\n", i);
+            (void)printf("eid                 :"EID_FMT" \n", EID_ARGS(val->ubva.eid));
+            (void)printf("va                  : %lu\n", val->ubva.va);
+            (void)printf("len                 : %lu\n", val->len);
+            (void)printf("token_id            : %u\n", val->token_id);
+            (void)printf("\n");
+            i++;
+        }
     }
     (void)printf("\n");
 }
 
-static void admin_print_res(admin_cmd_query_res_t *arg)
+static void admin_print_res_dev(struct nlattr *head, int len)
 {
-    (void)printf("**********%s**********\n", g_query_res_type[arg->in.type]);
-    switch (arg->in.type) {
-        case TOOL_RES_KEY_UPI:
-            admin_print_res_upi(arg);
-            break;
-        case TOOL_RES_KEY_VTP:
-            admin_print_res_vtp(arg);
-            break;
-        case TOOL_RES_KEY_TP:
-            admin_print_res_tp(arg);
-            break;
+    int rem;
+    uint32_t i = 0;
+    struct nlattr *nla;
+
+    nla_for_each_attr(nla, head, len, rem)
+    {
+        int type = nla_type(nla);
+        switch (type) {
+            case UBCORE_RES_DEV_SEG_CNT: {
+                (void)printf("----------SEG----------\n");
+                (void)printf("seg_cnt             :%u \n", nla_get_u32(nla));
+                break;
+            }
+            case UBCORE_RES_DEV_SEG_VAL: {
+                tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
+                (void)printf("seg[%u].ubva.eid    \t:" EID_FMT "\n", i, EID_ARGS(val->ubva.eid));
+                (void)printf("seg[%u].ubva.va     \t:%lu\n", i, val->ubva.va);
+                (void)printf("seg[%u].len         \t:%lu\n", i, val->len);
+                (void)printf("seg[%u].token_id      \t:%u\n", i, val->token_id);
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_JFS_CNT: {
+                (void)printf("\n----------JFS----------\n");
+                (void)printf("jfs_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_JFS_VAL: {
+                (void)printf("jfs_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_JFR_CNT: {
+                (void)printf("\n----------JFR----------\n");
+                (void)printf("jfr_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_JFR_VAL: {
+                (void)printf("jfr_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_JFC_CNT: {
+                (void)printf("\n----------JFR----------\n");
+                (void)printf("jfc_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_JFC_VAL: {
+                (void)printf("jfc_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_JETTY_CNT: {
+                (void)printf("\n---------JETTY---------\n");
+                (void)printf("jetty_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_JETTY_VAL: {
+                (void)printf("jetty_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_JTGRP_CNT: {
+                (void)printf("\n------JETTY_GROUP------\n");
+                (void)printf("jetty_group_cnt     :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_JTGRP_VAL: {
+                (void)printf("jetty_group_id[%u]   \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_RC_CNT: {
+                (void)printf("\n----------RC-----------\n");
+                (void)printf("rc_cnt              :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_RC_VAL: {
+                (void)printf("rc_id[%u]           \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_VTP_CNT: {
+                (void)printf("\n----------VTP----------\n");
+                (void)printf("vtp_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_VTP_VAL: {
+                (void)printf("vtp_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_TP_CNT: {
+                (void)printf("\n----------TP-----------\n");
+                (void)printf("tp_cnt              :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_TP_VAL: {
+                (void)printf("tp_id[%u]           \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_TPG_CNT: {
+                (void)printf("\n----------TPG----------\n");
+                (void)printf("tpg_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_TPG_VAL: {
+                (void)printf("tpg_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            case UBCORE_RES_DEV_UTP_CNT: {
+                (void)printf("\n----------UTP----------\n");
+                (void)printf("utp_cnt             :%u \n", nla_get_u32(nla));
+                i = 0;
+                break;
+            }
+            case UBCORE_RES_DEV_UTP_VAL: {
+                (void)printf("utp_id[%u]          \t:%u\n", i, nla_get_u32(nla));
+                i++;
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    (void)printf("\n");
+}
+
+static void print_query_res(struct nlattr *attr_ptr, netlink_cb_par *cb_par, int len)
+{
+    (void)printf("**********%s**********\n", g_query_res_type[cb_par->type]);
+    switch (cb_par->type) {
         case TOOL_RES_KEY_TPG:
-            admin_print_res_tpg(arg);
-            break;
-        case TOOL_RES_KEY_UTP:
-            admin_print_res_utp(arg);
-            break;
-        case TOOL_RES_KEY_JFS:
-            admin_print_res_jfs(arg);
-            break;
-        case TOOL_RES_KEY_JFR:
-            admin_print_res_jfr(arg);
-            break;
-        case TOOL_RES_KEY_JETTY:
-            admin_print_res_jetty(arg);
+            admin_print_res_tpg(attr_ptr, len);
             break;
         case TOOL_RES_KEY_JETTY_GROUP:
-            admin_print_res_jetty_grp(arg);
-            break;
-        case TOOL_RES_KEY_JFC:
-            admin_print_res_jfc(arg);
-            break;
-        case TOOL_RES_KEY_RC:
-            admin_print_res_rc(arg);
+            admin_print_res_jetty_grp(attr_ptr, len);
             break;
         case TOOL_RES_KEY_SEG:
-            admin_print_res_seg(arg);
+            admin_print_res_seg(attr_ptr, len);
             break;
         case TOOL_RES_KEY_DEV_CTX:
-            admin_print_res_dev(arg);
+            admin_print_res_dev(attr_ptr, len);
+            break;
+        case TOOL_RES_KEY_UPI:
+            admin_print_res_upi(attr_ptr);
+            break;
+        case TOOL_RES_KEY_VTP:
+            admin_print_res_vtp(attr_ptr);
+            break;
+        case TOOL_RES_KEY_TP:
+            admin_print_res_tp(attr_ptr);
+            break;
+        case TOOL_RES_KEY_UTP:
+            admin_print_res_utp(attr_ptr);
+            break;
+        case TOOL_RES_KEY_JFS:
+            admin_print_res_jfs(attr_ptr);
+            break;
+        case TOOL_RES_KEY_JFR:
+            admin_print_res_jfr(attr_ptr);
+            break;
+        case TOOL_RES_KEY_JETTY:
+            admin_print_res_jetty(attr_ptr);
+            break;
+        case TOOL_RES_KEY_JFC:
+            admin_print_res_jfc(attr_ptr);
+            break;
+        case TOOL_RES_KEY_RC:
+            admin_print_res_rc(attr_ptr);
             break;
         default:
             break;
     }
 }
 
-static inline void admin_dealloc_res_tp_list(const tool_config_t *cfg, uint64_t addr)
+static int cb_handler(struct nl_msg *msg, void *arg)
 {
-    tool_res_tpg_val_t *tpg = (tool_res_tpg_val_t *)addr;
-    if (tpg == NULL || tpg->tp_list == NULL) {
-        (void)printf("Invalid argument: tp_list.\n");
-        return;
-    }
-    free(tpg->tp_list);
-}
+    (void)printf("enter cb\n");
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attr_ptr = genlmsg_data(genlhdr);
+    int len = genlmsg_attrlen(genlhdr, 0);
 
-static inline int admin_alloc_res_tp_list(const tool_config_t *cfg, uint64_t addr)
-{
-    tool_res_tpg_val_t *tpg = (tool_res_tpg_val_t *)addr;
-
-    tpg->tp_list = calloc(1, sizeof(uint32_t) * tpg->tp_cnt);
-    if (tpg->tp_list == NULL) {
-        return -1;
-    }
+    netlink_cb_par *cb_par = (netlink_cb_par *)arg;
+    print_query_res(attr_ptr, cb_par, len);
 
     return 0;
 }
 
-static inline void admin_dealloc_res_jetty_list(const tool_config_t *cfg, uint64_t addr)
+static int admin_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, int genl_id, netlink_cb_par *cb_arg)
 {
-    tool_res_jetty_grp_val_t *jetty_grp = (tool_res_jetty_grp_val_t *)addr;
-    if (jetty_grp == NULL || jetty_grp->jetty_list == NULL) {
-        (void)printf("Invalid argument: jetty_list.\n");
-        return;
-    }
-    free(jetty_grp->jetty_list);
-}
-
-static inline int admin_alloc_res_jetty_list(const tool_config_t *cfg, uint64_t addr)
-{
-    tool_res_jetty_grp_val_t *jetty_grp = (tool_res_jetty_grp_val_t *)addr;
-
-    jetty_grp->jetty_list = calloc(1, sizeof(uint32_t) * jetty_grp->jetty_cnt);
-    if (jetty_grp->jetty_list == NULL) {
-        return -1;
-    }
-
-    return 0;
-}
-
-static void admin_dealloc_res_dev(const tool_config_t *cfg, uint64_t addr)
-{
-    tool_res_dev_val_t *dev = (tool_res_dev_val_t *)addr;
-    if (dev->seg_list != NULL) {
-        free(dev->seg_list);
-        dev->seg_list = NULL;
-    }
-    if (dev->jfs_list != NULL) {
-        free(dev->jfs_list);
-        dev->jfs_list = NULL;
-    }
-    if (dev->jfr_list != NULL) {
-        free(dev->jfr_list);
-        dev->jfr_list = NULL;
-    }
-    if (dev->jfc_list != NULL) {
-        free(dev->jfc_list);
-        dev->jfc_list = NULL;
-    }
-    if (dev->jetty_list != NULL) {
-        free(dev->jetty_list);
-        dev->jetty_list = NULL;
-    }
-    if (dev->jetty_group_list != NULL) {
-        free(dev->jetty_group_list);
-        dev->jetty_group_list = NULL;
-    }
-    if (dev->rc_list != NULL) {
-        free(dev->rc_list);
-        dev->rc_list = NULL;
-    }
-    if (dev->vtp_list != NULL) {
-        free(dev->vtp_list);
-        dev->vtp_list = NULL;
-    }
-    if (dev->tp_list != NULL) {
-        free(dev->tp_list);
-        dev->tp_list = NULL;
-    }
-    if (dev->tpg_list != NULL) {
-        free(dev->tpg_list);
-        dev->tpg_list = NULL;
-    }
-    if (dev->utp_list != NULL) {
-        free(dev->utp_list);
-        dev->utp_list = NULL;
-    }
-}
-
-static int admin_alloc_res_dev(const tool_config_t *cfg, uint64_t addr)
-{
-    tool_res_dev_val_t *dev = (tool_res_dev_val_t *)addr;
-
-    dev->seg_list = (tool_seg_info_t *)calloc(1, sizeof(tool_seg_info_t) * dev->seg_cnt);
-    if (dev->seg_list == NULL) {
-        return -1;
-    }
-    dev->jfs_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfs_cnt);
-    if (dev->jfs_list == NULL) {
-        goto free_seg_list;
-    }
-    dev->jfr_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfr_cnt);
-    if (dev->jfr_list == NULL) {
-        goto free_jfs_list;
-    }
-
-    dev->jfc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jfc_cnt);
-    if (dev->jfc_list == NULL) {
-        goto free_jfr_list;
-    }
-
-    dev->jetty_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jetty_cnt);
-    if (dev->jetty_list == NULL) {
-        goto free_jfc_list;
-    }
-
-    dev->jetty_group_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->jetty_group_cnt);
-    if (dev->jetty_group_list == NULL) {
-        goto free_jetty_list;
-    }
-
-    dev->rc_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->rc_cnt);
-    if (dev->rc_list == NULL) {
-        goto free_jetty_group_list;
-    }
-
-    dev->vtp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->vtp_cnt);
-    if (dev->vtp_list == NULL) {
-        goto free_rc_list;
-    }
-
-    dev->tp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->tp_cnt);
-    if (dev->tp_list == NULL) {
-        goto free_vtp_list;
-    }
-
-    dev->tpg_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->tpg_cnt);
-    if (dev->tpg_list == NULL) {
-        goto free_tp_list;
-    }
-
-    dev->utp_list = (uint32_t *)calloc(1, sizeof(uint32_t) * dev->utp_cnt);
-    if (dev->utp_list == NULL) {
-        goto free_tpg_list;
-    }
-
-    return 0;
-free_tpg_list:
-    free(dev->tpg_list);
-free_tp_list:
-    free(dev->tp_list);
-free_vtp_list:
-    free(dev->vtp_list);
-free_rc_list:
-    free(dev->rc_list);
-free_jetty_group_list:
-    free(dev->jetty_group_list);
-free_jetty_list:
-    free(dev->jetty_list);
-free_jfc_list:
-    free(dev->jfc_list);
-free_jfr_list:
-    free(dev->jfr_list);
-free_jfs_list:
-    free(dev->jfs_list);
-free_seg_list:
-    free(dev->seg_list);
-    return -1;
-}
-
-static int admin_cmd_ioctl_res(int dev_fd, const tool_config_t *cfg, uint64_t addr)
-{
+    admin_cmd_query_res_t *arg;
     urma_cmd_hdr_t hdr;
-    admin_cmd_query_res_t arg = {0};
+    arg = calloc(1, sizeof(admin_cmd_query_res_t));
+    if (arg == NULL) {
+        return -1;
+    }
+
+    arg->in.key = cfg->key.key;
+    arg->in.type = cfg->key.type;
+    arg->in.key_ext = cfg->key.key_ext;
+    arg->in.key_cnt = cfg->key.key_cnt;
+    (void)memcpy(arg->in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
+    cb_arg->type = arg->in.type;
 
     hdr.command = (uint32_t)URMA_CORE_CMD_QUERY_RES;
     hdr.args_len = (uint32_t)sizeof(admin_cmd_query_res_t);
-    hdr.args_addr = (uint64_t)&arg;
+    hdr.args_addr = (uint64_t)arg;
 
-    arg.in.key = cfg->key.key;
-    arg.in.type = cfg->key.type;
-    arg.in.key_ext = cfg->key.key_ext;
-    arg.in.key_cnt = cfg->key.key_cnt;
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-    arg.in.query_cnt = true;
-    arg.out.addr = addr;
-    arg.out.len = (uint32_t)g_query_res_size[cfg->key.type];
-
-    /* first ioctl to query cnt */
-    int ret = ioctl(dev_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("Failed to ioctl, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
-        goto deaalloc;
+    int ret = cmd_nlsend(sock, genl_id, &hdr);
+    if (ret < 0) {
+        (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
+        free(arg);
+        return ret;
     }
 
-    /* use size from query_cnt to alloc memory */
-    if (cfg->key.type == TOOL_RES_KEY_TPG && admin_alloc_res_tp_list(cfg, addr) != 0) {
-        (void)printf("Failed to alloc res tp list");
-        return -1;
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
-    if (cfg->key.type == TOOL_RES_KEY_JETTY_GROUP && admin_alloc_res_jetty_list(cfg, addr) != 0) {
-        (void)printf("Failed to alloc res jetty list");
-        return -1;
-    }
-    if (cfg->key.type == TOOL_RES_KEY_DEV_CTX && admin_alloc_res_dev(cfg, addr) != 0) {
-        (void)printf("Failed to alloc res dev");
-        return -1;
-    }
-
-    arg.in.query_cnt = false;
-
-    ret = ioctl(dev_fd, URMA_CORE_CMD, &hdr);
-    if (ret != 0) {
-        (void)printf("Failed to ioctl, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
-        goto deaalloc;
-    }
-
-    admin_print_res(&arg);
-
-deaalloc:
-    if (cfg->key.type == TOOL_RES_KEY_TPG) {
-        admin_dealloc_res_tp_list(cfg, addr);
-    }
-    if (cfg->key.type == TOOL_RES_KEY_JETTY_GROUP) {
-        admin_dealloc_res_jetty_list(cfg, addr);
-    }
-    if (cfg->key.type == TOOL_RES_KEY_DEV_CTX) {
-        admin_dealloc_res_dev(cfg, addr);
-    }
-    return ret;
-}
-
-static int admin_cmd_query_res(int dev_fd, const tool_config_t *cfg)
-{
-    void *addr = calloc(1, g_query_res_size[cfg->key.type]);
-    if (addr == NULL) {
-        return -ENOMEM;
-    }
-
-    if (admin_cmd_ioctl_res(dev_fd, cfg, (uint64_t)addr) != 0) {
-        (void)printf("Failed to query res by ioctl, type: %u.\n", cfg->key.type);
-        free(addr);
-        return -1;
-    }
-    free(addr);
+    free(arg);
     return 0;
 }
 
 int admin_show_res(const tool_config_t *cfg)
 {
-    char dev_path[FILE_PATH_MAX] = {0};
-    int dev_fd;
+    struct nl_sock *sock = NULL;
+    int genl_id;
+    netlink_cb_par nl_cb_agr;
 
-    if (cfg->specify_device == false) {
-        (void)printf("The device must be specified in the show res command.\n");
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
+        return -1;
+    }
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_handler, &nl_cb_agr);
+    if (admin_cmd_query_res(sock, cfg, genl_id, &nl_cb_agr) < 0) {
+        (void)printf("Failed to query stats by ioctl.\n");
+        nl_close(sock);
+        nl_socket_free(sock);
         return -1;
     }
 
-    dev_fd = open(UBCORE_DEV_PATH, O_RDWR);
-    if (dev_fd < 0) {
-        (void)printf("Failed to open ubcore dev: %s, errno: %d.\n", dev_path, errno);
-        return -1;
-    }
-    if (admin_cmd_query_res(dev_fd, cfg) != 0) {
-        (void)printf("Failed to query res by ioctl.\n");
-        (void)close(dev_fd);
-        return -1;
-    }
-
-    (void)close(dev_fd);
+    nl_close(sock);
+    nl_socket_free(sock);
     return 0;
+}
+
+static int ns_cb_handler(struct nl_msg *msg, void *arg)
+{
+    return NL_OK;
+}
+
+static int admin_nl_send_recv(struct nl_sock *sock, struct nl_msg *msg)
+{
+    int ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        (void)printf("Netlink send failed, ret:%d, errno: %d..\n", ret, errno);
+        return ret;
+    }
+
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("Netlink recv failed, ret:%d, errno:%d.\n", ret, errno);
+    }
+    return ret;
 }
 
 int admin_set_ns_mode(const tool_config_t *cfg)
 {
-    admin_nl_set_ns_mode_t req = {0};
-    admin_nl_resp resp = {0};
+    struct nl_sock *sock = NULL;
+    int genl_id;
 
-    req.ns_mode = cfg->ns_mode;
-    int ret = admin_nl_talk(&req, sizeof(admin_nl_set_ns_mode_t), ADMIN_NL_SET_NS_MODE, &resp);
-    if (ret != 0 || resp.ret != 0) {
-        printf("failed to set ns mode.\n");
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         return -1;
     }
-    return 0;
+
+    nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, ns_cb_handler, NULL);
+
+    void *msg_hdr;
+    struct nl_msg *msg;
+    int ret = 0, nlmsg_flags = 0;
+
+    msg = nlmsg_alloc();
+    if (msg == NULL) {
+        (void)printf("Unable to allocate netlink message\n");
+        ret = -ENOMEM;
+        goto close_sock;
+    }
+
+    msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, URMA_CORE_SET_NS_MODE,
+        UBCORE_GENL_FAMILY_VERSION);
+    if (msg_hdr == NULL) {
+        (void)printf("Unable to write genl header\n");
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    ret = nla_put_u8(msg, UBCORE_ATTR_NS_MODE, cfg->ns_mode);
+    if (ret < 0) {
+        (void)printf("Unable to add ns mode: %d\n", ret);
+        goto out;
+    }
+
+    ret = admin_nl_send_recv(sock, msg);
+
+out:
+    nlmsg_free(msg);
+close_sock:
+    nl_close(sock);
+    nl_socket_free(sock);
+    return ret;
 }
 
 int admin_set_dev_ns(const tool_config_t *cfg)
 {
-    admin_nl_set_dev_ns_t req = {0};
-    admin_nl_resp resp = {0};
+    int ret = 0;
     int ns_fd = -1;
-
-    memcpy(req.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
 
     if (strlen(cfg->ns) == 0) {
         (void)printf("invalid ns path %s.\n", cfg->ns);
@@ -873,18 +938,58 @@ int admin_set_dev_ns(const tool_config_t *cfg)
     ns_fd = urma_admin_get_ns_fd(cfg->ns);
     if (ns_fd < 0) {
         (void)printf("set ns failed, ns %s.\n", cfg->ns);
-        return -1;
+        return ns_fd;
     }
-    req.ns_fd = ns_fd;
 
-    int ret = admin_nl_talk(&req, sizeof(admin_nl_set_dev_ns_t), ADMIN_NL_SET_DEV_NS, &resp);
-    if (ret != 0 || resp.ret != 0) {
+    struct nl_sock *sock = NULL;
+    int genl_id;
+
+    sock = alloc_and_connect_nl(&genl_id);
+    if (sock == NULL) {
         ret = -1;
-        printf("failed to set ns %s for dev %s.\n", cfg->ns, cfg->dev_name);
+        goto close_ns_fd;
     }
 
-    if (ns_fd >= 0) {
-        (void)close(ns_fd);
+    nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, ns_cb_handler, NULL);
+
+    void *msg_hdr;
+    struct nl_msg *msg;
+    int nlmsg_flags = 0;
+
+    msg = nlmsg_alloc();
+    if (msg == NULL) {
+        (void)printf("Unable to allocate netlink message\n");
+        ret = -ENOMEM;
+        goto close_sock;
     }
+
+    msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, URMA_CORE_SET_DEV_NS,
+        UBCORE_GENL_FAMILY_VERSION);
+    if (msg_hdr == NULL) {
+        (void)printf("Unable to write genl header\n");
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    ret = nla_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    if (ret < 0) {
+        (void)printf("Unable to add device name: %d\n", ret);
+        goto out;
+    }
+
+    ret = nla_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    if (ret < 0) {
+        (void)printf("Unable to add ns fd: %d\n", ret);
+        goto out;
+    }
+
+    ret = admin_nl_send_recv(sock, msg);
+out:
+    nlmsg_free(msg);
+close_sock:
+    nl_close(sock);
+    nl_socket_free(sock);
+close_ns_fd:
+    (void)close(ns_fd);
     return ret;
 }

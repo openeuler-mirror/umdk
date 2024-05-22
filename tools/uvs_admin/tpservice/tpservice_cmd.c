@@ -39,7 +39,7 @@ static const struct option g_tpservice_show_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_tpservice_show_cmd_opt_usage[] = {
-    {TPSERVICE_OPT_HELP_LONG,         "this command need none opt.\n" },
+    {TPSERVICE_OPT_HELP_LONG,         "this command need none opt.", false},
 };
 
 static const uvs_admin_cmd_usage_t g_tpservice_show_cmd_usage = {
@@ -76,8 +76,15 @@ static int32_t tpservice_cmd_prep_args(uvs_admin_cmd_ctx_t *ctx)
 
 static void uvs_admin_print_tpservice(uvs_admin_service_show_rsp_t *show_rsp)
 {
-    char listen_ip[INET_ADDRSTRLEN] = {0};
-    (void)inet_ntop(AF_INET, &show_rsp->service_ip, listen_ip, INET_ADDRSTRLEN);
+#define IPV4_MAP_IPV6_PREFIX 0x0000ffff
+    char listen_ip[INET6_ADDRSTRLEN] = {0};
+
+    if (show_rsp->service_ip.in4.resv == 0 && show_rsp->service_ip.in4.prefix == htonl(IPV4_MAP_IPV6_PREFIX)) {
+        (void)inet_ntop(AF_INET, &show_rsp->service_ip.in4.addr, listen_ip, INET_ADDRSTRLEN);
+    } else {
+        (void)inet_ntop(AF_INET6, &show_rsp->service_ip, listen_ip, INET6_ADDRSTRLEN);
+    }
+
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("server_ip                  : %s\n", listen_ip);
     (void)printf("port_id                    : %hu\n", show_rsp->port_id);

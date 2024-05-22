@@ -23,7 +23,7 @@
 #include "urma_private.h"
 
 #define URMA_MAX_VALUE_LEN 64   // value length for urma_read_sysfs_device tmp_value arry
-#define URMA_CLASS_PATH  "/sys/class/uburma"
+#define URMA_CLASS_PATH  "/sys/class/ubcore"
 #define URMA_DEV_PATH "/dev/uburma"
 #define URMA_PORT_LEN 16
 #define URMA_DEV_PATH_MAX  (URMA_MAX_SYSFS_PATH + URMA_PORT_LEN)
@@ -52,7 +52,7 @@ ssize_t urma_read_sysfs_file(const char *dir, const char *file, char *buf, size_
     }
 
     len = read(fd, buf, size);
-    if (len <= 0 || len >= (ssize_t)size) {
+    if (len <= 0 || len > (ssize_t)size) {
         URMA_LOG_ERR("Failed read file: %s, ret:%zd, errno:%d.\n", file_path, len, errno);
         free(file_path);
         (void)close(fd);
@@ -63,8 +63,13 @@ ssize_t urma_read_sysfs_file(const char *dir, const char *file, char *buf, size_
 
     if (buf[len - 1] == '\n') {
         len = len - 1;
+        buf[len] = '\0';
+    } else if (len < (ssize_t)size) {
+        buf[len] = '\0';
+    } else {
+        // If >= size, it will fail directly
+        return -1;
     }
-    buf[len] = '\0';
     return len;
 }
 
@@ -174,10 +179,13 @@ void urma_update_port_attr(urma_sysfs_dev_t *sysfs_dev)
 
 static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
 {
+    char tmp_value[URMA_MAX_VALUE_LEN];
     char *sysfs_path = sysfs_dev->sysfs_path;
     urma_device_attr_t *attr = &sysfs_dev->dev_attr;
 
-    attr->guid = urma_parse_value_u64(sysfs_path, "guid");
+    (void)urma_read_sysfs_file(sysfs_path, "guid", tmp_value, URMA_MAX_VALUE_LEN);
+    (void)urma_str_to_eid(tmp_value, (urma_eid_t *)&attr->guid);
+
     attr->dev_cap.feature.value = urma_parse_value_u32(sysfs_path, "feature");
     attr->dev_cap.max_jfc = urma_parse_value_u32(sysfs_path, "max_jfc");
     attr->dev_cap.max_jfs = urma_parse_value_u32(sysfs_path, "max_jfs");
@@ -200,7 +208,7 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.ceq_cnt = urma_parse_value_u32(sysfs_path, "ceq_cnt");
     attr->dev_cap.max_tp_in_tpg = urma_parse_value_u32(sysfs_path, "max_tp_in_tpg");
     attr->port_cnt = urma_parse_value_u8(sysfs_path, "port_count");
-    attr->max_eid_cnt = urma_parse_value_u16(sysfs_path, "max_eid_cnt");
+    attr->dev_cap.max_eid_cnt = urma_parse_value_u16(sysfs_path, "max_eid_cnt");
 
     if (attr->port_cnt > 0 && attr->port_cnt != MAX_PORT_CNT) {
         urma_parse_port_attr(sysfs_path, attr);
@@ -225,7 +233,7 @@ urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
     urma_sysfs_dev_t *sysfs_dev = NULL;
     struct stat stat_buf;
 
-    if (dent->d_name[0] == '.') {
+    if (dent->d_name[0] == '.' || strcmp(dent->d_name, "ubcore") == 0) {
         return NULL;
     }
 

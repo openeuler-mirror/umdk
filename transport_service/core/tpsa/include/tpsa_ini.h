@@ -33,25 +33,7 @@ typedef struct file_info {
     char key[TPSA_MAX_FILE_LEN];
 } file_info_t;
 
-typedef enum tpsa_map_table_field {
-    TPSA_MAP_TBL_KEY = 0, /* EID */
-    TPSA_MAP_TBL_PEER_TPS,
-    TPSA_MAP_TBL_APRAY_EN,
-    TPSA_MAP_TBL_OOR_EN,
-    TPSA_MAP_TBL_SR_EN,
-    TPSA_MAP_TBL_RCTP_START,
-    TPSA_MAP_TBL_ACK_RCTP_START,
-    TPSA_MAP_TBL_RMTP_START,
-    TPSA_MAP_TBL_ACK_RMTP_START,
-    TPSA_MAP_TBL_TP_RANGE,
-    TPSA_MAP_TBL_TP_CC_EN,
-    TPSA_MAP_TBL_UNDERLAY_EID,
-    TPSA_MAP_TBL_NETADDR,
-    TPSA_MAP_TBL_MAX
-} tpsa_map_tbl_field_t;
-
 int tpsa_read_value_by_etc_file(file_info_t *file, char *pValue, size_t len);
-int tpsa_read_map_table(file_info_t *file);
 #ifdef __cplusplus
 }
 #endif

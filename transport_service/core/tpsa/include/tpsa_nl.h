@@ -27,9 +27,8 @@ extern "C" {
 #define TPSA_NL_MSG_BUF_LEN 1024
 #define TPSA_NETLINK_UBCORE_TYPE 24
 #define TPSA_NET_LINK_PORT 100
-#define TPSA_LM_REQ_SIZE 15  /* TODO: fix */
+#define TPSA_LM_REQ_SIZE 15
 #define TPSA_MAX_SOCKET_MSG_LEN (1024 * 3)
-#define TPSA_NON_VIRTUALIZATION_FE_IDX 0xffff
 
 typedef enum tpsa_nlmsg_type {
     TPSA_NL_CREATE_TP_REQ = NLMSG_MIN_TYPE, /* 0x10 */
@@ -51,7 +50,6 @@ typedef enum tpsa_nlmsg_type {
     TPSA_NL_TP_SUSPEND_REQ,
     TPSA_NL_MIGRATE_VTP_SWITCH,
     TPSA_NL_MIGRATE_VTP_ROLLBACK,
-    TPSA_NL_QUERY_TPF_DEV_INFO,
     TPSA_NL_UPDATE_TPF_DEV_INFO_REQ,
     TPSA_NL_UPDATE_TPF_DEV_INFO_RESP,
 } tpsa_nlmsg_type_t;
@@ -62,7 +60,10 @@ typedef enum tpsa_sock_type {
     TPSA_CREATE_ACK,
     TPSA_CREATE_FINISH,
     TPSA_DESTROY_REQ,
+    TPSA_DESTROY_FINISH,
+    TPSA_CREATE_FAIL_RESP,
     TPSA_TABLE_SYC,
+    TPSA_TABLE_SYC_RESP,
     TPSA_LM_MIG_REQ,
     TPSA_LM_MIG_RESP,
     TPSA_FORWARD,
@@ -82,7 +83,7 @@ typedef enum tpsa_nl_resp_status {
 
 typedef struct tpsa_nl_query_tp_req {
     urma_transport_mode_t trans_mode;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } tpsa_nl_query_tp_req_t;
 
@@ -103,9 +104,9 @@ typedef struct tpsa_nl_create_vtp_req {
     uint32_t eid_index;
     uint32_t local_jetty;
     uint32_t peer_jetty;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     bool virtualization;
-    char tpfdev_name[TPSA_MAX_DEV_NAME];
+    char tpf_name[UVS_MAX_DEV_NAME];
     /* for alpha */
     struct tpsa_ta_data ta_data;
     uint32_t udrv_in_len;
@@ -131,10 +132,10 @@ typedef enum tpsa_pattern {
 
 typedef struct tpsa_nl_alloc_eid_req {
     uint32_t eid_index;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     tpsa_pattern_t eid_type;
     bool virtualization;
-    char tpfdev_name[TPSA_MAX_DEV_NAME];
+    char tpf_name[UVS_MAX_DEV_NAME];
 } tpsa_nl_alloc_eid_req_t;
 
 typedef struct tpsa_nl_alloc_eid_resp {
@@ -150,7 +151,7 @@ typedef struct tpsa_nl_alloc_eid_resp tpsa_nl_dealloc_eid_resp_t;
 
 typedef struct tpsa_nl_function_mig_req {
     uint16_t mig_fe_idx; /* The virtual machine number for live migration */
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpsa_nl_function_mig_req_t;
 
 typedef struct tpsa_nl_mig_resp {
@@ -159,14 +160,14 @@ typedef struct tpsa_nl_mig_resp {
 } tpsa_nl_mig_resp_t;
 
 typedef struct tpsa_nl_config_device_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint32_t max_rc_cnt;
     uint32_t max_rc_depth;
     uint32_t min_slice;                 /* TA slice size byte */
     uint32_t max_slice;                 /* TA slice size byte */
     bool is_tpf_dev;
     bool virtualization;
-    char tpfdev_name[TPSA_MAX_DEV_NAME];
+    char tpf_name[UVS_MAX_DEV_NAME];
 } tpsa_nl_config_device_req_t;
 
 typedef struct tpsa_nl_config_device_resp {
@@ -186,7 +187,7 @@ typedef enum tpsa_nl_update_tpf_opcode {
 } tpsa_nl_update_tpf_opcode_t;
 
 typedef struct tpsa_nl_update_tpf_dev_info_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     tpsa_device_feat_t dev_fea;
     uint32_t cc_entry_cnt;
     tpsa_nl_update_tpf_opcode_t opcode;
@@ -220,7 +221,8 @@ struct tpsa_lm_req_entry {
 };
 
 typedef struct tpsa_lm_notification {
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
+    uvs_net_addr_t dst_uvs_ip; /* In a live migration scenario, the tpsa_ip of the migration destination. */
     uint32_t target_rm_num;
     uint32_t target_rc_num;
 
@@ -228,14 +230,14 @@ typedef struct tpsa_lm_notification {
 } tpsa_lm_notification_t;
 
 typedef struct tpsa_lm_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
     bool stop_proc_vtp;
 
     uint32_t rm_vtp_num;
     uint32_t rc_vtp_num;
     uint32_t um_vtp_num;
-    urma_eid_t mig_source; /* the tpsa_ip of the migrate source */
+    uvs_net_addr_t src_uvs_ip; /* the tpsa_ip of the migrate source */
 
     /* by default, vtp entry is construct in "RM -> RC -> UM" sequence */
     struct tpsa_lm_req_entry total_vtp[TPSA_LM_REQ_SIZE];
@@ -244,7 +246,7 @@ typedef struct tpsa_lm_req {
 typedef struct tpsa_lm_resp {
     uint16_t mig_fe_idx;
     bool last_mig_completed;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpsa_lm_resp_t;
 
 typedef struct tpsa_nl_tp_error_req {
@@ -260,18 +262,20 @@ typedef struct tpsa_nl_tp_error_req {
     uint32_t local_jetty_id;
     urma_eid_t peer_eid;
     uint32_t peer_jetty_id;
+    char tpf_dev_name[UVS_MAX_DEV_NAME];
 } tpsa_nl_tp_error_req_t;
 
 typedef struct tpsa_tp_error_msg {
     tpsa_nl_tp_error_req_t nl_tp_err_req;
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
 } tpsa_tp_error_msg_t;
 
 typedef struct tpsa_sock_msg {
     tpsa_sock_type_t msg_type;
 
     tpsa_transport_mode_t trans_mode;
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;    /* Only for live migration */
+    uvs_net_addr_t src_uvs_ip;  /* dip and dst_uvs_ip used when deleting and establishing link */
     urma_eid_t local_eid;
     urma_eid_t peer_eid;
     uint32_t local_jetty;
@@ -281,15 +285,17 @@ typedef struct tpsa_sock_msg {
     uint32_t peer_tpgn;
     uint32_t upi;
     bool live_migrate;
-    bool dip_valid;
-
+    bool migrate_third;
     union {
         tpsa_create_req_t req;
         tpsa_create_resp_t resp;
         tpsa_create_ack_t ack;
         tpsa_create_finish_t finish;
+        tpsa_create_fail_resp_t fail_resp;
         tpsa_destroy_req_t dreq;
+        tpsa_destroy_finish_t dfinish;
         tpsa_table_sync_t tsync;
+        tpsa_table_sync_resp_t tsync_resp;
         tpsa_nl_msg_t nlmsg;
         tpsa_lm_req_t lmmsg;  /* live migrate message */
         tpsa_lm_resp_t lm_resp;
@@ -306,13 +312,14 @@ typedef struct tpsa_netlink_context {
 } tpsa_nl_ctx_t;
 
 typedef struct tpsa_nl_add_sip_req {
-    tpsa_net_addr_t netaddr;
+    uvs_net_addr_info_t netaddr;
     uint32_t prefix_len;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint8_t port_cnt;
     uint8_t port_id[TPSA_MAX_PORT_CNT];
     uint32_t index;
     uint32_t mtu;
+    char netdev_name[UVS_MAX_DEV_NAME]; /* for change mtu */
 } tpsa_nl_add_sip_req_t;
 
 typedef struct tpsa_nl_add_sip_resp {
@@ -320,6 +327,7 @@ typedef struct tpsa_nl_add_sip_resp {
 } tpsa_nl_add_sip_resp_t;
 
 typedef struct tpsa_nl_del_sip_req {
+    char dev_name[UVS_MAX_DEV_NAME];
     uint32_t index;
 } tpsa_nl_del_sip_req_t;
 
@@ -333,11 +341,12 @@ typedef struct tpsa_nl_tp_suspend_req {
     uint16_t data_udp_start;
     uint16_t ack_udp_start;
     uint32_t sip_idx;
+    char tpf_dev_name[UVS_MAX_DEV_NAME];
 } tpsa_nl_tp_suspend_req_t;
 
 typedef struct tpsa_nl_migrate_vtp_req {
     tpsa_vtp_cfg_t vtp_cfg;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     tpsa_nlmsg_type_t msg_type;
 } tpsa_nl_migrate_vtp_req_t;
 
@@ -366,14 +375,14 @@ static ssize_t inline tpsa_nl_recv_msg(tpsa_nl_ctx_t *nl, tpsa_nl_msg_t *msg, si
 }
 
 tpsa_sock_msg_t *tpsa_handle_nl_create_tp_req(tpsa_nl_msg_t *req);
-tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req);
-tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req);
+tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status);
+tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status);
 
 int tpsa_nl_server_init(tpsa_nl_ctx_t *nl);
 void tpsa_nl_server_uninit(tpsa_nl_ctx_t *nl);
 tpsa_nl_msg_t *tpsa_alloc_nlmsg(uint32_t payload_len, const urma_eid_t *src_eid, const urma_eid_t *dst_eid);
 tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_fast(tpsa_nl_msg_t *nlreq, tpsa_nl_resp_status_t status, uint32_t vtpn);
-tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg);
+tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(tpsa_resp_id_t *resp_id, uint32_t vtpn, tpsa_nl_resp_status_t ret);
 tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_wait(uint32_t vtpn, tpsa_create_param_t *cparam);
 tpsa_nl_msg_t *tpsa_nl_destroy_vtp_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status);
 tpsa_nl_msg_t *tpsa_nl_config_device_resp(tpsa_nl_msg_t *req, tpsa_nl_config_device_resp_t *resp);

@@ -20,3 +20,5 @@ target_link_libraries(tpsa gobject-2.0 glib-2.0 urma_common)
 if("${URMA_INSTALL}" STREQUAL "enable")
     install(TARGETS tpsa DESTINATION /usr/lib64)
 endif()
+
+add_subdirectory(include)

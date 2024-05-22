@@ -129,11 +129,13 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp_fast(tpsa_nl_msg_t *nlreq, tpsa_nl_resp_s
     return nlresp;
 }
 
-tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
+tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(tpsa_resp_id_t *resp_id, uint32_t vtpn, tpsa_nl_resp_status_t resp_status)
 {
     tpsa_nl_msg_t *nlresp = NULL;
-    urma_eid_t local_eid = msg->local_eid;
-    urma_eid_t peer_eid = msg->peer_eid;
+    urma_eid_t local_eid; // to be deleted
+    urma_eid_t peer_eid;  // to be deleted
+    (void)memset(&local_eid, 0, sizeof(local_eid));
+    (void)memset(&peer_eid, 0, sizeof(peer_eid));
 
     nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_create_vtp_resp_t),
         &local_eid, &peer_eid);
@@ -146,19 +148,19 @@ tpsa_nl_msg_t *tpsa_nl_create_vtp_resp(uint32_t vtpn, tpsa_sock_msg_t *msg)
     nlresp->hdr.nlmsg_type = TPSA_NL_TPF2FE_RESP;
     nlresp->msg_type = TPSA_NL_TPF2FE_RESP;
     nlresp->hdr.nlmsg_len = tpsa_netlink_msg_len((const tpsa_nl_msg_t *)nlresp);
-    nlresp->nlmsg_seq = msg->content.finish.nlmsg_seq;
+    nlresp->nlmsg_seq = resp_id->nlmsg_seq;
     nlresp->transport_type = TPSA_TRANSPORT_UB;
 
     /* tpsa msg */
     tpsa_nl_resp_host_t *resp_host = (tpsa_nl_resp_host_t *)nlresp->payload;
-    resp_host->src_fe_idx = msg->content.finish.src_function_id;
+    resp_host->src_fe_idx = resp_id->src_fe_idx;
     resp_host->resp.len = (uint32_t)(sizeof(tpsa_nl_create_vtp_resp_t));
-    resp_host->resp.msg_id = msg->content.finish.msg_id;
+    resp_host->resp.msg_id = resp_id->msg_id;
     resp_host->resp.opcode = TPSA_MSG_CREATE_VTP;
 
     /* resp msg */
     tpsa_nl_create_vtp_resp_t *create_vtp_resp = (tpsa_nl_create_vtp_resp_t *)resp_host->resp.data;
-    create_vtp_resp->ret = TPSA_NL_RESP_SUCCESS;
+    create_vtp_resp->ret = resp_status;
     create_vtp_resp->vtpn = vtpn;
 
     return nlresp;
@@ -333,14 +335,14 @@ tpsa_sock_msg_t *tpsa_handle_nl_create_tp_req(tpsa_nl_msg_t *req)
     return info;
 }
 
-tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req)
+tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status)
 {
     urma_eid_t src_eid = req->src_eid;
     urma_eid_t dst_eid = req->dst_eid;
 
     tpsa_nl_msg_t *resp = NULL;
 
-    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t), &src_eid, &dst_eid);
+    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_add_sip_resp_t), &src_eid, &dst_eid);
     if (resp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -353,19 +355,19 @@ tpsa_nl_msg_t *tpsa_get_add_sip_resp(tpsa_nl_msg_t *req)
     resp->transport_type = req->transport_type;
 
     tpsa_nl_add_sip_resp_t *add_sip_resp = (tpsa_nl_add_sip_resp_t *)(void *)resp->payload;
-    add_sip_resp->ret = TPSA_NL_RESP_SUCCESS;
+    add_sip_resp->ret = status;
 
     return resp;
 }
 
-tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req)
+tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req, tpsa_nl_resp_status_t status)
 {
     urma_eid_t src_eid = req->src_eid;
     urma_eid_t dst_eid = req->dst_eid;
 
     tpsa_nl_msg_t *resp = NULL;
 
-    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t), &src_eid, &dst_eid);
+    resp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_del_sip_resp_t), &src_eid, &dst_eid);
     if (resp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
         return NULL;
@@ -378,7 +380,7 @@ tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req)
     resp->transport_type = req->transport_type;
 
     tpsa_nl_del_sip_resp_t *del_sip_resp = (tpsa_nl_del_sip_resp_t *)(void *)resp->payload;
-    del_sip_resp->ret = TPSA_NL_RESP_SUCCESS;
+    del_sip_resp->ret = status;
 
     return resp;
 }
@@ -415,7 +417,7 @@ tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *
     create_eid_resp->eid = ueid->eid;
     create_eid_resp->eid_index = index;
     create_eid_resp->upi = ueid->upi;
-    create_eid_resp->fe_idx = (virtualization == true ? reqmsg->src_fe_idx : TPSA_NON_VIRTUALIZATION_FE_IDX);
+    create_eid_resp->fe_idx = reqmsg->src_fe_idx;
 
     return nlresp;
 }

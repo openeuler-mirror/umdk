@@ -30,7 +30,7 @@ extern "C" {
    We can send re-create notification within the same tpsa in a single msg
    with the help of this table */
 typedef struct tpsa_notify_table_key {
-    urma_eid_t peer_tpsa_eid;
+    uvs_net_addr_t peer_uvs_ip;
 } tpsa_notify_table_key_t;
 
 typedef struct tpsa_notify_table_entry {
@@ -50,8 +50,7 @@ typedef struct tpsa_notify_table {
 typedef struct live_migrate_table_entry {
     struct ub_hmap_node node;
     live_migrate_table_key_t key;
-    int live_migrate_flag; /* ture means that the virtual machine need to started live migration */
-    urma_eid_t dip;
+    uvs_net_addr_t uvs_ip;
 } live_migrate_table_entry_t;
 
 typedef struct live_migrate_table {
@@ -78,17 +77,10 @@ tpsa_notify_table_entry_t *tpsa_notify_table_lookup(tpsa_notify_table_t *tpsa_no
                                                     tpsa_notify_table_key_t *key);
 int tpsa_notify_table_add(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify_table_key_t *key,
                           tpsa_notify_table_entry_t *add_entry);
-int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, urma_eid_t *peer_tpsa_eid,
+int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, uvs_net_addr_t *peer_uvs_ip,
                              rm_vtp_table_entry_t *rm_entry, rc_vtp_table_entry_t *rc_entry);
 int tpsa_notify_table_remove(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify_table_key_t *key);
 void tpsa_notify_table_destroy(tpsa_notify_table_t *tpsa_notify_table);
-
-/*
- * vport del list opts
- */
-void vport_del_list_destroy(struct ub_list *list);
-vport_del_list_node_t *vport_del_list_lookup(struct ub_list *list, vport_key_t *key);
-int vport_del_list_add(struct ub_list *list, vport_table_entry_t *entry);
 
 #ifdef __cplusplus
 }

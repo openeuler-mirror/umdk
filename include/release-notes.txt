@@ -5,6 +5,9 @@ This is the first release of UMDK API. It provides API change records, including
 reason, change items, etc.
 
 %changelog
+* Mon Jan 8 2024 huawei
+- deletion of urma_ex_api.h and redundant enums and structures
+
 * Thur Jun 15 2023 huawei
 - add urma_modify_jfs/urma_query_jfs/urma_flush_jfs/urma_query_jetty/urma_flush_jetty/
   urma_create_jetty_grp/urma_delete_jetty_grp and delete urma_reg_async_event_cb and

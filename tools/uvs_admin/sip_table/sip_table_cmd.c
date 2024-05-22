@@ -36,8 +36,8 @@ enum sip_table_opts {
 #define SIP_TABLE_OPT_DEV_NAME_LONG "dev_name"
     SIP_TABLE_OPT_DEV_NAME_NUM,
 
-#define SIP_TABLE_OPT_IP_LONG "ip"
-    SIP_TABLE_OPT_IP_NUM,
+#define SIP_TABLE_OPT_NET_ADDR_LONG "net_addr"
+    SIP_TABLE_OPT_NET_ADDR_NUM,
 
 #define SIP_TABLE_OPT_VLAN_LONG "vlan"
     SIP_TABLE_OPT_VLAN_NUM,
@@ -48,8 +48,8 @@ enum sip_table_opts {
 #define SIP_TABLE_OPT_PORT_LONG "port"
     SIP_TABLE_OPT_PORT_NUM,
 
-#define SIP_TABLE_OPT_IS_IPV6_LONG "is_ipv6"
-    SIP_TABLE_OPT_IS_IPV6_NUM,
+#define SIP_TABLE_OPT_NET_ADDR_TYPE_LONG "net_addr_type"
+    SIP_TABLE_OPT_NET_ADDR_TYPE_NUM,
 
 #define SIP_TABLE_OPT_PREFIX_LEN_LONG "prefix_len"
         SIP_TABLE_OPT_PREFIX_LEN_NUM,
@@ -71,11 +71,11 @@ static const struct opt_arg g_sip_table_opt_args[SIP_TABLE_OPT_MAX_NUM] = {
     [SIP_TABLE_OPT_HELP_NUM] = {SIP_TABLE_OPT_HELP_LONG, ARG_TYPE_OTHERS},
     [SIP_TABLE_OPT_SIP_IDX_NUM] = {SIP_TABLE_OPT_SIP_IDX_LONG, ARG_TYPE_NUM},
     [SIP_TABLE_OPT_DEV_NAME_NUM] = {SIP_TABLE_OPT_DEV_NAME_LONG, ARG_TYPE_STR},
-    [SIP_TABLE_OPT_IP_NUM] = {SIP_TABLE_OPT_IP_LONG, ARG_TYPE_STR},
+    [SIP_TABLE_OPT_NET_ADDR_NUM] = {SIP_TABLE_OPT_NET_ADDR_LONG, ARG_TYPE_STR},
     [SIP_TABLE_OPT_VLAN_NUM] = {SIP_TABLE_OPT_VLAN_LONG, ARG_TYPE_NUM},
     [SIP_TABLE_OPT_MAC_NUM] = {SIP_TABLE_OPT_MAC_LONG, ARG_TYPE_STR},
     [SIP_TABLE_OPT_PORT_NUM] = {SIP_TABLE_OPT_PORT_LONG, ARG_TYPE_NUM},
-    [SIP_TABLE_OPT_IS_IPV6_NUM] = {SIP_TABLE_OPT_IS_IPV6_LONG, ARG_TYPE_NUM},
+    [SIP_TABLE_OPT_NET_ADDR_TYPE_NUM] = {SIP_TABLE_OPT_NET_ADDR_TYPE_LONG, ARG_TYPE_NUM},
     [SIP_TABLE_OPT_PREFIX_LEN_NUM] = {SIP_TABLE_OPT_PREFIX_LEN_LONG, ARG_TYPE_NUM},
     [SIP_TABLE_OPT_MTU_NUM] = {SIP_TABLE_OPT_MTU_LONG, ARG_TYPE_STR},
 };
@@ -83,13 +83,15 @@ static const struct opt_arg g_sip_table_opt_args[SIP_TABLE_OPT_MAX_NUM] = {
 /* sip_table_show long options */
 static const struct option g_sip_table_show_long_options[] = {
     {SIP_TABLE_OPT_HELP_LONG,      no_argument,       NULL, SIP_TABLE_OPT_HELP_NUM },
+    {SIP_TABLE_OPT_DEV_NAME_LONG,  required_argument, NULL, SIP_TABLE_OPT_DEV_NAME_NUM },
     {SIP_TABLE_OPT_SIP_IDX_LONG,   required_argument, NULL, SIP_TABLE_OPT_SIP_IDX_NUM },
     {0,                            0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_sip_table_show_cmd_opt_usage[] = {
-    {SIP_TABLE_OPT_HELP_LONG,    "display this help and exit" },
-    {SIP_TABLE_OPT_SIP_IDX_LONG, "sip_idx" },
+    {SIP_TABLE_OPT_HELP_LONG,    "display this help and exit", false},
+    {SIP_TABLE_OPT_DEV_NAME_LONG, "sip index is allocated based on tpf domain", true},
+    {SIP_TABLE_OPT_SIP_IDX_LONG, "index of the entry in sip_table, allocated by ubcore", true},
 };
 
 static const uvs_admin_cmd_usage_t g_sip_table_show_cmd_usage = {
@@ -101,26 +103,26 @@ static const uvs_admin_cmd_usage_t g_sip_table_show_cmd_usage = {
 static const struct option g_sip_table_add_long_options[] = {
     {SIP_TABLE_OPT_HELP_LONG,       no_argument,       NULL, SIP_TABLE_OPT_HELP_NUM },
     {SIP_TABLE_OPT_DEV_NAME_LONG,   required_argument, NULL, SIP_TABLE_OPT_DEV_NAME_NUM },
-    {SIP_TABLE_OPT_IP_LONG,         required_argument, NULL, SIP_TABLE_OPT_IP_NUM },
+    {SIP_TABLE_OPT_NET_ADDR_LONG,         required_argument, NULL, SIP_TABLE_OPT_NET_ADDR_NUM },
     {SIP_TABLE_OPT_VLAN_LONG,       required_argument, NULL, SIP_TABLE_OPT_VLAN_NUM },
     {SIP_TABLE_OPT_MAC_LONG,        required_argument, NULL, SIP_TABLE_OPT_MAC_NUM },
     {SIP_TABLE_OPT_PORT_LONG,       required_argument, NULL, SIP_TABLE_OPT_PORT_NUM },
-    {SIP_TABLE_OPT_IS_IPV6_LONG,    required_argument, NULL, SIP_TABLE_OPT_IS_IPV6_NUM },
+    {SIP_TABLE_OPT_NET_ADDR_TYPE_LONG,    required_argument, NULL, SIP_TABLE_OPT_NET_ADDR_TYPE_NUM },
     {SIP_TABLE_OPT_PREFIX_LEN_LONG, required_argument, NULL, SIP_TABLE_OPT_PREFIX_LEN_NUM },
     {SIP_TABLE_OPT_MTU_LONG,        required_argument, NULL, SIP_TABLE_OPT_MTU_NUM },
     {0,                            0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_sip_table_add_cmd_opt_usage[] = {
-    {SIP_TABLE_OPT_HELP_LONG,           "display this help and exit" },
-    {SIP_TABLE_OPT_DEV_NAME_LONG,       "dev_name need add" },
-    {SIP_TABLE_OPT_IP_LONG,             "ip need add" },
-    {SIP_TABLE_OPT_VLAN_LONG,           "vlan need add" },
-    {SIP_TABLE_OPT_MAC_LONG,            "mac need add" },
-    {SIP_TABLE_OPT_PORT_LONG,           "port need add" },
-    {SIP_TABLE_OPT_IS_IPV6_LONG,        "is sip ipv6(1) or ipv4(0) need add" },
-    {SIP_TABLE_OPT_PREFIX_LEN_LONG,     "prefix_len set to network ipv4(0-32) ipv6(0-128) need add" },
-    {SIP_TABLE_OPT_MTU_LONG,            "mtu set to network 256/512/1024/2048/4096/8192 need add" },
+    {SIP_TABLE_OPT_HELP_LONG,           "display this help and exit", false},
+    {SIP_TABLE_OPT_DEV_NAME_LONG,       "specifies the name of tpf device", true},
+    {SIP_TABLE_OPT_NET_ADDR_LONG,       "used at the network layer, for the local UB device", true},
+    {SIP_TABLE_OPT_VLAN_LONG,           "used at the network layer, for the local UB device", true},
+    {SIP_TABLE_OPT_MAC_LONG,            "used at the network layer, for the local UB device", true},
+    {SIP_TABLE_OPT_PORT_LONG,           "used at the network layer, for the local UB device", true},
+    {SIP_TABLE_OPT_NET_ADDR_TYPE_LONG,  "net_addr type ((ipv4: 0) | (ipv6:1))", true},
+    {SIP_TABLE_OPT_PREFIX_LEN_LONG,     "prefix_len of net_addr", true},
+    {SIP_TABLE_OPT_MTU_LONG,            "mtu [256, 512, 1024, 2048, 4096, 8192]", true},
 };
 
 static const uvs_admin_cmd_usage_t g_sip_table_add_cmd_usage = {
@@ -131,13 +133,15 @@ static const uvs_admin_cmd_usage_t g_sip_table_add_cmd_usage = {
 /* sip_table_del long options */
 static const struct option g_sip_table_del_long_options[] = {
     {SIP_TABLE_OPT_HELP_LONG,      no_argument,       NULL, SIP_TABLE_OPT_HELP_NUM },
+    {SIP_TABLE_OPT_DEV_NAME_LONG,  required_argument, NULL, SIP_TABLE_OPT_DEV_NAME_NUM },
     {SIP_TABLE_OPT_SIP_IDX_LONG,   required_argument, NULL, SIP_TABLE_OPT_SIP_IDX_NUM },
     {0,                            0,                 0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_sip_table_del_cmd_opt_usage[] = {
-    {SIP_TABLE_OPT_HELP_LONG,    "display this help and exit" },
-    {SIP_TABLE_OPT_SIP_IDX_LONG, "sip need del" },
+    {SIP_TABLE_OPT_HELP_LONG,    "display this help and exit", false},
+    {SIP_TABLE_OPT_DEV_NAME_LONG, "sip index is destroyed based on tpf domain", true},
+    {SIP_TABLE_OPT_SIP_IDX_LONG, "index of the entry in sip_table, allocated by ubcore", true},
 };
 
 static const uvs_admin_cmd_usage_t g_sip_table_del_cmd_usage = {
@@ -185,16 +189,16 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->port_id = (uint8_t)num;
-    } else if (!strcmp(arg_name, SIP_TABLE_OPT_IS_IPV6_LONG) && num <= VALID_IS_IPV6_FLAG) {
+    } else if (!strcmp(arg_name, SIP_TABLE_OPT_NET_ADDR_TYPE_LONG) && num <= VALID_IS_IPV6_FLAG) {
         if (sip_table_input_range_check(num, 0, IS_IPV6_MAX) != 0) {
             (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
                 arg_name, num, 0, IS_IPV6_MAX);
             return -EINVAL;
         }
-        args->is_ipv6 = (bool)num;
+        args->net_addr_type = (bool)num;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_PREFIX_LEN_LONG)) {
         uint32_t prefix_len_max;
-        if (args->is_ipv6) {
+        if (args->net_addr_type) {
             prefix_len_max = IPV6_MAX_PREFIX_LEN;
         } else {
             prefix_len_max = IPV4_MAX_PREFIX_LEN;
@@ -247,8 +251,8 @@ static int sip_table_input_valid_str(uvs_admin_sip_table_args_t *args, const cha
     const char *arg_name)
 {
     int ret = 0;
-    if (!strcmp(arg_name, SIP_TABLE_OPT_IP_LONG)) {
-        ret = str_to_eid(_optarg, &args->sip);
+    if (!strcmp(arg_name, SIP_TABLE_OPT_NET_ADDR_LONG)) {
+        ret = str_to_eid(_optarg, (urma_eid_t *)&args->net_addr);
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_DEV_NAME_LONG)) {
         if (sip_table_input_str_range_check((uint32_t)UVS_ADMIN_MAX_DEV_NAME, (uint32_t)strlen(_optarg)) != 0) {
             (void)printf("ERR: invalid parameter range --%s %s; valid range = [%u, %u]\n",
@@ -335,10 +339,10 @@ static void uvs_admin_print_sip(uint32_t sip_idx, uvs_admin_sip_table_show_rsp_t
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("sip_idx                    : %u\n", sip_idx);
     (void)printf("dev_name                   : %s\n", show_rsp->dev_name);
-    (void)printf("ip                         : "EID_FMT"\n", EID_ARGS(show_rsp->sip));
+    (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->net_addr));
     (void)printf("vlan                       : %u\n", show_rsp->vlan);
     (void)printf("mac                        : %s\n", mac_str);
-    (void)printf("is_ipv6                    : %s\n", show_rsp->is_ipv6 ? "true" : "false");
+    (void)printf("net_addr_type              : %s\n", show_rsp->net_addr_type ? "IPv6" : "IPv4");
     for (int i = 0; i < show_rsp->port_cnt; i++) {
         (void)printf("port%-4d                   : %u\n", i, show_rsp->port[i]);
     }
@@ -370,6 +374,7 @@ static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_sip_table_show_req_t *sip_table_req = (uvs_admin_sip_table_show_req_t *)req->req;
     sip_table_req->sip_idx = args.sip_idx;
+    (void)memcpy(sip_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -413,8 +418,8 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_sip_table_add_req_t *sip_table_req = (uvs_admin_sip_table_add_req_t *)req->req;
     sip_table_req->vlan = args.vlan;
     sip_table_req->port_id = args.port_id;
-    sip_table_req->is_ipv6 = args.is_ipv6;
-    memcpy(&sip_table_req->sip, &args.sip, sizeof(urma_eid_t));
+    sip_table_req->net_addr_type = args.net_addr_type;
+    memcpy(&sip_table_req->net_addr, &args.net_addr, sizeof(uvs_admin_net_addr_t));
     memcpy(sip_table_req->mac, args.mac, UVS_ADMIN_MAC_BYTES);
     memcpy(sip_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
     sip_table_req->prefix_len = args.prefix_len;
@@ -429,6 +434,8 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_sip_table_add_rsp_t *add_rsp = (uvs_admin_sip_table_add_rsp_t *)rsp->rsp;
     if (add_rsp->res != 0) {
         (void)printf("ERR: failed to add sip info, ret: %d.\n", add_rsp->res);
+    } else {
+        (void)printf("Success: add index: %u sip info.\n", add_rsp->index);
     }
 
     free(req);
@@ -458,6 +465,7 @@ static int32_t uvs_admin_sip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 
     uvs_admin_sip_table_del_req_t *sip_table_req = (uvs_admin_sip_table_del_req_t *)req->req;
     sip_table_req->sip_idx = args.sip_idx;
+    (void)memcpy(sip_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {
@@ -468,6 +476,8 @@ static int32_t uvs_admin_sip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     uvs_admin_sip_table_del_rsp_t *del_rsp = (uvs_admin_sip_table_del_rsp_t *)rsp->rsp;
     if (del_rsp->res != 0) {
         (void)printf("ERR: failed to del sip info, ret: %d.\n", del_rsp->res);
+    } else {
+        (void)printf("Success: del index: %u sip info.\n", args.sip_idx);
     }
 
     free(req);
@@ -481,7 +491,7 @@ uvs_admin_cmd_t g_uvs_admin_sip_table_show_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_sip_table_show_cmd.subcmds)),
     .run = uvs_admin_sip_table_showcmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_TWO,
+    .min_argc = UVS_ADMIN_CMD_PARM_TWO + UVS_ADMIN_CMD_PARM_TWO,
 };
 
 uvs_admin_cmd_t g_uvs_admin_sip_table_add_cmd = {
@@ -491,7 +501,7 @@ uvs_admin_cmd_t g_uvs_admin_sip_table_add_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_sip_table_add_cmd.subcmds)),
     .run = uvs_admin_sip_table_addcmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_EIGHT + UVS_ADMIN_CMD_PARM_EIGHT,
+    .min_argc = UVS_ADMIN_CMD_PARM_SEVEN + UVS_ADMIN_CMD_PARM_SEVEN,
 };
 
 uvs_admin_cmd_t g_uvs_admin_sip_table_del_cmd = {
@@ -501,7 +511,7 @@ uvs_admin_cmd_t g_uvs_admin_sip_table_del_cmd = {
     .node = NULL,
     .subcmds = SHASH_INITIALIZER(&(g_uvs_admin_sip_table_del_cmd.subcmds)),
     .run = uvs_admin_sip_table_delcmd_exec,
-    .min_argc = UVS_ADMIN_CMD_PARM_TWO,
+    .min_argc = UVS_ADMIN_CMD_PARM_TWO + UVS_ADMIN_CMD_PARM_TWO,
 };
 
 static uvs_admin_cmd_t *g_uvs_admin_sip_table_subcmds[] = {

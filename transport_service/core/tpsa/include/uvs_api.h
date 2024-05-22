@@ -32,6 +32,24 @@ int uvs_so_init(uvs_init_attr_t *attr);
 void uvs_so_uninit(void);
 
 /**
+ * init uvs socket.
+ * @param[in] [Required] attr: server config;
+ * Return: 0 on success, other value on error.
+ */
+int uvs_socket_init(uvs_socket_init_attr_t *attr);
+
+/**
+ * uninit uvs socket.
+ */
+void uvs_socket_uninit(void);
+
+/**
+ * restore table from ubcore.
+ * Return: 0 on success, other value on error.
+ */
+int uvs_restore_table(void);
+
+/**
  * Add global configurations.
  * @param[in] [Required] info: pointer of global configurations;
  * Return: 0 on success, other value on error.
@@ -79,9 +97,10 @@ int uvs_modify_vport(uvs_vport_info_t *info);
 /**
  * Add sip table entry.
  * @param[in] [Required] sip_info: pointer of sip table entry;
+ * @param[out] [Required] sip_idx: the index of sip entry;
  * Return: 0 on success, other value on error.
  */
-int uvs_add_sip(uvs_sip_info_t *sip_info);
+int uvs_add_sip(uvs_sip_info_t *sip_info, uint32_t *sip_idx);
 
 /**
  * Delete sip table entry.
@@ -153,12 +172,22 @@ uvs_tpf_t **uvs_list_tpf(int *cnt);
 void uvs_free_tpf(uvs_tpf_t **tpfs, uint32_t cnt);
 
 /**
-* call this func to get user ops.
-* @param[in] user_ops: user ops
-* Return: uvs_user_ops pointer. NULL on falied
+* call this func to query vport link statistics by tpf name and vport
+* @param[in] tpf_name: tpf name
+* @param[in] vport: vport name
+* @param[out] st: vport statistics, including normal and abnormal link setup statistics
+* Return: 0 on success, other value on error.
 */
-uvs_user_ops_t* get_uvs_user_ops(user_ops_t user_ops);
+int uvs_query_vport_statistic(const char* tpf_name, uvs_vport_info_key_t *vport,
+    uvs_vport_statistic_t *st);
 
+/**
+* call this func to query tpf link statistics by tpf name
+* @param[in] tpf_name: tpf name
+* @param[out] st: tpf statistics, including normal and abnormal link setup statistics
+* Return: 0 on success, other value on error.
+*/
+int uvs_query_tpf_statistic(const char* tpf_name, uvs_tpf_statistic_t *st);
 #ifdef __cplusplus
 }
 #endif

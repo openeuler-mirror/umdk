@@ -14,7 +14,6 @@
 #include <stdbool.h>
 
 #include "urma_types.h"
-#include "urma_ex_api.h"
 
 #include "perftest_communication.h"
 
@@ -135,9 +134,14 @@ typedef enum perftest_jetty_mode {
     PERFTEST_JETTY_DUPLEX                    /* duplex mode only for jetty */
 } perftest_jetty_mode_t;
 
+enum perftest_opts {
+    PERFTEST_OPT_EID_IDX = 1,
+};
+
 typedef struct perftest_config {
     perftest_cmd_type_t cmd;
     perftest_type_t type;
+    uint32_t eid_idx;
     perftest_api_type_t api_type;
     bool all;                          /* Run sizes from 2 till 2^16. */
     perftest_atomic_type_t atomic_type;

@@ -10,6 +10,8 @@
 #ifndef TPSA_TABLE_H
 #define TPSA_TABLE_H
 
+#include <semaphore.h>
+
 #include "urma_types.h"
 #include "ub_hmap.h"
 #include "ub_list.h"
@@ -22,13 +24,13 @@ extern "C" {
 #define TPSA_TPF_DEV_TABLE_SIZE          100
 #define TPSA_FE_TABLE_SIZE          100
 #define TPSA_VTP_TABLE_SIZE          20000
-#define TPSA_SIP_IDX_TABLE_SIZE  10240
-#define TPSA_EID_IDX_TABLE_SIZE  10240
+#define TPSA_SIP_IDX_TABLE_SIZE  1024 /* 1823: 16; 1650: 1024; 1636: N/A */
+#define TPSA_EID_IDX_TABLE_SIZE  1024
 #define TPSA_MAX_PORT_CNT 16
 #define MAX_VTP_NODE_STATE 4
 
 typedef struct vport_key {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char tpf_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } __attribute__((packed)) vport_key_t;
 
@@ -41,6 +43,12 @@ typedef enum vtp_node_state {
     STATE_MIGRATING,
     STATE_ROLLBACK
 } vtp_node_state_t;
+
+typedef struct tpsa_tpg_info {
+    uint32_t tp_cnt;
+    uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
+    uint32_t tpgn;
+} tpsa_tpg_info_t;
 
 /*
  * rm_vtp table
@@ -67,6 +75,9 @@ typedef struct rm_vtp_table_entry {
     uint32_t upi;
     bool migration_status; /* true means that this node has been migrated to the destination */
     vtp_node_state_t node_status;
+    tpsa_tpg_info_t *tpg_param;
+    bool share_mode;
+    uint32_t use_cnt;
 } rm_vtp_table_entry_t;
 
 typedef struct rm_vtp_table {
@@ -189,18 +200,20 @@ typedef struct fe_table_entry {
     rc_vtp_table_t rc_vtp_table;
     um_vtp_table_t um_vtp_table;
     clan_vtp_table_t clan_vtp_table;
+    bool fe_rebooted; /* VF rebooted, need to clean all resource */
     bool stop_proc_vtp; /* true means that uvs receive the msg TPSA_MSG_STOP_PROC_VTP_MSG */
     bool link_ready; /* true means that the destination of live migration has completed link reconstruction. */
     bool full_migrate; /* true means that full migration for the first time  */
     struct timespec time_start; /* The beginning of iterative migration */
     uint32_t vtp_migrate_num; /* Used to record the number of vtp nodes that have been live migrated */
-    urma_eid_t mig_source; /* the ip of migrate source */
-    char lm_dev_name[TPSA_MAX_DEV_NAME]; /* Record the vfid and dev_name of the migrate source */
+    uvs_net_addr_t src_uvs_ip; /* the ip of migrate source */
+    char lm_dev_name[UVS_MAX_DEV_NAME]; /* Record the vfid and dev_name of the migrate source */
     uint16_t lm_fe_idx;
-} fe_table_entry_t;;
+} fe_table_entry_t;
 
 typedef struct fe_table {
     struct ub_hmap hmap;
+    bool clean_res; /* There is rebooted vf, need to clean resource */
     pthread_rwlock_t rwlock;
 } fe_table_t;
 
@@ -209,7 +222,7 @@ typedef struct fe_table {
  * only worker thread operate, lock no need
  */
 typedef struct rm_tpg_table_key {
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
 } __attribute__((packed)) rm_tpg_table_key_t;
 
 typedef enum tpsa_tpg_status {
@@ -224,6 +237,7 @@ typedef struct rm_tpg_table_entry {
     rm_tpg_table_key_t key;
     int type;
     uint32_t tpgn;
+    uint32_t tp_cnt;
     uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
     tpsa_tpg_status_t status;
     uint32_t use_cnt;
@@ -248,6 +262,7 @@ typedef struct rc_tpg_entry {
     int type;
     uint32_t tpgn;
     uint32_t vice_tpgn;
+    uint32_t tp_cnt;
     uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
     uint32_t vice_tpn[TPSA_MAX_TP_CNT_IN_GRP];
     tpsa_tpg_status_t status;
@@ -285,8 +300,8 @@ typedef struct jetty_peer_table {
  * only worker thread operate, lock no need
  */
 typedef struct utp_table_key {
-    tpsa_net_addr_t sip;
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t sip;
+    uvs_net_addr_info_t dip;
 } utp_table_key_t;
 
 typedef struct utp_table_entry {
@@ -305,7 +320,7 @@ typedef struct utp_table {
  * only worker thread operate, lock no need
  */
 typedef struct ctp_table_key {
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
 } ctp_table_key_t;
 
 typedef struct ctp_table_entry {
@@ -370,7 +385,9 @@ typedef union vport_entry_mask {
         uint64_t max_jetty_cnt       : 1;
         uint64_t min_jfr_cnt         : 1;
         uint64_t max_jfr_cnt         : 1;
-        uint64_t reserved            : 27;
+        uint64_t flag_um_en          : 1;
+        uint64_t flag_share_mode     : 1;
+        uint64_t reserved            : 29;
     } bs;
     uint64_t value;
 } vport_entry_mask_t;
@@ -378,6 +395,7 @@ typedef union vport_entry_mask {
 typedef struct vport_table_entry {
     struct ub_hmap_node node;
     vport_key_t key;
+    bool deleting;
     vport_entry_mask_t mask;
     uint32_t sip_idx;
     uint32_t tp_cnt;
@@ -391,21 +409,14 @@ typedef struct vport_table_entry {
     uint32_t max_jetty_cnt;
     uint32_t min_jfr_cnt;
     uint32_t max_jfr_cnt;
+    sem_t *sem;
 } vport_table_entry_t;
 
 typedef struct vport_table {
     struct ub_hmap hmap;
+    bool clean_res; /* there is deleting vport, need clean resource */
     pthread_rwlock_t rwlock;
-    bool vf_destroy; /* true means the a virtual machine is destroyed */
-    struct ub_list vport_delete_list; /* Record all vport tables to be deleted */
 } vport_table_t;
-
-typedef struct vport_delete_list_node {
-    struct ub_list node;
-    vport_key_t vport_key;
-    uint32_t sip_idx;
-    uint32_t tp_cnt;
-} vport_del_list_node_t;
 
 /*
  * vport param
@@ -416,27 +427,19 @@ typedef struct vport_param {
     uint32_t tp_cnt;
     tpsa_tp_mod_cfg_t tp_cfg;
     tpsa_rc_cfg_t rc_cfg;
+    uint32_t pattern;
 } vport_param_t;
 
-/*
- * sip table
- * worker and uvs_admin thread operate, need lock
- */
-
-typedef struct sip_table_entry {
-    char dev_name[TPSA_MAX_DEV_NAME];
-    tpsa_net_addr_t addr;
-    uint32_t prefix_len;
-    uint8_t port_cnt;
-    uint8_t port_id[TPSA_MAX_PORT_CNT];
-    uvs_mtu_t mtu;
-    bool used;
-} sip_table_entry_t;
-
-typedef struct sip_table {
-    sip_table_entry_t entries[TPSA_SIP_IDX_TABLE_SIZE];
-    pthread_rwlock_t rwlock;
-} sip_table_t;
+typedef union dip_table_modify_mask {
+    struct {
+        uint32_t eid            : 1;
+        uint32_t upi            : 1;
+        uint32_t uvs_ip         : 1;
+        uint32_t net_addr       : 1;
+        uint32_t reserved       : 28;
+    } bs;
+    uint32_t value;
+} dip_table_modify_mask_t;
 
 typedef struct dip_table_key {
     urma_eid_t deid;
@@ -446,16 +449,15 @@ typedef struct dip_table_key {
 typedef struct dip_table_entry {
     struct ub_hmap_node node;
     dip_table_key_t key; /* key */
-    urma_eid_t peer_tps; /* peer tps server address */
-    urma_eid_t underlay_eid;
-    tpsa_net_addr_t netaddr;
+    uvs_net_addr_t peer_uvs_ip; /* peer tps server address */
+    uvs_net_addr_info_t netaddr;
 } dip_table_entry_t;
 
 typedef struct dip_table {
     struct ub_hmap hmap;
     bool tbl_refresh;
     dip_table_entry_t *refresh_entry; /* Record the entry which dip has changed */
-    tpsa_net_addr_t old_netaddr; /* The underly ip before refresh */
+    uvs_net_addr_info_t new_netaddr; /* The underly ip before refresh */
     pthread_rwlock_t rwlock;
 } dip_table_t;
 
@@ -463,7 +465,7 @@ typedef struct dip_table {
    when a create finish, we will wakeup wait msg and reuse
    tpg to create vtp. */
 typedef struct rm_wait_table_key {
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
 } rm_wait_table_key_t;
 
 typedef struct rm_wait_table_entry {
@@ -497,7 +499,7 @@ typedef struct rc_wait_table {
  */
 typedef struct tp_state_table_key {
     uint32_t tpn;
-    tpsa_net_addr_t sip;
+    uvs_net_addr_info_t sip;
 } __attribute__((packed)) tp_state_table_key_t;
 
 typedef enum tp_exception_state {
@@ -523,8 +525,8 @@ typedef struct tp_state_table_entry {
     uint32_t peer_tpn;
     uint16_t data_udp_start;
     uint16_t ack_udp_start;
-    tpsa_net_addr_t dip;
-    urma_eid_t peer_tpsa_eid;
+    uvs_net_addr_info_t dip;
+    uvs_net_addr_t peer_uvs_ip;
     uint64_t timestamp[TPSA_SUSPEND2ERROR_CNT];
     uint32_t suspend_cnt;
 } tp_state_table_entry_t;
@@ -539,20 +541,23 @@ typedef struct tp_state_table {
  */
 typedef struct tpg_state_table_key {
     uint32_t tpgn;
-    tpsa_net_addr_t sip;
+    uvs_net_addr_info_t sip;
 } __attribute__((packed)) tpg_state_table_key_t;
 
 typedef enum tpg_exception_state {
-    INITIATOR_TPG_STATE_DEL,
-    TARGET_TPG_STATE_DEL,
+    TPG_STATE_INIT = 0,
+    TPG_STATE_DEL = 1,
 } tpg_exception_state_t;
 
 typedef struct tpg_state_table_entry {
     struct ub_hmap_node node;
     tpg_state_table_key_t key;
     tpg_exception_state_t tpg_exc_state;
+    uvs_net_addr_info_t dip;
+    uvs_net_addr_t peer_uvs_ip;
     uint32_t tpgn;
     uint32_t tp_cnt;
+    uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
     uint32_t tp_flush_cnt;
 } tpg_state_table_entry_t;
 
@@ -561,8 +566,23 @@ typedef struct tpg_state_table {
 } tpg_state_table_t;
 
 typedef struct tpf_dev_table_key {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpf_dev_table_key_t;
+
+typedef struct sip_table_entry {
+    char dev_name[UVS_MAX_DEV_NAME];
+    uvs_net_addr_info_t addr;
+    uint32_t prefix_len;
+    uint8_t port_cnt;
+    uint8_t port_id[TPSA_MAX_PORT_CNT];
+    uvs_mtu_t mtu;
+    char netdev_name[UVS_MAX_DEV_NAME];
+    bool used;
+} sip_table_entry_t;
+
+typedef struct sip_table {
+    sip_table_entry_t entries[TPSA_SIP_IDX_TABLE_SIZE];
+} sip_table_t;
 
 typedef struct tpf_dev_table_entry {
     struct ub_hmap_node node;
@@ -570,6 +590,7 @@ typedef struct tpf_dev_table_entry {
     tpsa_device_feat_t dev_fea;
     tpsa_cc_entry_t cc_array[TPSA_CC_IDX_TABLE_SIZE];
     uint32_t cc_entry_cnt;
+    sip_table_t *sip_table;
 } tpf_dev_table_entry_t;
 
 typedef struct tpf_dev_table {
@@ -590,6 +611,10 @@ typedef struct tpsa_vtp_table_index {
     /* for rc mode, sig_loop is true, which means seid=deid and local_jetty==peer_jetty */
     bool sig_loop;
     tpsa_transport_mode_t trans_mode;
+    bool share_mode;
+    /* use only for non-share_mode with rm mode */
+    tpsa_tpg_info_t tpg_param;
+    uint32_t use_cnt;
 } tpsa_vtp_table_index_t;
 
 typedef struct tpsa_vtp_table_param {
@@ -601,6 +626,9 @@ typedef struct tpsa_vtp_table_param {
     uint32_t eid_index;
     uint32_t upi;
     urma_eid_t local_eid;
+    bool share_mode;
+    /* only use for non-share_mode with RM mode */
+    tpsa_tpg_info_t tpg_param;
 } tpsa_vtp_table_param_t;
 
 typedef struct tpsa_um_vtp_table_param {
@@ -615,7 +643,7 @@ typedef struct tpsa_clan_vtp_table_param {
 } tpsa_clan_vtp_table_param_t;
 
 typedef struct tpsa_tpg_table_index {
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
     urma_eid_t local_eid;
     urma_eid_t peer_eid;
     uint32_t ljetty_id;
@@ -624,27 +652,23 @@ typedef struct tpsa_tpg_table_index {
     bool isLoopback;
     tpsa_transport_mode_t trans_mode;
     bool sig_loop;
-    tpsa_net_addr_t sip;
+    uvs_net_addr_info_t sip;
     uint32_t tp_cnt;
 } tpsa_tpg_table_index_t;
 
 typedef struct tpg_table_param {
     int type;
     uint32_t tpgn;
+    uint32_t tp_cnt;
     uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
     tpsa_tpg_status_t status;
     uint32_t use_cnt;
     uint32_t ljetty_id;
     urma_eid_t leid;
-    tpsa_net_addr_t dip;
+    uvs_net_addr_info_t dip;
     bool isLoopback;
     bool live_migrate;
 } tpsa_tpg_table_param_t;
-
-typedef struct tpsa_tpg_info {
-    uint32_t tpn[TPSA_MAX_TP_CNT_IN_GRP];
-    uint32_t tpgn;
-} tpsa_tpg_info_t;
 
 typedef struct jetty_peer_table_param {
     urma_eid_t seid;
@@ -652,6 +676,16 @@ typedef struct jetty_peer_table_param {
     uint32_t ljetty_id;
     uint32_t djetty_id;
 } jetty_peer_table_param_t;
+
+typedef struct wait_restored_entry {
+    struct ub_list node;
+    tpsa_restored_vtp_entry_t entry;
+    struct timespec start_timeval;
+} wait_restored_entry_t;
+
+typedef struct wait_restored_list {
+    struct ub_list list;
+} wait_restored_list_t;
 
 /*
  * fe table opts
@@ -741,6 +775,10 @@ int vport_table_lookup_by_ueid(vport_table_t *vport_table, uint32_t upi, urma_ei
     vport_table_entry_t *ret_entry);
 int vport_table_lookup_by_ueid_return_key(vport_table_t *vport_table, uint32_t upi, urma_eid_t *eid,
                                           vport_key_t *key, uint32_t *eid_index);
+int vport_set_deleting(vport_table_t *vport_table, vport_key_t *key, sem_t *sem);
+void vport_update_clean_res(vport_table_t *vport_table);
+bool vport_in_cleaning_proc(vport_table_t *vport_table, vport_key_t *key);
+
 void vport_table_destroy(vport_table_t *vport_table);
 
 /*
@@ -787,21 +825,15 @@ int rc_wait_table_pop(rc_wait_table_t *rc_table, rc_wait_table_key_t *key,
 void rc_wait_table_destroy(rc_wait_table_t *rc_wait_table);
 
 /*
- * sip table opts
- */
-void sip_table_create(sip_table_t *sip_table);
-sip_table_entry_t *sip_table_lookup(sip_table_t *sip_table, uint32_t sip_idx);
-int sip_table_add(sip_table_t *sip_table, uint32_t sip_idx, sip_table_entry_t *entry_add);
-int sip_table_remove(sip_table_t *sip_table, uint32_t sip_idx);
-void sip_table_destroy(sip_table_t *sip_table);
-
-/*
  * dip table opts
  */
 int dip_table_create(dip_table_t *dip_table);
 dip_table_entry_t *dip_table_lookup(dip_table_t *dip_table, dip_table_key_t *key);
 int dip_table_add(dip_table_t *dip_table, dip_table_key_t *key, dip_table_entry_t *add_entry);
 int dip_table_remove(dip_table_t *dip_table, dip_table_key_t *key);
+int dip_table_modify(dip_table_t *dip_table, dip_table_key_t *old_key,
+    dip_table_entry_t *new_entry, dip_table_modify_mask_t mask);
+
 void dip_table_destroy(dip_table_t *dip_table);
 
 /*
@@ -832,6 +864,7 @@ tpg_state_table_entry_t *tpg_state_table_lookup(tpg_state_table_t *tpg_state_tab
 /* User needs to lookup entry before calling tpg_state_table_add() */
 tpg_state_table_entry_t *tpg_state_table_add(tpg_state_table_t *tpg_state_table, tpg_state_table_key_t *key,
                                              tpg_state_table_entry_t *add_entry);
+int uvs_update_tpg_state_flush_cnt(tpg_state_table_t *tpg_state_table, tpg_state_table_key_t *key, uint32_t flush_cnt);
 int tpg_state_table_remove(tpg_state_table_t *tpg_state_table, tpg_state_table_key_t *key);
 void tpg_state_table_destroy(tpg_state_table_t *tpg_state_table);
 
@@ -845,6 +878,15 @@ void deid_um_vtp_list_remove(deid_vtp_table_t *deid_vtp_table, deid_vtp_table_ke
 void deid_vtp_table_destroy(deid_vtp_table_t *deid_vtp_table);
 deid_vtp_table_entry_t *deid_vtp_table_lookup(deid_vtp_table_t *deid_vtp_table, deid_vtp_table_key_t *key);
 
+/*
+ * wait_restored_list opts
+ */
+void wait_restored_list_create(wait_restored_list_t *wait_restored_list);
+wait_restored_entry_t *wait_restored_list_add(wait_restored_list_t *wait_restored_list,
+                                              tpsa_restored_vtp_entry_t *restored_vtp_entry);
+void wait_restored_list_add_restored_entry(wait_restored_list_t *wait_restored_list,
+                                           wait_restored_entry_t *entry);
+void wait_restored_list_destroy(wait_restored_list_t *wait_restored_list);
 #ifdef __cplusplus
 }
 #endif

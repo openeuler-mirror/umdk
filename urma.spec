@@ -137,12 +137,15 @@ fi
     %{_includedir}/umdk/urma_provider.h
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
+    %{_includedir}/umdk/uvs_api.h
+    %{_includedir}/umdk/uvs_types.h
 
 %files tools
 %defattr(-,root,root)
     %{_bindir}/urma_perftest
     %{_bindir}/urma_admin
     /etc/rsyslog.d/urma_admin.conf
+    %{_bindir}/urma_tp_test
 
 %post tools
 if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then

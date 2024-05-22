@@ -19,21 +19,20 @@ extern "C" {
 #endif
 
 typedef struct tpsa_live_migrate_show_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } tpsa_live_migrate_show_req_t;
 
 typedef struct tpsa_live_migrate_show_rsp {
     int res;
-    urma_eid_t dip;
-    int flag;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    uvs_net_addr_t uvs_ip;
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpsa_live_migrate_show_rsp_t;
 
 typedef struct tpsa_live_migrate_add_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
-    urma_eid_t dip;
+    uvs_net_addr_t uvs_ip;
 } tpsa_live_migrate_add_req_t;
 
 typedef struct tpsa_live_migrate_add_rsp {
@@ -41,7 +40,7 @@ typedef struct tpsa_live_migrate_add_rsp {
 } tpsa_live_migrate_add_rsp_t;
 
 typedef struct tpsa_live_migrate_del_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } tpsa_live_migrate_del_req_t;
 

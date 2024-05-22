@@ -22,8 +22,7 @@ static live_migrate_table_entry_t *alloc_live_migrate_table_entry(const live_mig
         return NULL;
     }
     entry->key = *key;
-    entry->live_migrate_flag = add_entry->live_migrate_flag;
-    (void)memcpy(&entry->dip, &add_entry->dip, TPSA_EID_SIZE);
+    (void)memcpy(&entry->uvs_ip, &add_entry->uvs_ip, TPSA_EID_SIZE);
 
     return entry;
 }
@@ -81,7 +80,7 @@ int live_migrate_table_add(live_migrate_table_t *live_migrate_table, live_migrat
     HMAP_INSERT(live_migrate_table, entry, key, sizeof(*key));
     (void)pthread_rwlock_unlock(&live_migrate_table->rwlock);
 
-    TPSA_LOG_INFO("success add fe_idx %hu dip " EID_FMT ", hash node is %u\n", key->fe_idx, EID_ARGS(entry->dip),
+    TPSA_LOG_INFO("success add fe_idx %hu dip " EID_FMT ", hash node is %u\n", key->fe_idx, EID_ARGS(entry->uvs_ip),
                    live_migrate_table->hmap.count);
     return 0;
 }
@@ -90,13 +89,13 @@ int live_migrate_table_remove(live_migrate_table_t *live_migrate_table, live_mig
 {
     (void)pthread_rwlock_wrlock(&live_migrate_table->rwlock);
     live_migrate_table_entry_t *entry = live_migrate_table_lookup(live_migrate_table, key);
-    if (entry == NULL || entry->live_migrate_flag == LIVE_MIGRATE_FALSE) {
+    if (entry == NULL) {
         TPSA_LOG_WARN("key fe_idx %hu not exist", key->fe_idx);
         (void)pthread_rwlock_unlock(&live_migrate_table->rwlock);
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del fe_idx %hu dip:" EID_FMT "\n", key->fe_idx, EID_ARGS(entry->dip));
+    TPSA_LOG_INFO("success del fe_idx %hu dip:" EID_FMT "\n", key->fe_idx, EID_ARGS(entry->uvs_ip));
 
     ub_hmap_remove(&live_migrate_table->hmap, &entry->node);
     free(entry);
@@ -155,11 +154,11 @@ int tpsa_notify_table_add(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify_ta
     }
 
     HMAP_INSERT(tpsa_notify_table, entry, key, sizeof(*key));
-    TPSA_LOG_INFO("success add tpsa eid " EID_FMT " \n", EID_ARGS(key->peer_tpsa_eid));
+    TPSA_LOG_INFO("success add tpsa eid " EID_FMT " \n", EID_ARGS(key->peer_uvs_ip));
     return 0;
 }
 
-int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, urma_eid_t *peer_tpsa_eid,
+int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, uvs_net_addr_t *peer_uvs_ip,
                              rm_vtp_table_entry_t *rm_entry, rc_vtp_table_entry_t *rc_entry)
 {
     if (rm_entry == NULL && rc_entry == NULL) {
@@ -167,7 +166,7 @@ int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, urma_eid_t *peer
     }
 
     tpsa_notify_table_key_t key = {
-        .peer_tpsa_eid = *peer_tpsa_eid,
+        .peer_uvs_ip = *peer_uvs_ip,
     };
 
     tpsa_notify_table_entry_t *entry = tpsa_notify_table_lookup(notify_table, &key);
@@ -215,11 +214,11 @@ int tpsa_notify_table_remove(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify
 {
     tpsa_notify_table_entry_t *entry = tpsa_notify_table_lookup(tpsa_notify_table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("eid " EID_FMT " not exist", EID_ARGS(key->peer_tpsa_eid));
+        TPSA_LOG_WARN("eid " EID_FMT " not exist", EID_ARGS(key->peer_uvs_ip));
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del tpsa eid " EID_FMT " \n", EID_ARGS(key->peer_tpsa_eid));
+    TPSA_LOG_INFO("success del tpsa eid " EID_FMT " \n", EID_ARGS(key->peer_uvs_ip));
     ub_hmap_remove(&tpsa_notify_table->hmap, &entry->node);
     free(entry);
     return 0;
@@ -229,45 +228,4 @@ void tpsa_notify_table_destroy(tpsa_notify_table_t *tpsa_notify_table)
 {
     HMAP_DESTROY(tpsa_notify_table, tpsa_notify_table_entry_t);
     return;
-}
-
-/*  vf_delete_list add/remove/lookup/destroy opts */
-vport_del_list_node_t *vport_del_list_lookup(struct ub_list *list, vport_key_t *key)
-{
-    vport_del_list_node_t *cur, *next;
-    vport_del_list_node_t *node = NULL;
-
-    UB_LIST_FOR_EACH_SAFE(cur, next, node, list) {
-        if (memcmp(&cur->vport_key, key, sizeof(vport_key_t)) != 0) {
-            continue;
-        }
-        node = cur;
-        break;
-    }
-
-    return node;
-}
-
-int vport_del_list_add(struct ub_list *list, vport_table_entry_t *entry)
-{
-    vport_del_list_node_t *node = (vport_del_list_node_t *)calloc(1, sizeof(vport_del_list_node_t));
-    if (node == NULL) {
-        return -ENOMEM;
-    }
-    node->vport_key = entry->key;
-    node->sip_idx = entry->sip_idx;
-    node->tp_cnt = entry->tp_cnt;
-    ub_list_push_back(list, &node->node);
-
-    return 0;
-}
-
-void vport_del_list_destroy(struct ub_list *list)
-{
-    vport_del_list_node_t *cur, *next;
-
-    UB_LIST_FOR_EACH_SAFE(cur, next, node, list) {
-        ub_list_remove(&cur->node);
-        free(cur);
-    }
 }

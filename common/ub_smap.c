@@ -118,6 +118,10 @@ void ub_smap_clone(ub_smap **dst_smap, ub_smap *src_smap)
     char *value = NULL;
     ub_smap_iter iter;
 
+    if (dst_smap == NULL) {
+        return;
+    }
+
     if (src_smap == NULL) {
         *dst_smap = NULL;
         return;

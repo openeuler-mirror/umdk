@@ -10,14 +10,15 @@
 #ifndef TPSA_CONFIG_H
 #define TPSA_CONFIG_H
 
-#include <arpa/inet.h>
+#include "uvs_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct tpsa_config {
-    struct in_addr tpsa_server_ip;
+    uvs_net_addr_type_t tpsa_ip_type;
+    uvs_net_addr_t tpsa_server_ip;
     uint16_t tpsa_server_port;
 } tpsa_config_t;
 

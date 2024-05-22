@@ -10,8 +10,8 @@
 #ifndef UVS_TYPES_H
 #define UVS_TYPES_H
 
+#include <stdbool.h>
 #include <stdint.h>
-#include <arpa/inet.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,10 +25,6 @@ extern "C" {
 #define UVS_MAX_PORT_CNT 16
 #define UVS_MAX_CC_CNT 64
 #define UVS_DEVID_SIZE (16)
-typedef struct uvs_init_attr {
-    struct in_addr server_ip;
-    uint16_t server_port;
-} uvs_init_attr_t;
 
 typedef enum uvs_mtu {
     UVS_MTU_256 = 1,
@@ -86,7 +82,7 @@ typedef union uvs_net_addr {
 } uvs_net_addr_t;
 
 typedef enum uvs_cc {
-    UVS_TP_CC_PFC = 0,
+    UVS_TP_CC_NONE = 0,
     UVS_TP_CC_DCQCN,
     UVS_TP_CC_DCQCN_AND_NETWORK_CC,
     UVS_TP_CC_LDCP,
@@ -269,8 +265,11 @@ typedef union uvs_vport_mask {
         uint32_t jetty_max_cnt : 1;
         uint32_t jfr_min_cnt : 1;
         uint32_t jfr_max_cnt : 1;
-        uint32_t rc_cnt : 1;
-        uint32_t rc_depth : 1;
+        uint32_t rct_cnt : 1;
+        uint32_t rct_depth : 1;
+        uint32_t rc_max_cnt : 1;
+        uint32_t rm_vtp_max_cnt : 1;
+        uint32_t um_vtp_max_cnt : 1;
         uint32_t upi : 1;
         uint32_t eid : 1;
         uint32_t parent_name : 1;
@@ -278,7 +277,8 @@ typedef union uvs_vport_mask {
         uint32_t flag_share_mode : 1;
         uint32_t flag_pattern : 1;
         uint32_t flag_um_en : 1;
-        uint32_t reserved : 13;
+        uint32_t vtp_per_second : 1;
+        uint32_t reserved : 11;
     } bs;
     uint32_t value;
 } uvs_vport_mask_t;
@@ -309,8 +309,12 @@ typedef struct uvs_vport_info {
     uint32_t jetty_max_cnt;                // Jetty(include JFS) + JFR + RCT, only for vport
     uint32_t jfr_min_cnt;                  // JFR only, only for vport
     uint32_t jfr_max_cnt;                  // JFR only, only for vport
-    uint32_t rc_cnt;                       // RC queue count, only for vport
-    uint32_t rc_depth;                     // RC queue depth, only for vport
+    uint32_t rct_cnt;                      // RC table queue count, only for vport
+    uint32_t rct_depth;                    // RC table queue depth, only for vport
+    uint32_t rc_max_cnt;                   // the maximum number of RC connections
+    uint32_t rm_vtp_max_cnt;               // the maximum number of rm vtp
+    uint32_t um_vtp_max_cnt;               // the maximum number of um vtp
+    uint32_t vtp_per_second;               // Check every few seconds for vport
     uint32_t upi;                          // for vport and sub_vport
     uvs_eid_info_t eid;                    // for vport and sub_vport
     char parent_name[UVS_MAX_VPORT_NAME];  // parent vport name, only for sub_vport
@@ -337,23 +341,65 @@ typedef struct uvs_cc_entry {
     uint8_t priority;
 } uvs_cc_entry_t;
 
-/* dip position data structure */
-typedef struct uvs_loc_dip {
+typedef struct uvs_net_addr_info {
     uvs_net_addr_type_t type;  // ipv4 or v6
-    uvs_net_addr_t dip;
-    uint8_t dmac[ETH_ADDR_LEN];
-    uint64_t vlan;
-} uvs_loc_dip_t;
+    uvs_net_addr_t net_addr;
+    uint64_t vlan; /* available for UBOE */
+    uint8_t mac[ETH_ADDR_LEN]; /* available for UBOE */
+} uvs_net_addr_info_t;
+
+typedef struct uvs_net_addr_info uvs_dip_info_t;
 
 typedef struct uvs_user_ops {
     const char *name;
-    int (*lookup_netaddr_by_ueid)(uvs_ueid_t *ueid, uvs_net_addr_t *dip);
+    int (*lookup_netaddr_by_ueid)(uvs_ueid_t *ueid, uvs_dip_info_t *dip);
 } uvs_user_ops_t;
 
 typedef enum {
     USER_OPS_GAEA,
     USER_OPS_MAX,
 } user_ops_t;
+
+typedef struct uvs_init_attr {
+    bool statistic;
+} uvs_init_attr_t;
+
+typedef struct uvs_socket_init_attr {
+    uvs_net_addr_type_t type;
+    uvs_net_addr_t server_ip;
+    uint16_t server_port;
+} uvs_socket_init_attr_t;
+
+/* total number of successful/active/failed/opening link setups in rm/rc/um mode for vport */
+typedef struct uvs_vport_statistic {
+    uint64_t rm_vtp_est; /* success statistic */
+    uint64_t rc_vtp_est;
+    uint64_t um_vtp_est;
+    uint64_t rm_vtp_active;
+    uint64_t rc_vtp_active;
+    uint64_t um_vtp_active;
+    uint64_t rm_vtp_failed;
+    uint64_t rc_vtp_failed;
+    uint64_t um_vtp_failed;
+    uint64_t rm_vtp_opening;
+    uint64_t rc_vtp_opening;
+    uint64_t um_vtp_opening;
+} uvs_vport_statistic_t;
+
+/* total number of successful/active/err/suspend/opening/closing link setups in rm/rc/utp mode for tp */
+typedef struct uvs_tpf_statistic {
+    uint64_t rm_tpg_est; /* success statistic only for tpg */
+    uint64_t rm_tp_est;
+    uint64_t rc_tp_est;
+    uint64_t utp_est;
+    uint64_t rm_tp_active;
+    uint64_t rc_tp_active;
+    uint64_t utp_active;
+    uint64_t tp_error; /* error statisitc Increases only */
+    uint64_t tp_suspend; /* suspend statisitc Increases only */
+    uint64_t tp_opening; /* opening statisitc Increases only */
+    uint64_t tp_closing; /* closing statisitc Increases only */
+} uvs_tpf_statistic_t;
 
 #ifdef __cplusplus
 }

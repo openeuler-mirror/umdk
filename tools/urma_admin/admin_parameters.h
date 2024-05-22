@@ -31,8 +31,6 @@ typedef enum tool_cmd_type {
     TOOL_CMD_DEL_EID,
     TOOL_CMD_SET_EID_MODE,
     TOOL_CMD_SET_CC_ALG,
-    TOOL_CMD_SET_UPI,
-    TOOL_CMD_SHOW_UPI,
     TOOL_CMD_SHOW_UTP,
     TOOL_CMD_SHOW_STATS,
     TOOL_CMD_SHOW_RES,
@@ -55,12 +53,14 @@ typedef struct utp_port {
 
 /* refer to enum ubcore_stats_key_type */
 typedef enum tool_stats_key_type {
-    TOOL_STATS_KEY_TP = 1,
-    TOOL_STATS_KEY_TPG = 2,
-    TOOL_STATS_KEY_JFS = 3,
-    TOOL_STATS_KEY_JFR = 4,
-    TOOL_STATS_KEY_JETTY = 5,
-    TOOL_STATS_KEY_JETTY_GROUP = 6
+    TOOL_STATS_KEY_VTP = 1,
+	TOOL_STATS_KEY_TP = 2,
+	TOOL_STATS_KEY_TPG = 3,
+	TOOL_STATS_KEY_JFS = 4,
+	TOOL_STATS_KEY_JFR = 5,
+	TOOL_STATS_KEY_JETTY = 6,
+	TOOL_STATS_KEY_JETTY_GROUP = 7,
+	TOOL_STATS_KEY_URMA_DEV = 8,
 } tool_stats_key_type_t;
 
 /* refer to enum ubcore_res_key_type */
@@ -152,12 +152,22 @@ typedef struct tool_res_tpg_val {
     uint32_t *tp_list;
 } tool_res_tpg_val_t;
 
+/* refer to struct ubcore_utp_cfg_flag */
+typedef union tool_utp_cfg_flag {
+    struct {
+        uint32_t loopback :  1;
+        uint32_t spray_en :  1;
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
+}tool_utp_cfg_flag_t;
+
 /* refer to struct ubcore_res_utp_val */
 typedef struct tool_res_utp_val {
     uint32_t utpn;
     uint16_t data_udp_start;
     uint8_t udp_range;
-    bool spray_en;
+    tool_utp_cfg_flag_t flag;
 } tool_res_utp_val_t;
 
 /* refer to struct ubcore_res_jfs_val */
@@ -174,7 +184,6 @@ typedef struct tool_res_jfr_val {
     uint32_t jfr_id;
     uint8_t state;
     uint32_t depth;
-    uint8_t pri;
     uint32_t jfc_id;
 } tool_res_jfr_val_t;
 
@@ -215,20 +224,18 @@ typedef struct tool_ubva {
     uint64_t va;
 } tool_ubva_t;
 
-/* refer to struct ubcore_res_seg_val */
-typedef struct tool_res_seg_val {
-    tool_ubva_t ubva;
-    uint64_t len;
-    uint32_t token_id;
-    urma_token_t token_value;
-} tool_res_seg_val_t;
-
 /* refer to struct ubcore_seg_info */
 typedef struct tool_seg_info {
     tool_ubva_t ubva;
     uint64_t len;
     uint32_t token_id;
 } tool_seg_info_t;
+
+/* refer to struct ubcore_res_seg_val */
+typedef struct tool_res_seg_val {
+    uint32_t seg_cnt;
+    tool_seg_info_t *seg_list;
+} tool_res_seg_val_t;
 
 /* refer to struct ubcore_res_dev_val */
 typedef struct tool_res_dev_val {
@@ -268,7 +275,6 @@ typedef struct tool_config {
     uint16_t idx; /* eid idx */
     char ns[URMA_ADMIN_MAX_NS_PATH]; /* /proc/$pid/ns/net */
     /* eid end */
-    uint32_t upi;
     utp_port_t utp_port;
     tool_query_key_t key;
     uint16_t cc_alg;

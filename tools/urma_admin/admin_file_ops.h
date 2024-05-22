@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 
-#define SYS_CLASS_PATH  "/sys/class/uburma"
+#define SYS_CLASS_PATH  "/sys/class/ubcore"
 #define CDEV_PATH  "/dev/uburma"
 #define DEV_PATH_MAX  1024
 #define VALUE_LEN_MAX 64

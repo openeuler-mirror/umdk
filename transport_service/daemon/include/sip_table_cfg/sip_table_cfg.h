@@ -17,43 +17,42 @@
 extern "C" {
 #endif
 
-typedef struct tpsa_sip_table_args {
-    uint32_t sip_idx;
-} tpsa_sip_table_args_t;
-
 typedef struct tpsa_sip_table_show_req {
+    char tpf_name[UVS_MAX_DEV_NAME];
     uint32_t sip_idx;
 } tpsa_sip_table_show_req_t;
 
 typedef struct tpsa_sip_table_show_rsp {
     int res;
-    urma_eid_t sip;
+    uvs_net_addr_t net_addr;
     uint16_t vlan;
-    uint8_t mac[TPSA_MAC_BYTES];
-    char dev_name[TPSA_MAX_DEV_NAME];
+    uint8_t mac[ETH_ADDR_LEN];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint8_t port_cnt;
     uint8_t port_id[TPSA_PORT_CNT_MAX];
-    bool is_ipv6;
+    bool net_addr_type;
     uint32_t prefix_len;
     uvs_mtu_t mtu;
 } tpsa_sip_table_show_rsp_t;
 
 typedef struct tpsa_sip_table_add_req {
-    urma_eid_t sip;
+    uvs_net_addr_t net_addr;
     uint16_t vlan;
-    uint8_t mac[TPSA_MAC_BYTES];
-    char dev_name[TPSA_MAX_DEV_NAME];
+    uint8_t mac[ETH_ADDR_LEN];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint8_t port_id;
-    bool is_ipv6;
+    bool net_addr_type;
     uint32_t prefix_len;
     uvs_mtu_t mtu;
 } tpsa_sip_table_add_req_t;
 
 typedef struct tpsa_sip_table_add_rsp {
     int32_t res;
+    uint32_t index;
 } tpsa_sip_table_add_rsp_t;
 
 typedef struct tpsa_sip_table_del_req {
+    char tpf_name[UVS_MAX_DEV_NAME];
     uint32_t sip_idx;
 } tpsa_sip_table_del_req_t;
 

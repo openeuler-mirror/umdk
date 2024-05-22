@@ -12,7 +12,6 @@
 #include <dirent.h>
 #include <errno.h>
 
-#include "urma_ex_api.h"
 #include "urma_log.h"
 #include "urma_types.h"
 #include "urma_provider.h"
@@ -162,6 +161,7 @@ static int urma_open_drivers(void)
         }
         if (urma_open_provider(path) != 0) {
             URMA_LOG_ERR("Failed to open provider %s\n", path);
+            continue;
         }
         n_loaded_drivers++;
     }
@@ -292,16 +292,22 @@ static inline bool urma_eid_is_valid(urma_eid_t *eid)
 
 urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
 {
-    if (dev == NULL || cnt == NULL) {
+    if (dev == NULL || dev->sysfs_dev == NULL || cnt == NULL) {
         URMA_LOG_WARN("invalid parameter with null_ptr.\n");
         return NULL;
     }
+
+    uint32_t max_eid_cnt = dev->sysfs_dev->dev_attr.dev_cap.max_eid_cnt;
+    if (max_eid_cnt == 0) {
+        URMA_LOG_ERR("max eid cnt %u is err", max_eid_cnt);
+        return NULL;
+    }
+
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
     urma_eid_info_t *eid_list;
     uint32_t cnt_idx = 0;
     urma_eid_t eid = {0};
-    uint32_t max_eid_cnt = dev->sysfs_dev->dev_attr.max_eid_cnt;
 
     eid_list = calloc(1, max_eid_cnt * sizeof(urma_eid_info_t));
     if (eid_list == NULL) {
@@ -405,7 +411,7 @@ urma_device_t *urma_get_device_by_eid(urma_eid_t eid, urma_transport_type_t type
 static int urma_open_cdev(char *path)
 {
     char *file_path = NULL;
-    int fd = -1;
+    int fd;
 
     file_path = realpath(path, NULL);
     if (file_path == NULL) {
@@ -504,11 +510,11 @@ urma_status_t urma_get_uasid(uint32_t *uasid)
             continue;
         }
         if (driver->ops->get_uasid(&g_uasid) == URMA_SUCCESS) {
-            break;
+            *uasid = g_uasid;
+            return URMA_SUCCESS;
         }
     }
-    *uasid = g_uasid;
-    return URMA_SUCCESS;
+    return URMA_FAIL;
 }
 
 static __attribute__((constructor)) void liburma_init(void)

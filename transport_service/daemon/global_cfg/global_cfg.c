@@ -23,7 +23,7 @@ tpsa_response_t *process_global_cfg_show(tpsa_request_t *req, ssize_t read_len)
     uvs_global_info_t *global_cfg = NULL;
 
     if (read_len != (req->req_len + (ssize_t)sizeof(tpsa_request_t))) {
-        TPSA_LOG_ERR("req_len not correct drop req, type: %d, len: %d\n", req->cmd_type, req->req_len);
+        TPSA_LOG_ERR("req_len not correct drop req, type: %u, len: %d\n", req->cmd_type, req->req_len);
         return NULL;
     }
 
@@ -63,7 +63,7 @@ tpsa_response_t *process_global_cfg_set(tpsa_request_t *req, ssize_t read_len)
     int ret = -1;
 
     if (read_len != (req->req_len + (ssize_t)sizeof(tpsa_request_t))) {
-        TPSA_LOG_ERR("req_len not correct drop req, type: %d, len: %d\n", req->cmd_type, req->req_len);
+        TPSA_LOG_ERR("req_len not correct drop req, type: %u, len: %d\n", req->cmd_type, req->req_len);
         return NULL;
     }
 

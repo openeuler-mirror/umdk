@@ -34,6 +34,18 @@ void uvs_admin_unregister_subcmd(uvs_admin_cmd_t *parent)
     shash_destroy(&parent->subcmds);
 }
 
+static inline void uvs_admin_print_opt_name(const uvs_admin_opt_usage_t *opt)
+{
+    char opt_name[UVS_ADMIN_MAX_CMD_LEN] = {0};
+
+    if (opt->is_mandatory == true) {
+        (void)snprintf(opt_name, UVS_ADMIN_MAX_CMD_LEN, "<--%s>", opt->opt_long);
+    } else {
+        (void)snprintf(opt_name, UVS_ADMIN_MAX_CMD_LEN, "[--%s]", opt->opt_long);
+    }
+    (void)printf("  %-23s %s\n", opt_name, opt->desc);
+}
+
 void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
 {
     uvs_admin_cmd_t *cmd = ctx->cur_cmd;
@@ -48,7 +60,7 @@ void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
         for (i = 0; i < usage->opt_num; i++) {
             opt = &usage->opt_usage[i];
             if (opt->opt_long) {
-                (void)printf("  --%-23s %s\n", opt->opt_long, opt->desc);
+                uvs_admin_print_opt_name(opt);
             } else {
                 (void)printf(" %s\n", opt->desc);
             }

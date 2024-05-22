@@ -30,7 +30,6 @@
 #include "admin_cmd.h"
 
 #define UINT8_INVALID (0xff)
-#define MAX_UPI_CNT 1000
 #define ADMIN_CC_ALG_MAX 255 /* 0xFF: Support 8 congestion algorithms */
 
 typedef struct admin_show_ubep {
@@ -72,7 +71,8 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     char tmp_eid[VALUE_LEN_MAX] = {0};
 
     urma_device_attr_t *dev_attr = &ubep->dev_attr;
-    (void)admin_parse_file_value_u64(sysfs_path, "guid", &dev_attr->guid);
+    (void)admin_parse_file_str(sysfs_path, "guid", tmp_value, VALUE_LEN_MAX);
+    (void)admin_str_to_eid(tmp_value, (urma_eid_t *)&dev_attr->guid);
 
     (void)admin_parse_file_value_u32(sysfs_path, "feature", &dev_attr->dev_cap.feature.value);
     (void)admin_parse_file_value_u32(sysfs_path, "max_jfc", &dev_attr->dev_cap.max_jfc);
@@ -95,14 +95,14 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u16(sysfs_path, "congestion_ctrl_alg", &dev_attr->dev_cap.congestion_ctrl_alg);
     (void)admin_parse_file_value_u32(sysfs_path, "ceq_cnt", &dev_attr->dev_cap.ceq_cnt);
     (void)admin_parse_file_value_u8(sysfs_path, "port_count", &dev_attr->port_cnt);
-    (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->max_eid_cnt);
+    (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->dev_cap.max_eid_cnt);
     (void)admin_parse_file_value_u32(sysfs_path, "max_tp_in_tpg", &dev_attr->dev_cap.max_tp_in_tpg);
 
-    ubep->eid_list = calloc(1, dev_attr->max_eid_cnt * sizeof(urma_eid_info_t));
+    ubep->eid_list = calloc(1, dev_attr->dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
     if (ubep->eid_list == NULL) {
         return;
     }
-    for (uint32_t i = 0; i < dev_attr->max_eid_cnt; i++) {
+    for (uint32_t i = 0; i < dev_attr->dev_cap.max_eid_cnt; i++) {
         if (snprintf(tmp_eid, VALUE_LEN_MAX, "eid%u/eid", i) <= 0) {
             (void)printf("snprintf failed, eid idx: %u.\n", i);
         }
@@ -122,7 +122,7 @@ static admin_show_ubep_t *admin_get_ubep_info(const struct dirent *dent)
     admin_show_ubep_t *ubep;
     char *sysfs_path;
 
-    if (dent->d_name[0] == '.') {
+    if (dent->d_name[0] == '.' || strcmp(dent->d_name, "ubcore") == 0) {
         return NULL;
     }
 
@@ -196,7 +196,7 @@ static inline void print_ubep_simple_info(const admin_show_ubep_t *ubep, int ind
 {
     urma_eid_t eid = {0};
 
-    for (uint32_t i = 0; i < ubep->dev_attr.max_eid_cnt; i++) {
+    for (uint32_t i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
         if (i > 0 && memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
             continue;
         }
@@ -270,14 +270,14 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     (void)printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
     (void)printf("name                       : %-16s\n", ubep->dev_name);
     (void)printf("transport_type             : %u [%s]\n", ubep->tp_type, urma_tp_type_to_string(ubep->tp_type));
-    for (i = 0; i < ubep->dev_attr.max_eid_cnt; i++) {
+    for (i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
         if (i > 0 && memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
             continue;
         }
         (void)printf("eid%u                       : "EID_FMT"\n", ubep->eid_list[i].eid_index,
         EID_ARGS(ubep->eid_list[i].eid));
     }
-    (void)printf("guid                       : %lu\n", ubep->dev_attr.guid);
+    (void)printf("guid                       : "EID_FMT"\n", EID_ARGS(ubep->dev_attr.guid));
     print_device_feat_str(ubep->dev_attr.dev_cap.feature);
 
     (void)printf("max_jfc                    : %u\n", ubep->dev_attr.dev_cap.max_jfc);
@@ -392,90 +392,6 @@ static int admin_set_ubep_cc_alg(const tool_config_t *cfg)
     return ret;
 }
 
-static int admin_set_ubep_upi(const tool_config_t *cfg)
-{
-    int ret;
-    char tmp_path[FILE_PATH_MAX] = {0};
-    char tmp_value[VALUE_LEN_MAX] = {0};
-
-    if (cfg->dev_name[0] == 0 || cfg->idx > MAX_UPI_CNT) {
-        (void)printf("set ubep upi failed, invalid parameter.\n");
-        return -1;
-    }
-
-    if (cfg->fe_idx == OWN_FE_IDX) {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "upi") <= 0) {
-            (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-            return -1;
-        }
-    } else {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "fe%u/upi", cfg->fe_idx) <= 0) {
-            (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-            return -1;
-        }
-    }
-
-    if (snprintf(tmp_value, VALUE_LEN_MAX - 1, "%u=%u", cfg->idx, cfg->upi) <= 0) {
-        (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-        return -1;
-    }
-
-    ret = admin_write_dev_file(cfg->dev_name, tmp_path, tmp_value, (uint32_t)strlen(tmp_value));
-
-    return ret;
-}
-
-static inline void print_ubep_upi(const char *upi_str)
-{
-    (void)printf("%s\n", upi_str);
-}
-
-static int admin_show_ubep_upi(const tool_config_t *cfg)
-{
-    uint32_t max_upi_cnt;
-    char *tmp_buf;
-    uint64_t buf_len;
-    char tmp_path[FILE_PATH_MAX] = {0};
-
-    if (cfg->dev_name[0] == 0) {
-        (void)printf("show ubep upi failed, invalid parameter.\n");
-        return -1;
-    }
-
-    if (cfg->fe_idx == OWN_FE_IDX) {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "upi") <= 0) {
-            (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-            return -1;
-        }
-    } else {
-        if (snprintf(tmp_path, FILE_PATH_MAX - 1, "fe%u/upi", cfg->fe_idx) <= 0) {
-            (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
-            return -1;
-        }
-    }
-
-    max_upi_cnt = admin_read_dev_file_value_u32(cfg->dev_name, "max_upi_cnt");
-    if (max_upi_cnt == 0) {
-        (void)printf("read max_upi_cnt failed, dev_name: %s.\n", cfg->dev_name);
-        return -1;
-    }
-#define ADMIN_UPI_STR_LEN (9)    /* 2^20 <= 8bit, add 1 bit space */
-    buf_len = (uint64_t)max_upi_cnt * ADMIN_UPI_STR_LEN + 1;
-    tmp_buf = calloc(1, buf_len);
-    if (tmp_buf == NULL) {
-        return -ENOMEM;
-    }
-
-    if (admin_read_dev_file(cfg->dev_name, tmp_path, tmp_buf, (uint32_t)buf_len) <= 0) {
-        free(tmp_buf);
-        return -1;
-    }
-
-    print_ubep_upi(tmp_buf);
-    free(tmp_buf);
-    return 0;
-}
-
 static int execute_command(const tool_config_t *cfg)
 {
     int ret;
@@ -496,14 +412,8 @@ static int execute_command(const tool_config_t *cfg)
         case TOOL_CMD_SET_CC_ALG:
             ret = admin_set_ubep_cc_alg(cfg);
             break;
-        case TOOL_CMD_SET_UPI:
-            ret = admin_set_ubep_upi(cfg);
-            break;
-        case TOOL_CMD_SHOW_UPI:
-            ret = admin_show_ubep_upi(cfg);
-            break;
         case TOOL_CMD_SHOW_UTP:
-            ret = admin_show_udp(cfg);
+            ret = admin_show_utp(cfg);
             break;
         case TOOL_CMD_SHOW_STATS:
             ret = admin_show_stats(cfg);

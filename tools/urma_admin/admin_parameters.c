@@ -128,8 +128,6 @@ static void usage(const char *argv0)
     (void)printf("  set_eid_mode <--dev> [--eid_mode]                      change the eid mode of pf ubep device.\n");
     (void)printf("  set_cc_alg <--dev> <--cc_alg>                          set one or more congestion control/\n");
     (void)printf("                                                         algorithms for ubep device.\n");
-    (void)printf("  set_upi <--dev> [--fe_idx] <--idx> <--upi>             set the upi of ubep device.\n");
-    (void)printf("  show_upi <--dev> [--fe_idx]                            show the upi of ubep device.\n");
     (void)printf("  show_stats <--dev> <--type> <--key>                    show run stats of ubep device.\n");
     (void)printf("  show_res <--dev> <--type> <--key> [--key_ext]                                        \n");
     (void)printf("           [--key_cnt]                                   show resources of ubep device.\n");
@@ -149,7 +147,6 @@ static void usage(const char *argv0)
     (void)printf("  -v, --fe_idx <fe_idx>                       the fe_idx of ubep device.\n" \
                  "                                              when fe_idx == 0xffff or empty, it refers to PF.\n");
     (void)printf("  -i, --idx <idx>                             idx defaults to 0.\n");
-    (void)printf("  -u, --upi <upi>                             upi value.\n");
     (void)printf("  -w, --whole                                 show whole information.\n");
     (void)printf("  -E, --spray_en                              end-side port number hashing enabled.\n");
     (void)printf("  -s, --src_port <port_id>                    udp data port start.\n");
@@ -177,8 +174,6 @@ static tool_cmd_type_t parse_command(const char *argv1)
         {"del_eid",         TOOL_CMD_DEL_EID},
         {"set_eid_mode",    TOOL_CMD_SET_EID_MODE},
         {"set_cc_alg",      TOOL_CMD_SET_CC_ALG},
-        {"set_upi",         TOOL_CMD_SET_UPI},
-        {"show_upi",        TOOL_CMD_SHOW_UPI},
         {"show_utp",        TOOL_CMD_SHOW_UTP},
         {"show_stats",      TOOL_CMD_SHOW_STATS},
         {"show_res",        TOOL_CMD_SHOW_RES},
@@ -254,7 +249,7 @@ static void init_tool_cfg(tool_config_t *cfg)
 static int check_query_type(const tool_config_t *cfg)
 {
     if (cfg->cmd == TOOL_CMD_SHOW_STATS) {
-        if (cfg->key.type < TOOL_STATS_KEY_TP || cfg->key.type > TOOL_STATS_KEY_JETTY_GROUP) {
+        if (cfg->key.type < TOOL_STATS_KEY_VTP || cfg->key.type > TOOL_STATS_KEY_URMA_DEV) {
             (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
             return -1;
         }
@@ -318,7 +313,6 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
         {"eid_mode",          no_argument,       NULL, 'm'},
         {"fe_idx",            required_argument, NULL, 'v'},
         {"idx",               required_argument, NULL, 'i'},
-        {"upi",               required_argument, NULL, 'u'},
         {"whole",             no_argument,       NULL, 'w'},
         {"spray_en",          no_argument,       NULL, 'E'},
         {"src_port",          required_argument, NULL, 's'},
@@ -351,7 +345,8 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 usage(argv[0]);
                 return 0;
             case 'd':
-                if (strlen(optarg) + 1 > URMA_ADMIN_MAX_DEV_NAME || check_dev_name(optarg) == false) {
+                if (strnlen(optarg, URMA_ADMIN_MAX_DEV_NAME) + 1 > URMA_ADMIN_MAX_DEV_NAME ||
+                    check_dev_name(optarg) == false) {
                     (void)printf("dev_name:%s out of range(%d) or invalid.\n", optarg, URMA_ADMIN_MAX_DEV_NAME);
                     return -1;
                 }
@@ -369,9 +364,6 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 break;
             case 'i':
                 ret = admin_str_to_u16(optarg, &cfg->idx);
-                break;
-            case 'u':
-                ret = admin_str_to_u32(optarg, &cfg->upi);
                 break;
             case 'w':
                 cfg->whole_info = true;
@@ -402,7 +394,7 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 (void)admin_str_to_u32(optarg, &cfg->key.key_ext);
                 break;
             case 'n':
-                if (strlen(optarg) + 1 > URMA_ADMIN_MAX_NS_PATH) {
+                if (strnlen(optarg, URMA_ADMIN_MAX_NS_PATH) + 1 > URMA_ADMIN_MAX_NS_PATH) {
                     (void)printf("ns path:%s out of range(%d) or invalid.\n", optarg, URMA_ADMIN_MAX_NS_PATH);
                     return -1;
                 }

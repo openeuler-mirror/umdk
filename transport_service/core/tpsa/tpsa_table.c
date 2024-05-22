@@ -26,6 +26,8 @@ int deid_vtp_table_create(deid_vtp_table_t *deid_vtp_table)
 
 static deid_vtp_table_entry_t *alloc_deid_vtp_table_entry(const deid_vtp_table_key_t *key)
 {
+    int ret = 0;
+
     deid_vtp_table_entry_t *entry = (deid_vtp_table_entry_t *)calloc(1,
         sizeof(deid_vtp_table_entry_t));
     if (entry == NULL) {
@@ -34,7 +36,10 @@ static deid_vtp_table_entry_t *alloc_deid_vtp_table_entry(const deid_vtp_table_k
     entry->key = *key;
     /* vtp list init to store the vtp entry with the same deid */
     ub_list_init(&entry->vtp_list);
-    (void)pthread_spin_init(&entry->vtp_list_lock, PTHREAD_PROCESS_PRIVATE);
+    ret = pthread_spin_init(&entry->vtp_list_lock, PTHREAD_PROCESS_PRIVATE);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to init spinlock, err: %d.\n", errno);
+    }
 
     return entry;
 }
@@ -283,6 +288,16 @@ static rm_vtp_table_entry_t *alloc_rm_vtp_table_entry(const rm_vtp_table_key_t *
     entry->migration_status = false;
     entry->upi = vtp_table_data->upi;
     entry->node_status = STATE_NORMAL;
+    entry->share_mode = vtp_table_data->share_mode;
+    if (!vtp_table_data->share_mode) {
+        entry->tpg_param = (tpsa_tpg_info_t *)calloc(1, sizeof(tpsa_tpg_info_t));
+        (void)memcpy(entry->tpg_param,
+            &vtp_table_data->tpg_param, sizeof(tpsa_tpg_info_t));
+        entry->use_cnt = 1;
+        TPSA_LOG_INFO("alloc rm vtp share_mode is %u, vtpn = %u, tpgn = %u, use_cnt = %u",
+            (uint32_t)entry->share_mode, entry->vtpn,
+            vtp_table_data->tpg_param.tpgn, entry->use_cnt);
+    }
 
     return entry;
 }
@@ -321,6 +336,12 @@ int rm_vtp_table_add(deid_vtp_table_t *deid_vtp_table, fe_table_entry_t *entry,
         TPSA_LOG_ERR("Invalid parameter");
         return -EINVAL;
     }
+
+    TPSA_LOG_DEBUG("fe_key.fe_idx = %hu and tpf_name %s",
+        entry->key.fe_idx, entry->key.tpf_name);
+
+    TPSA_LOG_DEBUG("vtp src eid = " EID_FMT " and dst eid" EID_FMT "\n",
+        key->src_eid, key->dst_eid);
 
     rm_vtp_table_entry_t *rm_entry = alloc_rm_vtp_table_entry(key, vtp_table_data);
     if (rm_entry == NULL) {
@@ -424,7 +445,7 @@ int rc_vtp_table_add(deid_vtp_table_t *deid_vtp_table, fe_table_entry_t *entry,
     if (deid_vtp_list_add(deid_vtp_table, &lm_vtp_entry, &deid_key) != 0) {
         TPSA_LOG_ERR("deid vtp list add is failed");
         free(rc_entry);
-        return -1;
+        return -ENOMEM;
     }
 
     HMAP_INSERT(&entry->rc_vtp_table, rc_entry, key, sizeof(*key));
@@ -622,9 +643,11 @@ static fe_table_entry_t *alloc_fe_table_entry(const vport_key_t *key)
 {
     fe_table_entry_t *entry = (fe_table_entry_t *)calloc(1, sizeof(fe_table_entry_t));
     if (entry == NULL) {
+        return NULL;
     }
     entry->key = *key;
 
+    entry->fe_rebooted = false;
     entry->stop_proc_vtp = false;
     entry->link_ready = false;
     entry->full_migrate = true;
@@ -668,18 +691,23 @@ free_fe_entry:
 
 int fe_table_create(fe_table_t *fe_table)
 {
+    if (fe_table == NULL) {
+        TPSA_LOG_ERR("Invalid parameter");
+        return -EINVAL;
+    }
     if (ub_hmap_init(&fe_table->hmap, TPSA_FE_TABLE_SIZE) != 0) {
         TPSA_LOG_ERR("fe_table init failed.\n");
         return -ENOMEM;
     }
-
+    fe_table->clean_res = false;
     (void)pthread_rwlock_init(&fe_table->rwlock, NULL);
     return 0;
 }
 
 fe_table_entry_t *fe_table_lookup(fe_table_t *fe_table, vport_key_t *key)
 {
-    if (fe_table == NULL) {
+    if (fe_table == NULL || key == NULL) {
+        TPSA_LOG_ERR("Invalid parameter");
         return NULL;
     }
     fe_table_entry_t *target = NULL;
@@ -714,6 +742,7 @@ void fe_table_remove(fe_table_t *fe_table, fe_table_entry_t *fe_entry)
         ub_hmap_destroy(&fe_entry->clan_vtp_table.hmap);
 
         ub_hmap_remove(&fe_table->hmap, &fe_entry->node);
+        TPSA_LOG_INFO("fe destroyed dev_name:%s, fe_idx:%d", fe_entry->key.tpf_name, fe_entry->key.fe_idx);
         free(fe_entry);
     }
 }
@@ -729,6 +758,7 @@ static rm_tpg_table_entry_t *alloc_rm_tpg_table_entry(const rm_tpg_table_key_t *
     entry->key = *key;
     entry->type = param->type;
     entry->tpgn = param->tpgn;
+    entry->tp_cnt = param->tp_cnt;
     (void)memcpy(entry->tpn, param->tpn,
         TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
     entry->status = param->status;
@@ -769,7 +799,7 @@ int rm_tpg_table_add(rm_tpg_table_t *rm_tpg_table, rm_tpg_table_key_t *key,
 
     /* Do not add if the map entry already exists */
     if (rm_tpg_table_lookup(rm_tpg_table, key) != NULL) {
-        TPSA_LOG_WARN("key " EID_FMT " already exist in rm_tpg_table", EID_ARGS(key->dip.eid));
+        TPSA_LOG_WARN("key " EID_FMT " already exist in rm_tpg_table", EID_ARGS(key->dip.net_addr));
         return 0;
     }
 
@@ -795,6 +825,7 @@ static rc_tpg_table_entry_t *alloc_rc_tpg_table_entry(const rc_tpg_table_key_t *
     entry->type = param->type;
     entry->tpgn = param->tpgn;
     entry->vice_tpgn = UINT32_MAX;
+    entry->tp_cnt = param->tp_cnt;
     (void)memcpy(entry->tpn, param->tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(uint32_t));
     entry->status = param->status;
     entry->ljetty_id = param->ljetty_id;
@@ -898,7 +929,7 @@ int utp_table_add(utp_table_t *utp_table, utp_table_key_t *key,
     /* Do not add if the entry already exists */
     if (utp_table_lookup(utp_table, key) != NULL) {
         TPSA_LOG_WARN("key sip: " EID_FMT ", dip: " EID_FMT " already exist in utp_table",
-            key->sip.eid, EID_ARGS(key->dip.eid));
+            key->sip.net_addr, EID_ARGS(key->dip.net_addr));
         return 0;
     }
 
@@ -916,7 +947,7 @@ int utp_table_remove(utp_table_t *utp_table, utp_table_key_t *key)
     utp_table_entry_t *entry = utp_table_lookup(utp_table, key);
     if (entry == NULL) {
         TPSA_LOG_WARN("key sip: " EID_FMT ", dip: " EID_FMT " not exist in utp_table",
-            key->sip.eid, EID_ARGS(key->dip.eid));
+            key->sip.net_addr, EID_ARGS(key->dip.net_addr));
         return -ENXIO;
     }
     ub_hmap_remove(&utp_table->hmap, &entry->node);
@@ -971,7 +1002,7 @@ int ctp_table_add(ctp_table_t *ctp_table, ctp_table_key_t *key, uint32_t ctp_idx
 
     /* Do not add if the entry already exist */
     if (ctp_table_lookup(ctp_table, key) != NULL) {
-        TPSA_LOG_WARN("key dip: " EID_FMT " already exist in ctp_table", EID_ARGS(key->dip.eid));
+        TPSA_LOG_WARN("key dip: " EID_FMT " already exist in ctp_table", EID_ARGS(key->dip.net_addr));
         return 0;
     }
 
@@ -988,7 +1019,7 @@ int ctp_table_remove(ctp_table_t *ctp_table, ctp_table_key_t *key)
 {
     ctp_table_entry_t *entry = ctp_table_lookup(ctp_table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("key dip: " EID_FMT " not exist in ctp table", EID_ARGS(key->dip.eid));
+        TPSA_LOG_WARN("key dip: " EID_FMT " not exist in ctp table", EID_ARGS(key->dip.net_addr));
         return -ENXIO;
     }
 
@@ -1011,10 +1042,17 @@ static tpf_dev_table_entry_t *alloc_tpf_dev_table_entry(const tpf_dev_table_key_
     if (entry == NULL) {
         return NULL;
     }
+    sip_table_t *sip_table = (sip_table_t *)calloc(1, sizeof(sip_table_t));
+    if (sip_table == NULL) {
+        free(entry);
+        return NULL;
+    }
     entry->key = *key;
     entry->cc_entry_cnt = add_entry->cc_entry_cnt;
     entry->dev_fea = add_entry->dev_fea;
     (void)memcpy(entry->cc_array, add_entry->cc_array, sizeof(tpsa_cc_entry_t) * entry->cc_entry_cnt);
+    entry->sip_table = sip_table;
+
     return entry;
 }
 
@@ -1083,10 +1121,17 @@ int tpf_dev_table_create(tpf_dev_table_t *tpf_dev_table)
 
 void tpf_dev_table_destroy(tpf_dev_table_t *tpf_dev_table)
 {
+    tpf_dev_table_entry_t *cur, *next;
+
     (void)pthread_rwlock_wrlock(&tpf_dev_table->rwlock);
-    HMAP_DESTROY(tpf_dev_table, tpf_dev_table_entry_t);
+    HMAP_FOR_EACH_SAFE(cur, next, node, &tpf_dev_table->hmap) {
+        ub_hmap_remove(&tpf_dev_table->hmap, &cur->node);
+        free(cur->sip_table);
+        free(cur);
+    }
     (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
     (void)pthread_rwlock_destroy(&tpf_dev_table->rwlock);
+    ub_hmap_destroy(&tpf_dev_table->hmap);
     return;
 }
 
@@ -1109,8 +1154,7 @@ int vport_table_create(vport_table_t *vport_table)
     }
 
     (void)pthread_rwlock_init(&vport_table->rwlock, NULL);
-    vport_table->vf_destroy = false;
-    ub_list_init(&vport_table->vport_delete_list);
+    vport_table->clean_res = false;
 
     return 0;
 }
@@ -1119,7 +1163,6 @@ void vport_table_destroy(vport_table_t *vport_table)
 {
     (void)pthread_rwlock_wrlock(&vport_table->rwlock);
     HMAP_DESTROY(vport_table, vport_table_entry_t);
-    vport_del_list_destroy(&vport_table->vport_delete_list);
     (void)pthread_rwlock_unlock(&vport_table->rwlock);
     (void)pthread_rwlock_destroy(&vport_table->rwlock);
     return;
@@ -1136,6 +1179,54 @@ vport_table_entry_t *vport_table_lookup(vport_table_t *vport_table, vport_key_t 
     return target;
 }
 
+int vport_set_deleting(vport_table_t *vport_table, vport_key_t *key, sem_t *sem)
+{
+    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
+    vport_table_entry_t *entry = vport_table_lookup(vport_table, key);
+    if (entry == NULL) {
+        (void)pthread_rwlock_unlock(&vport_table->rwlock);
+        return -1;
+    }
+    entry->deleting = true;
+    vport_table->clean_res = true;
+    if (entry->sem != NULL && sem != NULL) {
+        (void)pthread_rwlock_unlock(&vport_table->rwlock);
+        TPSA_LOG_ERR("key dev_name:%s, fe_idx %hu is deleting by another thread", key->tpf_name, key->fe_idx);
+        return -1;
+    }
+    entry->sem = sem;
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+
+    TPSA_LOG_INFO("key dev_name:%s, fe_idx %hu set to delete", key->tpf_name, key->fe_idx);
+    return 0;
+}
+
+void vport_update_clean_res(vport_table_t *vport_table)
+{
+    bool clean_res = false;
+
+    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
+    vport_table_entry_t *cur, *next;
+    HMAP_FOR_EACH_SAFE(cur, next, node, &vport_table->hmap) {
+        clean_res = clean_res || cur->deleting;
+    }
+
+    vport_table->clean_res = clean_res;
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+}
+
+bool vport_in_cleaning_proc(vport_table_t *vport_table, vport_key_t *key)
+{
+    bool vport_cleaning = false;
+    (void)pthread_rwlock_rdlock(&vport_table->rwlock);
+    vport_table_entry_t *entry = vport_table_lookup(vport_table, key);
+    if (entry != NULL) {
+        vport_cleaning = entry->deleting;
+    }
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+    return vport_cleaning;
+}
+
 int vport_table_add(vport_table_t *vport_table, vport_table_entry_t *add_entry)
 {
     if (vport_table == NULL || add_entry == NULL ||
@@ -1147,7 +1238,7 @@ int vport_table_add(vport_table_t *vport_table, vport_table_entry_t *add_entry)
     (void)pthread_rwlock_wrlock(&vport_table->rwlock);
     /* Do not add if the entry already exists */
     if (vport_table_lookup(vport_table, &add_entry->key) != NULL) {
-        TPSA_LOG_INFO("vport:%s-%hu already exist\n", add_entry->key.dev_name, add_entry->key.fe_idx);
+        TPSA_LOG_INFO("vport:%s-%hu already exist\n", add_entry->key.tpf_name, add_entry->key.fe_idx);
         (void)pthread_rwlock_unlock(&vport_table->rwlock);
         return -EEXIST;
     }
@@ -1157,11 +1248,12 @@ int vport_table_add(vport_table_t *vport_table, vport_table_entry_t *add_entry)
         (void)pthread_rwlock_unlock(&vport_table->rwlock);
         return -ENOMEM;
     }
+    entry->deleting = false;
 
     HMAP_INSERT(vport_table, entry, &entry->key, sizeof(vport_key_t));
     (void)pthread_rwlock_unlock(&vport_table->rwlock);
 
-    TPSA_LOG_INFO("success add fe_idx: %s-%hu sip_idx %u\n", entry->key.dev_name, entry->key.fe_idx, entry->sip_idx);
+    TPSA_LOG_INFO("success add fe_idx: %s-%hu sip_idx %u\n", entry->key.tpf_name, entry->key.fe_idx, entry->sip_idx);
     return 0;
 }
 
@@ -1170,14 +1262,17 @@ int vport_table_remove(vport_table_t *vport_table, vport_key_t *key)
     (void)pthread_rwlock_wrlock(&vport_table->rwlock);
     vport_table_entry_t *entry = vport_table_lookup(vport_table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("key dev_name:%s, fe_idx %hu not exist", key->dev_name, key->fe_idx);
+        TPSA_LOG_WARN("key dev_name:%s, fe_idx %hu not exist", key->tpf_name, key->fe_idx);
         (void)pthread_rwlock_unlock(&vport_table->rwlock);
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del dev_name:%s fe_idx %hu sip_idx %u\n", key->dev_name, key->fe_idx, entry->sip_idx);
+    TPSA_LOG_INFO("success del dev_name:%s fe_idx %hu sip_idx %u\n", key->tpf_name, key->fe_idx, entry->sip_idx);
 
     ub_hmap_remove(&vport_table->hmap, &entry->node);
+    if (entry->sem != NULL) {
+        (void)sem_post(entry->sem);
+    }
     free(entry);
     (void)pthread_rwlock_unlock(&vport_table->rwlock);
     return 0;
@@ -1363,7 +1458,7 @@ int rm_wait_table_add(rm_wait_table_t *rm_table, rm_wait_table_key_t *key,
     }
 
     HMAP_INSERT(rm_table, entry, key, sizeof(*key));
-    TPSA_LOG_INFO("add one entry to rm_wait_table: dip " EID_FMT "\n", EID_ARGS(key->dip.eid));
+    TPSA_LOG_INFO("add one entry to rm_wait_table: dip " EID_FMT "\n", EID_ARGS(key->dip.net_addr));
     return 0;
 }
 
@@ -1371,11 +1466,11 @@ int rm_wait_table_remove(rm_wait_table_t *rm_table, rm_wait_table_key_t *key)
 {
     rm_wait_table_entry_t *entry = rm_wait_table_lookup(rm_table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("key dip " EID_FMT " not exist", EID_ARGS(key->dip.eid));
+        TPSA_LOG_WARN("key dip " EID_FMT " not exist", EID_ARGS(key->dip.net_addr));
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del dip " EID_FMT "\n", EID_ARGS(key->dip.eid));
+    TPSA_LOG_INFO("success del dip " EID_FMT "\n", EID_ARGS(key->dip.net_addr));
 
     ub_hmap_remove(&rm_table->hmap, &entry->node);
     free(entry);
@@ -1387,7 +1482,7 @@ int rm_wait_table_pop(rm_wait_table_t *rm_table, rm_wait_table_key_t *key,
 {
     rm_wait_table_entry_t *entry = rm_wait_table_lookup(rm_table, key);
     if (entry == NULL) {
-        TPSA_LOG_WARN("key dip " EID_FMT " not exist", EID_ARGS(key->dip.eid));
+        TPSA_LOG_WARN("key dip " EID_FMT " not exist", EID_ARGS(key->dip.net_addr));
         return -ENXIO;
     }
 
@@ -1488,23 +1583,6 @@ int rc_wait_table_pop(rc_wait_table_t *rc_table, rc_wait_table_key_t *key,
     return 0;
 }
 
-/* sip_table create/add/remove/lookup/destroy opts */
-void sip_table_create(sip_table_t *sip_table)
-{
-    (void)pthread_rwlock_init(&sip_table->rwlock, NULL);
-}
-
-void sip_table_destroy(sip_table_t *sip_table)
-{
-    size_t clean_size = sizeof(sip_table_entry_t) * TPSA_SIP_IDX_TABLE_SIZE;
-
-    (void)pthread_rwlock_wrlock(&sip_table->rwlock);
-    (void)memset(sip_table->entries, 0, clean_size);
-    (void)pthread_rwlock_unlock(&sip_table->rwlock);
-    (void)pthread_rwlock_destroy(&sip_table->rwlock);
-    return;
-}
-
 int dip_table_create(dip_table_t *dip_table)
 {
     if (ub_hmap_init(&dip_table->hmap, TPSA_TABLE_SIZE) != 0) {
@@ -1512,10 +1590,13 @@ int dip_table_create(dip_table_t *dip_table)
         return -ENOMEM;
     }
 
-    (void)pthread_rwlock_init(&dip_table->rwlock, NULL);
-
     dip_table->tbl_refresh = false;
-    dip_table->refresh_entry = NULL;
+    dip_table->refresh_entry = (dip_table_entry_t *)calloc(1, sizeof(dip_table_entry_t));
+    if (dip_table->refresh_entry == NULL) {
+        ub_hmap_destroy(&dip_table->hmap);
+        return -ENOMEM;
+    }
+    (void)pthread_rwlock_init(&dip_table->rwlock, NULL);
 
     return 0;
 }
@@ -1523,6 +1604,9 @@ int dip_table_create(dip_table_t *dip_table)
 void dip_table_destroy(dip_table_t *dip_table)
 {
     (void)pthread_rwlock_wrlock(&dip_table->rwlock);
+    dip_table->tbl_refresh = false;
+    free(dip_table->refresh_entry);
+    dip_table->refresh_entry = NULL;
     HMAP_DESTROY(dip_table, dip_table_entry_t);
     (void)pthread_rwlock_unlock(&dip_table->rwlock);
     (void)pthread_rwlock_destroy(&dip_table->rwlock);
@@ -1537,8 +1621,7 @@ static dip_table_entry_t *alloc_dip_table_entry(const dip_table_key_t *key,
         return NULL;
     }
     entry->key = add_entry->key;
-    entry->peer_tps = add_entry->peer_tps;
-    entry->underlay_eid = add_entry->underlay_eid;
+    entry->peer_uvs_ip = add_entry->peer_uvs_ip;
     entry->netaddr = add_entry->netaddr;
 
     return entry;
@@ -1609,67 +1692,196 @@ int dip_table_remove(dip_table_t *dip_table, dip_table_key_t *key)
     return 0;
 }
 
+int dip_table_modify(dip_table_t *dip_table, dip_table_key_t *old_key,
+    dip_table_entry_t *new_entry, dip_table_modify_mask_t mask)
+{
+    dip_table_entry_t *old_entry = NULL;
+
+    (void)pthread_rwlock_wrlock(&dip_table->rwlock);
+    old_entry = dip_table_lookup(dip_table, old_key);
+    if (old_entry == NULL) {
+        (void)pthread_rwlock_unlock(&dip_table->rwlock);
+        TPSA_LOG_ERR("can not find dip by key: " EID_FMT " and upi %u\n",
+            EID_ARGS(old_key->deid), old_key->upi);
+        return -ENXIO;
+    }
+
+    if (memcmp(&old_entry->netaddr, &new_entry->netaddr, sizeof(uvs_net_addr_info_t)) != 0) {
+        /* Mark refresh old_entry */
+        (void)memcpy(dip_table->refresh_entry, old_entry, sizeof(dip_table_entry_t));
+        dip_table->new_netaddr = new_entry->netaddr;
+        dip_table->tbl_refresh = true;
+    }
+
+    ub_hmap_remove(&dip_table->hmap, &old_entry->node);
+
+    old_entry->key.deid = (mask.bs.eid == 0 ? old_entry->key.deid : new_entry->key.deid);
+    old_entry->key.upi = (mask.bs.upi == 0 ? old_entry->key.upi : new_entry->key.upi);
+    old_entry->peer_uvs_ip = (mask.bs.uvs_ip == 0 ? old_entry->peer_uvs_ip : new_entry->peer_uvs_ip);
+    old_entry->netaddr = (mask.bs.net_addr == 0 ? old_entry->netaddr : new_entry->netaddr);
+
+    HMAP_INSERT(dip_table, old_entry, &old_entry->key, sizeof(dip_table_key_t));
+    (void)pthread_rwlock_unlock(&dip_table->rwlock);
+    return 0;
+}
+
 /*
  * entry may del by other thread. The caller must lock the table
  * before lookup the entry and release the lock after the entry is used up.
  */
-sip_table_entry_t *sip_table_lookup(sip_table_t *sip_table, uint32_t sip_idx)
+
+/* sip table */
+void tpsa_sip_table_lookup(tpf_dev_table_t *tpf_dev_table, char *tpf_name, uint32_t sip_idx,
+    sip_table_entry_t *target_entry)
 {
-    if (sip_idx > TPSA_SIP_IDX_TABLE_SIZE - 1) {
+    tpf_dev_table_entry_t tpf_dev_table_entry;
+    sip_table_entry_t *entry;
+    sip_table_t *sip_table;
+
+    if (sip_idx >= TPSA_SIP_IDX_TABLE_SIZE) {
         TPSA_LOG_ERR("Invalid parameter");
-        return NULL;
+        return;
     }
-
-    sip_table_entry_t *entry = &sip_table->entries[sip_idx];
-    if (!entry->used) {
-        return NULL;
+    (void)pthread_rwlock_rdlock(&tpf_dev_table->rwlock);
+    if (tpsa_lookup_tpf_dev_table(tpf_name, tpf_dev_table, &tpf_dev_table_entry) != 0) {
+        (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+        TPSA_LOG_ERR("Failed to lookup tpf_dev: %s\n", tpf_name);
+        return;
     }
-
-    return entry;
+    sip_table = tpf_dev_table_entry.sip_table;
+    if (sip_table->entries[sip_idx].used == false) {
+        (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+        TPSA_LOG_ERR("No valid sip found");
+        return;
+    }
+    entry = &sip_table->entries[sip_idx];
+    (void)memcpy(target_entry, entry, sizeof(sip_table_entry_t));
+    (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
 }
 
-int sip_table_add(sip_table_t *sip_table, uint32_t sip_idx, sip_table_entry_t *entry_add)
+int tpsa_sip_table_add(tpf_dev_table_t *tpf_dev_table, uint32_t sip_idx, sip_table_entry_t *entry_add)
 {
-    if (sip_idx > TPSA_SIP_IDX_TABLE_SIZE - 1) {
+    tpf_dev_table_entry_t tpf_dev_table_entry;
+    sip_table_entry_t *entry;
+    int ret;
+
+    if (sip_idx >= TPSA_SIP_IDX_TABLE_SIZE) {
         TPSA_LOG_ERR("Invalid parameter");
         return -EINVAL;
     }
-
-    (void)pthread_rwlock_wrlock(&sip_table->rwlock);
-    sip_table_entry_t *entry = &sip_table->entries[sip_idx];
-    /* update entry if the it already exists */
-    if (entry->used) {
-        TPSA_LOG_WARN("key sip %d already exist, update it", sip_idx);
-        return -1;
+    (void)pthread_rwlock_wrlock(&tpf_dev_table->rwlock);
+    ret = tpsa_lookup_tpf_dev_table(entry_add->dev_name, tpf_dev_table, &tpf_dev_table_entry);
+    if (ret != 0) {
+        (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+        TPSA_LOG_ERR("No available tpf table found");
+        return -ENXIO;
+    }
+    entry = &tpf_dev_table_entry.sip_table->entries[sip_idx];
+    if (entry->used == true) {
+        (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+        TPSA_LOG_ERR("sip_index: [%s-%u] already exist", entry_add->dev_name, sip_idx);
+        return -EEXIST;
     }
 
     (void)memcpy(entry, entry_add, sizeof(sip_table_entry_t));
     entry->used = true;
-    (void)pthread_rwlock_unlock(&sip_table->rwlock);
-
-    TPSA_LOG_INFO("success add sip_idx %d to table\n", sip_idx);
+    (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+    TPSA_LOG_INFO("success add sip_idx: [%s-%u] to table\n", entry_add->dev_name, sip_idx);
     return 0;
 }
 
-int sip_table_remove(sip_table_t *sip_table, uint32_t sip_idx)
+int tpsa_sip_table_del(tpf_dev_table_t *tpf_dev_table, char *tpf_key, uint32_t sip_idx)
 {
-    if (sip_idx > TPSA_SIP_IDX_TABLE_SIZE - 1) {
+    tpf_dev_table_entry_t tpf_dev_table_entry;
+    sip_table_entry_t *entry;
+
+    if (sip_idx >= TPSA_SIP_IDX_TABLE_SIZE) {
         TPSA_LOG_ERR("Invalid parameter");
         return -EINVAL;
     }
-
-    (void)pthread_rwlock_wrlock(&sip_table->rwlock);
-    sip_table_entry_t *entry = &sip_table->entries[sip_idx];
-    if (entry->used) {
-        (void)memset(entry, 0, sizeof(sip_table_entry_t));
-        entry->used = false;
-        (void)pthread_rwlock_unlock(&sip_table->rwlock);
-        TPSA_LOG_INFO("success remove sip_idx %d from table\n", sip_idx);
-        return 0;
+    (void)pthread_rwlock_wrlock(&tpf_dev_table->rwlock);
+    if (tpsa_lookup_tpf_dev_table(tpf_key, tpf_dev_table, &tpf_dev_table_entry) == 0) {
+        entry = &tpf_dev_table_entry.sip_table->entries[sip_idx];
+        if (entry->used == true) {
+            (void)memset(entry, 0, sizeof(sip_table_entry_t));
+            (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+            TPSA_LOG_INFO("success del sip_idx: [%s-%u] from table\n", tpf_key, sip_idx);
+            return 0;
+        }
     }
-    (void)pthread_rwlock_unlock(&sip_table->rwlock);
-    TPSA_LOG_ERR("key sip_idx %d not exist", sip_idx);
+    (void)pthread_rwlock_unlock(&tpf_dev_table->rwlock);
+    TPSA_LOG_ERR("sip_idx: [%s-%u] not exist", tpf_key, sip_idx);
     return -ENXIO;
+}
+
+int tpsa_sip_table_query_unused_idx(tpsa_table_t *table_ctx, char *tpf_key, uint32_t *sip_idx)
+{
+    tpf_dev_table_entry_t return_entry;
+    uint32_t index = 0;
+    int ret = -1;
+
+    (void)pthread_rwlock_rdlock(&table_ctx->tpf_dev_table.rwlock);
+    ret = tpsa_lookup_tpf_dev_table(tpf_key, &table_ctx->tpf_dev_table, &return_entry);
+    if (ret != 0) {
+        (void)pthread_rwlock_unlock(&table_ctx->tpf_dev_table.rwlock);
+        TPSA_LOG_ERR("tpf table not found");
+        return -1;
+    }
+    sip_table_t *sip_table = return_entry.sip_table;
+    while (index < TPSA_SIP_IDX_TABLE_SIZE && sip_table->entries[index].used == true) {
+        index++;
+    }
+    (void)pthread_rwlock_unlock(&table_ctx->tpf_dev_table.rwlock);
+
+    if (index == TPSA_SIP_IDX_TABLE_SIZE) {
+        TPSA_LOG_ERR("failed to add sip entry to sip table\n");
+        return -1;
+    }
+    *sip_idx = index;
+
+    return 0;
+}
+
+sip_table_entry_t *tpsa_get_sip_entry_list(tpsa_table_t *table_ctx, char *tpf_key, uint32_t *max_sip_cnt)
+{
+    tpf_dev_table_entry_t return_entry;
+    sip_table_entry_t *sip_entry_list;
+    uint32_t valid_cnt = 0;
+    uint32_t sip_idx = 0;
+    int ret = -1;
+
+    sip_entry_list = (sip_table_entry_t *)calloc(1, sizeof(sip_table_entry_t) * TPSA_SIP_IDX_TABLE_SIZE);
+    if (sip_entry_list == NULL) {
+        return NULL;
+    }
+    (void)pthread_rwlock_rdlock(&table_ctx->tpf_dev_table.rwlock);
+    ret = tpsa_lookup_tpf_dev_table(tpf_key, &table_ctx->tpf_dev_table, &return_entry);
+    if (ret != 0) {
+        (void)pthread_rwlock_unlock(&table_ctx->tpf_dev_table.rwlock);
+        free(sip_entry_list);
+        TPSA_LOG_ERR("tpf table not found");
+        return NULL;
+    }
+    sip_table_t *sip_table = return_entry.sip_table;
+    for (sip_idx = 0; sip_idx < TPSA_SIP_IDX_TABLE_SIZE; ++sip_idx) {
+        if (sip_table->entries[sip_idx].used == false) {
+            continue;
+        }
+        (void)memcpy(&sip_entry_list[valid_cnt], &sip_table->entries[sip_idx],
+            sizeof(sip_table_entry_t));
+        valid_cnt++;
+    }
+    *max_sip_cnt = valid_cnt;
+    (void)pthread_rwlock_unlock(&table_ctx->tpf_dev_table.rwlock);
+
+    return sip_entry_list;
+}
+
+void tpsa_free_sip_entry_list(sip_table_entry_t *sip_entry_list)
+{
+    if (sip_entry_list != NULL) {
+        free(sip_entry_list);
+    }
 }
 
 static tpsa_ueid_t *vport_ueid_tbl_lookup_entry(vport_table_entry_t *entry, uint32_t ueid_index)
@@ -1807,7 +2019,7 @@ static tp_state_table_entry_t *alloc_tp_state_table_entry(const tp_state_table_k
     entry->ack_udp_start = add_entry->ack_udp_start;
     entry->peer_tpn = add_entry->peer_tpn;
     entry->dip = add_entry->dip;
-    entry->peer_tpsa_eid = add_entry->peer_tpsa_eid;
+    entry->peer_uvs_ip = add_entry->peer_uvs_ip;
     entry->suspend_cnt = add_entry->suspend_cnt;
     (void)memcpy(entry->timestamp, add_entry->timestamp, sizeof(entry->timestamp));
     return entry;
@@ -1844,8 +2056,8 @@ tp_state_table_entry_t *tp_state_table_add(tp_state_table_t *tp_state_table, tp_
     }
 
     HMAP_INSERT(tp_state_table, entry, key, sizeof(*key));
-    TPSA_LOG_INFO("success add tp %u eid " EID_FMT " state %d at %llu\n", key->tpn,
-        EID_ARGS(key->sip.eid), (int)add_entry->tp_exc_state, add_entry->timestamp);
+    TPSA_LOG_DEBUG("success add tp %u eid " EID_FMT " state %d at %llu\n", key->tpn,
+        EID_ARGS(key->sip.net_addr), (int)add_entry->tp_exc_state, add_entry->timestamp);
     return entry;
 }
 
@@ -1859,7 +2071,7 @@ int tp_state_table_add_with_duplication_check(tp_state_table_t *tp_state_table, 
 
     /* Do not add if the entry already exists */
     if (tp_state_table_lookup(tp_state_table, key) != NULL) {
-        TPSA_LOG_ERR("tpn %u, eid " EID_FMT ", already exist, \n", key->tpn, EID_ARGS(key->sip.eid));
+        TPSA_LOG_ERR("tpn %u, eid " EID_FMT ", already exist, \n", key->tpn, EID_ARGS(key->sip.net_addr));
         return 0;
     }
 
@@ -1870,7 +2082,7 @@ int tp_state_table_add_with_duplication_check(tp_state_table_t *tp_state_table, 
 
     HMAP_INSERT(tp_state_table, entry, key, sizeof(*key));
     TPSA_LOG_INFO("success add tp %u eid " EID_FMT " state %d at %llu\n", key->tpn,
-        EID_ARGS(key->sip.eid), (int)add_entry->tp_exc_state, add_entry->timestamp);
+        EID_ARGS(key->sip.net_addr), (int)add_entry->tp_exc_state, add_entry->timestamp);
     return 0;
 }
 
@@ -1882,8 +2094,8 @@ int tp_state_table_remove(tp_state_table_t *tp_state_table, tp_state_table_key_t
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del tp %u eid " EID_FMT " state %d at %llu\n", key->tpn,
-        EID_ARGS(key->sip.eid), (int)entry->tp_exc_state, entry->timestamp);
+    TPSA_LOG_DEBUG("success del tp %u eid " EID_FMT " state %d at %llu\n", key->tpn,
+        EID_ARGS(key->sip.net_addr), (int)entry->tp_exc_state, entry->timestamp);
 
     ub_hmap_remove(&tp_state_table->hmap, &entry->node);
     free(entry);
@@ -1907,9 +2119,12 @@ static tpg_state_table_entry_t *alloc_tpg_state_table_entry(const tpg_state_tabl
 
     entry->key = *key;
     entry->tpg_exc_state = add_entry->tpg_exc_state;
+    entry->dip = add_entry->dip;
+    entry->peer_uvs_ip = add_entry->peer_uvs_ip;
     entry->tpgn = add_entry->tpgn;
     entry->tp_cnt = add_entry->tp_cnt;
     entry->tp_flush_cnt = add_entry->tp_flush_cnt;
+    (void)memcpy(entry->tpn, add_entry->tpn, sizeof(add_entry->tpn));
     return entry;
 }
 
@@ -1940,12 +2155,13 @@ tpg_state_table_entry_t *tpg_state_table_add(tpg_state_table_t *tpg_state_table,
 
     tpg_state_table_entry_t *entry = alloc_tpg_state_table_entry(key, add_entry);
     if (entry == NULL) {
+        TPSA_LOG_WARN("tpg_entry alloc failed \n");
         return NULL;
     }
 
     HMAP_INSERT(tpg_state_table, entry, key, sizeof(*key));
     TPSA_LOG_INFO("success add tpg %u eid " EID_FMT " state %u\n", key->tpgn,
-        EID_ARGS(key->sip.eid), (uint32_t)entry->tpg_exc_state);
+        EID_ARGS(key->sip.net_addr), (uint32_t)entry->tpg_exc_state);
     return entry;
 }
 
@@ -1957,7 +2173,7 @@ int tpg_state_table_remove(tpg_state_table_t *tpg_state_table, tpg_state_table_k
         return -ENXIO;
     }
 
-    TPSA_LOG_INFO("success del tp %u eid " EID_FMT " state %d\n", key->tpgn, EID_ARGS(key->sip.eid),
+    TPSA_LOG_INFO("success del tp %u eid " EID_FMT " state %d\n", key->tpgn, EID_ARGS(key->sip.net_addr),
                   (int)entry->tpg_exc_state);
 
     ub_hmap_remove(&tpg_state_table->hmap, &entry->node);
@@ -1965,8 +2181,69 @@ int tpg_state_table_remove(tpg_state_table_t *tpg_state_table, tpg_state_table_k
     return 0;
 }
 
+int uvs_update_tpg_state_flush_cnt(tpg_state_table_t *tpg_state_table, tpg_state_table_key_t *key, uint32_t flush_cnt)
+{
+    tpg_state_table_entry_t *entry = tpg_state_table_lookup(tpg_state_table, key);
+    if (entry == NULL) {
+        TPSA_LOG_WARN("tpn %d not exist", key->tpgn);
+        return -ENXIO;
+    }
+
+    entry->tp_flush_cnt = flush_cnt;
+    return 0;
+}
+
 void tpg_state_table_destroy(tpg_state_table_t *tpg_state_table)
 {
     HMAP_DESTROY(tpg_state_table, tpg_state_table_entry_t);
     return;
+}
+
+void wait_restored_list_create(wait_restored_list_t *wait_restored_list)
+{
+    ub_list_init(&wait_restored_list->list);
+}
+
+wait_restored_entry_t *wait_restored_list_add(wait_restored_list_t *wait_restored_list,
+                                              tpsa_restored_vtp_entry_t *restored_vtp_entry)
+{
+    wait_restored_entry_t *e = (wait_restored_entry_t *)calloc(1, sizeof(wait_restored_entry_t));
+    if (e == NULL) {
+        TPSA_LOG_ERR("Fail to malloc wait_restored_entry_t when add entry.\n");
+        return NULL;
+    }
+
+    if (clock_gettime(CLOCK_REALTIME, &e->start_timeval) != 0) {
+        TPSA_LOG_ERR("Failed to clock_gettime when add entry.\n");
+        goto free_entry;
+    }
+
+    (void)memcpy(&e->entry, restored_vtp_entry, sizeof(tpsa_restored_vtp_entry_t));
+
+    ub_list_push_back(&wait_restored_list->list, &e->node);
+    return e;
+
+free_entry:
+    free(e);
+    return NULL;
+}
+
+void wait_restored_list_add_restored_entry(wait_restored_list_t *wait_restored_list,
+                                           wait_restored_entry_t *entry)
+{
+    if (entry == NULL) {
+        return;
+    }
+
+    ub_list_push_back(&wait_restored_list->list, &entry->node);
+}
+
+void wait_restored_list_destroy(wait_restored_list_t *wait_restored_list)
+{
+    wait_restored_entry_t *cur, *next;
+
+    UB_LIST_FOR_EACH_SAFE(cur, next, node, &wait_restored_list->list) {
+        ub_list_remove(&cur->node);
+        free(cur);
+    }
 }

@@ -716,6 +716,7 @@ int urma_cmd_create_jfc(urma_context_t *ctx, urma_jfc_t *jfc, urma_jfc_cfg_t *cf
     arg.in.jfce_fd = (cfg->jfce == NULL ? -1 : cfg->jfce->fd);
     /* UBcore gets userspace jfc for a completion event */
     arg.in.urma_jfc = (uint64_t)(void*)jfc;
+    arg.in.ceqn = cfg->ceqn;
 
     urma_cmd_set_udrv_priv(&arg.udata, udata);
     ret = ioctl(ctx->dev_fd, URMA_CMD, &hdr);

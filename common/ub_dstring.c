@@ -106,7 +106,9 @@ char *dstring_push_buf(struct dstring *dstr, size_t n)
         return NULL;
     }
 
-    (void)dstring_extend(dstr, dstr->buf_used + n);
+    if (dstring_extend(dstr, dstr->buf_used + n) != 0) {
+        return NULL;
+    }
     dstr->buf_used += n;
     dstr->string[dstr->buf_used] = '\0';
     return &dstr->string[dstr->buf_used - n];

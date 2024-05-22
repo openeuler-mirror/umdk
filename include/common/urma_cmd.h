@@ -33,7 +33,9 @@ typedef enum urma_core_cmd {
     URMA_CORE_CMD_QUERY_RES,
     URMA_CORE_CMD_ADD_EID,
     URMA_CORE_CMD_DEL_EID,
-    URMA_CORE_CMD_SET_EID_MODE
+    URMA_CORE_CMD_SET_EID_MODE,
+    URMA_CORE_SET_NS_MODE,
+    URMA_CORE_SET_DEV_NS,
 } urma_core_cmd_t;
 
 /* only for uburma device ioctl */
@@ -293,6 +295,8 @@ typedef struct urma_cmd_create_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
+        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+                            * set to 0 by default */
     } in;
     struct {
         uint32_t id;

@@ -18,49 +18,52 @@
 
 typedef struct uvs_admin_sip_table_args {
     uint32_t sip_idx;
-    urma_eid_t sip;
+    uvs_admin_net_addr_t net_addr;
     uint16_t vlan;
     uint8_t mac[UVS_ADMIN_MAC_BYTES];
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint8_t port_id;
-    bool is_ipv6;
+    bool net_addr_type;
     uint32_t prefix_len;
     uvs_admin_mtu_t mtu;
 } uvs_admin_sip_table_args_t;
 
 typedef struct uvs_admin_sip_table_show_req {
+    char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint32_t sip_idx;
 } uvs_admin_sip_table_show_req_t;
 
 typedef struct uvs_admin_sip_table_show_rsp {
     int res;
-    urma_eid_t sip;
+    uvs_admin_net_addr_t net_addr;
     uint16_t vlan;
     uint8_t mac[UVS_ADMIN_MAC_BYTES];
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint8_t port_cnt;
     uint8_t port[UVS_ADMIN_PORT_CNT_MAX];
-    bool is_ipv6;
+    bool net_addr_type;
     uint32_t prefix_len;
     uvs_admin_mtu_t mtu;
 } uvs_admin_sip_table_show_rsp_t;
 
 typedef struct uvs_admin_sip_table_add_req {
-    urma_eid_t sip;
+    uvs_admin_net_addr_t net_addr;
     uint16_t vlan;
     uint8_t mac[UVS_ADMIN_MAC_BYTES];
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint8_t port_id;
-    bool is_ipv6;
+    bool net_addr_type;
     uint32_t prefix_len;
     uvs_admin_mtu_t mtu;
 } uvs_admin_sip_table_add_req_t;
 
 typedef struct uvs_admin_sip_table_add_rsp {
     int32_t res;
+    uint32_t index;
 } uvs_admin_sip_table_add_rsp_t;
 
 typedef struct uvs_admin_sip_table_del_req {
+    char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint32_t sip_idx;
 } uvs_admin_sip_table_del_req_t;
 
