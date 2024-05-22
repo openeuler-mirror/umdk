@@ -54,6 +54,8 @@ static urma_ops_t g_udma_u_ops = {
 	.unbind_jetty = udma_u_unbind_jetty,
 	.create_jfce = udma_u_create_jfce,
 	.delete_jfce = udma_u_delete_jfce,
+	.get_tpn = udma_u_get_tpn,
+	.modify_tp = udma_u_modify_user_tp,
 	.register_seg = udma_u_register_seg,
 	.unregister_seg = udma_u_unregister_seg,
 	.import_seg = udma_u_import_seg,
@@ -537,7 +539,7 @@ urma_provider_ops_t g_udma_u_provider_ops = {
 	.name = "udma_v1",
 	.attr = {
 		.version = 1,
-		.transport_type = URMA_TRANSPORT_IB,
+		.transport_type = URMA_TRANSPORT_HNS_UB,
 	},
 	.match_table = match_table,
 	.init = udma_u_init,

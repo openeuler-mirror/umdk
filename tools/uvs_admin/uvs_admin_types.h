@@ -23,6 +23,8 @@ extern "C" {
 #define UVS_ADMIN_SLICE_SHIFT(a) (a + 15)
 #define UVS_ADMIN_SLICE_K_SHIFT 10
 #define UVS_ADMIN_PORT_CNT_MAX 16
+#define UVS_ADMIN_NET_ADDR_SIZE (16)
+
 
 typedef enum uvs_admin_mtu {
     UVS_ADMIN_MTU_256      = 1,
@@ -65,12 +67,26 @@ typedef enum uvs_admin_tp_cc_alg {
     UVS_ADMIN_TP_CC_DIP,
 } uvs_admin_cc_alg_t;
 
-typedef struct uvs_admin_net_addr {
+typedef union uvs_admin_net_addr {
+    uint8_t raw[UVS_ADMIN_NET_ADDR_SIZE]; /* Network Order */
+    struct {
+        uint64_t resv;   /* If IPv4 mapped to IPv6, == 0 */
+        uint32_t prefix; /* If IPv4 mapped to IPv6, == 0x0000ffff */
+        uint32_t addr;   /* If IPv4 mapped to IPv6, == IPv4 addr */
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
+} uvs_admin_net_addr_t;
+
+typedef struct uvs_admin_net_addr_info {
     uvs_admin_net_addr_type_t type;
-    urma_eid_t base;
+    uvs_admin_net_addr_t net_addr;
     uint64_t vlan; /* available for UBOE */
     uint8_t mac[UVS_ADMIN_MAC_BYTES]; /* available for UBOE */
-} uvs_admin_net_addr_t;
+    uint32_t prefix_len;
+} uvs_admin_net_addr_info_t;
 
 typedef union uvs_admin_tp_mod_flag {
     struct {
@@ -79,11 +95,15 @@ typedef union uvs_admin_tp_mod_flag {
         uint32_t cc_en : 1;
         uint32_t cc_alg : 4;
         uint32_t spray_en : 1;
-        uint32_t dca_enable : 1;     /* Inconsistent with ubcore_tp_mod_flag and combined.
+        uint32_t clan : 1;
+        uint32_t dca_enable : 1;
+        uint32_t um_en : 1;
+        uint32_t share_mode : 1;
+                                     /* Inconsistent with ubcore_tp_mod_flag and combined.
                                       * If ubcore_tp_cfg_flag parameter needs to be set,
                                       * the parameter must be set separately.
                                       */
-        uint32_t reserved : 23;
+        uint32_t reserved : 20; /* revise this struct need to sync print_tp_mod_flag_str fucntion */
     } bs;
     uint32_t value;
 } uvs_admin_tp_mod_flag_t;

@@ -20,11 +20,11 @@ extern "C" {
 #define TPSA_MAX_NETADDR_CNT 8
 
 typedef struct tpsa_underlay_info {
-    urma_eid_t peer_tps; /* peer tps server address */
+    uvs_net_addr_t peer_uvs_ip; /* peer tps server address */
     urma_eid_t eid; /* underlay eid */
     tpsa_multipath_tp_cfg_t cfg; /* rc and rm modes, support for multiple path configuration parameters */
     uint32_t netaddr_cnt;
-    tpsa_net_addr_t netaddr[0];
+    uvs_net_addr_info_t netaddr[0];
 } tpsa_underlay_info_t;
 
 typedef struct tpsa_netaddr_entry {
@@ -38,7 +38,7 @@ typedef struct tpsa_netaddr_tbl {
     pthread_rwlock_t rwlock;
 } tpsa_netaddr_tbl_t;
 
-int str_to_eid(const char *buf, urma_eid_t *eid);
+int str_to_net_addr(const char *buf, uvs_net_addr_t *net_addr);
 /* Lookup underlay info with local or remote eid */
 tpsa_netaddr_entry_t *tpsa_lookup_underlay_info(urma_eid_t *eid);
 

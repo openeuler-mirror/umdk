@@ -10,6 +10,7 @@
 #ifndef URMA_OPCODE_H
 #define URMA_OPCODE_H
 
+#include <errno.h>
 /* urma bit field value */
 #define URMA_TOKEN_NONE             0              /* Indicates the verification policy of the key. */
 #define URMA_TOKEN_PLAIN_TEXT       1
@@ -112,16 +113,16 @@ typedef enum urma_opcode {
     URMA_OPC_LAST
 } urma_opcode_t;
 
-typedef enum urma_status {
-    URMA_SUCCESS = 0,
-    URMA_EAGAIN = 0x1000,   // Resource temporarily unavailable
-    URMA_ENOMEM,            // Failed to allocate memory
-    URMA_ENOPERM,           // Operation not permitted
-    URMA_ETIMEOUT,          // Operation time out
-    URMA_EINVAL,            // Invalid argument
-    URMA_EEXIST,            // Exist
-    URMA_FAIL,
-} urma_status_t;
+typedef int urma_status_t;
+#define URMA_SUCCESS 0
+#define URMA_EAGAIN EAGAIN      // Resource temporarily unavailable
+#define URMA_ENOMEM ENOMEM      // Failed to allocate memory
+#define URMA_ENOPERM EPERM    // Operation not permitted
+#define URMA_ETIMEOUT ETIMEDOUT  // Operation time out
+#define URMA_EINVAL EINVAL      // Invalid argument
+#define URMA_EEXIST EEXIST      // Exist
+#define URMA_EINPROGRESS EINPROGRESS,
+#define URMA_FAIL 0x1000  /* 0x1000 */
 
 /* completion information */
 typedef enum urma_cr_status { // completion record status
@@ -140,6 +141,8 @@ typedef enum urma_cr_status { // completion record status
     URMA_CR_WR_SUSPEND_DONE,          /* Hardware constructs a fake CQE, and user_ctx is invalid. */
     URMA_CR_WR_FLUSH_ERR_DONE,        /* Hardware constructs a fake CQE, and user_ctx is invalid. */
     URMA_CR_WR_UNHANDLED,             /* Return of flush jetty/jfs, and the hardware has not processed the WR. */
+    URMA_CR_LOC_DATA_POISON,          /* Local Data Poison */
+    URMA_CR_REM_DATA_POISON,          /* Remote Data Poison */
 } urma_cr_status_t;
 
 typedef enum urma_cr_opcode {

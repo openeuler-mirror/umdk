@@ -185,6 +185,7 @@ struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
 void free_err_jfc(struct udma_u_jfc *jfc, struct udma_u_context *udma_ctx);
 urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg);
 urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
+struct udma_qp *get_qp_from_qpn(struct udma_u_context *udma_ctx, uint32_t qpn);
 urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
 int udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
 urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);

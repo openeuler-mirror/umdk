@@ -213,7 +213,7 @@ static void delete_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 {
 	urma_seg_cfg_t seg_cfg = {};
-	urma_token_t token;
+	uint32_t token = 0;
 
 	jfr->um_header_que = (struct um_header *)calloc(jfr->wqe_cnt,
 							sizeof(struct um_header));
@@ -227,7 +227,7 @@ int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 	seg_cfg.flag.bs.access = URMA_ACCESS_LOCAL_WRITE;
 	seg_cfg.va = (uint64_t)jfr->um_header_que;
 	seg_cfg.len = jfr->wqe_cnt * UDMA_JFR_GRH_HEAD_SZ;
-	seg_cfg.token_value = &token;
+	seg_cfg.token_value.token = token;
 
 	jfr->um_header_seg = udma_u_register_seg(ctx, &seg_cfg);
 	if (!jfr->um_header_seg) {

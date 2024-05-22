@@ -113,7 +113,7 @@ struct udma_qp {
 	uint32_t		qp_num;
 	/* shared by jfs and jetty */
 	uint32_t		jetty_id;
-	uint32_t		flags;
+	uint64_t		flags;
 	void			*dwqe_page;
 	struct udma_spinlock	udma_lock;
 	struct udma_buf		buf;

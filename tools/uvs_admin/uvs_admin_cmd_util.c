@@ -107,6 +107,27 @@ int str_to_eid(const char *buf, urma_eid_t *eid)
     return 0;
 }
 
+int get_net_addr_type(const char *buf, urma_eid_t *eid,
+    uvs_admin_net_addr_type_t *input_net_addr_type)
+{
+    uint32_t ipv4;
+
+    if (buf == NULL || strlen(buf) <= EID_STR_MIN_LEN || eid == NULL) {
+        return -EINVAL;
+    }
+
+    *input_net_addr_type = UVS_ADMIN_NET_ADDR_TYPE_IPV6;
+
+    // ipv4 addr: xx.xx.xx.xx
+    if (inet_pton(AF_INET, buf, &ipv4) > 0) {
+        ipv4_map_to_eid(be32toh(ipv4), eid);
+        *input_net_addr_type = UVS_ADMIN_NET_ADDR_TYPE_IPV4;
+        return 0;
+    }
+
+    return 0;
+}
+
 int mac_n2p(char *str, size_t length, const uint8_t *bin)
 {
     int ret;

@@ -25,7 +25,7 @@ Summary       : Unified memory development kit
 Version       : %{rpm_version}
 Release       : %{rpm_release}
 Group         : nStack
-License       : Proprietary
+License       : GPL-2.0-only
 Provides      : Huawei Technologies Co., Ltd
 Source0       : %{name}-%{version}.tar.gz
 BuildRoot     : %{_buildirootdir}/%{name}-%{version}-build
@@ -68,6 +68,7 @@ libraries.
 %package tools
 Summary:        tools of urma
 Requires:       umdk-urma-lib = %{version}
+BuildRequires:  libnl3-devel openssl-devel
 %description tools
 tools of urma, contains  urma_perftest, urma_admin.
 
@@ -137,6 +138,8 @@ fi
     %{_includedir}/umdk/urma_provider.h
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
+    %{_includedir}/umdk/uvs_api.h
+    %{_includedir}/umdk/uvs_types.h
 
 %files tools
 %defattr(-,root,root)

@@ -23,17 +23,21 @@ typedef struct tpsa_global_cfg_show_rsp {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    uint32_t sus2err_cnt;
     bool tp_fast_destroy;
+    bool tbl_input_done;
 } tpsa_global_cfg_show_rsp_t;
 
 typedef struct tpsa_global_cfg_set_req {
-    uvs_global_cfg_mask_t mask;
+    tpsa_global_cfg_mask_t mask;
     uvs_mtu_t mtu_set;
     uint32_t slice;
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    uint32_t sus2err_cnt;
     bool tp_fast_destroy;
+    bool tbl_input_done;
 } tpsa_global_cfg_set_req_t;
 
 typedef struct tpsa_global_cfg_set_rsp {

@@ -30,7 +30,6 @@ extern "C" {
 #define DEFAULT_TPSA_SOCK_DIR       "/var/run/tpsa/"
 #define MAX_CONNECTIONS             64
 #define TPSA_MAX_SOCKET_EVENTS      32
-#define MS_PER_SEC                  1000
 #define DEFAULT_TPSA_SOCK_FILE_PARM 0750
 
 int g_tpsa_server_socket = -1;
@@ -89,7 +88,7 @@ static int tpsa_server_socket_create()
     }
 
     un.sun_family = AF_UNIX;
-    strcpy(un.sun_path, DEFAULT_TPSA_SOCK);
+    (void)strcpy(un.sun_path, DEFAULT_TPSA_SOCK);
 
     ret = bind(fd, (struct sockaddr *)&un, sizeof(un));
     if (ret < 0) {
@@ -202,7 +201,7 @@ static void service_main_process_request()
 
     read_len = read_req(connfd, buf);
     if (read_len <= 0) {
-        TPSA_LOG_ERR("no msg read from fd");
+        TPSA_LOG_ERR("No msg read, fd = %d\n", connfd);
         (void)close(connfd);
         return;
     }
@@ -215,6 +214,7 @@ static void service_main_process_request()
     }
 
     if (rsp == NULL) {
+        TPSA_LOG_ERR("Failed to get rsp, fd = %d\n", connfd);
         (void)close(connfd);
         return;
     }
@@ -250,7 +250,7 @@ void *tpsa_server_run(void *args)
     g_tpsa_server_running = true;
 
     while (g_tpsa_server_running) {
-        n = epoll_wait(epfd, events, TPSA_MAX_SOCKET_EVENTS, MS_PER_SEC);
+        n = epoll_wait(epfd, events, TPSA_MAX_SOCKET_EVENTS, (int)MS_PER_SEC);
         for (i = 0; i < n; i++) {
             if ((events[i].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
                 TPSA_LOG_ERR("Exception event 0x%x fd = %d.\n", events[i].events, events[i].data.fd);

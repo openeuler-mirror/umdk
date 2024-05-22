@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+#define VPORT_TABLE_DEFAULT_UM_EN 1
+
 tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
 {
     tpsa_response_t *rsp;
@@ -39,16 +41,20 @@ tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
         TPSA_LOG_ERR("get_tpsa_daemon_ctx failed\n");
         return NULL;
     }
-
     show_req = (tpsa_vport_show_req_t *)req->req;
+    if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+
     vport_table = &ctx->worker->table_ctx.vport_table;
     key.fe_idx = show_req->fe_idx;
-    (void)memcpy(key.dev_name, show_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, show_req->dev_name, UVS_MAX_DEV_NAME);
 
     (void)pthread_rwlock_rdlock(&vport_table->rwlock);
     entry = vport_table_lookup(vport_table, &key);
     if (entry == NULL) {
-        TPSA_LOG_ERR("can not find vport by key dev_name:%s fe_idx %hu\n", key.dev_name, key.fe_idx);
+        TPSA_LOG_ERR("can not find vport by key dev_name:%s fe_idx %hu\n", key.tpf_name, key.fe_idx);
         ret = -1;
     } else {
         tmp_entry = *entry;
@@ -63,7 +69,7 @@ tpsa_response_t *process_vport_table_show(tpsa_request_t *req, ssize_t read_len)
 
     tpsa_vport_show_rsp_t *show_rsp = (tpsa_vport_show_rsp_t *)(rsp->rsp);
     show_rsp->res = ret;
-    (void)memcpy(show_rsp->args.dev_name, tmp_entry.key.dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(show_rsp->args.dev_name, tmp_entry.key.tpf_name, UVS_MAX_DEV_NAME);
     show_rsp->args.fe_idx = tmp_entry.key.fe_idx;
     show_rsp->args.sip_idx = tmp_entry.sip_idx;
     show_rsp->args.tp_cnt = tmp_entry.tp_cnt;
@@ -89,7 +95,7 @@ static int tpsa_get_dev_feature_ioctl(tpsa_daemon_ctx_t *ctx, char* dev_name, tp
     int ret;
 
     cfg.cmd_type = TPSA_CMD_GET_DEV_FEATURE;
-    (void)strcpy(cfg.cmd.get_dev_feature.in.dev_name, dev_name);
+    (void)strncpy(cfg.cmd.get_dev_feature.in.dev_name, dev_name, UVS_MAX_DEV_NAME);
 
     ret = tpsa_ioctl(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     *feat = cfg.cmd.get_dev_feature.out.feature;
@@ -140,7 +146,7 @@ static int tpsa_verify_local_device_capability(tpsa_tp_mod_flag_t config, tpsa_d
 
 static void fill_vport_info(vport_table_entry_t *entry, tpsa_vport_args_t *args, uint32_t max_ueid_cnt)
 {
-    (void)memcpy(entry->key.dev_name, args->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(entry->key.tpf_name, args->dev_name, UVS_MAX_DEV_NAME);
     entry->key.fe_idx = args->fe_idx;
     entry->mask.value = args->mask.value;
     entry->sip_idx = args->sip_idx;
@@ -154,6 +160,12 @@ static void fill_vport_info(vport_table_entry_t *entry, tpsa_vport_args_t *args,
     entry->min_jfr_cnt = args->min_jfr_cnt;
     entry->max_jfr_cnt = args->max_jfr_cnt;
     entry->ueid_max_cnt = max_ueid_cnt;
+    /*
+     * only use um_en in cloud scenarios;
+     * in non-cloud scenarios, set um_en to true.
+     */
+    entry->tp_cfg.tp_mod_flag.bs.um_en = VPORT_TABLE_DEFAULT_UM_EN;
+    entry->tp_cfg.tp_mod_flag.bs.share_mode = args->tp_cfg.tp_mod_flag.bs.share_mode;
 }
 
 tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
@@ -180,6 +192,10 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
     }
 
     add_req = (tpsa_vport_add_req_t *)req->req;
+    if (strnlen(add_req->args.dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
 
     ret = tpsa_get_dev_feature_ioctl(ctx, add_req->args.dev_name, &feat, &max_ueid_cnt);
     if (ret != 0) {
@@ -196,16 +212,16 @@ tpsa_response_t *process_vport_table_add(tpsa_request_t *req, ssize_t read_len)
 
     ret = vport_table_add(vport_table, &entry);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not add vport, dev: %s, fe_idx: %hu\n", entry.key.dev_name, entry.key.fe_idx);
+        TPSA_LOG_ERR("can not add vport, dev: %s, fe_idx: %hu\n", entry.key.tpf_name, entry.key.fe_idx);
         goto create_rsp;
     }
 
     tpsa_global_cfg_t *global_cfg = &ctx->worker->global_cfg_ctx;
     ret = uvs_ioctl_cmd_set_vport_cfg(&ctx->worker->ioctl_ctx, &entry, global_cfg);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not ioctl vport, dev: %s, fe_idx: %hu\n", entry.key.dev_name, entry.key.fe_idx);
+        TPSA_LOG_ERR("can not ioctl vport, dev: %s, fe_idx: %hu\n", entry.key.tpf_name, entry.key.fe_idx);
         if (vport_table_remove(vport_table, &entry.key) != 0) {
-            TPSA_LOG_ERR("failed to del vport, dev: %s, fe_idx: %hu\n", entry.key.dev_name, entry.key.fe_idx);
+            TPSA_LOG_ERR("failed to del vport, dev: %s, fe_idx: %hu\n", entry.key.tpf_name, entry.key.fe_idx);
         }
     }
 
@@ -224,30 +240,6 @@ create_rsp:
     return rsp;
 }
 
-int vport_table_handle_delete_list(vport_table_t *vport_table, vport_table_entry_t *entry)
-{
-    int ret = 0;
-
-    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
-    vport_table->vf_destroy = true;
-    vport_del_list_node_t *node = vport_del_list_lookup(&vport_table->vport_delete_list, &entry->key);
-    if (node != NULL) {
-        TPSA_LOG_INFO("this vport delete info has been added to the list.\n");
-        (void)pthread_rwlock_unlock(&vport_table->rwlock);
-        return 0;
-    }
-
-    ret = vport_del_list_add(&vport_table->vport_delete_list, entry);
-    if (ret != 0) {
-        TPSA_LOG_ERR("vport delete list add failed, %d.\n", ret);
-        (void)pthread_rwlock_unlock(&vport_table->rwlock);
-        return ret;
-    }
-
-    (void)pthread_rwlock_unlock(&vport_table->rwlock);
-
-    return 0;
-}
 tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
 {
     tpsa_response_t *rsp;
@@ -255,6 +247,7 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
     tpsa_vport_del_req_t *del_req = NULL;
     vport_table_t *vport_table = NULL;
     vport_key_t key = {0};
+    sem_t sem;
     int ret;
 
     if (read_len != (req->req_len + (ssize_t)sizeof(tpsa_request_t))) {
@@ -269,22 +262,28 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
     }
 
     del_req = (tpsa_vport_del_req_t *)req->req;
+    if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter");
+        return NULL;
+    }
     vport_table = &ctx->worker->table_ctx.vport_table;
-    (void)memcpy(key.dev_name, del_req->dev_name, TPSA_MAX_DEV_NAME);
     key.fe_idx = del_req->fe_idx;
+    (void)memcpy(key.tpf_name, del_req->dev_name, UVS_MAX_DEV_NAME);
 
-    vport_table_entry_t *entry = vport_table_lookup(vport_table, &key);
-    if (entry != NULL) {
-        ret = vport_table_handle_delete_list(vport_table, entry);
-        if (ret != 0) {
-            TPSA_LOG_ERR("vport table handle delere list failed, %d.\n", ret);
-        }
-    }
-    ret = vport_table_remove(vport_table, &key);
+    (void)sem_init(&sem, 0, 0);
+    ret = vport_set_deleting(vport_table, &key, &sem);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not del vport by key dev_name:%s, fe_idx %hu\n", key.dev_name, key.fe_idx);
+        (void)sem_destroy(&sem);
+        TPSA_LOG_ERR("can not del vport by key dev_name:%s, fe_idx %hu\n", key.tpf_name, key.fe_idx);
+        ret = -1;
+        goto send_resp;
     }
 
+    (void)uvs_ioctl_cmd_clear_vport_cfg(&ctx->worker->ioctl_ctx, &key);
+    (void)sem_wait(&sem);
+    (void)sem_destroy(&sem);
+
+send_resp:
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_del_rsp_t));
     if (rsp == NULL) {
         return NULL;
@@ -321,11 +320,16 @@ tpsa_response_t *process_vport_table_show_ueid(tpsa_request_t *req, ssize_t read
     }
 
     show_req = (tpsa_vport_show_ueid_req_t *)req->req;
+    if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+
     vport_table = &ctx->worker->table_ctx.vport_table;
     key.fe_idx = show_req->fe_idx;
-    (void)memcpy(key.dev_name, show_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, show_req->dev_name, UVS_MAX_DEV_NAME);
 
-    ueid = vport_table_lookup_ueid(vport_table, &key, show_req->eid_index);
+    ueid = vport_table_lookup_ueid(vport_table, &key, show_req->eid_idx);
     if (ueid == NULL) {
         ret = -1;
     }
@@ -339,6 +343,7 @@ tpsa_response_t *process_vport_table_show_ueid(tpsa_request_t *req, ssize_t read
     if (ueid != NULL) {
         show_rsp->eid = ueid->eid;
         show_rsp->upi = ueid->upi;
+        show_rsp->uuid = ueid->uuid;
     }
     rsp->cmd_type = VPORT_TABLE_SHOW_UEID;
     rsp->rsp_len = (ssize_t)sizeof(tpsa_vport_show_ueid_rsp_t);
@@ -368,16 +373,21 @@ tpsa_response_t *process_vport_table_add_ueid(tpsa_request_t *req, ssize_t read_
     }
 
     add_req = (tpsa_vport_add_ueid_req_t *)req->req;
+    if (strnlen(add_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
     vport_table = &ctx->worker->table_ctx.vport_table;
     key.fe_idx = add_req->fe_idx;
-    (void)memcpy(key.dev_name, add_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, add_req->dev_name, UVS_MAX_DEV_NAME);
 
     ueid.eid = add_req->eid;
     ueid.upi = add_req->upi;
-    ueid.eid_index = add_req->eid_index;
+    ueid.uuid = add_req->uuid;
+    ueid.eid_index = add_req->eid_idx;
     ret = vport_table_add_ueid(vport_table, &key, &ueid);
     if (ret != 0) {
-        TPSA_LOG_ERR("can not add vport by key dev_name: %s fe_idx %hu\n", key.dev_name, key.fe_idx);
+        TPSA_LOG_ERR("can not add vport by key dev_name: %s fe_idx %hu\n", key.tpf_name, key.fe_idx);
     }
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_add_ueid_rsp_t));
@@ -416,12 +426,16 @@ tpsa_response_t *process_vport_table_del_ueid(tpsa_request_t *req, ssize_t read_
     }
 
     del_req = (tpsa_vport_del_ueid_req_t *)req->req;
+    if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
     vport_table = &ctx->worker->table_ctx.vport_table;
     key.fe_idx = del_req->fe_idx;
-    (void)memcpy(key.dev_name, del_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, del_req->dev_name, UVS_MAX_DEV_NAME);
 
     (void)memset(&ueid, 0, sizeof(tpsa_ueid_t));
-    ret = vport_table_del_ueid(vport_table, &key, del_req->eid_index);
+    ret = vport_table_del_ueid(vport_table, &key, del_req->eid_idx);
     if (ret != 0) {
         TPSA_LOG_ERR("can not del vport by key fe_idx %hu\n", key.fe_idx);
     }
@@ -450,7 +464,7 @@ static int tpsa_ioctl_set_upi(int ubcore_fd, const tpsa_ioctl_cfg_t *cfg)
     hdr.args_len = (uint32_t)sizeof(tpsa_cmd_set_upi_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    (void)memcpy(arg.in.dev_name, cfg->cmd.set_upi.in.dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(arg.in.dev_name, cfg->cmd.set_upi.in.dev_name, UVS_MAX_DEV_NAME);
     arg.in.upi = cfg->cmd.set_upi.in.upi;
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
@@ -481,8 +495,12 @@ tpsa_response_t *process_vport_table_set_upi(tpsa_request_t *req, ssize_t read_l
         return NULL;
     }
     set_req = (tpsa_set_upi_req_t *)req->req;
+    if (strnlen(set_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
     cfg.cmd.set_upi.in.upi = set_req->upi;
-    (void)memcpy(cfg.cmd.set_upi.in.dev_name, set_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(cfg.cmd.set_upi.in.dev_name, set_req->dev_name, UVS_MAX_DEV_NAME);
     ret = tpsa_ioctl_set_upi(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     if (ret != 0) {
         TPSA_LOG_ERR("failed to ioctl set upi\n");
@@ -511,7 +529,7 @@ static int tpsa_ioctl_show_upi(int ubcore_fd, tpsa_ioctl_cfg_t *cfg)
     hdr.args_len = (uint32_t)sizeof(tpsa_cmd_show_upi_t);
     hdr.args_addr = (uint64_t)&arg;
 
-    (void)memcpy(arg.in.dev_name, cfg->cmd.show_upi.in.dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(arg.in.dev_name, cfg->cmd.show_upi.in.dev_name, UVS_MAX_DEV_NAME);
     ret = ioctl(ubcore_fd, TPSA_CMD, &hdr);
     if (ret != 0) {
         TPSA_LOG_ERR("show pattern3 upi ioctl failed, ret:%d, cmd:%u.\n", ret, hdr.command);
@@ -541,7 +559,11 @@ tpsa_response_t *process_vport_table_show_upi(tpsa_request_t *req, ssize_t read_
         return NULL;
     }
     show_req = (tpsa_show_upi_req_t *)req->req;
-    (void)memcpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name, TPSA_MAX_DEV_NAME);
+    if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+    (void)strncpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name, UVS_MAX_DEV_NAME);
     ret = tpsa_ioctl_show_upi(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     if (ret != 0) {
         TPSA_LOG_WARN("failed to ioctl show upi\n");

@@ -14,8 +14,12 @@ add_executable(urma_admin
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include/common)
-target_link_libraries(urma_admin glib-2.0)
+include_directories(/usr/include/libnl3)
+target_link_libraries(urma_admin glib-2.0 nl-genl-3 nl-3)
 
+if(CROSS_COMPILE)
+    target_link_libraries(urma_admin pcre2-8)
+endif()
 set_target_properties(urma_admin PROPERTIES C_STANDARD 99)
 if("${URMA_INSTALL}" STREQUAL "enable")
     install(TARGETS urma_admin DESTINATION /usr/bin)

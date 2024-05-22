@@ -5,6 +5,7 @@ set(UVS_ADMIN_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/tools/uvs_admin)
 include_directories(${UVS_ADMIN_INCLUDE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include/common)
+include_directories(/usr/include/libnl3)
 
 add_subdirectory(config)
 add_subdirectory(tpservice)
@@ -13,6 +14,7 @@ add_subdirectory(sip_table)
 add_subdirectory(dip_table)
 add_subdirectory(live_migrate_table)
 add_subdirectory(global_cfg)
+add_subdirectory(query_res)
 
 set(UVS_ADMIN_CORE_SOURCES
     uvs_admin.c
@@ -29,6 +31,7 @@ set(UVS_ADMIN_SUBCOMMAND_OBJS
     $<TARGET_OBJECTS:vport_table>
     $<TARGET_OBJECTS:sip_table>
     $<TARGET_OBJECTS:dip_table>
+    $<TARGET_OBJECTS:query_res>
     $<TARGET_OBJECTS:live_migrate_table>
     $<TARGET_OBJECTS:global_cfg>
 )
@@ -38,11 +41,20 @@ ${UVS_ADMIN_CORE_SOURCES}
 ${UVS_ADMIN_SUBCOMMAND_OBJS}
 )
 
-target_link_libraries(uvs_admin urma_common glib-2.0)
+target_link_libraries(uvs_admin urma_common_static glib-2.0 nl-genl-3 nl-3)
+
+if(CROSS_COMPILE)
+    target_link_libraries(uvs_admin pcre2-8 ffi)
+endif()
 
 if("${FUZZ}" STREQUAL "enable")
 target_link_libraries(uvs_admin /usr/local/lib64/libSecodefuzz.a)
 endif("${FUZZ}" STREQUAL "enable")
+
+target_include_directories(
+    uvs_admin PUBLIC
+    ${UVS_ADMIN_INCLUDE_DIR}/query_res
+)
 
 set_target_properties(uvs_admin PROPERTIES C_STANDARD 99)
 if("${URMA_INSTALL}" STREQUAL "enable")

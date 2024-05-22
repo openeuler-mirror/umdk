@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 
 #include "ub_list.h"
 
@@ -16,15 +17,19 @@
 #include "tpsa_log.h"
 #include "tpsa_config.h"
 
-#define TPSA_IP_LEN  32
+#define TPSA_IP_LEN  48
+#define TPSA_IPV4_MAP_IPV6_PREFIX 0x0000ffff
 
-static tpsa_config_t g_tpsa_config = {0};
+static tpsa_config_t g_tpsa_config;
 
 int tpsa_parse_config_file(tpsa_config_t *cfg)
 {
-    struct in_addr addr;
+    uvs_net_addr_t addr;
+    uvs_net_addr_type_t type;
+    char worker_cpu_core_str[TPSA_IP_LEN] = {0};
     char server_ip[TPSA_IP_LEN] = {0};
     char tcp_port[TPSA_IP_LEN] = {0};
+    int worker_cpu_core;
     unsigned int server_port;
     file_info_t *file = NULL;
 
@@ -43,12 +48,25 @@ int tpsa_parse_config_file(tpsa_config_t *cfg)
         TPSA_LOG_ERR("Failed to read tpsa_server_ip by etc file, ret: %d.\n", ret);
         goto free_file;
     }
-    if (inet_pton(AF_INET, server_ip, &addr) <= 0) {
-        TPSA_LOG_ERR("read ETC file: server_ip is illegal. server_ip:%s", server_ip);
-        goto free_file;
+    // ipv6 addr
+    addr.in6.subnet_prefix = 0;
+    addr.in6.interface_id = 0;
+    if (inet_pton(AF_INET6, server_ip, &addr) <= 0) {
+        if (inet_pton(AF_INET, server_ip, &addr.in4.addr) <= 0) {
+                TPSA_LOG_ERR("read ETC file: server_ip is illegal. server_ip:%s", server_ip);
+                ret = -EINVAL;
+                goto free_file;
+        } else {
+            addr.in4.prefix = htonl(TPSA_IPV4_MAP_IPV6_PREFIX);
+            type = UVS_NET_ADDR_TYPE_IPV4;
+        }
+    } else {
+        type = UVS_NET_ADDR_TYPE_IPV6;
     }
     g_tpsa_config.tpsa_server_ip = addr;
+    g_tpsa_config.tpsa_ip_type = type;
     cfg->tpsa_server_ip = addr;
+    cfg->tpsa_ip_type = type;
     TPSA_LOG_INFO("read ETC file: get server_ip: %s.", server_ip);
 
     /* read server_port */
@@ -65,7 +83,26 @@ int tpsa_parse_config_file(tpsa_config_t *cfg)
     }
     g_tpsa_config.tpsa_server_port = htons((uint16_t)server_port);
     cfg->tpsa_server_port = g_tpsa_config.tpsa_server_port;
-    TPSA_LOG_INFO("read ETC file: get server_port: %d.", server_port);
+    TPSA_LOG_INFO("read ETC file: get server_port: %u.", server_port);
+
+    /* read cpu_core, which is optioanl */
+    (void)memcpy(file->key, "tpsa_worker_cpu_core", sizeof("tpsa_worker_cpu_core"));
+    ret = tpsa_read_value_by_etc_file(file, worker_cpu_core_str, TPSA_IP_LEN);
+    if (ret != 0) {
+        TPSA_LOG_INFO("tpsa_worker_cpu_core has not been specified ret: %d.\n", ret);
+        worker_cpu_core = -1;
+        ret = 0;
+        goto set_worker_cpu_core;
+    }
+    ret = ub_str_to_int(worker_cpu_core_str, &worker_cpu_core);
+    if (ret != 0) {
+        TPSA_LOG_ERR("read ETC file: worker_cpu_core is illegal. worker_cpu_core:%s, ret:%d", worker_cpu_core, ret);
+        goto free_file;
+    }
+set_worker_cpu_core:
+    g_tpsa_config.tpsa_worker_cpu_core = worker_cpu_core;
+    cfg->tpsa_worker_cpu_core = g_tpsa_config.tpsa_worker_cpu_core;
+    TPSA_LOG_INFO("read ETC file: get worker_cpu_core: %d.", worker_cpu_core);
 
 free_file:
     free(file);

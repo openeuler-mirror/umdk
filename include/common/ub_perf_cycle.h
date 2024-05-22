@@ -17,19 +17,20 @@
 #include <stdint.h>
 
 typedef struct ub_perf_proc_context {
-    uint64_t cycles_num;                 /* number of one procedure iterations */
-    uint64_t cycle_cnt;                  /* cycle counter */
-    uint64_t *start;
-    uint64_t *end;
+    uint64_t cycles_num;                /* number of one procedure iterations */
+    uint64_t cycle_cnt;                 /* cycle counter */
+    uint64_t *start;                    /* cycles of start time-stamp */
+    uint64_t *end;                      /* cycles of end time-stamp */
 } ub_perf_proc_context_t;
 
 typedef struct ub_perf_context {
-    uint32_t perf_num;                    /* number of perftest procedures */
+    uint32_t perf_num;                  /* number of perftest procedures */
     ub_perf_proc_context_t *perf_proc;
 } ub_perf_context_t;
 
 int ub_perf_context_init(uint32_t perf_num, uint64_t cycles_num);
 void ub_perf_context_uninit(void);
 ub_perf_context_t *ub_get_perf_context(void);
+void ub_print_perf_result(ub_perf_context_t *perf_ctx);
 
 #endif // UB_PERF_CYCLE_H

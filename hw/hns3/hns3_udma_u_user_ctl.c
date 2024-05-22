@@ -36,7 +36,7 @@ static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
 	if (udma_jfs->tp_mode != URMA_TM_UM)
-		return -URMA_EINVAL;
+		return URMA_EINVAL;
 
 	if (!udma_jfs->lock_free)
 		(void)pthread_spin_lock(&udma_jfs->lock);
@@ -251,30 +251,12 @@ static int udma_u_query_poe_channel(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	return ret;
 }
 
-static struct udma_qp *find_jfs_qp(struct udma_u_jfs *jfs,
-				   urma_target_jetty_t *tjetty)
+static struct udma_qp *find_jfs_qp(struct udma_u_jfs *jfs)
 {
-	struct udma_hmap_node *hmap_node = NULL;
-	struct connect_node *udma_connect_node;
-	uint32_t tjfr_index;
-
 	if (jfs->tp_mode == URMA_TM_UM)
 		return jfs->um_qp;
 
-	if (!tjetty) {
-		URMA_LOG_ERR("tjetty is null.\n");
-		return NULL;
-	}
-	tjfr_index = udma_get_tgt_hash(&tjetty->id);
-	hmap_node = udma_table_first_with_hash(&jfs->tjfr_tbl.hmap,
-					       &jfs->tjfr_tbl.rwlock,
-					       tjfr_index);
-	if (!hmap_node)
-		return NULL;
-
-	udma_connect_node = CONTAINER_OF_FIELD(hmap_node, struct connect_node,
-					       hmap_node);
-	return udma_connect_node->qp;
+	return NULL;
 }
 
 static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
@@ -287,7 +269,7 @@ static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
 		return EINVAL;
 	}
 
-	qp = find_jfs_qp(to_udma_jfs(jfs), tjetty);
+	qp = find_jfs_qp(to_udma_jfs(jfs));
 	if (!qp) {
 		URMA_LOG_ERR("can't find qp by jfs.\n");
 		return EINVAL;
@@ -297,8 +279,7 @@ static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
 	return 0;
 }
 
-static struct udma_qp *find_jetty_qp(struct udma_u_jetty *jetty,
-				     urma_target_jetty_t *tjetty)
+static struct udma_qp *find_jetty_qp(struct udma_u_jetty *jetty)
 {
 	if (jetty->tp_mode == URMA_TM_RC) {
 		if (jetty->rc_node->tjetty == NULL) {
@@ -316,8 +297,7 @@ static struct udma_qp *find_jetty_qp(struct udma_u_jetty *jetty,
 	return NULL;
 }
 
-static int update_jetty_ci(urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
-			   uint32_t wqe_cnt)
+static int update_jetty_ci(urma_jetty_t *jetty, uint32_t wqe_cnt)
 {
 	struct udma_qp *qp;
 
@@ -326,7 +306,7 @@ static int update_jetty_ci(urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
 		return EINVAL;
 	}
 
-	qp = find_jetty_qp(to_udma_jetty(jetty), tjetty);
+	qp = find_jetty_qp(to_udma_jetty(jetty));
 	if (!qp) {
 		URMA_LOG_ERR("can't find qp by jetty.\n");
 		return EINVAL;
@@ -348,8 +328,7 @@ static int udma_u_update_queue_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		ret = update_jfs_ci(update_in.jfs, update_in.tjetty,
 				    update_in.wqe_cnt);
 	} else if (update_in.type == JETTY_TYPE) {
-		ret = update_jetty_ci(update_in.jetty, update_in.tjetty,
-				      update_in.wqe_cnt);
+		ret = update_jetty_ci(update_in.jetty, update_in.wqe_cnt);
 	} else {
 		URMA_LOG_ERR("failed to update ci, type = 0x%x.\n",
 			     update_in.type);

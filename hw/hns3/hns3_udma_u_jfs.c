@@ -13,6 +13,7 @@
  *
  */
 
+#include <string.h>
 #include <linux/kernel.h>
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_common.h"

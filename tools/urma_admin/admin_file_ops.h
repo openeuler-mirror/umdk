@@ -11,8 +11,9 @@
 #define ADMIN_FILE_OPS_H
 
 #include <stdint.h>
+#include "urma_types.h"
 
-#define SYS_CLASS_PATH  "/sys/class/uburma"
+#define SYS_CLASS_PATH  "/sys/class/ubcore"
 #define CDEV_PATH  "/dev/uburma"
 #define DEV_PATH_MAX  1024
 #define VALUE_LEN_MAX 64
@@ -33,4 +34,5 @@ int admin_parse_file_value_u16(const char *file_path, char *file, uint16_t *u16)
 int admin_parse_file_value_u32(const char *file_path, char *file, uint32_t *u32);
 int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64);
 
+void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint32_t max_eid_cnt);
 #endif

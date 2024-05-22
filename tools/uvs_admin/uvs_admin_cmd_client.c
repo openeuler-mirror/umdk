@@ -30,7 +30,7 @@ static int client_ctx_init(uvs_admin_cmd_ctx_t *ctx)
     struct timeval timeout = {ctx->timeout, 0};
 
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, ctx->path);
+    strncpy(addr.sun_path, ctx->path, strlen(DEFAULT_UVSD_SOCK));
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {

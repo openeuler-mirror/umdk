@@ -37,8 +37,8 @@ enum live_migrate_table_opts {
 #define LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG "fe_idx"
     LIVE_MIGRATE_TABLE_OPT_FE_IDX_NUM,
 
-#define LIVE_MIGRATE_TABLE_OPT_IP_LONG   "ip"
-    LIVE_MIGRATE_TABLE_OPT_IP_NUM,
+#define LIVE_MIGRATE_TABLE_OPT_UVS_IP_LONG   "uvs_ip"
+    LIVE_MIGRATE_TABLE_OPT_UVS_IP_NUM,
 
     LIVE_MIGRATE_TABLE_OPT_MAX_NUM,
 };
@@ -49,7 +49,7 @@ static const struct opt_arg g_live_migrate_table_opt_args[LIVE_MIGRATE_TABLE_OPT
     [LIVE_MIGRATE_TABLE_OPT_HELP_NUM] = {LIVE_MIGRATE_TABLE_OPT_HELP_LONG, ARG_TYPE_OTHERS},
     [LIVE_MIGRATE_TABLE_OPT_DEV_NAME_NUM] = {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG, ARG_TYPE_STR},
     [LIVE_MIGRATE_TABLE_OPT_FE_IDX_NUM] = {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG, ARG_TYPE_NUM},
-    [LIVE_MIGRATE_TABLE_OPT_IP_NUM] = {LIVE_MIGRATE_TABLE_OPT_IP_LONG, ARG_TYPE_STR},
+    [LIVE_MIGRATE_TABLE_OPT_UVS_IP_NUM] = {LIVE_MIGRATE_TABLE_OPT_UVS_IP_LONG, ARG_TYPE_STR},
 };
 
 /* live migrate table show long options */
@@ -61,9 +61,9 @@ static const struct option g_live_migrate_table_show_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_live_migrate_table_show_cmd_opt_usage[] = {
-    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           "display this help and exit\n" },
-    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,           "fe_idx need specify\n" },
+    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           "display this help and exit", false},
+    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "specifies the name of tpf device", true},
+    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,         "fe_idx is determined by tpf device", true},
 };
 
 static const uvs_admin_cmd_usage_t g_live_migrate_table_show_cmd_usage = {
@@ -76,15 +76,15 @@ static const struct option g_live_migrate_table_add_long_options[] = {
     {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           no_argument,         NULL, LIVE_MIGRATE_TABLE_OPT_HELP_NUM },
     {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       required_argument,   NULL, LIVE_MIGRATE_TABLE_OPT_DEV_NAME_NUM },
     {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,         required_argument,   NULL, LIVE_MIGRATE_TABLE_OPT_FE_IDX_NUM },
-    {LIVE_MIGRATE_TABLE_OPT_IP_LONG,             required_argument,   NULL, LIVE_MIGRATE_TABLE_OPT_IP_NUM},
+    {LIVE_MIGRATE_TABLE_OPT_UVS_IP_LONG,         required_argument,   NULL, LIVE_MIGRATE_TABLE_OPT_UVS_IP_NUM},
     {0,                                          0,                   0,    0 },
 };
 
 static const uvs_admin_opt_usage_t g_live_migrate_table_add_cmd_opt_usage[] = {
-    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           "display this help and exit\n" },
-    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,         "fe_idx need add\n" },
-    {LIVE_MIGRATE_TABLE_OPT_IP_LONG,             "ip need add\n" },
+    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,           "display this help and exit", false},
+    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "specifies the name of tpf device", true},
+    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,         "fe_idx is determined by tpf device", true},
+    {LIVE_MIGRATE_TABLE_OPT_UVS_IP_LONG,         "ip addr of remote uvs", true},
 };
 
 static const uvs_admin_cmd_usage_t g_live_migrate_table_add_cmd_usage = {
@@ -101,9 +101,9 @@ static const struct option g_live_migrate_table_del_long_options[] = {
 };
 
 static const uvs_admin_opt_usage_t g_live_migrate_table_del_cmd_opt_usage[] = {
-    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,    "display this help and exit\n" },
-    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,       "device need specify" },
-    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,    "fe_idx need del\n" },
+    {LIVE_MIGRATE_TABLE_OPT_HELP_LONG,      "display this help and exit", false},
+    {LIVE_MIGRATE_TABLE_OPT_DEV_NAME_LONG,  "specifies the name of tpf device", true},
+    {LIVE_MIGRATE_TABLE_OPT_FE_IDX_LONG,    "fe_idx is determined by tpf device", true},
 };
 
 static const uvs_admin_cmd_usage_t g_live_migrate_table_del_cmd_usage = {
@@ -113,7 +113,10 @@ static const uvs_admin_cmd_usage_t g_live_migrate_table_del_cmd_usage = {
 
 static inline int parse_dev_name(uvs_admin_live_migrate_table_args_t *args, const char *_optarg)
 {
-    (void)memcpy(args->dev_name, _optarg, strlen(_optarg));
+    if (strnlen(_optarg, UVS_ADMIN_MAX_DEV_NAME) >= UVS_ADMIN_MAX_DEV_NAME) {
+        return -EINVAL;
+    }
+    (void)strncpy(args->dev_name, _optarg, UVS_ADMIN_MAX_DEV_NAME - 1);
     args->mask.bs.dev_name = 1;
     return 0;
 }
@@ -137,18 +140,18 @@ static inline int parse_dip(uvs_admin_live_migrate_table_args_t *args, const cha
 {
     int ret;
 
-    ret = str_to_eid(_optarg, &args->dip);
+    ret = str_to_eid(_optarg, (urma_eid_t *)&args->uvs_ip);
     if (ret != 0) {
         return -EINVAL;
     }
-    args->mask.bs.dip = 1;
+    args->mask.bs.uvs_ip = 1;
     return 0;
 }
 
 static const live_migrate_table_parse g_live_migrate_table_parse[LIVE_MIGRATE_TABLE_OPT_MAX_NUM] = {
     [LIVE_MIGRATE_TABLE_OPT_DEV_NAME_NUM] = parse_dev_name,
     [LIVE_MIGRATE_TABLE_OPT_FE_IDX_NUM] = parse_fe_idx,
-    [LIVE_MIGRATE_TABLE_OPT_IP_NUM] = parse_dip,
+    [LIVE_MIGRATE_TABLE_OPT_UVS_IP_NUM] = parse_dip,
 };
 
 static int32_t live_migrate_table_cmd_prep_args(uvs_admin_cmd_ctx_t *ctx, const struct option *longopts,
@@ -199,8 +202,7 @@ static void uvs_admin_print_live_migrate(uint16_t fe_idx, uvs_admin_live_migrate
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("fe_idx                     : %hu\n", fe_idx);
     (void)printf("dev_name                   : %s\n", show_rsp->dev_name);
-    (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->dip));
-    (void)printf("live_migrate_flag          : %d\n", show_rsp->flag);
+    (void)printf("uvs_ip                     : "EID_FMT"\n", EID_ARGS(show_rsp->uvs_ip));
 }
 
 static int32_t uvs_admin_live_migrate_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
@@ -267,7 +269,7 @@ static int32_t uvs_admin_live_migrate_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx
         return ret;
     }
 
-    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.dip == 0) {
+    if (args.mask.bs.dev_name == 0 || args.mask.bs.fe_idx == 0 || args.mask.bs.uvs_ip == 0) {
         (void)printf("ERR: invalid parameter, must set dev_name/fe_idx/dip, mask:%x\n", args.mask.value);
         return -EINVAL;
     }
@@ -283,7 +285,7 @@ static int32_t uvs_admin_live_migrate_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx
     uvs_admin_live_migrate_table_add_req_t *live_migrate_table_req = (uvs_admin_live_migrate_table_add_req_t *)req->req;
     live_migrate_table_req->fe_idx = args.fe_idx;
     (void)memcpy(live_migrate_table_req->dev_name, args.dev_name, UVS_ADMIN_MAX_DEV_NAME);
-    (void)memcpy(&live_migrate_table_req->dip, &args.dip, sizeof(urma_eid_t));
+    (void)memcpy(&live_migrate_table_req->uvs_ip, &args.uvs_ip, sizeof(uvs_admin_net_addr_t));
 
     rsp = client_get_rsp(ctx, req, buf);
     if (rsp == NULL) {

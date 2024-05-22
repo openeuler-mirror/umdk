@@ -70,7 +70,63 @@ typedef struct admin_core_cmd_set_eid_mode {
     } in;
 } admin_core_cmd_set_eid_mode_t;
 
-int admin_show_udp(const tool_config_t *cfg);
+#define UBCORE_GENL_FAMILY_NAME		"UBCORE_GENL"
+#define UBCORE_GENL_FAMILY_VERSION	1
+
+enum {
+    UBCORE_ATTR_UNSPEC,
+    UBCORE_HDR_COMMAND,
+    UBCORE_HDR_ARGS_LEN,
+    UBCORE_HDR_ARGS_ADDR,
+    UBCORE_ATTR_NS_MODE,
+    UBCORE_ATTR_DEV_NAME,
+    UBCORE_ATTR_NS_FD,
+    UBCORE_ATTR_AFTER_LAST
+};
+
+enum {
+    UBCORE_RES_TPG_TP_CNT,
+	UBCORE_RES_TPG_DSCP,
+	UBCORE_RES_TPG_TP_VAL,
+	UBCORE_RES_JTGRP_JETTY_CNT,
+	UBCORE_RES_JTGRP_JETTY_VAL,
+	UBCORE_RES_SEGVAL_SEG_CNT,
+	UBCORE_RES_SEGVAL_SEG_VAL,
+	UBCORE_RES_DEV_SEG_CNT,
+	UBCORE_RES_DEV_SEG_VAL,
+	UBCORE_RES_DEV_JFS_CNT,
+	UBCORE_RES_DEV_JFS_VAL,
+	UBCORE_RES_DEV_JFR_CNT,
+	UBCORE_RES_DEV_JFR_VAL,
+	UBCORE_RES_DEV_JFC_CNT,
+	UBCORE_RES_DEV_JFC_VAL,
+	UBCORE_RES_DEV_JETTY_CNT,
+	UBCORE_RES_DEV_JETTY_VAL,
+	UBCORE_RES_DEV_JTGRP_CNT,
+	UBCORE_RES_DEV_JTGRP_VAL,
+	UBCORE_RES_DEV_RC_CNT,
+	UBCORE_RES_DEV_RC_VAL,
+	UBCORE_RES_DEV_VTP_CNT,
+	UBCORE_RES_DEV_VTP_VAL,
+	UBCORE_RES_DEV_TP_CNT,
+	UBCORE_RES_DEV_TP_VAL,
+	UBCORE_RES_DEV_TPG_CNT,
+	UBCORE_RES_DEV_TPG_VAL,
+	UBCORE_RES_DEV_UTP_CNT,
+	UBCORE_RES_DEV_UTP_VAL,
+	UBCORE_RES_UPI_VAL,
+	UBCORE_RES_VTP_VAL,
+	UBCORE_RES_TP_VAL,
+	UBCORE_RES_UTP_VAL,
+	UBCORE_RES_JFS_VAL,
+	UBCORE_RES_JFR_VAL,
+	UBCORE_RES_JETTY_VAL,
+	UBCORE_RES_JFC_VAL,
+	UBCORE_RES_RC_VAL,
+	UBCORE_ATTR_RES_LAST
+};
+
+int admin_show_utp(const tool_config_t *cfg);
 int admin_show_stats(const tool_config_t *cfg);
 int admin_show_res(const tool_config_t *cfg);
 int admin_add_eid(const tool_config_t *cfg);
@@ -78,4 +134,5 @@ int admin_del_eid(const tool_config_t *cfg);
 int admin_set_eid_mode(const tool_config_t *cfg);
 int admin_set_ns_mode(const tool_config_t *cfg);
 int admin_set_dev_ns(const tool_config_t *cfg);
+int admin_list_res(const tool_config_t *cfg);
 #endif

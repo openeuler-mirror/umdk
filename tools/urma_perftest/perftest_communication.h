@@ -16,6 +16,7 @@
 
 typedef struct perftest_comm {
     char *server_ip;
+    bool enable_ipv6;
     uint16_t port;                          /* Server port for bind or connect, default 21115. */
     int listen_fd;
     int sock_fd;
@@ -25,5 +26,6 @@ int establish_connection(perftest_comm_t *comm);
 void close_connection(perftest_comm_t *comm);
 int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data);
 int sync_time(int sock_fd, char *a);
+int write_sync_data(int sock_fd, char *local_data);
 
 #endif

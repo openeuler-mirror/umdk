@@ -22,6 +22,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -262,6 +263,7 @@ int ub_str_to_u8(const char *buf, uint8_t *u8);
 int ub_str_to_u16(const char *buf, uint16_t *u16);
 int ub_str_to_u32(const char *buf, uint32_t *u32);
 int ub_str_to_u64(const char *buf, uint64_t *u64);
+int ub_str_to_int(const char *buf, int *integer);
 int ub_hex_str_to_u64(const char *p, uint64_t *out, uint64_t max);
 int ub_parse_sysfs_val(const char *filename, unsigned long *val);
 void *ub_hugemalloc(size_t i_length, urma_huge_page_size_t hps, void *p_addr_hint);

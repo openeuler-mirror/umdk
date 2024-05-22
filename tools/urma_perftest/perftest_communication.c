@@ -6,7 +6,9 @@
  * Note:
  * History: 2022-04-03   create file
  */
-
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +16,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -47,6 +50,25 @@ static int ip_set_sockopts(int sockfd)
     return 0;
 }
 
+#define PERFTEST_PORT_LEN_MAX 32
+static int check_add_port(int port, const char *server_ip, struct addrinfo *hints, struct addrinfo **res)
+{
+    int num;
+    char service[PERFTEST_PORT_LEN_MAX] = {0};
+
+    if (sprintf(service, "%d", port) <= 0) {
+        return -1;
+    }
+
+    num = getaddrinfo(server_ip, service, hints, res);
+    if (num < 0) {
+        (void)fprintf(stderr, "%s for %s:%d\n", gai_strerror(num), server_ip, port);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
 {
     uint32_t times = 0;
@@ -63,61 +85,83 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
 
 static int client_connect(perftest_comm_t *comm)
 {
-    struct sockaddr_in addr;
+    struct addrinfo *res, *tmp;
+    struct addrinfo hints = {0};
 
     comm->listen_fd = -1;
-    comm->sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (comm->sock_fd < 0) {
-        (void)fprintf(stderr, "Failed to create socket in client: %s, sock_fd: %d.\n", strerror(errno), comm->sock_fd);
+    comm->sock_fd = -1;
+    hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (check_add_port(comm->port, comm->server_ip, &hints, &res)) {
+        fprintf(stderr, "Problem in resolving basic address and port\n");
         return -1;
     }
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = (uint16_t)htons(comm->port);
-    addr.sin_addr.s_addr = inet_addr(comm->server_ip);
-    if (addr.sin_addr.s_addr == INADDR_NONE) {
-        (void)fprintf(stderr, "Failed to inet_addr server ip: %s, errno: %s\n", comm->server_ip, strerror(errno));
-        goto close_fd;
+    for (tmp = res; tmp != NULL; tmp = tmp->ai_next) {
+        comm->sock_fd = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
+        if (comm->sock_fd >= 0) {
+            if (connect_retry(comm->sock_fd, tmp->ai_addr, tmp->ai_addrlen) == 0) {
+                break;
+            }
+            close(comm->sock_fd);
+            comm->sock_fd = -1;
+        }
     }
+    freeaddrinfo(res);
 
-    if (connect_retry(comm->sock_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr)) != 0) {
-        (void)fprintf(stderr, "Failed to connect, sockfd:%d, errno: [%d]%s\n", comm->sock_fd, errno, strerror(errno));
-        goto close_fd;
+    if (comm->sock_fd < 0) {
+        (void)fprintf(stderr, "Failed to connect %s:%d\n\n", comm->server_ip, comm->port);
+        return -1;
     }
 
     if (ip_set_sockopts(comm->sock_fd) !=  0) {
         (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: %s\n", comm->sock_fd, strerror(errno));
-        goto close_fd;
+        (void)close(comm->sock_fd);
+        return -1;
     }
     return 0;
-
-close_fd:
-    (void)close(comm->sock_fd);
-    return -1;
 }
 
 static int server_connect(perftest_comm_t *comm)
 {
-    struct sockaddr_in addr;
+    struct addrinfo *res, *tmp;
+    struct addrinfo hints = {0};
 
+    comm->listen_fd = -1;
     comm->server_ip = NULL;
-    comm->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (comm->listen_fd < 0) {
-        (void)fprintf(stderr, "Failed to create socket in server: %s, listen_fd: %d.\n",
-            strerror(errno), comm->listen_fd);
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (check_add_port(comm->port, NULL, &hints, &res)) {
+        fprintf(stderr, "Problem in resolving basic address and port\n");
         return -1;
     }
-    if (ip_set_sockopts(comm->listen_fd) !=  0) {
-        (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: %s\n", comm->listen_fd, strerror(errno));
-        goto close_listen_fd;
+
+    for (tmp = res; tmp != NULL; tmp = tmp->ai_next) {
+        if (tmp->ai_family != hints.ai_family) {
+            continue;
+        }
+
+        comm->listen_fd = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
+        if (comm->listen_fd >= 0) {
+            if (ip_set_sockopts(comm->listen_fd) !=  0) {
+                (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: %s\n",
+                    comm->listen_fd, strerror(errno));
+                goto close_listen_fd;
+            }
+            if (bind(comm->listen_fd, tmp->ai_addr, tmp->ai_addrlen) == 0) {
+                break;
+            }
+            close(comm->listen_fd);
+            comm->listen_fd = -1;
+        }
     }
+    freeaddrinfo(res);
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = (uint16_t)htons(comm->port);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(comm->listen_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr)) != 0) {
-        (void)fprintf(stderr, "Failed to bind, listenfd:%d, errno: [%d]%s\n", comm->listen_fd, errno, strerror(errno));
+    if (comm->listen_fd < 0) {
+        (void)fprintf(stderr, "Failed to bind, port:%d.\n", comm->port);
         goto close_listen_fd;
     }
 
@@ -147,6 +191,7 @@ close_sockfd:
     (void)close(comm->sock_fd);
 close_listen_fd:
     (void)close(comm->listen_fd);
+    freeaddrinfo(res);
     return -1;
 }
 
@@ -194,6 +239,20 @@ int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data)
         } else {
             rc = read_bytes;
         }
+    }
+
+    return rc;
+}
+
+int write_sync_data(int sock_fd, char *local_data)
+{
+    int rc;
+    int len = (int)strlen(local_data);
+    rc = write(sock_fd, local_data, (size_t)len);
+    if (rc < len) {
+        (void)fprintf(stderr, "Failed writing data during sock_sync_data, errno: %s.\n", strerror(errno));
+    } else {
+        rc = 0;
     }
 
     return rc;

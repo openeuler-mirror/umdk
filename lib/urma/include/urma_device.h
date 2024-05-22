@@ -19,6 +19,10 @@ void urma_update_port_attr(urma_sysfs_dev_t *sysfs_dev);
 uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_list);
 urma_device_t *urma_find_dev_by_name(struct ub_list *dev_list, const char *dev_name);
 void urma_free_devices(struct ub_list *dev_list);
-ssize_t urma_write_sysfs_file(const char *dir, char *buf, size_t size);
 urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent);
+uint32_t urma_read_eid_list(urma_device_t *dev,
+    urma_eid_info_t *eid_list, uint32_t max_eid_cnt);
+int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
+    uint32_t eid_index, urma_eid_t *eid);
+void urma_discover_sysfs_path(void);
 #endif

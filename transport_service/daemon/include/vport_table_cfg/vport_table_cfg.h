@@ -44,7 +44,7 @@ typedef union uvs_vport_args_mask {
         uint64_t rc_depth            : 1;
         uint64_t slice               : 1;
         uint64_t eid                 : 1;
-        uint64_t eid_index           : 1;
+        uint64_t eid_idx             : 1;
         uint64_t upi                 : 1;
         uint64_t pattern             : 1;
         uint64_t virtualization      : 1;
@@ -52,22 +52,26 @@ typedef union uvs_vport_args_mask {
         uint64_t max_jetty_cnt       : 1;
         uint64_t min_jfr_cnt         : 1;
         uint64_t max_jfr_cnt         : 1;
-        uint64_t reserved            : 27;
+        uint64_t um_en               : 1;
+        uint64_t share_mode          : 1;
+        uint64_t uuid                : 1;
+        uint64_t reserved            : 28;
     } bs;
     uint64_t value;
 } uvs_vport_args_mask_t;
 
 typedef struct tpsa_vport_args {
     uvs_vport_args_mask_t mask;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
     uint32_t sip_idx;
     uint32_t tp_cnt;
     tpsa_tp_mod_cfg_t tp_cfg;
     tpsa_rc_cfg_t rc_cfg;
     urma_eid_t eid;
-    uint32_t eid_index;
+    uint32_t eid_idx;
     uint32_t upi;
+    uvs_uuid_t uuid;
     uint32_t pattern;
     uint32_t virtualization;
     uint32_t min_jetty_cnt;
@@ -77,7 +81,7 @@ typedef struct tpsa_vport_args {
 } tpsa_vport_args_t;
 
 typedef struct tpsa_vport_show_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } tpsa_vport_show_req_t;
 
@@ -95,7 +99,7 @@ typedef struct tpsa_vport_add_rsp {
 } tpsa_vport_add_rsp_t;
 
 typedef struct tpsa_vport_del_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
 } tpsa_vport_del_req_t;
 
@@ -104,23 +108,25 @@ typedef struct tpsa_vport_del_rsp {
 } tpsa_vport_del_rsp_t;
 
 typedef struct tpsa_vport_show_ueid_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
-    uint32_t eid_index;
+    uint32_t eid_idx;
 } tpsa_vport_show_ueid_req_t;
 
 typedef struct tpsa_vport_show_ueid_rsp {
     int res;
     uint32_t upi;
     urma_eid_t eid;
+    uvs_uuid_t uuid;
 } tpsa_vport_show_ueid_rsp_t;
 
 typedef struct tpsa_vport_add_ueid_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
     uint32_t upi;
     urma_eid_t eid;
-    uint32_t eid_index;
+    uint32_t eid_idx;
+    uvs_uuid_t uuid;
 } tpsa_vport_add_ueid_req_t;
 
 typedef struct tpsa_vport_add_ueid_rsp {
@@ -128,9 +134,9 @@ typedef struct tpsa_vport_add_ueid_rsp {
 } tpsa_vport_add_ueid_rsp_t;
 
 typedef struct tpsa_vport_del_ueid_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
     uint16_t fe_idx;
-    uint32_t eid_index;
+    uint32_t eid_idx;
 } tpsa_vport_del_ueid_req_t;
 
 typedef struct tpsa_vport_del_ueid_rsp {
@@ -139,7 +145,7 @@ typedef struct tpsa_vport_del_ueid_rsp {
 
 typedef struct tpsa_set_upi_req {
     uint32_t upi;
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpsa_set_upi_req_t;
 
 typedef struct tpsa_set_upi_rsp {
@@ -147,7 +153,7 @@ typedef struct tpsa_set_upi_rsp {
 } tpsa_set_upi_rsp_t;
 
 typedef struct tpsa_show_upi_req {
-    char dev_name[TPSA_MAX_DEV_NAME];
+    char dev_name[UVS_MAX_DEV_NAME];
 } tpsa_show_upi_req_t;
 
 typedef struct tpsa_show_upi_rsp {

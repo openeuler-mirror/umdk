@@ -17,47 +17,46 @@
 
 union tpsa_dip_table_modify_mask {
     struct {
-        uint32_t dip            : 1;
+        uint32_t eid            : 1;
         uint32_t upi            : 1;
-        uint32_t peer_tpsa      : 1;
-        uint32_t underlay_eid   : 1;
-        uint32_t netaddr        : 1;
-        uint32_t reserved       : 27;
+        uint32_t uvs_ip         : 1;
+        uint32_t net_addr       : 1;
+        uint32_t new_eid        : 1;
+        uint32_t new_upi        : 1;
+        uint32_t reserved       : 26;
     } bs;
     uint32_t value;
 };
 
 typedef struct uvs_admin_dip_table_args {
-    urma_eid_t dip;
+    urma_eid_t eid;
     uint32_t upi;
-    urma_eid_t peer_tpsa_ip;
-    urma_eid_t underlay_eid;
-    uvs_admin_net_addr_t net_addr;
-    urma_eid_t new_dip;
+    uvs_admin_net_addr_t uvs_ip;
+    uvs_admin_net_addr_info_t net_addr;
+    urma_eid_t new_eid;
     uint32_t new_upi;
     union tpsa_dip_table_modify_mask mask;
+    uvs_admin_net_addr_type_t input_net_type;
 } uvs_admin_dip_table_args_t;
 
 typedef struct uvs_admin_dip_table_show_req {
-    urma_eid_t dip;
+    urma_eid_t eid;
     uint32_t upi;
 } uvs_admin_dip_table_show_req_t;
 
 typedef struct uvs_admin_dip_table_show_rsp {
     int res;
-    urma_eid_t dip;
+    urma_eid_t eid;
     uint32_t upi;
-    urma_eid_t peer_tpsa_ip;
-    urma_eid_t underlay_eid;
-    uvs_admin_net_addr_t net_addr;
+    uvs_admin_net_addr_t uvs_ip;
+    uvs_admin_net_addr_info_t net_addr;
 } uvs_admin_dip_table_show_rsp_t;
 
 typedef struct uvs_admin_dip_table_add_req {
-    urma_eid_t dip;
+    urma_eid_t eid;
     uint32_t upi;
-    urma_eid_t peer_tpsa_ip;
-    urma_eid_t underlay_eid;
-    uvs_admin_net_addr_t net_addr;
+    uvs_admin_net_addr_t uvs_ip;
+    uvs_admin_net_addr_info_t net_addr;
 } uvs_admin_dip_table_add_req_t;
 
 typedef struct uvs_admin_dip_table_add_rsp {
@@ -65,7 +64,7 @@ typedef struct uvs_admin_dip_table_add_rsp {
 } uvs_admin_dip_table_add_rsp_t;
 
 typedef struct uvs_admin_dip_table_del_req {
-    urma_eid_t dip;
+    urma_eid_t eid;
     uint32_t upi;
 } uvs_admin_dip_table_del_req_t;
 
@@ -74,13 +73,12 @@ typedef struct uvs_admin_dip_table_del_rsp {
 } uvs_admin_dip_table_del_rsp_t;
 
 typedef struct uvs_admin_dip_table_modify_req {
-    urma_eid_t old_dip;
+    urma_eid_t old_eid;
     uint32_t old_upi;
-    urma_eid_t new_dip;
+    urma_eid_t new_eid;
     uint32_t new_upi;
-    urma_eid_t new_peer_tpsa;
-    urma_eid_t new_underlay_eid;
-    uvs_admin_net_addr_t new_netaddr;
+    uvs_admin_net_addr_t new_uvs_ip;
+    uvs_admin_net_addr_info_t new_net_addr;
     union tpsa_dip_table_modify_mask mask;
 } uvs_admin_dip_table_modify_req_t;
 

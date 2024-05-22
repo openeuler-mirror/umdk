@@ -27,7 +27,10 @@
 
 static pthread_mutex_t g_tpsa_log_lock = PTHREAD_MUTEX_INITIALIZER;
 unsigned g_tpsa_log_level = TPSA_VLOG_LEVEL_INFO;
+#define UVS_LOG_ENV_STR    "UVS_LOG_LEVEL"
+#define UVS_LOG_LEVEL_ENV_MAX_BUF_LEN        32
 
+char g_tpsa_process_path[MAX_PROCESS_NAME_LEN + 1] = {0};
 char *g_tpsa_process_name = NULL;
 
 void tpsa_log_init(void)
@@ -56,30 +59,67 @@ inline bool tpsa_log_drop(unsigned int level)
 
 static int tpsa_find_process_name(void)
 {
-    char *tpsa_process_path;
     char *tpsa_process_name;
 
-    tpsa_process_path = (char*)calloc(MAX_PROCESS_NAME_LEN + 1, sizeof(char));
-    if (tpsa_process_path == NULL) {
-        /* TPSA_LOG cannot be used, otherwise, it will enter the dead cycle and burst the stack. */
-        return -ENOMEM;
-    }
-    ssize_t lenth = readlink(TPSA_PROCESS_PATH, tpsa_process_path, MAX_PROCESS_NAME_LEN);
-    if (lenth <= 0) {
+    ssize_t lenth = readlink(TPSA_PROCESS_PATH, g_tpsa_process_path, MAX_PROCESS_NAME_LEN);
+    if (lenth <= 0 || lenth > MAX_PROCESS_NAME_LEN) {
         (void)printf("/proc/self/exe invalid, errno:%d.\n", errno);
-        free(tpsa_process_path);
         return -1;
     }
-    tpsa_process_path[lenth + 1] = '\0';
-    tpsa_process_name = strrchr(tpsa_process_path, '/');
+
+    g_tpsa_process_path[lenth] = '\0';
+    tpsa_process_name = strrchr(g_tpsa_process_path, '/');
     if (tpsa_process_name == NULL) {
         (void)printf("tpsa_process_name strrchr failed, errno: %d.\n", errno);
-        free(tpsa_process_path);
         return -1;
     }
+
     tpsa_process_name++;
     g_tpsa_process_name = tpsa_process_name;
     return 0;
+}
+
+static enum tpsa_vlog_level tpsa_log_get_level_from_string(const char* level_string)
+{
+    if (level_string == NULL) {
+        return TPSA_VLOG_LEVEL_MAX;
+    }
+    if (strcasecmp(level_string, "fatal") == 0) {
+        return TPSA_VLOG_LEVEL_CRIT;
+    }
+    if (strcasecmp(level_string, "error") == 0) {
+        return TPSA_VLOG_LEVEL_ERR;
+    }
+    if (strcasecmp(level_string, "warning") == 0) {
+        return TPSA_VLOG_LEVEL_WARNING;
+    }
+    if (strcasecmp(level_string, "info") == 0) {
+        return TPSA_VLOG_LEVEL_INFO;
+    }
+    if (strcasecmp(level_string, "debug") == 0) {
+        return TPSA_VLOG_LEVEL_DEBUG;
+    }
+    return TPSA_VLOG_LEVEL_MAX;
+}
+
+void tpsa_getenv_log_level(void)
+{
+    char *level_str = getenv(UVS_LOG_ENV_STR);
+    if (level_str == NULL) {
+        return;
+    }
+
+    if (strnlen(level_str, UVS_LOG_LEVEL_ENV_MAX_BUF_LEN) >= UVS_LOG_LEVEL_ENV_MAX_BUF_LEN) {
+        TPSA_LOG_ERR("Invalid parameter: log level str.");
+        return;
+    }
+
+    enum tpsa_vlog_level log_level = tpsa_log_get_level_from_string(level_str);
+    if (log_level != TPSA_VLOG_LEVEL_MAX) {
+        pthread_mutex_lock(&g_tpsa_log_lock);
+        g_tpsa_log_level = log_level;
+        pthread_mutex_unlock(&g_tpsa_log_lock);
+    }
 }
 
 static int tpsa_vlog(const char *function, int line, unsigned int level, const char *format, va_list va)
@@ -104,7 +144,7 @@ static int tpsa_vlog(const char *function, int line, unsigned int level, const c
     }
     ret = vsnprintf(logmsg, sizeof(logmsg), newformat, va);
     if (ret < 0) {
-        TPSA_LOG_ERR("logmsg size exceeds MAX_LOG_LEN size :\n");
+        TPSA_LOG_ERR("logmsg size exceeds MAX_LOG_LEN size : %d\n", MAX_LOG_LEN);
         return ret;
     }
     syslog(level, "%s", logmsg);

@@ -28,12 +28,13 @@ typedef struct urma_cmd_hdr {
 #define URMA_MAX_UASID  (1 << 24)
 
 typedef enum urma_core_cmd {
-    URMA_CORE_CMD_SHOW_UTP = 1,
-    URMA_CORE_CMD_QUERY_STATS,
+    URMA_CORE_CMD_QUERY_STATS = 1,
     URMA_CORE_CMD_QUERY_RES,
     URMA_CORE_CMD_ADD_EID,
     URMA_CORE_CMD_DEL_EID,
-    URMA_CORE_CMD_SET_EID_MODE
+    URMA_CORE_CMD_SET_EID_MODE,
+    URMA_CORE_SET_NS_MODE,
+    URMA_CORE_SET_DEV_NS,
 } urma_core_cmd_t;
 
 /* only for uburma device ioctl */
@@ -42,7 +43,6 @@ typedef enum urma_core_cmd {
 
 typedef enum urma_cmd {
     URMA_CMD_CREATE_CTX = 1,
-    URMA_CMD_DESTROY_CTX,
     URMA_CMD_ALLOC_TOKEN_ID,
     URMA_CMD_FREE_TOKEN_ID,
     URMA_CMD_REGISTER_SEG,
@@ -77,7 +77,11 @@ typedef enum urma_cmd {
     URMA_CMD_UNBIND_JETTY,
     URMA_CMD_CREATE_JETTY_GRP,
     URMA_CMD_DESTROY_JETTY_GRP,
-    URMA_CMD_USER_CTL
+    URMA_CMD_USER_CTL,
+    URMA_CMD_GET_EID_LIST,
+    URMA_CMD_GET_NETADDR_LIST,
+    URMA_CMD_MODIFY_TP,
+    URMA_CMD_MAX
 } urma_cmd_t;
 
 #ifndef URMA_CMD_UDRV_PRIV
@@ -293,6 +297,8 @@ typedef struct urma_cmd_create_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
+        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+                            * set to 0 by default */
     } in;
     struct {
         uint32_t id;
@@ -333,6 +339,7 @@ typedef struct urma_cmd_import_jfr {
         /* correspond to urma_jfr_id */
         uint8_t eid[URMA_CMD_EID_SIZE];
         uint32_t id;
+        uint32_t flag;
         /* correspond to urma_token_t */
         uint32_t token;
         uint32_t trans_mode;
@@ -509,6 +516,7 @@ typedef struct urma_cmd_create_jetty_grp {
         uint32_t token;
         uint32_t id;
         uint32_t policy;
+        uint32_t flag;
         uint64_t urma_jetty_grp; /* urma jetty group pointer */
     } in;
     struct {
@@ -526,6 +534,16 @@ typedef struct urma_cmd_delete_jetty_grp {
         uint32_t async_events_reported;
     } out;
 } urma_cmd_delete_jetty_grp_t;
+
+typedef struct urma_cmd_get_eid_list {
+    struct {
+        uint32_t max_eid_cnt;
+    } in;
+    struct {
+        uint32_t eid_cnt;
+        urma_eid_info_t eid_list[URMA_MAX_EID_CNT];
+    } out;
+} urma_cmd_get_eid_list_t;
 
 typedef struct urma_cmd_user_ctl {
     struct {
@@ -545,6 +563,57 @@ typedef struct urma_cmd_user_ctl {
         uint32_t out_len;
     } udrv; /* struct [udrv] should be consistent with [urma_udrv_t] */
 } urma_cmd_user_ctl_t;
+
+typedef enum urma_cmd_net_addr_type {
+    URMA_CMD_NET_ADDR_TYPE_IPV4 = 0,
+    URMA_CMD_NET_ADDR_TYPE_IPV6
+} urma_cmd_net_addr_type_t;
+
+union urma_cmd_net_addr_union {
+    uint8_t raw[URMA_CMD_EID_SIZE];
+    struct {
+        uint64_t reserved1;
+        uint32_t reserved2;
+        uint32_t addr;
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
+};
+
+typedef struct urma_cmd_net_addr {
+    urma_cmd_net_addr_type_t type;
+    union urma_cmd_net_addr_union net_addr;
+    uint64_t vlan;                  /* available for UBOE */
+    uint8_t mac[URMA_MAC_BYTES];    /* available for UBOE */
+    uint32_t prefix_len;
+} urma_cmd_net_addr_t;
+
+typedef struct urma_cmd_net_addr_info {
+    urma_cmd_net_addr_t netaddr;
+    uint32_t index;
+} urma_cmd_net_addr_info_t;
+
+typedef struct urma_cmd_get_net_addr_list {
+    struct {
+        uint32_t max_netaddr_cnt;
+    } in;
+    struct {
+        uint32_t netaddr_cnt;
+        uint64_t addr;      /* containing the array of urma_cmd_net_addr_info_t */
+        uint64_t len;
+    } out;
+} urma_cmd_get_net_addr_list_t;
+
+typedef struct urma_cmd_modify_tp {
+    struct {
+        uint32_t tpn;
+        urma_tp_cfg_t tp_cfg;
+        urma_tp_attr_t attr;
+        urma_tp_attr_mask_t mask;
+    } in;
+} urma_cmd_modify_tp_t; /* this struct should be consistent [struct uburma_cmd_modify_tp] */
 
 /* only for event ioctl */
 #define MAX_JFCE_EVENT_CNT 16

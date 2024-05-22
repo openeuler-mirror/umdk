@@ -19,7 +19,7 @@ typedef union uvs_admin_lm_table_mask {
     struct {
         uint32_t dev_name            : 1;
         uint32_t fe_idx              : 1;
-        uint32_t dip                 : 1;
+        uint32_t uvs_ip              : 1;
         uint32_t reserved            : 29;
     } bs;
     uint32_t value;
@@ -28,7 +28,7 @@ typedef struct uvs_admin_live_migrate_table_args {
     uvs_admin_lm_table_mask_t mask;
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint16_t fe_idx;
-    urma_eid_t dip; /* the tpsa_ip of migration destination */
+    uvs_admin_net_addr_t uvs_ip; /* the tpsa_ip of migration destination */
 } uvs_admin_live_migrate_table_args_t;
 
 typedef struct uvs_admin_live_migrate_table_show_req {
@@ -38,15 +38,14 @@ typedef struct uvs_admin_live_migrate_table_show_req {
 
 typedef struct uvs_admin_live_migrate_table_show_rsp {
     int res;
-    urma_eid_t dip;
-    int flag;
+    uvs_admin_net_addr_t uvs_ip;
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
 } uvs_admin_live_migrate_table_show_rsp_t;
 
 typedef struct uvs_admin_live_migrate_table_add_req {
     char dev_name[UVS_ADMIN_MAX_DEV_NAME];
     uint16_t fe_idx;
-    urma_eid_t dip;
+    uvs_admin_net_addr_t uvs_ip;
 } uvs_admin_live_migrate_table_add_req_t;
 
 typedef struct uvs_admin_live_migrate_table_add_rsp {

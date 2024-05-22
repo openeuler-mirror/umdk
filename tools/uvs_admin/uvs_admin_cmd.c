@@ -11,6 +11,7 @@
 
 #include "uvs_admin_cmd_trace.h"
 #include "uvs_admin_rootcmd.h"
+#include "query_res_cmd.h"
 #include "uvs_admin_cmd.h"
 
 void uvs_admin_register_subcmd(uvs_admin_cmd_t *parent,
@@ -34,6 +35,18 @@ void uvs_admin_unregister_subcmd(uvs_admin_cmd_t *parent)
     shash_destroy(&parent->subcmds);
 }
 
+static inline void uvs_admin_print_opt_name(const uvs_admin_opt_usage_t *opt)
+{
+    char opt_name[UVS_ADMIN_MAX_CMD_LEN] = {0};
+
+    if (opt->is_mandatory == true) {
+        (void)snprintf(opt_name, UVS_ADMIN_MAX_CMD_LEN, "<--%s>", opt->opt_long);
+    } else {
+        (void)snprintf(opt_name, UVS_ADMIN_MAX_CMD_LEN, "[--%s]", opt->opt_long);
+    }
+    (void)printf("  %-23s %s\n", opt_name, opt->desc);
+}
+
 void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
 {
     uvs_admin_cmd_t *cmd = ctx->cur_cmd;
@@ -48,7 +61,7 @@ void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
         for (i = 0; i < usage->opt_num; i++) {
             opt = &usage->opt_usage[i];
             if (opt->opt_long) {
-                (void)printf("  --%-23s %s\n", opt->opt_long, opt->desc);
+                uvs_admin_print_opt_name(opt);
             } else {
                 (void)printf(" %s\n", opt->desc);
             }
@@ -68,6 +81,7 @@ void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
         (void)printf("  %-25s %s\n", subcmd->command, subcmd->summary);
     }
     free(nodes);
+    uvs_query_res_usage();
 }
 
 static bool uvs_admin_more_subcmd(uvs_admin_cmd_ctx_t *ctx)
@@ -110,7 +124,12 @@ done:
 int32_t uvs_admin_exec(int argc, char **argv)
 {
     int32_t status = 0;
+    int32_t ret = 0;
 
+    ret = query_res_cmd_exec(argc, argv);
+    if (ret != -EINVAL) {
+        return ret;
+    }
     uvs_admin_cmd_ctx_t ctx = {
         .argc     = argc,
         .argv     = argv,

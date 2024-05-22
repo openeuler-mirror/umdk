@@ -10,7 +10,6 @@
 #include "urma_log.h"
 #include "urma_api.h"
 #include "urma_opcode.h"
-#include "urma_ex_api.h"
 #include "urma_private.h"
 #include "urma_provider.h"
 
@@ -315,100 +314,4 @@ urma_status_t urma_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, ur
     }
 
     return dp_ops->post_jetty_recv_wr(jetty, wr, bad_wr);
-}
-
-urma_status_t urma_post_jfs_wr_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
-{
-    /* check parameter */
-    urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
-    if (dp_ops == NULL || dp_ops->user_ctl == NULL || wr == NULL || bad_wr == NULL ||
-        user_in == NULL || user_out == NULL || user_out->addr == 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-
-    /* After the opcode increases, use switch */
-    if (user_in->opcode < URMA_USER_CTL_POST_SEND_AND_RET_DB ||
-        user_in->opcode > URMA_USER_CTL_POST_SEND_AND_RET_DB) {
-        URMA_LOG_ERR("cmd out of range, opcode:%u.\n", user_in->opcode);
-        return URMA_EINVAL;
-    }
-
-    urma_post_and_ret_db_in_t wr_in = {
-        .wr = wr,
-        .is_jetty = false,
-        .jfs = jfs,
-    };
-    urma_user_ctl_in_t in = {
-        .addr = (uint64_t)&wr_in,
-        .len = (uint32_t)sizeof(urma_post_and_ret_db_in_t),
-        .opcode = user_in->opcode,
-    };
-
-    urma_post_and_ret_db_out_t wr_out = {0};
-    urma_user_ctl_out_t out = {
-        .addr = (uint64_t)&wr_out,
-        .len = (uint32_t)sizeof(urma_post_and_ret_db_out_t),
-        .reserved = 0,
-    };
-
-    int ret = dp_ops->user_ctl(jfs->urma_ctx, &in, &out);
-    bad_wr = wr_out.bad_wr;
-    ((urma_post_and_ret_db_user_out_t *)(user_out->addr))->db_addr = wr_out.db_addr;
-    ((urma_post_and_ret_db_user_out_t *)(user_out->addr))->db_data = wr_out.db_data;
-
-    if ((urma_status_t)ret != URMA_SUCCESS && (urma_status_t)ret != URMA_ENOPERM) {
-        URMA_LOG_ERR("Failed to excecute user_ctl, ret: %d, opcode:%u.\n", ret, user_in->opcode);
-        return URMA_FAIL;
-    }
-    return (urma_status_t)ret;
-}
-
-urma_status_t urma_post_jetty_wr_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
-    urma_user_ctl_in_t *user_in, urma_user_ctl_out_t *user_out)
-{
-    /* check parameter */
-    urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
-    if (dp_ops == NULL || dp_ops->user_ctl == NULL || wr == NULL || bad_wr == NULL ||
-        user_in == NULL || user_out == NULL || user_out->addr == 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-
-    /* After the opcode increases, use switch */
-    if (user_in->opcode < URMA_USER_CTL_POST_SEND_AND_RET_DB ||
-        user_in->opcode > URMA_USER_CTL_POST_SEND_AND_RET_DB) {
-        URMA_LOG_ERR("cmd out of range, opcode:%u.\n", user_in->opcode);
-        return URMA_EINVAL;
-    }
-
-    urma_post_and_ret_db_in_t wr_in = {
-        .wr = wr,
-        .is_jetty = true,
-        .jetty = jetty,
-    };
-    urma_user_ctl_in_t in = {
-        .addr = (uint64_t)&wr_in,
-        .len = (uint32_t)sizeof(urma_post_and_ret_db_in_t),
-        .opcode = user_in->opcode,
-    };
-
-    urma_post_and_ret_db_out_t wr_out = {0};
-    urma_user_ctl_out_t out = {
-        .addr = (uint64_t)&wr_out,
-        .len = (uint32_t)sizeof(urma_post_and_ret_db_out_t),
-        .reserved = 0,
-    };
-
-    int ret = dp_ops->user_ctl(jetty->urma_ctx, &in, &out);
-    bad_wr = wr_out.bad_wr;
-    ((urma_post_and_ret_db_user_out_t *)(user_out->addr))->db_addr = wr_out.db_addr;
-    ((urma_post_and_ret_db_user_out_t *)(user_out->addr))->db_data = wr_out.db_data;
-
-    if ((urma_status_t)ret != URMA_SUCCESS && (urma_status_t)ret != URMA_ENOPERM) {
-        URMA_LOG_ERR("Failed to excecute user_ctl, ret: %d, opcode:%u.\n", ret, user_in->opcode);
-        return URMA_FAIL;
-    }
-    return (urma_status_t)ret;
 }

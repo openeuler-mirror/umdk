@@ -9,8 +9,7 @@
 #ifndef TPSERVICE_CFG_H
 #define TPSERVICE_CFG_H
 
-#include <netinet/in.h>
-
+#include "uvs_types.h"
 #include "tpsa_service.h"
 
 #ifdef __cplusplus
@@ -18,7 +17,7 @@ extern "C" {
 #endif
 
 typedef struct tpsa_service_show_rsp {
-    struct in_addr service_ip;
+    uvs_net_addr_t service_ip;
     uint16_t service_port;
 } tpsa_service_show_rsp_t;
 

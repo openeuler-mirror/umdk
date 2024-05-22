@@ -14,13 +14,13 @@
 #include "tpsa_table.h"
 #include "tpsa_sock.h"
 #include "tpsa_nl.h"
-#include "tpsa_net.h"
 #include "tpsa_tbl_manage.h"
 #include "tpsa_ioctl.h"
 #include "uvs_tp_manage.h"
 #include "tpsa_types.h"
 #include "uvs_lm.h"
 #include "urma_types.h"
+#include "uvs_stats.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,19 +38,24 @@ typedef struct tpsa_worker {
     tpsa_global_cfg_t global_cfg_ctx;
     tpsa_table_t table_ctx;
     tpsa_sock_ctx_t sock_ctx;
-    tpsa_nl_ctx_t nl_ctx;
+    tpsa_genl_ctx_t genl_ctx;
     tpsa_ioctl_ctx_t ioctl_ctx;
+    uvs_socket_init_attr_t tpsa_attr;    /* IP information of local uvs module */
+    uvs_statistic_ctx_t statistic_ctx;   /* statistic_ctx table */
     bool stop;
     pthread_t thread;
     int epollfd;
+    int cpu_core;
 } tpsa_worker_t;
 
 typedef int (*tpsa_vtp_event_handler)(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg,
-                                      char *dev_name, tpsa_lm_vtp_entry_t *lm_vtp_entry);
+    vport_key_t *vport_key, tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
 
 tpsa_worker_t *tpsa_worker_init(uvs_init_attr_t *attr);
 void tpsa_worker_uninit(tpsa_worker_t *worker);
+int tpsa_worker_socket_init(tpsa_worker_t *worker);
 
+int uvs_destroy_target_vtp_for_lm(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx);
 /**
  * get ctx.
  * Return: 0 on success, other value on error.
@@ -60,6 +65,12 @@ tpsa_worker_t *uvs_get_worker(void);   /* obselete, not to be exposed in the fut
 bool tpsa_get_tp_fast_destroy(void);
 void tpsa_set_tp_fast_destroy(bool tp_fast_destory);
 user_ops_t get_user_ops_type(const char *user_ops);
+
+int tpsa_get_vtp_table_from_ubcore(int ubcore_fd, tpsa_ioctl_cfg_t **restore_vtp_tbl_cfg, uint32_t *vtp_cnt);
+int tpsa_restore_vtp_table(tpsa_worker_t *worker, tpsa_ioctl_cfg_t *restore_vtp_tbl_cfg, uint32_t vtp_cnt);
+int tpsa_handle_nl_msg(tpsa_worker_t *worker, tpsa_nl_msg_t *msg);
+int tpsa_check_cpu_core(int cpu_core);
+
 #ifdef __cplusplus
 }
 #endif

@@ -39,9 +39,14 @@ tpsa_response_t *process_live_migrate_table_show(tpsa_request_t *req, ssize_t re
     }
 
     show_req = (tpsa_live_migrate_show_req_t *)req->req;
+    if (strnlen(show_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+
     live_migrate_table = &ctx->worker->table_ctx.live_migrate_table;
     key.fe_idx = show_req->fe_idx;
-    (void)memcpy(key.dev_name, show_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, show_req->dev_name, UVS_MAX_DEV_NAME);
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_show_rsp_t));
     if (rsp == NULL) {
@@ -57,9 +62,8 @@ tpsa_response_t *process_live_migrate_table_show(tpsa_request_t *req, ssize_t re
         ret = -1;
     } else {
         ret = 0;
-        (void)memcpy(&show_rsp->dip, &entry->dip, TPSA_EID_SIZE);
-        (void)memcpy(show_rsp->dev_name, entry->key.dev_name, TPSA_MAX_DEV_NAME);
-        show_rsp->flag = entry->live_migrate_flag;
+        (void)memcpy(&show_rsp->uvs_ip, &entry->uvs_ip, TPSA_EID_SIZE);
+        (void)memcpy(show_rsp->dev_name, entry->key.tpf_name, UVS_MAX_DEV_NAME);
     }
     show_rsp->res = ret;
     (void)pthread_rwlock_unlock(&live_migrate_table->rwlock);
@@ -86,26 +90,32 @@ tpsa_response_t *process_live_migrate_table_add(tpsa_request_t *req, ssize_t rea
     }
 
     ctx = get_tpsa_daemon_ctx();
-    if (ctx == NULL) {
+    if (ctx == NULL || ctx->worker == NULL) {
         TPSA_LOG_ERR("get_tpsa_daemon_ctx failed\n");
         return NULL;
     }
 
     add_req = (tpsa_live_migrate_add_req_t *)req->req;
+    if (strnlen(add_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+
     live_migrate_table = &ctx->worker->table_ctx.live_migrate_table;
     key.fe_idx = add_req->fe_idx;
-    (void)memcpy(key.dev_name, add_req->dev_name, TPSA_MAX_DEV_NAME);
-    (void)memcpy(&entry.dip, &add_req->dip, TPSA_EID_SIZE);
-    entry.live_migrate_flag = LIVE_MIGRATE_TRUE;
-
-    ret = live_migrate_table_add(live_migrate_table, &key, &entry);
-    if (ret != 0) {
-        TPSA_LOG_ERR("can not add live migrate by key fe_idx %hu\n", key.fe_idx);
-    }
+    (void)memcpy(key.tpf_name, add_req->dev_name, UVS_MAX_DEV_NAME);
+    (void)memcpy(&entry.uvs_ip, &add_req->uvs_ip, TPSA_EID_SIZE);
 
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_add_rsp_t));
     if (rsp == NULL) {
+        TPSA_LOG_ERR("Failed to alloc rsp.\n");
         return NULL;
+    }
+
+    // If subsequent operations fail, a rollback is required.
+    ret = live_migrate_table_add(live_migrate_table, &key, &entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("can not add live migrate by key fe_idx %hu\n", key.fe_idx);
     }
 
     tpsa_live_migrate_add_rsp_t *add_rsp = (tpsa_live_migrate_add_rsp_t *)(rsp->rsp);
@@ -138,9 +148,14 @@ tpsa_response_t *process_live_migrate_table_del(tpsa_request_t *req, ssize_t rea
     }
 
     del_req = (tpsa_live_migrate_del_req_t *)req->req;
+    if (strnlen(del_req->dev_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid parameter.");
+        return NULL;
+    }
+
     live_migrate_table = &ctx->worker->table_ctx.live_migrate_table;
     key.fe_idx = del_req->fe_idx;
-    (void)memcpy(key.dev_name, del_req->dev_name, TPSA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, del_req->dev_name, UVS_MAX_DEV_NAME);
 
     ret = live_migrate_table_remove(live_migrate_table, &key);
     if (ret != 0) {

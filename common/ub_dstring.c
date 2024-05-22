@@ -14,18 +14,18 @@
 #include "ub_dstring.h"
 
 #define DSTRING_MIN_LEN 8
-#define DSTRING_MAX_LEN (1024 * 1024) /* Max memory by one dstring limited to 1M bytes */
+#define DSTRING_MAX_LEN (1024 * 1024 * 1024) /* Max memory by one dstring limited to 1G bytes */
 #define DSTRING_DOUBLE 2
 
 /* Initializes the dstring. */
-void dstring_reset(struct dstring *ds)
+void dstring_reset(struct dstring *dstr)
 {
-    if (ds == NULL) {
+    if (dstr == NULL) {
         return;
     }
-    ds->string = NULL;
-    ds->buf_used = 0;
-    ds->buf_len = 0;
+    dstr->string = NULL;
+    dstr->buf_used = 0;
+    dstr->buf_len = 0;
 }
 
 /* Destroy the dstring */
@@ -50,24 +50,24 @@ void dstring_clear(struct dstring *dstr)
     dstr->buf_used = 0;
 }
 
-size_t dstring_get_len(struct dstring *ds)
+size_t dstring_get_len(struct dstring *dstr)
 {
-    if (ds == NULL) {
+    if (dstr == NULL) {
         return 0;
     }
 
-    return ds->buf_used;
+    return dstr->buf_used;
 }
 
 /* Reduces 'dstring''s length to no more than 'new_length' */
-void dstring_truncate(struct dstring *ds, size_t new_length)
+void dstring_truncate(struct dstring *dstr, size_t new_length)
 {
-    if (ds == NULL) {
+    if (dstr == NULL) {
         return;
     }
-    if (ds->buf_used > new_length) {
-        ds->buf_used = new_length;
-        ds->string[new_length] = '\0';
+    if (dstr->buf_used > new_length) {
+        dstr->buf_used = new_length;
+        dstr->string[new_length] = '\0';
     }
 }
 
@@ -106,7 +106,9 @@ char *dstring_push_buf(struct dstring *dstr, size_t n)
         return NULL;
     }
 
-    (void)dstring_extend(dstr, dstr->buf_used + n);
+    if (dstring_extend(dstr, dstr->buf_used + n) != 0) {
+        return NULL;
+    }
     dstr->buf_used += n;
     dstr->string[dstr->buf_used] = '\0';
     return &dstr->string[dstr->buf_used - n];
@@ -119,20 +121,23 @@ void dstring_put_char(struct dstring *dstr, char c)
     }
 
     if (dstr->buf_used >= dstr->buf_len) {
-        *dstring_push_buf(dstr, 1) = c;
+        char *res_str = dstring_push_buf(dstr, 1);
+        if (res_str != NULL) {
+            *res_str = c;
+        }
     } else {
         dstr->string[dstr->buf_used++] = c;
         dstr->string[dstr->buf_used] = '\0';
     }
 }
 
-int dstring_put_cstring(struct dstring *ds, const char *s)
+int dstring_put_cstring(struct dstring *dstr, const char *s)
 {
-    if (ds == NULL || s == NULL) {
+    if (dstr == NULL || s == NULL) {
         return -1;
     }
     size_t s_len = strlen(s);
-    (void)memcpy(dstring_push_buf(ds, s_len), s, s_len);
+    (void)memcpy(dstring_push_buf(dstr, s_len), s, s_len);
     return 0;
 }
 
@@ -177,12 +182,12 @@ static int dstring_printf_(struct dstring *dstr, const char *format, va_list arg
     return 0;
 }
 
-// string actual length must not lager than 1MB
-void dstring_printf(struct dstring *ds, const char *format, ...)
+// string actual length must not lager than 1GB
+void dstring_printf(struct dstring *dstr, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
-    (void)dstring_printf_(ds, format, args);
+    (void)dstring_printf_(dstr, format, args);
     va_end(args);
 }
 
@@ -214,14 +219,14 @@ char *dstring_pealing(struct dstring *dstr)
     return str;
 }
 
-bool dstring_chomp(struct dstring *ds, int c)
+bool dstring_chomp(struct dstring *dstr, int c)
 {
-    if (ds == NULL) {
+    if (dstr == NULL) {
         return false;
     }
 
-    if (ds->buf_used > 0 && ds->string[ds->buf_used - 1] == (char)c) {
-        ds->string[--ds->buf_used] = '\0';
+    if (dstr->buf_used > 0 && dstr->string[dstr->buf_used - 1] == (char)c) {
+        dstr->string[--dstr->buf_used] = '\0';
         return true;
     } else {
         return false;

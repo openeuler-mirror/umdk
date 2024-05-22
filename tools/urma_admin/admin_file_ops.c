@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -181,7 +182,7 @@ uint32_t admin_read_dev_file_value_u32(const char *dev_name, const char *file)
     ret = admin_str_to_u32(tmp_value, &value);
     if (ret != 0) {
         (void)printf("file %s: str %s to u64 failed, ret:%d.\n", file, tmp_value, ret);
-        goto free_sysfs_path;
+        return 0;
     }
     return value;
 
@@ -258,4 +259,20 @@ int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64)
          return -1;
     }
     return admin_str_to_u64(tmp_value, u64);
+}
+
+void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+{
+    char tmp_eid[VALUE_LEN_MAX] = {0};
+    char tmp_value[VALUE_LEN_MAX];
+    for (uint32_t i = 0; i < max_eid_cnt; i++) {
+        if (snprintf(tmp_eid, VALUE_LEN_MAX, "eids/eid%u", i) <= 0) {
+            (void)printf("snprintf failed, eid idx: %u.\n", i);
+        }
+        eid_list[i].eid_index = i;
+        if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
+            admin_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
+            eid_list[i].eid.in4.prefix = 0;  // invalid
+        }
+    }
 }

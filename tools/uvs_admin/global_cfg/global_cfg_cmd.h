@@ -21,7 +21,9 @@ typedef union uvs_admin_global_cfg_mask {
         uint32_t suspend_period : 1;
         uint32_t suspend_cnt    : 1;
         uint32_t sus2err_period : 1;
-        uint32_t reserved       : 27;
+        uint32_t sus2err_cnt    : 1;
+        uint32_t tbl_input_done : 1;
+        uint32_t reserved       : 25;
     } bs;
     uint32_t value;
 } uvs_admin_global_cfg_mask_t;
@@ -30,10 +32,14 @@ typedef struct uvs_admin_global_cfg_args {
     uvs_admin_global_cfg_mask_t mask;
     uvs_admin_mtu_t mtu;
     uint32_t slice;
+    // thresholds for net card tp state transition to SUSPENDED
     uint32_t suspend_period;
     uint32_t suspend_cnt;
+    // thresholds for tpsa tp state transition from SUSPENDED to ERR
     uint32_t sus2err_period;
+    uint32_t sus2err_cnt;
     bool tp_fast_destroy;
+    bool tbl_input_done;
 } uvs_admin_global_cfg_args_t;
 
 typedef struct uvs_admin_global_cfg_show_rsp {
@@ -42,7 +48,9 @@ typedef struct uvs_admin_global_cfg_show_rsp {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    uint32_t sus2err_cnt;
     bool tp_fast_destroy;
+    bool tbl_input_done;
 } uvs_admin_global_cfg_show_rsp_t;
 
 // must be the same as that of uvs_admin_global_cfg_args.
@@ -53,7 +61,9 @@ typedef struct uvs_admin_global_cfg_set_req {
     uint32_t suspend_period;
     uint32_t suspend_cnt;
     uint32_t sus2err_period;
+    uint32_t sus2err_cnt;
     bool tp_fast_destroy;
+    bool tbl_input_done;
 } uvs_admin_global_cfg_set_req_t;
 
 typedef struct uvs_admin_global_cfg_set_rsp {

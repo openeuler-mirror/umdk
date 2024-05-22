@@ -133,39 +133,45 @@ static inline uint32_t ub_hmap_count(const struct ub_hmap *hmap)
 * Find target in table.
 * key_len is length of byte.
 */
-#define HMAP_FIND(table, key, key_len, target)                                           \
+#define HMAP_FIND_INNER(hmap, key_ptr, key_len, target)                                  \
     do {                                                                                 \
         typeof(target) cur = NULL;                                                       \
         (target) = NULL;                                                                 \
-        uint32_t hash = ub_hash_bytes((key), (key_len), 0);                              \
-        HMAP_FOR_EACH_WITH_HASH(cur, node, hash, &(table)->hmap) {                       \
-            if (memcmp(&(cur)->key, (key), (key_len)) == 0) {                            \
+        uint32_t hash = ub_hash_bytes((key_ptr), (key_len), 0);                          \
+        HMAP_FOR_EACH_WITH_HASH(cur, node, hash, (hmap)) {                               \
+            if (memcmp(&(cur)->key, (key_ptr), (key_len)) == 0) {                        \
                 (target) = cur;                                                          \
                 break;                                                                   \
             }                                                                            \
         }                                                                                \
     } while (0)
 
-#define HMAP_DESTROY(table, entry_type)                                                  \
+#define HMAP_FIND(table, key_ptr, key_len, target)  HMAP_FIND_INNER(&(table)->hmap, key_ptr, key_len, target)
+
+#define HMAP_DESTROY_INNER(hmap, entry_type)                                             \
     do {                                                                                 \
         typeof(entry_type) *cur = NULL;                                                  \
         typeof(entry_type) *next = NULL;                                                 \
-        HMAP_FOR_EACH_SAFE(cur, next, node, &(table)->hmap) {                            \
-            ub_hmap_remove(&(table)->hmap, &cur->node);                                  \
+        HMAP_FOR_EACH_SAFE(cur, next, node, (hmap)) {                                    \
+            ub_hmap_remove((hmap), &cur->node);                                          \
             free(cur);                                                                   \
         }                                                                                \
-        ub_hmap_destroy(&(table)->hmap);                                                 \
+        ub_hmap_destroy((hmap));                                                         \
     } while (0)
+
+#define HMAP_DESTROY(table, entry_type) HMAP_DESTROY_INNER(&(table)->hmap, entry_type)
 
 /*
 * Insert entry in table.
 * key_len is length of byte
 */
-#define HMAP_INSERT(table, entry, key, key_len)                                          \
-    do {                                                                                 \
-        uint32_t hash = ub_hash_bytes((key), (key_len), 0);                              \
-        ub_hmap_insert(&(table)->hmap, &(entry)->node, hash);                            \
+#define HMAP_INSERT_INEER(hmap, entry, key_ptr, key_len)                                   \
+    do {                                                                                   \
+        uint32_t hash = ub_hash_bytes((key_ptr), (key_len), 0);                            \
+        ub_hmap_insert((hmap), &(entry)->node, hash);                                      \
     } while (0)
+
+#define HMAP_INSERT(table, entry, key_ptr, key_len) HMAP_INSERT_INEER(&(table)->hmap, entry, key_ptr, key_len)
 
 static inline uint32_t calc_mask(uint32_t capacity)
 {
@@ -191,7 +197,7 @@ static inline int ub_hmap_init(struct ub_hmap *map, uint32_t count)
     if (map->bucket != NULL) {
         return 0;
     }
-
+    errno = ENOMEM;
     return -1;
 }
 

@@ -13,6 +13,10 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include/common)
 target_link_libraries(urma_perftest urma glib-2.0 pthread m)
 
+if(CROSS_COMPILE)
+    target_link_libraries(urma_perftest pcre2-8 ffi)
+endif()
+
 set_target_properties(urma_perftest PROPERTIES C_STANDARD 99)
 if("${URMA_INSTALL}" STREQUAL "enable")
     install(TARGETS urma_perftest DESTINATION /usr/bin)

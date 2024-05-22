@@ -10,9 +10,7 @@
 #ifndef UVS_TP_EXCEPTION_H
 #define UVS_TP_EXCEPTION_H
 
-#include "tpsa_sock.h"
-#include "tpsa_ioctl.h"
-#include "tpsa_tbl_manage.h"
+#include "tpsa_worker.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,13 +23,12 @@ static inline uint16_t next_port(uint16_t port, uint32_t tpn)
 }
 
 void uvs_tp_exception_init(void);
-void uvs_set_sus2err_period(uint32_t sus2err_period);
+void uvs_convert_sus2err_period_to_clock_cycle(uint32_t sus2err_period);
 void uvs_tp_exception_uninit(void);
 
 /* handle netlink */
-int uvs_handle_nl_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_t *sock_ctx, tpsa_ioctl_ctx_t *ioctl_ctx,
-                               tpsa_nl_msg_t *msg);
-int uvs_handle_nl_tp_suspend_req(tpsa_table_t *table_ctx, tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_nl_msg_t *msg);
+int uvs_handle_nl_tp_error_req(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg);
+int uvs_handle_nl_tp_suspend_req(tpsa_worker_t *worker, tpsa_nl_msg_t *msg);
 
 /* handle socket */
 int uvs_handle_sock_restore_tp_error_req(tpsa_table_t *table_ctx, tpsa_sock_ctx_t *sock_ctx,
