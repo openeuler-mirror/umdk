@@ -99,8 +99,6 @@ typedef enum tool_cmd_type {
     TOOL_CMD_ADD_EID,
     TOOL_CMD_DEL_EID,
     TOOL_CMD_SET_EID_MODE,
-    TOOL_CMD_SET_CC_ALG,
-    TOOL_CMD_SHOW_UTP,
     TOOL_CMD_SHOW_STATS,
     TOOL_CMD_SHOW_RES,
     TOOL_CMD_SET_NS_MODE,
@@ -178,13 +176,6 @@ typedef struct uvs_cmd_query_res {
     } out;
 } uvs_cmd_query_res_t;
 
-typedef struct utp_port {
-    uint32_t utpn;
-    uint16_t src_port_start;
-    uint8_t range_port;
-    bool spray_en;
-} utp_port_t;
-
 typedef struct tool_query_key {
     uint32_t type;
     uint32_t key;
@@ -204,9 +195,7 @@ typedef struct tool_config {
     uint16_t idx; /* eid idx */
     char ns[UVS_ADMIN_MAX_DEV_NAME]; /* /proc/$pid/ns/net */
     /* eid end */
-    utp_port_t utp_port;
     tool_query_key_t key;
-    uint16_t cc_alg;
     uint8_t ns_mode; /* 0: exclusive, 1: shared */
 } tool_config_t;
 
@@ -281,8 +270,6 @@ static void init_tool_cfg(tool_config_t *cfg)
 {
     (void)memset(cfg, 0, sizeof(tool_config_t));
     cfg->specify_device = false;
-    cfg->whole_info = false;
-    cfg->utp_port.spray_en = false;
     cfg->whole_info = false;
     cfg->fe_idx = OWN_FE_IDX;
 }
@@ -379,12 +366,33 @@ static int uvs_str_to_u32(const char *buf, uint32_t *u32)
     return 0;
 }
 
+void uvs_query_res_usage(void)
+{
+    (void)printf("supported Query_res command:\n");
+    (void)printf("\n");
+    (void)printf("Command syntax:\n");
+    (void)printf("  show_stats <--dev> <--type> <--key>                    show run stats of ubep device.\n");
+    (void)printf("  show_res <--dev> <--type> <--key> [--key_ext]                                        \n");
+    (void)printf("           [--key_cnt]                                   show resources of ubep device.\n");
+    (void)printf("  list_res <--dev> <--type> [--key] [--key_ext]                                        \n");
+    (void)printf("           [--key_cnt]                                   list resources of ubep device.\n");
+    (void)printf("  -h, --help                                  show help info.\n");
+    (void)printf("  -d, --dev <dev_name>                        the name of ubep device.\n");
+    (void)printf("  -R, --resource_type <type>                  config stats type with 1(vtp)/2(tp)/\n");
+    (void)printf("                                              3(tpg, not support)/8(dev).\n");
+    (void)printf("                                              config res type with 1(vtp)/\n");
+    (void)printf("                                              2(tp)/3(tpg)/4(utp)/13(dev_tp_ctx).\n");
+    (void)printf("  -k, --key <key>                             config stats/res key.\n");
+    (void)printf("  -K, --key_ext <key_ext>                     config key_ext for vtp res.\n");
+    (void)printf("  -C, --key_cnt <key>                         config key_cnt for res.\n");
+}
+
 static int uvs_parse_args(int argc, char *argv[], tool_config_t *cfg)
 {
     int ret = 0;
 
     if (argc == 1 || cfg == NULL) {
-        return -1;
+        return -EINVAL;
     }
 
     init_tool_cfg(cfg);
@@ -393,20 +401,21 @@ static int uvs_parse_args(int argc, char *argv[], tool_config_t *cfg)
 
     if (cfg->cmd != TOOL_CMD_SHOW_STATS && cfg->cmd != TOOL_CMD_SHOW_RES &&
     cfg->cmd != TOOL_CMD_LIST_RES) {
-        return -1;
+        return -EINVAL;
     }
     static const struct option long_options[] = {
         {"dev",               required_argument, NULL, 'd'},
         {"resource_type",     required_argument, NULL, 'R'},
-        {"key_ext",           required_argument, NULL, 'K'},
+        {"key",               required_argument, NULL, 'k'},
         {"key_cnt",           required_argument, NULL, 'C'},
-        {NULL,                no_argument,       NULL, '\0'}
+        {"key_ext",           required_argument, NULL, 'K'},
+        {"help",              no_argument,       NULL, 'h'},
     };
 
     /* Second parse the options */
     while (1) {
         int c;
-        c = getopt_long(argc, argv, "C:d:R:k:", long_options, NULL);
+        c = getopt_long(argc, argv, "C:d:R:k:K:h", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -433,6 +442,12 @@ static int uvs_parse_args(int argc, char *argv[], tool_config_t *cfg)
             case 'k':
                 ret = uvs_str_to_u32(optarg, &cfg->key.key);
                 break;
+            case 'K':
+                (void)uvs_str_to_u32(optarg, &cfg->key.key_ext);
+                break;
+            case 'h':
+                uvs_query_res_usage();
+                return -1;
             default:
                 return -1;
         }
@@ -583,7 +598,9 @@ static void uvs_print_res_tp(struct nlattr *head)
         (void)printf("dscp                : %u\n", (uint32_t)val->dscp);
         (void)printf("oor_en              : %u\n", (uint32_t)val->oor_en);
         (void)printf("selective_retrans_en: %u\n", (uint32_t)val->selective_retrans_en);
-        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, g_admin_tp_state[val->state]);
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state,
+            val->state < (sizeof(g_admin_tp_state) / sizeof(g_admin_tp_state[0])) ?
+            g_admin_tp_state[val->state] : "invalid");
         (void)printf("data_udp_start      : %hu\n", val->data_udp_start);
         (void)printf("ack_udp_start       : %hu\n", val->ack_udp_start);
         (void)printf("udp_range           : %u\n", (uint32_t)val->udp_range);
@@ -712,7 +729,11 @@ static int uvs_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, int
     arg->in.key = cfg->key.key;
     arg->in.type = cfg->key.type;
     arg->in.key_ext = cfg->key.key_ext;
-    arg->in.key_cnt = cfg->key.key_cnt;
+    if (arg->in.type == TOOL_RES_KEY_DEV_TP && cfg->key.key_cnt == 0) {
+        arg->in.key_cnt = 1;
+    } else {
+        arg->in.key_cnt = cfg->key.key_cnt;
+    }
     (void)memcpy(arg->in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
     cb_arg->type = arg->in.type;
     cb_arg->key = arg->in.key;
@@ -733,7 +754,7 @@ static int uvs_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, int
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
     free(arg);
-    return 0;
+    return ret;
 }
 
 int uvs_show_res(const tool_config_t *cfg)
@@ -742,12 +763,12 @@ int uvs_show_res(const tool_config_t *cfg)
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
-    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TP) {
-        (void)printf("key_cnt in show_res cannot be 0.\n");
-        return -1;
-    }
     if (cfg->key.type >= TOOL_RES_KEY_JFS && cfg->key.type <= TOOL_RES_KEY_DEV_TA) {
         (void)printf("uvs_admin do not support query ta stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TP) {
+        (void)printf("key_cnt in show_res cannot be 0.\n");
         return -1;
     }
     sock = alloc_and_connect_nl(&genl_id);
@@ -914,7 +935,7 @@ static int uvs_cmd_list_res(struct nl_sock *sock, const tool_config_t *cfg, int 
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
     free(arg);
-    return 0;
+    return ret;
 }
 
 int uvs_list_res(const tool_config_t *cfg)
@@ -923,12 +944,12 @@ int uvs_list_res(const tool_config_t *cfg)
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
-    if (cfg->key.key_cnt != 0) {
-        (void)printf("key_cnt in list_res should equal 0.\n");
-        return -1;
-    }
     if (cfg->key.type >= TOOL_RES_KEY_JFS) {
         (void)printf("uvs_admin do not support query ta and dev stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt != 0) {
+        (void)printf("key_cnt in list_res should equal 0.\n");
         return -1;
     }
     sock = alloc_and_connect_nl(&genl_id);
@@ -976,6 +997,13 @@ static int uvs_cmd_query_stats(struct nl_sock *sock, const tool_config_t *cfg, i
         (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
         return ret;
     }
+
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("query stats fail, please check input, ret:%d, errno:%d.\n", ret, errno);
+        return ret;
+    }
+
     uvs_print_stats(&arg);
     return 0;
 }

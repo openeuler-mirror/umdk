@@ -15,6 +15,7 @@
 #include "tpsa_types.h"
 #include "tpsa_worker.h"
 #include "uvs_tp_manage.h"
+#include "uvs_private_api.h"
 
 /* vpt list in single fe */
 typedef struct vtp_idx_list_node {
@@ -142,17 +143,8 @@ static int uvs_init_tp_msg_ctx(uvs_ctx_t *ctx, tpsa_vtp_table_index_t *vtp_idx,
 
     tp_msg_ctx->vport_ctx.key = vtp_idx->fe_key;
 
-    uint32_t eid_idx = 0;
-    if (vport_table_lookup_by_ueid_return_key(&ctx->table_ctx->vport_table,
-                                              vtp_idx->upi, &vtp_idx->local_eid,
-                                              &vtp_idx->fe_key, &eid_idx) != 0) {
-        TPSA_LOG_INFO("vport key lookup failed, upi:%u, eid:" EID_FMT "\n",
-                      vtp_idx->upi, EID_ARGS(vtp_idx->local_eid));
-        return -1;
-    }
-
-    int ret = tpsa_lookup_vport_param_with_eid_idx(&vtp_idx->fe_key, &ctx->table_ctx->vport_table,
-                                                   eid_idx, &tp_msg_ctx->vport_ctx.param);
+    int ret = tpsa_lookup_vport_param(&vtp_idx->fe_key, &ctx->table_ctx->vport_table,
+                                      &tp_msg_ctx->vport_ctx.param);
     if (ret != 0) {
         TPSA_LOG_INFO("can't faind vport dev_name:%s, fe_idx:%d when clean fe\n",
             vtp_idx->fe_key.tpf_name, vtp_idx->fe_key.fe_idx);
@@ -171,7 +163,7 @@ static int uvs_init_tp_msg_ctx(uvs_ctx_t *ctx, tpsa_vtp_table_index_t *vtp_idx,
     tp_msg_ctx->src.jetty_id = vtp_idx->local_jetty;
     tp_msg_ctx->src.ip = sip_entry.addr;
 
-    tpsa_lookup_dip_table(&ctx->table_ctx->dip_table, vtp_idx->peer_eid,
+    (void)tpsa_lookup_dip_table(&ctx->table_ctx->dip_table, vtp_idx->peer_eid,
         tp_msg_ctx->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip);
     tp_msg_ctx->dst.eid = vtp_idx->peer_eid;
     tp_msg_ctx->dst.jetty_id = vtp_idx->peer_jetty;
@@ -191,7 +183,7 @@ static int uvs_destroy_targe_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
 
     bool loopback = uvs_is_loopback(tp_msg_ctx->trans_mode, &tp_msg_ctx->src, &tp_msg_ctx->dst);
     if (!loopback) {
-        ret = tpsa_sock_send_destroy_req(ctx, tp_msg_ctx, TPSA_FROM_SERVER_TO_CLIENT, false, NULL);
+        ret = tpsa_sock_send_destroy_req(ctx, tp_msg_ctx, TPSA_FROM_SERVER_TO_CLIENT, NULL);
     }
     return ret;
 }
@@ -266,7 +258,7 @@ static int uvs_destroy_lb_target_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ct
     }
 
     if (tpsa_lookup_vport_param_with_eid_idx(&initial_ctx.vport_ctx.key, &ctx->table_ctx->vport_table,
-        eid_idx, &initial_ctx.vport_ctx.param) != 0) {
+        eid_idx, &initial_ctx.vport_ctx.param, &initial_ctx.lm_ctx) != 0) {
         TPSA_LOG_WARN("vport not exit, dev_name:%s, fe_idx:%d\n",
             initial_ctx.vport_ctx.key.tpf_name, initial_ctx.vport_ctx.key.fe_idx);
         return -1;
@@ -284,6 +276,8 @@ static void uvs_clean_single_fe(uvs_ctx_t *ctx, vport_key_t *vport_key)
     int ret = 0;
 
     TPSA_LOG_INFO("Clean FE dev_name:%s, fe_idx:%d", vport_key->tpf_name, vport_key->fe_idx);
+
+    tpsa_lookup_vport_and_fill_lm_ctx(vport_key, &ctx->table_ctx->vport_table, &tp_msg_ctx.lm_ctx);
 
     // 1. Get all VTP list in FE
     ub_list_init(&vtp_list);
@@ -305,6 +299,7 @@ static void uvs_clean_single_fe(uvs_ctx_t *ctx, vport_key_t *vport_key)
         // Destroy local VTP, and send destroy req msg to Server.
         if (cur->vtp_idx.location == TPSA_INITIATOR || cur->vtp_idx.location == TPSA_DUPLEX) {
             ret |= uvs_destroy_initial_vtp(ctx, &tp_msg_ctx, NULL);
+            uvs_cal_vtp_statistic(vport_key, tp_msg_ctx.trans_mode, UVS_VTP_DESTROY_STATE);
         }
 
         // 2.1 Server side destroy VTP process.
@@ -348,7 +343,7 @@ void uvs_clear_vport_ueid(uvs_ctx_t *ctx, vport_key_t *vport_key)
 
 void uvs_clean_rebooted_fe(uvs_ctx_t *ctx)
 {
-    if (!uvs_is_need_clean_fe(&ctx->table_ctx->fe_table)) {
+    if (!ctx->table_ctx->fe_table.clean_res) {
         return;
     }
 
@@ -389,19 +384,9 @@ static void uvs_clean_single_vport(uvs_ctx_t *ctx, vport_key_t *vport_key)
     return;
 }
 
-static bool uvs_is_need_clean_vport(vport_table_t *vport_table)
-{
-    bool clean_res = false;
-    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
-    clean_res = vport_table->clean_res;
-    (void)pthread_rwlock_unlock(&vport_table->rwlock);
-
-    return clean_res;
-}
-
 void uvs_clean_deleted_vport(uvs_ctx_t *ctx)
 {
-    if (!uvs_is_need_clean_vport(&ctx->table_ctx->vport_table)) {
+    if (!ctx->table_ctx->vport_table.clean_res) {
         return;
     }
 

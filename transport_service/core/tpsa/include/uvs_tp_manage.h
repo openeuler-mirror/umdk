@@ -52,6 +52,7 @@ typedef struct uvs_ctx {
     tpsa_genl_ctx_t *genl_ctx;
     tpsa_ioctl_ctx_t *ioctl_ctx;
     uvs_socket_init_attr_t tpsa_attr;
+    int fd;
 } uvs_ctx_t;
 
 typedef struct uvs_vport_ctx {
@@ -79,6 +80,8 @@ typedef struct uvs_tp_msg_ctx {
     /* remote site info */
     uvs_end_point_t dst;
     uvs_cp_ctx_t peer;
+
+    uvs_lm_tp_ctx_t lm_ctx;
 } uvs_tp_msg_ctx_t;
 
 /* tp msg ctx */
@@ -96,6 +99,11 @@ int uvs_response_destroy(uint32_t vtpn, tpsa_sock_msg_t *msg, tpsa_genl_ctx_t *g
 /* table operation */
 void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index_t *tpg_idx,
                               tpsa_vtp_table_index_t *vtp_idx, tpsa_table_t *table_ctx);
+
+/* TPG operation */
+
+/* when tp modify to RTR, change TP to ERR, before destroy TPG */
+int uvs_cmd_destroy_tpg(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_ioctl_cfg_t *cfg, int32_t tpgn);
 
 /* tp connection management */
 int uvs_map_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_create_param_t *cparam, uint32_t number,
@@ -127,8 +135,8 @@ int uvs_create_vtp_reuse_tpg(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, uvs_ne
 
 int uvs_create_vtp_base(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_create_param_t *cparam,
                         tpsa_tpg_table_index_t *tpg_idx, uvs_nl_resp_info_t *nl_resp);
-int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg);
-int uvs_handle_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
+int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, uint8_t retry_num_left);
+int uvs_handle_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uint8_t retry_num_left);
 int uvs_create_vtp_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_create_vtp_ack(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 int uvs_create_vtp_finish(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
@@ -151,7 +159,7 @@ bool uvs_is_clan_domain(uvs_ctx_t *ctx, vport_key_t *vport_key, vport_param_t *v
 
 int uvs_destroy_vtp_and_tpg(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, int32_t vtpn, int32_t tpgn,
                             uint32_t location);
-void destroy_tpg_error_process(tpsa_tpg_table_index_t *tpg_idx,
+void destroy_tpg_error_process(uvs_net_addr_info_t *sip,
                                tpsa_table_t *table_ctx, tpsa_tpg_info_t *find_tpg_info,
                                tpg_exception_state_t tpg_state);
 int uvs_lm_destroy_vtp_in_migrating(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_key_t *vport_key,
@@ -160,8 +168,7 @@ int uvs_lm_destroy_vtp_in_ready(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_k
     tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
 
 int tpsa_sock_send_destroy_req(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
-                               uvs_direction_t direction, bool live_migrate,
-                               tpsa_resp_id_t *resp_id);
+    uvs_direction_t direction, tpsa_resp_id_t *resp_id);
 int uvs_create_resp_to_lm_src(uvs_ctx_t *ctx, vport_key_t fe_key);
 #ifdef __cplusplus
 }

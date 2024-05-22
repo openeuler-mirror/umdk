@@ -13,7 +13,6 @@
 #include <netlink/genl/ctrl.h>
 
 #include "tpsa_log.h"
-#include "tpsa_net.h"
 #include "tpsa_worker.h"
 #include "tpsa_nl.h"
 
@@ -415,19 +414,19 @@ tpsa_nl_msg_t *tpsa_get_del_sip_resp(tpsa_nl_msg_t *req, int status)
     return resp;
 }
 
-tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index,
-    bool virtualization)
+int tpsa_nl_create_dicover_eid_resp(tpsa_genl_ctx_t *genl_ctx, tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, int ret)
 {
     urma_eid_t src_eid = req->src_eid;
     urma_eid_t dst_eid = req->dst_eid;
 
     tpsa_nl_msg_t *nlresp = NULL;
     tpsa_nl_req_host_t *reqmsg = (tpsa_nl_req_host_t *)req->payload;
+    tpsa_nl_alloc_eid_req_t *nlreq = (tpsa_nl_alloc_eid_req_t *)reqmsg->req.data;
 
     nlresp = tpsa_alloc_nlmsg(sizeof(tpsa_nl_resp_host_t) + sizeof(tpsa_nl_alloc_eid_resp_t), &src_eid, &dst_eid);
     if (nlresp == NULL) {
         TPSA_LOG_ERR("Fail to alloc nl msg");
-        return NULL;
+        return -1;
     }
 
     nlresp->hdr.nlmsg_type = TPSA_NL_TPF2FE_RESP;
@@ -443,13 +442,19 @@ tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *
     msg->resp.opcode = reqmsg->req.opcode;
 
     tpsa_nl_alloc_eid_resp_t *create_eid_resp = (tpsa_nl_alloc_eid_resp_t *)msg->resp.data;
-    create_eid_resp->ret = TPSA_NL_RESP_SUCCESS;
+    create_eid_resp->ret = ret;
     create_eid_resp->eid = ueid->eid;
-    create_eid_resp->eid_index = index;
+    create_eid_resp->eid_index = nlreq->eid_index;
     create_eid_resp->upi = ueid->upi;
     create_eid_resp->fe_idx = reqmsg->src_fe_idx;
 
-    return nlresp;
+    int rslt = tpsa_genl_send_msg(genl_ctx, nlresp);
+    if (rslt != 0) {
+        TPSA_LOG_ERR("Send discover eid resp failed");
+    }
+
+    free(nlresp);
+    return rslt;
 }
 
 static int tpsa_genl_cb_handler(struct nl_msg *msg, void *arg)
@@ -487,6 +492,7 @@ static int tpsa_genl_cb_handler(struct nl_msg *msg, void *arg)
 
     if (attrs[UBCORE_PAYLOAD_LEN] && attrs[UBCORE_PAYLOAD_DATA]) {
         tpsa_msg.payload_len = nla_get_u32(attrs[UBCORE_PAYLOAD_LEN]);
+        tpsa_msg.payload_len = MIN(tpsa_msg.payload_len, TPSA_NL_MSG_BUF_LEN);
         (void)memcpy(tpsa_msg.payload, nla_data(attrs[UBCORE_PAYLOAD_DATA]),
                        tpsa_msg.payload_len);
     }
@@ -568,8 +574,8 @@ int tpsa_get_init_res(tpsa_genl_ctx_t *genl)
 int tpsa_genl_handle_event(tpsa_genl_ctx_t *genl_ctx)
 {
     int ret = nl_recvmsgs_default(genl_ctx->sock);
-    if (ret < 0) {
-        TPSA_LOG_ERR("nl_recvmsgs_default failed, ret = %d.\n", ret);
+    if (ret < 0 && ret != -NLE_PERM) {
+        TPSA_LOG_WARN("nl_recvmsgs_default failed, ret = %d.\n", ret);
         return -1;
     }
     return 0;

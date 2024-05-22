@@ -33,14 +33,17 @@ typedef struct urma_sysfs_dev {
     uint16_t device_id;
     uint16_t vendor_id;
     struct ub_list node; /* Add to device list */
+    struct timespec time_created;
 } urma_sysfs_dev_t;
 
 typedef struct urma_sysfs_dev_name {
     char dev_name[URMA_MAX_NAME];
     struct ub_list node; /* Add to dev_name_list */
+    struct timespec time_created;
 } urma_sysfs_dev_name_t;
 
 int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
+int urma_open_cdev(char *path);
 #endif // URMA_PRIVATE_H

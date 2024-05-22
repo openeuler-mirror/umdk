@@ -66,6 +66,14 @@ typedef struct urma_ops {
     urma_status_t (*delete_jetty_grp)(urma_jetty_grp_t *jetty_grp);
     urma_jfce_t *(*create_jfce)(urma_context_t *ctx);
     urma_status_t (*delete_jfce)(urma_jfce_t *jfce);
+    /**
+     * Get tpn of current jetty
+     * @param[in] jetty: the jetty pointer created before
+     * Return: 0 or positive as correct tpn; negative as get tpn failure
+     */
+    int (*get_tpn)(urma_jetty_t *jetty);
+    int (*modify_tp)(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg, urma_tp_attr_t *attr,
+        urma_tp_attr_mask_t mask);
 
     /* Segment OPs */
     urma_token_id_t *(*alloc_token_id)(urma_context_t *ctx);
@@ -249,8 +257,15 @@ int urma_cmd_unimport_seg(urma_target_seg_t *tseg);
 urma_status_t urma_cmd_get_async_event(urma_context_t *ctx, urma_async_event_t *event);
 void urma_cmd_ack_async_event(urma_async_event_t *event);
 
+int urma_cmd_get_eid_list(int dev_fd, uint32_t max_eid_cnt,
+    urma_eid_info_t *eid_list, uint32_t *eid_cnt);
+
 /* Return user control res, for 0 on success, others on error */
 int urma_cmd_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out,
     urma_udrv_t *udrv_data);
+int urma_cmd_get_net_addr_list(urma_context_t *ctx, uint32_t max_netaddr_cnt,
+    urma_net_addr_info_t *net_addr_info, uint32_t *cnt);
+int urma_cmd_modify_tp(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg, urma_tp_attr_t *attr,
+    urma_tp_attr_mask_t mask);
 
 #endif

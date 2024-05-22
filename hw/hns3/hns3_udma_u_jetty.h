@@ -16,6 +16,7 @@
 #ifndef _UDMA_U_JETTY_H
 #define _UDMA_U_JETTY_H
 
+#include <string.h>
 #include <stdatomic.h>
 #include "urma_types.h"
 #include "urma_provider.h"
@@ -53,6 +54,7 @@ struct udma_u_jetty {
 		struct rc_node		*rc_node;
 		struct udma_qp		*um_qp;
 	};
+	uint8_t				sub_trans_mode;
 };
 
 struct udma_jetty_node {
@@ -99,15 +101,24 @@ static inline bool is_jetty(struct udma_u_context *udma_ctx, uint32_t qpn)
 	return qpn_prefix == HNS3_UDMA_JETTY_QPN_PREFIX;
 }
 
-static inline void fill_um_jetty_qp(struct udma_u_jetty *jetty,
+static inline void fill_um_jetty_qp(struct udma_qp *qp,
 				    struct hns3_udma_create_jetty_resp resp)
 {
-	jetty->um_qp->qp_num = resp.create_tp_resp.qpn;
-	jetty->um_qp->flags = resp.create_tp_resp.cap_flags;
-	jetty->um_qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
-	jetty->um_qp->um_srcport = resp.create_tp_resp.um_srcport;
-	jetty->um_qp->sq.priority = resp.create_tp_resp.priority;
-	jetty->um_qp->jetty_id = jetty->urma_jetty.jetty_id.id;
+	qp->qp_num = resp.create_tp_resp.qpn;
+	qp->flags = resp.create_tp_resp.cap_flags;
+	qp->path_mtu = (urma_mtu_t)resp.create_tp_resp.path_mtu;
+	qp->um_srcport = resp.create_tp_resp.um_srcport;
+	qp->sq.priority = resp.create_tp_resp.priority;
+	memcpy(&qp->um_srcport, &resp.create_tp_resp.um_srcport,
+	       sizeof(struct udp_srcport));
+}
+
+static inline void fill_rc_jetty_qp(struct udma_qp *qp,
+				    struct hns3_udma_create_jetty_resp resp)
+{
+	qp->qp_num = resp.create_tp_resp.qpn;
+	qp->flags = resp.create_tp_resp.cap_flags;
+	qp->sq.priority = resp.create_tp_resp.priority;
 }
 
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,

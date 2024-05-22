@@ -19,6 +19,7 @@
 #include "tpsa_types.h"
 #include "tpsa_worker.h"
 #include "uvs_stats.h"
+#include "uvs_private_api.h"
 #include "uvs_tp_manage.h"
 
 #define UVS_MAX_IPV4_BIT_LEN 32
@@ -250,6 +251,7 @@ static int uvs_remove_tpg_table(tpsa_table_t *table_ctx, tpsa_transport_mode_t t
 
     if (trans_mode == TPSA_TP_RM) {
         rm_tpg_table_key_t k = {
+            .sip = tpg_idx->sip.net_addr,
             .dip = tpg_idx->dip.net_addr,
         };
         ret = tpsa_remove_rm_tpg_table(&table_ctx->rm_tpg_table, &k, find_tpg_info);
@@ -266,10 +268,12 @@ static int uvs_remove_tpg_table(tpsa_table_t *table_ctx, tpsa_transport_mode_t t
         }
     }
 
-    if (ret < 0) {
+    if (ret != 0 && ret != TPSA_REMOVE_DUPLICATE) {
         TPSA_LOG_ERR("Failed to remove %s tpg table when destroy vtp, ret:%d\n",
             (trans_mode == TPSA_TP_RM) ? "rm" : "rc", ret);
-    } else {
+    }
+
+    if (ret == 0) {
         TPSA_LOG_INFO("Remove tpgn %d, tp_cnt:%d, from %s tpg table when destroy vtp\n", find_tpg_info->tpgn,
             find_tpg_info->tp_cnt, (trans_mode == TPSA_TP_RM) ? "rm" : "rc");
     }
@@ -277,7 +281,7 @@ static int uvs_remove_tpg_table(tpsa_table_t *table_ctx, tpsa_transport_mode_t t
     return ret;
 }
 
-void destroy_tpg_error_process(tpsa_tpg_table_index_t *tpg_idx,
+void destroy_tpg_error_process(uvs_net_addr_info_t *sip,
                                tpsa_table_t *table_ctx, tpsa_tpg_info_t *find_tpg_info,
                                tpg_exception_state_t tpg_state)
 {
@@ -287,15 +291,15 @@ void destroy_tpg_error_process(tpsa_tpg_table_index_t *tpg_idx,
     for (uint32_t i = 0; i < tp_cnt; i++) {
         tp_state_table_key_t key = {
             .tpn = find_tpg_info->tp[i].tpn,
-            .sip = tpg_idx->sip.net_addr
+            .sip = sip->net_addr
         };
 
         tp_state_table_entry_t *entry = tp_state_table_lookup(&table_ctx->tp_state_table, &key);
         if (entry != NULL) {
-            entry->tp_exc_state = INITIATOR_TP_STATE_DEL;
+            entry->tp_exc_state = TP_STATE_INITIATOR_DEL;
         } else {
             tp_state_table_entry_t add_entry = {0};
-            add_entry.tp_exc_state = INITIATOR_TP_STATE_DEL;
+            add_entry.tp_exc_state = TP_STATE_INITIATOR_DEL;
             entry = tp_state_table_add(&table_ctx->tp_state_table, &key, &add_entry);
             if (entry == NULL) {
                 TPSA_LOG_WARN("entry alloc failed \n");
@@ -305,7 +309,7 @@ void destroy_tpg_error_process(tpsa_tpg_table_index_t *tpg_idx,
 
     tpg_state_table_key_t tpg_key = {
         .tpgn = find_tpg_info->tpgn,
-        .sip = tpg_idx->sip.net_addr,
+        .sip = sip->net_addr,
     };
 
     tpg_state_table_entry_t *tpg_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_key);
@@ -326,6 +330,28 @@ void destroy_tpg_error_process(tpsa_tpg_table_index_t *tpg_idx,
     }
 }
 
+void uvs_update_peer_uvs_ip(tpsa_table_t *table_ctx, tpsa_tpg_table_index_t *tpg_idx, uint32_t tpgn)
+{
+    tpg_state_table_entry_t *target = NULL;
+    tpg_state_table_key_t key = {.tpgn = tpgn, .sip = tpg_idx->sip.net_addr};
+
+    target = tpg_state_table_lookup(&table_ctx->tpg_state_table, &key);
+    if (target == NULL) {
+        TPSA_LOG_ERR("Fail to find tpg state entry tpgn:%d", key.tpgn);
+        return;
+    }
+
+    if (memcmp(&tpg_idx->peer_uvs_ip, &target->peer_uvs_ip, sizeof(target->peer_uvs_ip)) != 0) {
+        TPSA_LOG_WARN("peer uvs ip updated, dip: " EID_FMT ", peer_uvs_ip: " EID_FMT " \n",
+            EID_ARGS(target->dip.net_addr), EID_ARGS(target->peer_uvs_ip));
+
+        tpg_idx->dip = target->dip;
+        tpg_idx->peer_uvs_ip = target->peer_uvs_ip;
+    }
+
+    return;
+}
+
 void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index_t *tpg_idx,
                               tpsa_vtp_table_index_t *vtp_idx, tpsa_table_t *table_ctx)
 {
@@ -335,7 +361,7 @@ void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index
 
     /* Remove vtpn from vtp table */
     vtp_idx->share_mode = true; /* share_mode is set to be true by default */
-    find_vtpn = tpsa_remove_vtp_table(vtp_idx->trans_mode, vtp_idx, table_ctx);
+    find_vtpn = tpsa_remove_vtp_table(vtp_idx->trans_mode, vtp_idx, table_ctx, tpg_idx);
     switch (find_vtpn) {
         case TPSA_REMOVE_INVALID:
             /* return when vtp is invalid */
@@ -351,6 +377,10 @@ void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index
             TPSA_LOG_INFO("Remove vtpn %d from vtp table when destroy initiator vtp\n", find_vtpn);
     }
 
+    if (find_vtpn != TPSA_LOOKUP_NULL) {
+        uvs_update_peer_uvs_ip(table_ctx, tpg_idx, vtp_idx->tpgn);
+    }
+
     if (vtp_idx->share_mode) {
         /* Remove tpgn from tpg table */
         ret = uvs_remove_tpg_table(table_ctx, tpg_idx->trans_mode, tpg_idx, &find_tpg_info);
@@ -359,7 +389,11 @@ void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index
             TPSA_LOG_INFO("tpgn %d is in use, use count is %u.", vtp_idx->tpgn, vtp_idx->use_cnt);
             ret = TPSA_REMOVE_DUPLICATE;
         } else {
-            tpg_state_table_key_t tpg_state_key = {.tpgn = vtp_idx->tpgn, .sip = tpg_idx->sip.net_addr};
+            uint32_t tpgn_tmp = vtp_idx->tpgn;
+            if (find_vtpn == TPSA_REMOVE_LM) {
+                tpgn_tmp = vtp_idx->vice_tpgn;
+            }
+            tpg_state_table_key_t tpg_state_key = {.tpgn = tpgn_tmp, .sip = tpg_idx->sip.net_addr};
             ret = tpg_state_find_tpg_info(&table_ctx->tpg_state_table, &tpg_state_key, &find_tpg_info);
             TPSA_LOG_INFO("detect non_share_mode and deleting tpgn = %u and tp_cnt = %u, ret = %u\n",
                 find_tpg_info.tpgn, find_tpg_info.tp_cnt, ret);
@@ -367,7 +401,7 @@ void uvs_table_remove_vtp_tpg(int32_t *vtpn, int32_t *tpgn, tpsa_tpg_table_index
     }
 
     if (ret == 0 && !tpsa_get_tp_fast_destroy()) {
-        destroy_tpg_error_process(tpg_idx, table_ctx, &find_tpg_info, TPG_STATE_DEL);
+        destroy_tpg_error_process(&tpg_idx->sip, table_ctx, &find_tpg_info, TPG_STATE_DEL);
     }
 
     *vtpn = find_vtpn;
@@ -456,6 +490,76 @@ static int uvs_send_table_sync_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, int re
     return 0;
 }
 
+static int tpsa_update_tpg_tp_state(uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_table_t *table_ctx,
+                                    uvs_tp_state_t tp_state, bool share_mode)
+{
+    if (tp_msg_ctx->trans_mode == TPSA_TP_RM) {
+        if (share_mode) {
+            rm_tpg_table_key_t k = {
+                .sip = tp_msg_ctx->src.ip.net_addr,
+                .dip = tp_msg_ctx->dst.ip.net_addr,
+            };
+
+            rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(&table_ctx->rm_tpg_table, &k);
+            if (entry == NULL) {
+                TPSA_LOG_ERR("Fail to update rm tpg table tp state, tpg can't find");
+                return -1;
+            }
+
+            for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+                entry->tp[i].tp_state = tp_state;
+            }
+        } else {
+            rm_vtp_table_entry_t *vtp_entry = NULL;
+            tpg_state_table_entry_t *tpg_state_entry = NULL;
+
+            rm_vtp_table_key_t vtp_key = {
+                .src_eid = tp_msg_ctx->src.eid,
+                .dst_eid = tp_msg_ctx->dst.eid,
+            };
+
+            vtp_entry = rm_fe_vtp_table_lookup(&table_ctx->fe_table, &tp_msg_ctx->vport_ctx.key, &vtp_key);
+            if (vtp_entry == NULL || vtp_entry->share_mode) {
+                TPSA_LOG_ERR("Fail to update rm tpg table tp state"
+                    ", vtp_entry can't find or not share mode");
+                return -1;
+            }
+
+            tpg_state_table_key_t tpg_key = {
+                .tpgn = vtp_entry->tpgn,
+                .sip = tp_msg_ctx->src.ip.net_addr
+            };
+
+            tpg_state_entry = tpg_state_table_lookup(&table_ctx->tpg_state_table, &tpg_key);
+            if (tpg_state_entry == NULL) {
+                TPSA_LOG_ERR("Fail to update rm tpg table tp state"
+                    ", tpg_state_entry can't find or not share mode");
+                return -1;
+            }
+
+            for (uint32_t i = 0; i < tpg_state_entry->tp_cnt; i++) {
+                tpg_state_entry->tp[i].tp_state = tp_state;
+            }
+        }
+    } else {
+        rc_tpg_table_key_t k = {
+            .deid = tp_msg_ctx->dst.eid,
+            .djetty_id = tp_msg_ctx->dst.jetty_id,
+        };
+
+        rc_tpg_table_entry_t *entry = rc_tpg_table_lookup(&table_ctx->rc_tpg_table, &k);
+        if (entry == NULL) {
+            TPSA_LOG_ERR("Fail to update rc tpg table tp state, tpg can't find");
+            return -1;
+        }
+        for (uint32_t i = 0; i < entry->tp_cnt; i++) {
+            entry->tp[i].tp_state = tp_state;
+        }
+    }
+
+    return 0;
+}
+
 static int tpsa_lookup_tpg_table_non_share_mode(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
                                                 tpsa_tpg_info_t *tpg, tpsa_tpg_status_t *status)
 {
@@ -511,16 +615,6 @@ int uvs_handle_table_sync(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     tpsa_tpg_info_t tpg;
     tpsa_tpg_table_index_t tpg_idx;
     int ret = 0;
-    uvs_net_addr_t peer_uvs_ip;
-
-    (void)memset(&peer_uvs_ip, 0, sizeof(peer_uvs_ip));
-    (void)memset(&tpg_idx, 0, sizeof(tpsa_tpg_table_index_t));
-
-    tpg_idx.local_eid = msg->peer_eid;
-    tpg_idx.peer_eid = msg->local_eid;
-    tpg_idx.ljetty_id = msg->peer_jetty;
-    tpg_idx.djetty_id = msg->local_jetty;
-    tpg_idx.isLoopback = false;
 
     TPSA_LOG_INFO("src eid " EID_FMT " sjetty: %u, dst eid " EID_FMT ", djetty: %u\n",
                   EID_ARGS(msg->local_eid), msg->local_jetty, EID_ARGS(msg->peer_eid),
@@ -538,6 +632,7 @@ int uvs_handle_table_sync(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     tpg_idx.peer_eid = tp_msg_ctx.dst.eid;
     tpg_idx.ljetty_id = tp_msg_ctx.src.jetty_id;
     tpg_idx.djetty_id = tp_msg_ctx.dst.jetty_id;
+    tpg_idx.sip = tp_msg_ctx.src.ip;
     tpg_idx.dip = tp_msg_ctx.dst.ip;
     tpg_idx.isLoopback = false;
 
@@ -557,7 +652,8 @@ int uvs_handle_table_sync(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     }
 
     if (sync->opcode == TPSA_TABLE_ADD) {
-        if (uvs_table_update(UINT32_MAX, tpg.tpgn, location, msg, ctx->table_ctx, TPSA_TP_STATE_RTS) < 0) {
+        if (uvs_table_update(UINT32_MAX, tpg.tpgn, location, msg, ctx->table_ctx,
+                             UVS_TP_STATE_RTS, &tp_msg_ctx.src.ip) < 0) {
             TPSA_LOG_ERR("Fail to sync table in target.");
             ret = -1;
             goto send_resp;
@@ -573,6 +669,9 @@ int uvs_handle_table_sync(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         cparam.vtpn = UINT32_MAX;
         cparam.live_migrate = msg->live_migrate;
         cparam.location = TPSA_TARGET;
+        cparam.eid_index = 0;
+        cparam.upi = msg->upi;
+        cparam.share_mode = sync->share_mode;
 
         if (uvs_map_target_vtp(ctx->ioctl_ctx->ubcore_fd, &cparam, tpg.tpgn, &tp_msg_ctx.src.ip) != 0) {
             TPSA_LOG_ERR("Fail to ioctl to map target vtp in target");
@@ -642,7 +741,9 @@ int uvs_map_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_create_param_t *cparam, uint32
 
     tpsa_ioctl_cmd_map_vtp(cfg, cparam, number, sip);
     if (tpsa_ioctl(ioctl_ctx->ubcore_fd, cfg) != 0) {
-        TPSA_LOG_ERR("Fail to ioctl to map vtp in worker, seid: " EID_FMT ", deid: " EID_FMT "\n");
+        TPSA_LOG_ERR("Fail to ioctl to map vtp in worker, seid: " EID_FMT ", deid: " EID_FMT "\n",
+                     EID_ARGS(cfg->cmd.map_vtp.in.vtp.local_eid),
+                     EID_ARGS(cfg->cmd.map_vtp.in.vtp.peer_eid));
         free(cfg);
         return -1;
     }
@@ -676,6 +777,7 @@ int uvs_um_map_vtp(tpsa_ioctl_ctx_t *ioctl_ctx, tpsa_table_t *table_ctx, uvs_map
         .vtpn = *uparam->vtpn,
         .utp_idx = utp_table_entry->utp_idx,
         .upi = cparam->upi,
+        .eid_index = cparam->eid_index,
     };
 
     res = um_fe_vtp_table_add(table_ctx, &fe_key, &um_vtp_key, &uvtp_param);
@@ -754,6 +856,7 @@ int uvs_create_utp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
         .vtpn = *uparam->vtpn,
         .utp_idx = utpn,
         .upi = cparam->upi,
+        .eid_index = cparam->eid_index,
     };
 
     ret = um_fe_vtp_table_add(ctx->table_ctx, &tp_msg_ctx->vport_ctx.key, &um_vtp_key, &uvtp_param);
@@ -923,6 +1026,40 @@ NL_RETURN:
     return 0;
 }
 
+static void uvs_lm_add_delete_vtp_node(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, void *vtp_entry)
+{
+    if (tp_msg_ctx->lm_ctx.location != LM_SOURCE) {
+        return;
+    }
+    um_vtp_table_entry_t *um_vtp_entry = NULL;
+    rm_vtp_table_entry_t *rm_vtp_entry = NULL;
+    lm_wait_sync_vtp_t vtp_node = {0};
+    int ret = 0;
+
+    vtp_node.trans_mode = tp_msg_ctx->trans_mode;
+    switch (tp_msg_ctx->trans_mode) {
+        case TPSA_TP_RM:
+            rm_vtp_entry = (rm_vtp_table_entry_t *)vtp_entry;
+            vtp_node.vtp_entry.rm_entry = *rm_vtp_entry;
+            ret = lm_wait_sync_vtp_add(&ctx->table_ctx->live_migrate_table, &tp_msg_ctx->vport_ctx.key, &vtp_node);
+            break;
+        case TPSA_TP_UM:
+            um_vtp_entry = (um_vtp_table_entry_t *)vtp_entry;
+            vtp_node.vtp_entry.um_entry = *um_vtp_entry;
+            ret = lm_wait_sync_vtp_add(&ctx->table_ctx->live_migrate_table, &tp_msg_ctx->vport_ctx.key, &vtp_node);
+            break;
+        case TPSA_TP_RC: // RC is deprecated in LM
+        default:
+            TPSA_LOG_INFO("Unexpected transmode[%u].\n", tp_msg_ctx->trans_mode);
+            break;
+    }
+
+    if (ret != 0) {
+        TPSA_LOG_ERR("Fail to add vtp entry to lm wait sync table.\n");
+    }
+    return;
+}
+
 int uvs_destroy_um_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
 {
     utp_table_key_t utp_key;
@@ -948,6 +1085,11 @@ int uvs_destroy_um_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
         TPSA_LOG_INFO("ioctl to destroy um vtp in worker success, other jetty in use it, vtpn:%u, use cnt:%u",
             vtpn, um_vtp_entry->use_cnt);
         return 0;
+    }
+
+    if (um_vtp_entry->migration_status) {
+        // for not migrated vtp entry, we do not need to sync it to migrate dest
+        uvs_lm_add_delete_vtp_node(ctx, tp_msg_ctx, (void *)um_vtp_entry);
     }
 
     utp_key.sip = tp_msg_ctx->src.ip;
@@ -1310,6 +1452,7 @@ static void uvs_table_remove_reused_vtp_tpg(uvs_ctx_t *ctx, tpsa_create_param_t 
     int32_t tpgn = 0;
 
     tpg_idx.dip = cparam->dip;
+    tpg_idx.peer_uvs_ip = cparam->dst_uvs_ip;
     tpg_idx.local_eid = cparam->local_eid;
     tpg_idx.peer_eid = cparam->peer_eid;
     tpg_idx.ljetty_id = cparam->local_jetty;
@@ -1339,6 +1482,49 @@ static void uvs_table_remove_reused_vtp_tpg(uvs_ctx_t *ctx, tpsa_create_param_t 
     uvs_table_remove_vtp_tpg(&vtpn, &tpgn, &tpg_idx, &vtp_idx, ctx->table_ctx);
 }
 
+static void uvs_fill_vtpn_param_reuse_tpg(tpsa_create_param_t *cparam, tpsa_vtp_table_param_t *vtp_table_data)
+{
+    vtp_table_data->upi = cparam->upi;
+    vtp_table_data->eid_index = vtp_table_data->eid_index;
+    vtp_table_data->local_eid = cparam->local_eid;
+    vtp_table_data->local_jetty = cparam->local_jetty;
+    vtp_table_data->location = cparam->location;
+    vtp_table_data->share_mode = cparam->share_mode;
+    vtp_table_data->valid = true;
+}
+
+int uvs_lm_reuse_tpg_find_vtpn(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, vport_key_t *fe_key,
+    tpsa_vtp_table_param_t *vtp_table_data)
+{
+    if (cparam->trans_mode != TPSA_TP_RM) {
+        TPSA_LOG_ERR("Unexpected trans_mode[%u].\n", cparam->trans_mode);
+        return -1;
+    }
+    rm_vtp_table_key_t vtp_key = {0};
+    vtp_key.src_eid = cparam->local_eid;
+    vtp_key.dst_eid = cparam->peer_eid;
+    rm_vtp_table_entry_t *entry = rm_fe_vtp_table_lookup(&ctx->table_ctx->fe_table, fe_key, &vtp_key);
+    if (entry == NULL) {
+        TPSA_LOG_ERR("Fail to lookup vtp entry, src eid [" EID_FMT "], dst eid [" EID_FMT "].\n",
+            EID_ARGS(vtp_key.src_eid), EID_ARGS(vtp_key.dst_eid));
+        return -1;
+    }
+    vtp_table_data->vtpn = entry->vtpn;
+    return 0;
+}
+
+static void uvs_fill_tpg_data_reuse_tpg(tpsa_create_param_t *cparam, uvs_net_addr_info_t *sip,
+    bool isLoopback, tpsa_tpg_table_param_t *tpg_data)
+{
+    tpg_data->use_cnt = 1;
+    tpg_data->ljetty_id = cparam->local_jetty;
+    tpg_data->leid = cparam->local_eid;
+    tpg_data->sip = *sip;
+    tpg_data->dip = cparam->dip;
+    tpg_data->isLoopback = isLoopback;
+    tpg_data->live_migrate = cparam->live_migrate;
+}
+
 int uvs_create_vtp_reuse_tpg(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, uvs_net_addr_info_t *sip,
                              tpsa_vtp_table_param_t *vtp_table_data, uvs_nl_resp_info_t *nl_resp)
 {
@@ -1355,24 +1541,23 @@ int uvs_create_vtp_reuse_tpg(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, uvs_ne
     (void)memcpy(fe_key.tpf_name, cparam->tpf_name, UVS_MAX_DEV_NAME);
 
     /* IOCTL to mapping vtp */
-    if (uvs_map_vtp(ctx->ioctl_ctx, cparam, vtp_table_data->tpgn, sip, &vtp_table_data->vtpn) < 0) {
-        return -1;
+    if (!cparam->live_migrate) {
+        if (uvs_map_vtp(ctx->ioctl_ctx, cparam, vtp_table_data->tpgn, sip, &vtp_table_data->vtpn) < 0) {
+            return -1;
+        }
+    } else {
+        if (uvs_lm_reuse_tpg_find_vtpn(ctx, cparam, &fe_key, vtp_table_data) != 0) {
+            return -1;
+        }
     }
     // this vtp_table_data->vtpn should not be changed after this step and will be sent to the driver
     TPSA_LOG_INFO("Finish IOCTL to mapping vtp in initiator.\n");
     TPSA_LOG_INFO("Add local vtp and tpg table when tpg already exists. vtpn: %d, tpgn %d\n",
                   vtp_table_data->vtpn, vtp_table_data->tpgn);
-    vtp_table_data->valid = true;
 
     tpsa_tpg_table_param_t tpg_data = {0};
-    tpg_data.use_cnt = 1;
-    tpg_data.ljetty_id = cparam->local_jetty;
-    tpg_data.leid = cparam->local_eid;
-    tpg_data.dip = cparam->dip;
-    tpg_data.isLoopback = isLoopback;
-    tpg_data.live_migrate = cparam->live_migrate;
-
-    vtp_table_data->share_mode = cparam->share_mode;
+    uvs_fill_tpg_data_reuse_tpg(cparam, sip, isLoopback, &tpg_data);
+    uvs_fill_vtpn_param_reuse_tpg(cparam, vtp_table_data);
     if (uvs_table_add(cparam, ctx->table_ctx, &tpg_data, vtp_table_data) < 0) {
         TPSA_LOG_ERR("Failed to add table when create vtp and tpg already exists\n");
         goto unmap_vtp;
@@ -1541,24 +1726,40 @@ int uvs_rc_valid_check(uvs_ctx_t *ctx, tpsa_create_param_t *cparam, bool isLoopb
 static int uvs_no_share_mode_reuse_tpg(uvs_ctx_t *ctx, tpsa_create_param_t *cparam,
     uvs_net_addr_info_t *sip, tpsa_vtp_table_param_t *vtp_table_data, uvs_nl_resp_info_t *nl_resp)
 {
-    rm_vtp_table_entry_t *share_mode_entry = NULL;
-
+    rm_vtp_table_entry_t *rm_entry = NULL;
     rm_vtp_table_key_t vtp_key = {0};
     vtp_key.src_eid = cparam->local_eid;
     vtp_key.dst_eid = cparam->peer_eid;
     vport_key_t vport_key = {0};
     (void)memcpy(vport_key.tpf_name, cparam->tpf_name, UVS_MAX_DEV_NAME);
     vport_key.fe_idx = cparam->fe_idx;
-    share_mode_entry = rm_fe_vtp_table_lookup(&ctx->table_ctx->fe_table,
-        &vport_key, &vtp_key);
-    if (share_mode_entry != NULL) {
-        if (!share_mode_entry->share_mode) {
-            vtp_table_data->tpgn = share_mode_entry->tpgn;
+    rm_entry = rm_fe_vtp_table_lookup(&ctx->table_ctx->fe_table, &vport_key, &vtp_key);
+
+    if (!cparam->live_migrate) {
+        if (rm_entry != NULL) {
+            if (!rm_entry->share_mode) {
+                vtp_table_data->tpgn = rm_entry->tpgn;
+            } else {
+                TPSA_LOG_WARN("rm vtp entry is share mode, but vport config is non-share_mode.\n");
+                return 0;
+            }
+        } else {
+            TPSA_LOG_INFO("cannot find rm fe vtp with seid " EID_FMT " and deid " EID_FMT "\n",
+                    EID_ARGS(vtp_key.src_eid), EID_ARGS(vtp_key.dst_eid));
+            return 0;
         }
     } else {
-        TPSA_LOG_INFO("cannot find rm fe vtp with seid " EID_FMT " and deid " EID_FMT "\n",
-                EID_ARGS(vtp_key.src_eid), EID_ARGS(vtp_key.dst_eid));
-        return 0;
+        if (rm_entry == NULL) {
+            TPSA_LOG_INFO("cannot find rm fe vtp with seid " EID_FMT " and deid " EID_FMT "\n",
+                    EID_ARGS(vtp_key.src_eid), EID_ARGS(vtp_key.dst_eid));
+            return -1;
+        }
+        if (rm_entry->vice_tpgn != UINT32_MAX) {
+            vtp_table_data->tpgn = rm_entry->tpgn;
+        } else {
+            TPSA_LOG_INFO("For lm, do not reuse tpgn:%u\n", rm_entry->tpgn);
+            return 0;
+        }
     }
 
     if (uvs_create_vtp_reuse_tpg(ctx, cparam, sip, vtp_table_data, nl_resp) < 0) {
@@ -1725,7 +1926,7 @@ int uvs_create_vtp_base(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_creat
     tpg_info.tp_cnt = cfg->cmd.create_tpg.in.tpg_cfg.tp_cnt;
     for (uint32_t i = 0; i < tpg_info.tp_cnt; i++) {
         tpg_info.tp[i].tpn = cfg->cmd.create_tpg.out.tpn[i];
-        tpg_info.tp[i].tp_state = TPSA_TP_STATE_RESET;
+        tpg_info.tp[i].tp_state = UVS_TP_STATE_RESET;
         TPSA_LOG_DEBUG("tpn get in uvs tpn[%u] = %u.\n", i, tpg_data.tp[i].tpn);
     }
 
@@ -1741,6 +1942,7 @@ int uvs_create_vtp_base(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_creat
     tpg_data.use_cnt = 1;
     tpg_data.ljetty_id = cparam->local_jetty;
     tpg_data.leid = cparam->local_eid;
+    tpg_data.sip = tp_msg_ctx->src.ip;
     tpg_data.dip = tp_msg_ctx->dst.ip;
     tpg_data.isLoopback = tpg_idx->isLoopback;
     tpg_data.live_migrate = cparam->live_migrate;
@@ -1767,9 +1969,12 @@ int uvs_create_vtp_base(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_creat
         nl_resp->status = TPSA_NL_RESP_SUCCESS;
         nl_resp->vtpn = vtp_table_data.vtpn;
         for (uint32_t i = 0; i < tpg_info.tp_cnt; i++) {
-            tpg_data.tp[i].tp_state = TPSA_TP_STATE_RTS;
+            tpg_data.tp[i].tp_state = UVS_TP_STATE_RTS;
         }
-        uvs_cal_vtp_statistic(&tp_msg_ctx->vport_ctx.key, cparam->trans_mode, UVS_VTP_SUCCESS_STATE);
+        if (tp_msg_ctx->trans_mode == TPSA_TP_RM) {
+            uvs_cal_tpg_statistic(tp_msg_ctx->vport_ctx.key.tpf_name);
+        }
+
         uvs_cal_multi_tp_statistic(cparam->tpf_name, cparam->trans_mode,
             UVS_TP_SUCCESS_STATE, tpg_info.tp_cnt);
     } else {
@@ -2054,8 +2259,8 @@ int uvs_get_tp_msg_ctx(uvs_ctx_t *ctx, tpsa_nl_create_vtp_req_t *nlreq, uint16_t
     tp_msg_ctx->vport_ctx.key.fe_idx = src_function_id;
     memcpy(tp_msg_ctx->vport_ctx.key.tpf_name, nlreq->tpf_name, UVS_MAX_DEV_NAME);
 
-    int ret = tpsa_lookup_vport_param_with_eid_idx(&tp_msg_ctx->vport_ctx.key,
-        &ctx->table_ctx->vport_table, nlreq->eid_index, &tp_msg_ctx->vport_ctx.param);
+    int ret = tpsa_lookup_vport_param_with_eid_idx(&tp_msg_ctx->vport_ctx.key, &ctx->table_ctx->vport_table,
+        nlreq->eid_index, &tp_msg_ctx->vport_ctx.param, &tp_msg_ctx->lm_ctx);
     if (ret < 0) {
         TPSA_LOG_ERR("Can not find vport_table by dev:%s-%hu and eid_idx: %u\n",
                      tp_msg_ctx->vport_ctx.key.tpf_name, src_function_id, nlreq->eid_index);
@@ -2081,8 +2286,10 @@ int uvs_get_tp_msg_ctx(uvs_ctx_t *ctx, tpsa_nl_create_vtp_req_t *nlreq, uint16_t
         tp_msg_ctx->upi = 0;
     }
 
-    tpsa_lookup_dip_table(&ctx->table_ctx->dip_table, nlreq->peer_eid,
-        tp_msg_ctx->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip);
+    if (tpsa_lookup_dip_table(&ctx->table_ctx->dip_table, nlreq->peer_eid,
+        tp_msg_ctx->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip) == -EAGAIN) {
+        return -EAGAIN;
+    }
     tp_msg_ctx->dst.eid = nlreq->peer_eid;
     tp_msg_ctx->dst.jetty_id = nlreq->peer_jetty;
 
@@ -2102,6 +2309,7 @@ static int uvs_clean_exist_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx)
         TPSA_LOG_ERR("Failed to clean vtp before create ret:%d\n", ret);
     } else {
         TPSA_LOG_WARN("Success to clean vtp before create vtp \n");
+        uvs_cal_vtp_statistic(&tp_msg_ctx->vport_ctx.key, tp_msg_ctx->trans_mode, UVS_VTP_DESTROY_STATE);
     }
     return ret;
 }
@@ -2115,7 +2323,7 @@ static int tpsa_lookup_vtp_table(tpsa_table_t *table_ctx, tpsa_transport_mode_t 
     switch (trans_mode) {
         case TPSA_TP_RM:
             status = tpsa_lookup_rm_vtp_table(table_ctx, &tp_msg_ctx->vport_ctx.key,
-                                              &tp_msg_ctx->src, &tp_msg_ctx->dst, vtpn);
+                                              &tp_msg_ctx->src.eid, &tp_msg_ctx->dst.eid, vtpn);
             break;
         case TPSA_TP_RC:
             status = tpsa_lookup_rc_vtp_table(table_ctx, &tp_msg_ctx->vport_ctx.key,
@@ -2129,7 +2337,7 @@ static int tpsa_lookup_vtp_table(tpsa_table_t *table_ctx, tpsa_transport_mode_t 
     return status;
 }
 
-int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
+int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg, uint8_t retry_num_left)
 {
     tpsa_nl_req_host_t *req_host = (tpsa_nl_req_host_t *)msg->payload;
     tpsa_nl_create_vtp_req_t *nlreq = (tpsa_nl_create_vtp_req_t *)req_host->req.data;
@@ -2138,6 +2346,7 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
     int32_t res = 0;
     bool isLoopback = false;
     bool sig_loop = false;
+    bool local_share_mode = true;
 
     uvs_tp_msg_ctx_t tp_msg_ctx = {0};
     if (nlreq->trans_mode == TPSA_TP_RC && (nlreq->sub_trans_mode & TPSA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE) &&
@@ -2147,6 +2356,11 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
         return -1;
     }
     res = uvs_get_tp_msg_ctx(ctx, nlreq, req_host->src_fe_idx, &tp_msg_ctx);
+    /* Fail to get dmac from cloud, uvs will retry after UVS_EXPIRATION_TIME_DUR(50ms) for max_retry_num times */
+    if (retry_num_left != 0 && res == -EAGAIN) {
+        TPSA_LOG_WARN("Fail to get tp msg ctx, retry_num_left: %hu.\n", retry_num_left);
+        return res;
+    }
     if (res == 0 && is_limit_create_vport(&tp_msg_ctx.vport_ctx.key, tp_msg_ctx.trans_mode)) {
         (void)uvs_response_create_fast(msg, ctx->genl_ctx, TPSA_NL_RESP_LIMIT_RATE, UINT32_MAX);
         TPSA_LOG_DEBUG("limit rate create vtp.\n");
@@ -2185,6 +2399,14 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
         return -1;
     }
 
+    if (nlreq->ta_data.trans_type == TPSA_TRANSPORT_UB && nlreq->trans_mode == TPSA_TP_RM &&
+        tp_msg_ctx.vport_ctx.param.tp_cfg.tp_mod_flag.bs.share_mode == 0) {
+        local_share_mode = false;
+        TPSA_LOG_INFO("Detect non-share_mode on local side, share_mode = %u and pattern = %u",
+            tp_msg_ctx.vport_ctx.param.tp_cfg.tp_mod_flag.bs.share_mode,
+            tp_msg_ctx.vport_ctx.param.pattern);
+    }
+
     /* um no need to negotiate */
     if (nlreq->ta_data.trans_type == TPSA_TRANSPORT_UB && nlreq->trans_mode == TPSA_TP_UM) {
         return uvs_create_um_vtp(ctx, msg, &tp_msg_ctx);
@@ -2204,6 +2426,7 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
         TPSA_LOG_WARN("vtp:%d reuse in uvs, duplicate creation", vtpn);
         return uvs_response_create_fast(msg, ctx->genl_ctx, TPSA_NL_RESP_SUCCESS, vtpn);
     } else if (res != TPSA_LOOKUP_NULL) {
+        TPSA_LOG_WARN("vtp:%d already exist, clean it first", res);
         (void)uvs_clean_exist_vtp(ctx, &tp_msg_ctx);
     }
 
@@ -2213,6 +2436,7 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
         nlreq->ta_data.trans_type == TPSA_TRANSPORT_UB) {
         TPSA_LOG_ERR("Can not find sip by tpf name %s and sip_idx %u\n",
             tp_msg_ctx.vport_ctx.key.tpf_name, tp_msg_ctx.vport_ctx.param.sip_idx);
+        (void)uvs_response_create_fast(msg, ctx->genl_ctx, TPSA_NL_RESP_FAIL, UINT32_MAX);
         return -1;
     }
 
@@ -2245,16 +2469,7 @@ int uvs_create_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
     cparam->dst_uvs_ip = tp_msg_ctx.peer.uvs_ip;
     cparam->pattern = tp_msg_ctx.vport_ctx.param.pattern;
     cparam->location = TPSA_INITIATOR;
-    if ((cparam->ta_data.trans_type == TPSA_TRANSPORT_UB && cparam->trans_mode == TPSA_TP_RM) &&
-        tp_msg_ctx.vport_ctx.param.tp_cfg.tp_mod_flag.bs.share_mode == 0) {
-        cparam->share_mode = false;
-        TPSA_LOG_INFO("Detect non-share_mode on local side, share_mode = %u and pattern = %u",
-            tp_msg_ctx.vport_ctx.param.tp_cfg.tp_mod_flag.bs.share_mode,
-            tp_msg_ctx.vport_ctx.param.pattern);
-    } else {
-        cparam->share_mode = true;
-        TPSA_LOG_DEBUG("Detect share_mode on local side");
-    }
+    cparam->share_mode = local_share_mode;
 
     uvs_nl_resp_info_t nl_resp = {
         .resp = false,
@@ -2344,6 +2559,7 @@ static void uvs_del_tpg_entry(tpsa_transport_type_t trans_type, tpsa_sock_msg_t 
     tpsa_tpg_info_t find_tpg_info;
     if (msg->trans_mode == TPSA_TP_RM) {
         rm_tpg_table_key_t k = {
+            .sip = tparam->sip.net_addr,
             .dip = tparam->dip.net_addr,
         };
         (void)tpsa_remove_rm_tpg_table(&table_ctx->rm_tpg_table, &k, &find_tpg_info);
@@ -2379,7 +2595,7 @@ int uvs_get_tp_msg_ctx_peer_site(tpsa_sock_msg_t *msg, tpsa_table_t *table_ctx, 
     }
 
     if (tpsa_lookup_vport_param_with_eid_idx(&vport_ctx->key, &table_ctx->vport_table,
-        eid_idx, &vport_ctx->param) < 0) {
+        eid_idx, &vport_ctx->param, &tp_msg_ctx->lm_ctx) < 0) {
         TPSA_LOG_ERR("Can not find vport_table by key dev_name:%s, fe_idx:%u, eid_idx:%u",
             vport_ctx->key.tpf_name, vport_ctx->key.fe_idx, eid_idx);
         return -1;
@@ -2397,15 +2613,17 @@ int uvs_get_tp_msg_ctx_peer_site(tpsa_sock_msg_t *msg, tpsa_table_t *table_ctx, 
     tp_msg_ctx->src.ip = sip_entry.addr;
     tp_msg_ctx->src.jetty_id = msg->peer_jetty;
 
+    if (tpsa_lookup_dip_table(&table_ctx->dip_table, msg->local_eid, msg->upi,
+        &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip) == (int)(-EAGAIN)) {
+        return (int)(-EAGAIN);
+    }
     /* If the dip table of the third-party node has been refreshed,
         the IP information of the migration source cannot be correctly obtained from the dip table */
     if (msg->live_migrate == true) {
-        tp_msg_ctx->dst.ip = msg->sip;
+        uvs_lm_set_dip_info(&tp_msg_ctx->dst.ip, &msg->sip);
         tp_msg_ctx->peer.uvs_ip = msg->src_uvs_ip;
-    } else {
-        tpsa_lookup_dip_table(&table_ctx->dip_table, msg->local_eid,
-                              msg->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip);
     }
+
     tp_msg_ctx->dst.eid = msg->local_eid;
     tp_msg_ctx->dst.jetty_id = msg->local_jetty;
 
@@ -2490,7 +2708,7 @@ static int uvs_get_final_share_mode(bool *final_share_mode, tpsa_sock_msg_t *msg
     return 0;
 }
 
-static tpsa_tpg_status_t tpsa_reuse_target_tpg_with_share_mode(uvs_ctx_t *ctx,
+static tpsa_tpg_status_t tpsa_reuse_target_tpg_with_share_mode(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg,
     rm_vtp_table_entry_t *share_mode_entry, uvs_tp_msg_ctx_t tp_msg_ctx, tpsa_tpg_info_t *tpg_info)
 {
     rm_vtp_table_key_t vtp_key = {0};
@@ -2498,10 +2716,17 @@ static tpsa_tpg_status_t tpsa_reuse_target_tpg_with_share_mode(uvs_ctx_t *ctx,
     vtp_key.src_eid = tp_msg_ctx.src.eid;
     vtp_key.dst_eid = tp_msg_ctx.dst.eid;
 
+    if (msg->live_migrate && !msg->migrate_third) {
+        // this request is coming from migrate dest to migrate third, do not reuse tpg
+        TPSA_LOG_INFO("For lm non_share_mode scenario, do not reuse tpg in targert.\n");
+        return TPSA_TPG_LOOKUP_NULL;
+    }
+
     share_mode_entry = rm_fe_vtp_table_lookup(&ctx->table_ctx->fe_table, &tp_msg_ctx.vport_ctx.key, &vtp_key);
     if (share_mode_entry != NULL) {
+        // for lm if migrate dest has already created vtp as client, then reuse this tpg
         tpg_state_table_key_t tpg_state_key = {.tpgn = share_mode_entry->tpgn, .sip = tp_msg_ctx.src.ip.net_addr};
-        if (tpg_state_find_tpg_info(&ctx->table_ctx->tpg_state_table, &tpg_state_key, tpg_info) != 0) {
+        if (tpg_state_find_tpg_info(&ctx->table_ctx->tpg_state_table, &tpg_state_key, tpg_info) == 0) {
             return TPSA_TPG_LOOKUP_EXIST;
         }
     }
@@ -2513,18 +2738,18 @@ static void uvs_ack_init_tpg_param(tpsa_tpg_info_t *tpg_param, tpsa_sock_msg_t *
     tpg_param->tp_cnt = msg->content.ack.tpg_cfg.tp_cnt;
     for (uint32_t i = 0; i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
         tpg_param->tp[i].tpn = msg->content.req.tp_param.uniq[i].peer_tpn;
-        tpg_param->tp[i].tp_state = TPSA_TP_STATE_WAIT_VERIFY;
+        tpg_param->tp[i].tp_state = UVS_TP_STATE_WAIT_VERIFY;
     }
     tpg_param->tpgn = msg->peer_tpgn;
 }
 
 static int uvs_update_target_vtp_tpg(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg,
-    uint32_t location, tpsa_tpg_info_t *tpg_param, tpsa_tp_state_t tp_state)
+    uint32_t location, tpsa_tpg_info_t *tpg_param, uvs_tp_state_t tp_state, uvs_net_addr_info_t *sip)
 {
     /* Start to update target vtp and tpg table */
     if (msg->content.ack.ta_data.trans_type == TPSA_TRANSPORT_UB) {
         if ((msg->content.ack.share_mode) &&
-            uvs_table_update(UINT32_MAX, msg->peer_tpgn, location, msg, ctx->table_ctx, tp_state) < 0) {
+            uvs_table_update(UINT32_MAX, msg->peer_tpgn, location, msg, ctx->table_ctx, tp_state, sip) < 0) {
             TPSA_LOG_ERR("Fail to update table when ack receive.");
             return -1;
         } else if (!msg->content.ack.share_mode &&
@@ -2544,7 +2769,7 @@ static int uvs_check_if_update_rm_tpg_tbl(
 }
 
 static int uvs_update_rm_tpg_tbl(uvs_tp_msg_ctx_t *tp_msg_ctx, uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uint32_t tp_cnt,
-    bool is_local, uvs_net_addr_info_t *sip)
+    bool is_local, uvs_net_addr_info_t *sip, bool share_mode)
 {
     tpg_table_update_index_t tpg_update_idx;
     tpg_update_idx.dip = tp_msg_ctx->dst.ip;
@@ -2557,15 +2782,30 @@ static int uvs_update_rm_tpg_tbl(uvs_tp_msg_ctx_t *tp_msg_ctx, uvs_ctx_t *ctx, t
     tpg_update_idx.fe_idx = tp_msg_ctx->vport_ctx.key.fe_idx;
     tpg_update_idx.share_mode = tp_msg_ctx->vport_ctx.param.tp_cfg.tp_mod_flag.bs.share_mode;
     (void)memcpy(tpg_update_idx.tpf_name, tp_msg_ctx->vport_ctx.key.tpf_name, UVS_MAX_DEV_NAME);
-    if (tpsa_update_rm_tpg_table_tp_cnt(&tpg_update_idx, ctx->table_ctx) != 0) {
+    if (tpsa_update_rm_tpg_table_tp_cnt(&tpg_update_idx, ctx->table_ctx, share_mode) != 0) {
         TPSA_LOG_ERR("Fail to update tpg table");
         return -1;
     }
     return 0;
 }
 
-static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
+int uvs_handle_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uint8_t retry_num_left)
 {
+    /* first try before setting alarm */
+    if (retry_num_left == UINT8_MAX) {
+        /* Negotiation should be conducted for each request after
+        * 1. UVS protocol is well defined.
+        * 2. Message context is introduced. */
+        int version = uvs_proto_nego_for_req(ctx->sock_ctx, ctx->fd, (struct uvs_base_header *)msg);
+        if (version == (int)UVS_PROTO_INVALID_VERSION) {
+            return uvs_send_general_ack(ctx->sock_ctx, msg, ctx->fd, UVS_PROTO_ACK_VER_NOT_SUPPORT);
+        }
+        /* UVS might handle incoming request in a different way. */
+        if (version == UVS_PROTO_BASE_VERSION) {
+            TPSA_LOG_DEBUG("Incoming request is with base version.\n");
+        }
+    }
+
     tpsa_cc_param_t resp_param = {0};
     tpsa_create_req_t *req = &msg->content.req;
     tpsa_tpg_table_param_t tparam = {0};
@@ -2584,6 +2824,9 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     tpsa_tpg_info_t tpg_param = {0};
     tpsa_init_tpg_cmd_param_t param = {0};
     uvs_mtu_t local_max_mtu;
+    uvs_tp_msg_ctx_t tp_msg_ctx = { 0 };
+    vport_param_t *vport_param = NULL;
+    tpsa_ioctl_cfg_t *cfg = NULL;
 
     TPSA_LOG_INFO("src eid " EID_FMT " sjetty: %u dst eid " EID_FMT " djetty: %u\n",
                   EID_ARGS(msg->local_eid), msg->local_jetty, EID_ARGS(msg->peer_eid), msg->peer_jetty);
@@ -2594,34 +2837,44 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     if (msg->live_migrate == false && req->ta_data.trans_type == TPSA_TRANSPORT_UB && msg->trans_mode == TPSA_TP_RC &&
         uvs_rc_check_ljetty(ctx->table_ctx, msg->peer_jetty, &msg->peer_eid, msg->local_jetty, &msg->local_eid)) {
         TPSA_LOG_ERR("Fail to rc_check_sjetty");
-        return -1;
+        res = -1;
+        goto EXIT;
     }
 
-    uvs_tp_msg_ctx_t tp_msg_ctx = { 0 };
-    if (uvs_get_tp_msg_ctx_peer_site(msg, ctx->table_ctx, &req->ta_data,  &tp_msg_ctx) < 0) {
+    res = uvs_get_tp_msg_ctx_peer_site(msg, ctx->table_ctx, &req->ta_data,  &tp_msg_ctx);
+    /* Fail to get dmac from cloud, uvs will retry after UVS_EXPIRATION_TIME_DUR(50ms) for max_retry_num times */
+    if (retry_num_left != 0 && res == -EAGAIN) {
+        TPSA_LOG_WARN("Fail to get peer tp msg ctx, retry_num_left: %hu.\n", retry_num_left);
+        return res;
+    }
+    if (res < 0) {
         TPSA_LOG_ERR("Fail to get msg ctx");
-        return -1;
+        res = -1;
+        goto EXIT;
     }
 
     if (uvs_is_fe_in_cleaning_proc(&ctx->table_ctx->fe_table, &tp_msg_ctx.vport_ctx.key) ||
         vport_in_cleaning_proc(&ctx->table_ctx->vport_table, &tp_msg_ctx.vport_ctx.key)) {
         TPSA_LOG_WARN("fe dev_name:%s, fe_idx:%u in cleaning proc", tp_msg_ctx.vport_ctx.key.tpf_name,
             tp_msg_ctx.vport_ctx.key.fe_idx);
-        return -1;
+        res = -1;
+        goto EXIT;
     }
 
     if (uvs_get_final_share_mode(&final_share_mode, msg, tp_msg_ctx) != 0) {
         TPSA_LOG_ERR("Failed to negotiate for final share mode");
-        return -1;
+        res = -1;
+        goto EXIT;
     }
     TPSA_LOG_INFO("finally, share mode is %u", (uint32_t)final_share_mode);
 
-    vport_param_t *vport_param = &tp_msg_ctx.vport_ctx.param;
+    vport_param = &tp_msg_ctx.vport_ctx.param;
     if (tpsa_sip_table_lookup(&ctx->table_ctx->tpf_dev_table, tp_msg_ctx.vport_ctx.key.tpf_name,
         vport_param->sip_idx, &sip_entry) != 0 && req->ta_data.trans_type == TPSA_TRANSPORT_UB) {
         TPSA_LOG_ERR("Can not find sip by tpf name %s and sip_idx %u\n",
             tp_msg_ctx.vport_ctx.key.tpf_name, vport_param->sip_idx);
-        return -1;
+        res = -1;
+        goto EXIT;
     }
 
     /* check if fe is in stop process create vtp req status */
@@ -2632,32 +2885,25 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         if (res < 0) {
             TPSA_LOG_ERR("Fail to transfer tpsa create req");
         }
-        return res;
+        goto EXIT;
     }
 
     /* TODO: table check */
     /* IOCTL to create target tpg */
-    tpsa_ioctl_cfg_t *cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
+    cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
     if (cfg == NULL) {
         TPSA_LOG_ERR("Fail to malloc config mem");
-        return -ENOMEM;
+        res = -ENOMEM;
+        goto EXIT;
     }
 
-    tpsa_ioctl_cmd_get_dev_info(cfg, tp_msg_ctx.vport_ctx.key.tpf_name, &sip_entry.addr,
-        TPSA_TRANSPORT_UB);
+    tpsa_ioctl_cmd_get_dev_info(cfg, tp_msg_ctx.vport_ctx.key.tpf_name);
     if (req->ta_data.trans_type == TPSA_TRANSPORT_UB && tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg) != 0) {
         TPSA_LOG_ERR("Fail to ioctl to get dev info in target");
         res = -1;
         goto free_cfg;
     }
     TPSA_LOG_INFO("Finish IOCTL to get dev info in target.\n");
-
-    if (req->ta_data.trans_type == TPSA_TRANSPORT_UB && !cfg->cmd.get_dev_info.out.port_is_active) {
-        TPSA_LOG_ERR("Failed to set up connection due to port unactive on target side with tpf_dev %s\n",
-            cfg->cmd.get_dev_info.in.target_pf_name);
-        res = -1;
-        goto free_cfg;
-    }
 
     local_max_mtu = cfg->cmd.get_dev_info.out.max_mtu;
 
@@ -2674,7 +2920,7 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     param.trans_mode = tp_msg_ctx.trans_mode;
 
     if (req->ta_data.trans_type == TPSA_TRANSPORT_UB) {
-        tpsa_query_cc_algo(cfg->cmd.get_dev_info.out.target_tpf_name, &ctx->table_ctx->tpf_dev_table, &param.tp_cfg,
+        tpsa_query_cc_algo(tp_msg_ctx.vport_ctx.key.tpf_name, &ctx->table_ctx->tpf_dev_table, &param.tp_cfg,
                            &param.cc_array_cnt, param.cc_result_array);
     }
 
@@ -2685,12 +2931,12 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     if (req->ta_data.trans_type == TPSA_TRANSPORT_UB && final_share_mode) {
         status = tpsa_reuse_target_tpg(ctx, &sip_entry.addr, &tp_msg_ctx.dst.ip, msg, &tpg_info);
     } else if (req->ta_data.trans_type == TPSA_TRANSPORT_UB && !final_share_mode) {
-        status = tpsa_reuse_target_tpg_with_share_mode(ctx, share_mode_entry, tp_msg_ctx,
+        status = tpsa_reuse_target_tpg_with_share_mode(ctx, msg, share_mode_entry, tp_msg_ctx,
             &tpg_info);
     }
     if (tp_msg_ctx.trans_mode == TPSA_TP_RM &&
         ((final_share_mode && status == TPSA_TPG_LOOKUP_IN_PROGRESS) ||
-            (!final_share_mode && share_mode_entry != NULL)) &&
+            (!final_share_mode && status == TPSA_TPG_LOOKUP_EXIST)) &&
         tp_msg_ctx.vport_ctx.param.tp_cnt != cfg->cmd.create_target_tpg.in.tpg_cfg.tp_cnt) {
         tpsa_ioctl_cmd_modify_tpg_tp_cnt(
             cfg, &param, tpg_info.tpgn, cfg->cmd.create_target_tpg.in.tpg_cfg.tp_cnt);
@@ -2701,13 +2947,13 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
             res = -1;
             goto free_cfg;
         }
-        if (uvs_update_rm_tpg_tbl(
-            &tp_msg_ctx, ctx, msg, cfg->cmd.create_target_tpg.in.tpg_cfg.tp_cnt, false, &sip_entry.addr) != 0) {
+        if (uvs_update_rm_tpg_tbl(&tp_msg_ctx, ctx, msg,
+            cfg->cmd.create_target_tpg.in.tpg_cfg.tp_cnt, false, &sip_entry.addr, final_share_mode) != 0) {
             res = -1;
             goto free_cfg;
         }
     } else if ((final_share_mode && status <= TPSA_TPG_LOOKUP_NULL) ||
-               (!final_share_mode && share_mode_entry == NULL)) {
+               (!final_share_mode && status == TPSA_TPG_LOOKUP_NULL)) {
         if (tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg) != 0) {
             TPSA_LOG_ERR("Fail to ioctl to create target tpg in worker");
             res = -1;
@@ -2721,9 +2967,8 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
             msg->trans_mode, UVS_TP_OPENING_STATE, tpg_info.tp_cnt);
         for (uint32_t i = 0; i < tpg_info.tp_cnt; i++) {
             tpg_info.tp[i].tpn = cfg->cmd.create_target_tpg.out.tpn[i];
-            tpg_info.tp[i].tp_state = TPSA_TP_STATE_WAIT_VERIFY;
+            tpg_info.tp[i].tp_state = UVS_TP_STATE_WAIT_VERIFY;
         }
-
         if (uvs_add_tpg_state_entry(ctx->table_ctx, &tp_msg_ctx, &tpg_info) != 0) {
             res = -1;
             goto destory_target_tpg;
@@ -2734,6 +2979,7 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         tparam.use_cnt = 1;
         tparam.ljetty_id = msg->peer_jetty;
         tparam.leid =  msg->peer_eid;
+        tparam.sip = tp_msg_ctx.src.ip;
         tparam.dip = tp_msg_ctx.dst.ip;
         tparam.live_migrate = msg->live_migrate;
         tparam.tp_cnt = cfg->cmd.create_target_tpg.in.tpg_cfg.tp_cnt;
@@ -2743,7 +2989,7 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         }
         for (uint32_t i = 0; i < tparam.tp_cnt; i++) {
             tparam.tp[i].tpn = cfg->cmd.create_target_tpg.out.tpn[i];
-            tparam.tp[i].tp_state = TPSA_TP_STATE_WAIT_VERIFY;
+            tparam.tp[i].tp_state = UVS_TP_STATE_WAIT_VERIFY;
         }
         if (final_share_mode && uvs_add_tpg_entry(req->ta_data.trans_type, msg, &tparam, ctx->table_ctx) != 0) {
             goto destory_target_tpg;
@@ -2752,8 +2998,8 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
 
     if (req->ta_data.trans_type == TPSA_TRANSPORT_UB &&
         ((final_share_mode && status == TPSA_TPG_LOOKUP_IN_PROGRESS) ||
-        (!final_share_mode && share_mode_entry != NULL)) &&
-        tpg_info.tp[0].tp_state == TPSA_TP_STATE_RESET) {
+        (!final_share_mode && status == TPSA_TPG_LOOKUP_EXIST)) &&
+        tpg_info.tp[0].tp_state == UVS_TP_STATE_RESET) {
         tpsa_ioctl_cfg_t *modify_cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
         if (modify_cfg == NULL) {
             TPSA_LOG_ERR("Fail to alloc modify cfg");
@@ -2802,6 +3048,9 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         cparam.vtpn = UINT32_MAX;
         cparam.live_migrate = msg->live_migrate;
         cparam.location = TPSA_TARGET;
+        cparam.eid_index = 0;
+        cparam.upi = msg->upi;
+        cparam.share_mode = final_share_mode;
         if (uvs_map_target_vtp(ctx->ioctl_ctx->ubcore_fd, &cparam, tpg_info.tpgn, &tp_msg_ctx.src.ip) != 0) {
             TPSA_LOG_ERR("Fail to ioctl to modify peer tpg in worker");
             res = -1;
@@ -2812,9 +3061,14 @@ static int uvs_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
 
     msg->peer_tpgn = tpg_info.tpgn;
     uvs_ack_init_tpg_param(&tpg_param, msg);
-    if (uvs_update_target_vtp_tpg(ctx, msg, location, &tpg_param, TPSA_TP_STATE_WAIT_VERIFY) != 0) {
+    if (uvs_update_target_vtp_tpg(ctx, msg, location, &tpg_param, UVS_TP_STATE_WAIT_VERIFY, &tp_msg_ctx.src.ip) != 0) {
         res = -1;
         goto free_cfg;
+    }
+
+    if (!final_share_mode) {
+        (void)tpsa_update_tpg_tp_state(&tp_msg_ctx, ctx->table_ctx, UVS_TP_STATE_WAIT_VERIFY,
+                                       final_share_mode);
     }
 
     resp = tpsa_sock_init_create_resp(msg, &init_resp_param);
@@ -2847,33 +3101,21 @@ remove_tpg_entry:
     }
 destory_target_tpg:
     if (res != 0 && status <= TPSA_TPG_LOOKUP_NULL) {
-        tpsa_ioctl_cmd_destroy_tpg(cfg, &sip_entry.addr, tpg_info.tpgn,
-            &cfg->cmd.create_target_tpg.ta_data);
-        (void)tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg);
-        uvs_rmv_tpg_state_entry(ctx->table_ctx, tpg_info.tpgn, &sip_entry.addr);
+        destroy_tpg_error_process(&tp_msg_ctx.src.ip, ctx->table_ctx, &tpg_info, TPG_STATE_DEL);
+        uvs_cmd_destroy_tpg(ctx, &tp_msg_ctx, cfg, (int32_t)tpg_info.tpgn);
     }
 free_cfg:
+    free(cfg);
+EXIT:
     if (res != 0) {
         uvs_cal_multi_tp_statistic(msg->content.req.dev_name, msg->trans_mode,
             UVS_TP_OPENING_FAIL_STATE, msg->content.req.tpg_cfg.tp_cnt);
-    }
-    free(cfg);
-    return res;
-}
-
-int uvs_handle_create_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
-{
-    int ret = 0;
-    ret = uvs_create_vtp_req(ctx, msg);
-    if (ret != 0) {
-        uvs_cal_multi_tp_statistic(msg->content.req.dev_name, msg->trans_mode,
-            UVS_TP_OPENING_FAIL_STATE, msg->content.req.tpg_cfg.tp_cnt);
-        TPSA_LOG_INFO("create vtp req failed src eid " EID_FMT " sjetty: %u dst eid " EID_FMT " djetty: %u",
-            EID_ARGS(msg->local_eid), msg->local_jetty, EID_ARGS(msg->peer_eid), msg->peer_jetty);
+        TPSA_LOG_ERR("create vtp req failed src eid " EID_FMT " sjetty: %u dst eid " EID_FMT " djetty: %u\
+            retry_num_left: %hu.\n", EID_ARGS(msg->local_eid), msg->local_jetty, EID_ARGS(msg->peer_eid),
+            msg->peer_jetty, retry_num_left);
         (void)tpsa_send_create_fail_resp(ctx, msg, &msg->src_uvs_ip);
     }
-
-    return ret;
+    return res;
 }
 
 static int tpsa_refresh_rm_wait_table(tpsa_tpg_table_index_t *tpg_idx, tpsa_vtp_table_param_t *vtp_table_data,
@@ -3004,7 +3246,7 @@ int uvs_get_tp_msg_ctx_local_site(tpsa_sock_msg_t *msg, vport_key_t *vport_key, 
     }
 
     if (tpsa_lookup_vport_param_with_eid_idx(&vport_ctx->key, &table_ctx->vport_table,
-        eid_idx, &vport_ctx->param) < 0) {
+        eid_idx, &vport_ctx->param, &tp_msg_ctx->lm_ctx) < 0) {
         TPSA_LOG_ERR("Can not find vport_table by key dev_name:%s, fe_idx:%u",
             vport_ctx->key.tpf_name, vport_ctx->key.fe_idx);
         return -1;
@@ -3026,12 +3268,11 @@ int uvs_get_tp_msg_ctx_local_site(tpsa_sock_msg_t *msg, vport_key_t *vport_key, 
     tp_msg_ctx->src.ip = sip_entry.addr;
     tp_msg_ctx->src.jetty_id = msg->local_jetty;
 
+    (void)tpsa_lookup_dip_table(&table_ctx->dip_table, msg->peer_eid,
+        msg->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip);
     if (msg->live_migrate) {
-        tp_msg_ctx->dst.ip = msg->sip;
+        uvs_lm_set_dip_info(&tp_msg_ctx->dst.ip, &msg->sip);
         tp_msg_ctx->peer.uvs_ip = msg->src_uvs_ip;
-    } else {
-        tpsa_lookup_dip_table(&table_ctx->dip_table, msg->peer_eid,
-            msg->upi, &tp_msg_ctx->peer.uvs_ip, &tp_msg_ctx->dst.ip);
     }
     tp_msg_ctx->dst.eid = msg->peer_eid;
     tp_msg_ctx->dst.jetty_id = msg->peer_jetty;
@@ -3039,89 +3280,8 @@ int uvs_get_tp_msg_ctx_local_site(tpsa_sock_msg_t *msg, vport_key_t *vport_key, 
     return 0;
 }
 
-static int uvs_resp_map_vtp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx,
-    tpsa_create_param_t *cparam, uint32_t *vtpn)
-{
-    int res = 0;
-    tpsa_tpg_table_index_t tpg_idx;
-    tpsa_vtp_table_param_t vtp_table_data;
-    tpsa_tpg_info_t tpg_param = {0};
-
-    tpg_param.tp_cnt = msg->content.resp.tpg_cfg.tp_cnt;
-    for (uint32_t i = 0; i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
-        tpg_param.tp[i].tpn = msg->content.resp.tp_param.uniq[i].peer_tpn;
-        tpg_param.tp[i].tp_state = TPSA_TP_STATE_RTS;
-    }
-    tpg_param.tpgn = msg->local_tpgn;
-
-    if (msg->content.resp.ta_data.trans_type == TPSA_TRANSPORT_UB) {
-        if (!msg->migrate_third) {
-            res = uvs_map_vtp(ctx->ioctl_ctx, cparam, msg->local_tpgn, &tp_msg_ctx->src.ip, vtpn);
-            if (res < 0) {
-                return res;
-            }
-
-            if (msg->content.resp.share_mode) {
-                if (uvs_table_update(*vtpn, msg->local_tpgn, TPSA_INITIATOR, msg, ctx->table_ctx,
-                    TPSA_TP_STATE_RTS) < 0) {
-                    TPSA_LOG_ERR("Fail to update vtp and tpg table when finish receive");
-                    res = -1;
-                    goto free_unmap_vtp;
-                }
-            } else {
-                if (tpsa_update_rm_vtp_table(msg, TPSA_INITIATOR, *vtpn, msg->local_tpgn,
-                    ctx->table_ctx, &tpg_param) < 0) {
-                    TPSA_LOG_ERR("Fail to update rm vtp table");
-                    res = -1;
-                    goto free_unmap_vtp;
-                }
-            }
-        }
-    }
-
-    /* Wakeup wait table when initiator finish create */
-    tpg_idx.dip = tp_msg_ctx->dst.ip;
-    tpg_idx.local_eid = msg->local_eid;
-    tpg_idx.peer_eid = msg->peer_eid;
-    tpg_idx.ljetty_id = msg->local_jetty;
-    tpg_idx.djetty_id = msg->peer_jetty;
-    tpg_idx.isLoopback = false;
-    tpg_idx.upi = msg->upi;
-    tpg_idx.trans_mode = msg->trans_mode;
-    tpg_idx.sig_loop = uvs_is_sig_loop(msg->trans_mode, &tp_msg_ctx->src, &tp_msg_ctx->dst);
-    tpg_idx.sip = tp_msg_ctx->src.ip;
-    tpg_idx.tp_cnt = msg->content.resp.tpg_cfg.tp_cnt;
-
-    vtp_table_data.location = TPSA_INITIATOR;
-    vtp_table_data.vtpn = UINT32_MAX;
-    vtp_table_data.tpgn = msg->local_tpgn;
-    vtp_table_data.valid = true;
-    vtp_table_data.local_eid = msg->local_eid;
-    vtp_table_data.local_jetty = msg->local_jetty;
-    vtp_table_data.eid_index = 0; /* Need to fix */
-    vtp_table_data.upi = msg->upi;
-    vtp_table_data.share_mode = msg->content.resp.share_mode;
-
-    if (msg->content.resp.ta_data.trans_type == TPSA_TRANSPORT_UB) {
-        res = tpsa_refresh_wait_table(&tpg_idx, &vtp_table_data, ctx);
-        if (res < 0) {
-            TPSA_LOG_ERR("Failed to refresh wait table when finish\n");
-        }
-    }
-
-    TPSA_LOG_INFO("Finish Create VTP, TP and PEER all change to RTS.\n");
-    return 0;
-
-free_unmap_vtp:
-    if (msg->content.resp.ta_data.trans_type == TPSA_TRANSPORT_UB) {
-        uvs_unmap_vtp(ctx->ioctl_ctx, cparam, &tp_msg_ctx->src.ip);
-    }
-
-    return res;
-}
-
 static bool tpsa_resp_need_modify(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
-    tpsa_sock_msg_t *msg, vport_key_t *vport_key)
+    tpsa_sock_msg_t *msg)
 {
     tpsa_tpg_table_index_t tpg_idx;
     tpsa_tpg_info_t tpsa_tpg_info;
@@ -3152,12 +3312,175 @@ static bool tpsa_resp_need_modify(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
     }
     /* tpg already change to rts in resp */
     if (ret == TPSA_TPG_LOOKUP_EXIST &&
-        ((tpsa_tpg_info.tp[0].tp_state == TPSA_TP_STATE_WAIT_VERIFY) ||
-        (tpsa_tpg_info.tp[0].tp_state == TPSA_TP_STATE_RTS))) {
+        ((tpsa_tpg_info.tp[0].tp_state == UVS_TP_STATE_WAIT_VERIFY) ||
+        (tpsa_tpg_info.tp[0].tp_state == UVS_TP_STATE_RTS))) {
         return false;
     }
 
     return true;
+}
+
+static int uvs_resp_map_vtp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx,
+    tpsa_create_param_t *cparam, uint32_t *vtpn)
+{
+    int res = 0;
+    bool need_modify = true;
+    tpsa_tpg_table_index_t tpg_idx;
+    tpsa_vtp_table_param_t vtp_table_data;
+    tpsa_tpg_info_t tpg_param = {0};
+    tpsa_ioctl_cfg_t *cfg = NULL;
+    tpsa_create_resp_t *resp = &msg->content.resp;
+    bool share_mode = msg->content.resp.share_mode;
+
+    tpg_param.tp_cnt = resp->tpg_cfg.tp_cnt;
+    for (uint32_t i = 0; i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
+        tpg_param.tp[i].tpn = resp->tp_param.uniq[i].peer_tpn;
+        tpg_param.tp[i].tp_state = UVS_TP_STATE_RTS;
+    }
+    tpg_param.tpgn = msg->local_tpgn;
+
+    cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
+    if (cfg == NULL) {
+        return -ENOMEM;
+    }
+
+    need_modify = tpsa_resp_need_modify(ctx, tp_msg_ctx, msg);
+    if (!msg->migrate_third) {
+        /* tpg not in rts state, modify tpg and map vtp */
+        if (need_modify) {
+            tpsa_ioctl_cmd_modify_tpg_map_vtp(cfg, msg, &tp_msg_ctx->src.ip, cparam,
+                &tp_msg_ctx->vport_ctx.param.tp_cfg);
+            res = tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg);
+            *vtpn = cfg->cmd.modify_tpg_map_vtp.out.vtpn;
+        } else {
+            res = uvs_map_vtp(ctx->ioctl_ctx, cparam, msg->local_tpgn, &tp_msg_ctx->src.ip, vtpn);
+        }
+
+        if (res < 0) {
+            goto out;
+        }
+
+        if (share_mode) {
+            if (uvs_table_update(*vtpn, msg->local_tpgn, TPSA_INITIATOR, msg, ctx->table_ctx,
+                UVS_TP_STATE_RTS, &tp_msg_ctx->src.ip) < 0) {
+                TPSA_LOG_ERR("Fail to update vtp and tpg table when finish receive");
+                res = -1;
+                goto out;
+            }
+        } else {
+            if (tpsa_update_rm_vtp_table(msg, TPSA_INITIATOR, *vtpn, msg->local_tpgn,
+                ctx->table_ctx, &tpg_param) < 0) {
+                TPSA_LOG_ERR("Fail to update rm vtp table");
+                res = -1;
+                goto out;
+            }
+
+            (void)tpsa_update_tpg_tp_state(tp_msg_ctx, ctx->table_ctx, UVS_TP_STATE_RTS, share_mode);
+        }
+    } else {
+        /* lm only need modify tpg */
+        if (need_modify) {
+            tpsa_ioctl_cmd_modify_tpg(cfg, msg, &tp_msg_ctx->src.ip);
+            if (tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg) != 0) {
+                TPSA_LOG_ERR("Fail to ioctl to modify tpg in worker");
+                res = -1;
+                goto out;
+            }
+        }
+
+        (void)tpsa_update_tpg_tp_state(tp_msg_ctx, ctx->table_ctx, UVS_TP_STATE_RTS, share_mode);
+    }
+
+    TPSA_LOG_INFO("Finish IOCTL to modify tpg in initiator.\n");
+    TPSA_LOG_INFO("resp tp_cnt is %d", resp->tpg_cfg.tp_cnt);
+    if (uvs_check_if_update_rm_tpg_tbl(tp_msg_ctx, msg->trans_mode, resp->tpg_cfg.tp_cnt)) {
+        if (uvs_update_rm_tpg_tbl(tp_msg_ctx, ctx, msg, resp->tpg_cfg.tp_cnt, true,
+            &tp_msg_ctx->src.ip, share_mode) != 0) {
+            res = -1;
+            goto out;
+        }
+    }
+
+    /* Wakeup wait table when initiator finish create */
+    tpg_idx.dip = tp_msg_ctx->dst.ip;
+    tpg_idx.local_eid = msg->local_eid;
+    tpg_idx.peer_eid = msg->peer_eid;
+    tpg_idx.ljetty_id = msg->local_jetty;
+    tpg_idx.djetty_id = msg->peer_jetty;
+    tpg_idx.isLoopback = false;
+    tpg_idx.upi = msg->upi;
+    tpg_idx.trans_mode = msg->trans_mode;
+    tpg_idx.sig_loop = uvs_is_sig_loop(msg->trans_mode, &tp_msg_ctx->src, &tp_msg_ctx->dst);
+    tpg_idx.sip = tp_msg_ctx->src.ip;
+    tpg_idx.tp_cnt = resp->tpg_cfg.tp_cnt;
+
+    vtp_table_data.location = TPSA_INITIATOR;
+    vtp_table_data.vtpn = UINT32_MAX;
+    vtp_table_data.tpgn = msg->local_tpgn;
+    vtp_table_data.valid = true;
+    vtp_table_data.local_eid = msg->local_eid;
+    vtp_table_data.local_jetty = msg->local_jetty;
+    vtp_table_data.eid_index = 0; /* Need to fix */
+    vtp_table_data.upi = msg->upi;
+    vtp_table_data.share_mode = resp->share_mode;
+
+    res = tpsa_refresh_wait_table(&tpg_idx, &vtp_table_data, ctx);
+    if (res < 0) {
+        TPSA_LOG_ERR("Failed to refresh wait table when finish\n");
+        res = 0;
+    }
+
+    TPSA_LOG_INFO("Finish Create VTP, TP and PEER all change to RTS.\n");
+
+out:
+    free(cfg);
+    return res;
+}
+
+static int uvs_resp_alpha_modify_tpg(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, uvs_tp_msg_ctx_t *tp_msg_ctx)
+{
+    tpsa_create_resp_t *resp = &msg->content.resp;
+    tpsa_ioctl_cfg_t *cfg = NULL;
+    bool need_modify = true;
+
+    /* alpha just modify tpg state */
+    need_modify = tpsa_resp_need_modify(ctx, tp_msg_ctx, msg);
+    if (need_modify) {
+        cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
+        if (cfg == NULL) {
+            return -ENOMEM;
+        }
+
+        tpsa_ioctl_cmd_modify_tpg(cfg, msg, &tp_msg_ctx->src.ip);
+        if (tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg) != 0) {
+            TPSA_LOG_ERR("Fail to ioctl to modify tpg in worker");
+            free(cfg);
+            return -1;
+        }
+        TPSA_LOG_INFO("Finish IOCTL to modify tpg in initiator.\n");
+        TPSA_LOG_INFO("resp tp_cnt is %d", resp->tpg_cfg.tp_cnt);
+        if (uvs_check_if_update_rm_tpg_tbl(tp_msg_ctx, msg->trans_mode, resp->tpg_cfg.tp_cnt)) {
+            if (uvs_update_rm_tpg_tbl(tp_msg_ctx, ctx, msg, resp->tpg_cfg.tp_cnt, true,
+                &tp_msg_ctx->src.ip, true) != 0) {
+                free(cfg);
+                return -1;
+            }
+        }
+
+        (void)tpsa_update_tpg_tp_state(tp_msg_ctx, ctx->table_ctx, UVS_TP_STATE_RTS, true);
+        free(cfg);
+    }
+
+    return 0;
+}
+
+static int uvs_check_create_vtp_resp_msg(tpsa_create_resp_t *resp)
+{
+    if (resp->tpg_cfg.tp_cnt > TPSA_MAX_TP_CNT_IN_GRP) {
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 int uvs_create_vtp_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
@@ -3165,13 +3488,22 @@ int uvs_create_vtp_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     int res = 0;
     tpsa_create_param_t cparam;
     tpsa_create_resp_t *resp = &msg->content.resp;
-    tpsa_ioctl_cfg_t *cfg = NULL;
     vport_key_t vport_key = {0};
     uint32_t vtpn = UINT32_MAX;
-    bool need_modify = true;
 
     TPSA_LOG_INFO("src eid " EID_FMT " sjetty: %u dst eid " EID_FMT " djetty: %u\n",
                   EID_ARGS(msg->local_eid), msg->local_jetty, EID_ARGS(msg->peer_eid), msg->peer_jetty);
+
+    /* Target sends normal response with version it supports.
+     * Or general ack is sent, which is handled in "uvs_handle_general_ack".
+     * Thus, just record the version here. */
+    (void)uvs_proto_nego_for_rsp(ctx->sock_ctx, ctx->fd, (struct uvs_base_header *)msg);
+
+    res = uvs_check_create_vtp_resp_msg(resp);
+    if (res != 0) {
+        TPSA_LOG_ERR("Fail to check msg param");
+        return res;
+    }
 
     vport_key.fe_idx = resp->src_function_id;
     memcpy(vport_key.tpf_name, resp->dev_name, UVS_MAX_DEV_NAME);
@@ -3182,37 +3514,6 @@ int uvs_create_vtp_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         res = -1;
         goto resp_tp_opening_fail;
     }
-
-    need_modify = tpsa_resp_need_modify(ctx, &tp_msg_ctx, msg, &vport_key);
-    /* IOCTL to create vtp */
-    if (need_modify) {
-        cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
-        if (cfg == NULL) {
-            res = -ENOMEM;
-            goto roll_back_vtp;
-        }
-
-        tpsa_ioctl_cmd_modify_tpg(cfg, msg, &tp_msg_ctx.src.ip);
-        if (tpsa_ioctl(ctx->ioctl_ctx->ubcore_fd, cfg) != 0) {
-            TPSA_LOG_ERR("Fail to ioctl to modify tpg in worker");
-            free(cfg);
-            res = -1;
-            goto roll_back_vtp;
-        }
-        TPSA_LOG_INFO("Finish IOCTL to modify tpg in initiator.\n");
-        TPSA_LOG_INFO("resp tp_cnt is %d", resp->tpg_cfg.tp_cnt);
-        if (uvs_check_if_update_rm_tpg_tbl(&tp_msg_ctx, msg->trans_mode, resp->tpg_cfg.tp_cnt)) {
-            if (uvs_update_rm_tpg_tbl(&tp_msg_ctx, ctx, msg, resp->tpg_cfg.tp_cnt, true, &tp_msg_ctx.src.ip) != 0) {
-                free(cfg);
-                return -1;
-            }
-        }
-        free(cfg);
-    }
-    if (msg->trans_mode == TPSA_TP_RM) {
-        uvs_cal_tpg_statistic(resp->dev_name);
-    }
-    uvs_cal_multi_tp_statistic(resp->dev_name, msg->trans_mode, UVS_TP_SUCCESS_STATE, resp->tpg_cfg.tp_cnt);
 
     cparam.trans_mode = msg->trans_mode;
     cparam.local_eid = msg->local_eid;
@@ -3227,16 +3528,24 @@ int uvs_create_vtp_resp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     cparam.upi = msg->upi;
     cparam.share_mode = msg->content.resp.share_mode;
 
+    if (tp_msg_ctx.trans_type == TPSA_TRANSPORT_UB) {
+        res = uvs_resp_map_vtp(ctx, msg, &tp_msg_ctx, &cparam, &vtpn);
+    } else {
+        res = uvs_resp_alpha_modify_tpg(ctx, msg, &tp_msg_ctx);
+    }
+
+    if (res < 0) {
+        goto roll_back_vtp;
+    }
+    if (msg->trans_mode == TPSA_TP_RM) {
+        uvs_cal_tpg_statistic(resp->dev_name);
+    }
+    uvs_cal_multi_tp_statistic(resp->dev_name, msg->trans_mode, UVS_TP_SUCCESS_STATE, resp->tpg_cfg.tp_cnt);
     /* Construct ack packet */
     res = tpsa_sock_send_create_ack(ctx->sock_ctx, msg, &tp_msg_ctx.src.ip, &ctx->tpsa_attr, &tp_msg_ctx.peer.uvs_ip);
     if (res != 0) {
         TPSA_LOG_ERR("Failed to send create vtp ack in worker\n");
         res = -1;
-        goto roll_back_vtp;
-    }
-
-    res = uvs_resp_map_vtp(ctx, msg, &tp_msg_ctx, &cparam, &vtpn);
-    if (res < 0) {
         goto roll_back_vtp;
     }
 
@@ -3297,6 +3606,7 @@ int uvs_create_vtp_ack(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
     }
 
     /* Wakeup wait table when initiator finish create */
+    tpg_idx.sip = tp_msg_ctx.src.ip;
     tpg_idx.dip = tp_msg_ctx.dst.ip;
     tpg_idx.local_eid = msg->peer_eid;
     tpg_idx.peer_eid = msg->local_eid;
@@ -3327,17 +3637,15 @@ int uvs_create_vtp_ack(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         goto free_cfg;
     }
 
-    if (tpsa_update_tpg_tp_state(msg, TPSA_TARGET, ctx->table_ctx, TPSA_TP_STATE_RTS) != 0) {
-        TPSA_LOG_ERR("Failed to update peer tpg tp state \n");
-        res = -1;
-        goto free_cfg;
-    }
-    if (msg->trans_mode == TPSA_TP_RM) {
-        uvs_cal_tpg_statistic(msg->content.ack.dev_name);
-    }
-    uvs_cal_multi_tp_statistic(msg->content.ack.dev_name, msg->content.ack.tpg_cfg.trans_mode,
-        UVS_TP_SUCCESS_STATE, msg->content.ack.tpg_cfg.tp_cnt);
+    (void)tpsa_update_tpg_tp_state(&tp_msg_ctx, ctx->table_ctx, UVS_TP_STATE_RTS, msg->content.ack.share_mode);
 
+    if (msg->content.ack.is_target) {
+        if (msg->trans_mode == TPSA_TP_RM) {
+            uvs_cal_tpg_statistic(msg->content.ack.dev_name);
+        }
+        uvs_cal_multi_tp_statistic(msg->content.ack.dev_name, msg->content.ack.tpg_cfg.trans_mode,
+            UVS_TP_SUCCESS_STATE, msg->content.ack.tpg_cfg.tp_cnt);
+    }
     TPSA_LOG_INFO("Finish socket ack message in target.\n");
 
 free_cfg:
@@ -3345,7 +3653,7 @@ free_cfg:
         free(cfg);
     }
 peer_tp_opening_fail:
-    if (res < 0) {
+    if (res < 0 && msg->content.ack.is_target) {
         uvs_cal_multi_tp_statistic(msg->content.ack.dev_name,
             msg->content.ack.tpg_cfg.trans_mode, UVS_TP_OPENING_FAIL_STATE, msg->content.ack.tpg_cfg.tp_cnt);
     }
@@ -3404,9 +3712,27 @@ static void uvs_change_tpg_to_error(uvs_ctx_t *ctx, tpsa_ioctl_cfg_t *cfg, uvs_t
     return;
 }
 
+/* when tp modify to RTR, change TP to ERR, before destroy TPG */
+int uvs_cmd_destroy_tpg(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_ioctl_cfg_t *cfg, int32_t tpgn)
+{
+    bool tp_fast_destroy = tpsa_get_tp_fast_destroy();
+    if (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_UB && tpgn >= 0 && !tp_fast_destroy) {
+        uvs_change_tpg_to_error(ctx, cfg, tp_msg_ctx, tpgn);
+    } else if (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_HNS_UB ||
+            tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_IB ||
+            (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_UB && tpgn >= 0 && tp_fast_destroy)) {
+        if (uvs_ioctl_destroy_tpg(cfg, tp_msg_ctx, tpgn, ctx, &tp_msg_ctx->ta_data) != 0) {
+            return -1;
+        }
+        uvs_rmv_tpg_state_entry(ctx->table_ctx, (uint32_t)tpgn, &tp_msg_ctx->src.ip);
+    }
+    return 0;
+}
+
 int uvs_destroy_vtp_and_tpg(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, int32_t vtpn, int32_t tpgn, uint32_t location)
 {
   /* IOCTL to destroy vtp and tpg */
+    TPSA_LOG_INFO("uvs destroy vtpn:%d, tpgn%d, location:%u.\n", vtpn, tpgn, location);
     tpsa_ioctl_cfg_t *cfg = (tpsa_ioctl_cfg_t *)calloc(1, sizeof(tpsa_ioctl_cfg_t));
     if (cfg == NULL) {
         return -ENOMEM;
@@ -3425,26 +3751,14 @@ int uvs_destroy_vtp_and_tpg(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, int32_
         (void)memset(cfg, 0, sizeof(tpsa_ioctl_cfg_t));
     }
 
-    bool tp_fast_destroy = tpsa_get_tp_fast_destroy();
-    if (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_UB && tpgn >= 0 && !tp_fast_destroy) {
-        uvs_change_tpg_to_error(ctx, cfg, tp_msg_ctx, tpgn);
-        /* TODO: checkout cfg->cmd.destroy_tpg.out */
-    } else if (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_IB ||
-            (tp_msg_ctx->ta_data.trans_type == TPSA_TRANSPORT_UB && tpgn >= 0 && tp_fast_destroy)) {
-        if (uvs_ioctl_destroy_tpg(cfg, tp_msg_ctx, tpgn, ctx, &tp_msg_ctx->ta_data) != 0) {
-            free(cfg);
-            return -1;
-        }
-        uvs_rmv_tpg_state_entry(ctx->table_ctx, (uint32_t)tpgn, &tp_msg_ctx->src.ip);
-    }
-    free(cfg);
+    int ret = uvs_cmd_destroy_tpg(ctx, tp_msg_ctx, cfg, tpgn);
 
-    return 0;
+    free(cfg);
+    return ret;
 }
 
 int tpsa_sock_send_destroy_req(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
-                               uvs_direction_t direction, bool live_migrate,
-                               tpsa_resp_id_t *resp_id)
+    uvs_direction_t direction, tpsa_resp_id_t *resp_id)
 {
     int ret = 0;
     tpsa_sock_msg_t *dmsg = (tpsa_sock_msg_t *)calloc(1, sizeof(tpsa_sock_msg_t));
@@ -3455,16 +3769,18 @@ int tpsa_sock_send_destroy_req(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx,
     dmsg->msg_type = TPSA_DESTROY_REQ;
     dmsg->local_eid = tp_msg_ctx->src.eid;
     dmsg->peer_eid = tp_msg_ctx->dst.eid;
+    dmsg->live_migrate = (tp_msg_ctx->lm_ctx.location != LM_NOT_SET);
     dmsg->local_jetty = tp_msg_ctx->src.jetty_id;
     dmsg->peer_jetty = tp_msg_ctx->dst.jetty_id;
     dmsg->trans_mode = tp_msg_ctx->trans_mode;
     dmsg->peer_tpgn = 0;
     dmsg->upi = tp_msg_ctx->upi;
-    dmsg->live_migrate = live_migrate;
     dmsg->sip = tp_msg_ctx->src.ip;
     dmsg->src_uvs_ip = ctx->tpsa_attr.server_ip;
 
     dmsg->content.dreq.direction = direction;
+    dmsg->content.dreq.location = tp_msg_ctx->lm_ctx.location;
+    dmsg->content.dreq.is_rollback = tp_msg_ctx->lm_ctx.is_rollback;
     if (resp_id != NULL) {
         dmsg->content.dreq.resp_id = *resp_id;
     }
@@ -3498,6 +3814,7 @@ static void uvs_table_init_destory_vtp_idx(uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_
     }
 
     tpg_idx->dip = tp_msg_ctx->dst.ip;
+    tpg_idx->peer_uvs_ip = tp_msg_ctx->peer.uvs_ip;
     tpg_idx->local_eid = tp_msg_ctx->src.eid;
     tpg_idx->peer_eid = tp_msg_ctx->dst.eid;
     tpg_idx->ljetty_id = tp_msg_ctx->src.jetty_id;
@@ -3522,6 +3839,18 @@ static void uvs_table_init_destory_vtp_idx(uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_
     vtp_idx->share_mode = true; /* share mode is on by default */
 }
 
+
+static void uvs_lm_add_rm_delete_vtp_node(uvs_ctx_t *ctx, tpsa_vtp_table_index_t *vtp_idx,
+    uvs_tp_msg_ctx_t *tp_msg_ctx)
+{
+    rm_vtp_table_entry_t rm_entry = {0};
+    rm_entry.key.src_eid = vtp_idx->local_eid;
+    rm_entry.key.dst_eid = vtp_idx->peer_eid;
+    rm_entry.location = vtp_idx->location;
+
+    uvs_lm_add_delete_vtp_node(ctx, tp_msg_ctx, (void *)&rm_entry);
+}
+
 int uvs_destroy_rm_rc_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_t location, int32_t *vtpn, int32_t *tpgn)
 {
     int ret = 0;
@@ -3536,6 +3865,9 @@ int uvs_destroy_rm_rc_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_t
         uvs_table_init_destory_vtp_idx(tp_msg_ctx, location, &tpg_idx, &vtp_idx);
         TPSA_LOG_INFO("location is %u when remove vtp and tpg\n", (uint32_t)location);
         uvs_table_remove_vtp_tpg(vtpn, tpgn, &tpg_idx, &vtp_idx, ctx->table_ctx);
+        if (tp_msg_ctx->trans_mode == TPSA_TP_RM && vtp_idx.migration_status) {
+            uvs_lm_add_rm_delete_vtp_node(ctx, &vtp_idx, tp_msg_ctx);
+        }
         if ((*vtpn == TPSA_REMOVE_INVALID) || (*tpgn == TPSA_REMOVE_INVALID)) {
             TPSA_LOG_ERR("faile to destroy, vtpn:%d, tpgn:%d location: %d \n", *vtpn, *tpgn, location);
         }
@@ -3543,22 +3875,34 @@ int uvs_destroy_rm_rc_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, uint32_t
         if (*vtpn == TPSA_REMOVE_SERVER && location == TPSA_TARGET) {
             TPSA_LOG_INFO("Found vtpn when destroy TARGET vtp. Remove it from table (No IOCTL)\n");
         }
+
+        uvs_net_addr_t empty_ip = {0};
+        if (memcmp(&tp_msg_ctx->peer.uvs_ip, &empty_ip, sizeof(empty_ip)) == 0) {
+            tp_msg_ctx->dst.ip = tpg_idx.dip;
+            tp_msg_ctx->peer.uvs_ip = tpg_idx.peer_uvs_ip;
+        }
         TPSA_LOG_INFO("now vtpn: %d, tpgn: %d\n", *vtpn, *tpgn);
     }
 
-    uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
-        tp_msg_ctx->trans_mode, UVS_TP_CLOSING_STATE, tpg_idx.tp_cnt);
+    if (*tpgn >= 0) {
+        uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
+            tp_msg_ctx->trans_mode, UVS_TP_CLOSING_STATE, tpg_idx.tp_cnt);
+    }
     /* IOCTL to destroy vtp and tpg */
     ret = uvs_destroy_vtp_and_tpg(ctx, tp_msg_ctx, *vtpn, *tpgn, location);
     if (ret != 0) {
         TPSA_LOG_ERR("destroy vtp or tpg failed on the %d side. ret :%d\n", location, ret);
-        uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
-            tp_msg_ctx->trans_mode, UVS_TP_CLOSING_FAIL_STATE, tpg_idx.tp_cnt);
+        if (*tpgn >= 0) {
+            uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
+                tp_msg_ctx->trans_mode, UVS_TP_CLOSING_FAIL_STATE, tpg_idx.tp_cnt);
+        }
         return ret;
     }
-    uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
-        tp_msg_ctx->trans_mode, UVS_TP_DESTROY_STATE, tpg_idx.tp_cnt);
 
+    if (*tpgn >= 0) {
+        uvs_cal_multi_tp_statistic(tp_msg_ctx->vport_ctx.key.tpf_name,
+            tp_msg_ctx->trans_mode, UVS_TP_DESTROY_STATE, tpg_idx.tp_cnt);
+    }
     return 0;
 }
 
@@ -3585,7 +3929,7 @@ int uvs_destroy_initial_vtp(uvs_ctx_t *ctx, uvs_tp_msg_ctx_t *tp_msg_ctx, tpsa_r
 
     /* Send socket msg to notify server to destroy vtp */
     if (!is_loopback) {
-        ret = tpsa_sock_send_destroy_req(ctx, tp_msg_ctx, TPSA_FROM_CLIENT_TO_SERVER, false, nl_resp_id);
+        ret = tpsa_sock_send_destroy_req(ctx, tp_msg_ctx, TPSA_FROM_CLIENT_TO_SERVER, nl_resp_id);
         if (ret != 0) {
             TPSA_LOG_ERR("Failed to send socket msg to destroy vtp\n");
         }
@@ -3622,16 +3966,15 @@ int uvs_destroy_vtp(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg)
 {
     tpsa_nl_req_host_t *nlmsg = (tpsa_nl_req_host_t *)msg->payload;
     tpsa_nl_destroy_vtp_req_t *nlreq = (tpsa_nl_destroy_vtp_req_t *)nlmsg->req.data;
-    int32_t res = -1;
-
     uvs_tp_msg_ctx_t tp_msg_ctx = {0};
     tpsa_resp_id_t nl_resp_id;
+    int32_t res = -1;
 
     uvs_init_resp_id(msg, &nl_resp_id);
     res = uvs_get_tp_msg_ctx(ctx, nlreq, nlmsg->src_fe_idx, &tp_msg_ctx);
     if (res < 0) {
         TPSA_LOG_ERR("Fail to get msg ctx");
-        return -1;
+        return uvs_response_destroy_fast(msg, ctx->genl_ctx, TPSA_NL_RESP_FAIL);
     }
     TPSA_LOG_INFO("destroy vtp seid " EID_FMT " sjetty: %u, sip: " EID_FMT ", deid " EID_FMT ", "
                   "djetty: %u, dip: " EID_FMT "\n",
@@ -3680,6 +4023,7 @@ int uvs_lm_destroy_vtp_in_migrating(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vpo
     if (lm_vtp_entry->trans_mode == TPSA_TP_RM) {
         location = lm_vtp_entry->content.rm_entry->location;
         rm_tpg_table_key_t key = {
+            .sip = tp_msg_ctx->src.ip.net_addr,
             .dip = tp_msg_ctx->dst.ip.net_addr,
         };
         tpg_idx.trans_mode = TPSA_TP_RM;
@@ -3688,7 +4032,7 @@ int uvs_lm_destroy_vtp_in_migrating(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vpo
             TPSA_LOG_ERR("Failed to remove rm tpg table when destroy vtp, ret:%d\n", ret);
         }
         if (ret == 0 && !tpsa_get_tp_fast_destroy()) {
-            destroy_tpg_error_process(&tpg_idx, ctx->table_ctx, &find_tpg_info, TPG_STATE_DEL);
+            destroy_tpg_error_process(&tpg_idx.sip, ctx->table_ctx, &find_tpg_info, TPG_STATE_DEL);
         }
     } else {
         location = lm_vtp_entry->content.rc_entry->location;
@@ -3709,7 +4053,7 @@ int uvs_lm_destroy_vtp_in_migrating(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vpo
             find_tpg_info.tp_cnt = tpg_entry->tp_cnt;
             (void)memcpy(find_tpg_info.tp,
                 tpg_entry->vice_tpn, TPSA_MAX_TP_CNT_IN_GRP * sizeof(tp_entry_t));
-            destroy_tpg_error_process(&tpg_idx, ctx->table_ctx, &find_tpg_info, TPG_STATE_DEL);
+            destroy_tpg_error_process(&tpg_idx.sip, ctx->table_ctx, &find_tpg_info, TPG_STATE_DEL);
         }
     }
 
@@ -3800,9 +4144,15 @@ int uvs_handle_destroy_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
                   tp_msg_ctx.vport_ctx.key.tpf_name, tp_msg_ctx.vport_ctx.key.fe_idx,
                   EID_ARGS(tp_msg_ctx.src.ip.net_addr), EID_ARGS(tp_msg_ctx.dst.ip.net_addr));
 
-    if (msg->live_migrate == true) {
+    if (msg->live_migrate) {
         /* In lm scenes, destroy target vtp */
-        return uvs_destroy_target_vtp_for_lm(ctx, &tp_msg_ctx);
+        tp_msg_ctx.lm_ctx.is_rollback = msg->content.dreq.is_rollback;
+        tp_msg_ctx.lm_ctx.location = msg->content.dreq.location;
+        tp_msg_ctx.lm_ctx.direction = msg->content.dreq.direction;
+        if (uvs_destroy_target_vtp_for_lm(ctx, &tp_msg_ctx) != 0) {
+            return -1;
+        }
+        goto resp_finish;
     }
 
     if (msg->content.dreq.direction == TPSA_FROM_SERVER_TO_CLIENT) {
@@ -3814,6 +4164,7 @@ int uvs_handle_destroy_vtp_req(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg)
         return -1;
     }
 
+resp_finish:
     if (msg->content.dreq.resp_id.is_need_resp == false) {
         TPSA_LOG_INFO("Destroy vtp Success from target side\n");
         return 0;

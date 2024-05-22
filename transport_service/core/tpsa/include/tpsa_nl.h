@@ -19,6 +19,7 @@
 #include "tpsa_log.h"
 #include "tpsa_table.h"
 #include "tpsa_types.h"
+#include "uvs_protocol.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +28,7 @@ extern "C" {
 #define TPSA_NL_MSG_BUF_LEN 1024
 #define TPSA_NETLINK_UBCORE_TYPE 24
 #define TPSA_NET_LINK_PORT 100
-#define TPSA_LM_REQ_SIZE 15
+#define TPSA_LM_REQ_SIZE 16
 #define TPSA_MAX_SOCKET_MSG_LEN (1024 * 3)
 
 // Must be the same as UBCORE_MSG_RESP_XXX
@@ -38,8 +39,7 @@ extern "C" {
 #define TPSA_NL_RESP_SUCCESS 0
 
 typedef enum tpsa_nlmsg_type {
-    TPSA_NL_SHOW_UTP = 1,
-	TPSA_NL_QUERY_STATS,
+    TPSA_NL_QUERY_STATS = 1,
 	TPSA_NL_QUERY_RES,
 	TPSA_NL_ADD_EID,
 	TPSA_NL_DEL_EID,
@@ -82,7 +82,9 @@ typedef enum tpsa_sock_type {
     TPSA_TP_ERROR_ACK,
     TPSA_LM_NOTIFY,
     TPSA_LM_ROLLBACK_REQ,
-    TPSA_LM_TRANSFER
+    TPSA_LM_TRANSFER,
+    TPSA_LM_NOTIFY_THIRD,
+    TPSA_GENERAL_ACK
 } tpsa_sock_type_t;
 
 typedef struct tpsa_nl_query_tp_req {
@@ -209,14 +211,15 @@ typedef struct tpsa_netlink_msg {
     struct nlmsghdr hdr;
     uint32_t nlmsg_seq;
     tpsa_nlmsg_type_t msg_type;
-    tpsa_transport_type_t transport_type;
     urma_eid_t src_eid;
     urma_eid_t dst_eid;
+    tpsa_transport_type_t transport_type;
     uint32_t payload_len;
     uint8_t payload[TPSA_NL_MSG_BUF_LEN];
-} __attribute__((packed)) tpsa_nl_msg_t;
+} tpsa_nl_msg_t;
 
 struct tpsa_lm_req_entry {
+    bool lm_need_del;
     uint32_t location;
     tpsa_transport_mode_t trans_mode;
 
@@ -278,6 +281,7 @@ typedef struct tpsa_tp_error_msg {
 } tpsa_tp_error_msg_t;
 
 typedef struct tpsa_sock_msg {
+    struct uvs_base_header base;
     tpsa_sock_type_t msg_type;
 
     tpsa_transport_mode_t trans_mode;
@@ -375,8 +379,7 @@ tpsa_nl_msg_t *tpsa_nl_update_tpf_dev_info_resp(tpsa_nl_msg_t *req, tpsa_nl_upda
 
 tpsa_nl_msg_t *tpsa_nl_mig_msg_resp_fast(tpsa_nl_msg_t *req, tpsa_mig_resp_status_t status);
 
-tpsa_nl_msg_t *tpsa_nl_create_dicover_eid_resp(tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, uint32_t index,
-    bool virtualization);
+int tpsa_nl_create_dicover_eid_resp(tpsa_genl_ctx_t *genl_ctx, tpsa_nl_msg_t *req, tpsa_ueid_t *ueid, int ret);
 
 int tpsa_genl_init(tpsa_genl_ctx_t *genl_ctx);
 void tpsa_genl_uninit(struct nl_sock *sock);

@@ -53,6 +53,14 @@ int uvs_lm_handle_stop_proc_vtp_msg(uvs_ctx_t *ctx, tpsa_nl_msg_t *msg);
 int uvs_lm_start_transfer_create_msg(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg, vport_key_t *key);
 void uvs_lm_clean_up_resource(uvs_ctx_t *ctx);
 void uvs_lm_clean_vport(uvs_ctx_t *ctx, vport_key_t *vport_key);
+int uvs_lm_config_migentry(uvs_ctx_t *ctx, uvs_ueid_t *dueid, tpsa_mig_state_t status);
+int uvs_lm_rollback_process(tpsa_table_t *table_ctx, uvs_ueid_t *dueid, vport_key_t *vport_key);
+int uvs_lm_handle_dst_delete(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_key_t *vport_key,
+    tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
+void uvs_lm_set_dip_info(uvs_net_addr_info_t *dst, uvs_net_addr_info_t *src);
+int uvs_lm_handle_src_delete(uvs_ctx_t *ctx, tpsa_vtp_cfg_t *vtp_cfg, vport_key_t *vport_key,
+    tpsa_lm_vtp_entry_t *lm_vtp_entry, uvs_tp_msg_ctx_t *tp_msg_ctx);
+int uvs_lm_thrid_restore_vtp(uvs_ctx_t *ctx, tpsa_sock_msg_t *msg);
 
 #ifdef __cplusplus
 }

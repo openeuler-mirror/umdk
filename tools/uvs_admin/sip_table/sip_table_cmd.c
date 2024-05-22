@@ -122,7 +122,7 @@ static const uvs_admin_opt_usage_t g_sip_table_add_cmd_opt_usage[] = {
     {SIP_TABLE_OPT_PORT_LONG,           "used at the network layer, for the local UB device", true},
     {SIP_TABLE_OPT_NET_ADDR_TYPE_LONG,  "net_addr type ((ipv4: 0) | (ipv6:1))", true},
     {SIP_TABLE_OPT_PREFIX_LEN_LONG,     "prefix_len of net_addr", true},
-    {SIP_TABLE_OPT_MTU_LONG,            "mtu [256, 512, 1024, 2048, 4096, 8192]", true},
+    {SIP_TABLE_OPT_MTU_LONG,            "mtu [1024, 4096, 8192]", false},
 };
 
 static const uvs_admin_cmd_usage_t g_sip_table_add_cmd_usage = {
@@ -175,6 +175,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->sip_idx = num;
+        args->mask.bs.sip_idx = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_VLAN_LONG) && num <= MAX_VLAN_ID) {
         if (sip_table_input_range_check(num, 0, MAX_VLAN_ID) != 0) {
             (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
@@ -182,6 +183,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->vlan = (uint16_t)num;
+        args->mask.bs.vlan = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_PORT_LONG)) {
         if (sip_table_input_range_check(num, 0, UINT8_MAX) != 0) {
             (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
@@ -189,6 +191,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->port_id = (uint8_t)num;
+        args->mask.bs.port_id = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_NET_ADDR_TYPE_LONG) && num <= VALID_IS_IPV6_FLAG) {
         if (sip_table_input_range_check(num, 0, IS_IPV6_MAX) != 0) {
             (void)printf("ERR: invalid parameter range --%s %u; valid range = [%u, %u]\n",
@@ -196,6 +199,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->net_addr_type = (bool)num;
+        args->mask.bs.net_addr_type = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_PREFIX_LEN_LONG)) {
         uint32_t prefix_len_max;
         if (args->net_addr_type) {
@@ -210,6 +214,7 @@ static int sip_table_input_valid_num(uvs_admin_sip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->prefix_len = num;
+        args->mask.bs.prefix_len = 1;
     } else {
         (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
@@ -259,17 +264,23 @@ static int sip_table_input_valid_str(uvs_admin_sip_table_args_t *args, const cha
     int ret = 0;
     if (!strcmp(arg_name, SIP_TABLE_OPT_NET_ADDR_LONG)) {
         ret = str_to_eid(_optarg, (urma_eid_t *)&args->net_addr);
+        ret |= get_net_addr_type(_optarg, (urma_eid_t *)&args->net_addr,
+            &args->input_net_type);
+        args->mask.bs.net_addr = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_DEV_NAME_LONG)) {
         if (sip_table_input_str_range_check((uint32_t)UVS_ADMIN_MAX_DEV_NAME, (uint32_t)strlen(_optarg)) != 0) {
             (void)printf("ERR: invalid parameter range --%s %s; valid range = [%u, %u]\n",
                 arg_name, _optarg, 0, UVS_ADMIN_MAX_DEV_NAME);
             return -EINVAL;
         }
-        (void)strcpy(args->dev_name, _optarg);
+        (void)strncpy(args->dev_name, _optarg, UVS_ADMIN_MAX_DEV_NAME - 1);
+        args->mask.bs.dev_name = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_MAC_LONG)) {
         ret = parse_mac(_optarg, args->mac);
+        args->mask.bs.mac = 1;
     } else if (!strcmp(arg_name, SIP_TABLE_OPT_MTU_LONG)) {
         ret = parse_mtu(_optarg, &args->mtu);
+        args->mask.bs.mtu = 1;
     } else {
         ret = -EINVAL;
     }
@@ -345,7 +356,7 @@ static void uvs_admin_print_sip(uint32_t sip_idx, uvs_admin_sip_table_show_rsp_t
     (void)printf(UVS_ADMIN_SHOW_PREFIX);
     (void)printf("sip_idx                    : %u\n", sip_idx);
     (void)printf("dev_name                   : %s\n", show_rsp->dev_name);
-    (void)printf("eid                        : "EID_FMT"\n", EID_ARGS(show_rsp->net_addr));
+    (void)printf("net_addr                   : "EID_FMT"\n", EID_ARGS(show_rsp->net_addr));
     (void)printf("vlan                       : %u\n", show_rsp->vlan);
     (void)printf("mac                        : %s\n", mac_str);
     (void)printf("net_addr_type              : %s\n", show_rsp->net_addr_type ? "IPv6" : "IPv4");
@@ -357,6 +368,17 @@ static void uvs_admin_print_sip(uint32_t sip_idx, uvs_admin_sip_table_show_rsp_t
         (uint32_t)show_rsp->mtu, g_mtu_str[show_rsp->mtu]);
 }
 
+static int uvs_admin_sip_table_del_show_cmd_validation(uvs_admin_sip_table_args_t args)
+{
+    if (args.mask.bs.sip_idx == 0 || args.mask.bs.dev_name == 0) {
+        (void)printf("ERR: invalid parameter, must set sip_idx/dev_name, mask:0x%x\n",
+            args.mask.value);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 {
     int ret;
@@ -366,6 +388,11 @@ static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char buf[MAX_MSG_LEN] = {0};
 
     ret = sip_table_cmd_prep_args(ctx, g_sip_table_show_long_options, g_sip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_sip_table_del_show_cmd_validation(args);
     if (ret != 0) {
         return ret;
     }
@@ -400,6 +427,27 @@ static int32_t uvs_admin_sip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     return 0;
 }
 
+static int uvs_admin_sip_table_addcmd_validation(uvs_admin_sip_table_args_t args)
+{
+    if (args.mask.bs.net_addr == 0 || args.mask.bs.vlan == 0 ||
+        args.mask.bs.mac == 0 || args.mask.bs.dev_name == 0 || args.mask.bs.port_id == 0 ||
+        args.mask.bs.net_addr_type == 0 || args.mask.bs.prefix_len == 0) {
+        (void)printf("ERR: invalid parameter, must set net_addr/vlan/mac/dev_name/port_id/"
+            "net_addr_type/prefix_len, mask:0x%x\n", args.mask.value);
+        return -EINVAL;
+    }
+
+    if (args.net_addr_type != args.input_net_type) {
+        (void)printf("ERR: invalid parameter, --net_addr_type is %s "
+            "but input net_addr ip type is %s\n",
+            args.net_addr_type == UVS_ADMIN_NET_ADDR_TYPE_IPV4 ? "IPV4" : "IPV6",
+            args.input_net_type == UVS_ADMIN_NET_ADDR_TYPE_IPV4 ? "IPV4" : "IPV6");
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 {
     int ret;
@@ -409,6 +457,11 @@ static int32_t uvs_admin_sip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char buf[MAX_MSG_LEN] = {0};
 
     ret = sip_table_cmd_prep_args(ctx, g_sip_table_add_long_options, g_sip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_sip_table_addcmd_validation(args);
     if (ret != 0) {
         return ret;
     }
@@ -459,6 +512,11 @@ static int32_t uvs_admin_sip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char buf[MAX_MSG_LEN] = {0};
 
     ret = sip_table_cmd_prep_args(ctx, g_sip_table_del_long_options, g_sip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_sip_table_del_show_cmd_validation(args);
     if (ret != 0) {
         return ret;
     }

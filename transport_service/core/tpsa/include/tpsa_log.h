@@ -29,6 +29,7 @@ enum tpsa_vlog_level {
     TPSA_VLOG_LEVEL_MAX = 8,
 };
 
+void tpsa_getenv_log_level(void);
 void tpsa_log_init(void);
 void tpsa_log_uninit(void);
 void tpsa_log_set_level(unsigned level);

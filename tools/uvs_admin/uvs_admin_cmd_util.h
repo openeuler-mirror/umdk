@@ -52,6 +52,8 @@ enum arg_type {
 
 int parse_mac(const char *mac, uint8_t *output_mac);
 int str_to_eid(const char *buf, urma_eid_t *eid);
+int get_net_addr_type(const char *buf, urma_eid_t *eid,
+    uvs_admin_net_addr_type_t *input_net_addr_type);
 int mac_n2p(char *str, size_t length, const uint8_t *bin);
 
 #ifdef __cplusplus

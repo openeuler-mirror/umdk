@@ -16,7 +16,7 @@ include_directories(/usr/include/libnl3)
 
 set_property(TARGET tpsa PROPERTY C_STANDARD 99)
 set_target_properties(tpsa PROPERTIES VERSION 0.0.1 SOVERSION 0)
-target_link_libraries(tpsa gobject-2.0 glib-2.0 urma_common_static nl-genl-3 nl-3)
+target_link_libraries(tpsa gobject-2.0 glib-2.0 urma_common_static nl-genl-3 nl-3 ssl crypto)
 
 if("${URMA_INSTALL}" STREQUAL "enable")
     install(TARGETS tpsa DESTINATION /usr/lib64)

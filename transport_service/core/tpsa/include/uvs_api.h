@@ -50,6 +50,11 @@ void uvs_socket_uninit(void);
 int uvs_restore_table(void);
 
 /**
+ * notify uvs that vport and sip add finished.
+ */
+void uvs_table_input_finish(void);
+
+/**
  * Add global configurations.
  * @param[in] [Required] info: pointer of global configurations;
  * Return: 0 on success, other value on error.
@@ -141,6 +146,15 @@ int uvs_query_fe_idx(const char* tpf_name, const uvs_devid_t *devid, uint16_t *f
 int uvs_config_dscp_vl(const char *tpf_name, uint8_t *dscp, uint8_t *vl, uint8_t num);
 
 /**
+* query dscp vl mapping
+* @param[in] tpf_name: the tpf dev name
+* @param[in] dscp: the dscp value array
+* @param[in] num: array num, range is [0, 64]
+* @param[out] vl: the vl value array
+*/
+int uvs_query_dscp_vl(const char *tpf_name, uint8_t *dscp, uint8_t num, uint8_t *vl);
+
+/**
 * call this func when uvs_adapter active/construct
 * @param[in] user_ops: user option
 * Return: 0 on success, other value on error.
@@ -200,6 +214,60 @@ int uvs_register_event_cb(uvs_event_cb_t cb_func, void *cb_arg);
  * Return: 0 (URMA_SUCCESS) on success, other value on error
  */
 int uvs_unregister_event_cb(void);
+
+/**
+ * Not used for now
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_delete_dip(uvs_ueid_t *ueid);
+
+/**
+ * Update the dip of third node
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_update_dip(uvs_ueid_t *ueid, uvs_net_addr_info_t *old_dip, uvs_net_addr_info_t *new_dip);
+
+/**
+ * notify uvs to start live migration
+ * @dueid: user supplied peer ueid
+ * @dip: user supplied peer ip
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_add_migration_task(uvs_ueid_t *dueid, uvs_net_addr_t *dip);
+
+/**
+ * Get the list of ueid and hits in live migrate
+ * @mig_list: list of ueid and hits in live migrate
+ * @cnt: count of mig_list
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_list_migration_task(uvs_mig_entry_list_t *mig_list, uint32_t *cnt);
+
+/**
+ * notify uvs to terminate live migration
+ * @dueid: user supplied peer ueid
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_del_migration_task(uvs_ueid_t *dueid);
+
+/**
+ * Get statistics info depend on tpf name and keys
+ * @param[in] tpf_name:tpf name to locate ubcore device
+ * @param[in] key:stats keys (type and id) used for find statistics
+ * @param[out] val:value found depend on type and id in key
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_query_stats(const char *tpf_name, uvs_stats_key_t *key, uvs_stats_val_t *val);
+
+/**
+ * Get rescource info depend on tpf name and keys
+ * @param[in] tpf_name:tpf name to locate device
+ * @param[in] key: resource keys used for find val
+ * @param[out] val:value found depend on key
+ * Return: 0 (URMA_SUCCESS) on success, other value on error
+ */
+int uvs_query_resource(const char *tpf_name, uvs_res_key_t *key, uvs_res_val_t *val);
+
 #ifdef __cplusplus
 }
 #endif

@@ -95,7 +95,7 @@ static int tpsa_get_dev_feature_ioctl(tpsa_daemon_ctx_t *ctx, char* dev_name, tp
     int ret;
 
     cfg.cmd_type = TPSA_CMD_GET_DEV_FEATURE;
-    (void)strcpy(cfg.cmd.get_dev_feature.in.dev_name, dev_name);
+    (void)strncpy(cfg.cmd.get_dev_feature.in.dev_name, dev_name, UVS_MAX_DEV_NAME);
 
     ret = tpsa_ioctl(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     *feat = cfg.cmd.get_dev_feature.out.feature;
@@ -247,6 +247,7 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
     tpsa_vport_del_req_t *del_req = NULL;
     vport_table_t *vport_table = NULL;
     vport_key_t key = {0};
+    sem_t sem;
     int ret;
 
     if (read_len != (req->req_len + (ssize_t)sizeof(tpsa_request_t))) {
@@ -269,13 +270,20 @@ tpsa_response_t *process_vport_table_del(tpsa_request_t *req, ssize_t read_len)
     key.fe_idx = del_req->fe_idx;
     (void)memcpy(key.tpf_name, del_req->dev_name, UVS_MAX_DEV_NAME);
 
-    ret = vport_set_deleting(vport_table, &key, NULL);
+    (void)sem_init(&sem, 0, 0);
+    ret = vport_set_deleting(vport_table, &key, &sem);
     if (ret != 0) {
+        (void)sem_destroy(&sem);
         TPSA_LOG_ERR("can not del vport by key dev_name:%s, fe_idx %hu\n", key.tpf_name, key.fe_idx);
-    } else {
-        (void)uvs_ioctl_cmd_clear_vport_cfg(&ctx->worker->ioctl_ctx, &key);
+        ret = -1;
+        goto send_resp;
     }
 
+    (void)uvs_ioctl_cmd_clear_vport_cfg(&ctx->worker->ioctl_ctx, &key);
+    (void)sem_wait(&sem);
+    (void)sem_destroy(&sem);
+
+send_resp:
     rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_vport_del_rsp_t));
     if (rsp == NULL) {
         return NULL;
@@ -335,6 +343,7 @@ tpsa_response_t *process_vport_table_show_ueid(tpsa_request_t *req, ssize_t read
     if (ueid != NULL) {
         show_rsp->eid = ueid->eid;
         show_rsp->upi = ueid->upi;
+        show_rsp->uuid = ueid->uuid;
     }
     rsp->cmd_type = VPORT_TABLE_SHOW_UEID;
     rsp->rsp_len = (ssize_t)sizeof(tpsa_vport_show_ueid_rsp_t);
@@ -374,6 +383,7 @@ tpsa_response_t *process_vport_table_add_ueid(tpsa_request_t *req, ssize_t read_
 
     ueid.eid = add_req->eid;
     ueid.upi = add_req->upi;
+    ueid.uuid = add_req->uuid;
     ueid.eid_index = add_req->eid_idx;
     ret = vport_table_add_ueid(vport_table, &key, &ueid);
     if (ret != 0) {
@@ -553,7 +563,7 @@ tpsa_response_t *process_vport_table_show_upi(tpsa_request_t *req, ssize_t read_
         TPSA_LOG_ERR("Invalid parameter.");
         return NULL;
     }
-    (void)strcpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name);
+    (void)strncpy(cfg.cmd.show_upi.in.dev_name, show_req->dev_name, UVS_MAX_DEV_NAME);
     ret = tpsa_ioctl_show_upi(ctx->worker->ioctl_ctx.ubcore_fd, &cfg);
     if (ret != 0) {
         TPSA_LOG_WARN("failed to ioctl show upi\n");

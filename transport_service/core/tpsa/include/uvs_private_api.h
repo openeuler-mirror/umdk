@@ -21,6 +21,7 @@ int uvs_ops_lock_init(void);
 void uvs_ops_lock_uninit(void);
 void uvs_ops_mutex_lock(void);
 void uvs_ops_mutex_unlock(void);
+bool uvs_check_gaea_scenario();
 
 #ifdef __cplusplus
 }

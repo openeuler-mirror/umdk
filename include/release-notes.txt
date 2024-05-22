@@ -5,6 +5,9 @@ This is the first release of UMDK API. It provides API change records, including
 reason, change items, etc.
 
 %changelog
+* Mon Apr 22
+- add URMA_TRASPORT_HNS_UB/UBCORE_TRANSPORT_HNS_UB/TPSA_TRANSPORT_HNS_UB for 1636.
+
 * Mon Mar 18 2024 huawei
 - add urma_import_jetty_flag_t in urma_tjetty_cfg_t, add urma_import_jfr_flag_t in urma_tjfr_cfg_t.
 

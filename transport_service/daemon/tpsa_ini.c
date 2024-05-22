@@ -8,10 +8,12 @@
  */
 
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <arpa/inet.h>
 
 #include "tpsa_log.h"
-#include "tpsa_net.h"
 #include "tpsa_ini.h"
 
 #define TPSA_MAX_CURRENT_ERR 5

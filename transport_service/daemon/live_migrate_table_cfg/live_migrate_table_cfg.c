@@ -90,7 +90,7 @@ tpsa_response_t *process_live_migrate_table_add(tpsa_request_t *req, ssize_t rea
     }
 
     ctx = get_tpsa_daemon_ctx();
-    if (ctx == NULL) {
+    if (ctx == NULL || ctx->worker == NULL) {
         TPSA_LOG_ERR("get_tpsa_daemon_ctx failed\n");
         return NULL;
     }
@@ -106,14 +106,16 @@ tpsa_response_t *process_live_migrate_table_add(tpsa_request_t *req, ssize_t rea
     (void)memcpy(key.tpf_name, add_req->dev_name, UVS_MAX_DEV_NAME);
     (void)memcpy(&entry.uvs_ip, &add_req->uvs_ip, TPSA_EID_SIZE);
 
+    rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_add_rsp_t));
+    if (rsp == NULL) {
+        TPSA_LOG_ERR("Failed to alloc rsp.\n");
+        return NULL;
+    }
+
+    // If subsequent operations fail, a rollback is required.
     ret = live_migrate_table_add(live_migrate_table, &key, &entry);
     if (ret != 0) {
         TPSA_LOG_ERR("can not add live migrate by key fe_idx %hu\n", key.fe_idx);
-    }
-
-    rsp = calloc(1, sizeof(tpsa_response_t) + sizeof(tpsa_live_migrate_add_rsp_t));
-    if (rsp == NULL) {
-        return NULL;
     }
 
     tpsa_live_migrate_add_rsp_t *add_rsp = (tpsa_live_migrate_add_rsp_t *)(rsp->rsp);

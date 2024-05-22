@@ -85,6 +85,7 @@ typedef struct uvs_admin_net_addr_info {
     uvs_admin_net_addr_t net_addr;
     uint64_t vlan; /* available for UBOE */
     uint8_t mac[UVS_ADMIN_MAC_BYTES]; /* available for UBOE */
+    uint32_t prefix_len;
 } uvs_admin_net_addr_info_t;
 
 typedef union uvs_admin_tp_mod_flag {
@@ -102,7 +103,7 @@ typedef union uvs_admin_tp_mod_flag {
                                       * If ubcore_tp_cfg_flag parameter needs to be set,
                                       * the parameter must be set separately.
                                       */
-        uint32_t reserved : 20;
+        uint32_t reserved : 20; /* revise this struct need to sync print_tp_mod_flag_str fucntion */
     } bs;
     uint32_t value;
 } uvs_admin_tp_mod_flag_t;

@@ -220,7 +220,7 @@ static int urma_admin_cmd_add_eid(struct nl_sock *sock, const tool_config_t *cfg
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
     (void)close(ns_fd);
-    return 0;
+    return ret;
 }
 
 static int urma_admin_cmd_del_eid(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
@@ -245,7 +245,7 @@ static int urma_admin_cmd_del_eid(struct nl_sock *sock, const tool_config_t *cfg
     if (ret < 0) {
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
-    return 0;
+    return ret;
 }
 
 static int urma_admin_cmd_set_eid_mode(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
@@ -269,7 +269,7 @@ static int urma_admin_cmd_set_eid_mode(struct nl_sock *sock, const tool_config_t
     if (ret < 0) {
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
-    return 0;
+    return ret;
 }
 
 static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
@@ -277,17 +277,27 @@ static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
     struct nlmsghdr *hdr = nlmsg_hdr(msg);
     struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
-    int ret;
+    int *ret = arg;
 
-    if (genlhdr->cmd == (int)URMA_CORE_CMD_ADD_EID ||
-        genlhdr->cmd == (int)URMA_CORE_CMD_DEL_EID) {
-        ret = nla_get_s32(attr_ptr);
-        if (ret != 0) {
-            (void)usleep(1);
-        } else {
-            (void)printf("recv update eid type %d success\n", (int)genlhdr->cmd);
-        }
+    if (arg == NULL) {
+        return 0;
     }
+
+    if (genlhdr->cmd != (int)URMA_CORE_CMD_ADD_EID &&
+        genlhdr->cmd != (int)URMA_CORE_CMD_DEL_EID) {
+        return 0;
+    }
+
+    *ret = nla_get_s32(attr_ptr);
+    if (*ret == 0) {
+        return 0;
+    } else if (*ret == 1) {
+        (void)usleep(1); // ret == 1 means in progress, genl will try again.
+    } else {
+        (void)printf("Failed to %s, invalid parameter.\n",
+            (genlhdr->cmd == (int)URMA_CORE_CMD_ADD_EID) ? "add eid" : "del eid");
+    }
+
     return 0;
 }
 
@@ -295,12 +305,13 @@ int admin_add_eid(const tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
+    int ret = 0;
 
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
         return -1;
     }
-    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, NULL);
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, &ret);
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
@@ -316,19 +327,20 @@ int admin_add_eid(const tool_config_t *cfg)
     }
     nl_close(sock);
     nl_socket_free(sock);
-    return 0;
+    return ret;
 }
 
 int admin_del_eid(const tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
+    int ret = 0;
 
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
         return -1;
     }
-    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, NULL);
+    (void)nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, cb_update_eid_handler, &ret);
     /* Automatically switch to static mode */
     if (urma_admin_cmd_set_eid_mode(sock, cfg, genl_id) < 0) {
         (void)printf("Failed to urma admin set eid mode, errno:%d\n", errno);
@@ -344,7 +356,7 @@ int admin_del_eid(const tool_config_t *cfg)
     }
     nl_close(sock);
     nl_socket_free(sock);
-    return 0;
+    return ret;
 }
 
 int admin_set_eid_mode(const tool_config_t *cfg)
@@ -362,56 +374,6 @@ int admin_set_eid_mode(const tool_config_t *cfg)
         nl_socket_free(sock);
         return -1;
     }
-    nl_close(sock);
-    nl_socket_free(sock);
-    return 0;
-}
-
-static int urma_admin_cmd_show_utp(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
-{
-    int ret;
-    urma_cmd_hdr_t hdr;
-    tool_res_utp_val_t utp_info = {0};
-    admin_core_cmd_show_utp_t arg = {0};
-
-    hdr.command = (uint32_t)URMA_CORE_CMD_SHOW_UTP;
-    hdr.args_len = (uint32_t)sizeof(admin_core_cmd_show_utp_t);
-    hdr.args_addr = (uint64_t)&arg;
-
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-    arg.out.addr = (uint64_t)&utp_info;
-    arg.out.len = (uint32_t)sizeof(tool_res_utp_val_t);
-
-    ret = cmd_nlsend(sock, genl_id, &hdr);
-    if (ret < 0) {
-        (void)printf("cmd_nlsend failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
-        return ret;
-    }
-    (void)printf("*************utp info**************\n");
-    (void)printf("tpn                 : %u\n", (uint32_t)utp_info.utpn);
-    (void)printf("flag                : %u\n", utp_info.flag.value);
-    (void)printf("data_udp_start      : %hu\n", utp_info.data_udp_start);
-    (void)printf("udp_range           : %u\n", (uint32_t)utp_info.udp_range);
-    return 0;
-}
-
-int admin_show_utp(const tool_config_t *cfg)
-{
-    struct nl_sock *sock = NULL;
-    int genl_id;
-
-    sock = alloc_and_connect_nl(&genl_id);
-    if (sock == NULL) {
-        return -1;
-    }
-
-    if (urma_admin_cmd_show_utp(sock, cfg, genl_id) < 0) {
-        (void)printf("Failed to urma admin show utp, errno:%d\n", errno);
-        nl_close(sock);
-        nl_socket_free(sock);
-        return -1;
-    }
-
     nl_close(sock);
     nl_socket_free(sock);
     return 0;
@@ -445,6 +407,13 @@ static int admin_cmd_query_stats(struct nl_sock *sock, const tool_config_t *cfg,
         (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
         return ret;
     }
+
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        (void)printf("query stats fail, please check input, ret:%d, errno:%d.\n", ret, errno);
+        return ret;
+    }
+
     admin_print_stats(&arg);
     return 0;
 }
@@ -490,15 +459,6 @@ static const char *g_query_res_type[] = {
     [TOOL_RES_KEY_DEV_TA]     = "RES_DEV_TA",
     [TOOL_RES_KEY_DEV_TP]     = "RES_DEV_TP"
 };
-
-static inline void admin_print_res_upi(struct nlattr *head)
-{
-    int type = nla_type(head);
-    if (type == UBCORE_RES_UPI_VAL) {
-        tool_res_upi_val_t *val = (tool_res_upi_val_t *)nla_data(head);
-        (void)printf("upi                 : %u\n", val->upi);
-    }
-}
 
 static void admin_print_res_jfs(struct nlattr *head)
 {
@@ -924,7 +884,11 @@ static int admin_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, i
     arg->in.key = cfg->key.key;
     arg->in.type = cfg->key.type;
     arg->in.key_ext = cfg->key.key_ext;
-    arg->in.key_cnt = cfg->key.key_cnt;
+    if (arg->in.type == TOOL_RES_KEY_DEV_TA && cfg->key.key_cnt == 0) {
+        arg->in.key_cnt = 1;
+    } else {
+        arg->in.key_cnt = cfg->key.key_cnt;
+    }
     (void)memcpy(arg->in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
     cb_arg->type = arg->in.type;
     cb_arg->key = arg->in.key;
@@ -945,7 +909,7 @@ static int admin_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, i
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
     free(arg);
-    return 0;
+    return ret;
 }
 
 int admin_show_res(const tool_config_t *cfg)
@@ -954,13 +918,13 @@ int admin_show_res(const tool_config_t *cfg)
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
-    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TA) {
-        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
-        return -1;
-    }
     if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
         cfg->key.type == TOOL_RES_KEY_DEV_TP) {
         (void)printf("urma_admin do not support query tp stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TA) {
+        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
         return -1;
     }
     sock = alloc_and_connect_nl(&genl_id);
@@ -1013,7 +977,7 @@ static int admin_cmd_list_res(struct nl_sock *sock, const tool_config_t *cfg, in
         (void)printf("Failed to nl_recvmsgs_default, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
     }
     free(arg);
-    return 0;
+    return ret;
 }
 
 int admin_list_res(const tool_config_t *cfg)
@@ -1022,13 +986,13 @@ int admin_list_res(const tool_config_t *cfg)
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
-    if (cfg->key.key_cnt != 0) {
-        (void)printf("key_cnt in list_res should equal 0.\n");
-        return -1;
-    }
     if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
         cfg->key.type >= TOOL_RES_KEY_DEV_TA) {
         (void)printf("urma_admin do not support query tp and dev stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt != 0) {
+        (void)printf("key_cnt in list_res should equal 0.\n");
         return -1;
     }
     sock = alloc_and_connect_nl(&genl_id);

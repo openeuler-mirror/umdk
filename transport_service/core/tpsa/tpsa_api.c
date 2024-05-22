@@ -17,12 +17,17 @@
 #include "tpsa_ioctl.h"
 #include "uvs_stats.h"
 #include "tpsa_types.h"
+#include "tpsa_table.h"
+#include "uvs_lm.h"
 
 #define UVS_DEFAULT_UM_EN 1
 #define UVS_DEFAULT_FLAG_UM_EN 1
 #define UVS_DEFAULT_CC_ALG (0x1 << 3) /* LDCP */
 #define UVS_DEFAULT_VPORT_EID_IDX 0
 #define UVS_DEFAULT_UEID_MAX_CNT 256
+#define UVS_DEFAULT_MIG_LIST_MAX_DEPTH 64
+#define UVS_DEFAULT_UPI_MIN 0X0
+#define UVS_DEFAULT_UPI_MAX 0xFFFFFF
 
 const char *g_tpsa_capability[TPSA_CAP_NUM] = {
     [TPSA_CAP_OOR] = "out of order receive",
@@ -59,12 +64,34 @@ static bool uvs_check_mtu_valid(uvs_mtu_t mtu)
     return (mtu == UVS_MTU_1024 || mtu == UVS_MTU_4096 || mtu == UVS_MTU_8192);
 }
 
+static bool uvs_check_udp_mask_valid(uvs_global_info_t *info)
+{
+    return info->mask.bs.udp_port_start && info->mask.bs.udp_port_end &&
+        info->mask.bs.udp_range;
+}
+
+static bool uvs_check_udp_valid(uvs_global_info_t *info)
+{
+    if (info->udp_range == 0) {
+        return false;
+    }
+
+    return (info->udp_port_end - info->udp_port_start) >= info->udp_range;
+}
+
 static int uvs_global_info_check_param_valid(uvs_global_info_t *info)
 {
     if (info->mask.bs.mtu && !uvs_check_mtu_valid(info->mtu)) {
         TPSA_LOG_ERR("failed to check mtu and mtu is %u", (uint32_t)info->mtu);
         return -1;
     }
+    if (uvs_check_udp_mask_valid(info) && !uvs_check_udp_valid(info)) {
+        TPSA_LOG_ERR("failed to check udp mask:%u or udp_port_start:%u, "
+            "udp_port_end:%u, udp_range:%u",
+            info->mask.value, info->udp_port_start, info->udp_port_end, info->udp_range);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -88,19 +115,24 @@ int uvs_add_global_info(uvs_global_info_t *info)
     tpsa_global_cfg_t *global_cfg_ctx = &uvs_worker->global_cfg_ctx;
     /* global_cfg->mask and local global mask is different */
     TPSA_LOG_INFO("uvs add global info mask:%u", info->mask.value);
-
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, mtu);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, slice);
-    UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, suspend_cnt);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, suspend_period);
+    UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, suspend_cnt);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, sus2err_period);
+    UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, sus2err_cnt);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, hop_limit);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, udp_port_start);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, udp_port_end);
     UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, udp_range);
+    UVS_FILL_GLOBAL_CFG_WITH_MASK(info, global_cfg_ctx, tbl_input_done);
 
-    global_cfg_ctx->flag.bs.um_en = info->mask.bs.flag_um_en == 0 ? (uint32_t)UVS_DEFAULT_UM_EN : info->flag.bs.um_en;
+    if (info->mask.bs.sus2err_period) {
+        uvs_convert_sus2err_period_to_clock_cycle(info->sus2err_period);
+    }
+
     global_cfg_ctx->mask.bs.flag_um_en = UVS_DEFAULT_FLAG_UM_EN;
+    global_cfg_ctx->flag.bs.um_en = info->mask.bs.flag_um_en == 0 ? (uint32_t)UVS_DEFAULT_UM_EN : info->flag.bs.um_en;
 
     int ret = uvs_ioctl_cmd_set_global_cfg(&uvs_worker->ioctl_ctx, &uvs_worker->global_cfg_ctx);
     if (ret != 0) {
@@ -129,9 +161,11 @@ uvs_global_info_t *uvs_list_global_info(void)
 
     info->mtu = uvs_worker->global_cfg_ctx.mtu;
     info->slice = uvs_worker->global_cfg_ctx.slice;
-    info->suspend_cnt = uvs_worker->global_cfg_ctx.suspend_cnt;
     info->suspend_period = uvs_worker->global_cfg_ctx.suspend_period;
+    info->suspend_cnt = uvs_worker->global_cfg_ctx.suspend_cnt;
     info->sus2err_period = uvs_worker->global_cfg_ctx.sus2err_period;
+    info->sus2err_cnt = uvs_worker->global_cfg_ctx.sus2err_cnt;
+    info->tbl_input_done = uvs_worker->global_cfg_ctx.tbl_input_done;
 
     info->hop_limit = uvs_worker->global_cfg_ctx.hop_limit;
     info->udp_port_start = uvs_worker->global_cfg_ctx.udp_port_start;
@@ -218,6 +252,7 @@ static int uvs_vport_link_ueid_entry_to_vport(vport_table_t *vport_table,
     if (port_entry->type == UVS_PORT_TYPE_UBSUBPORT && ueid_table_add(vport_table, &port_entry->key,
         ueid.upi, ueid.eid, ueid.eid_index) != 0) {
         parent_entry->ueid[ueid.eid_index].entry = NULL;
+        parent_entry->ueid[ueid.eid_index].is_valid = false;
         TPSA_LOG_ERR("failed to add ueid, dev_name:%s fe_idx:%d\n", port_entry->key.tpf_name,
                      port_entry->key.fe_idx);
         return -EINVAL;
@@ -361,7 +396,8 @@ static int uvs_fill_vport_entry(vport_table_entry_t *port_entry, uvs_vport_info_
         (void)pthread_rwlock_rdlock(&vport_table->rwlock);
         parent_entry = tpsa_vport_lookup_by_port_key_no_look(vport_table, &key);
         if (parent_entry == NULL) {
-            TPSA_LOG_INFO("failed to find parent entry");
+            (void)pthread_rwlock_unlock(&vport_table->rwlock);
+            TPSA_LOG_ERR("failed to find parent entry");
             return -1;
         }
         uvs_fill_vport_entry_subport(port_entry, parent_entry);
@@ -440,7 +476,9 @@ static void uvs_fill_vport_info(uvs_vport_info_t *info, vport_table_entry_t *vpo
 
     info->sip_idx = vport_entry->sip_idx;
     info->tp_info.tp_cnt_per_tpg = vport_entry->tp_cnt;
+    info->flag.bs.share_mode = vport_entry->tp_cfg.tp_mod_flag.bs.share_mode;
     info->flag.bs.pattern = vport_entry->pattern;
+    info->flag.bs.um_en = vport_entry->tp_cfg.tp_mod_flag.bs.um_en;
     info->virtualization = vport_entry->virtualization;
     info->jetty_max_cnt = vport_entry->max_jetty_cnt;
     info->jetty_min_cnt = vport_entry->min_jetty_cnt;
@@ -557,6 +595,15 @@ static int uvs_check_port_eid_idx(uvs_vport_info_t *info)
     return 0;
 }
 
+static int uvs_check_upi_validation(uint32_t upi)
+{
+    if (upi >= UVS_DEFAULT_UPI_MIN && upi <= UVS_DEFAULT_UPI_MAX) {
+        return 0;
+    }
+    TPSA_LOG_ERR("failed to check upi %u, valid range [0X 00 00 00, 0X FF FF FF]", upi);
+    return -1;
+}
+
 int uvs_add_vport(uvs_vport_info_t *info)
 {
     int ret = 0;
@@ -573,17 +620,17 @@ int uvs_add_vport(uvs_vport_info_t *info)
         return -1;
     }
 
+    if ((uvs_check_port_eid_idx(info) != 0) || (uvs_check_upi_validation(info->upi) != 0)) {
+        TPSA_LOG_ERR("failed to pass input param validation");
+        return -1;
+    }
+
     uvs_worker = uvs_get_worker();
     if (uvs_worker == NULL) {
         TPSA_LOG_ERR("Can not get uvs_worker ctx");
         return -1;
     }
     vport_table = &uvs_worker->table_ctx.vport_table;
-
-    if (uvs_check_port_eid_idx(info)) {
-        TPSA_LOG_ERR("failed to pass port eid_idx check");
-        return -1;
-    }
 
     if (uvs_check_duplicate_port_entry_with_name(vport_table, &info->key) != 0) {
         TPSA_LOG_ERR("failed to add port because it's already existed by name %s", info->key.name);
@@ -619,13 +666,13 @@ int uvs_add_vport(uvs_vport_info_t *info)
     }
 
     if (uvs_vport_add_ueid_entry(vport_table, entry, info) != 0) {
-        uvs_add_vport_statistic_config(info); // subport and vport key is same, add use cnt
         TPSA_LOG_ERR("failed to add ueid entry to vport table\n");
         free(entry);
         return -1;
     }
 
     if (info->type == UVS_PORT_TYPE_UBSUBPORT) {
+        uvs_add_vport_statistic_config(info); // subport and vport key is same, add use cnt
         TPSA_LOG_INFO("Detect now is adding subport, no need to add to vport table\n");
         free(entry);
         return 0;
@@ -740,7 +787,8 @@ int uvs_show_vport(uvs_vport_info_key_t *key, uvs_vport_info_t *info)
     tpsa_worker_t *uvs_worker = NULL;
     vport_table_entry_t *vport_entry = NULL;
 
-    if (key == NULL || info == NULL) {
+    if (key == NULL || strnlen(key->name, UVS_MAX_VPORT_NAME) == UVS_MAX_VPORT_NAME ||
+        info == NULL) {
         TPSA_LOG_ERR("Invalid parameter!\n");
         return -1;
     }
@@ -812,8 +860,8 @@ int uvs_add_sip(uvs_sip_info_t *sip_info, uint32_t *sip_idx)
     (void)memcpy(&add_entry.addr.net_addr, &sip_info->sip, sizeof(uvs_net_addr_t));
     add_entry.addr.vlan = sip_info->vlan;
     add_entry.addr.prefix_len = sip_info->msk;
-    /* mtu has been checked with gloabl cfg */
-    add_entry.mtu = uvs_worker->global_cfg_ctx.mtu;
+    /* cloud scenario, mtu's value is given by global mtu after negotiation */
+    add_entry.mtu = (uvs_mtu_t)0;
 
     add_entry.port_cnt = sip_info->port_cnt;
     add_entry.port_id[0] = sip_info->port_id[0];
@@ -1011,11 +1059,10 @@ int uvs_config_dscp_vl(const char* tpf_name, uint8_t *dscp, uint8_t *vl, uint8_t
         return -1;
     }
 
-    tpsa_cmd_config_dscp_vl_t cfg;
-    (void)memcpy(cfg.in.dev_name, tpf_name, strlen(tpf_name));
-    cfg.in.dev_name[strlen(tpf_name)] = '\0';
+    tpsa_cmd_config_dscp_vl_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
 
-    cfg.in.num = MIN(num, TPSA_MAX_DSCP_VL_NUM);
+    cfg.in.num = num;
     for (uint32_t i = 0; i < cfg.in.num; i++) {
         cfg.in.dscp[i] = dscp[i];
         cfg.in.vl[i] = vl[i];
@@ -1026,6 +1073,36 @@ int uvs_config_dscp_vl(const char* tpf_name, uint8_t *dscp, uint8_t *vl, uint8_t
         return -1;
     }
     return uvs_ioctl_config_dscp_vl(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+}
+
+int uvs_query_dscp_vl(const char* tpf_name, uint8_t *dscp, uint8_t num, uint8_t *vl)
+{
+    if (tpf_name == NULL || dscp == NULL || vl == NULL || num > TPSA_MAX_DSCP_VL_NUM ||
+        strnlen(tpf_name, URMA_MAX_DEV_NAME) == URMA_MAX_DEV_NAME) {
+        TPSA_LOG_WARN("Input invalid, num:%d", num);
+        return -1;
+    }
+    tpsa_cmd_query_dscp_vl_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.num = num;
+    for (uint32_t i = 0; i < cfg.in.num; i++) {
+        cfg.in.dscp[i] = dscp[i];
+    }
+
+    tpsa_worker_t *uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        return -1;
+    }
+
+    if (uvs_ioctl_query_dscp_vl(uvs_worker->ioctl_ctx.ubcore_fd, &cfg) != 0) {
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < cfg.in.num; i++) {
+        vl[i] = cfg.out.vl[i];
+    }
+    return 0;
 }
 
 void uvs_free_tpf(uvs_tpf_t **tpfs, uint32_t cnt)
@@ -1204,4 +1281,763 @@ int uvs_query_tpf_statistic(const char* tpf_name, uvs_tpf_statistic_t *st)
     }
 
     return uvs_query_tpf_statistic_inner(tpf_name, st);
+}
+
+int uvs_delete_dip(uvs_ueid_t *ueid)
+{
+    if (ueid == NULL) {
+        TPSA_LOG_ERR("Input invalid");
+        return -1;
+    }
+    return 0;
+}
+
+int uvs_update_dip(uvs_ueid_t *ueid, uvs_net_addr_info_t *old_dip, uvs_net_addr_info_t *new_dip)
+{
+    tpsa_worker_t *uvs_worker = NULL;
+    vport_key_t vport_key = {0};
+    uint32_t eid_index;
+    int ret = 0;
+
+    if (ueid == NULL || old_dip == NULL || new_dip == NULL) {
+        TPSA_LOG_ERR("Input invalid");
+        return -1;
+    }
+
+    uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        TPSA_LOG_ERR("Can not get uvs_worker ctx");
+        return -1;
+    }
+
+    dip_table_key_t update_key = {0};
+    (void)memcpy(&update_key.deid, &ueid->eid, UVS_EID_SIZE);
+    update_key.upi = ueid->upi;
+
+    // if we cannot find vport by this ueid, then we do nothing of this dip update
+    ret = vport_table_lookup_by_ueid_return_key(&uvs_worker->table_ctx.vport_table,
+        update_key.upi, &update_key.deid, &vport_key, &eid_index);
+    if (ret != 0) {
+        TPSA_LOG_INFO("Can not find vport by eid: " EID_FMT " upi: %u, drop this dip change\n",
+            EID_ARGS(update_key.deid), update_key.upi);
+        return 0;
+    }
+    (void)pthread_rwlock_wrlock(&uvs_worker->table_ctx.dip_table.rwlock);
+    ret = dip_table_add_update_list(&uvs_worker->table_ctx.dip_table, &update_key, old_dip, new_dip);
+    (void)pthread_rwlock_unlock(&uvs_worker->table_ctx.dip_table.rwlock);
+    return ret;
+}
+
+int uvs_add_migration_task(uvs_ueid_t *dueid, uvs_net_addr_t *dip)
+{
+    if (dueid == NULL || dip == NULL) {
+        TPSA_LOG_ERR("Input invalid");
+        return -1;
+    }
+    int ret;
+    uint32_t eid_idx;
+    tpsa_worker_t *ctx = NULL;
+    live_migrate_table_t *live_migrate_table = NULL;
+    live_migrate_table_key_t key = {0};
+    live_migrate_table_entry_t entry = {0};
+
+    ctx = uvs_get_worker();
+    if (ctx == NULL) {
+        TPSA_LOG_ERR("get_tpsa_daemon_ctx failed\n");
+        return -1;
+    }
+
+    if (vport_table_lookup_by_ueid_return_key(&ctx->table_ctx.vport_table, dueid->upi, (urma_eid_t *)&dueid->eid, &key,
+        &eid_idx) != 0) {
+        TPSA_LOG_INFO("upi %u,eid_idx is %u,eid:" EID_FMT "\n", dueid->upi, eid_idx, EID_ARGS(dueid->eid));
+        return -1;
+    }
+
+    (void)memcpy(&entry.uvs_ip, dip, TPSA_EID_SIZE);
+    live_migrate_table = &ctx->table_ctx.live_migrate_table;
+
+    ret = live_migrate_table_add(live_migrate_table, &key, &entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("can not add live migrate by key fe_idx %hu\n", key.fe_idx);
+    }
+
+    return ret;
+}
+
+static int tpsa_fill_mig_entry_by_vport_key(vport_table_t *vport_table, vport_key_t *key,
+    uvs_mig_entry_list_t *mig_list, tpsa_fe_stats_t *stats, uint32_t cnt)
+{
+    int idx = 0;
+    (void)pthread_rwlock_wrlock(&vport_table->rwlock);
+    for (uint32_t i = 0; i < cnt; i++) {
+        vport_table_entry_t *vport_entry = vport_table_lookup(vport_table, &key[i]);
+        if (vport_entry == NULL) {
+            continue;
+        }
+        uint64_t hits = stats[i].tx_pkt + stats[i].rx_pkt;
+        for (uint32_t j = 0; j < vport_entry->ueid_max_cnt; j++) {
+            if (vport_entry->ueid[i].used == false) {
+                continue;
+            }
+            if (idx > UVS_DEFAULT_MIG_LIST_MAX_DEPTH) {
+                (void)pthread_rwlock_unlock(&vport_table->rwlock);
+                TPSA_LOG_ERR("ueid count exceed limit(64)\n");
+                return -1;
+            }
+            mig_list[idx]->upi = vport_entry->ueid[j].upi;
+            (void)memcpy(&mig_list[idx]->eid.eid, &vport_entry->ueid[j].eid, sizeof(uvs_eid_t));
+            mig_list[idx]->hits = hits;
+            idx++;
+        }
+    }
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+    return idx;
+}
+int uvs_list_migration_task(uvs_mig_entry_list_t *mig_list, uint32_t *cnt)
+{
+    if (mig_list == NULL || cnt == NULL) {
+        TPSA_LOG_ERR("Input invalid");
+        return -1;
+    }
+    *cnt = 0;
+    int ret = 0;
+    uint32_t key_cnt;
+    live_migrate_table_key_t *live_migrate_key = NULL;
+    tpsa_worker_t *uvs_worker = NULL;
+    tpsa_fe_stats_t *stats = NULL;
+
+    uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        TPSA_LOG_ERR("Can not get uvs_worker ctx");
+        return -1;
+    }
+
+    key_cnt = live_migrate_table_return_key(&uvs_worker->table_ctx.live_migrate_table, &live_migrate_key);
+    if (key_cnt <= 0) {
+        return key_cnt;
+    }
+
+    sip_table_entry_t sip_entry = {0};
+    ret = find_sip_by_vport_key(&uvs_worker->table_ctx.vport_table, &(live_migrate_key[0]),
+        &uvs_worker->table_ctx.tpf_dev_table, &sip_entry);
+    if (ret != 0) {
+        goto free_key;
+    }
+
+    stats = (tpsa_fe_stats_t *)calloc(sizeof(tpsa_fe_stats_t), key_cnt);
+    if (stats == NULL) {
+        TPSA_LOG_ERR("Failed to alloc tpsa_fe_stats.\n");
+        ret = -ENOMEM;
+        goto free_key;
+    }
+
+    ret = tpsa_ioctl_cmd_list_migrate_entry(&uvs_worker->ioctl_ctx, key_cnt, live_migrate_key, stats,
+        &sip_entry.addr.net_addr);
+    if (ret != 0) {
+        goto free_stats;
+    }
+
+    *cnt = tpsa_fill_mig_entry_by_vport_key(&uvs_worker->table_ctx.vport_table, live_migrate_key, mig_list, stats,
+        key_cnt);
+    if (*cnt < 0) {
+        ret = -1;
+        goto free_stats;
+    }
+    ret = 0;
+
+free_stats:
+    free(stats);
+free_key:
+    free(live_migrate_key);
+    return ret;
+}
+
+static void uvs_fill_stats_val(uvs_cmd_dfx_query_stats_t cfg, uvs_stats_val_t *val)
+{
+    val->tx_pkt = cfg.out.tx_pkt;
+    val->rx_pkt = cfg.out.rx_pkt;
+    val->tx_bytes = cfg.out.tx_bytes;
+    val->rx_bytes = cfg.out.rx_bytes;
+    val->tx_pkt_err = cfg.out.tx_pkt_err;
+    val->rx_pkt_err = cfg.out.rx_pkt_err;
+
+    val->tx_timeout_cnt = cfg.out.tx_timeout_cnt;
+    val->rx_ce_pkt = cfg.out.rx_ce_pkt;
+}
+
+int uvs_query_stats(const char *tpf_name, uvs_stats_key_t *key, uvs_stats_val_t *val)
+{
+    int ret;
+
+    if (tpf_name == NULL || key == NULL || val == NULL) {
+        TPSA_LOG_ERR("Input invalid, null pointer");
+        return -1;
+    }
+
+    if (key->type != UVS_STATS_VTP && key->type != UVS_STATS_TP &&
+        key->type != UVS_STATS_TPG && key->type != UVS_STATS_DEV) {
+        TPSA_LOG_ERR("Type %d not supported yet", key->type);
+        return -1;
+    }
+
+    if (strnlen(tpf_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid tpf_name");
+        return -1;
+    }
+
+    uvs_cmd_dfx_query_stats_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.type = key->type;
+    cfg.in.id = key->id;
+    cfg.in.ext = key->ext;
+
+    tpsa_worker_t *uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        return -1;
+    }
+
+    ret = uvs_ioctl_dfx_query_stats(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query stats ioctl failed, key type:%u src:%lu", cfg.in.type, cfg.in.id);
+        return ret;
+    }
+
+    val->key = *key;
+    uvs_fill_stats_val(cfg, val);
+
+    return ret;
+}
+
+static void uvs_fill_query_res_vtp(uvs_res_vtp_ioctl_val_t *vtp_res, uint32_t tp_mode, uvs_res_vtp_val_t *vtp_val)
+{
+    vtp_val->vtpn = vtp_res->vtpn;
+    vtp_val->seid = vtp_res->local_eid;
+    vtp_val->sjetty_id = vtp_res->local_jetty;
+    vtp_val->deid = vtp_res->peer_eid;
+    vtp_val->djetty_id = vtp_res->peer_jetty;
+    vtp_val->fe_idx = vtp_res->fe_idx;
+    // rm and rs_share
+    if (tp_mode == UVS_TM_RM || tp_mode == UVS_TM_RC) {
+        vtp_val->tpgn = vtp_res->tpgn;
+    } else if (tp_mode == UVS_TM_UM) {
+        vtp_val->utpn = vtp_res->utpn;
+    }
+}
+
+static int uvs_dfx_rm_rc_lookup_vtpn(tpsa_worker_t *uvs_worker, uvs_res_vtp_key_t *vtp,
+    tpsa_cmd_dfx_query_res_t *cfg, uint32_t *eid_index)
+{
+    int ret = -1;
+    vport_key_t vport_key = {0};
+    urma_eid_t seid = {0};
+    urma_eid_t deid = {0};
+
+    switch (vtp->tp_mode) {
+        case UVS_TM_RM:
+            (void)memcpy(&seid, &vtp->rm.seid, sizeof(urma_eid_t));
+            (void)memcpy(&deid, &vtp->rm.deid, sizeof(urma_eid_t));
+            break;
+        case UVS_TM_RC:
+            if ((vtp->sub_tp_mode == 1) && (vtp->share_mode == 1)) {
+                // rs_share
+                (void)memcpy(&seid, &vtp->rs_share.seid, sizeof(urma_eid_t));
+                (void)memcpy(&deid, &vtp->rs_share.deid, sizeof(urma_eid_t));
+                break;
+            }
+            TPSA_LOG_ERR("unsupport dfx vtp res query sub tp mode: %d, share mode: %d",
+                vtp->sub_tp_mode, vtp->share_mode);
+            return -1;
+        default:
+            TPSA_LOG_ERR("unsupport dfx vtp res query type: %d", vtp->tp_mode);
+            return -1;
+    }
+    ret = vport_table_lookup_by_ueid_return_key(&uvs_worker->table_ctx.vport_table,
+        vtp->upi, &seid, &vport_key, eid_index);
+    if (ret != 0) {
+        TPSA_LOG_WARN("Can't find rm/rc vport key with upi: %u, seid: " EID_FMT ".",
+            vtp->upi, EID_ARGS(seid));
+        return ret;
+    }
+    ret = tpsa_lookup_rm_vtp_table(&uvs_worker->table_ctx, &vport_key,
+        &seid, &deid, &cfg->in.key);
+    if (ret != 0) {
+        TPSA_LOG_WARN("Can't find rm/rc vtp table tpf_name: %s, fe_idx: %u,"
+            "seid: " EID_FMT ", deid:" EID_FMT".", vport_key.tpf_name, vport_key.fe_idx,
+            EID_ARGS(seid), EID_ARGS(deid));
+        return ret;
+    }
+    // dev->ops->query_res中查询vtp的key为vptn, key_ext为fe_idx
+    cfg->in.key_ext = vport_key.fe_idx;
+    return 0;
+}
+
+static int uvs_dfx_um_lookup_vtpn(tpsa_worker_t *uvs_worker, uvs_res_vtp_key_t *vtp,
+    tpsa_cmd_dfx_query_res_t *cfg, uint32_t *eid_index)
+{
+    int ret = -1;
+    vport_key_t vport_key = {0};
+    urma_eid_t seid = {0};
+    urma_eid_t deid = {0};
+
+    (void)memcpy(&seid, &vtp->um.seid, sizeof(urma_eid_t));
+    (void)memcpy(&deid, &vtp->um.deid, sizeof(urma_eid_t));
+    um_vtp_table_key_t um_vtp_key = {
+        .src_eid = seid,
+        .dst_eid = deid,
+    };
+
+    ret = vport_table_lookup_by_ueid_return_key(&uvs_worker->table_ctx.vport_table,
+        vtp->upi, &seid, &vport_key, eid_index);
+    if (ret != 0) {
+        TPSA_LOG_WARN("Can't find um vport key with upi: %u, seid: " EID_FMT ".",
+            vtp->upi, EID_ARGS(seid));
+        return ret;
+    }
+
+    um_vtp_table_entry_t *um_vtp_entry = um_fe_vtp_table_lookup(&uvs_worker->table_ctx.fe_table,
+        &vport_key, &um_vtp_key);
+    if (um_vtp_entry == NULL) {
+        TPSA_LOG_WARN("Can't find um vtp entry with tpf_name: %s, fe_idx: %u,"
+            "seid: " EID_FMT ", deid:" EID_FMT".", vport_key.tpf_name, vport_key.fe_idx,
+            EID_ARGS(um_vtp_key.src_eid), EID_ARGS(um_vtp_key.dst_eid));
+        return -1;
+    }
+
+    cfg->in.key = um_vtp_entry->vtpn;
+    cfg->in.key_ext = vport_key.fe_idx;
+    *eid_index = um_vtp_entry->eid_index;
+    return 0;
+}
+
+static int uvs_ioctl_dfx_query_res_vtp(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+    tpsa_cmd_dfx_query_res_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+    uint32_t eid_index;
+
+    cfg.in.type = key->type;
+    cfg.in.key_cnt = 1;
+
+    switch (key->vtp.tp_mode) {
+        case UVS_TM_RM:
+            ret = uvs_dfx_rm_rc_lookup_vtpn(uvs_worker, &key->vtp, &cfg, &eid_index);
+            break;
+        case UVS_TM_RC:
+            if ((key->vtp.sub_tp_mode == 1) && (key->vtp.share_mode == 1)) {
+                // rs_share
+                ret = uvs_dfx_rm_rc_lookup_vtpn(uvs_worker, &key->vtp, &cfg, &eid_index);
+                break;
+            }
+            TPSA_LOG_ERR("unsupport dfx vtp rc res query sub tp mode: %d, share mode %d",
+                key->vtp.sub_tp_mode, key->vtp.share_mode);
+            return -1;
+        case UVS_TM_UM:
+            ret = uvs_dfx_um_lookup_vtpn(uvs_worker, &key->vtp, &cfg, &eid_index);
+            break;
+        default:
+            TPSA_LOG_ERR("unsupport dfx res query type: %d", key->type);
+            return -1;
+    }
+    if (ret != 0) {
+        TPSA_LOG_WARN("can't find vtpn with tp mode: %d", key->vtp.tp_mode);
+        return -EAGAIN; // 430适配GAEA需求，找不到反固定错码
+    }
+
+    ret = uvs_ioctl_dfx_query_res(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query res ioctl failed type: %d", key->type);
+        return ret;
+    }
+
+    val->vtp.key = key->vtp;
+    val->vtp.eid_index = eid_index;
+    uvs_fill_query_res_vtp(&cfg.out.vtp, key->vtp.tp_mode, &val->vtp);
+    return ret;
+}
+
+static void uvs_fill_query_res_tp(uvs_res_tp_ioctl_val_t *tp_res, uvs_res_tp_val_t *tp_val)
+{
+    tp_val->tx_psn = tp_res->tx_psn;
+    tp_val->rx_psn = tp_res->rx_psn;
+    tp_val->dscp = tp_res->dscp;
+    tp_val->oor_en = tp_res->oor_en;
+    tp_val->selective_retrans_en = tp_res->selective_retrans_en;
+    tp_val->state = tp_res->state;
+    tp_val->data_udp_start = tp_res->data_udp_start;
+    tp_val->ack_udp_start = tp_res->ack_udp_start;
+    tp_val->udp_range = tp_res->udp_range;
+    tp_val->spray_en = tp_res->spray_en;
+}
+
+static int uvs_ioctl_dfx_query_res_tp(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+
+    tpsa_cmd_dfx_query_res_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.type = key->type;
+    cfg.in.key_cnt = 1;
+    cfg.in.key = key->tp.tpn;
+
+    ret = uvs_ioctl_dfx_query_res(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query res ioctl failed type: %d", key->type);
+        return ret;
+    }
+
+    val->tp.key = key->tp;
+    uvs_fill_query_res_tp(&cfg.out.tp, &val->tp);
+    return ret;
+}
+
+static void uvs_fill_query_res_tpg(uvs_res_tpg_ioctl_val_t *tpg_res, uvs_res_tpg_val_t *tpg_val)
+{
+    tpg_val->tp_cnt = tpg_res->tp_cnt;
+    tpg_val->dscp = tpg_res->dscp;
+    (void)memcpy(tpg_val->tp_state, tpg_res->tp_state, sizeof(tpg_val->tp_state));
+    (void)memcpy(tpg_val->tpn, tpg_res->tpn, sizeof(tpg_val->tpn));
+}
+
+// Support rs share and rm non share
+static int uvs_dfx_rs_rm_lookup_tpg(tpsa_worker_t *uvs_worker, uvs_res_tpg_key_t *tpg,
+    tpsa_cmd_dfx_query_res_t *cfg, uint32_t *tpgn)
+{
+    int ret = -1;
+    vport_key_t vport_key = {0};
+    uint32_t eid_index;
+    urma_eid_t seid = {0};
+    urma_eid_t deid = {0};
+
+    switch (tpg->tp_mode) {
+        case UVS_TM_RM:
+            if (tpg->share_mode == 0) {
+                // rm_non_share
+                (void)memcpy(&seid, &tpg->rm_non_share.seid, sizeof(urma_eid_t));
+                (void)memcpy(&deid, &tpg->rm_non_share.deid, sizeof(urma_eid_t));
+                break;
+            }
+            TPSA_LOG_ERR("unsupport dfx tpg rm res query share mode: %d", tpg->share_mode);
+            return -1;
+        case UVS_TM_RC:
+            // rs_share
+            if ((tpg->sub_tp_mode == 1) && (tpg->share_mode == 1)) {
+                (void)memcpy(&seid, &tpg->rs_share.seid, sizeof(urma_eid_t));
+                (void)memcpy(&deid, &tpg->rs_share.deid, sizeof(urma_eid_t));
+                break;
+            }
+            TPSA_LOG_ERR("unsupport dfx tpg rs res query sub_tp_mode: %d, share_mode: %d",
+                tpg->sub_tp_mode, tpg->share_mode);
+            return -1;
+        default:
+            TPSA_LOG_ERR("unsupport dfx tpg res query type: %d", tpg->tp_mode);
+            return -1;
+    }
+
+    ret = vport_table_lookup_by_ueid_return_key(&uvs_worker->table_ctx.vport_table,
+        tpg->upi, &seid, &vport_key, &eid_index);
+    if (ret != 0) {
+        TPSA_LOG_ERR("tpg can't find vport_key with upi: %u, seid: " EID_FMT ".",
+            tpg->upi, EID_ARGS(seid));
+        return ret;
+    }
+
+    rm_vtp_table_key_t vtp_key = {.src_eid = seid, .dst_eid = deid };
+    rm_vtp_table_entry_t *vtp_table_entry = rm_fe_vtp_table_lookup(&uvs_worker->table_ctx.fe_table,
+        &vport_key, &vtp_key);
+    if (vtp_table_entry == NULL) {
+        TPSA_LOG_ERR("Can not find vtp_table_entry with tpf_name: %s, fe_idx: %u,",
+            vport_key.tpf_name, vport_key.fe_idx);
+        return -1;
+    }
+
+    if (tpg->tp_mode == UVS_TM_RM && vtp_table_entry->share_mode == 1) {
+        TPSA_LOG_WARN("RM: Global share mode == 1 but query share mode = %d.", tpg->share_mode);
+        return -EAGAIN;
+    }
+
+    *tpgn = vtp_table_entry->tpgn;
+    return 0;
+}
+
+static int uvs_ioctl_dfx_query_res_tpg(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+
+    tpsa_cmd_dfx_query_res_t cfg = {0};
+    uint32_t tpgn;
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.type = key->type;
+    cfg.in.key_cnt = 1;
+
+    switch (key->tpg.tp_mode) {
+        case UVS_TM_RM:
+            if (key->tpg.share_mode == 1) {
+                // rm share
+                rm_tpg_table_key_t tpg_key = {
+                    .sip = key->tpg.rm.sip,
+                    .dip = key->tpg.rm.dip,
+                };
+                rm_tpg_table_entry_t *entry = rm_tpg_table_lookup(&uvs_worker->table_ctx.rm_tpg_table, &tpg_key);
+                if (entry == NULL) {
+                    TPSA_LOG_WARN("dfx query res, Can't find entry, key sip " EID_FMT " , dip: " EID_FMT " ",
+                        EID_ARGS(tpg_key.sip), EID_ARGS(tpg_key.dip));
+                    return -EAGAIN;
+                }
+                tpgn = entry->tpgn;
+                ret = 0;
+            } else {
+                // rm_non_share
+                ret = uvs_dfx_rs_rm_lookup_tpg(uvs_worker, &key->tpg, &cfg, &tpgn);
+            }
+            break;
+        case UVS_TM_RC:
+            // rs_share
+            if ((key->tpg.sub_tp_mode == 1) && (key->tpg.share_mode == 1)) {
+                ret = uvs_dfx_rs_rm_lookup_tpg(uvs_worker, &key->tpg, &cfg, &tpgn);
+                break;
+            }
+            TPSA_LOG_ERR("unsupport dfx rc res query sub_tp_mode: %d, share_mode: %d",
+                key->tpg.sub_tp_mode, key->tpg.share_mode);
+            return -1;
+        default:
+            TPSA_LOG_ERR("unsupport dfx res query type: %d", key->tpg.tp_mode);
+            return -1;
+    }
+    if (ret != 0) {
+        TPSA_LOG_WARN("can't find tpgn with tp type: %d, share_mode: %d",
+            key->vtp.tp_mode, key->tpg.share_mode);
+        return -EAGAIN; // 430适配GAEA需求，找不到反固定错码
+    }
+
+    cfg.in.key = tpgn;
+    ret = uvs_ioctl_dfx_query_res(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query res ioctl failed type: %d", key->type);
+        return ret;
+    }
+
+    val->tpg.key = key->tpg;
+    val->tpg.tpgn = tpgn;
+    uvs_fill_query_res_tpg(&cfg.out.tpg, &val->tpg);
+    return ret;
+}
+
+static void uvs_fill_query_res_utp(uvs_res_utp_ioctl_val_t *utp_res, uvs_res_utp_val_t *utp_val)
+{
+    utp_val->utpn = utp_res->utpn;
+    utp_val->data_udp_start = utp_res->data_udp_start;
+    utp_val->udp_range = utp_res->udp_range;
+    utp_val->flag = utp_res->flag;
+}
+
+static int uvs_ioctl_dfx_query_res_utp(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+
+    tpsa_cmd_dfx_query_res_t cfg = {0};
+    sip_table_entry_t sip_entry = {0};
+    urma_eid_t remote_eid = {0};
+    uvs_net_addr_t peer_uvs_ip = {0};
+
+    uvs_net_addr_info_t dip;
+
+    (void)memset(&dip, 0, sizeof(uvs_net_addr_info_t));
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.type = key->type;
+    cfg.in.key_cnt = 1;
+
+    ret = tpsa_sip_table_lookup(&uvs_worker->table_ctx.tpf_dev_table, cfg.in.dev_name,
+        key->utp.sip_idx, &sip_entry);
+    if (ret != 0) {
+        TPSA_LOG_ERR("can't get sip table with sid_idx: %d", key->utp.sip_idx);
+        return -EAGAIN;  // 430适配GAEA需求，找不到反固定错码
+    }
+
+    (void)memcpy(&remote_eid, &key->utp.deid, sizeof(urma_eid_t));
+    ret = tpsa_lookup_dip_table(&uvs_worker->table_ctx.dip_table, remote_eid, key->utp.upi, &peer_uvs_ip, &dip);
+    if (ret != 0) {
+        TPSA_LOG_ERR("can't get dip table with upi: %u, seid: " EID_FMT ".",
+            key->utp.upi, EID_ARGS(remote_eid));
+        return -EAGAIN;
+    }
+
+    utp_table_key_t utp_key = {
+        .sip = sip_entry.addr,
+        .dip = dip,
+    };
+
+    utp_table_entry_t *utp_entry = utp_table_lookup(&uvs_worker->table_ctx.utp_table, &utp_key);
+    if (utp_entry == NULL) {
+        TPSA_LOG_ERR("can't get utp entry with utp key");
+        return -EAGAIN;
+    }
+
+    cfg.in.key = utp_entry->utp_idx;
+
+    ret = uvs_ioctl_dfx_query_res(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query res ioctl failed type: %d", key->type);
+        if (errno == 1) {
+            return 0;
+        }
+        return ret;
+    }
+
+    val->utp.key = key->utp;
+    uvs_fill_query_res_utp(&cfg.out.utp, &val->utp);
+    return ret;
+}
+
+static void uvs_fill_query_res_tpf(uvs_res_tpf_ioctl_val_t *tpf_res, uvs_res_tpf_val_t *tpf_val)
+{
+    tpf_val->vtp_cnt = tpf_res->vtp_cnt;
+    tpf_val->tp_cnt = tpf_res->tp_cnt;
+    tpf_val->tpg_cnt = tpf_res->tpg_cnt;
+    tpf_val->utp_cnt = tpf_res->utp_cnt;
+}
+
+static void uvs_get_vport_eid_cnt(vport_table_t *vport_table, const char *vport_name, uint32_t *eid_cnt)
+{
+    vport_table_entry_t *cur, *next;
+
+    (void)pthread_rwlock_rdlock(&vport_table->rwlock);
+    HMAP_FOR_EACH_SAFE(cur, next, node, &vport_table->hmap) {
+        if (strncmp(vport_name, cur->port_key.name, UVS_MAX_VPORT_NAME) != 0) {
+            continue;
+        }
+
+        for (uint32_t i = 0; i < cur->ueid_max_cnt; i++) {
+            if (cur->ueid[i].used) {
+                (*eid_cnt)++;
+            }
+        }
+    }
+    (void)pthread_rwlock_unlock(&vport_table->rwlock);
+}
+
+static int uvs_ioctl_dfx_query_res_tpf(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+    tpsa_cmd_dfx_query_res_t cfg = {0};
+    (void)strncpy(cfg.in.dev_name, tpf_name, URMA_MAX_DEV_NAME - 1);
+
+    cfg.in.type = key->type;
+    cfg.in.key = 0;
+    cfg.in.key_ext = 0;
+    cfg.in.key_cnt = 1;
+
+    ret = uvs_ioctl_dfx_query_res(uvs_worker->ioctl_ctx.ubcore_fd, &cfg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("dfx query res ioctl failed type: %d", key->type);
+        return ret;
+    }
+
+    val->tpf.key = key->tpf;
+    uvs_fill_query_res_tpf(&cfg.out.tpf, &val->tpf);
+    return ret;
+}
+
+static int uvs_dfx_query_res_vport(tpsa_worker_t *uvs_worker, const char *tpf_name,
+    uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = 0;
+    uvs_get_vport_eid_cnt(&uvs_worker->table_ctx.vport_table, key->vport.vport_name,
+        &val->vport.eid_used_cnt);
+    val->vport.key = key->vport;
+    return ret;
+}
+
+int uvs_del_migration_task(uvs_ueid_t *dueid)
+{
+    if (dueid == NULL) {
+        TPSA_LOG_ERR("Input invalid.\n");
+        return -1;
+    }
+
+    tpsa_worker_t *uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        TPSA_LOG_ERR("Can not get uvs_worker ctx\n");
+        return -1;
+    }
+
+    vport_key_t vport_key = {0};
+    uint32_t eid_index;
+    int ret;
+
+    ret = vport_table_lookup_by_ueid_return_key(&uvs_worker->table_ctx.vport_table,
+        dueid->upi, (urma_eid_t *)&dueid->eid, &vport_key, &eid_index);
+    if (ret != 0) {
+        TPSA_LOG_INFO("Can not find vport by eid: " EID_FMT " upi: %u, goto normal case.\n",
+            EID_ARGS(dueid->eid), dueid->upi);
+        goto normal_end;
+    }
+
+    ret = uvs_lm_rollback_process(&uvs_worker->table_ctx, dueid, &vport_key);
+
+    return ret;
+normal_end:
+
+    return ret;
+}
+
+int uvs_query_resource(const char *tpf_name, uvs_res_key_t *key, uvs_res_val_t *val)
+{
+    int ret = -1;
+
+    if (tpf_name == NULL || key == NULL || val == NULL) {
+        TPSA_LOG_ERR("uvs query resource with null ptr");
+        return ret;
+    }
+
+    if (key->type != UVS_RES_VTP && key->type != UVS_RES_UTP && key->type != UVS_RES_TPG &&
+        key->type != UVS_RES_TP && key->type != UVS_RES_VPORT && key->type != UVS_RES_TPF) {
+        TPSA_LOG_ERR("Input invalid, num:%d", key->type);
+        return ret;
+    }
+
+    if (strnlen(tpf_name, UVS_MAX_DEV_NAME) >= UVS_MAX_DEV_NAME) {
+        TPSA_LOG_ERR("Invalid tpf_name");
+        return ret;
+    }
+
+    tpsa_worker_t *uvs_worker = uvs_get_worker();
+    if (uvs_worker == NULL) {
+        return ret;
+    }
+
+    switch (key->type) {
+        case UVS_RES_VTP:
+            ret = uvs_ioctl_dfx_query_res_vtp(uvs_worker, tpf_name, key, val);
+            break;
+        case UVS_RES_TP:
+            ret = uvs_ioctl_dfx_query_res_tp(uvs_worker, tpf_name, key, val);
+            break;
+        case UVS_RES_TPG:
+            ret = uvs_ioctl_dfx_query_res_tpg(uvs_worker, tpf_name, key, val);
+            break;
+        case UVS_RES_UTP:
+            ret = uvs_ioctl_dfx_query_res_utp(uvs_worker, tpf_name, key, val);;
+            break;
+        case UVS_RES_TPF:
+            ret = uvs_ioctl_dfx_query_res_tpf(uvs_worker, tpf_name, key, val);;
+            break;
+        case UVS_RES_VPORT:
+            ret = uvs_dfx_query_res_vport(uvs_worker, tpf_name, key, val);;
+            break;
+        default:
+            TPSA_LOG_ERR("unsupport dfx res query type: %d", key->type);
+            break;
+    }
+
+    return ret;
 }

@@ -18,6 +18,8 @@
 #include <atomic>
 #endif
 
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include "urma_opcode.h"
 
 #ifdef __cplusplus
@@ -47,6 +49,9 @@ extern "C" {
 /* refer to UBCORE_MAX_DEV_NAME */
 #define URMA_MAX_DEV_NAME 64
 #define URMA_GUID_SIZE (16)
+
+#define URMA_MAC_BYTES 6            /* refer to UBCORE_MAC_BYTES */
+
 
 typedef struct urma_init_attr {
     uint64_t token;        /* [Optional] security token */
@@ -142,10 +147,14 @@ typedef union urma_device_feature {
         uint32_t jfc_inline        :   1;  /* [Public] URMA_JFC_INLINE. */
         uint32_t spray_en          :   1;  /* [Public] URMA_SPRAY_ENABLE for UDP port. */
         uint32_t selective_retrans :   1;  /* [Public] URMA_SELECTIVE_RETRANS. */
+        uint32_t live_migrate      :   1;  /* [Public] support live migration. */
+        uint32_t dca               :   1;  /* [Public] for user tp */
         uint32_t jetty_grp         :   1;  /* [Public] support jetty group. */
         uint32_t error_suspend     :   1;  /* [Public] support suspend jetty or jfs on error. */
         uint32_t outorder_comp     :   1;  /* [Public] support out-of-order completion. */
-        uint32_t reserved          :   20;
+        uint32_t mn                :   1;  /* [Public] for user tp */
+        uint32_t clan              :   1;  /* [Public] for user tp */
+        uint32_t reserved          :   16;
     } bs;
     uint32_t value;
 } urma_device_feature_t;
@@ -167,6 +176,7 @@ typedef union urma_atomic_feature {
 typedef enum urma_sub_trans_mode_cap {
     URMA_RC_TP_DST_ORDERING = 0x1,      /* ?rc mode with tp dst ordering? */
     URMA_RC_TA_DST_ORDERING = 0x1 << 1, /* ?rc mode with ta dst ordering? */
+    URMA_RC_USER_TP         = 0x1 << 2, /* ?rc mode with user tp */
 } urma_sub_trans_mode_cap_t;
 
 typedef struct urma_device_cap {
@@ -191,8 +201,12 @@ typedef struct urma_device_cap {
     uint16_t sub_trans_mode_cap;       /* [Public]?bit?OR?of?supported?transport?modes cap, urma_sub_trans_mode_cap_t */
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
-    uint32_t max_tp_in_tpg;
-    uint32_t max_eid_cnt;
+    uint32_t max_tp_in_tpg;            /* [Public] max tp in tpg */
+    uint32_t max_eid_cnt;              /* [Public] max eid count */
+    uint64_t page_size_cap;            /* [Public] page size capability, must include PAGE_SIZE(4k) */
+    uint32_t max_oor_cnt;              /* [Public] max OOR window size by packet, only for user tp */
+    uint32_t mn;                       /* [Public] only for user tp */
+    uint32_t max_netaddr_cnt;          /* [Public] only for user tp */
 } urma_device_cap_t;
 
 typedef struct urma_guid {
@@ -202,6 +216,8 @@ typedef struct urma_guid {
 typedef struct urma_device_attr {
     urma_guid_t guid;                 /* [Public] */
     urma_device_cap_t dev_cap;        /* [Public] capabilities of device. */
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
     uint8_t port_cnt;                 /* [Public] port number of device. */
     struct urma_port_attr port_attr[MAX_PORT_CNT];
 } urma_device_attr_t;
@@ -218,9 +234,10 @@ struct urma_provider_ops;
 
 typedef enum urma_transport_type {
     URMA_TRANSPORT_INVALID = -1,
-    URMA_TRANSPORT_UB,
-    URMA_TRANSPORT_IB,
-    URMA_TRANSPORT_IP,
+    URMA_TRANSPORT_UB      = 0,
+    URMA_TRANSPORT_IB      = 1,
+    URMA_TRANSPORT_IP      = 2,
+    URMA_TRANSPORT_HNS_UB  = 5,
     URMA_TRANSPORT_MAX
 } urma_transport_type_t;
 
@@ -347,6 +364,7 @@ typedef struct urma_jfc {
 } urma_jfc_t;
 
 #define URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
+#define URMA_SUB_TRANS_MODE_USER_TP (0x2)
 
 typedef union urma_jfs_flag {
     struct {
@@ -927,6 +945,116 @@ typedef struct urma_jfr_info {
     uint32_t uasid;
     uint32_t id;
 } urma_jfr_info_t;
+
+typedef union urma_tp_cfg_flag {
+    struct {
+        uint32_t target : 1; /* 0: initiator, 1: target */
+        uint32_t loopback : 1;
+        uint32_t dca_enable : 1;
+        /* for the bonding case, the hardware selects the port
+         * ignoring the port of the tp context and
+         * selects the port based on the hash value
+         * along with the information in the bonding group table.
+         */
+        uint32_t bonding : 1;
+        uint32_t reserved : 28;
+    } bs;
+    uint32_t value;
+} urma_tp_cfg_flag_t;
+
+typedef struct urma_tp_cfg {
+    urma_tp_cfg_flag_t flag;                /* flag of initial tp */
+    /* transport layer attributes */
+    urma_transport_mode_t trans_mode;
+    uint8_t retry_num;
+    uint8_t retry_factor;                   /* for calculate the time slot to retry */
+    uint8_t ack_timeout;
+    uint8_t dscp;
+    uint32_t oor_cnt;                       /* OOR window size: by packet */
+} urma_tp_cfg_t;
+
+typedef union urma_tp_attr_mask {
+    struct {
+        uint32_t flag : 1;
+        uint32_t peer_tpn : 1;
+        uint32_t state : 1;
+        uint32_t tx_psn : 1;
+        uint32_t rx_psn : 1; /* modify both rx psn and tx psn when restore tp */
+        uint32_t mtu : 1;
+        uint32_t cc_pattern_idx : 1;
+        uint32_t oos_cnt : 1;
+        uint32_t local_net_addr_idx : 1;
+        uint32_t peer_net_addr : 1;
+        uint32_t data_udp_start : 1;
+        uint32_t ack_udp_start : 1;
+        uint32_t udp_range : 1;
+        uint32_t hop_limit : 1;
+        uint32_t flow_label : 1;
+        uint32_t port_id : 1;
+        uint32_t mn : 1;
+        uint32_t peer_trans_type : 1;
+        uint32_t reserved : 14;
+    } bs;
+    uint32_t value;
+} urma_tp_attr_mask_t;
+
+typedef union urma_tp_mod_flag {
+    struct {
+        uint32_t oor_en      : 1; /* out of order receive, 0: disable 1: enable */
+        uint32_t sr_en       : 1; /* selective retransmission, 0: disable 1: enable */
+        uint32_t cc_en       : 1; /* congestion control algorithm, 0: disable 1: enable */
+        uint32_t cc_alg      : 4; /* The value is ubcore_tp_cc_alg_t */
+        uint32_t spray_en    : 1; /* spray with src udp port, 0: disable 1: enable */
+        uint32_t clan        : 1; /* clan domain, 0: disable 1: enable */
+        uint32_t reserved    : 23;
+    } bs;
+    uint32_t value;
+} urma_tp_mod_flag_t;
+
+typedef enum urma_tp_state {
+    URMA_TP_STATE_RESET = 0,
+    URMA_TP_STATE_PASSIVE,
+    URMA_TP_STATE_ACTIVE,
+    URMA_TP_STATE_BRAKE,
+    URMA_TP_STATE_ERROR
+} urma_tp_state_t;
+
+typedef struct urma_net_addr {
+    sa_family_t sin_family;     /* AF_INET/AF_INET6 */
+    union {
+        struct in_addr in4;
+        struct in6_addr in6;
+    };
+    uint64_t vlan;
+    uint8_t mac[URMA_MAC_BYTES];
+    uint32_t prefix_len;
+} urma_net_addr_t;
+
+typedef struct urma_net_addr_info {
+    urma_net_addr_t netaddr;
+    uint32_t index;
+} urma_net_addr_info_t;
+
+typedef struct urma_tp_attr {
+    urma_tp_mod_flag_t flag;
+    uint32_t peer_tpn;
+    urma_tp_state_t state;
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    urma_mtu_t mtu;
+    uint8_t cc_pattern_idx;
+    uint32_t oos_cnt; /* out of standing packet cnt */
+    uint32_t local_net_addr_idx;
+    urma_net_addr_t peer_net_addr;
+    uint16_t data_udp_start;
+    uint16_t ack_udp_start;
+    uint8_t udp_range;
+    uint8_t hop_limit;
+    uint32_t flow_label;
+    uint8_t port_id;
+    uint8_t mn; /* 0~15, a packet contains only one msg if mn is set as 0 */
+    urma_transport_type_t peer_trans_type;
+} urma_tp_attr_t;
 
 /* callback information */
 typedef void (*urma_async_event_cb)(urma_async_event_t *event, void *cb_arg);

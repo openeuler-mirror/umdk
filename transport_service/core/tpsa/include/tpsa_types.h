@@ -39,8 +39,12 @@ extern "C" {
 #define TPSA_DEFAULT_DCA_ENABLE 0
 #define TPSA_DEFAULT_BONDING 0
 
-#define UVS_DERFAULT_SUSPEND_PERIOD_US 1000
-#define UVS_DERFAULT_SUSPEND_CNT 3
+// thresholds for net card tp state transition to SUSPENDED
+#define TPSA_DEFAULT_SUSPEND_PERIOD_US 1000
+#define TPSA_DEFAULT_SUSPEND_CNT 3
+// thresholds for tpsa tp state transition from SUSPENDED to ERR
+#define TPSA_DEFAULT_SUS2ERR_PERIOD_US 30000000
+#define TPSA_DEFAULT_SUS2ERR_CNT 3
 
 #define TPSA_ADD_NOMEM (-1)
 #define TPSA_ADD_INVALID (-2)
@@ -51,15 +55,14 @@ extern "C" {
 #define TPSA_REMOVE_INVALID (-2)
 #define TPSA_REMOVE_DUPLICATE (-3)
 #define TPSA_REMOVE_SERVER (-4)
-
-#define TPSA_SUSPEND2ERROR_CNT 3
-#define TPSA_SUSPEND2ERROR_PERIOD_US 30000000
+#define TPSA_REMOVE_LM (-5)
 
 #define TPSA_CC_IDX_TABLE_SIZE 64 /* support 8 priorities and 8 algorithms */
                                   /* same as UBCORE_CC_IDX_TABLE_SIZE */
                                   /* same as URMA_CC_IDX_TABLE_SIZE */
 
 #define TPSA_UDRV_DATA_LEN 120
+#define UVS_UUID_LEN 16
 
 typedef enum tpsa_cap_type {
     TPSA_CAP_OOR = 0,
@@ -82,6 +85,12 @@ typedef enum tpsa_tp_cc_alg {
     TPSA_TP_CC_DIP,
     TPSA_TP_CC_NUM
 } tpsa_tp_cc_alg_t;
+
+typedef enum tpsa_lm_location {
+    LM_NOT_SET = 0,
+    LM_SOURCE,
+    LM_DESTINATION
+} tpsa_lm_location_t;
 
 typedef struct tpsa_cc_entry {
     tpsa_tp_cc_alg_t alg;
@@ -189,9 +198,10 @@ typedef enum tpsa_transport_mode {
 
 typedef enum tpsa_transport_type {
     TPSA_TRANSPORT_INVALID = -1,
-    TPSA_TRANSPORT_UB,
-    TPSA_TRANSPORT_IB,
-    TPSA_TRANSPORT_IP,
+    TPSA_TRANSPORT_UB      = 0,
+    TPSA_TRANSPORT_IB      = 1,
+    TPSA_TRANSPORT_IP      = 2,
+    TPSA_TRANSPORT_HNS_UB  = 5,
     TPSA_TRANSPORT_MAX
 } tpsa_transport_type_t;
 
@@ -210,10 +220,14 @@ typedef union tpsa_tp_mod_flag {
                                     * If ubcore_tp_cfg_flag parameter needs to be set,
                                     * the parameter must be set separately.
                                     */
-        uint32_t reserved : 20;
+        uint32_t reserved : 20; /* revise this struct need to sync print_tp_mod_flag_str fucntion */
     } bs;
     uint32_t value;
 } tpsa_tp_mod_flag_t;
+
+typedef struct uvs_uuid {
+    uint8_t b[UVS_UUID_LEN];
+} uvs_uuid_t;
 
 typedef struct tpsa_tp_mod_cfg {
     tpsa_tp_mod_flag_t tp_mod_flag;
@@ -224,9 +238,9 @@ typedef struct tpsa_tp_mod_cfg {
     uint8_t ack_timeout;
     uint8_t dscp;
     uint8_t cc_pattern_idx;
-    uint16_t data_udp_start;
-    uint16_t ack_udp_start;
-    uint8_t udp_range;
+    uint16_t data_udp_start; /* not used */
+    uint16_t ack_udp_start; /* not used */
+    uint8_t udp_range; /* not used */
     uint8_t hop_limit;
     uint8_t port;
     uint8_t mn;
@@ -276,15 +290,6 @@ typedef struct tpsa_rc_cfg {
     uint32_t slice;
 } tpsa_rc_cfg_t;
 
-typedef enum tpsa_tp_state {
-    TPSA_TP_STATE_RESET = 0,
-    TPSA_TP_STATE_RTR,
-    TPSA_TP_STATE_RTS,
-    TPSA_TP_STATE_SUSPENDED,
-    TPSA_TP_STATE_ERR,
-    TPSA_TP_STATE_WAIT_VERIFY,
-} tpsa_tp_state_t;
-
 typedef struct tpsa_tp_ext {
     uint64_t addr;
     uint32_t len;
@@ -295,7 +300,7 @@ typedef struct tpsa_tp_attr {
     /* Need to negotiate begin */
     tpsa_tp_mod_flag_t flag;
     uint32_t peer_tpn;
-    tpsa_tp_state_t state;
+    uvs_tp_state_t state;
     uint32_t tx_psn;
     uint32_t rx_psn;
     uvs_mtu_t mtu;
@@ -312,6 +317,7 @@ typedef struct tpsa_tp_attr {
     uint32_t flow_label;
     uint8_t port;
     uint8_t mn;
+    tpsa_transport_type_t peer_trans_type;  /* Only for user tp connection */
 } tpsa_tp_attr_t;
 
 typedef union tpsa_tp_attr_mask {
@@ -361,7 +367,7 @@ typedef struct tpsa_tp_param_common {
     tpsa_tp_mod_cfg_t remote_tp_cfg;
     uint32_t local_net_addr_idx;
     uvs_net_addr_info_t peer_net_addr;
-    tpsa_tp_state_t state;
+    uvs_tp_state_t state;
     uint32_t tx_psn;
     uint32_t rx_psn;
     uvs_mtu_t local_mtu;
@@ -549,6 +555,8 @@ typedef struct tpsa_destroy_req {
     struct tpsa_ta_data ta_data;
     uint16_t src_fe_idx;
     char src_tpf_name[UVS_MAX_DEV_NAME];
+    bool is_rollback;
+    tpsa_lm_location_t location;
 } tpsa_destroy_req_t;
 
 typedef struct tpsa_table_sync {
@@ -575,31 +583,40 @@ typedef struct tpsa_op_sip_parm {
     bool is_active;
 } tpsa_op_sip_parm_t;
 
-typedef union uvs_global_cfg_mask {
+typedef union tpsa_global_cfg_mask {
     struct {
         uint32_t mtu            : 1;
         uint32_t slice          : 1;
         uint32_t suspend_period : 1;
         uint32_t suspend_cnt    : 1;
         uint32_t sus2err_period : 1;
+        uint32_t sus2err_cnt    : 1;
+        uint32_t tbl_input_done : 1;
+
+        /* cfg mask for gaea */
         uint32_t hop_limit      : 1;
         uint32_t udp_port_start : 1;
         uint32_t udp_port_end   : 1;
         uint32_t udp_range      : 1;
         uint32_t flag_um_en     : 1;
-        uint32_t reserved       : 22;
+        uint32_t reserved       : 20;
     } bs;
     uint32_t value;
-} uvs_global_cfg_mask_t;
+} tpsa_global_cfg_mask_t;
 
 typedef struct tpsa_global_cfg {
-    uvs_global_cfg_mask_t mask;
+    tpsa_global_cfg_mask_t mask;
     uvs_mtu_t mtu;
     uint32_t slice;
+    // thresholds for net card tp state transition to SUSPENDED
     uint32_t suspend_period;        // us
     uint32_t suspend_cnt;
+    // thresholds for tpsa tp state transition from SUSPENDED to ERR
     uint32_t sus2err_period;        // us
+    uint32_t sus2err_cnt;
     bool vtp_restore_finished;
+    bool tbl_input_done;
+    bool restored_vtp_tpg_check_finished;
 
     /* cfg by gaea, for all tp */
     uint8_t hop_limit;
@@ -714,12 +731,19 @@ typedef struct tpsa_restored_vtp_entry {
     uint32_t eid_idx;
     uint32_t upi;
     bool share_mode;
+    bool restore_succeed;
 } tpsa_restored_vtp_entry_t;
 
 typedef struct tpsa_restored_table_param {
     uvs_net_addr_info_t sip;
     uvs_net_addr_info_t dip;
 } tpsa_restored_table_param_t;
+
+typedef struct uvs_lm_tp_ctx {
+    bool is_rollback;
+    tpsa_lm_location_t location;
+    uvs_direction_t direction;
+} uvs_lm_tp_ctx_t;
 
 #define TPSA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
 

@@ -26,6 +26,9 @@ uvs_admin_cmd_t g_uvs_admin_dip_table_cmd = {
     .min_argc = UVS_ADMIN_CMD_PARM_TWO,
 };
 
+#define UVS_DEFAULT_UPI_MIN 0X0
+#define UVS_DEFAULT_UPI_MAX 0xFFFFFF
+
 enum dip_table_opts {
 #define DIP_TABLE_OPT_HELP_LONG "help"
     DIP_TABLE_OPT_HELP_NUM = 0,
@@ -194,9 +197,9 @@ static int dip_table_input_valid_num(uvs_admin_dip_table_args_t *args, const cha
         args->net_addr.type = (bool)num;
         args->mask.bs.net_addr = 1;
     } else if (!strcmp(arg_name, DIP_TABLE_OPT_UPI_LONG)) {
-        if (dip_table_input_range_check(num, 0, UINT32_MAX) != 0) {
+        if (dip_table_input_range_check(num, UVS_DEFAULT_UPI_MIN, UVS_DEFAULT_UPI_MAX) != 0) {
             (void)printf("invalid parameter range --%s %u; valid range = [%u, %u]\n",
-                arg_name, num, 0, UINT32_MAX);
+                arg_name, num, UVS_DEFAULT_UPI_MIN, UVS_DEFAULT_UPI_MAX);
             return -EINVAL;
         }
         args->upi = num;
@@ -208,7 +211,7 @@ static int dip_table_input_valid_num(uvs_admin_dip_table_args_t *args, const cha
             return -EINVAL;
         }
         args->new_upi = num;
-        args->mask.bs.upi = 1;
+        args->mask.bs.new_upi = 1;
     } else {
         (void)printf("ERR: invalid parameter --%s %s\n", arg_name, _optarg);
         return -EINVAL;
@@ -223,18 +226,21 @@ static int dip_table_input_valid_str(uvs_admin_dip_table_args_t *args, const cha
     int ret = 0;
     if (!strcmp(arg_name, DIP_TABLE_OPT_EID_LONG)) {
         ret = str_to_eid(_optarg, &args->eid);
+        args->mask.bs.eid = 1;
     } else if (!strcmp(arg_name, DIP_TABLE_OPT_UVS_IP_LONG)) {
         ret = str_to_eid(_optarg, (urma_eid_t *)&args->uvs_ip);
         args->mask.bs.uvs_ip = 1;
     } else if (!strcmp(arg_name, DIP_TABLE_OPT_NET_ADDR_LONG)) {
         ret = str_to_eid(_optarg, (urma_eid_t *)&args->net_addr.net_addr);
+        ret |= get_net_addr_type(_optarg, (urma_eid_t *)&args->net_addr.net_addr,
+            &args->input_net_type);
         args->mask.bs.net_addr = 1;
     } else if (!strcmp(arg_name, DIP_TABLE_OPT_MAC_LONG)) {
         ret = parse_mac(_optarg, args->net_addr.mac);
         args->mask.bs.net_addr = 1;
     } else if (!strcmp(arg_name, DIP_TABLE_OPT_NEW_EID_LONG)) {
         ret = str_to_eid(_optarg, &args->new_eid);
-        args->mask.bs.eid = 1;
+        args->mask.bs.new_eid = 1;
     } else {
         ret = -EINVAL;
     }
@@ -361,6 +367,26 @@ static int32_t uvs_admin_dip_table_showcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     return 0;
 }
 
+static int uvs_admin_dip_table_addcmd_validation(uvs_admin_dip_table_args_t args)
+{
+    if (args.mask.bs.eid == 0 || args.mask.bs.upi == 0 ||
+        args.mask.bs.uvs_ip == 0 || args.mask.bs.net_addr == 0) {
+        (void)printf("ERR: invalid parameter, must set eid/upi/uvs_ip/net_addr, mask:0x%x\n",
+            args.mask.value);
+        return -EINVAL;
+    }
+
+    if (args.net_addr.type != args.input_net_type) {
+        (void)printf("ERR: invalid parameter, cmd param --net_addr_type is %s "
+            "but input net_addr ip type is %s\n",
+            args.net_addr.type == UVS_ADMIN_NET_ADDR_TYPE_IPV4 ? "IPV4" : "IPV6",
+            args.input_net_type == UVS_ADMIN_NET_ADDR_TYPE_IPV4 ? "IPV4" : "IPV6");
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 {
     int ret;
@@ -370,6 +396,11 @@ static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char buf[MAX_MSG_LEN] = {0};
 
     ret = dip_table_cmd_prep_args(ctx, g_dip_table_add_long_options, g_dip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_dip_table_addcmd_validation(args);
     if (ret != 0) {
         return ret;
     }
@@ -403,6 +434,17 @@ static int32_t uvs_admin_dip_table_addcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     return 0;
 }
 
+static int uvs_admin_dip_table_delcmd_validation(uvs_admin_dip_table_args_t args)
+{
+    if (args.mask.bs.eid == 0 || args.mask.bs.upi == 0) {
+        (void)printf("ERR: invalid parameter, must set eid/upi, mask:0x%x\n",
+            args.mask.value);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
 {
     int ret;
@@ -412,6 +454,11 @@ static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char buf[MAX_MSG_LEN] = {0};
 
     ret = dip_table_cmd_prep_args(ctx, g_dip_table_del_long_options, g_dip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_dip_table_delcmd_validation(args);
     if (ret != 0) {
         return ret;
     }
@@ -443,6 +490,19 @@ static int32_t uvs_admin_dip_table_delcmd_exec(uvs_admin_cmd_ctx_t *ctx)
     return 0;
 }
 
+static int uvs_admin_dip_table_modifycmd_validation(uvs_admin_dip_table_args_t args)
+{
+    if (args.mask.bs.eid == 0 || args.mask.bs.upi == 0 ||
+        args.mask.bs.uvs_ip == 0 || args.mask.bs.net_addr == 0 ||
+        args.mask.bs.new_eid == 0 || args.mask.bs.new_upi == 0) {
+        (void)printf("ERR: invalid parameter, must set eid/upi/uvs_ip/net_addr/new_eid/new_upi,"
+            " mask:0x%x\n", args.mask.value);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 static int32_t uvs_admin_dip_table_modifycmd_exec(uvs_admin_cmd_ctx_t *ctx)
 {
     int ret;
@@ -452,6 +512,11 @@ static int32_t uvs_admin_dip_table_modifycmd_exec(uvs_admin_cmd_ctx_t *ctx)
     char *buf = NULL;
 
     ret = dip_table_cmd_prep_args(ctx, g_dip_table_modify_long_options, g_dip_table_opt_args, &args);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = uvs_admin_dip_table_modifycmd_validation(args);
     if (ret != 0) {
         return ret;
     }

@@ -54,6 +54,7 @@ int tpsa_parse_config_file(tpsa_config_t *cfg)
     if (inet_pton(AF_INET6, server_ip, &addr) <= 0) {
         if (inet_pton(AF_INET, server_ip, &addr.in4.addr) <= 0) {
                 TPSA_LOG_ERR("read ETC file: server_ip is illegal. server_ip:%s", server_ip);
+                ret = -EINVAL;
                 goto free_file;
         } else {
             addr.in4.prefix = htonl(TPSA_IPV4_MAP_IPV6_PREFIX);

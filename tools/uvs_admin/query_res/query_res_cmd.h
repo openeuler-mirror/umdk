@@ -15,5 +15,6 @@
 #include "uvs_admin_cmd.h"
 
 int query_res_cmd_exec(int argc, char *argv[]);
+void uvs_query_res_usage(void);
 
 #endif /* QUERYRES_CMD_H */

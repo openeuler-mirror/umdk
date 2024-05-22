@@ -20,11 +20,42 @@ extern "C" {
 #define UVS_EID_SIZE 16
 #define UVS_NA_SIZE 16
 #define ETH_ADDR_LEN 6
-#define UVS_MAX_DEV_NAME 64
+#define UVS_MAX_DEV_NAME 64        // Refer to UBCORE_MAX_DEV_NAME
 #define UVS_MAX_VPORT_NAME 32
 #define UVS_MAX_PORT_CNT 16
 #define UVS_MAX_CC_CNT 64
 #define UVS_DEVID_SIZE (16)
+#define UVS_MAX_TP_CNT_IN_GRP 32
+#define MS_PER_SEC          1000ULL
+#define NS_PER_MS           1000000ULL
+#define NS_PER_SEC          1000000000ULL
+
+typedef enum uvs_tp_state {
+    UVS_TP_STATE_RESET = 0,
+    UVS_TP_STATE_RTR,
+    UVS_TP_STATE_RTS,
+    UVS_TP_STATE_SUSPENDED,
+    UVS_TP_STATE_ERR,
+    UVS_TP_STATE_WAIT_VERIFY,
+} uvs_tp_state_t;
+
+typedef union uvs_utp_cfg_flag {
+    struct {
+        uint32_t loopback : 1;
+        uint32_t spray_en : 1;
+        uint32_t clan     : 1;
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
+} uvs_utp_cfg_flag_t;
+
+
+// Refer to urma_transport_mode
+typedef enum uvs_tp_mode {
+    UVS_TM_RM = 0x1,      /* Reliable message */
+    UVS_TM_RC = 0x1 << 1, /* Reliable connection */
+    UVS_TM_UM = 0x1 << 2, /* Unreliable message */
+} uvs_tp_mode_t;
 
 enum uvs_event_type {
     UVS_EVENT_HANG,
@@ -208,7 +239,7 @@ typedef union uvs_global_flag {
     uint32_t value;
 } uvs_global_flag_t;
 
-typedef union uvs_global_mask {
+typedef union uvs_global_info_mask {
     struct {
         uint32_t tpf_name : 1;
         uint32_t mtu : 1;
@@ -227,10 +258,11 @@ typedef union uvs_global_mask {
         uint32_t flag_pattern : 1;
         uint32_t flag_um_en : 1;
         uint32_t flag_lo_internal : 1;
-        uint32_t resereved : 15;
+        uint32_t tbl_input_done : 1;
+        uint32_t resereved : 14;
     } bs;
     uint32_t value;
-} uvs_global_mask_t;
+} uvs_global_info_mask_t;
 
 typedef struct uvs_global_info_key {
     char tpf_name[UVS_MAX_DEV_NAME];
@@ -239,7 +271,7 @@ typedef struct uvs_global_info_key {
 typedef struct uvs_global_info {
     uvs_global_info_key_t key;
 
-    uvs_global_mask_t mask;
+    uvs_global_info_mask_t mask;
     /* for nic */
     uvs_mtu_t mtu;
     /* for tpf device */
@@ -249,6 +281,7 @@ typedef struct uvs_global_info {
     /* for uvs itself process, will not be set to driver */
     uint32_t sus2err_period;
     uint32_t sus2err_cnt;
+    bool tbl_input_done;
 
     /* for all tp */
     uint8_t hop_limit;
@@ -372,6 +405,41 @@ typedef enum {
     USER_OPS_MAX,
 } user_ops_t;
 
+/**
+ * UVS private key password generation function prototype.
+ * @param[out] pwd:         generated password;
+ * @param[out] pwd_len:     password length;
+ * Return: void.
+ * Note: password should be terminated by '\0'.
+ */
+typedef void (*uvs_generate_prkey_pwd_t)(char **pwd, int *pwd_len);
+
+/**
+ * UVS private key password erasement function prototype.
+ * @param[in] pwd:          password to be erased;
+ * @param[in] pwd_len:      password length;
+ * Return: void.
+ */
+typedef void (*uvs_erase_prkey_pwd_t)(char *pwd, int pwd_len);
+
+/**
+ * UVS certificate verification function prototype.
+ * @param[in] ctx:          a X509_STORE_CTX type context;
+ * @param[in] crl_path:     certificate revocation list path;
+ * Return: 0 on success, other value on error.
+ */
+typedef int (*uvs_verify_cert_t)(void *ctx, const char *crl_path);
+
+typedef struct uvs_ssl_cfg {
+    char *ca_path;      // Required, CA certificate file to verify remote
+    char *cert_path;    // Required, local certificate file to be sent to remote
+    char *prkey_path;   // Required, encrypted private key file
+    char *crl_path;     // Optional, certificate revocation list
+    uvs_generate_prkey_pwd_t generate_pwd;  // Required
+    uvs_erase_prkey_pwd_t erase_pwd;        // Required
+    uvs_verify_cert_t verify_cert;          // Optional
+} uvs_ssl_cfg_t;
+
 typedef struct uvs_init_attr {
     bool statistic;
     int cpu_core;
@@ -381,6 +449,7 @@ typedef struct uvs_socket_init_attr {
     uvs_net_addr_type_t type;
     uvs_net_addr_t server_ip;
     uint16_t server_port;
+    uvs_ssl_cfg_t *ssl_cfg;     // If NULL, UVS would not establish TLS connection
 } uvs_socket_init_attr_t;
 
 /* total number of successful/active/failed/opening link setups in rm/rc/um mode for vport */
@@ -421,6 +490,217 @@ typedef struct uvs_tpf_statistic {
  * Return: void.
  */
 typedef void (*uvs_event_cb_t)(struct uvs_event *event, void *arg);
+
+
+typedef struct uvs_mig_entry {
+    uint32_t upi;
+    uvs_eid_info_t eid;
+    uint64_t hits;
+} uvs_mig_entry_t;
+
+typedef uvs_mig_entry_t* uvs_mig_entry_list_t;
+
+typedef enum uvs_stats_type {
+    UVS_STATS_VTP = 1,             // uvs_stats_key id: vtpn, driver not supported yet
+    UVS_STATS_TP = 2,              // uvs_stats_key id: tpn, driver not supported yet
+    UVS_STATS_TPG = 3,             // uvs_stats_key id: tpgn, driver not supported yet
+    UVS_STATS_DEV = 8,             // uvs_stats_key id: fe_idx
+} uvs_stats_type_t;
+
+typedef struct uvs_stats_key {
+    uvs_stats_type_t type;
+    uint32_t id;                   // vtpn/tpn/tpgn/fe_idx, see uvs_stats_type_t
+    uint32_t ext;                  // For VTP only, provide fe_idx
+} uvs_stats_key_t;
+
+typedef struct uvs_stats_val {
+    uvs_stats_key_t key;
+    uint64_t tx_pkt;
+    uint64_t rx_pkt;
+    uint64_t tx_bytes;
+    uint64_t rx_bytes;
+    uint64_t tx_pkt_err;
+    uint64_t rx_pkt_err;
+    // UVS_STATS_KEY_DEV only
+    uint64_t tx_timeout_cnt;
+    uint64_t rx_ce_pkt;
+} uvs_stats_val_t;
+
+typedef enum uvs_res_type {
+    UVS_RES_VTP = 1,               // driver not supported yet
+    UVS_RES_TP = 2,
+    UVS_RES_TPG = 3,
+    UVS_RES_UTP = 4,               // stats not supported
+    UVS_RES_TPF = 13,
+    UVS_RES_VPORT = 14,
+} uvs_res_type_t;
+
+typedef struct uvs_res_vtp_key {
+    uint32_t tp_mode;              // Refer to uvs_tp_mode_t
+    uint32_t sub_tp_mode;
+    uint32_t share_mode;
+    uint32_t upi;
+    union {
+        struct {
+            uvs_eid_t seid;
+            uvs_eid_t deid;
+        } rm;
+        struct {
+            uvs_eid_t deid;
+            uint32_t djetty_id;
+        } rc;
+        struct {
+            uvs_eid_t seid;
+            uvs_eid_t deid;
+        } rs_share;
+        struct {
+            uvs_eid_t deid;
+            uint32_t djetty_id;
+        } rs_non_share;
+        struct {
+            uvs_eid_t seid;
+            uvs_eid_t deid;
+        } um;
+    };
+} uvs_res_vtp_key_t;
+
+typedef struct uvs_res_vtp_val {
+    uvs_res_vtp_key_t key;
+    uint32_t vtpn;
+    uvs_eid_t seid;
+    uint32_t sjetty_id;
+    uvs_eid_t deid;
+    uint32_t djetty_id;
+    uint16_t fe_idx;
+    uint32_t eid_index;
+    union {
+        uint32_t tpgn;             // RM
+        uint32_t utpn;             // UM
+    };
+} uvs_res_vtp_val_t;
+
+typedef struct uvs_res_tp_key_t {
+    uint32_t tpn;
+} uvs_res_tp_key_t;
+
+typedef struct uvs_res_tp_val {
+    uvs_res_tp_key_t key;
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    uint8_t dscp;
+    uint8_t oor_en;
+    uint8_t selective_retrans_en;
+    uint8_t state;
+    uint16_t data_udp_start;
+    uint16_t ack_udp_start;
+    uint8_t udp_range;
+    uint32_t spray_en;
+} uvs_res_tp_val_t;
+
+typedef struct uvs_res_tpg_key {
+    uint32_t tp_mode;
+    uint32_t sub_tp_mode;
+    uint32_t share_mode;
+    uint32_t upi;
+    union {
+        struct {
+            uvs_net_addr_t sip;
+            uvs_net_addr_t dip;
+        } rm;
+        struct {
+            uvs_eid_t seid;
+            uvs_eid_t deid;
+        } rm_non_share;
+        struct {
+            uvs_eid_t seid;
+            uvs_eid_t deid;
+        } rs_share;
+        struct {
+            uvs_eid_t deid;
+            uint32_t djetty_id;
+        } rs_non_share;
+        struct {
+            uvs_eid_t deid;
+            uint32_t djetty_id;
+        } rc;
+    };
+} uvs_res_tpg_key_t;
+
+typedef struct uvs_res_tpg_val {
+    uvs_res_tpg_key_t key;
+    uint32_t tpgn;
+    uint32_t tp_cnt;
+    uint8_t dscp;
+    uvs_tp_state_t tp_state[UVS_MAX_TP_CNT_IN_GRP];
+    uint32_t tpn[UVS_MAX_TP_CNT_IN_GRP];
+} uvs_res_tpg_val_t;
+
+typedef struct uvs_res_utp_key {
+    uint32_t sip_idx;
+    uint32_t upi;
+    uvs_eid_t deid;
+} uvs_res_utp_key_t;
+
+typedef struct uvs_res_utp_val {
+    uvs_res_utp_key_t key;
+    uint32_t utpn;
+    uint16_t data_udp_start;
+    uint8_t udp_range;
+    uvs_utp_cfg_flag_t flag;
+} uvs_res_utp_val_t;
+
+typedef struct uvs_res_vport_key {
+    char vport_name[UVS_MAX_VPORT_NAME];
+} uvs_res_vport_key_t;
+
+typedef struct uvs_res_vport_val {
+    uvs_res_vport_key_t key;
+    uint32_t seg_cnt;
+    uint32_t jfs_cnt;
+    uint32_t jfr_cnt;
+    uint32_t jfc_cnt;
+    uint32_t jetty_cnt;
+    uint32_t jetty_group_cnt;
+    uint32_t rc_cnt;
+    uint32_t eid_used_cnt;
+} uvs_res_vport_val_t;
+
+typedef struct uvs_res_tpf_key_t {
+    char tpf_name[UVS_MAX_DEV_NAME];
+} uvs_res_tpf_key_t;
+
+typedef struct uvs_res_tpf_val {
+    uvs_res_tpf_key_t key;
+    uint32_t vtp_cnt;
+    uint32_t tp_cnt;
+    uint32_t tpg_cnt;
+    uint32_t utp_cnt;
+    uint32_t eid_cnt;
+} uvs_res_tpf_val_t;
+
+typedef struct uvs_res_key {
+    uvs_res_type_t type;
+    union {
+        uvs_res_vtp_key_t   vtp;
+        uvs_res_tpg_key_t   tpg;
+        uvs_res_tp_key_t    tp;
+        uvs_res_utp_key_t   utp;
+        uvs_res_vport_key_t vport;
+        uvs_res_tpf_key_t   tpf;
+    };
+} uvs_res_key_t;
+
+typedef struct uvs_res_val {
+    uvs_res_type_t type;
+    union {
+        uvs_res_vtp_val_t   vtp;
+        uvs_res_tpg_val_t   tpg;
+        uvs_res_tp_val_t    tp;
+        uvs_res_utp_val_t   utp;
+        uvs_res_vport_val_t vport;
+        uvs_res_tpf_val_t   tpf;
+    };
+} uvs_res_val_t;
 #ifdef __cplusplus
 }
 #endif

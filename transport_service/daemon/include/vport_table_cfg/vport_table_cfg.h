@@ -54,7 +54,8 @@ typedef union uvs_vport_args_mask {
         uint64_t max_jfr_cnt         : 1;
         uint64_t um_en               : 1;
         uint64_t share_mode          : 1;
-        uint64_t reserved            : 29;
+        uint64_t uuid                : 1;
+        uint64_t reserved            : 28;
     } bs;
     uint64_t value;
 } uvs_vport_args_mask_t;
@@ -70,6 +71,7 @@ typedef struct tpsa_vport_args {
     urma_eid_t eid;
     uint32_t eid_idx;
     uint32_t upi;
+    uvs_uuid_t uuid;
     uint32_t pattern;
     uint32_t virtualization;
     uint32_t min_jetty_cnt;
@@ -115,6 +117,7 @@ typedef struct tpsa_vport_show_ueid_rsp {
     int res;
     uint32_t upi;
     urma_eid_t eid;
+    uvs_uuid_t uuid;
 } tpsa_vport_show_ueid_rsp_t;
 
 typedef struct tpsa_vport_add_ueid_req {
@@ -123,6 +126,7 @@ typedef struct tpsa_vport_add_ueid_req {
     uint32_t upi;
     urma_eid_t eid;
     uint32_t eid_idx;
+    uvs_uuid_t uuid;
 } tpsa_vport_add_ueid_req_t;
 
 typedef struct tpsa_vport_add_ueid_rsp {

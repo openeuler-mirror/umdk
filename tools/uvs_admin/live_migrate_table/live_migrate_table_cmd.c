@@ -116,7 +116,7 @@ static inline int parse_dev_name(uvs_admin_live_migrate_table_args_t *args, cons
     if (strnlen(_optarg, UVS_ADMIN_MAX_DEV_NAME) >= UVS_ADMIN_MAX_DEV_NAME) {
         return -EINVAL;
     }
-    strcpy(args->dev_name, _optarg);
+    (void)strncpy(args->dev_name, _optarg, UVS_ADMIN_MAX_DEV_NAME - 1);
     args->mask.bs.dev_name = 1;
     return 0;
 }

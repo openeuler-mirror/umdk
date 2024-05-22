@@ -81,6 +81,7 @@ void uvs_admin_cmd_usages(uvs_admin_cmd_ctx_t *ctx)
         (void)printf("  %-25s %s\n", subcmd->command, subcmd->summary);
     }
     free(nodes);
+    uvs_query_res_usage();
 }
 
 static bool uvs_admin_more_subcmd(uvs_admin_cmd_ctx_t *ctx)
@@ -123,9 +124,11 @@ done:
 int32_t uvs_admin_exec(int argc, char **argv)
 {
     int32_t status = 0;
+    int32_t ret = 0;
 
-    if (query_res_cmd_exec(argc, argv) == 0) {
-        return 0;
+    ret = query_res_cmd_exec(argc, argv);
+    if (ret != -EINVAL) {
+        return ret;
     }
     uvs_admin_cmd_ctx_t ctx = {
         .argc     = argc,

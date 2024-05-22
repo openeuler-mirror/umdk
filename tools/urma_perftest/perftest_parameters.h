@@ -86,7 +86,10 @@
 #define PERFTEST_DEF_TEST_TIME (2)    // 1/2 of duration for test
 #define PERFTEST_DEF_WARMUP_TIME (4)  // 1/4 of duration for warmup
 #define PERFTEST_DEF_INF_PERIOD (2)
+#define PERFTEST_DEF_CREDIT_RATE   (4)
 
+// timeout for bw test at server side(valid for iteraion tset)
+#define PERFTEST_DEF_BW_TEST_TIMEOUT (60)
 #define PERFTEST_RESULT_LINE "---------------------------------------------------------------------------------------\n"
 
 
@@ -106,6 +109,11 @@ typedef enum perftest_atomic_type {
     PERFTEST_CAS,
     PERFTEST_FAA
 } perftest_atomic_type_t;
+
+typedef struct perftest_jfc_cfg {
+    uint32_t tx_jfc_depth;
+    uint32_t rx_jfc_depth;
+} perftest_jfc_cfg_t;
 
 typedef union perftest_time_type {
     struct {
@@ -139,7 +147,12 @@ enum perftest_opts {
     PERFTEST_OPT_RATE_LIMIT,
     PERFTEST_OPT_BURST_SIZE,
     PERFTEST_OPT_RATE_UNITS,
-    PERFTEST_OPT_SUB_TRANS_MODE
+    PERFTEST_OPT_SUB_TRANS_MODE,
+    PERFTEST_OPT_ENABLE_IPV6,
+    PERFTEST_OPT_ENABLE_CREDIT,
+    PERFTEST_OPT_CREDIT_THRESHOLD,
+    PERFTEST_OPT_CREDIT_NOTIFY_CNT,
+    PERFTEST_OPT_JETTYS_PRE_JFR
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -147,6 +160,14 @@ typedef enum perftest_rate_limiter_units {
     PERFTEST_RATE_LIMIT_GIGA_BIT,
     PERFTEST_RATE_LIMIT_PS
 } perftest_rate_limiter_units_t;
+
+typedef struct perftest_check_alive_data {
+    int current_totrcnt;
+    int last_totrcnt;
+    int g_total_iters;
+    int to_exit;
+    int use_jfce;
+} perftest_check_alive_data_t;
 
 typedef struct perftest_config {
     perftest_cmd_type_t cmd;
@@ -156,6 +177,7 @@ typedef struct perftest_config {
     bool all;                          /* Run sizes from 2 till 2^16. */
     perftest_atomic_type_t atomic_type;
     uint32_t jfc_depth;
+    perftest_jfc_cfg_t jfc_cfg;        /* Currently only for UB */
     char dev_name[URMA_MAX_NAME];      /* The name of ubep device. */
     uint32_t duration;                 /* Run test for a customized period of second. */
     bool use_jfce;
@@ -192,6 +214,7 @@ typedef struct perftest_config {
     bool lock_free;
     uint8_t priority;
     bool share_jfr;
+    uint32_t jettys_pre_jfr;           /* How many jettys share a jfr. */
     uint32_t io_thread_num;
     perftest_comm_t comm;
 
@@ -200,6 +223,14 @@ typedef struct perftest_config {
     double rate_limit;
     uint32_t burst_size;
     perftest_rate_limiter_units_t rate_units;
+
+    /* send credit */
+    bool enable_credit;
+    uint32_t credit_threshold;
+    uint32_t credit_notify_cnt;
+
+    /* valid for server side of send_bw using iteraion type */
+    int check_alive_exited;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

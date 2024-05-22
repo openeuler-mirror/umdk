@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 
+#include "tpsa_log.h"
 #include "uvs_private_api.h"
 
 static pthread_mutex_t g_uvs_ops_lock;
@@ -46,4 +47,15 @@ void uvs_ops_mutex_lock(void)
 void uvs_ops_mutex_unlock(void)
 {
     (void)pthread_mutex_unlock(&g_uvs_ops_lock);
+}
+
+bool uvs_check_gaea_scenario()
+{
+    uvs_user_ops_t* gaea_ops = NULL;
+    gaea_ops = get_uvs_user_ops(USER_OPS_GAEA);
+    if (gaea_ops != NULL && gaea_ops->lookup_netaddr_by_ueid != NULL) {
+        TPSA_LOG_INFO("uvs detect cloud scenario.\n");
+        return true;
+    }
+    return false;
 }

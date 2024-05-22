@@ -44,6 +44,10 @@ typedef struct run_test_ctx {
     urma_sge_t *jfs_sge;
     urma_sge_t *jfr_sge;
     uint64_t *rx_buf_addr;
+
+    urma_jfs_wr_t *credit_wr;
+    urma_sge_t *credit_sge;
+    urma_sge_t *remote_credit_sge;
 } run_test_ctx_t;
 
 typedef struct perftest_context {
@@ -84,6 +88,14 @@ typedef struct perftest_context {
     // run test
     run_test_ctx_t run_ctx;
     bool infinite_print;
+
+    /* send credit */
+    uint64_t *ctrl_buf;
+    uint64_t *credit_buf;
+    urma_target_seg_t *credit_seg;
+    urma_token_id_t *credit_token_id;
+    urma_seg_t *remote_credit_seg;
+    urma_target_seg_t *import_credit_seg;
 } perftest_context_t;
 
 /* calculate sge addr offset and step forward. */

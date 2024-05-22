@@ -30,13 +30,12 @@ typedef enum tool_cmd_type {
     TOOL_CMD_ADD_EID,
     TOOL_CMD_DEL_EID,
     TOOL_CMD_SET_EID_MODE,
-    TOOL_CMD_SET_CC_ALG,
-    TOOL_CMD_SHOW_UTP,
     TOOL_CMD_SHOW_STATS,
     TOOL_CMD_SHOW_RES,
     TOOL_CMD_SET_NS_MODE,
     TOOL_CMD_SET_DEV_NS,
     TOOL_CMD_LIST_RES,
+    TOOL_CMD_SET_RSVD_JID_RANGE,
     TOOL_CMD_NUM
 } tool_cmd_type_t;
 
@@ -44,13 +43,6 @@ typedef struct tool_cmd {
     char *cmd;
     tool_cmd_type_t type;
 } tool_cmd_t;
-
-typedef struct utp_port {
-    uint32_t utpn;
-    uint16_t src_port_start;
-    uint8_t range_port;
-    bool spray_en;
-} utp_port_t;
 
 /* refer to enum ubcore_stats_key_type */
 typedef enum tool_stats_key_type {
@@ -276,10 +268,10 @@ typedef struct tool_config {
     uint16_t idx; /* eid idx */
     char ns[URMA_ADMIN_MAX_NS_PATH]; /* /proc/$pid/ns/net */
     /* eid end */
-    utp_port_t utp_port;
     tool_query_key_t key;
-    uint16_t cc_alg;
     uint8_t ns_mode; /* 0: exclusive, 1: shared */
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
 } tool_config_t;
 
 int admin_str_to_eid(const char *buf, urma_eid_t *eid);

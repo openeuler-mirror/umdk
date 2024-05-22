@@ -53,8 +53,25 @@ typedef struct live_migrate_table_entry {
     uvs_net_addr_t uvs_ip;
 } live_migrate_table_entry_t;
 
+typedef struct lm_wait_sync_vtp {
+    struct ub_list node;
+    tpsa_transport_mode_t trans_mode;
+    union {
+        rm_vtp_table_entry_t rm_entry;
+        rc_vtp_table_entry_t rc_entry;
+        um_vtp_table_entry_t um_entry;
+    } vtp_entry;
+} lm_wait_sync_vtp_t;
+
+typedef struct lm_wait_sync_table_entry {
+    struct ub_hmap_node node;
+    live_migrate_table_key_t key;
+    struct ub_list lm_wait_sync_vtp_list;
+} lm_wait_sync_table_entry_t;
+
 typedef struct live_migrate_table {
     struct ub_hmap hmap;
+    struct ub_hmap delete_vtp_hmap; // wait sync deletion hmap
     pthread_rwlock_t rwlock;
 } live_migrate_table_t;
 
@@ -66,6 +83,7 @@ live_migrate_table_entry_t *live_migrate_table_lookup(live_migrate_table_t *live
 int live_migrate_table_add(live_migrate_table_t *live_migrate_table, live_migrate_table_key_t *key,
                            live_migrate_table_entry_t *add_entry);
 int live_migrate_table_remove(live_migrate_table_t *live_migrate_table, live_migrate_table_key_t *key);
+int live_migrate_table_return_key(live_migrate_table_t *live_migrate_table, live_migrate_table_key_t **key);
 void live_migrate_table_destroy(live_migrate_table_t *live_migrate_table);
 int live_migrate_table_create(live_migrate_table_t *live_migrate_table);
 
@@ -81,6 +99,19 @@ int tpsa_notify_table_update(tpsa_notify_table_t *notify_table, uvs_net_addr_t *
                              rm_vtp_table_entry_t *rm_entry, rc_vtp_table_entry_t *rc_entry);
 int tpsa_notify_table_remove(tpsa_notify_table_t *tpsa_notify_table, tpsa_notify_table_key_t *key);
 void tpsa_notify_table_destroy(tpsa_notify_table_t *tpsa_notify_table);
+
+/*
+ * lm wait sync delete vtp table opts
+ */
+lm_wait_sync_table_entry_t *lm_wait_sync_table_add(live_migrate_table_t *live_migrate_table,
+    live_migrate_table_key_t *key);
+lm_wait_sync_table_entry_t *lm_wait_sync_table_lookup(live_migrate_table_t *live_migrate_table,
+    live_migrate_table_key_t *key);
+int lm_wait_sync_table_rmv(live_migrate_table_t *live_migrate_table, live_migrate_table_key_t *key);
+void lm_wait_sync_table_destroy(live_migrate_table_t *live_migrate_table);
+int lm_wait_sync_vtp_add(live_migrate_table_t *live_migrate_table, live_migrate_table_key_t *key,
+    lm_wait_sync_vtp_t *vtp_node);
+int lm_wait_sync_vtp_rmv(lm_wait_sync_vtp_t *vtp_node);
 
 #ifdef __cplusplus
 }

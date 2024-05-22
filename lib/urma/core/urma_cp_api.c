@@ -1223,3 +1223,70 @@ void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p)
     free(p->jfr_cfg);
     p->jfr_cfg = NULL;
 }
+
+int urma_get_tpn(urma_jetty_t *jetty)
+{
+    if (jetty == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_context_t *urma_ctx = jetty->urma_ctx;
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, get_tpn);
+
+    return ops->get_tpn(jetty);
+}
+
+urma_net_addr_info_t *urma_get_net_addr_list(urma_context_t *ctx, uint32_t *cnt)
+{
+    if (cnt == NULL || ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        errno = EINVAL;
+        return NULL;
+    }
+    urma_device_cap_t *dev_cap = &ctx->dev->sysfs_dev->dev_attr.dev_cap;
+    uint32_t max_netaddr_cnt = dev_cap->max_netaddr_cnt;
+    if (max_netaddr_cnt == 0) {
+        URMA_LOG_ERR("Invalid parameter with max_netaddr_cnt as 0.\n");
+        errno = EINVAL;
+        return NULL;
+    }
+
+    urma_net_addr_info_t *net_addr_info = (urma_net_addr_info_t *)calloc(1, max_netaddr_cnt *
+        sizeof(urma_net_addr_info_t));
+    if (net_addr_info == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    int ret = urma_cmd_get_net_addr_list(ctx, max_netaddr_cnt, net_addr_info, cnt);
+    if (ret < 0) {
+        URMA_LOG_ERR("Failed to get netaddr list, ret: %d, max_netaddr_cnt: %u.\n", ret, max_netaddr_cnt);
+        free(net_addr_info);
+        return NULL;
+    }
+    return net_addr_info;
+}
+
+void urma_free_net_addr_list(urma_net_addr_info_t *net_addr_list)
+{
+    if (net_addr_list == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return;
+    }
+    free(net_addr_list);
+}
+
+int urma_modify_tp(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg, urma_tp_attr_t *attr,
+    urma_tp_attr_mask_t mask)
+{
+    if (ctx == NULL || cfg == NULL || attr == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, modify_tp);
+
+    return ops->modify_tp(ctx, tpn, cfg, attr, mask);
+}

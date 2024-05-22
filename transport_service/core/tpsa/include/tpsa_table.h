@@ -60,11 +60,10 @@ typedef enum vtp_node_state {
     STATE_NORMAL = 0,
     STATE_READY,
     STATE_MIGRATING,
-    STATE_ROLLBACK
 } vtp_node_state_t;
 
 typedef struct tp_entry {
-    tpsa_tp_state_t tp_state;
+    uvs_tp_state_t tp_state;
     uint32_t tpn;
 } tp_entry_t;
 
@@ -94,6 +93,7 @@ typedef struct rm_vtp_table_entry {
     uint32_t vice_tpgn; /* for live migration scenario */
     bool valid;
     uint32_t location;
+    uint32_t vice_location;
     uint32_t src_jetty_id;
     uint32_t eid_index;
     uint32_t upi;
@@ -101,6 +101,7 @@ typedef struct rm_vtp_table_entry {
     vtp_node_state_t node_status;
     bool share_mode;
     uint32_t use_cnt;
+    uint32_t vice_use_cnt;
 } rm_vtp_table_entry_t;
 
 typedef struct rm_vtp_table {
@@ -155,6 +156,7 @@ typedef struct um_vtp_table_entry {
     uint32_t use_cnt;
     bool migration_status;
     uint32_t upi;
+    uint32_t eid_index;
     vtp_node_state_t node_status;
 } um_vtp_table_entry_t;
 
@@ -245,6 +247,7 @@ typedef struct fe_table {
  * only worker thread operate, lock no need
  */
 typedef struct rm_tpg_table_key {
+    uvs_net_addr_t sip;
     uvs_net_addr_t dip;
 } __attribute__((packed)) rm_tpg_table_key_t;
 
@@ -366,6 +369,7 @@ typedef struct vport_table_entry vport_table_entry_t;
 typedef struct tpsa_ueid {
     uint32_t upi;
     urma_eid_t eid;
+    uvs_uuid_t uuid;
     bool is_valid;
     vport_table_entry_t *entry;
     bool used;
@@ -375,6 +379,7 @@ typedef struct tpsa_ueid_cfg {
     urma_eid_t eid;
     uint32_t upi;
     uint32_t eid_index;
+    uvs_uuid_t uuid;
 } tpsa_ueid_cfg_t;
 
 typedef struct ueid_key {
@@ -441,6 +446,11 @@ typedef union vport_entry_mask {
     uint64_t value;
 } vport_entry_mask_t;
 
+typedef struct vport_lm_attr {
+    tpsa_lm_location_t lm_location;
+    bool is_rollback;
+} vport_lm_attr_t;
+
 struct vport_table_entry {
     struct ub_hmap_node node;
     vport_key_t key;
@@ -461,6 +471,9 @@ struct vport_table_entry {
     uint32_t min_jfr_cnt;
     uint32_t max_jfr_cnt;
     sem_t *sem;
+
+    /* for live migration */
+    vport_lm_attr_t lm_attr;
 };
 
 typedef struct vport_table {
@@ -489,7 +502,9 @@ typedef union dip_table_modify_mask {
         uint32_t upi            : 1;
         uint32_t uvs_ip         : 1;
         uint32_t net_addr       : 1;
-        uint32_t reserved       : 28;
+        uint32_t new_eid        : 1;
+        uint32_t new_upi        : 1;
+        uint32_t reserved       : 26;
     } bs;
     uint32_t value;
 } dip_table_modify_mask_t;
@@ -506,11 +521,17 @@ typedef struct dip_table_entry {
     uvs_net_addr_info_t netaddr;
 } dip_table_entry_t;
 
+typedef struct dip_update_entry {
+    struct ub_list node;
+    dip_table_key_t key;
+    uvs_net_addr_info_t new_dip;
+    uvs_net_addr_info_t old_dip;
+} dip_update_entry_t;
+
 typedef struct dip_table {
     struct ub_hmap hmap;
     bool tbl_refresh;
-    dip_table_entry_t *refresh_entry; /* Record the entry which dip has changed */
-    uvs_net_addr_info_t new_netaddr; /* The underly ip before refresh */
+    struct ub_list dip_update_list;
     pthread_rwlock_t rwlock;
 } dip_table_t;
 
@@ -556,15 +577,17 @@ typedef struct tp_state_table_key {
 } __attribute__((packed)) tp_state_table_key_t;
 
 typedef enum tp_exception_state {
-    INITIATOR_TP_STATE_RESET = 0,
-    INITIATOR_TP_STATE_RTS,
-    INITIATOR_TP_STATE_SUSPENDED,
-    INITIATOR_TP_STATE_ERR,
-    TARGET_TP_STATE_RTR,
-    TARGET_TP_STATE_ERR,
-    INITIATOR_TP_STATE_DEL,
-    TARGET_TP_STATE_DEL,
+    TP_STATE_RESET = 0,
+    TP_STATE_RTR,
+    TP_STATE_RTS,
+    TP_STATE_SUSPENDED,
+    TP_STATE_INITIATOR_ERR,
+    TP_STATE_TARGET_ERR,
+
+    // related to tpg exception
     TP_STATE_INIT,
+    TP_STATE_INITIATOR_DEL,
+    TP_STATE_TARGET_DEL,
 } tp_exception_state_t;
 
 typedef struct tp_state_table_entry {
@@ -580,8 +603,8 @@ typedef struct tp_state_table_entry {
     uint16_t ack_udp_start;
     uvs_net_addr_info_t dip;
     uvs_net_addr_t peer_uvs_ip;
-    uint64_t timestamp[TPSA_SUSPEND2ERROR_CNT];
-    uint32_t suspend_cnt;
+    uint64_t *sus2err_clock_cycle;
+    uint32_t sus2err_cnt;
 } tp_state_table_entry_t;
 
 typedef struct tp_state_table {
@@ -668,6 +691,8 @@ typedef struct tpsa_vtp_table_index {
     bool share_mode;
     uint32_t use_cnt;
     uint32_t tpgn;
+    bool migration_status;
+    uint32_t vice_tpgn;
 } tpsa_vtp_table_index_t;
 
 typedef struct tpsa_vtp_table_param {
@@ -686,6 +711,7 @@ typedef struct tpsa_um_vtp_table_param {
     uint32_t vtpn;
     uint32_t utp_idx;
     uint32_t upi;
+    uint32_t eid_index;
 } tpsa_um_vtp_table_param_t;
 
 typedef struct tpsa_clan_vtp_table_param {
@@ -695,6 +721,7 @@ typedef struct tpsa_clan_vtp_table_param {
 
 typedef struct tpsa_tpg_table_index {
     uvs_net_addr_info_t dip;
+    uvs_net_addr_t peer_uvs_ip;
     urma_eid_t local_eid;
     urma_eid_t peer_eid;
     uint32_t ljetty_id;
@@ -729,6 +756,7 @@ typedef struct tpg_table_param {
     uint32_t use_cnt;
     uint32_t ljetty_id;
     urma_eid_t leid;
+    uvs_net_addr_info_t sip;
     uvs_net_addr_info_t dip;
     bool isLoopback;
     bool live_migrate;
@@ -788,8 +816,11 @@ void clan_vtp_table_destroy(clan_vtp_table_t *clan_vtp_table);
  */
 int rm_tpg_table_create(rm_tpg_table_t *rm_tpg_table);
 rm_tpg_table_entry_t *rm_tpg_table_lookup(rm_tpg_table_t *rm_tpg_table, rm_tpg_table_key_t *key);
-int rm_tpg_table_update_tp_cnt(rm_tpg_table_t *rm_tpg_table, uvs_net_addr_info_t *dip, uint32_t tp_cnt);
+int rm_tpg_table_update_tp_cnt(rm_tpg_table_t *rm_tpg_table, uvs_net_addr_info_t *sip,
+                               uvs_net_addr_info_t *dip, uint32_t tp_cnt);
 int rm_tpg_table_add(rm_tpg_table_t *rm_tpg_table, rm_tpg_table_key_t *key, tpsa_tpg_table_param_t *param);
+int rm_tpg_table_remove(rm_tpg_table_t *rm_tpg_table, rm_tpg_table_key_t *key);
+rm_tpg_table_entry_t **rm_tpg_table_get_all(rm_tpg_table_t *rm_tpg_table, uint32_t *tpg_cnt);
 void rm_tpg_table_destroy(rm_tpg_table_t *rm_tpg_table);
 
 /*
@@ -807,6 +838,7 @@ int utp_table_create(utp_table_t *utp_table);
 utp_table_entry_t *utp_table_lookup(utp_table_t *utp_table, utp_table_key_t *key);
 int utp_table_add(utp_table_t *utp_table, utp_table_key_t *key, uint32_t utp_idx);
 int utp_table_remove(utp_table_t *utp_table, utp_table_key_t *key);
+utp_table_entry_t **utp_table_get_all(utp_table_t *utp_table, uint32_t *utp_cnt);
 void utp_table_destroy(utp_table_t *utp_table);
 
 /*
@@ -900,8 +932,11 @@ int dip_table_add(dip_table_t *dip_table, dip_table_key_t *key, dip_table_entry_
 int dip_table_remove(dip_table_t *dip_table, dip_table_key_t *key);
 int dip_table_modify(dip_table_t *dip_table, dip_table_key_t *old_key,
     dip_table_entry_t *new_entry, dip_table_modify_mask_t mask);
-
 void dip_table_destroy(dip_table_t *dip_table);
+int dip_table_add_update_list(dip_table_t *dip_table, dip_table_key_t *key,
+    uvs_net_addr_info_t *old_dip, uvs_net_addr_info_t *new_dip);
+int dip_table_rmv_update_list(dip_table_t *dip_table, dip_table_key_t *key);
+void dip_table_clear_update_list(dip_table_t *dip_table);
 
 /*
  * ueid table opts
@@ -910,6 +945,8 @@ tpsa_ueid_t *vport_table_lookup_ueid(vport_table_t *vport_table, vport_key_t *ke
 int vport_table_add_ueid(vport_table_t *vport_table, vport_key_t *key, tpsa_ueid_cfg_t *ueid);
 int vport_table_del_ueid(vport_table_t *vport_table, vport_key_t *key, uint32_t eid_index);
 int ueid_table_add_by_vport(vport_table_t *vport_table, vport_table_entry_t *add_entry);
+int find_sip_by_vport_key(vport_table_t *vport_table, vport_key_t *vport_key, tpf_dev_table_t *tpf_dev_table,
+    sip_table_entry_t *sip_entry);
 
 /*
  * tp state opts
@@ -947,6 +984,11 @@ void deid_rc_vtp_list_remove(deid_vtp_table_t *deid_vtp_table, deid_vtp_table_ke
 void deid_um_vtp_list_remove(deid_vtp_table_t *deid_vtp_table, deid_vtp_table_key_t *key, um_vtp_table_key_t *vtp_key);
 void deid_vtp_table_destroy(deid_vtp_table_t *deid_vtp_table);
 deid_vtp_table_entry_t *deid_vtp_table_lookup(deid_vtp_table_t *deid_vtp_table, deid_vtp_table_key_t *key);
+
+/*
+ * vport lm attr opts
+ */
+int vport_set_lm_location(vport_table_t *vport_table, vport_key_t *key, tpsa_lm_location_t location);
 #ifdef __cplusplus
 }
 #endif

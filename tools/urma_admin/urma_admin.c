@@ -30,7 +30,6 @@
 #include "admin_cmd.h"
 
 #define UINT8_INVALID (0xff)
-#define ADMIN_CC_ALG_MAX 255 /* 0xFF: Support 8 congestion algorithms */
 
 typedef struct admin_show_ubep {
     struct ub_list node;
@@ -91,6 +90,7 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     (void)admin_parse_file_value_u32(sysfs_path, "max_atomic_size", &dev_attr->dev_cap.max_atomic_size);
     (void)admin_parse_file_value_u32(sysfs_path, "atomic_feat", &dev_attr->dev_cap.atomic_feat.value);
     (void)admin_parse_file_value_u16(sysfs_path, "trans_mode", &dev_attr->dev_cap.trans_mode);
+    (void)admin_parse_file_value_u16(sysfs_path, "congestion_ctrl_alg", &dev_attr->dev_cap.congestion_ctrl_alg);
     (void)admin_parse_file_value_u32(sysfs_path, "ceq_cnt", &dev_attr->dev_cap.ceq_cnt);
     (void)admin_parse_file_value_u8(sysfs_path, "port_count", &dev_attr->port_cnt);
     (void)admin_parse_file_value_u32(sysfs_path, "max_eid_cnt", &dev_attr->dev_cap.max_eid_cnt);
@@ -120,7 +120,7 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
         return;
     }
 
-    admin_read_eid_list(sysfs_path, "eid", ubep->eid_list, dev_attr->dev_cap.max_eid_cnt);
+    admin_read_eid_list(sysfs_path, ubep->eid_list, dev_attr->dev_cap.max_eid_cnt);
 
     if (ubep->dev_attr.port_cnt > 0 && ubep->dev_attr.port_cnt != UINT8_INVALID) {
         admin_parse_port_attr(sysfs_path, ubep);
@@ -272,14 +272,11 @@ static void print_trans_mode_str(uint16_t trans_mode)
     (void)printf("]\n");
 }
 
-static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, const tool_config_t *cfg)
+static void print_ubep_eids(const admin_show_ubep_t *ubep)
 {
     urma_eid_t eid = {0};
     uint32_t i;
 
-    (void)printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
-    (void)printf("name                       : %-16s\n", ubep->dev_name);
-    (void)printf("transport_type             : %u [%s]\n", ubep->tp_type, urma_tp_type_to_string(ubep->tp_type));
     for (i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
         if (i > 0 && memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
             continue;
@@ -287,6 +284,18 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
         (void)printf("eid%u                       : "EID_FMT"\n", ubep->eid_list[i].eid_index,
         EID_ARGS(ubep->eid_list[i].eid));
     }
+}
+
+static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, const tool_config_t *cfg)
+{
+    uint32_t i;
+
+    (void)printf("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+    (void)printf("name                       : %-16s\n", ubep->dev_name);
+    (void)printf("transport_type             : %u [%s]\n", ubep->tp_type, urma_tp_type_to_string(ubep->tp_type));
+
+    print_ubep_eids(ubep);
+
     (void)printf("guid                       : "EID_FMT"\n", EID_ARGS(ubep->dev_attr.guid));
     print_device_feat_str(ubep->dev_attr.dev_cap.feature);
 
@@ -307,10 +316,12 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int index, cons
     (void)printf("max_atomic_size            : %u\n", ubep->dev_attr.dev_cap.max_atomic_size);
     print_atomic_feat_str(ubep->dev_attr.dev_cap.atomic_feat);
     print_trans_mode_str(ubep->dev_attr.dev_cap.trans_mode);
+    print_congestion_ctrl_alg_str(ubep->dev_attr.dev_cap.congestion_ctrl_alg);
     (void)printf("ceq_cnt                    : %u\n", ubep->dev_attr.dev_cap.ceq_cnt);
     (void)printf("max_tp_in_tpg              : %u\n", ubep->dev_attr.dev_cap.max_tp_in_tpg);
-
     (void)printf("port_count                 : %u\n", ubep->dev_attr.port_cnt);
+    (void)printf("reserved_jetty_id_min      : %u\n", ubep->dev_attr.reserved_jetty_id_min);
+    (void)printf("reserved_jetty_id_max      : %u\n", ubep->dev_attr.reserved_jetty_id_max);
     for (i = 0; i < ubep->dev_attr.port_cnt && ubep->dev_attr.port_cnt != UINT8_INVALID; i++) {
         (void)printf("port%u:\n", (uint32_t)i);
         (void)printf("  max_mtu              : %u [%s]\n", ubep->dev_attr.port_attr[i].max_mtu,
@@ -382,22 +393,28 @@ free_list:
     return ret;
 }
 
-static int admin_set_ubep_cc_alg(const tool_config_t *cfg)
+static int admin_set_reserved_jetty_id_range(const tool_config_t *cfg)
 {
     int ret;
-    char tmp_value[VALUE_LEN_MAX] = {0};
+    char max_value[VALUE_LEN_MAX] = {0};
+    char min_value[VALUE_LEN_MAX] = {0};
 
-    if (cfg->dev_name[0] == 0 || cfg->cc_alg == 0 || cfg->cc_alg > ADMIN_CC_ALG_MAX) {
-        (void)printf("set ubep cc_alg failed, invalid parameter.\n");
+    if (cfg->dev_name[0] == 0 || cfg->reserved_jetty_id_max < 0 || cfg->reserved_jetty_id_min < 0 ||
+        cfg->reserved_jetty_id_min > cfg->reserved_jetty_id_max) {
+        (void)printf("set ubep reserved jetty id range failed, invalid parameter.\n");
         return -1;
     }
 
-    if (sprintf(tmp_value, "%hu", cfg->cc_alg) <= 0) {
+    if (snprintf(max_value, VALUE_LEN_MAX, "%hu", cfg->reserved_jetty_id_max) <= 0 ||
+        snprintf(min_value, VALUE_LEN_MAX, "%hu", cfg->reserved_jetty_id_min) <= 0) {
         (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
         return -1;
     }
-    ret = admin_write_dev_file(cfg->dev_name, "congestion_ctrl_alg", tmp_value, sizeof(uint16_t) + 1);
-
+    ret = admin_write_dev_file(cfg->dev_name, "reserved_jetty_id_max", max_value, sizeof(uint32_t) + 1);
+    if (ret < 0) {
+        return ret;
+    }
+    ret = admin_write_dev_file(cfg->dev_name, "reserved_jetty_id_min", min_value, sizeof(uint32_t) + 1);
     return ret;
 }
 
@@ -418,12 +435,6 @@ static int execute_command(const tool_config_t *cfg)
         case TOOL_CMD_SET_EID_MODE:
             ret = admin_set_eid_mode(cfg);
             break;
-        case TOOL_CMD_SET_CC_ALG:
-            ret = admin_set_ubep_cc_alg(cfg);
-            break;
-        case TOOL_CMD_SHOW_UTP:
-            ret = admin_show_utp(cfg);
-            break;
         case TOOL_CMD_SHOW_STATS:
             ret = admin_show_stats(cfg);
             break;
@@ -438,6 +449,9 @@ static int execute_command(const tool_config_t *cfg)
             break;
         case TOOL_CMD_LIST_RES:
             ret = admin_list_res(cfg);
+            break;
+        case TOOL_CMD_SET_RSVD_JID_RANGE:
+            ret = admin_set_reserved_jetty_id_range(cfg);
             break;
         case TOOL_CMD_NUM:
         default:

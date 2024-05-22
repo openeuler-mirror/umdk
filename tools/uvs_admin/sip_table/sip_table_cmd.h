@@ -16,6 +16,22 @@
 #include "uvs_admin_cmd.h"
 #include "uvs_admin_types.h"
 
+typedef union uvs_admin_sip_table_mask {
+    struct {
+        uint64_t sip_idx          : 1;
+        uint64_t net_addr         : 1;
+        uint64_t vlan             : 1;
+        uint64_t mac              : 1;
+        uint64_t dev_name         : 1;
+        uint64_t port_id          : 1;
+        uint64_t net_addr_type    : 1;
+        uint64_t prefix_len       : 1;
+        uint64_t mtu              : 1;
+        uint64_t reserved         : 23;
+    } bs;
+    uint32_t value;
+} uvs_admin_sip_table_mask_t;
+
 typedef struct uvs_admin_sip_table_args {
     uint32_t sip_idx;
     uvs_admin_net_addr_t net_addr;
@@ -26,6 +42,8 @@ typedef struct uvs_admin_sip_table_args {
     bool net_addr_type;
     uint32_t prefix_len;
     uvs_admin_mtu_t mtu;
+    uvs_admin_sip_table_mask_t mask;
+    uvs_admin_net_addr_type_t input_net_type;
 } uvs_admin_sip_table_args_t;
 
 typedef struct uvs_admin_sip_table_show_req {

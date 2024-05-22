@@ -15,15 +15,158 @@
 #include "ub_util.h"
 #include "ub_hash.h"
 #include "tpsa_log.h"
-#include "tpsa_net.h"
 #include "tpsa_ioctl.h"
+#include "uvs_protocol.h"
+#include "uvs_security.h"
+
 #include "tpsa_sock.h"
 
-#define TPSA_SOCK_TABLE_SIZE 2048
+#define UVS_SOCK_TABLE_SIZE     2048
 
-#define TPSA_SOCK_KEEP_IDLE      (5)     // if no data exchanged within 5 seconds, start detection.
-#define TPSA_SOCK_KEEP_INTERVAL  (5)     // interval for sending detection packets is 5 seconds.
-#define TPSA_SOCK_KEEP_COUNT     (3)     // number of detection retry times.
+#define TPSA_SOCK_KEEP_IDLE     5   // if no data exchanged within 5 seconds, start detection.
+#define TPSA_SOCK_KEEP_INTERVAL 5   // interval for sending detection packets is 5 seconds.
+#define TPSA_SOCK_KEEP_COUNT    3   // number of detection retry times.
+#define TPSA_SOCK_TIMEOUT       10  // 10s
+#define TPSA_SOCK_IPV6_TENTAIVE_TIME 2
+
+static inline void *fill_uvs_base_header(struct uvs_base_header *hdr, uint8_t version, uint8_t msg_type,
+    uint16_t length, uint32_t msn, uint16_t cap, uint16_t flag)
+{
+    hdr->version = version;
+    hdr->msg_type = msg_type;
+    hdr->length = length;
+    hdr->msn = msn;
+    hdr->cap = cap;
+    hdr->flag = flag;
+    return (void *)(hdr + 1);
+}
+static inline void *fill_uvs_general_ack(struct uvs_general_ack *hdr, uint8_t ack_code)
+{
+    hdr->code = ack_code;
+    return (void *)(hdr + 1);
+}
+
+static ssize_t secure_socket_send(uvs_sock_node_t *node, void *buf, size_t len, int timeout)
+{
+    struct timespec start = {0};
+    struct timespec end = {0};
+    SSL *ssl = node->ssl;
+
+    (void)clock_gettime(CLOCK_MONOTONIC, &start);
+
+    int sent = 0;
+    do {
+        /* OpenSSL requires the same parameters when sending again. */
+        sent = SSL_write(ssl, buf, len);
+        int ret = SSL_get_error(ssl, sent);
+        if (ret == SSL_ERROR_NONE) {
+            /* OpenSSL ensures "sent == len". */
+            break;
+        }
+        if (ret != SSL_ERROR_WANT_WRITE) {
+            TPSA_LOG_ERR("SSL_write() fail, sent=%d, SSL_get_error=%d", sent, ret);
+            break;
+        }
+        /* Just repeat with the same function call on nonblocking mode. */
+        (void)clock_gettime(CLOCK_MONOTONIC, &end);
+    } while (end.tv_sec - start.tv_sec < timeout);
+
+    return sent;
+}
+
+static ssize_t secure_socket_recv(uvs_sock_node_t *node, void *buf, size_t len, int timeout)
+{
+    struct timespec start = {0};
+    struct timespec end = {0};
+    SSL *ssl = node->ssl;
+
+    (void)clock_gettime(CLOCK_MONOTONIC, &start);
+
+    int received = 0;
+    do {
+        /* OpenSSL requires the same parameters when receving again. */
+        received = SSL_read(ssl, buf, len);
+        int ret = SSL_get_error(ssl, received);
+        if (ret == SSL_ERROR_NONE) {
+            /* OpenSSL ensures "received == len". */
+            break;
+        }
+        if (ret == SSL_ERROR_ZERO_RETURN) {
+            TPSA_LOG_ERR("SSL peer has closed the TLS connection.\n");
+            break;
+        }
+        if (ret != SSL_ERROR_WANT_READ) {
+            TPSA_LOG_ERR("SSL_read() fail, received=%d, SSL_get_error=%d", received, ret);
+            break;
+        }
+        /* Just repeat with the same function call on nonblocking mode. */
+        (void)clock_gettime(CLOCK_MONOTONIC, &end);
+    } while (end.tv_sec - start.tv_sec < timeout);
+
+    return received;
+}
+
+static ssize_t normal_socket_send(uvs_sock_node_t *node, void *buf, size_t len, int timeout)
+{
+    struct timespec start = {0};
+    struct timespec end = {0};
+    int fd = node->fd;
+
+    (void)clock_gettime(CLOCK_MONOTONIC, &start);
+
+    size_t remain = len;
+    char *addr = (char *)buf;
+    do {
+        ssize_t ret = send(fd, addr, remain, 0);
+        if (ret > 0) {
+            remain -= ret;
+            addr += ret;
+        } else if (ret == -1) {
+            if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
+                /* Try to send again on nonblocking mode. */
+            } else {
+                TPSA_LOG_ERR("Fail to send message, fd=%d, err=%s.\n", fd, ub_strerror(errno));
+                break;
+            }
+        }
+        (void)clock_gettime(CLOCK_MONOTONIC, &end);
+    } while ((remain > 0) && (end.tv_sec - start.tv_sec < timeout));
+
+    return (ssize_t)(len - remain);
+}
+
+static ssize_t normal_socket_recv(uvs_sock_node_t *node, void *buf, size_t len, int timeout)
+{
+    struct timespec start = {0};
+    struct timespec end = {0};
+    int fd = node->fd;
+
+    (void)clock_gettime(CLOCK_MONOTONIC, &start);
+
+    size_t remain = len;
+    char *addr = (char *)buf;
+    do {
+        ssize_t ret = recv(fd, addr, remain, 0);
+        if (ret > 0) {
+            remain -= ret;
+            addr += ret;
+        } else if (ret == -1) {
+            if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
+                /* Try to receive again on nonblocking mode. */
+            } else {
+                TPSA_LOG_ERR("Fail to receive message, fd: %d, err: %s.\n", fd, ub_strerror(errno));
+                break;
+            }
+        } else {
+            TPSA_LOG_ERR("The peer closes the connection, fd=%d).\n", fd);
+            break;
+        }
+
+        (void)clock_gettime(CLOCK_MONOTONIC, &end);
+    } while ((remain > 0) && (end.tv_sec - start.tv_sec < timeout));
+
+    return (ssize_t)(len - remain);
+}
 
 static bool tpsa_addr_is_ipv6(const uvs_net_addr_t *server_ip)
 {
@@ -66,7 +209,7 @@ int tpsa_set_keepalive_opt(int fd)
 }
 
 /* Set fd to be nonblocking */
-int tpsa_set_nonblock_opt(int fd)
+int uvs_set_nonblock_opt(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
@@ -81,12 +224,12 @@ int tpsa_set_nonblock_opt(int fd)
 }
 
 /* Set socket to be nonblocking and tcp_nodelay */
-static int tpsa_set_socket_opt(int fd, bool is_noblock)
+static int uvs_set_socket_opt(int fd, bool is_noblock)
 {
     int ret;
 
     if (is_noblock) {
-        ret = tpsa_set_nonblock_opt(fd);
+        ret = uvs_set_nonblock_opt(fd);
         if (ret != 0) {
             TPSA_LOG_ERR("Failed to set socket nonblock, ret: %d, err: %d.\n", ret, errno);
             return ret;
@@ -116,7 +259,7 @@ static int tpsa_set_socket_opt(int fd, bool is_noblock)
     return 0;
 }
 
-int tpsa_add_epoll_event(int epollfd, int fd, uint32_t events)
+int uvs_add_epoll_event(int epollfd, int fd, uint32_t events)
 {
     struct epoll_event ev = {0};
     int ret;
@@ -144,13 +287,15 @@ static int tpsa_sock_bind(tpsa_sock_ctx_t *sock_ctx, uvs_socket_init_attr_t *att
     struct sockaddr_in src_addr4 = {0};
     socklen_t addr_len;
     void *src_addr;
+    int ret = 0;
+
     int fd = socket(domain, (int)SOCK_STREAM, 0);
     if (fd < 0) {
         TPSA_LOG_ERR("Failed to create fd, ret: %d, err: %s.\n", fd, ub_strerror(errno));
         return -1;
     }
 
-    if (tpsa_set_socket_opt(fd, true) != 0) {
+    if (uvs_set_socket_opt(fd, true) != 0) {
         (void)close(fd);
         return -1;
     }
@@ -169,14 +314,21 @@ static int tpsa_sock_bind(tpsa_sock_ctx_t *sock_ctx, uvs_socket_init_attr_t *att
         src_addr4.sin_port = attr->server_port;
     }
 
-    if (bind(fd, (struct sockaddr *)src_addr, addr_len) != 0) {
+    ret = bind(fd, (struct sockaddr *)src_addr, addr_len);
+    if (ret != 0 && is_ipv6) {
+        TPSA_LOG_WARN("Failed to bind port, err: [%d]%s, retry once.\n", errno, ub_strerror(errno));
+        sleep(TPSA_SOCK_IPV6_TENTAIVE_TIME);
+        ret = bind(fd, (struct sockaddr *)src_addr, addr_len);
+    }
+    if (ret != 0) {
         TPSA_LOG_ERR("Failed to bind port, err: [%d]%s.\n", errno, ub_strerror(errno));
         (void)close(fd);
         return -1;
     }
     sock_ctx->is_ipv6 = is_ipv6;
     sock_ctx->listen_fd = fd;
-    sock_ctx->listen_port = attr->server_port;
+    sock_ctx->local_ip = attr->server_ip;
+    sock_ctx->local_port = attr->server_port;
     return 0;
 }
 
@@ -186,7 +338,7 @@ static inline void tpsa_sock_unbind(tpsa_sock_ctx_t *sock_ctx)
     sock_ctx->listen_fd = -1;
 }
 
-static int tpsa_sock_connect(const uvs_net_addr_t *remote_uvs_ip, uint32_t cfg_port)
+static int uvs_sock_connect(const uvs_net_addr_t *remote_uvs_ip, uint32_t cfg_port)
 {
     bool is_ipv6 = tpsa_addr_is_ipv6(remote_uvs_ip);
     sa_family_t domain = is_ipv6 ? AF_INET6 : AF_INET;
@@ -215,12 +367,8 @@ static int tpsa_sock_connect(const uvs_net_addr_t *remote_uvs_ip, uint32_t cfg_p
     }
     int ret = connect(fd, (struct sockaddr *)addr, addr_len);
     if (ret != 0) {
-        TPSA_LOG_ERR("Failed to connect socket to eid 0x" EID_FMT " cfg_port 0x%x, ret: %d, err: [%d]%s.\n",
+        TPSA_LOG_ERR("Failed to connect socket to IP " EID_FMT " cfg_port 0x%x, ret: %d, err: [%d]%s.\n",
             EID_ARGS(*remote_uvs_ip), cfg_port, ret, errno, ub_strerror(errno));
-        (void)close(fd);
-        return -1;
-    }
-    if (tpsa_set_socket_opt(fd, false) != 0) {
         (void)close(fd);
         return -1;
     }
@@ -247,10 +395,6 @@ static int tpsa_get_accept_fd(int listen_fd, bool is_ipv6, uvs_net_addr_t *remot
             listen_fd, fd, errno, ub_strerror(errno));
         return -1;
     }
-    if (tpsa_set_socket_opt(fd, true) != 0) {
-        (void)close(fd);
-        return -1;
-    }
 
     if (is_ipv6) {
         (void)memcpy(remote_uvs_ip, &client_addr6.sin6_addr, sizeof(struct in6_addr));
@@ -261,356 +405,440 @@ static int tpsa_get_accept_fd(int listen_fd, bool is_ipv6, uvs_net_addr_t *remot
     return fd;
 }
 
-/* Return the socket fd to reach the remote node with remote_eid */
-static tpsa_sock_client_node_t *tpsa_lookup_client_socket(sock_table_t *table,
-    const uvs_net_addr_t *remote_uvs_ip)
+static uvs_sock_node_t *uvs_sock_tbl_lookup_by_ip(tpsa_sock_ctx_t *ctx, const uvs_net_addr_t *remote_ip)
 {
-    uint32_t hash = ub_hash_bytes(remote_uvs_ip, sizeof(uvs_net_addr_t), 0);
-    tpsa_sock_client_node_t *cur;
-    tpsa_sock_client_node_t *target = NULL;
+    uint32_t hash = ub_hash_bytes(remote_ip, sizeof(uvs_net_addr_t), 0);
+    uvs_sock_node_t *cur;
+    uvs_sock_node_t *target = NULL;
 
-    (void)pthread_rwlock_rdlock(&table->rwlock);
-    HMAP_FOR_EACH_WITH_HASH(cur, node, hash, &table->hmap) {
-        if (memcmp(&cur->uvs_ip, remote_uvs_ip, sizeof(uvs_net_addr_t)) == 0) {
+    HMAP_FOR_EACH_WITH_HASH(cur, ip_node, hash, &ctx->ip_tbl) {
+        if (memcmp(&cur->remote_ip, remote_ip, sizeof(uvs_net_addr_t)) == 0) {
             target = cur;
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&table->rwlock);
     return target;
 }
 
-static tpsa_sock_node_t *tpsa_lookup_socket(sock_table_t *table, int fd)
+static bool uvs_sock_node_in_fd_tbl(tpsa_sock_ctx_t *ctx, uvs_sock_node_t *node)
+{
+    uint32_t hash = ub_hash_bytes(&node->remote_ip, sizeof(uvs_net_addr_t), 0);
+    uvs_sock_node_t *cur = NULL;
+
+    HMAP_FOR_EACH_WITH_HASH(cur, ip_node, hash, &ctx->ip_tbl) {
+        if (cur == node) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static uvs_sock_node_t *uvs_sock_tbl_lookup_by_fd(tpsa_sock_ctx_t *ctx, int fd)
 {
     uint32_t hash = (uint32_t)fd;
-    tpsa_sock_node_t *cur;
-    tpsa_sock_node_t *target = NULL;
+    uvs_sock_node_t *cur;
+    uvs_sock_node_t *target = NULL;
 
-    (void)pthread_rwlock_rdlock(&table->rwlock);
-    HMAP_FOR_EACH_WITH_HASH(cur, node, hash, &table->hmap) {
+    HMAP_FOR_EACH_WITH_HASH(cur, fd_node, hash, &ctx->fd_tbl) {
         if (cur->fd == fd) {
             target = cur;
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&table->rwlock);
     return target;
 }
 
-static tpsa_sock_node_t *tpsa_add_socket(sock_table_t *table, int fd)
+static uvs_sock_node_t *uvs_add_sock_node(tpsa_sock_ctx_t *ctx, int fd, SSL *ssl,
+    const uvs_net_addr_t *remote_ip)
 {
-    tpsa_sock_node_t *sock_node = (tpsa_sock_node_t *)calloc(1, sizeof(tpsa_sock_node_t));
-    if (sock_node == NULL) {
+    uvs_sock_node_t *node = (uvs_sock_node_t *)calloc(1, sizeof(uvs_sock_node_t));
+    if (node == NULL) {
         return NULL;
     }
-    sock_node->fd = fd;
+    node->fd = fd;
+    node->ssl = ssl;
+    node->remote_ip = *remote_ip;
 
-    (void)pthread_rwlock_wrlock(&table->rwlock);
-    ub_hmap_insert(&table->hmap, &sock_node->node, (uint32_t)fd);
-    (void)pthread_rwlock_unlock(&table->rwlock);
-    return sock_node;
-}
+    ub_hmap_insert(&ctx->fd_tbl, &node->fd_node, (uint32_t)fd);
 
-static inline void tpsa_del_client_socket_node(sock_table_t *table, tpsa_sock_client_node_t *sock_node)
-{
-    (void)pthread_rwlock_wrlock(&table->rwlock);
-    ub_hmap_remove(&table->hmap, &sock_node->node);
-    (void)pthread_rwlock_unlock(&table->rwlock);
-    free(sock_node);
-}
-
-static inline void tpsa_del_socket_node(tpsa_sock_ctx_t *sock_ctx, tpsa_sock_node_t *sock_node)
-{
-    (void)pthread_rwlock_wrlock(&sock_ctx->sock_table.rwlock);
-    ub_hmap_remove(&sock_ctx->sock_table.hmap, &sock_node->node);
-    (void)pthread_rwlock_unlock(&sock_ctx->sock_table.rwlock);
-    free(sock_node);
-}
-
-void tpsa_del_socket(tpsa_sock_ctx_t *sock_ctx, int fd)
-{
-    tpsa_sock_node_t *sock_node = tpsa_lookup_socket(&sock_ctx->sock_table, fd);
-    if (sock_node == NULL) {
-        TPSA_LOG_WARN("Failed to find sock node, fd = %d.\n", fd);
-        return;
-    }
-
-    tpsa_del_socket_node(sock_ctx, sock_node);
-}
-
-static tpsa_sock_client_node_t *tpsa_add_client_socket(sock_table_t *table, int fd,
-    const uvs_net_addr_t *remote_uvs_ip)
-{
-    tpsa_sock_client_node_t *sock_node =
-        (tpsa_sock_client_node_t *)calloc(1, sizeof(tpsa_sock_client_node_t));
-    if (sock_node == NULL) {
-        return NULL;
-    }
-    sock_node->uvs_ip = *remote_uvs_ip;
-    sock_node->fd = fd;
-
-    (void)pthread_rwlock_wrlock(&table->rwlock);
-    ub_hmap_insert(&table->hmap, &sock_node->node,
-                   ub_hash_bytes(remote_uvs_ip, sizeof(uvs_net_addr_t), 0));
-    (void)pthread_rwlock_unlock(&table->rwlock);
-    return sock_node;
-}
-
-/* Return the socket node to reach the remote node with remote_eid */
-static tpsa_sock_client_node_t *tpsa_get_conn_fd(tpsa_sock_ctx_t *sock_ctx, uvs_net_addr_t remote_uvs_ip,
-    uint32_t cfg_port)
-{
-    if (sock_ctx == NULL) {
-        TPSA_LOG_ERR("Invalid parameter.\n");
-        return NULL;
-    }
-
-    /* Lookup socket table for a socket to reach the remote process */
-    tpsa_sock_client_node_t *client_node =
-        tpsa_lookup_client_socket(&sock_ctx->client_table, &remote_uvs_ip);
-    if (client_node != NULL) {
-        return client_node;
-    }
-
-    int fd = tpsa_sock_connect(&remote_uvs_ip, cfg_port);
-    if (fd < 0) {
-        TPSA_LOG_ERR("Failed to tpsa sock connect.\n");
-        return NULL;
-    }
-
-    client_node = tpsa_add_client_socket(&sock_ctx->client_table, fd, &remote_uvs_ip);
-    if (client_node == NULL) {
-        TPSA_LOG_ERR("Failed to add fd to client node.");
-        (void)close(fd);
-        return NULL;
-    }
-
-    TPSA_LOG_INFO("new connect eid: 0x" EID_FMT ", port: %d, fd: %d.\n", EID_ARGS(remote_uvs_ip), cfg_port, fd);
-    return client_node;
-}
-
-int tpsa_handle_accept_fd(int epollfd, tpsa_sock_ctx_t *sock_ctx)
-{
-    uvs_net_addr_t remote_uvs_ip;
-    char remote_uvs_ip_str[INET6_ADDRSTRLEN];
-    void *in_addr;
-    const char *ret;
-    (void)memset(&remote_uvs_ip, 0, sizeof(uvs_net_addr_t));
-    int fd = tpsa_get_accept_fd(sock_ctx->listen_fd, sock_ctx->is_ipv6, &remote_uvs_ip);
-    if (fd < 0) {
-        TPSA_LOG_ERR("Failed to get accept fd.\n");
-        return -1;
-    }
-    if (sock_ctx->is_ipv6) {
-        in_addr = &remote_uvs_ip;
-        ret = inet_ntop(AF_INET6, in_addr, remote_uvs_ip_str, sizeof(remote_uvs_ip_str));
+    /* When uvs1 and uvs2 concurrent connect,
+       thd fds get from accept() can not add to ip_table, only use as receiver fd. */
+    if (uvs_sock_tbl_lookup_by_ip(ctx, remote_ip) == NULL) {
+        ub_hmap_insert(&ctx->ip_tbl, &node->ip_node, ub_hash_bytes(remote_ip, sizeof(uvs_net_addr_t), 0));
     } else {
-        in_addr = &remote_uvs_ip.in4.addr;
-        ret = inet_ntop(AF_INET, in_addr, remote_uvs_ip_str, sizeof(remote_uvs_ip_str));
+        TPSA_LOG_INFO("uvs concurrent connect, remote_ip: " EID_FMT " not add to ip_table\n", EID_ARGS(*remote_ip));
     }
-    if (ret != NULL) {
-        TPSA_LOG_INFO("new accept ip: %s, port: %d, fd: %d\n", remote_uvs_ip_str, sock_ctx->listen_port, fd);
-    }
-
-    if (tpsa_add_epoll_event(epollfd, fd, EPOLLIN | EPOLLRDHUP) != 0) {
-        TPSA_LOG_ERR("Failed to add epoll event.\n");
-        (void)close(fd);
-        return -1;
-    }
-
-    tpsa_sock_node_t *sock_node = tpsa_add_socket(&sock_ctx->sock_table, fd);
-    if (sock_node == NULL) {
-        TPSA_LOG_ERR("Failed to add sock fd.\n");
-        (void)epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL);
-        (void)close(fd);
-        return -1;
-    }
-    return 0;
+    return node;
 }
 
-static int tpsa_sock_send_msg_impl(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
-                                   size_t len, uvs_net_addr_t remote_uvs_ip)
+static void uvs_rmv_sock_node(tpsa_sock_ctx_t *ctx, uvs_sock_node_t *node)
+{
+    ub_hmap_remove(&ctx->fd_tbl, &node->fd_node);
+
+    // In uvs concurrent conncet case, sock node may not in ip_tbl.
+    if (uvs_sock_node_in_fd_tbl(ctx, node)) {
+        ub_hmap_remove(&ctx->ip_tbl, &node->ip_node);
+    }
+    free(node);
+}
+
+static void uvs_sock_tbl_remove_by_fd(tpsa_sock_ctx_t *ctx, int fd)
+{
+    uint32_t hash = (uint32_t)fd;
+    uvs_sock_node_t *cur;
+
+    HMAP_FOR_EACH_WITH_HASH(cur, fd_node, hash, &ctx->fd_tbl) {
+        if (cur->fd == fd) {
+            uvs_destroy_secure_socket(cur->ssl);
+            uvs_rmv_sock_node(ctx, cur);
+            break;
+        }
+    }
+}
+
+static void uvs_destroy_socket_node(tpsa_sock_ctx_t *ctx, uvs_sock_node_t *node)
+{
+    uvs_destroy_secure_socket(node->ssl);
+    (void)epoll_ctl(ctx->epollfd, EPOLL_CTL_DEL, node->fd, NULL);
+    (void)close(node->fd);
+    uvs_rmv_sock_node(ctx, node);
+}
+
+void uvs_destroy_socket(tpsa_sock_ctx_t *ctx, int fd)
+{
+    uvs_sock_tbl_remove_by_fd(ctx, fd);
+    (void)epoll_ctl(ctx->epollfd, EPOLL_CTL_DEL, fd, NULL);
+    (void)close(fd);
+}
+
+static uvs_sock_node_t *uvs_get_sock_node(tpsa_sock_ctx_t *ctx, uvs_net_addr_t remote_ip, uint32_t port)
+{
+    /* Caution: accessing node outside lock causes contetion, e.g., another thread tries to delete this node.
+     * Change it when UVS uses multiple working threads. */
+    uvs_sock_node_t *node = uvs_sock_tbl_lookup_by_ip(ctx, &remote_ip);
+    if (node != NULL) {
+        return node;
+    }
+
+    int fd = uvs_sock_connect(&remote_ip, port);
+    if (fd < 0) {
+        TPSA_LOG_ERR("Failed to connect.\n");
+        return NULL;
+    }
+
+    SSL *ssl = NULL;
+    /* Self connection do not need SSL. */
+    if (ctx->enable_ssl && memcmp(&ctx->local_ip, &remote_ip, sizeof(uvs_net_addr_t)) != 0) {
+        ssl = uvs_create_secure_socket(fd, &ctx->ssl_cfg, false);
+        if (ssl == NULL) {
+            TPSA_LOG_ERR("Fail to create secure socket.\n");
+            goto ERR_FD;
+        }
+    }
+
+    if (uvs_set_socket_opt(fd, true) != 0) {
+        TPSA_LOG_ERR("Fail to set socket option.\n");
+        goto ERR_SSL;
+    }
+
+    node = uvs_add_sock_node(ctx, fd, ssl, &remote_ip);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Failed to add to socket table.");
+        goto ERR_SSL;
+    }
+
+    /* Upon receiving, socket node is to be found in the first place.
+     * Therefore, adding epoll event should be the last step. */
+    if (uvs_add_epoll_event(ctx->epollfd, fd, EPOLLIN | EPOLLRDHUP) != 0) {
+        TPSA_LOG_ERR("Failed to add epoll event.\n");
+        goto ERR_NODE;
+    }
+
+    TPSA_LOG_INFO("new connect IP: 0x" EID_FMT ", port: %d, fd: %d.\n", EID_ARGS(remote_ip), port, fd);
+    return node;
+
+ERR_NODE:
+    uvs_rmv_sock_node(ctx, node);
+ERR_SSL:
+    uvs_destroy_secure_socket(ssl);
+ERR_FD:
+    (void)close(fd);
+    return NULL;
+}
+
+int tpsa_handle_accept_fd(tpsa_sock_ctx_t *ctx)
+{
+    uvs_net_addr_t remote_ip = {0};
+    uvs_sock_node_t *node = NULL;
+    int fd = tpsa_get_accept_fd(ctx->listen_fd, ctx->is_ipv6, &remote_ip);
+    if (fd < 0) {
+        TPSA_LOG_ERR("Fail to get accept fd.\n");
+        return -1;
+    }
+    TPSA_LOG_INFO("Socket accepted, remote_ip: " EID_FMT ", local_port=%d, fd=%d\n",
+        EID_ARGS(remote_ip), ctx->local_port, fd);
+
+    SSL *ssl = NULL;
+    if (ctx->enable_ssl && memcmp(&remote_ip, &ctx->local_ip, sizeof(uvs_net_addr_t)) != 0) {
+        ssl = uvs_create_secure_socket(fd, &ctx->ssl_cfg, true);
+        if (ssl == NULL) {
+            TPSA_LOG_ERR("Fail to create secure socket.\n");
+            goto ERR_FD;
+        }
+    }
+
+    if (uvs_set_socket_opt(fd, true) != 0) {
+        TPSA_LOG_ERR("Fail to set socket option.\n");
+        goto ERR_SSL;
+    }
+
+    node = uvs_add_sock_node(ctx, fd, ssl, &remote_ip);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Failed to create socket node.\n");
+        goto ERR_SSL;
+    }
+
+    if (uvs_add_epoll_event(ctx->epollfd, fd, EPOLLIN | EPOLLRDHUP) != 0) {
+        TPSA_LOG_ERR("Failed to add epoll event.\n");
+        goto ERR_NODE;
+    }
+
+    return 0;
+
+ERR_NODE:
+    uvs_rmv_sock_node(ctx, node);
+ERR_SSL:
+    uvs_destroy_secure_socket(ssl);
+ERR_FD:
+    (void)close(fd);
+    return -1;
+}
+
+int tpsa_sock_send_msg(tpsa_sock_ctx_t *ctx, tpsa_sock_msg_t *msg,
+    size_t len, uvs_net_addr_t remote_uvs_ip)
 {
     if (len > sizeof(tpsa_sock_msg_t)) {
         TPSA_LOG_ERR("Maximum message length exceeded\n");
         return -1;
     }
 
-    tpsa_sock_client_node_t *sock_node = tpsa_get_conn_fd(sock_ctx, remote_uvs_ip, sock_ctx->listen_port);
-    if (sock_node == NULL) {
-        TPSA_LOG_ERR("Failed to get socket to eid 0x" EID_FMT ", port 0x%x\n",
-                     EID_ARGS(remote_uvs_ip), sock_ctx->listen_port);
+    /* Always us remote_ip to the Sender fd */
+    uvs_sock_node_t *node = uvs_get_sock_node(ctx, remote_uvs_ip, ctx->local_port);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Failed to get socket to IP 0x" EID_FMT ", port 0x%x\n",
+                     EID_ARGS(remote_uvs_ip), ctx->local_port);
         return -1;
     }
-    if (send(sock_node->fd, msg, len, 0) < 0) {
-        TPSA_LOG_ERR("Failed to send msg, err: [%d]%s\n", errno, ub_strerror(errno));
-        int fd = sock_node->fd;
-        tpsa_del_client_socket_node(&sock_ctx->client_table, sock_node);
-        (void)epoll_ctl(sock_ctx->epollfd, EPOLL_CTL_DEL, fd, NULL);
-        (void)close(fd);
+
+    /* For request, msn should be set using a global atomic variable.
+     * For response, msn should be copied in each message handler.
+     * Currently, msn is ignored. Fill it when message context is introduced. */
+    if (node->negotiated) {
+        (void)fill_uvs_base_header(&msg->base, node->version, (uint8_t)msg->msg_type,
+            sizeof(tpsa_sock_msg_t) - sizeof(struct uvs_base_header), 0, node->cap, 0);
+    } else {
+        (void)fill_uvs_base_header(&msg->base, UVS_PROTO_CUR_VERSION, (uint8_t)msg->msg_type,
+            sizeof(tpsa_sock_msg_t) - sizeof(struct uvs_base_header), 0, UVS_PROTO_CAP, 0);
+    }
+
+    if (ctx->sock_send(node, msg, len, TPSA_SOCK_TIMEOUT) != (ssize_t)len) {
+        TPSA_LOG_ERR("Fail to send message, err: [%d]%s.\n", errno, ub_strerror(errno));
+        uvs_destroy_socket_node(ctx, node);
         return -1;
     }
     return 0;
 }
 
-int tpsa_sock_send_msg(tpsa_sock_ctx_t *sock_ctx, const tpsa_sock_msg_t *msg,
-                       size_t len, uvs_net_addr_t remote_uvs_ip)
+int uvs_send_general_ack(tpsa_sock_ctx_t *ctx, tpsa_sock_msg_t *in, int fd, uint8_t ack_code)
 {
-    /* tcp keep alive will detech bad connection, and close socket.
-    *  Add one more try when send msg failed
-    */
-    int ret = tpsa_sock_send_msg_impl(sock_ctx, msg, len, remote_uvs_ip);
-    if (ret == 0) {
-        return ret;
+    uvs_sock_node_t *node = uvs_sock_tbl_lookup_by_fd(ctx, fd);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Fail to find socket node, fd=%d.\n", fd);
+        return -1;
     }
 
-    return tpsa_sock_send_msg_impl(sock_ctx, msg, len, remote_uvs_ip);
+    uint32_t tx_size = sizeof(struct uvs_base_header) + sizeof(struct uvs_general_ack);
+    void *tx_buf = malloc(tx_size);
+    if (tx_buf == NULL) {
+        TPSA_LOG_ERR("Fail to malloc TX buffer.\n");
+        return -ENOMEM;
+    }
+
+    void *ptr = tx_buf;
+    ptr = fill_uvs_base_header((struct uvs_base_header *)ptr, node->version, UVS_GENERAL_ACK,
+        sizeof(struct uvs_general_ack), in->base.msn, node->cap, 0);
+    (void)fill_uvs_general_ack((struct uvs_general_ack *)ptr, UVS_PROTO_ACK_VER_NOT_SUPPORT);
+
+    int rc = 0;
+    if (ctx->sock_send(node, tx_buf, tx_size, TPSA_SOCK_TIMEOUT) != tx_size) {
+        TPSA_LOG_ERR("Fail to send msg, err: [%d]%s.\n", errno, ub_strerror(errno));
+        uvs_destroy_socket_node(ctx, node);
+        rc = -1;
+    }
+
+    free(tx_buf);
+    return rc;
 }
 
-
-int tpsa_sock_recv_msg_timeout(int fd, char *buf, uint32_t len, int timeout, tpsa_sock_ctx_t *sock_ctx)
+/* RX buffers for UVS header and payload should be separated when UVS protocol is ready. */
+int uvs_socket_recv(tpsa_sock_ctx_t *ctx, int fd, void *buf, uint32_t len)
 {
-    struct timespec time_start = {0};
-    struct timespec time_end = {0};
-    ssize_t needed_len = len;
-    ssize_t recv_msg = 0;
-    char *addr = buf;
+    struct uvs_base_header *base = (struct uvs_base_header *)buf;
 
-    if (clock_gettime(CLOCK_REALTIME, &time_start) != 0) {
-        TPSA_LOG_ERR("Failed to clock_gettime.\n");
+    uvs_sock_node_t *node = uvs_sock_tbl_lookup_by_fd(ctx, fd);
+    if (node == NULL) {
         return -1;
     }
-    while (recv_msg < len && time_end.tv_sec - time_start.tv_sec < timeout) {
-        ssize_t ret = recv(fd, addr, (size_t)needed_len, 0);
-        if (clock_gettime(CLOCK_REALTIME, &time_end) != 0) {
-            TPSA_LOG_ERR("Failed to clock_gettime.\n");
-            return -1;
-        }
-        if (ret > 0 && ret <= needed_len) {
-            recv_msg += ret;
-            addr += ret;
-            needed_len -= ret;
-        } else if (ret == -1) {
-            /* The recving buffer is empty. Please try again. */
-            if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
-                continue;
-            } else {
-                TPSA_LOG_ERR("Failed to recv msg, fd: %d, err: %s, .\n", fd, ub_strerror(errno));
-                goto ERR;
-            }
-        } else {
-            TPSA_LOG_ERR("The peer end closes the connection (fd = %d), ret : %d\n", fd, ret);
-            goto ERR;
-        }
+
+    ssize_t recv_len = ctx->sock_recv(node, buf, sizeof(struct uvs_base_header), TPSA_SOCK_TIMEOUT);
+    if (recv_len != sizeof(struct uvs_base_header)) {
+        TPSA_LOG_ERR("Fail to receive UVS base header.\n");
+        goto ERR;
     }
-    if (time_end.tv_sec - time_start.tv_sec >= timeout) {
-        TPSA_LOG_ERR("Packet received timed out.\n");
-        return -1;
+
+    if (sizeof(struct uvs_base_header) + base->length > len) {
+        TPSA_LOG_ERR("RX buffer too small, buf_size=%u, msg_size=%u.\n",
+            len, sizeof(struct uvs_base_header) + base->length);
+        goto ERR;
     }
+
+    recv_len = ctx->sock_recv(node, (char *)buf + sizeof(struct uvs_base_header), base->length, TPSA_SOCK_TIMEOUT);
+    if (recv_len != base->length) {
+        TPSA_LOG_ERR("Fail to receive UVS message payload.\n");
+        goto ERR;
+    }
+
     return 0;
 
 ERR:
-    tpsa_del_socket(sock_ctx, fd);
-    (void)epoll_ctl(sock_ctx->epollfd, EPOLL_CTL_DEL, fd, NULL);
-    (void)close(fd);
+    uvs_destroy_socket_node(ctx, node);
     return -1;
 }
 
-static int tpsa_create_sock_table(sock_table_t *table)
+/* Return incoming request's version. */
+int uvs_proto_nego_for_req(tpsa_sock_ctx_t *ctx, int fd, struct uvs_base_header *req)
 {
-    (void)pthread_rwlock_init(&table->rwlock, NULL);
-    if (ub_hmap_init(&table->hmap, TPSA_SOCK_TABLE_SIZE) != 0) {
-        (void)pthread_rwlock_destroy(&table->rwlock);
+    uvs_sock_node_t *node = uvs_sock_tbl_lookup_by_fd(ctx, fd);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Fail to lookup socket node by FD(%d).\n", fd);
         return -1;
     }
 
-    return 0;
-}
+    if (node->negotiated) {
+        return node->version;
+    }
 
-static void tpsa_destroy_client_table(sock_table_t *table)
-{
-    tpsa_sock_client_node_t *cur, *next;
-
-    /* destroy client/server sock table */
-    (void)pthread_rwlock_wrlock(&table->rwlock);
-    HMAP_FOR_EACH_SAFE(cur, next, node, &table->hmap) {
-        ub_hmap_remove(&table->hmap, &cur->node);
-        if (cur->fd >= 0) {
-            (void)close(cur->fd);
+    int rc = 0;
+    if (req->version == UVS_PROTO_CUR_VERSION) {
+        node->version = UVS_PROTO_CUR_VERSION;
+        rc = UVS_PROTO_CUR_VERSION;
+    } else {
+        node->version = UVS_PROTO_BASE_VERSION;
+        if (req->version == UVS_PROTO_BASE_VERSION) {
+            rc = UVS_PROTO_BASE_VERSION;
+        } else {
+            rc = (int)UVS_PROTO_INVALID_VERSION;
         }
-        free(cur);
     }
-    ub_hmap_destroy(&table->hmap);
-    (void)pthread_rwlock_unlock(&table->rwlock);
-    (void)pthread_rwlock_destroy(&table->rwlock);
+
+    node->cap = req->cap & UVS_PROTO_CAP;
+    node->negotiated = true;
+    TPSA_LOG_INFO("UVS protocol version negotiation, req_ver=%u, local_cur_ver=%u, local_base_ver=%u.\n",
+        req->version, UVS_PROTO_CUR_VERSION, UVS_PROTO_BASE_VERSION);
+
+    return rc;
 }
 
-static inline void tpsa_close_sockfd(int fd, int epollfd)
+int uvs_proto_nego_for_rsp(tpsa_sock_ctx_t *ctx, int fd, struct uvs_base_header *rsp)
 {
-    if (fd < 0) {
-        return;
-    }
-
-    if (epollfd != -1) {
-        (void)epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL);
-    }
-    (void)close(fd);
-}
-
-static void tpsa_destroy_sock_table(sock_table_t *table, int epollfd)
-{
-    tpsa_sock_node_t *cur, *next;
-
-    (void)pthread_rwlock_wrlock(&table->rwlock);
-    HMAP_FOR_EACH_SAFE(cur, next, node, &table->hmap) {
-        ub_hmap_remove(&table->hmap, &cur->node);
-        tpsa_close_sockfd(cur->fd, epollfd);
-        free(cur);
-    }
-    ub_hmap_destroy(&table->hmap);
-    (void)pthread_rwlock_unlock(&table->rwlock);
-    (void)pthread_rwlock_destroy(&table->rwlock);
-}
-
-static int tpsa_sock_table_init(tpsa_sock_ctx_t *sock_ctx)
-{
-    if (tpsa_create_sock_table(&sock_ctx->client_table) != 0) {
-        TPSA_LOG_ERR("Failed to create client table");
+    uvs_sock_node_t *node = uvs_sock_tbl_lookup_by_fd(ctx, fd);
+    if (node == NULL) {
+        TPSA_LOG_ERR("Fail to lookup socket node by FD(%d).\n", fd);
         return -1;
     }
-    if (tpsa_create_sock_table(&sock_ctx->sock_table) != 0) {
-        tpsa_destroy_client_table(&sock_ctx->client_table);
-        TPSA_LOG_ERR("Failed to create server table");
+
+    if (node->negotiated) {
+        return 0;
+    }
+
+    /* Version negotiation fails only when target sends general ack.
+     * Thus, remove below statement when UVS protocol is completed. */
+    if (rsp->version != UVS_PROTO_CUR_VERSION && rsp->version != UVS_PROTO_BASE_VERSION) {
+        TPSA_LOG_ERR("UVS protocol version negotiation fails, remote_ver=%u, local_cur_ver=%u, local_base_ver=%u.\n",
+            rsp->version, UVS_PROTO_CUR_VERSION, UVS_PROTO_BASE_VERSION);
         return -1;
     }
+
+    node->version = rsp->version;
+    node->cap = rsp->cap;
+    node->negotiated = true;
+    TPSA_LOG_INFO("UVS protocol version negotiation, rsp_ver=%u, local_cur_ver=%u, local_base_ver=%u.\n",
+        rsp->version, UVS_PROTO_CUR_VERSION, UVS_PROTO_BASE_VERSION);
     return 0;
 }
 
-static void tpsa_sock_table_uninit(tpsa_sock_ctx_t *sock_ctx)
+static int uvs_sock_table_init(tpsa_sock_ctx_t *ctx)
 {
-    tpsa_destroy_sock_table(&sock_ctx->sock_table, sock_ctx->epollfd);
-    tpsa_destroy_client_table(&sock_ctx->client_table);
+    if (ub_hmap_init(&ctx->fd_tbl, UVS_SOCK_TABLE_SIZE) != 0) {
+        return -1;
+    }
+    if (ub_hmap_init(&ctx->ip_tbl, UVS_SOCK_TABLE_SIZE) != 0) {
+        ub_hmap_destroy(&ctx->fd_tbl);
+        return -1;
+    }
+
+    return 0;
+}
+
+static void uvs_sock_table_uninit(tpsa_sock_ctx_t *ctx)
+{
+    uvs_sock_node_t *cur, *next;
+
+    HMAP_FOR_EACH_SAFE(cur, next, fd_node, &ctx->fd_tbl) {
+        ub_hmap_remove(&ctx->fd_tbl, &cur->fd_node);
+        ub_hmap_remove(&ctx->ip_tbl, &cur->ip_node);
+        (void)epoll_ctl(ctx->epollfd, EPOLL_CTL_DEL, cur->fd, NULL);
+        (void)close(cur->fd);
+        free(cur);
+    }
+    ub_hmap_destroy(&ctx->fd_tbl);
+    ub_hmap_destroy(&ctx->ip_tbl);
 }
 
 int tpsa_sock_server_init(tpsa_sock_ctx_t *sock_ctx, uvs_socket_init_attr_t *attr)
 {
-    if (tpsa_sock_table_init(sock_ctx) != 0) {
+    if (attr != NULL && attr->ssl_cfg != NULL) {
+        if (uvs_ssl_init(attr->ssl_cfg) != 0) {
+            TPSA_LOG_ERR("Fail to initialize SSL.\n");
+            return -1;
+        }
+        sock_ctx->ssl_cfg = *attr->ssl_cfg;
+        sock_ctx->enable_ssl = true;
+        sock_ctx->sock_send = secure_socket_send;
+        sock_ctx->sock_recv = secure_socket_recv;
+    } else {
+        sock_ctx->sock_send = normal_socket_send;
+        sock_ctx->sock_recv = normal_socket_recv;
+    }
+
+    if (uvs_sock_table_init(sock_ctx) != 0) {
         TPSA_LOG_ERR("Failed to init sock table");
         return -1;
     }
 
     if (attr == NULL || tpsa_sock_bind(sock_ctx, attr) != 0) {
         TPSA_LOG_ERR("Failed to tpsa bind.\n");
-        tpsa_sock_table_uninit(sock_ctx);
+        uvs_sock_table_uninit(sock_ctx);
         return -1;
     }
+
     return 0;
 }
 
 void tpsa_sock_server_uninit(tpsa_sock_ctx_t *sock_ctx)
 {
     tpsa_sock_unbind(sock_ctx);
-    tpsa_sock_table_uninit(sock_ctx);
+    uvs_sock_table_uninit(sock_ctx);
 }
 
 static void tpsa_sock_init_content_param(tpsa_sock_msg_t *req, tpsa_init_sock_req_param_t *param,
@@ -634,7 +862,7 @@ static void tpsa_sock_init_content_param(tpsa_sock_msg_t *req, tpsa_init_sock_re
 
     req->content.req.tp_param.com.local_net_addr_idx = param->local_net_addr_idx; /* Need to fix */
     req->content.req.tp_param.com.peer_net_addr = param->peer_net_addr;
-    req->content.req.tp_param.com.state = TPSA_TP_STATE_RTR;
+    req->content.req.tp_param.com.state = UVS_TP_STATE_RTR;
     req->content.req.tp_param.com.tx_psn = 0;
     req->content.req.tp_param.com.rx_psn = param->rx_psn;
     req->content.req.tp_param.com.local_mtu = param->local_mtu;
@@ -724,6 +952,12 @@ tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, struct tpsa_in
     resp->content.resp.target_cc_cnt = param->resp_param->target_cc_cnt;
     (void)memcpy(resp->content.resp.target_cc_arr, param->resp_param->cc_result_array,
         param->resp_param->target_cc_cnt * sizeof(tpsa_tp_cc_entry_t));
+
+    if (req->cc_array_cnt > TPSA_CC_IDX_TABLE_SIZE) {
+        TPSA_LOG_ERR("Invalid cc array cnt:%d\n", req->cc_array_cnt);
+        free(resp);
+        return NULL;
+    }
     resp->content.resp.target_cc_en = param->resp_param->target_cc_en;
     resp->content.resp.local_cc_cnt = req->cc_array_cnt;
     (void)memcpy(resp->content.resp.local_cc_arr,
@@ -737,7 +971,7 @@ tpsa_sock_msg_t *tpsa_sock_init_create_resp(tpsa_sock_msg_t* msg, struct tpsa_in
     resp->content.resp.tp_param.com.remote_tp_cfg = req->tp_param.com.remote_tp_cfg;
     resp->content.resp.tp_param.com.local_net_addr_idx = req->tp_param.com.local_net_addr_idx;
     resp->content.resp.tp_param.com.peer_net_addr = req->tp_param.com.peer_net_addr; /* Need to fix */
-    resp->content.resp.tp_param.com.state = TPSA_TP_STATE_RTR;
+    resp->content.resp.tp_param.com.state = UVS_TP_STATE_RTR;
     resp->content.resp.tp_param.com.tx_psn = 0; /* Need to check */
     resp->content.resp.tp_param.com.rx_psn = req->tp_param.com.rx_psn;
     resp->content.resp.tp_param.com.local_mtu = req->tp_param.com.local_mtu;
@@ -789,7 +1023,7 @@ int tpsa_sock_send_create_ack(tpsa_sock_ctx_t *sock_ctx, tpsa_sock_msg_t *msg, u
 
     ack->content.ack.tp_param.com = msg->content.resp.tp_param.com;
     uint32_t i = 0;
-    for (; i < msg->content.resp.tpg_cfg.tp_cnt; i++) {
+    for (; i < msg->content.resp.tpg_cfg.tp_cnt && i < TPSA_MAX_TP_CNT_IN_GRP; i++) {
         ack->content.ack.tp_param.uniq[i] = msg->content.resp.tp_param.uniq[i];
     }
 

@@ -21,7 +21,9 @@ union tpsa_dip_table_modify_mask {
         uint32_t upi            : 1;
         uint32_t uvs_ip         : 1;
         uint32_t net_addr       : 1;
-        uint32_t reserved       : 28;
+        uint32_t new_eid        : 1;
+        uint32_t new_upi        : 1;
+        uint32_t reserved       : 26;
     } bs;
     uint32_t value;
 };
@@ -34,6 +36,7 @@ typedef struct uvs_admin_dip_table_args {
     urma_eid_t new_eid;
     uint32_t new_upi;
     union tpsa_dip_table_modify_mask mask;
+    uvs_admin_net_addr_type_t input_net_type;
 } uvs_admin_dip_table_args_t;
 
 typedef struct uvs_admin_dip_table_show_req {

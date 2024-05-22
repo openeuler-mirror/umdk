@@ -18,6 +18,7 @@
 
 #define UVS_SECOND_TO_US 1000000
 #define RC_TP_CNT 2
+#define VTP_RATE_CHECK_INTERVAL 1
 
 
 typedef struct vtp_stats_info {
@@ -39,7 +40,10 @@ struct vport_limit_rate_config {
     uint32_t rm_vtp_max_cnt;
     uint32_t rc_vtp_max_cnt;
     uint32_t um_vtp_max_cnt;
-    uint64_t vtp_per_us; /* us */
+    uint64_t cycles_per_s;
+    uint32_t rm_vtp_per_s;
+    uint32_t rc_vtp_per_s;
+    uint32_t um_vtp_per_s;
 };
 
 typedef struct uvs_vport_statistic_node {
@@ -191,7 +195,7 @@ static uvs_tpf_statistic_node_t *lookup_tpf_statistic_node(const uvs_tpf_statist
 
     (void)pthread_rwlock_rdlock(&g_statistic_ctx->tpf_table.lock);
     HMAP_FOR_EACH_WITH_HASH(cur, node, hash, &g_statistic_ctx->tpf_table.hmap) {
-        if (memcmp(cur->key.tpf, key->tpf, URMA_MAX_DEV_NAME) == 0) {
+        if (memcmp(cur->key.tpf, key->tpf, UVS_MAX_DEV_NAME) == 0) {
             target = cur;
             break;
         }
@@ -261,20 +265,25 @@ static void limit_config_init(struct vport_limit_rate_config *config,
 {
     if (info->mask.bs.rc_max_cnt != 0) {
         config->rc_vtp_max_cnt = info->rc_max_cnt;
-        TPSA_LOG_DEBUG("uvs config rc vtp mac cnt %u.\n", info->rc_max_cnt);
+        TPSA_LOG_DEBUG("uvs config rc vtp max cnt %u.\n", info->rc_max_cnt);
     }
     if (info->mask.bs.rm_vtp_max_cnt != 0) {
         config->rm_vtp_max_cnt = info->rm_vtp_max_cnt;
-        TPSA_LOG_DEBUG("uvs config rm vtp mac cnt %u.\n", info->rm_vtp_max_cnt);
+        TPSA_LOG_DEBUG("uvs config rm vtp max cnt %u.\n", info->rm_vtp_max_cnt);
     }
     if (info->mask.bs.um_vtp_max_cnt != 0) {
         config->um_vtp_max_cnt = info->um_vtp_max_cnt;
-        TPSA_LOG_DEBUG("uvs config um vtp mac cnt %u.\n", info->um_vtp_max_cnt);
+        TPSA_LOG_DEBUG("uvs config um vtp max cnt %u.\n", info->um_vtp_max_cnt);
     }
     if (info->mask.bs.vtp_per_second != 0) {
-        config->vtp_per_us = uvs_get_vtp_per_us(info->vtp_per_second);
-        TPSA_LOG_DEBUG("uvs config vtp per second %u to cpu per ms %lu.\n",
-            info->vtp_per_second, config->vtp_per_us);
+        config->rm_vtp_per_s = info->rm_vtp_max_cnt > info->vtp_per_second ?
+            info->vtp_per_second : info->rm_vtp_max_cnt;
+        config->rc_vtp_per_s = info->rc_max_cnt > info->vtp_per_second ?
+            info->vtp_per_second : info->rc_max_cnt;
+        config->um_vtp_per_s = info->um_vtp_max_cnt > info->vtp_per_second ?
+            info->vtp_per_second : info->um_vtp_max_cnt;
+        config->cycles_per_s = uvs_get_vtp_per_us(VTP_RATE_CHECK_INTERVAL);
+        TPSA_LOG_DEBUG("uvs config vtp per second %u.\n", info->vtp_per_second);
     }
     TPSA_LOG_INFO("uvs vport mask value %u.\n", info->mask.value);
 }
@@ -320,10 +329,10 @@ static void uvs_try_del_vtp_node(const vport_key_t *vport)
     TPSA_LOG_INFO("del tpf %s and fe_idx %u config complete.\n", vport->tpf_name, vport->fe_idx);
 }
 
-static uvs_tpf_statistic_node_t *uvs_add_tp_config_node(const char tpf_name[URMA_MAX_DEV_NAME])
+static uvs_tpf_statistic_node_t *uvs_add_tp_config_node(const char tpf_name[UVS_MAX_DEV_NAME])
 {
     uvs_tpf_statistic_key_t tpf_key = { 0 };
-    (void)memcpy(tpf_key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(tpf_key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&tpf_key);
     if (tpf_node != NULL) {
         (void)atomic_fetch_add(&tpf_node->use_cnt, 1U);
@@ -344,10 +353,10 @@ static uvs_tpf_statistic_node_t *uvs_add_tp_config_node(const char tpf_name[URMA
     return tpf_node;
 }
 
-static void uvs_try_del_tp_node(const char tpf_name[URMA_MAX_DEV_NAME])
+static void uvs_try_del_tp_node(const char tpf_name[UVS_MAX_DEV_NAME])
 {
     uvs_tpf_statistic_key_t tpf_key = { 0 };
-    (void)memcpy(tpf_key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(tpf_key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&tpf_key);
     if (tpf_node == NULL) {
         TPSA_LOG_INFO("tpf name %s not exists.\n", tpf_name);
@@ -365,7 +374,7 @@ static void uvs_try_del_tp_node(const char tpf_name[URMA_MAX_DEV_NAME])
 void uvs_add_vport_statistic_config(const uvs_vport_info_t *info)
 {
     vport_key_t key = { 0 };
-    (void)memcpy(key.tpf_name, info->tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf_name, info->tpf_name, UVS_MAX_DEV_NAME);
     key.fe_idx = info->fe_idx;
     uvs_vport_statistic_node_t *vtp_node = uvs_add_vtp_config_node(info, &key);
     if (vtp_node == NULL) {
@@ -377,7 +386,7 @@ void uvs_add_vport_statistic_config(const uvs_vport_info_t *info)
     }
 }
 
-void uvs_del_vport_statistic_config(const char tpf_name[URMA_MAX_DEV_NAME], const vport_key_t *vport)
+void uvs_del_vport_statistic_config(const char tpf_name[UVS_MAX_DEV_NAME], const vport_key_t *vport)
 {
     uvs_try_del_vtp_node(vport);
     uvs_try_del_tp_node(tpf_name);
@@ -521,7 +530,7 @@ static void cal_tp_destroy_statistic(uvs_tpf_statistic_t *st, tpsa_transport_mod
 }
 
 static void cal_tp_statistic(uvs_tpf_statistic_t *st, tpsa_transport_mode_t mode,
-    uvs_tp_state_t state)
+    uvs_statistic_tp_state_t state)
 {
     switch (state) {
         case UVS_TP_SUCCESS_STATE:
@@ -637,10 +646,10 @@ void uvs_cal_vtp_destroy_socket(tpsa_sock_msg_t *msg)
     uvs_cal_vtp_statistic(&key, msg->trans_mode, UVS_VTP_DESTROY_STATE);
 }
 
-void uvs_cal_tp_change_state_statistic(const char tpf_name[URMA_MAX_DEV_NAME], uvs_tp_change_state_t state)
+void uvs_cal_tp_change_state_statistic(const char tpf_name[UVS_MAX_DEV_NAME], uvs_tp_change_state_t state)
 {
     uvs_tpf_statistic_key_t key = { 0 };
-    (void)memcpy(key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&key);
     if (tpf_node == NULL) {
         TPSA_LOG_ERR("the tpf_name: %s is incorrect.\n", tpf_name);
@@ -682,7 +691,7 @@ void uvs_cal_tp_change_state_statistic(const char tpf_name[URMA_MAX_DEV_NAME], u
 }
 
 void uvs_cal_multi_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_transport_mode_t mode,
-    uvs_tp_state_t state, uint32_t tp_cnt)
+    uvs_statistic_tp_state_t state, uint32_t tp_cnt)
 {
     uvs_tpf_statistic_key_t tpf_key = { 0 };
 
@@ -690,7 +699,7 @@ void uvs_cal_multi_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_tra
         return;
     }
 
-    (void)memcpy(tpf_key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(tpf_key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&tpf_key);
     if (tpf_node == NULL) {
         TPSA_LOG_ERR("lookup multi tp statistic node tpf name %s err.\n", tpf_name);
@@ -703,14 +712,15 @@ void uvs_cal_multi_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_tra
     }
 }
 
-void uvs_cal_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_transport_mode_t mode, uvs_tp_state_t state)
+void uvs_cal_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_transport_mode_t mode,
+    uvs_statistic_tp_state_t state)
 {
     if (!g_global_statistic_enable) {
         return;
     }
 
     uvs_tpf_statistic_key_t key = { 0 };
-    (void)memcpy(key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&key);
     if (tpf_node == NULL) {
         TPSA_LOG_ERR("lookup tpf statistic node tpf name %s err.\n", tpf_name);
@@ -720,14 +730,14 @@ void uvs_cal_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_transport
     cal_tp_statistic(&tpf_node->statistic, mode, state);
 }
 
-void uvs_cal_tpg_statistic(const char tpf_name[URMA_MAX_DEV_NAME])
+void uvs_cal_tpg_statistic(const char tpf_name[UVS_MAX_DEV_NAME])
 {
     if (!g_global_statistic_enable) {
         return;
     }
 
     uvs_tpf_statistic_key_t key = { 0 };
-    (void)memcpy(key.tpf, tpf_name, URMA_MAX_DEV_NAME);
+    (void)memcpy(key.tpf, tpf_name, UVS_MAX_DEV_NAME);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&key);
     if (tpf_node == NULL) {
         TPSA_LOG_ERR("not lookup tpf statistic table tpf name %s err.\n", tpf_name);
@@ -769,7 +779,7 @@ int uvs_query_vport_statistic_inner(const vport_key_t *vport, uvs_vport_statisti
 int uvs_query_tpf_statistic_inner(const char* tpf_name, uvs_tpf_statistic_t *st)
 {
     uvs_tpf_statistic_key_t key = { 0 };
-    (void)strcpy(key.tpf, tpf_name);
+    (void)strncpy(key.tpf, tpf_name, UVS_MAX_DEV_NAME - 1);
     uvs_tpf_statistic_node_t *tpf_node = lookup_tpf_statistic_node(&key);
     if (tpf_node == NULL) {
         TPSA_LOG_ERR("uvs query tpf %s not match.\n", tpf_name);
@@ -804,16 +814,16 @@ static bool is_limit_create_vport_inner(uvs_vport_statistic_node_t *node,
     switch (mode) {
         case TPSA_TP_RM:
             return is_limit((&(node->statistic.rm_vtp)),
-                            node->limit_config.rm_vtp_max_cnt,
-                            node->limit_config.vtp_per_us);
+                            node->limit_config.rm_vtp_per_s,
+                            node->limit_config.cycles_per_s);
         case TPSA_TP_RC:
             return is_limit((&(node->statistic.rc_vtp)),
-                            node->limit_config.rc_vtp_max_cnt,
-                            node->limit_config.vtp_per_us);
+                            node->limit_config.rc_vtp_per_s,
+                            node->limit_config.cycles_per_s);
         case TPSA_TP_UM:
             return is_limit((&(node->statistic.um_vtp)),
-                            node->limit_config.um_vtp_max_cnt,
-                            node->limit_config.vtp_per_us);
+                            node->limit_config.um_vtp_per_s,
+                            node->limit_config.cycles_per_s);
         default:
             TPSA_LOG_ERR("the mode %u of the vport opening statistics are incorrect.\n", (uint32_t)mode);
     }

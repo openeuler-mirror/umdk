@@ -25,6 +25,10 @@
 #define URMA_MAX_VALUE_LEN 64   // value length for urma_read_sysfs_device tmp_value arry
 #define URMA_CLASS_PATH "/sys/class/ubcore"
 #define URMA_CLASS_PATH_OBSOLETED "/sys/class/uburma"
+
+#define URMA_EID_SUBPATH "eids/eid%u"
+#define URMA_EID_SUBPATH_OBSOLETED "eid%u/eid"
+
 #define URMA_DEV_PATH "/dev/uburma"
 #define URMA_PORT_LEN 16
 #define URMA_DEV_PATH_MAX  (URMA_MAX_SYSFS_PATH + URMA_PORT_LEN)
@@ -81,55 +85,7 @@ static inline bool urma_eid_is_valid(urma_eid_t *eid)
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
 }
 
-static int urma_parse_eid_info(char *buf, uint32_t *eid_index, urma_eid_t *eid)
-{
-    char *eid_index_str = NULL;
-    char *eid_str = NULL;
-
-    if (buf[strlen(buf) - 1] == '\n') {
-        buf[strlen(buf) - 1] = '\0';
-    } else {
-        return -1;
-    }
-
-    eid_index_str = strtok_r(buf, " ", &eid_str);
-    if (eid_index_str == NULL || ub_str_to_u32(eid_index_str, eid_index) != 0) {
-        return -1;
-    }
-
-    if (eid_str == NULL || urma_str_to_eid(eid_str, eid) != 0 ||
-        !urma_eid_is_valid(eid)) {
-        return -1;
-    }
-    return 0;
-}
-
-static FILE *urma_fopen_sysfs_file(const char *dir, const char *file, char *rwx)
-{
-    char path[URMA_MAX_SYSFS_PATH] = {0};
-    char *file_path;
-
-    if (snprintf(path, URMA_MAX_SYSFS_PATH, "%s/%s", dir, file) < 0) {
-        URMA_LOG_ERR("snprintf failed");
-        return NULL;
-    }
-
-    file_path = realpath(path, NULL);
-    if (file_path == NULL) {
-        URMA_LOG_WARN("file_path:%s is not standardize.\n", path);
-        return NULL;
-    }
-
-    FILE *fp = fopen(file_path, rwx);
-    if (!fp) {
-        URMA_LOG_ERR("Failed open file: %s, errno: %d.\n", file_path, errno);
-    }
-
-    free(file_path);
-    return fp;
-}
-
-static uint32_t read_eid_list_obselete(urma_sysfs_dev_t *sysfs_dev,
+static uint32_t read_eid_list_sysyf(urma_sysfs_dev_t *sysfs_dev, char *subpath,
     urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
@@ -138,7 +94,7 @@ static uint32_t read_eid_list_obselete(urma_sysfs_dev_t *sysfs_dev,
     urma_eid_t eid = {0};
 
     for (uint32_t i = 0; i < max_eid_cnt; i++) {
-        if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", i) <= 0) {
+        if (snprintf(tmp_eid, URMA_MAX_NAME, subpath, i) <= 0) {
             URMA_LOG_ERR("printf failed, eid idx: %u.\n", i);
             continue;
         }
@@ -155,40 +111,13 @@ static uint32_t read_eid_list_obselete(urma_sysfs_dev_t *sysfs_dev,
     return cnt_idx;
 }
 
-static uint32_t read_eid_list(urma_sysfs_dev_t *sysfs_dev,
-    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
-{
-    FILE *fp = urma_fopen_sysfs_file(sysfs_dev->sysfs_path, "eid", "r");
-    if (!fp) {
-        URMA_LOG_ERR("Failed open eid file\n");
-        return 0;
-    }
-
-    char buf[URMA_MAX_NAME] = {0};
-    uint32_t cnt_idx = 0;
-    while (cnt_idx < max_eid_cnt && !feof(fp)) {
-        if (!fgets(buf, URMA_MAX_NAME, fp)) {
-            continue;
-        }
-
-        if (urma_parse_eid_info(buf, &eid_list[cnt_idx].eid_index, &eid_list[cnt_idx].eid) != 0) {
-            continue;
-        }
-
-        cnt_idx++;
-    }
-
-    (void)fclose(fp);
-    return cnt_idx;
-}
-
-static int read_eid_with_index_obselete(urma_sysfs_dev_t *sysfs_dev,
+static int read_eid_sysfs_with_index(urma_sysfs_dev_t *sysfs_dev, char *pattern,
     uint32_t eid_index, urma_eid_t *eid)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
 
-    if (snprintf(tmp_eid, URMA_MAX_NAME, "eid%u/eid", eid_index) <= 0) {
+    if (snprintf(tmp_eid, URMA_MAX_NAME, pattern, eid_index) <= 0) {
         URMA_LOG_ERR("snprintf failed, eid idx: %u.\n", eid_index);
         return -1;
     }
@@ -203,54 +132,47 @@ static int read_eid_with_index_obselete(urma_sysfs_dev_t *sysfs_dev,
     return 0;
 }
 
-static int read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
-    uint32_t eid_index, urma_eid_t *eid)
+static int urma_ioctl_get_eid_list(urma_device_t *dev, uint32_t max_eid_cnt,
+    urma_eid_info_t *eid_list, uint32_t *eid_cnt)
 {
-    FILE *fp = urma_fopen_sysfs_file(sysfs_dev->sysfs_path, "eid", "r");
-    if (!fp) {
-        URMA_LOG_ERR("Failed open eid file\n");
+    int dev_fd = urma_open_cdev(dev->path);
+    if (dev_fd < 0) {
+        if (dev->type != URMA_TRANSPORT_IP) {
+            URMA_LOG_ERR("Failed to open urma cdev with path %s\n", dev->path);
+        }
         return -1;
     }
 
-    char buf[URMA_MAX_NAME] = {0};
-    uint32_t tmp_eid_index;
-    while (!feof(fp)) {
-        if (!fgets(buf, URMA_MAX_NAME, fp)) {
-            continue;
-        }
-
-        if (urma_parse_eid_info(buf, &tmp_eid_index, eid) != 0) {
-            continue;
-        }
-
-        if (eid_index == tmp_eid_index) {
-            (void)fclose(fp);
-            return 0;
-        }
-    }
-
-    (void)fclose(fp);
-    return -1;
+    int ret = urma_cmd_get_eid_list(dev_fd, max_eid_cnt, eid_list, eid_cnt);
+    close(dev_fd);
+    return ret;
 }
 
-uint32_t urma_read_eid_list(urma_sysfs_dev_t *sysfs_dev,
+uint32_t urma_read_eid_list(urma_device_t *dev,
     urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
 {
-    uint32_t eid_cnt = read_eid_list(sysfs_dev, eid_list, max_eid_cnt);
-    if (eid_cnt > 0) {
+    uint32_t eid_cnt = 0;
+    if (urma_ioctl_get_eid_list(dev, max_eid_cnt, eid_list, &eid_cnt) == 0) {
         return eid_cnt;
     }
 
-    return read_eid_list_obselete(sysfs_dev, eid_list, max_eid_cnt);
+    if (strcmp(g_urma_class_path, URMA_CLASS_PATH) == 0) {
+        return read_eid_list_sysyf(dev->sysfs_dev, URMA_EID_SUBPATH, eid_list, max_eid_cnt);
+    } else {
+        // to adapt old ko
+        return read_eid_list_sysyf(dev->sysfs_dev, URMA_EID_SUBPATH_OBSOLETED, eid_list, max_eid_cnt);
+    }
 }
 
 int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
     uint32_t eid_index, urma_eid_t *eid)
 {
-    if (read_eid_with_index(sysfs_dev, eid_index, eid) == 0) {
-        return 0;
+    if (strcmp(g_urma_class_path, URMA_CLASS_PATH) == 0) {
+        return read_eid_sysfs_with_index(sysfs_dev, "eids/eid%u", eid_index, eid);
+    } else {
+        // to adapt old ko
+        return read_eid_sysfs_with_index(sysfs_dev, "eid%u/eid", eid_index, eid);
     }
-    return read_eid_with_index_obselete(sysfs_dev, eid_index, eid);
 }
 
 static inline uint8_t urma_parse_value_u8(const char *sysfs_path, char *file)
@@ -358,6 +280,10 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.max_tp_in_tpg = urma_parse_value_u32(sysfs_path, "max_tp_in_tpg");
     attr->port_cnt = urma_parse_value_u8(sysfs_path, "port_count");
     attr->dev_cap.max_eid_cnt = urma_parse_value_u16(sysfs_path, "max_eid_cnt");
+    attr->dev_cap.page_size_cap = urma_parse_value_u64(sysfs_path, "page_size_cap");
+    attr->dev_cap.max_oor_cnt = urma_parse_value_u32(sysfs_path, "max_oor_cnt");
+    attr->dev_cap.mn = urma_parse_value_u32(sysfs_path, "mn");
+    attr->dev_cap.max_netaddr_cnt = urma_parse_value_u32(sysfs_path, "max_netaddr_cnt");
 
     if (attr->port_cnt > 0 && attr->port_cnt != MAX_PORT_CNT) {
         urma_parse_port_attr(sysfs_path, attr);
@@ -388,7 +314,7 @@ void urma_discover_sysfs_path(void)
 
     ret = stat(URMA_CLASS_PATH_OBSOLETED, &stat_buf);
     if (ret == 0) {
-        (void)strcpy(g_urma_class_path, URMA_CLASS_PATH_OBSOLETED);
+        (void)strncpy(g_urma_class_path, URMA_CLASS_PATH_OBSOLETED, URMA_MAX_SYSFS_PATH - 1);
         URMA_LOG_WARN("urma sysfs path is obseleted");
         return;
     }
@@ -428,6 +354,8 @@ urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
     }
 
     urma_read_sysfs_dev_attrs(sysfs_dev);
+    sysfs_dev->time_created = stat_buf.st_mtim;
+
     return sysfs_dev;
 
 out:
@@ -486,13 +414,22 @@ FAIL_OUT:
     return NULL;
 }
 
-static int urma_check_loaded_devices(const char *dev_name, struct ub_list *dev_name_list)
+static inline bool urma_time_cmp_eq(struct timespec *time1, struct timespec *time2)
+{
+    /* Todo: check (time1->tv_sec == time2->tv_sec && time1->tv_nsec == time2->tv_nsec) in container */
+    return true;
+}
+
+static int urma_check_loaded_devices(urma_sysfs_dev_t *sysfs_dev,
+    struct ub_list *dev_name_list)
 {
     urma_sysfs_dev_name_t *sysfs_dev_name = NULL;
     urma_sysfs_dev_name_t *next = NULL;
 
     UB_LIST_FOR_EACH_SAFE(sysfs_dev_name, next, node, dev_name_list) {
-        if (strcmp(sysfs_dev_name->dev_name, dev_name) == 0) {
+        if (strcmp(sysfs_dev_name->dev_name, sysfs_dev->dev_name) == 0 &&
+            urma_time_cmp_eq(&sysfs_dev_name->time_created,
+            &sysfs_dev->time_created) == true) {
             return 0;
         }
     }
@@ -505,7 +442,8 @@ static void urma_get_dev_name_list(struct ub_list *dev_name_list, urma_sysfs_dev
     if (sysfs_dev_name == NULL) {
         return;
     }
-    (void)strcpy(sysfs_dev_name->dev_name, sysfs_dev->dev_name);
+    (void)strncpy(sysfs_dev_name->dev_name, sysfs_dev->dev_name, URMA_MAX_NAME);
+    sysfs_dev_name->time_created = sysfs_dev->time_created;
     ub_list_insert_after(dev_name_list, &sysfs_dev_name->node);
 }
 
@@ -543,7 +481,8 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
         }
         urma_device_t *device = NULL;
         device = urma_find_dev_by_name(dev_list, sysfs_dev->dev_name);
-        if (device != NULL) {
+        if (device != NULL && urma_time_cmp_eq(&device->sysfs_dev->time_created,
+            &sysfs_dev->time_created)) {
             urma_get_dev_name_list(&dev_name_list, sysfs_dev);
             free(sysfs_dev);
             continue;
@@ -567,7 +506,7 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
     /* remove unloaded urma_device in dev_list */
     urma_sysfs_dev_t *next;
     UB_LIST_FOR_EACH_SAFE(sysfs_dev, next, node, dev_list) {
-        if (urma_check_loaded_devices(sysfs_dev->dev_name, &dev_name_list) == 0) {
+        if (urma_check_loaded_devices(sysfs_dev, &dev_name_list) == 0) {
             continue;
         }
         ub_list_remove(&sysfs_dev->node);

@@ -206,8 +206,8 @@ tpsa_response_t *process_dip_table_modify(tpsa_request_t *req, ssize_t read_len)
     modify_req = (tpsa_dip_table_modify_req_t *)req->req;
     dip_table = &ctx->worker->table_ctx.dip_table;
 
-    dip_table_key_t old_key;
-    dip_table_entry_t new_entry;
+    dip_table_key_t old_key = {0};
+    dip_table_entry_t new_entry = {0};
     old_key.deid = modify_req->old_eid;
     old_key.upi = modify_req->old_upi;
     new_entry.key.deid = modify_req->new_eid;

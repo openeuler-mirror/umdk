@@ -17,7 +17,6 @@
 #include "ub_hmap.h"
 #include "ub_hash.h"
 #include "uvs_lm_table.h"
-#include "tpsa_net.h"
 #include "tpsa_nl.h"
 #include "tpsa_types.h"
 
@@ -33,7 +32,7 @@ typedef enum uvs_vtp_state {
     UVS_VTP_UNKNOWN
 } uvs_vtp_state_t;
 
-typedef enum uvs_tp_state {
+typedef enum uvs_statistic_tp_state {
     UVS_TP_OPENING_STATE = 0,
     UVS_TP_SUCCESS_STATE,
     UVS_TP_OPENING_FAIL_STATE,
@@ -42,7 +41,7 @@ typedef enum uvs_tp_state {
     UVS_TP_DESTROY_STATE,
     UVS_TP_CLOSING_FAIL_STATE,
     UVS_TP_UNKNOWN
-} uvs_tp_state_t;
+} uvs_statistic_tp_state_t;
 
 typedef enum uvs_tp_change_state {
     UVS_TP_TO_ERR_STATE,
@@ -53,7 +52,7 @@ typedef enum uvs_tp_change_state {
 } uvs_tp_change_state_t;
 
 typedef struct uvs_tpf_statistic_key {
-    char tpf[URMA_MAX_DEV_NAME];
+    char tpf[UVS_MAX_DEV_NAME];
 } uvs_tpf_statistic_key_t;
 
 typedef struct uvs_statistic_table {
@@ -74,7 +73,7 @@ void uvs_set_global_statistic_enable(bool enable);
 
 // need add/del subport and vport config info
 void uvs_add_vport_statistic_config(const uvs_vport_info_t *info);
-void uvs_del_vport_statistic_config(const char tpf_name[URMA_MAX_DEV_NAME],
+void uvs_del_vport_statistic_config(const char tpf_name[UVS_MAX_DEV_NAME],
     const vport_key_t *vport);
 
 bool is_limit_create_vport(const vport_key_t *vport_key, tpsa_transport_mode_t mode);
@@ -84,18 +83,18 @@ void uvs_cal_vtp_destroy_nl(tpsa_nl_msg_t *msg, int status);
 
 void uvs_cal_vtp_destroy_socket(tpsa_sock_msg_t *msg);
 
-void uvs_cal_tp_change_state_statistic(const char tpf_name[URMA_MAX_DEV_NAME], uvs_tp_change_state_t state);
+void uvs_cal_tp_change_state_statistic(const char tpf_name[UVS_MAX_DEV_NAME], uvs_tp_change_state_t state);
 
 void uvs_cal_vtp_statistic(vport_key_t *vport_key, tpsa_transport_mode_t mode,
     uvs_vtp_state_t state);
 
 void uvs_cal_multi_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME], tpsa_transport_mode_t mode,
-    uvs_tp_state_t state, uint32_t tp_cnt);
+    uvs_statistic_tp_state_t state, uint32_t tp_cnt);
 
 void uvs_cal_tp_statistic(const char tpf_name[URMA_MAX_DEV_NAME],
-    tpsa_transport_mode_t mode, uvs_tp_state_t state);
+    tpsa_transport_mode_t mode, uvs_statistic_tp_state_t state);
 
-void uvs_cal_tpg_statistic(const char tpf_name[URMA_MAX_DEV_NAME]);
+void uvs_cal_tpg_statistic(const char tpf_name[UVS_MAX_DEV_NAME]);
 
 int uvs_query_vport_statistic_inner(const vport_key_t *vport, uvs_vport_statistic_t *st);
 

@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
@@ -23,6 +24,8 @@ pthread_mutex_t g_urma_log_lock = PTHREAD_MUTEX_INITIALIZER;
 urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
 #define MAX_LOG_LEN 512
 #define URMA_LOG_TAG "URMA_LOG_TAG"
+#define URMA_LOG_ENV_STR    "URMA_LOG_LEVEL"
+#define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN        32
 
 static void urma_default_log_func(int level, char *message)
 {
@@ -122,6 +125,26 @@ urma_vlog_level_t urma_log_get_level_from_string(const char* level_string)
         return URMA_VLOG_LEVEL_DEBUG;
     }
     return URMA_VLOG_LEVEL_MAX;
+}
+
+void urma_getenv_log_level(void)
+{
+    char *level_str = getenv(URMA_LOG_ENV_STR);
+    if (level_str == NULL) {
+        return;
+    }
+
+    if (strnlen(level_str, URMA_LOG_LEVEL_ENV_MAX_BUF_LEN) >= URMA_LOG_LEVEL_ENV_MAX_BUF_LEN) {
+        URMA_LOG_ERR("Invalid parameter: log level str.");
+        return;
+    }
+
+    urma_vlog_level_t log_level = urma_log_get_level_from_string(level_str);
+    if (log_level != URMA_VLOG_LEVEL_MAX) {
+        pthread_mutex_lock(&g_urma_log_lock);
+        g_urma_log_level = log_level;
+        pthread_mutex_unlock(&g_urma_log_lock);
+    }
 }
 
 static int urma_vlog(const char *function, int line, urma_vlog_level_t level, const char *format, va_list va)

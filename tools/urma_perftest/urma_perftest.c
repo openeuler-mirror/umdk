@@ -8,6 +8,8 @@
  */
 
 #include <stdio.h>
+#include <sys/socket.h>
+
 #include "urma_api.h"
 
 #include "perftest_parameters.h"
@@ -149,6 +151,11 @@ int main(int argc, char *argv[])
 destroy_ctx:
     destroy_ctx(&ctx, &cfg);
 close_connect:
+    if (cfg.check_alive_exited == 1) {
+        /* Inform client if server failed due to timeout in send_bw test */
+        ret = write_sync_data(cfg.comm.sock_fd, "Check alive exited");
+        (void)shutdown(cfg.comm.sock_fd, SHUT_RDWR);
+    }
     close_connection(&cfg.comm);
 clean_cfg:
     destroy_cfg(&cfg);

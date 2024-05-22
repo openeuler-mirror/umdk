@@ -23,5 +23,8 @@
 
 int mmap_dwqe(struct urma_context *urma_ctx, struct udma_qp *qp);
 void munmap_dwqe(struct udma_qp *qp);
+int udma_u_get_tpn(urma_jetty_t *jetty);
+int udma_u_modify_user_tp(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg,
+			  urma_tp_attr_t *attr, urma_tp_attr_mask_t mask);
 
 #endif /* _UDMA_U_TP_H */

@@ -15,8 +15,8 @@
 #include "uvs_admin_types.h"
 #include "urma_types.h"
 
-# define UVS_ADMIN_VPORT_TABLE_CC_ALG_MAX 256
-
+#define UVS_ADMIN_VPORT_TABLE_CC_ALG_MAX 256
+#define UVS_ADMIN_UUID_LEN 16
 typedef union uvs_admin_vport_table_mask {
     struct {
         uint64_t dev_name            : 1;
@@ -54,10 +54,15 @@ typedef union uvs_admin_vport_table_mask {
         uint64_t max_jfr_cnt         : 1;
         uint64_t um_en               : 1;
         uint64_t share_mode          : 1;
-        uint64_t reserved            : 29;
+        uint64_t uuid                : 1;
+        uint64_t reserved            : 28;
     } bs;
     uint64_t value;
 } uvs_admin_vport_table_mask_t;
+
+typedef struct uvs_admin_uuid {
+    uint8_t b[UVS_ADMIN_UUID_LEN];
+} uvs_admin_uuid_t;
 
 typedef struct uvs_admin_vport_table_args {
     uvs_admin_vport_table_mask_t mask;
@@ -70,6 +75,7 @@ typedef struct uvs_admin_vport_table_args {
     urma_eid_t eid;
     uint32_t eid_idx;
     uint32_t upi;
+    uvs_admin_uuid_t uuid;
     uint32_t pattern;
     uint32_t virtualization;
     uint32_t min_jetty_cnt;
@@ -115,6 +121,7 @@ typedef struct uvs_admin_vport_table_show_ueid_rsp {
     int res;
     uint32_t upi;
     urma_eid_t eid;
+    uvs_admin_uuid_t uuid;
 } uvs_admin_vport_table_show_ueid_rsp_t;
 
 typedef struct uvs_admin_vport_table_add_ueid_req {
@@ -123,6 +130,7 @@ typedef struct uvs_admin_vport_table_add_ueid_req {
     uint32_t upi;
     urma_eid_t eid;
     uint32_t eid_idx;
+    uvs_admin_uuid_t uuid;
 } uvs_admin_vport_table_add_ueid_req_t;
 
 typedef struct uvs_admin_vport_table_add_ueid_rsp {
@@ -159,18 +167,31 @@ typedef struct uvs_admin_vport_table_show_upi_rsp {
 
 extern uvs_admin_cmd_t g_uvs_admin_vport_table_cmd;
 
-static const char * const g_uvs_admin_tp_mod_flag_str[] = {
-#define UVS_ADMIN_TP_MOD_FLAG_OOR_EN 0
-    [UVS_ADMIN_TP_MOD_FLAG_OOR_EN] = "OOR_EN",
-#define UVS_ADMIN_TP_MOD_FLAG_SR_EN 1
-    [UVS_ADMIN_TP_MOD_FLAG_SR_EN] = "SR_EN",
-#define UVS_ADMIN_TP_MOD_FLAG_CC_EN 2
-    [UVS_ADMIN_TP_MOD_FLAG_CC_EN] = "CC_EN",
+typedef enum uvs_admin_tp_mod_flag_print {
+    UVS_ADMIN_TP_MOD_FLAG_OOR_EN = 0,
+    UVS_ADMIN_TP_MOD_FLAG_SR_EN,
+    UVS_ADMIN_TP_MOD_FLAG_CC_EN,
+    UVS_ADMIN_TP_MOD_FLAG_CC_ALG_BIT1,
+    UVS_ADMIN_TP_MOD_FLAG_CC_ALG_BIT2,
+    UVS_ADMIN_TP_MOD_FLAG_CC_ALG_BIT3,
+    UVS_ADMIN_TP_MOD_FLAG_CC_ALG_BIT4,
+    UVS_ADMIN_TP_MOD_FLAG_SPRAY_EN,
+    UVS_ADMIN_TP_MOD_FLAG_CLAN_EN,
+    UVS_ADMIN_TP_MOD_FLAG_DCA_EN,
+    UVS_ADMIN_TP_MOD_FLAG_UM_EN,
+    UVS_ADMIN_TP_MOD_FLAG_SHARE_MODE,
+    UVS_ADMIN_TP_MOD_FLAG_NUM,
+} uvs_admin_tp_mod_flag_print_t;
 
-#define UVS_ADMIN_TP_MOD_FLAG_SPRAY_EN 7
+static const char * const g_uvs_admin_tp_mod_flag_str[] = {
+    [UVS_ADMIN_TP_MOD_FLAG_OOR_EN] = "OOR_EN",
+    [UVS_ADMIN_TP_MOD_FLAG_SR_EN] = "SR_EN",
+    [UVS_ADMIN_TP_MOD_FLAG_CC_EN] = "CC_EN",
     [UVS_ADMIN_TP_MOD_FLAG_SPRAY_EN] = "SPRAY_EN",
-#define UVS_ADMIN_TP_MOD_FLAG_DCA_EN 8
+    [UVS_ADMIN_TP_MOD_FLAG_CLAN_EN] = "CLAN_EN",
     [UVS_ADMIN_TP_MOD_FLAG_DCA_EN] = "DCA_EN",
+    [UVS_ADMIN_TP_MOD_FLAG_UM_EN] = "UM_EN",
+    [UVS_ADMIN_TP_MOD_FLAG_SHARE_MODE] = "SHARE_MODE",
 };
 
 static const char * const g_uvs_admin_cc_alg_str[] = {
@@ -186,7 +207,7 @@ static const char * const g_uvs_admin_cc_alg_str[] = {
 
 static inline const char *uvs_admin_tp_mod_flag_to_string(uint8_t bit)
 {
-    if (bit > UVS_ADMIN_TP_MOD_FLAG_DCA_EN) {
+    if (bit >= UVS_ADMIN_TP_MOD_FLAG_NUM) {
         return "Invalid Value";
     }
     return g_uvs_admin_tp_mod_flag_str[bit];
@@ -196,7 +217,7 @@ static inline void print_tp_mod_flag_str(uvs_admin_tp_mod_flag_t flag)
     uint8_t i;
 
     (void)printf("    tp_mod_flag            : 0x%x [", flag.value);
-    for (i = 0; i <= UVS_ADMIN_TP_MOD_FLAG_DCA_EN; i++) {
+    for (i = 0; i < UVS_ADMIN_TP_MOD_FLAG_NUM; i++) {
         if (i > UVS_ADMIN_TP_MOD_FLAG_CC_EN && i < UVS_ADMIN_TP_MOD_FLAG_SPRAY_EN) {
             continue;
         }

@@ -171,6 +171,8 @@ static int urma_open_drivers(void)
 
 urma_status_t urma_init(urma_init_attr_t *conf)
 {
+    urma_getenv_log_level();
+
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
         URMA_LOG_ERR("urma_init has been called before.\n");
@@ -312,7 +314,7 @@ urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
         return NULL;
     }
 
-    *cnt = urma_read_eid_list(dev->sysfs_dev, eid_list, max_eid_cnt);
+    *cnt = urma_read_eid_list(dev, eid_list, max_eid_cnt);
     if (*cnt == 0) {
         free(eid_list);
         errno = EIO;
@@ -408,7 +410,7 @@ urma_device_t *urma_get_device_by_eid(urma_eid_t eid, urma_transport_type_t type
     return urma_dev;
 }
 
-static int urma_open_cdev(char *path)
+int urma_open_cdev(char *path)
 {
     char *file_path = NULL;
     int fd;
@@ -474,7 +476,7 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
 
     uint64_t atomic_cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (atomic_cnt > 1) {
-        URMA_LOG_ERR("already in use, atomic_cnt: %lu.\n", atomic_cnt);
+        URMA_LOG_WARN("already in use, atomic_cnt: %lu.\n", atomic_cnt);
         return URMA_EAGAIN;
     }
 

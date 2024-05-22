@@ -148,6 +148,7 @@ static const char * const g_urma_tp_type_str[] = {
     [URMA_TRANSPORT_UB] =      "UB",
     [URMA_TRANSPORT_IB] =      "IB",
     [URMA_TRANSPORT_IP] =      "IP",
+    [URMA_TRANSPORT_HNS_UB] =  "HNS_UB",
 };
 
 static inline const char *urma_tp_type_to_string(urma_transport_type_t type)

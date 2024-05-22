@@ -43,7 +43,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	seg->urma_seg.seg.attr.bs.dsva = false;
 	seg->urma_seg.seg.attr.bs.access = seg_cfg->flag.bs.access;
 	seg->urma_seg.user_ctx = seg_cfg->user_ctx;
-	(void)memcpy(&seg->token, seg_cfg->token_value, sizeof(urma_token_t));
+	(void)memcpy(&seg->token, &seg_cfg->token_value.token, sizeof(urma_token_t));
 	seg->urma_seg.urma_ctx = ctx;
 
 	if (urma_cmd_register_seg(ctx, &seg->urma_seg, seg_cfg, &udata) != 0) {
@@ -79,8 +79,6 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 				     urma_token_t *token, uint64_t addr,
 				     urma_import_seg_flag_t flag)
 {
-	urma_cmd_udrv_priv_t udata = {};
-	urma_import_tseg_cfg_t cfg = {};
 	urma_target_seg_t *tseg;
 
 	tseg = (urma_target_seg_t *)calloc(1, sizeof(urma_target_seg_t));
@@ -89,27 +87,17 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 		return NULL;
 	}
 
-	cfg.ubva = seg->ubva;
-	cfg.len = seg->len;
-	cfg.attr = seg->attr;
-	cfg.token_id = seg->token_id;
-	cfg.token = token;
-	udma_set_udata(&udata, NULL, 0, NULL, 0);
-	if (urma_cmd_import_seg(ctx, tseg, &cfg, &udata)) {
-		URMA_LOG_ERR("import seg failed.\n");
-		free(tseg);
-		return NULL;
-	}
+	tseg->seg.attr = seg->attr;
+	tseg->seg.ubva = seg->ubva;
+	tseg->seg.len = seg->len;
+	tseg->seg.token_id = seg->token_id;
+	tseg->urma_ctx = ctx;
 
 	return tseg;
 }
 
 urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg)
 {
-	if (urma_cmd_unimport_seg(target_seg)) {
-		URMA_LOG_ERR("unimport seg failed.\n");
-		return URMA_FAIL;
-	}
 	free(target_seg);
 
 	return URMA_SUCCESS;

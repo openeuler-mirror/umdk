@@ -85,7 +85,8 @@ static void usage(const char *argv0)
     (void)printf("  -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.\n");
     (void)printf("  -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).\n");
     (void)printf("  -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.\n");
-    (void)printf("  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat).\n");
+    (void)printf("  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat, \
+                                                jfc_depth can be adjusted accroding to jfs/jfr_depth and jettys).\n");
     (void)printf("  -d, --dev <dev_name>        The name of ubep device.\n");
     (void)printf("  -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.\n");
     (void)printf("  -e, --use_jfce              use jfc event.\n");
@@ -123,6 +124,11 @@ static void usage(const char *argv0)
     (void)printf("  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n");
     (void)printf("  --sub_trans_mode <sub_mode>     Sub transport mode: 0 for non ordering(default),\
                     1 for TA dest ordering (only valid for trans_mode RC).\n");
+    (void)printf("  --enable_ipv6               enable ipv6 for server ip. default disable.\n");
+    (void)printf("  --enable_credit             enable send credit, default: disable.\n");
+    (void)printf("  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n");
+    (void)printf("  --credit_notify_cnt <num>   Notify the send side after recv packets, default: jfr_depth / 4.\n");
+    (void)printf("  --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -230,6 +236,7 @@ static void init_cfg(perftest_config_t *cfg)
 
     init_cfg_size(cfg);
 
+    cfg->comm.enable_ipv6 = false;
     cfg->comm.server_ip = NULL;
     cfg->comm.port = PERFTEST_DEF_PORT;
     cfg->comm.listen_fd = -1;
@@ -251,10 +258,14 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->lock_free = false;
     cfg->priority = URMA_MAX_PRIORITY;
     cfg->share_jfr = false;
+    cfg->jettys_pre_jfr = 0;
     cfg->is_rate_limit = false;
     cfg->rate_limit = 0;
     cfg->burst_size = 0;
     cfg->rate_units = PERFTEST_RATE_LIMIT_GIGA_BIT;
+    cfg->enable_credit = false;
+    cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
+    cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
 }
 
 void print_cfg(const perftest_config_t *cfg)
@@ -288,10 +299,16 @@ void print_cfg(const perftest_config_t *cfg)
 
     (void)printf(" Number of jettys    : %-10u\t\t Transport mode   : %s\n", cfg->jettys,
         urma_tp_type_to_string(cfg->tp_type));
-    (void)printf(" JFC depth           : %-10u\t\t Device name      : %s\n", cfg->jfc_depth, cfg->dev_name);
+    (void)printf(" Trans mode          : %s\t\t Device name      : %s\n", g_trans_mode_str[cfg->trans_mode],
+        cfg->dev_name);
     (void)printf(" Mtu                 : %-10u\t\t JETTY mode       : %s\n", cfg->mtu,
         g_jetty_mode_str[cfg->jetty_mode]);
-    (void)printf(" trans mode          : %s\n", g_trans_mode_str[cfg->trans_mode]);
+    if (cfg->tp_type == URMA_TRANSPORT_UB || cfg->tp_type == URMA_TRANSPORT_HNS_UB) {
+        (void)printf(" Tx JFC depth        : %-10u\t\t Rx JFC depth     : %-10u\n", cfg->jfc_cfg.tx_jfc_depth,
+            cfg->jfc_cfg.rx_jfc_depth);
+    } else {
+        (void)printf(" JFC depth           : %u\n", cfg->jfc_depth);
+    }
     if (cfg->comm.server_ip != NULL || cfg->bidirection) {
         (void)printf(" JFS depth           : %u\n", cfg->jfs_depth);
     }
@@ -430,6 +447,11 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"rate_units",    required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
         {"burst_size",    required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
         {"sub_trans_mode",    required_argument, NULL, PERFTEST_OPT_SUB_TRANS_MODE},
+        {"enable_ipv6",    no_argument, NULL, PERFTEST_OPT_ENABLE_IPV6},
+        {"enable_credit",    no_argument, NULL, PERFTEST_OPT_ENABLE_CREDIT},
+        {"credit_threshold",    required_argument, NULL, PERFTEST_OPT_CREDIT_THRESHOLD},
+        {"credit_notify_cnt",    required_argument, NULL, PERFTEST_OPT_CREDIT_NOTIFY_CNT},
+        {"jettys_pre_jfr",    required_argument, NULL, PERFTEST_OPT_JETTYS_PRE_JFR},
         {NULL,            no_argument,       NULL, '\0'}
     };
 
@@ -623,6 +645,22 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case PERFTEST_OPT_SUB_TRANS_MODE:
                 (void)ub_str_to_u32(optarg, &cfg->sub_trans_mode);
+                break;
+            case PERFTEST_OPT_ENABLE_IPV6:
+                cfg->comm.enable_ipv6 = true;
+                break;
+            case PERFTEST_OPT_ENABLE_CREDIT:
+                cfg->enable_credit = true;
+                break;
+            case PERFTEST_OPT_CREDIT_THRESHOLD:
+                (void)ub_str_to_u32(optarg, &cfg->credit_threshold);
+                break;
+            case PERFTEST_OPT_CREDIT_NOTIFY_CNT:
+                (void)ub_str_to_u32(optarg, &cfg->credit_notify_cnt);
+                break;
+            case PERFTEST_OPT_JETTYS_PRE_JFR:
+                (void)ub_str_to_u32(optarg, &cfg->jettys_pre_jfr);
+                break;
             default:
                 usage(argv[0]);
                 return -1;
@@ -691,9 +729,19 @@ int check_local_cfg(perftest_config_t *cfg)
         }
     }
 
-    if (cfg->share_jfr == true && cfg->jfr_depth < cfg->jettys) {
-        (void)fprintf(stderr, "Using share jfr depth should be greater than number of Jettys.\n");
-        exit(1);
+    if (cfg->jettys_pre_jfr == 0) {
+        cfg->jettys_pre_jfr = cfg->jettys;
+    }
+    if (cfg->share_jfr == true) {
+        if (cfg->jettys % cfg->jettys_pre_jfr != 0) {
+            (void)fprintf(stderr, "Number of jettys must be a multiple of jettys_pre_jfr.\n");
+            exit(1);
+        }
+        if (cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr) < cfg->jettys * cfg->jfr_post_list) {
+            (void)fprintf(stderr, "Using share jfr depth should be greater than number of " \
+                "cfg->jettys_pre_jfr * jfr_post_list.\n");
+            exit(1);
+        }
     }
 
     /* we disable cq_mod for large message size to prevent from incorrect BW calculation
@@ -867,14 +915,6 @@ int check_local_cfg(perftest_config_t *cfg)
         }
     }
 
-    if (cfg->share_jfr == true && cfg->type == PERFTEST_BW && cfg->api_type == PERFTEST_SEND) {
-        if (cfg->jettys > cfg->jfr_depth / cfg->jfr_post_list) {
-            (void)fprintf(stderr, "size per jetty will be zero, please check the parameters: \
-                jettys, jfr_depth and jfr_post_list\n");
-            exit(1);
-        }
-    }
-
     if (cfg->jfs_depth > (cfg->jfc_depth * cfg->cq_mod)) {
         (void)fprintf(stderr, "Invalid config, try to decrease jfs depth or increase jfc depth.\n");
         exit(1);
@@ -900,6 +940,23 @@ int check_local_cfg(perftest_config_t *cfg)
             (cfg->cmd == PERFTEST_SEND_BW && cfg->bidirection == true)) {
             (void)fprintf(stderr, "Rate limiter cann't be executed on non-BW, ATOMIC or bidirectional SEND tests\n");
             exit(1);
+        }
+    }
+
+    if (cfg->enable_credit == true && (cfg->cmd != PERFTEST_SEND_BW || cfg->jetty_mode != PERFTEST_JETTY_DUPLEX)) {
+        (void)fprintf(stderr, "Credit takes effect only in SEND_BW & JETTY_DUPLEX test.\n");
+        exit(1);
+    }
+    if (cfg->enable_credit == true) {
+        if (cfg->credit_notify_cnt == 0 || cfg->credit_notify_cnt > cfg->jfr_depth) {
+            cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
+            (void)fprintf(stderr, "credit_notify_cnt out of range (1 ~ %u), change to %u.\n",
+                cfg->jfr_depth, cfg->credit_notify_cnt);
+        }
+        if (cfg->credit_threshold == 0 || cfg->credit_threshold + cfg->jfs_post_list > cfg->jfr_depth) {
+            cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
+            (void)fprintf(stderr, "credit_threshold out of range (1 ~ %u), change to %u.\n",
+                cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_notify_cnt);
         }
     }
     return 0;
@@ -986,6 +1043,14 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
     if (local_cfg->order != remote_cfg->order) {
         (void)fprintf(stderr, "Config inconsistent[order],local: %u, remote: %u.\n",
             local_cfg->order, remote_cfg->order);
+        return -1;
+    }
+    if (local_cfg->comm.enable_ipv6 != remote_cfg->comm.enable_ipv6) {
+        (void)fprintf(stderr, "Config inconsistent[enable_ipv6].\n");
+        return -1;
+    }
+    if (local_cfg->enable_credit != remote_cfg->enable_credit) {
+        (void)fprintf(stderr, "Config inconsistent[enable_credit].\n");
         return -1;
     }
     return 0;

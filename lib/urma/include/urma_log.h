@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 int urma_log_init(void);
+void urma_getenv_log_level(void);
 bool urma_log_drop(urma_vlog_level_t level);
 void urma_log(const char *function, int line, urma_vlog_level_t level, const char *format, ...);
 const char *urma_get_level_print(urma_vlog_level_t level);
