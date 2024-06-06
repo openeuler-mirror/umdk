@@ -138,8 +138,6 @@ fi
     %{_includedir}/umdk/urma_provider.h
     %{_includedir}/umdk/common/ub_*.h
     %{_includedir}/umdk/common/urma_*.h
-    %{_includedir}/umdk/uvs_api.h
-    %{_includedir}/umdk/uvs_types.h
 
 %files tools
 %defattr(-,root,root)

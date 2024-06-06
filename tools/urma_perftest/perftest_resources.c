@@ -130,6 +130,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 
     cfg->tp_type = urma_dev->type;
     check_device_inline(cfg);
+    return 0;
 
 del_ctx:
     (void)urma_delete_context(ctx->urma_ctx);
