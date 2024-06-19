@@ -320,6 +320,9 @@ static struct udma_u_jfr *get_common_jfr(struct udma_u_context *udma_ctx,
 	if (udma_ctx->jetty_table[table_id].refcnt) {
 		jetty_table = udma_ctx->jetty_table[table_id].table;
 		is_jetty = jetty_table[qpn & mask].is_jetty;
+	} else {
+		URMA_LOG_INFO("Failed to poll jfc. QP 0x%x has been destroyed.\n", qpn);
+		return NULL;
 	}
 	if (is_jetty) {
 		jetty = (struct udma_u_jetty *)jetty_table[qpn & mask].jetty;
@@ -354,7 +357,7 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 	if (cqe->cqe_inline == CQE_INLINE_ENABLE)
 		handle_recv_inl_cqe(cqe, jfr, cr);
 
-	if (jfr->rq_en) {
+	if (!jfr->share_jfr) {
 		cr->user_ctx = jfr->wrid[jfr->idx_que.tail & (jfr->wqe_cnt - 1)];
 		jfr->idx_que.tail++;
 	} else {

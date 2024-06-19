@@ -57,5 +57,6 @@ int udma_u_attach_dca_mem(struct udma_u_context *ctx,
 			  uint32_t size, struct udma_dca_buf *buf, bool force);
 int udma_alloc_buf(struct udma_buf *buf, uint32_t size, int page_size);
 void udma_free_buf(struct udma_buf *buf);
+void ubn_u_free_dca_mem(struct udma_u_dca_mem *mem);
 
 #endif /* _UDMA_U_BUF_H */

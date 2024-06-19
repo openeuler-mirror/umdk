@@ -58,6 +58,12 @@
 	     &(POS)->MEMBER != (HEAD);					\
 	     (POS) = list_next_entry(POS, MEMBER))
 
+#define list_for_each_entry_safe(POS, n, HEAD, MEMBER)			\
+	for ((POS) = list_first_entry(HEAD, typeof(*(POS)), MEMBER),	\
+	     (n) = list_next_entry((POS), MEMBER);			\
+	     &(POS)->MEMBER != (HEAD);					\
+	     (POS) = (n), (n) = list_next_entry(n, MEMBER))
+
 #define min_t(t, a, b) \
 	({ \
 		t _ta = (a); \

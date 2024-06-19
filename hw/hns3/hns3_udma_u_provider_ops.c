@@ -191,12 +191,16 @@ void udma_cleanup_dca_mem(struct udma_u_context *ctx)
 {
 	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
 	struct udma_dca_dereg_attr dereg_attr = {};
-	struct udma_u_dca_mem *mem;
+	struct udma_u_dca_mem *mem, *tmp;
 
-	list_for_each_entry(mem, &dca_ctx->mem_list, entry) {
+	pthread_spin_lock(&dca_ctx->lock);
+	list_for_each_entry_safe(mem, tmp, &dca_ctx->mem_list, entry) {
 		dereg_attr.free_key = dca_mem_to_key(mem);
 		exec_deregister_dca_mem_cmd(ctx, &dereg_attr);
+		list_del(&mem->entry);
+		ubn_u_free_dca_mem(mem);
 	}
+	pthread_spin_unlock(&dca_ctx->lock);
 }
 
 static void uninit_dca_context(struct udma_u_context *udma_u_ctx)
@@ -207,9 +211,7 @@ static void uninit_dca_context(struct udma_u_context *udma_u_ctx)
 	if (!dca_ctx->unit_size)
 		return;
 
-	pthread_spin_lock(&dca_ctx->lock);
 	udma_cleanup_dca_mem(udma_u_ctx);
-	pthread_spin_unlock(&dca_ctx->lock);
 
 	if (dca_ctx->buf_status) {
 		ret = munmap(dca_ctx->buf_status, (size_t)udma_u_ctx->page_size);

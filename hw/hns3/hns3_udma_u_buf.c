@@ -154,7 +154,7 @@ static int exec_register_dca_mem_cmd(struct udma_u_context *ctx,
 	return  urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-static void ubn_u_free_dca_mem(struct udma_u_dca_mem *mem)
+void ubn_u_free_dca_mem(struct udma_u_dca_mem *mem)
 {
 	udma_free_buf(&mem->buf);
 	free(mem);
