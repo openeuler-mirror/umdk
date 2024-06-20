@@ -152,7 +152,8 @@ enum perftest_opts {
     PERFTEST_OPT_ENABLE_CREDIT,
     PERFTEST_OPT_CREDIT_THRESHOLD,
     PERFTEST_OPT_CREDIT_NOTIFY_CNT,
-    PERFTEST_OPT_JETTYS_PRE_JFR
+    PERFTEST_OPT_JETTYS_PRE_JFR,
+    PERFTEST_OPT_SEG_PRE_JETTY,
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -231,6 +232,7 @@ typedef struct perftest_config {
 
     /* valid for server side of send_bw using iteraion type */
     int check_alive_exited;
+    bool seg_pre_jetty;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

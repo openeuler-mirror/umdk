@@ -537,26 +537,35 @@ static void destroy_duplex_jettys(perftest_context_t *ctx, perftest_config_t *cf
 
 static inline void unregister_seg(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
 {
+    uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
     for (int k = 0; k < idx; k++) {
-        (void)urma_unregister_seg(ctx->local_tseg[k]);
+        if (k < seg_num) {
+            (void)urma_unregister_seg(ctx->local_tseg[k]);
+        }
     }
     free(ctx->local_tseg);
     ctx->local_tseg = NULL;
 }
 
-static inline void free_token_id(perftest_context_t *ctx, const int idx)
+static inline void free_token_id(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
 {
+    uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
     for (int k = 0; k < idx; k++) {
-        (void)urma_free_token_id(ctx->token_id[k]);
+        if (k < seg_num) {
+            (void)urma_free_token_id(ctx->token_id[k]);
+        }
     }
     free(ctx->token_id);
     ctx->token_id = NULL;
 }
 
-static inline void free_memory(perftest_context_t *ctx, const int idx)
+static inline void free_memory(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
 {
+    uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
     for (int j = 0; j < idx; j++) {
-        free(ctx->local_buf[j]);
+        if (j < seg_num) {
+            free(ctx->local_buf[j]);
+        }
     }
     free(ctx->local_buf);
     ctx->local_buf = NULL;
@@ -570,17 +579,23 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
         return -ENOMEM;
     }
 
+    uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
+
     ctx->page_size = cfg->page_size;
 
     // holds the size of maximum between cfg->size and page_size, aligned to cache line.
     uint64_t max_size = MAX(cfg->size, ctx->page_size);
     ctx->buf_size = PERFTEST_ALIGN_CACHELINE(max_size, cfg->cache_line_size);
     // Buff is divided into two parts, one for recv and the other for send
-    ctx->buf_len = ctx->buf_size * PERFTEST_BUF_NUM;
+    ctx->buf_len = ctx->buf_size * PERFTEST_BUF_NUM *
+        ((cfg->seg_pre_jetty == true) ? 1 : cfg->jettys);
 
     for (i = 0; i < (int)cfg->jettys; i++) {
-        // Buff is divided into two parts, one for recv and the other for send
-        ctx->local_buf[i] = memalign(ctx->page_size, ctx->buf_len);
+        if (i < seg_num) {
+            ctx->local_buf[i] = memalign(ctx->page_size, ctx->buf_len);
+        } else {
+            ctx->local_buf[i] = ctx->local_buf[0];
+        }
         if (ctx->local_buf[i] == NULL) {
             (void)fprintf(stderr, "Failed to memalign local buff, loop:%d!\n", i);
             goto free_memory;
@@ -593,7 +608,11 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
             goto free_memory;
         }
         for (k = 0; k < (int)cfg->jettys; k++) {
-            ctx->token_id[k] = urma_alloc_token_id(ctx->urma_ctx);
+            if (k < seg_num) {
+                ctx->token_id[k] = urma_alloc_token_id(ctx->urma_ctx);
+            } else {
+                ctx->token_id[k] = ctx->token_id[0];
+            }
             if (ctx->token_id[k] == NULL) {
                 (void)fprintf(stderr, "Failed to alloc token id, loop:%d!\n", k);
                 goto free_token_id;
@@ -615,18 +634,22 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     };
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
-        .len = ctx->buf_size  * PERFTEST_BUF_NUM,
+        .len = ctx->buf_len,
         .token_value = g_perftest_token,
         .flag = flag,
         .user_ctx = (uintptr_t)NULL,
         .iova = 0
     };
     for (j = 0; j < (int)cfg->jettys; j++) {
-        seg_cfg.va = (uint64_t)ctx->local_buf[j];
-        if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
-            seg_cfg.token_id = ctx->token_id[j];
+        if (j < seg_num) {
+            seg_cfg.va = (uint64_t)ctx->local_buf[j];
+            if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
+                seg_cfg.token_id = ctx->token_id[j];
+            }
+            ctx->local_tseg[j] = urma_register_seg(ctx->urma_ctx, &seg_cfg);
+        } else {
+            ctx->local_tseg[j] = ctx->local_tseg[0];
         }
-        ctx->local_tseg[j] = urma_register_seg(ctx->urma_ctx, &seg_cfg);
         if (ctx->local_tseg[j] == NULL) {
             (void)fprintf(stderr, "Failed to register seg, loop:%d!\n", j);
             goto unregister_seg;
@@ -639,10 +662,10 @@ unregister_seg:
     unregister_seg(ctx, cfg, j);
 free_token_id:
     if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
-        free_token_id(ctx, k);
+        free_token_id(ctx, cfg, k);
     }
 free_memory:
-    free_memory(ctx, i);
+    free_memory(ctx, cfg, i);
     return -1;
 }
 
@@ -650,9 +673,9 @@ static void unregister_mem(perftest_context_t *ctx, const perftest_config_t *cfg
 {
     unregister_seg(ctx, cfg, (int)ctx->jetty_num);
     if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
-        free_token_id(ctx, (int)ctx->jetty_num);
+        free_token_id(ctx, cfg, (int)ctx->jetty_num);
     }
-    free_memory(ctx, (int)ctx->jetty_num);
+    free_memory(ctx, cfg, (int)ctx->jetty_num);
 }
 
 static inline void free_remote_seg(perftest_context_t *ctx, const int idx)

@@ -387,7 +387,8 @@ static int run_once_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
                     }
 
                     if (cr.status != URMA_CR_SUCCESS) {
-                        (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu", (int)cr.status, scnt, rcnt);
+                        (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu.\n",
+                            (int)cr.status, scnt, rcnt);
                         return -1;
                     }
 
@@ -456,7 +457,7 @@ static int run_once_send_lat(perftest_context_t *ctx, perftest_config_t *cfg)
                     return -1;
                 }
                 if (cr.status != URMA_CR_SUCCESS) {
-                    (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu", (int)cr.status, scnt, rcnt);
+                    (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu.\n", (int)cr.status, scnt, rcnt);
                     return -1;
                 }
 
@@ -778,8 +779,12 @@ static void init_read_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perf
     uint32_t i, uint32_t j)
 {
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    uint64_t lva = (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
-    uint64_t rva = (uint64_t)ctx->remote_seg[i]->ubva.va;
+    uint64_t lva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
+        (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
+    uint64_t rva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->remote_seg[0]->ubva.va + i * ctx->buf_size :
+        (uint64_t)ctx->remote_seg[i]->ubva.va;
     urma_sge_t *local_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR + 1];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR];
 
@@ -818,8 +823,13 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
     uint32_t i, uint32_t j)
 {
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    uint64_t lva = (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
-    uint64_t rva = (uint64_t)ctx->remote_seg[i]->ubva.va;
+
+    uint64_t lva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
+        (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
+    uint64_t rva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->remote_seg[0]->ubva.va + i * ctx->buf_size :
+        (uint64_t)ctx->remote_seg[i]->ubva.va;
     urma_sge_t *local_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR + 1];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR];
 
@@ -859,7 +869,9 @@ static void init_send_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perf
     uint32_t i, uint32_t j)
 {
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    uint64_t lva = (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
+    uint64_t lva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
+        (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
     urma_sge_t *local_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR + 1];
 
     // Step increased value
@@ -894,8 +906,12 @@ static void init_atomic_jfs_wr(urma_jfs_wr_t *wr, perftest_context_t *ctx, perft
     uint32_t remainder = (ctx->page_size / PERFTEST_BUF_NUM >= align_size) ?
         (j % ((ctx->page_size / PERFTEST_BUF_NUM) / align_size)) : 0;
 
-    uint8_t *lva = (uint8_t *)ctx->local_buf[i] + ctx->buf_size + remainder * align_size;
-    uint8_t *rva = (uint8_t *)ctx->remote_seg[i]->ubva.va + remainder * align_size;
+    uint8_t *lva = (cfg->seg_pre_jetty == false) ?
+        (uint8_t *)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size + remainder * align_size :
+        (uint8_t *)ctx->local_buf[i] + ctx->buf_size + remainder * align_size;
+    uint8_t *rva = (cfg->seg_pre_jetty == false) ?
+        (uint8_t *)ctx->remote_seg[i]->ubva.va + i * ctx->buf_size + remainder * align_size :
+        (uint8_t *)ctx->remote_seg[i]->ubva.va + remainder * align_size;
 
     urma_sge_t *local_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR + 1];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[(i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR];
@@ -1070,7 +1086,9 @@ static void init_jfr_wr(urma_jfr_wr_t *wr, perftest_context_t *ctx, perftest_con
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
 
     urma_sge_t *local_sge = &run_ctx->jfr_sge[(i * cfg->jfr_post_list + j) * PERFTEST_SGE_NUM_PRE_WR + 1];
-    local_sge->addr = (uint64_t)ctx->local_buf[i];
+    local_sge->addr = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
+        (uint64_t)ctx->local_buf[i];
     local_sge->len = cfg->size;
     local_sge->tseg = ctx->local_tseg[i];
 
@@ -1637,7 +1655,7 @@ static int run_once_jetty_send_lat(perftest_context_t *ctx, perftest_config_t *c
                     return -1;
                 }
                 if (cr.status != URMA_CR_SUCCESS) {
-                    (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu", (int)cr.status, scnt, rcnt);
+                    (void)fprintf(stderr, "Failed CR status %d, scnt: %lu, rcnt: %lu.\n", (int)cr.status, scnt, rcnt);
                     return -1;
                 }
 
@@ -2023,7 +2041,7 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 for (int i = 0; i < cqe_cnt; i++) {
                     cr_id = (int)cr[i].user_ctx; // todo jfs_id
                     if (cr[i].status != URMA_CR_SUCCESS) {
-                        (void)fprintf(stderr, "Failed CR status %d, tot_scnt: %lu, tot_ccnt: %lu",
+                        (void)fprintf(stderr, "Failed CR status %d, tot_scnt: %lu, tot_ccnt: %lu.\n",
                             (int)cr[i].status, tot_scnt, tot_ccnt);
                         goto free_cr;
                     }
@@ -2182,7 +2200,7 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
                         goto cleaning;
                     }
                     if (cr[i].status != URMA_CR_SUCCESS) {
-                        (void)fprintf(stderr, "Failed CR status %d, rcnt: %lu\n", (int)cr[i].status, rcnt);
+                        (void)fprintf(stderr, "Failed CR status %d, rcnt: %lu.\n", (int)cr[i].status, rcnt);
                         ret = -1;
                         goto cleaning;
                     }
@@ -2451,7 +2469,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                     goto cleaning;
                 }
                 if (cr_recv[i].status != URMA_CR_SUCCESS) {
-                    (void)fprintf(stderr, "Failed CR status: %d, tot_scnt: %lu, tot_ccnt: %lu, tot_rcnt: %lu\n.",
+                    (void)fprintf(stderr, "Failed CR status: %d, tot_scnt: %lu, tot_ccnt: %lu, tot_rcnt: %lu.\n",
                         (int)cr_recv[i].status, tot_scnt, tot_ccnt, tot_rcnt);
                     ret = -1;
                     goto cleaning;
