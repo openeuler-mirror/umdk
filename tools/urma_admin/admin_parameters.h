@@ -260,6 +260,7 @@ typedef struct tool_config {
     tool_cmd_type_t cmd;
     bool specify_device;
     bool whole_info;
+    bool help;
     char dev_name[URMA_ADMIN_MAX_DEV_NAME];       /* ubep device name */
     urma_eid_t eid;
     bool dynamic_eid_mode;

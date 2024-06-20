@@ -328,6 +328,7 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 ret = admin_str_to_u32(optarg, &cfg->key.key_cnt);
                 break;
             case 'h':
+                cfg->help = true;
                 usage(argv[0]);
                 return 0;
             case 'd':

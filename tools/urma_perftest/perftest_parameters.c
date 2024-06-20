@@ -538,16 +538,20 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'j':
                 if (ub_str_to_bool(optarg, &cfg->share_jfr) != 0) {
-                    (void)fprintf(stderr, "Invalid parameter :%s.\n", optarg);
+                    (void)fprintf(stderr, "Invalid parameter(share_jfr).\n");
                     return -1;
                 }
                 break;
             case 'J':
-                if (cfg->type != PERFTEST_BW) {
+                (void)ub_str_to_u32(optarg, &cfg->jettys);
+                if (cfg->jettys == 0) {
+                    (void)fprintf(stderr, "Invalid parameter(jettys).\n");
+                    return -1;
+                }
+                if (cfg->type != PERFTEST_BW && cfg->jettys > 1) {
                     (void)fprintf(stderr, "Multiple jettys only available on band width tests.\n");
                     return -1;
                 }
-                (void)ub_str_to_u32(optarg, &cfg->jettys);
                 break;
             case 'K':
                 (void)ub_str_to_u32(optarg, &cfg->token_policy);

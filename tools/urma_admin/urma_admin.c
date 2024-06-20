@@ -496,7 +496,7 @@ static void admin_log_cmd(int argc, char *argv[], int ret)
 int main(int argc, char *argv[])
 {
     int ret;
-    tool_config_t tool_cfg;
+    tool_config_t tool_cfg = {0};
 
     if (admin_check_cmd_len(argc, argv) != 0) {
         (void)printf("user: %s, cmd len out of range.\n", getlogin());
@@ -508,6 +508,10 @@ int main(int argc, char *argv[])
         (void)printf("Invalid parameter.\n");
         admin_log_cmd(argc, argv, ret);
         return ret;
+    }
+    if (tool_cfg.help) {
+        /* Do not execute other operations for --help parameter */
+        return 0;
     }
     if (tool_cfg.cmd == TOOL_CMD_NUM) {
         admin_log_cmd(argc, argv, ret);
