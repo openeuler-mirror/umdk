@@ -50,7 +50,7 @@ static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp
 			URMA_LOG_ERR("DCA wqe bufs alloc failed!\n");
 			return URMA_ENOMEM;
 		}
-	} else if (udma_alloc_buf(&qp->buf, buf_size, UDMA_HW_PAGE_SIZE)) {
+	} else if (udma_alloc_buf(&qp->buf, buf_size, ctx->page_size)) {
 		URMA_LOG_ERR("qp wqe buf alloc failed!\n");
 		return URMA_ENOMEM;
 	}
@@ -66,6 +66,7 @@ static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg, urma_jfr_cfg_
 	uint32_t cfg_depth;
 	int wqe_sge_cnt;
 	uint32_t max_gs;
+	uint32_t rq_cnt;
 
 	cfg_depth = roundup_pow_of_two(cfg->depth);
 	qp->sq.wqe_cnt = cfg_depth < UDMA_MIN_JFS_DEPTH ?
@@ -96,8 +97,12 @@ static void init_sq_param(struct udma_qp *qp, urma_jfs_cfg_t *cfg, urma_jfr_cfg_
 	/* rc rq param */
 	if (jfr_cfg != NULL) {
 		qp->rq.wqe_cnt = roundup_pow_of_two(jfr_cfg->depth);
+		if (jfr_cfg->trans_mode == URMA_TM_UM)
+			rq_cnt = roundup_pow_of_two(jfr_cfg->max_sge + 1);
+		else
+			rq_cnt = roundup_pow_of_two(jfr_cfg->max_sge);
 		qp->rq.wqe_shift = udma_ilog32(roundup_pow_of_two(UDMA_HW_SGE_SIZE *
-					       roundup_pow_of_two(jfr_cfg->max_sge)));
+								  rq_cnt));
 	}
 }
 

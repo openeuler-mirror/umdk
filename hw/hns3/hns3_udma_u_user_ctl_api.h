@@ -120,6 +120,8 @@ struct hns3_u_udma_get_jetty_info_out {
 	void		*ext_sge_tail_addr;
 	uint32_t	sl;
 	void		*head_idx;
+	void		*sge_idx;
+	bool		dwqe_enable;
 };
 
 enum hns3_udma_u_user_ctl_opcode {

@@ -42,11 +42,7 @@ static urma_status_t alloc_jfr(struct udma_u_jetty *jetty, urma_context_t *ctx,
 	if (jetty->share_jfr) {
 		jetty->udma_jfr = to_udma_jfr(jetty_cfg->shared.jfr);
 	} else {
-		if (jetty_cfg->jfr_cfg->trans_mode == URMA_TM_RC &&
-		    udma_ctx->dca_ctx.unit_size == 0)
-			urma_jfr = udma_u_create_jfr_rq(ctx, jetty_cfg->jfr_cfg, jetty);
-		else
-			urma_jfr = udma_u_create_jfr(ctx, jetty_cfg->jfr_cfg);
+		urma_jfr = udma_u_create_jfr_rq(ctx, jetty_cfg->jfr_cfg, jetty);
 		if (!urma_jfr) {
 			URMA_LOG_ERR("failed to create jfr.\n");
 			return URMA_FAIL;
@@ -68,8 +64,13 @@ static urma_status_t alloc_qp_node_table(struct udma_u_jetty *jetty,
 		return ret;
 
 	if (jetty->tp_mode == URMA_TM_UM) {
-		jetty->um_qp = udma_alloc_qp(udma_ctx, true, &jetty_cfg->jfs_cfg,
-					     NULL);
+		if (jetty->udma_jfr == NULL)
+			jetty->um_qp = udma_alloc_qp(udma_ctx, true,
+						     &jetty_cfg->jfs_cfg,
+						     jetty_cfg->jfr_cfg);
+		else
+			jetty->um_qp = udma_alloc_qp(udma_ctx, true,
+						     &jetty_cfg->jfs_cfg, NULL);
 		if (!jetty->um_qp) {
 			URMA_LOG_ERR("UM qp alloc failed, jetty_id = %u.\n",
 				     jetty->urma_jetty.jetty_id.id);
@@ -408,8 +409,7 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx,
 	struct udma_u_jetty *udma_jetty;
 	urma_status_t ret;
 
-	if (!jetty_cfg->flag.bs.share_jfr && udma_ctx->dca_ctx.unit_size == 0 &&
-	    jetty_cfg->jfs_cfg.trans_mode == URMA_TM_RC)
+	if (!jetty_cfg->flag.bs.share_jfr && udma_ctx->dca_ctx.unit_size == 0)
 		return udma_u_create_jetty_rq(ctx, jetty_cfg);
 
 	udma_jetty = (struct udma_u_jetty *)calloc(1, sizeof(*udma_jetty));
@@ -842,7 +842,7 @@ urma_status_t udma_u_post_jetty_recv_wr(urma_jetty_t *jetty,
 	if (!udma_jfr->lock_free)
 		(void)pthread_spin_lock(&udma_jfr->lock);
 
-	if (udma_jfr->rq_en) {
+	if (!udma_jfr->share_jfr) {
 		for (nreq = 0; wr; ++nreq, wr = wr->next) {
 			ret = post_recv_one_rq(udma_jfr, wr);
 			if (ret) {

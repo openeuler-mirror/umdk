@@ -259,8 +259,7 @@ static struct udma_qp *find_jfs_qp(struct udma_u_jfs *jfs)
 	return NULL;
 }
 
-static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
-			 uint32_t wqe_cnt)
+static int update_jfs_ci(urma_jfs_t *jfs, uint32_t wqe_cnt)
 {
 	struct udma_qp *qp;
 
@@ -269,9 +268,19 @@ static int update_jfs_ci(urma_jfs_t *jfs, urma_target_jetty_t *tjetty,
 		return EINVAL;
 	}
 
+	if (wqe_cnt == 0) {
+		URMA_LOG_ERR("input wqe num is zero.\n");
+		return EINVAL;
+	}
+
 	qp = find_jfs_qp(to_udma_jfs(jfs));
 	if (!qp) {
 		URMA_LOG_ERR("can't find qp by jfs.\n");
+		return EINVAL;
+	}
+
+	if (qp->sq.head - qp->sq.tail < wqe_cnt) {
+		URMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
 		return EINVAL;
 	}
 
@@ -306,9 +315,19 @@ static int update_jetty_ci(urma_jetty_t *jetty, uint32_t wqe_cnt)
 		return EINVAL;
 	}
 
+	if (wqe_cnt == 0) {
+		URMA_LOG_ERR("input wqe num is zero.\n");
+		return EINVAL;
+	}
+
 	qp = find_jetty_qp(to_udma_jetty(jetty));
 	if (!qp) {
 		URMA_LOG_ERR("can't find qp by jetty.\n");
+		return EINVAL;
+	}
+
+	if (qp->sq.head - qp->sq.tail < wqe_cnt) {
+		URMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
 		return EINVAL;
 	}
 
@@ -325,8 +344,7 @@ static int udma_u_update_queue_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	memcpy(&update_in, (void *)in->addr,
 		min(in->len, sizeof(struct hns3_udma_update_queue_ci_in)));
 	if (update_in.type == JFS_TYPE) {
-		ret = update_jfs_ci(update_in.jfs, update_in.tjetty,
-				    update_in.wqe_cnt);
+		ret = update_jfs_ci(update_in.jfs, update_in.wqe_cnt);
 	} else if (update_in.type == JETTY_TYPE) {
 		ret = update_jetty_ci(update_in.jetty, update_in.wqe_cnt);
 	} else {
@@ -491,6 +509,8 @@ static void udma_u_get_jetty_info_set_info_out(struct hns3_u_udma_get_jetty_info
 	info_out->db_addr = udma_ctx->uar + UDMA_DB_CFG0_OFFSET;
 	info_out->dwqe_addr = qp->dwqe_page;
 	info_out->ext_sge_tail_addr = get_send_sge_ex(qp, qp->ex_sge.sge_cnt);
+	info_out->sge_idx = &qp->next_sge;
+	info_out->dwqe_enable = !!(qp->flags & HNS3_UDMA_QP_CAP_DIRECT_WQE);
 }
 
 int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
@@ -500,6 +520,7 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	struct hns3_u_udma_get_jetty_info_in *info_in;
 	struct udma_u_jetty *udma_jetty;
 	struct udma_u_context *udma_ctx;
+	struct udma_u_jfs *udma_jfs;
 	struct udma_qp *qp;
 
 	if (in->len != sizeof(struct hns3_u_udma_get_jetty_info_in)) {
@@ -509,14 +530,18 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 	info_in = (struct hns3_u_udma_get_jetty_info_in *)in->addr;
 
-	if (!info_in->jetty) {
-		URMA_LOG_ERR("Jetty is null.\n");
+	if (info_in->type == JFS_TYPE && info_in->jfs) {
+		udma_jfs = to_udma_jfs(info_in->jfs);
+		qp = udma_jfs->um_qp;
+	} else if (info_in->type == JETTY_TYPE && info_in->jetty) {
+		udma_jetty = to_udma_jetty(info_in->jetty);
+		qp = udma_jetty->rc_node->qp;
+	} else {
+		URMA_LOG_ERR("Invalid parameter for query jetty/jfs info.\n");
 		return EINVAL;
 	}
 
-	udma_jetty = to_udma_jetty(info_in->jetty);
 	udma_ctx = to_udma_ctx(ctx);
-	qp = udma_jetty->rc_node->qp;
 
 	udma_u_get_jetty_info_set_info_out((struct hns3_u_udma_get_jetty_info_out *)out->addr,
 					    qp, udma_ctx);

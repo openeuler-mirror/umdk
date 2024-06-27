@@ -16,6 +16,7 @@
 #ifndef _UDMA_U_COMMON_H
 #define _UDMA_U_COMMON_H
 
+#include <unistd.h>
 #include <arm_neon.h>
 #include <limits.h>
 #include <stddef.h>
@@ -238,7 +239,7 @@ static inline unsigned long align(unsigned long val, unsigned long align)
 	return (val + align - 1) & ~(align - 1);
 }
 
-#define udma_hw_page_align(x)	align(x, UDMA_HW_PAGE_SIZE)
+#define udma_hw_page_align(x)	align(x, sysconf(_SC_PAGESIZE))
 
 static inline uint32_t to_udma_hem_entries_size(int count, int buf_shift)
 {

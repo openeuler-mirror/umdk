@@ -13,6 +13,7 @@
  *
  */
 
+#include <malloc.h>
 #include <string.h>
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_db.h"
@@ -103,9 +104,12 @@ static int alloc_jfr_buf(struct udma_u_jfr *jfr, struct udma_u_jetty *jetty)
 			URMA_LOG_ERR("failed to alloc jfr wqe buf.\n");
 			goto err_alloc_buf;
 		}
-	} else {
+	} else if (jetty->tp_mode == URMA_TM_RC) {
 		jfr->wqe_buf.buf = jetty->rc_node->qp->buf.buf +
 				   jetty->rc_node->qp->rq.offset;
+	} else {
+		jfr->wqe_buf.buf = jetty->um_qp->buf.buf +
+				   jetty->um_qp->rq.offset;
 	}
 
 	jfr->wrid = (uint64_t *)calloc(jfr->wqe_cnt, sizeof(*jfr->wrid));
@@ -129,7 +133,7 @@ err_alloc_buf:
 static void free_jfr_buf(struct udma_u_jfr *jfr)
 {
 	free(jfr->wrid);
-	if (!jfr->rq_en)
+	if (jfr->share_jfr)
 		udma_free_buf(&jfr->wqe_buf);
 	udma_free_buf(&jfr->idx_que.idx_buf);
 	udma_bitmap_free(jfr->idx_que.bitmap);
@@ -146,14 +150,22 @@ static int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
 	cmd.buf_addr = (uintptr_t)jfr->wqe_buf.buf;
 	cmd.idx_addr = (uintptr_t)jfr->idx_que.idx_buf.buf;
 	cmd.db_addr = (uintptr_t)jfr->db;
-	cmd.share_jfr = !jfr->rq_en;
 	if (jetty != NULL) {
-		cmd.wqe_buf_addr = (uintptr_t)jetty->rc_node->qp->buf.buf;
-		cmd.sqe_cnt = jetty->rc_node->qp->sq.wqe_cnt;
-		cmd.sqe_shift = jetty->rc_node->qp->sq.wqe_shift;
-		cmd.sge_cnt = jetty->rc_node->qp->ex_sge.sge_cnt;
-		cmd.sge_shift = jetty->rc_node->qp->ex_sge.sge_shift;
-		cmd.share_jfr = jetty->share_jfr;
+		if (jetty->tp_mode == URMA_TM_RC) {
+			cmd.wqe_buf_addr = (uintptr_t)jetty->rc_node->qp->buf.buf;
+			cmd.sqe_cnt = jetty->rc_node->qp->sq.wqe_cnt;
+			cmd.sqe_shift = jetty->rc_node->qp->sq.wqe_shift;
+			cmd.sge_cnt = jetty->rc_node->qp->ex_sge.sge_cnt;
+			cmd.sge_shift = jetty->rc_node->qp->ex_sge.sge_shift;
+			cmd.share_jfr = jetty->share_jfr;
+		} else {
+			cmd.wqe_buf_addr = (uintptr_t)jetty->um_qp->buf.buf;
+			cmd.sqe_cnt = jetty->um_qp->sq.wqe_cnt;
+			cmd.sqe_shift = jetty->um_qp->sq.wqe_shift;
+			cmd.sge_cnt = jetty->um_qp->ex_sge.sge_cnt;
+			cmd.sge_shift = jetty->um_qp->ex_sge.sge_shift;
+			cmd.share_jfr = jetty->share_jfr;
+		}
 	}
 
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
@@ -262,7 +274,7 @@ urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,
 		return NULL;
 
 	jfr->lock_free = cfg->flag.bs.lock_free;
-	jfr->rq_en = UDMA_JFR_RQ_EN;
+	jfr->share_jfr = false;
 	if (pthread_spin_init(&jfr->lock, PTHREAD_PROCESS_PRIVATE))
 		goto err_init_lock_rq;
 
@@ -284,8 +296,17 @@ urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,
 		goto err_insert_jfr_rq;
 	}
 
+	if (cfg->trans_mode == URMA_TM_UM) {
+		if (alloc_um_header_que(ctx, jfr)) {
+			URMA_LOG_ERR("alloc grh que failed.\n");
+			goto err_alloc_um_header;
+		}
+	}
+
 	return &jfr->urma_jfr;
 
+err_alloc_um_header:
+	delete_jfr_node(udma_ctx, jfr);
 err_insert_jfr_rq:
 	urma_cmd_delete_jfr(&jfr->urma_jfr);
 err_create_jfr_rq:
@@ -313,6 +334,7 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		return NULL;
 	memset(jfr, 0, sizeof(*jfr));
 	jfr->lock_free = cfg->flag.bs.lock_free;
+	jfr->share_jfr = true;
 	if (pthread_spin_init(&jfr->lock, PTHREAD_PROCESS_PRIVATE))
 		goto err_init_lock;
 
@@ -376,7 +398,7 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 		free_um_header_que(udma_jfr);
 
 	delete_jfr_node(udma_ctx, udma_jfr);
-	if (!udma_jfr->rq_en)
+	if (udma_jfr->share_jfr)
 		delete_jetty_node(udma_ctx, udma_jfr->jfrn);
 	ret = urma_cmd_delete_jfr(jfr);
 	if (ret) {
@@ -503,6 +525,9 @@ urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 	wqe_idx = udma_jfr->idx_que.head & (udma_jfr->wqe_cnt - 1);
 	wqe = get_jfr_wqe(udma_jfr, wqe_idx);
 
+	if (unlikely(udma_jfr->trans_mode == URMA_TM_UM))
+		wqe = set_um_header_sge(udma_jfr, wqe_idx, wqe);
+
 	fill_recv_sge_to_wqe(wr, wqe, max_sge);
 
 	udma_jfr->idx_que.head++;
@@ -566,7 +591,7 @@ urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 	if (!udma_jfr->lock_free)
 		(void)pthread_spin_lock(&udma_jfr->lock);
 
-	if (udma_jfr->rq_en) {
+	if (!udma_jfr->share_jfr) {
 		for (nreq = 0; wr; ++nreq, wr = wr->next) {
 			ret = post_recv_one_rq(udma_jfr, wr);
 			if (ret) {

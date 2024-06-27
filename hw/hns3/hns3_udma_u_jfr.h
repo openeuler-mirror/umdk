@@ -21,8 +21,6 @@
 
 #define UDMA_JFR_GRH_HEAD_SZ		40
 
-#define UDMA_JFR_RQ_EN			1
-
 struct udma_u_jfr_idx_que {
 	struct udma_buf		idx_buf;
 	uint32_t		entry_shift;
@@ -64,7 +62,7 @@ struct udma_u_jfr {
 	struct udma_buf           wqe_buf;
 	uint32_t                  wqe_cnt;
 	uint32_t                  wqe_shift;
-	bool                      rq_en;
+	bool                      share_jfr;
 };
 
 struct udma_jfr_node {
