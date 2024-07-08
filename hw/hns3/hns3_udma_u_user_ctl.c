@@ -44,7 +44,7 @@ static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 	for (it = wr; it != NULL; it = it->next) {
 		udma_qp = udma_jfs->um_qp;
 		if (!udma_qp) {
-			URMA_LOG_ERR("failed to get qp, opcode = 0x%x.\n",
+			UDMA_LOG_ERR("failed to get qp, opcode = 0x%x.\n",
 				     it->opcode);
 			ret = URMA_EINVAL;
 			*(ex_out->bad_wr) = it;
@@ -86,7 +86,7 @@ static int udma_u_post_jetty_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr,
 	for (it = wr; it != NULL; it = it->next) {
 		udma_qp = get_qp_of_jetty(udma_jetty, it);
 		if (!udma_qp) {
-			URMA_LOG_ERR("failed to find qp, opcode = 0x%x.\n",
+			UDMA_LOG_ERR("failed to find qp, opcode = 0x%x.\n",
 				     it->opcode);
 			ret = URMA_EINVAL;
 			*(ex_out->bad_wr) = it;
@@ -117,13 +117,13 @@ static int udma_u_post_send_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	int ret;
 
 	if (!in->addr || !out->addr) {
-		URMA_LOG_ERR("input is invalid.\n");
+		UDMA_LOG_ERR("input is invalid.\n");
 		return EINVAL;
 	}
 	memcpy(&ex_in, (void *)in->addr,
 	       min(in->len, sizeof(struct hns3_udma_post_and_ret_db_in)));
 	if (!ex_in.jfs || !ex_in.wr) {
-		URMA_LOG_ERR("jetty or wr is invalid.\n");
+		UDMA_LOG_ERR("jetty or wr is invalid.\n");
 		return EINVAL;
 	}
 	if (ex_in.type == JFS_TYPE) {
@@ -131,7 +131,7 @@ static int udma_u_post_send_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	} else if (ex_in.type == JETTY_TYPE) {
 		ret = udma_u_post_jetty_ex(ex_in.jetty, ex_in.wr, &ex_out);
 	} else {
-		URMA_LOG_ERR("failed to post send ex, type = 0x%x.\n", ex_in.type);
+		UDMA_LOG_ERR("failed to post send ex, type = 0x%x.\n", ex_in.type);
 		ret = EINVAL;
 		goto out;
 	}
@@ -145,12 +145,12 @@ static int udma_u_check_poe_cfg(struct udma_u_context *udma_ctx, uint8_t poe_cha
 				struct hns3_udma_poe_init_attr *init_attr)
 {
 	if (!init_attr || !udma_ctx) {
-		URMA_LOG_ERR("invalid ctx or attr\n");
+		UDMA_LOG_ERR("invalid ctx or attr\n");
 		return EINVAL;
 	}
 
 	if (poe_channel >= udma_ctx->poe_ch_num) {
-		URMA_LOG_ERR("invalid POE channel %u >= %u\n",
+		UDMA_LOG_ERR("invalid POE channel %u >= %u\n",
 			     poe_channel, udma_ctx->poe_ch_num);
 		return EINVAL;
 	}
@@ -182,7 +182,7 @@ static int config_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
 
 	ret = urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
 	if (ret)
-		URMA_LOG_ERR("failed to config POE channel %u, ret = %d\n",
+		UDMA_LOG_ERR("failed to config POE channel %u, ret = %d\n",
 			     poe_channel, ret);
 
 	return ret;
@@ -228,7 +228,7 @@ static int query_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
 
 	ret = urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
 	if (ret) {
-		URMA_LOG_ERR("failed to query POE channel %u, ret = %d\n",
+		UDMA_LOG_ERR("failed to query POE channel %u, ret = %d\n",
 			     poe_channel, ret);
 		return ret;
 	}
@@ -264,23 +264,23 @@ static int update_jfs_ci(urma_jfs_t *jfs, uint32_t wqe_cnt)
 	struct udma_qp *qp;
 
 	if (!jfs) {
-		URMA_LOG_ERR("jfs is null.\n");
+		UDMA_LOG_ERR("jfs is null.\n");
 		return EINVAL;
 	}
 
 	if (wqe_cnt == 0) {
-		URMA_LOG_ERR("input wqe num is zero.\n");
+		UDMA_LOG_ERR("input wqe num is zero.\n");
 		return EINVAL;
 	}
 
 	qp = find_jfs_qp(to_udma_jfs(jfs));
 	if (!qp) {
-		URMA_LOG_ERR("can't find qp by jfs.\n");
+		UDMA_LOG_ERR("can't find qp by jfs.\n");
 		return EINVAL;
 	}
 
 	if (qp->sq.head - qp->sq.tail < wqe_cnt) {
-		URMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
+		UDMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
 		return EINVAL;
 	}
 
@@ -292,7 +292,7 @@ static struct udma_qp *find_jetty_qp(struct udma_u_jetty *jetty)
 {
 	if (jetty->tp_mode == URMA_TM_RC) {
 		if (jetty->rc_node->tjetty == NULL) {
-			URMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %d.\n",
+			UDMA_LOG_ERR("The jetty not bind a remote jetty, jetty_id = %d.\n",
 				     jetty->urma_jetty.jetty_id.id);
 			return NULL;
 		}
@@ -311,23 +311,23 @@ static int update_jetty_ci(urma_jetty_t *jetty, uint32_t wqe_cnt)
 	struct udma_qp *qp;
 
 	if (!jetty) {
-		URMA_LOG_ERR("jetty is null.\n");
+		UDMA_LOG_ERR("jetty is null.\n");
 		return EINVAL;
 	}
 
 	if (wqe_cnt == 0) {
-		URMA_LOG_ERR("input wqe num is zero.\n");
+		UDMA_LOG_ERR("input wqe num is zero.\n");
 		return EINVAL;
 	}
 
 	qp = find_jetty_qp(to_udma_jetty(jetty));
 	if (!qp) {
-		URMA_LOG_ERR("can't find qp by jetty.\n");
+		UDMA_LOG_ERR("can't find qp by jetty.\n");
 		return EINVAL;
 	}
 
 	if (qp->sq.head - qp->sq.tail < wqe_cnt) {
-		URMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
+		UDMA_LOG_ERR("input wqe num is wrong, wqe_cnt = %d.\n", wqe_cnt);
 		return EINVAL;
 	}
 
@@ -348,7 +348,7 @@ static int udma_u_update_queue_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	} else if (update_in.type == JETTY_TYPE) {
 		ret = update_jetty_ci(update_in.jetty, update_in.wqe_cnt);
 	} else {
-		URMA_LOG_ERR("failed to update ci, type = 0x%x.\n",
+		UDMA_LOG_ERR("failed to update ci, type = 0x%x.\n",
 			     update_in.type);
 		ret = EINVAL;
 	}
@@ -364,17 +364,17 @@ static int udma_u_check_notify_attr(struct hns3_udma_jfc_notify_init_attr *notif
 		break;
 	case HNS3_UDMA_JFC_NOTIFY_MODE_64B_ALIGN:
 	case HNS3_UDMA_JFC_NOTIFY_MODE_DDR_64B_ALIGN:
-		URMA_LOG_ERR("Doesn't support notify mode %u\n",
+		UDMA_LOG_ERR("Doesn't support notify mode %u\n",
 			     notify_attr->notify_mode);
 		return EINVAL;
 	default:
-		URMA_LOG_ERR("Invalid notify mode %u\n",
+		UDMA_LOG_ERR("Invalid notify mode %u\n",
 			     notify_attr->notify_mode);
 		return EINVAL;
 	}
 
 	if (notify_attr->notify_addr & HNS3_UDMA_ADDR_4K_MASK) {
-		URMA_LOG_ERR("Notify addr should be aligned to 4k.\n",
+		UDMA_LOG_ERR("Notify addr should be aligned to 4k.\n",
 			     notify_attr->notify_addr);
 		return EINVAL;
 	}
@@ -387,7 +387,7 @@ static int udma_u_check_jfc_attr_ex(struct hns3_udma_jfc_init_attr *attr)
 	int ret = 0;
 
 	if (attr->jfc_ex_mask != HNS3_UDMA_JFC_NOTIFY_OR_POE_CREATE_FLAGS) {
-		URMA_LOG_ERR("Invalid comp mask %u\n", attr->jfc_ex_mask);
+		UDMA_LOG_ERR("Invalid comp mask %u\n", attr->jfc_ex_mask);
 		return EINVAL;
 	}
 
@@ -398,7 +398,7 @@ static int udma_u_check_jfc_attr_ex(struct hns3_udma_jfc_init_attr *attr)
 		ret = udma_u_check_notify_attr(&attr->notify_init_attr);
 		break;
 	default:
-		URMA_LOG_ERR("Invalid create flags %u\n", attr->create_flags);
+		UDMA_LOG_ERR("Invalid create flags %u\n", attr->create_flags);
 		return EINVAL;
 	}
 
@@ -429,7 +429,7 @@ static urma_jfc_t *create_jfc_ex(urma_context_t *ctx,
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 	ret = urma_cmd_create_jfc(ctx, &jfc->urma_jfc, cfg_ex->cfg, &udata);
 	if (ret) {
-		URMA_LOG_ERR("urma cmd create jfc failed.\n");
+		UDMA_LOG_ERR("urma cmd create jfc failed.\n");
 		free_err_jfc(jfc, udma_ctx);
 		return NULL;
 	}
@@ -452,7 +452,7 @@ static int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 	ret = udma_u_check_jfc_attr_ex(cfg_ex.attr);
 	if (ret) {
-		URMA_LOG_ERR("Invalid jfc attr ex\n");
+		UDMA_LOG_ERR("Invalid jfc attr ex\n");
 		return EINVAL;
 	}
 
@@ -524,7 +524,7 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	struct udma_qp *qp;
 
 	if (in->len != sizeof(struct hns3_u_udma_get_jetty_info_in)) {
-		URMA_LOG_ERR("Invalid buffer size(%u) for getting jetty info.\n", in->len);
+		UDMA_LOG_ERR("Invalid buffer size(%u) for getting jetty info.\n", in->len);
 		return EINVAL;
 	}
 
@@ -537,7 +537,7 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		udma_jetty = to_udma_jetty(info_in->jetty);
 		qp = udma_jetty->rc_node->qp;
 	} else {
-		URMA_LOG_ERR("Invalid parameter for query jetty/jfs info.\n");
+		UDMA_LOG_ERR("Invalid parameter for query jetty/jfs info.\n");
 		return EINVAL;
 	}
 
@@ -567,12 +567,12 @@ int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		    urma_user_ctl_out_t *out)
 {
 	if ((ctx == NULL) || (in == NULL) || (out == NULL)) {
-		URMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
+		UDMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
 		return EINVAL;
 	}
 
 	if (in->opcode >= HNS3_UDMA_U_USER_CTL_MAX) {
-		URMA_LOG_ERR("invalid opcode: 0x%x.\n", (int)in->opcode);
+		UDMA_LOG_ERR("invalid opcode: 0x%x.\n", (int)in->opcode);
 		return URMA_ENOPERM;
 	}
 	return g_udma_u_user_ctl_ops[in->opcode](ctx, in, out);

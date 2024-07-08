@@ -103,7 +103,7 @@ static urma_status_t udma_u_alloc_db(struct udma_u_context *udma_u_ctx, int dev_
 	udma_u_ctx->uar = mmap(NULL, udma_u_ctx->page_size, PROT_READ | PROT_WRITE,
 			       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->uar == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap uar page, errno:%d.\n", errno);
+		UDMA_LOG_ERR("failed to mmap uar page, errno:%d.\n", errno);
 		return URMA_FAIL;
 	}
 
@@ -116,7 +116,7 @@ static void udma_u_free_db(struct udma_u_context *udma_u_ctx)
 
 	ret = munmap(udma_u_ctx->uar, (size_t)udma_u_ctx->page_size);
 	if (ret != 0)
-		URMA_LOG_ERR("failed to munmap uar.\n");
+		UDMA_LOG_ERR("failed to munmap uar.\n");
 }
 
 static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int dev_fd)
@@ -127,7 +127,7 @@ static urma_status_t init_reset_state(struct udma_u_context *udma_u_ctx, int dev
 	udma_u_ctx->reset_state = mmap(NULL, (size_t)udma_u_ctx->page_size, PROT_READ,
 				       MAP_SHARED, dev_fd, offset);
 	if (udma_u_ctx->reset_state == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap reset page, errno:%d.\n", errno);
+		UDMA_LOG_ERR("failed to mmap reset page, errno:%d.\n", errno);
 		return URMA_FAIL;
 	}
 
@@ -140,7 +140,7 @@ static void uninit_reset_state(struct udma_u_context *udma_u_ctx)
 
 	ret = munmap(udma_u_ctx->reset_state, (size_t)udma_u_ctx->page_size);
 	if (ret != 0)
-		URMA_LOG_ERR("failed to munmap reset state.\n");
+		UDMA_LOG_ERR("failed to munmap reset state.\n");
 }
 
 static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
@@ -168,13 +168,13 @@ static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 
 	ret = udma_u_alloc_db(udma_u_ctx, dev_fd);
 	if (ret) {
-		URMA_LOG_ERR("failed to alloc db.\n");
+		UDMA_LOG_ERR("failed to alloc db.\n");
 		return ret;
 	}
 
 	ret = init_reset_state(udma_u_ctx, dev_fd);
 	if (ret) {
-		URMA_LOG_ERR("failed to init reset state.\n");
+		UDMA_LOG_ERR("failed to init reset state.\n");
 		udma_u_free_db(udma_u_ctx);
 	}
 
@@ -216,10 +216,10 @@ static void uninit_dca_context(struct udma_u_context *udma_u_ctx)
 	if (dca_ctx->buf_status) {
 		ret = munmap(dca_ctx->buf_status, (size_t)udma_u_ctx->page_size);
 		if (ret != 0)
-			URMA_LOG_ERR("Failed to munmap dca.\n");
+			UDMA_LOG_ERR("Failed to munmap dca.\n");
 	}
 
-	pthread_spin_destroy(&dca_ctx->lock);
+	(void)pthread_spin_destroy(&dca_ctx->lock);
 }
 
 static void udma_u_destroy_jfr_table(struct udma_u_context *ctx)
@@ -257,14 +257,14 @@ static urma_status_t init_jetty_x_table(struct udma_u_context *udma_u_ctx)
 
 	(void)pthread_rwlock_init(&udma_u_ctx->jfs_qp_table_lock, NULL);
 	if (udma_hmap_init(&udma_u_ctx->jfs_qp_table, UDMA_JFS_QP_TABLE_SIZE)) {
-		URMA_LOG_ERR("init jfs table failed.\n");
+		UDMA_LOG_ERR("init jfs table failed.\n");
 		ret = URMA_ENOMEM;
 		goto err_init_jfs_table;
 	}
 
 	(void)pthread_rwlock_init(&udma_u_ctx->jfr_table_lock, NULL);
 	if (udma_hmap_init(&udma_u_ctx->jfr_table, UDMA_JFR_TABLE_SIZE)) {
-		URMA_LOG_ERR("init jfr table failed.\n");
+		UDMA_LOG_ERR("init jfr table failed.\n");
 		ret = URMA_ENOMEM;
 		goto err_init_jfr_table;
 	}
@@ -304,7 +304,7 @@ static uint64_t get_env_val(char *env)
 			val = strtoul(env, &end, 0);
 
 		if (errno == ERANGE || *env == '-' || *end) {
-			URMA_LOG_ERR("The env val is error!\n");
+			UDMA_LOG_ERR("The env val is error!\n");
 			return 0;
 		}
 	}
@@ -330,7 +330,7 @@ static void load_dca_config_from_env_var(struct udma_dca_context_attr *attr)
 		attr->comp_mask |= UDMA_CONTEXT_MASK_DCA_UNIT_SIZE;
 		attr->dca_unit_size = unit_size;
 	} else {
-		URMA_LOG_ERR("The DCA_UNIT_SIZE is too large!\n");
+		UDMA_LOG_ERR("The DCA_UNIT_SIZE is too large!\n");
 		return;
 	}
 
@@ -363,7 +363,7 @@ static void load_dca_config_from_env_var(struct udma_dca_context_attr *attr)
 		if (tp_num <= MAX_TP_CNT)
 			attr->dca_prime_qps = tp_num;
 		else
-			URMA_LOG_ERR("The DCA_PRIME_TP_NUM is too large!\n");
+			UDMA_LOG_ERR("The DCA_PRIME_TP_NUM is too large!\n");
 	}
 }
 
@@ -415,7 +415,7 @@ static int mmap_dca(struct udma_u_context *ctx, int dev_fd, size_t size)
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd, offset);
 	if (addr == MAP_FAILED) {
-		URMA_LOG_ERR("failed to mmap dca addr.\n");
+		UDMA_LOG_ERR("failed to mmap dca addr.\n");
 		return URMA_FAIL;
 	}
 
@@ -441,7 +441,7 @@ static int init_dca_context(struct udma_u_context *ctx, int dev_fd,
 	INIT_LIST_HEAD(&dca_ctx->mem_list);
 	ret = pthread_spin_init(&dca_ctx->lock, PTHREAD_PROCESS_PRIVATE);
 	if (ret) {
-		URMA_LOG_ERR("Failed to init DCA spin lock ret %d.\n", ret);
+		UDMA_LOG_ERR("Failed to init DCA spin lock ret %d.\n", ret);
 		return ret;
 	}
 
@@ -468,7 +468,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 
 	udma_u_ctx = (struct udma_u_context *)calloc(1, sizeof(struct udma_u_context));
 	if (udma_u_ctx == NULL) {
-		URMA_LOG_ERR("failed to alloc memory for udma_u ctx.\n");
+		UDMA_LOG_ERR("failed to alloc memory for udma_u ctx.\n");
 		return NULL;
 	}
 
@@ -483,7 +483,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev,
 
 	ret = udma_u_init_context(udma_u_ctx, &resp, dev_fd);
 	if (ret != URMA_SUCCESS) {
-		URMA_LOG_ERR("udma_u init ctx failed.\n");
+		UDMA_LOG_ERR("udma_u init ctx failed.\n");
 		goto err_cmd;
 	}
 
@@ -518,7 +518,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	uninit_dca_context(udma_u_ctx);
 	udma_u_uninit_context(udma_u_ctx);
 	if (urma_cmd_delete_context(&udma_u_ctx->urma_ctx)) {
-		URMA_LOG_ERR("udma_u destroy ctx failed.\n");
+		UDMA_LOG_ERR("udma_u destroy ctx failed.\n");
 		ret = URMA_FAIL;
 	}
 
@@ -529,6 +529,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 
 static urma_status_t udma_u_init(urma_init_attr_t *conf)
 {
+	udma_getenv_log_level();
 	return URMA_SUCCESS;
 }
 

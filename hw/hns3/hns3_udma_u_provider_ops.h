@@ -19,7 +19,7 @@
 #include <stdatomic.h>
 #include <linux/types.h>
 #include "urma_provider.h"
-#include "urma_log.h"
+#include "hns3_udma_u_log.h"
 #include "hns3_udma_u_common.h"
 
 #ifndef PCI_VENDOR_ID_HUAWEI

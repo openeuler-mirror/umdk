@@ -32,7 +32,7 @@ int udma_alloc_buf(struct udma_buf *buf, uint32_t size, int page_size)
 	ret = madvise(buf->buf, buf->length, MADV_DONTFORK);
 	if (ret) {
 		munmap(buf->buf, buf->length);
-		URMA_LOG_ERR("madvise failed! ret=%d\n", ret);
+		UDMA_LOG_ERR("madvise failed! ret=%d\n", ret);
 	}
 
 	return ret;
@@ -103,7 +103,7 @@ static bool add_dca_mem_enabled(struct udma_u_dca_ctx *ctx, uint32_t alloc_size)
 	    ctx->max_size >= ctx->curr_size + alloc_size) {
 		enable = true;
 	} else {
-		URMA_LOG_ERR("pool size 0x%x doesn't exceed max size 0x%x!",
+		UDMA_LOG_ERR("pool size 0x%x doesn't exceed max size 0x%x!",
 			     ctx->curr_size + alloc_size, ctx->max_size);
 		enable = false;
 	}
@@ -120,14 +120,14 @@ static struct udma_u_dca_mem *udma_u_alloc_dca_mem(uint32_t size)
 
 	mem = (struct udma_u_dca_mem *)calloc(1, sizeof(struct udma_u_dca_mem));
 	if (!mem) {
-		URMA_LOG_ERR("malloc udma_u_dca_mem failed!");
+		UDMA_LOG_ERR("malloc udma_u_dca_mem failed!");
 		return NULL;
 	}
 
 	ret = udma_alloc_buf(&mem->buf, size, UDMA_HW_PAGE_SIZE);
 	if (ret) {
 		free(mem);
-		URMA_LOG_ERR("alloc buf failed! ret=%d\n", ret);
+		UDMA_LOG_ERR("alloc buf failed! ret=%d\n", ret);
 		return NULL;
 	}
 
@@ -178,7 +178,7 @@ static int add_dca_mem(struct udma_u_context *ctx, uint32_t size)
 	/* Step 2: Register DCA mem uobject to pin user address */
 	ret = exec_register_dca_mem_cmd(ctx, mem);
 	if (ret) {
-		URMA_LOG_ERR("register dca mem failed!");
+		UDMA_LOG_ERR("register dca mem failed!");
 		ubn_u_free_dca_mem(mem);
 		return ret;
 	}
@@ -308,7 +308,7 @@ int udma_u_attach_dca_mem(struct udma_u_context *ctx,
 	} while (try_times++ < DCA_EXPAND_MEM_TRY_TIMES);
 
 	if (ret || resp.alloc_pages < buf_pages) {
-		URMA_LOG_ERR("attach failed, size %u count %u != %u, ret = %d.\n",
+		UDMA_LOG_ERR("attach failed, size %u count %u != %u, ret = %d.\n",
 			     size, buf_pages, resp.alloc_pages, ret);
 		return ENOMEM;
 	}
@@ -411,14 +411,14 @@ void udma_u_shrink_dca_mem(struct udma_u_context *ctx)
 				entry);
 		(void)pthread_spin_unlock(&dca_ctx->lock);
 		if (!mem) {
-			URMA_LOG_ERR("dca shrink failed, mem list is empty!");
+			UDMA_LOG_ERR("dca shrink failed, mem list is empty!");
 			break;
 		}
 
 		attr.reserved_size = dca_ctx->min_size;
 		ret = exec_shrink_dca_mem_cmd(ctx, &attr, &resp);
 		if (ret) {
-			URMA_LOG_ERR("dca shrink failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("dca shrink failed, ret = %d.\n", ret);
 			break;
 		}
 
@@ -435,7 +435,7 @@ void udma_u_shrink_dca_mem(struct udma_u_context *ctx)
 		}
 		(void)pthread_spin_unlock(&dca_ctx->lock);
 		if (!mem) {
-			URMA_LOG_ERR("dca shrink failed, free_key is invalid!");
+			UDMA_LOG_ERR("dca shrink failed, free_key is invalid!");
 			break;
 		}
 
