@@ -243,7 +243,10 @@ static void delete_jfs_qp_node(struct udma_u_context *udma_ctx, struct udma_u_jf
 	udma_free_sw_db(udma_ctx, jfs->um_qp->sdb, UDMA_JFS_TYPE_DB);
 	free(jfs->um_qp->sq.wrid);
 	jfs->um_qp->sq.wrid = NULL;
-	udma_free_buf(&jfs->um_qp->buf);
+	if (jfs->um_qp->dca_wqe.bufs)
+		free(jfs->um_qp->dca_wqe.bufs);
+	else
+		udma_free_buf(&jfs->um_qp->buf);
 	free(jfs->um_qp);
 	jfs->um_qp = NULL;
 }
@@ -839,7 +842,7 @@ static urma_status_t udma_set_rc_wqe(void *wqe, struct udma_qp *qp,
 	return URMA_SUCCESS;
 }
 
-static int udma_wq_overflow(struct udma_wq *wq)
+static bool udma_wq_overflow(struct udma_wq *wq)
 {
 	uint32_t cur;
 

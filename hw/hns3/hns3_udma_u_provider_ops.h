@@ -126,9 +126,6 @@ struct udma_u_context {
 	uint32_t		max_jfs_sge;
 
 	uint32_t		num_qps_shift;
-	uint32_t		num_jfs_shift;
-	uint32_t		num_jfr_shift;
-	uint32_t		num_jetty_shift;
 
 	pthread_rwlock_t	jfr_table_lock;
 	struct udma_hmap	jfr_table;

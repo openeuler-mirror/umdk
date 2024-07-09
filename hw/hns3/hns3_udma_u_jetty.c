@@ -42,7 +42,10 @@ static urma_status_t alloc_jfr(struct udma_u_jetty *jetty, urma_context_t *ctx,
 	if (jetty->share_jfr) {
 		jetty->udma_jfr = to_udma_jfr(jetty_cfg->shared.jfr);
 	} else {
-		urma_jfr = udma_u_create_jfr_rq(ctx, jetty_cfg->jfr_cfg, jetty);
+		if (!udma_ctx->dca_ctx.unit_size)
+			urma_jfr = udma_u_create_jfr_rq(ctx, jetty_cfg->jfr_cfg, jetty);
+		else
+			urma_jfr = udma_u_create_jfr(ctx, jetty_cfg->jfr_cfg);
 		if (!urma_jfr) {
 			UDMA_LOG_ERR("failed to create jfr.\n");
 			return URMA_FAIL;
@@ -616,7 +619,6 @@ static urma_status_t exec_jetty_bind_cmd(urma_jetty_t *jetty,
 urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
 {
 	struct udma_u_target_jetty *udma_target_jetty = to_udma_target_jetty(tjetty);
-	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
 	int ret;
 
@@ -637,6 +639,11 @@ urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty
 		return URMA_EEXIST;
 	}
 
+	if (udma_jetty->sub_trans_mode != tjetty->flag.bs.sub_trans_mode) {
+		UDMA_LOG_ERR("The sub_trans_mode does not match.\n");
+		return URMA_EINVAL;
+	}
+
 	if (tjetty->flag.bs.sub_trans_mode != URMA_SUB_TRANS_MODE_USER_TP) {
 		ret = exec_jetty_bind_cmd(jetty, tjetty, udma_jetty->rc_node->qp);
 		if (ret) {
@@ -653,7 +660,6 @@ urma_status_t udma_u_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty
 
 urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 {
-	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
 	struct udma_u_target_jetty *udma_target_jetty;
 	urma_target_jetty_t *tjetty;

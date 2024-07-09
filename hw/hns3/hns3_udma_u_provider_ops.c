@@ -151,9 +151,6 @@ static urma_status_t udma_u_init_context(struct udma_u_context *udma_u_ctx,
 
 	udma_u_ctx->page_size = sysconf(_SC_PAGESIZE);
 	udma_u_ctx->num_qps_shift = resp->num_qps_shift;
-	udma_u_ctx->num_jfr_shift = resp->num_jfr_shift;
-	udma_u_ctx->num_jfs_shift = resp->num_jfs_shift;
-	udma_u_ctx->num_jetty_shift = resp->num_jetty_shift;
 	udma_u_ctx->max_jfc_cqe = resp->max_jfc_cqe;
 	udma_u_ctx->cqe_size = resp->cqe_size;
 	udma_u_ctx->max_jfr_wr = resp->max_jfr_wr;
@@ -513,6 +510,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	struct udma_u_context *udma_u_ctx = to_udma_ctx(ctx);
 	urma_status_t ret = URMA_SUCCESS;
 
+	(void)pthread_rwlock_destroy(&udma_u_ctx->jetty_table_lock);
 	udma_u_destroy_jfr_table(udma_u_ctx);
 	udma_u_destroy_jfs_qp_table(udma_u_ctx);
 	uninit_dca_context(udma_u_ctx);

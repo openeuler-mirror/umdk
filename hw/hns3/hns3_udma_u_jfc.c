@@ -97,7 +97,8 @@ void free_err_jfc(struct udma_u_jfc *jfc, struct udma_u_context *udma_ctx)
 {
 	udma_free_sw_db(udma_ctx, jfc->db, UDMA_JFC_TYPE_DB);
 	udma_free_buf(&jfc->buf);
-	pthread_spin_destroy(&jfc->lock);
+	if (!jfc->lock_free)
+		(void)pthread_spin_destroy(&jfc->lock);
 	free(jfc);
 }
 
@@ -137,14 +138,6 @@ urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc)
 	struct udma_u_jfc *udma_jfc = to_udma_jfc(jfc);
 	int ret;
 
-	if (udma_jfc->reserved_jfr) {
-		ret = udma_u_delete_jfr(&udma_jfc->reserved_jfr->urma_jfr);
-		if (ret) {
-			UDMA_LOG_ERR("delete reserved jfr of jfc failed, ret:%d.\n", ret);
-			return URMA_FAIL;
-		}
-	}
-
 	ret = urma_cmd_delete_jfc(jfc);
 	if (ret) {
 		UDMA_LOG_ERR("delete jfc failed, ret:%d.\n", ret);
@@ -153,7 +146,8 @@ urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc)
 
 	udma_free_sw_db(udma_ctx, udma_jfc->db, UDMA_JFC_TYPE_DB);
 	udma_free_buf(&udma_jfc->buf);
-	pthread_spin_destroy(&udma_jfc->lock);
+	if (!udma_jfc->lock_free)
+		(void)pthread_spin_destroy(&udma_jfc->lock);
 	free(udma_jfc);
 
 	return URMA_SUCCESS;
@@ -234,28 +228,6 @@ static void handle_recv_inl_cqe(struct udma_jfc_cqe *cqe, struct udma_u_jfr *jfr
 	cr->completion_len = cqe->byte_cnt - data_len;
 	if (data_len)
 		cr->status = URMA_CR_LOC_LEN_ERR;
-}
-
-static struct udma_u_jfr *get_jfr_from_cqe(struct udma_u_context *ctx,
-					   struct udma_jfc_cqe *cqe)
-{
-	struct udma_jfr_node *jfr_node;
-	struct udma_hmap_node *node;
-	struct udma_u_jfr *jfr;
-	uint32_t qpn;
-	uint32_t jid;
-
-	qpn = cqe->lcl_qpn;
-	jid = get_jid_from_qpn(qpn, ctx->num_qps_shift, ctx->num_jfr_shift);
-	(void)pthread_rwlock_rdlock(&ctx->jfr_table_lock);
-	node = udma_hmap_first_with_hash(&ctx->jfr_table, jid);
-	(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
-	if (!node)
-		return NULL;
-	jfr_node = to_udma_jfr_node(node);
-	jfr = jfr_node->jfr;
-
-	return jfr;
 }
 
 static void udma_parse_opcode_for_res(struct udma_jfc_cqe *cqe, urma_cr_t *cr)
@@ -357,11 +329,11 @@ static int parse_cqe_for_res(struct udma_u_context *udma_ctx,
 	if (cqe->cqe_inline == CQE_INLINE_ENABLE)
 		handle_recv_inl_cqe(cqe, jfr, cr);
 
+	wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
 	if (!jfr->share_jfr) {
 		cr->user_ctx = jfr->wrid[jfr->idx_que.tail & (jfr->wqe_cnt - 1)];
 		jfr->idx_que.tail++;
 	} else {
-		wqe_idx = udma_reg_read(cqe, CQE_WQE_IDX);
 		cr->user_ctx = jfr->wrid[wqe_idx];
 		if (!jfr->lock_free)
 			pthread_spin_lock(&jfr->lock);
