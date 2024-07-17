@@ -13,7 +13,6 @@
  *
  */
 
-#include "urma_log.h"
 #include "urma_provider.h"
 #include "hns3_udma_u_provider_ops.h"
 
@@ -23,7 +22,7 @@ static __attribute__((constructor)) void urma_provider_udma_init(void)
 
 	ret = urma_register_provider_ops(&g_udma_u_provider_ops);
 	if (ret)
-		URMA_LOG_ERR("Provider UDMA register ops failed(%d).\n", ret);
+		UDMA_LOG_ERR("Provider UDMA register ops failed(%d).\n", ret);
 }
 
 static __attribute__((destructor)) void urma_provider_udma_uninit(void)
@@ -32,6 +31,6 @@ static __attribute__((destructor)) void urma_provider_udma_uninit(void)
 
 	ret = urma_unregister_provider_ops(&g_udma_u_provider_ops);
 	if (ret)
-		URMA_LOG_ERR("Provider UDMA register ops not registered(%d).\n",
+		UDMA_LOG_ERR("Provider UDMA register ops not registered(%d).\n",
 			     ret);
 }

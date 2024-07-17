@@ -126,7 +126,6 @@ struct udma_u_jfc {
 	uint32_t		cqe_shift;
 	struct udma_buf		buf;
 	struct udma_jfc_cqe	*cqe;
-	struct udma_u_jfr	*reserved_jfr;
 	uint32_t		*db;
 	uint32_t		arm_sn;
 	uint32_t		caps_flag;

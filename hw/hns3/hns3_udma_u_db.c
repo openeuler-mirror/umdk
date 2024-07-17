@@ -90,13 +90,12 @@ void *udma_alloc_sw_db(struct udma_u_context *ctx, enum udma_db_type type)
 		goto out;
 
 found:
-	++page->use_cnt;
-
 	ret = udma_bitmap_use_idx(page->bitmap, page->bitmap_cnt,
-			       page->num_db, &npos);
+				  page->num_db, &npos);
 	if (ret)
 		goto out;
 
+	++page->use_cnt;
 	db = (char *)page->buf.buf + npos * db_size[type];
 
 out:

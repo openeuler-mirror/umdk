@@ -47,11 +47,11 @@ static urma_status_t alloc_qp_wqe_buf(struct udma_u_context *ctx, struct udma_qp
 		qp->dca_wqe.bufs = (void **)calloc(qp->dca_wqe.max_cnt,
 						   sizeof(void *));
 		if (!qp->dca_wqe.bufs) {
-			URMA_LOG_ERR("DCA wqe bufs alloc failed!\n");
+			UDMA_LOG_ERR("DCA wqe bufs alloc failed!\n");
 			return URMA_ENOMEM;
 		}
 	} else if (udma_alloc_buf(&qp->buf, buf_size, ctx->page_size)) {
-		URMA_LOG_ERR("qp wqe buf alloc failed!\n");
+		UDMA_LOG_ERR("qp wqe buf alloc failed!\n");
 		return URMA_ENOMEM;
 	}
 
@@ -117,14 +117,14 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 
 	qp->sq.wrid = (uintptr_t *)calloc(qp->sq.wqe_cnt, sizeof(uintptr_t));
 	if (!qp->sq.wrid) {
-		URMA_LOG_ERR("failed to calloc sq wrid in jetty.\n");
+		UDMA_LOG_ERR("failed to calloc sq wrid in jetty.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = alloc_qp_wqe_buf(udma_ctx, qp, jfs_cfg->trans_mode != URMA_TM_UM,
 			       jfr_cfg);
 	if (ret) {
-		URMA_LOG_ERR("alloc_jetty_wqe_buf failed.\n");
+		UDMA_LOG_ERR("alloc_jetty_wqe_buf failed.\n");
 		free(qp->sq.wrid);
 		qp->sq.wrid = NULL;
 	}
@@ -141,20 +141,20 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx, bool is_jetty,
 
 	qp = (struct udma_qp *)calloc(1, sizeof(struct udma_qp));
 	if (!qp) {
-		URMA_LOG_ERR("alloc qp failed.\n");
+		UDMA_LOG_ERR("alloc qp failed.\n");
 		return NULL;
 	}
 
 	db_type = is_jetty ? UDMA_JETTY_TYPE_DB : UDMA_JFS_TYPE_DB;
 	qp->sdb = (uint32_t *)udma_alloc_sw_db(udma_ctx, db_type);
 	if (!qp->sdb) {
-		URMA_LOG_ERR("alloc sw db failed.\n");
+		UDMA_LOG_ERR("alloc sw db failed.\n");
 		goto err_alloc_qp;
 	}
 
 	ret = alloc_qp_wqe(udma_ctx, qp, jfs_cfg, jfr_cfg);
 	if (ret) {
-		URMA_LOG_ERR("alloc_qp_wqe failed.\n");
+		UDMA_LOG_ERR("alloc_qp_wqe failed.\n");
 		goto err_alloc_sw_db;
 	}
 	qp->is_jetty = is_jetty;
@@ -180,7 +180,7 @@ static int alloc_table_qp(struct udma_u_jfs *jfs, struct udma_u_context *udma_ct
 
 	jfs->um_qp = udma_alloc_qp(udma_ctx, false, cfg, NULL);
 	if (!jfs->um_qp) {
-		URMA_LOG_ERR("alloc qp failed.\n");
+		UDMA_LOG_ERR("alloc qp failed.\n");
 		return ENOMEM;
 	}
 
@@ -202,7 +202,7 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	udma_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
 	if (ret) {
-		URMA_LOG_ERR("urma cmd create jfs failed.\n");
+		UDMA_LOG_ERR("urma cmd create jfs failed.\n");
 		return ret;
 	}
 
@@ -215,7 +215,7 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	if (resp.create_tp_resp.cap_flags & HNS3_UDMA_QP_CAP_DIRECT_WQE) {
 		ret = mmap_dwqe(ctx, jfs->um_qp);
 		if (ret) {
-			URMA_LOG_ERR("mmap dwqe failed\n");
+			UDMA_LOG_ERR("mmap dwqe failed\n");
 			goto err_mmap_dwqe;
 		}
 	}
@@ -224,7 +224,7 @@ static int exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 		sizeof(struct udp_srcport));
 	ret = udma_add_to_qp_table(udma_ctx, jfs->um_qp, jfs->um_qp->qp_num);
 	if (ret) {
-		URMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
+		UDMA_LOG_ERR("add to qp table failed for um jfs, ret = %d.\n", ret);
 		goto err_add_qp_table;
 	}
 
@@ -243,7 +243,10 @@ static void delete_jfs_qp_node(struct udma_u_context *udma_ctx, struct udma_u_jf
 	udma_free_sw_db(udma_ctx, jfs->um_qp->sdb, UDMA_JFS_TYPE_DB);
 	free(jfs->um_qp->sq.wrid);
 	jfs->um_qp->sq.wrid = NULL;
-	udma_free_buf(&jfs->um_qp->buf);
+	if (jfs->um_qp->dca_wqe.bufs)
+		free(jfs->um_qp->dca_wqe.bufs);
+	else
+		udma_free_buf(&jfs->um_qp->buf);
 	free(jfs->um_qp);
 	jfs->um_qp = NULL;
 }
@@ -265,14 +268,14 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	int ret;
 
 	if (!ctx || cfg->trans_mode != URMA_TM_UM) {
-		URMA_LOG_ERR("Invalid parameter.\n");
+		UDMA_LOG_ERR("Invalid parameter.\n");
 		return NULL;
 	}
 	udma_ctx = to_udma_ctx(ctx);
 
 	jfs = (struct udma_u_jfs *)calloc(1, sizeof(*jfs));
 	if (!jfs) {
-		URMA_LOG_ERR("memory allocation failed.\n");
+		UDMA_LOG_ERR("memory allocation failed.\n");
 		return NULL;
 	}
 
@@ -289,14 +292,14 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	ret = exec_jfs_create_cmd(ctx, jfs, cfg);
 	if (ret) {
-		URMA_LOG_ERR("failed to create jfs, mode = %d, ret = %d.\n",
+		UDMA_LOG_ERR("failed to create jfs, mode = %d, ret = %d.\n",
 			     jfs->tp_mode, ret);
 		goto error_create_jfs;
 	}
 
 	ret = insert_jetty_node(udma_ctx, jfs, false, jfs->jfs_id);
 	if (ret) {
-		URMA_LOG_ERR("failed to insert jetty node, ret = %d.\n", ret);
+		UDMA_LOG_ERR("failed to insert jetty node, ret = %d.\n", ret);
 		goto error_insert;
 	}
 
@@ -323,18 +326,18 @@ urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 	struct udma_u_jfs *udma_jfs;
 
 	if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.trans_mode != URMA_TM_UM) {
-		URMA_LOG_ERR("Invalid parameter.\n");
+		UDMA_LOG_ERR("Invalid parameter.\n");
 		return URMA_EINVAL;
 	}
 
 	udma_jfs = to_udma_jfs(jfs);
 	udma_ctx = to_udma_ctx(jfs->urma_ctx);
 
-	pthread_spin_destroy(&udma_jfs->lock);
+	(void)pthread_spin_destroy(&udma_jfs->lock);
 	delete_jetty_node(udma_ctx, udma_jfs->jfs_id);
 
 	if (exec_jfs_delete_cmd(udma_ctx, udma_jfs)) {
-		URMA_LOG_ERR("delete jfs cmd failed!\n");
+		UDMA_LOG_ERR("delete jfs cmd failed!\n");
 		return URMA_FAIL;
 	}
 
@@ -461,7 +464,7 @@ static int set_rc_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 	int ret;
 
 	if (!check_inl_data_len(qp, total_len)) {
-		URMA_LOG_ERR("Invalid inline len 0x%x, max inline len 0x%x, mtu 0x%x.\n",
+		UDMA_LOG_ERR("Invalid inline len 0x%x, max inline len 0x%x, mtu 0x%x.\n",
 			     total_len, qp->max_inline_data, qp->path_mtu);
 		return EINVAL;
 	}
@@ -481,7 +484,7 @@ static int set_rc_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 
 		ret = fill_ext_sge_inl_data(qp, total_len, sg_list, num_sge);
 		if (ret) {
-			URMA_LOG_ERR("Fill extra sge fail\n");
+			UDMA_LOG_ERR("Fill extra sge fail\n");
 			return ret;
 		}
 	}
@@ -528,7 +531,7 @@ static int set_um_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 	int ret;
 
 	if (!check_inl_data_len(qp, total_len)) {
-		URMA_LOG_ERR("Invalid inline len 0x%x, max inline len 0x%x, mtu 0x%x.\n",
+		UDMA_LOG_ERR("Invalid inline len 0x%x, max inline len 0x%x, mtu 0x%x.\n",
 			     total_len, qp->max_inline_data, qp->path_mtu);
 		return EINVAL;
 	}
@@ -542,7 +545,7 @@ static int set_um_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 
 		ret = fill_ext_sge_inl_data(qp, total_len, sg_list, num_sge);
 		if (ret) {
-			URMA_LOG_ERR("Fill extra sge fail.\n");
+			UDMA_LOG_ERR("Fill extra sge fail.\n");
 			return ret;
 		}
 	}
@@ -692,7 +695,7 @@ static int udma_parse_notify_params(urma_rw_wr_t *rw,
 
 	if (rw->dst.sge) {
 		if (rw->dst.sge[1].addr % NOTIFY_OFFSET_4B_ALIGN) {
-			URMA_LOG_ERR("notify offset %uB should be aligned to 4B.\n",
+			UDMA_LOG_ERR("notify offset %uB should be aligned to 4B.\n",
 				     rw->dst.sge[1].addr);
 			return EINVAL;
 		}
@@ -735,14 +738,14 @@ static int udma_parse_rc_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_wqe *jfs_wqe,
 		return udma_parse_rc_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
 	case URMA_OPC_WRITE_NOTIFY:
 		if (udma_parse_notify_params(&wr->rw, jfs_wqe)) {
-			URMA_LOG_ERR("parse wr failed, invalid notify parameters.\n");
+			UDMA_LOG_ERR("parse wr failed, invalid notify parameters.\n");
 			return EINVAL;
 		}
 		udma_reg_write(jfs_wqe, UDMAWQE_OPCODE,
 			       UDMA_OPCODE_RDMA_WRITE_WITH_NOTIFY);
 		return udma_parse_rc_write_wr(&wr->rw, jfs_wqe, qp, is_inline);
 	default:
-		URMA_LOG_ERR("Unsupported or invalid opcode :%u.\n",
+		UDMA_LOG_ERR("Unsupported or invalid opcode :%u.\n",
 			     (uint32_t)wr->opcode);
 		return EINVAL;
 	}
@@ -763,7 +766,7 @@ static int udma_parse_um_jfs_wr(urma_jfs_wr_t *wr, struct udma_jfs_um_wqe *jfs_w
 			       (uint32_t)(wr->send.imm_data));
 		return udma_parse_um_send_wr(&wr->send, jfs_wqe, qp, is_inline);
 	default:
-		URMA_LOG_ERR("Unsupported or invalid opcode :%u.\n",
+		UDMA_LOG_ERR("Unsupported or invalid opcode :%u.\n",
 			     (uint32_t)wr->opcode);
 		return EINVAL;
 	}
@@ -795,7 +798,7 @@ static urma_status_t udma_set_um_wqe(struct udma_u_context *udma_ctx, void *wqe,
 		       qp->next_sge & (qp->ex_sge.sge_cnt - 1));
 
 	if (udma_parse_um_jfs_wr(wr, jfs_wqe, qp) != 0) {
-		URMA_LOG_ERR("Failed to parse wr.\n");
+		UDMA_LOG_ERR("Failed to parse wr.\n");
 		return URMA_EINVAL;
 	}
 
@@ -826,7 +829,7 @@ static urma_status_t udma_set_rc_wqe(void *wqe, struct udma_qp *qp,
 	jfs_wqe->msg_start_sge_idx = qp->next_sge & (qp->ex_sge.sge_cnt - 1);
 
 	if (udma_parse_rc_jfs_wr(wr, jfs_wqe, qp) != 0) {
-		URMA_LOG_ERR("Failed to parse wr.\n");
+		UDMA_LOG_ERR("Failed to parse wr.\n");
 		return URMA_EINVAL;
 	}
 
@@ -839,7 +842,7 @@ static urma_status_t udma_set_rc_wqe(void *wqe, struct udma_qp *qp,
 	return URMA_SUCCESS;
 }
 
-static int udma_wq_overflow(struct udma_wq *wq)
+static bool udma_wq_overflow(struct udma_wq *wq)
 {
 	uint32_t cur;
 
@@ -960,7 +963,7 @@ urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *q
 	if (qp->flags & HNS3_UDMA_QP_CAP_DYNAMIC_CTX_ATTACH) {
 		ret = dca_attach_qp_buf(udma_ctx, qp);
 		if (ret) {
-			URMA_LOG_ERR("failed to attach DCA for QP %lu send!\n",
+			UDMA_LOG_ERR("failed to attach DCA for QP %lu send!\n",
 				     qp->qp_num);
 			return URMA_ENOMEM;
 		}
@@ -989,12 +992,12 @@ urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
-		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
+		UDMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
 		goto out;
 	}
 
 	if (udma_wq_overflow(&udma_qp->sq)) {
-		URMA_LOG_ERR("JFS overflow.\n");
+		UDMA_LOG_ERR("JFS overflow.\n");
 		ret = URMA_ENOMEM;
 		goto out;
 	}
@@ -1028,12 +1031,12 @@ urma_status_t udma_u_post_umqp_wr(struct udma_u_context *udma_ctx,
 
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
-		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
+		UDMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
 		goto out;
 	}
 
 	if (udma_wq_overflow(&udma_qp->sq)) {
-		URMA_LOG_ERR("JFS overflow.\n");
+		UDMA_LOG_ERR("JFS overflow.\n");
 		ret = URMA_ENOMEM;
 		goto out;
 	}
@@ -1113,18 +1116,18 @@ urma_status_t udma_u_post_qp_wr_ex(struct udma_u_context *udma_ctx,
 
 	ret = check_dca_valid(udma_ctx, udma_qp);
 	if (ret) {
-		URMA_LOG_ERR("failed to check send, qpn = %lu.\n",
+		UDMA_LOG_ERR("failed to check send, qpn = %lu.\n",
 			     udma_qp->qp_num);
 		goto out;
 	}
 
 	if (wr->send.src.num_sge > udma_qp->sq.max_gs) {
 		ret = udma_qp->sq.max_gs > 0 ? URMA_EINVAL : URMA_ENOPERM;
-		URMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
+		UDMA_LOG_ERR("Invalid wr sge num, ret = 0x%x.\n", ret);
 		goto out;
 	}
 	if (udma_wq_overflow(&udma_qp->sq)) {
-		URMA_LOG_ERR("JFS overflow. pi = %u, ci = %u.\n",
+		UDMA_LOG_ERR("JFS overflow. pi = %u, ci = %u.\n",
 			     udma_qp->sq.head, udma_qp->sq.tail);
 		ret = URMA_ENOMEM;
 		goto out;

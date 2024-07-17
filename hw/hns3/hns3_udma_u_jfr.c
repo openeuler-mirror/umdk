@@ -28,13 +28,13 @@ static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
 	if (!cfg->max_sge ||
 	    !cfg->depth || cfg->depth > udma_ctx->max_jfr_wr ||
 	    cfg->max_sge > udma_ctx->max_jfr_sge) {
-		URMA_LOG_ERR("invalid jfr cfg, depth = %u, max_sge = %u.\n",
+		UDMA_LOG_ERR("invalid jfr cfg, depth = %u, max_sge = %u.\n",
 			     cfg->depth, cfg->max_sge);
 		return EINVAL;
 	}
 
 	if (cfg->trans_mode != URMA_TM_UM && cfg->trans_mode != URMA_TM_RC) {
-		URMA_LOG_ERR("The jfr trans_mode(%d) is not supported.\n", cfg->trans_mode);
+		UDMA_LOG_ERR("The jfr trans_mode(%d) is not supported.\n", cfg->trans_mode);
 		return EINVAL;
 	}
 
@@ -67,13 +67,13 @@ static int alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 	idx_que->entry_shift = udma_ilog32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
 	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
 	if (!idx_que->bitmap) {
-		URMA_LOG_ERR("failed to alloc jfr idx que bitmap.\n");
+		UDMA_LOG_ERR("failed to alloc jfr idx que bitmap.\n");
 		return ENOMEM;
 	}
 
 	buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, idx_que->entry_shift);
 	if (udma_alloc_buf(&idx_que->idx_buf, buf_size, UDMA_HW_PAGE_SIZE)) {
-		URMA_LOG_ERR("failed to alloc jfr idx que buf.\n");
+		UDMA_LOG_ERR("failed to alloc jfr idx que buf.\n");
 		udma_bitmap_free(idx_que->bitmap);
 		idx_que->bitmap = NULL;
 		return ENOMEM;
@@ -95,13 +95,13 @@ static int alloc_jfr_wqe_buf(struct udma_u_jfr *jfr)
 static int alloc_jfr_buf(struct udma_u_jfr *jfr, struct udma_u_jetty *jetty)
 {
 	if (alloc_jfr_idx_que(jfr)) {
-		URMA_LOG_ERR("failed to alloc jfr idx que.\n");
+		UDMA_LOG_ERR("failed to alloc jfr idx que.\n");
 		return ENOMEM;
 	}
 
 	if (jetty == NULL) {
 		if (alloc_jfr_wqe_buf(jfr)) {
-			URMA_LOG_ERR("failed to alloc jfr wqe buf.\n");
+			UDMA_LOG_ERR("failed to alloc jfr wqe buf.\n");
 			goto err_alloc_buf;
 		}
 	} else if (jetty->tp_mode == URMA_TM_RC) {
@@ -114,7 +114,7 @@ static int alloc_jfr_buf(struct udma_u_jfr *jfr, struct udma_u_jetty *jetty)
 
 	jfr->wrid = (uint64_t *)calloc(jfr->wqe_cnt, sizeof(*jfr->wrid));
 	if (!jfr->wrid) {
-		URMA_LOG_ERR("failed to alloc jfr wrid.\n");
+		UDMA_LOG_ERR("failed to alloc jfr wrid.\n");
 		goto err_alloc_wrid;
 	}
 
@@ -185,7 +185,7 @@ static int insert_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 
 	jfr_node = (struct udma_jfr_node *)malloc(sizeof(struct udma_jfr_node));
 	if (!jfr_node) {
-		URMA_LOG_ERR("failed to alloc jfr node.\n");
+		UDMA_LOG_ERR("failed to alloc jfr node.\n");
 		return ENOMEM;
 	}
 	jfr_node->jfr = jfr;
@@ -193,7 +193,7 @@ static int insert_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 	if (!udma_hmap_insert(&ctx->jfr_table, &jfr_node->node, jfr->urma_jfr.jfr_id.id)) {
 		free(jfr_node);
 		jfr_node = NULL;
-		URMA_LOG_ERR("failed to insert jfr_node.\n");
+		UDMA_LOG_ERR("failed to insert jfr_node.\n");
 		(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
 		return EINVAL;
 	}
@@ -219,18 +219,17 @@ static void delete_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 		}
 	}
 	(void)pthread_rwlock_unlock(&ctx->jfr_table_lock);
-	URMA_LOG_ERR("failed to find jfr node.\n");
+	UDMA_LOG_ERR("failed to find jfr node.\n");
 }
 
 int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 {
 	urma_seg_cfg_t seg_cfg = {};
-	uint32_t token = 0;
 
 	jfr->um_header_que = (struct um_header *)calloc(jfr->wqe_cnt,
 							sizeof(struct um_header));
 	if (!jfr->um_header_que) {
-		URMA_LOG_ERR("failed to alloc jfr grh head que.\n");
+		UDMA_LOG_ERR("failed to alloc jfr grh head que.\n");
 		return ENOMEM;
 	}
 
@@ -239,12 +238,11 @@ int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 	seg_cfg.flag.bs.access = URMA_ACCESS_LOCAL_WRITE;
 	seg_cfg.va = (uint64_t)jfr->um_header_que;
 	seg_cfg.len = jfr->wqe_cnt * UDMA_JFR_GRH_HEAD_SZ;
-	seg_cfg.token_value.token = token;
 
 	jfr->um_header_seg = udma_u_register_seg(ctx, &seg_cfg);
 	if (!jfr->um_header_seg) {
 		free(jfr->um_header_que);
-		URMA_LOG_ERR("failed to register seg for grh head que.\n");
+		UDMA_LOG_ERR("failed to register seg for grh head que.\n");
 		return ENOMEM;
 	}
 
@@ -287,18 +285,18 @@ urma_jfr_t *udma_u_create_jfr_rq(urma_context_t *ctx, urma_jfr_cfg_t *cfg,
 		goto err_alloc_db_rq;
 
 	if (exec_jfr_create_cmd(ctx, jfr, cfg, jetty)) {
-		URMA_LOG_ERR("ubcore create jfr failed.\n");
+		UDMA_LOG_ERR("ubcore create jfr failed.\n");
 		goto err_create_jfr_rq;
 	}
 
 	if (insert_jfr_node(udma_ctx, jfr)) {
-		URMA_LOG_ERR("insert jfr node failed.\n");
+		UDMA_LOG_ERR("insert jfr node failed.\n");
 		goto err_insert_jfr_rq;
 	}
 
 	if (cfg->trans_mode == URMA_TM_UM) {
 		if (alloc_um_header_que(ctx, jfr)) {
-			URMA_LOG_ERR("alloc grh que failed.\n");
+			UDMA_LOG_ERR("alloc grh que failed.\n");
 			goto err_alloc_um_header;
 		}
 	}
@@ -314,7 +312,7 @@ err_create_jfr_rq:
 err_alloc_db_rq:
 	free_jfr_buf(jfr);
 err_alloc_buf_rq:
-	pthread_spin_destroy(&jfr->lock);
+	(void)pthread_spin_destroy(&jfr->lock);
 err_init_lock_rq:
 	free(jfr);
 
@@ -347,23 +345,23 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		goto err_alloc_db;
 
 	if (exec_jfr_create_cmd(ctx, jfr, cfg, NULL)) {
-		URMA_LOG_ERR("ubcore create jfr failed.\n");
+		UDMA_LOG_ERR("ubcore create jfr failed.\n");
 		goto err_create_jfr;
 	}
 
 	if (insert_jfr_node(udma_ctx, jfr)) {
-		URMA_LOG_ERR("insert jfr node failed.\n");
+		UDMA_LOG_ERR("insert jfr node failed.\n");
 		goto err_insert_jfr;
 	}
 
 	if (insert_jetty_node(udma_ctx, jfr, false, jfr->jfrn)) {
-		URMA_LOG_ERR("insert jetty node failed.\n");
+		UDMA_LOG_ERR("insert jetty node failed.\n");
 		goto err_insert_jetty;
 	}
 
 	if (cfg->trans_mode == URMA_TM_UM) {
 		if (alloc_um_header_que(ctx, jfr)) {
-			URMA_LOG_ERR("alloc grh que failed.\n");
+			UDMA_LOG_ERR("alloc grh que failed.\n");
 			goto err_alloc_um_header;
 		}
 	}
@@ -381,7 +379,7 @@ err_create_jfr:
 err_alloc_db:
 	free_jfr_buf(jfr);
 err_alloc_buf:
-	pthread_spin_destroy(&jfr->lock);
+	(void)pthread_spin_destroy(&jfr->lock);
 err_init_lock:
 	free(jfr);
 
@@ -402,13 +400,13 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 		delete_jetty_node(udma_ctx, udma_jfr->jfrn);
 	ret = urma_cmd_delete_jfr(jfr);
 	if (ret) {
-		URMA_LOG_ERR("urma_cmd_delete_jfr failed, ret:%d.\n", ret);
+		UDMA_LOG_ERR("urma_cmd_delete_jfr failed, ret:%d.\n", ret);
 		return URMA_FAIL;
 	}
 
 	udma_free_sw_db(udma_ctx, udma_jfr->db, UDMA_JFR_TYPE_DB);
 	free_jfr_buf(udma_jfr);
-	pthread_spin_destroy(&udma_jfr->lock);
+	(void)pthread_spin_destroy(&udma_jfr->lock);
 	free(udma_jfr);
 
 	return URMA_SUCCESS;
@@ -426,12 +424,12 @@ static inline urma_status_t check_post_jfr_valid(struct udma_u_jfr *jfr,
 						 uint32_t max_sge)
 {
 	if (udma_jfrwq_overflow(jfr)) {
-		URMA_LOG_ERR("failed to check jfrwq status, jfrwq is full.\n");
+		UDMA_LOG_ERR("failed to check jfrwq status, jfrwq is full.\n");
 		return URMA_ENOMEM;
 	}
 
 	if (wr->src.num_sge > max_sge) {
-		URMA_LOG_ERR("failed to check sge, wr->src.num_sge = %d, max_sge = %u.\n",
+		UDMA_LOG_ERR("failed to check sge, wr->src.num_sge = %d, max_sge = %u.\n",
 			     wr->src.num_sge, max_sge);
 		return URMA_EINVAL;
 	}
@@ -517,7 +515,7 @@ urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 	max_sge = udma_jfr->user_max_sge;
 	ret = check_post_jfr_valid(udma_jfr, wr, max_sge);
 	if (ret) {
-		URMA_LOG_ERR("failed to check post, jfrn = %u.\n",
+		UDMA_LOG_ERR("failed to check post, jfrn = %u.\n",
 			     udma_jfr->urma_jfr.jfr_id.id);
 		return ret;
 	}
@@ -546,14 +544,14 @@ urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 	max_sge = udma_jfr->user_max_sge;
 	ret = check_post_jfr_valid(udma_jfr, wr, max_sge);
 	if (unlikely(ret)) {
-		URMA_LOG_ERR("failed to check post, jfrn = %u.\n",
+		UDMA_LOG_ERR("failed to check post, jfrn = %u.\n",
 			     udma_jfr->urma_jfr.jfr_id.id);
 		return ret;
 	}
 
 	ret = get_wqe_idx(udma_jfr, &wqe_idx);
 	if (unlikely(ret)) {
-		URMA_LOG_ERR("failed to get jfr wqe idx.\n");
+		UDMA_LOG_ERR("failed to get jfr wqe idx.\n");
 		return ret;
 	}
 	wqe = get_jfr_wqe(udma_jfr, wqe_idx);
@@ -636,7 +634,7 @@ urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 	udma_target_jfr = (struct udma_u_target_jetty *)
 			  calloc(1, sizeof(struct udma_u_target_jetty));
 	if (!udma_target_jfr) {
-		URMA_LOG_ERR("udma_target_jfr alloc failed.\n");
+		UDMA_LOG_ERR("udma_target_jfr alloc failed.\n");
 		return NULL;
 	}
 
@@ -650,7 +648,7 @@ urma_target_jetty_t *udma_u_import_jfr(urma_context_t *ctx,
 	udma_set_udata(&udata, NULL, 0, NULL, 0);
 	ret = urma_cmd_import_jfr(ctx, tjfr, &cfg, &udata);
 	if (ret) {
-		URMA_LOG_ERR("import jfr failed.\n");
+		UDMA_LOG_ERR("import jfr failed.\n");
 		free(udma_target_jfr);
 		return NULL;
 	}
@@ -665,14 +663,14 @@ urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr)
 	int ret;
 
 	if (udma_target_jfr->refcnt > 1) {
-		URMA_LOG_ERR("the target jfr is still being used, id = %d.\n",
+		UDMA_LOG_ERR("the target jfr is still being used, id = %d.\n",
 			     target_jfr->id.id);
 		return URMA_FAIL;
 	}
 
 	ret = urma_cmd_unimport_jfr(target_jfr);
 	if (ret != 0) {
-		URMA_LOG_ERR("unimport jfr failed.\n");
+		UDMA_LOG_ERR("unimport jfr failed.\n");
 		return URMA_FAIL;
 	}
 	free(udma_target_jfr);
@@ -687,25 +685,25 @@ urma_status_t udma_u_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
 	int ret;
 
 	if (attr->mask & JFR_STATE) {
-		URMA_LOG_ERR("JFR status change is not supported.\n");
+		UDMA_LOG_ERR("JFR status change is not supported.\n");
 		return URMA_FAIL;
 	}
 
 	if (!(attr->mask & JFR_RX_THRESHOLD)) {
-		URMA_LOG_ERR("JFR threshold mask is not set.\n");
+		UDMA_LOG_ERR("JFR threshold mask is not set.\n");
 		return URMA_FAIL;
 	}
 
 	jfr_limit = attr->rx_threshold;
 	if (jfr_limit > udma_jfr->wqe_cnt) {
-		URMA_LOG_ERR("JFR limit(%u) larger than wqe num(%u).\n",
+		UDMA_LOG_ERR("JFR limit(%u) larger than wqe num(%u).\n",
 			     jfr_limit, udma_jfr->wqe_cnt);
 		return URMA_FAIL;
 	}
 
 	ret = urma_cmd_modify_jfr(jfr, attr, NULL);
 	if (ret != 0) {
-		URMA_LOG_ERR("modify jfr failed.\n");
+		UDMA_LOG_ERR("modify jfr failed.\n");
 		return URMA_FAIL;
 	}
 

@@ -13,7 +13,7 @@
  *
  */
 
-#include "urma_log.h"
+#include "hns3_udma_u_log.h"
 #include "urma_provider.h"
 #include "hns3_udma_u_segment.h"
 
@@ -24,7 +24,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	struct udma_u_seg *seg;
 
 	if (seg_cfg->flag.bs.access >= HNS3_URMA_SEG_ACCESS_GUARD) {
-		URMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
+		UDMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
 			     seg_cfg->flag.bs.access);
 		return NULL;
 	}
@@ -47,7 +47,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	seg->urma_seg.urma_ctx = ctx;
 
 	if (urma_cmd_register_seg(ctx, &seg->urma_seg, seg_cfg, &udata) != 0) {
-		URMA_LOG_ERR("failed to register segment.\n");
+		UDMA_LOG_ERR("failed to register segment.\n");
 		free(seg);
 		return NULL;
 	}
@@ -61,13 +61,13 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 	struct udma_u_seg *seg;
 
 	if (target_seg == NULL) {
-		URMA_LOG_ERR("Invalid parameter.\n");
+		UDMA_LOG_ERR("Invalid parameter.\n");
 		return URMA_FAIL;
 	}
 	seg = CONTAINER_OF_FIELD(target_seg, struct udma_u_seg, urma_seg);
 
 	if (urma_cmd_unregister_seg(target_seg) != 0) {
-		URMA_LOG_ERR("failed to unregister segment.\n");
+		UDMA_LOG_ERR("failed to unregister segment.\n");
 		ret = URMA_FAIL;
 	}
 	free(seg);
@@ -83,7 +83,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
 	tseg = (urma_target_seg_t *)calloc(1, sizeof(urma_target_seg_t));
 	if (!tseg) {
-		URMA_LOG_ERR("target seg alloc failed.\n");
+		UDMA_LOG_ERR("target seg alloc failed.\n");
 		return NULL;
 	}
 
