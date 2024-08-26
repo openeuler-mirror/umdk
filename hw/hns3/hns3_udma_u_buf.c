@@ -361,7 +361,7 @@ static int exec_shrink_dca_mem_cmd(struct udma_u_context *ctx,
 	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-int exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
+void exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
 				struct udma_dca_dereg_attr *attr)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
@@ -371,12 +371,12 @@ int exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
 
 	in.opcode = (uint32_t)UDMA_DCA_MEM_DEREG;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_shrink_attr);
+	in.len = (uint32_t)sizeof(struct udma_dca_dereg_attr);
 
-	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
+	(void)urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-int exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
+void exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
 			    struct udma_dca_detach_attr *attr)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
@@ -386,9 +386,9 @@ int exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
 
 	in.opcode = (uint32_t)UDMA_DCA_MEM_DETACH;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_shrink_attr);
+	in.len = (uint32_t)sizeof(struct udma_dca_detach_attr);
 
-	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
+	(void)urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
 void udma_u_shrink_dca_mem(struct udma_u_context *ctx)

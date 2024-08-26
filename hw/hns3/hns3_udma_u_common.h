@@ -72,7 +72,7 @@
 #define __bf_shf(x) (__builtin_ffsll(x) - 1)
 
 #define BUILD_ASSERT(cond) \
-	((void)sizeof(char[1 - 2 * !(cond)]))
+	do { (void)sizeof(char[1 - 2 * !(cond)]); } while (0)
 
 #define BUILD_ASSERT_OR_ZERO(cond) \
 	(sizeof(char [1 - 2 * !(cond)]) - 1)
@@ -229,14 +229,14 @@ struct udma_wqe_data_seg {
 #define UDMA_DB_CONS_IDX_M GENMASK(23, 0)
 #define UDMA_DB_PROD_IDX_M GENMASK(23, 0)
 
-static inline uint64_t roundup_pow_of_two(uint64_t n)
-{
-	return n == 1 ? 1 : 1ULL << ilog64(n - 1);
-}
-
 static inline unsigned long align(unsigned long val, unsigned long align)
 {
 	return (val + align - 1) & ~(align - 1);
+}
+
+static inline uint64_t roundup_pow_of_two(uint64_t n)
+{
+	return n == 1 ? 1 : 1ULL << ilog64(n - 1);
 }
 
 #define udma_hw_page_align(x)	align(x, sysconf(_SC_PAGESIZE))
@@ -440,100 +440,7 @@ static inline void udma_hmap_destroy(struct udma_hmap *hmap)
 	hmap->bucket = NULL;
 }
 
-#define HASH_OFFSET_B0 8
-#define HASH_OFFSET_B1 16
-
-#define HASH_SEED_1	0x85ebca6b
-#define HASH_SEED_2	0xc2b2ae35
-#define HASH_C1		0xcc9e2d51
-#define HASH_C2		0x1b873593
-#define HASH_N		0xe6546b64
-#define HASH_R1		15
-#define HASH_R2		13
-#define HASH_M		5
 #define EID_OFFSET	32
-
-static inline uint32_t udma_mhash_finish(uint32_t hash_value)
-{
-	uint32_t ret_val = hash_value;
-
-	ret_val ^= ret_val >> HASH_OFFSET_B1;
-	ret_val *= HASH_SEED_1;
-	ret_val ^= ret_val >> HASH_R2;
-	ret_val *= HASH_SEED_2;
-	ret_val ^= ret_val >> HASH_OFFSET_B1;
-
-	return ret_val;
-}
-
-static inline uint32_t udma_hash_finish(uint32_t hash_value, uint32_t final)
-{
-	return udma_mhash_finish(hash_value ^ final);
-}
-
-static inline uint32_t udma_hash_rot(uint32_t a, uint32_t b)
-{
-	uint32_t base = 32;
-
-	return (a << b) | (a >> (base - b));
-}
-
-static inline uint32_t udma_mhash_add__(uint32_t hash_value, uint32_t data)
-{
-	/* zero-valued 'data' will not change the 'hash' value */
-	uint32_t data_val = data;
-
-	if (data == 0)
-		return hash_value;
-
-	data_val *= HASH_C1;
-	data_val = udma_hash_rot(data_val, HASH_R1);
-	data_val *= HASH_C2;
-
-	return hash_value ^ data_val;
-}
-
-static inline uint32_t udma_mhash_add(uint32_t hash_value, uint32_t data)
-{
-	uint32_t local_hash_value = hash_value;
-
-	local_hash_value = udma_mhash_add__(local_hash_value, data);
-	local_hash_value = udma_hash_rot(local_hash_value, HASH_R2);
-	return local_hash_value * HASH_M + HASH_N;
-}
-
-static inline uint32_t udma_hash_add(uint32_t hash_value, uint32_t data)
-{
-	return udma_mhash_add(hash_value, data);
-}
-
-static inline uint32_t udma_hash_add64(uint32_t hash_value, uint64_t data)
-{
-	return udma_hash_add(udma_hash_add(hash_value, (uint32_t)data),
-			     data >> BITS_PER_UINT32);
-}
-
-static inline uint32_t udma_hash_uint64_base(const uint64_t key,
-					     const uint32_t base)
-{
-	return udma_hash_finish(udma_hash_add64(base, key), HASH_OFFSET_B0);
-}
-
-static inline uint32_t udma_hash_uint64(const uint64_t key)
-{
-	return udma_hash_uint64_base(key, 0);
-}
-
-static inline uint32_t udma_get_tgt_hash(const urma_jetty_id_t *id)
-{
-	uint64_t idx;
-
-	idx = id->eid.in4.addr;
-	idx = idx << EID_OFFSET;
-	idx |= id->id;
-
-	return udma_hash_uint64(idx);
-}
 
 uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt);
 void udma_bitmap_free(uint64_t *bitmap);

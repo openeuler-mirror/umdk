@@ -13,6 +13,7 @@
  *
  */
 
+#include "urma_types.h"
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_tp.h"
@@ -25,8 +26,8 @@ urma_status_t verify_jfs_init_attr(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	if (!cfg->depth || cfg->depth > udma_ctx->max_jfs_wr ||
 	    cfg->max_sge > udma_ctx->max_jfs_sge) {
-		UDMA_LOG_ERR("Invalid jfs cfg: sq depth: %u, sq max_sge: %u.\n",
-			     cfg->depth, cfg->max_sge);
+		UDMA_LOG_ERR("Invalid jfs cfg: sq depth: %u, max_jfs_wr:%u, sq max_sge: %u, udma_ctx->max_jfs_sge: %u.\n",
+			     cfg->depth, udma_ctx->max_jfs_wr, cfg->max_sge, udma_ctx->max_jfs_sge);
 		return URMA_EINVAL;
 	}
 
@@ -474,14 +475,16 @@ urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty)
 {
 	struct udma_u_context *udma_ctx = to_udma_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_jetty(jetty);
+	int ret;
+
+	ret = exec_jetty_delete_cmd(udma_ctx, udma_jetty);
+	if (ret) {
+		UDMA_LOG_ERR("urma_cmd_delete_jetty failed, ret:%d.\n", ret);
+		return URMA_FAIL;
+	}
 
 	delete_jetty_node(udma_ctx, udma_jetty->urma_jetty.jetty_id.id);
 	(void)pthread_spin_destroy(&udma_jetty->lock);
-
-	if (exec_jetty_delete_cmd(udma_ctx, udma_jetty)) {
-		UDMA_LOG_ERR("jetty delete failed!\n");
-		return URMA_FAIL;
-	}
 
 	if (!udma_jetty->share_jfr) {
 		udma_u_delete_jfr(&udma_jetty->udma_jfr->urma_jfr);
@@ -769,6 +772,7 @@ static urma_status_t udma_u_post_jetty_rc_wr(struct udma_u_context *udma_ctx,
 
 	if (likely(nreq)) {
 		udma_qp->sq.head += nreq;
+		*udma_qp->sdb = udma_qp->sq.head;
 		udma_u_ring_sq_doorbell(udma_ctx, udma_qp, wqe, nreq);
 	}
 

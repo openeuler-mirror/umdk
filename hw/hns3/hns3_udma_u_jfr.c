@@ -14,12 +14,12 @@
  */
 
 #include <malloc.h>
-#include <string.h>
 #include "hns3_udma_u_common.h"
+#include "hns3_udma_u_abi.h"
 #include "hns3_udma_u_db.h"
 #include "hns3_udma_u_jfs.h"
-#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_jfr.h"
 
 static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
@@ -35,6 +35,11 @@ static int verify_jfr_init_attr(struct udma_u_context *udma_ctx,
 
 	if (cfg->trans_mode != URMA_TM_UM && cfg->trans_mode != URMA_TM_RC) {
 		UDMA_LOG_ERR("The jfr trans_mode(%d) is not supported.\n", cfg->trans_mode);
+		return EINVAL;
+	}
+
+	if (cfg->trans_mode == URMA_TM_UM && cfg->max_sge + 1 > udma_ctx->max_jfr_sge) {
+		UDMA_LOG_ERR("invalid UM max sge %u.\n", cfg->max_sge);
 		return EINVAL;
 	}
 
@@ -72,7 +77,7 @@ static int alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 	}
 
 	buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, idx_que->entry_shift);
-	if (udma_alloc_buf(&idx_que->idx_buf, buf_size, UDMA_HW_PAGE_SIZE)) {
+	if (udma_alloc_buf(&idx_que->idx_buf, buf_size, sysconf(_SC_PAGESIZE))) {
 		UDMA_LOG_ERR("failed to alloc jfr idx que buf.\n");
 		udma_bitmap_free(idx_que->bitmap);
 		idx_que->bitmap = NULL;
@@ -89,7 +94,7 @@ static int alloc_jfr_wqe_buf(struct udma_u_jfr *jfr)
 {
 	uint32_t buf_size = to_udma_hem_entries_size(jfr->wqe_cnt, jfr->wqe_shift);
 
-	return udma_alloc_buf(&jfr->wqe_buf, buf_size, UDMA_HW_PAGE_SIZE);
+	return udma_alloc_buf(&jfr->wqe_buf, buf_size, sysconf(_SC_PAGESIZE));
 }
 
 static int alloc_jfr_buf(struct udma_u_jfr *jfr, struct udma_u_jetty *jetty)
@@ -222,7 +227,7 @@ static void delete_jfr_node(struct udma_u_context *ctx, struct udma_u_jfr *jfr)
 	UDMA_LOG_ERR("failed to find jfr node.\n");
 }
 
-int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
+static int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 {
 	urma_seg_cfg_t seg_cfg = {};
 
@@ -249,7 +254,7 @@ int alloc_um_header_que(urma_context_t *ctx, struct udma_u_jfr *jfr)
 	return 0;
 }
 
-void free_um_header_que(struct udma_u_jfr *jfr)
+static void free_um_header_que(struct udma_u_jfr *jfr)
 {
 	udma_u_unregister_seg(jfr->um_header_seg);
 	jfr->um_header_seg = NULL;
@@ -392,17 +397,18 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 	struct udma_u_jfr *udma_jfr = to_udma_jfr(jfr);
 	int ret;
 
+	ret = urma_cmd_delete_jfr(jfr);
+	if (ret) {
+		UDMA_LOG_ERR("urma_cmd_delete_jfr failed, ret:%d.\n", ret);
+		return URMA_FAIL;
+	}
+
 	if (udma_jfr->trans_mode == URMA_TM_UM)
 		free_um_header_que(udma_jfr);
 
 	delete_jfr_node(udma_ctx, udma_jfr);
 	if (udma_jfr->share_jfr)
 		delete_jetty_node(udma_ctx, udma_jfr->jfrn);
-	ret = urma_cmd_delete_jfr(jfr);
-	if (ret) {
-		UDMA_LOG_ERR("urma_cmd_delete_jfr failed, ret:%d.\n", ret);
-		return URMA_FAIL;
-	}
 
 	udma_free_sw_db(udma_ctx, udma_jfr->db, UDMA_JFR_TYPE_DB);
 	free_jfr_buf(udma_jfr);
@@ -537,8 +543,8 @@ urma_status_t post_recv_one_rq(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 
 urma_status_t post_recv_one(struct udma_u_jfr *udma_jfr, urma_jfr_wr_t *wr)
 {
-	urma_status_t ret = URMA_SUCCESS;
 	uint32_t wqe_idx, max_sge;
+	urma_status_t ret;
 	void *wqe;
 
 	max_sge = udma_jfr->user_max_sge;

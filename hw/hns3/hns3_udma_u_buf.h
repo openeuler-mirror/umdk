@@ -45,9 +45,9 @@ static inline void *dca_mem_addr(struct udma_u_dca_mem *dca_mem,
 }
 
 void udma_u_shrink_dca_mem(struct udma_u_context *ctx);
-int exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
+void exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
 			    struct udma_dca_detach_attr *attr);
-int exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
+void exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
 				struct udma_dca_dereg_attr *attr);
 bool udma_dca_start_post(struct udma_u_dca_ctx *ctx, uint32_t dcan);
 void udma_dca_stop_post(struct udma_u_dca_ctx *ctx, uint32_t dcan);

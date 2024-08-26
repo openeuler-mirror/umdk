@@ -373,7 +373,7 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx, bool is_jetty,
 			      urma_jfs_cfg_t *jfs_cfg, urma_jfr_cfg_t *jfr_cfg);
 void udma_u_ring_sq_doorbell(struct udma_u_context *udma_ctx,
 			     struct udma_qp *udma_qp, void *wqe, uint32_t num);
-int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+void exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp);
 urma_status_t check_dca_valid(struct udma_u_context *udma_ctx, struct udma_qp *qp);
 int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);

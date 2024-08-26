@@ -16,16 +16,13 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <ctype.h>
-#include <stdio.h>
 #include <stdint.h>
 #include "hns3_udma_u_jfr.h"
 #include "hns3_udma_u_jfc.h"
 #include "hns3_udma_u_jfs.h"
 #include "hns3_udma_u_tp.h"
-#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_segment.h"
-#include "hns3_udma_u_buf.h"
+#include "hns3_udma_u_jetty.h"
 #include "hns3_udma_u_user_ctl.h"
 #include "hns3_udma_u_provider_ops.h"
 
@@ -76,6 +73,8 @@ static urma_ops_t g_udma_u_ops = {
 static urma_match_entry_t match_table[] = {
 	{PCI_VENDOR_ID_HUAWEI, HNS3_DEV_ID_UDMA_OVER_UBL},
 	{PCI_VENDOR_ID_HUAWEI, HNS3_DEV_ID_UDMA},
+	{PCI_VENDOR_ID_HUAWEI, HNS3_DEV_ID_UDMA_OVER_UBL_VF},
+	{PCI_VENDOR_ID_HUAWEI, HNS3_DEV_ID_UDMA_OVER_UBL_TMP_VF},
 	{}
 };
 
@@ -184,7 +183,7 @@ static void udma_u_uninit_context(struct udma_u_context *udma_u_ctx)
 	udma_u_free_db(udma_u_ctx);
 }
 
-void udma_cleanup_dca_mem(struct udma_u_context *ctx)
+static void udma_cleanup_dca_mem(struct udma_u_context *ctx)
 {
 	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
 	struct udma_dca_dereg_attr dereg_attr = {};
