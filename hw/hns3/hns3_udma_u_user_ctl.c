@@ -27,8 +27,8 @@ static int udma_u_post_jfs_ex(urma_jfs_t *jfs, urma_jfs_wr_t *wr,
 {
 	urma_status_t ret = URMA_SUCCESS;
 	struct udma_u_context *udma_ctx;
+	struct udma_qp *udma_qp = NULL;
 	struct udma_u_jfs *udma_jfs;
-	struct udma_qp *udma_qp;
 	urma_jfs_wr_t *it;
 
 	udma_jfs = to_udma_jfs(jfs);
@@ -71,7 +71,7 @@ static int udma_u_post_jetty_ex(urma_jetty_t *jetty, urma_jfs_wr_t *wr,
 {
 	struct udma_u_context *udma_ctx;
 	struct udma_u_jetty *udma_jetty;
-	struct udma_qp *udma_qp;
+	struct udma_qp *udma_qp = NULL;
 	urma_jfs_wr_t *it;
 	urma_status_t ret;
 
@@ -111,16 +111,22 @@ out:
 static int udma_u_post_send_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 			       urma_user_ctl_out_t *out)
 {
-	struct hns3_udma_post_and_ret_db_out ex_out;
-	struct hns3_udma_post_and_ret_db_in ex_in;
+	struct hns3_udma_post_and_ret_db_out ex_out = {};
+	struct hns3_udma_post_and_ret_db_in ex_in = {};
 	int ret;
 
-	if (!in->addr || !out->addr) {
-		UDMA_LOG_ERR("input is invalid.\n");
+	if (in->len < sizeof(struct hns3_udma_post_and_ret_db_in)) {
+		UDMA_LOG_ERR("Invalid input: len %u.\n", in->len);
 		return EINVAL;
 	}
+
+	if (!out->addr || out->len < sizeof(struct hns3_udma_post_and_ret_db_out)) {
+		UDMA_LOG_ERR("Invalid output: len %u or addr is null.\n", out->len);
+		return EINVAL;
+	}
+
 	memcpy(&ex_in, (void *)in->addr,
-	       min(in->len, sizeof(struct hns3_udma_post_and_ret_db_in)));
+	       sizeof(struct hns3_udma_post_and_ret_db_in));
 	if (!ex_in.jfs || !ex_in.wr) {
 		UDMA_LOG_ERR("jetty or wr is invalid.\n");
 		return EINVAL;
@@ -135,7 +141,7 @@ static int udma_u_post_send_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		goto out;
 	}
 	memcpy((void *)out->addr, &ex_out,
-	       min(out->len, sizeof(struct hns3_udma_post_and_ret_db_out)));
+	       sizeof(struct hns3_udma_post_and_ret_db_out));
 out:
 	return ret;
 }
@@ -191,7 +197,7 @@ static int udma_u_config_poe_channel(urma_context_t *ctx,
 				     urma_user_ctl_in_t *in,
 				     urma_user_ctl_out_t *out)
 {
-	struct hns3_udma_config_poe_channel_in poe_in;
+	struct hns3_udma_config_poe_channel_in poe_in = {};
 	int ret;
 
 	if ((in->len < sizeof(struct hns3_udma_config_poe_channel_in)) || (in->addr == NULL)) {
@@ -247,18 +253,28 @@ static int query_poe_channel(urma_context_t *ctx, uint8_t poe_channel,
 static int udma_u_query_poe_channel(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				    urma_user_ctl_out_t *out)
 {
+	struct hns3_udma_poe_init_attr *init_attr;
 	uint8_t poe_channel;
-	int ret;
 
 	if (in->len < sizeof(uint8_t)) {
 		UDMA_LOG_ERR("Invalid input: len %u\n", in->len);
 		return EINVAL;
 	}
-	memcpy(&poe_channel, (void *)in->addr, sizeof(uint8_t));
-	ret = query_poe_channel(ctx, poe_channel,
-				(struct hns3_udma_poe_init_attr *)out->addr);
 
-	return ret;
+	if (!out->addr || out->len < sizeof(struct hns3_udma_user_ctl_query_poe_channel_out)) {
+		UDMA_LOG_ERR("Invalid output: len %u or addr is null\n", out->len);
+		return EINVAL;
+	}
+
+	init_attr = ((struct hns3_udma_user_ctl_query_poe_channel_out *)out->addr)->init_attr;
+	if (init_attr == NULL) {
+		UDMA_LOG_ERR("Invalid input: init attr is null\n");
+		return EINVAL;
+	}
+
+	memcpy(&poe_channel, (void *)in->addr, sizeof(uint8_t));
+
+	return query_poe_channel(ctx, poe_channel, init_attr);
 }
 
 static struct udma_qp *find_jfs_qp(struct udma_u_jfs *jfs)
@@ -348,7 +364,7 @@ static int update_jetty_ci(urma_jetty_t *jetty, uint32_t wqe_cnt)
 static int udma_u_update_queue_ci(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				  urma_user_ctl_out_t *out)
 {
-	struct hns3_udma_update_queue_ci_in update_in;
+	struct hns3_udma_update_queue_ci_in update_in = {};
 	int ret;
 
 	if (in->len < sizeof(struct hns3_udma_update_queue_ci_in)) {
@@ -387,8 +403,7 @@ static int udma_u_check_notify_attr(struct hns3_udma_jfc_notify_init_attr *notif
 	}
 
 	if (notify_attr->notify_addr & HNS3_UDMA_ADDR_4K_MASK) {
-		UDMA_LOG_ERR("Notify addr should be aligned to 4k.\n",
-			     notify_attr->notify_addr);
+		UDMA_LOG_ERR("Notify addr should be aligned to 4k.\n");
 		return EINVAL;
 	}
 
@@ -457,12 +472,17 @@ static urma_jfc_t *create_jfc_ex(urma_context_t *ctx,
 static int udma_u_create_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				urma_user_ctl_out_t *out)
 {
-	struct hns3_udma_create_jfc_ex_in cfg_ex;
+	struct hns3_udma_create_jfc_ex_in cfg_ex = {};
 	urma_jfc_t *jfc;
 	int ret;
 
 	if (in->len < sizeof(struct hns3_udma_create_jfc_ex_in)) {
 		UDMA_LOG_ERR("Invalid input: len %u\n", in->len);
+		return EINVAL;
+	}
+
+	if (!out->addr || out->len < sizeof(urma_jfc_t *)) {
+		UDMA_LOG_ERR("Invalid output: len %u or addr is null\n", out->len);
 		return EINVAL;
 	}
 	memcpy(&cfg_ex, (void *)in->addr, sizeof(struct hns3_udma_create_jfc_ex_in));
@@ -491,7 +511,7 @@ static int udma_u_delete_jfc_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	urma_status_t ret;
 	urma_jfc_t *jfc;
 
-	if ((in->len < sizeof(struct hns3_udma_user_ctl_delete_jfc_ex_in)) || (!in->addr)) {
+	if ((in->len < sizeof(struct hns3_udma_user_ctl_delete_jfc_ex_in)) || (in->addr == NULL)) {
 		UDMA_LOG_ERR("Invalid input: len %u or addr is NULL\n", in->len);
 		return EINVAL;
 	}
@@ -551,7 +571,7 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	struct udma_u_jfs *udma_jfs;
 	struct udma_qp *qp;
 
-	if ((in->len < sizeof(struct hns3_u_udma_get_jetty_info_in)) || (!in->addr) ||
+	if ((in->len < sizeof(struct hns3_u_udma_get_jetty_info_in)) || (in->addr == NULL) ||
 		(out->addr == NULL) || (out->len < sizeof(struct hns3_u_udma_get_jetty_info_out))) {
 		UDMA_LOG_ERR("Invalid input for getting jetty info.\n");
 		return EINVAL;
@@ -571,7 +591,7 @@ int udma_u_get_jetty_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		udma_jetty = to_udma_jetty(info_in->jetty);
 		if (udma_jetty->tp_mode == URMA_TM_RC)
 			qp = udma_jetty->rc_node->qp;
-		else if (udma_jetty->tp_mode == URMA_TM_UM)
+		else
 			qp = udma_jetty->um_qp;
 	} else {
 		UDMA_LOG_ERR("Invalid parameter for query jetty/jfs info.\n");
@@ -608,16 +628,11 @@ static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
 int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		    urma_user_ctl_out_t *out)
 {
-	if ((ctx == NULL) || (in == NULL) || (out == NULL)) {
-		UDMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
-		return EINVAL;
-	}
-
 	if (in->opcode >= HNS3_UDMA_U_USER_CTL_MAX) {
 		UDMA_LOG_ERR("invalid opcode: 0x%x.\n", (int)in->opcode);
 		return URMA_ENOPERM;
 	}
-	if ((in->opcode != HNS3_UDMA_U_USER_CTL_QUERY_HW_ID) && (!in->addr)) {
+	if ((in->opcode != HNS3_UDMA_U_USER_CTL_QUERY_HW_ID) && (in->addr == NULL)) {
 		UDMA_LOG_ERR("input addr invalid in urma_user_ctl.\n");
 		return EINVAL;
 	}

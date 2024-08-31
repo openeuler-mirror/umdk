@@ -13,7 +13,6 @@
  *
  */
 
-#include <string.h>
 #include <linux/kernel.h>
 #include "hns3_udma_u_provider_ops.h"
 #include "hns3_udma_u_common.h"
@@ -124,7 +123,7 @@ static urma_status_t alloc_qp_wqe(struct udma_u_context *udma_ctx,
 	ret = alloc_qp_wqe_buf(udma_ctx, qp, jfs_cfg->trans_mode != URMA_TM_UM,
 			       jfr_cfg);
 	if (ret) {
-		UDMA_LOG_ERR("alloc_jetty_wqe_buf failed.\n");
+		UDMA_LOG_ERR("failed to alloc jetty wqe buf.\n");
 		free(qp->sq.wrid);
 		qp->sq.wrid = NULL;
 	}
@@ -154,7 +153,7 @@ struct udma_qp *udma_alloc_qp(struct udma_u_context *udma_ctx, bool is_jetty,
 
 	ret = alloc_qp_wqe(udma_ctx, qp, jfs_cfg, jfr_cfg);
 	if (ret) {
-		UDMA_LOG_ERR("alloc_qp_wqe failed.\n");
+		UDMA_LOG_ERR("alloc qp wqe failed.\n");
 		goto err_alloc_sw_db;
 	}
 	qp->is_jetty = is_jetty;
@@ -322,24 +321,23 @@ error:
 
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 {
-	struct udma_u_context *udma_ctx;
-	struct udma_u_jfs *udma_jfs;
+	struct udma_u_context *udma_ctx = to_udma_ctx(jfs->urma_ctx);
+	struct udma_u_jfs *udma_jfs = to_udma_jfs(jfs);
+	int ret;
 
-	if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.trans_mode != URMA_TM_UM) {
+	if (jfs->jfs_cfg.trans_mode != URMA_TM_UM) {
 		UDMA_LOG_ERR("Invalid parameter.\n");
 		return URMA_EINVAL;
 	}
 
-	udma_jfs = to_udma_jfs(jfs);
-	udma_ctx = to_udma_ctx(jfs->urma_ctx);
+	ret = exec_jfs_delete_cmd(udma_ctx, udma_jfs);
+	if (ret) {
+		UDMA_LOG_ERR("urma_cmd_delete_jfs failed, ret:%d.\n", ret);
+		return URMA_FAIL;
+	}
 
 	(void)pthread_spin_destroy(&udma_jfs->lock);
 	delete_jetty_node(udma_ctx, udma_jfs->jfs_id);
-
-	if (exec_jfs_delete_cmd(udma_ctx, udma_jfs)) {
-		UDMA_LOG_ERR("delete jfs cmd failed!\n");
-		return URMA_FAIL;
-	}
 
 	delete_jfs_qp_node(udma_ctx, udma_jfs);
 
@@ -510,7 +508,7 @@ static void set_um_inl_seg(struct udma_jfs_um_wqe *wqe, uint8_t *data)
 		       *loc >> UDMAUMWQE_INLINE_SHIFT2);
 }
 
-static void fill_ud_inn_inl_data(uint32_t num_sge, struct udma_jfs_um_wqe *wqe,
+static void fill_um_inn_inl_data(uint32_t num_sge, struct udma_jfs_um_wqe *wqe,
 				 struct udma_sge *sg_list)
 {
 	uint8_t data[UDMA_MAX_UM_INL_INN_SZ] = {};
@@ -539,7 +537,7 @@ static int set_um_inl(struct udma_qp *qp, uint32_t num_sge, uint32_t total_len,
 	if (total_len <= UDMA_MAX_UM_INL_INN_SZ) {
 		udma_reg_clear(wqe, UDMAUMWQE_INLINE_TYPE);
 
-		fill_ud_inn_inl_data(num_sge, wqe, sg_list);
+		fill_um_inn_inl_data(num_sge, wqe, sg_list);
 	} else {
 		udma_reg_enable(wqe, UDMAUMWQE_INLINE_TYPE);
 
@@ -901,7 +899,7 @@ static void udma_update_sq_db(struct udma_u_context *ctx, struct udma_qp *qp)
 	udma_write64(ctx, (uint64_t *)(ctx->uar + UDMA_DB_CFG0_OFFSET), (uint64_t *)&sq_db);
 }
 
-int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
+void exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 				  struct udma_qp *qp)
 {
 	urma_context_t *ctx = &udma_ctx->urma_ctx;
@@ -917,7 +915,7 @@ int exec_jfs_flush_cqe_cmd(struct udma_u_context *udma_ctx,
 	fcp.qpn = qp->qp_num;
 	fcp.sq_producer_idx = qp->sq.head;
 
-	return urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
+	(void)urma_cmd_user_ctl(ctx, &in, &out, &udrv_data);
 }
 
 static int dca_attach_qp_buf(struct udma_u_context *ctx, struct udma_qp *qp)
@@ -1012,8 +1010,6 @@ urma_status_t udma_u_post_rcqp_wr(struct udma_u_context *udma_ctx,
 
 	if (dca_enable)
 		udma_write_dca_wqe(udma_qp, *wqe);
-
-	*udma_qp->sdb = udma_qp->sq.head + nreq;
 
 out:
 	if (dca_enable)

@@ -43,7 +43,7 @@ enum hns3_udma_jfc_init_attr_mask {
 };
 
 enum hns3_udma_jfc_create_flags {
-	HNS3_UDMA_JFC_CREATE_ENABLE_POE_MODE = 1 << 0,
+	HNS3_UDMA_JFC_CREATE_ENABLE_POE_MODE = 1 << 0, /* conflict with notify */
 	HNS3_UDMA_JFC_CREATE_ENABLE_NOTIFY = 1 << 1,
 };
 
