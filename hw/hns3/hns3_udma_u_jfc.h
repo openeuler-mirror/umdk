@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,8 +13,8 @@
  *
  */
 
-#ifndef _UDMA_U_JFC_H
-#define _UDMA_U_JFC_H
+#ifndef _HNS3_UDMA_U_JFC_H
+#define _HNS3_UDMA_U_JFC_H
 
 #include "urma_types.h"
 #include "hns3_udma_u_common.h"
@@ -42,21 +42,21 @@ enum {
 };
 
 enum {
-	UDMA_CQE_SUCCESS			= 0x00,
-	UDMA_CQE_LOCAL_LENGTH_ERR		= 0x01,
-	UDMA_CQE_LOCAL_QP_OP_ERR		= 0x02,
-	UDMA_CQE_LOCAL_PROT_ERR			= 0x04,
-	UDMA_CQE_WR_FLUSH_ERR			= 0x05,
-	UDMA_CQE_MEM_MANAGERENT_OP_ERR		= 0x06,
-	UDMA_CQE_BAD_RESP_ERR			= 0x10,
-	UDMA_CQE_LOCAL_ACCESS_ERR		= 0x11,
-	UDMA_CQE_REMOTE_INVAL_REQ_ERR		= 0x12,
-	UDMA_CQE_REMOTE_ACCESS_ERR		= 0x13,
-	UDMA_CQE_REMOTE_OP_ERR			= 0x14,
-	UDMA_CQE_TRANSPORT_RETRY_EXC_ERR	= 0x15,
-	UDMA_CQE_RNR_RETRY_EXC_ERR		= 0x16,
-	UDMA_CQE_REMOTE_ABORTED_ERR		= 0x22,
-	UDMA_CQE_GENERAL_ERR			= 0x23,
+	HNS3_UDMA_CQE_SUCCESS			= 0x00,
+	HNS3_UDMA_CQE_LOCAL_LENGTH_ERR		= 0x01,
+	HNS3_UDMA_CQE_LOCAL_QP_OP_ERR		= 0x02,
+	HNS3_UDMA_CQE_LOCAL_PROT_ERR		= 0x04,
+	HNS3_UDMA_CQE_WR_FLUSH_ERR		= 0x05,
+	HNS3_UDMA_CQE_MEM_MANAGERENT_OP_ERR	= 0x06,
+	HNS3_UDMA_CQE_BAD_RESP_ERR		= 0x10,
+	HNS3_UDMA_CQE_LOCAL_ACCESS_ERR		= 0x11,
+	HNS3_UDMA_CQE_REMOTE_INVAL_REQ_ERR	= 0x12,
+	HNS3_UDMA_CQE_REMOTE_ACCESS_ERR		= 0x13,
+	HNS3_UDMA_CQE_REMOTE_OP_ERR		= 0x14,
+	HNS3_UDMA_CQE_TRANSPORT_RETRY_EXC_ERR	= 0x15,
+	HNS3_UDMA_CQE_RNR_RETRY_EXC_ERR		= 0x16,
+	HNS3_UDMA_CQE_REMOTE_ABORTED_ERR	= 0x22,
+	HNS3_UDMA_CQE_GENERAL_ERR		= 0x23,
 };
 
 enum hw_cqe_opcode {
@@ -77,9 +77,9 @@ enum jfc_poll_state {
 
 #define	CQE_INLINE_ENABLE	1
 #define	UM_HEADER_DEID		8
-#define UDMA_POLL_SCR_CNT	1
+#define HNS3_UDMA_POLL_SCR_CNT	1
 
-struct udma_jfc_cqe {
+struct hns3_udma_jfc_cqe {
 	/* byte4 */
 	uint32_t		opcode : 5;
 	uint32_t		rq_inline : 1;
@@ -113,25 +113,25 @@ struct udma_jfc_cqe {
 	uint32_t		pld_in_cqe[8];
 };
 
-struct udma_u_jfc {
-	urma_jfc_t		urma_jfc;
-	pthread_spinlock_t	lock;
-	uint32_t		lock_free;
-	uint32_t		cqn;
-	uint32_t		pi;
-	uint32_t		ci;
-	uint32_t		depth;
-	uint32_t		cqe_cnt;
-	uint32_t		cqe_size;
-	uint32_t		cqe_shift;
-	struct udma_buf		buf;
-	struct udma_jfc_cqe	*cqe;
-	uint32_t		*db;
-	uint32_t		arm_sn;
-	uint32_t		caps_flag;
+struct hns3_udma_u_jfc {
+	urma_jfc_t			urma_jfc;
+	pthread_spinlock_t		lock;
+	uint32_t			lock_free;
+	uint32_t			cqn;
+	uint32_t			pi;
+	uint32_t			ci;
+	uint32_t			depth;
+	uint32_t			cqe_cnt;
+	uint32_t			cqe_size;
+	uint32_t			cqe_shift;
+	struct hns3_udma_buf		buf;
+	struct hns3_udma_jfc_cqe	*cqe;
+	uint32_t			*db;
+	uint32_t			arm_sn;
+	uint32_t			caps_flag;
 };
 
-struct udma_jfce {
+struct hns3_udma_jfce {
 	urma_jfce_t base;
 };
 
@@ -150,28 +150,28 @@ static inline uint32_t get_jid_from_qpn(uint32_t qpn, uint32_t num_qps_shift,
 	return FIELD_GET(GENMASK(high - 1, low), qpn);
 }
 
-static inline void update_cq_db(struct udma_u_context *udma_ctx,
-				struct udma_u_jfc *udma_u_jfc)
+static inline void update_cq_db(struct hns3_udma_u_context *udma_ctx,
+				struct hns3_udma_u_jfc *udma_u_jfc)
 {
-	struct udma_u_db cq_db = {};
+	struct hns3_udma_u_db cq_db = {};
 
-	udma_reg_write(&cq_db, UDMA_DB_TAG, udma_u_jfc->cqn);
-	udma_reg_write(&cq_db, UDMA_DB_CMD, UDMA_CQ_DB_PTR);
-	udma_reg_write(&cq_db, UDMA_DB_JFC_CI, udma_u_jfc->ci);
-	udma_reg_write(&cq_db, UDMA_DB_JFC_CMD_SN, 1);
+	hns3_udma_reg_write(&cq_db, HNS3_UDMA_DB_TAG, udma_u_jfc->cqn);
+	hns3_udma_reg_write(&cq_db, HNS3_UDMA_DB_CMD, HNS3_UDMA_CQ_DB_PTR);
+	hns3_udma_reg_write(&cq_db, HNS3_UDMA_DB_JFC_CI, udma_u_jfc->ci);
+	hns3_udma_reg_write(&cq_db, HNS3_UDMA_DB_JFC_CMD_SN, 1);
 
-	udma_write64(udma_ctx, (uint64_t *)(udma_ctx->uar + UDMA_DB_CFG0_OFFSET),
+	hns3_udma_write64(udma_ctx, (uint64_t *)(udma_ctx->uar + HNS3_UDMA_DB_CFG0_OFFSET),
 		    (uint64_t *)&cq_db);
 }
 
-static inline struct udma_u_jfc *to_udma_jfc(urma_jfc_t *jfc)
+static inline struct hns3_udma_u_jfc *to_hns3_udma_jfc(urma_jfc_t *jfc)
 {
-	return container_of(jfc, struct udma_u_jfc, urma_jfc);
+	return container_of(jfc, struct hns3_udma_u_jfc, urma_jfc);
 }
 
-static inline bool udma_state_reseted(struct udma_u_context *ctx)
+static inline bool hns3_udma_state_reseted(struct hns3_udma_u_context *ctx)
 {
-	struct udma_reset_state *state = (struct udma_reset_state *)ctx->reset_state;
+	struct hns3_udma_reset_state *state = (struct hns3_udma_reset_state *)ctx->reset_state;
 
 	if (state && state->is_reset)
 		return true;
@@ -179,22 +179,22 @@ static inline bool udma_state_reseted(struct udma_u_context *ctx)
 	return false;
 }
 
-struct udma_u_jfc *udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
-					    struct udma_u_context *udma_ctx);
-void free_err_jfc(struct udma_u_jfc *jfc, struct udma_u_context *udma_ctx);
-urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg);
-urma_status_t udma_u_delete_jfc(urma_jfc_t *jfc);
-struct udma_qp *get_qp_from_qpn(struct udma_u_context *udma_ctx, uint32_t qpn);
-urma_status_t udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
-int udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
-urma_status_t udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
-urma_jfce_t *udma_u_create_jfce(urma_context_t *ctx);
-urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce);
-int udma_u_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
-		    urma_jfc_t *jfc[]);
-void udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
-urma_status_t udma_u_get_async_event(urma_context_t *ctx,
-				     urma_async_event_t *event);
-void udma_u_ack_async_event(urma_async_event_t *event);
+struct hns3_udma_u_jfc *hns3_udma_u_create_jfc_common(urma_jfc_cfg_t *cfg,
+						      struct hns3_udma_u_context *udma_ctx);
+void free_err_jfc(struct hns3_udma_u_jfc *jfc, struct hns3_udma_u_context *udma_ctx);
+urma_jfc_t *hns3_udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg);
+urma_status_t hns3_udma_u_delete_jfc(urma_jfc_t *jfc);
+struct hns3_udma_qp *get_qp_from_qpn(struct hns3_udma_u_context *udma_ctx, uint32_t qpn);
+urma_status_t hns3_udma_u_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
+int hns3_udma_u_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
+urma_status_t hns3_udma_u_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
+urma_jfce_t *hns3_udma_u_create_jfce(urma_context_t *ctx);
+urma_status_t hns3_udma_u_delete_jfce(urma_jfce_t *jfce);
+int hns3_udma_u_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
+			 urma_jfc_t *jfc[]);
+void hns3_udma_u_ack_jfc(urma_jfc_t **jfc, uint32_t *nevents, uint32_t jfc_cnt);
+urma_status_t hns3_udma_u_get_async_event(urma_context_t *ctx,
+					  urma_async_event_t *event);
+void hns3_udma_u_ack_async_event(urma_async_event_t *event);
 
-#endif  /* _UDMA_U_JFC_H */
+#endif  /* _HNS3_UDMA_U_JFC_H */

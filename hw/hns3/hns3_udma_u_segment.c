@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -17,19 +17,19 @@
 #include "urma_provider.h"
 #include "hns3_udma_u_segment.h"
 
-urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
-				       urma_seg_cfg_t *seg_cfg)
+urma_target_seg_t *hns3_udma_u_register_seg(urma_context_t *ctx,
+					    urma_seg_cfg_t *seg_cfg)
 {
 	urma_cmd_udrv_priv_t udata = {};
-	struct udma_u_seg *seg;
+	struct hns3_udma_u_seg *seg;
 
 	if (seg_cfg->flag.bs.access >= HNS3_URMA_SEG_ACCESS_GUARD) {
-		UDMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
-			     seg_cfg->flag.bs.access);
+		HNS3_UDMA_LOG_ERR("Invalid seg cfg parameters, access = 0x%x.\n",
+				  seg_cfg->flag.bs.access);
 		return NULL;
 	}
 
-	seg = (struct udma_u_seg *)calloc(1, sizeof(struct udma_u_seg));
+	seg = (struct hns3_udma_u_seg *)calloc(1, sizeof(struct hns3_udma_u_seg));
 	if (!seg)
 		return NULL;
 
@@ -47,7 +47,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	seg->urma_seg.urma_ctx = ctx;
 
 	if (urma_cmd_register_seg(ctx, &seg->urma_seg, seg_cfg, &udata) != 0) {
-		UDMA_LOG_ERR("failed to register segment.\n");
+		HNS3_UDMA_LOG_ERR("failed to register segment.\n");
 		free(seg);
 		return NULL;
 	}
@@ -55,19 +55,19 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *ctx,
 	return &seg->urma_seg;
 }
 
-urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
+urma_status_t hns3_udma_u_unregister_seg(urma_target_seg_t *target_seg)
 {
 	urma_status_t ret = URMA_SUCCESS;
-	struct udma_u_seg *seg;
+	struct hns3_udma_u_seg *seg;
 
 	if (target_seg == NULL) {
-		UDMA_LOG_ERR("Invalid parameter.\n");
+		HNS3_UDMA_LOG_ERR("Invalid parameter.\n");
 		return URMA_FAIL;
 	}
-	seg = CONTAINER_OF_FIELD(target_seg, struct udma_u_seg, urma_seg);
+	seg = CONTAINER_OF_FIELD(target_seg, struct hns3_udma_u_seg, urma_seg);
 
 	if (urma_cmd_unregister_seg(target_seg) != 0) {
-		UDMA_LOG_ERR("failed to unregister segment.\n");
+		HNS3_UDMA_LOG_ERR("failed to unregister segment.\n");
 		ret = URMA_FAIL;
 	}
 	free(seg);
@@ -75,15 +75,15 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 	return ret;
 }
 
-urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
-				     urma_token_t *token, uint64_t addr,
-				     urma_import_seg_flag_t flag)
+urma_target_seg_t *hns3_udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
+					  urma_token_t *token, uint64_t addr,
+					  urma_import_seg_flag_t flag)
 {
 	urma_target_seg_t *tseg;
 
 	tseg = (urma_target_seg_t *)calloc(1, sizeof(urma_target_seg_t));
 	if (!tseg) {
-		UDMA_LOG_ERR("target seg alloc failed.\n");
+		HNS3_UDMA_LOG_ERR("target seg alloc failed.\n");
 		return NULL;
 	}
 
@@ -96,7 +96,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 	return tseg;
 }
 
-urma_status_t udma_u_unimport_seg(urma_target_seg_t *target_seg)
+urma_status_t hns3_udma_u_unimport_seg(urma_target_seg_t *target_seg)
 {
 	free(target_seg);
 
