@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,8 +13,8 @@
  *
  */
 
-#ifndef _UDMA_U_ABI_H
-#define _UDMA_U_ABI_H
+#ifndef _HNS3_UDMA_U_ABI_H
+#define _HNS3_UDMA_U_ABI_H
 #include "hns3_udma_abi.h"
 
-#endif /* _UDMA_U_ABI_H */
+#endif /* _HNS3_UDMA_U_ABI_H */

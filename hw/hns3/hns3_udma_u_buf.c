@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_buf.h"
 
-int udma_alloc_buf(struct udma_buf *buf, uint32_t size, int page_size)
+int hns3_udma_alloc_buf(struct hns3_udma_buf *buf, uint32_t size, int page_size)
 {
 	int ret;
 
@@ -32,13 +32,13 @@ int udma_alloc_buf(struct udma_buf *buf, uint32_t size, int page_size)
 	ret = madvise(buf->buf, buf->length, MADV_DONTFORK);
 	if (ret) {
 		munmap(buf->buf, buf->length);
-		UDMA_LOG_ERR("madvise failed! ret=%d\n", ret);
+		HNS3_UDMA_LOG_ERR("madvise failed! ret=%d\n", ret);
 	}
 
 	return ret;
 }
 
-void udma_free_buf(struct udma_buf *buf)
+void hns3_udma_free_buf(struct hns3_udma_buf *buf)
 {
 	if (!buf->buf)
 		return;
@@ -46,11 +46,11 @@ void udma_free_buf(struct udma_buf *buf)
 	munmap(buf->buf, buf->length);
 }
 
-#define DCAN_TO_SYNC_BIT(n) ((n) * UDMA_DCA_BITS_PER_STATUS)
+#define DCAN_TO_SYNC_BIT(n) ((n) * HNS3_UDMA_DCA_BITS_PER_STATUS)
 #define DCAN_TO_STAT_BIT(n) DCAN_TO_SYNC_BIT(n)
 
 #define MAX_DCA_TRY_LOCK_TIMES 10
-bool udma_dca_start_post(struct udma_u_dca_ctx *ctx, uint32_t dcan)
+bool hns3_udma_dca_start_post(struct hns3_udma_u_dca_ctx *ctx, uint32_t dcan)
 {
 	atomic_ulong *st = ctx->sync_status;
 	int try_times = 0;
@@ -65,7 +65,7 @@ bool udma_dca_start_post(struct udma_u_dca_ctx *ctx, uint32_t dcan)
 	return true;
 }
 
-static bool check_dca_is_attached(struct udma_u_dca_ctx *ctx, uint32_t dcan)
+static bool check_dca_is_attached(struct hns3_udma_u_dca_ctx *ctx, uint32_t dcan)
 {
 	atomic_ulong *st = ctx->buf_status;
 
@@ -75,35 +75,35 @@ static bool check_dca_is_attached(struct udma_u_dca_ctx *ctx, uint32_t dcan)
 	return atomic_test_bit(st, DCAN_TO_STAT_BIT(dcan));
 }
 
-static int exec_attach_dca_mem_cmd(struct udma_u_context *ctx,
-				   struct udma_dca_attach_attr *attr,
-				   struct udma_dca_attach_resp *resp)
+static int exec_attach_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+				   struct hns3_udma_dca_attach_attr *attr,
+				   struct hns3_udma_dca_attach_resp *resp)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_ATTACH;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_ATTACH;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_attach_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_attach_attr);
 	out.addr = (uint64_t)resp;
-	out.len = (uint32_t)sizeof(struct udma_dca_attach_resp);
+	out.len = (uint32_t)sizeof(struct hns3_udma_dca_attach_resp);
 
 	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-static bool add_dca_mem_enabled(struct udma_u_dca_ctx *ctx, uint32_t alloc_size)
+static bool add_dca_mem_enabled(struct hns3_udma_u_dca_ctx *ctx, uint32_t alloc_size)
 {
 	bool enable;
 
 	(void)pthread_spin_lock(&ctx->lock);
 
-	if (ctx->max_size == UDMA_DCA_MAX_MEM_SIZE ||
+	if (ctx->max_size == HNS3_UDMA_DCA_MAX_MEM_SIZE ||
 	    ctx->max_size >= ctx->curr_size + alloc_size) {
 		enable = true;
 	} else {
-		UDMA_LOG_ERR("pool size 0x%x doesn't exceed max size 0x%x!",
+		HNS3_UDMA_LOG_ERR("pool size 0x%x doesn't exceed max size 0x%x!",
 			     ctx->curr_size + alloc_size, ctx->max_size);
 		enable = false;
 	}
@@ -113,32 +113,32 @@ static bool add_dca_mem_enabled(struct udma_u_dca_ctx *ctx, uint32_t alloc_size)
 	return enable;
 }
 
-static struct udma_u_dca_mem *udma_u_alloc_dca_mem(uint32_t size)
+static struct hns3_udma_u_dca_mem *hns3_udma_u_alloc_dca_mem(uint32_t size)
 {
-	struct udma_u_dca_mem *mem = NULL;
+	struct hns3_udma_u_dca_mem *mem = NULL;
 	int ret;
 
-	mem = (struct udma_u_dca_mem *)calloc(1, sizeof(struct udma_u_dca_mem));
+	mem = (struct hns3_udma_u_dca_mem *)calloc(1, sizeof(struct hns3_udma_u_dca_mem));
 	if (!mem) {
-		UDMA_LOG_ERR("malloc udma_u_dca_mem failed!");
+		HNS3_UDMA_LOG_ERR("malloc hns3_udma_u_dca_mem failed!");
 		return NULL;
 	}
 
-	ret = udma_alloc_buf(&mem->buf, size, UDMA_HW_PAGE_SIZE);
+	ret = hns3_udma_alloc_buf(&mem->buf, size, HNS3_UDMA_HW_PAGE_SIZE);
 	if (ret) {
 		free(mem);
-		UDMA_LOG_ERR("alloc buf failed! ret=%d\n", ret);
+		HNS3_UDMA_LOG_ERR("alloc buf failed! ret=%d\n", ret);
 		return NULL;
 	}
 
 	return mem;
 }
 
-static int exec_register_dca_mem_cmd(struct udma_u_context *ctx,
-				     struct udma_u_dca_mem *mem)
+static int exec_register_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+				     struct hns3_udma_u_dca_mem *mem)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
-	struct udma_dca_reg_attr attr = {};
+	struct hns3_udma_dca_reg_attr attr = {};
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
@@ -147,30 +147,30 @@ static int exec_register_dca_mem_cmd(struct udma_u_context *ctx,
 	attr.key = dca_mem_to_key(mem);
 	attr.size = mem->buf.length;
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_REG;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_REG;
 	in.addr = (uint64_t)&attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_reg_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_reg_attr);
 
 	return  urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-void ubn_u_free_dca_mem(struct udma_u_dca_mem *mem)
+void ubn_u_free_dca_mem(struct hns3_udma_u_dca_mem *mem)
 {
-	udma_free_buf(&mem->buf);
+	hns3_udma_free_buf(&mem->buf);
 	free(mem);
 }
 
-static int add_dca_mem(struct udma_u_context *ctx, uint32_t size)
+static int add_dca_mem(struct hns3_udma_u_context *ctx, uint32_t size)
 {
-	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
-	struct udma_u_dca_mem *mem;
+	struct hns3_udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	struct hns3_udma_u_dca_mem *mem;
 	int ret;
 
 	if (!add_dca_mem_enabled(&ctx->dca_ctx, size))
 		return ENOMEM;
 
 	/* Step 1: Alloc DCA mem address */
-	mem = udma_u_alloc_dca_mem(DIV_ROUND_UP(size, dca_ctx->unit_size) *
+	mem = hns3_udma_u_alloc_dca_mem(DIV_ROUND_UP(size, dca_ctx->unit_size) *
 				   dca_ctx->unit_size);
 	if (!mem)
 		return ENOMEM;
@@ -178,7 +178,7 @@ static int add_dca_mem(struct udma_u_context *ctx, uint32_t size)
 	/* Step 2: Register DCA mem uobject to pin user address */
 	ret = exec_register_dca_mem_cmd(ctx, mem);
 	if (ret) {
-		UDMA_LOG_ERR("register dca mem failed!");
+		HNS3_UDMA_LOG_ERR("register dca mem failed!");
 		ubn_u_free_dca_mem(mem);
 		return ret;
 	}
@@ -194,28 +194,28 @@ static int add_dca_mem(struct udma_u_context *ctx, uint32_t size)
 	return 0;
 }
 
-static int exec_query_dca_mem_cmd(struct udma_u_context *ctx,
-				  struct udma_dca_query_attr *attr,
-				  struct udma_dca_query_resp *resp)
+static int exec_query_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+				  struct hns3_udma_dca_query_attr *attr,
+				  struct hns3_udma_dca_query_resp *resp)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_QUERY;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_QUERY;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_query_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_query_attr);
 	out.addr = (uint64_t)resp;
-	out.len = (uint32_t)sizeof(struct udma_dca_query_resp);
+	out.len = (uint32_t)sizeof(struct hns3_udma_dca_query_resp);
 
 	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-static struct udma_u_dca_mem *key_to_dca_mem(struct udma_u_dca_ctx *ctx,
+static struct hns3_udma_u_dca_mem *key_to_dca_mem(struct hns3_udma_u_dca_ctx *ctx,
 					     uintptr_t key)
 {
-	struct udma_u_dca_mem *mem;
+	struct hns3_udma_u_dca_mem *mem;
 
 	list_for_each_entry(mem, &ctx->mem_list, entry) {
 		if (dca_mem_to_key(mem) == key)
@@ -225,7 +225,7 @@ static struct udma_u_dca_mem *key_to_dca_mem(struct udma_u_dca_ctx *ctx,
 	return NULL;
 }
 
-static void config_dca_pages(void *addr, struct udma_dca_buf *buf,
+static void config_dca_pages(void *addr, struct hns3_udma_dca_buf *buf,
 			     uint32_t page_index, int page_count)
 {
 	void **pages = &buf->bufs[page_index];
@@ -239,13 +239,13 @@ static void config_dca_pages(void *addr, struct udma_dca_buf *buf,
 	}
 }
 
-static int setup_dca_buf(struct udma_u_context *ctx, struct udma_dca_buf *buf,
+static int setup_dca_buf(struct hns3_udma_u_context *ctx, struct hns3_udma_dca_buf *buf,
 			 uint32_t page_count, uint64_t qpn)
 {
-	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
-	struct udma_dca_query_attr attr = {};
-	struct udma_dca_query_resp resp = {};
-	struct udma_u_dca_mem *mem;
+	struct hns3_udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	struct hns3_udma_dca_query_attr attr = {};
+	struct hns3_udma_dca_query_resp resp = {};
+	struct hns3_udma_u_dca_mem *mem;
 	uint32_t idx = 0;
 	int ret;
 
@@ -277,12 +277,12 @@ static int setup_dca_buf(struct udma_u_context *ctx, struct udma_dca_buf *buf,
 }
 
 #define DCA_EXPAND_MEM_TRY_TIMES 3
-int udma_u_attach_dca_mem(struct udma_u_context *ctx,
-			  struct udma_dca_attach_attr *attr,
-			  uint32_t size, struct udma_dca_buf *buf, bool force)
+int hns3_udma_u_attach_dca_mem(struct hns3_udma_u_context *ctx,
+			       struct hns3_udma_dca_attach_attr *attr,
+			       uint32_t size, struct hns3_udma_dca_buf *buf, bool force)
 {
+	struct hns3_udma_dca_attach_resp resp = {};
 	uint32_t buf_pages = size >> buf->shift;
-	struct udma_dca_attach_resp resp = {};
 	bool is_new_buf = true;
 	uint32_t try_times = 0;
 	int ret = 0;
@@ -308,7 +308,7 @@ int udma_u_attach_dca_mem(struct udma_u_context *ctx,
 	} while (try_times++ < DCA_EXPAND_MEM_TRY_TIMES);
 
 	if (ret || resp.alloc_pages < buf_pages) {
-		UDMA_LOG_ERR("attach failed, size %u count %u != %u, ret = %d.\n",
+		HNS3_UDMA_LOG_ERR("attach failed, size %u count %u != %u, ret = %d.\n",
 			     size, buf_pages, resp.alloc_pages, ret);
 		return ENOMEM;
 	}
@@ -322,7 +322,7 @@ int udma_u_attach_dca_mem(struct udma_u_context *ctx,
 	return setup_dca_buf(ctx, buf, buf_pages, attr->qpn);
 }
 
-void udma_dca_stop_post(struct udma_u_dca_ctx *ctx, uint32_t dcan)
+void hns3_udma_dca_stop_post(struct hns3_udma_u_dca_ctx *ctx, uint32_t dcan)
 {
 	atomic_ulong *st = ctx->sync_status;
 
@@ -332,7 +332,7 @@ void udma_dca_stop_post(struct udma_u_dca_ctx *ctx, uint32_t dcan)
 	clear_bit_unlock(st, DCAN_TO_SYNC_BIT(dcan));
 }
 
-static bool shrink_dca_mem_enabled(struct udma_u_dca_ctx *ctx)
+static bool shrink_dca_mem_enabled(struct hns3_udma_u_dca_ctx *ctx)
 {
 	bool enable;
 
@@ -343,60 +343,60 @@ static bool shrink_dca_mem_enabled(struct udma_u_dca_ctx *ctx)
 	return enable;
 }
 
-static int exec_shrink_dca_mem_cmd(struct udma_u_context *ctx,
-				   struct udma_dca_shrink_attr *attr,
-				   struct udma_dca_shrink_resp *resp)
+static int exec_shrink_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+				   struct hns3_udma_dca_shrink_attr *attr,
+				   struct hns3_udma_dca_shrink_resp *resp)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_SHRINK;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_SHRINK;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_shrink_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_shrink_attr);
 	out.addr = (uint64_t)resp;
-	out.len = (uint32_t)sizeof(struct udma_dca_shrink_resp);
+	out.len = (uint32_t)sizeof(struct hns3_udma_dca_shrink_resp);
 
 	return urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-void exec_deregister_dca_mem_cmd(struct udma_u_context *ctx,
-				struct udma_dca_dereg_attr *attr)
+void exec_deregister_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+				struct hns3_udma_dca_dereg_attr *attr)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_DEREG;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_DEREG;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_dereg_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_dereg_attr);
 
 	(void)urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-void exec_detach_dca_mem_cmd(struct udma_u_context *ctx,
-			    struct udma_dca_detach_attr *attr)
+void exec_detach_dca_mem_cmd(struct hns3_udma_u_context *ctx,
+			    struct hns3_udma_dca_detach_attr *attr)
 {
 	urma_context_t *urma_ctx = &(ctx->urma_ctx);
 	urma_user_ctl_out_t out = {};
 	urma_user_ctl_in_t in = {};
 	urma_udrv_t udrv_data = {};
 
-	in.opcode = (uint32_t)UDMA_DCA_MEM_DETACH;
+	in.opcode = (uint32_t)HNS3_UDMA_DCA_MEM_DETACH;
 	in.addr = (uint64_t)attr;
-	in.len = (uint32_t)sizeof(struct udma_dca_detach_attr);
+	in.len = (uint32_t)sizeof(struct hns3_udma_dca_detach_attr);
 
 	(void)urma_cmd_user_ctl(urma_ctx, &in, &out, &udrv_data);
 }
 
-void udma_u_shrink_dca_mem(struct udma_u_context *ctx)
+void hns3_udma_u_shrink_dca_mem(struct hns3_udma_u_context *ctx)
 {
-	struct udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
-	struct udma_dca_shrink_attr attr = {};
-	struct udma_dca_shrink_resp resp = {};
-	struct udma_u_dca_mem *mem;
+	struct hns3_udma_u_dca_ctx *dca_ctx = &ctx->dca_ctx;
+	struct hns3_udma_dca_shrink_attr attr = {};
+	struct hns3_udma_dca_shrink_resp resp = {};
+	struct hns3_udma_u_dca_mem *mem;
 	int dca_mem_cnt;
 	int ret;
 
@@ -407,18 +407,18 @@ void udma_u_shrink_dca_mem(struct udma_u_context *ctx)
 		resp.free_mems = 0;
 		/* Step 1: Use any DCA mem uobject to shrink pool */
 		(void)pthread_spin_lock(&dca_ctx->lock);
-		mem = list_tail(&dca_ctx->mem_list, struct udma_u_dca_mem,
+		mem = list_tail(&dca_ctx->mem_list, struct hns3_udma_u_dca_mem,
 				entry);
 		(void)pthread_spin_unlock(&dca_ctx->lock);
 		if (!mem) {
-			UDMA_LOG_ERR("dca shrink failed, mem list is empty!");
+			HNS3_UDMA_LOG_ERR("dca shrink failed, mem list is empty!");
 			break;
 		}
 
 		attr.reserved_size = dca_ctx->min_size;
 		ret = exec_shrink_dca_mem_cmd(ctx, &attr, &resp);
 		if (ret) {
-			UDMA_LOG_ERR("dca shrink failed, ret = %d.\n", ret);
+			HNS3_UDMA_LOG_ERR("dca shrink failed, ret = %d.\n", ret);
 			break;
 		}
 
@@ -435,7 +435,7 @@ void udma_u_shrink_dca_mem(struct udma_u_context *ctx)
 		}
 		(void)pthread_spin_unlock(&dca_ctx->lock);
 		if (!mem) {
-			UDMA_LOG_ERR("dca shrink failed, free_key is invalid!");
+			HNS3_UDMA_LOG_ERR("dca shrink failed, free_key is invalid!");
 			break;
 		}
 

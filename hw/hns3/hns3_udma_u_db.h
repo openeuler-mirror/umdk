@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,14 +13,14 @@
  *
  */
 
-#ifndef _UDMA_U_DB_H
-#define _UDMA_U_DB_H
+#ifndef _HNS3_UDMA_U_DB_H
+#define _HNS3_UDMA_U_DB_H
 
 #include "hns3_udma_u_common.h"
 #include "hns3_udma_u_provider_ops.h"
 
-void *udma_alloc_sw_db(struct udma_u_context *ctx, enum udma_db_type type);
-void udma_free_sw_db(struct udma_u_context *ctx, uint32_t *db,
-		     enum udma_db_type type);
+void *hns3_udma_alloc_sw_db(struct hns3_udma_u_context *ctx, enum hns3_udma_db_type type);
+void hns3_udma_free_sw_db(struct hns3_udma_u_context *ctx, uint32_t *db,
+			  enum hns3_udma_db_type type);
 
-#endif /* _UDMA_U_DB_H */
+#endif /* _HNS3_UDMA_U_DB_H */

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -15,14 +15,14 @@
 
 #include "hns3_udma_u_common.h"
 
-void udma_hmap_remove(struct udma_hmap *hmap, const struct udma_hmap_node *node)
+void hns3_udma_hmap_remove(struct hns3_udma_hmap *hmap, const struct hns3_udma_hmap_node *node)
 {
-	struct udma_hmap_node *pre_node =
-		(struct udma_hmap_node *)&hmap->bucket[node->hash & hmap->mask];
-	struct udma_hmap_node *tmp_node = pre_node->next;
+	struct hns3_udma_hmap_node *pre_node =
+		(struct hns3_udma_hmap_node *)&hmap->bucket[node->hash & hmap->mask];
+	struct hns3_udma_hmap_node *tmp_node = pre_node->next;
 
 	while (tmp_node != NULL) {
-		struct udma_hmap_node *next_node = tmp_node->next;
+		struct hns3_udma_hmap_node *next_node = tmp_node->next;
 
 		if (tmp_node == node) {
 			pre_node->next = next_node;
@@ -34,7 +34,7 @@ void udma_hmap_remove(struct udma_hmap *hmap, const struct udma_hmap_node *node)
 	}
 }
 
-uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
+uint64_t *hns3_udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
 {
 	uint64_t *bitmap;
 	uint32_t i;
@@ -51,12 +51,12 @@ uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
 	return bitmap;
 }
 
-void udma_bitmap_free(uint64_t *bitmap)
+void hns3_udma_bitmap_free(uint64_t *bitmap)
 {
 	free(bitmap);
 }
 
-int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+int hns3_udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 		     uint32_t n_bits, uint32_t *idx)
 {
 	uint32_t bit_num;
@@ -78,7 +78,7 @@ int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 	return 0;
 }
 
-void udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+void hns3_udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 			  uint32_t idx)
 {
 	uint32_t bitmap_num;

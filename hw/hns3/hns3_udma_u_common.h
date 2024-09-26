@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,8 +13,8 @@
  *
  */
 
-#ifndef _UDMA_U_COMMON_H
-#define _UDMA_U_COMMON_H
+#ifndef _HNS3_UDMA_U_COMMON_H
+#define _HNS3_UDMA_U_COMMON_H
 
 #include <unistd.h>
 #include <arm_neon.h>
@@ -28,16 +28,16 @@
 #include "urma_provider.h"
 #include "hns3_udma_u_abi.h"
 
-#define UDMA_HW_PAGE_SHIFT	12
-#define UDMA_HW_PAGE_SIZE	(1 << UDMA_HW_PAGE_SHIFT)
-#define UDMA_HW_SGE_SIZE	16
-#define UDMA_SQ_WQE_SHIFT	6
-#define UDMA_HW_SGE_SHIFT	4
-#define BIT_CNT_PER_BYTE	8
-#define BIT_CNT_PER_LONG	(BIT_CNT_PER_BYTE * sizeof(uint64_t))
-#define UDMA_DB_CFG0_OFFSET	0x0230
-#define BITS_PER_UINT32		32
-#define BITS_PER_LONG		64
+#define HNS3_UDMA_HW_PAGE_SHIFT		12
+#define HNS3_UDMA_HW_PAGE_SIZE		(1 << HNS3_UDMA_HW_PAGE_SHIFT)
+#define HNS3_UDMA_HW_SGE_SIZE		16
+#define HNS3_UDMA_SQ_WQE_SHIFT		6
+#define HNS3_UDMA_HW_SGE_SHIFT		4
+#define BIT_CNT_PER_BYTE		8
+#define BIT_CNT_PER_LONG		(BIT_CNT_PER_BYTE * sizeof(uint64_t))
+#define HNS3_UDMA_DB_CFG0_OFFSET	0x0230
+#define BITS_PER_UINT32			32
+#define BITS_PER_LONG			64
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -64,7 +64,7 @@
 #define ilog32(_v) (builtin_ilog32_nz(_v)&-!!(_v))
 #define ilog64(_v) (builtin_ilog64_nz(_v)&-!!(_v))
 
-#define udma_ilog32(n)		ilog32((uint32_t)(n) - 1)
+#define hns3_udma_ilog32(n)		ilog32((uint32_t)(n) - 1)
 
 #define check_types_match(expr1, expr2)		\
 	((typeof(expr1) *)0 != (typeof(expr2) *)0)
@@ -92,7 +92,7 @@
 		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask));        \
 	})
 
-#define udma_reg_enable(ptr, field)                                            \
+#define hns3_udma_reg_enable(ptr, field)                                       \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
 		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
@@ -102,7 +102,7 @@
 			htole32(BIT((((field) << 32) >> 32) % 32));            \
 	})
 
-#define udma_reg_clear(ptr, field)                                             \
+#define hns3_udma_reg_clear(ptr, field)                                        \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
 		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
@@ -113,22 +113,22 @@
 			(((field) << 32) >> 32) % 32));                        \
 	})
 
-#define udma_reg_write_bool(ptr, field, val)                                   \
+#define hns3_udma_reg_write_bool(ptr, field, val)                              \
 	({                                                                     \
-		(val) ? udma_reg_enable(ptr, field) :                          \
-			udma_reg_clear(ptr, field);                            \
+		(val) ? hns3_udma_reg_enable(ptr, field) :                     \
+			hns3_udma_reg_clear(ptr, field);                       \
 	})
 
-#define udma_reg_write(ptr, field, val)                                        \
+#define hns3_udma_reg_write(ptr, field, val)                                   \
 	({                                                                     \
 		const uint32_t _val = val;                                     \
-		udma_reg_clear(ptr, field);                                    \
+		hns3_udma_reg_clear(ptr, field);                               \
 		*((uint32_t *)(ptr) + ((field) >> 32) / 32) |=                 \
 			htole32(FIELD_PREP(GENMASK(((field) >> 32) % 32,       \
 			(((field) << 32) >> 32) % 32), _val));                 \
 	})
 
-#define udma_reg_read(ptr, field)                                              \
+#define hns3_udma_reg_read(ptr, field)                                         \
 	({                                                                     \
 		const uint32_t *_ptr = (uint32_t *)(ptr);                      \
 		BUILD_ASSERT_OR_ZERO((((field) >> 32) / 32) ==                 \
@@ -149,8 +149,8 @@
 	  + check_types_match(*(member_ptr), ((containing_type *)0)->member))
 #endif
 
-#define udma_to_device_barrier() asm volatile("dsb st" ::: "memory")
-#define udma_from_device_barrier() asm volatile("dsb ld" ::: "memory")
+#define hns3_udma_to_device_barrier() {asm volatile("dsb st" ::: "memory"); }
+#define hns3_udma_from_device_barrier() {asm volatile("dsb ld" ::: "memory"); }
 
 #define MMIO_MEMCPY_X64_LEN 64
 static inline void _mmio_memcpy_x64_64b(void *dest, const void *src)
@@ -176,58 +176,58 @@ static inline void mmio_memcpy_x64(void *dest, const void *src, size_t bytecount
 		_mmio_memcpy_x64((dest), (src), (bytecount));
 }
 
-struct udma_buf {
+struct hns3_udma_buf {
 	void			*buf;
 	uint32_t		length;
 };
 
 /* the sw doorbell type */
-enum udma_db_type {
-	UDMA_JFS_TYPE_DB,
-	UDMA_JFR_TYPE_DB,
-	UDMA_JETTY_TYPE_DB,
-	UDMA_JFC_TYPE_DB,
-	UDMA_DB_TYPE_NUM
+enum hns3_udma_db_type {
+	HNS3_UDMA_JFS_TYPE_DB,
+	HNS3_UDMA_JFR_TYPE_DB,
+	HNS3_UDMA_JETTY_TYPE_DB,
+	HNS3_UDMA_JFC_TYPE_DB,
+	HNS3_UDMA_DB_TYPE_NUM
 };
 
-struct udma_db_page {
-	struct udma_db_page	*prev, *next;
-	struct udma_buf		buf;
-	uint32_t		num_db;
-	uint32_t		use_cnt;
-	uintptr_t		*bitmap;
-	uint32_t		bitmap_cnt;
+struct hns3_udma_db_page {
+	struct hns3_udma_db_page	*prev, *next;
+	struct hns3_udma_buf		buf;
+	uint32_t			num_db;
+	uint32_t			use_cnt;
+	uintptr_t			*bitmap;
+	uint32_t			bitmap_cnt;
 };
 
-struct udma_u_db {
+struct hns3_udma_u_db {
 	uint32_t byte_4;
 	uint32_t parameter;
 };
 
 enum {
-	UDMA_SQ_DB,
-	UDMA_RQ_DB,
-	UDMA_SRQ_DB,
-	UDMA_CQ_DB_PTR,
-	UDMA_CQ_DB_NTR,
+	HNS3_UDMA_SQ_DB,
+	HNS3_UDMA_RQ_DB,
+	HNS3_UDMA_SRQ_DB,
+	HNS3_UDMA_CQ_DB_PTR,
+	HNS3_UDMA_CQ_DB_NTR,
 };
 
-struct udma_wqe_data_seg {
+struct hns3_udma_wqe_data_seg {
 	uint32_t len;
 	uint32_t lkey;
 	uint64_t addr;
 };
 
-#define UDMA_DB_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
-#define UDMA_DB_TAG UDMA_DB_FIELD_LOC(23, 0)
-#define UDMA_DB_CMD UDMA_DB_FIELD_LOC(27, 24)
-#define UDMA_DB_PI UDMA_DB_FIELD_LOC(47, 32)
-#define UDMA_DB_SL UDMA_DB_FIELD_LOC(50, 48)
-#define UDMA_DB_JFC_CI UDMA_DB_FIELD_LOC(55, 32)
-#define UDMA_DB_JFC_NOTIFY UDMA_DB_FIELD_LOC(56, 56)
-#define UDMA_DB_JFC_CMD_SN UDMA_DB_FIELD_LOC(58, 57)
-#define UDMA_DB_CONS_IDX_M GENMASK(23, 0)
-#define UDMA_DB_PROD_IDX_M GENMASK(23, 0)
+#define HNS3_UDMA_DB_FIELD_LOC(h, l) ((uint64_t)(h) << 32 | (l))
+#define HNS3_UDMA_DB_TAG HNS3_UDMA_DB_FIELD_LOC(23, 0)
+#define HNS3_UDMA_DB_CMD HNS3_UDMA_DB_FIELD_LOC(27, 24)
+#define HNS3_UDMA_DB_PI HNS3_UDMA_DB_FIELD_LOC(47, 32)
+#define HNS3_UDMA_DB_SL HNS3_UDMA_DB_FIELD_LOC(50, 48)
+#define HNS3_UDMA_DB_JFC_CI HNS3_UDMA_DB_FIELD_LOC(55, 32)
+#define HNS3_UDMA_DB_JFC_NOTIFY HNS3_UDMA_DB_FIELD_LOC(56, 56)
+#define HNS3_UDMA_DB_JFC_CMD_SN HNS3_UDMA_DB_FIELD_LOC(58, 57)
+#define HNS3_UDMA_DB_CONS_IDX_M GENMASK(23, 0)
+#define HNS3_UDMA_DB_PROD_IDX_M GENMASK(23, 0)
 
 static inline unsigned long align(unsigned long val, unsigned long align)
 {
@@ -239,16 +239,16 @@ static inline uint64_t roundup_pow_of_two(uint64_t n)
 	return n == 1 ? 1 : 1ULL << ilog64(n - 1);
 }
 
-#define udma_hw_page_align(x)	align(x, sysconf(_SC_PAGESIZE))
+#define hns3_udma_hw_page_align(x)	align(x, sysconf(_SC_PAGESIZE))
 
-static inline uint32_t to_udma_hem_entries_size(int count, int buf_shift)
+static inline uint32_t to_hns3_udma_hem_entries_size(int count, int buf_shift)
 {
-	return udma_hw_page_align(count << buf_shift);
+	return hns3_udma_hw_page_align(count << buf_shift);
 }
 
-static inline void udma_set_udata(urma_cmd_udrv_priv_t *udrv_data, void *in_addr,
-				  uint32_t in_len, void *out_addr,
-				  uint32_t out_len)
+static inline void hns3_udma_set_udata(urma_cmd_udrv_priv_t *udrv_data, void *in_addr,
+				       uint32_t in_len, void *out_addr,
+				       uint32_t out_len)
 {
 	udrv_data->in_addr = (uint64_t)in_addr;
 	udrv_data->in_len = in_len;
@@ -257,13 +257,13 @@ static inline void udma_set_udata(urma_cmd_udrv_priv_t *udrv_data, void *in_addr
 }
 
 /* command value is offset[7:0] */
-static inline void udma_mmap_set_command(int command, off_t *offset)
+static inline void hns3_udma_mmap_set_command(int command, off_t *offset)
 {
 	*offset |= (command & HNS3_UDMA_MAP_COMMAND_MASK);
 }
 
 /* index value is offset[32:8] */
-static inline void udma_mmap_set_index(unsigned long index, off_t *offset)
+static inline void hns3_udma_mmap_set_index(unsigned long index, off_t *offset)
 {
 	*offset |= ((index & HNS3_UDMA_MAP_INDEX_MASK) << HNS3_UDMA_MAP_INDEX_SHIFT);
 }
@@ -272,8 +272,8 @@ static inline off_t get_mmap_offset(uint32_t idx, int page_size, int cmd)
 {
 	off_t offset = 0;
 
-	udma_mmap_set_command(cmd, &offset);
-	udma_mmap_set_index(idx, &offset);
+	hns3_udma_mmap_set_command(cmd, &offset);
+	hns3_udma_mmap_set_index(idx, &offset);
 
 	return offset * page_size;
 }
@@ -282,28 +282,28 @@ static inline off_t get_mmap_offset(uint32_t idx, int page_size, int cmd)
  * Hmap uses list to resolve hash conflicts in a bucket
  * NOT multi-thread safe in the current version
  */
-struct udma_hmap_node {
-	struct udma_hmap_node	*next;
+struct hns3_udma_hmap_node {
+	struct hns3_udma_hmap_node	*next;
 	uint32_t		hash;
 };
 
-struct udma_hmap_head {
-	struct udma_hmap_node	*next;
+struct hns3_udma_hmap_head {
+	struct hns3_udma_hmap_node	*next;
 };
 
-struct udma_hmap {
+struct hns3_udma_hmap {
 	uint32_t		count;
 	uint32_t		mask;
-	struct udma_hmap_head	*bucket;
+	struct hns3_udma_hmap_head	*bucket;
 };
 
-void udma_hmap_remove(struct udma_hmap *hmap, const struct udma_hmap_node *node);
+void hns3_udma_hmap_remove(struct hns3_udma_hmap *hmap, const struct hns3_udma_hmap_node *node);
 
-static inline struct udma_hmap_node *udma_hmap_first_with_hash(const struct udma_hmap *hmap,
-							       uint32_t hash)
+static inline struct hns3_udma_hmap_node *hns3_udma_hmap_first_with_hash(const struct hns3_udma_hmap *hmap,
+									 uint32_t hash)
 {
-	struct udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
-	struct udma_hmap_node *node;
+	struct hns3_udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
+	struct hns3_udma_hmap_node *node;
 
 	node = head->next;
 
@@ -313,25 +313,25 @@ static inline struct udma_hmap_node *udma_hmap_first_with_hash(const struct udma
 	return node;
 }
 
-static inline struct udma_hmap_node *udma_table_first_with_hash(const struct udma_hmap *hmap,
-								pthread_rwlock_t *rwlock,
-								uint32_t hash)
+static inline struct hns3_udma_hmap_node *hns3_udma_table_first_with_hash(const struct hns3_udma_hmap *hmap,
+									  pthread_rwlock_t *rwlock,
+									  uint32_t hash)
 {
-	struct udma_hmap_node *node;
+	struct hns3_udma_hmap_node *node;
 
 	(void)pthread_rwlock_rdlock(rwlock);
-	node = udma_hmap_first_with_hash(hmap, hash);
+	node = hns3_udma_hmap_first_with_hash(hmap, hash);
 	(void)pthread_rwlock_unlock(rwlock);
 
 	return node;
 }
 
-static inline bool udma_hmap_insert(struct udma_hmap *hmap, struct udma_hmap_node *node,
-				    uint32_t hash)
+static inline bool hns3_udma_hmap_insert(struct hns3_udma_hmap *hmap, struct hns3_udma_hmap_node *node,
+					 uint32_t hash)
 {
-	struct udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
+	struct hns3_udma_hmap_head *head = &hmap->bucket[hash & hmap->mask];
 
-	if (udma_hmap_first_with_hash(hmap, hash))
+	if (hns3_udma_hmap_first_with_hash(hmap, hash))
 		return false;
 
 	node->hash = hash;
@@ -341,10 +341,10 @@ static inline bool udma_hmap_insert(struct udma_hmap *hmap, struct udma_hmap_nod
 	return true;
 }
 
-static inline struct udma_hmap_node *udma_hmap_first_from_idx(const struct udma_hmap *hmap,
-							      uint32_t idx)
+static inline struct hns3_udma_hmap_node *hns3_udma_hmap_first_from_idx(const struct hns3_udma_hmap *hmap,
+									uint32_t idx)
 {
-	struct udma_hmap_node *node = NULL;
+	struct hns3_udma_hmap_node *node = NULL;
 
 	if (hmap == NULL || hmap->bucket == NULL)
 		return NULL;
@@ -357,20 +357,20 @@ static inline struct udma_hmap_node *udma_hmap_first_from_idx(const struct udma_
 	return node;
 }
 
-static inline struct udma_hmap_node *udma_hmap_first(const struct udma_hmap *hmap)
+static inline struct hns3_udma_hmap_node *hns3_udma_hmap_first(const struct hns3_udma_hmap *hmap)
 {
-	return udma_hmap_first_from_idx(hmap, 0);
+	return hns3_udma_hmap_first_from_idx(hmap, 0);
 }
 
-static inline struct udma_hmap_node *udma_hmap_next(const struct udma_hmap *hmap,
-						    const struct udma_hmap_node *pre_node)
+static inline struct hns3_udma_hmap_node *hns3_udma_hmap_next(const struct hns3_udma_hmap *hmap,
+							      const struct hns3_udma_hmap_node *pre_node)
 {
-	struct udma_hmap_node *node = pre_node->next;
+	struct hns3_udma_hmap_node *node = pre_node->next;
 
 	if (node != NULL)
 		return node;
 
-	return udma_hmap_first_from_idx(hmap, (pre_node->hash & hmap->mask) + 1);
+	return hns3_udma_hmap_first_from_idx(hmap, (pre_node->hash & hmap->mask) + 1);
 }
 
 #define OBJ_OFFSETOF(obj_ptr, field) offsetof(typeof(*(obj_ptr)), field)
@@ -390,14 +390,14 @@ static inline struct udma_hmap_node *udma_hmap_next(const struct udma_hmap *hmap
 	((obj_ptr) = NULL, ASSIGN_CONTAINER_PTR(obj_ptr, field_ptr, field))
 
 #define HMAP_FOR_EACH(NODE, MEMBER, TABLE) \
-	for (INIT_CONTAINER_PTR(NODE, udma_hmap_first(TABLE), MEMBER); \
+	for (INIT_CONTAINER_PTR(NODE, hns3_udma_hmap_first(TABLE), MEMBER); \
 		(((NODE) != OBJ_CONTAINING(NULL, (NODE), MEMBER)) || ((NODE) = NULL)); \
-		ASSIGN_CONTAINER_PTR((NODE), udma_hmap_next(TABLE, &(NODE)->MEMBER), MEMBER))
+		ASSIGN_CONTAINER_PTR((NODE), hns3_udma_hmap_next(TABLE, &(NODE)->MEMBER), MEMBER))
 
 #define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP) \
-	for (INIT_CONTAINER_PTR((NODE), udma_hmap_first(HMAP), MEMBER); \
+	for (INIT_CONTAINER_PTR((NODE), hns3_udma_hmap_first(HMAP), MEMBER); \
 		((((NODE) != OBJ_CONTAINING(NULL, (NODE), MEMBER)) || ((NODE) = NULL)) ? \
-		INIT_CONTAINER_PTR(NEXT, udma_hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 : 0); \
+		INIT_CONTAINER_PTR(NEXT, hns3_udma_hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 : 0); \
 		(NODE) = (NEXT))
 
 #ifndef DIV_ROUND_UP
@@ -422,19 +422,19 @@ static inline uint32_t calc_mask(uint32_t capacity)
 /*
  * When inserting more nodes than count, the lookup performance will be reduced.
  */
-static inline int udma_hmap_init(struct udma_hmap *map, uint32_t count)
+static inline int hns3_udma_hmap_init(struct hns3_udma_hmap *map, uint32_t count)
 {
 	map->count = 0;
 	map->mask = calc_mask(count);
-	map->bucket = (struct udma_hmap_head *)calloc(1, sizeof(struct udma_hmap_head) *
-						      (map->mask + 1));
+	map->bucket = (struct hns3_udma_hmap_head *)calloc(1, sizeof(struct hns3_udma_hmap_head) *
+							   (map->mask + 1));
 	if (map->bucket != NULL)
 		return 0;
 
 	return -1;
 }
 
-static inline void udma_hmap_destroy(struct udma_hmap *hmap)
+static inline void hns3_udma_hmap_destroy(struct hns3_udma_hmap *hmap)
 {
 	free(hmap->bucket);
 	hmap->bucket = NULL;
@@ -442,11 +442,11 @@ static inline void udma_hmap_destroy(struct udma_hmap *hmap)
 
 #define EID_OFFSET	32
 
-uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt);
-void udma_bitmap_free(uint64_t *bitmap);
-int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
-			uint32_t n_bits, uint32_t *idx);
-void udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
-			  uint32_t idx);
+uint64_t *hns3_udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt);
+void hns3_udma_bitmap_free(uint64_t *bitmap);
+int hns3_udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+			     uint32_t n_bits, uint32_t *idx);
+void hns3_udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+			       uint32_t idx);
 
-#endif /* _UDMA_U_COMMON_H */
+#endif /* _HNS3_UDMA_U_COMMON_H */

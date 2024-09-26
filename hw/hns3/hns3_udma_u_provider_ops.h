@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Huawei UDMA Linux driver
+/* Huawei HNS3_UDMA Linux driver
  * Copyright (c) 2023-2023 Hisilicon Limited.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,8 +13,8 @@
  *
  */
 
-#ifndef _UDMA_PROVIDER_OPS_H
-#define _UDMA_PROVIDER_OPS_H
+#ifndef _HNS3_UDMA_PROVIDER_OPS_H
+#define _HNS3_UDMA_PROVIDER_OPS_H
 
 #include <stdatomic.h>
 #include <linux/types.h>
@@ -26,14 +26,14 @@
 #define PCI_VENDOR_ID_HUAWEI			0x19E5
 #endif
 
-#define HNS3_DEV_ID_UDMA_OVER_UBL		0xA260
-#define HNS3_DEV_ID_UDMA			0xA261
-#define HNS3_DEV_ID_UDMA_OVER_UBL_VF		0xA268
-#define HNS3_DEV_ID_UDMA_OVER_UBL_TMP_VF	0xA26F
+#define HNS3_DEV_ID_HNS3_UDMA_OVER_UBL		0xA260
+#define HNS3_DEV_ID_HNS3_UDMA			0xA261
+#define HNS3_DEV_ID_HNS3_UDMA_OVER_UBL_VF	0xA268
+#define HNS3_DEV_ID_HNS3_UDMA_OVER_UBL_TMP_VF	0xA26F
 
-#define UDMA_JFR_TABLE_SIZE			8
-#define UDMA_JETTY_TABLE_SIZE			8
-#define UDMA_DCA_BITS_PER_STATUS		1
+#define HNS3_UDMA_JFR_TABLE_SIZE		8
+#define HNS3_UDMA_JETTY_TABLE_SIZE		8
+#define HNS3_UDMA_DCA_BITS_PER_STATUS		1
 #define DCA_BITS_HALF 2
 
 #define MAX_TP_CNT				0x8000
@@ -73,9 +73,9 @@
 		_ta > _tb ? _tb : _ta; \
 	})
 
-extern urma_provider_ops_t g_udma_u_provider_ops;
+extern urma_provider_ops_t g_hns3_udma_u_provider_ops;
 
-struct udma_dca_context_attr {
+struct hns3_udma_dca_context_attr {
 	uint64_t comp_mask;
 	uint32_t dca_prime_qps;
 	uint32_t dca_unit_size;
@@ -88,7 +88,7 @@ struct list_head {
 	struct list_head *prev;
 };
 
-struct udma_u_dca_ctx {
+struct hns3_udma_u_dca_ctx {
 	struct list_head	mem_list;
 	pthread_spinlock_t	lock;
 	uint32_t		mem_cnt;
@@ -102,15 +102,15 @@ struct udma_u_dca_ctx {
 	atomic_ulong		*sync_status;
 };
 
-#define UDMA_JETTY_TABLE_SHIFT 5
-#define UDMA_JETTY_TABLE_NUM (1 << UDMA_JETTY_TABLE_SHIFT)
+#define HNS3_UDMA_JETTY_TABLE_SHIFT 5
+#define HNS3_UDMA_JETTY_TABLE_NUM (1 << HNS3_UDMA_JETTY_TABLE_SHIFT)
 
 struct common_jetty {
 	bool is_jetty;
 	void *jetty;
 };
 
-struct udma_u_context {
+struct hns3_udma_u_context {
 	urma_context_t		urma_ctx;
 	void			*uar;
 	uint64_t		db_addr;
@@ -119,7 +119,7 @@ struct udma_u_context {
 	uint32_t		cqe_size;
 	uint32_t		page_size;
 
-	struct udma_db_page	*db_list[UDMA_DB_TYPE_NUM];
+	struct hns3_udma_db_page	*db_list[HNS3_UDMA_DB_TYPE_NUM];
 	pthread_mutex_t		db_list_mutex;
 
 	uint32_t		max_jfr_wr;
@@ -130,38 +130,38 @@ struct udma_u_context {
 	uint32_t		num_qps_shift;
 
 	pthread_rwlock_t	jfr_table_lock;
-	struct udma_hmap	jfr_table;
+	struct hns3_udma_hmap	jfr_table;
 	pthread_rwlock_t	jfs_qp_table_lock;
-	struct udma_hmap	jfs_qp_table;
+	struct hns3_udma_hmap	jfs_qp_table;
 	pthread_rwlock_t	jetty_table_lock;
 	struct {
 		struct common_jetty	*table;
 		int			refcnt;
-	} jetty_table[UDMA_JETTY_TABLE_NUM];
+	} jetty_table[HNS3_UDMA_JETTY_TABLE_NUM];
 	uint32_t		jettys_in_tbl_shift;
 	uint32_t		jettys_in_tbl;
 
-	uint8_t			poe_ch_num;
-	void			*reset_state;
-	struct udma_u_dca_ctx	dca_ctx;
-	uint8_t			chip_id;
-	uint8_t			die_id;
-	uint8_t			func_id;
+	uint8_t				poe_ch_num;
+	void				*reset_state;
+	struct hns3_udma_u_dca_ctx	dca_ctx;
+	uint8_t				chip_id;
+	uint8_t				die_id;
+	uint8_t				func_id;
 };
 
-struct udma_reset_state {
+struct hns3_udma_reset_state {
 	uint32_t is_reset;
 };
 
-static inline struct udma_u_context *to_udma_ctx(urma_context_t *ctx)
+static inline struct hns3_udma_u_context *to_hns3_udma_ctx(urma_context_t *ctx)
 {
-	return container_of(ctx, struct udma_u_context, urma_ctx);
+	return container_of(ctx, struct hns3_udma_u_context, urma_ctx);
 }
 
-static inline void udma_write64(struct udma_u_context *ctx,
+static inline void hns3_udma_write64(struct hns3_udma_u_context *ctx,
 				uint64_t *dest, uint64_t *val)
 {
-	struct udma_reset_state *state = (struct udma_reset_state *)ctx->reset_state;
+	struct hns3_udma_reset_state *state = (struct hns3_udma_reset_state *)ctx->reset_state;
 
 	if (state && state->is_reset)
 		return;
@@ -199,4 +199,4 @@ static inline void list_add_tail(struct list_head *head, struct list_head *tail)
 	__list_add(tail, head->prev, head);
 }
 
-#endif /* _UDMA_PROVIDER_OPS_H */
+#endif /* _HNS3_UDMA_PROVIDER_OPS_H */
