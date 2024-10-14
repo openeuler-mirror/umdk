@@ -194,17 +194,6 @@ static const char * const g_uvs_admin_tp_mod_flag_str[] = {
     [UVS_ADMIN_TP_MOD_FLAG_SHARE_MODE] = "SHARE_MODE",
 };
 
-static const char * const g_uvs_admin_cc_alg_str[] = {
-    [UVS_ADMIN_TP_CC_NONE]                  =      "CC_NONE",
-    [UVS_ADMIN_TP_CC_DCQCN]                 =      "DCQCN",
-    [UVS_ADMIN_TP_CC_DCQCN_AND_NETWORK_CC]  =      "DCQCN_AND_NETWORK_CC",
-    [UVS_ADMIN_TP_CC_LDCP]                  =      "LDCP",
-    [UVS_ADMIN_TP_CC_LDCP_AND_CAQM]         =      "LDCP_AND_CAQM",
-    [UVS_ADMIN_TP_CC_LDCP_AND_OPEN_CC]      =      "LDCP_AND_OPEN_CC",
-    [UVS_ADMIN_TP_CC_HC3]                   =      "HC3",
-    [UVS_ADMIN_TP_CC_DIP]                   =      "DIP"
-};
-
 static inline const char *uvs_admin_tp_mod_flag_to_string(uint8_t bit)
 {
     if (bit >= UVS_ADMIN_TP_MOD_FLAG_NUM) {
@@ -225,7 +214,7 @@ static inline void print_tp_mod_flag_str(uvs_admin_tp_mod_flag_t flag)
             (void)printf("%s ", uvs_admin_tp_mod_flag_to_string(i));
         }
     }
-    (void)printf("%s ", g_uvs_admin_cc_alg_str[flag.bs.cc_alg]);
+    /* Do not print cc_alg in flag as it may be different from cc_alg in vport_table */
     (void)printf("]\n");
 }
 
