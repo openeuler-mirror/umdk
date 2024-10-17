@@ -84,7 +84,7 @@ static bool urma_validate_ns_path(const char *path)
     char num_str[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
     /* check sub_str only containing number */
     int success_len = sscanf(path + offset, "%[0-9]", num_str);
-    /* The return vaule of sscanf_s is the number of string successfully matched */
+    /* The return value of sscanf_s is the number of string successfully matched */
     if (success_len != 1) {
         (void)printf("failed to get pid.\n");
         return false;
