@@ -103,7 +103,7 @@ typedef union uvs_admin_tp_mod_flag {
                                       * If ubcore_tp_cfg_flag parameter needs to be set,
                                       * the parameter must be set separately.
                                       */
-        uint32_t reserved : 20; /* revise this struct need to sync print_tp_mod_flag_str fucntion */
+        uint32_t reserved : 20; /* revise this struct need to sync print_tp_mod_flag_str function */
     } bs;
     uint32_t value;
 } uvs_admin_tp_mod_flag_t;
