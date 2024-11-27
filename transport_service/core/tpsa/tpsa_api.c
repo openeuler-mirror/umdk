@@ -257,7 +257,7 @@ static int uvs_vport_link_ueid_entry_to_vport(vport_table_t *vport_table,
                      port_entry->key.fe_idx);
         return -EINVAL;
     }
-    TPSA_LOG_INFO("Suceess to add ueid entry. port info: name %s, port_type %u, tpf_name %s,"
+    TPSA_LOG_INFO("Success to add ueid entry. port info: name %s, port_type %u, tpf_name %s,"
             " fe_idx %u, eid_idx %u, upi %u, eid " EID_FMT "\n",
             port_entry->port_key.name, (uint32_t)port_entry->type, port_entry->key.tpf_name,
             port_entry->key.fe_idx, info->eid.eid_idx,
