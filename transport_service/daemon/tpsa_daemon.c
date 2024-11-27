@@ -98,7 +98,7 @@ static void running_singleton(void)
         goto ERR;
     }
 
-    /* Step 3: clear pidfile and wirte pid to it */
+    /* Step 3: clear pidfile and write pid to it */
     if (ftruncate(fileno(g_file), 0) == -1) {
         TPSA_LOG_ERR("clear uvs pid file failed\n");
         goto ERR;

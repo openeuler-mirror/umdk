@@ -260,7 +260,7 @@ int uvs_del_migration_task(uvs_ueid_t *dueid);
 int uvs_query_stats(const char *tpf_name, uvs_stats_key_t *key, uvs_stats_val_t *val);
 
 /**
- * Get rescource info depend on tpf name and keys
+ * Get resource info depend on tpf name and keys
  * @param[in] tpf_name:tpf name to locate device
  * @param[in] key: resource keys used for find val
  * @param[out] val:value found depend on key
