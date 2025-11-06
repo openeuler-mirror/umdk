@@ -148,7 +148,7 @@ static void umq_perftest_client_run_qps_base(uint64_t umqh, umq_perftest_qps_arg
     uint64_t start_cycle = get_cycles();
     double cycles_to_units = get_cpu_mhz(false);
     while (!is_perftest_force_quit() && (get_cycles() - start_cycle) / cycles_to_units < ITER_MAX_WAIT_TIME_US) {
-        /* alloc buf, send req, send 64 wr each time. 
+        /* alloc buf, send req, send 64 wr each time.
         it will attempt to poll tx during the next enqueue and then release the buffer. */
         umq_buf_t *req_buf = umq_buf_alloc(size, UMQ_BATCH_SIZE, umqh, NULL);
         if (req_buf == NULL) {
@@ -212,7 +212,7 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
                 LOG_PRINT("poll rx failed\n");
                 return;
             }
-        } while (poll_num == 0);
+        } while (poll_num == 0 && !is_perftest_force_quit());
 
         require_rx_cnt += (uint32_t)poll_num;
         for (int i = 0; i < poll_num; ++i) {

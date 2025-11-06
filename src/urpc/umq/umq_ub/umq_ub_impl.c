@@ -107,6 +107,8 @@ typedef struct ub_flow_control {
     uint32_t remote_win_buf_len;
     volatile uint16_t local_rx_posted;
     volatile uint16_t remote_rx_window;
+    uint16_t initial_window;
+    uint16_t notify_interval;
     uint16_t local_tx_depth;
     uint16_t local_rx_depth;
     uint16_t remote_tx_depth;
@@ -255,80 +257,84 @@ typedef struct ub_bind_ctx {
 static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
 
-static inline uint16_t remote_rx_window_inc(struct ub_flow_control *fc, uint16_t new_win)
+static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_control *fc, uint16_t new_win)
 {
-    if (URPC_UNLIKELY(fc->remote_rx_window + new_win > UINT16_MAX)) {
+    uint32_t win_sum = fc->remote_rx_window + new_win;
+    if (URPC_UNLIKELY(win_sum > UINT16_MAX)) {
         UMQ_LIMIT_VLOG_WARN("receive remote win exceed UINT16_MAX, current win %d, new win %d, remote rx depth %d\n",
                             fc->remote_rx_window, new_win, fc->remote_rx_depth);
         return fc->remote_rx_window;
     }
 
-    if (URPC_UNLIKELY(fc->remote_rx_window + new_win > fc->remote_rx_depth)) {
+    if (URPC_UNLIKELY(win_sum > fc->remote_rx_depth)) {
         UMQ_LIMIT_VLOG_WARN("receive remote win exceed rx depth, current win %d, new win %d, remote rx depth %d\n",
                             fc->remote_rx_window, new_win, fc->remote_rx_depth);
     }
 
-    fc->remote_rx_window += new_win;
+    fc->remote_rx_window = (uint16_t)win_sum;
     return fc->remote_rx_window;
 }
 
-static inline uint16_t remote_rx_window_exchange(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t remote_rx_window_exchange_non_atomic(struct ub_flow_control *fc)
 {
     uint16_t win = fc->remote_rx_window;
     fc->remote_rx_window = 0;
     return win;
 }
 
-static inline uint16_t remote_rx_window_dec(struct ub_flow_control *fc, uint16_t required_win)
+static ALWAYS_INLINE uint16_t remote_rx_window_dec_non_atomic(struct ub_flow_control *fc, uint16_t required_win)
 {
     if (URPC_LIKELY(fc->remote_rx_window >= required_win)) {
         fc->remote_rx_window -= required_win;
         return required_win;
     }
 
-    return remote_rx_window_exchange(fc);
+    return remote_rx_window_exchange_non_atomic(fc);
 }
 
-static inline uint16_t remote_rx_window_load(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t remote_rx_window_load_non_atomic(struct ub_flow_control *fc)
 {
     return fc->remote_rx_window;
 }
 
-static inline uint16_t local_rx_posted_inc(struct ub_flow_control *fc, uint16_t rx_posted)
+static ALWAYS_INLINE uint16_t local_rx_posted_inc_non_atomic(struct ub_flow_control *fc, uint16_t rx_posted)
 {
-    if (URPC_UNLIKELY(fc->local_rx_posted + rx_posted > UINT16_MAX)) {
+    uint32_t rx_sum = fc->local_rx_posted + rx_posted;
+    if (URPC_UNLIKELY(rx_sum > UINT16_MAX)) {
         UMQ_LIMIT_VLOG_WARN("rx posted exceed UINT16_MAX, current rx %d, new post %d, local rx depth %d\n",
                             fc->local_rx_posted, rx_posted, fc->local_rx_depth);
         return fc->local_rx_posted;
     }
 
-    if (URPC_UNLIKELY(fc->local_rx_posted + rx_posted > fc->local_rx_depth)) {
+    if (URPC_UNLIKELY(rx_sum > fc->local_rx_depth)) {
         UMQ_LIMIT_VLOG_WARN("rx posted exceed rx depth, current win %d, new win %d, local rx depth %d\n",
                             fc->local_rx_posted, rx_posted, fc->local_rx_depth);
     }
 
-    fc->local_rx_posted += rx_posted;
+    fc->local_rx_posted = (uint16_t)rx_sum;
     return fc->local_rx_posted;
 }
 
-static inline uint16_t local_rx_posted_exchange(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t local_rx_posted_exchange_non_atomic(struct ub_flow_control *fc)
 {
     uint16_t posted = fc->local_rx_posted;
     fc->local_rx_posted = 0;
     return posted;
 }
 
-static inline uint16_t local_rx_posted_load(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t local_rx_posted_load_non_atomic(struct ub_flow_control *fc)
 {
     return fc->local_rx_posted;
 }
 
-static inline uint16_t remote_rx_window_inc_atomic(struct ub_flow_control *fc, uint16_t new_win)
+static ALWAYS_INLINE uint16_t remote_rx_window_inc_atomic(struct ub_flow_control *fc, uint16_t new_win)
 {
     uint16_t after, before = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
     uint16_t ret = before;
+    uint32_t win_sum;
     do {
-        if (URPC_UNLIKELY(before + new_win > UINT16_MAX)) {
+        win_sum = before + new_win;
+        if (URPC_UNLIKELY(win_sum > UINT16_MAX)) {
             UMQ_LIMIT_VLOG_WARN(
                 "receive remote win exceed UINT16_MAX, current win %d, new win %d, remote rx depth %d\n",
                 fc->remote_rx_window, new_win, fc->remote_rx_depth);
@@ -336,13 +342,13 @@ static inline uint16_t remote_rx_window_inc_atomic(struct ub_flow_control *fc, u
             break;
         }
 
-        if (URPC_UNLIKELY(before + new_win > fc->remote_rx_depth)) {
+        if (URPC_UNLIKELY(win_sum > fc->remote_rx_depth)) {
             UMQ_LIMIT_VLOG_WARN(
                 "receive remote win exceed rx depth, current win %d, new win %d, remote rx depth %d\n",
                 fc->remote_rx_window, new_win, fc->remote_rx_depth);
         }
 
-        after = before + new_win;
+        after = (uint16_t)win_sum;
         ret = after;
     } while (
         !__atomic_compare_exchange_n(&fc->remote_rx_window, &before, after, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
@@ -350,12 +356,12 @@ static inline uint16_t remote_rx_window_inc_atomic(struct ub_flow_control *fc, u
     return ret;
 }
 
-static inline uint16_t remote_rx_window_exchange_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t remote_rx_window_exchange_atomic(struct ub_flow_control *fc)
 {
     return __atomic_exchange_n(&fc->remote_rx_window, 0, __ATOMIC_RELAXED);
 }
 
-static inline uint16_t remote_rx_window_dec_atomic(struct ub_flow_control *fc, uint16_t required_win)
+static ALWAYS_INLINE uint16_t remote_rx_window_dec_atomic(struct ub_flow_control *fc, uint16_t required_win)
 {
     uint16_t after, before = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
     uint16_t ret = before;
@@ -373,28 +379,30 @@ static inline uint16_t remote_rx_window_dec_atomic(struct ub_flow_control *fc, u
     return ret;
 }
 
-static inline uint16_t remote_rx_window_load_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t remote_rx_window_load_atomic(struct ub_flow_control *fc)
 {
     return __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
 }
 
-static inline uint16_t local_rx_posted_inc_atomic(struct ub_flow_control *fc, uint16_t rx_posted)
+static ALWAYS_INLINE uint16_t local_rx_posted_inc_atomic(struct ub_flow_control *fc, uint16_t rx_posted)
 {
     uint16_t after, before = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
     uint16_t ret = before;
+    uint32_t rx_sum;
     do {
-        if (URPC_UNLIKELY(before + rx_posted > UINT16_MAX)) {
+        rx_sum = before + rx_posted;
+        if (URPC_UNLIKELY(rx_sum > UINT16_MAX)) {
             UMQ_LIMIT_VLOG_WARN("rx posted exceed UINT16_MAX, current rx %d, new post %d, local rx depth %d\n",
                                 before, rx_posted, fc->local_rx_depth);
             ret = before;
             break;
         }
 
-        if (URPC_UNLIKELY(before + rx_posted > fc->local_rx_depth)) {
+        if (URPC_UNLIKELY(rx_sum > fc->local_rx_depth)) {
             UMQ_LIMIT_VLOG_WARN("rx posted exceed rx depth, current win %d, new win %d, local rx depth %d\n",
                                 before, rx_posted, fc->local_rx_depth);
         }
-        after = before + rx_posted;
+        after = (uint16_t)rx_sum;
         ret = after;
     } while (
         !__atomic_compare_exchange_n(&fc->local_rx_posted, &before, after, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
@@ -402,27 +410,45 @@ static inline uint16_t local_rx_posted_inc_atomic(struct ub_flow_control *fc, ui
     return ret;
 }
 
-static inline uint16_t local_rx_posted_exchange_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t local_rx_posted_exchange_atomic(struct ub_flow_control *fc)
 {
     return __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_RELAXED);
 }
 
-static inline uint16_t local_rx_posted_load_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint16_t local_rx_posted_load_atomic(struct ub_flow_control *fc)
 {
     return __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
 }
 
-static inline uint64_t umq_ub_user_imm_bit_fields(ub_flow_control_t *fc)
+static ALWAYS_INLINE uint64_t umq_ub_user_imm_bit_fields(ub_flow_control_t *fc)
 {
     return fc->enabled ? UMQ_UB_IMM_WITHOUT_PRIVATE_BITS : UMQ_UB_IMM_BITS;
 }
 
-static int umq_ub_flow_control_init(uint32_t feature, umq_flow_control_cfg_t *cfg, ub_flow_control_t *fc)
+static int umq_ub_flow_control_init(
+    ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
 {
     memset(fc, 0, sizeof(ub_flow_control_t));
     fc->enabled = (feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0;
     if (!fc->enabled) {
         return UMQ_SUCCESS;
+    }
+
+    fc->local_rx_depth = queue->rx_depth;
+    fc->local_tx_depth = queue->tx_depth;
+    fc->initial_window = cfg->initial_window;
+    fc->notify_interval = cfg->notify_interval;
+    if (cfg->initial_window == 0 || cfg->initial_window > queue->rx_depth) {
+        fc->initial_window = fc->local_rx_depth >> 1;
+    }
+    if (fc->initial_window == 0) {
+        fc->initial_window = 1;
+    }
+    if (cfg->notify_interval == 0 || cfg->notify_interval > queue->rx_depth) {
+        fc->notify_interval = fc->local_rx_depth >> UMQ_UB_FLOW_CONTROL_NOTIFY_THR;
+    }
+    if (fc->notify_interval == 0) {
+        fc->notify_interval = 1;
     }
 
     if (cfg->use_atomic_window) {
@@ -435,17 +461,17 @@ static int umq_ub_flow_control_init(uint32_t feature, umq_flow_control_cfg_t *cf
         fc->ops.local_rx_posted_load = local_rx_posted_load_atomic;
         fc->ops.local_rx_posted_exchange = local_rx_posted_exchange_atomic;
     } else {
-        fc->ops.remote_rx_window_inc = remote_rx_window_inc;
-        fc->ops.remote_rx_window_dec = remote_rx_window_dec;
-        fc->ops.remote_rx_window_exchange = remote_rx_window_exchange;
-        fc->ops.remote_rx_window_load = remote_rx_window_load;
+        fc->ops.remote_rx_window_inc = remote_rx_window_inc_non_atomic;
+        fc->ops.remote_rx_window_dec = remote_rx_window_dec_non_atomic;
+        fc->ops.remote_rx_window_exchange = remote_rx_window_exchange_non_atomic;
+        fc->ops.remote_rx_window_load = remote_rx_window_load_non_atomic;
 
-        fc->ops.local_rx_posted_inc = local_rx_posted_inc;
-        fc->ops.local_rx_posted_load = local_rx_posted_load;
-        fc->ops.local_rx_posted_exchange = local_rx_posted_exchange;
+        fc->ops.local_rx_posted_inc = local_rx_posted_inc_non_atomic;
+        fc->ops.local_rx_posted_load = local_rx_posted_load_non_atomic;
+        fc->ops.local_rx_posted_exchange = local_rx_posted_exchange_non_atomic;
     }
 
-    UMQ_VLOG_INFO("umq flow control init success, use %s window\n", cfg->use_atomic_window ? "atomic": "non-atomic");
+    UMQ_VLOG_INFO("umq flow control init success, use %s window\n", cfg->use_atomic_window ? "atomic" : "non-atomic");
 
     return UMQ_SUCCESS;
 }
@@ -459,7 +485,7 @@ static void umq_ub_flow_control_uninit(ub_flow_control_t *fc)
     UMQ_VLOG_INFO("umq flow control uninit success\n");
 }
 
-static int umq_ub_window_init(ub_flow_control_t *fc, ub_queue_t *queue, umq_ub_bind_info_t *info)
+static int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *info)
 {
     if (!fc->enabled) {
         return UMQ_SUCCESS;
@@ -474,8 +500,6 @@ static int umq_ub_window_init(ub_flow_control_t *fc, ub_queue_t *queue, umq_ub_b
     fc->remote_win_buf_len = info->win_buf_len;
     fc->remote_rx_depth = info->rx_depth;
     fc->remote_tx_depth = info->tx_depth;
-    fc->local_rx_depth = queue->rx_depth;
-    fc->local_tx_depth = queue->tx_depth;
     fc->remote_rx_window = 0; // remote window need to be updated after remote rx_posted
 
     return UMQ_SUCCESS;
@@ -492,6 +516,9 @@ static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
 
 static void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
 {
+    if (!fc->enabled) {
+        return;
+    }
     // post read remote window
     urma_jfs_wr_t *bad_wr = NULL;
     urma_sge_t src_sge = {
@@ -544,11 +571,11 @@ static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *
     }
 
     uint16_t notify = fc->ops.local_rx_posted_inc(fc, rx_posted);
-    if (notify <= fc->remote_tx_depth >> UMQ_UB_FLOW_CONTROL_NOTIFY_THR || queue->bind_ctx == NULL) {
+    if (notify < fc->notify_interval || queue->bind_ctx == NULL) {
         return;
     }
 
-    if (notify >= fc->remote_tx_depth >> 1 && !fc->local_set) {
+    if (!fc->local_set && notify >= fc->initial_window) {
         notify = fc->ops.local_rx_posted_exchange(fc);
         if (notify == 0) {
             return;
@@ -809,10 +836,6 @@ static int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf
     umq_buf_t *wr_last_buf = NULL;  // record last qbuf of current wr
     while (buffer) {
         uint32_t rest_size = buffer->total_data_size;
-        if (rest_size > queue->rx_buf_size) {
-            UMQ_LIMIT_VLOG_ERR("total data size[%u] exceed max rx size[%u]\n", rest_size, queue->rx_buf_size);
-            goto PUT_ALL_RX_CTX;
-        }
         uint32_t sge_num = 0;
 
         rx_buf_ctx = queue_rx_buf_ctx_get(&queue->rx_buf_ctx_list);
@@ -968,7 +991,7 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (umq_ub_window_init(&queue->flow_control, queue, info) != UMQ_SUCCESS) {
+    if (umq_ub_window_init(&queue->flow_control, info) != UMQ_SUCCESS) {
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1414,6 +1437,13 @@ static int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *optio
         queue->rx_depth = dev_ctx->dev_attr.dev_cap.max_jfc_depth < UMQ_DEFAULT_DEPTH ?
                           dev_ctx->dev_attr.dev_cap.max_jfc_depth : UMQ_DEFAULT_DEPTH;
     }
+
+    if ((dev_ctx->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0 &&
+        (queue->tx_depth > UINT16_MAX || (queue->rx_depth > UINT16_MAX))) {
+        UMQ_VLOG_ERR("queue tx depth %u, rx depth %u exceed %u\n", queue->tx_depth, queue->rx_depth, UINT16_MAX);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
         if (option->tx_depth > dev_ctx->dev_attr.dev_cap.max_jfc_depth) {
             UMQ_VLOG_ERR("rx depth [%u] exceed max depth [%d]\n", option->tx_depth,
@@ -1481,7 +1511,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto FREE_QUEUE;
     }
 
-    if (umq_ub_flow_control_init(dev_ctx->feature, &dev_ctx->flow_control, &queue->flow_control) != UMQ_SUCCESS) {
+    if (umq_ub_flow_control_init(&queue->flow_control, queue,dev_ctx->feature, &dev_ctx->flow_control) != UMQ_SUCCESS) {
         goto FREE_QUEUE;
     }
 
@@ -1865,7 +1895,12 @@ static void umq_ub_fill_tx_imm(ub_flow_control_t *fc, urma_jfs_wr_t *urma_wr, um
         return;
     }
 
-    uint16_t notify = fc->ops.local_rx_posted_exchange(fc);
+    uint16_t notify = fc->ops.local_rx_posted_load(fc);
+    if (notify < fc->notify_interval) {
+        return;
+    }
+
+    notify = fc->ops.local_rx_posted_exchange(fc);
     if (notify == 0) {
         return;
     }
@@ -2260,7 +2295,7 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
         }
         buf[buf_cnt] = rx_buf_ctx->buffer;
         buf[buf_cnt]->io_direction = UMQ_IO_RX;
-        buf[buf_cnt]->status = URMA_CR_WR_FLUSH_ERR;
+        buf[buf_cnt]->status = UMQ_BUF_WR_FLUSH_ERR;
     }
 
     if (buf_cnt == 0) {
@@ -2371,7 +2406,7 @@ static int process_send_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
     return ret;
 }
 
-static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf)
+static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf, umq_buf_status_t *qbuf_status)
 {
     if (cr->opcode != URMA_CR_OPC_SEND_WITH_IMM) {
         return UMQ_SUCCESS;
@@ -2386,27 +2421,22 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
 
     if (imm.bs.type == IMM_TYPE_FLOW_CONTROL) {
         umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
+        *qbuf_status = UMQ_BUF_FLOW_CONTROL_UPDATE;
         if (imm.flow_control.in_user_buf == UMQ_UB_IMM_IN_USER_BUF) {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
             buf_pro->opcode = UMQ_OPC_SEND;
             buf_pro->imm_data = 0;
             return UMQ_SUCCESS;
         }
-
-        umq_buf_t *bad_qbuf = NULL;
-        if (umq_ub_post_rx_inner_impl(queue, rx_buf, &bad_qbuf) != UMQ_SUCCESS) {
-            umq_buf_free(bad_qbuf);
-        }
-
-        return UMQ_CONTINUE_FLAG;
     }
 
     return UMQ_SUCCESS;
 }
 
-static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue)
+static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_buf_status_t *qbuf_status)
 {
     int ret = 0;
+    *qbuf_status = (umq_buf_status_t)cr->status;
     switch (cr->opcode) {
         case URMA_CR_OPC_WRITE_WITH_IMM: {
             if ((queue->dev_ctx->feature & UMQ_FEATURE_API_PRO) == 0) {
@@ -2427,7 +2457,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue)
             break;
         }
         case URMA_CR_OPC_SEND_WITH_IMM: {
-            ret = umq_ub_on_rx_done(queue, cr, buf);
+            ret = umq_ub_on_rx_done(queue, cr, buf, qbuf_status);
             break;
         }
         default:
@@ -2468,14 +2498,15 @@ static int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
     int32_t qbuf_cnt = 0;
     int ret = 0;
+    umq_buf_status_t qbuf_status;
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx);
-        ret = process_rx_msg(&cr[i], buf[qbuf_cnt], queue);
+        ret = process_rx_msg(&cr[i], buf[qbuf_cnt], queue, &qbuf_status);
         if (ret == UMQ_CONTINUE_FLAG) {
             continue;
         }
         buf[qbuf_cnt]->io_direction = UMQ_IO_RX;
-        buf[qbuf_cnt]->status = cr[i].status;
+        buf[qbuf_cnt]->status = qbuf_status;
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB RX reports cr[%d] status[%d]\n", i, cr[i].status);
         } else {
@@ -2583,7 +2614,7 @@ static int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         }
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
         buf[qbuf_cnt]->io_direction = UMQ_IO_TX;
-        buf[qbuf_cnt]->status = cr[i].status;
+        buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;
         umq_ub_on_tx_done(&queue->flow_control, buf[qbuf_cnt], (cr[i].status != URMA_CR_SUCCESS));
         ++qbuf_cnt;
     }
@@ -2761,7 +2792,7 @@ static void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
         buf[qbuf_cnt]->io_direction = UMQ_IO_TX;
-        buf[qbuf_cnt]->status = cr[i].status;
+        buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;
         umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf[qbuf_cnt]->qbuf_ext;
         umq_ub_imm_t imm = {.value = buf_pro->imm_data};
         if (imm.bs.type == IMM_TYPE_UB_PLUS && imm.ub_plus.sub_type == IMM_TYPE_REVERSE_PULL_MEM_DONE) {
@@ -3138,7 +3169,7 @@ static int umq_report_incomplete_and_merge_rx(
         buf[buf_cnt] = rx_buf_ctx->buffer;
         buf[buf_cnt]->buf_data = 0;
         buf[buf_cnt]->io_direction = UMQ_IO_RX;
-        buf[buf_cnt]->status = URMA_CR_WR_FLUSH_ERR;
+        buf[buf_cnt]->status = UMQ_BUF_WR_FLUSH_ERR;
         umq_ub_merge_rx_buffer(buf[buf_cnt], previous_last);
     }
 
@@ -3161,7 +3192,7 @@ static int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[i] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx);
         buf[i]->io_direction = UMQ_IO_RX;
-        buf[i]->status = cr[i].status;
+        buf[i]->status = (umq_buf_status_t)cr[i].status;
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB RX reports cr[%d] status[%d]\n", i, cr[i].status);
         } else {
@@ -3230,7 +3261,7 @@ static int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq
             continue;
         }
         buf[qbuf_cnt]->io_direction = UMQ_IO_RX;
-        buf[qbuf_cnt]->status = cr[i].status;
+        buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB RX reports cr[%d] status[%d]\n", i, cr[i].status);
         } else {

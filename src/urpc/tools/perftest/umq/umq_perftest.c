@@ -136,6 +136,8 @@ static int umq_perftest_init_umq(umq_perftest_config_t *cfg)
     umq_config->buf_mode = cfg->buf_mode;
     umq_config->feature = cfg->feature;
     umq_config->flow_control.use_atomic_window = cfg->use_atomic_window;
+    umq_config->flow_control.notify_interval =
+        cfg->config.case_type == PERFTEST_CASE_LAT ? (cfg->config.rx_depth >> 1) : 0;
     umq_config->headroom_size = 0;
     umq_config->io_lock_free = true;
     umq_config->trans_info_num = 1;

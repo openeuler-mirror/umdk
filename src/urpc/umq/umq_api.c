@@ -568,6 +568,25 @@ int umq_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     return umq->tp_ops->umq_tp_buf_headroom_reset(qbuf, headroom_size);
 }
 
+int umq_buf_reset(umq_buf_t *qbuf)
+{
+    if (!g_umq_inited || qbuf == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_buf_t *head = qbuf;
+    uint32_t total_data_size = 0;
+    while (head != NULL ) {
+        head->data_size = head->buf_size;
+        total_data_size += head->data_size;
+
+        head = head->qbuf_next;
+    }
+    qbuf->total_data_size = total_data_size;
+
+    return UMQ_SUCCESS;
+}
+
 umq_buf_t *umq_data_to_head(void *data)
 {
     if (!g_umq_inited || data == NULL) {
