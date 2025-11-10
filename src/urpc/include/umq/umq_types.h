@@ -119,7 +119,7 @@ typedef struct umq_trans_info {
 typedef struct umq_flow_control_cfg {
     // set when rx >= initial_window at first, [1, rx_depth], otherwise use rx_depth / 2 by default
     uint16_t initial_window;
-    // notify when rx >= notify_interval, [1, rx_depth], otherwise use rx_depth / 16 by default 
+    // notify when rx >= notify_interval, [1, rx_depth], otherwise use rx_depth / 16 by default
     uint16_t notify_interval;
     // use atomic variables as flow control window
     bool use_atomic_window;
@@ -182,7 +182,8 @@ struct umq_buf {
 
     uint32_t data_size;                   // size of umq buf data
     uint16_t headroom_size;               // size of umq buf headroom
-    uint16_t rsvd1;
+    uint16_t first_fragment : 1;          // first piece of each batch buf
+    uint16_t rsvd1 : 15;
 
     uint32_t token_id : 20;               // token_id for reference operation
     uint32_t rsvd2 : 4;

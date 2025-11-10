@@ -32,7 +32,7 @@ typedef struct qbuf_pool {
     uint32_t headroom_size;     // 预留的头部空间大小
     uint32_t data_size;
 
-    uint32_t total_block_num;
+    uint64_t total_block_num;
     umq_buf_mode_t mode;
 
     global_block_pool_t block_pool;
@@ -102,7 +102,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     if (cfg->mode == UMQ_BUF_SPLIT) {
         QBUF_LIST_INIT(&g_qbuf_pool.block_pool.head_without_data);
         uint32_t blk_size = UMQ_SIZE_SMALL;
-        uint32_t blk_num = cfg->total_size /
+        uint64_t blk_num = cfg->total_size /
             ((UMQ_EMPTY_HEADER_COEFFICIENT + 1) * (uint32_t)sizeof(umq_buf_t) + blk_size);
 
         g_qbuf_pool.block_size = blk_size;
@@ -112,7 +112,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         g_qbuf_pool.header_buffer = cfg->buf_addr + blk_num * blk_size;
         g_qbuf_pool.ext_header_buffer = g_qbuf_pool.header_buffer + blk_num * sizeof(umq_buf_t);
 
-        for (uint32_t i = 0; i < blk_num; i++) {
+        for (uint64_t i = 0; i < blk_num; i++) {
             umq_buf_t *buf = id_to_buf_with_data_split((char *)g_qbuf_pool.header_buffer, i);
             buf->umqh = UMQ_INVALID_HANDLE;
             buf->buf_size = blk_size + (uint32_t)sizeof(umq_buf_t);
@@ -126,8 +126,8 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }
 
-        uint32_t head_without_data_count = blk_num * UMQ_EMPTY_HEADER_COEFFICIENT;
-        for (uint32_t i = 0; i < head_without_data_count; i++) {
+        uint64_t head_without_data_count = blk_num * UMQ_EMPTY_HEADER_COEFFICIENT;
+        for (uint64_t i = 0; i < head_without_data_count; i++) {
             umq_buf_t *head_buf = id_to_buf_without_data_split((char *)g_qbuf_pool.ext_header_buffer, i);
             head_buf->umqh = UMQ_INVALID_HANDLE;
             head_buf->buf_size = (uint32_t)sizeof(umq_buf_t);
@@ -144,7 +144,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         g_qbuf_pool.block_pool.buf_cnt_without_data = head_without_data_count;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         uint32_t blk_size = UMQ_SIZE_SMALL;
-        uint32_t blk_num = cfg->total_size / blk_size;
+        uint64_t blk_num = cfg->total_size / blk_size;
 
         g_qbuf_pool.data_buffer = cfg->buf_addr;
         g_qbuf_pool.header_buffer = NULL;
@@ -153,7 +153,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         g_qbuf_pool.block_size = blk_size;
         g_qbuf_pool.total_block_num = blk_num;
 
-        for (uint32_t i = 0; i < blk_num; i++) {
+        for (uint64_t i = 0; i < blk_num; i++) {
             umq_buf_t *buf = id_to_buf_combine((char *)g_qbuf_pool.data_buffer, i, g_qbuf_pool.block_size);
             buf->umqh = UMQ_INVALID_HANDLE;
             buf->buf_size = blk_size;
@@ -281,7 +281,6 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
         UMQ_VLOG_ERR("qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
-
     return headroom_reset(qbuf, headroom_size, g_qbuf_pool.mode, g_qbuf_pool.block_size);
 }
 

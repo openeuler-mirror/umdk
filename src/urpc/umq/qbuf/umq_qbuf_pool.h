@@ -314,22 +314,26 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     uint32_t total_data_size = request_size;
     uint32_t remaining_size = request_size;
     uint32_t max_data_capacity = UMQ_SIZE_SMALL - headroom_size_temp;
+    bool first_fragment = true;
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data) {
         cur_node->buf_data = floor_to_align(cur_node->buf_data, UMQ_SIZE_SMALL) + headroom_size_temp;
         cur_node->buf_size = UMQ_SIZE_SMALL + (uint32_t)sizeof(umq_buf_t);
         cur_node->headroom_size = headroom_size_temp;
         cur_node->total_data_size = total_data_size;
+        cur_node->first_fragment = first_fragment;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         remaining_size -= cur_node->data_size;
         if (remaining_size == 0) {
             headroom_size_temp = headroom_size;
             total_data_size = request_size;
             remaining_size = request_size;
+            first_fragment = true;
             max_data_capacity = UMQ_SIZE_SMALL - headroom_size;
         } else {
             headroom_size_temp = 0;
             total_data_size = 0;
+            first_fragment = false;
             max_data_capacity = UMQ_SIZE_SMALL;
         }
         if (++cnt == num) {
@@ -357,12 +361,14 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     uint32_t remaining_size = request_size;
     uint32_t max_data_size = UMQ_SIZE_SMALL - sizeof(umq_buf_t);
     uint32_t max_data_capacity = max_data_size - headroom_size_temp;
+    bool first_fragment = true;
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data) {
         cur_node->buf_data = cur_node->data + headroom_size_temp;
         cur_node->buf_size = UMQ_SIZE_SMALL;
         cur_node->headroom_size = headroom_size_temp;
         cur_node->total_data_size = total_data_size;
+        cur_node->first_fragment = first_fragment;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         remaining_size -= cur_node->data_size;
         if (remaining_size == 0) {
@@ -370,9 +376,11 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
             total_data_size = request_size;
             remaining_size = request_size;
             max_data_capacity = max_data_size - headroom_size;
+            first_fragment = true;
         } else {
             headroom_size_temp = 0;
             total_data_size = 0;
+            first_fragment = false;
             max_data_capacity = max_data_size;
         }
         if (++cnt == num) {
@@ -390,25 +398,79 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     local_pool->buf_cnt_with_data -= num;
 }
 
-static ALWAYS_INLINE int headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size, umq_buf_mode_t mode,
-        uint32_t block_size)
+static ALWAYS_INLINE int headroom_reset_with_split(umq_buf_t *qbuf, uint16_t headroom_size, uint32_t block_size)
 {
     umq_buf_t *data = qbuf;
-    uint64_t size = headroom_size + (mode == UMQ_BUF_COMBINE ? sizeof(umq_buf_t) : 0);
-    if (size > block_size) {
-        UMQ_VLOG_ERR("headroom_size: %u invalid\n", headroom_size);
-        return UMQ_FAIL;
+    uint32_t total_data_size = qbuf->total_data_size;
+    uint32_t remaining_size = total_data_size;
+    uint32_t max_data_capacity;
+    uint32_t after_reset_buf_count = ((total_data_size + headroom_size + block_size - 1) / block_size);
+    uint32_t before_reset_buf_count = ((total_data_size + data->headroom_size + block_size - 1) / block_size);
+
+    if ((headroom_size > block_size) || (after_reset_buf_count > before_reset_buf_count)) {
+        UMQ_LIMIT_VLOG_ERR("headroom_size: %u invalid, after_reset: %u, before_reset: %u\n",
+            headroom_size, after_reset_buf_count, before_reset_buf_count);
+        return -UMQ_ERR_EINVAL;
     }
 
     int32_t diff = (int32_t)headroom_size - (int32_t)data->headroom_size;
+
     while (data != NULL) {
-        data->buf_data = data->buf_data + diff;
-        data->data_size -= (uint32_t)diff;
-        data->total_data_size -= (uint32_t)diff;
-        data->headroom_size = headroom_size;
+        if (data->first_fragment) {
+            data->buf_data = data->buf_data + diff;
+            data->headroom_size = headroom_size;
+            remaining_size = data->total_data_size;
+            max_data_capacity = block_size - headroom_size;
+        } else {
+            max_data_capacity = block_size;
+        }
+        data->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
+        remaining_size -= data->data_size;
         data = data->qbuf_next;
     }
     return UMQ_SUCCESS;
+}
+
+static ALWAYS_INLINE int headroom_reset_with_combine(umq_buf_t *qbuf, uint16_t headroom_size, uint32_t block_size)
+{
+    umq_buf_t *data = qbuf;
+    uint32_t total_data_size = qbuf->total_data_size;
+    uint32_t align_size = block_size - sizeof(umq_buf_t);
+    uint32_t after_reset_buf_count =  ((total_data_size + headroom_size + align_size - 1) / align_size);
+    uint32_t before_reset_buf_count = ((total_data_size + data->headroom_size + align_size - 1) / align_size);
+
+    if ((headroom_size > align_size) || (after_reset_buf_count > before_reset_buf_count)) {
+        UMQ_LIMIT_VLOG_ERR("headroom_size: %u invalid, after_reset: %u, before_reset: %u\n",
+            headroom_size, after_reset_buf_count, before_reset_buf_count);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    uint32_t remaining_size = qbuf->total_data_size;
+    uint32_t max_data_capacity = align_size - headroom_size;
+    int32_t diff = (int32_t)headroom_size - (int32_t)data->headroom_size;
+
+    while (data != NULL) {
+        if (data->first_fragment) {
+            data->buf_data = data->buf_data + diff;
+            data->headroom_size = headroom_size;
+            remaining_size = data->total_data_size;
+        } else {
+            max_data_capacity = align_size;
+        }
+        data->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
+        remaining_size -= data->data_size;
+        data = data->qbuf_next;
+    }
+    return UMQ_SUCCESS;
+}
+
+static ALWAYS_INLINE int headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size, umq_buf_mode_t mode,
+        uint32_t block_size)
+{
+    if (mode == UMQ_BUF_SPLIT) {
+        return headroom_reset_with_split(qbuf, headroom_size, block_size);
+    }
+    return headroom_reset_with_combine(qbuf, headroom_size, block_size);
 }
 
 uint32_t umq_qbuf_headroom_get(void);

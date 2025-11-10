@@ -241,6 +241,7 @@ typedef struct umq_ub_bind_info {
     urma_order_type_t order_type;
     urma_token_t token;
     urma_target_seg_t tseg;
+    umq_buf_mode_t buf_pool_mode;
     uint64_t notify_buf;
     uint64_t win_buf_addr;
     uint32_t win_buf_len;
@@ -777,6 +778,7 @@ int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_i
     info->win_buf_addr = queue->flow_control.enabled ? umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL) : 0;
     info->win_buf_len = queue->flow_control.enabled ? UMQ_UB_RW_SEGMENT_LEN : 0;
     (void)memcpy(&info->tseg, queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
+    info->buf_pool_mode = umq_qbuf_mode_get();
     return sizeof(umq_ub_bind_info_t);
 }
 
@@ -968,33 +970,66 @@ static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, xchg_mem_info_t *
     return import_tseg;
 }
 
-int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
+static int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
-    if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
-        UMQ_VLOG_ERR("bind info size invalid\n");
-        return -UMQ_ERR_EINVAL;
-    }
-    umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
     if (info->umq_trans_mode != UMQ_TRANS_MODE_UB && info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
         info->umq_trans_mode != UMQ_TRANS_MODE_UBMM && info->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
         UMQ_VLOG_ERR("trans mode %d is not UB\n", info->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
-    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
+
+    if (info->buf_pool_mode != umq_qbuf_mode_get()) {
+        UMQ_VLOG_ERR("buf pool mode negotiation inconsistency, recv mode: %d\n", info->buf_pool_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (queue->bind_ctx != NULL || info->is_binded) {
         UMQ_VLOG_ERR("umq has already been binded\n");
         return -UMQ_ERR_EEXIST;
     }
-    if (memcmp(&queue->jetty->jetty_id.eid, &info->jetty_id.eid, sizeof(urma_eid_t)) == 0 && 
+
+    if (memcmp(&queue->jetty->jetty_id.eid, &info->jetty_id.eid, sizeof(urma_eid_t)) == 0 &&
         queue->jetty->jetty_id.id == info->jetty_id.id) {
         UMQ_VLOG_ERR("the queue cannot bind itself\n");
         return -UMQ_ERR_EINVAL;
     }
+    return UMQ_SUCCESS;
+}
 
-    if (umq_ub_window_init(&queue->flow_control, info) != UMQ_SUCCESS) {
-        return -UMQ_ERR_EINVAL;
-    }
+static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
+{
+    uint32_t require_rx_count = queue->rx_depth;
+    uint32_t cur_batch_count = 0;
+    int ret = UMQ_SUCCESS;
 
+    umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+    do {
+        cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
+        umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, 0, NULL);
+        if (qbuf == NULL) {
+            UMQ_VLOG_ERR("alloc rx failed");
+            ret = UMQ_ERR_ENOMEM;
+            goto DEC_REF;
+        }
+
+        umq_buf_t *bad_buf = NULL;
+        if (umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf) != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR("post rx failed");
+            umq_buf_free(bad_buf);
+            ret = UMQ_FAIL;
+            goto DEC_REF;
+        }
+        require_rx_count -= cur_batch_count;
+    } while (require_rx_count > 0);
+
+DEC_REF:
+    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+    return ret;
+
+}
+
+static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
+{
     urma_target_seg_t *tseg = &info->tseg;
     urma_seg_t *seg = &tseg->seg;
     xchg_mem_info_t mem_info = {
@@ -1003,6 +1038,7 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
         .seg_flag = (urma_import_seg_flag_t)seg->attr.value,
         .token.token = (uint32_t)tseg->user_ctx
     };
+
     (void)memcpy(&mem_info.ubva, &seg->ubva, sizeof(urma_ubva_t));
     queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID] = import_mem(queue->dev_ctx->urma_ctx, &mem_info);
     if (queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID] == NULL) {
@@ -1015,6 +1051,7 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
         goto UNIMPORT_SEG;
     }
     ctx->remote_notify_addr = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
+
     urma_rjetty_t rjetty = {
         .jetty_id = info->jetty_id,
         .trans_mode = info->trans_mode,
@@ -1028,6 +1065,7 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
         UMQ_VLOG_ERR("import jetty failed\n");
         goto FREE_CTX;
     }
+
     urma_status_t status = urma_bind_jetty(queue->jetty, tjetty);
     if (status != URMA_SUCCESS && status != URMA_EEXIST) {
         UMQ_VLOG_ERR("bind jetty failed, status:%d\n", (int)status);
@@ -1035,25 +1073,12 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
     }
     // if mode is UB, post rx here. if mode is UB PRO, no need to post rx
     if ((queue->dev_ctx->feature & UMQ_FEATURE_API_PRO) == 0) {
-        uint32_t require_rx_count = queue->rx_depth;
-        uint32_t cur_batch_count = 0;
-        do {
-            cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
-            umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, 0, NULL);
-            if (qbuf == NULL) {
-                UMQ_VLOG_ERR("alloc rx failed");
-                goto UNIMPORT_JETTY;
-            }
-
-            umq_buf_t *bad_buf = NULL;
-            if (umq_ub_post_rx(umqh, qbuf, &bad_buf) != UMQ_SUCCESS) {
-                UMQ_VLOG_ERR("post rx failed");
-                umq_buf_free(bad_buf);
-                goto UNIMPORT_JETTY;
-            }
-            require_rx_count -= cur_batch_count;
-        } while (require_rx_count > 0);
+        int ret = umq_ub_prefill_rx_buf(queue);
+        if (ret != UMQ_SUCCESS) {
+            goto UNIMPORT_JETTY;
+        }
     }
+
     ctx->tjetty = tjetty;
     queue->bind_ctx = ctx;
     return UMQ_SUCCESS;
@@ -1068,6 +1093,27 @@ UNIMPORT_SEG:
     (void)urma_unimport_seg(queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]);
     queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID] = NULL;
     return UMQ_FAIL;
+}
+
+int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
+{
+    if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
+        UMQ_VLOG_ERR("bind info size invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
+
+    int ret = umq_ub_bind_info_check(queue, info);
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
+
+    if (umq_ub_window_init(&queue->flow_control, info) != UMQ_SUCCESS) {
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq_ub_bind_inner_impl(queue, info);
 }
 
 int umq_modify_ubq_to_err(ub_queue_t *queue)
@@ -1161,11 +1207,91 @@ umq_buf_t *umq_ub_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_nu
     return QBUF_LIST_FIRST(&head);
 }
 
-void umq_tp_ub_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
+umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
+    umq_alloc_option_t *option)
+{
+    uint32_t headroom_size = umq_qbuf_headroom_get();
+    umq_buf_mode_t mode = umq_qbuf_mode_get();
+    uint32_t factor = (mode == UMQ_BUF_SPLIT) ? 0 : sizeof(umq_buf_t);
+    umq_buf_list_t head;
+
+    QBUF_LIST_INIT(&head);
+    if (request_size + headroom_size + factor < UMQ_SIZE_MID) {
+        if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+            return NULL;
+        }
+    } else {
+        enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= UMQ_SIZE_BIG) ?
+            HUGE_QBUF_POOL_SIZE_TYPE_BIG : HUGE_QBUF_POOL_SIZE_TYPE_MID;
+        if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+            return NULL;
+        }
+    }
+
+    return QBUF_LIST_FIRST(&head);
+}
+
+void umq_ub_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
 {
     umq_buf_list_t head;
     QBUF_LIST_FIRST(&head) = qbuf;
     umq_qbuf_free(&head);
+}
+
+void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
+{
+    umq_buf_list_t head;
+    QBUF_LIST_FIRST(&head) = qbuf;
+    if (QBUF_LIST_NEXT(qbuf) == NULL) {
+        if (qbuf->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            umq_huge_qbuf_free(&head);
+        } else {
+            umq_qbuf_free(&head);
+        }
+
+        return;
+    }
+
+    /* Here, the free list will be traversed, and an attempt will be made to scan each qbuf object.
+    * If there exist n consecutive qbuf objects that belong to the same memory pool, they will be
+    * released in batch. */
+    umq_buf_t *cur_node = NULL;
+    umq_buf_t *next_node = NULL;
+    umq_buf_t *last_node = NULL;
+    umq_buf_t *free_node = qbuf; // head of the list to be released
+    umq_buf_list_t free_head;
+    QBUF_LIST_FIRST(&free_head) = free_node;
+    bool is_huge = qbuf->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID; // Specify the list to be released currently
+                                                                    // belongs to large or general pool.
+    QBUF_LIST_FIRST(&head) = QBUF_LIST_NEXT(qbuf);
+
+    QBUF_LIST_FOR_EACH_SAFE(cur_node, &head, next_node)
+    {
+        if ((is_huge && (cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID)) ||
+            (!is_huge && (cur_node->mempool_id == 0))) {
+            // current qbuf is in the same pool, scan the next one directly
+            last_node = cur_node;
+            continue;
+        }
+
+        QBUF_LIST_NEXT(last_node) = NULL;
+        QBUF_LIST_FIRST(&free_head) = free_node;
+        free_node = cur_node;
+        is_huge = cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID;
+        if (free_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            umq_huge_qbuf_free(&free_head);
+        } else {
+            umq_qbuf_free(&free_head);
+        }
+    }
+
+    QBUF_LIST_FIRST(&free_head) = free_node;
+    if (free_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+        umq_huge_qbuf_free(&free_head);
+    } else {
+        umq_qbuf_free(&free_head);
+    }
+    return;
 }
 
 static uint32_t get_dev_by_eid_str(urma_transport_type_t type, urma_eid_t *eid, urma_device_t **urma_dev,
@@ -2937,8 +3063,8 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
         wr_index++;
         if ((wr_index == (uint32_t)remain_tx || wr_index == UMQ_POST_POLL_BATCH) && buffer != NULL) {
             // wr count exceed remain_tx or UMQ_POST_POLL_BATCH
-            UMQ_LIMIT_VLOG_ERR("wr count %u exceeds remain_tx %d or max_post_size %d, not supported\n", wr_index, 
-                               remain_tx, UMQ_POST_POLL_BATCH);
+            UMQ_LIMIT_VLOG_ERR("wr count %u exceeds remain_tx %d or max_post_size %d, not supported\n", wr_index,
+                remain_tx, UMQ_POST_POLL_BATCH);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
             goto ERROR;
@@ -3070,8 +3196,8 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
         wr_index++;
         if ((wr_index == (uint32_t)remain_tx || wr_index == UMQ_POST_POLL_BATCH) && buffer != NULL) {
             // wr count exceed remain_tx or UMQ_POST_POLL_BATCH
-            UMQ_LIMIT_VLOG_ERR("wr count %u exceeds remain_tx %d or max_post_size %d, not supported\n", wr_index, 
-                               remain_tx, UMQ_POST_POLL_BATCH);
+            UMQ_LIMIT_VLOG_ERR("wr count %u exceeds remain_tx %d or max_post_size %d, not supported\n", wr_index,
+                remain_tx, UMQ_POST_POLL_BATCH);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
             goto ERROR;
@@ -3098,7 +3224,7 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
 
 ERROR:
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-    return ret;    
+    return ret;
 }
 
 static void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)

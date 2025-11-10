@@ -81,12 +81,12 @@ static int umq_tp_ub_plus_unbind(uint64_t umqh_tp)
 static umq_buf_t *umq_tp_ub_plus_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
     umq_alloc_option_t *option)
 {
-    return umq_ub_buf_alloc_impl(request_size, request_qbuf_num, umqh_tp, option);
+    return umq_ub_plus_buf_alloc_impl(request_size, request_qbuf_num, umqh_tp, option);
 }
 
 static void umq_tp_ub_plus_buf_free(umq_buf_t *qbuf, uint64_t umqh_tp)
 {
-    umq_tp_ub_buf_free_impl(qbuf, umqh_tp);
+    umq_ub_plus_buf_free_impl(qbuf, umqh_tp);
 }
 
 static int umq_tp_ub_plus_enqueue(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
