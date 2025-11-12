@@ -660,7 +660,7 @@ static void *server_jetty_thread_main(void *arg)
                 fprintf(stderr, "Failed to recv in server jetty thread\n");
                 return NULL;
             }
-            if (server_reply_to_client(ctx, &cr) != 0) {
+            if (cr.flag.bs.s_r == 1 && server_reply_to_client(ctx, &cr) != 0) {
                 break;
             }
         } else {
