@@ -173,12 +173,6 @@ bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty);
 
 bool is_valid_import_tseg(bondp_import_tseg_t *rtseg);
 
-/* Get index of matrix server port in bondp_context_t->port_ctxs[X] */
-static inline int get_matrix_port_ctx_idx(int primary_idx, int port_idx)
-{
-    return primary_idx * PORT_EID_MAX_NUM_PER_DEV + port_idx;
-}
-
 /* Get index of matrix server port in p_ctx, p_jetty, etc. */
 static inline int get_matrix_port_p_idx(int primary_idx, int port_idx)
 {
