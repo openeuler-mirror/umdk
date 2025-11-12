@@ -435,10 +435,10 @@ static int init_general_slave_devices(bondp_context_t *bond_ctx)
         return -1;
     }
 
-    bond_ctx->dev_num = dev_info.slave_dev_num;
-
-    if (g_bondp_global_ctx->use_single_die) {
+    if (is_single_dev_mode(&bond_ctx->v_ctx)) {
         bond_ctx->dev_num = SINGLE_DIE_IODIE_NUM;
+    } else {
+        bond_ctx->dev_num = dev_info.slave_dev_num;
     }
 
     for (i = 0; i < bond_ctx->dev_num; ++i) {
@@ -467,9 +467,9 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx)
     int ret = 0;
     int i = 0;
     int j = 0;
-    int iodie_num = g_bondp_global_ctx->use_single_die ? SINGLE_DIE_IODIE_NUM : PRIMARY_EID_NUM;
+    int iodie_num = is_single_dev_mode(&bond_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : PRIMARY_EID_NUM;
     /* The second iodie is empty and is set to valid in single-die mode */
-    bool iodie_valid[IODIE_NUM] = {false, g_bondp_global_ctx->use_single_die};
+    bool iodie_valid[IODIE_NUM] = {false, is_single_dev_mode(&bond_ctx->v_ctx)};
     for (i = 0; i < iodie_num; ++i) {
         /* Primary EID must be valid */
         if (is_empty_eid((urma_eid_t *)(topo_info->io_die_info[i].primary_eid))) {
@@ -505,7 +505,7 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Either iodie is invalid: %d %d\n", iodie_valid[0], iodie_valid[1]);
         goto DELETE_CTX;
     }
-    bond_ctx->dev_num = g_bondp_global_ctx->use_single_die ? SINGLE_DIE_DEVNUM : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
+    bond_ctx->dev_num = is_single_dev_mode(&bond_ctx->v_ctx) ? SINGLE_DIE_DEVNUM : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
     return init_slave_context_fd(bond_ctx);
 DELETE_CTX:
     /*
@@ -566,6 +566,9 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         URMA_LOG_ERR("Failed to create epoll %s\n", ub_strerror(errno));
         goto UNINIT_V_CTX;
     }
+    bond_ctx->v_ctx.aggr_mode = g_bondp_global_ctx->use_single_die
+        ? URMA_AGGR_MODE_STANDALONE
+        : URMA_AGGR_MODE_BALANCE;
 
     if (!g_bondp_global_ctx->skip_load_topo && get_topo_info_from_ko(bond_ctx) == 0) {
         ret = init_matrix_slave_devices(bond_ctx);

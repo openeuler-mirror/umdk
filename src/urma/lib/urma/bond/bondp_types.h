@@ -199,4 +199,9 @@ static inline bool is_multipath_comp(bondp_comp_t *bdp_comp)
 {
     return bdp_comp->is_multipath;
 }
+
+static inline bool is_single_dev_mode(urma_context_t *ctx)
+{
+    return ctx->aggr_mode == URMA_AGGR_MODE_STANDALONE;
+}
 #endif // BONDP_TYPES_H
