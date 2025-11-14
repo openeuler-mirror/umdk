@@ -1089,10 +1089,6 @@ int check_local_cfg(perftest_config_t *cfg)
 
     if (cfg->time_type.bs.infinite == 1) {
         cfg->no_peak = true;
-        if (cfg->use_jfce) {
-            (void)fprintf(stderr, "Infinite does not support use_jfce currently.\n");
-            exit(1);
-        }
         if (cfg->type == PERFTEST_LAT) {
             (void)fprintf(stderr, "Infinite only supports BW test currently.\n");
             exit(1);
