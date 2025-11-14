@@ -581,7 +581,7 @@ urma_target_jetty_t *udma_u_import_jetty_ex(urma_context_t *ctx,
 {
 	urma_tjetty_cfg_t cfg = {rjetty->jetty_id, rjetty->flag,
 				 token_value, rjetty->trans_mode,
-				 rjetty->policy, rjetty->type};
+				 rjetty->policy, rjetty->type, rjetty->tp_type};
 	urma_cmd_udrv_priv_t udrv_data = {};
 	struct udma_u_target_jetty *tjetty;
 

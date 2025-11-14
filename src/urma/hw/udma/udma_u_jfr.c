@@ -524,6 +524,7 @@ urma_target_jetty_t *udma_u_import_jfr_ex(urma_context_t *ctx,
 	cfg.token = token_value;
 	cfg.jfr_id = rjfr->jfr_id;
 	cfg.trans_mode = rjfr->trans_mode;
+	cfg.tp_type = rjfr->tp_type;
 	if (rjfr->flag.bs.token_policy != URMA_TOKEN_NONE) {
 		tjfr->token_value = token_value->token;
 		tjfr->token_value_valid = true;
