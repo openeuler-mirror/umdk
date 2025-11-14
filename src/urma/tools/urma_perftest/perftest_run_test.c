@@ -2610,6 +2610,12 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
             }
         }
         if (tot_ccnt < tot_scnt) {
+            if (cfg->use_jfce == true) {
+                if (wait_jfc_event(ctx->jfce_s[0], cfg->wait_jfc_timeout) != 0) {
+                    (void)fprintf(stderr, "Couldn't wait jfce event.\n");
+                    goto err_exit;
+                }
+            }
             cqe_cnt = urma_poll_jfc(ctx->jfc_s[0], PERFTEST_POLL_BATCH, cr);
             if (cqe_cnt > 0) {
                 for (int i = 0; i < cqe_cnt; i++) {
@@ -2709,6 +2715,13 @@ static int run_once_bw_recv_infinite(perftest_context_t *ctx, perftest_config_t 
             void *thread_ret;
             (void)pthread_join(print_thread, &thread_ret);
             break;
+        }
+        if (cfg->use_jfce == true) {
+            if (wait_jfc_event(ctx->jfce_r[0], cfg->wait_jfc_timeout) != 0) {
+                (void)fprintf(stderr, "Couldn't wait jfc event.\n");
+                ret = -1;
+                goto err_exit;
+            }
         }
         cqe_cnt = urma_poll_jfc(ctx->jfc_r[0], PERFTEST_POLL_BATCH, cr);
         if (cqe_cnt > 0) {
