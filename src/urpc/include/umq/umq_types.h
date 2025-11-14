@@ -117,7 +117,12 @@ typedef struct umq_trans_info {
 #define UMQ_FEATURE_ENABLE_FLOW_CONTROL     (1 << 4)    // enable flow control
 
 typedef struct umq_flow_control_cfg {
-    bool use_atomic_window;  // use atomic variables as flow control window
+    // set when rx >= initial_window at first, [1, rx_depth], otherwise use rx_depth / 2 by default
+    uint16_t initial_window;
+    // notify when rx >= notify_interval, [1, rx_depth], otherwise use rx_depth / 16 by default 
+    uint16_t notify_interval;
+    // use atomic variables as flow control window
+    bool use_atomic_window;
 } umq_flow_control_cfg_t;
 
 typedef struct umq_init_cfg {
@@ -172,7 +177,7 @@ struct umq_buf {
 
     uint64_t umqh;                        // umqh which buf alloc from
 
-    uint32_t total_data_size;             // size of all umq buf data
+    uint32_t total_data_size;             // size of a batch of umq buf data, only valid in first qbuf of this batch
     uint32_t buf_size;                    // size of current umq buf
 
     uint32_t data_size;                   // size of umq buf data
@@ -184,7 +189,7 @@ struct umq_buf {
     uint32_t mempool_id : 8;              // indicate which memory pool it is allocated from
     uint32_t token_value;                 // token_value for reference operation
 
-    uint64_t status : 32;                 // status of umq buf
+    uint64_t status : 32;                 // umq_buf_status_t
     uint64_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
     uint64_t need_import : 1;
     uint64_t rsvd3 : 29;
