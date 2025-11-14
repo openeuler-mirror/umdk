@@ -269,27 +269,6 @@ static void udma_u_parse_opcode_for_res(struct udma_u_jfc_cqe *cqe, urma_cr_t *c
 	}
 }
 
-static struct udma_u_jetty_queue
-*udma_u_get_jetty_queue(struct udma_u_context *ctx,
-			enum udma_u_node_tbl_type type,
-			uint32_t local_id)
-{
-	struct udma_u_jetty_queue *udma_queue;
-	struct udma_u_hmap_node *hmap_node;
-	struct node_tbl *tbl;
-
-	tbl = &ctx->src_idx_tbl[type];
-	(void)pthread_rwlock_rdlock(&tbl->rwlock);
-	hmap_node = udma_u_hmap_first_with_hash(&tbl->hmap, local_id);
-	(void)pthread_rwlock_unlock(&tbl->rwlock);
-	if (hmap_node == NULL)
-		return NULL;
-
-	udma_queue = to_udma_jetty_queue(hmap_node);
-
-	return udma_queue;
-}
-
 static bool udma_u_update_jfr_idx(struct udma_u_context *udma_ctx,
 				  struct udma_u_jfc_cqe *cqe, urma_cr_t *cr,
 				  bool is_clean)
@@ -300,20 +279,39 @@ static bool udma_u_update_jfr_idx(struct udma_u_context *udma_ctx,
 	struct udma_u_jetty *jetty;
 	struct udma_u_jfr *jfr;
 	uint32_t entry_idx;
+	uint32_t table_id;
+	uint32_t jetty_id;
+	uint32_t mask;
 
-	queue = udma_u_get_jetty_queue(udma_ctx, (is_jetty ? UDMA_U_JETTY_TBL : UDMA_U_JFR_TBL), cr->local_id);
-	if (queue == NULL) {
-		UDMA_LOG_ERR("failed to match id %u, is_jetty = %d.\n", cr->local_id, is_jetty);
-		return true;
-	}
+	table_id = cr->local_id >> udma_ctx->jettys_in_tbl_shift;
+	mask = (1 << udma_ctx->jettys_in_tbl_shift) - 1;
+	jetty_id = cr->local_id;
 
 	if (is_jetty) {
-		jetty = to_udma_u_jetty_from_queue(queue);
-		cr->user_data = (uintptr_t)&jetty->base;
-		jfr = jetty->jfr;
+		if (udma_ctx->jetty_table[table_id].refcnt) {
+			jetty = (struct udma_u_jetty *)udma_ctx->jetty_table[table_id].jetty_array[jetty_id & mask];
+			if (!jetty) {
+				UDMA_LOG_INFO("Failed to get jetty. JT 0x%x has been destroyed.\n", jetty_id);
+				return true;
+			}
+			cr->user_data = (uintptr_t)&jetty->base;
+			jfr = jetty->jfr;
+		} else {
+			UDMA_LOG_INFO("Failed to poll jfc. JT 0x%x has been destroyed.\n", jetty_id);
+			return true;
+		}
 	} else {
-		jfr = to_udma_u_jfr_from_queue(queue);
-		cr->user_data = (uintptr_t)&jfr->base;
+		if (udma_ctx->jfr_table[table_id].refcnt) {
+			jfr = (struct udma_u_jfr *)udma_ctx->jfr_table[table_id].jfr_array[jetty_id & mask];
+			if (!jfr) {
+				UDMA_LOG_INFO("Failed to get jetty. JT 0x%x has been destroyed.\n", jetty_id);
+				return true;
+			}
+			cr->user_data = (uintptr_t)&jfr->base;
+		} else {
+			UDMA_LOG_INFO("Failed to poll jfc. JFR 0x%x has been destroyed.\n", jetty_id);
+			return true;
+		}
 	}
 
 	queue = &jfr->rq;
@@ -453,9 +451,8 @@ static enum jfc_poll_state udma_u_poll_one(struct udma_u_context *udma_ctx,
 	if (cqe == NULL)
 		return JFC_EMPTY;
 
-	++udma_u_jfc->cq.ci;
-
 	udma_from_device_barrier();
+	++udma_u_jfc->cq.ci;
 
 	if (udma_u_parse_cqe_for_jfc(udma_ctx, cqe, cr))
 		return JFC_POLL_ERR;

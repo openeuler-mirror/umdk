@@ -56,4 +56,5 @@ urma_target_jetty_t *udma_u_import_jfr_ex(urma_context_t *ctx,
 					  urma_rjfr_t *rjfr,
 					  urma_token_t *token_value,
 					  urma_active_tp_cfg_t *active_tp_cfg);
+int udma_u_insert_jfr_node(struct udma_u_context *udma_ctx, struct udma_u_jfr *jfr);
 #endif /* __UDMA_U_JFR_H__ */

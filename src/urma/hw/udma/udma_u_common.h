@@ -20,10 +20,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include "urma_provider.h"
-#include "udma_u_abi.h"
 #include "udma_u_ctl.h"
+#include "udma_u_abi.h"
 #include "udma_u_log.h"
-#include "udma_u_hmap.h"
 
 #define UDMA_JFS_WQEBB 64
 #define UDMA_JFR_WQEBB 16U
@@ -36,8 +35,10 @@
 #define UDMA_BITS_PER_LONG_SHIFT 6
 #define UDMA_JFS_WQEBB_SHIFT 6
 #define UDMA_SGE_SIZE 16
+
 #define UDMA_JFC_DB_OFFSET 0
 #define min(x, y) ((x) < (y) ? (x) : (y))
+#define RTE_SET_USED(x) (void)(x)
 
 struct udma_u_doorbell {
 	uint32_t id;
@@ -75,6 +76,9 @@ struct udma_u_hugepage {
 	struct udma_u_hugepage_priv *priv;
 };
 
+/* 32 */
+#define UDMA_JETTY_TABLE_NUM 1 << 5
+
 struct udma_u_context {
 	urma_context_t		urma_ctx;
 	void			*db_addr;
@@ -90,10 +94,21 @@ struct udma_u_context {
 	uint32_t		die_id;
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
-	struct node_tbl		src_idx_tbl[UDMA_U_TBL_NUM];
 	bool			hugepage_enable;
 	pthread_mutex_t		hugepage_lock;
 	struct udma_u_hugepage_priv *hugepage_list;
+	struct {
+		struct udma_u_jetty	**jetty_array;
+		int			refcnt;
+	} jetty_table[UDMA_JETTY_TABLE_NUM];
+	struct {
+		struct udma_u_jfr	**jfr_array;
+		int			refcnt;
+	} jfr_table[UDMA_JETTY_TABLE_NUM];
+	pthread_rwlock_t	jetty_table_lock;
+	pthread_rwlock_t	jfr_table_lock;
+	uint32_t		jettys_in_tbl_shift;
+	uint32_t		jettys_in_tbl;
 };
 
 struct udma_u_jetty_queue {
@@ -123,7 +138,6 @@ struct udma_u_jetty_queue {
 	uint32_t old_entry_idx;
 	bool lock_free;
 	bool cstm; /* sq ctrl flag */
-	struct udma_u_hmap_node hmap_node;
 	struct udma_u_hugepage *hugepage;
 };
 
@@ -247,11 +261,10 @@ struct udma_u_target_jetty {
 	  + (uint8_t)check_types_match(*(member_ptr), ((containing_type *)0)->member))
 #endif
 
-#define udma_to_device_barrier() {asm volatile("dsb st" ::: "memory"); }
-#define udma_from_device_barrier() {asm volatile("dsb ld" ::: "memory"); }
+#define udma_to_device_barrier() {asm volatile("dmb st" ::: "memory"); }
+#define udma_from_device_barrier() {asm volatile("dmb ld" ::: "memory"); }
 
 #define ARRAY_SIZE(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
-#define RTE_SET_USED(x) (void)(x)
 
 static inline void udma_u_set_udata(urma_cmd_udrv_priv_t *udrv_data,
 				    void *in_addr, uint32_t in_len,
@@ -386,40 +399,6 @@ static inline void udma_u_write64(uint64_t *dest, uint64_t *val)
 			      (uint64_t)(*val), memory_order_relaxed);
 }
 
-static inline struct udma_u_jetty_queue
-*to_udma_jetty_queue(struct udma_u_hmap_node *node)
-{
-	return container_of(node, struct udma_u_jetty_queue, hmap_node);
-}
-
-static inline int udma_u_jetty_queue_insert(struct udma_u_context *udma_ctx,
-					    struct udma_u_jetty_queue *queue,
-					    enum udma_u_node_tbl_type type)
-{
-	int ret;
-
-	(void)pthread_rwlock_wrlock(&udma_ctx->src_idx_tbl[type].rwlock);
-
-	ret = udma_u_hmap_insert(&udma_ctx->src_idx_tbl[type].hmap,
-				 &queue->hmap_node, queue->idx);
-	if (ret == EINVAL)
-		UDMA_LOG_ERR("insert queue failed idx = %u.\n", queue->idx);
-
-	(void)pthread_rwlock_unlock(&udma_ctx->src_idx_tbl[type].rwlock);
-
-	return ret;
-}
-
-static inline void udma_u_jetty_queue_remove(struct udma_u_context *udma_ctx,
-					     struct udma_u_jetty_queue *queue,
-					     enum udma_u_node_tbl_type type)
-{
-	(void)pthread_rwlock_wrlock(&udma_ctx->src_idx_tbl[type].rwlock);
-	udma_u_hmap_remove(&udma_ctx->src_idx_tbl[type].hmap,
-			   &queue->hmap_node);
-	(void)pthread_rwlock_unlock(&udma_ctx->src_idx_tbl[type].rwlock);
-}
-
 static inline uint32_t calc_mask(uint32_t capacity)
 {
 	return ((uint32_t)1 << ilog32(capacity)) - (uint32_t)1;
@@ -431,6 +410,11 @@ static inline void udma_u_swap_endian128(uint8_t *src, uint8_t *dst)
 	*(uint64_t *)(dst) = __builtin_bswap64(*(uint64_t *)(src + sizeof(uint64_t)));
 }
 
+static inline struct udma_u_jfs_wr_ex *to_udma_u_jfs_wr_ex(urma_jfs_wr_t *urma_wr)
+{
+	return container_of(urma_wr, struct udma_u_jfs_wr_ex, wr);
+}
+
 typedef int (*udma_u_user_ctl_ops)(urma_context_t *ctx, urma_user_ctl_in_t *in,
 				   urma_user_ctl_out_t *out, enum udma_u_user_ctl_opcode op);
 
@@ -438,10 +422,5 @@ bool udma_u_user_ctl_check_param(uint64_t addr, uint32_t in_len, uint32_t len,
 				 enum udma_u_user_ctl_opcode opcode);
 int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		    urma_user_ctl_out_t *out);
-
-static inline struct udma_u_jfs_wr_ex *to_udma_u_jfs_wr_ex(urma_jfs_wr_t *urma_wr)
-{
-	return container_of(urma_wr, struct udma_u_jfs_wr_ex, wr);
-}
 
 #endif /* __UDMA_U_COMMON_H__ */
