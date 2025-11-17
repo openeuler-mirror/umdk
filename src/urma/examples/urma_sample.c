@@ -731,7 +731,8 @@ static int server_listen(context_t *ctx, const argument_t *args)
         return -1;
     }
 
-    // 初始化信号量，初始值为0（互斥锁效果）,用于保障RC先bind jetty再使用
+    // Initialize the semaphore with an initial value of 0
+    // Ensuring that RC binds Jetty before usage
     sem_init(&semaphore, 0, 0);
     ctx->s.server_stop = false;
     ret = pthread_create(&ctx->s.server_sock_thread, NULL, server_sock_thread_main, ctx);
