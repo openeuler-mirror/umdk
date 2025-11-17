@@ -109,11 +109,16 @@ unsigned long ub_find_first_zero_bit(const unsigned long *array, unsigned long s
 
     array_size = BITS_TO_LONGS(size);
     for (i = 0; i < array_size; i++) {
-        if (array[i] == 0) {
-            return (ret + ffz(array[i]));
-        } else {
-            ret += BITS_PER_LONG;
+        if (array[i] != ~0UL) {
+            unsigned long pos = ffz(array[i]);
+            pos = (pos >= BITS_PER_LONG) ? BITS_PER_LONG - 1 : pos;
+            if (ret + pos < size) {
+                return ret + pos;
+            } else {
+                return size;
+            }
         }
+        ret += BITS_PER_LONG;
     }
 
     return size;

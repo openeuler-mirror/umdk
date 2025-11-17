@@ -131,8 +131,17 @@ static void ub_print_result_us(uint64_t *cycles, uint64_t cycles_num, uint32_t i
 
     qsort(cycles, cycles_num, sizeof(uint64_t), data_compare);
 
+    if (cycles_num <= UB_PERF_MEASURE_TAIL) {
+        (void)fprintf(stderr, "Invalid cycles_num: too small after tail removal.\n");
+        return;
+    }
     uint64_t cal_num = cycles_num - UB_PERF_MEASURE_TAIL;       /* Remove the two largest values */
-    double *delta_us = (double *)calloc((uint32_t)cal_num, sizeof(double));
+
+    if (cal_num > SIZE_MAX / sizeof(double)) {
+        (void)fprintf(stderr, "Requested buffer size too large.\n");
+        return;
+    }
+    double *delta_us = (double *)calloc(cal_num, sizeof(double));
     if (delta_us == NULL) {
         (void)fprintf(stderr, "Failed to alloc delta_us buffer.\n");
         return;
@@ -167,7 +176,8 @@ static void ub_print_perf_result_by_index(ub_perf_proc_context_t *perf_proc, uin
         if (perf_proc->end[i] < perf_proc->start[i]) {
             (void)fprintf(stderr, "Invalid parameter, end: %lu, start: %lu.\n", perf_proc->end[i],
                 perf_proc->start[i]);
-            break;
+            free(cycles);
+            return;
         }
         cycles[i] = perf_proc->end[i] - perf_proc->start[i];
     }
