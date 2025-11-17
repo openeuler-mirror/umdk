@@ -90,7 +90,11 @@ typedef struct bondp_context {
     bondp_hash_table_t remote_p2v_jetty_id_table;
     int real_async_fd; /* vcontex async_fd */
     bondp_hash_table_t remote_v2p_token_id_table;
+    #ifndef __cplusplus
     atomic_ulong token_id_cnt;
+    #else
+    std::atomic_ulong token_id_cnt;
+    #endif
 } bondp_context_t;
 
 typedef enum bondp_comp_type {
