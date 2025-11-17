@@ -663,7 +663,7 @@ int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->queue_mode != UMQ_MODE_INTERRUPT) {
         UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
-        return UMQ_FAIL;
+        return -UMQ_ERR_EINVAL;
     }
     return UMQ_SUCCESS;
 }
