@@ -688,7 +688,7 @@ int umq_shm_qbuf_enqueue(umq_buf_t *qbuf, uint64_t umq, uint64_t pool, bool rend
 
     int ret = enqueue(umq, &qbuf_offset, 1);
     if (ret != UMQ_SUCCESS) {
-        umq_shm_offset_to_qbuf_pointer((qbuf_offset & UMQ_OFFSET_DATA_BITS), pool, umq);
+        umq_shm_offset_to_qbuf_pointer((qbuf_offset & UMQ_OFFSET_DATA_BITS), pool, qbuf->umqh);
     }
     return ret;
 }
