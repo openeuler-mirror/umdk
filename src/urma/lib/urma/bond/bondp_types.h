@@ -89,6 +89,8 @@ typedef struct bondp_context {
     /* The mapping of pjetty_ids to vjetty_ids of all remote jettys that have been obtained. */
     bondp_hash_table_t remote_p2v_jetty_id_table;
     int real_async_fd; /* vcontex async_fd */
+    bondp_hash_table_t remote_v2p_token_id_table;
+    atomic_ulong token_id_cnt;
 } bondp_context_t;
 
 typedef enum bondp_comp_type {
@@ -150,6 +152,7 @@ typedef struct bondp_import_target_seg {
     urma_target_seg_t *p_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
     int target_dev_num;
+    bool is_reused;
 } bondp_import_tseg_t;
 
 static inline bool is_valid_dev_num(int dev_num)
