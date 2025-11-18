@@ -226,13 +226,14 @@ static void bondp_del_jfs_p_vjetty_info(bondp_comp_t *bdp_jfs)
 urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+
     if (is_in_matrix_server(bdp_ctx)) {
         if (cfg->flag.bs.multi_path == false) {
-            URMA_LOG_ERR("CONSTRAINT: JFS only support multi_path mode in matrix server,"
-                " but try to create single_path JFS.\n");
+            URMA_LOG_ERR("In matrix server, JFS don't support single-path mode.\n");
             return NULL;
         }
     }
+
     bondp_comp_t *bdp_jfs = bondp_create_comp(ctx, BONDP_COMP_JFS, cfg);
     if (bdp_jfs == NULL) {
         URMA_LOG_ERR("Failed to create bondp comp\n");
@@ -685,33 +686,34 @@ static void bondp_del_jetty_p_vjetty_info(bondp_comp_t *bdp_jetty)
 
 urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg)
 {
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+
     if (jetty_cfg->flag.bs.share_jfr != true || jetty_cfg->shared.jfr == NULL) {
-        URMA_LOG_ERR("UB device must use jetty share_jfr mode and shared.jfr should be valid.\n");
+        URMA_LOG_ERR("UB device must use shared jfr when create jetty.\n");
         errno = EINVAL;
         return NULL;
     }
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    if (!is_valid_ctx(bdp_ctx)) {
-        URMA_LOG_ERR("Invalid param ctx\n");
-        return NULL;
-    }
-
     if (jetty_cfg->id >= BONDP_MAX_WELL_KNOWN_JETTY_ID) {
         URMA_LOG_ERR("Invalid well known jetty id: %d, should be in (0, 1024)\n", jetty_cfg->id);
         return NULL;
     }
     if (is_in_matrix_server(bdp_ctx)) {
-        if (jetty_cfg->jfs_cfg.flag.bs.multi_path == false &&
-            (jetty_cfg->jfs_cfg.trans_mode == URMA_TM_RM || jetty_cfg->jfs_cfg.trans_mode == URMA_TM_UM)) {
-            URMA_LOG_ERR("CONSTRAINT: Jettys in Single-path mode only support trans_mode URMA_TM_RC, "
-                "try to create a jetty with trans_mode: %d\n", jetty_cfg->jfs_cfg.trans_mode);
-            errno = EINVAL;
-            return NULL;
-        }
-        if (jetty_cfg->id != 0 && jetty_cfg->jfs_cfg.flag.bs.multi_path == false) {
-            URMA_LOG_WARN("Wellknown jetty in matrix server mode must use multi-path mode, "
-                "set to multi_path mode forcely\n");
-            jetty_cfg->jfs_cfg.flag.bs.multi_path = true;
+        if (jetty_cfg->jfs_cfg.flag.bs.multi_path == false) {
+            if (jetty_cfg->jfs_cfg.trans_mode != URMA_TM_RC) {
+                URMA_LOG_ERR("In matrix server, jetty only supports single-path mode with RC.\n");
+                errno = EINVAL;
+                return NULL;
+            }
+            if (is_single_dev_mode(ctx)) {
+                URMA_LOG_ERR("In matrix server, multi-device mode don't support single path currently.\n");
+                errno = EINVAL;
+                return NULL;
+            }
+            if (jetty_cfg->id != 0) {
+                URMA_LOG_WARN("In matrix server, wellknown jetty must use multi-path mode, "
+                    "set to multi-path mode forcely\n");
+                jetty_cfg->jfs_cfg.flag.bs.multi_path = true;
+            }
         }
     }
 
