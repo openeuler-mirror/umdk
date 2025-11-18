@@ -190,6 +190,15 @@ void umq_ack_interrupt(uint64_t umqh, uint32_t nevents, umq_interrupt_option_t *
  */
 void umq_dfx_cmd_process(umq_dfx_cmd_t *cmd, umq_dfx_result_t *result_ctl);
 
+/**
+ * Split the head linked list at the node
+ * The new list starts from node and continues to the end of the original list
+ * @param[in] head: head pointer of the original buf list.
+ * @param[in] node: a pointer to the node at the split position.
+ * Return 0 on success, error code on failure
+ */
+int umq_buf_split(umq_buf_t *head, umq_buf_t *node);
+
 #ifdef __cplusplus
 }
 #endif
