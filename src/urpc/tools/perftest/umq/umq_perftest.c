@@ -396,11 +396,6 @@ static int umq_perftest_server_exchange_and_bind(umq_perftest_config_t *cfg)
     }
     LOG_PRINT("server recv bind info succeed, bind info size: %u\n", remote_info.msg_len);
 
-    if (umq_bind(g_umq_perftest_ctx.umqh, remote_info.data, remote_info.msg_len) != 0) {
-        LOG_PRINT("server bind failed\n");
-        return -1;
-    }
-
     exchange_info_t local_info = {0};
     local_info.msg_len = umq_bind_info_get(g_umq_perftest_ctx.umqh, local_info.data, MAX_INFO_SIZE);
     if (local_info.msg_len == 0) {
@@ -409,6 +404,11 @@ static int umq_perftest_server_exchange_and_bind(umq_perftest_config_t *cfg)
     }
     if (send_exchange_data(g_umq_perftest_ctx.accept_fd, &local_info) != 0) {
         LOG_PRINT("server send bind info failed\n");
+        return -1;
+    }
+
+    if (umq_bind(g_umq_perftest_ctx.umqh, remote_info.data, remote_info.msg_len) != 0) {
+        LOG_PRINT("server bind failed\n");
         return -1;
     }
 
