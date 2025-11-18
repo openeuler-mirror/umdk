@@ -88,6 +88,11 @@ typedef struct bondp_context {
     bondp_hash_table_t p_vjetty_id_table;
     /* The mapping of pjetty_ids to vjetty_ids of all remote jettys that have been obtained. */
     bondp_hash_table_t remote_p2v_jetty_id_table;
+    #ifndef __cplusplus
+    atomic_ulong token_id_cnt;
+    #else
+    std::atomic_ulong token_id_cnt;
+    #endif
     int real_async_fd; /* vcontex async_fd */
 } bondp_context_t;
 
