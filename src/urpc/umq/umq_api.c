@@ -691,3 +691,24 @@ void umq_ack_interrupt(uint64_t umqh, uint32_t nevents, umq_interrupt_option_t *
 
     return umq->tp_ops->umq_tp_ack_interrupt(umq->umqh_tp, nevents, option);
 }
+
+int umq_buf_split(umq_buf_t *head, umq_buf_t *node)
+{
+    if (head == NULL || node == NULL || head == node) {
+        UMQ_VLOG_ERR("head or node invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_buf_t *tmp = head;
+    while(tmp->qbuf_next != NULL && tmp->qbuf_next != node) {
+       tmp = tmp->qbuf_next;
+    }
+
+    if (tmp->qbuf_next == NULL) {
+        UMQ_VLOG_ERR("target node not found in the buf list\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    tmp->qbuf_next = NULL;
+    return UMQ_SUCCESS;
+}
