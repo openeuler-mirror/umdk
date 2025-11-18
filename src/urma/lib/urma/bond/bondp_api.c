@@ -18,6 +18,7 @@
 #include "urma_ubagg.h"
 #include "bondp_jetty_ctx.h"
 #include "bondp_context_table.h"
+#include "bondp_provider_ops.h"
 #include "ubagg_ioctl.h"
 #include "urma_provider.h"
 #include "bondp_api.h"
@@ -907,11 +908,6 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
 
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
-    bondp_context_t *bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    if (!is_valid_ctx(bond_ctx)) {
-        URMA_LOG_ERR("bonding context is invalid in user ctl");
-        return -1;
-    }
     switch (in->opcode) {
         case URMA_USER_CTL_BOND_GET_ID_INFO:
         case URMA_USER_CTL_BOND_ADD_RJFR_ID_INFO:
@@ -919,9 +915,15 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
         case URMA_USER_CTL_BOND_GET_SEG_INFO:
         case URMA_USER_CTL_BOND_ADD_REMOTE_SEG_INFO:
             break;
+        case URMA_USER_CTL_BOND_SET_AGGR_MODE:
+            if (in->len != sizeof(urma_context_aggr_mode_t)) {
+                URMA_LOG_ERR("Invalid len");
+                return -EINVAL;
+            }
+            return bondp_set_aggr_mode(ctx, *(urma_context_aggr_mode_t *)in->addr);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode:%d\n", in->opcode);
-            return -1;
+            return -EINVAL;
         }
     }
     return 0;
