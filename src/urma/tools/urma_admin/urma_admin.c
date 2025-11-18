@@ -263,10 +263,9 @@ static void print_ubep_simple_info(const admin_show_ubep_t *ubep, int *index, co
         if (memcmp(&ubep->eid_list[i].eid, &eid, sizeof(urma_eid_t)) == 0) {
             continue;
         }
-        (void)printf("%-3d  %-16s    %-8s    eid%u "EID_FMT"    %-8s    %-16s \n",
+        (void)printf("%-3d  %-16s    %-8s    eid%u "EID_FMT"    %-8s\n",
             (*index)++, ubep->dev_name, urma_tp_type_to_string(ubep->tp_type), ubep->eid_list[i].eid_index,
-            EID_ARGS(ubep->eid_list[i].eid), urma_port_state_to_string(ubep->dev_attr.port_attr[0].state),
-            ubep->net_dev_name);
+            EID_ARGS(ubep->eid_list[i].eid), urma_port_state_to_string(ubep->dev_attr.port_attr[0].state));
     }
 }
 
@@ -407,11 +406,9 @@ static void print_ubep_list(const struct ub_list *ubep_list, const tool_config_t
     admin_show_ubep_t *ubep, *next;
 
     if (cfg->whole_info == false) {
-        (void)printf("num  ubep_dev            tp_type     eid                                             link    ");
-        (void)printf("    net_dev          \n");
+        (void)printf("num  ubep_dev            tp_type     eid                                             link\n");
 
-        (void)printf("---  ----------------    --------    --------------------------------------------    --------");
-        (void)printf("    ---------------- \n");
+        (void)printf("---  ----------------    --------    --------------------------------------------    --------\n");
     }
 
     UB_LIST_FOR_EACH_SAFE(ubep, next, node, ubep_list) {
