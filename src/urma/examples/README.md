@@ -7,62 +7,49 @@
 Notes on running urma sample
 ===============================================================================
 
-You can run urma sample programs on two host_75 and host_76 with the following steps:
+You can run urma sample programs on two hosts the following steps:
 
 1. Build and install
-- You can build and install the ubus rpm packages by:
-$ cd UBus/code
-$ tar -czf /root/rpmbuild/SOURCES/umdk-1.2.0.tar.gz --exclude=.git `ls -A`
-$ rpmbuild -bb umdk.spec
-$ rpm -ivh /root/rpmbuild/RPMS/*/*.rpm
+- You can build and install the urma_sample as follows:
+  $ cd src
+  $ mkdir build
+  $ cd build
+  $ cmake .. -D BUILD_ALL=disable -D BUILD_URMA=enable
+  $ make install -j
 
-- Alternately, you can build your programs manually in the code foler for debug.
-$ cd UBus/opensource
-$ sh compile_opensource.sh
-$ mkdir UBus/code/build
-$ cd UBus/code/build
-$ cmake ..
-$ make install
 
-- load kernel modules
-$ depmod
-$ modprobe ubcore
-$ modprobe uburma
+2. Check Local Device
+You need to ensure that the urma environment has been correctly configured.
 
-2. [Optional]Config and start ubsc
-The ubsc controller should be configured and started on one of the hosts, e.g. host_75.
-
-- The configuation file of ubsc is "/etc/ubsc/ubsc.ini". Currently we support TCP/IP socket or urma jetty communication
-  bewtween UBSC and local_ubsc. You can read ubsc.md for configuration.
-
-- Start ubsc sevice by:
-$ service ubscd start
-
-- Alternately, you can start ubsc in the build path for debug.
-$ management/ubsc/ubsc_daemon
+- check Local Device by:
+$ urma_admin show
 
 3. Start urma sample program
-The sample program is included with the example rpm packages.
+- The sample program exist in UMDK/src/build/urma/examples.
+ You can run the "server command" at the first server and run the client command at the second server.
+ The ip of the first server is 192.168.100.100 in our test.
 
-- start sample at server side (e.g. host_75)
-The test progrom can be found in the build path.
-
-$ urma_sample -d hrn0_0
-
-- start sample for testing at client side (e.g. host_76)
-$ urma_sample -d hrn0_0 -i xx.xx.xx.xx
-
-Options:
-ub_client_server: invalid option -- 'h'
 Usage:
-  -m, --mode <mode>            urma mode: 0 for UB
-  -d, --dev-name <dev>         device name, e.g. udma for UB
-  -i, --server-ip <ip>         server ip address given only by client
-  -p, --server-port <port>     listen on/connect to port <port> (default 18515)
-  -e, --event-mode             demo jfc event
-  -a, --address-mode <va|pa>   use VA or PA in WQE
-  -c, --cs-coexist             client and server coexist in a process
+  -m, --trans-mode <mode>    urma mode: 0 for RM, 1 for RC, 2 for UM, 3 for RS (default 0)
+  -d, --dev-name <dev>       device name, e.g. udma for UB
+  -i, --server-ip <ip>       server ip address given only by client
+  -p, --server-port <port>   listen on/connect to port <port> (default 18515)
+  -t, --tp-type <type>       0 for URMA_RTP, 1 for URMA_CTP, 2 for URMA_UTP
+  -u, --multi-path           use multipath instead of single path (default false)
+  -e, --event-mode           demo jfc event (default false)
+  -c, --cs-coexist           client and server coexist in a process (default false)
 
-- The name of ROCE device can be found by:
-$ hiroce gids
-$ show_gids
+
+- The transmode of RS and UM is not support in urma_sample.c!
+
+- Here are the supported use cases:
+| **device**  | **trnas_mode(m)** | **multi_path(u)**      | **tp_type(t)**             | **server command**                     | **client command**                                        |
+|-------------|-------------------|------------------------|----------------------------|----------------------------------------|-----------------------------------------------------------|
+| **bonding** | RM（0）           | TRUE                   | unsupported param,warnning | ./urma_sample -m 0 -u -d bonding_dev_0 | ./urma_sample -m 0 -u -d bonding_dev_0 -i 192.168.100.100 |
+| **bonding** | RC（1）           | TRUE                   | unsupported param,warnning | ./urma_sample -m 1 -u -d bonding_dev_0 | ./urma_sample -m 1 -u -d bonding_dev_0 -i 192.168.100.100 |
+| **bonding** | RC（1）           | FALSE                  | unsupported param,warnning | ./urma_sample -m 1 -d bonding_dev_0    | ./urma_sample -m 1 -d bonding_dev_0 -i 192.168.100.100    |
+| **udma**    | RM（0）           | unsupported param,err! | URMA_RTP(0)                | ./urma_sample -m 0 -t 0 -d udma2       | ./urma_sample -m 0 -t 0 -d udma2 -i 192.168.100.100       |
+| **udma**    | RC（1）           | unsupported param,err! | URMA_RTP(0)                | ./urma_sample -m 1 -t 0 -d udma2       | ./urma_sample -m 1 -t 0 -d udma2 -i 192.168.100.100       |
+| **udma**    | RM（0）           | unsupported param,err! | URMA_CTP(1)                | ./urma_sample -m 0 -t 1 -d udma2       | ./urma_sample -m 0 -t 1 -d udma2 -i 192.168.100.100       |
+| **udma**    | RC（1）           | unsupported param,err! | URMA_CTP(1)                | ./urma_sample -m 1 -t 1 -d udma2       | ./urma_sample -m 1 -t 1 -d udma2 -i 192.168.100.100       |
+

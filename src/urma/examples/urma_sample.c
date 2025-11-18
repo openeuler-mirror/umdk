@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <semaphore.h>
 #include "sys/mman.h"
 #include "urma_api.h"
 
@@ -31,14 +32,17 @@
 #define MAX_CLIENT_CNT 10
 #define MAX_POLL_JFC_CNT 10
 #define SLEEP_TIME (100 * 1000) /* Sleep for 100 ms */
-#define TIMEOUT 100 /* 100 ms */
+#define TIMEOUT (-1) /* infinity */
 #define MSG_SIZE 160
 #define DEFAULT_PORT 13857
 #define PROC_FILE_NAME 32
 /* At most 8 outstanding WQEs can be posted in JFR with size of 256 */
 #define RECV_BATCH_CNT 8
 #define JETTY_SIZE 256
+#define CR_NUM_A_ROUND 2 /* include a send and a recv */
 /* #define SIMU 1 */
+
+sem_t semaphore;
 
 typedef struct argument {
     char *dev_name;
@@ -46,6 +50,8 @@ typedef struct argument {
     unsigned int server_port;
     bool event_mode;
     unsigned int trans_mode;
+    bool multi_path;
+    unsigned int tp_type;
     bool cs_coexist;      /* Client and server share the same process */
 } argument_t;
 
@@ -156,6 +162,20 @@ static urma_transport_mode_t args_to_trans_mode(const argument_t *args)
     };
 }
 
+static urma_transport_mode_t args_to_tp_type(const argument_t *args)
+{
+    switch (args->tp_type) {
+        case 0:
+            return URMA_RTP;
+        case 1:
+            return URMA_CTP;
+        case 2:
+            return URMA_UTP;
+        default:
+            return URMA_RTP;
+    };
+}
+
 static context_t *init_context(const argument_t *args)
 {
     context_t *ctx = calloc(1, sizeof(context_t));
@@ -231,6 +251,7 @@ static context_t *init_context(const argument_t *args)
     urma_jfs_cfg_t jfs_cfg = {
         .depth = JETTY_SIZE,
         .flag.bs.order_type = args->trans_mode == 3 ? 1 : 0,
+        .flag.bs.multi_path = args->multi_path ? 1 : 0,
         .trans_mode = args_to_trans_mode(args),
         .priority = URMA_MAX_PRIORITY, /* Highest priority */
         .max_sge = 1,
@@ -375,11 +396,13 @@ static int poll_jfc_wait(context_t *ctx, urma_cr_t *cr)
     for (int i = 0; i < MAX_POLL_JFC_CNT; i++) {
         cnt = urma_poll_jfc(ctx->jfc, 1, cr);
         if (cnt < 0) {
+            fprintf(stderr, "Failed to poll jfc, return_value of urma_poll_jfc is %d\n", cnt);
             return -1;
         } else if (cnt > 0) {
             if (cr->status == URMA_CR_SUCCESS) {
                 return 0;
             } else {
+                fprintf(stderr, "Failed to poll jfc, cr_status:%d\n", cr->status);
                 return -1;
             }
         }
@@ -461,6 +484,7 @@ static urma_target_jetty_t *sample_import_jetty(context_t *ctx, const struct arg
         .jetty_id = ctx->remote_jetty_id,
         .trans_mode = args_to_trans_mode(args),
         .type = URMA_JETTY,
+        .tp_type = args_to_tp_type(args),
         .flag.bs.order_type = args->trans_mode == 3 ? 1 : 0,
         .flag.bs.share_tp = args->trans_mode == 3 ? 1 : 0
     };
@@ -521,6 +545,7 @@ static void *server_sock_thread_main(void *arg)
             fprintf(stderr, "Failed to sync\n");
         }
         ctx->s.num_clients++;
+        sem_post(&semaphore);
         printf("accepted new connection\n");
     }
     for (int i = 0; i < ctx->s.num_clients; i++) {
@@ -594,6 +619,7 @@ static void *server_jetty_thread_main(void *arg)
      * [0, MSG_SIZE - 1 ] for urma read/write and cas from client
      * the rest memory [MSG_SIZE, MEM_SIZE - 1] for urma recv
      */
+    sem_wait(&semaphore);
     uint64_t offset = MSG_SIZE;
     for (int i = 0; i < RECV_BATCH_CNT; i++) {
         if (offset + MSG_SIZE > MEM_SIZE) {
@@ -612,7 +638,6 @@ static void *server_jetty_thread_main(void *arg)
             fprintf(stderr, "Failed to recv %i in server jfr thread\n", i);
             return NULL;
         }
-
         offset += MSG_SIZE;
     }
 
@@ -706,6 +731,9 @@ static int server_listen(context_t *ctx, const argument_t *args)
         return -1;
     }
 
+    // Initialize the semaphore with an initial value of 0
+    // Ensuring that RC binds Jetty before usage
+    sem_init(&semaphore, 0, 0);
     ctx->s.server_stop = false;
     ret = pthread_create(&ctx->s.server_sock_thread, NULL, server_sock_thread_main, ctx);
     if (ret) {
@@ -721,6 +749,7 @@ static int server_listen(context_t *ctx, const argument_t *args)
         return -1;
     }
     ret = pthread_create(&ctx->s.server_watch_thread, NULL, server_watch_thread_main, ctx);
+    sem_destroy(&semaphore);
     if (ret) {
         fprintf(stderr, "Failed to create server thread, err: [%d]%s.\n", errno, strerror(errno));
         (void)close(ctx->s.listen_fd);
@@ -930,17 +959,24 @@ static int client_send(context_t *ctx)
         fprintf(stderr, "Failed to send message\n");
         return -1;
     }
+    
     urma_cr_t cr;
-    if (poll_jfc_wait(ctx, &cr) != 0 || cr.user_ctx != ctx->rid) {
-        fprintf(stderr, "Failed to poll jfc for send, cr_status:%d,\n", cr.status);
-        return -1;
+    for (int i = 0; i < CR_NUM_A_ROUND; i++) {
+        int cr_ret = poll_jfc_wait(ctx, &cr);
+        if (cr.flag.bs.s_r == 0) {
+            if (cr_ret != 0 || cr.user_ctx != ctx->rid) {
+                fprintf(stderr, "Failed to poll jfc for send, cr_status:%d, cr_ret = %d\n", cr.status, cr_ret);
+                return -1;
+            }
+            printf("Msg sent: %s\n", (char *)ctx->va);
+        } else {
+            if (cr_ret != 0 || cr.user_ctx != offset) {
+                fprintf(stderr, "Failed to recv response, cr_status:%d, cr_ret = %d\n", cr.status, cr_ret);
+                return -1;
+            }
+            printf("Response received: %s at offset %ld\n", (char *)(ctx->va + offset), offset);
+        }
     }
-    printf("Msg sent: %s\n", (char *)ctx->va);
-    if (poll_jfc_wait(ctx, &cr) != 0 || cr.user_ctx != offset) {
-        fprintf(stderr, "Failed to recv response, cr_status:%d,\n", cr.status);
-        return -1;
-    }
-    printf("Response received: %s at offset %ld\n", (char *)(ctx->va + offset), offset);
     return 0;
 }
 
@@ -992,24 +1028,69 @@ static int run_server(const struct argument *args)
 }
 
 static struct option g_long_options[] = {
-    {"dev-name",             required_argument, NULL, 'd'},
-    {"server-ip",            required_argument, NULL, 'i'},
-    {"server-port",          required_argument, NULL, 'p'},
-    {"event-mode",           no_argument,       NULL, 'e'},
-    {"trans_mode",           required_argument, NULL, 'm'},
-    {"cs-coexist",           no_argument,       NULL, 'c'},
-    {NULL,           no_argument, '\0'}
+    {"trans-mode", required_argument, NULL, 'm'},
+    {"dev-name", required_argument, NULL, 'd'},
+    {"server-ip", required_argument, NULL, 'i'},
+    {"server-port", required_argument, NULL, 'p'},
+    {"tp-type", required_argument, NULL, 't'},
+    {"multi-path", required_argument, NULL, 'u'},
+    {"event-mode", no_argument, NULL, 'e'},
+    {"cs-coexist", no_argument, NULL, 'c'},
+    {NULL, 0, NULL, 0}
 };
 
 static void usage()
 {
-    fprintf(stdout, "Usage:\n");
-    fprintf(stdout, "  -d, --dev-name <dev>        device name, e.g. udma for UB\n");
-    fprintf(stdout, "  -i, --server-ip <ip>        server ip address given only by client\n");
-    fprintf(stdout, "  -p, --server-port <port>    listen on/connect to port <port> (default 18515)\n");
-    fprintf(stdout, "  -e, --event-mode            demo jfc event\n");
-    fprintf(stdout, "  -m, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM, 3 for RS.\n");
-    fprintf(stdout, "  -c, --cs-coexist            client and server coexist in a process\n");
+    printf("Usage:\n");
+    printf("  -m, --trans-mode <mode>    urma mode: 0 for RM, 1 for RC, 2 for UM, 3 for RS (default 0)\n");
+    printf("  -d, --dev-name <dev>       device name, e.g. udma for UB\n");
+    printf("  -i, --server-ip <ip>       server ip address given only by client\n");
+    printf("  -p, --server-port <port>   listen on/connect to port <port> (default 18515)\n");
+    printf("  -t, --tp-type <type>       0 for URMA_RTP, 1 for URMA_CTP, 2 for URMA_UTP\n");
+    printf("  -u, --multi-path           use multipath instead of single path (default false)\n");
+    printf("  -e, --event-mode           demo jfc event (default false)\n");
+    printf("  -c, --cs-coexist           client and server coexist in a process (default false)\n");
+}
+
+static int validate_input_params(struct argument *args, bool tp_type_input_flag, bool multi_path_input_flag)
+{
+    if (args->trans_mode > 3) {
+        fprintf(stderr, "Invalid trans mode %d\n", args->trans_mode);
+        return -1;
+    }
+
+    if (args->tp_type > 2) {
+        fprintf(stderr, "Invalid tp type %d\n", args->tp_type);
+        return -1;
+    }
+
+    // Determine whether it is a bonding device based on the name
+    if (strncmp(args->dev_name, "bonding", strlen("bonding")) == 0) {
+        if (tp_type_input_flag) {
+            fprintf(stderr, "Warning: TP type should not be set for bonding device.\n");
+        }
+        if (!((args->trans_mode == 0 && args->multi_path == true) || (args->trans_mode == 1))) {
+            fprintf(stderr, "Error: This combination of trans-mode and multi-path is invalid on bonding devices.\n");
+            return -1;
+        }
+        char* loopback = "127.0.0.1";
+        if (args->event_mode && args->server_ip != NULL &&
+        strncmp(args->server_ip, loopback, strlen(loopback)) == 0 && args->multi_path) {
+            fprintf(stderr, "Error: If using the -c option, bonding only supports RC + single_path in loopback.\n");
+            return -1;
+        }
+    } else {
+        if (multi_path_input_flag) {
+            fprintf(stderr, "Error: Multi path should not be set for non-bonding device.\n");
+            return -1;
+        }
+        if (!(((args->trans_mode != 2) && (args->tp_type != 2)) || (args->trans_mode == 2 && args->tp_type == 2))) {
+            fprintf(stderr, "Error: This combination of tp-type and trans-mode is invalid on non-bonding device.\n");
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 /* Parse the command line parameters for client and server */
@@ -1019,20 +1100,27 @@ int parse_arguments(int argc, char *argv[], struct argument *args)
         usage();
         return -1;
     }
+
     args->server_port = DEFAULT_PORT;
     args->event_mode = false;
     args->cs_coexist = false;
     args->trans_mode = 0;
 
+    // Used to record whether the user explicitly entered these two parameters.
+    bool multi_path_input_flag = false;
+    bool tp_type_input_flag = false;
+
     while (1) {
         int c;
-
-        c = getopt_long(argc, argv, "d:i:p:em:c", g_long_options, NULL);
+        c = getopt_long(argc, argv, "m:d:i:p:t:uec", g_long_options, NULL);
         if (c == -1) {
             break;
         }
 
         switch (c) {
+            case 'm':
+                args->trans_mode = strtoul(optarg, NULL, 0);
+                break;
             case 'd':
                 args->dev_name = strdup(optarg);
                 if (args->dev_name == NULL) {
@@ -1048,11 +1136,16 @@ int parse_arguments(int argc, char *argv[], struct argument *args)
             case 'p':
                 args->server_port = strtoul(optarg, NULL, 0);
                 break;
+            case 't':
+                args->tp_type = strtoul(optarg, NULL, 0);
+                tp_type_input_flag = true;
+                break;
+            case 'u':
+                args->multi_path = true;
+                multi_path_input_flag = true;
+                break;
             case 'e':
                 args->event_mode = true;
-                break;
-            case 'm':
-                args->trans_mode = strtoul(optarg, NULL, 0);
                 break;
             case 'c':
                 args->cs_coexist = true;
@@ -1062,11 +1155,13 @@ int parse_arguments(int argc, char *argv[], struct argument *args)
         }
     }
 
+    // Determine if there are any unprocessed parameters.
     if (optind < argc) {
         usage();
         return -1;
     }
-    return 0;
+
+    return validate_input_params(args, tp_type_input_flag, multi_path_input_flag);
 }
 
 static void *client_thread_main(void *args)
@@ -1106,12 +1201,8 @@ int run_client_server(struct argument *args)
 
 int main(int argc, char *argv[])
 {
-    struct argument args = {
-        .event_mode = false
-    };
+    struct argument args = {0};
     int ret;
-
-    (void)memset(&args, 0, sizeof(struct argument));
 
     ret = parse_arguments(argc, argv, &args);
     if (ret != 0) {
