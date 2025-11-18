@@ -49,6 +49,11 @@ static int umq_tp_ipc_unbind(uint64_t umqh_tp)
     return umq_ipc_unbind_impl(umqh_tp);
 }
 
+static umq_state_t umq_tp_ipc_state_get(uint64_t umqh_tp)
+{
+    return QUEUE_STATE_READY;
+}
+
 static umq_buf_t *umq_tp_ipc_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
     umq_alloc_option_t *option)
 {
@@ -104,6 +109,7 @@ static umq_ops_t g_umq_ipc_ops = {
     .umq_tp_bind_info_get = umq_tp_ipc_bind_info_get,
     .umq_tp_bind = umq_tp_ipc_bind,
     .umq_tp_unbind = umq_tp_ipc_unbind,
+    .umq_tp_state_get = umq_tp_ipc_state_get,
     .umq_tp_buf_alloc = umq_tp_ipc_buf_alloc,
     .umq_tp_buf_free = umq_tp_ipc_buf_free,
     .umq_tp_buf_headroom_reset = umq_tp_ipc_buf_headroom_reset,

@@ -81,6 +81,14 @@ int umq_unbind(uint64_t umqh);
 
 /**
  * User should ensure thread safety if io_lock_free is true
+ * Query umq state
+ * @param[in] umqh: umq handle
+ * Return umq state
+ */
+umq_state_t umq_state_get(uint64_t umqh);
+
+/**
+ * User should ensure thread safety if io_lock_free is true
  * Alloc umq buf, qbuf list with qbuf_next.
  * @param[in] request_size: size of qbuf request to alloc
  * @param[in] request_qbuf_num: num of qbuf request to alloc

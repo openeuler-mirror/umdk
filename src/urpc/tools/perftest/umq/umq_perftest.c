@@ -25,6 +25,8 @@
 #include "umq_perftest_latency.h"
 
 #define PERFTEST_STR_SIZE 1024
+#define PERFTEST_WAIT_TIMEOUT_US 100
+#define PERFTEST_WAIT_UMQ_READY_ROUND 10000
 
 typedef struct umq_perftest_worker_arg {
     perftest_thread_arg_t thd_arg;
@@ -193,8 +195,9 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
 
 static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 {
+    int poll_cnt = 0;
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
-        return 0;
+        goto WAIT_UMQ_READY;
     }
 
     // pro mode，need alloc rx buf
@@ -218,6 +221,29 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 
         require_rx_count -= cur_batch_count;
     } while (require_rx_count > 0);
+
+WAIT_UMQ_READY:
+    umq_buf_t *buf = NULL;
+    umq_state_t umq_state;
+    do {
+        int ret = umq_poll(g_umq_perftest_ctx.umqh, UMQ_IO_TX, &buf, 1);
+        if (ret != 0) {
+            LOG_PRINT("poll tx get unexpected result %d\n", ret);
+            break;
+        }
+
+        umq_state = umq_state_get(g_umq_perftest_ctx.umqh);
+        if (umq_state != QUEUE_STATE_IDLE) {
+            break;
+        }
+        usleep(PERFTEST_WAIT_TIMEOUT_US);
+    } while (poll_cnt++ < PERFTEST_WAIT_UMQ_READY_ROUND);
+
+    if (umq_state != QUEUE_STATE_READY) {
+        LOG_PRINT("wait umq to be ready failed, umq state %d\n", umq_state);
+        return -1;
+    }
+
     return 0;
 }
 
