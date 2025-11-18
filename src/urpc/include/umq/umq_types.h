@@ -391,6 +391,27 @@ typedef struct umq_dfx_result {
     };
 } umq_dfx_result_t;
 
+typedef enum umq_async_event_type {
+    UMQ_EVENT_QH_ERR,
+    UMQ_EVENT_QH_LIMIT,
+    UMQ_EVENT_PORT_ACTIVE,
+    UMQ_EVENT_PORT_DOWN,
+    UMQ_EVENT_DEV_FATAL,
+    UMQ_EVENT_EID_CHANGE,       // eid change, HNM and other management roles will be modified.
+    UMQ_EVENT_ELR_ERR,          // Entity level error
+    UMQ_EVENT_ELR_DONE,         // Entity flush done
+} umq_async_event_type_t;
+
+typedef struct umq_async_event {
+    umq_trans_info_t trans_info;
+    union {
+        uint64_t umqh;
+        uint32_t port_id;
+    } element;
+    umq_async_event_type_t event_type;
+    void *priv;
+} umq_async_event_t;
+
 #ifdef __cplusplus
 }
 #endif

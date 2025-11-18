@@ -175,6 +175,29 @@ typedef struct umq_ops {
     * @param[in] option: option param. user should specify UMQ_IO_TX or UMQ_IO_RX, or nothing will be done
     */
     void (*umq_tp_ack_interrupt)(uint64_t umqh_tp, uint32_t nevents, umq_interrupt_option_t *option);
+
+    /**
+     * Thread safety function
+     * get the fd for listening to asynchronous events
+     * @param[in] dev_info: device info
+     * Return fd >= 0 on success, < 0 on failure
+     */
+    int (*umq_tp_async_event_fd_get)(umq_trans_info_t *trans_info);
+
+    /**
+     *  Get asyn event.
+     * @param[in] dev_info: device info;
+     * @param[out] event: the address to put event
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_async_event_get)(umq_trans_info_t *trans_info, umq_async_event_t *event);
+
+    /**
+     *  Ack asyn event.
+     * @param[in] event: the address to ack event;
+     * Return: void
+     */
+    void (*umq_tp_aync_event_ack)(umq_async_event_t *event);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);
