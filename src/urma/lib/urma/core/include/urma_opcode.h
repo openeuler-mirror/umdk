@@ -116,6 +116,7 @@ typedef enum urma_opcode {
     URMA_OPC_SEND_IMM           = 0x41, // remote JFR/jetty ID
     URMA_OPC_SEND_INVALIDATE    = 0x42, // remote JFR/jetty ID and seg token id
     URMA_OPC_NOP                = 0x51,
+    URMA_OPC_WRITE_ATOMIC       = 0x60, // Non-standard definition of OPCODE
     URMA_OPC_LAST
 } urma_opcode_t;
 
