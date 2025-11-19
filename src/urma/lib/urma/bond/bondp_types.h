@@ -39,7 +39,6 @@ typedef struct bondp_global_context {
     uint32_t pid;
     topo_map_t *topo_map;
     bool skip_load_topo;
-    bool disable_recovery;
 } bondp_global_context_t;
 
 extern bondp_global_context_t *g_bondp_global_ctx;
