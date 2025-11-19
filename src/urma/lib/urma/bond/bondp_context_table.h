@@ -13,42 +13,6 @@
 #include "urma_ubagg.h"
 #include "bondp_hash_table.h"
 
-/**
- * Stores the reverse mapping between slave_id and base_id.
- * This enables the receiver to find the corresponding v_conn
- * according to the mapping relationship after receiving the CR.
- * This structure stores only the pointers of slave_id and base_id.
- * Please note the lifetime of slave_id and base_id.
- */
-typedef struct bdp_tjetty_id {
-    hmap_node_t hmap_node;
-    urma_jetty_id_t *slave_id;  //! key. EID is invalid due to driver can't report remote_id.eid in CR
-    urma_jetty_id_t *base_id;
-} bdp_tjetty_id_t;
-
-int bdp_tjetty_id_table_create(bondp_hash_table_t *tbl, uint32_t size);
-
-int bdp_tjetty_id_table_destroy(bondp_hash_table_t *tbl);
-
-int bdp_tjetty_id_table_add(bondp_hash_table_t *tbl, urma_jetty_id_t *slave_id, urma_jetty_id_t *base_id);
-
-int bdp_tjetty_id_table_del(bondp_hash_table_t *tbl, urma_jetty_id_t *slave_id);
-
-urma_jetty_id_t *bdp_tjetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *key);
-
-/* == bdp_seg_info_table == */
-
-typedef struct bdp_seg_info {
-    hmap_node_t hmap_node;
-    urma_seg_t base;            // key
-    urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
-} bdp_seg_info_t;
-
-int bdp_seg_info_table_create(bondp_hash_table_t *tbl, uint32_t size);
-
-int bdp_seg_info_table_destroy(bondp_hash_table_t *tbl);
-
 /* == bdp_p_vjetty_id_table == */
 /**
  * Record the mapping relationship from pjetty_id.jetty_id.id to vjetty_id.jetty_id.id,

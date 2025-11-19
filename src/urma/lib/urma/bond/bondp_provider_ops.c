@@ -293,13 +293,9 @@ static void bondp_uninit_v_ctx(bondp_context_t *bond_ctx)
 
 static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
 {
-    if (bdp_tjetty_id_table_create(&bond_ctx->tjetty_id_table, BONDP_MAX_NUM_JETTYS * URMA_UBAGG_DEV_MAX_NUM)) {
-        URMA_LOG_ERR("Failed to create hash table tjetty_id_table\n");
-        return -1;
-    }
     if (bondp_bitmap_init(&bond_ctx->token_id_bitmap, BONDP_MAX_NUM_SEGS + 1)) {
         URMA_LOG_ERR("Failed to create token_id_bitmap\n");
-        goto FREE_TJETTY_TABLE;
+        return -1;
     }
     if (bondp_id_store_init(&bond_ctx->ljetty_id_store, BONDP_MAX_NUM_JETTYS)) {
         URMA_LOG_ERR("Failed to create ljetty_id_store");
@@ -327,8 +323,6 @@ ID_STORE_UNINIT:
     bondp_id_store_uninit(&bond_ctx->ljetty_id_store);
 FREE_TOKEN_ID_BITMAP:
     bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
-FREE_TJETTY_TABLE:
-    bdp_tjetty_id_table_destroy(&bond_ctx->tjetty_id_table);
     return -1;
 }
 
@@ -338,7 +332,6 @@ static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
     bondp_id_store_uninit(&bond_ctx->ljetty_id_store);
     bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
-    bdp_tjetty_id_table_destroy(&bond_ctx->tjetty_id_table);
 }
 
 static bondp_context_t* bondp_create_ctx()
