@@ -34,7 +34,7 @@ class jetty_mgr_uniconn : public jetty_mgr {
     friend class client_entry_s;
 public:
     jetty_mgr_uniconn() = delete;
-    explicit jetty_mgr_uniconn(urma_ctx *p_urma_ctx) noexcept;
+    explicit jetty_mgr_uniconn(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept;
     ~jetty_mgr_uniconn() noexcept override;
     dlock_status_t jetty_mgr_uniconn_init(urma_ctx *p_urma_ctx, urma_jfc_t *p_jfc, uint32_t num_buf);
     void fill_recv_wr(urma_jfr_wr_t *wr, urma_sge_t *dst_sge, uint64_t wr_id) const;
@@ -76,6 +76,8 @@ private:
     void unimport_tjetty(void);
     void delete_share_jfr(void);
     void delete_jetty(void);
+    void modify_share_jfr_err(void);
+    void modify_jetty_err(void);
 
     void fill_base_wr(urma_jfs_wr_t *wr, uint64_t wr_id) const override;
 

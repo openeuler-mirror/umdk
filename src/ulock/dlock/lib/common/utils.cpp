@@ -548,7 +548,8 @@ bool check_if_eid_match(const urma_eid_t &eid1, const urma_eid_t &eid2)
     return true;
 }
 
-jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty_t type, trans_mode_t tp_mode)
+jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty_t type, trans_mode_t tp_mode,
+    dlock_server *p_server)
 {
     jetty_mgr *p_jetty_mgr;
     uint32_t num_buf;
@@ -570,7 +571,7 @@ jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty
 
     if (tp_mode == UNI_CONN) {
         jetty_mgr_uniconn *p_mgr_uniconn;
-        p_jetty_mgr = new(std::nothrow) jetty_mgr_uniconn(p_urma_ctx);
+        p_jetty_mgr = new(std::nothrow) jetty_mgr_uniconn(p_urma_ctx, p_server);
         if (p_jetty_mgr == nullptr) {
             DLOCK_LOG_ERR("c++ new failed, bad alloc for c++ object!");
             return nullptr;
@@ -588,7 +589,7 @@ jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty
         }
     } else {
         jetty_mgr_sepconn *p_mgr_sepconn;
-        p_jetty_mgr = new(std::nothrow) jetty_mgr_sepconn(p_urma_ctx);
+        p_jetty_mgr = new(std::nothrow) jetty_mgr_sepconn(p_urma_ctx, p_server);
         if (p_jetty_mgr == nullptr) {
             DLOCK_LOG_ERR("c++ new failed, bad alloc for c++ object!");
             return nullptr;

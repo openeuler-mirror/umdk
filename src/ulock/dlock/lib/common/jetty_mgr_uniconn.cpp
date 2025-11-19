@@ -18,6 +18,7 @@
 
 #include "dlock_common.h"
 #include "dlock_log.h"
+#include "dlock_server.h"
 #include "utils.h"
 
 namespace dlock {
@@ -54,6 +55,12 @@ dlock_status_t jetty_mgr_uniconn::create_jetty(void)
         delete_share_jfr();
         return DLOCK_FAIL;
     }
+
+    m_local_id = m_jetty->jetty_id.id;
+    if (m_p_server != nullptr) {
+        m_p_server->add_to_m_jetty_mgr_map(m_local_id, this);
+    }
+
     return DLOCK_SUCCESS;
 }
 
@@ -75,8 +82,8 @@ bool jetty_mgr_uniconn::check_construct_succeed(jetty_mgr_uniconn *p_mgr_uniconn
     return true;
 }
 
-jetty_mgr_uniconn::jetty_mgr_uniconn(urma_ctx *p_urma_ctx) noexcept
-    : jetty_mgr(p_urma_ctx), m_share_jfr(nullptr), m_jetty(nullptr), m_tjetty(nullptr)
+jetty_mgr_uniconn::jetty_mgr_uniconn(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept
+    : jetty_mgr(p_urma_ctx, p_server), m_share_jfr(nullptr), m_jetty(nullptr), m_tjetty(nullptr)
 {
     m_tp_mode = UNI_CONN;
 }
@@ -149,6 +156,10 @@ void jetty_mgr_uniconn::delete_jetty(void)
         return;
     }
 
+    if (m_p_server != nullptr) {
+        m_p_server->erase_from_m_jetty_mgr_map(m_jetty->jetty_id.id);
+    }
+
     urma_status_t ret = urma_delete_jetty(m_jetty);
     if (ret != URMA_SUCCESS) {
         DLOCK_LOG_ERR("failed to delete jetty, ret: %d", static_cast<int>(ret));
@@ -158,11 +169,52 @@ void jetty_mgr_uniconn::delete_jetty(void)
     delete_share_jfr();
 }
 
+void jetty_mgr_uniconn::modify_share_jfr_err(void)
+{
+    if (m_share_jfr == nullptr) {
+        return;
+    }
+
+    urma_jfr_attr_t attr = {0};
+    attr.mask = JFR_STATE;
+    attr.state = URMA_JFR_STATE_ERROR;
+
+    urma_status_t ret = urma_modify_jfr(m_share_jfr, &attr);
+    if (ret != URMA_SUCCESS) {
+        DLOCK_LOG_ERR("failed to modify jfr to URMA_JFR_STATE_ERROR, ret: %d", static_cast<int>(ret));
+    }
+}
+
+void jetty_mgr_uniconn::modify_jetty_err(void)
+{
+    if (m_jetty == nullptr) {
+        return;
+    }
+
+    urma_jetty_attr_t attr = {0};
+    attr.mask = JETTY_STATE;
+    attr.state = URMA_JETTY_STATE_ERROR;
+
+    m_modify_jetty2err = true;
+    urma_status_t ret = urma_modify_jetty(m_jetty, &attr);
+    if (ret != URMA_SUCCESS) {
+        DLOCK_LOG_ERR("failed to modify jetty to URMA_JETTY_STATE_ERROR, ret: %d", static_cast<int>(ret));
+        /* If modify jetty to error state failed, don't wait URMA_CR_WR_FLUSH_ERR_DONE CR */
+        m_flush_err_done = true;
+    }
+
+    modify_share_jfr_err();
+}
+
 void jetty_mgr_uniconn::delete_urma_channel_resource(void) noexcept
 {
+    modify_jetty_err();
+
     unimport_dst_tseg();
     unbind_jetty();
     unimport_tjetty();
+
+    wait_flush_err_done();
     delete_jetty();
 }
 

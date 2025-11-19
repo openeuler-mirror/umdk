@@ -251,7 +251,7 @@ int dlock_client::init_client_do(int *p_client_id, const char *ip_str, bool rein
         goto err_del_p_conn;
     }
 
-    p_jetty_mgr = create_jetty_mgr(m_p_urma_ctx, nullptr, CLIENT, m_tp_mode);
+    p_jetty_mgr = create_jetty_mgr(m_p_urma_ctx, nullptr, CLIENT, m_tp_mode, nullptr);
     if (p_jetty_mgr == nullptr) {
         DLOCK_LOG_ERR("failed to create jetty mgr");
         goto err_del_p_conn;

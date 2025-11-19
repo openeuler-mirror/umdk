@@ -46,7 +46,7 @@ class jetty_mgr {
     friend class jetty_mgr_sepconn;
 public:
     jetty_mgr() = delete;
-    explicit jetty_mgr(urma_ctx *p_urma_ctx) noexcept;
+    explicit jetty_mgr(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept;
     virtual ~jetty_mgr() noexcept;
     dlock_status_t jetty_mgr_init(urma_ctx *p_urma_ctx, urma_jfc_t *p_jfc, uint32_t num_buf);
     void jetty_mgr_deinit(void);
@@ -84,6 +84,21 @@ public:
         uint64_t add_val, uint64_t *res_val) const;
     dlock_status_t post_cas_and_get_res(uint64_t wr_id, uint32_t offset,
         uint64_t cmp_val, uint64_t swap_val) const;
+
+    inline bool get_m_modify_jetty2err(void) const
+    {
+        return m_modify_jetty2err;
+    }
+
+    inline bool get_m_flush_err_done(void) const
+    {
+        return m_flush_err_done;
+    }
+
+    inline void set_m_flush_err_done(void)
+    {
+        m_flush_err_done = true;
+    }
 
     uint64_t m_cr_data;
 protected:
@@ -131,6 +146,13 @@ private:
     virtual dlock_status_t get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const = 0;
     dlock_status_t construct_urma_bond_id_xchg_info(struct urma_init_body *jetty_info) const;
 #endif /* UB_AGG */
+
+    void wait_flush_err_done(void);
+
+    uint32_t m_local_id; /* local jetty/jfs id. */
+    bool m_modify_jetty2err;
+    bool m_flush_err_done;
+    dlock_server *m_p_server; /* If it is the client-side jetty_mgr, m_p_server is nullptr. */
 };
 };
 #endif

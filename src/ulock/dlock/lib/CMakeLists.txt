@@ -2,6 +2,7 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2020-2025. All rights reserved.
 
 include_directories(common)
+include_directories(server)
 include_directories(include)
 
 include_directories(${CMAKE_SOURCE_DIR}/urma/common/include)
