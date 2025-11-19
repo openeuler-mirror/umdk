@@ -195,6 +195,8 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
 
 static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 {
+    umq_buf_t *buf = NULL;
+    umq_state_t umq_state;
     int poll_cnt = 0;
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
         goto WAIT_UMQ_READY;
@@ -223,8 +225,6 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
     } while (require_rx_count > 0);
 
 WAIT_UMQ_READY:
-    umq_buf_t *buf = NULL;
-    umq_state_t umq_state;
     do {
         int ret = umq_poll(g_umq_perftest_ctx.umqh, UMQ_IO_TX, &buf, 1);
         if (ret != 0) {
