@@ -220,7 +220,7 @@ static bondp_ret_t import_p_tseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_
 static bondp_ret_t import_matrix_primary_seg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg)
 {
     bool has_success = false;
-    int iodie_num = g_bondp_global_ctx->use_single_die ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
+    int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
     for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
         bondp_ret_t ret = import_p_tseg(bdp_ctx, seg_cfg, iodie_idx, iodie_idx);
         if (ret == BONDP_SKIP) {
@@ -325,7 +325,7 @@ static bondp_ret_t import_matrix_port_seg(bondp_context_t *bdp_ctx, urma_seg_t *
     if (is_empty_eid(&eid)) {
         URMA_LOG_WARN("Can't get direct route by seg->ubva.eid, it is empty. Import segment to all port eid.\n");
         // fullmush import
-        int iodie_num = g_bondp_global_ctx->use_single_die ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
+        int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
         for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
             ret = import_matrix_port_seg_on_iodie(bdp_ctx, bondp_seg_cfg, iodie_idx);
             if (ret != BONDP_SUCCESS) {

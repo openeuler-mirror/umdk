@@ -212,7 +212,7 @@ static int schedule_next_route_in_matrix_server_multipath(const urma_jfs_wr_t *w
     bdp_v_conn_t *v_conn,
     int *send_idx, int *target_idx)
 {
-    if (g_bondp_global_ctx->use_single_die) {
+    if (is_single_dev_mode(bdp_tjetty->v_tjetty.urma_ctx)) {
         *send_idx = 0;
         *target_idx = 0;
         return 0;
@@ -1145,7 +1145,7 @@ static urma_status_t set_jfr_wr_ptjetty_ptseg_without_hdr(urma_jfr_wr_t *recv_wr
 
 static urma_status_t schedule_next_recv_port_matrix_multipath(bjetty_ctx_t *bjetty_ctx, int *recv_idx)
 {
-    if (g_bondp_global_ctx->use_single_die) {
+    if (is_single_dev_mode(&bjetty_ctx->bond_ctx->v_ctx)) {
         *recv_idx = 0;
         return URMA_SUCCESS;
     }
