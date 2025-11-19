@@ -396,3 +396,107 @@ int bdp_r_p2v_jetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *rp
     (void)pthread_rwlock_unlock(&tbl->lock);
     return 0;
 }
+
+/* == bdp_r_v2p_token_id_table == */
+ 
+static bool bdp_r_v2p_token_id_comp(struct ub_hmap_node *node, void *key)
+{
+    bondp_v2p_token_id_t *item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
+    bondp_v2p_token_id_key_t *key_item = key;
+ 
+    return (item->key.v_token_id == key_item->v_token_id) &&
+        (memcmp(&item->key.v_remote_eid, &key_item->v_remote_eid, sizeof(urma_eid_t)) == 0);
+}
+ 
+static void bdp_r_v2p_token_id_free(struct ub_hmap_node *node)
+{
+    bondp_v2p_token_id_t *item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
+    free(item);
+}
+ 
+static uint32_t bdp_r_v2p_token_id_hash(void *key)
+{
+    return ((bondp_v2p_token_id_key_t *)key)->v_token_id;
+}
+ 
+int bdp_r_v2p_token_id_table_create(bondp_hash_table_t *tbl, uint32_t size)
+{
+    return bondp_hash_table_create(tbl, size,
+        bdp_r_v2p_token_id_comp, bdp_r_v2p_token_id_free, bdp_r_v2p_token_id_hash);
+}
+ 
+int bdp_r_v2p_token_id_table_destroy(bondp_hash_table_t *tbl)
+{
+    bondp_hash_table_destroy(tbl);
+    return 0;
+}
+ 
+int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
+    urma_eid_t *v_remote_eid, bondp_v2p_token_id_t *item)
+{
+    hmap_node_t *node = NULL;
+    bondp_v2p_token_id_key_t key = {
+        .v_token_id = v_token_id,
+        .v_remote_eid = *v_remote_eid
+    };
+    uint32_t hash = v_token_id;
+    (void)pthread_rwlock_rdlock(&tbl->lock);
+    node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
+    if (node == NULL) {
+        (void)pthread_rwlock_unlock(&tbl->lock);
+        return BONDP_HASH_MAP_NOT_FOUND_ERROR;
+    }
+    bondp_v2p_token_id_t *tmp = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
+    (void)memcpy(item, tmp, sizeof(bondp_v2p_token_id_t));
+    (void)pthread_rwlock_unlock(&tbl->lock);
+ 
+    return 0;
+}
+ 
+int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index)
+{
+    bondp_v2p_token_id_t *item = NULL;
+    struct ub_hmap_node *node, *next;
+ 
+    node = ub_hmap_first(&tbl->hmap);
+    while (node != NULL) {
+        item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
+        next = ub_hmap_next(&tbl->hmap, node);
+        if (item->index == index) {
+            ub_hmap_remove(&tbl->hmap, node);
+            if (tbl->free_f != NULL) {
+                tbl->free_f(node);
+            }
+            return 0;
+        }
+        node = next;
+    }
+ 
+    URMA_LOG_ERR("Failed to find node, index: %u.\n", index);
+    return -1;
+}
+ 
+int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_token_id_t *item)
+{
+    bondp_v2p_token_id_key_t key = item->key;
+    uint32_t hash = key.v_token_id;
+    hmap_node_t *node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
+    if (node != NULL) {
+        URMA_LOG_DEBUG("Node already added into hash table, hash: %u, index: %u.\n", hash, item->index);
+        return 0;
+    }
+ 
+    bondp_v2p_token_id_t *new_item = calloc(1, sizeof(bondp_v2p_token_id_t));
+    if (new_item == NULL) {
+        return BONDP_HASH_MAP_ALLOC_ERROR;
+    }
+ 
+    (void)memcpy(new_item->peer_p_seg, item->peer_p_seg, URMA_UBAGG_DEV_MAX_NUM * sizeof(item->peer_p_seg[0]));
+    new_item->v_handle = item->v_handle;
+    new_item->key = key;
+    new_item->index = item->index;
+ 
+    bondp_hash_table_add_with_hash_without_lock(tbl, &new_item->hmap_node, hash);
+ 
+    return 0;
+}
