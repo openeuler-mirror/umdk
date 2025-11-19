@@ -264,7 +264,7 @@ static void urma_parse_port_attr(const char *sysfs_path, urma_device_attr_t *att
     uint8_t i;
     char port_path[URMA_DEV_PATH_MAX];
 
-    for (i = 0; i < attr->port_cnt; i++) {
+    for (i = 0; i < attr->port_cnt && i < MAX_PORT_CNT; i++) {
         if (snprintf(port_path, URMA_DEV_PATH_MAX - 1, "%s/port%u", sysfs_path, i) <= 0) {
             URMA_LOG_ERR("snprintf failed, path: %s, port_num:%hhu.\n", sysfs_path, i);
             continue;
@@ -489,7 +489,7 @@ static int urma_check_loaded_devices(urma_sysfs_dev_t *sysfs_dev,
 
 static void urma_get_dev_name_list(struct ub_list *dev_name_list, urma_sysfs_dev_t *sysfs_dev)
 {
-    urma_sysfs_dev_name_t *sysfs_dev_name = calloc(1, sizeof(urma_sysfs_dev_t));
+    urma_sysfs_dev_name_t *sysfs_dev_name = calloc(1, sizeof(urma_sysfs_dev_name_t));
     if (sysfs_dev_name == NULL) {
         return;
     }

@@ -78,7 +78,7 @@ static bool has_bonding_dev_prefix(const char* dev_name)
     return true;
 }
 
-static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
+static int admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
 {
     char tmp_value[VALUE_LEN_MAX];
 
@@ -143,7 +143,8 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
 
     ubep->eid_list = calloc(1, dev_attr->dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
     if (ubep->eid_list == NULL) {
-        return;
+        (void)printf("Failed to malloc eid_list, %s.\n", sysfs_path);
+        return -1;
     }
 
     admin_read_eid_list(sysfs_path, ubep->eid_list, dev_attr->dev_cap.max_eid_cnt);
@@ -155,6 +156,7 @@ static void admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *u
     if (has_bonding_dev_prefix(ubep->dev_name)) {
         ubep->dev_attr.port_attr[0].state = URMA_PORT_ACTIVE; /* bonding dev port 0 state is always active */
     }
+    return 0;
 }
 
 static admin_show_ubep_t *admin_get_ubep_info(const struct dirent *dent)
@@ -189,7 +191,12 @@ static admin_show_ubep_t *admin_get_ubep_info(const struct dirent *dent)
         (void)printf("parse transport_type failed, %s.\n", sysfs_path);
         goto free_sysfs_path;
     }
-    admin_parse_device_attr(sysfs_path, ubep);
+
+    ret = admin_parse_device_attr(sysfs_path, ubep);
+    if (ret != 0) {
+        (void)printf("parse device attr failed, %s.\n", sysfs_path);
+        goto free_sysfs_path;
+    }
 
     free(sysfs_path);
     return ubep;
