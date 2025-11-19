@@ -1320,6 +1320,7 @@ static int resend_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
         return CALLBACK_SKIP;
     }
     node->value.send_idx = migrate_idx;
+    node->value.target_idx = migrate_idx;
     /* get_comp_urma_jetty_id(bjetty_ctx->bdp_comp) always returns non-null value. */
     /* Because resend funciton access stored bjetty_ctx pointer which has been validated in post_send_check_valid */
     ret = send_and_store_jfs_wr(bjetty_ctx, get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id,
@@ -1524,7 +1525,14 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         Migrate all WRs from the current jetty to the next valid jetty
         ! Migration may fail, but considering it transparent to user, so we return 1 to ignore CR
         */
-        migrate_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->dev_num, send_idx);
+        if (is_in_matrix_server(bjetty_ctx->bond_ctx)) {
+            migrate_idx = (send_idx + 1) % PRIMARY_EID_NUM;
+            if (!bjetty_ctx->pjettys_valid[migrate_idx]) {
+                migrate_idx = -1;
+            }
+        } else {
+            migrate_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->dev_num, send_idx);
+        }
         ret = resend_error_device(bjetty_ctx, send_idx, migrate_idx, &bad_wr);
         URMA_LOG_DEBUG("Migrate send from %d to %d, ret %d\n", send_idx, migrate_idx, ret);
         return CR_HANDLER_SUCCESS_AND_SKIP;
