@@ -449,7 +449,7 @@ DELETE_SLAVE_CTX:
     return -1;
 }
 
-static int init_matrix_slave_devices(bondp_context_t *bond_ctx)
+static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_aggr_mode_t aggr_mode)
 {
     bond_ctx->topo_map = g_bondp_global_ctx->topo_map;
     topo_info_t *topo_info = get_topo_info_by_bonding_eid(bond_ctx->topo_map, &bond_ctx->v_ctx.eid);
@@ -457,64 +457,65 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Failed to get topo info by bonding eid\n");
         return -1;
     }
-    int ret = 0;
-    int i = 0;
-    int j = 0;
-    int iodie_num = is_single_dev_mode(&bond_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : PRIMARY_EID_NUM;
-    /* The second iodie is empty and is set to valid in single-die mode */
-    bool iodie_valid[IODIE_NUM] = {false, is_single_dev_mode(&bond_ctx->v_ctx)};
-    for (i = 0; i < iodie_num; ++i) {
-        /* Primary EID must be valid */
-        if (is_empty_eid((urma_eid_t *)(topo_info->io_die_info[i].primary_eid))) {
+
+    int iodie_num = aggr_mode == URMA_AGGR_MODE_STANDALONE
+        ? SINGLE_DIE_IODIE_NUM
+        : PRIMARY_EID_NUM;
+
+    urma_eid_t *eid_list[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    for (int i = 0; i < iodie_num; ++i) {
+        eid_list[i] = (urma_eid_t *)(topo_info->io_die_info[i].primary_eid);
+        if (is_empty_eid(eid_list[i])) {
             URMA_LOG_ERR("Primary eid %d is NULL\n", i);
-            goto DELETE_CTX;
+            return -1;
         }
-        ret = get_dev_and_ctx_by_eid((urma_eid_t *)topo_info->io_die_info[i].primary_eid,
-            &bond_ctx->primary_devs[i], &bond_ctx->primary_ctxs[i]);
-        if (ret) {
-            URMA_LOG_ERR("Failed to create ctx for primary eid[%d]\n", i);
-            goto DELETE_CTX;
-        }
-        /* There should be at least one valid port eid */
+
         bool port_eid_valid = false;
-        for (j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
-            if (is_empty_eid((urma_eid_t *)(topo_info->io_die_info[i].port_eid[j]))) {
+        for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
+            int idx = PRIMARY_EID_NUM + i * PORT_EID_MAX_NUM_PER_DEV + j;
+            eid_list[idx] = (urma_eid_t *)(topo_info->io_die_info[i].port_eid[j]);
+            if (is_empty_eid(eid_list[idx])) {
+                eid_list[idx] = NULL;
                 URMA_LOG_INFO("Skip port ctx [%d, %d], eid is empty", i, j);
                 continue;
             }
-            int port_idx = get_matrix_port_ctx_idx(i, j);
-            ret = get_dev_and_ctx_by_eid((urma_eid_t *)(topo_info->io_die_info[i].port_eid[j]),
-                &bond_ctx->port_devs[port_idx], &bond_ctx->port_ctxs[port_idx]);
-            if (ret) {
-                URMA_LOG_ERR("Failed to create port ctx[%d, %d]\n", i, j);
-                goto DELETE_CTX;
-            }
             port_eid_valid = true;
         }
-        iodie_valid[i] = port_eid_valid;
-    }
-    if (!iodie_valid[0] || !iodie_valid[1]) {
-        i = iodie_num - 1;
-        URMA_LOG_ERR("Either iodie is invalid: %d %d\n", iodie_valid[0], iodie_valid[1]);
-        goto DELETE_CTX;
-    }
-    bond_ctx->dev_num = is_single_dev_mode(&bond_ctx->v_ctx) ? SINGLE_DIE_DEVNUM : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
-    return init_slave_context_fd(bond_ctx);
-DELETE_CTX:
-    /*
-    This branch is only entered in error cases,
-    and at this time, the value of i is at most PRIMARY_EID_NUM - 1,
-    so there is no array out of bounds situation.
-    */
-    for (int p = 0; p <= i; ++p) {
-        for (int q = 0; q < PORT_EID_MAX_NUM_PER_DEV; ++q) {
-            int port_idx = get_matrix_port_ctx_idx(p, q);
-            if (bond_ctx->port_ctxs[port_idx]) {
-                urma_delete_context(bond_ctx->port_ctxs[port_idx]);
-            }
+
+        if (!port_eid_valid) {
+            URMA_LOG_ERR("No port eid valid\n");
+            return -1;
         }
-        if (bond_ctx->primary_ctxs[p]) {
-            urma_delete_context(bond_ctx->primary_ctxs[p]);
+    }
+
+    urma_context_t *p_ctxs[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (eid_list[i] == NULL) {
+            continue;
+        }
+        int ret = get_dev_and_ctx_by_eid(eid_list[i], &bond_ctx->p_devs[i], &p_ctxs[i]);
+        if (ret != 0) {
+            URMA_LOG_ERR("Failed to create ctx for primary eid[%d]\n", i);
+            goto DELETE_CTX;
+        }
+    }
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (bond_ctx->p_ctxs[i] != NULL) {
+            urma_delete_context(bond_ctx->p_ctxs[i]);
+        }
+        bond_ctx->p_ctxs[i] = p_ctxs[i];
+    }
+
+    bond_ctx->dev_num = aggr_mode == URMA_AGGR_MODE_STANDALONE
+        ? SINGLE_DIE_DEVNUM
+        : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
+    return init_slave_context_fd(bond_ctx);
+
+DELETE_CTX:
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (p_ctxs[i] != NULL) {
+            urma_delete_context(bond_ctx->p_ctxs[i]);
         }
     }
     return -1;
@@ -564,7 +565,7 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         : URMA_AGGR_MODE_BALANCE;
 
     if (!g_bondp_global_ctx->skip_load_topo && get_topo_info_from_ko(bond_ctx) == 0) {
-        ret = init_matrix_slave_devices(bond_ctx);
+        ret = init_matrix_slave_devices(bond_ctx, bond_ctx->v_ctx.aggr_mode);
     } else {
         ret = init_general_slave_devices(bond_ctx);
     }
