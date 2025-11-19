@@ -113,10 +113,6 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
     }
 
     ctx->pid = (uint32_t)getpid();
-
-    const char *env_value = getenv(UBAGG_ENABLE_RECOVERY);
-    ctx->disable_recovery = !(env_value != NULL && *env_value);
-
     *bondp_global_ctx = ctx;
     return 0;
 }
