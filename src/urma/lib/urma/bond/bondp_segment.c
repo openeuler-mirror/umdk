@@ -176,14 +176,6 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
     return bondp_delete_comp(target_seg, BONDP_COMP_SEGMENT);
 }
 
-void bondp_free_simple_seg_info(bdp_seg_info_t *seg_info)
-{
-    if (seg_info == NULL) {
-        return;
-    }
-    free(seg_info);
-}
-
 static bondp_ret_t import_p_tseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg,
     int local_idx, int target_idx)
 {
