@@ -712,3 +712,16 @@ int umq_buf_split(umq_buf_t *head, umq_buf_t *node)
     tmp->qbuf_next = NULL;
     return UMQ_SUCCESS;
 }
+
+umq_state_t umq_state_get(uint64_t umqh)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+
+    if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
+        (umq->tp_ops->umq_tp_state_get == NULL)) {
+        UMQ_VLOG_ERR("umqh invalid\n");
+        return QUEUE_STATE_MAX;
+    }
+
+    return umq->tp_ops->umq_tp_state_get(umq->umqh_tp);
+}

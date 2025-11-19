@@ -164,6 +164,14 @@ typedef struct umq_create_option {
     /*************Optional paramenters end*******************/
 } umq_create_option_t;
 
+typedef enum umq_state {
+    QUEUE_STATE_IDLE,
+    // if flow control is enabled, QUEUE_STATE_READY means initial_window is updated
+    QUEUE_STATE_READY,
+    QUEUE_STATE_ERR,
+    QUEUE_STATE_MAX
+} umq_state_t;
+
 /**
  * layout: | umq_buf_t | headroom | data |  unuse |
  * buf_size = sizeof(umq_buf_t) + headroom_size + data_size +  sizeof(unuse)

@@ -66,11 +66,6 @@ typedef struct umq_ub_ctx {
     uint64_t remote_notify_addr;
 } umq_ub_ctx_t;
 
-typedef enum ub_queue_state {
-    UMQ_UB_QUEUE_STATE_READY,
-    UMQ_UB_QUEUE_STATE_ERR
-} ub_queue_state_t;
-
 typedef struct rx_buf_ctx {
     urpc_list_t node;
     umq_buf_t *buffer;
@@ -155,7 +150,7 @@ typedef struct ub_queue {
     bool tx_flush_done;         // tx recv flush err done
     bool rx_flush_done;         // rx buf ctx all report
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
-    ub_queue_state_t state;
+    umq_state_t state;
     rx_buf_ctx_list_t rx_buf_ctx_list;
     umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
@@ -1136,7 +1131,7 @@ int umq_modify_ubq_to_err(ub_queue_t *queue)
         UMQ_VLOG_ERR("modify jfr to URMA_JFR_STATE_ERROR fail, status %u\n", urma_status);
     }
 
-    queue->state = UMQ_UB_QUEUE_STATE_ERR;
+    queue->state = QUEUE_STATE_ERR;
     return urma_status;
 }
 
@@ -1715,7 +1710,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     (void)pthread_mutex_init(&queue->imported_tseg_list_mutex, NULL);
     queue->ref_cnt = 1;
     queue->tx_outstanding = 0;
-    queue->state = UMQ_UB_QUEUE_STATE_READY;
+    queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
     return (uint64_t)(uintptr_t)queue;
 UNINIT_RX_CTX_LIST:
@@ -2421,7 +2416,7 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
 {
     int buf_cnt = 0;
     if (!queue->tx_flush_done || queue->rx_flush_done ||
-        queue->state != UMQ_UB_QUEUE_STATE_ERR || queue->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
+        queue->state != QUEUE_STATE_ERR || queue->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
         return buf_cnt;
     }
 
@@ -2714,7 +2709,7 @@ static int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d]\n", i, cr[i].status);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
-                if (queue->state == UMQ_UB_QUEUE_STATE_ERR) {
+                if (queue->state == QUEUE_STATE_ERR) {
                     queue->tx_flush_done = true;
                 }
                 continue;
@@ -2745,6 +2740,7 @@ static int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
             } else {
                 UMQ_VLOG_DEBUG("umq ub flow control update initial window %d\n", *remote_win);
                 umq_ub_window_inc(&queue->flow_control, *remote_win);
+                queue->state = QUEUE_STATE_READY;
             }
             continue;
         } else if (cr[i].user_ctx <= UINT16_MAX) {
@@ -2867,7 +2863,7 @@ static void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d]\n", i, cr[i].status);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
-                if (queue->state == UMQ_UB_QUEUE_STATE_ERR) {
+                if (queue->state == QUEUE_STATE_ERR) {
                     queue->tx_flush_done = true;
                 }
                 continue;
@@ -2911,7 +2907,7 @@ static void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d]\n", i, cr[i].status);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
-                if (queue->state == UMQ_UB_QUEUE_STATE_ERR) {
+                if (queue->state == QUEUE_STATE_ERR) {
                     queue->tx_flush_done = true;
                 }
                 continue;
@@ -3295,7 +3291,7 @@ static int umq_report_incomplete_and_merge_rx(
 {
     int buf_cnt = 0;
     if (!queue->tx_flush_done || queue->rx_flush_done ||
-        queue->state != UMQ_UB_QUEUE_STATE_ERR || queue->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
+        queue->state != QUEUE_STATE_ERR || queue->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
         return buf_cnt;
     }
     rx_buf_ctx_t *rx_buf_ctx;
@@ -3478,7 +3474,7 @@ static int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, um
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d]\n", i, cr[i].status);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
-                if (queue->state == UMQ_UB_QUEUE_STATE_ERR) {
+                if (queue->state == QUEUE_STATE_ERR) {
                     queue->tx_flush_done = true;
                 }
                 continue;
@@ -3617,4 +3613,10 @@ void umq_ub_remove_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id)
 util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp)
 {
     return &g_umq_ub_id_allocator;
+}
+
+umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    return queue->state;
 }
