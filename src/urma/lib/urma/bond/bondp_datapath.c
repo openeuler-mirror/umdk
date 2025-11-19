@@ -1654,6 +1654,11 @@ urma_status_t rearm_single_wr(bjetty_ctx_t *bjetty_ctx, int recv_idx, uint32_t i
     return comp_post_recv(bjetty_ctx, recv_idx, wr, bad_wr);
 }
 
+static inline bdp_r_p2v_jetty_id_type_t get_remote_id_type_by_cr(urma_cr_t *cr)
+{
+    return cr->flag.bs.jetty ? REMOTE_JETTY : REMOTE_JFR;
+}
+
 /**
  * @return 0: Success, Do copy CR
  * @return 1: Success, Do Not copy CR
@@ -1670,7 +1675,6 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     int migrate_idx = 0;
     bdp_v_conn_t *v_conn = NULL;
     bjetty_hdr_t hdr = {0};
-    urma_jetty_id_t *target_jetty_id = NULL;
 
     if (bjetty_ctx->bdp_comp->comp_type != BONDP_COMP_JETTY && bjetty_ctx->bdp_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_comp type: %d\n", bjetty_ctx->bdp_comp->comp_type);
@@ -1702,10 +1706,14 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         URMA_LOG_DEBUG("Failed to get user_ctx in jfr_wr_buf of recv_wr_id %u, skip\n", recv_wr_id);
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
-    target_jetty_id = bdp_tjetty_id_table_lookup(&bjetty_ctx->bond_ctx->tjetty_id_table, &cr->remote_id);
-    if (target_jetty_id == NULL) {
-        URMA_LOG_ERR("Failed to get target jetty id " EID_FMT " %u %u."
-            "Check calling of URMA_USER_CTL_BOND_ADD_RJETTY_ID_INFO\n",
+
+    urma_jetty_id_t target_jetty_id;
+    ret = bdp_r_p2v_jetty_id_table_lookup(
+        &bjetty_ctx->bond_ctx->remote_p2v_jetty_id_table,
+        &cr->remote_id, get_remote_id_type_by_cr(cr), &target_jetty_id
+    );
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to get target jetty id " EID_FMT " %u %u.\n",
             EID_ARGS(cr->remote_id.eid), cr->remote_id.id, cr->remote_id.uasid);
         (void)jfr_wr_buf_remove_wr(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id);
         restore_user_cr(cr, original_user_ctx);
@@ -1718,15 +1726,15 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     } else {
         msn = parse_hdr((uint64_t)bjetty_ctx->hdr_recv_buf, recv_wr_id, &hdr);
     }
-    v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, target_jetty_id);
+    v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, &target_jetty_id);
     if (!v_conn) {
-        if (bdp_v_conn_table_add_on_recv(&bjetty_ctx->v_conn_table, target_jetty_id, &v_conn)) {
+        if (bdp_v_conn_table_add_on_recv(&bjetty_ctx->v_conn_table, &target_jetty_id, &v_conn)) {
             /* get_comp_urma_jetty_id will return a non-null value,
                because we check bjetty_ctx->bdp_comp type at the entrance of this function. */
             urma_jetty_id_t *jfr_jetty_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp);
             URMA_LOG_ERR("Failed to create vconn for ( "EID_FMT" %d, "EID_FMT" %d)",
                 EID_ARGS(jfr_jetty_id->eid), jfr_jetty_id->id,
-                EID_ARGS(target_jetty_id->eid), target_jetty_id->id
+                EID_ARGS(target_jetty_id.eid), target_jetty_id.id
             );
             (void)jfr_wr_buf_remove_wr(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id);
             restore_user_cr(cr, original_user_ctx);
@@ -1941,13 +1949,6 @@ static int restore_cr_local_id(bondp_context_t *bdp_ctx, urma_cr_t *cr)
     }
     cr->local_id = vjetty_id;
     return 0;
-}
-static inline bdp_r_p2v_jetty_id_type_t get_remote_id_type_by_cr(urma_cr_t *cr)
-{
-    if (cr->flag.bs.jetty) {
-        return REMOTE_JETTY;
-    }
-    return REMOTE_JFR;
 }
 /**
  * Convert the remote_id field of a CR from pjetty_id to vjetty_id if possible.
