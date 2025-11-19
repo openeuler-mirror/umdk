@@ -837,11 +837,7 @@ void get_source_queue_info(urma_cr_t *cr, queue_local_t *local_q, uint8_t *src_q
     send_recv_src_queue_info_t *src_queue_info = (send_recv_src_queue_info_t *)(uintptr_t)src_q_info;
 
     /* Note: src_q_info is a 'QUEUE_MSG_SRC_QUEUE_INFO_SIZE' bytes buffer. Beware of memory overflow. */
-    if (local_q->is_binded == URPC_TRUE) {
-        src_queue_info->remote_id = local_q->remote_jetty_id;
-    } else {
-        src_queue_info->remote_id = cr->remote_id;
-    }
+    src_queue_info->remote_id = cr->remote_id;
     src_queue_info->l_queue = &local_q->queue;
     src_queue_info->tpn = cr->tpn;
 }
