@@ -549,6 +549,38 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
     return ret;
 }
 
+urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name,
+    const void *opt_value, size_t opt_len)
+{
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    switch (opt_name) {
+        case URMA_OPT_AGGR_MODE:
+            if (opt_len != sizeof(urma_context_aggr_mode_t)) {
+                URMA_LOG_ERR("Invalid option value len.\n");
+                return URMA_EINVAL;
+            }
+            if (strcmp(ctx->dev->ops->name, "ubagg") != 0) {
+                URMA_LOG_ERR("Cannot set aggragated mode for non-aggragated device.\n");
+                return URMA_EINVAL;
+            }
+            const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 5;
+            urma_user_ctl_in_t in = {
+                .opcode = URMA_USER_CTL_BOND_SET_AGGR_MODE,
+                .addr = (uint64_t) opt_value,
+                .len = opt_len,
+            };
+            urma_user_ctl_out_t out = {0};
+            return urma_user_ctl(ctx, &in, &out);
+        default:
+            URMA_LOG_ERR("Invalid option name.\n");
+            return URMA_EINVAL;
+    }
+}
+
 /* Temporarily use uasid allocated by provider */
 urma_status_t urma_get_uasid(uint32_t *uasid)
 {

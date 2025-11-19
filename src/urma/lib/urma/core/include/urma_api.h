@@ -104,6 +104,14 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index);
 urma_status_t urma_delete_context(urma_context_t *ctx);
 
 /**
+ * Set option of urma context.
+ * @param[in] [Required] ctx: handle of the created context.
+ * Return: 0 on success, other value on error.
+ */
+urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name,
+    const void *opt_value, size_t opt_len);
+
+/**
  * Create a jetty for completion (jfc).
  * @param[in] [Required] ctx: the urma context created before;
  * @param[in] [Required] jfc_cfg: configuration including: depth, flag, jfce, user context;

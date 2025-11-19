@@ -31,7 +31,6 @@
 #include "bondp_context_table.h"
 #include "bondp_provider_ops.h"
 
-#define UBAGG_DISABLE_SINGLE_DIE "UBAGG_DISABLE_SINGLE_DIE"
 #define UBAGG_MAX_EVENT 1
 #define UBAGG_ENABLE_RECOVERY "UBAGG_ENABLE_RECOVERY"
 
@@ -115,12 +114,7 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
 
     ctx->pid = (uint32_t)getpid();
 
-    const char *env_value = getenv(UBAGG_DISABLE_SINGLE_DIE);
-    if (env_value == NULL || *env_value == '\0') {
-        URMA_LOG_INFO("There is no env_value about UBAGG_DISABLE_SINGLE_DIE");
-    }
-    ctx->use_single_die = !(env_value != NULL && *env_value);
-    env_value = getenv(UBAGG_ENABLE_RECOVERY);
+    const char *env_value = getenv(UBAGG_ENABLE_RECOVERY);
     ctx->disable_recovery = !(env_value != NULL && *env_value);
 
     *bondp_global_ctx = ctx;
@@ -560,9 +554,7 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         URMA_LOG_ERR("Failed to create epoll %s\n", ub_strerror(errno));
         goto UNINIT_V_CTX;
     }
-    bond_ctx->v_ctx.aggr_mode = g_bondp_global_ctx->use_single_die
-        ? URMA_AGGR_MODE_STANDALONE
-        : URMA_AGGR_MODE_BALANCE;
+    bond_ctx->v_ctx.aggr_mode = URMA_AGGR_MODE_STANDALONE;
 
     if (!g_bondp_global_ctx->skip_load_topo && get_topo_info_from_ko(bond_ctx) == 0) {
         ret = init_matrix_slave_devices(bond_ctx, bond_ctx->v_ctx.aggr_mode);
@@ -603,5 +595,19 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     }
     bondp_uninit_v_ctx(bond_ctx);
     bondp_delete_ctx(bond_ctx);
+    return ret;
+}
+
+int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode) {
+    bondp_context_t *bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    if (!is_valid_ctx(bond_ctx)) {
+        URMA_LOG_ERR("bonding context is invalid in user ctl");
+        return -1;
+    }
+
+    int ret = init_matrix_slave_devices(bond_ctx, aggr_mode);
+    if (ret == 0) {
+        ctx->aggr_mode = aggr_mode;
+    }
     return ret;
 }
