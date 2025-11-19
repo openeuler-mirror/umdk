@@ -10,6 +10,7 @@
  */
  
 #include <cstring>
+#include <unistd.h>
 
 #include "dlock_types.h"
 #include "jetty_mgr.h"
@@ -19,9 +20,13 @@
 
 #include "dlock_common.h"
 #include "dlock_log.h"
+#include "dlock_server.h"
 #include "utils.h"
 
 namespace dlock {
+static const uint32_t JETTY_MGR_WAIT_FLUSH_ERR_DONE_TIMEOUT = 60000000; // us
+static const uint32_t JETTY_MGR_SLEEP_INTERVAL = 1000; // us
+
 void jetty_mgr::jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const
 {
     jfs_cfg.flag.bs.order_type = order_type;
@@ -87,10 +92,11 @@ dlock_status_t jetty_mgr::get_jfc(void)
     return DLOCK_SUCCESS;
 }
 
-jetty_mgr::jetty_mgr(urma_ctx *p_urma_ctx) noexcept
+jetty_mgr::jetty_mgr(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept
     : m_cr_data(0), m_gid_idx(GID_INDEX), m_urma_ctx(p_urma_ctx), m_jfc(nullptr),
     m_tp_mode(SEPERATE_CONN), m_is_exe(false), m_dlock_cipher(nullptr), m_p_rx_buf(nullptr),
-    m_missing_rx_buf_num(0), m_ci(0), m_dst_tseg(nullptr), m_state(JETTY_MGR_ACTIVE), m_next_message_id(0)
+    m_missing_rx_buf_num(0), m_ci(0), m_dst_tseg(nullptr), m_state(JETTY_MGR_ACTIVE), m_next_message_id(0),
+    m_local_id(0), m_modify_jetty2err(false), m_flush_err_done(false), m_p_server(p_server)
 {
 }
 
@@ -644,4 +650,36 @@ dlock_status_t jetty_mgr::construct_urma_bond_id_xchg_info(struct urma_init_body
     return DLOCK_SUCCESS;
 }
 #endif /* UB_AGG */
+
+void jetty_mgr::wait_flush_err_done(void)
+{
+    if ((m_p_server == nullptr) || m_flush_err_done || (!m_urma_ctx->is_m_jfc_polling())) {
+        return;
+    }
+
+    /*
+     * For the dlock server instance, multiple Jetty/JFS instances share one JFC. Due to UB hardware
+     * and driver constraints, before deleting a Jetty/JFS instance, must modify the Jetty to error
+     * state and wait for the fake URMA_CR_WR_FLUSH_ERR_DONE CR, otherwise, unpredictable errors
+     * may occur.
+     *
+     * For the dlock client instance, each Jetty/JFS exclusively occupies one JFC. If a Jetty/JFS
+     * is deleted, it will no longer poll the JFC, and the JFC will also be removed. Therefore,
+     * jetty/jfs can be directly deleted without waiting for the URMA_CR_WR_FLUSH_ERR_DONE CR.
+     * UB driver will modify jetty/jfs to error before deleting jetty/jfs.
+     */
+    std::chrono::microseconds interval;
+    std::chrono::steady_clock::time_point tp_start = std::chrono::steady_clock::now();
+
+    while ((!m_flush_err_done) && m_urma_ctx->is_m_jfc_polling()) {
+        std::chrono::steady_clock::time_point tp_now = std::chrono::steady_clock::now();
+        interval = std::chrono::duration_cast<std::chrono::microseconds>(tp_now - tp_start);
+        if (interval.count() > JETTY_MGR_WAIT_FLUSH_ERR_DONE_TIMEOUT) { // 60s timeout
+            DLOCK_LOG_ERR("Waiting for fake URMA_CR_WR_FLUSH_ERR_DONE CR timeout! local_id: %u.", m_local_id);
+            break;
+        }
+
+        static_cast<void>(usleep(JETTY_MGR_SLEEP_INTERVAL));
+    }
+}
 };

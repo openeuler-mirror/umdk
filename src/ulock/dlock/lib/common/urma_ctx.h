@@ -57,6 +57,21 @@ public:
         return m_urma_ctx->dev->type;
     }
 
+    inline void set_m_jfc_polling(void)
+    {
+        m_jfc_polling = true;
+    }
+
+    inline void clear_m_jfc_polling(void)
+    {
+        m_jfc_polling = false;
+    }
+
+    inline bool is_m_jfc_polling(void)
+    {
+        return m_jfc_polling;
+    }
+
 #ifdef UB_AGG
     inline bool is_ub_bonding_dev(void) const
     {
@@ -91,6 +106,7 @@ private:
     urma_device_attr_t m_dev_attr;
     urma_jfce_t *m_jfce;
     urma_jfc_t *m_jfc;
+    bool m_jfc_polling;
     urma_token_t m_token;
 
     void *m_va;

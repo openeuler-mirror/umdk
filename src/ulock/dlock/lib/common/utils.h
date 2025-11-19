@@ -72,7 +72,8 @@ int str_to_urma_eid(const char *buf, dlock_eid_t *eid);
 
 bool check_if_eid_match(const urma_eid_t &eid1, const urma_eid_t &eid2);
 
-jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty_t type, trans_mode_t tp_mode);
+jetty_mgr *create_jetty_mgr(urma_ctx *p_urma_ctx, urma_jfc_t *exe_jfc, new_jetty_t type, trans_mode_t tp_mode,
+    dlock_server *p_server);
 
 dlock_status_t set_jetty_connection(jetty_mgr *p_jetty_mgr, struct urma_init_body *jetty_info, trans_mode_t tp_mode);
 

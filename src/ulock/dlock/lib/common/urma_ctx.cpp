@@ -449,9 +449,10 @@ void urma_ctx::delete_urma_context(void) noexcept
 urma_ctx::urma_ctx(uint32_t num_buf, int num_cqe, char *dev_name, const dlock_eid_t eid, trans_mode_t tp_mode)
 #ifdef UB_AGG
     : m_is_ub_bonding_dev(false), m_eid_index(0), m_tp_mode(tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr),
-      m_jfc(nullptr), m_va(nullptr),
+      m_jfc(nullptr), m_jfc_polling(false), m_va(nullptr),
 #else
-    : m_eid_index(0), m_tp_mode(tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr), m_va(nullptr),
+    : m_eid_index(0), m_tp_mode(tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr), m_jfc_polling(false),
+      m_va(nullptr),
 #endif /* UB_AGG */
     m_local_tseg(nullptr), m_p_buf_head(nullptr), m_ctx_inited(false)
 {

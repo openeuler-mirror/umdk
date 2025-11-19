@@ -34,7 +34,7 @@ class jetty_mgr_sepconn : public jetty_mgr {
     friend class client_entry_s;
 public:
     jetty_mgr_sepconn() = delete;
-    explicit jetty_mgr_sepconn(urma_ctx *p_urma_ctx) noexcept;
+    explicit jetty_mgr_sepconn(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept;
     ~jetty_mgr_sepconn() noexcept override;
     dlock_status_t jetty_mgr_sepconn_init(urma_ctx *p_urma_ctx, urma_jfc_t *p_jfc, uint32_t num_buf);
     dlock_status_t post_recv(uint32_t len, uint64_t wr_id) const override;
@@ -63,6 +63,8 @@ private:
     void unimport_tjfr(void);
     void delete_jfr(void);
     void delete_jfs(void);
+    void modify_jfr_err(void);
+    void modify_jfs_err(void);
 
     void fill_base_wr(urma_jfs_wr_t *wr, uint64_t wr_id) const override;
 

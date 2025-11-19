@@ -18,6 +18,7 @@
 
 #include "dlock_common.h"
 #include "dlock_log.h"
+#include "dlock_server.h"
 #include "utils.h"
 
 namespace dlock {
@@ -32,6 +33,12 @@ dlock_status_t jetty_mgr_sepconn::create_jfs(void)
         DLOCK_LOG_ERR("Failed to create jfs");
         return DLOCK_FAIL;
     }
+
+    m_local_id = m_jfs->jfs_id.id;
+    if (m_p_server != nullptr) {
+        m_p_server->add_to_m_jetty_mgr_map(m_local_id, this);
+    }
+
     return DLOCK_SUCCESS;
 }
 
@@ -67,8 +74,8 @@ bool jetty_mgr_sepconn::check_construct_succeed(jetty_mgr_sepconn *p_mgr_sepconn
     return true;
 }
 
-jetty_mgr_sepconn::jetty_mgr_sepconn(urma_ctx *p_urma_ctx) noexcept
-    : jetty_mgr(p_urma_ctx), m_jfs(nullptr), m_jfr(nullptr), m_tjfr(nullptr)
+jetty_mgr_sepconn::jetty_mgr_sepconn(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept
+    : jetty_mgr(p_urma_ctx, p_server), m_jfs(nullptr), m_jfr(nullptr), m_tjfr(nullptr)
 {
     m_tp_mode = SEPERATE_CONN;
 }
@@ -132,6 +139,10 @@ void jetty_mgr_sepconn::delete_jfs(void)
         return;
     }
 
+    if (m_p_server != nullptr) {
+        m_p_server->erase_from_m_jetty_mgr_map(m_jfs->jfs_id.id);
+    }
+
     urma_status_t ret = urma_delete_jfs(m_jfs);
     if (ret != URMA_SUCCESS) {
         DLOCK_LOG_ERR("failed to delete jfs, ret: %d", static_cast<int>(ret));
@@ -139,10 +150,50 @@ void jetty_mgr_sepconn::delete_jfs(void)
     m_jfs = nullptr;
 }
 
+void jetty_mgr_sepconn::modify_jfr_err(void)
+{
+    if (m_jfr == nullptr) {
+        return;
+    }
+
+    urma_jfr_attr_t attr = {0};
+    attr.mask = JFR_STATE;
+    attr.state = URMA_JFR_STATE_ERROR;
+
+    urma_status_t ret = urma_modify_jfr(m_jfr, &attr);
+    if (ret != URMA_SUCCESS) {
+        DLOCK_LOG_ERR("failed to modify jfr to URMA_JFR_STATE_ERROR, ret: %d", static_cast<int>(ret));
+    }
+}
+
+void jetty_mgr_sepconn::modify_jfs_err(void)
+{
+    if (m_jfs == nullptr) {
+        return;
+    }
+
+    urma_jfs_attr_t attr = {0};
+    attr.mask = JFS_STATE;
+    attr.state = URMA_JETTY_STATE_ERROR;
+
+    m_modify_jetty2err = true;
+    urma_status_t ret = urma_modify_jfs(m_jfs, &attr);
+    if (ret != URMA_SUCCESS) {
+        DLOCK_LOG_ERR("failed to modify jfs to URMA_JETTY_STATE_ERROR, ret: %d", static_cast<int>(ret));
+        /* If modify jfs to error state failed, don't wait URMA_CR_WR_FLUSH_ERR_DONE CR */
+        m_flush_err_done = true;
+    }
+}
+
 void jetty_mgr_sepconn::delete_urma_channel_resource(void) noexcept
 {
+    modify_jfr_err();
+    modify_jfs_err();
+
     unimport_tjfr();
     unimport_dst_tseg();
+
+    wait_flush_err_done();
     delete_jfr();
     delete_jfs();
 }
