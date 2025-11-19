@@ -1937,6 +1937,10 @@ void umq_ub_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt
         return;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)(umqh_tp);
+    if (queue->mode != UMQ_MODE_INTERRUPT) {
+        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        return;
+    }
     if (option->direction == UMQ_IO_RX) {
         urma_ack_jfc(&queue->jfr_jfc, &nevents, 1);
     } else {
@@ -1954,10 +1958,14 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
         UMQ_LIMIT_VLOG_ERR("option not valid\n");
-        return -EINVAL;
+        return -UMQ_ERR_EINVAL;
     }
 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)(wait_umqh_tp);
+    if (queue->mode != UMQ_MODE_INTERRUPT) {
+        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        return -UMQ_ERR_EINVAL;
+    }
     urma_jfc_t *jfc;
     int cnt = 0;
     if (option->direction == UMQ_IO_RX) {
@@ -2004,6 +2012,10 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
         return -UMQ_ERR_EINVAL;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->mode != UMQ_MODE_INTERRUPT) {
+        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        return -UMQ_ERR_EINVAL;
+    }
     urma_jfc_t *jfc = option->direction == UMQ_IO_RX ? queue->jfr_jfc : queue->jfs_jfc;
     urma_status_t status = urma_rearm_jfc(jfc, solicated);
     if (status != URMA_SUCCESS) {
