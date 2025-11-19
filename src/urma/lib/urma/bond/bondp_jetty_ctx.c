@@ -15,7 +15,6 @@
 #include "bondp_connection.h"
 #include "bondp_jetty_ctx.h"
 
-#define BJETTY_CTX_SEG_TOKEN (0x9128571)
 #define BJETTY_CTX_PAGE_SIZE (0x1000) // 4KB
 
 static int create_bjetty_wr_bufs(bjetty_ctx_t *bjetty_ctx, size_t wr_buf_size)
@@ -58,19 +57,17 @@ static void destroy_bjetty_wr_bufs(bjetty_ctx_t *bjetty_ctx)
 
 static int create_bjetty_segments(urma_context_t *ctx, bjetty_ctx_t *bjetty_ctx, size_t hdr_buf_size)
 {
-    urma_reg_seg_flag_t seg_flag = {
-        .bs.token_policy = URMA_TOKEN_PLAIN_TEXT,
-        .bs.cacheable = URMA_NON_CACHEABLE,
-        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
-        .bs.reserved = 0
-    };
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
         .len = hdr_buf_size,
-        .token_value = {
-            .token = BJETTY_CTX_SEG_TOKEN
+        .flag = {
+            .bs.token_policy = URMA_TOKEN_PLAIN_TEXT,
+            .bs.cacheable = URMA_NON_CACHEABLE,
+            .bs.access = URMA_ACCESS_LOCAL_ONLY,
+            .bs.reserved = 0
         },
-        .flag = seg_flag,
+        // Only used in SEND ops, no need to set token_value.
+        .token_value = {0},
         .user_ctx = (uintptr_t)NULL,
         .iova = 0
     };
