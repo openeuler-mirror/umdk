@@ -28,4 +28,4 @@ target_compile_features(urma_gtest PRIVATE cxx_std_17)
 target_compile_definitions(urma_gtest PRIVATE PROJECT_DIR=${PROJECT_SOURCE_DIR})
 
 target_include_directories(urma_gtest PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(urma_gtest PRIVATE libgtest.a libmockcpp.a -lurma /lib64/urma/liburma_ubagg.so)
+target_link_libraries(urma_gtest PRIVATE libgtest.a libmockcpp.a -lurma /lib64/urma/liburma_ubagg.so pthread)
