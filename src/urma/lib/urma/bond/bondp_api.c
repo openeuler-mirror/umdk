@@ -704,7 +704,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
                 errno = EINVAL;
                 return NULL;
             }
-            if (is_single_dev_mode(ctx)) {
+            if (!is_single_dev_mode(ctx)) {
                 URMA_LOG_ERR("In matrix server, multi-device mode don't support single path currently.\n");
                 errno = EINVAL;
                 return NULL;
