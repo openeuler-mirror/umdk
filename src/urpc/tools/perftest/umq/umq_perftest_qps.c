@@ -364,10 +364,10 @@ REARM:
             goto ERROR;
         }
 POLL:
-        // poll tx cqe，increase the count
-        ret = umq_poll(umqh, UMQ_IO_TX, polled_buf, UMQ_BATCH_SIZE);
+        // poll tx cqe and flowctrl win，increase the count
+        ret = umq_poll(umqh, UMQ_IO_ALL, polled_buf, UMQ_BATCH_SIZE);
         if (ret < 0) {
-            LOG_PRINT("poll tx failed\n");
+            LOG_PRINT("poll failed\n");
             goto ERROR;
         } else if (ret == 0) {
             continue;
