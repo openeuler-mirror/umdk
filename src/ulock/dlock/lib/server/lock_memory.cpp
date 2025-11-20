@@ -255,7 +255,7 @@ int lock_memory::do_lock_cmd(int32_t client_id, struct lock_cmd_msg *p_cmd_msg, 
     }
 }
 
-inline int lock_memory::verify_client_id(int32_t expected_client_id, int32_t actual_client_id,
+int lock_memory::verify_client_id(int32_t expected_client_id, int32_t actual_client_id,
     struct lock_cmd_msg *p_cmd_msg)
 {
     if (actual_client_id == expected_client_id) {

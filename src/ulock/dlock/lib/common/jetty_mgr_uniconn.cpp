@@ -34,14 +34,14 @@ dlock_status_t jetty_mgr_uniconn::create_jetty(void)
     jfs_cfg_init(jfs_cfg, URMA_TM_RC, URMA_OL);
     jfr_cfg_init(jfr_cfg, URMA_TM_RC, URMA_OL);
     jetty_cfg.jfs_cfg = jfs_cfg;
-    
+
     if (m_urma_ctx->get_urma_dev_type() == URMA_TRANSPORT_UB) {
         m_share_jfr = urma_create_jfr(m_urma_ctx->m_urma_ctx, &jfr_cfg);
         if (m_share_jfr == nullptr) {
             DLOCK_LOG_ERR("Failed to create share jfr");
             return DLOCK_FAIL;
         }
- 
+
         jetty_cfg.flag.bs.share_jfr = URMA_SHARE_JFR; /* UB dev should use share jfr */
         jetty_cfg.shared.jfr = m_share_jfr;
     } else {
@@ -228,6 +228,8 @@ dlock_status_t jetty_mgr_uniconn::construct_jetty_xchg_info(struct urma_init_bod
     }
     jetty_info->tp_mode = p_jetty_mgr->m_tp_mode;
     static_cast<void>(memcpy(&(jetty_info->jetty_id), &(p_mgr_uniconn->m_jetty->jetty_id), sizeof(urma_jetty_id_t)));
+    jetty_info->token = get_jfr_token();
+    jetty_info->flag.bs.token_policy = get_token_policy();
 
 #ifdef UB_AGG
     return construct_urma_bond_id_xchg_info(jetty_info);
@@ -236,24 +238,27 @@ dlock_status_t jetty_mgr_uniconn::construct_jetty_xchg_info(struct urma_init_bod
 #endif /* UB_AGG */
 }
 
-dlock_status_t jetty_mgr_uniconn::import_jetty(const urma_jetty_id_t jetty_id)
+dlock_status_t jetty_mgr_uniconn::import_jetty(const urma_jetty_id_t jetty_id, uint32_t token_policy, uint32_t token)
 {
     urma_rjetty_t rjetty = {0};
+    urma_token_t token_value = {
+        .token = token,
+    };
 
     rjetty.jetty_id = jetty_id;
     rjetty.trans_mode = URMA_TM_RC;
+    rjetty.flag.bs.token_policy = token_policy;
     rjetty.flag.bs.order_type = URMA_OL;
     rjetty.tp_type = URMA_RTP;
 
     if (m_urma_ctx->get_urma_dev_type() == URMA_TRANSPORT_UB) {
         rjetty.type = URMA_JETTY;
-        rjetty.flag.bs.token_policy = URMA_TOKEN_NONE;
     } else {
         DLOCK_LOG_ERR("urma device type is not UB!");
         return DLOCK_FAIL;
     }
 
-    m_tjetty = urma_import_jetty(m_urma_ctx->m_urma_ctx, &rjetty, &(m_urma_ctx->m_token));
+    m_tjetty = urma_import_jetty(m_urma_ctx->m_urma_ctx, &rjetty, &token_value);
     if (m_tjetty == nullptr) {
         DLOCK_LOG_ERR("Failed to import jetty");
         return DLOCK_FAIL;

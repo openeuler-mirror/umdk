@@ -20,7 +20,9 @@
 #include "utils.h"
 #include "test_dlock_comm.h"
 
+#ifndef MOCKER_CPP
 #define MOCKER_CPP(api, TT) MOCKCPP_NS::mockAPI(#api, reinterpret_cast<TT>(api))
+#endif
 
 class test_urma_ctx : public testing::Test {
 protected:
@@ -30,8 +32,15 @@ protected:
 
     void SetUp()
     {
-        m_urma_ctx = new(std::nothrow) urma_ctx(SERVER_URMA_CTX_REG_BUF_NUM,
-            MAX_NUM_CLIENT * CQ_SIZE_PER_CLIENT, nullptr, eid, tp_mode);
+        struct urma_ctx_cfg urma_cfg = {
+            .num_buf = SERVER_URMA_CTX_REG_BUF_NUM,
+            .num_cqe = MAX_NUM_CLIENT * CQ_SIZE_PER_CLIENT,
+            .dev_name = nullptr,
+            .eid = eid,
+            .ub_token_disable = false,
+        };
+
+        m_urma_ctx = new(std::nothrow) urma_ctx(urma_cfg);
 
         ASSERT_NE(m_urma_ctx, nullptr);
     }

@@ -66,7 +66,7 @@ public:
     dlock_status_t check_recv(uint32_t &comp_len);
     virtual dlock_status_t post_write(urma_target_seg_t *src_tseg,
         uint8_t *buf, uint32_t len, uint64_t wr_id) const = 0;
-    dlock_status_t import_seg(urma_seg_t *seg);
+    dlock_status_t import_seg(urma_seg_t *seg, uint32_t token);
     virtual void delete_urma_channel_resource(void) noexcept = 0;
     void set_peer_info(dlock_conn_peer_t peer_type, int peer_id);
     void get_peer_info(dlock_conn_peer_info_t &peer_info) const;
@@ -98,6 +98,16 @@ public:
     inline void set_m_flush_err_done(void)
     {
         m_flush_err_done = true;
+    }
+
+    inline uint32_t get_jfr_token(void) const
+    {
+        return m_jfr_token.token;
+    }
+
+    inline uint32_t get_token_policy(void) const
+    {
+        return m_urma_ctx->get_token_policy();
     }
 
     uint64_t m_cr_data;
@@ -153,6 +163,7 @@ private:
     bool m_modify_jetty2err;
     bool m_flush_err_done;
     dlock_server *m_p_server; /* If it is the client-side jetty_mgr, m_p_server is nullptr. */
+    urma_token_t m_jfr_token;
 };
 };
 #endif

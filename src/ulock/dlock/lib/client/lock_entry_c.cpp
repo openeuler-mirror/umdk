@@ -171,7 +171,7 @@ lock_entry_c::~lock_entry_c()
     }
 }
 
-inline void lock_entry_c::init_cmd_msg_common_field(uint16_t message_id, struct lock_cmd_msg &cmd_msg) const
+void lock_entry_c::init_cmd_msg_common_field(uint16_t message_id, struct lock_cmd_msg &cmd_msg) const
 {
     cmd_msg.magic_no = DLOCK_DP_MAGIC_NO;
     cmd_msg.version = DLOCK_PROTO_VERSION;

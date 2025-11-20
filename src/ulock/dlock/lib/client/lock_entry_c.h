@@ -59,7 +59,7 @@ protected:
     int rw_async_fill_cmd_msg(int  client_id, const struct lock_request *req, struct lock_cmd_msg &cmd_msg);
     int fair_async_fill_cmd_msg(const struct lock_request *req, struct lock_cmd_msg &cmd_msg);
     void clear_lock_val(void);
-    inline void init_cmd_msg_common_field(uint16_t message_id, struct lock_cmd_msg &cmd_msg) const;
+    void init_cmd_msg_common_field(uint16_t message_id, struct lock_cmd_msg &cmd_msg) const;
 
 private:
     void debug_stats_count_incre(debug_stats_code_t stats_code);

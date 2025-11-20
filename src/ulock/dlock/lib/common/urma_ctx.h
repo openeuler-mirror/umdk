@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <string>
 #include <mutex>
+#include <openssl/rand.h>
 
 #include "urma_api.h"
 #include "dlock_types.h"
@@ -37,6 +38,15 @@ struct urma_buf {
     std::mutex b_mutex; /* To prevent buf and jfs_ref_count from being concurrently read */
 };
 
+struct urma_ctx_cfg {
+    uint32_t num_buf;
+    int num_cqe;
+    char *dev_name;
+    dlock_eid_t eid;
+    trans_mode_t tp_mode;
+    bool ub_token_disable;
+};
+
 class urma_ctx {
     friend class dlock_client;
     friend class dlock_server;
@@ -45,12 +55,13 @@ class urma_ctx {
     friend class jetty_mgr_uniconn;
 public:
     urma_ctx() = delete;
-    urma_ctx(uint32_t num_buf, int num_cqe, char *dev_name, const dlock_eid_t eid, trans_mode_t tp_mode);
+    explicit urma_ctx(const struct urma_ctx_cfg &cfg);
     ~urma_ctx() noexcept;
     struct urma_buf *get_memory();
     void release_memory(struct urma_buf *p_buf) noexcept;
     urma_jfc_t *new_jfc(int num_cqe) const;
-    urma_target_seg_t *register_new_seg(uint8_t *buf, uint32_t buf_len);
+    urma_target_seg_t *register_new_seg(uint8_t *buf, uint32_t buf_len, urma_token_t &token_value);
+    dlock_status_t gen_token_value(urma_token_t &token_value) const;
 
     inline urma_transport_type_t get_urma_dev_type(void) const
     {
@@ -70,6 +81,16 @@ public:
     inline bool is_m_jfc_polling(void)
     {
         return m_jfc_polling;
+    }
+
+    inline bool is_ub_token_disable(void) const
+    {
+        return m_ub_token_disable;
+    }
+
+    inline uint32_t get_token_policy(void) const
+    {
+        return (m_ub_token_disable ? URMA_TOKEN_NONE : URMA_TOKEN_PLAIN_TEXT);
     }
 
 #ifdef UB_AGG
@@ -107,10 +128,11 @@ private:
     urma_jfce_t *m_jfce;
     urma_jfc_t *m_jfc;
     bool m_jfc_polling;
-    urma_token_t m_token;
+    bool m_ub_token_disable;
 
     void *m_va;
     urma_target_seg_t *m_local_tseg; /* Exported target segment for read/write/atomic */
+    urma_token_t m_local_tseg_token;
     struct urma_buf *m_p_buf_head;
     std::mutex m_mutex; /* To prevent m_p_buf_head from being concurrently read */
     bool m_ctx_inited;

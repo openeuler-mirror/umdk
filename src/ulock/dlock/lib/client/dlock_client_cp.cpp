@@ -22,6 +22,7 @@
 #include "dlock_common.h"
 #include "dlock_log.h"
 #include "utils.h"
+#include "urma_ctx.h"
 #include "dlock_descriptor.h"
 #include "dlock_connection.h"
 #include "jetty_mgr_sepconn.h"
@@ -69,8 +70,16 @@ int dlock_client::init(const struct client_cfg *p_client_cfg)
     m_tp_mode = p_client_cfg->tp_mode;
 
     dlock_set_log_level(p_client_cfg->log_level);
-    m_p_urma_ctx = new(std::nothrow) urma_ctx(CLIENT_PER_HOST * (CMD_SQ_SIZE + CMD_RQ_SIZE), 0,
-        p_client_cfg->dev_name, p_client_cfg->eid, p_client_cfg->tp_mode);
+
+    struct urma_ctx_cfg urma_cfg = {
+        .num_buf = CLIENT_PER_HOST * (CMD_SQ_SIZE + CMD_RQ_SIZE),
+        .num_cqe = 0,
+        .dev_name = p_client_cfg->dev_name,
+        .eid = p_client_cfg->eid,
+        .tp_mode = p_client_cfg->tp_mode,
+        .ub_token_disable = p_client_cfg->ub_token_disable,
+    };
+    m_p_urma_ctx = new(std::nothrow) urma_ctx(urma_cfg);
     if (m_p_urma_ctx == nullptr) {
         DLOCK_LOG_ERR("c++ new failed, bad alloc for urma_ctx");
         return -1;
@@ -167,7 +176,7 @@ int dlock_client::add_client(uint8_t *buff, dlock_connection *p_conn, jetty_mgr 
         return static_cast<int>(DLOCK_BAD_RESPONSE);
     }
 
-    dlock_status_t ret = p_jetty_mgr.import_seg(&resp_body->obj_mem_seg);
+    dlock_status_t ret = p_jetty_mgr.import_seg(&resp_body->obj_mem_seg, resp_body->obj_mem_seg_token);
     if (ret != DLOCK_SUCCESS) {
         DLOCK_LOG_ERR("import seg failed");
         return -1;
@@ -1292,7 +1301,7 @@ int dlock_client::reinit_done(int client_id)
     return ret;
 }
 
-inline int dlock_client::check_resp_control_msg_hdr_status(int32_t status) const
+int dlock_client::check_resp_control_msg_hdr_status(int32_t status) const
 {
     if (status == static_cast<int32_t>(DLOCK_SUCCESS)) {
         return 0;

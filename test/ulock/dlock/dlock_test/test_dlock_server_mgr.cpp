@@ -20,7 +20,9 @@
 #include "dlock_server_mgr.h"
 #include "test_dlock_comm.h"
 
+#ifndef MOCKER_CPP
 #define MOCKER_CPP(api, TT) MOCKCPP_NS::mockAPI(#api, reinterpret_cast<TT>(api))
+#endif
 
 class test_server_start : public testing::Test {
 protected:

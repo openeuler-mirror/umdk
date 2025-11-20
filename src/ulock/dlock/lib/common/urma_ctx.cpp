@@ -23,9 +23,9 @@ namespace dlock {
 static int g_urma_init_cnt = 0;
 static std::mutex g_urma_ctx_mutex;
 
-static void seg_flag_init(urma_reg_seg_flag_t &flag)
+static void seg_flag_init(urma_reg_seg_flag_t &flag, uint32_t token_policy)
 {
-    flag.bs.token_policy = URMA_TOKEN_NONE;
+    flag.bs.token_policy = token_policy;
     flag.bs.cacheable = URMA_NON_CACHEABLE;
     flag.bs.access = DLOCK_SEG_ACCESS_FLAGS;
     flag.bs.token_id_valid = URMA_TOKEN_ID_INVALID;
@@ -356,7 +356,13 @@ dlock_status_t urma_ctx::register_seg(uint32_t num_buf)
 {
     struct urma_buf *tmp = nullptr;
     urma_reg_seg_flag_t flag = {.value = 0};
-    urma_seg_cfg_t seg_cfg;
+    urma_seg_cfg_t seg_cfg = {0};
+
+    dlock_status_t ret = gen_token_value(m_local_tseg_token);
+    if (ret != DLOCK_SUCCESS) {
+        DLOCK_LOG_ERR("Failed to generate token value");
+        return DLOCK_FAIL;
+    }
 
     m_va = memalign(PAGE_SIZE, num_buf * URMA_MTU);
     if (m_va == nullptr) {
@@ -364,11 +370,11 @@ dlock_status_t urma_ctx::register_seg(uint32_t num_buf)
         return DLOCK_ENOMEM;
     }
 
-    seg_flag_init(flag);
+    seg_flag_init(flag, get_token_policy());
     seg_cfg.va = reinterpret_cast<uint64_t>(m_va);
     seg_cfg.len = num_buf * URMA_MTU;
     seg_cfg.token_id = nullptr;
-    seg_cfg.token_value = m_token;
+    seg_cfg.token_value = m_local_tseg_token;
     seg_cfg.flag = flag;
     seg_cfg.user_ctx = static_cast<uintptr_t>(NULL);
     seg_cfg.iova = 0;
@@ -446,27 +452,23 @@ void urma_ctx::delete_urma_context(void) noexcept
     m_urma_ctx = nullptr;
 }
 
-urma_ctx::urma_ctx(uint32_t num_buf, int num_cqe, char *dev_name, const dlock_eid_t eid, trans_mode_t tp_mode)
+urma_ctx::urma_ctx(const struct urma_ctx_cfg &cfg)
 #ifdef UB_AGG
-    : m_is_ub_bonding_dev(false), m_eid_index(0), m_tp_mode(tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr),
-      m_jfc(nullptr), m_jfc_polling(false), m_va(nullptr),
+    : m_is_ub_bonding_dev(false), m_eid_index(0), m_tp_mode(cfg.tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr),
+      m_jfc(nullptr), m_jfc_polling(false), m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
 #else
-    : m_eid_index(0), m_tp_mode(tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr), m_jfc_polling(false),
-      m_va(nullptr),
+    : m_eid_index(0), m_tp_mode(cfg.tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr),
+      m_jfc_polling(false), m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
 #endif /* UB_AGG */
     m_local_tseg(nullptr), m_p_buf_head(nullptr), m_ctx_inited(false)
 {
-    /* urma token is not supported now, m_token is not used, but interfaces
-     * such as urma_import_seg, urma_import_jetty and urma_import_jfr require
-     * passing a token pointer, which cannot be nullptr.
-     */
-    m_token.token = 0;
+    m_local_tseg_token.token = 0;
 
     if (init_urma_ctx() != DLOCK_SUCCESS) {
         return;
     }
 
-    if (query_urma_device(dev_name, eid) != DLOCK_SUCCESS) {
+    if (query_urma_device(cfg.dev_name, cfg.eid) != DLOCK_SUCCESS) {
         goto UNINIT;
     }
 
@@ -478,11 +480,11 @@ urma_ctx::urma_ctx(uint32_t num_buf, int num_cqe, char *dev_name, const dlock_ei
         goto DEL_CTX;
     }
 
-    if (create_jfc(num_cqe) != DLOCK_SUCCESS) {
+    if (create_jfc(cfg.num_cqe) != DLOCK_SUCCESS) {
         goto DEL_JFCE;
     }
 
-    if (register_seg(num_buf) != DLOCK_SUCCESS) {
+    if (register_seg(cfg.num_buf) != DLOCK_SUCCESS) {
         goto DEL_JFC;
     }
 
@@ -561,19 +563,40 @@ urma_jfc_t *urma_ctx::new_jfc(int num_cqe) const
     return jfc;
 }
 
-urma_target_seg_t *urma_ctx::register_new_seg(uint8_t *buf, uint32_t buf_len)
+urma_target_seg_t *urma_ctx::register_new_seg(uint8_t *buf, uint32_t buf_len, urma_token_t &token_value)
 {
     urma_reg_seg_flag_t flag = {.value = 0};
     urma_seg_cfg_t seg_cfg;
 
-    seg_flag_init(flag);
+    dlock_status_t ret = gen_token_value(token_value);
+    if (ret != DLOCK_SUCCESS) {
+        DLOCK_LOG_ERR("Failed to generate token value");
+        return nullptr;
+    }
+
+    seg_flag_init(flag, get_token_policy());
     seg_cfg.va = reinterpret_cast<uint64_t>(buf);
     seg_cfg.len = buf_len;
     seg_cfg.token_id = nullptr;
-    seg_cfg.token_value = m_token;
+    seg_cfg.token_value = token_value;
     seg_cfg.flag = flag;
     seg_cfg.user_ctx = static_cast<uintptr_t>(NULL);
     seg_cfg.iova = 0;
     return urma_register_seg(m_urma_ctx, &seg_cfg);
+}
+
+dlock_status_t urma_ctx::gen_token_value(urma_token_t &token_value) const
+{
+    if (m_ub_token_disable) {
+        token_value.token = 0;
+        return DLOCK_SUCCESS;
+    }
+
+    int ret = RAND_priv_bytes(reinterpret_cast<unsigned char *>(&token_value.token), sizeof(token_value.token));
+    if (ret != 1) {
+        DLOCK_LOG_ERR("failed to generate random token value, ret: %d", ret);
+        return DLOCK_FAIL;
+    }
+    return DLOCK_SUCCESS;
 }
 };

@@ -316,6 +316,7 @@ void construct_primary_cfg(struct server_cfg &cfg_s, struct dlock_primary_cfg pa
     memset_s(&cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_s.log_level = LOG_WARNING;
     cfg_s.tp_mode = param_cfg.tp_mode;
+    cfg_s.ub_token_disable = false;
     cfg_s.sleep_mode_enable = true;
     cfg_s.primary.num_of_replica = param_cfg.num_of_replica;
     cfg_s.primary.recovery_client_num = param_cfg.recovery_client_num;
@@ -387,6 +388,7 @@ void init_dclient_lib_with_server1(bool ssl_enable, trans_mode_t tp_mode)
     memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
+    cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
     cfg_c.ssl.ssl_enable = ssl_enable;
     if (ssl_enable) {
