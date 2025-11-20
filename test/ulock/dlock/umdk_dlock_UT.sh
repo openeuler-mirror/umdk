@@ -5,33 +5,6 @@
 set -e
 SCRIPT_PATH=$(cd $(dirname $0);pwd)
 
-function module_loaded()
-{
-    /sbin/lsmod | grep -w "$1" > /dev/null 2>&1
-    return $?
-}
-
-function unload_modules()
-{
-    # tpsa_daemon depends on ubcore_test
-    if [[ "$(pidof tpsa_daemon)" ]]; then
-       kill -20 $(pidof tpsa_daemon)  # SIGTSTP: 20
-    fi
-    sleep 1 # wait tpsa_daemon to exit
-
-    for module in $*; do
-    if module_loaded $module; then
-        rmmod $module
-	fi
-    done
-}
-
-# reload URMA kernel module. Otherwise, query_urma_device may be failed
-unload_modules ubcore_test uburma ubcore
-depmod -a $(uname -r)
-modprobe ubcore
-modprobe uburma
-
 # compile DLock code
 cd $SCRIPT_PATH/../../../src
 if [ -d ./build ]; then

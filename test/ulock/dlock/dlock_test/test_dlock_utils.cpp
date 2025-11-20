@@ -320,7 +320,7 @@ TEST(test_check_if_eid_match, test_match)
 {
     urma_eid_t eid1;
 
-    (void)memset_s(&eid1, URMA_EID_SIZE, '1', URMA_EID_SIZE);
+    (void)memset(&eid1, '1', URMA_EID_SIZE);
     bool ret = check_if_eid_match(eid1, eid1);
     EXPECT_EQ(ret, true);
 }
@@ -330,8 +330,8 @@ TEST(test_check_if_eid_match, test_not_match)
     urma_eid_t eid1;
     urma_eid_t eid2;
 
-    (void)memset_s(&eid1, URMA_EID_SIZE, '1', URMA_EID_SIZE);
-    (void)memcpy_s(&eid2, URMA_EID_SIZE, &eid1, URMA_EID_SIZE);
+    (void)memset(&eid1, '1', URMA_EID_SIZE);
+    (void)memcpy(&eid2, &eid1, URMA_EID_SIZE);
     eid2.raw[0] = 2;
 
     bool ret = check_if_eid_match(eid1, eid2);
