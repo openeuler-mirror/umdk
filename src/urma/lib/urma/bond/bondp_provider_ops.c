@@ -299,14 +299,14 @@ static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Failed to create remote_p2v_jetty_id_table\n");
         goto FREE_P_VJETTY_ID_TABLE;
     }
-    if (bdp_r_p2v_jetty_id_table_create(&bond_ctx->remote_v2p_token_id_table, BONDP_MAX_NUM_RSEGS)) {
-        URMA_LOG_ERR("Failed to create remote_v2p_jetty_id_table\n");
+    if (bdp_r_v2p_token_id_table_create(&bond_ctx->remote_v2p_token_id_table, BONDP_MAX_NUM_RSEGS)) {
+        URMA_LOG_ERR("Failed to create remote_v2p_token_id_table\n");
         goto FREE_V_PTOKEN_ID_TABLE;
     }
     atomic_init(&bond_ctx->token_id_cnt, 0);
     return 0;
 FREE_V_PTOKEN_ID_TABLE:
-    (void)bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_v2p_token_id_table);
+    (void)bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
 FREE_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
 ID_STORE_UNINIT:
