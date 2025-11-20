@@ -713,7 +713,12 @@ static ALWAYS_INLINE void *rx_user_ctx_flush(queue_t *l_queue)
 {
     queue_local_t *local_q = CONTAINER_OF_FIELD(l_queue, queue_local_t, queue);
     rq_ctx_t *rq_ctx = local_q->rq_ctx;
-    if (URPC_UNLIKELY(rq_ctx->rx_user_ctx_slab.addr == NULL)) {
+
+    /**
+     * Draining the JFR requires that all queues sharing this JFR are set to the error state
+     * meaning the ready_cnt count must be zero
+     */
+    if (URPC_UNLIKELY(rq_ctx->rx_user_ctx_slab.addr == NULL || rq_ctx->ready_cnt > 0)) {
         return NULL;
     }
 
