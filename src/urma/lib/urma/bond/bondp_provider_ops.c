@@ -318,6 +318,7 @@ FREE_TOKEN_ID_BITMAP:
 
 static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
 {
+    bdp_r_v2p_token_id_table_destroy(&bond_ctx->remote_v2p_token_id_table);
     bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
     bondp_id_store_uninit(&bond_ctx->ljetty_id_store);
