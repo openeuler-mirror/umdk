@@ -120,19 +120,19 @@ private:
     void clear_m_object_map(void);
     void clear_m_fd2conn_map(void);
     void deinit_server_proc(void);
-    inline int check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable);
-    int init_server(bool is_primary, char *dev_name, const dlock_eid_t eid);
+    int check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable);
+    int init_server(bool is_primary, const struct server_cfg &cfg);
     int primary_get_addr_and_ports(const struct server_cfg &cfg,
         struct in_addr &ip_addr, uint16_t &server_port) const;
     int create_listen_fd(const struct in_addr &ip_addr, uint16_t port, int &listen_fd);
     int recv_msg_hdr(dlock_connection *p_conn, struct dlock_control_hdr *msg_hdr);
     int recv_msg_ext_hdr_and_body(dlock_connection *p_conn,
         uint8_t ext_hdr_len, uint16_t body_len, uint8_t **msg_ext_hdr, uint8_t **msg_body);
-    inline void free_msg_ext_hdr_and_body_recv_buf(uint8_t *msg_ext_hdr, uint8_t *msg_body) const;
+    void free_msg_ext_hdr_and_body_recv_buf(uint8_t *msg_ext_hdr, uint8_t *msg_body) const;
     int process_control_msg(dlock_connection *p_conn, uint8_t min_type, uint8_t max_type);
     void process_control_msg_err(struct dlock_control_hdr &msg_hdr,
         dlock_connection *p_conn, int32_t ret_status);
-    inline int do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len);
+    int do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len);
     int update_client(int32_t client_id, dlock_connection *p_conn, jetty_mgr *p_jetty_mgr, bool reinit_flag);
     jetty_mgr *init_client_primary(struct urma_init_body *jetty_info, bool /* reinit_flag */);
     int init_client_response(dlock_connection *p_conn, int32_t client_id, jetty_mgr *p_jetty_mgr, bool reinit_flag);
@@ -143,21 +143,21 @@ private:
     void lock_entry_release(lock_entry_s *lock_entry, const struct release_lock_body *release_msg);
     lock_entry_s* get_lock_by_msg(struct get_lock_body *get_msg);
     int batch_get_lock_reply(dlock_connection *p_conn, uint32_t lock_num, uint8_t *msg_body) const;
-    inline void preprocess_lock_cmd_msg(struct lock_cmd_msg *msg, uint32_t cmd_num);
-    inline void process_urma_cr_local_jfs(const urma_cr_t &cr) const;
+    void preprocess_lock_cmd_msg(struct lock_cmd_msg *msg, uint32_t cmd_num);
+    void process_urma_cr_local_jfs(const urma_cr_t &cr) const;
     lock_entry_s *update_lock_by_msg(struct update_lock_body *update_msg);
     void get_process_control_msg_range(uint8_t &min_type, uint8_t &max_type) const;
-    inline void server_mode_handler();
+    void server_mode_handler();
     void get_primary_affinity(enum thread_type type) const;
     int set_thread_affinity() const;
     int client_num_count_down();
     void init_primary_server_state(void);
-    inline void modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num,
+    void modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num,
         uint32_t ticket_obtain_time) const;
-    inline void modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num) const;
+    void modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num) const;
     void conn_exception_process(dlock_connection *p_conn);
     int modify_jetty_mgr_to_busy(jetty_mgr *p_jetty_mgr) const;
-    inline int modify_jetty_mgr_to_active(jetty_mgr *p_jetty_mgr) const;
+    int modify_jetty_mgr_to_active(jetty_mgr *p_jetty_mgr) const;
     int modify_jetty_mgr_to_invalid(jetty_mgr *p_jetty_mgr);
     void delete_invalid_jetty_mgr(void);
     void clear_m_jetty_mgr_invalid_queue(void);
@@ -174,8 +174,8 @@ private:
     dlock_status_t set_random_seed() const;
     void delete_sockfd(int sockfd) const;
     void delete_dlock_connection(dlock_connection *p_conn);
-    inline int negotiate_proto_version(const struct client_init_req_body &req_body) const;
-    inline int check_cmd_msg_common_field(const struct lock_cmd_msg &msg) const;
+    int negotiate_proto_version(const struct client_init_req_body &req_body) const;
+    int check_cmd_msg_common_field(const struct lock_cmd_msg &msg) const;
 
     object_entry_s* create_object_by_msg(struct object_create_body *body, int32_t client_id);
     void destroy_object_entry(object_entry_s *entry);
@@ -205,6 +205,7 @@ private:
     bool m_stop;
     lock_memory *m_lock_memory;
     urma_target_seg_t *m_lock_mem_dma_tseg; /* Exported target segment for lock memory read/write operation */
+    urma_token_t m_lock_mem_tseg_token;
     unsigned int m_recovery_client_num;
     int m_listen_fd;
     connection_map_t m_fd2conn_map;
@@ -235,6 +236,7 @@ private:
     object_map_t m_object_map;
     object_memory *m_object_memory;
     urma_target_seg_t *m_obj_mem_dma_tseg; /* Exported target segment for object memory faa/cas and read operation. */
+    urma_token_t m_obj_mem_tseg_token;
     int m_curr_object_id;
     int m_curr_object_num;
 

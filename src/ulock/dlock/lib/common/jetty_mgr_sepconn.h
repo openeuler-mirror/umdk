@@ -43,7 +43,7 @@ public:
     dlock_status_t post_recv_all(void) override;
     dlock_status_t post_send(uint8_t *buf, uint32_t len, uint64_t wr_id) const override;
     dlock_status_t construct_jetty_xchg_info(struct urma_init_body *jetty_info, jetty_mgr *p_jetty_mgr) const override;
-    dlock_status_t import_jfr(const urma_jfr_id_t jfr_id);
+    dlock_status_t import_jfr(const urma_jfr_id_t jfr_id, uint32_t token_policy, uint32_t token);
     bool check_construct_succeed(jetty_mgr_sepconn *p_mgr_sepconn, bool rx_buf_check) const;
     dlock_status_t post_write(urma_target_seg_t *src_tseg,
         uint8_t *buf, uint32_t len, uint64_t wr_id) const override;

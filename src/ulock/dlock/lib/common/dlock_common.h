@@ -187,6 +187,16 @@ struct urma_init_body {
         urma_jetty_id_t jetty_id;
     };
 
+    union {
+        struct {
+            uint32_t token_policy : 3;
+            uint32_t reserved : 29;
+        } bs;
+        uint32_t value;
+    } flag;
+
+    uint32_t token; /* for jfr/jetty */
+
 #ifdef UB_AGG
     bool is_bond;
     urma_bond_id_info_out_t bond_id_info;
@@ -205,6 +215,7 @@ struct client_init_resp_body {
     uint32_t server_state : 8;
     uint32_t rsvd : 24;
     urma_seg_t obj_mem_seg;
+    uint32_t obj_mem_seg_token;
 };
 
 struct get_lock_body {

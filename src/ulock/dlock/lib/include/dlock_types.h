@@ -220,6 +220,7 @@ struct client_cfg {
     int primary_port;
     struct ssl_cfg ssl;
     trans_mode_t tp_mode;
+    bool ub_token_disable;
 };
 
 struct primary_cfg {
@@ -250,6 +251,7 @@ struct server_cfg {
     };
     struct ssl_cfg ssl;
     trans_mode_t tp_mode;
+    bool ub_token_disable;
 };
 
 struct umo_atomic64_desc {

@@ -1005,7 +1005,7 @@ int dlock_client::async_result_check(int client_id, void *result)
     return (this->*g_async_check[p_client_entry->m_async_op])(*p_client_entry, result);
 }
 
-inline int dlock_client::check_resp_lock_cmd_msg(const struct lock_cmd_msg &lock_cmd_req,
+int dlock_client::check_resp_lock_cmd_msg(const struct lock_cmd_msg &lock_cmd_req,
     const struct lock_cmd_msg &lock_cmd_resp) const
 {
     if (memcmp(&lock_cmd_req, &lock_cmd_resp, DLOCK_LOCK_CMD_MSG_CMP_SIZE) != 0) {

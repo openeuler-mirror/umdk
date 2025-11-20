@@ -21,7 +21,9 @@
 #include "dlock_connection.h"
 #include "test_dlock_comm.h"
 
+#ifndef MOCKER_CPP
 #define MOCKER_CPP(api, TT) MOCKCPP_NS::mockAPI(#api, reinterpret_cast<TT>(api))
+#endif
 
 class test_xchg_control_msg : public testing::Test {
 protected:

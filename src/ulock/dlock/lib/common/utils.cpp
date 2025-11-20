@@ -624,7 +624,7 @@ dlock_status_t set_jetty_connection(jetty_mgr *p_jetty_mgr, struct urma_init_bod
         }
 #endif /* UB_AGG */
 
-        ret = p_mgr_sepconn->import_jfr(jetty_info->jfr_id);
+        ret = p_mgr_sepconn->import_jfr(jetty_info->jfr_id, jetty_info->flag.bs.token_policy, jetty_info->token);
         if (ret != DLOCK_SUCCESS) {
             DLOCK_LOG_ERR("import jfr error");
             return DLOCK_FAIL;
@@ -640,7 +640,7 @@ dlock_status_t set_jetty_connection(jetty_mgr *p_jetty_mgr, struct urma_init_bod
         }
 #endif /* UB_AGG */
 
-        ret = p_mgr_uniconn->import_jetty(jetty_info->jetty_id);
+        ret = p_mgr_uniconn->import_jetty(jetty_info->jetty_id, jetty_info->flag.bs.token_policy, jetty_info->token);
         if (ret != DLOCK_SUCCESS) {
             DLOCK_LOG_ERR("import jetty error");
             return DLOCK_FAIL;

@@ -45,6 +45,7 @@ static void test_dclient_lib_init(trans_mode_t tp_mode)
     memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
+    cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
     cfg_c.ssl.ssl_enable = false;
     ret = dclient_lib_init(&cfg_c);
@@ -91,6 +92,7 @@ static void test_dclient_lib_deinit(trans_mode_t tp_mode)
     memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
+    cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
     cfg_c.ssl.ssl_enable = false;
     ret = dclient_lib_init(&cfg_c);
@@ -1365,6 +1367,7 @@ static void test_server_start(void)
     str_to_urma_eid(server_ip, &primary_cfg_s.eid);
     primary_cfg_s.log_level = LOG_WARNING;
     primary_cfg_s.tp_mode = SEPERATE_CONN;
+    primary_cfg_s.ub_token_disable = false;
     primary_cfg_s.sleep_mode_enable = true;
     primary_cfg_s.primary.num_of_replica = 0;
     primary_cfg_s.primary.recovery_client_num = 0;
@@ -1440,6 +1443,7 @@ static void test_server_start(void)
     memset_s(&replica_cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     replica_cfg_s.log_level = LOG_WARNING;
     replica_cfg_s.tp_mode = SEPERATE_CONN;
+    replica_cfg_s.ub_token_disable = false;
     replica_cfg_s.sleep_mode_enable = true;
     replica_cfg_s.replica.primary_ip_str = server_ip;
     replica_cfg_s.replica.primary_port = 21615;
@@ -2622,6 +2626,7 @@ static void test_client_ssl_cfg(void)
     memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = SEPERATE_CONN;
+    cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
 
     default_client_ssl_cfg(cfg_c.ssl);
@@ -2801,6 +2806,7 @@ static void test_server_ssl_cfg(void)
     memset_s(&cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
     cfg_s.log_level = LOG_WARNING;
     cfg_s.tp_mode = SEPERATE_CONN;
+    cfg_s.ub_token_disable = false;
     cfg_s.sleep_mode_enable = true;
     cfg_s.primary.num_of_replica = 0;
     cfg_s.primary.replica_enable = false;

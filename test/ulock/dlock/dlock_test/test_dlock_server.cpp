@@ -31,14 +31,18 @@
 #include "test_dlock_comm.h"
 #include "utils.h"
 
+#ifndef MOCKER_CPP
 #define MOCKER_CPP(api, TT) MOCKCPP_NS::mockAPI(#api, reinterpret_cast<TT>(api))
+#endif
 
 class test_dlock_server : public testing::Test {
 protected:
     dlock_server *m_server;
+    struct server_cfg m_server_cfg;
 
     void SetUp()
     {
+        (void)memset(&m_server_cfg, 0, sizeof(struct server_cfg));
         m_server = new(std::nothrow) dlock_server(1);
         ASSERT_NE(m_server, nullptr);
     }
@@ -299,8 +303,7 @@ protected:
 TEST_F(test_dlock_server, test_init_server_1_server_inited)
 {
     m_server->m_is_primary = true;
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -309,8 +312,7 @@ TEST_F(test_dlock_server, test_init_server_2_lock_memory_init_failed)
     auto mocker_memalign = reinterpret_cast<void (*)(size_t, size_t, const char *, int)>(&memalign);
     MOCKER(mocker_memalign).stubs().will(returnValue((void *)nullptr));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, static_cast<int>(DLOCK_SERVER_NO_RESOURCE));
 }
 
@@ -319,8 +321,7 @@ TEST_F(test_dlock_server, test_init_server_3_init_urma_ctx_failed)
     MOCKER_CPP(&urma_ctx::init_urma_ctx, dlock_status_t (*)(urma_ctx *))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -329,8 +330,7 @@ TEST_F(test_dlock_server, test_init_server_4_create_ctx_failed)
     MOCKER_CPP(&urma_ctx::create_ctx, dlock_status_t (*)(urma_ctx *))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -339,8 +339,7 @@ TEST_F(test_dlock_server, test_init_server_6_create_jfce_failed)
     MOCKER_CPP(&urma_ctx::create_jfce, dlock_status_t (*)(urma_ctx *))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -349,8 +348,7 @@ TEST_F(test_dlock_server, test_init_server_7_create_jfc_failed)
     MOCKER_CPP(&urma_ctx::create_jfc, dlock_status_t (*)(urma_ctx *, int))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -359,8 +357,7 @@ TEST_F(test_dlock_server, test_init_server_8_register_seg_failed)
     MOCKER_CPP(&urma_ctx::register_seg, dlock_status_t (*)(urma_ctx *, uint32_t))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -369,8 +366,7 @@ TEST_F(test_dlock_server, test_init_server_10_create_exe_jfc_failed)
     MOCKER_CPP(&urma_ctx::new_jfc, urma_jfc_t * (*)(urma_ctx *, int))
         .stubs().will(returnValue((urma_jfc_t *)nullptr));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -379,8 +375,7 @@ TEST_F(test_dlock_server, test_init_server_11_register_dma_tseg_failed)
     MOCKER_CPP(&urma_ctx::register_new_seg, urma_target_seg_t * (*)(urma_ctx *, uint8_t *, uint32_t))
         .stubs().will(returnValue((urma_target_seg_t *)nullptr));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, -1);
 }
 
@@ -389,8 +384,7 @@ TEST_F(test_dlock_server, test_init_server_12_obj_memory_init_failed)
     MOCKER_CPP(&object_memory::init, bool (*)())
         .stubs().will(returnValue(false));
 
-    const dlock_eid_t eid = {0};
-    int ret = m_server->init_server(true, nullptr, eid);
+    int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, static_cast<int>(DLOCK_SERVER_NO_RESOURCE));
 }
 

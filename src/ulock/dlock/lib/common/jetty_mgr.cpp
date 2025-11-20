@@ -48,14 +48,14 @@ void jetty_mgr::jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_transport_mode_t tp_m
 
 void jetty_mgr::jfr_cfg_init(urma_jfr_cfg_t &jfr_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const
 {
-    jfr_cfg.flag.bs.token_policy = URMA_TOKEN_NONE;
+    jfr_cfg.flag.bs.token_policy = get_token_policy();
     jfr_cfg.flag.bs.tag_matching = URMA_NO_TAG_MATCHING;
     jfr_cfg.flag.bs.order_type = order_type;
     jfr_cfg.trans_mode = tp_mode;
     jfr_cfg.max_sge = static_cast<uint8_t>(m_urma_ctx->m_dev_attr.dev_cap.max_jfr_sge);
     jfr_cfg.min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER;
     jfr_cfg.jfc = m_jfc;
-    jfr_cfg.token_value = m_urma_ctx->m_token;
+    jfr_cfg.token_value = m_jfr_token;
     jfr_cfg.id = 0;
     if (m_is_exe) {
         jfr_cfg.depth = EXE_RQ_SIZE;
@@ -98,6 +98,7 @@ jetty_mgr::jetty_mgr(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept
     m_missing_rx_buf_num(0), m_ci(0), m_dst_tseg(nullptr), m_state(JETTY_MGR_ACTIVE), m_next_message_id(0),
     m_local_id(0), m_modify_jetty2err(false), m_flush_err_done(false), m_p_server(p_server)
 {
+    m_jfr_token.token = 0;
 }
 
 /* Before calling the jetty_mgr destructor, you must call jetty_mgr_deinit() */
@@ -156,6 +157,12 @@ dlock_status_t jetty_mgr::jetty_mgr_init(urma_ctx *p_urma_ctx, urma_jfc_t *p_jfc
         m_p_rx_buf->next = p_rx_buf;
         m_p_rx_buf->p_jetty_mgr = this;
         m_p_rx_buf->jfs_ref_count = 0;
+    }
+
+    ret = m_urma_ctx->gen_token_value(m_jfr_token);
+    if (ret != DLOCK_SUCCESS) {
+        DLOCK_LOG_ERR("Failed to generate token value");
+        return DLOCK_FAIL;
     }
 
     m_dlock_cipher = new(std::nothrow) dlock_cipher();
@@ -416,12 +423,15 @@ void jetty_mgr::import_seg_flag_init(urma_import_seg_flag_t &flag) const
     flag.bs.reserved = 0;
 }
 
-dlock_status_t jetty_mgr::import_seg(urma_seg_t *seg)
+dlock_status_t jetty_mgr::import_seg(urma_seg_t *seg, uint32_t token)
 {
     urma_import_seg_flag_t flag = {.value = 0};
     import_seg_flag_init(flag);
+    urma_token_t token_value = {
+        .token = token,
+    };
 
-    m_dst_tseg = urma_import_seg(m_urma_ctx->m_urma_ctx, seg, &m_urma_ctx->m_token, 0, flag);
+    m_dst_tseg = urma_import_seg(m_urma_ctx->m_urma_ctx, seg, &token_value, 0, flag);
     if (m_dst_tseg == nullptr) {
         DLOCK_LOG_ERR("Failed to import seg\n");
         return DLOCK_FAIL;

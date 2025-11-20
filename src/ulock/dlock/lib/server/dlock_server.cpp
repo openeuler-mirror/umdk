@@ -23,6 +23,7 @@
 #include "ub_barrier.h"
 #include "dlock_log.h"
 #include "utils.h"
+#include "urma_ctx.h"
 #include "lock_memory.h"
 #include "dlock_descriptor.h"
 #include "dlock_connection.h"
@@ -103,6 +104,9 @@ dlock_server::dlock_server(int server_id) noexcept
     DLOCK_LOG_DEBUG("server %d construct", server_id);
     static_cast<void>(gettimeofday(&m_time_previous, nullptr));
     static_cast<void>(memset(&m_stats, 0, sizeof(struct debug_stats)));
+
+    m_lock_mem_tseg_token.token = 0;
+    m_obj_mem_tseg_token.token = 0;
 }
 
 void dlock_server::unregister_lock_mem_dma_tseg(void)
@@ -319,8 +323,9 @@ void dlock_server::deinit()
     m_is_primary = false;
 }
 
-int dlock_server::init_server(bool is_primary, char *dev_name, const dlock_eid_t eid)
+int dlock_server::init_server(bool is_primary, const struct server_cfg &cfg)
 {
+    struct urma_ctx_cfg urma_cfg = {0};
     int ret = -1;
 
     if (m_is_primary) {
@@ -349,8 +354,15 @@ int dlock_server::init_server(bool is_primary, char *dev_name, const dlock_eid_t
         ret = static_cast<int>(DLOCK_SERVER_NO_RESOURCE);
         goto DEL_LOCK_MEMORY;
     }
-    m_p_urma_ctx = new(std::nothrow) urma_ctx(SERVER_URMA_CTX_REG_BUF_NUM,
-        MAX_NUM_CLIENT * CQ_SIZE_PER_CLIENT, dev_name, eid, m_tp_mode);
+
+    urma_cfg.num_buf = SERVER_URMA_CTX_REG_BUF_NUM;
+    urma_cfg.num_cqe = MAX_NUM_CLIENT * CQ_SIZE_PER_CLIENT;
+    urma_cfg.dev_name = cfg.dev_name;
+    urma_cfg.eid = cfg.eid;
+    urma_cfg.tp_mode = cfg.tp_mode;
+    urma_cfg.ub_token_disable = cfg.ub_token_disable;
+
+    m_p_urma_ctx = new(std::nothrow) urma_ctx(urma_cfg);
     if (m_p_urma_ctx == nullptr) {
         DLOCK_LOG_ERR("c++ new failed, bad alloc for urma_ctx");
         ret = static_cast<int>(DLOCK_SERVER_NO_RESOURCE);
@@ -371,13 +383,14 @@ int dlock_server::init_server(bool is_primary, char *dev_name, const dlock_eid_t
         DLOCK_LOG_ERR("failed to create exe jfc");
         goto FREE_BUFF;
     }
-    m_lock_mem_dma_tseg = m_p_urma_ctx->register_new_seg(m_lock_memory->m_p_lock_memory, LOCK_MEMORY_SIZE);
+    m_lock_mem_dma_tseg = m_p_urma_ctx->register_new_seg(m_lock_memory->m_p_lock_memory,
+        LOCK_MEMORY_SIZE, m_lock_mem_tseg_token);
     if (m_lock_mem_dma_tseg == nullptr) {
         DLOCK_LOG_ERR("error to register new seg");
         goto DEL_JFC;
     }
     m_obj_mem_dma_tseg = m_p_urma_ctx->register_new_seg(reinterpret_cast<uint8_t *>(m_object_memory->m_addr),
-        OBJECT_MEMORY_SIZE);
+        OBJECT_MEMORY_SIZE, m_obj_mem_tseg_token);
     if (m_obj_mem_dma_tseg == nullptr) {
         DLOCK_LOG_ERR("error to register new seg");
         goto UNREG_LOCK_MEM_DMA_TSEG;
@@ -531,7 +544,7 @@ int dlock_server::init_as_primary(const struct server_cfg &cfg)
         return -1;
     }
 
-    ret = init_server(true, cfg.dev_name, cfg.eid);
+    ret = init_server(true, cfg);
     if (ret != 0) {
         DLOCK_LOG_ERR("failed to init server");
         return ret;
@@ -820,7 +833,7 @@ int dlock_server::check_msg_type_range(const struct dlock_control_hdr msg_hdr, c
     return 0;
 }
 
-inline int dlock_server::check_control_msg_hdr(const struct dlock_control_hdr &msg_hdr) const
+int dlock_server::check_control_msg_hdr(const struct dlock_control_hdr &msg_hdr) const
 {
     if (msg_hdr.magic_no != DLOCK_CP_MAGIC_NO) {
         DLOCK_LOG_ERR("message magic_no %u error", msg_hdr.magic_no);
@@ -862,7 +875,7 @@ inline int dlock_server::check_control_msg_hdr(const struct dlock_control_hdr &m
     return 0;
 }
 
-inline void dlock_server::free_msg_ext_hdr_and_body_recv_buf(uint8_t *msg_ext_hdr, uint8_t *msg_body) const
+void dlock_server::free_msg_ext_hdr_and_body_recv_buf(uint8_t *msg_ext_hdr, uint8_t *msg_body) const
 {
     if (msg_ext_hdr != nullptr) {
         free(msg_ext_hdr);
@@ -1067,7 +1080,7 @@ err:
     return -1;
 }
 
-inline void dlock_server::preprocess_lock_cmd_msg(struct lock_cmd_msg *msg, uint32_t cmd_num)
+void dlock_server::preprocess_lock_cmd_msg(struct lock_cmd_msg *msg, uint32_t cmd_num)
 {
     struct timeval tv_cur;
 
@@ -1096,7 +1109,7 @@ inline void dlock_server::preprocess_lock_cmd_msg(struct lock_cmd_msg *msg, uint
     }
 }
 
-inline void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num,
+void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num,
     uint32_t ticket_obtain_time) const
 {
     /* If replica is not enabled, the server needs to synchronize the lock state of the clients
@@ -1119,7 +1132,7 @@ inline void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_m
     }
 }
 
-inline void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num) const
+void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_msg *msg, uint32_t cmd_num) const
 {
     struct timeval tv_cur;
 
@@ -1127,7 +1140,7 @@ inline void dlock_server::modify_response_with_fairlock_ticket(struct lock_cmd_m
     modify_response_with_fairlock_ticket(msg, cmd_num, static_cast<uint32_t>(tv_cur.tv_sec));
 }
 
-inline int dlock_server::check_cmd_msg_common_field(const struct lock_cmd_msg &msg) const
+int dlock_server::check_cmd_msg_common_field(const struct lock_cmd_msg &msg) const
 {
     if (msg.magic_no != DLOCK_DP_MAGIC_NO) {
         DLOCK_LOG_DEBUG("message magic_no %u error", msg.magic_no);
@@ -1142,7 +1155,7 @@ inline int dlock_server::check_cmd_msg_common_field(const struct lock_cmd_msg &m
     return 0;
 }
 
-inline int dlock_server::do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len)
+int dlock_server::do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len)
 {
     dlock_status_t ret;
     uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
@@ -1219,7 +1232,7 @@ void dlock_server::measure_throughput(void)
 }
 #endif
 
-inline void dlock_server::process_urma_cr_local_jfs(const urma_cr_t &cr) const
+void dlock_server::process_urma_cr_local_jfs(const urma_cr_t &cr) const
 {
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(cr.user_ctx);
 
@@ -1249,7 +1262,7 @@ int dlock_server::modify_jetty_mgr_to_busy(jetty_mgr *p_jetty_mgr) const
     return -1;
 }
 
-inline int dlock_server::modify_jetty_mgr_to_active(jetty_mgr *p_jetty_mgr) const
+int dlock_server::modify_jetty_mgr_to_active(jetty_mgr *p_jetty_mgr) const
 {
     jetty_mgr_state_t expected_state = JETTY_MGR_BUSY;
     jetty_mgr_state_t new_state = JETTY_MGR_ACTIVE;
@@ -1290,7 +1303,7 @@ int dlock_server::modify_jetty_mgr_to_invalid(jetty_mgr *p_jetty_mgr)
     return 0;
 }
 
-inline int dlock_server::check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable)
+int dlock_server::check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable)
 {
     struct urma_buf *p_rx_buf = nullptr;
     int ret = 0;
@@ -1412,7 +1425,7 @@ int dlock_server::primary_preinit_func(const urma_cr_t &cr) const
     return 0;
 }
 
-inline void dlock_server::server_mode_handler()
+void dlock_server::server_mode_handler()
 {
     double time_dif;
 
@@ -1802,6 +1815,7 @@ int dlock_server::init_client_response(dlock_connection *p_conn, int32_t client_
         resp_body->server_state = m_server_state;
         resp_body->rsvd = 0;
         static_cast<void>(memcpy(&resp_body->obj_mem_seg, &(m_obj_mem_dma_tseg->seg), sizeof(urma_seg_t)));
+        resp_body->obj_mem_seg_token = m_obj_mem_tseg_token.token;
 
         if (m_ssl_enable) {
             if (p_jetty_mgr->gen_key(reinterpret_cast<struct dlock_key *>(
@@ -1841,7 +1855,7 @@ int dlock_server::client_num_count_down()
     return -1;
 }
 
-inline int dlock_server::negotiate_proto_version(const struct client_init_req_body &req_body) const
+int dlock_server::negotiate_proto_version(const struct client_init_req_body &req_body) const
 {
     /*
      * The current DLOCK_PROTO_VERSION is set to 2, no previous version needs to be compatible.

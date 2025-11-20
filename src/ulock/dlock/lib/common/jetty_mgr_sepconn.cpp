@@ -208,6 +208,8 @@ dlock_status_t jetty_mgr_sepconn::construct_jetty_xchg_info(struct urma_init_bod
     }
     jetty_info->tp_mode = p_jetty_mgr->m_tp_mode;
     static_cast<void>(memcpy(&(jetty_info->jfr_id), &(p_sepconn_mgr->m_jfr->jfr_id), sizeof(urma_jfr_id_t)));
+    jetty_info->token = get_jfr_token();
+    jetty_info->flag.bs.token_policy = get_token_policy();
 
 #ifdef UB_AGG
     return construct_urma_bond_id_xchg_info(jetty_info);
@@ -216,14 +218,18 @@ dlock_status_t jetty_mgr_sepconn::construct_jetty_xchg_info(struct urma_init_bod
 #endif /* UB_AGG */
 }
 
-dlock_status_t jetty_mgr_sepconn::import_jfr(const urma_jfr_id_t jfr_id)
+dlock_status_t jetty_mgr_sepconn::import_jfr(const urma_jfr_id_t jfr_id, uint32_t token_policy, uint32_t token)
 {
     urma_rjfr_t remote_jfr;
+    urma_token_t token_value = {
+        .token = token,
+    };
 
     static_cast<void>(memset(&remote_jfr, 0, sizeof(urma_rjfr_t)));
     static_cast<void>(memcpy(&(remote_jfr.jfr_id), &jfr_id, sizeof(urma_jfr_id_t)));
     remote_jfr.trans_mode = URMA_TM_RM;
-    m_tjfr = urma_import_jfr(m_urma_ctx->m_urma_ctx, &remote_jfr, &(m_urma_ctx->m_token));
+    remote_jfr.flag.bs.token_policy = token_policy;
+    m_tjfr = urma_import_jfr(m_urma_ctx->m_urma_ctx, &remote_jfr, &token_value);
     if (m_tjfr == nullptr) {
         DLOCK_LOG_ERR("Failed to import jfr");
         return DLOCK_FAIL;

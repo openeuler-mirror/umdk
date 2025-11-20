@@ -101,7 +101,7 @@ public:
     void atomic_sync_state(uint32_t lock_offset, const lock_state &ls);
     void rwlock_sync_state(uint32_t lock_offset, const lock_state &ls);
     void fairlock_sync_state(uint32_t lock_offset, const lock_state &ls);
-    inline int verify_client_id(int32_t expected_client_id, int32_t actual_client_id,
+    int verify_client_id(int32_t expected_client_id, int32_t actual_client_id,
         struct lock_cmd_msg *p_cmd_msg);
 
 private:
