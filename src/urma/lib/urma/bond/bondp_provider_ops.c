@@ -595,7 +595,8 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     return ret;
 }
 
-int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode) {
+int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode)
+{
     bondp_context_t *bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     if (!is_valid_ctx(bond_ctx)) {
         URMA_LOG_ERR("bonding context is invalid in user ctl");

@@ -185,7 +185,7 @@ typedef union urma_order_type_cap {
         uint32_t oi : 1;
         uint32_t ol : 1;
         uint32_t no   : 1;
-        uint32_t reserved : 27;
+        uint32_t reserved : 28;
     } bs;
     uint32_t value;
 } urma_order_type_cap_t;
@@ -204,7 +204,7 @@ typedef union urma_tp_feature {
     struct {
         uint32_t rm_multi_path : 1;
         uint32_t rc_multi_path : 1;
-        uint32_t reserved : 28;
+        uint32_t reserved : 30;
     } bs;
     uint32_t value;
 } urma_tp_feature_t;

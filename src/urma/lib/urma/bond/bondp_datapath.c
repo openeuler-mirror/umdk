@@ -1717,7 +1717,7 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
 
-    urma_jetty_id_t target_jetty_id;
+    urma_jetty_id_t target_jetty_id = {0};
     ret = bdp_r_p2v_jetty_id_table_lookup(
         &bjetty_ctx->bond_ctx->remote_p2v_jetty_id_table,
         &cr->remote_id, get_remote_id_type_by_cr(cr), &target_jetty_id

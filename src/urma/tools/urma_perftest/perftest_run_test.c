@@ -914,7 +914,7 @@ static void init_credit_wr(perftest_context_t *ctx, perftest_config_t *cfg)
         run_ctx->credit_wr[i].tjetty = (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) ? ctx->import_tjetty[i] :
             ctx->import_tjfr[i];
         run_ctx->credit_wr[i].user_ctx = i;
-        run_ctx->credit_wr[i].user_ctx |= (1UL << PERFTEST_FLAG_USER_CTX);
+        run_ctx->credit_wr[i].user_ctx |= (1ULL << PERFTEST_FLAG_USER_CTX);
         run_ctx->credit_wr[i].rw.src.sge = &run_ctx->credit_sge[i];
         run_ctx->credit_wr[i].rw.src.num_sge = 1;
         run_ctx->credit_wr[i].rw.dst.sge = &run_ctx->remote_credit_sge[i];
