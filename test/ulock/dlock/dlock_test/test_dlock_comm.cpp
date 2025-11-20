@@ -17,19 +17,14 @@
 #include <arpa/inet.h>
 #include <string>
 #include <climits>
+#include <fstream>
+#include <iostream> 
 
 #include "gtest/gtest.h"
 #include "dlock_common.h"
 #include "dlock_client_api.h"
 #include "dlock_server_api.h"
 #include "test_dlock_comm.h"
-
-
-
-#include <fstream>
-#include <iostream> 
-
-
 
 #define CONNECT_COUNT 5
 #define SLEEP_TIME (100 * 1000) /* sleep for 100 ms */
@@ -280,7 +275,7 @@ void client_get_prkey_pwd(char **prkey_pwd, int *prkey_pwd_len)
 
 void erase_prkey(void *prkey_pwd, int prkey_pwd_len)
 {
-    memset_s(prkey_pwd, prkey_pwd_len, 0, prkey_pwd_len);
+    memset(prkey_pwd, 0, prkey_pwd_len);
     free(prkey_pwd);
     return;
 }
@@ -313,7 +308,7 @@ void construct_primary_cfg(struct server_cfg &cfg_s, struct dlock_primary_cfg pa
 {
     cfg_s.type = SERVER_PRIMARY;
     cfg_s.dev_name = nullptr;
-    memset_s(&cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_s.eid, 0, sizeof(dlock_eid_t));
     cfg_s.log_level = LOG_WARNING;
     cfg_s.tp_mode = param_cfg.tp_mode;
     cfg_s.ub_token_disable = false;
@@ -385,7 +380,7 @@ void init_dclient_lib_with_server1(bool ssl_enable, trans_mode_t tp_mode)
     struct client_cfg cfg_c;
 
     cfg_c.dev_name = nullptr;
-    memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;

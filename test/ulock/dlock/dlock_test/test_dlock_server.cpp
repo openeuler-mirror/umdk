@@ -240,7 +240,7 @@ protected:
         m_msg_body = (struct object_create_body *)buff;
         m_msg_body->obj_id = 1;
         m_msg_body->desc_len = obj_desc_len;
-        (void)memcpy_s(m_msg_body->desc, m_msg_body->desc_len, obj_desc, obj_desc_len);
+        (void)memcpy(m_msg_body->desc, obj_desc, obj_desc_len);
 
         m_client_id = 1;
     }
@@ -276,7 +276,7 @@ protected:
         m_msg_body = (struct object_create_body *)buff;
         m_msg_body->obj_id = 1;
         m_msg_body->desc_len = obj_desc_len;
-        (void)memcpy_s(m_msg_body->desc, m_msg_body->desc_len, obj_desc, obj_desc_len);
+        (void)memcpy(m_msg_body->desc, obj_desc, obj_desc_len);
 
         m_client_id = 1;
 
@@ -697,7 +697,7 @@ void test_delete_except_client_entry::prepare_except_client_entry(void)
     get_msg->lease_time = tv_start.tv_sec + 60000;
     get_msg->offset = 0;
     get_msg->desc_len = lock_desc_len;
-    (void)memcpy_s(get_msg->desc, get_msg->desc_len, lock_desc, lock_desc_len);
+    (void)memcpy(get_msg->desc, lock_desc, lock_desc_len);
 
     lock_entry_s *p_lock_entry = m_server->get_lock_by_msg(get_msg);
     ASSERT_NE(p_lock_entry, nullptr);
@@ -716,7 +716,7 @@ void test_delete_except_client_entry::prepare_except_client_entry(void)
     create_obj_msg->lease_time = 600000;
     create_obj_msg->init_value = 1;
     create_obj_msg->desc_len = object_desc_len;
-    (void)memcpy_s(create_obj_msg->desc, create_obj_msg->desc_len, obj_desc, object_desc_len);
+    (void)memcpy(create_obj_msg->desc, obj_desc, object_desc_len);
 
     object_entry_s *p_obj_entry = m_server->create_object_by_msg(create_obj_msg, client_id);
     ASSERT_NE(p_obj_entry, nullptr);

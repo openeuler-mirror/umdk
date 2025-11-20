@@ -42,7 +42,7 @@ static void test_dclient_lib_init(trans_mode_t tp_mode)
     struct client_cfg cfg_c;
 
     cfg_c.dev_name = nullptr;
-    memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;
@@ -89,7 +89,7 @@ static void test_dclient_lib_deinit(trans_mode_t tp_mode)
     int client_id = 100;
 
     cfg_c.dev_name = nullptr;
-    memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;
@@ -810,7 +810,7 @@ static void test_batch_release_lock(trans_mode_t tp_mode)
     ret = lock_request_async(client_id, &lock_req1);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "lock_request_async failed, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "an async op is ongoing, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -831,7 +831,7 @@ static void test_batch_release_lock(trans_mode_t tp_mode)
     ret = batch_get_lock(client_id, BATCH_SIZE, lock_descs, lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_get_lock failed, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_release_lock failed, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -847,7 +847,7 @@ static void test_batch_release_lock(trans_mode_t tp_mode)
     ret = unlock(client_id, lock_ids[2], &lock_state1);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "unlock failed, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_release_lock failed, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -860,7 +860,7 @@ static void test_batch_release_lock(trans_mode_t tp_mode)
             "lock[" << i << "] has not been got, output lock_id: " << temp_lock_ids[i];
     }
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, 0, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_EINVAL) << "invalid lock_num, ret: " << ret;
 
@@ -973,7 +973,7 @@ static void test_batch_trylock(trans_mode_t tp_mode)
     ret = batch_trylock(client_id, BATCH_SIZE, lock_reqs, lock_results);
     ASSERT_TRUE(ret == DLOCK_EINVAL) << "invalid lock_op, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_release_lock failed, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -1088,7 +1088,7 @@ static void test_batch_unlock(trans_mode_t tp_mode)
     ret = batch_unlock(client_id, BATCH_SIZE, lock_ids, nullptr);
     ASSERT_TRUE(ret == DLOCK_EINVAL) << "results is nullptr, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_release_lock failed, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -1212,7 +1212,7 @@ static void test_batch_lock_extend(trans_mode_t tp_mode)
     ret = batch_lock_extend(client_id, BATCH_SIZE, lock_extend_reqs, lock_results);
     ASSERT_TRUE(ret == DLOCK_EINVAL) << "invalid lock_op, ret: " << ret;
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(client_id, BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "batch_release_lock failed, ret: " << ret;
     for (i = 0; i < BATCH_SIZE; i++) {
@@ -1384,7 +1384,7 @@ static void test_server_start(void)
     ret = dserver_lib_init(max_server_num);
     ASSERT_TRUE(ret == 0) << "dlock server lib init failed, ret: " << ret;
 
-    memset_s(&primary_cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&primary_cfg_s.eid, 0, sizeof(dlock_eid_t));
     primary_cfg_s.dev_name = nullptr;
     ret = server_start(primary_cfg_s, server_id1);
     ASSERT_TRUE(ret == 0) << "eid is zero and dev_name is nullptr, ret: " << ret;
@@ -1440,7 +1440,7 @@ static void test_server_start(void)
 
     replica_cfg_s.type = SERVER_REPLICA;
     replica_cfg_s.dev_name = nullptr;
-    memset_s(&replica_cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&replica_cfg_s.eid, 0, sizeof(dlock_eid_t));
     replica_cfg_s.log_level = LOG_WARNING;
     replica_cfg_s.tp_mode = SEPERATE_CONN;
     replica_cfg_s.ub_token_disable = false;
@@ -2558,7 +2558,7 @@ static void test_server_not_ready(trans_mode_t tp_mode)
             "unlock lock[" << i << "], server is in the failure recovery process, ret: " << lock_results[i].op_ret;
     }
 
-    (void)memcpy_s(temp_lock_ids, (BATCH_SIZE * sizeof(int)), g_atomic_lock_ids, (BATCH_SIZE * sizeof(int)));
+    (void)memcpy(temp_lock_ids, g_atomic_lock_ids, (BATCH_SIZE * sizeof(int)));
     ret = batch_release_lock(g_client_id[1], BATCH_SIZE, temp_lock_ids);
     ASSERT_TRUE(ret == DLOCK_NOT_READY) << "batch_release_lock failed, ret: " << ret;
 
@@ -2617,13 +2617,13 @@ static void test_client_ssl_cfg(void)
     int client_id = 100;
     char *file_path = (char *)malloc(PATH_MAX + 2);
 
-    memset_s(file_path, PATH_MAX + 1, '0', PATH_MAX + 1);
-    memset_s(file_path + PATH_MAX + 1, 1, '\0', 1);
+    memset(file_path, '0', PATH_MAX + 1);
+    memset(file_path + PATH_MAX + 1, '\0', 1);
 
     startup_primary_server1(0, 0, false, true, SEPERATE_CONN);
 
     cfg_c.dev_name = nullptr;
-    memset_s(&cfg_c.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
     cfg_c.log_level = LOG_WARNING;
     cfg_c.tp_mode = SEPERATE_CONN;
     cfg_c.ub_token_disable = false;
@@ -2794,8 +2794,8 @@ static void test_server_ssl_cfg(void)
     int client_id = 100;
     char *file_path = (char *)malloc(PATH_MAX + 2);
 
-    memset_s(file_path, PATH_MAX + 1, '0', PATH_MAX + 1);
-    memset_s(file_path + PATH_MAX + 1, 1, '\0', 1);
+    memset(file_path, '0', PATH_MAX + 1);
+    memset(file_path + PATH_MAX + 1, '\0', 1);
 
     init_dclient_lib_with_server1(true, SEPERATE_CONN);
     ret = dserver_lib_init(max_server_num);
@@ -2803,7 +2803,7 @@ static void test_server_ssl_cfg(void)
 
     cfg_s.type = SERVER_PRIMARY;
     cfg_s.dev_name = nullptr;
-    memset_s(&cfg_s.eid, sizeof(dlock_eid_t), 0, sizeof(dlock_eid_t));
+    memset(&cfg_s.eid, 0, sizeof(dlock_eid_t));
     cfg_s.log_level = LOG_WARNING;
     cfg_s.tp_mode = SEPERATE_CONN;
     cfg_s.ub_token_disable = false;
