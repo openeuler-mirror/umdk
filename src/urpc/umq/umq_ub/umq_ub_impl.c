@@ -3637,3 +3637,20 @@ umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp)
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     return queue->state;
 }
+
+int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info)
+{
+    umq_ub_ctx_t *dev_ctx = NULL;
+
+    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
+        if (memcmp(&g_ub_ctx[i].trans_info.dev_info, &trans_info->dev_info, sizeof(umq_dev_assign_t)) == 0) {
+            dev_ctx = &g_ub_ctx[i];
+            break;
+        }
+    }
+    if (dev_ctx == NULL || dev_ctx->urma_ctx == NULL) {
+        UMQ_VLOG_ERR("dev_ctx invalid\n");
+        return UMQ_INVALID_FD;
+    }
+    return dev_ctx->urma_ctx->async_fd;
+}

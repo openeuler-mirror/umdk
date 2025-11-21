@@ -725,3 +725,62 @@ umq_state_t umq_state_get(uint64_t umqh)
 
     return umq->tp_ops->umq_tp_state_get(umq->umqh_tp);
 }
+
+int umq_async_event_fd_get(umq_trans_info_t *trans_info)
+{
+    if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX || trans_info->trans_mode < 0) {
+        UMQ_VLOG_ERR("trans info invalid\n");
+        return UMQ_INVALID_FD;
+    }
+
+    umq_framework_t *umq_fw = &g_umq_fws[trans_info->trans_mode];
+
+    if (!umq_fw->enable) {
+        UMQ_VLOG_ERR("framework instance disabled\n");
+        return UMQ_INVALID_FD;
+    }
+    if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_async_event_fd_get == NULL) {
+        UMQ_VLOG_ERR("get event fd failed\n");
+        return UMQ_INVALID_FD;
+    }
+    return umq_fw->tp_ops->umq_tp_async_event_fd_get(trans_info);
+}
+
+int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event)
+{
+    if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX || trans_info->trans_mode < 0) {
+        UMQ_VLOG_ERR("trans info invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_framework_t *umq_fw = &g_umq_fws[trans_info->trans_mode];
+
+    if (!umq_fw->enable) {
+        UMQ_VLOG_ERR("framework instance disabled\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_async_event_get == NULL) {
+        UMQ_VLOG_ERR("ops invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq_fw->tp_ops->umq_tp_async_event_get(trans_info, event);
+}
+
+void umq_ack_async_event(umq_async_event_t *event)
+{
+    if (event == NULL || event->trans_info.trans_mode >= UMQ_TRANS_MODE_MAX || event->trans_info.trans_mode < 0) {
+        UMQ_VLOG_ERR("event invalid\n");
+        return;
+    }
+
+    umq_framework_t *umq_fw = &g_umq_fws[event->trans_info.trans_mode];
+
+    if (!umq_fw->enable) {
+        return;
+    }
+    if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_aync_event_ack == NULL) {
+        UMQ_VLOG_ERR("ops invalid\n");
+        return;
+    }
+    return umq_fw->tp_ops->umq_tp_aync_event_ack(event);
+}

@@ -19,6 +19,7 @@ extern "C" {
 #define UMQ_SUCCESS                                (0)
 #define UMQ_FAIL                                   (-1)
 #define UMQ_INVALID_HANDLE                         (0)
+#define UMQ_INVALID_FD                             (-1)
 
 #define UMQ_ERR_EPERM                              (EPERM)
 #define UMQ_ERR_EAGAIN                             (EAGAIN)
@@ -35,7 +36,7 @@ typedef enum umq_buf_status {
     UMQ_BUF_LOC_OPERATION_ERR,          /* Local operation err */
     UMQ_BUF_LOC_ACCESS_ERR,             /* Access to local memory error */
     UMQ_BUF_REM_RESP_LEN_ERR,           /* Local Operation Error, with sub-status of Remote Response Length Error */
-    UMQ_BUF_REM_UNSUPPORTED_REQ_ERR,        
+    UMQ_BUF_REM_UNSUPPORTED_REQ_ERR,
     UMQ_BUF_REM_OPERATION_ERR,          /* Error when target jetty can not complete the operation */
     UMQ_BUF_REM_ACCESS_ABORT_ERR,       /* Error when target jetty access memory error or abort the operation */
     UMQ_BUF_ACK_TIMEOUT_ERR,            /* Retransmission exceeds the maximum number of times */

@@ -124,6 +124,21 @@ static void umq_tp_ub_plus_ack_interrupt(uint64_t umqh_tp, uint32_t nevents, umq
     umq_ub_ack_interrupt_impl(umqh_tp, nevents, option);
 }
 
+static int umq_tp_ub_plus_async_event_fd_get(umq_trans_info_t *trans_info)
+{
+    return umq_ub_async_event_fd_get(trans_info);
+}
+
+static int umq_tp_ub_plus_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event)
+{
+    return 0;
+}
+
+static void umq_tp_ub_plus_async_event_ack(umq_async_event_t *event)
+{
+    return;
+}
+
 static umq_ops_t g_umq_ub_plus_ops = {
     .mode = UMQ_TRANS_MODE_UB_PLUS,
     // control plane api
@@ -145,6 +160,9 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_rearm_interrupt = umq_tp_ub_plus_rearm_interrupt,
     .umq_tp_wait_interrupt = umq_tp_ub_plus_wait_interrupt,
     .umq_tp_ack_interrupt = umq_tp_ub_plus_ack_interrupt,
+    .umq_tp_async_event_fd_get = umq_tp_ub_plus_async_event_fd_get,
+    .umq_tp_async_event_get = umq_tp_ub_plus_async_event_get,
+    .umq_tp_aync_event_ack = umq_tp_ub_plus_async_event_ack,
 };
 
 umq_ops_t *umq_ub_plus_ops_get(void)
