@@ -518,6 +518,7 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
     ctx->eid_index = eid_index;
     ctx->eid = eid;
     atomic_init(&ctx->ref.atomic_cnt, 1);
+    ctx->aggr_mode = URMA_AGGR_MODE_STANDALONE;
 
     return ctx;
 }
