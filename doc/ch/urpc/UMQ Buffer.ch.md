@@ -28,7 +28,7 @@ UMQ Buffer使用时主要涉及两个内存实体概念
 * `need_import`：UMQ内部标记，主要用于扩容时注册内存逻辑的快速触发，用户正常使用时无需感知此字段。
 * `buf_data`：指向实际消息载荷的地址。
 * `qbuf_ext`：扩展数据，对应`umq_buf_pro_t`或者`struct umq_buf_pro`定义。主要是用于内存在数据面接口使用时的参数配置，定义可以参考[umq_pro_types.h](https://gitee.com/openeuler/umdk/blob/master/src/urpc/include/umq/umq_pro_types.h)。
-* `data`：combine模式的消息载荷起始地址，因为combine模式下数据头和消息载荷是连续的内存。
+* `data`：combine模式的消息载荷起始地址，因为combine模式下消息元数据和消息载荷是连续的内存。
 
 ## 消息载荷
 消息载荷是用户实际用于数据存储的内存，用户的完整数据可能会跨越多个消息载荷而存在。如果将所有的消息载荷连接在一起，逻辑上而言，用户的数据主要被划分为三个逻辑部分：
@@ -49,13 +49,13 @@ UMQ Buffer当前支持两种模式：
 
 ### split模式
 
-split模式的数据头与消息载荷的内存布局可以参见下图。数据头与消息载荷在内存上并不是处于连续的内存之上，因此split模式的直接访问`data`字段是非法的，要获取实际消息载荷的地址需要访问`buf_data`字段。需要注意的是split模式的消息载荷是大页内存（4KB）整数倍。如果用户场景需要使用完整大页内存时（即4KB整倍数的内存时），可以选择使用split模式。
+split模式的消息元数据与消息载荷的内存布局可以参见下图。消息元数据与消息载荷在内存上并不是处于连续的内存之上，因此split模式的直接访问`data`字段是非法的，要获取实际消息载荷的地址需要访问`buf_data`字段。需要注意的是split模式的消息载荷是大页内存（4KB）整数倍。如果用户场景需要使用完整大页内存时（即4KB整倍数的内存时），可以选择使用split模式。
 
 ![内存结构](./figures/UMQ_Buffer_Split_Mode_Example.png)
 
 ### combine模式
 
-combine模式的数据头与消息载荷的内存布局可以参见下图。其数据头与消息载荷在内存上是处于连续的状态，因此combine模式获取实际消息载荷的地址可以使用`data`或者`buf_data`字段，两者都是合法字段。但是combine模式为了达到更高的性能，往往会将每一组数据头与消息载荷限制在独立的大页内存内，换句话说，数据头+消息载荷的总长度是大页内存（4KB）整数倍。这就导致了combine模式的消息载荷的长度略小于大页内存（4KB）的整数倍。如果用户场景对此限制敏感，可以选择使用split模式。
+combine模式的消息元数据与消息载荷的内存布局可以参见下图。其消息元数据与消息载荷在内存上是处于连续的状态，因此combine模式获取实际消息载荷的地址可以使用`data`或者`buf_data`字段，两者都是合法字段。但是combine模式为了达到更高的性能，往往会将每一组消息元数据与消息载荷限制在独立的大页内存内，换句话说，消息元数据+消息载荷的总长度是大页内存（4KB）整数倍。这就导致了combine模式的消息载荷的长度略小于大页内存（4KB）的整数倍。如果用户场景对此限制敏感，可以选择使用split模式。
 
 ![内存结构](./figures/UMQ_Buffer_Combine_Mode_Example.png)
 
@@ -72,12 +72,12 @@ UMQ Buffer相关的接口定义可以参见[umq_api.h](https://gitee.com/openeul
 * `umqh`：是否从umq中申请。
 * `option`：申请接口的扩展参数配置
 
-以下将针对split模式与combine模式分别举例说明：我们尝试为2个请求申请1K的用户数据头（通过`option.headroom_size`进行配置）以及20K的用户数据(通过`request_size`进行配置)。下述示例中数据头的长度默认为128B,即`umq_buf_t`结构体长度，示例中不再赘述解释。
+以下将针对split模式与combine模式分别举例说明：我们尝试为2个请求申请1K的用户数据头（通过`option.headroom_size`进行配置）以及20K的用户数据(通过`request_size`进行配置)。下述示例中消息元数据的长度默认为128B,即`umq_buf_t`结构体长度，示例中不再赘述解释。
 
 #### split模式示例
 
 > **注意**
-> * 每个请求的首片数据头内会记录整个请求相关的配置，如`total_data_size`、`qbuf_ext`等等，这些字段在非首片内是无效字段，用户不应该信任这些字段的内容。
+> * 每个请求的首片消息元数据内会记录整个请求相关的配置，如`total_data_size`、`qbuf_ext`等等，这些字段在非首片内是无效字段，用户不应该信任这些字段的内容。
 > * 当前示例使用典型内存块大小（8K）进行阐述。
 
 
@@ -85,7 +85,7 @@ UMQ Buffer相关的接口定义可以参见[umq_api.h](https://gitee.com/openeul
 
 第一个请求的第一片内存：
 
-* `total_data_size`：作为请求内首片内存的数据头内会记录请求的数据大小为20KB。
+* `total_data_size`：作为请求内首片内存的消息元数据内会记录请求的数据大小为20KB。
 * `buf_size`：128B（`sizeof(umq_buf_t)`）+ 8K
 * `data_size`：7K，注意此处长度不包含用户数据头。
 * `headroom_size`：1K
@@ -106,14 +106,14 @@ UMQ Buffer相关的接口定义可以参见[umq_api.h](https://gitee.com/openeul
 #### combine模式示例
 
 > **注意**
-> * 每个请求的首片数据头内会记录整个请求相关的配置，如`total_data_size`、`qbuf_ext`等等，这些字段在非首片内是无效字段，用户不应该信任这些字段的内容。
+> * 每个请求的首片消息元数据内会记录整个请求相关的配置，如`total_data_size`、`qbuf_ext`等等，这些字段在非首片内是无效字段，用户不应该信任这些字段的内容。
 > * 当前示例使用典型内存块大小（8K）进行阐述。
 
 ![内存结构](./figures/UMQ_Buffer_Combine_Alloc_Example.png)
 
 第一个请求的第一片内存：
 
-* `total_data_size`：作为请求内首片内存的数据头内会记录请求的数据大小为20KB。
+* `total_data_size`：作为请求内首片内存的消息源数据内会记录请求的数据大小为20KB。
 * `buf_size`：8K
 * `data_size`：7K - 128，注意此处长度不包含用户数据头。
 * `headroom_size`：1K
