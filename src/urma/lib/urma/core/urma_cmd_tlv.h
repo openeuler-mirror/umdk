@@ -361,6 +361,7 @@ typedef enum urma_cmd_import_jfr_type {
     IMPORT_JFR_IN_FLAG,
     IMPORT_JFR_IN_TOKEN,
     IMPORT_JFR_IN_TRANS_MODE,
+    IMPORT_JFR_IN_TP_TYPE,
     IMPORT_JFR_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
     IMPORT_JFR_IN_NUM, /* Only for calculating number of types */
     /* Out type */
@@ -378,6 +379,7 @@ typedef enum urma_cmd_import_jfr_ex_type {
     IMPORT_JFR_EX_IN_FLAG,
     IMPORT_JFR_EX_IN_TOKEN,
     IMPORT_JFR_EX_IN_TRANS_MODE,
+    IMPORT_JFR_EX_IN_TP_TYPE,
     IMPORT_JFR_EX_IN_TP_HANDLE,
     IMPORT_JFR_EX_IN_PEER_TP_HANDLE,
     IMPORT_JFR_EX_IN_TAG,
@@ -517,6 +519,7 @@ typedef enum urma_cmd_import_jetty_type {
     IMPORT_JETTY_IN_TRANS_MODE,
     IMPORT_JETTY_IN_POLICY,
     IMPORT_JETTY_IN_TYPE,
+    IMPORT_JETTY_IN_TP_TYPE,
     IMPORT_JETTY_IN_UDATA, /* Consider udata as an in/out attr */
     IMPORT_JETTY_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
@@ -536,6 +539,7 @@ typedef enum urma_cmd_import_jetty_ex_type {
     IMPORT_JETTY_EX_IN_TRANS_MODE,
     IMPORT_JETTY_EX_IN_POLICY,
     IMPORT_JETTY_EX_IN_TYPE,
+    IMPORT_JETTY_EX_IN_TP_TYPE,
     IMPORT_JETTY_EX_IN_TP_HANDLE,
     IMPORT_JETTY_EX_IN_PEER_TP_HANDLE,
     IMPORT_JETTY_EX_IN_TAG,

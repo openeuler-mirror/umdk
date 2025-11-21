@@ -171,6 +171,7 @@ typedef struct urma_tjfr_cfg {
     urma_import_jetty_flag_t flag;
     urma_token_t *token;
     urma_transport_mode_t trans_mode;
+    urma_tp_type_t tp_type;
 } urma_tjfr_cfg_t;
 
 typedef struct urma_tjetty_cfg {
@@ -180,6 +181,7 @@ typedef struct urma_tjetty_cfg {
     urma_transport_mode_t trans_mode;
     urma_jetty_grp_policy_t policy;
     urma_target_type_t type;
+    urma_tp_type_t tp_type;
 } urma_tjetty_cfg_t;
 
 typedef struct urma_context_cfg {

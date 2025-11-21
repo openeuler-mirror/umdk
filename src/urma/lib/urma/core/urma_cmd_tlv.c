@@ -403,6 +403,7 @@ int urma_ioctl_import_jfr(int ioctl_fd, urma_cmd_import_jfr_t *arg)
     ATTR(a++, IMPORT_JFR_IN_FLAG, arg->in.flag);
     ATTR(a++, IMPORT_JFR_IN_TOKEN, arg->in.token);
     ATTR(a++, IMPORT_JFR_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, IMPORT_JFR_IN_TP_TYPE, arg->in.tp_type);
     ATTR(a++, IMPORT_JFR_IN_UDATA, arg->udata);
     ATTR(a++, IMPORT_JFR_OUT_TPN, arg->out.tpn);
     ATTR(a++, IMPORT_JFR_OUT_HANDLE, arg->out.handle);
@@ -421,6 +422,7 @@ int urma_ioctl_import_jfr_ex(int ioctl_fd, urma_cmd_import_jfr_ex_t *arg)
     ATTR(a++, IMPORT_JFR_EX_IN_FLAG, arg->in.flag);
     ATTR(a++, IMPORT_JFR_EX_IN_TOKEN, arg->in.token);
     ATTR(a++, IMPORT_JFR_EX_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, IMPORT_JFR_EX_IN_TP_TYPE, arg->in.tp_type);
     ATTR(a++, IMPORT_JFR_EX_IN_TP_HANDLE, arg->in.tp_handle);
     ATTR(a++, IMPORT_JFR_EX_IN_PEER_TP_HANDLE, arg->in.peer_tp_handle);
     ATTR(a++, IMPORT_JFR_EX_IN_TAG, arg->in.tag);
@@ -569,6 +571,7 @@ int urma_ioctl_import_jetty(int ioctl_fd, urma_cmd_import_jetty_t *arg)
     ATTR(a++, IMPORT_JETTY_IN_TRANS_MODE, arg->in.trans_mode);
     ATTR(a++, IMPORT_JETTY_IN_POLICY, arg->in.policy);
     ATTR(a++, IMPORT_JETTY_IN_TYPE, arg->in.type);
+    ATTR(a++, IMPORT_JETTY_IN_TP_TYPE, arg->in.tp_type);
     ATTR(a++, IMPORT_JETTY_IN_UDATA, arg->udata);
     ATTR(a++, IMPORT_JETTY_OUT_TPN, arg->out.tpn);
     ATTR(a++, IMPORT_JETTY_OUT_HANDLE, arg->out.handle);
@@ -589,6 +592,7 @@ int urma_ioctl_import_jetty_ex(int ioctl_fd, urma_cmd_import_jetty_ex_t *arg)
     ATTR(a++, IMPORT_JETTY_EX_IN_TRANS_MODE, arg->in.trans_mode);
     ATTR(a++, IMPORT_JETTY_EX_IN_POLICY, arg->in.policy);
     ATTR(a++, IMPORT_JETTY_EX_IN_TYPE, arg->in.type);
+    ATTR(a++, IMPORT_JETTY_EX_IN_TP_TYPE, arg->in.tp_type);
     ATTR(a++, IMPORT_JETTY_EX_IN_TP_HANDLE, arg->in.tp_handle);
     ATTR(a++, IMPORT_JETTY_EX_IN_PEER_TP_HANDLE, arg->in.peer_tp_handle);
     ATTR(a++, IMPORT_JETTY_EX_IN_TAG, arg->in.tag);

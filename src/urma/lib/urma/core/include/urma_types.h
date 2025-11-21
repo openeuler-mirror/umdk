@@ -184,7 +184,7 @@ typedef union urma_order_type_cap {
         uint32_t ot : 1;
         uint32_t oi : 1;
         uint32_t ol : 1;
-        uint32_t no   : 1;
+        uint32_t no : 1;
         uint32_t reserved : 28;
     } bs;
     uint32_t value;
@@ -758,7 +758,7 @@ typedef union urma_seg_attr {
         uint32_t cacheable      : 1;  /* 0: URMA_NON_CACHEABLE.
                                          1: URMA_CACHEABLE. */
         uint32_t dsva           : 1;
-        uint32_t access         : 6;  /* (0x1): URMA_ACCESS_LOCAL_WRITE.
+        uint32_t access         : 6;  /* (0x1): URMA_ACCESS_LOCAL_ONLY.
                                          (0x1 << 1): URMA_ACCESS_READ.
                                          (0x1 << 2): URMA_ACCESS_WRITE.
                                          (0x1 << 3): URMA_ACCESS_ATOMIC. */
@@ -876,7 +876,7 @@ typedef union urma_jfs_wr_flag {
         uint32_t place_order : 2;      /* 0: There is no order with other WR
                                           1: relax order
                                           2: strong order
-                                          3: reserve */ /* see urma_order_type_t */
+                                          3: reserve */ /* see urma_place_order_t */
         uint32_t comp_order : 1;       /* 0: There is no completion order with othwe WR.
                                           1: Completion order with previous WR. */
         uint32_t fence : 1;            /* 0: There is not fence.
@@ -1183,7 +1183,7 @@ typedef struct urma_tp_attr {
 typedef union urma_get_tp_cfg_flag {
     struct {
         uint32_t ctp             : 1;
-        uint32_t rtp              : 1;
+        uint32_t rtp             : 1;
         uint32_t utp             : 1;
         uint32_t uboe            : 1;
         uint32_t pre_defined     : 1;
