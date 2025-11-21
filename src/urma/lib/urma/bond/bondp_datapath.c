@@ -2212,7 +2212,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     }
     /* non-null bjetty_ctx value because post_recv_check_valid performed validation. */
     bjetty_ctx_t *bjetty_ctx = bdp_jfr->comp_ctx;
-    // workaround， at this point，jfr only support multipath
+    // workaround, at this point, jfr only support multipath
     bdp_jfr->is_multipath = true;
     if (is_single_dev_mode(jfr->urma_ctx)) {
         return bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
