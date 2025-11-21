@@ -113,7 +113,7 @@ UMQ Buffer相关的接口定义可以参见[umq_api.h](https://gitee.com/openeul
 
 第一个请求的第一片内存：
 
-* `total_data_size`：作为请求内首片内存的消息源数据内会记录请求的数据大小为20KB。
+* `total_data_size`：作为请求内首片内存的消息元数据内会记录请求的数据大小为20KB。
 * `buf_size`：8K
 * `data_size`：7K - 128，注意此处长度不包含用户数据头。
 * `headroom_size`：1K
