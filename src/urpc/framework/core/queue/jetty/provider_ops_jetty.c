@@ -240,21 +240,21 @@ static int trans_mode_opso_init(jetty_provider_t *jetty_provider)
     if (jetty_provider->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
         return 0;
     }
- 
+
     /* open source needs to import memory */
     if (mem_hmap_init() != 0) {
         return -1;
     }
- 
+
     return 0;
 }
- 
+
 static void trans_mode_opso_uninit(urma_transport_type_t type)
 {
     if (type != URMA_TRANSPORT_UB) {
         return;
     }
- 
+
     mem_hmap_uninit();
 }
 
@@ -501,7 +501,7 @@ static int jetty_provider_init_sub_providers(urpc_trans_info_t *trans_info, urma
     if (trans_mode_opso_init(jetty_provider) != 0) {
         goto DEL_CTX;
     }
-    
+
     if (jetty_provider->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
         if (add_urma_async_event_listener(jetty_provider) != URPC_SUCCESS) {
             goto UNINIT_OPSO;

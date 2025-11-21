@@ -136,14 +136,14 @@ typedef struct mem_hmap_key {
     uint32_t token_id;
     uint32_t token_value;
 } __attribute__((packed)) mem_hmap_key_t;
- 
+
 typedef struct mem_entry {
     struct urpc_hmap_node node;
     tseg_handle_t *tseg_h;
     uint32_t timestamp;
     mem_hmap_key_t mem_key;
 } mem_entry_t;
- 
+
 typedef struct mem_hmap {
     struct urpc_hmap hmap;
     pthread_rwlock_t lock;
