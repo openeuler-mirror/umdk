@@ -564,8 +564,8 @@ urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name
                 URMA_LOG_ERR("Invalid option value len.\n");
                 return URMA_EINVAL;
             }
-            if (strcmp(ctx->dev->ops->name, "ubagg") != 0) {
-                URMA_LOG_ERR("Cannot set aggragated mode for non-aggragated device.\n");
+            if (strcmp(ctx->dev->ops->name, "ub_agg") != 0) {
+                URMA_LOG_ERR("Cannot set aggregated mode for non-aggregated device.\n");
                 return URMA_EINVAL;
             }
             const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 5;
