@@ -422,6 +422,7 @@ static inline void fill_tjetty(urma_target_jetty_t *tjetty, urma_context_t *ctx,
     tjetty->tp.tpn = arg->out.tpn;
     tjetty->urma_ctx = ctx;
     tjetty->type = cfg->type;
+    tjetty->tp_type = cfg->tp_type;
     tjetty->policy = cfg->policy;
     tjetty->flag = cfg->flag;
 }
@@ -1012,6 +1013,7 @@ static inline void fill_tjfr(urma_target_jetty_t *tjfr, urma_context_t *ctx, urm
     tjfr->id = cfg->jfr_id;
     tjfr->trans_mode = cfg->trans_mode;
     tjfr->flag = cfg->flag;
+    tjfr->tp_type = cfg->tp_type;
     tjfr->handle = arg->out.handle;
     tjfr->tp.tpn = arg->out.tpn;
     tjfr->urma_ctx = ctx;
@@ -1034,6 +1036,7 @@ int urma_cmd_import_jfr(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_tjf
     arg.in.token = cfg->token->token;
     arg.in.trans_mode = (uint32_t)cfg->trans_mode;
     arg.in.flag = cfg->flag.value;
+    arg.in.tp_type = cfg->tp_type;
     urma_cmd_set_udrv_priv(&arg.udata, udata);
 
     ret = urma_ioctl_import_jfr(ctx->dev_fd, &arg);
@@ -1055,6 +1058,7 @@ static inline void fill_tjfr_ex(urma_target_jetty_t *tjfr, urma_context_t *ctx, 
     tjfr->trans_mode = cfg->trans_mode;
     tjfr->tp.tpn = arg->out.tpn;
     tjfr->flag = cfg->flag;
+    tjfr->tp_type = cfg->tp_type;
 }
 
 int urma_cmd_import_jfr_ex(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_tjfr_cfg_t *cfg,
@@ -1075,6 +1079,7 @@ int urma_cmd_import_jfr_ex(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_
     arg.in.flag = cfg->flag.value;
     arg.in.token = cfg->token->token;
     arg.in.trans_mode = (uint32_t)cfg->trans_mode;
+    arg.in.tp_type = (uint32_t)cfg->tp_type;
     arg.in.tp_handle = ex_cfg->tp_handle;
     arg.in.peer_tp_handle = ex_cfg->peer_tp_handle;
     arg.in.tag = ex_cfg->tag;
@@ -1513,6 +1518,7 @@ int urma_cmd_import_jetty(urma_context_t *ctx, urma_target_jetty_t *tjetty, urma
         .in.trans_mode = (uint32_t)cfg->trans_mode,
         .in.policy = (uint32_t)cfg->policy,
         .in.type = (uint32_t)cfg->type,
+        .in.tp_type = cfg->tp_type,
     };
     (void)memcpy(arg.in.eid, cfg->jetty_id.eid.raw, URMA_EID_SIZE);
     urma_cmd_set_udrv_priv(&arg.udata, udata);
@@ -1535,6 +1541,7 @@ static inline void fill_tjetty_ex(urma_target_jetty_t *tjetty, urma_context_t *c
     tjetty->type = cfg->type;
     tjetty->flag = cfg->flag;
     tjetty->policy = cfg->policy;
+    tjetty->tp_type = cfg->tp_type;
 }
 
 int urma_cmd_import_jetty_ex(urma_context_t *ctx, urma_target_jetty_t *tjetty, urma_tjetty_cfg_t *cfg,
@@ -1555,6 +1562,7 @@ int urma_cmd_import_jetty_ex(urma_context_t *ctx, urma_target_jetty_t *tjetty, u
     arg.in.trans_mode = (uint32_t)cfg->trans_mode;
     arg.in.policy = (uint32_t)cfg->policy;
     arg.in.type = (uint32_t)cfg->type;
+    arg.in.tp_type = (uint32_t)cfg->tp_type;
     arg.in.tp_handle = ex_cfg->tp_handle;
     arg.in.peer_tp_handle = ex_cfg->peer_tp_handle;
     arg.in.tag = ex_cfg->tag;
