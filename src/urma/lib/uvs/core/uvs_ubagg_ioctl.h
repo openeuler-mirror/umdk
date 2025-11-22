@@ -35,5 +35,8 @@ struct uvs_ubagg_set_topo_info {
 
 int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num);
+int uvs_ubcore_ioctl_get_topo_eid(uint32_t tp_type,
+    uvs_eid_t *src_v_eid, uvs_eid_t *dst_v_eid,
+    uvs_eid_t *src_p_eid, uvs_eid_t *dst_p_eid);
 
 #endif // UVS_UBAGG_IOCTL_H

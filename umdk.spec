@@ -318,6 +318,7 @@ fi
     %dir %{_includedir}/ub/umdk/urma
     %dir %{_includedir}/ub/umdk/urma/udma
     %{_includedir}/ub/umdk/urma/urma_*.h
+    %{_includedir}/ub/umdk/urma/uvs_types.h
     %{_includedir}/ub/umdk/urma/uvs_api.h
     %{_includedir}/ub/umdk/urma/udma/udma_u_ctl.h
 %if %{with gcov}

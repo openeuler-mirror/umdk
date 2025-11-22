@@ -30,4 +30,5 @@ install(TARGETS tpsa
 )
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/uvs_api.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/uvs_types.h
     DESTINATION /usr/include/ub/umdk/urma)
