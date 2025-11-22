@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_util.h"
 
 #include "urpc_slab.h"
@@ -49,7 +49,7 @@ void *eslab_alloc(eslab_t *slab, uint32_t *id)
     // Non-public interface, ensure that the parameter is not NULL.
     if (URPC_UNLIKELY(slab->next_free >= slab->total)) {
         (void)pthread_spin_unlock(&slab->lock);
-        URPC_LIB_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
+        UTIL_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
         errno = URPC_ERR_EPERM;
         return NULL;
     }
@@ -60,7 +60,7 @@ void *eslab_alloc(eslab_t *slab, uint32_t *id)
     /* next block still in use, means use after free */
     if (URPC_UNLIKELY(slab->next_free >= slab->total && slab->next_free != UINT32_MAX)) {
         (void)pthread_spin_unlock(&slab->lock);
-        URPC_LIB_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
+        UTIL_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
         errno = URPC_ERR_EPERM;
         return NULL;
     }
@@ -85,7 +85,7 @@ void *eslab_get_first_used_object_lockless(eslab_t *slab)
     uint32_t next_free = slab->next_free;
     while (next_free != UINT32_MAX && next_free < slab_num) {
         if (idle_slab[next_free]) {
-            URPC_LIB_LIMIT_LOG_DEBUG("idle slab list must not contain any cycles\n");
+            UTIL_LIMIT_LOG_DEBUG("idle slab list must not contain any cycles\n");
             return NULL;
         }
         idle_slab[next_free] = true;

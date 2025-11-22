@@ -174,6 +174,90 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     },
 };
 
+static int umq_fw_log_config_set(umq_log_config_t *config)
+{
+    for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
+        umq_framework_t *umq_fw = &g_umq_fws[fw_i];
+        if (!umq_fw->enable) {
+            continue;
+        }
+        if ((umq_fw == NULL) || (umq_fw->tp_ops == NULL) || (umq_fw->tp_ops->umq_tp_log_config_set == NULL)) {
+            UMQ_VLOG_ERR("umq_fw invalid\n");
+            return -UMQ_ERR_EINVAL;
+        }
+        umq_fw->tp_ops->umq_tp_log_config_set(config);
+        if (fw_i == UMQ_TRANS_MODE_UB || fw_i == UMQ_TRANS_MODE_UBMM || fw_i == UMQ_TRANS_MODE_UB_PLUS || 
+            fw_i == UMQ_TRANS_MODE_UBMM_PLUS) {
+            return UMQ_SUCCESS;
+        }
+    }
+    return UMQ_SUCCESS;
+}
+
+int umq_log_config_set(umq_log_config_t *config)
+{
+    if (config == NULL) {
+        UMQ_VLOG_ERR("invalid configure\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if ((config->log_flag & UMQ_LOG_FLAG_LEVEL) &&
+        (config->level < UMQ_LOG_LEVEL_ERR || config->level >= UMQ_LOG_LEVEL_MAX)) {
+        UMQ_VLOG_ERR("invalid log level %d\n", config->level);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_vlog_config_t *log_config = umq_get_log_config();
+    (void)pthread_mutex_lock(&log_config->log_lock);
+    if (config->log_flag & UMQ_LOG_FLAG_FUNC) {
+        if (config->func == NULL) {
+            log_config->ctx.vlog_output_func = default_vlog_output;
+            UMQ_VLOG_INFO("set log configuration successful, log output function: default\n");
+        } else {
+            log_config->ctx.vlog_output_func = config->func;
+            UMQ_VLOG_INFO("set log configuration successful, log output function: user defined\n");
+        }
+    }
+
+    if (config->log_flag & UMQ_LOG_FLAG_LEVEL) {
+        log_config->ctx.level = (util_vlog_level_t)config->level;
+        UMQ_VLOG_INFO("set log configuration successful, log level: %d\n", config->level);
+    }
+    umq_fw_log_config_set(config);
+
+    if ((config->log_flag & UMQ_LOG_FLAG_RATE_LIMITED)) {
+        log_config->ctx.rate_limited.interval_ms = config->rate_limited.interval_ms;
+        log_config->ctx.rate_limited.num = config->rate_limited.num;
+        UMQ_VLOG_INFO("set log configuration successful, limited interval(ms): %u, limited num: %u\n",
+                      config->rate_limited.interval_ms, config->rate_limited.num);
+    }
+    (void)pthread_mutex_unlock(&log_config->log_lock);
+
+    return UMQ_SUCCESS;
+}
+
+int umq_log_config_get(umq_log_config_t *config)
+{
+    if (config == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_vlog_config_t *log_config = umq_get_log_config();
+    (void)pthread_mutex_lock(&log_config->log_lock);
+    config->log_flag = log_config->log_flag;
+    config->level = (umq_log_level_t)log_config->ctx.level;
+    config->func = log_config->ctx.vlog_output_func;
+    config->rate_limited.interval_ms = log_config->ctx.rate_limited.interval_ms;
+    config->rate_limited.num = log_config->ctx.rate_limited.num;
+    if (config->func == default_vlog_output) {
+        config->func = NULL;
+    }
+    (void)pthread_mutex_unlock(&log_config->log_lock);
+
+    return UMQ_SUCCESS;
+}
+
 static void framework_uninit(void)
 {
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {

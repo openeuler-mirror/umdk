@@ -228,6 +228,21 @@ int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event);
  * Return: void
  */
 void umq_ack_async_event(umq_async_event_t *event);
+/**
+ * Set configuration for UMQ log.
+ * @param[in] config: Configuration, if 'func' is set to NULL, the default log output function is used
+ * Return UMQ_SUCCESS on success, error code on failure, the specific error code is as follows
+ * -UMQ_ERR_EINVAL: Invalid parameter
+ */
+int umq_log_config_set(umq_log_config_t *config);
+
+/**
+ * Get configuration for UMQ log.
+ * @param[in] config: Configuration, 'flag' & 'func'(when using default log output function) do not have valid values
+ * Return UMQ_SUCCESS on success, error code on failure, the specific error code is as follows
+ * -UMQ_ERR_EINVAL: Invalid parameter
+ */
+int umq_log_config_get(umq_log_config_t *config);
 
 #ifdef __cplusplus
 }

@@ -19,6 +19,7 @@ include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/lib/manager
     ${CMAKE_CURRENT_LIST_DIR}/protocol
     ${CMAKE_CURRENT_LIST_DIR}/util
+    ${CMAKE_CURRENT_LIST_DIR}
 )
 
 add_subdirectory(core)
@@ -28,6 +29,8 @@ add_subdirectory(protocol)
 include(core/CMakeLists.txt)
 include(lib/CMakeLists.txt)
 include(protocol/CMakeLists.txt)
+
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR} URPC_LIB_DIR_SRCS)
 
 add_library(urpc SHARED
     $<TARGET_OBJECTS:common_util>

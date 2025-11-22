@@ -693,6 +693,21 @@ static void huge_qbuf_pool_memory_uninit(uint8_t mempool_id, void *buf_addr)
     free(buf_addr);
 }
 
+void umq_ub_log_config_set_impl(umq_log_config_t *config)
+{
+    if (config->log_flag & UMQ_LOG_FLAG_FUNC) {
+        if (config->func == NULL) {
+            urma_unregister_log_func();
+        } else {
+            urma_register_log_func(config->func);
+        }
+    }
+
+    if (config->log_flag & UMQ_LOG_FLAG_LEVEL) {
+        urma_log_set_level((urma_vlog_level_t)config->level);
+    }
+}
+
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
 {
     huge_qbuf_pool_cfg_t small_cfg = {

@@ -570,6 +570,21 @@ static ALWAYS_INLINE bool is_remote_addr(umq_ubmm_info_t *tp, umq_buf_t *qbuf)
     addr < (uint64_t)(uintptr_t)tp->bind_ctx->remote_ring.addr + tp->bind_ctx->remote_ring.ubmm_export.size;
 }
 
+void umq_ubmm_log_config_set_impl(umq_log_config_t *config)
+{
+    if (config->log_flag & UMQ_LOG_FLAG_FUNC) {
+        if (config->func == NULL) {
+            urma_unregister_log_func();
+        } else {
+            urma_register_log_func(config->func);
+        }
+    }
+
+    if (config->log_flag & UMQ_LOG_FLAG_LEVEL) {
+        urma_log_set_level((urma_vlog_level_t)config->level);
+    }
+}
+
 void umq_tp_ubmm_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;

@@ -11,7 +11,7 @@
 
 #include "urpc_framework_errno.h"
 #include "urpc_id_generator.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_util.h"
 
 #include "urpc_thread.h"
@@ -45,7 +45,7 @@ static inline int urpc_thread_index_alloc(void)
 {
     uint32_t id = 0;
     if (urpc_id_generator_alloc(&g_urpc_thread_a_ctx.id_generator, 0, &id) != 0) {
-        URPC_LIB_LOG_ERR("urpc thread num exceeds max %d\n", URPC_THREAD_NUM_MAX);
+        UTIL_LOG_ERR("urpc thread num exceeds max %d\n", URPC_THREAD_NUM_MAX);
         return -1;
     }
 
@@ -67,7 +67,7 @@ static void *urpc_thread_job_func(void *arg)
     urpc_thread_param_t *param = (urpc_thread_param_t *)arg;
     if (pthread_setname_np(pid, param->name) != 0) {
         param->state = URPC_THREAD_ERROR;
-        URPC_LIB_LOG_ERR("set thread name %s failed\n", param->name);
+        UTIL_LOG_ERR("set thread name %s failed\n", param->name);
         return NULL;
     }
 
@@ -75,7 +75,7 @@ static void *urpc_thread_job_func(void *arg)
     if (param->pre_job.func != NULL &&
         param->pre_job.func(param->pre_job.args) != URPC_SUCCESS) {
         param->state = URPC_THREAD_ERROR;
-        URPC_LIB_LOG_ERR("execute thread pre job failed\n");
+        UTIL_LOG_ERR("execute thread pre job failed\n");
         return NULL;
     }
 
@@ -107,7 +107,7 @@ static inline void urpc_thread_clear_job(urpc_thread_param_t *param)
 int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t job_num)
 {
     if (job == NULL || job_num == 0) {
-        URPC_LIB_LOG_ERR("invalid arguments, thread job must be configured\n");
+        UTIL_LOG_ERR("invalid arguments, thread job must be configured\n");
         return -URPC_ERR_EINVAL;
     }
 
@@ -124,7 +124,7 @@ int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t
         ret = snprintf(param->name, URPC_THREAD_NAME_SIZE, "%s", thread_name);
     }
     if (ret < 0) {
-        URPC_LIB_LOG_ERR("urpc thread name copy failed, ret: %d\n", ret);
+        UTIL_LOG_ERR("urpc thread name copy failed, ret: %d\n", ret);
         goto THREAD_INDEX_FREE;
     }
 
@@ -140,7 +140,7 @@ int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t
                 param->post_job = job[i];
                 break;
             default:
-                URPC_LIB_LOG_ERR("unsupport thread job type: %d\n", job[i].type);
+                UTIL_LOG_ERR("unsupport thread job type: %d\n", job[i].type);
                 goto THREAD_INDEX_FREE;
         }
     }
@@ -148,7 +148,7 @@ int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t
     param->state = URPC_THREAD_INIT;
 
     if (pthread_create(&param->thread, NULL, urpc_thread_job_func, (void *)param) != 0) {
-        URPC_LIB_LOG_ERR("urpc thread create failed, %s\n", strerror(errno));
+        UTIL_LOG_ERR("urpc thread create failed, %s\n", strerror(errno));
         goto THREAD_INDEX_FREE;
     }
 
@@ -157,7 +157,7 @@ int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t
     }
 
     if (param->state == URPC_THREAD_RUNNING) {
-        URPC_LIB_LOG_INFO("urpc thread %s create successful, thread_index: %d\n", param->name, thread_index);
+        UTIL_LOG_INFO("urpc thread %s create successful, thread_index: %d\n", param->name, thread_index);
         return thread_index;
     }
 
@@ -176,7 +176,7 @@ void urpc_thread_destroy(int thread_index)
 {
     if (thread_index < 0 || thread_index >= URPC_THREAD_NUM_MAX ||
         g_urpc_thread_a_ctx.thread_param[thread_index].id == -1) {
-        URPC_LIB_LOG_ERR("urpc thread: %d not found\n", thread_index);
+        UTIL_LOG_ERR("urpc thread: %d not found\n", thread_index);
         return;
     }
 
@@ -189,7 +189,7 @@ void urpc_thread_destroy(int thread_index)
     param->id = -1;
     param->state = URPC_THREAD_INIT;
 
-    URPC_LIB_LOG_INFO("urpc thread %s destroy successful, thread_index: %d\n", param->name, thread_index);
+    UTIL_LOG_INFO("urpc thread %s destroy successful, thread_index: %d\n", param->name, thread_index);
 }
 
 int urpc_thread_ctx_init(void)
@@ -197,7 +197,7 @@ int urpc_thread_ctx_init(void)
     int ret =
         urpc_id_generator_init(&g_urpc_thread_a_ctx.id_generator, URPC_ID_GENERATOR_TYPE_BITMAP, URPC_THREAD_NUM_MAX);
     if (ret != 0) {
-        URPC_LIB_LOG_ERR("urpc thread id generator init failed, ret: %d\n", ret);
+        UTIL_LOG_ERR("urpc thread id generator init failed, ret: %d\n", ret);
         return URPC_FAIL;
     }
 
@@ -209,7 +209,7 @@ int urpc_thread_ctx_init(void)
         param->state = URPC_THREAD_INIT;
     }
 
-    URPC_LIB_LOG_INFO("urpc_thread_ctx init successful\n");
+    UTIL_LOG_INFO("urpc_thread_ctx init successful\n");
 
     return URPC_SUCCESS;
 }
@@ -228,5 +228,5 @@ void urpc_thread_ctx_uninit(void)
 
     urpc_id_generator_uninit(&g_urpc_thread_a_ctx.id_generator);
 
-    URPC_LIB_LOG_INFO("urpc_thread_ctx uninit successful\n");
+    UTIL_LOG_INFO("urpc_thread_ctx uninit successful\n");
 }

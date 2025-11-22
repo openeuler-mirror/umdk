@@ -112,6 +112,12 @@ typedef struct umq_ops {
     void (*umq_tp_buf_free)(umq_buf_t *qbuf, uint64_t umqh_tp);
 
     /**
+    * Set log config for umq.
+    * @param[in] config: if 'func' is set to NULL, the default log output function is used
+    */
+    void (*umq_tp_log_config_set)(umq_log_config_t *config);
+
+    /**
     * User should ensure thread safety if io_lock_free is true
     * Reset header room size for qbuf
     * @param[in] qbuf: list of qbuf

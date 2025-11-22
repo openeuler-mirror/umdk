@@ -13,6 +13,7 @@
 #include "urma_api.h"
 #include "urpc_framework_errno.h"
 #include "urpc_util.h"
+#include "util_log.h"
 #include "urpc_lib_log.h"
 
 typedef struct urpc_lib_log_config {
@@ -20,7 +21,7 @@ typedef struct urpc_lib_log_config {
     util_vlog_ctx_t ctx;
 } urpc_lib_log_config_t;
 
-urpc_lib_log_config_t g_urpc_log_config = {
+static urpc_lib_log_config_t g_urpc_log_config = {
     .ctx = {
         .vlog_name = "URPC_LOG",
         .vlog_output_func = default_vlog_output,
@@ -31,7 +32,7 @@ urpc_lib_log_config_t g_urpc_log_config = {
         },
     },
 };
-pthread_mutex_t g_urpc_log_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_urpc_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int urpc_log_config_set(urpc_log_config_t *config)
 {
@@ -100,4 +101,9 @@ int urpc_log_config_get(urpc_log_config_t *config)
 util_vlog_ctx_t *urpc_lib_get_vlog_ctx(void)
 {
     return &g_urpc_log_config.ctx;
+}
+
+URPC_CONSTRUCTOR(urpc_log_register, CONSTRUCTOR_PRIORITY_LOG_URPC)
+{
+    util_log_ctx_set(urpc_lib_get_vlog_ctx());
 }

@@ -8,11 +8,19 @@
 #ifndef UMQ_VLOG_H
 #define UMQ_VLOG_H
 
+#include <pthread.h>
+
 #include "util_vlog.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct umq_vlog_config {
+    uint32_t log_flag;
+    util_vlog_ctx_t ctx;
+    pthread_mutex_t log_lock;
+} umq_vlog_config_t;
 
 #define UMQ_VLOG_ERR(__format, ...)    \
     UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_ERR, __format, ##__VA_ARGS__)
@@ -37,6 +45,7 @@ extern "C" {
     UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __format, ##__VA_ARGS__)
 
 util_vlog_ctx_t *umq_get_log_ctx(void);
+umq_vlog_config_t *umq_get_log_config(void);
 
 #ifdef __cplusplus
 }

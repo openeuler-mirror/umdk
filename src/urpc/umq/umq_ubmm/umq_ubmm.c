@@ -81,6 +81,11 @@ static void umq_tp_ubmm_buf_free(umq_buf_t *qbuf, uint64_t umqh_tp)
     umq_tp_ubmm_buf_free_impl(qbuf, umqh_tp);
 }
 
+static int umq_tp_ubmm_log_config_set(umq_log_config_t *config)
+{
+    return umq_ubmm_log_config_set_impl(config);
+}
+
 static int umq_tp_ubmm_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 {
     return umq_tp_ubmm_buf_headroom_reset_impl(qbuf, headroom_size);
@@ -128,6 +133,7 @@ static umq_ops_t g_umq_ubmm_ops = {
     .umq_tp_state_get = umq_tp_ubmm_state_get,
     .umq_tp_buf_alloc = umq_tp_ubmm_buf_alloc,
     .umq_tp_buf_free = umq_tp_ubmm_buf_free,
+    .umq_tp_log_config_set = umq_tp_ubmm_log_config_set,
     .umq_tp_buf_headroom_reset = umq_tp_ubmm_buf_headroom_reset,
     .umq_tp_enqueue = umq_tp_ubmm_enqueue,
     .umq_tp_dequeue = umq_tp_ubmm_dequeue,

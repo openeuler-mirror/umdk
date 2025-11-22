@@ -6,16 +6,31 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "umq_example_common.h"
 #include "umq_example_base.h"
 
 const char *EXAMPLE_CLIENT_ENQUEUE_DATA = "hello, this is umq client";
 const char *EXAMPLE_SERVER_ENQUEUE_DATA = "hello, this is umq server";
+static const char *g_log_level_to_str[UMQ_LOG_LEVEL_MAX] = {"EMERG", "ALERT", "CRIT", "ERROR", "WARNING",
+                                                            "NOTICE", "INFO", "DEBUG"};
+
+static void default_output(int level, char *log_msg)
+{
+    struct timeval tval;
+    struct tm time;
+    (void)gettimeofday(&tval, NULL);
+    (void)localtime_r(&tval.tv_sec, &time);
+    (void)fprintf(stdout, "%02d%02d %02d:%02d:%02d.%06ld|%s|%s", time.tm_mon + 1, time.tm_mday, time.tm_hour,
+                  time.tm_min, time.tm_sec, (long)tval.tv_usec, g_log_level_to_str[level], log_msg);
+}
 
 int run_umq_example_server(struct urpc_example_config *cfg)
 {
     int ret = -1;
+
     uint32_t local_bind_info_size = UMQ_MAX_BIND_INFO_SIZE;
     uint8_t local_bind_info[UMQ_MAX_BIND_INFO_SIZE] = {0};
     uint64_t umqh = init_and_create_umq(cfg, local_bind_info, &local_bind_info_size);
@@ -39,6 +54,23 @@ int run_umq_example_server(struct urpc_example_config *cfg)
         goto DESTROY;
     }
     LOG_PRINT("server bind success\n");
+
+    umq_log_config_t log_cfg = {
+        .log_flag = UMQ_LOG_FLAG_FUNC | UMQ_LOG_FLAG_LEVEL,
+        .func = default_output,
+        .level = UMQ_LOG_LEVEL_DEBUG
+    };
+
+    if (umq_log_config_set(&log_cfg) != UMQ_SUCCESS) {
+        LOG_PRINT_ERR("umq_log_config_set failed\n");
+        goto UNBIND;
+    }
+
+    if (umq_log_config_get(&log_cfg) != UMQ_SUCCESS) {
+        LOG_PRINT_ERR("umq_log_config_get failed\n");
+        goto UNBIND;
+    }
+    LOG_PRINT("log level is %s\n", g_log_level_to_str[log_cfg.level]);
 
     if (example_dequeue_data(umqh, EXAMPLE_CLIENT_ENQUEUE_DATA, strlen(EXAMPLE_CLIENT_ENQUEUE_DATA)) != 0) {
         goto UNBIND;

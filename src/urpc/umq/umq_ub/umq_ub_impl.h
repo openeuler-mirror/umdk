@@ -73,6 +73,7 @@ umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp);
 int32_t umq_ub_register_memory_impl(uint8_t *ub_ctx, void *buf, uint64_t size);
 void umq_ub_unregister_memory_impl(uint8_t *ub_ctx);
 
+void umq_ub_log_config_set_impl(umq_log_config_t *config);
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg);
 void umq_ub_huge_qbuf_pool_uninit(void);
 

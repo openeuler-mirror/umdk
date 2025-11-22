@@ -6,7 +6,7 @@
  */
 
 #include "urpc_framework_errno.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_thread.h"
 #include "urpc_util.h"
 
@@ -60,8 +60,8 @@ void urpc_manage_job_register(urpc_manage_job_type_t type, urpc_manage_job_func 
                               uint32_t schedule_time_ms)
 {
     if (type >= URPC_MANAGE_JOB_TYPE_NUM || func == NULL || g_urpc_manage_job[type].job_num >= URPC_MANAGE_JOB_NUM) {
-        URPC_LIB_LOG_WARN("urpc manage job register failed, type: %d, num: %u\n", (int)type,
-                          g_urpc_manage_job[type].job_num);
+        UTIL_LOG_WARN("urpc manage job register failed, type: %d, num: %u\n", (int)type,
+                      g_urpc_manage_job[type].job_num);
         return;
     }
 
@@ -80,11 +80,11 @@ void urpc_manage_job_register(urpc_manage_job_type_t type, urpc_manage_job_func 
 int urpc_mange_event_register(urpc_manage_job_type_t type, urpc_epoll_event_t *event)
 {
     if (type >= URPC_MANAGE_JOB_TYPE_NUM || event == NULL) {
-        URPC_LIB_LOG_WARN("urpc manage event register failed, type: %d\n", (int)type);
+        UTIL_LOG_WARN("urpc manage event register failed, type: %d\n", (int)type);
         return URPC_FAIL;
     }
     if (g_urpc_manage_job[type].event_num >= URPC_MANAGE_EVENT_NUM) {
-        URPC_LIB_LOG_WARN("urpc manage event register failed, num: %u\n", g_urpc_manage_job[type].event_num);
+        UTIL_LOG_WARN("urpc manage event register failed, num: %u\n", g_urpc_manage_job[type].event_num);
         return URPC_FAIL;
     }
 
@@ -105,7 +105,7 @@ int urpc_mange_event_register(urpc_manage_job_type_t type, urpc_epoll_event_t *e
 int urpc_mange_event_unregister(urpc_manage_job_type_t type, urpc_epoll_event_t *event)
 {
     if (type >= URPC_MANAGE_JOB_TYPE_NUM || event == NULL) {
-        URPC_LIB_LOG_WARN("urpc manage event unregister failed, type: %d\n", (int)type);
+        UTIL_LOG_WARN("urpc manage event unregister failed, type: %d\n", (int)type);
         return URPC_FAIL;
     }
 
@@ -254,7 +254,7 @@ int urpc_manage_init(void)
         }
     }
 
-    URPC_LIB_LOG_INFO("urpc manage init successful\n");
+    UTIL_LOG_INFO("urpc manage init successful\n");
 
     return URPC_SUCCESS;
 
@@ -271,7 +271,7 @@ void urpc_manage_uninit(void)
         urpc_manage_job_uninit(i);
     }
 
-    URPC_LIB_LOG_INFO("urpc manage uninit successful\n");
+    UTIL_LOG_INFO("urpc manage uninit successful\n");
 }
 
 int urpc_manage_get_epoll_fd(urpc_manage_job_type_t type)
