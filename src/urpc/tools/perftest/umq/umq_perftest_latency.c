@@ -50,6 +50,19 @@ static void umq_perftest_client_run_latency_finish(umq_perftest_latency_arg_t *l
     g_perftest_latency_ctx.cycles = NULL;
 }
 
+void handle_bad_buf(umq_buf_t **post_buf, umq_buf_t *bad_buf)
+{
+    if (bad_buf == NULL) {
+        return;
+    }
+
+    if (*post_buf == bad_buf) {
+        *post_buf = NULL;
+        return;
+    }
+    (void)umq_buf_split(*post_buf, bad_buf);
+}
+
 static void umq_perftest_server_run_latency_base_interrupt(uint64_t umqh, umq_perftest_latency_arg_t *lat_arg)
 {
     umq_buf_t *bad_buf = NULL;
@@ -372,12 +385,14 @@ static void umq_perftest_server_run_latency_pro_polling(uint64_t umqh, umq_perft
 
         // fill rx
         if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&rx_buf, bad_buf);
             LOG_PRINT("post rx failed\n");
             goto FINISH;
         }
 
         // send return
         if (umq_post(umqh, resp_buf, UMQ_IO_TX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&resp_buf, bad_buf);
             LOG_PRINT("post tx failed\n");
             goto FINISH;
         }
@@ -490,14 +505,14 @@ static void umq_perftest_server_run_latency_pro_interrupt(uint64_t umqh, umq_per
 
         // fill rx
         if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&rx_buf, bad_buf);
             LOG_PRINT("post rx failed\n");
-            umq_buf_free(bad_buf);
-            bad_buf = NULL;
             goto FINISH;
         }
 
         // send return
         if (umq_post(umqh, resp_buf, UMQ_IO_TX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&resp_buf, bad_buf);
             LOG_PRINT("post tx failed\n");
             goto FINISH;
         }
@@ -583,18 +598,20 @@ static void umq_perftest_client_run_latency_pro_polling(uint64_t umqh, umq_perft
         ret = umq_post(umqh, req_buf, UMQ_IO_TX, &bad_buf);
         if (ret != UMQ_SUCCESS) {
             if (ret == -UMQ_ERR_EAGAIN) {
-                ret = umq_poll(umqh, UMQ_IO_ALL, polled_buf, 1);
+                ret = umq_poll(umqh, UMQ_IO_RX, polled_buf, 1);
                 if (ret == 0) {
                     continue;
-                } else if (ret == 1 && process_flow_control_buf(umqh, polled_buf[0]) == 0) {
-                    continue;
-                } else {
-                    umq_buf_free(polled_buf[0]);
-                    LOG_PRINT("umq_poll faield, ret %d\n", ret);
-                    goto FINISH;
+                } else if (ret == 1) {
+                    if (process_flow_control_buf(umqh, polled_buf[0]) == 0) {
+                        continue;
+                    } else {
+                        umq_buf_free(polled_buf[0]);
+                    }
                 }
+            } else {
+                LOG_PRINT("post tx failed, ret %d\n", ret);
             }
-            LOG_PRINT("post tx failed\n");
+            handle_bad_buf(&req_buf, bad_buf);
             goto FINISH;
         }
 
@@ -643,8 +660,8 @@ static void umq_perftest_client_run_latency_pro_polling(uint64_t umqh, umq_perft
 
         // fill rx
         if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&rx_buf, bad_buf);
             LOG_PRINT("post rx failed\n");
-            umq_buf_free(bad_buf);
             goto FINISH;
         }
 
@@ -655,6 +672,7 @@ FINISH:
     umq_perftest_client_run_latency_finish(lat_arg);
     umq_buf_free(rx_buf);
     umq_buf_free(req_buf);
+    umq_buf_free(bad_buf);
     perftest_force_quit();
 }
 
@@ -710,17 +728,20 @@ static void umq_perftest_client_run_latency_pro_interrupt(uint64_t umqh, umq_per
         ret = umq_post(umqh, req_buf, UMQ_IO_TX, &bad_buf);
         if (ret != UMQ_SUCCESS) {
             if (ret == -UMQ_ERR_EAGAIN) {
-                ret = umq_poll(umqh, UMQ_IO_ALL, &polled_buf, 1);
+                ret = umq_poll(umqh, UMQ_IO_RX, &polled_buf, 1);
                 if (ret == 0) {
                     continue;
-                } else if (ret == 1 && process_flow_control_buf(umqh, polled_buf) == 0) {
-                    continue;
-                } else {
-                    umq_buf_free(polled_buf);
-                    goto FINISH;
+                } else if (ret == 1) {
+                    if (process_flow_control_buf(umqh, polled_buf) == 0) {
+                        continue;
+                    } else {
+                        umq_buf_free(polled_buf);
+                    }
                 }
+            } else {
+                LOG_PRINT("post tx failed, ret %d\n", ret);
             }
-            LOG_PRINT("post tx failed\n");
+            handle_bad_buf(&req_buf, bad_buf);
             goto FINISH;
         }
         umq_notify(umqh);
@@ -789,8 +810,8 @@ static void umq_perftest_client_run_latency_pro_interrupt(uint64_t umqh, umq_per
 
         // fill rx
         if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            handle_bad_buf(&rx_buf, bad_buf);
             LOG_PRINT("post rx failed\n");
-            umq_buf_free(bad_buf);
             goto FINISH;
         }
 
@@ -801,6 +822,7 @@ FINISH:
     umq_perftest_client_run_latency_finish(lat_arg);
     umq_buf_free(req_buf);
     umq_buf_free(rx_buf);
+    umq_buf_free(bad_buf);
     perftest_force_quit();
 }
 
