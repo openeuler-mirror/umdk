@@ -429,9 +429,8 @@ int32_t umq_ubmm_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_i
         ret = -UMQ_ERR_EINVAL;
         goto FREE_CTX;
     }
-    ret = umq_ub_bind_impl(tp->ub_handle, bind_info + sizeof(umq_ubmm_bind_info_t), 
+    ret = umq_ub_bind_impl(tp->ub_handle, bind_info + sizeof(umq_ubmm_bind_info_t),
                            bind_info_size - sizeof(umq_ubmm_bind_info_t));
-
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR("ub bind failed");
         goto FREE_CTX;

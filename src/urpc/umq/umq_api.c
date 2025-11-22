@@ -576,7 +576,7 @@ int umq_buf_reset(umq_buf_t *qbuf)
 
     umq_buf_t *head = qbuf;
     uint32_t total_data_size = 0;
-    while (head != NULL ) {
+    while (head != NULL) {
         head->data_size = head->buf_size;
         total_data_size += head->data_size;
 
@@ -700,8 +700,8 @@ int umq_buf_split(umq_buf_t *head, umq_buf_t *node)
     }
 
     umq_buf_t *tmp = head;
-    while(tmp->qbuf_next != NULL && tmp->qbuf_next != node) {
-       tmp = tmp->qbuf_next;
+    while (tmp->qbuf_next != NULL && tmp->qbuf_next != node) {
+        tmp = tmp->qbuf_next;
     }
 
     if (tmp->qbuf_next == NULL) {
