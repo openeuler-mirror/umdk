@@ -772,7 +772,7 @@ static ALWAYS_INLINE urma_opcode_t transform_op_code(umq_opcode_t opcode)
 int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
 {
     if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
-        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]", bind_info_size, sizeof(umq_ub_bind_info_t));
+        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n", bind_info_size, sizeof(umq_ub_bind_info_t));
         return -UMQ_ERR_EINVAL;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
@@ -1020,14 +1020,14 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
         cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
         umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, 0, NULL);
         if (qbuf == NULL) {
-            UMQ_VLOG_ERR("alloc rx failed");
+            UMQ_VLOG_ERR("alloc rx failed\n");
             ret = UMQ_ERR_ENOMEM;
             goto DEC_REF;
         }
 
         umq_buf_t *bad_buf = NULL;
         if (umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf) != UMQ_SUCCESS) {
-            UMQ_VLOG_ERR("post rx failed");
+            UMQ_VLOG_ERR("post rx failed\n");
             umq_buf_free(bad_buf);
             ret = UMQ_FAIL;
             goto DEC_REF;
@@ -1766,12 +1766,12 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         return -UMQ_ERR_EINVAL;
     }
     if (umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt) != 1) {
-        UMQ_VLOG_ERR("umqh[%lu] ref cnt is not 0", umqh);
+        UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->bind_ctx != NULL) {
-        UMQ_VLOG_ERR("umqh[%lu] has not been unbinded", umqh);
+        UMQ_VLOG_ERR("umqh has not been unbinded\n");
         return -UMQ_ERR_ENODEV;
     }
     pthread_mutex_destroy(&queue->imported_tseg_list_mutex);
@@ -2797,7 +2797,7 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_
 
         int32_t rx_cnt = umq_ub_poll_rx(umqh_tp, &buf[tx_cnt], max_buf_count - tx_cnt);
         if (rx_cnt < 0) {
-            UMQ_LIMIT_VLOG_ERR("poll tx failed\n");
+            UMQ_LIMIT_VLOG_ERR("poll rx failed\n");
             return tx_cnt;
         }
 

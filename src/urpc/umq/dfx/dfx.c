@@ -15,7 +15,7 @@
 int umq_dfx_init(umq_init_cfg_t *cfg)
 {
     if (((cfg->feature & UMQ_FEATURE_ENABLE_PERF) != 0) && umq_perf_init() != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("umq dfx perf init failed");
+        UMQ_VLOG_ERR("umq dfx perf init failed\n");
         return UMQ_FAIL;
     }
     return UMQ_SUCCESS;
@@ -57,7 +57,7 @@ static void umq_dfx_process_perf_cmd(umq_dfx_cmd_t *cmd, umq_dfx_result_t *resul
 void umq_dfx_cmd_process(umq_dfx_cmd_t *cmd, umq_dfx_result_t *result_ctl)
 {
     if ((cmd == NULL) || (result_ctl == NULL)) {
-        UMQ_VLOG_ERR("umq dfx cmd process invalid param");
+        UMQ_VLOG_ERR("umq dfx cmd process invalid param\n");
         return;
     }
 

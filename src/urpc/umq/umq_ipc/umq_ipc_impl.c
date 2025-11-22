@@ -312,12 +312,12 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (umq_fetch_ref(g_ipc_ctx->io_lock_free, &tp->ref_cnt) != 1) {
-        UMQ_VLOG_ERR("umqh ref cnt is not 0");
+        UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
         return -UMQ_ERR_EINVAL;
     }
 
     if (tp->bind_ctx != NULL) {
-        UMQ_VLOG_ERR("umqh[%lu] has not been unbinded", umqh_tp);
+        UMQ_VLOG_ERR("umqh has not been unbinded\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -333,7 +333,7 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
     umq_ipc_unmap_memory(&tp->local_ring);
     free(tp);
     umq_dec_ref(g_ipc_ctx->io_lock_free, &g_ipc_ctx->ref_cnt, 1);
-    UMQ_VLOG_DEBUG("umqh destroyed");
+    UMQ_VLOG_DEBUG("umqh destroyed\n");
     return UMQ_SUCCESS;
 }
 
@@ -341,7 +341,7 @@ int32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
-        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]",
+        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n",
             bind_info_size, sizeof(umq_ipc_bind_info_t));
         return -UMQ_ERR_EINVAL;
     }
@@ -481,6 +481,7 @@ static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (num > UMQ_POST_POLL_BATCH) {
+        UMQ_LIMIT_VLOG_ERR("enqueue data num %u exceeds max_post_size %d\n", num, UMQ_POST_POLL_BATCH);
         return -UMQ_ERR_EINVAL;
     }
 

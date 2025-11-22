@@ -341,12 +341,12 @@ int32_t umq_ubmm_destroy_impl(uint64_t umqh_tp)
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
 
     if (umq_fetch_ref(tp->ubmm_ctx->io_lock_free, &tp->ref_cnt) != 1) {
-        UMQ_VLOG_ERR("umqh ref cnt is not 0");
+        UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
         return -UMQ_ERR_EINVAL;
     }
 
     if (tp->bind_ctx != NULL) {
-        UMQ_VLOG_ERR("umqh[%lu] has not been unbinded", umqh_tp);
+        UMQ_VLOG_ERR("umqh has not been unbinded\n");
         return -UMQ_ERR_ENODEV;
     }
 
@@ -367,7 +367,7 @@ int32_t umq_ubmm_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
     if (bind_info_size < sizeof(umq_ubmm_bind_info_t)) {
-        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]",
+        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n",
             bind_info_size, sizeof(umq_ubmm_bind_info_t));
         return -UMQ_ERR_EINVAL;
     }
@@ -432,7 +432,7 @@ int32_t umq_ubmm_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_i
     ret = umq_ub_bind_impl(tp->ub_handle, bind_info + sizeof(umq_ubmm_bind_info_t),
                            bind_info_size - sizeof(umq_ubmm_bind_info_t));
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("ub bind failed");
+        UMQ_VLOG_ERR("ub bind failed\n");
         goto FREE_CTX;
     }
 
@@ -631,6 +631,7 @@ static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
     if (num > UMQ_POST_POLL_BATCH) {
+        UMQ_LIMIT_VLOG_ERR("enqueue data num %u exceeds max_post_size %d\n", num, UMQ_POST_POLL_BATCH);
         return -UMQ_ERR_EINVAL;
     }
 

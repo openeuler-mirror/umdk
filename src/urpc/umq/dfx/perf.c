@@ -169,7 +169,7 @@ int umq_perf_start(uint64_t *thresh_array, uint32_t thresh_num)
 {
     // IO perf record has been started, user must stop it first before restart
     if (g_umq_perf_record_ctx == NULL || g_umq_perf_record_enable || thresh_array == NULL) {
-        UMQ_VLOG_ERR("invalid parameter");
+        UMQ_VLOG_ERR("invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
