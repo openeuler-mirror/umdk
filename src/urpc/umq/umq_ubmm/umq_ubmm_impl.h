@@ -27,6 +27,8 @@ int32_t umq_ubmm_unbind_impl(uint64_t umqh_tp);
 umq_buf_t *umq_ubmm_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
     umq_alloc_option_t *option);
 
+void umq_ubmm_log_config_set_impl(umq_log_config_t *config);
+
 void umq_tp_ubmm_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp);
 
 int umq_tp_ubmm_buf_headroom_reset_impl(umq_buf_t *qbuf, uint16_t headroom_size);

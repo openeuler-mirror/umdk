@@ -18,6 +18,34 @@
 extern "C" {
 #endif
 
+#define UMQ_LOG_FLAG_FUNC              (1U)
+#define UMQ_LOG_FLAG_LEVEL             (1U << 1)
+#define UMQ_LOG_FLAG_RATE_LIMITED      (1U << 2)
+
+typedef enum umq_log_level {
+    UMQ_LOG_LEVEL_EMERG = 0,
+    UMQ_LOG_LEVEL_ALERT,
+    UMQ_LOG_LEVEL_CRIT,
+    UMQ_LOG_LEVEL_ERR,
+    UMQ_LOG_LEVEL_WARN,
+    UMQ_LOG_LEVEL_NOTICE,
+    UMQ_LOG_LEVEL_INFO,
+    UMQ_LOG_LEVEL_DEBUG,
+    UMQ_LOG_LEVEL_MAX,
+} umq_log_level_t;
+
+typedef void (*umq_log_func_t)(int level, char *log_msg);
+
+typedef struct umq_log_config {
+    uint32_t log_flag;
+    umq_log_func_t func;
+    umq_log_level_t level;
+    struct {
+        uint32_t interval_ms;    // rate-limited log output interval. If the value is 0, rate is not limited.
+        uint32_t num;            // maximum number of rate-limited logs that can be output in a specified interval.
+    } rate_limited;
+} umq_log_config_t;
+
 typedef enum umq_buf_mode {
     UMQ_BUF_SPLIT,                  // umq_buf_t and buf is split
     UMQ_BUF_COMBINE,                // umq_buf_t and buf is combine

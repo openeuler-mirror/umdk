@@ -6,7 +6,7 @@
  */
 #include "urpc_cmd_queue.h"
 #include "urpc_dbuf_stat.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_framework_errno.h"
 
 #include "urpc_cmd_queue.h"
@@ -22,13 +22,13 @@ int urpc_cmd_queue_insert(
     urpc_cmd_queue_t *cmd_queue, urpc_cmd_process_t process, urpc_cmd_exception_t exception, void *args)
 {
     if (process == NULL || exception == NULL) {
-        URPC_LIB_LOG_ERR("invalid command\n");
+        UTIL_LOG_ERR("invalid command\n");
         return URPC_FAIL;
     }
 
     urpc_cmd_t *cmd = (urpc_cmd_t *)urpc_dbuf_calloc(URPC_DBUF_TYPE_CP, 1, sizeof(urpc_cmd_t));
     if (cmd == NULL) {
-        URPC_LIB_LOG_ERR("calloc command buffer failed\n");
+        UTIL_LOG_ERR("calloc command buffer failed\n");
         return URPC_FAIL;
     }
     cmd->process = process;

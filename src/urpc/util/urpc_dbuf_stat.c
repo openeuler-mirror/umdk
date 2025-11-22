@@ -4,7 +4,7 @@
  * Description: urpc dynamic buffer statistics
  */
 #include "urpc_util.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_dbuf_stat.h"
 
 urpc_dbuf_stat_t g_urpc_dbuf_stat[URPC_DBUF_TYPE_MAX];
@@ -140,11 +140,11 @@ void urpc_dbuf_stat_get(uint64_t *stat, int stat_len)
 void urpc_dbuf_stat_record_enable(void)
 {
     g_urpc_dbuf_record_enable = true;
-    URPC_LIB_LOG_INFO("enable dynamic buffer statistics successful\n");
+    UTIL_LOG_INFO("enable dynamic buffer statistics successful\n");
 }
 
 void urpc_dbuf_stat_record_disable(void)
 {
     g_urpc_dbuf_record_enable = false;
-    URPC_LIB_LOG_INFO("disable dynamic buffer statistics successful\n");
+    UTIL_LOG_INFO("disable dynamic buffer statistics successful\n");
 }

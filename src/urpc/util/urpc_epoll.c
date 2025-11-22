@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "urpc_framework_errno.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 
 #include "urpc_epoll.h"
 
@@ -22,7 +22,7 @@ int urpc_epoll_create(void)
 {
     int epoll_fd = epoll_create(MAX_EPOLL_FD_NUM);
     if (epoll_fd < 0) {
-        URPC_LIB_LOG_ERR("create epoll fd failed, %s\n", strerror(errno));
+        UTIL_LOG_ERR("create epoll fd failed, %s\n", strerror(errno));
         return -1;
     }
 
@@ -41,7 +41,7 @@ void urpc_epoll_destroy(int epoll_fd)
 int urpc_epoll_event_add(int epoll_fd, urpc_epoll_event_t *event)
 {
     if (epoll_fd < 0 || event == NULL) {
-        URPC_LIB_LOG_ERR("epoll control not ready\n");
+        UTIL_LOG_ERR("epoll control not ready\n");
         return URPC_FAIL;
     }
 
@@ -50,7 +50,7 @@ int urpc_epoll_event_add(int epoll_fd, urpc_epoll_event_t *event)
     ev.data.ptr = event;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event->fd, &ev) != 0) {
-        URPC_LIB_LOG_ERR("epoll control add event failed, %s\n", strerror(errno));
+        UTIL_LOG_ERR("epoll control add event failed, %s\n", strerror(errno));
         return URPC_FAIL;
     }
 
@@ -68,7 +68,7 @@ int urpc_epoll_event_modify(int epoll_fd, urpc_epoll_event_t *event)
 void urpc_epoll_event_delete(int epoll_fd, urpc_epoll_event_t *event)
 {
     if (epoll_fd < 0 || event == NULL) {
-        URPC_LIB_LOG_ERR("epoll control delete event failed:%s\n", strerror(errno));
+        UTIL_LOG_ERR("epoll control delete event failed:%s\n", strerror(errno));
         return;
     }
 

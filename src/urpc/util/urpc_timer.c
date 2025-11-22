@@ -14,7 +14,7 @@
 #include "urpc_framework_errno.h"
 #include "urpc_hash.h"
 #include "urpc_hmap.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_manage.h"
 
 #include "urpc_timer.h"
@@ -160,7 +160,7 @@ int urpc_timer_pool_add(uint32_t chid, uint32_t num, bool is_server)
     urpc_timer_pool_entry_t *new_entry = (urpc_timer_pool_entry_t *)urpc_dbuf_malloc(URPC_DBUF_TYPE_TIMEOUT,
         sizeof(urpc_timer_pool_entry_t) + sizeof(urpc_timer_t) * timer_num);
     if (new_entry == NULL) {
-        URPC_LIB_LOG_ERR("malloc %u new timer in pool failed\n", timer_num);
+        UTIL_LOG_ERR("malloc %u new timer in pool failed\n", timer_num);
         return URPC_FAIL;
     }
 
@@ -175,7 +175,7 @@ int urpc_timer_pool_add(uint32_t chid, uint32_t num, bool is_server)
         pthread_spin_unlock(&g_urpc_timing_wheel.p_lock);
 
         urpc_dbuf_free(new_entry);
-        URPC_LIB_LOG_INFO("add new timer in pool failed, entry already existed\n");
+        UTIL_LOG_INFO("add new timer in pool failed, entry already existed\n");
         return -URPC_ERR_EEXIST;
     }
 
@@ -245,7 +245,7 @@ static void urpc_timer_pool_put(urpc_timer_t *t)
         }
         entry->stats[TIMER_ENTRY_FREE_NUM]++;
     } else {
-        URPC_LIB_LOG_WARN("timer not in pool\n");
+        UTIL_LOG_WARN("timer not in pool\n");
     }
     pthread_spin_unlock(&g_urpc_timing_wheel.p_lock);
 }
@@ -254,7 +254,7 @@ static int urpc_timer_pool_init(void)
 {
     int ret = urpc_hmap_init(&g_urpc_timing_wheel.pool, URPC_TIMER_HMAP_SIZE);
     if (ret != URPC_SUCCESS) {
-        URPC_LIB_LOG_ERR("timer pool hmap init failed\n");
+        UTIL_LOG_ERR("timer pool hmap init failed\n");
         return URPC_FAIL;
     }
 
@@ -262,7 +262,7 @@ static int urpc_timer_pool_init(void)
 
     ret = urpc_timer_pool_add(URPC_INVALID_ID_U32, URPC_TIMER_DEFAULT_NUM, false);
     if (ret != URPC_SUCCESS) {
-        URPC_LIB_LOG_ERR("timer pool hmap init failed\n");
+        UTIL_LOG_ERR("timer pool hmap init failed\n");
         urpc_timer_pool_delete(URPC_INVALID_ID_U32, false);
         urpc_hmap_uninit(&g_urpc_timing_wheel.pool);
         pthread_spin_destroy(&g_urpc_timing_wheel.p_lock);
@@ -508,7 +508,7 @@ static int urpc_timer_fd_init(void)
 {
     g_urpc_timing_wheel.timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (g_urpc_timing_wheel.timer_fd < 0) {
-        URPC_LIB_LOG_ERR("create timer_fd failed, %s\n", strerror(errno));
+        UTIL_LOG_ERR("create timer_fd failed, %s\n", strerror(errno));
         return URPC_FAIL;
     }
 
@@ -521,7 +521,7 @@ static int urpc_timer_fd_init(void)
     time_cfg.it_interval.tv_nsec = NS_PER_SEC / URPC_TIMING_WHEEL_HZ;
 
     if (timerfd_settime(g_urpc_timing_wheel.timer_fd, 0, &time_cfg, NULL) < 0) {
-        URPC_LIB_LOG_ERR("set timer_fd failed, %s\n", strerror(errno));
+        UTIL_LOG_ERR("set timer_fd failed, %s\n", strerror(errno));
         goto CLOSE_TIMER_FD;
     }
 
@@ -539,7 +539,7 @@ static inline void urpc_timing_wheel_tick(uint32_t events, struct urpc_epoll_eve
     uint64_t timer_fd_readable = 0;
     int ret = read(g_urpc_timing_wheel.timer_fd, &timer_fd_readable, sizeof(uint64_t));
     if (URPC_UNLIKELY(ret != sizeof(uint64_t))) {
-        URPC_LIB_LOG_WARN("timer_fd readable event failed, ret %d, %s\n", ret, strerror(errno));
+        UTIL_LOG_WARN("timer_fd readable event failed, ret %d, %s\n", ret, strerror(errno));
         return;
     }
 
@@ -587,7 +587,7 @@ int urpc_timing_wheel_init(void)
         goto UNINIT_TIMER_FD;
     }
 
-    URPC_LIB_LOG_INFO("timing wheel init successful\n");
+    UTIL_LOG_INFO("timing wheel init successful\n");
     return URPC_SUCCESS;
 
 UNINIT_TIMER_FD:
@@ -633,7 +633,7 @@ urpc_timer_t *urpc_timer_create(uint32_t chid, bool is_server)
 {
     urpc_timer_t *timer = urpc_timer_pool_get(chid, is_server);
     if (URPC_UNLIKELY(timer == NULL)) {
-        URPC_LIB_LOG_ERR("timer pool exhausted\n");
+        UTIL_LOG_ERR("timer pool exhausted\n");
         return NULL;
     }
 
@@ -650,18 +650,18 @@ urpc_timer_t *urpc_timer_create(uint32_t chid, bool is_server)
 int urpc_timer_start(urpc_timer_t *timer, uint32_t timeout_ms, void (*func)(void *), void *args, bool periodic)
 {
     if (URPC_UNLIKELY(timer == NULL || !urpc_check_timer_magic(timer))) {
-        URPC_LIB_LOG_ERR("start failed: timer has been freed or not inited\n");
+        UTIL_LOG_ERR("start failed: timer has been freed or not inited\n");
         return URPC_FAIL;
     }
 
     // @args is permitted to be NULL
     if (URPC_UNLIKELY(func == NULL)) {
-        URPC_LIB_LOG_ERR("start failed: cb function is NULL\n");
+        UTIL_LOG_ERR("start failed: cb function is NULL\n");
         return URPC_FAIL;
     }
 
     if (URPC_UNLIKELY(timeout_ms < URPC_TIMER_MIN_DELAY || timeout_ms > URPC_TIMER_MAX_DELAY)) {
-        URPC_LIB_LOG_ERR("start failed: timeout %lu is out of range(%u ~ %u ms)\n", timeout_ms, URPC_TIMER_MIN_DELAY,
+        UTIL_LOG_ERR("start failed: timeout %lu is out of range(%u ~ %u ms)\n", timeout_ms, URPC_TIMER_MIN_DELAY,
             URPC_TIMER_MAX_DELAY);
         return URPC_FAIL;
     }
@@ -694,7 +694,7 @@ int urpc_timer_start(urpc_timer_t *timer, uint32_t timeout_ms, void (*func)(void
 int urpc_timer_restart(urpc_timer_t *timer)
 {
     if (URPC_UNLIKELY(timer == NULL || !urpc_check_timer_magic(timer) || timer->ticks == 0)) {
-        URPC_LIB_LOG_ERR("restart failed: timer has been freed or not inited\n");
+        UTIL_LOG_ERR("restart failed: timer has been freed or not inited\n");
         return URPC_FAIL;
     }
 
@@ -735,7 +735,7 @@ static void urpc_timer_remove_from_timing_wheel(urpc_timer_t *timer)
 void urpc_timer_destroy(urpc_timer_t *timer)
 {
     if (URPC_UNLIKELY(timer == NULL || !urpc_check_timer_magic(timer))) {
-        URPC_LIB_LOG_ERR("destroy failed: timer has been freed or not inited\n");
+        UTIL_LOG_ERR("destroy failed: timer has been freed or not inited\n");
         return;
     }
 

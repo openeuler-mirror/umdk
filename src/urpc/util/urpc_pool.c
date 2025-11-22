@@ -10,7 +10,7 @@
 #include "urpc_dbuf_stat.h"
 #include "urpc_id_generator.h"
 #include "urpc_thread_closure.h"
-#include "urpc_lib_log.h"
+#include "util_log.h"
 #include "urpc_util.h"
 
 #include "urpc_pool.h"
@@ -89,7 +89,7 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
     uint32_t id = 0;
     if (URPC_UNLIKELY(cfg->element_size > URPC_POOL_ELEMENT_SIZE_MAX ||
                       cfg->element_num_per_block > URPC_POOL_ELEMENT_MAX || cfg->block_num > URPC_POOL_BLOCK_MAX)) {
-        URPC_LIB_LOG_ERR("init urpc pool failed, element_size %u, element_num_per_block %u, block_num %u is invalid\n",
+        UTIL_LOG_ERR("init urpc pool failed, element_size %u, element_num_per_block %u, block_num %u is invalid\n",
             cfg->element_size,
             cfg->element_num_per_block,
             cfg->block_num);
@@ -97,7 +97,7 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
     }
 
     if (URPC_UNLIKELY(urpc_pool_id_get(&id) != 0)) {
-        URPC_LIB_LOG_ERR("malloc urpc pool id failed\n");
+        UTIL_LOG_ERR("malloc urpc pool id failed\n");
         return -ENOMEM;
     }
 
@@ -105,7 +105,7 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
         urpc_dbuf_malloc(URPC_DBUF_TYPE_UTIL, sizeof(urpc_pool_group_t) + cfg->block_num * sizeof(void *));
     if (pool->global_group == NULL) {
         urpc_pool_id_put(id);
-        URPC_LIB_LOG_ERR("malloc urpc pool group failed\n");
+        UTIL_LOG_ERR("malloc urpc pool group failed\n");
         return -ENOMEM;
     }
     pool->global_group->num = 0;
@@ -160,7 +160,7 @@ static int urpc_pool_local_init(urpc_pool_t *pool)
 
     g_urpc_pool_ctx[pool->id].local = urpc_dbuf_malloc(URPC_DBUF_TYPE_UTIL, pool->container_size);
     if (URPC_UNLIKELY(g_urpc_pool_ctx[pool->id].local == NULL)) {
-        URPC_LIB_LIMIT_LOG_ERR("malloc local pool failed\n");
+        UTIL_LIMIT_LOG_ERR("malloc local pool failed\n");
         return -ENOMEM;
     }
     g_urpc_pool_ctx[pool->id].global_pool = pool;
@@ -194,14 +194,14 @@ void *urpc_pool_element_get(urpc_pool_t *pool)
     } else {
         if (URPC_UNLIKELY(pool->global_group->num >= pool->cfg.block_num)) {
             (void)pthread_mutex_unlock(&pool->lock);
-            URPC_LIB_LIMIT_LOG_ERR("global pool num %u exceed %u\n", pool->global_group->num, pool->cfg.block_num);
+            UTIL_LIMIT_LOG_ERR("global pool num %u exceed %u\n", pool->global_group->num, pool->cfg.block_num);
             return NULL;
         }
 
         void *block_mem = urpc_dbuf_malloc(URPC_DBUF_TYPE_UTIL, pool->block_size);
         if (block_mem == NULL) {
             (void)pthread_mutex_unlock(&pool->lock);
-            URPC_LIB_LIMIT_LOG_ERR("malloc block memory failed\n");
+            UTIL_LIMIT_LOG_ERR("malloc block memory failed\n");
             return NULL;
         }
         pool->global_group->mem_addr[pool->global_group->num++] = block_mem;
@@ -220,7 +220,7 @@ void urpc_pool_element_put(urpc_pool_t *pool, void *element)
     // may put 1 element which is fetched by other thread, and local is not initialized yet
     if (URPC_UNLIKELY(urpc_pool_local_init(pool) != 0)) {
         // element will be freed when urpc_pool_uninit
-        URPC_LIB_LIMIT_LOG_ERR("put pool element failed\n");
+        UTIL_LIMIT_LOG_ERR("put pool element failed\n");
         return;
     }
 
@@ -240,7 +240,7 @@ void urpc_pool_element_put(urpc_pool_t *pool, void *element)
         if (URPC_UNLIKELY(block == NULL)) {
             (void)pthread_mutex_unlock(&pool->lock);
             // element will be freed when urpc_pool_uninit
-            URPC_LIB_LIMIT_LOG_ERR("malloc block memory failed\n");
+            UTIL_LIMIT_LOG_ERR("malloc block memory failed\n");
             return;
         }
     }
