@@ -49,4 +49,8 @@ urma_target_jetty_t *udma_u_import_jetty_ex(urma_context_t *ctx,
 urma_status_t udma_u_bind_jetty_ex(urma_jetty_t *jetty,
 				   urma_target_jetty_t *tjetty,
 				   urma_active_tp_cfg_t *active_tp_cfg);
+urma_status_t insert_jetty_node(struct udma_u_context *udma_ctx,
+				struct udma_u_jetty *pointer);
+void udma_u_jetty_table_remove(struct udma_u_context *udma_ctx,
+				struct udma_u_jetty *jetty);
 #endif /* __UDMA_U_JETTY_H__ */

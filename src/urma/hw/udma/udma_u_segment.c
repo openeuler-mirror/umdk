@@ -37,14 +37,28 @@ static void udma_u_init_seg_cfg(urma_context_t *urma_ctx, urma_seg_cfg_t *seg_cf
 
 static enum ummu_mapt_perm udma_u_get_seg_perm(urma_seg_attr_t *attr)
 {
-	if (attr->bs.access & URMA_ACCESS_LOCAL_ONLY ||
-	    attr->bs.access & URMA_ACCESS_ATOMIC)
+	bool local_only_flag = attr->bs.access & URMA_ACCESS_LOCAL_ONLY;
+	bool atomic_flag = attr->bs.access & URMA_ACCESS_ATOMIC;
+	bool write_flag = attr->bs.access & URMA_ACCESS_WRITE;
+	bool read_flag = attr->bs.access & URMA_ACCESS_READ;
+
+	/* After setting ACCESS_LOCAL, other operations cannot be configured. */
+	if (local_only_flag && !atomic_flag && !write_flag && !read_flag)
 		return MAPT_PERM_ATOMIC_RW;
 
-	if (attr->bs.access & URMA_ACCESS_WRITE)
+	/* Atomic require additional configuration of write and read. */
+	if (!local_only_flag && atomic_flag && write_flag && read_flag)
+		return MAPT_PERM_ATOMIC_RW;
+
+	/* Write require additional configuration of read. */
+	if (!local_only_flag && !atomic_flag && write_flag && read_flag)
 		return MAPT_PERM_RW;
 
-	return MAPT_PERM_R;
+	if (!local_only_flag && !atomic_flag && !write_flag && read_flag)
+		return MAPT_PERM_R;
+
+	/* All other configurations are illegal. */
+	return (enum ummu_mapt_perm)0;
 }
 
 static int udma_u_grant_segment(struct udma_u_segment *seg)
@@ -135,7 +149,8 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *urma_ctx,
 
 	ret = udma_u_grant_segment(seg);
 	if (ret) {
-		UDMA_LOG_ERR("segment grant failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("segment grant failed, access = %d, ret = %d.\n",
+			     seg_cfg->flag.bs.access, ret);
 		goto err_ummu_grant;
 	}
 
@@ -179,6 +194,8 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 {
 	struct udma_u_segment *tseg;
 
+	RTE_SET_USED(addr);
+	RTE_SET_USED(flag);
 	if (seg->attr.bs.token_policy > URMA_TOKEN_PLAIN_TEXT) {
 		UDMA_LOG_ERR("invalid token policy = %d.\n",
 			     seg->attr.bs.token_policy);

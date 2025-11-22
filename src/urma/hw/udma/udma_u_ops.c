@@ -113,6 +113,27 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 }
 
+static void udma_u_destroy_jt_table(struct udma_u_context *udma_u_ctx)
+{
+	pthread_rwlock_destroy(&udma_u_ctx->jfr_table_lock);
+	pthread_rwlock_destroy(&udma_u_ctx->jetty_table_lock);
+}
+
+static void udma_u_init_jetty_table(struct udma_u_context *udma_u_ctx)
+{
+#define UDMA_JETTYS_IN_TBL_SHIFT 11
+	udma_u_ctx->jettys_in_tbl_shift = UDMA_JETTYS_IN_TBL_SHIFT;
+	int i;
+
+	udma_u_ctx->jettys_in_tbl = 1 << udma_u_ctx->jettys_in_tbl_shift;
+	for (i = 0; i < UDMA_JETTY_TABLE_NUM; i++) {
+		udma_u_ctx->jetty_table[i].refcnt = 0;
+		udma_u_ctx->jfr_table[i].refcnt = 0;
+	}
+	(void)pthread_rwlock_init(&udma_u_ctx->jfr_table_lock, NULL);
+	(void)pthread_rwlock_init(&udma_u_ctx->jetty_table_lock, NULL);
+}
+
 static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_index,
 					     int dev_fd)
 {
@@ -157,13 +178,10 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 		goto err_alloc_db;
 	}
 
-	if (udma_u_init_node_tbl(udma_ctx->src_idx_tbl))
-		goto err_init_node;
+	udma_u_init_jetty_table(udma_ctx);
 
 	return &udma_ctx->urma_ctx;
 
-err_init_node:
-	udma_u_free_db(&udma_ctx->urma_ctx, &udma_ctx->db);
 err_alloc_db:
 	(void)urma_cmd_delete_context(&udma_ctx->urma_ctx);
 err_create_ctx:
@@ -181,7 +199,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
 	urma_status_t ret = URMA_SUCCESS;
 
-	udma_u_uninit_node_tbl(udma_ctx->src_idx_tbl);
+	udma_u_destroy_jt_table(udma_ctx);
 	udma_u_free_db(ctx, &udma_ctx->db);
 	udma_u_destroy_hugepage(udma_ctx);
 

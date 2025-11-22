@@ -272,7 +272,7 @@ static urma_jfr_t *udma_u_create_jfr_ex(urma_context_t *ctx,
 		goto err_exec_cmd;
 	}
 
-	if (udma_u_jetty_queue_insert(udma_ctx, &udma_jfr->rq, UDMA_U_JFR_TBL))
+	if (udma_u_insert_jfr_node(udma_ctx, udma_jfr))
 		goto err_insert_node;
 
 	return &udma_jfr->base;
@@ -570,8 +570,10 @@ static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_j
 
 	jetty->sq.dwqe_addr = (void *)jetty->sq.db.addr;
 	jetty->sq.idx = jetty->base.jetty_id.id;
-	if (udma_u_jetty_queue_insert(udma_ctx, &jetty->sq, UDMA_U_JETTY_TBL))
+	if (insert_jetty_node(udma_ctx, jetty)) {
+		UDMA_LOG_ERR("failed to insert jetty_queue.\n");
 		goto err_insert_node;
+	}
 
 	return &jetty->base;
 err_insert_node:

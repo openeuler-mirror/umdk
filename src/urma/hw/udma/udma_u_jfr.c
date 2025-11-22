@@ -128,6 +128,32 @@ static void udma_u_free_idx_que(struct udma_u_jfr_idx_que *idx_que)
 	udma_bitmap_free(idx_que->bitmap);
 }
 
+int udma_u_insert_jfr_node(struct udma_u_context *udma_ctx, struct udma_u_jfr *jfr)
+{
+	uint32_t jettys_in_tbl = 1 << udma_ctx->jettys_in_tbl_shift;
+	uint32_t mask = jettys_in_tbl - 1;
+	struct udma_u_jfr **jfr_array;
+	uint32_t table_id;
+
+	table_id = jfr->rq.idx >> udma_ctx->jettys_in_tbl_shift;
+	pthread_rwlock_wrlock(&udma_ctx->jfr_table_lock);
+	if (!udma_ctx->jfr_table[table_id].refcnt) {
+		udma_ctx->jfr_table[table_id].jfr_array = (struct udma_u_jfr **)calloc(jettys_in_tbl,
+							sizeof(struct udma_u_jfr *));
+		if (!udma_ctx->jfr_table[table_id].jfr_array) {
+			pthread_rwlock_unlock(&udma_ctx->jfr_table_lock);
+			return URMA_ENOMEM;
+		}
+	}
+
+	jfr_array = udma_ctx->jfr_table[table_id].jfr_array;
+	++udma_ctx->jfr_table[table_id].refcnt;
+	jfr_array[jfr->rq.idx & mask] = jfr;
+	pthread_rwlock_unlock(&udma_ctx->jfr_table_lock);
+
+	return URMA_SUCCESS;
+}
+
 urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
@@ -176,7 +202,7 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		goto err_exec_cmd;
 	}
 
-	if (udma_u_jetty_queue_insert(udma_ctx, &udma_jfr->rq, UDMA_U_JFR_TBL))
+	if (udma_u_insert_jfr_node(udma_ctx, udma_jfr))
 		goto err_insert_node;
 
 	return &udma_jfr->base;
@@ -199,6 +225,26 @@ err_spin_init:
 	return NULL;
 }
 
+static void udma_u_jfr_table_remove(struct udma_u_context *udma_ctx,
+					     struct udma_u_jfr *jfr)
+{
+	uint32_t mask = (1 << udma_ctx->jettys_in_tbl_shift) - 1;
+	uint32_t table_id = jfr->rq.idx >> udma_ctx->jettys_in_tbl_shift;
+
+	(void)pthread_rwlock_wrlock(&udma_ctx->jfr_table_lock);
+	if (udma_ctx->jfr_table[table_id].refcnt == 0) {
+		(void)pthread_rwlock_unlock(&udma_ctx->jfr_table_lock);
+		return;
+	}
+	if (!--udma_ctx->jfr_table[table_id].refcnt) {
+		free(udma_ctx->jfr_table[table_id].jfr_array);
+		udma_ctx->jfr_table[table_id].jfr_array = NULL;
+	} else {
+		udma_ctx->jfr_table[table_id].jfr_array[jfr->rq.idx & mask] = NULL;
+	}
+	(void)pthread_rwlock_unlock(&udma_ctx->jfr_table_lock);
+}
+
 static void udma_u_free_jfr(urma_jfr_t *jfr)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfr->urma_ctx);
@@ -219,6 +265,7 @@ static void udma_u_free_jfr(urma_jfr_t *jfr)
 	if (!udma_jfr->lock_free)
 		(void)pthread_spin_destroy(&udma_jfr->lock);
 
+	udma_u_jfr_table_remove(udma_ctx, udma_jfr);
 	free(udma_jfr);
 }
 
@@ -228,16 +275,20 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 	struct udma_u_jfr *udma_jfr = to_udma_u_jfr(jfr);
 	int ret;
 
-	udma_u_jetty_queue_remove(udma_ctx, &udma_jfr->rq, UDMA_U_JFR_TBL);
 	ret = urma_cmd_delete_jfr(jfr);
 	if (ret) {
 		UDMA_LOG_ERR("urma cmd delete jfr failed, ret = %d.\n", ret);
-		return URMA_FAIL;
+		goto delete_err;
 	}
 
 	udma_u_free_jfr(jfr);
 
 	return URMA_SUCCESS;
+
+delete_err:
+	udma_u_jfr_table_remove(udma_ctx, udma_jfr);
+
+	return URMA_FAIL;
 }
 
 urma_status_t udma_u_delete_jfr_batch(urma_jfr_t **jfr, int jfr_cnt, urma_jfr_t **bad_jfr)
@@ -257,22 +308,25 @@ urma_status_t udma_u_delete_jfr_batch(urma_jfr_t **jfr, int jfr_cnt, urma_jfr_t 
 		return URMA_EINVAL;
 	}
 
-	for (i = 0; i < jfr_cnt; i++) {
-		udma_ctx = to_udma_u_ctx(jfr[i]->urma_ctx);
-		udma_jfr = to_udma_u_jfr(jfr[i]);
-		udma_u_jetty_queue_remove(udma_ctx, &udma_jfr->rq, UDMA_U_JFR_TBL);
-	}
-
 	ret = urma_cmd_delete_jfr_batch(jfr, jfr_cnt, bad_jfr);
 	if (ret) {
 		UDMA_LOG_ERR("urma cmd delete jfr failed, ret = %d.\n", ret);
-		return URMA_FAIL;
+		goto delete_err;
 	}
 
 	for (i = 0; i < jfr_cnt; i++)
 		udma_u_free_jfr(jfr[i]);
 
 	return URMA_SUCCESS;
+
+delete_err:
+	for (i = 0; i < jfr_cnt; i++) {
+		udma_ctx = to_udma_u_ctx(jfr[i]->urma_ctx);
+		udma_jfr = to_udma_u_jfr(jfr[i]);
+		udma_u_jfr_table_remove(udma_ctx, udma_jfr);
+	}
+
+	return URMA_FAIL;
 }
 
 int udma_verify_modify_jfr(struct udma_u_jfr *jfr, uint32_t jfr_limit)
@@ -470,6 +524,7 @@ urma_target_jetty_t *udma_u_import_jfr_ex(urma_context_t *ctx,
 	cfg.token = token_value;
 	cfg.jfr_id = rjfr->jfr_id;
 	cfg.trans_mode = rjfr->trans_mode;
+	cfg.tp_type = rjfr->tp_type;
 	if (rjfr->flag.bs.token_policy != URMA_TOKEN_NONE) {
 		tjfr->token_value = token_value->token;
 		tjfr->token_value_valid = true;
