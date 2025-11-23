@@ -10,17 +10,17 @@
 #include "urpc_util.h"
 #include "util_log.h"
 
-static util_vlog_ctx_t *log_ctx = NULL;
+static util_vlog_ctx_t *g_log_ctx = NULL;
 int util_log_ctx_set(util_vlog_ctx_t *ctx)
 {
     if (ctx == NULL) {
         return -EINVAL;
     }
-    log_ctx = ctx;
+    g_log_ctx = ctx;
     return 0;
 }
 
 util_vlog_ctx_t *util_log_ctx_get(void)
 {
-    return log_ctx;
+    return g_log_ctx;
 }
