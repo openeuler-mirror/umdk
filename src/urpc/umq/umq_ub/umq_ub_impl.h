@@ -19,13 +19,13 @@
 #define MEMPOOL_UBVA_SIZE 28
 #define UMQ_IMM_VERSION 0
 
-typedef enum umq_size_interal {
-    UMQ_SIZE_INVALID_INTERAL = 0,   // invalid size, buffer lengths are inconsistent.
-    UMQ_SIZE_0K_SMALL_INTERAL = 1,  // (0K 8K] size
-    UMQ_SIZE_SMALL_MID_INTERAL,     // (8K 256K] size
-    UMQ_SIZE_MID_BIG_INTERAL,       // (256K 8M] size
-    UMQ_SIZE_INTERAL_MAX,
-} umq_size_interal_t;
+typedef enum umq_size_interval {
+    UMQ_SIZE_INVALID_INTERVAL = 0,  // invalid size, buffer lengths are inconsistent.
+    UMQ_SIZE_0K_SMALL_INTERVAL = 1, // (0K, UMQ_SIZE_SMALL] size
+    UMQ_SIZE_SMALL_MID_INTERVAL,    // (UMQ_SIZE_SMALL, UMQ_SIZE_MID] size
+    UMQ_SIZE_MID_BIG_INTERVAL,      // (UMQ_SIZE_MID, UMQ_SIZE_BIG] size
+    UMQ_SIZE_INTERVAL_MAX,
+} umq_size_interval_t;
 
 typedef enum umq_imm_protocol_type {
     IMM_PROTOCAL_TYPE_NONE = 0,
@@ -111,13 +111,12 @@ util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp);
 
 static inline uint32_t get_mem_interval(uint32_t used_mem_size)
 {
-    uint32_t mem_interval = UMQ_SIZE_MID_BIG_INTERAL;
     if (used_mem_size <= UMQ_SIZE_SMALL) {
-        mem_interval = UMQ_SIZE_0K_SMALL_INTERAL;
+        return UMQ_SIZE_0K_SMALL_INTERVAL;
     } else if (used_mem_size <= UMQ_SIZE_MID) {
-        mem_interval = UMQ_SIZE_SMALL_MID_INTERAL;
+        return UMQ_SIZE_SMALL_MID_INTERVAL;
     }
-    return mem_interval;
+    return UMQ_SIZE_MID_BIG_INTERVAL;
 }
 
 static inline void ub_fill_umq_imm_head(umq_imm_head_t *umq_imm_head, umq_buf_t *buffer)

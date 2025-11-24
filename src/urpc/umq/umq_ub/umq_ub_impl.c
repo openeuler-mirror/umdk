@@ -1854,11 +1854,6 @@ static ALWAYS_INLINE void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t 
     ref_sge->token_id = seg->token_id;
     ref_sge->mempool_id = buffer->mempool_id;
     ref_sge->token_value = tseg->user_ctx;
-
-    if (umq_imm_head->mem_interval != UMQ_SIZE_INVALID_INTERAL &&
-        (umq_imm_head->mem_interval != get_mem_interval(ref_sge->length))) {
-        umq_imm_head->mem_interval = UMQ_SIZE_INVALID_INTERAL;
-    }
 }
 
 void ubmm_fill_big_data_ref_sge(uint64_t umqh_tp, ub_ref_sge_t *ref_sge,
@@ -1893,6 +1888,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
     int32_t buf_index = 0;
     uint16_t ref_sge_num = (UMQ_SIZE_SMALL - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
     urma_sge_t sge;
+    uint32_t max_data_size = 0;
     while ((*buffer) && rest_size != 0) {
         if (rest_size < (*buffer)->data_size) {
             UMQ_LIMIT_VLOG_ERR("remaining size[%u] is smaller than data_size[%u]\n", rest_size, (*buffer)->data_size);
@@ -1907,6 +1903,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
         fill_big_data_ref_sge(
             queue, &ref_sge[buf_index], *buffer, &import_mempool_info[umq_imm_head->mempool_num], umq_imm_head);
 
+        max_data_size =  (*buffer)->data_size > max_data_size ? (*buffer)->data_size : max_data_size;
         rest_size -= (*buffer)->data_size;
         (*buffer) = QBUF_LIST_NEXT((*buffer));
         ++buf_index;
@@ -1921,6 +1918,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
         (void)memcpy(ref_sge + buf_index,
             import_mempool_info, sizeof(ub_import_mempool_info_t) * umq_imm_head->mempool_num);
     }
+    umq_imm_head->mem_interval = get_mem_interval(max_data_size);
 
     uint64_t user_ctx = (uint64_t)(uintptr_t)send_buf;
     sge.addr = (uint64_t)(uintptr_t)send_buf->buf_data;
@@ -2263,10 +2261,28 @@ typedef struct user_ctx {
     uint32_t msg_id;
 } user_ctx_t;
 
+static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(umq_size_interval_t size_interval, uint16_t buf_num)
+{
+    static const uint32_t read_alloc_mem_size[UMQ_SIZE_INTERVAL_MAX] = {
+        [UMQ_SIZE_0K_SMALL_INTERVAL] = UMQ_SIZE_SMALL,
+        [UMQ_SIZE_SMALL_MID_INTERVAL] = UMQ_SIZE_MID,
+        [UMQ_SIZE_MID_BIG_INTERVAL] = UMQ_SIZE_BIG,
+    };
+
+    umq_buf_mode_t buf_mode = umq_qbuf_mode_get();
+    if (buf_mode == UMQ_BUF_SPLIT) {
+        return read_alloc_mem_size[size_interval] * buf_num - umq_qbuf_headroom_get();
+    } else if (buf_mode == UMQ_BUF_COMBINE) {
+        return read_alloc_mem_size[size_interval] * buf_num - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
+    }
+
+    UMQ_LIMIT_VLOG_ERR("buf mode: %d is invalid\n", buf_mode);
+    return UINT32_MAX;
+}
+
 static umq_buf_t *umq_ub_read_ctx_create(
     ub_queue_t *queue, umq_imm_head_t *umq_imm_head, uint16_t buf_num, uint16_t msg_id)
 {
-    ub_ref_sge_t *ref_sge = (ub_ref_sge_t *)(uintptr_t)(umq_imm_head + 1);
     umq_buf_t *ctx_buf = umq_buf_alloc(sizeof(user_ctx_t), 1, UMQ_INVALID_HANDLE, NULL);
     if (ctx_buf == NULL) {
         UMQ_LIMIT_VLOG_ERR("ctx_buf malloc failed\n");
@@ -2279,27 +2295,20 @@ static umq_buf_t *umq_ub_read_ctx_create(
     buf_pro->imm_data = imm_temp.value;
     user_ctx_t *user_ctx = (user_ctx_t *)ctx_buf->buf_data;
 
-    if (umq_imm_head->mem_interval != UMQ_SIZE_INVALID_INTERAL) {
-        static const uint32_t read_alloc_mem_size[UMQ_SIZE_INTERAL_MAX] = {
-            [UMQ_SIZE_0K_SMALL_INTERAL] = UMQ_SIZE_SMALL,
-            [UMQ_SIZE_SMALL_MID_INTERAL] = UMQ_SIZE_MID,
-            [UMQ_SIZE_MID_BIG_INTERAL] = UMQ_SIZE_BIG,
-        };
-        user_ctx->dst_buf =
-            umq_buf_alloc(read_alloc_mem_size[umq_imm_head->mem_interval], buf_num, UMQ_INVALID_HANDLE, NULL);
-        if (user_ctx->dst_buf == NULL) {
-            umq_buf_free(ctx_buf);
-            UMQ_LIMIT_VLOG_ERR("dst_buf malloc failed\n");
-            return NULL;
-        }
-    } else {
-        user_ctx->dst_buf = umq_buf_alloc(ref_sge->length, 1, UMQ_INVALID_HANDLE, NULL);
-        if (user_ctx->dst_buf == NULL) {
-            umq_buf_free(ctx_buf);
-            UMQ_LIMIT_VLOG_ERR("dst_buf malloc failed\n");
-            return NULL;
-        }
+    uint32_t total_size = umq_ub_get_read_pre_allocate_max_total_size(umq_imm_head->mem_interval, buf_num);
+    if (total_size == UINT32_MAX) {
+        umq_buf_free(ctx_buf);
+        UMQ_LIMIT_VLOG_ERR("get total data size failed\n");
+        return NULL;
     }
+
+    user_ctx->dst_buf = umq_buf_alloc(total_size, 1, UMQ_INVALID_HANDLE, NULL);
+    if (user_ctx->dst_buf == NULL) {
+        umq_buf_free(ctx_buf);
+        UMQ_LIMIT_VLOG_ERR("dst_buf malloc failed\n");
+        return NULL;
+    }
+
     user_ctx->wr_total = buf_num;
     user_ctx->msg_id = msg_id;
     user_ctx->wr_cnt = 0;
@@ -2313,27 +2322,6 @@ static inline void umq_ub_read_ctx_destory(umq_buf_t *ctx_buf)
         umq_buf_free(user_ctx->dst_buf);
     }
     umq_buf_free(ctx_buf);
-}
-
-static ALWAYS_INLINE int umq_ub_read_fill_dst_sge(
-    ub_queue_t *queue, urma_sge_t *dst_sge, umq_buf_t **tmp_buf, umq_buf_t **last_buf, uint32_t buf_size)
-{
-    // memory is not applied for in a unified manner. mem_interval is 0
-    if (*tmp_buf == NULL) {
-        *tmp_buf = umq_buf_alloc(buf_size, 1, queue->umqh, NULL);
-        if (*tmp_buf == NULL) {
-            UMQ_VLOG_ERR("dst_buf malloc failed\n");
-            return -UMQ_ERR_ENOMEM;
-        }
-        (*last_buf)->qbuf_next = (*tmp_buf);
-        *last_buf = (*tmp_buf);
-    }
-    dst_sge->addr = (uint64_t)(uintptr_t)(*tmp_buf)->buf_data;
-    dst_sge->len = buf_size;
-    dst_sge->user_tseg = NULL;
-    dst_sge->tseg = queue->dev_ctx->tseg_list[(*tmp_buf)->mempool_id];
-    (*tmp_buf)->data_size = buf_size;
-    return UMQ_SUCCESS;
 }
 
 static ALWAYS_INLINE urma_status_t umq_ub_read_post_send(
@@ -2371,23 +2359,22 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
         return -UMQ_ERR_ENOMEM;
     }
 
+    urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     user_ctx_t *user_ctx = (user_ctx_t *)ctx_buf->buf_data;
     umq_buf_t *dst_buf = user_ctx->dst_buf;
     umq_buf_t *tmp_buf = dst_buf;
-    umq_buf_t *last_buf = dst_buf;
     urma_sge_t src_sge[buf_num];
     urma_sge_t dst_sge[buf_num];
     uint32_t total_data_size = 0;
     uint32_t src_buf_length = 0;
     for (uint32_t i = 0; i < buf_num; i++) {
         src_buf_length = ref_sge[i].length;
-        if (umq_ub_read_fill_dst_sge(queue, dst_sge + i, &tmp_buf, &last_buf, src_buf_length)) {
-            UMQ_LIMIT_VLOG_ERR("fill dst sge failed\n");
-            goto FREE_CTX_BUF;
-        }
 
-        total_data_size += src_buf_length;
-        tmp_buf = QBUF_LIST_NEXT(tmp_buf);
+        dst_sge[i].addr = (uint64_t)(uintptr_t)tmp_buf->buf_data;
+        dst_sge[i].len = src_buf_length;
+        dst_sge[i].user_tseg = NULL;
+        dst_sge[i].tseg = tseg_list[tmp_buf->mempool_id];
+        
         src_sge[i].addr = ref_sge[i].addr;
         src_sge[i].len = src_buf_length;
         src_sge[i].tseg = queue->imported_tseg_list[ref_sge[i].mempool_id];
@@ -2395,6 +2382,11 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
             UMQ_LIMIT_VLOG_ERR("imported memory handle not exist\n");
             goto FREE_CTX_BUF;
         }
+
+        tmp_buf->data_size = src_buf_length;
+        tmp_buf = QBUF_LIST_NEXT(tmp_buf);
+        total_data_size += src_buf_length;
+
         urma_status_t status = umq_ub_read_post_send(queue, src_sge + i, dst_sge + i, ctx_buf);
         if (status != URMA_SUCCESS) {
             umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
