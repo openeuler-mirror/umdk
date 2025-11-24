@@ -877,14 +877,12 @@ int umq_ubmm_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *opt
     return umq_ub_interrupt_fd_get_impl(tp->ub_handle, option);
 }
 
-int32_t umq_ubmm_register_memory_impl(uint8_t *ubmm_ctx, void *buf, uint64_t size)
+int32_t umq_ubmm_register_memory_impl(void *buf, uint64_t size)
 {
-    umq_ubmm_init_ctx_t *context = (umq_ubmm_init_ctx_t *)ubmm_ctx;
-    return umq_ub_register_memory_impl(context->ub_init_ctx, buf, size);
+    return umq_ub_register_memory_impl(buf, size);
 }
 
-void umq_ubmm_unregister_memory_impl(uint8_t *ubmm_ctx)
+void umq_ubmm_unregister_memory_impl()
 {
-    umq_ubmm_init_ctx_t *context = (umq_ubmm_init_ctx_t *)ubmm_ctx;
-    return umq_ub_unregister_memory_impl(context->ub_init_ctx);
+    return umq_ub_unregister_memory_impl();
 }

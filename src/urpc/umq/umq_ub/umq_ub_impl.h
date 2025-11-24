@@ -70,8 +70,8 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
 int umq_ub_unbind_impl(uint64_t umqh);
 umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp);
 
-int32_t umq_ub_register_memory_impl(uint8_t *ub_ctx, void *buf, uint64_t size);
-void umq_ub_unregister_memory_impl(uint8_t *ub_ctx);
+int32_t umq_ub_register_memory_impl(void *buf, uint64_t size);
+void umq_ub_unregister_memory_impl();
 
 int umq_ub_log_config_set_impl(umq_log_config_t *config);
 int umq_ub_log_config_reset_impl(void);
