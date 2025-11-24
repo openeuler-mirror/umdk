@@ -44,8 +44,13 @@ int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, ui
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
-        (umq->pro_tp_ops->umq_tp_poll == NULL) || buf == NULL) {
-        UMQ_LIMIT_VLOG_ERR("umqh or qbuf invalid\n");
+        (umq->pro_tp_ops->umq_tp_poll == NULL) || buf == NULL || max_buf_count == 0) {
+        UMQ_LIMIT_VLOG_ERR("param invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (io_direction == UMQ_IO_ALL && max_buf_count == 1) {
+        UMQ_LIMIT_VLOG_ERR("poll umq tx and rx needs at least 2 buf\n");
         return -UMQ_ERR_EINVAL;
     }
 
