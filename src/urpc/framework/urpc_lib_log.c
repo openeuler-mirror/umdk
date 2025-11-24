@@ -42,7 +42,7 @@ int urpc_log_config_set(urpc_log_config_t *config)
     }
 
     if ((config->log_flag & URPC_LOG_FLAG_LEVEL) &&
-        (config->level < URPC_LOG_LEVEL_ERR || config->level >= URPC_LOG_LEVEL_MAX)) {
+        (config->level < URPC_LOG_LEVEL_EMERG || config->level >= URPC_LOG_LEVEL_MAX)) {
         URPC_LIB_LOG_ERR("invalid log level %d\n", config->level);
         return URPC_FAIL;
     }
@@ -50,12 +50,20 @@ int urpc_log_config_set(urpc_log_config_t *config)
     (void)pthread_mutex_lock(&g_urpc_log_lock);
     if (config->log_flag & URPC_LOG_FLAG_FUNC) {
         if (config->func == NULL) {
+            if (urma_unregister_log_func() != URMA_SUCCESS) {
+                (void)pthread_mutex_unlock(&g_urpc_log_lock);
+                URPC_LIB_LOG_ERR("urma_unregister_log_func failed\n");
+                return -URPC_ERR_EINVAL;
+            }
             g_urpc_log_config.ctx.vlog_output_func = default_vlog_output;
-            urma_unregister_log_func();
             URPC_LIB_LOG_INFO("set log configuration successful, log output function: default\n");
         } else {
+            if (urma_register_log_func(config->func) != URMA_SUCCESS) {
+                (void)pthread_mutex_unlock(&g_urpc_log_lock);
+                URPC_LIB_LOG_ERR("urma_register_log_func failed\n");
+                return -URPC_ERR_EINVAL;
+            }
             g_urpc_log_config.ctx.vlog_output_func = config->func;
-            urma_register_log_func(config->func);
             URPC_LIB_LOG_INFO("set log configuration successful, log output function: user defined\n");
         }
     }

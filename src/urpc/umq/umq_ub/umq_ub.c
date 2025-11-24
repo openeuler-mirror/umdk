@@ -85,9 +85,14 @@ static void umq_tp_ub_buf_free(umq_buf_t *qbuf, uint64_t umqh_tp)
     umq_ub_buf_free_impl(qbuf, umqh_tp);
 }
 
-static void umq_tp_ub_log_config_set(umq_log_config_t *config)
+static int umq_tp_ub_log_config_set(umq_log_config_t *config)
 {
-    umq_ub_log_config_set_impl(config);
+    return umq_ub_log_config_set_impl(config);
+}
+
+static int umq_tp_ub_log_config_reset(void)
+{
+    return umq_ub_log_config_reset_impl();
 }
 
 static int umq_tp_ub_enqueue(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
@@ -147,6 +152,7 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_unbind = umq_tp_ub_unbind,
     .umq_tp_state_get = umq_tp_ub_state_get,
     .umq_tp_log_config_set = umq_tp_ub_log_config_set,
+    .umq_tp_log_config_reset = umq_tp_ub_log_config_reset,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_buf_alloc,
