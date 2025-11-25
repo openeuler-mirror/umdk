@@ -585,8 +585,14 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
 urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *token_value)
 {
     if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->ops == NULL ||
-        rjfr == NULL || token_value == NULL) {
+        rjfr == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (rjfr->flag.bs.token_policy != URMA_TOKEN_NONE && token_value == NULL) {
+        URMA_LOG_ERR("Token value must be set when token policy is not URMA_TOKEN_NONE.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -1116,8 +1122,14 @@ urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjett
     urma_token_t *token_value)
 {
     if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->ops == NULL ||
-        rjetty == NULL || token_value == NULL) {
+        rjetty == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (rjetty->flag.bs.token_policy != URMA_TOKEN_NONE && token_value == NULL) {
+        URMA_LOG_ERR("Token value must be set when token policy is not URMA_TOKEN_NONE.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -1662,7 +1674,7 @@ urma_target_seg_t *urma_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     }
 
     if (seg->attr.bs.token_policy != URMA_TOKEN_NONE && token_value == NULL) {
-        URMA_LOG_ERR("Key must be set when token_policy is not URMA_TOKEN_NONE.\n");
+        URMA_LOG_ERR("Token value must be set when token policy is not URMA_TOKEN_NONE.\n");
         errno = EINVAL;
         return NULL;
     }
