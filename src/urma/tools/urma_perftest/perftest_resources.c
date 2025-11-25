@@ -93,7 +93,7 @@ static int check_dev_cap(perftest_context_t *ctx, perftest_config_t *cfg)
         (void)printf("Error: max_jfs_sge out of range, max_jfs_sge:%u.\n", ctx->dev_attr.dev_cap.max_jfs_sge);
         return -1;
     }
-    
+
     if (cfg->sge_num > ctx->dev_attr.dev_cap.max_jfr_sge) {
         (void)printf("Error: max_jfr_sge out of range, max_jfr_sge:%u.\n", ctx->dev_attr.dev_cap.max_jfr_sge);
         return -1;
@@ -308,7 +308,7 @@ static int create_jfc(perftest_context_t *ctx, perftest_config_t *cfg)
                 (void)fprintf(stderr, "Failed to create jfce_s!\n");
                 goto delete_jfc;
             }
- 
+
             ctx->jfce_r[i] = urma_create_jfce(ctx->urma_ctx);
             if (ctx->jfce_r[i] == NULL) {
                 (void)fprintf(stderr, "Failed to create jfce_r!\n");
@@ -322,7 +322,7 @@ static int create_jfc(perftest_context_t *ctx, perftest_config_t *cfg)
             (void)fprintf(stderr, "Failed to create jfc_s, tx jfc_depth: %u.\n", cfg->jfc_depth);
             goto delete_jfc;
         }
- 
+
         jfc_cfg.jfce = cfg->use_jfce == true ? ctx->jfce_r[i] : NULL;
         ctx->jfc_r[i] = urma_create_jfc(ctx->urma_ctx, &jfc_cfg);
         if (ctx->jfc_r[i] == NULL) {
@@ -957,7 +957,7 @@ static int exchange_credit_info(perftest_context_t *ctx, perftest_comm_t *comm, 
             if (ctx->remote_credit_seg[i] == NULL) {
                 goto free_remote_credit_buf;
             }
-    
+
             if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t), (char *)&ctx->credit_seg[i]->seg,
                 (char *)ctx->remote_credit_seg[i]) != 0) {
                 (void)fprintf(stderr, "Failed to sync credit, loop:%u!\n", i);
@@ -2185,16 +2185,15 @@ void destroy_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
 
 static urma_status_t warm_up_post_send(perftest_context_t *ctx, uint32_t index, const perftest_config_t *cfg)
 {
-    run_test_ctx_t *run_ctx = &ctx->run_ctx;
-    urma_jfs_wr_t jfs_wr;
-    (void)memcpy(&jfs_wr, &run_ctx->jfs_wr[index * cfg->jfs_post_list],
-        sizeof(urma_jfs_wr_t));
+    urma_jfs_wr_t jfs_wr = ctx->run_ctx.jfs_wr[index * cfg->jfs_post_list];
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
         jfs_wr.tjetty = ctx->import_tjfr[index];
     } else {
         jfs_wr.tjetty = ctx->import_tjetty[index];
     }
     jfs_wr.flag.bs.complete_enable = 1;
+    jfs_wr.next = NULL;
+
     urma_jfs_wr_t *bad_wr = NULL;
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
         return urma_post_jfs_wr(ctx->jfs[index], &jfs_wr, &bad_wr);
