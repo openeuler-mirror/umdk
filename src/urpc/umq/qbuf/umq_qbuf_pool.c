@@ -194,9 +194,8 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     }
 
     local_block_pool_t *local_pool = get_thread_cache();
-    uint32_t headroom_size =
-        (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
-            option->headroom_size : g_qbuf_pool.headroom_size;
+    bool flag = (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0);
+    uint32_t headroom_size = flag ? option->headroom_size : g_qbuf_pool.headroom_size;
     uint32_t actual_buf_count;
 
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
@@ -207,7 +206,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     }
 
     if (request_size == 0) {
-        if (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) && option->headroom_size > 0) {
+        if (flag && headroom_size > 0) {
             UMQ_VLOG_ERR("headroom_size not supported when request_size is 0\n");
             return -EINVAL;
         }

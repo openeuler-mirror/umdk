@@ -30,6 +30,7 @@ extern "C" {
 #define UMQ_BUF_SIZE                    (1000L * 1024 * 1024)   // 1000M size
 #define UMQ_EMPTY_HEADER_COEFFICIENT    16      // if block count is n, there will be n*16 count of empty qbuf header
 #define UMQ_QBUF_DEFAULT_MEMPOOL_ID     (0)
+#define UMQ_HEADROOM_SIZE_LIMIT         (512)
 
 typedef struct qbuf_pool_cfg {
     void *buf_addr;             // buffer addr
@@ -407,7 +408,7 @@ static ALWAYS_INLINE int headroom_reset_with_split(umq_buf_t *qbuf, uint16_t hea
     uint32_t after_reset_buf_count = ((total_data_size + headroom_size + block_size - 1) / block_size);
     uint32_t before_reset_buf_count = ((total_data_size + data->headroom_size + block_size - 1) / block_size);
 
-    if ((headroom_size > block_size) || (after_reset_buf_count > before_reset_buf_count)) {
+    if (after_reset_buf_count > before_reset_buf_count) {
         UMQ_LIMIT_VLOG_ERR("headroom_size: %u invalid, after_reset: %u, before_reset: %u\n",
             headroom_size, after_reset_buf_count, before_reset_buf_count);
         return -UMQ_ERR_EINVAL;
@@ -439,7 +440,7 @@ static ALWAYS_INLINE int headroom_reset_with_combine(umq_buf_t *qbuf, uint16_t h
     uint32_t after_reset_buf_count =  ((total_data_size + headroom_size + align_size - 1) / align_size);
     uint32_t before_reset_buf_count = ((total_data_size + data->headroom_size + align_size - 1) / align_size);
 
-    if ((headroom_size > align_size) || (after_reset_buf_count > before_reset_buf_count)) {
+    if (after_reset_buf_count > before_reset_buf_count) {
         UMQ_LIMIT_VLOG_ERR("headroom_size: %u invalid, after_reset: %u, before_reset: %u\n",
             headroom_size, after_reset_buf_count, before_reset_buf_count);
         return -UMQ_ERR_EINVAL;

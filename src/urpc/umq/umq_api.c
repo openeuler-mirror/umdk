@@ -339,6 +339,11 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
+    if (cfg->headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
+        UMQ_VLOG_ERR("headroom size %u exceeds the maximum value\n", cfg->headroom_size);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if ((cfg->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0 && urpc_rand_seed_init() != 0) {
         UMQ_VLOG_ERR("rand seed init failed\n");
         return -UMQ_ERR_EINVAL;
@@ -543,8 +548,12 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     if (!g_umq_inited || request_qbuf_num == 0) {
         return NULL;
     }
-
-    uint32_t headroom_size = umq_qbuf_headroom_get();
+    uint32_t headroom_size = (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
+        option->headroom_size : umq_qbuf_headroom_get();
+    if (headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
+        UMQ_VLOG_ERR("headroom size %u exceeds the maximum value\n", headroom_size);
+        return NULL;
+    }
     umq_buf_mode_t mode = umq_qbuf_mode_get();
     uint32_t factor = (mode == UMQ_BUF_SPLIT) ? 0 : sizeof(umq_buf_t);
     if (umqh == UMQ_INVALID_HANDLE) {
@@ -649,6 +658,11 @@ void umq_buf_free(umq_buf_t *qbuf)
 int umq_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 {
     if (!g_umq_inited || qbuf == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
+        UMQ_VLOG_ERR("headroom size %u exceeds the maximum value\n", headroom_size);
         return -UMQ_ERR_EINVAL;
     }
 
