@@ -342,12 +342,12 @@ int32_t umq_ubmm_destroy_impl(uint64_t umqh_tp)
 
     if (umq_fetch_ref(tp->ubmm_ctx->io_lock_free, &tp->ref_cnt) != 1) {
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
-        return -UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EBUSY;
     }
 
     if (tp->bind_ctx != NULL) {
         UMQ_VLOG_ERR("umqh has not been unbinded\n");
-        return -UMQ_ERR_ENODEV;
+        return -UMQ_ERR_EBUSY;
     }
 
     msg_ring_destroy(tp->local_msg_ring);

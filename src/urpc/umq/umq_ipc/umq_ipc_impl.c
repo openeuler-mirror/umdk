@@ -313,12 +313,12 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (umq_fetch_ref(g_ipc_ctx->io_lock_free, &tp->ref_cnt) != 1) {
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
-        return -UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EBUSY;
     }
 
     if (tp->bind_ctx != NULL) {
         UMQ_VLOG_ERR("umqh has not been unbinded\n");
-        return -UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EBUSY;
     }
 
     umq_shm_global_pool_uninit(tp->qbuf_pool_handle);
