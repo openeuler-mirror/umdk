@@ -176,22 +176,34 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
 
 static int umq_fw_log_config_set(umq_log_config_t *config)
 {
-    for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
+    uint8_t fw_i = 0;
+    for (; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
         umq_framework_t *umq_fw = &g_umq_fws[fw_i];
         if (!umq_fw->enable) {
             continue;
         }
         if ((umq_fw == NULL) || (umq_fw->tp_ops == NULL) || (umq_fw->tp_ops->umq_tp_log_config_set == NULL)) {
             UMQ_VLOG_ERR("umq_fw invalid\n");
-            return -UMQ_ERR_EINVAL;
+            goto RESET_LOG;
         }
-        umq_fw->tp_ops->umq_tp_log_config_set(config);
-        if (fw_i == UMQ_TRANS_MODE_UB || fw_i == UMQ_TRANS_MODE_UBMM || fw_i == UMQ_TRANS_MODE_UB_PLUS || 
-            fw_i == UMQ_TRANS_MODE_UBMM_PLUS) {
-            return UMQ_SUCCESS;
+        if (umq_fw->tp_ops->umq_tp_log_config_set(config) != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR("log config set failed\n");
+            goto RESET_LOG;
         }
     }
     return UMQ_SUCCESS;
+
+RESET_LOG:
+    for (uint8_t j = 0; j < fw_i; j++) {
+        umq_framework_t *umq_fw = &g_umq_fws[j];
+        if (!umq_fw->enable) {
+            continue;
+        }
+        if (umq_fw->tp_ops->umq_tp_log_config_reset() != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR("log config reset failed, j = %u\n", j);
+        }
+    }
+    return -UMQ_ERR_EINVAL;
 }
 
 int umq_log_config_set(umq_log_config_t *config)
@@ -202,7 +214,7 @@ int umq_log_config_set(umq_log_config_t *config)
     }
 
     if ((config->log_flag & UMQ_LOG_FLAG_LEVEL) &&
-        (config->level < UMQ_LOG_LEVEL_ERR || config->level >= UMQ_LOG_LEVEL_MAX)) {
+        (config->level < UMQ_LOG_LEVEL_EMERG || config->level >= UMQ_LOG_LEVEL_MAX)) {
         UMQ_VLOG_ERR("invalid log level %d\n", config->level);
         return -UMQ_ERR_EINVAL;
     }
@@ -223,8 +235,10 @@ int umq_log_config_set(umq_log_config_t *config)
         log_config->ctx.level = (util_vlog_level_t)config->level;
         UMQ_VLOG_INFO("set log configuration successful, log level: %d\n", config->level);
     }
-    umq_fw_log_config_set(config);
-
+    if (umq_fw_log_config_set(config) != UMQ_SUCCESS) {
+        (void)pthread_mutex_unlock(&log_config->log_lock);
+        return -UMQ_ERR_EINVAL;
+    }
     if ((config->log_flag & UMQ_LOG_FLAG_RATE_LIMITED)) {
         log_config->ctx.rate_limited.interval_ms = config->rate_limited.interval_ms;
         log_config->ctx.rate_limited.num = config->rate_limited.num;
