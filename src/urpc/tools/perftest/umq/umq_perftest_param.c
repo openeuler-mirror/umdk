@@ -38,7 +38,7 @@ static struct option g_long_options[] = {
     {"use_atomic_window", no_argument, NULL, 'A'},
     {"buf_multiplex", no_argument, NULL, 'B'},
     {"num", required_argument, NULL, 'n'},
-
+    {"perf-thresh", required_argument, NULL, 't'},
     {NULL, 0, NULL, 0}
 };
 // clang-format on
@@ -69,6 +69,7 @@ static void usage(void)
     (void)printf("      --eid-index                     set eid index.\n");
     (void)printf("      --use_atomic_window             use atomic window when enable flow control.\n");
     (void)printf("      --num                           set number of iterations.\n");
+    (void)printf("      --perf-thresh                   set perf thresh array, length not exceed 8.\n");
     (void)printf("  -h, --help                          show help info.\n\n");
 }
 
@@ -90,6 +91,7 @@ static void init_cfg(umq_perftest_config_t *cfg)
     cfg->eid_idx = 0;
     cfg->use_atomic_window = false;
     cfg->test_round = DEFAULT_LAT_TEST_ROUND;
+    cfg->thresh_num = 0;
 }
 
 int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *cfg)
@@ -100,7 +102,7 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
     }
 
     init_cfg(cfg);
-
+    int start_idx = 0;
     while (1) {
         int c = getopt_long(argc, argv, "c:d:f:l:r:p:u:s:hN:D:E:n:", g_long_options, NULL);
         if (c == -1) {
@@ -179,6 +181,13 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                 break;
             case 'n':
                 cfg->test_round = (uint32_t)strtoul(optarg, NULL, 0);
+                break;
+            case 't':
+                start_idx = optind - 1;
+                while (start_idx < argc && *argv[start_idx] != '-' && cfg->thresh_num < UMQ_PERF_QUANTILE_MAX_NUM) {
+                    cfg->thresh_array[cfg->thresh_num++] = (uint64_t)strtoul(argv[start_idx++], NULL, 0);
+                }
+                optind = start_idx;
                 break;
             default:
                 usage();

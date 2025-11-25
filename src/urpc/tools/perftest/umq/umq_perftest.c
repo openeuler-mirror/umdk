@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #include "umq_api.h"
 #include "umq_pro_api.h"
@@ -27,6 +28,37 @@
 #define PERFTEST_STR_SIZE 1024
 #define PERFTEST_WAIT_TIMEOUT_US 100
 #define PERFTEST_WAIT_UMQ_READY_ROUND 10000
+
+#define UMQ_PERFTEST_EQUALS "=========================================================================================\
+================================================================================"
+#define UMQ_PERFTEST_UNDERLINE "--------------------------------------------------------------------------------------\
+-----------------------------------------------------------------------------------"
+#define UMQ_PERFTEST_ERTF_INFO_STR_SIZE (1024 + 1024 * 5 * 2) // head size: 1024, thread size: 1024 * 5, thread num: 2
+#define UMQ_PERFTEST_PERF_REC_NAME_MAX_LEN 20 // stay synchronized with the output format
+static char g_perf_record_type_name[UMQ_PERF_RECORD_TYPE_MAX][UMQ_PERFTEST_PERF_REC_NAME_MAX_LEN] = {
+    "umq_enqueue",
+    "umq_dequeue",
+    "umq_dequeue_empty",
+    "umq_post_all",
+    "umq_post_tx",
+    "umq_post_rx",
+    "umq_poll_all",
+    "umq_poll_tx",
+    "umq_poll_rx",
+    "umq_poll_all_empty",
+    "umq_poll_tx_empty",
+    "umq_poll_rx_empty",
+    "umq_notify",
+    "tp_post_send",
+    "tp_post_recv",
+    "tp_poll_tx",
+    "tp_poll_rx",
+    "tp_poll_tx_empty",
+    "tp_poll_rx_empty",
+    "tp_read",
+    "tp_send_imm",
+    "tp_write_imm",
+};
 
 typedef struct umq_perftest_worker_arg {
     perftest_thread_arg_t thd_arg;
@@ -126,6 +158,177 @@ static void umq_perftest_show_feature(uint32_t feature)
         str_len += ret;
     }
     LOG_PRINT("umq init with feature: %s\n", feature_str);
+}
+
+static inline int umq_perftest_write_perf_recode_msg(char *str_buf, int all_str_len, const char *format, ...)
+{
+    if (all_str_len <= 0) {
+        return 0;
+    }
+
+    va_list args;
+    va_start(args, format);
+    int ret = vsnprintf(str_buf, all_str_len, format, args);
+    va_end(args);
+    return ret;
+}
+
+static uint64_t umq_perftest_perf_cal_quantile(
+    umq_perf_record_t *record, umq_perf_record_type_t type, uint64_t count, uint64_t *thresh, uint32_t thresh_num)
+{
+    if (thresh_num == 0) {
+        return 0;
+    }
+
+    uint32_t idx;
+    uint64_t quantile_cnt = count;
+    for (idx = 0; idx < thresh_num; ++idx) {
+        if (record->type_record[type].bucket[idx] >= quantile_cnt) {
+            break;
+        }
+        quantile_cnt -= record->type_record[type].bucket[idx];
+    }
+
+    // the queried quantile cnt exceeds the maximum thresh records, return the max thresh
+    if (idx >= thresh_num) {
+        return thresh[thresh_num - 1];
+    }
+
+    if (record->type_record[type].bucket[idx] == 0) {
+        return 0;
+    }
+
+    uint64_t base = (idx == 0) ? 0 : thresh[idx - 1];
+    return ((double)quantile_cnt / record->type_record[type].bucket[idx]) * (thresh[idx] - base) + base;
+}
+
+static int umq_perftest_perf_analyse_and_output(
+    char *perf_info_str, int perf_info_size, umq_perf_record_t *perf_rec, uint64_t *thresh, uint32_t thresh_num)
+{
+    int ret = 0;
+    for (int type = 0; type < UMQ_PERF_RECORD_TYPE_MAX; ++type) {
+        uint64_t ave_cost = perf_rec->type_record[type].cnt != 0 ?
+                            (perf_rec->type_record[type].accumulation / perf_rec->type_record[type].cnt) : 0;
+        uint64_t median = umq_perftest_perf_cal_quantile(perf_rec, type,
+            (uint64_t)(0.5 * perf_rec->type_record[type].cnt), thresh, thresh_num);
+        uint64_t p90 = umq_perftest_perf_cal_quantile(perf_rec, type,
+            (uint64_t)(0.9 * perf_rec->type_record[type].cnt), thresh, thresh_num);
+        uint64_t p99 = umq_perftest_perf_cal_quantile(perf_rec, type,
+            (uint64_t)(0.99 * perf_rec->type_record[type].cnt), thresh, thresh_num);
+        ret += umq_perftest_write_perf_recode_msg(perf_info_str + ret, perf_info_size - ret,
+            "%-20s %-20lu %-20lu %-20lu %-20lu %-20lu %-20lu %-20lu\n",
+            g_perf_record_type_name[type], perf_rec->type_record[type].cnt, ave_cost,
+            perf_rec->type_record[type].min, perf_rec->type_record[type].max, median, p90, p99);
+    }
+    return ret;
+}
+
+static int umq_perftest_perf_info_string_get(char *perf_info, int perf_info_size,
+    umq_perf_record_t **perf_record_table, uint32_t table_num, uint64_t *thresh, uint32_t thresh_num)
+{
+    if (perf_info == NULL || perf_record_table == NULL) {
+        return UMQ_FAIL;
+    }
+
+    int str_size = 0;
+    char *ret_str = perf_info;
+    (void)memset(perf_info, 0, perf_info_size);
+
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "%s\n", UMQ_PERFTEST_EQUALS);
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "                                                                    Analyse IO performance records\n");
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "%s\n", UMQ_PERFTEST_EQUALS);
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "%-20s %-20s %-20s %-20s %-20s %-20s %-20s %-20s\n",
+        "Type", "Sample Num", "Average (ns)", "Minimum (ns)", "Maxinum (ns)", "Median (ns)", "P90 (ns)", "P99 (ns)");
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "%s\n", UMQ_PERFTEST_UNDERLINE);
+    umq_perf_record_t **recv_perf = perf_record_table;
+
+    // Ananlyse the recved perf data
+    for (uint32_t i = 0; i < table_num; ++i) {
+        if (!recv_perf[i]->is_used) {
+            continue;
+        }
+        str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+            "                                                                           Data Thread %u\n", i);
+        str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+            "%s\n", UMQ_PERFTEST_UNDERLINE);
+        str_size += umq_perftest_perf_analyse_and_output(ret_str + str_size, perf_info_size - str_size,
+            recv_perf[i], thresh, thresh_num);
+        str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+            "%s\n", UMQ_PERFTEST_UNDERLINE);
+    }
+    str_size += umq_perftest_write_perf_recode_msg(ret_str + str_size, perf_info_size - str_size,
+        "%s\n", UMQ_PERFTEST_EQUALS);
+    return str_size;
+}
+
+static int umq_perftest_start_perf(umq_perftest_config_t *cfg)
+{
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_PERF) != 0) {
+        umq_dfx_cmd_t dfx_cmd = {
+            .module_id = UMQ_DFX_MODULE_PERF,
+            .perf_cmd_id = UMQ_PERF_CMD_START,
+            .perf_in_parm = {
+                .thresh_num = cfg->thresh_num,
+            },
+        };
+        (void)memcpy(dfx_cmd.perf_in_parm.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
+        umq_dfx_result_t result_ctl = {0};
+        umq_dfx_cmd_process(&dfx_cmd, &result_ctl);
+        if (result_ctl.err_code != 0) {
+            LOG_PRINT("start dfx perf failed\n");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
+{
+    umq_dfx_cmd_t dfx_cmd;
+    umq_dfx_result_t result_ctl = {0};
+
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_PERF) != 0) {
+        // stop perf
+        dfx_cmd.module_id = UMQ_DFX_MODULE_PERF;
+        dfx_cmd.perf_cmd_id = UMQ_PERF_CMD_STOP;
+        umq_dfx_cmd_process(&dfx_cmd, &result_ctl);
+        if (result_ctl.err_code != 0) {
+            LOG_PRINT("stop perf failed\n");
+            return;
+        }
+
+        // get perf record
+        dfx_cmd.module_id = UMQ_DFX_MODULE_PERF;
+        dfx_cmd.perf_cmd_id = UMQ_PERF_CMD_GET_RESULT;
+        umq_dfx_cmd_process(&dfx_cmd, &result_ctl);
+        if (result_ctl.err_code != 0) {
+            LOG_PRINT("get perf result failed\n");
+            return;
+        }
+
+        // procrss raw data and output
+        char *perf_info_str_buf = (char *)malloc(UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
+        if (perf_info_str_buf == NULL) {
+            LOG_PRINT("malloc perf info str failed\n");
+            return;
+        }
+        umq_perf_infos_t *perf_record = (umq_perf_infos_t *)result_ctl.perf_out_parm;
+        uint64_t *thresh_array = cfg->thresh_array;
+        uint32_t thresh_num = cfg->thresh_num;
+        int str_size = umq_perftest_perf_info_string_get(perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE,
+            perf_record->perf_record, perf_record->perf_record_num, thresh_array, thresh_num);
+        if (str_size >= UMQ_PERFTEST_ERTF_INFO_STR_SIZE) {
+            perf_info_str_buf[UMQ_PERFTEST_ERTF_INFO_STR_SIZE - 1] = '\0';
+            LOG_PRINT("perf info str buf too small\n");
+        }
+        printf("%s\n", perf_info_str_buf);
+        free(perf_info_str_buf);
+    }
 }
 
 static int umq_perftest_init_umq(umq_perftest_config_t *cfg)
@@ -351,6 +554,11 @@ static int umq_perftest_run_client(umq_perftest_config_t *cfg)
         return -1;
     }
 
+    // start perf
+    if (umq_perftest_start_perf(cfg) != 0) {
+        return -1;
+    }
+
     // create umqh
     if (umq_perftest_create_umqh(cfg) != 0) {
         goto UNINIT;
@@ -391,6 +599,9 @@ static int umq_perftest_run_client(umq_perftest_config_t *cfg)
 
     // stop test threads
     umq_perftest_stop_test_threads(&cfg->config);
+
+    // finish ferf and out reslut
+    umq_perftest_finish_perf(cfg);
 
 UNBIND:
     // unbind and flush tx and rx
@@ -450,6 +661,11 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
         return ret;
     }
 
+    // start perf
+    if (umq_perftest_start_perf(cfg) != 0) {
+        return -1;
+    }
+
     // create umqh
     if (umq_perftest_create_umqh(cfg) != 0) {
         goto UNINIT;
@@ -496,6 +712,9 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
 
     // stop test threads
     umq_perftest_stop_test_threads(&cfg->config);
+
+    // finish ferf and out reslut
+    umq_perftest_finish_perf(cfg);
 
 UNBIND:
     // unbind and flush rx and tx
