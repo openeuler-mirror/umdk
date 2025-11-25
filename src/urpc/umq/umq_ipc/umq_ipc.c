@@ -14,7 +14,7 @@
 #include "umq_qbuf_pool.h"
 #include "umq_ipc_impl.h"
 
-static uint8_t *umq_tp_ipc_init(umq_init_cfg_t *cfg, void *addr, uint64_t len)
+static uint8_t *umq_tp_ipc_init(umq_init_cfg_t *cfg)
 {
     return umq_ipc_ctx_init_impl(cfg);
 }

@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <limits.h>
-#include <malloc.h>
 
 #include "dfx.h"
 #include "perf.h"
@@ -39,8 +38,6 @@ typedef struct umq_framework {
     umq_pro_ops_t *pro_tp_ops;
 } umq_framework_t;
 
-static void *g_buffer_addr = NULL;
-static uint64_t g_total_len = UMQ_BUF_SIZE;
 static bool g_umq_inited = false;
 
 static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
@@ -302,13 +299,8 @@ void umq_uninit(void)
     }
 
     umq_dfx_uninit();
-    umq_qbuf_pool_uninit();
     framework_uninit();
 
-    if (g_buffer_addr != NULL) {
-        free(g_buffer_addr);
-        g_buffer_addr = NULL;
-    }
     g_umq_inited = false;
 }
 
@@ -348,6 +340,10 @@ int umq_init(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR("rand seed init failed\n");
         return -UMQ_ERR_EINVAL;
     }
+    
+    if (umq_buf_size_pow_small_set(cfg->block_cfg.small_block_size) != UMQ_SUCCESS) {
+        return -UMQ_ERR_EINVAL;
+    }
 
     bool valid_enable = false;
     for (uint8_t trans_info_i = 0; trans_info_i < cfg->trans_info_num; trans_info_i++) {
@@ -365,15 +361,8 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
-    g_buffer_addr = (void *)memalign(UMQ_SIZE_SMALL, g_total_len);
-    if (g_buffer_addr == NULL) {
-        UMQ_VLOG_ERR("memory alloc failed\n");
-        return -UMQ_ERR_ENOMEM;
-    }
-
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
         umq_framework_t *umq_fw = &g_umq_fws[fw_i];
-
         if (!umq_fw->enable) {
             continue;
         }
@@ -394,7 +383,7 @@ int umq_init(umq_init_cfg_t *cfg)
             UMQ_VLOG_ERR("get ops func failed\n");
             goto FW_UNINIT;
         }
-        umq_fw->ctx = umq_fw->tp_ops->umq_tp_init(cfg, g_buffer_addr, g_total_len);
+        umq_fw->ctx = umq_fw->tp_ops->umq_tp_init(cfg);
         if (umq_fw->ctx == NULL) {
             UMQ_VLOG_ERR("tp init failed\n");
             goto FW_UNINIT;
@@ -412,33 +401,16 @@ int umq_init(umq_init_cfg_t *cfg)
         }
     }
 
-    qbuf_pool_cfg_t qbuf_cfg = {
-        .buf_addr = g_buffer_addr,
-        .total_size = g_total_len,
-        .data_size = UMQ_SIZE_SMALL,
-        .headroom_size = cfg->headroom_size,
-        .mode = cfg->buf_mode,
-    };
-    if (umq_qbuf_pool_init(&qbuf_cfg) != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("qbuf poll init failed\n");
-        goto FW_UNINIT;
-    }
-
     if (umq_dfx_init(cfg) != UMQ_SUCCESS) {
         UMQ_VLOG_ERR("umq dfx init failed\n");
-        goto POOL_UNINIT;
+        goto FW_UNINIT;
     }
 
     g_umq_inited = true;
     return UMQ_SUCCESS;
 
-POOL_UNINIT:
-    umq_qbuf_pool_uninit();
-
 FW_UNINIT:
     framework_uninit();
-    free(g_buffer_addr);
-    g_buffer_addr = NULL;
     return UMQ_FAIL;
 }
 
@@ -559,13 +531,14 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     if (umqh == UMQ_INVALID_HANDLE) {
         umq_buf_list_t head;
         QBUF_LIST_INIT(&head);
-        if (request_size + headroom_size + factor < UMQ_SIZE_MID) {
+        if (request_size + headroom_size + factor < umq_buf_size_middle()) {
             if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }
         } else {
-            enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= UMQ_SIZE_BIG) ?
-                HUGE_QBUF_POOL_SIZE_TYPE_BIG : HUGE_QBUF_POOL_SIZE_TYPE_MID;
+            enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= umq_buf_size_big())
+                                                     ? HUGE_QBUF_POOL_SIZE_TYPE_BIG
+                                                     : HUGE_QBUF_POOL_SIZE_TYPE_MID;
             if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }

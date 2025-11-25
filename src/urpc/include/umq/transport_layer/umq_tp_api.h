@@ -23,11 +23,9 @@ typedef struct umq_ops {
     * Thread safety function
     * Init umq
     * @param[in] cfg: init config of umq
-    * @param[in] addr: addr of global qbuf pool memory
-    * @param[in] len: length of global qbuf pool memory
     * Return uint8_t *ctx on success , NULL on failure (get error code from errno)
     */
-    uint8_t* (*umq_tp_init)(umq_init_cfg_t *cfg, void *addr, uint64_t len);
+    uint8_t* (*umq_tp_init)(umq_init_cfg_t *cfg);
 
     /**
     * Thread safety function

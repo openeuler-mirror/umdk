@@ -128,9 +128,17 @@ typedef struct umq_dev_assign {
     };
 } umq_dev_assign_t;
 
+typedef struct umq_memory_cfg {
+    // Total size will be malloced for umq buf pool, user should ensure the system has enough available memory,
+    // set to 1024MB if total_size == 0 in UB/UB_PLUS/UBMM/UBMM_PLUS mode, these modes share same total_size config.
+    // And total_size config is not used in IPC mode for now.
+    uint64_t total_size;
+} umq_memory_cfg_t;
+
 typedef struct umq_trans_info {
     umq_trans_mode_t trans_mode;
     umq_dev_assign_t dev_info;
+    umq_memory_cfg_t mem_cfg;
 } umq_trans_info_t;
 
 #define MAX_UMQ_TRANS_INFO_NUM (128)
@@ -152,6 +160,19 @@ typedef struct umq_flow_control_cfg {
     bool use_atomic_window;
 } umq_flow_control_cfg_t;
 
+typedef enum umq_buf_block_size {
+    BLOCK_SIZE_8K,
+    BLOCK_SIZE_64K,
+
+    BLOCK_SIZE_MAX,
+} umq_buf_block_size_t;
+
+typedef struct umq_buf_block_cfg {
+    // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automically
+    // adjusted
+    umq_buf_block_size_t small_block_size;
+} umq_buf_block_cfg_t;
+
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
     uint32_t feature;               // feature flags
@@ -159,6 +180,7 @@ typedef struct umq_init_cfg {
     bool io_lock_free;              // true: user should ensure thread safety when call io function
     uint8_t trans_info_num;
     umq_flow_control_cfg_t flow_control; // used when UMQ_FEATURE_ENABLE_FLOW_CONTROL is set
+    umq_buf_block_cfg_t block_cfg;
     uint16_t eid_idx;
     uint16_t cna;
     uint32_t ubmm_eid;

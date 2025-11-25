@@ -642,7 +642,7 @@ static inline int umq_ub_token_generate(bool enable_token, uint32_t *token)
 
 static int huge_qbuf_pool_memory_init(uint8_t mempool_id, enum HUGE_QBUF_POOL_SIZE_TYPE type, void **buffer_addr)
 {
-    uint32_t align_size = (type == HUGE_QBUF_POOL_SIZE_TYPE_MID) ? UMQ_SIZE_MID : UMQ_SIZE_BIG;
+    uint32_t align_size = (type == HUGE_QBUF_POOL_SIZE_TYPE_MID) ? umq_buf_size_middle() : umq_buf_size_big();
     uint32_t total_len = align_size * HUGE_QBUF_BUFFER_INC_BATCH;
     void *addr = (void *)memalign(align_size, total_len);
     if (addr == NULL) {
@@ -726,8 +726,8 @@ int umq_ub_log_config_reset_impl(void)
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
 {
     huge_qbuf_pool_cfg_t small_cfg = {
-        .total_size = UMQ_SIZE_MID * HUGE_QBUF_BUFFER_INC_BATCH,
-        .data_size = UMQ_SIZE_MID,
+        .total_size = umq_buf_size_middle() * HUGE_QBUF_BUFFER_INC_BATCH,
+        .data_size = umq_buf_size_middle(),
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
         .type = HUGE_QBUF_POOL_SIZE_TYPE_MID,
@@ -741,8 +741,8 @@ int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
     }
 
     huge_qbuf_pool_cfg_t big_cfg = {
-        .total_size = UMQ_SIZE_BIG * HUGE_QBUF_BUFFER_INC_BATCH,
-        .data_size = UMQ_SIZE_BIG,
+        .total_size = umq_buf_size_big() * HUGE_QBUF_BUFFER_INC_BATCH,
+        .data_size = umq_buf_size_big(),
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
         .type = HUGE_QBUF_POOL_SIZE_TYPE_BIG,
@@ -1245,13 +1245,14 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
     umq_buf_list_t head;
 
     QBUF_LIST_INIT(&head);
-    if (request_size + headroom_size + factor < UMQ_SIZE_MID) {
+    if (request_size + headroom_size + factor < umq_buf_size_middle()) {
         if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
     } else {
-        enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= UMQ_SIZE_BIG) ?
-            HUGE_QBUF_POOL_SIZE_TYPE_BIG : HUGE_QBUF_POOL_SIZE_TYPE_MID;
+        enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= umq_buf_size_big())
+                                                 ? HUGE_QBUF_POOL_SIZE_TYPE_BIG
+                                                 : HUGE_QBUF_POOL_SIZE_TYPE_MID;
         if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
@@ -1465,6 +1466,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto FREE_CTX;
     }
 
+    uint64_t total_io_buf_size = 0;
     for (uint32_t i = 0; i < cfg->trans_info_num; i++) {
         umq_trans_info_t *info = &cfg->trans_info[i];
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
@@ -1477,6 +1479,9 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
             continue;
         }
 
+        if (total_io_buf_size == 0) {
+            total_io_buf_size = info->mem_cfg.total_size;
+        }
         (void)memcpy(&g_ub_ctx[g_ub_ctx_count].trans_info, info, sizeof(umq_trans_info_t));
         g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
         g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
@@ -1489,10 +1494,30 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto URMA_UNINIT;
     }
 
+    if (umq_io_buf_malloc(cfg->buf_mode, total_io_buf_size) == NULL) {
+        goto URMA_UNINIT;
+    }
+
+    qbuf_pool_cfg_t qbuf_cfg = {
+        .buf_addr = umq_io_buf_addr(),
+        .total_size = umq_io_buf_size(),
+        .data_size = umq_buf_size_small(),
+        .headroom_size = cfg->headroom_size,
+        .mode = cfg->buf_mode,
+    };
+    int ret = umq_qbuf_pool_init(&qbuf_cfg);
+    if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
+        UMQ_VLOG_ERR("qbuf poll init failed\n");
+        goto IO_BUF_FREE;
+    }
+
     urpc_list_init(&g_umq_ub_queue_ctx_list.queue_list);
     (void)pthread_rwlock_init(&g_umq_ub_queue_ctx_list.lock, NULL);
 
     return (uint8_t *)(uintptr_t)g_ub_ctx;
+
+IO_BUF_FREE:
+    umq_io_buf_free();
 
 URMA_UNINIT:
     (void)urma_uninit();
@@ -1533,6 +1558,8 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         urma_delete_context(context[i].urma_ctx);
     }
 
+    umq_qbuf_pool_uninit();
+    umq_io_buf_free();
     util_id_allocator_uninit(&g_umq_ub_id_allocator);
     free(context);
     g_ub_ctx_count = 0;
@@ -1896,7 +1923,7 @@ void ubmm_fill_big_data_ref_sge(uint64_t umqh_tp, ub_ref_sge_t *ref_sge,
 static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
 {
     // apply for one to avoid memory leak
-    umq_buf_t *send_buf = umq_buf_alloc(UMQ_SIZE_SMALL, UMQ_MAX_QBUF_NUM, UMQ_INVALID_HANDLE, NULL);
+    umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), UMQ_MAX_QBUF_NUM, UMQ_INVALID_HANDLE, NULL);
     if (send_buf == NULL) {
         UMQ_LIMIT_VLOG_ERR("umq malloc failed\n");
         return -UMQ_ERR_ENOMEM;
@@ -1916,7 +1943,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
     ub_import_mempool_info_t import_mempool_info[UMQ_MAX_TSEG_NUM];
     uint32_t rest_size = (*buffer)->total_data_size;
     int32_t buf_index = 0;
-    uint16_t ref_sge_num = (UMQ_SIZE_SMALL - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
+    uint16_t ref_sge_num = (umq_buf_size_small() - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
     urma_sge_t sge;
     uint32_t max_data_size = 0;
     while ((*buffer) && rest_size != 0) {
@@ -1941,7 +1968,8 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
 
     if (umq_imm_head->type == IMM_PROTOCAL_TYPE_IMPORT_MEM) {
         if ((sizeof(umq_imm_head_t) + sizeof(ub_ref_sge_t) * buf_index +
-            sizeof(ub_import_mempool_info_t) * umq_imm_head->mempool_num) > (UMQ_SIZE_SMALL * UMQ_MAX_QBUF_NUM)) {
+                sizeof(ub_import_mempool_info_t) * umq_imm_head->mempool_num) >
+            (umq_buf_size_small() * UMQ_MAX_QBUF_NUM)) {
             UMQ_LIMIT_VLOG_ERR("import mempool info is not enough\n");
             goto FREE_BUF;
         }
@@ -2291,20 +2319,34 @@ typedef struct user_ctx {
     uint32_t msg_id;
 } user_ctx_t;
 
+
+static inline uint32_t umq_read_alloc_mem_size(umq_size_interval_t size_interval)
+{
+    if (size_interval == UMQ_SIZE_0K_SMALL_INTERVAL) {
+        return umq_buf_size_small();
+    } else if (size_interval == UMQ_SIZE_SMALL_MID_INTERVAL) {
+        return umq_buf_size_middle();
+    } else if (size_interval == UMQ_SIZE_MID_BIG_INTERVAL) {
+        return umq_buf_size_big();
+    }
+
+    UMQ_LIMIT_VLOG_ERR("size_interval: %d is invalid\n", size_interval);
+    return UINT32_MAX;
+};
+
 static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(
     umq_size_interval_t size_interval, uint16_t buf_num)
 {
-    static const uint32_t read_alloc_mem_size[UMQ_SIZE_INTERVAL_MAX] = {
-        [UMQ_SIZE_0K_SMALL_INTERVAL] = UMQ_SIZE_SMALL,
-        [UMQ_SIZE_SMALL_MID_INTERVAL] = UMQ_SIZE_MID,
-        [UMQ_SIZE_MID_BIG_INTERVAL] = UMQ_SIZE_BIG,
-    };
+    uint32_t read_alloc_mem_size = umq_read_alloc_mem_size(size_interval);
+    if (read_alloc_mem_size == UINT32_MAX) {
+        return UINT32_MAX;
+    }
 
     umq_buf_mode_t buf_mode = umq_qbuf_mode_get();
     if (buf_mode == UMQ_BUF_SPLIT) {
-        return read_alloc_mem_size[size_interval] * buf_num - umq_qbuf_headroom_get();
+        return read_alloc_mem_size * buf_num - umq_qbuf_headroom_get();
     } else if (buf_mode == UMQ_BUF_COMBINE) {
-        return read_alloc_mem_size[size_interval] * buf_num - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
+        return read_alloc_mem_size * buf_num - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
     }
 
     UMQ_LIMIT_VLOG_ERR("buf mode: %d is invalid\n", buf_mode);
