@@ -127,12 +127,12 @@ static int umq_tp_ub_async_event_fd_get(umq_trans_info_t *trans_info)
 
 static int umq_tp_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event)
 {
-    return 0;
+    return umq_ub_async_event_get(trans_info, event);
 }
 
 static void umq_tp_ub_async_event_ack(umq_async_event_t *event)
 {
-    return;
+    return umq_ub_async_event_ack(event);
 }
 
 static umq_ops_t g_umq_ub_ops = {

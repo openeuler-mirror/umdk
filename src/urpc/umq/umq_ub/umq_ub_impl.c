@@ -116,6 +116,7 @@ typedef struct ub_flow_control {
 
 struct ub_bind_ctx;
 typedef struct ub_queue {
+    urpc_list_t qctx_node;
     // queue param
     urma_jetty_t *jetty;
     urma_jfc_t *jfs_jfc;
@@ -156,6 +157,13 @@ typedef struct ub_queue {
     umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
 } ub_queue_t;
+
+typedef struct ub_queue_ctx_list {
+    urpc_list_t queue_list;
+    pthread_rwlock_t lock;
+} ub_queue_ctx_list_t;
+
+ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
 
 static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_segment_offset_t offset)
 {
@@ -1474,6 +1482,9 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto URMA_UNINIT;
     }
 
+    urpc_list_init(&g_umq_ub_queue_ctx_list.queue_list);
+    (void)pthread_rwlock_init(&g_umq_ub_queue_ctx_list.lock, NULL);
+
     return (uint8_t *)(uintptr_t)g_ub_ctx;
 
 URMA_UNINIT:
@@ -1490,6 +1501,12 @@ UNINIT_ALLOCATOR:
 
 void umq_ub_ctx_uninit_impl(uint8_t *ctx)
 {
+    ub_queue_t *cur_node, *next_node;
+    URPC_LIST_FOR_EACH_SAFE(cur_node, next_node, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        urpc_list_remove(&cur_node->qctx_node);
+    }
+    (void)pthread_rwlock_destroy(&g_umq_ub_queue_ctx_list.lock);
+
     umq_ub_ctx_t *context = (umq_ub_ctx_t *)ctx;
     if (context != g_ub_ctx) {
         UMQ_VLOG_ERR("uninit failed, ub_ctx is invalid\n");
@@ -1733,6 +1750,9 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
+    (void)pthread_rwlock_wrlock(&g_umq_ub_queue_ctx_list.lock);
+    urpc_list_push_back(&g_umq_ub_queue_ctx_list.queue_list, &queue->qctx_node);
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
     return (uint64_t)(uintptr_t)queue;
 UNINIT_RX_CTX_LIST:
     (void)rx_buf_ctx_list_uninit(&queue->rx_buf_ctx_list);
@@ -1802,6 +1822,9 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
             UMQ_VLOG_ERR("delete jfr_jfce failed\n");
         }
     }
+    (void)pthread_rwlock_wrlock(&g_umq_ub_queue_ctx_list.lock);
+    urpc_list_remove(&queue->qctx_node);
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->dev_ctx->ref_cnt, 1);
     free(queue);
     return UMQ_SUCCESS;
@@ -3660,4 +3683,176 @@ int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info)
         return UMQ_INVALID_FD;
     }
     return dev_ctx->urma_ctx->async_fd;
+}
+
+static void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
+{
+    ub_queue_t *local = NULL;
+    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->element.umqh = UMQ_INVALID_HANDLE;
+
+    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        if (local->jfs_jfc == urma_event->element.jfc || local->jfr_jfc == urma_event->element.jfc) {
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+    }
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+}
+
+static void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
+{
+    ub_queue_t *local = NULL;
+    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->element.umqh = UMQ_INVALID_HANDLE;
+
+    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        if (local->jfr == urma_event->element.jfr) {
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+    }
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+}
+
+static void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
+{
+    ub_queue_t *local = NULL;
+    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->element.umqh = UMQ_INVALID_HANDLE;
+
+    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        if (local->jfr == urma_event->element.jfr) {
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+    }
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+}
+
+static void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
+{
+    ub_queue_t *local = NULL;
+    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->element.umqh = UMQ_INVALID_HANDLE;
+
+    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        if (local->jetty == urma_event->element.jetty) {
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+    }
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+}
+
+static void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
+{
+    ub_queue_t *local = NULL;
+    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->element.umqh = UMQ_INVALID_HANDLE;
+
+    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
+        if (local->jetty == urma_event->element.jetty) {
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+    }
+    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+}
+
+int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event)
+{
+    umq_ub_ctx_t *dev_ctx = NULL;
+
+    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
+        if (memcmp(&g_ub_ctx[i].trans_info.dev_info, &trans_info->dev_info, sizeof(umq_dev_assign_t)) == 0) {
+            dev_ctx = &g_ub_ctx[i];
+            break;
+        }
+    }
+    if (dev_ctx == NULL || dev_ctx->urma_ctx == NULL) {
+        UMQ_VLOG_ERR("dev_ctx invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    urma_context_t *urma_ctx = dev_ctx->urma_ctx;
+
+    urma_async_event_t *urma_event = (urma_async_event_t *)calloc(1, sizeof(urma_async_event_t));
+    if (urma_event == NULL) {
+        UMQ_VLOG_ERR("umq calloc async event failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+    urma_status_t status = urma_get_async_event(urma_ctx, urma_event);
+    if (status != URMA_SUCCESS) {
+        free(urma_event);
+        return -status;
+    }
+    event->priv = (void *)urma_event;
+    memcpy(&event->trans_info, trans_info, sizeof(umq_trans_info_t));
+    event->original_code = urma_event->event_type;
+
+    switch (urma_event->event_type) {
+        case URMA_EVENT_JFC_ERR:
+            handle_async_event_jfc_err(urma_event, event);
+            break;
+        case URMA_EVENT_JFR_ERR:
+            handle_async_event_jfr_err(urma_event, event);
+            break;
+        case URMA_EVENT_JETTY_ERR:
+            handle_async_event_jetty_err(urma_event, event);
+            break;
+        case URMA_EVENT_JFR_LIMIT:
+            handle_async_event_jfr_limit(urma_event, event);
+            break;
+        case URMA_EVENT_JETTY_LIMIT:
+            handle_async_event_jetty_limit(urma_event, event);
+            break;
+        case URMA_EVENT_PORT_ACTIVE:
+            event->event_type = UMQ_EVENT_PORT_ACTIVE;
+            event->element.port_id = urma_event->element.port_id;
+            UMQ_LIMIT_VLOG_WARN("port active, port_id[%u]\n", event->element.port_id);
+            break;
+        case URMA_EVENT_PORT_DOWN:
+            event->event_type = UMQ_EVENT_PORT_DOWN;
+            event->element.port_id = urma_event->element.port_id;
+            UMQ_LIMIT_VLOG_WARN("port down, port_id[%u]\n", event->element.port_id);
+            break;
+        case URMA_EVENT_DEV_FATAL:
+            event->event_type = UMQ_EVENT_DEV_FATAL;
+            UMQ_LIMIT_VLOG_WARN("dev fatal\n");
+            break;
+        case URMA_EVENT_EID_CHANGE:
+            event->event_type = UMQ_EVENT_EID_CHANGE;
+            UMQ_LIMIT_VLOG_WARN("eid change\n");
+            break;
+        case URMA_EVENT_ELR_ERR:
+            event->event_type = UMQ_EVENT_ELR_ERR;
+            UMQ_LIMIT_VLOG_WARN("entity level error\n");
+            break;
+        case URMA_EVENT_ELR_DONE:
+            event->event_type = UMQ_EVENT_ELR_DONE;
+            UMQ_LIMIT_VLOG_WARN("entity flush done\n");
+            break;
+        default:
+            event->event_type = UMQ_EVENT_OTHER;
+            UMQ_LIMIT_VLOG_WARN("unrecognized urma event[%d]\n", urma_event->event_type);
+            break;
+    }
+    return URMA_SUCCESS;
+}
+
+void umq_ub_async_event_ack(umq_async_event_t *event)
+{
+    urma_async_event_t *urma_event = (urma_async_event_t *)event->priv;
+    if (urma_event == NULL) {
+        UMQ_LIMIT_VLOG_ERR("urma event invalid\n");
+        return;
+    }
+    urma_ack_async_event(urma_event);
+    free(urma_event);
+    event->priv = NULL;
 }

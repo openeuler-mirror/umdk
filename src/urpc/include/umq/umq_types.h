@@ -428,6 +428,7 @@ typedef enum umq_async_event_type {
     UMQ_EVENT_EID_CHANGE,       // eid change, HNM and other management roles will be modified.
     UMQ_EVENT_ELR_ERR,          // Entity level error
     UMQ_EVENT_ELR_DONE,         // Entity flush done
+    UMQ_EVENT_OTHER,
 } umq_async_event_type_t;
 
 typedef struct umq_async_event {
@@ -437,6 +438,7 @@ typedef struct umq_async_event {
         uint32_t port_id;
     } element;
     umq_async_event_type_t event_type;
+    int original_code; // record original event
     void *priv;
 } umq_async_event_t;
 

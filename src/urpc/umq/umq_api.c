@@ -860,6 +860,7 @@ void umq_ack_async_event(umq_async_event_t *event)
     umq_framework_t *umq_fw = &g_umq_fws[event->trans_info.trans_mode];
 
     if (!umq_fw->enable) {
+        UMQ_VLOG_ERR("framework instance disabled\n");
         return;
     }
     if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_aync_event_ack == NULL) {

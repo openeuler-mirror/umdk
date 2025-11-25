@@ -209,14 +209,14 @@ int umq_buf_split(umq_buf_t *head, umq_buf_t *node);
 
 /** Thread safety function
  * get the fd for listening to asynchronous events
- * @param[in] trans_info: transport info
+ * @param[in] trans_info: transport info, consistent with the trans_info carried in the umq_init interface parameters
  * Return fd >= 0 on success, < 0 on failure
  */
 int umq_async_event_fd_get(umq_trans_info_t *trans_info);
 
 /**
  *  Get asyn event.
- * @param[in] trans_info: transport info;
+ * @param[in] trans_info: transport info, consistent with the trans_info carried in the umq_init interface parameters
  * @param[out] event: the address to put event
  * Return: 0 on success, other value on error
  */
