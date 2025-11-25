@@ -3,10 +3,10 @@
 UMS是一种北向兼容标准socket API，南向基于UB网络进行数据传输，透明加速TCP通信的内核网络协议栈。UMS在SMC-R协议和内核SMC-R源码基础上进行二次开发，基于UMDK实现共享内存通信协议（SMC，Shared Memory Communication），旨在充分发挥华为UB硬件设备的性能优势，提升整体网络传输效率。作为构建在UB网络架构之上的高性能通信协议，UMS提供低延迟、高吞吐量的网络传输能力，特别适用于对网络性能要求苛刻的场景，如Redis、数据库、AI训推、分布式缓存等。
 
 ## 2. 软件架构
-**向上兼容 TCP socket**
+**向上兼容 TCP socket** \
 ums运行在linux内核态，兼容标准socket接口，使用tcp握手协议完成建连流程(协商错误自动回退到tcp通信)，并采用SMC-R的透明替换技术，应用层无需感知即可实现网络加速。
 
-**向下调用 UMDK-URMA API**
+**向下调用 UMDK-URMA API** \
 底层调用华为UMDK-URMA组件能力，充分利用UB网络的性能优势。
 
 **当前基于SMC-R协议**
@@ -17,11 +17,13 @@ ums运行在linux内核态，兼容标准socket接口，使用tcp握手协议完
 
 ## 3. 安装教程
 ### 3.1 查询内核是否支持smc协议
+```bash
 cat /boot/config-$(uname -r) | grep CONFIG_SMC
+```
 显示CONFIG_SMC=m 表示当前内核版本是支持smc协议的，确认环境支持以后，再按照下面描述的步骤进行环境部署
 
 ### 3.2 编译UMS RPM包
-**从UMDK编译产物获取**
+**从UMDK编译产物获取** \
 参考UMDK整体编译步骤
 
 **单独编译UMS**
@@ -30,18 +32,20 @@ cat /boot/config-$(uname -r) | grep CONFIG_SMC
 3. rpmbuild -ba umdk.spec --with ums
 
 **UMS 额外编译选项说明**
-- RPM compilation Options
-   --with ko_sign                                    option, i.e. disable ko_sign by default
+- RPM compilation Options \
+   --with ko_sign                                    option, i.e. disable ko_sign by default.
 
 **UMS 模块参数说明**
-- ko insmod/modprobe Options
-   --ub_token_disable=*                              option, i.e. 1:disable ub token, 0:enable ub token, default:0
-      说明：开启ub token会影响性能，请使用者评估使用场景安全性，决策是否开启。
+- ko insmod/modprobe Options \
+   ub_token_disable=*                              option, i.e. 1:disable ub token, 0:enable ub token, default:0. \
+     说明：开启ub token会影响性能，请使用者评估使用场景安全性，决策是否开启。
 
 ### 3.3 安装UMS
 说明:UMS需要调用URMA组件的能力，使用前需保证URMA组件安装成功且正常配置。
+```bash
 rpm -ivh /root/rpmbuild/RPMS/aarch64/umdk-ums-*
 modprobe ums
+```
 
 ## 4. 使用说明
 ### 4.1 使用方式

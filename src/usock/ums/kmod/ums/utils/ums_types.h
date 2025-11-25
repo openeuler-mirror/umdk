@@ -159,7 +159,7 @@ struct ums_link {
 	int llc_testlink_time;                /* testlink interval */
 	atomic_t conn_cnt;                    /* connections on this link */
 	atomic_t jetty_mod_cnt;               /* jetty modified count */
-	struct ubcore_token jetty_token_value; /* token value for jetty */
+	struct ubcore_token jetty_token_value; /* token_value for jetty */
 
 	struct hlist_node hnode; /* for ums_dev->jetty2link_htable */
 };

@@ -30,7 +30,7 @@
 #include "ums_log.h"
 #include "ums_clc.h"
 
-#define UMS_CLC_ACCEPT_CONFIRM_LEN 105
+#define UMS_CLC_ACCEPT_CONFIRM_LEN 108
 #define UMS_CLC_RECV_BUF_LEN 200
 #define UMS_S6_ADDR32_NUM 3
 #define UMS_PROPOSAL_KVEC_NUM 8
@@ -500,10 +500,6 @@ static int ums_clc_init_proposal(struct ums_sock *ums, struct ums_clc_msg_propos
 	}
 
 	pclc_umsd->v2_ext_offset = 0;
-	if (g_ums_sys_tuning_config.ub_token_disable)
-		pclc_base->lcl.ub_token_enable = 0;
-	else
-		pclc_base->lcl.ub_token_enable = 1;
 	pclc_base->hdr.length = htons(plen);
 	(void)memcpy(pclc->pclc_trl.eyecatcher, UMS_EYECATCHER, UMS_EYECATCHER_LEN);
 
@@ -612,9 +608,11 @@ static void ums_clc_confirm_accept_init_basic(struct ums_sock *ums,
 	clc->r0.jetty_id = htonl(link->ub_jetty->jetty_id.id);
 	clc->r0.seg_flag = htonl(conn->rmb_desc->seg[link->link_idx]->seg.attr.value);
 	if (g_ums_sys_tuning_config.ub_token_disable) {
+		clc->r0.jetty_token_policy = UBCORE_TOKEN_NONE;
 		clc->r0.jetty_token_value = 0;
 		clc->r0.seg_token_value = 0;
 	} else {
+		clc->r0.jetty_token_policy = UBCORE_TOKEN_PLAIN_TEXT;
 		clc->r0.jetty_token_value = htonl(link->jetty_token_value.token);
 		clc->r0.seg_token_value = htonl(conn->rmb_desc->seg_token_value.token);
 	}

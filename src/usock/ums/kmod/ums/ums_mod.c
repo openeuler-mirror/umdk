@@ -1146,8 +1146,8 @@ static int __init ums_init(void)
 #if defined(UMS_TRACE)
 	tracing_on();
 #endif
-	rc = ums_init_base();
 	ums_init_sys_config();
+	rc = ums_init_base();
 	if (rc != 0)
 		return rc;
 	rc = ums_ubcore_register_client();

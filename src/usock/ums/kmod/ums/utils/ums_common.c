@@ -279,12 +279,8 @@ void ums_link_save_peer_info(struct ums_link *link,
 	if ((ub_dev != NULL) && (ub_dev->transport_type == UBCORE_TRANSPORT_UB)) {
 		link->ub_tjetty_cfg.flag.bs.order_type = UBCORE_OL; /* low layer ordering */
 		link->ub_tjetty_cfg.flag.bs.share_tp = 1;
-		if (g_ums_sys_tuning_config.ub_token_disable) {
-			link->ub_tjetty_cfg.flag.bs.token_policy = UBCORE_TOKEN_NONE;
-		} else {
-			link->ub_tjetty_cfg.flag.bs.token_policy = UBCORE_TOKEN_PLAIN_TEXT;
-			link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
-		}
+		link->ub_tjetty_cfg.flag.bs.token_policy = clc->r0.jetty_token_policy;
+		link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
 		link->ub_tjetty_cfg.type = UBCORE_JETTY;
 		link->ub_tjetty_cfg.tp_type = UBCORE_CTP;
 	}
