@@ -477,6 +477,26 @@ int umq_ipc_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf
     return UMQ_FAIL;
 }
 
+static ALWAYS_INLINE bool is_local_addr(umq_ipc_info_t *tp, umq_buf_t *qbuf)
+{
+    uint64_t addr = (uint64_t)(uintptr_t)qbuf;
+    uint64_t addr_from = (uint64_t)(uintptr_t)tp->local_ring.addr;
+    uint64_t addr_to = addr_from + (uint64_t)(uintptr_t)tp->local_ring.shm_size;
+    return (addr_from <= addr) && (addr < addr_to);
+}
+
+static ALWAYS_INLINE bool is_remote_addr(umq_ipc_info_t *tp, umq_buf_t *qbuf)
+{
+    if (tp->bind_ctx == NULL) {
+        return false;
+    }
+
+    uint64_t addr = (uint64_t)(uintptr_t)qbuf;
+    uint64_t addr_from = (uint64_t)(uintptr_t)tp->bind_ctx->remote_ring.addr;
+    uint64_t addr_to = addr_from + (uint64_t)(uintptr_t)tp->bind_ctx->remote_ring.shm_size;
+    return (addr_from <= addr) && (addr < addr_to);
+}
+
 static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32_t num)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
@@ -504,6 +524,10 @@ int umq_ipc_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf
     if (tp->bind_ctx == NULL) {
         UMQ_LIMIT_VLOG_ERR("umq has not been binded\n");
         return -UMQ_ERR_ENODEV;
+    }
+    if (!is_local_addr(tp, qbuf)) {
+        UMQ_LIMIT_VLOG_ERR("qbuf addr is not local addr\n");
+        return -UMQ_ERR_EINVAL;
     }
 
     int ret = umq_shm_qbuf_enqueue(qbuf, umqh_tp, tp->qbuf_pool_handle, false, enqueue_data);
@@ -569,26 +593,6 @@ umq_buf_t *umq_ipc_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_n
     }
 
     return QBUF_LIST_FIRST(&head);
-}
-
-static ALWAYS_INLINE bool is_local_addr(umq_ipc_info_t *tp, umq_buf_t *qbuf)
-{
-    uint64_t addr = (uint64_t)(uintptr_t)qbuf;
-    uint64_t addr_from = (uint64_t)(uintptr_t)tp->local_ring.addr;
-    uint64_t addr_to = addr_from + (uint64_t)(uintptr_t)tp->local_ring.shm_size;
-    return (addr_from <= addr) && (addr < addr_to);
-}
-
-static ALWAYS_INLINE bool is_remote_addr(umq_ipc_info_t *tp, umq_buf_t *qbuf)
-{
-    if (tp->bind_ctx == NULL) {
-        return false;
-    }
-
-    uint64_t addr = (uint64_t)(uintptr_t)qbuf;
-    uint64_t addr_from = (uint64_t)(uintptr_t)tp->bind_ctx->remote_ring.addr;
-    uint64_t addr_to = addr_from + (uint64_t)(uintptr_t)tp->bind_ctx->remote_ring.shm_size;
-    return (addr_from <= addr) && (addr < addr_to);
 }
 
 void umq_tp_ipc_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)

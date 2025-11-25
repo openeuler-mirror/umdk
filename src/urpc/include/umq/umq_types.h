@@ -88,7 +88,6 @@ typedef enum umq_dev_assign_mode {
 #define UMQ_IPV4_SIZE                (16)
 #define UMQ_IPV6_SIZE                (46)
 #define UMQ_DEV_NAME_SIZE            (64)
-#define UMQ_MAX_BIND_INFO_SIZE       (256)
 #define UMQ_BATCH_SIZE               (64)
 
 #define UMQ_INTERRUPT_FLAG_IO_DIRECTION         (1)         // enable arg direction

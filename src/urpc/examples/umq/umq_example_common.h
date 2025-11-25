@@ -16,9 +16,10 @@
 #include "umq_api.h"
 #include "umq_pro_api.h"
 
-#define PORT_MAX 65535
-#define DEFAULT_PORT 19875
-#define TIME_SIZE 35
+#define PORT_MAX                  65535
+#define DEFAULT_PORT              19875
+#define TIME_SIZE                 35
+#define UMQ_MAX_BIND_INFO_SIZE    512
 
 extern const uint32_t EXAMPLE_SLEEP_TIME_US;
 extern const uint32_t EXAMPLE_MAX_WAIT_TIME_MS;
