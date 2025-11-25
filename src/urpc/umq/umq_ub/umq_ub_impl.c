@@ -522,7 +522,7 @@ static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
 
 static void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
 {
-    if (!fc->enabled) {
+    if (!fc->enabled || queue->bind_ctx == NULL) {
         return;
     }
     // post read remote window
@@ -1794,12 +1794,12 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
     if (umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt) != 1) {
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
-        return -UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EBUSY;
     }
 
     if (queue->bind_ctx != NULL) {
         UMQ_VLOG_ERR("umqh has not been unbinded\n");
-        return -UMQ_ERR_ENODEV;
+        return -UMQ_ERR_EBUSY;
     }
     pthread_mutex_destroy(&queue->imported_tseg_list_mutex);
     umq_buf_free(queue->notify_buf);
@@ -2291,7 +2291,8 @@ typedef struct user_ctx {
     uint32_t msg_id;
 } user_ctx_t;
 
-static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(umq_size_interval_t size_interval, uint16_t buf_num)
+static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(
+    umq_size_interval_t size_interval, uint16_t buf_num)
 {
     static const uint32_t read_alloc_mem_size[UMQ_SIZE_INTERVAL_MAX] = {
         [UMQ_SIZE_0K_SMALL_INTERVAL] = UMQ_SIZE_SMALL,
@@ -2824,10 +2825,9 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_
         }
 
         return tx_cnt + rx_cnt;
-    } else {
-        UMQ_LIMIT_VLOG_ERR("invalid io direction[%d]\n", io_direction);
     }
-    return UMQ_FAIL;
+    UMQ_LIMIT_VLOG_ERR("invalid io direction[%d]\n", io_direction);
+    return -UMQ_ERR_EINVAL;
 }
 
 static void umq_flush_rx(ub_queue_t *queue, uint32_t max_retry_times)
@@ -3561,6 +3561,10 @@ umq_buf_t *umq_ub_dequeue_impl(uint64_t umqh_tp)
 {
     umq_buf_t *buf[UMQ_POST_POLL_BATCH];
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->bind_ctx == NULL) {
+        UMQ_LIMIT_VLOG_ERR("umq has not been binded\n");
+        return NULL;
+    }
     urma_cr_t cr[UMQ_POST_POLL_BATCH];
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     int rx_cnt = umq_ub_dequeue_with_poll_rx(queue, cr, buf);
@@ -3579,6 +3583,10 @@ umq_buf_t *umq_ub_dequeue_impl_plus(uint64_t umqh_tp)
 {
     umq_buf_t *buf[UMQ_POST_POLL_BATCH];
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->bind_ctx == NULL) {
+        UMQ_LIMIT_VLOG_ERR("umq has not been binded\n");
+        return NULL;
+    }
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     urma_cr_t cr[UMQ_POST_POLL_BATCH];
     int return_rx_cnt;
