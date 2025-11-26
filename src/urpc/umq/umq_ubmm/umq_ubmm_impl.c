@@ -86,10 +86,11 @@ typedef struct umq_ubmm_ref_sge_info {
     uint16_t msg_id;
     char ub_ref_info[0];
 } __attribute__((packed)) umq_ubmm_ref_sge_info_t;
+
 static const uint32_t UMQ_IPC_DATA_SIZE = sizeof(uint64_t) + sizeof(uint32_t);
 static umq_ubmm_init_ctx_t *g_ubmm_ctx = NULL;
 static uint32_t g_ubmm_ctx_count = 0;
-util_id_allocator_t g_umq_id_allocator = {0};
+static util_id_allocator_t g_umq_id_allocator = {0};
 
 uint8_t *umq_ubmm_ctx_init_impl(umq_init_cfg_t *cfg)
 {

@@ -75,19 +75,24 @@ typedef struct umq_ipc_bind_info {
 
 // ipc supports only one ctx
 static umq_ipc_init_ctx_t *g_ipc_ctx = NULL;
-util_id_allocator_t g_umq_id_allocator = {0};
+static util_id_allocator_t g_umq_id_allocator = {0};
 
 uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
 {
     if (g_ipc_ctx != NULL) {
-        UMQ_VLOG_WARN("already inited\n");
+        UMQ_VLOG_WARN("umq ipc already inited\n");
         return (uint8_t *)g_ipc_ctx;
+    }
+
+    if (util_id_allocator_init(&g_umq_id_allocator, UMQ_MAX_QUEUE_NUMBER, 0) != 0) {
+        UMQ_VLOG_ERR("id allocator init failed\n");
+        return NULL;
     }
 
     g_ipc_ctx = (umq_ipc_init_ctx_t *)calloc(1, sizeof(umq_ipc_init_ctx_t));
     if (g_ipc_ctx == NULL) {
         UMQ_VLOG_ERR("memory alloc failed\n");
-        return NULL;
+        goto UNINIT_ALLOCATOR;
     }
 
     for (uint32_t i = 0; i < cfg->trans_info_num; ++i) {
@@ -104,12 +109,19 @@ uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
     }
 
     if (g_ipc_ctx->ref_cnt == 0) {
-        free(g_ipc_ctx);
-        g_ipc_ctx = NULL;
-        return NULL;
+        UMQ_VLOG_ERR("umq ipc not enabled\n");
+        goto FREE_CTX;
     }
 
     return (uint8_t *)(uintptr_t)g_ipc_ctx;
+
+FREE_CTX:
+    free(g_ipc_ctx);
+    g_ipc_ctx = NULL;
+
+UNINIT_ALLOCATOR:
+    util_id_allocator_uninit(&g_umq_id_allocator);
+    return NULL;
 }
 
 void umq_ipc_ctx_uninit_impl(uint8_t *ipc_ctx)
@@ -126,6 +138,7 @@ void umq_ipc_ctx_uninit_impl(uint8_t *ipc_ctx)
     }
 
     umq_dec_ref(context->io_lock_free, &context->ref_cnt, 1);
+    util_id_allocator_uninit(&g_umq_id_allocator);
     free(context);
     g_ipc_ctx = NULL;
 }
