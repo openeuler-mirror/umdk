@@ -7,8 +7,8 @@
 #include "util_log.h"
 #include "urpc_dbuf_stat.h"
 
-urpc_dbuf_stat_t g_urpc_dbuf_stat[URPC_DBUF_TYPE_MAX];
-bool g_urpc_dbuf_record_enable = false;
+static urpc_dbuf_stat_t g_urpc_dbuf_stat[URPC_DBUF_TYPE_MAX];
+static bool g_urpc_dbuf_record_enable = false;
 static const char *g_urpc_dbuf_stat_name[URPC_DBUF_STAT_NUM] = {
     "Queue",
     "Channel",

@@ -42,8 +42,8 @@ static struct {
 };
 
 static urpc_allocator_t *g_urpc_allocator = NULL;
-pthread_mutex_t g_urpc_allocator_lock = PTHREAD_MUTEX_INITIALIZER;
-bool g_urpc_allocator_inited = false;
+static pthread_mutex_t g_urpc_allocator_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool g_urpc_allocator_inited = false;
 
 static bool urpc_default_allocator_cfg_check(default_allocator_cfg_t *cfg)
 {

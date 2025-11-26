@@ -19,8 +19,8 @@
 #include "urpc_dbuf_stat.h"
 #include "channel.h"
 
-urpc_channel_info_t *g_urpc_channels[URPC_MAX_CHANNELS] = {0};
-urpc_channel_id_allocator_t g_urpc_channel_id_allocator = {0};
+static urpc_channel_info_t *g_urpc_channels[URPC_MAX_CHANNELS] = {0};
+static urpc_channel_id_allocator_t g_urpc_channel_id_allocator = {0};
 
 int channel_id_allocator_init(urpc_channel_id_allocator_t *id_allocator, uint32_t max_num)
 {

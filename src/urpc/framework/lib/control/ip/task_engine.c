@@ -18,7 +18,7 @@
 
 #include "task_engine.h"
 
-uint8_t g_urpc_ctl_version = URPC_CTL_VERSION_MAX;
+static uint8_t g_urpc_ctl_version = URPC_CTL_VERSION_MAX;
 typedef struct task_send_request_option {
     transport_handle_t *ctl_hdl;
     ip_ctl_capability_t cap;

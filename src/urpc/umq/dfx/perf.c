@@ -19,8 +19,8 @@
 #define UMQ_PERF_IO_DIRECTION_TX_OFFSET      (1)
 #define UMQ_PERF_IO_DIRECTION_RX_OFFSET      (2)
 
-__thread uint32_t g_perf_record_index = -1;
-__thread pthread_once_t g_dp_thread_run_once = PTHREAD_ONCE_INIT;
+static __thread uint32_t g_perf_record_index = -1;
+static __thread pthread_once_t g_dp_thread_run_once = PTHREAD_ONCE_INIT;
 static bool g_umq_perf_record_enable = false;
 
 typedef struct umq_perf_record_ctx {
@@ -30,7 +30,7 @@ typedef struct umq_perf_record_ctx {
     pthread_mutex_t lock;
 } umq_perf_record_ctx_t;
 
-umq_perf_record_ctx_t *g_umq_perf_record_ctx;
+static umq_perf_record_ctx_t *g_umq_perf_record_ctx;
 
 int umq_perf_init(void)
 {

@@ -44,7 +44,7 @@ static void set_read(uint64_t qh __attribute__((unused)),
     option->call_mode = 0;
 }
 
-client_test_case_t g_test_cases[] = {
+static client_test_case_t g_test_cases[] = {
     {
         .name = "early req without ack", .hit_event_num = 1,
         .hit_events = (1 << POLL_EVENT_REQ_RSPED), .func = set_early_rsp_mode

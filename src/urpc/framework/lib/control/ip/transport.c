@@ -24,8 +24,8 @@
 #define TRANSPORT_RETRY_TIMES 1
 #define TRANSPORT_EVENT_ERR_TIMES 3
 
-urpc_client_connect_table_t g_urpc_client_connect_hamp = {0};
-urpc_server_accept_manager_t g_urpc_server_accept_manager;
+static urpc_client_connect_table_t g_urpc_client_connect_hamp = {0};
+static urpc_server_accept_manager_t g_urpc_server_accept_manager;
 
 typedef struct server_channel_resource_table {
     struct urpc_hmap hmap;

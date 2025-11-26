@@ -12,8 +12,8 @@
 #include "umq_example_common.h"
 #include "umq_example_base.h"
 
-const char *EXAMPLE_CLIENT_ENQUEUE_DATA = "hello, this is umq client";
-const char *EXAMPLE_SERVER_ENQUEUE_DATA = "hello, this is umq server";
+static const char *EXAMPLE_CLIENT_ENQUEUE_DATA = "hello, this is umq client";
+static const char *EXAMPLE_SERVER_ENQUEUE_DATA = "hello, this is umq server";
 static const char *g_log_level_to_str[UMQ_LOG_LEVEL_MAX] = {"EMERG", "ALERT", "CRIT", "ERROR", "WARNING",
                                                             "NOTICE", "INFO", "DEBUG"};
 

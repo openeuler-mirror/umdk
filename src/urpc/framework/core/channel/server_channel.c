@@ -30,7 +30,7 @@ typedef struct server_id_entry {
 } server_id_entry_t;
 
 static pthread_rwlock_t g_urpc_server_channel_lock = PTHREAD_RWLOCK_INITIALIZER;
-urpc_server_channel_info_t *g_urpc_server_channels[URPC_SERVER_MAX_CHANNELS] = {0};
+static urpc_server_channel_info_t *g_urpc_server_channels[URPC_SERVER_MAX_CHANNELS] = {0};
 
 // if authentication is on, use random id as server_channel id sent to client, otherwise, just use server_channel->id
 static struct {
@@ -38,9 +38,9 @@ static struct {
     struct urpc_hmap id_map;
 } g_urpc_server_id_map;
 
-urpc_channel_id_allocator_t g_urpc_server_channel_base_id_allocator = {0};
+static urpc_channel_id_allocator_t g_urpc_server_channel_base_id_allocator = {0};
 
-urpc_server_connect_table_t g_urpc_server_channel_connect_hamp = {0};
+static urpc_server_connect_table_t g_urpc_server_channel_connect_hamp = {0};
 
 static int server_channel_id_map_init(void)
 {
