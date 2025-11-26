@@ -24,7 +24,7 @@
 #define POLL_MAX_NUM 64
 static ext_ops_t *g_urpc_ext_ops[MAX_FUNC_DEFINED];
 
-urpc_func_poll_cb_t g_func_poll_cb = NULL;
+static urpc_func_poll_cb_t g_func_poll_cb = NULL;
 
 static inline bool is_ssl_enabled(uint8_t func_defined)
 {

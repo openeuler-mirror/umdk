@@ -49,7 +49,7 @@ typedef enum umq_ub_rw_segment_offset {
     OFFSET_FLOW_CONTROL, // 16bit local window, 16bit remote window
 } umq_ub_rw_segment_offset_t;
 
-util_id_allocator_t g_umq_ub_id_allocator = {0};
+static util_id_allocator_t g_umq_ub_id_allocator = {0};
 
 typedef struct umq_ub_ctx {
     bool io_lock_free;
@@ -163,7 +163,7 @@ typedef struct ub_queue_ctx_list {
     pthread_rwlock_t lock;
 } ub_queue_ctx_list_t;
 
-ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
+static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
 
 static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_segment_offset_t offset)
 {
