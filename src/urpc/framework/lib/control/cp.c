@@ -39,7 +39,7 @@
 #define URPC_MANAGE_QUEUE_DEFAULT_DEPTH 128
 #define URPC_CLIENT_HANDSHAKE_TIMEOUT 30000 // ms
 #define KEEPALIVE_MAX_PROB_CNT 127
-urpc_ctx_t g_urpc_ctx = {0};
+static urpc_ctx_t g_urpc_ctx = {0};
 
 static urpc_ctrl_cb_t g_urpc_ctrl_msg_cb = NULL;
 static urpc_ext_channel_create_cb_t g_ext_channel_create_cb = NULL;

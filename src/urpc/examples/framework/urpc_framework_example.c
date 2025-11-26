@@ -74,7 +74,7 @@ typedef struct remote_qid {
 } remote_qid_t;
 
 static struct allocator_ctx *g_allocator_ctx = NULL;
-pthread_mutex_t g_allocator_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_allocator_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static urpc_allocator_t *g_used_allocator = NULL;
 static remote_qid_t g_server_rqid_array = {0};

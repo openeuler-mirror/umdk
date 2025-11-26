@@ -20,8 +20,8 @@
 
 #include "crypto.h"
 
-char g_urpc_cipher_list[URPC_MAX_CIPHER_LIST_LENGTH] = {0};
-char g_urpc_cipher_suites[URPC_MAX_CIPHER_LIST_LENGTH] = {0};
+static char g_urpc_cipher_list[URPC_MAX_CIPHER_LIST_LENGTH] = {0};
+static char g_urpc_cipher_suites[URPC_MAX_CIPHER_LIST_LENGTH] = {0};
 
 static struct {
     volatile urpc_ssl_config_t ssl_cfg;

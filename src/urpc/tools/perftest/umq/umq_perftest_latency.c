@@ -18,7 +18,7 @@
 
 #define LATENCY_MEASURE_TAIL 2
 
-perftest_latency_ctx_t g_perftest_latency_ctx = {0};
+static perftest_latency_ctx_t g_perftest_latency_ctx = {0};
 
 static void set_pro_data(umq_buf_t *tmp, umq_perftest_latency_arg_t *lat_arg)
 {

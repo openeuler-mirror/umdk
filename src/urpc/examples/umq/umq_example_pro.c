@@ -14,8 +14,8 @@
 #include "umq_example_pro.h"
 
 static const uint32_t EXAMPLE_MAX_DEPTH = 64;
-const char *EXAMPLE_CLIENT_POST_DATA = "hello, this is umq pro client";
-const char *EXAMPLE_SERVER_POST_DATA = "hello, this is umq pro server";
+static const char *EXAMPLE_CLIENT_POST_DATA = "hello, this is umq pro client";
+static const char *EXAMPLE_SERVER_POST_DATA = "hello, this is umq pro server";
 
 int run_umq_example_pro_server(struct urpc_example_config *cfg)
 {
