@@ -75,7 +75,7 @@ static pthread_rwlock_t g_register_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 static struct register_list_head g_register_list_head;
 static __thread register_list_node_t g_register_list_node = {0};
 
-static __thread local_qbuf_pool_t g_thread_cache[UMQ_SIZE_SMALL] = {0};
+static __thread local_qbuf_pool_t g_thread_cache[UMQ_MAX_QUEUE_NUMBER] = {0};
 
 static int release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
 {
@@ -120,7 +120,7 @@ static ALWAYS_INLINE void release_thread_cache_array()
     (void)pthread_rwlock_wrlock(&g_register_rwlock);
     LIST_REMOVE(&g_register_list_node, node);
 
-    for (uint32_t id = 0; id < UMQ_SIZE_SMALL; id++) {
+    for (uint32_t id = 0; id < UMQ_MAX_QUEUE_NUMBER; id++) {
         if (g_thread_cache[id].pool == NULL) {
             continue;
         }
