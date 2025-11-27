@@ -23,3 +23,29 @@ int udma_u_ctrlq_get_tp_list(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint32
 
 	return ret;
 }
+
+int udma_u_ctrlq_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle,
+			     const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap,
+			     const urma_tp_attr_value_t *tp_attr)
+{
+	int ret;
+
+	ret = urma_cmd_set_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr, NULL);
+	if (ret)
+		UDMA_LOG_ERR("urma cmd set tp attr failed, ret = %d.\n", ret);
+
+	return ret;
+}
+
+int udma_u_ctrlq_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle,
+			     uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap,
+			     urma_tp_attr_value_t *tp_attr)
+{
+	int ret;
+
+	ret = urma_cmd_get_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr, NULL);
+	if (ret)
+		UDMA_LOG_ERR("urma cmd get tp attr failed, ret = %d.\n", ret);
+
+	return ret;
+}
