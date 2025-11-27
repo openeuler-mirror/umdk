@@ -153,6 +153,128 @@ int ums_ubcore_determine_eid(struct ums_ubcore_determine_eid_param *param)
 	return -ENODEV;
 }
 
+static inline int ums_ubcore_get_eid_index(const struct ubcore_device *ub_dev,
+	const union ubcore_eid *eid, struct ums_init_info *ini)
+{
+	u32 i;
+
+	for (i = 0; i < ub_dev->eid_table.eid_cnt; i++) {
+		if ((ini->net == ub_dev->eid_table.eid_entries[i].net) &&
+			ums_ubcore_check_if_eid_match(eid, &ub_dev->eid_table.eid_entries[i].eid)) {
+			ini->eid_index = i;
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
+static int ums_ubcore_get_src_v_eid_and_ub_dev(struct ums_init_info *ini)
+{
+	struct ums_ubcore_device *ums_ub_dev;
+	u32 i;
+
+	mutex_lock(&g_ums_ubcore_devices.mutex);
+	list_for_each_entry(ums_ub_dev, &g_ums_ubcore_devices.list, list) {
+		if (!check_if_ub_bonding_dev(ums_ub_dev->ub_dev)) {
+			continue;
+		}
+
+		/* Get source virtual eid, refer to source bonding eid. */
+		for (i = 0; i < ums_ub_dev->ub_dev->eid_table.eid_cnt; i++) {
+			if ((ini->net == ums_ub_dev->ub_dev->eid_table.eid_entries[i].net) &&
+				ums_eid_valid(ums_ub_dev->ub_dev, i)) {
+				(void)memcpy(ini->src_v_eid.raw, ums_ub_dev->ub_dev->eid_table.eid_entries[i].eid.raw, UMS_EID_SIZE);
+				ini->ub_dev = ums_ub_dev; /* virtual ubdev, refer to bonding ubdev */
+				mutex_unlock(&g_ums_ubcore_devices.mutex);
+				return 0;
+			}
+		}
+
+		UMS_LOGE("Get source virtual eid failed, dev_name: %s.", ums_ub_dev->ub_dev->dev_name);
+		mutex_unlock(&g_ums_ubcore_devices.mutex);
+		return -ENODEV;
+	}
+	mutex_unlock(&g_ums_ubcore_devices.mutex);
+
+	UMS_LOGE("Get source virtual eid failed, bonding ubdev not found.");
+	return -ENODEV;
+}
+
+int ums_ubcore_find_ub_dev_by_eid(union ubcore_eid *eid, struct ums_init_info *ini)
+{
+	struct ums_ubcore_device *ums_ub_dev;
+	struct ubcore_device *ub_dev = NULL;
+	int i;
+
+	ub_dev = ubcore_get_device_by_eid(eid, UBCORE_TRANSPORT_UB);
+	if (ub_dev == NULL) {
+		UMS_LOGE("ubcore_get_device_by_eid failed, eid: %pI6c", eid->raw);
+		return -ENODEV;
+	}
+
+	mutex_lock(&g_ums_ubcore_devices.mutex);
+	list_for_each_entry(ums_ub_dev, &g_ums_ubcore_devices.list, list) {
+		if (ums_ub_dev->ub_dev != ub_dev) {
+			continue;
+		}
+
+		for (i = 0; i < UMS_MAX_PORTS; i++) {
+			if (ums_ubcore_port_active(ums_ub_dev, (u8)i) &&
+				(!test_bit(i, ums_ub_dev->ports_going_away)) &&
+				(ums_ubcore_get_eid_index(ums_ub_dev->ub_dev, eid, ini) == 0)) {
+				(void)memcpy(ini->eid.raw, eid->raw, UMS_EID_SIZE);
+				ini->ub_dev = ums_ub_dev;
+				ini->ub_port = (u8)i;
+				mutex_unlock(&g_ums_ubcore_devices.mutex);
+				return 0;
+			}
+		}
+	}
+	mutex_unlock(&g_ums_ubcore_devices.mutex);
+
+	UMS_LOGE("ubdev is not in ums ubcore devices list or get eid_index failed, dev_name: %s, eid: %pI6c.",
+		ub_dev->dev_name, eid->raw);
+	return -ENODEV;
+}
+
+void ums_ubcore_clnt_find_src_v_eid_and_ub_dev(struct ums_init_info *ini)
+{
+	if (ums_ubcore_get_src_v_eid_and_ub_dev(ini) != 0) {
+		return;
+	}
+
+	ini->topo_eid_enable = UMS_UBCORE_GET_TOPO_EID_ENABLE;
+	UMS_LOGI_LIMITED("Get source virtual eid succeeded, dev_name: %s, src_v_eid: %pI6c.",
+		ini->ub_dev->ub_dev->dev_name, ini->src_v_eid.raw);
+}
+
+void ums_ubcore_serv_find_ub_dev_non_netdev(struct ums_init_info *ini)
+{
+	union ubcore_eid local_eid = {0};
+	union ubcore_eid peer_eid = {0};
+
+	if (ums_ubcore_get_src_v_eid_and_ub_dev(ini) != 0) {
+		return;
+	}
+	ini->ub_dev = NULL;
+
+	if (ubcore_get_topo_eid(UBCORE_RTP, &ini->src_v_eid, &ini->dst_v_eid, &local_eid, &peer_eid) != 0) {
+		UMS_LOGE("ubcore_get_topo_eid failed, tp_type: %u, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
+			UBCORE_RTP, ini->src_v_eid.raw, ini->dst_v_eid.raw);
+		return;
+	}
+
+	if (ums_ubcore_find_ub_dev_by_eid(&local_eid, ini) != 0) {
+		UMS_LOGE("Find ub device by eid failed, eid: %pI6c.", local_eid.raw);
+		return;
+	}
+
+	(void)memcpy(ini->peer_eid.raw, peer_eid.raw, UMS_EID_SIZE);
+	UMS_LOGI_LIMITED("Find ub device succeeded, dev_name: %s, port: %u, eid_index: %d, eid: %pI6c, peer_eid: %pI6c.",
+		ini->ub_dev->ub_dev->dev_name, ini->ub_port, ini->eid_index, ini->eid.raw, ini->peer_eid.raw);
+}
+
 /* Create an identifier unique for this instance of UMS.
  * The MAC-address of the first active registered UB device
  * plus a random 2-byte number is used to create this identifier.

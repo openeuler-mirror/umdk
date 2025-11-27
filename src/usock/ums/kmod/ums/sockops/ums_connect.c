@@ -172,7 +172,6 @@ static void ums_init_ini_info(struct ums_init_info *ini, struct ums_clc_msg_acce
 	ini->first_contact_peer = aclc->hdr.typev2 & UMS_FIRST_CONTACT_MASK;
 	(void)memcpy(ini->peer_systemid, aclc->r0.lcl.id_for_peer, UMS_SYSTEMID_LEN);
 	(void)memcpy(ini->peer_eid.raw, aclc->r0.lcl.eid.raw, UMS_EID_SIZE);
-	ini->peer_eid_index = aclc->r0.lcl.eid_index;
 	(void)memcpy(ini->peer_mac, aclc->r0.lcl.mac, ETH_ALEN);
 }
 
@@ -183,6 +182,16 @@ static int ums_client_create_resources(struct ums_sock *ums,
 	int i;
 
 	ums_init_ini_info(ini, aclc);
+
+	if (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) {
+		if (ums_ubcore_find_ub_dev_by_eid(&aclc->r0.peer_eid, ini) != 0) {
+			UMS_LOGE("Find ub device by eid failed, eid: %pI6c.", aclc->r0.peer_eid.raw);
+			return UMS_CLC_DECL_NOUMSDEV;
+		}
+		UMS_LOGI_LIMITED("Find ub device succeeded, dev_name: %s, port: %u, eid_index: %d, "
+			"eid: %pI6c, peer_eid: %pI6c.", ini->ub_dev->ub_dev->dev_name, ini->ub_port,
+			ini->eid_index, ini->eid.raw, ini->peer_eid.raw);
+	}
 
 	ums_lgr_pending_lock(ini, &g_ums_client_lgr_pending);
 	reason_code = ums_conn_create(ums, ini);

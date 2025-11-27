@@ -324,7 +324,6 @@ struct ums_init_info {
 	u32 rc;
 	u8 negotiated_eid[UMS_MAX_EID_LEN];
 	union ubcore_eid peer_eid;
-	u32 peer_eid_index;
 	u8 peer_mac[ETH_ALEN];
 	u8 peer_systemid[UMS_SYSTEMID_LEN];
 	union ubcore_eid eid;
@@ -335,6 +334,16 @@ struct ums_init_info {
 	struct net *net;
 	/* mutex holding for conn create */
 	struct mutex *mutex;
+
+	bool is_server;
+	/*
+	 * If topo_eid_enable is true, then the src eid and dst eid
+	 * required for establishing the link is obtained by the source virtual
+	 * eid and destination virtual eid.
+	 */
+	u8 topo_eid_enable;
+	union ubcore_eid src_v_eid; /* Source virtual eid, refer to the source bonding eid. */
+	union ubcore_eid dst_v_eid; /* Destination virtual eid, refer to the destination bonding eid. */
 };
 
 enum ums_state { /* possible states of an UMS socket */

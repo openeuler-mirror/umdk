@@ -282,7 +282,7 @@ void ums_link_save_peer_info(struct ums_link *link,
 		link->ub_tjetty_cfg.flag.bs.token_policy = clc->r0.jetty_token_policy;
 		link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
 		link->ub_tjetty_cfg.type = UBCORE_JETTY;
-		link->ub_tjetty_cfg.tp_type = UBCORE_CTP;
+		link->ub_tjetty_cfg.tp_type = UBCORE_RTP;
 	}
 }
 

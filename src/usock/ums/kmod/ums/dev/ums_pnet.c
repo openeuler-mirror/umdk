@@ -902,58 +902,6 @@ static int ums_pnet_determine_id(struct ums_ubcore_device *ubdev, struct sock *s
 	return -ENODEV;
 }
 
-static int ums_ubcore_get_avail_eid(struct ubcore_device *ub_dev, struct ums_init_info *ini)
-{
-	u32 i;
-
-	for (i = 0; i < ub_dev->eid_table.eid_cnt; i++) {
-		if ((ini->net == ub_dev->eid_table.eid_entries[i].net) && ums_eid_valid(ub_dev, i)) {
-			ini->eid_index = i;
-			(void)memcpy(ini->eid.raw, ub_dev->eid_table.eid_entries[i].eid.raw, UMS_EID_SIZE);
-			return 0;
-		}
-	}
-
-	return -ENODEV;
-}
-
-static void ums_find_avail_ub_dev_and_eid(struct ums_init_info *ini)
-{
-	struct ums_ubcore_device *ums_ub_dev;
-	int i;
-
-	/* Traverse the ubcore devices to find an available ubcore device and EID for establishing a UB link. */
-	mutex_lock(&g_ums_ubcore_devices.mutex);
-	list_for_each_entry(ums_ub_dev, &g_ums_ubcore_devices.list, list) {
-		if (ums_ub_dev->ub_dev->transport_type != UBCORE_TRANSPORT_UB) {
-			continue;
-		}
-
-		/* UMS can see a URMA ub bonding device, but in reality,
-		 * URMA does not support using a ub bonding device in kernel now.
-		 */
-		if (check_if_ub_bonding_dev(ums_ub_dev->ub_dev)) {
-			continue;
-		}
-
-		for (i = 0; i < UMS_MAX_PORTS; i++) {
-			if (ums_ubcore_port_active(ums_ub_dev, (u8)i) &&
-				(!test_bit(i, ums_ub_dev->ports_going_away)) &&
-				(ums_ubcore_get_avail_eid(ums_ub_dev->ub_dev, ini) == 0)) {
-					ini->ub_dev = ums_ub_dev;
-					ini->ub_port = (u8)i;
-					UMS_LOGW_LIMITED("Unable to find the ubcore device via netdev. Traverse the ubcore "
-						"devices and use the first valid device and eid with the same net namespace, "
-						"dev_name: %s, port: %u, eid_index: %d, eid: %pI6c",
-						ini->ub_dev->ub_dev->dev_name, ini->ub_port, ini->eid_index, ini->eid.raw);
-					mutex_unlock(&g_ums_ubcore_devices.mutex);
-					return;
-			}
-		}
-	}
-	mutex_unlock(&g_ums_ubcore_devices.mutex);
-}
-
 /* if handshake network device belongs to a UB device, return its
  * UB device and port
  */
@@ -961,6 +909,11 @@ static void ums_pnet_find_ub_dev(struct net_device *netdev, struct sock *sk,
 	struct ums_init_info *ini)
 {
 	struct ums_ubcore_device *ubdev;
+
+	if (ini->is_server && (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE)) {
+		ums_ubcore_serv_find_ub_dev_non_netdev(ini);
+		return;
+	}
 
 	mutex_lock(&g_ums_ubcore_devices.mutex);
 	list_for_each_entry(ubdev, &g_ums_ubcore_devices.list, list) {
@@ -980,14 +933,13 @@ static void ums_pnet_find_ub_dev(struct net_device *netdev, struct sock *sk,
 	}
 	mutex_unlock(&g_ums_ubcore_devices.mutex);
 
-	/* For ubdev, there may be no available netdev associated with ubdev.
-	 * Even if UNIC generates a usable netdev, LCNE does not allow configuring an IP for that netdev.
-	 *
-	 * UMS establishes a TCP connection by finding another netdev via the destination IP.
-	 * Traverse the ubcore devices to find an available ubcore device and EID for establishing a UB link.
+	/*
+	 * UMS supports establishing TCP connections based on third-party netdev independent of ubdev.
+	 * For UMS client, if ubdev cannot be found via netdev, attempt to locate the virtual ubdev
+	 * and src virtual eid.
 	 */
-	if (!ini->ub_dev) {
-		ums_find_avail_ub_dev_and_eid(ini);
+	if ((!ini->ub_dev) && (!ini->is_server)) {
+		ums_ubcore_clnt_find_src_v_eid_and_ub_dev(ini);
 	}
 }
 

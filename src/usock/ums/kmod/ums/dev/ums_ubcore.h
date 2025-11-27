@@ -40,6 +40,10 @@
 #endif
 /* max. # of compl. queue elements in 1 poll */
 #define UMS_WR_MAX_POLL_CQE 64
+
+#define UMS_UBCORE_GET_TOPO_EID_DISABLE 0
+#define UMS_UBCORE_GET_TOPO_EID_ENABLE 1
+
 struct ums_hashinfo {
 	rwlock_t lock;
 	struct hlist_head ht;
@@ -118,6 +122,11 @@ struct ums_ubcore_determine_eid_param {
 	struct net *net;
 };
 
+static inline bool ums_ubcore_check_if_eid_match(const union ubcore_eid *eid1, const union ubcore_eid *eid2)
+{
+	return (memcmp(eid1->raw, eid2->raw, UMS_EID_SIZE) == 0);
+}
+
 int __init ums_ubcore_register_client(void);
 void ums_ubcore_unregister_client(void);
 void ums_ubcore_destroy_jetty(struct ums_link *lnk);
@@ -126,6 +135,9 @@ int ums_ubcore_create_jetty(struct ums_link *lnk);
 int ums_ubcore_ready_link(struct ums_link *lnk);
 long ums_ubcore_setup_per_ubdev(struct ums_ubcore_device *ums_ub_dev);
 int ums_ubcore_determine_eid(struct ums_ubcore_determine_eid_param *param);
+int ums_ubcore_find_ub_dev_by_eid(union ubcore_eid *eid, struct ums_init_info *ini);
+void ums_ubcore_clnt_find_src_v_eid_and_ub_dev(struct ums_init_info *ini);
+void ums_ubcore_serv_find_ub_dev_non_netdev(struct ums_init_info *ini);
 bool ums_ubcore_is_valid_local_systemid(void);
 bool ums_ubcore_port_active(const struct ums_ubcore_device *ums_ub_dev, u8 port);
 void ums_ubcore_ndev_change(struct net_device *ndev, unsigned long event);
