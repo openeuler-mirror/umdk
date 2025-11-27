@@ -270,17 +270,6 @@ static int ums_listen_ub_finish(struct ums_sock *new_ums, struct ums_clc_msg_acc
 	return reason_code;
 }
 
-static bool is_ub_token_config_mismatch(struct ums_clc_msg_proposal *pclc)
-{
-	if (g_ums_sys_tuning_config.ub_token_disable == (pclc->lcl.ub_token_enable != 0)) {
-		UMS_LOGE("UB token config mismatch, local : %s, remote : %s",
-			g_ums_sys_tuning_config.ub_token_disable ? "disabled" : "enabled",
-			pclc->lcl.ub_token_enable == 0 ? "disabled" : "enabled");
-		return true;
-	}
-	return false;
-}
-
 /* setup for connection of server */
 void ums_listen_work(struct work_struct *work)
 {
@@ -313,11 +302,6 @@ void ums_listen_work(struct work_struct *work)
 	rc = ums_clc_wait_msg(new_ums, pclc, sizeof(*buf), UMS_CLC_PROPOSAL, CLC_WAIT_TIME);
 	if (rc != 0)
 		goto out_decl;
-
-	if (is_ub_token_config_mismatch(pclc)) {
-		rc = UMS_CLC_DECL_CNFERR;
-		goto out_decl;
-	}
 
 	/* IPSec connections opt out of UMS optimizations */
 	if (using_ipsec(new_ums)) {

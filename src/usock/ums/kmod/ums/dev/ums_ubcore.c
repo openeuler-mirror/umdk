@@ -455,9 +455,10 @@ static void ums_ubcore_create_jfr(struct ums_ubcore_jfc *ums_ub_jfc, struct ums_
 	cfg.eid_index = lnk->eid_index;
 	cfg.max_sge = 1;
 	cfg.min_rnr_timer = UMS_TYPICAL_MIN_RNR_TIMER;
-	if (g_ums_sys_tuning_config.ub_token_disable)
+	if (g_ums_sys_tuning_config.ub_token_disable) {
+		cfg.flag.bs.token_policy = UBCORE_TOKEN_NONE;
 		cfg.token_value.token = 0;
-	else {
+	} else {
 		cfg.flag.bs.token_policy = UBCORE_TOKEN_PLAIN_TEXT;
 		get_random_bytes(&lnk->jetty_token_value.token, sizeof(lnk->jetty_token_value.token));
 		cfg.token_value.token = lnk->jetty_token_value.token;

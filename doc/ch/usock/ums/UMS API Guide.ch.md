@@ -2,42 +2,42 @@
 ## 1. 编程接口
 UMS是一种北向兼容标准socket API，南向基于UB网络进行数据传输，透明加速TCP通信的内核网络协议栈。当前UMS支持的标准socket API如下所示。
 
-**int socket(int domain, int type, int protocal);**
+### 1.1 int socket(int domain, int type, int protocal);
 创建一个socket：
 1. type仅支持SOCK_STREAM，protocol仅支持IPPROTO_IP或IPPROTO_TCP
 2. 在直接使用UMS的场景，需指定domain为AF_SMC，在透明替换的场景，需指定domain值为AF_INET或AF_INET6，两种场景详情见UMS使用手册。
 
-**ssize_t send(int sockfd, const void *buf, size_t len, int flags);**
+### 1.2 ssize_t send(int sockfd, const void *buf, size_t len, int flags);
 通过socket fd发送数据
 
-**ssize_t recv(int sockfd, void *buf, size_t len, int flags);**
+### 1.3 ssize_t recv(int sockfd, void *buf, size_t len, int flags);
 通过socket fd接收数据
 
-**ssize_t write(int fd, const void *buf, size_t count);**
+### 1.4 ssize_t write(int fd, const void *buf, size_t count);
 通过socket fd发送消息。
 
-**ssize_t read(int fd, void *buf, size_t count);**
+### 1.5 ssize_t read(int fd, void *buf, size_t count);
 通过socket fd接收消息。
 
-**int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);**
+### 1.6 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
 与对端server建立tcp连接。
 
-**int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);**
+### 1.7 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 将本地地址与socket fd绑定。
 
-**int listen(int sockfd, int backlog);**
+### 1.8 int listen(int sockfd, int backlog);
 将socket转换成可以接收连接的server端socket。
 
-**int accept(int listenfd, struct sockaddr *addr, int *addrlen);**
+### 1.9 int accept(int listenfd, struct sockaddr *addr, int *addrlen);
 接收client端的连接。
 
-**int shutdown(int sockfd, int howto);**
+### 1.10 int shutdown(int sockfd, int howto);
 断开socket部分数据传输通道。
 
-**int close(int fd);**
+### 1.11 int close(int fd);
 关闭socket连接。
 
-**int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);**
+### 1.12 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 设置与套接字相关的参数，目前并不支持所有socket选项，选项支持情况如下表:
 | level       | optname          |      支持情况        |
 | ----------- | ---------------- |   -----------        |
@@ -52,11 +52,11 @@ UMS是一种北向兼容标准socket API，南向基于UB网络进行数据传�
 | IPPROTO_TCP | TCP_KEEPCNT      |  管理面支持，数据通路不支持  |
 | IPPROTO_TCP | TCP_KEEPALIVE    |  管理面支持，数据通路不支持  |
 
-**int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);**
+### 1.13 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
 获取与套接字相关的参数。
 
-## 服务接口
-### UMS proc接口
+## 2. 服务接口
+### 2.1 UMS proc接口
 UMS支持使用proc file system输出当前系统中的链接状态，IPV4类型的连接，使用方式为：
 ```bash
 cat /proc/net/ums
@@ -85,8 +85,8 @@ cat /proc/net/ums6
 | SRC_EID, JETTY_ID  | 本地Jetty的EID信息和Jetty ID；非UMS连接不显示，打印N/A |
 | DEST_EID, JETTY_ID | 对端Jetty的EID信息和Jetty ID；非UMS连接不显示，打印N/A |
 
-### UMS sysctl接口
-UMS支持使用sysctl接口配置部分属性。使用方法包括:
+### 2.2 UMS sysctl接口
+UMS支持使用sysctl接口配置部分属性。使用方法包括: \
 **查询**
 ```bash
 cat /proc/sys/net/ums/[属性名]
