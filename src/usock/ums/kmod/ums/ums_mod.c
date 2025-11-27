@@ -75,7 +75,7 @@ unsigned int g_ums_net_id;
 static uint32_t ub_token_disable;
 
 module_param(ub_token_disable, uint, 0);
-MODULE_PARM_DESC(ub_token_disable, "1:disable ub token, 0:enable ub token, default:0");
+MODULE_PARM_DESC(ub_token_disable, "1:disable ub token, 0: enable ub token, default:0");
 
 static void ums_tcp_listen_work(struct work_struct *work);
 

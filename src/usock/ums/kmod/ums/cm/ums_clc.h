@@ -39,6 +39,7 @@
 #define UMS_CLC_DECL_NOSEID 0x03030006     /* peer sent no SEID	      */
 #define UMS_CLC_DECL_NOUEID 0x03030008     /* peer sent no UEID	      */
 #define UMS_CLC_DECL_ERR_REQ_LGR 0x03030009 /* required create link group */
+#define UMS_CLC_DECL_PEEREIDERR 0x0303000b /* peer eid negotiate failed */
 #define UMS_CLC_DECL_MODEUNSUPP 0x03040000 /* ums modes do not match (R or D) */
 #define UMS_CLC_DECL_RMBE_EC 0x03050000    /* peer has eyecatcher in RMBE    */
 #define UMS_CLC_DECL_OPTUNSUPP 0x03060000  /* fastopen sockopt not supported */
@@ -88,8 +89,16 @@ struct ums_clc_msg_trail { /* trailer of clc messages */
 struct ums_clc_msg_local {            /* header2 of clc messages */
 	u8 id_for_peer[UMS_SYSTEMID_LEN]; /* unique system id */
 	union ubcore_eid eid; /* ubcore_eid for peer to import jetty and seg */
-	u32 eid_index; /* 0 ~ (UBCORE_MAX_EID_CNT - 1) */
+	u8 reserved1[4];
 	u8 mac[ETH_ALEN];                        /* mac of ub_device port */
+#if defined(__BIG_ENDIAN_BITFIELD)
+	u8 topo_eid_enable : 1;
+	u8 reserved2 : 7;
+#elif defined(__LITTLE_ENDIAN_BITFIELD)
+	u8 reserved2 : 7;
+	u8 topo_eid_enable : 1;
+#endif
+	u8 reserved3[3];
 };
 
 /* Struct would be 4 byte aligned, but it is used in an array that is sent
@@ -193,6 +202,11 @@ struct umsr_clc_msg_accept_confirm { /* UMSR accept/confirm */
 	u8 jetty_token_policy : 3; /* token_policy for peer to import jetty when UB is used */
 #endif
 	u8 reserved2[3];
+
+	union {
+		union ubcore_eid peer_eid; /* CLC Accept */
+		u8 reserved3[16]; /* CLC Confirm */
+	};
 } __packed;
 
 struct umsd_clc_msg_accept_confirm_common { /* UMSD accept/confirm */
@@ -309,7 +323,7 @@ int ums_clc_send_proposal(struct ums_sock *ums, struct ums_init_info *ini);
 int ums_clc_send_confirm(struct ums_sock *ums, bool clnt_first_contact,  u8 *eid,
 	struct ums_init_info *ini);
 int ums_clc_send_accept(struct ums_sock *ums, bool srv_first_contact,
-	u8 *negotiated_eid);
+	u8 *negotiated_eid, struct ums_init_info *ini);
 void __init ums_clc_init(void);
 void ums_clc_exit(void);
 #endif /* UMS_CLC_H */

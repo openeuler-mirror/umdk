@@ -30,7 +30,7 @@
 #include "ums_log.h"
 #include "ums_clc.h"
 
-#define UMS_CLC_ACCEPT_CONFIRM_LEN 108
+#define UMS_CLC_ACCEPT_CONFIRM_LEN 128
 #define UMS_CLC_RECV_BUF_LEN 200
 #define UMS_S6_ADDR32_NUM 3
 #define UMS_PROPOSAL_KVEC_NUM 8
@@ -494,8 +494,15 @@ static int ums_clc_init_proposal(struct ums_sock *ums, struct ums_clc_msg_propos
 	pclc_base->hdr.type = UMS_CLC_PROPOSAL;
 	if (ums_indicated(ini->ums_type_v1)) {
 		(void)memcpy(pclc_base->lcl.id_for_peer, g_local_systemid, UMS_SYSTEMID_LEN);
-		(void)memcpy(pclc_base->lcl.eid.raw, ini->eid.raw, UMS_EID_SIZE);
-		pclc_base->lcl.eid_index = ini->eid_index;
+
+		if (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) {
+			/* Reuse the pclc_base->lcl.eid field to transmit src_v_eid to the ums server. */
+			(void)memcpy(pclc_base->lcl.eid.raw, ini->src_v_eid.raw, UMS_EID_SIZE);
+			pclc_base->lcl.topo_eid_enable = UMS_UBCORE_GET_TOPO_EID_ENABLE;
+		} else {
+			(void)memcpy(pclc_base->lcl.eid.raw, ini->eid.raw, UMS_EID_SIZE);
+		}
+
 		(void)memcpy(pclc_base->lcl.mac, ini->ub_dev->mac[ini->ub_port], ETH_ALEN);
 	}
 
@@ -583,7 +590,6 @@ static void ums_clc_confirm_accept_init_basic(struct ums_sock *ums,
 	clc->hdr.length = htons(UMS_CLC_ACCEPT_CONFIRM_LEN);
 	(void)memcpy(clc->r0.lcl.id_for_peer, g_local_systemid, UMS_SYSTEMID_LEN);
 	(void)memcpy(clc->r0.lcl.eid.raw, link->eid.raw, UMS_EID_SIZE);
-	clc->r0.lcl.eid_index = link->eid_index;
 	(void)memcpy(clc->r0.lcl.mac, link->ums_dev->mac[link->port], ETH_ALEN);
 	clc->r0.rmbe_idx = 1; /* for now: 1 RMB = 1 RMBE */
 	clc->r0.rmbe_alert_token = htonl(conn->conn_id);
@@ -643,6 +649,11 @@ static int ums_clc_send_confirm_accept(struct ums_sock *ums,
 
 	clc->hdr.length = htons(UMS_CLC_ACCEPT_CONFIRM_LEN);
 
+	if ((clc->hdr.type == UMS_CLC_ACCEPT) &&
+		(ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE)) {
+		(void)memcpy(clc->r0.peer_eid.raw, ini->peer_eid.raw, UMS_EID_SIZE);
+	}
+
 	ums_clc_confirm_accept_init_trl(&trl);
 
 	(void)memset(&msg, 0, sizeof(struct msghdr));
@@ -681,15 +692,14 @@ int ums_clc_send_confirm(struct ums_sock *ums, bool clnt_first_contact, u8 *eid,
 
 /* send CLC ACCEPT message across internal TCP socket */
 int ums_clc_send_accept(struct ums_sock *ums, bool srv_first_contact,
-	u8 *negotiated_eid)
+	u8 *negotiated_eid, struct ums_init_info *ini)
 {
 	struct ums_clc_msg_accept_confirm_v2 aclc_v2;
 	int len;
 
 	(void)memset(&aclc_v2, 0, sizeof(struct ums_clc_msg_accept_confirm_v2));
 	aclc_v2.hdr.type = UMS_CLC_ACCEPT;
-	len = ums_clc_send_confirm_accept(ums, &aclc_v2, srv_first_contact, negotiated_eid,
-		NULL);
+	len = ums_clc_send_confirm_accept(ums, &aclc_v2, srv_first_contact, negotiated_eid, ini);
 	if (len < ntohs(aclc_v2.hdr.length))
 		len = len >= 0 ? -EPROTO : -ums->clcsock->sk->sk_err;
 
