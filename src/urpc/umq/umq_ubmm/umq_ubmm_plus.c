@@ -14,7 +14,7 @@
 #include "umq_ubmm_impl.h"
 #include "umq_qbuf_pool.h"
 
-static uint8_t *umq_tp_ubmm_plus_init(umq_init_cfg_t *cfg, void *addr, uint64_t len)
+static uint8_t *umq_tp_ubmm_plus_init(umq_init_cfg_t *cfg)
 {
     uint8_t *ubmm_ctx = umq_ubmm_ctx_init_impl(cfg);
     if (ubmm_ctx == NULL) {
@@ -22,7 +22,7 @@ static uint8_t *umq_tp_ubmm_plus_init(umq_init_cfg_t *cfg, void *addr, uint64_t 
         return NULL;
     }
 
-    if (umq_ubmm_register_memory_impl(ubmm_ctx, addr, len) != UMQ_SUCCESS) {
+    if (umq_ubmm_register_memory_impl(ubmm_ctx, umq_io_buf_addr(), umq_io_buf_size()) != UMQ_SUCCESS) {
         UMQ_VLOG_ERR("register memory failed\n");
         goto UNINIT;
     }

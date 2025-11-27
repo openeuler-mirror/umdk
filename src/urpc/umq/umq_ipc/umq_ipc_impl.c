@@ -217,16 +217,16 @@ static ALWAYS_INLINE int fill_ring_info(umq_create_option_t *option, umq_ipc_rin
     ring->rx_depth = ring->tx_depth;
 
     uint64_t data_zone_size =
-        ring->tx_depth * (UMQ_SIZE_SMALL + sizeof(umq_buf_t) * (1 + UMQ_EMPTY_HEADER_COEFFICIENT));
+        ring->tx_depth * (umq_buf_size_small() + sizeof(umq_buf_t) * (1 + UMQ_EMPTY_HEADER_COEFFICIENT));
 
     // transmit queue and manage queue size calculate
     uint64_t post_data_size = sizeof(uint32_t) + sizeof(uint64_t);
     uint64_t tx_post_queue_size = sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
     uint64_t rx_post_queue_size = sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
-    uint64_t rounded_post_size = round_up(tx_post_queue_size + rx_post_queue_size, UMQ_SIZE_SMALL);
+    uint64_t rounded_post_size = round_up(tx_post_queue_size + rx_post_queue_size, umq_buf_size_small());
     ring->transmit_queue_buf_size = rounded_post_size;
 
-    ring->shm_size = round_up(data_zone_size + rounded_post_size, UMQ_SIZE_SMALL);
+    ring->shm_size = round_up(data_zone_size + rounded_post_size, umq_buf_size_small());
     ring->owner = owner;
 
     return UMQ_SUCCESS;
@@ -287,7 +287,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
     shm_qbuf_pool_cfg_t sm_qbuf_pool_cfg = {
         .buf_addr = tp->local_ring.addr + tp->local_ring.transmit_queue_buf_size,
         .total_size = tp->local_ring.shm_size - tp->local_ring.transmit_queue_buf_size,
-        .data_size = UMQ_SIZE_SMALL,
+        .data_size = umq_buf_size_small(),
         .headroom_size = global_pool_cfg.headroom_size,
         .mode = global_pool_cfg.mode,
         .type = SHM_QBUF_POOL_TYPE_LOCAL,
@@ -370,7 +370,7 @@ int32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_
 
     qbuf_pool_cfg_t global_pool_cfg;
     umq_qbuf_config_get(&global_pool_cfg);
-    tmp_info->shm_qbuf_pool_data_size = UMQ_SIZE_SMALL;
+    tmp_info->shm_qbuf_pool_data_size = umq_buf_size_small();
     tmp_info->shm_qbuf_pool_headroom_size = global_pool_cfg.headroom_size;
     tmp_info->shm_qbuf_pool_mode = global_pool_cfg.mode;
 
@@ -404,9 +404,9 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     }
 
     ctx->remote_ring.shm_size = tmp_info->shm_total_size;
-    ctx->remote_ring.tx_buf_size = UMQ_SIZE_SMALL;
+    ctx->remote_ring.tx_buf_size = umq_buf_size_small();
     ctx->remote_ring.tx_depth = tmp_info->tx_depth;
-    ctx->remote_ring.rx_buf_size = UMQ_SIZE_SMALL;
+    ctx->remote_ring.rx_buf_size = umq_buf_size_small();
     ctx->remote_ring.rx_depth = tmp_info->rx_depth;
     ctx->remote_ring.transmit_queue_buf_size = tmp_info->transmit_queue_buf_size;
     ctx->remote_ring.owner = false;
@@ -434,7 +434,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     shm_qbuf_pool_cfg_t sm_qbuf_pool_cfg = {
         .buf_addr = ctx->remote_ring.addr + ctx->remote_ring.transmit_queue_buf_size,
         .total_size = ctx->remote_ring.shm_size - ctx->remote_ring.transmit_queue_buf_size,
-        .data_size = UMQ_SIZE_SMALL,
+        .data_size = umq_buf_size_small(),
         .headroom_size = tmp_info->shm_qbuf_pool_headroom_size,
         .mode = tmp_info->shm_qbuf_pool_mode,
         .type = SHM_QBUF_POOL_TYPE_REMOTE,

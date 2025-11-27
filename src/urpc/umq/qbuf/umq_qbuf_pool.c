@@ -7,6 +7,8 @@
  * History: 2025-7-26
  */
 
+#include <malloc.h>
+
 #include "umq_errno.h"
 #include "umq_vlog.h"
 #include "umq_qbuf_pool.h"
@@ -40,6 +42,84 @@ typedef struct qbuf_pool {
 
 static qbuf_pool_t g_qbuf_pool = {0};
 static __thread local_qbuf_pool_t g_thread_cache = {0};
+static uint8_t g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_8K;
+
+static void *g_buffer_addr = NULL;
+static uint64_t g_total_len = 0;
+
+void *umq_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
+{
+    if (g_buffer_addr != NULL) {
+        return g_buffer_addr;
+    }
+
+    uint64_t min_size = umq_buf_size_small();
+    if (buf_mode == UMQ_BUF_SPLIT) {
+        min_size = (UMQ_EMPTY_HEADER_COEFFICIENT + 1) * (uint32_t)sizeof(umq_buf_t) + umq_buf_size_small();
+    }
+
+    if (size > 0) {
+        if (size < min_size) {
+            UMQ_VLOG_ERR("memory size %lu invalid, expect at least %lu\n", size, min_size);
+            return NULL;
+        }
+
+        g_total_len = size;
+    } else {
+        g_total_len = UMQ_BUF_DEFAULT_TOTAL_SIZE;
+    }
+
+    g_buffer_addr = (void *)memalign(umq_buf_size_small(), g_total_len);
+    if (g_buffer_addr == NULL) {
+        UMQ_VLOG_ERR("memory alloc failed\n");
+        return NULL;
+    }
+
+    UMQ_VLOG_INFO("malloc umq io buf %lu bytes\n", g_total_len);
+
+    return g_buffer_addr;
+}
+
+void umq_io_buf_free(void)
+{
+    if (g_buffer_addr != NULL) {
+        free(g_buffer_addr);
+        g_buffer_addr = NULL;
+    }
+
+    g_total_len = 0;
+}
+
+void *umq_io_buf_addr(void)
+{
+    return g_buffer_addr;
+}
+
+uint64_t umq_io_buf_size(void)
+{
+    return g_total_len;
+}
+
+int umq_buf_size_pow_small_set(umq_buf_block_size_t block_size)
+{
+    if (block_size < BLOCK_SIZE_8K || block_size >= BLOCK_SIZE_MAX) {
+        UMQ_VLOG_ERR("block size %d is invalid\n", block_size);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (block_size == BLOCK_SIZE_8K) {
+        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_8K;
+    } else {
+        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_64K;
+    }
+
+    return UMQ_SUCCESS;
+}
+
+uint8_t umq_buf_size_pow_small(void)
+{
+    return g_umq_qbuf_size_pow_samll;
+}
 
 void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg)
 {
@@ -88,7 +168,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 {
     if (g_qbuf_pool.inited) {
-        UMQ_VLOG_ERR("qbuf pool has already been inited\n");
+        UMQ_VLOG_INFO("qbuf pool has already been inited\n");
         return -UMQ_ERR_EEXIST;
     }
 
@@ -101,7 +181,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 
     if (cfg->mode == UMQ_BUF_SPLIT) {
         QBUF_LIST_INIT(&g_qbuf_pool.block_pool.head_without_data);
-        uint32_t blk_size = UMQ_SIZE_SMALL;
+        uint32_t blk_size = umq_buf_size_small();
         uint64_t blk_num = cfg->total_size /
             ((UMQ_EMPTY_HEADER_COEFFICIENT + 1) * (uint32_t)sizeof(umq_buf_t) + blk_size);
 
@@ -143,7 +223,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         g_qbuf_pool.block_pool.buf_cnt_with_data = blk_num;
         g_qbuf_pool.block_pool.buf_cnt_without_data = head_without_data_count;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
-        uint32_t blk_size = UMQ_SIZE_SMALL;
+        uint32_t blk_size = umq_buf_size_small();
         uint64_t blk_num = cfg->total_size / blk_size;
 
         g_qbuf_pool.data_buffer = cfg->buf_addr;
@@ -199,9 +279,10 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     uint32_t actual_buf_count;
 
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
-        actual_buf_count = num * ((request_size + headroom_size + UMQ_SIZE_SMALL - 1) >> UMQ_QBUF_SIZE_POW_SMALL);
+        actual_buf_count =
+            num * ((request_size + headroom_size + umq_buf_size_small() - 1) >> umq_buf_size_pow_small());
     } else {
-        uint32_t align_size = UMQ_SIZE_SMALL - sizeof(umq_buf_t);
+        uint32_t align_size = umq_buf_size_small() - sizeof(umq_buf_t);
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / align_size);
     }
 
