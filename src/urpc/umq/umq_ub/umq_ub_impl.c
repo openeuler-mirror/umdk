@@ -253,6 +253,7 @@ typedef struct umq_ub_bind_info {
     uint32_t tx_depth;
     uint32_t rx_buf_size;
     uint32_t feature;
+    umq_state_t state;
 } umq_ub_bind_info_t;
 
 typedef struct ub_bind_ctx {
@@ -807,6 +808,7 @@ int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_i
     info->win_buf_len = queue->flow_control.enabled ? UMQ_UB_RW_SEGMENT_LEN : 0;
     info->rx_buf_size = queue->rx_buf_size;
     info->feature = queue->dev_ctx->feature;
+    info->state = queue->state;
     (void)memcpy(&info->tseg, queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
     info->buf_pool_mode = umq_qbuf_mode_get();
     return sizeof(umq_ub_bind_info_t);
@@ -1000,7 +1002,7 @@ static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, xchg_mem_info_t *
     return import_tseg;
 }
 
-static inline uint32_t umq_ub_bind_fature_allowlist_get()
+static inline uint32_t umq_ub_bind_fature_allowlist_get(void)
 {
     return UMQ_FEATURE_ENABLE_STATS | UMQ_FEATURE_ENABLE_PERF;
 }
@@ -1015,6 +1017,11 @@ static int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
     if (info->umq_trans_mode != UMQ_TRANS_MODE_UB && info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
         info->umq_trans_mode != UMQ_TRANS_MODE_UBMM && info->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
         UMQ_VLOG_ERR("trans mode %d is not UB\n", info->umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (queue->state > QUEUE_STATE_READY || info->state > QUEUE_STATE_READY) {
+        UMQ_VLOG_ERR("queue state is not ready, local is %u, remote is %u\n", queue->state, info->state);
         return -UMQ_ERR_EINVAL;
     }
 
