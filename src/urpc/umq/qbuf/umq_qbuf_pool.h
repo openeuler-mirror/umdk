@@ -26,6 +26,8 @@ extern "C" {
 #define UMQ_QBUF_DEFAULT_MEMPOOL_ID     (0)
 #define UMQ_HEADROOM_SIZE_LIMIT         (512)
 #define UMQ_QBUF_SIZE_POW_8K            (13)
+#define UMQ_QBUF_SIZE_POW_16K           (14)
+#define UMQ_QBUF_SIZE_POW_32K           (15)
 #define UMQ_QBUF_SIZE_POW_64K           (16)
 // middle = small * 32, and big = middle * 32
 #define UMQ_QBUF_SIZE_POW_INTERVAL      (5)
