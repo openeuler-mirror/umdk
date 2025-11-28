@@ -2627,22 +2627,12 @@ static int process_send_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
         if (msg_id != 0) {
             ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
             umq_buf_t *buffer = (umq_buf_t *)queue->addr_list[msg_id];
-            int32_t rest_data_size = (int32_t)buffer->total_data_size;
-            umq_buf_t *tmp_buf = buffer;
-            while (tmp_buf && rest_data_size > 0) {
-                rest_data_size -= (int32_t)tmp_buf->data_size;
-                /*
-                 * truncate qbuf list for many packages connected, only release one package,
-                 * can't truncate qbuf list when send, because all qbufs of 128 wr are connected,
-                 * and the address of the first qbuf is placed in the user_ctx of the 128th wr, then released
-                 */
-                if (rest_data_size <= 0) {
-                    tmp_buf->qbuf_next = NULL;
-                    break;
-                }
-                tmp_buf = tmp_buf->qbuf_next;
-            }
-            umq_buf_free(buffer); // release tx mem
+            /*
+             * break qbuf list for many batches connected, only release the first batch,
+             * can't break qbuf list when send, because all qbufs of 128 wr are connected,
+             * and the address of the first qbuf is placed in the user_ctx of the 128th wr, then released
+             */
+            (void)umq_buf_break_and_free(buffer);
             util_id_allocator_release(&g_umq_ub_id_allocator, msg_id);
         }
         umq_buf_free(rx_buf); // release rx
@@ -2926,10 +2916,8 @@ static void umq_flush_tx(ub_queue_t *queue, uint32_t max_retry_times)
         if (tx_cnt < 0) {
             return;
         }
-        umq_buf_list_t head;
         for (int i = 0; i < tx_cnt; i++) {
-            head.first = buf[i];
-            umq_qbuf_free(&head);
+            (void)umq_buf_break_and_free(buf[i]);
         }
         retry_times++;
     }
@@ -2988,17 +2976,7 @@ static void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
             continue;
         }
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
-        umq_buf_t *tmp_buf = buf[qbuf_cnt];
-        uint32_t rest_data_size = tmp_buf->total_data_size;
-        while (tmp_buf && rest_data_size > 0) {
-            if (rest_data_size <= tmp_buf->data_size) {
-                tmp_buf->qbuf_next = NULL;
-                break;
-            }
-            rest_data_size -= (int32_t)tmp_buf->data_size;
-            tmp_buf = tmp_buf->qbuf_next;
-        }
-        umq_buf_free(buf[qbuf_cnt]);
+        (void)umq_buf_break_and_free(buf[qbuf_cnt]);
         ++qbuf_cnt;
     }
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, qbuf_cnt);
@@ -3057,17 +3035,7 @@ static void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
             }
             continue;
         }
-        umq_buf_t *tmp_buf = buf[qbuf_cnt];
-        uint32_t rest_data_size = tmp_buf->total_data_size;
-        while (tmp_buf && rest_data_size > 0) {
-            if (rest_data_size <= tmp_buf->data_size) {
-                tmp_buf->qbuf_next = NULL;
-                break;
-            }
-            rest_data_size -= (int32_t)tmp_buf->data_size;
-            tmp_buf = tmp_buf->qbuf_next;
-        }
-        umq_buf_free(buf[qbuf_cnt]);
+        (void)umq_buf_break_and_free(buf[qbuf_cnt]);
         ++qbuf_cnt;
     }
 }
@@ -3566,17 +3534,7 @@ static void umq_ub_rev_pull_tx_cqe(
 
 static void umq_ub_non_rev_pull_tx_cqe(ub_queue_t *queue, umq_buf_t *cur_tx_buf, int *qbuf_cnt)
 {
-    umq_buf_t *tmp_buf = cur_tx_buf;
-    int32_t rest_data_size = (int32_t)tmp_buf->total_data_size;
-    while (tmp_buf && rest_data_size > 0) {
-        rest_data_size -= (int32_t)tmp_buf->data_size;
-        if (rest_data_size <= 0) {
-            tmp_buf->qbuf_next = NULL;
-            break;
-        }
-        tmp_buf = tmp_buf->qbuf_next;
-    }
-    umq_buf_free(cur_tx_buf);
+    (void)umq_buf_break_and_free(cur_tx_buf);
     ++(*qbuf_cnt);
 }
 
