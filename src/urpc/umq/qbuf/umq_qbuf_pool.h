@@ -510,6 +510,12 @@ static ALWAYS_INLINE int headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size,
 uint32_t umq_qbuf_headroom_get(void);
 umq_buf_mode_t umq_qbuf_mode_get(void);
 
+typedef int (*register_seg_callback_t)(uint8_t *ctx, uint8_t mempool_id, void *addr, uint64_t size);
+typedef int (*unregister_seg_callback_t)(uint8_t *ctx, uint8_t mempool_id);
+
+int umq_qbuf_register_seg(uint8_t *ctx, register_seg_callback_t register_seg_func);
+int umq_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func);
+
 #ifdef __cplusplus
 }
 #endif

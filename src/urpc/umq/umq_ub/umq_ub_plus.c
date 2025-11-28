@@ -149,6 +149,11 @@ static void umq_tp_ub_plus_async_event_ack(umq_async_event_t *event)
     return umq_ub_async_event_ack(event);
 }
 
+int umq_tp_ub_plus_dev_add_impl(umq_trans_info_t *trans_info, umq_init_cfg_t *cfg)
+{
+    return umq_ub_dev_add_impl(trans_info, cfg);
+}
+
 static umq_ops_t g_umq_ub_plus_ops = {
     .mode = UMQ_TRANS_MODE_UB_PLUS,
     // control plane api
@@ -162,6 +167,7 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_state_get = umq_tp_ub_plus_state_get,
     .umq_tp_log_config_set = umq_tp_ub_plus_log_config_set,
     .umq_tp_log_config_reset = umq_tp_ub_plus_log_config_reset,
+    .umq_tp_dev_add = umq_tp_ub_plus_dev_add_impl,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_plus_buf_alloc,

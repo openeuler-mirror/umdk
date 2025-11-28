@@ -124,6 +124,7 @@ typedef struct umq_dev_assign {
         } eid;
         struct {
             char dev_name[UMQ_DEV_NAME_SIZE];
+            uint32_t eid_idx;
         } dev;
     };
 } umq_dev_assign_t;
@@ -181,7 +182,6 @@ typedef struct umq_init_cfg {
     uint8_t trans_info_num;
     umq_flow_control_cfg_t flow_control; // used when UMQ_FEATURE_ENABLE_FLOW_CONTROL is set
     umq_buf_block_cfg_t block_cfg;
-    uint16_t eid_idx;
     uint16_t cna;
     uint32_t ubmm_eid;
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];

@@ -134,5 +134,6 @@ void ubmm_fill_big_data_ref_sge(uint64_t umqh_tp, ub_ref_sge_t *ref_sge,
 int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info);
 int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event);
 void umq_ub_async_event_ack(umq_async_event_t *event);
+int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg);
 
 #endif
