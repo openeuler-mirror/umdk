@@ -67,52 +67,6 @@ static uint32_t (*g_huge_pool_size[HUGE_QBUF_POOL_SIZE_TYPE_MAX])(void) = {
     umq_buf_size_middle,
     umq_buf_size_big};
 
-int umq_huge_qbuf_pool_import(uint32_t id)
-{
-    if (!g_huge_pool_ctx.inited) {
-        UMQ_VLOG_ERR("huge qbuf pool has not been inited\n");
-        return -UMQ_ERR_ENOMEM;
-    }
-
-    huge_pool_t *pool = NULL;
-    for (uint32_t i = 0; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
-        if (id >= g_huge_pool_ctx.pool[i].pool_idx_shift &&
-            id < g_huge_pool_ctx.pool[i].pool_idx_shift + HUGE_QBUF_POOL_NUM_MAX) {
-            pool = &g_huge_pool_ctx.pool[i];
-        }
-    }
-
-    if (pool == NULL) {
-        UMQ_VLOG_ERR("Invalid input id(%u)\n", id);
-        return -UMQ_ERR_EINVAL;
-    }
-
-    huge_pool_info_t *pool_info = &pool->pool_info[id - pool->pool_idx_shift];
-
-    if (pool_info->imported) {
-        return UMQ_SUCCESS;
-    }
-
-    (void)pthread_mutex_lock(&pool->block_pool.global_mutex);
-
-    pool_info->imported = true;
-    if (g_huge_pool_ctx.mode == UMQ_BUF_SPLIT) {
-        for (uint32_t i = 0; i < pool->total_block_num; i++) {
-            umq_buf_t *buf = id_to_buf_with_data_split((char *)pool_info->header_buffer, i);
-            buf->need_import = 0;
-        }
-    } else if (g_huge_pool_ctx.mode == UMQ_BUF_COMBINE) {
-        for (uint32_t i = 0; i < pool->total_block_num; i++) {
-            umq_buf_t *buf = id_to_buf_combine((char *)pool_info->data_buffer, i, pool->block_size);
-            buf->need_import = 0;
-        }
-    }
-
-    (void)pthread_mutex_unlock(&pool->block_pool.global_mutex);
-
-    return UMQ_SUCCESS;
-}
-
 static int umq_huge_qbuf_pool_init(enum HUGE_QBUF_POOL_SIZE_TYPE type, huge_pool_t *pool)
 {
     void *buf_addr = NULL;
@@ -142,7 +96,6 @@ static int umq_huge_qbuf_pool_init(enum HUGE_QBUF_POOL_SIZE_TYPE type, huge_pool
             buf->headroom_size = 0;
             buf->buf_data = pool_info->data_buffer + i * pool->block_size;
             buf->mempool_id = mempool_id;
-            buf->need_import = 1;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&pool->block_pool.head_with_data, buf);
         }
@@ -161,7 +114,6 @@ static int umq_huge_qbuf_pool_init(enum HUGE_QBUF_POOL_SIZE_TYPE type, huge_pool
             buf->headroom_size = 0;
             buf->buf_data = (char *)buf + sizeof(umq_buf_t);
             buf->mempool_id = mempool_id;
-            buf->need_import = 1;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&pool->block_pool.head_with_data, buf);
         }

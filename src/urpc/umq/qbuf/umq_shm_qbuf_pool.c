@@ -230,7 +230,6 @@ static void umq_shm_global_split_pool_init(shm_qbuf_pool_cfg_t *cfg, qbuf_pool_t
         buf->token_id = 0;
         buf->buf_data = pool->data_buffer + i * blk_size;
         buf->mempool_id = 0;
-        buf->need_import = 0;
         (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
         QBUF_LIST_INSERT_HEAD(&pool->block_pool.head_with_data, buf);
     }
@@ -246,7 +245,6 @@ static void umq_shm_global_split_pool_init(shm_qbuf_pool_cfg_t *cfg, qbuf_pool_t
         head_buf->token_id = 0;
         head_buf->buf_data = NULL;
         head_buf->mempool_id = 0;
-        head_buf->need_import = 0;
         (void)memset(head_buf->qbuf_ext, 0, sizeof(head_buf->qbuf_ext));
         QBUF_LIST_INSERT_HEAD(&pool->block_pool.head_without_data, head_buf);
     }
@@ -280,7 +278,6 @@ static void umq_shm_global_combine_pool_init(shm_qbuf_pool_cfg_t *cfg, qbuf_pool
         buf->token_id = 0;
         buf->buf_data = (char *)buf + sizeof(umq_buf_t);
         buf->mempool_id = 0;
-        buf->need_import = 0;
         (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
         QBUF_LIST_INSERT_HEAD(&pool->block_pool.head_with_data, buf);
     }

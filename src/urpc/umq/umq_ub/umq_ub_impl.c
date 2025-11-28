@@ -11,6 +11,8 @@
 #include <sys/queue.h>
 #include <malloc.h>
 
+#include "urpc_hash.h"
+#include "urpc_hmap.h"
 #include "uvs_api.h"
 #include "perf.h"
 #include "urpc_util.h"
@@ -52,6 +54,23 @@ typedef enum umq_ub_rw_segment_offset {
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 
+#define UMQ_UB_MAX_REMOTE_EID_NUM 1024
+#define UMQ_UB_MIN_EID_ID 0
+
+typedef struct remote_eid_hmap_node {
+    struct urpc_hmap_node node;
+    urma_eid_t eid;
+    uint32_t remote_eid_id;
+    uint32_t ref_cnt;
+} remote_eid_hmap_node_t;
+
+typedef struct remote_imported_tseg_info {
+    bool tesg_imported[UMQ_UB_MAX_REMOTE_EID_NUM][UMQ_MAX_TSEG_NUM];
+    struct urpc_hmap remote_eid_id_table;
+    pthread_mutex_t remote_eid_id_table_lock;
+    util_id_allocator_t eid_id_allocator;
+} remote_imported_tseg_info_t;
+
 typedef struct umq_ub_ctx {
     bool io_lock_free;
     volatile uint32_t ref_cnt;
@@ -62,6 +81,7 @@ typedef struct umq_ub_ctx {
     urma_device_attr_t dev_attr;
     umq_dev_assign_t dev_info;
     urma_target_seg_t *tseg_list[UMQ_MAX_TSEG_NUM];
+    remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
     uint64_t remote_notify_addr;
@@ -269,6 +289,7 @@ typedef struct umq_ub_bind_info {
 typedef struct ub_bind_ctx {
     umq_ub_bind_info_t bind_info;
     urma_target_jetty_t *tjetty;
+    uint32_t remote_eid_id;
     uint64_t remote_notify_addr;
 } ub_bind_ctx_t;
 
@@ -1180,6 +1201,84 @@ DEC_REF:
     return ret;
 }
 
+static int umq_ub_eid_id_get(
+    remote_imported_tseg_info_t *remote_imported_info, umq_ub_bind_info_t *info, uint32_t *remote_eid_id)
+{
+    urma_eid_t *remote_eid = &info->jetty_id.eid;
+    uint32_t hash = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    bool find = false;
+    remote_eid_hmap_node_t *eid_node;
+    pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
+    URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
+        if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) {
+            find = true;
+            break;
+        }
+    }
+
+    if (find) {
+        *remote_eid_id = eid_node->remote_eid_id;
+        eid_node->ref_cnt++;
+        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        return UMQ_SUCCESS;
+    }
+
+    eid_node = (remote_eid_hmap_node_t *)malloc(sizeof(remote_eid_hmap_node_t));
+    if (eid_node == NULL) {
+        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        UMQ_VLOG_ERR("malloc eid node failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    uint32_t eid_id = util_id_allocator_get(&remote_imported_info->eid_id_allocator);
+    if (eid_id >= UMQ_UB_MAX_REMOTE_EID_NUM) {
+        free(eid_node);
+        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        UMQ_VLOG_ERR("remote eid cnt exceed maxinum limit\n");
+        return -UMQ_ERR_ENODEV;
+    }
+
+    eid_node->remote_eid_id = eid_id;
+    eid_node->ref_cnt = 1;
+    *remote_eid_id = eid_id;
+    (void)memset(remote_imported_info->tesg_imported[eid_id], 0, sizeof(bool) * UMQ_MAX_TSEG_NUM);
+    remote_imported_info->tesg_imported[eid_id][UMQ_QBUF_DEFAULT_MEMPOOL_ID] = true;
+    (void)memcpy(&eid_node->eid, remote_eid, sizeof(urma_eid_t));
+    urpc_hmap_insert(&remote_imported_info->remote_eid_id_table, &eid_node->node, hash);
+    pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+    return UMQ_SUCCESS;
+}
+
+static int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx)
+{
+    urma_eid_t *remote_eid = &ctx->tjetty->id.eid;
+    uint32_t hash = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    bool find = false;
+    remote_eid_hmap_node_t *eid_node;
+    pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
+    URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
+        if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0 &&
+            eid_node->remote_eid_id == ctx->remote_eid_id) {
+            find = true;
+            break;
+        }
+    }
+
+    if (!find) {
+        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        UMQ_VLOG_ERR("not find eid node %u\n", ctx->remote_eid_id);
+        return -UMQ_ERR_ENODEV;
+    }
+
+    eid_node->ref_cnt--;
+    if (eid_node->ref_cnt == 0) {
+        urpc_hmap_remove(&remote_imported_info->remote_eid_id_table, &eid_node->node);
+        free(eid_node);
+    }
+    pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+    return UMQ_SUCCESS;
+}
+
 static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     urma_target_seg_t *tseg = &info->tseg;
@@ -1202,7 +1301,13 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         UMQ_VLOG_ERR("bind ctx calloc failed\n");
         goto UNIMPORT_SEG;
     }
-    ctx->remote_notify_addr = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
+
+    if (umq_ub_eid_id_get(queue->dev_ctx->remote_imported_info, info, &ctx->remote_eid_id) != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("get eid id failed\n");
+        goto FREE_CTX;
+    }
+
+    ctx->remote_notify_addr = info->notify_buf;
 
     urma_rjetty_t rjetty = {
         .jetty_id = info->jetty_id,
@@ -1215,7 +1320,7 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &info->token);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR("import jetty failed\n");
-        goto FREE_CTX;
+        goto RELEASE_BIND_ID;
     }
 
     urma_status_t status = urma_bind_jetty(queue->jetty, tjetty);
@@ -1239,6 +1344,9 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 
 UNIMPORT_JETTY:
     urma_unimport_jetty(tjetty);
+
+RELEASE_BIND_ID:
+    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, ctx);
 
 FREE_CTX:
     free(ctx);
@@ -1546,11 +1654,18 @@ static int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, u
 
 static int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
 {
+    if (ub_ctx == NULL || ub_ctx->urma_ctx) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     urma_status_t urma_status = urma_delete_context(ub_ctx->urma_ctx);
     if (urma_status != URMA_SUCCESS) {
         UMQ_VLOG_ERR("delete context failed\n");
         return -UMQ_ERR_ENODEV;
     }
+
+    ub_ctx->urma_ctx = NULL;
     return UMQ_SUCCESS;
 }
 
@@ -1640,6 +1755,59 @@ static int umq_find_ub_device(umq_trans_info_t *info, umq_ub_ctx_t *ub_ctx)
     return UMQ_SUCCESS;
 }
 
+static remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void)
+{
+    remote_imported_tseg_info_t *remote_imported_tseg_info =
+        (remote_imported_tseg_info_t *)calloc(1, sizeof(remote_imported_tseg_info_t));
+    if (remote_imported_tseg_info == NULL) {
+        UMQ_VLOG_ERR("calloc imported info failed\n");
+        return NULL;
+    }
+
+    int ret = urpc_hmap_init(&remote_imported_tseg_info->remote_eid_id_table, UMQ_UB_MAX_REMOTE_EID_NUM);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("remote eid map init failed\n");
+        goto FREE_INFO;
+    }
+
+    ret = util_id_allocator_init(&remote_imported_tseg_info->eid_id_allocator,
+        UMQ_UB_MAX_REMOTE_EID_NUM, UMQ_UB_MIN_EID_ID);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("bind id allocator init failed\n");
+        goto REMOTE_EID_MAP_UNINIT;
+    }
+
+    (void)pthread_mutex_init(&remote_imported_tseg_info->remote_eid_id_table_lock, NULL);
+    return remote_imported_tseg_info;
+
+REMOTE_EID_MAP_UNINIT:
+    urpc_hmap_uninit(&remote_imported_tseg_info->remote_eid_id_table);
+
+FREE_INFO:
+    free(remote_imported_tseg_info);
+    return NULL;
+}
+
+static void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx)
+{
+    if (ub_ctx == NULL || ub_ctx->remote_imported_info == NULL) {
+        return;
+    }
+
+    remote_imported_tseg_info_t *remote_imported_tseg_info = ub_ctx->remote_imported_info;
+    remote_eid_hmap_node_t *cur = NULL;
+    remote_eid_hmap_node_t *next = NULL;
+    URPC_HMAP_FOR_EACH_SAFE(cur, next, node, &remote_imported_tseg_info->remote_eid_id_table) {
+        urpc_hmap_remove(&remote_imported_tseg_info->remote_eid_id_table, &cur->node);
+        free(cur);
+    }
+    (void)pthread_mutex_destroy(&remote_imported_tseg_info->remote_eid_id_table_lock);
+    urpc_hmap_uninit(&remote_imported_tseg_info->remote_eid_id_table);
+    util_id_allocator_uninit(&ub_ctx->remote_imported_info->eid_id_allocator);
+    free(ub_ctx->remote_imported_info);
+    ub_ctx->remote_imported_info = NULL;
+}
+
 uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 {
     if (g_ub_ctx_count > 0) {
@@ -1673,14 +1841,21 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
             continue;
         }
 
+        g_ub_ctx[g_ub_ctx_count].remote_imported_info = umq_ub_ctx_imported_info_create();
+        if (g_ub_ctx[g_ub_ctx_count].remote_imported_info == NULL) {
+            UMQ_VLOG_ERR("imported info create failed\n");
+            goto ROLLBACL_UB_CTX;
+        }
+
         if (umq_find_ub_device(info, &g_ub_ctx[g_ub_ctx_count]) != UMQ_SUCCESS) {
             UMQ_VLOG_INFO("find ub device failed\n");
-            continue;
+            goto ROLLBACL_UB_CTX;
         }
 
         if (total_io_buf_size == 0) {
             total_io_buf_size = info->mem_cfg.total_size;
         }
+
         g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
         g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
         g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
@@ -1689,11 +1864,11 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         ++g_ub_ctx_count;
     }
     if (g_ub_ctx_count == 0) {
-        goto URMA_UNINIT;
+        goto ROLLBACL_UB_CTX;
     }
 
     if (umq_io_buf_malloc(cfg->buf_mode, total_io_buf_size) == NULL) {
-        goto URMA_UNINIT;
+        goto ROLLBACL_UB_CTX;
     }
 
     qbuf_pool_cfg_t qbuf_cfg = {
@@ -1717,7 +1892,11 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 IO_BUF_FREE:
     umq_io_buf_free();
 
-URMA_UNINIT:
+ROLLBACL_UB_CTX:
+    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
+        umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
+        umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
+    }
     (void)urma_uninit();
 
 FREE_CTX:
@@ -1752,6 +1931,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     }
 
     for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
+        umq_ub_ctx_imported_info_destroy(&context[i]);
         umq_dec_ref(context[i].io_lock_free, &context[i].ref_cnt, 1);
         urma_delete_context(context[i].urma_ctx);
     }
@@ -2087,7 +2267,7 @@ static ALWAYS_INLINE void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t 
 {
     urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[buffer->mempool_id];
     urma_seg_t *seg = &tseg->seg;
-    if (buffer->need_import == 1) {
+    if (!queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][buffer->mempool_id]) {
         umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
         umq_imm_head->mempool_num++;
         import_mempool_info->mempool_seg_flag = seg->attr.value;
@@ -3112,6 +3292,8 @@ int umq_ub_unbind_impl(uint64_t umqh)
         umq_flush_tx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
         umq_flush_rx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
     }
+
+    util_id_allocator_release(&queue->dev_ctx->remote_imported_info->eid_id_allocator, bind_ctx->remote_eid_id);
     free(queue->bind_ctx);
     queue->bind_ctx = NULL;
     return UMQ_SUCCESS;
@@ -3610,10 +3792,9 @@ static int process_write_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
         umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)(uintptr_t)rx_buf->qbuf_ext;
         buf_pro->imm_data = imm.value;
     } else if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
-        if (umq_huge_qbuf_pool_import(imm.mem_import_done.mempool_id) != UMQ_SUCCESS) {
-            UMQ_LIMIT_VLOG_ERR("import mem failed \n");
-            return UMQ_FAIL;
-        }
+        ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
+        queue->dev_ctx->remote_imported_info->
+            tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import_done.mempool_id] = true;
         ret = UMQ_CONTINUE_FLAG;
         umq_buf_free(rx_buf);
     } else if (imm.bs.type == IMM_TYPE_NOTIFY) {
@@ -4097,25 +4278,30 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     }
 
     // create ub ctx
+    g_ub_ctx[g_ub_ctx_count].remote_imported_info = umq_ub_ctx_imported_info_create();
+    if (g_ub_ctx[g_ub_ctx_count].remote_imported_info == NULL) {
+        UMQ_VLOG_ERR("imported info create failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
     int ret = umq_find_ub_device(info, &g_ub_ctx[g_ub_ctx_count]);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_INFO("find ub device failed\n");
-        return ret;
+        UMQ_VLOG_ERR("find ub device failed\n");
+        goto DELETE_IMPORT_INFO;
     }
 
     // register seg
     ret = umq_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], umq_ub_register_seg_callback);
     if (ret != UMQ_SUCCESS) {
-        (void)umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
-        return ret;
+        UMQ_VLOG_ERR("qbuf register seg failed\n");
+        goto DELETE_URMA_CTX;
     }
 
     ret = umq_huge_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count],
         umq_ub_register_seg_callback, umq_ub_unregister_seg_callback);
     if (ret != UMQ_SUCCESS) {
-        (void)umq_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], umq_ub_unregister_seg_callback);
-        (void)umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
-        return ret;
+        UMQ_VLOG_ERR("huge qbuf register seg failed\n");
+        goto UNREGISTER_MEM;
     }
 
     g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
@@ -4126,6 +4312,17 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     g_ub_ctx_count++;
 
     return UMQ_SUCCESS;
+
+UNREGISTER_MEM:
+    (void)umq_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], umq_ub_unregister_seg_callback);
+
+DELETE_URMA_CTX:
+    (void)umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
+
+DELETE_IMPORT_INFO:
+    (void)umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
+
+    return ret;
 }
 
 int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)

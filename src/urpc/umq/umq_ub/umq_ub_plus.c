@@ -159,6 +159,11 @@ static int umq_tp_ub_plus_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in,
     return umq_ub_user_ctl_impl(umqh_tp, in, out);
 }
 
+static int umq_tp_ub_plus_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+{
+    return umq_ub_get_route_list_impl(route, route_list);
+}
+
 static umq_ops_t g_umq_ub_plus_ops = {
     .mode = UMQ_TRANS_MODE_UB_PLUS,
     // control plane api
@@ -174,6 +179,7 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_log_config_reset = umq_tp_ub_plus_log_config_reset,
     .umq_tp_dev_add = umq_tp_ub_plus_dev_add_impl,
     .umq_tp_user_ctl = umq_tp_ub_plus_user_ctl_impl,
+    .umq_tp_get_topo = umq_tp_ub_plus_get_route_list_impl,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_plus_buf_alloc,
