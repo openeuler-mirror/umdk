@@ -328,11 +328,11 @@ int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg)
 {
     init_cfg->trans_info_num = 1;
     init_cfg->trans_info[0].trans_mode = (umq_trans_mode_t)cfg->trans_mode;
-    init_cfg->eid_idx = cfg->eid_idx;
 
     if (cfg->dev_name != NULL) {
         init_cfg->trans_info[0].dev_info.assign_mode = UMQ_DEV_ASSIGN_MODE_DEV;
         strcpy(init_cfg->trans_info[0].dev_info.dev.dev_name, cfg->dev_name);
+        init_cfg->trans_info[0].dev_info.dev.eid_idx = cfg->eid_idx;
     } else if (cfg->server_ip != NULL) {
         init_cfg->trans_info[0].dev_info.assign_mode = UMQ_DEV_ASSIGN_MODE_IPV4;
         strcpy(init_cfg->trans_info[0].dev_info.ipv4.ip_addr, cfg->server_ip);

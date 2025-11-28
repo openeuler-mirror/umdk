@@ -48,6 +48,10 @@ int umq_huge_qbuf_alloc(enum HUGE_QBUF_POOL_SIZE_TYPE type, uint32_t request_siz
 
 void umq_huge_qbuf_free(umq_buf_list_t *list);
 
+int umq_huge_qbuf_register_seg(uint8_t *ctx,
+    register_seg_callback_t register_seg_func, unregister_seg_callback_t unregister_seg_func);
+void umq_huge_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func);
+
 #ifdef __cplusplus
 }
 #endif

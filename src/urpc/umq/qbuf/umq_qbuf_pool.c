@@ -395,3 +395,13 @@ umq_buf_mode_t umq_qbuf_mode_get(void)
 {
     return g_qbuf_pool.mode;
 }
+
+int umq_qbuf_register_seg(uint8_t *ctx, register_seg_callback_t register_seg_func)
+{
+    return register_seg_func(ctx, UMQ_QBUF_DEFAULT_MEMPOOL_ID, g_qbuf_pool.data_buffer,  g_qbuf_pool.total_size);
+}
+
+int umq_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func)
+{
+    return unregister_seg_func(ctx, UMQ_QBUF_DEFAULT_MEMPOOL_ID);
+}

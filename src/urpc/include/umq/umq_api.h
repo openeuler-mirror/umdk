@@ -252,6 +252,13 @@ int umq_log_config_set(umq_log_config_t *config);
  */
 int umq_log_config_get(umq_log_config_t *config);
 
+/**
+ * add dev for umq, only support ub
+ * @param[in] trans_info: transport info;
+ * Return: 0 on success, other value on error
+ */
+int umq_dev_add(umq_trans_info_t *trans_info);
+
 #ifdef __cplusplus
 }
 #endif

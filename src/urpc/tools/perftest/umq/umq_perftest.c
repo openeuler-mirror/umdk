@@ -99,6 +99,7 @@ static int fill_dev_info(umq_dev_assign_t *dev_info, umq_perftest_config_t *cfg)
         LOG_PRINT("umq perftest init with dev: %s\n", cfg->config.dev_name);
         dev_info->assign_mode = UMQ_DEV_ASSIGN_MODE_DEV;
         memcpy(dev_info->dev.dev_name, cfg->config.dev_name, strlen(cfg->config.dev_name));
+        dev_info->dev.eid_idx = cfg->eid_idx;
     } else if (inet_pton(AF_INET, cfg->config.local_ip, &addr) == 1) {
         LOG_PRINT("umq perftest init with ipv4: %s\n", cfg->config.local_ip);
         dev_info->assign_mode = UMQ_DEV_ASSIGN_MODE_IPV4;
@@ -349,7 +350,6 @@ static int umq_perftest_init_umq(umq_perftest_config_t *cfg)
     umq_config->trans_info[0].trans_mode = (umq_trans_mode_t)cfg->trans_mode;
     umq_config->cna = cfg->cna;
     umq_config->ubmm_eid = cfg->deid;
-    umq_config->eid_idx = cfg->eid_idx;
     if (fill_dev_info(&umq_config->trans_info[0].dev_info, cfg) != 0) {
         free(umq_config);
         return -1;

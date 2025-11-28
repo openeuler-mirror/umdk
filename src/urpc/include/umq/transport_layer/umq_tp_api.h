@@ -209,6 +209,14 @@ typedef struct umq_ops {
      * Return: void
      */
     void (*umq_tp_aync_event_ack)(umq_async_event_t *event);
+
+    /**
+     * add dev
+     * @param[in] trans_info: device info
+     * @param[in] cfg: init config of umq
+     * return: 0 on success, other value on error
+     */
+    int (*umq_tp_dev_add)(umq_trans_info_t *trans_info, umq_init_cfg_t *cfg);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);
