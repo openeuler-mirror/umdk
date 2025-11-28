@@ -155,6 +155,7 @@ public:
         urpc_config.feature = URPC_FEATURE_TIMEOUT;
         urpc_config.trans_info_num = 1;
         urpc_config.trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
+        urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
         (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "lo");
         urpc_state_set(URPC_STATE_UNINIT);
 

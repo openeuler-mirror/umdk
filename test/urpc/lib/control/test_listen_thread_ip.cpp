@@ -125,6 +125,7 @@ TEST_F(listen_thread_test, TestListenThreadByUrpcFrameworkDefinedCallBack) {
     urpc_config.feature |= URPC_FEATURE_TIMEOUT;
     urpc_config.trans_info_num = 1;
     urpc_config.trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
+    urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", dev_name);
     ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
 
@@ -135,7 +136,7 @@ TEST_F(listen_thread_test, TestListenThreadByUrpcFrameworkDefinedCallBack) {
     urpc_host_info_t server;
     memset(&server, 0, sizeof(urpc_host_info_t));
     server.host_type = HOST_TYPE_IPV4;
-    memcpy((server.ipv4.ip_addr, ip_addr, strlen(ip_addr));
+    memcpy(server.ipv4.ip_addr, ip_addr, strlen(ip_addr));
     server.ipv4.port = DEFAULT_PORT;
 
     // urpc server start

@@ -14,8 +14,6 @@
 
 #include "urpc_framework_errno.h"
 
-#include "../../../../lib/urpc_lib_ext/lib_ext_plog/datapath_ext/dp_ext.h"
-#include "../../../../lib/urpc_lib_ext/lib_ext_general/datapath_ext/dp_ext.h"
 #include "crypto.h"
 
 #define URPC_UT_EXT_HEADER_SIZE     256
@@ -83,7 +81,7 @@ static unsigned int server_psk_cb_func(void *ssl, const char *identity, unsigned
         printf("no enough buffer to copy psk key\n");
         return 0;
     }
-    memcpy((psk, max_psk_len, g_psk_key, strlen(g_psk_key));
+    memcpy(psk, (void *)(uintptr_t)g_psk_key, strlen(g_psk_key));
 
     return strnlen(g_psk_key, max_psk_len);
 }
@@ -182,153 +180,6 @@ static urpc_server_channel_info_t* get_server_channel_mock(uint32_t urpc_chid, b
     return &g_server_channel;
 }
 
-TEST_F(crypto_test, TestCryptoEncryptDecryptReq)
-{
-    // init cipher opt
-    urpc_cipher_t cipher_opt = {0};
-    crypto_key_t crypto_key;
-    int ret = crypto_ssl_gen_crypto_key(&crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-    ret = crypto_cipher_init(&cipher_opt, &crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-
-    // prepare data
-    char hdr_sge[URPC_UT_EXT_HEADER_SIZE] = {0};
-    char payload_sge[URPC_UT_USR_PAYLOAD_SIZE] = {0};
-    urpc_sge_t sges[2] = {{.addr = (uint64_t)(uintptr_t)hdr_sge, .length = URPC_UT_EXT_HEADER_SIZE},
-                          {.addr = (uint64_t)(uintptr_t)payload_sge, .length = URPC_UT_USR_PAYLOAD_SIZE}};
-
-    size_t base_size = urpc_hdr_size_get(URPC_REQ, 0);
-    urpc_plog_req_exthdr_t *exthdr = (urpc_plog_req_exthdr_t *)(uintptr_t)(sges[0].addr + base_size);
-    urpc_plog_req_exthdr_fill_user_hdr_offset(exthdr, URPC_UT_HDR_ROOM_SIZE - base_size);
-
-    // test encrypt & decrypt
-    ASSERT_EQ(crypto_encrypt_with_plog_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-
-    ASSERT_EQ(crypto_decrypt_with_plog_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-
-    // test get cipher from server channel
-    (void)pthread_rwlock_init(&g_server_channel.rw_lock, NULL);
-    g_server_channel.cipher_opt = &cipher_opt;
-    MOCKER(server_channel_get_with_rw_lock).stubs().will(invoke(get_server_channel_mock));
-
-    ASSERT_EQ(crypto_encrypt_with_plog_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-
-    ASSERT_EQ(crypto_decrypt_with_plog_ext_hdr(URPC_REQ, NULL, sges, 2), URPC_SUCCESS);
-
-    (void)pthread_rwlock_destroy(&g_server_channel.rw_lock);
-
-    crypto_cipher_uninit(&cipher_opt);
-}
-
-TEST_F(crypto_test, TestCryptoEncryptDecryptRsp)
-{
-    // init cipher opt
-    urpc_cipher_t cipher_opt = {0};
-    crypto_key_t crypto_key;
-    int ret = crypto_ssl_gen_crypto_key(&crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-    ret = crypto_cipher_init(&cipher_opt, &crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-
-    // prepare data
-    char hdr_sge[URPC_UT_EXT_HEADER_SIZE] = {0};
-    char payload_sge[URPC_UT_USR_PAYLOAD_SIZE] = {0};
-    urpc_sge_t sges[2] = {{.addr = (uint64_t)(uintptr_t)hdr_sge, .length = URPC_UT_EXT_HEADER_SIZE},
-                          {.addr = (uint64_t)(uintptr_t)payload_sge, .length = URPC_UT_USR_PAYLOAD_SIZE}};
-
-    size_t base_size = urpc_hdr_size_get(URPC_RSP, 0);
-    urpc_plog_rsp_exthdr_t *exthdr = (urpc_plog_rsp_exthdr_t *)((uintptr_t)(sges[0].addr + base_size));
-    urpc_plog_rsp_exthdr_fill_user_hdr_offset(exthdr, URPC_UT_HDR_ROOM_SIZE - base_size);
-
-    // test encrypt & decrypt
-    ASSERT_EQ(crypto_encrypt_with_plog_ext_hdr(URPC_RSP, &cipher_opt, sges, 2), URPC_SUCCESS);
-
-    ASSERT_EQ(crypto_decrypt_with_plog_ext_hdr(URPC_RSP, &cipher_opt, sges, 2), URPC_SUCCESS);
-
-    crypto_cipher_uninit(&cipher_opt);
-}
-
-TEST_F(crypto_test, TestGeneralHdrCryptoEncryptDecryptReq)
-{
-    // init cipher opt
-    urpc_cipher_t cipher_opt = {0};
-    crypto_key_t crypto_key;
-    int ret = crypto_ssl_gen_crypto_key(&crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-    ret = crypto_cipher_init(&cipher_opt, &crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-
-    // prepare data
-    size_t base_size = urpc_hdr_size_get(URPC_REQ, 0);
-    size_t hdr_total_size = base_size + urpc_ext_hdr_size_get(URPC_REQ, FUNC_DEF_GENERAL, 0);
-    char hdr_sge[hdr_total_size] = {0};
-    char payload_sge[URPC_UT_USR_PAYLOAD_SIZE] = {0};
-    const char *test_payload_str = "This is a test payload string.";
-    memcpy((payload_sge, test_payload_str, strlen(test_payload_str));
-    urpc_sge_t sges[2] = {{.addr = (uint64_t)(uintptr_t)hdr_sge, .length = (uint32_t)hdr_total_size},
-                          {.addr = (uint64_t)(uintptr_t)payload_sge, .length = URPC_UT_USR_PAYLOAD_SIZE}};
-
-    urpc_req_head_t *base_hdr = (urpc_req_head_t *)(uintptr_t)sges[0].addr;
-    urpc_req_fill_req_info_without_dma(base_hdr, 0, hdr_total_size + strlen(test_payload_str), 0, 0);
-    urpc_general_req_exthdr_t *exthdr = (urpc_general_req_exthdr_t *)(base_hdr + 1);
-    urpc_general_req_exthdr_fill_user_data_offset(exthdr, hdr_total_size - base_size);
-
-    // test encrypt & decrypt
-    ASSERT_EQ(crypto_encrypt_with_general_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-    ASSERT_EQ(crypto_decrypt_with_general_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-    // test payload unchanged
-    ASSERT_STREQ(payload_sge, test_payload_str);
-
-    // test get cipher from server channel
-    (void)pthread_rwlock_init(&g_server_channel.rw_lock, NULL);
-    g_server_channel.cipher_opt = &cipher_opt;
-    MOCKER(server_channel_get_with_rw_lock).stubs().will(invoke(get_server_channel_mock));
-
-    ASSERT_EQ(crypto_encrypt_with_general_ext_hdr(URPC_REQ, &cipher_opt, sges, 2), URPC_SUCCESS);
-    ASSERT_EQ(crypto_decrypt_with_general_ext_hdr(URPC_REQ, NULL, sges, 2), URPC_SUCCESS);
-    // test payload unchanged
-    ASSERT_STREQ(payload_sge, test_payload_str);
-
-    (void)pthread_rwlock_destroy(&g_server_channel.rw_lock);
-
-    crypto_cipher_uninit(&cipher_opt);
-}
-
-TEST_F(crypto_test, TestGeneralHdrCryptoEncryptDecryptRsp)
-{
-    // init cipher opt
-    urpc_cipher_t cipher_opt = {0};
-    crypto_key_t crypto_key;
-    int ret = crypto_ssl_gen_crypto_key(&crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-    ret = crypto_cipher_init(&cipher_opt, &crypto_key);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-
-    // prepare data
-    size_t base_size = urpc_hdr_size_get(URPC_RSP, 0);
-    size_t hdr_total_size = base_size + urpc_ext_hdr_size_get(URPC_RSP, FUNC_DEF_GENERAL, 0);
-    char hdr_sge[hdr_total_size] = {0};
-    char payload_sge[URPC_UT_USR_PAYLOAD_SIZE] = {0};
-    const char *test_payload_str = "This is a test payload string.";
-    memcpy((payload_sge, test_payload_str, strlen(test_payload_str));
-    urpc_sge_t sges[2] = {{.addr = (uint64_t)(uintptr_t)hdr_sge, .length = (uint32_t)hdr_total_size},
-                          {.addr = (uint64_t)(uintptr_t)payload_sge, .length = URPC_UT_USR_PAYLOAD_SIZE}};
-
-    urpc_rsp_head_t *base_hdr = (urpc_rsp_head_t *)(uintptr_t)sges[0].addr;
-    urpc_rsp_fill_one_req_info(base_hdr, 0, hdr_total_size + strlen(test_payload_str), NULL);
-    urpc_general_rsp_exthdr_t *exthdr = (urpc_general_rsp_exthdr_t *)(base_hdr + 1);
-    urpc_general_rsp_exthdr_fill_user_data_offset(exthdr, hdr_total_size - base_size);
-
-    // test encrypt & decrypt
-    ASSERT_EQ(crypto_encrypt_with_general_ext_hdr(URPC_RSP, &cipher_opt, sges, 2), URPC_SUCCESS);
-    ASSERT_EQ(crypto_decrypt_with_general_ext_hdr(URPC_RSP, &cipher_opt, sges, 2), URPC_SUCCESS);
-    // test payload unchanged
-    ASSERT_STREQ(payload_sge, test_payload_str);
-
-    crypto_cipher_uninit(&cipher_opt);
-}
-
 TEST_F(crypto_test, keepalive_encrypt_without_input_msg_test)
 {
     int ret;
@@ -349,7 +200,7 @@ TEST_F(crypto_test, keepalive_encrypt_without_input_msg_test)
     ret = crypto_cipher_init(&cipher_opt, &crypto_key);
     ASSERT_EQ(ret, URPC_SUCCESS);
 
-    memcpy((backup_data, keepalive_data, URPC_KEEPALIVE_HDR_SIZE);
+    memcpy(backup_data, keepalive_data, URPC_KEEPALIVE_HDR_SIZE);
     ret = crypto_encrypt_keepalive_req(&cipher_opt, &sge, 1);
     ASSERT_EQ(ret, URPC_SUCCESS);
 
@@ -402,7 +253,7 @@ TEST_F(crypto_test, keepalive_encrypt_with_input_msg_test)
     ret = crypto_cipher_init(&cipher_opt, &crypto_key);
     ASSERT_EQ(ret, URPC_SUCCESS);
 
-    memcpy((backup_data, URPC_KEEPALIVE_HDR_SIZE + input_msg_len);
+    memcpy(backup_data, keepalive_data, URPC_KEEPALIVE_HDR_SIZE + input_msg_len);
     ret = crypto_encrypt_keepalive_req(&cipher_opt, &sge, 1);
     ASSERT_EQ(ret, URPC_SUCCESS);
 

@@ -10,7 +10,7 @@
 
 TEST(UrpcLogTest, TestLevel) {
     urpc_log_level_t level = URPC_LOG_LEVEL_DEBUG;
-    bool res = util_vlog_drop(urpc_lib_get_vlog_ctx(), level);
+    bool res = util_vlog_drop(urpc_lib_get_vlog_ctx(), (util_vlog_level_t)level);
     ASSERT_EQ(res, true);
 
     urpc_log_config_t log_cfg;
@@ -19,7 +19,7 @@ TEST(UrpcLogTest, TestLevel) {
     log_cfg.level = level;
     int ret = urpc_log_config_set(&log_cfg);
     ASSERT_EQ(ret, URPC_SUCCESS);
-    res = util_vlog_drop(urpc_lib_get_vlog_ctx(), level);
+    res = util_vlog_drop(urpc_lib_get_vlog_ctx(), (util_vlog_level_t)level);
     ASSERT_EQ(res, false);
 
     level = URPC_LOG_LEVEL_MAX;

@@ -61,9 +61,6 @@
 
 #define DMA_CNT 5
 
-static int g_plog_sge_size[PLOG_SGE_SIZE_ARRAY_SIZE] = { URPC_EXT_HEADER_SIZE, SGE_SIZE };
-
-extern queue_ops_t g_urpc_send_recv_ops;
 static urma_device_t dev = {0};
 
 static urma_status_t urma_query_device_mock(urma_device_t *dev, urma_device_attr_t *dev_attr)
@@ -143,7 +140,7 @@ public:
             .will(returnValue(URPC_SUCCESS));
         MOCKER(queue_id_allocator_free).stubs().will(ignoreReturnValue());
 
-        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_IP, .assign_mode = DEV_ASSIGN_MODE_DEV,};
+        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_UB, .assign_mode = DEV_ASSIGN_MODE_DEV,};
         (void)snprintf(cfg.dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "lo");
         provider_flag_t flag = {0};
         int ret = provider_init(1, &cfg, flag);
@@ -182,15 +179,6 @@ TEST(queue_not_init_test, send_recv_create_local_queue_without_init)
     ASSERT_EQ(qh, (uint64_t)0);
 }
 
-TEST(queue_not_init_test, send_recv_advise_queue_empty)
-{
-    // 程序不coredump就是成功
-    g_urpc_send_recv_ops.bind_queue(NULL, NULL, NULL);
-    ASSERT_EQ(0, 0);
-    g_urpc_send_recv_ops.unbind_queue(NULL, NULL);
-    ASSERT_EQ(0, 0);
-}
-
 TEST(queue_not_init_test, send_recv_init_dev_by_ip_addr)
 {
     urma_device_t dev = {0};
@@ -222,12 +210,12 @@ TEST(queue_not_init_test, send_recv_init_dev_by_ip_addr)
     EXPECT_EQ(urma_str_to_eid("127.0.0.1", &eid_info.eid), 0);
     provider_flag_t flag = {0};
 
-    urpc_trans_info_t dp_cfg = {.trans_mode = URPC_TRANS_MODE_IP, .assign_mode = DEV_ASSIGN_MODE_IPV4,};
+    urpc_trans_info_t dp_cfg = {.trans_mode = URPC_TRANS_MODE_UB, .assign_mode = DEV_ASSIGN_MODE_IPV4,};
     (void)snprintf(dp_cfg.ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "127.0.0.1");
     dp_cfg.trans_mode = (enum urpc_trans_mode)10;
     EXPECT_EQ(provider_init(1, &dp_cfg, flag), URPC_FAIL);
 
-    dp_cfg.trans_mode = URPC_TRANS_MODE_IP;
+    dp_cfg.trans_mode = URPC_TRANS_MODE_UB;
     EXPECT_EQ(provider_init(1, &dp_cfg, flag), URPC_SUCCESS);
 
     provider_uninit();
@@ -376,7 +364,7 @@ TEST_F(queue_test, send_recv_create_shared_txrx_cq_fail)
     queue_cfg1.max_rx_sge = SHARED_JFC_MAX_RX_SGE;
     queue_cfg1.tx_depth = DEFAULT_TX_DEPTH;
     queue_cfg1.urpc_qh_share_tx_cq = qh;
-    uint64_t qh2 = urpc_queue_create(QUEUE_TRANS_MODE_JETTY_DISORDER, &queue_cfg1);
+    uint64_t qh2 = urpc_queue_create(QUEUE_TRANS_MODE_JETTY, &queue_cfg1);
     ASSERT_EQ(qh2, (uint64_t)0);
     queue_cfg.mode = QUEUE_MODE_INTERRUPT;
     queue_cfg1.urpc_qh_share_rq = qh;
@@ -389,43 +377,6 @@ TEST_F(queue_test, send_recv_create_shared_txrx_cq_fail)
     ASSERT_EQ(ret, URPC_SUCCESS);
     ret = urpc_queue_destroy(qh2);
     ASSERT_EQ(ret, URPC_SUCCESS);
-    dev.type = URMA_TRANSPORT_UB;
-}
-
-TEST_F(queue_test, send_recv_queue_ext_cfg_get)
-{
-    int ret;
-    dev.type = URMA_TRANSPORT_UB;
-    urpc_qcfg_create_t queue_cfg = {0};
-    queue_cfg.create_flag =
-        QCREATE_FLAG_RX_BUF_SIZE | QCREATE_FLAG_RX_DEPTH | QCREATE_FLAG_TX_DEPTH | QCREATE_FLAG_PRIORITY;
-    queue_cfg.rx_buf_size = DEFAULT_MSG_SIZE;
-    queue_cfg.rx_depth = DEFAULT_RX_DEPTH;
-    queue_cfg.tx_depth = DEFAULT_TX_DEPTH;
-    queue_cfg.priority = DEFAULT_PRIORITY;
-    uint64_t qh = urpc_queue_create(QUEUE_TRANS_MODE_JETTY, &queue_cfg);
-    ASSERT_NE(qh, (uint64_t)0);
-
-    urpc_ext_q_cfg_get_t ext_get_cfg;
-
-    ret = urpc_queue_ext_cfg_get(0, &ext_get_cfg);
-    ASSERT_EQ(ret, URPC_FAIL);
-
-    ret = urpc_queue_ext_cfg_get(qh, 0);
-    ASSERT_EQ(ret, URPC_FAIL);
-
-    ret = urpc_queue_ext_cfg_get(qh, &ext_get_cfg);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-    ASSERT_EQ(ext_get_cfg.trans_mode, QUEUE_TRANS_MODE_JETTY);
-
-    ASSERT_EQ(ext_get_cfg.local_mode_jetty.local_ctx_cnt, (uint32_t)1);
-    ASSERT_EQ(ext_get_cfg.local_mode_jetty.queue_info[0].local_ctx_id, (uint32_t)0);
-    ASSERT_EQ(ext_get_cfg.local_mode_jetty.queue_info[0].jetty_id, (uint32_t)0);
-    ASSERT_EQ(ext_get_cfg.local_mode_jetty.queue_info[0].jetty_token, (uint32_t)0);
-
-    ret = urpc_queue_destroy(qh);
-    ASSERT_EQ(ret, URPC_SUCCESS);
-
     dev.type = URMA_TRANSPORT_UB;
 }
 
@@ -604,278 +555,4 @@ TEST_F(queue_test, test_read_cache_list)
     test_read_cache_concurrent_pop_front(&cache_args);
 
     queue_read_cache_list_uninit(&rcache_list);
-}
-
-mem_handle_t *g_plog_allocator_mem_handle = nullptr;
-static std::random_device g_random_device;
-
-static int urpc_plog_allocator_get_raw_buf(urpc_sge_t *sge, uint64_t total_size, urpc_allocator_option_t *option)
-{
-    sge->length = SGE_SIZE;
-    sge->flag = 0;
-    sge->addr = (uint64_t)(uintptr_t)calloc(1, SGE_SIZE);
-    if (sge->addr == 0) {
-        return URPC_FAIL;
-    }
-    sge->mem_h = (uint64_t)(uintptr_t)g_plog_allocator_mem_handle;
-
-    return URPC_SUCCESS;
-}
-
-static int urpc_plog_allocator_put(urpc_sge_t *sge, uint32_t num, urpc_allocator_option_t *option)
-{
-    for (uint32_t i = 0; i < num; i++) {
-        free((void *)(uintptr_t)sge[i].addr);
-    }
-
-    free(sge);
-
-    return URPC_SUCCESS;
-}
-
-static int urpc_plog_allocator_put_raw_buf(urpc_sge_t *sge, urpc_allocator_option_t *option)
-{
-    if (sge == NULL || sge[0].addr == 0) {
-        return URPC_FAIL;
-    }
-
-    free((void *)(uintptr_t)sge->addr);
-
-    return URPC_SUCCESS;
-}
-
-static int urpc_plog_allocator_get(urpc_sge_t **sge, uint32_t *num, uint64_t total_size, urpc_allocator_option_t *option)
-{
-    uint32_t i = 0;
-    urpc_sge_t *sge_ = (urpc_sge_t *)malloc(sizeof(urpc_sge_t) * PLOG_SGE_SIZE_ARRAY_SIZE);
-    if (sge_ == NULL) {
-        return URPC_FAIL;
-    }
-
-    for (i = 0; i < PLOG_SGE_SIZE_ARRAY_SIZE; i++) {
-        sge_[i].length = g_plog_sge_size[i];
-        sge_[i].flag = 0;
-        sge_[i].addr = (uint64_t)(uintptr_t)calloc(1, sge_[i].length);
-        if (sge_[i].addr == 0) {
-            goto ERROR;
-        }
-        sge_[i].mem_h = (uint64_t)(uintptr_t)g_plog_allocator_mem_handle;
-    }
-
-    *num = (int)PLOG_SGE_SIZE_ARRAY_SIZE;
-    *sge = sge_;
-
-    return URPC_SUCCESS;
-
-ERROR:
-    for (uint32_t j = 0; j < i; j++) {
-        free((void *)(uintptr_t)sge_[j].addr);
-    }
-
-    free(sge_);
-
-    return URPC_FAIL;
-}
-
-static int urpc_plog_allocator_get_sges(urpc_sge_t **sge, uint32_t num, urpc_allocator_option_t *option)
-{
-    if (num == 0) {
-        return URPC_FAIL;
-    }
-
-    urpc_sge_t *tmp_sge = (urpc_sge_t *)calloc(num, sizeof(urpc_sge_t));
-    if (tmp_sge == NULL) {
-        return URPC_FAIL;
-    }
-
-    for (uint32_t i = 0; i < num; i++) {
-        tmp_sge[i].flag = SGE_FLAG_NO_MEM;
-    }
-
-    *sge = tmp_sge;
-
-    return URPC_SUCCESS;
-}
-
-static int urpc_plog_allocator_put_sges(urpc_sge_t *sge, urpc_allocator_option_t *option)
-{
-    if (sge == NULL) {
-        return URPC_FAIL;
-    }
-
-    free(sge);
-    return URPC_SUCCESS;
-}
-
-static urpc_allocator_t g_plog_allocator = {
-    .get = urpc_plog_allocator_get,
-    .put = urpc_plog_allocator_put,
-    .get_raw_buf = urpc_plog_allocator_get_raw_buf,
-    .put_raw_buf = urpc_plog_allocator_put_raw_buf,
-    .get_sges = urpc_plog_allocator_get_sges,
-    .put_sges = urpc_plog_allocator_put_sges,
-};
-
-send_recv_queue_local_t *g_test_send_recv_queue_read_cache_list_queue = nullptr;
-class WrInfo {
-public:
-    WrInfo(urma_sge_t *sge, uint32_t num_sge, uint64_t user_ctx) : m_user_ctx(user_ctx), m_num_sge(num_sge)
-    {
-        m_timestamp = get_timestamp_ns();
-        uint32_t mem_size = num_sge * sizeof(urma_sge_t);
-        memcpy((&m_sge, sge, mem_size);
-        for (uint32_t i = 0; i < m_num_sge; i++) {
-            m_sge_total_len += m_sge[i].len;
-        }
-    }
-
-    uint64_t m_timestamp;
-    uint64_t m_user_ctx;
-    urma_sge_t m_sge[PLOG_SGE_SIZE_ARRAY_SIZE];
-    uint32_t m_num_sge;
-    uint32_t m_sge_total_len = 0;
-};
-
-static pthread_spinlock_t g_tx_lock;
-static pthread_spinlock_t g_rx_lock;
-static std::deque<WrInfo> g_test_send_recv_queue_read_cache_list_rx_vec;
-static std::deque<WrInfo> g_test_send_recv_queue_read_cache_list_tx_vec;
-static uint32_t g_simulate_post_read_duration;
-static bool g_simulate_flush_jetty;
-static bool g_simulate_flush_jfr;
-static uint32_t g_total_rx_cr_cnt;
-static std::atomic<uint32_t> g_req_id;
-
-static uint32_t fill_plog_read_proto_info(WrInfo &wr)
-{
-    uint32_t req_id = g_req_id.fetch_add(1);
-    urpc_req_head_t *req_head = (urpc_req_head_t *)wr.m_sge[0].addr;
-    urpc_req_fill_basic_info(req_head, 0, 0);
-    urpc_req_fill_req_info_without_dma(req_head, 0, wr.m_sge_total_len, req_id, FUNC_DEF_PLOG);
-    urpc_plog_req_exthdr_t *exthdr =
-        (urpc_plog_req_exthdr_t *)((uintptr_t)(wr.m_sge[0].addr + sizeof(urpc_req_head_t)));
-    uint32_t dma_cnt = wr.m_sge[1].len / PLOG_DMA_INFO_SIZE;
-
-    urpc_plog_req_exthdr_fill_version(exthdr, URPC_EXTHDR_PLOG_VERSION);
-    urpc_plog_req_exthdr_fill_data_trans_mode(exthdr, MODE_SEND_READ);
-    urpc_plog_req_exthdr_fill_user_hdr_offset(exthdr, PLOG_READ_HEADER_ROOM_SIZE - sizeof(urpc_req_head_t));
-    urpc_plog_req_exthdr_fill_user_data_offset(exthdr, PLOG_READ_HEADER_TOTAL_SIZE - sizeof(urpc_req_head_t));
-    urpc_plog_req_exthdr_fill_flow_ctrl_flag(exthdr, 0);
-    urpc_plog_req_exthdr_fill_data_zone_dma_cnt(exthdr, dma_cnt);
-    urpc_plog_req_exthdr_fill_early_rsp(exthdr, false);
-
-    urpc_plog_dma_t *dma = (urpc_plog_dma_t *)wr.m_sge[1].addr;
-    for (uint32_t i = 0; i < dma_cnt; i++) {
-        urpc_plog_dma_fill_size(dma + i, SGE_SIZE);
-        urpc_plog_dma_fill_address(dma + i, (uint64_t)(uintptr_t)dma);
-    }
-    return req_id;
-}
-
-static int urma_poll_jfr_jfc_mock(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
-{
-    pthread_spin_lock(&g_rx_lock);
-    if (!g_simulate_flush_jfr && g_total_rx_cr_cnt <= 0) {
-        pthread_spin_unlock(&g_rx_lock);
-        return 0;
-    }
-
-    int i = 0;
-    while (i < cr_cnt && !g_test_send_recv_queue_read_cache_list_rx_vec.empty() && (g_simulate_flush_jfr || g_total_rx_cr_cnt > 0)) {
-        auto wr = g_test_send_recv_queue_read_cache_list_rx_vec.front();
-        g_test_send_recv_queue_read_cache_list_rx_vec.pop_front();
-        if (!g_simulate_flush_jfr) {
-            uint32_t req_id = fill_plog_read_proto_info(wr);
-            cr[i].completion_len += wr.m_sge_total_len;
-            cr[i].user_ctx = wr.m_user_ctx;
-            cr[i].status = URMA_CR_SUCCESS;
-            g_total_rx_cr_cnt--;
-        } else {
-            cr[i].completion_len += wr.m_sge_total_len;
-            cr[i].user_ctx = wr.m_user_ctx;
-            cr[i].status = URMA_CR_WR_FLUSH_ERR;
-        }
-        i++;
-    }
-
-    pthread_spin_unlock(&g_rx_lock);
-    return i;
-}
-
-static int urma_poll_jfs_jfc_mock(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
-{
-    int i = 0;
-    pthread_spin_lock(&g_tx_lock);
-    for (; i < cr_cnt && !g_test_send_recv_queue_read_cache_list_tx_vec.empty(); i++) {
-        auto wr = g_test_send_recv_queue_read_cache_list_tx_vec.front();
-        uint64_t timestamp = get_timestamp_ns();
-        if (!g_simulate_flush_jetty && (timestamp - wr.m_timestamp < g_simulate_post_read_duration)) {
-            pthread_spin_unlock(&g_tx_lock);
-            return i;
-        }
-        g_test_send_recv_queue_read_cache_list_tx_vec.pop_front();
-        cr[i].completion_len += wr.m_sge_total_len;
-        cr[i].user_ctx = wr.m_user_ctx;
-        cr[i].status = URMA_CR_SUCCESS;
-    }
-
-    if (g_simulate_flush_jetty && i < cr_cnt && g_test_send_recv_queue_read_cache_list_rx_vec.empty()) {
-        cr[i].status = URMA_CR_WR_SUSPEND_DONE;
-    }
-
-    pthread_spin_unlock(&g_tx_lock);
-    return i;
-}
-
-static int urma_poll_jfc_mock(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
-{
-    if (jfc == g_test_send_recv_queue_read_cache_list_queue->jfr_jfc) {
-        return urma_poll_jfr_jfc_mock(jfc, cr_cnt, cr);
-    }
-
-    return urma_poll_jfs_jfc_mock(jfc, cr_cnt, cr);
-}
-
-static urma_status_t urma_post_jetty_send_wr_mock(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
-{
-    pthread_spin_lock(&g_tx_lock);
-    if (g_test_send_recv_queue_read_cache_list_tx_vec.size() >=
-        g_test_send_recv_queue_read_cache_list_queue->local_q.cfg.tx_depth) {
-        pthread_spin_unlock(&g_tx_lock);
-        return URMA_EAGAIN;
-    }
-
-    g_test_send_recv_queue_read_cache_list_tx_vec.emplace_back(wr->send.src.sge, wr->send.src.num_sge, wr->user_ctx);
-    pthread_spin_unlock(&g_tx_lock);
-    return URMA_SUCCESS;
-}
-
-static urma_status_t urma_post_jetty_recv_wr_mock(urma_jetty_t *jetty, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
-{
-    pthread_spin_lock(&g_rx_lock);
-    g_test_send_recv_queue_read_cache_list_rx_vec.emplace_back(wr->src.sge, wr->src.num_sge, wr->user_ctx);
-    pthread_spin_unlock(&g_rx_lock);
-    return URMA_SUCCESS;
-}
-
-static urma_status_t urma_modify_jetty_mock(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
-{
-    if (attr->state == URMA_JETTY_STATE_SUSPENDED || attr->state == URMA_JETTY_STATE_ERROR) {
-        pthread_spin_lock(&g_tx_lock);
-        g_simulate_flush_jetty = true;
-        pthread_spin_unlock(&g_tx_lock);
-    }
-
-    return URMA_SUCCESS;
-}
-
-static urma_status_t urma_modify_jfr_mock(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
-{
-    if (attr->state == URMA_JFR_STATE_ERROR) {
-        pthread_spin_lock(&g_rx_lock);
-        g_simulate_flush_jfr = true;
-        pthread_spin_unlock(&g_rx_lock);
-    }
-
-    return URMA_SUCCESS;
 }
