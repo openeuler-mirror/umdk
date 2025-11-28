@@ -111,6 +111,14 @@ void umq_buf_free(umq_buf_t *qbuf);
 
 /**
  * User should ensure thread safety if io_lock_free is true
+ * Break and free the qbufs of first batch
+ * @param[in] qbuf: list of qbuf
+ * Return first qbuf addr of next batch, return NULL if not exist
+ */
+umq_buf_t *umq_buf_break_and_free(umq_buf_t *qbuf);
+
+/**
+ * User should ensure thread safety if io_lock_free is true
  * Reset header room size for qbuf
  * @param[in] qbuf: list of qbuf
  * @param[in] headroom_size: head room size to reset
