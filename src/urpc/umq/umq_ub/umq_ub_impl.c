@@ -683,7 +683,7 @@ static inline void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cn
     for (uint32_t i = 0; i < ctx_cnt; i++) {
         if (ctx_list[i].tseg_list[mempool_id] != NULL &&
             urma_unregister_seg(ctx_list[i].tseg_list[mempool_id]) != URMA_SUCCESS) {
-            UMQ_VLOG_ERR("ub ctx[%u] unregister memory failed\n", i);
+            UMQ_VLOG_ERR("ub ctx[%u] unregister segment failed\n", i);
         }
         ctx_list[i].tseg_list[mempool_id] = NULL;
     }
@@ -699,54 +699,29 @@ static int huge_qbuf_pool_memory_init(uint8_t mempool_id, enum HUGE_QBUF_POOL_SI
         return -UMQ_ERR_ENOMEM;
     }
 
-    bool enable_token = (g_ub_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
-    uint32_t mem_token;
-    int ret = umq_ub_token_generate(enable_token, &mem_token);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("generate memory token failed\n");
-        free(addr);
-        return ret;
-    }
-
-    urma_reg_seg_flag_t flag = {
-        .bs.token_policy = token_policy_get(enable_token),
-        .bs.cacheable = URMA_NON_CACHEABLE,
-        .bs.reserved = 0,
-        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC
-    };
-    urma_token_t token = { .token = mem_token };
-    urma_seg_cfg_t seg_cfg = {
-        .va = (uintptr_t)addr,
-        .len = total_len,
-        .token_id = NULL,
-        .token_value = token,
-        .flag = flag,
-        .user_ctx = token.token,
-        .iova = 0
-    };
-    g_ub_ctx->tseg_list[mempool_id] = urma_register_seg(g_ub_ctx->urma_ctx, &seg_cfg);
-    if (g_ub_ctx->tseg_list[mempool_id] == NULL) {
-        UMQ_VLOG_ERR("fail to register segment\n");
-        free(addr);
-        return -UMQ_ERR_EINVAL;
+    uint32_t failed_idx = 0;
+    int ret = 0;
+    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
+        ret = umq_ub_register_seg(&g_ub_ctx[i], mempool_id, addr, total_len);
+        if (ret != UMQ_SUCCESS) {
+            failed_idx = i;
+            UMQ_VLOG_ERR("ub ctx[%u] register segment failed\n", i);
+            goto UNREGISTER_MEM;
+        }
     }
 
     *buffer_addr = addr;
-
     return UMQ_SUCCESS;
+
+UNREGISTER_MEM:
+    umq_ub_unregister_seg(g_ub_ctx, failed_idx, mempool_id);
+    free(addr);
+    return ret;
 }
 
 static void huge_qbuf_pool_memory_uninit(uint8_t mempool_id, void *buf_addr)
 {
-    if (g_ub_ctx->tseg_list[mempool_id] == NULL) {
-        return;
-    }
-
-    if (urma_unregister_seg(g_ub_ctx->tseg_list[mempool_id]) != URMA_SUCCESS) {
-        UMQ_VLOG_ERR("huge qbuf pool unregister segment failed, pool id: %u\n", mempool_id);
-    }
-    g_ub_ctx->tseg_list[mempool_id] = NULL;
-
+    umq_ub_unregister_seg(g_ub_ctx, g_ub_ctx_count, mempool_id);
     free(buf_addr);
 }
 
@@ -1246,58 +1221,39 @@ int umq_modify_ubq_to_err(ub_queue_t *queue)
     return urma_status;
 }
 
-int32_t umq_ub_register_memory_impl(uint8_t *ub_ctx, void *buf, uint64_t size)
+int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
 {
+    if (g_ub_ctx == NULL) {
+        UMQ_VLOG_ERR("no device is available to register memory\n");
+        return -UMQ_ERR_ENODEV;
+    }
+
     if (buf == NULL || size == 0) {
         UMQ_VLOG_ERR("invalid addr or size\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_ub_ctx_t *ctx = (umq_ub_ctx_t *)ub_ctx;
-    bool enable_token = (ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
-    uint32_t mem_token;
-    if (umq_ub_token_generate(enable_token, &mem_token) != 0) {
-        UMQ_VLOG_ERR("generate memory token failed\n");
-        return -UMQ_ERR_ENOMEM;
-    }
-
-    urma_reg_seg_flag_t flag = {
-        .bs.token_policy = token_policy_get(enable_token),
-        .bs.cacheable = URMA_NON_CACHEABLE,
-        .bs.reserved = 0,
-        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC
-    };
-    urma_token_t token = { .token = mem_token };
-    urma_seg_cfg_t seg_cfg = {
-        .va = (uintptr_t)buf,
-        .len = size,
-        .token_id = NULL,
-        .token_value = token,
-        .flag = flag,
-        .user_ctx = token.token,
-        .iova = 0
-    };
-    ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID] = urma_register_seg(ctx->urma_ctx, &seg_cfg);
-    if (ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID] == NULL) {
-        UMQ_VLOG_ERR("fail to register segment\n");
-        return -UMQ_ERR_ENODEV;
+    uint32_t failed_idx;
+    int ret = 0;
+    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
+        ret = umq_ub_register_seg(&g_ub_ctx[i], UMQ_QBUF_DEFAULT_MEMPOOL_ID, buf, size);
+        if (ret != UMQ_SUCCESS) {
+            failed_idx = i;
+            UMQ_VLOG_ERR("ub ctx[%u] register segment failed\n", i);
+            goto UNREGISTER_MEM;
+        }
     }
     return UMQ_SUCCESS;
+
+UNREGISTER_MEM:
+    umq_ub_unregister_seg(g_ub_ctx, failed_idx, UMQ_QBUF_DEFAULT_MEMPOOL_ID);
+    return ret;
 }
 
-void umq_ub_unregister_memory_impl(uint8_t *ub_ctx)
+void umq_ub_unregister_memory_impl()
 {
-    if (ub_ctx == NULL) {
-        UMQ_VLOG_ERR("ub_ctx is null\n");
-        return;
-    }
-    for (uint32_t i = 0; i < UMQ_MAX_TSEG_NUM; i++) {
-        umq_ub_ctx_t *ctx = (umq_ub_ctx_t *)ub_ctx;
-        if (ctx->tseg_list[i] != NULL && urma_unregister_seg(ctx->tseg_list[i]) != URMA_SUCCESS) {
-            UMQ_VLOG_ERR("urma unregister segment failed\n");
-            return;
-        }
-        ctx->tseg_list[i] = NULL;
+    for (uint32_t tseg_idx = 0; tseg_idx < UMQ_MAX_TSEG_NUM; tseg_idx++) {
+        umq_ub_unregister_seg(g_ub_ctx, g_ub_ctx_count, tseg_idx);
     }
 }
 
