@@ -19,7 +19,7 @@ int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_direction_t io_direction, um
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
-        (umq->pro_tp_ops->umq_tp_post == NULL) || qbuf == NULL || bad_qbuf == NULL) {
+        (umq->pro_tp_ops->umq_tp_post == NULL) || qbuf == NULL || qbuf->buf_data == NULL || bad_qbuf == NULL) {
         UMQ_LIMIT_VLOG_ERR("umqh or qbuf invalid\n");
         return -UMQ_ERR_EINVAL;
     }

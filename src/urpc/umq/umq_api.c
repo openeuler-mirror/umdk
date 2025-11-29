@@ -751,7 +751,7 @@ int umq_enqueue(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
-        (umq->tp_ops->umq_tp_enqueue == NULL) || qbuf == NULL || bad_qbuf == NULL) {
+        (umq->tp_ops->umq_tp_enqueue == NULL) || qbuf == NULL || qbuf->buf_data == NULL || bad_qbuf == NULL) {
         UMQ_VLOG_ERR("umqh or qbuf invalid\n");
         return -UMQ_ERR_EINVAL;
     }
