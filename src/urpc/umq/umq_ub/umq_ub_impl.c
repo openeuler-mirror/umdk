@@ -642,7 +642,7 @@ static inline int umq_ub_token_generate(bool enable_token, uint32_t *token)
     return urpc_rand_generate((uint8_t *)token, sizeof(uint32_t));
 }
 
-static inline int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size)
+static int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size)
 {
     bool enable_token = (ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
     uint32_t mem_token;
@@ -1031,7 +1031,7 @@ static inline uint32_t umq_ub_bind_fature_allowlist_get(void)
 
 static inline bool umq_ub_bind_feature_check(uint32_t local_feature, uint32_t remote_feature)
 {
-    return ((local_feature ^ remote_feature) & !umq_ub_bind_fature_allowlist_get()) == 0;
+    return ((local_feature ^ remote_feature) & (~umq_ub_bind_fature_allowlist_get())) == 0;
 }
 
 static int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
@@ -1250,7 +1250,7 @@ UNREGISTER_MEM:
     return ret;
 }
 
-void umq_ub_unregister_memory_impl()
+void umq_ub_unregister_memory_impl(void)
 {
     for (uint32_t tseg_idx = 0; tseg_idx < UMQ_MAX_TSEG_NUM; tseg_idx++) {
         umq_ub_unregister_seg(g_ub_ctx, g_ub_ctx_count, tseg_idx);
@@ -1439,7 +1439,7 @@ static uint32_t umq_find_ub_dev_by_name(char *dev_name, urma_device_t **urma_dev
 
 static uint32_t umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, uint32_t *eid_index)
 {
-     uint32_t eid_cnt = 0;
+    uint32_t eid_cnt = 0;
     if (dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_DEV) {
         eid_cnt = umq_find_ub_dev_by_name(dev_info->dev.dev_name, urma_dev);
         *eid_index = dev_info->dev.eid_idx;
@@ -1532,7 +1532,7 @@ static umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(
 }
 
 static int umq_find_ub_device(umq_trans_info_t *info, umq_ub_ctx_t *ub_ctx)
-{   
+{
     if (g_ub_ctx_count >= MAX_UMQ_TRANS_INFO_NUM) {
         UMQ_VLOG_ERR("ub ctx cnt exceeded the maximum limit %u\n", MAX_UMQ_TRANS_INFO_NUM);
         return -UMQ_ERR_EINVAL;

@@ -71,7 +71,7 @@ int umq_ub_unbind_impl(uint64_t umqh);
 umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp);
 
 int32_t umq_ub_register_memory_impl(void *buf, uint64_t size);
-void umq_ub_unregister_memory_impl();
+void umq_ub_unregister_memory_impl(void);
 
 int umq_ub_log_config_set_impl(umq_log_config_t *config);
 int umq_ub_log_config_reset_impl(void);

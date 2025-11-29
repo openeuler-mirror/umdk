@@ -52,6 +52,6 @@ int umq_ubmm_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *opt
 
 int32_t umq_ubmm_register_memory_impl(uint8_t *ubmm_ctx, void *buf, uint64_t size);
 
-void umq_ubmm_unregister_memory_impl();
+void umq_ubmm_unregister_memory_impl(void);
 
 #endif
