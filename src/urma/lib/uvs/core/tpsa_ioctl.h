@@ -18,6 +18,8 @@
 #include <atomic>
 #endif
 #include "ub_util.h"
+#include "uvs_types.h"
+#include "uvs_api.h"
 #include "tpsa_log.h"
 
 #ifdef __cplusplus
@@ -41,6 +43,7 @@ typedef struct tpsa_cmd_hdr {
 
 typedef enum uvs_global_cmd {
     UVS_CMD_SET_TOPO = 1,
+    UVS_CMD_GET_TOPO_EID = 2,
     UVS_CMD_GLOBAL_LAST
 } uvs_global_cmd_t;
 
@@ -51,8 +54,14 @@ typedef struct uvs_set_topo {
     } in;
 } uvs_set_topo_t;
 
+typedef struct uvs_cmd_get_route_list {
+    uvs_route_t in;
+    uvs_route_list_t out;
+} uvs_cmd_get_route_list_t;
+
 int uvs_ioctl_in_global(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_global_cmd_t cmd, void *arg, uint32_t arg_len);
 int uvs_ioctl_set_topo(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_set_topo_t *arg);
+int uvs_ioctl_get_route_list(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_route_list_t *arg);
 
 #ifdef __cplusplus
 }

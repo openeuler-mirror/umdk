@@ -9,6 +9,7 @@
  */
 
 #include <sys/syscall.h>
+#include <errno.h>
 #include "uvs_api.h"
 #include "uvs_cmd_tlv.h"
 #include "tpsa_ioctl.h"
@@ -50,5 +51,19 @@ int uvs_set_topo_info(void *topo, uint32_t topo_num)
     uvs_get_api_rdlock();
     ret = uvs_set_topo_info_inner(topo, topo_num);
     put_uvs_lock();
+    return ret;
+}
+
+int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
+{
+    int ret = 0;
+    if (route == NULL || route_list == NULL) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -EINVAL;
+    }
+    ret = uvs_ubcore_ioctl_get_route_list(route, route_list);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to get route list, ret: %d.\n", ret);
+    }
     return ret;
 }
