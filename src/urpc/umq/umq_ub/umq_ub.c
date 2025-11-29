@@ -145,6 +145,11 @@ int umq_tp_ub_dev_add_impl(umq_trans_info_t *trans_info, umq_init_cfg_t *cfg)
     return umq_ub_dev_add_impl(trans_info, cfg);
 }
 
+int umq_tp_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+{
+    return umq_ub_get_route_list_impl(route, route_list);
+}
+
 static umq_ops_t g_umq_ub_ops = {
     .mode = UMQ_TRANS_MODE_UB,
     // control plane api
@@ -159,6 +164,8 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_log_config_set = umq_tp_ub_log_config_set,
     .umq_tp_log_config_reset = umq_tp_ub_log_config_reset,
     .umq_tp_dev_add = umq_tp_ub_dev_add_impl,
+    .umq_tp_get_topo = umq_tp_ub_get_route_list_impl,
+
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_buf_alloc,

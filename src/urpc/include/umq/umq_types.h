@@ -455,6 +455,8 @@ typedef enum umq_async_event_type {
     UMQ_EVENT_OTHER,
 } umq_async_event_type_t;
 
+#define UMQ_MAX_ROUTES 16
+
 typedef struct umq_async_event {
     umq_trans_info_t trans_info;
     union {
@@ -465,6 +467,27 @@ typedef struct umq_async_event {
     int original_code; // record original event
     void *priv;
 } umq_async_event_t;
+
+typedef union umq_route_flag {
+    struct {
+        uint32_t rtp: 1;
+        uint32_t ctp: 1;
+        uint32_t utp: 1;
+        uint32_t reserved: 29;
+    } bs;
+    uint32_t value;
+} umq_route_flag_t;
+
+typedef struct umq_route {
+    umq_eid_t src;
+    umq_eid_t dst;
+    umq_route_flag_t flag;
+} umq_route_t;
+
+typedef struct umq_route_list {
+    uint32_t len;
+    umq_route_t buf[UMQ_MAX_ROUTES];
+} umq_route_list_t;
 
 #ifdef __cplusplus
 }

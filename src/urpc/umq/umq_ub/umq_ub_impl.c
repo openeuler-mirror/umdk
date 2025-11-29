@@ -11,6 +11,7 @@
 #include <sys/queue.h>
 #include <malloc.h>
 
+#include "uvs_api.h"
 #include "perf.h"
 #include "urpc_util.h"
 #include "urpc_list.h"
@@ -4052,5 +4053,32 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
     g_ub_ctx_count++;
 
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+{
+    if (route == NULL || route_list == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    uvs_route_t uvs_route;
+    uvs_route_list_t uvs_route_list;
+    (void)memcpy(&uvs_route.src, &route->src, sizeof(umq_eid_t));
+    (void)memcpy(&uvs_route.dst, &route->dst, sizeof(umq_eid_t));
+
+    int ret = uvs_get_route_list(&uvs_route, &uvs_route_list);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("get roite list failed\n");
+        return ret;
+    }
+
+    for (uint32_t i = 0; i < uvs_route_list.len; i++) {
+        (void)memcpy(&route_list->buf[i].src, &uvs_route_list.buf[i].src, sizeof(umq_eid_t));
+        (void)memcpy(&route_list->buf[i].dst, &uvs_route_list.buf[i].dst, sizeof(umq_eid_t));
+        route_list->buf[i].flag.value = uvs_route_list.buf[i].flag.value;
+    }
+    route_list->len = uvs_route_list.len;
     return UMQ_SUCCESS;
 }

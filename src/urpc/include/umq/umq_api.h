@@ -259,6 +259,15 @@ int umq_log_config_get(umq_log_config_t *config);
  */
 int umq_dev_add(umq_trans_info_t *trans_info);
 
+/**
+ * Get primary and port eid from topo info.
+ * @param[in] route: parameter that contains src_v_eid and dst_v_eid, refers to umq_route_t;
+ * @param[in] umq_trans_mode: umq trans mdoe;
+ * @param[out] route_list: a list buffer, containing all routes returned;
+ * Return: 0 on success, other value on error
+ */
+int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list);
+
 #ifdef __cplusplus
 }
 #endif
