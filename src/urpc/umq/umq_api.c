@@ -995,3 +995,29 @@ UNLOCK:
 
 return ret;
 }
+
+int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list)
+{
+    if (route == NULL || route_list == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (umq_trans_mode >= MAX_UMQ_TRANS_INFO_NUM) {
+        UMQ_VLOG_ERR("trans info num[%u] exceeds maximum[%u] limit\n", umq_trans_mode, MAX_UMQ_TRANS_INFO_NUM);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_framework_t *umq_fw = &g_umq_fws[umq_trans_mode];
+    if (!umq_fw->enable) {
+        UMQ_VLOG_ERR("trans mode %u ops not init\n", umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_get_topo == NULL) {
+        UMQ_VLOG_ERR("trans mode %u ops not support\n", umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+    
+    return umq_fw->tp_ops->umq_tp_get_topo(route, route_list);
+}

@@ -14,7 +14,7 @@ set_target_properties(umq_ub PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
     C_STANDARD 11
 )
-target_link_libraries(umq_ub PUBLIC pthread ssl urma PRIVATE umq_buf)
+target_link_libraries(umq_ub PUBLIC pthread ssl urma tpsa PRIVATE umq_buf)
 install(TARGETS umq_ub DESTINATION /usr/lib64)
 
 # uninstall target
