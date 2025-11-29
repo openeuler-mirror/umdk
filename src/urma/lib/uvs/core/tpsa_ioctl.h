@@ -19,6 +19,7 @@
 #endif
 #include "ub_util.h"
 #include "uvs_types.h"
+#include "uvs_api.h"
 #include "tpsa_log.h"
 
 #ifdef __cplusplus
@@ -53,21 +54,14 @@ typedef struct uvs_set_topo {
     } in;
 } uvs_set_topo_t;
 
-typedef struct uvs_cmd_get_topo_eid {
-    struct {
-        uint32_t tp_type;
-        uvs_eid_t src_v_eid;
-        uvs_eid_t dst_v_eid;
-    } in;
-    struct {
-        uvs_eid_t src_p_eid;
-        uvs_eid_t dst_p_eid;
-    } out;
-} uvs_cmd_get_topo_eid_t;
+typedef struct uvs_cmd_get_route_list {
+    uvs_route_t in;
+    uvs_route_list_t out;
+} uvs_cmd_get_route_list_t;
 
 int uvs_ioctl_in_global(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_global_cmd_t cmd, void *arg, uint32_t arg_len);
 int uvs_ioctl_set_topo(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_set_topo_t *arg);
-int uvs_ioctl_get_topo_eid(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_topo_eid_t *arg);
+int uvs_ioctl_get_route_list(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_route_list_t *arg);
 
 #ifdef __cplusplus
 }

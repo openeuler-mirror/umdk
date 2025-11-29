@@ -77,12 +77,10 @@ int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num)
     return 0;
 }
 
-int uvs_ubcore_ioctl_get_topo_eid(uint32_t tp_type,
-    uvs_eid_t *src_v_eid, uvs_eid_t *dst_v_eid,
-    uvs_eid_t *src_p_eid, uvs_eid_t *dst_p_eid)
+int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
 {
     tpsa_ioctl_ctx_t ioctl_ctx = {0};
-    uvs_cmd_get_topo_eid_t arg = {0};
+    uvs_cmd_get_route_list_t arg = {0};
     int ret = 0;
 
     int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
@@ -92,20 +90,17 @@ int uvs_ubcore_ioctl_get_topo_eid(uint32_t tp_type,
     }
 
     ioctl_ctx.ubcore_fd = dev_fd;
-    arg.in.tp_type = tp_type;
-    arg.in.src_v_eid = *src_v_eid;
-    arg.in.dst_v_eid = *dst_v_eid;
+    arg.in = *route;
 
-    ret = uvs_ioctl_get_topo_eid(&ioctl_ctx, &arg);
+    ret = uvs_ioctl_get_route_list(&ioctl_ctx, &arg);
     if (ret != 0) {
-        TPSA_LOG_ERR("Failed to get topo eid, ret: %d, errno: %d.\n",
+        TPSA_LOG_ERR("Failed to get route list, ret: %d, errno: %d.\n",
             ret, errno);
         close(dev_fd);
         return ret;
     }
 
-    *src_p_eid = arg.out.src_p_eid;
-    *dst_p_eid = arg.out.dst_p_eid;
+    *route_list = arg.out;
 
     close(dev_fd);
     return 0;

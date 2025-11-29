@@ -18,6 +18,29 @@
 extern "C" {
 #endif
 
+#define UVS_MAX_ROUTES 16
+
+typedef union uvs_route_flag {
+    struct {
+        uint32_t rtp: 1;
+        uint32_t ctp: 1;
+        uint32_t utp: 1;
+        uint32_t reserved: 29;
+    } bs;
+    uint32_t value;
+} uvs_route_flag_t;
+
+typedef struct uvs_route {
+    uvs_eid_t src;
+    uvs_eid_t dst;
+    uvs_route_flag_t flag;
+} uvs_route_t;
+
+typedef struct uvs_route_list {
+    uint32_t len;
+    uvs_route_t buf[UVS_MAX_ROUTES];
+} uvs_route_list_t;
+
 /**
  * UVS set topo info which gets from MXE module.
  * @param[in] topo: topo info of one bonding device
@@ -27,22 +50,13 @@ extern "C" {
 int uvs_set_topo_info(void *topo, uint32_t topo_num);
 
 /**
- * Get primary or port eid from topo info.
- * @param[in] tp_type: tp type, 0-RTP, 1-CTP, 2-UTP,
-                       refer to urma_tp_type_t;
- * @param[in] src_v_eid: source virtual eid, refer to
-                       source bonding eid;
- * @param[in] dst_v_eid: dest virtual eid, refer to
-                       dest bonding eid;
- * @param[out] src_p_eid: source physical eid, refer to
-                       source primary or port eid;
- * @param[out] src_v_eid: dest physical eid, refer to
-                       dest primary or port eid;
+ * Get primary and port eid from topo info.
+ * @param[in] route: parameter that contains src_v_eid and dst_v_eid,
+ *                          refers to uvs_route_t;
+ * @param[out] route_list: a list buffer, containing all routes returned;
  * Return: 0 on success, other value on error
  */
-int uvs_get_topo_eid(uint32_t tp_type, uvs_eid_t *src_v_eid,
-    uvs_eid_t *dst_v_eid, uvs_eid_t *src_p_eid,
-    uvs_eid_t *dst_p_eid);
+int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
 
 #ifdef __cplusplus
 }

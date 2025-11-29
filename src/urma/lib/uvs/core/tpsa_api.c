@@ -54,27 +54,16 @@ int uvs_set_topo_info(void *topo, uint32_t topo_num)
     return ret;
 }
 
-int uvs_get_topo_eid(uint32_t tp_type, uvs_eid_t *src_v_eid,
-    uvs_eid_t *dst_v_eid, uvs_eid_t *src_p_eid,
-    uvs_eid_t *dst_p_eid)
+int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
 {
     int ret = 0;
-
-    if (src_v_eid == NULL || dst_v_eid == NULL ||
-        src_p_eid == NULL || dst_p_eid == NULL) {
+    if (route == NULL || route_list == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
-
-    ret = uvs_ubcore_ioctl_get_topo_eid(tp_type,
-        src_v_eid, dst_v_eid, src_p_eid, dst_p_eid);
+    ret = uvs_ubcore_ioctl_get_route_list(route, route_list);
     if (ret != 0) {
-        TPSA_LOG_ERR("Failed to get topo eid, ret: %d, tp_type: %u.\n",
-            ret, tp_type);
-    } else {
-        TPSA_LOG_INFO("Finish to get topo eid, tp_type: %u.\n",
-            tp_type);
+        TPSA_LOG_ERR("Failed to get route list, ret: %d.\n", ret);
     }
-
     return ret;
 }

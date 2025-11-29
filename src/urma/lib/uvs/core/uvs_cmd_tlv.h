@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define UVS_CMD_OUT_TYPE_INIT 0x80
+#define UVS_CMD_OUT_TYPE_INIT 0x80  // 128B
 
 typedef struct uvs_cmd_attr {
     uint8_t type; /* See uvs_cmd_xxx_type_t */
@@ -42,15 +42,12 @@ typedef enum uvs_cmd_set_topo_type {
     SET_TOPO_IN_NUM /* Only for calculating number of types */
 } uvs_cmd_set_topo_type_t;
 
-typedef enum uvs_cmd_get_topo_eid_type {
-    GET_TOPO_EID_IN_TP_TYPE,
-    GET_TOPO_EID_IN_SRC_V_EID,
-    GET_TOPO_EID_IN_DST_V_EID,
-    GET_TOPO_EID_IN_NUM, /* Only for calculating number of types */
-    GET_TOPO_EID_OUT_SRC_P_EID = UVS_CMD_OUT_TYPE_INIT,
-    GET_TOPO_EID_OUT_DST_P_EID,
-    GET_TOPO_EID_OUT_NUM
-} uvs_cmd_get_topo_eid_type_t;
+typedef enum uvs_cmd_get_route_list_type {
+    GET_ROUTE_LIST_IN_ROUTE_PAIR,
+    GET_ROUTE_LIST_IN_NUM,
+    GET_ROUTE_LIST_OUT_ROUTE_LIST = UVS_CMD_OUT_TYPE_INIT,
+    GET_ROUTE_LIST_OUT_NUM
+} uvs_cmd_get_route_list_type_t;
 
 #ifdef __cplusplus
 }

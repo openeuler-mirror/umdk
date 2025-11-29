@@ -54,16 +54,13 @@ int uvs_ioctl_set_topo(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_set_topo_t *arg)
     return uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_SET_TOPO, (void *)attrs, sizeof(attrs));
 }
 
-int uvs_ioctl_get_topo_eid(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_topo_eid_t *arg)
+int uvs_ioctl_get_route_list(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_route_list_t *arg)
 {
-    uvs_cmd_attr_t attrs[GET_TOPO_EID_IN_NUM + GET_TOPO_EID_OUT_NUM - UVS_CMD_OUT_TYPE_INIT] = {0};
+    uvs_cmd_attr_t attrs[GET_ROUTE_LIST_IN_NUM + GET_ROUTE_LIST_OUT_NUM - UVS_CMD_OUT_TYPE_INIT] = {0};
     uvs_cmd_attr_t *a = attrs;
 
-    ATTR(a++, GET_TOPO_EID_IN_TP_TYPE, arg->in.tp_type);
-    ATTR(a++, GET_TOPO_EID_IN_SRC_V_EID, arg->in.src_v_eid);
-    ATTR(a++, GET_TOPO_EID_IN_DST_V_EID, arg->in.dst_v_eid);
-    ATTR(a++, GET_TOPO_EID_OUT_SRC_P_EID, arg->out.src_p_eid);
-    ATTR(a++, GET_TOPO_EID_OUT_DST_P_EID, arg->out.dst_p_eid);
+    ATTR(a++, GET_ROUTE_LIST_IN_ROUTE_PAIR, arg->in);
+    ATTR(a++, GET_ROUTE_LIST_OUT_ROUTE_LIST, arg->out);
 
     return uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_GET_TOPO_EID, (void *)attrs, sizeof(attrs));
 }
