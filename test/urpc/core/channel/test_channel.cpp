@@ -33,8 +33,6 @@ static urma_status_t urma_query_device_mock(urma_device_t *dev, urma_device_attr
     return URMA_SUCCESS;
 }
 
-static urpc_allocator_t g_allocator;
-
 static urma_status_t urma_query_jetty_mock(urma_jetty_t *jetty, urma_jetty_cfg_t *cfg, urma_jetty_attr_t *attr)
 {
     attr->state = URMA_JETTY_STATE_READY;
@@ -296,100 +294,6 @@ TEST_F(ChannelTest, ChannelRemoveServerTypeIP)
 
     int ret = channel_free(channel->id);
     ASSERT_EQ(ret, URPC_SUCCESS);
-}
-
-static void test_list_queue_create_queue(urpc_queue_trans_mode_t mode, urpc_channel_info_t *channel,
-                                         uint64_t *queue_array, queue_ops_t *ops)
-{
-    urpc_qcfg_create_t queue_cfg = {0};
-    queue_cfg.create_flag = QCREATE_FLAG_RX_BUF_SIZE | QCREATE_FLAG_RX_DEPTH | QCREATE_FLAG_TX_DEPTH;
-    queue_cfg.rx_buf_size = 4096;
-    queue_cfg.rx_depth = 16;
-    queue_cfg.tx_depth = 16;
-    uint32_t half_max_queue_size = MAX_QUEUE_SIZE / 2;
-
-    for (uint32_t i = 0; i < half_max_queue_size; i++) {
-        queue_array[i] = urpc_queue_create(mode, &queue_cfg);
-        ASSERT_NE(queue_array[i], (uint64_t)URPC_INVALID_HANDLE);
-        queue_node_t *node = (queue_node_t *)urpc_dbuf_malloc(URPC_DBUF_TYPE_CHANNEL, sizeof(queue_node_t));
-        if (node == NULL) {
-            return;
-        }
-        node->node.next = NULL;
-        node->urpc_qh = (uint64_t)(uintptr_t)queue_array[i];
-        node->ref_cnt = 1;
-        URPC_SLIST_INSERT_HEAD(&channel->l_queue_nodes_head, node, node);
-        channel->l_qnum++;
-        queue_t *queue = (queue_t *)(uintptr_t)queue_array[i];
-        channel->provider = queue->provider;
-        (void)__sync_fetch_and_add(&queue->ref_cnt, 1);
-    }
-
-    queue_info_t queue_info = {0};
-
-    for (uint32_t i = half_max_queue_size; i < MAX_QUEUE_SIZE; i++) {
-        queue_array[i] = (uint64_t)(uintptr_t)ops->create_remote_queue(&queue_info, 0, 0);
-        ASSERT_NE(queue_array[i], (uint64_t)URPC_INVALID_HANDLE);
-        queue_node_t *node = (queue_node_t *)urpc_dbuf_malloc(URPC_DBUF_TYPE_CHANNEL, sizeof(queue_node_t));
-        if (node == NULL) {
-            return;
-        }
-        node->node.next = NULL;
-        node->urpc_qh = (uint64_t)(uintptr_t)(uint64_t)(uintptr_t)queue_array[i];
-        URPC_SLIST_INSERT_HEAD(&channel->r_queue_nodes_head, node, node);
-        channel->r_qnum++;
-        queue_t *queue = (queue_t *)(uintptr_t)queue_array[i];
-        queue->provider = channel->provider;
-        queue->ops->import_remote_queue(queue, queue->provider);
-        queue->ref_cnt++;
-    }
-}
-
-static void test_channel_get_queue_trans_info(urpc_channel_info_t *channel, uint64_t *queue_array, uint32_t tx_depth)
-{
-    char *output = NULL;
-    uint32_t output_size = 0;
-    ASSERT_EQ(channel_get_queue_trans_info(channel->id, &output, &output_size), 0);
-    ASSERT_NE(output_size, (uint32_t)0);
-    ASSERT_EQ(output != NULL, true);
-
-    uint32_t offset = 0;
-    for (int i = 0; i < MAX_QUEUE_SIZE; i++) {
-        queue_trans_info_t *trans_info = (queue_trans_info_t *)(uintptr_t)(output + offset);
-        if (!trans_info->flag.is_remote) {
-            EXPECT_EQ(trans_info->trans_spec_cnt, tx_depth);
-        } else {
-            ASSERT_EQ(trans_info->trans_spec_cnt, (uint32_t)1);
-        }
-
-        offset += sizeof(queue_trans_info_t) + trans_info->trans_spec_cnt * sizeof(queue_trans_resource_spec_t);
-    }
-
-    urpc_dbuf_free(output);
-}
-
-static void test_list_queue_destroy_queue(urpc_channel_info_t *channel, uint64_t *queue_array, queue_ops_t *ops)
-{
-    uint32_t half_max_queue_size = MAX_QUEUE_SIZE / 2;
-    for (uint32_t i = 0; i < half_max_queue_size; i++) {
-        queue_t *queue = (queue_t *)(uintptr_t)queue_array[i];
-        queue_node_t *cur_node;
-        queue_node_t *next_node;
-        URPC_SLIST_FOR_EACH_SAFE(cur_node, &channel->l_queue_nodes_head, node, next_node)
-        {
-            if (cur_node->urpc_qh == queue_array[i]) {
-                (void)__sync_fetch_and_sub(&queue->ref_cnt, 1);
-                URPC_SLIST_REMOVE(&channel->l_queue_nodes_head, cur_node, queue_node, node);
-                urpc_dbuf_free(cur_node);
-                channel->l_qnum--;
-            }
-        }
-        EXPECT_EQ(urpc_queue_destroy(queue_array[i]), URPC_SUCCESS);
-    }
-    ASSERT_EQ(channel_free(channel->id), URPC_SUCCESS);
-    for (int i = half_max_queue_size; i < MAX_QUEUE_SIZE; i++) {
-        ops->delete_remote_queue((queue_t *)(uintptr_t)queue_array[i]);
-    }
 }
 
 TEST_F(ChannelTest, test_channel_get_server_node_by_chid) {

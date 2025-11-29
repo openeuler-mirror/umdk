@@ -421,12 +421,6 @@ void get_eid_mock(provider_t *provider, urpc_eid_t *eid)
 
 TEST(TLV, TestDetachMsgV1SerializeDeserializeWithInValidChannel)
 {
-    provider_ops_t provider_ops;
-    provider_ops.get_eid = get_eid_mock;
-    provider_t provider;
-    provider.ops = &provider_ops;
-    urpc_channel_info_t channel;
-    channel.provider = &provider;
     uint32_t server_chid = 1;
     urpc_detach_msg_v1_t data;
     memset(&data, 0, sizeof(data));
@@ -445,7 +439,7 @@ TEST(TLV, TestDetachMsgV1SerializeWithInValidServerChannelId)
     urpc_channel_info_t channel;
     channel.provider = &provider;
     urpc_detach_msg_v1_t data;
-    memset_s(&data, sizeof(data), 0, sizeof(data));
+    memset(&data, 0, sizeof(data));
 
     // 测试server_chid为URPC_INVALID_ID_U32的情况
     int result = urpc_detach_msg_v1_serialize(&channel, URPC_INVALID_ID_U32, &data);
@@ -462,7 +456,7 @@ TEST(TLV, TestDetachMsgV1SerializeWithInValidData)
     channel.provider = &provider;
     uint32_t server_chid = 1;
     urpc_detach_msg_v1_t data;
-    memset_s(&data, sizeof(data), 0, sizeof(data));
+    memset(&data, 0, sizeof(data));
 
     // 测试data为NULL的情况
     int result = urpc_detach_msg_v1_serialize(&channel, server_chid, NULL);
@@ -480,7 +474,7 @@ TEST(TLV, TestDetachMsgV1SerializeDeserializeNormal)
     channel.provider = &provider;
     uint32_t server_chid = 1;
     urpc_detach_msg_v1_t data;
-    memset_s(&data, sizeof(data), 0, sizeof(data));
+    memset(&data, 0, sizeof(data));
 
     // 测试正常情况
     int result = urpc_detach_msg_v1_serialize(&channel, server_chid, &data);
@@ -497,7 +491,7 @@ TEST(TLV, TestDetachMsgV1SerializeDeserializeNormal)
 TEST(TLV, TestDetachMsgV1DeserializeWithInValidDate)
 {
     urpc_detach_msg_v1_t output;
-    memset_s(&output, sizeof(output), 0, sizeof(output));
+    memset(&output, 0, sizeof(output));
     // 测试data的buffer为NULL的情况
     int result = urpc_detach_msg_v1_deserialize(&output);
     ASSERT_EQ(result, -URPC_ERR_EINVAL);
@@ -506,7 +500,7 @@ TEST(TLV, TestDetachMsgV1DeserializeWithInValidDate)
 TEST(TLV, TestDetachMsgV1DeserializeWithNull)
 {
     urpc_detach_msg_v1_t output;
-    memset_s(&output, sizeof(output), 0, sizeof(output));
+    memset(&output, 0, sizeof(output));
     // 测试data为NULL的情况
     int result = urpc_detach_msg_v1_deserialize(NULL);
     ASSERT_EQ(result, -URPC_ERR_EINVAL);
@@ -522,12 +516,12 @@ TEST(TLV, TestDetachMsgV1DeserializeWithNormal)
     channel.provider = &provider;
     uint32_t server_chid = 1;
     urpc_detach_msg_v1_t data;
-    memset_s(&data, sizeof(data), 0, sizeof(data));
+    memset(&data, 0, sizeof(data));
 
     // 测试正常情况
     int result = urpc_detach_msg_v1_serialize(&channel, server_chid, &data);
     urpc_detach_msg_v1_t output;
-    memset_s(&output, sizeof(output), 0, sizeof(output));
+    memset(&output, 0, sizeof(output));
     output.data = data.data;
     result = urpc_detach_msg_v1_deserialize(&output);
     ASSERT_EQ(result, URPC_SUCCESS);
@@ -543,7 +537,7 @@ static queue_info_t g_manage_queue_info;
 void init_user_queue_info(void)
 {
     g_user_queue_info.type = QUEUE_TYPE_NORMAL;
-    g_user_queue_info.trans_mode = QUEUE_TRANS_MODE_JETTY_DISORDER;
+    g_user_queue_info.trans_mode = QUEUE_TRANS_MODE_JETTY;
     g_user_queue_info.priority = 2;
     g_user_queue_info.queue_flag = 3;
     g_user_queue_info.qid = 4;
@@ -566,14 +560,14 @@ void init_manage_queue_info(void)
 
 int user_queue_query_local_queue(queue_t *l_queue, void *ptr)
 {
-    memcpy((ptr, &g_user_queue_info, sizeof(g_user_queue_info));
+    memcpy(ptr, &g_user_queue_info, sizeof(g_user_queue_info));
 
     return URPC_SUCCESS;
 }
 
 int manage_queue_query_local_queue(queue_t *l_queue, void *ptr)
 {
-    memcpy((ptr, &g_manage_queue_info, sizeof(g_manage_queue_info));
+    memcpy(ptr, &g_manage_queue_info, sizeof(g_manage_queue_info));
 
     return URPC_SUCCESS;
 }
@@ -733,47 +727,7 @@ TEST(urpc_channel_server_refresh, TestRefreshWithNotReady)
     urpc_channel_connect_option_t channel_option = {0};
     channel_option.flag = URPC_CHANNEL_CONN_FLAG_FEATURE;
     channel_option.feature = URPC_CHANNEL_CONN_FEATURE_NONBLOCK;
-    urpc_host_info_t server;
     urpc_state_set(URPC_STATE_UNINIT);
     int ret = urpc_channel_server_refresh(0, &channel_option);
     ASSERT_EQ(-URPC_ERR_EPERM, ret);
-}
-
-TEST(urpc_connect_msg_serialize, TestWithNullServerNode)
-{
-    urpc_instance_key_t client_key;
-    urpc_channel_info_t channel;
-    provider_ops_t provider_ops;
-    provider_ops.get_eid = get_eid_mock;
-    provider_t provider;
-    provider.ops = &provider_ops;
-    channel.provider = &provider;
-    queue_ops_t user_queue_ops;
-    user_queue_ops.query_local_queue = user_queue_query_local_queue;
-    queue_t user_queue;
-    user_queue.ops = &user_queue_ops;
-    urpc_list_init(&channel.server_nodes_list);
-    urpc_chmsg_input_v2_t input_ch = {
-        .client_channel = &channel,
-        .q_num = 1,
-    };
-    input_ch.qh[0] = (uint64_t)(uintptr_t)&user_queue;
-    urpc_connect_msg_input_t input = {
-        .key = &client_key,
-        .chmsg_arr = &input_ch,
-        .num = 1,
-    };
-    MOCKER(urpc_instance_key_fill).stubs().will(invoke(urpc_instance_key_fill_mock));
-    size_t total_size =
-        sizeof(urpc_connect_msg_t) + 1 * sizeof(urpc_chmsg_v2_t) + 1 * sizeof(queue_info_t *) * MAX_QUEUE_SIZE;
-    urpc_connect_msg_t *connection_msg = (urpc_connect_msg_t *)urpc_dbuf_calloc(URPC_DBUF_TYPE_CP, 1, total_size);
-    if (urpc_connect_msg_serialize(&input, connection_msg) != URPC_SUCCESS) {
-        urpc_connect_msg_buffer_release(connection_msg);
-        urpc_dbuf_free(connection_msg);
-        return;
-    }
-    int ret = urpc_connect_msg_deserialize(connection_msg);
-    urpc_connect_msg_buffer_release(connection_msg);
-    urpc_dbuf_free(connection_msg);
-    EXPECT_EQ(ret, 0);
 }

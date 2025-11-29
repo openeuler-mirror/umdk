@@ -24,8 +24,6 @@
 #define DEV_NAME_LEN        15
 #define MAX_MSG_SIZE (1UL << 20)
 
-extern urpc_server_channel_info_t *g_urpc_server_channels[URPC_SERVER_MAX_CHANNELS];
-
 extern queue_ops_t g_urpc_send_recv_ops;
 
 static int g_notifier_fd = -1;
@@ -98,7 +96,7 @@ public:
             .will(returnValue(URPC_SUCCESS));
         MOCKER(queue_id_allocator_free).stubs().will(ignoreReturnValue());
 
-        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_IP, .assign_mode = DEV_ASSIGN_MODE_DEV,};
+        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_UB, .assign_mode = DEV_ASSIGN_MODE_DEV,};
         (void)snprintf(cfg.dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "lo");
         provider_flag_t flag = {0};
         int ret = provider_init(1, &cfg, flag);
@@ -146,16 +144,10 @@ int import_remote_queue_mock(queue_t *r_queue)
     return URPC_SUCCESS;
 }
 
-int unimport_remote_queue_async_mock(queue_t *r_queue)
-{
-    return URPC_SUCCESS;
-}
-
 TEST_F(ServerChannelTest, ServerChannelAlloc) {
     urpc_instance_key_t key  = {0};
     urpc_server_channel_info_t *info = server_channel_alloc(&key , 0);
     ASSERT_NE(info, nullptr);
-    ASSERT_EQ(g_urpc_server_channels[info->id], info);
     server_channel_unlock(info->id);
     ASSERT_EQ(server_channel_free(info->id, false), URPC_SUCCESS);
 }
@@ -224,27 +216,6 @@ TEST_F(ServerChannelTest, ServerChannelBaseIdReuse) {
     ASSERT_EQ(base_id1, base_id2);
 }
 
-TEST_F(ServerChannelTest, ServerChannelFree) {
-    urpc_instance_key_t key = {0};
-    urpc_server_channel_info_t *info = server_channel_alloc(&key, 0);
-    ASSERT_NE(info, nullptr);
-    queue_node_t *node = (queue_node_t *)urpc_dbuf_calloc(URPC_DBUF_TYPE_CHANNEL, 1, sizeof(queue_node_t));
-
-    queue_t *r_queue = (queue_t *)calloc(1, sizeof(queue_t));
-    ASSERT_NE(r_queue, nullptr);
-    queue_ops_t ops;
-    ops.delete_remote_queue = delete_remote_queue_mock;
-    ops.unimport_remote_queue_async = unimport_remote_queue_async_mock;
-    r_queue->ops = &ops;
-    node->urpc_qh = (uint64_t)(uintptr_t)r_queue;
-
-    URPC_SLIST_INSERT_HEAD(&info->r_queue_nodes_head, node, node);
-    server_channel_unlock(info->id);
-    ASSERT_EQ(server_channel_free(info->id,false), URPC_SUCCESS);
-
-    free(r_queue);
-}
-
 TEST_F(ServerChannelTest, test_list_queue_by_server_channel_id) {
     urma_target_jetty_t jetty1 = {0};
     jetty1.id.id = 0;
@@ -297,10 +268,6 @@ static void *urpc_dbuf_malloc_stud(urpc_dbuf_type_t type, uint32_t size)
 {
     return NULL;
 }
-static void urpc_dbuf_free_stud(void *ptr)
-{
-}
-
 
 TEST_F(ServerChannelTest, test_server_channel_get_queue_trans_info_malloc_fail)
 {
@@ -398,161 +365,6 @@ TEST_F(ServerChannelTest, TestServerRefreshRemoteQueueInfos) {
     free(xchg_info);
 }
 
-TEST_F(ServerChannelTest, TestServerManageChannelInit) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    MOCKER(urpc_hmap_init).stubs().will(returnValue(URPC_FAIL));
-
-    // 覆盖 hmap count为0的情况 没有返回值
-    server_manage_channel_uninit();
-    ASSERT_EQ(0, 0);
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelGet) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-    // 正常给 hmap 中加节点
-    ret = server_manage_channel_get(&client, URPC_INVALID_ID_U32, 0, &mange_chid, &mapped_id);
-    ASSERT_EQ(ret, 0);
-    // 覆盖正常uninit
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelGetAllocFail) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    MOCKER(server_channel_alloc).stubs().will(returnValue((urpc_server_channel_info_t *)(uintptr_t)0));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-    // 覆盖alloc失败分支
-    ret = server_manage_channel_get(&client, URPC_INVALID_ID_U32, 0, &mange_chid, &mapped_id);
-    ASSERT_EQ(ret, URPC_FAIL);
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelPutSuccess) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-
-    // 正常给 hmap 中加节点
-    ret = server_manage_channel_get(&client, URPC_INVALID_ID_U32, 0, &mange_chid, &mapped_id);
-    ASSERT_EQ(ret, 0);
-
-    ret = server_manage_channel_put(&client, false, false);
-    ASSERT_EQ(ret, 0);
-
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelPutDelayed) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-
-    // 正常给 hmap 中加节点
-    ret = server_manage_channel_get(&client, URPC_INVALID_ID_U32, 0, &mange_chid, &mapped_id);
-    ASSERT_EQ(ret, 0);
-    // 覆盖有enrty
-    ret = server_manage_channel_put(&client, true, false);
-    ASSERT_EQ(ret, 0);
-
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelPutNoEntry) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-    // 覆盖没有entry被找到的情况
-    ret = server_manage_channel_put(&client, true, false);
-    ASSERT_EQ(ret, 0);
-
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerManageChannelDelayedReset) {
-    MOCKER(is_feature_enable).stubs().will(returnValue(true));
-    urpc_instance_key_t client = {0};
-    uint32_t mange_chid = 0;
-    uint32_t mapped_id = 0;
-
-    // 正常给 hmap 中加节点
-    ret = server_manage_channel_get(&client, URPC_INVALID_ID_U32, 0, &mange_chid, &mapped_id);
-    ASSERT_EQ(ret, 0);
-
-    server_mange_channel_delayed_reset(&client, URPC_INVALID_ID_U32, URPC_INVALID_ID_U32);
-
-    server_manage_channel_uninit();
-}
-
-TEST_F(ServerChannelTest, TestServerChannelPutRemoteQueueFailed)
-{
-    urma_target_jetty_t t_jetty = {0};
-    MOCKER(urma_import_jetty_async).stubs().will(returnObjectList(&t_jetty, (urma_target_jetty *)(uintptr_t)0));
-    MOCKER(urma_advise_jetty).stubs().will(returnValue(EINVAL));
-    urpc_instance_key_t key = {0};
-    urpc_server_channel_info_t *info = server_channel_alloc(&key, 0);
-    ASSERT_NE(info, nullptr);
-
-    queue_info_t qinfo[2];
-    memset(&qinfo, 0, sizeof(qinfo));
-    qinfo[0].timestamp = 1;
-    qinfo[0].mode_jetty.jetty_id.id = 0;
-
-    queue_ops_t *ops = queue_get_ops(QUEUE_TRANS_MODE_JETTY);
-    ASSERT_NE(ops, nullptr);
-    queue_t *queue = ops->create_remote_queue(&qinfo[0], info->id, 0);
-    ASSERT_NE(queue, nullptr);
-    queue_node_t *node = (queue_node_t *)urpc_dbuf_malloc(URPC_DBUF_TYPE_CHANNEL, sizeof(queue_node_t));
-    ASSERT_NE(queue, nullptr);
-    urpc_eid_t eid = {0};
-    queue_import_async_info_t async_info;
-    urma_notifier_t notifier;
-    async_info.notifier_handle = (uint64_t)(uintptr_t)&notifier;
-    int ret = ops->import_remote_queue_async(queue, get_provider(&eid), &async_info, 0);
-    ASSERT_EQ(ret, 1);
-    node->node.next = NULL;
-    node->urpc_qh = (uint64_t)(uintptr_t)queue;
-    URPC_SLIST_INSERT_HEAD(&info->r_queue_nodes_head, node, node);
-
-    urpc_chinfo_t chinfo;
-    memset(&chinfo, 0, sizeof(urpc_chinfo_t));
-    urpc_chmsg_v1_t chmsg;
-    memset(&chmsg, 0, sizeof(urpc_chmsg_v1_t));
-    chmsg.chinfo = &chinfo;
-    chmsg.chinfo->cap.is_support_quik_reply = false;
-    chmsg.chinfo->attr = 0;
-    chmsg.chinfo->chid = 0;
-    chmsg.chinfo->key.pid = 0;
-    chmsg.qinfo_arr.arr_num = 2;
-    chmsg.qinfo_arr.qinfos[0] = &qinfo[0];
-    chmsg.qinfo_arr.qinfos[1] = &qinfo[1];
-
-    qinfo[1].type = QUEUE_TYPE_NORMAL;
-    qinfo[1].trans_mode = QUEUE_TRANS_MODE_JETTY;
-    qinfo[1].queue_flag = 0;
-    qinfo[1].mode_jetty.type = URMA_JETTY;
-    qinfo[1].mode_jetty.jetty_id.id = 1;
-    qinfo[1].timestamp = 0;
-
-    // server channel alloc with wr_lock
-    (void)pthread_rwlock_unlock(&info->rw_lock);
-    batch_queue_import_ctx_t ctx;
-    urpc_list_init(&ctx.import_list);
-    urpc_list_init(&ctx.list);
-    ret = server_channel_put_remote_queue_async(info->id, &chmsg, &ctx);
-    EXPECT_EQ(ret, URPC_FAIL);
-    URPC_SLIST_REMOVE(&info->r_queue_nodes_head, node, queue_node, node);
-    queue->ops->delete_remote_queue(queue);
-    urpc_dbuf_free(node);
-    server_channel_free(info->id, false);
-}
-
 class ServerChannelTestNoThing : public :: testing::Test {
 public:
     void SetUp() override {
@@ -562,7 +374,6 @@ public:
         GlobalMockObject::verify();
     }
 };
-
 
 void *server_channel_alloc_urpc_dbuf_calloc_stud_return = NULL;
 

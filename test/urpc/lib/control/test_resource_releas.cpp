@@ -124,7 +124,6 @@ TEST_F(resource_release_test, TestReleaseStartTimer)
 
 TEST_F(resource_release_test, TestStartTimerFailed)
 {
-    int release_size = 100;
     int ret = urpc_timing_wheel_init();
     ASSERT_EQ(ret, 0);
 

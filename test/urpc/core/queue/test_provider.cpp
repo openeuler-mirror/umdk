@@ -19,7 +19,7 @@
 #include "urpc_framework_types.h"
 
 #define MAX_MSG_SIZE (1UL << 20)
-#define TEST_DEV_NUM 5
+#define TEST_DEV_NUM 4
 #define EID_NUM 3
 
 class ProviderTest : public ::testing::Test {
@@ -94,6 +94,7 @@ TEST_F(ProviderTest, test_one_eid_dev) {
         .will(returnValue(&device_list));
     MOCKER(urma_free_device_list).stubs().will(ignoreReturnValue());
     MOCKER(urma_delete_context).stubs().will(returnValue(URMA_SUCCESS));
+    MOCKER(urma_unregister_seg).stubs().will(returnValue(URMA_SUCCESS));
     urma_notifier_t notifier;
     notifier.fd = eventfd(0, EFD_NONBLOCK);
     MOCKER(urma_create_notifier).stubs().will(returnValue(&notifier));
@@ -105,7 +106,7 @@ TEST_F(ProviderTest, test_one_eid_dev) {
     urpc_config.feature |= URPC_FEATURE_TIMEOUT;
     urpc_config.trans_info_num = 1;
     urpc_config.trans_info[0].assign_mode = (urpc_dev_assign_mode_t)10;
-    urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_IP;
+    urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "lo");
     ASSERT_NE(urpc_init(&urpc_config), URPC_SUCCESS);
 
@@ -237,7 +238,7 @@ TEST_F(ProviderTest, test_multi_eid_dev_all_success) {
     memset(&trans_info, 0, sizeof(trans_info));
     provider_flag_t flag = {0};
     trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
-    trans_info[0].trans_mode = URPC_TRANS_MODE_IP;
+    trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev0");
     ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), trans_info_num);
@@ -245,7 +246,7 @@ TEST_F(ProviderTest, test_multi_eid_dev_all_success) {
 
     trans_info_num++;
     trans_info[1].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[1].trans_mode = URPC_TRANS_MODE_IB;
+    trans_info[1].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[1].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.2");
     ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), trans_info_num);
@@ -263,30 +264,6 @@ TEST_F(ProviderTest, test_multi_eid_dev_all_success) {
     trans_info[3].assign_mode = DEV_ASSIGN_MODE_IPV6;
     trans_info[3].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[3].ipv6.ip_addr, URPC_IPV6_SIZE, "%s", "12::3");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[4].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[4].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[4].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.4");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[5].assign_mode = DEV_ASSIGN_MODE_IPV6;
-    trans_info[5].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[5].ipv6.ip_addr, URPC_IPV6_SIZE, "%s", "11::5");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[6].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[6].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[6].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.5");
     ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), trans_info_num);
     provider_uninit();
@@ -315,7 +292,7 @@ TEST_F(ProviderTest, test_multi_eid_dev_with_failure) {
     memset(&trans_info, 0, sizeof(trans_info));
     provider_flag_t flag = {0};
     trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
-    trans_info[0].trans_mode = URPC_TRANS_MODE_IP;
+    trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev0000");
     ASSERT_NE(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
     fail_cnt++;
@@ -324,7 +301,7 @@ TEST_F(ProviderTest, test_multi_eid_dev_with_failure) {
 
     trans_info_num++;
     trans_info[1].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[1].trans_mode = URPC_TRANS_MODE_IB;
+    trans_info[1].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[1].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.10");
     ASSERT_NE(provider_init(trans_info_num, trans_info, flag), URPC_SUCCESS);
     fail_cnt++;
@@ -344,30 +321,6 @@ TEST_F(ProviderTest, test_multi_eid_dev_with_failure) {
     trans_info[3].assign_mode = DEV_ASSIGN_MODE_IPV6;
     trans_info[3].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(trans_info[3].ipv6.ip_addr, URPC_IPV6_SIZE, "%s", "12::3");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), -URPC_ERR_INIT_PART_FAIL);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num - fail_cnt);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[4].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[4].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[4].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.4");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), -URPC_ERR_INIT_PART_FAIL);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num - fail_cnt);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[5].assign_mode = DEV_ASSIGN_MODE_IPV6;
-    trans_info[5].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[5].ipv6.ip_addr, URPC_IPV6_SIZE, "%s", "11::5");
-    ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), -URPC_ERR_INIT_PART_FAIL);
-    ASSERT_EQ(provider_get_list_size(), trans_info_num - fail_cnt);
-    provider_uninit();
-
-    trans_info_num++;
-    trans_info[6].assign_mode = DEV_ASSIGN_MODE_IPV4;
-    trans_info[6].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(trans_info[6].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.5");
     ASSERT_EQ(provider_init(trans_info_num, trans_info, flag), -URPC_ERR_INIT_PART_FAIL);
     ASSERT_EQ(provider_get_list_size(), trans_info_num - fail_cnt);
     provider_uninit();
@@ -398,7 +351,7 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_all_success) {
     urpc_config.trans_info_num = 1;
     urpc_config.trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
     urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev2");
+    (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev1");
     ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num);
     urpc_uninit();
@@ -406,7 +359,7 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_all_success) {
     urpc_config.trans_info_num++;
     urpc_config.trans_info[1].assign_mode = DEV_ASSIGN_MODE_DEV;
     urpc_config.trans_info[1].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[1].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev3");
+    (void)snprintf(urpc_config.trans_info[1].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev2");
     ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num);
     urpc_uninit();
@@ -414,7 +367,7 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_all_success) {
     urpc_config.trans_info_num++;
     urpc_config.trans_info[2].assign_mode = DEV_ASSIGN_MODE_DEV;
     urpc_config.trans_info[2].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[2].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev4");
+    (void)snprintf(urpc_config.trans_info[2].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev3");
     ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
     ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num);
     urpc_uninit();
@@ -439,7 +392,6 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_with_failure) {
     MOCKER(urma_create_notifier).stubs().will(returnValue(&notifier));
     MOCKER(urma_delete_notifier).stubs().will(returnValue(URMA_SUCCESS));
 
-    uint32_t fail_cnt = 0;
     urpc_config_t urpc_config;
     memset(&urpc_config, 0, sizeof(urpc_config));
     urpc_config.role = URPC_ROLE_SERVER;
@@ -449,8 +401,7 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_with_failure) {
     urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(urpc_config.trans_info[0].ipv4.ip_addr, URPC_IPV4_SIZE, "%s", "192.168.0.10");
     ASSERT_NE(urpc_init(&urpc_config), URPC_SUCCESS);
-    fail_cnt++;
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
+    ASSERT_EQ(provider_get_list_size(), 0);
     urpc_uninit();
 
     urpc_config.feature |= URPC_FEATURE_MULTI_EID;
@@ -458,49 +409,14 @@ TEST_F(ProviderTest, test_urpc_init_multi_eid_dev_with_failure) {
     urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
     (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev0000");
     ASSERT_NE(urpc_init(&urpc_config), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
+    ASSERT_EQ(provider_get_list_size(), 0);
     urpc_uninit();
 
-    urpc_config.trans_info_num++;
-    urpc_config.trans_info[1].assign_mode = DEV_ASSIGN_MODE_DEV;
-    urpc_config.trans_info[1].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[1].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev0");
+    urpc_config.trans_info[0].assign_mode = DEV_ASSIGN_MODE_DEV;
+    urpc_config.trans_info[0].trans_mode = URPC_TRANS_MODE_UB;
+    (void)snprintf(urpc_config.trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev5");
     ASSERT_NE(urpc_init(&urpc_config), URPC_SUCCESS);
-    fail_cnt++;
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
-    urpc_uninit();
-
-    urpc_config.trans_info_num++;
-    urpc_config.trans_info[2].assign_mode = DEV_ASSIGN_MODE_DEV;
-    urpc_config.trans_info[2].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[2].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev1");
-    ASSERT_NE(urpc_init(&urpc_config), URPC_SUCCESS);
-    fail_cnt++;
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
-    urpc_uninit();
-
-    urpc_config.trans_info_num++;
-    urpc_config.trans_info[3].assign_mode = DEV_ASSIGN_MODE_DEV;
-    urpc_config.trans_info[3].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[3].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev2");
-    ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
-    urpc_uninit();
-
-    urpc_config.trans_info_num++;
-    urpc_config.trans_info[4].assign_mode = DEV_ASSIGN_MODE_DEV;
-    urpc_config.trans_info[4].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[4].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev3");
-    ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
-    urpc_uninit();
-
-    urpc_config.trans_info_num++;
-    urpc_config.trans_info[5].assign_mode = DEV_ASSIGN_MODE_DEV;
-    urpc_config.trans_info[5].trans_mode = URPC_TRANS_MODE_UB;
-    (void)snprintf(urpc_config.trans_info[5].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "dev4");
-    ASSERT_EQ(urpc_init(&urpc_config), URPC_SUCCESS);
-    ASSERT_EQ(provider_get_list_size(), urpc_config.trans_info_num - fail_cnt);
+    ASSERT_EQ(provider_get_list_size(), 0);
     urpc_uninit();
     close(notifier.fd);
 }

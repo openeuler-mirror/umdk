@@ -39,14 +39,9 @@ static void test_keepalive_cfg_fill(urpc_keepalive_config_t *cfg)
     cfg->q_depth = 0;
 }
 
-static uint32_t g_mock_feature = 0;
 static bool is_feature_enable_mock(uint32_t feature)
 {
-    if (feature == URPC_FEATURE_SOFT) {
-        return (feature & g_mock_feature) != 0;
-    } else {
-        return true;
-    }
+    return true;
 }
 
 class keepalive_test : public ::testing::Test {
@@ -93,18 +88,15 @@ public:
         MOCKER(urma_query_jetty).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_modify_jetty).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_poll_jfc).stubs().will(returnValue(0));
+        MOCKER(urma_modify_jfc).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_rearm_jfc).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_wait_jfc).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_post_jetty_send_wr).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urpc_role_get).stubs().will(returnValue(URPC_ROLE_SERVER_CLIENT));
         MOCKER(is_feature_enable).stubs().will(invoke(is_feature_enable_mock));
-        static uint32_t qid = 0;
-        MOCKER(queue_id_allocator_alloc)
-            .stubs()
-            .with(outBoundP((uint32_t *)&qid, sizeof(qid)))
-            .will(returnValue(URPC_SUCCESS));
+
         MOCKER(queue_id_allocator_free).stubs().will(ignoreReturnValue());
-        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_IP, .assign_mode = DEV_ASSIGN_MODE_DEV,};
+        urpc_trans_info_t cfg = {.trans_mode = URPC_TRANS_MODE_UB, .assign_mode = DEV_ASSIGN_MODE_DEV,};
         (void)snprintf(cfg.dev.dev_name, URPC_DEV_NAME_SIZE, "%s", "lo");
         provider_flag_t flag = {0};
         int ret = provider_init(1, &cfg, flag);
@@ -115,7 +107,9 @@ public:
         ASSERT_EQ(ret, 0);
 
         ASSERT_EQ(urpc_thread_ctx_init(), URPC_SUCCESS);
+        urpc_manage_uninit();
         ASSERT_EQ(urpc_manage_init(), URPC_SUCCESS);
+        ASSERT_EQ(queue_id_allocator_init(), URPC_SUCCESS);
 
         urpc_keepalive_config_t keepalive_cfg;
         test_keepalive_cfg_fill(&keepalive_cfg);
@@ -131,6 +125,7 @@ public:
 
         urpc_keepalive_uninit();
         urpc_timing_wheel_uninit();
+        queue_id_allocator_uninit();
         provider_uninit();
 
         GlobalMockObject::verify();
@@ -299,11 +294,6 @@ urpc_allocator_t *allocator_get_mock()
 static uint32_t crypto_security_field_size_get_mock(void)
 {
     return 0;
-}
-
-static void urpc_keepalive_task_timestamp_update_mock(urpc_keepalive_id_t *id, bool is_server)
-{
-    return;
 }
 
 TEST_F(keepalive_test, test_keepalive_probe_process_default_msg)

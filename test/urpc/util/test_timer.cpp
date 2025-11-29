@@ -216,8 +216,6 @@ TEST_F(timer_test, TestTimerStart)
     ASSERT_EQ(ret, 0);
 
     urpc_timer_t *timer = urpc_timer_create(URPC_INVALID_ID_U32, false);
-    urpc_list prev;
-    urpc_list next;
 
     // timer is NULL
     ASSERT_EQ(urpc_timer_start(NULL, 0, NULL, NULL, false), URPC_FAIL);
