@@ -34,6 +34,7 @@ typedef struct uvs_route {
     uvs_eid_t src;
     uvs_eid_t dst;
     uvs_route_flag_t flag;
+    uint32_t hops;	// Only supports direct routes, currently 0.
 } uvs_route_t;
 
 typedef struct uvs_route_list {
