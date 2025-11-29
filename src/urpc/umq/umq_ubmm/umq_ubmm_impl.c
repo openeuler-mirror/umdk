@@ -882,7 +882,7 @@ int32_t umq_ubmm_register_memory_impl(void *buf, uint64_t size)
     return umq_ub_register_memory_impl(buf, size);
 }
 
-void umq_ubmm_unregister_memory_impl()
+void umq_ubmm_unregister_memory_impl(void)
 {
     return umq_ub_unregister_memory_impl();
 }
