@@ -272,6 +272,18 @@ typedef struct umq_alloc_option {
     uint16_t headroom_size;
 } umq_alloc_option_t;
 
+typedef struct umq_flowcontrol_stats {
+    uint64_t local_rx_posted;
+    uint64_t remote_rx_window;
+    uint64_t total_local_rx_posted;
+    uint64_t total_local_rx_notified;
+    uint64_t total_local_rx_posted_error;
+    uint64_t total_remote_rx_received;
+    uint64_t total_remote_rx_consumed;
+    uint64_t total_remote_rx_received_error;
+    uint64_t total_flow_controlled_wr;
+} umq_flowcontrol_stats_t;
+
 typedef enum umq_dfx_module_id {
     UMQ_DFX_MODULE_PERF,
     UMQ_DFX_MODULE_STATS,
