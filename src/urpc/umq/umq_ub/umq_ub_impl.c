@@ -1272,6 +1272,7 @@ static int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_in
 
     eid_node->ref_cnt--;
     if (eid_node->ref_cnt == 0) {
+        util_id_allocator_release(&remote_imported_info->eid_id_allocator, eid_node->remote_eid_id);
         urpc_hmap_remove(&remote_imported_info->remote_eid_id_table, &eid_node->node);
         free(eid_node);
     }
@@ -1897,6 +1898,7 @@ ROLLBACL_UB_CTX:
         umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
         umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
     }
+    g_ub_ctx_count = 0;
     (void)urma_uninit();
 
 FREE_CTX:
@@ -3293,7 +3295,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
         umq_flush_rx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
     }
 
-    util_id_allocator_release(&queue->dev_ctx->remote_imported_info->eid_id_allocator, bind_ctx->remote_eid_id);
+    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     free(queue->bind_ctx);
     queue->bind_ctx = NULL;
     return UMQ_SUCCESS;
