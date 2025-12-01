@@ -70,18 +70,6 @@ typedef struct umq_buf_pro {
     uint64_t rsvd1[2];
 } umq_buf_pro_t;
 
-typedef struct umq_user_ctl_in {
-    uint64_t addr;                  // the address of the input parameter buffer
-    uint32_t len;                   // the length of the input parameter buffer
-    uint32_t opcode;                // Opcode is simultaneously recognized by user and driver
-} umq_user_ctl_in_t;
-
-typedef struct umq_user_ctl_out {
-    uint64_t addr;                  // the address of the output parameter buffer
-    uint32_t len;                   // the length of the output parameter buffer
-    uint32_t reserved;
-} umq_user_ctl_out_t;
-
 #ifdef __cplusplus
 }
 #endif

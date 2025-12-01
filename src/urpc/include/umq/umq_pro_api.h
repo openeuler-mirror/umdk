@@ -56,16 +56,6 @@ int umq_interrupt_fd_get(uint64_t umqh, umq_interrupt_option_t *option);
  */
 int umq_get_cq_event(uint64_t umqh, umq_interrupt_option_t *option);
 
-/**
- * Thread safety function
- * User defined control of the context.
- * @param[in] umqh: umq handle
- * @param[in] in: user ioctl cmd;
- * @param[out] out: result of execution;
- * Return 0 on success, error code on failure
- */
-int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
-
 #ifdef __cplusplus
 }
 #endif

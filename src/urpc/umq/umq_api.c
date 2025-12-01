@@ -1021,3 +1021,15 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
     
     return umq_fw->tp_ops->umq_tp_get_topo(route, route_list);
 }
+
+int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops->umq_tp_user_ctl == NULL || in == NULL
+        || out == NULL) {
+        UMQ_VLOG_ERR("parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return umq->tp_ops->umq_tp_user_ctl(umq->umqh_tp, in, out);
+}

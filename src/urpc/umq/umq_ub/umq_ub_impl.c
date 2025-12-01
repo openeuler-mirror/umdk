@@ -4160,3 +4160,17 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
     route_list->len = uvs_route_list.len;
     return UMQ_SUCCESS;
 }
+
+int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (in->opcode != UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY  || out->addr == 0 ||
+        out->len != sizeof(umq_flowcontrol_stats_t)) {
+        UMQ_VLOG_ERR("umq ub user ctl parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_flowcontrol_stats_t *stats = (umq_flowcontrol_stats_t *)(uintptr_t)out->addr;
+    queue->flow_control.ops.stats_query(&queue->flow_control, stats);
+    return UMQ_SUCCESS;
+}
