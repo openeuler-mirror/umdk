@@ -4074,10 +4074,16 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         return ret;
     }
 
+    if (uvs_route_list.len >= UMQ_MAX_ROUTES || uvs_route_list.len >= UVS_MAX_ROUTES) {
+        UMQ_VLOG_ERR("number of routes exceeds the maximum limit\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
     for (uint32_t i = 0; i < uvs_route_list.len; i++) {
         (void)memcpy(&route_list->buf[i].src, &uvs_route_list.buf[i].src, sizeof(umq_eid_t));
         (void)memcpy(&route_list->buf[i].dst, &uvs_route_list.buf[i].dst, sizeof(umq_eid_t));
         route_list->buf[i].flag.value = uvs_route_list.buf[i].flag.value;
+        route_list->buf[i].hops = uvs_route_list.buf[i].hops;
     }
     route_list->len = uvs_route_list.len;
     return UMQ_SUCCESS;
