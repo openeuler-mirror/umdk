@@ -95,10 +95,19 @@ typedef struct ub_flow_control_window_ops {
     uint16_t (*local_rx_posted_load)(struct ub_flow_control *fc);
     // exchange current rx_posted to 0 and return rx_posted
     uint16_t (*local_rx_posted_exchange)(struct ub_flow_control *fc);
+
+    void (*stats_query)(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out);
 } ub_flow_control_window_ops_t;
 
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
+    volatile uint64_t total_local_rx_posted;
+    volatile uint64_t total_local_rx_notified;
+    volatile uint64_t total_local_rx_posted_error;
+    volatile uint64_t total_remote_rx_received;
+    volatile uint64_t total_remote_rx_consumed;
+    volatile uint64_t total_remote_rx_received_error;
+    volatile uint64_t total_flow_controlled_wr;
     uint64_t remote_win_buf_addr;
     uint32_t remote_win_buf_len;
     volatile uint16_t local_rx_posted;
@@ -272,6 +281,7 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_con
     if (URPC_UNLIKELY(win_sum > UINT16_MAX)) {
         UMQ_LIMIT_VLOG_WARN("receive remote win exceed UINT16_MAX, current win %d, new win %d, remote rx depth %d\n",
                             fc->remote_rx_window, new_win, fc->remote_rx_depth);
+        fc->total_remote_rx_received_error += new_win;
         return fc->remote_rx_window;
     }
 
@@ -280,6 +290,7 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_con
                             fc->remote_rx_window, new_win, fc->remote_rx_depth);
     }
 
+    fc->total_remote_rx_received += new_win;
     fc->remote_rx_window = (uint16_t)win_sum;
     return fc->remote_rx_window;
 }
@@ -287,6 +298,7 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_con
 static ALWAYS_INLINE uint16_t remote_rx_window_exchange_non_atomic(struct ub_flow_control *fc)
 {
     uint16_t win = fc->remote_rx_window;
+    fc->total_remote_rx_consumed += win;
     fc->remote_rx_window = 0;
     return win;
 }
@@ -295,7 +307,10 @@ static ALWAYS_INLINE uint16_t remote_rx_window_dec_non_atomic(struct ub_flow_con
 {
     if (URPC_LIKELY(fc->remote_rx_window >= required_win)) {
         fc->remote_rx_window -= required_win;
+        fc->total_remote_rx_consumed += required_win;
         return required_win;
+    } else {
+        fc->total_flow_controlled_wr += (required_win - fc->remote_rx_window);
     }
 
     return remote_rx_window_exchange_non_atomic(fc);
@@ -312,6 +327,7 @@ static ALWAYS_INLINE uint16_t local_rx_posted_inc_non_atomic(struct ub_flow_cont
     if (URPC_UNLIKELY(rx_sum > UINT16_MAX)) {
         UMQ_LIMIT_VLOG_WARN("rx posted exceed UINT16_MAX, current rx %d, new post %d, local rx depth %d\n",
                             fc->local_rx_posted, rx_posted, fc->local_rx_depth);
+        fc->total_local_rx_posted_error += rx_posted;
         return fc->local_rx_posted;
     }
 
@@ -320,6 +336,7 @@ static ALWAYS_INLINE uint16_t local_rx_posted_inc_non_atomic(struct ub_flow_cont
                             fc->local_rx_posted, rx_posted, fc->local_rx_depth);
     }
 
+    fc->total_local_rx_posted += rx_posted;
     fc->local_rx_posted = (uint16_t)rx_sum;
     return fc->local_rx_posted;
 }
@@ -327,6 +344,7 @@ static ALWAYS_INLINE uint16_t local_rx_posted_inc_non_atomic(struct ub_flow_cont
 static ALWAYS_INLINE uint16_t local_rx_posted_exchange_non_atomic(struct ub_flow_control *fc)
 {
     uint16_t posted = fc->local_rx_posted;
+    fc->total_local_rx_notified += posted;
     fc->local_rx_posted = 0;
     return posted;
 }
@@ -334,6 +352,19 @@ static ALWAYS_INLINE uint16_t local_rx_posted_exchange_non_atomic(struct ub_flow
 static ALWAYS_INLINE uint16_t local_rx_posted_load_non_atomic(struct ub_flow_control *fc)
 {
     return fc->local_rx_posted;
+}
+
+static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out)
+{
+    out->local_rx_posted = fc->local_rx_posted;
+    out->remote_rx_window = fc->remote_rx_window;
+    out->total_local_rx_posted = fc->total_local_rx_posted;
+    out->total_local_rx_notified = fc->total_local_rx_notified;
+    out->total_local_rx_posted_error = fc->total_local_rx_posted_error;
+    out->total_remote_rx_received = fc->total_remote_rx_received;
+    out->total_remote_rx_consumed = fc->total_remote_rx_consumed;
+    out->total_remote_rx_received_error = fc->total_remote_rx_received_error;
+    out->total_flow_controlled_wr = fc->total_flow_controlled_wr;
 }
 
 static ALWAYS_INLINE uint16_t remote_rx_window_inc_atomic(struct ub_flow_control *fc, uint16_t new_win)
@@ -362,6 +393,12 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_atomic(struct ub_flow_control
     } while (
         !__atomic_compare_exchange_n(&fc->remote_rx_window, &before, after, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
+    if (URPC_UNLIKELY(ret == before)) {
+        (void)__atomic_add_fetch(&fc->total_remote_rx_received_error, new_win, __ATOMIC_RELAXED);
+    } else {
+        (void)__atomic_add_fetch(&fc->total_remote_rx_received, new_win, __ATOMIC_RELAXED);
+    }
+
     return ret;
 }
 
@@ -384,6 +421,14 @@ static ALWAYS_INLINE uint16_t remote_rx_window_dec_atomic(struct ub_flow_control
         ret = before - after;
     } while (
         !__atomic_compare_exchange_n(&fc->remote_rx_window, &before, after, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
+
+    if (URPC_UNLIKELY(ret < required_win)) {
+        (void)__atomic_add_fetch(&fc->total_flow_controlled_wr, (required_win - ret), __ATOMIC_RELAXED);
+    }
+
+    if (URPC_LIKELY(ret > 0)) {
+        (void)__atomic_add_fetch(&fc->total_remote_rx_consumed, ret, __ATOMIC_RELAXED);
+    }
 
     return ret;
 }
@@ -416,17 +461,40 @@ static ALWAYS_INLINE uint16_t local_rx_posted_inc_atomic(struct ub_flow_control 
     } while (
         !__atomic_compare_exchange_n(&fc->local_rx_posted, &before, after, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
+    if (URPC_UNLIKELY(ret == before)) {
+        (void)__atomic_add_fetch(&fc->total_local_rx_posted_error, rx_posted, __ATOMIC_RELAXED);
+    } else {
+        (void)__atomic_add_fetch(&fc->total_local_rx_posted, rx_posted, __ATOMIC_RELAXED);
+    }
+
     return ret;
 }
 
 static ALWAYS_INLINE uint16_t local_rx_posted_exchange_atomic(struct ub_flow_control *fc)
 {
-    return __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_RELAXED);
+    uint16_t posted = __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_RELAXED);
+    if (URPC_LIKELY(posted > 0)) {
+        (void)__atomic_add_fetch(&fc->total_local_rx_notified, posted, __ATOMIC_RELAXED);
+    }
+    return posted;
 }
 
 static ALWAYS_INLINE uint16_t local_rx_posted_load_atomic(struct ub_flow_control *fc)
 {
     return __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
+}
+
+static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out)
+{
+    out->local_rx_posted = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
+    out->remote_rx_window = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
+    out->total_local_rx_posted = __atomic_load_n(&fc->total_local_rx_posted, __ATOMIC_RELAXED);
+    out->total_local_rx_notified = __atomic_load_n(&fc->total_local_rx_notified, __ATOMIC_RELAXED);
+    out->total_local_rx_posted_error = __atomic_load_n(&fc->total_local_rx_posted_error, __ATOMIC_RELAXED);
+    out->total_remote_rx_received = __atomic_load_n(&fc->total_remote_rx_received, __ATOMIC_RELAXED);
+    out->total_remote_rx_consumed = __atomic_load_n(&fc->total_remote_rx_consumed, __ATOMIC_RELAXED);
+    out->total_remote_rx_received_error = __atomic_load_n(&fc->total_remote_rx_received_error, __ATOMIC_RELAXED);
+    out->total_flow_controlled_wr = __atomic_load_n(&fc->total_flow_controlled_wr, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE uint64_t umq_ub_user_imm_bit_fields(ub_flow_control_t *fc)
@@ -469,6 +537,8 @@ static int umq_ub_flow_control_init(
         fc->ops.local_rx_posted_inc = local_rx_posted_inc_atomic;
         fc->ops.local_rx_posted_load = local_rx_posted_load_atomic;
         fc->ops.local_rx_posted_exchange = local_rx_posted_exchange_atomic;
+
+        fc->ops.stats_query = flow_control_stats_query_atomic;
     } else {
         fc->ops.remote_rx_window_inc = remote_rx_window_inc_non_atomic;
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_non_atomic;
@@ -478,6 +548,8 @@ static int umq_ub_flow_control_init(
         fc->ops.local_rx_posted_inc = local_rx_posted_inc_non_atomic;
         fc->ops.local_rx_posted_load = local_rx_posted_load_non_atomic;
         fc->ops.local_rx_posted_exchange = local_rx_posted_exchange_non_atomic;
+
+        fc->ops.stats_query = flow_control_stats_query_non_atomic;
     }
 
     UMQ_VLOG_INFO("umq flow control init success, use %s window\n", cfg->use_atomic_window ? "atomic" : "non-atomic");
