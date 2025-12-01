@@ -11,6 +11,10 @@
 #include "dp.h"
 #include "provider_ops_jetty.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define JFS_SIZE 1024
 #define JFR_SIZE 1024
 #define MAX_RX_BUF_SIZE 65536
@@ -156,4 +160,9 @@ void mem_hmap_unlcok(void);
 
 int jetty_provider_import_mem(provider_t *provider, xchg_mem_info_t *mem_info, uint32_t server_chid);
 int jetty_provider_unimport_mem(provider_t *provider, mem_hmap_key_t *mem_key);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

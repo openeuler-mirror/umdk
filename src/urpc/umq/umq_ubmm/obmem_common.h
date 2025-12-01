@@ -12,6 +12,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define OBMM_EID_LEN    16
 
 typedef struct obmem_export_info {
@@ -43,5 +47,9 @@ int obmem_release_export_memory(uint64_t handle, void *ptr, uint64_t len);
 void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_export_info_t *exp, uint64_t *handle);
 
 int obmem_release_import_memory(uint64_t handle, void *ptr, uint64_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // OBMEM_COMMON_H

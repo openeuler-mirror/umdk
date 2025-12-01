@@ -16,6 +16,10 @@
 #include "umq_api.h"
 #include "umq_pro_api.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define PORT_MAX                  65535
 #define DEFAULT_PORT              19875
 #define TIME_SIZE                 35
@@ -122,5 +126,9 @@ void print_config(struct urpc_example_config *cfg);
 } while (0)
 
 void log_get_current_time(char *buffer, uint32_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

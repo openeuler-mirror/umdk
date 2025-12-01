@@ -13,6 +13,10 @@
 #include "umq_types.h"
 #include "umq_pro_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg);
 
 void umq_ipc_ctx_uninit_impl(uint8_t *ipc_ctx);
@@ -49,5 +53,9 @@ int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt
 int32_t umq_ipc_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrupt_option_t *option);
 
 void umq_ipc_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt_option_t *option);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

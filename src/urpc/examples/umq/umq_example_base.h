@@ -12,6 +12,14 @@
 
 #include "umq_api.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int run_umq_example(struct urpc_example_config *cfg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
