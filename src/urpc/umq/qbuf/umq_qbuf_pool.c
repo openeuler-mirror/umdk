@@ -205,7 +205,6 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             buf->headroom_size = 0;
             buf->buf_data = g_qbuf_pool.data_buffer + i * blk_size;
             buf->mempool_id = 0;
-            buf->need_import = 0;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }
@@ -220,7 +219,6 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             head_buf->headroom_size = 0;
             head_buf->buf_data = NULL;
             head_buf->mempool_id = 0;
-            head_buf->need_import = 0;
             (void)memset(head_buf->qbuf_ext, 0, sizeof(head_buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_without_data, head_buf);
         }
@@ -246,7 +244,6 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             buf->headroom_size = 0;
             buf->buf_data = (char *)buf + sizeof(umq_buf_t);
             buf->mempool_id = 0;
-            buf->need_import = 0;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }

@@ -37,8 +37,6 @@ typedef struct huge_qbuf_pool_cfg {
     void (*memory_uninit_callback)(uint8_t mempool_id, void *buf_addr);
 } huge_qbuf_pool_cfg_t;
 
-int umq_huge_qbuf_pool_import(uint32_t id);
-
 int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg);
 
 void umq_huge_qbuf_pool_uninit(void);
