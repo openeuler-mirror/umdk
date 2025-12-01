@@ -268,6 +268,16 @@ int umq_dev_add(umq_trans_info_t *trans_info);
  */
 int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list);
 
+/**
+ * Thread safety function
+ * User defined control of the context.
+ * @param[in] umqh: umq handle
+ * @param[in] in: user ctl cmd
+ * @param[out] out: result of excution
+ * Return 0 on success, error code on failure
+ */
+int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+
 #ifdef __cplusplus
 }
 #endif

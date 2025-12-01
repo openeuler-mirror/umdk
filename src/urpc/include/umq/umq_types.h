@@ -502,6 +502,24 @@ typedef struct umq_route_list {
     umq_route_t buf[UMQ_MAX_ROUTES];
 } umq_route_list_t;
 
+typedef enum umq_user_ctl_opcode {
+    UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY = 0,
+
+    UMQ_OPCODE_MAX,
+} umq_user_ctl_opcode_t;
+
+typedef struct umq_user_ctl_in {
+    uint64_t addr;                  // the address of the input parameter buffer
+    uint32_t len;                   // the length of the input parameter buffer
+    uint32_t opcode;                // opcode for user ctl
+} umq_user_ctl_in_t;
+
+typedef struct umq_user_ctl_out {
+    uint64_t addr;                  // the address of the output parameter buffer
+    uint32_t len;                   // the length of the output parameter buffer
+    uint32_t reserved;
+} umq_user_ctl_out_t;
+
 #ifdef __cplusplus
 }
 #endif

@@ -140,14 +140,19 @@ static void umq_tp_ub_async_event_ack(umq_async_event_t *event)
     return umq_ub_async_event_ack(event);
 }
 
-int umq_tp_ub_dev_add_impl(umq_trans_info_t *trans_info, umq_init_cfg_t *cfg)
+static int umq_tp_ub_dev_add_impl(umq_trans_info_t *trans_info, umq_init_cfg_t *cfg)
 {
     return umq_ub_dev_add_impl(trans_info, cfg);
 }
 
-int umq_tp_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+static int umq_tp_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
 {
     return umq_ub_get_route_list_impl(route, route_list);
+}
+
+static int umq_tp_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+{
+    return umq_ub_user_ctl_impl(umqh_tp, in, out);
 }
 
 static umq_ops_t g_umq_ub_ops = {
@@ -165,7 +170,7 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_log_config_reset = umq_tp_ub_log_config_reset,
     .umq_tp_dev_add = umq_tp_ub_dev_add_impl,
     .umq_tp_get_topo = umq_tp_ub_get_route_list_impl,
-
+    .umq_tp_user_ctl = umq_tp_ub_user_ctl_impl,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_buf_alloc,
