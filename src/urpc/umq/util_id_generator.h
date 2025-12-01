@@ -8,6 +8,10 @@
 #ifndef UTIL_ID_GENERATOR_H
 #define UTIL_ID_GENERATOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct util_id_allocator {
     uint32_t *available_ids;
     uint32_t num_available;
@@ -20,5 +24,9 @@ int util_id_allocator_init(util_id_allocator_t *id_allocator, uint32_t max_num, 
 void util_id_allocator_uninit(util_id_allocator_t *id_allocator);
 uint32_t util_id_allocator_get(util_id_allocator_t *id_allocator);
 void util_id_allocator_release(util_id_allocator_t *id_allocator, uint32_t util_id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
