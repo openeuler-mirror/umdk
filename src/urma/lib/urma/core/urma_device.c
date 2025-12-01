@@ -10,29 +10,29 @@
 
 #include "urma_device.h"
 
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <string.h>
-#include <dirent.h>
 #include <arpa/inet.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "ub_util.h"
 #include "urma_log.h"
 #include "urma_private.h"
 
-#define URMA_MAX_VALUE_LEN 64   // value length for urma_read_sysfs_device tmp_value arry
-#define URMA_CLASS_PATH "/sys/class/ubcore"
+#define URMA_MAX_VALUE_LEN        64 // value length for urma_read_sysfs_device tmp_value arry
+#define URMA_CLASS_PATH           "/sys/class/ubcore"
 #define URMA_CLASS_PATH_OBSOLETED "/sys/class/uburma"
 
-#define URMA_EID_SUBPATH "eids/eid%u"
+#define URMA_EID_SUBPATH           "eids/eid%u"
 #define URMA_EID_SUBPATH_OBSOLETED "eid%u/eid"
 
-#define URMA_DEV_PATH "/dev/uburma"
-#define URMA_PORT_LEN 16
-#define URMA_DEV_PATH_MAX  (URMA_MAX_SYSFS_PATH + URMA_PORT_LEN)
+#define URMA_DEV_PATH     "/dev/uburma"
+#define URMA_PORT_LEN     16
+#define URMA_DEV_PATH_MAX (URMA_MAX_SYSFS_PATH + URMA_PORT_LEN)
 
 #define URMA_RSVD_JETTY_ID_PARAM_NUM 2
 
@@ -88,8 +88,8 @@ static inline bool urma_eid_is_valid(urma_eid_t *eid)
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
 }
 
-static uint32_t read_eid_list_sysyf(urma_sysfs_dev_t *sysfs_dev, char *subpath,
-    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+static uint32_t read_eid_list_sysyf(urma_sysfs_dev_t *sysfs_dev, char *subpath, urma_eid_info_t *eid_list,
+                                    uint32_t max_eid_cnt)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
@@ -114,8 +114,7 @@ static uint32_t read_eid_list_sysyf(urma_sysfs_dev_t *sysfs_dev, char *subpath,
     return cnt_idx;
 }
 
-static int read_eid_sysfs_with_index(urma_sysfs_dev_t *sysfs_dev, char *pattern,
-    uint32_t eid_index, urma_eid_t *eid)
+static int read_eid_sysfs_with_index(urma_sysfs_dev_t *sysfs_dev, char *pattern, uint32_t eid_index, urma_eid_t *eid)
 {
     char tmp_eid[URMA_MAX_NAME] = {0};
     char tmp_value[URMA_MAX_NAME] = {0};
@@ -135,8 +134,8 @@ static int read_eid_sysfs_with_index(urma_sysfs_dev_t *sysfs_dev, char *pattern,
     return 0;
 }
 
-static int urma_ioctl_get_eid_list(urma_device_t *dev, uint32_t max_eid_cnt,
-    urma_eid_info_t *eid_list, uint32_t *eid_cnt)
+static int urma_ioctl_get_eid_list(urma_device_t *dev, uint32_t max_eid_cnt, urma_eid_info_t *eid_list,
+                                   uint32_t *eid_cnt)
 {
     int dev_fd = urma_open_cdev(dev->path);
     if (dev_fd < 0) {
@@ -149,8 +148,7 @@ static int urma_ioctl_get_eid_list(urma_device_t *dev, uint32_t max_eid_cnt,
     return ret;
 }
 
-uint32_t urma_read_eid_list(urma_device_t *dev,
-    urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
+uint32_t urma_read_eid_list(urma_device_t *dev, urma_eid_info_t *eid_list, uint32_t max_eid_cnt)
 {
     uint32_t eid_cnt = 0;
     if (urma_ioctl_get_eid_list(dev, max_eid_cnt, eid_list, &eid_cnt) == 0) {
@@ -165,8 +163,7 @@ uint32_t urma_read_eid_list(urma_device_t *dev,
     }
 }
 
-int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev,
-    uint32_t eid_index, urma_eid_t *eid)
+int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev, uint32_t eid_index, urma_eid_t *eid)
 {
     if (strcmp(g_urma_class_path, URMA_CLASS_PATH) == 0) {
         return read_eid_sysfs_with_index(sysfs_dev, "eids/eid%u", eid_index, eid);
@@ -334,8 +331,8 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
         urma_parse_port_attr(sysfs_path, attr);
     }
 
-    urma_parse_rsvd_jetty_range(sysfs_path, "reserved_jetty_id",
-        &attr->reserved_jetty_id_min, &attr->reserved_jetty_id_max);
+    urma_parse_rsvd_jetty_range(sysfs_path, "reserved_jetty_id", &attr->reserved_jetty_id_min,
+                                &attr->reserved_jetty_id_max);
 }
 
 static void urma_read_sysfs_dev_attrs(urma_sysfs_dev_t *sysfs_dev)
@@ -388,7 +385,7 @@ urma_sysfs_dev_t *urma_read_sysfs_device(const struct dirent *dent)
         return NULL;
     }
 
-    ret = snprintf(sysfs_dev->sysfs_path, URMA_MAX_SYSFS_PATH - 1, "%s/%s",  g_urma_class_path, dent->d_name);
+    ret = snprintf(sysfs_dev->sysfs_path, URMA_MAX_SYSFS_PATH - 1, "%s/%s", g_urma_class_path, dent->d_name);
     if (ret <= 0) {
         URMA_LOG_ERR("snprintf failed, dev_name: %s.\n", dent->d_name);
         goto out;
@@ -433,7 +430,7 @@ static bool urma_match_device(const urma_sysfs_dev_t *sdev, const urma_driver_t 
 bool urma_match_driver(urma_sysfs_dev_t *sysfs_dev, struct ub_list *driver_list)
 {
     urma_driver_t *driver;
-    UB_LIST_FOR_EACH(driver, node, driver_list) {
+    UB_LIST_FOR_EACH (driver, node, driver_list) {
         if (urma_match_device(sysfs_dev, driver)) {
             sysfs_dev->driver = driver;
             return true;
@@ -471,16 +468,14 @@ static inline bool urma_time_cmp_eq(struct timespec *time1, struct timespec *tim
     return true;
 }
 
-static int urma_check_loaded_devices(urma_sysfs_dev_t *sysfs_dev,
-    struct ub_list *dev_name_list)
+static int urma_check_loaded_devices(urma_sysfs_dev_t *sysfs_dev, struct ub_list *dev_name_list)
 {
     urma_sysfs_dev_name_t *sysfs_dev_name = NULL;
     urma_sysfs_dev_name_t *next = NULL;
 
-    UB_LIST_FOR_EACH_SAFE(sysfs_dev_name, next, node, dev_name_list) {
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev_name, next, node, dev_name_list) {
         if (strcmp(sysfs_dev_name->dev_name, sysfs_dev->dev_name) == 0 &&
-            urma_time_cmp_eq(&sysfs_dev_name->time_created,
-            &sysfs_dev->time_created) == true) {
+            urma_time_cmp_eq(&sysfs_dev_name->time_created, &sysfs_dev->time_created) == true) {
             return 0;
         }
     }
@@ -502,7 +497,7 @@ static void urma_free_dev_name_list(struct ub_list *dev_name_list)
 {
     urma_sysfs_dev_name_t *sysfs_dev, *next;
 
-    UB_LIST_FOR_EACH_SAFE(sysfs_dev, next, node, dev_name_list) {
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev, next, node, dev_name_list) {
         if (sysfs_dev == NULL) {
             continue;
         }
@@ -532,8 +527,7 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
         }
         urma_device_t *device = NULL;
         device = urma_find_dev_by_name(dev_list, sysfs_dev->dev_name);
-        if (device != NULL && urma_time_cmp_eq(&device->sysfs_dev->time_created,
-            &sysfs_dev->time_created)) {
+        if (device != NULL && urma_time_cmp_eq(&device->sysfs_dev->time_created, &sysfs_dev->time_created)) {
             urma_get_dev_name_list(&dev_name_list, sysfs_dev);
             free(sysfs_dev);
             continue;
@@ -556,7 +550,7 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
 
     /* remove unloaded urma_device in dev_list */
     urma_sysfs_dev_t *next;
-    UB_LIST_FOR_EACH_SAFE(sysfs_dev, next, node, dev_list) {
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev, next, node, dev_list) {
         if ((sysfs_dev->flag & URMA_SYSFS_DEV_FLAG_DRIVER_CREATED) != 0) {
             // sysfs_dev created by driver.
             continue;
@@ -583,7 +577,7 @@ urma_device_t *urma_find_dev_by_name(struct ub_list *dev_list, const char *dev_n
 {
     urma_sysfs_dev_t *sysfs_dev;
 
-    UB_LIST_FOR_EACH(sysfs_dev, node, dev_list) {
+    UB_LIST_FOR_EACH (sysfs_dev, node, dev_list) {
         if (strcmp(sysfs_dev->dev_name, dev_name) == 0) {
             return sysfs_dev->urma_device;
         }
@@ -595,7 +589,7 @@ void urma_free_devices(struct ub_list *dev_list)
 {
     urma_sysfs_dev_t *sysfs_dev, *next;
 
-    UB_LIST_FOR_EACH_SAFE(sysfs_dev, next, node, dev_list) {
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev, next, node, dev_list) {
         if (sysfs_dev == NULL) {
             continue;
         }

@@ -14,13 +14,13 @@
 #include "urma_cmd_tlv.h"
 
 static inline void fill_attr(urma_cmd_attr_t *attr, uint16_t type, uint16_t field_size, uint16_t el_num,
-    uint16_t el_size, uintptr_t data)
+                             uint16_t el_size, uintptr_t data)
 {
-    *attr = (urma_cmd_attr_t) {
+    *attr = (urma_cmd_attr_t){
         .type = type,
         .flag = 0,
         .field_size = field_size,
-        .attr_data.bs = { .el_num = el_num, .el_size = el_size },
+        .attr_data.bs = {.el_num = el_num, .el_size = el_size},
         .data = data,
     };
 }
@@ -36,7 +36,7 @@ static inline void fill_attr(urma_cmd_attr_t *attr, uint16_t type, uint16_t fiel
  * @param v1 Full path of struct array, e.g. `arg->out.attr.port_attr`
  * @param v2 Path relative to struct in array, e.g. `active_speed`
  */
-#define ATTR_ARRAY(attr, type, v1, v2) \
+#define ATTR_ARRAY(attr, type, v1, v2)                                                                                 \
     fill_attr(attr, type, sizeof((v1)->v2), ARRAY_SIZE(v1), sizeof((v1)[0]), (uintptr_t)(&((v1)->v2)))
 
 static int urma_tlv_ioctl(int ioctl_fd, urma_cmd_t cmd, urma_cmd_attr_t *args, uint32_t args_len)
@@ -762,8 +762,8 @@ int urma_ioctl_get_netaddr_list(int ioctl_fd, urma_cmd_get_net_addr_list_t *arg)
 
     ATTR(a++, GET_NET_ADDR_LIST_IN_MAX_NETADDR_CNT, arg->in.max_netaddr_cnt);
     ATTR(a++, GET_NET_ADDR_LIST_OUT_NETADDR_CNT, arg->out.netaddr_cnt);
-    fill_attr(a++, GET_NET_ADDR_LIST_OUT_NETADDR_LIST, netaddr_size, arg->out.len / netaddr_size,
-        netaddr_size, arg->out.addr);
+    fill_attr(a++, GET_NET_ADDR_LIST_OUT_NETADDR_LIST, netaddr_size, arg->out.len / netaddr_size, netaddr_size,
+              arg->out.addr);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_NETADDR_LIST, attrs, sizeof(attrs));
 }
@@ -907,21 +907,21 @@ int urma_ioctl_import_jetty_async(int ioctl_fd, urma_cmd_import_jetty_async_t *a
     urma_cmd_attr_t attrs[IMPORT_JETTY_ASYNC_IN_NUM + IMPORT_JETTY_ASYNC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
 
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_EID,          arg->in.eid);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_ID,           arg->in.id);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_FLAG,         arg->in.flag);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TOKEN,        arg->in.token);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TRANS_MODE,   arg->in.trans_mode);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_POLICY,       arg->in.policy);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TYPE,         arg->in.type);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_URMA_TJETTY,  arg->in.urma_tjetty);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_USER_CTX,     arg->in.user_ctx);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_FD,           arg->in.fd);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TIMEOUT,      arg->in.timeout);
-    ATTR(a++, IMPORT_JETTY_ASYNC_IN_UDATA,        arg->udata);
-    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_TPN,         arg->out.tpn);
-    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_HANDLE,      arg->out.handle);
-    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_UDATA,       arg->udata);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_EID, arg->in.eid);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_ID, arg->in.id);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_FLAG, arg->in.flag);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TOKEN, arg->in.token);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_POLICY, arg->in.policy);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TYPE, arg->in.type);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_URMA_TJETTY, arg->in.urma_tjetty);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_USER_CTX, arg->in.user_ctx);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_FD, arg->in.fd);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_TIMEOUT, arg->in.timeout);
+    ATTR(a++, IMPORT_JETTY_ASYNC_IN_UDATA, arg->udata);
+    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_TPN, arg->out.tpn);
+    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, IMPORT_JETTY_ASYNC_OUT_UDATA, arg->udata);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_IMPORT_JETTY_ASYNC, attrs, sizeof(attrs));
 }
@@ -941,16 +941,16 @@ int urma_ioctl_bind_jetty_async(int ioctl_fd, urma_cmd_bind_jetty_async_t *arg)
     urma_cmd_attr_t attrs[BIND_JETTY_ASYNC_IN_NUM + BIND_JETTY_ASYNC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
 
-    ATTR(a++, BIND_JETTY_ASYNC_IN_JETTY_HANDLE,     arg->in.jetty_handle);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_TJETTY_HANDLE,    arg->in.tjetty_handle);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_URMA_TJETTY,      arg->in.urma_tjetty);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_URMA_JETTY,       arg->in.urma_jetty);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_FD,               arg->in.fd);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_USER_CTX,         arg->in.user_ctx);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_TIMEOUT,          arg->in.timeout);
-    ATTR(a++, BIND_JETTY_ASYNC_IN_UDATA,            arg->udata);
-    ATTR(a++, BIND_JETTY_ASYNC_OUT_TPN,             arg->out.tpn);
-    ATTR(a++, BIND_JETTY_ASYNC_OUT_UDATA,           arg->udata);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_JETTY_HANDLE, arg->in.jetty_handle);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_TJETTY_HANDLE, arg->in.tjetty_handle);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_URMA_TJETTY, arg->in.urma_tjetty);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_URMA_JETTY, arg->in.urma_jetty);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_FD, arg->in.fd);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_USER_CTX, arg->in.user_ctx);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_TIMEOUT, arg->in.timeout);
+    ATTR(a++, BIND_JETTY_ASYNC_IN_UDATA, arg->udata);
+    ATTR(a++, BIND_JETTY_ASYNC_OUT_TPN, arg->out.tpn);
+    ATTR(a++, BIND_JETTY_ASYNC_OUT_UDATA, arg->udata);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_BIND_JETTY_ASYNC, attrs, sizeof(attrs));
 }
@@ -1021,12 +1021,12 @@ int urma_ioctl_set_tp_attr(int ioctl_fd, urma_cmd_set_tp_attr_t *arg)
     urma_cmd_attr_t attrs[SET_TP_ATTR_IN_NUM + SET_TP_ATTR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
 
-    ATTR(a++, SET_TP_ATTR_IN_TP_HANDLE,        arg->in.tp_handle);
-    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR_CNT,      arg->in.tp_attr_cnt);
-    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR_BITMAP,   arg->in.tp_attr_bitmap);
-    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR,          arg->in.tp_attr);
-    ATTR(a++, SET_TP_ATTR_IN_UDATA,            arg->udata);
-    ATTR(a++, SET_TP_ATTR_OUT_UDATA,           arg->udata);
+    ATTR(a++, SET_TP_ATTR_IN_TP_HANDLE, arg->in.tp_handle);
+    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR_CNT, arg->in.tp_attr_cnt);
+    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR_BITMAP, arg->in.tp_attr_bitmap);
+    ATTR(a++, SET_TP_ATTR_IN_TP_ATTR, arg->in.tp_attr);
+    ATTR(a++, SET_TP_ATTR_IN_UDATA, arg->udata);
+    ATTR(a++, SET_TP_ATTR_OUT_UDATA, arg->udata);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_SET_TP_ATTR, attrs, sizeof(attrs));
 }
@@ -1036,12 +1036,12 @@ int urma_ioctl_get_tp_attr(int ioctl_fd, urma_cmd_get_tp_attr_t *arg)
     urma_cmd_attr_t attrs[GET_TP_ATTR_IN_NUM + GET_TP_ATTR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
 
-    ATTR(a++, GET_TP_ATTR_IN_TP_HANDLE,        arg->in.tp_handle);
-    ATTR(a++, GET_TP_ATTR_IN_UDATA,            arg->udata);
-    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR_CNT,     arg->out.tp_attr_cnt);
-    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR_BITMAP,  arg->out.tp_attr_bitmap);
-    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR,         arg->out.tp_attr);
-    ATTR(a++, GET_TP_ATTR_OUT_UDATA,           arg->udata);
+    ATTR(a++, GET_TP_ATTR_IN_TP_HANDLE, arg->in.tp_handle);
+    ATTR(a++, GET_TP_ATTR_IN_UDATA, arg->udata);
+    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR_CNT, arg->out.tp_attr_cnt);
+    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR_BITMAP, arg->out.tp_attr_bitmap);
+    ATTR(a++, GET_TP_ATTR_OUT_TP_ATTR, arg->out.tp_attr);
+    ATTR(a++, GET_TP_ATTR_OUT_UDATA, arg->udata);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_TP_ATTR, attrs, sizeof(attrs));
 }

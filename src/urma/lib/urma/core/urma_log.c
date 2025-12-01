@@ -8,26 +8,27 @@
  * History: 2020-9-28 inital implementation of urma log
  */
 
+#include <errno.h>
+#include <pthread.h>
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <stdarg.h>
-#include <errno.h>
 #include <sys/types.h>
 #include <syslog.h>
-#include <pthread.h>
+
+#include "urma_log.h"
 #include "urma_opcode.h"
 #include "urma_types.h"
-#include "urma_log.h"
 
 pthread_mutex_t g_urma_log_lock = PTHREAD_MUTEX_INITIALIZER;
 urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
-#define MAX_LOG_LEN 512
-#define MAX_THREAD_TAG_LEN 64
-#define URMA_LOG_TAG "LogTag_URMA"
-#define URMA_LOG_ENV_STR    "URMA_LOG_LEVEL"
-#define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN        32
+#define MAX_LOG_LEN                    512
+#define MAX_THREAD_TAG_LEN             64
+#define URMA_LOG_TAG                   "LogTag_URMA"
+#define URMA_LOG_ENV_STR               "URMA_LOG_LEVEL"
+#define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN 32
 
 static void urma_default_log_func(int level, char *message)
 {
@@ -59,7 +60,7 @@ int urma_log_init(void)
 {
     openlog("", LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
     return setlogmask(LOG_MASK(LOG_CRIT) | LOG_MASK(LOG_ERR) | LOG_MASK(LOG_WARNING) | LOG_MASK(LOG_INFO) |
-        LOG_MASK(LOG_DEBUG));
+                      LOG_MASK(LOG_DEBUG));
 }
 
 urma_vlog_level_t urma_log_get_level(void)
@@ -106,20 +107,26 @@ inline bool urma_log_drop(urma_vlog_level_t level)
 const char *urma_get_level_print(urma_vlog_level_t level)
 {
     switch (level) {
-        case URMA_VLOG_LEVEL_CRIT: return "fatal";
-        case URMA_VLOG_LEVEL_ERR: return "error";
-        case URMA_VLOG_LEVEL_WARNING: return "warning";
-        case URMA_VLOG_LEVEL_DEBUG: return "debug";
-        case URMA_VLOG_LEVEL_INFO: return "info";
-        case URMA_VLOG_LEVEL_EMERG:
-        case URMA_VLOG_LEVEL_ALERT:
-        case URMA_VLOG_LEVEL_NOTICE:
-        case URMA_VLOG_LEVEL_MAX:
-        default: return "Unknown";
+    case URMA_VLOG_LEVEL_CRIT:
+        return "fatal";
+    case URMA_VLOG_LEVEL_ERR:
+        return "error";
+    case URMA_VLOG_LEVEL_WARNING:
+        return "warning";
+    case URMA_VLOG_LEVEL_DEBUG:
+        return "debug";
+    case URMA_VLOG_LEVEL_INFO:
+        return "info";
+    case URMA_VLOG_LEVEL_EMERG:
+    case URMA_VLOG_LEVEL_ALERT:
+    case URMA_VLOG_LEVEL_NOTICE:
+    case URMA_VLOG_LEVEL_MAX:
+    default:
+        return "Unknown";
     }
 }
 
-urma_vlog_level_t urma_log_get_level_from_string(const char* level_string)
+urma_vlog_level_t urma_log_get_level_from_string(const char *level_string)
 {
     if (level_string == NULL) {
         return URMA_VLOG_LEVEL_MAX;

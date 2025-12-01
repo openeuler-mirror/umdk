@@ -12,18 +12,17 @@
 #define _GNU_SOURCE
 #endif
 
-#include <stdio.h>
-#include <dlfcn.h>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <errno.h>
+#include <stdio.h>
 #include <syslog.h>
 
+#include "urma_device.h"
 #include "urma_log.h"
-#include "urma_types.h"
-#include "urma_provider.h"
 #include "urma_private.h"
 #include "urma_provider.h"
-#include "urma_device.h"
+#include "urma_types.h"
 
 #if defined(__ANDROID__) || defined(__OHOS__)
 #define LIBURMA_DIR "/system/lib64/urma"
@@ -41,7 +40,7 @@ static atomic_uint g_init_flag;
 
 typedef struct urma_so {
     char path[URMA_MAX_LIB_PATH];
-    void *dl; /* Handle returned by dlopen so */
+    void *dl;            /* Handle returned by dlopen so */
     struct ub_list node; /* Add to so list */
 } urma_so_t;
 
@@ -65,7 +64,7 @@ static int urma_open_provider(const char file[URMA_MAX_LIB_PATH])
     int ret;
     char *canonicalized_path = NULL;
 
-    ret = access(file, F_OK | R_OK | X_OK);  // Determine permission: exist & read & execute
+    ret = access(file, F_OK | R_OK | X_OK); // Determine permission: exist & read & execute
     if (ret != 0) {
         URMA_LOG_ERR("%s doesn't exist or doesn't have permission.\n", file);
         return -1;
@@ -124,7 +123,7 @@ int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
     }
 
     urma_driver_t *driver, *next;
-    UB_LIST_FOR_EACH_SAFE(driver, next, node, &g_driver_list) {
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
         if (driver->ops == provider_ops) {
             ub_list_remove(&driver->node);
             free(driver);
@@ -230,7 +229,7 @@ urma_status_t urma_init(urma_init_attr_t *conf)
 
     (void)pthread_spin_init(&g_dev_list_lock, PTHREAD_PROCESS_PRIVATE);
     urma_driver_t *driver, *next;
-    UB_LIST_FOR_EACH_SAFE(driver, next, node, &g_driver_list) {
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
         if (driver->ops->init == NULL || driver->ops->init(conf) != URMA_SUCCESS) {
             URMA_LOG_WARN("Provider init failed %s", driver->ops->name);
             ub_list_remove(&driver->node);
@@ -256,7 +255,7 @@ urma_status_t urma_uninit(void)
     }
 
     urma_driver_t *driver;
-    UB_LIST_FOR_EACH(driver, node, &g_driver_list) {
+    UB_LIST_FOR_EACH (driver, node, &g_driver_list) {
         if (driver->ops->uninit == NULL || driver->ops->uninit() != URMA_SUCCESS) {
             URMA_LOG_WARN("Provider uninit failed %s\n", driver->ops->name);
             ret = URMA_FAIL;
@@ -268,7 +267,7 @@ urma_status_t urma_uninit(void)
     (void)pthread_spin_destroy(&g_dev_list_lock);
     /* unload urma so */
     urma_so_t *so, *next;
-    UB_LIST_FOR_EACH_SAFE(so, next, node, &g_so_list) {
+    UB_LIST_FOR_EACH_SAFE (so, next, node, &g_so_list) {
         urma_close_provider(so->dl, so->path);
         ub_list_remove(&so->node);
         free(so);
@@ -289,7 +288,7 @@ static urma_device_t **get_urma_device_list(int *num_devices)
 
     int tmp_num = 0;
     urma_sysfs_dev_t *sysfs_dev;
-    UB_LIST_FOR_EACH(sysfs_dev, node, &g_dev_list) {
+    UB_LIST_FOR_EACH (sysfs_dev, node, &g_dev_list) {
         device_list[tmp_num] = sysfs_dev->urma_device;
         tmp_num++;
     }
@@ -526,8 +525,7 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 urma_status_t urma_delete_context(urma_context_t *ctx)
 {
     URMA_LOG_INFO("urma delete context start.\n");
-    if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL ||
-        ctx->dev->ops->delete_context == NULL) {
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL || ctx->dev->ops->delete_context == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -550,8 +548,7 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
     return ret;
 }
 
-urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name,
-    const void *opt_value, size_t opt_len)
+urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name, const void *opt_value, size_t opt_len)
 {
     if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
@@ -559,26 +556,26 @@ urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name
     }
 
     switch (opt_name) {
-        case URMA_OPT_AGGR_MODE:
-            if (opt_len != sizeof(urma_context_aggr_mode_t)) {
-                URMA_LOG_ERR("Invalid option value len.\n");
-                return URMA_EINVAL;
-            }
-            if (strcmp(ctx->dev->ops->name, "ub_agg") != 0) {
-                URMA_LOG_ERR("Cannot set aggregated mode for non-aggregated device.\n");
-                return URMA_EINVAL;
-            }
-            const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 5;
-            urma_user_ctl_in_t in = {
-                .opcode = URMA_USER_CTL_BOND_SET_AGGR_MODE,
-                .addr = (uint64_t) opt_value,
-                .len = opt_len,
-            };
-            urma_user_ctl_out_t out = {0};
-            return urma_user_ctl(ctx, &in, &out);
-        default:
-            URMA_LOG_ERR("Invalid option name.\n");
+    case URMA_OPT_AGGR_MODE:
+        if (opt_len != sizeof(urma_context_aggr_mode_t)) {
+            URMA_LOG_ERR("Invalid option value len.\n");
             return URMA_EINVAL;
+        }
+        if (strcmp(ctx->dev->ops->name, "ub_agg") != 0) {
+            URMA_LOG_ERR("Cannot set aggregated mode for non-aggregated device.\n");
+            return URMA_EINVAL;
+        }
+        const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 5;
+        urma_user_ctl_in_t in = {
+            .opcode = URMA_USER_CTL_BOND_SET_AGGR_MODE,
+            .addr = (uint64_t)opt_value,
+            .len = opt_len,
+        };
+        urma_user_ctl_out_t out = {0};
+        return urma_user_ctl(ctx, &in, &out);
+    default:
+        URMA_LOG_ERR("Invalid option name.\n");
+        return URMA_EINVAL;
     }
 }
 
@@ -591,7 +588,7 @@ urma_status_t urma_get_uasid(uint32_t *uasid)
     }
 
     urma_driver_t *driver;
-    UB_LIST_FOR_EACH(driver, node, &g_driver_list) {
+    UB_LIST_FOR_EACH (driver, node, &g_driver_list) {
         if (driver->ops->get_uasid == NULL) {
             continue;
         }
