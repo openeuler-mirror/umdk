@@ -686,6 +686,11 @@ static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *
         uint16_t *remote_data = (uint16_t *)(uintptr_t)umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL);
         *remote_data = notify;
         fc->local_set = true;
+
+        if (!fc->remote_get) {
+            umq_ub_window_read(fc, queue);
+        }
+
         return;
     }
 
