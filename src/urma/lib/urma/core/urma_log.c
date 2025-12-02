@@ -18,9 +18,10 @@
 #include <sys/types.h>
 #include <syslog.h>
 
-#include "urma_log.h"
 #include "urma_opcode.h"
 #include "urma_types.h"
+
+#include "urma_log.h"
 
 pthread_mutex_t g_urma_log_lock = PTHREAD_MUTEX_INITIALIZER;
 urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
@@ -107,22 +108,22 @@ inline bool urma_log_drop(urma_vlog_level_t level)
 const char *urma_get_level_print(urma_vlog_level_t level)
 {
     switch (level) {
-    case URMA_VLOG_LEVEL_CRIT:
-        return "fatal";
-    case URMA_VLOG_LEVEL_ERR:
-        return "error";
-    case URMA_VLOG_LEVEL_WARNING:
-        return "warning";
-    case URMA_VLOG_LEVEL_DEBUG:
-        return "debug";
-    case URMA_VLOG_LEVEL_INFO:
-        return "info";
-    case URMA_VLOG_LEVEL_EMERG:
-    case URMA_VLOG_LEVEL_ALERT:
-    case URMA_VLOG_LEVEL_NOTICE:
-    case URMA_VLOG_LEVEL_MAX:
-    default:
-        return "Unknown";
+        case URMA_VLOG_LEVEL_CRIT:
+            return "fatal";
+        case URMA_VLOG_LEVEL_ERR:
+            return "error";
+        case URMA_VLOG_LEVEL_WARNING:
+            return "warning";
+        case URMA_VLOG_LEVEL_DEBUG:
+            return "debug";
+        case URMA_VLOG_LEVEL_INFO:
+            return "info";
+        case URMA_VLOG_LEVEL_EMERG:
+        case URMA_VLOG_LEVEL_ALERT:
+        case URMA_VLOG_LEVEL_NOTICE:
+        case URMA_VLOG_LEVEL_MAX:
+        default:
+            return "Unknown";
     }
 }
 

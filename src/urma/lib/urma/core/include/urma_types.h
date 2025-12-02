@@ -349,7 +349,7 @@ typedef struct urma_context {
     uint32_t eid_index;
     uint32_t uasid;           /* [Public] uasid of current process. */
     struct urma_ref ref;      /* [Private] reference count of urma context. */
-    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 
 typedef struct urma_eid_info {
