@@ -2149,7 +2149,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto DELETE_JETTY;
     }
 
-    queue->notify_buf = umq_buf_alloc(1, 1, UMQ_INVALID_HANDLE, NULL);
+    queue->notify_buf = umq_buf_alloc(umq_buf_size_small(), 1, UMQ_INVALID_HANDLE, NULL);
     if (queue->notify_buf == NULL) {
         UMQ_VLOG_ERR("buf alloc failed\n");
         goto UNINIT_RX_CTX_LIST;
