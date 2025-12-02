@@ -564,7 +564,7 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
 {
     if (!g_umq_inited || request_qbuf_num == 0 || request_qbuf_num > UMQ_BATCH_SIZE
         || request_size > UMQ_MAX_BUF_REQUEST_SIZE) {
-        UMQ_VLOG_ERR("parma invalid or umq initialized\n");
+        UMQ_VLOG_ERR("param invalid or umq initialized\n");
         return NULL;
     }
     uint32_t headroom_size = (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
