@@ -88,12 +88,12 @@ typedef enum urma_cmd_register_seg_type {
     REGISTER_SEG_IN_TOKEN,
     REGISTER_SEG_IN_FLAG,
     REGISTER_SEG_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    REGISTER_SEG_IN_NUM, /* Only for calculating number of types */
+    REGISTER_SEG_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     REGISTER_SEG_OUT_TOKEN_ID = URMA_CMD_OUT_TYPE_INIT,
     REGISTER_SEG_OUT_HANDLE,
     REGISTER_SEG_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    REGISTER_SEG_OUT_NUM, /* Only for calculating number of types */
+    REGISTER_SEG_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_register_seg_type_t;
 
 /* See urma_cmd_unregister_seg_t, consistent with enum uburma_cmd_unregister_seg_type */
@@ -114,11 +114,11 @@ typedef enum urma_cmd_import_seg_type {
     IMPORT_SEG_IN_TOKEN_ID,
     IMPORT_SEG_IN_MVA,
     IMPORT_SEG_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    IMPORT_SEG_IN_NUM, /* Only for calculating number of types */
+    IMPORT_SEG_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     IMPORT_SEG_OUT_HANDLE = URMA_CMD_OUT_TYPE_INIT,
     IMPORT_SEG_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    IMPORT_SEG_OUT_NUM, /* Only for calculating number of types */
+    IMPORT_SEG_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_import_seg_type_t;
 
 /* See urma_cmd_unimport_seg_t, consistent with enum uburma_cmd_unimport_seg_type */
@@ -145,7 +145,7 @@ typedef enum urma_cmd_create_jfs_type {
     CREATE_JFS_IN_JFC_HANDLE,
     CREATE_JFS_IN_URMA_JFS,
     CREATE_JFS_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    CREATE_JFS_IN_NUM, /* Only for calculating number of types */
+    CREATE_JFS_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     CREATE_JFS_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
     CREATE_JFS_OUT_DEPTH,
@@ -154,7 +154,7 @@ typedef enum urma_cmd_create_jfs_type {
     CREATE_JFS_OUT_MAX_INLINE_DATA,
     CREATE_JFS_OUT_HANDLE,
     CREATE_JFS_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    CREATE_JFS_OUT_NUM, /* Only for calculating number of types */
+    CREATE_JFS_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_create_jfs_type_t;
 
 /* See urma_cmd_modify_jfs_t, consistent with enum uburma_cmd_modify_jfs_type */
@@ -164,10 +164,10 @@ typedef enum urma_cmd_modify_jfs_type {
     MODIFY_JFS_IN_MASK,
     MODIFY_JFS_IN_STATE,
     MODIFY_JFS_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    MODIFY_JFS_IN_NUM, /* Only for calculating number of types */
+    MODIFY_JFS_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     MODIFY_JFS_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
-    MODIFY_JFS_OUT_NUM, /* Only for calculating number of types */
+    MODIFY_JFS_OUT_NUM,                            /* Only for calculating number of types */
 } urma_cmd_modify_jfs_type_t;
 
 /* See urma_cmd_query_jfs_t, consistent with enum uburma_cmd_query_jfs_type */
@@ -226,14 +226,14 @@ typedef enum urma_cmd_create_jfr_type {
     CREATE_JFR_IN_ID,
     CREATE_JFR_IN_URMA_JFR,
     CREATE_JFR_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    CREATE_JFR_IN_NUM, /* Only for calculating number of types */
+    CREATE_JFR_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     CREATE_JFR_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
     CREATE_JFR_OUT_DEPTH,
     CREATE_JFR_OUT_MAX_SGE,
     CREATE_JFR_OUT_HANDLE,
     CREATE_JFR_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    CREATE_JFR_OUT_NUM, /* Only for calculating number of types */
+    CREATE_JFR_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_create_jfr_type_t;
 
 /* See urma_cmd_modify_jfr_t, consistent with enum uburma_cmd_modify_jfr_type */
@@ -244,10 +244,10 @@ typedef enum urma_cmd_modify_jfr_type {
     MODIFY_JFR_IN_RX_THRESHOLD,
     MODIFY_JFR_IN_STATE,
     MODIFY_JFR_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    MODIFY_JFR_IN_NUM, /* Only for calculating number of types */
+    MODIFY_JFR_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     MODIFY_JFR_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
-    MODIFY_JFR_OUT_NUM, /* Only for calculating number of types */
+    MODIFY_JFR_OUT_NUM,                            /* Only for calculating number of types */
 } urma_cmd_modify_jfr_type_t;
 
 /* See urma_cmd_query_jfr_t, consistent with enum uburma_cmd_query_jfr_type */
@@ -299,13 +299,13 @@ typedef enum urma_cmd_create_jfc_type {
     CREATE_JFC_IN_URMA_JFC,
     CREATE_JFC_IN_CEQN,
     CREATE_JFC_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    CREATE_JFC_IN_NUM, /* Only for calculating number of types */
+    CREATE_JFC_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     CREATE_JFC_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
     CREATE_JFC_OUT_DEPTH,
     CREATE_JFC_OUT_HANDLE,
     CREATE_JFC_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    CREATE_JFC_OUT_NUM, /* Only for calculating number of types */
+    CREATE_JFC_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_create_jfc_type_t;
 
 /* See urma_cmd_modify_jfc_t, consistent with enum uburma_cmd_modify_jfc_type */
@@ -316,10 +316,10 @@ typedef enum urma_cmd_modify_jfc_type {
     MODIFY_JFC_IN_MODERATE_COUNT,
     MODIFY_JFC_IN_MODERATE_PERIOD,
     MODIFY_JFC_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    MODIFY_JFC_IN_NUM, /* Only for calculating number of types */
+    MODIFY_JFC_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     MODIFY_JFC_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
-    MODIFY_JFC_OUT_NUM, /* Only for calculating number of types */
+    MODIFY_JFC_OUT_NUM,                            /* Only for calculating number of types */
 } urma_cmd_modify_jfc_type_t;
 
 /* See urma_cmd_delete_jfc_t, consistent with enum uburma_cmd_delete_jfc_type */
@@ -363,12 +363,12 @@ typedef enum urma_cmd_import_jfr_type {
     IMPORT_JFR_IN_TRANS_MODE,
     IMPORT_JFR_IN_TP_TYPE,
     IMPORT_JFR_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    IMPORT_JFR_IN_NUM, /* Only for calculating number of types */
+    IMPORT_JFR_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     IMPORT_JFR_OUT_TPN = URMA_CMD_OUT_TYPE_INIT,
     IMPORT_JFR_OUT_HANDLE,
     IMPORT_JFR_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    IMPORT_JFR_OUT_NUM, /* Only for calculating number of types */
+    IMPORT_JFR_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_import_jfr_type_t;
 
 /* See urma_cmd_import_jfr_ex_t, consistent with enum uburma_cmd_import_jfr_ex_type */
@@ -386,12 +386,12 @@ typedef enum urma_cmd_import_jfr_ex_type {
     IMPORT_JFR_EX_IN_TX_PSN,
     IMPORT_JFR_EX_IN_RX_PSN,
     IMPORT_JFR_EX_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
-    IMPORT_JFR_EX_IN_NUM, /* Only for calculating number of types */
+    IMPORT_JFR_EX_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
     IMPORT_JFR_EX_OUT_TPN = URMA_CMD_OUT_TYPE_INIT,
     IMPORT_JFR_EX_OUT_HANDLE,
     IMPORT_JFR_EX_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
-    IMPORT_JFR_EX_OUT_NUM, /* Only for calculating number of types */
+    IMPORT_JFR_EX_OUT_NUM,   /* Only for calculating number of types */
 } urma_cmd_import_jfr_ex_type_t;
 
 /* See urma_cmd_unimport_jfr_t, consistent with enum uburma_cmd_unimport_jfr_type */
@@ -646,7 +646,7 @@ typedef enum urma_cmd_user_ctl_type {
     USER_CTL_IN_OUT_ADDR,
     USER_CTL_IN_OUT_LEN,
     USER_CTL_IN_UDATA,
-    USER_CTL_IN_NUM,   /* Only for calculating number of types */
+    USER_CTL_IN_NUM, /* Only for calculating number of types */
 } urma_cmd_user_ctl_type_t;
 
 /* See urma_cmd_get_eid_list_t, consistent with enum uburma_cmd_get_eid_list_type */

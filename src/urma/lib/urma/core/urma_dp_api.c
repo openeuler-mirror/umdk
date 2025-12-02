@@ -7,9 +7,11 @@
  * Note:
  * History: 2021-08-11
  */
+
 #include <stddef.h>
-#include "urma_log.h"
+
 #include "urma_api.h"
+#include "urma_log.h"
 #include "urma_opcode.h"
 #include "urma_private.h"
 #include "urma_provider.h"
@@ -87,29 +89,21 @@ static int check_valid_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr)
     return 0;
 }
 
-urma_status_t urma_write(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
-    urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
-    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uint64_t user_ctx)
+urma_status_t urma_write(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,         //
+                         urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg, //
+                         uint64_t dst, uint64_t src, uint32_t len,                 //
+                         urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
     /* src_tseg could be NULL as src data could be inline data */
-    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || target_jfr == NULL ||
-        dst_tseg == NULL) {
+    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || target_jfr == NULL || dst_tseg == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
-    urma_sge_t src_sge = {
-        .addr = src,
-        .len = len,
-        .tseg = (urma_target_seg_t *)src_tseg
-    };
-    urma_sge_t dst_sge = {
-        .addr = dst,
-        .len = len,
-        .tseg = (urma_target_seg_t *)dst_tseg
-    };
+    urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
+    urma_sge_t dst_sge = {.addr = dst, .len = len, .tseg = (urma_target_seg_t *)dst_tseg};
     urma_jfs_wr_t wr;
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_WRITE;
@@ -123,29 +117,21 @@ urma_status_t urma_write(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
     wr.next = NULL;
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
- 
-urma_status_t urma_read(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
-    urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
-    uint64_t dst, uint64_t src, uint32_t len, urma_jfs_wr_flag_t flag, uint64_t user_ctx)
+
+urma_status_t urma_read(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,         //
+                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg, //
+                        uint64_t dst, uint64_t src, uint32_t len,                 //
+                        urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
-    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || target_jfr == NULL ||
-        dst_tseg == NULL || src_tseg == NULL) {
+    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || target_jfr == NULL || dst_tseg == NULL || src_tseg == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
-    urma_sge_t src_sge = {
-        .addr = src,
-        .len = len,
-        .tseg = (urma_target_seg_t *)src_tseg
-    };
-    urma_sge_t dst_sge = {
-        .addr = dst,
-        .len = len,
-        .tseg = (urma_target_seg_t *)dst_tseg
-    };
+    urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
+    urma_sge_t dst_sge = {.addr = dst, .len = len, .tseg = (urma_target_seg_t *)dst_tseg};
     urma_jfs_wr_t wr;
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_READ;
@@ -160,9 +146,9 @@ urma_status_t urma_read(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
 
-urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
-    urma_target_seg_t *src_tseg, uint64_t src, uint32_t len,
-    urma_jfs_wr_flag_t flag, uint64_t user_ctx)
+urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,        //
+                        urma_target_seg_t *src_tseg, uint64_t src, uint32_t len, //
+                        urma_jfs_wr_flag_t flag, uint64_t user_ctx)
 {
     /* check parameter */
     if (checkout_valid_tjfr(target_jfr) != URMA_SUCCESS) {
@@ -180,11 +166,7 @@ urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
         return URMA_EINVAL;
     }
 
-    urma_sge_t src_sge = {
-        .addr = src,
-        .len = len,
-        .tseg = (urma_target_seg_t *)src_tseg
-    };
+    urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
     urma_jfs_wr_t wr;
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_SEND;
@@ -198,8 +180,8 @@ urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
     return dp_ops->post_jfs_wr(jfs, &wr, &bad_wr);
 }
 
-urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg,
-    uint64_t buf, uint32_t len, uint64_t user_ctx)
+urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg, //
+                        uint64_t buf, uint32_t len, uint64_t user_ctx)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfr(jfr);
@@ -209,11 +191,7 @@ urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg,
         return URMA_EINVAL;
     }
 
-    urma_sge_t src_sge = {
-        .addr = buf,
-        .len = len,
-        .tseg = recv_tseg
-    };
+    urma_sge_t src_sge = {.addr = buf, .len = len, .tseg = recv_tseg};
 
     urma_jfr_wr_t wr;
     urma_jfr_wr_t *bad_wr;
@@ -250,8 +228,7 @@ urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
     return dp_ops->rearm_jfc(jfc, solicited_only);
 }
 
-int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out,
-    urma_jfc_t *jfc[])
+int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[])
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfce(jfce);
     if (dp_ops == NULL || dp_ops->wait_jfc == NULL || jfc_cnt == 0 || jfc == NULL) {

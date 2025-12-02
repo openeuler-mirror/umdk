@@ -8,12 +8,12 @@
  * History: 2022-8-9 inital implementation
  */
 
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include <errno.h>
-#include <endian.h>
 #include <arpa/inet.h>
+#include <endian.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "ub_util.h"
 #include "urma_log.h"
