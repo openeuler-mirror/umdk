@@ -13,7 +13,7 @@ UMQ Abnormal Event is the ability provided by UMQ components to report asynchron
 **Note**:
     If an exception event occurs that occurred with an object, the exception acknowledgment interface (umq_ack_async_event) must be called before the object can be deleted.
 
-**Instructions for Use**:：
+**Instructions for Use**:
     (1) The user calls `umq_async_event_fd_get`, inputting the device's `trans_info` (which must match the `trans_info` passed to `umq_init`) to obtain the file descriptor (fd) for the exception event being monitored.
 
     (2) The user uses the epoll mechanism to monitor the readable events of the fd for the exception event. Once a readable event is available, the user can use the `umq_get_async_event` interface to retrieve the exception event.
