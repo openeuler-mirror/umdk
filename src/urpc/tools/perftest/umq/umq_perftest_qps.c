@@ -42,6 +42,19 @@ static void set_pro_data(umq_buf_t *tmp, umq_perftest_qps_arg_t *qps_arg)
     }
 }
 
+static void handle_bad_buf(umq_buf_t **post_buf, umq_buf_t *bad_buf)
+{
+    if (bad_buf == NULL) {
+        return;
+    }
+
+    if (*post_buf == bad_buf) {
+        *post_buf = NULL;
+        return;
+    }
+    umq_buf_split(*post_buf, bad_buf);
+}
+
 static void umq_perftest_server_run_qps_base_interrupt(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     umq_buf_t *recv_buf = NULL;
@@ -229,9 +242,10 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
             }
 
             if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
-                LOG_PRINT("post rx failed\n");
+                handle_bad_buf(&rx_buf, bad_buf);
+                umq_buf_free(rx_buf);
                 umq_buf_free(bad_buf);
-                bad_buf = NULL;
+                LOG_PRINT("post rx failed\n");
                 return;
             }
             require_rx_cnt -= UMQ_BATCH_SIZE;
@@ -272,9 +286,10 @@ static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, umq_perftest_
             }
 
             if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
-                LOG_PRINT("post rx failed\n");
+                handle_bad_buf(&rx_buf, bad_buf);
+                umq_buf_free(rx_buf);
                 umq_buf_free(bad_buf);
-                bad_buf = NULL;
+                LOG_PRINT("post rx failed\n");
                 return;
             }
             require_rx_cnt -= UMQ_BATCH_SIZE;
@@ -307,6 +322,34 @@ static inline uint32_t get_actual_send_num(umq_buf_t *req_buf, umq_buf_t *bad)
     return num;
 }
 
+static int handle_qps_client_rx_buf(uint64_t umqh, umq_buf_t **rx_buf, uint32_t poll_buf_cnt)
+{
+    umq_buf_t *buf = NULL;
+    uint32_t failed_idx = 0;
+    for (uint32_t i = 0; i < poll_buf_cnt; i++) {
+        buf = rx_buf[i];
+        if (umq_buf_reset(buf) != UMQ_SUCCESS) {
+            failed_idx = i;
+            LOG_PRINT("reset rx buf failed\n");
+            goto FREE_RX_BUF;
+        }
+
+        umq_buf_t *bad_buf = NULL;
+        if (umq_post(umqh, buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            failed_idx = i;
+            LOG_PRINT("post rx failed\n");
+            goto FREE_RX_BUF;
+        }
+    }
+    return UMQ_SUCCESS;
+
+FREE_RX_BUF:
+    for (uint32_t i = failed_idx; i < poll_buf_cnt; i++) {
+        umq_buf_free(rx_buf[i]);
+    }
+    return UMQ_FAIL;
+}
+
 static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     // preparing req data, req data reuse
@@ -323,6 +366,7 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
     umq_buf_t *bad_buf = NULL;
     uint32_t can_send_num = qps_arg->cfg->config.tx_depth;
     umq_buf_t *polled_buf[UMQ_BATCH_SIZE];
+    umq_buf_t *rx_buf[UMQ_BATCH_SIZE];
     uint32_t thread_inx = perftest_thread_index();
     uint64_t start_cycle = get_cycles();
     double cycles_to_units = get_cpu_mhz(false);
@@ -347,6 +391,7 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
                     umq_notify(umqh);
                     goto REARM;
                 }
+                handle_bad_buf(&req_buf, bad_buf);
                 LOG_PRINT("post tx failed\n");
                 goto ERROR;
             }
@@ -364,8 +409,20 @@ REARM:
             goto ERROR;
         }
 POLL:
-        // poll tx cqe and flowctrl win，increase the count
-        ret = umq_poll(umqh, UMQ_IO_ALL, polled_buf, UMQ_BATCH_SIZE);
+        // poll flowctrl win, increase the count
+        ret = umq_poll(umqh, UMQ_IO_RX, rx_buf, UMQ_BATCH_SIZE);
+        if (ret < 0) {
+            LOG_PRINT("poll rx failed\n");
+            goto ERROR;
+        }
+
+        if (handle_qps_client_rx_buf(umqh, rx_buf, ret) != UMQ_SUCCESS) {
+            LOG_PRINT("handle qps client rx buf failed\n");
+            goto ERROR;
+        }
+
+        // poll tx cqe，increase the count
+        ret = umq_poll(umqh, UMQ_IO_TX, polled_buf, UMQ_BATCH_SIZE);
         if (ret < 0) {
             LOG_PRINT("poll failed\n");
             goto ERROR;
@@ -382,6 +439,7 @@ POLL:
 
 ERROR:
     umq_buf_free(req_buf);
+    umq_buf_free(bad_buf);
     perftest_force_quit();
 }
 
@@ -401,6 +459,7 @@ static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_
     umq_buf_t *bad_buf = NULL;
     uint32_t can_send_num = qps_arg->cfg->config.tx_depth;
     umq_buf_t *polled_buf[UMQ_BATCH_SIZE];
+    umq_buf_t *rx_buf[UMQ_BATCH_SIZE];
     uint32_t thread_inx = perftest_thread_index();
     uint64_t start_cycle = get_cycles();
     double cycles_to_units = get_cpu_mhz(false);
@@ -413,6 +472,7 @@ static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_
                     can_send_num -= get_actual_send_num(req_buf, bad_buf);
                     goto POLL;
                 }
+                handle_bad_buf(&req_buf, bad_buf);
                 LOG_PRINT("post tx failed\n");
                 goto ERROR;
             }
@@ -420,8 +480,20 @@ static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_
             umq_notify(umqh);
         }
 POLL:
+        // poll flowctrl win, increase the count
+        ret = umq_poll(umqh, UMQ_IO_RX, rx_buf, UMQ_BATCH_SIZE);
+        if (ret < 0) {
+            LOG_PRINT("poll rx failed\n");
+            goto ERROR;
+        }
+
+        if (handle_qps_client_rx_buf(umqh, rx_buf, ret) != UMQ_SUCCESS) {
+            LOG_PRINT("handle qps client rx buf failed\n");
+            goto ERROR;
+        }
+
         // poll tx cqe, increase the count
-        ret = umq_poll(umqh, UMQ_IO_ALL, polled_buf, UMQ_BATCH_SIZE);
+        ret = umq_poll(umqh, UMQ_IO_TX, polled_buf, UMQ_BATCH_SIZE);
         if (ret < 0) {
             LOG_PRINT("poll tx failed\n");
             goto ERROR;
@@ -438,6 +510,7 @@ POLL:
 
 ERROR:
     umq_buf_free(req_buf);
+    umq_buf_free(bad_buf);
     perftest_force_quit();
 }
 
