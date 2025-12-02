@@ -9,3 +9,4 @@ AlignConsecutiveBitFields: AcrossComments
 AlignConsecutiveMacros: AcrossComments
 AllowShortFunctionsOnASingleLine: None
 AllowShortEnumsOnASingleLine: false
+IndentCaseLabels: true

@@ -9,7 +9,7 @@ add_executable(urma_perftest
     perftest_run_test.c
 )
 
-set_target_properties(urma_ubagg
+set_target_properties(urma_perftest
     PROPERTIES
         C_STANDARD 99
 )

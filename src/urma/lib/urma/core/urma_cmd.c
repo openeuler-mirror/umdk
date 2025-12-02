@@ -1709,34 +1709,34 @@ urma_status_t urma_cmd_get_async_event(urma_context_t *ctx, urma_async_event_t *
     event->priv = NULL;
     event->urma_ctx = ctx;
     switch (arg.event_type) {
-    case URMA_EVENT_JFC_ERR:
-        event->element.jfc = (urma_jfc_t *)arg.event_data;
-        break;
-    case URMA_EVENT_JFS_ERR:
-        event->element.jfs = (urma_jfs_t *)arg.event_data;
-        break;
-    case URMA_EVENT_JFR_ERR:
-    case URMA_EVENT_JFR_LIMIT:
-        event->element.jfr = (urma_jfr_t *)arg.event_data;
-        break;
-    case URMA_EVENT_JETTY_ERR:
-    case URMA_EVENT_JETTY_LIMIT:
-        event->element.jetty = (urma_jetty_t *)arg.event_data;
-        break;
-    case URMA_EVENT_JETTY_GRP_ERR:
-        event->element.jetty_grp = (urma_jetty_grp_t *)arg.event_data;
-        break;
-    case URMA_EVENT_PORT_ACTIVE:
-    case URMA_EVENT_PORT_DOWN:
-        event->element.port_id = (uint32_t)arg.event_data;
-        break;
-    case URMA_EVENT_DEV_FATAL:
-        return URMA_SUCCESS;
-    case URMA_EVENT_EID_CHANGE:
-        event->element.eid_idx = (uint32_t)arg.event_data;
-        break;
-    default:
-        return URMA_FAIL;
+        case URMA_EVENT_JFC_ERR:
+            event->element.jfc = (urma_jfc_t *)arg.event_data;
+            break;
+        case URMA_EVENT_JFS_ERR:
+            event->element.jfs = (urma_jfs_t *)arg.event_data;
+            break;
+        case URMA_EVENT_JFR_ERR:
+        case URMA_EVENT_JFR_LIMIT:
+            event->element.jfr = (urma_jfr_t *)arg.event_data;
+            break;
+        case URMA_EVENT_JETTY_ERR:
+        case URMA_EVENT_JETTY_LIMIT:
+            event->element.jetty = (urma_jetty_t *)arg.event_data;
+            break;
+        case URMA_EVENT_JETTY_GRP_ERR:
+            event->element.jetty_grp = (urma_jetty_grp_t *)arg.event_data;
+            break;
+        case URMA_EVENT_PORT_ACTIVE:
+        case URMA_EVENT_PORT_DOWN:
+            event->element.port_id = (uint32_t)arg.event_data;
+            break;
+        case URMA_EVENT_DEV_FATAL:
+            return URMA_SUCCESS;
+        case URMA_EVENT_EID_CHANGE:
+            event->element.eid_idx = (uint32_t)arg.event_data;
+            break;
+        default:
+            return URMA_FAIL;
     }
     return URMA_SUCCESS;
 }
@@ -1755,30 +1755,30 @@ void urma_cmd_ack_async_event(urma_async_event_t *event)
     }
 
     switch (event->event_type) {
-    case URMA_EVENT_JFC_ERR:
-        jfc = event->element.jfc;
-        ack_one_async_event(&jfc->event_mutex, &jfc->event_cond, &jfc->async_events_acked);
-        break;
-    case URMA_EVENT_JFS_ERR:
-        jfs = event->element.jfs;
-        ack_one_async_event(&jfs->event_mutex, &jfs->event_cond, &jfs->async_events_acked);
-        break;
-    case URMA_EVENT_JFR_ERR:
-    case URMA_EVENT_JFR_LIMIT:
-        jfr = event->element.jfr;
-        ack_one_async_event(&jfr->event_mutex, &jfr->event_cond, &jfr->async_events_acked);
-        break;
-    case URMA_EVENT_JETTY_ERR:
-    case URMA_EVENT_JETTY_LIMIT:
-        jetty = event->element.jetty;
-        ack_one_async_event(&jetty->event_mutex, &jetty->event_cond, &jetty->async_events_acked);
-        break;
-    case URMA_EVENT_JETTY_GRP_ERR:
-        jetty_grp = event->element.jetty_grp;
-        ack_one_async_event(&jetty_grp->event_mutex, &jetty_grp->event_cond, &jetty_grp->async_events_acked);
-        break;
-    default:
-        return;
+        case URMA_EVENT_JFC_ERR:
+            jfc = event->element.jfc;
+            ack_one_async_event(&jfc->event_mutex, &jfc->event_cond, &jfc->async_events_acked);
+            break;
+        case URMA_EVENT_JFS_ERR:
+            jfs = event->element.jfs;
+            ack_one_async_event(&jfs->event_mutex, &jfs->event_cond, &jfs->async_events_acked);
+            break;
+        case URMA_EVENT_JFR_ERR:
+        case URMA_EVENT_JFR_LIMIT:
+            jfr = event->element.jfr;
+            ack_one_async_event(&jfr->event_mutex, &jfr->event_cond, &jfr->async_events_acked);
+            break;
+        case URMA_EVENT_JETTY_ERR:
+        case URMA_EVENT_JETTY_LIMIT:
+            jetty = event->element.jetty;
+            ack_one_async_event(&jetty->event_mutex, &jetty->event_cond, &jetty->async_events_acked);
+            break;
+        case URMA_EVENT_JETTY_GRP_ERR:
+            jetty_grp = event->element.jetty_grp;
+            ack_one_async_event(&jetty_grp->event_mutex, &jetty_grp->event_cond, &jetty_grp->async_events_acked);
+            break;
+        default:
+            return;
     }
 }
 

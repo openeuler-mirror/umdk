@@ -106,7 +106,7 @@ urma_status_t urma_delete_context(urma_context_t *ctx);
 /**
  * Set option of urma context.
  * @param[in] [Required] ctx: handle of the created context.
- * Return: 0 on success, other value on error.
+ * Return: 0 on success, other value on error
  */
 urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name,
     const void *opt_value, size_t opt_len);
