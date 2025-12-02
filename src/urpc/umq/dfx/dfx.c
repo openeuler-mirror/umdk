@@ -31,7 +31,7 @@ static void umq_dfx_process_perf_cmd(umq_dfx_cmd_t *cmd, umq_dfx_result_t *resul
     umq_perf_cmd_id_t cmd_id = cmd->perf_cmd_id;
     switch (cmd_id) {
         case UMQ_PERF_CMD_START:
-            result_ctl->err_code = umq_perf_start(cmd->perf_in_parm.thresh_array, cmd->perf_in_parm.thresh_num);
+            result_ctl->err_code = umq_perf_start(cmd->perf_in_param.thresh_array, cmd->perf_in_param.thresh_num);
             result_ctl->perf_cmd_id = UMQ_PERF_CMD_START;
             break;
         case UMQ_PERF_CMD_STOP:
@@ -43,7 +43,7 @@ static void umq_dfx_process_perf_cmd(umq_dfx_cmd_t *cmd, umq_dfx_result_t *resul
             result_ctl->perf_cmd_id = UMQ_PERF_CMD_CLEAR;
             break;
         case UMQ_PERF_CMD_GET_RESULT:
-            result_ctl->err_code = umq_perf_info_get(&result_ctl->perf_out_parm);
+            result_ctl->err_code = umq_perf_info_get(&result_ctl->perf_out_param);
             result_ctl->perf_cmd_id = UMQ_PERF_CMD_GET_RESULT;
             break;
         case UMQ_PERF_CMD_MAX:

@@ -273,11 +273,11 @@ static int umq_perftest_start_perf(umq_perftest_config_t *cfg)
         umq_dfx_cmd_t dfx_cmd = {
             .module_id = UMQ_DFX_MODULE_PERF,
             .perf_cmd_id = UMQ_PERF_CMD_START,
-            .perf_in_parm = {
+            .perf_in_param = {
                 .thresh_num = cfg->thresh_num,
             },
         };
-        (void)memcpy(dfx_cmd.perf_in_parm.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
+        (void)memcpy(dfx_cmd.perf_in_param.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
         umq_dfx_result_t result_ctl = {0};
         umq_dfx_cmd_process(&dfx_cmd, &result_ctl);
         if (result_ctl.err_code != 0) {
@@ -318,7 +318,7 @@ static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
             LOG_PRINT("malloc perf info str failed\n");
             return;
         }
-        umq_perf_infos_t *perf_record = (umq_perf_infos_t *)result_ctl.perf_out_parm;
+        umq_perf_infos_t *perf_record = (umq_perf_infos_t *)result_ctl.perf_out_param;
         uint64_t *thresh_array = cfg->thresh_array;
         uint32_t thresh_num = cfg->thresh_num;
         int str_size = umq_perftest_perf_info_string_get(perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE,
