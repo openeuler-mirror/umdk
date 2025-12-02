@@ -1477,6 +1477,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
             if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
                 (void)fprintf(stderr, "Failed to bind jetty: %u!\n", i);
                 urma_unimport_jetty(ctx->import_tjetty[i]);
+                ctx->import_tjetty[i] = NULL;
                 goto disconnect_jetty;
             }
         }
