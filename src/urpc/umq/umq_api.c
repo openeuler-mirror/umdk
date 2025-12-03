@@ -39,7 +39,10 @@ typedef struct umq_framework {
 } umq_framework_t;
 
 static bool g_umq_inited = false;
-
+static struct {
+    umq_log_config_t cfg;
+    bool is_set;
+} g_umq_log_config;
 static umq_init_cfg_t *g_umq_config;
 static pthread_mutex_t g_umq_config_mutex_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -247,6 +250,9 @@ int umq_log_config_set(umq_log_config_t *config)
     }
     (void)pthread_mutex_unlock(&log_config->log_lock);
 
+    g_umq_log_config.cfg = *config;
+    g_umq_log_config.is_set = true;
+
     return UMQ_SUCCESS;
 }
 
@@ -281,6 +287,10 @@ static void framework_uninit(void)
 
         if ((umq_fw->ctx != NULL) && (umq_fw->tp_ops != NULL) && (umq_fw->tp_ops->umq_tp_uninit != NULL)) {
             umq_fw->tp_ops->umq_tp_uninit(umq_fw->ctx);
+
+            if (umq_fw->tp_ops->umq_tp_log_config_reset != NULL) {
+                (void)umq_fw->tp_ops->umq_tp_log_config_reset();
+            }
         }
         umq_fw->ctx = NULL;
         umq_fw->tp_ops = NULL;
@@ -308,6 +318,7 @@ void umq_uninit(void)
         free(g_umq_config);
         g_umq_config = NULL;
     }
+    g_umq_log_config.is_set = false;
     g_umq_inited = false;
 }
 
@@ -341,10 +352,16 @@ static int umq_framework_init(umq_framework_t *umq_fw, umq_init_cfg_t *cfg)
         goto UNLOAD_OPS_GET_FUNC;
     }
 
+    // register log func if needed
+    if (g_umq_log_config.is_set && umq_fw->tp_ops->umq_tp_log_config_set != NULL) {
+        if (umq_fw->tp_ops->umq_tp_log_config_set(&g_umq_log_config.cfg) != UMQ_SUCCESS) {
+            goto PUT_TP_OPS;
+        }
+    }
     umq_fw->ctx = umq_fw->tp_ops->umq_tp_init(cfg);
     if (umq_fw->ctx == NULL) {
         UMQ_VLOG_ERR("tp init failed\n");
-        goto PUT_TP_OPS;
+        goto RESET_LOG;
     }
 
     if (load_symbol(umq_fw->dlhandler,
@@ -368,6 +385,11 @@ UNINIT_UMQ_TP:
     if (umq_fw->tp_ops->umq_tp_uninit != NULL) {
         umq_fw->tp_ops->umq_tp_uninit(umq_fw->ctx);
         umq_fw->ctx = NULL;
+    }
+
+RESET_LOG:
+    if (umq_fw->tp_ops->umq_tp_log_config_reset != NULL) {
+        (void)umq_fw->tp_ops->umq_tp_log_config_reset();
     }
 
 PUT_TP_OPS:
