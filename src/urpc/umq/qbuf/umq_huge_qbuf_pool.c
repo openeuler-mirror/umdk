@@ -473,7 +473,7 @@ UNREGISTER_HUGE_SEG:
         (void)unregister_seg_func(ctx, pool->pool_idx_shift + i);
     }
     pool = &g_huge_pool_ctx.pool[HUGE_QBUF_POOL_SIZE_TYPE_BIG];
-    failed_idx =  pool->pool_idx;
+    failed_idx = pool->pool_idx;
 
 UNREGISTER_BIG_SEG:
     pool = &g_huge_pool_ctx.pool[HUGE_QBUF_POOL_SIZE_TYPE_BIG];
@@ -481,7 +481,7 @@ UNREGISTER_BIG_SEG:
         (void)unregister_seg_func(ctx, pool->pool_idx_shift + i);
     }
     pool = &g_huge_pool_ctx.pool[HUGE_QBUF_POOL_SIZE_TYPE_MID];
-    failed_idx =  pool->pool_idx;
+    failed_idx = pool->pool_idx;
 
 UNREGISTER_MID_SEG:
     pool = &g_huge_pool_ctx.pool[HUGE_QBUF_POOL_SIZE_TYPE_MID];

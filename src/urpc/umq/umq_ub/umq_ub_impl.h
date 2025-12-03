@@ -40,8 +40,8 @@ typedef enum umq_imm_protocol_type {
 typedef struct umq_imm_head {
     uint32_t version : 8;
     uint32_t type : 8;
-    uint32_t mem_interval : 3;
-    uint32_t recv : 5;
+    uint32_t mem_interval : 4;
+    uint32_t recv : 4;
     uint32_t mempool_num : 8;
 } umq_imm_head_t;
 
