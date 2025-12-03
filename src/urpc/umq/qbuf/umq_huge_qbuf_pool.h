@@ -22,8 +22,9 @@ extern "C" {
 #endif
 
 enum HUGE_QBUF_POOL_SIZE_TYPE {
-    HUGE_QBUF_POOL_SIZE_TYPE_MID, // Corresponding to 256KB size
-    HUGE_QBUF_POOL_SIZE_TYPE_BIG, // Corresponding to 8MB size
+    HUGE_QBUF_POOL_SIZE_TYPE_MID,
+    HUGE_QBUF_POOL_SIZE_TYPE_BIG,
+    HUGE_QBUF_POOL_SIZE_TYPE_HUGE,
     HUGE_QBUF_POOL_SIZE_TYPE_MAX,
 };
 
@@ -49,6 +50,8 @@ void umq_huge_qbuf_free(umq_buf_list_t *list);
 int umq_huge_qbuf_register_seg(uint8_t *ctx,
     register_seg_callback_t register_seg_func, unregister_seg_callback_t unregister_seg_func);
 void umq_huge_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func);
+enum HUGE_QBUF_POOL_SIZE_TYPE umq_huge_qbuf_get_type_for_size(uint32_t buf_size);
+uint32_t umq_huge_qbuf_get_size_for_type(enum HUGE_QBUF_POOL_SIZE_TYPE type);
 
 #ifdef __cplusplus
 }

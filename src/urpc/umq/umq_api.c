@@ -432,7 +432,7 @@ int umq_init(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR("rand seed init failed\n");
         return -UMQ_ERR_EINVAL;
     }
-    
+
     if (umq_buf_size_pow_small_set(cfg->block_cfg.small_block_size) != UMQ_SUCCESS) {
         return -UMQ_ERR_EINVAL;
     }
@@ -600,14 +600,14 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     if (umqh == UMQ_INVALID_HANDLE) {
         umq_buf_list_t head;
         QBUF_LIST_INIT(&head);
-        if (request_size + headroom_size + factor < umq_buf_size_middle()) {
+        uint32_t buf_size = request_size + headroom_size + factor;
+
+        if (buf_size < umq_buf_size_middle()) {
             if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }
         } else {
-            enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= umq_buf_size_big())
-                                                     ? HUGE_QBUF_POOL_SIZE_TYPE_BIG
-                                                     : HUGE_QBUF_POOL_SIZE_TYPE_MID;
+            enum HUGE_QBUF_POOL_SIZE_TYPE type = umq_huge_qbuf_get_type_for_size(buf_size);
             if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }
@@ -1040,7 +1040,7 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
         UMQ_VLOG_ERR("trans mode %u ops not support\n", umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
-    
+
     return umq_fw->tp_ops->umq_tp_get_topo(route, route_list);
 }
 
