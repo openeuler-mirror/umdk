@@ -183,7 +183,7 @@ static int ums_client_create_resources(struct ums_sock *ums,
 
 	ums_init_ini_info(ini, aclc);
 
-	if (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) {
+	if (ini->ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) {
 		if (ums_ubcore_find_ub_dev_by_eid(&aclc->r0.peer_eid, ini) != 0) {
 			UMS_LOGE("Find ub device by eid failed, eid: %pI6c.", aclc->r0.peer_eid.raw);
 			return UMS_CLC_DECL_NOUMSDEV;

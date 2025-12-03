@@ -495,10 +495,10 @@ static int ums_clc_init_proposal(struct ums_sock *ums, struct ums_clc_msg_propos
 	if (ums_indicated(ini->ums_type_v1)) {
 		(void)memcpy(pclc_base->lcl.id_for_peer, g_local_systemid, UMS_SYSTEMID_LEN);
 
-		if (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) {
+		if (ini->ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) {
 			/* Reuse the pclc_base->lcl.eid field to transmit src_v_eid to the ums server. */
 			(void)memcpy(pclc_base->lcl.eid.raw, ini->src_v_eid.raw, UMS_EID_SIZE);
-			pclc_base->lcl.topo_eid_enable = UMS_UBCORE_GET_TOPO_EID_ENABLE;
+			pclc_base->lcl.ubcore_route_enable = UMS_UBCORE_ROUTE_ENABLE;
 		} else {
 			(void)memcpy(pclc_base->lcl.eid.raw, ini->eid.raw, UMS_EID_SIZE);
 		}
@@ -650,7 +650,7 @@ static int ums_clc_send_confirm_accept(struct ums_sock *ums,
 	clc->hdr.length = htons(UMS_CLC_ACCEPT_CONFIRM_LEN);
 
 	if ((clc->hdr.type == UMS_CLC_ACCEPT) &&
-		(ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE)) {
+		(ini->ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE)) {
 		(void)memcpy(clc->r0.peer_eid.raw, ini->peer_eid.raw, UMS_EID_SIZE);
 	}
 

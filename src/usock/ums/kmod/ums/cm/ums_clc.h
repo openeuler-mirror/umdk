@@ -92,11 +92,11 @@ struct ums_clc_msg_local {            /* header2 of clc messages */
 	u8 reserved1[4];
 	u8 mac[ETH_ALEN];                        /* mac of ub_device port */
 #if defined(__BIG_ENDIAN_BITFIELD)
-	u8 topo_eid_enable : 1;
+	u8 ubcore_route_enable : 1;
 	u8 reserved2 : 7;
 #elif defined(__LITTLE_ENDIAN_BITFIELD)
 	u8 reserved2 : 7;
-	u8 topo_eid_enable : 1;
+	u8 ubcore_route_enable : 1;
 #endif
 	u8 reserved3[3];
 };

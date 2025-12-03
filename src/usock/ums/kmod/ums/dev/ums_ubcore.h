@@ -41,8 +41,8 @@
 /* max. # of compl. queue elements in 1 poll */
 #define UMS_WR_MAX_POLL_CQE 64
 
-#define UMS_UBCORE_GET_TOPO_EID_DISABLE 0
-#define UMS_UBCORE_GET_TOPO_EID_ENABLE 1
+#define UMS_UBCORE_ROUTE_DISABLE 0
+#define UMS_UBCORE_ROUTE_ENABLE 1
 
 struct ums_hashinfo {
 	rwlock_t lock;

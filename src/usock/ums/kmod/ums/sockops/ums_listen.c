@@ -167,8 +167,8 @@ static int ums_find_ub_device_serv(struct ums_sock *new_ums,
 	/* prepare UB check */
 	(void)memcpy(ini->peer_systemid, pclc->lcl.id_for_peer, UMS_SYSTEMID_LEN);
 
-	if (pclc->lcl.topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) {
-		ini->topo_eid_enable = pclc->lcl.topo_eid_enable;
+	if (pclc->lcl.ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) {
+		ini->ubcore_route_enable = pclc->lcl.ubcore_route_enable;
 		(void)memcpy(ini->dst_v_eid.raw, pclc->lcl.eid.raw, UMS_EID_SIZE);
 	} else {
 		(void)memcpy(ini->peer_eid.raw, pclc->lcl.eid.raw, UMS_EID_SIZE);
@@ -261,7 +261,7 @@ static int ums_listen_ub_finish(struct ums_sock *new_ums, struct ums_clc_msg_acc
 	}
 	ini->tjetty_id = ntohl(cclc->r0.jetty_id);
 
-	if ((ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE) &&
+	if ((ini->ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) &&
 		(!ums_ubcore_check_if_eid_match(&ini->peer_eid, &cclc->r0.lcl.eid))) {
 		UMS_LOGE("Expected peer_eid: %pI6c and received peer_eid: %pI6c in clc confirm msg do not match.",
 			ini->peer_eid.raw, cclc->r0.lcl.eid.raw);

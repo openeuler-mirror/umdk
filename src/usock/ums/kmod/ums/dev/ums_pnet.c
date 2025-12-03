@@ -910,7 +910,7 @@ static void ums_pnet_find_ub_dev(struct net_device *netdev, struct sock *sk,
 {
 	struct ums_ubcore_device *ubdev;
 
-	if (ini->is_server && (ini->topo_eid_enable == UMS_UBCORE_GET_TOPO_EID_ENABLE)) {
+	if (ini->is_server && (ini->ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE)) {
 		ums_ubcore_serv_find_ub_dev_non_netdev(ini);
 		return;
 	}

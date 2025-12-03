@@ -337,11 +337,11 @@ struct ums_init_info {
 
 	bool is_server;
 	/*
-	 * If topo_eid_enable is true, then the src eid and dst eid
-	 * required for establishing the link is obtained by the source virtual
-	 * eid and destination virtual eid.
+	 * If ubcore_route_enable is true, then the src eid and dst eid
+	 * are obtained through ubcore_get_route_list(), with the input
+	 * parameters being the source virtual eid and destination virtual eid.
 	 */
-	u8 topo_eid_enable;
+	u8 ubcore_route_enable;
 	union ubcore_eid src_v_eid; /* Source virtual eid, refer to the source bonding eid. */
 	union ubcore_eid dst_v_eid; /* Destination virtual eid, refer to the destination bonding eid. */
 };
