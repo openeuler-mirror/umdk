@@ -400,6 +400,8 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_POLL_RX_EMPTY,
     /* record point for transport read in umq_dequeue and umq_poll */
     UMQ_PERF_RECORD_TRANSPORT_READ,
+    /* record point for transport write in umq_dequeue and umq_poll */
+    UMQ_PERF_RECORD_TRANSPORT_WRITE,
     /* record point for transport send imm in umq_dequeue and umq_poll */
     UMQ_PERF_RECORD_TRANSPORT_SEND_IMM,
     /* record point for transport write in umq_notify */
