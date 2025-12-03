@@ -4408,7 +4408,7 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         return -UMQ_ERR_EINVAL;
     }
 
-    uvs_route_t uvs_route;
+    uvs_route_t uvs_route = {.flag.value = route->flag.value};
     uvs_route_list_t uvs_route_list;
     (void)memcpy(&uvs_route.src, &route->src, sizeof(umq_eid_t));
     (void)memcpy(&uvs_route.dst, &route->dst, sizeof(umq_eid_t));
@@ -4419,7 +4419,7 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         return ret;
     }
 
-    if (uvs_route_list.len >= UMQ_MAX_ROUTES || uvs_route_list.len >= UVS_MAX_ROUTES) {
+    if (uvs_route_list.len > UMQ_MAX_ROUTES || uvs_route_list.len > UVS_MAX_ROUTES) {
         UMQ_VLOG_ERR("number of routes exceeds the maximum limit\n");
         return -UMQ_ERR_ENOMEM;
     }
