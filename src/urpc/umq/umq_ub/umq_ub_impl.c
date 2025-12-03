@@ -3289,6 +3289,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
     }
 
     urma_target_jetty_t *tjetty = bind_ctx->tjetty;
+    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     (void)urma_unbind_jetty(queue->jetty);
     (void)urma_unimport_jetty(tjetty);
     (void)urma_unimport_seg(queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]);
@@ -3300,7 +3301,6 @@ int umq_ub_unbind_impl(uint64_t umqh)
         umq_flush_rx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
     }
 
-    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     free(queue->bind_ctx);
     queue->bind_ctx = NULL;
     return UMQ_SUCCESS;
