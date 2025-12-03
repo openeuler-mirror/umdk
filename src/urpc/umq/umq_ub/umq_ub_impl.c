@@ -790,7 +790,7 @@ static inline void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cn
 
 static int huge_qbuf_pool_memory_init(uint8_t mempool_id, enum HUGE_QBUF_POOL_SIZE_TYPE type, void **buffer_addr)
 {
-    uint32_t align_size = (type == HUGE_QBUF_POOL_SIZE_TYPE_MID) ? umq_buf_size_middle() : umq_buf_size_big();
+    uint32_t align_size = umq_huge_qbuf_get_size_for_type(type);
     uint32_t total_len = align_size * HUGE_QBUF_BUFFER_INC_BATCH;
     void *addr = (void *)memalign(align_size, total_len);
     if (addr == NULL) {
@@ -878,6 +878,20 @@ int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
         return ret;
     }
 
+    huge_qbuf_pool_cfg_t huge_cfg = {
+        .total_size = umq_buf_size_huge() * HUGE_QBUF_BUFFER_INC_BATCH,
+        .data_size = umq_buf_size_huge(),
+        .headroom_size = cfg->headroom_size,
+        .mode = cfg->buf_mode,
+        .type = HUGE_QBUF_POOL_SIZE_TYPE_HUGE,
+        .memory_init_callback = huge_qbuf_pool_memory_init,
+        .memory_uninit_callback = huge_qbuf_pool_memory_uninit,
+    };
+    ret = umq_huge_qbuf_config_init(&huge_cfg);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("initialize configuration for huge qbuf pool(big) failed\n");
+        return ret;
+    }
     return UMQ_SUCCESS;
 }
 
@@ -1465,14 +1479,14 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
     umq_buf_list_t head;
 
     QBUF_LIST_INIT(&head);
-    if (request_size + headroom_size + factor < umq_buf_size_middle()) {
+    uint32_t buf_size = request_size + headroom_size + factor;
+
+    if (buf_size < umq_buf_size_middle()) {
         if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
     } else {
-        enum HUGE_QBUF_POOL_SIZE_TYPE type = (request_size + headroom_size + factor >= umq_buf_size_big())
-                                                 ? HUGE_QBUF_POOL_SIZE_TYPE_BIG
-                                                 : HUGE_QBUF_POOL_SIZE_TYPE_MID;
+        enum HUGE_QBUF_POOL_SIZE_TYPE type = umq_huge_qbuf_get_type_for_size(buf_size);
         if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
@@ -2760,6 +2774,8 @@ static inline uint32_t umq_read_alloc_mem_size(umq_size_interval_t size_interval
         return umq_buf_size_middle();
     } else if (size_interval == UMQ_SIZE_MID_BIG_INTERVAL) {
         return umq_buf_size_big();
+    } else if (size_interval == UMQ_SIZE_BIG_HUGE_INTERVAL) {
+        return umq_buf_size_huge();
     }
 
     UMQ_LIMIT_VLOG_ERR("size_interval: %d is invalid\n", size_interval);
@@ -2879,7 +2895,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
         dst_sge[i].len = src_buf_length;
         dst_sge[i].user_tseg = NULL;
         dst_sge[i].tseg = tseg_list[tmp_buf->mempool_id];
-        
+
         src_sge[i].addr = ref_sge[i].addr;
         src_sge[i].len = src_buf_length;
         src_sge[i].tseg = queue->imported_tseg_list[ref_sge[i].mempool_id];
