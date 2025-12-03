@@ -33,7 +33,7 @@
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
 #define DEFAULT_ERR_TIMEOUT 2
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
-#define UMQ_MAX_SGE_NUM 16
+#define UMQ_MAX_SGE_NUM 6
 #define UMQ_REV_PULL_DONE 1
 #define UMQ_FLUSH_MAX_RETRY_TIMES 10000
 #define UMQ_MAX_ID_NUM (1 << 16)
@@ -2544,6 +2544,54 @@ static uint16_t umq_ub_tx_failed_num(urma_jfs_wr_t *urma_wr, uint16_t wr_index, 
     return 0;
 }
 
+static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_ptr, urma_sge_t *sges_ptr,
+                          uint32_t sge_num)
+{
+    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
+    switch (buf_pro->opcode) {
+        case UMQ_OPC_READ:
+            if (buf_pro->remote_sge.length > buffer->total_data_size) {
+                UMQ_LIMIT_VLOG_ERR("local buffer size[%u] is smaller than remote buffer size[%u]\n",
+                                   buffer->total_data_size, buf_pro->remote_sge.length);
+                return -UMQ_ERR_EINVAL;
+            }
+            urma_sge_t src_sge = {
+                .addr = buf_pro->remote_sge.addr,
+                .len = buf_pro->remote_sge.length,
+                .tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID],
+            };
+            urma_wr_ptr->rw.src.sge = &src_sge;
+            urma_wr_ptr->rw.src.num_sge = 1;
+            urma_wr_ptr->rw.dst.sge = sges_ptr;
+            urma_wr_ptr->rw.dst.num_sge = sge_num;
+            break;
+        case UMQ_OPC_WRITE:
+            if (buf_pro->remote_sge.length < buffer->total_data_size) {
+                UMQ_LIMIT_VLOG_ERR("local buffer size[%u] is larger than remote buffer size[%u]\n",
+                                   buffer->total_data_size, buf_pro->remote_sge.length);
+                return -UMQ_ERR_EINVAL;
+            }
+            urma_sge_t dst_sge = {
+                .addr = buf_pro->remote_sge.addr,
+                .len = buf_pro->remote_sge.length,
+                .tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
+            };
+            urma_wr_ptr->rw.dst.sge = &dst_sge;
+            urma_wr_ptr->rw.dst.num_sge = 1;
+            urma_wr_ptr->rw.src.sge = sges_ptr;
+            urma_wr_ptr->rw.src.num_sge = sge_num;
+            break;
+        case UMQ_OPC_SEND:
+        case UMQ_OPC_SEND_IMM:
+            urma_wr_ptr->send.src.sge = sges_ptr;
+            urma_wr_ptr->send.src.num_sge = sge_num;
+            break;
+        default:
+            break;
+    }
+    return UMQ_SUCCESS;
+}
+
 static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
     int ret = UMQ_SUCCESS;
@@ -2571,7 +2619,6 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
     *bad_qbuf = NULL;
     while (buffer) {
-        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
         uint32_t rest_size = buffer->total_data_size;
         if (rest_size > max_send_size) {
             UMQ_LIMIT_VLOG_ERR("total data size[%u] exceed max send size[%u]\n", rest_size, max_send_size);
@@ -2581,7 +2628,10 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         }
         sges_ptr = sges[wr_index];
         uint32_t sge_num = 0;
+        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
+        umq_opcode_t opcode = buf_pro->opcode;
         uint64_t user_ctx = (uint64_t)(uintptr_t)buffer;
+        umq_buf_t *tmp_buf = buffer;
         while (buffer && rest_size > 0) { // try to add up to total_size
             if (sge_num++ >= max_sge_num) {
                 UMQ_LIMIT_VLOG_ERR("sge num exceed max sge num[%u]\n", max_sge_num);
@@ -2612,17 +2662,20 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             ret = -UMQ_ERR_ENOMEM;
             goto ERROR;
         }
+        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, sges[wr_index], sge_num);
+        if (ret != UMQ_SUCCESS) {
+            *bad_qbuf = qbuf;
+            goto ERROR;
+        }
         urma_wr_ptr->user_ctx = user_ctx;
-        urma_wr_ptr->send.src.sge = sges[wr_index];
-        urma_wr_ptr->send.src.num_sge = sge_num;
-        urma_wr_ptr->opcode = transform_op_code(buf_pro->opcode);
+        urma_wr_ptr->opcode = transform_op_code(opcode);
         urma_wr_ptr->flag.value = buf_pro->flag.value;
         urma_wr_ptr->tjetty = tjetty;
         if (urma_wr_ptr->opcode == URMA_OPC_SEND_IMM) {
             urma_wr_ptr->send.imm_data = buf_pro->imm_data & umq_ub_user_imm_bit_fields(&queue->flow_control);
         }
-        opcode_consume_rqe = (buf_pro->opcode == UMQ_OPC_SEND || buf_pro->opcode == UMQ_OPC_SEND_IMM ||
-            buf_pro->opcode == UMQ_OPC_WRITE_IMM);
+        opcode_consume_rqe = (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM ||
+                              opcode == UMQ_OPC_WRITE_IMM);
         umq_ub_fill_tx_imm(&queue->flow_control, urma_wr_ptr, buf_pro);
         urma_wr_ptr++;
         (urma_wr_ptr - 1)->next = urma_wr_ptr;
