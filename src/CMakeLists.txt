@@ -18,6 +18,6 @@ if(NOT "${BUILD_ALL}" STREQUAL "disable" OR "${BUILD_URPC}" STREQUAL "enable")
     add_subdirectory(urpc)
 endif()
 
-if("${BUILD_UMS}" STREQUAL "enable")
+if(NOT "${BUILD_ALL}" STREQUAL "disable" OR "${BUILD_UMS}" STREQUAL "enable")
     add_subdirectory(usock)
 endif()
