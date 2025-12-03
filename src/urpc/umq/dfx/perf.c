@@ -51,7 +51,6 @@ int umq_perf_init(void)
 void umq_perf_uninit(void)
 {
     if (g_umq_perf_record_ctx == NULL) {
-        UMQ_VLOG_ERR("umq perf has not been inited\n");
         return;
     }
     g_umq_perf_record_enable = false;
