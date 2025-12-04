@@ -1270,6 +1270,10 @@ static int umq_ub_eid_id_get(
 
 static int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx)
 {
+    if (remote_imported_info == NULL || ctx == NULL || ctx->tjetty == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
     urma_eid_t *remote_eid = &ctx->tjetty->id.eid;
     uint32_t hash = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
     bool find = false;
@@ -1322,11 +1326,6 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         goto UNIMPORT_SEG;
     }
 
-    if (umq_ub_eid_id_get(queue->dev_ctx->remote_imported_info, info, &ctx->remote_eid_id) != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("get eid id failed\n");
-        goto FREE_CTX;
-    }
-
     ctx->remote_notify_addr = info->notify_buf;
 
     urma_rjetty_t rjetty = {
@@ -1340,7 +1339,7 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &info->token);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR("import jetty failed\n");
-        goto RELEASE_BIND_ID;
+        goto FREE_CTX;
     }
 
     urma_status_t status = urma_bind_jetty(queue->jetty, tjetty);
@@ -1358,15 +1357,22 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 
     ctx->tjetty = tjetty;
     queue->bind_ctx = ctx;
+
+    if (umq_ub_eid_id_get(queue->dev_ctx->remote_imported_info, info, &ctx->remote_eid_id) != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("get eid id failed\n");
+        goto UNBIND_JETTY;
+    }
+
     uint32_t max_msg_size = queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
     queue->remote_rx_buf_size = (max_msg_size > info->rx_buf_size) ? info->rx_buf_size : max_msg_size;
     return UMQ_SUCCESS;
 
+UNBIND_JETTY:
+    queue->bind_ctx = NULL;
+    urma_unbind_jetty(queue->jetty);
+
 UNIMPORT_JETTY:
     urma_unimport_jetty(tjetty);
-
-RELEASE_BIND_ID:
-    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, ctx);
 
 FREE_CTX:
     free(ctx);
