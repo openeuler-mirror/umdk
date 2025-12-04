@@ -205,7 +205,7 @@ AutoReqProv:    on
 This package contains umq_perftest and related UMQ tools.
 %endif
 
-%if %{with ums}
+%if %{build_all} || %{with ums}
 %package ums
 Summary:        kmod file of ums
 BuildRequires:  glib2-devel, libnl3-devel
@@ -443,7 +443,7 @@ fi
     %{_includedir}/ub/umdk/ulock/dlock/dlock_server_api.h
 %endif
 
-%if %{with ums}
+%if %{build_all} || %{with ums}
 %files ums
 %defattr(-,root,root)
     %dir /lib/modules/%{kernel_version}/extra/ums/
