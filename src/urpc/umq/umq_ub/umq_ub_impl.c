@@ -2565,7 +2565,7 @@ static uint16_t umq_ub_tx_failed_num(urma_jfs_wr_t *urma_wr, uint16_t wr_index, 
 }
 
 static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_ptr, urma_sge_t *sges_ptr,
-                          uint32_t sge_num)
+                          uint32_t sge_num, urma_sge_t *src_sge, urma_sge_t *dst_sge)
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
     switch (buf_pro->opcode) {
@@ -2575,12 +2575,10 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
                                    buffer->total_data_size, buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
-            urma_sge_t src_sge = {
-                .addr = buf_pro->remote_sge.addr,
-                .len = buf_pro->remote_sge.length,
-                .tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID],
-            };
-            urma_wr_ptr->rw.src.sge = &src_sge;
+            src_sge->addr = buf_pro->remote_sge.addr;
+            src_sge->len = buf_pro->remote_sge.length;
+            src_sge->tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID];
+            urma_wr_ptr->rw.src.sge = src_sge;
             urma_wr_ptr->rw.src.num_sge = 1;
             urma_wr_ptr->rw.dst.sge = sges_ptr;
             urma_wr_ptr->rw.dst.num_sge = sge_num;
@@ -2591,12 +2589,10 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
                                    buffer->total_data_size, buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
-            urma_sge_t dst_sge = {
-                .addr = buf_pro->remote_sge.addr,
-                .len = buf_pro->remote_sge.length,
-                .tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
-            };
-            urma_wr_ptr->rw.dst.sge = &dst_sge;
+            dst_sge->addr = buf_pro->remote_sge.addr;
+            dst_sge->len = buf_pro->remote_sge.length;
+            dst_sge->tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID];
+            urma_wr_ptr->rw.dst.sge = dst_sge;
             urma_wr_ptr->rw.dst.num_sge = 1;
             urma_wr_ptr->rw.src.sge = sges_ptr;
             urma_wr_ptr->rw.src.num_sge = sge_num;
@@ -2627,6 +2623,7 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
     urma_jfs_wr_t *urma_wr_ptr = urma_wr;
     urma_sge_t sges[UMQ_POST_POLL_BATCH][max_sge_num];
+    urma_sge_t src_sge, dst_sge;
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty;
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_sge_t *sges_ptr;
@@ -2682,7 +2679,7 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             ret = -UMQ_ERR_ENOMEM;
             goto ERROR;
         }
-        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, sges[wr_index], sge_num);
+        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, sges[wr_index], sge_num, &src_sge, &dst_sge);
         if (ret != UMQ_SUCCESS) {
             *bad_qbuf = qbuf;
             goto ERROR;
