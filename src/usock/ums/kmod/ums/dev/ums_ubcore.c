@@ -244,9 +244,57 @@ void ums_ubcore_clnt_find_src_v_eid_and_ub_dev(struct ums_init_info *ini)
 		return;
 	}
 
-	ini->topo_eid_enable = UMS_UBCORE_GET_TOPO_EID_ENABLE;
+	ini->ubcore_route_enable = UMS_UBCORE_ROUTE_ENABLE;
 	UMS_LOGI_LIMITED("Get source virtual eid succeeded, dev_name: %s, src_v_eid: %pI6c.",
 		ini->ub_dev->ub_dev->dev_name, ini->src_v_eid.raw);
+}
+
+static int ums_ubcore_get_route_eid(union ubcore_eid *src_v_eid, union ubcore_eid *dst_v_eid,
+	union ubcore_eid *src_p_eid, union ubcore_eid *dst_p_eid)
+{
+	int ret = -1;
+	uint32_t i = 0;
+	uint32_t route_idx = 0;
+	bool route_found = false;
+	uint32_t min_hops = UINT32_MAX;
+	struct ubcore_route_list route_list = {0};
+
+	struct ubcore_route route_v = {
+		.src = *src_v_eid,
+		.dst = *dst_v_eid,
+	};
+
+	ret = ubcore_get_route_list(&route_v, &route_list);
+	if (ret != 0) {
+		UMS_LOGE("ubcore_get_route_list failed, ret: %d, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
+			ret, src_v_eid->raw, dst_v_eid->raw);
+		return -ENETUNREACH;
+	}
+
+	for (i = 0; i < route_list.route_num; i++) {
+		if (route_list.buf[i].hops >= min_hops) {
+			continue;
+		}
+
+		if (route_list.buf[i].flag.bs.rtp == 0) { /* only supports UBCORE_RTP */
+			continue;
+		}
+
+		route_found = true;
+		route_idx = i;
+		if (route_list.buf[i].hops == 0) {
+			break;
+		}
+		min_hops = route_list.buf[i].hops;
+	}
+
+	if (!route_found) {
+		return -ENETUNREACH;
+	}
+
+	*src_p_eid = route_list.buf[route_idx].src;
+	*dst_p_eid = route_list.buf[route_idx].dst;
+	return 0;
 }
 
 void ums_ubcore_serv_find_ub_dev_non_netdev(struct ums_init_info *ini)
@@ -259,9 +307,9 @@ void ums_ubcore_serv_find_ub_dev_non_netdev(struct ums_init_info *ini)
 	}
 	ini->ub_dev = NULL;
 
-	if (ubcore_get_topo_eid(UBCORE_RTP, &ini->src_v_eid, &ini->dst_v_eid, &local_eid, &peer_eid) != 0) {
-		UMS_LOGE("ubcore_get_topo_eid failed, tp_type: %u, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
-			UBCORE_RTP, ini->src_v_eid.raw, ini->dst_v_eid.raw);
+	if (ums_ubcore_get_route_eid(&ini->src_v_eid, &ini->dst_v_eid, &local_eid, &peer_eid) != 0) {
+		UMS_LOGE("Get ubcore route eid failed, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
+			ini->src_v_eid.raw, ini->dst_v_eid.raw);
 		return;
 	}
 
