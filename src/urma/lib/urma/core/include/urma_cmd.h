@@ -11,7 +11,9 @@
 
 #ifndef URMA_CMD_H
 #define URMA_CMD_H
+
 #include <linux/types.h>
+
 #include "urma_types.h"
 
 typedef struct urma_cmd_hdr {
@@ -21,12 +23,12 @@ typedef struct urma_cmd_hdr {
 } urma_cmd_hdr_t;
 
 #define URMA_CMD_MAX_ARGS_SIZE 4096
-#define URMA_CMD_EID_SIZE (16)
+#define URMA_CMD_EID_SIZE      (16)
 
 /* only for ubcore device ioctl */
-#define URMA_CORE_CMD_MAGIC 'C'
-#define URMA_CORE_CMD _IOWR(URMA_CORE_CMD_MAGIC, 1, urma_cmd_hdr_t)
-#define URMA_MAX_UASID  (1 << 24)
+#define URMA_CORE_CMD_MAGIC    'C'
+#define URMA_CORE_CMD          _IOWR(URMA_CORE_CMD_MAGIC, 1, urma_cmd_hdr_t)
+#define URMA_MAX_UASID         (1 << 24)
 #define URMA_CMD_TP_ATTR_BYTES 128
 
 typedef enum urma_core_cmd {
@@ -42,7 +44,7 @@ typedef enum urma_core_cmd {
 
 /* only for uburma device ioctl */
 #define URMA_CMD_MAGIC 'U'
-#define URMA_CMD _IOWR(URMA_CMD_MAGIC, 1, urma_cmd_hdr_t)
+#define URMA_CMD       _IOWR(URMA_CMD_MAGIC, 1, urma_cmd_hdr_t)
 
 typedef enum urma_cmd {
     URMA_CMD_CREATE_CTX = 1,
@@ -212,8 +214,8 @@ typedef struct urma_cmd_create_jfr {
 
 typedef struct urma_cmd_modify_jfr {
     struct {
-        uint64_t handle;          /* handle of jfr, used to find jfr obj in kernel */
-        uint32_t mask;            /* see urma_jfr_attr_mask_t */
+        uint64_t handle; /* handle of jfr, used to find jfr obj in kernel */
+        uint32_t mask;   /* see urma_jfr_attr_mask_t */
         uint32_t rx_threshold;
         uint32_t state;
     } in;
@@ -237,7 +239,6 @@ typedef struct urma_cmd_query_jfr {
         uint32_t state;
     } out;
 } urma_cmd_query_jfr_t;
-
 
 typedef struct urma_cmd_delete_jfr {
     struct {
@@ -288,13 +289,12 @@ typedef struct urma_cmd_create_jfs {
 
 typedef struct urma_cmd_modify_jfs {
     struct {
-        uint64_t handle;          /* handle of jfs, used to find jfs obj in kernel */
-        uint32_t mask;            /* see urma_jfr_attr_mask_t */
-        uint32_t state;           /* urma_jetty_state_t */
+        uint64_t handle; /* handle of jfs, used to find jfs obj in kernel */
+        uint32_t mask;   /* see urma_jfr_attr_mask_t */
+        uint32_t state;  /* urma_jetty_state_t */
     } in;
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_modify_jfs_t;
-
 
 typedef struct urma_cmd_query_jfs {
     struct {
@@ -355,8 +355,8 @@ typedef struct urma_cmd_create_jfc {
 
 typedef struct urma_cmd_modify_jfc {
     struct {
-        uint64_t handle;          /* handle of jfc, used to find jfc obj in kernel */
-        uint32_t mask;            /* see urma_jfc_attr_mask_t */
+        uint64_t handle; /* handle of jfc, used to find jfc obj in kernel */
+        uint32_t mask;   /* see urma_jfc_attr_mask_t */
         uint16_t moderate_count;
         uint16_t moderate_period; /* in micro seconds */
     } in;
@@ -400,7 +400,7 @@ typedef struct urma_cmd_import_jfr {
         /* correspond to urma_token_t */
         uint32_t token;
         uint32_t trans_mode;
-	uint32_t tp_type;
+        uint32_t tp_type;
     } in;
     struct {
         uint32_t tpn;
@@ -418,7 +418,7 @@ typedef struct urma_cmd_import_jfr_ex {
         /* correspond to urma_token_t */
         uint32_t token;
         uint32_t trans_mode;
-	uint32_t tp_type;
+        uint32_t tp_type;
         /* correspond to urma_active_tp_cfg_t */
         uint64_t tp_handle;
         uint64_t peer_tp_handle;
@@ -466,16 +466,16 @@ typedef struct urma_cmd_create_jetty {
         uint64_t recv_jfc_handle; /* handle of the related recv jfc */
         uint32_t token;
 
-        uint32_t jfr_id; /* shared jfr */
+        uint32_t jfr_id;     /* shared jfr */
         uint64_t jfr_handle; /* handle of the shared jfr */
 
         uint64_t jetty_grp_handle; /* handle of the related jetty group */
-        uint8_t  is_jetty_grp;
+        uint8_t is_jetty_grp;
 
         uint64_t urma_jetty; /* urma jetty pointer */
     } in;
     struct {
-        uint32_t id; /* jetty id allocated by ubcore */
+        uint32_t id;     /* jetty id allocated by ubcore */
         uint64_t handle; /* handle of the allocated jetty obj in kernel */
         uint32_t jfs_depth;
         uint32_t jfr_depth;
@@ -489,8 +489,8 @@ typedef struct urma_cmd_create_jetty {
 
 typedef struct urma_cmd_modify_jetty {
     struct {
-        uint64_t handle;          /* handle of jetty, used to find jetty obj in kernel */
-        uint32_t mask;            /* see urma_jetty_attr_mask_t */
+        uint64_t handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint32_t mask;   /* see urma_jetty_attr_mask_t */
         uint32_t rx_threshold;
         uint32_t state;
     } in;
@@ -558,7 +558,7 @@ typedef struct urma_cmd_import_jetty {
         uint32_t trans_mode;
         uint32_t policy;
         uint32_t type;
-	uint32_t tp_type;
+        uint32_t tp_type;
     } in;
     struct {
         uint32_t tpn;
@@ -578,8 +578,8 @@ typedef struct urma_cmd_import_jetty_ex {
         uint32_t trans_mode;
         uint32_t policy;
         uint32_t type;
+        uint32_t tp_type;
         /* correspond to urma_active_tp_cfg_t */
-	uint32_t tp_type;
         uint64_t tp_handle;
         uint64_t peer_tp_handle;
         uint64_t tag;
@@ -602,7 +602,7 @@ typedef struct urma_cmd_unimport_jetty {
 
 typedef struct urma_cmd_advise_jetty {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
     } in;
     urma_cmd_udrv_priv_t udata;
@@ -610,7 +610,7 @@ typedef struct urma_cmd_advise_jetty {
 
 typedef struct urma_cmd_bind_jetty {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
     } in;
     struct {
@@ -621,7 +621,7 @@ typedef struct urma_cmd_bind_jetty {
 
 typedef struct urma_cmd_bind_jetty_ex {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
         /* correspond to urma_active_tp_cfg_t */
         uint64_t tp_handle;
@@ -645,7 +645,7 @@ typedef struct urma_cmd_unbind_jetty {
 
 typedef struct urma_cmd_unadvise_jetty {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
     } in;
 } urma_cmd_unadvise_jetty_t;
@@ -660,7 +660,7 @@ typedef struct urma_cmd_create_jetty_grp {
         uint64_t urma_jetty_grp; /* urma jetty group pointer */
     } in;
     struct {
-        uint32_t id; /* jetty group id allocated by ubcore */
+        uint32_t id;     /* jetty group id allocated by ubcore */
         uint64_t handle; /* handle of the allocated jetty group obj in kernel */
     } out;
     urma_cmd_udrv_priv_t udata;
@@ -695,7 +695,7 @@ typedef struct urma_cmd_user_ctl {
         uint64_t addr;
         uint32_t len;
         uint32_t reserved;
-    } out;  /* struct [out] should be consistent with [urma_user_ctl_out_t] */
+    } out; /* struct [out] should be consistent with [urma_user_ctl_out_t] */
     struct {
         uint64_t in_addr;
         uint32_t in_len;
@@ -725,8 +725,8 @@ union urma_cmd_net_addr_union {
 typedef struct urma_cmd_net_addr {
     urma_cmd_net_addr_type_t type;
     union urma_cmd_net_addr_union net_addr;
-    uint64_t vlan;                  /* available for UBOE */
-    uint8_t mac[URMA_MAC_BYTES];    /* available for UBOE */
+    uint64_t vlan;               /* available for UBOE */
+    uint8_t mac[URMA_MAC_BYTES]; /* available for UBOE */
     uint32_t prefix_len;
 } urma_cmd_net_addr_t;
 
@@ -741,7 +741,7 @@ typedef struct urma_cmd_get_net_addr_list {
     } in;
     struct {
         uint32_t netaddr_cnt;
-        uint64_t addr;      /* containing the array of urma_cmd_net_addr_info_t */
+        uint64_t addr; /* containing the array of urma_cmd_net_addr_info_t */
         uint64_t len;
     } out;
 } urma_cmd_get_net_addr_list_t;
@@ -795,10 +795,10 @@ typedef struct urma_cmd_unimport_jetty_async {
 
 typedef struct urma_cmd_bind_jetty_async {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
-        uint64_t urma_tjetty; /* urma tjetty pointer */
-        uint64_t urma_jetty; /* urma jetty pointer */
+        uint64_t urma_tjetty;   /* urma tjetty pointer */
+        uint64_t urma_jetty;    /* urma jetty pointer */
         int fd;
         uint64_t user_ctx;
         int timeout;
@@ -811,7 +811,7 @@ typedef struct urma_cmd_bind_jetty_async {
 
 typedef struct urma_cmd_unbind_jetty_async {
     struct {
-        uint64_t jetty_handle; /* handle of jetty, used to find jetty obj in kernel */
+        uint64_t jetty_handle;  /* handle of jetty, used to find jetty obj in kernel */
         uint64_t tjetty_handle; /* handle of tjetty, used to find tjetty obj in kernel */
     } in;
 } urma_cmd_unbind_jetty_async_t;
@@ -823,16 +823,16 @@ typedef struct urma_cmd_create_notifier {
 } urma_cmd_create_notifier_t;
 
 /* only for event ioctl */
-#define MAX_JFCE_EVENT_CNT 16
-#define MAX_NOTIFY_CNT 16
+#define MAX_JFCE_EVENT_CNT   16
+#define MAX_NOTIFY_CNT       16
 #define URMA_EVENT_CMD_MAGIC 'E'
 
-#define JFCE_CMD_WAIT_EVENT  0
-#define URMA_CMD_WAIT_JFC _IOWR(URMA_EVENT_CMD_MAGIC, JFCE_CMD_WAIT_EVENT, urma_cmd_hdr_t)
-#define JFAE_CMD_GET_ASYNC_EVENT  0
+#define JFCE_CMD_WAIT_EVENT      0
+#define URMA_CMD_WAIT_JFC        _IOWR(URMA_EVENT_CMD_MAGIC, JFCE_CMD_WAIT_EVENT, urma_cmd_hdr_t)
+#define JFAE_CMD_GET_ASYNC_EVENT 0
 #define URMA_CMD_GET_ASYNC_EVENT _IOWR(URMA_EVENT_CMD_MAGIC, JFAE_CMD_GET_ASYNC_EVENT, urma_cmd_hdr_t)
-#define NOTIFIER_CMD_WAIT_NOTIFY  0
-#define URMA_CMD_WAIT_NOTIFY _IOWR(URMA_EVENT_CMD_MAGIC, NOTIFIER_CMD_WAIT_NOTIFY, urma_cmd_hdr_t)
+#define NOTIFIER_CMD_WAIT_NOTIFY 0
+#define URMA_CMD_WAIT_NOTIFY     _IOWR(URMA_EVENT_CMD_MAGIC, NOTIFIER_CMD_WAIT_NOTIFY, urma_cmd_hdr_t)
 
 typedef struct urma_cmd_jfce_wait {
     struct {

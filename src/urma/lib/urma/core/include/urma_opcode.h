@@ -12,21 +12,22 @@
 #define URMA_OPCODE_H
 
 #include <errno.h>
+
 /* urma bit field value */
-#define URMA_TOKEN_NONE             0              /* Indicates the verification policy of the key. */
-#define URMA_TOKEN_PLAIN_TEXT       1
-#define URMA_TOKEN_SIGNED           2
-#define URMA_TOKEN_ALL_ENCRYPTED    3
-#define URMA_TOKEN_RESERVED         4
+#define URMA_TOKEN_NONE          0 /* Indicates the verification policy of the key. */
+#define URMA_TOKEN_PLAIN_TEXT    1
+#define URMA_TOKEN_SIGNED        2
+#define URMA_TOKEN_ALL_ENCRYPTED 3
+#define URMA_TOKEN_RESERVED      4
 
-#define URMA_TOKEN_ID_INVALID       0
-#define URMA_TOKEN_ID_VALID         1
+#define URMA_TOKEN_ID_INVALID 0
+#define URMA_TOKEN_ID_VALID   1
 
-#define URMA_DSVA_DISABLE         0              /* Indicates whether it is a segment of dsva. */
-#define URMA_DSVA_ENABLE          1
+#define URMA_DSVA_DISABLE 0 /* Indicates whether it is a segment of dsva. */
+#define URMA_DSVA_ENABLE  1
 
-#define URMA_NON_CACHEABLE        0              /* Indicates whether the segment can be cached by multiple hosts. */
-#define URMA_CACHEABLE            1
+#define URMA_NON_CACHEABLE 0 /* Indicates whether the segment can be cached by multiple hosts. */
+#define URMA_CACHEABLE     1
 
 /* If URMA_ACCESS_LOCAL_ONLY is set, local access will have all the permissions of
  * READ, WRITE, and ATOMIC but external access is denied.
@@ -34,122 +35,124 @@
  * the configuration of external access permissions is determined by the following three types, and
  * it takes effect according to the combination of READ, WRITE, and ATOMIC configured by the user.
  */
-#define URMA_ACCESS_LOCAL_ONLY    (0x1 << 0)
-#define URMA_ACCESS_READ          (0x1 << 1)
-#define URMA_ACCESS_WRITE         (0x1 << 2)
-#define URMA_ACCESS_ATOMIC        (0x1 << 3)
+#define URMA_ACCESS_LOCAL_ONLY (0x1 << 0)
+#define URMA_ACCESS_READ       (0x1 << 1)
+#define URMA_ACCESS_WRITE      (0x1 << 2)
+#define URMA_ACCESS_ATOMIC     (0x1 << 3)
 
-#define URMA_LOCAL_MEMORY         0              /* Indicates that the physical memory is remote. */
-#define URMA_REMOTE_MEMORY        1
+#define URMA_LOCAL_MEMORY  0 /* Indicates that the physical memory is remote. */
+#define URMA_REMOTE_MEMORY 1
 
-#define URMA_SEG_NOMAP            0              /* Indicates that the current process has mapped this segment */
-#define URMA_SEG_MAPPED           1
+#define URMA_SEG_NOMAP  0 /* Indicates that the current process has mapped this segment */
+#define URMA_SEG_MAPPED 1
 
-#define URMA_ADDR_TYPE_MVA        0
-#define URMA_ADDR_TYPE_UBVA       1
+#define URMA_ADDR_TYPE_MVA  0
+#define URMA_ADDR_TYPE_UBVA 1
 
-#define URMA_COMPLETE_ENABLE      1              /* Notify the source after the task is completed. */
-#define URMA_COMPLETE_DISABLE     0              /* Do not notify the source after the task is complete. */
+#define URMA_COMPLETE_ENABLE  1 /* Notify the source after the task is completed. */
+#define URMA_COMPLETE_DISABLE 0 /* Do not notify the source after the task is complete. */
 
-#define URMA_COMPLETE_TYPE_JFC    0              /* Complete notification via JFC. */
-#define URMA_COMPLETE_TYPE_CF     1              /* Complete notification via DDR address */
+#define URMA_COMPLETE_TYPE_JFC 0 /* Complete notification via JFC. */
+#define URMA_COMPLETE_TYPE_CF  1 /* Complete notification via DDR address */
 
-#define URMA_DEPENDENCY_NONE      0              /* There is no dependency between commands. */
-#define URMA_DEPENDENCY_FIRST     1              /* Subsequent commands depend on the execution result \
-                                                     of the current command. */
-#define URMA_DEPENDENCY_DELAY     2              /* The current command is executed only when the command \
-                                                     that the preamble depends on is executed successfully. */
+#define URMA_DEPENDENCY_NONE 0 /* There is no dependency between commands. */
+#define URMA_DEPENDENCY_FIRST                                                                                          \
+    1 /* Subsequent commands depend on the execution result                                                            \
+          of the current command. */
+#define URMA_DEPENDENCY_DELAY                                                                                          \
+    2 /* The current command is executed only when the command                                                         \
+          that the preamble depends on is executed successfully. */
 
-#define URMA_NOTIFY_DISABLE       0              /* The destination is not notified when the task is completed. */
-#define URMA_NOTIFY_ENABLE        1              /* Notify the destination when the task is completed. */
+#define URMA_NOTIFY_DISABLE 0 /* The destination is not notified when the task is completed. */
+#define URMA_NOTIFY_ENABLE  1 /* Notify the destination when the task is completed. */
 
-#define URMA_NOTIFY_TYPE_JFC      0              /* Complete notification via JFC. */
-#define URMA_NOTIFY_TYPE_RVA      1              /* Complete notification via DDR address. */
+#define URMA_NOTIFY_TYPE_JFC 0 /* Complete notification via JFC. */
+#define URMA_NOTIFY_TYPE_RVA 1 /* Complete notification via DDR address. */
 
-#define URMA_INLINE_DISABLE       0              /* The data is generated by source_address assignment. */
-#define URMA_INLINE_ENABLE        1              /* The data is carried in the command. */
+#define URMA_INLINE_DISABLE 0 /* The data is generated by source_address assignment. */
+#define URMA_INLINE_ENABLE  1 /* The data is carried in the command. */
 
-#define URMA_SOLICITED_DISABLE    0              /* There is no interruption when notifying through JFC. */
-#define URMA_SOLICITED_ENABLE     1              /* Interrupt occurred while notifying via JFC. */
+#define URMA_SOLICITED_DISABLE 0 /* There is no interruption when notifying through JFC. */
+#define URMA_SOLICITED_ENABLE  1 /* Interrupt occurred while notifying via JFC. */
 
-#define URMA_FENCE_DISABLE        0              /* There is no fence. */
-#define URMA_FENCE_ENABLE         1              /* Fence with previous WRs. */
+#define URMA_FENCE_DISABLE 0 /* There is no fence. */
+#define URMA_FENCE_ENABLE  1 /* Fence with previous WRs. */
 
-#define URMA_REGULAR              1              /* regular, specifies stride format. */
-#define URMA_IRREGULAR            0              /* irregular, specifies S/G format. */
+#define URMA_REGULAR   1 /* regular, specifies stride format. */
+#define URMA_IRREGULAR 0 /* irregular, specifies S/G format. */
 
-#define URMA_NO_TAG_MATCHING      0
-#define URMA_WITH_TAG_MATCHING    1
+#define URMA_NO_TAG_MATCHING   0
+#define URMA_WITH_TAG_MATCHING 1
 
-#define URMA_NONPOST_LS           0
-#define URMA_POST_LS              1
+#define URMA_NONPOST_LS 0
+#define URMA_POST_LS    1
 
-#define URMA_NO_SHARE_JFR         0
-#define URMA_SHARE_JFR            1
+#define URMA_NO_SHARE_JFR 0
+#define URMA_SHARE_JFR    1
 
-#define URMA_TYPICAL_RNR_RETRY    7             /* typical value of rnr retry for jfs cfg */
-#define URMA_TYPICAL_ERR_TIMEOUT   17           /* typical value of err_timeout for jfs cfg */
-#define URMA_TYPICAL_MIN_RNR_TIMER 12           /* typical value of min_rnr_timer for jfr cfg */
-#define URMA_MAX_PRIORITY 15
+#define URMA_TYPICAL_RNR_RETRY     7  /* typical value of rnr retry for jfs cfg */
+#define URMA_TYPICAL_ERR_TIMEOUT   17 /* typical value of err_timeout for jfs cfg */
+#define URMA_TYPICAL_MIN_RNR_TIMER 12 /* typical value of min_rnr_timer for jfr cfg */
+#define URMA_MAX_PRIORITY          15
 
 /* operation information */
 typedef enum urma_place_order {
-    URMA_NO_ORDER = 0,     // No order
-    URMA_RELAX_ORDER,      // Relax order
-    URMA_STRONG_ORDER      // Strong order
+    URMA_NO_ORDER = 0, // No order
+    URMA_RELAX_ORDER,  // Relax order
+    URMA_STRONG_ORDER  // Strong order
 } urma_place_order_t;
 
 /* opcode definition */
 typedef enum urma_opcode {
-    URMA_OPC_WRITE              = 0x00,
-    URMA_OPC_WRITE_IMM          = 0x01,
-    URMA_OPC_WRITE_NOTIFY       = 0x02, // not support result will return for URMA_OPC_WRITE_NOTIFY
-    URMA_OPC_READ               = 0x10,
-    URMA_OPC_CAS                = 0x20,
-    URMA_OPC_SWAP               = 0x21,
-    URMA_OPC_FADD               = 0x22,
-    URMA_OPC_FSUB               = 0x23,
-    URMA_OPC_FAND               = 0x24,
-    URMA_OPC_FOR                = 0x25,
-    URMA_OPC_FXOR               = 0x26,
-    URMA_OPC_SEND               = 0x40, // remote JFR/jetty ID
-    URMA_OPC_SEND_IMM           = 0x41, // remote JFR/jetty ID
-    URMA_OPC_SEND_INVALIDATE    = 0x42, // remote JFR/jetty ID and seg token id
-    URMA_OPC_NOP                = 0x51,
-    URMA_OPC_WRITE_ATOMIC       = 0x60, // Non-standard definition of OPCODE
+    URMA_OPC_WRITE = 0x00,
+    URMA_OPC_WRITE_IMM = 0x01,
+    URMA_OPC_WRITE_NOTIFY = 0x02, // not support result will return for URMA_OPC_WRITE_NOTIFY
+    URMA_OPC_READ = 0x10,
+    URMA_OPC_CAS = 0x20,
+    URMA_OPC_SWAP = 0x21,
+    URMA_OPC_FADD = 0x22,
+    URMA_OPC_FSUB = 0x23,
+    URMA_OPC_FAND = 0x24,
+    URMA_OPC_FOR = 0x25,
+    URMA_OPC_FXOR = 0x26,
+    URMA_OPC_SEND = 0x40,            // remote JFR/jetty ID
+    URMA_OPC_SEND_IMM = 0x41,        // remote JFR/jetty ID
+    URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
+    URMA_OPC_NOP = 0x51,
+    URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
     URMA_OPC_LAST
 } urma_opcode_t;
 
 typedef int urma_status_t;
-#define URMA_SUCCESS 0
-#define URMA_EAGAIN EAGAIN      // Resource temporarily unavailable
-#define URMA_ENOMEM ENOMEM      // Failed to allocate memory
-#define URMA_ENOPERM EPERM    // Operation not permitted
-#define URMA_ETIMEOUT ETIMEDOUT  // Operation time out
-#define URMA_EINVAL EINVAL      // Invalid argument
-#define URMA_EEXIST EEXIST      // Exist
+#define URMA_SUCCESS     0
+#define URMA_EAGAIN      EAGAIN    // Resource temporarily unavailable
+#define URMA_ENOMEM      ENOMEM    // Failed to allocate memory
+#define URMA_ENOPERM     EPERM     // Operation not permitted
+#define URMA_ETIMEOUT    ETIMEDOUT // Operation time out
+#define URMA_EINVAL      EINVAL    // Invalid argument
+#define URMA_EEXIST      EEXIST    // Exist
 #define URMA_EINPROGRESS EINPROGRESS,
-#define URMA_FAIL 0x1000  /* 0x1000 */
+#define URMA_FAIL        0x1000 /* 0x1000 */
 
 /* completion information */
 typedef enum urma_cr_status { // completion record status
     URMA_CR_SUCCESS = 0,
-    URMA_CR_UNSUPPORTED_OPCODE_ERR,   /* Opcode in the WR is not supported */
-    URMA_CR_LOC_LEN_ERR,              /* Local data too long error */
-    URMA_CR_LOC_OPERATION_ERR,        /* Local operation err */
-    URMA_CR_LOC_ACCESS_ERR,           /* Access to local memory error */
-    URMA_CR_REM_RESP_LEN_ERR,         /* Local Operation Error, with sub-status of Remote Response Length Error */
+    URMA_CR_UNSUPPORTED_OPCODE_ERR, /* Opcode in the WR is not supported */
+    URMA_CR_LOC_LEN_ERR,            /* Local data too long error */
+    URMA_CR_LOC_OPERATION_ERR,      /* Local operation err */
+    URMA_CR_LOC_ACCESS_ERR,         /* Access to local memory error */
+    URMA_CR_REM_RESP_LEN_ERR,       /* Local Operation Error, with sub-status of Remote Response Length Error */
     URMA_CR_REM_UNSUPPORTED_REQ_ERR,
-    URMA_CR_REM_OPERATION_ERR,        /* Error when target jetty can not complete the operation */
-    URMA_CR_REM_ACCESS_ABORT_ERR,     /* Error when target jetty access memory error or abort the operation */
-    URMA_CR_ACK_TIMEOUT_ERR,          /* Retransmission exceeds the maximum number of times */
-    URMA_CR_RNR_RETRY_CNT_EXC_ERR,    /* RNR retries exceeded the maximum number: remote jfr has no buffer */
-    URMA_CR_WR_FLUSH_ERR,             /* Jetty in the error state, and the hardware has processed the WR. */
-    URMA_CR_WR_SUSPEND_DONE,          /* Hardware constructs a fake CQE, and user_ctx is invalid. */
-    URMA_CR_WR_FLUSH_ERR_DONE,        /* Hardware constructs a fake CQE, and user_ctx is invalid. */
-    URMA_CR_WR_UNHANDLED,             /* Return of flush jetty/jfs, and the hardware has not processed the WR. */
-    URMA_CR_LOC_DATA_POISON,          /* Local Data Poison */
-    URMA_CR_REM_DATA_POISON,          /* Remote Data Poison */
+    URMA_CR_REM_OPERATION_ERR,     /* Error when target jetty can not complete the operation */
+    URMA_CR_REM_ACCESS_ABORT_ERR,  /* Error when target jetty access memory error or abort the operation */
+    URMA_CR_ACK_TIMEOUT_ERR,       /* Retransmission exceeds the maximum number of times */
+    URMA_CR_RNR_RETRY_CNT_EXC_ERR, /* RNR retries exceeded the maximum number: remote jfr has no buffer */
+    URMA_CR_WR_FLUSH_ERR,          /* Jetty in the error state, and the hardware has processed the WR. */
+    URMA_CR_WR_SUSPEND_DONE,       /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_FLUSH_ERR_DONE,     /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_UNHANDLED,          /* Return of flush jetty/jfs, and the hardware has not processed the WR. */
+    URMA_CR_LOC_DATA_POISON,       /* Local Data Poison */
+    URMA_CR_REM_DATA_POISON,       /* Remote Data Poison */
 } urma_cr_status_t;
 
 typedef enum urma_cr_opcode {
@@ -171,9 +174,9 @@ typedef enum urma_async_event_type {
     URMA_EVENT_PORT_ACTIVE,
     URMA_EVENT_PORT_DOWN,
     URMA_EVENT_DEV_FATAL,
-    URMA_EVENT_EID_CHANGE,     // eid change, HNM and other management roles will be modified.
-    URMA_EVENT_ELR_ERR,        /* Entity level error */
-    URMA_EVENT_ELR_DONE        /* Entity flush done */
+    URMA_EVENT_EID_CHANGE, // eid change, HNM and other management roles will be modified.
+    URMA_EVENT_ELR_ERR,    /* Entity level error */
+    URMA_EVENT_ELR_DONE    /* Entity flush done */
 } urma_async_event_type_t;
 
 typedef enum urma_jfc_state {
@@ -194,4 +197,5 @@ typedef enum urma_jfr_state {
     URMA_JFR_STATE_READY,
     URMA_JFR_STATE_ERROR
 } urma_jfr_state_t;
+
 #endif // URMA_OPCODE_H
