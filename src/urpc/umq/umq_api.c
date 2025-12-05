@@ -607,7 +607,7 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
                 return NULL;
             }
         } else {
-            enum HUGE_QBUF_POOL_SIZE_TYPE type = umq_huge_qbuf_get_type_for_size(buf_size);
+            huge_qbuf_pool_size_type_t type = umq_huge_qbuf_get_type_by_size(buf_size);
             if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }
@@ -728,7 +728,11 @@ int umq_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     }
 
     if (qbuf->umqh == UMQ_INVALID_HANDLE) {
-        return umq_qbuf_headroom_reset(qbuf, headroom_size);
+        if (qbuf->mempool_id == UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            return umq_qbuf_headroom_reset(qbuf, headroom_size);
+        } else {
+            return umq_huge_qbuf_headroom_reset(qbuf, headroom_size);
+        }
     }
 
     umq_t *umq = (umq_t *)(uintptr_t)qbuf->umqh;

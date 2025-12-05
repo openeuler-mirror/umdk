@@ -788,9 +788,9 @@ static inline void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cn
     }
 }
 
-static int huge_qbuf_pool_memory_init(uint8_t mempool_id, enum HUGE_QBUF_POOL_SIZE_TYPE type, void **buffer_addr)
+static int huge_qbuf_pool_memory_init(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
-    uint32_t align_size = umq_huge_qbuf_get_size_for_type(type);
+    uint32_t align_size = umq_huge_qbuf_get_size_by_type(type);
     uint32_t total_len = align_size * HUGE_QBUF_BUFFER_INC_BATCH;
     void *addr = (void *)memalign(align_size, total_len);
     if (addr == NULL) {
@@ -1492,7 +1492,7 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
             return NULL;
         }
     } else {
-        enum HUGE_QBUF_POOL_SIZE_TYPE type = umq_huge_qbuf_get_type_for_size(buf_size);
+        huge_qbuf_pool_size_type_t type = umq_huge_qbuf_get_type_by_size(buf_size);
         if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
@@ -2769,7 +2769,7 @@ typedef struct user_ctx {
 } user_ctx_t;
 
 
-static inline uint32_t umq_read_alloc_mem_size(umq_size_interval_t size_interval)
+static uint32_t umq_read_alloc_mem_size(umq_size_interval_t size_interval)
 {
     if (size_interval == UMQ_SIZE_0K_SMALL_INTERVAL) {
         return umq_buf_size_small();
