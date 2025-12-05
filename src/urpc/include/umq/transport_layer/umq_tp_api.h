@@ -235,6 +235,23 @@ typedef struct umq_ops {
      * Return 0 on success, error code on failure
      */
     int (*umq_tp_user_ctl)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+
+    /**
+     * Get mempool config.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * @param[out] mempool_state: mempool state
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_state_get)(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
+
+    /**
+     * refresh mempool state, 
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_state_refresh)(uint64_t umqh_tp, uint32_t mempool_id);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);

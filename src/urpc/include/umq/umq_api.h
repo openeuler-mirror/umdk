@@ -253,7 +253,7 @@ int umq_log_config_set(umq_log_config_t *config);
 int umq_log_config_get(umq_log_config_t *config);
 
 /**
- * add dev for umq, only support ub
+ * Add dev for umq, only support ub
  * @param[in] trans_info: transport info;
  * Return: 0 on success, other value on error
  */
@@ -261,9 +261,9 @@ int umq_dev_add(umq_trans_info_t *trans_info);
 
 /**
  * Get primary and port eid from topo info.
- * @param[in] route: parameter that contains src_v_eid and dst_v_eid, refers to umq_route_t;
- * @param[in] umq_trans_mode: umq trans mdoe;
- * @param[out] route_list: a list buffer, containing all routes returned;
+ * @param[in] route: parameter that contains src_v_eid and dst_v_eid, refers to umq_route_t
+ * @param[in] umq_trans_mode: umq trans mdoe
+ * @param[out] route_list: a list buffer, containing all routes returned
  * Return: 0 on success, other value on error
  */
 int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list);
@@ -277,6 +277,23 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
  * Return 0 on success, error code on failure
  */
 int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+
+/**
+ * Get mempool config.
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[out] mempool_state: mempool state
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
+
+/**
+ * Refresh mempool state.
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 
 #ifdef __cplusplus
 }
