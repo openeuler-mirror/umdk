@@ -140,7 +140,6 @@ typedef struct ub_flow_control {
     uint16_t remote_rx_depth;
     bool local_set;
     bool remote_get;
-    bool need_notify;
     bool enabled;
 } ub_flow_control_t;
 
@@ -667,17 +666,21 @@ static inline void umq_ub_rq_posted_notifier_inc(ub_flow_control_t *fc, uint16_t
 
 static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t rx_posted)
 {
-    fc->need_notify = false;
     if (rx_posted == 0 || !fc->enabled) {
         return;
     }
 
     uint16_t notify = fc->ops.local_rx_posted_inc(fc, rx_posted);
-    if (notify < fc->notify_interval || queue->bind_ctx == NULL) {
+    if (queue->bind_ctx == NULL) {
         return;
     }
 
-    if (!fc->local_set && notify >= fc->initial_window) {
+    // if initial_window is not set, wait initial_window to be ready first
+    if (!fc->local_set) {
+        if (notify < fc->initial_window) {
+            return;
+        }
+
         notify = fc->ops.local_rx_posted_exchange(fc);
         if (notify == 0) {
             return;
@@ -694,8 +697,11 @@ static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *
         return;
     }
 
+    if (notify < fc->notify_interval) {
+        return;
+    }
+
     if (umq_ub_window_dec(fc, queue, 1) != 1) {
-        fc->need_notify = true;
         return;
     }
 
@@ -721,7 +727,6 @@ static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *
     }
 
     UMQ_LIMIT_VLOG_ERR("flow control window send failed, errno %d\n", (int)status);
-    fc->need_notify = true;
     umq_ub_window_inc(fc, 1);
     umq_ub_rq_posted_notifier_inc(fc, notify);
 }
