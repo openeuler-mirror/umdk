@@ -37,7 +37,10 @@
 %if %{defined kernel_version}
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %else
-    %define kernel_version %(uname -r)
+    %define kernel_version %( \
+        rpm -q --qf "%%{VERSION}-%%{RELEASE}.%%{ARCH}" kernel-devel 2>/dev/null || \
+        uname -r \
+    )
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %endif
 %define kernel_requires_version %(echo %{kernel_version} | awk -F"." 'OFS="."{$NF="";print}' | sed 's/\.$//g')
