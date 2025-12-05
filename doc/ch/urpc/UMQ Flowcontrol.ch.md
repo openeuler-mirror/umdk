@@ -32,7 +32,7 @@ UMQ流量控制维护了local_rx_posted和remote_rx_window两个计数，分别�
 
 统计查询接口使用示例如下：
 ```
-umq_flowcontrol_stats_t s = {0};
+umq_flow_control_stats_t s = {0};
 umq_user_ctl_in_t in = {.opcode = UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY};
 umq_user_ctl_out_t out = {.addr = &s, .len = sizeof(s)};
 int ret = umq_user_ctl(umqh, &in, &out);
