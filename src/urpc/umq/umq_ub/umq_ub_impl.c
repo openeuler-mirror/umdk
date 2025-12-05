@@ -116,7 +116,7 @@ typedef struct ub_flow_control_window_ops {
     // exchange current rx_posted to 0 and return rx_posted
     uint16_t (*local_rx_posted_exchange)(struct ub_flow_control *fc);
 
-    void (*stats_query)(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out);
+    void (*stats_query)(struct ub_flow_control *fc, umq_flow_control_stats_t *out);
 } ub_flow_control_window_ops_t;
 
 typedef struct ub_flow_control {
@@ -375,7 +375,7 @@ static ALWAYS_INLINE uint16_t local_rx_posted_load_non_atomic(struct ub_flow_con
     return fc->local_rx_posted;
 }
 
-static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out)
+static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_control *fc, umq_flow_control_stats_t *out)
 {
     out->local_rx_posted = fc->local_rx_posted;
     out->remote_rx_window = fc->remote_rx_window;
@@ -505,7 +505,7 @@ static ALWAYS_INLINE uint16_t local_rx_posted_load_atomic(struct ub_flow_control
     return __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
 }
 
-static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control *fc, umq_flowcontrol_stats_t *out)
+static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control *fc, umq_flow_control_stats_t *out)
 {
     out->local_rx_posted = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
     out->remote_rx_window = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
@@ -4440,13 +4440,13 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
 int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if (in->opcode != UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY  || out->addr == 0 ||
-        out->len != sizeof(umq_flowcontrol_stats_t)) {
+    if (in->opcode != UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY || out->addr == 0 ||
+        out->len != sizeof(umq_flow_control_stats_t)) {
         UMQ_VLOG_ERR("umq ub user ctl parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_flowcontrol_stats_t *stats = (umq_flowcontrol_stats_t *)(uintptr_t)out->addr;
+    umq_flow_control_stats_t *stats = (umq_flow_control_stats_t *)(uintptr_t)out->addr;
     queue->flow_control.ops.stats_query(&queue->flow_control, stats);
     return UMQ_SUCCESS;
 }
