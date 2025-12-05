@@ -12,10 +12,11 @@
 
 #include <pthread.h>
 
-#include "urpc_util.h"
 #include "qbuf_list.h"
-#include "umq_types.h"
 #include "umq_errno.h"
+#include "umq_types.h"
+#include "umq_vlog.h"
+#include "urpc_util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -217,7 +218,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     if (*global_buf_cnt < batch_count) {
         pthread_mutex_unlock(&global_pool->global_mutex);
         UMQ_VLOG_ERR("%s not enough, rest count: %u\n", with_data ? "buf with data" : "buf with no data",
-        *global_buf_cnt);
+            *global_buf_cnt);
         return UMQ_FAIL;
     }
 

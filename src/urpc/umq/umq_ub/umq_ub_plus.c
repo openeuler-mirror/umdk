@@ -8,11 +8,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "umq_vlog.h"
 #include "umq_errno.h"
+#include "umq_huge_qbuf_pool.h"
+#include "umq_qbuf_pool.h"
 #include "umq_ub_impl.h"
 #include "umq_ub_api.h"
-#include "umq_qbuf_pool.h"
+#include "umq_vlog.h"
 
 static uint8_t *umq_tp_ub_plus_init(umq_init_cfg_t *cfg)
 {
@@ -164,6 +165,15 @@ static int umq_tp_ub_plus_get_route_list_impl(const umq_route_t *route, umq_rout
     return umq_ub_get_route_list_impl(route, route_list);
 }
 
+static int umq_tp_ub_plus_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
+{
+    if (qbuf->mempool_id == UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+        return umq_qbuf_headroom_reset(qbuf, headroom_size);
+    } else {
+        return umq_huge_qbuf_headroom_reset(qbuf, headroom_size);
+    }
+}
+
 static umq_ops_t g_umq_ub_plus_ops = {
     .mode = UMQ_TRANS_MODE_UB_PLUS,
     // control plane api
@@ -177,6 +187,7 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_state_get = umq_tp_ub_plus_state_get,
     .umq_tp_log_config_set = umq_tp_ub_plus_log_config_set,
     .umq_tp_log_config_reset = umq_tp_ub_plus_log_config_reset,
+    .umq_tp_buf_headroom_reset = umq_tp_ub_plus_buf_headroom_reset,
     .umq_tp_dev_add = umq_tp_ub_plus_dev_add_impl,
     .umq_tp_user_ctl = umq_tp_ub_plus_user_ctl_impl,
     .umq_tp_get_topo = umq_tp_ub_plus_get_route_list_impl,

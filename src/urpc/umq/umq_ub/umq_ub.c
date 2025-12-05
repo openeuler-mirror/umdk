@@ -155,6 +155,11 @@ static int umq_tp_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_
     return umq_ub_user_ctl_impl(umqh_tp, in, out);
 }
 
+static int umq_tp_ub_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
+{
+    return umq_qbuf_headroom_reset(qbuf, headroom_size);
+}
+
 static umq_ops_t g_umq_ub_ops = {
     .mode = UMQ_TRANS_MODE_UB,
     // control plane api
@@ -168,6 +173,7 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_state_get = umq_tp_ub_state_get,
     .umq_tp_log_config_set = umq_tp_ub_log_config_set,
     .umq_tp_log_config_reset = umq_tp_ub_log_config_reset,
+    .umq_tp_buf_headroom_reset = umq_tp_ub_buf_headroom_reset,
     .umq_tp_dev_add = umq_tp_ub_dev_add_impl,
     .umq_tp_get_topo = umq_tp_ub_get_route_list_impl,
     .umq_tp_user_ctl = umq_tp_ub_user_ctl_impl,

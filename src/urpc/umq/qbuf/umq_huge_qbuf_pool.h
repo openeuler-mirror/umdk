@@ -21,20 +21,20 @@
 extern "C" {
 #endif
 
-enum HUGE_QBUF_POOL_SIZE_TYPE {
+typedef enum huge_qbuf_pool_size_type {
     HUGE_QBUF_POOL_SIZE_TYPE_MID,
     HUGE_QBUF_POOL_SIZE_TYPE_BIG,
     HUGE_QBUF_POOL_SIZE_TYPE_HUGE,
     HUGE_QBUF_POOL_SIZE_TYPE_MAX,
-};
+} huge_qbuf_pool_size_type_t;
 
 typedef struct huge_qbuf_pool_cfg {
     uint64_t total_size;        // total buffer size
     uint32_t data_size;         // size of one data slab
     uint32_t headroom_size;     // reserve head room size
     umq_buf_mode_t mode;
-    enum HUGE_QBUF_POOL_SIZE_TYPE type;
-    int (*memory_init_callback)(uint8_t mempool_id, enum HUGE_QBUF_POOL_SIZE_TYPE type, void **buf_addr);
+    huge_qbuf_pool_size_type_t type;
+    int (*memory_init_callback)(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buf_addr);
     void (*memory_uninit_callback)(uint8_t mempool_id, void *buf_addr);
 } huge_qbuf_pool_cfg_t;
 
@@ -42,7 +42,7 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg);
 
 void umq_huge_qbuf_pool_uninit(void);
 
-int umq_huge_qbuf_alloc(enum HUGE_QBUF_POOL_SIZE_TYPE type, uint32_t request_size, uint32_t num,
+int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, uint32_t num,
     umq_alloc_option_t *option, umq_buf_list_t *list);
 
 void umq_huge_qbuf_free(umq_buf_list_t *list);
@@ -50,8 +50,9 @@ void umq_huge_qbuf_free(umq_buf_list_t *list);
 int umq_huge_qbuf_register_seg(uint8_t *ctx,
     register_seg_callback_t register_seg_func, unregister_seg_callback_t unregister_seg_func);
 void umq_huge_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func);
-enum HUGE_QBUF_POOL_SIZE_TYPE umq_huge_qbuf_get_type_for_size(uint32_t buf_size);
-uint32_t umq_huge_qbuf_get_size_for_type(enum HUGE_QBUF_POOL_SIZE_TYPE type);
+huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_size(uint32_t buf_size);
+uint32_t umq_huge_qbuf_get_size_by_type(huge_qbuf_pool_size_type_t type);
+int umq_huge_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size);
 
 #ifdef __cplusplus
 }
