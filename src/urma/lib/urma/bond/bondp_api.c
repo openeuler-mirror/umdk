@@ -1649,10 +1649,6 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
         goto free_bondp_tjetty;
     }
 
-    if (udata_out.is_multipath && memcmp(&ctx->eid, &rjfr->jfr_id.eid, sizeof(urma_eid_t)) == 0) {
-        URMA_LOG_ERR("Loopback not supported in multipath.\n");
-        goto unimport_vjfr;
-    }
     if (bdp_tjetty->is_in_matrix_server != udata_out.is_in_matrix_server) {
         URMA_LOG_ERR("The in_matrix_server attribute of jfr is different\n");
         goto unimport_vjfr;
