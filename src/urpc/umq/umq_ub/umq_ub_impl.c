@@ -2984,23 +2984,44 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
 
 static inline int umq_ub_import_mem_done(ub_queue_t *queue, uint16_t mempool_id)
 {
-    umq_ub_imm_t imm = { .mem_import_done =
-        { .umq_private = UMQ_UB_IMM_PRIVATE, .type = IMM_TYPE_MEM_IMPORT_DONE, .mempool_id = mempool_id} };
-    return umq_ub_write_imm((uint64_t)(uintptr_t)queue, queue->bind_ctx->remote_notify_addr, 1, imm.value);
+    umq_ub_imm_t imm = { .mem_import ={ .umq_private = UMQ_UB_IMM_PRIVATE,
+        .type = IMM_TYPE_MEM, .sub_type = IMM_TYPE_MEM_IMPORT_DONE, .mempool_id = mempool_id} };
+    uint16_t max_tx = umq_ub_window_dec(&queue->flow_control, queue, 1);
+    if (max_tx == 0) {
+        UMQ_LIMIT_VLOG_ERR("flow control window lack\n");
+        return -UMQ_ERR_EAGAIN;
+    }
+    int ret = umq_ub_write_imm((uint64_t)(uintptr_t)queue, queue->bind_ctx->remote_notify_addr, 1, imm.value);
+    if (ret != UMQ_SUCCESS) {
+        umq_ub_window_inc(&queue->flow_control, max_tx);
+    }
+    return ret;
 }
 
-static int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t msg_num)
+
+// The rx buf contains metadata including the IMM header, reference SGE and import memory details.
+static int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num)
 {
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)rx_buf->buf_data;
     if (umq_imm_head->type == IMM_PROTOCAL_TYPE_NONE) {
         return UMQ_SUCCESS;
     }
 
+    if (umq_imm_head->mempool_num >= UMQ_MAX_TSEG_NUM) {
+        UMQ_LIMIT_VLOG_INFO("mempool num invalid, mempool_num %u\n", umq_imm_head->mempool_num);
+        return -UMQ_ERR_EINVAL;
+    }
+
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     pthread_mutex_lock(&queue->imported_tseg_list_mutex);
     ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)
-            (rx_buf->buf_data + sizeof(umq_imm_head_t) + msg_num * sizeof(ub_ref_sge_t));
+            (rx_buf->buf_data + sizeof(umq_imm_head_t) + ref_seg_num * sizeof(ub_ref_sge_t));
     for (uint32_t i = 0; i < umq_imm_head->mempool_num; i++) {
+        if(import_mempool_info[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
+            UMQ_LIMIT_VLOG_INFO("mempool id %u invalid\n", import_mempool_info[i].mempool_id);
+            return -UMQ_ERR_EINVAL; 
+        }
+
         if (queue->imported_tseg_list[import_mempool_info[i].mempool_id] != NULL) {
             UMQ_LIMIT_VLOG_INFO("mempool %u has been imported\n", import_mempool_info[i].mempool_id);
             (void)umq_ub_import_mem_done(queue, import_mempool_info[i].mempool_id);
@@ -3010,7 +3031,7 @@ static int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint
         xchg_mem_info_t mem_info = {
             .seg_len = import_mempool_info[i].mempool_length,
             .seg_token_id = import_mempool_info[i].mempool_token_id,
-            .seg_flag = (urma_import_seg_flag_t)import_mempool_info[i].mempool_seg_flag,
+            .seg_flag.value = import_mempool_info[i].mempool_seg_flag,
             .token.token = import_mempool_info[i].mempool_token_value
         };
 
@@ -3087,15 +3108,28 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
         return UMQ_SUCCESS;
     }
 
-    if (imm.bs.type == IMM_TYPE_FLOW_CONTROL) {
-        umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
-        *qbuf_status = UMQ_BUF_FLOW_CONTROL_UPDATE;
-        if (imm.flow_control.in_user_buf == UMQ_UB_IMM_IN_USER_BUF) {
-            umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
-            buf_pro->opcode = UMQ_OPC_SEND;
-            buf_pro->imm_data = 0;
-            return UMQ_SUCCESS;
-        }
+    switch (imm.bs.type) {
+        case IMM_TYPE_FLOW_CONTROL:
+            umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
+            *qbuf_status = UMQ_BUF_FLOW_CONTROL_UPDATE;
+            if (imm.flow_control.in_user_buf == UMQ_UB_IMM_IN_USER_BUF) {
+                umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
+                buf_pro->opcode = UMQ_OPC_SEND;
+                buf_pro->imm_data = 0;
+                return UMQ_SUCCESS;
+            }
+            break;
+        case IMM_TYPE_MEM:
+            if (imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT) {
+                if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)queue, rx_buf, 0) != UMQ_SUCCESS) {
+                    *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+                    break;
+                }
+                *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
+            }
+            break;
+        default:
+            break;
     }
 
     return UMQ_SUCCESS;
@@ -3120,6 +3154,22 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                 }
                 ret = UMQ_CONTINUE_FLAG;
             } else {
+                umq_ub_imm_t imm = {.value = cr->imm_data};
+                if (imm.bs.umq_private == 0) {
+                    return UMQ_SUCCESS;
+                }
+
+                if (imm.mem_import.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT_DONE) {
+                    if (imm.mem_import.mempool_id >= UMQ_MAX_TSEG_NUM) {
+                        UMQ_LIMIT_VLOG_ERR("mempool id exceed maxinum\n");
+                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+                        return UMQ_SUCCESS;
+                    }
+                    queue->dev_ctx->remote_imported_info->
+                        tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
+                    *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
+                    return UMQ_SUCCESS;
+                }
                 ret = UMQ_SUCCESS;
             }
             break;
@@ -3220,6 +3270,32 @@ static void umq_ub_on_tx_done(ub_flow_control_t *fc, umq_buf_t *buf, bool failed
     buf_pro->imm_data = 0;
 }
 
+static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
+{
+    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+    umq_ub_imm_t imm = {.value = buf_pro->imm_data};
+    if (imm.bs.umq_private == 0) {
+        return UMQ_SUCCESS;
+    }
+    
+    switch (buf_pro->opcode) {
+        case UMQ_OPC_WRITE_IMM:
+            if (imm.bs.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT_DONE) {
+                return UMQ_CONTINUE_FLAG;
+            }
+            break;
+        case UMQ_OPC_SEND_IMM:
+            if (imm.bs.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT) {
+                umq_buf_free(buf);
+                return UMQ_CONTINUE_FLAG;
+            }
+            break;
+        default:
+            break;
+    }
+    return UMQ_SUCCESS;
+}
+
 static int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 {
     if (buf_count == 0) {
@@ -3285,7 +3361,9 @@ static int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         buf[qbuf_cnt]->io_direction = UMQ_IO_TX;
         buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;
         umq_ub_on_tx_done(&queue->flow_control, buf[qbuf_cnt], (cr[i].status != URMA_CR_SUCCESS));
-        ++qbuf_cnt;
+        if (process_tx_msg(buf[qbuf_cnt], queue) == UMQ_SUCCESS) {
+            ++qbuf_cnt;
+        }
     }
 
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
@@ -3875,10 +3953,10 @@ static int process_write_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
     if (imm.bs.umq_private == 0) {
         umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)(uintptr_t)rx_buf->qbuf_ext;
         buf_pro->imm_data = imm.value;
-    } else if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
+    } else if (imm.bs.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT_DONE) {
         ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
         queue->dev_ctx->remote_imported_info->
-            tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import_done.mempool_id] = true;
+            tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
         ret = UMQ_CONTINUE_FLAG;
         umq_buf_free(rx_buf);
     } else if (imm.bs.type == IMM_TYPE_NOTIFY) {
@@ -4090,7 +4168,7 @@ int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint6
         .flag.bs.solicited_enable = URMA_SOLICITED_ENABLE,
         .flag.bs.inline_flag = URMA_INLINE_ENABLE,
         .tjetty = queue->bind_ctx->tjetty,
-        .user_ctx = 0,
+        .user_ctx = UINT16_MAX,     // do not report TX events
         .rw = { .src = {.sge = &src_sge, .num_sge = 1},
                 .dst = {.sge = &dst_sge, .num_sge = 1},
                 .notify_data = imm_value, },
@@ -4454,4 +4532,96 @@ int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_o
     umq_flow_control_stats_t *stats = (umq_flow_control_stats_t *)(uintptr_t)out->addr;
     queue->flow_control.ops.stats_query(&queue->flow_control, stats);
     return UMQ_SUCCESS;
+}
+
+int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->dev_ctx == NULL || queue->dev_ctx->remote_imported_info == NULL || queue->bind_ctx == NULL ||
+        mempool_id >= UMQ_MAX_TSEG_NUM) {
+        UMQ_VLOG_ERR("umq ub get mempool state parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    
+    if (queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][mempool_id]) {
+        mempool_state->import_state = MEMPOOL_STATE_IMPORTED;
+    } else {
+        mempool_state->import_state = MEMPOOL_STATE_NOT_IMPORTED;
+    }
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
+{
+    umq_mempool_state_t mempool_state;
+    if (umq_ub_mempool_state_get_impl(umqh_tp, mempool_id, &mempool_state) != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("get mempool state failed\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (mempool_state.import_state == MEMPOOL_STATE_IMPORTED) {
+        UMQ_VLOG_INFO("mempool %u is imported\n", mempool_id);
+        return UMQ_SUCCESS;
+    }
+
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[mempool_id];
+    if (tseg == NULL) {
+        UMQ_VLOG_ERR("mempool %u tseg not exist\n", mempool_id);
+        return -UMQ_ERR_ENODEV;
+    }
+    urma_seg_t *seg = &tseg->seg;
+
+    umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), 1, queue->umqh, NULL);
+    if (send_buf == NULL) {
+        UMQ_VLOG_ERR("umq malloc failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)send_buf->qbuf_ext;
+    umq_ub_imm_t imm = {.mem_import = {
+        .umq_private = UMQ_UB_IMM_PRIVATE, .type = IMM_TYPE_MEM, .sub_type = IMM_TYPE_MEM_IMPORT}};
+    buf_pro->imm_data = imm.value;
+    buf_pro->opcode = UMQ_OPC_SEND_IMM;
+
+    umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)send_buf->buf_data;
+    umq_imm_head->version = UMQ_IMM_VERSION;
+    umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
+    umq_imm_head->mempool_num = 1;
+    umq_imm_head->mem_interval = UMQ_SIZE_INVALID_INTERVAL;
+
+    ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(umq_imm_head + 1);
+    import_mempool_info->mempool_seg_flag = seg->attr.value;
+    import_mempool_info->mempool_length = seg->len,
+    import_mempool_info->mempool_token_id = seg->token_id;
+    import_mempool_info->mempool_id = mempool_id;
+    import_mempool_info->mempool_token_value = tseg->user_ctx;
+    (void)memcpy(import_mempool_info->mempool_ubva, &seg->ubva, sizeof(urma_ubva_t));
+
+    urma_sge_t sge = {
+        .addr = (uint64_t)(uintptr_t)send_buf->buf_data,
+        .len = sizeof(umq_imm_head_t) + sizeof(ub_import_mempool_info_t),
+        .user_tseg = NULL,
+        .tseg = queue->dev_ctx->tseg_list[send_buf->mempool_id],
+    };
+    int ret = 0;
+    uint16_t max_tx = umq_ub_window_dec(&queue->flow_control, queue, 1);
+    if (max_tx == 0) {
+        ret = -UMQ_ERR_EAGAIN;
+        goto FREE_BUF;
+    }
+
+    ret = umq_ub_send_imm(queue, imm.value, &sge, (uint64_t)(uintptr_t)send_buf);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("umq ub send imm failed\n");
+        goto INC_FC_WIN;
+    }
+    return UMQ_SUCCESS;
+
+INC_FC_WIN:
+    umq_ub_window_inc(&queue->flow_control, 1);
+
+FREE_BUF:
+    umq_buf_free(send_buf);
+    return ret;
 }

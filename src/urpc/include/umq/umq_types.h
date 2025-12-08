@@ -521,6 +521,15 @@ typedef struct umq_user_ctl_out {
     uint32_t reserved;
 } umq_user_ctl_out_t;
 
+typedef enum umq_mempool_import_state {
+    MEMPOOL_STATE_NOT_IMPORTED,      // remote not import the memory pool
+    MEMPOOL_STATE_IMPORTED,         // remote imported the memory pool
+} mempool_import_state_t;
+
+typedef struct umq_mempool_state {
+    mempool_import_state_t import_state;
+} umq_mempool_state_t;
+
 #ifdef __cplusplus
 }
 #endif

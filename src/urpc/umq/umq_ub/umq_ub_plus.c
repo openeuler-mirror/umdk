@@ -173,6 +173,15 @@ static int umq_tp_ub_plus_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_
         return umq_huge_qbuf_headroom_reset(qbuf, headroom_size);
     }
 }
+static int umq_tp_ub_plus_mempool_state_get(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state)
+{
+    return umq_ub_mempool_state_get_impl(umqh_tp, mempool_id, mempool_state);
+}
+
+static int umq_tp_ub_plus_mempool_state_refresh(uint64_t umqh_tp, uint32_t mempool_id)
+{
+    return umq_ub_mempool_state_refresh_impl(umqh_tp, mempool_id);
+}
 
 static umq_ops_t g_umq_ub_plus_ops = {
     .mode = UMQ_TRANS_MODE_UB_PLUS,
@@ -191,6 +200,8 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_dev_add = umq_tp_ub_plus_dev_add_impl,
     .umq_tp_user_ctl = umq_tp_ub_plus_user_ctl_impl,
     .umq_tp_get_topo = umq_tp_ub_plus_get_route_list_impl,
+    .umq_tp_mempool_state_get = umq_tp_ub_plus_mempool_state_get,
+    .umq_tp_mempool_state_refresh = umq_tp_ub_plus_mempool_state_refresh,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_plus_buf_alloc,
