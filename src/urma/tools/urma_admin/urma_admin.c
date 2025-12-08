@@ -208,6 +208,37 @@ free_ubep:
     return NULL;
 }
 
+static void sort_ubep_list(struct ub_list *ubep_list)
+{
+    struct ub_list *tmp_list;
+    admin_show_ubep_t *ubep, *ubep_next;
+    int flag = 0;
+
+    while (!flag) {
+        flag = 1;
+        if (ubep_list == NULL || ubep_list->next == NULL) {
+            return;
+        }
+        tmp_list = ubep_list->next;
+        while (tmp_list->next != NULL && tmp_list->next != ubep_list) {
+            ubep = CONTAINER_OF_FIELD(tmp_list, admin_show_ubep_t, node);
+            ubep_next = CONTAINER_OF_FIELD(tmp_list->next, admin_show_ubep_t, node);
+            if (strcmp(ubep->dev_name, ubep_next->dev_name) > 0) {
+                ubep->node.next = ubep_next->node.next;
+                ubep_next->node.next->prev = &ubep->node;
+                ubep_next->node.next = &ubep->node;
+                ubep->node.prev->next = &ubep_next->node;
+                ubep_next->node.prev = ubep->node.prev;
+                ubep->node.prev = &ubep_next->node;
+                flag = 0;
+            } else {
+                tmp_list = tmp_list->next;
+            }
+        }
+    }
+    return;
+}
+
 static int find_ubep_list(struct ub_list *ubep_list, const tool_config_t *cfg)
 {
     DIR *class_dir;
@@ -457,6 +488,7 @@ static int admin_show_ubep(const tool_config_t *cfg)
         goto free_list;
     }
 
+    sort_ubep_list(&ubep_list);
     print_ubep_list(&ubep_list, cfg);
 
 free_list:
