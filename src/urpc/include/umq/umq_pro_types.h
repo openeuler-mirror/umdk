@@ -64,7 +64,8 @@ typedef struct umq_buf_pro {
         uint32_t token_id;
 
         uint32_t token_value;
-        uint32_t rsvd0;
+        uint32_t mempool_id : 8;
+        uint32_t rsvd0 : 24;
     } remote_sge;                   // remote sge which reference read/write
 
     uint64_t rsvd1[2];

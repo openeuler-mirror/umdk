@@ -517,11 +517,6 @@ static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control
     out->total_flow_controlled_wr = __atomic_load_n(&fc->total_flow_controlled_wr, __ATOMIC_RELAXED);
 }
 
-static ALWAYS_INLINE uint64_t umq_ub_user_imm_bit_fields(ub_flow_control_t *fc)
-{
-    return fc->enabled ? UMQ_UB_IMM_WITHOUT_PRIVATE_BITS : UMQ_UB_IMM_BITS;
-}
-
 static int umq_ub_flow_control_init(
     ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
 {
@@ -2573,6 +2568,7 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
                           uint32_t sge_num, urma_sge_t *src_sge, urma_sge_t *dst_sge)
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
+    uint8_t mempool_id = buf_pro->remote_sge.mempool_id;
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (buf_pro->remote_sge.length > buffer->total_data_size) {
@@ -2580,23 +2576,36 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
                                    buffer->total_data_size, buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
+            if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
+                UMQ_LIMIT_VLOG_ERR("mempool_id invalid or remote tseg has not been imported, mempool_id %u\n",
+                                   mempool_id);
+                return -UMQ_ERR_ETSEG_NOT_IMPORT;
+            }
             src_sge->addr = buf_pro->remote_sge.addr;
             src_sge->len = buf_pro->remote_sge.length;
-            src_sge->tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID];
+            src_sge->tseg = queue->imported_tseg_list[mempool_id];
             urma_wr_ptr->rw.src.sge = src_sge;
             urma_wr_ptr->rw.src.num_sge = 1;
             urma_wr_ptr->rw.dst.sge = sges_ptr;
             urma_wr_ptr->rw.dst.num_sge = sge_num;
             break;
+        case UMQ_OPC_WRITE_IMM:
+            urma_wr_ptr->rw.notify_data = buf_pro->imm_data;
+            /* fall through */
         case UMQ_OPC_WRITE:
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
                 UMQ_LIMIT_VLOG_ERR("local buffer size[%u] is larger than remote buffer size[%u]\n",
                                    buffer->total_data_size, buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
+            if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
+                UMQ_LIMIT_VLOG_ERR("mempool_id invalid or remote tseg has not been imported, mempool_id %u\n",
+                                   mempool_id);
+                return -UMQ_ERR_ETSEG_NOT_IMPORT;
+            }
             dst_sge->addr = buf_pro->remote_sge.addr;
             dst_sge->len = buf_pro->remote_sge.length;
-            dst_sge->tseg = queue->imported_tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID];
+            dst_sge->tseg = queue->imported_tseg_list[mempool_id];
             urma_wr_ptr->rw.dst.sge = dst_sge;
             urma_wr_ptr->rw.dst.num_sge = 1;
             urma_wr_ptr->rw.src.sge = sges_ptr;
@@ -2641,8 +2650,10 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
     *bad_qbuf = NULL;
     while (buffer) {
+        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
+        umq_opcode_t opcode = buf_pro->opcode;
         uint32_t rest_size = buffer->total_data_size;
-        if (rest_size > max_send_size) {
+        if (rest_size > max_send_size && (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM)) {
             UMQ_LIMIT_VLOG_ERR("total data size[%u] exceed max send size[%u]\n", rest_size, max_send_size);
             ret = -UMQ_ERR_EINVAL;
             *bad_qbuf = qbuf;
@@ -2650,8 +2661,6 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         }
         sges_ptr = sges[wr_index];
         uint32_t sge_num = 0;
-        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
-        umq_opcode_t opcode = buf_pro->opcode;
         uint64_t user_ctx = (uint64_t)(uintptr_t)buffer;
         umq_buf_t *tmp_buf = buffer;
         while (buffer && rest_size > 0) { // try to add up to total_size
@@ -2693,8 +2702,8 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         urma_wr_ptr->opcode = transform_op_code(opcode);
         urma_wr_ptr->flag.value = buf_pro->flag.value;
         urma_wr_ptr->tjetty = tjetty;
-        if (urma_wr_ptr->opcode == URMA_OPC_SEND_IMM) {
-            urma_wr_ptr->send.imm_data = buf_pro->imm_data & umq_ub_user_imm_bit_fields(&queue->flow_control);
+        if (urma_wr_ptr->opcode == URMA_OPC_SEND_IMM || urma_wr_ptr->opcode == URMA_OPC_WRITE_IMM) {
+            urma_wr_ptr->send.imm_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
         }
         opcode_consume_rqe = (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM ||
                               opcode == UMQ_OPC_WRITE_IMM);
