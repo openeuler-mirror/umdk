@@ -28,6 +28,7 @@ extern "C" {
 #define UMQ_ERR_EEXIST                             (EEXIST)
 #define UMQ_ERR_EINVAL                             (EINVAL)
 #define UMQ_ERR_ENODEV                             (ENODEV)
+#define UMQ_ERR_ETSEG_NOT_IMPORT                   (0x0201)
 
 typedef enum umq_buf_status {
     UMQ_BUF_SUCCESS = 0,
