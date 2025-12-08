@@ -353,14 +353,9 @@ static void unimport_seg_default(bondp_import_tseg_t *bdp_imprt_tseg)
 static int import_seg_matrix_server(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_seg_cfg_t *bondp_seg_cfg)
 {
     bondp_ret_t ret;
-    urma_eid_t tmp_eid = seg->ubva.eid;
-    if (!is_same_eid(&tmp_eid, &bdp_ctx->v_ctx.eid)) {
-    /* In a loopback scenario, the primary eID cannot be utilized because it always uses CTP and cannot achieve
-    loopback functionality, so importing it is unnecessary. */
-        ret = import_matrix_primary_seg(bdp_ctx, bondp_seg_cfg);
-        if (ret != BONDP_SUCCESS) {
-            goto unimport;
-        }
+    ret = import_matrix_primary_seg(bdp_ctx, bondp_seg_cfg);
+    if (ret != BONDP_SUCCESS) {
+        goto unimport;
     }
     ret = import_matrix_port_seg(bdp_ctx, seg, bondp_seg_cfg);
     if (ret != BONDP_SUCCESS) {
@@ -405,11 +400,11 @@ static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t
     tseg->handle = handle;
     tseg->urma_ctx = ctx;
 }
- 
+
 static int bondp_import_p_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_seg_cfg_t *bondp_seg_cfg)
 {
     int ret;
- 
+
     if (is_in_matrix_server(bdp_ctx)) {
         ret = import_seg_matrix_server(bdp_ctx, seg, bondp_seg_cfg);
     } else {
@@ -419,22 +414,22 @@ static int bondp_import_p_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_s
         URMA_LOG_ERR("Failed to import p segment, ret: %d.\n", ret);
         return ret;
     }
- 
+
     bondp_import_tseg_t *bdp_imprt_tseg = bondp_seg_cfg->bdp_imprt_tseg;
     bdp_imprt_tseg->v_tseg.urma_ctx = &bdp_ctx->v_ctx;
     bdp_imprt_tseg->v_tseg.user_ctx = (uint64_t)&bdp_imprt_tseg->v_tseg;
     bdp_imprt_tseg->v_tseg.seg.ubva = seg->ubva;
- 
+
     return ret;
 }
- 
+
 static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t *v2p_token_id)
 {
     unsigned long token_id_cnt = atomic_load(&bdp_ctx->token_id_cnt);
     uint32_t target_idx = (uint32_t)(token_id_cnt % BONDP_MAX_NUM_RSEGS);
     bondp_hash_table_t *tbl = &bdp_ctx->remote_v2p_token_id_table;
     int ret;
- 
+
     (void)pthread_rwlock_wrlock(&tbl->lock);
     if (token_id_cnt >= BONDP_MAX_NUM_RSEGS) {
         /* remove the token_id with target_idx */
@@ -452,7 +447,7 @@ static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t
         return ret;
     }
     (void)pthread_rwlock_unlock(&tbl->lock);
- 
+
     atomic_fetch_add(&bdp_ctx->token_id_cnt, 1);
     return 0;
 }
