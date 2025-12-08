@@ -1152,29 +1152,24 @@ static int bondp_import_pjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
 {
     int ret = 0;
     if (bdp_tjetty->is_in_matrix_server) {
-        if (is_same_eid(&bdp_ctx->v_ctx.eid, &rjetty->jetty_id.eid)) {
-            if (udata_out->is_multipath) {
-                URMA_LOG_ERR("Target jetty is multipath mode, which does not support Loopback.\n");
-                return -1;
-            }
-            bdp_tjetty->local_dev_num = bdp_ctx->dev_num;
-            bdp_tjetty->target_dev_num = bdp_ctx->dev_num;
-            bdp_tjetty->is_multipath = false; /* only support single-path mode */
-            ret = import_loopback_matrix_jetty(bdp_ctx, bdp_tjetty, udata_out, rjetty, rjetty_token);
+        if (is_well_known_jetty_id(rjetty->jetty_id.id)) {
+            int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
+            bdp_tjetty->local_dev_num = iodie_num;
+            bdp_tjetty->target_dev_num = iodie_num;
+            bdp_tjetty->is_multipath = true;
+            ret = import_well_known_jetty(bdp_ctx, bdp_tjetty, rjetty, rjetty_token);
         } else {
-            if (is_well_known_jetty_id(rjetty->jetty_id.id)) {
+            bdp_tjetty->is_multipath = udata_out->is_multipath;
+            if (bdp_tjetty->is_multipath) {
                 int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
                 bdp_tjetty->local_dev_num = iodie_num;
                 bdp_tjetty->target_dev_num = iodie_num;
-                bdp_tjetty->is_multipath = true;
-                ret = import_well_known_jetty(bdp_ctx, bdp_tjetty, rjetty, rjetty_token);
+                ret = import_primary_ports(bdp_ctx, bdp_tjetty, udata_out, rjetty, rjetty_token);
             } else {
-                bdp_tjetty->is_multipath = udata_out->is_multipath;
-                if (bdp_tjetty->is_multipath) {
-                    int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
-                    bdp_tjetty->local_dev_num = iodie_num;
-                    bdp_tjetty->target_dev_num = iodie_num;
-                    ret = import_primary_ports(bdp_ctx, bdp_tjetty, udata_out, rjetty, rjetty_token);
+                if (is_same_eid(&bdp_ctx->v_ctx.eid, &rjetty->jetty_id.eid)) {
+                    bdp_tjetty->local_dev_num = bdp_ctx->dev_num;
+                    bdp_tjetty->target_dev_num = bdp_ctx->dev_num;
+                    ret = import_loopback_matrix_jetty(bdp_ctx, bdp_tjetty, udata_out, rjetty, rjetty_token);
                 } else {
                     bdp_tjetty->local_dev_num = bdp_ctx->dev_num;
                     bdp_tjetty->target_dev_num = udata_out->dev_num;
@@ -1267,10 +1262,6 @@ static bool bondp_import_jetty_is_valid(bondp_context_t *bdp_ctx, bondp_target_j
     }
     if (bdp_tjetty->is_in_matrix_server != udata_out->is_in_matrix_server) {
         URMA_LOG_ERR("The in_matrix_server attribute of jetty is different\n");
-        return false;
-    }
-    if (udata_out->is_in_matrix_server && !udata_out->is_multipath && rjetty->trans_mode != URMA_TM_RC) {
-        URMA_LOG_ERR("Loopback in single-path mode only supports RC mode. Rjetty is %d\n", rjetty->trans_mode);
         return false;
     }
     return true;
@@ -1444,10 +1435,6 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
 
     if (!is_valid_bondp_comp(bdp_jetty)) {
         URMA_LOG_ERR("Invalid param jetty\n");
-        return URMA_EINVAL;
-    }
-    if (bdp_jetty->is_multipath && memcmp(&jetty->jetty_id.eid, &tjetty->id.eid, sizeof(urma_eid_t)) == 0) {
-        URMA_LOG_ERR("Loopback not supported in multipath.\n");
         return URMA_EINVAL;
     }
     if (jetty->remote_jetty) {
