@@ -2579,7 +2579,7 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
             if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
                 UMQ_LIMIT_VLOG_ERR("mempool_id invalid or remote tseg has not been imported, mempool_id %u\n",
                                    mempool_id);
-                return -UMQ_ERR_ETSEG_NOT_IMPORT;
+                return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             src_sge->addr = buf_pro->remote_sge.addr;
             src_sge->len = buf_pro->remote_sge.length;
@@ -2601,7 +2601,7 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
             if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
                 UMQ_LIMIT_VLOG_ERR("mempool_id invalid or remote tseg has not been imported, mempool_id %u\n",
                                    mempool_id);
-                return -UMQ_ERR_ETSEG_NOT_IMPORT;
+                return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             dst_sge->addr = buf_pro->remote_sge.addr;
             dst_sge->len = buf_pro->remote_sge.length;
@@ -4555,7 +4555,7 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
     if (queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][mempool_id]) {
         mempool_state->import_state = MEMPOOL_STATE_IMPORTED;
     } else {
-        mempool_state->import_state = MEMPOOL_STATE_NOT_IMPORTED;
+        mempool_state->import_state = MEMPOOL_STATE_NON_IMPORTED;
     }
     return UMQ_SUCCESS;
 }
