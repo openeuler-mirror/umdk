@@ -3070,7 +3070,7 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
     return buf_cnt;
 }
 
-static inline int umq_ub_import_mem_done(ub_queue_t *queue, uint16_t mempool_id)
+static ALWAYS_INLINE int umq_ub_import_mem_done(ub_queue_t *queue, uint16_t mempool_id)
 {
     umq_ub_imm_t imm = { .mem_import ={ .umq_private = UMQ_UB_IMM_PRIVATE,
         .type = IMM_TYPE_MEM, .sub_type = IMM_TYPE_MEM_IMPORT_DONE, .mempool_id = mempool_id} };

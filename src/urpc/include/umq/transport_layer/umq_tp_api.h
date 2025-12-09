@@ -246,7 +246,7 @@ typedef struct umq_ops {
     int (*umq_tp_mempool_state_get)(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
 
     /**
-     * refresh mempool state, 
+     * Refresh mempool state.
      * @param[in] umqh_tp: umq tp handle
      * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
      * Return: 0 on success, other value on error
