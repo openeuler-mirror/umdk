@@ -3028,7 +3028,7 @@ static int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint
     for (uint32_t i = 0; i < umq_imm_head->mempool_num; i++) {
         if(import_mempool_info[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
             UMQ_LIMIT_VLOG_INFO("mempool id %u invalid\n", import_mempool_info[i].mempool_id);
-            return -UMQ_ERR_EINVAL; 
+            return -UMQ_ERR_EINVAL;
         }
 
         if (queue->imported_tseg_list[import_mempool_info[i].mempool_id] != NULL) {
@@ -3286,7 +3286,7 @@ static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
     if (imm.bs.umq_private == 0) {
         return UMQ_SUCCESS;
     }
-    
+
     switch (buf_pro->opcode) {
         case UMQ_OPC_WRITE_IMM:
             if (imm.bs.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT_DONE) {
@@ -4229,14 +4229,7 @@ umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp)
 
 int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info)
 {
-    umq_ub_ctx_t *dev_ctx = NULL;
-
-    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
-        if (memcmp(&g_ub_ctx[i].trans_info.dev_info, &trans_info->dev_info, sizeof(umq_dev_assign_t)) == 0) {
-            dev_ctx = &g_ub_ctx[i];
-            break;
-        }
-    }
+    umq_ub_ctx_t *dev_ctx = umq_ub_get_ub_ctx_by_dev_info(g_ub_ctx, g_ub_ctx_count, &trans_info->dev_info);
     if (dev_ctx == NULL || dev_ctx->urma_ctx == NULL) {
         UMQ_VLOG_ERR("dev_ctx invalid\n");
         return UMQ_INVALID_FD;
@@ -4326,14 +4319,7 @@ static void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_a
 
 int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event)
 {
-    umq_ub_ctx_t *dev_ctx = NULL;
-
-    for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
-        if (memcmp(&g_ub_ctx[i].trans_info.dev_info, &trans_info->dev_info, sizeof(umq_dev_assign_t)) == 0) {
-            dev_ctx = &g_ub_ctx[i];
-            break;
-        }
-    }
+    umq_ub_ctx_t *dev_ctx = umq_ub_get_ub_ctx_by_dev_info(g_ub_ctx, g_ub_ctx_count, &trans_info->dev_info);
     if (dev_ctx == NULL || dev_ctx->urma_ctx == NULL) {
         UMQ_VLOG_ERR("dev_ctx invalid\n");
         return -UMQ_ERR_EINVAL;
@@ -4551,7 +4537,7 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
         UMQ_VLOG_ERR("umq ub get mempool state parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    
+
     if (queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][mempool_id]) {
         mempool_state->import_state = MEMPOOL_STATE_IMPORTED;
     } else {

@@ -584,8 +584,7 @@ int umq_unbind(uint64_t umqh)
 
 umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh, umq_alloc_option_t *option)
 {
-    if (!g_umq_inited || request_qbuf_num == 0 || request_qbuf_num > UMQ_BATCH_SIZE
-        || request_size > UMQ_MAX_BUF_REQUEST_SIZE) {
+    if (!g_umq_inited || request_qbuf_num == 0 || request_size > UMQ_MAX_BUF_REQUEST_SIZE) {
         UMQ_VLOG_ERR("param invalid or umq initialized\n");
         return NULL;
     }
