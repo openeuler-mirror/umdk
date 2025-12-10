@@ -4,23 +4,21 @@ URPC是统一远程过程调用协议，其基于UB事务层提供的能力，�
 
 ![](./figures/URPC_Functional_Roles.png)
 
-URPC的架构框架主要包含3个职能角色：<u>**Client**</u>、<u>**Server**</u>、<u>**Worker**</u>，分别聚焦于不同架构功能  
-
+**URPC职能角色**
 -   <u>**Client**</u>：URPC的发起端和调用者，向Server发送URPC Request，等待URPC Ack和URPC Response的返回；
 -   <u>**Server**</u>：URPC的接收端和分配者，接收URPC Request，调用Worker执行，向Client回复URPC Ack和URPC Response；
 -   <u>**Worker**</u>：URPC的执行者，专注执行URPC调用的函数、功能、服务。
 
-注1：URPC Ack将在之后版本提供服务。
-注2：Caller：基于 URPC 协议发起远程过程调用的用户。
-注3：Callee：URPC 函数的具体实现方，根据需求可以与 Worker 合并。
+*注1：URPC Ack将在之后版本提供服务。* \
+*注2：Caller：基于 URPC 协议发起远程过程调用的用户。* \
+*注3：Callee：URPC 函数的具体实现方，根据需求可以与 Worker 合并。*
 
-在 Client 和 Server 之间通过 URPC Message 交互信息，分为以下类型：
-
+**URPC Message类型**
 - **URPC Request**：由 Client 发送给 Server，用于发起函数调用行为；
 - **URPC Ack**：由 Server 返回给 Client，表示参数传递完成，并触发 Client 释放参数的内存空间；
 - **URPC Response**：由 Server 返回给 Client，表示函数执行完成并返回结果。
 
-基于以上URPC角色和消息格式，URPC协议流程如下：
+**URPC协议流程**
 - 用户Caller触发Client发起远程函数调用；
 - Client向Sevrer发送URPC Request消息，携带函数唯一标识和参数信息；
 - Server接收到函数唯一标识和参数信息，向Client回复URPC Ack通知其参数传递完成；
@@ -28,10 +26,10 @@ URPC的架构框架主要包含3个职能角色：<u>**Client**</u>、<u>**Serve
 - Worker基于函数唯一标识触发Callee执行对应函数，在函数执行完毕后将结果通过URPC Response返回给Client；
 - Client收到URPC Response，将远程函数调用结果返回给用户Caller；
 
-注1：URPC Ack是否需要由Client决定；
-注2：URPC Ack与URPC Response是否合并由Server决定。如果合并，函数执行完毕后Server将结果通过URPC Ack&Resonse合并消息返回Client，通知其参数传递完毕，同时一并将结果返回。
+*注1：URPC Ack是否需要由Client决定。* \
+*注2：URPC Ack与URPC Response是否合并由Server决定。如果合并，函数执行完毕后Server将结果通过URPC Ack&Resonse合并消息返回Client，通知其参数传递完毕，同时一并将结果返回。*
 
-同时，URPC协议支持以下创新特性：
+**URPC创新特性**
 - 对等函数调用：任意UB设备之间可以直接发起函数调用；
 - 引用传参：支持Worker基于参数引用（参数数据地址）发起参数数据搬移；
 
@@ -64,4 +62,4 @@ URPC支持如下三种参数传递方式：
 | 值传递（外联）   | ● 参数数据大小不受 URPC Request 的大小上限约束；<br>● Server 接收 URPC Request 后，再发起参数传输，参数传递需 1.5 个 RTT；<br>● 参数数据从 Client 传递给 Server，再传递给 Worker；<br>● Server 拉取参数数据后，Worker 开始执行函数时，Client 即可释放参数的内存资源 | 参数数据大，内存资源不足<br>例如：存储场景，数据大小 40K 以上 |
 | 引用传递         | ● 参数数据大小不受 URPC Request 的大小上限约束；<br>● Worker 开始执行函数后，发起参数传输，参数传递需 1.5 个 RTT；<br>● 参数数据从 Client 直接传递给 Worker，传递时机由 Worker 灵活可控；<br>● Worker 执行函数拉取参数数据后，Client 才可释放参数的内存资源 | 参数传递和函数执行时间较接近<br>例如：AI 训练/推理场景，数据传输和 NPU 运算需相互掩盖执行时间 |
 
-注：RTT（Round-Trip Time）表示往返时间
+*注：RTT（Round-Trip Time）表示往返时间。*
