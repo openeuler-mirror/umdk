@@ -2673,7 +2673,7 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
             urma_wr_ptr->rw.dst.num_sge = sge_num;
             break;
         case UMQ_OPC_WRITE_IMM:
-            urma_wr_ptr->rw.notify_data = buf_pro->imm_data;
+            urma_wr_ptr->rw.notify_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
             /* fall through */
         case UMQ_OPC_WRITE:
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
@@ -2694,8 +2694,10 @@ static int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *u
             urma_wr_ptr->rw.src.sge = sges_ptr;
             urma_wr_ptr->rw.src.num_sge = sge_num;
             break;
-        case UMQ_OPC_SEND:
         case UMQ_OPC_SEND_IMM:
+            urma_wr_ptr->send.imm_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
+            /* fall through */
+        case UMQ_OPC_SEND:
             urma_wr_ptr->send.src.sge = sges_ptr;
             urma_wr_ptr->send.src.num_sge = sge_num;
             break;
@@ -2785,9 +2787,6 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         urma_wr_ptr->opcode = transform_op_code(opcode);
         urma_wr_ptr->flag.value = buf_pro->flag.value;
         urma_wr_ptr->tjetty = tjetty;
-        if (urma_wr_ptr->opcode == URMA_OPC_SEND_IMM || urma_wr_ptr->opcode == URMA_OPC_WRITE_IMM) {
-            urma_wr_ptr->send.imm_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
-        }
         opcode_consume_rqe = (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM ||
                               opcode == UMQ_OPC_WRITE_IMM);
         umq_ub_fill_tx_imm(&queue->flow_control, urma_wr_ptr, buf_pro);
@@ -3261,6 +3260,8 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
             } else {
                 umq_ub_imm_t imm = {.value = cr->imm_data};
                 if (imm.bs.umq_private == 0) {
+                    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+                    buf_pro->imm_data = imm.value;
                     return UMQ_SUCCESS;
                 }
 
