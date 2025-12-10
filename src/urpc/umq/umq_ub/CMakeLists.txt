@@ -14,6 +14,13 @@ set_target_properties(umq_ub PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
     C_STANDARD 11
 )
+
+target_include_directories(umq_ub
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
+        ${CMAKE_SOURCE_DIR}/urma/lib/uvs/core/include
+)
+
 target_link_libraries(umq_ub PUBLIC pthread ssl urma tpsa PRIVATE umq_buf)
 install(TARGETS umq_ub DESTINATION /usr/lib64)
 

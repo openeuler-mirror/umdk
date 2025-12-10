@@ -14,7 +14,6 @@
 #include <stdatomic.h>
 
 #include "urpc_util.h"
-#include "urma_api.h"
 #include "umq_api.h"
 #include "umq_pro_api.h"
 #include "umq_tp_api.h"
@@ -38,11 +37,6 @@ typedef struct umq {
     umq_pro_ops_t *pro_tp_ops;
     uint64_t umqh_tp;
 } umq_t;
-
-static inline bool is_eid_ipv6(const urma_eid_t *eid)
-{
-    return eid->in4.reserved != 0 || eid->in4.prefix != htonl(UMQ_EID_MAP_PREFIX);
-}
 
 static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, atomic_uint *require_rx_count)
 {

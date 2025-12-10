@@ -15,10 +15,6 @@ set_target_properties(umq_buf PROPERTIES
     C_STANDARD 11
 )
 
-target_include_directories(umq_buf
-    PUBLIC
-        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
-)
 install(TARGETS umq_buf DESTINATION /usr/lib64)
 
 # uninstall target
