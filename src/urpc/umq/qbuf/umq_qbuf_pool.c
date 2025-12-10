@@ -140,7 +140,9 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_cache(void)
 {
     if (!g_thread_cache.inited) {
         QBUF_LIST_INIT(&g_thread_cache.block_pool.head_with_data);
+        g_thread_cache.block_pool.buf_cnt_with_data = 0;
         QBUF_LIST_INIT(&g_thread_cache.block_pool.head_without_data);
+        g_thread_cache.block_pool.buf_cnt_without_data = 0;
         g_thread_cache.inited = true;
         urpc_thread_closure_register(THREAD_CLOSURE_QBUF, 0, release_thread_cache);
     }
@@ -167,6 +169,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
         g_qbuf_pool.block_pool.buf_cnt_without_data += cnt;
     }
     (void)pthread_mutex_unlock(&g_qbuf_pool.block_pool.global_mutex);
+    g_thread_cache.inited = false;
 }
 
 int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
@@ -263,7 +266,7 @@ void umq_qbuf_pool_uninit(void)
     if (!g_qbuf_pool.inited) {
         return;
     }
-
+    release_thread_cache(0);
     memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
 }
 
