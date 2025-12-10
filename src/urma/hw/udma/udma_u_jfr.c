@@ -43,7 +43,7 @@ void udma_u_init_jfr_param(struct udma_u_jfr *jfr, urma_jfr_cfg_t *cfg)
 
 	jfr->max_sge = roundup_pow_of_two(cfg->max_sge);
 	jfr->rq.trans_mode  = cfg->trans_mode;
-	jfr->wqe_shift = udma_u_ilog32(roundup_pow_of_two(UDMA_SGE_SIZE *
+	jfr->wqe_shift = UDMA_U_ILOG32(roundup_pow_of_two(UDMA_SGE_SIZE *
 							  jfr->max_sge));
 	jfr->lock_free = cfg->flag.bs.lock_free;
 }
@@ -55,7 +55,7 @@ static int udma_u_create_rq(struct udma_u_context *udma_ctx,
 	uint32_t sge_per_wqe;
 	uint32_t wqebb_cnt;
 
-	sge_per_wqe = min(jfr->max_sge, udma_ctx->jfr_sge);
+	sge_per_wqe = UDMA_MIN(jfr->max_sge, udma_ctx->jfr_sge);
 	wqebb_cnt = sge_per_wqe * jfr->wqe_cnt;
 
 	if (!udma_u_alloc_queue_buf(rq, wqebb_cnt, UDMA_JFR_WQEBB,
@@ -102,7 +102,7 @@ static int udma_u_alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
 	uint32_t buf_size;
 
-	idx_que->entry_shift = udma_u_ilog32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
+	idx_que->entry_shift = UDMA_U_ILOG32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
 	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
 	if (!idx_que->bitmap)
 		return ENOMEM;
@@ -483,7 +483,7 @@ urma_status_t udma_u_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr,
 	}
 
 	if (nreq) {
-		udma_to_device_barrier();
+		UDMA_TO_DEVICE_BARRIER();
 		*udma_jfr->sw_db = udma_jfr->rq.pi & UDMA_JFR_DB_PROD_IDX_M;
 	}
 

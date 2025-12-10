@@ -348,9 +348,9 @@ static uint32_t get_max_inline_size(uint8_t opcode, uint32_t sq_inline_size)
 {
 	switch (opcode) {
 	case UDMA_OPCODE_WRITE_WITH_IMM:
-		return min(sq_inline_size, SQE_WRITE_IMM_INLINE_SIZE);
+		return UDMA_MIN(sq_inline_size, SQE_WRITE_IMM_INLINE_SIZE);
 	case UDMA_OPCODE_WRITE_WITH_NOTIFY:
-		return min(sq_inline_size, SQE_WRITE_NTF_INLINE_SIZE);
+		return UDMA_MIN(sq_inline_size, SQE_WRITE_NTF_INLINE_SIZE);
 	default:
 		return sq_inline_size;
 	}
@@ -828,7 +828,7 @@ urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 	}
 
 	if (wr_cnt) {
-		udma_to_device_barrier();
+		UDMA_TO_DEVICE_BARRIER();
 
 		if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
 			udma_write_dsqe(sq, wqe_addr);

@@ -120,7 +120,7 @@ static int udma_u_create_idx_que_ex(struct udma_u_jfr *jfr, struct udma_u_jfr_cf
 	struct udma_u_jfr_cstm_cfg *cstm_cfg = &cfg_ex->cstm_cfg;
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
 
-	idx_que->entry_shift = udma_u_ilog32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
+	idx_que->entry_shift = UDMA_U_ILOG32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
 	idx_que->buf.length = (uint32_t)align(jfr->wqe_cnt << idx_que->entry_shift,
 					      UDMA_HW_PAGE_SIZE);
 
@@ -147,7 +147,7 @@ static int udma_u_create_rq_ex(struct udma_u_context *udma_ctx, struct udma_u_jf
 	uint32_t wqebb_cnt;
 	uint32_t ret;
 
-	sge_per_wqe = min(jfr->max_sge, udma_ctx->jfr_sge);
+	sge_per_wqe = UDMA_MIN(jfr->max_sge, udma_ctx->jfr_sge);
 	wqebb_cnt = sge_per_wqe * jfr->wqe_cnt;
 	ret = udma_u_init_queue_buf(rq, wqebb_cnt, UDMA_JFR_WQEBB,
 				    UDMA_HW_PAGE_SIZE, cstm_cfg->rq.buff);
@@ -923,7 +923,7 @@ udma_u_post_sq_wr_ex(struct udma_u_context *udma_ctx, struct udma_u_jetty_queue 
 	}
 out:
 	if (wr_cnt != 0) {
-		udma_to_device_barrier();
+		UDMA_TO_DEVICE_BARRIER();
 		wqe_addr->sqe_bb_idx = sq->pi;
 		if (wr_ex->db_en) {
 			if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))

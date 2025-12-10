@@ -28,6 +28,7 @@ set(UDMA_NAME urma-udma)
 set_target_properties(BETA_UDMA_SO PROPERTIES OUTPUT_NAME ${UDMA_NAME})
 
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -Wfloat-equal -fno-common -std=gnu99 -Werror=implicit-function-declaration")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,now -s -fstack-protector-strong -D_FORTIFY_SOURCE=2 -O2 -ftrapv")
 set(CMAKE_LD_FLAGS "-s")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wuninitialized -Wno-error -Wno-error=format -Wundef")

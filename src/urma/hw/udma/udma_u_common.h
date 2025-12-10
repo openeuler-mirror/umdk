@@ -37,7 +37,7 @@
 #define UDMA_SGE_SIZE 16
 
 #define UDMA_JFC_DB_OFFSET 0
-#define min(x, y) ((x) < (y) ? (x) : (y))
+#define UDMA_MIN(x, y) ((x) < (y) ? (x) : (y))
 #define RTE_SET_USED(x) (void)(x)
 
 struct udma_u_doorbell {
@@ -223,27 +223,27 @@ struct udma_u_target_jetty {
 };
 
 #if INT_MAX >= 2147483647
-#define builtin_ilog32_nz(v) \
+#define BUILTIN_ILOG32_NZ(v) \
 	(((int)sizeof(uint32_t) * CHAR_BIT) - __builtin_clz(v))
 #elif LONG_MAX >= 2147483647L
-#define builtin_ilog32_nz(v) \
+#define BUILTIN_ILOG32_NZ(v) \
 	(((int)sizeof(uint32_t) * CHAR_BIT) - __builtin_clzl(v))
 #endif
 
 #if INT_MAX >= 9223372036854775807LL
-#define builtin_ilog64_nz(v) \
+#define BUILTIN_ILOG64_NZ(v) \
 	(((int)sizeof(uint32_t) * CHAR_BIT) - __builtin_clz(v))
 #elif LONG_MAX >= 9223372036854775807LL
-#define builtin_ilog64_nz(v) \
+#define BUILTIN_ILOG64_NZ(v) \
 	(((int)sizeof(uint64_t) * CHAR_BIT) - __builtin_clzl(v))
 #endif
 
-#define ilog32(_v) ((uint32_t)builtin_ilog32_nz(_v)&((_v) == 0UL ? 0UL : 0xFFFFFFFFUL))
-#define ilog64(_v) ((uint64_t)builtin_ilog64_nz(_v)&((_v) == 0ULL ? 0ULL : 0xFFFFFFFFFFFFFFFFULL))
+#define ILOG32(_v) ((uint32_t)BUILTIN_ILOG32_NZ(_v)&((_v) == 0UL ? 0UL : 0xFFFFFFFFUL))
+#define ILOG64(_v) ((uint64_t)BUILTIN_ILOG64_NZ(_v)&((_v) == 0ULL ? 0ULL : 0xFFFFFFFFFFFFFFFFULL))
 
-#define udma_u_ilog32(n) ilog32((uint32_t)(n) - 1)
+#define UDMA_U_ILOG32(n) ILOG32((uint32_t)(n) - 1)
 
-#define check_types_match(expr1, expr2)		\
+#define CHECK_TYPES_MATCH(expr1, expr2)		\
 	((typeof(expr1) *)0 != (typeof(expr2) *)0)
 
 #define GENMASK(h, l) \
@@ -252,17 +252,17 @@ struct udma_u_target_jetty {
 #define BIT(nr) (1UL << (nr))
 
 #ifndef container_of
-#define container_off(containing_type, member)                                 \
+#define CONTAINER_OFF(containing_type, member)                                 \
 	offsetof(containing_type, member)
-#define container_of(member_ptr, containing_type, member)                      \
+#define CONTAINER_OF(member_ptr, containing_type, member)                      \
 	 ((containing_type *)                                                  \
 	  ((void *)(member_ptr)                                                \
-	   - container_off(containing_type, member))                           \
-	  + (uint8_t)check_types_match(*(member_ptr), ((containing_type *)0)->member))
+	   - CONTAINER_OFF(containing_type, member))                           \
+	  + (uint8_t)CHECK_TYPES_MATCH(*(member_ptr), ((containing_type *)0)->member))
 #endif
 
-#define udma_to_device_barrier() {asm volatile("dmb st" ::: "memory"); }
-#define udma_from_device_barrier() {asm volatile("dmb ld" ::: "memory"); }
+#define UDMA_TO_DEVICE_BARRIER() {asm volatile("dmb st" ::: "memory"); }
+#define UDMA_FROM_DEVICE_BARRIER() {asm volatile("dmb ld" ::: "memory"); }
 
 #define ARRAY_SIZE(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
 
@@ -278,7 +278,7 @@ static inline void udma_u_set_udata(urma_cmd_udrv_priv_t *udrv_data,
 
 static inline uint64_t roundup_pow_of_two(uint64_t n)
 {
-	return n == 1ULL ? 1ULL : 1ULL << ilog64(n - 1ULL);
+	return n == 1ULL ? 1ULL : 1ULL << ILOG64(n - 1ULL);
 }
 
 static inline unsigned long align(unsigned long val, unsigned long align)
@@ -293,12 +293,12 @@ static inline void mmio_memcpy_x64(uint64_t *dest, uint64_t *val)
 
 static inline struct udma_u_context *to_udma_u_ctx(urma_context_t *ctx)
 {
-	return container_of(ctx, struct udma_u_context, urma_ctx);
+	return CONTAINER_OF(ctx, struct udma_u_context, urma_ctx);
 }
 
 static inline struct udma_u_jfr *to_udma_u_jfr(urma_jfr_t *jfr)
 {
-	return container_of(jfr, struct udma_u_jfr, base);
+	return CONTAINER_OF(jfr, struct udma_u_jfr, base);
 }
 
 /* index value is offset[32:8] */
@@ -329,23 +329,23 @@ static inline off_t get_mmap_offset(uint32_t idx, int page_size, uint32_t cmd)
 
 static inline struct udma_u_jfs *to_udma_u_jfs(urma_jfs_t *jfs)
 {
-	return container_of(jfs, struct udma_u_jfs, base);
+	return CONTAINER_OF(jfs, struct udma_u_jfs, base);
 }
 
 static inline struct udma_u_jetty *to_udma_u_jetty(urma_jetty_t *jetty)
 {
-	return container_of(jetty, struct udma_u_jetty, base);
+	return CONTAINER_OF(jetty, struct udma_u_jetty, base);
 }
 
 static inline struct udma_u_jfc *to_udma_u_jfc(urma_jfc_t *jfc)
 {
-	return container_of(jfc, struct udma_u_jfc, base);
+	return CONTAINER_OF(jfc, struct udma_u_jfc, base);
 }
 
 static inline struct udma_u_target_jetty *
 to_udma_u_target_jetty(urma_target_jetty_t *target_jetty)
 {
-	return container_of(target_jetty, struct udma_u_target_jetty, urma_tjetty);
+	return CONTAINER_OF(target_jetty, struct udma_u_target_jetty, urma_tjetty);
 }
 
 static inline void *udma_inc_ptr_wrap(uint8_t *ptr, uint32_t inc,
@@ -367,30 +367,30 @@ static inline uint32_t align_power2(uint32_t n)
 
 static inline struct udma_u_tid *to_udma_u_tid(urma_token_id_t *key_id)
 {
-	return container_of(key_id, struct udma_u_tid, base);
+	return CONTAINER_OF(key_id, struct udma_u_tid, base);
 }
 
 static inline struct udma_u_jetty_grp *
 to_udma_u_jetty_grp(urma_jetty_grp_t *jetty_grp)
 {
-	return container_of(jetty_grp, struct udma_u_jetty_grp, base);
+	return CONTAINER_OF(jetty_grp, struct udma_u_jetty_grp, base);
 }
 
 static inline struct udma_u_jfr *
 to_udma_u_jfr_from_queue(struct udma_u_jetty_queue *queue)
 {
-	return container_of(queue, struct udma_u_jfr, rq);
+	return CONTAINER_OF(queue, struct udma_u_jfr, rq);
 }
 
 static inline struct udma_u_jetty *
 to_udma_u_jetty_from_queue(struct udma_u_jetty_queue *queue)
 {
-	return container_of(queue, struct udma_u_jetty, sq);
+	return CONTAINER_OF(queue, struct udma_u_jetty, sq);
 }
 
 static inline struct udma_u_segment *to_udma_u_seg(urma_target_seg_t *seg)
 {
-	return container_of(seg, struct udma_u_segment, urma_tseg);
+	return CONTAINER_OF(seg, struct udma_u_segment, urma_tseg);
 }
 
 static inline void udma_u_write64(uint64_t *dest, uint64_t *val)
@@ -401,7 +401,7 @@ static inline void udma_u_write64(uint64_t *dest, uint64_t *val)
 
 static inline uint32_t calc_mask(uint32_t capacity)
 {
-	return ((uint32_t)1 << ilog32(capacity)) - (uint32_t)1;
+	return ((uint32_t)1 << ILOG32(capacity)) - (uint32_t)1;
 }
 
 static inline void udma_u_swap_endian128(uint8_t *src, uint8_t *dst)
@@ -412,7 +412,7 @@ static inline void udma_u_swap_endian128(uint8_t *src, uint8_t *dst)
 
 static inline struct udma_u_jfs_wr_ex *to_udma_u_jfs_wr_ex(urma_jfs_wr_t *urma_wr)
 {
-	return container_of(urma_wr, struct udma_u_jfs_wr_ex, wr);
+	return CONTAINER_OF(urma_wr, struct udma_u_jfs_wr_ex, wr);
 }
 
 typedef int (*udma_u_user_ctl_ops)(urma_context_t *ctx, urma_user_ctl_in_t *in,
