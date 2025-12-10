@@ -383,7 +383,7 @@ static enum jfc_poll_state udma_u_parse_cqe_for_send(struct udma_u_jfc_cqe *cqe,
 		jetty = to_udma_u_jetty_from_queue(queue);
 		cr->user_data = (uintptr_t)&jetty->base;
 	} else {
-		jfs = container_of(queue, struct udma_u_jfs, sq);
+		jfs = CONTAINER_OF(queue, struct udma_u_jfs, sq);
 		cr->user_data = (uintptr_t)&jfs->base;
 	}
 
@@ -451,7 +451,7 @@ static enum jfc_poll_state udma_u_poll_one(struct udma_u_context *udma_ctx,
 	if (cqe == NULL)
 		return JFC_EMPTY;
 
-	udma_from_device_barrier();
+	UDMA_FROM_DEVICE_BARRIER();
 	++udma_u_jfc->cq.ci;
 
 	if (udma_u_parse_cqe_for_jfc(udma_ctx, cqe, cr))
@@ -559,7 +559,7 @@ urma_status_t udma_u_delete_jfce(urma_jfce_t *jfce)
 		return URMA_EINVAL;
 	}
 	(void)close(jfce->fd);
-
+	jfce->fd = 0;
 	free(jfce);
 
 	return URMA_SUCCESS;
@@ -668,7 +668,7 @@ void udma_u_clean_jfc(struct urma_jfc *jfc, uint32_t jetty_id)
 
 	while ((int) --pi - (int) cq->ci >= 0) {
 		cqe = (struct udma_u_jfc_cqe *)get_u_buf_entry(cq, pi);
-		udma_from_device_barrier();
+		UDMA_FROM_DEVICE_BARRIER();
 		local_id = (cqe->local_num_h << UDMA_SRC_IDX_SHIFT) | cqe->local_num_l;
 		if (local_id == jetty_id) {
 			if (cqe->s_r == (uint8_t)CQE_FOR_RECEIVE) {
@@ -679,7 +679,7 @@ void udma_u_clean_jfc(struct urma_jfc *jfc, uint32_t jetty_id)
 			++nfreed;
 		} else if (!!nfreed) {
 			dest = (struct udma_u_jfc_cqe *)get_u_buf_entry(cq, pi + nfreed);
-			udma_from_device_barrier();
+			UDMA_FROM_DEVICE_BARRIER();
 			owner_bit = dest->owner;
 			(void)memcpy(dest, cqe, cqe_size);
 			dest->owner = owner_bit;
@@ -688,7 +688,7 @@ void udma_u_clean_jfc(struct urma_jfc *jfc, uint32_t jetty_id)
 
 	if (!!nfreed) {
 		cq->ci += nfreed;
-		udma_to_device_barrier();
+		UDMA_TO_DEVICE_BARRIER();
 		*udma_u_jfc->sw_db = cq->ci & (uint32_t)UDMA_U_JFC_DB_CI_IDX_M;
 	}
 

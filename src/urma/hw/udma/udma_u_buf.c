@@ -216,6 +216,7 @@ void udma_u_free_hugepage(struct udma_u_context *ctx, struct udma_u_hugepage *hu
 	pthread_mutex_unlock(&ctx->hugepage_lock);
 
 	free(hugepage->priv);
+	hugepage->priv = NULL;
 	free(hugepage);
 }
 
