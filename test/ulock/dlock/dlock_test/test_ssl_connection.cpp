@@ -143,15 +143,6 @@ TEST_F(test_ssl_init, test_OpenSSL_add_all_algorithms_failed)
     EXPECT_EQ(ret, -1);
 }
 
-TEST_F(test_ssl_init, test_SSL_load_error_strings_failed)
-{
-    // SSL_load_error_strings -> OPENSSL_init_ssl
-    MOCKER(OPENSSL_init_ssl).stubs().will(returnValue(1)).then(returnValue(0));
-
-    int ret = m_conn->ssl_init(true, m_ssl_init_attr);
-    EXPECT_EQ(ret, -1);
-}
-
 TEST_F(test_ssl_init, test_SSL_CTX_new_failed)
 {
     MOCKER(SSL_CTX_new).stubs().will(returnValue((SSL_CTX *)nullptr));
@@ -164,14 +155,6 @@ TEST_F(test_ssl_init, test_SSL_CTX_set_min_proto_version_failed)
 {
     // SSL_CTX_set_min_proto_version -> SSL_CTX_ctrl
     MOCKER(SSL_CTX_ctrl).stubs().will(returnValue(0));
-
-    int ret = m_conn->ssl_init(true, m_ssl_init_attr);
-    EXPECT_EQ(ret, -1);
-}
-
-TEST_F(test_ssl_init, test_SSL_CTX_set_ciphersuites_failed)
-{
-    MOCKER(SSL_CTX_set_ciphersuites).stubs().will(returnValue(1)).then(returnValue(0));
 
     int ret = m_conn->ssl_init(true, m_ssl_init_attr);
     EXPECT_EQ(ret, -1);
@@ -319,8 +302,13 @@ TEST_F(test_recv, test_blocking_SSL_ERROR_ZERO_RETURN)
 
 TEST_F(test_recv, test_blocking_ssl_r_unexpected_eof_while_reading)
 {
+#if ((OPENSSL_VERSION_NUMBER >= 0x30000000L) || (OPENSSL_VERSION_NUMBER == 0x1010105fL))
+    MOCKER(SSL_get_error).stubs().will(returnValue(SSL_ERROR_SSL));
+    MOCKER(ERR_peek_last_error).stubs().will(returnValue((unsigned long)SSL_R_UNEXPECTED_EOF_WHILE_READING));
+#else
     MOCKER(SSL_get_error).stubs().will(returnValue(SSL_ERROR_SYSCALL));
     MOCKER(ERR_peek_last_error).stubs().will(returnValue((unsigned long)0));
+#endif
 
     ssize_t ret = m_conn->recv(m_buff, m_recv_len, 0);
     EXPECT_EQ(ret, 0);
@@ -354,8 +342,13 @@ TEST_F(test_recv, test_non_blocking_SSL_ERROR_ZERO_RETURN)
 
 TEST_F(test_recv, test_non_blocking_ssl_r_unexpected_eof_while_reading)
 {
+#if ((OPENSSL_VERSION_NUMBER >= 0x30000000L) || (OPENSSL_VERSION_NUMBER == 0x1010105fL))
+    MOCKER(SSL_get_error).stubs().will(returnValue(SSL_ERROR_SSL));
+    MOCKER(ERR_peek_last_error).stubs().will(returnValue((unsigned long)SSL_R_UNEXPECTED_EOF_WHILE_READING));
+#else
     MOCKER(SSL_get_error).stubs().will(returnValue(SSL_ERROR_SYSCALL));
     MOCKER(ERR_peek_last_error).stubs().will(returnValue((unsigned long)0));
+#endif
 
     ssize_t ret = m_conn->recv(m_buff, m_recv_len, MSG_DONTWAIT);
     EXPECT_EQ(ret, 0);

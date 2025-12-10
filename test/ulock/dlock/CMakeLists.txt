@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD 11)
 # find GTest
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
-set(GTEST_LIBRARIES /usr/local/lib64/libgtest.a /usr/local/lib64/libgtest_main.a)
+set(GTEST_LIBRARIES /usr/local/lib64/libgtest.a)
 
 # find MockCpp
 set(MOCKCPP_INCLUDE_DIRS /usr/local/include)

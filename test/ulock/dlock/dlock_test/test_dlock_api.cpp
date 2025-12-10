@@ -42,8 +42,8 @@ static void test_dclient_lib_init(trans_mode_t tp_mode)
     struct client_cfg cfg_c;
 
     cfg_c.dev_name = nullptr;
-    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
-    cfg_c.log_level = LOG_WARNING;
+    memcpy(&cfg_c.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_c.log_level = g_test_dlock_cfg.log_level;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
@@ -58,18 +58,20 @@ static void test_dclient_lib_init(trans_mode_t tp_mode)
     ret = dclient_lib_init(nullptr);
     ASSERT_TRUE(ret == DLOCK_EINVAL) << "p_client_cfg is nullptr, ret: " << ret;
 
+    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
     cfg_c.dev_name = strdup("xxxx");
     ret = dclient_lib_init(&cfg_c);
     free(cfg_c.dev_name);
     ASSERT_TRUE(ret == -1) << "invalid dev_name, ret: " << ret;
 
+    memcpy(&cfg_c.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
     cfg_c.dev_name = nullptr;
     cfg_c.log_level = 10;
     ret = dclient_lib_init(&cfg_c);
     ASSERT_TRUE(ret == 0) << "invalid log_level, ret: " << ret;
     dclient_lib_deinit();
 
-    cfg_c.log_level = LOG_WARNING;
+    cfg_c.log_level = g_test_dlock_cfg.log_level;
     cfg_c.primary_port = -1;
     ret = dclient_lib_init(&cfg_c);
     ASSERT_TRUE(ret == 0) << "invalid primary_port, ret: " << ret;
@@ -85,12 +87,12 @@ static void test_dclient_lib_deinit(trans_mode_t tp_mode)
 {
     int ret;
     struct client_cfg cfg_c;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     cfg_c.dev_name = nullptr;
-    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
-    cfg_c.log_level = LOG_WARNING;
+    memcpy(&cfg_c.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_c.log_level = g_test_dlock_cfg.log_level;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
@@ -99,7 +101,6 @@ static void test_dclient_lib_deinit(trans_mode_t tp_mode)
     ASSERT_TRUE(ret == 0) << "dlock client lib init failed, ret: " << ret;
 
     ret = client_init(&client_id, server_ip);
-    free(server_ip);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client init failed, ret: " << ret;
 
     dclient_lib_deinit();
@@ -112,7 +113,7 @@ static void test_dclient_lib_deinit(trans_mode_t tp_mode)
 static void test_client_init_and_deinit(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     char *invalid_ip_str = strdup(INVALID_IP_STR);
     int client_id = 100;
 
@@ -140,14 +141,13 @@ static void test_client_init_and_deinit(trans_mode_t tp_mode)
     ASSERT_TRUE(ret == -1) << "client has not been inited, ret: " << ret;
 
     dclient_lib_deinit();
-    free(server_ip);
     free(invalid_ip_str);
 }
 
 static void test_client_reinit_and_reinit_done(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     char *invalid_ip_str = strdup(INVALID_IP_STR);
     int client_id = 100;
 
@@ -184,14 +184,13 @@ static void test_client_reinit_and_reinit_done(trans_mode_t tp_mode)
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
 
-    free(server_ip);
     free(invalid_ip_str);
 }
 
 static void test_update_all_locks(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -232,14 +231,12 @@ static void test_update_all_locks(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-
-    free(server_ip);
 }
 
 static void test_client_heartbeat(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     ret = client_heartbeat(client_id, 5);
@@ -273,8 +270,6 @@ static void test_client_heartbeat(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-
-    free(server_ip);
 }
 
 static void test_lock_limit(int client_id, int lock_num, unsigned int lease_time)
@@ -309,7 +304,7 @@ static void test_lock_limit(int client_id, int lock_num, unsigned int lease_time
 static void test_get_lock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
     int client_id2 = 101;
 
@@ -375,13 +370,12 @@ static void test_get_lock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_release_lock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -435,13 +429,12 @@ static void test_release_lock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_trylock_and_lock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -518,13 +511,12 @@ static void test_trylock_and_lock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_unlock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -588,13 +580,12 @@ static void test_unlock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_lock_extend(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -661,13 +652,12 @@ static void test_lock_extend(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_batch_get_lock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
     int client_id2 = 101;
 
@@ -756,13 +746,12 @@ static void test_batch_get_lock(trans_mode_t tp_mode)
 
     /* test client_id2 exit abnormally */
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_batch_release_lock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -873,13 +862,12 @@ static void test_batch_release_lock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_batch_trylock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -984,13 +972,12 @@ static void test_batch_trylock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_batch_unlock(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -1099,13 +1086,12 @@ static void test_batch_unlock(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_batch_lock_extend(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -1223,13 +1209,12 @@ static void test_batch_lock_extend(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_lock_request_async(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -1291,13 +1276,12 @@ static void test_lock_request_async(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_lock_result_check(trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     int client_id = 100;
 
     struct timeval tv_start;
@@ -1325,7 +1309,6 @@ static void test_lock_result_check(trans_mode_t tp_mode)
     ret = client_deinit(client_id);
     ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client deinit failed, ret: " << ret;
     dclient_lib_deinit();
-    free(server_ip);
 }
 
 static void test_dserver_lib_init_and_deinit(void)
@@ -1352,10 +1335,10 @@ static void test_server_start(void)
 {
     int ret;
     int max_server_num = 2;
-    char ctrl_cpuset[] = "15-20";
-    char cmd_cpuset[] = "20-25";
+    char ctrl_cpuset[] = "9";
+    char cmd_cpuset[] = "10-11";
     char invalid_cpuset[] = "-1";
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     char *invalid_server_ip = strdup("1.1.1");
     struct server_cfg primary_cfg_s;
     struct server_cfg replica_cfg_s;
@@ -1364,8 +1347,8 @@ static void test_server_start(void)
 
     primary_cfg_s.type = SERVER_PRIMARY;
     primary_cfg_s.dev_name = nullptr;
-    str_to_urma_eid(server_ip, &primary_cfg_s.eid);
-    primary_cfg_s.log_level = LOG_WARNING;
+    memcpy(&primary_cfg_s.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    primary_cfg_s.log_level = g_test_dlock_cfg.log_level;
     primary_cfg_s.tp_mode = SEPERATE_CONN;
     primary_cfg_s.ub_token_disable = false;
     primary_cfg_s.sleep_mode_enable = true;
@@ -1391,6 +1374,8 @@ static void test_server_start(void)
     ret = server_stop(server_id1);
     ASSERT_TRUE(ret == 0) << "server stop failed, ret: " << ret;
 
+    primary_cfg_s.dev_name = nullptr;
+    memcpy(&primary_cfg_s.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
     primary_cfg_s.type = SERVER_MAX;
     ret = server_start(primary_cfg_s, server_id1);
     ASSERT_TRUE(ret == -1) << "invalid server_type, ret: " << ret;
@@ -1440,8 +1425,8 @@ static void test_server_start(void)
 
     replica_cfg_s.type = SERVER_REPLICA;
     replica_cfg_s.dev_name = nullptr;
-    memset(&replica_cfg_s.eid, 0, sizeof(dlock_eid_t));
-    replica_cfg_s.log_level = LOG_WARNING;
+    memcpy(&replica_cfg_s.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    replica_cfg_s.log_level = g_test_dlock_cfg.log_level;
     replica_cfg_s.tp_mode = SEPERATE_CONN;
     replica_cfg_s.ub_token_disable = false;
     replica_cfg_s.sleep_mode_enable = true;
@@ -1452,7 +1437,6 @@ static void test_server_start(void)
     ASSERT_TRUE(ret == -1) << "replica server is not supported, ret: " << ret;
 
     dserver_lib_deinit();
-    free(server_ip);
     free(invalid_server_ip);
 }
 
@@ -2419,7 +2403,7 @@ static void test_server_not_ready(trans_mode_t tp_mode)
 {
     int ret;
     int client_id = 100;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
 
     struct timeval tv_start;
     char lock_desc_str1[] = "lock desc 1";
@@ -2568,7 +2552,6 @@ static void test_server_not_ready(trans_mode_t tp_mode)
 
     dclient_lib_deinit();
     stop_primary_server1();
-    free(server_ip);
 }
 
 static void test_ssl_basic_process(trans_mode_t tp_mode)
@@ -2612,7 +2595,7 @@ static void get_prkey_pwd_invalid(char **prkey_pwd, int *prkey_pwd_len)
 static void test_client_ssl_cfg(void)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     struct client_cfg cfg_c;
     int client_id = 100;
     char *file_path = (char *)malloc(PATH_MAX + 2);
@@ -2623,8 +2606,8 @@ static void test_client_ssl_cfg(void)
     startup_primary_server1(0, 0, false, true, SEPERATE_CONN);
 
     cfg_c.dev_name = nullptr;
-    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
-    cfg_c.log_level = LOG_WARNING;
+    memcpy(&cfg_c.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_c.log_level = g_test_dlock_cfg.log_level;
     cfg_c.tp_mode = SEPERATE_CONN;
     cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
@@ -2775,7 +2758,6 @@ static void test_client_ssl_cfg(void)
 
     stop_primary_server1();
 
-    free(server_ip);
     free(ca_path);
     free(cert_path);
     free(prkey_path);
@@ -2786,9 +2768,7 @@ static void test_server_ssl_cfg(void)
 {
     int ret;
     unsigned int max_server_num = 10;
-    char ctrl_cpuset[] = "15-20";
-    char cmd_cpuset[] = "15-20";
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     struct server_cfg cfg_s;
     int server_id;
     int client_id = 100;
@@ -2803,16 +2783,16 @@ static void test_server_ssl_cfg(void)
 
     cfg_s.type = SERVER_PRIMARY;
     cfg_s.dev_name = nullptr;
-    memset(&cfg_s.eid, 0, sizeof(dlock_eid_t));
-    cfg_s.log_level = LOG_WARNING;
+    memcpy(&cfg_s.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_s.log_level = g_test_dlock_cfg.log_level;
     cfg_s.tp_mode = SEPERATE_CONN;
     cfg_s.ub_token_disable = false;
     cfg_s.sleep_mode_enable = true;
     cfg_s.primary.num_of_replica = 0;
     cfg_s.primary.replica_enable = false;
     cfg_s.primary.recovery_client_num = 0;
-    cfg_s.primary.ctrl_cpuset = ctrl_cpuset;
-    cfg_s.primary.cmd_cpuset = cmd_cpuset;
+    cfg_s.primary.ctrl_cpuset = nullptr;
+    cfg_s.primary.cmd_cpuset = nullptr;
     cfg_s.primary.server_ip_str = server_ip;
     cfg_s.primary.server_port = PRIMARY1_CONTROL_PORT_CLIENT;
 
@@ -2966,7 +2946,6 @@ static void test_server_ssl_cfg(void)
     dclient_lib_deinit();
     dserver_lib_deinit();
 
-    free(server_ip);
     free(ca_path);
     free(cert_path);
     free(prkey_path);
@@ -3046,7 +3025,7 @@ static inline void print_debug_stats(struct debug_stats *stats)
     int ret = 0;
 
     for (int i = 0; i < DEBUG_STATS_MAX; i++) {
-        ret += sprintf_s((buf + ret), (MAX_BUF - ret), "%d:%ld ", i, stats->stats[i]);
+        ret += sprintf((buf + ret), "%d:%ld ", i, stats->stats[i]);
     }
     DLOCK_LOG_WARN("debug_stats: %s", buf);
 }
@@ -3151,7 +3130,7 @@ protected:
     {
         client_id = 100;
         client_id2 = 101;
-        server_ip = strdup(PRIMARY_ADDRESS);
+        server_ip = g_test_dlock_cfg.server_ip;
         val = 20;
 
         struct timeval tv_start;
@@ -3165,7 +3144,6 @@ protected:
 
     void TearDown() override
     {
-        free(server_ip);
         dclient_lib_deinit();
     }
 };
@@ -3344,7 +3322,7 @@ protected:
     void SetUp() override
     {
         client_id = 100;
-        server_ip = strdup(PRIMARY_ADDRESS);
+        server_ip = g_test_dlock_cfg.server_ip;
         val = 20;
 
         struct timeval tv_start;
@@ -3358,7 +3336,6 @@ protected:
 
     void TearDown() override
     {
-        free(server_ip);
         dclient_lib_deinit();
     }
 };
@@ -3459,7 +3436,7 @@ protected:
 
     void SetUp() override
     {
-        server_ip = strdup(PRIMARY_ADDRESS);
+        server_ip = g_test_dlock_cfg.server_ip;
         client_id = 102;
         object_id = 0;
         val = 20;
@@ -3473,7 +3450,6 @@ protected:
 
     void TearDown() override
     {
-        free(server_ip);
         dclient_lib_deinit();
     }
 };

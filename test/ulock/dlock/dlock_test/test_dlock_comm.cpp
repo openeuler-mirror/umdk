@@ -307,9 +307,9 @@ void default_client_ssl_cfg(struct ssl_cfg &ssl)
 void construct_primary_cfg(struct server_cfg &cfg_s, struct dlock_primary_cfg param_cfg)
 {
     cfg_s.type = SERVER_PRIMARY;
-    cfg_s.dev_name = nullptr;
-    memset(&cfg_s.eid, 0, sizeof(dlock_eid_t));
-    cfg_s.log_level = LOG_WARNING;
+    cfg_s.dev_name = g_test_dlock_cfg.dev_name;
+    memcpy(&cfg_s.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_s.log_level = g_test_dlock_cfg.log_level;
     cfg_s.tp_mode = param_cfg.tp_mode;
     cfg_s.ub_token_disable = false;
     cfg_s.sleep_mode_enable = true;
@@ -332,11 +332,9 @@ void startup_primary_server1(unsigned int recovery_client_num, unsigned int num_
 {
     int ret;
     unsigned int max_server_num = 10;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
     struct server_cfg cfg_s;
     struct dlock_primary_cfg param_cfg;
-    char ctrl_cpuset[] = "15-20";
-    char cmd_cpuset[] = "15-20";
 
     ret = dserver_lib_init(max_server_num);
     ASSERT_TRUE(ret == 0) << "dlock server lib init failed, ret: " << ret;
@@ -347,14 +345,13 @@ void startup_primary_server1(unsigned int recovery_client_num, unsigned int num_
     param_cfg.recovery_client_num = recovery_client_num;
     param_cfg.num_of_replica = num_of_replica;
     param_cfg.replica_enable = replica_enable;
-    param_cfg.ctrl_cpuset = ctrl_cpuset;
-    param_cfg.cmd_cpuset = cmd_cpuset;
+    param_cfg.ctrl_cpuset = nullptr;
+    param_cfg.cmd_cpuset = nullptr;
     construct_primary_cfg(cfg_s, param_cfg);
     ret = server_start(cfg_s, g_primary_server1_id);
     ASSERT_TRUE(ret == 0) << "server start failed, ret: " << ret;
     sleep(1);
 
-    free(server_ip);
     if (ssl_enable) {
         free(cfg_s.ssl.ca_path);
         free(cfg_s.ssl.cert_path);
@@ -379,9 +376,9 @@ void init_dclient_lib_with_server1(bool ssl_enable, trans_mode_t tp_mode)
     int ret;
     struct client_cfg cfg_c;
 
-    cfg_c.dev_name = nullptr;
-    memset(&cfg_c.eid, 0, sizeof(dlock_eid_t));
-    cfg_c.log_level = LOG_WARNING;
+    cfg_c.dev_name = g_test_dlock_cfg.dev_name;
+    memcpy(&cfg_c.eid, &g_test_dlock_cfg.eid, sizeof(dlock_eid_t));
+    cfg_c.log_level = g_test_dlock_cfg.log_level;
     cfg_c.tp_mode = tp_mode;
     cfg_c.ub_token_disable = false;
     cfg_c.primary_port = PRIMARY1_CONTROL_PORT_CLIENT;
@@ -403,7 +400,7 @@ void init_dclient_lib_with_server1(bool ssl_enable, trans_mode_t tp_mode)
 void startup_clients_of_server1(bool ssl_enable, trans_mode_t tp_mode)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
 
     init_dclient_lib_with_server1(ssl_enable, tp_mode);
 
@@ -412,8 +409,6 @@ void startup_clients_of_server1(bool ssl_enable, trans_mode_t tp_mode)
         ret = client_init(&g_client_id[i], server_ip);
         ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client init failed, ret: " << ret;
     }
-
-    free(server_ip);
 }
 
 void stop_clients_of_server1(void)
@@ -431,13 +426,12 @@ void stop_clients_of_server1(void)
 void reinit_clients_of_server1(void)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
 
     for (int i = 0; i < CLIENT_NUM; i++) {
         ret = client_reinit(g_client_id[i], server_ip);
         ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client reinit failed, ret: " << ret;
     }
-    free(server_ip);
 }
 
 int update_client_locks(int client_id)
@@ -464,7 +458,7 @@ int update_client_locks(int client_id)
 void recovery_clients_of_server1(void)
 {
     int ret;
-    char *server_ip = strdup(PRIMARY_ADDRESS);
+    char *server_ip = g_test_dlock_cfg.server_ip;
 
     for (int i = 0; i < CLIENT_NUM; i++) {
         ret = client_reinit(g_client_id[i], server_ip);
@@ -480,14 +474,12 @@ void recovery_clients_of_server1(void)
         ret = client_reinit_done(g_client_id[i]);
         ASSERT_TRUE(ret == DLOCK_SUCCESS) << "client_reinit_done failed, ret: " << ret;
     }
-
-    free(server_ip);
 }
 
 void prepare_default_primary_server_cfg(struct server_cfg &cfg_s)
 {
     struct dlock_primary_cfg param_cfg = {
-        .server_ip = strdup(PRIMARY_ADDRESS),
+        .server_ip = g_test_dlock_cfg.server_ip,
         .recovery_client_num = 0,
         .num_of_replica = 0,
         .replica_enable = false,
@@ -501,7 +493,6 @@ void prepare_default_primary_server_cfg(struct server_cfg &cfg_s)
 
 void destroy_default_primary_server_cfg(struct server_cfg &cfg_s)
 {
-    free(cfg_s.primary.server_ip_str);
     free(cfg_s.primary.ctrl_cpuset);
     free(cfg_s.primary.cmd_cpuset);
 }

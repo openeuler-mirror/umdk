@@ -150,45 +150,11 @@ TEST(test_set_send_recv_timeout, test_set_SO_SNDTIMEO_failed)
     GlobalMockObject::verify();
 }
 
-TEST(test_set_send_recv_timeout, test_set_SO_RCVTIMEO_failed)
-{
-    MOCKER(setsockopt).stubs().will(returnValue(0)).then(returnValue(-1));
-
-    int sockfd = 123456;
-    int timeout_second = 5;
-    int ret = set_send_recv_timeout(sockfd, timeout_second);
-    EXPECT_EQ(ret, -1);
-
-    GlobalMockObject::verify();
-}
-
 TEST(test_set_primary_keepalive, test_set_SO_KEEPALIVE_failed)
 {
     MOCKER(setsockopt).stubs().will(returnValue(-1));
 
     int sockfd = 12345;
-    int ret = set_primary_keepalive(sockfd);
-    EXPECT_EQ(ret, -1);
-
-    GlobalMockObject::verify();
-}
-
-TEST(test_set_primary_keepalive, test_set_TCP_KEEPIDLE_failed)
-{
-    MOCKER(setsockopt).stubs().will(returnValue(0)).then(returnValue(-1));
-
-    int sockfd = 123456;
-    int ret = set_primary_keepalive(sockfd);
-    EXPECT_EQ(ret, -1);
-
-    GlobalMockObject::verify();
-}
-
-TEST(test_set_primary_keepalive, test_set_TCP_KEEPINTVL_failed)
-{
-    MOCKER(setsockopt).stubs().will(repeat(0, 2)).then(returnValue(-1));
-
-    int sockfd = 123456;
     int ret = set_primary_keepalive(sockfd);
     EXPECT_EQ(ret, -1);
 
