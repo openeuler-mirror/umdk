@@ -1028,8 +1028,8 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
         return -UMQ_ERR_EINVAL;
     }
 
-    if (umq_trans_mode >= MAX_UMQ_TRANS_INFO_NUM) {
-        UMQ_VLOG_ERR("trans info num[%u] exceeds maximum[%u] limit\n", umq_trans_mode, MAX_UMQ_TRANS_INFO_NUM);
+    if (umq_trans_mode >= UMQ_TRANS_MODE_MAX) {
+        UMQ_VLOG_ERR("trans info mode[%u] is invalid\n", umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 
