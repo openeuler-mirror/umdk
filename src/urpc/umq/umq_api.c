@@ -924,7 +924,8 @@ int umq_async_event_fd_get(umq_trans_info_t *trans_info)
 
 int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event)
 {
-    if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX || trans_info->trans_mode < 0) {
+    if (event == NULL || trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX
+        || trans_info->trans_mode < 0) {
         UMQ_VLOG_ERR("trans info invalid\n");
         return -UMQ_ERR_EINVAL;
     }

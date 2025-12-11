@@ -129,3 +129,7 @@ UMQ Buffer相关的接口定义可以参见[umq_api.h](https://gitee.com/openeul
 * `data_size`：5K + 256
 
 第二个请求同理，此处不过多赘述。
+
+## 约束说明
+
+* 用户在umq_init或者umq_buf_alloc需要配置合理的内存池总大小和qbuf_num，以免超过实际硬件环境上内存规格，引起性能下降或其他错误
