@@ -5,7 +5,7 @@
 使用RPM包编译构建
 - rm -rf .git*
 - mkdir -p /root/rpmbuild/SOURCES/
-- tar czvf - \`find . -print\` > /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz
+- tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
 - rpmbuild -bb umdk.spec --with urpc
 
 # 3. 安装使用
