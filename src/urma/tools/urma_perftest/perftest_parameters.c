@@ -157,6 +157,8 @@ default: disable.\n");
                                                 timeout = 0: return immediately even if no events are ready,\n\
                                                 timeout = -1: an infinite timeout,\n\
                                                 default: 1000(1s).\n");
+    (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
+2MB or 1GB currently.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -318,6 +320,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->use_ctp = false;
 
     cfg->wait_jfc_timeout = PERFTEST_DEF_WAIT_JFC_TIME;
+    cfg->use_huge_page = false;
 }
 
 void print_cfg(const perftest_config_t *cfg)
@@ -517,6 +520,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"ctp",           no_argument,       NULL, PERFTEST_OPT_CTP},
         {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
+        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
         {NULL,            no_argument,       NULL, '\0'}
     };
 
@@ -798,6 +802,21 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case PERFTEST_OPT_WAIT_JFC_TIMEOUT:
                 (void)ub_str_to_int(optarg, &cfg->wait_jfc_timeout);
+                break;
+            case PERFTEST_OPT_PAGE_SIZE:
+                if (optarg != NULL) {
+                    cfg->use_huge_page = true;
+                    if (strcmp("2MB", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
+                    } else if (strcmp("1GB", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_1GB;
+                    } else if (strcmp("ANY", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
+                    } else {
+                        (void)fprintf(stderr, "Huge_page only support 2MB, 1GB and ANY.\n");
+                        return -1;
+                    }
+                }
                 break;
             default:
                 usage(argv[0]);

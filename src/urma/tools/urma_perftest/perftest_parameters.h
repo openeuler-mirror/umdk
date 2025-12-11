@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "ub_util.h"
 #include "urma_types.h"
 
 #include "perftest_communication.h"
@@ -189,7 +190,8 @@ enum perftest_opts {
     PERFTEST_OPT_CTP,
     PERFTEST_OPT_SINGLE_PATH,
     PERFTEST_OPT_JETTY_ID,
-    PERFTEST_OPT_WAIT_JFC_TIMEOUT
+    PERFTEST_OPT_WAIT_JFC_TIMEOUT,
+    PERFTEST_OPT_PAGE_SIZE
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -288,6 +290,8 @@ typedef struct perftest_config {
     bool use_ctp;
     uint32_t jetty_id;
     int32_t wait_jfc_timeout;
+    urma_huge_page_size_t huge_page;
+    bool use_huge_page;
 } perftest_config_t;
 
 typedef struct perftest_value_range {
