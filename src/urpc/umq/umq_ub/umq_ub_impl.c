@@ -2821,11 +2821,14 @@ static int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         goto RECOVER_WINDOW;
     }
 
-    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     if (max_tx < wr_index) {
         *bad_qbuf = (umq_buf_t *)(uintptr_t)urma_wr[max_tx].user_ctx;
+        umq_ub_recover_tx_imm(queue, urma_wr, wr_index, *bad_qbuf);
+        umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
         return -UMQ_ERR_EAGAIN;
     }
+
+    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
     return UMQ_SUCCESS;
 
