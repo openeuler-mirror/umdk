@@ -144,6 +144,7 @@ static ALWAYS_INLINE uint64_t round_up(uint64_t size, uint64_t align)
     return (size + align - 1) & ~(align - 1);
 }
 
+/* input align equal to 2^x */
 static ALWAYS_INLINE void *floor_to_align(void *ptr, uint64_t align)
 {
     return (void *)((uint64_t)(uintptr_t)ptr & ~(align - 1));
