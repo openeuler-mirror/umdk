@@ -64,7 +64,9 @@ add_subdirectory(common)
 add_subdirectory(lib)
 add_subdirectory(examples)
 add_subdirectory(tools)
-add_subdirectory(hw)
+if(NOT "${BUILD_UDMA}" STREQUAL "disable")
+    add_subdirectory(hw)
+endif()
 
 # uninstall target
 if(NOT TARGET uninstall)
