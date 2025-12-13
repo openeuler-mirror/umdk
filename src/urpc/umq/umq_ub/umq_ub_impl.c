@@ -10,6 +10,8 @@
 #include <pthread.h>
 #include <sys/queue.h>
 #include <malloc.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "urpc_hash.h"
 #include "urpc_hmap.h"
