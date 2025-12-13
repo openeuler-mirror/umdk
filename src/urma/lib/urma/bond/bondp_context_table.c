@@ -20,8 +20,9 @@
 static bool bdp_p_vjetty_id_comp(struct ub_hmap_node *node, void *key)
 {
     bdp_p_vjetty_id_t *item = CONTAINER_OF_FIELD(node, bdp_p_vjetty_id_t, hmap_node);
-    bdp_p_vjetty_id_key_t *tmp = key;
-    return item->key.pjetty_id == tmp->pjetty_id && item->key.type == tmp->type;
+    bdp_p_vjetty_id_key_t *key_item = key;
+    return memcmp(&item->key.pjetty_id, &key_item->pjetty_id, sizeof(urma_jetty_id_t)) == 0 &&
+        item->key.type == key_item->type;
 }
 
 static void bdp_p_vjetty_id_free(struct ub_hmap_node *node)
@@ -32,7 +33,8 @@ static void bdp_p_vjetty_id_free(struct ub_hmap_node *node)
 
 static uint32_t bdp_p_vjetty_id_hash(void *key)
 {
-    return ub_hash_bytes(key, sizeof(bdp_p_vjetty_id_key_t), BDP_P_VJETTY_ID_HASH_BASIS);
+    bdp_p_vjetty_id_key_t *item = key;
+    return ub_hash_bytes(&item->pjetty_id, sizeof(urma_jetty_id_t), BDP_P_VJETTY_ID_HASH_BASIS) + item->type;
 }
 
 int bdp_p_vjetty_id_table_create(bondp_hash_table_t *tbl, uint32_t size)
@@ -46,60 +48,7 @@ int bdp_p_vjetty_id_table_destroy(bondp_hash_table_t *tbl)
     return 0;
 }
 
-int bdp_p_vjetty_id_table_add(bondp_hash_table_t *tbl, uint32_t pjetty_id, bdp_p_vjetty_type_t type,
-    uint32_t vjetty_id, bondp_comp_t *comp)
-{
-    bdp_p_vjetty_id_t *tmp = NULL;
-    hmap_node_t *node = NULL;
-    bdp_p_vjetty_id_key_t key = {
-        .pjetty_id = pjetty_id,
-        .type = type
-    };
-    if (comp == NULL) {
-        return BONDP_HASH_MAP_INVALID_PARAM_ERROR;
-    }
-    uint32_t hash = bdp_p_vjetty_id_hash(&key);
-    (void)pthread_rwlock_wrlock(&tbl->lock);
-    node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
-    if (node) {
-        (void)pthread_rwlock_unlock(&tbl->lock);
-        return BONDP_HASH_MAP_COLLIDE_ERROR;
-    }
-    tmp = calloc(1, sizeof(bdp_p_vjetty_id_t));
-    if (!tmp) {
-        (void)pthread_rwlock_unlock(&tbl->lock);
-        return BONDP_HASH_MAP_ALLOC_ERROR;
-    }
-    tmp->key = key;
-    tmp->vjetty_id = vjetty_id;
-    tmp->comp = comp;
-    bondp_hash_table_add_with_hash_without_lock(tbl, &tmp->hmap_node, hash);
-    (void)pthread_rwlock_unlock(&tbl->lock);
-    return 0;
-}
-
-int bdp_p_vjetty_id_table_del(bondp_hash_table_t *tbl, uint32_t pjetty_id, bdp_p_vjetty_type_t type)
-{
-    hmap_node_t *node = NULL;
-    bdp_p_vjetty_id_key_t key = {
-        .pjetty_id = pjetty_id,
-        .type = type
-    };
-    uint32_t hash = bdp_p_vjetty_id_hash(&key);
-
-    (void)pthread_rwlock_wrlock(&tbl->lock);
-    node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
-    if (!node) {
-        (void)pthread_rwlock_unlock(&tbl->lock);
-        return BONDP_HASH_MAP_NOT_FOUND_ERROR;
-    }
-    bondp_hash_table_remove_without_lock(tbl, node);
-    bdp_p_vjetty_id_free(node);
-    (void)pthread_rwlock_unlock(&tbl->lock);
-    return 0;
-}
-
-int bdp_p_vjetty_id_table_add_without_lock(bondp_hash_table_t *tbl, uint32_t pjetty_id, bdp_p_vjetty_type_t type,
+int bdp_p_vjetty_id_table_add_without_lock(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type,
     uint32_t vjetty_id, bondp_comp_t *comp)
 {
     bdp_p_vjetty_id_t *tmp = NULL;
@@ -127,7 +76,7 @@ int bdp_p_vjetty_id_table_add_without_lock(bondp_hash_table_t *tbl, uint32_t pje
     return 0;
 }
 
-int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, uint32_t pjetty_id, bdp_p_vjetty_type_t type)
+int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type)
 {
     hmap_node_t *node = NULL;
     bdp_p_vjetty_id_key_t key = {
@@ -145,7 +94,7 @@ int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, uint32_t pje
     return 0;
 }
 
-int bdp_p_vjetty_id_table_lookup(bondp_hash_table_t *tbl, uint32_t pjetty_id, bdp_p_vjetty_type_t type,
+int bdp_p_vjetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type,
     uint32_t *vjetty_id)
 {
     hmap_node_t *node = NULL;
@@ -166,7 +115,7 @@ int bdp_p_vjetty_id_table_lookup(bondp_hash_table_t *tbl, uint32_t pjetty_id, bd
 }
 
 struct bondp_comp *bdp_p_vjetty_id_table_lookup_comp_without_lock(bondp_hash_table_t *tbl,
-    uint32_t pjetty_id, bdp_p_vjetty_type_t type)
+    urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type)
 {
     hmap_node_t *node = NULL;
     bdp_p_vjetty_id_key_t key = {
@@ -290,39 +239,39 @@ int bdp_r_p2v_jetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *rp
 }
 
 /* == bdp_r_v2p_token_id_table == */
- 
+
 static bool bdp_r_v2p_token_id_comp(struct ub_hmap_node *node, void *key)
 {
     bondp_v2p_token_id_t *item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
     bondp_v2p_token_id_key_t *key_item = key;
- 
+
     return (item->key.v_token_id == key_item->v_token_id) &&
         (memcmp(&item->key.v_remote_eid, &key_item->v_remote_eid, sizeof(urma_eid_t)) == 0);
 }
- 
+
 static void bdp_r_v2p_token_id_free(struct ub_hmap_node *node)
 {
     bondp_v2p_token_id_t *item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
     free(item);
 }
- 
+
 static uint32_t bdp_r_v2p_token_id_hash(void *key)
 {
     return ((bondp_v2p_token_id_key_t *)key)->v_token_id;
 }
- 
+
 int bdp_r_v2p_token_id_table_create(bondp_hash_table_t *tbl, uint32_t size)
 {
     return bondp_hash_table_create(tbl, size,
         bdp_r_v2p_token_id_comp, bdp_r_v2p_token_id_free, bdp_r_v2p_token_id_hash);
 }
- 
+
 int bdp_r_v2p_token_id_table_destroy(bondp_hash_table_t *tbl)
 {
     bondp_hash_table_destroy(tbl);
     return 0;
 }
- 
+
 int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
     urma_eid_t *v_remote_eid, bondp_v2p_token_id_t *item)
 {
@@ -341,15 +290,15 @@ int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
     bondp_v2p_token_id_t *tmp = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
     (void)memcpy(item, tmp, sizeof(bondp_v2p_token_id_t));
     (void)pthread_rwlock_unlock(&tbl->lock);
- 
+
     return 0;
 }
- 
+
 int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index)
 {
     bondp_v2p_token_id_t *item = NULL;
     struct ub_hmap_node *node, *next;
- 
+
     node = ub_hmap_first(&tbl->hmap);
     while (node != NULL) {
         item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
@@ -363,11 +312,11 @@ int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index)
         }
         node = next;
     }
- 
+
     URMA_LOG_ERR("Failed to find node, index: %u.\n", index);
     return -1;
 }
- 
+
 int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_token_id_t *item)
 {
     bondp_v2p_token_id_key_t key = item->key;
@@ -377,18 +326,18 @@ int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_tok
         URMA_LOG_DEBUG("Node already added into hash table, hash: %u, index: %u.\n", hash, item->index);
         return 0;
     }
- 
+
     bondp_v2p_token_id_t *new_item = calloc(1, sizeof(bondp_v2p_token_id_t));
     if (new_item == NULL) {
         return BONDP_HASH_MAP_ALLOC_ERROR;
     }
- 
+
     (void)memcpy(new_item->peer_p_seg, item->peer_p_seg, URMA_UBAGG_DEV_MAX_NUM * sizeof(item->peer_p_seg[0]));
     new_item->v_handle = item->v_handle;
     new_item->key = key;
     new_item->index = item->index;
- 
+
     bondp_hash_table_add_with_hash_without_lock(tbl, &new_item->hmap_node, hash);
- 
+
     return 0;
 }
