@@ -75,4 +75,6 @@ void bondp_ack_async_event(urma_async_event_t *event);
 
 /* Other ops */
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
+
+int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
 #endif // BONDP_API_H
