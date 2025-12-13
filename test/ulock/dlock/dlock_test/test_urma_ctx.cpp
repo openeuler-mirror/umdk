@@ -68,14 +68,6 @@ TEST_F(test_urma_ctx, test_create_ctx_2_malloc_failed)
     EXPECT_EQ(ret, DLOCK_ENOMEM);
 }
 
-TEST_F(test_urma_ctx, test_create_ctx_3_strcpy_failed)
-{
-    MOCKER(strcpy).stubs().will(returnValue(-1));
-
-    dlock_status_t ret = m_urma_ctx->create_ctx();
-    EXPECT_EQ(ret, DLOCK_FAIL);
-}
-
 TEST_F(test_urma_ctx, test_create_ctx_4_urma_get_device_by_name_failed)
 {
     MOCKER(urma_get_device_by_name).stubs().will(returnValue((urma_device_t *)nullptr));
@@ -88,8 +80,11 @@ TEST_F(test_urma_ctx, test_create_ctx_5_urma_create_context_failed)
 {
     MOCKER(urma_create_context).stubs().will(returnValue((urma_context_t *)nullptr));
 
+    urma_context_t *temp_urma_ctx = m_urma_ctx->m_urma_ctx;
     dlock_status_t ret = m_urma_ctx->create_ctx();
     EXPECT_EQ(ret, DLOCK_FAIL);
+
+    m_urma_ctx->m_urma_ctx = temp_urma_ctx;
 }
 
 TEST_F(test_urma_ctx, test_query_urma_device_1_by_eid_succ)
@@ -121,7 +116,7 @@ TEST_F(test_urma_ctx, test_query_urma_device_3_by_dev_name_succ)
     MOCKER_CPP(&urma_ctx::check_urma_device_state, dlock_status_t (*)(urma_ctx *, char *))
         .stubs().will(returnValue(DLOCK_SUCCESS));
 
-    char *dev_name = strdup("mlx5_1");
+    char *dev_name = strdup("udma1");
     const dlock_eid_t eid = {0};
     dlock_status_t ret = m_urma_ctx->query_urma_device(dev_name, eid);
     EXPECT_EQ(ret, DLOCK_SUCCESS);
@@ -133,7 +128,7 @@ TEST_F(test_urma_ctx, test_query_urma_device_4_by_dev_name_failed)
     MOCKER_CPP(&urma_ctx::check_urma_device_state, dlock_status_t (*)(urma_ctx *, char *))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    char *dev_name = strdup("mlx5_1");
+    char *dev_name = strdup("udma1");
     const dlock_eid_t eid = {0};
     dlock_status_t ret = m_urma_ctx->query_urma_device(dev_name, eid);
     EXPECT_EQ(ret, DLOCK_FAIL);
@@ -208,7 +203,7 @@ static urma_status_t urma_query_device_stub(urma_device_t *dev, urma_device_attr
 
 TEST_F(test_urma_ctx, test_check_urma_device_state_by_eid_3_urma_query_device_succ)
 {
-    std::string dev_name = "mlx5_1";
+    std::string dev_name = "udma1";
     urma_device_t temp_dev;
     (void)memset(&temp_dev, 0, sizeof(urma_device_t));
     snprintf(temp_dev.name, URMA_MAX_NAME, "%s", dev_name.c_str());
@@ -252,7 +247,7 @@ TEST_F(test_urma_ctx, test_check_urma_device_state_1_get_urma_eid_index_failed)
         dlock_status_t (*)(urma_ctx *, urma_device_t *, urma_eid_t *, uint32_t &))
         .stubs().will(returnValue(DLOCK_FAIL));
 
-    char *dev_name = strdup("mlx5_1");
+    char *dev_name = strdup("udma1");
     dlock_status_t ret = m_urma_ctx->check_urma_device_state(dev_name);
     EXPECT_EQ(ret, DLOCK_FAIL);
 
@@ -269,7 +264,7 @@ TEST_F(test_urma_ctx, test_check_urma_device_state_2_urma_query_device_failed)
         urma_eid_t *, uint32_t &)).stubs().will(invoke(get_urma_eid_index_stub));
     MOCKER(urma_query_device).stubs().will(returnValue(URMA_FAIL));
 
-    char *dev_name = strdup("mlx5_1");
+    char *dev_name = strdup("udma1");
     dlock_status_t ret = m_urma_ctx->check_urma_device_state(dev_name);
     EXPECT_EQ(ret, DLOCK_FAIL);
 

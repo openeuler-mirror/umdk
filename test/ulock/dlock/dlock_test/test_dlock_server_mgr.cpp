@@ -39,7 +39,6 @@ protected:
         GlobalMockObject::verify();
 
         dserver_lib_deinit();
-        free(m_cfg_s.primary.server_ip_str);
         free(m_cfg_s.primary.ctrl_cpuset);
         free(m_cfg_s.primary.cmd_cpuset);
     }

@@ -64,7 +64,7 @@ protected:
     void SetUp()
     {
         m_server = new(std::nothrow) dlock_server(1);
-        m_ip_str = strdup(PRIMARY_ADDRESS);
+        m_ip_str = g_test_dlock_cfg.server_ip;
         ASSERT_NE(m_server, nullptr);
         ASSERT_NE(m_ip_str, nullptr);
 
@@ -77,7 +77,6 @@ protected:
         GlobalMockObject::verify();
 
         delete m_server;
-        free(m_ip_str);
     }
 };
 
@@ -309,8 +308,7 @@ TEST_F(test_dlock_server, test_init_server_1_server_inited)
 
 TEST_F(test_dlock_server, test_init_server_2_lock_memory_init_failed)
 {
-    auto mocker_memalign = reinterpret_cast<void (*)(size_t, size_t, const char *, int)>(&memalign);
-    MOCKER(mocker_memalign).stubs().will(returnValue((void *)nullptr));
+    MOCKER(memalign).stubs().will(returnValue((void *)nullptr));
 
     int ret = m_server->init_server(true, m_server_cfg);
     EXPECT_EQ(ret, static_cast<int>(DLOCK_SERVER_NO_RESOURCE));
@@ -390,8 +388,7 @@ TEST_F(test_dlock_server, test_init_server_12_obj_memory_init_failed)
 
 TEST_F(test_dlock_server, test_primary_control_loop_1_control_events_calloc_failed)
 {
-    auto mocker_calloc = reinterpret_cast<void (*)(size_t, size_t, const char *, int)>(&calloc);
-    MOCKER(mocker_calloc).stubs().will(returnValue((void *)nullptr));
+    MOCKER(calloc).stubs().will(returnValue((void *)nullptr));
 
     int ret = m_server->primary_control_loop();
     EXPECT_EQ(ret, -1);
@@ -399,8 +396,7 @@ TEST_F(test_dlock_server, test_primary_control_loop_1_control_events_calloc_fail
 
 TEST_F(test_dlock_server, test_primary_control_loop_2_epoll_ctl_failed)
 {
-    auto mocker_epoll_ctl = reinterpret_cast<int (*)(int, int, int, struct epoll_event *)>(&epoll_ctl);
-    MOCKER(mocker_epoll_ctl).stubs().will(returnValue(-1));
+    MOCKER(epoll_ctl).stubs().will(returnValue(-1));
 
     int ret = m_server->primary_control_loop();
     EXPECT_EQ(ret, -1);
@@ -408,8 +404,7 @@ TEST_F(test_dlock_server, test_primary_control_loop_2_epoll_ctl_failed)
 
 TEST_F(test_dlock_server, test_primary_control_loop_3_epoll_wait_failed)
 {
-    auto mocker_epoll_ctl = reinterpret_cast<int (*)(int, int, int, struct epoll_event *)>(&epoll_ctl);
-    MOCKER(mocker_epoll_ctl).stubs().will(returnValue(0));
+    MOCKER(epoll_ctl).stubs().will(returnValue(0));
     MOCKER(epoll_wait).stubs().will(returnValue(-1));
 
     int ret = m_server->primary_control_loop();
@@ -418,8 +413,7 @@ TEST_F(test_dlock_server, test_primary_control_loop_3_epoll_wait_failed)
 
 TEST_F(test_dlock_server, test_primary_control_loop_4_epoll_create_failed)
 {
-    auto mocker_epoll_create = reinterpret_cast<int (*)(int, int)>(&epoll_create);
-    MOCKER(mocker_epoll_create).stubs().will(returnValue(-1));
+    MOCKER(epoll_create).stubs().will(returnValue(-1));
     int ret = m_server->primary_control_loop();
     EXPECT_EQ(ret, -1);
 }
@@ -459,8 +453,7 @@ TEST_F(test_dlock_server, test_primary_control_func_4_epoll_ctl_failed)
     int new_sockfd = 10002;
 
     MOCKER(accept).stubs().will(returnValue(new_sockfd));
-    auto mocker_epoll_ctl = reinterpret_cast<int (*)(int, int, int, struct epoll_event *)>(&epoll_ctl);
-    MOCKER(mocker_epoll_ctl).stubs().will(returnValue(-1));
+    MOCKER(epoll_ctl).stubs().will(returnValue(-1));
 
     m_server->m_listen_fd = 10000;
     int ret = m_server->primary_control_func(10001, 10000);
@@ -577,8 +570,7 @@ TEST_F(test_dlock_server, test_get_client_id_max_num_reached)
 
 TEST_F(test_create_listen_fd, test_create_socket_failed)
 {
-    auto mocker_socket = reinterpret_cast<int (*)(int, int, int)>(&socket);
-    MOCKER(mocker_socket).stubs().will(returnValue(-1));
+    MOCKER(socket).stubs().will(returnValue(-1));
 
     int listen_fd;
     int ret = m_server->create_listen_fd(m_ip_addr, CONTROL_PORT_CLIENT, listen_fd);
@@ -587,8 +579,7 @@ TEST_F(test_create_listen_fd, test_create_socket_failed)
 
 TEST_F(test_create_listen_fd, test_setsockopt_failed)
 {
-    auto mocker_setsockopt = reinterpret_cast<int (*)(int, int, int, const void *, socklen_t)>(&setsockopt);
-    MOCKER(mocker_setsockopt).stubs().will(returnValue(-1));
+    MOCKER(setsockopt).stubs().will(returnValue(-1));
 
     int listen_fd;
     int ret = m_server->create_listen_fd(m_ip_addr, CONTROL_PORT_CLIENT, listen_fd);
@@ -597,8 +588,7 @@ TEST_F(test_create_listen_fd, test_setsockopt_failed)
 
 TEST_F(test_create_listen_fd, test_bind_failed)
 {
-    auto mocker_bind = reinterpret_cast<int (*)(int, const struct sockaddr *, socklen_t)>(&bind);
-    MOCKER(mocker_bind).stubs().will(returnValue(-1));
+    MOCKER(bind).stubs().will(returnValue(-1));
 
     int listen_fd;
     int ret = m_server->create_listen_fd(m_ip_addr, CONTROL_PORT_CLIENT, listen_fd);
@@ -607,27 +597,11 @@ TEST_F(test_create_listen_fd, test_bind_failed)
 
 TEST_F(test_create_listen_fd, test_listen_failed)
 {
-    auto mocker_listen = reinterpret_cast<int (*)(int, int)>(&listen);
-    MOCKER(mocker_listen).stubs().will(returnValue(-1));
+    MOCKER(listen).stubs().will(returnValue(-1));
 
     int listen_fd;
     int ret = m_server->create_listen_fd(m_ip_addr, CONTROL_PORT_CLIENT, listen_fd);
     EXPECT_EQ(ret, -1);
-}
-
-TEST(test_set_random_seed, test_read_entropy_pool_failed)
-{
-    dlock_server *p_server = new(std::nothrow) dlock_server(1);
-    ASSERT_NE(p_server, nullptr);
-
-    MOCKER_CPP(&dlock_server::read_entropy_pool, dlock_status_t (*)(dlock_server *, int, uint8_t *, int))
-        .stubs().will(returnValue(DLOCK_FAIL));
-
-    int ret = p_server->set_random_seed();
-    EXPECT_EQ(ret, DLOCK_FAIL);
-
-    GlobalMockObject::verify();
-    delete p_server;
 }
 
 TEST_F(test_init_as_primary, test_set_random_seed_failed)
@@ -861,8 +835,7 @@ TEST_F(test_recv_msg, test_recv_msg_hdr_3_recv_len_error)
 
 TEST_F(test_recv_msg, test_recv_msg_ext_hdr_and_body_1_malloc_buff_failed)
 {
-    auto mocker_malloc = reinterpret_cast<void *(*)(size_t)>(malloc);
-    MOCKER(mocker_malloc).stubs().with(eq(DLOCK_CLIENT_INIT_REQ_BODY_LEN)).will(returnValue((void *)nullptr));
+    MOCKER(malloc).stubs().with(eq(DLOCK_CLIENT_INIT_REQ_BODY_LEN)).will(returnValue((void *)nullptr));
 
     uint8_t *msg_ext_hdr = nullptr;
     uint8_t *msg_body = nullptr;

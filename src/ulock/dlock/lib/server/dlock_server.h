@@ -88,13 +88,13 @@ public:
 
     inline void erase_from_m_jetty_mgr_map(uint32_t local_id)
     {
-        std::unique_lock<std::shared_mutex> locker(m_jetty_mgr_map_rwlock);
+        std::lock_guard<std::mutex> lg(m_jetty_mgr_map_lock);
         m_jetty_mgr_map.erase(local_id);
     }
 
     inline void add_to_m_jetty_mgr_map(uint32_t local_id, jetty_mgr *p_jetty_mgr)
     {
-        std::unique_lock<std::shared_mutex> locker(m_jetty_mgr_map_rwlock);
+        std::lock_guard<std::mutex> lg(m_jetty_mgr_map_lock);
         jetty_mgr_map_t::iterator jetty_mgr_iter = m_jetty_mgr_map.find(local_id);
         if (jetty_mgr_iter != m_jetty_mgr_map.end()) {
             /*
@@ -241,7 +241,7 @@ private:
     int m_curr_object_num;
 
     jetty_mgr_map_t m_jetty_mgr_map;
-    std::shared_mutex m_jetty_mgr_map_rwlock;
+    std::mutex m_jetty_mgr_map_lock;
 };
 };
 #endif

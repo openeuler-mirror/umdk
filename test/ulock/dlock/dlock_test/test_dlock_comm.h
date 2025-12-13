@@ -29,7 +29,6 @@
 #include "dlock_server_api.h"
 #include "dlock_log.h"
 
-#define PRIMARY_ADDRESS "127.0.0.1"
 #define INVALID_IP_STR "1.1.1.1"
 
 #define PRIMARY1_CONTROL_PORT_CLIENT 22000
@@ -67,6 +66,13 @@ extern int g_client_id[CLIENT_NUM];
 
 using namespace dlock;
 
+struct test_dlock_cfg {
+    char *server_ip;
+    dlock_eid_t eid;
+    char *dev_name;
+    int log_level;
+};
+
 struct dlock_ssl_ca_info {
     std::string ca_path;
     std::string ca_prkey_path;
@@ -83,6 +89,8 @@ struct dlock_primary_cfg {
     char *ctrl_cpuset;
     char *cmd_cpuset;
 };
+
+extern struct test_dlock_cfg g_test_dlock_cfg;
 
 int generate_ssl_ca(std::string &pwd, std::string &path, std::string &file_suffix, int days);
 int generate_ssl_crt(struct dlock_ssl_ca_info &ca_info, std::string &pwd, std::string &path, std::string &file_suffix, int days);

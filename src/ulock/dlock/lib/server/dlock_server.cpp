@@ -162,7 +162,7 @@ void dlock_server::clear_m_client_map(void)
 
 void dlock_server::clear_m_jetty_mgr_map(void)
 {
-    std::unique_lock<std::shared_mutex> locker(m_jetty_mgr_map_rwlock);
+    std::lock_guard<std::mutex> lg(m_jetty_mgr_map_lock);
     m_jetty_mgr_map.clear();
 }
 
@@ -1317,7 +1317,7 @@ int dlock_server::check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable)
         jetty_mgr *p_jetty_mgr = nullptr;
 
         /* cr local_id is jetty/jfs id. */
-        std::shared_lock<std::shared_mutex> shared_locker(m_jetty_mgr_map_rwlock);
+        std::lock_guard<std::mutex> lg(m_jetty_mgr_map_lock);
         jetty_mgr_map_t::iterator jetty_mgr_iter = m_jetty_mgr_map.find(cr[idx].local_id);
         if (jetty_mgr_iter == m_jetty_mgr_map.end()) {
             DLOCK_LOG_WARN("The jetty_mgr associated with cr does not exist, cr local_id: %u, status: 0x%x.",
