@@ -1830,14 +1830,18 @@ static inline bdp_p_vjetty_type_t get_p_vjetty_type_by_cr(urma_cr_t *cr)
  * The caller needs to decrement the reference count when bjetty_ctx is about to go out of scope.
  * @return Return bjetty_ctx on success, return NULL on failure.
  */
-static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, urma_cr_t *cr)
+static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
 {
+    urma_jetty_id_t pjetty_id = {
+        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
+        .id = cr->local_id,
+    };
     pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
-    bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(&bdp_ctx->p_vjetty_id_table,
-        cr->local_id, get_p_vjetty_type_by_cr(cr));
+    bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(&bdp_ctx->p_vjetty_id_table, pjetty_id,
+                                                                        get_p_vjetty_type_by_cr(cr));
     if (comp == NULL) {
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to get comp, local_id: %d\n", cr->local_id);
+        URMA_LOG_ERR("Failed to get comp, local_id: %d\n", pjetty_id.id);
         return NULL;
     }
     if (comp->comp_ctx == NULL) {
@@ -1884,7 +1888,7 @@ static urma_status_t update_device_valid_state(bondp_context_t *bdp_ctx, int dev
         if (!is_cr_user_ctx_valid(&cr_buf[cr_id])) {
             continue;
         }
-        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, &cr_buf[cr_id]);
+        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_id, &cr_buf[cr_id]);
         if (bjetty_ctx == NULL) {
             URMA_LOG_ERR("Failed to get bjetty_ctx\n");
             return URMA_FAIL;
@@ -1948,13 +1952,17 @@ static int bondp_poll_pjfc(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfc, int 
  * Convert the local_id field of a CR from pjetty.id to vjetty.id if possible.
  * @return: If conversion is possible, perform the conversion and return 0; otherwise, do not replace and return -1.
  */
-static int restore_cr_local_id(bondp_context_t *bdp_ctx, urma_cr_t *cr)
+static int restore_cr_local_id(bondp_context_t *bdp_ctx,  int dev_idx, urma_cr_t *cr)
 {
     uint32_t vjetty_id;
-    int ret = bdp_p_vjetty_id_table_lookup(&bdp_ctx->p_vjetty_id_table, cr->local_id, get_p_vjetty_type_by_cr(cr),
+    urma_jetty_id_t pjetty_id = {
+        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
+        .id = cr->local_id,
+    };
+    int ret = bdp_p_vjetty_id_table_lookup(&bdp_ctx->p_vjetty_id_table, pjetty_id, get_p_vjetty_type_by_cr(cr),
         &vjetty_id);
     if (ret) {
-        URMA_LOG_ERR("Failed to get vjetty.id of local_id: %u, ret: %d\n", cr->local_id, ret);
+        URMA_LOG_ERR("Failed to get vjetty.id of local_id: %u, ret: %d\n", pjetty_id.id, ret);
         return -1;
     }
     cr->local_id = vjetty_id;
@@ -2001,13 +2009,13 @@ static void restore_cr_remote_id_fallback(bondp_context_t *bdp_ctx, urma_cr_t *c
  * Considering that the binding relationship between pjfc and pjetty keeps their indices consistent,
  * we use the index of pjfc as the index for pjetty.
  */
-static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx,
-    urma_cr_t *cr, urma_cr_t *cr_output_array, int *total_cnt)
+static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr, urma_cr_t *cr_output_array,
+                                    int *total_cnt)
 {
     // Special handling is applied to the CRs constructed by the hardware of SUSPEND_DONE and FLUSH_ERROR_DONE.
     if (!is_cr_user_ctx_valid(cr)) {
         // find out the bjetty_ctx
-        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, cr);
+        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_idx, cr);
         if (bjetty_ctx == NULL) {
             return -1;
         }
@@ -2046,7 +2054,7 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx,
         put_bjetty_ctx(bjetty_ctx);
         return 0;
     }
-    if (restore_cr_local_id(bdp_ctx, cr)) {
+    if (restore_cr_local_id(bdp_ctx, dev_idx, cr)) {
         cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
     }
     /* Perform remote_id restoration on both the sending and receiving ends.
@@ -2069,13 +2077,13 @@ static inline bool is_cr_handler_ret_skip(bondp_cr_handler_ret_t ret)
     return ret == CR_HANDLER_SUCCESS_AND_SKIP || ret == CR_HANDLER_ERR_AND_SKIP;
 }
 
-static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int total_cqe_cnt, int cr_cnt_limit, urma_cr_t *cr,
-    urma_cr_t *cr_output_array, int *total_cnt)
+static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int total_cqe_cnt, int cr_cnt_limit,
+                                      urma_cr_t *cr, urma_cr_t *cr_output_array, int *total_cnt)
 {
     /* Handle CR with status URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE */
     if (!is_cr_user_ctx_valid(cr)) {
         /* For these CRs where the user_ctx does not exist, simply restore the necessary values and then skip them. */
-        if (restore_cr_local_id(bdp_ctx, cr)) {
+        if (restore_cr_local_id(bdp_ctx, dev_idx, cr)) {
             cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
         }
         /*
@@ -2090,7 +2098,7 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int total_cqe_cn
         cr_output_array[(*total_cnt)++] = *cr;
         return 0;
     }
-    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, cr);
+    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_idx, cr);
     if (bjetty_ctx == NULL) {
         return -1;
     }
@@ -2164,7 +2172,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
                 ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
                     cr_output_array, &total_cnt);
             } else {
-                ret = bondp_handle_cr_with_store(bdp_ctx, total_cqe_cnt, cr_cnt,
+                ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_cqe_cnt, cr_cnt,
                     &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
             }
             if (ret < 0) {
@@ -2286,7 +2294,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr_output_arra
                  ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
                      cr_output_array, &total_cnt);
              } else {
-                 ret = bondp_handle_cr_with_store(bdp_ctx, total_flush_cnt, cr_cnt,
+                 ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_flush_cnt, cr_cnt,
                      &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
              }
              if (ret < 0) {
