@@ -21,6 +21,7 @@
 #include "ums_ubcore.h"
 
 #define GID_SPRINTF_BUFF_SIZE 40
+#define UMS_CONN_ID_MASK 0x3FFFFF
 
 struct ums_rtoken_key_info {
 	__be32 nw_rkey;

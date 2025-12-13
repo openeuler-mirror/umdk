@@ -424,7 +424,7 @@ static inline u32 ums_get_imm(struct ums_connection *conn, int skip_flag)
 	/* in DMS, we store conn->token, credit and write_blocked in the IMM */
 	imm.write_blocked = conn->local_tx_ctrl.prod_flags.write_blocked;
 	imm.skip_flag = ((u32)skip_flag) & 0x1;
-	imm.token = conn->local_tx_ctrl.token & 0xFFFFFF;
+	imm.token = conn->local_tx_ctrl.token & UMS_CONN_ID_MASK;
 	if (ums_wr_rx_credits_need_announce_frequent(link))
 		saved_credits = (u8)ums_wr_rx_get_credits(link);
 	imm.credits = saved_credits;

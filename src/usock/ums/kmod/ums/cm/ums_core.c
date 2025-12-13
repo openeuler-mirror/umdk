@@ -211,7 +211,7 @@ static int ums_lgr_register_conn(struct ums_connection *conn, bool first)
 	 */
 	sock_hold(&ums->sk); /* sock_put in ums_lgr_unregister_conn() */
 	while (conn->conn_id == 0) {
-		conn->conn_id = (u32)atomic_inc_return(&nexttoken);
+		conn->conn_id = (u32)atomic_inc_return(&nexttoken) & UMS_CONN_ID_MASK;
 		if (ums_lgr_find_conn(conn->conn_id, conn->lgr))
 			conn->conn_id = 0;
 	}
