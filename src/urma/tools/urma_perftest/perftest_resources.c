@@ -16,7 +16,9 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <stddef.h>
+#include <sys/mman.h>
 
+#include "ub_util.h"
 #include "urma_api.h"
 
 #include "perftest_resources.h"
@@ -660,12 +662,20 @@ static inline void free_token_id(perftest_context_t *ctx, const perftest_config_
     ctx->token_id = NULL;
 }
 
-static inline void free_memory(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
+static void free_memory(perftest_context_t *ctx, const perftest_config_t *cfg, const int idx)
 {
+    int ret = 0;
     uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
     for (uint32_t j = 0; j < idx; j++) {
         if (j < seg_num) {
-            free(ctx->local_buf[j]);
+            if (cfg->use_huge_page == false) {
+                free(ctx->local_buf[j]);
+            } else {
+                ret = ub_hugefree(ctx->local_buf[j], ctx->buf_len);
+                if (ret != 0) {
+                    (void)fprintf(stderr, "Failed to free huge page, len: %lu.\n", ctx->buf_len);
+                }
+            }
         }
     }
     free(ctx->local_buf);
@@ -675,6 +685,8 @@ static inline void free_memory(perftest_context_t *ctx, const perftest_config_t 
 static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     uint32_t i = 0, j = 0, k = 0;
+    const uint64_t page_size_2MB = 2 * 1024 * 1024;
+    const uint64_t page_size_1GB = 1024 * 1024 * 1024;
     ctx->local_buf = calloc(1, sizeof(void *) * cfg->jettys);
     if (ctx->local_buf == NULL) {
         return -ENOMEM;
@@ -683,6 +695,18 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     uint32_t seg_num = (cfg->seg_pre_jetty == false) ? 1 : cfg->jettys;
 
     ctx->page_size = cfg->page_size;
+    if (cfg->use_huge_page) {
+        switch (cfg->huge_page) {
+        case UB_HUGE_PAGE_SIZE_2MB:
+            ctx->page_size = page_size_2MB;
+            break;
+        case UB_HUGE_PAGE_SIZE_1GB:
+            ctx->page_size = page_size_1GB;
+            break;
+        default:
+            break;
+        }
+    }
 
     // holds the size of maximum between cfg->size and page_size, aligned to cache line.
     uint64_t max_size = MAX(cfg->size, ctx->page_size);
@@ -692,14 +716,26 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
         ((cfg->seg_pre_jetty == true) ? 1 : cfg->jettys);
 
     for (i = 0; i < cfg->jettys; i++) {
-        if (i < seg_num) {
-            ctx->local_buf[i] = memalign(ctx->page_size, ctx->buf_len);
+        if (cfg->use_huge_page) {
+            if (i < seg_num) {
+                ctx->local_buf[i] = ub_hugemalloc(ctx->buf_len, cfg->huge_page, NULL);
+            } else {
+                ctx->local_buf[i] = ctx->local_buf[0];
+            }
+            if (ctx->local_buf[i] == NULL) {
+                (void)fprintf(stderr, "Failed to alloc local buffer, i: %u.\n", i);
+                goto free_memory;
+            }
         } else {
-            ctx->local_buf[i] = ctx->local_buf[0];
-        }
-        if (ctx->local_buf[i] == NULL) {
-            (void)fprintf(stderr, "Failed to memalign local buff: %u!\n", i);
-            goto free_memory;
+            if (i < seg_num) {
+                ctx->local_buf[i] = memalign(ctx->page_size, ctx->buf_len);
+            } else {
+                ctx->local_buf[i] = ctx->local_buf[0];
+            }
+            if (ctx->local_buf[i] == NULL) {
+                (void)fprintf(stderr, "Failed to memalign local buffer, i: %u.\n", i);
+                goto free_memory;
+            }
         }
     }
 
