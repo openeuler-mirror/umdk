@@ -521,7 +521,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
         {"hugepage_size", required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
-        {NULL,            no_argument,       NULL, '\0'}
+        {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
+        {NULL,            no_argument,       NULL, '\0'},
     };
 
     /* Second parse the options */
@@ -804,18 +805,29 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 (void)ub_str_to_int(optarg, &cfg->wait_jfc_timeout);
                 break;
             case PERFTEST_OPT_PAGE_SIZE:
-                if (optarg != NULL) {
-                    cfg->use_huge_page = true;
-                    if (strcmp("2MB", optarg) == 0) {
-                        cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
-                    } else if (strcmp("1GB", optarg) == 0) {
-                        cfg->huge_page = UB_HUGE_PAGE_SIZE_1GB;
-                    } else if (strcmp("ANY", optarg) == 0) {
-                        cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
-                    } else {
-                        (void)fprintf(stderr, "Huge_page only support 2MB, 1GB and ANY.\n");
-                        return -1;
-                    }
+                cfg->use_huge_page = true;
+                if (strcmp("2MB", optarg) == 0) {
+                    cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
+                } else if (strcmp("1GB", optarg) == 0) {
+                    cfg->huge_page = UB_HUGE_PAGE_SIZE_1GB;
+                } else if (strcmp("ANY", optarg) == 0) {
+                    cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
+                } else {
+                    (void)fprintf(stderr, "Huge_page only support 2MB, 1GB and ANY.\n");
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_AGGR_MODE:
+                cfg->enable_aggr_mode = true;
+                if (strcmp("standalone", optarg) == 0) {
+                    cfg->aggr_mode = URMA_AGGR_MODE_STANDALONE;
+                } else if (strcmp("active_backup", optarg) == 0) {
+                    cfg->aggr_mode = URMA_AGGR_MODE_ACTIVE_BACKUP;
+                } else if (strcmp("balance", optarg) == 0) {
+                    cfg->aggr_mode = URMA_AGGR_MODE_BALANCE;
+                } else {
+                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");
+                    return -1;
                 }
                 break;
             default:
@@ -874,7 +886,7 @@ static int calc_rate_limit_gap(perftest_config_t *cfg)
     double gap_time = 0; /* usec */
     uint32_t num_of_burst = 0;
     double cpu_mhz = 0;
-    
+
     switch (cfg->rate_units) {
         case PERFTEST_RATE_LIMIT_MEGA_BYTE:
             rate_limit_pps = (uint32_t)(((double)(cfg->rate_limit) / cfg->size) * PERFTEST_MBS);

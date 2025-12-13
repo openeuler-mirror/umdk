@@ -191,7 +191,8 @@ enum perftest_opts {
     PERFTEST_OPT_SINGLE_PATH,
     PERFTEST_OPT_JETTY_ID,
     PERFTEST_OPT_WAIT_JFC_TIMEOUT,
-    PERFTEST_OPT_PAGE_SIZE
+    PERFTEST_OPT_PAGE_SIZE,
+    PERFTEST_OPT_AGGR_MODE,
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -292,6 +293,8 @@ typedef struct perftest_config {
     int32_t wait_jfc_timeout;
     urma_huge_page_size_t huge_page;
     bool use_huge_page;
+    bool enable_aggr_mode;
+    uint32_t aggr_mode;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

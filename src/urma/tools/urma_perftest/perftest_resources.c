@@ -188,6 +188,14 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     ctx->eid = ctx->urma_ctx->eid;
 
+    if (cfg->enable_aggr_mode) {
+        status = urma_set_context_opt( ctx->urma_ctx, URMA_OPT_AGGR_MODE, &cfg->aggr_mode, sizeof(cfg->aggr_mode));
+        if (status != URMA_SUCCESS) {
+            (void)fprintf(stderr, "Failed to set aggregation mode, status:%d!\n", (int)status);
+            goto del_ctx;
+        }
+    }
+
     if (check_dev_cap(ctx, cfg) != 0) {
         goto del_ctx;
     }
