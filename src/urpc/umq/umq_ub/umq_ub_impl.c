@@ -61,6 +61,7 @@ static util_id_allocator_t g_umq_ub_id_allocator = {0};
 typedef struct remote_eid_hmap_node {
     struct urpc_hmap_node node;
     urma_eid_t eid;
+    uint32_t pid;
     uint32_t remote_eid_id;
     uint32_t ref_cnt;
 } remote_eid_hmap_node_t;
@@ -284,12 +285,14 @@ typedef struct umq_ub_bind_info {
     uint32_t tx_depth;
     uint32_t rx_buf_size;
     uint32_t feature;
+    uint32_t pid;
     umq_state_t state;
 } umq_ub_bind_info_t;
 
 typedef struct ub_bind_ctx {
     umq_ub_bind_info_t bind_info;
     urma_target_jetty_t *tjetty;
+    uint32_t remote_pid;
     uint32_t remote_eid_id;
     uint64_t remote_notify_addr;
 } ub_bind_ctx_t;
@@ -952,6 +955,7 @@ int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_i
     info->rx_buf_size = queue->rx_buf_size;
     info->feature = queue->dev_ctx->feature;
     info->state = queue->state;
+    info->pid = getpid();
     (void)memcpy(&info->tseg, queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
     info->buf_pool_mode = umq_qbuf_mode_get();
     return sizeof(umq_ub_bind_info_t);
@@ -1233,12 +1237,13 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
 {
     remote_imported_tseg_info_t *remote_imported_info = queue->dev_ctx->remote_imported_info;
     urma_eid_t *remote_eid = &info->jetty_id.eid;
-    uint32_t hash = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    uint32_t hash_eid = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    uint32_t hash = urpc_hash_add(hash_eid, info->pid);
     bool find = false;
     remote_eid_hmap_node_t *eid_node;
     pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
-        if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) {
+        if ((memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) && (info->pid == eid_node->pid)) {
             find = true;
             break;
         }
@@ -1291,6 +1296,7 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     }
 
     (void)pthread_mutex_init(&remote_imported_info->imported_tseg_list_mutex[eid_id], NULL);
+    eid_node->pid = info->pid;
     eid_node->remote_eid_id = eid_id;
     eid_node->ref_cnt = 1;
     *remote_eid_id = eid_id;
@@ -1309,12 +1315,13 @@ static int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_in
         return -UMQ_ERR_EINVAL;
     }
     urma_eid_t *remote_eid = &ctx->tjetty->id.eid;
-    uint32_t hash = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    uint32_t hash_eid = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
+    uint32_t hash = urpc_hash_add(hash_eid, ctx->remote_pid);
     bool find = false;
     remote_eid_hmap_node_t *eid_node;
     pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
-        if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0 &&
+        if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0 && (ctx->remote_pid == eid_node->pid) &&
             eid_node->remote_eid_id == ctx->remote_eid_id) {
             find = true;
             break;
@@ -1386,6 +1393,7 @@ static int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         }
     }
 
+    ctx->remote_pid = info->pid;
     ctx->tjetty = tjetty;
     queue->bind_ctx = ctx;
 
