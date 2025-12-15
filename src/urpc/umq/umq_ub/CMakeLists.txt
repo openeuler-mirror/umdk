@@ -21,7 +21,7 @@ target_include_directories(umq_ub
         ${CMAKE_SOURCE_DIR}/urma/lib/uvs/core/include
 )
 
-target_link_libraries(umq_ub PUBLIC pthread ssl urma tpsa PRIVATE umq_buf)
+target_link_libraries(umq_ub PUBLIC pthread OpenSSL::SSL urma tpsa PRIVATE umq_buf)
 install(TARGETS umq_ub DESTINATION /usr/lib64)
 
 # uninstall target
