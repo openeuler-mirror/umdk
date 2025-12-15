@@ -16,6 +16,8 @@ set(CMAKE_FLAGS_TSAN "-fsanitize=thread -fsanitize-recover=address -fno-omit-fra
 set(CMAKE_FLAGS_COVERAGE "-fprofile-arcs -ftest-coverage")
 set(CMAKE_FLAGS_FUZZ "${CMAKE_FLAGS_ASAN} ${CMAKE_FLAGS_COVERAGE} -fdump-rtl-expand")
 
+find_package(OpenSSL REQUIRED)
+
 # FUZZ ENABLE
 if("${FUZZ}" STREQUAL "enable")
     set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} ${CMAKE_FLAGS_FUZZ}")

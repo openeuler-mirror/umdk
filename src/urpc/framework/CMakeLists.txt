@@ -45,7 +45,7 @@ set_target_properties(urpc PROPERTIES
 )
 
 set_property(TARGET urpc PROPERTY C_STANDARD 11)
-target_link_libraries(urpc urma urma_common common_util pthread ssl)
+target_link_libraries(urpc urma urma_common common_util pthread OpenSSL::SSL)
 install(TARGETS urpc DESTINATION /usr/lib64)
 
 # uninstall target

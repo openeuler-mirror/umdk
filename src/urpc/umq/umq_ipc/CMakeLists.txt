@@ -15,7 +15,7 @@ set_target_properties(umq_ipc PROPERTIES
     C_STANDARD 11
 )
 
-target_link_libraries(umq_ipc PUBLIC pthread ssl PRIVATE common_util rt)
+target_link_libraries(umq_ipc PUBLIC pthread OpenSSL::SSL PRIVATE common_util rt)
 install(TARGETS umq_ipc DESTINATION /usr/lib64)
 
 # uninstall target
