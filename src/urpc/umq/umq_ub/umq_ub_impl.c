@@ -49,6 +49,7 @@
 #define UMQ_UB_FLOW_CONTROL_NOTIFY_THR 4
 #define UMQ_DATA_LIMIT_SIZE (8 * 1024) // 8KB
 #define DEV_STR_LENGTH 64
+#define UMQ_QBUF_ALIGN_SIZE 4096
 
 typedef enum umq_ub_rw_segment_offset {
     OFFSET_MEM_IMPORT = 0,
@@ -730,7 +731,7 @@ static void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *
     if (status == URMA_SUCCESS) {
         return;
     }
-  
+
     UMQ_LIMIT_VLOG_ERR("flow control window send failed, status %d, local eid: " EID_FMT ", "
                        "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n", (int)status,
                        EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id,
@@ -803,9 +804,9 @@ static inline void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cn
 
 static int huge_qbuf_pool_memory_init(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
-    uint32_t align_size = umq_huge_qbuf_get_size_by_type(type);
-    uint32_t total_len = align_size * HUGE_QBUF_BUFFER_INC_BATCH;
-    void *addr = (void *)memalign(align_size, total_len);
+    uint32_t blk_size = umq_huge_qbuf_get_size_by_type(type);
+    uint32_t total_len = blk_size * HUGE_QBUF_BUFFER_INC_BATCH;
+    void *addr = (void *)memalign(UMQ_QBUF_ALIGN_SIZE, total_len);
     if (addr == NULL) {
         UMQ_VLOG_ERR("memory alloc failed\n");
         return -UMQ_ERR_ENOMEM;
