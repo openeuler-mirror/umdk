@@ -248,11 +248,20 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         return ret;
     }
 
+    return ret;
+}
+
+void umq_huge_qbuf_pool_ctx_common_cfg_set(huge_qbuf_pool_cfg_t *cfg)
+{
     g_huge_pool_ctx.mode = cfg->mode;
     g_huge_pool_ctx.headroom_size = cfg->headroom_size;
     g_huge_pool_ctx.inited = true;
+}
 
-    return ret;
+void umq_huge_qbuf_config_uninit(huge_qbuf_pool_size_type_t type)
+{
+    huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
+    pool->inited = false;
 }
 
 static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_split(huge_pool_t *pool, uint32_t request_size,

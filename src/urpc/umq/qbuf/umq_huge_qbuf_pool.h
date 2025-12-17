@@ -53,6 +53,8 @@ void umq_huge_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregi
 huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_size(uint32_t buf_size);
 uint32_t umq_huge_qbuf_get_size_by_type(huge_qbuf_pool_size_type_t type);
 int umq_huge_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size);
+void umq_huge_qbuf_pool_ctx_common_cfg_set(huge_qbuf_pool_cfg_t *cfg);
+void umq_huge_qbuf_config_uninit(huge_qbuf_pool_size_type_t type);
 
 #ifdef __cplusplus
 }

@@ -862,51 +862,34 @@ int umq_ub_log_config_reset_impl(void)
 
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
 {
-    huge_qbuf_pool_cfg_t small_cfg = {
-        .total_size = umq_buf_size_middle() * HUGE_QBUF_BUFFER_INC_BATCH,
-        .data_size = umq_buf_size_middle(),
+    int ret = 0;
+    uint32_t i = 0;
+    huge_qbuf_pool_cfg_t pool_cfg = {
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
-        .type = HUGE_QBUF_POOL_SIZE_TYPE_MID,
         .memory_init_callback = huge_qbuf_pool_memory_init,
         .memory_uninit_callback = huge_qbuf_pool_memory_uninit,
     };
-    int ret = umq_huge_qbuf_config_init(&small_cfg);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("initialize configuration for huge qbuf pool(small) failed\n");
-        return ret;
-    }
 
-    huge_qbuf_pool_cfg_t big_cfg = {
-        .total_size = umq_buf_size_big() * HUGE_QBUF_BUFFER_INC_BATCH,
-        .data_size = umq_buf_size_big(),
-        .headroom_size = cfg->headroom_size,
-        .mode = cfg->buf_mode,
-        .type = HUGE_QBUF_POOL_SIZE_TYPE_BIG,
-        .memory_init_callback = huge_qbuf_pool_memory_init,
-        .memory_uninit_callback = huge_qbuf_pool_memory_uninit,
-    };
-    ret = umq_huge_qbuf_config_init(&big_cfg);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("initialize configuration for huge qbuf pool(big) failed\n");
-        return ret;
+    for (i = 0; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
+        pool_cfg.data_size = umq_huge_qbuf_get_size_by_type(i);
+        pool_cfg.total_size = pool_cfg.data_size * HUGE_QBUF_BUFFER_INC_BATCH;
+        pool_cfg.type = i;
+        ret = umq_huge_qbuf_config_init(&pool_cfg);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR("initialize configuration for huge qbuf pool type(%d) failed\n", i);
+            goto CONFIG_UNINIT;
+        }
     }
-
-    huge_qbuf_pool_cfg_t huge_cfg = {
-        .total_size = umq_buf_size_huge() * HUGE_QBUF_BUFFER_INC_BATCH,
-        .data_size = umq_buf_size_huge(),
-        .headroom_size = cfg->headroom_size,
-        .mode = cfg->buf_mode,
-        .type = HUGE_QBUF_POOL_SIZE_TYPE_HUGE,
-        .memory_init_callback = huge_qbuf_pool_memory_init,
-        .memory_uninit_callback = huge_qbuf_pool_memory_uninit,
-    };
-    ret = umq_huge_qbuf_config_init(&huge_cfg);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("initialize configuration for huge qbuf pool(big) failed\n");
-        return ret;
-    }
+    umq_huge_qbuf_pool_ctx_common_cfg_set(&pool_cfg);
     return UMQ_SUCCESS;
+
+CONFIG_UNINIT:
+    for (uint32_t j = 0; j < i; j++) {
+        umq_huge_qbuf_config_uninit(j);
+    }
+
+    return ret;
 }
 
 void umq_ub_huge_qbuf_pool_uninit(void)
