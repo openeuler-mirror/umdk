@@ -82,9 +82,8 @@ typedef struct perftest_context {
     urma_target_seg_t **local_tseg;
 
     // remote info
-    urma_seg_t **remote_seg;
-    urma_jfr_t **remote_jfr;
-    urma_jetty_t **remote_jetty;
+    urma_seg_t *remote_seg;
+    urma_jetty_id_t *remote_jetty_id;
 
     // import seg
     urma_target_seg_t **import_tseg;
@@ -101,7 +100,7 @@ typedef struct perftest_context {
     uint64_t **ctrl_buf;
     urma_target_seg_t **credit_seg;
     urma_token_id_t **credit_token_id;
-    urma_seg_t **remote_credit_seg;
+    urma_seg_t *remote_credit_seg;
     urma_target_seg_t **import_credit_seg;
 
     /* user tp */
