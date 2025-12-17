@@ -1753,6 +1753,8 @@ static int umq_ub_get_eid_dev_info(urma_device_t *urma_dev, uint32_t eid_idx, um
         (void)memcpy(&out_info->eid.eid, &eid_info_list[i].eid, sizeof(urma_eid_t));
         break;
     }
+
+    urma_free_eid_list(eid_info_list);
     return UMQ_SUCCESS;
 }
 
