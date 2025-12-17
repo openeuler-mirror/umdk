@@ -137,3 +137,7 @@ First request, third fragment:
 * `data_size`: 5KB + 256B (adjusted for metadata alignment).
 
 (Second request follows identical structure.)
+
+## Constraint Description
+
+* Users need to configure a reasonable total memory pool size and qbuf_num in umq_init or umq_buf_alloc. Exceeding the actual memory specifications of the hardware environment can lead to performance degradation or other errors.
