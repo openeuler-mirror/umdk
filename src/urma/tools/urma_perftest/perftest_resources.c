@@ -823,275 +823,183 @@ static void unregister_mem(perftest_context_t *ctx, const perftest_config_t *cfg
     free_memory(ctx, cfg, (int)ctx->jetty_num);
 }
 
-static inline void free_remote_seg(perftest_context_t *ctx, const int idx)
+static inline void free_remote_seg(perftest_context_t *ctx)
 {
-    for (int k = 0; k < idx; k++) {
-        free(ctx->remote_seg[k]);
-        ctx->remote_seg[k] = NULL;
-    }
     free(ctx->remote_seg);
     ctx->remote_seg = NULL;
 }
 
 static int exchange_seg_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
 {
-    int i;
-    ctx->remote_seg = calloc(1, sizeof(urma_seg_t *) * ctx->jetty_num);
-    if (ctx->remote_seg == NULL) {
-        return -1;
+    urma_seg_t *local_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
+    urma_seg_t *remote_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
+    if (local_seg_buf == NULL || remote_seg_buf == NULL) {
+        goto free_buf;
+    }
+
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        local_seg_buf[i] = ctx->local_tseg[i]->seg;
     }
 
     if (cfg->pair_flag) {
-        for (i = 0; i < (int)cfg->pair_num; i++) {
-            ctx->remote_seg[i] = calloc(1, sizeof(urma_seg_t));
-            if (ctx->remote_seg[i] == NULL) {
-                goto free_remote_seg_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t), (char *)&ctx->local_tseg[i]->seg,
-                (char *)ctx->remote_seg[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync seg, loop:%d!\n", i);
-                goto free_remote_seg_buf;
+        for (uint32_t i = 0; i < cfg->pair_num; i++) {
+            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t),
+                (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
+                (void)fprintf(stderr, "Failed to exchange seg %u!\n", i);
+                goto free_buf;
             }
         }
     } else {
-        for (i = 0; i < (int)ctx->jetty_num; i++) {
-            ctx->remote_seg[i] = calloc(1, sizeof(urma_seg_t));
-            if (ctx->remote_seg[i] == NULL) {
-                goto free_remote_seg_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[0], sizeof(urma_seg_t), (char *)&ctx->local_tseg[i]->seg,
-                (char *)ctx->remote_seg[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync seg, loop:%d!\n", i);
-                goto free_remote_seg_buf;
-            }
+        if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_seg_t),
+            (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
+            (void)fprintf(stderr, "Failed to exchange seg!\n");
+            goto free_buf;
         }
     }
+
+    ctx->remote_seg = remote_seg_buf;
+    free(local_seg_buf);
     return 0;
-free_remote_seg_buf:
-    free_remote_seg(ctx, i);
+
+free_buf:
+    free(local_seg_buf);
+    free(remote_seg_buf);
     return -1;
 }
 
-static inline void free_remote_jfr(perftest_context_t *ctx, const int idx)
+static inline void free_remote_jetty(perftest_context_t *ctx)
 {
-    for (int k = 0; k < idx; k++) {
-        free(ctx->remote_jfr[k]);
-        ctx->remote_jfr[k] = NULL;
-    }
-    free(ctx->remote_jfr);
-    ctx->remote_jfr = NULL;
+    free(ctx->remote_jetty_id);
+    ctx->remote_jetty_id = NULL;
 }
 
-static int exchange_jfr_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_jetty_id(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
 {
-    int i;
-    ctx->remote_jfr = calloc(1, sizeof(urma_jfr_t *) * ctx->jetty_num);
-    if (ctx->remote_jfr == NULL) {
-        return -1;
+    urma_jetty_id_t *local_jetty_id_buf = calloc(ctx->jetty_num, sizeof(urma_jetty_id_t));
+    urma_jetty_id_t *remote_jetty_id_buf = calloc(ctx->jetty_num, sizeof(urma_jetty_id_t));
+    if (local_jetty_id_buf == NULL || remote_jetty_id_buf == NULL) {
+        goto free_buf;
+    }
+
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        local_jetty_id_buf[i] =
+            cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
+            ? ctx->jfr[i]->jfr_id
+            : ctx->jetty[i]->jetty_id;
     }
 
     if (cfg->pair_flag) {
-        for (i = 0; i < (int)cfg->pair_num; i++) {
-            ctx->remote_jfr[i] = calloc(1, sizeof(urma_jfr_t));
-            if (ctx->remote_jfr[i] == NULL) {
-                goto free_remote_jfr_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_jfr_t), (char *)ctx->jfr[i],
-                (char *)ctx->remote_jfr[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync jfr, loop:%d!\n", i);
-                goto free_remote_jfr_buf;
+        for (uint32_t i = 0; i < cfg->pair_num; i++) {
+            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_jetty_id_t),
+                (char *)&local_jetty_id_buf[i], (char *)&remote_jetty_id_buf[i]) != 0) {
+                (void)fprintf(stderr, "Failed to exchange jetty %u!\n", i);
+                goto free_buf;
             }
         }
     } else {
-        for (i = 0; i < (int)ctx->jetty_num; i++) {
-            ctx->remote_jfr[i] = calloc(1, sizeof(urma_jfr_t));
-            if (ctx->remote_jfr[i] == NULL) {
-                goto free_remote_jfr_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[0], sizeof(urma_jfr_t), (char *)ctx->jfr[i],
-                (char *)ctx->remote_jfr[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync jfr, loop:%d!\n", i);
-                goto free_remote_jfr_buf;
-            }
+        if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_jetty_id_t),
+            (char *)local_jetty_id_buf, (char *)remote_jetty_id_buf) != 0) {
+            (void)fprintf(stderr, "Failed to exchange jetty!\n");
+            goto free_buf;
         }
     }
+
+    ctx->remote_jetty_id = remote_jetty_id_buf;
+    free(local_jetty_id_buf);
     return 0;
 
-free_remote_jfr_buf:
-    free_remote_jfr(ctx, i);
+free_buf:
+    free(local_jetty_id_buf);
+    free(remote_jetty_id_buf);
     return -1;
 }
 
-static inline void free_remote_jetty(perftest_context_t *ctx, const int idx)
-{
-    for (int k = 0; k < idx; k++) {
-        free(ctx->remote_jetty[k]);
-        ctx->remote_jetty[k] = NULL;
-    }
-    free(ctx->remote_jetty);
-    ctx->remote_jetty = NULL;
-}
-
-static int exchange_jetty_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
-{
-    int i;
-    ctx->remote_jetty = calloc(1, sizeof(urma_jetty_t *) * ctx->jetty_num);
-    if (ctx->remote_jetty == NULL) {
-        return -1;
-    }
-    if (cfg->pair_flag) {
-        for (i = 0; i < (int)cfg->pair_num; i++) {
-            ctx->remote_jetty[i] = calloc(1, sizeof(urma_jetty_t));
-            if (ctx->remote_jetty[i] == NULL) {
-                goto free_remote_jetty_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_jetty_t), (char *)ctx->jetty[i],
-                (char *)ctx->remote_jetty[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync jetty, loop:%d!\n", i);
-                goto free_remote_jetty_buf;
-            }
-        }
-    } else {
-        for (i = 0; i < (int)ctx->jetty_num; i++) {
-            ctx->remote_jetty[i] = calloc(1, sizeof(urma_jetty_t));
-            if (ctx->remote_jetty[i] == NULL) {
-                goto free_remote_jetty_buf;
-            }
-            if (sock_sync_data(comm->sock_fd[0], sizeof(urma_jetty_t), (char *)ctx->jetty[i],
-                (char *)ctx->remote_jetty[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync jetty, loop:%d!\n", i);
-                goto free_remote_jetty_buf;
-            }
-        }
-    }
-    return 0;
-
-free_remote_jetty_buf:
-    free_remote_jetty(ctx, i);
-    return -1;
-}
-
-static void free_remote_credit(perftest_context_t *ctx, const int idx)
+static void free_remote_credit(perftest_context_t *ctx)
 {
     if (ctx->remote_credit_seg == NULL) {
         return;
     }
-    for (int k = 0; k < idx; k++) {
-        if (ctx->remote_credit_seg[k] != NULL) {
-            free(ctx->remote_credit_seg[k]);
-            ctx->remote_credit_seg[k] = NULL;
-        }
-    }
-    if (ctx->remote_credit_seg != NULL) {
-        free(ctx->remote_credit_seg);
-        ctx->remote_credit_seg = NULL;
-    }
+    free(ctx->remote_credit_seg);
+    ctx->remote_credit_seg = NULL;
 }
 
 static int exchange_credit_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
 {
-    uint32_t i;
-    ctx->remote_credit_seg = calloc(1, sizeof(urma_seg_t) * cfg->jettys);
-    if (ctx->remote_credit_seg == NULL) {
-        return -1;
+    if (!cfg->enable_credit) {
+        return 0;
     }
-    if (cfg->pair_flag) {
-        for (i = 0; i < cfg->pair_num; i++) {
-            ctx->remote_credit_seg[i] = calloc(1, sizeof(urma_seg_t));
-            if (ctx->remote_credit_seg[i] == NULL) {
-                goto free_remote_credit_buf;
-            }
 
-            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t), (char *)&ctx->credit_seg[i]->seg,
-                (char *)ctx->remote_credit_seg[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync credit, loop:%u!\n", i);
-                goto free_remote_credit_buf;
+    urma_seg_t *local_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
+    urma_seg_t *remote_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
+    if (local_seg_buf == NULL || remote_seg_buf == NULL) {
+        goto free_buf;
+    }
+
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        local_seg_buf[i] = ctx->credit_seg[i]->seg;
+    }
+
+    if (cfg->pair_flag) {
+        for (uint32_t i = 0; i < cfg->pair_num; i++) {
+            if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t),
+                (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
+                (void)fprintf(stderr, "Failed to exchange seg %u!\n", i);
+                goto free_buf;
             }
         }
     } else {
-        for (i = 0; i < ctx->jetty_num; i++) {
-            ctx->remote_credit_seg[i] = calloc(1, sizeof(urma_seg_t));
-            if (ctx->remote_credit_seg[i] == NULL) {
-                goto free_remote_credit_buf;
-            }
-
-            if (sock_sync_data(comm->sock_fd[0], sizeof(urma_seg_t), (char *)&ctx->credit_seg[i]->seg,
-                (char *)ctx->remote_credit_seg[i]) != 0) {
-                (void)fprintf(stderr, "Failed to sync credit, loop:%u!\n", i);
-                goto free_remote_credit_buf;
-            }
+        if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_seg_t),
+            (char *)&local_seg_buf[0], (char *)&remote_seg_buf[0]) != 0) {
+            (void)fprintf(stderr, "Failed to exchange seg!\n");
+            goto free_buf;
         }
     }
+
+    ctx->remote_credit_seg = remote_seg_buf;
+    free(local_seg_buf);
     return 0;
 
-free_remote_credit_buf:
-    free_remote_credit(ctx, i);
+free_buf:
+    free(local_seg_buf);
+    free(remote_seg_buf);
     return -1;
 }
 
-static int exchange_simplex_info(perftest_context_t *ctx, perftest_config_t *cfg)
+static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
-    perftest_comm_t *comm = &cfg->comm;
-    int ret = exchange_seg_info(ctx, comm, cfg);
+    int ret;
+
+    ret = exchange_seg_info(ctx, &cfg->comm, cfg);
     if (ret != 0) {
         (void)fprintf(stderr, "Failed to exchange_seg_info, ret: %d\n", ret);
         return -1;
     }
-    ret = exchange_jfr_info(ctx, comm, cfg);
+
+    ret = exchange_jetty_id(ctx, &cfg->comm, cfg);
     if (ret != 0) {
-        (void)fprintf(stderr, "Failed to exchange_jfr_info, ret: %d\n", ret);
-        free_remote_seg(ctx, (int)ctx->jetty_num);
-        return -1;
+        (void)fprintf(stderr, "Failed to exchange jetty id, ret: %d\n", ret);
+        goto exchange_jetty_id_fail;
     }
-    if (cfg->enable_credit == true) {
-        ret = exchange_credit_info(ctx, comm, cfg);
-        if (ret != 0) {
-            (void)fprintf(stderr, "Failed to exchange_credit_info for sinplex, ret: %d\n", ret);
-            free_remote_jfr(ctx, (int)ctx->jetty_num);
-            free_remote_seg(ctx, (int)ctx->jetty_num);
-            return -1;
-        }
+
+    ret = exchange_credit_info(ctx, &cfg->comm, cfg);
+    if (ret != 0) {
+        (void)fprintf(stderr, "Failed to exchange_credit_info, ret: %d\n", ret);
+        goto exchange_credit_fail;
     }
     return 0;
+
+exchange_credit_fail:
+    free_remote_jetty(ctx);
+exchange_jetty_id_fail:
+    free_remote_seg(ctx);
+    return -1;
 }
 
-static int exchange_duplex_info(perftest_context_t *ctx, perftest_config_t *cfg)
+static void destroy_connection_info(perftest_context_t *ctx)
 {
-    perftest_comm_t *comm = &cfg->comm;
-    int ret = exchange_seg_info(ctx, comm, cfg);
-    if (ret != 0) {
-        (void)fprintf(stderr, "Failed to exchange_seg_info, ret: %d\n", ret);
-        return -1;
-    }
-    ret = exchange_jetty_info(ctx, comm, cfg);
-    if (ret != 0) {
-        (void)fprintf(stderr, "Failed to exchange_jetty_info, ret: %d\n", ret);
-        free_remote_seg(ctx, (int)ctx->jetty_num);
-        return -1;
-    }
-    if (cfg->enable_credit == true) {
-        ret = exchange_credit_info(ctx, comm, cfg);
-        if (ret != 0) {
-            (void)fprintf(stderr, "Failed to exchange_credit_info, ret: %d\n", ret);
-            free_remote_jetty(ctx, (int)ctx->jetty_num);
-            free_remote_seg(ctx, (int)ctx->jetty_num);
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static void destroy_simplex_remote_info(perftest_context_t *ctx)
-{
-    free_remote_seg(ctx, (int)ctx->jetty_num);
-    free_remote_jfr(ctx, (int)ctx->jetty_num);
-}
-
-static void destroy_duplex_remote_info(perftest_context_t *ctx)
-{
-    free_remote_credit(ctx, (int)ctx->jetty_num);
-    free_remote_seg(ctx, (int)ctx->jetty_num);
-    free_remote_jetty(ctx, (int)ctx->jetty_num);
+    free_remote_credit(ctx);
+    free_remote_seg(ctx);
+    free_remote_jetty(ctx);
 }
 
 static inline void unimport_seg(perftest_context_t *ctx, const int idx)
@@ -1135,7 +1043,7 @@ static int import_seg_for_simplex(perftest_context_t *ctx, perftest_config_t *cf
             return -ENOMEM;
         }
         for (i = 0; i < (int)ctx->jetty_num; i++) {
-            ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_credit_seg[i],
+            ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_credit_seg[i],
                 &g_perftest_token, 0, flag);
             if (ctx->import_credit_seg[i] == NULL) {
                 (void)fprintf(stderr, "Failed to import seg for simplex, loop: %d!\n", i);
@@ -1150,7 +1058,7 @@ static int import_seg_for_simplex(perftest_context_t *ctx, perftest_config_t *cf
     }
 
     for (i = 0; i < (int)ctx->jetty_num; i++) {
-        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_token, 0, flag);
+        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_seg[i], &g_perftest_token, 0, flag);
         if (ctx->import_tseg[i] == NULL) {
             (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
             goto unimp_simp_seg;
@@ -1184,7 +1092,7 @@ static int import_seg_for_duplex(perftest_context_t *ctx, perftest_config_t *cfg
             return -ENOMEM;
         }
         for (i = 0; i < (int)ctx->jetty_num; i++) {
-            ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_credit_seg[i],
+            ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_credit_seg[i],
                 &g_perftest_token, 0, flag);
             if (ctx->import_credit_seg[i] == NULL) {
                 (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
@@ -1199,7 +1107,7 @@ static int import_seg_for_duplex(perftest_context_t *ctx, perftest_config_t *cfg
     }
 
     for (i = 0; i < (int)ctx->jetty_num; i++) {
-        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg[i], &g_perftest_token, 0, flag);
+        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_seg[i], &g_perftest_token, 0, flag);
         if (ctx->import_tseg[i] == NULL) {
             (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
             goto unimp_dup_seg;
@@ -1245,8 +1153,8 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_rjfr_t rjfr = {0};
-        rjfr.jfr_id = ctx->remote_jfr[i]->jfr_id;
-        rjfr.trans_mode = ctx->remote_jfr[i]->jfr_cfg.trans_mode;
+        rjfr.jfr_id = ctx->remote_jetty_id[i];
+        rjfr.trans_mode = cfg->trans_mode;
         if (cfg->use_ctp) {
             rjfr.tp_type = URMA_CTP;
         } else if (rjfr.trans_mode == URMA_TM_UM) {
@@ -1340,7 +1248,7 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
 
         tp_cfg.trans_mode = cfg->trans_mode;
         tp_cfg.local_eid = ctx->jfs[i]->jfs_id.eid;
-        tp_cfg.peer_eid = ctx->remote_jfr[i]->jfr_id.eid;
+        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
 
         urma_import_jfr_ex_cfg_t active_cfg = {0};
         if (exchange_tp_info(ctx, cfg, &tp_cfg, &active_cfg) != 0) {
@@ -1349,8 +1257,8 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
         }
 
         urma_rjfr_t rjfr = {0};
-        rjfr.jfr_id = ctx->remote_jfr[i]->jfr_id;
-        rjfr.trans_mode = ctx->remote_jfr[i]->jfr_cfg.trans_mode;
+        rjfr.jfr_id = ctx->remote_jetty_id[i];
+        rjfr.trans_mode = cfg->trans_mode;
 
         ctx->import_tjfr[i] = urma_import_jfr_ex(ctx->urma_ctx, &rjfr, &g_perftest_token, &active_cfg);
         if (ctx->import_tjfr[i] == NULL) {
@@ -1422,7 +1330,7 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_rjetty_t rjetty = {0};
-        rjetty.jetty_id = ctx->remote_jetty[i]->jetty_id;
+        rjetty.jetty_id = ctx->remote_jetty_id[i];
         rjetty.trans_mode = cfg->trans_mode;
         rjetty.type = URMA_JETTY;
         rjetty.flag.bs.order_type = cfg->order_type;
@@ -1492,7 +1400,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
 
         tp_cfg.trans_mode = cfg->trans_mode;
         tp_cfg.local_eid = ctx->jetty[i]->jetty_id.eid;
-        tp_cfg.peer_eid = ctx->remote_jetty[i]->jetty_id.eid;
+        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
 
         urma_import_jetty_ex_cfg_t active_cfg = {0};
         if (exchange_tp_info(ctx, cfg, &tp_cfg, &active_cfg) != 0) {
@@ -1501,7 +1409,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         }
 
         urma_rjetty_t rjetty = {0};
-        rjetty.jetty_id = ctx->remote_jetty[i]->jetty_id;
+        rjetty.jetty_id = ctx->remote_jetty_id[i];
         rjetty.trans_mode = cfg->trans_mode;
         rjetty.type = URMA_JETTY;
         rjetty.flag.bs.order_type = cfg->order_type;
@@ -1604,7 +1512,7 @@ static int connect_jetty_async(perftest_context_t *ctx, perftest_config_t *cfg)
     waited = 0;
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_rjetty_t rjetty = {0};
-        rjetty.jetty_id = ctx->remote_jetty[i]->jetty_id;
+        rjetty.jetty_id = ctx->remote_jetty_id[i];
         rjetty.trans_mode = cfg->trans_mode;
         rjetty.type = URMA_JETTY;
         rjetty.flag.bs.order_type = cfg->order_type;
@@ -1889,7 +1797,7 @@ static int create_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
         goto unregister_mem;
     }
 
-    if (exchange_simplex_info(ctx, cfg) != 0) {
+    if (exchange_connection_info(ctx, cfg) != 0) {
         goto delete_credit_ctx;
     }
 
@@ -1911,7 +1819,7 @@ disconnect_jfr:
 unimport_seg:
     unimport_seg(ctx, (int)ctx->jetty_num);
 destroy_remote_info:
-    destroy_simplex_remote_info(ctx);
+    destroy_connection_info(ctx);
 delete_credit_ctx:
     if (cfg->enable_credit == true) {
         destroy_credit_ctx(ctx, cfg);
@@ -2069,7 +1977,7 @@ static int modify_user_tp(perftest_context_t *ctx, perftest_config_t *cfg)
     mask.value = 0xffffffff;
     urma_net_addr_info_t net_addr = {0};
     (void)find_net_addr_by_eid(ctx->remote_user_tp->net_addr_list, ctx->remote_user_tp->net_addr_cnt,
-        ctx->remote_jetty[0]->jetty_id.eid, &net_addr);
+        ctx->remote_jetty_id[0].eid, &net_addr);
 
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         uint32_t tpn = ctx->user_tp[i].attr.peer_tpn;
@@ -2119,7 +2027,7 @@ static int create_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
         goto unregister_mem;
     }
 
-    if (exchange_duplex_info(ctx, cfg) != 0) {
+    if (exchange_connection_info(ctx, cfg) != 0) {
         goto delete_credit_ctx;
     }
 
@@ -2151,7 +2059,7 @@ disconnect_jetty:
 unimport_seg:
     unimport_seg(ctx, (int)ctx->jetty_num);
 delete_remote_info:
-    destroy_duplex_remote_info(ctx);
+    destroy_connection_info(ctx);
 delete_credit_ctx:
     if (cfg->enable_credit == true) {
         destroy_credit_ctx(ctx, cfg);
@@ -2184,7 +2092,7 @@ static void destroy_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     if (cfg->enable_credit == true) {
         unimport_credit(ctx, ctx->jetty_num);
     }
-    destroy_simplex_remote_info(ctx);
+    destroy_connection_info(ctx);
     if (cfg->enable_credit == true) {
         destroy_credit_ctx(ctx, cfg);
     }
@@ -2209,7 +2117,7 @@ static void destroy_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
         unimport_credit(ctx, ctx->jetty_num);
     }
     unimport_seg(ctx, (int)ctx->jetty_num);
-    destroy_duplex_remote_info(ctx);
+    destroy_connection_info(ctx);
     if (cfg->enable_credit == true) {
         destroy_credit_ctx(ctx, cfg);
     }

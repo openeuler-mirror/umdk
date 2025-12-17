@@ -177,7 +177,7 @@ static void *run_read_lat_simplex(void *arg)
         urma_status_t status;
         if (cfg->use_flat_api) {
             uint64_t lva = (uint64_t)(uintptr_t)ctx->local_buf[0] + ctx->buf_size; // Second half for local memory
-            uint64_t rva = ctx->remote_seg[0]->ubva.va;
+            uint64_t rva = ctx->remote_seg[0].ubva.va;
             urma_jfs_wr_flag_t flag = {
                 .bs.complete_enable = URMA_COMPLETE_ENABLE,
             };
@@ -265,7 +265,7 @@ static void *run_write_lat_simplex(void *arg)
             urma_status_t status;
             if (cfg->use_flat_api) {
                 uint64_t lva = (uint64_t)(uintptr_t)ctx->local_buf[0] + ctx->buf_size; // Second half for local memory
-                uint64_t rva = ctx->remote_seg[0]->ubva.va;
+                uint64_t rva = ctx->remote_seg[0].ubva.va;
                 urma_jfs_wr_flag_t flag = {
                     .bs.complete_enable = 1,
                     .bs.inline_flag = (cfg->size <= cfg->inline_size) ? 1 : 0,
@@ -687,8 +687,8 @@ static void init_read_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perf
         (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
         (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false) ?
-        (uint64_t)ctx->remote_seg[0]->ubva.va + i * ctx->buf_size :
-        (uint64_t)ctx->remote_seg[i]->ubva.va;
+        (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size :
+        (uint64_t)ctx->remote_seg[i].ubva.va;
 
     uint32_t local_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
     uint32_t remote_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
@@ -740,8 +740,8 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
         (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size :
         (uint64_t)ctx->local_buf[i] + ctx->buf_size;    // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false) ?
-        (uint64_t)ctx->remote_seg[0]->ubva.va + i * ctx->buf_size :
-        (uint64_t)ctx->remote_seg[i]->ubva.va;
+        (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size :
+        (uint64_t)ctx->remote_seg[i].ubva.va;
 
     uint32_t local_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
     uint32_t remote_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
@@ -838,8 +838,8 @@ static void init_atomic_jfs_wr(urma_jfs_wr_t *wr, perftest_context_t *ctx, perft
         (uint8_t *)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size + remainder * align_size :
         (uint8_t *)ctx->local_buf[i] + ctx->buf_size + remainder * align_size;
     uint8_t *rva = (cfg->seg_pre_jetty == false) ?
-        (uint8_t *)ctx->remote_seg[i]->ubva.va + i * ctx->buf_size + remainder * align_size :
-        (uint8_t *)ctx->remote_seg[i]->ubva.va + remainder * align_size;
+        (uint8_t *)ctx->remote_seg[i].ubva.va + i * ctx->buf_size + remainder * align_size :
+        (uint8_t *)ctx->remote_seg[i].ubva.va + remainder * align_size;
 
     urma_sge_t *local_sge = &run_ctx->jfs_sge[local_sge_idx];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[remote_sge_idx];
@@ -905,7 +905,7 @@ static void init_credit_wr(perftest_context_t *ctx, perftest_config_t *cfg)
         run_ctx->credit_sge[i].len = sizeof(uint64_t);
         run_ctx->credit_sge[i].tseg = ctx->credit_seg[i];
 
-        run_ctx->remote_credit_sge[i].addr = (uint64_t)(ctx->remote_credit_seg[i]->ubva.va + sizeof(uint64_t));
+        run_ctx->remote_credit_sge[i].addr = (uint64_t)(ctx->remote_credit_seg[i].ubva.va + sizeof(uint64_t));
         run_ctx->remote_credit_sge[i].len = sizeof(uint64_t);
         run_ctx->remote_credit_sge[i].tseg = ctx->import_credit_seg[i];
 
@@ -1704,7 +1704,7 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         urma_sge_t *remote_sge =
                             &run_ctx->jfs_sge[(index * cfg->jfs_post_list) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num];
                         increase_loc_addr(remote_sge, cfg->size, run_ctx->scnt[index],
-                            (uint64_t)ctx->remote_seg[index]->ubva.va, cfg->cache_line_size, ctx->page_size);
+                            (uint64_t)ctx->remote_seg[index].ubva.va, cfg->cache_line_size, ctx->page_size);
                     }
                 }
 
