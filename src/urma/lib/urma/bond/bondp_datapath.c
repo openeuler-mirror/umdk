@@ -2234,34 +2234,26 @@ static int bondp_flush_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty,
 {
     int total_flush_cnt = 0;
     int remaining_flush = cr_cnt;
-    uintptr_t last_flush_idx = (uintptr_t)bdp_jetty->comp_ctx;
-    /* Starting from the next idx of the last obtainable CR from pjetty, prevent pjetty from starving. */
-    for (int i = 1; i <= bdp_jetty->dev_num; ++i) {
-        int dev_id = (last_flush_idx + i) % bdp_jetty->dev_num;
+
+    for (int i = 0; i <= bdp_jetty->dev_num; ++i) {
         if (remaining_flush <= 0) {
             break;
         }
-        if (bdp_jetty->p_jetty[dev_id] == NULL) {
+        if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
         int current_cr_cnt = remaining_flush > URMA_UBAGG_MAX_CR_CNT_PER_DEV ?
             URMA_UBAGG_MAX_CR_CNT_PER_DEV : remaining_flush;
-        flush_cnt[dev_id] = urma_flush_jetty(bdp_jetty->p_jetty[dev_id], current_cr_cnt, bdp_cr_buf[dev_id]);
-        if (flush_cnt[dev_id] < 0) {
-            URMA_LOG_ERR("Failed to flush pjetty[%d]: %d\n", dev_id, flush_cnt[dev_id]);
-            return flush_cnt[dev_id];
+        flush_cnt[i] = urma_flush_jetty(bdp_jetty->p_jetty[i], current_cr_cnt, bdp_cr_buf[i]);
+        if (flush_cnt[i] < 0) {
+            URMA_LOG_ERR("Failed to flush pjetty[%d]: %d\n", i, flush_cnt[i]);
+            return flush_cnt[i];
         }
-        if (flush_cnt[dev_id] == 0) {
+        if (flush_cnt[i] == 0) {
             continue;
         }
-        total_flush_cnt += flush_cnt[dev_id];
-        remaining_flush -= flush_cnt[dev_id];
-        bdp_jetty->comp_ctx = (void *)(uintptr_t)dev_id;
-        urma_status_t ret = update_device_valid_state(bdp_ctx, dev_id, flush_cnt[dev_id], bdp_cr_buf[dev_id]);
-        if (ret) {
-            URMA_LOG_ERR("Failed to update deivce valid state: %d\n", ret);
-            return -ret;
-        }
+        total_flush_cnt += flush_cnt[i];
+        remaining_flush -= flush_cnt[i];
     }
     return total_flush_cnt;
 }
@@ -2272,8 +2264,6 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr_output_arra
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     urma_cr_t bdp_cr_buf[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
     int flush_cnt[URMA_UBAGG_DEV_MAX_NUM] = {0};
-
-    return 0;
 
     if (!is_valid_bondp_comp(bdp_jetty)) {
         return -EINVAL;
