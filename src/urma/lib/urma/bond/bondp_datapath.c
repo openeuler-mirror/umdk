@@ -2273,6 +2273,8 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr_output_arra
     urma_cr_t bdp_cr_buf[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
     int flush_cnt[URMA_UBAGG_DEV_MAX_NUM] = {0};
 
+    return 0;
+
     if (!is_valid_bondp_comp(bdp_jetty)) {
         return -EINVAL;
     }
