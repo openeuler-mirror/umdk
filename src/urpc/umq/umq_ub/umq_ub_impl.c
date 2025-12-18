@@ -3116,6 +3116,11 @@ static int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint
     }
 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->bind_ctx == NULL) {
+        UMQ_LIMIT_VLOG_INFO("The queue has been unbound\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     pthread_mutex_t *imported_tseg_list_mutex_lock =
         &queue->dev_ctx->remote_imported_info->imported_tseg_list_mutex[queue->bind_ctx->remote_eid_id];
     pthread_mutex_lock(imported_tseg_list_mutex_lock);
@@ -3274,6 +3279,13 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                         *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
                         return UMQ_SUCCESS;
                     }
+
+                    if (queue->bind_ctx == NULL) {
+                        UMQ_LIMIT_VLOG_ERR("queue has been unbind\n");
+                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+                        return UMQ_SUCCESS;
+                    }
+
                     queue->dev_ctx->remote_imported_info->
                         tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
                     *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
