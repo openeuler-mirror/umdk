@@ -965,6 +965,114 @@ free_buf:
     return -1;
 }
 
+static void free_tp_info(perftest_context_t *ctx)
+{
+    if (ctx->tp_info == NULL) {
+        return;
+    }
+    free(ctx->tp_info);
+    ctx->tp_info = NULL;
+}
+
+static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+{
+    if (!cfg->tp_aware) {
+        return 0;
+    }
+
+    ctx->tp_info = calloc(ctx->jetty_num, sizeof(urma_tp_info_t));
+    if (ctx->tp_info == NULL) {
+        return -1;
+    }
+
+    urma_get_tp_cfg_t tp_cfg = {0};
+    if (cfg->use_ctp) {
+        tp_cfg.flag.bs.ctp = 1;
+    } else if (cfg->trans_mode == URMA_TM_UM) {
+        tp_cfg.flag.bs.utp = 1;
+    } else {
+        tp_cfg.flag.bs.rtp = 1;
+    }
+    tp_cfg.trans_mode = cfg->trans_mode;
+
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        if (cfg->tp_reuse && cfg->trans_mode == URMA_TM_RM && i > 0) {
+            ctx->tp_info[i] = ctx->tp_info[0];
+            continue;
+        }
+        tp_cfg.local_eid =
+            cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
+            ? ctx->jfs[i]->jfs_id.eid
+            : ctx->jetty[i]->jetty_id.eid;
+        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
+        uint32_t tp_cnt = 1;
+        int ret = urma_get_tp_list(ctx->urma_ctx, &tp_cfg, &tp_cnt, &ctx->tp_info[i]);
+        if (ret != URMA_SUCCESS || tp_cnt != 1) {
+            (void)fprintf(stderr, "Failed to get tpid list, ret:%d, tp_cnt:%u!\n", ret, tp_cnt);
+            goto free_buf;
+        }
+    }
+    return 0;
+
+free_buf:
+    free(ctx->tp_info);
+    return -1;
+}
+
+static inline void free_remote_tp_info(perftest_context_t *ctx)
+{
+    if (ctx->remote_jetty_id == NULL) {
+        return;
+    }
+    free(ctx->remote_jetty_id);
+    ctx->remote_jetty_id = NULL;
+    free(ctx->local_tp_info);
+    ctx->local_tp_info = NULL;
+}
+
+static int exchange_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+{
+    if (!cfg->tp_aware || cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
+        return 0;
+    }
+
+    perftest_tp_info_t *local_tp_info_buf = calloc(ctx->jetty_num, sizeof(perftest_tp_info_t));
+    perftest_tp_info_t *remote_tp_info_buf = calloc(ctx->jetty_num, sizeof(perftest_tp_info_t));
+    if (local_tp_info_buf == NULL || remote_tp_info_buf == NULL) {
+        goto free_buf;
+    }
+
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        local_tp_info_buf[i].tp_handle = ctx->tp_info[i].tp_handle;
+        local_tp_info_buf[i].psn = (uint32_t)random();
+    }
+
+    if (cfg->pair_flag) {
+        for (uint32_t i = 0; i < cfg->pair_num; i++) {
+            if (sock_sync_data(comm->sock_fd[i], sizeof(perftest_tp_info_t),
+                (char *)&local_tp_info_buf[i], (char *)&remote_tp_info_buf[i]) != 0) {
+                (void)fprintf(stderr, "Failed to exchange tp info %u!\n", i);
+                goto free_buf;
+            }
+        }
+    } else {
+        if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(perftest_tp_info_t),
+            (char *)local_tp_info_buf, (char *)remote_tp_info_buf) != 0) {
+            (void)fprintf(stderr, "Failed to exchange tp info!\n");
+            goto free_buf;
+        }
+    }
+
+    ctx->remote_tp_info = remote_tp_info_buf;
+    ctx->local_tp_info = local_tp_info_buf;
+    return 0;
+
+free_buf:
+    free(local_tp_info_buf);
+    free(remote_tp_info_buf);
+    return -1;
+}
+
 static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     int ret;
@@ -986,8 +1094,23 @@ static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *
         (void)fprintf(stderr, "Failed to exchange_credit_info, ret: %d\n", ret);
         goto exchange_credit_fail;
     }
+
+    ret = create_tp_info(ctx, &cfg->comm, cfg);
+    if (ret != 0) {
+        (void)fprintf(stderr, "Failed to create tp info, ret: %d\n", ret);
+        goto create_tp_info_fail;
+    }
+    ret = exchange_tp_info(ctx, &cfg->comm, cfg);
+    if (ret != 0) {
+        (void)fprintf(stderr, "Failed to create tp info, ret: %d\n", ret);
+        goto exchange_tp_info_fail;
+    }
     return 0;
 
+exchange_tp_info_fail:
+    free_tp_info(ctx);
+create_tp_info_fail:
+    free_remote_credit(ctx);
 exchange_credit_fail:
     free_remote_jetty(ctx);
 exchange_jetty_id_fail:
@@ -997,6 +1120,8 @@ exchange_jetty_id_fail:
 
 static void destroy_connection_info(perftest_context_t *ctx)
 {
+    free_remote_tp_info(ctx);
+    free_tp_info(ctx);
     free_remote_credit(ctx);
     free_remote_seg(ctx);
     free_remote_jetty(ctx);
@@ -1125,11 +1250,6 @@ free_credit:
     return -1;
 }
 
-typedef struct perftest_tp_info {
-    uint64_t tp_handle;
-    uint32_t psn;
-} perftest_tp_info_t;
-
 typedef struct perftest_tp_pair_info {
     urma_get_tp_cfg_t get_tp_cfg;
     perftest_tp_info_t local;
@@ -1186,48 +1306,6 @@ disconnect_jfr:
     return -1;
 }
 
-static bool g_tp_info_updated = false;
-static urma_tp_info_t g_tp_info = {0};
-
-static int exchange_tp_info(perftest_context_t *ctx, const perftest_config_t *cfg, urma_get_tp_cfg_t *tp_cfg,
-    urma_active_tp_cfg_t *active_cfg)
-{
-    urma_tp_info_t tp_info = {0};
-    uint32_t tp_cnt = 1;
-    urma_status_t ret;
-
-    if (cfg->tp_reuse && cfg->trans_mode == URMA_TM_RM && g_tp_info_updated) {
-        tp_info = g_tp_info;
-    } else {
-        ret = urma_get_tp_list(ctx->urma_ctx, tp_cfg, &tp_cnt, &tp_info);
-        if (ret != URMA_SUCCESS || tp_cnt != 1) {
-            (void)fprintf(stderr, "Failed to get tpid list, ret:%d, tp_cnt:%u!\n", ret, tp_cnt);
-            return -1;
-        }
-        g_tp_info_updated = true;
-        g_tp_info = tp_info;
-    }
-
-    if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
-        active_cfg->tp_handle = tp_info.tp_handle;
-        active_cfg->tp_attr.tx_psn = (uint32_t)random();
-    } else {
-        perftest_tp_info_t tp_info_local = {0}, tp_info_peer = {0};
-        tp_info_local.tp_handle = tp_info.tp_handle;
-        tp_info_local.psn = (uint32_t)random();
-        if (sock_sync_data(cfg->comm.sock_fd[0], sizeof(perftest_tp_info_t),
-            (char *)&tp_info_local, (char *)&tp_info_peer) != 0) {
-            (void)fprintf(stderr, "Failed to exchange tp info!\n");
-            return -1;
-        }
-        active_cfg->tp_handle = tp_info_local.tp_handle;
-        active_cfg->tp_attr.tx_psn = tp_info_local.psn;
-        active_cfg->peer_tp_handle = tp_info_peer.tp_handle;
-        active_cfg->tp_attr.rx_psn = tp_info_peer.psn;
-    }
-    return 0;
-}
-
 static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     if (ctx->urma_ctx->dev->type != URMA_TRANSPORT_UB) {
@@ -1236,24 +1314,15 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
     }
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
-        urma_get_tp_cfg_t tp_cfg = {0};
-
-        if (cfg->use_ctp) {
-            tp_cfg.flag.bs.ctp = 1;
-        } else if (cfg->trans_mode == URMA_TM_UM) {
-            tp_cfg.flag.bs.utp = 1;
-        } else {
-            tp_cfg.flag.bs.rtp = 1;
-        }
-
-        tp_cfg.trans_mode = cfg->trans_mode;
-        tp_cfg.local_eid = ctx->jfs[i]->jfs_id.eid;
-        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
-
         urma_import_jfr_ex_cfg_t active_cfg = {0};
-        if (exchange_tp_info(ctx, cfg, &tp_cfg, &active_cfg) != 0) {
-            (void)fprintf(stderr, "Failed to exchange tp info, loop:%u!\n", i);
-            goto disconnect_jfr;
+        if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
+            active_cfg.tp_handle = ctx->tp_info[i].tp_handle;
+            active_cfg.tp_attr.tx_psn = (uint32_t)random();
+        } else {
+            active_cfg.tp_handle = ctx->local_tp_info[i].tp_handle;
+            active_cfg.tp_attr.tx_psn = ctx->local_tp_info[i].psn;
+            active_cfg.peer_tp_handle = ctx->remote_tp_info[i].tp_handle;
+            active_cfg.tp_attr.rx_psn = ctx->remote_tp_info[i].psn;
         }
 
         urma_rjfr_t rjfr = {0};
@@ -1388,24 +1457,15 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
     }
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
-        urma_get_tp_cfg_t tp_cfg = {0};
-
-        if (cfg->use_ctp) {
-            tp_cfg.flag.bs.ctp = 1;
-        } else if (cfg->trans_mode == URMA_TM_UM) {
-            tp_cfg.flag.bs.utp = 1;
-        } else {
-            tp_cfg.flag.bs.rtp = 1;
-        }
-
-        tp_cfg.trans_mode = cfg->trans_mode;
-        tp_cfg.local_eid = ctx->jetty[i]->jetty_id.eid;
-        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
-
         urma_import_jetty_ex_cfg_t active_cfg = {0};
-        if (exchange_tp_info(ctx, cfg, &tp_cfg, &active_cfg) != 0) {
-            (void)fprintf(stderr, "Failed to exchange tp info, loop:%u!\n", i);
-            goto disconnect_jetty;
+        if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
+            active_cfg.tp_handle = ctx->tp_info[i].tp_handle;
+            active_cfg.tp_attr.tx_psn = (uint32_t)random();
+        } else {
+            active_cfg.tp_handle = ctx->local_tp_info[i].tp_handle;
+            active_cfg.tp_attr.tx_psn = ctx->local_tp_info[i].psn;
+            active_cfg.peer_tp_handle = ctx->remote_tp_info[i].tp_handle;
+            active_cfg.tp_attr.rx_psn = ctx->remote_tp_info[i].psn;
         }
 
         urma_rjetty_t rjetty = {0};
@@ -1416,6 +1476,11 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         if (rjetty.trans_mode == URMA_TM_RC &&
             (rjetty.flag.bs.order_type == URMA_OT)) {
             rjetty.flag.bs.share_tp = 1;
+        }
+        if (cfg->use_ctp) {
+            rjetty.tp_type = URMA_CTP;
+        } else {
+            rjetty.tp_type = URMA_RTP;
         }
 
         ctx->import_tjetty[i] = urma_import_jetty_ex(ctx->urma_ctx, &rjetty, &g_perftest_token, &active_cfg);
