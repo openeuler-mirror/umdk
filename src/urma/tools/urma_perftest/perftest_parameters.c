@@ -1383,12 +1383,14 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
     return 0;
 }
 
+#define OFF_SET (360)
+
 int check_remote_cfg(perftest_config_t *cfg)
 {
     perftest_config_t remote_cfg;
     for (uint32_t i = 0; i < cfg->pair_num; i++) {
         int sock_fd = cfg->comm.sock_fd[i];
-        int ret = sock_sync_data(sock_fd, sizeof(perftest_config_t), (char *)cfg, (char *)&remote_cfg);
+        int ret = sock_sync_data(sock_fd, OFF_SET, (char *)cfg, (char *)&remote_cfg);
         if (ret != 0) {
             (void)fprintf(stderr, "Failed to sync remote configuration, pair_num:%u, errno:%s.\n", i, strerror(errno));
             return ret;
