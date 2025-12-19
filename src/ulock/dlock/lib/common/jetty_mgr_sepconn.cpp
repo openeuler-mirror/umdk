@@ -406,10 +406,10 @@ dlock_status_t jetty_mgr_sepconn::post_cas(uint32_t offset, uint64_t cmp_data, u
 #ifdef UB_AGG
 dlock_status_t jetty_mgr_sepconn::get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const
 {
-    urma_bond_id_info_in_t in = {
-        .jfr = m_jfr,
-        .type = URMA_JFR,
-    };
+    urma_bond_id_info_in_t in = {0};
+    in.jfr = m_jfr;
+    in.type = URMA_JFR;
+
     urma_user_ctl_in_t user_ctl_in = {
         .addr = (uint64_t)&in,
         .len = sizeof(urma_bond_id_info_in_t),
