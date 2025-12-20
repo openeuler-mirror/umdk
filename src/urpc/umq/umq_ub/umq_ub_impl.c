@@ -1704,7 +1704,7 @@ static int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, u
 
 static int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
 {
-    if (ub_ctx == NULL || ub_ctx->urma_ctx) {
+    if (ub_ctx == NULL || ub_ctx->urma_ctx == NULL) {
         UMQ_VLOG_ERR("invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
@@ -1939,6 +1939,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 
         if (umq_find_ub_device(info, &g_ub_ctx[g_ub_ctx_count]) != UMQ_SUCCESS) {
             UMQ_VLOG_INFO("find ub device failed\n");
+            umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
             goto ROLLBACL_UB_CTX;
         }
 
@@ -1970,7 +1971,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
     };
     int ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
-        UMQ_VLOG_ERR("qbuf poll init failed\n");
+        UMQ_VLOG_ERR("qbuf pool init failed\n");
         goto IO_BUF_FREE;
     }
 
@@ -1984,8 +1985,8 @@ IO_BUF_FREE:
 
 ROLLBACL_UB_CTX:
     for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
-        umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
-        umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
+        umq_ub_ctx_imported_info_destroy(&g_ub_ctx[i]);
+        umq_ub_delete_urma_ctx(&g_ub_ctx[i]);
     }
     g_ub_ctx_count = 0;
     (void)urma_uninit();
