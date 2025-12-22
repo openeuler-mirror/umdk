@@ -534,10 +534,10 @@ dlock_status_t jetty_mgr_uniconn::post_cas(uint32_t offset, uint64_t cmp_data, u
 #ifdef UB_AGG
 dlock_status_t jetty_mgr_uniconn::get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const
 {
-    urma_bond_id_info_in_t in = {
-        .jetty = m_jetty,
-        .type = URMA_JETTY,
-    };
+    urma_bond_id_info_in_t in = {0};
+    in.jetty = m_jetty;
+    in.type = URMA_JETTY;
+
     urma_user_ctl_in_t user_ctl_in = {
         .addr = (uint64_t)&in,
         .len = sizeof(urma_bond_id_info_in_t),
