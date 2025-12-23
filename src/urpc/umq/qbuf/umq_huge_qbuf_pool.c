@@ -47,29 +47,7 @@ typedef struct huge_pool_ctx {
     huge_pool_t pool[HUGE_QBUF_POOL_SIZE_TYPE_MAX];
 } huge_pool_ctx_t;
 
-static huge_pool_ctx_t g_huge_pool_ctx = {
-    .pool = {
-        [HUGE_QBUF_POOL_SIZE_TYPE_MID] = {
-            .pool_idx_shift = HUGE_QBUF_POOL_IDX_SHIFT,
-            .block_pool = {
-                .global_mutex = PTHREAD_MUTEX_INITIALIZER,
-            },
-        },
-        [HUGE_QBUF_POOL_SIZE_TYPE_BIG] = {
-            .pool_idx_shift = HUGE_QBUF_POOL_IDX_SHIFT + HUGE_QBUF_POOL_NUM_MAX,
-            .block_pool = {
-                .global_mutex = PTHREAD_MUTEX_INITIALIZER,
-            },
-        },
-        [HUGE_QBUF_POOL_SIZE_TYPE_HUGE] = {
-            .pool_idx_shift = HUGE_QBUF_POOL_IDX_SHIFT +
-                (HUGE_QBUF_POOL_SIZE_TYPE_HUGE * HUGE_QBUF_POOL_NUM_MAX),
-            .block_pool = {
-                .global_mutex = PTHREAD_MUTEX_INITIALIZER,
-            },
-        },
-    }
-};
+static huge_pool_ctx_t g_huge_pool_ctx = {0};
 
 static uint32_t (*g_huge_pool_size[HUGE_QBUF_POOL_SIZE_TYPE_MAX])(void) = {
     umq_buf_size_middle,
@@ -180,7 +158,8 @@ static int do_umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EEXIST;
     }
 
-    QBUF_LIST_INIT(&pool->block_pool.head_with_data);
+    umq_qbuf_block_pool_init(&pool->block_pool);
+
     pool->total_size = cfg->total_size;
     pool->data_size = g_huge_pool_size[cfg->type]();
     pool->memory_init_callback = cfg->memory_init_callback;
@@ -199,6 +178,10 @@ static int do_umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         pool->total_block_num = blk_num;
     }
 
+    pool->pool_idx = 0;
+    pool->pool_idx_shift = HUGE_QBUF_POOL_IDX_SHIFT +
+        (cfg->type - HUGE_QBUF_POOL_SIZE_TYPE_MID) * HUGE_QBUF_POOL_NUM_MAX;
+
     pool->inited = true;
 
     return UMQ_SUCCESS;
@@ -215,10 +198,14 @@ void umq_huge_qbuf_pool_uninit(void)
         for (uint32_t j = 0; j < pool->pool_idx; j++) {
             huge_pool_info_t *pool_info = &pool->pool_info[j];
             pool->memory_uninit_callback(pool->pool_idx_shift + j, pool_info->data_buffer);
+            pool_info->imported = false;
+            pool_info->data_buffer = NULL;
+            pool_info->header_buffer = NULL;
         }
+        umq_huge_qbuf_config_uninit(i);
     }
 
-    (void)memset(&g_huge_pool_ctx, 0, sizeof(huge_pool_ctx_t));
+    g_huge_pool_ctx.inited = false;
 }
 
 int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
@@ -261,6 +248,7 @@ void umq_huge_qbuf_pool_ctx_common_cfg_set(huge_qbuf_pool_cfg_t *cfg)
 void umq_huge_qbuf_config_uninit(huge_qbuf_pool_size_type_t type)
 {
     huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
+    umq_qbuf_block_pool_uninit(&pool->block_pool);
     pool->inited = false;
 }
 
