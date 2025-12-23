@@ -37,9 +37,13 @@
 %if %{defined kernel_version}
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %else
-    %define kernel_version %( \
-        rpm -q --qf "%%{VERSION}-%%{RELEASE}.%%{ARCH}" kernel-devel 2>/dev/null || \
-        uname -r \
+    %define kernel_version %(
+        KERNEL_DEVEL_COUNT=$(rpm -qa kernel-devel 2>/dev/null | wc -l);
+        if [ "$KERNEL_DEVEL_COUNT" -eq 1 ]; then
+            rpm -q --qf '%%{VERSION}-%%{RELEASE}.%%{ARCH}' kernel-devel 2>/dev/null;
+        else
+            uname -r;
+        fi
     )
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %endif
