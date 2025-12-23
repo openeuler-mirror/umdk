@@ -130,7 +130,7 @@ static void udma_u_hugepage_del(struct udma_u_context *ctx,
 static struct udma_u_hugepage_priv *
 udma_u_alloc_hugepage_priv(struct udma_u_context *ctx, uint32_t len)
 {
-	off_t offset = get_mmap_offset(0, ctx->page_size, UDMA_MMAP_HUGEPAGE);
+	off_t offset = get_mmap_offset((UDMA_HUGEPAGE_SIZE / ctx->page_size >> MAP_INDEX_SHIFT), ctx->page_size, UDMA_MMAP_HUGEPAGE);
 	struct udma_u_hugepage_priv *priv;
 	int ret;
 

@@ -6,9 +6,9 @@
 
 #include <linux/types.h>
 
-#define MAP_COMMAND_MASK 0xff
-#define MAP_INDEX_MASK 0xffffff
-#define MAP_INDEX_SHIFT 8
+#define MAP_COMMAND_MASK 0xf
+#define MAP_INDEX_MASK 0xfffffff
+#define MAP_INDEX_SHIFT 4
 
 #define UDMA_SEGMENT_ACCESS_GUARD (1UL << 5)
 
@@ -85,7 +85,7 @@ struct udma_create_jetty_ucmd {
 struct udma_create_jfc_ucmd {
 	__aligned_u64 buf_addr;
 	__u32 buf_len;
-	__u32 mode; /* 0: normal, 1: user STARS mode, 2: kernel STARS mode */
+	__u32 mode; /* 0: normal, 1: user stars, 2: kernel stars */
 	__aligned_u64 db_addr;
 	__u32 is_hugepage : 1;
 	__u32 rsv : 31;
@@ -112,9 +112,9 @@ struct udma_create_jfr_resp {
 };
 
 enum db_mmap_type {
+	UDMA_MMAP_HUGEPAGE,
 	UDMA_MMAP_JFC_PAGE,
 	UDMA_MMAP_JETTY_DSQE,
-	UDMA_MMAP_HUGEPAGE,
 };
 
 enum {
