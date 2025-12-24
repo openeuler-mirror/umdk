@@ -323,6 +323,7 @@ void umq_shm_global_pool_uninit(uint64_t pool)
     }
 
     unregister_all_thread_cache(_pool);
+    pthread_mutex_destroy(&_pool->block_pool.global_mutex);
     free(_pool);
 }
 

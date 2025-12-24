@@ -521,6 +521,20 @@ static ALWAYS_INLINE int headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size,
     return headroom_reset_with_combine(qbuf, headroom_size, block_size);
 }
 
+static ALWAYS_INLINE void umq_qbuf_block_pool_init(global_block_pool_t *block_pool)
+{
+    QBUF_LIST_INIT(&block_pool->head_with_data);
+    QBUF_LIST_INIT(&block_pool->head_without_data);
+    block_pool->buf_cnt_with_data = 0;
+    block_pool->buf_cnt_without_data = 0;
+    (void)pthread_mutex_init(&block_pool->global_mutex, NULL);
+}
+
+static ALWAYS_INLINE void umq_qbuf_block_pool_uninit(global_block_pool_t *block_pool)
+{
+    pthread_mutex_destroy(&block_pool->global_mutex);
+}
+
 uint32_t umq_qbuf_headroom_get(void);
 umq_buf_mode_t umq_qbuf_mode_get(void);
 
