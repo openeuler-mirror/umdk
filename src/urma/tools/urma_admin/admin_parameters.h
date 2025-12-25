@@ -31,26 +31,6 @@
 #define URMA_ADMIN_MAX_NS_PATH  128 /* /proc/$pid/ns/net */
 #define OWN_UE_IDX              (0xffff)
 
-typedef enum tool_cmd_type {
-    TOOL_CMD_SHOW,
-    TOOL_CMD_ADD_EID,
-    TOOL_CMD_DEL_EID,
-    TOOL_CMD_SET_EID_MODE,
-    TOOL_CMD_SHOW_STATS,
-    TOOL_CMD_SHOW_RES,
-    TOOL_CMD_SET_NS_MODE,
-    TOOL_CMD_SET_DEV_NS,
-    TOOL_CMD_LIST_RES,
-    TOOL_CMD_SET_RESERVED_JETTY,
-    TOOL_CMD_SHOW_TOPO_INFO,
-    TOOL_CMD_NUM
-} tool_cmd_type_t;
-
-typedef struct tool_cmd {
-    char *cmd;
-    tool_cmd_type_t type;
-} tool_cmd_t;
-
 /* refer to enum ubcore_stats_key_type */
 typedef enum tool_stats_key_type {
     TOOL_STATS_KEY_VTP = 1,
@@ -282,7 +262,8 @@ typedef struct tool_res_dev_val {
 } tool_res_dev_val_t;
 
 typedef struct tool_config {
-    tool_cmd_type_t cmd;
+    int argc;
+    char **argv;
     bool specify_device;
     bool whole_info;
     bool help;
@@ -306,5 +287,17 @@ int admin_str_to_u16(const char *buf, uint16_t *u16);
 int admin_str_to_u32(const char *buf, uint32_t *u32);
 int admin_str_to_u64(const char *buf, uint64_t *u64);
 int admin_parse_args(int argc, char *argv[], tool_config_t *cfg);
+
+typedef tool_config_t admin_config_t;
+
+typedef struct admin_cmd {
+    char *name;
+    int (*func)(admin_config_t *cfg);
+} admin_cmd_t;
+
+void usage(const char *argv0);
+int admin_exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
+
+bool is_1650(const char *dev_name);
 
 #endif

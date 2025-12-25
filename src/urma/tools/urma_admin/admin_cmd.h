@@ -138,13 +138,13 @@ enum {
 };
 
 int admin_show_utp(const tool_config_t *cfg);
-int admin_show_stats(const tool_config_t *cfg);
-int admin_show_res(const tool_config_t *cfg);
-int admin_add_eid(const tool_config_t *cfg);
-int admin_del_eid(const tool_config_t *cfg);
-int admin_set_eid_mode(const tool_config_t *cfg);
-int admin_set_ns_mode(const tool_config_t *cfg);
-int admin_set_dev_ns(const tool_config_t *cfg);
-int admin_list_res(const tool_config_t *cfg);
-int admin_show_topo_info(const tool_config_t *cfg);
+int admin_show_stats(tool_config_t *cfg);
+int admin_show_res(tool_config_t *cfg);
+int admin_add_eid(tool_config_t *cfg);
+int admin_del_eid(tool_config_t *cfg);
+int admin_set_eid_mode(tool_config_t *cfg);
+int admin_set_ns_mode(tool_config_t *cfg);
+int admin_set_dev_ns(tool_config_t *cfg);
+int admin_list_res(tool_config_t *cfg);
+int admin_show_topo_info(tool_config_t *cfg);
 #endif

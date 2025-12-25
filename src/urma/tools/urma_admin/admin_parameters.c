@@ -119,7 +119,7 @@ int admin_str_to_u64(const char *buf, uint64_t *u64)
     return 0;
 }
 
-static void usage(const char *argv0)
+void usage(const char *argv0)
 {
     (void)printf("Usage: %s command [command options]\n", argv0);
     (void)printf(" %s URMA configuration tool, chips do not support some values, which might be invalid.\n", argv0);
@@ -182,34 +182,6 @@ static void usage(const char *argv0)
     (void)printf("  -u, --max_id  <0 - U32_MAX>                 max reserved jetty id, U32_MAX means invalid.\n");
 }
 
-static tool_cmd_type_t parse_command(const char *argv1)
-{
-    int i;
-
-    tool_cmd_t cmd[] = {{"show", TOOL_CMD_SHOW},
-                        {"add_eid", TOOL_CMD_ADD_EID},
-                        {"del_eid", TOOL_CMD_DEL_EID},
-                        {"set_eid_mode", TOOL_CMD_SET_EID_MODE},
-                        {"show_stats", TOOL_CMD_SHOW_STATS},
-                        {"show_res", TOOL_CMD_SHOW_RES},
-                        {"set_ns_mode", TOOL_CMD_SET_NS_MODE},
-                        {"set_dev_ns", TOOL_CMD_SET_DEV_NS},
-                        {"set_reserved_jetty", TOOL_CMD_SET_RESERVED_JETTY},
-                        {"list_res", TOOL_CMD_LIST_RES},
-                        {"show_topo", TOOL_CMD_SHOW_TOPO_INFO}};
-
-    for (i = 0; i < (int)TOOL_CMD_NUM; i++) {
-        if (strlen(argv1) != strlen(cmd[i].cmd)) {
-            continue;
-        }
-        if (strcmp(argv1, cmd[i].cmd) == 0) {
-            return cmd[i].type;
-        }
-    }
-
-    return TOOL_CMD_NUM;
-}
-
 #define IPV4_MAP_IPV6_PREFIX 0x0000ffff
 #define EID_STR_MIN_LEN      3
 static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
@@ -250,35 +222,6 @@ int admin_str_to_eid(const char *buf, urma_eid_t *eid)
 
     (void)printf("format error, ipv6: %d, ipv4:%d, errno:%d.\n", err_ipv6, err_ipv4, errno);
     return -EINVAL;
-}
-
-static void init_tool_cfg(tool_config_t *cfg)
-{
-    (void)memset(cfg, 0, sizeof(tool_config_t));
-    cfg->specify_device = false;
-    cfg->whole_info = false;
-    cfg->ue_idx = OWN_UE_IDX;
-}
-
-static int check_query_type(const tool_config_t *cfg)
-{
-    if (cfg->cmd == TOOL_CMD_SHOW_STATS) {
-        if (cfg->key.type < TOOL_STATS_KEY_VTP || cfg->key.type > TOOL_STATS_KEY_URMA_DEV) {
-            (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
-            return -1;
-        }
-        if (cfg->key.type == TOOL_STATS_KEY_TPG || cfg->key.type == TOOL_STATS_KEY_JETTY_GROUP) {
-            (void)printf("Type: %d currently not supported.\n", (int)cfg->key.type);
-            return -1;
-        }
-    }
-    if (cfg->cmd == TOOL_CMD_SHOW_RES) {
-        if (cfg->key.type < TOOL_RES_KEY_VTP || cfg->key.type > TOOL_RES_KEY_DEV_TA) {
-            (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
-            return -1;
-        }
-    }
-    return 0;
 }
 
 static bool check_dev_name(char *dev_name)
@@ -337,19 +280,6 @@ static int admin_parse_dev_name(char *buf, tool_config_t *cfg)
     return 0;
 }
 
-static int admin_parse_resource_type(char *buf, tool_config_t *cfg)
-{
-    if (admin_str_to_u32(buf, &cfg->key.type) != 0) {
-        return -1;
-    }
-    if (check_query_type(cfg) != 0) {
-        (void)printf("Failed to check query type: %u.\n", cfg->key.type);
-        URMA_ADMIN_LOG("Failed to check query type: %u.\n", cfg->key.type);
-        return -1;
-    }
-    return 0;
-}
-
 static int admin_parse_ns(char *buf, tool_config_t *cfg)
 {
     if (strnlen(buf, URMA_ADMIN_MAX_NS_PATH) + 1 > URMA_ADMIN_MAX_NS_PATH) {
@@ -364,7 +294,7 @@ static int admin_parse_ns(char *buf, tool_config_t *cfg)
     return 0;
 }
 
-static int admin_inner_parse_args(int argc, char *argv[], tool_config_t *cfg)
+int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
 {
     int ret = 0;
     while (1) {
@@ -400,7 +330,7 @@ static int admin_inner_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 cfg->whole_info = true;
                 break;
             case 'R':
-                ret = admin_parse_resource_type(optarg, cfg);
+                ret = admin_str_to_u32(optarg, &cfg->key.type);
                 break;
             case 'k':
                 ret = admin_str_to_u32(optarg, &cfg->key.key);
@@ -430,39 +360,46 @@ static int admin_inner_parse_args(int argc, char *argv[], tool_config_t *cfg)
             return -1;
         }
     }
-    if (optind < argc - 1) {
-        URMA_ADMIN_LOG("optind < argc - 1\n");
-        usage(argv[0]);
-        return -1;
-    }
     return 0;
 }
 
-int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
+int admin_exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
 {
-    int ret = 0;
-
-    if (argc == 1 || cfg == NULL) {
-        URMA_ADMIN_LOG("Invalid parameter\n.");
-        usage(argv[0]);
-        return -1;
+    if (cfg->argc == 0) {
+        return cmds->func(cfg);
     }
 
-    init_tool_cfg(cfg);
-    /* First parse the command */
-    cfg->cmd = parse_command(argv[1]);
-
-    /* Second parse the options */
-    ret = admin_inner_parse_args(argc, argv, cfg);
-    if (ret != 0) {
-        return -1;
+    const admin_cmd_t *cmd = cmds + 1;
+    while (cmd->name) {
+        if (strncmp(cmd->name, *cfg->argv, strlen(cmd->name) + 1) == 0) {
+            cfg->argc--;
+            cfg->argv++;
+            return cmd->func(cfg);
+        }
+        cmd++;
     }
 
-    /* Increase illegal cmd return error */
-    if (cfg->cmd == TOOL_CMD_NUM && cfg->help == false) {
-        URMA_ADMIN_LOG("cfg->cmd == TOOL_CMD_NUM\n");
-        usage(argv[0]);
-        return -1;
-    }
+    printf("Unknown cmd '%s'.\n", *cfg->argv);
     return 0;
+}
+
+bool is_1650(const char *dev_name)
+{
+    char *device_path = calloc(1, DEV_PATH_MAX);
+    if (device_path == NULL) {
+        return false;
+    }
+
+    if (snprintf(device_path, DEV_PATH_MAX - 1, "%s/%s/device", SYS_CLASS_PATH, dev_name) <= 0) {
+        (void)printf("snprintf failed, dev:%s.\n", dev_name);
+        free(device_path);
+        return false;
+    }
+
+    const uint32_t device_id_1650 = 0xa001;
+    uint32_t device_id;
+    (void)admin_parse_file_value_u32(device_path, "device", &device_id);
+
+    free(device_path);
+    return device_id == device_id_1650;
 }
