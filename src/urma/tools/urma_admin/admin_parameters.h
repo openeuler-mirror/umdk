@@ -15,21 +15,21 @@
 #define _GNU_SOURCE
 #endif
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
+#include "urma_cmd.h"
 #include "urma_types.h"
 #include "urma_types_str.h"
-#include "urma_cmd.h"
 
-#define MAX_NODE_NUM (16)
-#define EID_LEN (16)
-#define MAX_PORT_NUM (9)
-#define IODIE_NUM (2)
+#define MAX_NODE_NUM            (16)
+#define EID_LEN                 (16)
+#define MAX_PORT_NUM            (9)
+#define IODIE_NUM               (2)
 #define URMA_ADMIN_MAX_DEV_NAME 64
-#define URMA_ADMIN_MAX_NS_PATH 128 /* /proc/$pid/ns/net */
-#define OWN_UE_IDX (0xffff)
+#define URMA_ADMIN_MAX_NS_PATH  128 /* /proc/$pid/ns/net */
+#define OWN_UE_IDX              (0xffff)
 
 typedef enum tool_cmd_type {
     TOOL_CMD_SHOW,
@@ -105,7 +105,7 @@ typedef struct tool_res_upi_val {
 
 typedef union urma_vtp_cfg_flag {
     struct {
-        uint32_t clan_tp :  1;
+        uint32_t clan_tp : 1;
         uint32_t migrate : 1;
         uint32_t reserve : 30;
     } bs;
@@ -155,12 +155,12 @@ typedef struct tool_res_tpg_val {
 /* refer to struct ubcore_utp_cfg_flag */
 typedef union tool_utp_cfg_flag {
     struct {
-        uint32_t loopback :  1;
-        uint32_t spray_en :  1;
+        uint32_t loopback : 1;
+        uint32_t spray_en : 1;
         uint32_t reserved : 30;
     } bs;
     uint32_t value;
-}tool_utp_cfg_flag_t;
+} tool_utp_cfg_flag_t;
 
 /* refer to struct ubcore_res_utp_val */
 typedef struct tool_res_utp_val {
@@ -258,27 +258,27 @@ typedef struct tool_topo_map {
 /* refer to struct ubcore_res_dev_val */
 typedef struct tool_res_dev_val {
     uint32_t seg_cnt;
-    tool_seg_info_t *seg_list;      /* token_id of segment list */
+    tool_seg_info_t *seg_list; /* token_id of segment list */
     uint32_t jfs_cnt;
-    uint32_t *jfs_list;             /* jfs_id list */
+    uint32_t *jfs_list; /* jfs_id list */
     uint32_t jfr_cnt;
-    uint32_t *jfr_list;             /* jfr_id list */
+    uint32_t *jfr_list; /* jfr_id list */
     uint32_t jfc_cnt;
-    uint32_t *jfc_list;             /* jfc_id list */
+    uint32_t *jfc_list; /* jfc_id list */
     uint32_t jetty_cnt;
-    uint32_t *jetty_list;           /* jetty_id list */
+    uint32_t *jetty_list; /* jetty_id list */
     uint32_t jetty_group_cnt;
-    uint32_t *jetty_group_list;     /* jetty_group_id list */
+    uint32_t *jetty_group_list; /* jetty_group_id list */
     uint32_t rc_cnt;
-    uint32_t *rc_list;              /* RC */
+    uint32_t *rc_list; /* RC */
     uint32_t vtp_cnt;
-    uint32_t *vtp_list;             /* vtp */
+    uint32_t *vtp_list; /* vtp */
     uint32_t tp_cnt;
-    uint32_t *tp_list;              /* RC */
+    uint32_t *tp_list; /* RC */
     uint32_t tpg_cnt;
-    uint32_t *tpg_list;             /* RM */
+    uint32_t *tpg_list; /* RM */
     uint32_t utp_cnt;
-    uint32_t *utp_list;             /* UM */
+    uint32_t *utp_list; /* UM */
 } tool_res_dev_val_t;
 
 typedef struct tool_config {
@@ -286,12 +286,12 @@ typedef struct tool_config {
     bool specify_device;
     bool whole_info;
     bool help;
-    char dev_name[URMA_ADMIN_MAX_DEV_NAME];       /* ubep device name */
+    char dev_name[URMA_ADMIN_MAX_DEV_NAME]; /* ubep device name */
     urma_eid_t eid;
     bool dynamic_eid_mode;
     uint16_t ue_idx;
     /* eid start */
-    uint16_t idx; /* eid idx */
+    uint16_t idx;                    /* eid idx */
     char ns[URMA_ADMIN_MAX_NS_PATH]; /* /proc/$pid/ns/net */
     /* eid end */
     tool_query_key_t key;
@@ -306,4 +306,5 @@ int admin_str_to_u16(const char *buf, uint16_t *u16);
 int admin_str_to_u32(const char *buf, uint32_t *u32);
 int admin_str_to_u64(const char *buf, uint64_t *u64);
 int admin_parse_args(int argc, char *argv[], tool_config_t *cfg);
+
 #endif

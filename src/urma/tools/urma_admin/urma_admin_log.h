@@ -8,7 +8,6 @@
  * History: 2023-2-16 delare urma log API
  */
 
-
 #ifndef URMA_ADMIN_LOG_H
 #define URMA_ADMIN_LOG_H
 
