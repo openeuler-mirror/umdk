@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #include "admin_file_ops.h"
-#include "urma_admin_log.h"
+#include "admin_log.h"
 
 #include "admin_parameters.h"
 

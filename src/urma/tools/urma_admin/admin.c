@@ -27,9 +27,9 @@
 #include "urma_types_str.h"
 
 #include "admin_cmd.h"
+#include "admin_log.h"
 #include "admin_file_ops.h"
 #include "admin_parameters.h"
-#include "urma_admin_log.h"
 
 #define UINT8_INVALID (0xff)
 
