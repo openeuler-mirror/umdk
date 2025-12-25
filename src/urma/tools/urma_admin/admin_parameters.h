@@ -25,8 +25,9 @@
 
 #define MAX_NODE_NUM            (16)
 #define EID_LEN                 (16)
-#define MAX_PORT_NUM            (9)
+#define PORT_NUM            (9)
 #define IODIE_NUM               (2)
+#define DEV_NUM                 (128)
 #define URMA_ADMIN_MAX_DEV_NAME 64
 #define URMA_ADMIN_MAX_NS_PATH  128 /* /proc/$pid/ns/net */
 #define OWN_UE_IDX              (0xffff)
@@ -217,18 +218,29 @@ typedef struct tool_res_seg_val {
     tool_seg_info_t *seg_list;
 } tool_res_seg_val_t;
 
-typedef struct tool_iodie_info {
+typedef struct tool_topo_ue {
+    uint32_t socket_id;
     char primary_eid[EID_LEN];
-    char port_eid[MAX_PORT_NUM][EID_LEN];
-    char peer_port_eid[MAX_PORT_NUM][EID_LEN];
-    int socket_id;
-} tool_iodie_info_t;
+    char port_eid[PORT_NUM][EID_LEN];
+} tool_topo_ue_t;
+
+typedef struct tool_topo_agg_dev {
+    char agg_eid[EID_LEN];
+    tool_topo_ue_t ues[IODIE_NUM];
+} tool_topo_agg_dev_t;
+
+typedef struct tool_topo_link {
+    uint32_t peer_node;
+    uint32_t peer_iodie;
+    uint32_t peer_port;
+} tool_topo_link_t;
 
 typedef struct tool_topo_info {
-    char bonding_eid[EID_LEN];
-    tool_iodie_info_t io_die_info[IODIE_NUM];
-    bool is_cur_node;
-} tool_topo_info_t;
+    uint32_t id;
+    uint32_t is_current;
+    tool_topo_link_t links[IODIE_NUM][PORT_NUM];
+    tool_topo_agg_dev_t agg_devs[DEV_NUM];
+}  tool_topo_info_t;
 
 typedef struct tool_topo_map {
     tool_topo_info_t topo_infos[MAX_NODE_NUM];
