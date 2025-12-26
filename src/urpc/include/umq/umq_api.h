@@ -295,6 +295,15 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
  */
 int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 
+/**
+ * Get device information.
+ * @param[in] dev_name: device name
+ * @param[in] umq_trans_mode: umq trans mdoe
+ * @param[out] umq_dev_info: device information
+ * Return: 0 on success, other value on error
+ */
+int umq_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
+
 #ifdef __cplusplus
 }
 #endif

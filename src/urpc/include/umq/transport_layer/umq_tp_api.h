@@ -252,6 +252,15 @@ typedef struct umq_ops {
      * Return: 0 on success, other value on error
      */
     int (*umq_tp_mempool_state_refresh)(uint64_t umqh_tp, uint32_t mempool_id);
+
+    /**
+    * Get device information.
+    * @param[in] dev_name: device name
+    * @param[in] umq_trans_mode: umq trans mdoe
+    * @param[out] umq_dev_info: device information
+    * Return: 0 on success, other value on error
+    */
+    int (*umq_tp_dev_info_get)(char *dev_name,  umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);

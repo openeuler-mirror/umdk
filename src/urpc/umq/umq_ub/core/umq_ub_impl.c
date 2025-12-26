@@ -1392,3 +1392,42 @@ FREE_BUF:
     umq_buf_free(send_buf);
     return ret;
 }
+
+int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
+{
+    if (dev_name == NULL || strnlen(dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE || umq_dev_info == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    urma_device_t *urma_dev = urma_get_device_by_name(dev_name);
+    if (urma_dev == NULL) {
+        UMQ_VLOG_ERR("urma get device by name failed, dev_name %s\n", dev_name);
+        return -UMQ_ERR_ENODEV;
+    }
+
+    uint32_t eid_cnt = 0;
+    urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
+    if (eid_info_list == NULL || eid_cnt == 0) {
+        UMQ_VLOG_ERR("get eid list fialed, dev: %s\n", dev_name);
+        return -UMQ_ERR_ENODEV;
+    }
+
+    if (eid_cnt >= UMQ_MAX_EID_CNT) {
+        urma_free_eid_list(eid_info_list);
+        UMQ_VLOG_ERR("number of eid exceeds the maximum limit, dev: %s\n", dev_name);
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    for (uint32_t i = 0; i < eid_cnt; i++) {
+        memcpy(&umq_dev_info->ub.eid_list[i].eid, &eid_info_list[i].eid, sizeof(urma_eid_t));
+        umq_dev_info->ub.eid_list[i].eid_index = eid_info_list[i].eid_index;
+    }
+
+    umq_dev_info->ub.eid_cnt = eid_cnt;
+    umq_dev_info->umq_trans_mode = umq_trans_mode;
+    memcpy(umq_dev_info->dev_name, dev_name, strnlen(dev_name, UMQ_DEV_NAME_SIZE));
+    urma_free_eid_list(eid_info_list);
+
+    return UMQ_SUCCESS;
+}

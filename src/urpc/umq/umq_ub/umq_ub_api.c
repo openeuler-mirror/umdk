@@ -169,6 +169,11 @@ static int umq_tp_ub_mempool_state_refresh(uint64_t umqh_tp, uint32_t mempool_id
     return umq_ub_mempool_state_refresh_impl(umqh_tp, mempool_id);
 }
 
+static int umq_tp_ub_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
+{
+    return umq_ub_dev_info_get_impl(dev_name, umq_trans_mode, umq_dev_info);
+}
+
 static umq_ops_t g_umq_ub_ops = {
     .mode = UMQ_TRANS_MODE_UB,
     // control plane api
@@ -188,6 +193,7 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_user_ctl = umq_tp_ub_user_ctl_impl,
     .umq_tp_mempool_state_get = umq_tp_ub_mempool_state_get,
     .umq_tp_mempool_state_refresh = umq_tp_ub_mempool_state_refresh,
+    .umq_tp_dev_info_get = umq_tp_ub_dev_info_get,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_buf_alloc,

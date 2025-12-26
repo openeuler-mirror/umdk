@@ -530,6 +530,24 @@ typedef struct umq_mempool_state {
     mempool_import_state_t import_state;
 } umq_mempool_state_t;
 
+#define UMQ_MAX_EID_CNT 64
+
+typedef struct umq_eid_info {
+    umq_eid_t eid;
+    uint32_t eid_index;
+} umq_eid_info_t;
+
+typedef struct umq_dev_info {
+    char dev_name[UMQ_DEV_NAME_SIZE];
+    umq_trans_mode_t umq_trans_mode;
+    union {
+        struct {
+            umq_eid_info_t eid_list[UMQ_MAX_EID_CNT];
+            uint32_t eid_cnt;
+        } ub;
+    };
+} umq_dev_info_t;
+
 #ifdef __cplusplus
 }
 #endif
