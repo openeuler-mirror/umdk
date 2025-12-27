@@ -137,6 +137,7 @@ enum {
     UBCORE_ATTR_RES_LAST
 };
 
+// Legacy command
 int admin_show_utp(const tool_config_t *cfg);
 int admin_show_stats(tool_config_t *cfg);
 int admin_show_res(tool_config_t *cfg);
@@ -147,4 +148,10 @@ int admin_set_ns_mode(tool_config_t *cfg);
 int admin_set_dev_ns(tool_config_t *cfg);
 int admin_list_res(tool_config_t *cfg);
 int admin_show_topo_info(tool_config_t *cfg);
+
+// New command
+int admin_cmd_agg(admin_config_t *cfg);
+int admin_cmd_dev(admin_config_t *cfg);
+int admin_cmd_eid(admin_config_t *cfg);
+
 #endif
