@@ -68,7 +68,8 @@ typedef struct umq_buf_pro {
         uint32_t rsvd0 : 24;
     } remote_sge;                   // remote sge which reference read/write
 
-    uint64_t rsvd1[2];
+    uint64_t umq_ctx;               // umq ctx record when create umq, only share rx res will fill
+    uint64_t rsvd1;
 } umq_buf_pro_t;
 
 #ifdef __cplusplus
