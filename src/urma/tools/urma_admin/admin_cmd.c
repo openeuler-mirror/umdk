@@ -42,85 +42,6 @@ typedef struct netlink_cb_par {
     uint32_t key;
 } netlink_cb_par;
 
-#define ADMIN_NET_NS_PATH_MAX_LEN  256
-/* Path1 format: /var/run/netns/$ns_name */
-#define ADMIN_NET_NS_PATH1_PREFIX  "/var/run/netns/"
-#define ADMIN_NET_NS_PATH1_MIN_LEN strlen(ADMIN_NET_NS_PATH1_PREFIX)
-/* Path2 format: /proc/$pid/ns/net */
-#define ADMIN_NET_NS_PATH2_PREFIX  "/proc/"
-#define ADMIN_NET_NS_PATH2_SUFFIX  "/ns/net"
-/* The minimum length of path2: $pid occupies at least 1 character */
-#define ADMIN_NET_NS_PATH2_MIN_LEN 14
-
-static bool urma_validate_ns_path(const char *path)
-{
-    /* ns path is a special symbolic link, cannot be checked by realpath */
-    /* check path format1: /var/run/netns/$ns_name->/proc/$pid/ns/net */
-    size_t path_len = strnlen(path, ADMIN_NET_NS_PATH_MAX_LEN);
-    if (path_len > ADMIN_NET_NS_PATH1_MIN_LEN && path_len < ADMIN_NET_NS_PATH_MAX_LEN &&
-        (strncmp(path, ADMIN_NET_NS_PATH1_PREFIX, ADMIN_NET_NS_PATH1_MIN_LEN) == 0)) {
-        /* check if there is still "/./" or "/../" after "ns/"-> check if there is any sub_str can be
-           splitted by "/" */
-        char ns_name[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
-        /* check ns_name not containing "/" */
-        int ret = sscanf(path + ADMIN_NET_NS_PATH1_MIN_LEN, "%[^/]", ns_name);
-        if (ret < 0 || strlen(ns_name) + ADMIN_NET_NS_PATH1_MIN_LEN != path_len) {
-            (void)printf("path 1 is invalid, ns_name: %s, ret: %d, errno: %d.\n", ns_name, ret, errno);
-            return false;
-        }
-        return true;
-    }
-
-    /* check path format2: /proc/$pid/ns/net */
-    if (path_len < ADMIN_NET_NS_PATH2_MIN_LEN || path_len >= ADMIN_NET_NS_PATH_MAX_LEN) {
-        (void)printf("The len of ns realpath:%s is invalid, len: %lu.\n", path, path_len);
-        return false;
-    }
-
-    /* /proc/ */
-    size_t sub_str_len = strlen(ADMIN_NET_NS_PATH2_PREFIX);
-    uint64_t offset = sub_str_len;
-    if (offset >= path_len || strncmp(path, ADMIN_NET_NS_PATH2_PREFIX, sub_str_len) != 0) {
-        (void)printf("path 2 is invalid, should start with '/proc/', path: %s.\n", path);
-        return false;
-    }
-
-    /* pid */
-    char num_str[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
-    /* check sub_str only containing number */
-    int success_len = sscanf(path + offset, "%[0-9]", num_str);
-    /* The return value of sscanf_s is the number of string successfully matched */
-    if (success_len != 1) {
-        (void)printf("failed to get pid.\n");
-        return false;
-    }
-    sub_str_len = strnlen(num_str, ADMIN_NET_NS_PATH_MAX_LEN);
-    offset += sub_str_len;
-
-    /* /ns/net */
-    if (strcmp(path + offset, ADMIN_NET_NS_PATH2_SUFFIX) != 0) {
-        (void)printf("path is not valid: should be /proc/pid/ns/net.\n");
-        return false;
-    }
-    return true;
-}
-
-static int urma_admin_get_ns_fd(const char *ns)
-{
-    int ns_fd;
-    /* validate input */
-    if (urma_validate_ns_path(ns) == false) {
-        return -1;
-    }
-
-    ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
-    if (ns_fd == -1) {
-        (void)printf("failed to open ns file %s, errno:%d", ns, errno);
-        return ns_fd;
-    }
-    return ns_fd;
-}
-
 static int cmd_nlsend(struct nl_sock *sock, int genl_id, urma_cmd_hdr_t *hdr)
 {
     void *msg_hdr;
@@ -208,7 +129,7 @@ static int urma_admin_cmd_add_eid(struct nl_sock *sock, const tool_config_t *cfg
 
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
     arg.in.eid_index = cfg->idx;
-    if (strlen(cfg->ns) > 0 && (ns_fd = urma_admin_get_ns_fd(cfg->ns)) < 0) {
+    if (strlen(cfg->ns) > 0 && (ns_fd = admin_get_ns_fd(cfg->ns)) < 0) {
         (void)printf("set ns failed, cmd:%u, ns %s.\n", hdr.command, cfg->ns);
         return -1;
     }
@@ -1219,67 +1140,25 @@ close_sock:
 
 int admin_set_dev_ns(tool_config_t *cfg)
 {
-    int ret = 0;
-    int ns_fd = -1;
-
-    if (strlen(cfg->ns) == 0) {
-        (void)printf("invalid ns path %s.\n", cfg->ns);
-        return -1;
-    }
-    ns_fd = urma_admin_get_ns_fd(cfg->ns);
+    int ns_fd = admin_get_ns_fd(cfg->ns);
     if (ns_fd < 0) {
         (void)printf("set ns failed, ns %s.\n", cfg->ns);
         return ns_fd;
     }
 
-    struct nl_sock *sock = NULL;
-    int genl_id;
+    int ret = 0;
 
-    sock = alloc_and_connect_nl(&genl_id);
-    if (sock == NULL) {
-        ret = -1;
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
+    if (msg == NULL) {
+        ret = -ENOMEM;
         goto close_ns_fd;
     }
 
-    nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, ns_cb_handler, NULL);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
 
-    void *msg_hdr;
-    struct nl_msg *msg;
-    int nlmsg_flags = 0;
-
-    msg = nlmsg_alloc();
-    if (msg == NULL) {
-        (void)printf("Unable to allocate netlink message\n");
-        ret = -ENOMEM;
-        goto close_sock;
-    }
-
-    msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, URMA_CORE_SET_DEV_NS,
-                          UBCORE_GENL_FAMILY_VERSION);
-    if (msg_hdr == NULL) {
-        (void)printf("Unable to write genl header\n");
-        ret = -ENOMEM;
-        goto out;
-    }
-
-    ret = nla_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    if (ret < 0) {
-        (void)printf("Unable to add device name: %d\n", ret);
-        goto out;
-    }
-
-    ret = nla_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
-    if (ret < 0) {
-        (void)printf("Unable to add ns fd: %d\n", ret);
-        goto out;
-    }
-
-    ret = admin_nl_send_recv(sock, msg);
-out:
-    nlmsg_free(msg);
-close_sock:
-    nl_close(sock);
-    nl_socket_free(sock);
 close_ns_fd:
     (void)close(ns_fd);
     return ret;

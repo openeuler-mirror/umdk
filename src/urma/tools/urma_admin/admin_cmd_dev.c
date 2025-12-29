@@ -9,6 +9,9 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
+
+#include "admin_netlink.h"
 
 #include "admin_cmd.h"
 
@@ -35,8 +38,26 @@ static int cmd_dev_set_ns(admin_config_t *cfg)
         return ret;
     }
 
-    printf("TODO set ns %s to %s\n", cfg->dev_name, cfg->ns);
-    return 0;
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
+    if (msg == NULL) {
+        ret = -ENOMEM;
+        goto close_ns_fd;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+
+close_ns_fd:
+    (void)close(ns_fd);
+    return ret;
 }
 
 static int cmd_dev_set(admin_config_t *cfg)
