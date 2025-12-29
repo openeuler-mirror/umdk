@@ -176,8 +176,11 @@ int admin_list_res(tool_config_t *cfg);
 int admin_show_topo_info(tool_config_t *cfg);
 
 // New command
+int admin_cmd_main(admin_config_t *cfg);
+
 int admin_cmd_agg(admin_config_t *cfg);
 int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
+int admin_cmd_show(admin_config_t *cfg);
 
 #endif

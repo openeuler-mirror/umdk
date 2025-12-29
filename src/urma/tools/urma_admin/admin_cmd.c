@@ -390,107 +390,6 @@ int admin_show_stats(tool_config_t *cfg)
     return 0;
 }
 
-bool admin_is_eid_valid(const char *eid)
-{
-    int i;
-
-    for (i = 0; i < EID_LEN; i++) {
-        if (eid[i] != 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void admin_print_topo_map(tool_topo_map_t *topo_map)
-{
-    uint32_t i, j, k;
-    tool_topo_info_t *cur_node_info;
-
-    (void)printf("========================== topo map start =============================\n");
-    for (i = 0; i < topo_map->node_num; i++) {
-        cur_node_info = topo_map->topo_infos + i;
-        if (!admin_is_eid_valid(cur_node_info->bonding_eid)) {
-            continue;
-        }
-
-        (void)printf("===================== node %d start =======================\n", i);
-        (void)printf("bonding eid: " EID_FMT "\n", EID_ARGS(*(urma_eid_t *)cur_node_info->bonding_eid));
-        for (j = 0; j < IODIE_NUM; j++) {
-            (void)printf("**primary eid %d: " EID_FMT "\n", j,
-                         EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].primary_eid));
-            for (k = 0; k < MAX_PORT_NUM; k++) {
-                (void)printf("****port eid %d: " EID_FMT "\n", k,
-                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].port_eid[k]));
-                (void)printf("****peer_port eid %d: " EID_FMT "\n", k,
-                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].peer_port_eid[k]));
-            }
-        }
-        (void)printf("===================== node %d end =======================\n", i);
-    }
-    (void)printf("========================== topo map end =============================\n");
-}
-
-static int admin_cmd_query_topo_info(struct nl_sock *sock, const tool_config_t *cfg, int genl_id)
-{
-    urma_cmd_hdr_t hdr;
-    tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
-    int ret = 0;
-    if (topo_map == NULL) {
-        return -1;
-    }
-    int node_num = MAX_NODE_NUM;
-    for (int i = 0; i < node_num; ++i) {
-        admin_core_cmd_topo_info_t arg = {0};
-        arg.in.node_idx = i;
-        hdr.command = (uint32_t)URMA_CORE_GET_TOPO_INFO;
-        hdr.args_len = (uint32_t)sizeof(admin_core_cmd_topo_info_t);
-        hdr.args_addr = (uint64_t)(uintptr_t)&arg;
-
-        ret = cmd_nlsend(sock, genl_id, &hdr);
-        if (ret < 0) {
-            (void)printf("Failed to cmd_nlsend, ret: %d, command: %u, errno: %d.\n", ret, hdr.command, errno);
-            goto free_topo;
-        }
-
-        ret = nl_recvmsgs_default(sock);
-        if (ret < 0) {
-            (void)printf("query topo_infos fail, please check input, ret:%d, errno:%d.\n", ret, errno);
-            goto free_topo;
-        }
-        topo_map->topo_infos[i] = arg.out.topo_info;
-        topo_map->node_num = arg.out.node_num;
-        node_num = arg.out.node_num;
-    }
-    admin_print_topo_map(topo_map);
-    free(topo_map);
-    return 0;
-free_topo:
-    free(topo_map);
-    return ret;
-}
-
-int admin_show_topo_info(tool_config_t *cfg)
-{
-    struct nl_sock *sock = NULL;
-    int genl_id;
-
-    sock = alloc_and_connect_nl(&genl_id);
-    if (sock == NULL) {
-        return -1;
-    }
-    if (admin_cmd_query_topo_info(sock, cfg, genl_id) < 0) {
-        (void)printf("Failed to query stats by ioctl.\n");
-        nl_close(sock);
-        nl_socket_free(sock);
-        return -1;
-    }
-
-    nl_close(sock);
-    nl_socket_free(sock);
-    return 0;
-}
-
 static const char *g_query_res_type[] = {
     [0] = NULL,
     [TOOL_RES_KEY_VTP] = "RES_VTP",
@@ -1162,4 +1061,45 @@ int admin_set_dev_ns(tool_config_t *cfg)
 close_ns_fd:
     (void)close(ns_fd);
     return ret;
+}
+
+static int admin_set_reserved_jetty_id_range(tool_config_t *cfg)
+{
+    char jetty_id_range[VALUE_LEN_MAX] = {0};
+
+    if (cfg->min_rsvd_jetty_id > cfg->max_rsvd_jetty_id) {
+        (void)printf("set reserved jetty id range failed, min jetty id should not be larger than max jetty id.\n");
+        return -1;
+    }
+
+    int len = sprintf(jetty_id_range, "%u-%u", cfg->min_rsvd_jetty_id, cfg->max_rsvd_jetty_id);
+    if (len <= 0 || len >= VALUE_LEN_MAX) {
+        (void)printf("snprintf failed, dev_name: %s.\n", cfg->dev_name);
+        return -1;
+    }
+
+    return admin_write_dev_file(cfg->dev_name, "reserved_jetty_id", jetty_id_range, len + 1);
+}
+
+int admin_cmd_main(admin_config_t *cfg)
+{
+    static const admin_cmd_t cmds[] = {
+        {NULL, admin_cmd_show},
+        {"add_eid", admin_add_eid},
+        {"del_eid", admin_del_eid},
+        {"set_eid_mode", admin_set_eid_mode},
+        {"show_stats", admin_show_stats},
+        {"show_res", admin_show_res},
+        {"set_ns_mode", admin_set_ns_mode},
+        {"set_dev_ns", admin_set_dev_ns},
+        {"set_reserved_jetty", admin_set_reserved_jetty_id_range},
+        {"list_res", admin_list_res},
+        //
+        {"show", admin_cmd_show},
+        {"agg", admin_cmd_agg},
+        {"dev", admin_cmd_dev},
+        {"eid", admin_cmd_eid},
+        {0},
+    };
+    return exec_cmd(cfg, cmds);
 }
