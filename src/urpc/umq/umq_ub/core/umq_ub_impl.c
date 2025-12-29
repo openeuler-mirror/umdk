@@ -1291,7 +1291,7 @@ int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_o
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (in->opcode != UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY || out->addr == 0 ||
-        out->len != sizeof(umq_flow_control_stats_t)) {
+        out->len != sizeof(umq_flow_control_stats_t) || !queue->flow_control.enabled) {
         UMQ_VLOG_ERR("umq ub user ctl parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
