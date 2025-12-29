@@ -27,8 +27,23 @@ static int cmd_dev_usage(admin_config_t *cfg)
 
 static int cmd_dev_set_sharing(admin_config_t *cfg)
 {
-    printf("TODO set sharing %s\n", cfg->dev_name);
-    return 0;
+    int ret;
+
+    if ((ret = pop_arg_sharing(cfg)) != 0) {
+        return ret;
+    }
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_SHARING_MODE, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u8(msg, UBCORE_ATTR_NS_MODE, cfg->ns_mode);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+
+    return ret;
 }
 
 static int cmd_dev_set_ns(admin_config_t *cfg)
@@ -86,8 +101,26 @@ static int cmd_dev_expose(admin_config_t *cfg)
         return ret;
     }
 
-    printf("TODO expose %s to %s\n", cfg->dev_name, cfg->ns);
-    return 0;
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_EXPOSE_DEV_NS, 0);
+    if (msg == NULL) {
+        ret = -ENOMEM;
+        goto close_ns_fd;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+
+close_ns_fd:
+    (void)close(ns_fd);
+    return ret;
 }
 
 static int cmd_dev_unexpose(admin_config_t *cfg)
@@ -100,8 +133,26 @@ static int cmd_dev_unexpose(admin_config_t *cfg)
         return ret;
     }
 
-    printf("TODO unexpose %s to %s\n", cfg->dev_name, cfg->ns);
-    return 0;
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_UNEXPOSE_DEV_NS, 0);
+    if (msg == NULL) {
+        ret = -ENOMEM;
+        goto close_ns_fd;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+
+close_ns_fd:
+    (void)close(ns_fd);
+    return ret;
 }
 
 int admin_cmd_dev(admin_config_t *cfg)

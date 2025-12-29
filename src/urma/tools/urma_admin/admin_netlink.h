@@ -57,7 +57,16 @@ static inline int admin_nl_put_u32(struct nl_msg *msg, int attr, uint32_t value)
 {
     int ret = nla_put_u32(msg, attr, value);
     if (ret != 0) {
-        printf("Failed to put string attribute %d, ret: %d\n", attr, ret);
+        printf("Failed to put u32 attribute %d, ret: %d\n", attr, ret);
+    }
+    return ret;
+}
+
+static inline int admin_nl_put_u8(struct nl_msg *msg, int attr, uint8_t value)
+{
+    int ret = nla_put_u8(msg, attr, value);
+    if (ret != 0) {
+        printf("Failed to put u8 attribute %d, ret: %d\n", attr, ret);
     }
     return ret;
 }
