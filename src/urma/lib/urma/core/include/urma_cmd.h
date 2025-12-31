@@ -42,6 +42,7 @@ typedef enum urma_core_cmd {
     URMA_CORE_SET_DEV_SHARING_MODE,
     URMA_CORE_EXPOSE_DEV_NS,
     URMA_CORE_UNEXPOSE_DEV_NS,
+    URMA_CORE_SET_DEV_EID_NS,
     URMA_CORE_GET_TOPO_INFO,
 } urma_core_cmd_t;
 

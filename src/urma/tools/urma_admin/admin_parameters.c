@@ -450,6 +450,29 @@ int pop_arg_eid_idx(admin_config_t *cfg)
     return ret;
 }
 
+int pop_arg_eid_mode(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    if (arg == NULL) {
+        printf("No eid mode specified.\n");
+        return -EINVAL;
+    }
+
+    const char *eid_mode_static = "static";
+    const char *eid_mode_dynamic = "dynamic";
+
+    if (strncmp(arg, eid_mode_static, strlen(eid_mode_static) + 1) == 0) {
+        cfg->dynamic_eid_mode = false;
+    } else if (strncmp(arg, eid_mode_dynamic, strlen(eid_mode_dynamic) + 1) == 0) {
+        cfg->dynamic_eid_mode = true;
+    } else {
+        printf("Invalid eid mode:%s, expect 'dynamic' or 'static'.\n", arg);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 #define ADMIN_NET_NS_PATH_MAX_LEN  256
 /* Path1 format: /var/run/netns/$ns_name */
 #define ADMIN_NET_NS_PATH1_PREFIX  "/var/run/netns/"
