@@ -18,15 +18,15 @@
 
 static int cmd_dev_usage(admin_config_t *cfg)
 {
-    printf("Usage: urma_admin dev set [ DEV ] ns [ NETNS ]\n"
-           "       urma_admin dev set [ DEV ] sharing { on | off }\n"
+    printf("Usage: urma_admin dev sharing { on | off }\n"
+           "       urma_admin dev set [ DEV ] ns [ NETNS ]\n"
            "       urma_admin dev expose [ DEV ] [ NETNS ]\n"
            "       urma_admin dev unexpose [ DEV ] [ NETNS ]\n"
            "where  NETNS := /proc/$pid/ns/net\n");
     return 0;
 }
 
-static int cmd_dev_set_sharing(admin_config_t *cfg)
+static int cmd_dev_toggle_sharing(admin_config_t *cfg)
 {
     int ret;
 
@@ -34,7 +34,7 @@ static int cmd_dev_set_sharing(admin_config_t *cfg)
         return ret;
     }
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_SHARING_MODE, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -85,7 +85,6 @@ static int cmd_dev_set(admin_config_t *cfg)
 
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_dev_usage},            //
-        {"sharing", cmd_dev_set_sharing}, //
         {"ns", cmd_dev_set_ns},           //
         {0},                              //
     };
@@ -163,6 +162,7 @@ int admin_cmd_dev(admin_config_t *cfg)
     }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_dev_usage},          //
+        {"sharing", cmd_dev_toggle_sharing},       //
         {"set", cmd_dev_set},           //
         {"expose", cmd_dev_expose},     //
         {"unexpose", cmd_dev_unexpose}, //
