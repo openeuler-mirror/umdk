@@ -81,6 +81,15 @@ int umq_unbind(uint64_t umqh);
 
 /**
  * User should ensure thread safety if io_lock_free is true
+ * Set umq state
+ * @param[in] umqh: umq handle
+ * @param[in] state: umq state want to set (Only Support Set ERR STATE)
+ * Return 0 on success, error code on failure
+ */
+int umq_state_set(uint64_t umqh, umq_state_t state);
+
+/**
+ * User should ensure thread safety if io_lock_free is true
  * Query umq state
  * @param[in] umqh: umq handle
  * Return umq state

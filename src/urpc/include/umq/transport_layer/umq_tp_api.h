@@ -81,6 +81,15 @@ typedef struct umq_ops {
 
     /**
     * User should ensure thread safety if io_lock_free is true
+    * Set umq state
+    * @param[in] umqh_tp: umq handle
+    * @param[in] state: umq state want to set(Only Support Set ERR STATE)
+    * Return 0 on success, error code on failure
+    */
+    int (*umq_tp_state_set)(uint64_t umqh_tp, umq_state_t state);
+
+    /**
+    * User should ensure thread safety if io_lock_free is true
     * Query umq state
     * @param[in] umqh_tp: umq handle
     * Return umq state

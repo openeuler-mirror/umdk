@@ -327,25 +327,30 @@ FREE_CTX:
     return UMQ_FAIL;
 }
 
-int umq_modify_ubq_to_err(ub_queue_t *queue)
+int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction)
 {
-    urma_jetty_attr_t jetty_attr = {
-        .mask = JETTY_STATE,
-        .state = URMA_JETTY_STATE_ERROR,
-    };
-    urma_status_t urma_status = urma_modify_jetty(queue->jetty, &jetty_attr);
-    if (urma_status != URMA_SUCCESS) {
-        UMQ_VLOG_ERR("modify jetty to URMA_JETTY_STATE_ERROR fail, status %u, eid: " EID_FMT ", jetty_id: %u\n",
-                     urma_status, EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id);
+    urma_status_t urma_status = URMA_EINVAL;
+    if (direction == UMQ_IO_ALL || direction == UMQ_IO_TX) {
+        urma_jetty_attr_t jetty_attr = {
+            .mask = JETTY_STATE,
+            .state = URMA_JETTY_STATE_ERROR,
+        };
+        urma_status_t urma_status = urma_modify_jetty(queue->jetty, &jetty_attr);
+        if (urma_status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR("modify jetty to URMA_JETTY_STATE_ERROR fail, status %u, eid: " EID_FMT ", jetty_id: %u\n",
+                        urma_status, EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id);
+        }
     }
 
-    urma_jfr_attr_t jfr_attr = {
-        .mask = JETTY_STATE,
-        .state = URMA_JFR_STATE_ERROR,
-    };
-    urma_status = urma_modify_jfr(queue->jfr_ctx->jfr, &jfr_attr);
-    if (urma_status != URMA_SUCCESS) {
-        UMQ_VLOG_ERR("modify jfr to URMA_JFR_STATE_ERROR fail, status %u\n", urma_status);
+    if (direction == UMQ_IO_ALL || direction == UMQ_IO_RX) {
+        urma_jfr_attr_t jfr_attr = {
+            .mask = JETTY_STATE,
+            .state = URMA_JFR_STATE_ERROR,
+        };
+        urma_status = urma_modify_jfr(queue->jfr_ctx->jfr, &jfr_attr);
+        if (urma_status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR("modify jfr to URMA_JFR_STATE_ERROR fail, status %u\n", urma_status);
+        }
     }
 
     queue->state = QUEUE_STATE_ERR;
