@@ -420,12 +420,7 @@ static urma_status_t set_send_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_targ
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
             return URMA_EINVAL;
         }
-        if ((void *)vtseg->user_ctx == NULL) {
-            URMA_LOG_ERR("Failed to set ptseg, vtseg->user_ctx is NULL."
-                "The input parameter may be a self-constructed structure.\n");
-            return URMA_EINVAL;
-        }
-        vtseg = (urma_target_seg_t *)vtseg->user_ctx;
+        vtseg = (urma_target_seg_t *)vtseg->handle;
         send_wr->send.src.sge[i].tseg = get_p_tseg(vtseg, send_idx, target_idx);
     }
     send_wr->tjetty = get_p_tjetty(vtjetty, send_idx, target_idx);
@@ -458,21 +453,16 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
             return URMA_EINVAL;
         }
-        if ((void *)vtseg->user_ctx == NULL) {
-            URMA_LOG_ERR("vtseg->user_ctx is NULL."
-                "The input parameter may be a self-constructed structure."
-                "Using the Adaptation Solution.\n");
+        // There is no longer self constructed seg, can be deleted
+        if ((void *)vtseg->handle == NULL) {
+            URMA_LOG_ERR("Write sge.dst->handle is NULL.\n");
             vtseg = bondp_find_vtseg_by_va(send_wr->rw.src.sge[i].tseg->seg.token_id);
             if (vtseg == NULL) {
                 URMA_LOG_ERR("bondp_find_vtseg_by_va fail.");
                 return URMA_FAIL;
             }
-            if ((void *)vtseg->user_ctx == NULL) {
-                URMA_LOG_ERR("bondp_find_vtseg_by_va found error vtseg, vtseg->user_ctx is NULL\n");
-                return URMA_FAIL;
-            }
         }
-        vtseg = (urma_target_seg_t *)vtseg->user_ctx;
+        vtseg = (urma_target_seg_t *)vtseg->handle;
         send_wr->rw.src.sge[i].tseg = get_p_tseg(vtseg, send_idx, target_idx);
     }
     for (int i = 0; i < send_wr->rw.dst.num_sge; ++i) {
@@ -484,21 +474,16 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
             return URMA_EINVAL;
         }
-        if ((void *)vtseg->user_ctx == NULL) {
-            URMA_LOG_ERR("vtseg->user_ctx is NULL."
-                "The input parameter may be a self-constructed structure."
-                "Using the Adaptation Solution.\n");
+        // There is no longer self constructed seg, can be deleted
+        if ((void *)vtseg->handle == NULL) {
+            URMA_LOG_ERR("Write sge.dst->handle is NULL.\n");
             vtseg = bondp_find_vtseg_by_va(send_wr->rw.dst.sge[i].tseg->seg.token_id);
             if (vtseg == NULL) {
                 URMA_LOG_ERR("bondp_find_vtseg_by_va fail.");
                 return URMA_FAIL;
             }
-            if ((void *)vtseg->user_ctx == NULL) {
-                URMA_LOG_ERR("bondp_find_vtseg_by_va found error vtseg, vtseg->user_ctx is NULL\n");
-                return URMA_FAIL;
-            }
         }
-        vtseg = (urma_target_seg_t *)vtseg->user_ctx;
+        vtseg = (urma_target_seg_t *)vtseg->handle;
         send_wr->rw.dst.sge[i].tseg = get_p_tseg(vtseg, send_idx, target_idx);
     }
     send_wr->tjetty = get_p_tjetty(vtjetty, send_idx, target_idx);
@@ -531,21 +516,12 @@ static urma_status_t set_cas_wr_ptseg_pjetty(urma_jfs_wr_t *send_wr, urma_target
         URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
         return URMA_EINVAL;
     }
-    if ((void *)vtseg->user_ctx == NULL) {
-        URMA_LOG_ERR("vtseg->user_ctx is NULL."
-            "The input parameter may be a self-constructed structure.\n");
-        return URMA_EINVAL;
-    }
-    vtseg = (urma_target_seg_t *)vtseg->user_ctx;
+
+    vtseg = (urma_target_seg_t *)vtseg->handle;
     send_wr->cas.src->tseg = get_p_tseg(vtseg, send_idx, target_idx);
     vtseg = (urma_target_seg_t *)send_wr->cas.dst->tseg;
     if (vtseg == NULL) {
         URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
-        return URMA_EINVAL;
-    }
-    if ((void *)vtseg->user_ctx == NULL) {
-        URMA_LOG_ERR("vtseg->user_ctx is NULL."
-            "The input parameter may be a self-constructed structure.\n");
         return URMA_EINVAL;
     }
     send_wr->cas.dst->tseg = get_p_tseg(vtseg, send_idx, target_idx);
@@ -580,12 +556,8 @@ static urma_status_t set_fadd_wr_ptseg_pjetty(urma_jfs_wr_t *send_wr, urma_targe
         URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
         return URMA_EINVAL;
     }
-    if ((void *)vtseg->user_ctx == NULL) {
-        URMA_LOG_ERR("vtseg->user_ctx is NULL."
-            "The input parameter may be a self-constructed structure.\n");
-        return URMA_EINVAL;
-    }
-    vtseg = (urma_target_seg_t *)vtseg->user_ctx;
+
+    vtseg = (urma_target_seg_t *)vtseg->handle;
     send_wr->faa.src->tseg = get_p_tseg(vtseg, send_idx, target_idx);
 
     vtseg = (urma_target_seg_t *)send_wr->faa.dst->tseg;
@@ -593,12 +565,8 @@ static urma_status_t set_fadd_wr_ptseg_pjetty(urma_jfs_wr_t *send_wr, urma_targe
         URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
         return URMA_EINVAL;
     }
-    if ((void *)vtseg->user_ctx == NULL) {
-        URMA_LOG_ERR("vtseg->user_ctx is NULL."
-            "The input parameter may be a self-constructed structure.\n");
-        return URMA_EINVAL;
-    }
-    vtseg = (urma_target_seg_t *)send_wr->faa.dst->tseg->user_ctx;
+
+    vtseg = (urma_target_seg_t *)send_wr->faa.dst->tseg->handle;
     send_wr->faa.dst->tseg = get_p_tseg(vtseg, send_idx, target_idx);
     send_wr->tjetty = get_p_tjetty(vtjetty, send_idx, target_idx);
     return URMA_SUCCESS;
@@ -1133,10 +1101,6 @@ static urma_status_t set_jfr_wr_ptjetty_ptseg_without_hdr(urma_jfr_wr_t *recv_wr
     for (int i = 0; i < recv_wr->src.num_sge; ++i) {
         if (recv_wr->src.sge[i].tseg == NULL) {
             URMA_LOG_ERR("Recv sge[%d] has NULL tseg\n", i);
-            return URMA_EINVAL;
-        }
-        if ((void *)recv_wr->src.sge[i].tseg->user_ctx == NULL) {
-            URMA_LOG_ERR("Recv sge[%d] has invalid tseg, user_ctx is NULL. It may be self-constructed\n", i);
             return URMA_EINVAL;
         }
         recv_wr->src.sge[i].tseg = get_p_tseg(recv_wr->src.sge[i].tseg, local_idx, target_idx);

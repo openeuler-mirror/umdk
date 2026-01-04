@@ -173,6 +173,7 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
 
 urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 {
+    target_seg->handle = ((bondp_comp_t *)target_seg)->v_orig_handle;
     return bondp_delete_comp(target_seg, BONDP_COMP_SEGMENT);
 }
 
@@ -195,7 +196,8 @@ static bondp_ret_t import_p_tseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_
         URMA_LOG_ERR("Failed to import seg (%d, %d)\n", local_idx, target_idx);
         return BONDP_ERROR;
     }
-    p_tseg->user_ctx = (uint64_t)(seg_cfg->bdp_imprt_tseg);
+    seg_cfg->bdp_imprt_tseg->p_orig_handle[local_idx][target_idx] = p_tseg->handle;
+    p_tseg->handle = (uint64_t)(seg_cfg->bdp_imprt_tseg);
     seg_cfg->bdp_imprt_tseg->p_tseg[local_idx][target_idx] = p_tseg;
 
     URMA_LOG_INFO("Import seg [%d]("EID_FMT")<-[%d]("EID_FMT")\n",
@@ -417,7 +419,8 @@ static int bondp_import_p_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_s
 
     bondp_import_tseg_t *bdp_imprt_tseg = bondp_seg_cfg->bdp_imprt_tseg;
     bdp_imprt_tseg->v_tseg.urma_ctx = &bdp_ctx->v_ctx;
-    bdp_imprt_tseg->v_tseg.user_ctx = (uint64_t)&bdp_imprt_tseg->v_tseg;
+    bdp_imprt_tseg->v_orig_handle = bdp_imprt_tseg->v_tseg.handle;
+    bdp_imprt_tseg->v_tseg.handle = (uint64_t)&bdp_imprt_tseg->v_tseg;
     bdp_imprt_tseg->v_tseg.seg.ubva = seg->ubva;
 
     return ret;
@@ -550,12 +553,14 @@ urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg)
             if (bdp_imprt_tseg->p_tseg[i][j] == NULL) {
                 continue;
             }
+            bdp_imprt_tseg->p_tseg[i][j]->handle = bdp_imprt_tseg->p_orig_handle[i][j];
             if (urma_unimport_seg(bdp_imprt_tseg->p_tseg[i][j]) != URMA_SUCCESS) {
                 ret = URMA_FAIL;
             }
         }
     }
     if (!bdp_imprt_tseg->is_reused) {
+        bdp_imprt_tseg->v_tseg.handle = bdp_imprt_tseg->v_orig_handle;
         if (urma_cmd_unimport_seg(&bdp_imprt_tseg->v_tseg) != URMA_SUCCESS) {
             ret = URMA_FAIL;
         }

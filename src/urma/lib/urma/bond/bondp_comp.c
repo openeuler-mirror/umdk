@@ -456,6 +456,8 @@ int bondp_v_segment_register(bondp_comp_t *bdp_comp, bondp_context_t *bdp_ctx, u
     }
     bdp_comp->v_tseg.seg.token_id = t_seg.seg.token_id;
     bdp_comp->v_tseg.handle = t_seg.handle;
+    bdp_comp->v_orig_handle = t_seg.handle;
+    bdp_comp->v_tseg.handle = (uint64_t)&bdp_comp->v_tseg;
     URMA_LOG_INFO("Success register seg, handle:%lu.\n", t_seg.handle);
     return 0;
 }
@@ -479,7 +481,8 @@ static urma_status_t bondp_segment_init_comp_attr(bondp_comp_t *bdp_comp, bondp_
         if (bdp_comp->p_tseg[i]->token_id == NULL) {
             bdp_comp->p_tseg[i]->token_id = cfg->token_id;
         }
-        bdp_comp->p_tseg[i]->user_ctx = (uint64_t)&bdp_comp->v_tseg;
+        bdp_comp->p_orig_handle[i] = bdp_comp->p_tseg[i]->handle;
+        bdp_comp->p_tseg[i]->handle = (uint64_t)&bdp_comp->v_tseg;
     }
 
     return bondp_v_segment_register(bdp_comp, bdp_ctx, cfg);
@@ -622,6 +625,9 @@ urma_status_t bondp_delete_comp(void *comp, bondp_comp_type_t type)
         return URMA_EINVAL;
     }
     for (int i = 0; i < bdp_comp->dev_num; ++i) {
+        if (type == BONDP_COMP_SEGMENT && bdp_comp->p_tseg[i]) {
+            bdp_comp->p_tseg[i]->handle = bdp_comp->p_orig_handle[i];
+        }
         if (bdp_comp->members[i] &&
             g_bondp_comp_table[type].delete(bdp_comp->members[i]) != URMA_SUCCESS) {
             URMA_LOG_ERR("Failed to delete comp %d type %d\n", i, type);
