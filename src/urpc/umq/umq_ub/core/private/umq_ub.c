@@ -686,6 +686,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     queue->umq_trans_mode = option->trans_mode;
     queue->remote_rx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size;
     queue->create_flag = option->create_flag;
+    queue->umq_ctx = option->umq_ctx;
     queue->share_rq_umqh = option->share_rq_umqh;
     return UMQ_SUCCESS;
 }
