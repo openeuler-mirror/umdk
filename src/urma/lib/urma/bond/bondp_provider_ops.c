@@ -443,7 +443,7 @@ DELETE_SLAVE_CTX:
 static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_aggr_mode_t aggr_mode)
 {
     bond_ctx->topo_map = g_bondp_global_ctx->topo_map;
-    topo_info_t *topo_info = get_topo_info_by_bonding_eid(bond_ctx->topo_map, &bond_ctx->v_ctx.eid);
+    bondp_topo_agg_dev_t *topo_info = get_topo_dev_info_by_agg_eid(bond_ctx->topo_map, &bond_ctx->v_ctx.eid);
     if (topo_info == NULL) {
         URMA_LOG_ERR("Failed to get topo info by bonding eid\n");
         return -1;
@@ -455,7 +455,7 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_agg
 
     urma_eid_t *eid_list[URMA_UBAGG_DEV_MAX_NUM] = {0};
     for (int i = 0; i < iodie_num; ++i) {
-        eid_list[i] = (urma_eid_t *)(topo_info->io_die_info[i].primary_eid);
+        eid_list[i] = (urma_eid_t *)(topo_info->ues[i].primary_eid);
         if (is_empty_eid(eid_list[i])) {
             URMA_LOG_ERR("Primary eid %d is NULL\n", i);
             return -1;
@@ -464,7 +464,7 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_agg
         bool port_eid_valid = false;
         for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
             int idx = PRIMARY_EID_NUM + i * PORT_EID_MAX_NUM_PER_DEV + j;
-            eid_list[idx] = (urma_eid_t *)(topo_info->io_die_info[i].port_eid[j]);
+            eid_list[idx] = (urma_eid_t *)(topo_info->ues[i].port_eid[j]);
             if (is_empty_eid(eid_list[idx])) {
                 eid_list[idx] = NULL;
                 URMA_LOG_INFO("Skip port ctx [%d, %d], eid is empty", i, j);

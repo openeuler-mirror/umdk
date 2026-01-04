@@ -69,7 +69,7 @@ struct ubagg_slave_device {
 };
 
 struct ubagg_topo_info_out {
-    struct topo_info topo_info[MAX_NODE_NUM];
+    bondp_topo_node_t topo_info[MAX_NODE_NUM];
     uint32_t node_num;
 };
 #endif // UBAGG_IOCTL_H

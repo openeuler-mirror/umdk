@@ -261,7 +261,7 @@ static bondp_ret_t import_matrix_port_seg_by_direct_route(bondp_context_t *bdp_c
         URMA_LOG_ERR("No direct route to target seg in single_path mode\n");
         return BONDP_ERROR;
     }
-    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_bonding_eid(bdp_ctx->topo_map, &eid);
+    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_agg_eid(bdp_ctx->topo_map, &eid);
     if (direct_dev_info == NULL) {
         URMA_LOG_ERR("Can't get direct route by eid "EID_FMT"\n", EID_ARGS(eid));
         return BONDP_ERROR;
@@ -271,10 +271,10 @@ static bondp_ret_t import_matrix_port_seg_by_direct_route(bondp_context_t *bdp_c
     int i = 0;
     int success_import_num = 0;
     for (i = 0; i < direct_dev_info->direct_num; ++i) {
-        local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].plane_idx,
-            direct_dev_info->local_map_idx[i].port_idx);
-        target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].plane_idx,
-            direct_dev_info->target_map_idx[i].port_idx);
+        local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
+            direct_dev_info->local_map_idx[i].peer_port);
+        target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].peer_iodie,
+            direct_dev_info->target_map_idx[i].peer_port);
         if (local_port >= bdp_ctx->dev_num || bdp_ctx->p_ctxs[local_port] == NULL) {
             URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
             continue;
