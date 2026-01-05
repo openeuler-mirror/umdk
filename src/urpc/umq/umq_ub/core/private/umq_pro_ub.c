@@ -485,11 +485,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
 
     /* only sub umq need set umq_ctx */
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
-    if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
-        buf_pro->umq_ctx = 0;
-    } else {
-        buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
-    }
+    buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
 
     umq_ub_imm_t imm = {.value = cr->imm_data};
     if (imm.bs.umq_private == 0) {
@@ -578,12 +574,6 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
         }
         case URMA_CR_OPC_SEND: {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-            if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
-                buf_pro->umq_ctx = 0;
-                break;
-            }
-
-            /* only subqueue need fill umq_ctx */
             buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
             break;
         }
