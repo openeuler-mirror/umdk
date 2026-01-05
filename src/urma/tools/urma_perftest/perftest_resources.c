@@ -31,6 +31,22 @@ static urma_token_t g_perftest_token = {
     .token = 0xABCDEF,
 };
 
+static const char *log_level_str[] = {
+    "EMERG",     /* URMA_VLOG_LEVEL_EMERG */
+    "ALERT",     /* URMA_VLOG_LEVEL_ALERT */
+    "CRIT",      /* URMA_VLOG_LEVEL_CRIT */
+    "ERROR",     /* URMA_VLOG_LEVEL_ERR */
+    "WARN",      /* URMA_VLOG_LEVEL_WARNING */
+    "NOTICE",    /* URMA_VLOG_LEVEL_NOTICE */
+    "INFO",      /* URMA_VLOG_LEVEL_INFO */
+    "DEBUG"      /* URMA_VLOG_LEVEL_DEBUG */
+};
+
+static void print_log(int level, char *message)
+{
+    printf("%s|%s\n", log_level_str[level], message);
+}
+
 static void check_device_inline(perftest_config_t *cfg)
 {
     uint32_t default_inline = 0;
@@ -157,6 +173,14 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     if (status != URMA_SUCCESS) {
         (void)fprintf(stderr, "Failed to urma init, status:%d!\n", (int)status);
         return -1;
+    }
+
+    if (cfg->enable_stdout == true) {
+        status = urma_register_log_func(print_log);
+        if (status != URMA_SUCCESS) {
+            (void)fprintf(stderr, "Failed to register log func, status:%d!\n", (int)status);
+            goto uninit;
+        }
     }
 
     if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
