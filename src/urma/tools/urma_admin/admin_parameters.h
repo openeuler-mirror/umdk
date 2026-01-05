@@ -261,9 +261,10 @@ typedef struct tool_res_dev_val {
     uint32_t *utp_list; /* UM */
 } tool_res_dev_val_t;
 
-typedef struct tool_config {
+typedef struct admin_config {
     int argc;
     char **argv;
+    char *filename;
     bool specify_device;
     bool whole_info;
     bool help;
@@ -277,25 +278,19 @@ typedef struct tool_config {
     /* eid end */
     tool_query_key_t key;
     uint8_t ns_mode; /* 0: exclusive, 1: shared */
-    uint32_t min_rsvd_jetty_id;
-    uint32_t max_rsvd_jetty_id;
-} tool_config_t;
+} admin_config_t;
 
 int admin_str_to_eid(const char *buf, urma_eid_t *eid);
 int admin_str_to_u8(const char *buf, uint8_t *u8);
 int admin_str_to_u16(const char *buf, uint16_t *u16);
 int admin_str_to_u32(const char *buf, uint32_t *u32);
 int admin_str_to_u64(const char *buf, uint64_t *u64);
-int admin_parse_args(int argc, char *argv[], tool_config_t *cfg);
-
-typedef tool_config_t admin_config_t;
+int admin_parse_args(admin_config_t *cfg);
 
 typedef struct admin_cmd {
     char *name;
     int (*func)(admin_config_t *cfg);
 } admin_cmd_t;
-
-void usage(const char *argv0);
 
 char *pop_arg(admin_config_t *cmds);
 int pop_arg_dev(admin_config_t *cmds);
@@ -306,9 +301,5 @@ int pop_arg_eid_idx(admin_config_t *cfg);
 int pop_arg_eid_mode(admin_config_t *cfg);
 
 int admin_get_ns_fd(const char *ns);
-
-int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
-
-bool is_1650(const char *dev_name);
 
 #endif

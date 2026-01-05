@@ -120,69 +120,6 @@ int admin_str_to_u64(const char *buf, uint64_t *u64)
     return 0;
 }
 
-void usage(const char *argv0)
-{
-    (void)printf("Usage: %s command [command options]\n", argv0);
-    (void)printf(" %s URMA configuration tool, chips do not support some values, which might be invalid.\n", argv0);
-    (void)printf("\n");
-    (void)printf("Command syntax:\n");
-    (void)printf("  show [--dev] [--whole]                                 show all UB devices info.\n");
-    (void)printf("  add_eid <--dev> <--idx> [--ns /proc/$pid/ns/net]       add eid of UB device, only for uvs,\n");
-    (void)printf("                                                           control plane not support.\n");
-    (void)printf("  del_eid <--dev> <--idx>                                del eid of UB device, only for uvs,\n");
-    (void)printf("                                                           control plane not support.\n");
-    (void)printf("  set_eid_mode <--dev> [--eid_mode]                      change eid mode of MUE device, only for\n");
-    (void)printf("                                                           uvs, control plane not support.\n");
-    (void)printf("  set_reserved_jetty <--dev> <--min_id> <--max_id>       set reserved jetty id range.\n");
-    (void)printf("  show_stats <--dev> <--resource_type> <--key>           show run stats of UB device, \n");
-    (void)printf("                                                           control plane not support.\n");
-    (void)printf("  show_topo                                              show topo_info of bonding device.\n");
-    (void)printf("  show_res <--dev> <--resource_type> <--key> [--key_ext]                                  \n");
-    (void)printf("           <--key_cnt>                                   show resources of UB device.\n");
-    (void)printf("  list_res <--dev> <--resource_type> [--key] [--key_ext]                               \n");
-    (void)printf("           [--key_cnt]                                   list resources of UB device.\n");
-    (void)printf("  set_ns_mode <--ns_mode (exclusive: 0) | (shared: 1) >  set ns mode for UB devices.\n");
-    (void)printf("  set_dev_ns <--dev> <--ns /proc/$pid/ns/net>            set net namespace of UB device.\n");
-    (void)printf("Options:\n");
-    (void)printf("  -h, --help                                  show help info.\n");
-    (void)printf("  -d, --dev <dev_name>                        the name of UB device.\n");
-    (void)printf("  -e, --eid <eid>                             the eid of UB device.\n");
-    (void)printf("  -m, --eid_mode <eid_mode>                   the eid mode of UB device,/\n");
-    (void)printf("                                              (change to dynamic_mode: cmd with -m,\n");
-    (void)printf("                                              change to static_mode: cmd without -m).\n");
-    (void)printf("  -v, --ue_idx <ue_idx>                       the ue_idx of ubep device.\n"
-                 "                                              when ue_idx == 0xffff or empty, it refers to MUE.\n");
-    (void)printf("  -i, --idx <idx>                             idx defaults to 0.\n");
-    (void)printf("  -w, --whole                                 show whole information.\n");
-    (void)printf("  -R, --resource_type <type>                  config stats type with 1(tp_id/vtp, not support)/\n");
-    (void)printf("                                                2(tp, not support)/3(tpg, not support)/4(jfs)/\n");
-    (void)printf("                                                5(jfr)/6(jetty)/\n");
-    (void)printf("                                                7(jetty group, not support)/8(dev).\n");
-    (void)printf("                                              config res type with 1(tp_id/vtp, not support)/\n");
-    (void)printf("                                                2(tp, not support)/3(tpg, not support)/\n");
-    (void)printf("                                                4(utp, not support)/5(jfs)/6(jfr)/7(jetty)/\n");
-    (void)printf("                                                8(jetty group)/9(jfc)/10(rc)/11(seg)/\n");
-    (void)printf("                                                12(dev ta, not support)/13(dev tp, not support).\n");
-    (void)printf("  -k, --key <key>                             config stats/res key, config stats key with: .\n");
-    (void)printf("                                                1(tp_id/vtpn, not support)/2(tpn, not support)/\n");
-    (void)printf("                                                3(tpgn, not support)/4(jfs_id)/5(jfr_id)/\n");
-    (void)printf("                                                6(jetty_id)/7(jetty group id, not support)/\n");
-    (void)printf("                                                8(dev, no key)\n");
-    (void)printf("                                              config res key with: \n");
-    (void)printf("                                                1(tp_id/vtpn, not support)/2(tpn, not support)/\n");
-    (void)printf("                                                3(tpgn, not support)/4(utpn, not support)/\n");
-    (void)printf("                                                5(jfs_id)/6(jfr_id)/7(jetty_id)/\n");
-    (void)printf("                                                8(jetty group id)/9(jfc_id)/\n");
-    (void)printf("                                                10(rc_id, not support)/11(token_id)/\n");
-    (void)printf("                                                12(eid, not support)/13(eid, not support).\n");
-    (void)printf("  -K, --key_ext <key_ext>                     config key_ext for tp_id/vtp res.\n");
-    (void)printf("  -C, --key_cnt <key>                         config key_cnt for rc res.\n");
-    (void)printf("  -n, --ns </proc/$pid/ns/net>                ns path.\n");
-    (void)printf("  -M, --ns_mode <0 or 1>                      ns_mode with (exclusive: 0) | (shared: 1).\n");
-    (void)printf("  -l, --min_id  <0 - U32_MAX>                 min reserved jetty id, U32_MAX means invalid.\n");
-    (void)printf("  -u, --max_id  <0 - U32_MAX>                 max reserved jetty id, U32_MAX means invalid.\n");
-}
-
 #define IPV4_MAP_IPV6_PREFIX 0x0000ffff
 #define EID_STR_MIN_LEN      3
 static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
@@ -269,7 +206,7 @@ static const struct option g_urma_admin_long_options[] = {
     {NULL, no_argument, NULL, '\0'},                 //
 };
 
-static int admin_parse_dev_name(char *buf, tool_config_t *cfg)
+static int admin_parse_dev_name(char *buf, admin_config_t *cfg)
 {
     if (strnlen(buf, URMA_ADMIN_MAX_DEV_NAME) + 1 > URMA_ADMIN_MAX_DEV_NAME || check_dev_name(buf) == false) {
         (void)printf("dev_name:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_DEV_NAME);
@@ -281,7 +218,7 @@ static int admin_parse_dev_name(char *buf, tool_config_t *cfg)
     return 0;
 }
 
-static int admin_parse_ns(char *buf, tool_config_t *cfg)
+static int admin_parse_ns(char *buf, admin_config_t *cfg)
 {
     if (strnlen(buf, URMA_ADMIN_MAX_NS_PATH) + 1 > URMA_ADMIN_MAX_NS_PATH) {
         (void)printf("ns path:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_NS_PATH);
@@ -295,7 +232,7 @@ static int admin_parse_ns(char *buf, tool_config_t *cfg)
     return 0;
 }
 
-static int admin_parse_sharing(char *buf, tool_config_t *cfg)
+static int admin_parse_sharing(char *buf, admin_config_t *cfg)
 {
     if (buf == NULL) {
         (void)printf("Invalid argument.\n");
@@ -314,12 +251,11 @@ static int admin_parse_sharing(char *buf, tool_config_t *cfg)
     return 0;
 }
 
-int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
+int admin_parse_args(admin_config_t *cfg)
 {
     int ret = 0;
     while (1) {
-        int c;
-        c = getopt_long(argc, argv, "C:hd:e:mv:i:wR:k:K:n:M:u:l:", g_urma_admin_long_options, NULL);
+        int c = getopt_long(cfg->argc, cfg->argv, "C:hd:e:mv:i:wR:k:K:n:M:u:l:", g_urma_admin_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -329,8 +265,7 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
                 break;
             case 'h':
                 cfg->help = true;
-                usage(argv[0]);
-                return 0;
+                break;
             case 'd':
                 ret = admin_parse_dev_name(optarg, cfg);
                 break;
@@ -364,22 +299,24 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
             case 'M':
                 ret = admin_str_to_u8(optarg, &cfg->ns_mode);
                 break;
-            case 'u':
-                ret = admin_str_to_u32(optarg, &cfg->max_rsvd_jetty_id);
-                break;
-            case 'l':
-                ret = admin_str_to_u32(optarg, &cfg->min_rsvd_jetty_id);
-                break;
+            case ':':
+                printf("Option -%c requires an argument\n", optopt);
+                URMA_ADMIN_LOG("Option -%c requires an argument\n", optopt);
+                return -EINVAL;
             default:
-                usage(argv[0]);
-                return -1;
+                printf("Unknown option\n");
+                URMA_ADMIN_LOG("Unknown option\n");
+                return -EINVAL;
         }
         if (ret != 0) {
-            (void)printf("Please check the legality of parameters\n");
-            URMA_ADMIN_LOG("Please check the legality of parameters\n");
-            return -1;
+            printf("Invalid option\n");
+            URMA_ADMIN_LOG("Invalid option\n");
+            return -EINVAL;
         }
     }
+
+    cfg->argc -= optind;
+    cfg->argv += optind;
     return 0;
 }
 
@@ -550,44 +487,4 @@ int admin_get_ns_fd(const char *ns)
         return ns_fd;
     }
     return ns_fd;
-}
-
-int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
-{
-    const char *cmd_name = pop_arg(cfg);
-    if (cmd_name == NULL) {
-        return cmds[0].func(cfg);
-    }
-
-    const admin_cmd_t *cmd = cmds + 1;
-    while (cmd->name) {
-        if (strncmp(cmd->name, cmd_name, strlen(cmd->name) + 1) == 0) {
-            return cmd->func(cfg);
-        }
-        cmd++;
-    }
-
-    printf("Unknown cmd '%s'.\n", cmd_name);
-    return 0;
-}
-
-bool is_1650(const char *dev_name)
-{
-    char *device_path = calloc(1, DEV_PATH_MAX);
-    if (device_path == NULL) {
-        return false;
-    }
-
-    if (snprintf(device_path, DEV_PATH_MAX - 1, "%s/%s/device", SYS_CLASS_PATH, dev_name) <= 0) {
-        (void)printf("snprintf failed, dev:%s.\n", dev_name);
-        free(device_path);
-        return false;
-    }
-
-    const uint32_t device_id_1650 = 0xa001;
-    uint32_t device_id;
-    (void)admin_parse_file_value_u32(device_path, "device", &device_id);
-
-    free(device_path);
-    return device_id == device_id_1650;
 }

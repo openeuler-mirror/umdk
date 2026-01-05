@@ -23,6 +23,13 @@
 
 #include "admin_cmd.h"
 
+static int cmd_show_usage(admin_config_t *cfg)
+{
+    printf("Usage: urma_admin show\n"
+           "       urma_admin show topo\n");
+    return 0;
+}
+
 #define UINT8_INVALID (0xff)
 
 typedef struct admin_show_ubep {
@@ -570,6 +577,9 @@ free_topo:
 
 int admin_cmd_show(admin_config_t *cfg)
 {
+    if (cfg->help) {
+        return cmd_show_usage(cfg);
+    }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_show_default}, //
         {"topo", cmd_show_topo},  //

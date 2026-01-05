@@ -114,6 +114,9 @@ static int cmd_agg_del(admin_config_t *cfg)
 
 int admin_cmd_agg(admin_config_t *cfg)
 {
+    if (cfg->help) {
+        return cmd_agg_usage(cfg);
+    }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_agg_usage}, //
         {"add", cmd_agg_add},  //
