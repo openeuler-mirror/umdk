@@ -377,12 +377,14 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
 
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
         if (data >= g_qbuf_pool.data_buffer && data < g_qbuf_pool.header_buffer) {
-            uint32_t id = (uint32_t)(data - g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
+            uint64_t id =
+                ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
             return (umq_buf_t *)(g_qbuf_pool.header_buffer + id * sizeof(umq_buf_t));
         }
     } else {
         if (data >= g_qbuf_pool.data_buffer && data < g_qbuf_pool.data_buffer + g_qbuf_pool.total_size) {
-            uint32_t id = (uint32_t)(data - g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
+            uint64_t id =
+                ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
             return (umq_buf_t *)(g_qbuf_pool.data_buffer + id * g_qbuf_pool.block_size);
         }
     }
