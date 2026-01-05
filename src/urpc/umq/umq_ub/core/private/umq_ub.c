@@ -673,6 +673,12 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         }
         queue->mode = option->mode;
     }
+    if (((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 && (option->create_flag &
+        UMQ_CREATE_FLAG_SUB_UMQ) == 0) || ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0
+        && (option->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0)) {
+            UMQ_VLOG_ERR("queue create_flag[%u] is invalid\n", option->create_flag);
+        return -UMQ_ERR_EINVAL;
+    }
     queue->max_rx_sge = dev_ctx->dev_attr.dev_cap.max_jfr_sge < UMQ_MAX_SGE_NUM ?
                         dev_ctx->dev_attr.dev_cap.max_jfr_sge : UMQ_MAX_SGE_NUM;
     queue->max_tx_sge = dev_ctx->dev_attr.dev_cap.max_jfs_sge < UMQ_MAX_SGE_NUM ?
@@ -694,6 +700,11 @@ int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq)
 {
     if (share_rq->state == QUEUE_STATE_ERR) {
         UMQ_VLOG_ERR("the share_rq is invalid\n");
+        errno = UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EINVAL;
+    }
+    if (share_rq->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
+        UMQ_VLOG_ERR("sub umq cannot be used as share_rq\n");
         errno = UMQ_ERR_EINVAL;
         return -UMQ_ERR_EINVAL;
     }
@@ -732,7 +743,7 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue)
 }
 
 int umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
-                       ub_queue_t *share_queue)
+                          ub_queue_t *share_queue)
 {
     if ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
         queue->jfr_ctx = share_queue->jfr_ctx;
