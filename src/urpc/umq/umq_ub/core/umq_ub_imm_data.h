@@ -43,6 +43,15 @@ typedef enum umq_ub_import_mem_sub_type {
     IMM_TYPE_MEM_IMPORT_DONE,           // used for record remoet import mem done
 } umq_ub_import_mem_sub_type_t;
 
+typedef enum umq_ub_flow_control_sub_type {
+    IMM_TYPE_FC_ASSOCIATE_IO_EXCHANGE,    // imm associated with io exchange
+    IMM_TYPE_FC_CREDIT_INIT,
+    IMM_TYPE_FC_CREDIT_REQ,               // request credit
+    IMM_TYPE_FC_CREDIT_REP,               // reply credit request
+    IMM_TYPE_FC_CREDIT_RETURN_REQ,        // request for credit refund
+    IMM_TYPE_FC_CREDIT_RETURN_ACK,        // answer refund credit
+} umq_ub_flow_control_sub_type_t;
+
 typedef union umq_ub_imm {
     uint64_t value;
     struct {
@@ -62,8 +71,9 @@ typedef union umq_ub_imm {
     struct {
         uint64_t umq_private : 1;
         uint64_t type : 5;
+        uint64_t sub_type : 5;
         uint64_t in_user_buf : 1;
-        uint64_t rsvd1 : 9;
+        uint64_t rsvd1 : 4;
         uint64_t window : 16;
         uint64_t rsvd2 : 32;
     } flow_control;
