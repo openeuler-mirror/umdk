@@ -452,7 +452,7 @@ WAIT_UMQ_READY:
 
 static inline void umq_perftest_server_qps_work_load(perftest_thread_arg_t *args)
 {
-    umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)args;
+    umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->qps_arg.cfg = arg->cfg;
     umq_perftest_run_qps(arg->umqh, &arg->qps_arg);
 }
