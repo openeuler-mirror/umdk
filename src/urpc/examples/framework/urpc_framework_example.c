@@ -48,7 +48,7 @@ typedef struct example_case {
     example_case_type_t case_idx;
     char *name;
     int (*client)(
-        uint32_t chid, uint64_t qh, urpc_channel_qinfos_t *qinfos, uint64_t func_id, urpc_allocator_t *allocator);
+        uint32_t chid, uint64_t qh, urpc_channel_qinfos_t *qinfos, uint64_t func_id, const urpc_allocator_t *allocator);
     int (*server)(uint64_t qh, uint64_t qh1, const urpc_allocator_t *allocator);
 } example_case_t;
 
@@ -501,7 +501,7 @@ static int fill_client_urpc_config(urpc_lib_example_config_t *cfg, urpc_config_t
     urpc_config->trans_info[0].trans_mode = (urpc_trans_mode_t)cfg->trans_mode;
     urpc_config->trans_info[0].assign_mode = cfg->dev_assign_mode;
     if (cfg->dev_assign_mode == DEV_ASSIGN_MODE_EID) {
-        (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)&urpc_config->trans_info[0].ub.eid);
+        (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)(uintptr_t)&urpc_config->trans_info[0].ub.eid);
     } else {
         if (snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name) < 0) {
             LOG_PRINT("snprintf dev_name failed\n");

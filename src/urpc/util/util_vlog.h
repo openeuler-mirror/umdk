@@ -66,7 +66,7 @@ static inline void default_vlog_output(int level, char *log_msg)
 
 bool util_vlog_limit(util_vlog_ctx_t *ctx, uint32_t *print_count, uint64_t *last_time);
 
-static inline bool util_vlog_drop(util_vlog_ctx_t *ctx, util_vlog_level_t level)
+static inline bool util_vlog_drop(const util_vlog_ctx_t *ctx, util_vlog_level_t level)
 {
     return level > ctx->level;
 }

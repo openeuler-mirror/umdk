@@ -459,7 +459,7 @@ static inline void umq_perftest_server_qps_work_load(perftest_thread_arg_t *args
 
 static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
 {
-    umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)args;
+    umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->lat_arg.cfg = arg->cfg;
     umq_perftest_run_latency(arg->umqh, &arg->lat_arg);
 }

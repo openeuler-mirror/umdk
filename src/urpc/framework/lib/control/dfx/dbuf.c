@@ -15,7 +15,8 @@
 
 #define URPC_DBUF_INFO_LEN 8192
 
-static int format_stats_string(char *buf, int len, uint64_t *stats, int stats_len, const char *(*name_get)(int))
+static int format_stats_string(char *buf, int len, const uint64_t *stats,
+                               int stats_len, const char *(*name_get)(int))
 {
     int ret;
     int offset = 0, remain = len;

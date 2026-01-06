@@ -7,7 +7,6 @@
 #include <asm/byteorder.h>
 
 extern "C" {
-
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 /* Host Order       1111 1111 0000 0000
  * Network Order    1111 1111 0000 0000 */
@@ -59,5 +58,4 @@ static uint64_t g_ho_field48 = 0x00ff00ff00ff;
 static uint64_t g_ho_field64 = 0x00ff00ff00ff00ff;
 [[maybe_unused]] static uint64_t g_no_field64 = 0xff00ff00ff00ff00;
 #endif
-
 };
