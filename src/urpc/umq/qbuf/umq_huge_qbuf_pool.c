@@ -379,7 +379,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     if (g_huge_pool_ctx.mode == UMQ_BUF_SPLIT) {
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / (align_size));
     } else {
-        align_size -= sizeof(umq_buf_t);
+        align_size -= (uint64_t)sizeof(umq_buf_t);
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / (align_size));
     }
 
