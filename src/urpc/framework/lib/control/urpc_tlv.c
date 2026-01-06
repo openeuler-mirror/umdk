@@ -7,7 +7,7 @@
 #include "urpc_lib_log.h"
 #include "urpc_tlv.h"
 
-static bool urpc_tlv_buf_validation(char *buf, uint32_t buf_size)
+static bool urpc_tlv_buf_validation(const char *buf, uint32_t buf_size)
 {
     if (buf == NULL || buf_size < sizeof(urpc_tlv_head_t)) {
         URPC_LIB_LOG_ERR("invalid arguments\n");

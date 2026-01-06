@@ -399,7 +399,7 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
 static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 {
     umq_buf_t *buf = NULL;
-    umq_state_t umq_state;
+    umq_state_t umq_state = QUEUE_STATE_MAX;
     int poll_cnt = 0;
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
         goto WAIT_UMQ_READY;

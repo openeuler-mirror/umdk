@@ -972,19 +972,32 @@ int urpc_mem_info_set(uint32_t chid, uint64_t addr, uint32_t len)
 {
     urpc_tlv_arr_head_t *meminfo_arr_tlv_head = (urpc_tlv_arr_head_t *)(uintptr_t)addr;
     uint32_t mem_info_num = meminfo_arr_tlv_head->value.arr_num;
-    xchg_mem_info_t *meminfo_arr[mem_info_num];
+    if (mem_info_num > MAX_QUEUE_SIZE) {
+        URPC_LIB_LOG_ERR("mem_info_num %u is too large\n", mem_info_num);
+        return -URPC_ERR_EINVAL;
+    }
+
+    xchg_mem_info_t **meminfo_arr =
+        (xchg_mem_info_t **)urpc_dbuf_malloc(URPC_DBUF_TYPE_CP, mem_info_num * sizeof(xchg_mem_info_t));
+    if (meminfo_arr == NULL) {
+        URPC_LIB_LOG_ERR("malloc memeinfo_arr failed\n");
+        return -URPC_ERR_ENOMEM;
+    }
+
     int ret = meminfo_arr_deserialize(meminfo_arr_tlv_head, meminfo_arr);
     if (ret != URPC_SUCCESS) {
+        urpc_dbuf_free(meminfo_arr);
         URPC_LIB_LOG_ERR("deserialize meminfo arr failed\n")
         return ret;
     }
 
     ret = server_channel_put_mem_info(chid, meminfo_arr, mem_info_num);
     if (ret != URPC_SUCCESS) {
+        urpc_dbuf_free(meminfo_arr);
         URPC_LIB_LOG_ERR("put mem info failed\n")
         return ret;
     }
-
+    urpc_dbuf_free(meminfo_arr);
     return URPC_SUCCESS;
 }
 

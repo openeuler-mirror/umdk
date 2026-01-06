@@ -118,7 +118,7 @@ static int cfg_check(perftest_framework_config_t *cfg)
     return 0;
 }
 
-static int cfg_size_get(uint32_t *size, uint32_t *total, char *data)
+static uint32_t cfg_size_get(uint32_t *size, uint32_t *total, char *data)
 {
     char *save;
     char *new_data = strtok_r(data, ",", &save);

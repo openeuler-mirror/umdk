@@ -577,7 +577,7 @@ static inline uint32_t urpc_keepalive_parse_server_channel(urpc_keepalive_head_t
  * @param[in] head:                 Address of uRPC keepalive head. Caller must ensure the validity of the address.
  * Return: is_rsp.
  */
-static inline bool urpc_keepalive_parse_rsp(urpc_keepalive_head_t *head)
+static inline bool urpc_keepalive_parse_rsp(const urpc_keepalive_head_t *head)
 {
     return (head->is_rsp != 0);
 }

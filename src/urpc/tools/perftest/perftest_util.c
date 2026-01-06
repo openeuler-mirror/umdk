@@ -55,7 +55,7 @@ int recv_data(int sock, uint8_t *recv_data, uint32_t recv_len)
         }
     }
 
-    LOG_PRINT("recv data done, len: %u\n", offset);
+    LOG_PRINT("recv data done, len: %d\n", offset);
     return offset;
 }
 
@@ -95,7 +95,7 @@ int send_exchange_data(int sock, exchange_info_t *info)
 
 int perftest_create_socket(perftest_config_t *cfg, struct sockaddr_storage *addr, socklen_t *addr_len, bool is_server)
 {
-    int fd;
+    int fd = -1;
 
     // 创建客户端socket
     if (is_ipv4(cfg->local_ip)) {
@@ -154,8 +154,8 @@ bool perftest_get_remote_sockaddr(perftest_config_t *cfg, struct sockaddr_storag
 
 int perftest_create_server_socket(perftest_config_t *cfg)
 {
-    struct sockaddr_storage addr;
-    socklen_t addr_len;
+    struct sockaddr_storage addr = {0};
+    socklen_t addr_len = {0};
     int fd = perftest_create_socket(cfg, &addr, &addr_len, true);
 
     int optval = 1;
