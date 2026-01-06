@@ -689,42 +689,12 @@ static ALWAYS_INLINE umq_buf_t *umq_prepare_rendezvous_data(umq_ubmm_info_t *tp,
         return NULL;
     }
 
-    uint32_t max_ref_sge_num =
-        (umq_buf_size_small() - sizeof(umq_ubmm_ref_sge_info_t) - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
-
     umq_ubmm_ref_sge_info_t *ref_sge_info = (umq_ubmm_ref_sge_info_t *)(uintptr_t)send_buf->buf_data;
-    umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)ref_sge_info->ub_ref_info;
-    ub_ref_sge_t *ref_sge = (ub_ref_sge_t *)(uintptr_t)(umq_imm_head + 1);
-    ub_fill_umq_imm_head(umq_imm_head, qbuf);
-
-    ub_import_mempool_info_t import_mempool_info[UMQ_MAX_TSEG_NUM];
-    umq_buf_t *tmp_buf = qbuf;
-    uint32_t idx = 0;
-    while (tmp_buf != NULL) {
-        if (idx >= max_ref_sge_num) {
-            UMQ_LIMIT_VLOG_ERR("rendezvoud buf count exceed max support count[%u]\n", max_ref_sge_num);
-            umq_buf_free(send_buf);
-            return NULL;
-        }
-
-        ubmm_fill_big_data_ref_sge(
-            tp->ub_handle, ref_sge, tmp_buf, &import_mempool_info[umq_imm_head->mempool_num], umq_imm_head);
-        tmp_buf = tmp_buf->qbuf_next;
-        ref_sge = ref_sge + 1;
-        idx++;
+    uint32_t ub_ref_info_size = umq_buf_size_small() - sizeof(umq_ubmm_ref_sge_info_t);
+    if (ubmm_fill_ref_sge_info(tp->ub_handle ,qbuf, ref_sge_info->ub_ref_info, ub_ref_info_size) != UMQ_SUCCESS) {
+        umq_buf_free(send_buf);
+        return NULL;
     }
-
-    if (umq_imm_head->type == IMM_PROTOCAL_TYPE_IMPORT_MEM) {
-        if ((sizeof(umq_imm_head_t) + sizeof(ub_ref_sge_t) * idx +
-            sizeof(ub_import_mempool_info_t) * umq_imm_head->mempool_num) > umq_buf_size_small()) {
-            UMQ_LIMIT_VLOG_ERR("import mempool info is not enough\n");
-            umq_buf_free(send_buf);
-            return NULL;
-        }
-        (void)memcpy(ref_sge,
-            import_mempool_info, sizeof(ub_import_mempool_info_t) * umq_imm_head->mempool_num);
-    }
-
     ref_sge_info->sge_num = idx;
     ref_sge_info->msg_id = util_id_allocator_get(umq_ub_get_msg_id_generator(tp->ub_handle));
     *msg_id = ref_sge_info->msg_id;

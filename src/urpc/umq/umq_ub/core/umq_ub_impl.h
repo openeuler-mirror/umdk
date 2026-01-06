@@ -20,50 +20,6 @@
 extern "C" {
 #endif
 
-#define MEMPOOL_UBVA_SIZE 28
-#define UMQ_IMM_VERSION 0
-
-typedef enum umq_size_interval {
-    UMQ_SIZE_INVALID_INTERVAL = 0,
-    UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
-    UMQ_SIZE_SMALL_MID_INTERVAL,    // (umq_buf_size_small(), umq_buf_size_middle()] size
-    UMQ_SIZE_MID_BIG_INTERVAL,      // (umq_buf_size_middle(), umq_buf_size_big()] size
-    UMQ_SIZE_BIG_HUGE_INTERVAL,     // (umq_buf_size_big(), umq_buf_size_huge()] size
-    UMQ_SIZE_INTERVAL_MAX,
-} umq_size_interval_t;
-
-typedef enum umq_imm_protocol_type {
-    IMM_PROTOCAL_TYPE_NONE = 0,
-    IMM_PROTOCAL_TYPE_IMPORT_MEM = 1,
-} umq_imm_protocol_type_t;
-
-typedef struct umq_imm_head {
-    uint32_t version : 8;
-    uint32_t type : 8;
-    uint32_t mem_interval : 4;
-    uint32_t recv : 4;
-    uint32_t mempool_num : 8;
-} umq_imm_head_t;
-
-typedef struct ub_ref_sge {
-    uint64_t addr;
-    uint32_t length;
-    uint32_t token_id : 20;
-    uint32_t rsvd : 4;
-    uint32_t mempool_id : 8;
-    uint32_t token_value;
-} ub_ref_sge_t;
-
-typedef struct ub_import_mempool_info {
-    char mempool_ubva[MEMPOOL_UBVA_SIZE];
-    uint32_t mempool_seg_flag;
-    uint32_t mempool_length;
-    uint32_t mempool_token_id : 20;
-    uint32_t rsvd : 4;
-    uint32_t mempool_id : 8;
-    uint32_t mempool_token_value;
-} ub_import_mempool_info_t;
-
 uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg);
 void umq_ub_ctx_uninit_impl(uint8_t *ctx);
 
@@ -107,36 +63,13 @@ void umq_ub_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt
 int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *option);
 
 int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint64_t imm_value);
-int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm);
 
 // ubmm rendezvous related functions
-void umq_ub_get_token(uint64_t umqh_tp, uint8_t mempool_id, uint32_t *token_id, uint32_t *token_value);
 void umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf);
 void umq_ub_remove_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id);
 util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp);
 
-static inline uint32_t get_mem_interval(uint32_t used_mem_size)
-{
-    if (used_mem_size <= umq_buf_size_small()) {
-        return UMQ_SIZE_0K_SMALL_INTERVAL;
-    } else if (used_mem_size <= umq_buf_size_middle()) {
-        return UMQ_SIZE_SMALL_MID_INTERVAL;
-    } else if (used_mem_size <= umq_buf_size_big()) {
-        return UMQ_SIZE_MID_BIG_INTERVAL;
-    }
-    return UMQ_SIZE_BIG_HUGE_INTERVAL;
-}
-
-static inline void ub_fill_umq_imm_head(umq_imm_head_t *umq_imm_head, umq_buf_t *buffer)
-{
-    umq_imm_head->version = UMQ_IMM_VERSION;
-    umq_imm_head->type = IMM_PROTOCAL_TYPE_NONE;
-    umq_imm_head->mempool_num = 0;
-    umq_imm_head->mem_interval = get_mem_interval(buffer->data_size);
-}
-
-void ubmm_fill_big_data_ref_sge(uint64_t umqh_tp, ub_ref_sge_t *ref_sge,
-    umq_buf_t *buffer, ub_import_mempool_info_t *import_mempool_info, umq_imm_head_t *umq_imm_head);
+void ubmm_fill_umq_imm_head(void *imm_head_buf, umq_buf_t *buffer);
 
 int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info);
 int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event);
