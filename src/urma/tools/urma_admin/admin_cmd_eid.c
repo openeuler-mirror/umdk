@@ -50,7 +50,7 @@ static int nl_set_eid_ns(const admin_config_t *cfg)
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_EID_IDX, cfg->idx);
+    admin_nl_put_u16(msg, UBCORE_ATTR_EID_IDX, cfg->idx);
     admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
 
     int ret = admin_nl_send_recv_msg_default(msg);
