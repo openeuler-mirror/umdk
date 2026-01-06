@@ -972,15 +972,15 @@ int urpc_mem_info_set(uint32_t chid, uint64_t addr, uint32_t len)
 {
     urpc_tlv_arr_head_t *meminfo_arr_tlv_head = (urpc_tlv_arr_head_t *)(uintptr_t)addr;
     uint32_t mem_info_num = meminfo_arr_tlv_head->value.arr_num;
-    if (mem_info_num > MAX_QUEUE_SIZE) {
+    if (mem_info_num > MAX_MEM_H_SIZE) {
         URPC_LIB_LOG_ERR("mem_info_num %u is too large\n", mem_info_num);
         return -URPC_ERR_EINVAL;
     }
 
     xchg_mem_info_t **meminfo_arr =
-        (xchg_mem_info_t **)urpc_dbuf_malloc(URPC_DBUF_TYPE_CP, mem_info_num * sizeof(xchg_mem_info_t));
+        (xchg_mem_info_t **)urpc_dbuf_malloc(URPC_DBUF_TYPE_CP, mem_info_num * sizeof(xchg_mem_info_t *));
     if (meminfo_arr == NULL) {
-        URPC_LIB_LOG_ERR("malloc memeinfo_arr failed\n");
+        URPC_LIB_LOG_ERR("malloc meminfo_arr failed\n");
         return -URPC_ERR_ENOMEM;
     }
 
