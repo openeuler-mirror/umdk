@@ -99,6 +99,7 @@ static void urpc_print_ref_msg(urpc_poll_msg_t *msg, uint64_t qh)
         g_allocator->put_raw_buf(read_idx->req_sges[i], NULL);
         free(read_idx->req_sges[i]);
     }
+    free(read_idx);
 }
 
 static void server_handle_poll_event(urpc_poll_msg_t *msgs, int poll_num, uint64_t qh)
@@ -147,7 +148,7 @@ static void server_handle_poll_event(urpc_poll_msg_t *msgs, int poll_num, uint64
     }
 }
 
-int server_run_early_response(uint64_t qh, uint64_t qh1, urpc_allocator_t *allocator)
+int server_run_early_response(uint64_t qh, uint64_t qh1, const urpc_allocator_t *allocator)
 {
     g_allocator = allocator;
 

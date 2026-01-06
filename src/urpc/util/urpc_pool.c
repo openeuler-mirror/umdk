@@ -111,8 +111,8 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
     pool->global_group->num = 0;
 
     pool->cfg = *cfg;
-    pool->block_size = sizeof(urpc_pool_block_t) + cfg->element_num_per_block * cfg->element_size;
-    pool->container_size = sizeof(urpc_pool_block_t) + cfg->element_num_per_block * sizeof(void *);
+    pool->block_size = (uint32_t)sizeof(urpc_pool_block_t) + cfg->element_num_per_block * cfg->element_size;
+    pool->container_size = (uint32_t)sizeof(urpc_pool_block_t) + cfg->element_num_per_block * (uint32_t)sizeof(void *);
     pthread_mutex_init(&pool->lock, NULL);
     urpc_list_init(&pool->global_free);
     urpc_list_init(&pool->global_free_container);
