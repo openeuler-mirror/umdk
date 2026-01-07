@@ -60,9 +60,9 @@ struct uvs_ubagg_set_topo_info {
     } in;
 };
 
-int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t agg_eid);
-int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t agg_eid);
-int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t eid, char *buf, size_t len);
+int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid);
+int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t *agg_eid);
+int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
 int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);

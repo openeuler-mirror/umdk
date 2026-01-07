@@ -20,13 +20,13 @@
 #define UVS_UBAGG_DEVICE_PATH "/dev/ubagg"
 #define UVS_UBCORE_DEVICE_PATH "/dev/ubcore/ubcore"
 
-int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t agg_eid)
+int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid)
 {
     struct uvs_ubagg_create_dev_arg args = {0};
     struct uvs_ubagg_cmd_hdr hdr = {0};
     int ret;
 
-    args.in.agg_eid = agg_eid;
+    args.in.agg_eid = *agg_eid;
 
     hdr.command = UVS_UBAGG_CMD_CREATE_DEV;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
@@ -49,13 +49,13 @@ int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t agg_eid)
     return 0;
 }
 
-int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t agg_eid)
+int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t *agg_eid)
 {
     struct uvs_ubagg_delete_dev_arg args = {0};
     struct uvs_ubagg_cmd_hdr hdr = {0};
     int ret;
 
-    args.in.agg_eid = agg_eid;
+    args.in.agg_eid = *agg_eid;
 
     hdr.command = UVS_UBAGG_CMD_DELETE_DEV;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
@@ -78,13 +78,13 @@ int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t agg_eid)
     return 0;
 }
 
-int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t eid, char *buf, size_t len)
+int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
 {
     struct uvs_ubagg_get_dev_name_arg args = {0};
     struct uvs_ubagg_cmd_hdr hdr = {0};
     int ret;
 
-    args.in.eid = eid;
+    args.in.eid = *eid;
 
     hdr.command = UVS_UBAGG_CMD_GET_DEV_NAME;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
