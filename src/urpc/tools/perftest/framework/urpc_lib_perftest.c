@@ -824,6 +824,7 @@ static void chanel_queue_unpair(perftest_framework_config_t *cfg)
         LOG_PRINT("unpair queue task: %d\n", task);
         urpc_channel_task_cancel(chid, task);
     }
+    free(qinfo);
 }
 
 static int post_one_queue_rx(uint64_t qh, uint32_t num, uint32_t buf_size, bool wait_bind)
