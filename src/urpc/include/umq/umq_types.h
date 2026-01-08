@@ -501,6 +501,7 @@ typedef struct umq_route {
     umq_eid_t dst;
     umq_route_flag_t flag;
     uint32_t hops; // Only supports direct routes, currently 0
+    uint32_t chip_id;
 } umq_route_t;
 
 typedef struct umq_route_list {

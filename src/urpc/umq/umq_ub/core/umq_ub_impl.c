@@ -1261,7 +1261,7 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         return -UMQ_ERR_EINVAL;
     }
 
-    uvs_route_t uvs_route = {.flag.value = route->flag.value, .hops = route->hops};
+    uvs_route_t uvs_route = {.flag.value = route->flag.value, .hops = route->hops, .chip_id = route->chip_id};
     uvs_route_list_t uvs_route_list = {0};
     (void)memcpy(&uvs_route.src, &route->src, sizeof(umq_eid_t));
     (void)memcpy(&uvs_route.dst, &route->dst, sizeof(umq_eid_t));
@@ -1282,6 +1282,7 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         (void)memcpy(&route_list->buf[i].dst, &uvs_route_list.buf[i].dst, sizeof(umq_eid_t));
         route_list->buf[i].flag.value = uvs_route_list.buf[i].flag.value;
         route_list->buf[i].hops = uvs_route_list.buf[i].hops;
+        route_list->buf[i].chip_id = uvs_route_list.buf[i].chip_id;
     }
     route_list->len = uvs_route_list.len;
     return UMQ_SUCCESS;
