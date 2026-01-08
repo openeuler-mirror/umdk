@@ -684,7 +684,7 @@ static int urpc_perftest_server_wait_sync(perftest_framework_config_t *cfg)
 
     char msg[URPC_PERFTEST_SYNC_MSG_SIZE] = {0};
     int msg_len = recv(g_urpc_perftest_ctx.accept_fd, msg, URPC_PERFTEST_SYNC_MSG_SIZE, MSG_NOSIGNAL);
-    if (msg_len != strlen(URPC_PERFTEST_SYN) || memcmp(msg, URPC_PERFTEST_SYN, msg_len) != 0) {
+    if (msg_len != (int)strlen(URPC_PERFTEST_SYN) || memcmp(msg, URPC_PERFTEST_SYN, msg_len) != 0) {
         LOG_PRINT("recv syn failed, msg %s, %s\n", msg, strerror(errno));
         goto CLOSE_ACCEPT_FD;
     }
@@ -708,7 +708,7 @@ static int urpc_perftest_server_send_ack(perftest_framework_config_t *cfg)
     }
 
     int msg_len = send(g_urpc_perftest_ctx.accept_fd, URPC_PERFTEST_ACK, strlen(URPC_PERFTEST_ACK), MSG_NOSIGNAL);
-    if (msg_len != strlen(URPC_PERFTEST_ACK)) {
+    if (msg_len != (int)strlen(URPC_PERFTEST_ACK)) {
         LOG_PRINT("send ack failed, %s\n", strerror(errno));
         ret = -1;
     } else {
@@ -751,13 +751,13 @@ static int urpc_perftest_client_wait_ack(perftest_framework_config_t *cfg)
 
     char msg[URPC_PERFTEST_SYNC_MSG_SIZE] = {0};
     int msg_len = send(g_urpc_perftest_ctx.fd, URPC_PERFTEST_SYN, strlen(URPC_PERFTEST_SYN), MSG_NOSIGNAL);
-    if (msg_len != strlen(URPC_PERFTEST_SYN)) {
+    if (msg_len != (int)strlen(URPC_PERFTEST_SYN)) {
         LOG_PRINT("send syn failed, %s\n", strerror(errno));
         goto CLOSE_FD;
     }
 
     msg_len = recv(g_urpc_perftest_ctx.fd, msg, URPC_PERFTEST_SYNC_MSG_SIZE, MSG_NOSIGNAL);
-    if (msg_len != strlen(URPC_PERFTEST_ACK) || memcmp(msg, URPC_PERFTEST_ACK, msg_len) != 0) {
+    if (msg_len != (int)strlen(URPC_PERFTEST_ACK) || memcmp(msg, URPC_PERFTEST_ACK, msg_len) != 0) {
         LOG_PRINT("recv ack failed, msg %s, %s\n", msg, strerror(errno));
         goto CLOSE_FD;
     }

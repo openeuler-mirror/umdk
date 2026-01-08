@@ -49,7 +49,7 @@ typedef struct example_case {
     char *name;
     int (*client)(
         uint32_t chid, uint64_t qh, urpc_channel_qinfos_t *qinfos, uint64_t func_id, urpc_allocator_t *allocator);
-    int (*server)(uint64_t qh, uint64_t qh1, urpc_allocator_t *allocator);
+    int (*server)(uint64_t qh, uint64_t qh1, const urpc_allocator_t *allocator);
 } example_case_t;
 
 typedef struct allocator_buf {
@@ -948,7 +948,7 @@ static int urpc_example_flush_queue(uint64_t qh)
     urpc_poll_option_t option = {
         .urpc_qh = qh,
     };
-    
+
     struct timespec tc;
     (void)clock_gettime(CLOCK_MONOTONIC, &tc);
     uint64_t start_timestamp_s = (uint64_t)tc.tv_sec;
@@ -1200,7 +1200,7 @@ int run_client(urpc_lib_example_config_t *cfg)
             goto ASYNC_REMOVE_LOCAL_QUEUE0;
         }
     }
-    
+
     LOG_PRINT("add local queue 1 success\n");
 
     ret = channel_queue_add(cfg->nonblock_enabled, chid, (uint64_t)g_client_recv_rqid.rqid[0], false);

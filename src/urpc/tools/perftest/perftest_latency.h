@@ -17,7 +17,6 @@
 #include <cstdint>
 #else
 #include <stdint.h>
-#include <stdbool.h>
 #endif
 
 #ifdef __cplusplus

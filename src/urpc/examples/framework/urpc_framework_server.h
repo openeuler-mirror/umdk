@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-int server_run_early_response(uint64_t qh, uint64_t qh1, urpc_allocator_t *allocator);
+int server_run_early_response(uint64_t qh, uint64_t qh1, const urpc_allocator_t *allocator);
 int server_run_timeout(uint64_t qh, urpc_allocator_t *allocator);
 
 #ifdef __cplusplus

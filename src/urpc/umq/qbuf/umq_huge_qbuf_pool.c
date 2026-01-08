@@ -373,7 +373,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     uint32_t headroom_size =
         (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
             option->headroom_size : g_huge_pool_ctx.headroom_size;
-    uint32_t align_size = umq_huge_qbuf_get_size_by_type(type);
+    uint64_t align_size = umq_huge_qbuf_get_size_by_type(type);
 
     if (g_huge_pool_ctx.mode == UMQ_BUF_SPLIT) {
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / (align_size));

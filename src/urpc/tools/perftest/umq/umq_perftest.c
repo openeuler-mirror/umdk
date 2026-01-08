@@ -747,7 +747,7 @@ int main(int argc, char *argv[])
 
     // only UB/UB_PLUS/IB/IB_PLUS support pro feature
     uint32_t trans_mode = g_umq_perftest_ctx.cfg.trans_mode;
-    if ((g_umq_perftest_ctx.cfg.feature & UMQ_FEATURE_API_PRO) &&
+    if (((g_umq_perftest_ctx.cfg.feature & UMQ_FEATURE_API_PRO) != 0) &&
         trans_mode != UMQ_TRANS_MODE_UB && trans_mode != UMQ_TRANS_MODE_IB &&
         trans_mode != UMQ_TRANS_MODE_UB_PLUS && trans_mode != UMQ_TRANS_MODE_IB_PLUS) {
         LOG_PRINT("trans_mode: %u doesn't support pro feature\n", trans_mode);
