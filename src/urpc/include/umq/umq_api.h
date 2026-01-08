@@ -304,6 +304,14 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
  */
 int umq_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
 
+/**
+ * Query umq configuration
+ * @param[in] umqh: Queue handle
+ * @param[out] cfg: Configuration information for umq
+ * Return 0 on success, error code on failure, other value on error
+ */
+int umq_cfg_get(uint64_t umqh, umq_cfg_get_t *cfg);
+
 #ifdef __cplusplus
 }
 #endif

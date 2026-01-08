@@ -261,6 +261,13 @@ typedef struct umq_ops {
     * Return: 0 on success, other value on error
     */
     int (*umq_tp_dev_info_get)(char *dev_name,  umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
+    /**
+     * Get umq cfg.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[out] cfg: umq cfg
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_cfg_get)(uint64_t umqh_tp, umq_cfg_get_t *cfg);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);

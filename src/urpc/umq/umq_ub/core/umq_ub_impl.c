@@ -1411,6 +1411,25 @@ int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, um
     umq_dev_info->umq_trans_mode = umq_trans_mode;
     memcpy(umq_dev_info->dev_name, dev_name, strnlen(dev_name, UMQ_DEV_NAME_SIZE));
     urma_free_eid_list(eid_info_list);
+    return UMQ_SUCCESS;
+}
 
+int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
+{
+    if (cfg == NULL) {
+        UMQ_VLOG_ERR("umq cfg is invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    cfg->create_flag = queue->create_flag;
+    cfg->rx_buf_size = queue->rx_buf_size;
+    cfg->tx_buf_size = queue->tx_buf_size;
+    cfg->rx_depth = queue->rx_depth;
+    cfg->tx_depth = queue->tx_depth;
+    cfg->umq_ctx = queue->umq_ctx;
+    cfg->share_rq_umqh = queue->share_rq_umqh;
+    cfg->trans_mode = queue->umq_trans_mode;
+    cfg->mode = queue->mode;
+    cfg->state = queue->state;
     return UMQ_SUCCESS;
 }
