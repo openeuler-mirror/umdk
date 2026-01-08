@@ -432,7 +432,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     }
     (recv_wr_ptr - 1)->next = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
-    if (urma_post_jetty_recv_wr(queue->jetty, recv_wr, &bad_wr) < 0) {
+    if (urma_post_jetty_recv_wr(queue->jetty, recv_wr, &bad_wr) != URMA_SUCCESS) {
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_recv_wr failed, eid: " EID_FMT ", jetty_id: %u\n",
                            EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id);

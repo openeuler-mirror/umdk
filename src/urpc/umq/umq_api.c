@@ -1117,5 +1117,5 @@ int umq_cfg_get(uint64_t umqh, umq_cfg_get_t *cfg)
         UMQ_VLOG_ERR("parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->tp_ops->umq_tp_cfg_get(umqh, cfg);
+    return umq->tp_ops->umq_tp_cfg_get(umq->umqh_tp, cfg);
 }
