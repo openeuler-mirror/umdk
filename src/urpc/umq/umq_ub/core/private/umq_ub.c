@@ -193,6 +193,7 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
         import_mem(queue->dev_ctx->urma_ctx, &mem_info);
     if (remote_imported_info->imported_tseg_list[eid_id][UMQ_QBUF_DEFAULT_MEMPOOL_ID] == NULL) {
         util_id_allocator_release(&remote_imported_info->eid_id_allocator, eid_id);
+        free(eid_node);
         pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR("import mem failed, remote eid "EID_FMT", local eid "EID_FMT"\n",
             EID_ARGS(info->jetty_id.eid), EID_ARGS(queue->dev_ctx->urma_ctx->eid));

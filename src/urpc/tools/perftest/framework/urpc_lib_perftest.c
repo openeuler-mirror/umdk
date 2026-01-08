@@ -798,6 +798,7 @@ static int chanel_queue_pair(perftest_framework_config_t *cfg)
         urpc_channel_task_cancel(chid, task);
     }
 
+    free(qinfo);
     return URPC_SUCCESS;
 }
 

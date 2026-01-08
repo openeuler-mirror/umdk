@@ -1397,7 +1397,7 @@ static int fill_server_urpc_config(urpc_lib_example_config_t *cfg, urpc_config_t
     urpc_config->trans_info[0].assign_mode = (urpc_dev_assign_mode_t)cfg->dev_assign_mode;
 
     if (cfg->dev_assign_mode == DEV_ASSIGN_MODE_EID) {
-        (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)&urpc_config->trans_info[0].ub.eid);
+        (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)(uintptr_t)&urpc_config->trans_info[0].ub.eid);
     } else {
         if (snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name) < 0) {
             LOG_PRINT("snprintf dev_name failed\n");

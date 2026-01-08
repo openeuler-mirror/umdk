@@ -274,7 +274,8 @@ static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_split(huge_pool_t *pool,
             pool_idx = last_mempool_id - pool->pool_idx_shift;
             pool_info = &pool->pool_info[pool_idx];
         }
-        uint32_t index = ((void *)cur_node - pool_info->header_buffer) >> HUGE_QBUF_HEAD_POWER_OF_TWO;
+        uint64_t index = ((uint64_t)(uintptr_t)cur_node - (uint64_t)(uintptr_t)pool_info->header_buffer) >>
+                         HUGE_QBUF_HEAD_POWER_OF_TWO;
         cur_node->buf_data = pool_info->data_buffer + index * blk_size + headroom_size_temp;
         cur_node->buf_size = blk_size + (uint32_t)sizeof(umq_buf_t);
         cur_node->headroom_size = headroom_size_temp;

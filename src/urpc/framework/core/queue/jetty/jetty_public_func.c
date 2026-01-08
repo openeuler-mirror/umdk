@@ -1440,6 +1440,9 @@ int jetty_provider_import_mem(provider_t *provider, xchg_mem_info_t *mem_info, u
     jetty_provider_t *jetty_provider = (jetty_provider_t *)(uintptr_t)provider;
     if (jetty_provider->urma_ctx == NULL) {
         (void)pthread_rwlock_unlock(&g_urpc_ip_mem_hmap.lock);
+        if (new_tsge_handle) {
+            urpc_dbuf_free(tseg_handle);
+        }
         URPC_LIB_LOG_ERR("urma context is null\n");
         return URPC_FAIL;
     }
@@ -1447,6 +1450,9 @@ int jetty_provider_import_mem(provider_t *provider, xchg_mem_info_t *mem_info, u
     urma_target_seg_t *import_tseg = urma_import_seg(jetty_provider->urma_ctx, &remote_seg, &token, 0, flag);
     if (import_tseg == NULL) {
         (void)pthread_rwlock_unlock(&g_urpc_ip_mem_hmap.lock);
+        if (new_tsge_handle) {
+            urpc_dbuf_free(tseg_handle);
+        }
         URPC_LIB_LOG_ERR("urma import segment failed\n");
         return URPC_FAIL;
     }
