@@ -250,7 +250,7 @@ int perftest_client_sync(int fd)
     }
 
     msg_len = recv_data(fd, (uint8_t *)msg, strlen(PERFTEST_ACK));
-    if (msg_len != (int)strlen(PERFTEST_ACK) || memcmp(msg, PERFTEST_ACK, msg_len) != 0) {
+    if (msg_len != (int)strlen(PERFTEST_ACK) || memcmp(msg, PERFTEST_ACK, (size_t)msg_len) != 0) {
         LOG_PRINT("recv ack failed, msg %s, %s\n", msg, strerror(errno));
         return -1;
     }
@@ -264,7 +264,7 @@ int perftest_server_sync(int fd)
 {
     char msg[PERFTEST_SYNC_MSG_SIZE] = {0};
     int msg_len = recv_data(fd, (uint8_t *)msg, strlen(PERFTEST_SYN));
-    if (msg_len != (int)strlen(PERFTEST_SYN) || memcmp(msg, PERFTEST_SYN, msg_len) != 0) {
+    if (msg_len != (int)strlen(PERFTEST_SYN) || memcmp(msg, PERFTEST_SYN, (size_t)msg_len) != 0) {
         LOG_PRINT("recv syn failed, %s\n", strerror(errno));
         return -1;
     }
