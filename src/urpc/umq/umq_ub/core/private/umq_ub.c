@@ -1185,7 +1185,7 @@ static ALWAYS_INLINE urma_status_t umq_ub_read_post_send(
     return status;
 }
 
-static inline void umq_ub_read_ctx_destory(umq_buf_t *ctx_buf)
+static inline void umq_ub_read_ctx_destroy(umq_buf_t *ctx_buf)
 {
     user_ctx_t *user_ctx = (user_ctx_t *)ctx_buf->buf_data;
     if (user_ctx->dst_buf != NULL) {
@@ -1259,7 +1259,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
     return UMQ_SUCCESS;
 
 FREE_CTX_BUF:
-    umq_ub_read_ctx_destory(ctx_buf);
+    umq_ub_read_ctx_destroy(ctx_buf);
     return UMQ_FAIL;
 }
 

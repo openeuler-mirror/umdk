@@ -1140,7 +1140,7 @@ int run_client(urpc_lib_example_config_t *cfg)
     qh1 = urpc_queue_create(trans_mode, &queue_cfg1);
     if (qh1 == URPC_INVALID_HANDLE) {
         LOG_PRINT("urpc_queue_create failed\n");
-        goto DESTORY_QUEUE;
+        goto DESTROY_QUEUE;
     }
 
     if (g_allocator_ctx != NULL) {
@@ -1157,17 +1157,17 @@ int run_client(urpc_lib_example_config_t *cfg)
     urpc_server_info_t server_info = {0};
     if (fill_client_attach_info(cfg, &server_info) != 0) {
         LOG_PRINT("memory copy ip address failed\n");
-        goto DESTORY_QUEUE1;
+        goto DESTROY_QUEUE1;
     }
     urpc_host_info_t server_host;
     urpc_host_info_t local_host;
     parse_server_to_host(&server_info, &server_host, &local_host);
     urpc_host_info_t *local = server_info.assigned_addr.bind_local_addr_enabled ? &local_host : NULL;
     if (set_ssl_config(cfg, false) != URPC_SUCCESS) {
-        goto DESTORY_QUEUE1;
+        goto DESTROY_QUEUE1;
     }
     if (async_task_init() != URPC_SUCCESS) {
-        goto DESTORY_QUEUE1;
+        goto DESTROY_QUEUE1;
     }
 
     ret = attach_server_v2(&server_host, local, cfg->nonblock_enabled, chid);
@@ -1320,13 +1320,13 @@ MEM_SEG_DISABLE:
 CLOSE_FD:
     async_task_uninit();
 
-DESTORY_QUEUE1:
+DESTROY_QUEUE1:
     if (cfg->enable_shared_jfr) {
         urpc_example_flush_queue(qh1);
         (void)urpc_queue_destroy(qh1);
     }
 
-DESTORY_QUEUE:
+DESTROY_QUEUE:
     urpc_example_flush_queue(qh);
     (void)urpc_queue_destroy(qh);
 
@@ -1481,7 +1481,7 @@ int run_server(urpc_lib_example_config_t *cfg)
     urpc_qcfg_get_t cfg_get = {0};
     if (urpc_queue_cfg_get(cfg->qh, &cfg_get) != URPC_SUCCESS) {
         LOG_PRINT("query local qh cfg failed\n");
-        goto DESTORY_QUEUE;
+        goto DESTROY_QUEUE;
     } else {
         LOG_PRINT("query local qh qid: %u\n", cfg_get.qid);
     }
@@ -1494,12 +1494,12 @@ int run_server(urpc_lib_example_config_t *cfg)
         qh1 = urpc_queue_create(trans_mode, &queue_cfg);
         if (qh1 == URPC_INVALID_HANDLE) {
             LOG_PRINT("urpc_queue_create failed\n");
-            goto DESTORY_QUEUE;
+            goto DESTROY_QUEUE;
         }
 
         if (urpc_queue_cfg_get(qh1, &cfg_get) != URPC_SUCCESS) {
             LOG_PRINT("query local qh cfg failed\n");
-            goto DESTORY_QUEUE1;
+            goto DESTROY_QUEUE1;
         } else {
             LOG_PRINT("query local qh qid: %u\n", cfg_get.qid);
         }
@@ -1508,7 +1508,7 @@ int run_server(urpc_lib_example_config_t *cfg)
     }
 
     if (urpc_lib_example_func_register(cfg) != 0) {
-        goto DESTORY_QUEUE1;
+        goto DESTROY_QUEUE1;
     }
 
     urpc_control_plane_config_t cp_cfg = {0};
@@ -1545,13 +1545,13 @@ int run_server(urpc_lib_example_config_t *cfg)
 UNREGISTER_FUNC:
     urpc_lib_example_func_unregister(cfg);
 
-DESTORY_QUEUE1:
+DESTROY_QUEUE1:
     if (cfg->enable_shared_jfr || cfg->enable_shared_jfs_jfc) {
         (void)urpc_example_flush_queue(qh1);
         (void)urpc_queue_destroy(qh1);
     }
 
-DESTORY_QUEUE:
+DESTROY_QUEUE:
     (void)urpc_example_flush_queue(cfg->qh);
     (void)urpc_queue_destroy(cfg->qh);
 
