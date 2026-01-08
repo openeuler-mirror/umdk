@@ -1082,3 +1082,29 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id)
 
     return umq->tp_ops->umq_tp_mempool_state_refresh(umq->umqh_tp, mempool_id);
 }
+
+int umq_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
+{
+    if (dev_name == NULL || strnlen(dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE || umq_dev_info == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (umq_trans_mode >= UMQ_TRANS_MODE_MAX) {
+        UMQ_VLOG_ERR("trans info mode[%u] is invalid\n", umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_framework_t *umq_fw = &g_umq_fws[umq_trans_mode];
+    if (!umq_fw->enable) {
+        UMQ_VLOG_ERR("trans mode %u ops not init\n", umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_dev_info_get == NULL) {
+        UMQ_VLOG_ERR("trans mode %u ops not support\n", umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return umq_fw->tp_ops->umq_tp_dev_info_get(dev_name, umq_trans_mode, umq_dev_info);
+}
