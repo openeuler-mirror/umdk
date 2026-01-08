@@ -75,7 +75,7 @@ void urpc_epoll_event_delete(int epoll_fd, urpc_epoll_event_t *event)
     (void)epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event->fd, NULL);
 }
 
-static bool is_consume_ctx(void *consum_ctx[], int num, void* target)
+static bool is_consume_ctx(void *consum_ctx[], int num, const void* target)
 {
     for (int i = 0; i < num; i++) {
         if (consum_ctx[i] == target) {

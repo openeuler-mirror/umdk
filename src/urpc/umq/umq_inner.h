@@ -50,7 +50,7 @@ static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, atomic_uint *requi
             return 0;
         }
     } while (!atomic_compare_exchange_weak_explicit(require_rx_count, &rx_num, 0,
-            memory_order_relaxed, memory_order_relaxed));
+             memory_order_relaxed, memory_order_relaxed));
     return rx_num;
 }
 

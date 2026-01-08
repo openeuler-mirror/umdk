@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 int client_run(
-    uint32_t chid, uint64_t qh, urpc_channel_qinfos_t *qinfos, uint64_t func_id, urpc_allocator_t *allocator);
+    uint32_t chid, uint64_t qh, urpc_channel_qinfos_t *qinfos, uint64_t func_id, const urpc_allocator_t *allocator);
 #ifdef __cplusplus
 }
 #endif

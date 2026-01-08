@@ -253,12 +253,12 @@ void umq_huge_qbuf_config_uninit(huge_qbuf_pool_size_type_t type)
 }
 
 static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_split(huge_pool_t *pool, uint32_t request_size,
-    uint32_t num, umq_buf_list_t *list, int32_t headroom_size)
+    uint32_t num, umq_buf_list_t *list, uint32_t headroom_size)
 {
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     uint32_t blk_size = pool->block_size;
-    int32_t headroom_size_temp = headroom_size;
+    uint32_t headroom_size_temp = headroom_size;
     uint32_t total_data_size = request_size;
     uint32_t remaining_size = request_size;
     uint32_t max_data_capacity = blk_size - headroom_size_temp;
@@ -310,12 +310,12 @@ static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_split(huge_pool_t *pool,
 }
 
 static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_combine(huge_pool_t *pool, uint32_t request_size,
-    uint32_t num, umq_buf_list_t *list, int32_t headroom_size)
+    uint32_t num, umq_buf_list_t *list, uint32_t headroom_size)
 {
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     uint32_t blk_size = pool->block_size;
-    int32_t headroom_size_temp = headroom_size;
+    uint32_t headroom_size_temp = headroom_size;
     uint32_t total_data_size = request_size;
     uint32_t remaining_size = request_size;
     uint32_t max_data_size = blk_size - sizeof(umq_buf_t);
