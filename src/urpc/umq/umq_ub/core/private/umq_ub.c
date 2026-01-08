@@ -675,9 +675,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         queue->mode = option->mode;
     }
     if (((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 && (option->create_flag &
-        UMQ_CREATE_FLAG_SUB_UMQ) == 0) || ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0
-        && (option->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0)) {
-            UMQ_VLOG_ERR("queue create_flag[%u] is invalid\n", option->create_flag);
+        UMQ_CREATE_FLAG_SUB_UMQ) == 0) || ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0 &&
+        (option->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0)) {
+        UMQ_VLOG_ERR("queue create_flag[%u] is invalid\n", option->create_flag);
         return -UMQ_ERR_EINVAL;
     }
     queue->max_rx_sge = dev_ctx->dev_attr.dev_cap.max_jfr_sge < UMQ_MAX_SGE_NUM ?
@@ -702,21 +702,32 @@ int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq)
 {
     if (share_rq->state == QUEUE_STATE_ERR) {
         UMQ_VLOG_ERR("the share_rq is invalid\n");
-        errno = UMQ_ERR_EINVAL;
-        return -UMQ_ERR_EINVAL;
+        goto ERR;
     }
     if (share_rq->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
         UMQ_VLOG_ERR("sub umq cannot be used as share_rq\n");
-        errno = UMQ_ERR_EINVAL;
-        return -UMQ_ERR_EINVAL;
+        goto ERR;
     }
-    if (share_rq->rx_depth != queue->rx_depth || share_rq->dev_ctx != queue->dev_ctx ||
-        share_rq->rx_buf_size != queue->rx_buf_size || share_rq->mode != queue->mode) {
-        UMQ_VLOG_ERR("the rx params of share_rq and creating queue are not same\n");
-        errno = UMQ_ERR_EINVAL;
-        return -UMQ_ERR_EINVAL;
+    if (share_rq->dev_ctx != queue->dev_ctx) {
+        UMQ_VLOG_ERR("the dev_ctx of share_rq and creating queue is different\n");
+        goto ERR;
+    }
+    if (queue->create_flag & UMQ_CREATE_FLAG_RX_BUF_SIZE && share_rq->rx_buf_size != queue->rx_buf_size) {
+        UMQ_VLOG_ERR("the rx_buf_size of share_rq and creating queue is different\n");
+        goto ERR;
+    }
+    if (queue->create_flag & UMQ_CREATE_FLAG_RX_DEPTH && share_rq->rx_depth != queue->rx_depth) {
+        UMQ_VLOG_ERR("the rx_depth of share_rq and creating queue is different\n");
+        goto ERR;
+    }
+    if (queue->create_flag & UMQ_CREATE_FLAG_QUEUE_MODE && share_rq->mode != queue->mode) {
+        UMQ_VLOG_ERR("the queue_mode of share_rq and creating queue is different\n");
+        goto ERR;
     }
     return UMQ_SUCCESS;
+ERR:
+    errno = UMQ_ERR_EINVAL;
+    return -UMQ_ERR_EINVAL;
 }
 
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue)
@@ -1327,7 +1338,7 @@ static inline int process_imm_msg(uint64_t umqh_tp, umq_buf_t *buf, urma_cr_t *c
 static int umq_ub_read_done(ub_queue_t *queue, uint16_t msg_id)
 {
     umq_ub_imm_t imm = {.ub_plus = {.umq_private = UMQ_UB_IMM_PRIVATE,
-                                   .type = IMM_TYPE_UB_PLUS,
+                                    .type = IMM_TYPE_UB_PLUS,
                                     .sub_type = IMM_TYPE_REVERSE_PULL_MEM_FREE,
                                     .msg_id = msg_id}};
 
@@ -1961,10 +1972,10 @@ int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint6
         .flag.bs.inline_flag = URMA_INLINE_ENABLE,
         .tjetty = queue->bind_ctx->tjetty,
         .user_ctx = UINT16_MAX,     // do not report TX events
-        .rw = { 
-                .src = {.sge = &src_sge, .num_sge = 1},
-                .dst = {.sge = &dst_sge, .num_sge = 1},
-                .notify_data = imm_value, },
+        .rw = {
+            .src = {.sge = &src_sge, .num_sge = 1},
+            .dst = {.sge = &dst_sge, .num_sge = 1},
+            .notify_data = imm_value, },
         .next = NULL
     };
 
