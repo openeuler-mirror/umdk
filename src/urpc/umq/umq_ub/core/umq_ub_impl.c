@@ -576,6 +576,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         if (share_rq_param_check(queue, share_rq) != UMQ_SUCCESS) {
             goto FREE_QUEUE;
         }
+        queue->share_rq_umqh = option->share_rq_umqh;
     }
 
     if (umq_ub_flow_control_init(&queue->flow_control, queue, dev_ctx->feature, &dev_ctx->flow_control) !=
@@ -610,6 +611,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto DELETE_JFS_JFC;
     }
     if ((option->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
+        queue->umq_ctx = option->umq_ctx;
         dev_ctx->umq_ctx_jetty_table[queue->jetty->jetty_id.id] = option->umq_ctx;
     }
 
