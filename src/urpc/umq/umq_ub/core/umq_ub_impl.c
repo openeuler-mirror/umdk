@@ -583,7 +583,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto FREE_QUEUE;
     }
 
-    if(umq_ub_jfr_ctx_create(queue, dev_ctx, option, share_rq) != UMQ_SUCCESS) {
+    if (umq_ub_jfr_ctx_create(queue, dev_ctx, option, share_rq) != UMQ_SUCCESS) {
         goto UNINIT_FLOW_CONTROL;
     }
 
@@ -659,6 +659,11 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
     if (umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt) != 1) {
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
+        return -UMQ_ERR_EBUSY;
+    }
+    if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0 && __atomic_load_n(&queue->jfr_ctx->ref_cnt,
+        __ATOMIC_RELAXED) != 1) {
+        UMQ_VLOG_ERR("jfr_ctx ref_cnt not cleared, cannot destroy main queue\n");
         return -UMQ_ERR_EBUSY;
     }
 

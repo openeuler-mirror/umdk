@@ -321,7 +321,7 @@ void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mem
 int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_queue);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue);
 int umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
-                       ub_queue_t *share_queue);
+                          ub_queue_t *share_queue);
 
 // hanele async event
 void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event);
