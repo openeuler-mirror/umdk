@@ -197,6 +197,9 @@ typedef struct umq_init_cfg {
 #define UMQ_CREATE_FLAG_RX_DEPTH            (1 << 2)        // enable arg rx_depth when create umq
 #define UMQ_CREATE_FLAG_TX_DEPTH            (1 << 3)        // enable arg tx_depth when create umq
 #define UMQ_CREATE_FLAG_QUEUE_MODE          (1 << 4)        // enable arg mode when create umq
+#define UMQ_CREATE_FLAG_SHARE_RQ            (1 << 5)        // enable arg share_rq_umqh when create umq
+#define UMQ_CREATE_FLAG_UMQ_CTX             (1 << 6)        // enable arg umq_ctx when create umq
+#define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 7)        // just indicates the umq is sub queue
 
 typedef struct umq_create_option {
     /*************Required paramenters start*****************/
@@ -211,6 +214,8 @@ typedef struct umq_create_option {
     uint32_t tx_buf_size;
     uint32_t rx_depth;
     uint32_t tx_depth;
+    uint64_t share_rq_umqh;
+    uint64_t umq_ctx;
 
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     /*************Optional paramenters end*******************/

@@ -163,6 +163,7 @@ typedef struct umq_ub_ctx {
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
     uint64_t remote_notify_addr;
+    uint64_t *umq_ctx_jetty_table;
 } umq_ub_ctx_t;
 
 typedef struct rx_buf_ctx {
@@ -206,20 +207,27 @@ typedef struct ub_bind_ctx {
     uint64_t remote_notify_addr;
 } ub_bind_ctx_t;
 
+typedef struct jfr_ctx {
+    urma_jfr_t *jfr;
+    urma_jfc_t *jfr_jfc;
+    urma_jfce_t *jfr_jfce;
+    volatile uint32_t ref_cnt;
+    rx_buf_ctx_list_t rx_buf_ctx_list;
+} jfr_ctx_t;
+
 typedef struct ub_queue {
     urpc_list_t qctx_node;
     // queue param
     urma_jetty_t *jetty;
+    jfr_ctx_t *jfr_ctx;
     urma_jfc_t *jfs_jfc;
-    urma_jfc_t *jfr_jfc;
-    urma_jfr_t *jfr;
     urma_jfce_t *jfs_jfce;
-    urma_jfce_t *jfr_jfce;
     umq_ub_ctx_t *dev_ctx;
     struct ub_bind_ctx *bind_ctx;
     volatile uint32_t ref_cnt;
     atomic_uint require_rx_count;
     volatile uint32_t tx_outstanding;
+    uint32_t create_flag;
     urma_target_seg_t **imported_tseg_list;   // read-only
     uint64_t addr_list[UMQ_MAX_ID_NUM];
 
@@ -243,9 +251,9 @@ typedef struct ub_queue {
     bool rx_flush_done;         // rx buf ctx all report
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;
-    rx_buf_ctx_list_t rx_buf_ctx_list;
     umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
+    uint64_t share_rq_umqh;
 } ub_queue_t;
 
 typedef struct user_ctx {
@@ -309,6 +317,10 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx);
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue);
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mempool_id);
+int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_queue);
+void umq_ub_jfr_ctx_destroy(ub_queue_t *queue);
+int umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
+                       ub_queue_t *share_queue);
 
 // hanele async event
 void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event);
