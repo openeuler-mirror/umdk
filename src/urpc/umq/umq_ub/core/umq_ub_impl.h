@@ -29,6 +29,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh);
 int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size);
 int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size);
 int umq_ub_unbind_impl(uint64_t umqh);
+int umq_ub_state_set_impl(uint64_t umqh_tp, umq_state_t state);
 umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp);
 
 int32_t umq_ub_register_memory_impl(void *buf, uint64_t size);

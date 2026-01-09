@@ -893,6 +893,19 @@ int umq_buf_split(umq_buf_t *head, umq_buf_t *node)
     return UMQ_SUCCESS;
 }
 
+int umq_state_set(uint64_t umqh, umq_state_t state)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+
+    if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
+        (umq->tp_ops->umq_tp_state_set == NULL)) {
+        UMQ_VLOG_ERR("umqh invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return umq->tp_ops->umq_tp_state_set(umq->umqh_tp, state);
+}
+
 umq_state_t umq_state_get(uint64_t umqh)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
