@@ -464,6 +464,10 @@ typedef struct umq_dfx_result {
 typedef enum umq_async_event_type {
     UMQ_EVENT_QH_ERR,
     UMQ_EVENT_QH_LIMIT,
+    UMQ_EVENT_QH_RQ_ERR,
+    UMQ_EVENT_QH_RQ_LIMIT,
+    UMQ_EVENT_QH_RQ_CQ_ERR,
+    UMQ_EVENT_QH_SQ_CQ_ERR,
     UMQ_EVENT_PORT_ACTIVE,
     UMQ_EVENT_PORT_DOWN,
     UMQ_EVENT_DEV_FATAL,

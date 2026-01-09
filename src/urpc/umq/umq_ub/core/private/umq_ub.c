@@ -901,54 +901,95 @@ void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mem
 
 void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
 {
+    bool find = false;
     ub_queue_t *local = NULL;
     umq_event->event_type = UMQ_EVENT_QH_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jfs_jfc == urma_event->element.jfc || local->jfr_ctx->jfr_jfc == urma_event->element.jfc) {
+        if (local->jfs_jfc == urma_event->element.jfc) {
+            find = true;
+            umq_event->event_type = UMQ_EVENT_QH_SQ_CQ_ERR;
+            umq_event->element.umqh = local->umqh;
+            break;
+        }
+
+        if (local->jfr_ctx->jfr_jfc == urma_event->element.jfc) {
+            find = true;
+            umq_event->event_type = UMQ_EVENT_QH_RQ_CQ_ERR;
+            /* sub umq submit main_qh to user */
+            if (local->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
+                umq_event->element.umqh = local->share_rq_umqh;
+                break;
+            }
             umq_event->element.umqh = local->umqh;
             break;
         }
     }
     (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+
+    if (!find) {
+        UMQ_VLOG_WARN("can not find jfc id %u in all umq\n", urma_event->element.jfc->jfc_id.id);
+    }
 }
 
 void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
 {
+    bool find = false;
     ub_queue_t *local = NULL;
-    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->event_type = UMQ_EVENT_QH_RQ_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jfr_ctx->jfr == urma_event->element.jfr) {
+            find = true;
+            /* sub umq submit main_qh to user */
+            if (local->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
+                umq_event->element.umqh = local->share_rq_umqh;
+                break;
+            }
             umq_event->element.umqh = local->umqh;
             break;
         }
     }
     (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+
+    if (!find) {
+        UMQ_VLOG_WARN("can not find jfr id %u in all umq\n", urma_event->element.jfr->jfr_id.id);
+    }
 }
 
 void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
 {
+    bool find = false;
     ub_queue_t *local = NULL;
-    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->event_type = UMQ_EVENT_QH_RQ_LIMIT;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jfr_ctx->jfr == urma_event->element.jfr) {
+            find = true;
+            if (local->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
+                umq_event->element.umqh = local->share_rq_umqh;
+                break;
+            }
             umq_event->element.umqh = local->umqh;
             break;
         }
     }
     (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+
+    if (!find) {
+        UMQ_VLOG_WARN("can not find jfr id %u in all umq\n", urma_event->element.jfr->jfr_id.id);
+    }
 }
 
 void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
 {
+    bool find = false;
     ub_queue_t *local = NULL;
     umq_event->event_type = UMQ_EVENT_QH_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
@@ -956,27 +997,38 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jetty == urma_event->element.jetty) {
+            find = true;
             umq_event->element.umqh = local->umqh;
             break;
         }
     }
     (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+
+    if (!find) {
+        UMQ_VLOG_WARN("can not find jetty id %u in all umq\n", urma_event->element.jetty->jetty_id.id);
+    }
 }
 
 void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_event_t *umq_event)
 {
+    bool find = false;
     ub_queue_t *local = NULL;
-    umq_event->event_type = UMQ_EVENT_QH_ERR;
+    umq_event->event_type = UMQ_EVENT_QH_LIMIT;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jetty == urma_event->element.jetty) {
+            find = true;
             umq_event->element.umqh = local->umqh;
             break;
         }
     }
     (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+
+    if (!find) {
+        UMQ_VLOG_WARN("can not find jetty id %u in all umq\n", urma_event->element.jetty->jetty_id.id);
+    }
 }
 
 void umq_ub_queue_ctx_list_init(void)
