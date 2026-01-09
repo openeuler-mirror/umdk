@@ -270,6 +270,7 @@ typedef struct umq_ops {
     * Return: 0 on success, other value on error
     */
     int (*umq_tp_dev_info_get)(char *dev_name,  umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
+
     /**
      * Get umq cfg.
      * @param[in] umqh_tp: umq tp handle

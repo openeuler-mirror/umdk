@@ -99,7 +99,7 @@ static uint16_t umq_ub_tx_failed_num(urma_jfs_wr_t *urma_wr, uint16_t wr_index, 
 }
 
 int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_ptr, urma_sge_t *sges_ptr,
-                          uint32_t sge_num, urma_sge_t *src_sge, urma_sge_t *dst_sge)
+    uint32_t sge_num, urma_sge_t *src_sge, urma_sge_t *dst_sge)
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
     uint8_t mempool_id = buf_pro->remote_sge.mempool_id;
@@ -483,7 +483,6 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
         return UMQ_SUCCESS;
     }
 
-    /* only sub umq need set umq_ctx */
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
     buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
 
