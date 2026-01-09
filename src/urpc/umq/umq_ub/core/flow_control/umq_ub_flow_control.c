@@ -446,11 +446,11 @@ void umq_ub_fill_tx_imm(ub_flow_control_t *fc, urma_jfs_wr_t *urma_wr, umq_buf_p
     }
 
     umq_ub_imm_t imm = {.flow_control = {
-                            .umq_private = UMQ_UB_IMM_PRIVATE,
-                            .type = IMM_TYPE_FLOW_CONTROL,
-                            .in_user_buf = UMQ_UB_IMM_IN_USER_BUF,
-                            .window = notify,
-                        }};
+        .umq_private = UMQ_UB_IMM_PRIVATE,
+        .type = IMM_TYPE_FLOW_CONTROL,
+        .in_user_buf = UMQ_UB_IMM_IN_USER_BUF,
+        .window = notify,
+    }};
     urma_wr->opcode = URMA_OPC_SEND_IMM;
     urma_wr->send.imm_data = imm.value;
     buf_pro->opcode = UMQ_OPC_SEND_IMM;
