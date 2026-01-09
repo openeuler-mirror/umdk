@@ -31,7 +31,7 @@ target_include_directories(urma_admin
 
 target_link_libraries(urma_admin
     PRIVATE
-        nl-genl-3 nl-3
+        nl-genl-3 nl-3 urma
 )
 
 install(TARGETS urma_admin

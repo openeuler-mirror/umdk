@@ -643,19 +643,18 @@ static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
     return node_id;
 }
 
-static int cmd_show_topo(admin_config_t *cfg)
+int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
 {
-    tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
-    if (topo_map == NULL) {
-        return -ENOMEM;
-    }
-
     int ret = 0;
-
+    admin_core_cmd_topo_info_t *arg = NULL;
     int node_num = MAX_NODE_NUM;
     for (int i = 0; i < node_num; ++i) {
-        admin_core_cmd_topo_info_t arg = {0};
-        arg.in.node_idx = i;
+        arg = calloc(1, sizeof(admin_core_cmd_topo_info_t));
+        if (arg == NULL) {
+            ret = -ENOMEM;
+            goto free_topo;
+        }
+        arg->in.node_idx = i;
 
         struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_INFO, 0);
         if (msg == NULL) {
@@ -664,17 +663,36 @@ static int cmd_show_topo(admin_config_t *cfg)
         }
 
         admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_topo_info_t));
-        admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+        admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
         ret = admin_nl_send_recv_msg_default(msg);
         admin_nl_free_msg(msg);
         if (ret < 0) {
             goto free_topo;
         }
 
-        topo_map->topo_infos[i] = arg.out.topo_info;
-        topo_map->node_num = arg.out.node_num;
-        node_num = arg.out.node_num;
+        topo_map->topo_infos[i] = arg->out.topo_info;
+        topo_map->node_num = arg->out.node_num;
+        node_num = arg->out.node_num;
+        free(arg);
     }
+    return ret;
+free_topo:
+    free(arg);
+    return ret;
+}
+
+static int cmd_show_topo(admin_config_t *cfg)
+{
+    tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
+    if (topo_map == NULL) {
+        return -ENOMEM;
+    }
+    int ret = admin_cmd_get_topo_info(topo_map);
+    if (ret != 0) {
+        (void)printf("Failed to get topo info, ret=%d.\n", ret);
+        goto free_topo;
+    }
+
     uint32_t node_id = get_cur_node_id(topo_map);
     admin_print_topo_map(topo_map, node_id);
     free(topo_map);
