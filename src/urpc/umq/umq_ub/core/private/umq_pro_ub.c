@@ -498,7 +498,6 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
             umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
             *qbuf_status = UMQ_BUF_FLOW_CONTROL_UPDATE;
             if (imm.flow_control.in_user_buf == UMQ_UB_IMM_IN_USER_BUF) {
-                umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
                 buf_pro->opcode = UMQ_OPC_SEND;
                 buf_pro->imm_data = 0;
                 return UMQ_SUCCESS;

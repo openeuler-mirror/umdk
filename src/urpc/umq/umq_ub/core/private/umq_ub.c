@@ -335,7 +335,7 @@ int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction)
             .mask = JETTY_STATE,
             .state = URMA_JETTY_STATE_ERROR,
         };
-        urma_status_t urma_status = urma_modify_jetty(queue->jetty, &jetty_attr);
+        urma_status = urma_modify_jetty(queue->jetty, &jetty_attr);
         if (urma_status != URMA_SUCCESS) {
             UMQ_VLOG_ERR("modify jetty to URMA_JETTY_STATE_ERROR fail, status %u, eid: " EID_FMT ", jetty_id: %u\n",
                         urma_status, EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id);
