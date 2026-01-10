@@ -3,7 +3,9 @@ Provides a high-performance RPC communication library with extremely low latency
 
 # 2. Software Build
 
-## Build and install RPM packages
+## URPC
+
+### Build and install URPC RPM packages
 ```bash
 rm -rf .git*
 mkdir -p /root/rpmbuild/SOURCES/
@@ -11,13 +13,21 @@ tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
 rpmbuild -bb umdk.spec --with urpc
 ```
 
-## Complie uRPC with cmake
+### Compile URPC with cmake
 ```bash
 cd src
 mkdir build; cd build
 cmake .. -DBUILD_ALL=disable -DBUILD_URPC=enable
 make -j16
-make install # optional, install uRPC if needed
+make install # optional, install URPC if needed
+```
+## UMQ
+
+### Compile UMQ with bazel
+Run the following command to generate the dynamic library files used by UMQ:
+```bash
+cd src/urpc/
+bazel build //umq:libumq_so # files will be generated in the /src/urpc/bazel-bin/
 ```
 
 # 3. Usage Guide

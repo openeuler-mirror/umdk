@@ -3,7 +3,9 @@
 
 # 2. 软件编译
 
-## 使用RPM包编译构建
+## URPC
+
+### 使用RPM包编译构建URPC
 ```bash
 rm -rf .git*
 mkdir -p /root/rpmbuild/SOURCES/
@@ -11,13 +13,22 @@ tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
 rpmbuild -bb umdk.spec --with urpc
 ```
 
-## 使用cmake编译uRPC
+### 使用cmake编译URPC
 ```bash
 cd src
 mkdir build; cd build
 cmake .. -DBUILD_ALL=disable -DBUILD_URPC=enable
 make -j16
-make install # 可选项，如果需要安装uRPC则执行此命令
+make install # 可选项，如果需要安装URPC则执行此命令
+```
+
+## UMQ
+
+### 使用bazel编译UMQ
+使用下述命令即可生成所有umq组件所需的动态库文件：
+```bash
+cd src/urpc/
+bazel build //umq:libumq_so # so将在/src/urpc/bazel-bin/目录下生成
 ```
 
 # 3. 安装使用
