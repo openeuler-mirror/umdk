@@ -597,7 +597,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     }
 
     urma_jfc_cfg_t jfc_cfg = {
-        .depth = queue->tx_depth,
+        .depth = queue->tx_depth + 1, // flush done consumes one cqe
         .jfce = queue->jfs_jfce
     };
     queue->jfs_jfc = urma_create_jfc(dev_ctx->urma_ctx, &jfc_cfg);
