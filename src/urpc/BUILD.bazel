@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:shared_library.bzl", "cc_shared_library")

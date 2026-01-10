@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+
+cc_library(
+    name = "framework_headers",
+    hdrs = glob(["framework/*.h"]),
+    includes = ["framework/"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "umq_headers",
+    hdrs = glob(["umq/*.h"]),
+    includes = ["umq/"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "umq_tp_headers",
+    hdrs = glob(["umq/transport_layer/*.h"]),
+    includes = ["umq/transport_layer/"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "umq_ipc_headers",
+    hdrs = glob(["umq/umq_ipc/*.h"]),
+    includes = ["umq/umq_ipc/"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "umq_ub_headers",
+    hdrs = glob(["umq/umq_ub/*.h"]),
+    includes = ["umq/umq_ub/"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "umq_ubmm_headers",
+    hdrs = glob(["umq/umq_ubmm/*.h"]),
+    includes = ["umq/umq_ubmm/"],
+    visibility = ["//visibility:public"],
+)
