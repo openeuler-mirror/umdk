@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+
+load("//:bazel/copts.bzl", "UMQ_DEFAULT_COPTS", "UMQ_DEFAULT_LINKOPTS")
+
+cc_library(
+    name = "umq_ipc_lib",
+    srcs = glob(["**/*.c"]),
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    linkopts = UMQ_DEFAULT_LINKOPTS + [
+        "-lpthread",
+        "-lrt",
+    ],
+    visibility = ["//umq:__subpackages__"],
+    deps = [
+        "//include:umq_headers",
+        "//include:umq_tp_headers",
+        "//include:umq_ipc_headers",
+        "//util:common_util",
+        "//umq:vlog",
+        "//umq:umq_inner",
+        "//umq:msg_ring",
+        "//umq:util_id_generator",
+        "//umq/qbuf:umq_qbuf_lib",
+    ],
+)
+
+cc_shared_library(
+    name = "umq_ipc",
+    deps = [
+        ":umq_ipc_lib",
+    ],
+    dynamic_deps = ["//umq/qbuf:umq_qbuf"],
+    visibility = ["//visibility:public"],
+)

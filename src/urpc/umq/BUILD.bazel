@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+
+load("//:bazel/copts.bzl", "UMQ_DEFAULT_COPTS", "UMQ_DEFAULT_LINKOPTS")
+
+cc_library(
+    name = "vlog",
+    srcs = ["umq_vlog.c"],
+    hdrs = ["umq_vlog.h"],
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    visibility = ["//umq:__subpackages__"],
+    deps = [
+        "//include:umq_headers",
+        "//util:common_util",
+    ]
+)
+
+cc_library(
+    name = "umq_inner",
+    hdrs = ["umq_inner.h"],
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    visibility = ["//umq:__subpackages__"],
+    deps = [
+        "//include:umq_headers",
+        "//include:umq_tp_headers",
+        "//util:common_util",
+    ]
+)
+
+cc_library(
+    name = "msg_ring",
+    srcs = ["msg_ring.c"],
+    hdrs = ["msg_ring.h"],
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    visibility = ["//umq:__subpackages__"],
+    deps = [
+        "//umq:vlog",
+    ]
+)
+
+cc_library(
+    name = "util_id_generator",
+    srcs = ["util_id_generator.c"],
+    hdrs = ["util_id_generator.h"],
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    visibility = ["//umq:__subpackages__"],
+)
+
+cc_library(
+    name = "umq_lib",
+    srcs = [
+        "umq_api.c",
+        "umq_pro_api.c",
+    ],
+    includes = ["."],
+    copts = UMQ_DEFAULT_COPTS,
+    linkopts = UMQ_DEFAULT_LINKOPTS + [
+        "-lpthread",
+    ],
+    deps = [
+        "//include:umq_headers",
+        "//include:umq_tp_headers",
+        "//umq/dfx:dfx",
+        "//umq/qbuf:umq_qbuf_lib",
+        "//umq:vlog",
+        "//umq:umq_inner",
+        "//util:common_util",
+    ],
+)
+
+cc_shared_library(
+    name = "umq",
+    deps = [
+        ":umq_lib",
+    ],
+    dynamic_deps = ["//umq/qbuf:umq_qbuf"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "libumq_so",
+    srcs = [
+        "//umq:umq",
+        "//umq/qbuf:umq_qbuf",
+        "//umq/umq_ipc:umq_ipc",
+        "//umq/umq_ub:umq_ub",
+    ]
+)
