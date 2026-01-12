@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <syslog.h>
 
-#include "urma_admin_log.h"
+#include "admin_log.h"
 
 #define MAX_LOG_LEN                1024
 #define URMA_ADMIN_LOG_TAG         "URMA_ADMIN_LOGTAG"

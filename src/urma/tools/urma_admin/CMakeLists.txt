@@ -4,12 +4,12 @@
 add_subdirectory(config)
 
 add_executable(urma_admin
-    urma_admin.c
-    urma_admin_log.c
-    admin_parameters.c
-    admin_file_ops.c
     admin_cmd.c
+    admin_file_ops.c
+    admin_log.c
     admin_netlink.c
+    admin_parameters.c
+    admin.c
 )
 
 set_target_properties(urma_admin
