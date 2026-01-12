@@ -7,6 +7,7 @@ add_executable(urma_admin
     admin_cmd_agg.c
     admin_cmd_dev.c
     admin_cmd_eid.c
+    admin_cmd_res.c
     admin_cmd_show.c
     admin_cmd.c
     admin_file_ops.c

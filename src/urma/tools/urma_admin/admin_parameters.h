@@ -300,8 +300,10 @@ void usage(const char *argv0);
 char *pop_arg(admin_config_t *cmds);
 int pop_arg_dev(admin_config_t *cmds);
 int pop_arg_ns(admin_config_t *cfg);
+int pop_arg_sharing(admin_config_t *cfg);
 int pop_arg_eid(admin_config_t *cfg);
 int pop_arg_eid_idx(admin_config_t *cfg);
+int pop_arg_eid_mode(admin_config_t *cfg);
 
 int admin_get_ns_fd(const char *ns);
 

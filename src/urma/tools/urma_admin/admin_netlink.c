@@ -166,7 +166,13 @@ int admin_nl_recv_msg(int (*cb)(struct nl_msg *msg, void *arg), void *arg)
 
     ret = nl_recvmsgs_default(sock);
     if (ret < 0) {
-        printf("Netlink recv failed, ret:%d\n", ret);
+        printf("Failed to recv netlink msg, ret:%d\n", ret);
+        return ret;
+    }
+
+    ret = nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, NULL, arg);
+    if (ret < 0) {
+        printf("Failed to reset netlink callback, ret:%d\n", ret);
         return ret;
     }
 

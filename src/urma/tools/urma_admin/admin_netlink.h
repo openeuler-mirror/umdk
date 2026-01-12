@@ -53,11 +53,20 @@ static inline int admin_nl_put_string(struct nl_msg *msg, int attr, const char *
     return ret;
 }
 
+static inline int admin_nl_put_u8(struct nl_msg *msg, int attr, uint8_t value)
+{
+    int ret = nla_put_u8(msg, attr, value);
+    if (ret != 0) {
+        printf("Failed to put u8 attribute %d, ret: %d\n", attr, ret);
+    }
+    return ret;
+}
+
 static inline int admin_nl_put_u32(struct nl_msg *msg, int attr, uint32_t value)
 {
     int ret = nla_put_u32(msg, attr, value);
     if (ret != 0) {
-        printf("Failed to put string attribute %d, ret: %d\n", attr, ret);
+        printf("Failed to put u32 attribute %d, ret: %d\n", attr, ret);
     }
     return ret;
 }
@@ -66,11 +75,9 @@ static inline int admin_nl_put_u64(struct nl_msg *msg, int attr, uint64_t value)
 {
     int ret = nla_put_u64(msg, attr, value);
     if (ret != 0) {
-        printf("Failed to put string attribute %d, ret: %d\n", attr, ret);
+        printf("Failed to put u64 attribute %d, ret: %d\n", attr, ret);
     }
     return ret;
 }
-
-int cmd_nlsend_legacy(struct nl_msg *msg, urma_cmd_hdr_t *hdr);
 
 #endif

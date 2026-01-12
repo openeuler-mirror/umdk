@@ -295,6 +295,25 @@ static int admin_parse_ns(char *buf, tool_config_t *cfg)
     return 0;
 }
 
+static int admin_parse_sharing(char *buf, tool_config_t *cfg)
+{
+    if (buf == NULL) {
+        (void)printf("Invalid argument.\n");
+        return -EINVAL;
+    }
+
+    // 先复用ns_mode
+    if (strcmp(buf, "on") == 0) {
+        cfg->ns_mode = 1;
+    } else if (strcmp(buf, "off") == 0) {
+        cfg->ns_mode = 0;
+    } else {
+        URMA_ADMIN_LOG("Invalid sharing mode:%s, expect 'on' or 'off'.\n", buf);
+        return -1;
+    }
+    return 0;
+}
+
 int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
 {
     int ret = 0;
@@ -398,6 +417,17 @@ int pop_arg_ns(admin_config_t *cfg)
     return ret;
 }
 
+int pop_arg_sharing(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    if (arg == NULL) {
+        printf("No sharing mode specified.\n");
+        return -EINVAL;
+    }
+    int ret = admin_parse_sharing(arg, cfg);
+    return ret;
+}
+
 int pop_arg_eid(admin_config_t *cfg)
 {
     char *arg = pop_arg(cfg);
@@ -418,6 +448,29 @@ int pop_arg_eid_idx(admin_config_t *cfg)
         return -EINVAL;
     }
     return ret;
+}
+
+int pop_arg_eid_mode(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    if (arg == NULL) {
+        printf("No eid mode specified.\n");
+        return -EINVAL;
+    }
+
+    const char *eid_mode_static = "static";
+    const char *eid_mode_dynamic = "dynamic";
+
+    if (strncmp(arg, eid_mode_static, strlen(eid_mode_static) + 1) == 0) {
+        cfg->dynamic_eid_mode = false;
+    } else if (strncmp(arg, eid_mode_dynamic, strlen(eid_mode_dynamic) + 1) == 0) {
+        cfg->dynamic_eid_mode = true;
+    } else {
+        printf("Invalid eid mode:%s, expect 'dynamic' or 'static'.\n", arg);
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 #define ADMIN_NET_NS_PATH_MAX_LEN  256
