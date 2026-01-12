@@ -1012,12 +1012,12 @@ static int import_direct_route(bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
     }
     bdp_tjetty->direct_route_num = 0;
     /* This function won't return NULL ptr because check function has_direct_route has been called before */
-    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_bonding_eid(bdp_ctx->topo_map, &rjetty->jetty_id.eid);
+    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_agg_eid(bdp_ctx->topo_map, &rjetty->jetty_id.eid);
     for (int i = 0; i < direct_dev_info->direct_num; ++i) {
-        int local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].plane_idx,
-            direct_dev_info->local_map_idx[i].port_idx);
-        int target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].plane_idx,
-            direct_dev_info->target_map_idx[i].port_idx);
+        int local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
+            direct_dev_info->local_map_idx[i].peer_port);
+        int target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].peer_iodie,
+            direct_dev_info->target_map_idx[i].peer_port);
         if (local_port >= bdp_ctx->dev_num ||
             bdp_ctx->p_ctxs[local_port] == NULL ||
             target_port >= ex_info->dev_num ||
@@ -1062,7 +1062,7 @@ static int import_well_known_jetty(bondp_context_t *bdp_ctx, bondp_target_jetty_
     urma_rjetty_t p_rjetty = *rjetty;
     p_rjetty.tp_type = URMA_CTP; /* only support multi-path mode and use CTP */
 
-    topo_info_t *topo_info = get_topo_info_by_bonding_eid(bdp_ctx->topo_map, &rjetty->jetty_id.eid);
+    bondp_topo_agg_dev_t *topo_info = get_topo_dev_info_by_agg_eid(bdp_ctx->topo_map, &rjetty->jetty_id.eid);
     if (topo_info == NULL) {
         URMA_LOG_ERR("Failed to get topo info in import jetty\n");
         return -1;
@@ -1074,7 +1074,7 @@ static int import_well_known_jetty(bondp_context_t *bdp_ctx, bondp_target_jetty_
             return -1;
         }
         bdp_tjetty->local_valid[i] = true;
-        p_rjetty.jetty_id.eid = *(urma_eid_t *)topo_info->io_die_info[i].primary_eid;
+        p_rjetty.jetty_id.eid = *(urma_eid_t *)topo_info->ues[i].primary_eid;
         if (is_empty_eid(&p_rjetty.jetty_id.eid)) {
             URMA_LOG_WARN("Primary dev has NULL rjetty eid\n");
             return -1;
