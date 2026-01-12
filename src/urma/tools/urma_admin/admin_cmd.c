@@ -304,11 +304,16 @@ static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
     return 0;
 }
 
-int admin_add_eid(const tool_config_t *cfg)
+int admin_add_eid(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
     int ret = 0;
+
+    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
+        (void)printf("This operation is not supported on 1650.\n");
+        return -1;
+    }
 
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
@@ -333,11 +338,16 @@ int admin_add_eid(const tool_config_t *cfg)
     return ret;
 }
 
-int admin_del_eid(const tool_config_t *cfg)
+int admin_del_eid(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
     int ret = 0;
+
+    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
+        (void)printf("This operation is not supported on 1650.\n");
+        return -1;
+    }
 
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
@@ -362,10 +372,15 @@ int admin_del_eid(const tool_config_t *cfg)
     return ret;
 }
 
-int admin_set_eid_mode(const tool_config_t *cfg)
+int admin_set_eid_mode(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
+
+    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
+        (void)printf("This operation is not supported on 1650.\n");
+        return -1;
+    }
 
     sock = alloc_and_connect_nl(&genl_id);
     if (sock == NULL) {
@@ -421,11 +436,19 @@ static int admin_cmd_query_stats(struct nl_sock *sock, const tool_config_t *cfg,
     return 0;
 }
 
-int admin_show_stats(const tool_config_t *cfg)
+int admin_show_stats(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
 
+    if (cfg->key.type < TOOL_STATS_KEY_VTP || cfg->key.type > TOOL_STATS_KEY_URMA_DEV) {
+        (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
+        return -1;
+    }
+    if (cfg->key.type == TOOL_STATS_KEY_TPG || cfg->key.type == TOOL_STATS_KEY_JETTY_GROUP) {
+        (void)printf("Type: %d currently not supported.\n", (int)cfg->key.type);
+        return -1;
+    }
     if (cfg->key.type >= TOOL_STATS_KEY_VTP && cfg->key.type <= TOOL_STATS_KEY_TPG) {
         (void)printf("urma_admin do not support query tp stats.\n");
         return -1;
@@ -526,7 +549,7 @@ free_topo:
     return ret;
 }
 
-int admin_show_topo_info(const tool_config_t *cfg)
+int admin_show_topo_info(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
@@ -1023,12 +1046,16 @@ static int admin_cmd_query_res(struct nl_sock *sock, const tool_config_t *cfg, i
     return ret;
 }
 
-int admin_show_res(const tool_config_t *cfg)
+int admin_show_res(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
     netlink_cb_par nl_cb_agr;
 
+    if (cfg->key.type < TOOL_RES_KEY_VTP || cfg->key.type > TOOL_RES_KEY_DEV_TA) {
+        (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
+        return -1;
+    }
     if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
         cfg->key.type == TOOL_RES_KEY_DEV_TP) {
         (void)printf("urma_admin do not support query tp stats.\n");
@@ -1091,7 +1118,7 @@ static int admin_cmd_list_res(struct nl_sock *sock, const tool_config_t *cfg, in
     return ret;
 }
 
-int admin_list_res(const tool_config_t *cfg)
+int admin_list_res(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
@@ -1143,7 +1170,7 @@ static int admin_nl_send_recv(struct nl_sock *sock, struct nl_msg *msg)
     return ret;
 }
 
-int admin_set_ns_mode(const tool_config_t *cfg)
+int admin_set_ns_mode(tool_config_t *cfg)
 {
     struct nl_sock *sock = NULL;
     int genl_id;
@@ -1190,7 +1217,7 @@ close_sock:
     return ret;
 }
 
-int admin_set_dev_ns(const tool_config_t *cfg)
+int admin_set_dev_ns(tool_config_t *cfg)
 {
     int ret = 0;
     int ns_fd = -1;

@@ -27,8 +27,8 @@
 #include "urma_types_str.h"
 
 #include "admin_cmd.h"
-#include "admin_log.h"
 #include "admin_file_ops.h"
+#include "admin_log.h"
 #include "admin_parameters.h"
 
 #define UINT8_INVALID (0xff)
@@ -475,7 +475,7 @@ static void free_ubep_list(struct ub_list *ubep_list)
     }
 }
 
-static int admin_show_ubep(const tool_config_t *cfg)
+static int admin_show_ubep(tool_config_t *cfg)
 {
     int ret;
     struct ub_list ubep_list;
@@ -497,7 +497,7 @@ free_list:
     return ret;
 }
 
-static int admin_set_reserved_jetty_id_range(const tool_config_t *cfg)
+static int admin_set_reserved_jetty_id_range(tool_config_t *cfg)
 {
     char jetty_id_range[VALUE_LEN_MAX] = {0};
 
@@ -515,58 +515,24 @@ static int admin_set_reserved_jetty_id_range(const tool_config_t *cfg)
     return admin_write_dev_file(cfg->dev_name, "reserved_jetty_id", jetty_id_range, len + 1);
 }
 
-static int execute_command(const tool_config_t *cfg)
+static int admin_cmd_main(admin_config_t *cfg)
 {
-    if (cfg->cmd == TOOL_CMD_ADD_EID || cfg->cmd == TOOL_CMD_DEL_EID || cfg->cmd == TOOL_CMD_SET_EID_MODE ||
-        cfg->cmd == TOOL_CMD_SET_NS_MODE || cfg->cmd == TOOL_CMD_SET_DEV_NS ||
-        cfg->cmd == TOOL_CMD_SET_RESERVED_JETTY) {
-        (void)printf("This command not support in control plane.\n");
-        return -1;
-    }
-
-    int ret;
-
-    switch (cfg->cmd) {
-        case TOOL_CMD_SHOW:
-            ret = admin_show_ubep(cfg);
-            break;
-        case TOOL_CMD_ADD_EID:
-            ret = admin_add_eid(cfg);
-            break;
-        case TOOL_CMD_DEL_EID:
-            ret = admin_del_eid(cfg);
-            break;
-        case TOOL_CMD_SET_EID_MODE:
-            ret = admin_set_eid_mode(cfg);
-            break;
-        case TOOL_CMD_SHOW_STATS:
-            ret = admin_show_stats(cfg);
-            break;
-        case TOOL_CMD_SHOW_RES:
-            ret = admin_show_res(cfg);
-            break;
-        case TOOL_CMD_SET_NS_MODE:
-            ret = admin_set_ns_mode(cfg);
-            break;
-        case TOOL_CMD_SET_DEV_NS:
-            ret = admin_set_dev_ns(cfg);
-            break;
-        case TOOL_CMD_LIST_RES:
-            ret = admin_list_res(cfg);
-            break;
-        case TOOL_CMD_SET_RESERVED_JETTY:
-            ret = admin_set_reserved_jetty_id_range(cfg);
-            break;
-        case TOOL_CMD_SHOW_TOPO_INFO:
-            ret = admin_show_topo_info(cfg);
-            break;
-        case TOOL_CMD_NUM:
-        default:
-            ret = -1;
-            break;
-    }
-
-    return ret;
+    static const admin_cmd_t cmds[] = {
+        {NULL, admin_show_ubep},
+        {"show", admin_show_ubep},
+        {"add_eid", admin_add_eid},
+        {"del_eid", admin_del_eid},
+        {"set_eid_mode", admin_set_eid_mode},
+        {"show_stats", admin_show_stats},
+        {"show_res", admin_show_res},
+        {"set_ns_mode", admin_set_ns_mode},
+        {"set_dev_ns", admin_set_dev_ns},
+        {"set_reserved_jetty", admin_set_reserved_jetty_id_range},
+        {"list_res", admin_list_res},
+        {"show_topo", admin_show_topo_info},
+        {0},
+    };
+    return admin_exec_cmd(cfg, cmds);
 }
 
 #define MAX_CMDLINE_LEN 896 /* must less than MAX_LOG_LEN */
@@ -602,38 +568,42 @@ static void admin_log_cmd(int argc, char *argv[], int ret)
 
 int main(int argc, char *argv[])
 {
-    int ret;
-    tool_config_t tool_cfg = {0};
-
     if (admin_check_cmd_len(argc, argv) != 0) {
         (void)printf("user: %s, cmd len out of range.\n", getlogin());
         return -1;
     }
 
-    ret = admin_parse_args(argc, argv, &tool_cfg);
+    int ret;
+    admin_config_t cfg = {
+        .ue_idx = OWN_UE_IDX,
+    };
+
+    ret = admin_parse_args(argc, argv, &cfg);
     if (ret != 0) {
         (void)printf("Invalid parameter.\n");
-        admin_log_cmd(argc, argv, ret);
-        return ret;
+        URMA_ADMIN_LOG("Invalid parameter\n.");
+        usage(argv[0]);
+        goto exit;
     }
-    if (tool_cfg.help) {
+    cfg.argc = argc - optind;
+    cfg.argv = argv + optind;
+
+    if (cfg.help) {
         /* Do not execute other operations for --help parameter */
         return 0;
     }
-    if (tool_cfg.cmd == TOOL_CMD_NUM) {
-        URMA_ADMIN_LOG("tool_cfg.cmd == TOOL_CMD_NUM\n.");
-        admin_log_cmd(argc, argv, ret);
-        return 0;
-    }
 
-    ret = execute_command(&tool_cfg);
+    ret = admin_cmd_main(&cfg);
     if (ret != 0) {
         (void)printf("Failed to execute command.\n");
         URMA_ADMIN_LOG("Failed to execute command\n.");
-        admin_log_cmd(argc, argv, ret);
-        return ret;
+        goto exit;
     }
 
+    admin_log_cmd(argc, argv, ret);
+    return 0;
+
+exit:
     admin_log_cmd(argc, argv, ret);
     return ret;
 }
