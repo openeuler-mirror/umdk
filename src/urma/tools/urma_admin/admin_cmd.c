@@ -9,42 +9,46 @@
  */
 
 #define _GNU_SOURCE
+
+#include <errno.h>
+#include <fcntl.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#include <sched.h>
+#include <unistd.h>
 
+#include <netlink/genl/ctrl.h>
+#include <netlink/genl/genl.h>
+#include <netlink/msg.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
-#include <netlink/msg.h>
-#include <netlink/genl/genl.h>
-#include <netlink/genl/ctrl.h>
 
-#include "urma_types.h"
-#include "admin_parameters.h"
-#include "admin_file_ops.h"
 #include "ub_util.h"
 #include "urma_cmd.h"
+#include "urma_types.h"
+
+#include "admin_file_ops.h"
 #include "admin_netlink.h"
+#include "admin_parameters.h"
+
 #include "admin_cmd.h"
+
 typedef struct netlink_cb_par {
     uint32_t type;
     uint32_t key;
 } netlink_cb_par;
 
-#define ADMIN_NET_NS_PATH_MAX_LEN 256
+#define ADMIN_NET_NS_PATH_MAX_LEN  256
 /* Path1 format: /var/run/netns/$ns_name */
-#define ADMIN_NET_NS_PATH1_PREFIX "/var/run/netns/"
+#define ADMIN_NET_NS_PATH1_PREFIX  "/var/run/netns/"
 #define ADMIN_NET_NS_PATH1_MIN_LEN strlen(ADMIN_NET_NS_PATH1_PREFIX)
 /* Path2 format: /proc/$pid/ns/net */
-#define ADMIN_NET_NS_PATH2_PREFIX "/proc/"
-#define ADMIN_NET_NS_PATH2_SUFFIX "/ns/net"
+#define ADMIN_NET_NS_PATH2_PREFIX  "/proc/"
+#define ADMIN_NET_NS_PATH2_SUFFIX  "/ns/net"
 /* The minimum length of path2: $pid occupies at least 1 character */
 #define ADMIN_NET_NS_PATH2_MIN_LEN 14
 
@@ -111,7 +115,7 @@ static int urma_admin_get_ns_fd(const char *ns)
 
     ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
     if (ns_fd == -1) {
-        (void)printf("failed to open ns file %s, errno:%d", ns,  errno);
+        (void)printf("failed to open ns file %s, errno:%d", ns, errno);
         return ns_fd;
     }
     return ns_fd;
@@ -129,14 +133,13 @@ static int cmd_nlsend(struct nl_sock *sock, int genl_id, urma_cmd_hdr_t *hdr)
         return -1;
     }
 
-    if (hdr->command == URMA_CORE_CMD_QUERY_RES ||
-        hdr->command == URMA_CORE_CMD_ADD_EID ||
+    if (hdr->command == URMA_CORE_CMD_QUERY_RES || hdr->command == URMA_CORE_CMD_ADD_EID ||
         hdr->command == URMA_CORE_CMD_DEL_EID) {
         nlmsg_flags = NLM_F_DUMP;
     }
 
     msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, (uint8_t)hdr->command,
-        UBCORE_GENL_FAMILY_VERSION);
+                          UBCORE_GENL_FAMILY_VERSION);
     if (msg_hdr == NULL) {
         (void)printf("Unable to write genl header\n");
         nlmsg_free(msg);
@@ -284,8 +287,7 @@ static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
         return 0;
     }
 
-    if (genlhdr->cmd != (int)URMA_CORE_CMD_ADD_EID &&
-        genlhdr->cmd != (int)URMA_CORE_CMD_DEL_EID) {
+    if (genlhdr->cmd != (int)URMA_CORE_CMD_ADD_EID && genlhdr->cmd != (int)URMA_CORE_CMD_DEL_EID) {
         return 0;
     }
 
@@ -296,7 +298,7 @@ static int cb_update_eid_handler(struct nl_msg *msg, void *arg)
         (void)usleep(1); // ret == 1 means in progress, genl will try again.
     } else {
         (void)printf("Failed to %s, invalid parameter.\n",
-            (genlhdr->cmd == (int)URMA_CORE_CMD_ADD_EID) ? "add eid" : "del eid");
+                     (genlhdr->cmd == (int)URMA_CORE_CMD_ADD_EID) ? "add eid" : "del eid");
     }
 
     return 0;
@@ -469,16 +471,15 @@ void admin_print_topo_map(tool_topo_map_t *topo_map)
         }
 
         (void)printf("===================== node %d start =======================\n", i);
-        (void)printf("bonding eid: "EID_FMT"\n",
-            EID_ARGS(*(urma_eid_t *)cur_node_info->bonding_eid));
+        (void)printf("bonding eid: " EID_FMT "\n", EID_ARGS(*(urma_eid_t *)cur_node_info->bonding_eid));
         for (j = 0; j < IODIE_NUM; j++) {
-            (void)printf("**primary eid %d: "EID_FMT"\n",
-                j, EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].primary_eid));
+            (void)printf("**primary eid %d: " EID_FMT "\n", j,
+                         EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].primary_eid));
             for (k = 0; k < MAX_PORT_NUM; k++) {
-                (void)printf("****port eid %d: "EID_FMT"\n",
-                    k, EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].port_eid[k]));
-                (void)printf("****peer_port eid %d: "EID_FMT"\n",
-                    k, EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].peer_port_eid[k]));
+                (void)printf("****port eid %d: " EID_FMT "\n", k,
+                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].port_eid[k]));
+                (void)printf("****peer_port eid %d: " EID_FMT "\n", k,
+                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].peer_port_eid[k]));
             }
         }
         (void)printf("===================== node %d end =======================\n", i);
@@ -547,20 +548,20 @@ int admin_show_topo_info(const tool_config_t *cfg)
 }
 
 static const char *g_query_res_type[] = {
-    [0]                        = NULL,
-    [TOOL_RES_KEY_VTP]         = "RES_VTP",
-    [TOOL_RES_KEY_TP]          = "RES_TP",
-    [TOOL_RES_KEY_TPG]         = "RES_TPG",
-    [TOOL_RES_KEY_UTP]         = "RES_UTP",
-    [TOOL_RES_KEY_JFS]         = "RES_JFS",
-    [TOOL_RES_KEY_JFR]         = "RES_JFR",
-    [TOOL_RES_KEY_JETTY]       = "RES_JETTY",
+    [0] = NULL,
+    [TOOL_RES_KEY_VTP] = "RES_VTP",
+    [TOOL_RES_KEY_TP] = "RES_TP",
+    [TOOL_RES_KEY_TPG] = "RES_TPG",
+    [TOOL_RES_KEY_UTP] = "RES_UTP",
+    [TOOL_RES_KEY_JFS] = "RES_JFS",
+    [TOOL_RES_KEY_JFR] = "RES_JFR",
+    [TOOL_RES_KEY_JETTY] = "RES_JETTY",
     [TOOL_RES_KEY_JETTY_GROUP] = "RES_JETTY_GRP",
-    [TOOL_RES_KEY_JFC]         = "RES_JFC",
-    [TOOL_RES_KEY_RC]          = "RES_RC",
-    [TOOL_RES_KEY_SEG]         = "RES_SEG",
-    [TOOL_RES_KEY_DEV_TA]     = "RES_DEV_TA",
-    [TOOL_RES_KEY_DEV_TP]     = "RES_DEV_TP"
+    [TOOL_RES_KEY_JFC] = "RES_JFC",
+    [TOOL_RES_KEY_RC] = "RES_RC",
+    [TOOL_RES_KEY_SEG] = "RES_SEG",
+    [TOOL_RES_KEY_DEV_TA] = "RES_DEV_TA",
+    [TOOL_RES_KEY_DEV_TP] = "RES_DEV_TP",
 };
 
 static void admin_print_res_jfs(struct nlattr *head)
@@ -569,8 +570,7 @@ static void admin_print_res_jfs(struct nlattr *head)
     if (type == UBCORE_RES_JFS_VAL) {
         tool_res_jfs_val_t *val = (tool_res_jfs_val_t *)nla_data(head);
         (void)printf("jfs_id              : %u\n", val->jfs_id);
-        (void)printf("state               : %u [%s]\n", (uint32_t)val->state,
-            urma_jetty_state_to_string(val->state));
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jetty_state_to_string(val->state));
         (void)printf("depth               : %u\n", val->depth);
         (void)printf("pri                 : %u\n", (uint32_t)val->pri);
         (void)printf("jfc_id              : %u\n", val->jfc_id);
@@ -599,8 +599,7 @@ static void admin_print_res_jetty(struct nlattr *head)
         (void)printf("recv_jfc_id         : %u\n", val->recv_jfc_id);
         (void)printf("jfr_id              : %u\n", val->jfr_id);
         (void)printf("jfs_depth           : %u\n", val->jfs_depth);
-        (void)printf("state               : %u [%s]\n", (uint32_t)val->state,
-            urma_jetty_state_to_string(val->state));
+        (void)printf("state               : %u [%s]\n", (uint32_t)val->state, urma_jetty_state_to_string(val->state));
         (void)printf("pri                 : %u\n", (uint32_t)val->pri);
     }
 }
@@ -610,7 +609,8 @@ static void admin_print_res_jetty_grp(struct nlattr *head, int len)
     struct nlattr *nla;
     int rem;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_JTGRP_JETTY_CNT) {
             (void)printf("jetty_cnt           : %u\n", nla_get_u32(nla));
@@ -653,7 +653,8 @@ static void admin_print_res_seg(struct nlattr *head, int len)
     int rem;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_SEGVAL_SEG_CNT) {
             (void)printf("seg_cnt             : %u\n", nla_get_u32(nla));
@@ -663,7 +664,7 @@ static void admin_print_res_seg(struct nlattr *head, int len)
         if (type == UBCORE_RES_SEGVAL_SEG_VAL) {
             tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
             (void)printf("seg_list idx: %u\n", i);
-            (void)printf("eid                 :"EID_FMT" \n", EID_ARGS(val->ubva.eid));
+            (void)printf("eid                 :" EID_FMT " \n", EID_ARGS(val->ubva.eid));
             (void)printf("va                  : %lu\n", val->ubva.va);
             (void)printf("len                 : %lu\n", val->len);
             (void)printf("token_id            : %u\n", val->token_id);
@@ -797,7 +798,8 @@ static void admin_list_res_jfs(struct nlattr *head, int len)
     struct nlattr *nla;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_DEV_JFS_CNT) {
             (void)printf("\n----------JFS----------\n");
@@ -816,7 +818,8 @@ static void admin_list_res_jfr(struct nlattr *head, int len)
     struct nlattr *nla;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_DEV_JFR_CNT) {
             (void)printf("\n----------JFR----------\n");
@@ -835,7 +838,8 @@ static void admin_list_res_jetty(struct nlattr *head, int len)
     struct nlattr *nla;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_DEV_JETTY_CNT) {
             (void)printf("\n---------JETTY---------\n");
@@ -855,7 +859,8 @@ static void admin_list_res_jetty_grp(struct nlattr *head, int len)
     int rem;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_JTGRP_JETTY_CNT) {
             (void)printf("\n------JETTY_GROUP------\n");
@@ -875,7 +880,8 @@ static void admin_list_res_jfc(struct nlattr *head, int len)
     struct nlattr *nla;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_DEV_JFC_CNT) {
             (void)printf("\n----------JFC----------\n");
@@ -894,7 +900,8 @@ static void admin_list_res_rc(struct nlattr *head, int len)
     struct nlattr *nla;
     uint32_t i = 0;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_DEV_RC_CNT) {
             (void)printf("\n----------RC-----------\n");
@@ -913,7 +920,8 @@ static void admin_list_res_seg(struct nlattr *head, int len)
     uint32_t i = 0;
     struct nlattr *nla;
 
-    nla_for_each_attr(nla, head, len, rem) {
+    nla_for_each_attr(nla, head, len, rem)
+    {
         int type = nla_type(nla);
         if (type == UBCORE_RES_SEGVAL_SEG_CNT) {
             (void)printf("seg_cnt             : %u\n", nla_get_u32(nla));
@@ -922,7 +930,7 @@ static void admin_list_res_seg(struct nlattr *head, int len)
         if (type == UBCORE_RES_SEGVAL_SEG_VAL) {
             tool_seg_info_t *val = (tool_seg_info_t *)nla_data(nla);
             (void)printf("seg_list idx: %u\n", i);
-            (void)printf("eid                 :"EID_FMT" \n", EID_ARGS(val->ubva.eid));
+            (void)printf("eid                 :" EID_FMT " \n", EID_ARGS(val->ubva.eid));
             (void)printf("va                  : %lu\n", val->ubva.va);
             (void)printf("len                 : %lu\n", val->len);
             (void)printf("token_id            : %u\n", val->token_id);
@@ -1159,7 +1167,7 @@ int admin_set_ns_mode(const tool_config_t *cfg)
     }
 
     msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, URMA_CORE_SET_NS_MODE,
-        UBCORE_GENL_FAMILY_VERSION);
+                          UBCORE_GENL_FAMILY_VERSION);
     if (msg_hdr == NULL) {
         (void)printf("Unable to write genl header\n");
         ret = -ENOMEM;
@@ -1220,7 +1228,7 @@ int admin_set_dev_ns(const tool_config_t *cfg)
     }
 
     msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, genl_id, 0, nlmsg_flags, URMA_CORE_SET_DEV_NS,
-        UBCORE_GENL_FAMILY_VERSION);
+                          UBCORE_GENL_FAMILY_VERSION);
     if (msg_hdr == NULL) {
         (void)printf("Unable to write genl header\n");
         ret = -ENOMEM;

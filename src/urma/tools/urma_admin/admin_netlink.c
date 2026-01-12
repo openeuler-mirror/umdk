@@ -8,14 +8,16 @@
  * History: 2023-12-07   create file
  */
 
-#include <unistd.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "admin_cmd.h"
+
 #include "admin_netlink.h"
 
 #define UBURMA_NL_TYPE 25
@@ -68,8 +70,8 @@ int admin_nl_talk(void *req, size_t len, enum admin_nlmsg_type type, admin_nl_re
     }
 
     socklen_t src_addr_len = (socklen_t)sizeof(struct sockaddr_nl);
-    ssize_t recv_len = recvfrom(fd, nlh, NLMSG_SPACE(sizeof(admin_nl_resp)), 0,
-        (struct sockaddr *)&src_addr, &src_addr_len);
+    ssize_t recv_len =
+        recvfrom(fd, nlh, NLMSG_SPACE(sizeof(admin_nl_resp)), 0, (struct sockaddr *)&src_addr, &src_addr_len);
     if (recv_len <= 0) {
         free(nlh);
         (void)close(fd);

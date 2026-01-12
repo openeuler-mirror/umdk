@@ -8,16 +8,17 @@
  * History: 2023-01-04   create file
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <limits.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <unistd.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "admin_parameters.h"
+
 #include "admin_file_ops.h"
 
 #define ADMIN_RESERVED_JETTY_PARAM_NUM 2
@@ -228,7 +229,7 @@ int admin_parse_file_value_u8(const char *file_path, char *file, uint8_t *u8)
     char tmp_value[VALUE_LEN_MAX];
     if (read_file(file_path, file, tmp_value, VALUE_LEN_MAX) <= 0) {
         (void)printf("read file %s/%s failed.\n", file_path, file);
-         return -1;
+        return -1;
     }
     return admin_str_to_u8(tmp_value, u8);
 }
@@ -238,7 +239,7 @@ int admin_parse_file_value_u16(const char *file_path, char *file, uint16_t *u16)
     char tmp_value[VALUE_LEN_MAX];
     if (read_file(file_path, file, tmp_value, VALUE_LEN_MAX) <= 0) {
         (void)printf("read file %s/%s failed.\n", file_path, file);
-         return -1;
+        return -1;
     }
     return admin_str_to_u16(tmp_value, u16);
 }
@@ -248,7 +249,7 @@ int admin_parse_file_value_u32(const char *file_path, char *file, uint32_t *u32)
     char tmp_value[VALUE_LEN_MAX];
     if (read_file(file_path, file, tmp_value, VALUE_LEN_MAX) <= 0) {
         (void)printf("read file %s/%s failed.\n", file_path, file);
-         return -1;
+        return -1;
     }
     return admin_str_to_u32(tmp_value, u32);
 }
@@ -258,7 +259,7 @@ int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64)
     char tmp_value[VALUE_LEN_MAX];
     if (read_file(file_path, file, tmp_value, VALUE_LEN_MAX) <= 0) {
         (void)printf("read file %s/%s failed.\n", file_path, file);
-         return -1;
+        return -1;
     }
     return admin_str_to_u64(tmp_value, u64);
 }
@@ -270,7 +271,7 @@ void admin_parse_reserved_jetty(const char *file_path, char *file, uint32_t *min
         *min = UINT32_MAX;
         *max = UINT32_MAX;
         (void)printf("read file %s/%s failed.\n", file_path, file);
-         return;
+        return;
     }
 
     if (sscanf(tmp_value, "%u-%u", min, max) != ADMIN_RESERVED_JETTY_PARAM_NUM) {
@@ -294,7 +295,7 @@ void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint
         eid_list[i].eid_index = i;
         if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
             admin_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
-            eid_list[i].eid.in4.prefix = 0;  // invalid
+            eid_list[i].eid.in4.prefix = 0; // invalid
         }
     }
 }

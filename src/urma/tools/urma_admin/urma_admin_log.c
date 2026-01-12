@@ -8,14 +8,14 @@
  * History: 2023-2-16 inital implementation of urma_admin log
  */
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <syslog.h>
 
 #include "urma_admin_log.h"
 
-#define MAX_LOG_LEN 1024
-#define URMA_ADMIN_LOG_TAG "URMA_ADMIN_LOGTAG"
+#define MAX_LOG_LEN                1024
+#define URMA_ADMIN_LOG_TAG         "URMA_ADMIN_LOGTAG"
 #define URMA_ADMIN_VLOG_LEVEL_INFO 6
 
 static int urma_admin_vlog(const char *function, int line, const char *format, va_list va)

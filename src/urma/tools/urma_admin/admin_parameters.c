@@ -8,20 +8,21 @@
  * History: 2023-01-04   create file
  */
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <getopt.h>
-#include <errno.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <limits.h>
 #include <arpa/inet.h>
+#include <dirent.h>
+#include <errno.h>
+#include <getopt.h>
+#include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "urma_admin_log.h"
 #include "admin_file_ops.h"
+#include "urma_admin_log.h"
+
 #include "admin_parameters.h"
 
 int admin_str_to_u8(const char *buf, uint8_t *u8)
@@ -148,7 +149,7 @@ static void usage(const char *argv0)
     (void)printf("  -m, --eid_mode <eid_mode>                   the eid mode of UB device,/\n");
     (void)printf("                                              (change to dynamic_mode: cmd with -m,\n");
     (void)printf("                                              change to static_mode: cmd without -m).\n");
-    (void)printf("  -v, --ue_idx <ue_idx>                       the ue_idx of ubep device.\n" \
+    (void)printf("  -v, --ue_idx <ue_idx>                       the ue_idx of ubep device.\n"
                  "                                              when ue_idx == 0xffff or empty, it refers to MUE.\n");
     (void)printf("  -i, --idx <idx>                             idx defaults to 0.\n");
     (void)printf("  -w, --whole                                 show whole information.\n");
@@ -185,19 +186,17 @@ static tool_cmd_type_t parse_command(const char *argv1)
 {
     int i;
 
-    tool_cmd_t cmd[] = {
-        {"show",                TOOL_CMD_SHOW},
-        {"add_eid",             TOOL_CMD_ADD_EID},
-        {"del_eid",             TOOL_CMD_DEL_EID},
-        {"set_eid_mode",        TOOL_CMD_SET_EID_MODE},
-        {"show_stats",          TOOL_CMD_SHOW_STATS},
-        {"show_res",            TOOL_CMD_SHOW_RES},
-        {"set_ns_mode",         TOOL_CMD_SET_NS_MODE},
-        {"set_dev_ns",          TOOL_CMD_SET_DEV_NS},
-        {"set_reserved_jetty",  TOOL_CMD_SET_RESERVED_JETTY},
-        {"list_res",            TOOL_CMD_LIST_RES},
-        {"show_topo",           TOOL_CMD_SHOW_TOPO_INFO}
-    };
+    tool_cmd_t cmd[] = {{"show", TOOL_CMD_SHOW},
+                        {"add_eid", TOOL_CMD_ADD_EID},
+                        {"del_eid", TOOL_CMD_DEL_EID},
+                        {"set_eid_mode", TOOL_CMD_SET_EID_MODE},
+                        {"show_stats", TOOL_CMD_SHOW_STATS},
+                        {"show_res", TOOL_CMD_SHOW_RES},
+                        {"set_ns_mode", TOOL_CMD_SET_NS_MODE},
+                        {"set_dev_ns", TOOL_CMD_SET_DEV_NS},
+                        {"set_reserved_jetty", TOOL_CMD_SET_RESERVED_JETTY},
+                        {"list_res", TOOL_CMD_LIST_RES},
+                        {"show_topo", TOOL_CMD_SHOW_TOPO_INFO}};
 
     for (i = 0; i < (int)TOOL_CMD_NUM; i++) {
         if (strlen(argv1) != strlen(cmd[i].cmd)) {
@@ -212,7 +211,7 @@ static tool_cmd_type_t parse_command(const char *argv1)
 }
 
 #define IPV4_MAP_IPV6_PREFIX 0x0000ffff
-#define EID_STR_MIN_LEN 3
+#define EID_STR_MIN_LEN      3
 static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
 {
     eid->in4.reserved = 0;
@@ -249,8 +248,7 @@ int admin_str_to_eid(const char *buf, urma_eid_t *eid)
         return 0;
     }
 
-    (void)printf("format error, ipv6: %d, ipv4:%d, errno:%d.\n",
-        err_ipv6, err_ipv4, errno);
+    (void)printf("format error, ipv6: %d, ipv4:%d, errno:%d.\n", err_ipv6, err_ipv4, errno);
     return -EINVAL;
 }
 
@@ -309,28 +307,27 @@ static bool check_dev_name(char *dev_name)
 }
 
 static const struct option g_urma_admin_long_options[] = {
-    {"help",              no_argument,       NULL, 'h'},
-    {"dev",               required_argument, NULL, 'd'},
-    {"eid",               required_argument, NULL, 'e'},
-    {"eid_mode",          no_argument,       NULL, 'm'},
-    {"ue_idx",            required_argument, NULL, 'v'},
-    {"idx",               required_argument, NULL, 'i'},
-    {"whole",             no_argument,       NULL, 'w'},
-    {"resource_type",     required_argument, NULL, 'R'},
-    {"key",               required_argument, NULL, 'k'},
-    {"key_ext",           required_argument, NULL, 'K'},
-    {"key_cnt",           required_argument, NULL, 'C'},
-    {"ns",                required_argument, NULL, 'n'},
-    {"ns_mode",           required_argument, NULL, 'M'},
-    {"min_id",            required_argument, NULL, 'l'},
-    {"max_id",            required_argument, NULL, 'u'},
-    {NULL,                no_argument,       NULL, '\0'}
+    {"help", no_argument, NULL, 'h'},                //
+    {"dev", required_argument, NULL, 'd'},           //
+    {"eid", required_argument, NULL, 'e'},           //
+    {"eid_mode", no_argument, NULL, 'm'},            //
+    {"ue_idx", required_argument, NULL, 'v'},        //
+    {"idx", required_argument, NULL, 'i'},           //
+    {"whole", no_argument, NULL, 'w'},               //
+    {"resource_type", required_argument, NULL, 'R'}, //
+    {"key", required_argument, NULL, 'k'},           //
+    {"key_ext", required_argument, NULL, 'K'},       //
+    {"key_cnt", required_argument, NULL, 'C'},       //
+    {"ns", required_argument, NULL, 'n'},            //
+    {"ns_mode", required_argument, NULL, 'M'},       //
+    {"min_id", required_argument, NULL, 'l'},        //
+    {"max_id", required_argument, NULL, 'u'},        //
+    {NULL, no_argument, NULL, '\0'},                 //
 };
 
 static int admin_parse_dev_name(char *buf, tool_config_t *cfg)
 {
-    if (strnlen(buf, URMA_ADMIN_MAX_DEV_NAME) + 1 > URMA_ADMIN_MAX_DEV_NAME ||
-        check_dev_name(buf) == false) {
+    if (strnlen(buf, URMA_ADMIN_MAX_DEV_NAME) + 1 > URMA_ADMIN_MAX_DEV_NAME || check_dev_name(buf) == false) {
         (void)printf("dev_name:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_DEV_NAME);
         URMA_ADMIN_LOG("dev_name:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_DEV_NAME);
         return -1;
