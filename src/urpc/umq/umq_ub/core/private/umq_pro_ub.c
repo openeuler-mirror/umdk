@@ -629,7 +629,10 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     int32_t qbuf_cnt = 0;
     if (queue->state == QUEUE_STATE_ERR) {
-        qbuf_cnt = umq_report_incomplete_rx(queue, max_batch, buf);
+        // only main queue in error state can report incomplete rx
+        if (!(queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ)) {
+            qbuf_cnt = umq_report_incomplete_rx(queue, max_batch, buf);
+        }
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
         return qbuf_cnt;
     }
