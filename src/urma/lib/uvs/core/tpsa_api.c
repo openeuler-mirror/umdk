@@ -18,6 +18,50 @@
 
 #define UVS_MAX_TOPO_NUM 16
 
+int uvs_create_agg_dev(uvs_eid_t agg_eid)
+{
+    int ret = 0;
+
+    ret = uvs_ubagg_ioctl_create_agg_dev(agg_eid);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to create agg dev in ubagg.\n");
+        return ret;
+    }
+
+    return ret;
+}
+
+int uvs_delete_agg_dev(uvs_eid_t agg_eid)
+{
+    int ret = 0;
+
+    ret = uvs_ubagg_ioctl_delete_agg_dev(agg_eid);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to delete agg dev in ubagg.\n");
+        return ret;
+    }
+
+    return ret;
+}
+
+int uvs_get_device_name_by_eid(uvs_eid_t eid, char *buf, size_t len)
+{
+    int ret = 0;
+
+    if (buf == NULL || len == 0) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -EINVAL;
+    }
+
+    ret = uvs_ubagg_ioctl_get_dev_name_by_eid(eid, buf, len);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to get dev name by eid in ubagg.\n");
+        return ret;
+    }
+
+    return 0;
+}
+
 int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
 {
     int ret;

@@ -137,6 +137,32 @@ enum {
     UBCORE_ATTR_RES_LAST
 };
 
+typedef enum admin_agg_cmd {
+    CMD_AGG_ADD = 4,
+    CMD_AGG_DEL,
+} admin_agg_cmd_t;
+
+struct admin_cmd_hdr {
+    uint32_t command;
+    uint32_t args_len;
+    uint64_t args_addr;
+};
+
+#define ADMIN_AGG_CMD_MAGIC 'B'
+#define ADMIN_AGG_CMD _IOWR(ADMIN_AGG_CMD_MAGIC, 1, struct admin_cmd_hdr)
+
+struct cmd_agg_add_arg {
+    struct {
+        urma_eid_t agg_eid;
+    } in;
+};
+
+struct cmd_agg_del_arg {
+    struct {
+        urma_eid_t agg_eid;
+    } in;
+};
+
 // Legacy command
 int admin_show_utp(const tool_config_t *cfg);
 int admin_show_stats(tool_config_t *cfg);
