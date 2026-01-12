@@ -703,7 +703,7 @@ umq_buf_t *umq_buf_break_and_free(umq_buf_t *qbuf)
         return NULL;
     }
     // break qbuf list for many batchs connected, only release the first batch.
-    umq_buf_t *next_batch_qbuf = NULL;
+    umq_buf_t *next_batch_qbuf = qbuf->qbuf_next;
     umq_buf_t *tmp_buf = qbuf;
     uint32_t rest_data_size = tmp_buf->total_data_size;
     while (tmp_buf && rest_data_size > 0) {
@@ -874,6 +874,10 @@ void umq_ack_interrupt(uint64_t umqh, uint32_t nevents, umq_interrupt_option_t *
 
 int umq_buf_split(umq_buf_t *head, umq_buf_t *node)
 {
+    if (!g_umq_inited) {
+        UMQ_VLOG_ERR("umq not initialized\n");
+        return -UMQ_ERR_EINVAL;
+    }
     if (head == NULL || node == NULL || head == node) {
         UMQ_VLOG_ERR("head or node invalid\n");
         return -UMQ_ERR_EINVAL;
