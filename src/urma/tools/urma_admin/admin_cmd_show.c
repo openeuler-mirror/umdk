@@ -505,33 +505,142 @@ bool admin_is_eid_valid(const char *eid)
     return false;
 }
 
-static void admin_print_topo_map(tool_topo_map_t *topo_map)
+static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_len)
 {
-    uint32_t i, j, k;
-    tool_topo_info_t *cur_node_info;
+    uint16_t words[8];
+    int i, zero_start = -1, zero_len = 0;
+    int max_zero_start = -1, max_zero_len = 0;
 
-    (void)printf("========================== topo map start =============================\n");
-    for (i = 0; i < topo_map->node_num; i++) {
-        cur_node_info = topo_map->topo_infos + i;
-        if (!admin_is_eid_valid(cur_node_info->bonding_eid)) {
+    // 按2字节分组，转为16位整数（网络序）
+    for (i = 0; i < 8; ++i) {
+        words[i] = ((uint16_t)eid->raw[i * 2] << 8) | eid->raw[i * 2 + 1];
+    }
+
+    // 查找最长连续0区间
+    for (i = 0; i < 8; ++i) {
+        if (words[i] == 0) {
+            if (zero_start == -1) {
+                zero_start = i;
+                zero_len = 1;
+            } else {
+                zero_len++;
+            }
+        } else {
+            if (zero_len > max_zero_len) {
+                max_zero_start = zero_start;
+                max_zero_len = zero_len;
+            }
+            zero_start = -1;
+            zero_len = 0;
+        }
+    }
+    if (zero_len > max_zero_len) {
+        max_zero_start = zero_start;
+        max_zero_len = zero_len;
+    }
+    if (max_zero_len < 2) { // 只缩写长度大于1的区间
+        max_zero_start = -1;
+        max_zero_len = 0;
+    }
+
+    // 组装字符串
+    char *ptr = out;
+    size_t left = out_len;
+    int printed = 0;
+    for (i = 0; i < 8;) {
+        if (i == max_zero_start) {
+            if (!printed) {
+                snprintf(ptr, left, "::");
+                ptr += 2;
+                left -= 2;
+            } else {
+                snprintf(ptr, left, ":");
+                ptr += 1;
+                left -= 1;
+            }
+            i += max_zero_len;
+            printed = 1;
             continue;
         }
+        if (printed) {
+            snprintf(ptr, left, ":");
+            ptr += 1;
+            left -= 1;
+        }
+        int n = snprintf(ptr, left, "%x", words[i]);
+        ptr += n;
+        left -= n;
+        printed = 1;
+        i++;
+    }
+    *ptr = '\0';
+}
 
-        (void)printf("===================== node %d start =======================\n", i);
-        (void)printf("bonding eid: " EID_FMT "\n", EID_ARGS(*(urma_eid_t *)cur_node_info->bonding_eid));
-        for (j = 0; j < IODIE_NUM; j++) {
-            (void)printf("**primary eid %d: " EID_FMT "\n", j,
-                         EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].primary_eid));
-            for (k = 0; k < MAX_PORT_NUM; k++) {
-                (void)printf("****port eid %d: " EID_FMT "\n", k,
-                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].port_eid[k]));
-                (void)printf("****peer_port eid %d: " EID_FMT "\n", k,
-                             EID_ARGS(*(urma_eid_t *)cur_node_info->io_die_info[j].peer_port_eid[k]));
+void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
+{
+    (void)printf("========================== topo map start =============================\n");
+    tool_topo_info_t *cur_node_info = topo_map->topo_infos + node_id;
+    (void)printf("===================== show node %d topo info =======================\n", node_id);
+    for (uint32_t iodie_idx = 0; iodie_idx < IODIE_NUM; iodie_idx++) {
+        (void)printf("IODie %d:\n", iodie_idx);
+        for (uint32_t port_idx = 0; port_idx < PORT_NUM; port_idx++) {
+            if (cur_node_info->links[iodie_idx][port_idx].peer_node >= MAX_NODE_NUM) {
+                (void)printf("Port %d: Not connected\n", port_idx);
+                continue;
+            }
+            (void)printf("Port %d: Connected to Node %d, IODie %d, Port %d\n", port_idx,
+                         cur_node_info->links[iodie_idx][port_idx].peer_node,
+                         cur_node_info->links[iodie_idx][port_idx].peer_iodie,
+                         cur_node_info->links[iodie_idx][port_idx].peer_port);
+        }
+        (void)printf("\n");
+    }
+    char eid_str[INET6_ADDRSTRLEN];
+    for (uint32_t agg_dev_idx = 0; agg_dev_idx < DEV_NUM; agg_dev_idx++) {
+        tool_topo_agg_dev_t *agg_dev = &cur_node_info->agg_devs[agg_dev_idx];
+        if (!admin_is_eid_valid(agg_dev->agg_eid)) {
+            (void)printf("Dev %d bonding_dev_%d: Invalid EID\n", agg_dev_idx, agg_dev_idx);
+            continue;
+        }
+        urma_eid_to_ipv6_str((urma_eid_t *)agg_dev->agg_eid, eid_str, sizeof(eid_str));
+        (void)printf("Dev %d bonding_dev_%d: %s\n", agg_dev_idx, agg_dev_idx, eid_str);
+        for (uint32_t iodie_idx = 0; iodie_idx < IODIE_NUM; iodie_idx++) {
+            tool_topo_ue_t *ue = &agg_dev->ues[iodie_idx];
+            printf("\t UE %d:\n", iodie_idx);
+            printf("\t\t Socket id: %d\n", ue->socket_id);
+            printf("\t\t Primary eid:\n");
+            if (!admin_is_eid_valid(ue->primary_eid)) {
+                (void)printf("\t\t\t Invalid EID\n");
+                continue;
+            }
+            urma_eid_to_ipv6_str((urma_eid_t *)ue->primary_eid, eid_str, sizeof(eid_str));
+            printf("\t\t\t %s\n", eid_str);
+
+            printf("\t\t Port eid:\n");
+            for (uint32_t port_idx = 0; port_idx < PORT_NUM; port_idx++) {
+                if (!admin_is_eid_valid(ue->port_eid[port_idx])) {
+                    (void)printf("\t\t\t Port %d: Invalid EID\n", port_idx);
+                } else {
+                    urma_eid_to_ipv6_str((urma_eid_t *)ue->port_eid[port_idx], eid_str, sizeof(eid_str));
+                    (void)printf("\t\t\t Port %d: %s\n", port_idx, eid_str);
+                }
             }
         }
-        (void)printf("===================== node %d end =======================\n", i);
     }
     (void)printf("========================== topo map end =============================\n");
+}
+
+static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
+{
+    uint32_t node_id = 0;
+    for (uint32_t i = 0; i < topo_map->node_num; i++) {
+        tool_topo_info_t *cur_node_info = topo_map->topo_infos + i;
+        if (cur_node_info->is_current) {
+            node_id = i;
+            break;
+        }
+    }
+    return node_id;
 }
 
 static int cmd_show_topo(admin_config_t *cfg)
@@ -566,7 +675,8 @@ static int cmd_show_topo(admin_config_t *cfg)
         topo_map->node_num = arg.out.node_num;
         node_num = arg.out.node_num;
     }
-    admin_print_topo_map(topo_map);
+    uint32_t node_id = get_cur_node_id(topo_map);
+    admin_print_topo_map(topo_map, node_id);
     free(topo_map);
     return 0;
 
