@@ -113,5 +113,6 @@ util_vlog_ctx_t *urpc_lib_get_vlog_ctx(void)
 
 URPC_CONSTRUCTOR(urpc_log_register, CONSTRUCTOR_PRIORITY_LOG_URPC)
 {
+    openlog(NULL, LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
     util_log_ctx_set(urpc_lib_get_vlog_ctx());
 }
