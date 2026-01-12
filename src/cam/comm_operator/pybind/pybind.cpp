@@ -7,8 +7,8 @@
  * History: 2025-12-10 add pybind
  */
 
-#include <torch/extension.h>
 #include "functions.h"
+#include <torch/extension.h>
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
@@ -20,20 +20,22 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_shmem", &MoeCombineShmemImplAutograd, "moe_combine_shmem");
 }
 
-TORCH_LIBRARY(umdk_cam_op_lib, m) {
+TORCH_LIBRARY(umdk_cam_op_lib, m)
+{
     m.def("fused_deep_moe(Tensor x, Tensor expertIds, Tensor[] gmm1PermutedWeight, Tensor[] gmm1PermutedWeightScale, \
     Tensor[] gmm2Weight, Tensor[] gmm2WeightScale, Tensor expertScales, Tensor? expertSmoothScales, \
     Tensor? xActiveMask, str groupEp, int epRankSize, int epRankId, int moeExpertNum, int sharedExpertNum, \
     int sharedExpertRankNum, int quantMode, int globalBs) -> Tensor[]");
-    m.def("get_dispatch_layout(Tensor topk_idx, int num_experts, int num_ranks) -> (Tensor, Tensor, Tensor)");
-    m.def("moe_dispatch_prefill(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor num_tokens_per_rank, \
-    Tensor is_token_in_rank, Tensor num_tokens_per_expert, int num_worst_tokens, str group_ep, int rank, int num_ranks) \
-    -> (Tensor, Tensor, Tensor, Tensor)");
+    m.def("get_dispatch_layout(Tensor topk_idx, int num_experts, int num_ranks) -> (Tensor, Tensor)");
+    m.def("moe_dispatch_prefill(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor num_tokens_per_expert, \
+    Tensor send_token_idx_small, str group_ep, int rank, int num_ranks, bool use_quant) \
+    -> (Tensor, Tensor, Tensor, Tensor, Tensor)");
     m.def("moe_combine_prefill(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor src_idx, Tensor send_head, \
     str group_ep, int rank, int num_ranks) -> Tensor");
     m.def("moe_dispatch_shmem(Tensor x, Tensor expertIds, Tensor? scales, Tensor? xActiveMask, \
     int epWorldSize, int epRankId, int moeExpertNum, int tpWorldSize, int tpRankId, \
-    int expertShardType, int sharedExpertNum, int sharedExpertRankNum, int quantMode, int globalBS, int expertTokenNumsType, int extInfo) -> Tensor[]");
+    int expertShardType, int sharedExpertNum, int sharedExpertRankNum, int quantMode, int globalBS, \
+    int expertTokenNumsType, int extInfo) -> Tensor[]");
     m.def("moe_combine_shmem(Tensor expandX, Tensor expertIds, Tensor expandIdx, Tensor epSendCounts, \
     Tensor expertScales, Tensor? tpSendCounts, Tensor? xActiveMask, Tensor? activationScale, Tensor? weightScale, \
     Tensor? groupList, Tensor? expandScales, int epWorldSize, int epRankId, int moeExpertNum, int tpWorldSize, \

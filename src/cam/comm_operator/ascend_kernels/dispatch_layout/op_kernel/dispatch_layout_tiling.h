@@ -17,6 +17,7 @@ struct DispatchLayoutInfo {
     uint32_t numRanks;
     uint32_t numExperts;
     uint32_t numTopk;
+    uint32_t localRankSize;
     uint64_t totalUbSize;
 };
 

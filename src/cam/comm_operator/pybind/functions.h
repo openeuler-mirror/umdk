@@ -10,11 +10,11 @@
 #ifndef COMMON_OPS_CSRC_FUNCTIONS_H_
 #define COMMON_OPS_CSRC_FUNCTIONS_H_
 
-#include <ATen/ATen.h>
-#include <torch/script.h>
-#include <torch/extension.h>
-#include <torch/csrc/autograd/custom_function.h>
 #include "torch_npu/csrc/core/npu/NPUStream.h"
+#include <ATen/ATen.h>
+#include <torch/csrc/autograd/custom_function.h>
+#include <torch/extension.h>
+#include <torch/script.h>
 
 std::vector<at::Tensor> FusedDeepMoeImplAutograd(
     const at::Tensor &x, \
@@ -35,31 +35,28 @@ std::vector<at::Tensor> FusedDeepMoeImplAutograd(
     int64_t quantMode, \
     int64_t globalBs);
 
-std::tuple<at::Tensor, at::Tensor, at::Tensor>
-GetDispatchLayoutImplAutograd(
-    const at::Tensor& topIdx,
+std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImplAutograd(
+    const at::Tensor &topIdx,
     int64_t numExperts,
     int64_t numRanks);
 
-std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor>
-MoeDispatchPrefillImplAutograd(
-    const at::Tensor& x,
-    const at::Tensor& topkIdx,
-    const at::Tensor& topkWeights,
-    const at::Tensor& numTokensPerRank,
-    const at::Tensor& isTokenInRank,
-    at::Tensor& numTokensPerExpert,
-    int64_t numWorstTokens,
+std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor>MoeDispatchPrefillImplAutograd(
+    const at::Tensor &x,
+    const at::Tensor &topkIdx,
+    const at::Tensor &topkWeights,
+    const at::Tensor &numTokensPerExpert,
+    const at::Tensor &sendTokenIdxSmall,
     c10::string_view groupEp,
     int64_t rank,
-    int64_t numRanks);
+    int64_t numRanks,
+    bool useQuant);
 
 at::Tensor MoeCombinePrefillImplAutograd(
-    const at::Tensor& x,
-    const at::Tensor& topkIdx,
-    const at::Tensor& topkWeights,
-    const at::Tensor& srcIdx,
-    const at::Tensor& sendHead,
+    const at::Tensor &x,
+    const at::Tensor &topkIdx,
+    const at::Tensor &topkWeights,
+    const at::Tensor &srcIdx,
+    const at::Tensor &sendHead,
     c10::string_view groupEp,
     int64_t rank,
     int64_t numRanks);
