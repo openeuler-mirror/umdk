@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -417,6 +418,85 @@ int pop_arg_eid_idx(admin_config_t *cfg)
         return -EINVAL;
     }
     return ret;
+}
+
+#define ADMIN_NET_NS_PATH_MAX_LEN  256
+/* Path1 format: /var/run/netns/$ns_name */
+#define ADMIN_NET_NS_PATH1_PREFIX  "/var/run/netns/"
+#define ADMIN_NET_NS_PATH1_MIN_LEN strlen(ADMIN_NET_NS_PATH1_PREFIX)
+/* Path2 format: /proc/$pid/ns/net */
+#define ADMIN_NET_NS_PATH2_PREFIX  "/proc/"
+#define ADMIN_NET_NS_PATH2_SUFFIX  "/ns/net"
+/* The minimum length of path2: $pid occupies at least 1 character */
+#define ADMIN_NET_NS_PATH2_MIN_LEN 14
+
+static bool urma_validate_ns_path(const char *path)
+{
+    /* ns path is a special symbolic link, cannot be checked by realpath */
+    /* check path format1: /var/run/netns/$ns_name->/proc/$pid/ns/net */
+    size_t path_len = strnlen(path, ADMIN_NET_NS_PATH_MAX_LEN);
+    if (path_len > ADMIN_NET_NS_PATH1_MIN_LEN && path_len < ADMIN_NET_NS_PATH_MAX_LEN &&
+        (strncmp(path, ADMIN_NET_NS_PATH1_PREFIX, ADMIN_NET_NS_PATH1_MIN_LEN) == 0)) {
+        /* check if there is still "/./" or "/../" after "ns/"-> check if there is any sub_str can be
+           splitted by "/" */
+        char ns_name[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
+        /* check ns_name not containing "/" */
+        int ret = sscanf(path + ADMIN_NET_NS_PATH1_MIN_LEN, "%[^/]", ns_name);
+        if (ret < 0 || strlen(ns_name) + ADMIN_NET_NS_PATH1_MIN_LEN != path_len) {
+            (void)printf("path 1 is invalid, ns_name: %s, ret: %d, errno: %d.\n", ns_name, ret, errno);
+            return false;
+        }
+        return true;
+    }
+
+    /* check path format2: /proc/$pid/ns/net */
+    if (path_len < ADMIN_NET_NS_PATH2_MIN_LEN || path_len >= ADMIN_NET_NS_PATH_MAX_LEN) {
+        (void)printf("The len of ns realpath:%s is invalid, len: %lu.\n", path, path_len);
+        return false;
+    }
+
+    /* /proc/ */
+    size_t sub_str_len = strlen(ADMIN_NET_NS_PATH2_PREFIX);
+    uint64_t offset = sub_str_len;
+    if (offset >= path_len || strncmp(path, ADMIN_NET_NS_PATH2_PREFIX, sub_str_len) != 0) {
+        (void)printf("path 2 is invalid, should start with '/proc/', path: %s.\n", path);
+        return false;
+    }
+
+    /* pid */
+    char num_str[ADMIN_NET_NS_PATH_MAX_LEN + 1] = {0};
+    /* check sub_str only containing number */
+    int success_len = sscanf(path + offset, "%[0-9]", num_str);
+    /* The return value of sscanf_s is the number of string successfully matched */
+    if (success_len != 1) {
+        (void)printf("failed to get pid.\n");
+        return false;
+    }
+    sub_str_len = strnlen(num_str, ADMIN_NET_NS_PATH_MAX_LEN);
+    offset += sub_str_len;
+
+    /* /ns/net */
+    if (strcmp(path + offset, ADMIN_NET_NS_PATH2_SUFFIX) != 0) {
+        (void)printf("path is not valid: should be /proc/pid/ns/net.\n");
+        return false;
+    }
+    return true;
+}
+
+int admin_get_ns_fd(const char *ns)
+{
+    int ns_fd;
+    /* validate input */
+    if (urma_validate_ns_path(ns) == false) {
+        return -1;
+    }
+
+    ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
+    if (ns_fd == -1) {
+        (void)printf("failed to open ns file %s, errno:%d", ns, errno);
+        return ns_fd;
+    }
+    return ns_fd;
 }
 
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)

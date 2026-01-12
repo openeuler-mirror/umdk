@@ -303,6 +303,8 @@ int pop_arg_ns(admin_config_t *cfg);
 int pop_arg_eid(admin_config_t *cfg);
 int pop_arg_eid_idx(admin_config_t *cfg);
 
+int admin_get_ns_fd(const char *ns);
+
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
 
 bool is_1650(const char *dev_name);
