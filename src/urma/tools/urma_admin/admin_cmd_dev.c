@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "admin_netlink.h"
+#include "admin_file_ops.h"
 
 #include "admin_cmd.h"
 
@@ -157,6 +158,9 @@ close_ns_fd:
 
 int admin_cmd_dev(admin_config_t *cfg)
 {
+    if (cfg->help) {
+        return cmd_dev_usage(cfg);
+    }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_dev_usage},          //
         {"set", cmd_dev_set},           //

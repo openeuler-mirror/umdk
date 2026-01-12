@@ -58,41 +58,33 @@ static void admin_log_cmd(int argc, char *argv[], int ret)
 int main(int argc, char *argv[])
 {
     if (admin_check_cmd_len(argc, argv) != 0) {
-        (void)printf("user: %s, cmd len out of range.\n", getlogin());
-        return -1;
+        printf("user: %s, cmd len out of range.\n", getlogin());
+        return EXIT_FAILURE;
     }
 
-    int ret;
     admin_config_t cfg = {
         .ue_idx = OWN_UE_IDX,
+        .argc = argc,
+        .argv = argv,
+        .filename = argv[0],
     };
 
-    ret = admin_parse_args(argc, argv, &cfg);
-    if (ret != 0) {
-        (void)printf("Invalid parameter.\n");
-        URMA_ADMIN_LOG("Invalid parameter\n.");
-        usage(argv[0]);
-        goto exit;
-    }
-    cfg.argc = argc - optind;
-    cfg.argv = argv + optind;
+    int ret;
 
-    if (cfg.help) {
-        /* Do not execute other operations for --help parameter */
-        return 0;
+    if ((ret = admin_parse_args(&cfg)) != 0) {
+        goto fail;
     }
 
-    ret = admin_cmd_main(&cfg);
-    if (ret != 0) {
+    if ((ret = admin_cmd_main(&cfg)) != 0) {
         (void)printf("Failed to execute command.\n");
         URMA_ADMIN_LOG("Failed to execute command\n.");
-        goto exit;
+        goto fail;
     }
 
     admin_log_cmd(argc, argv, ret);
-    return 0;
+    return EXIT_SUCCESS;
 
-exit:
+fail:
     admin_log_cmd(argc, argv, ret);
-    return ret;
+    return EXIT_FAILURE;
 }

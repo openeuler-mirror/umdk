@@ -230,6 +230,9 @@ static int cmd_eid_set(admin_config_t *cfg)
 
 int admin_cmd_eid(admin_config_t *cfg)
 {
+    if (cfg->help) {
+        return cmd_eid_usage(cfg);
+    }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_eid_usage}, //
         {"add", cmd_eid_add},  //
@@ -243,8 +246,8 @@ int admin_cmd_eid(admin_config_t *cfg)
 // Legacy cmd
 int admin_cmd_add_eid_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
-        (void)printf("This operation is not supported on 1650.\n");
+    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
 
@@ -265,8 +268,8 @@ int admin_cmd_add_eid_legacy(admin_config_t *cfg)
 
 int admin_cmd_del_eid_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
-        (void)printf("This operation is not supported on 1650.\n");
+    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
 
@@ -287,8 +290,8 @@ int admin_cmd_del_eid_legacy(admin_config_t *cfg)
 
 int admin_cmd_set_eid_mode_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_1650(cfg->dev_name)) {
-        (void)printf("This operation is not supported on 1650.\n");
+    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
     return nl_set_eid_mode(cfg);
