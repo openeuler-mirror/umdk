@@ -296,7 +296,14 @@ typedef struct admin_cmd {
 } admin_cmd_t;
 
 void usage(const char *argv0);
-int admin_exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
+
+char *pop_arg(admin_config_t *cmds);
+int pop_arg_dev(admin_config_t *cmds);
+int pop_arg_ns(admin_config_t *cfg);
+int pop_arg_eid(admin_config_t *cfg);
+int pop_arg_eid_idx(admin_config_t *cfg);
+
+int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
 
 bool is_1650(const char *dev_name);
 

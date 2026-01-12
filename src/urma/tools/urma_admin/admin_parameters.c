@@ -363,23 +363,78 @@ int admin_parse_args(int argc, char *argv[], tool_config_t *cfg)
     return 0;
 }
 
-int admin_exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
+char *pop_arg(admin_config_t *cfg)
 {
-    if (cfg->argc == 0) {
-        return cmds->func(cfg);
+    if (cfg->argc <= 0) {
+        return NULL;
+    }
+
+    char *arg = *cfg->argv;
+    cfg->argc--;
+    cfg->argv++;
+
+    return arg;
+}
+
+int pop_arg_dev(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    if (arg == NULL) {
+        printf("No device name specified.\n");
+        return -EINVAL;
+    }
+    return admin_parse_dev_name(arg, cfg);
+}
+
+int pop_arg_ns(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    if (arg == NULL) {
+        printf("No namespace specified.\n");
+        return -EINVAL;
+    }
+    int ret = admin_parse_ns(arg, cfg);
+    return ret;
+}
+
+int pop_arg_eid(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    int ret = admin_str_to_eid(arg, &cfg->eid);
+    if (ret != 0) {
+        printf("No eid specified.\n");
+        return -EINVAL;
+    }
+    return ret;
+}
+
+int pop_arg_eid_idx(admin_config_t *cfg)
+{
+    char *arg = pop_arg(cfg);
+    int ret = admin_str_to_u16(arg, &cfg->idx);
+    if (ret != 0) {
+        printf("No eid idx specified.\n");
+        return -EINVAL;
+    }
+    return ret;
+}
+
+int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
+{
+    const char *cmd_name = pop_arg(cfg);
+    if (cmd_name == NULL) {
+        return cmds[0].func(cfg);
     }
 
     const admin_cmd_t *cmd = cmds + 1;
     while (cmd->name) {
-        if (strncmp(cmd->name, *cfg->argv, strlen(cmd->name) + 1) == 0) {
-            cfg->argc--;
-            cfg->argv++;
+        if (strncmp(cmd->name, cmd_name, strlen(cmd->name) + 1) == 0) {
             return cmd->func(cfg);
         }
         cmd++;
     }
 
-    printf("Unknown cmd '%s'.\n", *cfg->argv);
+    printf("Unknown cmd '%s'.\n", cmd_name);
     return 0;
 }
 

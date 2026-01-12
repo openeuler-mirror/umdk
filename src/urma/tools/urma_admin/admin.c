@@ -530,9 +530,13 @@ static int admin_cmd_main(admin_config_t *cfg)
         {"set_reserved_jetty", admin_set_reserved_jetty_id_range},
         {"list_res", admin_list_res},
         {"show_topo", admin_show_topo_info},
+        //
+        {"agg", admin_cmd_agg},
+        {"dev", admin_cmd_dev},
+        {"eid", admin_cmd_eid},
         {0},
     };
-    return admin_exec_cmd(cfg, cmds);
+    return exec_cmd(cfg, cmds);
 }
 
 #define MAX_CMDLINE_LEN 896 /* must less than MAX_LOG_LEN */
