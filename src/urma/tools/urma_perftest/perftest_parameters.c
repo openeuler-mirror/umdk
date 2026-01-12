@@ -159,6 +159,7 @@ default: disable.\n");
                                                 default: 1000(1s).\n");
     (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
 2MB or 1GB currently.\n");
+    (void)printf("  --stdout                    Print logs to console.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -321,6 +322,7 @@ static void init_cfg(perftest_config_t *cfg)
 
     cfg->wait_jfc_timeout = PERFTEST_DEF_WAIT_JFC_TIME;
     cfg->use_huge_page = false;
+    cfg->enable_stdout = false;
 }
 
 void print_cfg(const perftest_config_t *cfg)
@@ -522,6 +524,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
         {"hugepage_size", required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
         {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
+        {"stdout",  no_argument,       NULL, PERFTEST_OPT_STDOUT },
         {NULL,            no_argument,       NULL, '\0'},
     };
 
@@ -829,6 +832,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");
                     return -1;
                 }
+                break;
+            case PERFTEST_OPT_STDOUT:
+                cfg->enable_stdout = true;
                 break;
             default:
                 usage(argv[0]);
