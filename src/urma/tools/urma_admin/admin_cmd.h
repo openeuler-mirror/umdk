@@ -166,6 +166,10 @@ struct cmd_agg_del_arg {
 
 bool is_ubc(const char *dev_name);
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
+int admin_cmd_dev_expose(const char *dev_name, const char *ns);
+int admin_cmd_dev_unexpose(const char *dev_name, const char *ns);
+int admin_cmd_eid_set_eid_ns(const char *dev_name, uint32_t eid_idx, const char *ns);
+int admin_cmd_get_topo_info(tool_topo_map_t *topo_map);
 
 // Legacy command
 int admin_cmd_show_stats_legacy(admin_config_t *cfg);

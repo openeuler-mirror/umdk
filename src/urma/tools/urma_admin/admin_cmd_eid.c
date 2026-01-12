@@ -35,11 +35,11 @@ static int nl_set_eid_mode(const admin_config_t *cfg)
     return ret;
 }
 
-static int nl_set_eid_ns(const admin_config_t *cfg)
+int admin_cmd_eid_set_eid_ns(const char *dev_name, uint32_t eid_idx, const char *ns)
 {
-    int ns_fd = admin_get_ns_fd(cfg->ns);
+    int ns_fd = admin_get_ns_fd(ns);
     if (ns_fd < 0) {
-        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        (void)printf("Failed to get ns fd, ns %s.\n", ns);
         return ns_fd;
     }
 
@@ -49,8 +49,8 @@ static int nl_set_eid_ns(const admin_config_t *cfg)
         return -ENOMEM;
     }
 
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u16(msg, UBCORE_ATTR_EID_IDX, cfg->idx);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    admin_nl_put_u16(msg, UBCORE_ATTR_EID_IDX, eid_idx);
     admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
 
     int ret = admin_nl_send_recv_msg_default(msg);
@@ -203,7 +203,7 @@ static int cmd_eid_set_ns(admin_config_t *cfg)
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
-    if ((ret = nl_set_eid_ns(cfg)) != 0) {
+    if ((ret = admin_cmd_eid_set_eid_ns(cfg->dev_name, cfg->idx, cfg->ns)) != 0) {
         return ret;
     }
     return 0;

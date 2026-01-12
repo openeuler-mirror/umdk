@@ -19,6 +19,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "urma_api.h"
+
 #include "admin_cmd.h"
 #include "admin_file_ops.h"
 #include "admin_log.h"
@@ -57,6 +59,11 @@ static void admin_log_cmd(int argc, char *argv[], int ret)
 
 int main(int argc, char *argv[])
 {
+    urma_init_attr_t attr = {
+        .token = 0,
+        .uasid = 0,
+    };
+    urma_init(&attr);
     if (admin_check_cmd_len(argc, argv) != 0) {
         printf("user: %s, cmd len out of range.\n", getlogin());
         return EXIT_FAILURE;
@@ -82,9 +89,11 @@ int main(int argc, char *argv[])
     }
 
     admin_log_cmd(argc, argv, ret);
+    urma_uninit();
     return EXIT_SUCCESS;
 
 fail:
     admin_log_cmd(argc, argv, ret);
+    urma_uninit();
     return EXIT_FAILURE;
 }
