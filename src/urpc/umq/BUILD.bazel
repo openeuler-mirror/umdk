@@ -2,6 +2,29 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
 
 load("//:bazel/copts.bzl", "UMQ_DEFAULT_COPTS", "UMQ_DEFAULT_LINKOPTS")
+load("//:bazel/build_settings.bzl", "openssl_mode")
+
+openssl_mode(
+    name = "openssl_mode",
+    build_setting_default = "bazel",
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "openssl_system",
+    flag_values = {
+        ":openssl_mode": "system",
+    },
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "openssl_bazel",
+    flag_values = {
+        ":openssl_mode": "bazel",
+    },
+    visibility = ["//visibility:public"],
+)
 
 cc_library(
     name = "vlog",
@@ -65,7 +88,7 @@ cc_library(
         "//include:umq_headers",
         "//include:umq_tp_headers",
         "//umq/dfx:dfx",
-        "//umq/qbuf:umq_qbuf_lib",
+        "//umq/qbuf:umq_buf_lib",
         "//umq:vlog",
         "//umq:umq_inner",
         "//util:common_util",
@@ -77,7 +100,7 @@ cc_shared_library(
     deps = [
         ":umq_lib",
     ],
-    dynamic_deps = ["//umq/qbuf:umq_qbuf"],
+    dynamic_deps = ["//umq/qbuf:umq_buf"],
     visibility = ["//visibility:public"],
 )
 
@@ -85,7 +108,7 @@ filegroup(
     name = "libumq_so",
     srcs = [
         "//umq:umq",
-        "//umq/qbuf:umq_qbuf",
+        "//umq/qbuf:umq_buf",
         "//umq/umq_ipc:umq_ipc",
         "//umq/umq_ub:umq_ub",
     ]

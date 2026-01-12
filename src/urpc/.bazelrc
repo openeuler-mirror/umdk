@@ -3,3 +3,10 @@
 
 build --cxxopt='-std=c++11'
 build --host_cxxopt='-std=c++11'
+build --compilation_mode=opt
+build --strip=always
+
+build:release --linkopt=-Wl,-s
+
+build:debug --compilation_mode=dbg
+build:debug --strip=never

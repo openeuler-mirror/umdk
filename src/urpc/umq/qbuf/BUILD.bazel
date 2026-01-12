@@ -4,7 +4,7 @@
 load("//:bazel/copts.bzl", "UMQ_DEFAULT_COPTS", "UMQ_DEFAULT_LINKOPTS")
 
 cc_library(
-    name = "umq_qbuf_lib",
+    name = "umq_buf_lib",
     srcs = glob(["**/*.c"]),
     hdrs = glob(["**/*.h"]),
     includes = ["."],
@@ -21,9 +21,9 @@ cc_library(
 )
 
 cc_shared_library(
-    name = "umq_qbuf",
+    name = "umq_buf",
     deps = [
-        ":umq_qbuf_lib",
+        ":umq_buf_lib",
         "//umq:msg_ring",
         "//umq:vlog",
         "//util:common_util",

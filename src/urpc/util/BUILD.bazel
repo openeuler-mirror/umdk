@@ -5,18 +5,29 @@ load("//:bazel/copts.bzl", "UMQ_DEFAULT_COPTS", "UMQ_DEFAULT_LINKOPTS")
 
 cc_library(
     name = "common_util",
-    srcs = glob(["**/*.c"]),
+    srcs = glob([
+        "**/*.c",
+        "**/*.cpp",
+    ]),
     hdrs = glob(["**/*.h"]),
     includes = ["."],
     copts = UMQ_DEFAULT_COPTS,
     linkopts = UMQ_DEFAULT_LINKOPTS + [
         "-lpthread",
-    ],
+    ] + select({
+        "//umq:openssl_system": [
+            "-lcrypto",
+            "-lssl",
+        ],
+        "//conditions:default" : [],
+    }),
     visibility = ["//umq:__subpackages__"],
-    deps = [
-        "@openssl//:ssl",
-        "@openssl//:crypto",
-        "//include:framework_headers",
-    ],
+    deps = ["//include:framework_headers"] + select({
+        "//umq:openssl_system": [],
+        "//conditions:default": [
+            "@openssl//:ssl",
+            "@openssl//:crypto",
+        ],
+    }),
     alwayslink = True,
 )
