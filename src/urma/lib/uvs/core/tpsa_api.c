@@ -18,9 +18,14 @@
 
 #define UVS_MAX_TOPO_NUM 16
 
-int uvs_create_agg_dev(uvs_eid_t agg_eid)
+int uvs_create_agg_dev(uvs_eid_t *agg_eid)
 {
     int ret = 0;
+
+    if (agg_eid == NULL) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -EINVAL;
+    }
 
     ret = uvs_ubagg_ioctl_create_agg_dev(agg_eid);
     if (ret != 0) {
@@ -31,9 +36,14 @@ int uvs_create_agg_dev(uvs_eid_t agg_eid)
     return ret;
 }
 
-int uvs_delete_agg_dev(uvs_eid_t agg_eid)
+int uvs_delete_agg_dev(uvs_eid_t *agg_eid)
 {
     int ret = 0;
+
+    if (agg_eid == NULL) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -EINVAL;
+    }
 
     ret = uvs_ubagg_ioctl_delete_agg_dev(agg_eid);
     if (ret != 0) {
@@ -44,7 +54,7 @@ int uvs_delete_agg_dev(uvs_eid_t agg_eid)
     return ret;
 }
 
-int uvs_get_device_name_by_eid(uvs_eid_t eid, char *buf, size_t len)
+int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
 {
     int ret = 0;
 

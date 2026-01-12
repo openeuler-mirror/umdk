@@ -49,14 +49,14 @@ typedef struct uvs_route_list {
  * @param[in] agg_eid  EID of the aggregation device to be created.
  * @return 0 on success, other value on error.
  */
-int uvs_create_agg_dev(uvs_eid_t agg_eid);
+int uvs_create_agg_dev(uvs_eid_t *agg_eid);
 
 /**
  * Delete an aggregation device from UVS.
  * @param[in] agg_eid  EID of the aggregation device to be deleted.
  * @return 0 on success, other value on error.
  */
-int uvs_delete_agg_dev(uvs_eid_t agg_eid);
+int uvs_delete_agg_dev(uvs_eid_t *agg_eid);
 
 /**
  * Get device name by EID.
@@ -65,7 +65,7 @@ int uvs_delete_agg_dev(uvs_eid_t agg_eid);
  * @param[in] len  Length of the buffer.
  * @return 0 on success, other value on error.
  */
-int uvs_get_device_name_by_eid(uvs_eid_t eid, char *buf, size_t len);
+int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
 
 /**
  * UVS set topo info which gets from MXE module.
