@@ -180,6 +180,26 @@ int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
             }
         }
     }
+
+    bondp_topo_agg_dev_t *topo_dev = NULL;
+    for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
+        for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
+            topo_dev = &cur_node->agg_devs[dev_idx];
+            if (is_empty_eid((urma_eid_t *)topo_dev->agg_eid)) {
+                continue;
+            }
+            bondp_topo_link_t local_map_idx = {
+                .peer_node = cur_node->id,
+                .peer_iodie = plane_idx,
+                .peer_port = 0,
+            };
+            int ret = update_each_direct_dev_table_entry(topo_map, topo_dev, &local_map_idx, &local_map_idx);
+            if (ret) {
+                URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
+                return -1;
+            }
+        }
+    }
     return 0;
 }
 
