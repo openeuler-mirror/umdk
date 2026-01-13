@@ -45,6 +45,8 @@ extern "C" {
 
 #define MEMPOOL_UBVA_SIZE 28
 #define UMQ_IMM_VERSION 0
+#define UMQ_UB_FLOW_CONTORL_JETTY_DEPTH 2
+#define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
 typedef enum umq_size_interval {
     UMQ_SIZE_INVALID_INTERVAL = 0,
@@ -59,6 +61,13 @@ typedef enum umq_imm_protocol_type {
     IMM_PROTOCAL_TYPE_NONE = 0,
     IMM_PROTOCAL_TYPE_IMPORT_MEM = 1,
 } umq_imm_protocol_type_t;
+
+typedef enum ub_queue_jetty_index {
+ 	UB_QUEUE_JETTY_IO,
+ 	UB_QUEUE_JETTY_FLOW_CONTROL, // flow control jetty only send imm without data
+
+ 	UB_QUEUE_JETTY_NUM,
+} ub_queue_jetty_index_t;
 
 typedef struct umq_imm_head {
     uint32_t version : 8;
@@ -182,10 +191,10 @@ typedef struct umq_ub_bind_info {
     umq_trans_mode_t umq_trans_mode;
     urma_transport_mode_t trans_mode;
     urma_jetty_grp_policy_t policy;
-    urma_jetty_id_t jetty_id;
+    urma_jetty_id_t jetty_id[UB_QUEUE_JETTY_NUM];
     urma_target_type_t type;
     urma_order_type_t order_type;
-    urma_token_t token;
+    urma_token_t token[UB_QUEUE_JETTY_NUM];
     urma_target_seg_t tseg;
     umq_buf_mode_t buf_pool_mode;
     uint64_t notify_buf;
@@ -201,7 +210,7 @@ typedef struct umq_ub_bind_info {
 
 typedef struct ub_bind_ctx {
     umq_ub_bind_info_t bind_info;
-    urma_target_jetty_t *tjetty;
+    urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
     uint32_t remote_eid_id;
     uint64_t remote_notify_addr;
@@ -215,13 +224,18 @@ typedef struct jfr_ctx {
     rx_buf_ctx_list_t rx_buf_ctx_list;
 } jfr_ctx_t;
 
+typedef struct umq_v_jfce {
+ 	int fd;
+} umq_v_jfce_t;
+
 typedef struct ub_queue {
     urpc_list_t qctx_node;
     // queue param
-    urma_jetty_t *jetty;
-    jfr_ctx_t *jfr_ctx;
-    urma_jfc_t *jfs_jfc;
-    urma_jfce_t *jfs_jfce;
+    urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
+    jfr_ctx_t *jfr_ctx[UB_QUEUE_JETTY_NUM];
+    urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
+    urma_jfce_t *jfs_jfce; // io and flow control jetty share same jfce
+    umq_v_jfce_t *v_jfr_jfce; // io and flow control jfr_jfce unification
     umq_ub_ctx_t *dev_ctx;
     struct ub_bind_ctx *bind_ctx;
     volatile uint32_t ref_cnt;
@@ -287,8 +301,9 @@ static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_s
     return (uint64_t)((uintptr_t)queue->notify_buf->buf_data + offset * UMQ_UB_RW_SEGMENT_LEN);
 }
 
-int rx_buf_ctx_list_init(ub_queue_t *queue);
+int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num);
 void rx_buf_ctx_list_uninit(rx_buf_ctx_list_t *rx_buf_ctx_list);
+umq_buf_t *umq_get_buf_by_user_ctx(ub_queue_t *queue, uint64_t user_ctx, ub_queue_jetty_index_t jetty_index);
 
 // for control plane on umq ub api
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
@@ -306,7 +321,7 @@ int umq_ub_token_generate(bool enable_token, uint32_t *token);
 int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info);
 int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx);
 int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info);
-int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction);
+int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_queue_jetty_index_t jetty_idx);
 uint32_t umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, uint32_t *eid_index);
 int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
@@ -314,14 +329,16 @@ int umq_ub_get_eid_dev_info(urma_device_t *urma_dev, uint32_t eid_idx, umq_dev_a
 umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
 remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void);
 void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx);
-urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx);
+urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue);
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mempool_id);
 int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq);
-void umq_ub_jfr_ctx_destroy(ub_queue_t *queue);
-int umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
+void umq_ub_jfr_ctx_put(ub_queue_t *queue);
+int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
                           ub_queue_t *share_queue);
+jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
+void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 
 // hanele async event
 void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event);

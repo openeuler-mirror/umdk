@@ -16,25 +16,24 @@
 #include "umq_qbuf_pool.h"
 #include "umq_ub_private.h"
 
-int rx_buf_ctx_list_init(ub_queue_t *queue)
+int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
-    rx_buf_ctx_list_t *rx_buf_ctx_list = &queue->jfr_ctx->rx_buf_ctx_list;
-    uint32_t num = queue->rx_depth;
-
-    rx_buf_ctx_list->addr = calloc(num, sizeof(rx_buf_ctx_t));
-    urpc_list_init(&rx_buf_ctx_list->idle_rx_buf_ctx_list);
-    urpc_list_init(&rx_buf_ctx_list->used_rx_buf_ctx_list);
-
-    rx_buf_ctx_t *rx_buf_ctx = (rx_buf_ctx_t *)rx_buf_ctx_list->addr;
-    if (rx_buf_ctx == NULL) {
-        UMQ_VLOG_ERR("rx buf ctx list calloc failed\n");
+    void *addr = calloc(ctx_num, sizeof(rx_buf_ctx_t));
+    if (addr == NULL) {
+        UMQ_VLOG_ERR("rx buf ctx list addr calloc failed\n");
         return -UMQ_ERR_ENOMEM;
     }
 
-    for (uint32_t i = 0; i < num; i++) {
+    rx_buf_ctx_t *rx_buf_ctx = (rx_buf_ctx_t *)(uintptr_t)addr;
+    urpc_list_init(&rx_buf_ctx_list->idle_rx_buf_ctx_list);
+    urpc_list_init(&rx_buf_ctx_list->used_rx_buf_ctx_list);
+
+    for (uint32_t i = 0; i < ctx_num; i++) {
         urpc_list_push_back(&rx_buf_ctx_list->idle_rx_buf_ctx_list, &rx_buf_ctx->node);
         rx_buf_ctx = rx_buf_ctx + 1;
     }
+
+    rx_buf_ctx_list->addr = addr;
     return UMQ_SUCCESS;
 }
 
@@ -80,11 +79,11 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list)
     return rx_buf_ctx;
 }
 
-static inline umq_buf_t *umq_get_buf_by_user_ctx(ub_queue_t *queue, uint64_t user_ctx)
+umq_buf_t *umq_get_buf_by_user_ctx(ub_queue_t *queue, uint64_t user_ctx, ub_queue_jetty_index_t jetty_index)
 {
     rx_buf_ctx_t *rx_buf_ctx = (rx_buf_ctx_t *)(uintptr_t)user_ctx;
     umq_buf_t *buf = rx_buf_ctx->buffer;
-    queue_rx_buf_ctx_put(&queue->jfr_ctx->rx_buf_ctx_list, rx_buf_ctx);
+    queue_rx_buf_ctx_put(&queue->jfr_ctx[jetty_index]->rx_buf_ctx_list, rx_buf_ctx);
     return buf;
 }
 
@@ -195,7 +194,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     urma_jfs_wr_t *urma_wr_ptr = urma_wr;
     urma_sge_t sges[UMQ_POST_POLL_BATCH][max_sge_num];
     urma_sge_t src_sge, dst_sge;
-    urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty;
+    urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_sge_t *sges_ptr;
     umq_buf_t *buffer = qbuf;
@@ -286,7 +285,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
-    urma_status_t status = urma_post_jetty_send_wr(queue->jetty, urma_wr, &bad_wr);
+    urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp, queue->dev_ctx->feature);
     if (status != URMA_SUCCESS) {
         ret = -(int)status;
@@ -296,9 +295,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             *bad_qbuf = qbuf;
         }
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_send_wr failed, status %d, local eid: " EID_FMT ", "
-                           "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n", (int)status,
-                           EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id,
-                           EID_ARGS(tjetty->id.eid), tjetty->id.id);
+                           "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n",
+                           (int)status, EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
+                            queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
         goto RECOVER_WINDOW;
     }
 
@@ -342,7 +341,7 @@ static ALWAYS_INLINE void process_bad_wr(ub_queue_t *queue, urma_jfr_wr_t *bad_w
             fail = fail->qbuf_next;
         }
 
-        queue_rx_buf_ctx_put(&queue->jfr_ctx->rx_buf_ctx_list, rx_buf_ctx);
+        queue_rx_buf_ctx_put(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list, rx_buf_ctx);
         last_fail_end = fail;
         wr = wr->next;
     }
@@ -382,7 +381,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         uint32_t rest_size = buffer->total_data_size;
         uint32_t sge_num = 0;
 
-        rx_buf_ctx = queue_rx_buf_ctx_get(&queue->jfr_ctx->rx_buf_ctx_list);
+        rx_buf_ctx = queue_rx_buf_ctx_get(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list);
         if (rx_buf_ctx == NULL) {
             UMQ_LIMIT_VLOG_ERR("rx buf ctx is used up\n");
             goto PUT_ALL_RX_CTX;
@@ -432,10 +431,11 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     }
     (recv_wr_ptr - 1)->next = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
-    if (urma_post_jetty_recv_wr(queue->jetty, recv_wr, &bad_wr) != URMA_SUCCESS) {
+    if (urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], recv_wr, &bad_wr) != URMA_SUCCESS) {
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_recv_wr failed, eid: " EID_FMT ", jetty_id: %u\n",
-                           EID_ARGS(queue->jetty->jetty_id.eid), queue->jetty->jetty_id.id);
+                           EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
+                           queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
         if (bad_wr != NULL) {
             *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
         } else {
@@ -454,7 +454,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
 PUT_CUR_RX_CTX:
     buffer = rx_buf_ctx->buffer;
     // put rx buf ctx that was not added to recv wr
-    queue_rx_buf_ctx_put(&queue->jfr_ctx->rx_buf_ctx_list, rx_buf_ctx);
+    queue_rx_buf_ctx_put(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list, rx_buf_ctx);
 
 PUT_ALL_RX_CTX:
     // put rx buf in recv wr
@@ -529,7 +529,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                  * and it counsumes one rqe, so fill rx buffer here.
                  * on condition of pro feature, report it to user.
                 */
-                umq_buf_t *write_qbuf = umq_get_buf_by_user_ctx(queue, cr->user_ctx);
+                umq_buf_t *write_qbuf = umq_get_buf_by_user_ctx(queue, cr->user_ctx, UB_QUEUE_JETTY_IO);
                 umq_buf_t *bad_qbuf = NULL;
                 if (umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf) != UMQ_SUCCESS) {
                     UMQ_LIMIT_VLOG_ERR("ub post rx failed\n");
@@ -585,13 +585,13 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
 {
     int buf_cnt = 0;
     if (!queue->tx_flush_done || queue->rx_flush_done ||
-        queue->state != QUEUE_STATE_ERR || queue->jfr_ctx->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
+        queue->state != QUEUE_STATE_ERR || queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
         return buf_cnt;
     }
 
     rx_buf_ctx_t *rx_buf_ctx;
     for (buf_cnt = 0; buf_cnt < (int)max_rx_ctx; buf_cnt++) {
-        rx_buf_ctx = queue_rx_buf_ctx_flush(&queue->jfr_ctx->rx_buf_ctx_list);
+        rx_buf_ctx = queue_rx_buf_ctx_flush(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list);
         if (rx_buf_ctx == NULL) {
             break;
         }
@@ -636,7 +636,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 
     urma_cr_t cr[max_batch];
     uint64_t start_timestmap = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
-    int rx_cr_cnt = urma_poll_jfc(queue->jfr_ctx->jfr_jfc, max_batch, cr);
+    int rx_cr_cnt = urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, max_batch, cr);
     umq_perf_record_write_poll(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, start_timestmap, queue->dev_ctx->feature, rx_cr_cnt);
     if (rx_cr_cnt < 0) {
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
@@ -647,7 +647,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     int ret = 0;
     umq_buf_status_t qbuf_status;
     for (int i = 0; i < rx_cr_cnt; i++) {
-        buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx);
+        buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         ret = process_rx_msg(&cr[i], buf[qbuf_cnt], queue, &qbuf_status);
         if (ret == UMQ_CONTINUE_FLAG) {
             continue;
@@ -729,7 +729,7 @@ static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_cou
 {
     urma_cr_t cr[buf_count];
     int cnt = 0;
-    int cr_cnt = urma_flush_jetty(queue->jetty, buf_count, cr);
+    int cr_cnt = urma_flush_jetty(queue->jetty[UB_QUEUE_JETTY_IO], buf_count, cr);
     for (int i = 0; i < cr_cnt; i++) {
         if (cr[i].status == URMA_CR_WR_SUSPEND_DONE || cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE ||
             cr[i].user_ctx <= UINT16_MAX) {
@@ -760,7 +760,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 
     urma_cr_t cr[max_batch];
     uint64_t start_timestmap = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
-    int tx_cr_cnt = urma_poll_jfc(queue->jfs_jfc, max_batch, cr);
+    int tx_cr_cnt = urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], max_batch, cr);
     umq_perf_record_write_poll(UMQ_PERF_RECORD_TRANSPORT_POLL_TX, start_timestmap, queue->dev_ctx->feature, tx_cr_cnt);
     if (tx_cr_cnt < 0) {
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
