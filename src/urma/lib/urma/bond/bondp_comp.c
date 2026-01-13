@@ -85,6 +85,7 @@ void bdp_vjfce_info_table_del(bondp_hash_table_t *tbl, int key)
 
 void bdp_vjfce_info_table_close_fd(bondp_comp_t *bdp_comp)
 {
+    int ret = URMA_SUCCESS;
     bondp_hash_table_t *tbl = (bondp_hash_table_t *)bdp_comp->comp_ctx;
     if (!tbl) {
         return;
@@ -93,7 +94,11 @@ void bdp_vjfce_info_table_close_fd(bondp_comp_t *bdp_comp)
     bdp_vjfce_info_t *cur = NULL;
     struct epoll_event ev = {0};
     HMAP_FOR_EACH_SAFE(cur, next, node, &tbl->hmap) {
-        epoll_ctl(bdp_comp->v_jfce.fd, EPOLL_CTL_DEL, cur->key, &ev);
+        // ensure the fd of pjfce is valid before this epoll_ctl
+        ret = epoll_ctl(bdp_comp->v_jfce.fd, EPOLL_CTL_DEL, cur->key, &ev);
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_WARN("non-zero return value of EPOLL_CTL_DEL, ret = %d.\n", ret);
+        }
     }
 
     close(bdp_comp->v_jfce.fd);
@@ -615,15 +620,34 @@ FREE_COMP:
     return NULL;
 }
 
-urma_status_t bondp_delete_comp(void *comp, bondp_comp_type_t type)
+static urma_status_t bondp_delete_comp_jfce(void *comp)
 {
     bondp_comp_t *bdp_comp = CONTAINER_OF_FIELD(comp, bondp_comp_t, base);
     urma_status_t ret = URMA_SUCCESS;
-    if (!is_valid_bondp_comp(bdp_comp)) {
-        URMA_LOG_ERR("Invalid param\n");
-        return URMA_EINVAL;
+ 
+    bdp_vjfce_info_table_close_fd(bdp_comp);
+    bdp_vjfce_info_table_destroy((bondp_hash_table_t *)bdp_comp->comp_ctx);
+    for (int i = 0; i < bdp_comp->dev_num; i++) {
+        if (bdp_comp->p_jfce[i] == NULL) {
+            continue;
+        }
+        ret = urma_delete_jfce(bdp_comp->p_jfce[i]);
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to delete p_jfce, ret = %d.\n", ret);
+        }
     }
+
+    free(bdp_comp->comp_ctx);
+    bdp_comp->comp_ctx = NULL;
+    return URMA_SUCCESS;
+}
+
+static urma_status_t bondp_delete_comp_default(void *comp, bondp_comp_type_t type)
+{
+    bondp_comp_t *bdp_comp = CONTAINER_OF_FIELD(comp, bondp_comp_t, base);
+    urma_status_t ret = URMA_SUCCESS;
     for (int i = 0; i < bdp_comp->dev_num; ++i) {
+        // special for BONDP_COMP_SEGMENT
         if (type == BONDP_COMP_SEGMENT && bdp_comp->p_tseg[i]) {
             bdp_comp->p_tseg[i]->handle = bdp_comp->p_orig_handle[i];
         }
@@ -640,5 +664,28 @@ urma_status_t bondp_delete_comp(void *comp, bondp_comp_type_t type)
     }
 
     free(bdp_comp);
+    return ret;
+}
+
+urma_status_t bondp_delete_comp(void *comp, bondp_comp_type_t type)
+{
+    urma_status_t ret = URMA_SUCCESS;
+    switch (type) {
+        case BONDP_COMP_JFCE:
+            ret = bondp_delete_comp_jfce(comp);
+            break;
+        case BONDP_COMP_JFC:
+        case BONDP_COMP_JETTY:
+        case BONDP_COMP_JFR:
+        case BONDP_COMP_JFS:
+        case BONDP_COMP_SEGMENT:
+            ret = bondp_delete_comp_default(comp, type);
+            break;
+        default:
+            if (!is_valid_bondp_comp(comp)) {
+                URMA_LOG_ERR("Invalid param\n");
+                return URMA_EINVAL;
+            }
+    }
     return ret;
 }
