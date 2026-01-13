@@ -30,6 +30,13 @@ make install # 可选项，如果需要安装URPC则执行此命令
 cd src/urpc/
 bazel build //umq:libumq_so # so将在/src/urpc/bazel-bin/目录下生成
 ```
+#### 编译模式
+* bazel编译默认会使用opt模式进行编译，即包括`O2`优化、剥离符号表(`-Wl,-S`)等操作。
+* `--config=release`，release版本是在默认优化上进行深度符号表剥离(`-Wl,-s`)。
+* `--config=debug`, debug版本将进行`O0`优化同时完全保留符号表信息。
+
+#### openssl依赖
+* bazel默认（或者指定`--//umq:openssl_mode=bazel`）会使用`.bazelrc`内定义的openssl版本（静态编译）。如果用户希望使用系统内的so，可以加上``--//umq:openssl_mode=system`来指明使用系统版本。
 
 # 3. 安装使用
 - rpm -ivh /root/rpmbuild/RPMS/aarch64/umdk-urpc-*.rpm

@@ -30,6 +30,14 @@ cd src/urpc/
 bazel build //umq:libumq_so # files will be generated in the /src/urpc/bazel-bin/
 ```
 
+#### Build Modes
+* By default, opt mode will be used for compilation, which includes optimizations such as `O2` and stripping of symbol tables(`-Wl,-S`).
+* `--config=release`, the release version fully strips the symbol table(`-Wl, -s`) on top of the default optimizations.
+* `--config=debug`, the debug version performs `O0` optimization and fully preserving the symbol table information.
+
+#### Openssl Dependency
+* By default(or when `--//umq:openssl_mode=bazel` is specified), openssl will use the specified version defined in `.bazelrc`. If user wants to use openssl directly from system, add `--//umq:openssl_mode=system`.
+
 # 3. Usage Guide
 - rpm -ivh /root/rpmbuild/RPMS/aarch64/umdk-urpc-*.rpm
 - urpc_framework_example -i SERVER_IP -d DEV_NAME -T 1 -e 0 --server --eid EID -L --assign_mode 2 -R

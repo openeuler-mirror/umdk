@@ -23,7 +23,7 @@ cc_library(
         "//umq:umq_inner",
         "//umq:msg_ring",
         "//umq:util_id_generator",
-        "//umq/qbuf:umq_qbuf_lib",
+        "//umq/qbuf:umq_buf_lib",
     ],
 )
 
@@ -32,6 +32,6 @@ cc_shared_library(
     deps = [
         ":umq_ipc_lib",
     ],
-    dynamic_deps = ["//umq/qbuf:umq_qbuf"],
+    dynamic_deps = ["//umq/qbuf:umq_buf"],
     visibility = ["//visibility:public"],
 )
