@@ -83,6 +83,8 @@ ext1 = NpuExtension(
              "./moe_dispatch_shmem.cpp",
              "./moe_combine_shmem.cpp",
              "./pybind.cpp",
+             "./pytorch_extension/NPUBridge.cpp",
+             "./pytorch_extension/NPUStorageImpl.cpp",
             ],
     
     extra_compile_args = compile_args,
