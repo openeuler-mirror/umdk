@@ -17,6 +17,30 @@
 extern "C" {
 #endif
 
+typedef union umq_ub_fc_info {
+    uint64_t value;
+    struct {
+        uint64_t local_window : 16;
+        uint64_t local_rx_depth : 2;
+        uint64_t local_rsvd0 : 6;
+        uint64_t local_rsvd1 : 8;
+        uint64_t remote_window : 16;
+        uint64_t remote_rx_depth : 2;
+        uint64_t remote_rsvd0 : 6;
+        uint64_t remote_rsvd1 : 8;
+    } fc;
+} umq_ub_fc_info_t;
+
+typedef union umq_ub_fc_user_ctx {
+    uint64_t value;
+    struct {
+        uint64_t type : 5;
+        uint64_t notify : 16;
+        uint64_t rsvd0 : 11;
+        uint64_t rsvd1 : 32;
+    } operator;
+} umq_ub_fc_user_ctx_t;
+
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *info);
