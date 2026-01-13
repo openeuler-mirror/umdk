@@ -74,9 +74,9 @@ public:
         MOCKER(urma_create_notifier).stubs().will(returnValue(&notifier));
         MOCKER(urma_delete_notifier).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_get_eid_list)
-        .stubs()
-        .with(any(), outBoundP((uint32_t *)&eid_num, sizeof(eid_num)))
-        .will(returnValue(&eid_info));
+            .stubs()
+            .with(mockcpp::any(), outBoundP((uint32_t *)&eid_num, sizeof(eid_num)))
+            .will(returnValue(&eid_info));
 
         static urma_jfr_t jfr = {0};
         static urma_jfc_t jfc = {0};
