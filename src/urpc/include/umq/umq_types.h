@@ -252,7 +252,8 @@ struct umq_buf {
     uint32_t data_size;                   // size of umq buf data
     uint16_t headroom_size;               // size of umq buf headroom
     uint16_t first_fragment : 1;          // first piece of each batch buf
-    uint16_t rsvd1 : 15;
+    uint16_t alloc_state : 1;             // 0: free; 1: allocated
+    uint16_t rsvd1 : 14;
 
     uint32_t token_id : 20;               // token_id for reference operation
     uint32_t rsvd2 : 4;
