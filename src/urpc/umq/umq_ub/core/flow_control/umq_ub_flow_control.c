@@ -610,6 +610,7 @@ void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
         .tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]};
     urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
+        queue->interrupt_ctx.tx_fc_interrupt = true;
         fc->remote_get = true;
         return;
     }
