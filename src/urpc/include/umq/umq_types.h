@@ -158,6 +158,10 @@ typedef struct umq_flow_control_cfg {
     uint16_t initial_window;
     // notify when rx >= notify_interval, [1, rx_depth], otherwise use rx_depth / 16 by default
     uint16_t notify_interval;
+    // number of credits allocated per request for each umq
+ 	uint16_t credits_per_request;
+ 	// initial available credit for each umq
+ 	uint16_t initial_credit;
     // use atomic variables as flow control window
     bool use_atomic_window;
 } umq_flow_control_cfg_t;
