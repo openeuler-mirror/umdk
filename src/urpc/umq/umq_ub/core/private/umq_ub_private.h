@@ -63,10 +63,10 @@ typedef enum umq_imm_protocol_type {
 } umq_imm_protocol_type_t;
 
 typedef enum ub_queue_jetty_index {
- 	UB_QUEUE_JETTY_IO,
- 	UB_QUEUE_JETTY_FLOW_CONTROL, // flow control jetty only send imm without data
+    UB_QUEUE_JETTY_IO,
+    UB_QUEUE_JETTY_FLOW_CONTROL, // flow control jetty only send imm without data
 
- 	UB_QUEUE_JETTY_NUM,
+    UB_QUEUE_JETTY_NUM,
 } ub_queue_jetty_index_t;
 
 typedef struct umq_imm_head {
@@ -272,7 +272,7 @@ typedef struct ub_credit_pool {
 typedef struct jfr_ctx {
     urma_jfr_t *jfr;
     urma_jfc_t *jfr_jfc;
-    urma_jfce_t *jfr_jfce;
+    urma_jfce_t *jfr_jfce; // io and flow control jetty share same jfce
     volatile uint32_t ref_cnt;
     rx_buf_ctx_list_t rx_buf_ctx_list;
     ub_credit_pool_t credit;
@@ -394,7 +394,7 @@ void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mem
 int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq);
 void umq_ub_jfr_ctx_put(ub_queue_t *queue);
 int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
-                          ub_queue_t *share_queue);
+                       ub_queue_t *share_queue);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 
@@ -435,6 +435,9 @@ int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint
 int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint64_t imm_value);
 int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm);
 int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_wr_ptr, uint32_t remain_tx);
+
+int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
+int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 
 int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue);
 void umq_ub_close_rx_notfiy_fd(ub_queue_t *queue);

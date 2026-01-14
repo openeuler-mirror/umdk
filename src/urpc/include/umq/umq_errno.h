@@ -52,6 +52,10 @@ typedef enum umq_buf_status {
     UMQ_BUF_FLOW_CONTROL_UPDATE = 128,  /* Umq flow control window is updated, this is not error case */
     UMQ_MEMPOOL_UPDATE_SUCCESS,
     UMQ_MEMPOOL_UPDATE_FAILED,
+
+    // fake buf
+    UMQ_FAKE_BUF_FC_UPDATE = 192,       /* Umq fake flow control window is updated, this is not error case */
+    UMQ_FAKE_BUF_MAX = 256,
 } umq_buf_status_t;
 
 #ifdef __cplusplus
