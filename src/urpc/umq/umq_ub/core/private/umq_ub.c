@@ -55,6 +55,18 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_EINVAL;
     }
 
+    if (queue->dev_ctx->transport_mode != info->trans_mode) {
+        UMQ_VLOG_ERR("transport_mode misatch, local is %u but remote %u\n",
+            queue->dev_ctx->transport_mode, info->trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (queue->dev_ctx->tp_type != info->tp_type) {
+        UMQ_VLOG_ERR("tp_type misatch, local is %u but remote %u\n",
+            queue->dev_ctx->tp_type, info->tp_type);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!umq_ub_bind_feature_check(queue->dev_ctx->feature, info->feature)) {
         UMQ_VLOG_ERR("feature misatch, local is %u but remote %u\n", queue->dev_ctx->feature, info->feature);
         return -UMQ_ERR_EINVAL;
@@ -268,7 +280,8 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
                             .flag.bs.token_policy =
                                 token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0),
                             .flag.bs.order_type = info->order_type,
-                            .flag.bs.share_tp = 1};
+                            .flag.bs.share_tp = 1,
+                            .tp_type = info->tp_type};
 
     urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &info->token[i]);
     if (tjetty == NULL) {
@@ -643,7 +656,7 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
     urma_jetty_cfg_t jetty_cfg = {
         .jfs_cfg = {
             .flag.bs.order_type = dev_ctx->order_type,
-            .trans_mode = URMA_TM_RC,
+            .trans_mode = dev_ctx->transport_mode,
             .depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->tx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
             .priority = queue->priority,
             .max_sge = queue->max_tx_sge,
@@ -853,7 +866,7 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
     // create jfr
     urma_jfr_cfg_t jfr_cfg = {
         .flag.bs.token_policy = token_policy_get(enable_token),
-        .trans_mode = URMA_TM_RC,
+        .trans_mode = dev_ctx->transport_mode,
         .depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->rx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
         .max_sge = queue->max_rx_sge,
         .min_rnr_timer = queue->min_rnr_timer,
@@ -1796,8 +1809,7 @@ static int umq_report_incomplete_and_merge_rx(
     ub_queue_t *queue, int max_rx_ctx, umq_buf_t **buf, umq_buf_t **previous_last)
 {
     int buf_cnt = 0;
-    if (!queue->tx_flush_done || queue->rx_flush_done ||
-        queue->state != QUEUE_STATE_ERR || queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
+    if (!queue->tx_flush_done || queue->rx_flush_done || queue->state != QUEUE_STATE_ERR) {
         return buf_cnt;
     }
     rx_buf_ctx_t *rx_buf_ctx;

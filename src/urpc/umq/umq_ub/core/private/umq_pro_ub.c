@@ -573,8 +573,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
 static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_buf_t **buf)
 {
     int buf_cnt = 0;
-    if (!queue->tx_flush_done || queue->rx_flush_done ||
-        queue->state != QUEUE_STATE_ERR || queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_cfg.trans_mode != URMA_TM_RC) {
+    if (!queue->tx_flush_done || queue->rx_flush_done || queue->state != QUEUE_STATE_ERR) {
         return buf_cnt;
     }
 
