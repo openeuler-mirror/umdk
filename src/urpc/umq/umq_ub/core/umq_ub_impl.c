@@ -459,6 +459,17 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
             goto ROLLBACK_UB_CTX;
         }
 
+        g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table = (volatile uint64_t *)calloc(
+            g_ub_ctx[g_ub_ctx_count].dev_attr.dev_cap.max_jetty, sizeof(uint64_t));
+        if (g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table == NULL) {
+            UMQ_VLOG_ERR("calloc rx_consumed_jetty_table failed\n");
+            umq_ub_delete_urma_ctx(&g_ub_ctx[g_ub_ctx_count]);
+            umq_ub_ctx_imported_info_destroy(&g_ub_ctx[g_ub_ctx_count]);
+            free(g_ub_ctx[g_ub_ctx_count].umq_ctx_jetty_table);
+            g_ub_ctx[g_ub_ctx_count].umq_ctx_jetty_table = NULL;
+            goto ROLLBACK_UB_CTX;
+        }
+
         if (total_io_buf_size == 0) {
             total_io_buf_size = info->mem_cfg.total_size;
         }
@@ -503,6 +514,8 @@ ROLLBACK_UB_CTX:
         umq_ub_delete_urma_ctx(&g_ub_ctx[i]);
         free(g_ub_ctx[i].umq_ctx_jetty_table);
         g_ub_ctx[i].umq_ctx_jetty_table = NULL;
+        free((void*)g_ub_ctx[i].rx_consumed_jetty_table);
+        g_ub_ctx[i].rx_consumed_jetty_table = NULL;
     }
     g_ub_ctx_count = 0;
     (void)urma_uninit();
@@ -592,20 +605,19 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         queue->share_rq_umqh = option->share_rq_umqh;
     }
 
-    if (umq_ub_flow_control_init(&queue->flow_control, queue, dev_ctx->feature, &dev_ctx->flow_control) !=
-        UMQ_SUCCESS) {
+    if (umq_ub_jfr_ctx_get(queue, dev_ctx, option, share_rq) != UMQ_SUCCESS) {
         goto FREE_QUEUE;
     }
 
-    if (umq_ub_jfr_ctx_get(queue, dev_ctx, option, share_rq) != UMQ_SUCCESS) {
-        goto UNINIT_FLOW_CONTROL;
+    if (umq_ub_flow_control_init(&queue->flow_control, queue, dev_ctx->feature, &dev_ctx->flow_control) !=
+        UMQ_SUCCESS) {
+        goto DESTROY_JFR_CTX;
     }
-
     if (queue->mode == UMQ_MODE_INTERRUPT) {
         queue->jfs_jfce = urma_create_jfce(dev_ctx->urma_ctx);
         if (queue->jfs_jfce == NULL) {
             UMQ_VLOG_ERR("create jfs_jfce failed\n");
-            goto DESTROY_JFR_CTX;
+            goto UNINIT_FLOW_CONTROL;
         }
     }
 
@@ -637,6 +649,8 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
 
     if (queue->flow_control.enabled) {
         // fc jetty
+        umq_ub_rx_consumed_exchange(queue->dev_ctx->io_lock_free,
+ 	        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], 0);
         queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL] =
             umq_ub_jfr_ctx_create(queue, dev_ctx, UB_QUEUE_JETTY_FLOW_CONTROL);
         if (queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
@@ -659,6 +673,8 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         if ((option->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
             dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id] = option->umq_ctx;
         }
+        umq_ub_rx_consumed_exchange(queue->dev_ctx->io_lock_free,
+            &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id], 0);
     }
 
     if (queue->mode == UMQ_MODE_INTERRUPT) {
@@ -706,10 +722,10 @@ DELETE_JFCE:
     if (queue->mode == UMQ_MODE_INTERRUPT) {
         (void)urma_delete_jfce(queue->jfs_jfce);
     }
-DESTROY_JFR_CTX:
-    umq_ub_jfr_ctx_put(queue);
 UNINIT_FLOW_CONTROL:
     umq_ub_flow_control_uninit(&queue->flow_control);
+DESTROY_JFR_CTX:
+    umq_ub_jfr_ctx_put(queue);
 FREE_QUEUE:
     umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
     free(queue);
@@ -740,6 +756,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
 
     if (queue->flow_control.enabled) {
+        umq_ub_credit_clean_up(queue);
         UMQ_VLOG_INFO("delete fc jetty, eid: " EID_FMT ", jetty_id: %u\n",
                       EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
                       queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id);
@@ -809,7 +826,7 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     }
     urma_jfc_t *jfc[UB_QUEUE_JETTY_NUM];
     int cnt = 0;
-    
+
     if (option->direction == UMQ_IO_RX) {
         cnt = umq_ub_wait_rx_interrupt(queue, time_out, jfc);
     } else {

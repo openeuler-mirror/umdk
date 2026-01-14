@@ -260,7 +260,6 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         urma_wr_ptr->tjetty = tjetty;
         opcode_consume_rqe = (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM ||
                               opcode == UMQ_OPC_WRITE_IMM);
-        umq_ub_fill_tx_imm(&queue->flow_control, urma_wr_ptr, buf_pro);
         urma_wr_ptr++;
         (urma_wr_ptr - 1)->next = urma_wr_ptr;
 
@@ -278,6 +277,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     if (max_tx == 0) {
         *bad_qbuf = qbuf;
         ret = -UMQ_ERR_EAGAIN;
+        umq_ub_shared_credit_req_send(queue);
         goto ERROR;
     } else if (max_tx < wr_index) {
         urma_wr[max_tx - 1].next = NULL;
@@ -303,7 +303,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
     if (max_tx < wr_index) {
         *bad_qbuf = (umq_buf_t *)(uintptr_t)urma_wr[max_tx].user_ctx;
-        umq_ub_recover_tx_imm(queue, urma_wr, wr_index, *bad_qbuf);
+        umq_ub_shared_credit_req_send(queue);
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
         return -UMQ_ERR_EAGAIN;
     }
@@ -318,7 +318,6 @@ RECOVER_WINDOW:
     }
 
 ERROR:
-    umq_ub_recover_tx_imm(queue, urma_wr, wr_index, *bad_qbuf);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     return ret;
 }
@@ -441,13 +440,12 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         } else {
             *bad_qbuf = qbuf;
         }
-        umq_ub_rq_posted_notifier_update(&queue->flow_control, queue,
-                                         umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
+        umq_ub_shared_credit_recharge(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
         return -UMQ_ERR_EAGAIN;
     }
-    umq_ub_rq_posted_notifier_update(&queue->flow_control, queue, wr_index);
+    umq_ub_shared_credit_recharge(queue, wr_index);
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp, queue->dev_ctx->feature);
     return UMQ_SUCCESS;
 
@@ -493,15 +491,6 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     }
 
     switch (imm.bs.type) {
-        case IMM_TYPE_FLOW_CONTROL:
-            umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
-            *qbuf_status = UMQ_BUF_FLOW_CONTROL_UPDATE;
-            if (imm.flow_control.in_user_buf == UMQ_UB_IMM_IN_USER_BUF) {
-                buf_pro->opcode = UMQ_OPC_SEND;
-                buf_pro->imm_data = 0;
-                return UMQ_SUCCESS;
-            }
-            break;
         case IMM_TYPE_MEM:
             if (imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT) {
                 if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)queue, rx_buf, 0) != UMQ_SUCCESS) {
@@ -621,17 +610,27 @@ static inline void umq_perf_record_write_poll(umq_perf_record_type_t type, uint6
 
 static int umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_buf_t **buf)
 {
-    switch (imm.bs.type) {
-        case IMM_TYPE_FLOW_CONTROL:
-            umq_ub_window_inc(&queue->flow_control, imm.flow_control.window);
-            umq_buf_t *qbuf = umq_buf_alloc(0, 1, queue->umqh, NULL);
-            qbuf->status = UMQ_FAKE_BUF_FC_UPDATE;
-            *buf = qbuf;
-            return 1;
+    if (imm.bs.type != IMM_TYPE_FLOW_CONTROL) {
+        return 0;
+    }
+    umq_buf_t *fc_buf = NULL;
+    int ret = 0;
+    switch (imm.flow_control.sub_type) {
+        case IMM_TYPE_FC_CREDIT_REQ:
+            umq_ub_shared_credit_req_handle(queue, &imm);
+            break;
+        case IMM_TYPE_FC_CREDIT_REP:
+            fc_buf = umq_buf_alloc(64, 1, 0, NULL);
+            umq_ub_shared_credit_resp_handle(queue, &imm);
+            fc_buf->io_direction = UMQ_IO_RX;
+            fc_buf->status = UMQ_FAKE_BUF_FC_UPDATE;
+            buf[0] = fc_buf;
+            ret = 1;
+            break;
         default:
             break;
     }
-    return 0;
+    return ret;
 }
 
 int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
@@ -722,6 +721,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     umq_buf_status_t qbuf_status;
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
+        umq_ub_rx_consumed_inc(queue->dev_ctx->io_lock_free, &queue->dev_ctx->rx_consumed_jetty_table[cr->local_id], 1);
         ret = process_rx_msg(&cr[i], buf[qbuf_cnt], queue, &qbuf_status);
         if (ret == UMQ_CONTINUE_FLAG) {
             continue;
@@ -761,16 +761,6 @@ static void umq_ub_on_tx_done(ub_flow_control_t *fc, umq_buf_t *buf, bool failed
         return;
     }
 
-    umq_ub_imm_t imm = {.value = buf_pro->imm_data};
-    if (imm.bs.umq_private == 0 || imm.bs.type != IMM_TYPE_FLOW_CONTROL) {
-        return;
-    }
-
-    if (failed) {
-        umq_ub_rq_posted_notifier_inc(fc, imm.flow_control.window);
-    }
-    buf_pro->opcode = UMQ_OPC_SEND;
-    buf_pro->imm_data = 0;
 }
 
 static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
@@ -823,6 +813,52 @@ static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_cou
     return cnt;
 }
 
+static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
+{
+    uint32_t type = obj->operator.type;
+    umq_ub_fc_info_t *fc_info = NULL;
+    uint16_t remote_win;
+    switch (type) {
+        case IMM_TYPE_FC_CREDIT_INIT:
+            // window read ok
+            fc_info = (umq_ub_fc_info_t *)(uintptr_t)(umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL));
+            remote_win = fc_info->fc.remote_window;
+            if (fc_info->fc.remote_rx_depth != UMQ_UB_FLOW_CONTORL_JETTY_DEPTH) {
+                queue->flow_control.remote_get = false;
+                umq_ub_window_read(&queue->flow_control, queue);
+            } else {
+                UMQ_VLOG_DEBUG("umq ub flow control update initial window %d\n", remote_win);
+                umq_ub_window_inc(&queue->flow_control, remote_win);
+                queue->state = QUEUE_STATE_READY;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
+{
+    uint32_t type = obj->operator.type;
+    ub_flow_control_t *fc = NULL;
+    uint16_t notify;
+
+    switch (type) {
+        case IMM_TYPE_FC_CREDIT_INIT:
+            queue->flow_control.remote_get = false;
+            UMQ_LIMIT_VLOG_ERR("get remote window post read failed\n");
+            break;
+        case IMM_TYPE_FC_CREDIT_REP:
+            notify = obj->operator.notify;
+            fc = &queue->flow_control;
+            umq_ub_rq_posted_notifier_inc(fc, notify);
+            (void)fc->ops.local_rx_allocted_dec(fc, notify);
+            break;
+        default:
+            break;
+    }
+}
+
 int umq_ub_poll_fc_tx(ub_queue_t *queue)
 {
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
@@ -841,12 +877,16 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue)
     }
 
     for (int i = 0; i < tx_cr_cnt; i++) {
+        umq_ub_fc_user_ctx_t  obj = {.value = cr[i].user_ctx};
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE || cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
                 continue;
             }
+            umq_ub_fc_process_tx_error(queue, &obj);
+            continue;
         }
+        umq_ub_fc_process_tx(queue, &obj);
     }
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     return UMQ_SUCCESS;
@@ -888,35 +928,9 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
             if (cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
                 continue;
             }
-
-            // recover flow control window and rx_posted
-            if (cr[i].user_ctx == 0) {
-                queue->flow_control.remote_get = false;
-                UMQ_LIMIT_VLOG_ERR("get remote window post read failed\n");
-                continue;
-            } else if (cr[i].user_ctx <= UINT16_MAX) {
-                umq_ub_window_inc(&queue->flow_control, 1);
-                umq_ub_rq_posted_notifier_inc(&queue->flow_control, (uint16_t)cr[i].user_ctx);
-                continue;
-            }
-        }
-
-        if (cr[i].user_ctx == 0) {
-            // window read ok
-            uint16_t *remote_win =
-                (uint16_t *)(uintptr_t)(umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL) + sizeof(uint16_t));
-            if (*remote_win == 0) {
-                queue->flow_control.remote_get = false;
-                umq_ub_window_read(&queue->flow_control, queue);
-            } else {
-                UMQ_VLOG_DEBUG("umq ub flow control update initial window %d\n", *remote_win);
-                umq_ub_window_inc(&queue->flow_control, *remote_win);
-                queue->state = QUEUE_STATE_READY;
-            }
-            continue;
-        } else if (cr[i].user_ctx <= UINT16_MAX) {
             continue;
         }
+
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
         buf[qbuf_cnt]->io_direction = UMQ_IO_TX;
         buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;

@@ -147,6 +147,8 @@ typedef struct ub_flow_control {
     volatile uint16_t stats_u16[FC_COUNTER_MAX_U16];
     uint16_t initial_window;
     uint16_t notify_interval;
+    uint16_t credits_per_request;
+    uint16_t initial_credit;
     uint16_t local_tx_depth;
     uint16_t local_rx_depth;
     uint16_t remote_tx_depth;
