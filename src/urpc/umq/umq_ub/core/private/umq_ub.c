@@ -337,17 +337,18 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         goto RESET_BIND_CTX;
     }
 
+    queue->imported_tseg_list = queue->dev_ctx->remote_imported_info->imported_tseg_list[ctx->remote_eid_id];
+    uint32_t max_msg_size = queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
+    queue->remote_rx_buf_size = (max_msg_size > info->rx_buf_size) ? info->rx_buf_size : max_msg_size;
     if (queue->flow_control.enabled) {
         for (uint32_t i = 0; i < UMQ_UB_FLOW_CONTORL_JETTY_DEPTH; i++) {
             if (umq_ub_fill_fc_rx_buf(queue) != UMQ_SUCCESS) {
                 goto PUT_EID_ID;
             }
         }
+        umq_ub_default_credit_allocate(queue, &queue->flow_control);
     }
 
-    queue->imported_tseg_list = queue->dev_ctx->remote_imported_info->imported_tseg_list[ctx->remote_eid_id];
-    uint32_t max_msg_size = queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
-    queue->remote_rx_buf_size = (max_msg_size > info->rx_buf_size) ? info->rx_buf_size : max_msg_size;
     UMQ_VLOG_INFO("bind jetty success, local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
                   "remote jetty_id: %u\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
                   queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
@@ -838,7 +839,6 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
             UMQ_VLOG_ERR("create jfr_jfce failed\n");
             goto FREE_JFR_CTX;
         }
-        
     }
     // create jfr_jfc
     urma_jfc_cfg_t jfr_jfc_cfg = {
@@ -2267,7 +2267,7 @@ int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue)
             goto REMOVE_IO_JFR_JFCE;
         }
     }
-    
+
     queue->rx_notify_fd = epoll_fd;
     return UMQ_SUCCESS;
 
