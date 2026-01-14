@@ -144,7 +144,8 @@ int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_i
     umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
     info->is_binded = queue->bind_ctx != NULL ? true : false;
     info->umq_trans_mode = queue->dev_ctx->trans_info.trans_mode;
-    info->trans_mode = URMA_TM_RC;
+    info->trans_mode = queue->dev_ctx->transport_mode;
+    info->tp_type = queue->dev_ctx->tp_type;
     info->order_type = queue->dev_ctx->order_type;
     info->jetty_id[UB_QUEUE_JETTY_IO] = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id;
     info->type = URMA_JETTY;
@@ -405,6 +406,34 @@ static int umq_find_ub_device(umq_trans_info_t *info, umq_ub_ctx_t *ub_ctx)
     return UMQ_SUCCESS;
 }
 
+static urma_transport_mode_t urma_trans_mode_get(umq_transport_mode_t transport_mode)
+{
+    switch (transport_mode) {
+        case UMQ_TM_RC:
+            return URMA_TM_RC;
+        case UMQ_TM_RM:
+            return URMA_TM_RM;
+        case UMQ_TM_UM:
+            return URMA_TM_UM;
+        default:
+            return URMA_TM_RC;
+    };
+}
+
+static urma_tp_type_t urma_tp_type_get(umq_tp_type_t tp_type)
+{
+    switch (tp_type) {
+        case UMQ_TP_TYPE_RTP:
+            return URMA_RTP;
+        case UMQ_TP_TYPE_CTP:
+            return URMA_CTP;
+        case UMQ_TP_TYPE_UTP:
+            return URMA_UTP;
+        default:
+            return URMA_RTP;
+    };
+}
+
 uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 {
     if (g_ub_ctx_count > 0) {
@@ -466,6 +495,8 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
         g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
         g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
+        g_ub_ctx[g_ub_ctx_count].transport_mode = urma_trans_mode_get(cfg->transport_mode);
+        g_ub_ctx[g_ub_ctx_count].tp_type = urma_tp_type_get(cfg->tp_type);
         g_ub_ctx[g_ub_ctx_count].order_type = URMA_DEF_ORDER;
         g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
         ++g_ub_ctx_count;

@@ -76,6 +76,20 @@ typedef enum umq_trans_mode {
     UMQ_TRANS_MODE_MAX,
 } umq_trans_mode_t;
 
+typedef enum umq_transport_mode {
+    UMQ_TM_RC = 0,              /* Reliable connection */
+    UMQ_TM_RM,                  /* Reliable message */
+    UMQ_TM_UM,                  /* Unreliable message */
+    UMQ_TM_MAX,
+} umq_transport_mode_t;
+
+typedef enum umq_tp_type {
+    UMQ_TP_TYPE_RTP = 0,
+    UMQ_TP_TYPE_CTP,
+    UMQ_TP_TYPE_UTP,
+    UMQ_TP_TYPE_MAX,
+} umq_tp_type_t;
+
 typedef enum umq_dev_assign_mode {
     UMQ_DEV_ASSIGN_MODE_IPV4,
     UMQ_DEV_ASSIGN_MODE_IPV6,
@@ -183,6 +197,8 @@ typedef struct umq_buf_block_cfg {
 
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
+    umq_transport_mode_t transport_mode;
+    umq_tp_type_t tp_type;
     uint32_t feature;               // feature flags
     uint16_t headroom_size;         // header size of umq buffer, [0, UMQ_HEADROOM_SIZE_LIMIT]
     bool io_lock_free;              // true: user should ensure thread safety when call io function

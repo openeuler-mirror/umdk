@@ -423,6 +423,16 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
+    if (cfg->transport_mode != UMQ_TM_RC) {
+        UMQ_VLOG_ERR("transport_mode[%u] is invalid\n", cfg->transport_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (cfg->tp_type != UMQ_TP_TYPE_RTP) {
+        UMQ_VLOG_ERR("tp_type[%u] is invalid\n", cfg->tp_type);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (cfg->headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
         UMQ_VLOG_ERR("headroom size %u exceeds the maximum value\n", cfg->headroom_size);
         return -UMQ_ERR_EINVAL;
@@ -703,7 +713,7 @@ umq_buf_t *umq_buf_break_and_free(umq_buf_t *qbuf)
         return NULL;
     }
     // break qbuf list for many batchs connected, only release the first batch.
-    umq_buf_t *next_batch_qbuf = qbuf->qbuf_next;
+    umq_buf_t *next_batch_qbuf = qbuf->qbuf_next; /* if request_size = 0, return qbuf->qbuf_next */
     umq_buf_t *tmp_buf = qbuf;
     uint32_t rest_data_size = tmp_buf->total_data_size;
     while (tmp_buf && rest_data_size > 0) {

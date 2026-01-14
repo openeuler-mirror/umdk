@@ -190,6 +190,8 @@ typedef struct umq_ub_ctx {
     uint64_t remote_notify_addr;
     uint64_t *umq_ctx_jetty_table;
     volatile uint64_t *rx_consumed_jetty_table;
+    urma_transport_mode_t transport_mode;
+    urma_tp_type_t tp_type;
 } umq_ub_ctx_t;
 
 typedef struct rx_buf_ctx {
@@ -207,6 +209,7 @@ typedef struct umq_ub_bind_info {
     bool is_binded;
     umq_trans_mode_t umq_trans_mode;
     urma_transport_mode_t trans_mode;
+    urma_tp_type_t tp_type;
     urma_jetty_grp_policy_t policy;
     urma_jetty_id_t jetty_id[UB_QUEUE_JETTY_NUM];
     urma_target_type_t type;
