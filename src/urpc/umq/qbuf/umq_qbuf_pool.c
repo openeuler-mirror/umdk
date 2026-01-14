@@ -15,8 +15,8 @@
 
 #include "urpc_thread_closure.h"
 
-#define QBUF_POOL_TLS_MAX (2048) // max count of thread local buffer storage
-#define QBUF_POOL_BATCH_CNT (512) // batch size when fetch from global or return to global
+#define QBUF_POOL_TLS_MAX (2048)     // max count of thread local buffer storage
+#define QBUF_POOL_BATCH_CNT (512)    // batch size when fetch from global or return to global
 
 typedef struct local_qbuf_pool {
     bool inited;
@@ -206,6 +206,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             buf->headroom_size = 0;
             buf->buf_data = g_qbuf_pool.data_buffer + i * blk_size;
             buf->mempool_id = 0;
+            buf->alloc_state = QBUF_ALLOC_STATE_FREE;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }
@@ -220,6 +221,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             head_buf->headroom_size = 0;
             head_buf->buf_data = NULL;
             head_buf->mempool_id = 0;
+            head_buf->alloc_state = QBUF_ALLOC_STATE_FREE;
             (void)memset(head_buf->qbuf_ext, 0, sizeof(head_buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_without_data, head_buf);
         }
@@ -245,6 +247,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             buf->headroom_size = 0;
             buf->buf_data = (char *)buf + sizeof(umq_buf_t);
             buf->mempool_id = 0;
+            buf->alloc_state = QBUF_ALLOC_STATE_FREE;
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }
