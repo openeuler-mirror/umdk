@@ -86,7 +86,7 @@ TEST_F(ProviderTest, test_one_eid_dev) {
     MOCKER(urma_free_eid_list).stubs().will(ignoreReturnValue());
     MOCKER(urma_get_eid_list)
         .stubs()
-        .with(any(), outBoundP((uint32_t *)&eid_num, sizeof(eid_num)))
+        .with(mockcpp::any(), outBoundP((uint32_t *)&eid_num, sizeof(eid_num)))
         .will(returnValue((urma_eid_info_t *)eid_info));
     MOCKER(urma_get_device_list)
         .stubs()
