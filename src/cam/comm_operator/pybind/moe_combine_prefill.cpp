@@ -108,6 +108,7 @@ public:
         int64_t rank,
         int64_t numRanks)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = MoeCombinePrefillImpl(x, topkIdx, topkWeights, srcIdx, sendHead, \
             groupEp, rank, numRanks);
         return result;
