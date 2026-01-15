@@ -43,7 +43,7 @@ typedef union umq_ub_fc_user_ctx {
 
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
-int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *info);
+int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
 void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue);
 void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t rx_posted);
 void umq_ub_fill_tx_imm(ub_flow_control_t *fc, urma_jfs_wr_t *urma_wr, umq_buf_pro_t *buf_pro);

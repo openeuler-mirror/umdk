@@ -35,7 +35,7 @@ extern "C" {
 #define ITER_MAX_WAIT_TIME_US           20000000
 
 #define URPC_PERFTEST_ACCEPT_WAIT_US    (10000)     // 10ms
-#define MAX_INFO_SIZE                   (256)
+#define MAX_INFO_SIZE                   (512)
 
 #define LOG_PRINT(fmt, ...) \
     (void)printf("%s|%s|%s|%d:" fmt "", __DATE__, __TIME__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
