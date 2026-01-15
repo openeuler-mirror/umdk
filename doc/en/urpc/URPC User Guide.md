@@ -29,6 +29,10 @@ Run the following command to generate the dynamic library files used by UMQ:
 cd src/urpc/
 bazel build //umq:libumq_so # files will be generated in the /src/urpc/bazel-bin/
 ```
+#### Note
+
+* Compile using blzmod (default mode or explicitly specify `--enable_bzlmod`). See `src/urpc/MODULE.bazel` for version dependencies.
+* UMQ compilation is also compatible with WORKSPACE-defined dependencies, i.e., disable blzmod compilation (explicitly specify `--noenable_bzlmod`). See `src/urpc/WORKSPACE` for version dependencies.
 
 #### Build Modes
 * By default, opt mode will be used for compilation, which includes optimizations such as `O2` and stripping of symbol tables(`-Wl,-S`).
