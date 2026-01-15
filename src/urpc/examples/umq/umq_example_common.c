@@ -50,12 +50,13 @@ static struct option g_long_options[] = {
     {"feature",            required_argument, NULL, 'f'},
     {"trans-mode",         required_argument, NULL, 'T'},
     {"eid-idx",            required_argument, NULL, 'E'},
-    {"sub-trans-mode",     required_argument, NULL, 'S'},
     /* Long options only */
     {"server",             no_argument,       NULL, 'r'},
     {"client",             no_argument,       NULL, 'l'},
     {"cna",                required_argument, NULL, 'C'},
     {"deid",               required_argument, NULL, 'D'},
+    {"transport-mode",     required_argument, NULL, 'M'},
+    {"tp-type",            required_argument, NULL, 'P'},
     {NULL,                 0,                 NULL,  0 }
 };
 
@@ -69,6 +70,8 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
     init_cfg->feature = cfg->feature;
     init_cfg->cna = cfg->cna;
     init_cfg->ubmm_eid = cfg->deid;
+    init_cfg->transport_mode = (umq_transport_mode_t)cfg->transport_mode;
+    init_cfg->tp_type = (umq_tp_type_t)cfg->tp_type;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
         goto FREE_CFG;
@@ -544,7 +547,7 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
         int c;
         unsigned long param;
 
-        c = getopt_long(argc, argv, "d:e:w:p:i:c:t:m:I:f:T:E:S:D:", g_long_options, NULL);
+        c = getopt_long(argc, argv, "d:e:w:p:i:c:t:m:I:f:T:E:D:M:P:", g_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -618,18 +621,25 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 param = strtoul(optarg, NULL, 0);
                 cfg->eid_idx = (uint16_t)param;
                 break;
-            case 'S':
-                param = strtoul(optarg, NULL, 0);
-                if (param < 0 || param >= UMQ_TM_MAX) {
-                    return -1;
-                }
-                cfg->sub_trans_mode = (int)param;
-                break;
             case 'C':
                 cfg->cna = (uint16_t)strtoul(optarg, NULL, 0);
                 break;
             case 'D':
                 cfg->deid = (uint32_t)strtoul(optarg, NULL, 0);
+                break;
+            case 'M':
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param < 0 || param >= TRANSPORT_MODE_MAX) {
+                    return -1;
+                }
+                cfg->transport_mode = param;
+                break;
+            case 'P':
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param < 0 || param >= TP_TYPE_MAX) {
+                    return -1;
+                }
+                cfg->tp_type = param;
                 break;
             default:
                 return -1;
