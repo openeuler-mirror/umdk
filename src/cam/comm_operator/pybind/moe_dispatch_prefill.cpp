@@ -233,6 +233,7 @@ public:
         int64_t rank,
         int64_t numRanks)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = MoeDispatchPrefillImpl(x, topkIdx, topkWeights, numTokensPerRank, \
             isTokenInRank, numTokensPerExpert, numWorstTokens, groupEp, rank, numRanks);
 

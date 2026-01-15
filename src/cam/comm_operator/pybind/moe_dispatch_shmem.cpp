@@ -237,6 +237,7 @@ public:
         int64_t expertTokenNumsType, \
         int64_t extInfo)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = MoeDispatchShmemImpl(x, expertIds, scales, xActiveMask, \
             epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
             sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo);

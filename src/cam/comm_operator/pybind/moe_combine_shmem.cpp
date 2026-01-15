@@ -207,6 +207,7 @@ public:
         int64_t outDtype, \
         int64_t groupListType)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = MoeCombineShmemImpl(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask, activationScale,
         weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
         sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode, extInfo, outDtype, groupListType);

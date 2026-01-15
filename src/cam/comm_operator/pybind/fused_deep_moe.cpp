@@ -170,6 +170,7 @@ public:
                             int64_t quantMode, \
                             int64_t globalBs)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = FusedDeepMoeImpl(x, expertIds, gmm1PermutedWeight, gmm1PermutedWeightScale, gmm2Weight, \
             gmm2WeightScale, expertScales, expertSmoothScales, xActiveMask, \
             groupEp, epRankSize, epRankId, moeExpertNum, sharedExpertNum, sharedExpertRankNum, quantMode, globalBs);

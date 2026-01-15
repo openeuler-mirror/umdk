@@ -81,6 +81,7 @@ public:
         int64_t numExperts,
         int64_t numRanks)
     {
+        at::AutoDispatchBelowADInplaceOrView guard;
         auto result = GetDispatchLayoutImpl(topkIdx, numExperts, numRanks);
 
         return {std::get<0>(result), std::get<1>(result), std::get<2>(result)};
