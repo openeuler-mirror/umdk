@@ -30,6 +30,10 @@ make install # 可选项，如果需要安装URPC则执行此命令
 cd src/urpc/
 bazel build //umq:libumq_so # so将在/src/urpc/bazel-bin/目录下生成
 ```
+#### 注意
+* 使用blzmod编译（默认模式或者显式指明`--enable_bzlmod`），版本依赖具体参考`src/urpc/MODULE.bazel`。
+* UMQ编译同时兼容WORKSPACE定义依赖项，即禁用blzmod编译（显式指明`--noenable_bzlmod`），版本依赖具体参考`src/urpc/WORKSPACE`。
+
 #### 编译模式
 * bazel编译默认会使用opt模式进行编译，即包括`O2`优化、剥离符号表(`-Wl,-S`)等操作。
 * `--config=release`，release版本是在默认优化上进行深度符号表剥离(`-Wl,-s`)。
