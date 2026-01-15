@@ -116,26 +116,39 @@ static int update_each_direct_dev_table_entry(topo_map_t *topo_map, bondp_topo_a
     return 0;
 }
 
+static inline bool is_empty_eid(urma_eid_t *eid)
+{
+    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
+}
+
 int update_direct_dev_table_entry(topo_map_t *topo_map,
     bondp_topo_link_t *local_map_idx, bondp_topo_link_t* target_map_idx)
 {
-    bondp_topo_agg_dev_t *topo_info = NULL;
-    int ret = 0;
+    bondp_topo_node_t *node_info = NULL;
+    for (uint32_t node_idx = 0; node_idx < MAX_NODE_NUM; ++node_idx) {
+        if (topo_map->topo_infos[node_idx].id == target_map_idx->peer_node) {
+            node_info = &topo_map->topo_infos[node_idx];
+            break;
+        }
+    }
+    if (node_info == NULL) {
+        URMA_LOG_ERR("Failed to find target node info in topo map %d\n", target_map_idx->peer_node);
+        return -1;
+    }
 
+    bondp_topo_agg_dev_t *topo_info = NULL;
     for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
-        topo_info = &topo_map->topo_infos[target_map_idx->peer_node].agg_devs[dev_idx];
-        ret = update_each_direct_dev_table_entry(topo_map, topo_info, local_map_idx, target_map_idx);
+        topo_info = &node_info->agg_devs[dev_idx];
+        if (is_empty_eid((urma_eid_t *)topo_info->agg_eid)) {
+            continue;
+        }
+        int ret = update_each_direct_dev_table_entry(topo_map, topo_info, local_map_idx, target_map_idx);
         if (ret) {
             URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
             return -1;
         }
     }
     return 0;
-}
-
-static inline bool is_empty_eid(urma_eid_t *eid)
-{
-    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
 }
 
 static inline bool is_eid_equal(urma_eid_t *eid1, urma_eid_t *eid2)
@@ -156,13 +169,33 @@ int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
                 continue;
             }
             bondp_topo_link_t local_map_idx = {
-                .peer_node = cur_node_idx,
+                .peer_node = cur_node->id,
                 .peer_iodie = plane_idx,
                 .peer_port = port_idx
             };
             ret = update_direct_dev_table_entry(topo_map, &local_map_idx, peer_map_idx);
             if (ret) {
                 URMA_LOG_ERR("Failed to update direct dev table entry %d\n", ret);
+                return -1;
+            }
+        }
+    }
+
+    bondp_topo_agg_dev_t *topo_dev = NULL;
+    for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
+        for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
+            topo_dev = &cur_node->agg_devs[dev_idx];
+            if (is_empty_eid((urma_eid_t *)topo_dev->agg_eid)) {
+                continue;
+            }
+            bondp_topo_link_t local_map_idx = {
+                .peer_node = cur_node->id,
+                .peer_iodie = plane_idx,
+                .peer_port = 0,
+            };
+            int ret = update_each_direct_dev_table_entry(topo_map, topo_dev, &local_map_idx, &local_map_idx);
+            if (ret) {
+                URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
                 return -1;
             }
         }
