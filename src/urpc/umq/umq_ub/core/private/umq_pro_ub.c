@@ -661,7 +661,7 @@ int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
         (void)umq_ub_fill_fc_rx_buf(queue);
     }
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-    return rx_cr_cnt;
+    return qbuf_cnt;
 }
 
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue)

@@ -775,6 +775,11 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
         return -UMQ_ERR_EBUSY;
     }
+
+    if (queue->mode == UMQ_MODE_INTERRUPT) {
+        umq_ub_close_rx_notfiy_fd(queue);
+    }
+
     if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0 &&
         __atomic_load_n(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->ref_cnt, __ATOMIC_RELAXED) != 1) {
         UMQ_VLOG_ERR("jfr_ctx ref_cnt not cleared, cannot destroy main queue\n");
@@ -986,7 +991,6 @@ int umq_ub_unbind_impl(uint64_t umqh)
         return -UMQ_ERR_ENODEV;
     }
 
-    umq_ub_close_rx_notfiy_fd(queue);
     if (queue->flow_control.enabled) {
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
         UMQ_VLOG_INFO("unbind jetty, local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
