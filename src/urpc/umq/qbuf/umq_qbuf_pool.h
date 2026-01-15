@@ -122,6 +122,8 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size);
  */
 umq_buf_t *umq_qbuf_data_to_head(void *data);
 
+uint64_t umq_buf_to_id(char *buf, bool shm, bool with_data);
+
 void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg);
 
 typedef struct local_block_pool {
@@ -313,24 +315,34 @@ static ALWAYS_INLINE void return_qbuf_to_global(global_block_pool_t *global_pool
     (void)pthread_mutex_unlock(&global_pool->global_mutex);
 }
 
-static ALWAYS_INLINE umq_buf_t *id_to_buf_with_data_split(char *addr, uint32_t id)
+static ALWAYS_INLINE umq_buf_t *id_to_buf_with_data_split(char *addr, uint64_t id)
 {
     return (umq_buf_t *)(addr + id * sizeof(umq_buf_t));
 }
 
-static ALWAYS_INLINE uint32_t buf_to_id_with_data_split(char *addr, char *buf)
+static ALWAYS_INLINE uint64_t buf_to_id_with_data_split(char *addr, char *buf)
 {
-    return (uint32_t)((buf - addr) / sizeof(umq_buf_t));
+    return (uint64_t)((buf - addr) / sizeof(umq_buf_t));
 }
 
-static ALWAYS_INLINE umq_buf_t *id_to_buf_without_data_split(char *addr, uint32_t id)
+static ALWAYS_INLINE umq_buf_t *id_to_buf_without_data_split(char *addr, uint64_t id)
 {
     return (umq_buf_t *)(addr + id * sizeof(umq_buf_t));
 }
 
-static ALWAYS_INLINE umq_buf_t *id_to_buf_combine(char *addr, uint32_t id, uint32_t block_size)
+static ALWAYS_INLINE uint64_t buf_to_id_without_data_split(char *addr, char *buf)
+{
+    return (uint64_t)((buf - addr) / sizeof(umq_buf_t));
+}
+
+static ALWAYS_INLINE umq_buf_t *id_to_buf_combine(char *addr, uint64_t id, uint32_t block_size)
 {
     return (umq_buf_t *)(addr + id * block_size);
+}
+
+static ALWAYS_INLINE uint64_t buf_to_id_combine(char *addr, char *buf, uint32_t block_size)
+{
+    return (uint64_t)((buf - addr) / block_size);
 }
 
 static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, uint32_t num, umq_buf_list_t *list)
