@@ -62,10 +62,18 @@ enum TRANS_MODE {
     TRANS_MODE_MAX,
 };
 
-enum UMQ_TRANS_MODE {
-    UMQ_TM_RC = 0,
-    UMQ_TM_RS,
-    UMQ_TM_MAX,
+enum TP_TYPE {
+    TP_TYPE_RTP = 0,
+    TP_TYPE_CTP,
+    TP_TYPE_UTP,
+    TP_TYPE_MAX,
+};
+
+enum TRANSPORT_MODE {
+    TRANSPORT_MODE_RC = 0,
+    TRANSPORT_MODE_RM,
+    TRANSPORT_MODE_UM,
+    TRANSPORT_MODE_MAX,
 };
 
 struct urpc_example_config {
@@ -83,8 +91,9 @@ struct urpc_example_config {
     enum TRANS_MODE trans_mode;
     int16_t eid_idx;
     uint16_t cna;
-    enum UMQ_TRANS_MODE sub_trans_mode;
     uint32_t deid;
+    enum TRANSPORT_MODE transport_mode;
+    enum TP_TYPE tp_type;
 };
 
 struct req_cb_arg {
