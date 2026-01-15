@@ -997,16 +997,16 @@ void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jfs_jfc[UB_QUEUE_JETTY_IO] == urma_event->element.jfc ||
-            local->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jfc) {
+        if (local->jfs_jfc[UB_QUEUE_JETTY_IO] == urma_event->element.jfc || (local->flow_control.enabled &&
+            local->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jfc)) {
             find = true;
             umq_event->event_type = UMQ_EVENT_QH_SQ_CQ_ERR;
             umq_event->element.umqh = local->umqh;
             break;
         }
 
-        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc == urma_event->element.jfc ||
-            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfc == urma_event->element.jfc) {
+        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc == urma_event->element.jfc || (local->flow_control.enabled &&
+            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfc == urma_event->element.jfc)) {
             find = true;
             umq_event->event_type = UMQ_EVENT_QH_RQ_CQ_ERR;
             /* sub umq submit main_qh to user */
@@ -1034,8 +1034,8 @@ void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr ||
-            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr) {
+        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr || (local->flow_control.enabled &&
+            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr)) {
             find = true;
             /* sub umq submit main_qh to user */
             if (local->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
@@ -1062,8 +1062,8 @@ void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_even
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr ||
-            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr) {
+        if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr || (local->flow_control.enabled &&
+            local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr)) {
             find = true;
             if (local->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
                 umq_event->element.umqh = local->share_rq_umqh;
@@ -1089,8 +1089,8 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty ||
-            local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty) {
+        if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control.enabled &&
+            local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
             find = true;
             umq_event->element.umqh = local->umqh;
             break;
@@ -1112,8 +1112,8 @@ void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_ev
 
     (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
-        if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty ||
-            local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty) {
+        if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control.enabled &&
+            local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
             find = true;
             umq_event->element.umqh = local->umqh;
             break;
@@ -2271,8 +2271,8 @@ int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue)
     }
 
     // insert fc jfr jfce
-    ev.data.fd = queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd;
     if (queue->flow_control.enabled && (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
+        ev.data.fd = queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd;
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd, &ev) != 0) {
             UMQ_VLOG_ERR("fail to add fd:%d to epoll fd:%d, errno %d\n",
                 queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd, epoll_fd, errno);
@@ -2322,7 +2322,8 @@ int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
         urma_jfce_t *jfr_jfce = NULL;
         if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd) {
             jfr_jfce = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce;
-        } else if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
+        } else if (queue->flow_control.enabled &&
+                   events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
             jfr_jfce = fc_jfr_jfce;
         }
         if (jfr_jfce == NULL) {
@@ -2338,7 +2339,8 @@ int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
         }
         if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd) {
             queue->interrupt_ctx.rx_io_interrupt = true;
-        } else if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
+        } else if (queue->flow_control.enabled && 
+                   events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
             queue->interrupt_ctx.rx_fc_interrupt = true;
         }
         uint32_t nevents = 1;
@@ -2368,7 +2370,7 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
         jfc[i] = temp_jfc[i];
         if (temp_jfc[i] == queue->jfs_jfc[UB_QUEUE_JETTY_IO]) {
             queue->interrupt_ctx.tx_io_interrupt = true;
-        } else if (temp_jfc[i] == queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL]) {
+        } else if (queue->flow_control.enabled && temp_jfc[i] == queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL]) {
             queue->interrupt_ctx.tx_fc_interrupt = true;
         }
     }
