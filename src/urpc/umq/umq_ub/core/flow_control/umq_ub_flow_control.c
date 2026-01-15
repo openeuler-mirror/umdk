@@ -604,21 +604,23 @@ void umq_ub_flow_control_uninit(ub_flow_control_t *fc)
     UMQ_VLOG_INFO("umq flow control uninit success\n");
 }
 
-int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *info)
+int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info)
 {
     if (!fc->enabled) {
         return UMQ_SUCCESS;
     }
 
-    if (info->win_buf_addr == 0 || info->win_buf_len < sizeof(uint16_t)) {
+    umq_ub_bind_fc_info_t *fc_info = (umq_ub_bind_fc_info_t *)(uintptr_t)bind_info->fc_info;
+    umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)bind_info->queue_info;
+    if (fc_info->win_buf_addr == 0 || fc_info->win_buf_len < sizeof(uint16_t)) {
         UMQ_VLOG_ERR("umq window init failed, remote flow control qbuf is empty\n");
         return UMQ_FAIL;
     }
 
-    fc->remote_win_buf_addr = info->win_buf_addr;
-    fc->remote_win_buf_len = info->win_buf_len;
-    fc->remote_rx_depth = info->rx_depth;
-    fc->remote_tx_depth = info->tx_depth;
+    fc->remote_win_buf_addr = fc_info->win_buf_addr;
+    fc->remote_win_buf_len = fc_info->win_buf_len;
+    fc->remote_rx_depth = queue_info->rx_depth;
+    fc->remote_tx_depth = queue_info->tx_depth;
     fc->remote_rx_window = 0; // remote window need to be updated after remote rx_posted
 
     return UMQ_SUCCESS;
