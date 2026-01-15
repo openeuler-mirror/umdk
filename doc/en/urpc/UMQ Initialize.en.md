@@ -13,7 +13,7 @@ The Unified Message Queue (UMQ) initialization interface is responsible for load
 - UMQ must be initialized first when the application starts
 - It only needs to be called once
 
-## Configurable Parameter Description
+## Configurable Parameter
 - buf mode: Selects the mode for using UMQ Buffer, supports two types: 'UMQ_BUF_SPLIT' and 'UMQ_BUF_COMBINE'
 - feature: Sets UMQ features
 - | Feature Type                        | Description                                      |
@@ -32,6 +32,9 @@ The Unified Message Queue (UMQ) initialization interface is responsible for load
 - cna: The CNA address of the UB controller for memory imported by the user, only valid for UMQ_TRANS_MODE_UBMM and UMQ_TRANS_MODE_UBMM_PLUS modes
 - ubmm_eid: The EID of the UB controller for memory imported by the user, only valid for UMQ_TRANS_MODE_UBMM and UMQ_TRANS_MODE_UBMM_PLUS modes
 - trans_info: Data plane transmission device information, used to initialize the corresponding device
+
+# Description
+1.When the UMQ_FEATURE_ENABLE_TOKEN_POLICY parameter is configured in UB mode, the UB token verification capability will be enabled. Consequently, umq_bind_info will carry UB token information. To ensure the secure transmission of this sensitive data, applications must exchange umq_bind_info over a secure channel, such as TLS.
 
 ## Device Initialization
 Devices are initialized according to the transmission device information.
