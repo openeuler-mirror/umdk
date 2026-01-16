@@ -28,15 +28,7 @@
 #include "tiling/hccl/hccl_tiling.h"
 #include "mc2_tiling_utils.h"
 
-#define USE_CANN82_PATH
-
-#ifdef USE_CANN83_PATH
-#include "platform/platform_infos_def.h"
-#elif defined(USE_CANN82_PATH)
 #include "experiment/platform/platform/platform_infos_def.h"
-#else
-#error "CANN version not supported or platform_infos_def.h not found. Check CANN_VERSION_MACRO definition."
-#endif
 
 using namespace ge;
 namespace {
@@ -221,7 +213,8 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
             "tokenPerExpertData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
             static_cast<ge::DataType>(tokenPerExpertData->GetDataType())),
         return false);
-    auto tmpData = context->GetInputDesc(INPUT_TMP_DATA_INDEX);  // 用于算子中临时存数的空间，与recvData相同大小
+    // for saving intermiadiate vars in kernel, same size as recvData
+    auto tmpData = context->GetInputDesc(INPUT_TMP_DATA_INDEX);
     OP_TILING_CHECK(tmpData == nullptr, OP_LOGE(nodeName, "tmpData is null."), return false);
     OP_TILING_CHECK(
         (tmpData->GetDataType() != ge::DT_BF16) && (tmpData->GetDataType() != ge::DT_FLOAT16) &&
