@@ -7,15 +7,14 @@
  * History: 2026-01-08 create moe_combine_prefill pybind extention file
  */
 
-#include <unistd.h>
-#include <hccl/hccl.h>
-#include <torch/extension.h>
-#include <torch/csrc/autograd/custom_function.h>
-#include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "pytorch_npu_helper.hpp"
+#include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "utils.h"
 #include <hccl/hccl.h>
 #include <iostream>
+#include <torch/csrc/autograd/custom_function.h>
+#include <torch/extension.h>
+#include <unistd.h>
 
 using torch::autograd::AutogradContext;
 using torch::autograd::Function;
@@ -23,117 +22,87 @@ using TensorVector = std::vector<at::Tensor>;
 using namespace at;
 using namespace std;
 
-at::Tensor MoeCombinePrefillImplNpu(
-    const at::Tensor& x,
-    const at::Tensor& topkIdx,
-    const at::Tensor& topkWeights,
-    const at::Tensor& srcIdx,
-    const at::Tensor& sendHead,
-    c10::string_view groupEp,
-    int64_t rank,
-    int64_t numRanks)
+namespace {
+const uint32_t DIM_TWO = 2;
+} // namespace
+
+at::Tensor MoeCombinePrefillImplNpu(const at::Tensor &x, const at::Tensor &topkIdx, const at::Tensor &topkWeights,
+                                    const at::Tensor &srcIdx, const at::Tensor &sendHead, c10::string_view groupEp,
+                                    int64_t rank, int64_t numRanks)
 {
     std::vector<char> groupEpChrs(groupEp.begin(), groupEp.end());
     groupEpChrs.push_back('\0');
-    char* groupEpPtr = &groupEpChrs[0];
+    char *groupEpPtr = &groupEpChrs[0];
 
-    TORCH_BIND_ASSERT(x.dim() == 2 and x.is_contiguous());
-    at::Tensor recvX = x;
-    at::Tensor topkIdxP = topkIdx;
+    TORCH_BIND_ASSERT(x.dim() == DIM_TWO and x.is_contiguous());
+
+    // Convert topkIdx to int32 if necessary
+    at::Tensor topkIdxInt32 = topkIdx.scalar_type() == at::kInt ? topkIdx : topkIdx.to(at::kInt);
     at::Tensor tokenSrcInfo = srcIdx;
     at::Tensor epSendCounts = sendHead;
     auto device = x.device();
 
-    int64_t hidden = static_cast<int>(recvX.size(1));
+    // Convert topkWeights to float if necessary
+    at::Tensor expertScales = topkWeights.scalar_type() == at::kFloat ? topkWeights : topkWeights.to(at::kFloat);
+
+    int64_t hidden = static_cast<int>(x.size(1));
     at::Tensor tpSendCounts = at::empty({1}, at::dtype(at::kInt).device(device));
     int64_t tpWorldSize = 1;
     int64_t tpRankId = 0;
     int64_t moeExpertNumber = sendHead.size(0);
-    int64_t globalBs = topkIdxP.size(0) * numRanks;
+    int64_t globalBs = topkIdxInt32.size(0) * numRanks;
+
+    // Create combineSendCostStatsOut tensor (optional output for performance monitoring)
+    at::Tensor combineSendCostStatsOut;
 
     // Combine data
-    auto combinedX = torch::empty({topkWeights.size(0), hidden}, x.options());
+    auto combinedX = torch::empty({expertScales.size(0), hidden}, x.options());
 
-    EXEC_NPU_CMD(aclnnMoeCombineNormal,
-        recvX,
-        tokenSrcInfo,
-        epSendCounts,
-        topkWeights,
-        tpSendCounts,
-        groupEpPtr,
-        numRanks,
-        rank,
-        groupEpPtr,
-        tpWorldSize,
-        tpRankId,
-        moeExpertNumber,
-        globalBs,
-        combinedX);
+    EXEC_NPU_CMD(aclnnMoeCombineNormal, x, tokenSrcInfo, epSendCounts, expertScales, tpSendCounts, groupEpPtr, numRanks,
+                 rank, groupEpPtr, tpWorldSize, tpRankId, moeExpertNumber, globalBs, combinedX,
+                 combineSendCostStatsOut);
 
     return combinedX;
 }
 
 TensorVector MoeCombinePrefillBackwardImplNpu(const at::Tensor &self)
 {
-    return {at::Tensor(), at::Tensor(), at::Tensor(), at::Tensor()};
+    return {at::Tensor()};
 }
 
-at::Tensor MoeCombinePrefillImpl(
-    const at::Tensor& x,
-    const at::Tensor& topkIdx,
-    const at::Tensor& topkWeights,
-    const at::Tensor& srcIdx,
-    const at::Tensor& sendHead,
-    c10::string_view groupEp,
-    int64_t rank,
-    int64_t numRanks)
+at::Tensor MoeCombinePrefillImpl(const at::Tensor &x, const at::Tensor &topkIdx, const at::Tensor &topkWeights,
+                                 const at::Tensor &srcIdx, const at::Tensor &sendHead, c10::string_view groupEp,
+                                 int64_t rank, int64_t numRanks)
 {
     static auto op = torch::Dispatcher::singleton()
-                        .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_prefill", "")
-                        .typed<decltype(MoeCombinePrefillImpl)>();
+                         .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_prefill", "")
+                         .typed<decltype(MoeCombinePrefillImpl)>();
     return op.call(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
 class ExtMoeCombinePrefill : public torch::autograd::Function<ExtMoeCombinePrefill> {
 public:
-    static at::Tensor forward(
-        AutogradContext *ctx, \
-        const at::Tensor& x,
-        const at::Tensor& topkIdx,
-        const at::Tensor& topkWeights,
-        const at::Tensor& srcIdx,
-        const at::Tensor& sendHead,
-        c10::string_view groupEp,
-        int64_t rank,
-        int64_t numRanks)
+    static at::Tensor forward(AutogradContext *ctx, const at::Tensor &x, const at::Tensor &topkIdx,
+                              const at::Tensor &topkWeights, const at::Tensor &srcIdx, const at::Tensor &sendHead,
+                              c10::string_view groupEp, int64_t rank, int64_t numRanks)
     {
         at::AutoDispatchBelowADInplaceOrView guard;
-        auto result = MoeCombinePrefillImpl(x, topkIdx, topkWeights, srcIdx, sendHead, \
-            groupEp, rank, numRanks);
+        auto result = MoeCombinePrefillImpl(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
         return result;
     }
 
-    static TensorVector backward(
-        AutogradContext *ctx, \
-        TensorVector grad_outputs)
+    static TensorVector backward(AutogradContext *ctx, TensorVector gradOutputs)
     {
-        return {at::Tensor(), at::Tensor(), at::Tensor(), at::Tensor()};
+        return {at::Tensor()};
     }
 };
 
-at::Tensor MoeCombinePrefillImplAutograd(
-    const at::Tensor& x,
-    const at::Tensor& topkIdx,
-    const at::Tensor& topkWeights,
-    const at::Tensor& srcIdx,
-    const at::Tensor& sendHead,
-    c10::string_view groupEp,
-    int64_t rank,
-    int64_t numRanks)
+at::Tensor MoeCombinePrefillImplAutograd(const at::Tensor &x, const at::Tensor &topkIdx, const at::Tensor &topkWeights,
+                                         const at::Tensor &srcIdx, const at::Tensor &sendHead, c10::string_view groupEp,
+                                         int64_t rank, int64_t numRanks)
 {
-    auto result = ExtMoeCombinePrefill::apply(x, topkIdx, topkWeights, srcIdx, sendHead, \
-        groupEp, rank, numRanks);
+    auto result = ExtMoeCombinePrefill::apply(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
     return result;
 }
 
