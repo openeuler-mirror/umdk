@@ -251,8 +251,6 @@ uint64_t urpc_queue_create(enum urpc_queue_trans_mode trans_mode, urpc_qcfg_crea
 
 /**
  * Modify URPC queue status.
- * 1823 Only support QUEUE_STATUS_RESET, QUEUE_STATUS_READY, QUEUE_STATUS_FAULT, QUEUE_STATUS_ERR
- * 1650 only support QUEUE_STATUS_READY to QUEUE_STATUS_ERR
  * @param[in] urpc_qh: Queue handle (local urpc_qh)
  * @param[in] status: Target queue status
  * Return URPC_SUCCESS on success, error code on failure, the specific error code is as follows
