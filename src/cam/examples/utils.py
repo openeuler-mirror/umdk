@@ -1,3 +1,12 @@
+#
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+# Description: Utils for dispatch/combine normal example.
+# Create: 2026-01-15
+# Note:
+# History: 2026-01-15 create utils for dispatch/combine normal example file
+#
+
 import inspect
 import json
 import os

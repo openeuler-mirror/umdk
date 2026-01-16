@@ -1,3 +1,12 @@
+#
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+# Description: Example for dispatch/combine normal operator.
+# Create: 2026-01-15
+# Note:
+# History: 2026-01-15 create dispatch/combine normal example file
+#
+
 import argparse
 import time
 
