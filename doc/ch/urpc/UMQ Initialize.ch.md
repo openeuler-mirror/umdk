@@ -13,7 +13,7 @@
 - 应用程序启动时，首先要初始化umq
 - 只需要调用一次
 
-## 可配参数说明
+## 可配参数
 - buf mode: 选择使用UMQ Buffer的模式，支持UMQ_BUF_SPLIT和UMQ_BUF_COMBINE两种类型
 - feature: 设置umq特性
 - | 特性类型                        | 描述             |
@@ -32,6 +32,9 @@
 - cna：使用方导入内存的UB控制器的CNA地址，仅UMQ_TRANS_MODE_UBMM和UMQ_TRANS_MODE_UBMM_PLUS模式有效
 - ubmm_eid: 用方导入内存的UB控制器的EID，仅UMQ_TRANS_MODE_UBMM和UMQ_TRANS_MODE_UBMM_PLUS模式有效
 - trans_info：数据面传输设备信息，用于初始化对应得设备
+
+### 说明
+1.当应用在UB模式下配置UMQ_FEATURE_ENABLE_TOKEN_POLICY参数时，将使能UB token校验能力，umq_bind_info中会携带UB token信息，如果应用需要安全传输该信息，请使用安全通道（如TLS等）交换umq_bind_info。
 
 ## 设备初始化
 按照传输设备信息，初始化设备。
