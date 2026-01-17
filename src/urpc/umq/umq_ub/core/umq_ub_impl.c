@@ -1386,6 +1386,8 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
     g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
     g_ub_ctx[g_ub_ctx_count].order_type = URMA_DEF_ORDER;
+    g_ub_ctx[g_ub_ctx_count].transport_mode = urma_trans_mode_get(cfg->transport_mode);
+    g_ub_ctx[g_ub_ctx_count].tp_type = urma_tp_type_get(cfg->tp_type);
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
     g_ub_ctx_count++;
 
