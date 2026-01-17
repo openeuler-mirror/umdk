@@ -25,7 +25,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
 
 int32_t umq_ipc_destroy_impl(uint64_t umqh_tp);
 
-int32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
+uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
 
 int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
 

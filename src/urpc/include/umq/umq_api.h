@@ -53,7 +53,7 @@ int umq_destroy(uint64_t umqh);
  * @param[in] umqh: umq handle
  * @param[out] bind_info: buf of bind info
  * @param[in] bind_info_size: buf size of bind info
- * Return buf size of bind info get
+ * Return buf size of bind info on success, 0 on failure (get error code from errno)
  */
 uint32_t umq_bind_info_get(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size);
 

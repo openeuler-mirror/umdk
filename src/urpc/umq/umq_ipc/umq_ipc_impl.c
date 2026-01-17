@@ -350,13 +350,14 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
     return UMQ_SUCCESS;
 }
 
-int32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size)
+uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
+        errno = UMQ_ERR_EINVAL;
         UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n",
             bind_info_size, sizeof(umq_ipc_bind_info_t));
-        return -UMQ_ERR_EINVAL;
+        return 0;
     }
 
     umq_ipc_bind_info_t *tmp_info = (umq_ipc_bind_info_t *)bind_info;

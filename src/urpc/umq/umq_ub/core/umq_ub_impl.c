@@ -134,11 +134,12 @@ void umq_ub_huge_qbuf_pool_uninit(void)
     umq_huge_qbuf_pool_uninit();
 }
 
-int umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
+uint32_t umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
 {
     if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
+        errno = UMQ_ERR_EINVAL;
         UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n", bind_info_size, sizeof(umq_ub_bind_info_t));
-        return -UMQ_ERR_EINVAL;
+        return 0;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
