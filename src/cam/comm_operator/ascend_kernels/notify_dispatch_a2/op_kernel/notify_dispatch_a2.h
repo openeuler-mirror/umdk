@@ -134,7 +134,6 @@ public:
         totalRecvTokensOutputGT_.SetGlobalBuffer((__gm__ int32_t *)totalRecvTokensOutput);
 
         // init RDMA params
-        // dataSpaceGT_ = workspace; // preserve large space for splited data after exchange with other ranks
         windowInGM_ = this->shareAddrs[rank];
         windowOutGM_ =
             hccl_.GetWindowsOutAddr(rank) + (magic % PING_PONG_SIZE) * IPC_BUFF_MAX_SIZE + notifyMemoryOffset;
@@ -615,73 +614,618 @@ private:
     // recvData split data and calculate output
     __aicore__ inline void SplitAndCalcData()
     {
-        return;
+        pipe.Reset();
+        pipe.InitBuffer(tempBuf_, UB_ALIGN);  // saving temporary direct number
+        // MAX_BS <= 4096, make sure larger than 1 batchsize item
+        pipe.InitBuffer(tempBuf2_, Ceil(MAX_BS * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+        // larger than numExpert item
+        pipe.InitBuffer(tempBuf3_, Ceil(numExperts * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+        // larger than numExpert item
+        pipe.InitBuffer(tempBuf7_, Ceil(numExperts * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+        // MAX_BS <= 4096, larger than next batchsize item
+        pipe.InitBuffer(tempBuf8_, Ceil(MAX_BS * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+        // MAX_BS <= 4096, larger than next batchsize item
+        pipe.InitBuffer(tempBuf9_, Ceil(MAX_BS * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+        // larger than numExpert item
+        pipe.InitBuffer(tempBuf10_, Ceil(numExperts * sizeof(int32_t), UB_ALIGN) * UB_ALIGN);
+
+        pipe.InitBuffer(tempBuf4_, NUM_1000 * sizeof(float));  // larger than localExp recving tokens from all ranks
+        pipe.InitBuffer(tempBuf5_, NUM_1000 * sizeof(float));  // temporary data
+        pipe.InitBuffer(tempBuf6_, NUM_1000 * sizeof(float));  // temporary data
+
+        pipe.InitBuffer(tempBuf11_, Ceil(1 * sizeof(int64_t), UB_ALIGN) * UB_ALIGN);  // temporary data
+
+        GetRankEpTokenCntData(0, blockNum);
+        GetExpertMaxBsSrcData(0, blockNum);
+        SyncAll<true>();
+        BuildEpRankTokenCntData(0, blockNum);
+        SyncAll<true>();
+        BuildLocalEpRankTokenCntData(0, blockNum);
+
+        int32_t coreNumPerFunc = CeilDiv(static_cast<int32_t>(blockNum), 2);
+        if (blockIdx < coreNumPerFunc) {
+            if (blockIdx == 0) {
+                BuildTokenUniquePerServerData();
+                BuildTotalRecvTokensData();
+            }
+            if (blockIdx == 1) {
+                BuildTokenSeverIdxData();
+            }
+            if (blockIdx == NUM_2) {
+                BuildCountOuterData();
+            }
+            if (blockIdx == NUM_3) {
+                BuildExpandIdxData();
+            }
+            if (blockIdx > NUM_3) {
+                int32_t beginCoreId = NUM_4;
+                int32_t remainCoreNum = coreNumPerFunc - NUM_4;
+                BuildOffsetInnerData(beginCoreId, remainCoreNum);
+            }
+        } else {
+            int32_t beginCoreId = coreNumPerFunc;
+            int32_t remainCoreNum = blockNum - coreNumPerFunc;
+            BuildSrcDstOffsetData(beginCoreId, remainCoreNum);
+        }
     }
 
     __aicore__ inline void BuildTokenSeverIdxData()
     {
-        return;
+        // calc tokenServerIdxOutputGT_
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<int32_t> dstLt = tempBuf9_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(MAX_BS * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        LocalTensor<int32_t> fullOneLt = tempBuf8_.Get<int32_t>();
+        Duplicate<int32_t>(fullOneLt, 1, MAX_BS);
+        PipeBarrier<PIPE_V>();
+
+        // offset + numTokensPerExpertLen + numTokensUniquePerServerLen + numTokensPerServerLen + tokenServerCntLen
+        int32_t curRankDataOffset = rank * len + numExperts + serverNum + MAX_BS * serverNum + MAX_BS;
+
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int i = 0; i < serverNum; ++i) {
+            int32_t recvOffset = curRankDataOffset + i * MAX_BS;  // each time copy MAX_BS items
+
+            event_t eventId = EVENT_ID0;
+            AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+            DataCopyPad(tmpLt, recvDataOutputGt[recvOffset], copyParams, padParams);
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+
+            Sub(dstLt, tmpLt, fullOneLt, MAX_BS);  // all offsets = -1，-1 means not sending to the server
+            PipeBarrier<PIPE_V>();
+
+            SyncFunc<AscendC::HardEvent::V_MTE3>();
+
+            int32_t tarOffset = i * MAX_BS;
+            DataCopyPad(tokenServerIdxOutputGT_[tarOffset], dstLt, copyParams);
+
+            AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
     }
 
     __aicore__ inline void BuildExpandIdxData()
     {
-        return;
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<int32_t> dstLt = tempBuf9_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(MAX_BS * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        LocalTensor<int32_t> fullOneLt = tempBuf8_.Get<int32_t>();
+        Duplicate<int32_t>(fullOneLt, 1, MAX_BS);
+        PipeBarrier<PIPE_V>();
+
+        // calc expandIdxOutputGT_ , according to tokenExpertIdx
+        // offset + numTokensPerExpertLen + numTokensUniquePerServerLen + numTokensPerServerLen + tokenServerCntLen +
+        // tokenServerIdxLen
+        int32_t curRankDataOffset =
+            rank * len + numExperts + serverNum + MAX_BS * serverNum + MAX_BS + MAX_BS * serverNum;
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int i = 0; i < numExperts; ++i) {
+            int32_t recvOffset = curRankDataOffset + i * MAX_BS;  // each time copy MAX_BS items
+
+            event_t eventId = EVENT_ID0;
+            AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+            DataCopyPad(tmpLt, recvDataOutputGt[recvOffset], copyParams, padParams);
+
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+
+            Sub(dstLt, tmpLt, fullOneLt, MAX_BS);  // all offsets = -1，-1 means not sending to the server
+            PipeBarrier<PIPE_V>();
+            SyncFunc<AscendC::HardEvent::V_MTE3>();
+
+            int32_t tarOffset = i * MAX_BS;
+            DataCopyPad(expandIdxOutputGT_[tarOffset], dstLt, copyParams);
+
+            AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
     }
 
     __aicore__ inline void GetEpRankSumCnt(int32_t srcRank, LocalTensor<int32_t> &epTokenCntLt)
     {
-        return;
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(numExperts * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        SyncFunc<AscendC::HardEvent::S_MTE2>();
+
+        int32_t epTokenCntOffset = srcRank * len;
+        DataCopyPad(epTokenCntLt, recvDataOutputGt[epTokenCntOffset], copyParams, padParams);
+
+        SyncFunc<AscendC::HardEvent::MTE2_S>();
+
+        // if epTokenCntGt=[2,2,2,2] -->
+        // start prefix sum, Experts across servers must be re-indexed starting from 0[0,2,0,2]
+        int32_t preCnt = 0;
+        int32_t curVal = 0;
+        uint32_t localServerExpNum = numExperts / rankSize * localRankSize;
+        for (int32_t i = 0; i < numExperts; ++i) {
+            if (i % localServerExpNum == 0) {
+                preCnt = 0;
+            }
+            curVal = epTokenCntLt(i);
+            pipe_barrier(PIPE_ALL);
+            epTokenCntLt(i) = preCnt;  // prefix sum of pre item
+            pipe_barrier(PIPE_ALL);
+            preCnt += curVal;
+        }
     }
 
     __aicore__ inline void BuildOffsetInnerForRank(int32_t targetRankId, int32_t index, uint32_t startTokenId,
                                                    uint32_t endTokenId)
     {
-        return;
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<int32_t> tmpSumLt = tempBuf7_.Get<int32_t>();
+        LocalTensor<int32_t> tmp2Lt = tempBuf10_.Get<int32_t>();
+        LocalTensor<int32_t> maskLt = tempBuf3_.Get<int32_t>();
+
+        LocalTensor<int32_t> fullOneLt = tempBuf9_.Get<int32_t>();
+        Duplicate<int32_t>(fullOneLt, 1, numExperts);
+        PipeBarrier<PIPE_V>();
+
+        LocalTensor<int32_t> epTokenCntLt = tempBuf8_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(numExperts * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        // 1.local rank send to each expert toke nnum start prefix sum
+        GetEpRankSumCnt(targetRankId, epTokenCntLt);
+
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        int32_t dataOffset =
+            targetRankId * len + numExperts + serverNum + MAX_BS * serverNum + MAX_BS + MAX_BS * serverNum;
+        for (int tokId = startTokenId; tokId < endTokenId; ++tokId) {
+            int32_t recvOffset = dataOffset + tokId * numExperts;
+
+            event_t eventId = EVENT_ID0;
+            AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+            // 2.order of each token send to expert, current token expand_idx, assume [2,2,0,0]
+            DataCopyPad(tmpLt, recvDataOutputGt[recvOffset], copyParams, padParams);
+
+            // 3.token offset on each expert
+            // server expert token prefix sum add with expand_ids of each token
+            // negative means not send to the expert
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+
+            // Compare with 1 to get a 0/1 tensor to use as a multiplicand [1,1,0,0]
+            Mins(maskLt, tmpLt, 1, numExperts);
+            // Decrement all offsets by 1; a value of -1 means "do not send to this expert"
+            Sub(tmp2Lt, tmpLt, fullOneLt, numExperts);
+            PipeBarrier<PIPE_V>();
+            // After multiplication, mask out the experts that should not receive data.
+            Mul(tmpLt, epTokenCntLt, maskLt, numExperts);
+            PipeBarrier<PIPE_V>();
+
+            Add(tmpSumLt, tmp2Lt, tmpLt, numExperts);
+            PipeBarrier<PIPE_V>();
+
+            SyncFunc<AscendC::HardEvent::V_MTE3>();
+
+            int32_t tarOffset = index * MAX_BS * numExperts + tokId * numExperts;
+            DataCopyPad(offsetInnerOutputGT_[tarOffset], tmpSumLt, copyParams);
+
+            AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
     }
 
     __aicore__ inline void BuildOffsetInnerData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        // split token，2 server
+        int32_t vBlockIdx = blockIdx - beginCoreId;     // relative blockIdx
+        uint32_t coreForToken = MAX_BS / validCoreNum;  // 4096 / 20 = 204
+        uint32_t remainToken = MAX_BS % validCoreNum;   // 4096 % 20 = 16
+        uint32_t startTokenId = coreForToken * vBlockIdx;
+        if (vBlockIdx < remainToken) {
+            startTokenId += vBlockIdx;
+            coreForToken += 1;
+        } else {
+            startTokenId += remainToken;
+        }
+        uint32_t endTokenId = startTokenId + coreForToken;
+        if (coreForToken == 0) {
+            return;
+        }
+
+        // Compute the peer rank and build its offsetInner data (method for 2 servers)
+        int32_t curRankId = rank;
+        int32_t peerRankId = (1 - serverId) * localRankSize + localRank;         // formula for 2-server case
+        int32_t firstRankId = curRankId < peerRankId ? curRankId : peerRankId;   // smaller rank
+        int32_t secondRankId = curRankId < peerRankId ? peerRankId : curRankId;  // larger rank
+
+        // Build offsetInnerOutputGT_ (holds offsetInner for both local and peer ranks)
+        // shape: [max_bs, expertNum], values: inner_offset
+        BuildOffsetInnerForRank(firstRankId, 0, startTokenId, endTokenId);   // process smaller rank first
+        BuildOffsetInnerForRank(secondRankId, 1, startTokenId, endTokenId);  // process larger rank second
     }
 
     __aicore__ inline void BuildCountOuterData()
     {
-        return;
+        // calculate countOuterOutputGT_
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(MAX_BS * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        // offset + numTokensPerExpertLen + numTokensUniquePerServerLen + numTokensPerServerLen
+        int32_t curRankDataOffset = rank * len + numExperts + serverNum + MAX_BS * serverNum;
+
+        DataCopyPad(tmpLt, recvDataOutputGt[curRankDataOffset], copyParams, padParams);
+
+        SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+
+        DataCopyPad(countOuterOutputGT_, tmpLt, copyParams);
+        SyncFunc<AscendC::HardEvent::MTE3_MTE2>();
     }
 
     __aicore__ inline void BuildTokenUniquePerServerData()
     {
-        return;
+        // calculate tokensUniquePerServerOutputGT_
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(serverNum * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        int32_t curRankDataOffset = rank * len + numExperts;  // offset + numTokensPerExpertLen
+        DataCopyPad(tmpLt, recvDataOutputGt[curRankDataOffset], copyParams, padParams);
+
+        SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+
+        DataCopyPad(tokensUniquePerServerOutputGT_, tmpLt, copyParams);
+        SyncFunc<AscendC::HardEvent::MTE3_MTE2>();
     }
 
     __aicore__ inline void GetRankEpTokenCntData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        // split by cores，2 server，each core one rank
+        int32_t vBlockIdx = blockIdx - beginCoreId;  // relative blockIdx
+        uint32_t coreForRank = rankSize / validCoreNum;
+        uint32_t remainRank = rankSize % validCoreNum;
+        uint32_t startRankId = coreForRank * vBlockIdx;
+        if (vBlockIdx < remainRank) {
+            startRankId += vBlockIdx;
+            coreForRank += 1;
+        } else {
+            startRankId += remainRank;
+        }
+        uint32_t endRankId = startRankId + coreForRank;
+        if (coreForRank == 0) {
+            return;
+        }
+
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        // get gRankEpTokenCntGT_
+        DataCopyExtParams copyParams1{1, static_cast<uint32_t>(numExperts * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams1{false, 0, 0, 0};
+        int32_t curRankDataOffset = rank * len;
+
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int i = startRankId; i < endRankId; ++i) {
+            int32_t recvOffset = i * len;  // Each time, copy numExperts elements from recvData.
+
+            event_t eventId = EVENT_ID0;
+            AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+            DataCopyPad(tmpLt, recvDataOutputGt[recvOffset], copyParams1, padParams1);
+
+            AscendC::SetFlag<HardEvent::MTE2_MTE3>(eventId);
+            AscendC::WaitFlag<HardEvent::MTE2_MTE3>(eventId);
+
+            int32_t tarOffset = i * numExperts;
+            DataCopyPad(gRankEpTokenCntGT_[tarOffset], tmpLt, copyParams1);
+
+            AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        SyncFunc<AscendC::HardEvent::MTE3_S>();
+        pipe_barrier(PIPE_ALL);
     }
 
     __aicore__ inline void GetExpertMaxBsSrcData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        // split by cores，2 server，each core one rank
+        int32_t vBlockIdx = blockIdx - beginCoreId;  // relative blockIdx
+        uint32_t coreForRank = rankSize / validCoreNum;
+        uint32_t remainRank = rankSize % validCoreNum;
+        uint32_t startRankId = coreForRank * vBlockIdx;
+        if (vBlockIdx < remainRank) {
+            startRankId += vBlockIdx;
+            coreForRank += 1;
+        } else {
+            startRankId += remainRank;
+        }
+        uint32_t endRankId = startRankId + coreForRank;
+        if (coreForRank == 0) {
+            return;
+        }
+
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(MAX_BS * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int i = startRankId; i < endRankId; ++i) {
+            int32_t dataOffset = i * len + numExperts + serverNum + MAX_BS * serverNum + MAX_BS + MAX_BS * serverNum +
+                                 MAX_BS * numExperts;
+            for (int j = 0; j < numExperts; ++j) {
+                int32_t recvOffset = dataOffset + j * MAX_BS;  //  copy MAX_BS nums from recvdata
+
+                event_t eventId = EVENT_ID0;
+                AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+                DataCopyPad(tmpLt, recvDataOutputGt[recvOffset], copyParams, padParams);
+
+                AscendC::SetFlag<HardEvent::MTE2_MTE3>(eventId);
+                AscendC::WaitFlag<HardEvent::MTE2_MTE3>(eventId);
+
+                int32_t tarOffset = (i * numExperts * MAX_BS) + j * MAX_BS;
+                DataCopyPad(gExpertMaxBsSrcGT_[tarOffset], tmpLt, copyParams);
+
+                AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+            }
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        pipe_barrier(PIPE_ALL);
     }
 
     __aicore__ inline void BuildEpRankTokenCntData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        // split by cores, 2 server，each core handles a rank
+        int32_t vBlockIdx = blockIdx - beginCoreId;  // relative blockIdx
+        uint32_t coreForRank = rankSize / validCoreNum;
+        uint32_t remainRank = rankSize % validCoreNum;
+        uint32_t startRankId = coreForRank * vBlockIdx;
+        if (vBlockIdx < remainRank) {
+            startRankId += vBlockIdx;
+            coreForRank += 1;
+        } else {
+            startRankId += remainRank;
+        }
+        uint32_t endRankId = startRankId + coreForRank;
+        if (coreForRank == 0) {
+            return;
+        }
+
+        SyncFunc<AscendC::HardEvent::MTE3_S>();
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(1 * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        // shape[rankSize, numExperts] --> shape[numExperts, rankSize]  value: cnt
+        for (int srcRank = startRankId; srcRank < endRankId; ++srcRank) {
+            for (int curExp = 0; curExp < numExperts; ++curExp) {
+                int32_t inOffset = srcRank * numExperts + curExp;  // only copy one number
+
+                event_t eventId = EVENT_ID0;
+                AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+                DataCopyPad(tmpLt, gRankEpTokenCntGT_[inOffset], copyParams, padParams);
+
+                AscendC::SetFlag<HardEvent::MTE2_MTE3>(eventId);
+                AscendC::WaitFlag<HardEvent::MTE2_MTE3>(eventId);
+
+                int32_t outOffset = curExp * rankSize + srcRank;
+                DataCopyPad(epRankTokenCntOutputGT_[outOffset], tmpLt, copyParams);
+
+                AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+            }
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        SyncFunc<AscendC::HardEvent::MTE3_S>();
     }
 
     __aicore__ inline void BuildTotalRecvTokensData()
     {
-        return;
+        // single core calculate
+        LocalTensor<int32_t> totalCnt = tempBuf_.Get<int32_t>();
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<float> floatTmpLt = tempBuf4_.Get<float>();
+        LocalTensor<float> floatTmpSumLt = tempBuf5_.Get<float>();
+        LocalTensor<float> sharedTmpBuffer = tempBuf6_.Get<float>();
+
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(rankSize * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        int32_t localExpertNum = numExperts / rankSize;
+        int32_t sumVal = 0;
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int index = 0; index < localExpertNum; ++index) {
+            int expId = rank * localExpertNum + index;
+            DataCopyPad(tmpLt, epRankTokenCntOutputGT_[expId * rankSize], copyParams, padParams);
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+            Cast(floatTmpLt, tmpLt, RoundMode::CAST_NONE, rankSize);
+            PipeBarrier<PIPE_V>();
+            ReduceSum(floatTmpSumLt, floatTmpLt, sharedTmpBuffer, rankSize);
+            SyncFunc<AscendC::HardEvent::V_S>();
+            // add token num received by the expert
+            sumVal += static_cast<int32_t>(floatTmpSumLt.GetValue(0));
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+
+        totalCnt(0) = sumVal;
+        PipeBarrier<PIPE_ALL>();
+        SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+        DataCopyExtParams copyParams1{1, static_cast<uint32_t>(1 * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPad(totalRecvTokensOutputGT_, totalCnt, copyParams1);
     }
 
     __aicore__ inline void BuildLocalEpRankTokenCntData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        // calculate localEpTokenCntOutputGT_ , shape[localExperts]  value: tokenCnt  not prefix sum
+        int32_t localExpertNum = numExperts / rankSize;
+        int32_t vBlockIdx = blockIdx - beginCoreId;  // relative blockIdx
+        uint32_t coreForExp = localExpertNum / validCoreNum;
+        uint32_t remainExp = localExpertNum % validCoreNum;
+        uint32_t startExpId = coreForExp * vBlockIdx;
+        if (vBlockIdx < remainExp) {
+            startExpId += vBlockIdx;
+            coreForExp += 1;
+        } else {
+            startExpId += remainExp;
+        }
+        uint32_t endExpId = startExpId + coreForExp;
+        if (coreForExp == 0) {
+            return;
+        }
+
+        LocalTensor<int64_t> tmpEpRecvLt = tempBuf11_.Get<int64_t>();
+        DataCopyExtParams copyParams1{1, static_cast<uint32_t>(1 * sizeof(int64_t)), 0, 0, 0};
+
+        LocalTensor<int32_t> tmpLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<float> floatTmpLt = tempBuf4_.Get<float>();
+        LocalTensor<float> floatTmpSumLt = tempBuf5_.Get<float>();
+        LocalTensor<float> sharedTmpBuffer = tempBuf6_.Get<float>();
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(rankSize * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        for (int i = startExpId; i < endExpId; ++i) {
+            int expId = rank * localExpertNum + i;
+            DataCopyPad(tmpLt, epRankTokenCntOutputGT_[expId * rankSize], copyParams, padParams);
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+            Cast(floatTmpLt, tmpLt, RoundMode::CAST_NONE, rankSize);
+            PipeBarrier<PIPE_V>();
+            ReduceSum(floatTmpSumLt, floatTmpLt, sharedTmpBuffer, rankSize);
+            SyncFunc<AscendC::HardEvent::V_S>();
+            // token num received by the expert
+            int64_t recvCnt = static_cast<int64_t>(floatTmpSumLt.GetValue(0));
+
+            tmpEpRecvLt(0) = recvCnt;
+            pipe_barrier(PIPE_ALL);
+            DataCopyPad(localEpTokenCntOutputGT_[i], tmpEpRecvLt, copyParams1);
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+    }
+
+    __aicore__ inline void HandleDstOffset(
+        int tokId, int validTokenCnt, int* dstOffsetStart, LocalTensor<int32_t> dstOffsetLt)
+    {
+        if (tokId < validTokenCnt) {
+            dstOffsetLt(0) = *dstOffsetStart;
+            pipe_barrier(PIPE_ALL);
+            *dstOffsetStart = *dstOffsetStart + 1;  // valid token，current rank output address offset should increase
+        } else {
+            dstOffsetLt(0) = -1;
+            pipe_barrier(PIPE_ALL);
+        }
     }
 
     __aicore__ inline void BuildSrcDstOffsetData(int32_t beginCoreId, int32_t validCoreNum)
     {
-        return;
+        int32_t localExpertNum = numExperts / rankSize;
+        uint32_t curRankExpertStart = rank * localExpertNum;
+        uint32_t curRankExpertEnd = curRankExpertStart + localExpertNum;
+
+        // split local experts
+        int32_t vBlockIdx = blockIdx - beginCoreId;
+        uint32_t coreForExp = localExpertNum / validCoreNum;
+        uint32_t remainExp = localExpertNum % validCoreNum;
+        uint32_t startExpId = coreForExp * vBlockIdx + curRankExpertStart;
+        if (vBlockIdx < remainExp) {
+            startExpId += vBlockIdx;
+            coreForExp += 1;
+        } else {
+            startExpId += remainExp;
+        }
+        uint32_t endExpId = startExpId + coreForExp;
+        if (coreForExp == 0) {
+            return;
+        }
+
+        /** calc srcOffsetRankTokenIdxOutputGT_ / dstOffsetRankTokenIdxOutputGT_
+         *   shape[local_exp_num, num_rank, max_bs]  value: src_offset/dst_offset <--- shape[num_rank, num_expert,
+         * max_bs]
+         */
+        LocalTensor<int32_t> expTokenCntLt = tempBuf2_.Get<int32_t>();
+        LocalTensor<float> floatExpTokenCntLt = tempBuf4_.Get<float>();
+        LocalTensor<float> floatExpTokenSumCntLt = tempBuf5_.Get<float>();
+        LocalTensor<float> sharedTmpBuffer = tempBuf6_.Get<float>();
+
+        LocalTensor<int32_t> tmpLt = tempBuf3_.Get<int32_t>();
+        LocalTensor<int32_t> dstOffsetLt = tempBuf_.Get<int32_t>();  // buf for instant number
+        AscendC::SetFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);           // MTE2 waits for MTE3
+        DataCopyExtParams copyParams{1, static_cast<uint32_t>(1 * sizeof(int32_t)), 0, 0, 0};
+        DataCopyPadExtParams<int32_t> padParams{false, 0, 0, 0};
+
+        for (int expId = startExpId; expId < endExpId; ++expId) {  // global expert id
+            int32_t localExpId = expId - curRankExpertStart;       // local expert id
+
+            int32_t dstOffsetStart = 0;  // because only handle local expert，dstOffset increase
+            if (localExpId != 0) {
+                // copy from epRankTokenCntOutputGT_:local rank,  token nums received before the current expert
+                int32_t copyCnt = localExpId * rankSize;
+                DataCopyExtParams copyParams1{1, static_cast<uint32_t>(localExpId * rankSize * sizeof(int32_t)), 0, 0,
+                                              0};
+                DataCopyPadExtParams<int32_t> padParams1{false, 0, 0, 0};
+
+                DataCopyPad(expTokenCntLt, epRankTokenCntOutputGT_[curRankExpertStart * rankSize], copyParams1,
+                            padParams1);
+                SyncFunc<AscendC::HardEvent::MTE2_V>();
+                Cast(floatExpTokenCntLt, expTokenCntLt, RoundMode::CAST_NONE, copyCnt);
+                PipeBarrier<PIPE_V>();
+                ReduceSum(floatExpTokenSumCntLt, floatExpTokenCntLt, sharedTmpBuffer, copyCnt);
+                SyncFunc<AscendC::HardEvent::V_S>();
+                // current expert start offset
+                dstOffsetStart = static_cast<int32_t>(floatExpTokenSumCntLt.GetValue(0));
+            }
+
+            for (int srcRank = 0; srcRank < rankSize; ++srcRank) {
+                DataCopyPad(tmpLt, epRankTokenCntOutputGT_[expId * rankSize + srcRank], copyParams,
+                            padParams);  // only copy one number
+                SyncFunc<AscendC::HardEvent::MTE2_S>();
+                int32_t validTokenCnt = tmpLt(0);
+                pipe_barrier(PIPE_ALL);
+
+                for (int tokId = 0; tokId < validTokenCnt; ++tokId) {
+                    event_t eventId = EVENT_ID0;
+                    AscendC::WaitFlag<HardEvent::MTE3_MTE2>(eventId);
+
+                    SyncFunc<AscendC::HardEvent::S_MTE2>();  // reuse tmpLt，add a sync
+                    int32_t inIdx = srcRank * numExperts * MAX_BS + expId * MAX_BS + tokId;
+                    DataCopyPad(tmpLt, gExpertMaxBsSrcGT_[inIdx], copyParams, padParams);  // only copy one number
+                    SyncFunc<AscendC::HardEvent::MTE2_S>();
+                    int32_t srcOffsetVal = tmpLt(0) - 1;  // srcOffset-1，offset from 0
+                    tmpLt(0) = srcOffsetVal;
+                    pipe_barrier(PIPE_ALL);
+
+                    SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+                    int32_t outIdx = expId * rankSize * MAX_BS + srcRank * MAX_BS + tokId;
+                    DataCopyPad(srcOffsetRankTokenIdxOutputGT_[outIdx], tmpLt, copyParams);
+
+                    HandleDstOffset(tokId, validTokenCnt, &dstOffsetStart, dstOffsetLt);
+
+                    SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+
+                    DataCopyPad(dstOffsetRankTokenIdxOutputGT_[outIdx], dstOffsetLt, copyParams);
+
+                    AscendC::SetFlag<HardEvent::MTE3_MTE2>(eventId);
+                }
+            }
+        }
+        AscendC::WaitFlag<HardEvent::MTE3_MTE2>(EVENT_ID0);  // MTE2 waits for MTE3
+        SyncFunc<AscendC::HardEvent::MTE3_S>();
     }
 
     GlobalTensor<T> sendDataInputGt;
