@@ -559,6 +559,7 @@ uint32_t umq_bind_info_get(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info
 
     if ((bind_info == NULL) || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
         (umq->tp_ops->umq_tp_bind_info_get == NULL)) {
+        errno = UMQ_ERR_EINVAL;
         UMQ_VLOG_ERR("bind_info or umqh invalid\n");
         return 0;
     }
