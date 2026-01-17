@@ -389,7 +389,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     bool first_fragment = true;
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data) {
-        cur_node->buf_data = floor_to_align(cur_node->buf_data, umq_buf_size_small()) + headroom_size_temp;
+        cur_node->buf_data = (char *)floor_to_align(cur_node->buf_data, umq_buf_size_small()) + headroom_size_temp;
         cur_node->buf_size = umq_buf_size_small() + (uint32_t)sizeof(umq_buf_t);
         cur_node->headroom_size = headroom_size_temp;
         cur_node->total_data_size = total_data_size;

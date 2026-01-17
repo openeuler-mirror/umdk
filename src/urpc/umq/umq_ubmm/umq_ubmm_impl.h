@@ -22,7 +22,7 @@ uint64_t umq_ubmm_create_impl(uint64_t umqh, uint8_t *ubmm_ctx, umq_create_optio
 
 int32_t umq_ubmm_destroy_impl(uint64_t umqh_tp);
 
-int32_t umq_ubmm_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
+uint32_t umq_ubmm_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
 
 int32_t umq_ubmm_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size);
 
