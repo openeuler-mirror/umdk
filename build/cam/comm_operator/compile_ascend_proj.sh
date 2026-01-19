@@ -53,6 +53,22 @@ CopyOps() {
     done
 }
 
+modify_func_cmake() {
+    sed -i '/cmake_parse_arguments(OPBUILD.*)/a\
+\ 
+    if (DEFINED CANN_VERSION_MACRO AND NOT "${CANN_VERSION_MACRO}" STREQUAL "")\
+        set(CANN_VERSION_FLAG "-D${CANN_VERSION_MACRO}")\
+        message(STATUS "opbuild: Detected CANN_VERSION_MACRO = ${CANN_VERSION_MACRO}")\
+    else()\
+        set(CANN_VERSION_FLAG "")\
+        message(WARNING "opbuild: No CANN_VERSION_MACRO defined! Possible #error in .cc files.")\
+    endif()' cmake/func.cmake
+
+# 在 -D_GLIBCXX_USE_CXX11_ABI 后添加 ${CANN_VERSION_FLAG}
+    sed -i '/-D_GLIBCXX_USE_CXX11_ABI=/a\    
+                ${CANN_VERSION_FLAG}' cmake/func.cmake
+}
+
 # 构建算子工程并将其产物传到指定地点
 BuildAscendProj() {
     local os_id=$(grep ^ID= /etc/os-release | cut -d= -f2 | tr -d '"')
@@ -85,6 +101,7 @@ BuildAscendProj() {
 
     source $ASCEND_HOME_PATH/bin/setenv.bash
     cd ${proj_name}
+    modify_func_cmake
     ./build.sh
     # 根据is_extract判断是否抽取run包
     if [ $is_extract -eq 1 ]; then
