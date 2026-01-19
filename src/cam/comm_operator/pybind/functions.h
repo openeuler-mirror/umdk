@@ -111,4 +111,17 @@ at::Tensor moe_combine_shmem_impl_autograd( \
     int64_t extInfo, \
     int64_t outDtype, \
     int64_t groupListType);
+
+at::Tensor all2_all_detour_impl_autograd( \
+    const at::Tensor &sendData, \
+    const at::Tensor &commArgs1, \
+    const at::Tensor &commRankIds, \
+    const int64_t commId);
+
+at::Tensor reduce_scatter_detour_impl_autograd( \
+    const at::Tensor &sendData, \
+    const at::Tensor &commArgs1, \
+    const at::Tensor &commRankIds, \
+    const int64_t commId, \
+    const int64_t op);
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_
