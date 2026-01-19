@@ -50,6 +50,7 @@ export GCOV_PREFIX="$REPORTS_PATH"
 ./lib/test_lib
 ./protocol/test_protocol
 ./util/test_util
+./umq/test_umq
 
 echo "Generating coverage reports..."
 cd $REPORTS_PATH

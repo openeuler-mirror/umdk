@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(urpc_framework_test)
+project(urpc_test)
 
 option(ENABLE_ASAN "Enable AddressSanitizer" ON)
 
@@ -19,3 +19,4 @@ add_subdirectory(core)
 add_subdirectory(lib)
 add_subdirectory(protocol)
 add_subdirectory(util)
+add_subdirectory(umq)
