@@ -45,6 +45,8 @@ static int cmd_main_usage(admin_config_t *cfg)
     (void)printf("\n");
     (void)printf("Command syntax:\n");
     (void)printf("  show [--dev] [--whole]                                 show all UB devices info.\n");
+    (void)printf("  show topo [node_id]                                      show topo_info of the specified node.\n");
+    (void)printf("                                                           when node_id is empty, will show the current node.\n");
     (void)printf("  add_eid <--dev> <--idx> [--ns /proc/$pid/ns/net]       add eid of UB device, only for uvs,\n");
     (void)printf("                                                           control plane not support.\n");
     (void)printf("  del_eid <--dev> <--idx>                                del eid of UB device, only for uvs,\n");
@@ -54,7 +56,6 @@ static int cmd_main_usage(admin_config_t *cfg)
     (void)printf("  set_reserved_jetty <--dev> <--min_id> <--max_id>       set reserved jetty id range.\n");
     (void)printf("  show_stats <--dev> <--resource_type> <--key>           show run stats of UB device, \n");
     (void)printf("                                                           control plane not support.\n");
-    (void)printf("  show_topo                                              show topo_info of bonding device.\n");
     (void)printf("  show_res <--dev> <--resource_type> <--key> [--key_ext]                                  \n");
     (void)printf("           <--key_cnt>                                   show resources of UB device.\n");
     (void)printf("  list_res <--dev> <--resource_type> [--key] [--key_ext]                               \n");

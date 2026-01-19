@@ -164,12 +164,22 @@ struct cmd_agg_del_arg {
     } in;
 };
 
+typedef struct admin_device_info {
+    char dev_name[URMA_ADMIN_MAX_DEV_NAME];
+    urma_device_attr_t dev_attr;
+    urma_transport_type_t tp_type;
+    urma_eid_info_t *eid_list;
+    char net_dev_name[URMA_ADMIN_MAX_DEV_NAME];
+} admin_device_info_t;
+
 bool is_ubc(const char *dev_name);
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
-int admin_cmd_dev_expose(const char *dev_name, const char *ns);
-int admin_cmd_dev_unexpose(const char *dev_name, const char *ns);
-int admin_cmd_eid_set_eid_ns(const char *dev_name, uint32_t eid_idx, const char *ns);
+int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd);
+int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd);
+int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd);
 int admin_cmd_get_topo_info(tool_topo_map_t *topo_map);
+int admin_get_device_name_by_eid(const urma_eid_t *eid, char *dev_name, size_t dev_name_len);
+int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *dev_info);
 
 // Legacy command
 int admin_cmd_show_stats_legacy(admin_config_t *cfg);
