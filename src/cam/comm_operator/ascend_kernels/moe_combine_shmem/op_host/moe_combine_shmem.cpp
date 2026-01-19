@@ -10,8 +10,7 @@
 #include "register/op_def_registry.h"
 
 namespace ops {
-class MoeCombineShmem : public OpDef
-{
+class MoeCombineShmem : public OpDef {
 public:
     explicit MoeCombineShmem(const char *name) : OpDef(name)
     {
@@ -114,7 +113,6 @@ public:
             .ExtendCfgInfo("multiKernelSupportDynamicGraph.value", "multi_kernel");
 
         this->AICore().AddConfig("ascend910_93", aicore_config);
-        // this->AICore().AddConfig("ascend910b", aicore_config_A2);
     }
 };
 

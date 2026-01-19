@@ -16,24 +16,6 @@
 extern "C" {
 #endif
 
-/* function: aclnnMoeCombineNormalGetWorkspaceSize
- * recvX : required
- * tokenSrcInfo : required
- * epRecvCounts : required
- * recvTopkWeights : required
- * tpRecvCountsOptional : required
- * epGroupName : optional
- * epWorldSize : required
- * epRankId : required
- * tpGroupNameOptional : required
- * tpWorldSize : optional
- * tpRankId : optional
- * moeExpertNum : optional
- * globalBs : optional
- * out : required
- * workspaceSize : size of workspace(output).
- * executor : executor context(output).
- */
 __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalGetWorkspaceSize(
     const aclTensor *recvX, const aclTensor *tokenSrcInfo, const aclTensor *epRecvCounts,
     const aclTensor *recvTopkWeights, const aclTensor *tpRecvCountsOptional, char *epGroupName, int64_t epWorldSize,
@@ -41,12 +23,6 @@ __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalGetWorks
     int64_t globalBs, const aclTensor *out, const aclTensor *sendCostStats, uint64_t *workspaceSize,
     aclOpExecutor **executor);
 
-/* function: aclnnMoeCombineNormal
- * workspace : workspace memory addr(input).
- * workspaceSize : size of workspace(input).
- * executor : executor context(input).
- * stream : acl stream.
- */
 __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormal(void *workspace, uint64_t workspaceSize,
                                                                          aclOpExecutor *executor, aclrtStream stream);
 

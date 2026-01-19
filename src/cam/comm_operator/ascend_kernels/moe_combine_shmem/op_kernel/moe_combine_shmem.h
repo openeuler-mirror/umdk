@@ -613,10 +613,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
 
     outTensor_ = xOutQueue_.DeQue<ExpandXType>();
     // UB --> GM [这个要写到对应的 rank idx]
-    // shmem_put_half_mem_nbi(rankWindow_[loopIdx * dataCnt], outTensor_, dataCnt, ep);
-    // shmem_put_bfloat16_mem_nbi(rankWindow_[loopIdx * dataCnt], outTensor_, dataCnt, ep);
     SHMEM_PUT_BY_DTYPE(ExpandXType, rankWindow_[loopIdx * dataCnt], outTensor_, dataCnt, ep);
-    xOutQueue_.FreeTensor<ExpandXType>(outTensor_);
 }
 
 template <TemplateMC2TypeClass>
@@ -644,16 +641,11 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
                 gmTpSendCountTensor_ = gmQuantInQueue_.AllocTensor<ExpandXType>();
                 DataCopy(gmTpSendCountTensor_, expandXGM_[srcStartTokenIdx], dataCnt);
                 gmQuantInQueue_.EnQue(gmTpSendCountTensor_);
-
                 gmTpSendCountTensor_ = gmQuantInQueue_.DeQue<ExpandXType>();
                 sendLocal_ = xOutQueue_.AllocTensor<ExpandXType>();
-
                 QuantProcess();
-
                 xOutQueue_.EnQue(sendLocal_);
                 sendLocal_ = xOutQueue_.DeQue<ExpandXType>();
-                // shmem_put_half_mem_nbi(rankWindow_[loopIdx * dataCnt], sendLocal_, axisH_ / 2 + scaleLen_, ep);
-                // shmem_put_bfloat16_mem_nbi(rankWindow_[loopIdx * dataCnt], sendLocal_, axisH_ / 2 + scaleLen_, ep);
                 SHMEM_PUT_BY_DTYPE(ExpandXType, rankWindow_[loopIdx * dataCnt], sendLocal_, axisH_ / 2 + scaleLen_, ep);
                 gmQuantInQueue_.FreeTensor<ExpandXType>(gmTpSendCountTensor_);
                 xOutQueue_.FreeTensor<ExpandXType>(sendLocal_);
@@ -662,8 +654,6 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
                 DataCopy(gmTpSendCountTensor_, expandXGM_[srcStartTokenIdx], dataCnt);
                 gmTpSendCountQueue_.EnQue(gmTpSendCountTensor_);
                 gmTpSendCountTensor_ = gmTpSendCountQueue_.DeQue<ExpandXType>();
-                // shmem_put_half_mem_nbi(rankWindow_[loopIdx * dataCnt], gmTpSendCountTensor_, dataCnt, ep);
-                // shmem_put_bfloat16_mem_nbi(rankWindow_[loopIdx * dataCnt], gmTpSendCountTensor_, dataCnt, ep);
                 SHMEM_PUT_BY_DTYPE(ExpandXType, rankWindow_[loopIdx * dataCnt], gmTpSendCountTensor_, dataCnt, ep);
                 gmTpSendCountQueue_.FreeTensor<ExpandXType>(gmTpSendCountTensor_);
             }
@@ -698,7 +688,6 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetStatus()
         // 空闲核，直接返回
         return;
     }
-
     LocalTensor<int32_t> statusFlagUb = readStateBuf_.Get<int32_t>();
     statusFlagUb.SetValue(0, epStateValue_);
     for (uint32_t epIdx = startRankId_; epIdx < endRankId_; epIdx++) {
@@ -722,7 +711,6 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::WaitDispatch()
     LocalTensor<float> gatherMaskOutTensor = gatherMaskOutBuf_.Get<float>();
     LocalTensor<uint32_t> gatherTmpTensor = gatherTmpBuf_.Get<uint32_t>();
     LocalTensor<float> statusSumOutTensor = statusSumOutBuf_.Get<float>();
-
     gatherTmpTensor.SetValue(0, 1);
     uint32_t mask = 1;  // gatherMask + sum 相关参数
     uint64_t rsvdCnt = 0;
@@ -846,15 +834,9 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
             rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)wAddr);
             tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
             if constexpr (IsQuant) {
-                // shmem_get_half_mem_nbi(tmpUb, rowTmpGlobal_, quantCopyLen, epRankId_);
-                // shmem_get_bfloat16_mem_nbi(tmpUb, rowTmpGlobal_, quantCopyLen, epRankId_);
                 SHMEM_GET_BY_DTYPE(ExpandXType, tmpUb, rowTmpGlobal_, quantCopyLen, epRankId_);
-                // DataCopy(tmpUb, rowTmpGlobal_, quantCopyLen);
             } else {
-                // shmem_get_half_mem_nbi(tmpUb, rowTmpGlobal_, processLen, epRankId_);
-                // shmem_get_bfloat16_mem_nbi(tmpUb, rowTmpGlobal_, processLen, epRankId_);
                 SHMEM_GET_BY_DTYPE(ExpandXType, tmpUb, rowTmpGlobal_, processLen, epRankId_);
-                // DataCopy(tmpUb, rowTmpGlobal_, processLen);
                 SyncFunc<AscendC::HardEvent::MTE2_V>();
             }
             moeSumQueue_.EnQue(tmpUb);
@@ -891,13 +873,9 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
             shareTokGlobal.SetGlobalBuffer((__gm__ ExpandXType *)(shareAddr));
             SyncFunc<AscendC::HardEvent::V_MTE2>();  // 与结果搬出Cast同地址
             if constexpr (IsQuant) {
-                // shmem_get_half_mem_nbi(rowTmpLocal, shareTokGlobal, quantCopyLen, epRankId_);
-                // shmem_get_bfloat16_mem_nbi(rowTmpLocal, shareTokGlobal, quantCopyLen, epRankId_);
                 SHMEM_GET_BY_DTYPE(ExpandXType, rowTmpLocal, shareTokGlobal, quantCopyLen, epRankId_);
                 DequantProcess(rowTmpLocal);
             } else {
-                // shmem_get_half_mem_nbi(rowTmpLocal, shareTokGlobal, processLen, epRankId_);
-                // shmem_get_bfloat16_mem_nbi(rowTmpLocal, shareTokGlobal, processLen, epRankId_);
                 SHMEM_GET_BY_DTYPE(ExpandXType, rowTmpLocal, shareTokGlobal, processLen, epRankId_);
                 SyncFunc<AscendC::HardEvent::MTE2_V>();
             }

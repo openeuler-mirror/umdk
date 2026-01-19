@@ -77,8 +77,7 @@ __aicore__ inline void SyncFunc()
 #define TemplateMC2TypeFunc XType, ExpandXOutType, StaticQuant, DynamicQuant, IsSmoothScaleExist, IsNeedAllgather
 
 template <TemplateMC2TypeClass>
-class MoeDispatchShmem
-{
+class MoeDispatchShmem {
 public:
     __aicore__ inline MoeDispatchShmem(){};
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR expandXOut,
@@ -105,7 +104,7 @@ private:
     __aicore__ inline void UpdateTokenNumsOut();
     __aicore__ inline GM_ADDR GetWindAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * halfWinSize_ + 1024 * 1024;
+        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * halfWinSize_ + STATE_SIZE;
     }
     __aicore__ inline GM_ADDR GetWindStateAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
@@ -476,10 +475,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::SendToSharedExpert
                 }
                 DataCopy(expandXOutGMTensor_[tokenIndex * axisHCommu_], xTmpTensor_, axisHCommu_);
             } else {
-                // 否则发到对端对应位置上
-                // shmem_put_half_mem_nbi(dstWinGMTensor[(tokenIndex - preCnt) * axisHCommu_], xTmpTensor_,
-                // hCommuCopyOutParams_shmem, moeOnShareRank); shmem_put_bfloat16_mem_nbi(dstWinGMTensor[(tokenIndex -
-                // preCnt) * axisHCommu_], xTmpTensor_, hCommuCopyOutParams_shmem, moeOnShareRank);
                 SHMEM_PUT_BY_DTYPE(ExpandXOutType, dstWinGMTensor[(tokenIndex - preCnt) * axisHCommu_], xTmpTensor_,
                                    hCommuCopyOutParams_shmem, moeOnShareRank);
             }
@@ -523,7 +518,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::SendToMoeExpert()
             xOutQueue_.EnQue(xOutTensor_);
 
             xOutTensor_ = xOutQueue_.DeQue<ExpandXOutType>();
-            // DataCopy(dstWinGMTensor, xOutTensor_, axisHCommu_); // 约束对齐
             shmem_put_int8_mem_nbi(dstWinGMTensor, xOutTensor_, hCommuCopyOutParams_shmem, tempRankId);
             xOutQueue_.FreeTensor(xOutTensor_);
         } else {
@@ -531,8 +525,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::SendToMoeExpert()
             DataCopy(xTmpTensor_, xGMTensor_[tokenIndex / axisK_ * axisH_], axisH_);  // 约束对齐
             xQueue_.EnQue(xTmpTensor_);
             xTmpTensor_ = xQueue_.DeQue<ExpandXOutType>();
-            // shmem_put_half_mem_nbi(dstWinGMTensor, xTmpTensor_, hCommuCopyOutParams_shmem, tempRankId);
-            // shmem_put_bfloat16_mem_nbi(dstWinGMTensor, xTmpTensor_, hCommuCopyOutParams_shmem, tempRankId);
             SHMEM_PUT_BY_DTYPE(ExpandXOutType, dstWinGMTensor, xTmpTensor_, hCommuCopyOutParams_shmem, tempRankId);
             xQueue_.FreeTensor<ExpandXOutType>(xTmpTensor_);
         }

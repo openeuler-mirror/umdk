@@ -10,8 +10,8 @@
 #ifndef MOE_DISPATCH_NORMAL_TILING_H
 #define MOE_DISPATCH_NORMAL_TILING_H
 
-#include "kernel_tiling/kernel_tiling.h"
 #include <cstdint>
+#include "kernel_tiling/kernel_tiling.h"
 
 struct MoeDispatchNormalInfo {
     uint32_t epWorldSize;  // epWorldSize

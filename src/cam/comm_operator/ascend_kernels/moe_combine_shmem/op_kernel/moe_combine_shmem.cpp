@@ -24,8 +24,6 @@ extern "C" __global__ __aicore__ void moe_combine_shmem(
     TPipe pipe;
 
 #if (ORIG_DTYPE_EXPAND_X == DT_BF16 || ORIG_DTYPE_EXPAND_X == DT_FLOAT16)
-    // #if (ORIG_DTYPE_EXPAND_X == DT_FLOAT16)
-    // #if (ORIG_DTYPE_EXPAND_X == DT_BF16)
     if (TILING_KEY_IS(1100)) {  // tp=2
         GET_TILING_DATA_WITH_STRUCT(MoeCombineShmemTilingData, tilingData, tilingGM);
         MoeCombineShmem<DTYPE_EXPAND_X, int32_t, true, false> op;

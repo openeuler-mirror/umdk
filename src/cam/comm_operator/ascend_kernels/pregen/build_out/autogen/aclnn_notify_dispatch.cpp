@@ -18,12 +18,12 @@ extern void NnopbaseOpLogE(const aclnnStatus code, const char *const expr);
 extern "C" {
 #endif
 
-enum NnopbaseHcclServerType {
-    NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0,
-    NNOPBASE_HCCL_SERVER_TYPE_MTE,
-    NNOPBASE_HCCL_SERVER_TYPE_END
-};
-extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, NnopbaseHcclServerType sType);
+namespace {
+    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+}; // namespace
+extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 aclnnStatus aclnnNotifyDispatchGetWorkspaceSize(const aclTensor *sendData, const aclTensor *tokenPerExpertData,
                                                 int64_t sendCount, int64_t numTokens, char *commGroup, int64_t rankSize,

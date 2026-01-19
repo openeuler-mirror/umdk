@@ -10,6 +10,7 @@
 #ifndef FUSED_DEEP_MOE_TILING_H
 #define FUSED_DEEP_MOE_TILING_H
 
+#include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
 struct FusedDeepMoeInfo {

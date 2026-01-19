@@ -115,8 +115,8 @@ TensorVector FusedDeepMoeImplMeta(
     } else {
         localExpertNum = moeExpertNum / (epRankSize - sharedExpertRankNum);
     }
-    auto opts = expertIds.options().dtype(at::kLong); 
-    at::Tensor expertTokenNums = at::empty({localExpertNum}, opts.device(at::kMeta)); 
+    auto opts = expertIds.options().dtype(at::kLong);
+    at::Tensor expertTokenNums = at::empty({localExpertNum}, opts.device(at::kMeta));
     
     return {output, expertTokenNums};
 }

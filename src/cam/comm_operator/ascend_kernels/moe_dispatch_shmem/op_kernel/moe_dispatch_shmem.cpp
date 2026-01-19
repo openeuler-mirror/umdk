@@ -38,8 +38,6 @@ extern "C" __global__ __aicore__ void moe_dispatch_shmem(GM_ADDR x, GM_ADDR expe
     REGISTER_TILING_DEFAULT(MoeDispatchShmemTilingData);
     TPipe pipe;
 #if (ORIG_DTYPE_EXPAND_X == DT_BF16 || ORIG_DTYPE_EXPAND_X == DT_FLOAT16)
-    // #if (ORIG_DTYPE_EXPAND_X == DT_FLOAT16)
-    // #if (ORIG_DTYPE_EXPAND_X == DT_BF16)
     if (TILING_KEY_IS(1000)) {
         GET_TILING_DATA_WITH_STRUCT(MoeDispatchShmemTilingData, tilingData, tilingGM);
         MoeDispatchShmem<DTYPE_X, DTYPE_EXPAND_X, false, false, false, false> op;
