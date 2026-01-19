@@ -102,13 +102,13 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
     if (opt->owner) {
         msg_ring_h->shm_tx_ring_hdr->ci = 0;
         msg_ring_h->shm_tx_ring_hdr->pi = 0;
-        atomic_init(&msg_ring_h->shm_tx_ring_hdr->cq_event_flag, 0);
-        atomic_init(&msg_ring_h->shm_tx_ring_hdr->pending_events, 0);
+        msg_ring_h->shm_tx_ring_hdr->cq_event_flag = 0;
+        msg_ring_h->shm_tx_ring_hdr->pending_events = 0;
 
         msg_ring_h->shm_rx_ring_hdr->ci = 0;
         msg_ring_h->shm_rx_ring_hdr->pi = 0;
-        atomic_init(&msg_ring_h->shm_rx_ring_hdr->cq_event_flag, 0);
-        atomic_init(&msg_ring_h->shm_rx_ring_hdr->pending_events, 0);
+        msg_ring_h->shm_rx_ring_hdr->cq_event_flag = 0;
+        msg_ring_h->shm_rx_ring_hdr->pending_events = 0;
     }
 
     msg_ring_h->tx_max_buf_size = opt->tx_max_buf_size;

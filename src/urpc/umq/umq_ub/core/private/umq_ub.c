@@ -1848,7 +1848,7 @@ static int umq_report_incomplete_and_merge_rx(
 
 void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
 {
-    atomic_fetch_add_explicit(&queue->require_rx_count, rx_cnt, memory_order_relaxed);
+    __atomic_fetch_add(&queue->require_rx_count, rx_cnt, __ATOMIC_RELAXED);
     uint32_t require_rx_count = umq_get_post_rx_num(queue->rx_depth, &queue->require_rx_count);
     if (require_rx_count > 0) {
         umq_buf_list_t head;
@@ -1857,7 +1857,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
             cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
             QBUF_LIST_INIT(&head);
             if (umq_qbuf_alloc(queue->rx_buf_size, cur_batch_count, NULL, &head) != UMQ_SUCCESS) {
-                atomic_fetch_add_explicit(&queue->require_rx_count, cur_batch_count, memory_order_relaxed);
+                __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_RELAXED);
                 UMQ_LIMIT_VLOG_ERR("alloc rx failed\n");
                 break;
             }
@@ -1871,7 +1871,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
                     bad_buf = bad_buf->qbuf_next;
                 }
                 umq_qbuf_free(&head);
-                atomic_fetch_add_explicit(&queue->require_rx_count, fail_count, memory_order_relaxed);
+                __atomic_fetch_add(&queue->require_rx_count, fail_count, __ATOMIC_RELAXED);
                 break;
             }
             require_rx_count -= cur_batch_count;
@@ -2234,7 +2234,7 @@ void umq_flush_rx(ub_queue_t *queue, uint32_t max_retry_times)
     int rx_cnt = 0;
     uint32_t retry_times = 0;
     umq_buf_t *buf[UMQ_POST_POLL_BATCH];
-    uint32_t remain = queue->rx_depth - atomic_load_explicit(&queue->require_rx_count, memory_order_acquire);
+    uint32_t remain = queue->rx_depth - __atomic_load_n(&queue->require_rx_count, __ATOMIC_ACQUIRE);
     while (remain > 0 && retry_times < max_retry_times) {
         rx_cnt = umq_ub_poll_rx((uint64_t)(uintptr_t)queue, buf, UMQ_POST_POLL_BATCH);
         if (rx_cnt < 0) {

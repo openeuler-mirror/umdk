@@ -959,7 +959,7 @@ void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t cou
     if (lock_free) {
         *var = *var + count;
     } else {
-        (void)__sync_fetch_and_add(var, count);
+        (void)__atomic_fetch_add(var, count, __ATOMIC_RELAXED);
     }
 }
 

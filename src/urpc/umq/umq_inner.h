@@ -11,7 +11,6 @@
 #define UMQ_INNER_API_H
 
 #include <time.h>
-#include <stdatomic.h>
 
 #include "urpc_util.h"
 #include "umq_api.h"
@@ -38,19 +37,18 @@ typedef struct umq {
     uint64_t umqh_tp;
 } umq_t;
 
-static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, atomic_uint *require_rx_count)
+static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, volatile uint32_t *require_rx_count)
 {
     if (rx_depth <= UMQ_POST_POLL_BATCH) {
-        return atomic_exchange_explicit(require_rx_count, 0, memory_order_relaxed);
+        return __atomic_exchange_n(require_rx_count, 0, __ATOMIC_RELAXED);
     }
 
-    unsigned int rx_num = (uint32_t)atomic_load_explicit(require_rx_count, memory_order_relaxed);
+    unsigned int rx_num = (uint32_t)__atomic_load_n(require_rx_count, __ATOMIC_RELAXED);
     do {
         if (rx_num < UMQ_POST_POLL_BATCH) {
             return 0;
         }
-    } while (!atomic_compare_exchange_weak_explicit(require_rx_count, &rx_num, 0,
-                                                    memory_order_relaxed, memory_order_relaxed));
+    } while (!__atomic_compare_exchange_n(require_rx_count, &rx_num, 0, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
     return rx_num;
 }
 
@@ -59,7 +57,7 @@ static inline void umq_inc_ref(bool lock_free, volatile uint32_t *ref_cnt, uint3
     if (lock_free) {
         *ref_cnt = *ref_cnt + n;
     } else {
-        (void)__sync_fetch_and_add(ref_cnt, n);
+        (void)__atomic_fetch_add(ref_cnt, n, __ATOMIC_RELAXED);
     }
 }
 
@@ -68,7 +66,7 @@ static inline void umq_dec_ref(bool lock_free, volatile uint32_t *ref_cnt, uint3
     if (lock_free) {
         *ref_cnt = *ref_cnt - n;
     } else {
-        (void)__sync_fetch_and_sub(ref_cnt, n);
+        (void)__atomic_fetch_sub(ref_cnt, n, __ATOMIC_RELAXED);
     }
 }
 
@@ -77,7 +75,7 @@ static inline uint32_t umq_fetch_ref(bool lock_free, volatile uint32_t *ref_cnt)
     if (lock_free) {
         return *ref_cnt;
     } else {
-        return __sync_val_compare_and_swap(ref_cnt, 0, 0);
+        return (uint32_t)__atomic_load_n(ref_cnt, __ATOMIC_SEQ_CST);
     }
 }
 

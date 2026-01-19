@@ -652,7 +652,7 @@ int umq_tp_ipc_buf_headroom_reset_impl(umq_buf_t *qbuf, uint16_t headroom_size)
     return umq_shm_qbuf_headroom_reset(qbuf_pool_handle, qbuf, headroom_size);
 }
 
-static ALWAYS_INLINE int futex_wake(atomic_int *addr, int n)
+static ALWAYS_INLINE int futex_wake(volatile uint32_t *addr, int n)
 {
     return syscall(SYS_futex, addr, FUTEX_WAKE, n, NULL, NULL, 0);
 }
@@ -666,8 +666,8 @@ void umq_ipc_notify_impl(uint64_t umqh_tp)
     }
 
     // notify peer that some events triggered
-    atomic_store(&tp->local_msg_ring->shm_tx_ring_hdr->cq_event_flag, 1);
-    atomic_fetch_add(&tp->local_msg_ring->shm_tx_ring_hdr->pending_events, 1);
+    __atomic_store_n(&tp->local_msg_ring->shm_tx_ring_hdr->cq_event_flag, 1, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&tp->local_msg_ring->shm_tx_ring_hdr->pending_events, 1, __ATOMIC_SEQ_CST);
     futex_wake(&tp->local_msg_ring->shm_tx_ring_hdr->cq_event_flag, 1);
 }
 
@@ -687,7 +687,7 @@ int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt
     return UMQ_SUCCESS;
 }
 
-static ALWAYS_INLINE int futex_wait(atomic_int *addr, int val, int timeout)
+static ALWAYS_INLINE int futex_wait(volatile uint32_t *addr, int val, int timeout)
 {
     int ret = -1;
     struct timespec ts;
@@ -707,7 +707,7 @@ static ALWAYS_INLINE int futex_wait(atomic_int *addr, int val, int timeout)
         } else if (ret == -1) {
             break;
         }
-    } while (atomic_load(addr) == val);
+    } while (__atomic_load_n(addr, __ATOMIC_SEQ_CST) == (uint32_t)val);
 
     return ret;
 }
@@ -730,7 +730,7 @@ int32_t umq_ipc_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_int
 
     int ret = futex_wait(&hdr->cq_event_flag, 0, time_out);
     if (ret == 0 || errno == EAGAIN) {
-        return atomic_load(&hdr->pending_events);
+        return __atomic_load_n(&hdr->pending_events, __ATOMIC_SEQ_CST);
     } else if (errno == ETIMEDOUT) {
         return 0;
     }
@@ -754,8 +754,8 @@ void umq_ipc_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrup
     shm_ring_hdr_t *hdr = option->direction == UMQ_IO_TX ? tp->local_msg_ring->shm_tx_ring_hdr :
         tp->bind_ctx->remote_msg_ring->shm_tx_ring_hdr;
 
-    atomic_fetch_sub(&hdr->pending_events, nevents);
-    if (atomic_load(&hdr->pending_events) == 0) {
-        atomic_store(&hdr->cq_event_flag, 0);
+    __atomic_fetch_sub(&hdr->pending_events, nevents, __ATOMIC_SEQ_CST);
+    if (__atomic_load_n(&hdr->pending_events, __ATOMIC_SEQ_CST) == 0) {
+        __atomic_store_n(&hdr->cq_event_flag, 0, __ATOMIC_SEQ_CST);
     }
 }
