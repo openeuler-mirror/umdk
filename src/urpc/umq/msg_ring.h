@@ -10,12 +10,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#ifndef __cplusplus
-#include <stdatomic.h>
-#else
-#include <atomic>
-using namespace std;
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,8 +20,8 @@ extern "C" {
 typedef struct shm_ring_hdr {
     volatile uint32_t pi;
     volatile uint32_t ci;
-    atomic_int cq_event_flag;   // 0: 无事件, 1: 有事件
-    atomic_int pending_events;  // 事件计数器
+    volatile uint32_t cq_event_flag;  // 0: 无事件, 1: 有事件
+    volatile uint32_t pending_events; // 事件计数器
 } shm_ring_hdr_t;
 
 typedef struct msg_ring {

@@ -710,7 +710,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     }
 
     UMQ_VLOG_INFO("umq create success\n");
-    atomic_init(&queue->require_rx_count, 0);
+    queue->require_rx_count = 0;
     queue->ref_cnt = 1;
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
