@@ -179,7 +179,7 @@ at::Tensor MoeCombineShmemImpl(
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtMoeCombineShmem : public torch::autograd::Function<ExtMoeCombineShmem> {
+class MoeCombineShmem : public torch::autograd::Function<MoeCombineShmem> {
 public:
     static at::Tensor forward(
         AutogradContext *ctx, \
@@ -250,7 +250,7 @@ at::Tensor MoeCombineShmemImplAutograd(
     int64_t outDtype, \
     int64_t groupListType)
 {
-    auto result = ExtMoeCombineShmem::apply(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts,
+    auto result = MoeCombineShmem::apply(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts,
         xActiveMask, activationScale, weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum,
         tpWorldSize, tpRankId, expertShardType, sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode,
         extInfo, outDtype, groupListType);

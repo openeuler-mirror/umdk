@@ -14,7 +14,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <queue>
-#include <string>s
+#include <string>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
@@ -32,10 +32,13 @@
 #elif defined(USE_CANN82_PATH)
 #include "experiment/platform/platform/platform_infos_def.h"
 #else
-#error "CANN version not supported or platform_infoS_def.h not found. Check CANN_VERSION_MACRO definition."
+#error "CANN version not supported or platform_infos_def.h not found. Check CANN_VERSION_MACRO definition."
 #endif
 
 using namespace ge;
+using namespace Cam;
+using namespace Util;
+
 namespace {
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8U; // numeric representation of AlltoAll
 
@@ -87,7 +90,7 @@ static void PrintTilingDataInfo(const char *nodeName, const NotifyDispatchTiling
 }
 
 static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &context, const char *nodeName,
-    NotifyDispatchTilingData &tilingData, std::string &commGroup)
+                                               NotifyDispatchTilingData &tilingData, std::string &commGroup)
 {
     auto attrs = context.GetAttrs();
     OP_TILING_CHECK(attrs == nullptr, OP_LOGE(nodeName, "attrs is nullptr."), return ge::GRAPH_FAILED);
@@ -139,7 +142,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
 }
 
 static void SetHcommCfg(const gert::TilingContext &context, NotifyDispatchTilingData &tiling,
-						const std::string commGroup)
+                        const std::string commGroup)
 {
     const char *nodeName = context.GetNodeName();
     OP_LOGD(nodeName, "NotifyDispatch commGroup = %s", commGroup.c_str());
@@ -176,7 +179,7 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
     } else {
         dataSize = SIZE_FOUR;
     }
-    auto tokenPerExpertData = context->GetInputDesc(INPUT_TOKEN_PER_EXPERT_INDEX);
+    auto tokenPerExpertData = context.GetInputDesc(INPUT_TOKEN_PER_EXPERT_INDEX);
     OP_TILING_CHECK(tokenPerExpertData == nullptr, OP_LOGE(nodeName, "tokenPerExpertData is null."), return false);
     OP_TILING_CHECK(
         (tokenPerExpertData->GetDataType() != ge::DT_BF16) && (tokenPerExpertData->GetDataType() != ge::DT_FLOAT16) &&
@@ -187,7 +190,7 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
             static_cast<ge::DataType>(tokenPerExpertData->GetDataType())),
         return false);
 
-    auto sendDataOffset = context->GetInputDesc(OUTPUT_SEND_DATA_OFFSET_INDEX);
+    auto sendDataOffset = context.GetInputDesc(OUTPUT_SEND_DATA_OFFSET_INDEX);
     OP_TILING_CHECK(sendDataOffset == nullptr, OP_LOGE(nodeName, "sendDataOffset is null."), return false);
     OP_TILING_CHECK(
         (sendDataOffset->GetDataType() != ge::DT_BF16) && (sendDataOffset->GetDataType() != ge::DT_FLOAT16) &&
@@ -246,7 +249,9 @@ static ge::graphStatus NotifyDispatchTilingFuncImpl(gert::TilingContext &context
     SetHcommCfg(context, *tilingData, commGroup);
 
     int tilingKey = TILING_KEY_INT;
-    auto sendDtype = context.GetInputDesc(0)->GetDataType();
+    OP_TILING_CHECK(context.GetInputDesc(0) == nullptr, OP_LOGE(nodeName, "sendData is null."),
+        return ge::GRAPH_FAILED);
+    auto sendDtype = (context.GetInputDesc(0))->GetDataType();
     if (sendDtype == ge::DT_FLOAT16) {
         tilingKey = TILING_KEY_FLOAT16;
     } else if (sendDtype == ge::DT_BF16) {
@@ -256,6 +261,8 @@ static ge::graphStatus NotifyDispatchTilingFuncImpl(gert::TilingContext &context
     }
 
     fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
+    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE(nodeName, "platformInfoPtr is nullptr."),
+        return ge::GRAPH_FAILED);
     fe::PlatFormInfos &platformInfo = *platformInfoPtr;
 
     std::string socVersion;

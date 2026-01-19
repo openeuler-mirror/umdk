@@ -8,8 +8,7 @@
  */
 
 #include "pytorch_npu_helper.hpp"
-#include "torch_npu/csrc/core/npu/NPUStream.h"
-#include "utils.h"
+#include "torch_bind_exception.h"
 #include <hccl/hccl.h>
 #include <iostream>
 #include <torch/csrc/autograd/custom_function.h>
@@ -76,7 +75,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImpl(const at::Tensor &topkI
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtGetDispatchLayout : public torch::autograd::Function<ExtGetDispatchLayout> {
+class GetDispatchLayout : public torch::autograd::Function<GetDispatchLayout> {
 public:
     static TensorVector forward(AutogradContext *ctx, const at::Tensor &topkIdx, int64_t numExperts, int64_t numRanks)
     {
@@ -95,7 +94,7 @@ public:
 std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImplAutograd(const at::Tensor &topkIdx, int64_t numExperts,
                                                                  int64_t numRanks)
 {
-    auto result = ExtGetDispatchLayout::apply(topkIdx, numExperts, numRanks);
+    auto result = GetDispatchLayout::apply(topkIdx, numExperts, numRanks);
     return std::make_tuple(result[ZERO], result[FIRST]);
 }
 

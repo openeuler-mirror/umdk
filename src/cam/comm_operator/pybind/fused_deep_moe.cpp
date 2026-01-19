@@ -23,7 +23,7 @@ using namespace at;
 using namespace std;
 
 
-std::vector<at::Tensor> FusedDeepMoeImplNpu(
+TensorVector FusedDeepMoeImplNpu(
     const at::Tensor &x, \
     const at::Tensor &expertIds, \
     const at::TensorList &gmm1PermutedWeight, \
@@ -62,9 +62,8 @@ std::vector<at::Tensor> FusedDeepMoeImplNpu(
     at::Tensor expertTokenNums = at::empty({localExpertNum}, opts);
     
     // 必须要求对齐fused_deep_moe.cpp 先input 跟着 attr， 然后output
-    vector<char> groupEpChrs(groupEp.begin(), groupEp.end());
-    groupEpChrs.push_back('\0');
-    char *groupEpPtr = &groupEpChrs[0];
+    const std::string groupEpStr(groupEp.data(), groupEp.size());
+    const char* groupEpPtr = groupEpStr.c_str();
 
     // 必须要求对齐fused_deep_moe.cpp 先input 跟着 attr, 然后output
     EXEC_NPU_CMD(aclnnFusedDeepMoe,
@@ -149,7 +148,7 @@ TensorVector FusedDeepMoeImpl(
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtFusedDeepMoe : public torch::autograd::Function<ExtFusedDeepMoe> {
+class FusedDeepMoe : public torch::autograd::Function<FusedDeepMoe> {
 public:
     static TensorVector forward(AutogradContext *ctx, \
                             const at::Tensor &x, \
@@ -211,7 +210,7 @@ TensorVector FusedDeepMoeImplAutograd(
     int64_t quantMode, \
     int64_t globalBs)
 {
-    auto result = ExtFusedDeepMoe::apply(x, expertIds, gmm1PermutedWeight, gmm1PermutedWeightScale, gmm2Weight, \
+    auto result = FusedDeepMoe::apply(x, expertIds, gmm1PermutedWeight, gmm1PermutedWeightScale, gmm2Weight, \
             gmm2WeightScale, expertScales, expertSmoothScales, xActiveMask, \
             groupEp, epRankSize, epRankId, moeExpertNum, sharedExpertNum, sharedExpertRankNum, quantMode, globalBs);
         return result;

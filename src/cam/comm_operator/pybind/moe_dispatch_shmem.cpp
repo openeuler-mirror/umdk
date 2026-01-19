@@ -216,7 +216,7 @@ TensorVector MoeDispatchShmemImpl(
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtMoeDispatchShmem : public torch::autograd::Function<ExtMoeDispatchShmem> {
+class MoeDispatchShmem : public torch::autograd::Function<MoeDispatchShmem> {
 public:
     static TensorVector forward(
         AutogradContext *ctx, \
@@ -271,7 +271,7 @@ TensorVector MoeDispatchShmemImplAutograd(
     int64_t expertTokenNumsType, \
     int64_t extInfo)
 {
-    auto result = ExtMoeDispatchShmem::apply(x, expertIds, scales, xActiveMask, \
+    auto result = MoeDispatchShmem::apply(x, expertIds, scales, xActiveMask, \
             epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
             sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo);
     return result;

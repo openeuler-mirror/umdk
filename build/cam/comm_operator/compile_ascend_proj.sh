@@ -53,20 +53,20 @@ CopyOps() {
     done
 }
 
-modify_func_cmake() {
-    sed -i '/cmake_parse_arguments(OPBUILD.*)/a\
-\ 
-    if (DEFINED CANN_VERSION_MACRO AND NOT "${CANN_VERSION_MACRO}" STREQUAL "")\
-        set(CANN_VERSION_FLAG "-D${CANN_VERSION_MACRO}")\
-        message(STATUS "opbuild: Detected CANN_VERSION_MACRO = ${CANN_VERSION_MACRO}")\
-    else()\
-        set(CANN_VERSION_FLAG "")\
-        message(WARNING "opbuild: No CANN_VERSION_MACRO defined! Possible #error in .cc files.")\
-    endif()' cmake/func.cmake
-
+modify_func_cmake () {
+  sed -i '/cmake_parse_arguments(OPBUILD.*)/a\
+\
+  if (DEFINED CANN_VERSION_MACRO AND NOT "${CANN_VERSION_MACRO}" STREQUAL "")\
+    set(CANN_VERSION_FLAG "-D${CANN_VERSION_MACRO}")\
+    message(STATUS "opbuild: Detected CANN_VERSION_MACRO = ${CANN_VERSION_MACRO}")\
+  else()\
+    set(CANN_VERSION_FLAG "")\
+    message(WARNING "opbuild: No CANN_VERSION_MACRO defined! Possible #error in .cc files.")\
+  endif()' cmake/func.cmake
+ 
 # 在 -D_GLIBCXX_USE_CXX11_ABI 后添加 ${CANN_VERSION_FLAG}
-    sed -i '/-D_GLIBCXX_USE_CXX11_ABI=/a\    
-                ${CANN_VERSION_FLAG}' cmake/func.cmake
+  sed -i '/-D_GLIBCXX_USE_CXX11_ABI=/a\
+                  ${CANN_VERSION_FLAG}' cmake/func.cmake
 }
 
 # 构建算子工程并将其产物传到指定地点

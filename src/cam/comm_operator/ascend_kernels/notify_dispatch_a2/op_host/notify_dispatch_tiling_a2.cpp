@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <cstdio>
 #include <cstdlib>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cmath>
@@ -23,20 +22,23 @@
 #include "error_log.h"
 #include "graph/utils/type_utils.h"
 #include "register/op_def_registry.h"
-#include "../op_kernel/notify_dispatch_tiling_a2.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "tiling/hccl/hccl_tiling.h"
 #include "mc2_tiling_utils.h"
+#include "../op_kernel/notify_dispatch_tiling_a2.h"
 
 #ifdef USE_CANN83_PATH
 #include "platform/platform_infos_def.h"
 #elif defined(USE_CANN82_PATH)
 #include "experiment/platform/platform/platform_infos_def.h"
 #else
-#error "CANN version not supported or platform_infoS_def.h not found. Check CANN_VERSION_MACRO definition."
+#error "CANN version not supported or platform_infos_def.h not found. Check CANN_VERSION_MACRO definition."
 #endif
 
 using namespace ge;
+using namespace Cam;
+using namespace Util;
+
 namespace {
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8U;  // numeric representation of AlltoAll
 
@@ -89,7 +91,7 @@ constexpr static int TILING_KEY_A2_TYPE = 100;
 }  // namespace
 
 namespace optiling {
-static void PrintTilingDataInfo(const char *nodeName, NotifyDispatchA2TilingData &tilingData)
+static void PrintTilingDataInfo(const char *nodeName, const NotifyDispatchA2TilingData &tilingData)
 {
     OP_LOGD(nodeName, "rankSize is %u.", tilingData.notifyDispatchInfoA2.rankSize);
     OP_LOGD(nodeName, "rankId is %u.", tilingData.notifyDispatchInfoA2.rankId);
@@ -103,10 +105,10 @@ static void PrintTilingDataInfo(const char *nodeName, NotifyDispatchA2TilingData
     OP_LOGD(nodeName, "totalUbSize is %lu.", tilingData.notifyDispatchInfoA2.totalUbSize);
 }
 
-static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context, const char *nodeName,
+static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &context, const char *nodeName,
                                                NotifyDispatchA2TilingData &tilingData, std::string &commGroup)
 {
-    auto attrs = context->GetAttrs();
+    auto attrs = context.GetAttrs();
     OP_TILING_CHECK(attrs == nullptr, OP_LOGE(nodeName, "attrs is nullptr."), return ge::GRAPH_FAILED);
 
     auto sendCountPtr = attrs->GetAttrPointer<int64_t>(ATTR_SEND_COUNT_INDEX);
@@ -170,31 +172,31 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context, con
     return ge::GRAPH_SUCCESS;
 }
 
-static void SetHcommCfg(const gert::TilingContext *context, NotifyDispatchA2TilingData *tiling,
+static void SetHcommCfg(const gert::TilingContext &context, NotifyDispatchA2TilingData &tiling,
                         const std::string commGroup)
 {
-    const char *nodeName = context->GetNodeName();
+    const char *nodeName = context.GetNodeName();
     OP_LOGD(nodeName, "NotifyDispatchA2 commGroup = %s", commGroup.c_str());
     uint32_t opType1 = OP_TYPE_ALL_TO_ALL;
     std::string algConfigAllToAllStr = "AlltoAll=level0:fullmesh;level1:pairwise";
 
     AscendC::Mc2CcTilingConfig mc2CcTilingConfig(commGroup, opType1, algConfigAllToAllStr);
-    mc2CcTilingConfig.GetTiling(tiling->mc2InitTiling);
-    mc2CcTilingConfig.GetTiling(tiling->mc2CcTiling1);
+    mc2CcTilingConfig.GetTiling(tiling.mc2InitTiling);
+    mc2CcTilingConfig.GetTiling(tiling.mc2CcTiling1);
 }
 
-static ge::graphStatus SetWorkSpace(gert::TilingContext *context, const char *nodeName)
+static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *nodeName)
 {
-    size_t *workSpaces = context->GetWorkspaceSizes(1);
+    size_t *workSpaces = context.GetWorkspaceSizes(1);
     OP_TILING_CHECK(workSpaces == nullptr, OP_LOGE(nodeName, "workSpaces is nullptr."), return ge::GRAPH_FAILED);
     workSpaces[0] = SYSTEM_NEED_WORKSPACE + KERNEL_USE_WORKSPACE + KERNEL_A2_ARG_SIZE;
     return ge::GRAPH_SUCCESS;
 }
 
-static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeName)
+static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeName)
 {
     OP_LOGD(nodeName, "========CheckTensorDataType============");
-    auto sendData = context->GetInputDesc(INPUT_SEND_DATA_INDEX);
+    auto sendData = context.GetInputDesc(INPUT_SEND_DATA_INDEX);
     OP_TILING_CHECK(sendData == nullptr, OP_LOGE(nodeName, "sendData is null."), return false);
     OP_TILING_CHECK(
         (sendData->GetDataType() != ge::DT_BF16) && (sendData->GetDataType() != ge::DT_FLOAT16) &&
@@ -209,7 +211,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
     } else {
         dataSize = NUM_4;
     }
-    auto tokenPerExpertData = context->GetInputDesc(INPUT_TOKEN_PER_EXPERT_INDEX);
+    auto tokenPerExpertData = context.GetInputDesc(INPUT_TOKEN_PER_EXPERT_INDEX);
     OP_TILING_CHECK(tokenPerExpertData == nullptr, OP_LOGE(nodeName, "tokenPerExpertData is null."), return false);
     OP_TILING_CHECK(
         (tokenPerExpertData->GetDataType() != ge::DT_BF16) && (tokenPerExpertData->GetDataType() != ge::DT_FLOAT16) &&
@@ -220,7 +222,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
             static_cast<ge::DataType>(tokenPerExpertData->GetDataType())),
         return false);
     // for saving intermiadiate vars in kernel, same size as recvData
-    auto tmpData = context->GetInputDesc(INPUT_TMP_DATA_INDEX);
+    auto tmpData = context.GetInputDesc(INPUT_TMP_DATA_INDEX);
     OP_TILING_CHECK(tmpData == nullptr, OP_LOGE(nodeName, "tmpData is null."), return false);
     OP_TILING_CHECK(
         (tmpData->GetDataType() != ge::DT_BF16) && (tmpData->GetDataType() != ge::DT_FLOAT16) &&
@@ -229,7 +231,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(tmpData->GetDataType())),
         return false);
 
-    auto sendDataOffset = context->GetOutputDesc(OUTPUT_SEND_DATA_OFFSET_INDEX);
+    auto sendDataOffset = context.GetOutputDesc(OUTPUT_SEND_DATA_OFFSET_INDEX);
     OP_TILING_CHECK(sendDataOffset == nullptr, OP_LOGE(nodeName, "sendDataOffset is null."), return false);
     OP_TILING_CHECK(
         (sendDataOffset->GetDataType() != ge::DT_BF16) && (sendDataOffset->GetDataType() != ge::DT_FLOAT16) &&
@@ -239,7 +241,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(sendDataOffset->GetDataType())),
         return false);
 
-    auto recvData = context->GetOutputDesc(OUTPUT_RECV_DATA_INDEX);
+    auto recvData = context.GetOutputDesc(OUTPUT_RECV_DATA_INDEX);
     OP_TILING_CHECK(recvData == nullptr, OP_LOGE(nodeName, "recvData is null."), return false);
     OP_TILING_CHECK(
         (recvData->GetDataType() != ge::DT_BF16) && (recvData->GetDataType() != ge::DT_FLOAT16) &&
@@ -249,7 +251,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(recvData->GetDataType())),
         return false);
 
-    auto tokenServerIdx = context->GetOutputDesc(OUTPUT_TOKEN_SERVER_IDX_INDEX);
+    auto tokenServerIdx = context.GetOutputDesc(OUTPUT_TOKEN_SERVER_IDX_INDEX);
     OP_TILING_CHECK(tokenServerIdx == nullptr, OP_LOGE(nodeName, "tokenServerIdx is null."), return false);
     OP_TILING_CHECK(
         (tokenServerIdx->GetDataType() != ge::DT_BF16) && (tokenServerIdx->GetDataType() != ge::DT_FLOAT16) &&
@@ -259,7 +261,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(tokenServerIdx->GetDataType())),
         return false);
 
-    auto tokenUniquePerServer = context->GetOutputDesc(OUTPUT_TOKEN_UNIQUE_PER_SERVER_INDEX);
+    auto tokenUniquePerServer = context.GetOutputDesc(OUTPUT_TOKEN_UNIQUE_PER_SERVER_INDEX);
     OP_TILING_CHECK(tokenUniquePerServer == nullptr, OP_LOGE(nodeName, "tokenUniquePerServer is null."), return false);
     OP_TILING_CHECK(
         (tokenUniquePerServer->GetDataType() != ge::DT_BF16) &&
@@ -272,7 +274,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
             static_cast<ge::DataType>(tokenUniquePerServer->GetDataType())),
         return false);
 
-    auto epRankTokenCnt = context->GetOutputDesc(OUTPUT_EP_RANK_TOKEN_CNT_INDEX);
+    auto epRankTokenCnt = context.GetOutputDesc(OUTPUT_EP_RANK_TOKEN_CNT_INDEX);
     OP_TILING_CHECK(epRankTokenCnt == nullptr, OP_LOGE(nodeName, "epRankTokenCnt is null."), return false);
     OP_TILING_CHECK(
         (epRankTokenCnt->GetDataType() != ge::DT_BF16) && (epRankTokenCnt->GetDataType() != ge::DT_FLOAT16) &&
@@ -282,14 +284,14 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(epRankTokenCnt->GetDataType())),
         return false);
 
-    auto localEpTokenCnt = context->GetOutputDesc(OUTPUT_LOCAL_EP_TOKEN_CNT_INDEX);
+    auto localEpTokenCnt = context.GetOutputDesc(OUTPUT_LOCAL_EP_TOKEN_CNT_INDEX);
     OP_TILING_CHECK(localEpTokenCnt == nullptr, OP_LOGE(nodeName, "localEpTokenCnt is null."), return false);
     OP_TILING_CHECK((localEpTokenCnt->GetDataType() != ge::DT_INT64),
                     OP_LOGE(nodeName, "localEpTokenCnt datatype is invalid, datatype should be int64, but is %d.",
                             static_cast<ge::DataType>(localEpTokenCnt->GetDataType())),
                     return false);
 
-    auto srcOffsetRankTokenIdx = context->GetOutputDesc(OUTPUT_SRC_OFFSET_RANK_TOKEN_INDEX);
+    auto srcOffsetRankTokenIdx = context.GetOutputDesc(OUTPUT_SRC_OFFSET_RANK_TOKEN_INDEX);
     OP_TILING_CHECK(srcOffsetRankTokenIdx == nullptr, OP_LOGE(nodeName, "srcOffsetRankTokenIdx is null."),
                     return false);
     OP_TILING_CHECK(
@@ -303,7 +305,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
             static_cast<ge::DataType>(srcOffsetRankTokenIdx->GetDataType())),
         return false);
 
-    auto dstOffsetRankTokenIdx = context->GetOutputDesc(OUTPUT_DST_OFFSET_RANK_TOKEN_INDEX);
+    auto dstOffsetRankTokenIdx = context.GetOutputDesc(OUTPUT_DST_OFFSET_RANK_TOKEN_INDEX);
     OP_TILING_CHECK(dstOffsetRankTokenIdx == nullptr, OP_LOGE(nodeName, "dstOffsetRankTokenIdx is null."),
                     return false);
     OP_TILING_CHECK(
@@ -317,7 +319,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
             static_cast<ge::DataType>(dstOffsetRankTokenIdx->GetDataType())),
         return false);
 
-    auto offsetInner = context->GetOutputDesc(OUTPUT_OFFSET_INNER_INDEX);
+    auto offsetInner = context.GetOutputDesc(OUTPUT_OFFSET_INNER_INDEX);
     OP_TILING_CHECK(offsetInner == nullptr, OP_LOGE(nodeName, "offsetInner is null."), return false);
     OP_TILING_CHECK(
         (offsetInner->GetDataType() != ge::DT_BF16) && (offsetInner->GetDataType() != ge::DT_FLOAT16) &&
@@ -327,7 +329,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(offsetInner->GetDataType())),
         return false);
 
-    auto countOuter = context->GetOutputDesc(OUTPUT_COUNT_OUTER_INDEX);
+    auto countOuter = context.GetOutputDesc(OUTPUT_COUNT_OUTER_INDEX);
     OP_TILING_CHECK(countOuter == nullptr, OP_LOGE(nodeName, "countOuter is null."), return false);
     OP_TILING_CHECK(
         (countOuter->GetDataType() != ge::DT_BF16) && (countOuter->GetDataType() != ge::DT_FLOAT16) &&
@@ -337,7 +339,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(countOuter->GetDataType())),
         return false);
 
-    auto expandIdx = context->GetOutputDesc(OUTPUT_EXPAND_IDX_INDEX);
+    auto expandIdx = context.GetOutputDesc(OUTPUT_EXPAND_IDX_INDEX);
     OP_TILING_CHECK(expandIdx == nullptr, OP_LOGE(nodeName, "expandIdx is null."), return false);
     OP_TILING_CHECK(
         (expandIdx->GetDataType() != ge::DT_BF16) && (expandIdx->GetDataType() != ge::DT_FLOAT16) &&
@@ -347,7 +349,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
                 static_cast<ge::DataType>(expandIdx->GetDataType())),
         return false);
 
-    auto totalRecvTokens = context->GetOutputDesc(OUTPUT_TOTAL_RECV_TOKENS_INDEX);
+    auto totalRecvTokens = context.GetOutputDesc(OUTPUT_TOTAL_RECV_TOKENS_INDEX);
     OP_TILING_CHECK(totalRecvTokens == nullptr, OP_LOGE(nodeName, "totalRecvTokens is null."), return false);
     OP_TILING_CHECK(
         (totalRecvTokens->GetDataType() != ge::DT_BF16) && (totalRecvTokens->GetDataType() != ge::DT_FLOAT16) &&
@@ -358,7 +360,8 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
         return false);
 
     // Verify the size of the win area
-    NotifyDispatchA2TilingData *tilingData = context->GetTilingData<NotifyDispatchA2TilingData>();
+    NotifyDispatchA2TilingData *tilingData = context.GetTilingData<NotifyDispatchA2TilingData>();
+    OP_TILING_CHECK(tilingData == nullptr, OP_LOGE(nodeName, "tilingData is nullptr."), return false);
     uint64_t maxWindowSize = Mc2TilingUtils::GetMaxWindowSize();
     uint64_t actualSize = 2 * dataSize * tilingData->notifyDispatchInfoA2.sendCount + 2 * 1024 * 1024;  // 2MB flag位
     if (actualSize > maxWindowSize) {
@@ -368,7 +371,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
     return true;
 }
 
-static ge::graphStatus TilingCheckTensor(gert::TilingContext *context, const char *nodeName)
+static ge::graphStatus TilingCheckTensor(gert::TilingContext &context, const char *nodeName)
 {
     OP_TILING_CHECK(!CheckTensorDataType(context, nodeName), OP_LOGE(nodeName, "params dataType is invalid."),
                     return ge::GRAPH_FAILED);
@@ -376,11 +379,11 @@ static ge::graphStatus TilingCheckTensor(gert::TilingContext *context, const cha
     return ge::GRAPH_SUCCESS;
 }
 
-static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *context)
+static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext &context)
 {
     OP_LOGD(nodeName, "Enter NotifyDispatchA2TilingFuncImpl.");
-    const char *nodeName = context->GetNodeName();
-    NotifyDispatchA2TilingData *tilingData = context->GetTilingData<NotifyDispatchA2TilingData>();
+    const char *nodeName = context.GetNodeName();
+    NotifyDispatchA2TilingData *tilingData = context.GetTilingData<NotifyDispatchA2TilingData>();
     OP_TILING_CHECK(tilingData == nullptr, OP_LOGE(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
     std::string commGroup = "";
     OP_LOGI(nodeName, "Enter NotifyDispatchA2 tiling check func.");
@@ -393,7 +396,7 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *conte
 
     OP_TILING_CHECK(SetWorkSpace(context, nodeName) != ge::GRAPH_SUCCESS,
                     OP_LOGE(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
-    SetHcommCfg(context, tilingData, commGroup);
+    SetHcommCfg(context, *tilingData, commGroup);
 
     std::string hcclIntraPcieEnableStr;
     std::string hcclIntraRoceEnableStr;
@@ -414,7 +417,9 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *conte
                     return ge::GRAPH_FAILED);
 
     int tilingKey = TILING_KEY_INT;
-    auto sendDtype = context->GetInputDesc(0)->GetDataType();
+    OP_TILING_CHECK(context.GetInputDesc(0) == nullptr, OP_LOGE(nodeName, "input 0 is nullptr."),
+        return ge::GRAPH_FAILED);
+    auto sendDtype = (context.GetInputDesc(0))->GetDataType();
     if (sendDtype == ge::DT_FLOAT16) {
         tilingKey = TILING_KEY_FLOAT16;
     } else if (sendDtype == ge::DT_BF16) {
@@ -423,7 +428,9 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *conte
         tilingKey = TILING_KEY_FLOAT;
     }
 
-    fe::PlatFormInfos *platformInfoPtr = context->GetPlatformInfo();
+    fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
+    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE(nodeName, "platformInfoPtr is nullptr."),
+        return ge::GRAPH_FAILED);
     fe::PlatFormInfos &platformInfo = *platformInfoPtr;
 
     std::string socVersion;
@@ -432,16 +439,16 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *conte
     if (socVersion == "Ascend910B") {
         tilingKey = tilingKey + TILING_KEY_A2_TYPE;
     }
-    context->SetTilingKey(tilingKey);
+    context.SetTilingKey(tilingKey);
 
-    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());
     uint32_t blockDim;
     uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
     uint64_t ubSize = 0UL;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ubSize);
 
     blockDim = aivNum;
-    context->SetBlockDim(blockDim);
+    context.SetBlockDim(blockDim);
     tilingData->notifyDispatchInfoA2.totalUbSize = ubSize;
     tilingData->notifyDispatchInfoA2.aivNum = aivNum;
     OP_LOGD(nodeName, "blockDim=%u, aivNum=%u, ubSize=%lu", blockDim, aivNum, ubSize);
@@ -451,7 +458,7 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext *conte
 
 static ge::graphStatus NotifyDispatchA2TilingFunc(gert::TilingContext *context)
 {
-    ge::graphStatus ret = NotifyDispatchA2TilingFuncImpl(context);
+    ge::graphStatus ret = NotifyDispatchA2TilingFuncImpl(*context);
     return ret;
 }
 

@@ -7,8 +7,8 @@
  * History: 2026-01-06 create shmem combine header file in device part
  */
 
-#ifndef moe_combine_shmem_H
-#define moe_combine_shmem_H
+#ifndef MOE_COMBINE_SHMEM_H
+#define MOE_COMBINE_SHMEM_H
 #define OPT_RANK_OFFSET 512
 
 #include "kernel_operator.h"
@@ -17,6 +17,7 @@
 #include "shmem_api.h"
 
 using namespace AscendC;
+using namespace Moe;
 #define SHMEM_PUT_BY_DTYPE(dtype, ...)                            \
     do {                                                          \
         if constexpr (std::is_same_v<dtype, half>) {              \
@@ -877,7 +878,6 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
                 DequantProcess(rowTmpLocal);
             } else {
                 SHMEM_GET_BY_DTYPE(ExpandXType, rowTmpLocal, shareTokGlobal, processLen, epRankId_);
-                SyncFunc<AscendC::HardEvent::MTE2_V>();
             }
 
             Cast(rowTmpFloatLocal, rowTmpLocal, AscendC::RoundMode::CAST_NONE, processLen);
@@ -907,4 +907,4 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::Process()
     LocalWindowCopy();
 }
 }  // namespace MoeDistributeCombineImpl
-#endif  // moe_combine_shmem_H
+#endif  // MOE_COMBINE_SHMEM_H

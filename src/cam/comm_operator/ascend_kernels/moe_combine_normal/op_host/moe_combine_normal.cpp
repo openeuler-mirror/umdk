@@ -12,7 +12,7 @@
 namespace ops {
 class MoeCombineNormal : public OpDef {
 public:
-    explicit MoeCombineNormal(const char* name) : OpDef(name)
+    explicit MoeCombineNormal(const char *name) : OpDef(name)
     {
         this->Input("recv_x")
             .ParamType(REQUIRED)

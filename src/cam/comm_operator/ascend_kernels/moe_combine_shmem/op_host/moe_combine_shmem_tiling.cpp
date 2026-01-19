@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <cstdio>
 #include <cstdlib>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cmath>
@@ -27,9 +26,9 @@
 #include "tiling/platform/platform_ascendc.h"
 #include "error_log.h"
 #include "../op_kernel/moe_combine_shmem_tiling.h"
-// #include "shmem_api.h"
 
 using namespace ge;
+using namespace Moe;
 
 namespace {
 constexpr uint32_t EXPAND_X_INDEX = 0;
@@ -416,6 +415,7 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineShmem
 
     // 校验expandIdx的维度
     const gert::StorageShape *expandIdxStorageShape = context.GetInputShape(EXPAND_IDX_INDEX);
+    OP_TILING_CHECK(expandIdxStorageShape == nullptr, OP_LOGE(nodeName, "expandIdxStorageShape is null"), return false);
     int64_t expandIdxDim0 = expandIdxStorageShape->GetStorageShape().GetDim(0);
     OP_TILING_CHECK(expandIdxDim0 != expertIdsDim0 * expertIdsDim1,
                     OP_LOGE(nodeName, "expandIdxDim0 != bs * k, expandIdxDim0 is %ld, bs * k is %ld.", expandIdxDim0,
@@ -426,13 +426,17 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineShmem
     int64_t epWorldSize = static_cast<int64_t>(tilingData.moeDistributeCombineInfo.epWorldSize);
     int64_t moeExpertPerRankNum = static_cast<int64_t>(tilingData.moeDistributeCombineInfo.moeExpertPerRankNum);
     const gert::StorageShape *epSendCountStorageShape = context.GetInputShape(EP_SEND_COUNTS_INDEX);
+    OP_TILING_CHECK(epSendCountStorageShape == nullptr, OP_LOGE(nodeName, "epSendCountStorageShape is null."),
+        return false);
     const gert::StorageShape *tpSendCountStorageShape = context.GetOptionalInputShape(TP_SEND_COUNTS_INDEX);
+    OP_TILING_CHECK(tpSendCountStorageShape == nullptr, OP_LOGE(nodeName, "tpSendCountStorageShape is null."),
+        return false);
     const int64_t epSendCountDim0 = epSendCountStorageShape->GetStorageShape().GetDim(0);
     const int64_t tpSendCountDim0 = tpSendCountStorageShape->GetStorageShape().GetDim(0);
     int64_t epSendCount = (isShared) ? epWorldSize : epWorldSize * moeExpertPerRankNum;
     OP_TILING_CHECK(epSendCountDim0 < epSendCount * tpWorldSize,
                     OP_LOGE(nodeName,
-                            "epSendCountDim0 not greater than or equal to epSendCount * tpWorldSize, epSendCountDim0 " 
+                            "epSendCountDim0 not greater than or equal to epSendCount * tpWorldSize, epSendCountDim0 "
                             "is %ld, epSendCount is %ld, tpWorldSize is %ld.",
                             epSendCountDim0, epSendCount, tpWorldSize),
                     return false);
@@ -445,7 +449,7 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineShmem
     // 校验expertScales的维度
     const gert::StorageShape *expertScalesStorageShape = context.GetInputShape(EXPERT_SCALES_INDEX);
     OP_TILING_CHECK(expertScalesStorageShape == nullptr,
-        OP_LOGE(nodeName, "expertScalesStorageShape is null."), return false);
+        OP_LOGE(nodeName, "expertScalesStorageShape is null"), return false);
     int64_t expertScalesDim0 = expertScalesStorageShape->GetStorageShape().GetDim(0);
     int64_t expertScalesDim1 = expertScalesStorageShape->GetStorageShape().GetDim(1);
     OP_TILING_CHECK(expertScalesDim0 != expertIdsDim0,
@@ -482,8 +486,8 @@ static bool CheckAttrs(const gert::TilingContext &context, MoeCombineShmemTiling
     // 校验ep能均分共享
     OP_TILING_CHECK((sharedExpertRankNum != 0) && (epWorldSize % sharedExpertRankNum != 0),
                     OP_LOGE(nodeName,
-                            "epWorldSize should be divisible by sharedExpertRankNum, but epWorldSize=%d, "
-                            "sharedExpertRankNum=%d.",
+                            "epWorldSize should be divisible by sharedExpertRankNum, but epWorldSize=%u, "
+                            "sharedExpertRankNum=%u.",
                             epWorldSize, sharedExpertRankNum),
                     return false);
 
@@ -519,7 +523,7 @@ static bool CheckAttrs(const gert::TilingContext &context, MoeCombineShmemTiling
     // 校验输入expertIds的维度0并设bs
     const gert::StorageShape *expertIdsStorageShape = context.GetInputShape(EXPERT_IDS_INDEX);
     OP_TILING_CHECK(expertIdsStorageShape == nullptr,
-        OP_LOGE(nodeName, "expertIdsStorageShape is null."), return false);
+        OP_LOGE(nodeName, "expertIdsStorageShape is null"), return false);
     int64_t expertIdsDim0 = expertIdsStorageShape->GetStorageShape().GetDim(0);
     OP_TILING_CHECK((expertIdsDim0 <= 0) || (expertIdsDim0 > BS_UPPER_BOUND),
                     OP_LOGE(nodeName, "Invalid expertIds dims0(BS) %ld. Should be between [1, %ld].", expertIdsDim0,
@@ -552,7 +556,7 @@ static bool CheckAttrs(const gert::TilingContext &context, MoeCombineShmemTiling
     return true;
 }
 
-static ge::graphStatus TilingCheckMoeDistributeCombine(const gert::TilingContext &context, const char *nodeName)
+static ge::graphStatus TilingCheckMoeDistributeCombine(gert::TilingContext &context, const char *nodeName)
 {
     // 检查参数shape信息
     OP_TILING_CHECK(!CheckTensorDim(context, nodeName), OP_LOGE(nodeName, "param shape is invalid"),
@@ -609,9 +613,8 @@ static ge::graphStatus MoeDistributeCombineA3TilingFuncImpl(gert::TilingContext 
     uint32_t commQuantMode = 0U;
 
     // 获取入参属性
-    OP_TILING_CHECK(
-        GetAttrAndSetTilingData(context, *tilingData, nodeName, groupEp, groupTp, commQuantMode) == ge::GRAPH_FAILED,
-        OP_LOGE(nodeName, "Getting attr failed."), return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(GetAttrAndSetTilingData(context, *tilingData, nodeName, commQuantMode) == ge::GRAPH_FAILED,
+                    OP_LOGE(nodeName, "Getting attr failed."), return ge::GRAPH_FAILED);
 
     // 检查输入输出的dim、format、dataType
     OP_TILING_CHECK(TilingCheckMoeDistributeCombine(context, nodeName) != ge::GRAPH_SUCCESS,

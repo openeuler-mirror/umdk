@@ -11,24 +11,23 @@
 #define __MC2_TILING_UTILS_H__
 
 #include <cstdint>
-#include <map>
 #include <string>
 
 #include "error_log.h"
 #include "register/tilingdata_base.h"
 #include "tiling/tiling_api.h"
 
+namespace Util {
 class Mc2TilingUtils {
 public:
-#define HCCL_BUFFSIZE "HCCL_BUFFSIZE"
     static uint64_t GetMaxWindowSize()
     {
         uint16_t defaultWindowSize = 200;
-        if (getenv(HCCL_BUFFSIZE) == nullptr) {
+        if (getenv("HCCL_BUFFSIZE") == nullptr) {
             OP_LOGD("", "Env HCCL_BUFFSIZE don't set");
         } else {
             try {
-                std::string envStr(getenv(HCCL_BUFFSIZE));
+                std::string envStr(getenv("HCCL_BUFFSIZE"));
                 defaultWindowSize = std::stoi(envStr);
             } catch (const std::invalid_argument &ia) {
                 OP_LOGE("", "Invalid argument when parsing HCCL_BUFFSIZE: %s", ia.what());
@@ -41,5 +40,5 @@ public:
         return maxWindowSize;
     }
 };
-
+} // namespace Util
 #endif

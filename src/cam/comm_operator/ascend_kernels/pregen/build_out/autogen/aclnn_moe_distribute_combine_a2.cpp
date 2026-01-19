@@ -9,15 +9,15 @@
 
 #include <string.h>
 #include "graph/types.h"
-#include "aclnn_moe_distribute_combine_a2.h"
 #include "aclnnInner_moe_distribute_combine_a2.h"
+#include "aclnn_moe_distribute_combine_a2.h"
 
-enum NnopbaseHcclServerType {
-    NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0,
-    NNOPBASE_HCCL_SERVER_TYPE_MTE,
-    NNOPBASE_HCCL_SERVER_TYPE_END
-};
-extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, NnopbaseHcclServerType sType);
+namespace {
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
+extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus
 extern "C" {

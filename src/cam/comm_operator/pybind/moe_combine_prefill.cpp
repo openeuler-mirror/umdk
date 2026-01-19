@@ -8,8 +8,7 @@
  */
 
 #include "pytorch_npu_helper.hpp"
-#include "torch_npu/csrc/core/npu/NPUStream.h"
-#include "utils.h"
+#include "torch_bind_exception.h"
 #include <hccl/hccl.h>
 #include <iostream>
 #include <torch/csrc/autograd/custom_function.h>
@@ -30,9 +29,8 @@ at::Tensor MoeCombinePrefillImplNpu(const at::Tensor &x, const at::Tensor &topkI
                                     const at::Tensor &srcIdx, const at::Tensor &sendHead, c10::string_view groupEp,
                                     int64_t rank, int64_t numRanks)
 {
-    std::vector<char> groupEpChrs(groupEp.begin(), groupEp.end());
-    groupEpChrs.push_back('\0');
-    char *groupEpPtr = &groupEpChrs[0];
+    const std::string groupEpStr(groupEp.data(), groupEp.size());
+    const char* groupEpPtr = groupEpStr.c_str();
 
     TORCH_BIND_ASSERT(x.dim() == DIM_TWO and x.is_contiguous());
 
@@ -81,7 +79,7 @@ at::Tensor MoeCombinePrefillImpl(const at::Tensor &x, const at::Tensor &topkIdx,
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtMoeCombinePrefill : public torch::autograd::Function<ExtMoeCombinePrefill> {
+class MoeCombinePrefill : public torch::autograd::Function<MoeCombinePrefill> {
 public:
     static at::Tensor forward(AutogradContext *ctx, const at::Tensor &x, const at::Tensor &topkIdx,
                               const at::Tensor &topkWeights, const at::Tensor &srcIdx, const at::Tensor &sendHead,
@@ -102,7 +100,7 @@ at::Tensor MoeCombinePrefillImplAutograd(const at::Tensor &x, const at::Tensor &
                                          const at::Tensor &srcIdx, const at::Tensor &sendHead, c10::string_view groupEp,
                                          int64_t rank, int64_t numRanks)
 {
-    auto result = ExtMoeCombinePrefill::apply(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
+    auto result = MoeCombinePrefill::apply(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
     return result;
 }
 

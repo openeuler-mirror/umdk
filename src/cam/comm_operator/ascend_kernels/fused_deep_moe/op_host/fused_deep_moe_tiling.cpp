@@ -18,6 +18,7 @@
 #include "../op_kernel/fused_deep_moe_tiling.h"
 
 using namespace ge;
+using namespace Cam;
 namespace {
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8;
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
@@ -96,17 +97,17 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
     uint32_t sharedExpertRankNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.sharedExpertRankNum;
     uint32_t localExpertNum = epRankId < sharedExpertRankNum ? 1 : moeExpertNumPerRank;
 
-    OP_TILING_CHECK(elementDims != TWO_DIMS && elementDims != THREE_DIMS, 
-        OP_LOGE(nodeName, "gmm1Weight shape is invalid."),
-            return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(elementDims != TWO_DIMS && elementDims != THREE_DIMS,
+                    OP_LOGE(nodeName, "gmm1Weight shape is invalid."),
+                    return ge::GRAPH_FAILED);
     if (gmm1ListLen > 1) { // List
         OP_TILING_CHECK(gmm1ListLen != localExpertNum,
-                OP_LOGE(nodeName, "gmm1 listlen does not equals to localExpertNum."),return ge::GRAPH_FAILED);
+                OP_LOGE(nodeName, "gmm1 listlen does not equals to localExpertNum."), return ge::GRAPH_FAILED);
         OP_TILING_CHECK(h != gmm1FirstTensorElementShape.GetDim(0),
                 OP_LOGE(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
         tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(TENSOR_HIDDEN_INDEX));
+                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(TENSOR_HIDDEN_INDEX));
         tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList = true;
     } else { // Single
         if (elementDims == TWO_DIMS) {  // one localExpert perRank
@@ -114,7 +115,7 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
                 OP_LOGE(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
             tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX - 1));
+                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX - 1));
         } else {    // multi localExperts perRank
             OP_TILING_CHECK(localExpertNum != gmm1FirstTensorElementShape.GetDim(0),
                 OP_LOGE(nodeName, "gmm1Weight does not match local expert number per rank."),
@@ -123,7 +124,7 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
                 OP_LOGE(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
             tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX));
+                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX));
         }
         tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList = false;
     }
@@ -179,6 +180,8 @@ static ge::graphStatus CheckGmm2Shape(const gert::TilingContext &context, const 
     
     uint32_t gmm2ListLen = CountTensorListLen(context, INPUT_GMM2_WEIGHT_INDEX);
     auto gmm2FirstTensorElement = context.GetDynamicInputTensor(INPUT_GMM2_WEIGHT_INDEX, 0);
+    OP_TILING_CHECK(gmm2FirstTensorElement == nullptr,
+        OP_LOGE(nodeName, "gmm2Weight is null."), return ge::GRAPH_FAILED);
     auto gmm2FirstTensorElementShape = gmm2FirstTensorElement->GetOriginShape();
     uint32_t elementDims = gmm2FirstTensorElementShape.GetDimNum();
     OP_TILING_CHECK(elementDims != 2 && elementDims != 3, OP_LOGE(nodeName, "gmm2Weight shape is invalid."),
@@ -245,7 +248,7 @@ static ge::graphStatus CheckGmm2ScaleShape(gert::TilingContext &context,
     return ge::GRAPH_SUCCESS;
 }
 
-static ge::graphStatus CheckWeightTensorList(const gert::TilingContext &context,
+static ge::graphStatus CheckWeightTensorList(gert::TilingContext &context,
                                              FusedDeepMoeTilingData &tilingData)
 {
     if (CheckGmm1Shape(context, tilingData) == ge::GRAPH_SUCCESS &&
@@ -323,7 +326,7 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
     return ge::GRAPH_SUCCESS;
 }
 
-static ge::graphStatus GetAttrAndSetTilingData(const TilingContext &context, const char *nodeName,
+static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &context, const char *nodeName,
                                                FusedDeepMoeTilingData &tilingData, std::string &groupEp)
 {
     auto attrs = context.GetAttrs();

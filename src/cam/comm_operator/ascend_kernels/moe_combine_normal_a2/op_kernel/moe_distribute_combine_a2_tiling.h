@@ -13,6 +13,7 @@
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
+namespace Moe {
 struct MoeDistributeCombineA2Info {
     uint32_t epWorldSize;          // epWorldSize
     uint32_t tpWorldSize;          // tpWorldSize
@@ -36,5 +37,5 @@ struct MoeDistributeCombineA2TilingData {
     Mc2CcTiling mc2CcTiling;
     MoeDistributeCombineA2Info moeDistributeCombineInfo;
 };
-
+} // namespace Moe
 #endif  //__MOE_DISTRIBUTE_CMOBINE_A2_TILING_H__

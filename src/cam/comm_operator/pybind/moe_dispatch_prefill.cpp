@@ -8,8 +8,7 @@
  */
 
 #include "pytorch_npu_helper.hpp"
-#include "torch_npu/csrc/core/npu/NPUStream.h"
-#include "utils.h"
+#include "torch_bind_exception.h"
 #include <hccl/hccl.h>
 #include <iostream>
 #include <torch/csrc/autograd/custom_function.h>
@@ -45,9 +44,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     int64_t numRanks,
     bool useQuant)
 {
-    std::vector<char> groupEpChrs(groupEp.begin(), groupEp.end());
-    groupEpChrs.push_back('\0');
-    char *groupEpPtr = &groupEpChrs[0];
+    const std::string groupEpStr(groupEp.data(), groupEp.size());
+    const char* groupEpPtr = groupEpStr.c_str();
 
     // Convert topkIdx to int32 if necessary
     at::Tensor topkIdxInt32 = topkIdx.scalar_type() == at::kInt ? topkIdx : topkIdx.to(at::kInt);
@@ -146,7 +144,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
-class ExtMoeDispatchPrefill : public torch::autograd::Function<ExtMoeDispatchPrefill> {
+class MoeDispatchPrefill : public torch::autograd::Function<MoeDispatchPrefill> {
 public:
     static TensorVector forward(AutogradContext *ctx, const at::Tensor &x, const at::Tensor &topkIdx,
                                 const at::Tensor &topkWeights, const at::Tensor &numTokensPerExpert,
@@ -178,8 +176,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     int64_t numRanks,
     bool useQuant)
 {
-    auto result = ExtMoeDispatchPrefill::apply(x, topkIdx, topkWeights, numTokensPerExpert, sendTokenIdxSmall, groupEp,
-                                               rank, numRanks, useQuant);
+    auto result = MoeDispatchPrefill::apply(x, topkIdx, topkWeights, numTokensPerExpert, sendTokenIdxSmall, groupEp,
+                                            rank, numRanks, useQuant);
     return std::make_tuple(result[ZERO], result[FIRST], result[SECOND], result[THIRD], result[FOURTH]);
 }
 

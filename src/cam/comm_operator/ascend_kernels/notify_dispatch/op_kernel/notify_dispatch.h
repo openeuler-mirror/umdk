@@ -27,17 +27,6 @@ template <AscendC::HardEvent event> __aicore__ inline void SyncFunc()
     AscendC::WaitFlag<event>(eventID);
 }
 
-#define KERNELS_ARGS_FUN_ALL2ALL()                                                                                     \
-    GM_ADDR sendDataInput, GM_ADDR tokenPerExpertDataInput, GM_ADDR sendDataOffsetOutput, GM_ADDR recvDataOutput,      \
-        GM_ADDR totalRecvTokens, GM_ADDR recvCount, GM_ADDR recvOffset, GM_ADDR maxBs, GM_ADDR recvTokensPerExpert,    \
-        int64_t len, int64_t numTokens, int op, int root, int cycleCount, GM_ADDR scale, int64_t scaleCount,           \
-        GM_ADDR offset, int localRank, int localRankSize
-
-#define KERNELS_ARGS_CALL_ALL2ALL()                                                                                    \
-    sendDataInput, tokenPerExpertDataInput, sendDataOffsetOutput, recvDataOutput, totalRecvTokens, recvCount,          \
-        recvOffset, maxBs, recvTokensPerExpert, len, numTokens, op, root, cycleCount, scale, scaleCount, offset,       \
-        localRank, localRankSize
-
 template <typename T> class NotifyDispatch {
     constexpr static int64_t MAX_RANK_PER_CORE = 8;
     constexpr static int64_t MULTI_RANK_SIZE = 48;
@@ -57,9 +46,14 @@ public:
     {
     }
 
-    __aicore__ inline void Init(KERNELS_ARGS_FUN_ALL2ALL())
+    __aicore__ inline void Init(GM_ADDR sendDataInput, GM_ADDR tokenPerExpertDataInput, GM_ADDR sendDataOffsetOutput,
+        GM_ADDR recvDataOutput, GM_ADDR totalRecvTokens, GM_ADDR recvCount, GM_ADDR recvOffset, GM_ADDR maxBs,
+        GM_ADDR recvTokensPerExpert, int64_t len, int64_t numTokens, int op, int root, int cycleCount, GM_ADDR scale,
+        int64_t scaleCount, GM_ADDR offset, int localRank, int localRankSize)
     {
-        InitSmallFullMesh(KERNELS_ARGS_CALL_ALL2ALL());
+        InitSmallFullMesh(sendDataInput, tokenPerExpertDataInput, sendDataOffsetOutput, recvDataOutput, totalRecvTokens,
+            recvCount, recvOffset, maxBs, recvTokensPerExpert, len, numTokens, op, root, cycleCount, scale,
+            scaleCount, offset, localRank, localRankSize);
         nodeNum = rankSize / localRankSize;
         localRankId = rank % localRankSize;
         localNodeId = rank / localRankSize;
@@ -420,7 +414,11 @@ private:
     __aicore__ inline int64_t GetDataCount(const int64_t dataLen, const int64_t useBlockNum);
     __aicore__ inline GM_ADDR GetWindAddrByRankId(const int32_t rankId, uint8_t ctxIdx);
     __aicore__ inline uint64_t GetMagicValue(void);
-    __aicore__ inline void InitSmallFullMesh(KERNELS_ARGS_FUN_ALL2ALL());
+    __aicore__ inline void InitSmallFullMesh(GM_ADDR sendDataInput, GM_ADDR tokenPerExpertDataInput,
+        GM_ADDR sendDataOffsetOutput, GM_ADDR recvDataOutput, GM_ADDR totalRecvTokens, GM_ADDR recvCount,
+        GM_ADDR recvOffset, GM_ADDR maxBs, GM_ADDR recvTokensPerExpert, int64_t len, int64_t numTokens,
+        int op, int root, int cycleCount, GM_ADDR scale, int64_t scaleCount, GM_ADDR offset,
+        int localRank, int localRankSize);
     template <typename F> __aicore__ inline void SetAtomic(int op);
     __aicore__ inline void UnsetAtomic(int op);
     template <HardEvent eventType> __aicore__ inline void SetWaitEvent(event_t eventId);
@@ -556,7 +554,11 @@ template <typename T> __aicore__ inline uint64_t NotifyDispatch<T>::GetMagicValu
     return magic;
 }
 
-template <typename T> __aicore__ inline void NotifyDispatch<T>::InitSmallFullMesh(KERNELS_ARGS_FUN_ALL2ALL())
+template <typename T> __aicore__ inline void NotifyDispatch<T>::InitSmallFullMesh(
+    GM_ADDR sendDataInput, GM_ADDR tokenPerExpertDataInput, GM_ADDR sendDataOffsetOutput,
+    GM_ADDR recvDataOutput, GM_ADDR totalRecvTokens, GM_ADDR recvCount, GM_ADDR recvOffset, GM_ADDR maxBs,
+    GM_ADDR recvTokensPerExpert, int64_t len, int64_t numTokens, int op, int root, int cycleCount, GM_ADDR scale,
+    int64_t scaleCount, GM_ADDR offset, int localRank, int localRankSize)
 {
     this->root = root;
     this->len = len;

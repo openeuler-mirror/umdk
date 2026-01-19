@@ -16,6 +16,7 @@
 #include "moe_dispatch_normal_tiling.h"
 #include "moe_distribute_base.h"
 
+using namespace Moe;
 namespace MoeDispatchNormalImpl {
 constexpr uint8_t BUFFER_NUM = 2;
 constexpr uint32_t STATE_OFFSET = 32U;

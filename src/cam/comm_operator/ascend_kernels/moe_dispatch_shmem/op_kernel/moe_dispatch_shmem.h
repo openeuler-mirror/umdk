@@ -20,6 +20,7 @@
 #include <type_traits>
 
 using namespace AscendC;
+using namespace Moe;
 #define SHMEM_PUT_BY_DTYPE(dtype, ...)                            \
     do {                                                          \
         if constexpr (std::is_same_v<dtype, half>) {              \
@@ -559,7 +560,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::AlltoAllDispatch()
             tableLocalTensor_((tokenIndex / axisK_ + 1) * moeExpertRankNumAligned_ + expertId) = 1;
         }
         pipe_barrier(PIPE_ALL);
-
         // 分核，确定每个核要处理的token
         uint32_t sendTokenNum = expertIdsCnt / moeUsedAivNum_;
         uint32_t remainderTokenNum = expertIdsCnt % moeUsedAivNum_;
@@ -580,7 +580,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::AlltoAllDispatch()
                 tableInt16LocalTensor_[(row - 1) * moeExpertRankNumInt16Aligned_], moeExpertRankNumInt16Aligned_);
             pipe_barrier(PIPE_V);
         }
-
         // 计算完成后，下标为的i的行 为下标为i+1的token在远端的偏移，最后一行为总count
         GlobalTensor<int32_t> expandIdxGMTensor;
         if (aivId_ < moeUsedAivNum_) {
@@ -611,7 +610,6 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::AlltoAllDispatch()
         }
         uint32_t preEndExpertId = preStartExpertId + preSendExpertNum;
         preStartExpertId = preStartExpertId >= sharedExpertRankNum_ ? preStartExpertId : sharedExpertRankNum_;
-
         SyncFunc<AscendC::HardEvent::V_S>();
         for (int32_t tmpExpertId = preStartExpertId; tmpExpertId < preEndExpertId; ++tmpExpertId) {
             statusTensor_(tmpExpertId * INT32_NUM_PER_BLOCK + 1) =

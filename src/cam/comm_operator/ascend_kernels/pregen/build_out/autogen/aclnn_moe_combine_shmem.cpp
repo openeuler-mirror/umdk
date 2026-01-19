@@ -9,14 +9,14 @@
 
 #include <string.h>
 #include "graph/types.h"
-#include "aclnn_moe_combine_shmem.h"
 #include "aclnnInner_moe_combine_shmem.h"
+#include "aclnn_moe_combine_shmem.h"
 
 namespace {
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
-}; // namespace
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
 extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus
@@ -32,16 +32,14 @@ aclnnStatus aclnnMoeCombineShmemGetWorkspaceSize(const aclTensor *expandX, const
     int64_t sharedExpertRankNum, int64_t globalBs, int64_t commQuantMode, int64_t extInfo, int64_t outDtype,
     int64_t groupListType, const aclTensor *out, uint64_t *workspaceSize, aclOpExecutor **executor)
 {
-    return aclnnInnerMoeCombineShmemGetWorkspaceSize(expandX, expertIds, expandIdx, epSendCounts,
-                                                         expertScales, tpSendCountsOptional, xActiveMaskOptional, activationScaleOptional,
-                                                         weightScaleOptional, groupListOptional, expandScalesOptional, epWorldSize,
-                                                         epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, sharedExpertNum,
-                                                         sharedExpertRankNum, globalBs, commQuantMode, extInfo, outDtype, groupListType,
-                                                         out, workspaceSize, executor);
+    return aclnnInnerMoeCombineShmemGetWorkspaceSize(expandX, expertIds, expandIdx, epSendCounts, expertScales,
+        tpSendCountsOptional, xActiveMaskOptional, activationScaleOptional, weightScaleOptional, groupListOptional,
+        expandScalesOptional, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
+        sharedExpertNum, sharedExpertRankNum, globalBs, commQuantMode, extInfo, outDtype, groupListType,
+        out, workspaceSize, executor);
 }
 
-aclnnStatus aclnnMoeCombineShmem(void *workspace, uint64_t workspaceSize, aclOpExecutor *executor,
-                                     aclrtStream stream)
+aclnnStatus aclnnMoeCombineShmem(void *workspace, uint64_t workspaceSize, aclOpExecutor *executor, aclrtStream stream)
 {
     if (NnopbaseSetHcclServerType) {
         NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_MTE);

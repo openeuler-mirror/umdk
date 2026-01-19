@@ -23,11 +23,8 @@ __attribute__((visibility("default"))) aclnnStatus aclnnNotifyDispatchGetWorkspa
     const aclTensor *recvCount, const aclTensor *recvOffset, const aclTensor *maxBs,
     const aclTensor *recvTokensPerExpert, uint64_t *workspaceSize, aclOpExecutor **executor);
 
-
-__attribute__((visibility("default"))) aclnnStatus aclnnNotifyDispatch(void *workspace, 
-                                                                       uint64_t workspaceSize,
-                                                                       aclOpExecutor *executor,
-																	   aclrtStream stream);
+__attribute__((visibility("default"))) aclnnStatus aclnnNotifyDispatch(void *workspace, uint64_t workspaceSize,
+    aclOpExecutor *executor, aclrtStream stream);
 
 #ifdef __cplusplus
 }

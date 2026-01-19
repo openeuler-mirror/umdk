@@ -16,6 +16,7 @@
 #include "moe_combine_normal_tiling.h"
 #include "moe_distribute_base.h"
 
+using namespace Moe;
 namespace MoeCombineNormalImpl {
 constexpr uint32_t RANK_ID_OFFSET_IN_SRC_INFO = 0U;
 constexpr uint32_t TOKEN_IDX_OFFSET_IN_SRC_INFO = 1U;

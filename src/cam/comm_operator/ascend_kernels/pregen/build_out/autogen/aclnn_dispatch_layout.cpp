@@ -7,16 +7,16 @@
  * History: 2026-01-05 add dispatch layout interface cpp file.
  */
 
-#include "aclnn_dispatch_layout.h"
+#include <string.h>
 #include "aclnnInner_dispatch_layout.h"
 #include "graph/types.h"
-#include <string.h>
+#include "aclnn_dispatch_layout.h"
 
 namespace {
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
-}; // namespace
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
 extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus

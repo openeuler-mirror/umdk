@@ -18,7 +18,7 @@
 #include "sync_collectives.h"
 #include "moe_distribute_base.h"
 #include "dispatch_layout_tiling.h"
-
+using namespace Moe;
 namespace MoeDispatchLayoutA2 {
 
 constexpr uint32_t UB_32_ALIGN = 32U;

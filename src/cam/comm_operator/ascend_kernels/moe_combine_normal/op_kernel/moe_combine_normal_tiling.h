@@ -10,9 +10,11 @@
 #ifndef MOE_COMBINE_NORMAL_TILING_H
 #define MOE_COMBINE_NORMAL_TILING_H
 
-#include "kernel_tiling/kernel_tiling.h"
 #include <cstdint>
+#include "kernel_tiling/kernel_tiling.h"
 
+// a3
+namespace Moe {
 struct MoeCombineNormalInfo {
     uint32_t epWorldSize;
     uint32_t tpWorldSize;
@@ -38,5 +40,5 @@ struct MoeCombineNormalTilingData {
     Mc2CcTiling mc2CcTiling2;
     MoeCombineNormalInfo moeCombineNormalInfo;
 };
-
+} // namespace Moe
 #endif // MOE_COMBINE_NORMAL_TILING_H

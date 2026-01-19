@@ -83,6 +83,7 @@ private:
     __aicore__ inline void BuffInit();
     __aicore__ inline void SplitCoreCal();
     __aicore__ inline void AlltoAllDispatch();
+    __aicore__ inline void WaitFlagEq(uint32_t waitFlagAddr, int64_t expectVal, LocalTensor<int64_t> flagUb);
     __aicore__ inline void SumToWindow();
     __aicore__ inline void SetStatus();
     __aicore__ inline void WaitDispatch();
@@ -434,6 +435,19 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
+__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::WaitFlagEq(
+    uint32_t waitFlagAddr, int64_t expectVal, LocalTensor<int64_t> &flagUb)
+{
+    while (true) {
+        DataCopy(flagUb, shareFlagGlobal_[waitFlagAddr * SINGLE_COPY_INT64_NUM], SINGLE_COPY_INT64_NUM);
+        PipeBarrier<PIPE_ALL>();
+        if (flagUb.GetValue(0) == expectVal) {
+            break;
+        }
+    }
+}
+
+template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::SumToWindow()
 {
     // Assumpt only one core handles one rank. only serverNum ranks with the same local rank id
@@ -442,14 +456,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
             (__gm__ int64_t *)(shareAddreRank[rankId_ % SERVER_RANK_SIZE] + IPC_DISPATCH_DATA_OFFSET));
         LocalTensor<int64_t> InUb = statusBuf_.AllocTensor<int64_t>();
         for (uint32_t i = 0U; i < SERVER_RANK_SIZE; i++) {
-            uint32_t waitFlagAddr = coreIdx_ * SERVER_RANK_SIZE + i;
-            while (true) {
-                DataCopy(InUb, shareFlagGlobal_[waitFlagAddr * SINGLE_COPY_INT64_NUM], SINGLE_COPY_INT64_NUM);
-                PipeBarrier<PIPE_ALL>();
-                if (InUb.GetValue(0) == 12345) {
-                    break;
-                }
-            }
+            WaitFlagEq(coreIdx_ * SERVER_RANK_SIZE + i, 12345, InUb);
         }
         InUb.SetValue(0, 0);
         PipeBarrier<PIPE_ALL>();

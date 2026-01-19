@@ -13,6 +13,7 @@
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
+namespace Cam {
 struct NotifyDispatchInfo {
     uint32_t rankSize;
     uint32_t rankId;
@@ -29,5 +30,5 @@ struct NotifyDispatchTilingData {
     Mc2CcTiling mc2CcTiling1;
     NotifyDispatchInfo notifyDispatchInfo;
 };
-
+} // namespace Cam
 #endif

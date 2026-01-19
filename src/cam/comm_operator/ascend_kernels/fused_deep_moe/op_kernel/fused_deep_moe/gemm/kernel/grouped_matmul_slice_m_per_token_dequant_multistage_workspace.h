@@ -19,6 +19,7 @@
 #include "catlass/gemm_coord.hpp"
 #include "catlass/matrix_coord.hpp"
 
+using namespace Cam;
 namespace Catlass::Gemm::Kernel {
 
 template <TemplateMC2TypeClass, class BlockMmad_, class BlockEpilogue_, class BlockScheduler_,
