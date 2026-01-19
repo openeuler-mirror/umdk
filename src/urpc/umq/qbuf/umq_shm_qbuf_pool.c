@@ -6,7 +6,6 @@
 
 #include <unistd.h>
 #include <sys/queue.h>
-#include <stdatomic.h>
 
 #include "umq_errno.h"
 #include "umq_vlog.h"
@@ -51,7 +50,7 @@ typedef struct queue_local_pool {
 
 struct local_qbuf_pool {
     queue_local_pool_t *pool;
-    atomic_uint remove_ref_cnt;
+    volatile uint32_t remove_ref_cnt;
 };
 
 typedef struct register_list_node {
@@ -80,14 +79,14 @@ static __thread local_qbuf_pool_t g_thread_cache[UMQ_MAX_QUEUE_NUMBER] = {0};
 static int release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
 {
     // Avoid concurrent access between destroy queue and thread exit.
-    uint32_t ref = atomic_fetch_add_explicit(&tls_mgmt_pool->remove_ref_cnt, 1, memory_order_acq_rel);
+    uint32_t ref = __atomic_fetch_add(&tls_mgmt_pool->remove_ref_cnt, 1, __ATOMIC_ACQ_REL);
     if (ref != 0) {
         return ref;
     }
 
     queue_local_pool_t *local_pool = tls_mgmt_pool->pool;
     if (local_pool == NULL) {
-        atomic_fetch_sub_explicit(&tls_mgmt_pool->remove_ref_cnt, 1, memory_order_acq_rel);
+        __atomic_fetch_sub(&tls_mgmt_pool->remove_ref_cnt, 1, __ATOMIC_ACQ_REL);
         return 0;
     }
 
@@ -107,7 +106,7 @@ static int release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
 
     // reset local record and free resource
     tls_mgmt_pool->pool = NULL;
-    atomic_fetch_sub_explicit(&tls_mgmt_pool->remove_ref_cnt, 1, memory_order_acq_rel);
+    __atomic_fetch_sub(&tls_mgmt_pool->remove_ref_cnt, 1, __ATOMIC_ACQ_REL);
 
     free(local_pool);
 
@@ -147,8 +146,8 @@ static void unregister_all_thread_cache(qbuf_pool_t *pool)
           * on this thread cache), wait until the next thread finish the release operation */
         (void)clock_gettime(CLOCK_MONOTONIC, &start);
         uint32_t desired = ref;
-        while (!atomic_compare_exchange_weak_explicit(
-            &tls_mgmt_pool->remove_ref_cnt, &desired, 0, memory_order_release, memory_order_acquire)) {
+        while (!__atomic_compare_exchange_n(&tls_mgmt_pool->remove_ref_cnt, &desired, 0, true, __ATOMIC_RELEASE,
+                                            __ATOMIC_ACQUIRE)) {
             if (desired != ref) {
                 UMQ_VLOG_ERR("unexpected exception, actual ref: %u, desired ref: %u\n", ref, desired);
                 break;
