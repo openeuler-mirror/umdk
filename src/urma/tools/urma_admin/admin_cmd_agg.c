@@ -119,15 +119,6 @@ static inline bool urma_eid_is_valid(urma_eid_t *eid)
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
 }
 
-static urma_device_t* get_urma_device_by_eid(const char *eid)
-{
-    urma_device_t *ub_dev = NULL;
-    urma_eid_t urma_eid = {0};
-    memcpy(&urma_eid, eid, sizeof(urma_eid_t));
-    ub_dev = urma_get_device_by_eid(urma_eid, URMA_TRANSPORT_UB);
-    return ub_dev;
-}
-
 static tool_topo_agg_dev_t *get_topo_agg_dev_by_agg_eid(tool_topo_map_t *topo_map, urma_eid_t *agg_eid)
 {
     for (int i = 0; i < topo_map->node_num; i++) {
@@ -143,68 +134,71 @@ static tool_topo_agg_dev_t *get_topo_agg_dev_by_agg_eid(tool_topo_map_t *topo_ma
 }
 
 // Expose VF device and its EIDs to the specified netns
-static int nl_expose_device_by_eid(const char *eid, const char *netns)
+static int nl_expose_device_by_eid(const char *eid, int ns_fd)
 {
     int ret = 0;
-    urma_device_t *ub_dev = NULL;
-    ub_dev = get_urma_device_by_eid(eid);
-    if (ub_dev == NULL) {
-        printf("Failed to get dev by eid.\n");
-        return -1;
-    }
-    printf("Exposing device %s in netns %s.\n", ub_dev->name, netns);
-    ret = admin_cmd_dev_expose(ub_dev->name, netns);
+    admin_device_info_t dev_info = {0};
+    ret = admin_get_device_info_by_eid((urma_eid_t *)eid, &dev_info);
     if (ret != 0) {
-        (void)printf("Failed to expose device %s in netns %s, ret=%d.\n", ub_dev->name, netns, ret);
+        (void)printf("Failed to get device name by eid, ret=%d.\n", ret);
         return ret;
     }
 
-    urma_eid_info_t *eid_infos = NULL;
-    uint32_t eid_cnt = 0;
-    eid_infos = urma_get_eid_list(ub_dev, &eid_cnt);
-    for (int i = 0; i < eid_cnt; i++) {
-        urma_eid_info_t *eid_info = &eid_infos[i];
-        printf("Setting EID index %u in device %s, netns %s.\n", eid_info->eid_index, ub_dev->name, netns);
-        ret = admin_cmd_eid_set_eid_ns(ub_dev->name, eid_info->eid_index, netns);
+    printf("Exposing device %s in netns %d.\n", dev_info.dev_name, ns_fd);
+    ret = admin_nl_expose_dev_ns(dev_info.dev_name, ns_fd);
+    if (ret != 0) {
+        (void)printf("Failed to expose device %s in netns %d, ret=%d.\n", dev_info.dev_name, ns_fd, ret);
+        free(dev_info.eid_list);
+        goto close_fd;
+    }
+
+    for (int i = 0; i < dev_info.dev_attr.dev_cap.max_eid_cnt; i++) {
+        urma_eid_info_t *eid_info = &dev_info.eid_list[i];
+        printf("Setting EID index %u in device %s, netns %d.\n", eid_info->eid_index, dev_info.dev_name, ns_fd);
+        ret = admin_nl_set_eid_ns(dev_info.dev_name, eid_info->eid_index, ns_fd);
         if (ret != 0) {
-            (void)printf("Failed to expose device %s in netns %s, ret=%d.\n", ub_dev->name, netns, ret);
+            (void)printf("Failed to expose device %s in netns %d, ret=%d.\n", dev_info.dev_name, ns_fd, ret);
             goto unexpose_device;
         }
     }
-    urma_free_eid_list(eid_infos);
+    free(dev_info.eid_list);
     return ret;
 unexpose_device:
-    urma_free_eid_list(eid_infos);
-    admin_cmd_dev_unexpose(ub_dev->name, netns);
+    free(dev_info.eid_list);
+    admin_nl_unexpose_dev_ns(dev_info.dev_name, ns_fd);
+close_fd:
+    close(ns_fd);
     return ret;
 }
 
-static void nl_unexpose_device_by_eid(const char *eid, const char *netns)
+static void nl_unexpose_device_by_eid(const char *eid, int ns_fd)
 {
-    urma_device_t *ub_dev = NULL;
-    ub_dev = get_urma_device_by_eid(eid);
-    if (ub_dev == NULL) {
-        printf("Failed to get dev by eid.\n");
-    }
-    printf("Unexposing device %s in netns %s.\n", ub_dev->name, netns);
-    int ret = admin_cmd_dev_unexpose(ub_dev->name, netns);
+    char dev_name[URMA_ADMIN_MAX_DEV_NAME];
+    int ret = admin_get_device_name_by_eid((urma_eid_t *)eid, dev_name, sizeof(dev_name));
     if (ret != 0) {
-        (void)printf("Failed to unexpose device %s in netns %s, ret=%d.\n", ub_dev->name, netns, ret);
+        printf("Failed to get dev by eid.\n");
+        return;
+    }
+    printf("Unexposing device %s in netns %d.\n", dev_name, ns_fd);
+    ret = admin_nl_unexpose_dev_ns(dev_name, ns_fd);
+    if (ret != 0) {
+        (void)printf("Failed to unexpose device %s in netns %d, ret=%d.\n", dev_name, ns_fd, ret);
     }
 }
 
-static int nl_expose_agg_device(struct tool_topo_agg_dev *agg_dev, const char *netns)
+static int nl_expose_agg_device(struct tool_topo_agg_dev *agg_dev, int ns_fd)
 {
     int ret = 0;
     int ue_idx = 0;
-    ret = nl_expose_device_by_eid(agg_dev->agg_eid, netns);
+
+    ret = nl_expose_device_by_eid(agg_dev->agg_eid, ns_fd);
     if (ret != 0) {
         printf("Failed to expose agg dev\n");
         return ret;
     }
     for (ue_idx = 0; ue_idx < IODIE_NUM; ue_idx++) {
         tool_topo_ue_t *ue = &agg_dev->ues[ue_idx];
-        ret = nl_expose_device_by_eid(ue->primary_eid, netns);
+        ret = nl_expose_device_by_eid(ue->primary_eid, ns_fd);
         if (ret != 0) {
             printf("Failed to expose vf dev\n");
             goto unexpose_agg_dev;
@@ -213,15 +207,17 @@ static int nl_expose_agg_device(struct tool_topo_agg_dev *agg_dev, const char *n
     return 0;
 
 unexpose_agg_dev:
-    for (int i = ue_idx - 1; i >= 0; i--) {
-        tool_topo_ue_t *ue = &agg_dev->ues[i];
-        nl_unexpose_device_by_eid(ue->primary_eid, netns);
+    if (ue_idx > 0) {
+        for (int i = ue_idx - 1; i >= 0; i--) {
+            tool_topo_ue_t *ue = &agg_dev->ues[i];
+            nl_unexpose_device_by_eid(ue->primary_eid, ns_fd);
+        }
     }
-    nl_unexpose_device_by_eid(agg_dev->agg_eid, netns);
+    nl_unexpose_device_by_eid(agg_dev->agg_eid, ns_fd);
     return -1;
 }
 
-static int admin_cmd_agg_expose(urma_eid_t *eid, const char *netns)
+static int admin_cmd_agg_expose(urma_eid_t *eid, int ns_fd)
 {
     tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
     if (topo_map == NULL) {
@@ -238,7 +234,7 @@ static int admin_cmd_agg_expose(urma_eid_t *eid, const char *netns)
         ret = -EINVAL;
         goto free_topo;
     }
-    ret = nl_expose_agg_device(agg_dev, netns);
+    ret = nl_expose_agg_device(agg_dev, ns_fd);
     if (ret != 0) {
         (void)printf("Failed to expose agg device, ret=%d.\n", ret);
         goto free_topo;
@@ -257,11 +253,19 @@ static int cmd_agg_expose(admin_config_t *cfg)
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
-    ret = admin_cmd_agg_expose(&cfg->eid, cfg->ns);
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    ret = admin_cmd_agg_expose(&cfg->eid, ns_fd);
     if (ret != 0) {
         printf("Failed to expose agg dev\n");
+        close(ns_fd);
         return ret;
     }
+    close(ns_fd);
     return 0;
 }
 

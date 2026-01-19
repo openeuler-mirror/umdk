@@ -495,6 +495,97 @@ free_list:
     return ret;
 }
 
+static bool is_eid_equal(const urma_eid_t *eid1, const urma_eid_t *eid2)
+{
+    for (int i = 0; i < URMA_EID_SIZE; i++) {
+        if (eid1->raw[i] != eid2->raw[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int admin_get_device_name_by_eid(const urma_eid_t *eid, char *dev_name, size_t dev_name_len)
+{
+    int ret = 0;
+    struct ub_list ubep_list;
+    admin_show_ubep_t *ubep, *next;
+    admin_config_t cfg = {0};
+    cfg.specify_device = false;
+
+    ub_list_init(&ubep_list);
+    ret = find_ubep_list(&ubep_list, &cfg);
+    if (ret != 0) {
+        (void)printf("Failed to find ubep.\n");
+        goto free_list;
+    }
+
+    UB_LIST_FOR_EACH_SAFE (ubep, next, node, &ubep_list) {
+        if (ubep == NULL) {
+            break;
+        }
+        for (uint32_t i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
+            if (is_eid_equal(&ubep->eid_list[i].eid, eid)) {
+                strncpy(dev_name, ubep->dev_name, dev_name_len);
+                goto free_list;
+            }
+        }
+    }
+    ret = -1; // not found
+
+free_list:
+    free_ubep_list(&ubep_list);
+    return ret;
+}
+
+int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *device_info)
+{
+    int ret = 0;
+    struct ub_list ubep_list;
+    admin_show_ubep_t *ubep, *next;
+    admin_config_t cfg = {0};
+    cfg.specify_device = false;
+    admin_show_ubep_t *ubep_info = NULL;
+
+    ub_list_init(&ubep_list);
+    ret = find_ubep_list(&ubep_list, &cfg);
+    if (ret != 0) {
+        (void)printf("Failed to find ubep.\n");
+        goto free_list;
+    }
+
+    UB_LIST_FOR_EACH_SAFE (ubep, next, node, &ubep_list) {
+        if (ubep == NULL) {
+            break;
+        }
+        for (uint32_t i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
+            if (is_eid_equal(&ubep->eid_list[i].eid, eid)) {
+                ubep_info = ubep;
+                break;
+            }
+        }
+    }
+    ret = (ubep_info != NULL) ? 0 : -1;
+    if (ret == 0) {
+        memcpy(device_info->dev_name, ubep_info->dev_name, sizeof(device_info->dev_name));
+        memcpy(device_info->net_dev_name, ubep_info->net_dev_name, sizeof(device_info->net_dev_name));
+        memcpy(&device_info->dev_attr, &ubep_info->dev_attr, sizeof(urma_device_attr_t));
+        memcpy(&device_info->tp_type, &ubep_info->tp_type, sizeof(urma_transport_type_t));
+
+        device_info->eid_list = calloc(1, ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
+        if (device_info->eid_list == NULL) {
+            (void)printf("Failed to malloc eid_list.\n");
+            ret = -1;
+            goto free_list;
+        }
+        memcpy(device_info->eid_list, ubep_info->eid_list,
+               ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
+    }
+free_list:
+    free_ubep_list(&ubep_list);
+    return ret;
+}
+
 bool admin_is_eid_valid(const char *eid)
 {
     for (int i = 0; i < EID_LEN; i++) {
@@ -579,7 +670,17 @@ static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_le
 void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
 {
     (void)printf("========================== topo map start =============================\n");
-    tool_topo_info_t *cur_node_info = topo_map->topo_infos + node_id;
+    tool_topo_info_t *cur_node_info = NULL;
+    for (uint32_t i = 0; i < topo_map->node_num; i++) {
+        if (topo_map->topo_infos[i].id == node_id) {
+            cur_node_info = &topo_map->topo_infos[i];
+            break;
+        }
+    }
+    if (cur_node_info == NULL) {
+        (void)printf("Node %d topo info not found.\n", node_id);
+        return;
+    }
     (void)printf("===================== show node %d topo info =======================\n", node_id);
     for (uint32_t iodie_idx = 0; iodie_idx < IODIE_NUM; iodie_idx++) {
         (void)printf("IODie %d:\n", iodie_idx);
@@ -596,24 +697,31 @@ void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
         (void)printf("\n");
     }
     char eid_str[INET6_ADDRSTRLEN];
+    char dev_name[URMA_ADMIN_MAX_DEV_NAME];
     for (uint32_t agg_dev_idx = 0; agg_dev_idx < DEV_NUM; agg_dev_idx++) {
         tool_topo_agg_dev_t *agg_dev = &cur_node_info->agg_devs[agg_dev_idx];
         if (!admin_is_eid_valid(agg_dev->agg_eid)) {
-            (void)printf("Dev %d bonding_dev_%d: Invalid EID\n", agg_dev_idx, agg_dev_idx);
             continue;
         }
         urma_eid_to_ipv6_str((urma_eid_t *)agg_dev->agg_eid, eid_str, sizeof(eid_str));
-        (void)printf("Dev %d bonding_dev_%d: %s\n", agg_dev_idx, agg_dev_idx, eid_str);
+        if (admin_get_device_name_by_eid((urma_eid_t *)agg_dev->agg_eid, dev_name, sizeof(dev_name)) == 0) {
+            (void)printf("Dev %d %s: %s\n", agg_dev_idx, dev_name, eid_str);
+        } else {
+            (void)printf("Dev %d: %s\n", agg_dev_idx, eid_str);
+        }
         for (uint32_t iodie_idx = 0; iodie_idx < IODIE_NUM; iodie_idx++) {
             tool_topo_ue_t *ue = &agg_dev->ues[iodie_idx];
-            printf("\t UE %d:\n", iodie_idx);
-            printf("\t\t Socket id: %d\n", ue->socket_id);
-            printf("\t\t Primary eid:\n");
             if (!admin_is_eid_valid(ue->primary_eid)) {
-                (void)printf("\t\t\t Invalid EID\n");
                 continue;
             }
             urma_eid_to_ipv6_str((urma_eid_t *)ue->primary_eid, eid_str, sizeof(eid_str));
+            if (admin_get_device_name_by_eid((urma_eid_t *)ue->primary_eid, dev_name, sizeof(dev_name)) == 0) {
+                (void)printf("\t UE %d %s:\n", iodie_idx, dev_name);
+            } else {
+                printf("\t UE %d:\n", iodie_idx);
+            }
+            printf("\t\t Socket id: %d\n", ue->socket_id);
+            printf("\t\t Primary eid:\n");
             printf("\t\t\t %s\n", eid_str);
 
             printf("\t\t Port eid:\n");
@@ -636,7 +744,7 @@ static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
     for (uint32_t i = 0; i < topo_map->node_num; i++) {
         tool_topo_info_t *cur_node_info = topo_map->topo_infos + i;
         if (cur_node_info->is_current) {
-            node_id = i;
+            node_id = cur_node_info->id;
             break;
         }
     }
@@ -683,17 +791,23 @@ free_topo:
 
 static int cmd_show_topo(admin_config_t *cfg)
 {
+    uint32_t node_id;
+    int ret;
     tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
     if (topo_map == NULL) {
         return -ENOMEM;
     }
-    int ret = admin_cmd_get_topo_info(topo_map);
-    if (ret != 0) {
+    if ((ret = admin_cmd_get_topo_info(topo_map)) != 0) {
         (void)printf("Failed to get topo info, ret=%d.\n", ret);
         goto free_topo;
     }
-
-    uint32_t node_id = get_cur_node_id(topo_map);
+    char *arg = pop_arg(cfg);
+    ret = admin_str_to_u16(arg, &cfg->idx);
+    if (ret == 0) {
+        node_id = cfg->idx;
+    } else {
+        node_id = get_cur_node_id(topo_map);
+    }
     admin_print_topo_map(topo_map, node_id);
     free(topo_map);
     return 0;
