@@ -302,7 +302,7 @@ typedef struct ub_queue {
     umq_ub_ctx_t *dev_ctx;
     struct ub_bind_ctx *bind_ctx;
     volatile uint32_t ref_cnt;
-    atomic_uint require_rx_count;
+    volatile uint32_t require_rx_count;
     volatile uint32_t tx_outstanding;
     uint32_t create_flag;
     uint64_t umq_ctx;
