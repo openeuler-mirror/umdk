@@ -120,7 +120,7 @@ public:
         tileRow = params_.tileRow;
         tileColumn = params_.tileColumn;
         tileCount = tileRow * tileColumn;
-        halfTileColumn = tileColumn / 2;
+        halfTileColumn = tileColumn >> 1;
         halfTileCount = tileRow * halfTileColumn;
 
         ubInput = resource.ubBuf.template GetBufferByByte<ElementInput>(ubOffset);
@@ -502,9 +502,7 @@ public:
         // when localExpertNum=1, all cores send token and recv token in sequence
         recvCoreNum = aivNum;
         // when localExpertNum>1, half of cores send token and another half recv token in parallel
-        if (localExpertNum > 1) {
-            recvCoreNum = aiCoreGroupNum;
-        }
+        recvCoreNum = (localExpertNum > 1) ? aiCoreGroupNum : recvCoreNum;
         uint32_t coreNumPerGroup = recvCoreNum / localExpertNum;
         winContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<AscendC::HCCL_GROUP_ID_0>();
 

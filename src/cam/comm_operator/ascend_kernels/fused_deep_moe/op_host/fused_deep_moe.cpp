@@ -9,8 +9,7 @@
 #include "register/op_def_registry.h"
 
 namespace ops {
-class FusedDeepMoe : public OpDef
-{
+class FusedDeepMoe : public OpDef {
 public:
     explicit FusedDeepMoe(const char *name) : OpDef(name)
     {

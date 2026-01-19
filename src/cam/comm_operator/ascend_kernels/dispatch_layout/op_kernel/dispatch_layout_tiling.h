@@ -10,6 +10,7 @@
 #ifndef DISPATCH_LAYOUT_TILING_H
 #define DISPATCH_LAYOUT_TILING_H
 
+#include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
 struct DispatchLayoutInfo {

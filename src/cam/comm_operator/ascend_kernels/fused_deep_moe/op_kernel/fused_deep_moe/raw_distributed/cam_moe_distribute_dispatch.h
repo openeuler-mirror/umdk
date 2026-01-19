@@ -241,11 +241,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
         selfDataStatusTensor[aivId_ * UB_ALIGN]);
     __asm__ __volatile__("");
     dataState_ = selfDataStatusTensor(aivId_ * UB_ALIGN);
-    if (dataState_ == 0) {
-        selfDataStatusTensor(aivId_ * UB_ALIGN) = 1;
-    } else {
-        selfDataStatusTensor(aivId_ * UB_ALIGN) = 0;
-    }
+    selfDataStatusTensor(aivId_ * UB_ALIGN) = (dataState_ == 0);
     __asm__ __volatile__("");
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
         selfDataStatusTensor[aivId_ * UB_ALIGN]);
@@ -643,13 +639,14 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Allto
             statusTensor_(expertId * INT32_NUM_PER_BLOCK + 1)++;
         }
     }
-    if (!isShareExpertRank_) {
-        for (uint32_t curSatatusExpId = 0; curSatatusExpId < sharedExpertRankNum_; ++curSatatusExpId) {
-            int32_t curExpertCnt = (curSatatusExpId + 1 + epRankId_) * axisBS_ / sharedExpertRankNum_ -
-                                   (curSatatusExpId + epRankId_) * axisBS_ / sharedExpertRankNum_;
-            statusTensor_((curSatatusExpId)*INT32_NUM_PER_BLOCK + 1) = curExpertCnt;
-        }
+    const uint32_t limit = isShareExpertRank_? 0U : sharedExpertRankNum_;
+    for (uint32_t curSatatusExpId = 0; curSatatusExpId < limit; ++curSatatusExpId) {
+        int32_t curExpertCnt = 
+            (curSatatusExpId + 1 + epRankId_) * axisBS_ / sharedExpertRankNum_ -
+            (curSatatusExpId + epRankId_) * axisBS_ / sharedExpertRankNum_;
+        statusTensor_((curSatatusExpId) * INT32_NUM_PER_BLOCK + 1) = curExpertCnt;
     }
+    
     if ((sharedExpertRankNum_ != 0) && (aivId_ >= moeUsedAivNum_)) {
         SendToSharedExpert();
         return;

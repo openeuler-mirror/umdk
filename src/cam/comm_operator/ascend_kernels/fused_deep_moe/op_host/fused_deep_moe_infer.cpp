@@ -26,6 +26,8 @@ constexpr uint32_t ATTR_SHARE_EXPERT_NUM_INDEX = 4;
 constexpr uint32_t ATTR_SHARE_EXPERT_RANK_NUM_INDEX = 5;
 constexpr uint32_t ATTR_QUANT_MODE_INDEX = 6;
 constexpr uint32_t ATTR_GLOBAL_BS_INDEX = 7;
+constexpr uint32_t DIM_ONE = 1;
+constexpr uint32_t DIM_TWO = 2;
 
 static ge::graphStatus InferShape(gert::InferShapeContext *context)
 {
@@ -39,7 +41,7 @@ static ge::graphStatus InferShape(gert::InferShapeContext *context)
         expertTokenNumsShape == nullptr) {
         return GRAPH_FAILED;
     }
-    if (expandXShape->GetDimNum() < 2 || expertIdsShape->GetDimNum() < 1) {
+    if (expandXShape->GetDimNum() < DIM_TWO || expertIdsShape->GetDimNum() < DIM_ONE) {
         return GRAPH_FAILED;
     }
 

@@ -23,8 +23,7 @@ namespace Catlass::Gemm::Kernel {
 
 template <TemplateMC2TypeClass, class BlockMmad_, class BlockEpilogue_, class BlockScheduler_,
           uint32_t WORKSPACE_STAGES_, class ElementGroupList_>
-class GroupedMatmulSliceMPerTokenDequantMultiStageWorkspace
-{
+class GroupedMatmulSliceMPerTokenDequantMultiStageWorkspace {
 public:
     using BlockMmad = BlockMmad_;
     using ArchTag = typename BlockMmad::ArchTag;

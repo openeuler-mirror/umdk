@@ -10,6 +10,7 @@
 #ifndef NOTIFY_DISPATCH_TILING_H
 #define NOTIFY_DISPATCH_TILING_H
 
+#include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
 struct NotifyDispatchInfo {

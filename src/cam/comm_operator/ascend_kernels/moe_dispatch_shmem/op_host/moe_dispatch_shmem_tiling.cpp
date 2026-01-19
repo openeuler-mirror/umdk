@@ -25,7 +25,6 @@
 #include "tiling/platform/platform_ascendc.h"
 #include "error_log.h"
 #include "../op_kernel/moe_dispatch_shmem_tiling.h"
-// #include "shmem_api.h"
 
 using namespace ge;
 
@@ -41,11 +40,9 @@ constexpr uint32_t OUTPUT_EXPERT_TOKEN_NUMS_INDEX = 3U;
 constexpr uint32_t OUTPUT_EP_RECV_COUNTS_INDEX = 4U;
 constexpr uint32_t OUTPUT_TP_RECV_COUNTS_INDEX = 5U;
 
-// constexpr uint32_t ATTR_GROUP_EP_INDEX = -1;
 constexpr uint32_t ATTR_EP_WORLD_SIZE_INDEX = 0;
 constexpr uint32_t ATTR_EP_RANK_ID_INDEX = 1;
 constexpr uint32_t ATTR_MOE_EXPERT_NUM_INDEX = 2;
-// constexpr uint32_t ATTR_GROUP_TP_INDEX = -1;
 constexpr uint32_t ATTR_TP_WORLD_SIZE_INDEX = 3;
 constexpr uint32_t ATTR_TP_RANK_ID_INDEX = 4;
 constexpr uint32_t ATTR_EXPERT_SHARD_TYPE_INDEX = 5;
@@ -151,11 +148,6 @@ static bool CheckTensorDim(const gert::TilingContext &context, const char *nodeN
         OP_LOGD(nodeName, "scales dim0 = %ld", scalesStorageShape->GetStorageShape().GetDim(0));
         OP_LOGD(nodeName, "scales dim1 = %ld", scalesStorageShape->GetStorageShape().GetDim(1));
     }
-
-    // x_active_mask当前不支持传入
-    // const gert::StorageShape *xActiveMaskStorageShape = context.GetOptionalInputShape(X_ACTIVE_MASK_INDEX);
-    // OP_TILING_CHECK(xActiveMaskStorageShape != nullptr, OP_LOGE(nodeName, "x_active_mask only support input None."),
-    //     return false);
 
     const gert::StorageShape *expandXStorageShape = context.GetOutputShape(OUTPUT_EXPAND_X_INDEX);
     OP_TILING_CHECK(expandXStorageShape == nullptr, OP_LOGE(nodeName, "expandXShape is null."), return false);
@@ -357,8 +349,7 @@ static bool CheckTensorFormat(const gert::TilingContext &context, const char *no
 }
 
 static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &context, const char *nodeName,
-                                               MoeDispatchShmemTilingData &tilingData, std::string &groupEp,
-                                               std::string &groupTp)
+                                               MoeDispatchShmemTilingData &tilingData)
 {
     auto attrs = context.GetAttrs();
     OP_TILING_CHECK(attrs == nullptr, OP_LOGE(nodeName, "attrs is nullptr."), return ge::GRAPH_FAILED);
@@ -755,7 +746,7 @@ static ge::graphStatus MoeDistributeDispatchA3TilingFuncImpl(gert::TilingContext
     uint32_t localMoeExpertNum = 1;
     OP_LOGI(nodeName, "Enter MoeDispatchShmem tiling check func.");
     // 获取入参属性
-    OP_TILING_CHECK(GetAttrAndSetTilingData(context, nodeName, *tilingData, groupEp, groupTp) != ge::GRAPH_SUCCESS,
+    OP_TILING_CHECK(GetAttrAndSetTilingData(context, nodeName, *tilingData) != ge::GRAPH_SUCCESS,
                     OP_LOGE(nodeName, "Get attr and set tiling data failed."), return ge::GRAPH_FAILED);
     // 获取scales
     const gert::StorageShape *scalesStorageShape = context.GetOptionalInputShape(SCALES_INDEX);
@@ -795,13 +786,6 @@ static ge::graphStatus MoeDistributeDispatchA3TilingFuncImpl(gert::TilingContext
     uint64_t epWorldSize = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.epWorldSize);
     uint64_t maxBs = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.globalBs) / epWorldSize;
     uint64_t actualSize = epWorldSize * maxBs * h * 2UL * 2UL * static_cast<uint64_t>(localMoeExpertNum);
-    // if (actualSize > maxWindowSize) {
-    //     OP_LOGE(nodeName, "HCCL_BUFFSIZE is too SMALL, maxBs = %lu, h = %lu, epWorldSize = %lu, localMoeExpertNum =
-    //     %u,"
-    //         "ep_worldsize * maxBs * h * 2 * 2 * localMoeExpertNum = %luMB, HCCL_BUFFSIZE=%luMB.", maxBs, h,
-    //         epWorldSize, localMoeExpertNum, actualSize / MB_SIZE + 1UL, maxWindowSize / MB_SIZE);
-    //     return ge::GRAPH_FAILED;
-    // }
     tilingData->moeDistributeDispatchInfo.totalWinSize = maxWindowSize;
 
     OP_TILING_CHECK(SetWorkSpace(context, nodeName) != ge::GRAPH_SUCCESS,

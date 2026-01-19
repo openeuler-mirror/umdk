@@ -25,10 +25,9 @@ namespace Catlass::Epilogue::Block {
 template <uint32_t UB_STAGES_, uint32_t EXEC_FLAG_, class CType_, class ScaleType_, class PerTokenScaleType_,
           class DType_, class TileRowBroadcastMul_, class TileBroadcastOneBlk_, class TileOneBlkColumnBroadcastMul_,
           class TileCopy_, class EpilogueTileSwizzle_>
-class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_, ScaleType_, PerTokenScaleType_,
-                    DType_, TileRowBroadcastMul_, TileBroadcastOneBlk_, TileOneBlkColumnBroadcastMul_, TileCopy_,
-                    EpilogueTileSwizzle_>
-{
+class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_, ScaleType_, 
+                    PerTokenScaleType_, DType_, TileRowBroadcastMul_, TileBroadcastOneBlk_, 
+                    TileOneBlkColumnBroadcastMul_, TileCopy_, EpilogueTileSwizzle_> {
 public:
     using DispatchPolicy = EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>;
     using ArchTag = typename DispatchPolicy::ArchTag;
@@ -46,8 +45,9 @@ public:
 
     // Check data infos
     static_assert(std::is_same_v<ElementC, int32_t> &&
-                      (std::is_same_v<ElementD, half> || std::is_same_v<ElementD, bfloat16_t>) &&
-                      std::is_same_v<ElementScale, ElementD> && std::is_same_v<ElementPerTokenScale, ElementD>,
+                      (std::is_same_v<ElementD, half> ||
+					   std::is_same_v<ElementD, bfloat16_t>) && std::is_same_v<ElementScale, ElementD> &&
+					  std::is_same_v<ElementPerTokenScale, ElementD>,
                   "The element type template parameters of BlockEpilogue are wrong");
     static_assert(std::is_same_v<LayoutC, layout::RowMajor> && std::is_same_v<LayoutScale, layout::VectorLayout> &&
                       std::is_same_v<LayoutPerTokenScale, layout::VectorLayout> &&
@@ -88,7 +88,7 @@ public:
         LayoutD layoutD{};
 
         CATLASS_DEVICE
-        Params() {};
+        Params(){};
 
         CATLASS_DEVICE
         Params(__gm__ ElementScale *ptrScale_, LayoutScale const &layoutScale_,
@@ -100,7 +100,8 @@ public:
               layoutPerTokenScale(layoutPerTokenScale_),
               ptrD(ptrD_),
               layoutD(layoutD_)
-        {}
+        {
+        }
     };
 
     CATLASS_DEVICE
@@ -313,10 +314,10 @@ private:
 template <uint32_t UB_STAGES_, uint32_t EXEC_FLAG_, class CType_, class LayoutScale_, class LayoutPerTokenScale_,
           class DType_, class TileRowBroadcastMul_, class TileBroadcastOneBlk_, class TileOneBlkColumnBroadcastMul_,
           class TileCopy_, class EpilogueTileSwizzle_>
-class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_, Gemm::GemmType<float, LayoutScale_>,
-                    Gemm::GemmType<float, LayoutPerTokenScale_>, DType_, TileRowBroadcastMul_, TileBroadcastOneBlk_,
-                    TileOneBlkColumnBroadcastMul_, TileCopy_, EpilogueTileSwizzle_>
-{
+class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_,
+                    Gemm::GemmType<float, LayoutScale_>, Gemm::GemmType<float, LayoutPerTokenScale_>, DType_,
+                    TileRowBroadcastMul_, TileBroadcastOneBlk_, TileOneBlkColumnBroadcastMul_, TileCopy_,
+                    EpilogueTileSwizzle_> {
 public:
     using DispatchPolicy = EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>;
     using ArchTag = typename DispatchPolicy::ArchTag;
@@ -376,7 +377,7 @@ public:
         LayoutD layoutD{};
 
         CATLASS_DEVICE
-        Params() {};
+        Params(){};
 
         CATLASS_DEVICE
         Params(__gm__ ElementScale *ptrScale_, LayoutScale const &layoutScale_,
@@ -388,7 +389,8 @@ public:
               layoutPerTokenScale(layoutPerTokenScale_),
               ptrD(ptrD_),
               layoutD(layoutD_)
-        {}
+        {
+        }
     };
 
     CATLASS_DEVICE void AlignUbOffset()
@@ -402,7 +404,9 @@ public:
     CATLASS_DEVICE
     BlockEpilogue(Arch::Resource<ArchTag> &resource, MoeDistributeCombineImpl::CombineCalcInfo &calcInfo,
                   Params const &params = Params{})
-        : resource(resource), calcInfo(calcInfo), params(params)
+        : resource(resource),
+          calcInfo(calcInfo),
+          params(params)
     {
         for (uint32_t i = 0; i < UB_STAGES; ++i) {
             ubCList[i] = resource.ubBuf.template GetBufferByByte<ElementC>(ubOffset);
@@ -488,10 +492,10 @@ public:
 
     CATLASS_DEVICE GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t expertLocalId = 0U)
     {
-        return (GM_ADDR)((calcInfo.epRankId_ == rankId)
-                             ? calcInfo.epWinContext_->localWindowsIn
-                             : ((HcclRankRelationResV2 *)(calcInfo.epWinContext_->remoteRes[rankId].nextDevicePtr))
-                                   ->windowsIn) +
+        return (GM_ADDR)((calcInfo.epRankId_ == rankId) ?
+                             calcInfo.epWinContext_->localWindowsIn :
+                             ((HcclRankRelationResV2 *)(calcInfo.epWinContext_->remoteRes[rankId].nextDevicePtr))
+                                 ->windowsIn) +
                calcInfo.winDataSizeOffset_ + expertLocalId * calcInfo.expertPerSizeOnWin_ + rankId * OPT_RANK_OFFSET;
     }
 #if ENABLE_EP_SEND_COUNT_HASH
@@ -529,7 +533,8 @@ public:
     }
 
     CATLASS_DEVICE void DoCombineSend(AscendC::LocalTensor<ElementD> &ubD, layout::RowMajor &layoutGmTileD,
-                                  LayoutD &layoutUbD, int64_t groupOffsetD, uint32_t expertIdx, uint32_t tileOffsetD)
+                                      LayoutD &layoutUbD, int64_t groupOffsetD, uint32_t expertIdx,
+                                      uint32_t tileOffsetD)
     {
         const uint32_t copyTokenLen = layoutGmTileD.shape(1) * sizeof(ElementD);
         const uint32_t copyTokenSrcStride =

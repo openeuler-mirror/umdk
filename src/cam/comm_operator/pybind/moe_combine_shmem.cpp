@@ -77,8 +77,8 @@ at::Tensor MoeCombineShmemImplNpu(
         expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask, activationScale, \
         weightScale, groupList, expandScales, \
         // attr
-        epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, sharedExpertNum, sharedExpertRankNum, \
-        globalBS, commQuantMode, extInfo, outDtype, groupListType, \
+        epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, sharedExpertNum, \
+        sharedExpertRankNum, globalBS, commQuantMode, extInfo, outDtype, groupListType, \
         // output
         expandXOut);
     return expandXOut;
@@ -172,9 +172,10 @@ at::Tensor MoeCombineShmemImpl(
     static auto op = torch::Dispatcher::singleton()
                         .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_shmem", "")
                         .typed<decltype(MoeCombineShmemImpl)>();
-    return op.call(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask, activationScale,
-        weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
-        sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode, extInfo, outDtype, groupListType);
+    return op.call(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask,
+        activationScale, weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum, tpWorldSize,
+        tpRankId, expertShardType, sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode,
+        extInfo, outDtype, groupListType);
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
@@ -208,9 +209,10 @@ public:
         int64_t groupListType)
     {
         at::AutoDispatchBelowADInplaceOrView guard;
-        auto result = MoeCombineShmemImpl(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask, activationScale,
-        weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
-        sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode, extInfo, outDtype, groupListType);
+        auto result = MoeCombineShmemImpl(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts,
+            xActiveMask, activationScale, weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum,
+            tpWorldSize, tpRankId, expertShardType, sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode,
+            extInfo, outDtype, groupListType);
         return result;
     }
 
@@ -248,9 +250,10 @@ at::Tensor MoeCombineShmemImplAutograd(
     int64_t outDtype, \
     int64_t groupListType)
 {
-    auto result = ExtMoeCombineShmem::apply(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts, xActiveMask, activationScale,
-        weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
-        sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode, extInfo, outDtype, groupListType);
+    auto result = ExtMoeCombineShmem::apply(expandX, expertIds, expandIdx, epSendCounts, expertScales, tpSendCounts,
+        xActiveMask, activationScale, weightScale, groupList, expandScales, epWorldSize, epRankId, moeExpertNum,
+        tpWorldSize, tpRankId, expertShardType, sharedExpertNum, sharedExpertRankNum, globalBS, commQuantMode,
+        extInfo, outDtype, groupListType);
     return result;
 }
 
