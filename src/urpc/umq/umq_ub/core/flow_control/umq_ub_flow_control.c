@@ -17,8 +17,8 @@
 #define UMQ_UB_CREDITS_PER_REQUEST 4
 #define UMQ_UB_INITIAL_CREDITS_PER_UMQ 4
 
-static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uint16_t count,
-    ub_credit_stat_u16_t type) {
+static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uint16_t count, ub_credit_stat_u16_t type)
+{
     volatile uint16_t *counter = &pool->stats_u16[type];
     uint16_t after, before = __atomic_load_n(counter, __ATOMIC_RELAXED);
     uint16_t ret = before;
@@ -45,8 +45,8 @@ static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uin
     return ret;
 }
 
-static ALWAYS_INLINE uint16_t counter_dec_atomic_u16(ub_credit_pool_t *pool, uint16_t count,
-    ub_credit_stat_u16_t type) {
+static ALWAYS_INLINE uint16_t counter_dec_atomic_u16(ub_credit_pool_t *pool, uint16_t count, ub_credit_stat_u16_t type)
+{
     volatile uint16_t *counter = &pool->stats_u16[type];
     uint16_t after, before = __atomic_load_n(counter, __ATOMIC_RELAXED);
     uint16_t ret = before;
@@ -64,7 +64,8 @@ static ALWAYS_INLINE uint16_t counter_dec_atomic_u16(ub_credit_pool_t *pool, uin
     return ret;
 }
 
-static ALWAYS_INLINE uint16_t counter_dec_atomic_u64(volatile uint64_t *counter, uint16_t count) {
+static ALWAYS_INLINE uint16_t counter_dec_atomic_u64(volatile uint64_t *counter, uint16_t count)
+{
     uint64_t after, before = __atomic_load_n(counter, __ATOMIC_RELAXED);
     uint64_t ret = before;
 
@@ -81,7 +82,8 @@ static ALWAYS_INLINE uint16_t counter_dec_atomic_u64(volatile uint64_t *counter,
     return ret;
 }
 
-static ALWAYS_INLINE uint16_t counter_dec_non_atomic_u64(volatile uint64_t *counter, uint16_t count) {
+static ALWAYS_INLINE uint16_t counter_dec_non_atomic_u64(volatile uint64_t *counter, uint16_t count)
+{
     if (URPC_LIKELY(*counter >= count)) {
        *counter -= count;
         return count;
@@ -91,7 +93,8 @@ static ALWAYS_INLINE uint16_t counter_dec_non_atomic_u64(volatile uint64_t *coun
     return temp;
 }
 
-static ALWAYS_INLINE uint64_t counter_inc_atomic_u64(volatile uint64_t *counter, uint16_t count) {
+static ALWAYS_INLINE uint64_t counter_inc_atomic_u64(volatile uint64_t *counter, uint16_t count)
+{
     uint64_t after, before = __atomic_load_n(counter, __ATOMIC_RELAXED);
     uint64_t ret = before;
     do {
@@ -104,7 +107,8 @@ static ALWAYS_INLINE uint64_t counter_inc_atomic_u64(volatile uint64_t *counter,
 }
 
 static ALWAYS_INLINE uint16_t counter_inc_non_atomic_u16(ub_credit_pool_t *pool, uint16_t count,
-    ub_credit_stat_u16_t type) {
+    ub_credit_stat_u16_t type)
+{
     uint16_t before = pool->stats_u16[type];
     uint32_t sum = pool->stats_u16[type] + count;
 
@@ -123,7 +127,8 @@ static ALWAYS_INLINE uint16_t counter_inc_non_atomic_u16(ub_credit_pool_t *pool,
 }
 
 static ALWAYS_INLINE uint16_t counter_dec_non_atomic_u16(ub_credit_pool_t *pool, uint16_t count,
-    ub_credit_stat_u16_t type) {
+    ub_credit_stat_u16_t type)
+{
     uint16_t before = pool->stats_u16[type];
 
     if (before < count) {
@@ -543,13 +548,13 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     if (cfg->credits_per_request == 0 || cfg->credits_per_request > queue->rx_depth) {
         fc->credits_per_request = fc->local_rx_depth >> UMQ_UB_CREDITS_PER_REQUEST;
     }
-    if (cfg->credits_per_request == 0) {
+    if (fc->credits_per_request == 0) {
         fc->credits_per_request = 1;
     }
     if (cfg->initial_credit == 0 || cfg->initial_credit > queue->rx_depth) {
         fc->initial_credit = fc->local_rx_depth >> UMQ_UB_INITIAL_CREDITS_PER_UMQ;
     }
-    if (cfg->initial_credit == 0) {
+    if (fc->initial_credit == 0) {
         fc->initial_credit = 1;
     }
     if (cfg->use_atomic_window) {
