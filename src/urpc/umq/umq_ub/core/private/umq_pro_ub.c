@@ -188,7 +188,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         return -UMQ_ERR_ENODEV;
     }
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-
+    ub_flow_control_t *fc = &queue->flow_control;
+    umq_ub_credit_check_and_request_send(fc, queue);
     uint32_t max_sge_num = queue->max_tx_sge;
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
     urma_jfs_wr_t *urma_wr_ptr = urma_wr;
@@ -632,6 +633,22 @@ static int umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_buf_t 
     return ret;
 }
 
+static void umq_ub_fill_rx_buff_post_process(ub_queue_t *queue, umq_ub_imm_t imm)
+{
+    if (imm.bs.type != IMM_TYPE_FLOW_CONTROL) {
+        return;
+    }
+    ub_flow_control_t *fc = &queue->flow_control;
+    switch (imm.flow_control.sub_type) {
+        case IMM_TYPE_FC_CREDIT_REP:
+             umq_ub_permission_release(fc);
+            break;
+        default:
+            break;
+    }
+    return;
+}
+
 int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
 {
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
@@ -652,6 +669,7 @@ int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
     int qbuf_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
+            (void)umq_ub_fill_fc_rx_buf(queue);
             UMQ_LIMIT_VLOG_ERR("UB RX reports cr[%d] status[%d], remote eid " EID_FMT ", remote jetty_id %u\n", i,
                                cr[i].status, EID_ARGS(cr[i].remote_id.eid), cr[i].remote_id.id);
             continue;
@@ -659,6 +677,7 @@ int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
         umq_ub_imm_t imm = {.value = cr[i].imm_data};
         qbuf_cnt += umq_ub_process_fc_msg(queue, imm, &buf[qbuf_cnt]);
         (void)umq_ub_fill_fc_rx_buf(queue);
+        (void)umq_ub_fill_rx_buff_post_process(queue, imm);
     }
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     return qbuf_cnt;
@@ -839,20 +858,21 @@ static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 {
     uint32_t type = obj->operator.type;
-    ub_flow_control_t *fc = NULL;
+    ub_flow_control_t *fc = &queue->flow_control;
     uint16_t notify;
 
     switch (type) {
         case IMM_TYPE_FC_CREDIT_INIT:
-            queue->flow_control.remote_get = false;
+            fc->remote_get = false;
             UMQ_LIMIT_VLOG_ERR("get remote window post read failed\n");
             break;
         case IMM_TYPE_FC_CREDIT_REP:
             notify = obj->operator.notify;
-            fc = &queue->flow_control;
             umq_ub_rq_posted_notifier_inc(fc, notify);
             (void)fc->ops.local_rx_allocted_dec(fc, notify);
             break;
+        case IMM_TYPE_FC_CREDIT_REQ:
+            umq_ub_permission_release(fc);
         default:
             break;
     }

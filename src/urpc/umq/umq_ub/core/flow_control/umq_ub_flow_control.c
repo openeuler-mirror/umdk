@@ -487,8 +487,7 @@ static ALWAYS_INLINE uint16_t leak_credit_inc_non_atomic(ub_credit_pool_t *pool,
     return counter_inc_non_atomic_u16(pool, count, LEAKED_CREDIT_COUNT);
 }
 
-static void umq_ub_cerdit_pool_init(ub_queue_t *queue, uint32_t feature,
-    umq_flow_control_cfg_t *cfg)
+static void umq_ub_cerdit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
 {
     ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     memset(pool, 0, sizeof(ub_credit_pool_t));
@@ -556,6 +555,10 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     }
     if (fc->initial_credit == 0) {
         fc->initial_credit = 1;
+    }
+    fc->credit_request_threshold = fc->credits_per_request >> 1;
+    if (fc->credit_request_threshold == 0) {
+        fc->credit_request_threshold = 1;
     }
     if (cfg->use_atomic_window) {
         fc->ops.remote_rx_window_inc = remote_rx_window_inc_atomic;
@@ -666,7 +669,8 @@ void umq_ub_rq_posted_notifier_inc(ub_flow_control_t *fc, uint16_t rx_posted)
     (void)fc->ops.local_rx_posted_inc(fc, rx_posted);
 }
 
-void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count) {
+void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count)
+{
     ub_flow_control_t *fc = &queue->flow_control;
 
     if (recharge_count == 0 || !fc->enabled) {
@@ -677,137 +681,8 @@ void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count) {
     credit->ops.available_credit_inc(credit, recharge_count);
 }
 
-void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t rx_posted)
+void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc)
 {
-    if (rx_posted == 0 || !fc->enabled) {
-        return;
-    }
-
-    uint16_t notify = fc->ops.local_rx_posted_inc(fc, rx_posted);
-    if (queue->bind_ctx == NULL) {
-        return;
-    }
-
-    // if initial_window is not set, wait initial_window to be ready first
-    if (!fc->local_set) {
-        if (notify < fc->initial_window) {
-            return;
-        }
-
-        notify = fc->ops.local_rx_posted_exchange(fc);
-        if (notify == 0) {
-            return;
-        }
-
-        uint16_t *remote_data = (uint16_t *)(uintptr_t)umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL);
-        *remote_data = notify;
-        fc->local_set = true;
-
-        if (!fc->remote_get) {
-            umq_ub_window_read(fc, queue);
-        }
-
-        return;
-    }
-
-    if (notify < fc->notify_interval) {
-        return;
-    }
-
-    if (umq_ub_window_dec(fc, queue, 1) != 1) {
-        return;
-    }
-
-    notify = fc->ops.local_rx_posted_exchange(fc);
-    if (notify == 0) {
-        umq_ub_window_inc(fc, 1);
-        return;
-    }
-
-    umq_ub_imm_t imm = {
-        .flow_control = {
-            .umq_private = UMQ_UB_IMM_PRIVATE, .type = IMM_TYPE_FLOW_CONTROL, .in_user_buf = 0, .window = notify}
-        };
-    // user_ctx used as notify for recovery on tx error
-    urma_jfs_wr_t urma_wr = {.user_ctx = notify,
-        .send = {.imm_data = imm.value},
-        .flag = {.bs = {.complete_enable = 1, .inline_flag = 1}},
-        .tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO],
-        .opcode = URMA_OPC_SEND_IMM};
-    urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], &urma_wr, &bad_wr);
-    if (status == URMA_SUCCESS) {
-        return;
-    }
-
-    UMQ_LIMIT_VLOG_ERR("flow control window send failed, status %d, local eid: " EID_FMT ", "
-                       "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n", (int)status,
-                       EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
-                       queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-                       EID_ARGS(queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
-                       queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id);
-    umq_ub_window_inc(fc, 1);
-    umq_ub_rq_posted_notifier_inc(fc, notify);
-}
-
-void umq_ub_fill_tx_imm(ub_flow_control_t *fc, urma_jfs_wr_t *urma_wr, umq_buf_pro_t *buf_pro)
-{
-    // user send wr can carry flow control
-    if (!fc->enabled || urma_wr->opcode != URMA_OPC_SEND) {
-        return;
-    }
-
-    uint16_t notify = fc->ops.local_rx_posted_load(fc);
-    if (notify < fc->notify_interval) {
-        return;
-    }
-
-    notify = fc->ops.local_rx_posted_exchange(fc);
-    if (notify == 0) {
-        return;
-    }
-
-    umq_ub_imm_t imm = {.flow_control = {
-        .umq_private = UMQ_UB_IMM_PRIVATE,
-        .type = IMM_TYPE_FLOW_CONTROL,
-        .in_user_buf = UMQ_UB_IMM_IN_USER_BUF,
-        .window = notify,
-    }};
-    urma_wr->opcode = URMA_OPC_SEND_IMM;
-    urma_wr->send.imm_data = imm.value;
-    buf_pro->opcode = UMQ_OPC_SEND_IMM;
-    buf_pro->imm_data = imm.value;
-}
-
-void umq_ub_recover_tx_imm(ub_queue_t *queue, urma_jfs_wr_t *urma_wr, uint16_t wr_index, umq_buf_t *bad)
-{
-    if (!queue->flow_control.enabled) {
-        return;
-    }
-
-    bool find = false;
-    umq_buf_pro_t *buf_pro = NULL;
-    umq_ub_imm_t imm;
-    for (uint16_t i = 0; i < wr_index; i++) {
-        if (urma_wr[i].user_ctx == (uint64_t)(uintptr_t)bad) {
-            find = true;
-        }
-
-        if (find && urma_wr[i].opcode == URMA_OPC_SEND_IMM) {
-            imm.value = urma_wr[i].send.imm_data;
-            if (imm.bs.umq_private == 0 || imm.bs.type != IMM_TYPE_FLOW_CONTROL) {
-                continue;
-            }
-
-            umq_ub_rq_posted_notifier_update(&queue->flow_control, queue, imm.flow_control.window);
-            buf_pro = (umq_buf_pro_t *)(((umq_buf_t *)(uintptr_t)urma_wr[i].user_ctx)->qbuf_ext);
-            buf_pro->opcode = UMQ_OPC_SEND;
-            buf_pro->imm_data = 0;
-        }
-    }
-}
-
-void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc) {
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t initial_credit = fc->initial_credit;
     uint16_t allocted_count = credit->ops.available_credit_dec(credit, initial_credit);
@@ -828,22 +703,14 @@ void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc) {
     }
 }
 
-static ALWAYS_INLINE bool umq_ub_sending_permission_acquire(struct ub_flow_control *fc) {
-    bool expected = false;
-    bool desired = true;
-    return __atomic_compare_exchange_n(&fc->is_credit_applying, &expected, desired, false,
-        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-}
-
-static ALWAYS_INLINE void umq_ub_sending_permission_release(struct ub_flow_control *fc) {
-    __atomic_store_n(&fc->is_credit_applying, false, __ATOMIC_RELAXED);
-}
-
 void umq_ub_shared_credit_req_send(ub_queue_t *queue)
 {
+    ub_flow_control_t *fc = &queue->flow_control;
+    if (!umq_ub_permission_acquire(fc)) {
+        return;
+    }
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
-    ub_flow_control_t *fc = &queue->flow_control;
     uint16_t credits_per_request = fc->credits_per_request;
     umq_ub_imm_t imm = {
         .flow_control = {
@@ -869,14 +736,11 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
 
-    if (!umq_ub_sending_permission_acquire(fc)) {
-        return;
-    }
     urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         return;
     }
-
+    umq_ub_permission_release(fc);
     UMQ_LIMIT_VLOG_ERR("send credit req failed, status %d, local eid: " EID_FMT ", "
                        "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n", (int)status,
                        EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id,
@@ -940,10 +804,10 @@ void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     umq_ub_shared_credit_resp_send(queue, notify);
 }
 
-void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm) {
+void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
+{
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t reply_credits = imm->flow_control.window;
-    umq_ub_sending_permission_release(fc);
     umq_ub_window_inc(fc, reply_credits);
     return;
 }

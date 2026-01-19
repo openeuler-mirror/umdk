@@ -675,7 +675,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     if (queue->flow_control.enabled) {
         // fc jetty
         umq_ub_rx_consumed_exchange(queue->dev_ctx->io_lock_free,
- 	        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], 0);
+            &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], 0);
         queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL] =
             umq_ub_jfr_ctx_create(queue, dev_ctx, UB_QUEUE_JETTY_FLOW_CONTROL);
         if (queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
