@@ -45,9 +45,6 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *info);
 void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue);
-void umq_ub_rq_posted_notifier_update(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t rx_posted);
-void umq_ub_fill_tx_imm(ub_flow_control_t *fc, urma_jfs_wr_t *urma_wr, umq_buf_pro_t *buf_pro);
-void umq_ub_recover_tx_imm(ub_queue_t *queue, urma_jfs_wr_t *urma_wr, uint16_t wr_index, umq_buf_t *bad);
 void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc);
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count);
 uint64_t umq_ub_rx_consumed_exchange(bool lock_free, volatile uint64_t *var, uint64_t count);
@@ -81,6 +78,27 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
 }
 
 void umq_ub_rq_posted_notifier_inc(ub_flow_control_t *fc, uint16_t rx_posted);
+
+static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
+{
+    if (fc->ops.remote_rx_window_load(fc) <= fc->credit_request_threshold) {
+        umq_ub_shared_credit_req_send(queue);
+    }
+    return;
+}
+
+static ALWAYS_INLINE bool umq_ub_permission_acquire(struct ub_flow_control *fc)
+{
+    bool expected = false;
+    bool desired = true;
+    return __atomic_compare_exchange_n(&fc->is_credit_applying, &expected, desired, false,
+        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
+
+static ALWAYS_INLINE void umq_ub_permission_release(struct ub_flow_control *fc)
+{
+    __atomic_store_n(&fc->is_credit_applying, false, __ATOMIC_RELAXED);
+}
 
 #ifdef __cplusplus
 }
