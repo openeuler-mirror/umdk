@@ -39,6 +39,12 @@
 static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
 
+typedef int (*ub_user_ctl_func)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+static ub_user_ctl_func g_umq_ub_user_ctl_func[UMQ_TRANS_MODE_MAX] = {
+    [UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY] = umq_flow_control_stats_get,
+    [UMQ_OPCODE_QBUF_POOL_INFO_QUERY] = umq_qbuf_pool_info_get
+};
+
 static int huge_qbuf_pool_memory_init(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
     uint32_t blk_size = umq_huge_qbuf_get_size_by_type(type);
@@ -1461,16 +1467,11 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
 
 int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
 {
-    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if (in->opcode != UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY || out->addr == 0 ||
-        out->len != sizeof(umq_flow_control_stats_t) || !queue->flow_control.enabled) {
-        UMQ_VLOG_ERR("umq ub user ctl parameter invalid\n");
+    if (in == NULL || out == NULL || in->opcode >= UMQ_OPCODE_MAX || g_umq_ub_user_ctl_func[in->opcode] == NULL) {
+        UMQ_VLOG_ERR("in or out parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-
-    umq_flow_control_stats_t *stats = (umq_flow_control_stats_t *)(uintptr_t)out->addr;
-    queue->flow_control.ops.stats_query(&queue->flow_control, stats);
-    return UMQ_SUCCESS;
+    return g_umq_ub_user_ctl_func[in->opcode](umqh_tp, in, out);
 }
 
 int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state)

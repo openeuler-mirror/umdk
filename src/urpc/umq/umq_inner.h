@@ -30,6 +30,8 @@ extern "C" {
 #define UMQ_SIZE_4M                     (0x400000)
 #define SHM_MODE (0660)
 
+typedef int (*user_ctl_func)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+
 typedef struct umq {
     umq_trans_mode_t mode;
     umq_ops_t *tp_ops;

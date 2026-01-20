@@ -2576,3 +2576,16 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
     urma_ack_jfc(temp_jfc, nevents, p_num);
     return p_num;
 }
+
+int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (out->addr == 0 || out->len != sizeof(umq_flow_control_stats_t) || !queue->flow_control.enabled) {
+        UMQ_VLOG_ERR("umq ub user ctl parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_flow_control_stats_t *stats = (umq_flow_control_stats_t *)(uintptr_t)out->addr;
+    queue->flow_control.ops.stats_query(&queue->flow_control, stats);
+    return UMQ_SUCCESS;
+}
