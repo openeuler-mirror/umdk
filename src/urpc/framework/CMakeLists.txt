@@ -44,6 +44,8 @@ set_target_properties(urpc PROPERTIES
     C_STANDARD 11
 )
 
+target_include_directories(urpc PUBLIC ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include)
+
 set_property(TARGET urpc PROPERTY C_STANDARD 11)
 target_link_libraries(urpc urma urma_common common_util pthread OpenSSL::SSL)
 install(TARGETS urpc DESTINATION /usr/lib64)

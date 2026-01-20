@@ -27,7 +27,7 @@ set_target_properties(umq PROPERTIES
     C_STANDARD 11
 )
 
-target_link_libraries(umq PUBLIC common_util PUBLIC pthread PRIVATE urma umq_buf)
+target_link_libraries(umq PUBLIC common_util PUBLIC pthread rt PRIVATE umq_buf)
 install(TARGETS umq DESTINATION /usr/lib64)
 
 if(NOT TARGET uninstall)
