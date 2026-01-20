@@ -298,7 +298,6 @@ typedef struct ub_queue {
     jfr_ctx_t *jfr_ctx[UB_QUEUE_JETTY_NUM];
     urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
     urma_jfce_t *jfs_jfce; // io and flow control jetty share same jfce
-    int rx_notify_fd; // io and flow control jfr_jfce fd unification
     ub_queue_interrupt_ctx_t interrupt_ctx;
     umq_ub_ctx_t *dev_ctx;
     struct ub_bind_ctx *bind_ctx;
@@ -445,8 +444,6 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
 int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 
-int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue);
-void umq_ub_close_rx_notfiy_fd(ub_queue_t *queue);
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 
