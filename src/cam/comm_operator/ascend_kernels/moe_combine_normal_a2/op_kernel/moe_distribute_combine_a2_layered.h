@@ -83,7 +83,7 @@ private:
     __aicore__ inline void BuffInit();
     __aicore__ inline void SplitCoreCal();
     __aicore__ inline void AlltoAllDispatch();
-    __aicore__ inline void WaitFlagEq(uint32_t waitFlagAddr, int64_t expectVal, LocalTensor<int64_t> flagUb);
+    __aicore__ inline void WaitFlagEq(uint32_t waitFlagAddr, int64_t expectVal, LocalTensor<int64_t> &flagUb);
     __aicore__ inline void SumToWindow();
     __aicore__ inline void SetStatus();
     __aicore__ inline void WaitDispatch();
