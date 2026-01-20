@@ -1,9 +1,9 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- * Description: FusedDeepMoe operator kernel function implementation file
+ * Description: FusedDeepMoeFwk operator kernel function implementation file
  * Create: 2026-01-20
- * History: 2026-01-20 create FusedDeepMoe operator kernel function implementation file
+ * History: 2026-01-20 create FusedDeepMoeFwk operator kernel function implementation file
  */
 #ifndef ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
 #define ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
