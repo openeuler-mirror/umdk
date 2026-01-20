@@ -1,19 +1,16 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: add combine kernel implement
- * Create: 2025-07-21
- * Note:
- * History: 2025-07-21 add combine kernel implement
+ * Create: 2026-01-20
  */
-#ifndef CAM_MOE_DISTRIBUTE_COMBINE_H
-#define CAM_MOE_DISTRIBUTE_COMBINE_H
-#define OPT_RANK_OFFSET 512
+
+#pragma once
 
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
-#include "../../fused_deep_moe_base.h"
-#include "../../fused_deep_moe_tiling.h"
+#include "../../fused_deep_moe_fwk_base.h"
+#include "../../fused_deep_moe_fwk_tiling.h"
 
 namespace MoeDistributeCombineImpl {
 constexpr uint8_t BUFFER_NUM = 2;  // multi-buf
@@ -62,7 +59,7 @@ public:
     __aicore__ inline CamMoeDistributeCombine(){};
     __aicore__ inline void Init(GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount,
                                 GM_ADDR tpSendCount, GM_ADDR scales, GM_ADDR XOut, GM_ADDR workspaceGM, TPipe *pipe,
-                                const FusedDeepMoeTilingData *tilingData);
+                                const FusedDeepMoeFwkTilingData *tilingData);
     __aicore__ inline void Process();
     __aicore__ inline void AllToAllSend();
     __aicore__ inline void ReducePermute();
@@ -231,7 +228,7 @@ private:
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount, GM_ADDR tpSendCount, GM_ADDR scales,
-    GM_ADDR XOut, GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData)
+    GM_ADDR XOut, GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeFwkTilingData *tilingData)
 {
     tpipe_ = pipe;
     coreIdx_ = GetBlockIdx();
@@ -809,5 +806,3 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermu
     }
 }
 }  // namespace MoeDistributeCombineImpl
-
-#endif  // CAM_MOE_DISTRIBUTE_COMBINE_IMPL_H

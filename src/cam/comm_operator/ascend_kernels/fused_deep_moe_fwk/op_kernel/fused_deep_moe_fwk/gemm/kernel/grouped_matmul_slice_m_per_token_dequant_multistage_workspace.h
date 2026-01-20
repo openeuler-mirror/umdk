@@ -1,15 +1,12 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- * Description: FusedDeepMoeFwk operator kernel function implementation file
+ * Description: FusedDeepMoeFwkFwk operator kernel function implementation file
  * Create: 2026-01-20
- * History: 2026-01-20 create FusedDeepMoeFwk operator kernel function implementation file
  */
-#ifndef ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
-#define ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
 
-#include "ascendc/basic_api/interface/kernel_operator_list_tensor_intf.h"
-#include "../../raw_distributed/cam_moe_distribute_combine.h"
+#pragma once
+
 #include "catlass/catlass.hpp"
 #include "catlass/arch/cross_core_sync.hpp"
 #include "catlass/arch/resource.hpp"
@@ -17,6 +14,8 @@
 #include "catlass/detail/callback.hpp"
 #include "catlass/gemm_coord.hpp"
 #include "catlass/matrix_coord.hpp"
+
+#include "../../raw_distributed/cam_moe_distribute_combine.h"
 
 #include "lib_ops.h"
 
@@ -387,5 +386,3 @@ private:
 };
 
 }  // namespace Catlass::Gemm::Kernel
-
-#endif  // ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP

@@ -1,18 +1,15 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: FusedDeepMoe tilingData definition file
- * Create: 2025-07-19
- * Note:
- * History: 2025-07-19 create FusedDeepMoe tilingData definition file
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: FusedDeepMoeFwk tilingData definition file
+ * Create: 2026-01-20
  */
 
-#ifndef FUSED_DEEP_MOE_TILING_H
-#define FUSED_DEEP_MOE_TILING_H
+#pragma once
 
 #include "kernel_tiling/kernel_tiling.h"
 
-struct FusedDeepMoeInfo {
+struct FusedDeepMoeFwkInfo {
     uint32_t epRankSize;           // epRankSize
     uint32_t epRankId;             // epRankId
     uint32_t moeExpertNum;         // moe expert number
@@ -32,10 +29,10 @@ struct FusedDeepMoeInfo {
     bool isTensorList;
 };
 
-struct FusedDeepMoeTilingData {
+struct FusedDeepMoeFwkTilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
-    FusedDeepMoeInfo disGmmDeqSwigluQuantGmmDeqComInfo;
+    FusedDeepMoeFwkInfo disGmmDeqSwigluQuantGmmDeqComInfo;
 };
 
 constexpr uint32_t GM_ALIGN_BYTE = 512;
@@ -71,4 +68,3 @@ constexpr uint32_t WORKSPACE_STAGES = 4;
 
 constexpr uint32_t EXEC_FLAG_DEEP_FUSE = (1U << 0);
 constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 1);
-#endif  // FUSED_DEEP_MOE_TILING_H

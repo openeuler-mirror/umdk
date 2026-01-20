@@ -1,18 +1,17 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: FusedDeepMoe tiling function implementation file
- * Create: 2025-07-22
- * Note:
- * History: 2025-07-13 create FusedDeepMoe infer function file
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: FusedDeepMoeFwk tiling function implementation file
+ * Create: 2026-01-20
  */
 
 #include <cstdint>
-#include "error_log.h"
 #include "graph/utils/type_utils.h"
 #include "register/op_def_registry.h"
+#include "error_log.h"
 
 namespace ge {
+
 constexpr uint32_t EXPAND_X_INDEX = 0;
 constexpr uint32_t EXPERT_IDS_INDEX = 1;
 constexpr uint32_t OUTPUT_X_INDEX = 0;
@@ -89,5 +88,6 @@ static ge::graphStatus InferDataType(gert::InferDataTypeContext *context)
     return ge::GRAPH_SUCCESS;
 }
 
-IMPL_OP(FusedDeepMoe).InferShape(InferShape).InferDataType(InferDataType);
+IMPL_OP(FusedDeepMoeFwk).InferShape(InferShape).InferDataType(InferDataType);
+
 }  // namespace ge

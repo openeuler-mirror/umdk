@@ -1,13 +1,12 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: FusedDeepMoe operator kernel function implementation file
- * Author: 
- * Create: 2025-07-19
- * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function implementation file
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: FusedDeepMoeFwk operator kernel function implementation file
+ * Create: 2026-01-20
  */
+
 #pragma once
+
 #include "catlass/catlass.hpp"
 #include "catlass/arch/resource.hpp"
 #include "catlass/coord.hpp"

@@ -1,16 +1,14 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: FusedDeepMoe operator kernel function header file, for a3
- * Create: 2025-07-19
- * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function header file, for a3
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: FusedDeepMoeFwk operator kernel function header file, for a3
+ * Create: 2026-01-20
  */
-#ifndef FUSED_DEEP_MOE_H
-#define FUSED_DEEP_MOE_H
+
+#pragma once
 
 #include "lib/matmul_intf.h"
-#include <kernel_operator.h>
+#include "kernel_operator.h"
 
 #include "catlass/catlass.hpp"
 #include "catlass/arch/arch.hpp"
@@ -19,18 +17,17 @@
 #include "catlass/epilogue/tile/tile_broadcast_one_blk.hpp"
 #include "catlass/epilogue/tile/tile_swizzle.hpp"
 #include "catlass/gemm/block/block_swizzle.hpp"
-#include "fused_deep_moe/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h"
 #include "catlass/gemm/gemm_type.hpp"
-#include "fused_deep_moe/epilogue/dispatch_policy.h"
-#include "fused_deep_moe/gemm/dispatch_policy.h"
-#include "fused_deep_moe/epilogue/block/block_epilogue.h"
-#include "fused_deep_moe/gemm/block/block_mmad.h"
-#include "fused_deep_moe/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_swiglu_quant_multistage_workspace.h"
+#include "fused_deep_moe_fwk/epilogue/dispatch_policy.h"
+#include "fused_deep_moe_fwk/gemm/dispatch_policy.h"
+#include "fused_deep_moe_fwk/epilogue/block/block_epilogue.h"
+#include "fused_deep_moe_fwk/gemm/block/block_mmad.h"
+#include "fused_deep_moe_fwk/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_swiglu_quant_multistage_workspace.h"
+#include "fused_deep_moe_fwk/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h"
+#include "fused_deep_moe_fwk/raw_distributed/cam_moe_distribute_dispatch.h"
 
-#include "fused_deep_moe/raw_distributed/cam_moe_distribute_dispatch.h"
-
-#include "fused_deep_moe_tiling.h"
-#include "fused_deep_moe_base.h"
+#include "fused_deep_moe_fwk_tiling.h"
+#include "fused_deep_moe_fwk_base.h"
 
 using namespace Catlass;
 
@@ -233,10 +230,10 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
 }
 
 template <TemplateMC2TypeClass>
-class FusedDeepMoe
+class FusedDeepMoeFwk
 {
 public:
-    __aicore__ inline FusedDeepMoe(){};
+    __aicore__ inline FusedDeepMoeFwk(){};
     __aicore__ inline void Init(
         // input
         GM_ADDR x, GM_ADDR expert_ids, GM_ADDR gmm1_permuted_weight, GM_ADDR gmm1_permuted_weight_scale,
@@ -244,7 +241,7 @@ public:
         // output
         GM_ADDR output, GM_ADDR expertTokenNums,
         // system
-        GM_ADDR workspaceGM, AscendC::TPipe *pipe, const FusedDeepMoeTilingData *tilingData);
+        GM_ADDR workspaceGM, AscendC::TPipe *pipe, const FusedDeepMoeFwkTilingData *tilingData);
     __aicore__ inline void Process();
 
 private:
@@ -283,18 +280,18 @@ private:
 
     AscendC::TPipe *tpipe_{nullptr};
     __gm__ HcclOpResParam *winContext_{nullptr};
-    const FusedDeepMoeTilingData *tilingData_;
+    const FusedDeepMoeFwkTilingData *tilingData_;
 };
 
 template <TemplateMC2TypeClass>
-__aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
+__aicore__ inline void FusedDeepMoeFwk<TemplateMC2TypeFunc>::Init(
     // input
     GM_ADDR x, GM_ADDR expert_ids, GM_ADDR gmm1_permuted_weight, GM_ADDR gmm1_permuted_weight_scale,
     GM_ADDR gmm2_weight, GM_ADDR gmm2_weight_scale, GM_ADDR expert_smooth_scales, GM_ADDR expert_scales,
     // output
     GM_ADDR output, GM_ADDR expertTokenNums,
     // system
-    GM_ADDR workspaceGM, AscendC::TPipe *pipe, const FusedDeepMoeTilingData *tilingData)
+    GM_ADDR workspaceGM, AscendC::TPipe *pipe, const FusedDeepMoeFwkTilingData *tilingData)
 {
     tpipe_ = pipe;
     blockDim_ = AscendC::GetBlockNum();
@@ -339,7 +336,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
 }
 
 template <TemplateMC2TypeClass>
-__aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
+__aicore__ inline void FusedDeepMoeFwk<TemplateMC2TypeFunc>::Process()
 {
     GemmCoord gmm1ProblemShape{m_, n_, k_};
     GemmCoord gmm2ProblemShape{m_, n2_, k2_};
@@ -430,4 +427,3 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
                                gmScale2_, layoutScale2, gmPerTokenScale2, layoutPerTokenScale2, gmGmm2DepOut,
                                layoutOutput, gmWorkspace, &combiner);
 }
-#endif  // FUSED_DEEP_MOE_H

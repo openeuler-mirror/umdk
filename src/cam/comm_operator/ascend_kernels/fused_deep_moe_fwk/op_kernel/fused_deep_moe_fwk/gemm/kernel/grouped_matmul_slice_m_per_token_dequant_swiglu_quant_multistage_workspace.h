@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- * Description: FusedDeepMoeFwk operator kernel function implementation file
+ * Description: FusedDeepMoeFwkFwk operator kernel function implementation file
  * Create: 2026-01-20
- * History: 2026-01-20 create FusedDeepMoeFwk operator kernel function implementation file
  */
+
 #pragma once
 
 #include "catlass/catlass.hpp"
@@ -37,7 +37,6 @@ constexpr int32_t BUFFER_NUM = 2;
 constexpr int32_t GATHER_SECOND_NUM = 2;
 constexpr uint32_t MAX_QUANT_ROW_ONCE = 8;
 constexpr uint32_t QUANT_SPACE_FACTOR = 176 * 1024 / 11; // ub usage of quant is limited to 176kb
-#define OPT_RANK_OFFSET 512
 
 #define CEIL_UP(x) ((x + UB_ALIGN - 1) / UB_ALIGN * UB_ALIGN)
 #define CEIL(x, y) (((x) + (y - 1)) / (y))

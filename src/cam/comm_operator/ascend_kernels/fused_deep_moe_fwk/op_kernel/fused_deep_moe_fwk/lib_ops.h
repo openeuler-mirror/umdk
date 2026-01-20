@@ -3,7 +3,6 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: Framework ops file
  * Create: 2026-01-20
- * History: 2026-01-20 create framework ops file
  */
 
 #pragma once
@@ -13,7 +12,7 @@
 #include "epilogue/tile/tile_stride_muls.h"
 #include "epilogue/tile/tile_stride_binary.h"
 
-#include "fused_deep_moe_base.h"
+#include "fused_deep_moe_fwk_base.h"
 
 
 template <AscendC::HardEvent EVENT>

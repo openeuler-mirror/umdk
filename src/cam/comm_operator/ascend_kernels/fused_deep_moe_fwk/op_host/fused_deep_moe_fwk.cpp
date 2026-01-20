@@ -1,18 +1,18 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: FusedDeepMoe operator definition file
- * Create: 2025-07-19
- * Note:
- * History: 2025-07-19 create FusedDeepMoe operator definition file
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: FusedDeepMoeFwk operator definition file
+ * Create: 2026-01-20
  */
+
 #include "register/op_def_registry.h"
 
 namespace ops {
-class FusedDeepMoe : public OpDef
+
+class FusedDeepMoeFwk : public OpDef
 {
 public:
-    explicit FusedDeepMoe(const char *name) : OpDef(name)
+    explicit FusedDeepMoeFwk(const char *name) : OpDef(name)
     {
         this->Input("x")
             .ParamType(REQUIRED)
@@ -74,9 +74,10 @@ public:
         this->Attr("global_bs").Int();
 
         this->MC2().HcclGroup({"group_ep"});
-        this->AICore().AddConfig("ascend910_93");
+        this->AICore().AddConfig("ascend910_93").AddConfig("ascend910b4");
     }
 };
 
-OP_ADD(FusedDeepMoe);
+OP_ADD(FusedDeepMoeFwk);
+
 }  // namespace ops

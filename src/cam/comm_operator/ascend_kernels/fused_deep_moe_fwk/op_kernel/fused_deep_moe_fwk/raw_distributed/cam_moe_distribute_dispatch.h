@@ -1,20 +1,16 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: CamMoeDistributeDispatch operator kernel function header file, for a3
- * Create: 2025-05-29
- * Note:
- * History: 2025-05-29 create CamMoeDistributeDispatch operator kernel function header file, for a3
+ * Create: 2026-01-20
  */
 
-#ifndef CAM_MOE_DISTRIBUTE_DISPATCH_H
-#define CAM_MOE_DISTRIBUTE_DISPATCH_H
-#define OPT_RANK_OFFSET 512
+#pragma once
 
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
-#include "../../fused_deep_moe_base.h"
-#include "../../fused_deep_moe_tiling.h"
+#include "../../fused_deep_moe_fwk_base.h"
+#include "../../fused_deep_moe_fwk_tiling.h"
 
 namespace MoeDistributeDispatchImpl {
 constexpr uint8_t BUFFER_NUM = 2;
@@ -55,7 +51,7 @@ public:
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR expandXOut,
                                 GM_ADDR dynamicScalesOut, GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut,
                                 GM_ADDR sendCountsOut, GM_ADDR outputRecvCount, GM_ADDR tpSendCountsOut,
-                                GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData);
+                                GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeFwkTilingData *tilingData);
     __aicore__ inline void Process();
 
 private:
@@ -213,7 +209,7 @@ template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR expandXOut, GM_ADDR dynamicScalesOut, GM_ADDR expandIdxOut,
     GM_ADDR expertTokenNumsOut, GM_ADDR sendCountsOut, GM_ADDR outputRecvCount, GM_ADDR tpSendCountsOut,
-    GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData)
+    GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeFwkTilingData *tilingData)
 {
     tpipe_ = pipe;
     aivId_ = GetBlockIdx();
@@ -1072,4 +1068,3 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Proce
 }
 
 }  // namespace MoeDistributeDispatchImpl
-#endif  // CAM_MOE_DISTRIBUTE_DISPATCH_H
