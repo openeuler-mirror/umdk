@@ -485,6 +485,7 @@ int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue);
 void umq_ub_close_rx_notfiy_fd(ub_queue_t *queue);
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
+int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
 
 #ifdef __cplusplus
 }

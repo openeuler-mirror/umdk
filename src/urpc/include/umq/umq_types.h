@@ -536,6 +536,7 @@ typedef struct umq_route_list {
 
 typedef enum umq_user_ctl_opcode {
     UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY = 0,
+    UMQ_OPCODE_QBUF_POOL_INFO_QUERY,
 
     UMQ_OPCODE_MAX,
 } umq_user_ctl_opcode_t;
@@ -591,6 +592,29 @@ typedef struct umq_cfg_get {
     umq_queue_mode_t mode;        // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;            // queue state
 } umq_cfg_get_t;
+
+typedef struct umq_qbuf_pool_info {
+    umq_buf_mode_t mode;                      // split or combine
+    uint64_t total_size;                      // qbuf pool total size
+    uint64_t total_block_num;
+    uint32_t block_size;
+    uint32_t headroom_size;
+    uint32_t data_size;                       // combine: block_size - umq_buf_t_size, split: block_size
+    uint32_t buf_size;                        // combine: block_size, split: block_size + umq_buf_t_size
+    uint32_t umq_buf_t_size;                  // size of umq_buf_t
+    union {
+        struct {
+            uint64_t block_num_with_data;     // number of available buf in data area
+            uint64_t size_with_data;          // available buf size in data area
+            uint64_t block_num_without_data;  // number of available buf in non-data area
+            uint64_t size_without_data;       // available buf size in non-data area
+        } split;
+        struct {
+            uint64_t block_num_with_data;
+            uint64_t size_with_data;
+        } combine;
+    } available_mem;
+} umq_qbuf_pool_info_t;
 
 #ifdef __cplusplus
 }
