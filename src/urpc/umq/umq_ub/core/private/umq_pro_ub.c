@@ -712,7 +712,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
 
     max_batch -= qbuf_cnt;
-    if (max_batch == 0) {
+    if (max_batch == 0 || (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
         return qbuf_cnt;
     }
 

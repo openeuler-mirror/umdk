@@ -2451,103 +2451,49 @@ void umq_flush_tx(ub_queue_t *queue, uint32_t max_retry_times)
     }
 }
 
-int umq_ub_create_rx_notfiy_fd(ub_queue_t *queue)
-{
-    int epoll_fd = epoll_create(UB_QUEUE_JETTY_NUM);
-    if (epoll_fd < 0) {
-        UMQ_VLOG_ERR("create epoll fd failed, errno %d\n", errno);
-        return errno;
-    }
-
-    // insert io jfr jfce
-    struct epoll_event ev = {0};
-    ev.events = EPOLLIN;
-    ev.data.fd = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd, &ev) != 0) {
-        UMQ_VLOG_ERR("fail to add fd:%d to epoll fd:%d, errno %d\n",
-            queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd, epoll_fd, errno);
-        goto CLOSE_EPOLL_FD;
-    }
-
-    // insert fc jfr jfce
-    if (queue->flow_control.enabled && (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
-        ev.data.fd = queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd;
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd, &ev) != 0) {
-            UMQ_VLOG_ERR("fail to add fd:%d to epoll fd:%d, errno %d\n",
-                queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd, epoll_fd, errno);
-            goto REMOVE_IO_JFR_JFCE;
-        }
-    }
-
-    queue->rx_notify_fd = epoll_fd;
-    return UMQ_SUCCESS;
-
-REMOVE_IO_JFR_JFCE:
-    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd, NULL);
-
-CLOSE_EPOLL_FD:
-    close(epoll_fd);
-
-return UMQ_FAIL;
-}
-
-void umq_ub_close_rx_notfiy_fd(ub_queue_t *queue)
-{
-    int epoll_fd = queue->rx_notify_fd;
-    if (queue->flow_control.enabled && (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd, NULL);
-    }
-    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd, NULL);
-    close(epoll_fd);
-    queue->rx_notify_fd = -1;
-}
-
+/**
+ * fc enable && is main umq: jfc cnt = 2, use io jfr jfce
+ * fc disable && is main umq: jfc cnt = 1, use io jfr jfce
+ * fc enable && is sub umq: jfc cnt = 1, use fc jfr jfce
+ * fc disable && is sub umq: jfc cnt = 0, return 0
+ */
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
 {
-    struct epoll_event events[UB_QUEUE_JETTY_NUM] = {0};
-    int num = epoll_wait(queue->rx_notify_fd, events, UB_QUEUE_JETTY_NUM, time_out);
-    if (num < 0 || num > UB_QUEUE_JETTY_NUM) {
-        UMQ_LIMIT_VLOG_ERR("epoll wait err, ret:%d.\n", num);
-        return -1;
-    } else if (num == 0) {
+    uint32_t jfc_cnt = 0;
+    urma_jfce_t *jfr_jfce = NULL;
+
+    if (queue->flow_control.enabled) {
+        jfc_cnt++;
+        jfr_jfce = queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce;
+    }
+
+    if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
+        jfc_cnt++;
+        jfr_jfce = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce;
+    }
+
+    if (jfr_jfce == NULL) {
         return 0;
     }
 
-    urma_jfce_t *fc_jfr_jfce =
-        queue->flow_control.enabled ? queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce : NULL;
-
-    int actual_num = 0;
-    for (int i = 0; i < num; i++) {
-        urma_jfce_t *jfr_jfce = NULL;
-        if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd) {
-            jfr_jfce = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce;
-        } else if (queue->flow_control.enabled &&
-                   events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
-            jfr_jfce = fc_jfr_jfce;
-        }
-        if (jfr_jfce == NULL) {
-            UMQ_LIMIT_VLOG_ERR("invalid jfce, skip\n");
-            continue;
-        }
-
-        urma_jfc_t *temp_jfc = NULL;
-        int p_num = urma_wait_jfc(jfr_jfce, 1, 0, &temp_jfc);
-        if (p_num <= 0) {
-            UMQ_LIMIT_VLOG_ERR("cannot wait jfc, skip\n");
-            continue;
-        }
-        if (events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd) {
+    urma_jfc_t *temp_jfc[jfc_cnt];
+    int p_num = urma_wait_jfc(jfr_jfce, jfc_cnt, time_out, temp_jfc);
+    if (p_num <= 0) {
+        return p_num;
+    }
+    uint32_t nevents[p_num];
+    for (int i = 0; i < p_num; i++) {
+        nevents[i] = 1;
+        jfc[i] = temp_jfc[i];
+        if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0 &&
+            temp_jfc[i] == queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc) {
             queue->interrupt_ctx.rx_io_interrupt = true;
-        } else if (queue->flow_control.enabled && 
-                   events[i].data.fd == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd) {
+        } else if (queue->flow_control.enabled && temp_jfc[i] == queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfc) {
             queue->interrupt_ctx.rx_fc_interrupt = true;
         }
-        uint32_t nevents = 1;
-        urma_ack_jfc(&temp_jfc, &nevents, 1);
-        jfc[actual_num++] = temp_jfc;
     }
-
-    return actual_num;
+    urma_ack_jfc(temp_jfc, nevents, p_num);
+    return p_num;
 }
 
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
@@ -2560,7 +2506,6 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
     urma_jfc_t *temp_jfc[jfc_cnt];
     int p_num = urma_wait_jfc(queue->jfs_jfce, jfc_cnt, time_out, temp_jfc);
     if (p_num <= 0) {
-        UMQ_LIMIT_VLOG_ERR("cannot wait jfc, skip\n");
         return p_num;
     }
     uint32_t nevents[p_num];
