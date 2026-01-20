@@ -13,6 +13,7 @@
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
+namespace Moe {
 struct MoeDispatchShmemInfo {
     uint32_t epWorldSize;          // epWorldSize
     uint32_t tpWorldSize;          // tpWorldSize
@@ -43,5 +44,5 @@ struct MoeDispatchShmemTilingData {
     Mc2CcTiling mc2CcTiling2;
     MoeDispatchShmemInfo moeDistributeDispatchInfo;
 };
-
+} // namespace Moe
 #endif

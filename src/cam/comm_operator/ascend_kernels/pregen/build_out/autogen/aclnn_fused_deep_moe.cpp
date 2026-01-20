@@ -10,14 +10,14 @@
 #include <string.h>
 #include "graph/types.h"
 #include "aclnn/opdev/platform.h"
-#include "aclnn_fused_deep_moe.h"
 #include "aclnnInner_fused_deep_moe.h"
+#include "aclnn_fused_deep_moe.h"
 
 namespace {
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
-}; // namespace
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
 extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus

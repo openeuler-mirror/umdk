@@ -7,16 +7,16 @@
  * History: 2025-12-04 add moe dispatch normal interface cpp file.
  */
 
-#include "aclnn_moe_dispatch_normal.h"
+#include <string.h>
 #include "aclnnInner_moe_dispatch_normal.h"
 #include "graph/types.h"
-#include <string.h>
+#include "aclnn_moe_dispatch_normal.h"
 
 namespace {
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
-}; // namespace
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
 extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus

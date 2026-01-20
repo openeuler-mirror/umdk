@@ -20,7 +20,7 @@
 
 using namespace AscendC;
 using namespace Moe;
-
+using namespace Cam;
 template <AscendC::HardEvent event>
 __aicore__ inline void SyncFunc()
 {

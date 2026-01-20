@@ -16,6 +16,7 @@
 #include "../../fused_deep_moe_base.h"
 #include "../../fused_deep_moe_tiling.h"
 
+using namespace Cam;
 namespace MoeDistributeDispatchImpl {
 constexpr uint8_t BUFFER_NUM = 2;
 constexpr uint32_t STATE_OFFSET = 512;        // state space offset
@@ -63,6 +64,7 @@ private:
     __aicore__ inline void SendToMoeExpert();
     __aicore__ inline void AlltoAllDispatch();
     __aicore__ inline void FillExpertCountByRowRange(uint32_t startTokenRow, uint32_t endTokenRow);
+    __aicore__ inline void CountAndPrepareStatusWithAivOpt(uint32_t expertIdsCnt);
     __aicore__ inline void LocalWindowCopy();
     __aicore__ inline void QuantProcess(uint32_t expertIndex);
     __aicore__ inline void LocalSharedExpertCopyWindow(uint32_t rankIndex, uint32_t tokenOffset,
@@ -551,6 +553,76 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::FillE
 }
 
 template <TemplateDispatchTypeClass>
+__aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::CountAndPrepareStatusWithAivOpt(
+    uint32_t expertIdsCnt)
+{
+    LocalTensor<int16_t> tableInt16LocalTensor_ = tableLocalTensor_.template ReinterpretCast<int16_t>();
+    Duplicate(tableInt16LocalTensor_, (int16_t)0, tableElemCount_ / 2);
+    SyncFunc<AscendC::HardEvent::V_S>();
+
+    for (int tokenIndex = 0; tokenIndex < static_cast<int>(expertIdsCnt); ++tokenIndex) {  // 0: not send; 1: send
+        int expertId = expertIdsTensor_(tokenIndex);
+        if (expertId < 0) {
+            continue;
+        }
+        tableLocalTensor_((tokenIndex / axisK_ + 1) * moeExpertRankNumAligned_ + expertId) = 1;
+    }
+    pipe_barrier(PIPE_ALL);
+
+    uint32_t sendTokenNum = expertIdsCnt / moeUsedAivNum_;
+    uint32_t remainderTokenNum = expertIdsCnt % moeUsedAivNum_;
+    uint32_t startTokenId = sendTokenNum * aivId_;
+    if (aivId_ < remainderTokenNum) {
+        sendTokenNum += 1;
+        startTokenId += aivId_;
+    } else {
+        startTokenId += remainderTokenNum;
+    }
+    uint32_t endTokenId = startTokenId + sendTokenNum;
+    uint32_t startTokenRow = startTokenId / axisK_;
+    uint32_t endTokenRow = (endTokenId + axisK_ - 1) / axisK_;
+
+    for (int row = 1; row <= axisBS_; ++row) {
+        Add(tableInt16LocalTensor_[row * moeExpertRankNumInt16Aligned_],
+            tableInt16LocalTensor_[row * moeExpertRankNumInt16Aligned_],
+            tableInt16LocalTensor_[(row - 1) * moeExpertRankNumInt16Aligned_], moeExpertRankNumInt16Aligned_);
+        pipe_barrier(PIPE_V);
+    }
+
+    GlobalTensor<int32_t> expandIdxGMTensor;
+    if (aivId_ < moeUsedAivNum_) {
+        SyncFunc<AscendC::HardEvent::V_S>();
+        FillExpertCountByRowRange(startTokenRow, endTokenRow);
+        SyncFunc<AscendC::HardEvent::S_MTE3>();
+        for (int row = static_cast<int>(startTokenRow); row < static_cast<int>(endTokenRow); ++row) {
+            expandIdxGMTensor.SetGlobalBuffer(
+                (__gm__ int32_t *)(expandIdxOutGM_ + row * axisK_ * sizeof(uint32_t)));
+            DataCopy(expandIdxGMTensor, expertCountTensor_[row * axisK_], axisK_);
+        }
+    }
+
+    uint32_t preTotalExpertNum = sharedExpertRankNum_ + moeExpertNum_;
+    uint32_t preSendExpertNum = preTotalExpertNum / aivNum_;
+    uint32_t preRemainderRankNum = preTotalExpertNum % aivNum_;
+    uint32_t preStartExpertId = preSendExpertNum * aivId_;
+    if (aivId_ < preRemainderRankNum) {
+        preSendExpertNum += 1;
+        preStartExpertId += aivId_;
+    } else {
+        preStartExpertId += preRemainderRankNum;
+    }
+    uint32_t preEndExpertId = preStartExpertId + preSendExpertNum;
+    preStartExpertId = preStartExpertId >= sharedExpertRankNum_ ? preStartExpertId : sharedExpertRankNum_;
+
+    SyncFunc<AscendC::HardEvent::V_S>();
+    for (int32_t tmpExpertId = static_cast<int32_t>(preStartExpertId);
+         tmpExpertId < static_cast<int32_t>(preEndExpertId); ++tmpExpertId) {
+        statusTensor_(tmpExpertId * INT32_NUM_PER_BLOCK + 1) =
+            (int32_t)sendCountLocalTensor_(tmpExpertId - sharedExpertRankNum_);
+    }
+}
+
+template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::AlltoAllDispatch()
 {
     activeMaskBsCnt_ = axisBS_;
@@ -566,69 +638,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Allto
     expertCntLocalSync.SetFlag(0);
     expertCntLocalSync.WaitFlag(0);
     if (enableAivOpt_) {
-        LocalTensor<int16_t> tableInt16LocalTensor_ = tableLocalTensor_.template ReinterpretCast<int16_t>();
-        Duplicate(tableInt16LocalTensor_, (int16_t)0, tableElemCount_ / 2);
-        SyncFunc<AscendC::HardEvent::V_S>();
-        for (int tokenIndex = 0; tokenIndex < expertIdsCnt; ++tokenIndex) {  // 0: not send; 1: send
-            int expertId = expertIdsTensor_(tokenIndex);
-            if (expertId < 0) {
-                continue;
-            }
-            tableLocalTensor_((tokenIndex / axisK_ + 1) * moeExpertRankNumAligned_ + expertId) = 1;
-        }
-        pipe_barrier(PIPE_ALL);
-
-        uint32_t sendTokenNum = expertIdsCnt / moeUsedAivNum_;
-        uint32_t remainderTokenNum = expertIdsCnt % moeUsedAivNum_;
-        uint32_t startTokenId = sendTokenNum * aivId_;
-        if (aivId_ < remainderTokenNum) {
-            sendTokenNum += 1;
-            startTokenId += aivId_;
-        } else {
-            startTokenId += remainderTokenNum;
-        }
-        uint32_t endTokenId = startTokenId + sendTokenNum;
-        uint32_t startTokenRow = startTokenId / axisK_;
-        uint32_t endTokenRow = (endTokenId + axisK_ - 1) / axisK_;
-
-        for (int row = 1; row <= axisBS_; ++row) {
-            Add(tableInt16LocalTensor_[row * moeExpertRankNumInt16Aligned_],
-                tableInt16LocalTensor_[row * moeExpertRankNumInt16Aligned_],
-                tableInt16LocalTensor_[(row - 1) * moeExpertRankNumInt16Aligned_], moeExpertRankNumInt16Aligned_);
-            pipe_barrier(PIPE_V);
-        }
-
-        // row-i of tableLocalTensor_ is index of token
-        GlobalTensor<int32_t> expandIdxGMTensor;
-        if (aivId_ < moeUsedAivNum_) {
-            SyncFunc<AscendC::HardEvent::V_S>();
-            FillExpertCountByRowRange(startTokenRow, endTokenRow);
-            SyncFunc<AscendC::HardEvent::S_MTE3>();
-            for (int row = startTokenRow; row < endTokenRow; ++row) {
-                expandIdxGMTensor.SetGlobalBuffer(
-                    (__gm__ int32_t *)(expandIdxOutGM_ + row * axisK_ * sizeof(uint32_t)));
-                DataCopy(expandIdxGMTensor, expertCountTensor_[row * axisK_], axisK_);
-            }
-        }
-
-        uint32_t preTotalExpertNum = sharedExpertRankNum_ + moeExpertNum_;
-        uint32_t preSendExpertNum = preTotalExpertNum / aivNum_;
-        uint32_t preRemainderRankNum = preTotalExpertNum % aivNum_;
-        uint32_t preStartExpertId = preSendExpertNum * aivId_;
-        if (aivId_ < preRemainderRankNum) {
-            preSendExpertNum += 1;
-            preStartExpertId += aivId_;
-        } else {
-            preStartExpertId += preRemainderRankNum;
-        }
-        uint32_t preEndExpertId = preStartExpertId + preSendExpertNum;
-        preStartExpertId = preStartExpertId >= sharedExpertRankNum_ ? preStartExpertId : sharedExpertRankNum_;
-
-        SyncFunc<AscendC::HardEvent::V_S>();
-        for (int32_t tmpExpertId = preStartExpertId; tmpExpertId < preEndExpertId; ++tmpExpertId) {
-            statusTensor_(tmpExpertId * INT32_NUM_PER_BLOCK + 1) =
-                (int32_t)sendCountLocalTensor_(tmpExpertId - sharedExpertRankNum_);
-        }
+        CountAndPrepareStatusWithAivOpt(expertIdsCnt);
     } else {
         for (uint32_t tokenIndex = 0; tokenIndex < expertIdsCnt; ++tokenIndex) {
             int32_t expertId = expertIdsTensor_(tokenIndex) + sharedExpertRankNum_;
@@ -639,14 +649,13 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Allto
             statusTensor_(expertId * INT32_NUM_PER_BLOCK + 1)++;
         }
     }
-    const uint32_t limit = isShareExpertRank_? 0U : sharedExpertRankNum_;
+    const uint32_t limit = isShareExpertRank_ ? 0U : sharedExpertRankNum_;
     for (uint32_t curSatatusExpId = 0; curSatatusExpId < limit; ++curSatatusExpId) {
-        int32_t curExpertCnt = 
+        int32_t curExpertCnt =
             (curSatatusExpId + 1 + epRankId_) * axisBS_ / sharedExpertRankNum_ -
             (curSatatusExpId + epRankId_) * axisBS_ / sharedExpertRankNum_;
-        statusTensor_((curSatatusExpId) * INT32_NUM_PER_BLOCK + 1) = curExpertCnt;
+        statusTensor_(curSatatusExpId * INT32_NUM_PER_BLOCK + 1) = curExpertCnt;
     }
-    
     if ((sharedExpertRankNum_ != 0) && (aivId_ >= moeUsedAivNum_)) {
         SendToSharedExpert();
         return;

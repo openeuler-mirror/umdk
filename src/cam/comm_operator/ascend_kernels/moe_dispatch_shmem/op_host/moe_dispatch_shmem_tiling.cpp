@@ -27,6 +27,7 @@
 #include "../op_kernel/moe_dispatch_shmem_tiling.h"
 
 using namespace ge;
+using namespace Moe;
 
 namespace {
 constexpr uint32_t X_INDEX = 0U;

@@ -15,6 +15,7 @@
 #include "../../fused_deep_moe_base.h"
 #include "../../fused_deep_moe_tiling.h"
 
+using namespace Cam;
 namespace MoeDistributeCombineImpl {
 constexpr uint8_t BUFFER_NUM = 2;  // multi-buf
 constexpr uint32_t STATE_OFFSET = 512;

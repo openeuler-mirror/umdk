@@ -51,11 +51,11 @@ public:
 
     /**
      * @brief Set the flag for the specified eventID of the designated card,
-     *        with the value being a combination of magic and value.
+              with the value being a combination of magic and value.
      * @param magic The operator batch, which will be combined into the high 32 bits of the flag value to be set.
      * @param value The specific value to be set, which will be the low 32 bits of the flag value to be set.
      * @param eventID Physically, it is an offset from the shared memory base address
-     *                (requires scaling, not an absolute value).
+                      (requires scaling, not an absolute value).
      * @param rank This rank is the rankId corresponding to the peerMems array in the CommArgs structure,
      *             not a global or local id. (Local is not applicable in the 91093 scenario,
      *             and global is not applicable in the 910B multi-machine scenario.)

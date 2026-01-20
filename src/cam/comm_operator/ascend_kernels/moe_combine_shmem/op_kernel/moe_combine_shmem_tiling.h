@@ -14,6 +14,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 
 // a3
+namespace Moe {
 struct MoeCombineShmemInfo {
     uint32_t epWorldSize;  // epWorldSize
     uint32_t tpWorldSize;  // tpWorldSize
@@ -39,5 +40,5 @@ struct MoeCombineShmemTilingData {
     Mc2CcTiling mc2CcTiling2;
     MoeCombineShmemInfo moeDistributeCombineInfo;
 };
-
+} // namespace Moe
 #endif  //__ASCENDC_COMM_MOE_CMOBINE_SHMEM_TILING_H__

@@ -9,14 +9,14 @@
 
 #include <string.h>
 #include "graph/types.h"
-#include "aclnn_moe_dispatch_shmem.h"
 #include "aclnnInner_moe_dispatch_shmem.h"
+#include "aclnn_moe_dispatch_shmem.h"
 
 namespace {
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
-    static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
-}; // namespace
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_MTE = 1;
+static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_END = 2;
+} // namespace
 extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, int32_t sType);
 
 #ifdef __cplusplus
@@ -33,9 +33,10 @@ aclnnStatus aclnnMoeDispatchShmemGetWorkspaceSize(
     uint64_t *workspaceSize, aclOpExecutor **executor)
 {
     return aclnnInnerMoeDispatchShmemGetWorkspaceSize(
-        x, expertIds, scalesOptional, xActiveMaskOptional, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType,
-        sharedExpertNum, sharedExpertRankNum, quantMode, globalBs, expertTokenNumsType, extInfo, expandXOut, dynamicScalesOut,
-        expandIdxOut, expertTokenNumsOut, epRecvCountOut, tpRecvCountOut, workspaceSize, executor);
+        x, expertIds, scalesOptional, xActiveMaskOptional, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId,
+        expertShardType, sharedExpertNum, sharedExpertRankNum, quantMode, globalBs, expertTokenNumsType, extInfo,
+        expandXOut, dynamicScalesOut, expandIdxOut, expertTokenNumsOut, epRecvCountOut, tpRecvCountOut,
+        workspaceSize, executor);
 }
 
 aclnnStatus aclnnMoeDispatchShmem(void *workspace, uint64_t workspaceSize, aclOpExecutor *executor, aclrtStream stream)

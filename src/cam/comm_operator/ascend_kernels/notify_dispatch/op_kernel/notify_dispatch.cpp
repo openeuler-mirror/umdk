@@ -23,8 +23,8 @@ extern "C" __global__ __aicore__ void notify_dispatch(GM_ADDR sendData, GM_ADDR 
                                                       GM_ADDR recvCount, GM_ADDR recvOffset, GM_ADDR maxBs,
                                                       GM_ADDR recvTokensPerExpert, GM_ADDR workspace, GM_ADDR tiling)
 {
-    REGISTER_TILING_DEFAULT(NotifyDispatchTilingData);
-    GET_TILING_DATA_WITH_STRUCT(NotifyDispatchTilingData, tilingData, tiling);
+    REGISTER_TILING_DEFAULT(Cam::NotifyDispatchTilingData);
+    GET_TILING_DATA_WITH_STRUCT(Cam::NotifyDispatchTilingData, tilingData, tiling);
 
     int localRank = tilingData.notifyDispatchInfo.localRankId;
     int localRankSize = tilingData.notifyDispatchInfo.localRankSize;
@@ -50,15 +50,21 @@ extern "C" __global__ __aicore__ void notify_dispatch(GM_ADDR sendData, GM_ADDR 
 
     if (TILING_KEY_IS(TILING_KEY_FLOAT16)) {
         NotifyDispatch<float16_t> opKernel(rank, rankSize, extraFlag);
-        opKernel.Init(KERNELS_ARGS_CALL_ALL2ALL());
+        opKernel.Init(sendDataInput, tokenPerExpertDataInput, sendDataOffsetOutput, recvDataOutput, totalRecvTokens,
+            recvCount, recvOffset, maxBs, recvTokensPerExpert, len, numTokens, op, root, cycleCount, scale,
+            scaleCount, offset, localRank, localRankSize);
         opKernel.Process();
     } else if (TILING_KEY_IS(TILING_KEY_FLOAT)) {
         NotifyDispatch<float> opKernel(rank, rankSize, extraFlag);
-        opKernel.Init(KERNELS_ARGS_CALL_ALL2ALL());
+        opKernel.Init(sendDataInput, tokenPerExpertDataInput, sendDataOffsetOutput, recvDataOutput, totalRecvTokens,
+            recvCount, recvOffset, maxBs, recvTokensPerExpert, len, numTokens, op, root, cycleCount, scale,
+            scaleCount, offset, localRank, localRankSize);
         opKernel.Process();
     } else if (TILING_KEY_IS(TILING_KEY_INT)) {
         NotifyDispatch<int> opKernel(rank, rankSize, extraFlag);
-        opKernel.Init(KERNELS_ARGS_CALL_ALL2ALL());
+        opKernel.Init(sendDataInput, tokenPerExpertDataInput, sendDataOffsetOutput, recvDataOutput, totalRecvTokens,
+            recvCount, recvOffset, maxBs, recvTokensPerExpert, len, numTokens, op, root, cycleCount, scale,
+            scaleCount, offset, localRank, localRankSize);
         opKernel.Process();
     }
 }

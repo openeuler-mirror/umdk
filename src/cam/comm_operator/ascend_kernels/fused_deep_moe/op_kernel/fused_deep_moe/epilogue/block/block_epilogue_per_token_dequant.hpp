@@ -25,8 +25,8 @@ namespace Catlass::Epilogue::Block {
 template <uint32_t UB_STAGES_, uint32_t EXEC_FLAG_, class CType_, class ScaleType_, class PerTokenScaleType_,
           class DType_, class TileRowBroadcastMul_, class TileBroadcastOneBlk_, class TileOneBlkColumnBroadcastMul_,
           class TileCopy_, class EpilogueTileSwizzle_>
-class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_, ScaleType_, 
-                    PerTokenScaleType_, DType_, TileRowBroadcastMul_, TileBroadcastOneBlk_, 
+class BlockEpilogue<EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>, CType_, ScaleType_,
+                    PerTokenScaleType_, DType_, TileRowBroadcastMul_, TileBroadcastOneBlk_,
                     TileOneBlkColumnBroadcastMul_, TileCopy_, EpilogueTileSwizzle_> {
 public:
     using DispatchPolicy = EpilogueAtlasA2PerTokenDequantCombine<UB_STAGES_, EXEC_FLAG_>;

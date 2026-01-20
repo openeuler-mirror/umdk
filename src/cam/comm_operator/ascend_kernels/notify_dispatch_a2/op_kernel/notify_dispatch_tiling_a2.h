@@ -10,8 +10,10 @@
 #ifndef NOTIFY_DISPATCH_TILING_A2_H
 #define NOTIFY_DISPATCH_TILING_A2_H
 
+#include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
+namespace Cam {
 struct NotifyDispatchInfoA2 {
     uint32_t rankSize;
     uint32_t rankId;
@@ -30,5 +32,5 @@ struct NotifyDispatchA2TilingData {
     Mc2CcTiling mc2CcTiling1;
     NotifyDispatchInfoA2 notifyDispatchInfoA2;
 };
-
+} // namespace Cam
 #endif
