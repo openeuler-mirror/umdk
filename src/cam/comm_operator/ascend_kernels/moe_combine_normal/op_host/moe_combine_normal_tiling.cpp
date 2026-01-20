@@ -352,7 +352,7 @@ static bool CheckTensorFormat(const gert::TilingContext &context, const char *no
 }
 
 static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineNormalTilingData &tilingData,
-                             const char *nodeName, uint32_t localExpertNum)
+                             const char *nodeName)
 {
     const gert::StorageShape *topkWeightsStorageShape = context.GetInputShape(TOPK_WEIGHTS_INDEX);
     OP_TILING_CHECK(topkWeightsStorageShape == nullptr, OP_LOGE(nodeName, "topkWeights is null."), return false);
@@ -530,7 +530,7 @@ static ge::graphStatus MoeCombineNormalA3TilingFuncImpl(gert::TilingContext &con
     uint32_t epRankId = tilingData->moeCombineNormalInfo.epRankId;
 
     // 检查shape各维度并赋值h,k
-    OP_TILING_CHECK(!CheckTensorShape(context, *tilingData, nodeName, localMoeExpertNum),
+    OP_TILING_CHECK(!CheckTensorShape(context, *tilingData, nodeName),
                     OP_LOGE(nodeName, "param dim check failed."), return ge::GRAPH_FAILED);
 
     // 校验win区大小

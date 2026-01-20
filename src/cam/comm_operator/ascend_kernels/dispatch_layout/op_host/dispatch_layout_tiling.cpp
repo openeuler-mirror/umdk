@@ -75,11 +75,11 @@ static void PrintTilingDataInfo(const char *nodeName, const DispatchLayoutTiling
     OP_LOGD(nodeName, "totalUbSize is %lu.", tilingData.dispatchLayoutInfo.totalUbSize);
 }
 
-static bool CheckIfA2MultiMachine(const gert::TilingContext &context,
+static bool CheckIfA2MultiMachine(const gert::TilingContext &context, const char *nodeName,
                                   const DispatchLayoutTilingData &tilingData)
 {
     fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
-    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE("DispatchLayoutTilingFunc", "platformInfoPtr is nullptr."),
+    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE(nodeName, "platformInfoPtr is nullptr."),
         return ge::GRAPH_FAILED);
     fe::PlatFormInfos &platformInfo = *platformInfoPtr;
 
@@ -137,7 +137,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.dispatchLayoutInfo.numTopk = static_cast<uint32_t>(*numTopkPtr);
     tilingData.dispatchLayoutInfo.localRankSize = static_cast<uint32_t>(*localRankSizePtr);
 
-    if (CheckIfA2MultiMachine(context, tilingData)) {
+    if (CheckIfA2MultiMachine(context, nodeName, tilingData)) {
         OP_TILING_CHECK(
             (*localRankSizePtr <= 0) || (*localRankSizePtr > MAX_LOCAL_RANKSIZE),
             OP_LOGE(nodeName, "localRankSizePtr is invalid, only support (0, %ld], but got localRankSize=%ld.",
@@ -240,7 +240,7 @@ static ge::graphStatus DispatchLayoutTilingFuncImpl(gert::TilingContext &context
                     OP_LOGE(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
 
     int tilingKey = TILING_KEY_INT;
-    if (CheckIfA2MultiMachine(context, *tilingData)) {
+    if (CheckIfA2MultiMachine(context, nodeName, *tilingData)) {
         tilingKey = tilingKey + TILING_KEY_A2_TYPE;
     }
     context.SetTilingKey(tilingKey);
