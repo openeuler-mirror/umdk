@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include "admin_file_ops.h"
 #include "admin_log.h"
@@ -420,6 +421,21 @@ int pop_arg_eid_mode(admin_config_t *cfg)
 /* The minimum length of path2: $pid occupies at least 1 character */
 #define ADMIN_NET_NS_PATH2_MIN_LEN 14
 
+/**
+ * @brief 检查字符串是否为非空纯数字串（仅包含 '0'-'9'）
+ * @param s 输入字符串
+ * @return 1 表示是纯数字，0 表示不是或为空
+ */
+static bool is_numeric_string(const char *s) {
+    if (!s || *s == '\0') return false;
+    for (const char *p = s; *p != '\0'; ++p) {
+        if (!isdigit((unsigned char)*p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool urma_validate_ns_path(const char *path)
 {
     /* ns path is a special symbolic link, cannot be checked by realpath */
@@ -476,14 +492,21 @@ static bool urma_validate_ns_path(const char *path)
 int admin_get_ns_fd(const char *ns)
 {
     int ns_fd;
+    char path[ADMIN_NET_NS_PATH_MAX_LEN];
+    if (is_numeric_string(ns)) {
+        snprintf(path, sizeof(path), "/proc/%s/ns/net", ns);
+    } else {
+        snprintf(path, sizeof(path), "%s", ns);
+    }
     /* validate input */
-    if (urma_validate_ns_path(ns) == false) {
-        return -1;
+    if (urma_validate_ns_path(path) == false) {
+        (void)printf("ns path is invalid: %s.\n", path);
+        return -EINVAL;
     }
 
-    ns_fd = open(ns, O_RDONLY | O_CLOEXEC);
+    ns_fd = open(path, O_RDONLY | O_CLOEXEC);
     if (ns_fd == -1) {
-        (void)printf("failed to open ns file %s, errno:%d", ns, errno);
+        (void)printf("failed to open ns file %s, errno:%d", path, errno);
         return ns_fd;
     }
     return ns_fd;
