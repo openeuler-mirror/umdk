@@ -14,6 +14,7 @@
 
 using namespace AscendC;
 using namespace MoeDistributeCombineA2Impl;
+using namespace Moe;
 extern "C" __global__ __aicore__ void moe_distribute_combine_a2(
     GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount, GM_ADDR scales, GM_ADDR tpSendCount,
     GM_ADDR xActiveMask, GM_ADDR activationScale, GM_ADDR weightScale, GM_ADDR groupList, GM_ADDR expandScales,
