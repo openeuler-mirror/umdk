@@ -33,8 +33,6 @@
 
 #define UMQ_FLUSH_MAX_RETRY_TIMES 10000
 #define DEV_STR_LENGTH 64
-#define UMQ_POLL_RX_MIN_BUF_CNT 2
-#define UMQ_POLL_TX_MIN_BUF_CNT 1
 
 static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
@@ -915,23 +913,10 @@ int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_direction_t io_di
 int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count)
 {
     if (io_direction == UMQ_IO_RX) {
-        if (max_buf_count < UMQ_POLL_RX_MIN_BUF_CNT) {
-            UMQ_LIMIT_VLOG_ERR("poll umq rx needs at least %u buf\n", UMQ_POLL_RX_MIN_BUF_CNT);
-            return -UMQ_ERR_EINVAL;
-        }
         return umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
     } else if (io_direction == UMQ_IO_TX) {
-        if (max_buf_count < UMQ_POLL_TX_MIN_BUF_CNT) {
-            UMQ_LIMIT_VLOG_ERR("poll umq tx needs at least %u buf\n", UMQ_POLL_TX_MIN_BUF_CNT);
-            return -UMQ_ERR_EINVAL;
-        }
         return umq_ub_poll_tx(umqh_tp, buf, max_buf_count);
     } else if (io_direction == UMQ_IO_ALL) {
-        if (max_buf_count < (UMQ_POLL_TX_MIN_BUF_CNT + UMQ_POLL_RX_MIN_BUF_CNT)) {
-            UMQ_LIMIT_VLOG_ERR("poll umq tx and rx needs at least %u buf\n",
-                               (UMQ_POLL_TX_MIN_BUF_CNT + UMQ_POLL_RX_MIN_BUF_CNT));
-            return -UMQ_ERR_EINVAL;
-        }
         uint32_t tx_max_cnt = max_buf_count > 1 ? max_buf_count >> 1 : 1;
         int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt);
         if (tx_cnt < 0) {
