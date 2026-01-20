@@ -16,11 +16,11 @@
 
 #include "admin_cmd.h"
 
-static int nl_set_eid_mode(const admin_config_t *cfg)
+static int admin_nl_set_eid_mode(const char *dev_name, bool is_dynamic)
 {
     admin_core_cmd_set_eid_mode_t arg = {0};
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
-    arg.in.eid_mode = cfg->dynamic_eid_mode;
+    (void)memcpy(arg.in.dev_name, dev_name, URMA_ADMIN_MAX_DEV_NAME);
+    arg.in.eid_mode = is_dynamic;
 
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_SET_EID_MODE, 0);
     if (msg == NULL) {
@@ -35,17 +35,10 @@ static int nl_set_eid_mode(const admin_config_t *cfg)
     return ret;
 }
 
-int admin_cmd_eid_set_eid_ns(const char *dev_name, uint32_t eid_idx, const char *ns)
+int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd)
 {
-    int ns_fd = admin_get_ns_fd(ns);
-    if (ns_fd < 0) {
-        (void)printf("Failed to get ns fd, ns %s.\n", ns);
-        return ns_fd;
-    }
-
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_EID_NS, 0);
     if (msg == NULL) {
-        close(ns_fd);
         return -ENOMEM;
     }
 
@@ -55,7 +48,6 @@ int admin_cmd_eid_set_eid_ns(const char *dev_name, uint32_t eid_idx, const char 
 
     int ret = admin_nl_send_recv_msg_default(msg);
     admin_nl_free_msg(msg);
-    close(ns_fd);
     return ret;
 }
 
@@ -152,7 +144,7 @@ static int cmd_eid_add(admin_config_t *cfg)
     }
 
     /* Automatically switch to static mode */
-    if ((ret = nl_set_eid_mode(cfg)) != 0) {
+    if ((ret = admin_nl_set_eid_mode(cfg->dev_name, false)) != 0) {
         printf("Failed to set eid mode, ret:%d\n", ret);
         return ret;
     }
@@ -174,7 +166,7 @@ static int cmd_eid_del(admin_config_t *cfg)
     }
 
     /* Automatically switch to static mode */
-    if ((ret = nl_set_eid_mode(cfg)) < 0) {
+    if ((ret = admin_nl_set_eid_mode(cfg->dev_name, false)) < 0) {
         printf("Failed to set eid mode, ret:%d\n", ret);
         return ret;
     }
@@ -191,7 +183,7 @@ static int cmd_eid_set_mode(admin_config_t *cfg)
     if ((ret = pop_arg_eid_mode(cfg)) != 0) {
         return ret;
     }
-    if ((ret = nl_set_eid_mode(cfg)) != 0) {
+    if ((ret = admin_nl_set_eid_mode(cfg->dev_name, cfg->dynamic_eid_mode)) != 0) {
         return ret;
     }
     return 0;
@@ -203,9 +195,19 @@ static int cmd_eid_set_ns(admin_config_t *cfg)
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
-    if ((ret = admin_cmd_eid_set_eid_ns(cfg->dev_name, cfg->idx, cfg->ns)) != 0) {
+
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    if ((ret = admin_nl_set_eid_ns(cfg->dev_name, cfg->idx, ns_fd)) != 0) {
+        close(ns_fd);
         return ret;
     }
+
+    close(ns_fd);
     return 0;
 }
 
@@ -254,7 +256,7 @@ int admin_cmd_add_eid_legacy(admin_config_t *cfg)
     int ret;
 
     /* Automatically switch to static mode */
-    if ((ret = nl_set_eid_mode(cfg)) != 0) {
+    if ((ret = admin_nl_set_eid_mode(cfg->dev_name, false)) != 0) {
         printf("Failed to set eid mode, ret:%d\n", ret);
         return ret;
     }
@@ -276,7 +278,7 @@ int admin_cmd_del_eid_legacy(admin_config_t *cfg)
     int ret;
 
     /* Automatically switch to static mode */
-    if ((ret = nl_set_eid_mode(cfg)) < 0) {
+    if ((ret = admin_nl_set_eid_mode(cfg->dev_name, false)) < 0) {
         printf("Failed to set eid mode, ret:%d\n", ret);
         return ret;
     }
@@ -294,5 +296,5 @@ int admin_cmd_set_eid_mode_legacy(admin_config_t *cfg)
         (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
-    return nl_set_eid_mode(cfg);
+    return admin_nl_set_eid_mode(cfg->dev_name, cfg->dynamic_eid_mode);
 }

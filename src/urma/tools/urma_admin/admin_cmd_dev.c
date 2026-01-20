@@ -11,10 +11,65 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "admin_netlink.h"
 #include "admin_file_ops.h"
+#include "admin_netlink.h"
 
 #include "admin_cmd.h"
+
+int admin_nl_set_dev_sharing(bool enabled)
+{
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u8(msg, UBCORE_ATTR_NS_MODE, (uint8_t)enabled);
+    int ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+    return ret;
+}
+
+int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
+{
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    int ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+    return ret;
+}
+
+int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd)
+{
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_EXPOSE_DEV_NS, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    int ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+    return ret;
+}
+
+int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd)
+{
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_UNEXPOSE_DEV_NS, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    int ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+    return ret;
+}
 
 static int cmd_dev_usage(admin_config_t *cfg)
 {
@@ -34,17 +89,7 @@ static int cmd_dev_toggle_sharing(admin_config_t *cfg)
         return ret;
     }
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
-    if (msg == NULL) {
-        return -ENOMEM;
-    }
-
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u8(msg, UBCORE_ATTR_NS_MODE, cfg->ns_mode);
-    ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
-
-    return ret;
+    return admin_nl_set_dev_sharing(cfg->ns_mode == 1);
 }
 
 static int cmd_dev_set_ns(admin_config_t *cfg)
@@ -60,19 +105,12 @@ static int cmd_dev_set_ns(admin_config_t *cfg)
         return ns_fd;
     }
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
-    if (msg == NULL) {
-        ret = -ENOMEM;
-        goto close_ns_fd;
+    if ((ret = admin_nl_set_dev_ns(cfg->dev_name, ns_fd)) != 0) {
+        close(ns_fd);
+        return ret;
     }
 
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
-    ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
-
-close_ns_fd:
-    (void)close(ns_fd);
+    close(ns_fd);
     return ret;
 }
 
@@ -84,37 +122,11 @@ static int cmd_dev_set(admin_config_t *cfg)
     }
 
     static const admin_cmd_t cmds[] = {
-        {NULL, cmd_dev_usage},            //
-        {"ns", cmd_dev_set_ns},           //
-        {0},                              //
+        {NULL, cmd_dev_usage},  //
+        {"ns", cmd_dev_set_ns}, //
+        {0},                    //
     };
     return exec_cmd(cfg, cmds);
-}
-
-int admin_cmd_dev_expose(const char *dev_name, const char *ns)
-{
-    int ret = 0;
-
-    int ns_fd = admin_get_ns_fd(ns);
-    if (ns_fd < 0) {
-        (void)printf("Failed to get ns fd, ns %s.\n", ns);
-        return ns_fd;
-    }
-
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_EXPOSE_DEV_NS, 0);
-    if (msg == NULL) {
-        ret = -ENOMEM;
-        goto close_ns_fd;
-    }
-
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
-    ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
-
-close_ns_fd:
-    (void)close(ns_fd);
-    return ret;
 }
 
 static int cmd_dev_expose(admin_config_t *cfg)
@@ -126,37 +138,20 @@ static int cmd_dev_expose(admin_config_t *cfg)
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
-    ret = admin_cmd_dev_expose(cfg->dev_name, cfg->ns);
-    if (ret != 0) {
-        printf("Failed to expose dev\n");
-        return ret;
-    }
-    return ret;
-}
 
-int admin_cmd_dev_unexpose(const char *dev_name, const char *ns)
-{
-    int ret = 0;
-    int ns_fd = admin_get_ns_fd(ns);
+    int ns_fd = admin_get_ns_fd(cfg->ns);
     if (ns_fd < 0) {
-        (void)printf("Failed to get ns fd, ns %s.\n", ns);
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
         return ns_fd;
     }
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_UNEXPOSE_DEV_NS, 0);
-    if (msg == NULL) {
-        ret = -ENOMEM;
-        goto close_ns_fd;
+    if ((ret = admin_nl_expose_dev_ns(cfg->dev_name, ns_fd)) != 0) {
+        close(ns_fd);
+        return ret;
     }
 
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
-    ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
-
-close_ns_fd:
-    (void)close(ns_fd);
-    return ret;
+    close(ns_fd);
+    return 0;
 }
 
 static int cmd_dev_unexpose(admin_config_t *cfg)
@@ -168,12 +163,20 @@ static int cmd_dev_unexpose(admin_config_t *cfg)
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
-    ret = admin_cmd_dev_unexpose(cfg->dev_name, cfg->ns);
-    if (ret != 0) {
-        printf("Failed to unexpose dev\n");
+
+    int ns_fd = admin_get_ns_fd(cfg->ns);
+    if (ns_fd < 0) {
+        (void)printf("Failed to get ns fd, ns %s.\n", cfg->ns);
+        return ns_fd;
+    }
+
+    if ((ret = admin_nl_unexpose_dev_ns(cfg->dev_name, ns_fd)) != 0) {
+        close(ns_fd);
         return ret;
     }
-    return ret;
+
+    close(ns_fd);
+    return 0;
 }
 
 int admin_cmd_dev(admin_config_t *cfg)
@@ -182,12 +185,12 @@ int admin_cmd_dev(admin_config_t *cfg)
         return cmd_dev_usage(cfg);
     }
     static const admin_cmd_t cmds[] = {
-        {NULL, cmd_dev_usage},          //
-        {"sharing", cmd_dev_toggle_sharing},       //
-        {"set", cmd_dev_set},           //
-        {"expose", cmd_dev_expose},     //
-        {"unexpose", cmd_dev_unexpose}, //
-        {0},                            //
+        {NULL, cmd_dev_usage},               //
+        {"sharing", cmd_dev_toggle_sharing}, //
+        {"set", cmd_dev_set},                //
+        {"expose", cmd_dev_expose},          //
+        {"unexpose", cmd_dev_unexpose},      //
+        {0},                                 //
     };
     return exec_cmd(cfg, cmds);
 }
@@ -195,17 +198,7 @@ int admin_cmd_dev(admin_config_t *cfg)
 // Legacy cmd
 int admin_cmd_set_ns_mode_legacy(admin_config_t *cfg)
 {
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
-    if (msg == NULL) {
-        return -ENOMEM;
-    }
-
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u8(msg, UBCORE_ATTR_NS_MODE, cfg->ns_mode);
-
-    int ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
-    return ret;
+    return admin_nl_set_dev_sharing(cfg->ns_mode == 1);
 }
 
 int admin_cmd_set_dev_ns_legacy(admin_config_t *cfg)
@@ -216,17 +209,12 @@ int admin_cmd_set_dev_ns_legacy(admin_config_t *cfg)
         return ns_fd;
     }
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
-    if (msg == NULL) {
+    int ret = admin_nl_set_dev_ns(cfg->dev_name, ns_fd);
+    if (ret != 0) {
         close(ns_fd);
-        return -ENOMEM;
+        return ret;
     }
 
-    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
-
-    int ret = admin_nl_send_recv_msg_default(msg);
-    admin_nl_free_msg(msg);
     close(ns_fd);
     return ret;
 }
