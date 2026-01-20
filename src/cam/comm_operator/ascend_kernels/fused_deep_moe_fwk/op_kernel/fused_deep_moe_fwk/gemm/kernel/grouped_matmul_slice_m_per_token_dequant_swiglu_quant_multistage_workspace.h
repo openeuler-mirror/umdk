@@ -1,11 +1,9 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: FusedDeepMoe operator kernel function implementation file
- * Author:
- * Create: 2025-07-19
- * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function implementation file
+ * Create: 2026-01-20
+ * History: 2026-01-20 create FusedDeepMoe operator kernel function implementation file
  */
 #pragma once
 
@@ -32,13 +30,13 @@ constexpr uint32_t UB_ALIGN = 32;
 constexpr uint32_t TOKEN_EXTRA_SPACE = 512;
 constexpr uint32_t INT32_COUNT_PER_BLOCK = 8;
 constexpr uint32_t SOFT_SYNC_SPACE_SIZE = 512;
-constexpr int64_t LOOP_TMP_SIZE = 4096;     // 计算地址偏移优化使用空间
-constexpr int32_t SUB_AIV_NUM = 2;          // 1C配2V，即1个cube搭配两个vector
-constexpr int32_t ODD_EVEN_BASE = 2;        // 判断奇偶的基数
+constexpr int64_t LOOP_TMP_SIZE = 4096;
+constexpr int32_t SUB_AIV_NUM = 2;
+constexpr int32_t ODD_EVEN_BASE = 2;
 constexpr int32_t BUFFER_NUM = 2;
 constexpr int32_t GATHER_SECOND_NUM = 2;
 constexpr uint32_t MAX_QUANT_ROW_ONCE = 8;
-constexpr uint32_t QUANT_SPACE_FACTOR = 176 * 1024 / 11;  // 量化使用UB不超过176KB
+constexpr uint32_t QUANT_SPACE_FACTOR = 176 * 1024 / 11; // ub usage of quant is limited to 176kb
 #define OPT_RANK_OFFSET 512
 
 #define CEIL_UP(x) ((x + UB_ALIGN - 1) / UB_ALIGN * UB_ALIGN)
@@ -63,7 +61,7 @@ constexpr uint32_t QUANT_SPACE_FACTOR = 176 * 1024 / 11;  // 量化使用UB不�
 #define PRE_COUNT_INDEX 2
 #define SELF_COUNT_INDEX 3
 #define TOTAL_COUNT_INDEX 4
-#define GROUP_TOKEN_COUNT 3  // 等于SELF_COUNT_INDEX
+#define GROUP_TOKEN_COUNT SELF_COUNT_INDEX
 #define GROUP_INFO_SIZE 32
 
 namespace Catlass::Gemm::Kernel {
@@ -71,7 +69,6 @@ namespace Catlass::Gemm::Kernel {
 
 __aicore__ inline static void EncreaseSyncFlag(__gm__ uint8_t *flagAddr, uint8_t idx)
 {
-    // flag++，类似set flag
     AscendC::PipeBarrier<PIPE_ALL>();
     AscendC::GlobalTensor<uint8_t> global;
     global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE);
@@ -90,7 +87,6 @@ __aicore__ inline static void EncreaseSyncFlag(__gm__ uint8_t *flagAddr, uint8_t
 
 __aicore__ inline static void CheckSyncFlag(__gm__ uint8_t *flagAddr, uint8_t idx, uint32_t target)
 {
-    //  查看flag，类似wait flag
     AscendC::PipeBarrier<PIPE_ALL>();
     AscendC::GlobalTensor<uint8_t> global;
     global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE);
@@ -263,16 +259,14 @@ public:
         moeExpertNumPerRank = params.moeExpertNumPerRank;
         isShareExpert = (params.epRankId < params.sharedExpertRankNum);
         localExpertNum = isShareExpert ? 1 : moeExpertNumPerRank;
-        // 单卡单专家48发48收
-        recvCoreNum = aivNum;
-        // 单卡多专家24收24发
-        if (localExpertNum > 1) {
+        recvCoreNum = aivNum; // 48 send 48 recv in 1-expert per rank sence
+        if (localExpertNum > 1) { // 24 send 24 recv in multi-expert per rank sence
             recvCoreNum = aiCoreGroupNum;
         }
-        uint32_t coreNumPerGroup = recvCoreNum / localExpertNum;  // 这里假设可以整除
+        uint32_t coreNumPerGroup = recvCoreNum / localExpertNum; // Required it's divided evenly
         winContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<AscendC::HCCL_GROUP_ID_0>();
 
-        // 更新状态，影响CV交互使用的信号值
+        // Update the status of cv communication flag
         statusDataSpaceGm = (GM_ADDR)(winContext_->localWindowsExp);
         AscendC::GlobalTensor<int32_t> selfDataStatusTensor;
         selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
@@ -317,7 +311,7 @@ public:
         uint32_t startCoreIdx = 0;
         AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
         aicSetFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
-                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};  // AIV等待的信息在24~48
+                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};
         uint32_t target = 1;
         for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
             if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
@@ -326,7 +320,7 @@ public:
             }
             groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) +
                                                      groupIdx * GROUP_INFO_SIZE);
-            // 等待AIV的token收齐信号后，再往下走
+            // Wait until all tokens is received by aiv
             while (true) {
                 __asm__ __volatile__("");
                 AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
@@ -354,11 +348,10 @@ public:
                 GemmCoord blockCoord = blockScheduler.GetBlockCoord(loopIdx);
                 GemmCoord actualBlockShape = blockScheduler.GetActualBlockShape(blockCoord);
 
-                // 使用软同步
                 Callback callbackBeforeFixpipe{};
                 if (stageUsed == WORKSPACE_STAGES) {
                     aicWaitFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(AscendC::GetBlockIdx()),
-                                    target};  // AIC等待的信号在前24个
+                                    target};
                     target += 1;
                     callbackBeforeFixpipe = MakeCallback(&aicWaitFunc1);
                 } else {
@@ -404,7 +397,7 @@ public:
         while (stageUsed > 0) {
             uint32_t aivComputeStageId =
                 (stageId >= stageUsed) ? (stageId - stageUsed) : (stageId + WORKSPACE_STAGES - stageUsed);
-            target += 1;  // 追平AIV多余的软同步
+            target += 1;
             --stageUsed;
         }
         AscendC::SyncAll<false>();
@@ -465,7 +458,7 @@ public:
         CATLASS_DEVICE
         void operator()(const opx::MatrixDataContext& ctx)
         {
-            // 清理软同步残留信息，避免影响别处或者下次运行
+            // Clear the flags of the soft-sync
             AscendC::PipeBarrier<PIPE_ALL>();
 
             AscendC::GlobalTensor<int32_t> syncGlobal;
@@ -490,7 +483,7 @@ public:
         CATLASS_DEVICE
         uint32_t GetValue(uint32_t groupIdx)
         {
-            // only 1 group
+            // Only 1 group
             AscendC::GlobalTensor<uint32_t> totalTokenNumGlobal;
             totalTokenNumGlobal.SetGlobalBuffer(gmTotalTokenNum);
             __asm__ __volatile__("");
@@ -619,7 +612,7 @@ public:
         // BlockQuant
         auto gmGroupTokenNum =
             (__gm__ uint32_t*)params.gmEpSendCount + ctx.moeExpertNumPerRank * ctx.epRankSize - 1;
-        uint32_t nOut = layoutD.shape(1); // 读取上面Swiglu输出，N相同
+        uint32_t nOut = layoutD.shape(1); // Read from the output of the Swiglu above
         uint32_t quantRowOnce = 0;
         CalQuantRow(nOut, quantRowOnce);
 
@@ -690,7 +683,6 @@ private:
     AicSetFunc1 aicSetFunc1;
     Arch::Resource<ArchTag> resource;
 
-    // 卡与专家相关
     uint32_t epRankSize{0};
     uint32_t epRankId{0};
     bool hasShareExpert{false};
@@ -701,7 +693,6 @@ private:
     uint32_t moeExpertNumPerRank{0};
     uint32_t moeExpertNum{0};
 
-    // token相关
     uint32_t hOutSize{0};
     uint32_t scaleParamPad{0};
     uint32_t hCommuSize{0};
@@ -712,28 +703,24 @@ private:
     uint32_t expertIdsCnt{0};
     uint32_t tokenLength{0};
 
-    // 状态相关
-    int32_t tokenFlag{0};    // token到达的flag
-    int32_t vToCFlag{0};     // V通知C的flag
-    int32_t dataState{0};    // 当前核的状态，与combine配合
-    int32_t cvDataState{0};  // 当前核的状态，CV配合
-    int32_t state{0};        // count的flag选择依据
-    float sumTarget{0.0};    // count达到的数量
+    int32_t tokenFlag{0};
+    int32_t vToCFlag{0};
+    int32_t dataState{0};
+    int32_t cvDataState{0};
+    int32_t state{0};
+    float sumTarget{0.0};
 
-    // 共享内存相关
     __gm__ HcclOpResParam *winContext_;
     GM_ADDR statusDataSpaceGm;
     uint32_t stateOffset{0};
     uint64_t expertPerSizeOnWin{0};
     uint64_t winDataSizeOffset{0};
 
-    // 核上资源相关
     int64_t ubOffset;
 
-    // 分核相关
     bool isSendCore{false};
     bool isRecvCore{false};
-    bool isCompCore{false};  // 参与计算deq_swiglu
+    bool isCompCore{false};
     uint32_t aiCoreGroupNum{0};
     uint32_t aiCoreGroupIdx{0};
     uint32_t subBlockNum{0};

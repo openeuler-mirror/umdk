@@ -1,3 +1,10 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: Framework ops file
+ * Create: 2026-01-20
+ * History: 2026-01-20 create framework ops file
+ */
 
 #pragma once
 
@@ -117,7 +124,7 @@ struct MoEContext
         uint32_t aivIdx = AscendC::GetBlockIdx();
         uint32_t aivStateGlobalCoreIdx = aivNum + aicNum + aivIdx;
 
-        // 核状态更新，决定使用哪一半空间，以及各种信号的切换
+        // Read and update the execute-state, determine which space and the flag value to be used
         using AscendC::CacheLine;
         using AscendC::DcciDst;
 
@@ -138,7 +145,7 @@ struct MoEContext
             selfDataStatusTensor[aivIdx * UB_ALIGN]);
         __asm__ __volatile__("");
 
-        // 专家token数据信号
+        // Flag value of C-V communication
         __asm__ __volatile__("");
         AscendC::DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
             selfDataStatusTensor[aivStateGlobalCoreIdx * UB_ALIGN]);
@@ -167,7 +174,7 @@ struct MoEContext
         if (state == 0) {
             sumTarget = 1.0f;
             tokenFlag = TOKEN_FLAG_1;
-            selfStatusTensor(aivIdx * UB_ALIGN) = 0x3F800000; // 0x3F800000为浮点数的1.0
+            selfStatusTensor(aivIdx * UB_ALIGN) = 0x3F800000; // 0x3F800000 equals to 1.0f in hex
         } else {
             sumTarget = 0.0f;
             tokenFlag = TOKEN_FLAG_2;
@@ -221,10 +228,10 @@ public:
     uint32_t topK{0};
     uint32_t tokenLength{0};
 
-    int32_t dataState{0};       // dispatch使用的数据段，与combine互斥配合修改，取值[0,1]
-    int32_t tokenFlag{0};       // token到达的flag
-    int32_t vToCFlag{0};        // v通知c的flag
-    float sumTarget{0.0};       // count达到的数量
+    int32_t dataState{0};
+    int32_t tokenFlag{0};
+    int32_t vToCFlag{0};
+    float sumTarget{0.0};
 
     uint64_t expertPerSizeOnWin{0};
     uint64_t winDataSizeOffset{0};
@@ -328,12 +335,12 @@ private:
     void CalAndSendTokenCount(uint32_t ubOffset,
         const AscendC::LocalTensor<uint32_t>& expertIdsLocal, uint32_t expertIdsCnt)
     {
-        // 计算发送token的数量，并且发送出去
         uint32_t totalExpertNum = ctx.moeExpertNumPerRank * ctx.epRankSize;
-        uint32_t sendCountExpertNum = totalExpertNum / sendCoreNum; // 每个aiv需要处理的专家数
+        uint32_t sendCountExpertNum = totalExpertNum / sendCoreNum;
         uint32_t remainderRankNum = totalExpertNum % sendCoreNum;
-        uint32_t startExpertId = sendCountExpertNum * sendCoreIdx; // 每个aiv发送的起始rankid
-        if (sendCoreIdx < remainderRankNum) { // 前remainderRankNum个aiv需要多发1个卡的数据
+        uint32_t startExpertId = sendCountExpertNum * sendCoreIdx;
+        // The first remainderRankNum-AIVs needs to send an additional rank of data
+        if (sendCoreIdx < remainderRankNum) {
             sendCountExpertNum += 1;
             startExpertId += sendCoreIdx;
         } else {
@@ -343,15 +350,15 @@ private:
         if (startExpertId >= totalExpertNum) {
             return;
         }
-        // 计算count及偏移：开始
+
         uint32_t statusTensorLen = RoundUp(ctx.expertCntUp, INT32_COUNT_PER_BLOCK) * UB_BLOCK_SIZE;
         AscendC::LocalTensor<int32_t> statusTensor = GetBufferByByte<int32_t>(ubOffset, statusTensorLen);
-        AscendC::Duplicate(statusTensor, 0, ctx.expertCntUp * INT32_COUNT_PER_BLOCK); // 先清零再赋值，清零一定要做
+        AscendC::Duplicate(statusTensor, 0, ctx.expertCntUp * INT32_COUNT_PER_BLOCK); // Clear to zero
         if (ctx.sumTarget == 1.0f) {
-            // 一次性操作256字节，也是64个int32_t，每8个数将首个设置为0x3F800000,即浮点数1.0
+            // Operates 256B(64-int32_t) at once
+            // Set the first number of every 8 numbers to 0x3F800000(hex of 1.0f)
             uint64_t mask[2] = { 0x101010101010101, 0};
             AscendC::PipeBarrier<PIPE_V>();
-            // 这里原版代码有bug, block数量不是8的倍数时，后面的尾巴没法更新
             AscendC::Duplicate(statusTensor, 0x3F800000, mask,
                 CeilDiv(ctx.expertCntUp, INT32_COUNT_PER_BLOCK), 1, INT32_COUNT_PER_BLOCK);
         }
@@ -378,12 +385,12 @@ private:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
-    /// @brief 计算expertIds的前n个值中等于dstExpertId的个数
-    /// @param ubOffset 使用UB内存的偏移
-    /// @param expertIdsLocal 存储expertIds的UB内存
-    /// @param n 要计算的前n个元素
-    /// @param dstExpertId 目标专家序号
-    /// @return 返回expertIds的前n个值中等于dstExpertId的个数
+    /// @brief Count the number of values equal to dstExpertId in the first n values of expertIds array
+    /// @param ubOffset The offset of UB memory temporary used by method
+    /// @param expertIdsLocal Local tensor that stores the expertIds array
+    /// @param n First n number to be calculated
+    /// @param dstExpertId Destination expert id
+    /// @return The number of values equals to dstExpertId among the first n-element of expertIds array
     CATLASS_DEVICE
     uint32_t CalExpandIdx(uint32_t ubOffset, const AscendC::LocalTensor<uint32_t>& expertIdsLocal,
         uint32_t n, uint32_t dstExpertId)
@@ -399,16 +406,17 @@ private:
         AscendC::Sub(tmpLocal, expertIdsLocal.ReinterpretCast<int32_t>(), tmpLocal, n);
         AscendC::PipeBarrier<PIPE_V>();
         AscendC::LocalTensor<float> tmpFp32 = tmpLocal.ReinterpretCast<float>();
-        AscendC::Abs(tmpFp32, tmpFp32, n); // Abs只支持浮点，会抹掉浮点最高符号位，i32负数会变为很大的值
+        AscendC::Abs(tmpFp32, tmpFp32, n); // Use Abs to remove the sign-bit of i32
         AscendC::PipeBarrier<PIPE_V>();
-        // 将不是发往dstExpertId的位置全部变为1，因为上面减法后做绝对值相等的位置为0
+        // Set all values that are not equal to dstExpertId to 1
         AscendC::Mins(tmpLocal, tmpLocal, 1, n);
         AscendC::PipeBarrier<PIPE_V>();
-        // 计算1的个数。将i32作为浮点数做reduce，i32为正数且小于f32的尾数位23bit时结果等价
+        // Count the number of 1. Treat i32 as float to do Reduce,
+        // the result is equivalent when every of the i32 is positive and the sum-result is less than 2^23
         AscendC::ReduceSum(tmpFp32, tmpFp32, {}, n);
         PipeSync<AscendC::HardEvent::V_S>();
 
-        // 用n减去即可得到发往dstExpertId的个数
+        // Get the number of 0 by sub n with the number of 1
         return n - (uint32_t)tmpLocal(0);
     }
 
@@ -416,7 +424,6 @@ private:
     void SendToMoeExpert(uint32_t ubOffset,
         const AscendC::LocalTensor<uint32_t>& expertIdsLocal, uint32_t expertIdsCnt)
     {
-        // 给路由专家发送token
         uint32_t sendTokenNum = expertIdsCnt / sendCoreNum;
         uint32_t remainderTokenNum = expertIdsCnt % sendCoreNum;
         uint32_t startTokenId = sendTokenNum * sendCoreIdx;
@@ -434,7 +441,7 @@ private:
 
         AscendC::LocalTensor<uint32_t> expandIdxLocal =
             GetBufferByByte<uint32_t>(ubOffset, expertIdsCnt * sizeof(uint32_t));
-        AscendC::Duplicate<uint32_t>(expandIdxLocal, 0, expertIdsCnt); // 清零
+        AscendC::Duplicate<uint32_t>(expandIdxLocal, 0, expertIdsCnt); // Clear zero
         PipeSync<AscendC::HardEvent::V_S>();
 
         AscendC::LocalTensor<XType> xInTensor[BUFFER_NUM];
@@ -458,13 +465,13 @@ private:
             AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(ev_MTE3_MTE2[i]);
         }
 
-        AscendC::GlobalTensor<int8_t> dstWinGMTensor; // token输出
+        AscendC::GlobalTensor<int8_t> dstWinGMTensor;
 
         uint32_t flowId = 0;
         for (uint32_t sendGroupIndex = 0; sendGroupIndex < ctx.moeExpertNumPerRank; ++sendGroupIndex) {
             for (uint32_t tokenIndex = startTokenId; tokenIndex < endTokenId; ++tokenIndex) {
                 uint32_t dstExpertId = expertIdsLocal(tokenIndex);
-                if ((dstExpertId % ctx.moeExpertNumPerRank) != sendGroupIndex) { // 优先发送制定专家的token
+                if ((dstExpertId % ctx.moeExpertNumPerRank) != sendGroupIndex) { // Send low-id expert in priority
                     continue;
                 }
                 flowId = (flowId + 1) % BUFFER_NUM;
@@ -492,7 +499,7 @@ private:
                 AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(ev_V_MTE3[flowId]);
 
                 AscendC::DataCopy(dstWinGMTensor, yInt8Tensor[flowId], tokenLength);
-                // 分开发送，要求flag字段晚于token到达
+                // Send the data first then the flag
                 AscendC::PipeBarrier<PIPE_MTE3>();
                 AscendC::DataCopy(dstWinGMTensor[tokenLength], yInt8Tensor[flowId][tokenLength],
                     TOKEN_EXTRA_SPACE / sizeof(int8_t));
@@ -596,15 +603,18 @@ public:
         AscendC::LocalTensor<int32_t> gatherMaskOutCountTensor =
             GetBufferByByte<int32_t>(ubOffset, ctx.expertCntUp * sizeof(float));
 
-        // 先按本地专家分核，再在专家接收的源rank进一步分核
+        // Determine how many cores each expert needs first, and then determine
+        // the number of source ranks each core receives data from
         uint32_t recvExpertNum = ctx.expertCntUp;
-        uint32_t recvCoreNumPerGroup = recvCoreNum / ctx.moeExpertNumPerRank; // 每个group由若干核处理，这里要求能整除且不为0
-        uint32_t recvRankNumPerCore = ctx.epRankSize / recvCoreNumPerGroup; // 每个核处理的rank数量
+        // Required recvCoreNum is divided evenly by moeExpertNumPerRank
+        uint32_t recvCoreNumPerGroup = recvCoreNum / ctx.moeExpertNumPerRank;
+        // The number of source ranks each core receives data from
+        uint32_t recvRankNumPerCore = ctx.epRankSize / recvCoreNumPerGroup;
         uint32_t remainderRankNum = ctx.epRankSize % recvCoreNumPerGroup;
 
-        uint32_t groupId = recvCoreIdx / recvCoreNumPerGroup; // 当前核处理的是哪个group
-        uint32_t recvCoreIdxInGroup = recvCoreIdx % recvCoreNumPerGroup; // 当前核处理的是group中第几个
-        uint32_t startRankIdInGroup = recvRankNumPerCore * recvCoreIdxInGroup; // 当前核处理的起始rank
+        uint32_t groupId = recvCoreIdx / recvCoreNumPerGroup; // Determine which group the core is belongs to
+        uint32_t recvCoreIdxInGroup = recvCoreIdx % recvCoreNumPerGroup; // The index of core among the group
+        uint32_t startRankIdInGroup = recvRankNumPerCore * recvCoreIdxInGroup;
         if (recvCoreIdxInGroup < remainderRankNum) {
             recvRankNumPerCore += 1;
             startRankIdInGroup += recvCoreIdxInGroup;
@@ -633,9 +643,8 @@ private:
         const AscendC::LocalTensor<float>& statusFp32Tensor,
         const AscendC::LocalTensor<float>& gatherMaskOutFp32Tensor)
     {
-        // 接收count数据
         uint32_t recStatusNumPerCore = ctx.expertCntUp;
-        uint32_t startStatusIndex = 0; // 目前每个核都要收集所有的count
+        uint32_t startStatusIndex = 0; // Each core must receive all count data
 
         AscendC::GlobalTensor<float> windowInStatusFp32Tensor;
         windowInStatusFp32Tensor.SetGlobalBuffer((__gm__ float*)ctx.GetWindowStateAddrByRankId(ctx.epRankId) +
@@ -644,7 +653,7 @@ private:
         AscendC::DataCopyParams dataCopyParams{};
         dataCopyParams.blockCount = (uint16_t)recStatusNumPerCore;
         dataCopyParams.blockLen = 1;
-        dataCopyParams.srcStride = 15; // 15个DataBlock，实际读取间隔16*32B=512B
+        dataCopyParams.srcStride = 15; // 15 data blocks，actual read stride is 16*32B=512B
         dataCopyParams.dstStride = 0;
 
         AscendC::GatherMaskParams gatherMaskParams{};
@@ -653,7 +662,7 @@ private:
         gatherMaskParams.src0RepeatStride = 1;
         gatherMaskParams.src1RepeatStride = 0;
 
-        uint8_t src1Pattern = 3; // 3-内置固定模式，每个repeat内每四个元素取第一个元素
+        uint8_t src1Pattern = 3; // 3 inner-pattern, select the first element from every 4 elements within each repeat
         uint32_t procElementInRepeat = 1;
         uint64_t rsvdCnt = 0;
 
@@ -661,7 +670,7 @@ private:
         float minTarget = (ctx.sumTarget * recStatusNumPerCore) - (float)0.5;
         float maxTarget = (ctx.sumTarget * recStatusNumPerCore) + (float)0.5;
 
-        // 等待本卡所有专家的所有源rank发送标志位置位
+        // Wait until all source ranks of all experts in this rank to send the flag
         do {
             AscendC::DataCopy(statusFp32Tensor, windowInStatusFp32Tensor, dataCopyParams);
             PipeSync<AscendC::HardEvent::MTE2_V>();
@@ -673,13 +682,14 @@ private:
             sumOfFlag = gatherMaskOutFp32Tensor.GetValue(0);
         } while (!(minTarget < sumOfFlag && sumOfFlag < maxTarget));
 
-        // 获取本卡所有专家的所有源rank发来的token个数
-        src1Pattern = 4; // 4-内置固定模式，每个repeat内每四个元素取第二个元素
+        // Get the sum of the token nums sent by all source ranks of all experts in this rank
+        src1Pattern = 4; // 4 inner-pattern, select the second element from every 4 elements within each repeat
         procElementInRepeat = 2;
         AscendC::GatherMask(gatherMaskOutFp32Tensor, statusFp32Tensor, src1Pattern,
             true, procElementInRepeat, gatherMaskParams, rsvdCnt);
         AscendC::PipeBarrier<PIPE_V>();
-        // 计算要处理的rank-id之前所有token个数的前缀和，到gatherMaskOut第一个元素，供后续使用
+        // Calculates the prefix sum of the number of tokens before the rank-id to be processed
+        // store to the 0-index of gatherMaskOut array, for later used
         AscendC::ReduceSum(gatherMaskOutFp32Tensor, gatherMaskOutFp32Tensor, {}, startRankId + 1);
         PipeSync<AscendC::HardEvent::V_S>();
     }
@@ -709,10 +719,10 @@ private:
             uint32_t beginIdx = gatherMaskOutCountTensor.GetValue(i) - count;
             uint32_t winOffset = index;
             if (ctx.moeExpertNumPerRank > 1) {
-                // count的空间排布，与token数据的空间排布不同，需要转换成数据区的排布偏移
+                // The spatial layout of the count is different from that of the token data
                 // srcRank: index % epRankSize
                 // localExpertId: index / epRankSize
-                // Addr: (srcRank * moeExpertNumPerRank + localExpertId) * expertPerSizeOnWin
+                // addr: (srcRank * moeExpertNumPerRank + localExpertId) * expertPerSizeOnWin
                 winOffset = (index % ctx.epRankSize) * ctx.moeExpertNumPerRank + index / ctx.epRankSize;
             }
             GM_ADDR wAddr = ctx.GetWindowDataAddrByRankId(ctx.epRankId) + winOffset * ctx.expertPerSizeOnWin;
@@ -752,7 +762,7 @@ private:
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(ev_MTE3_MTE2);
         GetTPipePtr()->ReleaseEventID<AscendC::HardEvent::MTE3_MTE2>(ev_MTE3_MTE2);
 
-        // 写出接收到的count个数的前缀和
+        // Write out the prefix sum of the received token number
         AscendC::DataCopyExtParams dataCopyExtParams{};
         dataCopyExtParams.blockCount = 1;
         dataCopyExtParams.blockLen = (endRankId - startRankId) * sizeof(int32_t);
@@ -765,7 +775,8 @@ private:
     CATLASS_DEVICE
     void NotifyNextStage(uint32_t ubOffset, uint32_t groupId, uint32_t flagValue, uint32_t recvTokenCount)
     {
-        // 通过AtomicAdd增加对应Group的标志位，当某个Group的标志位达到目标时，C核和计算V核启动
+        // Use AtomicAdd to increase the ready flag of one group
+        // AICs and the computing-AIVs will start when the corresponding group's ready flag reaches the target value
         AscendC::LocalTensor<int32_t> tmpLocalTensor = GetBufferByByte<int32_t>(ubOffset, UB_BLOCK_SIZE);
 
         tmpLocalTensor.SetValue(CV_FLAG_INDEX, flagValue);
@@ -1052,13 +1063,13 @@ public:
 
         uint32_t aivIdx = get_block_idx() * get_subblockdim() + get_subblockid();
         if (aivIdx == 0) {
-            // 清理专家token数量信息
+            // Clear the token number infos
             AscendC::LocalTensor<int32_t> zeroLocal = GetBufferByByte<int32_t>(0);
             AscendC::Duplicate(zeroLocal, (int32_t)0, GROUP_INFO_SIZE * ctx.moeExpertNumPerRank);
             PipeSync<AscendC::HardEvent::V_MTE3>();
             AscendC::DataCopy(groupTokenNumStateGlobal, zeroLocal, GROUP_INFO_SIZE * ctx.moeExpertNumPerRank);
         } else if (aivIdx == 1) {
-            // 更新group_list信息
+            // Update the group list infos
             uint32_t tmpTokenNum = 0;
             for (uint32_t localMoeIndex = 0; localMoeIndex < ctx.moeExpertNumPerRank; ++localMoeIndex) {
                 __asm__ __volatile__("");
