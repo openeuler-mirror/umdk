@@ -297,16 +297,45 @@ typedef struct umq_alloc_option {
     uint16_t headroom_size;
 } umq_alloc_option_t;
 
+typedef struct umq_credit_pool_stats {
+    /* current actual statistics of the system */
+    uint64_t pool_idle; // the number of credits currently available in the credit pool
+    uint64_t pool_be_allocated; // the number of credits currently allocated and taken from the credit pool
+    uint64_t rsvd0[2];
+
+    /* cumulative statistics */
+    uint64_t total_pool_idle; // the total number of available credits in the current credit pool.
+    uint64_t total_pool_be_allocated; // the total number of credits currently allocated and taken from the credit pool
+    uint64_t rsvd1[2];
+
+    /* error in statistics */
+    uint64_t total_pool_post_rx_err; // the total number of invalid credits (which will cause `pool_idle` to overflow)
+    uint64_t rsvd2[2];
+} umq_credit_pool_stats_t;
+
+typedef struct umq_credit_private_stats {
+    /* current actual statistics at the queue level */
+    uint64_t queue_idle; // credits to be allocated to the peer (no practical use, always 0, reserved field)
+    uint64_t queue_be_allocted; // credits already be allocated to the peer, used for rx direction receive io
+    uint64_t queue_acquired; // credits acquired from the peer, used for tx direction send io
+    uint64_t rsvd0[2];
+
+    /* cumulative statistics at the queue level */
+    uint64_t total_queue_idle; // the total number of credits to be allocated to the peer
+    uint64_t total_queue_acquired; // the total number of credits obtained from the peer
+    uint64_t total_queue_be_allocated; // the total number of credits already be allocated to the peer
+    uint64_t total_queue_post_tx_success; // the total number of already consumed credits in the tx direction
+    uint64_t rsvd1[2];
+
+    /* error in statistics */
+    uint64_t total_queue_post_tx_err; // the total number of transmitted io that failed in the tx direction
+    uint64_t total_queue_acquired_err; // the total number of credits obtained from the peer that were invalid
+    uint64_t rsvd[4];
+} umq_credit_private_stats_t;
+
 typedef struct umq_flow_control_stats {
-    uint64_t local_rx_posted;
-    uint64_t remote_rx_window;
-    uint64_t total_local_rx_posted;
-    uint64_t total_local_rx_notified;
-    uint64_t total_local_rx_posted_error;
-    uint64_t total_remote_rx_received;
-    uint64_t total_remote_rx_consumed;
-    uint64_t total_remote_rx_received_error;
-    uint64_t total_flow_controlled_wr;
+    umq_credit_pool_stats_t pool_credit; // credit-related statistics of a main queue
+    umq_credit_private_stats_t queue_credit; // credit-related statistics of a specific queue
 } umq_flow_control_stats_t;
 
 typedef enum umq_dfx_module_id {

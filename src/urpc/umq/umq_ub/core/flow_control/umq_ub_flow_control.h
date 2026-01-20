@@ -69,15 +69,8 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
         return win;
     }
 
-    if (!fc->remote_get) {
-        umq_ub_window_read(fc, queue);
-        return 0;
-    }
-
     return fc->ops.remote_rx_window_dec(fc, win);
 }
-
-void umq_ub_rq_posted_notifier_inc(ub_flow_control_t *fc, uint16_t rx_posted);
 
 static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {

@@ -664,8 +664,8 @@ int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
     }
 
     if (rx_cr_cnt > 0) {
- 	    queue->interrupt_ctx.rx_fc_interrupt = false;
- 	}
+        queue->interrupt_ctx.rx_fc_interrupt = false;
+    }
     int qbuf_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
@@ -736,6 +736,10 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
 
     umq_buf_status_t qbuf_status;
+    ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+    if (queue->flow_control.enabled) {
+        (void)credit->ops.allocated_credit_dec(credit, rx_cr_cnt);
+    }
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         umq_ub_rx_consumed_inc(queue->dev_ctx->io_lock_free, &queue->dev_ctx->rx_consumed_jetty_table[cr->local_id], 1);
@@ -782,7 +786,6 @@ static void umq_ub_on_tx_done(ub_flow_control_t *fc, umq_buf_t *buf, bool failed
     if (buf_pro->opcode != UMQ_OPC_SEND_IMM) {
         return;
     }
-
 }
 
 static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
@@ -864,7 +867,7 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
     uint32_t type = obj->operator.type;
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t notify;
-
+    ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     switch (type) {
         case IMM_TYPE_FC_CREDIT_INIT:
             fc->remote_get = false;
@@ -872,7 +875,7 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
             break;
         case IMM_TYPE_FC_CREDIT_REP:
             notify = obj->operator.notify;
-            umq_ub_rq_posted_notifier_inc(fc, notify);
+            (void)credit->ops.available_credit_return(credit, notify);
             (void)fc->ops.local_rx_allocted_dec(fc, notify);
             break;
         case IMM_TYPE_FC_CREDIT_REQ:
