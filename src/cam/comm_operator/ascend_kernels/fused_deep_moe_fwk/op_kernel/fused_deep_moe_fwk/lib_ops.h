@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "kernel_operator_list_tensor_intf.h"
 #include "opx/opx.h"
 
 #include "epilogue/tile/tile_stride_muls.h"

@@ -22,9 +22,10 @@
 #include "fused_deep_moe_fwk/gemm/dispatch_policy.h"
 #include "fused_deep_moe_fwk/epilogue/block/block_epilogue.h"
 #include "fused_deep_moe_fwk/gemm/block/block_mmad.h"
+#include "fused_deep_moe_fwk/raw_distributed/cam_moe_distribute_dispatch.h"
+#include "fused_deep_moe_fwk/raw_distributed/cam_moe_distribute_combine.h"
 #include "fused_deep_moe_fwk/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_swiglu_quant_multistage_workspace.h"
 #include "fused_deep_moe_fwk/gemm/kernel/grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h"
-#include "fused_deep_moe_fwk/raw_distributed/cam_moe_distribute_dispatch.h"
 
 #include "fused_deep_moe_fwk_tiling.h"
 #include "fused_deep_moe_fwk_base.h"

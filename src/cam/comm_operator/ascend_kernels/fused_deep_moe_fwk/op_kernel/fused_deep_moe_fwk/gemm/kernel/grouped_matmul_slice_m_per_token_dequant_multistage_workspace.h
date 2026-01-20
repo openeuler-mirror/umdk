@@ -15,9 +15,7 @@
 #include "catlass/gemm_coord.hpp"
 #include "catlass/matrix_coord.hpp"
 
-#include "../../raw_distributed/cam_moe_distribute_combine.h"
-
-#include "lib_ops.h"
+#include "fused_deep_moe_fwk/lib_ops.h"
 
 namespace Catlass::Gemm::Kernel {
 

@@ -74,7 +74,7 @@ public:
         this->Attr("global_bs").Int();
 
         this->MC2().HcclGroup({"group_ep"});
-        this->AICore().AddConfig("ascend910_93").AddConfig("ascend910b4");
+        this->AICore().AddConfig("ascend910_93");
     }
 };
 
