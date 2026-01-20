@@ -79,8 +79,7 @@ static bool CheckIfA2MultiMachine(const gert::TilingContext &context, const char
                                   const DispatchLayoutTilingData &tilingData)
 {
     fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
-    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE(nodeName, "platformInfoPtr is nullptr."),
-        return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(platformInfoPtr == nullptr, OP_LOGE(nodeName, "platformInfoPtr is nullptr."), return false);
     fe::PlatFormInfos &platformInfo = *platformInfoPtr;
 
     std::string socVersion;
