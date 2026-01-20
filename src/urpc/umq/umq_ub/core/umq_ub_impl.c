@@ -142,59 +142,28 @@ uint32_t umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t b
         return 0;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-    umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
-    info->is_binded = queue->bind_ctx != NULL ? true : false;
-    info->umq_trans_mode = queue->dev_ctx->trans_info.trans_mode;
-    info->trans_mode = queue->dev_ctx->transport_mode;
-    info->tp_type = queue->dev_ctx->tp_type;
-    info->order_type = queue->dev_ctx->order_type;
-    info->jetty_id[UB_QUEUE_JETTY_IO] = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id;
-    info->type = URMA_JETTY;
-    info->token[UB_QUEUE_JETTY_IO] = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
-    info->notify_buf = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
-    info->rx_depth = queue->rx_depth;
-    info->tx_depth = queue->tx_depth;
-    info->rx_buf_size = queue->rx_buf_size;
-    info->feature = queue->dev_ctx->feature;
-    info->state = queue->state;
-    info->pid = getpid();
-    (void)memcpy(&info->tseg, queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
-    info->buf_pool_mode = umq_qbuf_mode_get();
-    if (queue->flow_control.enabled) {
-        info->jetty_id[UB_QUEUE_JETTY_FLOW_CONTROL] = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id;
-        info->token[UB_QUEUE_JETTY_FLOW_CONTROL] =
-            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
-        info->win_buf_addr = umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL);
-        info->win_buf_len = UMQ_UB_RW_SEGMENT_LEN;
-    } else {
-        memset(&info->jetty_id[UB_QUEUE_JETTY_FLOW_CONTROL], 0, sizeof(urma_jetty_id_t));
-        info->token[UB_QUEUE_JETTY_FLOW_CONTROL].token = 0;
-        info->win_buf_addr = 0;
-        info->win_buf_len = 0;
-    }
-
-    return sizeof(umq_ub_bind_info_t);
+    return umq_ub_bind_info_serialize(queue, bind_info, bind_info_size);
 }
 
-int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
+int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info_buf, uint32_t bind_info_size)
 {
-    if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
-        UMQ_VLOG_ERR("bind info size invalid\n");
-        return -UMQ_ERR_EINVAL;
+    umq_ub_bind_info_t bind_info = {0};
+    int ret = umq_ub_bind_info_deserialize(bind_info_buf, bind_info_size, &bind_info);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR("deserialize bind info failed\n");
+        return ret;
     }
 
-    umq_ub_bind_info_t *info = (umq_ub_bind_info_t *)bind_info;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-
-    int ret = umq_ub_bind_info_check(queue, info);
+    ret = umq_ub_bind_info_check(queue, &bind_info);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }
 
-    if (umq_ub_window_init(&queue->flow_control, info) != UMQ_SUCCESS) {
+    if (umq_ub_window_init(&queue->flow_control, &bind_info) != UMQ_SUCCESS) {
         return -UMQ_ERR_EINVAL;
     }
-    return umq_ub_bind_inner_impl(queue, info);
+    return umq_ub_bind_inner_impl(queue, &bind_info);
 }
 
 int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)

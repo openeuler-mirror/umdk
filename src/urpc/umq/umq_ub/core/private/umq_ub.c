@@ -9,6 +9,7 @@
 
 #include <sys/epoll.h>
 #include "perf.h"
+#include "urpc_tlv.h"
 #include "umq_qbuf_pool.h"
 #include "umq_ub_flow_control.h"
 #include "qbuf_list.h"
@@ -38,53 +39,74 @@ static inline bool umq_ub_bind_feature_check(uint32_t local_feature, uint32_t re
 
 int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
-    if (info->umq_trans_mode != UMQ_TRANS_MODE_UB && info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
-        info->umq_trans_mode != UMQ_TRANS_MODE_UBMM && info->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
-        UMQ_VLOG_ERR("trans mode %d is not UB\n", info->umq_trans_mode);
+    if (info->version_info == NULL) {
+        UMQ_VLOG_ERR("verion_info not exist\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->state > QUEUE_STATE_READY || info->state > QUEUE_STATE_READY) {
-        UMQ_VLOG_ERR("queue state is not ready, local is %u, remote is %u\n", queue->state, info->state);
+    umq_ub_bind_dev_info_t *dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info->dev_info;
+    if (dev_info == NULL) {
+        UMQ_VLOG_ERR("dev_info not exist\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->trans_info.trans_mode != info->umq_trans_mode) {
+    umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info->queue_info;
+    if (queue_info == NULL) {
+        UMQ_VLOG_ERR("queue_info not exist\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (queue->flow_control.enabled && info->fc_info == NULL) {
+        UMQ_VLOG_ERR("fc_info not exist\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB && dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
+        dev_info->umq_trans_mode != UMQ_TRANS_MODE_UBMM && dev_info->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
+        UMQ_VLOG_ERR("trans mode %d is not UB\n", dev_info->umq_trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (queue->state > QUEUE_STATE_READY || queue_info->state > QUEUE_STATE_READY) {
+        UMQ_VLOG_ERR("queue state is not ready or idle, local is %u, remote is %u\n", queue->state, queue_info->state);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (queue->dev_ctx->trans_info.trans_mode != dev_info->umq_trans_mode) {
         UMQ_VLOG_ERR("trans mode misatch, local is %u but remote %u\n",
-            queue->dev_ctx->trans_info.trans_mode, info->umq_trans_mode)
+            queue->dev_ctx->trans_info.trans_mode, dev_info->umq_trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->transport_mode != info->trans_mode) {
+    if (queue->dev_ctx->transport_mode != dev_info->trans_mode) {
         UMQ_VLOG_ERR("transport_mode misatch, local is %u but remote %u\n",
-            queue->dev_ctx->transport_mode, info->trans_mode);
+            queue->dev_ctx->transport_mode, dev_info->trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->tp_type != info->tp_type) {
+    if (queue->dev_ctx->tp_type != dev_info->tp_type) {
         UMQ_VLOG_ERR("tp_type misatch, local is %u but remote %u\n",
-            queue->dev_ctx->tp_type, info->tp_type);
+            queue->dev_ctx->tp_type, dev_info->tp_type);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (!umq_ub_bind_feature_check(queue->dev_ctx->feature, info->feature)) {
-        UMQ_VLOG_ERR("feature misatch, local is %u but remote %u\n", queue->dev_ctx->feature, info->feature);
+    if (!umq_ub_bind_feature_check(queue->dev_ctx->feature, dev_info->feature)) {
+        UMQ_VLOG_ERR("feature misatch, local is %u but remote %u\n", queue->dev_ctx->feature, dev_info->feature);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (info->buf_pool_mode != umq_qbuf_mode_get()) {
-        UMQ_VLOG_ERR("buf pool mode negotiation inconsistency, recv mode: %d\n", info->buf_pool_mode);
+    if (dev_info->buf_pool_mode != umq_qbuf_mode_get()) {
+        UMQ_VLOG_ERR("buf pool mode negotiation inconsistency, recv mode: %d\n", dev_info->buf_pool_mode);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->bind_ctx != NULL || info->is_binded) {
+    if (queue->bind_ctx != NULL || queue_info->is_binded) {
         UMQ_VLOG_ERR("umq has already been binded\n");
         return -UMQ_ERR_EEXIST;
     }
 
-    if (memcmp(&queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid,
-        &info->jetty_id[UB_QUEUE_JETTY_IO].eid, sizeof(urma_eid_t)) == 0 &&
-        queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id == info->jetty_id[UB_QUEUE_JETTY_IO].id) {
+    if (memcmp(&queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid, &queue_info->jetty_id.eid, sizeof(urma_eid_t)) == 0 &&
+        queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id == queue_info->jetty_id.id) {
         UMQ_VLOG_ERR("the queue cannot bind itself, eid: " EID_FMT ", jetty_id: %u\n",
                      EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
                      queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
@@ -155,14 +177,14 @@ static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, xchg_mem_info_t *
 static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32_t *remote_eid_id)
 {
     remote_imported_tseg_info_t *remote_imported_info = queue->dev_ctx->remote_imported_info;
-    urma_eid_t *remote_eid = &info->jetty_id[UB_QUEUE_JETTY_IO].eid;
+    urma_eid_t *remote_eid = &info->queue_info->jetty_id.eid;
     uint32_t hash_eid = urpc_hash_bytes(remote_eid, sizeof(urma_eid_t), 0);
-    uint32_t hash = urpc_hash_add(hash_eid, info->pid);
+    uint32_t hash = urpc_hash_add(hash_eid, info->dev_info->pid);
     bool find = false;
     remote_eid_hmap_node_t *eid_node;
     pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
-        if ((memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) && (info->pid == eid_node->pid)) {
+        if ((memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) && (info->dev_info->pid == eid_node->pid)) {
             find = true;
             break;
         }
@@ -193,7 +215,7 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     }
 
     // importing the remote memory
-    urma_target_seg_t *tseg = &info->tseg;
+    urma_target_seg_t *tseg = &info->dev_info->tseg;
     urma_seg_t *seg = &tseg->seg;
     xchg_mem_info_t mem_info = {
         .seg_len = seg->len,
@@ -211,12 +233,12 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
         free(eid_node);
         pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR("import mem failed, remote eid "EID_FMT", local eid "EID_FMT"\n",
-            EID_ARGS(info->jetty_id[UB_QUEUE_JETTY_IO].eid), EID_ARGS(queue->dev_ctx->urma_ctx->eid));
+            EID_ARGS(info->queue_info->jetty_id.eid), EID_ARGS(queue->dev_ctx->urma_ctx->eid));
         return -UMQ_ERR_ENODEV;
     }
 
     (void)pthread_mutex_init(&remote_imported_info->imported_tseg_list_mutex[eid_id], NULL);
-    eid_node->pid = info->pid;
+    eid_node->pid = info->dev_info->pid;
     eid_node->remote_eid_id = eid_id;
     eid_node->ref_cnt = 1;
     *remote_eid_id = eid_id;
@@ -274,20 +296,20 @@ int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_
 
 static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_info_t *info, ub_queue_jetty_index_t i)
 {
-    urma_rjetty_t rjetty = {.jetty_id = info->jetty_id[i],
-                            .trans_mode = info->trans_mode,
-                            .type = info->type,
+    urma_rjetty_t rjetty = {.jetty_id = i == UB_QUEUE_JETTY_IO ? info->queue_info->jetty_id : info->fc_info->jetty_id,
+                            .trans_mode = info->dev_info->trans_mode,
+                            .type = info->queue_info->type,
                             .flag.bs.token_policy =
                                 token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0),
-                            .flag.bs.order_type = info->order_type,
+                            .flag.bs.order_type = info->dev_info->order_type,
                             .flag.bs.share_tp = 1,
-                            .tp_type = info->tp_type};
-
-    urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &info->token[i]);
+                            .tp_type = info->dev_info->tp_type};
+    urma_token_t token = i == UB_QUEUE_JETTY_IO ? info->queue_info->token : info->fc_info->token;
+    urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &token);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR("import jetty[%d] failed, local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
                      "remote jetty_id: %u\n", i, EID_ARGS(queue->jetty[i]->jetty_id.eid),
-                     queue->jetty[i]->jetty_id.id, EID_ARGS(info->jetty_id[i].eid), info->jetty_id[i].id);
+                     queue->jetty[i]->jetty_id.id, EID_ARGS(rjetty.jetty_id.eid), rjetty.jetty_id.id);
         return NULL;
     }
 
@@ -322,7 +344,7 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_ENOMEM;
     }
 
-    ctx->remote_notify_addr = info->notify_buf;
+    ctx->remote_notify_addr = info->queue_info->notify_buf;
     ctx->tjetty[UB_QUEUE_JETTY_IO] = umq_ub_connect_jetty(queue, info, UB_QUEUE_JETTY_IO);
     if (ctx->tjetty[UB_QUEUE_JETTY_IO] == NULL) {
         goto FREE_CTX;
@@ -342,7 +364,7 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         }
     }
 
-    ctx->remote_pid = info->pid;
+    ctx->remote_pid = info->dev_info->pid;
     queue->bind_ctx = ctx;
 
     if (umq_ub_eid_id_get(queue, info, &ctx->remote_eid_id) != UMQ_SUCCESS) {
@@ -352,7 +374,8 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 
     queue->imported_tseg_list = queue->dev_ctx->remote_imported_info->imported_tseg_list[ctx->remote_eid_id];
     uint32_t max_msg_size = queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
-    queue->remote_rx_buf_size = (max_msg_size > info->rx_buf_size) ? info->rx_buf_size : max_msg_size;
+    queue->remote_rx_buf_size =
+        (max_msg_size > info->queue_info->rx_buf_size) ? info->queue_info->rx_buf_size : max_msg_size;
     if (queue->flow_control.enabled) {
         for (uint32_t i = 0; i < UMQ_UB_FLOW_CONTORL_JETTY_DEPTH; i++) {
             if (umq_ub_fill_fc_rx_buf(queue) != UMQ_SUCCESS) {
@@ -385,6 +408,167 @@ DISCONNECT_IO_JETTY:
 FREE_CTX:
     free(ctx);
     return UMQ_FAIL;
+}
+
+static ALWAYS_INLINE uint32_t umq_ub_version_info_serialize(uint8_t *bind_info_buf, uint32_t left_buf_size)
+{
+    if (left_buf_size < (uint32_t)sizeof(umq_ub_bind_version_info_t) + (uint32_t)sizeof(urpc_tlv_head_t)) {
+        UMQ_VLOG_ERR("bind info size insufficient, version info cannot serialize\n");
+        errno = UMQ_ERR_ENOMEM;
+        return 0;
+    }
+    urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
+    umq_ub_bind_version_info_t *version_info = (umq_ub_bind_version_info_t *)(uintptr_t)info_tlv_head->value;
+    version_info->version = UMQ_UB_BIND_VERSION;
+    info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_VERSION;
+    info_tlv_head->len = sizeof(umq_ub_bind_version_info_t);
+    return urpc_tlv_get_total_len(info_tlv_head);
+}
+
+static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
+    umq_ub_ctx_t *dev_ctx, uint8_t *bind_info_buf, uint32_t left_buf_size)
+{
+    if (left_buf_size < (uint32_t)sizeof(umq_ub_bind_dev_info_t) + (uint32_t)sizeof(urpc_tlv_head_t)) {
+        UMQ_VLOG_ERR("bind info size insufficient, version info cannot serialize\n");
+        errno = UMQ_ERR_ENOMEM;
+        return 0;
+    }
+    urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
+    umq_ub_bind_dev_info_t *dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
+    dev_info->umq_trans_mode = dev_ctx->trans_info.trans_mode;
+    dev_info->trans_mode = dev_ctx->transport_mode;
+    dev_info->tp_type = dev_ctx->tp_type;
+    dev_info->order_type = dev_ctx->order_type;
+    (void)memcpy(&dev_info->tseg, dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
+    dev_info->buf_pool_mode = umq_qbuf_mode_get();
+    dev_info->feature = dev_ctx->feature;
+    dev_info->pid = getpid();
+    info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
+    info_tlv_head->len = sizeof(umq_ub_bind_dev_info_t);
+    return urpc_tlv_get_total_len(info_tlv_head);
+}
+
+static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
+    ub_queue_t *queue, uint8_t *bind_info_buf, uint32_t left_buf_size)
+{
+    if (left_buf_size < (uint32_t)sizeof(umq_ub_bind_queue_info_t) + (uint32_t)sizeof(urpc_tlv_head_t)) {
+        UMQ_VLOG_ERR("bind info size insufficient, version info cannot serialize\n");
+        errno = UMQ_ERR_ENOMEM;
+        return 0;
+    }
+    urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
+    umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info_tlv_head->value;
+    queue_info->is_binded = queue->bind_ctx != NULL ? true : false;
+    queue_info->jetty_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id;
+    queue_info->type = URMA_JETTY;
+    queue_info->token = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
+    queue_info->notify_buf = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
+    queue_info->rx_depth = queue->rx_depth;
+    queue_info->tx_depth = queue->tx_depth;
+    queue_info->rx_buf_size = queue->rx_buf_size; 
+    queue_info->state = queue->state;
+    info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_QUEUE;
+    info_tlv_head->len = sizeof(umq_ub_bind_queue_info_t);
+    return urpc_tlv_get_total_len(info_tlv_head);
+}
+
+static ALWAYS_INLINE uint32_t umq_ub_fc_info_serialize(
+    ub_queue_t *queue, uint8_t *bind_info_buf, uint32_t left_buf_size)
+{
+    if (left_buf_size < (uint32_t)sizeof(umq_ub_bind_fc_info_t) + (uint32_t)sizeof(urpc_tlv_head_t)) {
+        UMQ_VLOG_ERR("bind info size insufficient, version info cannot serialize\n");
+        errno = UMQ_ERR_ENOMEM;
+        return 0;
+    }
+    urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
+    umq_ub_bind_fc_info_t *fc_info = (umq_ub_bind_fc_info_t *)(uintptr_t)info_tlv_head->value;
+    if (queue->flow_control.enabled) {
+        fc_info->jetty_id = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id;
+        fc_info->token = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
+        fc_info->win_buf_addr = umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL);
+        fc_info->win_buf_len = UMQ_UB_RW_SEGMENT_LEN;
+    } else {
+        memset(&fc_info->jetty_id, 0, sizeof(urma_jetty_id_t));
+        fc_info->token.token = 0;
+        fc_info->win_buf_addr = 0;
+        fc_info->win_buf_len = 0;
+    }
+    info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_FC;
+    info_tlv_head->len = sizeof(umq_ub_bind_fc_info_t);
+    return urpc_tlv_get_total_len(info_tlv_head);
+}
+
+uint32_t umq_ub_bind_info_serialize(ub_queue_t *queue, uint8_t *bind_info, uint32_t bind_info_size)
+{
+    uint32_t info_data_size = 0;
+    // fill version info
+    uint32_t data_size = umq_ub_version_info_serialize(bind_info, bind_info_size);
+    if (data_size == 0) {
+        UMQ_VLOG_ERR("serialize version info failed\n");
+        return 0;
+    }
+    info_data_size += data_size;
+
+    // fill dev info
+    data_size = umq_ub_dev_info_serialize(queue->dev_ctx, bind_info + info_data_size, bind_info_size - info_data_size);
+    if (data_size == 0) {
+        UMQ_VLOG_ERR("serialize dev info failed\n");
+        return 0;
+    }
+    info_data_size += data_size;
+
+    // fill queue info
+    data_size = umq_ub_queue_info_serialize(queue, bind_info + info_data_size, bind_info_size - info_data_size);
+    if (data_size == 0) {
+        UMQ_VLOG_ERR("serialize queue info failed\n");
+        return 0;
+    }
+    info_data_size += data_size;
+
+    // fill fc info
+    data_size = umq_ub_fc_info_serialize(queue, bind_info + info_data_size, bind_info_size - info_data_size);
+    if (data_size == 0) {
+        UMQ_VLOG_ERR("serialize fc info failed\n");
+        return 0;
+    }
+    info_data_size += data_size;
+    return info_data_size;
+}
+
+int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size, umq_ub_bind_info_t *bind_info)
+{
+    if (bind_info_size < (uint32_t)sizeof(urpc_tlv_head_t)) {
+        UMQ_VLOG_ERR("bind info size insufficient\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    uint32_t left_info_size = bind_info_size;
+    urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
+    while(left_info_size >= urpc_tlv_get_total_len(info_tlv_head)) {
+        switch (info_tlv_head->type) {
+            case UMQ_UB_BIND_INFO_TYPE_VERSION:
+                bind_info->version_info = (umq_ub_bind_version_info_t *)(uintptr_t)info_tlv_head->value;
+                break;
+            case UMQ_UB_BIND_INFO_TYPE_DEV:
+                bind_info->dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
+                break;
+            case UMQ_UB_BIND_INFO_TYPE_QUEUE:
+                bind_info->queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info_tlv_head->value;
+                break;
+            case UMQ_UB_BIND_INFO_TYPE_FC:
+                bind_info->fc_info = (umq_ub_bind_fc_info_t *)(uintptr_t)info_tlv_head->value;
+                break;
+            default:
+                UMQ_VLOG_WARN("unknown type %u\n", info_tlv_head->type);
+                break;
+        }
+        left_info_size -= urpc_tlv_get_total_len(info_tlv_head);
+        if (left_info_size < (uint32_t)sizeof(urpc_tlv_head_t)) {
+            break;
+        }
+        info_tlv_head = urpc_tlv_get_next_element(info_tlv_head);
+    }
+    return UMQ_SUCCESS;
 }
 
 int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_queue_jetty_index_t jetty_idx)
