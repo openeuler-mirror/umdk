@@ -465,7 +465,7 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
     queue_info->notify_buf = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
     queue_info->rx_depth = queue->rx_depth;
     queue_info->tx_depth = queue->tx_depth;
-    queue_info->rx_buf_size = queue->rx_buf_size; 
+    queue_info->rx_buf_size = queue->rx_buf_size;
     queue_info->state = queue->state;
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_QUEUE;
     info_tlv_head->len = sizeof(umq_ub_bind_queue_info_t);
@@ -544,7 +544,7 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
 
     uint32_t left_info_size = bind_info_size;
     urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
-    while(left_info_size >= urpc_tlv_get_total_len(info_tlv_head)) {
+    while (left_info_size >= urpc_tlv_get_total_len(info_tlv_head)) {
         switch (info_tlv_head->type) {
             case UMQ_UB_BIND_INFO_TYPE_VERSION:
                 bind_info->version_info = (umq_ub_bind_version_info_t *)(uintptr_t)info_tlv_head->value;
