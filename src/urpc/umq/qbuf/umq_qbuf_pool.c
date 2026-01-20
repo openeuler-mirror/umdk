@@ -442,6 +442,48 @@ umq_buf_mode_t umq_qbuf_mode_get(void)
     return g_qbuf_pool.mode;
 }
 
+int umq_qbuf_pool_info_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+{
+    if (in->opcode != UMQ_OPCODE_QBUF_POOL_INFO_QUERY || out->addr == 0 || out->len != sizeof(umq_qbuf_pool_info_t)) {
+        UMQ_VLOG_ERR("umq user ctl parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    if (!g_qbuf_pool.inited) {
+        UMQ_VLOG_ERR("qbuf pool has not been inited\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    umq_qbuf_pool_info_t *qbuf_pool_info = (umq_qbuf_pool_info_t *)(uintptr_t)out->addr;
+    uint32_t block_size = g_qbuf_pool.block_size;
+    uint32_t umq_buf_t_size = (uint32_t)sizeof(umq_buf_t);
+    umq_buf_mode_t mode = g_qbuf_pool.mode;
+    qbuf_pool_info->mode = mode;
+    qbuf_pool_info->total_size = g_qbuf_pool.total_size;
+    qbuf_pool_info->headroom_size = g_qbuf_pool.headroom_size;
+    qbuf_pool_info->block_size = block_size;
+    qbuf_pool_info->total_block_num = g_qbuf_pool.total_block_num;
+    qbuf_pool_info->umq_buf_t_size = umq_buf_t_size;
+    if (mode == UMQ_BUF_SPLIT) {
+        qbuf_pool_info->data_size = block_size;
+        qbuf_pool_info->buf_size = block_size + umq_buf_t_size;
+        qbuf_pool_info->available_mem.split.block_num_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data;
+        qbuf_pool_info->available_mem.split.size_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data *
+            (block_size + umq_buf_t_size);
+        qbuf_pool_info->available_mem.split.block_num_without_data =
+            g_qbuf_pool.block_pool.buf_cnt_without_data;
+        qbuf_pool_info->available_mem.split.size_without_data =
+            g_qbuf_pool.block_pool.buf_cnt_without_data * umq_buf_t_size;
+    } else {
+        qbuf_pool_info->data_size = block_size - umq_buf_t_size;
+        qbuf_pool_info->buf_size = block_size;
+        qbuf_pool_info->available_mem.combine.block_num_with_data =
+            g_qbuf_pool.block_pool.buf_cnt_with_data;
+        qbuf_pool_info->available_mem.combine.size_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data *
+            (block_size + umq_buf_t_size);
+    }
+    return UMQ_SUCCESS;
+}
+
 int umq_qbuf_register_seg(uint8_t *ctx, register_seg_callback_t register_seg_func)
 {
     return register_seg_func(ctx, UMQ_QBUF_DEFAULT_MEMPOOL_ID, g_qbuf_pool.data_buffer,  g_qbuf_pool.total_size);

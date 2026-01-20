@@ -177,6 +177,11 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     },
 };
 
+static user_ctl_func g_umq_user_ctl_func[UMQ_TRANS_MODE_MAX] = {
+    [UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY] = NULL,
+    [UMQ_OPCODE_QBUF_POOL_INFO_QUERY] = umq_qbuf_pool_info_get
+};
+
 static int umq_fw_log_config_set(umq_log_config_t *config)
 {
     uint8_t fw_i = 0;
@@ -1091,9 +1096,20 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
 
 int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
 {
+    if (in == NULL || in->opcode >= UMQ_OPCODE_MAX || out == NULL) {
+        UMQ_VLOG_ERR("in or out parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    if (umqh == UMQ_INVALID_HANDLE) {
+        user_ctl_func func = g_umq_user_ctl_func[in->opcode];
+        if (func) {
+            return func(umqh, in, out);
+        }
+    }
+
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
     if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
-        umq->tp_ops->umq_tp_user_ctl == NULL || in == NULL || out == NULL) {
+        umq->tp_ops->umq_tp_user_ctl == NULL) {
         UMQ_VLOG_ERR("parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
