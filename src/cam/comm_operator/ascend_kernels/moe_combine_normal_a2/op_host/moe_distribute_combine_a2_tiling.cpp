@@ -180,9 +180,9 @@ static ge::graphStatus MoeDistributeCombineA2CheckShapeAndSetTiling(const gert::
     const uint32_t maxBatchSize = isLayered ? MAX_BATCH_SIZE_LAYERED_A2 : MAX_BATCH_SIZE_A2;
     OPS_CHECK(bs > maxBatchSize, OPS_LOG_E(K_INNER_DEBUG, "Batchsize must be smaller than %u.", maxBatchSize),
               return ge::GRAPH_FAILED);
-    info.bs = bs;
-    info.k = k;
-    info.h = h;
+    info.bs = static_cast<uint32_t>(bs);
+    info.k = static_cast<uint32_t>(k);
+    info.h = static_cast<uint32_t>(h);
 
     OPS_LOG_D(K_INNER_DEBUG, "batchSize=%u", bs);
     OPS_LOG_D(K_INNER_DEBUG, "k=%u", k);
