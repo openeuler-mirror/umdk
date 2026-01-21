@@ -14,6 +14,7 @@
 #include "moe_distribute_combine_a2_tiling.h"
 #include "moe_distribute_base.h"
 
+using namespace Moe;
 namespace MoeDistributeCombineA2Impl {
 
 #define COMBINE_2SERVER_VERSION
