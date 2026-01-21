@@ -55,7 +55,7 @@ public:
     __aicore__ inline CamMoeDistributeDispatch(){};
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR xActiveMask, GM_ADDR expandXOut,
                                 GM_ADDR dynamicScalesOut, GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut,
-                                GM_ADDR sendCountsOut, GM_ADDR outputRecvCount, GM_ADDR tpSendCountsOut,
+                                GM_ADDR sendCountsOut, GM_ADDR expertTokenNums, GM_ADDR tpSendCountsOut,
                                 GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData);
     __aicore__ inline void Process();
 
@@ -71,8 +71,7 @@ private:
                                                        uint32_t currendTokenIndex, uint32_t &dynamicScalesLocalIdx);
     __aicore__ inline void SetStatus();
     __aicore__ inline void WaitDispatch();
-    __aicore__ inline void GetCumSum(LocalTensor<int32_t> &inLocal, LocalTensor<int32_t> &outLocal, int32_t totalCount,
-                                     GM_ADDR gmOutputRecvCount);
+    __aicore__ inline void GetCumSum(LocalTensor<int32_t> &inLocal, LocalTensor<int32_t> &outLocal, int32_t totalCount);
     __aicore__ inline void CreateZeroTensor(LocalTensor<uint32_t> &outTensor);
     __aicore__ inline void AllGatherSetStatusAndWait();
     __aicore__ inline void ResetStatus();
@@ -153,7 +152,7 @@ private:
     GM_ADDR expandIdxOutGM_;
     GM_ADDR expertTokenNumsOutGM_;
     GM_ADDR sendCountsOutGM_;
-    GM_ADDR outputRecvCountGM_;
+    GM_ADDR expertTokenNumsGM_;
     GM_ADDR sendTpCountOutGM_;
     GM_ADDR statusSpaceGm_;
     GM_ADDR windowGM_;
@@ -223,7 +222,7 @@ private:
 template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR xActiveMask, GM_ADDR expandXOut, GM_ADDR dynamicScalesOut,
-    GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut, GM_ADDR sendCountsOut, GM_ADDR outputRecvCount,
+    GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut, GM_ADDR sendCountsOut, GM_ADDR expertTokenNums,
     GM_ADDR tpSendCountsOut, GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData)
 {
     tpipe_ = pipe;
@@ -289,7 +288,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     expandXOutGM_ = expandXOut;
     expandIdxOutGM_ = expandIdxOut;
     sendCountsOutGM_ = sendCountsOut;
-    outputRecvCountGM_ = outputRecvCount;
+    expertTokenNumsGM_ = expertTokenNums;
     sendTpCountOutGM_ = tpSendCountsOut;
     isQuant_ = StaticQuant | DynamicQuant;
     hSize_ = axisH_ * sizeof(XType);
@@ -813,8 +812,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::WaitD
 template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::GetCumSum(LocalTensor<int32_t> &inLocal,
                                                                                      LocalTensor<int32_t> &outLocal,
-                                                                                     int32_t totalCount,
-                                                                                     GM_ADDR gmOutputRecvCount)
+                                                                                     int32_t totalCount)
 {
     statusFp32Tensor_ = statusTensor_.ReinterpretCast<float>();
     DataCopyParams intriParams{static_cast<uint16_t>(recvWinBlockNum_), 1,
@@ -839,14 +837,6 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::GetCu
     uint32_t mask = recvWinBlockNum_ * 8;
     uint64_t rsvdCnt = 0;
     GatherMask(outLocal, inLocal, gatherTmpTensor, true, mask, {1, 1, 0, 0}, rsvdCnt);
-    AscendC::GlobalTensor<int32_t> recvCountTensor;
-    recvCountTensor.SetGlobalBuffer((__gm__ int32_t *)gmOutputRecvCount);
-    uint32_t localExpertNum = isShareExpertRank_ ? 1 : moeExpertNumPerRank_;
-    AscendC::DataCopyExtParams dataCopyParams = {
-        1U, static_cast<uint32_t>(localExpertNum * epWorldSize_ * sizeof(int32_t)), 0U, 0U, 0U};
-    SyncFunc<AscendC::HardEvent::V_MTE3>();
-    AscendC::DataCopyPad(recvCountTensor, outLocal.ReinterpretCast<int32_t>(), dataCopyParams);
-    SyncFunc<AscendC::HardEvent::MTE3_V>();
     int typeSize = sizeof(int32_t);
     int32_t elementsPerBlock = 32 / typeSize;
     int32_t elementsPerRepeat = 256 / typeSize;
@@ -900,7 +890,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Local
     if (startExpertId_ >= totalMoeExpert) {
         return;
     }
-    GetCumSum(statusTensor_, outCountLocal, startExpertId_ + 1, outputRecvCountGM_);
+    GetCumSum(statusTensor_, outCountLocal, startExpertId_ + 1);
     uint32_t index = 0;
     uint32_t beginIdx = 0;
     DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
@@ -1059,6 +1049,9 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Updat
     uint32_t tokenSums = 0;
     GlobalTensor<int32_t> sendCountsGlobal;
     sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(sendCountsOutGM_));
+    GlobalTensor<int64_t> expertTokenNumsTensor;
+    expertTokenNumsTensor.SetGlobalBuffer((__gm__ int64_t *)expertTokenNumsGM_);
+
     for (uint32_t localMoeIndex = 0; localMoeIndex < moeExpertNumPerRank_; ++localMoeIndex) {
         if (localMoeIndex == 0) {
             DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
@@ -1068,6 +1061,9 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Updat
             expertTokenNumsOutGMTensor_.SetValue(localMoeIndex, tokenSums);
             DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
                 expertTokenNumsOutGMTensor_[localMoeIndex]);
+            expertTokenNumsTensor.SetValue(localMoeIndex, tokenSums);
+            DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
+                expertTokenNumsTensor[localMoeIndex]);
         } else {
             uint32_t preIndex = epWorldSize_ * (localMoeIndex - 1) + epWorldSize_ - 1;
             uint32_t curIndex = epWorldSize_ * localMoeIndex + epWorldSize_ - 1;
@@ -1082,6 +1078,9 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Updat
             expertTokenNumsOutGMTensor_.SetValue(localMoeIndex, tokenSums);
             DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
                 expertTokenNumsOutGMTensor_[localMoeIndex]);
+            expertTokenNumsTensor.SetValue(localMoeIndex, tokenSums);
+            DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
+                expertTokenNumsTensor[localMoeIndex]);
         }
     }
 }
@@ -1106,6 +1105,11 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Updat
         expertTokenNumsOutGMTensor_.SetValue(0, tokenNum);
         DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
             expertTokenNumsOutGMTensor_);
+        GlobalTensor<int64_t> expertTokenNumsTensor;
+        expertTokenNumsTensor.SetGlobalBuffer((__gm__ int64_t *)expertTokenNumsGM_);
+        expertTokenNumsTensor.SetValue(0, tokenNum);
+        DataCacheCleanAndInvalid<int64_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
+            expertTokenNumsTensor);
     }
     if constexpr (IsNeedAllgater) {
         GlobalTensor<int32_t> sendTpCountsGlobal;
