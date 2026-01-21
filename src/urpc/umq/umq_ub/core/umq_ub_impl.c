@@ -584,6 +584,8 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         urma_delete_context(context[i].urma_ctx);
         free(context[i].umq_ctx_jetty_table);
         context[i].umq_ctx_jetty_table = NULL;
+        free((void*)context[i].rx_consumed_jetty_table);
+        context[i].rx_consumed_jetty_table = NULL;
     }
 
     umq_qbuf_pool_uninit();
