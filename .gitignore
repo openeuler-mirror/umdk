@@ -1,0 +1,8 @@
+
+.vscode
+
+build/cam/comm_operator/pybind
+build/cam/pytorch_extension
+output
+ascend_kernels_ascend*_proj
+third_party

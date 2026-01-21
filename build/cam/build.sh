@@ -19,7 +19,7 @@ export TEST_PATH="${ROOT_PATH}/test/cam"
 export BUILD_PATH="${ROOT_PATH}/build/cam"
 export CAM_THIRD_PARTY_PATH="${ROOT_PATH}/src/cam/third_party"
 
-export CPATH=${CAM_THIRD_PARTY_PATH}/catlass/include:${CPATH}
+export CPATH=${CAM_THIRD_PARTY_PATH}:${CAM_THIRD_PARTY_PATH}/catlass/include:${CPATH}
 
 export BUILD_TYPE="Release"
 MODULE_NAME="all"
