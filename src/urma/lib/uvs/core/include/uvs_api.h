@@ -61,7 +61,7 @@ int uvs_delete_agg_dev(uvs_eid_t *agg_eid);
 /**
  * Get device name by EID.
  * @param[in] eid  EID of the device.
- * @param[in] buf  Buffer to hold the device name.
+ * @param[out] buf  Buffer to hold the device name.
  * @param[in] len  Length of the buffer.
  * @return 0 on success, other value on error.
  */
@@ -70,7 +70,7 @@ int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
 /**
  * UVS set topo info which gets from MXE module.
  * @param[in] topo: topo info of one bonding device
- * @param[in] topo_num: number of bonding devices
+ * @param[in] topo_num: number of nodes
  * Return: 0 on success, other value on error
  */
 int uvs_set_topo_info(void *topo, uint32_t topo_num);
