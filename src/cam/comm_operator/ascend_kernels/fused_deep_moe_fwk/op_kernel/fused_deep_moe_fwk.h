@@ -298,8 +298,8 @@ __aicore__ inline void FusedDeepMoeFwk<TemplateMC2TypeFunc>::Init(
     blockDim_ = AscendC::GetBlockNum();
     winContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<AscendC::HCCL_GROUP_ID_0>();
 
-    gmSmoothScales_ = expert_smooth_scales;  // 这里传入较大空间，开发时使用
-    gmX_ = x;                                // dispatch的输入
+    gmSmoothScales_ = expert_smooth_scales;
+    gmX_ = x;
     gmexpertIds_ = expert_ids;
     gmPermuteWeight1_ = gmm1_permuted_weight;
     gmPermuteScale1_ = gmm1_permuted_weight_scale;
