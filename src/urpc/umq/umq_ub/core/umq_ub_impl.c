@@ -675,13 +675,6 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
             &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id], 0);
     }
 
-    if (queue->mode == UMQ_MODE_INTERRUPT) {
-        if (umq_ub_create_rx_notfiy_fd(queue) != UMQ_SUCCESS) {
-            UMQ_VLOG_ERR("create virtual jfr jfce failed\n");
-            goto DELETE_FC_JETTY;
-        }
-    }
-
     UMQ_VLOG_INFO("umq create success\n");
     queue->require_rx_count = 0;
     queue->ref_cnt = 1;
@@ -690,11 +683,6 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->umqh = umqh;
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     return (uint64_t)(uintptr_t)queue;
-
-DELETE_FC_JETTY:
-    if (queue->flow_control.enabled) {
-        urma_delete_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
-    }
 
 DELETE_FC_JFS_JFC:
     if (queue->flow_control.enabled) {
@@ -741,10 +729,6 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     if (umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt) != 1) {
         UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
         return -UMQ_ERR_EBUSY;
-    }
-
-    if (queue->mode == UMQ_MODE_INTERRUPT) {
-        umq_ub_close_rx_notfiy_fd(queue);
     }
 
     if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0 &&
@@ -837,7 +821,7 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     }
     if (cnt < 0) {
         if (errno != EAGAIN) {
-            UMQ_LIMIT_VLOG_ERR("urma_wait_jfc failed\n");
+            UMQ_LIMIT_VLOG_ERR("urma_wait_jfc failed, direction %u\n", option->direction);
             return -1;
         }
         return 0;
@@ -861,9 +845,12 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
     }
     if (option->direction == UMQ_IO_TX) {
         return queue->jfs_jfce->fd;
-    } else {
-        return queue->rx_notify_fd;
+    } else if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
+        return queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce->fd;
+    } else if (queue->flow_control.enabled) {
+        return queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce->fd;
     }
+    return -1;
 }
 
 int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
@@ -878,9 +865,13 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
         UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
         return -UMQ_ERR_EINVAL;
     }
-    urma_jfc_t *io_jfc = option->direction == UMQ_IO_RX ?
-        queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc : queue->jfs_jfc[UB_QUEUE_JETTY_IO];
-    urma_status_t status = urma_rearm_jfc(io_jfc, solicated);
+
+    urma_status_t status = URMA_SUCCESS;
+    if (option->direction == UMQ_IO_TX) {
+        status = urma_rearm_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], solicated);
+    } else if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
+        status = urma_rearm_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, solicated);
+    }
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR("rearm io jfc failed\n");
         return -status;
