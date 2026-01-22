@@ -321,6 +321,10 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
     uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
     OP_TILING_CHECK(topK > SUPPORT_TOP_K, OP_LOGE(nodeName, "topK(k) must <= %u.", SUPPORT_TOP_K),
                     return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(topK > tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum,
+        OP_LOGE(nodeName, "topK(k) must <= moeExpertNum(%u).",
+                tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum),
+        return ge::GRAPH_FAILED);
     uint32_t globalBatchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
     uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
     if (globalBatchSize == 0) {
