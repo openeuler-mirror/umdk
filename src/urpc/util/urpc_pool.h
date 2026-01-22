@@ -49,6 +49,8 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool);
 
 void urpc_pool_uninit(urpc_pool_t *pool);
 
+void urpc_pool_thread_closure(uint64_t arg);
+
 void *urpc_pool_element_get(urpc_pool_t *pool);
 
 void urpc_pool_element_put(urpc_pool_t *pool, void *element);
