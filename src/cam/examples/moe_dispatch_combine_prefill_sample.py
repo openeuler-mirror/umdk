@@ -1,10 +1,10 @@
 #
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
-# Description: Example for dispatch/combine normal operator.
+# Description: Example for dispatch/combine operator when prefill.
 # Create: 2026-01-15
 # Note:
-# History: 2026-01-15 create dispatch/combine normal example file
+# History: 2026-01-15 create file
 #
 
 import argparse
@@ -122,7 +122,10 @@ def test_main(
     gbl_num_tokens_per_rank = num_tokens_per_rank.clone()
     dist.all_reduce(gbl_num_tokens_per_rank, group=group)
 
-    t = bench(lambda: torch.ops.umdk_cam_op_lib.get_dispatch_layout(topk_idx, num_experts, num_ranks))[0]
+    t = bench(lambda: torch.ops.umdk_cam_op_lib.get_dispatch_layout(
+        topk_idx=topk_idx,
+        num_experts=num_experts,
+        num_ranks=num_ranks))[0]
     if local_rank == 0:
         print(f"[layout] Kernel performance: {t * 1000:.3f} ms", flush=True)
         print("", flush=True)
@@ -130,7 +133,10 @@ def test_main(
     time.sleep(1)
 
     try:
-        return_values = torch.ops.umdk_cam_op_lib.get_dispatch_layout(topk_idx, num_experts, num_ranks)
+        return_values = torch.ops.umdk_cam_op_lib.get_dispatch_layout(
+            topk_idx=topk_idx,
+            num_experts=num_experts,
+            num_ranks=num_ranks)
         (
             ref_num_tokens_per_expert,
             ref_send_token_idx_small,

@@ -1,17 +1,17 @@
 #
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
-# Description: UT for shmem dispatch/combine op
+# Description: Example for shmem dispatch/combine operator.
 # Create: 2026-01-14
 # Note:
-# History: 2026-01-14 create shmem dispatch/combine UT test file
+# History: 2026-01-14 create shmem dispatch/combine example file
 #
 
-import pytest
 import torch
 import torch_npu
 import numpy as np
 import torch.distributed as dist
+import torch.multiprocessing as mp
 import torchair
 from torchair.configs.compiler_config import CompilerConfig
 from collections import defaultdict
@@ -24,12 +24,25 @@ import umdk_cam_op_lib
 import shmem as shm
 shm.set_conf_store_tls(False, "") # 关闭tls认证
 
-from ..util import tool
-# 必要夹具 导入即生效
-from ..util.marker import Author
-from ..util.marker import MPTest
-from ..util.marker import A3Test
-from ..util.marker import SKIP_ENV_RANKSIZE_UNEQUAL
+def _count_unequal_element(data_expect, data_check, rtol, atol, msg=""):
+    assert data_expect.shape == data_check.shape
+    total_count = len(data_expect.flatten())
+    error = np.abs(data_expect - data_check)
+    greater = np.greater(error, atol + np.abs(data_check) * rtol)
+    loss_count = np.count_nonzero(greater)
+    assert (
+        loss_count / total_count
+    ) < rtol, "\nmsg{0}_data_expect_std:{1}\ndata_check_error:{2}\nloss:{3}".format(
+        msg, data_expect[greater], data_check[greater], error[greater]
+    )
+
+def allclose_nparray(data_expect, data_check, rtol=1e-4, atol=1e-4, equal_nan=True, msg=""):
+    if np.any(np.isnan(data_expect)):
+        assert np.allclose(data_expect, data_check, rtol, atol, equal_nan=equal_nan)
+    elif not np.allclose(data_expect, data_check, rtol, atol, equal_nan=equal_nan):
+        _count_unequal_element(data_expect, data_check, rtol, atol, msg)
+    else:
+        assert True
 
 class Module(torch.nn.Module):
     def __init__(self):
@@ -37,22 +50,22 @@ class Module(torch.nn.Module):
 
     def forward(self, expandX, expertIds, scales, shmPtr, world_size, rank, totalExpertNum, sharedExpertRankNum, sharedExpertNum, expertScales):
         output = torch.ops.umdk_cam_op_lib.moe_dispatch_shmem(
-            expandX,
-            expertIds,
-            None,
-            None,
-            world_size,
-            rank,
-            (totalExpertNum - sharedExpertNum),
-            1,
-            0,
-            0,
-            1,
-            sharedExpertNum,
-            0,
-            0,
-            0,
-            shmPtr
+            x=expandX,
+            expert_ids=expertIds,
+            scales=None,
+            x_active_mask=None,
+            ep_world_size=world_size,
+            ep_rank_id=rank,
+            moe_expert_num=(totalExpertNum - sharedExpertNum),
+            tp_world_size=1,
+            tp_rank_id=0,
+            expert_shard_type=0,
+            shared_expert_num=1,
+            shared_expert_rank_num=sharedExpertRankNum,
+            quant_mode=0,
+            global_bs=0,
+            expert_token_nums_type=0,
+            ext_info=shmPtr
         )
 
         expandXOut, dynamicScalesOut, expandIdxOut, expertTokenNumsOut, epSendCountOut, tpSendCountOut = output[0:6]
@@ -73,30 +86,30 @@ class Module(torch.nn.Module):
         shared_expert_num = 1
         
         output1 = torch.ops.umdk_cam_op_lib.moe_combine_shmem(
-            expandXOut,
-            expertIds,
-            expandIdxOut,
-            epSendCountOut,
-            expertScales,
-            tpSendCountOut,
-            x_active_mask,
-            activation_scale,
-            weight_scale,
-            group_list,
-            expand_scales,
-            world_size,
-            rank,
-            moe_expert_num,
-            tp_world_size,
-            tp_rank_id,
-            expert_shard_type,
-            shared_expert_num,
-            sharedExpertRankNum,
-            global_bs,
-            comm_quant_mode,
-            shmPtr,
-            out_dtype,
-            group_list_type)
+            expand_x=expandXOut,
+            expert_ids=expertIds,
+            expand_idx=expandIdxOut,
+            ep_send_counts=epSendCountOut,
+            expert_scales=expertScales,
+            tp_send_counts=tpSendCountOut,
+            x_active_mask=x_active_mask,
+            activation_scale=activation_scale,
+            weight_scale=weight_scale,
+            group_list=group_list,
+            expand_scales=expand_scales,
+            ep_world_size=world_size,
+            ep_rank_id=rank,
+            moe_expert_num=moe_expert_num,
+            tp_world_size=tp_world_size,
+            tp_rank_id=tp_rank_id,
+            expert_shard_type=expert_shard_type,
+            shared_expert_num=shared_expert_num,
+            shared_expert_rank_num=sharedExpertRankNum,
+            global_bs=global_bs,
+            comm_quant_mode=comm_quant_mode,
+            ext_info=shmPtr,
+            out_dtype=out_dtype,
+            group_list_type=group_list_type)
         return output1
 
 def gen_x(rank, batchSize, hidden_size):
@@ -155,18 +168,9 @@ CASE_8RANK = {
 }
 is_encode_utf8=True
 
-@Author("g00852163") # 用例作者
-@MPTest # 用例类型，此处代表多进程测试例
-@A3Test
-@SKIP_ENV_RANKSIZE_UNEQUAL(16) # RankSize不为期望的16时，跳过此用例
-@pytest.mark.parametrize("mode", ['Eager'])
-def test_base_test(mode):
-    # 图模式无法获得算子覆盖率故提前退出
-    if mode == "GE" and tool.is_run_for_cov():
-        return
-    # 通过工具方法获得rank和ranksize
-    rank = tool.get_rank()
-    worldSize = tool.get_world_size()
+def test_base_test(local_rank_id, ep_world_size):
+    rank = local_rank_id
+    worldSize = ep_world_size
 
     case = CASE_16RANK
     totalExpertNum = case["totalExpertNum"]
@@ -195,13 +199,7 @@ def test_base_test(mode):
     scalesData = scalesData.reshape(batchSize, topk)
     expertScalesTensor = torch.tensor(scalesData, dtype=torch.float, device='npu')
 
-    if mode == "Eager":
-        mod = Module().npu()
-    elif mode == "GE":
-        torch_npu.npu.set_compile_mode(jit_compile=True)
-        config = CompilerConfig()
-        npu_backend = torchair.get_npu_backend(compiler_config=config)
-        mod = torch.compile(Module().npu(), backend=npu_backend)
+    mod = Module().npu()
 
     ep_ranks_list = list(np.arange(0, worldSize))
 
@@ -243,4 +241,12 @@ def test_base_test(mode):
         expect_out = 2 * expandXData
     else:
         expect_out = expandXData
-    tool.allclose_nparray(expect_out.astype(float), out_cpu.to(torch.float).numpy(), 5e-3)
+    allclose_nparray(expect_out.astype(float), out_cpu.to(torch.float).numpy(), 5e-3)
+
+if __name__ == "__main__":
+    local_rank = int(os.environ["LOCAL_RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    # shmem init must comes after torch.npu.set_device(or any other aclInit device action)
+    torch.npu.set_device(local_rank)
+    dist.init_process_group(backend="hccl", rank=local_rank)
+    test_base_test(local_rank, world_size)
