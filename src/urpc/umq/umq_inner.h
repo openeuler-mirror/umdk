@@ -90,7 +90,7 @@ static ALWAYS_INLINE bool is_timeout(const struct timespec *last, uint32_t timeo
     uint64_t t2 = (uint64_t)(now.tv_sec * NS_PER_SEC + now.tv_nsec);
     uint64_t t3 = (uint64_t)timeout * NS_PER_MS;
 
-    return t2 - t1 >= t3;
+    return (t2 >= t1) && (t2 - t1) >= t3;
 }
 
 #ifdef __cplusplus

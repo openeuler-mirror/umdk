@@ -205,7 +205,7 @@ int msg_ring_poll_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_max_buf_s
 {
     shm_ring_hdr_t *tx_ring_hdr = (shm_ring_hdr_t *)msg_ring_h->shm_tx_ring_hdr;
     if (tx_ring_hdr->pi == tx_ring_hdr->ci) {
-        return -1;
+        return 0;
     }
 
     RMB();
@@ -224,7 +224,7 @@ int msg_ring_poll_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_max_buf_s
     MB();
     tx_ring_hdr->ci = (tx_ring_hdr->ci + 1) % msg_ring_h->tx_depth;
 
-    return 0;
+    return 1;
 }
 
 int msg_ring_poll_tx_batch(msg_ring_t *msg_ring_h, char **tx_buf, uint32_t tx_max_buf_size,
@@ -294,7 +294,7 @@ int msg_ring_poll_rx(msg_ring_t *msg_ring_h, char *rx_buf, uint32_t rx_max_buf_s
 {
     shm_ring_hdr_t *rx_ring_hdr = (shm_ring_hdr_t *)msg_ring_h->shm_rx_ring_hdr;
     if (rx_ring_hdr->pi == rx_ring_hdr->ci) {
-        return -1;
+        return 0;
     }
 
     RMB();
@@ -313,7 +313,7 @@ int msg_ring_poll_rx(msg_ring_t *msg_ring_h, char *rx_buf, uint32_t rx_max_buf_s
     MB();
     rx_ring_hdr->ci = (rx_ring_hdr->ci + 1) % msg_ring_h->rx_depth;
 
-    return 0;
+    return 1;
 }
 
 int msg_ring_poll_rx_batch(msg_ring_t *msg_ring_h, char **rx_buf, uint32_t rx_max_buf_size,
