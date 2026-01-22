@@ -32,3 +32,23 @@ UMQ_DEFAULT_LINKOPTS = [
     "-Wl,-z,relro",
     "-Wl,-z,now",
 ]
+
+UMQ_DEFAULT_STATIC_COPTS = [
+    "-Wall",
+    "-Werror",
+    "-Wfloat-equal",
+    "-Wtrampolines",
+    "-g",
+    "-fno-strict-aliasing",
+    "-fstack-protector-strong",
+    "-Wextra",
+    "-Wno-unused-parameter",
+    "-Wno-missing-field-initializers",
+    "-Wno-type-limits",
+    "-fno-common",
+    "-D_GNU_SOURCE",
+] + select({
+    "@platforms//cpu:x86_64": ["-msse4.2", "-DUB_ARCH_X86_64"],
+    "@platforms//cpu:aarch64": ["-march=armv8-a+crc", "-DUB_ARCH_ARM64"],
+    "//conditions:default": [],
+})
