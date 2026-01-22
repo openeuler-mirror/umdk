@@ -888,34 +888,36 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         queue->tx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size < UMQ_DEFAULT_BUF_SIZE ?
                              dev_ctx->dev_attr.dev_cap.max_msg_size : UMQ_DEFAULT_BUF_SIZE;
     }
+
+    uint32_t min_dev_rx = dev_ctx->dev_attr.dev_cap.max_jfr_depth < dev_ctx->dev_attr.dev_cap.max_jfc_depth ?
+        dev_ctx->dev_attr.dev_cap.max_jfr_depth : dev_ctx->dev_attr.dev_cap.max_jfc_depth;
     if (option->create_flag & UMQ_CREATE_FLAG_RX_DEPTH) {
-        if (option->rx_depth > dev_ctx->dev_attr.dev_cap.max_jfc_depth) {
-            UMQ_VLOG_ERR("rx depth [%u] exceed max depth [%d]\n", option->rx_depth,
-                         dev_ctx->dev_attr.dev_cap.max_jfc_depth);
+        if (option->rx_depth > min_dev_rx) {
+            UMQ_VLOG_ERR("rx depth [%u] exceed max depth [%d]\n", option->rx_depth, min_dev_rx);
             return -UMQ_ERR_EINVAL;
         }
         queue->rx_depth = option->rx_depth;
     } else {
-        queue->rx_depth = dev_ctx->dev_attr.dev_cap.max_jfc_depth < UMQ_DEFAULT_DEPTH ?
-                          dev_ctx->dev_attr.dev_cap.max_jfc_depth : UMQ_DEFAULT_DEPTH;
+        queue->rx_depth = min_dev_rx < UMQ_DEFAULT_DEPTH ? min_dev_rx : UMQ_DEFAULT_DEPTH;
+    }
+
+    // tx flush_done consumes one tx_cqe
+    uint32_t min_dev_tx = dev_ctx->dev_attr.dev_cap.max_jfs_depth < dev_ctx->dev_attr.dev_cap.max_jfc_depth - 1 ?
+        dev_ctx->dev_attr.dev_cap.max_jfs_depth : dev_ctx->dev_attr.dev_cap.max_jfc_depth - 1;
+    if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
+        if (option->tx_depth > min_dev_tx) {
+            UMQ_VLOG_ERR("tx depth [%u] exceed max depth [%d]\n", option->tx_depth, min_dev_tx);
+            return -UMQ_ERR_EINVAL;
+        }
+        queue->tx_depth = option->tx_depth;
+    } else {
+        queue->tx_depth = min_dev_tx < UMQ_DEFAULT_DEPTH ? min_dev_tx : UMQ_DEFAULT_DEPTH;
     }
 
     if ((dev_ctx->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0 &&
         (queue->tx_depth > UINT16_MAX || (queue->rx_depth > UINT16_MAX))) {
         UMQ_VLOG_ERR("queue tx depth %u, rx depth %u exceed %u\n", queue->tx_depth, queue->rx_depth, UINT16_MAX);
         return -UMQ_ERR_EINVAL;
-    }
-
-    if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
-        if (option->tx_depth + 1 > dev_ctx->dev_attr.dev_cap.max_jfc_depth) {
-            UMQ_VLOG_ERR("tx depth [%u] exceed max depth [%d]\n", option->tx_depth + 1,
-                         dev_ctx->dev_attr.dev_cap.max_jfc_depth);
-            return -UMQ_ERR_EINVAL;
-        }
-        queue->tx_depth = option->tx_depth;
-    } else {
-        queue->tx_depth = dev_ctx->dev_attr.dev_cap.max_jfc_depth < UMQ_DEFAULT_DEPTH ?
-                          dev_ctx->dev_attr.dev_cap.max_jfc_depth : UMQ_DEFAULT_DEPTH;
     }
     if (option->create_flag & UMQ_CREATE_FLAG_QUEUE_MODE) {
         if (option->mode < 0 || option->mode >= UMQ_MODE_MAX) {
