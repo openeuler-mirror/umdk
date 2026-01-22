@@ -2062,7 +2062,7 @@ private:
 
     struct AicWaitFunc {
         using MatmulKernel = GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspaceWithShallowDispatch<
-            EXEC_FLAG, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
+            EXEC_FLAG, BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
 
         CATLASS_DEVICE
         AicWaitFunc() = default;
