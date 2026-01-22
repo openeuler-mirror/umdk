@@ -1733,7 +1733,7 @@ private:
 
 namespace Catlass::Gemm::Kernel {
 
-template <class BlockMmad_, class BlockEpilogue_, class BlockScheduler_, uint32_t WORKSPACE_STAGES_,
+template <uint32_t EXEC_FLAG, class BlockMmad_, class BlockEpilogue_, class BlockScheduler_, uint32_t WORKSPACE_STAGES_,
           class ElementGroupList_>
 class GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspaceWithShallowDispatch {
 public:
@@ -1841,7 +1841,10 @@ public:
         AscendC::GlobalTensor<ElementA> gmA;
         gmA.SetGlobalBuffer(params.ptrA);
         AscendC::GlobalTensor<ElementB> gmB;
-        gmB.SetGlobalBuffer(params.ptrB);
+        AscendC::ListTensorDesc gmBlistTensorDesc(reinterpret_cast<__gm__ void *>(params.ptrB));
+        if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
+            gmB.SetGlobalBuffer(reinterpret_cast<__gm__ ElementB *>(gmBlistTensorDesc.GetDataPtr<int32_t>(0)));
+        }
         AscendC::GlobalTensor<ElementGroupList> groupList;
         groupList.SetGlobalBuffer(params.ptrGroupList);
 
@@ -1858,6 +1861,10 @@ public:
         uint32_t stageUsed = 0;
         uint32_t startCoreIdx = 0;
         for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
+            if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
+                gmB.SetGlobalBuffer(reinterpret_cast<__gm__ ElementB *>(
+                        gmBlistTensorDesc.GetDataPtr<int32_t>(groupIdx)));
+            }
             uint32_t currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
                                                 : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
             GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
@@ -1907,7 +1914,9 @@ public:
             }
 
             gmGroupOffsetA += inGroupProblemShape.m() * inGroupProblemShape.k();
-            gmGroupOffsetB += inGroupProblemShape.k() * inGroupProblemShape.n();
+            if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
+                gmGroupOffsetB += inGroupProblemShape.k() * inGroupProblemShape.n();
+            }
 
             startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
         }
@@ -1953,6 +1962,13 @@ public:
 
             uint32_t stageId = 0;
             uint32_t startCoreIdx = 0;
+            AscendC::ListTensorDesc gmScaleListTensor;
+            AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
+            gmScaleListTensor = AscendC::ListTensorDesc(reinterpret_cast<__gm__ void *>(params.ptrScale));
+            __gm__ ElementScale* gmScalePtr;
+            if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
+                gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
+            }
             for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
                 uint32_t currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
                                                     : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
@@ -1962,13 +1978,23 @@ public:
                 LayoutPerTokenScale layoutPerTokenScale =
                     params.layoutPerTokenScale.GetTileLayout(inGroupProblemShape.template GetCoordByAxis<0>());
                 LayoutD layoutD = layout::RowMajor{currentM, n};
-
-                EpilogueParams epilogueParams{params.ptrScale + gmGroupOffsetScale,
-                                              layoutScale,
-                                              params.ptrPerTokenScale + gmGroupOffsetPerTokenScale,
-                                              layoutPerTokenScale,
-                                              ptrD + gmGroupOffsetD,
-                                              layoutD};
+                EpilogueParams epilogueParams;
+                if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
+                    gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(
+                                    gmScaleListTensor.GetDataPtr<int32_t>(groupIdx));
+                    epilogueParams = EpilogueParams {
+                                                gmScalePtr, layoutScale,
+                                                params.ptrPerTokenScale + gmGroupOffsetPerTokenScale,
+                                                layoutPerTokenScale,
+                                                ptrD + gmGroupOffsetD, layoutD};
+                } else {
+                    epilogueParams = EpilogueParams{gmScalePtr + gmGroupOffsetScale,
+                                                layoutScale,
+                                                params.ptrPerTokenScale + gmGroupOffsetPerTokenScale,
+                                                layoutPerTokenScale,
+                                                ptrD + gmGroupOffsetD,
+                                                layoutD};
+                }
 
                 blockScheduler.Update(inGroupProblemShape, L1TileShape::ToCoordMN());
                 blockEpilogue.UpdateParams(epilogueParams);
@@ -1992,7 +2018,9 @@ public:
                     stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
                 }
 
-                gmGroupOffsetScale += inGroupProblemShape.n();
+                if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
+                    gmGroupOffsetScale += inGroupProblemShape.n();
+                }
                 gmGroupOffsetPerTokenScale += inGroupProblemShape.m();
                 gmGroupOffsetD += currentM * n;
 
@@ -2034,7 +2062,7 @@ private:
 
     struct AicWaitFunc {
         using MatmulKernel = GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspaceWithShallowDispatch<
-            BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
+            EXEC_FLAG, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
 
         CATLASS_DEVICE
         AicWaitFunc() = default;
@@ -2051,7 +2079,7 @@ private:
 
     struct AicSetFunc {
         using MatmulKernel = GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspaceWithShallowDispatch<
-            BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
+            EXEC_FLAG, BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
 
         CATLASS_DEVICE
         AicSetFunc() = default;
