@@ -15,10 +15,12 @@
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "tiling/hccl/hccl_tiling.h"
+#include "mc2_tiling_utils.h"
 #include "../op_kernel/fused_deep_moe_tiling.h"
 
 using namespace ge;
 using namespace Cam;
+using namespace Util;
 namespace {
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8;
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
@@ -61,6 +63,8 @@ constexpr uint32_t MAX_GMM1_HIDDEN = 6144;
 constexpr uint32_t TENSOR_HIDDEN_INDEX = 1;
 constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
+constexpr uint32_t MB_SIZE = 1024 * 1024;
+constexpr uint32_t DOUBLE_BUFFER = 2;
 }  // namespace
 
 namespace optiling {
@@ -371,6 +375,9 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OP_TILING_CHECK(epRankId >= epRankSize, OP_LOGE(nodeName, "epRankId must < epRankSize."), return ge::GRAPH_FAILED);
     OP_TILING_CHECK(moeExpertNum > MAX_MOE_EXERT_NUM, OP_LOGE(nodeName, "moeExpertNum must <= %u.", MAX_MOE_EXERT_NUM),
                     return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(moeExpertNumPerRank * epRankSize > MAX_MOE_EXERT_NUM,
+                    OP_LOGE(nodeName, "moeExpertNumPerRank * epRankSize must <= %u.", MAX_MOE_EXERT_NUM),
+                    return ge::GRAPH_FAILED);
     OP_TILING_CHECK(moeExpertNum <= 0, OP_LOGE(nodeName, "moeExpertNum must > 0."), return ge::GRAPH_FAILED);
     OP_TILING_CHECK(sharedExpertNum != 1, OP_LOGE(nodeName, "sharedExpertNum must be 1."), return ge::GRAPH_FAILED);
     OP_TILING_CHECK(moeExpertNum % (epRankSize - sharedExpertRankNum) != 0,
@@ -400,6 +407,24 @@ static void SetHcommCfg(const gert::TilingContext &context, FusedDeepMoeTilingDa
     AscendC::Mc2CcTilingConfig mc2CcTilingConfig(groupEp, opType, algConfigAllToAllStr);
     mc2CcTilingConfig.GetTiling(tiling.mc2InitTiling);
     mc2CcTilingConfig.GetTiling(tiling.mc2CcTiling);
+}
+
+static ge::graphStatus CheckHcclBufferSize(const char *nodeName, const FusedDeepMoeTilingData &tilingData)
+{
+    uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
+    uint32_t globalBatchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
+    uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
+    uint64_t bufferDemand = moeExpertNumPerRank * globalBatchSize * h * TOKEN_DTYPE_BYTE_SIZE * DOUBLE_BUFFER;
+    uint64_t maxWindowSize = Mc2TilingUtils::GetMaxWindowSize();
+    OP_TILING_CHECK(bufferDemand > maxWindowSize,
+                    OP_LOGE(nodeName,
+                            "HCCL_BUFFSIZE is too SMALL, globalBatchSize = %u, h = %u, moeExpertNumPerRank = %u,"
+                            " NEEDED_HCCL_BUFFSIZE(moeExpertNumPerRank * globalBatchSize * h *"
+                            " TOKEN_DTYPE_BYTE_SIZE * doubleBuffer) B=%luMB, HCCL_BUFFSIZE=%luMB.",
+                            globalBatchSize, h, moeExpertNumPerRank, (bufferDemand + MB_SIZE - 1) / MB_SIZE,
+                            maxWindowSize / MB_SIZE),
+                    return ge::GRAPH_FAILED);
+    return ge::GRAPH_SUCCESS;
 }
 
 static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *nodeName,
@@ -483,6 +508,8 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
                     OP_LOGE(nodeName, "Get attr and set tiling data failed."), return ge::GRAPH_FAILED);
     OP_TILING_CHECK(CheckWeightTensorList(context, *tilingData) != ge::GRAPH_SUCCESS,
            OP_LOGE(nodeName, "CheckWeightTensorList failed."), return ge::GRAPH_FAILED);
+    OP_TILING_CHECK(CheckHcclBufferSize(nodeName, *tilingData) != ge::GRAPH_SUCCESS,
+           OP_LOGE(nodeName, "CheckHcclBuffSize failed."), return ge::GRAPH_FAILED);
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());
     uint32_t aicNum = ascendcPlatform.GetCoreNumAic();
     uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
