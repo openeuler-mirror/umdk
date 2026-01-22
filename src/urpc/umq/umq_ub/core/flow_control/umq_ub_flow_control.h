@@ -81,6 +81,9 @@ void umq_ub_rq_posted_notifier_inc(ub_flow_control_t *fc, uint16_t rx_posted);
 
 static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
+    if (!fc->enabled) {
+        return;
+    }
     if (fc->ops.remote_rx_window_load(fc) <= fc->credit_request_threshold) {
         umq_ub_shared_credit_req_send(queue);
     }
