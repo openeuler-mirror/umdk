@@ -31,12 +31,13 @@ static __thread urpc_pool_context_t g_urpc_pool_ctx[URPC_POOL_LOCAL_MAX];
 URPC_DESTRUCTOR(urpc_pool_destructor, DESTRUCTOR_PRIORITY_GLOBAL)
 {
     if (g_urpc_pool_id != NULL) {
+        urpc_id_generator_uninit(g_urpc_pool_id);
         urpc_dbuf_free(g_urpc_pool_id);
         g_urpc_pool_id = NULL;
     }
 }
 
-static void urpc_pool_thread_closure(uint64_t arg __attribute__((unused)))
+void urpc_pool_thread_closure(uint64_t arg __attribute__((unused)))
 {
     urpc_pool_t *pool;
     for (uint32_t i = 0; i < URPC_POOL_LOCAL_MAX; i++) {
