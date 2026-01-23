@@ -878,6 +878,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
                 DequantProcess(rowTmpLocal);
             } else {
                 SHMEM_GET_BY_DTYPE(ExpandXType, rowTmpLocal, shareTokGlobal, processLen, epRankId_);
+                SyncFunc<AscendC::HardEvent::MTE2_V>();
             }
 
             Cast(rowTmpFloatLocal, rowTmpLocal, AscendC::RoundMode::CAST_NONE, processLen);
