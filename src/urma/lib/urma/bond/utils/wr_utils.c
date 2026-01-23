@@ -12,7 +12,7 @@
 #include "wr_utils.h"
 /**
  * Not responsible for memory allocation of `sge`
- * Do not copy the user_tseg field, as this capability is not supported on the 1650 generation.
+ * Do not copy the user_tseg field, as this capability is not supported on the new generation.
  * However, we should provide a warning for this.
  */
 static int deepcopy_sge(urma_sge_t *dst, const urma_sge_t *src)
