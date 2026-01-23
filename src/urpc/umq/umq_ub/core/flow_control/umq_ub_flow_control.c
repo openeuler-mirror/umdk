@@ -712,6 +712,7 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
     if (!fc->enabled) {
         return;
     }
+    (void)umq_ub_poll_fc_tx(queue);
     if (!umq_ub_permission_acquire(fc)) {
         return;
     }
