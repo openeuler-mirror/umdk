@@ -97,6 +97,7 @@ typedef struct ub_import_mempool_info {
 } ub_import_mempool_info_t;
 
 struct ub_flow_control;
+struct ub_queue;
 typedef struct ub_flow_control_window_ops {
     // update tx window after receive IMM_TYPE_FLOW_CONTROL
     uint16_t (*remote_rx_window_inc)(struct ub_flow_control *fc, uint16_t new_win);
@@ -106,19 +107,10 @@ typedef struct ub_flow_control_window_ops {
     uint16_t (*remote_rx_window_exchange)(struct ub_flow_control *fc);
     // load current tx window
     uint16_t (*remote_rx_window_load)(struct ub_flow_control *fc);
-
-    // update rx_posted after post rx buffer
-    uint16_t (*local_rx_posted_inc)(struct ub_flow_control *fc, uint16_t rx_posted);
-    // load current rx_posted
-    uint16_t (*local_rx_posted_load)(struct ub_flow_control *fc);
-    // exchange current rx_posted to 0 and return rx_posted
-    uint16_t (*local_rx_posted_exchange)(struct ub_flow_control *fc);
-    // exchange current rx_posted to 0 and return rx_posted + retrun_credit
-    uint16_t (*local_rx_posted_return)(struct ub_flow_control *fc, uint16_t return_win);
     uint64_t (*local_rx_allocted_inc)(struct ub_flow_control *fc, uint16_t new_win);
     uint16_t (*local_rx_allocted_dec)(struct ub_flow_control *fc, uint16_t required_win);
     uint64_t (*local_rx_allocted_load)(struct ub_flow_control *fc);
-    void (*stats_query)(struct ub_flow_control *fc, umq_flow_control_stats_t *out);
+    void (*stats_query)(struct ub_flow_control *fc, struct ub_queue *queue, umq_credit_private_stats_t *out);
 } ub_flow_control_window_ops_t;
 
 typedef enum ub_queue_fc_stat_u16 {
@@ -126,7 +118,8 @@ typedef enum ub_queue_fc_stat_u16 {
 } ub_queue_fc_stat_u16_t;
 
 typedef enum ub_queue_fc_stat_u64 {
-    ALLOCATED_RX_TOTAL,
+    ALLOCATED_SUCCESS, // credits successfully allocated to the peer
+    ALLOCATED_TOTAL, // the total num  of credits allocated to the peer
     FC_COUNTER_MAX_U64
 } ub_queue_fc_stat_u64_t;
 
@@ -277,27 +270,27 @@ struct ub_credit_pool;
 typedef struct ub_credit_pool_ops {
     // update shared jfr rx_posted after post rx buffer
     uint16_t (*available_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
-    // load idle credit
-    uint16_t (*available_credit_load)(struct ub_credit_pool *shared_credit);
     // distribute x in batch
     uint16_t (*available_credit_dec)(struct ub_credit_pool *shared_credit, uint16_t count);
     // return unused credit
     uint16_t (*available_credit_return)(struct ub_credit_pool *shared_credit, uint16_t count);
+    uint16_t (*allocated_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
+    uint16_t (*allocated_credit_dec)(struct ub_credit_pool *shared_credit, uint16_t count);
+    void (*stats_query)(struct ub_credit_pool *fc, umq_credit_pool_stats_t *out);
     uint16_t (*leak_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
     uint16_t (*leak_credit_recycle)(struct ub_credit_pool *shared_credit, uint16_t count);
 } ub_credit_pool_ops_t;
 
 typedef enum ub_credit_stat_u64 {
-    CREDIT_TOTAL = 0,
-    CREDIT_ERR_TOTAL,
-    CREDIT_CONSUMED_TOTAL,
-    CREDIT_LEAKED_TOTAL,
+    CREDIT_POOL_IDLE_TOTAL = 0,     // the total number of idle credit in the statistics pool
+    CREDIT_POOL_ALLOCATED_TOTAL,    // the total number of credit allocated from the credit pool
+    CREDIT_POOL_ERR_TOTAL,          // invalid total credit count (which will cause pool_idle statistics failure)
     CREDIT_COUNTER_MAX_U64
 } ub_credit_stat_u64_t;
 
 typedef enum ub_credit_stat_u16 {
-    IDLE_CREDIT_COUNT = 0,
-    LEAKED_CREDIT_COUNT,
+    CREDIT_POOL_IDLE = 0,           // the number of credits available in the current credit pool
+    CREDIT_POOL_ALLOCATED,          // the number of credit currently be allocated form the credit pool
     CREDIT_COUNTER_MAX_U16
 } ub_credit_stat_u16_t;
 
@@ -306,7 +299,6 @@ typedef struct ub_credit_pool {
     volatile uint64_t stats_u64[CREDIT_COUNTER_MAX_U64];
     volatile uint16_t stats_u16[CREDIT_COUNTER_MAX_U16];
     uint16_t capacity;
-    uint16_t leak_threshold;
 } ub_credit_pool_t;
 
 typedef struct jfr_ctx {
