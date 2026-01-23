@@ -16,6 +16,8 @@
 #include "umq_qbuf_pool.h"
 #include "umq_ub_private.h"
 
+#define UMQ_FAKE_BUF_FC_UPDATE_SIZE 64
+
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
     void *addr = calloc(ctx_num, sizeof(rx_buf_ctx_t));
@@ -620,7 +622,7 @@ static int umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_buf_t 
             umq_ub_shared_credit_req_handle(queue, &imm);
             break;
         case IMM_TYPE_FC_CREDIT_REP:
-            fc_buf = umq_buf_alloc(64, 1, 0, NULL);
+            fc_buf = umq_buf_alloc(UMQ_FAKE_BUF_FC_UPDATE_SIZE, 1, 0, NULL);
             umq_ub_shared_credit_resp_handle(queue, &imm);
             fc_buf->io_direction = UMQ_IO_RX;
             fc_buf->status = UMQ_FAKE_BUF_FC_UPDATE;
