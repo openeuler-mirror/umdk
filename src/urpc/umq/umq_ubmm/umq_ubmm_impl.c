@@ -232,8 +232,7 @@ uint64_t umq_ubmm_create_impl(uint64_t umqh, uint8_t *ubmm_ctx, umq_create_optio
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)calloc(1, sizeof(umq_ubmm_info_t));
     if (tp == NULL) {
         UMQ_VLOG_ERR("memory alloc failed\n");
-        umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
-        return UMQ_INVALID_HANDLE;
+        goto DEC_REF;
     }
 
     // call ub create
@@ -336,7 +335,7 @@ uint64_t umq_ubmm_create_impl(uint64_t umqh, uint8_t *ubmm_ctx, umq_create_optio
     tp->umqh = umqh;
     tp->ubmm_ctx = dev_ctx;
     tp->ref_cnt = 1;
-    UMQ_VLOG_INFO("create ubmm tp succeed, umq id: %d\n", tp->umq_id);
+    UMQ_VLOG_INFO("create ubmm tp success, umq id: %d\n", tp->umq_id);
     return (uint64_t)(uintptr_t)tp;
 
 UNINIT_SM_POOL:
@@ -358,6 +357,7 @@ DESTROY_UB:
 FREE_INFO:
     free(tp);
 
+DEC_REF:
     umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
     return UMQ_INVALID_HANDLE;
 }
@@ -525,7 +525,7 @@ int32_t umq_ubmm_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_i
     }
 
     tp->bind_ctx = ctx;
-    UMQ_VLOG_INFO("ubmm bind succeed\n");
+    UMQ_VLOG_INFO("ubmm bind success\n");
     return UMQ_SUCCESS;
 
 DESTROY_IPC:
