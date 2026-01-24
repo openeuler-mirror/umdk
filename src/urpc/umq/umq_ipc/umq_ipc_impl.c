@@ -249,8 +249,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
     umq_ipc_info_t *tp = (umq_ipc_info_t *)calloc(1, sizeof(umq_ipc_info_t));
     if (tp == NULL) {
         UMQ_VLOG_ERR("memory alloc failed\n");
-        umq_dec_ref(ctx->io_lock_free, &ctx->ref_cnt, 1);
-        return UMQ_INVALID_HANDLE;
+        goto DEC_REF;
     }
 
     tp->trans_mode = option->trans_mode;
@@ -305,7 +304,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
 
     tp->umqh = umqh;
     tp->ref_cnt = 1;
-    UMQ_VLOG_DEBUG("create ipc tp succeed\n");
+    UMQ_VLOG_INFO("create ipc tp success\n");
     return (uint64_t)(uintptr_t)tp;
 
 RELEASE_ID:
@@ -317,6 +316,8 @@ UNMAP:
 
 FREE_TP:
     free(tp);
+
+DEC_REF:
     umq_dec_ref(ctx->io_lock_free, &ctx->ref_cnt, 1);
     return UMQ_INVALID_HANDLE;
 }
@@ -346,7 +347,7 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
     umq_ipc_unmap_memory(&tp->local_ring);
     free(tp);
     umq_dec_ref(g_ipc_ctx->io_lock_free, &g_ipc_ctx->ref_cnt, 1);
-    UMQ_VLOG_DEBUG("umqh destroyed\n");
+    UMQ_VLOG_INFO("destroy ipc tp success\n");
     return UMQ_SUCCESS;
 }
 
@@ -449,7 +450,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
 
     ctx->trans_mode = UMQ_TRANS_MODE_IPC;
     tp->bind_ctx = ctx;
-    UMQ_VLOG_DEBUG("bind succeed\n");
+    UMQ_VLOG_INFO("umq ipc bind success\n");
     return UMQ_SUCCESS;
 
 DESTROY_IPC:
@@ -477,7 +478,7 @@ int32_t umq_ipc_unbind_impl(uint64_t umqh_tp)
     umq_shm_global_pool_uninit(tp->bind_ctx->qbuf_pool_handle);
     free(tp->bind_ctx);
     tp->bind_ctx = NULL;
-    UMQ_VLOG_DEBUG("unbind succeed\n");
+    UMQ_VLOG_INFO("umq ipc unbind success\n");
     return UMQ_SUCCESS;
 }
 
