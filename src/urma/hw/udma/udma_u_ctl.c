@@ -8,10 +8,7 @@
  */
 
 #include <errno.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include "urma_private.h"
 #include "udma_u_common.h"
@@ -21,6 +18,7 @@
 #include "udma_u_jfr.h"
 #include "udma_u_jfc.h"
 #include "udma_u_jetty.h"
+#include "udma_u_ctrlq_tp.h"
 #include "udma_u_ctl.h"
 
 static void udma_u_uninit_queue_buf(struct udma_u_jetty_queue *q)
@@ -84,7 +82,7 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 
 	q->wrid = (uintptr_t *)malloc(q->baseblk_cnt * sizeof(uint64_t));
 	if (q->wrid == NULL) {
-		UDMA_LOG_ERR("failed to alloc jfs STARS buffer for wrid!\n");
+		UDMA_LOG_ERR("failed to alloc stars buffer for wrid!\n");
 		return ENOMEM;
 	}
 
@@ -341,13 +339,8 @@ static int udma_u_verify_jfs_param_ex(urma_context_t *ctx, struct udma_u_jfs_cfg
 	urma_device_attr_t *attr;
 	urma_jfs_cfg_t *jfs_cfg;
 
-	if (ctx == NULL) {
-		UDMA_LOG_ERR("urma ctx is null.\n");
-		return EINVAL;
-	}
-
-	if (cfg_ex == NULL) {
-		UDMA_LOG_ERR("cfg ex is null.\n");
+	if (ctx == NULL || cfg_ex == NULL) {
+		UDMA_LOG_ERR("urma ctx or cfg ex is null.\n");
 		return EINVAL;
 	}
 
@@ -438,7 +431,7 @@ static int udma_u_create_jetty_check_cap(urma_context_t *ctx, urma_jetty_cfg_t *
 
 	if ((jfs_cfg->max_inline_data != 0 && jfs_cfg->max_inline_data > cap->max_jfs_inline_len) ||
 	    (jfr_cfg->depth == 0 || jfr_cfg->depth > cap->max_jfr_depth) ||
-	    (jfs_cfg->max_sge > cap->max_jfs_sge || jfs_cfg->max_rsge > cap->max_jfs_rsge || \
+	    (jfs_cfg->max_sge > cap->max_jfs_sge || jfs_cfg->max_rsge > cap->max_jfs_rsge ||
 	     jfr_cfg->max_sge > cap->max_jfr_sge)) {
 		UDMA_LOG_ERR("jetty cfg out of range, jfs_depth:%u, max_jfs_depth: %u, " \
 			"inline_data:%u, max_jfs_inline_len: %u, jfr_depth:%u, max_jfr_depth: %u, " \
@@ -696,7 +689,7 @@ static int udma_u_jfr_ops_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		if (jfr == NULL)
 			return EFAULT;
 
-		memcpy((void *)out->addr, &jfr, sizeof(urma_jfr_t *));
+		(void)memcpy((void *)out->addr, &jfr, sizeof(urma_jfr_t *));
 		atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
 	} else {
 		if (!udma_u_user_ctl_check_param(in->addr, in->len, (uint32_t)sizeof(urma_jfr_t *), op))
@@ -1086,6 +1079,8 @@ static int udma_u_ctrlq_query_tp_sport(urma_context_t *ctx, urma_user_ctl_in_t *
 	if (ret)
 		UDMA_LOG_ERR("failed to query tp sport, ret: %d.\n", ret);
 
+	in->opcode = UDMA_U_USER_CTL_QUERY_TP_SPORT;
+
 	return ret;
 }
 
@@ -1170,7 +1165,8 @@ int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		return URMA_EINVAL;
 	}
 
-	if (in->opcode >= UDMA_U_USER_CTL_MAX) {
+	if (in->opcode >= ARRAY_SIZE(g_udma_u_user_ctl_ops) ||
+	    g_udma_u_user_ctl_ops[in->opcode] == NULL) {
 		UDMA_LOG_ERR("invalid opcode: 0x%x.\n", in->opcode);
 		return URMA_ENOPERM;
 	}

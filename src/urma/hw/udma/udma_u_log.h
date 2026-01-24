@@ -9,6 +9,7 @@
 
 #ifndef __UDMA_U_LOG_H__
 #define __UDMA_U_LOG_H__
+
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -33,7 +34,7 @@ bool udma_log_drop(enum udma_vlog_level level);
 void udma_getenv_log_level(void);
 void udma_log(const char *function, int line, enum udma_vlog_level level,
 	      const char *format, ...) __attribute__((format(printf, 4, 5)));
-enum udma_vlog_level udma_log_get_level_from_string(const char *level_string);
+enum udma_vlog_level udma_log_get_level_from_string(const char* level_string);
 
 #define UDMA_LOG(l, ...)								\
 	do {										\
