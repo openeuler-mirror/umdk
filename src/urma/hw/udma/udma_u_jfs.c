@@ -313,7 +313,7 @@ static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_je
 		*udma_opcode = UDMA_OPCODE_NOP;
 		goto default_sge_num;
 	default:
-		UDMA_LOG_ERR("Invalid opcode :%u\n", (uint8_t)opcode);
+		UDMA_LOG_ERR("invalid opcode :%u\n", (uint8_t)opcode);
 		return true;
 	}
 
@@ -762,7 +762,7 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 
 	wqe_ctl->rmt_jetty_type = (uint8_t)(tjetty->type);
 	if (udma_parse_jfs_wr(wqe_ctl, wr, sq, wqe_info, tjetty) != 0) {
-		UDMA_LOG_ERR("Failed to parse wr\n");
+		UDMA_LOG_ERR("failed to parse wr\n");
 		return URMA_EINVAL;
 	}
 
