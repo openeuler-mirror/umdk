@@ -95,13 +95,12 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 		if (q->hugepage) {
 			q->qbuf = q->hugepage->va_start;
 		} else {
-			UDMA_LOG_WARN("failed to alloc hugepage buf, switch to alloc standard buf.");
-			q->qbuf = udma_u_alloc_buf(q->qbuf_size);
+			UDMA_LOG_WARN("failed to alloc hugepage buf, switch to alloc standard buf.\n");
+			q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 		}
 	} else {
-		q->qbuf = udma_u_alloc_buf(q->qbuf_size);
+		q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 	}
-
 	if (q->qbuf == NULL) {
 		UDMA_LOG_ERR("failed to alloc queue buffer.\n");
 		free(q->wrid);

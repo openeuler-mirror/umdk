@@ -95,7 +95,7 @@ static int udma_exec_register_seg_cmd(urma_context_t *urma_ctx,
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
-	if (seg_cfg->flag.bs.non_pin)
+	if (!to_udma_u_ctx(urma_ctx)->sva_sep_mode_en && seg_cfg->flag.bs.non_pin)
 		return 0;
 
 	ret = urma_cmd_register_seg(urma_ctx, urma_tseg, seg_cfg, &udata);
@@ -109,8 +109,8 @@ static int udma_u_check_seg_cfg(const urma_seg_cfg_t *seg_cfg)
 {
 	if (seg_cfg->flag.bs.access >= UDMA_SEGMENT_ACCESS_GUARD ||
 	    !seg_cfg->token_id || seg_cfg->flag.bs.token_policy >= URMA_TOKEN_SIGNED) {
-		UDMA_LOG_ERR("invalid segment input, access = %d, "
-			     "token_policy = %d, or NULL tid.\n",
+		UDMA_LOG_ERR("invalid segment input, access = %u, "
+			     "token_policy = %u, or NULL tid.\n",
 			     seg_cfg->flag.bs.access, seg_cfg->flag.bs.token_policy);
 		return EINVAL;
 	}
