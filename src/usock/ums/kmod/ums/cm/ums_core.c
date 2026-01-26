@@ -496,8 +496,7 @@ static int ums_lgr_init(struct ums_link_group *lgr, struct ums_sock *ums,
 	if (rc != 0)
 		goto out;
 
-	if (lnk->ums_dev->ub_dev->netdev)
-		lgr->net = dev_net(lnk->ums_dev->ub_dev->netdev);
+	lgr->net = ini->net;
 	/* UMS only supports VM continous mode */
 	lgr->buf_type = UMS_VIRT_CONT_BUFS;
 	atomic_inc(&g_lgr_cnt);
@@ -1139,6 +1138,11 @@ int ums_vlan_by_tcpsk(struct socket *clcsock, struct ums_init_info *ini)
 	return 0;
 }
 
+static inline bool ums_lgr_net_match(struct ums_link_group *lgr, struct net *net)
+{
+	return net_eq(lgr->net, net);
+}
+
 static bool ums_lgr_match(struct ums_link_group *lgr, struct ums_init_info *ini,
 	enum ums_lgr_role role, struct net *net)
 {
@@ -1155,8 +1159,7 @@ static bool ums_lgr_match(struct ums_link_group *lgr, struct ums_init_info *ini,
 		if (!ums_link_active(lnk))
 			continue;
 
-		/* use verbs API to check netns, instead of lgr->net */
-		if (!ums_udev_can_access_from_ns(lnk->ums_dev, net))
+		if (!ums_lgr_net_match(lgr, net))
 			return false;
 
 		if ((lgr->role == UMS_SERV || lnk->tjetty_id == ini->tjetty_id) &&
