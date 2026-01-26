@@ -865,6 +865,7 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
             break;
         case IMM_TYPE_FC_CREDIT_REQ:
             umq_ub_permission_release(fc);
+            break;
         default:
             break;
     }
