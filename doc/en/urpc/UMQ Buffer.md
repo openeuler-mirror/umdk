@@ -13,7 +13,7 @@ When using UMQ Buffer, two primary memory entities are involved:
 
 ## Message Metadata
 
-The definition of message metadata can be referenced in [umq_types.h](https://gitee.com/openeuler/umdk/blob/master/src/urpc/include/umq/umq_types.h). Key fields include:
+The definition of message metadata can be referenced in [umq_types.h](../../../src/urpc/include/umq/umq_types.h). Key fields include:
 
 * `qbuf_next`: Address of the next buffer’s metadata in the chain, enabling batch operations via linked lists.
 * `umqh`: Indicates whether the memory belongs to a specific UMQ instance (e.g., in shared memory scenarios).
@@ -29,7 +29,7 @@ The definition of message metadata can be referenced in [umq_types.h](https://gi
 * `io_direction`: Specifies I/O direction (e.g., TX for transmit, RX for receive).
 * `need_import`: Internal flag for memory registration during expansion (transparent to users).
 * `buf_data`: Pointer to the actual payload.
-* `qbuf_ext`: Extended configuration (`umq_buf_pro_t`/`struct umq_buf_pro`) for data-plane operations. Defined in [umq_pro_types.h](https://gitee.com/openeuler/umdk/blob/master/src/urpc/include/umq/umq_pro_types.h).
+* `qbuf_ext`: Extended configuration (`umq_buf_pro_t`/`struct umq_buf_pro`) for data-plane operations. Defined in [umq_pro_types.h](../../../src/urpc/include/umq/umq_pro_types.h).
 * `data`: Start address of the payload in combine mode (metadata and payload are contiguous).
 
 ## Message Payload
@@ -75,7 +75,7 @@ Optimized for latency-sensitive use cases.
 ![](./figures/UMQ_Buffer_Combine_Mode_Example.png)
 
 ## API Reference
-UMQ Buffer APIs are defined in [umq_api.h](https://gitee.com/openeuler/umdk/blob/master/src/urpc/include/umq/umq_api.h). Batch operations are supported for high-performance allocation/free cycles.
+UMQ Buffer APIs are defined in [umq_api.h](../../../src/urpc/include/umq/umq_api.h). Batch operations are supported for high-performance allocation/free cycles.
 
 ### Memory Allocation
 
