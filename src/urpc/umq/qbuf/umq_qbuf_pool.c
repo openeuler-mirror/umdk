@@ -478,8 +478,7 @@ int umq_qbuf_pool_info_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl
         qbuf_pool_info->buf_size = block_size;
         qbuf_pool_info->available_mem.combine.block_num_with_data =
             g_qbuf_pool.block_pool.buf_cnt_with_data;
-        qbuf_pool_info->available_mem.combine.size_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data *
-            (block_size + umq_buf_t_size);
+        qbuf_pool_info->available_mem.combine.size_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data * block_size;
     }
     return UMQ_SUCCESS;
 }
