@@ -31,19 +31,13 @@
 #include "tiling_args.h"
 #include "../op_kernel/moe_combine_normal_tiling.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "MOE_COMBINE_NORMAL"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace AscendC;
 using namespace ge;
 using namespace Moe;
 using namespace Util;
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "MOE_COMBINE_NORMAL";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t RECV_X_INDEX = 0;
 constexpr uint32_t TOKEN_SRC_INFO_INDEX = 1;
 constexpr uint32_t EP_RECV_COUNTS_INDEX = 2;

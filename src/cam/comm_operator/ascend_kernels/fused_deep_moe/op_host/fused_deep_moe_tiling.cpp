@@ -19,18 +19,12 @@
 #include "mc2_tiling_utils.h"
 #include "../op_kernel/fused_deep_moe_tiling.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "FUSED_DEEP_MOE"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace ge;
 using namespace Cam;
 using namespace Util;
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "FUSED_DEEP_MOE";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8;
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
 constexpr uint32_t GM_ALIGN_SIZE = 512;

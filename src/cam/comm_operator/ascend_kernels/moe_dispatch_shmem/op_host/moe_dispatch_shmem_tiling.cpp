@@ -27,18 +27,12 @@
 #include "ops_error.h"
 #include "../op_kernel/moe_dispatch_shmem_tiling.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "MOE_DISPATCH_SHMEM"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace ge;
 using namespace Moe;
 
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "MOE_DISPATCH_SHMEM";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t X_INDEX = 0U;
 constexpr uint32_t EXPERT_IDS_INDEX = 1U;
 constexpr uint32_t SCALES_INDEX = 2U;
@@ -375,8 +369,6 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     auto sharedExpertNumPtr = attrs->GetAttrPointer<int64_t>(static_cast<int>(ATTR_SHARED_EXPERT_NUM_INDEX));
     auto expertTokenNumsTypePtr = attrs->GetAttrPointer<int64_t>(static_cast<int>(ATTR_EXPERT_TOKEN_NUMS_TYPE_INDEX));
     auto shmemPtr = attrs->GetAttrPointer<int64_t>(ATTR_EXT_INFO_INDEX);
-
-    OPS_LOG_I(nodeName, "shmemPtr inside tiling is %ld", shmemPtr);
 
     // 判空
     OPS_ERR_IF(epWorldSizePtr == nullptr, OPS_LOG_E(nodeName, "epWorldSizePtr is null."), return ge::GRAPH_FAILED);

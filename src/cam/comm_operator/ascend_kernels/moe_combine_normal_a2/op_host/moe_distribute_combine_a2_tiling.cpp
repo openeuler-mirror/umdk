@@ -31,18 +31,12 @@
 #include "mc2_tiling_utils.h"
 #include "../op_kernel/moe_distribute_combine_a2_tiling.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "MOE_DISTRIBUTE_COMBINE_A2"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace AscendC;
 using namespace ge;
 using namespace Moe;
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "MOE_DISTRIBUTE_COMBINE_A2";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t EXPAND_X_INDEX = 0;
 constexpr uint32_t EXPERT_IDS_INDEX = 1;
 constexpr uint32_t EXPAND_IDX_INDEX = 2;
