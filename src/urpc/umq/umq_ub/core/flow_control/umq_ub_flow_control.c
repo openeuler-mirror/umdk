@@ -602,7 +602,7 @@ void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc)
 void umq_ub_shared_credit_req_send(ub_queue_t *queue)
 {
     ub_flow_control_t *fc = &queue->flow_control;
-    if (!fc->enabled) {
+    if (!fc->enabled || queue->bind_ctx == NULL) {
         return;
     }
     (void)umq_ub_poll_fc_tx(queue);
@@ -646,12 +646,14 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
                        EID_ARGS(tjetty->id.eid), tjetty->id.id);
 }
 
-static void umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
+static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
 {
+    if (queue->bind_ctx == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
-    ub_flow_control_t *fc = &queue->flow_control;
-    ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+
     umq_ub_imm_t imm = {
         .flow_control = {
             .umq_private = UMQ_UB_IMM_PRIVATE,
@@ -676,15 +678,14 @@ static void umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
     urma_jfs_wr_t *bad_wr = NULL;
     urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
-        return;
+        return UMQ_SUCCESS;
     }
 
     UMQ_LIMIT_VLOG_ERR("send credit req failed, status %d, local eid: " EID_FMT ", "
                        "local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u\n", (int)status,
                        EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id,
                        EID_ARGS(tjetty->id.eid), tjetty->id.id);
-    (void)credit->ops.available_credit_return(credit, notify);
-    (void)fc->ops.local_rx_allocted_dec(fc, notify);
+    return UMQ_FAIL;
 }
 
 void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
@@ -694,7 +695,11 @@ void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     uint16_t credits_per_request = imm->flow_control.window;
     uint16_t allocted_count = credit->ops.available_credit_dec(credit, credits_per_request);
     (void)fc->ops.local_rx_allocted_inc(fc, allocted_count);
-    umq_ub_shared_credit_resp_send(queue, allocted_count);
+    int ret = umq_ub_shared_credit_resp_send(queue, allocted_count);
+    if (ret != UMQ_SUCCESS) {
+        (void)credit->ops.available_credit_return(credit, allocted_count);
+        (void)fc->ops.local_rx_allocted_dec(fc, allocted_count);
+    }
 }
 
 void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
