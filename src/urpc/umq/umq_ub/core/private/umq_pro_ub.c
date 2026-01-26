@@ -126,7 +126,7 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             break;
         case UMQ_OPC_WRITE_IMM:
             urma_wr_ptr->rw.notify_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
-            /* fall through */
+            /* fall-through */
         case UMQ_OPC_WRITE:
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
                 UMQ_LIMIT_VLOG_ERR("local buffer size[%u] is larger than remote buffer size[%u]\n",
@@ -148,7 +148,7 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             break;
         case UMQ_OPC_SEND_IMM:
             urma_wr_ptr->send.imm_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
-            /* fall through */
+            /* fall-through */
         case UMQ_OPC_SEND:
             urma_wr_ptr->send.src.sge = sges_ptr;
             urma_wr_ptr->send.src.num_sge = sge_num;
