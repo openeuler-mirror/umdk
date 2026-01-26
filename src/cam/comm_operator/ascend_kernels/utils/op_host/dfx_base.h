@@ -34,22 +34,7 @@ public:
         return static_cast<uint64_t>(syscall(__NR_gettid));
     }
 
-    static inline const char *GetStr(const std::string &str)
-    {
-        return str.c_str();
-    }
-
-    static inline const char *GetStr(const char *str)
-    {
-        return str;
-    }
-
-    static inline const std::string &GetOpInfo(const std::string &str)
-    {
-        return str;
-    }
-
-    static inline const char *GetOpInfo(const char *str)
+    static inline std::string GetOpInfo(const std::string &str)
     {
         return str;
     }
@@ -106,15 +91,14 @@ std::string Shape2String(const T &shape)
 }
 }  // namespace ops
 
-// 使用本宏前需预定义标识子模块名称的 OPS_UTILS_LOG_SUB_MOD_NAME
-// 如: #define OPS_UTILS_LOG_SUB_MOD_NAME "OP_TILING" 或通过 CMake 传递预定义宏
 #define OPS_LOG_STUB(MOD_ID, LOG_LEVEL, OPS_DESC, FMT, ...)                                                          \
     do {                                                                                                             \
         if (AlogCheckDebugLevel(static_cast<int>(MOD_ID), (LOG_LEVEL)) == 1) {                                       \
+            std::string op_info_tmp = ops::utils::DfxBase::GetOpInfo(OPS_DESC);                                      \
             AlogRecord(static_cast<int>(MOD_ID), DLOG_TYPE_DEBUG, (LOG_LEVEL),                                       \
                        "[%s:%d][%s]%s[%s][%lu] OpName:[%s] " #FMT, __FILE__, __LINE__, (OPS_UTILS_LOG_SUB_MOD_NAME), \
                        (OPS_UTILS_LOG_PACKAGE_TYPE), __FUNCTION__, ops::utils::DfxBase::GetTid(),                    \
-                       ops::utils::DfxBase::GetStr(ops::utils::DfxBase::GetOpInfo(OPS_DESC)), ##__VA_ARGS__);        \
+                       op_info_tmp.c_str(), ##__VA_ARGS__);                                                          \
         }                                                                                                            \
     } while (0)
 

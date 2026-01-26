@@ -13,15 +13,9 @@
 #include "graph/utils/type_utils.h"
 #include "register/op_def_registry.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "FUSED_DEEP_MOE"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 namespace ge {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "FUSED_DEEP_MOE";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t EXPAND_X_INDEX = 0;
 constexpr uint32_t EXPERT_IDS_INDEX = 1;
 constexpr uint32_t OUTPUT_X_INDEX = 0;

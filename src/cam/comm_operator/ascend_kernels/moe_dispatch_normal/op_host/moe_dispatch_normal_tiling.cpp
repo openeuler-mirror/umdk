@@ -30,20 +30,14 @@
 #include "tiling_args.h"
 #include "../op_kernel/moe_dispatch_normal_tiling.h"
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "MOE_DISPATCH_NORMAL"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace AscendC;
 using namespace ge;
 using namespace Moe;
 using namespace Util;
 
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "MOE_DISPATCH_NORMAL";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t X_INDEX = 0U;
 constexpr uint32_t EXPERT_IDS_INDEX = 1U;
 constexpr uint32_t SEND_OFFSET_INDEX = 2U;

@@ -36,19 +36,13 @@
 #error "CANN version not supported or platform_infos_def.h not found. Check CANN_VERSION_MACRO definition."
 #endif
 
-#ifndef OPS_UTILS_LOG_SUB_MOD_NAME
-#define OPS_UTILS_LOG_SUB_MOD_NAME "NOTIFY_DISPATCH"
-#endif
-
-#ifndef OPS_UTILS_LOG_PACKAGE_TYPE
-#define OPS_UTILS_LOG_PACKAGE_TYPE "CAM_OPS"
-#endif
-
 using namespace ge;
 using namespace Cam;
 using namespace Util;
 
 namespace {
+constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "DISPATCH_LAYOUT";
+constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8U; // numeric representation of AlltoAll
 
 constexpr uint32_t INPUT_SEND_DATA_INDEX = 0;
