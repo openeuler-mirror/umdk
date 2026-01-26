@@ -29,7 +29,7 @@ typedef struct umq_ipc_init_ctx {
 typedef struct umq_ipc_ring_info {
     void *addr;
     int shm_fd;
-    int shm_size;
+    uint32_t shm_size;
     char ipc_name[MAX_MSG_RING_NAME + 1];
     uint32_t tx_buf_size;
     uint32_t tx_depth;
