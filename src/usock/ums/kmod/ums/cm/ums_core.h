@@ -96,9 +96,9 @@ static inline bool ums_conn_lgr_valid(const struct ums_connection *conn)
 /*
  * Returns true if the specified link is usable.
  *
- * usable means the link is ready to receive UB messages, map memory
- * on the link, etc. This doesn't ensure we are able to send UB messages
- * on this link, if sending UB messages is needed, use ums_link_sendable()
+ * A link is usable, meaning that the link has been initialized, but this does not necessarily
+ * mean that the link is ready to receive UB messages or can be used to send UB messages.
+ * If sending UB messages is needed, use ums_link_sendable().
  */
 static inline bool ums_link_usable(const struct ums_link *lnk)
 {
@@ -111,15 +111,20 @@ static inline bool ums_link_usable(const struct ums_link *lnk)
  * Returns true if the specified link is ready to receive AND send UB
  * messages.
  *
- * For the client side in first contact, the underlying QP may still in
- * RESET or RTR when the link state is ACTIVATING, checks in ums_link_usable()
- * is not strong enough. For those places that need to send any CDC or LLC
- * messages, use ums_link_sendable(), otherwise, use ums_link_usable() instead
+ * The underlying Jetty may still in RESET state when the link state is ACTIVATING,
+ * checks in ums_link_usable() is not strong enough. For those places that need to
+ * send any UB messages(e.g., Data, CDC or LLC), use ums_link_sendable(), otherwise,
+ * use ums_link_usable() instead.
  */
 static inline bool ums_link_sendable(struct ums_link *lnk)
 {
-	/* In use, the link is RTS/RTR once the jetty is bounded */
-	return ums_link_usable(lnk) && lnk->ub_jetty != NULL && lnk->ub_tjetty != NULL;
+	/*
+	 * Currently, the Jetty state transition implementation may not be consistent with
+	 * the UB protocol. Therefore, you can only confirm whether Jetty is ready to send
+	 * by checking the Jetty pointers.
+	 */
+	return ums_link_usable(lnk) && lnk->ub_jetty != NULL && lnk->ub_tjetty != NULL &&
+		lnk->ub_jetty->remote_jetty != NULL;
 }
 
 static inline bool ums_link_active(const struct ums_link *lnk)
