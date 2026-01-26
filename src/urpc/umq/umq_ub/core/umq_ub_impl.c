@@ -1034,7 +1034,10 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp, queue->dev_ctx->feature);
     if (status != URMA_SUCCESS) {
         if (bad_wr != NULL) {
-            process_bad_qbuf(bad_wr, bad_qbuf, qbuf, queue);
+            *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
+            process_bad_qbuf(*bad_qbuf, qbuf, queue);
+        } else {
+            *bad_qbuf = qbuf;
         }
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_send_wr failed, status %d\n", status);
         ret = -status;
@@ -1085,7 +1088,10 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp, queue->dev_ctx->feature);
     if (status != URMA_SUCCESS) {
         if (bad_wr != NULL) {
-            process_bad_qbuf(bad_wr, bad_qbuf, qbuf, queue);
+            *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
+            process_bad_qbuf(*bad_qbuf, qbuf, queue);
+        } else {
+            *bad_qbuf = qbuf;
         }
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_send_wr failed, status %d\n", status);
         ret = -status;
