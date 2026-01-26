@@ -581,9 +581,8 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     umq_inc_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
     ub_queue_t *queue = (ub_queue_t *)calloc(1, sizeof(ub_queue_t));
     if (queue == NULL) {
-        umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
         UMQ_VLOG_ERR("umq create failed, calloc queue failed\n");
-        return UMQ_INVALID_HANDLE;
+        goto DEC_REF;
     }
 
     if (check_and_set_param(dev_ctx, option, queue) != UMQ_SUCCESS) {
@@ -715,8 +714,10 @@ UNINIT_FLOW_CONTROL:
 DESTROY_JFR_CTX:
     umq_ub_jfr_ctx_put(queue);
 FREE_QUEUE:
-    umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
     free(queue);
+DEC_REF:
+    umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
+
     return UMQ_INVALID_HANDLE;
 }
 
@@ -894,39 +895,58 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
 
 int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_direction_t io_direction, umq_buf_t **bad_qbuf)
 {
+    int ret;
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+
     if (io_direction == UMQ_IO_TX) {
-        return umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf);
+        ret = umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf);
     } else if (io_direction == UMQ_IO_RX) {
-        return umq_ub_post_rx(umqh_tp, qbuf, bad_qbuf);
+        ret = umq_ub_post_rx(umqh_tp, qbuf, bad_qbuf);
+    } else {
+        UMQ_LIMIT_VLOG_ERR("io_direction[%d] is not supported when post\n", io_direction);
+        ret = -UMQ_ERR_EINVAL;
     }
-    UMQ_LIMIT_VLOG_ERR("io_direction[%d] is not supported when post\n", io_direction);
-    return -UMQ_ERR_EINVAL;
+
+    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+
+    return ret;
 }
 
 int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count)
 {
+    int ret;
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+
     if (io_direction == UMQ_IO_RX) {
-        return umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
+        ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
     } else if (io_direction == UMQ_IO_TX) {
-        return umq_ub_poll_tx(umqh_tp, buf, max_buf_count);
+        ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count);
     } else if (io_direction == UMQ_IO_ALL) {
         uint32_t tx_max_cnt = max_buf_count > 1 ? max_buf_count >> 1 : 1;
         int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt);
         if (tx_cnt < 0) {
-            UMQ_LIMIT_VLOG_ERR("poll tx failed\n");
-            return -UMQ_ERR_EAGAIN;
+            ret = tx_cnt;
+            goto OUT;
         }
 
         int32_t rx_cnt = umq_ub_poll_rx(umqh_tp, &buf[tx_cnt], max_buf_count - tx_cnt);
         if (rx_cnt < 0) {
-            UMQ_LIMIT_VLOG_ERR("poll rx failed\n");
-            return tx_cnt;
+            // notice: only report tx cqe qbuf in case of failure
+            ret = tx_cnt;
+            goto OUT;
         }
 
-        return tx_cnt + rx_cnt;
+        ret = tx_cnt + rx_cnt;
+    } else {
+        UMQ_LIMIT_VLOG_ERR("invalid io direction[%d]\n", io_direction);
+        ret = -UMQ_ERR_EINVAL;
     }
-    UMQ_LIMIT_VLOG_ERR("invalid io direction[%d]\n", io_direction);
-    return -UMQ_ERR_EINVAL;
+
+OUT:
+    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+    return ret;
 }
 
 int umq_ub_unbind_impl(uint64_t umqh)
@@ -937,6 +957,8 @@ int umq_ub_unbind_impl(uint64_t umqh)
         UMQ_VLOG_ERR("umq has not been binded\n");
         return -UMQ_ERR_ENODEV;
     }
+
+    umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
     if (queue->flow_control.enabled) {
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
@@ -973,6 +995,9 @@ int umq_ub_unbind_impl(uint64_t umqh)
 
     free(queue->bind_ctx);
     queue->bind_ctx = NULL;
+
+    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+
     return UMQ_SUCCESS;
 }
 
@@ -995,13 +1020,13 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
     int remain_tx = queue->tx_depth - tx_outstanding;
     if (remain_tx <= 0) {
         ret = -UMQ_ERR_EAGAIN;
-        goto ERROR;
+        goto DEC_REF;
     }
     int wr_num = umq_ub_fill_wr_impl(qbuf, queue, urma_wr, (uint32_t)remain_tx);
     if (wr_num < 0) {
         *bad_qbuf = qbuf;
         ret = wr_num;
-        goto ERROR;
+        goto DEC_REF;
     }
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
@@ -1013,14 +1038,12 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
         }
         UMQ_LIMIT_VLOG_ERR("urma_post_jetty_send_wr failed, status %d\n", status);
         ret = -status;
-        goto ERROR;
+        goto DEC_REF;
     }
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, wr_num);
-    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-    return ret;
 
-ERROR:
+DEC_REF:
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     return ret;
 }
@@ -1070,8 +1093,6 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
     }
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, wr_num);
-    umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-    return ret;
 
 DEC_REF:
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
