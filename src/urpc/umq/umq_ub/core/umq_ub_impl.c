@@ -229,7 +229,7 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
     QBUF_LIST_INIT(&head);
     uint32_t buf_size = request_size + headroom_size + factor;
 
-    if (buf_size < umq_buf_size_middle()) {
+    if (buf_size < umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID)) {
         if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
             return NULL;
         }
@@ -1505,7 +1505,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     umq_imm_head->version = UMQ_IMM_VERSION;
     umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
     umq_imm_head->mempool_num = 1;
-    umq_imm_head->mem_interval = UMQ_SIZE_INVALID_INTERVAL;
+    umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
 
     ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(umq_imm_head + 1);
     import_mempool_info->mempool_seg_flag = seg->attr.value;
@@ -1589,6 +1589,8 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     cfg->create_flag = queue->create_flag;
+    cfg->max_rx_sge = queue->max_rx_sge;
+    cfg->max_tx_sge = queue->max_tx_sge;
     cfg->rx_buf_size = queue->rx_buf_size;
     cfg->tx_buf_size = queue->tx_buf_size;
     cfg->rx_depth = queue->rx_depth;

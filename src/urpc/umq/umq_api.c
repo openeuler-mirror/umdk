@@ -607,7 +607,7 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
         QBUF_LIST_INIT(&head);
         uint32_t buf_size = request_size + headroom_size + factor;
 
-        if (buf_size < umq_buf_size_middle()) {
+        if (buf_size < umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID)) {
             if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
                 return NULL;
             }

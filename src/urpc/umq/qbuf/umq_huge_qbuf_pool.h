@@ -25,6 +25,7 @@ typedef enum huge_qbuf_pool_size_type {
     HUGE_QBUF_POOL_SIZE_TYPE_MID,
     HUGE_QBUF_POOL_SIZE_TYPE_BIG,
     HUGE_QBUF_POOL_SIZE_TYPE_HUGE,
+    HUGE_QBUF_POOL_SIZE_TYPE_GIGANTIC,
     HUGE_QBUF_POOL_SIZE_TYPE_MAX,
 } huge_qbuf_pool_size_type_t;
 
