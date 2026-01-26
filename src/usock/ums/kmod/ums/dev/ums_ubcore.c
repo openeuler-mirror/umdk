@@ -125,8 +125,9 @@ int ums_ubcore_determine_eid(struct ums_ubcore_determine_eid_param *param)
 
 	/* Try to locate the EID via IP address. */
 	for (i = 0; i < param->ums_ub_dev->ub_dev->eid_table.eid_cnt; i++) {
-		if (ums_ubcore_sk_rcv_saddr_equal_eid(param->sk,
-		    &param->ums_ub_dev->ub_dev->eid_table.eid_entries[i].eid)) {
+		if ((param->net == param->ums_ub_dev->ub_dev->eid_table.eid_entries[i].net) &&
+			ums_ubcore_sk_rcv_saddr_equal_eid(param->sk,
+			&param->ums_ub_dev->ub_dev->eid_table.eid_entries[i].eid)) {
 			*param->eid_index = i;
 			(void)memcpy(param->eid->raw, param->ums_ub_dev->ub_dev->eid_table.eid_entries[i].eid.raw, UMS_EID_SIZE);
 			return 0;
