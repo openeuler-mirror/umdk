@@ -889,10 +889,11 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue)
     for (int i = 0; i < tx_cr_cnt; i++) {
         umq_ub_fc_user_ctx_t  obj = {.value = cr[i].user_ctx};
         if (cr[i].status != URMA_CR_SUCCESS) {
-            UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE || cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
+                UMQ_LIMIT_VLOG_INFO("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
                 continue;
             }
+            UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
             umq_ub_fc_process_tx_error(queue, &obj);
             continue;
         }
@@ -925,16 +926,18 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     int32_t qbuf_cnt = 0;
     for (int i = 0; i < tx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
-            UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
+                UMQ_LIMIT_VLOG_INFO("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
                 if (queue->state == QUEUE_STATE_ERR) {
                     queue->tx_flush_done = true;
                 }
                 continue;
             }
             if (cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
+                UMQ_LIMIT_VLOG_INFO("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
                 continue;
             }
+            UMQ_LIMIT_VLOG_ERR("UB TX reports cr[%d] status[%d] jetty_id[%u]\n", i, cr[i].status, cr[i].local_id);
             continue;
         }
 
