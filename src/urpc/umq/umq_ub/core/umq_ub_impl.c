@@ -1013,6 +1013,7 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
     umq_ub_enqueue_with_poll_tx(queue, buf);
 
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
+    urma_sge_t sges[UMQ_POST_POLL_BATCH][queue->max_tx_sge];
     *bad_qbuf = NULL;
 
     int ret = UMQ_SUCCESS;
@@ -1022,7 +1023,9 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
         goto DEC_REF;
     }
     uint32_t remain_tx = queue->tx_depth - tx_outstanding;
-    int wr_num = umq_ub_fill_wr_impl(qbuf, queue, urma_wr, remain_tx);
+    /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
+     * `umq_ub_fill_wr_impl`, it is assigned by jumping in groups of UMQ_POST_POLL_BATCH. */
+    int wr_num = umq_ub_fill_wr_impl(qbuf, queue, urma_wr, (urma_sge_t *)(uintptr_t)sges, remain_tx);
     if (wr_num < 0) {
         *bad_qbuf = qbuf;
         ret = wr_num;
@@ -1065,6 +1068,7 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     umq_ub_enqueue_plus_with_poll_tx(queue, buf);
+    urma_sge_t sges[UMQ_POST_POLL_BATCH][queue->max_tx_sge];
     uint32_t tx_outstanding = umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding);
     int remain_tx = queue->tx_depth - tx_outstanding;
     if (remain_tx <= 0) {
@@ -1073,7 +1077,9 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
     }
 
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
-    int wr_num = umq_ub_plus_fill_wr_impl(qbuf, queue, urma_wr, (uint32_t)remain_tx);
+    /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
+     * `umq_ub_plus_fill_wr_impl`, it is assigned by jumping in groups of UMQ_POST_POLL_BATCH. */
+    int wr_num = umq_ub_plus_fill_wr_impl(qbuf, queue, urma_wr, (urma_sge_t *)(uintptr_t)sges, (uint32_t)remain_tx);
     if (wr_num < 0) {
         *bad_qbuf = qbuf;
         ret = wr_num;
@@ -1403,7 +1409,7 @@ DELETE_IMPORT_INFO:
 int ubmm_fill_ref_sge_info(uint64_t umqh_tp, umq_buf_t *qbuf, char *ub_ref_info, uint32_t ub_ref_info_size)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    uint32_t max_ref_sge_num = (ub_ref_info_size - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
+    uint32_t max_ref_sge_num = (uint32_t)((size_t)ub_ref_info_size - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)ub_ref_info;
     ub_ref_sge_t *ref_sge = (ub_ref_sge_t *)(uintptr_t)(ub_ref_info + sizeof(umq_imm_head_t));
     ub_fill_umq_imm_head(umq_imm_head, qbuf);

@@ -81,7 +81,7 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
 int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
 int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
 int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id);
-int umq_ub_dev_info_get_impl(char *umq_dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
+int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
 int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg);
 
 #ifdef __cplusplus
