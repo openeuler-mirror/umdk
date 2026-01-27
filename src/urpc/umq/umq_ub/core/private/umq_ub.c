@@ -421,7 +421,7 @@ static ALWAYS_INLINE uint32_t umq_ub_version_info_serialize(uint8_t *bind_info_b
     umq_ub_bind_version_info_t *version_info = (umq_ub_bind_version_info_t *)(uintptr_t)info_tlv_head->value;
     version_info->version = UMQ_UB_BIND_VERSION;
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_VERSION;
-    info_tlv_head->len = sizeof(umq_ub_bind_version_info_t);
+    info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_version_info_t);
     return urpc_tlv_get_total_len(info_tlv_head);
 }
 
@@ -444,7 +444,7 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     dev_info->feature = dev_ctx->feature;
     dev_info->pid = getpid();
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
-    info_tlv_head->len = sizeof(umq_ub_bind_dev_info_t);
+    info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_dev_info_t);
     return urpc_tlv_get_total_len(info_tlv_head);
 }
 

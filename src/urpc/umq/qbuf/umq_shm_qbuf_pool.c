@@ -76,7 +76,7 @@ static __thread register_list_node_t g_register_list_node = {0};
 
 static __thread local_qbuf_pool_t g_thread_cache[UMQ_MAX_QUEUE_NUMBER] = {0};
 
-static int release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
+static uint32_t release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
 {
     // Avoid concurrent access between destroy queue and thread exit.
     uint32_t ref = __atomic_fetch_add(&tls_mgmt_pool->remove_ref_cnt, 1, __ATOMIC_ACQ_REL);
@@ -420,7 +420,6 @@ static void umq_shm_qbuf_alloc_data_with_split(local_block_pool_t *local_pool, u
         cur_node->total_data_size = total_data_size;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         cur_node->first_fragment = first_fragment;
-        
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
             UMQ_VLOG_ERR("qbuf %lu in with_data pool already allocated\n", buf_id);
@@ -481,7 +480,7 @@ int umq_shm_qbuf_alloc(
         param.actual_buf_count =
             num * ((request_size + param.headroom_size + umq_buf_size_small() - 1) >> umq_buf_size_pow_small());
     } else {
-        uint32_t align_size = umq_buf_size_small() - sizeof(umq_buf_t);
+        uint32_t align_size = umq_buf_size_small() - (uint32_t)sizeof(umq_buf_t);
         param.actual_buf_count = num * ((request_size + param.headroom_size + align_size - 1) / align_size);
     }
     if (request_size == 0) {
