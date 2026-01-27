@@ -1,9 +1,9 @@
 # DLock API Guide
 
 API lists:
-Server APIs：[dlock_server_api.h](../../../src/ulock/dlock/lib/include/dlock_server_api.h) 
-Client APIs：[dlock_client_api.h](../../../src/ulock/dlock/lib/include/dlock_client_api.h) 
-External Data Structures：[dlock_types.h](../../../src/ulock/dlock/lib/include/dlock_types.h)
+Server APIs：[dlock_server_api.h](../../../../src/ulock/dlock/lib/include/dlock_server_api.h) 
+Client APIs：[dlock_client_api.h](../../../../src/ulock/dlock/lib/include/dlock_client_api.h) 
+External Data Structures：[dlock_types.h](../../../../src/ulock/dlock/lib/include/dlock_types.h)
 
 
 ## Server APIs
