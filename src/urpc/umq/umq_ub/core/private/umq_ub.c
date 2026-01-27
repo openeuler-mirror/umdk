@@ -442,7 +442,7 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     (void)memcpy(&dev_info->tseg, dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
     dev_info->buf_pool_mode = umq_qbuf_mode_get();
     dev_info->feature = dev_ctx->feature;
-    dev_info->pid = getpid();
+    dev_info->pid = (uint32_t)getpid();
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
     info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_dev_info_t);
     return urpc_tlv_get_total_len(info_tlv_head);
@@ -494,7 +494,7 @@ static ALWAYS_INLINE uint32_t umq_ub_fc_info_serialize(
         fc_info->win_buf_len = 0;
     }
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_FC;
-    info_tlv_head->len = sizeof(umq_ub_bind_fc_info_t);
+    info_tlv_head->len = (uint64_t)sizeof(umq_ub_bind_fc_info_t);
     return urpc_tlv_get_total_len(info_tlv_head);
 }
 
