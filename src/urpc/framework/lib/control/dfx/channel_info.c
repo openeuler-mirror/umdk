@@ -8,7 +8,7 @@
 #include "unix_server.h"
 #include "urpc_lib_log.h"
 #include "channel.h"
-#include "../control/dfx/channel_info.h"
+#include "channel_info.h"
 
 static void process_channel_all(urpc_ipc_ctl_head_t *req_ctl, char *request __attribute__((unused)),
                                 urpc_ipc_ctl_head_t *rsp_ctl, char **reply)
