@@ -81,6 +81,8 @@ ext1 = NpuExtension(
              "./get_dispatch_layout_a2.cpp",
              "./moe_dispatch_prefill.cpp",
              "./moe_combine_prefill.cpp",
+             "./moe_dispatch_prefill_a2.cpp",
+             "./moe_combine_prefill_a2.cpp",
              "./moe_dispatch_shmem.cpp",
              "./moe_combine_shmem.cpp",
              "./pybind.cpp",
