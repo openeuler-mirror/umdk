@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <mutex>
 
 #include "dlock_types.h"
 #include "dlock_client_api.h"
@@ -41,6 +42,7 @@ static int g_client_num = CLIENT_NUM;
 static trans_mode_t g_tp_mode = SEPERATE_CONN;
 
 static int g_loop_num = LOOP_NUM;
+static std::mutex g_client_mgr_lock;
 
 void* client_launch(void *p_object)
 {
@@ -62,7 +64,10 @@ void* client_launch(void *p_object)
     time_total = time_max = 0;
     time_min = 1000000;
 
-    ret = CLIENT_INIT(&client_id, g_server_ip);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = CLIENT_INIT(&client_id, g_server_ip);
+    }
     if (ret != 0) {
         printf("client_init failed! ret: %d\n", ret);
         return 0;
@@ -99,9 +104,6 @@ void* client_launch(void *p_object)
     lock_req2_ext.expire_time = 7000;
 
     for (int i = 0; i < g_loop_num; i++) {
-        if ((i + 1) % 10000 == 0) {
-            printf("loop count: %d\n", i + 1);
-        }
         lock_req1.lock_op = LOCK_EXCLUSIVE;
         lock_req2.lock_op = LOCK_EXCLUSIVE;
         lock_req2_ext.lock_op = EXTEND_LOCK_EXCLUSIVE;
@@ -130,7 +132,6 @@ void* client_launch(void *p_object)
         time_total += time;
         time_min = (time_min > time) ? time : time_min;
         time_max = (time_max < time) ? time : time_max;
-        printf("trylock time: %ld us\n", time);
 
         ret = unlock(client_id, lock_id_1, &lock_state1);
         if (ret != 0) {
@@ -155,7 +156,10 @@ void* client_launch(void *p_object)
         return 0;
     }
 
-    ret = client_deinit(client_id);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = client_deinit(client_id);
+    }
     if (ret != 0) {
         printf("client_deinit failed! ret: %d\n", ret);
         return 0;
@@ -175,7 +179,10 @@ void* client_heartbeat_test(void *p_object)
     time_total = time_max = 0;
     time_min = 1000000;
 
-    ret = CLIENT_INIT(&client_id, g_server_ip);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = CLIENT_INIT(&client_id, g_server_ip);
+    }
     if (ret != 0) {
         printf("client_init failed! ret: %d\n", ret);
         return 0;
@@ -196,10 +203,12 @@ void* client_heartbeat_test(void *p_object)
         time_total += time;
         time_min = (time_min > time) ? time : time_min;
         time_max = (time_max < time) ? time : time_max;
-        printf("heartbeat time: %ld us\n", time);
     }
 
-    ret = client_deinit(client_id);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = client_deinit(client_id);
+    }
     if (ret != 0) {
         printf("client_deinit failed! ret: %d\n", ret);
         return 0;
@@ -222,7 +231,10 @@ void* client_getlock_test(void *p_object)
 
     time_total = time_max = 0;
     time_min = 1000000;
-    ret = CLIENT_INIT(&client_id, g_server_ip);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = CLIENT_INIT(&client_id, g_server_ip);
+    }
     if (ret != 0) {
         printf("client_init failed! ret: %d\n", ret);
         return 0;
@@ -238,7 +250,6 @@ void* client_getlock_test(void *p_object)
     }
 
     for (int k = 0; k < g_loop_num; k++) {
-        printf("loop count %d\n", k + 1);
         gettimeofday(&tv_start, NULL);
         ret = batch_get_lock(client_id, BATCH_SIZE, lock_descs, lock_ids);
         gettimeofday(&tv_end, NULL);
@@ -250,7 +261,6 @@ void* client_getlock_test(void *p_object)
         time_total += time;
         time_min = (time_min > time) ? time : time_min;
         time_max = (time_max < time) ? time : time_max;
-        printf("batch getlock time: %ld us\n", time);
 
         ret = batch_release_lock(client_id, BATCH_SIZE, lock_ids);
         if (ret != 0) {
@@ -259,7 +269,10 @@ void* client_getlock_test(void *p_object)
         }
     }
 
-    ret = client_deinit(client_id);
+    {
+        std::unique_lock<std::mutex> locker(g_client_mgr_lock);
+        ret = client_deinit(client_id);
+    }
     if (ret != 0) {
         printf("client_deinit failed! ret: %d\n", ret);
         return 0;
