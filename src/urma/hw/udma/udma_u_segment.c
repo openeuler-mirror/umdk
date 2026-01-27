@@ -169,18 +169,20 @@ err_ummu_grant:
 
 urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(target_seg->urma_ctx);
 	struct udma_u_segment *seg = to_udma_u_seg(target_seg);
 	int ret;
 
-	if (!seg->urma_tseg.seg.attr.bs.non_pin) {
-		ret = urma_cmd_unregister_seg(target_seg);
-		if (ret) {
-			UDMA_LOG_ERR("urma cmd unregister segment failed, ret = %d.\n",
-				     ret);
-			return URMA_FAIL;
-		}
+	if (!udma_ctx->sva_sep_mode_en && seg->urma_tseg.seg.attr.bs.non_pin)
+		goto common_process;
+
+	ret = urma_cmd_unregister_seg(target_seg);
+	if (ret) {
+		UDMA_LOG_ERR("urma cmd unregister segment failed, ret = %d.\n", ret);
+		return URMA_FAIL;
 	}
 
+common_process:
 	udma_u_ungrant_seg(seg);
 	seg->token_value.token = 0;
 	free(seg);
