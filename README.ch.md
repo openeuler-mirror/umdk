@@ -92,7 +92,7 @@ chmod 755 /usr/lib64/liburma*
 
 #### 四、参与贡献
 
-我们非常欢迎开发者提交贡献, 如果您发现了一个bug或者有一些想法想要交流，欢迎[发邮件到dev列表](https://openeuler.org/zh/community/mailing-list) 或者[提交一个issue](https://gitee.com/openeuler/umdk/issues) 。
+我们非常欢迎开发者提交贡献, 如果您发现了一个bug或者有一些想法想要交流，欢迎[发邮件到dev列表](https://openeuler.org/zh/community/mailing-list) 或者[提交一个issue](https://atomgit.com/openeuler/umdk/issues) 。
 
 #### 五、许可
 
