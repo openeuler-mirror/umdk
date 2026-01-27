@@ -73,7 +73,7 @@ static void unix_server_cmds_uninit(void)
     }
 }
 
-static int unix_server_cmd_get(uint16_t module_id, uint16_t cmd_id, urpc_ipc_cmd_t *cmd)
+int unix_server_cmd_get(uint16_t module_id, uint16_t cmd_id, urpc_ipc_cmd_t *cmd)
 {
     if (module_id >= URPC_IPC_MODULE_MAX) {
         return URPC_FAIL;
