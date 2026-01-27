@@ -40,11 +40,13 @@ typedef enum data_trans_mode {
 #define DEFAULT_LAT_TEST_ROUND 100000
 #define DEFAULT_LISTEN_IP_ADDR "127.0.0.1"
 #define MAX_SGE_SIZE     32
+#define EID_LENGTH       64
 
 typedef struct perftest_framework_config {
     char path[PATH_MAX + 1];
     char dev_name[URPC_PERFTEST_DEV_NAME_SIZE];  // device name
-    char local_ip[INET6_ADDRSTRLEN];            // local host IP addr
+    char eid[EID_LENGTH];                        // eid
+    char local_ip[INET6_ADDRSTRLEN];             // local host IP addr
     char remote_ip[INET6_ADDRSTRLEN];            // remote host IP addr
     uint16_t tcp_port;                           // server TCP port
     perftest_case_type_t case_type;              // test case, lat or qps
