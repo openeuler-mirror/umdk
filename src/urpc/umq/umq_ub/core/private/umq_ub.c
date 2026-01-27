@@ -652,7 +652,7 @@ static uint32_t get_dev_by_eid_str(urma_transport_type_t type, urma_eid_t *eid, 
 static uint32_t umq_find_ub_dev_by_eid(urma_transport_type_t type, umq_dev_assign_t *dev_info, urma_device_t **urma_dev,
                                        uint32_t *eid_index)
 {
-    urma_eid_t *eid = (urma_eid_t *)&dev_info->eid.eid;
+    urma_eid_t *eid = (urma_eid_t *)(uintptr_t)&dev_info->eid.eid;
     return get_dev_by_eid_str(type, eid, urma_dev, eid_index);
 }
 

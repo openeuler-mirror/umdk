@@ -285,7 +285,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
     // initialize shm_qbuf
     shm_qbuf_pool_cfg_t sm_qbuf_pool_cfg = {
         .buf_addr = tp->local_ring.addr + tp->local_ring.transmit_queue_buf_size,
-        .total_size = tp->local_ring.shm_size - tp->local_ring.transmit_queue_buf_size,
+        .total_size = (uint64_t)tp->local_ring.shm_size - (uint64_t)tp->local_ring.transmit_queue_buf_size,
         .data_size = umq_buf_size_small(),
         .headroom_size = global_pool_cfg.headroom_size,
         .mode = global_pool_cfg.mode,

@@ -1070,12 +1070,12 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
     umq_ub_enqueue_plus_with_poll_tx(queue, buf);
     urma_sge_t sges[UMQ_POST_POLL_BATCH][queue->max_tx_sge];
     uint32_t tx_outstanding = umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding);
-    int remain_tx = queue->tx_depth - tx_outstanding;
-    if (remain_tx <= 0) {
+    if (queue->tx_depth <= tx_outstanding) {
         ret = -UMQ_ERR_EAGAIN;
         goto DEC_REF;
     }
 
+    uint32_t remain_tx = queue->tx_depth - tx_outstanding;
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
     /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
      * `umq_ub_plus_fill_wr_impl`, it is assigned by jumping in groups of UMQ_POST_POLL_BATCH. */
