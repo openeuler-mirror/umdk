@@ -696,7 +696,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         return 0;
     }
     int ret;
-    int32_t qbuf_cnt = 0;
+    uint32_t qbuf_cnt = 0;
     uint32_t max_batch = buf_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : buf_count;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     if (queue->flow_control.enabled && (queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.rx_fc_interrupt)) {
@@ -756,7 +756,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
 
 OUT:
-    return qbuf_cnt;
+    return (int)qbuf_cnt;
 }
 
 static void umq_ub_on_tx_done(ub_flow_control_t *fc, umq_buf_t *buf, bool failed)
