@@ -89,7 +89,7 @@ chmod 755 /usr/lib64/liburma*
 
 #### 4. Contributing
 
-We warmly welcome contributions from developers. If you have discovered a bug or would like to discuss ideas, please feel free to [send an email to the development mailing list](https://openeuler.org/zh/community/mailing-list) or [submit an issue](https://gitee.com/openeuler/umdk/issues) 。
+We warmly welcome contributions from developers. If you have discovered a bug or would like to discuss ideas, please feel free to [send an email to the development mailing list](https://openeuler.org/zh/community/mailing-list) or [submit an issue](https://atomgit.com/openeuler/umdk/issues) 。
 
 #### 5. LICENSES
 

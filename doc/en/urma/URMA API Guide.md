@@ -1,7 +1,7 @@
 ## URMA Interface Specification
 
 Interface File List: \
-[urma_api.h](../../src/urma/lib/urma/core/include/urma_api.h)
+[urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 ### Introduction to URMA
 ### 1. Basic Concepts

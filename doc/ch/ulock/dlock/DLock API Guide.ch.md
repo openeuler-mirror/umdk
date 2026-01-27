@@ -1,9 +1,9 @@
 # DLock相关对外接口指南
 
 接口文件列表： 
-服务端对外接口：[dlock_server_api.h](../../../src/ulock/dlock/lib/include/dlock_server_api.h) 
-客户端对外接口：[dlock_client_api.h](../../../src/ulock/dlock/lib/include/dlock_client_api.h) 
-对外数据结构列表：[dlock_types.h](../../../src/ulock/dlock/lib/include/dlock_types.h)
+服务端对外接口：[dlock_server_api.h](../../../../src/ulock/dlock/lib/include/dlock_server_api.h) 
+客户端对外接口：[dlock_client_api.h](../../../../src/ulock/dlock/lib/include/dlock_client_api.h) 
+对外数据结构列表：[dlock_types.h](../../../../src/ulock/dlock/lib/include/dlock_types.h)
 
 ## 服务端对外接口
 1. 使用dserver_lib_init初始化DLock服务端库上下文；
