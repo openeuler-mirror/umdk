@@ -104,4 +104,9 @@ at::Tensor MoeCombineShmemImplAutograd( \
     int64_t extInfo, \
     int64_t outDtype, \
     int64_t groupListType);
+
+std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplAutograd(
+    const at::Tensor &topIdx,
+    int64_t numExperts,
+    int64_t numRanks);
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_

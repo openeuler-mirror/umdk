@@ -18,6 +18,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_prefill", &MoeCombinePrefillImplAutograd, "moe_combine_prefill");
     m.def("moe_dispatch_shmem", &MoeDispatchShmemImplAutograd, "moe_dispatch_shmem");
     m.def("moe_combine_shmem", &MoeCombineShmemImplAutograd, "moe_combine_shmem");
+    m.def("get_dispatch_layout_a2", &GetDispatchLayoutA2ImplAutograd, "get_dispatch_layout_a2");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m)
@@ -42,4 +43,5 @@ TORCH_LIBRARY(umdk_cam_op_lib, m)
     int moe_expert_num, int tp_world_size, int tp_rank_id, int expert_shard_type, int shared_expert_num, \
     int shared_expert_rank_num, int global_bs, int comm_quant_mode, int ext_info, int out_dtype, \
     int group_list_type) -> Tensor");
+    m.def("get_dispatch_layout_a2(Tensor topk_idx, int num_experts, int num_ranks) -> (Tensor, Tensor)");
 }
