@@ -558,15 +558,15 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 cfg->dev_name = strdup(optarg);
                 break;
             case 'e':
-                param = strtoul(optarg, NULL, 0);
-                if (param < URPC_POLLING_JFC || param > URPC_INTERRUPT_JFC) {
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param > (uint32_t)URPC_INTERRUPT_JFC) {
                     return -1;
                 }
                 cfg->poll_mode = (enum URPC_POLL_JFC_MODE)param;
                 break;
             case 'w':
-                param = strtoul(optarg, NULL, 0);
-                if (param < DYNAMIC_WORKER_MODE || param > STATIC_WORKER_MODE) {
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param > (uint32_t)STATIC_WORKER_MODE) {
                     return -1;
                 }
                 cfg->worker_mode = (enum URPC_WORKER_THREAD_MODE)param;
@@ -583,8 +583,8 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 cfg->server_ip = strdup(optarg);
                 break;
             case 'c':
-                param = strtoul(optarg, NULL, 0);
-                if (param < 0 || param >= GREETER_CASE_NUM) {
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param >= (uint32_t)GREETER_CASE_NUM) {
                     return -1;
                 }
                 cfg->case_type = (int)param;
@@ -611,8 +611,8 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 cfg->feature = (uint32_t)param;
                 break;
             case 'T':
-                param = strtoul(optarg, NULL, 0);
-                if (param < 0 || param >= TRANS_MODE_MAX) {
+                param = (uint32_t)strtoul(optarg, NULL, 0);
+                if (param >= (uint32_t)TRANS_MODE_MAX) {
                     return -1;
                 }
                 cfg->trans_mode = (int)param;
@@ -629,14 +629,14 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 break;
             case 'M':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param < 0 || param >= TRANSPORT_MODE_MAX) {
+                if (param >= (uint32_t)TRANSPORT_MODE_MAX) {
                     return -1;
                 }
                 cfg->transport_mode = param;
                 break;
             case 'P':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param < 0 || param >= TP_TYPE_MAX) {
+                if (param >= (uint32_t)TP_TYPE_MAX) {
                     return -1;
                 }
                 cfg->tp_type = param;
