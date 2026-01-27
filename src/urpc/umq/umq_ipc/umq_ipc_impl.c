@@ -220,9 +220,9 @@ static ALWAYS_INLINE int fill_ring_info(umq_create_option_t *option, umq_ipc_rin
         ring->tx_depth * (umq_buf_size_small() + sizeof(umq_buf_t) * (1 + UMQ_EMPTY_HEADER_COEFFICIENT));
 
     // transmit queue and manage queue size calculate
-    uint64_t post_data_size = sizeof(uint32_t) + sizeof(uint64_t);
-    uint64_t tx_post_queue_size = sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
-    uint64_t rx_post_queue_size = sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
+    uint64_t post_data_size = (uint64_t)(sizeof(uint32_t) + sizeof(uint64_t));
+    uint64_t tx_post_queue_size = (uint64_t)sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
+    uint64_t rx_post_queue_size = (uint64_t)sizeof(shm_ring_hdr_t) + ring->tx_depth * post_data_size;
     uint64_t rounded_post_size = round_up(tx_post_queue_size + rx_post_queue_size, umq_buf_size_small());
     ring->transmit_queue_buf_size = rounded_post_size;
 
@@ -522,7 +522,7 @@ static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32
 
     uint32_t sizes[num];
     for (uint32_t i = 0; i < num; i++) {
-        sizes[i] = sizeof(uint64_t);
+        sizes[i] = (uint32_t)sizeof(uint64_t);
     }
 
     int ret = msg_ring_post_tx_batch(tp->local_msg_ring, (char **)&offset, sizes, num);
