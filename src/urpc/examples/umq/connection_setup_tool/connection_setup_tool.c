@@ -1,13 +1,12 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: umq example
  * Create: 2026-1-27
  * Note:
  * History: 2026-1-27
  */
 
-#define _GUN_SOURCE
 #include <stdatomic.h>
 #include <sys/epoll.h>
 #include <stdio.h>
@@ -42,66 +41,17 @@
 #define UMQ_MAX_BIND_INFO_SIZE      512
 #define EAGAIN_WAIT_TIME_U          (400 * 1000)
 #define SEND_REQ_SLEEP_TIME_S       3
+#define INTERRUPT_WAIT_TIME_MS      300
+#define STATE_SLEEP_TIME_S          10
 
 #define DEFAULT_THREAD_COUNT 16
 #define DEFAULT_QUEUE_CNT 16
 #define QUEUE_SIZE 2048
 #define MAIN_QUEUE_CNT EXAMPLE_MAX_DEV_NUM
 
-typedef struct exchange_info {
-    uint32_t msg_len;
-    uint8_t data[0];
-} exchange_info_t;
-
-typedef enum fd_ctx_type {
-    FD_CTX_TYPE_INTERRUPT_TX = 0x123,
-    FD_CTX_TYPE_INTERRUPT_RX,
-    FD_CTX_TYPE_MAX,
-} fd_ctx_type_t;
-
-typedef struct fd_ctx {
-    uint32_t type;
-    uint64_t umqh;
-    int fd;
-    bool processing;
-} fd_ctx_t;
-
-typedef struct umq_ctx {
-    uint64_t umqh;
-    uint32_t main_umq_idx;
-} umq_ctx_t;
-
-typedef struct umq_info {
-    uint64_t umqh;
-    uint32_t send_req_cnt;
-    uint32_t recv_req_cnt;
-    uint32_t send_rsp_cnt;
-    uint32_t recv_rsp_cnt;
-    uint32_t fc_update;
-    uint32_t eagain_cnt;
-    fd_ctx_t *tx_fd_ctx;
-    fd_ctx_t *rx_fd_ctx;
-    umq_ctx_t *umq_ctx;
-    bool enable;
-    bool is_main_umq;
-} umq_info_t;
-
 static umq_info_t g_tatal_umq_info_list;
 static umq_info_t g_umq_info_list[CONNECTION_SETUP_LISTEN];
 static volatile uint32_t g_umq_cnt = 0;
-
-typedef struct ip_info {
-    char *ip;
-    uint16_t port;
-} ip_info_t;
-
-typedef struct connection_bind_info {
-    char dev_name[UMQ_DEV_NAME_SIZE];
-    uint32_t eid_idx;
-    uint32_t bind_info_size;
-    uint8_t umq_bind_info[0];
-} connection_bind_info_t;
-
 struct urpc_example_config *g_cfg;
 int g_epoll_fd = -1;
 threadpool_t *g_threadpool;
@@ -317,11 +267,11 @@ static umq_info_t *create_one_umq(struct urpc_example_config *cfg, bool is_main_
 
     int rx_fd = umq_interrupt_fd_get(umqh, &rx_interrupt_option);
     if (rx_fd < 0) {
-        LOG_PRINT_ERR("umq_interrupt_rx_fd_get failed, rx fd %d\n",rx_fd);
+        LOG_PRINT_ERR("umq_interrupt_rx_fd_get failed, rx fd %d\n", rx_fd);
         goto EPOLL_DEL_TX;
     }
 
-    fd_ctx_t * rx_fd_ctx = (fd_ctx_t *)malloc(sizeof(fd_ctx_t));
+    fd_ctx_t *rx_fd_ctx = (fd_ctx_t *)(uintptr_t)malloc(sizeof(fd_ctx_t));
     if (rx_fd_ctx == NULL) {
         LOG_PRINT_ERR("malloc fd ctx failed\n");
         goto EPOLL_DEL_TX;
@@ -363,12 +313,14 @@ EPOLL_DEL_RX:
 
 FREE_RX_FD_CTX:
     free(rx_fd_ctx);
+    rx_fd_ctx = NULL;
 
 EPOLL_DEL_TX:
     (void)epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, tx_fd, NULL);
 
 FREE_TX_FD_CTX:
     free(tx_fd_ctx);
+    tx_fd_ctx = NULL;
 
 DESTROY_UMQ:
     umq_destroy(umqh);
@@ -376,6 +328,7 @@ DESTROY_UMQ:
 FREE_UMQ_CTX:
     if (!is_main_queue) {
         free(umq_ctx);
+        umq_ctx = NULL;
     }
     return NULL;
 }
@@ -388,12 +341,15 @@ static void destroy_one_umq(umq_info_t *umq_info)
 
     (void)epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, umq_info->rx_fd_ctx->fd, NULL);
     free(umq_info->rx_fd_ctx);
+    umq_info->rx_fd_ctx = NULL;
     (void)epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, umq_info->tx_fd_ctx->fd, NULL);
     free(umq_info->tx_fd_ctx);
+    umq_info->tx_fd_ctx = NULL;
     umq_destroy(umq_info->umqh);
 
     if (!umq_info->is_main_umq) {
         free(umq_info->umq_ctx);
+        umq_info->umq_ctx = NULL;
     }
     umq_info->enable = false;
 }
@@ -433,7 +389,6 @@ static int client_bind_umq(uint64_t umqh, ip_info_t *ip_info)
         .sin_family = AF_INET,
         .sin_port = htons(ip_info->port),
     };
-
     if (inet_pton(AF_INET, ip_info->ip, &server.sin_addr) != 1) {
         LOG_PRINT_ERR("ip[%s] not valid\n", ip_info->ip);
         ret = -1;
@@ -622,14 +577,14 @@ static int send_req(umq_info_t *umq_info)
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
         .direction = UMQ_IO_TX,
     };
-    umq_wait_interrupt(umqh, 300, &tx_option);
+    umq_wait_interrupt(umqh, INTERRUPT_WAIT_TIME_MS, &tx_option);
     umq_rearm_interrupt(umqh, false, &tx_option);
 
     umq_interrupt_option_t rx_option = {
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
         .direction = UMQ_IO_RX,
     };
-    umq_wait_interrupt(umqh, 300, &rx_option);
+    umq_wait_interrupt(umqh, INTERRUPT_WAIT_TIME_MS, &rx_option);
     umq_rearm_interrupt(umqh, false, &rx_option);
 
     umq_buf_t *bad_buf;
@@ -644,7 +599,6 @@ static int send_req(umq_info_t *umq_info)
 
         if (poll_buf[i]->io_direction == UMQ_IO_RX) {
             umq_buf_reset(poll_buf[i]);
-            umq_buf_t *bad_buf;
             if (umq_post(umqh, poll_buf[i], UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
                 umq_buf_free(bad_buf);
                 LOG_PRINT_ERR("post rx failed\n");
@@ -658,7 +612,7 @@ static int send_req(umq_info_t *umq_info)
     }
 
     umq_buf_t *tx_post_buf = umq_buf_alloc(CONNETION_SETUP_MSG_SZIE, 1, umqh, NULL);
-    sprintf(tx_post_buf->buf_data, "hello server i am client %lu", umqh);
+    (void)sprintf(tx_post_buf->buf_data, "hello server i am client");
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
     int ret = umq_post(umqh, tx_post_buf, UMQ_IO_TX, &bad_buf);
@@ -679,7 +633,7 @@ static void return_rsp(void *arg)
     umq_ctx_t *umq_ctx = *(umq_ctx_t **)arg;
     uint64_t umqh = umq_ctx->umqh;
     umq_buf_t *tx_post_buf = umq_buf_alloc(CONNETION_SETUP_MSG_SZIE, 1, umqh, NULL);
-    sprintf(tx_post_buf->buf_data, "hello client i am server %lu", umqh);
+    (void)sprintf(tx_post_buf->buf_data, "hello client i am server");
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
     umq_buf_t *bad_buf;
@@ -689,7 +643,7 @@ static void return_rsp(void *arg)
         if (ret == -UMQ_ERR_EAGAIN) {
             g_umq_info_list[umq_ctx->main_umq_idx].eagain_cnt++;
         } else {
-            LOG_PRINT_ERR("umq %lu post failed\n", umqh);
+            LOG_PRINT_ERR("umq post failed\n");
         }
     }
     g_umq_info_list[umq_ctx->main_umq_idx].send_rsp_cnt++;
@@ -704,9 +658,9 @@ static void process_tx_interrupt(void *arg)
         .direction = UMQ_IO_TX,
     };
 
-    int ret = umq_wait_interrupt(umqh, 300, &option);
+    int ret = umq_wait_interrupt(umqh, INTERRUPT_WAIT_TIME_MS, &option);
     if (ret < 0) {
-        fd_ctx->processing= false;
+        fd_ctx->processing = false;
         return;
     }
 
@@ -717,9 +671,9 @@ static void process_tx_interrupt(void *arg)
         if (tx_cnt == 1) {
             umq_buf_free(buf);
         }
-    } while(tx_cnt > 0);
+    } while (tx_cnt > 0);
     umq_rearm_interrupt(umqh, false, &option);
-    fd_ctx->processing= false;
+    fd_ctx->processing = false;
 }
 
 static void process_rx_interrupt(void *arg)
@@ -731,7 +685,7 @@ static void process_rx_interrupt(void *arg)
         .direction = UMQ_IO_RX,
     };
 
-    int ret = umq_wait_interrupt(umqh, 300, &option);
+    int ret = umq_wait_interrupt(umqh, INTERRUPT_WAIT_TIME_MS, &option);
     if (ret != 1) {
         fd_ctx->processing = false;
         return;
@@ -758,9 +712,9 @@ static void process_rx_interrupt(void *arg)
                 LOG_PRINT_ERR("post rx failed\n");
             }
         }
-    } while(rx_cnt > 0);
+    } while (rx_cnt > 0);
     umq_rearm_interrupt(umqh, false, &option);
-    fd_ctx->processing= false;
+    fd_ctx->processing = false;
 }
 
 static int wait_work(threadpool_t *pool)
@@ -807,7 +761,7 @@ static int wait_work(threadpool_t *pool)
 static void *server_state_conn_info(void *arg)
 {
     while (1) {
-        sleep(10);
+        sleep(STATE_SLEEP_TIME_S);
         printf("=======================================================\n");
         printf("conn cnt: %u \n", g_state_total_conn_cnt);
         for (uint32_t i = 0; i < g_umq_cnt && i < MAIN_QUEUE_CNT && g_main_umq[i] != 0; i++) {
@@ -916,7 +870,7 @@ CLOSE_FD:
 static void *client_state_conn_info(void *arg)
 {
     while (1) {
-        sleep(10);
+        sleep(STATE_SLEEP_TIME_S);
         printf("=======================================================\n");
         printf("connect cnt:\t %u \n", g_umq_cnt);
         printf("send cnt:\t %u\n", g_tatal_umq_info_list.send_req_cnt);
