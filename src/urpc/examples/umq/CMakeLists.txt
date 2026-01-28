@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2020-2025. All rights reserved.
 
+include(${CMAKE_CURRENT_LIST_DIR}/connection_setup_tool/CMakeLists.txt)
+
 include_directories(/usr/include/umdk)
 include_directories(/usr/include/ub/umdk/urma)
 include_directories(/usr/include/umdk/umq)
 include_directories(${CMAKE_CURRENT_LIST_DIR})
+include_directories(${CMAKE_CURRENT_LIST_DIR}/connection_setup_tool)
 include_directories(${CMAKE_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/umq)
 

@@ -10,6 +10,7 @@
 #include "umq_example_common.h"
 #include "umq_example_base.h"
 #include "umq_example_pro.h"
+#include "connection_setup_tool.h"
 
 int main(int argc, char *argv[])
 {
@@ -18,6 +19,10 @@ int main(int argc, char *argv[])
     if (ret != 0) {
         LOG_PRINT_ERR("parse_arguments failed, ret: %d\n", ret);
         goto EXIT;
+    }
+
+    if (cfg.case_type == CASE_TYPE_CONNEXTION) {
+        return connection_setup_tool(&cfg);
     }
 
     if ((cfg.feature & UMQ_FEATURE_API_PRO) != 0) {

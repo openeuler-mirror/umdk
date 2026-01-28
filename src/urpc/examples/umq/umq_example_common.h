@@ -24,6 +24,7 @@ extern "C" {
 #define DEFAULT_PORT              19875
 #define TIME_SIZE                 35
 #define UMQ_MAX_BIND_INFO_SIZE    512
+#define EXAMPLE_MAX_DEV_NUM       10
 
 extern const uint32_t EXAMPLE_SLEEP_TIME_US;
 extern const uint32_t EXAMPLE_MAX_WAIT_TIME_MS;
@@ -76,6 +77,12 @@ enum TRANSPORT_MODE {
     TRANSPORT_MODE_MAX,
 };
 
+typedef enum example_case_type {
+    CASE_TYPE_DEFAULT = 0,
+    CASE_TYPE_CONNEXTION,
+    CASE_TYPE_MAX,
+} example_case_type_t;
+
 struct urpc_example_config {
     bool greeter_test_mode;                         /* true: enable greeter test mode */
     char *dev_name;                                 /* device name */
@@ -94,6 +101,10 @@ struct urpc_example_config {
     uint32_t deid;
     enum TRANSPORT_MODE transport_mode;
     enum TP_TYPE tp_type;
+    uint32_t queue_num;
+    int thread_poll_size;
+    char *m_dev_name[EXAMPLE_MAX_DEV_NUM];                                 /* device name */
+    uint16_t m_eid_idx[EXAMPLE_MAX_DEV_NUM];
 };
 
 struct req_cb_arg {
@@ -111,6 +122,8 @@ int server_exchange_bind_info(const char *ip, uint16_t port, uint8_t *send_data,
 
 int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg);
 
+int send_exchange_data(int sock, uint8_t *send_data, uint32_t send_len);
+int recv_exchange_data(int sock, uint8_t *recv_data, uint32_t *recv_len);
 int example_post_rx(uint64_t umqh, uint32_t depth);
 int example_poll_rx(uint64_t umqh, const char *check_data, uint32_t data_size, bool with_imm_data);
 int example_post_tx(uint64_t umqh, const char *data, uint32_t data_size);
