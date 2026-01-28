@@ -277,8 +277,6 @@ typedef struct ub_credit_pool_ops {
     uint16_t (*allocated_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
     uint16_t (*allocated_credit_dec)(struct ub_credit_pool *shared_credit, uint16_t count);
     void (*stats_query)(struct ub_credit_pool *fc, umq_credit_pool_stats_t *out);
-    uint16_t (*leak_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
-    uint16_t (*leak_credit_recycle)(struct ub_credit_pool *shared_credit, uint16_t count);
 } ub_credit_pool_ops_t;
 
 typedef enum ub_credit_stat_u64 {

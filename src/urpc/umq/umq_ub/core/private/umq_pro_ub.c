@@ -588,6 +588,7 @@ static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_
         queue->rx_flush_done = true;
     }
 
+    umq_ub_idle_credit_flush(queue, buf_cnt);
     return buf_cnt;
 }
 
@@ -727,7 +728,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 
     umq_buf_status_t qbuf_status;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
-    if (queue->flow_control.enabled) {
+    if (queue->flow_control.enabled && rx_cr_cnt != 0) {
         (void)credit->ops.allocated_credit_dec(credit, rx_cr_cnt);
     }
     for (int i = 0; i < rx_cr_cnt; i++) {
