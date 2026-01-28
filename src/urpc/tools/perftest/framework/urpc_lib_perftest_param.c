@@ -40,11 +40,11 @@ static struct option g_long_options[] = {
     {"rx-depth", required_argument, NULL, 'R'},
     {"tx-depth", required_argument, NULL, 'U'},
     {"use-one-queue", no_argument, NULL, 'V'},
-    {"disorder", no_argument, NULL, 'D'},
     {"align", no_argument, NULL, 'L'},
     {"is_ipv6_dev", no_argument, NULL, 'B'},
     {"concurrent-num", required_argument, NULL, 'W'},
     {"data-trans-mode", required_argument, NULL, 'E'},
+    {"eid", required_argument, NULL, 'e'},
 
     {NULL, 0, NULL, 0}
 };
@@ -59,28 +59,28 @@ static void usage(void)
     (void)printf("                                      1: test urpc qps\n");
     (void)printf("      --server                        to launch server.\n");
     (void)printf("      --client                        to launch client.\n");
+    (void)printf("      --eid                           set dev eid.\n");
     (void)printf("      --hw-offload                    set URPC_FEATURE_HWUB_OFFLOAD, default not set\n");
     (void)printf("      --show-thread-qps               show all worker thread qps, effective in qps test\n");
     (void)printf("      --tx-depth                      set queue tx-depth(default 512).\n");
     (void)printf("      --rx-depth                      set queue rx-depth(default 512).\n");
     (void)printf("      --trans-mode                    set urpc_trans_mode.\n");
     (void)printf("      --use-one-queue                 use one queue in latency test(default 2 queues).\n");
-    (void)printf("      --alloc-buf                     don't reuse allocator buffer in latency test(allocator only "
+    (void)printf("      --alloc-buf                     don't reuse allocator buffer in latency test(allocator only\n"
                  "                                      has one sge in latency test by default).\n");
     (void)printf("      --align                         memory address align to 4K.\n");
     (void)printf("      --is_ipv6_dev                   use ipv6 dev for data plane.\n");
-    (void)printf("      --concurrent-num <num>          concurrent num for wqe in one time, should go with --alloc-buf,"
+    (void)printf("      --concurrent-num <num>          concurrent num for wqe in one time, should go with --alloc-buf,\n"
                  "                                      and size larger than 105.\n");
-    (void)printf("      --data-trans-mode <num>         urpc data trans mode, 0 for send(default), "
+    (void)printf("      --data-trans-mode <num>         urpc data trans mode, 0 for send(default),\n"
                  "                                      2 for read(only support one queue, not support concurrent).\n");
-    (void)printf("      --disorder                      use disorder queue.\n");
-    (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>, server and client "
+    (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>, server and client\n"
                  "may use <port+1> to sync and client may use <port-1> in latency test case (default: 19875)\n");
     (void)printf("  -f, --unix-file-path <path>         unix-file-path for dfx\n");
     (void)printf("  -l, --local-ip <ip-address>         local ip address\n");
     (void)printf("  -r, --remote-ip <ip-address>        remote ip address\n");
     (void)printf("  -n, --thread-num <thread-num>       number of process threads\n");
-    (void)printf("  -s, --size <size1,size2...>         size of request, support most 32 sizes, each size should not "
+    (void)printf("  -s, --size <size1,size2...>         size of request, support most 32 sizes, each size should not\n"
                  "                                      more than 8192, and will provide in order of input\n");
     (void)printf("  -t, --target-queue <target-queue>   target-queue index of remote for client to send request to\n");
     (void)printf("  -u, --cpu_core <cpu_core>           from which cpu core to set affinity for each thread\n");
@@ -148,7 +148,7 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
 
     while (1) {
         int long_option_index = -1;
-        int c = getopt_long(argc, argv, "c:d:f:h:l:n:p:r:s:t:u:P:", g_long_options, &long_option_index);
+        int c = getopt_long(argc, argv, "c:d:f:h:l:n:p:r:s:t:u:P:e:", g_long_options, &long_option_index);
         if (c == -1) {
             break;
         }
@@ -237,6 +237,9 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
             case 'E':
                 cfg->data_trans_mode = (data_trans_mode_t)strtoul(optarg, NULL, 0);
                 break;
+            case 'e':
+                strcpy(cfg->eid, optarg);
+ 	            break;
             default:
                 usage();
                 return -1;
