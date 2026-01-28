@@ -651,6 +651,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
     if (queue->bind_ctx == NULL) {
         return -UMQ_ERR_EINVAL;
     }
+    (void)umq_ub_poll_fc_tx(queue);
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
 
