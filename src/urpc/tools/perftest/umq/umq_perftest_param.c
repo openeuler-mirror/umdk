@@ -49,7 +49,7 @@ static void usage(void)
     (void)printf("  -d, --dev-name <dev>                device name <dev>\n");
     (void)printf("  -l, --local-ip <ip-address>         local ip address\n");
     (void)printf("  -r, --remote-ip <ip-address>        remote ip address\n");
-    (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>");
+    (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>\n");
     (void)printf("  -c, --test-case <case index>        test case to be performed(default: 0)\n");
     (void)printf("                                      0: test umq latency(default)\n");
     (void)printf("                                      1: test umq qps\n");
