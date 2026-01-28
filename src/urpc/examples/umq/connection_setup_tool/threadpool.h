@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: umq example
  * Create: 2026-1-27
  * Note:
@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct {
     pthread_mutex_t lock;
-    pthread_cond_t notify; 
+    pthread_cond_t notify;
     pthread_t *threads;
     threadpool_task_t *queue;
     int thread_count;
