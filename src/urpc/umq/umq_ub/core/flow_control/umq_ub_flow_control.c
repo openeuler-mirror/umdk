@@ -711,12 +711,6 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     return;
 }
 
-void umq_ub_leak_credit_recycle(ub_queue_t *queue, uint16_t count)
-{
-    ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
-    credit->ops.leak_credit_recycle(credit, count);
-}
-
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count)
 {
     if (lock_free) {
@@ -762,4 +756,17 @@ void umq_ub_credit_clean_up(ub_queue_t *queue)
     }
     (void)credit->ops.available_credit_return(credit, actual_return_credit + unconsumed);
     (void)fc->ops.local_rx_allocted_dec(fc, unconsumed);
+}
+
+void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt) {
+    ub_flow_control_t *fc = &queue->flow_control;
+    if (cnt != 0 && fc->enabled) {
+        ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+        bool use_atomic_window = queue->dev_ctx->flow_control.use_atomic_window;
+        if (use_atomic_window) {
+            (void)counter_dec_atomic_u16(credit, cnt, CREDIT_POOL_IDLE);
+        } else {
+            (void)counter_dec_non_atomic_u16(credit, cnt, CREDIT_POOL_IDLE);
+        }
+    }
 }
