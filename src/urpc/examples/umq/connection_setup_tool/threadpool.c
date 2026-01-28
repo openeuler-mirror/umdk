@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: umq example
  * Create: 2026-1-27
  * Note:
@@ -17,6 +17,8 @@
 #include <string.h>
 #include "threadpool.h"
 
+#define MAX_THREAD_NUM 100
+
 static void *threadpool_worker(void *threadpool)
 {
     threadpool_t *pool = (threadpool_t *)threadpool;
@@ -29,8 +31,7 @@ static void *threadpool_worker(void *threadpool)
             pthread_cond_wait(&(pool->notify), &(pool->lock));
         }
 
-        if ((pool->shutdown == 1) || 
-            ((pool->shutdown == 2) && (pool->count == 0))) {
+        if (pool->shutdown == 1) {
             break;
         }
 
@@ -46,7 +47,6 @@ static void *threadpool_worker(void *threadpool)
     
     pool->started--;
     pthread_mutex_unlock(&(pool->lock));
-    pthread_exit(NULL);
     return NULL;
 }
 
@@ -55,7 +55,7 @@ threadpool_t *threadpool_create(int thread_count, int queue_size)
     threadpool_t *pool;
     int i;
     
-    if (thread_count <= 0 || thread_count > 100 || queue_size <= 0) {
+    if (thread_count <= 0 || thread_count > MAX_THREAD_NUM || queue_size <= 0) {
         return NULL;
     }
 
@@ -141,7 +141,7 @@ int threadpool_destroy(threadpool_t *pool)
     if (pool->shutdown) {
         err = -1;
     } else {
-        pool->shutdown = 1; 
+        pool->shutdown = 1;
         if ((pthread_cond_broadcast(&(pool->notify)) != 0)) {
             err = -1;
         }
@@ -168,7 +168,9 @@ int threadpool_free(threadpool_t *pool)
     
     if (pool->threads) {
         free(pool->threads);
+        pool->threads = NULL;
         free(pool->queue);
+        pool->queue = NULL;
         pthread_mutex_destroy(&(pool->lock));
         pthread_cond_destroy(&(pool->notify));
     }
