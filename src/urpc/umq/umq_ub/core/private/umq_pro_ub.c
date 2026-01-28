@@ -566,15 +566,15 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
     return ret;
 }
 
-static int umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_buf_t **buf)
+static uint32_t umq_report_incomplete_rx(ub_queue_t *queue, uint32_t max_rx_ctx, umq_buf_t **buf)
 {
-    int buf_cnt = 0;
+    uint32_t buf_cnt = 0;
     if (!queue->tx_flush_done || queue->rx_flush_done || queue->state != QUEUE_STATE_ERR) {
         return buf_cnt;
     }
 
     rx_buf_ctx_t *rx_buf_ctx;
-    for (buf_cnt = 0; buf_cnt < (int)max_rx_ctx; buf_cnt++) {
+    for (buf_cnt = 0; buf_cnt < max_rx_ctx; buf_cnt++) {
         rx_buf_ctx = queue_rx_buf_ctx_flush(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list);
         if (rx_buf_ctx == NULL) {
             break;
@@ -603,13 +603,13 @@ static inline void umq_perf_record_write_poll(umq_perf_record_type_t type, uint6
     }
 }
 
-static int umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_buf_t **buf)
+static uint32_t umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_buf_t **buf)
 {
     if (imm.bs.type != IMM_TYPE_FLOW_CONTROL) {
         return 0;
     }
     umq_buf_t *fc_buf = NULL;
-    int ret = 0;
+    uint32_t ret = 0;
     switch (imm.flow_control.sub_type) {
         case IMM_TYPE_FC_CREDIT_REQ:
             umq_ub_shared_credit_req_handle(queue, &imm);
@@ -644,7 +644,7 @@ static void umq_ub_fill_rx_buff_post_process(ub_queue_t *queue, umq_ub_imm_t imm
     return;
 }
 
-int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
+uint32_t umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
 {
     urma_cr_t cr[UMQ_UB_FLOW_CONTORL_JETTY_DEPTH];
     uint64_t start_timestmap = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
@@ -659,7 +659,7 @@ int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
     if (rx_cr_cnt > 0) {
         queue->interrupt_ctx.rx_fc_interrupt = false;
     }
-    int qbuf_cnt = 0;
+    uint32_t qbuf_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
             (void)umq_ub_fill_fc_rx_buf(queue);

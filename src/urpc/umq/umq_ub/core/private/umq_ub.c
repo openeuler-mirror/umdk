@@ -1841,8 +1841,8 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
 
     ub_import_mempool_info_t import_mempool_info[UMQ_MAX_TSEG_NUM];
     uint32_t rest_size = (*buffer)->total_data_size;
-    int32_t buf_index = 0;
-    uint16_t ref_sge_num = (uint16_t)((size_t)umq_buf_size_small() - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
+    uint32_t buf_index = 0;
+    uint32_t ref_sge_num = (uint32_t)((size_t)umq_buf_size_small() - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
     urma_sge_t sge;
     uint32_t max_data_size = 0;
     while ((*buffer) && rest_size != 0) {
@@ -1851,7 +1851,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
             goto FREE_BUF;
         }
 
-        if (buf_index == ref_sge_num) {
+        if (buf_index == ref_sge_num || buf_index > UINT16_MAX) {
             UMQ_LIMIT_VLOG_ERR("the buf num [%d] exceeds the maximum limit [%u]\n", buf_index, (uint32_t)ref_sge_num);
             goto FREE_BUF;
         }
