@@ -26,6 +26,7 @@
 #include "urpc_lib_perftest_util.h"
 
 #define URPC_PERFTEST_DEPTH_MARGIN 8
+#define URPC_PERFTEST_BIND_REMOTE_QID 2
 
 #define URPC_PERFTEST_SYN "SYN"
 #define URPC_PERFTEST_ACK "ACK"
@@ -556,6 +557,12 @@ static int urpc_perftest_server_client_channel_init(perftest_framework_config_t 
     if (g_urpc_perftest_ctx.chid == URPC_U32_FAIL) {
         return -1;
     }
+
+    if (perftest_mem_remote_access_enable(g_urpc_perftest_ctx.chid) != URPC_SUCCESS) {
+        LOG_PRINT("urpc_mem_seg_remote_access_enable failed\n");
+        return -1;
+    }
+
     if (urpc_perftest_server_client_channel_attach(cfg, g_urpc_perftest_ctx.chid) != 0) {
         urpc_perftest_server_client_channel_uninit(cfg);
         return -1;
@@ -646,13 +653,9 @@ static int urpc_perftest_server_do_accept(void)
     return 0;
 }
 
-// server wait for "sync" and send "ack", only latency test need sync
+// server wait for "sync" and send "ack"
 static int urpc_perftest_server_wait_sync(perftest_framework_config_t *cfg)
 {
-    if (cfg->case_type != PERFTEST_CASE_LAT) {
-        return 0;
-    }
-
     g_urpc_perftest_ctx.fd = socket(AF_INET, (int)SOCK_STREAM, IPPROTO_TCP);
     if (g_urpc_perftest_ctx.fd < 0) {
         LOG_PRINT("create socket failed, %s\n", strerror(errno));
@@ -707,10 +710,6 @@ CLOSE_LISTEN_FD:
 static int urpc_perftest_server_send_ack(perftest_framework_config_t *cfg)
 {
     int ret = 0;
-    if (cfg->case_type != PERFTEST_CASE_LAT) {
-        return 0;
-    }
-
     int msg_len = send(g_urpc_perftest_ctx.accept_fd, URPC_PERFTEST_ACK, strlen(URPC_PERFTEST_ACK), MSG_NOSIGNAL);
     if (msg_len != (int)strlen(URPC_PERFTEST_ACK)) {
         LOG_PRINT("send ack failed, %s\n", strerror(errno));
@@ -725,13 +724,9 @@ static int urpc_perftest_server_send_ack(perftest_framework_config_t *cfg)
     return ret;
 }
 
-// client send "sync" and wait for "ack", only latency test need sync
+// client send "sync" and wait for "ack"
 static int urpc_perftest_client_wait_ack(perftest_framework_config_t *cfg)
 {
-    if (cfg->case_type != PERFTEST_CASE_LAT) {
-        return 0;
-    }
-
     int ret = -1;
     g_urpc_perftest_ctx.fd = socket(AF_INET, (int)SOCK_STREAM, IPPROTO_TCP);
     if (g_urpc_perftest_ctx.fd < 0) {
@@ -776,8 +771,33 @@ CLOSE_FD:
     return ret;
 }
 
-static int chanel_queue_pair(perftest_framework_config_t *cfg)
+static uint64_t find_recv_queue(perftest_framework_config_t *cfg, urpc_channel_qinfos_t *qinfo)
 {
+    if (cfg->case_type == PERFTEST_CASE_LAT && !cfg->use_one_q) {
+        urpc_qcfg_get_t q_cfg;
+        for (uint32_t i = 0; i < qinfo->r_qnum; i++) {
+            if (urpc_queue_cfg_get(qinfo->r_qinfo[i].urpc_qh, &q_cfg) != URPC_SUCCESS) {
+                LOG_PRINT("urpc_queue_cfg_get failed\n");
+                return 0;
+            }
+
+            if (q_cfg.qid == URPC_PERFTEST_BIND_REMOTE_QID) {
+                return qinfo->r_qinfo[i].urpc_qh;
+            }
+        }
+        LOG_PRINT("not find remote queue\n");
+        return 0;
+    }
+    return qinfo->r_qinfo[0].urpc_qh;
+}
+
+// In use_one_q mode, the LAT case does not require pair
+static int channel_queue_pair(perftest_framework_config_t *cfg)
+{
+    if (cfg->instance_mode == SERVER && (cfg->case_type != PERFTEST_CASE_LAT || cfg->use_one_q)) {
+        return 0;
+    }
+
     uint32_t chid = g_urpc_perftest_ctx.chid;
     urpc_channel_qinfos_t *qinfo = (urpc_channel_qinfos_t *)calloc(1, sizeof(urpc_channel_qinfos_t));
     if (qinfo == NULL) {
@@ -796,18 +816,27 @@ static int chanel_queue_pair(perftest_framework_config_t *cfg)
     option.timeout = -1;
 
     int task;
-    for (uint32_t i = 0; i < qinfo->l_qnum && i < qinfo->r_qnum; i++) {
-        task = urpc_channel_queue_pair(chid, qinfo->l_qinfo[i].urpc_qh, qinfo->r_qinfo[i].urpc_qh, &option);
-        LOG_PRINT("pair queue task: %d\n", task);
-        urpc_channel_task_cancel(chid, task);
+    
+    uint64_t r_qh = find_recv_queue(cfg, qinfo);
+    if (r_qh == 0) {
+        LOG_PRINT("recv queue not exist\n");
+        return -1;
     }
+    task = urpc_channel_queue_pair(chid, qinfo->l_qinfo[0].urpc_qh, r_qh, &option);
+    LOG_PRINT("pair queue task: %d\n", task);
+    urpc_channel_task_cancel(chid, task);
 
     free(qinfo);
     return URPC_SUCCESS;
 }
 
-static void chanel_queue_unpair(perftest_framework_config_t *cfg)
+// In use_one_q mode, the LAT case does not require unpair
+static void channel_queue_unpair(perftest_framework_config_t *cfg)
 {
+    if (cfg->instance_mode == SERVER && (cfg->case_type != PERFTEST_CASE_LAT || cfg->use_one_q)) {
+        return;
+    }
+
     uint32_t chid = g_urpc_perftest_ctx.chid;
     urpc_channel_qinfos_t *qinfo = (urpc_channel_qinfos_t *)calloc(1, sizeof(urpc_channel_qinfos_t));
     if (qinfo == NULL) {
@@ -824,8 +853,9 @@ static void chanel_queue_unpair(perftest_framework_config_t *cfg)
     urpc_channel_connect_option_t option = {0};
     option.flag = URPC_CHANNEL_CONN_FLAG_FEATURE | URPC_CHANNEL_CONN_FLAG_TIMEOUT;
     option.timeout = -1;
-    for (uint32_t i = 0; i < qinfo->l_qnum && i < qinfo->r_qnum; i++) {
-        int task = urpc_channel_queue_unpair(chid, qinfo->l_qinfo[i].urpc_qh, qinfo->r_qinfo[i].urpc_qh, &option);
+    uint64_t r_qh = find_recv_queue(cfg, qinfo);
+    if (r_qh != 0) {
+        int task = urpc_channel_queue_unpair(chid, qinfo->l_qinfo[0].urpc_qh, r_qh, &option);
         LOG_PRINT("unpair queue task: %d\n", task);
         urpc_channel_task_cancel(chid, task);
     }
@@ -837,7 +867,7 @@ static int post_one_queue_rx(uint64_t qh, uint32_t num, uint32_t buf_size, bool 
     uint32_t post_num = 0;
     int ret = URPC_SUCCESS;
     urpc_allocator_t *allocator = urpc_perftest_allocator_get();
-    while (post_num < num) {
+    while (post_num < num && !is_perftest_force_quit()) {
         urpc_sge_t *sges;
         uint32_t sge_num = 0;
         if ((allocator->get(&sges, &sge_num, buf_size, NULL) != 0)) {
@@ -899,21 +929,28 @@ static int urpc_perftest_run_server(perftest_framework_config_t *cfg)
         goto QUEUE_HANDLE_UNINIT;
     }
 
+    if (channel_queue_pair(cfg) != 0) {
+        goto QUEUE_HANDLE_UNINIT;
+    }
+
+    post_queue_rx(cfg);
+
     // server workers should be ready for recv as soon as possible
     if (urpc_perftest_start_workers(cfg) != 0) {
-        goto QUEUE_HANDLE_UNINIT;
+        goto QUEUE_UNPAIR;
     }
 
     if (urpc_perftest_server_send_ack(cfg) != 0) {
         goto WORKERS_UNINIT;
     }
 
-    post_queue_rx(cfg);
-
     urpc_perftest_run(cfg);
 
 WORKERS_UNINIT:
     urpc_perftest_stop_workers();
+
+QUEUE_UNPAIR:
+    channel_queue_unpair(cfg);
 
 QUEUE_HANDLE_UNINIT:
     urpc_perftest_queue_handles_uninit();
@@ -947,7 +984,7 @@ static int urpc_perftest_run_client(perftest_framework_config_t *cfg)
         goto QUEUE_HANDLE_UNINIT;
     }
 
-    if (chanel_queue_pair(cfg) != 0) {
+    if (channel_queue_pair(cfg) != 0) {
         goto CHANNEL_UNINIT;
     }
 
@@ -973,7 +1010,7 @@ static int urpc_perftest_run_client(perftest_framework_config_t *cfg)
     urpc_perftest_stop_workers();
 
 QUEUE_UNPAIR:
-    chanel_queue_unpair(cfg);
+    channel_queue_unpair(cfg);
 
 CHANNEL_UNINIT:
     urpc_perftest_server_client_channel_uninit(cfg);

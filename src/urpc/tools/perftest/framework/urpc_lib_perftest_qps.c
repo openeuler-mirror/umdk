@@ -138,8 +138,6 @@ void urpc_perftest_client_run_qps(perftest_thread_arg_t *args, urpc_lib_perftest
     uint32_t can_send_num = qps_arg->cfg->tx_depth;
     int poll_num;
     urpc_call_wr_t wr;
-    uint32_t post_num = 0;
-    uint32_t posted_num = 0;
     urpc_qcfg_get_t cfg_get = {0};
     if (urpc_queue_cfg_get(qh, &cfg_get) != URPC_SUCCESS) {
         LOG_PRINT("query local qh cfg failed\n");
@@ -176,18 +174,7 @@ void urpc_perftest_client_run_qps(perftest_thread_arg_t *args, urpc_lib_perftest
                 LOG_PRINT("urpc_func_poll get bad event %d\n", (int)msgs[i].event);
                 continue;
             }
-            post_num++;
         }
-
-        if (post_num > URPC_POST_RECV_WR_NUM || cfg_get.rx_depth < URPC_POST_RECV_WR_NUM) {
-            posted_num = perftest_post_rx_buff(qh, post_num, cfg_get.rx_buf_size);
-            if (posted_num == URPC_U32_FAIL) {
-                LOG_PRINT("post rx buff faile\n");
-                goto ERROR;
-            }
-            post_num -= posted_num;
-        }
-
         (void)atomic_fetch_add(&g_urpc_perftest_qps_ctx.reqs[thread_index], poll_num);
         can_send_num += (uint32_t)poll_num;
     }
