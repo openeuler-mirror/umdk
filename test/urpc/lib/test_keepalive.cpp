@@ -57,6 +57,7 @@ public:
         urma_ctx.dev = &dev;
         static urma_device_attr_t dev_attr = {0};
         dev_attr.dev_cap.max_msg_size = 65536;
+        dev_attr.dev_cap.priority_info[0].tp_type.bs.rtp = 1;
         MOCKER(urma_init).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_user_ctl).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_query_device)

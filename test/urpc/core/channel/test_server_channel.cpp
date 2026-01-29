@@ -31,6 +31,7 @@ static int g_notifier_fd = -1;
 static urma_status_t urma_query_device_mock(urma_device_t *dev, urma_device_attr_t *dev_attr)
 {
     dev_attr->dev_cap.max_msg_size = MAX_MSG_SIZE;
+    dev_attr->dev_cap.priority_info[0].tp_type.bs.rtp = 1;
     return URMA_SUCCESS;
 }
 
@@ -227,11 +228,11 @@ TEST_F(ServerChannelTest, test_list_queue_by_server_channel_id) {
 
     urpc_qcfg_create_t q_cfg = {0};
     uint64_t qh1 = urpc_queue_create(QUEUE_TRANS_MODE_JETTY, &q_cfg);
-    EXPECT_NE(qh1, (uint64_t)URPC_INVALID_HANDLE);
+    ASSERT_NE(qh1, (uint64_t)URPC_INVALID_HANDLE);
 
     urpc_instance_key_t key = {0};
     urpc_server_channel_info_t *info = server_channel_alloc(&key, 0);
-    EXPECT_NE(info, nullptr);
+    ASSERT_NE(info, nullptr);
     server_channel_unlock(info->id);
 
     queue_info_t queue1_info = {0};
