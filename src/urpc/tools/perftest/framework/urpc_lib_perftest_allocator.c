@@ -345,3 +345,8 @@ uint32_t perftest_post_rx_buff(uint64_t qh, uint32_t post_num, uint32_t rx_buf_s
     }
     return posted;
 }
+
+int perftest_mem_remote_access_enable(uint32_t urpc_chid)
+{
+    return urpc_mem_seg_remote_access_enable(urpc_chid, g_perftest_allocator_ctx[0].tsge);
+}
