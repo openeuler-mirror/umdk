@@ -14,6 +14,7 @@
 #include "umq_errno.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_qbuf_pool.h"
+#include "umq_ub_private.h"
 
 static uint64_t g_huge_pool_total_size = 0;
 static uint64_t g_huge_pool_total_size_by_type[HUGE_QBUF_POOL_SIZE_TYPE_MAX] = {0};
@@ -60,11 +61,10 @@ static int RegisterSegFail(uint8_t *ctx __attribute__((unused)),
     return UMQ_FAIL;
 }
 
-static int UnregisterSeg(uint8_t *ctx __attribute__((unused)),
+static void UnregisterSeg(uint8_t *ctx __attribute__((unused)),
                          uint16_t mempool_id __attribute__((unused)))
 {
     g_unregister_cnt++;
-    return UMQ_SUCCESS;
 }
 
 class HugeQbufPoolTest : public ::testing::Test {
@@ -147,12 +147,17 @@ TEST_F(HugeQbufPoolInitTest, test_huge_qbuf_alloc_free_and_register)
     ASSERT_EQ(umq_huge_qbuf_headroom_reset(qbuf, 64), UMQ_SUCCESS);
     ASSERT_EQ(qbuf->headroom_size, 64);
 
-    ASSERT_EQ(umq_huge_qbuf_register_seg(nullptr, RegisterSeg, UnregisterSeg), UMQ_SUCCESS);
+    mempool_segment_ops_t ops;
+    ops.register_seg_callback = RegisterSeg;
+    ops.unregister_seg_callback = UnregisterSeg;
+    ASSERT_EQ(umq_huge_qbuf_register_seg(nullptr, &ops), UMQ_SUCCESS);
     ASSERT_GT(g_register_cnt, 0);
 
-    ASSERT_NE(umq_huge_qbuf_register_seg(nullptr, RegisterSegFail, UnregisterSeg), UMQ_SUCCESS);
+    ops.register_seg_callback = RegisterSegFail;
+    ASSERT_NE(umq_huge_qbuf_register_seg(nullptr, &ops), UMQ_SUCCESS);
 
-    umq_huge_qbuf_unregister_seg(nullptr, UnregisterSeg);
+    ops.unregister_seg_callback = UnregisterSeg;
+    umq_huge_qbuf_unregister_seg(nullptr, &ops);
     ASSERT_GT(g_unregister_cnt, 0);
 
     umq_huge_qbuf_free(&list);
@@ -199,8 +204,13 @@ TEST_F(HugeQbufPoolTest, test_huge_qbuf_split_alloc_multi_fragment)
     cfg.memory_init_callback = HugeMemInit;
     cfg.memory_uninit_callback = HugeMemUninit;
 
+    for (uint32_t i = 0; i < (uint32_t)HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
+        cfg.data_size = umq_huge_qbuf_get_size_by_type((huge_qbuf_pool_size_type_t)i);
+        cfg.total_size = cfg.data_size * HUGE_QBUF_BUFFER_INC_BATCH;
+        cfg.type = (huge_qbuf_pool_size_type_t)i;
+        ASSERT_EQ(umq_huge_qbuf_config_init(&cfg), UMQ_SUCCESS);
+    }
     umq_huge_qbuf_pool_ctx_common_cfg_set(&cfg);
-    ASSERT_EQ(umq_huge_qbuf_config_init(&cfg), UMQ_SUCCESS);
 
     umq_buf_list_t list;
     QBUF_LIST_INIT(&list);

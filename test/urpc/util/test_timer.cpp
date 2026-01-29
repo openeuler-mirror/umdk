@@ -264,3 +264,12 @@ TEST_F(timer_test, TestTimingTimerPoolInit)
 
     ASSERT_EQ(urpc_timer_create(300001, false), (urpc_timer_t *)NULL);
 }
+
+TEST_F(timer_test, TestQueryTimeInfo)
+{
+    uint64_t stats[2] = {0};
+    urpc_query_timer_info(0, true, stats, sizeof(stats));
+
+    ASSERT_EQ(stats[0], 0);
+    ASSERT_EQ(stats[1], 0);
+}

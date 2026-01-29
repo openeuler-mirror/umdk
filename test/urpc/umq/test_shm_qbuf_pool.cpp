@@ -107,6 +107,18 @@ class ShmQbufPoolTest : public ::testing::Test {
         GlobalMockObject::verify();
     }
 
+    // SetUpTestCase 在所有 TEST_F 测试开始前执行一次
+    static void SetUpTestCase()
+    {
+        ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
+    }
+
+    // TearDownTestCase 在所有 TEST_F 测试完成后执行一次
+    static void TearDownTestCase()
+    {
+        shm_qbuf_uninit();
+    }
+
   protected:
     void *buf_addr_ = nullptr;
     uint64_t total_size_ = 0;

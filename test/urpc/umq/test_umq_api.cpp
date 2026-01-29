@@ -71,7 +71,6 @@ TEST_F(UmqAPITest, test_umq_log_config_set_and_get_success)
     ASSERT_EQ(umq_log_config_set(&cfg), 0);
 
     ASSERT_EQ(umq_log_config_get(&cfg), 0);
-    // ASSERT_EQ(cfg.log_flag, (UMQ_LOG_FLAG_LEVEL | UMQ_LOG_FLAG_RATE_LIMITED | UMQ_LOG_FLAG_FUNC));
     ASSERT_EQ(cfg.level, UMQ_LOG_LEVEL_EMERG);
     ASSERT_EQ(cfg.rate_limited.interval_ms, 0);
     ASSERT_EQ(cfg.rate_limited.num, 0);
