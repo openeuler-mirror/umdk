@@ -107,9 +107,9 @@ typedef struct ub_flow_control_window_ops {
     uint16_t (*remote_rx_window_exchange)(struct ub_flow_control *fc);
     // load current tx window
     uint16_t (*remote_rx_window_load)(struct ub_flow_control *fc);
-    uint64_t (*local_rx_allocted_inc)(struct ub_flow_control *fc, uint16_t new_win);
-    uint16_t (*local_rx_allocted_dec)(struct ub_flow_control *fc, uint16_t required_win);
-    uint64_t (*local_rx_allocted_load)(struct ub_flow_control *fc);
+    uint64_t (*local_rx_allocated_inc)(struct ub_flow_control *fc, uint16_t new_win);
+    uint16_t (*local_rx_allocated_dec)(struct ub_flow_control *fc, uint16_t required_win);
+    uint64_t (*local_rx_allocated_load)(struct ub_flow_control *fc);
     void (*stats_query)(struct ub_flow_control *fc, struct ub_queue *queue, umq_credit_private_stats_t *out);
 } ub_flow_control_window_ops_t;
 
