@@ -316,7 +316,7 @@ typedef struct umq_credit_pool_stats {
 typedef struct umq_credit_private_stats {
     /* current actual statistics at the queue level */
     uint64_t queue_idle; // credits to be allocated to the peer (no practical use, always 0, reserved field)
-    uint64_t queue_be_allocted; // credits already be allocated to the peer, used for rx direction receive io
+    uint64_t queue_be_allocated; // credits already be allocated to the peer, used for rx direction receive io
     uint64_t queue_acquired; // credits acquired from the peer, used for tx direction send io
     uint64_t rsvd0[2];
 
