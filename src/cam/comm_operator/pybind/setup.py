@@ -78,6 +78,7 @@ ext1 = NpuExtension(
         "profapi"],
     sources=["./fused_deep_moe.cpp",
              "./get_dispatch_layout.cpp",
+             "./get_dispatch_layout_a2.cpp",
              "./moe_dispatch_prefill.cpp",
              "./moe_combine_prefill.cpp",
              "./moe_dispatch_shmem.cpp",
