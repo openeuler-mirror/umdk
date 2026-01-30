@@ -109,4 +109,29 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplAutograd(
     const at::Tensor &topIdx,
     int64_t numExperts,
     int64_t numRanks);
+
+std::vector<at::Tensor> MoeDispatchPrefillA2ImplAutograd( \
+    const at::Tensor& x, \
+    const at::Tensor& topkIdx, \
+    const at::Tensor& topkWeights, \
+    const at::Tensor& numTokensPerExpert, \
+    const at::Tensor& notifySendData, \
+    c10::string_view groupEp, \
+    int64_t rank, \
+    int64_t numRanks, \
+    bool useQuant);
+
+at::Tensor MoeCombinePrefillA2ImplAutograd(
+    const at::Tensor& x,
+    const at::Tensor& topkIdx,
+    const at::Tensor& topkWeights,
+    const at::Tensor& srcIdx,
+    const at::Tensor& sendHead,
+    const at::Tensor& expandScales,
+    const at::Tensor& offsetInner,
+    const at::Tensor& offsetOuter,
+    const at::Tensor& countOuter,
+    c10::string_view groupEp,
+    int64_t rank,
+    int64_t numRanks);
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_

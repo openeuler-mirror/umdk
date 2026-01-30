@@ -19,6 +19,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_dispatch_shmem", &MoeDispatchShmemImplAutograd, "moe_dispatch_shmem");
     m.def("moe_combine_shmem", &MoeCombineShmemImplAutograd, "moe_combine_shmem");
     m.def("get_dispatch_layout_a2", &GetDispatchLayoutA2ImplAutograd, "get_dispatch_layout_a2");
+    m.def("moe_dispatch_prefill_a2", &MoeDispatchPrefillA2ImplAutograd, "moe_dispatch_prefill_a2");
+    m.def("moe_combine_prefill_a2", &MoeCombinePrefillA2ImplAutograd, "moe_combine_prefill_a2");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m)
@@ -44,4 +46,9 @@ TORCH_LIBRARY(umdk_cam_op_lib, m)
     int shared_expert_rank_num, int global_bs, int comm_quant_mode, int ext_info, int out_dtype, \
     int group_list_type) -> Tensor");
     m.def("get_dispatch_layout_a2(Tensor topk_idx, int num_experts, int num_ranks) -> (Tensor, Tensor)");
+    m.def("moe_dispatch_prefill_a2(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor num_tokens_per_expert,\
+    Tensor notify_send_data, str group_ep, int rank, int num_ranks, bool use_quant) -> Tensor[]");
+    m.def("moe_combine_prefill_a2(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor src_idx, Tensor send_head, \
+    Tensor expand_scales, Tensor offset_inner, Tensor offset_outer, Tensor count_outer, str group_ep, int rank, \
+    int num_ranks) -> Tensor");
 }
