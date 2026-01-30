@@ -156,7 +156,7 @@ int server_run_early_response(uint64_t qh, uint64_t qh1, const urpc_allocator_t 
     struct urpc_poll_option poll_opt = {0};
 
     int poll_num;
-    while (g_poll_exit == 0) {
+    while (!is_example_force_quit()) {
         poll_opt.urpc_qh = qh;
         poll_num = urpc_func_poll(URPC_U32_FAIL, &poll_opt, &msg, 1);
         if (poll_num < 0) {

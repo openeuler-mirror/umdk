@@ -4,6 +4,7 @@
  * Description: urpc example to use urpc lib
  */
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
@@ -39,9 +40,14 @@
 #define CONNECT_TIMEOUT_MS 30000    // Connection timeout after 30000 ms
 #define CANCEL_OVER_WAIT_SLEEP_TIME 1
 #define ALIGNED_SIZE 4096 // Memory alignment method
+#define URPC_EXAMPLE_SYN "SYN"
+#define URPC_EXAMPLE_ACK "ACK"
+#define URPC_EXAMPLE_MSG_EARLY_REQ "hello server I'm early req without ack!"
+#define URPC_EXAMPLE_SYNC_MSG_SIZE 32
+#define URPC_EXAMPLE_ACCEPT_WAIT_US 10000
 
 urpc_lib_example_config_t g_cfg = { 0 };
-volatile sig_atomic_t g_poll_exit = 0;
+volatile bool g_example_force_quit;
 int g_epoll_fd = -1;
 
 typedef struct example_case {
@@ -588,8 +594,9 @@ int client_run_test(uint32_t chid, uint64_t qh, uint64_t qh1, urpc_channel_qinfo
     if (ret || (!cfg->enable_shared_jfr && !cfg->enable_shared_jfs_jfc)) {
         return ret;
     }
-
-    ret = client_run(chid, qh1, qinfos, cfg->func_id, g_used_allocator);
+    if (qh1 != URPC_INVALID_HANDLE) {
+        ret = client_run(chid, qh1, qinfos, cfg->func_id, g_used_allocator);
+    }
     return ret;
 }
 
@@ -977,7 +984,7 @@ static int urpc_example_flush_queue(uint64_t qh)
     return URPC_SUCCESS;
 }
 
-static int chanel_queue_pair(bool is_non_block, uint32_t chid, urpc_channel_qinfos_t *qinfo)
+static int channel_queue_pair(bool is_non_block, uint32_t chid, urpc_channel_qinfos_t *qinfo)
 {
     urpc_channel_connect_option_t option = {0};
     option.flag = URPC_CHANNEL_CONN_FLAG_FEATURE | URPC_CHANNEL_CONN_FLAG_TIMEOUT;
@@ -1011,7 +1018,7 @@ static int chanel_queue_pair(bool is_non_block, uint32_t chid, urpc_channel_qinf
     return URPC_SUCCESS;
 }
 
-static void chanel_queue_unpair(bool is_non_block, uint32_t chid, urpc_channel_qinfos_t *qinfo)
+static void channel_queue_unpair(bool is_non_block, uint32_t chid, urpc_channel_qinfos_t *qinfo)
 {
     urpc_channel_connect_option_t option = {0};
     option.flag = URPC_CHANNEL_CONN_FLAG_FEATURE | URPC_CHANNEL_CONN_FLAG_TIMEOUT;
@@ -1042,7 +1049,7 @@ static int post_queue_rx(uint64_t qh, uint32_t num, bool wait_bind)
 {
     uint32_t post_num = 0;
     int ret = URPC_SUCCESS;
-    while (post_num < num) {
+    while (post_num < num && !is_example_force_quit()) {
         urpc_sge_t *sges;
         uint32_t sge_num = 0;
         if ((g_used_allocator->get(&sges, &sge_num, DEFAULT_MSG_SIZE, NULL) != 0)) {
@@ -1061,6 +1068,165 @@ static int post_queue_rx(uint64_t qh, uint32_t num, bool wait_bind)
         }
         post_num++;
     }
+    return ret;
+}
+
+static int g_example_sync_fd = -1;
+static int g_example_sync_accept_fd = -1;
+static int urpc_example_server_do_accept(void)
+{
+    struct sockaddr_in addr;
+    socklen_t len = (socklen_t)sizeof(addr);
+
+    do {
+        g_example_sync_accept_fd = accept(g_example_sync_fd, (struct sockaddr *)(void *)&addr, &len);
+        if (g_example_sync_accept_fd >= 0) {
+            break;
+        }
+
+        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            LOG_PRINT("accept socket failed, %s\n", strerror(errno));
+            break;
+        }
+        usleep(URPC_EXAMPLE_ACCEPT_WAIT_US);
+    } while (!is_example_force_quit());
+
+    if (g_example_sync_accept_fd < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+// server wait for "sync" and send "ack"
+static int urpc_example_server_wait_sync(urpc_lib_example_config_t *cfg)
+{
+    g_example_sync_fd = socket(AF_INET, (int)SOCK_STREAM, IPPROTO_TCP);
+    if (g_example_sync_fd < 0) {
+        LOG_PRINT("create socket failed, %s\n", strerror(errno));
+        return -1;
+    }
+
+    int optval = 1;
+    if (setsockopt(g_example_sync_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0) {
+        LOG_PRINT("set socket reuseport failed, %s\n", strerror(errno));
+        return -1;
+    }
+
+    // set accept non-block
+    int fd_flags = fcntl(g_example_sync_fd, F_GETFL, 0);
+    if (fd_flags == -1) {
+        LOG_PRINT("get socket fcntl flags failed, %s\n", strerror(errno));
+        return -1;
+    }
+
+    if (fcntl(g_example_sync_fd, F_SETFL, ((uint32_t)fd_flags) | O_NONBLOCK) == -1) {
+        LOG_PRINT("set socket non-bolck failed, %s\n", strerror(errno));
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    socklen_t len = (socklen_t)sizeof(addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(cfg->port + 1); // temporary use tcp_port + 1
+    if (inet_pton(AF_INET, cfg->ip_addr, &addr.sin_addr) != 1) {
+        LOG_PRINT("format server ip %s failed\n", cfg->ip_addr);
+        goto CLOSE_LISTEN_FD;
+    }
+
+    if (bind(g_example_sync_fd, (struct sockaddr *)(void *)&addr, len) < 0) {
+        LOG_PRINT("bind socket failed, %s\n", strerror(errno));
+        goto CLOSE_LISTEN_FD;
+    }
+
+    if (listen(g_example_sync_fd, 1) < 0) {
+        LOG_PRINT("listen socket failed, %s\n", strerror(errno));
+        goto CLOSE_LISTEN_FD;
+    }
+
+    if (urpc_example_server_do_accept() != 0) {
+        goto CLOSE_LISTEN_FD;
+    }
+
+    char msg[URPC_EXAMPLE_SYNC_MSG_SIZE] = {0};
+    int msg_len = recv(g_example_sync_accept_fd, msg, URPC_EXAMPLE_SYNC_MSG_SIZE, MSG_NOSIGNAL);
+    if (msg_len != (int)strlen(URPC_EXAMPLE_SYN) || memcmp(msg, URPC_EXAMPLE_SYN, msg_len) != 0) {
+        LOG_PRINT("recv syn failed, msg %s, %s\n", msg, strerror(errno));
+        goto CLOSE_ACCEPT_FD;
+    }
+
+    return 0;
+
+CLOSE_ACCEPT_FD:
+    (void)close(g_example_sync_accept_fd);
+    g_example_sync_accept_fd = -1;
+
+CLOSE_LISTEN_FD:
+    (void)close(g_example_sync_fd);
+    g_example_sync_fd = -1;
+
+    return -1;
+}
+
+static int urpc_example_server_send_ack(urpc_lib_example_config_t *cfg)
+{
+    int ret = 0;
+    int msg_len = send(g_example_sync_accept_fd, URPC_EXAMPLE_ACK, strlen(URPC_EXAMPLE_ACK), MSG_NOSIGNAL);
+    if (msg_len != (int)strlen(URPC_EXAMPLE_ACK)) {
+        LOG_PRINT("send ack failed, %s\n", strerror(errno));
+        ret = -1;
+    } else {
+        LOG_PRINT("server sync success\n");
+    }
+
+    (void)close(g_example_sync_accept_fd);
+    g_example_sync_accept_fd = -1;
+    (void)close(g_example_sync_fd);
+    g_example_sync_fd = -1;
+    return ret;
+}
+
+// client send "sync" and wait for "ack"
+static int urpc_example_client_wait_ack(urpc_lib_example_config_t *cfg)
+{
+    int ret = -1;
+    g_example_sync_fd = socket(AF_INET, (int)SOCK_STREAM, IPPROTO_TCP);
+    if (g_example_sync_fd < 0) {
+        LOG_PRINT("create socket failed, %s\n", strerror(errno));
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    socklen_t len = (socklen_t)sizeof(addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(cfg->port + 1); // temporary use tcp_port + 1
+    if (inet_pton(AF_INET, cfg->ip_addr, &addr.sin_addr) != 1) {
+        LOG_PRINT("format server ip %s failed\n", cfg->ip_addr);
+        goto CLOSE_FD;
+    }
+
+    if (connect(g_example_sync_fd, (struct sockaddr *)(void *)&addr, len) < 0) {
+        LOG_PRINT("connect to server failed, %s\n", strerror(errno));
+        goto CLOSE_FD;
+    }
+
+    char msg[URPC_EXAMPLE_SYNC_MSG_SIZE] = {0};
+    int msg_len = send(g_example_sync_fd, URPC_EXAMPLE_SYN, strlen(URPC_EXAMPLE_SYN), MSG_NOSIGNAL);
+    if (msg_len != (int)strlen(URPC_EXAMPLE_SYN)) {
+        LOG_PRINT("send syn failed, %s\n", strerror(errno));
+        goto CLOSE_FD;
+    }
+
+    msg_len = recv(g_example_sync_fd, msg, URPC_EXAMPLE_SYNC_MSG_SIZE, MSG_NOSIGNAL);
+    if (msg_len != (int)strlen(URPC_EXAMPLE_ACK) || memcmp(msg, URPC_EXAMPLE_ACK, msg_len) != 0) {
+        LOG_PRINT("recv ack failed, msg %s, %s\n", msg, strerror(errno));
+        goto CLOSE_FD;
+    }
+
+    ret = 0;
+CLOSE_FD:
+    (void)close(g_example_sync_fd);
+    g_example_sync_fd = -1;
+
     return ret;
 }
 
@@ -1137,10 +1303,12 @@ int run_client(urpc_lib_example_config_t *cfg)
         queue_cfg1.create_flag |= QCREATE_FLAG_QH_SHARE_TX_CQ;
         queue_cfg1.urpc_qh_share_tx_cq = qh;
     }
-    qh1 = urpc_queue_create(trans_mode, &queue_cfg1);
-    if (qh1 == URPC_INVALID_HANDLE) {
-        LOG_PRINT("urpc_queue_create failed\n");
-        goto DESTROY_QUEUE;
+    if (cfg->enable_shared_jfr || cfg->enable_shared_jfs_jfc) {
+        qh1 = urpc_queue_create(trans_mode, &queue_cfg1);
+        if (qh1 == URPC_INVALID_HANDLE) {
+            LOG_PRINT("urpc_queue_create failed\n");
+            goto DESTROY_QUEUE;
+        }
     }
 
     if (g_allocator_ctx != NULL) {
@@ -1236,8 +1404,12 @@ int run_client(urpc_lib_example_config_t *cfg)
     }
     LOG_PRINT("refresh server success\n");
 
-    if (chanel_queue_pair(cfg->nonblock_enabled, chid, qinfos) != URPC_SUCCESS) {
-        LOG_PRINT("chanel_queue_pair failed\n");
+    if (channel_queue_pair(cfg->nonblock_enabled, chid, qinfos) != URPC_SUCCESS) {
+        LOG_PRINT("channel_queue_pair failed\n");
+        goto FREE_QINFOS;
+    }
+
+    if (urpc_example_client_wait_ack(cfg) != URPC_SUCCESS) {
         goto FREE_QINFOS;
     }
 
@@ -1268,15 +1440,17 @@ int run_client(urpc_lib_example_config_t *cfg)
     show_queue_stats(qh);
 
 UNPAIR_QUEUE:
-    chanel_queue_unpair(cfg->nonblock_enabled, chid, qinfos);
+    channel_queue_unpair(cfg->nonblock_enabled, chid, qinfos);
 
 FREE_QINFOS:
     free(qinfos);
 
 ASYNC_REMOVE_REMOTE_QUEUE1:
-    ret = channel_queue_rm(cfg->nonblock_enabled, chid, g_client_recv_rqid.rqid[1], false);
-    if (ret != 0) {
-        LOG_PRINT("rm remote queue failed\n");
+    if (cfg->enable_shared_jfr || cfg->enable_shared_jfs_jfc) {
+        ret = channel_queue_rm(cfg->nonblock_enabled, chid, g_client_recv_rqid.rqid[1], false);
+        if (ret != 0) {
+            LOG_PRINT("rm remote queue failed\n");
+        }
     }
 
 ASYNC_REMOVE_REMOTE_QUEUE:
@@ -1321,7 +1495,7 @@ CLOSE_FD:
     async_task_uninit();
 
 DESTROY_QUEUE1:
-    if (cfg->enable_shared_jfr) {
+    if (cfg->enable_shared_jfr || cfg->enable_shared_jfs_jfc) {
         urpc_example_flush_queue(qh1);
         (void)urpc_queue_destroy(qh1);
     }
@@ -1343,12 +1517,17 @@ UNINIT_URPC:
 }
 
 // server print request and set response
-static inline void urpc_lib_example_exec_handler(
+static void urpc_lib_example_exec_handler(
     struct urpc_sge *args, uint32_t args_sge_num, void *ctx, struct urpc_sge **rsps, uint32_t *rsps_sge_num)
 {
     char *client_msg =
         (char *)(uintptr_t)args[0].addr + urpc_hdr_size_get(URPC_REQ, 0) + sizeof(custom_head_t);
     LOG_PRINT("(req msg) %s\n", client_msg);
+
+    // case "early req without ack"  expects no response
+    if (strcmp(client_msg, URPC_EXAMPLE_MSG_EARLY_REQ) == 0) {
+        return;
+    }
 
     int ret = g_allocator.get(rsps, rsps_sge_num, DEFAULT_MSG_SIZE, NULL);
     if (ret != URPC_SUCCESS) {
@@ -1531,12 +1710,20 @@ int run_server(urpc_lib_example_config_t *cfg)
         goto UNREGISTER_FUNC;
     }
 
+    if (urpc_example_server_wait_sync(cfg) != URPC_SUCCESS) {
+        goto UNREGISTER_FUNC;
+    }
+
     if (post_queue_rx(cfg->qh, num, true) != URPC_SUCCESS) {
         goto UNREGISTER_FUNC;
     }
 
     if ((cfg->enable_shared_jfr || cfg->enable_shared_jfs_jfc) &&
         post_queue_rx(qh1, num, true) != URPC_SUCCESS) {
+        goto UNREGISTER_FUNC;
+    }
+
+    if (urpc_example_server_send_ack(cfg) != URPC_SUCCESS) {
         goto UNREGISTER_FUNC;
     }
 
@@ -1729,12 +1916,19 @@ static void clear_cfg(void)
     g_cfg.psk_id = NULL;
     free(g_cfg.psk_key);
     g_cfg.psk_key = NULL;
+    free(g_cfg.eid);
+    g_cfg.eid = NULL;
 }
 
 void handle_signal(int sig)
 {
     // server stop poll
-    g_poll_exit = 1;
+    g_example_force_quit = true;
+}
+
+bool is_example_force_quit(void)
+{
+    return g_example_force_quit;
 }
 
 int main(int argc, char *argv[])

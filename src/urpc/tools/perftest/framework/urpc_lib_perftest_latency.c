@@ -30,7 +30,7 @@
 #define LATENCY_HEAD_TOTAL_SIZE 64
 #define POLL_BATCH 8
 #define MAX_WR_NUM 8
-#define SIGN_LEN 100
+#define SIGN_LEN (DEFAULT_REQUEST_SIZE64 - 8)
 
 #define SIMULATE_USER_HDR_SIZE  192
 #define SERVER_USE_SGE_SIZE 256
@@ -220,7 +220,7 @@ static void urpc_perftest_server_run_latency(
             }
 
             if (post_num > URPC_POST_RECV_WR_NUM || cfg_get.rx_depth < URPC_POST_RECV_WR_NUM) {
-                posted_num = perftest_post_rx_buff(qh, post_num, cfg_get.rx_buf_size);
+                posted_num = perftest_post_rx_buff(lat_arg->l_qhs[Q_FOR_RECV], post_num, cfg_get.rx_buf_size);
                 if (posted_num == URPC_U32_FAIL) {
                     LOG_PRINT("post rx buff faile\n");
                     goto FINISH;
@@ -261,7 +261,6 @@ static void urpc_perftest_server_run_latency(
             for (int j = 0; j < poll_num; j++) {
                 if (msgs[j].event == POLL_EVENT_REQ_RSPED) {
                     // early-rsp send successful, continue to wait for next request
-                    post_num++;
                     req_recvd++;
                     continue;
                 } else {
@@ -269,15 +268,6 @@ static void urpc_perftest_server_run_latency(
                         "urpc_func_poll %u get bad event %d\n", g_urpc_perftest_latency_ctx.iters, (int)msgs[j].event);
                     goto FINISH;
                 }
-            }
-
-            if (post_num > URPC_POST_RECV_WR_NUM || cfg_get.rx_depth < URPC_POST_RECV_WR_NUM) {
-                posted_num = perftest_post_rx_buff(qh, post_num, cfg_get.rx_buf_size);
-                if (posted_num == URPC_U32_FAIL) {
-                    LOG_PRINT("post rx buff faile\n");
-                    goto FINISH;
-                }
-                post_num -= posted_num;
             }
 
             if (args->state != PERFTEST_THREAD_RUNNING) {
@@ -535,7 +525,6 @@ static void urpc_perftest_client_run_latency(
             for (int j = 0; j < poll_num; j++) {
                 if (msgs[j].event == POLL_EVENT_REQ_RSPED) {
                     // early-rsp send successful, continue to wait for server respond
-                    post_num++;
                     req_recvd++;
                     continue;
                 } else {
@@ -544,16 +533,6 @@ static void urpc_perftest_client_run_latency(
                     goto FINISH;
                 }
             }
-
-            if (post_num > URPC_POST_RECV_WR_NUM || cfg_get.rx_depth < URPC_POST_RECV_WR_NUM) {
-                posted_num = perftest_post_rx_buff(qh, post_num, cfg_get.rx_buf_size);
-                if (posted_num == URPC_U32_FAIL) {
-                    LOG_PRINT("post rx buff faile\n");
-                    goto FINISH;
-                }
-                post_num -= posted_num;
-            }
-
             if (args->state != PERFTEST_THREAD_RUNNING) {
                 goto FINISH;
             }
@@ -587,7 +566,7 @@ static void urpc_perftest_client_run_latency(
             }
 
             if (post_num > URPC_POST_RECV_WR_NUM || cfg_get.rx_depth < URPC_POST_RECV_WR_NUM) {
-                posted_num = perftest_post_rx_buff(qh, post_num, cfg_get.rx_buf_size);
+                posted_num = perftest_post_rx_buff(lat_arg->l_qhs[Q_FOR_RECV], post_num, cfg_get.rx_buf_size);
                 if (posted_num == URPC_U32_FAIL) {
                     LOG_PRINT("post rx buff faile\n");
                     goto FINISH;

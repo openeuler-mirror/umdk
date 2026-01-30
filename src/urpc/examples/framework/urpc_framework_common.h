@@ -108,8 +108,6 @@ typedef struct urpc_lib_example_config {
     bool is_cancel;
 } urpc_lib_example_config_t;
 
-extern volatile sig_atomic_t g_poll_exit;
-
 typedef enum urpc_lib_example_msg_type {
     WITHOUT_DMA,
     WITH_DMA,
@@ -130,6 +128,7 @@ typedef struct urpc_example_dma {
 void get_current_time(char* buffer, uint32_t len);
 
 urpc_lib_example_config_t *get_example_cfg(void);
+bool is_example_force_quit(void);
 
 #ifdef __cplusplus
 }
