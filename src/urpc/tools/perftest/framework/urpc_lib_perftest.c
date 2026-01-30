@@ -306,7 +306,7 @@ static void fill_dev_info(urpc_trans_info_t *dev_info, perftest_framework_config
         LOG_PRINT("urpc perftest init with dev: %s\n", cfg->dev_name);
         dev_info->assign_mode = DEV_ASSIGN_MODE_DEV;
         memcpy(dev_info->dev.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-     } else if (strlen(cfg->eid) != 0) {
+    } else if (strlen(cfg->eid) != 0) {
         LOG_PRINT("urpc perftest init with eid: %s\n", cfg->eid);
         dev_info->assign_mode = DEV_ASSIGN_MODE_EID;
         (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)(uintptr_t)&dev_info->ub.eid);

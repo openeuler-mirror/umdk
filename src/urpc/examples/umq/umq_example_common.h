@@ -25,6 +25,7 @@ extern "C" {
 #define TIME_SIZE                 35
 #define UMQ_MAX_BIND_INFO_SIZE    512
 #define EXAMPLE_MAX_DEV_NUM       10
+#define EXAMPLE_DEV_NAME_LEN      15
 #define EXAMPLE_SLEEP_TIME_US     100
 #define EXAMPLE_MAX_WAIT_TIME_MS  3000
 #define EXAMPLE_FLUSH_TIME_MS     1000
@@ -59,8 +60,9 @@ struct urpc_example_config {
     umq_tp_type_t tp_type;
     uint32_t queue_num;
     int thread_poll_size;
-    char *m_dev_name[EXAMPLE_MAX_DEV_NUM];                                 /* device name */
+    char m_dev_name[EXAMPLE_MAX_DEV_NUM][EXAMPLE_DEV_NAME_LEN];
     uint16_t m_eid_idx[EXAMPLE_MAX_DEV_NUM];
+    uint32_t m_dev_num;
 };
 
 struct req_cb_arg {
