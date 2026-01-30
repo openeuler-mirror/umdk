@@ -411,7 +411,7 @@ static void umq_perftest_server_run_latency_pro_polling(uint64_t umqh, umq_perft
         // poll tx cqe. tx buffer reuse, no release
         send_cnt = 0;
         do {
-            int ret = umq_poll(umqh, UMQ_IO_TX, polled_buf, 1);
+            ret = umq_poll(umqh, UMQ_IO_TX, polled_buf, 1);
             if (ret < 0) {
                 LOG_PRINT("umq poll tx failed, ret %d\n", ret);
                 goto FINISH;
@@ -438,7 +438,7 @@ FINISH:
     perftest_force_quit();
 }
 
-static inline int process_tx_eagain_interrupt(uint64_t umqh, umq_interrupt_option_t *interrupt_option)
+static int process_tx_eagain_interrupt(uint64_t umqh, umq_interrupt_option_t *interrupt_option)
 {
     umq_buf_t *buf;
     int ret;

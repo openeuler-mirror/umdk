@@ -9,11 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <stdbool.h>
-#include <errno.h>
 #include <string.h>
 #include "threadpool.h"
 
@@ -27,7 +23,7 @@ static void *threadpool_worker(void *threadpool)
     for (;;) {
         pthread_mutex_lock(&(pool->lock));
 
-        while ((pool->count == 0) && (!pool->shutdown)) {
+        while ((pool->count == 0) && (pool->shutdown == 0)) {
             pthread_cond_wait(&(pool->notify), &(pool->lock));
         }
 
@@ -106,28 +102,32 @@ int threadpool_add(threadpool_t *pool, void (*function)(void *), void *arg, uint
     int next;
     
     void *work_arg = malloc(arg_len);
-    (void)memcpy(work_arg, arg, arg_len);
-
-    if (pool == NULL || function == NULL) {
+    if (work_arg == NULL) {
         return -1;
+    }
+
+    (void)memcpy(work_arg, arg, arg_len);
+    if (pool == NULL || function == NULL) {
+        goto FREE_ARG;
     }
 
     pthread_mutex_lock(&(pool->lock));
     next = (pool->tail + 1) % pool->queue_size;
-    if (pool->count == pool->queue_size || pool->shutdown) {
-        err = -1;
+    if (pool->count == pool->queue_size || pool->shutdown != 0) {
+        goto FREE_ARG;
     } else {
         pool->queue[pool->tail].function = function;
         pool->queue[pool->tail].arg = work_arg;
         pool->tail = next;
         pool->count += 1;
-
-        if (pthread_cond_signal(&(pool->notify)) != 0) {
-            err = -1;
-        }
+        err = pthread_cond_signal(&(pool->notify));
     }
     pthread_mutex_unlock(&(pool->lock));
     return err;
+
+FREE_ARG:
+    free(work_arg);
+    return -1;
 }
 
 int threadpool_destroy(threadpool_t *pool)
@@ -138,7 +138,7 @@ int threadpool_destroy(threadpool_t *pool)
     }
 
     pthread_mutex_lock(&(pool->lock));
-    if (pool->shutdown) {
+    if (pool->shutdown != 0) {
         err = -1;
     } else {
         pool->shutdown = 1;
@@ -154,7 +154,7 @@ int threadpool_destroy(threadpool_t *pool)
     }
     pthread_mutex_unlock(&(pool->lock));
 
-    if (!err) {
+    if (err == 0) {
         threadpool_free(pool);
     }
     return err;
