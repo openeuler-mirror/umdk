@@ -107,8 +107,6 @@ static int init_umq(struct urpc_example_config *cfg)
         return -1;
     }
     init_cfg->feature = cfg->feature;
-    init_cfg->transport_mode = cfg->transport_mode;
-    init_cfg->tp_type = cfg->tp_type;
     init_cfg->flow_control.use_atomic_window = true;
     init_cfg->flow_control.initial_credit = TOOL_INITIAL_CREDIT;
     init_cfg->flow_control.credits_per_request = TOOL_REQIEST_CREDITS;
@@ -170,12 +168,15 @@ static umq_info_t *create_one_umq(struct urpc_example_config *cfg, bool is_main_
     umq_create_option_t option = {
         .trans_mode = (umq_trans_mode_t)cfg->trans_mode,
         .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
-            UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE,
+                       UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE |
+                       UMQ_CREATE_FLAG_TP_TYPE,
         .rx_buf_size = TOOL_EXAMPLE_BUFFER_SIZE,
         .tx_buf_size = TOOL_EXAMPLE_BUFFER_SIZE,
         .rx_depth = TOOL_EXAMPLE_DEPTH,
         .tx_depth = TOOL_EXAMPLE_DEPTH,
-        .mode = (umq_queue_mode_t)cfg->poll_mode,
+        .mode = cfg->poll_mode,
+        .tp_mode = cfg->tp_mode,
+        .tp_type = cfg->tp_type,
     };
 
     umq_ctx_t *umq_ctx = NULL;

@@ -47,7 +47,7 @@ static struct option g_long_options[] = {
     {"client",             no_argument,       NULL, 'l'},
     {"cna",                required_argument, NULL, 'C'},
     {"deid",               required_argument, NULL, 'D'},
-    {"transport-mode",     required_argument, NULL, 'M'},
+    {"tp-mode",            required_argument, NULL, 'M'},
     {"tp-type",            required_argument, NULL, 'P'},
     {"queue_cnt",          required_argument, NULL, 'q'},
     {"threadpool_size",    required_argument, NULL, 's'},
@@ -66,8 +66,6 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
     init_cfg->feature = cfg->feature;
     init_cfg->cna = cfg->cna;
     init_cfg->ubmm_eid = cfg->deid;
-    init_cfg->transport_mode = cfg->transport_mode;
-    init_cfg->tp_type = cfg->tp_type;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
         goto FREE_CFG;
@@ -81,12 +79,15 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
     umq_create_option_t option = {
         .trans_mode = init_cfg->trans_info[0].trans_mode,
         .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
-            UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE,
+                       UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE |
+                       UMQ_CREATE_FLAG_TP_TYPE,
         .rx_buf_size = EXAMPLE_BUFFER_SIZE,
         .tx_buf_size = EXAMPLE_BUFFER_SIZE,
         .rx_depth = EXAMPLE_DEPTH,
         .tx_depth = EXAMPLE_DEPTH,
-        .mode = (umq_queue_mode_t)cfg->poll_mode
+        .mode = cfg->poll_mode,
+        .tp_mode = cfg->tp_mode,
+        .tp_type = cfg->tp_type,
     };
     if (cfg->instance_mode == SERVER) {
         if (sprintf(option.name, "%s", "server") <= 0) {
@@ -651,7 +652,7 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 if (param >= (uint32_t)UMQ_TM_MAX) {
                     return -1;
                 }
-                cfg->transport_mode = (umq_transport_mode_t)param;
+                cfg->tp_mode = (umq_tp_mode_t)param;
                 break;
             case 'P':
                 param = (uint32_t)strtoul(optarg, NULL, 0);

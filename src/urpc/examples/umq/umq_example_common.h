@@ -56,7 +56,7 @@ struct urpc_example_config {
     int16_t eid_idx;
     uint16_t cna;
     uint32_t deid;
-    umq_transport_mode_t transport_mode;
+    umq_tp_mode_t tp_mode;
     umq_tp_type_t tp_type;
     uint32_t queue_num;
     int thread_poll_size;
