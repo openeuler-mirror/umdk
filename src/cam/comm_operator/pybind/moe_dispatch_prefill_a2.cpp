@@ -82,7 +82,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     auto device = x.device();
     at::Tensor newTopkWeights;
 
-    newTopkWeights = topk_weights;
+    newTopkWeights = topkWeights;
 
     // FP8 scales checks
     std::optional<at::Tensor> xScales;
@@ -109,7 +109,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     int64_t sharedExpertRankNum = 0;
     int64_t expertTokenNumsType = 0;
 
-    int64_t quantMode = use_quant ? DYNAMIC_SCALES : NO_SCALES;
+    int64_t quantMode = useQuant ? DYNAMIC_SCALES : NO_SCALES;
     int64_t globalBs = static_cast<int64_t>(MAX_BATCH_SIZE * numRanks);
     at::Tensor expertIds = newTopkIdx.to(at::kInt);
     at::Tensor xActiveMask = at::empty({1}, at::dtype(at::kInt).device(x.device()));
@@ -186,7 +186,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
         totalRecvToken);
     int totalCount = totalRecvToken.item<int>();
     int numRecvTokens = (totalCount == 0) ? 1 : totalCount;
-    auto expandxOut = use_quant ? at::empty({numRecvTokens, hidden}, at::dtype(at::kChar).device(x.device()))
+    auto expandxOut = useQuant ? at::empty({numRecvTokens, hidden}, at::dtype(at::kChar).device(x.device()))
                                  : at::empty({numRecvTokens, hidden}, x.options());
     auto dynamicScalesOut = at::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
     auto expandScales = at::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
