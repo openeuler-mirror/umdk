@@ -18,6 +18,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${URPC_ROOT_DIR}/umq
     ${URPC_ROOT_DIR}/umq/dfx
     ${URPC_ROOT_DIR}/umq/qbuf
+    ${URPC_ROOT_DIR}/umq/umq_ub
+    ${URPC_ROOT_DIR}/umq/umq_ub/core
+    ${URPC_ROOT_DIR}/umq/umq_ub/core/private
     ${URPC_ROOT_DIR}/util
 )
 
@@ -29,6 +32,7 @@ endif()
 target_link_libraries(${PROJECT_NAME}
     umq
     umq_buf
+    umq_ub
     GTest::gtest
     GTest::gtest_main
     mockcpp
