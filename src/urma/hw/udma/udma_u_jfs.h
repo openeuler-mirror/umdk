@@ -139,6 +139,13 @@ static inline uint32_t sq_cal_wqebb_num(uint32_t sqe_ctl_len, uint32_t sge_num,
 		wqebb_size + (uint32_t)1;
 }
 
+static inline uint32_t get_max_sge_num(uint8_t max_sge, uint32_t max_inline_size)
+{
+	uint32_t size = (max_inline_size == 0) ?
+			1 : ((max_inline_size - (uint32_t)1) / UDMA_SGE_SIZE + (uint32_t)1);
+	return UDMA_MAX(max_sge, size);
+}
+
 urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 				struct udma_u_jetty_queue *sq, urma_jfs_wr_t *wr,
 				urma_jfs_wr_t **bad_wr);
