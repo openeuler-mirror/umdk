@@ -129,7 +129,8 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	udma_u_init_sq_param(sq, cfg);
 
 	sqe_bb_cnt = sq_cal_wqebb_num(SQE_WRITE_NOTIFY_CTL_LEN,
-				      cfg->max_sge, UDMA_JFS_WQEBB);
+				      get_max_sge_num(cfg->max_sge, sq->max_inline_size),
+				      UDMA_JFS_WQEBB);
 	if (sqe_bb_cnt > MAX_SQE_BB_NUM)
 		sqe_bb_cnt = MAX_SQE_BB_NUM;
 	sq->sqe_bb_cnt = sqe_bb_cnt;
