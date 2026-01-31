@@ -180,19 +180,19 @@ static ALWAYS_INLINE uint16_t remote_rx_window_load_non_atomic(struct ub_flow_co
     return fc->remote_rx_window;
 }
 
-static ALWAYS_INLINE uint64_t local_rx_allocted_inc_non_atomic(struct ub_flow_control *fc, uint16_t win)
+static ALWAYS_INLINE uint64_t local_rx_allocated_inc_non_atomic(struct ub_flow_control *fc, uint16_t win)
 {
     fc->stats_u64[ALLOCATED_SUCCESS] += win;
     fc->stats_u64[ALLOCATED_TOTAL] += win;
     return fc->stats_u64[ALLOCATED_SUCCESS];
 }
 
-static ALWAYS_INLINE uint16_t local_rx_allocted_dec_non_atomic(struct ub_flow_control *fc, uint16_t win)
+static ALWAYS_INLINE uint16_t local_rx_allocated_dec_non_atomic(struct ub_flow_control *fc, uint16_t win)
 {
     return counter_dec_non_atomic_u64(&fc->stats_u64[ALLOCATED_SUCCESS], win);
 }
 
-static ALWAYS_INLINE uint64_t local_rx_allocted_load_non_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint64_t local_rx_allocated_load_non_atomic(struct ub_flow_control *fc)
 {
     return fc->stats_u64[ALLOCATED_SUCCESS];
 }
@@ -201,7 +201,7 @@ static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_con
     struct ub_queue *queue, umq_credit_private_stats_t *out)
 {
     out->queue_idle = fc->local_rx_posted;
-    out->queue_be_allocted = fc->stats_u64[ALLOCATED_SUCCESS] -
+    out->queue_be_allocated = fc->stats_u64[ALLOCATED_SUCCESS] -
         queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id];
     out->queue_acquired = fc->remote_rx_window;
     out->total_queue_idle = fc->total_local_rx_posted;
@@ -300,18 +300,18 @@ static ALWAYS_INLINE uint16_t remote_rx_window_load_atomic(struct ub_flow_contro
     return __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
 }
 
-static ALWAYS_INLINE uint64_t local_rx_allocted_inc_atomic(struct ub_flow_control *fc, uint16_t win)
+static ALWAYS_INLINE uint64_t local_rx_allocated_inc_atomic(struct ub_flow_control *fc, uint16_t win)
 {
     (void)counter_inc_atomic_u64(&fc->stats_u64[ALLOCATED_TOTAL], win);
     return counter_inc_atomic_u64(&fc->stats_u64[ALLOCATED_SUCCESS], win);
 }
 
-static ALWAYS_INLINE uint16_t local_rx_allocted_dec_atomic(struct ub_flow_control *fc, uint16_t win)
+static ALWAYS_INLINE uint16_t local_rx_allocated_dec_atomic(struct ub_flow_control *fc, uint16_t win)
 {
     return counter_dec_atomic_u64(&fc->stats_u64[ALLOCATED_SUCCESS], win);
 }
 
-static ALWAYS_INLINE uint64_t local_rx_allocted_load_atomic(struct ub_flow_control *fc)
+static ALWAYS_INLINE uint64_t local_rx_allocated_load_atomic(struct ub_flow_control *fc)
 {
     return __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED);
 }
@@ -322,7 +322,7 @@ static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control
     out->queue_idle = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
     uint64_t consumed_credit = __atomic_load_n(
         &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], __ATOMIC_RELAXED);
-    out->queue_be_allocted = __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED) - consumed_credit;
+    out->queue_be_allocated = __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED) - consumed_credit;
     out->queue_acquired = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
     out->total_queue_idle = __atomic_load_n(&fc->total_local_rx_posted, __ATOMIC_RELAXED);
     out->total_queue_acquired = __atomic_load_n(&fc->total_remote_rx_received, __ATOMIC_RELAXED);
@@ -477,9 +477,9 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_atomic;
         fc->ops.remote_rx_window_exchange = remote_rx_window_exchange_atomic;
         fc->ops.remote_rx_window_load = remote_rx_window_load_atomic;
-        fc->ops.local_rx_allocted_inc = local_rx_allocted_inc_atomic;
-        fc->ops.local_rx_allocted_dec = local_rx_allocted_dec_atomic;
-        fc->ops.local_rx_allocted_load = local_rx_allocted_load_atomic;
+        fc->ops.local_rx_allocated_inc = local_rx_allocated_inc_atomic;
+        fc->ops.local_rx_allocated_dec = local_rx_allocated_dec_atomic;
+        fc->ops.local_rx_allocated_load = local_rx_allocated_load_atomic;
 
         fc->ops.stats_query = flow_control_stats_query_atomic;
     } else {
@@ -487,9 +487,9 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_non_atomic;
         fc->ops.remote_rx_window_exchange = remote_rx_window_exchange_non_atomic;
         fc->ops.remote_rx_window_load = remote_rx_window_load_non_atomic;
-        fc->ops.local_rx_allocted_inc = local_rx_allocted_inc_non_atomic;
-        fc->ops.local_rx_allocted_dec = local_rx_allocted_dec_non_atomic;
-        fc->ops.local_rx_allocted_load = local_rx_allocted_load_non_atomic;
+        fc->ops.local_rx_allocated_inc = local_rx_allocated_inc_non_atomic;
+        fc->ops.local_rx_allocated_dec = local_rx_allocated_dec_non_atomic;
+        fc->ops.local_rx_allocated_load = local_rx_allocated_load_non_atomic;
 
         fc->ops.stats_query = flow_control_stats_query_non_atomic;
     }
@@ -583,13 +583,13 @@ void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc)
 {
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t initial_credit = fc->initial_credit;
-    uint16_t allocted_count = credit->ops.available_credit_dec(credit, initial_credit);
-    (void)fc->ops.local_rx_allocted_inc(fc, allocted_count);
+    uint16_t allocated_count = credit->ops.available_credit_dec(credit, initial_credit);
+    (void)fc->ops.local_rx_allocated_inc(fc, allocated_count);
 
     if (!fc->local_set) {
         umq_ub_fc_info_t *local_data =
             (umq_ub_fc_info_t *)(uintptr_t)umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL);
-        local_data->fc.local_window = allocted_count;
+        local_data->fc.local_window = allocated_count;
         local_data->fc.local_rx_depth = UMQ_UB_FLOW_CONTORL_JETTY_DEPTH;
         fc->local_set = true;
         if (!fc->remote_get) {
@@ -694,12 +694,12 @@ void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     ub_flow_control_t *fc = &queue->flow_control;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t credits_per_request = imm->flow_control.window;
-    uint16_t allocted_count = credit->ops.available_credit_dec(credit, credits_per_request);
-    (void)fc->ops.local_rx_allocted_inc(fc, allocted_count);
-    int ret = umq_ub_shared_credit_resp_send(queue, allocted_count);
+    uint16_t allocated_count = credit->ops.available_credit_dec(credit, credits_per_request);
+    (void)fc->ops.local_rx_allocated_inc(fc, allocated_count);
+    int ret = umq_ub_shared_credit_resp_send(queue, allocated_count);
     if (ret != UMQ_SUCCESS) {
-        (void)credit->ops.available_credit_return(credit, allocted_count);
-        (void)fc->ops.local_rx_allocted_dec(fc, allocted_count);
+        (void)credit->ops.available_credit_return(credit, allocated_count);
+        (void)fc->ops.local_rx_allocated_dec(fc, allocated_count);
     }
 }
 
@@ -747,18 +747,19 @@ void umq_ub_credit_clean_up(ub_queue_t *queue)
     uint16_t actual_return_credit = __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_RELAXED);
     uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
         &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id]);
-    uint64_t allocted_credit = fc->ops.local_rx_allocted_load(fc);
-    uint64_t unconsumed = allocted_credit - consumed_credit;
+    uint64_t allocated_credit = fc->ops.local_rx_allocated_load(fc);
+    uint64_t unconsumed = allocated_credit - consumed_credit;
     if (unconsumed > UINT16_MAX) {
         UMQ_LIMIT_VLOG_WARN("unconsumed credit exceed UINT16_MAX, unconsumed credit %llu, capacity %d\n",
             unconsumed, credit->capacity);
         return;
     }
     (void)credit->ops.available_credit_return(credit, actual_return_credit + unconsumed);
-    (void)fc->ops.local_rx_allocted_dec(fc, unconsumed);
+    (void)fc->ops.local_rx_allocated_dec(fc, unconsumed);
 }
 
-void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt) {
+void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt)
+{
     ub_flow_control_t *fc = &queue->flow_control;
     if (cnt != 0 && fc->enabled) {
         ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;

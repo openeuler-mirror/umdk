@@ -733,7 +733,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
-        umq_ub_rx_consumed_inc(queue->dev_ctx->io_lock_free, &queue->dev_ctx->rx_consumed_jetty_table[cr->local_id], 1);
+        umq_ub_rx_consumed_inc(queue->dev_ctx->io_lock_free, &queue->dev_ctx->rx_consumed_jetty_table[cr[i].local_id], 1);
         ret = process_rx_msg(&cr[i], buf[qbuf_cnt], queue, &qbuf_status);
         if (ret == UMQ_CONTINUE_FLAG) {
             continue;
@@ -862,7 +862,7 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
         case IMM_TYPE_FC_CREDIT_REP:
             notify = obj->operator.notify;
             (void)credit->ops.available_credit_return(credit, notify);
-            (void)fc->ops.local_rx_allocted_dec(fc, notify);
+            (void)fc->ops.local_rx_allocated_dec(fc, notify);
             break;
         case IMM_TYPE_FC_CREDIT_REQ:
             umq_ub_permission_release(fc);
