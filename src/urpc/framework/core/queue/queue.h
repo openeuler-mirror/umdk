@@ -591,7 +591,7 @@ static ALWAYS_INLINE queue_ctx_head_t *queue_ctx_malloc(queue_local_t *local_q, 
 static ALWAYS_INLINE int queue_ctx_validate(queue_t *l_queue, queue_ctx_type_t type, void *ctx)
 {
     queue_local_t *local_q = CONTAINER_OF_FIELD(l_queue, queue_local_t, queue);
-    // check whether context is allocted by 'malloc'. if so, not validate this context and return success directly
+    // check whether context is allocated by 'malloc'. if so, not validate this context and return success directly
     if (!eslab_validate_addr(&local_q->slab[type], ctx)) {
         return URPC_SUCCESS;
     }
