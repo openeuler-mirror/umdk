@@ -38,6 +38,7 @@
 
 #define UDMA_JFC_DB_OFFSET 0
 #define UDMA_MIN(x, y) ((x) < (y) ? (x) : (y))
+#define UDMA_MAX(x, y) ((x) > (y) ? (x) : (y))
 #define RTE_SET_USED(x) (void)(x)
 
 struct udma_u_doorbell {
