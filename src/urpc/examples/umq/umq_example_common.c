@@ -19,11 +19,6 @@
 
 #include "umq_example_common.h"
 
-const uint32_t EXAMPLE_SLEEP_TIME_US = 100;
-const uint32_t EXAMPLE_MAX_WAIT_TIME_MS = 3000;
-const uint32_t EXAMPLE_FLUSH_TIME_MS = 1000;
-const uint32_t EXAMPLE_TEST_IMM_DATA = 123456;
-
 static const uint32_t EXAMPLE_MAX_POLL_BATCH = 64;
 static const uint32_t EXAMPLE_REQUEST_SIZE = 8192;
 static const uint32_t SOCKET_SEND_RECV_TIMEOUT = 5;
@@ -40,12 +35,9 @@ typedef struct exchange_info {
 static struct option g_long_options[] = {
     {"dev",                required_argument, NULL, 'd'},
     {"event-mode",         required_argument, NULL, 'e'},
-    {"worker-mode",        required_argument, NULL, 'w'},
     {"port",               required_argument, NULL, 'p'},
     {"server-ip",          required_argument, NULL, 'i'},
     {"case",               required_argument, NULL, 'c'},
-    {"mem-mode",           required_argument, NULL, 'm'},
-    {"test",               no_argument,       NULL, 't'},
     {"ipv6-addr",          required_argument, NULL, 'I'},
     {"feature",            required_argument, NULL, 'f'},
     {"trans-mode",         required_argument, NULL, 'T'},
@@ -74,8 +66,8 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
     init_cfg->feature = cfg->feature;
     init_cfg->cna = cfg->cna;
     init_cfg->ubmm_eid = cfg->deid;
-    init_cfg->transport_mode = (umq_transport_mode_t)cfg->transport_mode;
-    init_cfg->tp_type = (umq_tp_type_t)cfg->tp_type;
+    init_cfg->transport_mode = cfg->transport_mode;
+    init_cfg->tp_type = cfg->tp_type;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
         goto FREE_CFG;
@@ -334,7 +326,7 @@ CLOSE_SVR:
 int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg)
 {
     init_cfg->trans_info_num = 1;
-    init_cfg->trans_info[0].trans_mode = (umq_trans_mode_t)cfg->trans_mode;
+    init_cfg->trans_info[0].trans_mode = cfg->trans_mode;
 
     if (cfg->dev_name != NULL) {
         init_cfg->trans_info[0].dev_info.assign_mode = UMQ_DEV_ASSIGN_MODE_DEV;
@@ -551,7 +543,7 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
         int c;
         unsigned long param;
 
-        c = getopt_long(argc, argv, "d:e:w:p:i:c:t:m:I:f:T:E:D:M:P:", g_long_options, NULL);
+        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:D:M:P:", g_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -565,17 +557,10 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 break;
             case 'e':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param > (uint32_t)URPC_INTERRUPT_JFC) {
+                if (param >= (uint32_t)UMQ_MODE_MAX) {
                     return -1;
                 }
-                cfg->poll_mode = (enum URPC_POLL_JFC_MODE)param;
-                break;
-            case 'w':
-                param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param > (uint32_t)STATIC_WORKER_MODE) {
-                    return -1;
-                }
-                cfg->worker_mode = (enum URPC_WORKER_THREAD_MODE)param;
+                cfg->poll_mode = (umq_queue_mode_t)param;
                 break;
             case 'p':
                 param = strtoul(optarg, NULL, 0);
@@ -595,17 +580,11 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 }
                 cfg->case_type = (int)param;
                 break;
-            case 't':
-                cfg->greeter_test_mode = true;
-                break;
             case 'r':
                 cfg->instance_mode = cfg->instance_mode == NONE ? SERVER : cfg->instance_mode;
                 break;
             case 'l':
                 cfg->instance_mode = cfg->instance_mode == NONE ? CLIENT : cfg->instance_mode;
-                break;
-            case 'm':
-                cfg->mem_mode = USER_PRIVATE;
                 break;
             case 'I':
                 cfg->is_ipv6 = true;
@@ -618,10 +597,10 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 break;
             case 'T':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param >= (uint32_t)TRANS_MODE_MAX) {
+                if (param >= (uint32_t)UMQ_TRANS_MODE_MAX) {
                     return -1;
                 }
-                cfg->trans_mode = (int)param;
+                cfg->trans_mode = (umq_trans_mode_t)param;
                 break;
             case 'E':
                 param = strtoul(optarg, NULL, 0);
@@ -635,17 +614,17 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 break;
             case 'M':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param >= (uint32_t)TRANSPORT_MODE_MAX) {
+                if (param >= (uint32_t)UMQ_TM_MAX) {
                     return -1;
                 }
-                cfg->transport_mode = param;
+                cfg->transport_mode = (umq_transport_mode_t)param;
                 break;
             case 'P':
                 param = (uint32_t)strtoul(optarg, NULL, 0);
-                if (param >= (uint32_t)TP_TYPE_MAX) {
+                if (param >= (uint32_t)UMQ_TP_TYPE_MAX) {
                     return -1;
                 }
-                cfg->tp_type = param;
+                cfg->tp_type = (umq_tp_type_t)param;
                 break;
             case 'q':
                 cfg->queue_num = (uint32_t)strtoul(optarg, NULL, 0);
@@ -706,11 +685,8 @@ void print_config(struct urpc_example_config *cfg)
         (void)printf(" IP : %s\n", cfg->server_ip);
     }
     (void)printf(" TCP port : %hu\n", cfg->tcp_port);
-    (void)printf(" Mode: %s\n", cfg->poll_mode == URPC_INTERRUPT_JFC ? "Interrupt" : "Polling");
+    (void)printf(" Mode: %s\n", cfg->poll_mode == UMQ_MODE_INTERRUPT ? "Interrupt" : "Polling");
     (void)printf(" ------------------------------------------------\n\n");
-    if (!(cfg->instance_mode == CLIENT || (cfg->instance_mode == NONE && cfg->server_ip != NULL))) {
-        (void)printf(" Worker Mode: %s\n", cfg->worker_mode == DYNAMIC_WORKER_MODE ? "Dynamic" : "Static");
-    }
 }
 
 void log_get_current_time(char *buffer, uint32_t len)

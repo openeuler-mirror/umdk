@@ -27,13 +27,10 @@ enum INSTANCE_MODE {
 
 typedef enum data_trans_mode {
     DATA_TRANS_MODE_SEND,
-    DATA_TRANS_MODE_READ,
     DATA_TRANS_MODE_MAX,
 } data_trans_mode_t;
 
 #define DEFAULT_REQUEST_SIZE64 64
-#define DEFAULT_REQUEST_SIZE4K 4096
-#define URPC_PERFTEST_RX_BUF_SIZE 4096
 #define DEFAULT_RX_DEPTH 512
 #define DEFAULT_TX_DEPTH 512
 #define URPC_PERFTEST_DEV_NAME_SIZE 128
@@ -55,12 +52,10 @@ typedef struct perftest_framework_config {
     uint32_t size[MAX_SGE_SIZE];    // request size
     uint32_t size_len;
     uint32_t size_total;    // record sum of all sizes
-    uint32_t func_period;
     uint32_t trans_mode;
     uint32_t rx_depth;
     uint32_t tx_depth;
     enum INSTANCE_MODE instance_mode;
-    uint8_t target_queue;   // target-queue index of remote for client to send request to
     bool hwub_offlad;
     bool show_thread_qps;
     bool use_one_q;

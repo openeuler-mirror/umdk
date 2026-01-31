@@ -103,8 +103,8 @@ static int init_umq(struct urpc_example_config *cfg)
 {
     umq_init_cfg_t init_cfg = {
         .feature = cfg->feature,
-        .transport_mode = (umq_transport_mode_t)cfg->transport_mode,
-        .tp_type = (umq_tp_type_t)cfg->tp_type,
+        .transport_mode = cfg->transport_mode,
+        .tp_type = cfg->tp_type,
         .flow_control.use_atomic_window = true,
         .flow_control.initial_credit = TOOL_INITIAL_CREDIT,
         .flow_control.credits_per_request = TOOL_REQIEST_CREDITS,
