@@ -78,15 +78,13 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->transport_mode != dev_info->trans_mode) {
-        UMQ_VLOG_ERR("transport_mode misatch, local is %u but remote %u\n",
-            queue->dev_ctx->transport_mode, dev_info->trans_mode);
+    if (queue->tp_mode != queue_info->tp_mode) {
+        UMQ_VLOG_ERR("tp_mode misatch, local is %u but remote %u\n", queue->tp_mode, queue_info->tp_mode);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->tp_type != dev_info->tp_type) {
-        UMQ_VLOG_ERR("tp_type misatch, local is %u but remote %u\n",
-            queue->dev_ctx->tp_type, dev_info->tp_type);
+    if (queue->tp_type != queue_info->tp_type) {
+        UMQ_VLOG_ERR("tp_type misatch, local is %u but remote %u\n", queue->tp_type, queue_info->tp_type);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -297,13 +295,13 @@ int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_
 static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_info_t *info, ub_queue_jetty_index_t i)
 {
     urma_rjetty_t rjetty = {.jetty_id = i == UB_QUEUE_JETTY_IO ? info->queue_info->jetty_id : info->fc_info->jetty_id,
-                            .trans_mode = info->dev_info->trans_mode,
+                            .trans_mode = info->queue_info->tp_mode,
                             .type = info->queue_info->type,
                             .flag.bs.token_policy =
                                 token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0),
-                            .flag.bs.order_type = info->dev_info->order_type,
+                            .flag.bs.order_type = info->queue_info->order_type,
                             .flag.bs.share_tp = 1,
-                            .tp_type = info->dev_info->tp_type};
+                            .tp_type = info->queue_info->tp_type};
     urma_token_t token = i == UB_QUEUE_JETTY_IO ? info->queue_info->token : info->fc_info->token;
     urma_target_jetty_t *tjetty = urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &token);
     if (tjetty == NULL) {
@@ -436,9 +434,6 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
     umq_ub_bind_dev_info_t *dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
     dev_info->umq_trans_mode = dev_ctx->trans_info.trans_mode;
-    dev_info->trans_mode = dev_ctx->transport_mode;
-    dev_info->tp_type = dev_ctx->tp_type;
-    dev_info->order_type = dev_ctx->order_type;
     (void)memcpy(&dev_info->tseg, dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
     dev_info->buf_pool_mode = umq_qbuf_mode_get();
     dev_info->feature = dev_ctx->feature;
@@ -463,6 +458,9 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
     queue_info->type = URMA_JETTY;
     queue_info->token = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
     queue_info->notify_buf = umq_ub_notify_buf_addr_get(queue, OFFSET_MEM_IMPORT);
+    queue_info->order_type = queue->order_type;
+    queue_info->tp_mode = queue->tp_mode;
+    queue_info->tp_type = queue->tp_type;
     queue_info->rx_depth = queue->rx_depth;
     queue_info->tx_depth = queue->tx_depth;
     queue_info->rx_buf_size = queue->rx_buf_size;
@@ -839,8 +837,8 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
 {
     urma_jetty_cfg_t jetty_cfg = {
         .jfs_cfg = {
-            .flag.bs.order_type = dev_ctx->order_type,
-            .trans_mode = dev_ctx->transport_mode,
+            .flag.bs.order_type = queue->order_type,
+            .trans_mode = queue->tp_mode,
             .depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->tx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
             .priority = queue->priority,
             .max_sge = queue->max_tx_sge,
@@ -862,6 +860,34 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
     UMQ_VLOG_INFO("create jetty[%d] success, eid: " EID_FMT ", jetty_id: %u\n",
                   jetty_idx, EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id);
     return jetty;
+}
+
+static urma_transport_mode_t umq_tp_mode_convert(umq_tp_mode_t tp_mode)
+{
+    switch (tp_mode) {
+        case UMQ_TM_RC:
+            return URMA_TM_RC;
+        case UMQ_TM_RM:
+            return URMA_TM_RM;
+        case UMQ_TM_UM:
+            return URMA_TM_UM;
+        default:
+            return URMA_TM_RC;
+    };
+}
+
+static urma_tp_type_t umq_tp_type_convert(umq_tp_type_t tp_type)
+{
+    switch (tp_type) {
+        case UMQ_TP_TYPE_RTP:
+            return URMA_RTP;
+        case UMQ_TP_TYPE_CTP:
+            return URMA_CTP;
+        case UMQ_TP_TYPE_UTP:
+            return URMA_UTP;
+        default:
+            return URMA_RTP;
+    };
 }
 
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue)
@@ -932,6 +958,27 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         UMQ_VLOG_ERR("queue create_flag[%u] is invalid\n", option->create_flag);
         return -UMQ_ERR_EINVAL;
     }
+
+    if (option->create_flag & UMQ_CREATE_FLAG_TP_MODE) {
+        if (option->tp_mode != UMQ_TM_RC) {
+            UMQ_VLOG_ERR("tp_mode[%u] is invalid\n", option->tp_mode);
+            return -UMQ_ERR_EINVAL;
+        }
+        queue->tp_mode = umq_tp_mode_convert(option->tp_mode);
+    } else {
+        queue->tp_mode = umq_tp_mode_convert(UMQ_TM_RC);
+    }
+
+    if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
+        if (option->tp_type != UMQ_TP_TYPE_RTP) {
+            UMQ_VLOG_ERR("tp_type[%u] is invalid\n", option->tp_type);
+            return -UMQ_ERR_EINVAL;
+        }
+        queue->tp_type = umq_tp_type_convert(option->tp_type);
+    } else {
+        queue->tp_type = umq_tp_type_convert(UMQ_TP_TYPE_RTP);
+    }
+
     queue->max_rx_sge = dev_ctx->dev_attr.dev_cap.max_jfr_sge < UMQ_MAX_SGE_NUM ?
                         dev_ctx->dev_attr.dev_cap.max_jfr_sge : UMQ_MAX_SGE_NUM;
     queue->max_tx_sge = dev_ctx->dev_attr.dev_cap.max_jfs_sge < UMQ_MAX_SGE_NUM ?
@@ -943,6 +990,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     (void)memcpy(queue->name, option->name, UMQ_NAME_MAX_LEN);
     queue->dev_ctx = dev_ctx;
     queue->umq_trans_mode = option->trans_mode;
+    queue->order_type = URMA_DEF_ORDER;
     queue->remote_rx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size;
     queue->create_flag = option->create_flag;
     return UMQ_SUCCESS;
@@ -1067,14 +1115,14 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
     // create jfr
     urma_jfr_cfg_t jfr_cfg = {
         .flag.bs.token_policy = token_policy_get(enable_token),
-        .trans_mode = dev_ctx->transport_mode,
+        .trans_mode = queue->tp_mode,
         .depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->rx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
         .max_sge = queue->max_rx_sge,
         .min_rnr_timer = queue->min_rnr_timer,
         .jfc = jfr_ctx->jfr_jfc,
         .token_value = { .token = jetty_token }
     };
-    jfr_cfg.flag.bs.order_type = dev_ctx->order_type;
+    jfr_cfg.flag.bs.order_type = queue->order_type;
     jfr_ctx->jfr = urma_create_jfr(dev_ctx->urma_ctx, &jfr_cfg);
     if (jfr_ctx->jfr == NULL) {
         UMQ_VLOG_ERR("urma create jfr failed\n");

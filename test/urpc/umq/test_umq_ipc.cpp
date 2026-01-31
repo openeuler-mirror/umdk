@@ -94,16 +94,6 @@ TEST_F(UmqIPCTest, test_umq_init_failure)
     ASSERT_NE(ret, 0);
     cfg.trans_info_num = 0;
 
-    cfg.transport_mode = UMQ_TM_UM;
-    ret = umq_init(&cfg);
-    ASSERT_NE(ret, 0);
-    cfg.transport_mode = UMQ_TM_RC;
-
-    cfg.tp_type = UMQ_TP_TYPE_UTP;
-    ret = umq_init(&cfg);
-    ASSERT_NE(ret, 0);
-    cfg.tp_type = UMQ_TP_TYPE_RTP;
-
     cfg.headroom_size = UMQ_HEADROOM_SIZE_LIMIT + 1;
     ret = umq_init(&cfg);
     ASSERT_NE(ret, 0);

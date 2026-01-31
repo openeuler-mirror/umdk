@@ -428,16 +428,6 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (cfg->transport_mode != UMQ_TM_RC) {
-        UMQ_VLOG_ERR("transport_mode[%u] is invalid\n", cfg->transport_mode);
-        return -UMQ_ERR_EINVAL;
-    }
-
-    if (cfg->tp_type != UMQ_TP_TYPE_RTP) {
-        UMQ_VLOG_ERR("tp_type[%u] is invalid\n", cfg->tp_type);
-        return -UMQ_ERR_EINVAL;
-    }
-
     if (cfg->headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
         UMQ_VLOG_ERR("headroom size %u exceeds the maximum value\n", cfg->headroom_size);
         return -UMQ_ERR_EINVAL;
