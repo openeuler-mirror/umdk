@@ -25,57 +25,16 @@ extern "C" {
 #define TIME_SIZE                 35
 #define UMQ_MAX_BIND_INFO_SIZE    512
 #define EXAMPLE_MAX_DEV_NUM       10
+#define EXAMPLE_SLEEP_TIME_US     100
+#define EXAMPLE_MAX_WAIT_TIME_MS  3000
+#define EXAMPLE_FLUSH_TIME_MS     1000
+#define EXAMPLE_TEST_IMM_DATA     123456
 
-extern const uint32_t EXAMPLE_SLEEP_TIME_US;
-extern const uint32_t EXAMPLE_MAX_WAIT_TIME_MS;
-extern const uint32_t EXAMPLE_TEST_IMM_DATA;
-
-enum URPC_POLL_JFC_MODE {
-    URPC_POLLING_JFC,
-    URPC_INTERRUPT_JFC
-};
-
-enum URPC_WORKER_THREAD_MODE {
-    DYNAMIC_WORKER_MODE,
-    STATIC_WORKER_MODE
-};
-
-enum INSTANCE_MODE {
+typedef enum instance_mode {
     NONE,
     SERVER,
     CLIENT
-};
-
-enum MEM_MODE {
-    URPC_ALLOCATER,
-    USER_PRIVATE
-};
-
-enum TRANS_MODE {
-    TRANS_MODE_UB = 0,              // ub, max io size 64K
-    TRANS_MODE_IB,                  // ib, max io size 64K
-    TRANS_MODE_UCP,                 // ub offload, max io size 64K
-    TRANS_MODE_IPC,                 // local ipc, max io size 10M
-    TRANS_MODE_UBMM,                // ub share memory, max io size 8K
-    TRANS_MODE_UB_PLUS,             // ub, max io size 10M
-    TRANS_MODE_IB_PLUS,             // ib, max io size 10M
-    TRANS_MODE_UBMM_PLUS,           // ub share memory, max io size 10M
-    TRANS_MODE_MAX,
-};
-
-enum TP_TYPE {
-    TP_TYPE_RTP = 0,
-    TP_TYPE_CTP,
-    TP_TYPE_UTP,
-    TP_TYPE_MAX,
-};
-
-enum TRANSPORT_MODE {
-    TRANSPORT_MODE_RC = 0,
-    TRANSPORT_MODE_RM,
-    TRANSPORT_MODE_UM,
-    TRANSPORT_MODE_MAX,
-};
+} instance_mode_t;
 
 typedef enum example_case_type {
     CASE_TYPE_DEFAULT = 0,
@@ -84,23 +43,20 @@ typedef enum example_case_type {
 } example_case_type_t;
 
 struct urpc_example_config {
-    bool greeter_test_mode;                         /* true: enable greeter test mode */
     char *dev_name;                                 /* device name */
     char *server_ip;                                /* server host IP addr */
     uint16_t tcp_port;                              /* server TCP port */
     int case_type;                                  /* case type */
     bool is_ipv6;                                   /* ipv6 case */
-    enum MEM_MODE mem_mode;
-    enum INSTANCE_MODE instance_mode;
-    enum URPC_WORKER_THREAD_MODE worker_mode;       /* worker thread mode: static or dynamic */
-    enum URPC_POLL_JFC_MODE poll_mode;              /* enable Interrupt */
+    instance_mode_t instance_mode;
+    umq_queue_mode_t poll_mode;                     /* enable Interrupt */
     uint32_t feature;
-    enum TRANS_MODE trans_mode;
+    umq_trans_mode_t trans_mode;
     int16_t eid_idx;
     uint16_t cna;
     uint32_t deid;
-    enum TRANSPORT_MODE transport_mode;
-    enum TP_TYPE tp_type;
+    umq_transport_mode_t transport_mode;
+    umq_tp_type_t tp_type;
     uint32_t queue_num;
     int thread_poll_size;
     char *m_dev_name[EXAMPLE_MAX_DEV_NUM];                                 /* device name */

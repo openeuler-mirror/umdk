@@ -32,7 +32,6 @@
 #define MAX_WR_NUM 8
 #define SIGN_LEN (DEFAULT_REQUEST_SIZE64 - 8)
 
-#define SIMULATE_USER_HDR_SIZE  192
 #define SERVER_USE_SGE_SIZE 256
 #define URPC_POST_RECV_WR_NUM 32
 
@@ -51,9 +50,6 @@ static void call_option_set(urpc_call_option_t *opt, urpc_lib_perftest_latency_a
     opt->l_qh = arg->l_qhs[0];
     opt->r_qh = arg->r_qhs[0];
     opt->func_defined = FUNC_DEF_NULL;
-    if (arg->cfg->data_trans_mode == DATA_TRANS_MODE_READ) {
-        opt->call_mode = FUNC_CALL_MODE_EARLY_RSP;
-    }
 }
 
 static void server_run_latency_with_one_queue(
@@ -80,7 +76,7 @@ static void server_run_latency_with_one_queue(
     // 1. client/server need to process recv 4K, and server use recv first
     // 2. before urpc_func_call, set wr.args[0].length to lat_arg->cfg->size.
     // 3. after urpc_func_call, to ensure recv buffer size is valid, set wr.args[0].length to 4K
-    for (i = 0 ; (i < MAX_WR_NUM) && (lat_arg->cfg->data_trans_mode != DATA_TRANS_MODE_READ); i++) {
+    for (i = 0 ; (i < MAX_WR_NUM); i++) {
         if (allocator->get(&wr[i].args, &wr[i].args_num, lat_arg->cfg->size_total, NULL) != URPC_SUCCESS) {
             LOG_PRINT("g_allocator.get failed\n");
             goto FINISH;
@@ -104,9 +100,6 @@ static void server_run_latency_with_one_queue(
                     // recv request and server need to respond
                     post_num++;
                     req_recvd++;
-                    if (lat_arg->cfg->data_trans_mode == DATA_TRANS_MODE_READ) {
-                        tx_sent++;
-                    }
                     allocator->put(msgs[j].req_recved.args, msgs[j].req_recved.args_sge_num, NULL);
                 } else if (msgs[j].event == POLL_EVENT_REQ_RSPED) {
                     // early-rsp send successful, continue to wait for next request
@@ -134,7 +127,7 @@ static void server_run_latency_with_one_queue(
         } while (!((req_recvd >= lat_arg->cfg->con_num) && (tx_sent >= lat_arg->cfg->con_num)));
 
         // server send request as soon as possible
-        for (i = 0; (i < lat_arg->cfg->con_num) && (lat_arg->cfg->data_trans_mode != DATA_TRANS_MODE_READ); i++) {
+        for (i = 0; (i < lat_arg->cfg->con_num); i++) {
             wr[i].args[0].length = get_set_sge_size(0);
             dptr = (uint64_t*)(uintptr_t)(wr[i].args->addr + SIGN_LEN);
             *dptr = i;
@@ -149,7 +142,7 @@ static void server_run_latency_with_one_queue(
     }
 
 FINISH:
-    for (i = 0; (i < MAX_WR_NUM) && (lat_arg->cfg->data_trans_mode != DATA_TRANS_MODE_READ); i++) {
+    for (i = 0; (i < MAX_WR_NUM); i++) {
         if (wr[i].args_num != 0) {
             allocator->put(wr[i].args, wr[i].args_num, NULL);
         }
@@ -320,10 +313,6 @@ static void client_run_latency_with_one_queue(
 
     urpc_allocator_option_t allocator_option = {0};
     uint32_t length  = lat_arg->cfg->size_total;
-    if (lat_arg->cfg->data_trans_mode == DATA_TRANS_MODE_READ) {
-        allocator_option.qcustom_flag = 0x123;
-        length = URPC_PERFTEST_PAGE_SIZE * ((uint8_t)lat_arg->cfg->size_len - PLOG_HEADER_SGE_NUM);
-    }
     urpc_call_wr_t wr[MAX_WR_NUM] = {0};
     uint64_t cycles[MAX_WR_NUM] = {0};
     urpc_allocator_t *allocator = urpc_perftest_allocator_get();
@@ -377,9 +366,8 @@ static void client_run_latency_with_one_queue(
                 LOG_PRINT("urpc_func_call failed\n");
                 goto FINISH;
             }
-            if (lat_arg->cfg->data_trans_mode != DATA_TRANS_MODE_READ) {
-                wr[i].args[0].length = get_recv_max_sge_size(wr[i].args_num, 0);
-            }
+            wr[i].args[0].length = get_recv_max_sge_size(wr[i].args_num, 0);
+
         }
 
         // client report early_rsp request sent

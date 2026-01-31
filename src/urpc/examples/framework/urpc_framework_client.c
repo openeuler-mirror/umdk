@@ -13,7 +13,6 @@
 #include "urpc_framework_client.h"
 
 #define CLIENT_SGE_SIZE          4096
-#define CLIENT_USE_SGE_SIZE      256
 #define DEFAULT_TIMEOUT          1000
 #define CLIENT_SLEEP_TIME        (1000 * 1000)
 

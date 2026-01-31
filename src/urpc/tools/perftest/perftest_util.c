@@ -42,7 +42,7 @@ int recv_data(int sock, uint8_t *recv_data, uint32_t recv_len)
 {
     int offset = 0;
     void *recv_buf = recv_data;
-    while (1) {
+    while (!is_perftest_force_quit()) {
         int len = recv(sock, recv_buf + offset, recv_len - offset, MSG_NOSIGNAL);
         if (len <= 0) {
             LOG_PRINT("receive data failed\n");
@@ -64,7 +64,7 @@ int recv_exchange_data(int sock, exchange_info_t *info)
     int offset = 0;
     void *recv_buf = info;
     uint32_t recv_size = (uint32_t)sizeof(exchange_info_t);
-    while (1) {
+    while (!is_perftest_force_quit()) {
         int len = recv(sock, recv_buf + offset, recv_size - offset, MSG_NOSIGNAL);
         if (len <= 0) {
             LOG_PRINT("receive exchange data failed\n");
