@@ -328,9 +328,6 @@ static int urpc_perftest_server_client_init(perftest_framework_config_t *cfg)
 
     urpc_config_t urpc_config = {0};
     urpc_config.role = URPC_ROLE_SERVER_CLIENT;
-    if (cfg->hwub_offlad) {
-        urpc_config.feature |= URPC_FEATURE_HWUB_OFFLOAD;
-    }
 
     urpc_config.feature |= (URPC_FEATURE_DISABLE_TOKEN_POLICY | URPC_FEATURE_DISABLE_STATS);
     urpc_config.trans_info_num = 1;
@@ -505,8 +502,7 @@ static int urpc_perftest_server_client_remote_queue_add(perftest_framework_confi
     }
 
     // qps test only add 1 remote queue
-    uint8_t target_queue = cfg->target_queue >= g_urpc_perftest_client_recv_rqid.num ? 0 : cfg->target_queue;
-    if (urpc_channel_queue_add(chid, g_urpc_perftest_client_recv_rqid.rqid[target_queue], attr, &queue_option) !=
+    if (urpc_channel_queue_add(chid, g_urpc_perftest_client_recv_rqid.rqid[0], attr, &queue_option) !=
         0) {
         LOG_PRINT("urpc_channel_queue_add failed\n");
         free(qinfos);
@@ -521,7 +517,7 @@ static int urpc_perftest_server_client_remote_queue_add(perftest_framework_confi
     for (int i = 0; i < qinfos->r_qnum; i++) {
         urpc_qcfg_get_t qcfg_get = {0};
         (void)urpc_queue_cfg_get(qinfos->r_qinfo[i].urpc_qh, &qcfg_get);
-        if (qcfg_get.qid == g_urpc_perftest_client_recv_rqid.rqid[target_queue]) {
+        if (qcfg_get.qid == g_urpc_perftest_client_recv_rqid.rqid[0]) {
             g_urpc_perftest_ctx.r_qh = qinfos->r_qinfo[i].urpc_qh;
             is_find = true;
             break;
