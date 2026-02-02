@@ -76,12 +76,12 @@ typedef enum umq_trans_mode {
     UMQ_TRANS_MODE_MAX,
 } umq_trans_mode_t;
 
-typedef enum umq_transport_mode {
+typedef enum umq_tp_mode {
     UMQ_TM_RC = 0,              /* Reliable connection */
     UMQ_TM_RM,                  /* Reliable message */
     UMQ_TM_UM,                  /* Unreliable message */
     UMQ_TM_MAX,
-} umq_transport_mode_t;
+} umq_tp_mode_t;
 
 typedef enum umq_tp_type {
     UMQ_TP_TYPE_RTP = 0,
@@ -197,8 +197,6 @@ typedef struct umq_buf_block_cfg {
 
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
-    umq_transport_mode_t transport_mode;
-    umq_tp_type_t tp_type;
     uint32_t feature;               // feature flags
     uint16_t headroom_size;         // header size of umq buffer, [0, UMQ_HEADROOM_SIZE_LIMIT]
     bool io_lock_free;              // true: user should ensure thread safety when call io function
@@ -220,6 +218,8 @@ typedef struct umq_init_cfg {
 #define UMQ_CREATE_FLAG_SHARE_RQ            (1 << 5)        // enable arg share_rq_umqh when create umq
 #define UMQ_CREATE_FLAG_UMQ_CTX             (1 << 6)        // enable arg umq_ctx when create umq
 #define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 7)        // just indicates the umq is sub queue
+#define UMQ_CREATE_FLAG_TP_MODE             (1 << 8)        // enable arg tp_mode when create umq
+#define UMQ_CREATE_FLAG_TP_TYPE             (1 << 9)        // enable arg tp_type when create umq
 
 typedef struct umq_create_option {
     /*************Required paramenters start*****************/
@@ -236,8 +236,9 @@ typedef struct umq_create_option {
     uint32_t tx_depth;
     uint64_t share_rq_umqh;
     uint64_t umq_ctx;
-
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
+    umq_tp_mode_t tp_mode;
+    umq_tp_type_t tp_type;
     /*************Optional paramenters end*******************/
 } umq_create_option_t;
 
