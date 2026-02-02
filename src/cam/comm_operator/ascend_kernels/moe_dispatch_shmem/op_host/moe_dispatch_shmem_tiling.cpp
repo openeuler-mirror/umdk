@@ -782,7 +782,7 @@ static ge::graphStatus MoeDistributeDispatchA3TilingFuncImpl(gert::TilingContext
                                      static_cast<int64_t>(localMoeExpertNum)) != ge::GRAPH_SUCCESS,
                     OPS_LOG_E(nodeName, "Check tensor shape failed."), return ge::GRAPH_FAILED);
     // 校验win区大小
-    uint16_t defaultWindowSize = 200;
+    uint16_t defaultWindowSize = 1024;
     const uint64_t maxWindowSize = static_cast<uint64_t>(defaultWindowSize) * 1024UL * 1024UL;
     uint64_t bs = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.bs);
     uint64_t h = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.h);
