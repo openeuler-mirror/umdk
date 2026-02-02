@@ -37,7 +37,7 @@
 #define TOOL_REQIEST_CREDITS            4
 
 #define CONNETION_SETUP_MSG_SZIE    100
-#define CONNECTION_SETUP_LISTEN     2048
+#define CONNECTION_SETUP_LISTEN     128
 #define UMQ_MAX_BIND_INFO_SIZE      512
 #define EAGAIN_WAIT_TIME_U          (400 * 1000)
 #define SEND_REQ_SLEEP_TIME_S       3
@@ -101,32 +101,39 @@ static int parse_m_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *i
 
 static int init_umq(struct urpc_example_config *cfg)
 {
-    umq_init_cfg_t init_cfg = {
-        .feature = cfg->feature,
-        .transport_mode = cfg->transport_mode,
-        .tp_type = cfg->tp_type,
-        .flow_control.use_atomic_window = true,
-        .flow_control.initial_credit = TOOL_INITIAL_CREDIT,
-        .flow_control.credits_per_request = TOOL_REQIEST_CREDITS,
-    };
-
-    if (cfg->instance_mode == SERVER) {
-        if (parse_m_trans_info(cfg, &init_cfg) != 0) {
-            LOG_PRINT_ERR("parse_trans_info failed\n");
-            return  -1;
-        }
-    } else {
-        if (parse_trans_info(cfg, &init_cfg) != 0) {
-            LOG_PRINT_ERR("parse_trans_info failed\n");
-            return  -1;
-        }
-    }
-
-    if (umq_init(&init_cfg) != UMQ_SUCCESS) {
-        LOG_PRINT_ERR("umq_init failed\n");
+    umq_init_cfg_t *init_cfg = (umq_init_cfg_t *)(uintptr_t)calloc(1, sizeof(umq_init_cfg_t));
+    if (init_cfg == NULL) {
+        LOG_PRINT_ERR("calloc init cfg failed\n");
         return -1;
     }
+    init_cfg->feature = cfg->feature;
+    init_cfg->transport_mode = cfg->transport_mode;
+    init_cfg->tp_type = cfg->tp_type;
+    init_cfg->flow_control.use_atomic_window = true;
+    init_cfg->flow_control.initial_credit = TOOL_INITIAL_CREDIT;
+    init_cfg->flow_control.credits_per_request = TOOL_REQIEST_CREDITS;
+
+    if (cfg->instance_mode == SERVER) {
+        if (parse_m_trans_info(cfg, init_cfg) != 0) {
+            LOG_PRINT_ERR("parse_trans_info failed\n");
+            goto FREE_CFG;
+        }
+    } else {
+        if (parse_trans_info(cfg, init_cfg) != 0) {
+            LOG_PRINT_ERR("parse_trans_info failed\n");
+            goto FREE_CFG;
+        }
+    }
+
+    if (umq_init(init_cfg) != UMQ_SUCCESS) {
+        LOG_PRINT_ERR("umq_init failed\n");
+        goto FREE_CFG;
+    }
     return 0;
+
+FREE_CFG:
+    free(init_cfg);
+    return -1;
 }
 
 static uint64_t find_main_umq(char *dev_name, uint32_t eid_idx)
@@ -296,10 +303,6 @@ static umq_info_t *create_one_umq(struct urpc_example_config *cfg, bool is_main_
         goto EPOLL_DEL_RX;
     }
 
-    if (is_main_queue) {
-        LOG_PRINT_ERR("create main queue %lu\n", umqh);
-    }
-
     g_umq_info_list[umq_id].umqh = umqh;
     g_umq_info_list[umq_id].enable = true;
     g_umq_info_list[umq_id].is_main_umq = is_main_queue;
@@ -394,7 +397,7 @@ static int client_bind_umq(uint64_t umqh, ip_info_t *ip_info)
         ret = -1;
         goto CLOSE_SOC;
     }
-    if (connect(client_fd, (struct sockaddr*)&server, sizeof(server)) != 0) {
+    if (connect(client_fd, (struct sockaddr*)(uintptr_t)&server, sizeof(server)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] connect failed\n", ip_info->ip, ip_info->port);
         ret = -1;
         goto CLOSE_SOC;
@@ -542,7 +545,7 @@ void *start_server_lisent(void *arg)
         goto CLOSE_SERVER;
     }
 
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    if (bind(server_fd, (struct sockaddr*)(uintptr_t)&addr, sizeof(addr)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] bind failed\n", g_cfg->server_ip, g_cfg->tcp_port);
         goto CLOSE_SERVER;
     }
@@ -559,7 +562,8 @@ void *start_server_lisent(void *arg)
             LOG_PRINT_ERR("ip[%s] port[%u] accept failed\n", g_cfg->server_ip, g_cfg->tcp_port);
             goto CLOSE_SERVER;
         }
-        if (threadpool_add(pool, serever_bind_one_client, (void *)&client_fd, sizeof(client_fd)) != UMQ_SUCCESS) {
+        if (threadpool_add(pool, serever_bind_one_client,
+            (void *)(uintptr_t)&client_fd, sizeof(client_fd)) != UMQ_SUCCESS) {
             LOG_PRINT_ERR("threadpool_add failed\n");
             goto CLOSE_SERVER;
         }
@@ -651,7 +655,7 @@ static void return_rsp(void *arg)
 
 static void process_tx_interrupt(void *arg)
 {
-    fd_ctx_t *fd_ctx = (fd_ctx_t *)(*(uint64_t *)arg);
+    fd_ctx_t *fd_ctx = (fd_ctx_t *)(uintptr_t)(*(uint64_t *)(uintptr_t)arg);
     uint64_t umqh = fd_ctx->umqh;
     umq_interrupt_option_t option = {
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
@@ -678,7 +682,7 @@ static void process_tx_interrupt(void *arg)
 
 static void process_rx_interrupt(void *arg)
 {
-    fd_ctx_t *fd_ctx = (fd_ctx_t *)(*(uint64_t *)arg);
+    fd_ctx_t *fd_ctx = (fd_ctx_t *)(uintptr_t)(*(uint64_t *)(uintptr_t)arg);
     uint64_t umqh = fd_ctx->umqh;
     umq_interrupt_option_t option = {
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
@@ -701,8 +705,8 @@ static void process_rx_interrupt(void *arg)
                 continue;
             }
 
-            umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-            umq_ctx_t *umq_ctx = (umq_ctx_t *)buf_pro->umq_ctx;
+            umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)(uintptr_t)buf->qbuf_ext;
+            umq_ctx_t *umq_ctx = (umq_ctx_t *)(uintptr_t)buf_pro->umq_ctx;
             g_umq_info_list[umq_ctx->main_umq_idx].recv_req_cnt++;
             threadpool_add(g_threadpool, return_rsp, &umq_ctx, sizeof(uint64_t));
             umq_buf_reset(buf);
@@ -803,7 +807,7 @@ static int run_server(struct urpc_example_config *cfg)
 
     // create main umq
     uint32_t idx = 0;
-    while (cfg->m_dev_name[idx] != NULL && idx < MAIN_QUEUE_CNT) {
+    while (idx < cfg->m_dev_num) {
         umq_info_t *umq_info = create_one_umq(g_cfg, true, cfg->m_dev_name[idx], cfg->m_eid_idx[idx]);
         if (umq_info == NULL) {
             LOG_PRINT("create_g_main_umq failed\n");

@@ -47,7 +47,7 @@
 #define URPC_EXAMPLE_ACCEPT_WAIT_US 10000
 
 urpc_lib_example_config_t g_cfg = { 0 };
-volatile bool g_example_force_quit;
+volatile sig_atomic_t g_example_force_quit = 0;
 int g_epoll_fd = -1;
 
 typedef struct example_case {
@@ -1150,7 +1150,7 @@ static int urpc_example_server_wait_sync(urpc_lib_example_config_t *cfg)
     char msg[URPC_EXAMPLE_SYNC_MSG_SIZE] = {0};
     int msg_len = recv(g_example_sync_accept_fd, msg, URPC_EXAMPLE_SYNC_MSG_SIZE, MSG_NOSIGNAL);
     if (msg_len != (int)strlen(URPC_EXAMPLE_SYN) || memcmp(msg, URPC_EXAMPLE_SYN, msg_len) != 0) {
-        LOG_PRINT("recv syn failed, msg %s, %s\n", msg, strerror(errno));
+        LOG_PRINT("recv syn failed, %s\n", strerror(errno));
         goto CLOSE_ACCEPT_FD;
     }
 
@@ -1218,7 +1218,7 @@ static int urpc_example_client_wait_ack(urpc_lib_example_config_t *cfg)
 
     msg_len = recv(g_example_sync_fd, msg, URPC_EXAMPLE_SYNC_MSG_SIZE, MSG_NOSIGNAL);
     if (msg_len != (int)strlen(URPC_EXAMPLE_ACK) || memcmp(msg, URPC_EXAMPLE_ACK, msg_len) != 0) {
-        LOG_PRINT("recv ack failed, msg %s, %s\n", msg, strerror(errno));
+        LOG_PRINT("recv ack failed, %s\n", strerror(errno));
         goto CLOSE_FD;
     }
 
@@ -1923,12 +1923,12 @@ static void clear_cfg(void)
 void handle_signal(int sig)
 {
     // server stop poll
-    g_example_force_quit = true;
+    g_example_force_quit = 1;
 }
 
 bool is_example_force_quit(void)
 {
-    return g_example_force_quit;
+    return g_example_force_quit == 1;
 }
 
 int main(int argc, char *argv[])

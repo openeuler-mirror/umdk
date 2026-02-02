@@ -530,6 +530,42 @@ void example_flush(uint64_t umqh)
     }
 }
 
+static int cfg_get_dev_name(struct urpc_example_config *cfg, char *data)
+{
+    char *save;
+    char *new_data = strtok_r(data, ",", &save);
+    uint32_t i = 0;
+    while (i < EXAMPLE_MAX_DEV_NUM && (new_data != NULL)) {
+        (void)strcpy(cfg->m_dev_name[i], new_data);
+        new_data = strtok_r(NULL, ",", &save);
+        i++;
+    }
+    
+    if (cfg->m_dev_num != 0 && cfg->m_dev_num != i) {
+        return -1;
+    }
+    cfg->m_dev_num = i;
+    return 0;
+}
+
+static int cfg_get_eid_idx(struct urpc_example_config *cfg, char *data)
+{
+    char *save;
+    char *new_data = strtok_r(data, ",", &save);
+    uint32_t i = 0;
+    while (i < EXAMPLE_MAX_DEV_NUM && (new_data != NULL)) {
+        cfg->m_eid_idx[i] = (uint16_t)strtoul(new_data, NULL, 0);
+        new_data = strtok_r(NULL, ",", &save);
+        i++;
+    }
+
+    if (cfg->m_dev_num != 0 && cfg->m_dev_num != i) {
+        return -1;
+    }
+    cfg->m_dev_num = i;
+    return 0;
+}
+
 /* Parse the command line parameters for client and server */
 int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
 {
@@ -548,8 +584,6 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
             break;
         }
 
-        char *tmp = NULL;
-        uint32_t idx = 0;
         switch (c) {
             case 'd':
                 /* need to free when exiting */
@@ -630,42 +664,17 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                 cfg->queue_num = (uint32_t)strtoul(optarg, NULL, 0);
                 break;
             case 's':
-                cfg->thread_poll_size = (uint32_t)strtoul(optarg, NULL, 0);
+                cfg->thread_poll_size = (int)strtol(optarg, NULL, 0);
                 break;
             case 'n':
-                tmp = strdup(optarg);
-                idx = 0;
-                while (*tmp != '\0' && idx < EXAMPLE_MAX_DEV_NUM) {
-                    cfg->m_dev_name[idx++] = tmp;
-                    while (*tmp != ',' && *tmp != '\0') {
-                        tmp++;
-                    }
-
-                    if (*tmp == '\0') {
-                        break;
-                    }
-
-                    *tmp = '\0';
-                    tmp++;
+                if (cfg_get_dev_name(cfg, optarg) != 0) {
+                    return -1;
                 }
                 break;
             case 'x':
-                tmp = strdup(optarg);
-                char *ptr = tmp;
-                idx = 0;
-                while (*tmp != '\0' && idx < EXAMPLE_MAX_DEV_NUM) {
-                    while (*tmp != ',' && *tmp != '\0') {
-                        tmp++;
-                    }
-                    if (*tmp == '\0') {
-                        break;
-                    }
-                    *tmp = '\0';
-                    cfg->m_eid_idx[idx++] = (uint32_t)strtoul(ptr, NULL, 0);
-                    tmp++;
-                    ptr = tmp;
+                if (cfg_get_eid_idx(cfg, optarg) != 0) {
+                    return -1;
                 }
-                cfg->m_eid_idx[idx++] = (uint32_t)strtoul(ptr, NULL, 0);
                 break;
             default:
                 return -1;
