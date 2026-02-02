@@ -7,28 +7,34 @@
 # History: 2025-12-09 create pybind building script
 
 set -e
-EXT_PATH=$MODULE_BUILD_PATH/pybind
-DIST_OUT_PATH=$MODULE_BUILD_OUT_PATH
-
-if [ ! -d "$MODULE_BUILD_PATH" ]; then
-    mkdir -p $MODULE_BUILD_PATH
-fi
 
 build_pybind() {
-    if [ -d "$DIST_OUT_PATH/dist" ]; then
-        rm -rf $DIST_OUT_PATH/dist
+    local build_tmp_dir="${MODULE_BUILD_PATH}/pybind"
+    local wheel_out_dir="${MODULE_BUILD_OUT_PATH}/dist"
+    
+    # 确保构建临时目录和输出目录存在
+    mkdir -p "${wheel_out_dir}"
+    
+    # 清理之前的构建输出
+    if [ -d "${wheel_out_dir}" ]; then
+        rm -rf "${wheel_out_dir}"
+        mkdir -p "${wheel_out_dir}"
     fi
-    cp -rf $MODULE_SRC_PATH/pybind $MODULE_BUILD_PATH
-    cp -rf $MODULE_SRC_PATH/pybind/pytorch_extension $BUILD_PATH
-    cd $EXT_PATH
-    python3 setup.py bdist_wheel
-    DIST_GEN_PATH=$EXT_PATH/dist
-    if [ -d "$DIST_GEN_PATH" ]; then
-        echo "copy $DIST_GEN_PATH to $DIST_OUT_PATH/"
-        cp -rf $DIST_GEN_PATH $DIST_OUT_PATH
-        echo "Build packet successful!"
+    if [ -d "${build_tmp_dir}" ]; then
+        rm -rf "${build_tmp_dir}"
+    fi
+    
+    # 拷贝源码到临时编译路径
+    cp -r $MODULE_SRC_PATH/pybind "${build_tmp_dir}"
+    
+    # 在临时目录中编译
+    cd "${build_tmp_dir}"
+    python3 setup.py bdist_wheel --dist-dir="${wheel_out_dir}"
+        
+    if [ $? -eq 0 ] && [ -d "${wheel_out_dir}" ] && [ "$(ls -A ${wheel_out_dir})" ]; then
+        echo "Build packet successful! Wheel files generated in ${wheel_out_dir}"
     else
-        echo $DIST_GEN_PATH does not exist
+        echo "${wheel_out_dir} does not exist or is empty"
         echo "Build whl packet fail."
         return 1
     fi

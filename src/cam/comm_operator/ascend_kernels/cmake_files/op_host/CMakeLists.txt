@@ -4,6 +4,15 @@
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} ops_srcs)
 
 #===================================================
+# Check for coverage option
+#===================================================
+if(DEFINED ENV{ENABLE_COV})
+    message(STATUS "Coverage enabled via ENABLE_COV environment variable")
+    add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
+    add_link_options(--coverage -lgcov)
+endif()
+
+#===================================================
 # Detect CANN version include path globally
 #===================================================
 set(CANN82_PATH "${ASCEND_CANN_PACKAGE_PATH}/include/experiment/platform/platform/platform_infos_def.h")
