@@ -827,7 +827,7 @@ static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_cou
 
 static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 {
-    uint32_t type = obj->operator.type;
+    uint32_t type = obj->bs.type;
     umq_ub_fc_info_t *fc_info = NULL;
     uint16_t remote_win;
     switch (type) {
@@ -851,7 +851,7 @@ static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 
 static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 {
-    uint32_t type = obj->operator.type;
+    uint32_t type = obj->bs.type;
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t notify;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
@@ -861,7 +861,7 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
             UMQ_LIMIT_VLOG_ERR("get remote window post read failed\n");
             break;
         case IMM_TYPE_FC_CREDIT_REP:
-            notify = obj->operator.notify;
+            notify = obj->bs.notify;
             (void)credit->ops.available_credit_return(credit, notify);
             (void)fc->ops.local_rx_allocated_dec(fc, notify);
             break;
