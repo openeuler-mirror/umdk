@@ -174,7 +174,6 @@ typedef struct umq_ub_ctx {
     bool io_lock_free;
     volatile uint32_t ref_cnt;
     uint32_t feature;
-    urma_order_type_t order_type;
     umq_flow_control_cfg_t flow_control;
     urma_context_t *urma_ctx;
     urma_device_attr_t dev_attr;
@@ -186,8 +185,6 @@ typedef struct umq_ub_ctx {
     uint64_t remote_notify_addr;
     uint64_t *umq_ctx_jetty_table;
     volatile uint64_t *rx_consumed_jetty_table;
-    urma_transport_mode_t transport_mode;
-    urma_tp_type_t tp_type;
 } umq_ub_ctx_t;
 
 typedef struct rx_buf_ctx {
@@ -222,9 +219,6 @@ typedef struct umq_ub_bind_version_info {
 
 typedef struct umq_ub_bind_dev_info {
     umq_trans_mode_t umq_trans_mode;
-    urma_transport_mode_t trans_mode;
-    urma_tp_type_t tp_type;
-    urma_order_type_t order_type;
     urma_target_seg_t tseg;
     umq_buf_mode_t buf_pool_mode;
     uint32_t feature;
@@ -235,7 +229,10 @@ typedef struct umq_ub_bind_queue_info {
     bool is_binded;
     urma_jetty_grp_policy_t policy;
     urma_jetty_id_t jetty_id;
+    urma_order_type_t order_type;
     urma_target_type_t type;
+    urma_transport_mode_t tp_mode;
+    urma_tp_type_t tp_type;
     urma_token_t token;
     uint64_t notify_buf;
     uint32_t rx_depth;
@@ -335,6 +332,9 @@ typedef struct ub_queue {
 
     // config param
     umq_trans_mode_t umq_trans_mode;
+    urma_order_type_t order_type;
+    urma_transport_mode_t tp_mode;
+    urma_tp_type_t tp_type;
     ub_flow_control_t flow_control;
     char name[UMQ_NAME_MAX_LEN];
     uint32_t rx_buf_size;
