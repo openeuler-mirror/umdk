@@ -65,8 +65,8 @@ static void usage(void)
                  "                                      has one sge in latency test by default).\n");
     (void)printf("      --align                         memory address align to 4K.\n");
     (void)printf("      --is_ipv6_dev                   use ipv6 dev for data plane.\n");
-    (void)printf("      --concurrent-num <num>          concurrent num for wqe in one time, should go with --alloc-buf,\n"
-                 "                                      and size larger than 105.\n");
+    (void)printf("      --concurrent-num <num>          concurrent num for wqe in one time, should go with\n"
+                 "                                      --alloc-buf, and size larger than 105.\n");
     (void)printf("      --data-trans-mode <num>         urpc data trans mode, 0 for send(default).\n");
     (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>, server and client\n"
                  "may use <port+1> to sync and client may use <port-1> in latency test case (default: 19875)\n");
@@ -220,7 +220,7 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
                 break;
             case 'e':
                 strcpy(cfg->eid, optarg);
- 	            break;
+                break;
             default:
                 usage();
                 return -1;

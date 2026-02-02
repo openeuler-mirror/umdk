@@ -367,7 +367,6 @@ static void client_run_latency_with_one_queue(
                 goto FINISH;
             }
             wr[i].args[0].length = get_recv_max_sge_size(wr[i].args_num, 0);
-
         }
 
         // client report early_rsp request sent
