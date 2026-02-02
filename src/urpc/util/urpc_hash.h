@@ -78,7 +78,7 @@ static inline uint32_t urpc_hash_add64(uint32_t hash_value, uint64_t data)
 /* Returns the hash of memory bytes'. */
 static inline uint32_t urpc_hash_bytes(const void *ptr, uint32_t n_bytes, uint32_t basis)
 {
-    const uint32_t *hash_ptr = ptr;
+    const uint32_t *hash_ptr = (const uint32_t *)ptr;
     uint32_t tmp_bytes = n_bytes;
     uint32_t hash_value;
 

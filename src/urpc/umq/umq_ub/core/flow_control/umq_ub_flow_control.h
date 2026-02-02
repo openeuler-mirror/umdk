@@ -38,7 +38,7 @@ typedef union umq_ub_fc_user_ctx {
         uint64_t notify : 16;
         uint64_t rsvd0 : 11;
         uint64_t rsvd1 : 32;
-    } operator;
+    } bs;
 } umq_ub_fc_user_ctx_t;
 
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
