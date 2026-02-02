@@ -543,7 +543,7 @@ void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
                           .len = sizeof(uint32_t),
                           .tseg = queue->dev_ctx->tseg_list[0]};
     umq_ub_fc_user_ctx_t obj = {
-        .operator = {
+        .bs = {
             .type = IMM_TYPE_FC_CREDIT_INIT,
         }
     };
@@ -622,7 +622,7 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
         };
 
     umq_ub_fc_user_ctx_t obj = {
-        .operator = {
+        .bs = {
             .type = IMM_TYPE_FC_CREDIT_REQ,
             .notify = credits_per_request,
             .rsvd0 = 0,
@@ -664,7 +664,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
             .window = notify}
         };
     umq_ub_fc_user_ctx_t obj = {
-        .operator = {
+        .bs = {
             .type = IMM_TYPE_FC_CREDIT_REP,
             .notify = notify,
             .rsvd0 = 0,
