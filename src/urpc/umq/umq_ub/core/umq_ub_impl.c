@@ -36,6 +36,7 @@
 
 static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
+static bool g_umq_ub_inited = false;
 
 typedef int (*ub_user_ctl_func)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
 static ub_user_ctl_func g_umq_ub_user_ctl_func[UMQ_TRANS_MODE_MAX] = {
@@ -382,7 +383,7 @@ static int umq_find_ub_device(umq_trans_info_t *info, umq_ub_ctx_t *ub_ctx)
 
 uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 {
-    if (g_ub_ctx_count > 0) {
+    if (g_umq_ub_inited) {
         UMQ_VLOG_WARN("umq ub ctx already inited\n");
         return (uint8_t *)g_ub_ctx;
     }
@@ -410,6 +411,11 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
             info->trans_mode != UMQ_TRANS_MODE_UBMM && info->trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
             UMQ_VLOG_INFO("trans init mode: %d not UB, skip it\n", info->trans_mode);
+            continue;
+        }
+
+        if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
+            UMQ_VLOG_INFO("device info assign_mode is dummy, skip it\n");
             continue;
         }
 
@@ -455,9 +461,6 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
         ++g_ub_ctx_count;
     }
-    if (g_ub_ctx_count == 0) {
-        goto ROLLBACK_UB_CTX;
-    }
 
     if (umq_io_buf_malloc(cfg->buf_mode, total_io_buf_size) == NULL) {
         goto ROLLBACK_UB_CTX;
@@ -476,6 +479,8 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto IO_BUF_FREE;
     }
     umq_ub_queue_ctx_list_init();
+
+    g_umq_ub_inited = true;
 
     return (uint8_t *)(uintptr_t)g_ub_ctx;
 
@@ -535,6 +540,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     umq_ub_id_allocator_uninit();
     free(context);
     g_ub_ctx_count = 0;
+    g_umq_ub_inited = false;
     urma_uninit();
 }
 
@@ -1579,6 +1585,53 @@ int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, um
     memcpy(umq_dev_info->dev_name, dev_name, strnlen(dev_name, UMQ_DEV_NAME_SIZE));
     urma_free_eid_list(eid_info_list);
     return UMQ_SUCCESS;
+}
+
+umq_dev_info_t *umq_ub_dev_info_list_get_impl(umq_trans_mode_t umq_trans_mode, int *dev_num)
+{
+    int ret, urma_dev_num = 0;
+    if (dev_num == NULL) {
+        UMQ_VLOG_ERR("invalid parameter\n");
+        errno = UMQ_ERR_EINVAL;
+        return NULL;
+    }
+
+    urma_device_t **urma_dev = urma_get_device_list(&urma_dev_num);
+    if (urma_dev == NULL || urma_dev_num <= 0) {
+        // errno is set by urma_get_device_list
+        return NULL;
+    }
+
+    umq_dev_info_t *umq_dev_info = calloc(urma_dev_num, sizeof(umq_dev_info_t));
+    if (umq_dev_info == NULL) {
+        UMQ_VLOG_ERR("malloc umq_dev_info failed\n");
+        errno = UMQ_ERR_ENOMEM;
+        goto FREE_DEV_LIST;
+    }
+
+    *dev_num = urma_dev_num;
+
+    for (int i = 0; i < urma_dev_num; i++) {
+        (void)strcpy(umq_dev_info[i].dev_name, urma_dev[i]->name);
+        umq_dev_info[i].umq_trans_mode = umq_trans_mode;
+        umq_dev_info[i].ub.eid_cnt = 0;
+        ret = umq_ub_dev_info_get_impl(umq_dev_info[i].dev_name, umq_trans_mode, &umq_dev_info[i]);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR("get dev info for dev: %s failed, ret %d\n", umq_dev_info[i].dev_name, ret);
+        }
+    }
+
+FREE_DEV_LIST:
+    urma_free_device_list(urma_dev);
+
+    return umq_dev_info;
+}
+
+void umq_ub_dev_info_list_free_impl(umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
+{
+    if (umq_dev_info != NULL) {
+        free(umq_dev_info);
+    }
 }
 
 int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
