@@ -95,6 +95,7 @@ typedef enum umq_dev_assign_mode {
     UMQ_DEV_ASSIGN_MODE_IPV6,
     UMQ_DEV_ASSIGN_MODE_EID,
     UMQ_DEV_ASSIGN_MODE_DEV,
+    UMQ_DEV_ASSIGN_MODE_DUMMY, // indicates no actual dev info
     UMQ_DEV_ASSIGN_MODE_MAX
 } umq_dev_assign_mode_t;
 
