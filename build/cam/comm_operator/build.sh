@@ -6,6 +6,8 @@
 # Note:
 # History: 2025-07-20 create cam building script
 
+set -e
+
 export MODULE_NAME="comm_operator"
 export MODULE_SRC_PATH="${SRC_PATH}/${MODULE_NAME}"
 export MODULE_SCRIPTS_PATH="${SCRIPTS_PATH}/${MODULE_NAME}"
@@ -18,21 +20,7 @@ ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
 
-BuildTest() {
-    cd ${MODULE_TEST_PATH}/ut_gtest
-    if [ -d "./build" ]; then
-        rm -rf "./build"
-    fi
-    mkdir ./build
-    cd build
-    cmake .. && make -j && make install
-    if [ $? -ne 0 ]; then
-        echo "BuildTest fail"
-        return 1
-    fi
-}
-
-PrintHelp() {
+print_help() {
     echo "
     ./build.sh comm_operator <opt>...
     -x Extract the run package
@@ -69,7 +57,7 @@ while getopts "c:xdtprh" opt; do
         export ENABLE_COV=1
         ;;
     h)
-        PrintHelp
+        print_help
         exit 0
         ;;
     esac
@@ -90,9 +78,6 @@ if [ $ENABLE_SRC_BUILD -eq 1 ]; then
     else
         bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE
     fi
-    if [ $? -ne 0 ]; then
-        exit 1
-    fi
 fi
 
 if [ $ENABLE_PYBIND_BUILD -eq 1 ]; then
@@ -101,7 +86,4 @@ fi
 
 if [ $ENABLE_UT_BUILD -eq 1 ]; then
     BuildTest
-    if [ $? -ne 0 ]; then
-        exit 1
-    fi
 fi

@@ -6,6 +6,8 @@
 # Note:
 # History: 2025-07-20 create cam building script
 
+set -e
+
 # 定义全局屏蔽列表
 exclude_list=()
 if [ -z "${SHMEM_HOME_PATH}" ]; then
@@ -13,7 +15,7 @@ if [ -z "${SHMEM_HOME_PATH}" ]; then
     exclude_list+=("moe_combine_shmem" "moe_dispatch_shmem")
 fi
 
-CopyOps() {
+copy_ops() {
     local src_dir="$1" # 源目录
     local dst_dir="$2" # 目标目录
 
@@ -70,7 +72,7 @@ modify_func_cmake () {
 }
 
 # 构建算子工程并将其产物传到指定地点
-BuildAscendProj() {
+build_ascend_proj() {
     local os_id=$(grep ^ID= /etc/os-release | cut -d= -f2 | tr -d '"')
     local arch=$(uname -m)
     local soc_version=$2
@@ -79,28 +81,37 @@ BuildAscendProj() {
     local proj_name="ascend_kernels_${soc_version}_proj"
     # 修改默认算子名
     export OPS_PROJECT_NAME=aclnnInner
+    # 使能AscendC算子覆盖率统计
+    if [ -n "${ENABLE_COV}" ]; then
+        export ASCENDC_COV=1
+    fi
     # 进入编译路径
     cd $1
 
-    if [ -d "./${proj_name}" ]; then
-        rm -rf ${proj_name}
-    fi
-    echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${proj_name}"
-    msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${proj_name}
-    rm -rf ./${proj_name}/op_host/add_custom*
-    rm  -rf ./${proj_name}/op_kernel/add_custom*
-    CopyOps "./ascend_kernels" "./${proj_name}"
-    python $SCRIPTS_PATH/comm_operator/set_conf.py ./${proj_name}/CMakePresets.json $build_type True CAM
-    cp -rf ./ascend_kernels/pregen ./${proj_name}
-    # if need to compile shmem opts: replace msopgen camke files with pregen {.ascend_kernels/pregen/cmake}
-    if [ -n "${SHMEM_HOME_PATH}" ]; then
-        cp -rf ./ascend_kernels/pregen/cmake ./${proj_name}
-    else
-        rm -f ./${proj_name}/pregen/build_out/autogen/*shmem*
+    # 确保 MODULE_BUILD_PATH 目录存在
+    if [ ! -d "${MODULE_BUILD_PATH}" ]; then
+        mkdir -p ${MODULE_BUILD_PATH}
     fi
 
-    source $ASCEND_HOME_PATH/bin/setenv.bash
-    cd ${proj_name}
+    if [ -d "${MODULE_BUILD_PATH}/${proj_name}" ]; then
+        rm -rf ${MODULE_BUILD_PATH}/${proj_name}
+    fi
+    echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}"
+    msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}
+    rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*
+    rm  -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
+    copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
+    python $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
+    cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}
+    # if need to compile shmem opts: replace msopgen camke files with pregen {.ascend_kernels/pregen/cmake}
+    if [ -n "${SHMEM_HOME_PATH}" ]; then
+        cp -rf ./ascend_kernels/pregen/cmake ${MODULE_BUILD_PATH}/${proj_name}
+    else
+        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*shmem*
+    fi
+
+    source $ASCEND_HOME_PATH/bin/setenv.bash || true
+    cd ${MODULE_BUILD_PATH}/${proj_name}
     modify_func_cmake
     ./build.sh
     # 根据is_extract判断是否抽取run包
@@ -115,4 +126,4 @@ BuildAscendProj() {
     fi
 }
 
-BuildAscendProj $1 $2 $3 $4
+build_ascend_proj $1 $2 $3 $4
