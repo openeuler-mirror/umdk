@@ -58,7 +58,7 @@ int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
 {
     int ret = 0;
 
-    if (buf == NULL || len == 0) {
+    if (buf == NULL || len == 0 || eid == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
