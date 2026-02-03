@@ -113,6 +113,7 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->dump_aux_info = resp->dump_aux_info;
 	udma_ctx->jfr_sge = resp->jfr_sge;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
+	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
 }
 
 static void udma_u_destroy_jt_table(struct udma_u_context *udma_u_ctx)

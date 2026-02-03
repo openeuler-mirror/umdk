@@ -62,7 +62,7 @@ void udma_getenv_log_level(void)
 
 	if (strnlen(level_str, UDMA_LOG_LEVEL_ENV_MAX_BUF_LEN) >=
 	    UDMA_LOG_LEVEL_ENV_MAX_BUF_LEN) {
-		UDMA_LOG_ERR("Invalid parameter: log level str.");
+		UDMA_LOG_ERR("Invalid parameter: log level str.\n");
 		return;
 	}
 
@@ -87,7 +87,7 @@ int udma_vlog(const char *function, int line, enum udma_vlog_level level, const 
 		return ret;
 
 	ret = vsnprintf(logmsg, MAX_LOG_LEN, newformat, va);
-	if (ret == -1) {
+	if (ret == -1 || ret >= (int)sizeof(newformat)) {
 		(void)printf("logmsg size exceeds MAX_LOG_LEN size :%d.\n", MAX_LOG_LEN);
 		return ret;
 	}

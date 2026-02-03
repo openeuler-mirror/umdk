@@ -98,7 +98,8 @@ struct udma_create_ctx_resp {
 	__u32 reduce_enable : 1;
 	__u32 dump_aux_info : 1;
 	__u32 hugepage_enable : 1;
-	__u32 rsv : 20;
+	__u32 sva_sep_mode_en : 1;
+	__u32 rsv : 19;
 	__u32 ue_id;
 	__u32 chip_id;
 	__u32 die_id;
@@ -115,6 +116,7 @@ enum db_mmap_type {
 	UDMA_MMAP_HUGEPAGE,
 	UDMA_MMAP_JFC_PAGE,
 	UDMA_MMAP_JETTY_DSQE,
+	UDMA_MMAP_KERNEL_BUF,
 };
 
 enum {

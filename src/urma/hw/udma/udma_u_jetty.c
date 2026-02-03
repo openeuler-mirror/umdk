@@ -370,7 +370,7 @@ urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty)
 
 	if (target_jetty->trans_mode == URMA_TM_RC &&
 	    target_jetty->tp.tpn != INVALID_TPN) {
-		UDMA_LOG_ERR("the RC target jetty is still being used, id = %u.\n",
+		UDMA_LOG_ERR("the rc target jetty is still being used, id = %u.\n",
 			     target_jetty->id.id);
 		return URMA_FAIL;
 	}
@@ -426,14 +426,14 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 	int ret;
 
 	if (tjetty == NULL || udma_jetty->sq.tjetty == NULL) {
-		UDMA_LOG_ERR("The Jetty not bind a remote Jetty, id = %u.\n",
+		UDMA_LOG_ERR("the jetty not bind a remote jetty, id = %u.\n",
 			     jetty->jetty_id.id);
 		return URMA_EINVAL;
 	}
 
 	if (udma_jetty->sq.trans_mode != URMA_TM_RC ||
 	    tjetty->trans_mode != URMA_TM_RC) {
-		UDMA_LOG_ERR("The transmode of Jetty or tJetty is not rc.\n");
+		UDMA_LOG_ERR("the transmode of jetty or tjetty is not rc.\n");
 		return URMA_EINVAL;
 	}
 
@@ -586,7 +586,7 @@ urma_target_jetty_t *udma_u_import_jetty_ex(urma_context_t *ctx,
 	struct udma_u_target_jetty *tjetty;
 
 	if (rjetty->type != URMA_JETTY && rjetty->type != URMA_JETTY_GROUP) {
-		UDMA_LOG_ERR("The Jetty type %u cannot imported jetty ex.\n",
+		UDMA_LOG_ERR("the jetty type %u cannot imported jetty ex.\n",
 			     rjetty->type);
 		return NULL;
 	}
@@ -631,7 +631,7 @@ urma_status_t udma_u_bind_jetty_ex(urma_jetty_t *jetty,
 
 	if (udma_jetty->sq.trans_mode != URMA_TM_RC ||
 	    tjetty->trans_mode != URMA_TM_RC) {
-		UDMA_LOG_ERR("The transmode of Jetty or tJetty in exp is not rc.\n");
+		UDMA_LOG_ERR("the transmode of jetty or tjetty in exp is not rc.\n");
 		return URMA_EINVAL;
 	}
 
@@ -642,7 +642,7 @@ urma_status_t udma_u_bind_jetty_ex(urma_jetty_t *jetty,
 	}
 
 	if (udma_jetty->sq.tjetty != NULL) {
-		UDMA_LOG_ERR("The rc Jetty has bound a remote Jetty in exp,"
+		UDMA_LOG_ERR("the rc jetty has bound a remote jetty in exp,"
 			     "jetty_id = %u.\n", jetty->jetty_id.id);
 		return URMA_EEXIST;
 	}

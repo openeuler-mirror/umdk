@@ -100,7 +100,10 @@ static struct udma_u_db_page *udma_add_db_page(struct udma_u_context *ctx,
 		goto err_map;
 
 	db_page->buf.length = page_size;
-	db_page->buf.buf = udma_u_alloc_buf(db_page->buf.length);
+	if (type == UDMA_JFR_PAYLOAD)
+		db_page->buf.buf = udma_u_alloc_buf(db_page->buf.length);
+	else
+		db_page->buf.buf = udma_u_alloc_kernel_buf(ctx, db_page->buf.length);
 	if (!db_page->buf.buf)
 		goto err_buf;
 
