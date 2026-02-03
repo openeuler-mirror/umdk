@@ -58,6 +58,9 @@
               ip: x.x.x.x
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
 ```
+**说明：** 
+- test_nic1的name、eid分别填写urma_admin show命令查询出来的设备名称和eid，比如bonding_dev_0设备，eid为4245:4944:0000:0000:0000:0000:0200:0000
+- test_nic1的ip现在未使用，填写manage_nic的ip即可
 
 #### 三、用例运行
 1. UMDK集成测试框架依赖pytest测试框架，使用pytest来运行用例
@@ -71,7 +74,10 @@
   cd ./umdk/test/intergration_test
   find ./ -name test.py | xargs -i pytest {}
 ```
-**注意事项：** 请在host1上来执行用例
+**注意事项：**
+- 请在host1上来执行用例
+- 日志检查：默认采用rsyslog记录日志，归档在/var/log/umdk/目录，日志文件名称为：二进制名称.log
+
 
 #### 四、许可
 
