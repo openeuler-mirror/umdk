@@ -110,7 +110,7 @@ static int udma_u_alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 	buf_size = align(jfr->wqe_cnt << idx_que->entry_shift,
 			 UDMA_HW_PAGE_SIZE);
 	idx_que->buf.length = align(buf_size, UDMA_HW_PAGE_SIZE);
-	idx_que->buf.buf = udma_u_alloc_buf(idx_que->buf.length);
+	idx_que->buf.buf = udma_u_alloc_kernel_buf(jfr->rq.ctx, idx_que->buf.length);
 	if (!idx_que->buf.buf) {
 		udma_bitmap_free(idx_que->bitmap);
 		idx_que->bitmap = NULL;
@@ -169,6 +169,7 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		return NULL;
 	}
 
+	udma_jfr->rq.ctx = udma_ctx;
 	udma_u_init_jfr_param(udma_jfr, cfg);
 
 	if (!udma_jfr->lock_free &&
@@ -180,7 +181,6 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		goto err_alloc_idx;
 	}
 
-	udma_jfr->rq.ctx = udma_ctx;
 	if (udma_u_create_rq(udma_ctx, udma_jfr)) {
 		UDMA_LOG_ERR("failed to create jfr rqe buf.\n");
 		goto err_create_rq;

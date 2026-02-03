@@ -133,6 +133,7 @@ err_alloc_sw_db:
 	udma_u_delete_cq(&jfc->cq);
 err_create_cq:
 	free(jfc);
+
 	return NULL;
 }
 
@@ -194,7 +195,7 @@ struct udma_cr_status {
 		return JFC_OK;
 	}
 
-	UDMA_LOG_ERR("cqe_status (%u) substatus (%u) is invalid.",
+	UDMA_LOG_ERR("cqe_status (%u) substatus (%u) is invalid.\n",
 		     src_status, substatus);
 
 	return JFC_POLL_ERR;
@@ -666,7 +667,7 @@ void udma_u_clean_jfc(struct urma_jfc *jfc, uint32_t jetty_id)
 			break;
 	}
 
-	while ((int) --pi - (int) cq->ci >= 0) {
+	while ((int)--pi - (int)cq->ci >= 0) {
 		cqe = (struct udma_u_jfc_cqe *)get_u_buf_entry(cq, pi);
 		UDMA_FROM_DEVICE_BARRIER();
 		local_id = (cqe->local_num_h << UDMA_SRC_IDX_SHIFT) | cqe->local_num_l;

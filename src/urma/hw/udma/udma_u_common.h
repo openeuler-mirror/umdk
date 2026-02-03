@@ -40,6 +40,7 @@
 #define UDMA_MIN(x, y) ((x) < (y) ? (x) : (y))
 #define UDMA_MAX(x, y) ((x) > (y) ? (x) : (y))
 #define RTE_SET_USED(x) (void)(x)
+#define UNLIKELY(x) (__builtin_expect(!!(x), 0))
 
 struct udma_u_doorbell {
 	uint32_t id;
@@ -95,6 +96,7 @@ struct udma_u_context {
 	uint32_t		die_id;
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
+	bool			sva_sep_mode_en;
 	bool			hugepage_enable;
 	pthread_mutex_t		hugepage_lock;
 	struct udma_u_hugepage_priv *hugepage_list;
