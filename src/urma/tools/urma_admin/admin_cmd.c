@@ -139,7 +139,7 @@ int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
     }
 
     printf("Unknown cmd '%s'.\n", cmd_name);
-    return 0;
+    return -EINVAL;
 }
 
 bool is_ubc(const char *dev_name)
