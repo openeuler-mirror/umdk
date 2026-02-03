@@ -105,11 +105,11 @@ private:
     __aicore__ inline void UpdateTokenNumsOut();
     __aicore__ inline GM_ADDR GetWindAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * halfWinSize_ + STATE_SIZE;
+        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + IPC_DATA_OFFSET + winDataSizeOffset_ + rankId * OPT_RANK_OFFSET;
     }
     __aicore__ inline GM_ADDR GetWindStateAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * halfWinSize_;
+        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * WIN_STATE_OFFSET;
     }
 
     __aicore__ inline uint32_t MIN(uint32_t x, uint32_t y)
