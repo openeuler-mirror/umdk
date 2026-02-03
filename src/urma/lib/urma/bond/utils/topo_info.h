@@ -68,6 +68,12 @@ typedef struct {
     direct_dev_info_t direct_dev_info;
 } direct_dev_node_t;
 
+typedef struct eid_mapping_entry {
+    hmap_node_t hmap_node;
+    urma_eid_t  key_eid;
+    urma_eid_t  bonding_eid;
+} eid_mapping_entry_t;
+
 int direct_dev_hash_table_create(bondp_hash_table_t *tbl, uint32_t size);
 
 int direct_dev_hash_table_add(bondp_hash_table_t *tbl, bondp_topo_agg_dev_t *topo_info,
@@ -79,6 +85,7 @@ typedef struct topo_map {
     bondp_topo_node_t topo_infos[MAX_NODE_NUM];
     uint32_t node_num;
     bondp_hash_table_t direct_dev_hash_table;
+    bondp_hash_table_t eid_mapping_hash_table; 
 } topo_map_t;
 
 /* The following functions needs the caller to check the validity of the parameters */
