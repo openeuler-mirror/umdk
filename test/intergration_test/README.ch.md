@@ -59,7 +59,7 @@
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
 ```
 **说明：** 
-- test_nic1的name、eid分别填写urma_admin show命令查询出来的设备名称和eid，比如bonding_dev_0设备，eid为4245:4944:0000:0000:0000:0000:0200:0000
+- test_nic1的name、eid分别填写urma_admin show命令查询出来的设备名称和eid，推荐使用bonding_dev_0设备
 - test_nic1的ip现在未使用，填写manage_nic的ip即可
 
 #### 三、用例运行
