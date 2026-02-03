@@ -110,7 +110,6 @@ CASE_16RANK = {
     "hidden_size": 7168,
 }
 
-@Author("l00679719")
 @MPTest
 @A3Test
 @SKIP_ENV_RANKSIZE_UNEQUAL(16)
