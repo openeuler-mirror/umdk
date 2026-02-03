@@ -358,7 +358,6 @@ CASE_8RANK = {
     "with_mc2_mask": False,
 }
 
-@Author("w00939310") # 用例作者
 @MPTest # 用例类型，此处代表多进程测试例
 @A3Test
 @SKIP_ENV_RANKSIZE_UNEQUAL(4) # RankSize不为期望的4时跳过此用例

@@ -155,7 +155,6 @@ CASE_8RANK = {
 }
 is_encode_utf8=True
 
-@Author("g00852163") # 用例作者
 @MPTest # 用例类型，此处代表多进程测试例
 @A3Test
 @SKIP_ENV_RANKSIZE_UNEQUAL(16) # RankSize不为期望的16时，跳过此用例
