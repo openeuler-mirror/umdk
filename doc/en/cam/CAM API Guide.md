@@ -49,7 +49,7 @@ Dispatch interface based on SHMEM, which is used for token dispatch to different
 |shared_expert_num|int|Required|Only support 1, set to 1|Shared expert number|
 |shared_expert_rank_num|int|Required|[0, ep_world_size-1]|Shared expert rank number|
 |quant_mode|int|Required|set to 0 when no quant，set to 2 when quant|Quant mode|
-|global_bs|int|Required|Value constrains by the total HBM buffer size.|Global BS value upper bound in the EP communicator|
+|global_bs|int|Required|Value constrains by the total Memory buffer size.|Global BS value upper bound in the EP communicator|
 |expert_token_nums_type|int|Required|0: Output is the token processing number of each expert；1：Output is the prefix sum of each expert's token processing number|expert_token_nums_out data format indicator|
 |ext_info|int|Required|--|Basic address pointer return value after SHMEM initiation|
 ##### 1.1.1.4 Output Parameters 
@@ -131,7 +131,7 @@ Combine interface based on SHMEM, which is used for token combine from different
 |expert_shard_type|int|Required|Not support，set to 0|--|
 |shared_expert_num|int|Required|Set to 1|Shared expert number|
 |shared_expert_rank_num|int|Required|[0, ep_world_size-1]|Shared expert rank ID|
-|global_bs|int|Required|Value constrains by the total HBM buffer size.|Global BS value upper bound in the EP communicator|
+|global_bs|int|Required|Value constrains by the total Memory buffer size.|Global BS value upper bound in the EP communicator|
 |out_dtype|int|Required|Not support，set to 0|--|
 |comm_quant_mode|int|Required|Set to 0 when no quant, set to 2 when quant|Quant mode|
 |group_list_type|int|Required|Not support，set to 0|--|
