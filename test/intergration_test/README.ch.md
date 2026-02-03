@@ -75,6 +75,7 @@
   find ./ -name test.py | xargs -i pytest {}
 ```
 **注意事项：**
+- 测试代码需要在2台host上都存放，且目录结构需保持一致
 - 请在host1上来执行用例
 - 日志检查：默认采用rsyslog记录日志，归档在/var/log/umdk/目录，日志文件名称为：二进制名称.log
 
