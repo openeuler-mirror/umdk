@@ -485,3 +485,54 @@ int umq_huge_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     }
     return headroom_reset(qbuf, headroom_size, g_huge_pool_ctx.mode, pool->block_size);
 }
+
+int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
+{
+    /**
+     * The huge memory pool is not necessarily initialized
+     * If it is not initialized, no statistics are returned, yet the operation itself returns successfully
+     */ 
+    if (!g_huge_pool_ctx.inited) {
+        UMQ_VLOG_DEBUG(VLOG_UMQ, "huge qbuf pool has not been inited\n");
+        return UMQ_SUCCESS;
+    }
+
+    uint32_t umq_buf_t_size = (uint32_t)sizeof(umq_buf_t);
+    umq_qbuf_pool_info_t *qbuf_pool_info = NULL;
+    huge_pool_t *pool = NULL;
+    uint32_t block_size;
+    for (uint32_t i = 0; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
+        if (qbuf_pool_stats->num >= UMQ_STATS_QBUF_POOL_TYPE_MAX) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "count of qbuf pool info exceeds maximum %u\n", UMQ_STATS_QBUF_POOL_TYPE_MAX);
+            return -UMQ_ERR_EINVAL;
+        }
+        qbuf_pool_info = &qbuf_pool_stats->qbuf_pool_info[qbuf_pool_stats->num];
+        pool = &g_huge_pool_ctx.pool[i];
+        block_size = pool->block_size;
+        qbuf_pool_info->mode = g_huge_pool_ctx.mode;
+        qbuf_pool_info->total_size = pool->total_size;
+        qbuf_pool_info->headroom_size = g_huge_pool_ctx.headroom_size;
+        qbuf_pool_info->block_size = block_size;
+        qbuf_pool_info->total_block_num = pool->total_block_num;
+        qbuf_pool_info->umq_buf_t_size = umq_buf_t_size;
+        if (g_huge_pool_ctx.mode == UMQ_BUF_SPLIT) {
+            qbuf_pool_info->data_size = block_size;
+            qbuf_pool_info->buf_size = block_size + umq_buf_t_size;
+            qbuf_pool_info->available_mem.split.block_num_with_data = pool->block_pool.buf_cnt_with_data;
+            qbuf_pool_info->available_mem.split.size_with_data = pool->block_pool.buf_cnt_with_data *
+                (block_size + umq_buf_t_size);
+            qbuf_pool_info->available_mem.split.block_num_without_data =
+                pool->block_pool.buf_cnt_without_data;
+            qbuf_pool_info->available_mem.split.size_without_data =
+                pool->block_pool.buf_cnt_without_data * umq_buf_t_size;
+        } else {
+            qbuf_pool_info->data_size = block_size - umq_buf_t_size;
+            qbuf_pool_info->buf_size = block_size;
+            qbuf_pool_info->available_mem.combine.block_num_with_data =
+                pool->block_pool.buf_cnt_with_data;
+            qbuf_pool_info->available_mem.combine.size_with_data = pool->block_pool.buf_cnt_with_data * block_size;
+        }
+        qbuf_pool_stats->num++;
+    }
+    return UMQ_SUCCESS;
+}

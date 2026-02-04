@@ -2639,18 +2639,16 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
     return p_num;
 }
 
-int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if (out->addr == 0 || out->len != sizeof(umq_flow_control_stats_t) || !queue->flow_control.enabled) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub user ctl parameter invalid\n",
-            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
+    if (!queue->flow_control.enabled) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "flow control disabled\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_flow_control_stats_t *stats = (umq_flow_control_stats_t *)(uintptr_t)out->addr;
     ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
-    pool->ops.stats_query(pool, &stats->pool_credit);
-    queue->flow_control.ops.stats_query(&queue->flow_control, queue, &stats->queue_credit);
+    pool->ops.stats_query(pool, &flow_control_stats->pool_credit);
+    queue->flow_control.ops.stats_query(&queue->flow_control, queue, flow_control_stats);
     return UMQ_SUCCESS;
 }

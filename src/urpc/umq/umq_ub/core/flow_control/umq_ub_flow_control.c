@@ -198,18 +198,32 @@ static ALWAYS_INLINE uint64_t local_rx_allocated_load_non_atomic(struct ub_flow_
 }
 
 static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_control *fc,
-    struct ub_queue *queue, umq_credit_private_stats_t *out)
+    struct ub_queue *queue, umq_flow_control_stats_t *out)
 {
-    out->queue_idle = fc->local_rx_posted;
-    out->queue_be_allocated = fc->stats_u64[ALLOCATED_SUCCESS] -
+    umq_credit_private_stats_t *queue_credit = &out->queue_credit;
+    queue_credit->queue_idle = fc->local_rx_posted;
+    queue_credit->queue_be_allocated = fc->stats_u64[ALLOCATED_SUCCESS] -
         queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id];
-    out->queue_acquired = fc->remote_rx_window;
-    out->total_queue_idle = fc->total_local_rx_posted;
-    out->total_queue_be_allocated = fc->stats_u64[ALLOCATED_TOTAL];
-    out->total_queue_acquired = fc->total_remote_rx_received;
-    out->total_queue_acquired_err = fc->total_remote_rx_received_error;
-    out->total_queue_post_tx_success = fc->total_remote_rx_consumed;
-    out->total_queue_post_tx_err = fc->total_flow_controlled_wr;
+    queue_credit->queue_acquired = fc->remote_rx_window;
+    queue_credit->total_queue_idle = fc->total_local_rx_posted;
+    queue_credit->total_queue_be_allocated = fc->stats_u64[ALLOCATED_TOTAL];
+    queue_credit->total_queue_acquired = fc->total_remote_rx_received;
+    queue_credit->total_queue_acquired_err = fc->total_remote_rx_received_error;
+    queue_credit->total_queue_post_tx_success = fc->total_remote_rx_consumed;
+    queue_credit->total_queue_post_tx_err = fc->total_flow_controlled_wr;
+
+    umq_packet_stats_t *packet_stats = &out->packet_stats;
+    packet_stats->send_cnt = fc->packet_stats[UB_PACKET_STATS_TYPE_SEND];
+    packet_stats->send_success = fc->packet_stats[UB_PACKET_STATS_TYPE_SEND_SUCCESS];
+    packet_stats->recv_cnt = fc->packet_stats[UB_PACKET_STATS_TYPE_RECV];
+    packet_stats->send_error_cnt = fc->packet_stats[UB_PACKET_STATS_TYPE_SEND_ERROR];
+    packet_stats->recv_error_cnt = fc->packet_stats[UB_PACKET_STATS_TYPE_RECV_ERROR];
+}
+
+static ALWAYS_INLINE void flow_control_packet_stats_non_atomic(
+    struct ub_flow_control *fc, uint32_t cnt, ub_packet_stats_type_t type)
+{
+    fc->packet_stats[type] += cnt;
 }
 
 static ALWAYS_INLINE void credit_pool_stats_query_non_atomic(ub_credit_pool_t *pool, umq_credit_pool_stats_t *out)
@@ -316,19 +330,37 @@ static ALWAYS_INLINE uint64_t local_rx_allocated_load_atomic(struct ub_flow_cont
 }
 
 static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control *fc,
-    struct ub_queue *queue, umq_credit_private_stats_t *out)
+    struct ub_queue *queue, umq_flow_control_stats_t *out)
 {
-    out->queue_idle = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
+    umq_credit_private_stats_t *queue_credit = &out->queue_credit;
+    queue_credit->queue_idle = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
     uint64_t consumed_credit = __atomic_load_n(
         &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], __ATOMIC_RELAXED);
-    out->queue_be_allocated = __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED) - consumed_credit;
-    out->queue_acquired = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
-    out->total_queue_idle = __atomic_load_n(&fc->total_local_rx_posted, __ATOMIC_RELAXED);
-    out->total_queue_acquired = __atomic_load_n(&fc->total_remote_rx_received, __ATOMIC_RELAXED);
-    out->total_queue_acquired_err = __atomic_load_n(&fc->total_remote_rx_received_error, __ATOMIC_RELAXED);
-    out->total_queue_be_allocated = __atomic_load_n(&fc->stats_u64[ALLOCATED_TOTAL], __ATOMIC_RELAXED);
-    out->total_queue_post_tx_success = __atomic_load_n(&fc->total_remote_rx_consumed, __ATOMIC_RELAXED);
-    out->total_queue_post_tx_err = __atomic_load_n(&fc->total_flow_controlled_wr, __ATOMIC_RELAXED);
+    queue_credit->queue_be_allocated =
+        __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED) - consumed_credit;
+    queue_credit->queue_acquired = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
+    queue_credit->total_queue_idle = __atomic_load_n(&fc->total_local_rx_posted, __ATOMIC_RELAXED);
+    queue_credit->total_queue_acquired = __atomic_load_n(&fc->total_remote_rx_received, __ATOMIC_RELAXED);
+    queue_credit->total_queue_acquired_err = __atomic_load_n(&fc->total_remote_rx_received_error, __ATOMIC_RELAXED);
+    queue_credit->total_queue_be_allocated = __atomic_load_n(&fc->stats_u64[ALLOCATED_TOTAL], __ATOMIC_RELAXED);
+    queue_credit->total_queue_post_tx_success = __atomic_load_n(&fc->total_remote_rx_consumed, __ATOMIC_RELAXED);
+    queue_credit->total_queue_post_tx_err = __atomic_load_n(&fc->total_flow_controlled_wr, __ATOMIC_RELAXED);
+
+    umq_packet_stats_t *packet_stats = &out->packet_stats;
+    packet_stats->send_cnt = __atomic_load_n(&fc->packet_stats[UB_PACKET_STATS_TYPE_SEND], __ATOMIC_RELAXED);
+    packet_stats->send_success =
+        __atomic_load_n(&fc->packet_stats[UB_PACKET_STATS_TYPE_SEND_SUCCESS], __ATOMIC_RELAXED);
+    packet_stats->recv_cnt = __atomic_load_n(&fc->packet_stats[UB_PACKET_STATS_TYPE_RECV], __ATOMIC_RELAXED);
+    packet_stats->send_error_cnt =
+        __atomic_load_n(&fc->packet_stats[UB_PACKET_STATS_TYPE_SEND_ERROR], __ATOMIC_RELAXED);
+    packet_stats->recv_error_cnt =
+        __atomic_load_n(&fc->packet_stats[UB_PACKET_STATS_TYPE_RECV_ERROR], __ATOMIC_RELAXED);
+}
+
+static ALWAYS_INLINE void flow_control_packet_stats_atomic(
+    struct ub_flow_control *fc, uint32_t cnt, ub_packet_stats_type_t type)
+{
+    (void)__atomic_add_fetch(&fc->packet_stats[type], cnt, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE uint16_t available_credit_inc_atomic(ub_credit_pool_t *pool, uint16_t count)
@@ -481,6 +513,7 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->ops.local_rx_allocated_load = local_rx_allocated_load_atomic;
 
         fc->ops.stats_query = flow_control_stats_query_atomic;
+        fc->ops.packet_stats = flow_control_packet_stats_atomic;
     } else {
         fc->ops.remote_rx_window_inc = remote_rx_window_inc_non_atomic;
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_non_atomic;
@@ -491,6 +524,7 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->ops.local_rx_allocated_load = local_rx_allocated_load_non_atomic;
 
         fc->ops.stats_query = flow_control_stats_query_non_atomic;
+        fc->ops.packet_stats = flow_control_packet_stats_non_atomic;
     }
 
     UMQ_VLOG_INFO(VLOG_UMQ, "umq flow control init success, use %s window\n",
@@ -557,6 +591,7 @@ void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
     if (status == URMA_SUCCESS) {
         fc->remote_get = true;
         queue->interrupt_ctx.tx_fc_interrupt = true;
+        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return;
     }
 
@@ -638,6 +673,7 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
     urma_jfs_wr_t *bad_wr = NULL;
     urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
+        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return;
     }
     umq_ub_permission_release(fc);
@@ -679,6 +715,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
     urma_jfs_wr_t *bad_wr = NULL;
     urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
+        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
     }
 
