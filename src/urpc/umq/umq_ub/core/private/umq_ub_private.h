@@ -27,6 +27,7 @@
 #include "util_id_generator.h"
 #include "umq_inner.h"
 #include "umq_qbuf_pool.h"
+#include "umq_huge_qbuf_pool.h"
 #include "umq_ub_imm_data.h"
 
 #ifdef __cplusplus
@@ -35,7 +36,7 @@ extern "C" {
 
 #define UMQ_MAX_ID_NUM (1 << 16)
 #define UMQ_CONTINUE_FLAG 1
-#define UMQ_MAX_TSEG_NUM 255
+#define UMQ_MAX_TSEG_NUM (1 + (64 * HUGE_QBUF_POOL_SIZE_TYPE_MAX))
 #define UMQ_UB_RW_SEGMENT_LEN 64 // ub_queue read/write buf splited 64B for each module, such as mem import/flow control
 #define HUGE_QBUF_BUFFER_INC_BATCH 64
 #define UMQ_QBUF_ALIGN_SIZE 4096
@@ -49,11 +50,11 @@ extern "C" {
 #define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
 typedef enum umq_size_interval {
-    UMQ_SIZE_INVALID_INTERVAL = 0,
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
     UMQ_SIZE_SMALL_MID_INTERVAL,    // (umq_buf_size_small(), umq_buf_size_middle()] size
     UMQ_SIZE_MID_BIG_INTERVAL,      // (umq_buf_size_middle(), umq_buf_size_big()] size
     UMQ_SIZE_BIG_HUGE_INTERVAL,     // (umq_buf_size_big(), umq_buf_size_huge()] size
+    UMQ_SIZE_HUGE_GIGANTIC_INTERVAL, // (umq_buf_size_huge(), umq_buf_size_gigantic()] size
     UMQ_SIZE_INTERVAL_MAX,
 } umq_size_interval_t;
 

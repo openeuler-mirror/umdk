@@ -618,6 +618,8 @@ typedef struct umq_cfg_get {
     uint32_t tx_depth;            // depth of the send buffer ring
     uint64_t umq_ctx;             // umq ctx
     uint64_t share_rq_umqh;       // share jfr queue handle
+    uint8_t max_rx_sge;           // max sge number of receive array
+    uint8_t max_tx_sge;           // max sge number of send array
     umq_trans_mode_t trans_mode;  // transmission mode of the queue
     umq_queue_mode_t mode;        // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;            // queue state
