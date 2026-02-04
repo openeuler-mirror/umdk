@@ -11,6 +11,7 @@
 #define UMQ_SHM_QBUF_POOL_H
 
 #include "qbuf_list.h"
+#include "umq_dfx_types.h"
 #include "umq_types.h"
 #include "umq_qbuf_pool.h"
 #include "msg_ring.h"

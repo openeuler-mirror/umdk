@@ -36,6 +36,10 @@ typedef struct umq_framework {
     char pro_ops_get_funcname[MAX_FUNCNAME_LEN];
     umq_pro_ops_get_t pro_ops_get_func;
     umq_pro_ops_t *pro_tp_ops;
+
+    char dfx_ops_get_funcname[MAX_FUNCNAME_LEN];
+    umq_dfx_ops_get_t dfx_ops_get_func;
+    umq_dfx_ops_t *dfx_tp_ops;
 } umq_framework_t;
 
 static bool g_umq_inited = false;
@@ -62,6 +66,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ub_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ub_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_IB] = {
         .mode = UMQ_TRANS_MODE_IB,
@@ -78,6 +86,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ib_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ib_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_UCP] = {
         .mode = UMQ_TRANS_MODE_UCP,
@@ -94,6 +106,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ucp_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ucp_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_IPC] = {
         .mode = UMQ_TRANS_MODE_IPC,
@@ -110,6 +126,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ipc_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ipc_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_UBMM] = {
         .mode = UMQ_TRANS_MODE_UBMM,
@@ -126,6 +146,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ubmm_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ubmm_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_UB_PLUS] = {
         .mode = UMQ_TRANS_MODE_UB_PLUS,
@@ -142,6 +166,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ub_plus_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ub_plus_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_IB_PLUS] = {
         .mode = UMQ_TRANS_MODE_IB_PLUS,
@@ -158,6 +186,10 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ib_plus_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+
+        .dfx_ops_get_funcname = "umq_ib_plus_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
     [UMQ_TRANS_MODE_UBMM_PLUS] = {
         .mode = UMQ_TRANS_MODE_UBMM_PLUS,
@@ -174,6 +206,9 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_ops_get_funcname = "umq_pro_ubmm_plus_ops_get",
         .pro_ops_get_func = NULL,
         .pro_tp_ops = NULL,
+        .dfx_ops_get_funcname = "umq_ubmm_plus_dfx_ops_get",
+        .dfx_ops_get_func = NULL,
+        .dfx_tp_ops = NULL,
     },
 };
 
