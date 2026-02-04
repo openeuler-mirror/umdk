@@ -314,6 +314,22 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 int umq_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
 
 /**
+ * Get all devices information, umq_dev_info_list_free needs to be called to free memory.
+ * @param[in] umq_trans_mode: umq trans mdoe
+ * @param[out] dev_num: device information array size
+ * Return: devices information, NULL on failure (get error code from errno)
+ */
+umq_dev_info_t *umq_dev_info_list_get(umq_trans_mode_t umq_trans_mode, int *dev_num);
+
+/**
+ * Free devices information allocated by umq_dev_info_list_get.
+ * @param[in] umq_trans_mode: umq trans mdoe
+ * @param[in] umq_dev_info: device information to free
+ * Return: void
+ */
+void umq_dev_info_list_free(umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
+
+/**
  * Query umq configuration
  * @param[in] umqh: Queue handle
  * @param[out] cfg: Configuration information for umq
