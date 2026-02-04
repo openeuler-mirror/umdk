@@ -292,17 +292,6 @@ TEST_F(UmqIPCTest, test_umq_state_get_success)
 }
 
 // IPC umq not support
-TEST_F(UmqIPCTest, test_umq_user_ctl_failure)
-{
-    umq_user_ctl_in_t in;
-    umq_user_ctl_out_t out;
-    ASSERT_NE(umq_user_ctl(test_ipc_umqh(), nullptr, nullptr), 0);
-    ASSERT_NE(umq_user_ctl(test_ipc_umqh(), &in, nullptr), 0);
-    ASSERT_NE(umq_user_ctl(test_ipc_umqh(), nullptr, &out), 0);
-    ASSERT_NE(umq_user_ctl(test_ipc_umqh(), &in, &out), 0);
-}
-
-// IPC umq not support
 TEST_F(UmqIPCTest, test_umq_cfg_get_failure)
 {
     umq_cfg_get_t cfg;

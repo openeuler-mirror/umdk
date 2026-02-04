@@ -447,18 +447,19 @@ umq_buf_mode_t umq_qbuf_mode_get(void)
     return g_qbuf_pool.mode;
 }
 
-int umq_qbuf_pool_info_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
+int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
-    if (in->opcode != UMQ_OPCODE_QBUF_POOL_INFO_QUERY || out->addr == 0 || out->len != sizeof(umq_qbuf_pool_info_t)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umq user ctl parameter invalid\n");
-        return -UMQ_ERR_EINVAL;
-    }
     if (!g_qbuf_pool.inited) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
 
-    umq_qbuf_pool_info_t *qbuf_pool_info = (umq_qbuf_pool_info_t *)(uintptr_t)out->addr;
+    if (qbuf_pool_stats->num >= UMQ_STATS_QBUF_POOL_TYPE_MAX) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "count of qbuf pool info exceeds maximum %u\n", UMQ_STATS_QBUF_POOL_TYPE_MAX);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_qbuf_pool_info_t *qbuf_pool_info = &qbuf_pool_stats->qbuf_pool_info[qbuf_pool_stats->num];
     uint32_t block_size = g_qbuf_pool.block_size;
     uint32_t umq_buf_t_size = (uint32_t)sizeof(umq_buf_t);
     umq_buf_mode_t mode = g_qbuf_pool.mode;
@@ -485,6 +486,7 @@ int umq_qbuf_pool_info_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl
             g_qbuf_pool.block_pool.buf_cnt_with_data;
         qbuf_pool_info->available_mem.combine.size_with_data = g_qbuf_pool.block_pool.buf_cnt_with_data * block_size;
     }
+    qbuf_pool_stats->num++;
     return UMQ_SUCCESS;
 }
 

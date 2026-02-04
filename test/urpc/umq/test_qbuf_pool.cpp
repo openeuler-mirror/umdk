@@ -128,39 +128,11 @@ TEST_F(QbufPoolTest, test_qbuf_pool_combine_alloc_free)
 
     umq_qbuf_free(&list);
 
-    umq_user_ctl_in_t in;
-    umq_user_ctl_out_t out;
-    umq_qbuf_pool_info_t info;
-    memset(&in, 0, sizeof(in));
-    memset(&out, 0, sizeof(out));
-    memset(&info, 0, sizeof(info));
+    umq_qbuf_pool_stats_t qbuf_pool_stats;
+    memset(&qbuf_pool_stats, 0, sizeof(qbuf_pool_stats));
 
-    in.opcode = UMQ_OPCODE_QBUF_POOL_INFO_QUERY;
-    out.addr = reinterpret_cast<uint64_t>(&info);
-    out.len = sizeof(info);
-
-    ASSERT_EQ(umq_qbuf_pool_info_get(0, &in, &out), UMQ_SUCCESS);
-    ASSERT_EQ(info.mode, UMQ_BUF_COMBINE);
-}
-
-TEST_F(QbufPoolTest, test_qbuf_pool_info_get_invalid)
-{
-    // Invalid parameters should fail info query.
-    umq_user_ctl_in_t in;
-    umq_user_ctl_out_t out;
-    umq_qbuf_pool_info_t info;
-    memset(&in, 0, sizeof(in));
-    memset(&out, 0, sizeof(out));
-    memset(&info, 0, sizeof(info));
-
-    in.opcode = UMQ_OPCODE_QBUF_POOL_INFO_QUERY;
-    out.addr = reinterpret_cast<uint64_t>(&info);
-    out.len = sizeof(info);
-
-    ASSERT_NE(umq_qbuf_pool_info_get(0, &in, &out), UMQ_SUCCESS);
-
-    in.opcode = UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY;
-    ASSERT_NE(umq_qbuf_pool_info_get(0, &in, &out), UMQ_SUCCESS);
+    ASSERT_EQ(umq_qbuf_pool_info_get(&qbuf_pool_stats), UMQ_SUCCESS);
+    ASSERT_EQ(qbuf_pool_stats[0].mode, UMQ_BUF_COMBINE);
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_zero)

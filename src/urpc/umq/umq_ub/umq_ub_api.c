@@ -156,11 +156,6 @@ static int umq_tp_ub_get_route_list_impl(const umq_route_t *route, umq_route_lis
     return umq_ub_get_route_list_impl(route, route_list);
 }
 
-static int umq_tp_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
-{
-    return umq_ub_user_ctl_impl(umqh_tp, in, out);
-}
-
 static int umq_tp_ub_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 {
     return umq_qbuf_headroom_reset(qbuf, headroom_size);
@@ -212,7 +207,6 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_buf_headroom_reset = umq_tp_ub_buf_headroom_reset,
     .umq_tp_dev_add = umq_tp_ub_dev_add_impl,
     .umq_tp_get_topo = umq_tp_ub_get_route_list_impl,
-    .umq_tp_user_ctl = umq_tp_ub_user_ctl_impl,
     .umq_tp_mempool_state_get = umq_tp_ub_mempool_state_get,
     .umq_tp_mempool_state_refresh = umq_tp_ub_mempool_state_refresh,
     .umq_tp_dev_info_get = umq_tp_ub_dev_info_get,

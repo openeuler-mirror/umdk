@@ -1,28 +1,29 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- * Description: Public header file of UMQ dfx
+ * Description: realize func for umq ub plus dfx api
  * Create: 2026-2-4
  * Note:
  * History: 2026-2-4
  */
 
 #include "umq_errno.h"
+#include "umq_ub_impl.h"
 #include "umq_tp_dfx_api.h"
 
 static int umq_tp_ub_plus_stats_flow_control_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_plus_stats_flow_control_get_impl(umqh_tp, flow_control_stats);
 }
 
 static int umq_tp_ub_plus_stats_qbuf_pool_get(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_stats_qbuf_pool_get_impl(umqh_tp, qbuf_pool_stats);
 }
 
 static int umq_tp_ub_plus_info_get(uint64_t umqh_tp, umq_info_t *umq_info)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_info_get_impl(umqh_tp, umq_info);
 }
 
 static int umq_tp_ub_plus_stats_io_get(uint64_t umqh_tp, umq_packet_stats_t *packet_stats)

@@ -22,6 +22,7 @@
 #include "urpc_hmap.h"
 #include "urpc_util.h"
 #include "urpc_list.h"
+#include "umq_dfx_types.h"
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "util_id_generator.h"
@@ -96,6 +97,15 @@ typedef struct ub_import_mempool_info {
     uint32_t mempool_token_value;
 } ub_import_mempool_info_t;
 
+typedef enum ub_packet_stats_type {
+    UB_PACKET_STATS_TYPE_SEND,
+    UB_PACKET_STATS_TYPE_SEND_SUCCESS,
+    UB_PACKET_STATS_TYPE_RECV,
+    UB_PACKET_STATS_TYPE_SEND_ERROR,
+    UB_PACKET_STATS_TYPE_RECV_ERROR,
+    UB_PACKET_STATS_TYPE_MAX,
+} ub_packet_stats_type_t;
+
 struct ub_flow_control;
 struct ub_queue;
 typedef struct ub_flow_control_window_ops {
@@ -110,7 +120,8 @@ typedef struct ub_flow_control_window_ops {
     uint64_t (*local_rx_allocated_inc)(struct ub_flow_control *fc, uint16_t new_win);
     uint16_t (*local_rx_allocated_dec)(struct ub_flow_control *fc, uint16_t required_win);
     uint64_t (*local_rx_allocated_load)(struct ub_flow_control *fc);
-    void (*stats_query)(struct ub_flow_control *fc, struct ub_queue *queue, umq_credit_private_stats_t *out);
+    void (*stats_query)(struct ub_flow_control *fc, struct ub_queue *queue, umq_flow_control_stats_t *out);
+    void (*packet_stats)(struct ub_flow_control *fc, uint32_t cnt, ub_packet_stats_type_t type);
 } ub_flow_control_window_ops_t;
 
 typedef enum ub_queue_fc_stat_u16 {
@@ -132,6 +143,7 @@ typedef struct ub_flow_control {
     volatile uint64_t total_remote_rx_consumed;
     volatile uint64_t total_remote_rx_received_error;
     volatile uint64_t total_flow_controlled_wr;
+    volatile uint64_t packet_stats[UB_PACKET_STATS_TYPE_MAX];
     volatile uint64_t stats_u64[FC_COUNTER_MAX_U64];
     uint64_t remote_win_buf_addr;
     uint32_t remote_win_buf_len;
@@ -476,7 +488,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
-int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats);
 
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
 void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf);
