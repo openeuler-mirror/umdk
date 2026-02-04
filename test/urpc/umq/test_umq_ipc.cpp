@@ -13,6 +13,7 @@
 #include "umq_api.h"
 #include "umq_pro_api.h"
 #include "umq_qbuf_pool.h"
+#include "umq_huge_qbuf_pool.h"
 #include "urpc_util.h"
 
 #define TEST_IPC_BIND_INFO_SIZE 2048
@@ -655,7 +656,7 @@ TEST(UmqIPCRawTest, test_umq_buf_alloc_failure)
     qbuf = umq_buf_alloc(4096, 1, 0, &option);
     ASSERT_EQ(qbuf, nullptr);
 
-    qbuf = umq_buf_alloc(umq_buf_size_middle(), 1, 0, &option);
+    qbuf = umq_buf_alloc(umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID), 1, 0, &option);
     ASSERT_EQ(qbuf, nullptr);
     umq_buf_free(qbuf);
 

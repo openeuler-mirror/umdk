@@ -30,9 +30,9 @@ extern "C" {
 #define UMQ_QBUF_SIZE_POW_16K           (14)
 #define UMQ_QBUF_SIZE_POW_32K           (15)
 #define UMQ_QBUF_SIZE_POW_64K           (16)
-// middle = small * 32, and big = middle * 32
-#define UMQ_QBUF_SIZE_POW_INTERVAL      (5)
-#define UMQ_QBUF_SIZE_MULTIPLE_INTERVAL (6)
+// middle = small * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL, and big = middle * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL
+#define UMQ_QBUF_SIZE_POW_INTERVAL      (2)
+#define UMQ_QBUF_SIZE_MULTIPLE_INTERVAL (4)
 #define QBUF_ALLOC_STATE_FREE      0            // define qbuf free state
 #define QBUF_ALLOC_STATE_ALLOCATED 1            // define qbuf allocated state
 
@@ -54,40 +54,10 @@ int umq_buf_size_pow_small_set(umq_buf_block_size_t block_size);
 
 uint8_t umq_buf_size_pow_small(void);
 
-static inline uint8_t umq_buf_size_mul_middle(void)
-{
-    return UMQ_QBUF_SIZE_MULTIPLE_INTERVAL;
-}
-
-static inline uint8_t umq_buf_size_mul_big(void)
-{
-    return (umq_buf_size_mul_middle() * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL);
-}
-
-static inline uint8_t umq_buf_size_mul_huge(void)
-{
-    return (umq_buf_size_mul_big() * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL);
-}
-
 // small qbuf block size: 8K, or 64K size
 static inline uint32_t umq_buf_size_small(void)
 {
     return (1 << umq_buf_size_pow_small());
-}
-
-static inline uint32_t umq_buf_size_middle(void)
-{
-    return umq_buf_size_small() * umq_buf_size_mul_middle();
-}
-
-static inline uint32_t umq_buf_size_big(void)
-{
-    return umq_buf_size_small() * umq_buf_size_mul_big();
-}
-
-static inline uint32_t umq_buf_size_huge(void)
-{
-    return umq_buf_size_small() * umq_buf_size_mul_huge();
 }
 
 void *umq_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size);

@@ -11,6 +11,7 @@
 #include "perf.h"
 #include "urpc_tlv.h"
 #include "umq_qbuf_pool.h"
+#include "umq_huge_qbuf_pool.h"
 #include "umq_ub_flow_control.h"
 #include "qbuf_list.h"
 #include "umq_ub_api.h"
@@ -1421,18 +1422,14 @@ util_id_allocator_t *umq_ub_id_allocator_get(void)
 
 static uint32_t umq_read_alloc_mem_size(umq_size_interval_t size_interval)
 {
+    if (size_interval >= UMQ_SIZE_INTERVAL_MAX || size_interval < 0) {
+        UMQ_LIMIT_VLOG_ERR("size_interval: %d is invalid\n", size_interval);
+        return UINT32_MAX;
+    }
     if (size_interval == UMQ_SIZE_0K_SMALL_INTERVAL) {
         return umq_buf_size_small();
-    } else if (size_interval == UMQ_SIZE_SMALL_MID_INTERVAL) {
-        return umq_buf_size_middle();
-    } else if (size_interval == UMQ_SIZE_MID_BIG_INTERVAL) {
-        return umq_buf_size_big();
-    } else if (size_interval == UMQ_SIZE_BIG_HUGE_INTERVAL) {
-        return umq_buf_size_huge();
     }
-
-    UMQ_LIMIT_VLOG_ERR("size_interval: %d is invalid\n", size_interval);
-    return UINT32_MAX;
+    return umq_huge_qbuf_get_size_by_type(size_interval - 1);
 }
 
 static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(
@@ -1824,14 +1821,23 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
 
 static inline uint32_t get_mem_interval(uint32_t used_mem_size)
 {
+    uint32_t i = 0;
+    uint32_t buf_size;
+
     if (used_mem_size <= umq_buf_size_small()) {
-        return UMQ_SIZE_0K_SMALL_INTERVAL;
-    } else if (used_mem_size <= umq_buf_size_middle()) {
-        return UMQ_SIZE_SMALL_MID_INTERVAL;
-    } else if (used_mem_size <= umq_buf_size_big()) {
-        return UMQ_SIZE_MID_BIG_INTERVAL;
+        return i;
     }
-    return UMQ_SIZE_BIG_HUGE_INTERVAL;
+
+    for (i = UMQ_SIZE_SMALL_MID_INTERVAL; i < UMQ_SIZE_INTERVAL_MAX; i++) {
+        buf_size = umq_huge_qbuf_get_size_by_type(i - 1);
+        if (used_mem_size <= buf_size) {
+            break;
+        }
+    }
+    if (i == UMQ_SIZE_INTERVAL_MAX) {
+        return i - 1;
+    }
+    return i;
 }
 
 void ub_fill_umq_imm_head(umq_imm_head_t *umq_imm_head, umq_buf_t *buffer)

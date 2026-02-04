@@ -15,8 +15,6 @@
 #include "umq_ub_imm_data.h"
 #include "umq_ubmm_impl.h"
 
-#define UMQ_MAX_TSEG_NUM 255
-
 typedef struct umq_ubmm_init_ctx {
     uint8_t *ub_init_ctx;
     umq_trans_info_t trans_info;
