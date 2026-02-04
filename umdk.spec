@@ -349,6 +349,7 @@ fi
 %files urma-tools
 %defattr(-,root,root)
     %{_bindir}/urma_admin
+    %{_bindir}/urma_ping
     /etc/rsyslog.d/urma_admin.conf
     %{_bindir}/urma_perftest
     %{_bindir}/ubagg_cli
