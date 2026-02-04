@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "umq_types.h"
+#include "umq_dfx_types.h"
 #include "urpc_util.h"
 
 #ifdef __cplusplus

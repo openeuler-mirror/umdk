@@ -13,7 +13,6 @@
 #include "perf.h"
 
 #define UMQ_PERF_MAX_THRESH_NS         (100000u)
-#define UMQ_PERF_REC_MAX_NUM           (64u)
 
 #define UMQ_PERF_IO_DIRECTION_ALL_OFFSET     (0)
 #define UMQ_PERF_IO_DIRECTION_TX_OFFSET      (1)
