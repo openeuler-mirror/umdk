@@ -66,7 +66,7 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
 int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint64_t imm_value);
 
 // ubmm rendezvous related functions
-void umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf);
+int umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf);
 void umq_ub_remove_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id);
 util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp);
 

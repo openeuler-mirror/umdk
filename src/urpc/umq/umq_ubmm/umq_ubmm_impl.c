@@ -720,7 +720,11 @@ int umq_ubmm_plus_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **ba
             *bad_qbuf = qbuf;
             return -UMQ_ERR_ENODEV;
         }
-        umq_ub_record_rendezvous_buf(tp->ub_handle, msg_id, qbuf);
+        if (umq_ub_record_rendezvous_buf(tp->ub_handle, msg_id, qbuf) != UMQ_SUCCESS) {
+            umq_buf_free(send_buf);
+            *bad_qbuf = qbuf;
+            return -UMQ_ERR_ENOMEM;
+        }
     }
 
     int ret = umq_shm_qbuf_enqueue(send_buf, umqh_tp, tp->qbuf_pool_handle, rendezvous, enqueue_data);

@@ -1685,9 +1685,9 @@ static int process_send_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
         ret = UMQ_CONTINUE_FLAG;
     } else if (imm.ub_plus.sub_type == IMM_TYPE_REVERSE_PULL_MEM_FREE) {
         uint16_t msg_id = (uint16_t)(imm.ub_plus.msg_id);
-        if (msg_id != 0) {
-            ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-            umq_buf_t *buffer = (umq_buf_t *)(uintptr_t)queue->addr_list[msg_id];
+        ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
+        if (msg_id != 0 && queue->addr_list != NULL) {
+            umq_buf_t *buffer = umq_ub_queue_addr_list_remove(queue->addr_list, msg_id);
             /*
              * break qbuf list for many batches connected, only release the first batch,
              * can't break qbuf list when send, because all qbufs of 128 wr are connected,
@@ -1871,9 +1871,11 @@ void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge,
     ref_sge->token_value = tseg->user_ctx;
 }
 
-
 static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
 {
+    if (umq_ub_queue_addr_list_alloc(queue) != UMQ_SUCCESS) {
+        return -UMQ_ERR_ENOMEM;
+    }
     // apply for one to avoid memory leak
     umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), UMQ_MAX_QBUF_NUM, UMQ_INVALID_HANDLE, NULL);
     if (send_buf == NULL) {
@@ -1887,7 +1889,7 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
     };
     buf_pro->imm_data = imm_temp.value;
     uint16_t msg_id = util_id_allocator_get(&g_umq_ub_id_allocator);
-    queue->addr_list[msg_id] = (uint64_t)(uintptr_t)(*buffer);
+    umq_ub_queue_addr_list_record(queue->addr_list, msg_id, *buffer);
 
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)send_buf->buf_data;
     ub_fill_umq_imm_head(umq_imm_head, *buffer);
