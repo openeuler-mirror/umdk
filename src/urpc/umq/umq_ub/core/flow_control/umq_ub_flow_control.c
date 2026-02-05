@@ -205,6 +205,7 @@ static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_con
         queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id];
     out->queue_acquired = fc->remote_rx_window;
     out->total_queue_idle = fc->total_local_rx_posted;
+    out->total_queue_be_allocated = fc->stats_u64[ALLOCATED_TOTAL];
     out->total_queue_acquired = fc->total_remote_rx_received;
     out->total_queue_acquired_err = fc->total_remote_rx_received_error;
     out->total_queue_post_tx_success = fc->total_remote_rx_consumed;
