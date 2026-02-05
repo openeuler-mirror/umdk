@@ -582,6 +582,8 @@ TEST(UmqIPCRawTest, test_umq_get_route_list_failure)
 {
     umq_route_t route;
     umq_route_list_t route_list;
+    memset(&route, 0, sizeof(umq_route_t));
+    memset(&route_list, 0, sizeof(umq_route_list_t));
 
     ASSERT_NE(umq_get_route_list(&route, UMQ_TRANS_MODE_IPC, &route_list), 0);
 
