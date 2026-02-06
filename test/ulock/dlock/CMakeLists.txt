@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.14.1)
 
 project(dlock_ut_gtest)
 
-add_compile_options(-Wall -Wno-noexcept-type -Wno-pmf-conversions -fno-access-control -fPIC -fno-omit-frame-pointer)
+add_compile_options(-Wall -Wno-noexcept-type -Wno-pmf-conversions -fno-access-control -fPIC -fno-omit-frame-pointer -s)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
