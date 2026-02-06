@@ -6,7 +6,7 @@ set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 set(CMAKE_FLAGS_PUBILC " -Wall -Werror -Wfloat-equal -Wtrampolines -Wextra -Wno-missing-field-initializers -Wno-unused-parameter -g -O2 -rdynamic -Wl,-z,noexecstack,-z,relro,-z,now \
 -fno-strict-aliasing -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -fPIC -funsigned-char -Wformat=2 -Wdate-time -Wswitch-default -Wshadow \
--fno-common")
+-fno-common -s")
 
 if("${UB_AGG_DIS}" STREQUAL "enable")
     set(UB_AGG "disable")

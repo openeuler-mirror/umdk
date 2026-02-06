@@ -93,7 +93,8 @@ struct dlock_primary_cfg {
 extern struct test_dlock_cfg g_test_dlock_cfg;
 
 int generate_ssl_ca(std::string &pwd, std::string &path, std::string &file_suffix, int days);
-int generate_ssl_crt(struct dlock_ssl_ca_info &ca_info, std::string &pwd, std::string &path, std::string &file_suffix, int days);
+int generate_ssl_crt(struct dlock_ssl_ca_info &ca_info, std::string &pwd, std::string &path,
+    std::string &file_suffix, int days);
 int generate_ssl_file(void);
 int delete_ssl_file(void);
 void server_get_prkey_pwd(char **prkey_pwd, int *prkey_pwd_len);
