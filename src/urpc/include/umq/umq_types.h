@@ -58,6 +58,11 @@ typedef enum umq_io_direction {
     UMQ_IO_MAX,
 } umq_io_direction_t;
 
+typedef enum umq_fd_type {
+    UMQ_FD_IO = 0,      // get the fd related to I/O
+    UMQ_FD_EVENT,       // get the fd related to inner event, example return credit event
+} umq_fd_type_t;
+
 typedef enum umq_queue_mode {
     UMQ_MODE_POLLING,             // polling mode
     UMQ_MODE_INTERRUPT,           // interrupt mode
@@ -111,6 +116,7 @@ typedef enum umq_dev_assign_mode {
 typedef struct umq_interrupt_option {
     uint32_t flag;                      // indicates which below property takes effect
     umq_io_direction_t direction;
+    umq_fd_type_t fd_type;
 } umq_interrupt_option_t;
 
 typedef union umq_eid {
@@ -177,6 +183,10 @@ typedef struct umq_flow_control_cfg {
     uint16_t credits_per_request;
     // initial available credit for each umq
     uint16_t initial_credit;
+    // credit return ratio divisor, return_ratio = 1: return all credit, return_ratio = 2: return half the credit
+    uint16_t return_ratio;
+    // timeout duration, if no I/O is sent within timeout_ms, the system notifies the user to return credit
+    uint32_t timeout_ms;
     // use atomic variables as flow control window
     bool use_atomic_window;
 } umq_flow_control_cfg_t;

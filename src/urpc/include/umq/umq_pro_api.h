@@ -43,7 +43,8 @@ int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, ui
  * User should ensure thread safety if io_lock_free is true
  * Query umq interrupt fd
  * @param[in] umqh: umq handle
- * @param[in] option: option param. user should specify UMQ_IO_TX or UMQ_IO_RX, or UMQ_FAIL will be returned
+ * @param[in] option: option param. user get io fd should specify UMQ_IO_TX or UMQ_IO_RX, or UMQ_FAIL will be returned
+ * if get event fd, fd_type set UMQ_FD_EVENT, return event fd (used to notify the user to return credit)
  * Return fd >= 0 on success, error code < 0 on failure
  */
 int umq_interrupt_fd_get(uint64_t umqh, umq_interrupt_option_t *option);
