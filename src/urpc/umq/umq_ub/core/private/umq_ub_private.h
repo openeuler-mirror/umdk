@@ -74,16 +74,14 @@ typedef struct umq_imm_head {
     uint32_t version : 8;
     uint32_t type : 8;
     uint32_t mem_interval : 4;
-    uint32_t recv : 4;
-    uint32_t mempool_num : 8;
+    uint32_t mempool_num : 12;
 } umq_imm_head_t;
 
 typedef struct ub_ref_sge {
     uint64_t addr;
     uint32_t length;
     uint32_t token_id : 20;
-    uint32_t rsvd : 4;
-    uint32_t mempool_id : 8;
+    uint32_t mempool_id : 12;
     uint32_t token_value;
 } ub_ref_sge_t;
 
@@ -92,8 +90,7 @@ typedef struct ub_import_mempool_info {
     uint32_t mempool_seg_flag;
     uint32_t mempool_length;
     uint32_t mempool_token_id : 20;
-    uint32_t rsvd : 4;
-    uint32_t mempool_id : 8;
+    uint32_t mempool_id : 12;
     uint32_t mempool_token_value;
 } ub_import_mempool_info_t;
 
@@ -421,8 +418,8 @@ remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void);
 void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx);
 urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue);
-int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size);
-void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mempool_id);
+int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
+void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id);
 int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq);
 void umq_ub_jfr_ctx_put(ub_queue_t *queue);
 int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,

@@ -44,7 +44,7 @@ static ub_user_ctl_func g_umq_ub_user_ctl_func[UMQ_TRANS_MODE_MAX] = {
     [UMQ_OPCODE_QBUF_POOL_INFO_QUERY] = umq_qbuf_pool_info_get
 };
 
-static int huge_qbuf_pool_memory_init(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
+static int huge_qbuf_pool_memory_init(uint16_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
     uint32_t blk_size = umq_huge_qbuf_get_size_by_type(type);
     uint32_t total_len = blk_size * HUGE_QBUF_BUFFER_INC_BATCH;
@@ -74,7 +74,7 @@ UNREGISTER_MEM:
     return ret;
 }
 
-static void huge_qbuf_pool_memory_uninit(uint8_t mempool_id, void *buf_addr)
+static void huge_qbuf_pool_memory_uninit(uint16_t mempool_id, void *buf_addr)
 {
     umq_ub_unregister_seg(g_ub_ctx, g_ub_ctx_count, mempool_id);
     free(buf_addr);
@@ -1318,7 +1318,7 @@ void umq_ub_async_event_ack(umq_async_event_t *event)
     event->priv = NULL;
 }
 
-static int umq_ub_register_seg_callback(uint8_t *ctx, uint8_t mempool_id, void *addr, uint64_t size)
+static int umq_ub_register_seg_callback(uint8_t *ctx, uint16_t mempool_id, void *addr, uint64_t size)
 {
     if (ctx == NULL || addr == NULL || size == 0) {
         UMQ_VLOG_ERR("invalid parameter\n");
@@ -1327,7 +1327,7 @@ static int umq_ub_register_seg_callback(uint8_t *ctx, uint8_t mempool_id, void *
     return umq_ub_register_seg((umq_ub_ctx_t *)(uintptr_t)ctx, mempool_id, addr, size);
 }
 
-static int umq_ub_unregister_seg_callback(uint8_t *ctx, uint8_t mempool_id)
+static int umq_ub_unregister_seg_callback(uint8_t *ctx, uint16_t mempool_id)
 {
     if (ctx == NULL) {
         UMQ_VLOG_ERR("invalid parameter\n");

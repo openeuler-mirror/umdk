@@ -274,8 +274,7 @@ struct umq_buf {
     uint16_t rsvd1 : 14;
 
     uint32_t token_id : 20;               // token_id for reference operation
-    uint32_t rsvd2 : 4;
-    uint32_t mempool_id : 8;              // indicate which memory pool it is allocated from
+    uint32_t mempool_id : 12;              // indicate which memory pool it is allocated from
     uint32_t token_value;                 // token_value for reference operation
 
     uint64_t status : 32;                 // umq_buf_status_t
