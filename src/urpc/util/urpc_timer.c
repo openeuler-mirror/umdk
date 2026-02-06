@@ -25,7 +25,7 @@
 #define URPC_TIMER_HMAP_SIZE (16384)
 #define URPC_TIMER_DEFAULT_NUM (8192)  // default timer cost 800KB
 
-#define URPC_TIMING_WHEEL_HZ 500   /* 2ms per tick */
+#define URPC_TIMING_WHEEL_HZ 1000   /* 1ms per tick */
 #define URPC_TIMER_MIN_SLEEP 10000 /* 10us minimum sleep time per slot */
 
 /* timing wheel level depth and size. 1<<10 means 1024 ticks
@@ -36,7 +36,7 @@
 #define URPC_WHEEL_LEVEL_MASK (URPC_WHEEL_LEVEL_SIZE - 1)
 
 #define URPC_TIMER_MAGIC_NUM 0x33445577u
-#define URPC_TIMER_MIN_DELAY (10u)      /* 10ms */
+#define URPC_TIMER_MIN_DELAY (1u)      /* 1ms */
 #define URPC_TIMER_MAX_DELAY 0xFFFFFFFu /* in ms, 3 days */
 #define URPC_TIMER_MAX_JOB 1000
 

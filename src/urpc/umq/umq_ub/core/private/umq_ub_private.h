@@ -152,13 +152,15 @@ typedef struct ub_flow_control {
     volatile uint16_t stats_u16[FC_COUNTER_MAX_U16];
     uint16_t initial_window;
     uint16_t notify_interval;
-    uint16_t credits_per_request;
+    volatile uint16_t credits_per_request;
     uint16_t initial_credit;
     uint16_t credit_request_threshold;
+    uint16_t return_ratio;
     uint16_t local_tx_depth;
     uint16_t local_rx_depth;
     uint16_t remote_tx_depth;
     uint16_t remote_rx_depth;
+    uint32_t timeout_us;
     bool local_set;
     bool remote_get;
     bool enabled;
@@ -330,6 +332,16 @@ typedef struct wait_ack_import {
     pthread_rwlock_t lock;
 } wait_ack_import_t;
 
+typedef struct ub_queue_idle_check {
+    urpc_list_t node;
+    struct ub_queue *umq;
+    volatile uint64_t last_send;
+    volatile uint64_t target_slot_id;
+    volatile bool need_return_credit;
+    int event_fd;
+    pthread_mutex_t lock;
+} ub_queue_idle_check_t;
+
 typedef struct ub_queue {
     urpc_list_t qctx_node;
     // queue param
@@ -375,6 +387,7 @@ typedef struct ub_queue {
     umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
     uint64_t share_rq_umqh;
+    ub_queue_idle_check_t *checker;
 } ub_queue_t;
 
 typedef struct user_ctx {
@@ -497,7 +510,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue);
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats);
-
+uint32_t umq_ub_timer_timeout_get(void);
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
 void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf);
 umq_buf_t *umq_ub_queue_addr_list_remove(umq_buf_t *addr_list, uint16_t msg_id);
