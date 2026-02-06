@@ -329,7 +329,7 @@ typedef struct ub_queue {
     uint32_t create_flag;
     uint64_t umq_ctx;
     urma_target_seg_t **imported_tseg_list;   // read-only
-    uint64_t addr_list[UMQ_MAX_ID_NUM];
+    umq_buf_t *addr_list;
 
     // config param
     umq_trans_mode_t umq_trans_mode;
@@ -477,6 +477,10 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue);
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
+
+int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
+void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf);
+umq_buf_t *umq_ub_queue_addr_list_remove(umq_buf_t *addr_list, uint16_t msg_id);
 
 #ifdef __cplusplus
 }
