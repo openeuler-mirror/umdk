@@ -1191,7 +1191,7 @@ int umq_ub_token_generate(bool enable_token, uint32_t *token)
     return urpc_rand_generate((uint8_t *)token, sizeof(uint32_t));
 }
 
-int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint64_t size)
+int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size)
 {
     bool enable_token = (ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
     uint32_t mem_token;
@@ -1227,7 +1227,7 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint8_t mempool_id, void *addr, uint6
     return UMQ_SUCCESS;
 }
 
-void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint8_t mempool_id)
+void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id)
 {
     for (uint32_t i = 0; i < ctx_cnt; i++) {
         if (ctx_list[i].tseg_list[mempool_id] != NULL &&

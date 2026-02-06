@@ -21,7 +21,7 @@ static std::vector<void *> g_huge_allocated;
 static int g_register_cnt = 0;
 static int g_unregister_cnt = 0;
 
-static int HugeMemInit(uint8_t mempool_id __attribute__((unused)),
+static int HugeMemInit(uint16_t mempool_id __attribute__((unused)),
                        huge_qbuf_pool_size_type_t type,
                        void **buf_addr)
 {
@@ -36,7 +36,7 @@ static int HugeMemInit(uint8_t mempool_id __attribute__((unused)),
     return UMQ_SUCCESS;
 }
 
-static void HugeMemUninit(uint8_t mempool_id __attribute__((unused)), void *buf_addr)
+static void HugeMemUninit(uint16_t mempool_id __attribute__((unused)), void *buf_addr)
 {
     if (buf_addr != nullptr) {
         free(buf_addr);
@@ -44,7 +44,7 @@ static void HugeMemUninit(uint8_t mempool_id __attribute__((unused)), void *buf_
 }
 
 static int RegisterSeg(uint8_t *ctx __attribute__((unused)),
-                       uint8_t mempool_id __attribute__((unused)),
+                       uint16_t mempool_id __attribute__((unused)),
                        void *addr __attribute__((unused)),
                        uint64_t size __attribute__((unused)))
 {
@@ -53,7 +53,7 @@ static int RegisterSeg(uint8_t *ctx __attribute__((unused)),
 }
 
 static int RegisterSegFail(uint8_t *ctx __attribute__((unused)),
-                           uint8_t mempool_id __attribute__((unused)),
+                           uint16_t mempool_id __attribute__((unused)),
                            void *addr __attribute__((unused)),
                            uint64_t size __attribute__((unused)))
 {
@@ -61,7 +61,7 @@ static int RegisterSegFail(uint8_t *ctx __attribute__((unused)),
 }
 
 static int UnregisterSeg(uint8_t *ctx __attribute__((unused)),
-                         uint8_t mempool_id __attribute__((unused)))
+                         uint16_t mempool_id __attribute__((unused)))
 {
     g_unregister_cnt++;
     return UMQ_SUCCESS;

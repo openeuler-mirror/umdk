@@ -103,7 +103,7 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     uint32_t sge_num, urma_sge_t *src_sge, urma_sge_t *dst_sge)
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
-    uint8_t mempool_id = buf_pro->remote_sge.mempool_id;
+    uint16_t mempool_id = buf_pro->remote_sge.mempool_id;
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (buf_pro->remote_sge.length > buffer->total_data_size) {
