@@ -117,6 +117,15 @@ uint8_t *umq_ubmm_ctx_init_impl(umq_init_cfg_t *cfg)
             continue;
         }
 
+        if (total_io_buf_size == 0) {
+            total_io_buf_size = info->mem_cfg.total_size;
+        }
+
+        if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
+            UMQ_VLOG_INFO("device info assign_mode is dummy, skip it\n");
+            continue;
+        }
+
         if (ub_init_ctx == NULL) {
             ub_init_ctx = umq_ub_ctx_init_impl(cfg);
             if (ub_init_ctx == NULL) {
@@ -124,9 +133,6 @@ uint8_t *umq_ubmm_ctx_init_impl(umq_init_cfg_t *cfg)
             }
         }
 
-        if (total_io_buf_size == 0) {
-            total_io_buf_size = info->mem_cfg.total_size;
-        }
         (void)memcpy(&g_ubmm_ctx[g_ubmm_ctx_count].trans_info, info, sizeof(umq_trans_info_t));
         g_ubmm_ctx[g_ubmm_ctx_count].io_lock_free = cfg->io_lock_free;
         g_ubmm_ctx[g_ubmm_ctx_count].feature = cfg->feature;

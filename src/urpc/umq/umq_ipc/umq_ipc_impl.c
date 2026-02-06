@@ -102,6 +102,11 @@ uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
             continue;
         }
 
+        if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
+            UMQ_VLOG_INFO("device info assign_mode is dummy, skip it\n");
+            continue;
+        }
+
         g_ipc_ctx->io_lock_free = cfg->io_lock_free;
         g_ipc_ctx->feature = cfg->feature;
         g_ipc_ctx->ref_cnt = 1;
