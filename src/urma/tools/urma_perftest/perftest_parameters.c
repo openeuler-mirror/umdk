@@ -26,6 +26,11 @@
 #define PERFTEST_JFC_MUL_THRESHOLD (4)
 #define PERFTEST_DEFAULT_DURATION (5)
 
+#define PERFTEST_RTP_MAX_SEND_SIZE (65536)
+#define PERFTEST_CTP_MAX_SEND_SIZE (4096)
+#define PERFTEST_RTP_MAX_ORDER     (16)
+#define PERFTEST_CTP_MAX_ORDER     (12)
+
 typedef struct perftest_cmd {
     char *cmd;
     perftest_cmd_type_t type;
@@ -83,7 +88,8 @@ static void usage(const char *argv0)
 {
     command_usage(argv0);
     (void)printf("Options:\n");
-    (void)printf("  -a, --all[order]            Run sizes from 2 till 2^23 (default 2^16), order: exponent of 2.\n");
+    (void)printf("  -a, --all[order]            Run sizes from 2 till 2^23,\n"
+                 "                              default 2^12 for send, 2^16 for others, order: exponent of 2.\n");
     (void)printf("  -A, --atomic_type <type>    Specify atomic type, {cas|faa}.\n");
     (void)printf("  -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.\n");
     (void)printf("  -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).\n");
@@ -283,7 +289,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->jfc_inline = false;
     cfg->inf_period = PERFTEST_DEF_INF_PERIOD;
     cfg->inf_period_ms = 0;
-    cfg->order = PERFTEST_SIZE_ORDER;
+    cfg->order = (cfg->api_type == PERFTEST_SEND) ? PERFTEST_CTP_MAX_ORDER : PERFTEST_SIZE_ORDER;
     cfg->err_timeout = URMA_TYPICAL_ERR_TIMEOUT;
     cfg->lock_free = false;
     cfg->priority = URMA_MAX_PRIORITY;
@@ -1260,6 +1266,30 @@ int check_local_cfg(perftest_config_t *cfg)
     }
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
         (void)fprintf(stderr, "UM transport mode is not recommended for ctp.\n");
+    }
+
+    if (cfg->api_type == PERFTEST_SEND) {
+        if (cfg->single_path && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with single path for send opcode, max size: %u.\n",
+                cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
+            exit(1);
+        }
+        if (!cfg->single_path && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with multi path for send opcode, max size: %u.\n",
+                cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
+            exit(1);
+        }
+
+        if (cfg->single_path && cfg->order > PERFTEST_RTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with single path for send opcode, max order: %u.\n",
+                cfg->order, PERFTEST_RTP_MAX_ORDER);
+            exit(1);
+        }
+        if (!cfg->single_path && cfg->order > PERFTEST_CTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with multi path for send opcode, max order: %u.\n",
+                cfg->order, PERFTEST_CTP_MAX_ORDER);
+            exit(1);
+        }
     }
 
     return 0;
