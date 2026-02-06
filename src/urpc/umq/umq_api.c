@@ -441,6 +441,27 @@ CLONE_SO:
     return UMQ_FAIL;
 }
 
+static void umq_init_cfg_dummy_dev_filter(umq_init_cfg_t *cfg)
+{
+    uint8_t i, j;
+    umq_trans_info_t *src, *dst;
+    for (i = 0, j = 0; i < cfg->trans_info_num && j < cfg->trans_info_num;) {
+        src = &cfg->trans_info[i];
+        dst = &cfg->trans_info[j];
+
+        if (src->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
+            i++;
+            continue;
+        }
+
+        memcpy(dst, src, sizeof(umq_trans_info_t));
+        i++;
+        j++;
+    }
+
+    cfg->trans_info_num = j;
+}
+
 int umq_init(umq_init_cfg_t *cfg)
 {
     if (g_umq_inited) {
@@ -510,6 +531,8 @@ int umq_init(umq_init_cfg_t *cfg)
         goto DFX_UNINIT;
     }
     (void)memcpy(g_umq_config, cfg, sizeof(umq_init_cfg_t));
+
+    umq_init_cfg_dummy_dev_filter(g_umq_config);
 
     g_umq_inited = true;
     return UMQ_SUCCESS;
