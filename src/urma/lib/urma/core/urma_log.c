@@ -17,6 +17,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "urma_opcode.h"
 #include "urma_types.h"
@@ -27,7 +29,8 @@ pthread_mutex_t g_urma_log_lock = PTHREAD_MUTEX_INITIALIZER;
 urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
 #define MAX_LOG_LEN                    512
 #define MAX_THREAD_TAG_LEN             64
-#define URMA_LOG_TAG                   "LogTag_URMA"
+#define URMA_LOG_TAG                   "URMA"
+#define LIBURMA_LOG                    "libumra"
 #define URMA_LOG_ENV_STR               "URMA_LOG_LEVEL"
 #define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN 32
 
@@ -176,8 +179,9 @@ static int urma_vlog(const char *function, int line, urma_vlog_level_t level, co
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "LogTag_URMA|thread_tag|function|[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s|%s[%d]|%s", URMA_LOG_TAG, g_thread_tag, function, line, format);
+    /* add log head info, "URMA|liburma|thread_id|thread_tag|function[line]|format" */
+    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s|%ld|%s|%s[%d]|%s",
+        URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, function, line, format);
     if (ret <= 0 || ret >= sizeof(newformat)) {
         return ret;
     }
