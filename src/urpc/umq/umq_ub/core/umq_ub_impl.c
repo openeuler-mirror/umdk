@@ -1588,6 +1588,35 @@ FREE_BUF:
     return ret;
 }
 
+static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
+{
+    uint32_t eid_cnt = 0;
+    urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
+    if (eid_info_list == NULL || eid_cnt == 0) {
+        UMQ_VLOG_ERR("get eid list fialed, dev: %s\n", urma_dev->name);
+        return -UMQ_ERR_ENODEV;
+    }
+
+    if (eid_cnt >= UMQ_MAX_EID_CNT) {
+        urma_free_eid_list(eid_info_list);
+        UMQ_VLOG_ERR("number of eid exceeds the maximum limit, dev: %s\n", urma_dev->name);
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    for (uint32_t i = 0; i < eid_cnt; i++) {
+        memcpy(&umq_dev_info->ub.eid_list[i].eid, &eid_info_list[i].eid, sizeof(urma_eid_t));
+        umq_dev_info->ub.eid_list[i].eid_index = eid_info_list[i].eid_index;
+    }
+
+    umq_dev_info->ub.eid_cnt = eid_cnt;
+    umq_dev_info->umq_trans_mode = umq_trans_mode;
+    memcpy(umq_dev_info->dev_name, urma_dev->name, strnlen(urma_dev->name, UMQ_DEV_NAME_SIZE));
+
+    urma_free_eid_list(eid_info_list);
+
+    return UMQ_SUCCESS;
+}
+
 int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
 {
     if (dev_name == NULL || strnlen(dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE || umq_dev_info == NULL) {
@@ -1601,29 +1630,7 @@ int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, um
         return -UMQ_ERR_ENODEV;
     }
 
-    uint32_t eid_cnt = 0;
-    urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
-    if (eid_info_list == NULL || eid_cnt == 0) {
-        UMQ_VLOG_ERR("get eid list fialed, dev: %s\n", dev_name);
-        return -UMQ_ERR_ENODEV;
-    }
-
-    if (eid_cnt >= UMQ_MAX_EID_CNT) {
-        urma_free_eid_list(eid_info_list);
-        UMQ_VLOG_ERR("number of eid exceeds the maximum limit, dev: %s\n", dev_name);
-        return -UMQ_ERR_ENOMEM;
-    }
-
-    for (uint32_t i = 0; i < eid_cnt; i++) {
-        memcpy(&umq_dev_info->ub.eid_list[i].eid, &eid_info_list[i].eid, sizeof(urma_eid_t));
-        umq_dev_info->ub.eid_list[i].eid_index = eid_info_list[i].eid_index;
-    }
-
-    umq_dev_info->ub.eid_cnt = eid_cnt;
-    umq_dev_info->umq_trans_mode = umq_trans_mode;
-    memcpy(umq_dev_info->dev_name, dev_name, strnlen(dev_name, UMQ_DEV_NAME_SIZE));
-    urma_free_eid_list(eid_info_list);
-    return UMQ_SUCCESS;
+    return umq_ub_dev_eid_set(urma_dev, umq_trans_mode, umq_dev_info);
 }
 
 umq_dev_info_t *umq_ub_dev_info_list_get_impl(umq_trans_mode_t umq_trans_mode, int *dev_num)
@@ -1651,12 +1658,9 @@ umq_dev_info_t *umq_ub_dev_info_list_get_impl(umq_trans_mode_t umq_trans_mode, i
     *dev_num = urma_dev_num;
 
     for (int i = 0; i < urma_dev_num; i++) {
-        (void)strcpy(umq_dev_info[i].dev_name, urma_dev[i]->name);
-        umq_dev_info[i].umq_trans_mode = umq_trans_mode;
-        umq_dev_info[i].ub.eid_cnt = 0;
-        ret = umq_ub_dev_info_get_impl(umq_dev_info[i].dev_name, umq_trans_mode, &umq_dev_info[i]);
+        ret = umq_ub_dev_eid_set(urma_dev[i], umq_trans_mode, &umq_dev_info[i]);
         if (ret != UMQ_SUCCESS) {
-            UMQ_VLOG_ERR("get dev info for dev: %s failed, ret %d\n", umq_dev_info[i].dev_name, ret);
+            UMQ_VLOG_ERR("get dev info for dev: %s failed, ret %d\n", urma_dev[i]->name, ret);
         }
     }
 
