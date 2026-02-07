@@ -73,7 +73,9 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     TORCH_BIND_ASSERT(topkIdxInt32.dim() == DIM_TWO and topkIdxInt32.is_contiguous());
     TORCH_BIND_ASSERT(topkWeights.dim() == DIM_TWO and topkWeights.is_contiguous());
     TORCH_BIND_ASSERT(numTokens == topkIdxInt32.size(0));
+    TORCH_BIND_ASSERT(numTokens == sendTokenIdxSmall.size(0));
     TORCH_BIND_ASSERT(numTopk == topkWeights.size(1));
+    TORCH_BIND_ASSERT(numTopk == sendTokenIdxSmall.size(1));
 
     int sendPerGroup = EXPAND_IDX_COUNT_PER_GROUP; // (send_to_expert_num, send_to_expert_offset, send_rank_tokens)
 
