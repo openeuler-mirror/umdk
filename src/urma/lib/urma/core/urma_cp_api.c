@@ -96,6 +96,8 @@ urma_jfc_t *urma_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *jfc_cfg)
         atomic_fetch_add(&jfc->jfc_cfg.jfce->ref.atomic_cnt, 1);
     }
     if (jfc == NULL) {
+        URMA_LOG_ERR("[DRV_ERR]Failed to create jfc, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
     }
     return jfc;
@@ -126,8 +128,14 @@ urma_status_t urma_delete_jfc(urma_jfc_t *jfc)
     urma_ops_t *ops = NULL;
     urma_jfce_t *jfce = jfc->jfc_cfg.jfce;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, delete_jfc);
+    uint32_t jfc_id = jfc->jfc_id.id;
 
     urma_status_t ret = ops->delete_jfc(jfc);
+    if (ret != URMA_SUCCESS) {
+        URMA_LOG_ERR(
+            "[DRV_ERR]Failed to delete jfc, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, jfc_id, ret);
+    }
     if (ret == URMA_SUCCESS && jfce != NULL) {
         atomic_fetch_sub(&jfce->ref.atomic_cnt, 1);
     }
@@ -240,6 +248,8 @@ urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
     atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
     urma_jfs_t *jfs = ops->create_jfs(ctx, jfs_cfg);
     if (jfs == NULL) {
+        URMA_LOG_ERR("[DRV_ERR]Failed to create jfs, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
     }
     return jfs;
@@ -283,12 +293,15 @@ urma_status_t urma_delete_jfs(urma_jfs_t *jfs)
 
     urma_context_t *urma_ctx = jfs->urma_ctx;
     urma_ops_t *ops = NULL;
+    uint32_t jfs_id = jfs->jfs_id.id;
 
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, delete_jfs);
 
     urma_status_t ret = ops->delete_jfs(jfs);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to delete jfs.\n");
+        URMA_LOG_ERR(
+            "[DRV_ERR]Failed to delete jfs, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, jfs_id, ret);
         return ret;
     }
 
@@ -396,6 +409,8 @@ urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *jfr_cfg)
     atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
     urma_jfr_t *jfr = ops->create_jfr(ctx, jfr_cfg);
     if (jfr == NULL) {
+        URMA_LOG_ERR("[DRV_ERR]Failed to create jfr, dev_name: %s, eid_idex: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
     }
     return jfr;
@@ -439,11 +454,14 @@ urma_status_t urma_delete_jfr(urma_jfr_t *jfr)
 
     urma_context_t *urma_ctx = jfr->urma_ctx;
     urma_ops_t *ops = NULL;
+    uint32_t jfr_id = jfr->jfr_id.id;
 
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, delete_jfr);
     urma_status_t status = ops->delete_jfr(jfr);
     if (status != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to delete jfr.\n");
+        URMA_LOG_ERR(
+            "[DRV_ERR]Failed to delete jfr, dev_name: %s, eid_idx: %u, id: %u, status: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, jfr_id, status);
         return status;
     }
 
@@ -658,6 +676,8 @@ urma_jfce_t *urma_create_jfce(urma_context_t *ctx)
     atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
     urma_jfce_t *jfce = ops->create_jfce(ctx);
     if (jfce == NULL) {
+        URMA_LOG_ERR("[DRV_ERR]Failed to create jfce, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
         return NULL;
     }
@@ -682,7 +702,7 @@ urma_status_t urma_delete_jfce(urma_jfce_t *jfce)
 
     urma_status_t ret = ops->delete_jfce(jfce);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to delete jfce, ret: %d\n", (int)ret);
+        URMA_LOG_ERR("[DRV_ERR]Failed to delete jfce, ret: %d\n", (int)ret);
         return ret;
     }
 
@@ -777,12 +797,14 @@ static int urma_check_jetty_cfg_with_jetty_grp(urma_jetty_cfg_t *cfg)
         if (cfg->jetty_grp->cfg.token_value.token != cfg->shared.jfr->jfr_cfg.token_value.token ||
             cfg->jetty_grp->cfg.flag.bs.token_policy != cfg->shared.jfr->jfr_cfg.flag.bs.token_policy ||
             cfg->shared.jfr->jfr_cfg.trans_mode != URMA_TM_RM) {
+            URMA_LOG_ERR("Invalid token with share_jfr.\n");
             return -1;
         }
     } else {
         if (cfg->jetty_grp->cfg.token_value.token != cfg->jfr_cfg->token_value.token ||
             cfg->jetty_grp->cfg.flag.bs.token_policy != cfg->jfr_cfg->flag.bs.token_policy ||
             cfg->jfr_cfg->trans_mode != URMA_TM_RM) {
+            URMA_LOG_ERR("Invalid token with unshared jfr.\n");
             return -1;
         }
     }
@@ -859,19 +881,16 @@ urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg
     }
 
     if (urma_create_jetty_check_jfc(jetty_cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
     }
 
     if (urma_create_jetty_check_trans_mode(ctx, jetty_cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
     }
 
     if (urma_check_jetty_cfg_with_jetty_grp(jetty_cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -888,7 +907,8 @@ urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg
     urma_jetty_t *jetty = ops->create_jetty(ctx, jetty_cfg);
     if (jetty == NULL) {
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
-        URMA_LOG_ERR("create_jetty failed.\n");
+        URMA_LOG_ERR("[DRV_ERR]create_jetty failed, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         return NULL;
     }
 
@@ -945,6 +965,7 @@ urma_status_t urma_delete_jetty(urma_jetty_t *jetty)
 
     urma_context_t *urma_ctx = jetty->urma_ctx;
     urma_ops_t *ops = NULL;
+    uint32_t jetty_id = jetty->jetty_id.id;
 
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, delete_jetty);
 
@@ -956,6 +977,8 @@ urma_status_t urma_delete_jetty(urma_jetty_t *jetty)
     if (ret == URMA_SUCCESS) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     } else {
+        URMA_LOG_ERR("[DRV_ERR]Failed to delete jetty, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, jetty_id, ret);
         if (jetty->jetty_cfg.jetty_grp != NULL) {
             (void)urma_add_jetty_to_jetty_grp(jetty, jetty->jetty_cfg.jetty_grp);
         }
@@ -1665,7 +1688,11 @@ urma_target_seg_t *urma_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     tseg = ops->import_seg(ctx, seg, token_value, addr, flag);
     if (tseg != NULL) {
         atomic_fetch_add(&tseg->urma_ctx->ref.atomic_cnt, 1);
+    } else {
+        URMA_LOG_ERR("[DRV_ERR]Failed to import seg, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
     }
+
     return tseg;
 }
 
@@ -1703,6 +1730,9 @@ urma_token_id_t *urma_alloc_token_id(urma_context_t *ctx)
     token_id = ops->alloc_token_id(ctx);
     if (token_id != NULL) {
         atomic_fetch_add(&token_id->urma_ctx->ref.atomic_cnt, 1);
+    } else {
+        URMA_LOG_ERR("[DRV_ERR]Failed to register seg, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
     }
     return token_id;
 }
@@ -1744,13 +1774,19 @@ urma_status_t urma_free_token_id(urma_token_id_t *token_id)
     }
     urma_ops_t *ops = NULL;
     urma_context_t *urma_ctx = token_id->urma_ctx;
+    uint32_t tid = token_id->token_id;
 
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, free_token_id);
 
     urma_status_t ret = ops->free_token_id(token_id);
     if (ret == URMA_SUCCESS) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
+    } else {
+        URMA_LOG_ERR(
+            "[DRV_ERR]Failed to free token_id, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, tid, ret);
     }
+
     return ret;
 }
 
@@ -1800,7 +1836,6 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
     if (seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID && ctx->dev->type == URMA_TRANSPORT_UB) {
         tmp_cfg.token_id = urma_alloc_token_id(ctx);
         if (tmp_cfg.token_id == NULL) {
-            URMA_LOG_ERR("alloc token id failed.\n");
             return NULL;
         }
         tmp_cfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID; // If not set, ubcore verification fails.
@@ -1811,7 +1846,8 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
         if (seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID && ctx->dev->type == URMA_TRANSPORT_UB) {
             (void)urma_free_token_id(tmp_cfg.token_id);
         }
-        URMA_LOG_ERR("register seg failed.\n");
+        URMA_LOG_ERR("[DRV_ERR]register seg failed, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         return NULL;
     }
     seg->seg.attr.bs.user_token_id = seg_cfg->flag.bs.token_id_valid;
@@ -1849,6 +1885,10 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
         if (type == URMA_TRANSPORT_UB && token_id != NULL) {
             atomic_fetch_sub(&token_id->ref.atomic_cnt, 1);
         }
+    } else {
+        URMA_LOG_ERR(
+            "[DRV_ERR]Unregister seg fail, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
+            urma_ctx->dev->name, urma_ctx->eid_index, token_id->token_id, ret);
     }
 
     if (free_token_id == true) {
