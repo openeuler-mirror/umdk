@@ -704,8 +704,9 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         UMQ_VLOG_ERR("destroy umq failed, trans mode %d is not UB\n", queue->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
-    if (umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt) != 1) {
-        UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
+    uint32_t ref_cnt = umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt);
+    if (!queue->dev_ctx->io_lock_free && ref_cnt != 1) {
+        UMQ_VLOG_WARN("umqh ref cnt %u is not 0\n", ref_cnt);
         return -UMQ_ERR_EBUSY;
     }
 
