@@ -17,6 +17,7 @@
 
 #include "umq_api.h"
 #include "umq_pro_api.h"
+#include "umq_dfx_api.h"
 #include "umq_perftest_param.h"
 #include "perftest_util.h"
 #include "perftest_thread.h"

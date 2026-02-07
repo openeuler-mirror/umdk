@@ -14,6 +14,7 @@
 
 #include "urpc_util.h"
 #include "qbuf_list.h"
+#include "umq_dfx_types.h"
 #include "umq_types.h"
 #include "umq_qbuf_pool.h"
 

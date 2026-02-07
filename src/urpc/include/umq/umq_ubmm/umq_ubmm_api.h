@@ -12,6 +12,7 @@
 
 #include "umq_tp_api.h"
 #include "umq_pro_tp_api.h"
+#include "umq_tp_dfx_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,9 +20,11 @@ extern "C" {
 
 umq_ops_t *umq_ubmm_ops_get(void);
 umq_pro_ops_t *umq_pro_ubmm_ops_get(void);
+umq_dfx_ops_t *umq_ubmm_dfx_ops_get_t(void);
 
 umq_ops_t *umq_ubmm_plus_ops_get(void);
 umq_pro_ops_t *umq_pro_ubmm_plus_ops_get(void);
+umq_dfx_ops_t *umq_ubmm_plus_dfx_ops_get_t(void);
 
 #ifdef __cplusplus
 }
