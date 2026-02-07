@@ -11,7 +11,6 @@ int bondp_hash_table_create(bondp_hash_table_t *tbl, uint32_t size,
 {
     (void)pthread_rwlock_init(&tbl->lock, NULL);
     if (ub_hmap_init(&tbl->hmap, size) != 0) {
-        URMA_LOG_ERR("hash table init failed.\n");
         return -1;
     }
     tbl->free_f = free_f;

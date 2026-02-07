@@ -396,7 +396,7 @@ urma_status_t urma_query_device(urma_device_t *dev, urma_device_attr_t *dev_attr
 urma_device_t *urma_get_device_by_name(char *dev_name)
 {
     if (dev_name == NULL || strnlen(dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
-        URMA_LOG_ERR("Invalid parameter.\n");
+        URMA_LOG_ERR("Invalid dev_name.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -481,7 +481,7 @@ int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid)
 urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 {
     if (dev == NULL || dev->ops == NULL || dev->ops->create_context == NULL) {
-        URMA_LOG_ERR("Failed to find device by eid.\n");
+        URMA_LOG_ERR("Invalid parameter with err dev or ops.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -498,7 +498,8 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
         }
         dev_fd = urma_open_cdev(dev->path);
         if (dev_fd < 0) {
-            URMA_LOG_ERR("Failed to open urma cdev with path %s\n", dev->path);
+            URMA_LOG_ERR("Failed to open urma cdev with path %s, dev_fd: %d\n",
+                dev->path, dev_fd);
             errno = EIO;
             return NULL;
         }
@@ -506,7 +507,7 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 
     urma_context_t *ctx = dev->ops->create_context(dev, eid_index, dev_fd);
     if (ctx == NULL) {
-        URMA_LOG_ERR("Failed to create urma context.\n");
+        URMA_LOG_ERR("[DRV_ERR]Failed to create urma context.\n");
         if (dev_fd >= 0) {
             (void)close(dev_fd);
         }
@@ -524,15 +525,18 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 
 urma_status_t urma_delete_context(urma_context_t *ctx)
 {
-    URMA_LOG_INFO("urma delete context start.\n");
     if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL || ctx->dev->ops->delete_context == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
+    char dev_name[URMA_MAX_NAME] = {0};
+    (void)strcpy(dev_name, ctx->dev->name);
+    uint32_t eid_index = ctx->eid_index;
     uint64_t atomic_cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (atomic_cnt > 1) {
-        URMA_LOG_WARN("already in use, atomic_cnt: %lu.\n", atomic_cnt);
+        URMA_LOG_WARN("already in use, atomic_cnt: %lu, dev_name: %s, eid_idx: %u.\n",
+            atomic_cnt, dev_name, eid_index);
         return URMA_EAGAIN;
     }
 
@@ -541,10 +545,10 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
     if (ret == URMA_SUCCESS && dev_fd >= 0) {
         (void)close(dev_fd);
     } else {
-        URMA_LOG_WARN("Delete context error, fd: %d not closed, ret: %d.\n", dev_fd, ret);
+        URMA_LOG_WARN("[DRV_ERR]Delete ctx error, fd: %d, ret: %d, dev_name: %s, eid_idx: %u.\n",
+            dev_fd, ret, dev_name, eid_index);
     }
 
-    URMA_LOG_INFO("urma delete context end.\n");
     return ret;
 }
 

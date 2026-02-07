@@ -331,7 +331,6 @@ static bondp_context_t* bondp_create_ctx()
 
     bond_ctx = calloc(1, sizeof(bondp_context_t));
     if (bond_ctx == NULL) {
-        URMA_LOG_ERR("Failed to alloc bondp_context_t\n");
         return NULL;
     }
     if (bondp_init_ctx_table(bond_ctx)) {
@@ -457,7 +456,7 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_agg
     for (int i = 0; i < iodie_num; ++i) {
         eid_list[i] = (urma_eid_t *)(topo_info->ues[i].primary_eid);
         if (is_empty_eid(eid_list[i])) {
-            URMA_LOG_ERR("Primary eid %d is NULL\n", i);
+            URMA_LOG_ERR("Primary eid %d is empty\n", i);
             return -1;
         }
 
@@ -562,6 +561,9 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         goto CMD_DELETE_CONTEXT;
     }
 
+    URMA_LOG_INFO("Finish to create ctx, dev_name: %s, eid_idx: %u.\n",
+        dev->name, eid_index);
+
     return &bond_ctx->v_ctx;
 
 CMD_DELETE_CONTEXT:
@@ -577,7 +579,10 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
 {
     bondp_context_t *bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     urma_status_t ret = URMA_SUCCESS;
+    char dev_name[URMA_MAX_NAME] = {0};
+    uint32_t eid_index = ctx->eid_index;
 
+    (void)strcpy(dev_name, ctx->dev->name);
     for (int i = 0; i < bond_ctx->dev_num; ++i) {
         if (bond_ctx->p_ctxs[i] && urma_delete_context(bond_ctx->p_ctxs[i])) {
             URMA_LOG_ERR("Failed to delete context %d", i);
@@ -592,6 +597,10 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     }
     bondp_uninit_v_ctx(bond_ctx);
     bondp_delete_ctx(bond_ctx);
+
+    URMA_LOG_INFO("Finish to delete ctx, dev_name: %s, eid_idx: %u.\n",
+        dev_name, eid_index);
+
     return ret;
 }
 
