@@ -13,6 +13,8 @@ file(GLOB UMQ_C_API_FILE
     "${CMAKE_CURRENT_SOURCE_DIR}/umq/umq_pro_api.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/umq/umq_pro_types.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/umq/umq_types.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/umq/umq_dfx_api.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/umq/umq_dfx_types.h"
 )
 
 install(DIRECTORY DESTINATION /usr/include/ub/umdk/urpc/)

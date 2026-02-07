@@ -299,47 +299,6 @@ typedef struct umq_alloc_option {
     uint16_t headroom_size;
 } umq_alloc_option_t;
 
-typedef struct umq_credit_pool_stats {
-    /* current actual statistics of the system */
-    uint64_t pool_idle; // the number of credits currently available in the credit pool
-    uint64_t pool_be_allocated; // the number of credits currently allocated and taken from the credit pool
-    uint64_t rsvd0[2];
-
-    /* cumulative statistics */
-    uint64_t total_pool_idle; // the total number of available credits in the current credit pool.
-    uint64_t total_pool_be_allocated; // the total number of credits currently allocated and taken from the credit pool
-    uint64_t rsvd1[2];
-
-    /* error in statistics */
-    uint64_t total_pool_post_rx_err; // the total number of invalid credits (which will cause `pool_idle` to overflow)
-    uint64_t rsvd2[2];
-} umq_credit_pool_stats_t;
-
-typedef struct umq_credit_private_stats {
-    /* current actual statistics at the queue level */
-    uint64_t queue_idle; // credits to be allocated to the peer (no practical use, always 0, reserved field)
-    uint64_t queue_be_allocated; // credits already be allocated to the peer, used for rx direction receive io
-    uint64_t queue_acquired; // credits acquired from the peer, used for tx direction send io
-    uint64_t rsvd0[2];
-
-    /* cumulative statistics at the queue level */
-    uint64_t total_queue_idle; // the total number of credits to be allocated to the peer
-    uint64_t total_queue_acquired; // the total number of credits obtained from the peer
-    uint64_t total_queue_be_allocated; // the total number of credits already be allocated to the peer
-    uint64_t total_queue_post_tx_success; // the total number of already consumed credits in the tx direction
-    uint64_t rsvd1[2];
-
-    /* error in statistics */
-    uint64_t total_queue_post_tx_err; // the total number of transmitted io that failed in the tx direction
-    uint64_t total_queue_acquired_err; // the total number of credits obtained from the peer that were invalid
-    uint64_t rsvd[4];
-} umq_credit_private_stats_t;
-
-typedef struct umq_flow_control_stats {
-    umq_credit_pool_stats_t pool_credit; // credit-related statistics of a main queue
-    umq_credit_private_stats_t queue_credit; // credit-related statistics of a specific queue
-} umq_flow_control_stats_t;
-
 typedef enum umq_dfx_module_id {
     UMQ_DFX_MODULE_PERF,
     UMQ_DFX_MODULE_STATS,
@@ -416,76 +375,16 @@ typedef struct umq_stats_infos {
 
 #define UMQ_PERF_QUANTILE_MAX_NUM (8u)
 
-typedef enum umq_perf_record_type {
-    /* record point for umq_enqueue */
-    UMQ_PERF_RECORD_ENQUEUE,
-    /* record point for umq_dequeue */
-    UMQ_PERF_RECORD_DEQUEUE,
-    /* record point for umq_dequeue empty */
-    UMQ_PERF_RECORD_DEQUEUE_EMPTY,
-    /* record point for umq_post_all */
-    UMQ_PERF_RECORD_POST_ALL,
-    /* record point for umq_post_tx */
-    UMQ_PERF_RECORD_POST_TX,
-    /* record point for umq_post_rx */
-    UMQ_PERF_RECORD_POST_RX,
-    /* record point for umq_poll_all */
-    UMQ_PERF_RECORD_POLL_ALL,
-    /* record point for umq_poll_tx */
-    UMQ_PERF_RECORD_POLL_TX,
-    /* record point for umq_poll_rx */
-    UMQ_PERF_RECORD_POLL_RX,
-    /* record point for umq_poll_all when poll is empty */
-    UMQ_PERF_RECORD_POLL_ALL_EMPTY,
-    /* record point for umq_poll_tx when tx is empty */
-    UMQ_PERF_RECORD_POLL_TX_EMPTY,
-    /* record point for umq_poll_rx when rx is empty */
-    UMQ_PERF_RECORD_POLL_RX_EMPTY,
-    /* record point for umq_notify */
-    UMQ_PERF_RECORD_NOTIFY,
-    /* record point for transport post send in umq_enqueue and umq_post */
-    UMQ_PERF_RECORD_TRANSPORT_POST_SEND,
-    /* record point for transport post recv in umq_enqueue and umq_post */
-    UMQ_PERF_RECORD_TRANSPORT_POST_RECV,
-    /* record point for transport poll tx in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_POLL_TX,
-    /* record point for transport poll rx in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_POLL_RX,
-    /* record point for transport poll tx in umq_dequeue and umq_poll when tx is empty */
-    UMQ_PERF_RECORD_TRANSPORT_POLL_TX_EMPTY,
-    /* record point for transport poll rx in umq_dequeue and umq_poll when rx is empty */
-    UMQ_PERF_RECORD_TRANSPORT_POLL_RX_EMPTY,
-    /* record point for transport read in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_READ,
-    /* record point for transport write in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_WRITE,
-    /* record point for transport send imm in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_SEND_IMM,
-    /* record point for transport write in umq_notify */
-    UMQ_PERF_RECORD_TRANSPORT_WRITE_IMM,
-    UMQ_PERF_RECORD_TYPE_MAX,
-} umq_perf_record_type_t;
-
-typedef struct umq_perf_record {
-    struct {
-        uint64_t accumulation;
-        uint64_t min;
-        uint64_t max;
-        uint64_t cnt;
-        uint64_t bucket[UMQ_PERF_QUANTILE_MAX_NUM + 1];
-    } type_record[UMQ_PERF_RECORD_TYPE_MAX];
-    bool is_used;
-} umq_perf_record_t;
-
 typedef struct perf_in_param {
     // Record data within the specified interval
     uint64_t thresh_array[UMQ_PERF_QUANTILE_MAX_NUM];
     uint32_t thresh_num;
 } perf_in_param_t;
 
+struct umq_perf_record;
 typedef struct umq_perf_infos {
     uint32_t perf_record_num;
-    umq_perf_record_t *perf_record[0];
+    struct umq_perf_record *perf_record[0];
 } umq_perf_infos_t;
 
 typedef struct umq_dfx_cmd {
@@ -625,29 +524,6 @@ typedef struct umq_cfg_get {
     umq_queue_mode_t mode;        // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;            // queue state
 } umq_cfg_get_t;
-
-typedef struct umq_qbuf_pool_info {
-    umq_buf_mode_t mode;                      // split or combine
-    uint64_t total_size;                      // qbuf pool total size
-    uint64_t total_block_num;
-    uint32_t block_size;
-    uint32_t headroom_size;
-    uint32_t data_size;                       // combine: block_size - umq_buf_t_size, split: block_size
-    uint32_t buf_size;                        // combine: block_size, split: block_size + umq_buf_t_size
-    uint32_t umq_buf_t_size;                  // size of umq_buf_t
-    union {
-        struct {
-            uint64_t block_num_with_data;     // number of available buf in data area
-            uint64_t size_with_data;          // available buf size in data area
-            uint64_t block_num_without_data;  // number of available buf in non-data area
-            uint64_t size_without_data;       // available buf size in non-data area
-        } split;
-        struct {
-            uint64_t block_num_with_data;
-            uint64_t size_with_data;
-        } combine;
-    } available_mem;
-} umq_qbuf_pool_info_t;
 
 #ifdef __cplusplus
 }
