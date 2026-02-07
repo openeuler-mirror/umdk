@@ -740,6 +740,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
 
     umq_buf_free(queue->notify_buf);
+    umq_buf_free(queue->addr_list);
 
     umq_ub_flow_control_uninit(&queue->flow_control);
     UMQ_VLOG_INFO("delete jetty, eid: " EID_FMT ", jetty_id: %u\n",
@@ -1133,16 +1134,53 @@ umq_buf_t *umq_ub_dequeue_impl_plus(uint64_t umqh_tp)
     return buf[0];
 }
 
-void umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf)
+int umq_ub_queue_addr_list_alloc(ub_queue_t *queue)
+{
+    if (queue->addr_list != NULL) {
+        return UMQ_SUCCESS;
+    }
+
+    queue->addr_list = umq_buf_alloc(UMQ_MAX_ID_NUM * sizeof(uint64_t), 1, UMQ_INVALID_HANDLE, NULL);
+    if (queue->addr_list == NULL) {
+        UMQ_LIMIT_VLOG_ERR("umq_buf_alloc for addr_list failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    return UMQ_SUCCESS;
+}
+
+void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf)
+{
+    uint64_t *dst = (uint64_t *)(uintptr_t)addr_list->buf_data;
+    dst[msg_id] = (uint64_t)(uintptr_t)buf;
+}
+
+umq_buf_t *umq_ub_queue_addr_list_remove(umq_buf_t *addr_list, uint16_t msg_id)
+{
+    uint64_t *dst = (uint64_t *)(uintptr_t)addr_list->buf_data;
+    umq_buf_t *buf = (umq_buf_t *)(uintptr_t)dst[msg_id];
+    dst[msg_id] = 0;
+    return buf;
+}
+
+int umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    queue->addr_list[msg_id] = (uint64_t)(uintptr_t)buf;
+    if (umq_ub_queue_addr_list_alloc(queue) != UMQ_SUCCESS) {
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    umq_ub_queue_addr_list_record(queue->addr_list, msg_id, buf);
+    return UMQ_SUCCESS;
 }
 
 void umq_ub_remove_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    queue->addr_list[msg_id] = 0;
+    if (queue->addr_list == NULL) {
+        return;
+    }
+    (void)umq_ub_queue_addr_list_remove(queue->addr_list, msg_id);
 }
 
 util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp)
