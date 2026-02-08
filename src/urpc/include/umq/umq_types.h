@@ -491,7 +491,7 @@ typedef struct umq_mempool_state {
     mempool_import_state_t import_state;
 } umq_mempool_state_t;
 
-#define UMQ_MAX_EID_CNT 64
+#define UMQ_MAX_EID_CNT 256
 
 typedef struct umq_eid_info {
     umq_eid_t eid;

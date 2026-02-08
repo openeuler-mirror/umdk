@@ -49,6 +49,8 @@ extern "C" {
 #define UMQ_UB_FLOW_CONTORL_JETTY_DEPTH 2
 #define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
+#define UMQ_UB_DEV_STR_LENGTH 64
+
 typedef enum umq_size_interval {
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
     UMQ_SIZE_SMALL_MID_INTERVAL,    // (umq_buf_size_small(), umq_buf_size_middle()] size
@@ -381,6 +383,12 @@ typedef enum umq_ub_rw_segment_offset {
     OFFSET_FLOW_CONTROL, // 16bit local window, 16bit remote window
 } umq_ub_rw_segment_offset_t;
 
+typedef struct umq_ub_raw_dev {
+    urma_device_t *urma_dev;
+    umq_eid_t eid;
+    uint32_t eid_index;
+} umq_ub_raw_dev_t;
+
 static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_segment_offset_t offset)
 {
     return (uint64_t)((uintptr_t)queue->notify_buf->buf_data + offset * UMQ_UB_RW_SEGMENT_LEN);
@@ -409,11 +417,6 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info);
 uint32_t umq_ub_bind_info_serialize(ub_queue_t *queue, uint8_t *bind_info, uint32_t bind_info_size);
 int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size, umq_ub_bind_info_t *bind_info);
 int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_queue_jetty_index_t jetty_idx);
-uint32_t umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, uint32_t *eid_index);
-int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
-int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
-int umq_ub_get_eid_dev_info(urma_device_t *urma_dev, uint32_t eid_idx, umq_dev_assign_t *out_info);
-umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
 remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void);
 void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx);
 urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
@@ -478,6 +481,20 @@ int umq_flow_control_stats_get(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
 void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf);
 umq_buf_t *umq_ub_queue_addr_list_remove(umq_buf_t *addr_list, uint16_t msg_id);
+
+// dev info
+int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_len);
+int umq_ub_dev_info_init(void);
+void umq_ub_dev_info_uninit(void);
+int umq_ub_dev_num_get(void);
+void umq_ub_dev_info_dump(umq_trans_mode_t umq_trans_mode, int num, umq_dev_info_t *out);
+int umq_ub_dev_info_dump_by_name(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *out);
+int umq_ub_dev_lookup_by_name(char *dev_name, uint32_t eid_idx, umq_ub_raw_dev_t *out);
+int umq_ub_dev_lookup_by_eid(umq_eid_t *eid, umq_ub_raw_dev_t *out);
+int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, umq_eid_t *eid, uint32_t *eid_index);
+umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
+int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
+int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
 
 #ifdef __cplusplus
 }
