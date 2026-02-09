@@ -80,30 +80,31 @@ static util_id_allocator_t g_umq_id_allocator = {0};
 uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
 {
     if (g_ipc_ctx != NULL) {
-        UMQ_VLOG_WARN("umq ipc already inited\n");
+        UMQ_VLOG_WARN(VLOG_UMQ, "umq ipc already inited\n");
         return (uint8_t *)g_ipc_ctx;
     }
 
-    if (util_id_allocator_init(&g_umq_id_allocator, UMQ_MAX_QUEUE_NUMBER, 0) != 0) {
-        UMQ_VLOG_ERR("id allocator init failed\n");
+    int ret = util_id_allocator_init(&g_umq_id_allocator, UMQ_MAX_QUEUE_NUMBER, 0);
+    if (ret != 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "id allocator init failed, status: %d\n", ret);
         return NULL;
     }
 
     g_ipc_ctx = (umq_ipc_init_ctx_t *)calloc(1, sizeof(umq_ipc_init_ctx_t));
     if (g_ipc_ctx == NULL) {
-        UMQ_VLOG_ERR("memory alloc failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "memory alloc failed\n");
         goto UNINIT_ALLOCATOR;
     }
 
     for (uint32_t i = 0; i < cfg->trans_info_num; ++i) {
         umq_trans_info_t *info = &cfg->trans_info[i];
         if (info->trans_mode != UMQ_TRANS_MODE_IPC) {
-            UMQ_VLOG_INFO("trans init mode: %d not ipc, skip it\n", info->trans_mode);
+            UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %d not ipc, skip it\n", info->trans_mode);
             continue;
         }
 
         if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
-            UMQ_VLOG_INFO("device info assign_mode is dummy, skip it\n");
+            UMQ_VLOG_INFO(VLOG_UMQ, "device info assign_mode is dummy, skip it\n");
             continue;
         }
 
@@ -114,7 +115,7 @@ uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
     }
 
     if (g_ipc_ctx->ref_cnt == 0) {
-        UMQ_VLOG_ERR("umq ipc not enabled\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq ipc not enabled\n");
         goto FREE_CTX;
     }
 
@@ -133,12 +134,12 @@ void umq_ipc_ctx_uninit_impl(uint8_t *ipc_ctx)
 {
     umq_ipc_init_ctx_t *context = (umq_ipc_init_ctx_t *)ipc_ctx;
     if (context != g_ipc_ctx) {
-        UMQ_VLOG_ERR("ipc ctx is invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc ctx is invalid\n");
         return;
     }
 
     if (umq_fetch_ref(context->io_lock_free, &context->ref_cnt) > 1) {
-        UMQ_VLOG_ERR("device ref cnt not cleared\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "device ref cnt not cleared\n");
         return;
     }
 
@@ -154,26 +155,26 @@ static ALWAYS_INLINE int umq_ipc_map_memory(umq_ipc_ring_info_t *ring)
     if (ring->owner) {
         shm_fd = shm_open(ring->ipc_name, O_CREAT | O_RDWR | O_EXCL, SHM_MODE);
         if (shm_fd == -1) {
-            UMQ_VLOG_ERR("shm open failed, name: %s errno: %d\n", ring->ipc_name, errno);
+            UMQ_VLOG_ERR(VLOG_UMQ, "shm open failed, name: %s errno: %d\n", ring->ipc_name, errno);
             goto ERR_SHM_OPEN;
         }
 
         // set share memory size
         if (ftruncate(shm_fd, ring->shm_size) != 0) {
-            UMQ_VLOG_ERR("ftruncate failed, errno: %d\n", errno);
+            UMQ_VLOG_ERR(VLOG_UMQ, "ftruncate failed, errno: %d\n", errno);
             goto ERR_SHM_SIZE;
         }
     } else {
         shm_fd = shm_open(ring->ipc_name, O_RDWR, SHM_MODE);
         if (shm_fd == -1) {
-            UMQ_VLOG_ERR("shm open failed, name: %s errno: %d\n", ring->ipc_name, errno);
+            UMQ_VLOG_ERR(VLOG_UMQ, "shm open failed, name: %s errno: %d\n", ring->ipc_name, errno);
             goto ERR_SHM_OPEN;
         }
     }
     ring->shm_fd = shm_fd;
     ring->addr = mmap(0, ring->shm_size, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);
     if (ring->addr == MAP_FAILED) {
-        UMQ_VLOG_ERR("map failed, errno: %d\n", errno);
+        UMQ_VLOG_ERR(VLOG_UMQ, "map failed, errno: %d\n", errno);
         goto ERR_SHM_MMAP;
     }
 
@@ -210,7 +211,7 @@ static ALWAYS_INLINE void umq_ipc_unmap_memory(umq_ipc_ring_info_t *ring)
 static ALWAYS_INLINE int fill_ring_info(umq_create_option_t *option, umq_ipc_ring_info_t *ring, bool owner)
 {
     if (strlen(option->name) > MAX_MSG_RING_NAME) {
-        UMQ_VLOG_ERR("name length exceeds %d\n", MAX_MSG_RING_NAME);
+        UMQ_VLOG_ERR(VLOG_UMQ, "name length exceeds %d\n", MAX_MSG_RING_NAME);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -241,19 +242,19 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
 {
     umq_ipc_init_ctx_t *ctx = (umq_ipc_init_ctx_t *)ipc_ctx;
     if (ctx != g_ipc_ctx) {
-        UMQ_VLOG_ERR("ipc ctx is invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc ctx is invalid\n");
         return UMQ_INVALID_HANDLE;
     }
 
     if (option->mode < 0 || option->mode >= UMQ_MODE_MAX) {
-        UMQ_VLOG_ERR("queue mode[%d] is invalid\n", option->mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue mode[%d] is invalid\n", option->mode);
         return UMQ_INVALID_HANDLE;
     }
 
     umq_inc_ref(ctx->io_lock_free, &ctx->ref_cnt, 1);
     umq_ipc_info_t *tp = (umq_ipc_info_t *)calloc(1, sizeof(umq_ipc_info_t));
     if (tp == NULL) {
-        UMQ_VLOG_ERR("memory alloc failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "memory alloc failed\n");
         goto DEC_REF;
     }
 
@@ -263,8 +264,9 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
     }
 
     tp->queue_mode = (option->create_flag & UMQ_CREATE_FLAG_QUEUE_MODE) ? option->mode : UMQ_MODE_POLLING;
-    if (umq_ipc_map_memory(&tp->local_ring) != 0) {
-        UMQ_VLOG_ERR("ipc map memory failed\n");
+    int ret = umq_ipc_map_memory(&tp->local_ring);
+    if (ret != 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc map memory failed, status: %d\n", ret);
         goto FREE_TP;
     }
 
@@ -279,7 +281,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
     };
     tp->local_msg_ring = msg_ring_create("", 0, &ipc_option);
     if (tp->local_msg_ring == NULL) {
-        UMQ_VLOG_ERR("ipc create failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc create failed\n");
         goto UNMAP;
     }
 
@@ -309,7 +311,7 @@ uint64_t umq_ipc_create_impl(uint64_t umqh, uint8_t *ipc_ctx, umq_create_option_
 
     tp->umqh = umqh;
     tp->ref_cnt = 1;
-    UMQ_VLOG_INFO("create ipc tp success\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "create ipc tp success\n");
     return (uint64_t)(uintptr_t)tp;
 
 RELEASE_ID:
@@ -331,12 +333,12 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (umq_fetch_ref(g_ipc_ctx->io_lock_free, &tp->ref_cnt) != 1) {
-        UMQ_VLOG_ERR("umqh ref cnt is not 0\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umqh ref cnt is not 0\n");
         return -UMQ_ERR_EBUSY;
     }
 
     if (tp->bind_ctx != NULL) {
-        UMQ_VLOG_ERR("umqh has not been unbinded\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umqh has not been unbinded\n");
         return -UMQ_ERR_EBUSY;
     }
 
@@ -352,7 +354,7 @@ int32_t umq_ipc_destroy_impl(uint64_t umqh_tp)
     umq_ipc_unmap_memory(&tp->local_ring);
     free(tp);
     umq_dec_ref(g_ipc_ctx->io_lock_free, &g_ipc_ctx->ref_cnt, 1);
-    UMQ_VLOG_INFO("destroy ipc tp success\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "destroy ipc tp success\n");
     return UMQ_SUCCESS;
 }
 
@@ -361,8 +363,8 @@ uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
         errno = UMQ_ERR_EINVAL;
-        UMQ_VLOG_ERR("bind_info_size[%u] is less than required size[%u]\n",
-            bind_info_size, sizeof(umq_ipc_bind_info_t));
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size[%u] is less than required size[%u], errno: %d\n",
+            bind_info_size, sizeof(umq_ipc_bind_info_t), errno);
         return 0;
     }
 
@@ -391,22 +393,22 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     umq_ipc_bind_info_t *tmp_info = (umq_ipc_bind_info_t *)bind_info;
     if (tp->bind_ctx != NULL || tmp_info->is_binded) {
-        UMQ_VLOG_ERR("umq has already been binded\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq has already been binded\n");
         return -UMQ_ERR_EEXIST;
     }
 
     if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
-        UMQ_VLOG_ERR("bind_info_size is invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size is invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     if (tmp_info->trans_mode != UMQ_TRANS_MODE_IPC) {
-        UMQ_VLOG_ERR("trans mode: %d is invalid, bind failed\n", tmp_info->trans_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans mode: %d is invalid, bind failed\n", tmp_info->trans_mode);
         return -UMQ_ERR_EINVAL;
     }
     ipc_bind_ctx_t *ctx = (ipc_bind_ctx_t *)calloc(1, sizeof(ipc_bind_ctx_t));
     if (ctx == NULL) {
-        UMQ_VLOG_ERR("bind ctx alloc failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind ctx alloc failed\n");
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -419,8 +421,9 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     ctx->remote_ring.owner = false;
     (void)memcpy(ctx->remote_ring.ipc_name, tmp_info->ipc_name, strlen(tmp_info->ipc_name));
 
-    if (umq_ipc_map_memory(&ctx->remote_ring) != 0) {
-        UMQ_VLOG_ERR("ipc map memory failed\n");
+    int ret = umq_ipc_map_memory(&ctx->remote_ring);
+    if (ret != 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc map memory failed, status: %d\n", ret);
         goto FREE_CTX;
     }
 
@@ -455,7 +458,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
 
     ctx->trans_mode = UMQ_TRANS_MODE_IPC;
     tp->bind_ctx = ctx;
-    UMQ_VLOG_INFO("umq ipc bind success\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "umq ipc bind success\n");
     return UMQ_SUCCESS;
 
 DESTROY_IPC:
@@ -473,7 +476,7 @@ int32_t umq_ipc_unbind_impl(uint64_t umqh_tp)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->bind_ctx == NULL) {
-        UMQ_VLOG_ERR("umq has not been binded\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq has not been binded\n");
         return -UMQ_ERR_ENODEV;
     }
 
@@ -483,7 +486,7 @@ int32_t umq_ipc_unbind_impl(uint64_t umqh_tp)
     umq_shm_global_pool_uninit(tp->bind_ctx->qbuf_pool_handle);
     free(tp->bind_ctx);
     tp->bind_ctx = NULL;
-    UMQ_VLOG_INFO("umq ipc unbind success\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "umq ipc unbind success\n");
     return UMQ_SUCCESS;
 }
 
@@ -521,7 +524,7 @@ static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (num > UMQ_POST_POLL_BATCH) {
-        UMQ_LIMIT_VLOG_ERR("enqueue data num %u exceeds max_post_size %d\n", num, UMQ_POST_POLL_BATCH);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "enqueue data num %u exceeds max_post_size %d\n", num, UMQ_POST_POLL_BATCH);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -532,7 +535,7 @@ static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32
 
     int ret = msg_ring_post_tx_batch(tp->local_msg_ring, (char **)&offset, sizes, num);
     if (ret != 0) {
-        UMQ_LIMIT_VLOG_ERR("ipc post tx failed\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "ipc post tx failed, status: %d\n", ret);
         return ret;
     }
     return UMQ_SUCCESS;
@@ -542,11 +545,11 @@ int umq_ipc_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->bind_ctx == NULL) {
-        UMQ_LIMIT_VLOG_ERR("umq has not been binded\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq has not been binded\n");
         return -UMQ_ERR_ENODEV;
     }
     if (!is_local_addr(tp, qbuf)) {
-        UMQ_LIMIT_VLOG_ERR("qbuf addr is not local addr\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf addr is not local addr\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -571,7 +574,7 @@ static ALWAYS_INLINE int dequeue_data(uint64_t umq_tp, uint64_t *offset, uint32_
     int ret = msg_ring_poll_tx_batch(tp->bind_ctx->remote_msg_ring, (char **)&rx_data_ptr,
         sizeof(uint64_t), polled_buf_size, num);
     if (ret < 0) {
-        UMQ_LIMIT_VLOG_ERR("ipc poll rx failed\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "ipc poll rx failed, status: %d\n", ret);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -582,7 +585,7 @@ umq_buf_t *umq_ipc_dequeue_impl(uint64_t umqh_tp)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->bind_ctx == NULL) {
-        UMQ_LIMIT_VLOG_ERR("umq has not been binded\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq has not been binded\n");
         return NULL;
     }
 
@@ -591,7 +594,7 @@ umq_buf_t *umq_ipc_dequeue_impl(uint64_t umqh_tp)
     umq_buf_t *polled_buf = umq_shm_qbuf_dequeue(tp->umqh, umqh_tp, tp->bind_ctx->qbuf_pool_handle,
         &rendezvous, dequeue_data);
     if (polled_buf == NULL) {
-        UMQ_LIMIT_VLOG_DEBUG("umq_shm_qbuf_dequeue return nothing\n");
+        UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "umq_shm_qbuf_dequeue return nothing\n");
     }
 
     return polled_buf;
@@ -602,7 +605,7 @@ umq_buf_t *umq_ipc_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_n
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR("no qbuf pool is valid for this umq\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
         return NULL;
     }
 
@@ -624,11 +627,11 @@ void umq_tp_ipc_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
     } else if (is_local_addr(tp, qbuf)) {
         qbuf_pool_handle = tp->qbuf_pool_handle;
     } else {
-        UMQ_VLOG_ERR("qbuf is invalid for this umq\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf is invalid for this umq\n");
     }
 
     if (qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR("no qbuf pool is valid for this umq\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
         return;
     }
 
@@ -647,11 +650,11 @@ int umq_tp_ipc_buf_headroom_reset_impl(umq_buf_t *qbuf, uint16_t headroom_size)
     } else if (is_local_addr(tp, qbuf)) {
         qbuf_pool_handle = tp->qbuf_pool_handle;
     } else {
-        UMQ_VLOG_ERR("qbuf is invalid for this umq\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf is invalid for this umq\n");
     }
 
     if (qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR("no qbuf pool is valid for this umq\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -667,7 +670,7 @@ void umq_ipc_notify_impl(uint64_t umqh_tp)
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->queue_mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "queue mode is not interrupt\n");
         return;
     }
 
@@ -681,13 +684,13 @@ int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt
 {
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
-        UMQ_LIMIT_VLOG_ERR("option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->queue_mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "queue mode is not interrupt\n");
         return -UMQ_ERR_EINVAL;
     }
     return UMQ_SUCCESS;
@@ -722,13 +725,13 @@ int32_t umq_ipc_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_int
 {
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
-        UMQ_LIMIT_VLOG_ERR("option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)wait_umqh_tp;
     if (tp->queue_mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "queue mode is not interrupt\n");
         return -UMQ_ERR_EINVAL;
     }
     shm_ring_hdr_t *hdr = option->direction == UMQ_IO_TX ? tp->local_msg_ring->shm_tx_ring_hdr :
@@ -748,13 +751,13 @@ void umq_ipc_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrup
 {
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
-        UMQ_LIMIT_VLOG_ERR("option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
         return;
     }
 
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     if (tp->queue_mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR("queue mode is not interrupt\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "queue mode is not interrupt\n");
         return;
     }
     shm_ring_hdr_t *hdr = option->direction == UMQ_IO_TX ? tp->local_msg_ring->shm_tx_ring_hdr :

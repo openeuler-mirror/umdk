@@ -44,19 +44,19 @@ void *obmem_export_memory(obmem_export_memory_param_t *export_param, uint64_t *h
     uint32_t open_flag = 0;
 
     if (export_param->len == 0) {
-        UMQ_VLOG_ERR("invalid input parameters, len=0\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid input parameters, len=0\n");
         return NULL;
     }
 
     if ((export_param->len & (ADDR_MASK_4MB - 1)) != 0) {
-        UMQ_VLOG_ERR("invalid input parameters, len[%lu byte] is not an integer multiple of unit size[%lu byte]\n",
-            export_param->len, ADDR_MASK_4MB);
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid input parameters, len[%lu byte] is not an integer multiple of"
+            "unit size[%lu byte]\n", export_param->len, ADDR_MASK_4MB);
         return NULL;
     }
 
     if ((handle == NULL) || (exp == NULL)) {
-        UMQ_VLOG_ERR("invalid input parameters, handle %s NULL, exp %s NULL\n", handle == NULL ? "is" : "not",
-                     exp == NULL ? "is" : "not");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid input parameters, handle %s NULL, exp %s NULL\n",
+            handle == NULL ? "is" : "not", exp == NULL ? "is" : "not");
         return NULL;
     }
 
@@ -65,7 +65,7 @@ void *obmem_export_memory(obmem_export_memory_param_t *export_param, uint64_t *h
     (void)memcpy(export_info.deid, export_param->deid, OBMM_EID_LEN);
     memid = obmm_export(size, OBMM_EXPORT_FLAG_ALLOW_MMAP, &export_info);
     if (memid == OBMM_INVALID_MEMID) {
-        UMQ_VLOG_ERR("[obmem_export_memory] fail to export obmm\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "export obmm failed\n");
         return NULL;
     }
 
@@ -73,14 +73,14 @@ void *obmem_export_memory(obmem_export_memory_param_t *export_param, uint64_t *h
     open_flag = export_param->cacheable ? O_RDWR : O_RDWR | O_SYNC;
     fd = open(dev_info, open_flag);
     if (fd < 0) {
-        UMQ_VLOG_ERR("[obmem_export_memory] fail to open obmem_export_memory, fd=%d\n", fd);
+        UMQ_VLOG_ERR(VLOG_UMQ, "open obmem_export_memory failed, fd=%d\n", fd);
         goto UNEXPORT_OBMM;
     }
 
     ptr = mmap(NULL, export_param->len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (ptr == MAP_FAILED) {
         (void)close(fd);
-        UMQ_VLOG_ERR("mmap failed, len: %lu errno: %d\n", export_param->len, errno);
+        UMQ_VLOG_ERR(VLOG_UMQ, "mmap failed, len: %lu errno: %d\n", export_param->len, errno);
         goto UNEXPORT_OBMM;
     }
 
@@ -95,9 +95,9 @@ void *obmem_export_memory(obmem_export_memory_param_t *export_param, uint64_t *h
 UNEXPORT_OBMM:
     ret = obmm_unexport(memid, 0);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("release_share_memory failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "release_share_memory failed, status: %d\n", ret);
     } else {
-        UMQ_VLOG_INFO("release_share_memory successful\n");
+        UMQ_VLOG_INFO(VLOG_UMQ, "release_share_memory success\n");
     }
     return NULL;
 }
@@ -108,14 +108,14 @@ int obmem_release_export_memory(uint64_t handle, void *ptr, uint64_t len)
     unsigned long flags = 0;
     ret = munmap(ptr, len);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("munmap failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "munmap failed, status: %d\n", ret);
     }
 
     ret = obmm_unexport(handle, flags);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("release_share_memory failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "release_share_memory failed, status: %d\n", ret);
     } else {
-        UMQ_VLOG_INFO("release_share_memory successful\n");
+        UMQ_VLOG_INFO(VLOG_UMQ, "release_share_memory success\n");
     }
 
     return ret;
@@ -123,7 +123,7 @@ int obmem_release_export_memory(uint64_t handle, void *ptr, uint64_t len)
 
 void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_export_info_t *exp, uint64_t *handle)
 {
-    UMQ_VLOG_INFO("Enter obmem_import_memory\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "enter obmem_import_memory\n");
     void *ptr = NULL;
     mem_id memid = 0;
     unsigned long flags = OBMM_IMPORT_FLAG_ALLOW_MMAP;
@@ -136,20 +136,20 @@ void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_expor
     int ret = -1;
 
     if ((exp == NULL) || (handle == NULL)) {
-        UMQ_VLOG_ERR("invalid input parameters, handle %s NULL, exp %s NULL\n", handle == NULL ? "is" : "not",
-                     exp == NULL ? "is" : "not");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid input parameters, handle %s NULL, exp %s NULL\n",
+            handle == NULL ? "is" : "not", exp == NULL ? "is" : "not");
         return NULL;
     }
 
     if (import_param->import_cna == import_param->export_cna) {
-        UMQ_VLOG_ERR("invalid input parameters, import_cna==export_cna(%d)\n", import_param->import_cna);
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid input parameters, import_cna==export_cna(%d)\n", import_param->import_cna);
         return NULL;
     }
 
     uint32_t alloc_size = sizeof(struct obmm_mem_desc) + sizeof(struct ub_mem_priv_data);
     desc = (struct obmm_mem_desc *)calloc(1, alloc_size);
     if (desc == NULL) {
-        UMQ_VLOG_ERR("calloc failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc failed\n");
         return NULL;
     }
     desc->addr = exp->uba;
@@ -167,7 +167,7 @@ void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_expor
 
     memid = obmm_import(desc, flags, base_dist, &numa);
     if (memid == OBMM_INVALID_MEMID) {
-        UMQ_VLOG_ERR("[obmem_import_memory] fail to import obmm\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "import obmm failed\n");
         return NULL;
     }
 
@@ -175,14 +175,14 @@ void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_expor
     open_flag = import_param->cacheable ? O_RDWR : O_RDWR | O_SYNC;
     fd = open(dev_info, open_flag);
     if (fd < 0) {
-        UMQ_VLOG_ERR("[obmem_import_memory] fail to open obmem_import_memory, fd=%d\n", fd);
+        UMQ_VLOG_ERR(VLOG_UMQ, "open obmem_import_memory failed, fd=%d\n", fd);
         goto UNIMPORT_OBMM;
     }
 
     ptr = mmap(NULL, desc->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (ptr == MAP_FAILED) {
         (void)close(fd);
-        UMQ_VLOG_ERR("mmap failed, len: %lu errno: %d\n", desc->length, errno);
+        UMQ_VLOG_ERR(VLOG_UMQ, "mmap failed, len: %lu errno: %d\n", desc->length, errno);
         goto UNIMPORT_OBMM;
     }
 
@@ -195,9 +195,9 @@ void *obmem_import_memory(obmem_import_memory_param_t *import_param, obmem_expor
 UNIMPORT_OBMM:
     ret = obmm_unimport(*handle, 0);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("release_share_memory failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "release_share_memory failed, status: %d\n", ret);
     } else {
-        UMQ_VLOG_INFO("release_share_memory successful\n");
+        UMQ_VLOG_INFO(VLOG_UMQ, "release_share_memory success\n");
     }
     return NULL;
 }
@@ -208,14 +208,14 @@ int obmem_release_import_memory(uint64_t handle, void *ptr, uint64_t len)
     unsigned long flags = 0;
     ret = munmap(ptr, len);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("munmap failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "munmap failed, status: %d\n", ret);
     }
 
     ret = obmm_unimport(handle, flags);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("withdraw_share_memory failed, ret=%d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "withdraw_share_memory failed, status: %d\n", ret);
     } else {
-        UMQ_VLOG_DEBUG("withdraw_share_memory successful\n");
+        UMQ_VLOG_DEBUG(VLOG_UMQ, "withdraw_share_memory success\n");
     }
 
     return ret;

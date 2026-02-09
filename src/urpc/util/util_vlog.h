@@ -35,6 +35,15 @@ typedef enum util_vlog_level {
     UTIL_VLOG_LEVEL_MAX,
 } util_vlog_level_t;
 
+typedef enum util_vlog_type {
+    VLOG_DEFAULT = 0,
+    VLOG_UMQ,
+    VLOG_UMQ_URMA_API,
+    VLOG_UMQ_URMA_CQE,
+    VLOG_UMQ_URMA_AE,
+    VLOG_MAX,
+} util_vlog_type_t;
+
 typedef struct util_vlog_ctx {
     util_vlog_level_t level;
     char vlog_name[UTIL_VLOG_NAME_STR_LEN];
@@ -45,17 +54,17 @@ typedef struct util_vlog_ctx {
     } rate_limited;
 } util_vlog_ctx_t;
 
-#define UTIL_VLOG(__ctx, __level, ...)  \
+#define UTIL_VLOG(__ctx, __level, __type, ...)  \
     if (!util_vlog_drop(__ctx, __level)) {  \
-        util_vlog_output(__ctx, __level, __func__, __LINE__, ##__VA_ARGS__);    \
+        util_vlog_output(__ctx, __level, __type, __func__, __LINE__, ##__VA_ARGS__);    \
     }
 
-#define UTIL_LIMIT_VLOG(__ctx, __level, ...)  \
+#define UTIL_LIMIT_VLOG(__ctx, __level, __type, ...)  \
     if (!util_vlog_drop(__ctx, __level)) {  \
         static uint32_t count_call = 0; \
         static uint64_t last_time = 0;  \
         if (util_vlog_limit(__ctx, &count_call, &last_time)) {  \
-            util_vlog_output(__ctx, __level, __func__, __LINE__, ##__VA_ARGS__);    \
+            util_vlog_output(__ctx, __level, __type, __func__, __LINE__, ##__VA_ARGS__);    \
         }   \
     }
 
@@ -71,8 +80,8 @@ static inline bool util_vlog_drop(const util_vlog_ctx_t *ctx, util_vlog_level_t 
     return level > ctx->level;
 }
 
-void util_vlog_output(
-    util_vlog_ctx_t *ctx, util_vlog_level_t level, const char *function, int line, const char *format, ...);
+void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_type_t type, const char *function,
+    int line, const char *format, ...);
 
 util_vlog_level_t util_vlog_level_converter_from_str(const char *str, util_vlog_level_t default_level);
 const char *util_vlog_level_converter_to_str(util_vlog_level_t level);

@@ -140,11 +140,11 @@ void urpc_dbuf_stat_get(uint64_t *stat, int stat_len)
 void urpc_dbuf_stat_record_enable(void)
 {
     g_urpc_dbuf_record_enable = true;
-    UTIL_LOG_INFO("enable dynamic buffer statistics successful\n");
+    UTIL_LOG_INFO("enable dynamic buffer statistics success\n");
 }
 
 void urpc_dbuf_stat_record_disable(void)
 {
     g_urpc_dbuf_record_enable = false;
-    UTIL_LOG_INFO("disable dynamic buffer statistics successful\n");
+    UTIL_LOG_INFO("disable dynamic buffer statistics success\n");
 }

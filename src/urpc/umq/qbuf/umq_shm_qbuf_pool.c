@@ -153,12 +153,12 @@ static void unregister_all_thread_cache(qbuf_pool_t *pool)
         while (!__atomic_compare_exchange_n(&tls_mgmt_pool->remove_ref_cnt, &desired, 0, true, __ATOMIC_RELEASE,
                                             __ATOMIC_ACQUIRE)) {
             if (desired != ref) {
-                UMQ_VLOG_ERR("unexpected exception, actual ref: %u, desired ref: %u\n", ref, desired);
+                UMQ_VLOG_ERR(VLOG_UMQ, "unexpected exception, actual ref: %u, desired ref: %u\n", ref, desired);
                 break;
             }
 
             if (is_timeout(&start, RELEASE_THREAD_CACHE_TIMEOUT_MS)) {
-                UMQ_VLOG_ERR("release thread cache for shared memory exceeds %d ms timeout\n",
+                UMQ_VLOG_ERR(VLOG_UMQ, "release thread cache for shared memory exceeds %d ms timeout\n",
                     RELEASE_THREAD_CACHE_TIMEOUT_MS);
                 break;
             }
@@ -321,7 +321,7 @@ void umq_shm_global_pool_uninit(uint64_t pool)
 {
     qbuf_pool_t *_pool = (qbuf_pool_t *)(uintptr_t)pool;
     if (_pool == NULL) {
-        UMQ_VLOG_ERR("queue buffer pool is invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue buffer pool is invalid\n");
         return;
     }
 
@@ -343,7 +343,7 @@ static ALWAYS_INLINE int umq_shm_dequeue_qbuf(msg_ring_t *msg_ring, uint64_t *of
     int ret =
         msg_ring_poll_rx_batch(msg_ring, (char **)&rx_data_ptr, sizeof(uint64_t), polled_buf_size, max_num);
     if (ret < 0) {
-        UMQ_VLOG_ERR("ipc poll rx failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc poll rx failed, status: %d\n", ret);
         return -UMQ_ERR_EAGAIN;
     }
 
@@ -387,7 +387,7 @@ static ALWAYS_INLINE void umq_shm_poll_and_fill_global(qbuf_pool_t *pool)
     uint32_t max_count = SHM_QBUF_POOL_BATCH_CNT;
     int ret = umq_shm_dequeue_qbuf(pool->msg_ring, qbuf_offset, max_count);
     if (ret < 0) {
-        UMQ_VLOG_ERR("umq_shm_dequeue_qbuf return: %d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq_shm_dequeue_qbuf failed, status: %d\n", ret);
         return;
     }
 
@@ -422,7 +422,7 @@ static void umq_shm_qbuf_alloc_data_with_split(local_block_pool_t *local_pool, u
         cur_node->first_fragment = first_fragment;
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
-            UMQ_VLOG_ERR("qbuf %lu in with_data pool already allocated\n", buf_id);
+            UMQ_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
 
@@ -459,14 +459,14 @@ int umq_shm_qbuf_alloc(
 {
     qbuf_pool_t *_pool = (qbuf_pool_t *)(uintptr_t)pool;
     if (_pool == NULL) {
-        UMQ_VLOG_ERR("queue buffer _pool is invalid\n");
-        return -EINVAL;
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue buffer _pool is invalid\n");
+        return -UMQ_ERR_EINVAL;
     }
 
     queue_local_pool_t *local_pool = get_thread_cache(_pool);
     if (local_pool == NULL) {
-        UMQ_VLOG_ERR("thread cache is not ready\n");
-        return -EINVAL;
+        UMQ_VLOG_ERR(VLOG_UMQ, "thread cache is not ready\n");
+        return -UMQ_ERR_EINVAL;
     }
 
     local_block_pool_t *lblk_pool = &local_pool->block_pool;
@@ -475,6 +475,7 @@ int umq_shm_qbuf_alloc(
     qbuf_alloc_param_t param;
     param.shm = true;
     param.headroom_size = flag ? option->headroom_size : _pool->headroom_size;
+    int ret = UMQ_SUCCESS;
 
     if (_pool->mode == UMQ_BUF_SPLIT) {
         param.actual_buf_count =
@@ -485,19 +486,22 @@ int umq_shm_qbuf_alloc(
     }
     if (request_size == 0) {
         if (flag && param.headroom_size > 0) {
-            UMQ_VLOG_ERR("headroom_size not supported when request_size is 0\n");
-            return -EINVAL;
+            UMQ_VLOG_ERR(VLOG_UMQ, "headroom_size not supported when request_size is 0\n");
+            return -UMQ_ERR_EINVAL;
         }
 
         if (_pool->mode != UMQ_BUF_SPLIT) {
-            UMQ_VLOG_ERR("cannot alloc memory size 0 in combine mode\n");
+            UMQ_VLOG_ERR(VLOG_UMQ, "cannot alloc memory size 0 in combine mode\n");
             return -UMQ_ERR_ENOMEM;
         }
 
         // fetch from global first, if thread local qbuf is not enough for allocate operation
         while (lblk_pool->buf_cnt_without_data < num) {
             umq_shm_poll_and_fill_global(_pool);
-            if (fetch_from_global(gblk_pool, lblk_pool, false, SHM_QBUF_POOL_BATCH_CNT) <= 0) {
+            ret = fetch_from_global(gblk_pool, lblk_pool, false, SHM_QBUF_POOL_BATCH_CNT);
+            if (ret <= 0) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
+                    lblk_pool->buf_cnt_without_data, num, ret);
                 return -UMQ_ERR_ENOMEM;
             }
         }
@@ -510,9 +514,10 @@ int umq_shm_qbuf_alloc(
     // fetch from global first, if thread local qbuf is not enough for allocate operation
     while (lblk_pool->buf_cnt_with_data < param.actual_buf_count) {
         umq_shm_poll_and_fill_global(_pool);
-        if (fetch_from_global(gblk_pool, lblk_pool, true, SHM_QBUF_POOL_BATCH_CNT) <= 0) {
-            UMQ_VLOG_ERR("fetch from global failed, current size: %u, alloc num: %u\n",
-                lblk_pool->buf_cnt_with_data, param.actual_buf_count);
+        ret = fetch_from_global(gblk_pool, lblk_pool, true, SHM_QBUF_POOL_BATCH_CNT);
+        if (ret <= 0) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
+                lblk_pool->buf_cnt_with_data, param.actual_buf_count, ret);
             return -UMQ_ERR_ENOMEM;
         }
     }
@@ -530,7 +535,7 @@ static ALWAYS_INLINE int umq_shm_enqueue_qbuf(msg_ring_t *msg_ring, uint64_t off
 {
     int ret = msg_ring_post_rx(msg_ring, (char *)&offset, sizeof(uint64_t));
     if (ret != 0) {
-        UMQ_VLOG_ERR("msg_ring post rx failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "msg_ring post rx failed, status: %d\n", ret);
         return ret;
     }
     return UMQ_SUCCESS;
@@ -559,7 +564,7 @@ void umq_shm_qbuf_free(uint64_t pool, umq_buf_list_t *list)
 {
     qbuf_pool_t *_pool = (qbuf_pool_t *)(uintptr_t)pool;
     if (_pool == NULL) {
-        UMQ_VLOG_ERR("queue buffer pool is invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue buffer pool is invalid\n");
         return;
     }
 
@@ -570,7 +575,7 @@ void umq_shm_qbuf_free(uint64_t pool, umq_buf_list_t *list)
 
     queue_local_pool_t *local_pool = get_thread_cache(_pool);
     if (local_pool == NULL) {
-        UMQ_VLOG_ERR("thread cache is not ready\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "thread cache is not ready\n");
         return;
     }
 
@@ -607,8 +612,8 @@ int umq_shm_qbuf_headroom_reset(uint64_t pool, umq_buf_t *qbuf, uint16_t headroo
 {
     qbuf_pool_t *_pool = (qbuf_pool_t *)(uintptr_t)pool;
     if (_pool == NULL) {
-        UMQ_VLOG_ERR("queue buffer pool is invalid\n");
-        return -EINVAL;
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue buffer pool is invalid\n");
+        return -UMQ_ERR_EINVAL;
     }
 
     return headroom_reset(qbuf, headroom_size, _pool->mode, _pool->block_size);

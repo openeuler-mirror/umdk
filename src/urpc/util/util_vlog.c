@@ -6,6 +6,8 @@
  */
 
 #include <stdarg.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "urpc_util.h"
 #include "util_vlog.h"
@@ -23,6 +25,7 @@ static const char *g_warn_alias_names_def[] = { "warn", "warning", "4", NULL };
 static const char *g_notice_alias_names_def[] = { "notice", "5", NULL };
 static const char *g_info_alias_names_def[] = { "info", "informational", "6", NULL };
 static const char *g_debug_alias_names_def[] = { "debug", "7", NULL };
+static const char *g_log_type_to_str[VLOG_MAX] = {"", "", "[URMA_API]", "[URMA_CQE]", "[URMA_AE]"};
 
 static const util_vlog_level_def_t g_util_vlog_level_def[] = {
     { "EMERG", g_emerg_alias_names_def },
@@ -63,11 +66,13 @@ bool util_vlog_limit(util_vlog_ctx_t *ctx, uint32_t *print_count, uint64_t *last
     return false;
 }
 
-void util_vlog_output(
-    util_vlog_ctx_t *ctx, util_vlog_level_t level, const char *function, int line, const char *format, ...)
+void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_type_t type, const char *function,
+    int line, const char *format, ...)
 {
     char log_msg[UTIL_VLOG_SIZE];
-    int len = snprintf(log_msg, UTIL_VLOG_SIZE, "%s|%s[%d]|", ctx->vlog_name, function, line);
+
+    int len = snprintf(log_msg, UTIL_VLOG_SIZE, "%s%s[%lu]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
+        syscall(__NR_gettid), function, line);
     if (len < 0) {
         return;
     }

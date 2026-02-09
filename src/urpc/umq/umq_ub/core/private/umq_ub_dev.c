@@ -26,14 +26,14 @@ int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_le
         case UMQ_DEV_ASSIGN_MODE_DEV:
             ret = snprintf(dev_str, dev_str_len, "%s[%u]", dev_info->dev.dev_name, dev_info->dev.eid_idx);
             if (ret < 0 || ret >= dev_str_len) {
-                UMQ_VLOG_ERR("snprintf failed, ret: %d\n", ret);
+                UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
                 return UMQ_FAIL;
             }
             break;
         case UMQ_DEV_ASSIGN_MODE_EID:
             ret = snprintf(dev_str, dev_str_len, "" EID_FMT "", EID_ARGS(dev_info->eid.eid));
             if (ret < 0 || ret >= dev_str_len) {
-                UMQ_VLOG_ERR("snprintf failed, ret: %d\n", ret);
+                UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
                 return UMQ_FAIL;
             }
             break;
@@ -44,12 +44,12 @@ int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_le
                 dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV4 ? dev_info->ipv4.ip_addr : dev_info->ipv6.ip_addr;
             ret = snprintf(dev_str, dev_str_len, "%s", ip_addr);
             if (ret < 0 || ret >= dev_str_len) {
-                UMQ_VLOG_ERR("snprintf failed, ret: %d\n", ret);
+                UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
                 return UMQ_FAIL;
             }
             break;
         default:
-            UMQ_VLOG_ERR("assign mode: %d not supported\n", dev_info->assign_mode);
+            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %d not supported\n", dev_info->assign_mode);
             return -UMQ_ERR_EINVAL;
     }
 
@@ -61,13 +61,14 @@ static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_i
     uint32_t eid_cnt = 0;
     urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
     if (eid_info_list == NULL || eid_cnt == 0) {
-        UMQ_VLOG_WARN("get empty eid list, dev: %s\n", urma_dev->name);
+        UMQ_VLOG_WARN(VLOG_UMQ_URMA_API, "urma_get_eid_list failed, dev: %s, errno: %d\n", urma_dev->name, errno);
         return UMQ_SUCCESS;
     }
 
     if (eid_cnt >= UMQ_MAX_EID_CNT) {
         urma_free_eid_list(eid_info_list);
-        UMQ_VLOG_ERR("number of eid exceeds the maximum limit %d, dev: %s\n", UMQ_MAX_EID_CNT, urma_dev->name);
+        UMQ_VLOG_ERR(VLOG_UMQ, "number of eid exceeds the maximum limit %d, dev: %s\n", UMQ_MAX_EID_CNT,
+            urma_dev->name);
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -90,13 +91,13 @@ int umq_ub_dev_info_init(void)
     int ret = UMQ_SUCCESS;
     g_umq_global_dev.urma_dev = urma_get_device_list(&g_umq_global_dev.dev_num);
     if (g_umq_global_dev.urma_dev == NULL || g_umq_global_dev.dev_num <= 0) {
-        UMQ_VLOG_ERR("urma_get_device_list failed, errno %d\n", errno);
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_device_list failed, errno %d\n", errno);
         return -UMQ_ERR_ENODEV;
     }
 
     g_umq_global_dev.umq_dev = calloc(g_umq_global_dev.dev_num, sizeof(umq_dev_info_t));
     if (g_umq_global_dev.umq_dev == NULL) {
-        UMQ_VLOG_ERR("malloc umq_dev_info failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc umq_dev_info failed\n");
         ret = -UMQ_ERR_ENOMEM;
         goto FREE_DEV_LIST;
     }
@@ -104,7 +105,8 @@ int umq_ub_dev_info_init(void)
     for (int i = 0; i < g_umq_global_dev.dev_num; i++) {
         ret = umq_ub_dev_eid_set(g_umq_global_dev.urma_dev[i], &g_umq_global_dev.umq_dev[i]);
         if (ret != UMQ_SUCCESS) {
-            UMQ_VLOG_WARN("get dev info for dev: %s failed, ret %d\n", g_umq_global_dev.urma_dev[i]->name, ret);
+            UMQ_VLOG_WARN(VLOG_UMQ, "get dev info for dev: %s failed, status: %d\n",
+                g_umq_global_dev.urma_dev[i]->name, ret);
             goto FREE_UMQ_DEV;
         }
     }
@@ -161,7 +163,7 @@ int umq_ub_dev_info_dump_by_name(char *dev_name, umq_trans_mode_t umq_trans_mode
         }
     }
 
-    UMQ_VLOG_ERR("get dev info by name failed, dev_name %s\n", dev_name);
+    UMQ_VLOG_ERR(VLOG_UMQ, "get dev info by name failed, dev_name %s\n", dev_name);
     return -UMQ_ERR_ENODEV;
 }
 
