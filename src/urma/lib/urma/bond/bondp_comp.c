@@ -582,12 +582,11 @@ bondp_comp_t *bondp_create_comp(urma_context_t *ctx, bondp_comp_type_t type, voi
     }
     bdp_comp = (bondp_comp_t *)calloc(1, sizeof(bondp_comp_t));
     if (bdp_comp == NULL) {
-        URMA_LOG_ERR("Failed to alloc bdp_comp\n");
         return NULL;
     }
     args = g_bondp_comp_table[type].get_args_list(bdp_ctx, cfg, &bdp_comp->dev_num);
     if (args == NULL) {
-        URMA_LOG_ERR("Failed to get args list\n");
+        URMA_LOG_ERR("Failed to get args list, type: %d.\n", type);
         goto FREE_COMP;
     }
     for (i = 0; i < bdp_comp->dev_num; ++i) {
@@ -598,7 +597,7 @@ bondp_comp_t *bondp_create_comp(urma_context_t *ctx, bondp_comp_type_t type, voi
             bdp_ctx->p_ctxs[i],
             args + i * g_bondp_comp_table[type].cfg_size);
         if (bdp_comp->members[i] == NULL) {
-            URMA_LOG_ERR("Failed to create comp %d\n", i);
+            URMA_LOG_ERR("Failed to create comp %d, type: %d.\n", i, type);
             goto DELETE_MEMBER;
         }
     }

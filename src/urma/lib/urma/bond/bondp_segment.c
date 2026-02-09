@@ -115,11 +115,10 @@ urma_token_id_t *bondp_alloc_token_id(urma_context_t *ctx)
 
     token = calloc(1, sizeof(urma_token_id_t));
     if (token == NULL) {
-        URMA_LOG_ERR("Failed to alloc token");
         return NULL;
     }
     if (bondp_bitmap_alloc_idx(&bdp_ctx->token_id_bitmap, &token->token_id)) {
-        URMA_LOG_ERR("Failed to alloc token id");
+        URMA_LOG_ERR("Failed to alloc token id.\n");
         free(token);
         return NULL;
     }
@@ -136,7 +135,7 @@ urma_status_t bondp_free_token_id(urma_token_id_t *token_id)
         return URMA_FAIL;
     }
     if (bondp_bitmap_free_idx(&bdp_ctx->token_id_bitmap, token_id->token_id)) {
-        URMA_LOG_ERR("Failed to free idx");
+        URMA_LOG_ERR("Failed to free idx, tid: %u.\n", token_id->token_id);
         return URMA_FAIL;
     }
     free(token_id);
@@ -159,7 +158,6 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
     // va --> vtarget_seg hash table
     bdp_va_vtseg_info_t *va_vtseg = calloc(1, sizeof(bdp_va_vtseg_info_t));
     if (va_vtseg == NULL) {
-        URMA_LOG_ERR("Failed to alloc va_vtseg\n");
         (void)bondp_delete_comp(bdp_comp, BONDP_COMP_SEGMENT);
         return NULL;
     }
@@ -466,7 +464,6 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
     bondp_import_tseg_t *bdp_imprt_tseg = calloc(1, sizeof(bondp_import_tseg_t));
     if (bdp_imprt_tseg == NULL) {
-        URMA_LOG_ERR("Failed to alloc import target seg.\n");
         return NULL;
     }
     bdp_imprt_tseg->local_dev_num = bdp_ctx->dev_num;
@@ -503,8 +500,9 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     urma_cmd_udrv_priv_t udata = { .in_addr = 0,      .in_len = 0,
         .out_addr = (uint64_t)&udata_out,             .out_len = sizeof(udata_out) };
 
-    if (urma_cmd_import_seg(ctx, &bdp_imprt_tseg->v_tseg, &cfg, &udata) != 0) {
-        URMA_LOG_ERR("import seg failed.\n");
+    ret = urma_cmd_import_seg(ctx, &bdp_imprt_tseg->v_tseg, &cfg, &udata);
+    if (ret != 0) {
+        URMA_LOG_ERR("import seg failed, ret: %d, errno: %d.\n", ret, errno);
         goto free_bdp_imprt_tseg;
     }
 

@@ -81,7 +81,6 @@ int bondp_bitmap_alloc_idx(bondp_bitmap_t *bitmap, uint32_t *idx_out)
     uint32_t idx;
     idx = (uint32_t)bondp_find_first_zero_bit(bitmap->bits, bitmap->size);
     if (idx >= bitmap->size) {
-        URMA_LOG_ERR("bitmap allocation failed.\n");
         return -1;
     }
     ub_bitmap_set1(bitmap->bits, idx);
@@ -123,7 +122,6 @@ int bondp_bitmap_use_id(bondp_bitmap_t *bitmap, uint32_t id)
 int bondp_bitmap_free_idx(bondp_bitmap_t *bitmap, uint32_t idx)
 {
     if (!ub_bitmap_is_set(bitmap->bits, idx)) {
-        URMA_LOG_ERR("idx not set: %d.\n", idx);
         return -EINVAL;
     }
     ub_bitmap_set0(bitmap->bits, idx);
