@@ -127,6 +127,8 @@ static int init_umq(struct urpc_example_config *cfg)
         LOG_PRINT_ERR("umq_init failed\n");
         goto FREE_CFG;
     }
+
+    free(init_cfg);
     return 0;
 
 FREE_CFG:
@@ -617,6 +619,11 @@ static int send_req(umq_info_t *umq_info)
     }
 
     umq_buf_t *tx_post_buf = umq_buf_alloc(CONNETION_SETUP_MSG_SZIE, 1, umqh, NULL);
+    if (tx_post_buf == NULL || tx_post_buf->buf_data == NULL) {
+        LOG_PRINT_ERR("umq_buf_alloc tx buf failed\n");
+        return -1;
+    }
+
     (void)sprintf(tx_post_buf->buf_data, "hello server i am client");
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
