@@ -22,27 +22,27 @@ typedef struct umq_vlog_config {
     pthread_mutex_t log_lock;
 } umq_vlog_config_t;
 
-#define UMQ_VLOG_ERR(__format, ...)    \
-    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_ERR, __format, ##__VA_ARGS__)
-#define UMQ_VLOG_WARN(__format, ...)   \
-    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_WARN, __format, ##__VA_ARGS__)
-#define UMQ_VLOG_NOTICE(__format, ...) \
-    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_NOTICE, __format, ##__VA_ARGS__)
-#define UMQ_VLOG_INFO(__format, ...)   \
-    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_INFO, __format, ##__VA_ARGS__)
-#define UMQ_VLOG_DEBUG(__format, ...)  \
-    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_ERR(__type, __format, ...)    \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_ERR, __type, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_WARN(__type, __format, ...)   \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_WARN, __type, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_NOTICE(__type, __format, ...) \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_NOTICE, __type, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_INFO(__type, __format, ...)   \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_INFO, __type, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_DEBUG(__type, __format, ...)  \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __type, __format, ##__VA_ARGS__)
 
-#define UMQ_LIMIT_VLOG_ERR(__format, ...)   \
-    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_ERR, __format, ##__VA_ARGS__)
-#define UMQ_LIMIT_VLOG_WARN(__format, ...)  \
-    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_WARN, __format, ##__VA_ARGS__)
-#define UMQ_LIMIT_VLOG_NOTICE(__format, ...)    \
-    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_NOTICE, __format, ##__VA_ARGS__)
-#define UMQ_LIMIT_VLOG_INFO(__format, ...)  \
-    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_INFO, __format, ##__VA_ARGS__)
-#define UMQ_LIMIT_VLOG_DEBUG(__format, ...)     \
-    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __format, ##__VA_ARGS__)
+#define UMQ_LIMIT_VLOG_ERR(__type, __format, ...)   \
+    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_ERR, __type, __format, ##__VA_ARGS__)
+#define UMQ_LIMIT_VLOG_WARN(__type, __format, ...)  \
+    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_WARN, __type, __format, ##__VA_ARGS__)
+#define UMQ_LIMIT_VLOG_NOTICE(__type, __format, ...)    \
+    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_NOTICE, __type, __format, ##__VA_ARGS__)
+#define UMQ_LIMIT_VLOG_INFO(__type, __format, ...)  \
+    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_INFO, __type, __format, ##__VA_ARGS__)
+#define UMQ_LIMIT_VLOG_DEBUG(__type, __format, ...)     \
+    UTIL_LIMIT_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __type, __format, ##__VA_ARGS__)
 
 util_vlog_ctx_t *umq_get_log_ctx(void);
 umq_vlog_config_t *umq_get_log_config(void);
