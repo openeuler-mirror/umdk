@@ -494,28 +494,37 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
-    buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
-
+    ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+    if (real_queue != NULL) {
+        umq_inc_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
+        buf_pro->umq_ctx = real_queue->umq_ctx;
+    } else {
+        buf_pro->umq_ctx = 0;
+    }
     umq_ub_imm_t imm = {.value = cr->imm_data};
     if (imm.bs.umq_private == 0) {
         buf_pro->imm_data = imm.value;
-        return UMQ_SUCCESS;
+        goto OUT;
     }
 
     switch (imm.bs.type) {
         case IMM_TYPE_MEM:
             if (imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT) {
-                if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)queue, rx_buf, 0) != UMQ_SUCCESS) {
-                    *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+                if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0, false) != UMQ_SUCCESS) {
+                    *qbuf_status = UMQ_IMPORT_TSEG_FAILED;
                     break;
                 }
-                *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
+                *qbuf_status = UMQ_IMPORT_TSEG_SUCCESS;
             }
             break;
         default:
             break;
     }
 
+OUT:
+    if (real_queue != NULL) {
+        umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
+    }
     return UMQ_SUCCESS;
 }
 
@@ -557,16 +566,30 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                         return UMQ_SUCCESS;
                     }
 
-                    if (queue->bind_ctx == NULL) {
-                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue has been unbind\n",
+                    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+                    ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+                    if (real_queue == NULL) {
+                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroy\n",
                             EID_ARGS(*eid), id);
+                        buf_pro->umq_ctx = 0;
                         *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
                         return UMQ_SUCCESS;
                     }
 
-                    queue->dev_ctx->remote_imported_info->
-                        tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
+                    buf_pro->umq_ctx = real_queue->umq_ctx;
+                    umq_inc_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
+                    if (real_queue->bind_ctx == NULL) {
+                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue has been unbind\n",
+                            EID_ARGS(*eid), real_queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
+                        umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
+                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+                        return UMQ_SUCCESS;
+                    }
+
+                    real_queue->dev_ctx->remote_imported_info->
+                        tesg_imported[real_queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
                     *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
+                    umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
                     return UMQ_SUCCESS;
                 }
                 ret = UMQ_SUCCESS;
@@ -579,7 +602,12 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
         }
         case URMA_CR_OPC_SEND: {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-            buf_pro->umq_ctx = queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+            ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+            if (real_queue != NULL) {
+                buf_pro->umq_ctx = real_queue->umq_ctx;
+            } else {
+                buf_pro->umq_ctx = 0;
+            }
             break;
         }
         default:
@@ -733,6 +761,10 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     if (queue->flow_control.enabled && (queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.rx_fc_interrupt)) {
         qbuf_cnt += umq_ub_poll_fc_rx(queue, buf, max_batch);
+    }
+
+    if (queue->wait_ack_import.wait_ack_idx > 0) {
+        umq_ub_ack_import_tseg(queue);
     }
 
     max_batch -= qbuf_cnt;

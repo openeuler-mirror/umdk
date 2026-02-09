@@ -1482,8 +1482,37 @@ static ALWAYS_INLINE int umq_ub_import_mem_done(ub_queue_t *queue, uint16_t memp
     return ret;
 }
 
+static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_t mempool_id, bool send_ack)
+{
+    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
+    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    if (send_ack) {
+        if (umq_ub_import_mem_done(queue, mempool_id) != UMQ_SUCCESS) {
+            // send import mem done failed not cause the data plane to be unavailable
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed",
+                EID_ARGS(*eid), id);
+        }
+    } else if (queue->wait_ack_import.wait_ack_idx != UMQ_MAX_TSEG_NUM) {
+        pthread_rwlock_rdlock(&queue->wait_ack_import.lock);
+        if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
+            queue->wait_ack_import.wait_ack_pool_id = (uint16_t *)(uintptr_t)calloc(UMQ_MAX_TSEG_NUM, sizeof(uint16_t));
+            if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
+                (void)pthread_rwlock_unlock(&queue->wait_ack_import.lock);
+                UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc wait ack pool id failed",
+                    EID_ARGS(*eid), id);
+                return;
+            }
+        }
+        queue->wait_ack_import.wait_ack_pool_id[queue->wait_ack_import.wait_ack_idx++] = mempool_id;
+        (void)pthread_rwlock_unlock(&queue->wait_ack_import.lock);
+    } else {
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wait ack import table is full",
+            EID_ARGS(*eid), id);
+    }
+}
+
 // The rx buf contains metadata including the IMM header, reference SGE and import memory details.
-int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num)
+int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num, bool send_ack)
 {
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)rx_buf->buf_data;
     if (umq_imm_head->type == IMM_PROTOCAL_TYPE_NONE) {
@@ -1496,10 +1525,15 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
     }
 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue == NULL) {
+        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "umq has been destroy\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     if (queue->bind_ctx == NULL) {
-        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the queue has been unbound\n",
+        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the queue has been unbind\n",
             EID_ARGS(*eid), id);
         return -UMQ_ERR_EINVAL;
     }
@@ -1520,7 +1554,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         if (queue->imported_tseg_list[import_mempool_info[i].mempool_id] != NULL) {
             UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u has been imported\n",
                 EID_ARGS(*eid), id, import_mempool_info[i].mempool_id);
-            (void)umq_ub_import_mem_done(queue, import_mempool_info[i].mempool_id);
+            umq_ub_return_import_result(queue, import_mempool_info[i].mempool_id, send_ack);
             continue;
         }
 
@@ -1539,12 +1573,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
             return UMQ_FAIL;
         }
 
-        int ret = umq_ub_import_mem_done(queue, import_mempool_info[i].mempool_id);
-        if (ret != UMQ_SUCCESS) {
-            // send import mem done failed not cause the data plane to be unavailable
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed, "
-                "status: %d\n", EID_ARGS(*eid), id, ret);
-        }
+        umq_ub_return_import_result(queue, import_mempool_info[i].mempool_id, send_ack);
         queue->dev_ctx->remote_imported_info->
             imported_tseg_list[queue->bind_ctx->remote_eid_id][import_mempool_info[i].mempool_id] = imported_tseg;
     }
@@ -1661,7 +1690,7 @@ static int process_send_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
         return ret;
     }
     if (imm.ub_plus.sub_type == IMM_TYPE_REVERSE_PULL_MEM) {
-        if (umq_ub_data_plan_import_mem(umqh, rx_buf, imm.ub_plus.msg_num) != UMQ_SUCCESS) {
+        if (umq_ub_data_plan_import_mem(umqh, rx_buf, imm.ub_plus.msg_num, true) != UMQ_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "import mem failed\n");
             umq_buf_free(rx_buf); // release rx
             return UMQ_CONTINUE_FLAG;
@@ -2651,4 +2680,24 @@ int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_
     pool->ops.stats_query(pool, &flow_control_stats->pool_credit);
     queue->flow_control.ops.stats_query(&queue->flow_control, queue, flow_control_stats);
     return UMQ_SUCCESS;
+}
+
+void umq_ub_ack_import_tseg(ub_queue_t *queue)
+{
+    if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
+        return;
+    }
+
+    if (queue->bind_ctx == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq has not been binded\n");
+        return;
+    }
+
+    uint16_t mempool_id = 0;
+    while (queue->wait_ack_import.wait_ack_idx > 0) {
+        mempool_id = queue->wait_ack_import.wait_ack_pool_id[--queue->wait_ack_import.wait_ack_idx];
+        if (umq_ub_import_mem_done(queue, mempool_id) != UMQ_SUCCESS) {
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "send import mem done imm failed, pool id %u\n", mempool_id);
+        }
+    }
 }
