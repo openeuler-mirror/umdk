@@ -46,7 +46,7 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
 
     msg_ring_t *msg_ring_h = (msg_ring_t *)calloc(1, sizeof(msg_ring_t));
     if (msg_ring_h == NULL) {
-        UMQ_VLOG_ERR("msg ring calloc failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "msg ring calloc failed\n");
         return NULL;
     }
     msg_ring_h->shm_fd = -1;
@@ -61,20 +61,20 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
         if (opt->owner) {
             shm_fd = shm_open(msg_ring_name, O_CREAT | O_RDWR | O_EXCL, SHM_MODE);
             if (shm_fd == -1) {
-                UMQ_VLOG_ERR("shm open failed, errno: %d\n", errno);
+                UMQ_VLOG_ERR(VLOG_UMQ, "shm open failed, errno: %d\n", errno);
                 goto ERR_SHM_OPEN;
             }
 
             // set share memory size
             ret = ftruncate(shm_fd, shm_size);
             if (ret != 0) {
-                UMQ_VLOG_ERR("ftruncate failed, errno: %d\n", errno);
+                UMQ_VLOG_ERR(VLOG_UMQ, "ftruncate failed, errno: %d\n", errno);
                 goto ERR_SHM_SIZE;
             }
         } else {
             shm_fd = shm_open(msg_ring_name, O_RDWR, SHM_MODE);
             if (shm_fd == -1) {
-                UMQ_VLOG_ERR("shm open failed, errno: %d\n", errno);
+                UMQ_VLOG_ERR(VLOG_UMQ, "shm open failed, errno: %d\n", errno);
                 goto ERR_SHM_OPEN;
             }
         }
@@ -84,7 +84,7 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
 
         ptr = mmap(0, shm_size, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);
         if (ptr == MAP_FAILED) {
-            UMQ_VLOG_ERR("mmap failed, errno: %d\n", errno);
+            UMQ_VLOG_ERR(VLOG_UMQ, "mmap failed, errno: %d\n", errno);
             goto ERR_SHM_MMAP;
         }
     } else {
@@ -149,14 +149,14 @@ int msg_ring_post_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_buf_size)
 {
     uint32_t payload_size = msg_ring_h->tx_max_buf_size - (uint32_t)sizeof(shm_ring_buf_hdr_t);
     if (tx_buf_size > payload_size) {
-        UMQ_LIMIT_VLOG_ERR("post tx failed, payload_size %u is less than tx_buf_size %u\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, payload_size %u is less than tx_buf_size %u\n",
                            payload_size, tx_buf_size);
         return -1;
     }
 
     shm_ring_hdr_t *tx_ring_hdr = (shm_ring_hdr_t *)msg_ring_h->shm_tx_ring_hdr;
     if ((tx_ring_hdr->pi + 1) % msg_ring_h->tx_depth == tx_ring_hdr->ci) {
-        UMQ_LIMIT_VLOG_ERR("post tx failed, the queue is full\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, the queue is full\n");
         return -EAGAIN;
     }
 
@@ -180,7 +180,7 @@ int msg_ring_post_tx_batch(msg_ring_t *msg_ring_h, char **tx_buf, uint32_t *tx_b
     shm_ring_hdr_t *tx_ring_hdr = (shm_ring_hdr_t *)msg_ring_h->shm_tx_ring_hdr;
     uint32_t left_cnt = (tx_ring_hdr->ci + msg_ring_h->tx_depth - tx_ring_hdr->pi - 1) % msg_ring_h->tx_depth;
     if (left_cnt < tx_buf_cnt) {
-        UMQ_LIMIT_VLOG_ERR("post tx batch failed, rest tx_depth %u is less than tx_cnt %u\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx batch failed, rest tx_depth %u is less than tx_cnt %u\n",
                            left_cnt, tx_buf_cnt);
         return -1;
     }
@@ -213,7 +213,7 @@ int msg_ring_poll_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_max_buf_s
         tx_ring_hdr->ci * msg_ring_h->tx_max_buf_size);
     char *ring_buf_p = (char *)(ring_buf_hdr + 1);
     if (tx_max_buf_size < ring_buf_hdr->avail_buf_size) {
-        UMQ_LIMIT_VLOG_ERR("tx_max_buf_size %u is less than avail_buf_size %u\n", tx_max_buf_size,
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_max_buf_size %u is less than avail_buf_size %u\n", tx_max_buf_size,
                            ring_buf_hdr->avail_buf_size);
         return -1;
     }
@@ -246,7 +246,7 @@ int msg_ring_poll_tx_batch(msg_ring_t *msg_ring_h, char **tx_buf, uint32_t tx_ma
         char *ring_buf_p = (char *)(ring_buf_hdr + 1);
         tx_buf_ = tx_buf[i];
         if (tx_max_buf_size < ring_buf_hdr->avail_buf_size) {
-            UMQ_LIMIT_VLOG_ERR("tx_max_buf_size %u is less than avail_buf_size %u\n", tx_max_buf_size,
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_max_buf_size %u is less than avail_buf_size %u\n", tx_max_buf_size,
                                ring_buf_hdr->avail_buf_size);
             return -1;
         }
@@ -265,14 +265,14 @@ int msg_ring_post_rx(msg_ring_t *msg_ring_h, char *rx_buf, uint32_t rx_buf_size)
 {
     uint32_t payload_size = msg_ring_h->rx_max_buf_size - (uint32_t)sizeof(shm_ring_buf_hdr_t);
     if (rx_buf_size > payload_size) {
-        UMQ_LIMIT_VLOG_ERR("post rx failed, payload_size %u is less than rx_buf_size %u\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post rx failed, payload_size %u is less than rx_buf_size %u\n",
                            payload_size, rx_buf_size);
         return -1;
     }
 
     shm_ring_hdr_t *rx_ring_hdr = (shm_ring_hdr_t *)msg_ring_h->shm_rx_ring_hdr;
     if ((rx_ring_hdr->pi + 1) % msg_ring_h->rx_depth == rx_ring_hdr->ci) {
-        UMQ_LIMIT_VLOG_ERR("post rx failed, the queue is full\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post rx failed, the queue is full\n");
         return -EAGAIN;
     }
 
@@ -302,7 +302,7 @@ int msg_ring_poll_rx(msg_ring_t *msg_ring_h, char *rx_buf, uint32_t rx_max_buf_s
         rx_ring_hdr->ci * msg_ring_h->rx_max_buf_size);
     char *ring_buf_p =  (char *)(ring_buf_hdr + 1);
     if (rx_max_buf_size < ring_buf_hdr->avail_buf_size) {
-        UMQ_LIMIT_VLOG_ERR("rx_max_buf_size %u is less than avail_buf_size %u\n", rx_max_buf_size,
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rx_max_buf_size %u is less than avail_buf_size %u\n", rx_max_buf_size,
                            ring_buf_hdr->avail_buf_size);
         return -1;
     }
@@ -335,7 +335,7 @@ int msg_ring_poll_rx_batch(msg_ring_t *msg_ring_h, char **rx_buf, uint32_t rx_ma
             ((rx_ring_hdr->ci + i) % msg_ring_h->rx_depth) * msg_ring_h->rx_max_buf_size);
         char *ring_buf_p = (char *)(ring_buf_hdr + 1);
         if (rx_max_buf_size < ring_buf_hdr->avail_buf_size) {
-            UMQ_LIMIT_VLOG_ERR("rx_max_buf_size %u is less than avail_buf_size %u\n", rx_max_buf_size,
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rx_max_buf_size %u is less than avail_buf_size %u\n", rx_max_buf_size,
                                ring_buf_hdr->avail_buf_size);
             return -1;
         }

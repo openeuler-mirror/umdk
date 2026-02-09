@@ -49,8 +49,9 @@ void *eslab_alloc(eslab_t *slab, uint32_t *id)
     // Non-public interface, ensure that the parameter is not NULL.
     if (URPC_UNLIKELY(slab->next_free >= slab->total)) {
         (void)pthread_spin_unlock(&slab->lock);
-        UTIL_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
         errno = URPC_ERR_EPERM;
+        UTIL_LOG_DEBUG("eslab alloc out of range, next_free: %u, total: %u, errno: %d\n", slab->next_free,
+            slab->total, errno);
         return NULL;
     }
 
@@ -60,8 +61,9 @@ void *eslab_alloc(eslab_t *slab, uint32_t *id)
     /* next block still in use, means use after free */
     if (URPC_UNLIKELY(slab->next_free >= slab->total && slab->next_free != UINT32_MAX)) {
         (void)pthread_spin_unlock(&slab->lock);
-        UTIL_LOG_DEBUG("eslab alloc out of range, next_free = %u, total = %u\n", slab->next_free, slab->total);
         errno = URPC_ERR_EPERM;
+        UTIL_LOG_DEBUG("eslab alloc out of range, next_free: %u, total: %u, errno: %d\n", slab->next_free, slab->total,
+            errno);
         return NULL;
     }
     (void)pthread_spin_unlock(&slab->lock);

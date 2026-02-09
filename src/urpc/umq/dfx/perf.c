@@ -34,13 +34,13 @@ static umq_perf_record_ctx_t *g_umq_perf_record_ctx;
 int umq_perf_init(void)
 {
     if (g_umq_perf_record_ctx != NULL) {
-        UMQ_VLOG_ERR("umq perf has been inited\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq perf has been inited\n");
         return -UMQ_ERR_EEXIST;
     }
 
     g_umq_perf_record_ctx = (umq_perf_record_ctx_t *)calloc(1, sizeof(umq_perf_record_ctx_t));
     if (g_umq_perf_record_ctx == NULL) {
-        UMQ_VLOG_ERR("malloc for umq_perf_record failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc for umq_perf_record failed\n");
         return -UMQ_ERR_ENOMEM;
     }
     pthread_mutex_init(&g_umq_perf_record_ctx->lock, NULL);
@@ -50,6 +50,7 @@ int umq_perf_init(void)
 void umq_perf_uninit(void)
 {
     if (g_umq_perf_record_ctx == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq perf has not been inited\n");
         return;
     }
     g_umq_perf_record_enable = false;
@@ -87,7 +88,8 @@ void umq_perf_record_alloc(void)
     }
     if (idx == UMQ_PERF_REC_MAX_NUM) {
         (void)pthread_mutex_unlock(&g_umq_perf_record_ctx->lock);
-        UMQ_VLOG_WARN("perf_rec table capacity %u were exhausted, alloc perf_rec failed\n", UMQ_PERF_REC_MAX_NUM);
+        UMQ_VLOG_WARN(VLOG_UMQ, "perf_rec table capacity %u were exhausted, alloc perf_rec failed\n",
+            UMQ_PERF_REC_MAX_NUM);
         return;
     }
 
@@ -167,7 +169,7 @@ int umq_perf_start(uint64_t *thresh_array, uint32_t thresh_num)
 {
     // IO perf record has been started, user must stop it first before restart
     if (g_umq_perf_record_ctx == NULL || g_umq_perf_record_enable || thresh_array == NULL) {
-        UMQ_VLOG_ERR("invalid parameter\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -176,9 +178,8 @@ int umq_perf_start(uint64_t *thresh_array, uint32_t thresh_num)
     }
 
     if (thresh_num > UMQ_PERF_QUANTILE_MAX_NUM) {
-        UMQ_VLOG_ERR(
-            "configured thresh num %u exceeds the max thresh_num %u, only the minimum %d of them are used\n",
-            thresh_num, UMQ_PERF_QUANTILE_MAX_NUM, UMQ_PERF_QUANTILE_MAX_NUM);
+        UMQ_VLOG_ERR(VLOG_UMQ, "configured thresh num %u exceeds the max thresh_num %u, only the minimum %d of them"
+            "are used\n", thresh_num, UMQ_PERF_QUANTILE_MAX_NUM, UMQ_PERF_QUANTILE_MAX_NUM);
         return -UMQ_ERR_EAGAIN;
     }
 
@@ -194,26 +195,26 @@ int umq_perf_start(uint64_t *thresh_array, uint32_t thresh_num)
     }
 
     g_umq_perf_record_enable = true;
-    UMQ_VLOG_INFO("IO perf record started successfully, set %u thresh\n", idx);
+    UMQ_VLOG_INFO(VLOG_UMQ, "IO perf record started success, set %u thresh\n", idx);
     return UMQ_SUCCESS;
 }
 
 int umq_perf_stop(void)
 {
     if (g_umq_perf_record_ctx == NULL || !g_umq_perf_record_enable) {
-        UMQ_VLOG_ERR("invalid parameter\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
     g_umq_perf_record_enable = false;
-    UMQ_VLOG_INFO("IO perf record stopped\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "IO perf record stopped\n");
     return UMQ_SUCCESS;
 }
 
 int umq_perf_clear(void)
 {
     if (g_umq_perf_record_enable) {
-        UMQ_VLOG_ERR("IO perf has been started\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "IO perf has been started\n");
         return -UMQ_ERR_EEXIST;
     }
 
@@ -228,7 +229,7 @@ int umq_perf_clear(void)
         g_umq_perf_record_ctx->perf_record_msg = NULL;
     }
     (void)pthread_mutex_unlock(&g_umq_perf_record_ctx->lock);
-    UMQ_VLOG_INFO("IO perf record clear\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "IO perf record cleared\n");
     return UMQ_SUCCESS;
 }
 
@@ -256,7 +257,7 @@ static inline void umq_perf_convert_cycles_to_ns(umq_perf_record_t *perf_rec)
 int umq_perf_info_get(umq_perf_infos_t **perf_info)
 {
     if (g_umq_perf_record_ctx == NULL || g_umq_perf_record_enable) {
-        UMQ_VLOG_ERR("invalid parameter\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -265,7 +266,7 @@ int umq_perf_info_get(umq_perf_infos_t **perf_info)
         g_umq_perf_record_ctx->perf_record_msg =
             (umq_perf_infos_t *)malloc(sizeof(umq_perf_record_t) * UMQ_PERF_REC_MAX_NUM + sizeof(uint32_t));
         if (g_umq_perf_record_ctx->perf_record_msg == NULL) {
-            UMQ_VLOG_ERR("malloc for perf_record_msg failed\n");
+            UMQ_VLOG_ERR(VLOG_UMQ, "malloc for perf_record_msg failed\n");
             return UMQ_FAIL;
         }
     }
@@ -281,7 +282,7 @@ int umq_perf_info_get(umq_perf_infos_t **perf_info)
     }
 
     *perf_info = g_umq_perf_record_ctx->perf_record_msg;
-    UMQ_VLOG_INFO("Perf record stopped\n");
+    UMQ_VLOG_INFO(VLOG_UMQ, "perf record stopped\n");
     (void)pthread_mutex_unlock(&g_umq_perf_record_ctx->lock);
     return 0;
 }

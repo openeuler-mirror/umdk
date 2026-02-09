@@ -18,12 +18,13 @@ static uint8_t *umq_tp_ub_init(umq_init_cfg_t *cfg)
 {
     uint8_t *ub_ctx = umq_ub_ctx_init_impl(cfg);
     if (ub_ctx == NULL) {
-        UMQ_VLOG_ERR("umq ub ctx init failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq ub ctx init failed\n");
         return NULL;
     }
 
-    if (umq_ub_register_memory_impl(umq_io_buf_addr(), umq_io_buf_size()) != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("register memory failed\n");
+    int ret = umq_ub_register_memory_impl(umq_io_buf_addr(), umq_io_buf_size());
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %d\n", ret);
         goto UNINIT;
     }
 
@@ -37,7 +38,7 @@ UNINIT:
 static void umq_tp_ub_uninit(uint8_t *ctx)
 {
     if (ctx == NULL) {
-        UMQ_VLOG_ERR("ub_ctx is null\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "ub_ctx is null\n");
         return;
     }
     umq_ub_unregister_memory_impl();

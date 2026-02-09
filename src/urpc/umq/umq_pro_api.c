@@ -20,7 +20,7 @@ int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_direction_t io_direction, um
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_post == NULL) || qbuf == NULL || qbuf->buf_data == NULL || bad_qbuf == NULL) {
-        UMQ_LIMIT_VLOG_ERR("umqh or qbuf invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umqh or qbuf invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -45,12 +45,12 @@ int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, ui
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_poll == NULL) || buf == NULL || max_buf_count == 0) {
-        UMQ_LIMIT_VLOG_ERR("param invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "param invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     if (io_direction == UMQ_IO_ALL && max_buf_count == 1) {
-        UMQ_LIMIT_VLOG_ERR("poll umq tx and rx needs at least 2 buf\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "poll umq tx and rx needs at least 2 buf\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -65,7 +65,7 @@ int umq_interrupt_fd_get(uint64_t umqh, umq_interrupt_option_t *option)
 
     if (option == NULL || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_interrupt_fd_get == NULL)) {
-        UMQ_VLOG_ERR("umqh or option invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -78,7 +78,7 @@ int umq_get_cq_event(uint64_t umqh, umq_interrupt_option_t *option)
 
     if (option == NULL || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_get_cq_event == NULL)) {
-        UMQ_VLOG_ERR("umqh or option invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
