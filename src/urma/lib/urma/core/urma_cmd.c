@@ -321,7 +321,6 @@ int urma_cmd_import_seg(urma_context_t *ctx, urma_target_seg_t *tseg, urma_impor
 
     ret = urma_ioctl_import_seg(ctx->dev_fd, &arg);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
         return ret;
     }
 
@@ -343,7 +342,6 @@ int urma_cmd_unimport_seg(urma_target_seg_t *tseg)
     ret = urma_ioctl_unimport_seg(tseg->urma_ctx->dev_fd, &arg);
     uburma_is_destroy_err(&ret);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
         return ret;
     }
     return 0;
@@ -1024,7 +1022,6 @@ int urma_cmd_import_jfr(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_tjf
 
     ret = urma_ioctl_import_jfr(ctx->dev_fd, &arg);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
         return ret;
     }
 
@@ -1071,7 +1068,6 @@ int urma_cmd_import_jfr_ex(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_
 
     ret = urma_ioctl_import_jfr_ex(ctx->dev_fd, &arg);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
         return ret;
     }
 
@@ -1092,7 +1088,6 @@ int urma_cmd_unimport_jfr(urma_target_jetty_t *tjfr)
     int ret = urma_ioctl_unimport_jfr(tjfr->urma_ctx->dev_fd, &arg);
     uburma_is_destroy_err(&ret);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
         return ret;
     }
 
