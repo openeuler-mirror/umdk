@@ -1458,23 +1458,38 @@ int ubmm_fill_ref_sge_info(uint64_t umqh_tp, umq_buf_t *qbuf, char *ub_ref_info,
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    uint32_t max_ref_sge_num = (uint32_t)((size_t)ub_ref_info_size - sizeof(umq_imm_head_t)) / sizeof(ub_ref_sge_t);
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)ub_ref_info;
     ub_ref_sge_t *ref_sge = (ub_ref_sge_t *)(uintptr_t)(ub_ref_info + sizeof(umq_imm_head_t));
     ub_fill_umq_imm_head(umq_imm_head, qbuf);
 
-    ub_import_mempool_info_t import_mempool_info[UMQ_MAX_TSEG_NUM];
+    uint32_t ref_sge_cnt = umq_ub_ref_sge_cnt(qbuf);
+    if (ref_sge_cnt == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, get ref sge cnt failed\n", EID_ARGS(*eid), id);
+        return UMQ_FAIL;
+    }
+
+    uint32_t ref_sge_size = ref_sge_cnt * sizeof(ub_ref_sge_t);
+    if (ref_sge_size + (uint32_t)sizeof(umq_imm_head_t) > umq_buf_size_small()) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the buf num [%d] exceeds the maximum limit\n",
+            EID_ARGS(*eid), id, ref_sge_cnt);
+        return UMQ_FAIL;
+    }
+    uint32_t mempool_info_size = umq_buf_size_small() - ref_sge_size - (uint32_t)sizeof(umq_imm_head_t);
+    ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(uintptr_t)(ub_ref_info +
+        sizeof(umq_imm_head_t) + ref_sge_cnt * sizeof(ub_ref_sge_t));
+
     umq_buf_t *tmp_buf = qbuf;
     uint32_t idx = 0;
+    bool mempool_info_record[UMQ_MAX_TSEG_NUM] = {0};
     while (tmp_buf != NULL) {
-        if (idx >= max_ref_sge_num) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, rendezvoud buf count exceed max support "
-                "count[%u]\n", EID_ARGS(*eid), id, max_ref_sge_num);
+        if (mempool_info_size < (umq_imm_head->mempool_num * sizeof(ub_import_mempool_info_t))) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the buf num [%d] mempool info num [%u] "
+                "exceeds the maximum limit [%u]\n", EID_ARGS(*eid), id, ref_sge_cnt, umq_imm_head->mempool_num);
             return UMQ_FAIL;
         }
 
-        fill_big_data_ref_sge(
-            queue, ref_sge, tmp_buf, &import_mempool_info[umq_imm_head->mempool_num], umq_imm_head);
+        fill_big_data_ref_sge(queue, ref_sge, tmp_buf,
+            &import_mempool_info[umq_imm_head->mempool_num], umq_imm_head, mempool_info_record);
         tmp_buf = tmp_buf->qbuf_next;
         ref_sge = ref_sge + 1;
         idx++;

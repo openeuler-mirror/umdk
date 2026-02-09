@@ -114,6 +114,7 @@ int threadpool_add(threadpool_t *pool, void (*function)(void *), void *arg, uint
     pthread_mutex_lock(&(pool->lock));
     next = (pool->tail + 1) % pool->queue_size;
     if (pool->count == pool->queue_size || pool->shutdown != 0) {
+        pthread_mutex_unlock(&pool->lock);
         goto FREE_ARG;
     } else {
         pool->queue[pool->tail].function = function;
