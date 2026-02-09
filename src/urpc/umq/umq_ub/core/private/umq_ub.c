@@ -601,99 +601,44 @@ int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_qu
     return urma_status;
 }
 
-static uint32_t get_dev_by_eid_str(urma_transport_type_t type, urma_eid_t *eid, urma_device_t **urma_dev,
-                                   uint32_t *eid_index)
+static int umq_find_ub_dev_by_ip_addr(umq_dev_assign_t *dev_info, umq_ub_raw_dev_t *out)
 {
-    if (eid == NULL) {
-        UMQ_VLOG_ERR("eid is null\n");
-        return 0;
-    }
-
-    int device_num = 0;
-    urma_device_t **device_list = urma_get_device_list(&device_num);
-    if (device_list == NULL || device_num == 0) {
-        UMQ_VLOG_ERR("urma get device list failed, eid " EID_FMT "\n", EID_ARGS(*eid));
-        return 0;
-    }
-
-    uint32_t j, cnt = 0;
-    int i;
-    for (i = 0; i < device_num; i++) {
-        if (device_list[i]->type != type) {
-            continue;
-        }
-        urma_eid_info_t *eid_list = urma_get_eid_list(device_list[i], &cnt);
-        if (eid_list == NULL || cnt == 0) {
-            continue;
-        }
-        for (j = 0; j < cnt; j++) {
-            if ((memcmp(eid, &eid_list[j].eid, sizeof(urma_eid_t)) == 0)) {
-                *urma_dev = device_list[i];
-                *eid_index = eid_list[j].eid_index;
-                break;
-            }
-        }
-        urma_free_eid_list(eid_list);
-        if (j != cnt) {
-            break;
-        }
-    }
-
-    urma_free_device_list(device_list);
-
-    if (i == device_num) {
-        UMQ_VLOG_ERR("get device failed, eid " EID_FMT "\n", EID_ARGS(*eid));
-        return 0;
-    }
-    return 1;
-}
-
-static uint32_t umq_find_ub_dev_by_eid(urma_transport_type_t type, umq_dev_assign_t *dev_info, urma_device_t **urma_dev,
-                                       uint32_t *eid_index)
-{
-    urma_eid_t *eid = (urma_eid_t *)(uintptr_t)&dev_info->eid.eid;
-    return get_dev_by_eid_str(type, eid, urma_dev, eid_index);
-}
-
-static uint32_t umq_find_ub_dev_by_ip_addr(urma_transport_type_t type, umq_dev_assign_t *dev_info,
-                                           urma_device_t **urma_dev, uint32_t *eid_index)
-{
-    const char *ip_addr = dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV4 ? dev_info->ipv4.ip_addr
-                                                                                 : dev_info->ipv6.ip_addr;
-    urma_eid_t eid;
-    int ret = urma_str_to_eid(ip_addr, &eid);
+    const char *ip_addr =
+        dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV4 ? dev_info->ipv4.ip_addr : dev_info->ipv6.ip_addr;
+    umq_eid_t eid;
+    int ret = urma_str_to_eid(ip_addr, (urma_eid_t *)(uintptr_t)&eid);
     if (ret != 0) {
         UMQ_VLOG_ERR("format ip addr to eid failed, ip_addr %s\n", ip_addr);
-        return 0;
+        return -UMQ_ERR_EINVAL;
     }
-    return get_dev_by_eid_str(type, &eid, urma_dev, eid_index);
+    return umq_ub_dev_lookup_by_eid(&eid, out);
 }
 
-static uint32_t umq_find_ub_dev_by_name(char *dev_name, urma_device_t **urma_dev)
+int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, umq_eid_t *eid, uint32_t *eid_index)
 {
-    *urma_dev = urma_get_device_by_name(dev_name);
-    if (*urma_dev == NULL) {
-        UMQ_VLOG_ERR("urma get device by name failed, dev_name %s\n", dev_name);
-        return 0;
-    }
-    return 1;
-}
-
-uint32_t umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, uint32_t *eid_index)
-{
-    uint32_t eid_cnt = 0;
+    int ret;
+    umq_ub_raw_dev_t out;
     if (dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_DEV) {
-        eid_cnt = umq_find_ub_dev_by_name(dev_info->dev.dev_name, urma_dev);
-        *eid_index = dev_info->dev.eid_idx;
+        ret = umq_ub_dev_lookup_by_name(dev_info->dev.dev_name, dev_info->dev.eid_idx, &out);
     } else if (dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_EID) {
-        eid_cnt = umq_find_ub_dev_by_eid(URMA_TRANSPORT_UB, dev_info, urma_dev, eid_index);
+        ret = umq_ub_dev_lookup_by_eid(&dev_info->eid.eid, &out);
     } else if (dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV4 ||
                dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV6) {
-        eid_cnt = umq_find_ub_dev_by_ip_addr(URMA_TRANSPORT_UB, dev_info, urma_dev, eid_index);
+        ret = umq_find_ub_dev_by_ip_addr(dev_info, &out);
     } else {
+        ret = -UMQ_ERR_EINVAL;
         UMQ_VLOG_ERR("assign mode: %d not supported\n", dev_info->assign_mode);
     }
-    return eid_cnt;
+
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
+
+    *urma_dev = out.urma_dev;
+    *eid = out.eid;
+    *eid_index = out.eid_index;
+
+    return UMQ_SUCCESS;
 }
 
 int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx)
@@ -730,47 +675,25 @@ int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
     return UMQ_SUCCESS;
 }
 
-int umq_ub_get_eid_dev_info(urma_device_t *urma_dev, uint32_t eid_idx, umq_dev_assign_t *out_info)
-{
-    uint32_t eid_cnt = 0;
-    urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
-    if (eid_info_list == NULL || eid_cnt == 0) {
-        UMQ_VLOG_ERR("get eid list fialed\n");
-        return -UMQ_ERR_ENODEV;
-    }
-
-    for (uint32_t i = 0; i < eid_cnt; i++) {
-        if (eid_info_list[i].eid_index != eid_idx) {
-            continue;
-        }
-
-        out_info->assign_mode = UMQ_DEV_ASSIGN_MODE_EID;
-        (void)memcpy(&out_info->eid.eid, &eid_info_list[i].eid, sizeof(urma_eid_t));
-        break;
-    }
-
-    urma_free_eid_list(eid_info_list);
-    return UMQ_SUCCESS;
-}
-
 umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info)
 {
-    urma_device_t *urma_dev;
-    uint32_t eid_index = 0;
-    uint32_t eid_cnt = umq_ub_get_urma_dev(dev_info, &urma_dev, &eid_index);
-    if (eid_cnt == 0) {
-        UMQ_VLOG_ERR("failed to get urma dev\n");
-        return NULL;
-    }
-
-    umq_dev_assign_t eid_dev_info;
-    int ret = umq_ub_get_eid_dev_info(urma_dev, eid_index, &eid_dev_info);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("umq get eid trans info\n");
-        return NULL;
-    }
-
     umq_ub_ctx_t *ub_ctx = NULL;
+    urma_device_t *urma_dev;
+    umq_dev_assign_t eid_dev_info = {.assign_mode = UMQ_DEV_ASSIGN_MODE_EID};
+    uint32_t eid_index = 0;
+
+    // get ub dev eid
+    if (dev_info->assign_mode != UMQ_DEV_ASSIGN_MODE_EID) {
+        if (umq_ub_get_urma_dev(dev_info, &urma_dev, &eid_dev_info.eid.eid, &eid_index) != UMQ_SUCCESS) {
+            char dev_str[UMQ_UB_DEV_STR_LENGTH] = {0};
+            (void)umq_ub_dev_str_get(dev_info, dev_str, UMQ_UB_DEV_STR_LENGTH);
+            UMQ_VLOG_ERR("failed to get urma_dev: %s\n", dev_str);
+            return NULL;
+        }
+    } else {
+        eid_dev_info.eid.eid = dev_info->eid.eid;
+    }
+
     for (uint32_t i = 0; i < ub_ctx_cnt; i++) {
         if (ub_ctx_list[i].trans_info.dev_info.assign_mode == eid_dev_info.assign_mode &&
             memcmp(&ub_ctx_list[i].trans_info.dev_info.eid.eid, &eid_dev_info.eid.eid, sizeof(umq_eid_t)) == 0) {
@@ -1819,7 +1742,7 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
     return return_rx_cnt;
 }
 
-static inline uint32_t get_mem_interval(uint32_t used_mem_size)
+static uint32_t get_mem_interval(uint32_t used_mem_size)
 {
     uint32_t i = 0;
     uint32_t buf_size;
