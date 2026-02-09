@@ -82,7 +82,8 @@ typedef union umq_ub_imm {
         uint64_t type : 5;
         uint64_t sub_type : 5;
         uint64_t rsvd1 : 5;
-        uint64_t mempool_id : 16;
+        uint64_t mempool_id : 12;
+        uint64_t rsvd3 : 4;
         uint64_t rsvd2 : 32;
     } mem_import;
     struct {

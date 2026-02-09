@@ -34,8 +34,8 @@ typedef struct huge_pool {
     uint64_t total_block_num;
     uint32_t pool_idx;
     uint32_t pool_idx_shift;
-    int (*memory_init_callback)(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buf_addr);
-    void (*memory_uninit_callback)(uint8_t mempool_id, void *buf_addr);
+    int (*memory_init_callback)(uint16_t mempool_id, huge_qbuf_pool_size_type_t type, void **buf_addr);
+    void (*memory_uninit_callback)(uint16_t mempool_id, void *buf_addr);
     global_block_pool_t block_pool;
     huge_pool_info_t pool_info[HUGE_QBUF_POOL_NUM_MAX];
 } huge_pool_t;
@@ -56,7 +56,7 @@ static uint32_t g_buf_size_multiplier_array[HUGE_QBUF_POOL_SIZE_TYPE_MAX] = {
 static int umq_huge_qbuf_pool_init(huge_qbuf_pool_size_type_t type, huge_pool_t *pool)
 {
     void *buf_addr = NULL;
-    uint8_t mempool_id = pool->pool_idx + pool->pool_idx_shift;
+    uint16_t mempool_id = pool->pool_idx + pool->pool_idx_shift;
     if (pool->pool_idx >= HUGE_QBUF_POOL_NUM_MAX) {
         UMQ_VLOG_ERR("huge qbuf pool has reached its maximum expansion limit(%d)\n", HUGE_QBUF_POOL_NUM_MAX);
         return -UMQ_ERR_EINVAL;

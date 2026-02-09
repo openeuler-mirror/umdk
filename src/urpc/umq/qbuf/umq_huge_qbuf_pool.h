@@ -36,8 +36,8 @@ typedef struct huge_qbuf_pool_cfg {
     uint32_t headroom_size;     // reserve head room size
     umq_buf_mode_t mode;
     huge_qbuf_pool_size_type_t type;
-    int (*memory_init_callback)(uint8_t mempool_id, huge_qbuf_pool_size_type_t type, void **buf_addr);
-    void (*memory_uninit_callback)(uint8_t mempool_id, void *buf_addr);
+    int (*memory_init_callback)(uint16_t mempool_id, huge_qbuf_pool_size_type_t type, void **buf_addr);
+    void (*memory_uninit_callback)(uint16_t mempool_id, void *buf_addr);
 } huge_qbuf_pool_cfg_t;
 
 int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg);

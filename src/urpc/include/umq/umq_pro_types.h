@@ -61,11 +61,10 @@ typedef struct umq_buf_pro {
         uint64_t addr;
 
         uint32_t length;
-        uint32_t token_id;
-
+        uint32_t token_id : 20;
+        uint32_t mempool_id : 12;
         uint32_t token_value;
-        uint32_t mempool_id : 8;
-        uint32_t rsvd0 : 24;
+        uint32_t rsvd0;
     } remote_sge;                   // remote sge which reference read/write
 
     uint64_t umq_ctx;               // umq ctx record when create umq, only share rx res will fill
