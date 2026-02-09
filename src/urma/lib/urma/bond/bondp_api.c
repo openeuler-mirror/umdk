@@ -32,6 +32,9 @@ urma_jfce_t *bondp_create_jfce(urma_context_t *ctx)
         return NULL;
     }
 
+    URMA_LOG_INFO("Finish to create jfce, dev_name: %s, eid_idx: %u.\n",
+        ctx->dev->name, ctx->eid_index);
+
     return &bdp_jfce->v_jfce;
 }
 
@@ -43,7 +46,16 @@ urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
         URMA_LOG_ERR("Failed to delete jfce[%d], still in use. use_cnt: %lu\n", jfce->fd, use_cnt);
         return URMA_EAGAIN;
     }
-    return bondp_delete_comp(jfce, BONDP_COMP_JFCE);
+
+    char dev_name[URMA_MAX_NAME] = {0};
+    (void)strcpy(dev_name, jfce->urma_ctx->dev->name);
+    uint32_t eid_index = jfce->urma_ctx->eid_index;
+    urma_status_t ret = bondp_delete_comp(jfce, BONDP_COMP_JFCE);
+
+    URMA_LOG_INFO("Finish to delete jfce, dev_name: %s, eid_idx: %u, ret: %d.\n",
+        dev_name, eid_index, ret);
+
+    return ret;
 }
 
 static int bondp_create_vjfc(urma_context_t *ctx, bondp_comp_t *bdp_jfc, urma_jfc_cfg_t *jfc_cfg)
@@ -75,7 +87,8 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 {
     bondp_comp_t *bdp_jfc = bondp_create_comp(ctx, BONDP_COMP_JFC, cfg);
     if (bdp_jfc == NULL) {
-        URMA_LOG_ERR("Failed to create bondp comp\n");
+        URMA_LOG_ERR("Failed to create bondp comp, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         return NULL;
     }
     /* JFC use comp_ctx as uintptr_t to store the latest polled jfc idx */
@@ -89,11 +102,10 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
     }
 
     if (bondp_create_vjfc(ctx, bdp_jfc, cfg) != 0) {
-        URMA_LOG_ERR("Failed to create vjfc.\n");
+        URMA_LOG_ERR("Failed to create vjfc, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
         goto free_bondp_jfc;
     }
-    URMA_LOG_INFO("Successfully created vjfc, ["EID_FMT"]:%u\n",
-        EID_ARGS(bdp_jfc->v_jfc.jfc_id.eid), bdp_jfc->v_jfc.jfc_id.id);
 
     if (cfg->jfce != NULL) {
         bondp_comp_t *bdp_jfce = CONTAINER_OF_FIELD(cfg->jfce, bondp_comp_t, v_jfce);
@@ -727,8 +739,6 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         URMA_LOG_ERR("Failed to create vjetty, %u\n", jetty_cfg->id);
         goto free_bondp_jetty;
     }
-    URMA_LOG_INFO("Successfully created vjetty, ["EID_FMT"]:%u\n",
-        EID_ARGS(bdp_jetty->v_jetty.jetty_id.eid), bdp_jetty->v_jetty.jetty_id.id);
 
     if (bondp_add_jetty_p_vjetty_id_info(bdp_ctx, bdp_jetty, bdp_jetty->v_jetty.jetty_id.id) != 0) {
         URMA_LOG_ERR("Failed to add jetty id to p_vjetty_id table\n");

@@ -363,7 +363,6 @@ int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, 
 bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid)
 {
     if (topo_map == NULL) {
-        URMA_LOG_ERR("invalid param\n");
         return NULL;
     }
     for (uint32_t i = 0; i < MAX_NODE_NUM; ++i) {
