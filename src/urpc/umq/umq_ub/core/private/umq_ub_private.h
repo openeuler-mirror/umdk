@@ -51,6 +51,8 @@ extern "C" {
 #define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
 #define UMQ_UB_DEV_STR_LENGTH 64
+#define UMQ_UB_NAMESPACE_SIZE 256
+#define UMQ_UB_NAMESPACE_PATH "/proc/self/ns/net"
 
 typedef enum umq_size_interval {
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
@@ -169,6 +171,7 @@ typedef struct remote_eid_hmap_node {
     struct urpc_hmap_node node;
     urma_eid_t eid;
     uint32_t pid;
+    char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
     uint32_t remote_eid_id;
     uint32_t ref_cnt;
 } remote_eid_hmap_node_t;
@@ -235,6 +238,8 @@ typedef struct umq_ub_bind_dev_info {
     umq_buf_mode_t buf_pool_mode;
     uint32_t feature;
     uint32_t pid;
+    uint32_t namespace_len;
+    char bind_namespace[0];
 } umq_ub_bind_dev_info_t;
 
 typedef struct umq_ub_bind_queue_info {
@@ -271,6 +276,7 @@ typedef struct ub_bind_ctx {
     umq_ub_bind_info_t bind_info;
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
+    char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
     uint32_t remote_eid_id;
     uint64_t remote_notify_addr;
 } ub_bind_ctx_t;
