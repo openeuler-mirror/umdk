@@ -173,7 +173,7 @@ A3代际Prefill阶段Dispatch使用的前置接口，用以在当前rank将Token
 |----------|----------|--------------|--------------|----------|
 |topk_idx|Tensor|必选|形状:(batch_size, topk)， int64类型|目标专家的ID信息|
 |num_experts|int|必选|取值范围：(0, 512]|MOE专家数|
-|num_ranks|int|必选|取值范围：[2, 384]|EP通信域rank数|
+|num_ranks|int|必选|取值范围：[1, 384]|EP通信域rank数|
 ##### 1.1.3.4 返回值 
 函数返回值是一个2个Tensor构成的Tuple，分别存放：number_tokens_per_expert和send_token_idx.
 | **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
