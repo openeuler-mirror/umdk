@@ -234,7 +234,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
         pthread_mutex_unlock(&global_pool->global_mutex);
         UMQ_VLOG_ERR(VLOG_UMQ, "%s not enough, rest count: %u\n", with_data ? "buf with data" : "buf with no data",
             *global_buf_cnt);
-        return UMQ_FAIL;
+        return -UMQ_ERR_ENOMEM;
     }
 
     count = allocate_batch(global_head, batch_count, local_head);

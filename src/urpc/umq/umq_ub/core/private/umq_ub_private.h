@@ -448,6 +448,7 @@ int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_opti
                        ub_queue_t *share_queue);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
+int umq_status_convert(urma_status_t urma_status);
 
 // hanele async event
 void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_t *umq_event);
