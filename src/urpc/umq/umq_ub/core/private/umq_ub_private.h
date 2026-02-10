@@ -324,6 +324,12 @@ typedef struct ub_queue_interrupt_ctx {
     bool rx_fc_interrupt;
 } ub_queue_interrupt_ctx_t;
 
+typedef struct wait_ack_import {
+    uint16_t *wait_ack_pool_id;
+    uint16_t wait_ack_idx;
+    pthread_rwlock_t lock;
+} wait_ack_import_t;
+
 typedef struct ub_queue {
     urpc_list_t qctx_node;
     // queue param
@@ -341,6 +347,7 @@ typedef struct ub_queue {
     uint64_t umq_ctx;
     urma_target_seg_t **imported_tseg_list;   // read-only
     umq_buf_t *addr_list;
+    wait_ack_import_t wait_ack_import;
 
     // config param
     umq_trans_mode_t umq_trans_mode;
@@ -412,7 +419,7 @@ umq_buf_t *umq_get_buf_by_user_ctx(ub_queue_t *queue, uint64_t user_ctx, ub_queu
 
 // for control plane on umq ub api
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
-int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num);
+int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num, bool send_ack);
 rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
 
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
@@ -493,6 +500,7 @@ int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
 void umq_ub_queue_addr_list_record(umq_buf_t *addr_list, uint16_t msg_id, umq_buf_t *buf);
 umq_buf_t *umq_ub_queue_addr_list_remove(umq_buf_t *addr_list, uint16_t msg_id);
+void umq_ub_ack_import_tseg(ub_queue_t *queue);
 
 // dev info
 int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_len);
