@@ -301,7 +301,7 @@ Interface used befor dispatch in prefill phase for A2, which copies the current 
 | **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|--------------|----------|
 |topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type，Range：[0, num_experts)|ID for target experts|
-|num_experts|int|Required|Range：(0, 512]|MOE expert numbers|
+|num_experts|int|Required|Range：(0, 256]|MOE expert numbers|
 |num_ranks|int|Required|Support 16 only|rank number for EP communication group|
 ##### 1.1.6.4 Return Value
 Return value is a tuple made of 2 tensors, which stores number_tokens_per_expert and notify_send_data.
@@ -372,7 +372,7 @@ Return value is a list made of 8 tensors, which stores: recv_x, dynamic_scales_o
 6. Other Constraits need to be satisfy:
  - top_k range：(2， 16]
  - BS range：[1，4k]
- - num_experts range：(0， 512]
+ - num_experts range：(0， 256]
  - Required: num_experts % num_ranks == 0
  - Required: num_ranks % 8 == 0
  - Required: hidden_size range: (0, 7168] and (hidden_size % 32) == 0
@@ -429,7 +429,7 @@ Return value is a tensor，which stores combine_x.
 6. Other Constraits need to be satisfy:
  - top_k range：(2， 16]
  - BS range：[1，4k]
- - num_experts range：(0， 512]
+ - num_experts range：(0， 256]
  - Required: num_experts % num_ranks == 0
  - Required: num_ranks % 8 == 0
  - Required: hidden_size range: (0, 7168] and (hidden_size % 32) == 0
