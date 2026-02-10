@@ -1213,7 +1213,6 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
                 continue;
             }
             if (urma_unimport_jetty(bdp_tjetty->p_tjetty[i][j]) != URMA_SUCCESS) {
-                URMA_LOG_ERR("Failed to unimport jetty [%u](%d, %d)\n", bdp_tjetty->v_tjetty.id.id, i, j);
                 ret = URMA_FAIL;
             }
             bdp_tjetty->p_tjetty[i][j] = NULL;
@@ -1356,11 +1355,9 @@ urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty)
     pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
 
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport pjetty\n");
         ret = URMA_FAIL;
     }
     if (bondp_unimport_vjetty(bdp_tjetty) != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport vjetty\n");
         ret = URMA_FAIL;
     }
     free(bdp_tjetty);
@@ -1381,7 +1378,6 @@ static urma_status_t bind_jetty_default(bondp_comp_t *bdp_jetty, bondp_target_je
         }
         ret = urma_bind_jetty(bdp_jetty->p_jetty[i], bdp_tjetty->p_tjetty[i][i]);
         if (ret) {
-            URMA_LOG_ERR("bondp bind jetty failed (%d, %d)\n", i, i);
             goto UNBIND;
         }
         bdp_jetty->p_jetty[i]->remote_jetty = bdp_tjetty->p_tjetty[i][i];
@@ -1420,7 +1416,6 @@ static urma_status_t bind_jetty_single_path(bondp_comp_t *bdp_jetty, bondp_targe
         }
         ret = urma_bind_jetty(bdp_jetty->p_jetty[local_port], bdp_tjetty->p_tjetty[local_port][target_port]);
         if (ret) {
-            URMA_LOG_ERR("bondp bind jetty failed (%d, %d)\n", local_port, target_port);
             return URMA_FAIL;
         }
         has_valid_route = true;
@@ -1548,7 +1543,6 @@ static int import_primary_ports_jfr(bondp_context_t *bdp_ctx, bondp_target_jetty
         p_rjfr.jfr_id = ex_info->slave_id[i];
         bdp_tjetty->p_tjetty[i][i] = urma_import_jfr(bdp_ctx->p_ctxs[i], &p_rjfr, rjfr_token);
         if (bdp_tjetty->p_tjetty[i][i] == NULL) {
-            URMA_LOG_ERR("Failed to import primary tjfr %d %d\n", i, i);
             return -1;
         }
     }
@@ -1615,7 +1609,6 @@ static int bondp_unimport_pjfr(bondp_target_jetty_t *bdp_tjetty)
                 continue;
             }
             if (urma_unimport_jfr(bdp_tjetty->p_tjetty[i][j]) != URMA_SUCCESS) {
-                URMA_LOG_ERR("Failed to unimport jfr [%u](%d, %d)\n", bdp_tjetty->v_tjetty.id.id, i, j);
                 ret = URMA_FAIL;
             }
             bdp_tjetty->p_tjetty[i][j] = NULL;
@@ -1652,7 +1645,6 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
     }
 
     if (bondp_import_pjfr(bdp_ctx, bdp_tjetty, rjfr, token_value, &udata_out) != 0) {
-        URMA_LOG_ERR("Failed to import pjetty\n");
         goto unimport_pjfr;
     }
 
@@ -1677,11 +1669,9 @@ urma_status_t bondp_unimport_jfr(urma_target_jetty_t *target_jfr)
         return URMA_EINVAL;
     }
     if (bondp_unimport_pjfr(bdp_tjetty) != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport pjfr\n");
         ret = URMA_FAIL;
     }
     if (bondp_unimport_vjfr(bdp_tjetty) != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport vjfr\n");
         ret = URMA_FAIL;
     }
     free(bdp_tjetty);
@@ -1709,7 +1699,6 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
         }
         urma_status_t ret = urma_rearm_jfc(bdp_jfc->p_jfc[i], solicited_only);
         if (ret != URMA_SUCCESS) {
-            URMA_LOG_WARN("Failed to rearm jfc %d, ret:%d\n", i, ret);
             continue;
         }
         success_once = true;
@@ -1756,7 +1745,6 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
         urma_jfc_t *p_jfc = NULL;
         int p_num = urma_wait_jfc(node->p_jfce, 1, 0, &p_jfc);
         if (p_num <= 0) {
-            URMA_LOG_WARN("Cannot wait p_jfc, skip\n");
             continue;
         }
 
@@ -1858,7 +1846,6 @@ urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_e
         status = urma_get_async_event(p_contex, p_event);
         if (status != URMA_SUCCESS) {
             free(p_event);
-            URMA_LOG_ERR("bondp failed to get async event, ret = %u\n", status);
             return status;
         }
         v_event->urma_ctx = ctx;
@@ -1882,7 +1869,6 @@ void bondp_ack_async_event(urma_async_event_t *event)
     }
     urma_async_event_t *p_event = (urma_async_event_t *)event->priv;
     urma_ack_async_event(p_event);
-    URMA_LOG_INFO("ack v_event: %p, p_event: %p\n", event, p_event);
     event->priv = NULL;
     free(p_event);
 }

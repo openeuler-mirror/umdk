@@ -667,7 +667,6 @@ static urma_status_t send_and_store_jfs_wr(bjetty_ctx_t *bjetty_ctx, uint32_t v_
     /* post send wr */
     ret = comp_post_send(bjetty_ctx, value->send_idx, send_wr, bad_wr);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to post send in send_and_store_jfs_wr, ret %d", ret);
         return ret;
     }
     /* store to jfs_wr_buf */
@@ -807,7 +806,6 @@ static bdp_v_conn_t *get_v_conn_on_send(bjetty_ctx_t *bjetty_ctx, bondp_target_j
 {
     urma_jetty_id_t *comp_jetty_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp);
     if (comp_jetty_id == NULL) {
-        URMA_LOG_ERR("Invalid comp_jetty_id\n");
         return NULL;
     }
     urma_jetty_id_t *vtjetty_id = &bdp_tjetty->v_tjetty.id;
@@ -848,24 +846,20 @@ static urma_status_t bondp_post_send_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     }
     bdp_v_conn_t *v_conn = get_v_conn_on_send(bjetty_ctx, bdp_tjetty);
     if (v_conn == NULL) {
-        URMA_LOG_ERR("Failed to get v_conn\n");
         return URMA_FAIL;
     }
     ret = schedule_send(wr, bjetty_ctx, v_conn, &local_port, &target_port);
     if (ret) {
-        URMA_LOG_ERR("Failed to get local/target port");
         return URMA_FAIL;
     }
     urma_jfs_wr_t *copied_jfs_wr = deepcopy_jfs_wr(wr);
     if (copied_jfs_wr == NULL) {
-        URMA_LOG_ERR("Failed to get copied_jfs_wr\n");
         return URMA_FAIL;
     }
     urma_jfs_wr_t *cur_wr = copied_jfs_wr;
     while (cur_wr != NULL) {
         ret = set_jfs_wr_ptseg_ptjetty(cur_wr, cur_wr->tjetty, local_port, target_port);
         if (ret) {
-            URMA_LOG_ERR("Failed to emplace jfs pjetty ptseg\n");
             goto DEL_AND_RET;
         }
         cur_wr = cur_wr->next;
@@ -886,7 +880,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
     bdp_v_conn_t *v_conn = get_v_conn_on_send(bjetty_ctx, bdp_tjetty);
     if (v_conn == NULL) {
-        URMA_LOG_ERR("Failed to get v_conn\n");
         return URMA_FAIL;
     }
     /* Schedule sending jetty */
@@ -894,7 +887,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     int target_idx = 0;
     urma_status_t ret = schedule_send(wr, bjetty_ctx, v_conn, &send_idx, &target_idx);
     if (ret) {
-        URMA_LOG_ERR("Failed to get send target idx\n");
         return URMA_FAIL;
     }
     /* We maintain the following statement:
@@ -903,9 +895,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     if (!wr_buf_try_add(bjetty_ctx->jfs_bufs[send_idx], bjetty_ctx->send_wr_id)) {
         /* get_comp_urma_jetty_id will return a non-null value,
            because the previous post_send_check_valid has performed validation. */
-        urma_jetty_id_t *comp_jetty_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp);
-        URMA_LOG_INFO("No space left in wr_buf[%d], jetty_id: " URMA_JETTY_ID_FMT "\n", send_idx,
-            URMA_JETTY_ID_ARGS(comp_jetty_id));
         return URMA_EAGAIN;
     }
     /* get new wr */
@@ -919,7 +908,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     urma_jfs_wr_t *send_wr = get_new_jfs_wr(wr, bjetty_ctx->hdr_send_buf, bjetty_ctx->hdr_send_tseg,
         bjetty_ctx->send_wr_id, send_idx, target_idx, &new_wrs_len);
     if (send_wr == NULL) {
-        URMA_LOG_ERR("Failed to get jfs wr");
         return URMA_FAIL;
     }
     /* Store essential information to wr_buf when the WR is posted for the first time */
@@ -949,7 +937,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
             .ex_value = value
         };
         if (bdp_v_conn_push_send_so(v_conn, &so_data)) {
-            URMA_LOG_ERR("Failed to push so wr to so queue");
             ret = URMA_FAIL;
             goto FREE_SEND_WR;
         }
@@ -1077,7 +1064,6 @@ static urma_status_t copy_store_and_post_jfr_wr(uint32_t v_jetty_id, bjetty_ctx_
     urma_status_t ret = 0;
     ret = comp_post_recv(bjetty_ctx, recv_idx, recv_wr, bad_wr);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to post jetty recv %d\n", ret);
         goto FREE_COPIED_JFR_WR;
     }
     /* store to jfr_wr_buf */
@@ -1153,19 +1139,16 @@ static urma_status_t bondp_post_recv_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     urma_status_t ret = 0;
     ret = schedule_recv(bjetty_ctx, &recv_idx);
     if (ret) {
-        URMA_LOG_ERR("Failed to schedule recv: %d\n", ret);
         return URMA_FAIL;
     }
     urma_jfr_wr_t *copied_jfr_wr = deepcopy_jfr_wr(wr);
     if (copied_jfr_wr == NULL) {
-        URMA_LOG_ERR("Failed to get copied_jfr_wr\n");
         return URMA_FAIL;
     }
     urma_jfr_wr_t *cur_wr = copied_jfr_wr;
     while (cur_wr != NULL) {
         ret = set_jfr_wr_ptjetty_ptseg_without_hdr(cur_wr, recv_idx, 0);
         if (ret) {
-            URMA_LOG_ERR("Failed to emplace jfr pjetty ptseg\n");
             goto DELETE_JFR_WR;
         }
         cur_wr = cur_wr->next;
@@ -1187,7 +1170,6 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, urma
     /* Schedule receiving jetty */
     int ret = schedule_recv(bjetty_ctx, &recv_idx);
     if (ret) {
-        URMA_LOG_ERR("Failed to schedule recv: %d\n", ret);
         return URMA_FAIL;
     }
     /* get_comp_urma_jetty_id will return a non-null value,
@@ -1339,7 +1321,6 @@ static urma_status_t send_so_from_snd_queue(bjetty_ctx_t *bjetty_ctx, bdp_v_conn
             ret = send_and_store_jfs_wr(bjetty_ctx, get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id, so_data->send_wr,
                 so_data->send_wr_id, &so_data->ex_value, &bad_wr);
             if (ret != URMA_SUCCESS) {
-                URMA_LOG_WARN("Failed to send SO, ret = %d\n", ret);
                 return ret;
             }
             (void)bdp_v_conn_pop_send_so(v_conn, &tmp_data);
@@ -1388,7 +1369,6 @@ static urma_status_t resend_wr_from_node(bjetty_ctx_t *bjetty_ctx, wr_buf_node_t
     /* post send wr */
     ret = comp_post_send(bjetty_ctx, send_idx, send_wr, bad_wr);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to post send in resend_wr_from_node, ret %d", ret);
         return ret;
     }
     /* We already have the node stored in jfs wr, so we don't need to store it again */
@@ -1528,10 +1508,7 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     /* Sender use send_wr_id to indicate the order of send, node->key is send_wr_id */
     (void)bdp_slide_wnd_add(&v_conn->send_wnd, send_wr_id);
     /* Send SO from queue */
-    if (send_so_from_snd_queue(bjetty_ctx, v_conn) != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to send stored SO of send_wr_id %u\n", send_wr_id);
-        /* We can still poll for NO, so don't return error */
-    }
+    (void)send_so_from_snd_queue(bjetty_ctx, v_conn);
     /* If this jfs wr doesn't ask for cqe, we simply remove it from buffer */
     if (!node->value.flag.bs.complete_enable) {
         (void)jfs_wr_buf_remove_wr(bjetty_ctx->jfs_bufs[send_idx], send_wr_id);
@@ -1574,7 +1551,6 @@ static int rearm_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
         which conflicts with our error code
         */
         ra->ret = -ret;
-        URMA_LOG_DEBUG("Failed to rearm wr in migration\n");
         return -ret;
     }
     /* This won't fail because of wr_buf_try_add */
@@ -1854,7 +1830,6 @@ static urma_status_t update_device_valid_state(bondp_context_t *bdp_ctx, int dev
         }
         bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_id, &cr_buf[cr_id]);
         if (bjetty_ctx == NULL) {
-            URMA_LOG_ERR("Failed to get bjetty_ctx\n");
             return URMA_FAIL;
         }
         if (bjetty_ctx->pjettys_valid[dev_id] && is_device_error(cr_buf[cr_id].status)) {
@@ -1895,7 +1870,6 @@ static int bondp_poll_pjfc(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfc, int 
             URMA_UBAGG_MAX_CR_CNT_PER_DEV : remaining_poll;
         cqe_cnt[dev_id] = urma_poll_jfc(bdp_jfc->p_jfc[dev_id], current_cr_cnt, bdp_cr_buf[dev_id]);
         if (cqe_cnt[dev_id] < 0) {
-            URMA_LOG_ERR("Failed to poll pjfc[%d]: %d\n", dev_id, cqe_cnt[dev_id]);
             return cqe_cnt[dev_id];
         }
         if (cqe_cnt[dev_id] == 0) {
@@ -1906,7 +1880,6 @@ static int bondp_poll_pjfc(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfc, int 
         bdp_jfc->comp_ctx = (void *)(uintptr_t)dev_id;
         urma_status_t ret = update_device_valid_state(bdp_ctx, dev_id, cqe_cnt[dev_id], bdp_cr_buf[dev_id]);
         if (ret) {
-            URMA_LOG_ERR("Failed to update deivce valid state: %d\n", ret);
             return -ret;
         }
     }
