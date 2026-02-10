@@ -347,7 +347,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
             if (ret <= 0) {
                 UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
                     local_pool->buf_cnt_without_data, num, ret);
-                return -UMQ_ERR_ENOMEM;
+                return ret;
             }
         }
 
@@ -361,7 +361,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
         if (ret <= 0) {
             UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
                 local_pool->buf_cnt_with_data, param.actual_buf_count, ret);
-            return -UMQ_ERR_ENOMEM;
+            return ret;
         }
     }
 
