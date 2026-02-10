@@ -691,8 +691,6 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     urma_eid_t *io_eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t io_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    urma_eid_t *fc_eid = &queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid;
-    uint32_t fc_id = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id;
     int ret = UMQ_SUCCESS;
     if (queue->umq_trans_mode != UMQ_TRANS_MODE_UB && queue->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
         queue->umq_trans_mode != UMQ_TRANS_MODE_UBMM && queue->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
@@ -721,6 +719,8 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
 
     if (queue->flow_control.enabled) {
+        urma_eid_t *fc_eid = &queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid;
+        uint32_t fc_id = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id;
         umq_ub_credit_clean_up(queue);
         UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, delete flowcontrol jetty\n",
             EID_ARGS(*fc_eid), fc_id);
