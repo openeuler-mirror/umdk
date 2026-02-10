@@ -171,7 +171,7 @@ Interface used before dispatch in prefill phase for A3, which copies the current
 |----------|----------|--------------|--------------|----------|
 |topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type|ID info for target experts|
 |num_experts|int|Required|Range：(0, 512]|MOE experts number|
-|num_ranks|int|Required|Range：[2, 384]|rank number in EP communication group|
+|num_ranks|int|Required|Range：[1, 384]|rank number in EP communication group|
 ##### 1.1.3.4 Return Value
 Return value of this interface is a tuple made of 2 tensor, which stores number_tokens_per_expert and send_token_idx respectively.
 | **📌Parameter** | **🔧Type** | **📋Value Range** | **📝Details** |
