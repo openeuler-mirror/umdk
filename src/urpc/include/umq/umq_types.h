@@ -183,8 +183,12 @@ typedef struct umq_flow_control_cfg {
     uint16_t credits_per_request;
     // initial available credit for each umq
     uint16_t initial_credit;
+    // next request credit number = current credit request number * credit_multiple
+    uint16_t credit_multiple;
     // credit return ratio divisor, return_ratio = 1: return all credit, return_ratio = 2: return half the credit
     uint16_t return_ratio;
+    // minimum reserved credit, if the held credit <= min_reserved_credit, the credit will not be returned
+    uint16_t min_reserved_credit;
     // timeout duration, if no I/O is sent within timeout_ms, the system notifies the user to return credit
     uint32_t timeout_ms;
     // use atomic variables as flow control window

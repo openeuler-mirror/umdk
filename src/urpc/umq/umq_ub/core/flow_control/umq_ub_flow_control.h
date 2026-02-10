@@ -45,12 +45,14 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
 void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue);
-void umq_ub_default_credit_allocate(ub_queue_t *queue, ub_flow_control_t *fc);
+void umq_ub_fc_depth_exchange(ub_queue_t *queue, ub_flow_control_t *fc);
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count);
 uint64_t umq_ub_rx_consumed_exchange(bool lock_free, volatile uint64_t *var, uint64_t count);
 void umq_ub_shared_credit_req_send(ub_queue_t *queue);
 void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
 void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
+void umq_ub_shared_credit_return_req_send(ub_queue_t *queue);
+void umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
 void umq_ub_credit_clean_up(ub_queue_t *queue);
 void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count);
 void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt) ;
@@ -61,7 +63,7 @@ static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
         return;
     }
 
-    (void)fc->ops.remote_rx_window_inc(fc, win);
+    (void)fc->ops.remote_rx_window_inc(fc, win, false);
 }
 
 static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t win)
@@ -70,13 +72,16 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
         return win;
     }
 
-    return fc->ops.remote_rx_window_dec(fc, win);
+    return fc->ops.remote_rx_window_dec(fc, win, false);
 }
 
 static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
     if (!fc->enabled) {
         return;
+    }
+    if (queue->checker != NULL) {
+        queue->checker->last_send = get_timestamp_us();
     }
     if (fc->ops.remote_rx_window_load(fc) <= fc->credit_request_threshold) {
         umq_ub_shared_credit_req_send(queue);
