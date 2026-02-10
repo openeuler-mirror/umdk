@@ -48,6 +48,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     umq_alloc_option_t *option, umq_buf_list_t *list);
 
 void umq_huge_qbuf_free(umq_buf_list_t *list);
+int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
 
 int umq_huge_qbuf_register_seg(uint8_t *ctx,
     register_seg_callback_t register_seg_func, unregister_seg_callback_t unregister_seg_func);

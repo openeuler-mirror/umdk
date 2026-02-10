@@ -37,12 +37,6 @@ static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
 static bool g_umq_ub_inited = false;
 
-typedef int (*ub_user_ctl_func)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
-static ub_user_ctl_func g_umq_ub_user_ctl_func[UMQ_TRANS_MODE_MAX] = {
-    [UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY] = umq_flow_control_stats_get,
-    [UMQ_OPCODE_QBUF_POOL_INFO_QUERY] = umq_qbuf_pool_info_get
-};
-
 static int huge_qbuf_pool_memory_init(uint16_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
     uint32_t blk_size = umq_huge_qbuf_get_size_by_type(type);
@@ -1525,15 +1519,6 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
     return UMQ_SUCCESS;
 }
 
-int umq_ub_user_ctl_impl(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
-{
-    if (in == NULL || out == NULL || in->opcode >= UMQ_OPCODE_MAX || g_umq_ub_user_ctl_func[in->opcode] == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "in or out parameter invalid\n");
-        return -UMQ_ERR_EINVAL;
-    }
-    return g_umq_ub_user_ctl_func[in->opcode](umqh_tp, in, out);
-}
-
 int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
@@ -1693,5 +1678,60 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
     cfg->trans_mode = queue->umq_trans_mode;
     cfg->mode = queue->mode;
     cfg->state = queue->state;
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_plus_stats_flow_control_get_impl(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats)
+{
+    return umq_flow_control_stats_get(umqh_tp, flow_control_stats);
+}
+
+int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbuf_pool_stats)
+{
+    qbuf_pool_stats->num = 0;
+    int ret = umq_qbuf_pool_info_get(qbuf_pool_stats);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq_qbuf pool info get failed\n");
+        return ret;
+    }
+
+    ret = umq_huge_qbuf_pool_info_get(qbuf_pool_stats);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq huge qbuf pool info get failed\n");
+        return ret;
+    }
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if ( queue->jetty[UB_QUEUE_JETTY_IO] != NULL) {
+        umq_info->ub.local_io_jetty_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    } else {
+        umq_info->ub.local_io_jetty_id = 0;
+    }
+    
+    if (queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] != NULL) {
+        umq_info->ub.local_fc_jetty_id = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id;
+    } else {
+        umq_info->ub.local_fc_jetty_id = 0;
+    }
+    
+    if (queue->bind_ctx != NULL && queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO] != NULL) {
+        umq_info->ub.remote_io_jetty_id = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id;
+    } else {
+        umq_info->ub.remote_io_jetty_id = 0;
+    }
+
+    if (queue->bind_ctx != NULL && queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL] != NULL) {
+        umq_info->ub.remote_fc_jetty_id = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL]->id.id;
+    } else {
+        umq_info->ub.remote_fc_jetty_id = 0;
+    }
+
+    umq_info->trans_mode = queue->dev_ctx->trans_info.trans_mode;
+    (void)memcpy(&umq_info->ub.eid, &queue->dev_ctx->urma_ctx->eid, sizeof(urma_eid_t));
+    (void)memcpy(umq_info->ub.dev_name, queue->dev_ctx->urma_ctx->dev->name, URMA_MAX_NAME);
     return UMQ_SUCCESS;
 }
