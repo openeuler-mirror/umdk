@@ -114,6 +114,31 @@ static int cmd_dev_set_ns(admin_config_t *cfg)
     return ret;
 }
 
+static int cmd_dev_set_sl(admin_config_t *cfg)
+{
+    int ret = 0;
+    admin_core_cmd_sl_info_t arg = {0};
+    arg.in.priority = cfg->priority;
+    arg.in.SL = cfg->SL;
+    (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_SL, 0);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_sl_info_t));
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    ret = admin_nl_send_recv_msg_default(msg);
+    admin_nl_free_msg(msg);
+    if (ret < 0) {
+        (void)printf("set_sl fail, please check input, ret:%d, errno:%d.\n", ret, errno);
+        return ret;
+    }
+
+    return 0;
+}
+
 static int cmd_dev_set(admin_config_t *cfg)
 {
     int ret;
@@ -124,6 +149,7 @@ static int cmd_dev_set(admin_config_t *cfg)
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_dev_usage},  //
         {"ns", cmd_dev_set_ns}, //
+        {"sl", cmd_dev_set_sl}, //
         {0},                    //
     };
     return exec_cmd(cfg, cmds);

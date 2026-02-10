@@ -43,6 +43,7 @@ typedef enum urma_core_cmd {
     URMA_CORE_UNEXPOSE_DEV_NS,
     URMA_CORE_SET_DEV_EID_NS,
     URMA_CORE_GET_TOPO_INFO,
+    URMA_CORE_SET_SL,
 } urma_core_cmd_t;
 
 /* only for uburma device ioctl */
