@@ -409,7 +409,6 @@ static int bondp_import_p_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_s
         ret = import_seg_default(bdp_ctx, bondp_seg_cfg);
     }
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to import p segment, ret: %d.\n", ret);
         return ret;
     }
 
@@ -497,9 +496,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     urma_cmd_udrv_priv_t udata = { .in_addr = 0,      .in_len = 0,
         .out_addr = (uint64_t)&udata_out,             .out_len = sizeof(udata_out) };
 
-    ret = urma_cmd_import_seg(ctx, &bdp_imprt_tseg->v_tseg, &cfg, &udata);
-    if (ret != 0) {
-        URMA_LOG_ERR("import seg failed, ret: %d, errno: %d.\n", ret, errno);
+    if (urma_cmd_import_seg(ctx, &bdp_imprt_tseg->v_tseg, &cfg, &udata) != 0) {
         goto free_bdp_imprt_tseg;
     }
 

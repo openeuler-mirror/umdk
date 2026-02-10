@@ -562,12 +562,9 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
         urma_tp_info_t tp_info = {0};
         urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
         if (status != URMA_SUCCESS || tp_cnt != 1) {
-            URMA_LOG_ERR("Failed to get tp list, status: %d, tp_cnt: %u.\n", status, tp_cnt);
             errno = EIO;
             return NULL;
         }
-        URMA_LOG_INFO("Get tp list, leid: " EID_FMT ", deid: " EID_FMT ".\n", EID_ARGS(get_tp_cfg.local_eid),
-                      EID_ARGS(get_tp_cfg.peer_eid));
 
         active_tp_cfg.tp_handle = tp_info.tp_handle;
         active_tp_cfg.tp_attr.tx_psn = rand();
@@ -577,12 +574,9 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
             int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
                                                 &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
             if (ret != 0) {
-                URMA_LOG_ERR("Failed to exchange tp info.\n");
                 errno = EIO;
                 return NULL;
             }
-            URMA_LOG_INFO("Finish to exchange tp info, local eid " EID_FMT ", peer eid " EID_FMT ".\n",
-                          EID_ARGS(ctx->eid), EID_ARGS(rjfr->jfr_id.eid));
         }
     }
 
@@ -654,7 +648,6 @@ urma_status_t urma_unimport_jfr(urma_target_jetty_t *target_jfr)
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, unimport_jfr);
     urma_status_t status = ops->unimport_jfr(target_jfr);
     if (status != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport jfr.\n");
         return status;
     }
     atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
@@ -1094,12 +1087,9 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
         urma_tp_info_t tp_info = {0};
         urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
         if (status != URMA_SUCCESS || tp_cnt != 1) {
-            URMA_LOG_ERR("Failed to get tp list, status: %d, tp_cnt: %u.\n", status, tp_cnt);
             errno = EIO;
             return NULL;
         }
-        URMA_LOG_INFO("Get tp list, leid: " EID_FMT ", deid: " EID_FMT ".\n", EID_ARGS(get_tp_cfg.local_eid),
-                      EID_ARGS(get_tp_cfg.peer_eid));
 
         active_tp_cfg.tp_handle = tp_info.tp_handle;
         active_tp_cfg.tp_attr.tx_psn = rand();
@@ -1109,12 +1099,9 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
             int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
                                                 &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
             if (ret != 0) {
-                URMA_LOG_ERR("Failed to exchange tp info.\n");
                 errno = EIO;
                 return NULL;
             }
-            URMA_LOG_INFO("Finish to exchange tp info, local eid " EID_FMT ", peer eid " EID_FMT ".\n",
-                          EID_ARGS(ctx->eid), EID_ARGS(rjetty->jetty_id.eid));
         }
     }
 
@@ -1122,7 +1109,6 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
     urma_target_jetty_t *tjetty = ops->import_jetty_ex(ctx, rjetty, token_value, &active_tp_cfg);
     if (tjetty == NULL) {
         atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
-        URMA_LOG_INFO("Failed in import jetty ex.\n");
     }
     return tjetty;
 }
@@ -1188,7 +1174,6 @@ urma_status_t urma_unimport_jetty(urma_target_jetty_t *tjetty)
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, unimport_jetty);
     urma_status_t status = ops->unimport_jetty(tjetty);
     if (status != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to unimport jetty.\n");
         return status;
     }
     atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
@@ -1209,12 +1194,9 @@ static urma_status_t urma_bind_jetty_compat(urma_jetty_t *jetty, urma_target_jet
     urma_tp_info_t tp_info = {0};
     urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
     if (status != URMA_SUCCESS || tp_cnt != 1) {
-        URMA_LOG_ERR("Failed to get tp list, status: %d, tp_cnt: %u.\n", status, tp_cnt);
         errno = EIO;
         return URMA_FAIL;
     }
-    URMA_LOG_INFO("Get tp list, leid: " EID_FMT ", deid: " EID_FMT ".\n", EID_ARGS(get_tp_cfg.local_eid),
-                  EID_ARGS(get_tp_cfg.peer_eid));
 
     urma_active_tp_cfg_t active_tp_cfg = {
         .tp_handle = tp_info.tp_handle,
@@ -1225,11 +1207,8 @@ static urma_status_t urma_bind_jetty_compat(urma_jetty_t *jetty, urma_target_jet
         int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
                                             &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
         if (ret != 0) {
-            URMA_LOG_ERR("Failed to exchange tp info.\n");
             return URMA_FAIL;
         }
-        URMA_LOG_INFO("Finish to exchange tp info, local eid " EID_FMT ", peer eid " EID_FMT ".\n",
-                      EID_ARGS(jetty->jetty_id.eid), EID_ARGS(tjetty->id.eid));
     }
 
     return ops->bind_jetty_ex(jetty, tjetty, &active_tp_cfg);
