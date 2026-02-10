@@ -89,6 +89,26 @@ static inline const char *urma_link_width_to_string(urma_link_width_t width)
     return g_urma_link_width_str[width];
 }
 
+static const char * const g_urma_tp_type_en_str[] = {
+    [URMA_RTP]  =      "RTP",
+    [URMA_CTP]  =      "CTP",
+    [URMA_UTP]  =      "UTP",
+};
+ 
+static inline const char *urma_tp_type_en_to_string(union urma_tp_type_en tp_type)
+{
+    if (tp_type.bs.rtp == 1 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 0) {
+        return g_urma_tp_type_en_str[URMA_RTP];
+    }
+    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 1 && tp_type.bs.utp == 0) {
+        return g_urma_tp_type_en_str[URMA_CTP];
+    }
+    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 1) {
+        return g_urma_tp_type_en_str[URMA_UTP];
+    }
+    return "Invalid Value";
+}
+
 #define URMA_DEVICE_FEAT_NUM 9
 
 static const char *const g_urma_device_feat_str[URMA_DEVICE_FEAT_NUM] = {

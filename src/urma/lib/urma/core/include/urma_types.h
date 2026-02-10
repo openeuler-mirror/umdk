@@ -35,6 +35,7 @@ extern "C" {
 #define URMA_MAX_NAME               64
 #define URMA_MAX_PATH               4096
 #define URMA_EID_SIZE               (16)
+#define URMA_MAX_PRIORITY_CNT       16
 #define URMA_IPV4_MAP_IPV6_PREFIX   (0x0000ffff)
 #define URMA_MAX_EID_CNT            1024 /* refer to UBCORE_MAX_SIP */
 #define URMA_CC_IDX_TABLE_SIZE      81   /* support 9 priorities and 9 algorithms */
@@ -137,6 +138,21 @@ typedef struct urma_port_attr {
     urma_speed_t active_speed;      /* [Public] bandwidth. */
     urma_mtu_t active_mtu;          /* [Public] current effective mtu. */
 } urma_port_attr_t;
+
+union urma_tp_type_en {
+    struct {
+        uint32_t rtp : 1;
+        uint32_t ctp : 1;
+        uint32_t utp : 1;
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
+};
+
+struct urma_sl_info {
+    uint32_t SL;
+    union urma_tp_type_en tp_type;
+};
 
 typedef union urma_device_feature {
     struct {
@@ -256,6 +272,7 @@ typedef struct urma_device_cap {
     urma_tp_type_cap_t rc_tp_cap;
     urma_tp_type_cap_t um_tp_cap;
     urma_tp_feature_t tp_feature;
+    struct urma_sl_info priority_info[URMA_MAX_PRIORITY_CNT];
 } urma_device_cap_t;
 
 typedef struct urma_guid {

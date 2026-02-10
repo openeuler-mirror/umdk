@@ -204,6 +204,8 @@ static const struct option g_urma_admin_long_options[] = {
     {"ns_mode", required_argument, NULL, 'M'},       //
     {"min_id", required_argument, NULL, 'l'},        //
     {"max_id", required_argument, NULL, 'u'},        //
+    {"priority", required_argument, NULL, 'p'},      //
+    {"sl", required_argument, NULL, 's'},            //
     {NULL, no_argument, NULL, '\0'},                 //
 };
 
@@ -256,7 +258,7 @@ int admin_parse_args(admin_config_t *cfg)
 {
     int ret = 0;
     while (1) {
-        int c = getopt_long(cfg->argc, cfg->argv, "C:hd:e:mv:i:wR:k:K:n:M:u:l:", g_urma_admin_long_options, NULL);
+        int c = getopt_long(cfg->argc, cfg->argv, "C:hd:e:mv:i:wR:k:K:n:M:p:s:u:l:", g_urma_admin_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -299,6 +301,12 @@ int admin_parse_args(admin_config_t *cfg)
                 break;
             case 'M':
                 ret = admin_str_to_u8(optarg, &cfg->ns_mode);
+                break;
+            case 'p':
+                ret = admin_str_to_u8(optarg, &cfg->priority);
+                break;
+            case 's':
+                ret = admin_str_to_u8(optarg, &cfg->SL);
                 break;
             case ':':
                 printf("Option -%c requires an argument\n", optopt);

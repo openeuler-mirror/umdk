@@ -100,6 +100,8 @@ static int cmd_main_usage(admin_config_t *cfg)
     (void)printf("  -M, --ns_mode <0 or 1>                      ns_mode with (exclusive: 0) | (shared: 1).\n");
     (void)printf("  -l, --min_id  <0 - U32_MAX>                 min reserved jetty id, U32_MAX means invalid.\n");
     (void)printf("  -u, --max_id  <0 - U32_MAX>                 max reserved jetty id, U32_MAX means invalid.\n");
+    (void)printf("  -p, --priority  <0 - 15>                    the serial number of priority.\n");
+    (void)printf("  -u, --max_id  <0 - 15>                      the serial number of SL.\n");
     return 0;
 }
 
