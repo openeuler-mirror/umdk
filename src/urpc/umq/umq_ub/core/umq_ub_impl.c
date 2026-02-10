@@ -543,9 +543,10 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, umq_create_opt
     if (queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
         goto DELETE_FC_JFS_JFC;
     }
-    if ((option->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
-        dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id] = option->umq_ctx;
-    }
+
+    dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id] =
+        (uint64_t)(uintptr_t)queue;
+
     umq_ub_rx_consumed_exchange(
         dev_ctx->io_lock_free,
         &dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id], 0);
@@ -631,8 +632,8 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     }
     if ((option->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
         queue->umq_ctx = option->umq_ctx;
-        dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = option->umq_ctx;
     }
+    dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = (uint64_t)(uintptr_t)queue;
 
     queue->notify_buf = umq_buf_alloc(umq_buf_size_small(), 1, UMQ_INVALID_HANDLE, NULL);
     if (queue->notify_buf == NULL) {
@@ -651,6 +652,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
+    (void)pthread_rwlock_init(&queue->wait_ack_import.lock, NULL);
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     return (uint64_t)(uintptr_t)queue;
 
@@ -761,6 +763,12 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
                 "status: %d\n", EID_ARGS(*io_eid), io_id, ret);
         }
     }
+
+    if (queue->wait_ack_import.wait_ack_pool_id != NULL) {
+        free(queue->wait_ack_import.wait_ack_pool_id);
+    }
+    (void)pthread_rwlock_destroy(&queue->wait_ack_import.lock);
+
     umq_ub_jfr_ctx_put(queue);
     umq_ub_queue_ctx_list_remove(&queue->qctx_node);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->dev_ctx->ref_cnt, 1);
