@@ -106,7 +106,7 @@ typedef struct umq_info {
     union {
         struct {
             uint32_t umq_id; // the ID of the UMQ
-            umq_eid_info_t eid; // the EID used by the UMQ.
+            umq_eid_t eid; // the EID used by the UMQ
             char dev_name[UMQ_DEV_NAME_SIZE]; // the UDMA device name corresponding to the EID
             uint32_t local_io_jetty_id; // the I/O jetty ID within the UMQ
             uint32_t local_fc_jetty_id; // the flow control jetty ID within the UMQ
