@@ -7,6 +7,8 @@
  * History: 2025-12-22
  */
 
+#include <sys/eventfd.h>
+
 #include "urma_api.h"
 #include "perf.h"
 #include "umq_vlog.h"
@@ -230,7 +232,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         umq_buf_t *tmp_buf = buffer;
         while (buffer && rest_size > 0) { // try to add up to total_size
             if (sge_num++ >= max_sge_num) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sge num exceed max sge num[%u]\n", 
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sge num exceed max sge num[%u]\n",
                     EID_ARGS(*eid), id, max_sge_num);
                 *bad_qbuf = qbuf;
                 ret = -UMQ_ERR_EINVAL;
@@ -673,6 +675,9 @@ static uint32_t umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_b
             buf[0] = fc_buf;
             ret = 1;
             break;
+        case IMM_TYPE_FC_CREDIT_RETURN_REQ:
+            umq_ub_shared_credit_return_req_handle(queue, &imm);
+            break;
         default:
             break;
     }
@@ -688,6 +693,9 @@ static void umq_ub_fill_rx_buff_post_process(ub_queue_t *queue, umq_ub_imm_t imm
     switch (imm.flow_control.sub_type) {
         case IMM_TYPE_FC_CREDIT_REP:
              umq_ub_permission_release(fc);
+            break;
+        case IMM_TYPE_FC_CREDIT_RETURN_ACK:
+            umq_ub_permission_release(fc);
             break;
         default:
             break;
@@ -896,20 +904,18 @@ static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 {
     uint32_t type = obj->bs.type;
     umq_ub_fc_info_t *fc_info = NULL;
-    uint16_t remote_win;
     switch (type) {
         case IMM_TYPE_FC_CREDIT_INIT:
             // window read ok
             fc_info = (umq_ub_fc_info_t *)(uintptr_t)(umq_ub_notify_buf_addr_get(queue, OFFSET_FLOW_CONTROL));
-            remote_win = fc_info->fc.remote_window;
             if (fc_info->fc.remote_rx_depth != UMQ_UB_FLOW_CONTORL_JETTY_DEPTH) {
                 queue->flow_control.remote_get = false;
                 umq_ub_window_read(&queue->flow_control, queue);
             } else {
-                UMQ_VLOG_DEBUG(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub flow control update initial window %d"
-                    "\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid), 
-                    queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, remote_win);
-                umq_ub_window_inc(&queue->flow_control, remote_win);
+                UMQ_VLOG_DEBUG(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub flow control ready\n",
+                    EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
+                    queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
+                (void)umq_ub_shared_credit_req_send(queue);
                 queue->state = QUEUE_STATE_READY;
             }
             break;
@@ -937,6 +943,11 @@ static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *
             (void)fc->ops.local_rx_allocated_dec(fc, notify);
             break;
         case IMM_TYPE_FC_CREDIT_REQ:
+            umq_ub_permission_release(fc);
+            break;
+        case IMM_TYPE_FC_CREDIT_RETURN_REQ:
+            notify = obj->bs.notify;
+            fc->ops.remote_rx_window_inc(fc, notify, true);
             umq_ub_permission_release(fc);
             break;
         default:
@@ -998,8 +1009,19 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
 
-    if (queue->flow_control.enabled && (queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.tx_fc_interrupt)) {
-        (void)umq_ub_poll_fc_tx(queue);
+    if (queue->flow_control.enabled) {
+        if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
+            uint64_t count;
+            ub_queue_idle_check_t *checker = queue->checker;
+            if (__atomic_load_n(&checker->need_return_credit, __ATOMIC_RELAXED)) {
+                umq_ub_shared_credit_return_req_send(queue);
+                __atomic_store_n(&checker->need_return_credit, false, __ATOMIC_RELAXED);
+                (void)eventfd_read(checker->event_fd, &count);
+            }
+        }
+        if ((queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.tx_fc_interrupt)) {
+            (void)umq_ub_poll_fc_tx(queue);
+        }
     }
 
     urma_cr_t cr[max_batch];
