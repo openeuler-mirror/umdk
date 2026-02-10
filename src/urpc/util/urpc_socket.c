@@ -26,7 +26,7 @@ size_t urpc_socket_recv(int fd, void *buf, size_t size)
         done = recv(fd, cur, total, MSG_NOSIGNAL);
         /* nonblocking operation is not enabled. If done is 0, the link has been disconnected. */
         if (done <= 0) {
-            UTIL_LOG_ERR("get ret:%ld, errno:%d\n", done, errno);
+            UTIL_LOG_ERR("get ret: %ld, errno: %d\n", done, errno);
             return 0;
         }
         total -= (size_t)done;
@@ -45,7 +45,7 @@ size_t urpc_socket_send(int fd, void *buf, size_t size)
         done = send(fd, cur, total, MSG_NOSIGNAL);
         /* nonblocking operation is not enabled. If done is 0, the link has been disconnected. */
         if (done <= 0) {
-            UTIL_LOG_ERR("get ret:%ld, errno:%d\n", done, errno);
+            UTIL_LOG_ERR("get ret: %ld, errno: %d\n", done, errno);
             return 0;
         }
         total -= (size_t)done;
@@ -73,7 +73,7 @@ static int ip_socket_addr_format_ipv4(const char *ip_addr, uint16_t port, socket
     addr->in.sin_port = htons(port);
     ret = inet_pton(AF_INET, ip_addr, &(addr->in.sin_addr));
     if (ret != 1) {
-        UTIL_LOG_ERR("format ip address %s failed\n", ip_addr);
+        UTIL_LOG_ERR("format ip address %s failed, errno: %d\n", ip_addr, errno);
         return -1;
     }
     return 0;
@@ -87,7 +87,7 @@ static int ip_socket_addr_format_ipv6(const char *ip_addr, uint16_t port, socket
     addr->in6.sin6_port = htons(port);
     ret = inet_pton(AF_INET6, ip_addr, &(addr->in6.sin6_addr));
     if (ret != 1) {
-        UTIL_LOG_ERR("format ip address %s failed\n", ip_addr);
+        UTIL_LOG_ERR("format ip address %s failed, errno: %d\n", ip_addr, errno);
         return -1;
     }
     return 0;
@@ -115,10 +115,10 @@ int urpc_socket_bind_assigned_addr(urpc_host_info_t *local, int socket_fd)
     }
 
     if (bind(socket_fd, (struct sockaddr*)&addr, len) < 0) {
-        UTIL_LOG_ERR("bind assigned addr failed, ip %s port %d\n", ip_addr, port);
+        UTIL_LOG_ERR("bind assigned addr failed, ip %s port %d, errno: %d\n", ip_addr, port, errno);
         return URPC_FAIL;
     }
-    UTIL_LOG_DEBUG("client bind assigned addr successfully\n");
+    UTIL_LOG_DEBUG("client bind assigned addr success\n");
 
     return URPC_SUCCESS;
 }
@@ -165,11 +165,11 @@ bool urpc_socket_check_connected(int fd)
     int error = 0;
     socklen_t len = (socklen_t)sizeof(error);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
-        UTIL_LOG_ERR("failed to get sock option SO_ERROR:%s\n", strerror(errno));
+        UTIL_LOG_ERR("failed to get sock option error: %s\n", strerror(errno));
         return false;
     }
     if (error != 0) {
-        UTIL_LOG_ERR("socket error:%s\n", strerror(error));
+        UTIL_LOG_ERR("socket error: %s\n", strerror(error));
         return false;
     }
     return true;

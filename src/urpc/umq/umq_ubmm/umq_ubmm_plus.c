@@ -18,12 +18,13 @@ static uint8_t *umq_tp_ubmm_plus_init(umq_init_cfg_t *cfg)
 {
     uint8_t *ubmm_ctx = umq_ubmm_ctx_init_impl(cfg);
     if (ubmm_ctx == NULL) {
-        UMQ_VLOG_ERR("umq ub ctx init failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq ub ctx init failed\n");
         return NULL;
     }
 
-    if (umq_ubmm_register_memory_impl(umq_io_buf_addr(), umq_io_buf_size()) != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR("register memory failed\n");
+    int ret = umq_ubmm_register_memory_impl(umq_io_buf_addr(), umq_io_buf_size());
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %d\n", ret);
         goto UNINIT;
     }
 

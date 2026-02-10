@@ -254,7 +254,7 @@ int urpc_manage_init(void)
         }
     }
 
-    UTIL_LOG_INFO("urpc manage init successful\n");
+    UTIL_LOG_INFO("urpc manage init success\n");
 
     return URPC_SUCCESS;
 
@@ -271,7 +271,7 @@ void urpc_manage_uninit(void)
         urpc_manage_job_uninit(i);
     }
 
-    UTIL_LOG_INFO("urpc manage uninit successful\n");
+    UTIL_LOG_INFO("urpc manage uninit success\n");
 }
 
 int urpc_manage_get_epoll_fd(urpc_manage_job_type_t type)
