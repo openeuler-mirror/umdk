@@ -722,7 +722,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
         "remote jetty_id: %u, urma_post_jetty_send_wr for send credit req failed, status: %d\n",
         EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id, EID_ARGS(tjetty->id.eid), tjetty->id.id, (int)status);
-    return -umq_status_convert(status);
+    return umq_status_convert(status);
 }
 
 void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)

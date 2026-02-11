@@ -626,7 +626,7 @@ int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_qu
     }
 
     queue->state = QUEUE_STATE_ERR;
-    return -umq_status_convert(urma_status);
+    return umq_status_convert(urma_status);
 }
 
 static int umq_find_ub_dev_by_ip_addr(umq_dev_assign_t *dev_info, umq_ub_raw_dev_t *out)
@@ -677,7 +677,7 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_query_device failed, device name: %s, status: %d\n", *urma_dev->name,
             (int)status);
-        return -umq_status_convert(status);
+        return umq_status_convert(status);
     }
     ub_ctx->dev_attr = dev_attr;
 
@@ -699,7 +699,7 @@ int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
     urma_status_t urma_status = urma_delete_context(ub_ctx->urma_ctx);
     if (urma_status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_context failed, status: %d\n", (int)urma_status);
-        return -umq_status_convert(urma_status);
+        return umq_status_convert(urma_status);
     }
 
     ub_ctx->urma_ctx = NULL;
@@ -1668,7 +1668,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
             if (i == 0) {
                 goto FREE_CTX_BUF;
             } else {
-                return -umq_status_convert(status);
+                return umq_status_convert(status);
             }
         }
     }
@@ -2414,7 +2414,7 @@ int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint
             "remote jetty_id: %u, urma_post_jetty_send_wr failed, status: %d\n", EID_ARGS(*eid), id,
             EID_ARGS(queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
             queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, (int)status);
-        return -umq_status_convert(status);
+        return umq_status_convert(status);
     }
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
     return UMQ_SUCCESS;
@@ -2468,7 +2468,7 @@ int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint6
             "remote jetty_id: %u, urma_post_jetty_send_wr failed, status: %d\n", EID_ARGS(*eid), id,
             EID_ARGS(queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
             queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, (int)status);
-        return -umq_status_convert(status);
+        return umq_status_convert(status);
     }
     return UMQ_SUCCESS;
 }
@@ -2713,19 +2713,19 @@ int umq_status_convert(urma_status_t urma_status)
         case URMA_FAIL:
             return UMQ_FAIL;
         case URMA_EAGAIN:
-            return UMQ_ERR_EAGAIN;
+            return -UMQ_ERR_EAGAIN;
         case URMA_ENOMEM:
-            return UMQ_ERR_ENOMEM;
+            return -UMQ_ERR_ENOMEM;
         case URMA_ENOPERM:
-            return UMQ_ERR_EPERM;
+            return -UMQ_ERR_EPERM;
         case URMA_ETIMEOUT:
-            return UMQ_ERR_ETIMEOUT;
+            return -UMQ_ERR_ETIMEOUT;
         case URMA_EINVAL:
-            return UMQ_ERR_EINVAL;
+            return -UMQ_ERR_EINVAL;
         case URMA_EEXIST:
-            return UMQ_ERR_EEXIST;
-        case URMA_EINPROGRESS:
-            return UMQ_ERR_EINPROGRESS;
+            return -UMQ_ERR_EEXIST;
+        case EINPROGRESS:
+            return -UMQ_ERR_EINPROGRESS;
         default:
             UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "unrecognized urma status: %d\n", (int)urma_status);
             return UMQ_FAIL;

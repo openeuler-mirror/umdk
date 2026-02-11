@@ -301,7 +301,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp, queue->dev_ctx->feature);
     if (status != URMA_SUCCESS) {
-        ret = -umq_status_convert(status);
+        ret = umq_status_convert(status);
         if (bad_wr != NULL) {
             *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
         } else {
@@ -743,7 +743,7 @@ int umq_ub_fill_fc_rx_buf(ub_queue_t *queue)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_recv_wr failed, "
             "status: %d\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
             queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, (int)status);
-        return -umq_status_convert(status);
+        return umq_status_convert(status);
     }
     return UMQ_SUCCESS;
 }
