@@ -301,7 +301,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
     umq_perf_record_write_with_feature(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp, queue->dev_ctx->feature);
     if (status != URMA_SUCCESS) {
-        ret = -(int)status;
+        ret = -umq_status_convert(status);
         if (bad_wr != NULL) {
             *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
         } else {
@@ -701,8 +701,8 @@ uint32_t umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_coun
     uint64_t start_timestmap = umq_perf_get_start_timestamp_with_feature(queue->dev_ctx->feature);
     int rx_cr_cnt =
         urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfc, UMQ_UB_FLOW_CONTORL_JETTY_DEPTH, cr);
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid;
+    uint32_t id = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id;
     umq_perf_record_write_poll(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, start_timestmap, queue->dev_ctx->feature, rx_cr_cnt);
     if (rx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports rx_cr_cnt[%d]\n",
@@ -743,7 +743,7 @@ int umq_ub_fill_fc_rx_buf(ub_queue_t *queue)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_recv_wr failed, "
             "status: %d\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
             queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, (int)status);
-        return UMQ_FAIL;
+        return -umq_status_convert(status);
     }
     return UMQ_SUCCESS;
 }
@@ -907,8 +907,8 @@ static void umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
                 umq_ub_window_read(&queue->flow_control, queue);
             } else {
                 UMQ_VLOG_DEBUG(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub flow control update initial window %d"
-                    "\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), 
-                    queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, remote_win);
+                    "\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid), 
+                    queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, remote_win);
                 umq_ub_window_inc(&queue->flow_control, remote_win);
                 queue->state = QUEUE_STATE_READY;
             }

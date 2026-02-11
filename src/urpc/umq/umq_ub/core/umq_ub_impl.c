@@ -871,7 +871,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for io jfc failed, "
             "status: %d\n", EID_ARGS(*eid), id, (int)status);
-        return -status;
+        return -umq_status_convert(status);
     }
 
     if (queue->flow_control.enabled) {
@@ -881,7 +881,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for flowcontrol jfc failed"
                 ", status: %d\n", EID_ARGS(*eid), id, (int)status);
-            return -status;
+            return -umq_status_convert(status);
         }
     }
 
@@ -1044,7 +1044,7 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
         }
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_send_wr failed, "
             "status: %d\n", EID_ARGS(*eid), id, status);
-        ret = -status;
+        ret = -umq_status_convert(status);
         goto DEC_REF;
     }
 
@@ -1104,7 +1104,7 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
         }
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_send_wr failed, status"
             " %d\n", EID_ARGS(*eid), id, status);
-        ret = -status;
+        ret = -umq_status_convert(status);
         goto DEC_REF;
     }
 
@@ -1245,7 +1245,7 @@ int umq_ub_state_set_impl(uint64_t umqh_tp, umq_state_t state)
     if (ret) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, modify queue state failed, status: %d\n",
             EID_ARGS(*eid), id, ret);
-        return -ret;
+        return ret;
     }
 
     UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, modify queue state %d success\n",
@@ -1287,7 +1287,7 @@ int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *even
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_async_event failed, status: %d\n", status);
         free(urma_event);
-        return -status;
+        return -umq_status_convert(status);
     }
     event->priv = (void *)urma_event;
     memcpy(&event->trans_info, trans_info, sizeof(umq_trans_info_t));
@@ -1551,7 +1551,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     int ret = umq_ub_mempool_state_get_impl(umqh_tp, mempool_id, &mempool_state);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "get mempool state failed, status: %d\n", ret);
-        return -UMQ_ERR_EINVAL;
+        return ret;
     }
 
     if (mempool_state.import_state == MEMPOOL_STATE_IMPORTED) {
