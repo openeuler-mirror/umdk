@@ -37,7 +37,7 @@ static int umq_tp_ub_plus_stats_io_reset(uint64_t umqh_tp)
 }
 
 static umq_dfx_ops_t g_umq_ub_plus_dfx_ops = {
-    .mode = UMQ_TRANS_MODE_UB,
+    .mode = UMQ_TRANS_MODE_UB_PLUS,
     .umq_tp_stats_flow_control_get = umq_tp_ub_plus_stats_flow_control_get,
     .umq_tp_stats_qbuf_pool_get = umq_tp_ub_plus_stats_qbuf_pool_get,
     .umq_tp_info_get = umq_tp_ub_plus_info_get,
