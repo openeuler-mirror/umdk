@@ -131,7 +131,7 @@ typedef int urma_status_t;
 #define URMA_ETIMEOUT    ETIMEDOUT // Operation time out
 #define URMA_EINVAL      EINVAL    // Invalid argument
 #define URMA_EEXIST      EEXIST    // Exist
-#define URMA_EINPROGRESS EINPROGRESS,
+#define URMA_EINPROGRESS EINPROGRESS
 #define URMA_FAIL        0x1000 /* 0x1000 */
 
 /* completion information */
