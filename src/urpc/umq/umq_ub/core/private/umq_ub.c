@@ -2081,7 +2081,9 @@ int umq_ub_plus_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *
                 , EID_ARGS(*eid), id, rest_size, queue->tx_buf_size);
             return -UMQ_ERR_EINVAL;
         }
-        sge_index = wr_index * UMQ_POST_POLL_BATCH;
+        /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
+         * `umq_ub_plus_fill_wr_impl`, it is assigned by jumping in groups of max_sge_num. */
+        sge_index = wr_index * max_sge_num;
         sges_ptr = &sges[sge_index];
         sge_num = 0;
         uint64_t user_ctx = (uint64_t)(uintptr_t)buffer;
@@ -2551,7 +2553,9 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
                 "\n", EID_ARGS(*eid), id, rest_size, max_send_size);
             return -UMQ_ERR_EINVAL;
         }
-        sge_index = wr_index * UMQ_POST_POLL_BATCH;
+        /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
+         * `umq_ub_fill_wr_impl`, it is assigned by jumping in groups of max_sge_num. */
+        sge_index = wr_index * max_sge_num;
         sges_ptr = &sges[sge_index];
         uint64_t user_ctx = (uint64_t)(uintptr_t)buffer;
         sge_num = 0;
