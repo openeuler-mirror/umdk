@@ -350,7 +350,7 @@ Dispatch interface in prefill phase for A2, which send token to target experts i
 |group_ep|str|Required|--|name of HCCL communication group|
 |rank|int|Required|[0, num_ranks)|rank ID of this rank in EP group|
 |num_ranks|int|Required|support 16 only|rank number in EP group|
-|use_quant|bool|Required|True: quant； False: no quant|Dispatch quant indicator|
+|use_quant|bool|Required| False: no quant, quant is not supported in current version|Dispatch quant indicator|
 ##### 1.1.7.4 Return Value
 Return value is a list made of 8 tensors, which stores: recv_x, dynamic_scales_out, expand_idx_out, ep_rank_token_cnt, offset_inner, offset_outer, count_outer, expand_scales.
 | **📌Parameter** | **🔧Type** | **📋Value Range** | **📝Details** |
