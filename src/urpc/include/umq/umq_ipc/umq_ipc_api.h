@@ -20,11 +20,11 @@ extern "C" {
 
 umq_ops_t *umq_ipc_ops_get(void);
 umq_pro_ops_t *umq_pro_ipc_ops_get(void);
-umq_dfx_ops_t *umq_ipc_dfx_ops_get_t(void);
+umq_dfx_ops_t *umq_ipc_dfx_ops_get(void);
 
 umq_ops_t *umq_ipc_plus_ops_get(void);
 umq_pro_ops_t *umq_pro_ipc_plus_ops_get(void);
-umq_dfx_ops_t *umq_ipc_plus_dfx_ops_get_t(void);
+umq_dfx_ops_t *umq_ipc_plus_dfx_ops_get(void);
 
 #ifdef __cplusplus
 }
