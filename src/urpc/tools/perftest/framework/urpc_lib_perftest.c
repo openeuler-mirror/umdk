@@ -816,6 +816,7 @@ static int channel_queue_pair(perftest_framework_config_t *cfg)
     uint64_t r_qh = find_recv_queue(cfg, qinfo);
     if (r_qh == 0) {
         LOG_PRINT("recv queue not exist\n");
+        free(qinfo);
         return -1;
     }
     task = urpc_channel_queue_pair(chid, qinfo->l_qinfo[0].urpc_qh, r_qh, &option);
