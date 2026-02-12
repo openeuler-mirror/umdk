@@ -23,6 +23,73 @@ extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, 
 extern "C" {
 #endif
 
+aclnnStatus aclnnMoeDistributeCombineA2GetWorkspaceSize(
+    const aclTensor *expandX,
+    const aclTensor *expertIds,
+    const aclTensor *expandIdx,
+    const aclTensor *epSendCounts,
+    const aclTensor *expertScales,
+    const aclTensor *tpSendCountsOptional,
+    const aclTensor *xActiveMaskOptional,
+    const aclTensor *activationScaleOptional,
+    const aclTensor *weightScaleOptional,
+    const aclTensor *groupListOptional,
+    const aclTensor *expandScalesOptional,
+    const aclTensor *offsetInner,
+    const aclTensor *offsetOuter,
+    const aclTensor *countOuter,
+    char *groupEp,
+    int64_t epWorldSize,
+    int64_t epRankId,
+    int64_t moeExpertNum,
+    char *groupTpOptional,
+    int64_t tpWorldSize,
+    int64_t tpRankId,
+    int64_t expertShardType,
+    int64_t sharedExpertNum,
+    int64_t sharedExpertRankNum,
+    int64_t globalBs,
+    int64_t outDtype,
+    int64_t commQuantMode,
+    int64_t groupListType,
+    const aclTensor *out,
+    uint64_t *workspaceSize,
+    aclOpExecutor **executor)
+{
+    return aclnnInnerMoeDistributeCombineA2GetWorkspaceSize(
+        expandX,
+        expertIds,
+        expandIdx,
+        epSendCounts,
+        expertScales,
+        tpSendCountsOptional,
+        xActiveMaskOptional,
+        activationScaleOptional,
+        weightScaleOptional,
+        groupListOptional,
+        expandScalesOptional,
+        offsetInner,
+        offsetOuter,
+        countOuter,
+        groupEp,
+        epWorldSize,
+        epRankId,
+        moeExpertNum,
+        groupTpOptional,
+        tpWorldSize,
+        tpRankId,
+        expertShardType,
+        sharedExpertNum,
+        sharedExpertRankNum,
+        globalBs,
+        outDtype,
+        commQuantMode,
+        groupListType,
+        out,
+        workspaceSize,
+        executor);
+}
+
 aclnnStatus aclnnMoeDistributeCombineA2(
     void *workspace,
     uint64_t workspaceSize,
@@ -30,7 +97,7 @@ aclnnStatus aclnnMoeDistributeCombineA2(
     aclrtStream stream)
 {
     if (NnopbaseSetHcclServerType) {
-        NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_MTE);
+        NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_AICPU);
     }
     return aclnnInnerMoeDistributeCombineA2(
         workspace,

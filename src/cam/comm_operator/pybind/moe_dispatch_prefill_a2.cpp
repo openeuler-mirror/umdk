@@ -84,22 +84,8 @@ tensorList MoeDispatchPrefillA2ImplNpu(
 
     newTopkWeights = topkWeights;
 
-    // FP8 scales checks
-    std::optional<at::Tensor> xScales;
-    float *xScalesPtr = nullptr;
-    int numScales = 0;
-    int scaleTokenStride = 0;
-    int scaleHiddenStride = 0;
-    if (xScales.has_value()) {
-        TORCH_BIND_ASSERT(newX.element_size() == 1);
-        TORCH_BIND_ASSERT(xScales->scalar_type() == at::kFloat or xScales->scalar_type() == at::kInt);
-        TORCH_BIND_ASSERT(xScales->dim() == X_DIM);
-        TORCH_BIND_ASSERT(xScales->size(0) == numTokens);
-        numScales = xScales->dim() == 1 ? 1 : static_cast<int>(xScales->size(1));
-        xScalesPtr = static_cast<float *>(xScales->data_ptr());
-        scaleTokenStride = static_cast<int>(xScales->stride(0));
-        scaleHiddenStride = static_cast<int>(xScales->stride(1));
-    }
+    // FP8 scales
+    at::Tensor xScales;
 
     // dispatch normal param
     int64_t tpSize = 1;

@@ -87,7 +87,7 @@ aclnnStatus aclnnNotifyDispatchA2(
     aclrtStream stream)
 {
     if (NnopbaseSetHcclServerType) {
-        NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_MTE);
+        NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_AICPU);
     }
     return aclnnInnerNotifyDispatchA2(
         workspace,
