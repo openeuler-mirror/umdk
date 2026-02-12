@@ -81,6 +81,14 @@ typedef struct admin_core_cmd_topo_info {
     } out;
 } admin_core_cmd_topo_info_t;
 
+typedef struct admin_core_cmd_sl_info {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+        uint32_t SL;
+        uint32_t priority;
+    } in;
+} admin_core_cmd_sl_info_t;
+
 #define UBCORE_GENL_FAMILY_NAME    "UBCORE_GENL"
 #define UBCORE_GENL_FAMILY_VERSION 1
 

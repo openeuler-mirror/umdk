@@ -64,6 +64,8 @@ int main(int argc, char *argv[])
 
     admin_config_t cfg = {
         .ue_idx = OWN_UE_IDX,
+        .priority = URMA_MAX_PRIORITY_CNT,
+        .SL = URMA_MAX_PRIORITY_CNT,
         .argc = argc,
         .argv = argv,
         .filename = argv[0],
