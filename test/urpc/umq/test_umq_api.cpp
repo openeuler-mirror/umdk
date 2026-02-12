@@ -116,6 +116,7 @@ TEST_F(UmqAPITest, test_umq_msg_ring_create_success)
 {
     msg_ring_t *r;
     char name[MAX_MSG_RING_NAME];
+    (void)snprintf(name, MAX_MSG_RING_NAME, "%s", "umq_test_ring");
     msg_ring_option_t cfg;
     memset(&cfg, 0, sizeof(msg_ring_option_t));
 

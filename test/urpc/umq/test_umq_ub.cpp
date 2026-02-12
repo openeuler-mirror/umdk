@@ -23,7 +23,7 @@ static urma_device_t *g_dev_ptr_list[TEST_DEV_NUM];
 urma_device_t **urma_get_device_list_mock(int *num_devices)
 {
     *num_devices = 1;
-    (void)snprintf(g_dev_list[0].name, URMA_MAX_NAME, "%s", "dev0");
+    (void)snprintf(g_dev_list[0].name, URMA_MAX_NAME, "%s", "bonding_dev_0");
     g_dev_list[0].type = URMA_TRANSPORT_UB;
     g_dev_ptr_list[0] = &g_dev_list[0];
     return (urma_device_t **)&g_dev_ptr_list;
