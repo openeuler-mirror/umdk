@@ -1874,10 +1874,10 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
                 continue;
             }
         }
+        /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent. 
+         * This tx_cqe request does't need to be reported. */
         if (cr[i].user_ctx == 0) {
-            if (cr[i].opcode == URMA_CR_OPC_SEND_WITH_IMM) {
-                umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
-            }
+            umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
             continue;
         }
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
@@ -2381,9 +2381,6 @@ void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
             }
         }
 
-        if (cr[i].user_ctx == 0) {
-            continue;
-        }
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
         (void)umq_buf_break_and_free(buf[qbuf_cnt]);
         ++qbuf_cnt;
@@ -2421,9 +2418,7 @@ void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
         }
 
         if (cr[i].user_ctx == 0) {
-            if (cr[i].opcode == URMA_CR_OPC_SEND_WITH_IMM) {
-                umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
-            }
+            umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
             continue;
         }
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
