@@ -1283,7 +1283,7 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
     }
     uint32_t remain_tx = queue->tx_depth - tx_outstanding;
     /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
-     * `umq_ub_fill_wr_impl`, it is assigned by jumping in groups of UMQ_POST_POLL_BATCH. */
+     * `umq_ub_fill_wr_impl`, it is assigned by jumping in groups of max_tx_sge. */
     int wr_num = umq_ub_fill_wr_impl(qbuf, queue, urma_wr, (urma_sge_t *)(uintptr_t)sges, remain_tx);
     if (wr_num < 0) {
         *bad_qbuf = qbuf;
@@ -1340,7 +1340,7 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
     uint32_t remain_tx = queue->tx_depth - tx_outstanding;
     urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
     /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
-     * `umq_ub_plus_fill_wr_impl`, it is assigned by jumping in groups of UMQ_POST_POLL_BATCH. */
+     * `umq_ub_plus_fill_wr_impl`, it is assigned by jumping in groups of max_tx_sge. */
     int wr_num = umq_ub_plus_fill_wr_impl(qbuf, queue, urma_wr, (urma_sge_t *)(uintptr_t)sges, (uint32_t)remain_tx);
     if (wr_num < 0) {
         *bad_qbuf = qbuf;
