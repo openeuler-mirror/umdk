@@ -132,7 +132,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_combine_alloc_free)
     memset(&qbuf_pool_stats, 0, sizeof(qbuf_pool_stats));
 
     ASSERT_EQ(umq_qbuf_pool_info_get(&qbuf_pool_stats), UMQ_SUCCESS);
-    ASSERT_EQ(qbuf_pool_stats[0].mode, UMQ_BUF_COMBINE);
+    ASSERT_EQ(qbuf_pool_stats.qbuf_pool_info[0].mode, UMQ_BUF_COMBINE);
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_zero)
