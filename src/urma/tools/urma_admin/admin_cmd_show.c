@@ -66,6 +66,28 @@ static void admin_parse_port_attr(const char *sysfs_path, admin_show_ubep_t *ube
     free(port_path);
 }
 
+static void admin_parse_priority_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
+{
+    uint8_t i;
+    char *priority_path = calloc(1, DEV_PATH_MAX);
+    if (priority_path == NULL) {
+        return;
+    }
+ 
+    for (i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
+        if (snprintf(priority_path, DEV_PATH_MAX - 1, "%s/priority/priority%u", sysfs_path, i) <= 0) {
+            (void)printf("snprintf failed, path: %s, priority_num:%u.\n", sysfs_path, i);
+            continue;
+        }
+ 
+        struct urma_sl_info *priority_attr = &(ubep->dev_attr.dev_cap.priority_info[i]);
+ 
+        (void)admin_parse_file_value_u32(priority_path, "sl", (uint32_t *)&priority_attr->SL);
+        (void)admin_parse_file_value_u32(priority_path, "tp_type", (uint32_t *)&priority_attr->tp_type.value);
+    }
+    free(priority_path);
+}
+
 static bool has_bonding_dev_prefix(const char *dev_name)
 {
     const char *prefix = "bonding_dev";
@@ -148,6 +170,8 @@ static int admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ub
     }
 
     admin_read_eid_list(sysfs_path, ubep->eid_list, dev_attr->dev_cap.max_eid_cnt);
+
+    admin_parse_priority_attr(sysfs_path, ubep);
 
     if (ubep->dev_attr.port_cnt > 0 && ubep->dev_attr.port_cnt != UINT8_INVALID) {
         admin_parse_port_attr(sysfs_path, ubep);
@@ -377,6 +401,21 @@ static void print_ubep_eids(const admin_show_ubep_t *ubep)
     }
 }
 
+static void print_ubep_prioritys(const admin_show_ubep_t *ubep)
+{
+    printf("priority  :    0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15\n");
+    printf("      sl  :");
+    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; ++i) {
+        printf("%5d", ubep->dev_attr.dev_cap.priority_info[i].SL);
+    }
+    printf("\n");
+    printf(" tp_type  :");
+    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; ++i) {
+        printf("  %s", urma_tp_type_en_to_string(ubep->dev_attr.dev_cap.priority_info[i].tp_type));
+    }
+    printf("\n");
+}
+
 static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int *index, const admin_config_t *cfg)
 {
     uint32_t i;
@@ -435,6 +474,7 @@ static void print_ubep_whole_info(const admin_show_ubep_t *ubep, int *index, con
         (void)printf("  active_mtu           : %u [%s]\n", ubep->dev_attr.port_attr[i].active_mtu,
                      urma_mtu_to_string(ubep->dev_attr.port_attr[i].active_mtu));
     }
+    print_ubep_prioritys(ubep);
     (void)printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
 }
 

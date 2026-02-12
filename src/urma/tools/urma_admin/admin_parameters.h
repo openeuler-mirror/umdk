@@ -290,6 +290,8 @@ typedef struct admin_config {
     /* eid end */
     tool_query_key_t key;
     uint8_t ns_mode; /* 0: exclusive, 1: shared */
+    uint8_t priority;
+    uint8_t SL;
 } admin_config_t;
 
 int admin_str_to_eid(const char *buf, urma_eid_t *eid);
