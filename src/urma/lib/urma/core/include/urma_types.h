@@ -173,7 +173,9 @@ typedef union urma_device_feature {
         uint32_t mn                    : 1; /* [Public] for user tp */
         uint32_t clan                  : 1; /* [Public] for user tp */
         uint32_t muti_seg_per_token_id : 1;
-        uint32_t reserved              : 15;
+        uint32_t ipourma_en            : 1;
+        uint32_t ctp_en                : 1;
+        uint32_t reserved              : 13;
     } bs;
     uint32_t value;
 } urma_device_feature_t;
