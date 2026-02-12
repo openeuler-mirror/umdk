@@ -275,7 +275,6 @@ typedef struct umq_ub_bind_info {
 } umq_ub_bind_info_t;
 
 typedef struct ub_bind_ctx {
-    umq_ub_bind_info_t bind_info;
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
     char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
@@ -492,8 +491,9 @@ umq_buf_t *umq_ub_read_ctx_create(ub_queue_t *queue, umq_imm_head_t *umq_imm_hea
 int umq_ub_plus_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_wr_ptr,
                              urma_sge_t *sges, uint32_t remain_tx);
 int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **buf, int return_rx_cnt);
-void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge,
-    umq_buf_t *buffer, ub_import_mempool_info_t *import_mempool_info, umq_imm_head_t *umq_imm_head);
+uint32_t umq_ub_ref_sge_cnt(umq_buf_t *buffer);
+void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge, umq_buf_t *buffer,
+    ub_import_mempool_info_t *import_mempool_info, umq_imm_head_t *umq_imm_head, bool *mempool_info_record);
 void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt);
 int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **buf);
 int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq_buf_t **buf);
@@ -529,7 +529,7 @@ void umq_ub_dev_info_uninit(void);
 int umq_ub_dev_num_get(void);
 void umq_ub_dev_info_dump(umq_trans_mode_t umq_trans_mode, int num, umq_dev_info_t *out);
 int umq_ub_dev_info_dump_by_name(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *out);
-int umq_ub_dev_lookup_by_name(char *dev_name, uint32_t eid_idx, umq_ub_raw_dev_t *out);
+int umq_ub_dev_lookup_by_name(char *dev_name, uint32_t eid_index, umq_ub_raw_dev_t *out);
 int umq_ub_dev_lookup_by_eid(umq_eid_t *eid, umq_ub_raw_dev_t *out);
 int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, umq_eid_t *eid, uint32_t *eid_index);
 umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
