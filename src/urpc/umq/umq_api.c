@@ -13,7 +13,10 @@
 #include "perf.h"
 #include "umq_vlog.h"
 #include "umq_inner.h"
+#include "urpc_thread.h"
+#include "urpc_manage.h"
 #include "umq_qbuf_pool.h"
+#include "urpc_timer.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_errno.h"
 #include "urpc_util.h"
@@ -372,6 +375,72 @@ static void framework_uninit(void)
     }
 }
 
+static int umq_pre_thread_start_callback(void *args)
+{
+    return UMQ_SUCCESS;
+}
+
+static void umq_post_thread_end_callback(void *args)
+{
+    return;
+}
+
+static int umq_pre_dp_start(void)
+{
+    if (urpc_timing_wheel_init() != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq timing wheel init failed\n");
+        return UMQ_FAIL;
+    }
+    urpc_manage_callback_register(umq_pre_thread_start_callback, umq_post_thread_end_callback,
+        URPC_MANAGE_JOB_TYPE_LISTEN);
+    if (urpc_manage_init() != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq listen thread init failed\n");
+        goto TIMER_UNINIT;
+    }
+    return UMQ_SUCCESS;
+TIMER_UNINIT:
+    urpc_timing_wheel_uninit();
+
+    return UMQ_FAIL;
+}
+
+static void umq_post_dp_end(void)
+{
+    urpc_manage_uninit();
+    urpc_timing_wheel_uninit();
+}
+
+static int umq_thread_init(umq_init_cfg_t *cfg)
+{
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) == 0) {
+        // disable flow control
+        return UMQ_SUCCESS;
+    }
+    if (urpc_thread_ctx_init() != UMQ_SUCCESS) {
+        return UMQ_FAIL;
+    }
+
+    if (umq_pre_dp_start() != UMQ_SUCCESS) {
+        goto THREAD_CTX_UNINIT;
+    }
+
+    return UMQ_SUCCESS;
+
+THREAD_CTX_UNINIT:
+    urpc_thread_ctx_uninit();
+
+    return UMQ_FAIL;
+}
+
+static void umq_thread_uninit(umq_init_cfg_t *cfg)
+{
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) == 0) {
+        return;
+    }
+    umq_post_dp_end();
+    urpc_thread_ctx_uninit();
+}
+
 void umq_uninit(void)
 {
     if (!g_umq_inited) {
@@ -383,6 +452,7 @@ void umq_uninit(void)
     framework_uninit();
 
     if (g_umq_config != NULL) {
+        umq_thread_uninit(g_umq_config);
         free(g_umq_config);
         g_umq_config = NULL;
     }
@@ -580,6 +650,11 @@ int umq_init(umq_init_cfg_t *cfg)
         g_umq_fws[info->trans_mode].enable = true;
     }
 
+    ret = umq_thread_init(cfg);
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
+
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
         umq_framework_t *umq_fw = &g_umq_fws[fw_i];
         if (!umq_fw->enable) {
@@ -616,6 +691,7 @@ DFX_UNINIT:
 
 FW_UNINIT:
     framework_uninit();
+    umq_thread_uninit(cfg);
     return ret;
 }
 
