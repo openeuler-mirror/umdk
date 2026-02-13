@@ -578,23 +578,24 @@ free_list:
     return ret;
 }
 
-int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *device_info)
+int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *device_info, 
+                                 struct ub_list *ubep_list)
 {
     int ret = 0;
-    struct ub_list ubep_list;
     admin_show_ubep_t *ubep, *next;
     admin_config_t cfg = {0};
     cfg.specify_device = false;
     admin_show_ubep_t *ubep_info = NULL;
 
-    ub_list_init(&ubep_list);
-    ret = find_ubep_list(&ubep_list, &cfg);
-    if (ret != 0) {
-        (void)printf("Failed to find ubep.\n");
-        goto free_list;
+    if (ub_list_is_empty(ubep_list)) {
+        ret = find_ubep_list(ubep_list, &cfg);
+        if (ret != 0) {
+            (void)printf("Failed to find ubep.\n");
+            return ret;
+        }
     }
 
-    UB_LIST_FOR_EACH_SAFE (ubep, next, node, &ubep_list) {
+    UB_LIST_FOR_EACH_SAFE(ubep, next, node, ubep_list) {
         if (ubep == NULL) {
             break;
         }
@@ -616,13 +617,12 @@ int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *dev
         if (device_info->eid_list == NULL) {
             (void)printf("Failed to malloc eid_list.\n");
             ret = -1;
-            goto free_list;
+        } else {
+            memcpy(device_info->eid_list, ubep_info->eid_list,
+                   ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
         }
-        memcpy(device_info->eid_list, ubep_info->eid_list,
-               ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
     }
-free_list:
-    free_ubep_list(&ubep_list);
+
     return ret;
 }
 

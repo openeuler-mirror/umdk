@@ -11,6 +11,8 @@
 #ifndef ADMIN_CMD_H
 #define ADMIN_CMD_H
 
+#include "ub_list.h"
+
 #include "admin_parameters.h"
 
 typedef struct admin_core_cmd_show_utp {
@@ -187,7 +189,8 @@ int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd);
 int admin_cmd_get_topo_info(tool_topo_map_t *topo_map);
 int admin_get_device_name_by_eid(const urma_eid_t *eid, char *dev_name, size_t dev_name_len);
-int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *dev_info);
+int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *device_info, 
+                                 struct ub_list *ubep_list);
 
 // Legacy command
 int admin_cmd_show_stats_legacy(admin_config_t *cfg);
