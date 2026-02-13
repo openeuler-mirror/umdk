@@ -2132,3 +2132,55 @@ urma_status_t urma_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_hand
 
     return ops->get_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr);
 }
+
+urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid)
+{
+    if (ctx == NULL || net_addr == NULL || eid == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, get_eid_by_ip);
+ 
+    return ops->get_eid_by_ip(ctx, net_addr, eid);
+}
+ 
+urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr)
+{
+    if (ctx == NULL || eid == NULL || net_addr == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, get_ip_by_eid);
+ 
+    return ops->get_ip_by_eid(ctx, eid, net_addr);
+}
+ 
+urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac)
+{
+    if (ctx == NULL || mac == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, get_smac);
+ 
+    return ops->get_smac(ctx, mac);
+}
+ 
+urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac)
+{
+    if (ctx == NULL || net_addr == NULL || mac == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_ops_t *ops = NULL;
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, get_dmac);
+ 
+    return ops->get_dmac(ctx, net_addr, mac);
+}
