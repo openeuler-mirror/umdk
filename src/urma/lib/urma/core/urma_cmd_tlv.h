@@ -911,6 +911,39 @@ typedef enum urma_cmd_exchange_tp_info_type {
     EXCHANGE_TP_INFO_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_exchange_tp_info_type_t;
 
+typedef enum urma_cmd_get_eid_by_ip_type {
+    /* In type */
+    GET_EID_BY_IP_INFO_IN_NET_ADDR,
+    GET_EID_BY_IP_INFO_IN_NUM,
+    /* Out type */
+    GET_EID_BY_IP_INFO_OUT_EID = URMA_CMD_OUT_TYPE_INIT,
+    GET_EID_BY_IP_INFO_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_eid_by_ip_type_t;
+ 
+typedef enum urma_cmd_get_ip_by_eid_type {
+    /* In type */
+    GET_IP_BY_EID_INFO_IN_EID,
+    GET_IP_BY_EID_INFO_IN_NUM,
+    /* Out type */
+    GET_IP_BY_EID_INFO_OUT_NET_ADDR = URMA_CMD_OUT_TYPE_INIT,
+    GET_IP_BY_EID_INFO_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_ip_by_eid_type_t;
+ 
+typedef enum urma_cmd_get_smac_type {
+    /* Out type */
+    GET_SMAC_OUT_MAC = URMA_CMD_OUT_TYPE_INIT,
+    GET_SMAC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_smac_type_t;
+ 
+typedef enum urma_cmd_get_dmac_type {
+    /* In type */
+    GET_DMAC_IN_NET_ADDR,
+    GET_DMAC_IN_NUM,
+    /* Out type */
+    GET_DMAC_OUT_MAC = URMA_CMD_OUT_TYPE_INIT,
+    GET_DMAC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_dmac_type_t;
+
 int urma_ioctl_create_ctx(int ioctl_fd, urma_cmd_create_ctx_t *arg);
 int urma_ioctl_alloc_token_id(int ioctl_fd, urma_cmd_alloc_token_id_t *arg);
 int urma_ioctl_free_token_id(int ioctl_fd, urma_cmd_free_token_id_t *arg);
@@ -972,5 +1005,9 @@ int urma_ioctl_get_tp_list(int ioctl_fd, urma_cmd_get_tp_list_t *arg);
 int urma_ioctl_set_tp_attr(int ioctl_fd, urma_cmd_set_tp_attr_t *arg);
 int urma_ioctl_get_tp_attr(int ioctl_fd, urma_cmd_get_tp_attr_t *arg);
 int urma_ioctl_exchange_tp_info(int ioctl_fd, urma_cmd_exchange_tp_info_t *arg);
+int urma_ioctl_get_eid_by_ip(int ioctl_fd, urma_cmd_get_eid_by_ip_t *arg);
+int urma_ioctl_get_ip_by_eid(int ioctl_fd, urma_cmd_get_ip_by_eid_t *arg);
+int urma_ioctl_get_smac(int ioctl_fd, urma_cmd_get_smac_t *arg);
+int urma_ioctl_get_dmac(int ioctl_fd, urma_cmd_get_dmac_t *arg);
 
 #endif

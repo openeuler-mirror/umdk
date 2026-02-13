@@ -135,6 +135,10 @@ typedef struct urma_ops {
     urma_status_t (*delete_notifier)(urma_notifier_t *notifier);
     int (*wait_notify)(urma_notifier_t *notifier, uint32_t cnt, urma_notify_t *notify, int timeout);
     void (*ack_notify)(uint32_t cnt, urma_notify_t *notify);
+    urma_status_t (*get_eid_by_ip)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+    urma_status_t (*get_ip_by_eid)(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+    urma_status_t (*get_smac)(const urma_context_t *ctx, uint8_t *mac);
+    urma_status_t (*get_dmac)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 } urma_ops_t;
 
 typedef struct urma_provider_attr {
@@ -328,5 +332,9 @@ int urma_cmd_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle, ui
                          uint32_t *tp_attr_bitmap, urma_tp_attr_value_t *tp_attr, urma_cmd_udrv_priv_t *udata);
 int urma_cmd_exchange_tp_info(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint64_t local_tp_handle, uint32_t tx_psn,
                               uint64_t *peer_tp_handle, uint32_t *rx_psn);
+int urma_cmd_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+int urma_cmd_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+int urma_cmd_get_smac(const urma_context_t *ctx, uint8_t *mac);
+int urma_cmd_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 
 #endif

@@ -2124,3 +2124,78 @@ int urma_cmd_exchange_tp_info(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint6
     *rx_psn = arg.out.rx_psn;
     return 0;
 }
+
+int urma_cmd_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid)
+{
+    if (ctx == NULL || net_addr == NULL || eid == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_cmd_get_eid_by_ip_t arg = {0};
+    arg.in.net_addr = *net_addr;
+ 
+    int ret = urma_ioctl_get_eid_by_ip(ctx->dev_fd, &arg);
+    if (ret != URMA_SUCCESS) {
+        return ret;
+    }
+ 
+    *eid = arg.out.eid;
+    return 0;
+}
+ 
+int urma_cmd_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr)
+{
+    if (ctx == NULL || eid == NULL || net_addr == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_cmd_get_ip_by_eid_t arg = {0};
+    arg.in.eid = *eid;
+ 
+    int ret = urma_ioctl_get_ip_by_eid(ctx->dev_fd, &arg);
+    if (ret != URMA_SUCCESS) {
+        return ret;
+    }
+ 
+    *net_addr = arg.out.net_addr;
+    return 0;
+}
+ 
+int urma_cmd_get_smac(const urma_context_t *ctx, uint8_t *mac)
+{
+    if (ctx == NULL || mac == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_cmd_get_smac_t arg = {0};
+ 
+    int ret = urma_ioctl_get_smac(ctx->dev_fd, &arg);
+    if (ret != URMA_SUCCESS) {
+        return ret;
+    }
+ 
+    (void)memcpy(mac, arg.out.mac, URMA_MAC_BYTES);
+    return 0;
+}
+ 
+int urma_cmd_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac)
+{
+    if (ctx == NULL || net_addr == NULL || mac == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+ 
+    urma_cmd_get_dmac_t arg = {0};
+    arg.in.net_addr = *net_addr;
+ 
+    int ret = urma_ioctl_get_dmac(ctx->dev_fd, &arg);
+    if (ret != URMA_SUCCESS) {
+        return ret;
+    }
+ 
+    (void)memcpy(mac, arg.out.mac, URMA_MAC_BYTES);
+    return 0;
+}

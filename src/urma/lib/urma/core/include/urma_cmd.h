@@ -107,6 +107,10 @@ typedef enum urma_cmd {
     URMA_CMD_SET_TP_ATTR,
     URMA_CMD_GET_TP_ATTR,
     URMA_CMD_EXCHANGE_TP_INFO,
+    URMA_CMD_GET_EID_BY_IP,
+    URMA_CMD_GET_IP_BY_EID,
+    URMA_CMD_GET_SMAC,
+    URMA_CMD_GET_DMAC,
     URMA_CMD_MAX
 } urma_cmd_t;
 
@@ -926,5 +930,38 @@ typedef struct urma_cmd_get_tp_attr {
     } out;
     urma_cmd_udrv_priv_t udata;
 } urma_cmd_get_tp_attr_t;
+
+typedef struct urma_cmd_get_eid_by_ip {
+    struct {
+        urma_net_addr_t net_addr;
+    } in;
+    struct {
+        urma_eid_t eid;
+    } out;
+} urma_cmd_get_eid_by_ip_t;
+ 
+typedef struct urma_cmd_get_ip_by_eid {
+    struct {
+        urma_eid_t eid;
+    } in;
+    struct {
+        urma_net_addr_t net_addr;
+    } out;
+} urma_cmd_get_ip_by_eid_t;
+ 
+typedef struct urma_cmd_get_smac {
+    struct {
+        uint8_t mac[URMA_MAC_BYTES];
+    } out;
+} urma_cmd_get_smac_t;
+ 
+typedef struct urma_cmd_get_dmac {
+    struct {
+        urma_net_addr_t net_addr;
+    } in;
+    struct {
+        uint8_t mac[URMA_MAC_BYTES];
+    } out;
+} urma_cmd_get_dmac_t;
 
 #endif

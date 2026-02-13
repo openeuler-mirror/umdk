@@ -1062,3 +1062,46 @@ int urma_ioctl_exchange_tp_info(int ioctl_fd, urma_cmd_exchange_tp_info_t *arg)
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_EXCHANGE_TP_INFO, attrs, sizeof(attrs));
 }
+
+int urma_ioctl_get_eid_by_ip(int ioctl_fd, urma_cmd_get_eid_by_ip_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_EID_BY_IP_INFO_IN_NUM + GET_EID_BY_IP_INFO_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+ 
+    ATTR(a++, GET_EID_BY_IP_INFO_IN_NET_ADDR, arg->in.net_addr);
+    ATTR(a++, GET_EID_BY_IP_INFO_OUT_EID, arg->out.eid);
+ 
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_EID_BY_IP, attrs, sizeof(attrs));
+}
+ 
+int urma_ioctl_get_ip_by_eid(int ioctl_fd, urma_cmd_get_ip_by_eid_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_IP_BY_EID_INFO_IN_NUM + GET_IP_BY_EID_INFO_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+ 
+    ATTR(a++, GET_IP_BY_EID_INFO_IN_EID, arg->in.eid);
+    ATTR(a++, GET_IP_BY_EID_INFO_OUT_NET_ADDR, arg->out.net_addr);
+ 
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_IP_BY_EID, attrs, sizeof(attrs));
+}
+ 
+int urma_ioctl_get_smac(int ioctl_fd, urma_cmd_get_smac_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_SMAC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+ 
+    ATTR(a++, GET_SMAC_OUT_MAC, arg->out.mac);
+ 
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_SMAC, attrs, sizeof(attrs));
+}
+ 
+int urma_ioctl_get_dmac(int ioctl_fd, urma_cmd_get_dmac_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_DMAC_IN_NUM + GET_DMAC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+ 
+    ATTR(a++, GET_DMAC_IN_NET_ADDR, arg->in.net_addr);
+    ATTR(a++, GET_DMAC_OUT_MAC, arg->out.mac);
+ 
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_DMAC, attrs, sizeof(attrs));
+}
