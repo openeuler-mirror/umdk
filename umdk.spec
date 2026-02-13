@@ -34,6 +34,9 @@
     %define build_all 0
 %endif
 
+# add --without udma option, i.e. enable udma by default
+%bcond_without udma
+
 %if %{defined kernel_version}
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %else
@@ -64,8 +67,8 @@ Source0       : %{name}-%{version}.tar.gz
 BuildRoot     : %{_buildirootdir}/%{name}-%{version}-build
 buildArch     : x86_64 aarch64
 
-BuildRequires : rpm-build, make, cmake, gcc, gcc-c++, glibc-devel, openssl-devel, glib2-devel, libnl3-devel, kernel-devel, libummu-devel
-Requires: glibc, glib2, libummu
+BuildRequires : rpm-build, make, cmake, gcc, gcc-c++, glibc-devel, openssl-devel, glib2-devel, libnl3-devel, kernel-devel
+Requires: glibc, glib2
 %if %{with asan}
 Requires: libasan
 %endif
@@ -78,7 +81,10 @@ A new system interconnect architecture
 
 %if %{build_all} || %{with urma} || %{with urpc}
 %package urma-lib
+%if %{with udma}
+BuildRequires:  libummu-devel
 Requires:       libummu
+%endif
 Summary:        Basic URMA libraries of UMDK
 
 %description urma-lib
@@ -286,6 +292,9 @@ tools of ums, contains ums_run
 %if %{without udma_stb64_disable}
     -DUDMA_ST64B="enable" \
 %endif
+%if %{without udma}
+    -DBUILD_UDMA="disable" \
+%endif
 
 make %{?_smp_mflags}
 
@@ -307,7 +316,9 @@ make install DESTDIR=%{buildroot}
     %{_libdir}/liburma.so.*
     %{_libdir}/liburma_common.so.*
     %{_libdir}/urma/liburma_ubagg.so.*
+%if %{with udma}
     %{_libdir}/urma/liburma-udma.so
+%endif
     /etc/rsyslog.d/urma.conf
     /etc/logrotate.d/urma
 
@@ -321,13 +332,15 @@ fi
     %{_libdir}/liburma.so
     %{_libdir}/liburma_common.so
     %{_libdir}/urma/liburma_ubagg.so
-    %{_libdir}/urma/liburma-udma.so
     %dir %{_includedir}/ub/umdk/urma
-    %dir %{_includedir}/ub/umdk/urma/udma
     %{_includedir}/ub/umdk/urma/urma_*.h
     %{_includedir}/ub/umdk/urma/uvs_types.h
     %{_includedir}/ub/umdk/urma/uvs_api.h
+%if %{with udma}
+    %{_libdir}/urma/liburma-udma.so
+    %dir %{_includedir}/ub/umdk/urma/udma
     %{_includedir}/ub/umdk/urma/udma/udma_u_ctl.h
+%endif
 %if %{with gcov}
     %dir /var/lib/ub/umdk/urma/gcov/%{name}
     /var/lib/ub/umdk/urma/gcov/%{name}/
