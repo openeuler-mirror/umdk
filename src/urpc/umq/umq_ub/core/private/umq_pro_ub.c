@@ -1054,7 +1054,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
                 "status: %d local_id: %u\n", EID_ARGS(*eid), id, i, cr[i].status, cr[i].local_id);
         }
 
-        /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent. 
+        /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent.
          * This tx_cqe request does't need to be reported. */
         if (cr[i].user_ctx == 0) {
             umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);

@@ -1874,7 +1874,7 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
                 continue;
             }
         }
-        /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent. 
+        /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent.
          * This tx_cqe request does't need to be reported. */
         if (cr[i].user_ctx == 0) {
             umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
@@ -2204,31 +2204,30 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
     __atomic_fetch_add(&queue->require_rx_count, rx_cnt, __ATOMIC_RELAXED);
     uint32_t require_rx_count = umq_get_post_rx_num(queue->rx_depth, &queue->require_rx_count);
     if (require_rx_count > 0) {
-        umq_buf_list_t head;
         uint32_t cur_batch_count = 0;
         int ret = UMQ_SUCCESS;
         urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
         uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
         do {
             cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
-            QBUF_LIST_INIT(&head);
-            if (umq_qbuf_alloc(queue->rx_buf_size, cur_batch_count, NULL, &head) != UMQ_SUCCESS) {
+            umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, UMQ_INVALID_HANDLE, NULL);
+            if (qbuf == NULL) {
                 __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_RELAXED);
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, alloc rx failed\n", EID_ARGS(*eid), id);
                 break;
             }
             umq_buf_t *bad_buf = NULL;
-            ret = umq_ub_post_rx_inner_impl(queue, QBUF_LIST_FIRST(&head), &bad_buf);
+            ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf);
             if (ret != UMQ_SUCCESS) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, status: %d\n",
                     EID_ARGS(*eid), id, ret);
-                QBUF_LIST_FIRST(&head) = bad_buf;
                 uint32_t fail_count = 0;
-                while (bad_buf) {
+                umq_buf_t *tmp_buf = bad_buf;
+                while (tmp_buf) {
                     fail_count++;
-                    bad_buf = bad_buf->qbuf_next;
+                    tmp_buf = tmp_buf->qbuf_next;
                 }
-                umq_qbuf_free(&head);
+                umq_buf_free(bad_buf);
                 __atomic_fetch_add(&queue->require_rx_count, fail_count, __ATOMIC_RELAXED);
                 break;
             }
@@ -2632,10 +2631,8 @@ void umq_flush_rx(ub_queue_t *queue, uint32_t max_retry_times)
         if (rx_cnt < 0) {
             return;
         }
-        umq_buf_list_t head;
         for (int i = 0; i < rx_cnt; i++) {
-            head.first = buf[i];
-            umq_qbuf_free(&head);
+            umq_buf_free(buf[i]);
         }
         remain -= (uint32_t)rx_cnt;
         retry_times++;
