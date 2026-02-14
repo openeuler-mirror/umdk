@@ -29,6 +29,7 @@ extern "C" {
 
 typedef struct bondp_topo_ue {
     uint32_t socket_id;
+    uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
 } bondp_topo_ue_t;

@@ -220,6 +220,7 @@ typedef struct tool_res_seg_val {
 
 typedef struct tool_topo_ue {
     uint32_t socket_id;
+    uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
 } tool_topo_ue_t;
