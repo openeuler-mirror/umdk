@@ -9,19 +9,28 @@
 #include "dfx.h"
 #include "umq_vlog.h"
 #include "urpc_util.h"
+#include "umq_inner.h"
+#include "umq_dfx_api.h"
+#include "umq_ub_private.h"
+#include "umq_ub_flow_control.h"
+#include "umq_ub_api.h"
 
+#define TEST_QUEUE_RX_DEPTH 128
 // Test DFX functionality
 class DfxTest : public ::testing::Test {
 protected:
-    void SetUp() override {
+    void SetUp() override
+    {
     }
 
-    void TearDown() override {
+    void TearDown() override
+    {
         umq_perf_uninit();
     }
 };
 
-TEST_F(DfxTest, DfxInitSuccessWithPerf) {
+TEST_F(DfxTest, DfxInitSuccessWithPerf)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
 
@@ -29,7 +38,8 @@ TEST_F(DfxTest, DfxInitSuccessWithPerf) {
     EXPECT_EQ(result, UMQ_SUCCESS);
 }
 
-TEST_F(DfxTest, DfxInitWithoutPerfFeature) {
+TEST_F(DfxTest, DfxInitWithoutPerfFeature)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = 0;
 
@@ -37,7 +47,8 @@ TEST_F(DfxTest, DfxInitWithoutPerfFeature) {
     EXPECT_EQ(result, UMQ_SUCCESS);
 }
 
-TEST_F(DfxTest, DfxUninit) {
+TEST_F(DfxTest, DfxUninit)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
 
@@ -49,7 +60,8 @@ TEST_F(DfxTest, DfxUninit) {
     SUCCEED();
 }
 
-TEST_F(DfxTest, DfxCmdProcessNullParams) {
+TEST_F(DfxTest, DfxCmdProcessNullParams)
+{
     // Test with null cmd
     umq_dfx_result_t result = {};
     umq_dfx_cmd_process(nullptr, &result);
@@ -64,7 +76,8 @@ TEST_F(DfxTest, DfxCmdProcessNullParams) {
     SUCCEED();  // If no crash, test passes
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfModuleStart) {
+TEST_F(DfxTest, DfxCmdProcessPerfModuleStart)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
     cmd.perf_cmd_id = UMQ_PERF_CMD_START;
@@ -81,7 +94,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfModuleStart) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_START);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfModuleStop) {
+TEST_F(DfxTest, DfxCmdProcessPerfModuleStop)
+{
     // First start perf
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
@@ -106,7 +120,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfModuleStop) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_STOP);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfModuleClear) {
+TEST_F(DfxTest, DfxCmdProcessPerfModuleClear)
+{
     // First start then stop perf to allow clearing
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
@@ -132,7 +147,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfModuleClear) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_CLEAR);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfModuleGetResult) {
+TEST_F(DfxTest, DfxCmdProcessPerfModuleGetResult)
+{
     // First start then stop perf to get results
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
@@ -158,7 +174,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfModuleGetResult) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_GET_RESULT);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfModuleInvalidCmd) {
+TEST_F(DfxTest, DfxCmdProcessPerfModuleInvalidCmd)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
     cmd.perf_cmd_id = UMQ_PERF_CMD_MAX;  // Invalid command
@@ -171,7 +188,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfModuleInvalidCmd) {
     EXPECT_EQ(result.module_id, UMQ_DFX_MODULE_PERF);
 }
 
-TEST_F(DfxTest, DfxCmdProcessUnknownModule) {
+TEST_F(DfxTest, DfxCmdProcessUnknownModule)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = static_cast<umq_dfx_module_id_t>(999);  // Unknown module
 
@@ -181,7 +199,8 @@ TEST_F(DfxTest, DfxCmdProcessUnknownModule) {
     EXPECT_EQ(result.err_code, UMQ_FAIL);
 }
 
-TEST_F(DfxTest, DfxCmdProcessStatsModule) {
+TEST_F(DfxTest, DfxCmdProcessStatsModule)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_STATS;  // Stats module (should go to default case)
 
@@ -191,7 +210,8 @@ TEST_F(DfxTest, DfxCmdProcessStatsModule) {
     EXPECT_EQ(result.err_code, UMQ_FAIL);
 }
 
-TEST_F(DfxTest, MultipleInitAndUninitCycle) {
+TEST_F(DfxTest, MultipleInitAndUninitCycle)
+{
     // Test multiple init/uninit cycles
     for (int i = 0; i < 3; ++i) {
         umq_init_cfg_t cfg = {};
@@ -207,7 +227,8 @@ TEST_F(DfxTest, MultipleInitAndUninitCycle) {
 }
 
 // Integration test: full workflow
-TEST_F(DfxTest, FullWorkflow) {
+TEST_F(DfxTest, FullWorkflow)
+{
     // Initialize
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
@@ -266,7 +287,8 @@ TEST_F(DfxTest, FullWorkflow) {
 }
 
 // Additional tests for umq_dfx_init to improve coverage
-TEST_F(DfxTest, DfxInitWithMultipleFeatures) {
+TEST_F(DfxTest, DfxInitWithMultipleFeatures)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF | 0x10; // Perf + another feature
 
@@ -274,7 +296,8 @@ TEST_F(DfxTest, DfxInitWithMultipleFeatures) {
     EXPECT_EQ(result, UMQ_SUCCESS);
 }
 
-TEST_F(DfxTest, DfxInitWithZeroFeature) {
+TEST_F(DfxTest, DfxInitWithZeroFeature)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = 0; // No features enabled
 
@@ -282,7 +305,8 @@ TEST_F(DfxTest, DfxInitWithZeroFeature) {
     EXPECT_EQ(result, UMQ_SUCCESS);
 }
 
-TEST_F(DfxTest, DfxInitPerfInitFailure) {
+TEST_F(DfxTest, DfxInitPerfInitFailure)
+{
     // This test might not work well due to static linking
     // We'll focus on code paths that can be tested more easily
     umq_init_cfg_t cfg = {};
@@ -297,7 +321,8 @@ TEST_F(DfxTest, DfxInitPerfInitFailure) {
 }
 
 // More detailed tests for umq_dfx_cmd_process
-TEST_F(DfxTest, DfxCmdProcessPerfStartWithValidThresholds) {
+TEST_F(DfxTest, DfxCmdProcessPerfStartWithValidThresholds)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     umq_dfx_init(&cfg);
@@ -325,7 +350,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfStartWithValidThresholds) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_START);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfStopWhenNotRunning) {
+TEST_F(DfxTest, DfxCmdProcessPerfStopWhenNotRunning)
+{
     // Try to stop when perf hasn't been started
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
@@ -340,7 +366,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfStopWhenNotRunning) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_STOP);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfClearWhenNotRunning) {
+TEST_F(DfxTest, DfxCmdProcessPerfClearWhenNotRunning)
+{
     // Initialize but don't start perf
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
@@ -359,7 +386,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfClearWhenNotRunning) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_CLEAR);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfGetResultWhenPerfRunning) {
+TEST_F(DfxTest, DfxCmdProcessPerfGetResultWhenPerfRunning)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     umq_dfx_init(&cfg);
@@ -386,7 +414,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfGetResultWhenPerfRunning) {
 }
 
 // Test different perf command IDs in detail
-TEST_F(DfxTest, DfxCmdProcessPerfCmdMax) {
+TEST_F(DfxTest, DfxCmdProcessPerfCmdMax)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
     cmd.perf_cmd_id = UMQ_PERF_CMD_MAX;
@@ -399,7 +428,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfCmdMax) {
     EXPECT_EQ(result.module_id, UMQ_DFX_MODULE_PERF);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfCmdDefaultCase) {
+TEST_F(DfxTest, DfxCmdProcessPerfCmdDefaultCase)
+{
     // Use a value that falls into default case
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
@@ -413,7 +443,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfCmdDefaultCase) {
     EXPECT_EQ(result.module_id, UMQ_DFX_MODULE_PERF);
 }
 
-TEST_F(DfxTest, DfxUninitAfterInit) {
+TEST_F(DfxTest, DfxUninitAfterInit)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     int init_result = umq_dfx_init(&cfg);
@@ -425,7 +456,8 @@ TEST_F(DfxTest, DfxUninitAfterInit) {
 }
 
 // Test boundary conditions for threshold arrays
-TEST_F(DfxTest, DfxCmdProcessPerfStartWithEmptyThresholds) {
+TEST_F(DfxTest, DfxCmdProcessPerfStartWithEmptyThresholds)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     umq_dfx_init(&cfg);
@@ -444,7 +476,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfStartWithEmptyThresholds) {
     EXPECT_EQ(result.perf_cmd_id, UMQ_PERF_CMD_START);
 }
 
-TEST_F(DfxTest, DfxCmdProcessPerfStartWithMaxThresholds) {
+TEST_F(DfxTest, DfxCmdProcessPerfStartWithMaxThresholds)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     umq_dfx_init(&cfg);
@@ -472,7 +505,8 @@ TEST_F(DfxTest, DfxCmdProcessPerfStartWithMaxThresholds) {
 }
 
 // Test umq_dfx_cmd_process with various combinations
-TEST_F(DfxTest, DfxCmdProcessAllPerfCommandsSequence) {
+TEST_F(DfxTest, DfxCmdProcessAllPerfCommandsSequence)
+{
     umq_init_cfg_t cfg = {};
     cfg.feature = UMQ_FEATURE_ENABLE_PERF;
     int init_result = umq_dfx_init(&cfg);
@@ -525,7 +559,8 @@ TEST_F(DfxTest, DfxCmdProcessAllPerfCommandsSequence) {
 }
 
 // Test different module IDs
-TEST_F(DfxTest, DfxCmdProcessAllModuleTypes) {
+TEST_F(DfxTest, DfxCmdProcessAllModuleTypes)
+{
     // Test PERF module
     umq_dfx_cmd_t perf_cmd = {};
     perf_cmd.module_id = UMQ_DFX_MODULE_PERF;
@@ -542,7 +577,7 @@ TEST_F(DfxTest, DfxCmdProcessAllModuleTypes) {
     umq_dfx_result_t stats_result = {};
     umq_dfx_cmd_process(&stats_cmd, &stats_result);
     EXPECT_EQ(stats_result.err_code, UMQ_FAIL);
-    
+
     // Test unknown module
     umq_dfx_cmd_t unknown_cmd = {};
     unknown_cmd.module_id = static_cast<umq_dfx_module_id_t>(999);
@@ -568,7 +603,8 @@ TEST_F(DfxTest, DfxInitAfterPerfContextExists) {
 }
 
 // Null pointer tests with more details
-TEST_F(DfxTest, DfxCmdProcessVariousNullCombinations) {
+TEST_F(DfxTest, DfxCmdProcessVariousNullCombinations)
+{
     umq_dfx_cmd_t cmd = {};
     cmd.module_id = UMQ_DFX_MODULE_PERF;
     cmd.perf_cmd_id = UMQ_PERF_CMD_START;
@@ -584,4 +620,93 @@ TEST_F(DfxTest, DfxCmdProcessVariousNullCombinations) {
     umq_dfx_cmd_process(nullptr, nullptr);
 
     SUCCEED();
+}
+
+TEST_F(DfxTest, UmqStatsFlowControlGetTestWithInvalidParam)
+{
+    umq_dfx_ops_t dfx_tp_ops = {
+        .umq_tp_stats_flow_control_get = NULL,
+    };
+    umq_t umq = {
+        .mode = UMQ_TRANS_MODE_UB,
+        .dfx_tp_ops = &dfx_tp_ops,
+    };
+    umq_flow_control_stats_t flow_control_stats = {0};
+    int ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
+    EXPECT_EQ(ret, -UMQ_ERR_EINVAL);
+}
+
+TEST_F(DfxTest, UmqStatsFlowControlGetTestWithDisableFc)
+{
+    ub_queue_t umqh = {0};
+    umq_t umq = {
+        .mode = UMQ_TRANS_MODE_UB,
+        .dfx_tp_ops = umq_ub_dfx_ops_get(),
+        .umqh_tp = (uint64_t)(uintptr_t)&umqh
+    };
+    umq_flow_control_stats_t flow_control_stats = {0};
+    int ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
+    EXPECT_EQ(ret, -UMQ_ERR_EINVAL);
+}
+
+TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcAtomic)
+{
+    ub_queue_t queue = {0};
+    queue.flow_control.enabled = true;
+    queue.flow_control.local_rx_depth = TEST_QUEUE_RX_DEPTH;
+    jfr_ctx_t io_jfr_ctx =  {0};
+    urma_jetty_t jetty;
+    jetty.jetty_id.id = 0;
+    queue.jfr_ctx[UB_QUEUE_JETTY_IO] = &io_jfr_ctx;
+    umq_flow_control_cfg_t cfg = {0};
+    cfg.use_atomic_window = true;
+    umq_ub_ctx_t dev_ctx;
+    uint64_t rx_consumed_jetty_table;
+    dev_ctx.rx_consumed_jetty_table = &rx_consumed_jetty_table;
+    dev_ctx.flow_control.use_atomic_window = true;
+    queue.jetty[UB_QUEUE_JETTY_IO] = &jetty;
+    queue.dev_ctx = &dev_ctx;
+
+    int ret = umq_ub_flow_control_init(&queue.flow_control, &queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
+    ASSERT_EQ(ret, 0);
+    umq_t umq = {
+        .mode = UMQ_TRANS_MODE_UB,
+        .dfx_tp_ops = umq_ub_dfx_ops_get(),
+        .umqh_tp = (uint64_t)(uintptr_t)&queue
+    };
+    umq_flow_control_stats_t flow_control_stats = {0};
+    ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
+    umq_ub_flow_control_uninit(&queue.flow_control);
+}
+
+TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
+{
+    ub_queue_t queue = {0};
+    queue.flow_control.enabled = true;
+    queue.flow_control.local_rx_depth = TEST_QUEUE_RX_DEPTH;
+    jfr_ctx_t io_jfr_ctx =  {0};
+    urma_jetty_t jetty;
+    jetty.jetty_id.id = 0;
+    queue.jfr_ctx[UB_QUEUE_JETTY_IO] = &io_jfr_ctx;
+    umq_flow_control_cfg_t cfg = {0};
+    cfg.use_atomic_window = false;
+    umq_ub_ctx_t dev_ctx;
+    uint64_t rx_consumed_jetty_table;
+    dev_ctx.rx_consumed_jetty_table = &rx_consumed_jetty_table;
+    dev_ctx.flow_control.use_atomic_window = true;
+    queue.jetty[UB_QUEUE_JETTY_IO] = &jetty;
+    queue.dev_ctx = &dev_ctx;
+
+    int ret = umq_ub_flow_control_init(&queue.flow_control, &queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
+    ASSERT_EQ(ret, 0);
+    umq_t umq = {
+        .mode = UMQ_TRANS_MODE_UB,
+        .dfx_tp_ops = umq_ub_dfx_ops_get(),
+        .umqh_tp = (uint64_t)(uintptr_t)&queue
+    };
+    umq_flow_control_stats_t flow_control_stats = {0};
+    ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
+    umq_ub_flow_control_uninit(&queue.flow_control);
 }
