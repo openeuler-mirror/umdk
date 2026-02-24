@@ -76,6 +76,7 @@ struct CommArgs {
     int64_t sharedExpertRankNum;
     int64_t expertNumPerRank;
     int64_t dfx[DFX_COUNT] = {};
+    int64_t memLen;
 };
 }
 #endif // COMM_ARGS_H

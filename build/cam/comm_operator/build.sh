@@ -18,6 +18,20 @@ ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
 
+build_cam_comm() {
+    cd $MODULE_SRC_PATH
+    if [ -d "./build" ]; then
+        rm -rf "./build"
+    fi
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+        && make && make install || {
+            echo "build_cam_comm fail"
+            return 1
+        }
+}
+
 BuildTest() {
     cd ${MODULE_TEST_PATH}/ut_gtest
     if [ -d "./build" ]; then
@@ -82,11 +96,13 @@ fi
 # 目前whl包和UT的编译暂时需要先将CAM算子包并安装到环境
 # 在编译whl包和UT时屏蔽算子包编译，加快编译速度
 if [ $ENABLE_SRC_BUILD -eq 1 ]; then
+    build_cam_comm
     if [ ! -d "./build_out/comm_operator/run/" ]; then
         mkdir -p ${MODULE_BUILD_OUT_PATH}/run
     fi
     if [[ "$SOC_VERSION" == "all" ]]; then
-        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE
+        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE && \
+        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910b4 $IS_EXTRACT $BUILD_TYPE
     else
         bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE
     fi

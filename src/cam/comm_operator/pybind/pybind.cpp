@@ -9,6 +9,7 @@
 
 #include <torch/extension.h>
 #include "functions.h"
+#include "ext_utils.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
@@ -17,6 +18,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_normal", &moe_combine_normal_impl_autograd, "moe_combine_normal");
     m.def("moe_dispatch_shmem", &moe_dispatch_shmem_impl_autograd, "moe_dispatch_shmem");
     m.def("moe_combine_shmem", &moe_combine_shmem_impl_autograd, "moe_combine_shmem");
+    m.def("all2_all_detour", &all2_all_detour_impl_autograd, "all2_all_detour");
+    m.def("reduce_scatter_detour", &reduce_scatter_detour_impl_autograd, "reduce_scatter_detour");
+    m.def("cam_get_comm", &cam_get_comm, "cam_get_comm");
+    m.def("cam_free_comm", &cam_free_comm, "cam_free_comm");
+    m.def("cam_get_rank_size", &cam_get_rank_size, "cam_get_rank_size");
+    m.def("cam_get_and_increase_magic", &cam_get_and_increase_magic, "cam_get_and_increase_magic");
+    m.def("cam_get_magic", &cam_get_magic, "cam_get_magic");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -38,4 +46,8 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     Tensor? groupList, Tensor? expandScales, int epWorldSize, int epRankId, int moeExpertNum, int tpWorldSize, \
     int tpRankId, int expertShardType, int sharedExpertNum, int sharedExpertRankNum, int globalBS, int commQuantMode, \
     int extInfo, int outDtype, int groupListType) -> Tensor");
+    m.def("all2_all_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId) -> Tensor");
+    m.def("reduce_scatter_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId, int op) -> Tensor");
+    m.def("cam_get_comm(int comm_id, int rank, int group_size, str server_ip_port) -> Tensor");
+    m.def("cam_free_comm(int comm_id) -> Tensor");
 }

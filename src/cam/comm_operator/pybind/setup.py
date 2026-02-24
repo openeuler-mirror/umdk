@@ -25,8 +25,10 @@ env_version = os.getenv("CAM_WHL_VERSION", "208.1.0.B001")
 torch_path = os.path.dirname(torch.__file__)
 torch_npu_spec = importlib.util.find_spec("torch_npu")
 torch_npu_path = os.path.dirname(torch_npu_spec.origin)
+cam_comm_path = os.environ["CAM_COMM_PATH"]
 print(f"torch_path: {torch_path}")
 print(f"torch_npu_path: {torch_npu_path}")
+print(f"cam_comm_path: {cam_comm_path}")
 PYTORCH_NPU_INSTALL_PATH = os.path.dirname(os.path.abspath(torch_npu_spec.origin))
 architecture = str(platform.machine())
 if architecture.startswith("x86"):
@@ -34,7 +36,7 @@ if architecture.startswith("x86"):
 else:
     arch = "aarch64"
 
-env_names = ["ASCEND_HOME_PATH"]
+env_names = ["CAM_COMM_PATH", "ASCEND_HOME_PATH"]
 for env_name in env_names:
     if env_name not in os.environ:
         print(f"{env_name} is not in env, please export {env_name} first")
@@ -55,6 +57,8 @@ exts = []
 ext1 = NpuExtension(
     name="umdk_cam_op_lib",
     include_dirs=[
+        os.path.join(os.environ["CAM_COMM_PATH"], 'include/'),
+        os.path.join(os.environ["CAM_COMM_PATH"], 'framework/communicator'),
         os.path.join(torch_npu_path, "include"),
         os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
         os.path.join(torch_npu_path, "include/third_party/acl/inc"),
@@ -66,22 +70,28 @@ ext1 = NpuExtension(
         os.path.join(os.path.dirname(__file__), "./", "pytorch_extension")],
 
     library_dirs=[
+        os.path.join(os.environ["CAM_COMM_PATH"], 'build/'),
         os.path.join(torch_path, "lib"),
         os.path.join(torch_npu_path, "lib"),
         os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64")],
     libraries=[
+        'cam_static',
         "torch_npu",
         "gcov",
         "runtime",
         "torch",
         "ascendcl",
-        "profapi"],
+        "profapi",
+        "nnopbase"],
     sources=["./fused_deep_moe.cpp",
              "./moe_dispatch_normal.cpp",
              "./moe_combine_normal.cpp",
              "./moe_dispatch_shmem.cpp",
              "./moe_combine_shmem.cpp",
              "./pybind.cpp",
+             "./ext_utils.cpp",
+             "./all2_all_detour.cpp",
+             "./reduce_scatter_detour.cpp"
             ],
     
     extra_compile_args = compile_args,

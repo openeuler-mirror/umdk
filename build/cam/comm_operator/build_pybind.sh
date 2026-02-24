@@ -21,6 +21,11 @@ build_pybind() {
     cp -rf $MODULE_SRC_PATH/pybind $MODULE_BUILD_PATH
     cp -rf $MODULE_SRC_PATH/pybind/pytorch_extension $BUILD_PATH
     cd $EXT_PATH
+    if [ -z "$CAM_COMM_PATH" ]; then
+        CAM_COMM_PATH=$MODULE_SRC_PATH
+        export CAM_COMM_PATH
+    fi
+    rm -rf build/ dist/ umdk_cam_op_lib_custom.egg-info/
     python3 setup.py bdist_wheel
     DIST_GEN_PATH=$EXT_PATH/dist
     if [ -d "$DIST_GEN_PATH" ]; then
