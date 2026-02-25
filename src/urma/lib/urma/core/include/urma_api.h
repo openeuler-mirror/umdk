@@ -887,6 +887,43 @@ urma_status_t urma_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_hand
 urma_status_t urma_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt,
                                uint32_t *tp_attr_bitmap, urma_tp_attr_value_t *tp_attr);
 
+/**
+ * get eid by ip info
+ * @param[in] ctx: the created urma context pointer;
+ * @param[in] net_addr: the ip info (type and net_addr are valid, vlan, mac, prefix_len will not be used);
+ * @param[out] eid: device's eid;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+ 
+/**
+ * get ip info by eid.
+ * @param[in] ctx: the created urma context pointer;
+ * @param[in] eid: device's eid;
+ * @param[out] net_addr: the ip info (type and net_addr are valid, vlan, mac, prefix_len will not be used);
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+
+ 
+/**
+ * get source mac address.
+
+ * @param[in] ctx: the created urma context pointer;
+ * @param[out] mac: the mac address of source;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
+ 
+/**
+ * get dest mac address.
+ * @param[in] ctx: the created urma context pointer;
+ * @param[in] net_addr: the ip info (type and net_addr are valid, vlan, mac, prefix_len will not be used);
+ * @param[out] mac: the mac address of dest;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
+
 #ifdef __cplusplus
 }
 #endif
