@@ -249,6 +249,71 @@ static bondp_ret_t import_matrix_port_seg_on_iodie(bondp_context_t *bdp_ctx, bon
     }
     return BONDP_SUCCESS;
 }
+
+static bool is_half_loopback(topo_map_t *topo_map, urma_eid_t *target_eid)
+{
+    for (int node_id = 0; node_id < MAX_NODE_NUM; node_id++) {
+        if (topo_map->topo_infos[node_id].is_current == 0) {
+            continue;
+        }
+        for (int dev_id = 0; dev_id < DEV_NUM; dev_id++) {
+            bondp_topo_agg_dev_t *agg_dev = &(topo_map->topo_infos[node_id].agg_devs[dev_id]);
+            if (memcmp(agg_dev->agg_eid, target_eid, sizeof(urma_eid_t)) == 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/* v_eid is virtual eid, refering to initiator or target bonding eid */
+static int get_v_eid_valid_port(topo_map_t *topo_map, urma_eid_t *v_eid, int *port)
+{
+    for (int node_id = 0; node_id < MAX_NODE_NUM; node_id++) {
+        if (topo_map->topo_infos[node_id].is_current == 0) {
+            continue;
+        }
+
+        for (int dev_id = 0; dev_id < DEV_NUM; dev_id++) {
+            bondp_topo_agg_dev_t *agg_dev = &(topo_map->topo_infos[node_id].agg_devs[dev_id]);
+            if (memcmp(agg_dev->agg_eid, v_eid, sizeof(urma_eid_t)) == 0) {
+                for (int port_id = 0; port_id < PORT_NUM; port_id++) {
+                    if (!is_empty_eid((urma_eid_t *)(agg_dev->ues[0].port_eid[port_id]))) {
+                        *port = port_id + PRIMARY_EID_NUM;
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+
+    return -1;
+}
+
+static bondp_ret_t bondp_import_seg_half_loopback(bondp_context_t *bdp_ctx,
+    bondp_seg_cfg_t *bondp_seg_cfg, urma_eid_t *target_eid)
+{
+    int local_port, target_port;
+
+    if (get_v_eid_valid_port(bdp_ctx->topo_map, &bdp_ctx->v_ctx.eid, &local_port) != 0) {
+        URMA_LOG_ERR("Failed to get local port.\n");
+        return BONDP_ERROR;
+    }
+
+    if (get_v_eid_valid_port(bdp_ctx->topo_map, target_eid, &target_port) != 0) {
+        URMA_LOG_ERR("Failed to get target port.\n");
+        return BONDP_ERROR;
+    }
+
+    bondp_ret_t ret = import_p_tseg(bdp_ctx, bondp_seg_cfg, local_port, target_port);
+    if (ret != BONDP_SUCCESS) {
+        URMA_LOG_ERR("Failed to import p target seg, ret: %d.\n", ret);
+    }
+
+    return ret;
+}
+
 /**
 * Obtain topology information via eid Direct connection paths,
 * between local and remote devices in direct_dev_info_t.
@@ -270,6 +335,11 @@ static bondp_ret_t import_matrix_port_seg_by_direct_route(bondp_context_t *bdp_c
     int target_port;
     int i = 0;
     int success_import_num = 0;
+
+    if (is_half_loopback(bdp_ctx->topo_map, &eid)) {
+        return bondp_import_seg_half_loopback(bdp_ctx, bondp_seg_cfg, &eid);
+    }
+    
     for (i = 0; i < direct_dev_info->direct_num; ++i) {
         local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
             direct_dev_info->local_map_idx[i].peer_port);
