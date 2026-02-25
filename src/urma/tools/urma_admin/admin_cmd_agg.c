@@ -166,11 +166,13 @@ static void nl_unexpose_device_by_eid(const char *eid, int ns_fd)
 
 static int nl_expose_agg_device(struct tool_topo_agg_dev *agg_dev, int ns_fd)
 {
+    struct ub_list ubep_list;
     int ret = 0;
     int ue_idx = 0;
     admin_device_info_t bonding_dev_info = {0};
 
-    ret = admin_get_device_info_by_eid((urma_eid_t *)agg_dev->agg_eid, &bonding_dev_info);
+    ub_list_init(&ubep_list);
+    ret = admin_get_device_info_by_eid((urma_eid_t *)agg_dev->agg_eid, &bonding_dev_info, &ubep_list);
     if (ret != 0) {
         printf("Failed to get device info for bonding device, ret=%d\n", ret);
         return ret;
@@ -205,7 +207,7 @@ static int nl_expose_agg_device(struct tool_topo_agg_dev *agg_dev, int ns_fd)
         tool_topo_ue_t *ue = &agg_dev->ues[ue_idx];
         admin_device_info_t primary_dev_info = {0};
 
-        ret = admin_get_device_info_by_eid((urma_eid_t *)ue->primary_eid, &primary_dev_info);
+        ret = admin_get_device_info_by_eid((urma_eid_t *)ue->primary_eid, &primary_dev_info, &ubep_list);
         if (ret != 0) {
             printf("Failed to get device info for primary device, ret=%d\n", ret);
             goto unexpose_agg_dev;
