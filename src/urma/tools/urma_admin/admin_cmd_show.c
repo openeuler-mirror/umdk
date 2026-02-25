@@ -761,6 +761,7 @@ void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
                 printf("\t UE %d:\n", iodie_idx);
             }
             printf("\t\t Socket id: %d\n", ue->socket_id);
+            printf("\t\t Entity id: %d\n", ue->entity_id);
             printf("\t\t Primary eid:\n");
             printf("\t\t\t %s\n", eid_str);
 
