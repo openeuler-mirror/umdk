@@ -20,9 +20,14 @@
 
 static int cmd_agg_usage(admin_config_t *cfg)
 {
-    printf("Usage: urma_admin agg add [ EID ]\n"
-           "       urma_admin agg del [ EID ]\n"
-           "       urma_admin agg expose [ EID ] [ NETNS ]\n");
+    printf("Usage:\n"
+           "  urma_admin agg add <eid>\n"
+           "  urma_admin agg del <eid>\n"
+           "  urma_admin agg expose <eid> <netns>\n"
+           "\n"
+           "Options:\n"
+           "  <eid>    EID value\n"
+           "  <netns>  Network namespace path (e.g., /proc/$pid/ns/net)\n");
     return 0;
 }
 
