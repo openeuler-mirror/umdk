@@ -1297,6 +1297,13 @@ int check_local_cfg(perftest_config_t *cfg)
         exit(1);
     }
 
+    if (cfg->use_ctp) {
+        // Hacky: CTP must use priority 6, will query for available prioritues instead
+        const uint8_t ctp_priority = 6;
+        cfg->priority = ctp_priority;
+        (void)fprintf(stderr, "Warning: ctp should set priority to %hhu.\n", ctp_priority);
+    }
+
     return 0;
 }
 
