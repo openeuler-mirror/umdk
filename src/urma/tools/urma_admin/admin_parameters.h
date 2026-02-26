@@ -25,7 +25,7 @@
 
 #define MAX_NODE_NUM            (16)
 #define EID_LEN                 (16)
-#define PORT_NUM            (9)
+#define PORT_NUM                (9)
 #define IODIE_NUM               (2)
 #define DEV_NUM                 (128)
 #define URMA_ADMIN_MAX_DEV_NAME 64
@@ -241,7 +241,7 @@ typedef struct tool_topo_info {
     uint32_t is_current;
     tool_topo_link_t links[IODIE_NUM][PORT_NUM];
     tool_topo_agg_dev_t agg_devs[DEV_NUM];
-}  tool_topo_info_t;
+} tool_topo_info_t;
 
 typedef struct tool_topo_map {
     tool_topo_info_t topo_infos[MAX_NODE_NUM];
@@ -300,7 +300,9 @@ int admin_str_to_u8(const char *buf, uint8_t *u8);
 int admin_str_to_u16(const char *buf, uint16_t *u16);
 int admin_str_to_u32(const char *buf, uint32_t *u32);
 int admin_str_to_u64(const char *buf, uint64_t *u64);
-int admin_parse_args(admin_config_t *cfg);
+
+int admin_parse_dev_name(char *buf, admin_config_t *cfg);
+int admin_parse_ns(char *buf, admin_config_t *cfg);
 
 typedef struct admin_cmd {
     char *name;

@@ -9,10 +9,10 @@
  */
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <ctype.h>
 
 #include "admin_file_ops.h"
 #include "admin_log.h"
@@ -188,28 +187,7 @@ static bool check_dev_name(char *dev_name)
     return ret;
 }
 
-static const struct option g_urma_admin_long_options[] = {
-    {"help", no_argument, NULL, 'h'},                //
-    {"dev", required_argument, NULL, 'd'},           //
-    {"eid", required_argument, NULL, 'e'},           //
-    {"eid_mode", no_argument, NULL, 'm'},            //
-    {"ue_idx", required_argument, NULL, 'v'},        //
-    {"idx", required_argument, NULL, 'i'},           //
-    {"whole", no_argument, NULL, 'w'},               //
-    {"resource_type", required_argument, NULL, 'R'}, //
-    {"key", required_argument, NULL, 'k'},           //
-    {"key_ext", required_argument, NULL, 'K'},       //
-    {"key_cnt", required_argument, NULL, 'C'},       //
-    {"ns", required_argument, NULL, 'n'},            //
-    {"ns_mode", required_argument, NULL, 'M'},       //
-    {"min_id", required_argument, NULL, 'l'},        //
-    {"max_id", required_argument, NULL, 'u'},        //
-    {"priority", required_argument, NULL, 'p'},      //
-    {"sl", required_argument, NULL, 's'},            //
-    {NULL, no_argument, NULL, '\0'},                 //
-};
-
-static int admin_parse_dev_name(char *buf, admin_config_t *cfg)
+int admin_parse_dev_name(char *buf, admin_config_t *cfg)
 {
     if (strnlen(buf, URMA_ADMIN_MAX_DEV_NAME) + 1 > URMA_ADMIN_MAX_DEV_NAME || check_dev_name(buf) == false) {
         (void)printf("dev_name:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_DEV_NAME);
@@ -221,7 +199,7 @@ static int admin_parse_dev_name(char *buf, admin_config_t *cfg)
     return 0;
 }
 
-static int admin_parse_ns(char *buf, admin_config_t *cfg)
+int admin_parse_ns(char *buf, admin_config_t *cfg)
 {
     if (strnlen(buf, URMA_ADMIN_MAX_NS_PATH) + 1 > URMA_ADMIN_MAX_NS_PATH) {
         (void)printf("ns path:%s out of range(%d) or invalid.\n", buf, URMA_ADMIN_MAX_NS_PATH);
@@ -251,81 +229,6 @@ static int admin_parse_sharing(char *buf, admin_config_t *cfg)
         URMA_ADMIN_LOG("Invalid sharing mode:%s, expect 'on' or 'off'.\n", buf);
         return -1;
     }
-    return 0;
-}
-
-int admin_parse_args(admin_config_t *cfg)
-{
-    int ret = 0;
-    while (1) {
-        int c = getopt_long(cfg->argc, cfg->argv, "C:hd:e:mv:i:wR:k:K:n:M:p:s:u:l:", g_urma_admin_long_options, NULL);
-        if (c == -1) {
-            break;
-        }
-        switch (c) {
-            case 'C':
-                ret = admin_str_to_u32(optarg, &cfg->key.key_cnt);
-                break;
-            case 'h':
-                cfg->help = true;
-                break;
-            case 'd':
-                ret = admin_parse_dev_name(optarg, cfg);
-                break;
-            case 'e':
-                (void)admin_str_to_eid(optarg, &cfg->eid);
-                break;
-            case 'm':
-                cfg->dynamic_eid_mode = true;
-                break;
-            case 'v':
-                ret = admin_str_to_u16(optarg, &cfg->ue_idx);
-                break;
-            case 'i':
-                ret = admin_str_to_u16(optarg, &cfg->idx);
-                break;
-            case 'w':
-                cfg->whole_info = true;
-                break;
-            case 'R':
-                ret = admin_str_to_u32(optarg, &cfg->key.type);
-                break;
-            case 'k':
-                ret = admin_str_to_u32(optarg, &cfg->key.key);
-                break;
-            case 'K':
-                ret = admin_str_to_u32(optarg, &cfg->key.key_ext);
-                break;
-            case 'n':
-                ret = admin_parse_ns(optarg, cfg);
-                break;
-            case 'M':
-                ret = admin_str_to_u8(optarg, &cfg->ns_mode);
-                break;
-            case 'p':
-                ret = admin_str_to_u8(optarg, &cfg->priority);
-                break;
-            case 's':
-                ret = admin_str_to_u8(optarg, &cfg->SL);
-                break;
-            case ':':
-                printf("Option -%c requires an argument\n", optopt);
-                URMA_ADMIN_LOG("Option -%c requires an argument\n", optopt);
-                return -EINVAL;
-            default:
-                printf("Unknown option\n");
-                URMA_ADMIN_LOG("Unknown option\n");
-                return -EINVAL;
-        }
-        if (ret != 0) {
-            printf("Invalid option\n");
-            URMA_ADMIN_LOG("Invalid option\n");
-            return -EINVAL;
-        }
-    }
-
-    cfg->argc -= optind;
-    cfg->argv += optind;
     return 0;
 }
 
@@ -434,8 +337,10 @@ int pop_arg_eid_mode(admin_config_t *cfg)
  * @param s 输入字符串
  * @return 1 表示是纯数字，0 表示不是或为空
  */
-static bool is_numeric_string(const char *s) {
-    if (!s || *s == '\0') return false;
+static bool is_numeric_string(const char *s)
+{
+    if (!s || *s == '\0')
+        return false;
     for (const char *p = s; *p != '\0'; ++p) {
         if (!isdigit((unsigned char)*p)) {
             return false;
