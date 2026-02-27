@@ -140,7 +140,7 @@ private:
     LocalTensor<float> gmTpSendCountFloatTensor_;
     LocalTensor<ExpandIdxType> epSendCountLocal_;
 
-    // tiling侧已确保数据上限， 相乘不会越界，因此统一采用uin32_t进行处理
+    // tiling侧已确保数据上限， 相乘不会越界，因此统一采用uint32_t进行处理
     uint32_t axisBS_{0};
     uint32_t axisMaxBS_{0};
     uint32_t axisH_{0};
@@ -242,7 +242,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::Init(
     epRankId_ = tilingData->moeDistributeCombineInfo.epRankId;
     GM_ADDR statusDataSpaceGm;
     GlobalTensor<int32_t> selfDataStatusTensor;
-    gva_gm = (GM_ADDR)tilingData->moeDistributeCombineInfo.shmemptr;
+    gva_gm = (GM_ADDR)tilingData->moeDistributeCombineInfo.shmemPtr;
     statusDataSpaceGm = (GM_ADDR)(gva_gm);
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm));
 

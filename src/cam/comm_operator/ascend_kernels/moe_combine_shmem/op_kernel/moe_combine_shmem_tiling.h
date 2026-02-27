@@ -7,8 +7,8 @@
  * History: 2026-01-06 create shmem combine tiling header file
  */
 
-#ifndef ASCENDC_COMM_MOE_CMOBINE_SHMEM_TILING_H
-#define ASCENDC_COMM_MOE_CMOBINE_SHMEM_TILING_H
+#ifndef ASCENDC_COMM_MOE_COMBINE_SHMEM_TILING_H
+#define ASCENDC_COMM_MOE_COMBINE_SHMEM_TILING_H
 
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
@@ -32,7 +32,7 @@ struct MoeCombineShmemInfo {
     uint64_t totalUbSize;
     uint64_t totalWinSize;
     uint64_t magic;
-    uint64_t shmemptr;  // shmem ptr
+    uint64_t shmemPtr;  // shmem ptr
 };
 struct MoeCombineShmemTilingData {
     Mc2InitTiling mc2InitTiling;
@@ -41,4 +41,4 @@ struct MoeCombineShmemTilingData {
     MoeCombineShmemInfo moeDistributeCombineInfo;
 };
 } // namespace Moe
-#endif  //__ASCENDC_COMM_MOE_CMOBINE_SHMEM_TILING_H__
+#endif  //__ASCENDC_COMM_MOE_COMBINE_SHMEM_TILING_H__

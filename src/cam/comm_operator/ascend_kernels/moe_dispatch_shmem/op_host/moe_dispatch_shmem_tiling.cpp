@@ -444,9 +444,9 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.moeDistributeDispatchInfo.moeExpertNum = static_cast<uint32_t>(*moeExpertNumPtr);
     tilingData.moeDistributeDispatchInfo.quantMode = static_cast<uint32_t>(*quantModePtr);
     tilingData.moeDistributeDispatchInfo.expertTokenNumsType = static_cast<uint32_t>(*expertTokenNumsTypePtr);
-    tilingData.moeDistributeDispatchInfo.shmemptr = static_cast<uint64_t>(*shmemPtr);
+    tilingData.moeDistributeDispatchInfo.shmemPtr = static_cast<uint64_t>(*shmemPtr);
 
-    OPS_LOG_I(nodeName, "shmemPtr send to tilingInfo is %ld", tilingData.moeDistributeDispatchInfo.shmemptr);
+    OPS_LOG_I(nodeName, "shmemPtr send to tilingInfo is %ld", tilingData.moeDistributeDispatchInfo.shmemPtr);
 
     return ge::GRAPH_SUCCESS;
 }
