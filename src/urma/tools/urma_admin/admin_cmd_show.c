@@ -15,6 +15,7 @@
 #include "ub_list.h"
 #include "urma_types.h"
 #include "urma_types_str.h"
+#include "urma_private.h"
 
 #include "admin_file_ops.h"
 #include "admin_log.h"
@@ -578,52 +579,83 @@ free_list:
     return ret;
 }
 
-int admin_get_device_info_by_eid(const urma_eid_t *eid, admin_device_info_t *device_info, 
-                                 struct ub_list *ubep_list)
+int admin_get_eid_list_by_eid(urma_eid_t *eid, urma_eid_info_t **eid_info_list, char* dev_name)
 {
     int ret = 0;
-    admin_show_ubep_t *ubep, *next;
-    admin_config_t cfg = {0};
-    cfg.specify_device = false;
-    admin_show_ubep_t *ubep_info = NULL;
+    int dev_fd = -1;
+    DIR *dir = NULL;
+    struct dirent *entry = NULL;
+    char dev_path[URMA_MAX_PATH] = {0};
+    urma_eid_info_t *tmp_eid_list = NULL;
+    uint32_t eid_cnt = 0;
+    bool found = false;
 
-    if (ub_list_is_empty(ubep_list)) {
-        ret = find_ubep_list(ubep_list, &cfg);
-        if (ret != 0) {
-            (void)printf("Failed to find ubep.\n");
-            return ret;
-        }
+    if (eid == NULL || dev_name == NULL || eid_info_list == NULL) {
+        printf("Invalid input parameters.\n");
+        return -1;
     }
 
-    UB_LIST_FOR_EACH_SAFE(ubep, next, node, ubep_list) {
-        if (ubep == NULL) {
-            break;
+    dir = opendir("/dev/uburma");
+    if (dir == NULL) {
+        printf("Failed to open /dev/uburma directory.\n");
+        return -1;
+    }
+
+    tmp_eid_list = (urma_eid_info_t *)calloc(1, URMA_MAX_EID_CNT * sizeof(urma_eid_info_t));
+    if (tmp_eid_list == NULL) {
+        printf("Failed to allocate memory for EID list.\n");
+        closedir(dir);
+        return -1;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
         }
-        for (uint32_t i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
-            if (is_eid_equal(&ubep->eid_list[i].eid, eid)) {
-                ubep_info = ubep;
+
+        if (snprintf(dev_path, URMA_MAX_PATH, "%s/%s", "/dev/uburma", entry->d_name) <= 0) {
+            printf("Failed to construct device path.\n");
+            continue;
+        }
+
+        dev_fd = urma_open_cdev(dev_path);
+        if (dev_fd < 0) {
+            printf("Failed to open device %s\n", entry->d_name);
+            continue;
+        }
+
+        ret = urma_cmd_get_eid_list(dev_fd, URMA_MAX_EID_CNT, tmp_eid_list, &eid_cnt);
+        if (ret != 0) {
+            printf("Device %s has no EID configured\n", entry->d_name);
+            close(dev_fd);
+            continue;
+        }
+
+        for (uint32_t i = 0; i < eid_cnt; i++) {
+            if (memcmp(&tmp_eid_list[i].eid, eid, sizeof(urma_eid_t)) == 0) {
+                found = true;
+                strncpy(dev_name, entry->d_name, URMA_MAX_NAME - 1);
+                dev_name[URMA_MAX_NAME - 1] = '\0';
+                *eid_info_list = tmp_eid_list;
                 break;
             }
         }
-    }
-    ret = (ubep_info != NULL) ? 0 : -1;
-    if (ret == 0) {
-        memcpy(device_info->dev_name, ubep_info->dev_name, sizeof(device_info->dev_name));
-        memcpy(device_info->net_dev_name, ubep_info->net_dev_name, sizeof(device_info->net_dev_name));
-        memcpy(&device_info->dev_attr, &ubep_info->dev_attr, sizeof(urma_device_attr_t));
-        memcpy(&device_info->tp_type, &ubep_info->tp_type, sizeof(urma_transport_type_t));
 
-        device_info->eid_list = calloc(1, ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
-        if (device_info->eid_list == NULL) {
-            (void)printf("Failed to malloc eid_list.\n");
-            ret = -1;
-        } else {
-            memcpy(device_info->eid_list, ubep_info->eid_list,
-                   ubep_info->dev_attr.dev_cap.max_eid_cnt * sizeof(urma_eid_info_t));
+        close(dev_fd);
+
+        if (found) {
+            break;
         }
     }
+    closedir(dir);
 
-    return ret;
+    if (!found) {
+        printf("EID not found.\n");
+        urma_free_eid_list(tmp_eid_list);
+        return -1;
+    }
+
+    return 0;
 }
 
 bool admin_is_eid_valid(const char *eid)
