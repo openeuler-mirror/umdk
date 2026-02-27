@@ -173,7 +173,7 @@ int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev, uint32_t eid_index, ur
     }
 }
 
-static int urma_query_device_attr(urma_sysfs_dev_t *sysfs_dev)
+int urma_query_device_attr(urma_sysfs_dev_t *sysfs_dev)
 {
     char cdev_path[URMA_MAX_PATH] = {0};
 
