@@ -33,7 +33,7 @@ urma_status_t urma_init(urma_init_attr_t *conf);
 urma_status_t urma_uninit(void);
 
 /* Device Manage API */
-/**
+ /**
  *  Get device list.
  * @param[out] num_devices: number of urma device;
  * Return: pointer array of urma_device; NULL means no device returned;
@@ -50,19 +50,19 @@ urma_device_t **urma_get_device_list(int *num_devices);
 void urma_free_device_list(urma_device_t **device_list);
 
 /**
- *  Get eid list.
- * @param[in] [Required] dev: device pointer
- * @param[out] cnt: Return the number of valid eids;
- * Return: If it succeeds, it will return the eid_info array pointer, and the number of elements
- * is cnt; if it fails, it will return NULL; it will be released by the user calling
- */
+*  Get eid list.
+* @param[in] [Required] dev: device pointer
+* @param[out] cnt: Return the number of valid eids;
+* Return: If it succeeds, it will return the eid_info array pointer, and the number of elements
+* is cnt; if it fails, it will return NULL; it will be released by the user calling
+*/
 urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt);
 
 /**
- *  free eid list.
- * @param[in] [Required] eid_list: The eid array pointer to be released
- * Return: void;
- */
+*  free eid list.
+* @param[in] [Required] eid_list: The eid array pointer to be released
+* Return: void;
+*/
 void urma_free_eid_list(urma_eid_info_t *eid_list);
 
 /**
@@ -72,7 +72,7 @@ void urma_free_eid_list(urma_eid_info_t *eid_list);
  */
 urma_device_t *urma_get_device_by_name(char *dev_name);
 
-/**
+ /**
  *  Get device by device eid.
  * @param[in] [Required] eid: device's eid;
  * @param[in] [Required] type: device's transport type;
@@ -133,6 +133,57 @@ urma_status_t urma_modify_jfc(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_delete_jfc(urma_jfc_t *jfc);
+
+/**
+ * Alloc a jfc.
+ * @param[in] [Required] urma_ctx: the urma context created before;
+ * @param[in] [Required] cfg: configuration including: depth, flag, jfce, user context;
+ * @param[out] [Required] jfc: handle of the allocated jfc;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma_jfc_t **jfc);
+
+/**
+ * Set the opt of jfc.
+ * @param[in] [Required] jfc: the jfc allocated before;
+ * @param[in] [Required] opt: the opt to change cfg of jfc;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[in] [Required] buf: the buffer containing the value to set;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Active the allocated jfc.
+ * @param[in] [Required] jfc: the jfc allocated before;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_active_jfc(urma_jfc_t *jfc);
+
+/**
+ * Get the opt of jfc.
+ * @param[in] [Required] jfc: the jfc allocated before;
+ * @param[in] [Required] opt: the opt to change cfg of jfc;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[out] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Deactive the created jfc.
+ * @param[in] [Required] jfc: the jfc actived before;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_deactive_jfc(urma_jfc_t *jfc);
+
+/**
+ * Free the created jfc.
+ * @param[in] [Required] jfc: the jfc allocated before;
+ * After free, the jfc pointer is no longer allowed to be accessed.
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_free_jfc(urma_jfc_t *jfc);
 
 /**
  * Delete the created jfc in a batch.
@@ -202,6 +253,57 @@ urma_status_t urma_delete_jfs_batch(urma_jfs_t **jfs_arr, int jfs_num, urma_jfs_
 int urma_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
 
 /**
+ * Alloc a jfs.
+ * @param[in] [Required] urma_ctx: the urma context created before;
+ * @param[in] [Required] cfg: configuration including: depth, flag, jfce, user context;
+ * @param[out] [Required] jfs: handle of the allocated jfs;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma_jfs_t **jfs);
+
+/**
+ * Set the opt of jfs.
+ * @param[in] [Required] jfs: the jfs allocated before;
+ * @param[in] [Required] opt: the opt to change cfg of jfs;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[in] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Active the created jfs.
+ * @param[in] [Required] jfs: the jfs allocated before;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_active_jfs(urma_jfs_t *jfs);
+
+/**
+ * Get the opt of jfs.
+ * @param[in] [Required] jfs: the jfs allocated before;
+ * @param[in] [Required] opt: the opt to change cfg of jfs;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[out] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Deactive the created jfs.
+ * @param[in] [Required] jfs: the jfs actived before;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_deactive_jfs(urma_jfs_t *jfs);
+
+/**
+ * Free the created jfs.
+ * @param[in] [Required] jfs: the jfs allocated before;
+ * After free, the jfs pointer is no longer allowed to be accessed.
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_free_jfs(urma_jfs_t *jfs);
+
+ /**
  * Create a jetty for receive (jfr).
  * @param[in] [Required] ctx: the urma context created before;
  * @param[in] [Required] jfr_cfg: address to put the jfr config;
@@ -267,7 +369,7 @@ urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urm
  * Return: the address of target jfr, not NULL on success, NULL on error
  */
 urma_target_jetty_t *urma_import_jfr_ex(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *token_value,
-                                        urma_import_jfr_ex_cfg_t *cfg);
+    urma_import_jfr_ex_cfg_t *cfg);
 
 /**
  * Unimport the imported remote jfr.
@@ -305,6 +407,57 @@ urma_status_t urma_advise_jfr_async(urma_jfs_t *jfs, urma_target_jetty_t *tjfr, 
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_unadvise_jfr(urma_jfs_t *jfs, urma_target_jetty_t *tjfr);
+
+/**
+ * Alloc a jfr.
+ * @param[in] [Required] urma_ctx: the urma context created before;
+ * @param[in] [Required] cfg: configuration including: depth, flag, jfce, user context;
+ * @param[out] [Required] jfr: handle of the allocated jfr;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma_jfr_t **jfr);
+
+/**
+ * Set the opt of jfr.
+ * @param[in] [Required] jfr: handle of the allocated jfr;
+ * @param[in] [Required] opt: the opt to change cfg of jfr;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[in] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Active the allocated jfr.
+ * @param[in] [Required] jfr: handle of the allocated jfr;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_active_jfr(urma_jfr_t *jfr);
+
+/**
+ * Get the opt of jfr.
+ * @param[in] [Required] jfr: handle of the allocated jfr;
+ * @param[in] [Required] opt: the opt to change cfg of jfr;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[out] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Deactive the actived jfr.
+ * @param[in] [Required] jfr: handle of the allocated jfr;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_deactive_jfr(urma_jfr_t *jfr);
+
+/**
+ * Free the allocated jfr.
+ * @param[in] [Required] jfr: handle of the allocated jfr;
+ * After free, the jfr pointer is no longer allowed to be accessed.
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_free_jfr(urma_jfr_t *jfr);
 
 /**
  ******************** Beginning of URMA JETTY APIs ***************************
@@ -454,7 +607,7 @@ int urma_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
  * Return: the address of target jetty, not NULL on success, NULL on error
  */
 urma_target_jetty_t *urma_import_jetty_async(urma_notifier_t *notifier, const urma_rjetty_t *rjetty,
-                                             const urma_token_t *token_value, uint64_t user_ctx, int timeout);
+    const urma_token_t *token_value, uint64_t user_ctx, int timeout);
 
 /**
  * Unimport the imported remote jetty asynchronously.
@@ -496,6 +649,57 @@ urma_notifier_t *urma_create_notifier(urma_context_t *ctx);
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_delete_notifier(urma_notifier_t *notifier);
+
+/**
+ * Alloc a jetty.
+ * @param[in] [Required] urma_ctx: the urma context created before;
+ * @param[in] [Required] jetty_cfg: configuration including: depth, flag, jfce, user context;
+ * @param[out] [Required] jetty: handle of the allocated jetty;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, urma_jetty_t **jetty);
+
+/**
+ * Set the opt of jetty.
+ * @param[in] [Required] jetty: handle of the allocated jetty;
+ * @param[in] [Required] opt: the opt to change cfg of jetty;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[in] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Active the allocated jetty.
+ * @param[in] [Required] jetty: handle of the allocated jetty;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_active_jetty(urma_jetty_t *jetty);
+
+/**
+ * Get the opt of jetty.
+ * @param[in] [Required] jetty: handle of the allocated jetty;
+ * @param[in] [Required] opt: the opt to change cfg of jetty;
+ * @param[in] [Required] len: the len of the opt value(byte);
+ * @param[out] [Required] buf: the buffer to store the value;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
+
+/**
+ * Deactive the actived jetty.
+ * @param[in] [Required] jetty: handle of the allocated jetty;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_deactive_jetty(urma_jetty_t *jetty);
+
+/**
+ * Free the allocated jetty.
+ * @param[in] [Required] jetty: handle of the allocated jetty;
+ * After free, the jfc pointer is no longer allowed to be accessed.
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_free_jetty(urma_jetty_t *jetty);
 
 /**
  * Wait for asynchronous event notification to obtain the connection establishment result.
@@ -842,7 +1046,7 @@ void urma_free_net_addr_list(urma_net_addr_info_t *net_addr_list);
  * Return: 0 on success; other values on error
  */
 int urma_modify_tp(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg, urma_tp_attr_t *attr,
-                   urma_tp_attr_mask_t mask);
+    urma_tp_attr_mask_t mask);
 
 /**
  * get available tp list from control plane.
@@ -895,7 +1099,7 @@ urma_status_t urma_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_hand
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
- 
+
 /**
  * get ip info by eid.
  * @param[in] ctx: the created urma context pointer;
@@ -905,7 +1109,7 @@ urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_
  */
 urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
 
- 
+
 /**
  * get source mac address.
 
@@ -914,7 +1118,7 @@ urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *ei
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
- 
+
 /**
  * get dest mac address.
  * @param[in] ctx: the created urma context pointer;
@@ -925,7 +1129,7 @@ urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
 urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 
 #ifdef __cplusplus
-}
+ }
 #endif
 
 #endif

@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 
 #ifndef __cplusplus
@@ -40,6 +41,7 @@ extern "C" {
 #define URMA_MAX_EID_CNT            1024 /* refer to UBCORE_MAX_SIP */
 #define URMA_CC_IDX_TABLE_SIZE      81   /* support 9 priorities and 9 algorithms */
                                          /* same as UBCORE_CC_IDX_TABLE_SIZE */
+#define URMA_OPT_REVERSED_NUM 4
 
 #define URMA_EID_STR_LEN (39)
 #define EID_FMT          "%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x"
@@ -55,6 +57,30 @@ extern "C" {
 
 #define URMA_IP_ADDR_BYTES 16 /* refer to UBCORE_IP_ADDR_BYTES */
 #define URMA_MAC_BYTES     6  /* refer to UBCORE_MAC_BYTES */
+
+#define URMA_JFS_SQE_BASE_ADDR_MASK       (1ULL << 0)
+#define URMA_JFS_ID_MASK                  (1ULL << 1)
+#define URMA_JFS_DB_ADDR_MASK             (1ULL << 2)
+#define URMA_JFS_DB_STATUS_MASK           (1ULL << 3)
+#define URMA_JFS_PI_MASK                  (1ULL << 4)
+#define URMA_JFS_PI_TYPE_MASK             (1ULL << 5)
+#define URMA_JFS_CI_MASK                  (1ULL << 6)
+
+#define URMA_JFR_RQE_BASE_ADDR_MASK       (1ULL << 0)
+#define URMA_JFR_ID_MASK                  (1ULL << 1)
+#define URMA_JFR_DB_ADDR_MASK             (1ULL << 2)
+#define URMA_JFR_DB_STATUS_MASK           (1ULL << 3)
+#define URMA_JFR_PI_MASK                  (1ULL << 4)
+#define URMA_JFR_PI_TYPE_MASK             (1ULL << 5)
+#define URMA_JFR_CI_MASK                  (1ULL << 6)
+
+#define URMA_JFC_CQE_BASE_ADDR_MASK       (1ULL << 0)
+#define URMA_JFC_ID_MASK                  (1ULL << 1)
+#define URMA_JFC_DB_ADDR_MASK             (1ULL << 2)
+#define URMA_JFC_DB_STATUS_MASK           (1ULL << 3)
+#define URMA_JFC_PI_MASK                  (1ULL << 4)
+#define URMA_JFC_PI_TYPE_MASK             (1ULL << 5)
+#define URMA_JFC_CI_MASK                  (1ULL << 6)
 
 typedef struct urma_init_attr {
     uint64_t token; /* [Optional] security token */
@@ -428,6 +454,34 @@ typedef struct urma_jetty_id urma_jfs_id_t;
 typedef struct urma_jetty_id urma_jfr_id_t;
 typedef struct urma_jetty_id urma_jfc_id_t;
 
+union urma_jfc_opt_mask {
+    struct {
+        uint64_t urma_jfc_cqe_base_addr : 1;
+        uint64_t urma_jfc_db_addr : 1;
+        uint64_t urma_jfc_id : 1;
+        uint64_t urma_jfc_pi : 1;
+        uint64_t urma_jfc_pi_type : 1;
+        uint64_t urma_jfc_ci : 1;
+        uint64_t urma_jfc_db_status : 1;
+        uint64_t reserved : 57;
+    } bs;
+    uint64_t value;
+};
+
+typedef struct urma_jfc_opt {
+    union urma_jfc_opt_mask jfc_opt_mask; /* bit0:cqe_base_addr, bit1:db_addr, bit2:id, bit3:pi, bit4:pi_type,
+                                            bit5:ci, bit6:db_status */
+    bool is_actived;
+    uint64_t urma_jfc_cqe_base_addr; /* [Optional] CQ Queue Address (VA) */
+    uint32_t urma_jfc_id;      /* [Optional] the id of jfc */
+    uint64_t urma_jfc_db_addr; /* [Optional] CQ Queue Doorbell Address (VA) */
+    uint8_t urma_jfc_db_status; /* [Optional] JFC Doorbell status, used for live migration (0 invalid, 1 valid) */
+    uint16_t urma_jfc_pi;     /* [Optional] PI value of the JFC */
+    uint16_t urma_jfc_pi_type; /* [Optional] PI type, 0: absolute value, 1: cumulative value */
+    uint16_t urma_jfc_ci;     /* [Optional] CI value of the JFC */
+    uint64_t reserved[URMA_OPT_REVERSED_NUM];
+} urma_jfc_opt_t;
+
 typedef struct urma_jfc {
     urma_context_t *urma_ctx; /* [Private] point to urma context. */
     urma_jfc_id_t jfc_id;     /* [Public] see urma_jetty_id. */
@@ -437,6 +491,7 @@ typedef struct urma_jfc {
     pthread_cond_t event_cond;
     uint32_t comp_events_acked;
     uint32_t async_events_acked;
+    urma_jfc_opt_t urma_jfc_opt;
 } urma_jfc_t;
 
 #define URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
@@ -467,6 +522,34 @@ typedef union urma_jfs_flag {
     uint32_t value;
 } urma_jfs_flag_t;
 
+union urma_jfs_opt_mask {
+    struct {
+        uint64_t urma_jfs_cqe_base_addr : 1;
+        uint64_t urma_jfs_db_addr : 1;
+        uint64_t urma_jfs_id : 1;
+        uint64_t urma_jfs_pi : 1;
+        uint64_t urma_jfs_pi_type : 1;
+        uint64_t urma_jfs_ci : 1;
+        uint64_t urma_jfs_db_status : 1;
+        uint64_t reserved : 57;
+    } bs;
+    uint64_t value;
+};
+
+typedef struct urma_jfs_opt {
+    union urma_jfs_opt_mask jfs_opt_mask; /* bit0:sqe_base_addr, bit1:db_addr, bit2:id, bit3:pi, bit4:pi_type,
+                                            bit5:ci, bit6:db_status */
+    bool is_actived;
+    uint64_t urma_jfs_sqe_base_addr; /* [Optional] SQ Queue Address (VA) */
+    uint32_t urma_jfs_id;     /* [Optional] the id of jfs */
+    uint64_t urma_jfs_db_addr; /* [Optional] SQ Queue Doorbell Address (VA) */
+    uint8_t urma_jfs_db_status; /* [Optional] JFS Doorbell status, used for live migration (0 invalid, 1 valid) */
+    uint16_t urma_jfs_pi;     /* [Optional] PI value of the JFS */
+    uint16_t urma_jfs_pi_type; /* [Optional] PI type, 0: absolute value, 1: cumulative value */
+    uint16_t urma_jfs_ci;     /* [Optional] CI value of the JFS */
+    uint64_t reserved[URMA_OPT_REVERSED_NUM];
+} urma_jfs_opt_t;
+
 typedef struct urma_jfs_cfg {
     uint32_t depth;                   /* [Required] the depth of jfs, defaut urma_device_cap_t->jfs_depth */
     urma_jfs_flag_t flag;             /* [Optional] see urma_jfs_flag_t definition */
@@ -495,6 +578,7 @@ typedef struct urma_jfs {
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
+    urma_jfs_opt_t urma_jfs_opt;
 } urma_jfs_t;
 
 typedef enum urma_jfs_attr_mask {
@@ -527,6 +611,34 @@ typedef union urma_jfr_flag {
     } bs;
     uint32_t value;
 } urma_jfr_flag_t;
+
+union urma_jfr_opt_mask {
+    struct {
+        uint64_t urma_jfr_cqe_base_addr : 1;
+        uint64_t urma_jfr_db_addr : 1;
+        uint64_t urma_jfr_id : 1;
+        uint64_t urma_jfr_pi : 1;
+        uint64_t urma_jfr_pi_type : 1;
+        uint64_t urma_jfr_ci : 1;
+        uint64_t urma_jfr_db_status : 1;
+        uint64_t reserved : 57;
+    } bs;
+    uint64_t value;
+};
+
+typedef struct urma_jfr_opt {
+    union urma_jfr_opt_mask jfr_opt_mask; /* bit0:rqe_base_addr, bit1:db_addr, bit2:id, bit3:pi, bit4:pi_type,
+                                        bit5:ci, bit6:db_status */
+    bool is_actived;
+    uint64_t urma_jfr_rqe_base_addr; /* [Optional] RQ Queue Address (VA) */
+    uint32_t urma_jfr_id;     /* [Optional] the id of jfr */
+    uint64_t urma_jfr_db_addr; /* [Optional] RQ Queue Doorbell Address (VA) */
+    uint8_t urma_jfr_db_status; /* [Optional] JFR Doorbell status, used for live migration (0 invalid, 1 valid) */
+    uint16_t urma_jfr_pi;     /* [Optional] PI value of the JFR */
+    uint16_t urma_jfr_pi_type; /* [Optional] PI type, 0: absolute value, 1: cumulative value */
+    uint16_t urma_jfr_ci;     /* [Optional] CI value of the JFR */
+    uint64_t reserved[URMA_OPT_REVERSED_NUM];
+} urma_jfr_opt_t;
 
 typedef struct urma_jfr_cfg {
     uint32_t id;                      /* [Optional] specify jfr id. If the parameter is 0,
@@ -561,6 +673,7 @@ typedef struct urma_jfr {
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
+    urma_jfr_opt_t urma_jfr_opt;
 } urma_jfr_t;
 
 typedef union urma_import_jetty_flag {
@@ -668,6 +781,12 @@ typedef struct urma_jetty_attr {
     urma_jetty_state_t state;
 } urma_jetty_attr_t;
 
+typedef struct urma_jetty_opt {
+    bool is_actived;
+    urma_jfs_opt_t jfs_opt;
+    uint64_t reserved[URMA_OPT_REVERSED_NUM];
+} urma_jetty_opt_t;
+
 typedef struct urma_jetty {
     urma_context_t *urma_ctx;          /* [Private] point to urma context. */
     urma_jetty_id_t jetty_id;          /* [Public] see urma_jetty_id. */
@@ -678,6 +797,7 @@ typedef struct urma_jetty {
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
+    urma_jetty_opt_t urma_jetty_opt;
 } urma_jetty_t;
 
 typedef struct urma_notifier {
@@ -742,6 +862,7 @@ typedef struct urma_ubva {
     uint32_t uasid; // 24 bit for UB
     uint64_t va;
 } __attribute__((packed)) urma_ubva_t;
+
 
 /* segment definition */
 typedef union urma_reg_seg_flag {
