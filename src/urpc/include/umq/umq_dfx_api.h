@@ -27,6 +27,16 @@ int umq_stats_flow_control_get(uint64_t umqh, umq_flow_control_stats_t *flow_con
 
 /**
  * Thread safety function
+ * Convert flow control statistical results to string.
+ * @param[in] flow_control_stats: flow control statistical results
+ * @param[out] buf: buffer to store the string
+ * @param[in] max_buf_len: length of the buffer
+ * Return 0 on success, error code on failure
+ */
+int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_stats, char *buf, int max_buf_len);
+
+/**
+ * Thread safety function
  * Get qbuf pool statistical results.
  * @param[in] umqh: umq handle
  * @param[out] qbuf_pool_stats: qbuf pool statistical results
@@ -36,12 +46,32 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
 
 /**
  * Thread safety function
+ * Convert qbuf pool statistical results to string.
+ * @param[in] qbuf_pool_stats: qbuf pool statistical results
+ * @param[out] buf: buffer to store the string
+ * @param[in] max_buf_len: length of the buffer
+ * Return string len on success, error code on failure
+ */
+int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, char *buf, int max_buf_len);
+
+/**
+ * Thread safety function
  * Get umq info results.
  * @param[in] umqh: umq handle
  * @param[out] umq_info: umq info results
  * Return 0 on success, error code on failure
  */
 int umq_info_get(uint64_t umqh, umq_info_t *umq_info);
+
+/**
+ * Thread safety function
+ * Convert umq info results to string.
+ * @param[in] umq_info: umq info results
+ * @param[out] buf: buffer to store the string
+ * @param[in] max_buf_len: length of the buffer
+ * Return string len on success, error code on failure
+ */
+int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len);
 
 /**
  * Thread safety function

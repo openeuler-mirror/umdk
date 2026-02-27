@@ -1353,7 +1353,7 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
     if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
         umq->tp_ops->umq_tp_mempool_state_get == NULL || mempool_state == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "parameter invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1365,7 +1365,7 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id)
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
     if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
         umq->tp_ops->umq_tp_mempool_state_refresh == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "parameter invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1475,7 +1475,7 @@ int umq_cfg_get(uint64_t umqh, umq_cfg_get_t *cfg)
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
     if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL
         || umq->tp_ops->umq_tp_cfg_get == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "parameter invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
     return umq->tp_ops->umq_tp_cfg_get(umq->umqh_tp, cfg);
