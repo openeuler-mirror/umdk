@@ -163,6 +163,7 @@ default: disable.\n");
                                                 timeout = 0: return immediately even if no events are ready,\n\
                                                 timeout = -1: an infinite timeout,\n\
                                                 default: 1000(1s).\n");
+    (void)printf("  --page_size                 Set page size, default: 4096.\n");
     (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
 2MB or 1GB currently.\n");
     (void)printf("  --stdout                    Print logs to console.\n");
@@ -528,7 +529,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"ctp",           no_argument,       NULL, PERFTEST_OPT_CTP},
         {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
-        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
+        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE },
+        {"page_size",     required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
         {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
         {"stdout",  no_argument,       NULL, PERFTEST_OPT_STDOUT },
         {NULL,            no_argument,       NULL, '\0'},
@@ -813,7 +815,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_WAIT_JFC_TIMEOUT:
                 (void)ub_str_to_int(optarg, &cfg->wait_jfc_timeout);
                 break;
-            case PERFTEST_OPT_PAGE_SIZE:
+            case PERFTEST_OPT_HUGE_PAGE_SIZE:
                 cfg->use_huge_page = true;
                 if (strcmp("2MB", optarg) == 0) {
                     cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
@@ -823,6 +825,13 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
                 } else {
                     (void)fprintf(stderr, "Huge_page only support 2MB, 1GB and ANY.\n");
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_PAGE_SIZE:
+                (void)ub_str_to_u64(optarg, &cfg->page_size);
+                if (cfg->page_size % PERFTEST_PAGE_SIZE != 0 || cfg->page_size == 0) {
+                    (void)fprintf(stderr, "Invalid page size.\n");
                     return -1;
                 }
                 break;
