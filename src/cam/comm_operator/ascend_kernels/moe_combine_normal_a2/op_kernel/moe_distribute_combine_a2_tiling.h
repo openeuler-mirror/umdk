@@ -7,8 +7,8 @@
  * History: 2026-01-15 create combine normal A2 kernel part tiling
  */
 
-#ifndef MOE_DISTRIBUTE_CMOBINE_A2_TILING_H
-#define MOE_DISTRIBUTE_CMOBINE_A2_TILING_H
+#ifndef MOE_DISTRIBUTE_COMBINE_A2_TILING_H
+#define MOE_DISTRIBUTE_COMBINE_A2_TILING_H
 
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
@@ -38,4 +38,4 @@ struct MoeDistributeCombineA2TilingData {
     MoeDistributeCombineA2Info moeDistributeCombineInfo;
 };
 } // namespace Moe
-#endif  //__MOE_DISTRIBUTE_CMOBINE_A2_TILING_H__
+#endif  //__MOE_DISTRIBUTE_COMBINE_A2_TILING_H__

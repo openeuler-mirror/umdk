@@ -202,7 +202,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.moeDistributeCombineInfo.expertShardType = static_cast<uint32_t>(*expertShardPtr);
     tilingData.moeDistributeCombineInfo.sharedExpertRankNum = static_cast<uint32_t>(*sharedExpertRankNumPtr);
     tilingData.moeDistributeCombineInfo.moeExpertNum = static_cast<uint32_t>(*moeExpertNumPtr);
-    tilingData.moeDistributeCombineInfo.shmemptr = static_cast<uint64_t>(*shmemPtr);
+    tilingData.moeDistributeCombineInfo.shmemPtr = static_cast<uint64_t>(*shmemPtr);
 
     return ge::GRAPH_SUCCESS;
 }

@@ -35,7 +35,7 @@ struct MoeDispatchShmemInfo {
     uint64_t totalUbSize;          // epWorldSize
     uint64_t totalWinSize;
     uint32_t expertTokenNumsType;  // expert token nums type, support 0: cumsum mode, 1: count mode
-    uint64_t shmemptr;             // shmem ptr
+    uint64_t shmemPtr;             // shmem ptr
 };
 
 struct MoeDispatchShmemTilingData {

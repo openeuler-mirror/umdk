@@ -247,7 +247,7 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::Init(
     epRankId_ = tilingData->moeDistributeDispatchInfo.epRankId;
     GlobalTensor<int32_t> selfDataStatusTensor;
     GM_ADDR statusDataSpaceGm;
-    gva_gm = (GM_ADDR)tilingData->moeDistributeDispatchInfo.shmemptr;
+    gva_gm = (GM_ADDR)tilingData->moeDistributeDispatchInfo.shmemPtr;
     halfWinSize_ = tilingData->moeDistributeDispatchInfo.totalWinSize / 2;
     statusDataSpaceGm = (GM_ADDR)(gva_gm);
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm));

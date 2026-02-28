@@ -10,7 +10,7 @@
 import pytest
 from . import tool
 
-Author = pytest.mark.authoer
+Author = pytest.mark.author
 MPTest = pytest.mark.multi_process_test
 SPTest = pytest.mark.single_process_test
 A2Test = pytest.mark.a2_test
