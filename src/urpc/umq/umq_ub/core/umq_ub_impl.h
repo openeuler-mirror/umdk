@@ -87,6 +87,8 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg);
 int umq_ub_plus_stats_flow_control_get_impl(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats);
 int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbuf_pool_stats);
 int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info);
+int umq_ub_stats_io_get_impl(uint64_t umqh_tp, umq_packet_stats_t *packet_stats);
+int umq_ub_stats_io_reset_impl(uint64_t umqh_tp);
 
 #ifdef __cplusplus
 }
