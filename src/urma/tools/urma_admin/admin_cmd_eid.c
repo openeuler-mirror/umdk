@@ -122,11 +122,17 @@ static int nl_del_eid(const admin_config_t *cfg)
 
 static int cmd_eid_usage(admin_config_t *cfg)
 {
-    printf("Usage: urma_admin eid add [ DEV ] [ EID_IDX ] [ EID ] --ns [ NETNS ] --mode [ EID_MODE ]\n"
-           "       urma_admin eid del [ DEV ] [ EID_IDX ]\n"
-           "       urma_admin eid set [ DEV ] [ EID_IDX ] ns [ NETNS ]\n"
-           "       urma_admin eid set [ DEV ] [ EID_IDX ] mode { static | dynamic }\n"
-           "where  NETNS := /proc/$pid/ns/net\n");
+    printf("Usage:\n"
+           "  urma_admin eid add <dev> <eid_idx> <eid> [--ns <netns>] [--mode <eid_mode>]\n"
+           "  urma_admin eid del <dev> <eid_idx>\n"
+           "  urma_admin eid set <dev> <eid_idx> ns <netns>\n"
+           "  urma_admin eid set <dev> <eid_idx> mode {static|dynamic}\n"
+           "\n"
+           "Options:\n"
+           "  <dev>      Device name (e.g., udma1)\n"
+           "  <eid-idx>  EID index\n"
+           "  <eid>      EID value\n"
+           "  <netns>    Network namespace path (e.g., /proc/$pid/ns/net)\n");
     return 0;
 }
 
@@ -222,10 +228,10 @@ static int cmd_eid_set(admin_config_t *cfg)
     }
 
     static const admin_cmd_t cmds[] = {
-        {NULL, cmd_eid_usage},      //
-        {"mode", cmd_eid_set_mode}, //
-        {"ns", cmd_eid_set_ns},     //
-        {0},                        //
+        {NULL, cmd_eid_usage},
+        {"mode", cmd_eid_set_mode},
+        {"ns", cmd_eid_set_ns},
+        {0},
     };
     return exec_cmd(cfg, cmds);
 }
@@ -236,11 +242,11 @@ int admin_cmd_eid(admin_config_t *cfg)
         return cmd_eid_usage(cfg);
     }
     static const admin_cmd_t cmds[] = {
-        {NULL, cmd_eid_usage}, //
-        {"add", cmd_eid_add},  //
-        {"del", cmd_eid_del},  //
-        {"set", cmd_eid_set},  //
-        {0},                   //
+        {NULL, cmd_eid_usage},
+        {"add", cmd_eid_add},
+        {"del", cmd_eid_del},
+        {"set", cmd_eid_set},
+        {0},
     };
     return exec_cmd(cfg, cmds);
 }
