@@ -273,7 +273,10 @@ int CamComm::Init()
         ", localRankSize_ : " << localRankSize_ << "success";
     
     // set comm args in device
-    SyncCommArgs();
+    if (SyncCommArgs() != CAM_SUCCESS) {
+        CAM_LOG(ERROR) << "SyncCommArgs failed!";
+        return CAM_ERROR_INTERNAL;
+    }
     CAM_LOG(INFO) << "CamCommInit" << rank_  << "/" << rankSize_ << " success and extraFlag:" << commArgs_.extraFlag <<
         " commArgs_. localRank : " << commArgs_.localRank << "commArgs_.localRankSize : " << commArgs_.localRankSize;
     inited_ = true;

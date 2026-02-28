@@ -13,6 +13,7 @@
 #include <csignal>
 #include <cerrno>
 #include <cstring>
+#include <regex>
 #include <set>
 #include <string>
 #include <fstream>
@@ -32,6 +33,14 @@ namespace Cam {
 constexpr const char *LOCAL_DEFAULT_LISTEN_IP = "127.0.0.1";
 constexpr uint16_t LOCAL_DEFAULT_LISTEN_PORT = 10067;
 constexpr uint32_t MAX_LISTEN_BACK_LOG = 65535;
+static const std::regex ipv4_regex(
+    R"(^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)",
+    std::regex::optimize
+);
+
+bool Ipv4IsValid(const std::string& ip) {
+    return std::regex_match(ip, ipv4_regex);
+}
 
 int ParseIpAndPort(const char *input, string &ip, uint16_t &port)
 {
@@ -45,7 +54,12 @@ int ParseIpAndPort(const char *input, string &ip, uint16_t &port)
         return CAM_ERROR_INTERNAL;
     }
 
-    ip = inputStr.substr(0, colonPos);
+    std::string tempIp = inputStr.substr(0, colonPos);
+    if (!Ipv4IsValid(tempIp)) {
+        CAM_LOG(ERROR) << "Invalid Ipv4 format, please check.";
+        return CAM_INVALID_VALUE;
+    }
+    ip = tempIp;
     std::string portStr = inputStr.substr(colonPos + 1);
 
     std::istringstream portStream(portStr);

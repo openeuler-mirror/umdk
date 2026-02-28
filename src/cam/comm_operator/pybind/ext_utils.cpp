@@ -8,6 +8,7 @@
 #include "cam_api.h"
 #include "cam_comm.h"
 #include <iostream>
+#include "torch_bind_exception.h"
 #include "ext_utils.h"
 
 using namespace at;
@@ -19,7 +20,8 @@ constexpr int PARAM_ARGS_CNT = 1;
 at::Tensor cam_get_comm(const int64_t comm_id, const int64_t rank, const int64_t group_size,
     std::string serverIpPort)
 {
-    cam_comm_init(comm_id, rank, group_size, serverIpPort);
+    bool valid = cam_comm_init(comm_id, rank, group_size, serverIpPort);
+    TORCH_BIND_ASSERT(valid == true);
     Cam::CamComm *cam_comm(static_cast<Cam::CamComm *>(g_comms[comm_id]));
     auto comm_size = sizeof(Cam::CommArgs);
 
@@ -50,10 +52,7 @@ bool cam_comm_init(const int64_t comm_id, const int64_t rank, const int64_t grou
 int32_t cam_get_rank_size(const int64_t comm_id)
 {
     Cam::CamComm *cam_comm(static_cast<Cam::CamComm *>(g_comms[comm_id]));
-    if (cam_comm == nullptr) {
-        printf("ERROR!!! COMM is not INIT!!!");
-        return 0;
-    }
+    TORCH_BIND_ASSERT(cam_comm != nullptr);
     int rankSize = cam_comm->GetRankSize();
     return rankSize;
 }
@@ -61,10 +60,7 @@ int32_t cam_get_rank_size(const int64_t comm_id)
 int64_t cam_get_and_increase_magic(const int64_t comm_id)
 {
     Cam::CamComm *cam_comm(static_cast<Cam::CamComm *>(g_comms[comm_id]));
-    if (cam_comm == nullptr) {
-        printf("ERROR!!! COMM is not INIT!!!");
-        return 0;
-    }
+    TORCH_BIND_ASSERT(cam_comm != nullptr);
     int magic = cam_comm->GetAndIncreaseMagic();
     return magic;
 }
@@ -72,10 +68,7 @@ int64_t cam_get_and_increase_magic(const int64_t comm_id)
 int64_t cam_get_magic(const int64_t comm_id)
 {
     Cam::CamComm *cam_comm(static_cast<Cam::CamComm *>(g_comms[comm_id]));
-    if (cam_comm == nullptr) {
-        printf("ERROR!!! COMM is not INIT!!!");
-        return 0;
-    }
+    TORCH_BIND_ASSERT(cam_comm != nullptr);
     int magic = cam_comm->GetMagic();
     return magic;
 }
@@ -102,9 +95,7 @@ TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m)
 at::Tensor cam_free_comm(const int64_t comm_id)
 {
     int ret = CamDestroyComm(g_comms[comm_id]);
-    if (ret != Cam::CAM_SUCCESS) {
-        printf("ERROR!!! COMM is not freed!!!");
-    }
+    TORCH_BIND_ASSERT(ret == Cam::CAM_SUCCESS);
     g_comms[comm_id] = nullptr;
 
     return at::Tensor();
