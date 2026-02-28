@@ -1691,6 +1691,9 @@ static ALWAYS_INLINE urma_status_t umq_ub_read_post_send(
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], &urma_wr, &bad_wr);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp);
+    if (status == URMA_SUCCESS) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, 1, queue->dev_ctx->io_lock_free);
+    }
     return status;
 }
 
@@ -1907,6 +1910,8 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
         return return_rx_cnt;
     }
     int qbuf_cnt = 0;
+    uint32_t success_cnt = 0;
+    uint32_t failed_cnt = 0;
     for (int i = 0; i < tx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d] "
@@ -1920,6 +1925,9 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
             if (cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
                 continue;
             }
+            failed_cnt++;
+        } else {
+            success_cnt++;
         }
         /* After the read operation is complete, send_imm request with user_ctx equal to 0 will be sent.
          * This tx_cqe request does't need to be reported. */
@@ -1938,6 +1946,15 @@ int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t
         }
         umq_ub_non_rev_pull_tx_cqe(queue, tx_buf[qbuf_cnt], &qbuf_cnt);
     }
+
+    if (success_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_SUCCESS, success_cnt, queue->dev_ctx->io_lock_free);
+    }
+
+    if (failed_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_ERROR, failed_cnt, queue->dev_ctx->io_lock_free);
+    }
+
     return return_rx_cnt;
 }
 
@@ -2300,11 +2317,13 @@ int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **bu
         return rx_cr_cnt;
     }
 
+    uint32_t success_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[i] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         buf[i]->io_direction = UMQ_IO_RX;
         buf[i]->status = (umq_buf_status_t)cr[i].status;
         if (cr[i].status != URMA_CR_SUCCESS) {
+            umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_RECV_ERROR, 1, queue->dev_ctx->io_lock_free);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports rx cr[%d] "
                 "status: %d\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
                 queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, i, cr[i].status);
@@ -2317,10 +2336,16 @@ int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **bu
                 total_data_size -= tmp_buf->data_size;
                 tmp_buf = tmp_buf->qbuf_next;
             }
+            success_cnt++;
         }
         umq_ub_merge_rx_buffer(buf[i], &previous_last);
         qbuf_cnt++;
     }
+
+    if (qbuf_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_RECV, success_cnt, queue->dev_ctx->io_lock_free);
+    }
+
     return qbuf_cnt;
 }
 
@@ -2343,6 +2368,7 @@ int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq_buf_t 
         return rx_cr_cnt;
     }
 
+    uint32_t success_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         if (process_imm_msg(umqh_tp, buf[qbuf_cnt], cr + i) == UMQ_CONTINUE_FLAG) {
@@ -2362,10 +2388,16 @@ int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq_buf_t 
                 total_data_size -= tmp_buf->data_size;
                 tmp_buf = tmp_buf->qbuf_next;
             }
+            success_cnt++;
         }
         umq_ub_merge_rx_buffer(buf[qbuf_cnt], &previous_last);
         ++qbuf_cnt;
     }
+
+    if (success_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_RECV, success_cnt, queue->dev_ctx->io_lock_free);
+    }
+
     if (rx_cr_cnt != 0) {
         umq_ub_fill_rx_buffer(queue, rx_cr_cnt);
     }
@@ -2398,6 +2430,7 @@ void process_bad_qbuf(umq_buf_t *bad_qbuf, umq_buf_t *qbuf, ub_queue_t *queue)
         // break chain of succeed qbuf and failed qbuf on tx
         previous->qbuf_next = NULL;
     }
+    umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, count, queue->dev_ctx->io_lock_free);
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, count);
 }
 
@@ -2414,6 +2447,8 @@ void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
     }
 
     int32_t qbuf_cnt = 0;
+    uint32_t success_cnt = 0;
+    uint32_t failed_cnt = 0;
     for (int i = 0; i < tx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d] "
@@ -2427,11 +2462,21 @@ void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
             if (cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
                 continue;
             }
+            failed_cnt++;
+        } else {
+            success_cnt++;
         }
 
         buf[qbuf_cnt] = (umq_buf_t *)(uintptr_t)cr[i].user_ctx;
         (void)umq_buf_break_and_free(buf[qbuf_cnt]);
         ++qbuf_cnt;
+    }
+    if (success_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_SUCCESS, success_cnt, queue->dev_ctx->io_lock_free);
+    }
+
+    if (failed_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_ERROR, success_cnt, queue->dev_ctx->io_lock_free);
     }
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, qbuf_cnt);
 }
@@ -2449,6 +2494,8 @@ void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
     }
 
     int32_t qbuf_cnt = 0;
+    uint32_t success_cnt = 0;
+    uint32_t failed_cnt = 0;
     int ret = UMQ_SUCCESS;
     for (int i = 0; i < tx_cr_cnt; i++) {
         if (cr[i].status != URMA_CR_SUCCESS) {
@@ -2463,6 +2510,9 @@ void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
             if (cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
                 continue;
             }
+            failed_cnt++;
+        } else {
+            success_cnt++;
         }
 
         if (cr[i].user_ctx == 0) {
@@ -2497,6 +2547,14 @@ void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
         (void)umq_buf_break_and_free(buf[qbuf_cnt]);
         ++qbuf_cnt;
     }
+
+    if (success_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_SUCCESS, success_cnt, queue->dev_ctx->io_lock_free);
+    }
+
+    if (failed_cnt > 0) {
+        umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_ERROR, failed_cnt, queue->dev_ctx->io_lock_free);
+    }
 }
 
 int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint64_t user_ctx)
@@ -2525,6 +2583,7 @@ int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint
             queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, (int)status);
         return umq_status_convert(status);
     }
+    umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, 1, queue->dev_ctx->io_lock_free);
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, 1);
     return UMQ_SUCCESS;
 }
@@ -2579,6 +2638,7 @@ int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint6
             queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, (int)status);
         return umq_status_convert(status);
     }
+    umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, 1, queue->dev_ctx->io_lock_free);
     return UMQ_SUCCESS;
 }
 

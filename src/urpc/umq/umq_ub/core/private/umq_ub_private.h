@@ -363,6 +363,7 @@ typedef struct ub_queue {
     volatile uint32_t ref_cnt;
     volatile uint32_t require_rx_count;
     volatile uint32_t tx_outstanding;
+    volatile uint64_t packet_stats[UB_PACKET_STATS_TYPE_MAX];
     uint32_t create_flag;
     uint64_t umq_ctx;
     urma_target_seg_t **imported_tseg_list;   // read-only
@@ -544,6 +545,20 @@ int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, um
 umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
 int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
+
+static ALWAYS_INLINE void umq_ub_io_packet_stats(
+    ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt, bool lock_free)
+{
+    if ((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_STATS) == 0) {
+        return;
+    }
+
+    if (lock_free) {
+        queue->packet_stats[type] += cnt;
+    } else {
+        (void)__atomic_add_fetch(&queue->packet_stats[type], cnt, __ATOMIC_RELAXED);
+    }
+}
 
 #ifdef __cplusplus
 }
