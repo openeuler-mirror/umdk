@@ -503,6 +503,9 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     fc->credits_per_request = cfg->credits_per_request;
     fc->initial_credit = cfg->initial_credit;
     fc->return_ratio = cfg->return_ratio;
+    fc->min_reserved_credit = cfg->min_reserved_credit;
+    fc->credit_multiple = cfg->credit_multiple;
+
     if (cfg->initial_window == 0 || cfg->initial_window > queue->rx_depth) {
         fc->initial_window = fc->local_rx_depth >> 1;
     }
@@ -528,7 +531,7 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->initial_credit = 1;
     }
     fc->credits_per_request = fc->initial_credit;
-    fc->credit_request_threshold = fc->initial_credit;
+    fc->credit_request_threshold = fc->min_reserved_credit;
     if (cfg->credit_multiple == 0 || cfg->credit_multiple > queue->rx_depth / fc->initial_credit) {
         fc->credit_multiple = UMQ_UB_DEFAULT_CREDIT_MULTIPLE;
     }
@@ -816,7 +819,9 @@ void umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     if (return_credit == 0) {
         return_credit = 1;
     }
-
+    if (remote_credit - return_credit <= fc->min_reserved_credit) {
+        return_credit = remote_credit - fc->min_reserved_credit;
+    }
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
 
