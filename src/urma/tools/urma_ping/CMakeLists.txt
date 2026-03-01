@@ -23,6 +23,7 @@ target_link_libraries(urma_ping
     PRIVATE
         urma
         tpsa
+        m
 )
 
 install(TARGETS urma_ping
