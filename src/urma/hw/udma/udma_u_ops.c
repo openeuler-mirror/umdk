@@ -76,6 +76,10 @@ static urma_ops_t g_udma_ops = {
 	.rearm_jfc = udma_u_rearm_jfc,
 	.wait_jfc = udma_u_wait_jfc,
 	.ack_jfc = udma_u_ack_jfc,
+	.get_eid_by_ip = udma_u_get_eid_by_ip,
+	.get_ip_by_eid = udma_u_get_ip_by_eid,
+	.get_smac = udma_u_get_smac,
+	.get_dmac = udma_u_get_dmac,
 };
 
 static urma_status_t udma_u_init(urma_init_attr_t *conf)
