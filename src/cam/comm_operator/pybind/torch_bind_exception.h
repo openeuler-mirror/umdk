@@ -29,7 +29,6 @@ private:
 };
 
 #define TORCH_BIND_ASSERT(cond)                                                \
-    ;                                                                          \
     do {                                                                       \
         if (not(cond)) {                                                       \
             throw TorchBindException("Assertion", __FILE__, __LINE__, #cond);  \
