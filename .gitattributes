@@ -1,0 +1,5 @@
+# text files will be converted to LF format upon submission and will be preserved in their original form upon checkout
+* text=auto eol=lf
+
+# Binary files do not handle newline characters
+*.png binary
