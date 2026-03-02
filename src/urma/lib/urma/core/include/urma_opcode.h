@@ -198,4 +198,59 @@ typedef enum urma_jfr_state {
     URMA_JFR_STATE_ERROR
 } urma_jfr_state_t;
 
+#define URMA_JFS_DEPTH             0x0001
+#define URMA_JFS_FLAG              0x0002
+#define URMA_JFS_TRANS_MODE        0x0003
+#define URMA_JFS_PRIORITY          0x0004
+#define URMA_JFS_MAX_SGE           0x0005
+#define URMA_JFS_MAX_RSGE          0x0006
+#define URMA_JFS_MAX_INLINE_DATA   0x0007
+#define URMA_JFS_RNR_RETRY         0x0008
+#define URMA_JFS_ERR_TIMEOUT       0x0009
+#define URMA_JFS_BIND_JFC          0x000a
+#define URMA_JFS_USER_CTX          0x000b
+#define URMA_JFS_SQE_BASE_ADDR     0x000c
+#define URMA_JFS_ID                0x000d
+#define URMA_JFS_DB_ADDR           0x000e
+#define URMA_JFS_DB_STATUS         0x000f
+#define URMA_JFS_PI                0x0010
+#define URMA_JFS_PI_TYPE           0x0011
+#define URMA_JFS_CI                0x0012
+
+#define URMA_JFR_DEPTH             0x1001
+#define URMA_JFR_FLAG              0x1002
+#define URMA_JFR_TRANS_MODE        0x1003
+#define URMA_JFR_MAX_SGE           0x1004
+#define URMA_JFR_MIN_RNR_TIMER     0x1005
+#define URMA_JFR_BIND_JFC          0x1006
+#define URMA_JFR_TOKEN_VALUE       0x1007
+#define URMA_JFR_USER_CTX          0x1008
+#define URMA_JFR_RQE_BASE_ADDR     0x1009
+#define URMA_JFR_ID                0x100a
+#define URMA_JFR_DB_ADDR           0x100b
+#define URMA_JFR_DB_STATUS         0x100c
+#define URMA_JFR_PI                0x100d
+#define URMA_JFR_PI_TYPE           0x100e
+#define URMA_JFR_CI                0x100f
+
+#define URMA_JFC_DEPTH             0x2001
+#define URMA_JFC_CEQN              0x2002
+#define URMA_JFC_FLAG              0x2003
+#define URMA_JFC_BIND_JFCE         0x2004
+#define URMA_JFC_USER_CTX          0x2005
+#define URMA_JFC_CQE_BASE_ADDR     0x2006
+#define URMA_JFC_ID                0x2007
+#define URMA_JFC_DB_ADDR           0x2008
+#define URMA_JFC_DB_STATUS         0x2009
+#define URMA_JFC_PI                0x200a
+#define URMA_JFC_PI_TYPE           0x200b
+#define URMA_JFC_CI                0x200c
+
+#define URMA_JETTY_ID              0x3001
+#define URMA_JETTY_FLAG            0x3002
+#define URMA_JETTY_BIND_JFR        0x3003
+#define URMA_JETTY_BIND_RX_JFC     0x3004
+#define URMA_JETTY_BIND_JTG        0x3005
+#define URMA_JETTY_USER_CTX        0x3006
+
 #endif // URMA_OPCODE_H

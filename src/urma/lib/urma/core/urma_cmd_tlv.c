@@ -45,11 +45,11 @@ static int urma_tlv_ioctl(int ioctl_fd, urma_cmd_t cmd, urma_cmd_attr_t *args, u
         .command = (uint32_t)cmd,
         .args_len = args_len,
         .args_addr = (uint64_t)args,
-    };
+     };
     int ret = ioctl(ioctl_fd, URMA_CMD, &hdr);
     if (ret != 0) {
         URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
-    }
+     }
     return ret;
 }
 
@@ -240,6 +240,123 @@ int urma_ioctl_delete_jfs_batch(int ioctl_fd, urma_cmd_delete_jfs_batch_t *arg)
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DELETE_JFS_BATCH, attrs, sizeof(attrs));
 }
 
+
+int urma_ioctl_alloc_jfs(int ioctl_fd, urma_cmd_alloc_jfs_t *arg)
+{
+    urma_cmd_attr_t attrs[ALLOC_JFS_IN_NUM + ALLOC_JFS_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ALLOC_JFS_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ALLOC_JFS_IN_FLAG, arg->in.flag);
+    ATTR(a++, ALLOC_JFS_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, ALLOC_JFS_IN_PRIORITY, arg->in.priority);
+    ATTR(a++, ALLOC_JFS_IN_MAX_SGE, arg->in.max_sge);
+    ATTR(a++, ALLOC_JFS_IN_MAX_RSGE, arg->in.max_rsge);
+    ATTR(a++, ALLOC_JFS_IN_MAX_INLINE_DATA, arg->in.max_inline_data);
+    ATTR(a++, ALLOC_JFS_IN_RNR_RETRY, arg->in.rnr_retry);
+    ATTR(a++, ALLOC_JFS_IN_ERR_TIMEOUT, arg->in.err_timeout);
+    ATTR(a++, ALLOC_JFS_IN_JFC_ID, arg->in.jfc_id);
+    ATTR(a++, ALLOC_JFS_IN_JFC_HANDLE, arg->in.jfc_handle);
+    ATTR(a++, ALLOC_JFS_IN_URMA_JFS, arg->in.urma_jfs);
+    ATTR(a++, ALLOC_JFS_IN_UDATA, arg->udata);
+    ATTR(a++, ALLOC_JFS_OUT_ID, arg->out.id);
+    ATTR(a++, ALLOC_JFS_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ALLOC_JFS_OUT_MAX_SGE, arg->out.max_sge);
+    ATTR(a++, ALLOC_JFS_OUT_MAX_RSGE, arg->out.max_rsge);
+    ATTR(a++, ALLOC_JFS_OUT_MAX_INLINE_DATA, arg->out.max_inline_data);
+    ATTR(a++, ALLOC_JFS_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ALLOC_JFS_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ALLOC_JFS, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_free_jfs(int ioctl_fd, urma_cmd_free_jfs_t *arg)
+{
+    urma_cmd_attr_t attrs[FREE_JFS_IN_NUM + FREE_JFS_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, FREE_JFS_IN_HANDLE, arg->in.handle);
+    ATTR(a++, FREE_JFS_IN_UDATA, arg->udata);
+    ATTR(a++, FREE_JFS_OUT_ASYNC_EVENTS_REPORTED, arg->out.async_events_reported);
+    ATTR(a++, FREE_JFS_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_FREE_JFS, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_set_jfs_opt(int ioctl_fd, urma_cmd_set_jfs_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[SET_JFS_OPT_IN_NUM + SET_JFS_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, SET_JFS_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, SET_JFS_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, SET_JFS_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, SET_JFS_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, SET_JFS_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, SET_JFS_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_SET_JFS_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_get_jfs_opt(int ioctl_fd, urma_cmd_get_jfs_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JFS_OPT_IN_NUM + GET_JFS_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JFS_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, GET_JFS_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, GET_JFS_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, GET_JFS_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, GET_JFS_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, GET_JFS_OPT_OUT_BUF, arg->out.buf);
+    ATTR(a++, GET_JFS_OPT_OUT_LEN, arg->out.len);
+    ATTR(a++, GET_JFS_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JFS_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_active_jfs(int ioctl_fd, urma_cmd_active_jfs_t *arg)
+{
+    urma_cmd_attr_t attrs[ACTIVE_JFS_IN_NUM + ACTIVE_JFS_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ACTIVE_JFS_IN_HANDLE, arg->in.handle);
+    ATTR(a++, ACTIVE_JFS_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ACTIVE_JFS_IN_FLAG, arg->in.flag);
+    ATTR(a++, ACTIVE_JFS_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, ACTIVE_JFS_IN_PRIORITY, arg->in.priority);
+    ATTR(a++, ACTIVE_JFS_IN_MAX_SGE, arg->in.max_sge);
+    ATTR(a++, ACTIVE_JFS_IN_MAX_RSGE, arg->in.max_rsge);
+    ATTR(a++, ACTIVE_JFS_IN_MAX_INLINE_DATA, arg->in.max_inline_data);
+    ATTR(a++, ACTIVE_JFS_IN_RNR_RETRY, arg->in.rnr_retry);
+    ATTR(a++, ACTIVE_JFS_IN_ERR_TIMEOUT, arg->in.err_timeout);
+    ATTR(a++, ACTIVE_JFS_IN_JFC_ID, arg->in.jfc_id);
+    ATTR(a++, ACTIVE_JFS_IN_JFC_HANDLE, arg->in.jfc_handle);
+    ATTR(a++, ACTIVE_JFS_IN_JFS_OPT, arg->in.jfs_opt);
+    ATTR(a++, ACTIVE_JFS_IN_UDATA, arg->udata);
+    ATTR(a++, ACTIVE_JFS_OUT_ID, arg->out.id);
+    ATTR(a++, ACTIVE_JFS_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ACTIVE_JFS_OUT_MAX_SGE, arg->out.max_sge);
+    ATTR(a++, ACTIVE_JFS_OUT_MAX_RSGE, arg->out.max_rsge);
+    ATTR(a++, ACTIVE_JFS_OUT_MAX_INLINE_DATA, arg->out.max_inline_data);
+    ATTR(a++, ACTIVE_JFS_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ACTIVE_JFS_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ACTIVE_JFS, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_deactive_jfs(int ioctl_fd, urma_cmd_deactive_jfs_t *arg)
+{
+    urma_cmd_attr_t attrs[DEACTIVE_JFS_IN_NUM + DEACTIVE_JFS_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, DEACTIVE_JFS_IN_HANDLE, arg->in.handle);
+    ATTR(a++, DEACTIVE_JFS_IN_UDATA, arg->udata);
+    ATTR(a++, DEACTIVE_JFS_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DEACTIVE_JFS, attrs, sizeof(attrs));
+}
+
 int urma_ioctl_create_jfr(int ioctl_fd, urma_cmd_create_jfr_t *arg)
 {
     urma_cmd_attr_t attrs[CREATE_JFR_IN_NUM + CREATE_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
@@ -323,6 +440,113 @@ int urma_ioctl_delete_jfr_batch(int ioctl_fd, urma_cmd_delete_jfr_batch_t *arg)
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DELETE_JFR_BATCH, attrs, sizeof(attrs));
 }
 
+int urma_ioctl_alloc_jfr(int ioctl_fd, urma_cmd_alloc_jfr_t *arg)
+{
+    urma_cmd_attr_t attrs[ALLOC_JFR_IN_NUM + ALLOC_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ALLOC_JFR_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ALLOC_JFR_IN_FLAG, arg->in.flag);
+    ATTR(a++, ALLOC_JFR_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, ALLOC_JFR_IN_MAX_SGE, arg->in.max_sge);
+    ATTR(a++, ALLOC_JFR_IN_MIN_RNR_TIMER, arg->in.min_rnr_timer);
+    ATTR(a++, ALLOC_JFR_IN_JFC_ID, arg->in.jfc_id);
+    ATTR(a++, ALLOC_JFR_IN_JFC_HANDLE, arg->in.jfc_handle);
+    ATTR(a++, ALLOC_JFR_IN_TOKEN, arg->in.token);
+    ATTR(a++, ALLOC_JFR_IN_ID, arg->in.id);
+    ATTR(a++, ALLOC_JFR_IN_URMA_JFR, arg->in.urma_jfr);
+    ATTR(a++, ALLOC_JFR_IN_UDATA, arg->udata);
+    ATTR(a++, ALLOC_JFR_OUT_ID, arg->out.id);
+    ATTR(a++, ALLOC_JFR_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ALLOC_JFR_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ALLOC_JFR_OUT_MAX_SGE, arg->out.max_sge);
+    ATTR(a++, ALLOC_JFR_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ALLOC_JFR, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_free_jfr(int ioctl_fd, urma_cmd_free_jfr_t *arg)
+{
+    urma_cmd_attr_t attrs[FREE_JFR_IN_NUM + FREE_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, FREE_JFR_IN_HANDLE, arg->in.handle);
+    ATTR(a++, FREE_JFR_IN_UDATA, arg->udata);
+    ATTR(a++, FREE_JFR_OUT_ASYNC_EVENTS_REPORTED, arg->out.async_events_reported);
+    ATTR(a++, FREE_JFR_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_FREE_JFR, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_set_jfr_opt(int ioctl_fd, urma_cmd_set_jfr_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[SET_JFR_OPT_IN_NUM + SET_JFR_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, SET_JFR_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, SET_JFR_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, SET_JFR_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, SET_JFR_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, SET_JFR_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, SET_JFR_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_SET_JFR_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_get_jfr_opt(int ioctl_fd, urma_cmd_get_jfr_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JFR_OPT_IN_NUM + GET_JFR_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JFR_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, GET_JFR_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, GET_JFR_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, GET_JFR_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, GET_JFR_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, GET_JFR_OPT_OUT_BUF, arg->out.buf);
+    ATTR(a++, GET_JFR_OPT_OUT_LEN, arg->out.len);
+    ATTR(a++, GET_JFR_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JFR_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_active_jfr(int ioctl_fd, urma_cmd_active_jfr_t *arg)
+{
+    urma_cmd_attr_t attrs[ACTIVE_JFR_IN_NUM + ACTIVE_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ACTIVE_JFR_IN_HANDLE, arg->in.handle);
+    ATTR(a++, ACTIVE_JFR_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ACTIVE_JFR_IN_FLAG, arg->in.flag);
+    ATTR(a++, ACTIVE_JFR_IN_TRANS_MODE, arg->in.trans_mode);
+    ATTR(a++, ACTIVE_JFR_IN_MAX_SGE, arg->in.max_sge);
+    ATTR(a++, ACTIVE_JFR_IN_MIN_RNR_TIMER, arg->in.min_rnr_timer);
+    ATTR(a++, ACTIVE_JFR_IN_JFC_ID, arg->in.jfc_id);
+    ATTR(a++, ACTIVE_JFR_IN_JFC_HANDLE, arg->in.jfc_handle);
+    ATTR(a++, ACTIVE_JFR_IN_TOKEN, arg->in.token_value);
+    ATTR(a++, ACTIVE_JFR_IN_JFR_OPT, arg->in.jfr_opt);
+    ATTR(a++, ACTIVE_JFR_IN_UDATA, arg->udata);
+    ATTR(a++, ACTIVE_JFR_OUT_ID, arg->out.id);
+    ATTR(a++, ACTIVE_JFR_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ACTIVE_JFR_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ACTIVE_JFR_OUT_MAX_SGE, arg->out.max_sge);
+    ATTR(a++, ACTIVE_JFR_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ACTIVE_JFR, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_deactive_jfr(int ioctl_fd, urma_cmd_deactive_jfr_t *arg)
+{
+    urma_cmd_attr_t attrs[DEACTIVE_JFR_IN_NUM + DEACTIVE_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, DEACTIVE_JFR_IN_HANDLE, arg->in.handle);
+    ATTR(a++, DEACTIVE_JFR_IN_UDATA, arg->udata);
+    ATTR(a++, DEACTIVE_JFR_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DEACTIVE_JFR, attrs, sizeof(attrs));
+}
+
 int urma_ioctl_create_jfc(int ioctl_fd, urma_cmd_create_jfc_t *arg)
 {
     urma_cmd_attr_t attrs[CREATE_JFC_IN_NUM + CREATE_JFC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
@@ -369,6 +593,37 @@ int urma_ioctl_delete_jfc(int ioctl_fd, urma_cmd_delete_jfc_t *arg)
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DELETE_JFC, attrs, sizeof(attrs));
 }
 
+int urma_ioctl_active_jfc(int ioctl_fd, urma_cmd_active_jfc_t *arg)
+{
+    urma_cmd_attr_t attrs[ACTIVE_JFC_IN_NUM + ACTIVE_JFC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ACTIVE_JFC_IN_HANDLE, arg->in.handle);
+    ATTR(a++, ACTIVE_JFC_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ACTIVE_JFC_IN_FLAG, arg->in.flag);
+    ATTR(a++, ACTIVE_JFC_IN_CEQN, arg->in.ceqn);
+    ATTR(a++, ACTIVE_JFC_IN_JFC_OPT, arg->in.urma_jfc_opt);
+    ATTR(a++, ACTIVE_JFC_IN_UDATA, arg->udata);
+    ATTR(a++, ACTIVE_JFC_OUT_ID, arg->out.id);
+    ATTR(a++, ACTIVE_JFC_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ACTIVE_JFC_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ACTIVE_JFC_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ACTIVE_JFC, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_deactive_jfc(int ioctl_fd, urma_cmd_deactive_jfc_t *arg)
+{
+    urma_cmd_attr_t attrs[DEACTIVE_JFC_IN_NUM + DEACTIVE_JFC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, DEACTIVE_JFC_IN_HANDLE, arg->in.handle);
+    ATTR(a++, DEACTIVE_JFC_IN_UDATA, arg->udata);
+    ATTR(a++, DEACTIVE_JFC_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DEACTIVE_JFC, attrs, sizeof(attrs));
+}
+
 int urma_ioctl_delete_jfc_batch(int ioctl_fd, urma_cmd_delete_jfc_batch_t *arg)
 {
     urma_cmd_attr_t attrs[DELETE_JFC_BATCH_IN_NUM + DELETE_JFC_BATCH_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
@@ -381,6 +636,71 @@ int urma_ioctl_delete_jfc_batch(int ioctl_fd, urma_cmd_delete_jfc_batch_t *arg)
     ATTR(a++, DELETE_JFC_BATCH_IN_JFC_PTR, arg->in.jfc_ptr);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DELETE_JFC_BATCH, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_alloc_jfc(int ioctl_fd, urma_cmd_alloc_jfc_t *arg)
+{
+    urma_cmd_attr_t attrs[ALLOC_JFC_IN_NUM + ALLOC_JFC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ALLOC_JFC_IN_DEPTH, arg->in.depth);
+    ATTR(a++, ALLOC_JFC_IN_FLAG, arg->in.flag);
+    ATTR(a++, ALLOC_JFC_IN_JFCE_FD, arg->in.jfce_fd);
+    ATTR(a++, ALLOC_JFC_IN_URMA_JFC, arg->in.urma_jfc);
+    ATTR(a++, ALLOC_JFC_IN_CEQN, arg->in.ceqn);
+    ATTR(a++, ALLOC_JFC_IN_UDATA, arg->udata);
+    ATTR(a++, ALLOC_JFC_OUT_ID, arg->out.id);
+    ATTR(a++, ALLOC_JFC_OUT_DEPTH, arg->out.depth);
+    ATTR(a++, ALLOC_JFC_OUT_HANDLE, arg->out.handle);
+    ATTR(a++, ALLOC_JFC_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ALLOC_JFC, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_free_jfc(int ioctl_fd, urma_cmd_free_jfc_t *arg)
+{
+    urma_cmd_attr_t attrs[FREE_JFC_IN_NUM + FREE_JFC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, FREE_JFC_IN_HANDLE, arg->in.handle);
+    ATTR(a++, FREE_JFC_IN_UDATA, arg->udata);
+    ATTR(a++, FREE_JFC_OUT_COMP_EVENTS_REPORTED, arg->out.comp_events_reported);
+    ATTR(a++, FREE_JFC_OUT_ASYNC_EVENTS_REPORTED, arg->out.async_events_reported);
+    ATTR(a++, FREE_JFC_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_FREE_JFC, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_set_jfc_opt(int ioctl_fd, urma_cmd_set_jfc_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[SET_JFC_OPT_IN_NUM + SET_JFC_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, SET_JFC_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, SET_JFC_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, SET_JFC_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, SET_JFC_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, SET_JFC_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, SET_JFC_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_SET_JFC_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_get_jfc_opt(int ioctl_fd, urma_cmd_get_jfc_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JFC_OPT_IN_NUM + GET_JFC_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JFC_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, GET_JFC_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, GET_JFC_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, GET_JFC_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, GET_JFC_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, GET_JFC_OPT_OUT_BUF, arg->out.buf);
+    ATTR(a++, GET_JFC_OPT_OUT_LEN, arg->out.len);
+    ATTR(a++, GET_JFC_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JFC_OPT, attrs, sizeof(attrs));
 }
 
 int urma_ioctl_create_jfce(int ioctl_fd, urma_cmd_create_jfce_t *arg)
@@ -639,6 +959,92 @@ static int urma_ioctl_unadvise_jetty_inner(int ioctl_fd, urma_cmd_t cmd, urma_cm
     return urma_tlv_ioctl(ioctl_fd, cmd, attrs, sizeof(attrs));
 }
 
+int urma_ioctl_alloc_jetty(int ioctl_fd, urma_cmd_alloc_jetty_t *arg)
+{
+    urma_cmd_attr_t attrs[ALLOC_JETTY_IN_NUM + ALLOC_JETTY_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ALLOC_JETTY_IN_CFG, *arg);
+    ATTR(a++, ALLOC_JETTY_OUT_CFG, *arg);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ALLOC_JETTY, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_free_jetty(int ioctl_fd, urma_cmd_free_jetty_t *arg)
+{
+    urma_cmd_attr_t attrs[FREE_JETTY_IN_NUM + FREE_JETTY_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, FREE_JETTY_IN_HANDLE, arg->in.handle);
+    ATTR(a++, FREE_JETTY_IN_UDATA, arg->udata);
+    ATTR(a++, FREE_JETTY_OUT_ASYNC_EVENTS_REPORTED, arg->out.async_events_reported);
+    ATTR(a++, FREE_JETTY_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_FREE_JETTY, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_set_jetty_opt(int ioctl_fd, urma_cmd_set_jetty_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[SET_JETTY_OPT_IN_NUM + SET_JETTY_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, SET_JETTY_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, SET_JETTY_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, SET_JETTY_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, SET_JETTY_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, SET_JETTY_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, SET_JETTY_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_SET_JETTY_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_get_jetty_opt(int ioctl_fd, urma_cmd_get_jetty_opt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JETTY_OPT_IN_NUM + GET_JETTY_OPT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JETTY_OPT_IN_HANDLE, arg->in.handle);
+    ATTR(a++, GET_JETTY_OPT_IN_OPT, arg->in.opt);
+    ATTR(a++, GET_JETTY_OPT_IN_BUF, arg->in.buf);
+    ATTR(a++, GET_JETTY_OPT_IN_LEN, arg->in.len);
+    ATTR(a++, GET_JETTY_OPT_IN_UDATA, arg->udata);
+    ATTR(a++, GET_JETTY_OPT_OUT_BUF, arg->out.buf);
+    ATTR(a++, GET_JETTY_OPT_OUT_LEN, arg->out.len);
+    ATTR(a++, GET_JETTY_OPT_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JETTY_OPT, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_active_jetty(int ioctl_fd, urma_cmd_active_jetty_t *arg)
+{
+    urma_cmd_attr_t attrs[ACTIVE_JETTY_IN_NUM + ACTIVE_JETTY_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, ACTIVE_JETTY_IN_FLAG, arg->in.flag);
+    ATTR(a++, ACTIVE_JETTY_IN_HANDLE, arg->in.handle);
+    ATTR(a++, ACTIVE_JETTY_IN_SEND_JFC_HANDLE, arg->in.send_jfc_handle);
+    ATTR(a++, ACTIVE_JETTY_IN_RECV_JFC_HANDLE, arg->in.recv_jfc_handle);
+    ATTR(a++, ACTIVE_JETTY_IN_URMA_JETTY, arg->in.urma_jetty);
+    ATTR(a++, ACTIVE_JETTY_IN_JETTY_OPT, arg->in.jetty_opt);
+    ATTR(a++, ACTIVE_JETTY_IN_UDATA, arg->udata);
+    ATTR(a++, ACTIVE_JETTY_OUT_JETTY_ID, arg->out.jetty_id);
+    ATTR(a++, ACTIVE_JETTY_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_ACTIVE_JETTY, attrs, sizeof(attrs));
+}
+
+int urma_ioctl_deactive_jetty(int ioctl_fd, urma_cmd_deactive_jetty_t *arg)
+{
+    urma_cmd_attr_t attrs[DEACTIVE_JETTY_IN_NUM + DEACTIVE_JETTY_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, DEACTIVE_JETTY_IN_HANDLE, arg->in.handle);
+    ATTR(a++, DEACTIVE_JETTY_IN_UDATA, arg->udata);
+    ATTR(a++, DEACTIVE_JETTY_OUT_UDATA, arg->udata);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_DEACTIVE_JETTY, attrs, sizeof(attrs));
+}
+
 inline int urma_ioctl_advise_jfr(int ioctl_fd, urma_cmd_advise_jetty_t *arg)
 {
     return urma_ioctl_advise_jetty_inner(ioctl_fd, URMA_CMD_ADVISE_JFR, arg);
@@ -874,11 +1280,11 @@ int urma_ioctl_wait_jfc(int ioctl_fd, urma_cmd_jfce_wait_t *arg)
         .command = (uint32_t)URMA_EVENT_CMD_WAIT_JFCE,
         .args_len = sizeof(attrs),
         .args_addr = (uint64_t)(uintptr_t)attrs,
-    };
+     };
     int ret = ioctl(ioctl_fd, URMA_CMD_WAIT_JFC, &hdr);
     if (ret != 0) {
         URMA_LOG_ERR("wait jfc ioctl failed, ret:%d, errno:%d.\n", ret, errno);
-    }
+     }
     return ret;
 }
 
@@ -894,11 +1300,11 @@ int urma_ioctl_get_async_event(int ioctl_fd, urma_cmd_async_event_t *arg)
         .command = (uint32_t)URMA_EVENT_CMD_GET_ASYNC_EVENT,
         .args_len = sizeof(attrs),
         .args_addr = (uint64_t)(uintptr_t)attrs,
-    };
+     };
     int ret = ioctl(ioctl_fd, URMA_CMD_GET_ASYNC_EVENT, &hdr);
     if (ret != 0) {
         URMA_LOG_ERR("get async event ioctl failed, ret:%d, errno:%d.\n", ret, errno);
-    }
+     }
     return ret;
 }
 
@@ -990,11 +1396,11 @@ int urma_ioctl_wait_notify(int ioctl_fd, urma_cmd_wait_notify_t *arg)
         .command = (uint32_t)URMA_EVENT_CMD_WAIT_NOTIFY,
         .args_len = sizeof(attrs),
         .args_addr = (uint64_t)(uintptr_t)attrs,
-    };
+     };
     int ret = ioctl(ioctl_fd, URMA_CMD_WAIT_NOTIFY, &hdr);
     if (ret != 0) {
         URMA_LOG_ERR("wait notify ioctl failed, ret:%d, errno:%d.\n", ret, errno);
-    }
+     }
     return ret;
 }
 
@@ -1067,41 +1473,41 @@ int urma_ioctl_get_eid_by_ip(int ioctl_fd, urma_cmd_get_eid_by_ip_t *arg)
 {
     urma_cmd_attr_t attrs[GET_EID_BY_IP_INFO_IN_NUM + GET_EID_BY_IP_INFO_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
- 
+
     ATTR(a++, GET_EID_BY_IP_INFO_IN_NET_ADDR, arg->in.net_addr);
     ATTR(a++, GET_EID_BY_IP_INFO_OUT_EID, arg->out.eid);
- 
+
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_EID_BY_IP, attrs, sizeof(attrs));
 }
- 
+
 int urma_ioctl_get_ip_by_eid(int ioctl_fd, urma_cmd_get_ip_by_eid_t *arg)
 {
     urma_cmd_attr_t attrs[GET_IP_BY_EID_INFO_IN_NUM + GET_IP_BY_EID_INFO_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
- 
+
     ATTR(a++, GET_IP_BY_EID_INFO_IN_EID, arg->in.eid);
     ATTR(a++, GET_IP_BY_EID_INFO_OUT_NET_ADDR, arg->out.net_addr);
- 
+
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_IP_BY_EID, attrs, sizeof(attrs));
 }
- 
+
 int urma_ioctl_get_smac(int ioctl_fd, urma_cmd_get_smac_t *arg)
 {
     urma_cmd_attr_t attrs[GET_SMAC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
- 
+
     ATTR(a++, GET_SMAC_OUT_MAC, arg->out.mac);
- 
+
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_SMAC, attrs, sizeof(attrs));
 }
- 
+
 int urma_ioctl_get_dmac(int ioctl_fd, urma_cmd_get_dmac_t *arg)
 {
     urma_cmd_attr_t attrs[GET_DMAC_IN_NUM + GET_DMAC_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
     urma_cmd_attr_t *a = attrs;
- 
+
     ATTR(a++, GET_DMAC_IN_NET_ADDR, arg->in.net_addr);
     ATTR(a++, GET_DMAC_OUT_MAC, arg->out.mac);
- 
+
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_DMAC, attrs, sizeof(attrs));
 }
