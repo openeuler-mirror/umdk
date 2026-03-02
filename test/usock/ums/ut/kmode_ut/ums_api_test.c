@@ -36,6 +36,12 @@
 #define UMS_TEST_SNDBUF_DEFAULT_SIZE (1 * 1024 * 1024) /* 1MB by default */
 #define UMS_TEST_RCVBUF_DEFAULT_SIZE (1 * 1024 * 1024) /* 1MB by default */
 #define UMS_TEST_AUTOCORKING_DEFAULT_SIZE ((UMS_TEST_SNDBUF_DEFAULT_SIZE) >> 1)
+#define UMS_TEST_CDC_TX_PUSHING 10
+#define SOCK_ADDR_SA_FAMILY_LEN_NORMAL 16
+#define SOCK_ADDR_SA_FAMILY_LEN_ABNORMAL 1
+#define UMS_TEST_KERNEL_CONNECT_FLAGS 2
+#define UMS_TEST_TX_WQ_LEN 4
+#define UMS_TEST_DEL_LLC_LINK_NUM 100
 
 struct socket *socket;
 struct ums_sock *ums;
@@ -45,11 +51,11 @@ static void ums_test_close_abort(void)
     struct ums_connection *conn = kzalloc(sizeof(*conn), GFP_KERNEL);
     if (!conn)
         return;
-    atomic_set(&conn->cdc_tx_pushing, 10);
+    atomic_set(&conn->cdc_tx_pushing, UMS_TEST_CDC_TX_PUSHING);
     atomic_set(&conn->conn_tx_rx_refcnt, 1);
     ums_close_abort(conn);
 
-    if(conn)
+    if (conn)
         kfree(conn);
 }
 
@@ -136,24 +142,24 @@ static void ums_test_check_sk_state(void)
 
     /* test for ums_connect_check_sk_state */
     socket->sk->sk_state = (unsigned char)UMS_ACTIVE;
-    ums_connect(socket, &addr, 16, 2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_NORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 
     socket->sk->sk_state = (unsigned char)UMS_LISTEN;
-    ums_connect(socket, &addr, 16, 2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_NORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 
     socket->sk->sk_state = (unsigned char)UMS_CLOSED;
-    ums_connect(socket, &addr, 16, 2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_NORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 
     /* when alen is less than sizeof(addr->sa_family) */
-    ums_connect(socket, &addr, 1, 2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_ABNORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 
     /* when sa_faimly is AF_UNIX */
     addr.sa_family = AF_UNIX;
-    ums_connect(socket, &addr, 16,2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_NORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 
     /* Test for ums_connect_check_sk_state */
     socket->state = SS_FREE;
-    ums_connect(socket, &addr, 16,2);
+    ums_connect(socket, &addr, SOCK_ADDR_SA_FAMILY_LEN_NORMAL, UMS_TEST_KERNEL_CONNECT_FLAGS);
 }
 
 static void ums_test_close_passive_work(struct work_struct *work)
@@ -177,7 +183,7 @@ static void ums_test_close_active(void)
     ums->listen_ums = NULL;
     init_rwsem(&ums->clcsock_release_lock);
     workqueue_test = alloc_workqueue("workqueue_test", 0, 0);
-    tx_wq = alloc_workqueue("ums_tx_wq-%*phN", 0, 0, 4, 0);
+    tx_wq = alloc_workqueue("ums_tx_wq-%*phN", 0, 0, UMS_TEST_TX_WQ_LEN, 0);
     INIT_WORK(&ums->conn.close_work, ums_test_close_passive_work);
     INIT_DELAYED_WORK(&ums->conn.tx_work, ums_test_tx_work);
     queue_work(workqueue_test, &ums->conn.close_work);
@@ -220,7 +226,7 @@ static void ums_test_close_active_shut(void)
 
     /* test when sk statw is UMS_PROCESSABORT */
     ums->sk.sk_state = UMS_PROCESSABORT;
-    atomic_set(&conn.cdc_tx_pushing, 10);
+    atomic_set(&conn.cdc_tx_pushing, UMS_TEST_CDC_TX_PUSHING);
     ums_close_active(ums);
 
     /* test when sk statw is UMS_PEERABORTWAIT */
@@ -295,7 +301,7 @@ static void ums_test_srv_delete_link(void)
     struct ums_llc_msg_del_link del_llc;
 
     del_llc.hd.flags = 0;
-    del_llc.link_num = 100;
+    del_llc.link_num = UMS_TEST_DEL_LLC_LINK_NUM;
     lgr->llc_flow_lcl.qentry = qentry;
     qentry->link = &link;
     qentry->msg.delete_link = del_llc;
