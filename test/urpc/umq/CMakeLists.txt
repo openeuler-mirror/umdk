@@ -14,6 +14,7 @@ add_executable(${PROJECT_NAME} ${TEST_SOURCE_DIR} ${TEST_C_FILE})
 target_include_directories(${PROJECT_NAME} PRIVATE
     /usr/include/ub/umdk/urma
     ${URPC_ROOT_DIR}/include/umq
+    ${URPC_ROOT_DIR}/include/umq/umq_ub
     ${URPC_ROOT_DIR}/include/umq/transport_layer
     ${URPC_ROOT_DIR}/umq
     ${URPC_ROOT_DIR}/umq/dfx
