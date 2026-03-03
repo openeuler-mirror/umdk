@@ -99,11 +99,40 @@ int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
     return ret;
 }
 
+int uvs_get_topo_info_inner(void *topo)
+{
+    int ret;
+
+    if (!topo) {
+        TPSA_LOG_ERR("topo is NULL.\n");
+        return -EINVAL;
+    }
+
+    ret = uvs_ubcore_ioctl_get_topo(topo);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to get topo info in ubcore.\n");
+        return ret;
+    } else {
+        TPSA_LOG_INFO("success to get topo info in ubcore\n");
+    }
+
+    return ret;
+}
+
 int uvs_set_topo_info(void *topo, uint32_t topo_num)
 {
     int ret = 0;
     uvs_get_api_rdlock();
     ret = uvs_set_topo_info_inner(topo, topo_num);
+    put_uvs_lock();
+    return ret;
+}
+
+int uvs_get_topo_info(void *topo)
+{
+    int ret = 0;
+    uvs_get_api_rdlock();
+    ret = uvs_get_topo_info_inner(topo);
     put_uvs_lock();
     return ret;
 }
