@@ -1753,9 +1753,10 @@ int ubmm_fill_ref_sge_info(uint64_t umqh_tp, umq_buf_t *qbuf, char *ub_ref_info,
                 "exceeds the maximum limit [%u]\n", EID_ARGS(*eid), id, ref_sge_cnt, umq_imm_head->mempool_num);
             return UMQ_FAIL;
         }
-
         mempool_info_ctx.import_mempool_info = &import_mempool_info[umq_imm_head->mempool_num];
-        fill_big_data_ref_sge(queue, ref_sge, tmp_buf, &mempool_info_ctx);
+        if (fill_big_data_ref_sge(queue, ref_sge, tmp_buf, &mempool_info_ctx) != UMQ_SUCCESS) {
+            return UMQ_FAIL;
+        }
         tmp_buf = tmp_buf->qbuf_next;
         ref_sge = ref_sge + 1;
         idx++;

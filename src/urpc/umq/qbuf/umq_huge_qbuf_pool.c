@@ -388,7 +388,7 @@ static huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_mempool_id(uint32_t 
 {
     huge_qbuf_pool_size_type_t type;
     int i = HUGE_QBUF_POOL_SIZE_TYPE_BIG;
-    for (i = HUGE_QBUF_POOL_SIZE_TYPE_BIG; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
+    for (; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
         if (mempool_id < g_huge_pool_ctx.pool[i].pool_idx_shift) {
             break;
         }
@@ -491,7 +491,7 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     /**
      * The huge memory pool is not necessarily initialized
      * If it is not initialized, no statistics are returned, yet the operation itself returns successfully
-     */ 
+     */
     if (!g_huge_pool_ctx.inited) {
         UMQ_VLOG_DEBUG(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return UMQ_SUCCESS;

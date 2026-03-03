@@ -335,7 +335,11 @@ static int process_tx_eagain(uint64_t umqh)
             return -1;
         }
         if (ret == 1) {
-            return process_flow_control_buf(umqh, buf);
+            ret = process_flow_control_buf(umqh, buf);
+            if (ret == 1) {
+                umq_buf_free(buf);
+            }
+            return ret;
         }
     }
     return -1;
@@ -464,7 +468,11 @@ static int process_tx_eagain_interrupt(uint64_t umqh, umq_interrupt_option_t *in
     if (is_perftest_force_quit()) {
         return -1;
     }
-    return process_flow_control_buf(umqh, buf);
+    ret = process_flow_control_buf(umqh, buf);
+    if (ret == 1) {
+        umq_buf_free(buf);
+    }
+    return ret;
 }
 
 static void umq_perftest_server_run_latency_pro_interrupt(uint64_t umqh, umq_perftest_latency_arg_t *lat_arg)

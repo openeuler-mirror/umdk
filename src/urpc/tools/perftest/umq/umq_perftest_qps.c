@@ -470,11 +470,11 @@ REARM:
 
         if (umq_wait_interrupt(umqh, 0, &rx_interrupt_option) < 0) {
             LOG_PRINT("umq wait tx interrupt failed\n");
-            return;
+            goto ERROR;
         }
         if (umq_rearm_interrupt(umqh, false, &rx_interrupt_option) != 0) {
             LOG_PRINT("server umq rearm tx interrupt failed\n");
-            return;
+            goto ERROR;
         }
 
 POLL:
