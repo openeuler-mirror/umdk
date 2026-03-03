@@ -248,7 +248,7 @@ typedef struct umq_ub_bind_dev_info {
 } umq_ub_bind_dev_info_t;
 
 typedef struct umq_ub_bind_queue_info {
-    bool is_binded;
+    uint8_t is_binded;
     urma_jetty_grp_policy_t policy;
     urma_jetty_id_t jetty_id;
     urma_order_type_t order_type;

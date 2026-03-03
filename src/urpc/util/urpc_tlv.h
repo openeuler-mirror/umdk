@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+#define URPC_TLV_ALIGNMENT 8
+
 /* urpc tlv basic type ranges from 0 to 15(0xf)
  * urpc tlv complex type ranges from 16 to 65535(0xffff) */
 typedef enum urpc_tlv_type {
@@ -61,20 +63,28 @@ typedef struct urpc_tlv_arr_head {
     uint32_t type;
     uint32_t len;   // the length of 'value'(array num(4B) + user data), not including 'urpc_tlv_head_t'.
     struct {
-        uint32_t arr_num;
+        uint64_t arr_num;
         char user_data[0];
     } value;
 } urpc_tlv_arr_head_t;
 
+// align the given length value 'len' and return the aligned length
+static inline uint32_t urpc_tlv_get_aligned_len(uint32_t len)
+{
+    return ((len + URPC_TLV_ALIGNMENT -1) & ~(URPC_TLV_ALIGNMENT -1));
+}
+
 static inline urpc_tlv_head_t *urpc_tlv_get_next_element(urpc_tlv_head_t *head)
 {
-    return (urpc_tlv_head_t *)(head->value + head->len);
+    // return next head aligned to 8 bytes
+    return (urpc_tlv_head_t *)(head->value + urpc_tlv_get_aligned_len(head->len));
 }
 
 /* total length = sizeof(urpc_tlv_head_t) + value length */
 static inline uint32_t urpc_tlv_get_total_len(urpc_tlv_head_t *head)
 {
-    return sizeof(urpc_tlv_head_t) + head->len;
+    // return the total length aligned to 8 bytes
+    return sizeof(urpc_tlv_head_t) + urpc_tlv_get_aligned_len(head->len);
 }
 
 /* Caller ensures the validity of 'type' */
@@ -90,7 +100,7 @@ static inline uint32_t urpc_tlv_get_left_len(char *buf, uint32_t buf_size, urpc_
 
 static inline uint32_t urpc_tlv_arr_get_user_data_len(urpc_tlv_arr_head_t *head)
 {
-    return head->len - sizeof(head->value);
+    return (head->len > sizeof(head->value)) ? (head->len - sizeof(head->value)) : 0;
 }
 
 static inline uint32_t urpc_tlv_arr_get_value_len_by_user_data_len(uint32_t user_data_len)
