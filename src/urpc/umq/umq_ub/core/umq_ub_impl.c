@@ -1956,6 +1956,7 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
     cfg->trans_mode = queue->umq_trans_mode;
     cfg->mode = queue->mode;
     cfg->state = queue->state;
+    cfg->priority = queue->priority;
     return UMQ_SUCCESS;
 }
 
