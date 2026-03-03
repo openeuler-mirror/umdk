@@ -14,6 +14,7 @@
 #include "udma_u_buf.h"
 #include "udma_u_db.h"
 #include "udma_u_jfc.h"
+#include "udma_u_jetty.h"
 #include "udma_u_jfs.h"
 
 static uint32_t get_ctl_len(uint8_t opcode)
@@ -86,9 +87,27 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 	}
 }
 
-int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
-			       urma_jfs_cfg_t *cfg)
+int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
+			  struct udma_create_jetty_resp *resp)
 {
+	if (!sq->sq_reserved || sq->cstm)
+		return 0;
+
+	if (resp->buf_addr == 0) {
+		UDMA_LOG_ERR("failed to get reserved addr.\n");
+		return EINVAL;
+	}
+
+	sq->qbuf = (void *)(uintptr_t)resp->buf_addr;
+	sq->qbuf_curr = sq->qbuf;
+	sq->qbuf_end = sq->qbuf + sq->qbuf_size;
+
+	return 0;
+}
+
+static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cfg)
+{
+	struct udma_create_jetty_resp resp = {};
 	struct udma_create_jetty_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
@@ -103,22 +122,72 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	cmd.buf_len = jfs->sq.qbuf_size;
 	cmd.jetty_addr = (uintptr_t)&jfs->sq;
 	cmd.sqe_bb_cnt = jfs->sq.sqe_bb_cnt;
-	cmd.pi_type = jfs->pi_type;
+	cmd.pi_type = jfs->sq.pi_type;
 	cmd.non_pin = jfs->sq.cstm;
 	cmd.is_hugepage = jfs->sq.hugepage != NULL;
 	cmd.jetty_type = jfs->jfs_type;
 	cmd.jfs_id = jfs->sq.db.id;
-	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), NULL, 0);
+	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
+	ret = urma_cmd_active_jfs(&jfs->base, &udata);
+	if (ret != 0) {
+		UDMA_LOG_ERR("failed to urma cmd active jfs, ret is %d.\n", ret);
+		return ret;
+	}
+
+	ret = udma_u_set_sq_by_resp(&jfs->sq, &resp);
+	if (ret != 0) {
+		(void)urma_cmd_deactive_jfs(&jfs->base, NULL);
+		return ret;
+	}
+
+	return ret;
+}
+
+int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
+			       urma_jfs_cfg_t *cfg)
+{
+	struct udma_create_jetty_resp resp = {};
+	struct udma_create_jetty_ucmd cmd = {};
+	urma_cmd_udrv_priv_t udata = {};
+	int ret;
+
+	if (cfg->priority >= UDMA_MAX_PRIORITY) {
+		UDMA_LOG_ERR("user mode jfs priority is out of range, priority is %u.\n",
+			     cfg->priority);
+		return EINVAL;
+	}
+
+	cmd.buf_addr = (uintptr_t)jfs->sq.qbuf;
+	cmd.buf_len = jfs->sq.qbuf_size;
+	cmd.jetty_addr = (uintptr_t)&jfs->sq;
+	cmd.sqe_bb_cnt = jfs->sq.sqe_bb_cnt;
+	cmd.pi_type = jfs->sq.pi_type;
+	cmd.non_pin = jfs->sq.cstm;
+	cmd.is_hugepage = jfs->sq.hugepage != NULL;
+	cmd.jetty_type = jfs->jfs_type;
+	cmd.jfs_id = jfs->sq.db.id;
+	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
-	if (ret != 0)
+	if (ret != 0) {
 		UDMA_LOG_ERR("failed to urma cmd create jfs, ret is %d.\n", ret);
+		return ret;
+	}
+
+	ret = udma_u_set_sq_by_resp(&jfs->sq, &resp);
+	if (ret != 0) {
+		(void)urma_cmd_delete_jfs(&jfs->base);
+		return ret;
+	}
 
 	return ret;
 }
 
 int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 {
+	struct udma_u_context *ctx = sq->ctx;
+	uint32_t aligned_size;
 	uint32_t sqe_bb_cnt;
+	bool is_ccu_jetty;
 
 	sq->lock_free = cfg->flag.bs.lock_free;
 
@@ -135,8 +204,14 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 		sqe_bb_cnt = MAX_SQE_BB_NUM;
 	sq->sqe_bb_cnt = sqe_bb_cnt;
 	sq->max_sge_num = cfg->max_sge;
+
+	is_ccu_jetty = ctx->ccu_jetty_max_cnt &&
+		       sq->db.id >= ctx->ccu_jetty_start_id &&
+		       sq->db.id < ctx->ccu_jetty_start_id + ctx->ccu_jetty_max_cnt;
+	aligned_size = is_ccu_jetty ?
+		(UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB) : UDMA_HW_PAGE_SIZE;
 	if (!udma_u_alloc_queue_buf(sq, sqe_bb_cnt * cfg->depth,
-				    UDMA_JFS_WQEBB, UDMA_HW_PAGE_SIZE, true)) {
+				    UDMA_JFS_WQEBB, aligned_size, true)) {
 		UDMA_LOG_ERR("failed to alloc jfs wqe buf.\n");
 		goto err_alloc_buf;
 	}
@@ -153,6 +228,23 @@ err_init_lock:
 void udma_u_delete_sq(struct udma_u_jetty_queue *sq)
 {
 	udma_u_free_queue_buf(sq);
+
+	if (!sq->lock_free)
+		(void)pthread_spin_destroy(&sq->lock);
+}
+
+void udma_u_lock_delete_sq(struct udma_u_jetty_queue *sq)
+{
+	if (sq->wrid != NULL) {
+		free(sq->wrid);
+		sq->wrid = NULL;
+	}
+
+	if (sq->qbuf != NULL) {
+		sq->qbuf = NULL;
+		sq->qbuf_curr = NULL;
+		sq->qbuf_end = NULL;
+	}
 
 	if (!sq->lock_free)
 		(void)pthread_spin_destroy(&sq->lock);
@@ -175,6 +267,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	}
 
 	jfs->sq.ctx = udma_ctx;
+	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	if (udma_u_create_sq(&jfs->sq, cfg)) {
 		UDMA_LOG_ERR("failed to create sq.\n");
 		goto err_create_sq;
@@ -202,8 +295,9 @@ err_create_sq:
 	return NULL;
 }
 
-static void udma_u_free_jfs(urma_jfs_t *jfs)
+static void udma_u_free_jfs_prepare(urma_jfs_t *jfs)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 
 	if (!!jfs->jfs_cfg.jfc)
@@ -211,7 +305,12 @@ static void udma_u_free_jfs(urma_jfs_t *jfs)
 
 	udma_u_free_db(jfs->urma_ctx, &udma_jfs->sq.db);
 	udma_u_delete_sq(&udma_jfs->sq);
-	free(udma_jfs);
+}
+
+static void udma_u_free_jfs_detail(urma_jfs_t *jfs)
+{
+	udma_u_free_jfs_prepare(jfs);
+	free(jfs);
 }
 
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
@@ -219,7 +318,7 @@ urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs)
 	if (urma_cmd_delete_jfs(jfs))
 		return URMA_FAIL;
 
-	udma_u_free_jfs(jfs);
+	udma_u_free_jfs_detail(jfs);
 
 	return URMA_SUCCESS;
 }
@@ -242,7 +341,7 @@ urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t 
 		return URMA_FAIL;
 
 	for (i = 0; i < jfs_cnt; i++)
-		udma_u_free_jfs(jfs[i]);
+		udma_u_free_jfs_detail(jfs[i]);
 
 	return URMA_SUCCESS;
 }
@@ -831,10 +930,14 @@ urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 	if (wr_cnt) {
 		UDMA_TO_DEVICE_BARRIER();
 
-		if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
-			udma_write_dsqe(sq, wqe_addr);
-		else
-			udma_update_sq_db(sq);
+		if (UNLIKELY(sq->db_status)) {
+			sq->need_ring_db = true;
+		} else {
+			if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
+				udma_write_dsqe(sq, wqe_addr);
+			else
+				udma_update_sq_db(sq);
+		}
 	}
 
 	if (!sq->lock_free)
@@ -916,7 +1019,7 @@ static void copy_from_sq(struct udma_u_jetty_queue *sq, uint32_t wqebb_cnt,
 
 	offset = (sq->ci & (sq->baseblk_cnt - 1)) * UDMA_JFS_WQEBB;
 	field_h = remain > wqebb_cnt ? wqebb_cnt : remain;
-	field_l = wqebb_cnt > field_h ? wqebb_cnt - field_h : 0;
+	field_l = wqebb_cnt - field_h;
 
 	(void)memcpy((void *)tmp_sq, sq->qbuf + offset, field_h * sizeof(struct udma_jfs_wqebb));
 
@@ -1038,4 +1141,189 @@ int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr)
 		(void)pthread_spin_unlock(&sq->lock);
 
 	return n_flushed;
+}
+
+urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
+			      urma_jfs_t **jfs)
+{
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+	struct udma_u_jfs *udma_jfs;
+	urma_cmd_udrv_priv_t udata;
+	int ret;
+
+	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
+	if (udma_jfs == NULL) {
+		UDMA_LOG_ERR("udma jfs allocation failed.\n");
+		return URMA_ENOMEM;
+	}
+
+	ret = urma_cmd_alloc_jfs(ctx, cfg, &udma_jfs->base, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("alloc jfs failed, ret = %d.\n", ret);
+		free(udma_jfs);
+		return URMA_FAIL;
+	}
+
+	*jfs = &udma_jfs->base;
+	udma_jfs->sq.ctx = udma_ctx;
+
+	return URMA_SUCCESS;
+}
+
+urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
+{
+	urma_cmd_udrv_priv_t udata;
+	int ret;
+
+	ret = urma_cmd_free_jfs(jfs, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("free jfs failed, ret = %d.\n", ret);
+		return URMA_FAIL;
+	}
+
+	free(jfs);
+
+	return URMA_SUCCESS;
+}
+
+urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
+	urma_cmd_udrv_priv_t udata;
+	urma_status_t verify_ret;
+	urma_status_t urma_ret;
+	int ret;
+
+	verify_ret = udma_u_verify_jetty_opt(opt, buf, len, JFS_MODE, PERM_W);
+	if (verify_ret && verify_ret != URMA_EEXIST)
+		return verify_ret;
+
+	if (opt == URMA_JFS_ID)
+		udma_jfs->sq.db.id = *((uint32_t *)(uintptr_t)buf);
+	else {
+		urma_ret = udma_u_set_jetty_field(&udma_jfs->sq, opt, buf);
+		if (urma_ret)
+			return urma_ret;
+	}
+
+	if (verify_ret == URMA_EEXIST)
+		return URMA_SUCCESS;
+
+	ret = urma_cmd_set_jfs_opt(jfs, opt, buf, len, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+		return URMA_FAIL;
+	}
+
+	return URMA_SUCCESS;
+}
+
+urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
+	urma_cmd_udrv_priv_t udata;
+	urma_status_t urma_ret;
+	int ret;
+
+	urma_ret = udma_u_verify_jetty_opt(opt, buf, len, JFS_MODE, PERM_R);
+	if (urma_ret && urma_ret != URMA_EEXIST)
+		return urma_ret;
+
+	if (urma_ret != URMA_EEXIST) {
+		ret = urma_cmd_get_jfs_opt(jfs, opt, buf, len, &udata);
+		if (ret) {
+			UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+			return URMA_FAIL;
+		}
+	}
+
+	if (opt == URMA_JFS_ID) {
+		*((uint32_t *)(uintptr_t)buf) = udma_jfs->sq.db.id;
+	} else {
+		udma_u_get_jetty_field(&udma_jfs->sq, opt, buf);
+		udma_u_get_jfs_cfg_field(&jfs->jfs_cfg, opt, buf);
+	}
+
+	return URMA_SUCCESS;
+}
+
+static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
+	int ret;
+
+	if (cfg->trans_mode == URMA_TM_RC) {
+		UDMA_LOG_ERR("jfs not support RC transmode.\n");
+		return EINVAL;
+	}
+
+	udma_jfs->sq.sq_reserved = udma_jfs->sq.sq_reserved;
+	ret = udma_u_create_sq(&udma_jfs->sq, cfg);
+	if (ret)
+		UDMA_LOG_ERR("failed to create sq, ret = %d.\n", ret);
+
+	return ret;
+}
+
+static int udma_u_active_jfs_after(urma_jfs_t *jfs)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
+	int ret;
+
+	udma_jfs->sq.db.type = UDMA_MMAP_JETTY_DSQE;
+	udma_jfs->sq.db.id = udma_jfs->base.jfs_id.id;
+	ret = udma_u_alloc_db(jfs->urma_ctx, &udma_jfs->sq.db);
+	if (ret)
+		return ret;
+
+	udma_jfs->sq.dwqe_addr = (void *)udma_jfs->sq.db.addr;
+
+	return ret;
+}
+
+urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
+{
+	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
+	urma_jfs_cfg_t *cfg = &jfs->jfs_cfg;
+	urma_cmd_udrv_priv_t udata = {};
+	int ret;
+
+	ret = udma_u_active_jfs_prepare(jfs, cfg);
+	if (ret)
+		return ret;
+
+	udma_jfs->jfs_type = UDMA_URMA_EX_JETTY_TYPE;
+	ret = udma_u_exec_jfs_active_cmd(udma_jfs, cfg);
+	if (ret) {
+		UDMA_LOG_ERR("exec active jfs cmd failed, ret = %d.\n", ret);
+		goto err_active_jfs_cmd;
+	}
+
+	ret = udma_u_active_jfs_after(jfs);
+	if (ret)
+		goto err_active_jfs_after;
+
+	return URMA_SUCCESS;
+err_active_jfs_after:
+	urma_cmd_deactive_jfs(jfs, &udata);
+err_active_jfs_cmd:
+	udma_u_delete_sq(&udma_jfs->sq);
+
+	return URMA_FAIL;
+}
+
+urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs)
+{
+	urma_cmd_udrv_priv_t udata;
+	int ret;
+
+	ret = urma_cmd_deactive_jfs(jfs, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("deactive jfs failed, ret = %d.\n", ret);
+		return URMA_FAIL;
+	}
+
+	udma_u_free_jfs_prepare(jfs);
+
+	return URMA_SUCCESS;
 }
