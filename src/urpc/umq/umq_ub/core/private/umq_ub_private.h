@@ -155,11 +155,12 @@ typedef struct ub_flow_control {
     uint16_t initial_window;
     uint16_t notify_interval;
     uint16_t credits_per_request;
+    uint16_t max_credits_request;
     uint16_t initial_credit;
     uint16_t credit_request_threshold;
     uint16_t return_ratio;
     uint16_t min_reserved_credit;
-    uint16_t credit_multiple;
+    float credit_multiple;
     uint16_t local_tx_depth;
     uint16_t local_rx_depth;
     uint16_t remote_tx_depth;
