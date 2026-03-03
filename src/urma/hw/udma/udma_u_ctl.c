@@ -86,6 +86,9 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 		return ENOMEM;
 	}
 
+	if (!cstm && q->sq_reserved)
+		return 0;
+
 	if (cstm) {
 		q->qbuf = cfg_ex->cstm_cfg.sq.buff;
 	} else if (q->ctx->hugepage_enable) {
@@ -379,13 +382,14 @@ static urma_jfs_t *udma_u_create_jfs_ex(urma_context_t *ctx,
 	}
 
 	jfs->sq.ctx = udma_ctx;
+	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	if (udma_u_create_sq_ex(&jfs->sq, cfg_ex)) {
 		UDMA_LOG_ERR("failed to create sq.\n");
 		goto err_create_sq;
 	}
 
 	jfs->sq.cstm = cfg_ex->cstm_cfg.flag.bs.sq_cstm;
-	jfs->pi_type = cfg_ex->pi_type;
+	jfs->sq.pi_type = cfg_ex->pi_type;
 	jfs->jfs_type = (uint32_t)cfg_ex->jetty_type;
 	jfs->sq.db.id = cfg_ex->id;
 	cfg_ex->base_cfg.depth = 1;
@@ -515,7 +519,7 @@ static void udma_u_init_jetty_param_ex(struct udma_u_jetty *jetty,
 	jetty->jfr = to_udma_u_jfr(cfg_ex->base_cfg.shared.jfr);
 	jetty->sq.cstm = cfg_ex->jfs_cstm.flag.bs.sq_cstm != 0 ? true : false;
 	jetty->jetty_type = (uint32_t)cfg_ex->jetty_type;
-	jetty->pi_type = cfg_ex->pi_type;
+	jetty->sq.pi_type = cfg_ex->pi_type;
 	cfg_ex->base_cfg.jfs_cfg.depth = 1;
 }
 
@@ -540,6 +544,7 @@ static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_j
 
 	udma_u_init_jfs_cfg_ex(cfg_ex, &jfs_cfg);
 	jetty->sq.ctx = udma_ctx;
+	jetty->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq_ex(&jetty->sq, &jfs_cfg);
 	if (ret != 0) {
 		UDMA_LOG_ERR("jetty create sq failed, ret = %d.\n", ret);

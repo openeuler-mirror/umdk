@@ -155,12 +155,15 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg);
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 void udma_u_delete_sq(struct udma_u_jetty_queue *sq);
+void udma_u_lock_delete_sq(struct udma_u_jetty_queue *sq);
 urma_status_t udma_u_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *jfs_attr);
 urma_status_t udma_u_query_jfs(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg,
 			       urma_jfs_attr_t *attr);
 int udma_u_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
 void udma_u_flush_sq(uint32_t local_id, struct udma_u_jetty_queue *sq,
 		     urma_cr_t *cr, bool is_jetty);
+int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
+			  struct udma_create_jetty_resp *resp);
 int udma_u_exec_jfs_create_cmd(urma_context_t *ctx,
 			       struct udma_u_jfs *jfs,
 			       urma_jfs_cfg_t *cfg);
@@ -171,5 +174,12 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 				 bool *dwqe_enable);
 void udma_reset_sw_u_jetty_queue(struct udma_u_jetty_queue *sq);
 urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t **bad_jfs);
+urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
+			      urma_jfs_t **jfs);
+urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
+urma_status_t udma_u_active_jfs(urma_jfs_t *jfs);
+urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
+urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs);
+urma_status_t udma_u_free_jfs(urma_jfs_t *jfs);
 
 #endif /* __UDMA_U_JFS_H__ */
