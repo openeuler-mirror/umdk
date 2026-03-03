@@ -96,7 +96,10 @@ struct udma_u_context {
 	uint32_t		die_id;
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
+	bool			sq_reserved;
 	bool			sva_sep_mode_en;
+	uint32_t		ccu_jetty_start_id;
+	uint32_t		ccu_jetty_max_cnt;
 	bool			hugepage_enable;
 	pthread_mutex_t		hugepage_lock;
 	struct udma_u_hugepage_priv *hugepage_list;
@@ -141,7 +144,11 @@ struct udma_u_jetty_queue {
 	uint32_t old_entry_idx;
 	bool lock_free;
 	bool cstm; /* sq ctrl flag */
+	bool sq_reserved;
 	struct udma_u_hugepage *hugepage;
+	uint8_t db_status;
+	bool need_ring_db;
+	bool pi_type;
 };
 
 struct udma_wqe_sge {
@@ -176,7 +183,6 @@ struct udma_u_jfr {
 struct udma_u_jfs {
 	urma_jfs_t base;
 	struct udma_u_jetty_queue sq;
-	bool pi_type;
 	uint32_t jfs_type;
 };
 
@@ -186,7 +192,6 @@ struct udma_u_jetty {
 	struct udma_u_jfr *jfr;
 	struct udma_u_jetty_grp *jetty_grp;
 	uint32_t jetty_type;
-	bool pi_type;
 };
 
 struct udma_u_jfc {
