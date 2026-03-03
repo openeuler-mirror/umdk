@@ -84,6 +84,19 @@ static int admin_cmd_agg_del(urma_eid_t eid)
 
     args.in.agg_eid = eid;
 
+    /* Hacky: bonding_dev_0 is hardcoded in other components. Deletion is disabled for now. */
+    urma_init_attr_t init_attr = {0};
+
+    urma_init(&init_attr);
+    urma_device_t *urma_dev = urma_get_device_by_eid(eid, URMA_TRANSPORT_UB);
+    bool is_dev_disallowed = strcmp(urma_dev->name, "bonding_dev_0");
+    urma_uninit();
+
+    if (is_dev_disallowed == 0) {
+        printf("bonding_dev_0 cannot be deleted now.\n");
+        return -1;
+    }
+
     hdr.command = CMD_AGG_DEL;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
     hdr.args_len = sizeof(args);
