@@ -26,5 +26,6 @@ bool urma_match_driver(urma_sysfs_dev_t *sysfs_dev, struct ub_list *driver_list)
 uint32_t urma_read_eid_list(urma_device_t *dev, urma_eid_info_t *eid_list, uint32_t max_eid_cnt);
 int urma_read_eid_with_index(urma_sysfs_dev_t *sysfs_dev, uint32_t eid_index, urma_eid_t *eid);
 void urma_discover_sysfs_path(void);
+int urma_query_device_attr(urma_sysfs_dev_t *sysfs_dev);
 
 #endif

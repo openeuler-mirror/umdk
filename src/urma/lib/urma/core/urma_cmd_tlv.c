@@ -1262,6 +1262,13 @@ int urma_ioctl_query_dev_attr(int ioctl_fd, urma_cmd_query_device_attr_t *arg)
     ATTR_ARRAY(a++, QUERY_DEVICE_OUT_PORT_ATTR_ACTIVE_WIDTH, arg->out.attr.port_attr, active_width);
     ATTR_ARRAY(a++, QUERY_DEVICE_OUT_PORT_ATTR_ACTIVE_SPEED, arg->out.attr.port_attr, active_speed);
     ATTR_ARRAY(a++, QUERY_DEVICE_OUT_PORT_ATTR_ACTIVE_MTU, arg->out.attr.port_attr, active_mtu);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_RM_ORDER_CAP, arg->out.attr.dev_cap.rm_order_cap.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_RC_ORDER_CAP, arg->out.attr.dev_cap.rc_order_cap.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_RM_TP_CAP, arg->out.attr.dev_cap.rm_tp_cap.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_RC_TP_CAP, arg->out.attr.dev_cap.rc_tp_cap.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_UM_TP_CAP, arg->out.attr.dev_cap.um_tp_cap.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_TP_FEATURE, arg->out.attr.dev_cap.tp_feature.value);
+	ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_PRIORITY_INFO, arg->out.attr.dev_cap.priority_info);
 
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_QUERY_DEV_ATTR, attrs, sizeof(attrs));
 }
