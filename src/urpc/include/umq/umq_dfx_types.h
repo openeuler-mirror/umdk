@@ -22,6 +22,7 @@ extern "C" {
 #define UMQ_STATS_QBUF_POOL_TYPE_MAX (16u)
 #define UMQ_PERF_QUANTILE_MAX_NUM (8u)
 #define UMQ_PERF_REC_MAX_NUM (64u)
+#define UMQ_DFX_TO_STRING_DEFAULT_LEN (8192)
 
 typedef struct umq_packet_stats {
     uint64_t send_cnt;              // number of packets sent
