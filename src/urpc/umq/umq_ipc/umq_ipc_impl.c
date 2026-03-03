@@ -59,7 +59,7 @@ typedef struct umq_ipc_info {
 } umq_ipc_info_t;
 
 typedef struct umq_ipc_bind_info {
-    bool is_binded;
+    uint8_t is_binded;
     umq_trans_mode_t trans_mode;
     uint32_t tx_depth;
     uint32_t rx_depth;
@@ -370,7 +370,7 @@ uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32
 
     umq_ipc_bind_info_t *tmp_info = (umq_ipc_bind_info_t *)bind_info;
     memset(tmp_info, 0, sizeof(umq_ipc_bind_info_t));
-    tmp_info->is_binded = tp->bind_ctx != NULL ? true : false;
+    tmp_info->is_binded = tp->bind_ctx != NULL ? 1 : 0;
     tmp_info->trans_mode = tp->trans_mode;
     tmp_info->tx_depth = tp->local_ring.tx_depth;
     tmp_info->rx_depth = tp->local_ring.rx_depth;
@@ -392,7 +392,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
 {
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     umq_ipc_bind_info_t *tmp_info = (umq_ipc_bind_info_t *)bind_info;
-    if (tp->bind_ctx != NULL || tmp_info->is_binded) {
+    if (tp->bind_ctx != NULL || tmp_info->is_binded != 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq has already been binded\n");
         return -UMQ_ERR_EEXIST;
     }
@@ -419,7 +419,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     ctx->remote_ring.rx_depth = tmp_info->rx_depth;
     ctx->remote_ring.transmit_queue_buf_size = tmp_info->transmit_queue_buf_size;
     ctx->remote_ring.owner = false;
-    (void)memcpy(ctx->remote_ring.ipc_name, tmp_info->ipc_name, strlen(tmp_info->ipc_name));
+    (void)memcpy(ctx->remote_ring.ipc_name, tmp_info->ipc_name, sizeof(tmp_info->ipc_name));
 
     int ret = umq_ipc_map_memory(&ctx->remote_ring);
     if (ret != 0) {
