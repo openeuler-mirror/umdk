@@ -183,8 +183,10 @@ typedef struct umq_flow_control_cfg {
     uint16_t credits_per_request;
     // initial available credit for each umq
     uint16_t initial_credit;
+    // the max number of credits allocated per request for each umq
+    uint16_t max_credits_request;
     // next request credit number = current credit request number * credit_multiple
-    uint16_t credit_multiple;
+    float credit_multiple;
     // credit return ratio divisor, return_ratio = 1: return all credit, return_ratio = 2: return half the credit
     uint16_t return_ratio;
     // minimum reserved credit, if the held credit <= min_reserved_credit, the credit will not be returned
