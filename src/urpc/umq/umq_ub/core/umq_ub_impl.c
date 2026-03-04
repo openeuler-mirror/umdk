@@ -1319,7 +1319,7 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
         ret = umq_status_convert(status);
         goto DEC_REF;
     }
-
+    umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, wr_num, queue->dev_ctx->io_lock_free);
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, wr_num);
 
 DEC_REF:
@@ -1379,7 +1379,7 @@ int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **
         ret = umq_status_convert(status);
         goto DEC_REF;
     }
-
+    umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, wr_num, queue->dev_ctx->io_lock_free);
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, wr_num);
 
 DEC_REF:
@@ -1993,7 +1993,7 @@ int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbu
 int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if ( queue->jetty[UB_QUEUE_JETTY_IO] != NULL) {
+    if (queue->jetty[UB_QUEUE_JETTY_IO] != NULL) {
         umq_info->ub.local_io_jetty_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     } else {
         umq_info->ub.local_io_jetty_id = 0;
@@ -2020,5 +2020,34 @@ int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info)
     umq_info->trans_mode = queue->dev_ctx->trans_info.trans_mode;
     (void)memcpy(&umq_info->ub.eid, &queue->dev_ctx->urma_ctx->eid, sizeof(urma_eid_t));
     (void)memcpy(umq_info->ub.dev_name, queue->dev_ctx->urma_ctx->dev->name, URMA_MAX_NAME);
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_stats_io_get_impl(uint64_t umqh_tp, umq_packet_stats_t *packet_stats)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    packet_stats->send_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND];
+    packet_stats->send_success = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND_SUCCESS];
+    packet_stats->recv_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_RECV];
+    packet_stats->send_error_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND_ERROR];
+    packet_stats->recv_error_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_RECV_ERROR];
+
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_stats_io_reset_impl(uint64_t umqh_tp)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+
+    if (queue->dev_ctx != NULL && queue->dev_ctx->io_lock_free) {
+        for (uint32_t i = 0; i < UB_PACKET_STATS_TYPE_MAX; i++) {
+            queue->packet_stats[i] = 0;
+        }
+        return UMQ_SUCCESS;
+    }
+
+    for (uint32_t i = 0; i < UB_PACKET_STATS_TYPE_MAX; i++) {
+        (void)__atomic_exchange_n(&queue->packet_stats[i], 0, __ATOMIC_RELAXED);
+    }
     return UMQ_SUCCESS;
 }
