@@ -208,14 +208,6 @@ int32_t umq_wait_interrupt(uint64_t wait_umqh, int time_out, umq_interrupt_optio
 void umq_ack_interrupt(uint64_t umqh, uint32_t nevents, umq_interrupt_option_t *option);
 
 /**
- * User should ensure thread safety if io_lock_free is true
- * Execute dfx command
- * @param[in] cmd: dfx command, user should set perf or stats
- * @param[out] result_ctl: command result
- */
-void umq_dfx_cmd_process(umq_dfx_cmd_t *cmd, umq_dfx_result_t *result_ctl);
-
-/**
  * Split the head linked list at the node
  * The new list starts from node and continues to the end of the original list
  * @param[in] head: head pointer of the original buf list.

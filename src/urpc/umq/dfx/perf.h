@@ -21,9 +21,16 @@ extern "C" {
 #define UMQ_PERF_REC_NAME_MAX_LEN                   (128u)
 #define UMQ_PERF_RECORD_TRANSPORT_POLL_EMPTY_OFFSET (2)
 
+#define UMQ_DFX_PERF_EQUALS "=========================================================================================\
+================================================================================"
+#define UMQ_DFX_PERF_UNDERLINE "--------------------------------------------------------------------------------------\
+-----------------------------------------------------------------------------------"
+
 uint64_t umq_perf_get_start_timestamp(void);
 void umq_perf_record_write(umq_perf_record_type_t type, uint64_t start);
 void umq_perf_record_write_with_direction(umq_perf_record_type_t type, uint64_t start, umq_io_direction_t direction);
+void umq_perf_record_write_interrupt_with_direction(
+    umq_perf_record_type_t type, uint64_t start, umq_io_direction_t direction);
 int umq_perf_init(void);
 void umq_perf_uninit(void);
 
@@ -43,10 +50,11 @@ static inline void umq_perf_record_write_with_feature(umq_perf_record_type_t typ
     umq_perf_record_write(type, start);
 }
 
-int umq_perf_start(uint64_t *thresh_array, uint32_t thresh_num);
+int umq_perf_start(void);
+int umq_perf_reset(umq_perf_stats_cfg_t *perf_stats_cfg);
 int umq_perf_stop(void);
-int umq_perf_clear(void);
-int umq_perf_info_get(umq_perf_infos_t **perf_info);
+int umq_perf_info_get(umq_perf_stats_t *perf_info);
+int umq_perf_info_to_string(umq_perf_stats_t *perf_stats, char *umq_perf_stats_buf, int max_buf_szie);
 
 #ifdef __cplusplus
 }

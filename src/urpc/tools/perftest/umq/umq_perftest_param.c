@@ -39,6 +39,7 @@ static struct option g_long_options[] = {
     {"buf_multiplex", no_argument, NULL, 'B'},
     {"num", required_argument, NULL, 'n'},
     {"perf-thresh", required_argument, NULL, 't'},
+    {"enable-perf", no_argument, NULL, 'F'},
     {NULL, 0, NULL, 0}
 };
 // clang-format on
@@ -70,6 +71,7 @@ static void usage(void)
     (void)printf("      --use_atomic_window             use atomic window when enable flow control.\n");
     (void)printf("      --num                           set number of iterations.\n");
     (void)printf("      --perf-thresh                   set perf thresh array, length not exceed 8.\n");
+    (void)printf("      --enable-perf                   enable perf.\n");
     (void)printf("  -h, --help                          show help info.\n\n");
 }
 
@@ -90,6 +92,7 @@ static void init_cfg(umq_perftest_config_t *cfg)
     cfg->trans_mode = UMQ_TRANS_MODE_IB;
     cfg->eid_idx = 0;
     cfg->use_atomic_window = false;
+    cfg->enable_perf = false;
     cfg->test_round = DEFAULT_LAT_TEST_ROUND;
     cfg->thresh_num = 0;
 }
@@ -188,6 +191,9 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                     cfg->thresh_array[cfg->thresh_num++] = (uint64_t)strtoul(argv[start_idx++], NULL, 0);
                 }
                 optind = start_idx;
+                break;
+            case 'F':
+                cfg->enable_perf = true;
                 break;
             default:
                 usage();

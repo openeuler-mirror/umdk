@@ -142,6 +142,18 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_POLL_TX_EMPTY,
     /* record point for umq_poll_rx when rx is empty */
     UMQ_PERF_RECORD_POLL_RX_EMPTY,
+    /* record point for umq_rearm_interrupt tx */
+    UMQ_PERF_RECORD_REARM_TX,
+    /* record point for umq_rearm_interrupt rx */
+    UMQ_PERF_RECORD_REARM_RX,
+    /* record point for umq_wait_interrupt rx */
+    UMQ_PERF_RECORD_WAIT_TX,
+    /* record point for umq_wait_interrupt tx */
+    UMQ_PERF_RECORD_WAIT_RX,
+    /* record point for umq_ack_interrupt tx */
+    UMQ_PERF_RECORD_ACK_TX,
+    /* record point for umq_ack_interrupt rx */
+    UMQ_PERF_RECORD_ACK_RX,
     /* record point for umq_notify */
     UMQ_PERF_RECORD_NOTIFY,
     /* record point for transport post send in umq_enqueue and umq_post */
@@ -156,32 +168,32 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_POLL_TX_EMPTY,
     /* record point for transport poll rx in umq_dequeue and umq_poll when rx is empty */
     UMQ_PERF_RECORD_TRANSPORT_POLL_RX_EMPTY,
-    /* record point for transport read in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_READ,
-    /* record point for transport write in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_WRITE,
-    /* record point for transport send imm in umq_dequeue and umq_poll */
-    UMQ_PERF_RECORD_TRANSPORT_SEND_IMM,
-    /* record point for transport write in umq_notify */
-    UMQ_PERF_RECORD_TRANSPORT_WRITE_IMM,
+    /* record point for transport rearm interrupt tx */
+    UMQ_PERF_RECORD_TRANSPORT_REARM_TX,
+    /* record point for transport rearm interrupt rx */
+    UMQ_PERF_RECORD_TRANSPORT_REARM_RX,
+    /* record point for transport wait interrupt rx */
+    UMQ_PERF_RECORD_TRANSPORT_WAIT_TX,
+    /* record point for transport wait interrupt tx */
+    UMQ_PERF_RECORD_TRANSPORT_WAIT_RX,
+    /* record point for transport ack interrupt tx */
+    UMQ_PERF_RECORD_TRANSPORT_ACK_TX,
+    /* record point for transport ack interrupt rx */
+    UMQ_PERF_RECORD_TRANSPORT_ACK_RX,
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
 
-typedef struct umq_perf_record {
+typedef struct umq_perf_stats {
     struct {
         umq_perf_record_type_t type; // types of probe points supported by perf probe
-        uint64_t accumulation; // total latency
-        uint64_t min; // min latency
-        uint64_t max; // max latency
-        uint64_t cnt; // statistical count
-        uint64_t bucket[UMQ_PERF_QUANTILE_MAX_NUM + 1]; // sample count in each quantile bin
+        uint64_t sample_num; // statistical count
+        uint64_t average; // average latency
+        uint64_t mininum; // min latency
+        uint64_t maxinum; // max latency
+        uint64_t median; // median latency
+        uint64_t p90; // 90th percentile
+        uint64_t p99; // 99th percentile
     } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe poin
-    bool is_used; // the statistic item valid
-} umq_perf_record_t;
-
-typedef struct umq_perf_stats {
-    umq_perf_record_t perf_record[UMQ_PERF_REC_MAX_NUM]; // perf statistics list for each thread
-    uint32_t perf_record_num; // Number of valid perf statistics entries
 } umq_perf_stats_t;
 
 typedef struct umq_perf_stats_cfg {
