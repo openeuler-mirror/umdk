@@ -54,7 +54,13 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 		}
 	}
 
-	if (q->ctx->hugepage_enable) {
+	if (q->cstm)
+		goto alloc_queue_buf_finish;
+
+	if (q->sq_reserved)
+		return true;
+
+	if (!q->cstm && q->ctx->hugepage_enable) {
 		q->hugepage = udma_u_alloc_hugepage(q->ctx, q->qbuf_size);
 		if (q->hugepage) {
 			q->qbuf = q->hugepage->va_start;
@@ -62,10 +68,11 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 			UDMA_LOG_WARN("failed to alloc hugepage buf, switch to alloc normal buf.\n");
 			q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 		}
-	} else {
+	} else if (!q->cstm) {
 		q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 	}
 
+alloc_queue_buf_finish:
 	if (!q->qbuf) {
 		UDMA_LOG_ERR("failed to alloc queue buffer.\n");
 		if (wrid_en) {
@@ -87,7 +94,7 @@ void udma_u_free_queue_buf(struct udma_u_jetty_queue *q)
 		q->wrid = NULL;
 	}
 
-	if (q->cstm)
+	if (q->cstm || q->sq_reserved)
 		return;
 
 	if (q->qbuf != NULL) {

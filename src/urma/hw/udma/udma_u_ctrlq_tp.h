@@ -11,6 +11,7 @@
 #define __UDMA_U_CTRLQ_TP_H__
 
 #include "udma_u_common.h"
+#include "udma_u_ctl.h"
 
 int udma_u_ctrlq_get_tp_list(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint32_t *tp_cnt,
 			     urma_tp_info_t *tp_list);
@@ -21,4 +22,10 @@ int udma_u_ctrlq_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle
 int udma_u_ctrlq_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle,
 			     const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap,
 			     const urma_tp_attr_value_t *tp_attr);
+
+urma_status_t udma_u_get_smac(const urma_context_t *ctx, uint8_t *mac);
+urma_status_t udma_u_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
+urma_status_t udma_u_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+urma_status_t udma_u_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+
 #endif /* __UDMA_U_CTRLQ_TP_H__ */
