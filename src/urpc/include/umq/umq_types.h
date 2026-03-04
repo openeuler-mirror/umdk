@@ -541,6 +541,8 @@ typedef struct umq_cfg_get {
     umq_trans_mode_t trans_mode;  // transmission mode of the queue
     umq_queue_mode_t mode;        // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;            // queue state
+    umq_tp_type_t tp_type;        // tp_type of queue
+    umq_tp_mode_t tp_mode;        // transport mode of queue
 } umq_cfg_get_t;
 
 #ifdef __cplusplus

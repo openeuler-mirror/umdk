@@ -864,7 +864,7 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
     return jetty;
 }
 
-static urma_transport_mode_t umq_tp_mode_convert(umq_tp_mode_t tp_mode)
+static urma_transport_mode_t umq_tp_mode_convert_to_urma(umq_tp_mode_t tp_mode)
 {
     switch (tp_mode) {
         case UMQ_TM_RC:
@@ -878,7 +878,7 @@ static urma_transport_mode_t umq_tp_mode_convert(umq_tp_mode_t tp_mode)
     };
 }
 
-static urma_tp_type_t umq_tp_type_convert(umq_tp_type_t tp_type)
+static urma_tp_type_t umq_tp_type_convert_to_urma(umq_tp_type_t tp_type)
 {
     switch (tp_type) {
         case UMQ_TP_TYPE_RTP:
@@ -981,9 +981,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
             UMQ_VLOG_ERR(VLOG_UMQ, "tp_mode[%u] is invalid\n", option->tp_mode);
             return -UMQ_ERR_EINVAL;
         }
-        queue->tp_mode = umq_tp_mode_convert(option->tp_mode);
+        queue->tp_mode = umq_tp_mode_convert_to_urma(option->tp_mode);
     } else {
-        queue->tp_mode = umq_tp_mode_convert(UMQ_TM_RC);
+        queue->tp_mode = umq_tp_mode_convert_to_urma(UMQ_TM_RC);
     }
 
     if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
@@ -991,9 +991,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
             UMQ_VLOG_ERR(VLOG_UMQ, "tp_type[%u] is invalid\n", option->tp_type);
             return -UMQ_ERR_EINVAL;
         }
-        queue->tp_type = umq_tp_type_convert(option->tp_type);
+        queue->tp_type = umq_tp_type_convert_to_urma(option->tp_type);
     } else {
-        queue->tp_type = umq_tp_type_convert(UMQ_TP_TYPE_RTP);
+        queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_RTP);
     }
 
     umq_tp_type_t actual_tp_type = (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) != 0 ?
