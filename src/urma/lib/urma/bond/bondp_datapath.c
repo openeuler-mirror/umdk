@@ -7,6 +7,9 @@
  * Note:
  * History: 2025-02-19   Create File
  */
+
+#include <threads.h>
+
 #include "bondp_datapath.h"
 #include "urma_log.h"
 #include "urma_api.h"
@@ -51,6 +54,10 @@ struct resend_args {
     int skip_count;
     int ret;
 };
+
+thread_local bondp_tx_wr_list_t g_bondp_tx_wr;
+thread_local urma_cr_t g_bondp_cr_buf[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_MAX_CR_CNT_PER_DEV];
+thread_local int g_bondp_cqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
 {
@@ -827,6 +834,43 @@ static bdp_v_conn_t *get_v_conn_on_send(bjetty_ctx_t *bjetty_ctx, bondp_target_j
     }
     return v_conn;
 }
+
+static void bondp_deep_copy_wr(urma_jfs_wr_t *t_wr, const urma_jfs_wr_t *s_wr,
+    urma_sge_t *src_sge, urma_sge_t *dst_sge)
+{
+    switch (s_wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            t_wr->send.src.sge = src_sge;
+            (void)memcpy(src_sge, s_wr->send.src.sge, s_wr->send.src.num_sge * sizeof(urma_sge_t));
+            break;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            t_wr->rw.src.sge = src_sge;
+            (void)memcpy(src_sge, s_wr->rw.src.sge, s_wr->rw.src.num_sge * sizeof(urma_sge_t));
+            t_wr->rw.dst.sge = dst_sge;
+            (void)memcpy(dst_sge, s_wr->rw.dst.sge, s_wr->rw.dst.num_sge * sizeof(urma_sge_t));
+            break;
+        case URMA_OPC_CAS:
+            t_wr->cas.src = src_sge;
+            (void)memcpy(src_sge, s_wr->cas.src, sizeof(urma_sge_t));
+            t_wr->cas.dst = dst_sge;
+            (void)memcpy(dst_sge, s_wr->cas.dst, sizeof(urma_sge_t));
+            break;
+        case URMA_OPC_FADD:
+            t_wr->faa.src = src_sge;
+            (void)memcpy(src_sge, s_wr->faa.src, sizeof(urma_sge_t));
+            t_wr->faa.dst = dst_sge;
+            (void)memcpy(dst_sge, s_wr->faa.dst, sizeof(urma_sge_t));
+            break;
+        default:
+            break;
+    }
+}
+
 /**
  * Do not cache WR, nor perform reliability processing;
  * simply replicate the WR information,
@@ -852,21 +896,28 @@ static urma_status_t bondp_post_send_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     if (ret) {
         return URMA_FAIL;
     }
-    urma_jfs_wr_t *copied_jfs_wr = deepcopy_jfs_wr(wr);
-    if (copied_jfs_wr == NULL) {
-        return URMA_FAIL;
-    }
-    urma_jfs_wr_t *cur_wr = copied_jfs_wr;
+
+    int index = 0;
+    urma_jfs_wr_t *cur_wr = (urma_jfs_wr_t *)wr;
+    urma_jfs_wr_t *wr_list = g_bondp_tx_wr.wr_list;
     while (cur_wr != NULL) {
-        ret = set_jfs_wr_ptseg_ptjetty(cur_wr, cur_wr->tjetty, local_port, target_port);
+        if (index >= BONDP_MAX_WR_LIST_NUM - 1) {
+            URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM - 1);
+            return URMA_EINVAL;
+        }
+        wr_list[index] = *cur_wr;
+        bondp_deep_copy_wr(&wr_list[index], cur_wr,
+            g_bondp_tx_wr.src_sge[index], g_bondp_tx_wr.dst_sge[index]);
+        ret = set_jfs_wr_ptseg_ptjetty(&wr_list[index], cur_wr->tjetty, local_port, target_port);
         if (ret) {
-            goto DEL_AND_RET;
+            return ret;
         }
         cur_wr = cur_wr->next;
+        wr_list[index].next = (wr_list[index].next != NULL) ? &wr_list[index + 1] : NULL;
+        index++;
     }
-    ret = comp_post_send(bjetty_ctx, local_port, copied_jfs_wr, bad_wr);
-DEL_AND_RET:
-    (void)delete_copied_jfs_wr(copied_jfs_wr);
+
+    ret = comp_post_send(bjetty_ctx, local_port, wr_list, bad_wr);
     return ret;
 }
 /**
@@ -1911,6 +1962,10 @@ static int restore_cr_local_id(bondp_context_t *bdp_ctx,  int dev_idx, urma_cr_t
  */
 static int restore_cr_remote_id(bondp_context_t *bdp_ctx, urma_cr_t *cr)
 {
+    /* No need to fill remote id for send cr */
+    if (cr->flag.bs.s_r == 0) {
+        return 0;
+    }
     urma_jetty_id_t jetty_id = {0};
     int ret = bdp_r_p2v_jetty_id_table_lookup(&bdp_ctx->remote_p2v_jetty_id_table,
         &cr->remote_id, get_remote_id_type_by_cr(cr), &jetty_id);
@@ -2085,15 +2140,13 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
     bondp_comp_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_comp_t, v_jfc);
-    urma_cr_t bdp_cr_buf[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
-    int cqe_cnt[URMA_UBAGG_DEV_MAX_NUM] = {0};
 
     if (!is_valid_bondp_comp(bdp_jfc)) {
         return -EINVAL;
     }
 
     /* Get all CR from pjfc and check device status */
-    int total_cqe_cnt = bondp_poll_pjfc(bdp_ctx, bdp_jfc, cr_cnt, cqe_cnt, bdp_cr_buf);
+    int total_cqe_cnt = bondp_poll_pjfc(bdp_ctx, bdp_jfc, cr_cnt, g_bondp_cqe_cnt, g_bondp_cr_buf);
     if (total_cqe_cnt <= 0) {
         return total_cqe_cnt;
     }
@@ -2103,14 +2156,14 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
         if (bdp_jfc->p_jfc[dev_id] == NULL) {
             continue;
         }
-        for (int cr_id = 0; cr_id < cqe_cnt[dev_id]; ++cr_id) {
+        for (int cr_id = 0; cr_id < g_bondp_cqe_cnt[dev_id]; ++cr_id) {
             int ret = 0;
             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
-                ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
+                ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &g_bondp_cr_buf[dev_id][cr_id],
                     cr_output_array, &total_cnt);
             } else {
                 ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_cqe_cnt, cr_cnt,
-                    &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
+                    &g_bondp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
             }
             if (ret < 0) {
                 return ret;
