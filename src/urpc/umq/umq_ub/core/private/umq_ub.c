@@ -906,17 +906,6 @@ static umq_tp_type_t umq_tp_type_get(union urma_tp_type_en tp_type)
     return UMQ_TP_TYPE_MAX;
 }
 
-static int umq_default_priority_get(umq_ub_ctx_t *dev_ctx, umq_tp_type_t actual_tp_type)
-{
-    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
-        umq_tp_type_t tp_type = umq_tp_type_get(dev_ctx->dev_attr.dev_cap.priority_info[i].tp_type);
-        if (tp_type == actual_tp_type) {
-            return i;
-        }
-    }
-    return UMQ_FAIL;
-}
-
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue)
 {
     if (option->create_flag & UMQ_CREATE_FLAG_RX_BUF_SIZE) {
@@ -1022,12 +1011,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         }
         queue->priority = option->priority;
     } else {
-        int ret = umq_default_priority_get(dev_ctx, actual_tp_type);
-        if (ret < 0) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "there is no priority for tp_type %s\n", g_umq_ub_tp_type_str[actual_tp_type]);
-            return -UMQ_ERR_EINVAL;
-        }
-        queue->priority = (uint8_t)ret;
+        queue->priority = 0;
     }
 
     queue->max_rx_sge = dev_ctx->dev_attr.dev_cap.max_jfr_sge < UMQ_MAX_SGE_NUM ?
