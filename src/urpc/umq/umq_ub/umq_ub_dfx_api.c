@@ -28,12 +28,12 @@ static int umq_tp_ub_info_get(uint64_t umqh_tp, umq_info_t *umq_info)
 
 static int umq_tp_ub_stats_io_get(uint64_t umqh_tp, umq_packet_stats_t *packet_stats)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_stats_io_get_impl(umqh_tp, packet_stats);
 }
 
 static int umq_tp_ub_stats_io_reset(uint64_t umqh_tp)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_stats_io_reset_impl(umqh_tp);
 }
 
 static umq_dfx_ops_t g_umq_ub_dfx_ops = {
