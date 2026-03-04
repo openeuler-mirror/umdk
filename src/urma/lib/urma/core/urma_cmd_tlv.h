@@ -290,6 +290,214 @@ typedef enum urma_cmd_delete_jfr_batch_type {
     DELETE_JFR_BATCH_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_delete_jfr_batch_type_t;
 
+/* See urma_cmd_alloc_jfr_t, consistent with enum uburma_cmd_alloc_jfr_type */
+typedef enum urma_cmd_alloc_jfr_type {
+    /* In type */
+    ALLOC_JFR_IN_DEPTH,
+    ALLOC_JFR_IN_FLAG,
+    ALLOC_JFR_IN_TRANS_MODE,
+    ALLOC_JFR_IN_MAX_SGE,
+    ALLOC_JFR_IN_MIN_RNR_TIMER,
+    ALLOC_JFR_IN_JFC_ID,
+    ALLOC_JFR_IN_JFC_HANDLE,
+    ALLOC_JFR_IN_TOKEN,
+    ALLOC_JFR_IN_ID,
+    ALLOC_JFR_IN_URMA_JFR,
+    ALLOC_JFR_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    ALLOC_JFR_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ALLOC_JFR_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ALLOC_JFR_OUT_DEPTH,
+    ALLOC_JFR_OUT_HANDLE,
+    ALLOC_JFR_OUT_MAX_SGE,
+    ALLOC_JFR_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    ALLOC_JFR_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_alloc_jfr_type_t;
+
+/* See urma_cmd_free_jfr_t, consistent with enum uburma_cmd_free_jfr_type */
+typedef enum urma_cmd_free_jfr_type {
+    /* In type */
+    FREE_JFR_IN_HANDLE,
+    FREE_JFR_IN_UDATA,
+    FREE_JFR_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    FREE_JFR_OUT_ASYNC_EVENTS_REPORTED = URMA_CMD_OUT_TYPE_INIT,
+    FREE_JFR_OUT_UDATA,
+    FREE_JFR_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_free_jfr_type_t;
+
+typedef enum urma_cmd_set_jfr_opt_type {
+    /* In type */
+    SET_JFR_OPT_IN_HANDLE,
+    SET_JFR_OPT_IN_OPT,
+    SET_JFR_OPT_IN_BUF,
+    SET_JFR_OPT_IN_LEN,
+    SET_JFR_OPT_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    SET_JFR_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    SET_JFR_OPT_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
+    SET_JFR_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_set_jfr_opt_type_t;
+
+typedef enum urma_cmd_get_jfr_opt_type {
+    /* In type */
+    GET_JFR_OPT_IN_HANDLE,
+    GET_JFR_OPT_IN_OPT,
+    GET_JFR_OPT_IN_BUF,
+    GET_JFR_OPT_IN_LEN,
+    GET_JFR_OPT_IN_UDATA,
+    GET_JFR_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    GET_JFR_OPT_OUT_BUF = URMA_CMD_OUT_TYPE_INIT,
+    GET_JFR_OPT_OUT_LEN,
+    GET_JFR_OPT_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    GET_JFR_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_jfr_opt_type_t;
+
+/* See urma_cmd_active_jfr_t, consistent with enum uburma_cmd_active_jfr_type */
+typedef enum urma_cmd_active_jfr_type {
+    /* In type */
+    ACTIVE_JFR_IN_HANDLE,
+    ACTIVE_JFR_IN_DEPTH,
+    ACTIVE_JFR_IN_FLAG,
+    ACTIVE_JFR_IN_TRANS_MODE,
+    ACTIVE_JFR_IN_MAX_SGE,
+    ACTIVE_JFR_IN_MIN_RNR_TIMER,
+    ACTIVE_JFR_IN_JFC_ID,
+    ACTIVE_JFR_IN_JFC_HANDLE,
+    ACTIVE_JFR_IN_TOKEN,
+    ACTIVE_JFR_IN_JFR_OPT,
+    ACTIVE_JFR_IN_UDATA,
+    ACTIVE_JFR_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ACTIVE_JFR_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ACTIVE_JFR_OUT_DEPTH,
+    ACTIVE_JFR_OUT_HANDLE,
+    ACTIVE_JFR_OUT_MAX_SGE,
+    ACTIVE_JFR_OUT_UDATA,
+    ACTIVE_JFR_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_active_jfr_type_t;
+
+/* See urma_cmd_deactive_jfr_t, consistent with enum uburma_cmd_deactive_jfr_type */
+typedef enum urma_cmd_deactive_jfr_type {
+    /* In type */
+    DEACTIVE_JFR_IN_HANDLE,
+    DEACTIVE_JFR_IN_UDATA,
+    DEACTIVE_JFR_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    DEACTIVE_JFR_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT,
+    DEACTIVE_JFR_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_deactive_jfr_type_t;
+
+
+/* See urma_cmd_alloc_jfs_t, consistent with enum uburma_cmd_alloc_jfs_type */
+typedef enum urma_cmd_alloc_jfs_type {
+    /* In type */
+    ALLOC_JFS_IN_DEPTH,
+    ALLOC_JFS_IN_FLAG,
+    ALLOC_JFS_IN_TRANS_MODE,
+    ALLOC_JFS_IN_PRIORITY,
+    ALLOC_JFS_IN_MAX_SGE,
+    ALLOC_JFS_IN_MAX_RSGE,
+    ALLOC_JFS_IN_MAX_INLINE_DATA,
+    ALLOC_JFS_IN_RNR_RETRY,
+    ALLOC_JFS_IN_ERR_TIMEOUT,
+    ALLOC_JFS_IN_JFC_ID,
+    ALLOC_JFS_IN_JFC_HANDLE,
+    ALLOC_JFS_IN_URMA_JFS,
+    ALLOC_JFS_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    ALLOC_JFS_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ALLOC_JFS_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ALLOC_JFS_OUT_DEPTH,
+    ALLOC_JFS_OUT_MAX_SGE,
+    ALLOC_JFS_OUT_MAX_RSGE,
+    ALLOC_JFS_OUT_MAX_INLINE_DATA,
+    ALLOC_JFS_OUT_HANDLE,
+    ALLOC_JFS_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    ALLOC_JFS_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_alloc_jfs_type_t;
+
+/* See urma_cmd_free_jfs_t, consistent with enum uburma_cmd_free_jfs_type */
+typedef enum urma_cmd_free_jfs_type {
+    /* In type */
+    FREE_JFS_IN_HANDLE,
+    FREE_JFS_IN_UDATA,
+    FREE_JFS_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    FREE_JFS_OUT_ASYNC_EVENTS_REPORTED = URMA_CMD_OUT_TYPE_INIT,
+    FREE_JFS_OUT_UDATA,
+    FREE_JFS_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_free_jfs_type_t;
+
+typedef enum urma_cmd_set_jfs_opt_type {
+    /* In type */
+    SET_JFS_OPT_IN_HANDLE,
+    SET_JFS_OPT_IN_OPT,
+    SET_JFS_OPT_IN_BUF,
+    SET_JFS_OPT_IN_LEN,
+    SET_JFS_OPT_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    SET_JFS_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    SET_JFS_OPT_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
+    SET_JFS_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_set_jfs_opt_type_t;
+
+typedef enum urma_cmd_get_jfs_opt_type {
+    /* In type */
+    GET_JFS_OPT_IN_HANDLE,
+    GET_JFS_OPT_IN_OPT,
+    GET_JFS_OPT_IN_BUF,
+    GET_JFS_OPT_IN_LEN,
+    GET_JFS_OPT_IN_UDATA,
+    GET_JFS_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    GET_JFS_OPT_OUT_BUF = URMA_CMD_OUT_TYPE_INIT,
+    GET_JFS_OPT_OUT_LEN,
+    GET_JFS_OPT_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    GET_JFS_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_jfs_opt_type_t;
+
+/* See urma_cmd_active_jfs_t, consistent with enum uburma_cmd_active_jfs_type */
+typedef enum urma_cmd_active_jfs_type {
+    /* In type */
+    ACTIVE_JFS_IN_HANDLE,
+    ACTIVE_JFS_IN_DEPTH,
+    ACTIVE_JFS_IN_FLAG,
+    ACTIVE_JFS_IN_TRANS_MODE,
+    ACTIVE_JFS_IN_PRIORITY,
+    ACTIVE_JFS_IN_MAX_SGE,
+    ACTIVE_JFS_IN_MAX_RSGE,
+    ACTIVE_JFS_IN_MAX_INLINE_DATA,
+    ACTIVE_JFS_IN_RNR_RETRY,
+    ACTIVE_JFS_IN_ERR_TIMEOUT,
+    ACTIVE_JFS_IN_JFC_ID,
+    ACTIVE_JFS_IN_JFC_HANDLE,
+    ACTIVE_JFS_IN_JFS_OPT,
+    ACTIVE_JFS_IN_UDATA,
+    ACTIVE_JFS_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ACTIVE_JFS_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ACTIVE_JFS_OUT_DEPTH,
+    ACTIVE_JFS_OUT_MAX_SGE,
+    ACTIVE_JFS_OUT_MAX_RSGE,
+    ACTIVE_JFS_OUT_MAX_INLINE_DATA,
+    ACTIVE_JFS_OUT_HANDLE,
+    ACTIVE_JFS_OUT_UDATA,
+    ACTIVE_JFS_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_active_jfs_type_t;
+
+/* See urma_cmd_deactive_jfs_t, consistent with enum uburma_cmd_deactive_jfs_type */
+typedef enum urma_cmd_deactive_jfs_type {
+    /* In type */
+    DEACTIVE_JFS_IN_HANDLE,
+    DEACTIVE_JFS_IN_UDATA,
+    DEACTIVE_JFS_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    DEACTIVE_JFS_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT,
+    DEACTIVE_JFS_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_deactive_jfs_type_t;
+
 /* See urma_cmd_create_jfc_t, consistent with enum uburma_cmd_create_jfc_type */
 typedef enum urma_cmd_create_jfc_type {
     /* In type */
@@ -345,6 +553,94 @@ typedef enum urma_cmd_delete_jfc_batch_type {
     DELETE_JFC_BATCH_OUT_BAD_JFC_INDEX,
     DELETE_JFC_BATCH_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_delete_jfc_batch_type_t;
+
+/* See urma_cmd_alloc_jfc_t, consistent with enum uburma_cmd_alloc_jfc_type */
+typedef enum urma_cmd_alloc_jfc_type {
+    /* In type */
+    ALLOC_JFC_IN_DEPTH,
+    ALLOC_JFC_IN_FLAG,
+    ALLOC_JFC_IN_JFCE_FD,
+    ALLOC_JFC_IN_URMA_JFC,
+    ALLOC_JFC_IN_CEQN,
+    ALLOC_JFC_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    ALLOC_JFC_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ALLOC_JFC_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ALLOC_JFC_OUT_DEPTH,
+    ALLOC_JFC_OUT_HANDLE,
+    ALLOC_JFC_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    ALLOC_JFC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_alloc_jfc_type_t;
+
+/* See urma_cmd_free_jfc_t, consistent with enum uburma_cmd_free_jfc_type */
+typedef enum urma_cmd_free_jfc_type {
+    /* In type */
+    FREE_JFC_IN_HANDLE,
+    FREE_JFC_IN_UDATA,
+    FREE_JFC_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    FREE_JFC_OUT_COMP_EVENTS_REPORTED = URMA_CMD_OUT_TYPE_INIT,
+    FREE_JFC_OUT_ASYNC_EVENTS_REPORTED,
+    FREE_JFC_OUT_UDATA,
+    FREE_JFC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_free_jfc_type_t;
+
+typedef enum urma_cmd_set_jfc_opt_type {
+    /* In type */
+    SET_JFC_OPT_IN_HANDLE,
+    SET_JFC_OPT_IN_OPT,
+    SET_JFC_OPT_IN_BUF,
+    SET_JFC_OPT_IN_LEN,
+    SET_JFC_OPT_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    SET_JFC_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    SET_JFC_OPT_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
+    SET_JFC_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_set_jfc_opt_type_t;
+
+typedef enum urma_cmd_get_jfc_opt_type {
+    /* In type */
+    GET_JFC_OPT_IN_HANDLE,
+    GET_JFC_OPT_IN_OPT,
+    GET_JFC_OPT_IN_BUF,
+    GET_JFC_OPT_IN_LEN,
+    GET_JFC_OPT_IN_UDATA,
+    GET_JFC_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    GET_JFC_OPT_OUT_BUF = URMA_CMD_OUT_TYPE_INIT,
+    GET_JFC_OPT_OUT_LEN,
+    GET_JFC_OPT_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    GET_JFC_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_jfc_opt_type_t;
+
+/* See urma_cmd_active_jfc_t, consistent with enum uburma_cmd_active_jfc_type */
+typedef enum urma_cmd_active_jfc_type {
+    /* In type */
+    ACTIVE_JFC_IN_HANDLE,
+    ACTIVE_JFC_IN_DEPTH,
+    ACTIVE_JFC_IN_FLAG,
+    ACTIVE_JFC_IN_CEQN,
+    ACTIVE_JFC_IN_JFC_OPT,
+    ACTIVE_JFC_IN_UDATA,
+    ACTIVE_JFC_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    ACTIVE_JFC_OUT_ID = URMA_CMD_OUT_TYPE_INIT,
+    ACTIVE_JFC_OUT_DEPTH,
+    ACTIVE_JFC_OUT_HANDLE,
+    ACTIVE_JFC_OUT_UDATA,
+    ACTIVE_JFC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_active_jfc_type_t;
+
+/* See urma_cmd_deactive_jfc_t, consistent with enum uburma_cmd_deactive_jfc_type */
+typedef enum urma_cmd_deactive_jfc_type {
+    /* In type */
+    DEACTIVE_JFC_IN_HANDLE,
+    DEACTIVE_JFC_IN_UDATA,
+    DEACTIVE_JFC_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    DEACTIVE_JFC_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT,
+    DEACTIVE_JFC_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_deactive_jfc_type_t;
 
 /* See urma_cmd_create_jfce_t, consistent with enum uburma_cmd_create_jfce_type */
 typedef enum urma_cmd_create_jfce_type {
@@ -637,6 +933,80 @@ typedef enum urma_cmd_delete_jetty_grp_type {
     DELETE_JETTY_GRP_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_delete_jetty_grp_type_t;
 
+typedef enum urma_cmd_alloc_jetty_type {
+    ALLOC_JETTY_IN_CFG,
+    ALLOC_JETTY_IN_NUM, /* Only for calculating number of types */
+    ALLOC_JETTY_OUT_CFG = URMA_CMD_OUT_TYPE_INIT,
+    ALLOC_JETTY_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_alloc_jetty_type_t;
+
+typedef enum urma_cmd_free_jetty_type {
+    /* In type */
+    FREE_JETTY_IN_HANDLE,
+    FREE_JETTY_IN_UDATA,
+    FREE_JETTY_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    FREE_JETTY_OUT_ASYNC_EVENTS_REPORTED = URMA_CMD_OUT_TYPE_INIT,
+    FREE_JETTY_OUT_UDATA,
+    FREE_JETTY_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_free_jetty_type_t;
+
+typedef enum urma_cmd_set_jetty_opt_type {
+    /* In type */
+    SET_JETTY_OPT_IN_HANDLE,
+    SET_JETTY_OPT_IN_OPT,
+    SET_JETTY_OPT_IN_BUF,
+    SET_JETTY_OPT_IN_LEN,
+    SET_JETTY_OPT_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
+    SET_JETTY_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    SET_JETTY_OPT_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT, /* Consider udata as an ordinary member of out attrs */
+    SET_JETTY_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_set_jetty_opt_type_t;
+
+typedef enum urma_cmd_get_jetty_opt_type {
+    /* In type */
+    GET_JETTY_OPT_IN_HANDLE,
+    GET_JETTY_OPT_IN_OPT,
+    GET_JETTY_OPT_IN_BUF,
+    GET_JETTY_OPT_IN_LEN,
+    GET_JETTY_OPT_IN_UDATA,
+    GET_JETTY_OPT_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    GET_JETTY_OPT_OUT_BUF = URMA_CMD_OUT_TYPE_INIT,
+    GET_JETTY_OPT_OUT_LEN,
+    GET_JETTY_OPT_OUT_UDATA, /* Consider udata as an ordinary member of out attrs */
+    GET_JETTY_OPT_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_get_jetty_opt_type_t;
+
+/* See urma_cmd_active_jetty_t, consistent with enum uburma_cmd_active_jetty_type */
+typedef enum urma_cmd_active_jetty_type {
+    /* In type */
+    ACTIVE_JETTY_IN_FLAG,
+    ACTIVE_JETTY_IN_HANDLE,
+    ACTIVE_JETTY_IN_SEND_JFC_HANDLE,
+    ACTIVE_JETTY_IN_RECV_JFC_HANDLE,
+    ACTIVE_JETTY_IN_URMA_JETTY,
+    ACTIVE_JETTY_IN_JETTY_OPT,
+    ACTIVE_JETTY_IN_UDATA, /* Consider udata as an in/out attr */
+    ACTIVE_JETTY_IN_NUM,   /* Only for calculating number of types */
+    /* Out type */
+    ACTIVE_JETTY_OUT_JETTY_ID = URMA_CMD_OUT_TYPE_INIT,
+    ACTIVE_JETTY_OUT_UDATA, /* Consider udata as an in/out attr */
+    ACTIVE_JETTY_OUT_NUM,   /* Only for calculating number of types */
+} urma_cmd_active_jetty_type_t;
+
+/* See urma_cmd_deactive_jetty_t, consistent with enum uburma_cmd_deactive_jetty_type */
+typedef enum urma_cmd_deactive_jetty_type {
+    /* In type */
+    DEACTIVE_JETTY_IN_HANDLE,
+    DEACTIVE_JETTY_IN_UDATA,
+    DEACTIVE_JETTY_IN_NUM, /* Only for calculating number of types */
+    /* Out type */
+    DEACTIVE_JETTY_OUT_UDATA = URMA_CMD_OUT_TYPE_INIT,
+    DEACTIVE_JETTY_OUT_NUM, /* Only for calculating number of types */
+} urma_cmd_deactive_jetty_type_t;
+
 /* See urma_cmd_user_ctl_t, consistent with enum uburma_cmd_user_ctl_type */
 typedef enum urma_cmd_user_ctl_type {
     /* In type */
@@ -926,7 +1296,7 @@ typedef enum urma_cmd_get_eid_by_ip_type {
     GET_EID_BY_IP_INFO_OUT_EID = URMA_CMD_OUT_TYPE_INIT,
     GET_EID_BY_IP_INFO_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_get_eid_by_ip_type_t;
- 
+
 typedef enum urma_cmd_get_ip_by_eid_type {
     /* In type */
     GET_IP_BY_EID_INFO_IN_EID,
@@ -935,13 +1305,13 @@ typedef enum urma_cmd_get_ip_by_eid_type {
     GET_IP_BY_EID_INFO_OUT_NET_ADDR = URMA_CMD_OUT_TYPE_INIT,
     GET_IP_BY_EID_INFO_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_get_ip_by_eid_type_t;
- 
+
 typedef enum urma_cmd_get_smac_type {
     /* Out type */
     GET_SMAC_OUT_MAC = URMA_CMD_OUT_TYPE_INIT,
     GET_SMAC_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_get_smac_type_t;
- 
+
 typedef enum urma_cmd_get_dmac_type {
     /* In type */
     GET_DMAC_IN_NET_ADDR,
@@ -963,15 +1333,33 @@ int urma_ioctl_modify_jfs(int ioctl_fd, urma_cmd_modify_jfs_t *arg);
 int urma_ioctl_query_jfs(int ioctl_fd, urma_cmd_query_jfs_t *arg);
 int urma_ioctl_delete_jfs(int ioctl_fd, urma_cmd_delete_jfs_t *arg);
 int urma_ioctl_delete_jfs_batch(int ioctl_fd, urma_cmd_delete_jfs_batch_t *arg);
+int urma_ioctl_alloc_jfs(int ioctl_fd, urma_cmd_alloc_jfs_t *arg);
+int urma_ioctl_free_jfs(int ioctl_fd, urma_cmd_free_jfs_t *arg);
+int urma_ioctl_set_jfs_opt(int ioctl_fd, urma_cmd_set_jfs_opt_t *arg);
+int urma_ioctl_get_jfs_opt(int ioctl_fd, urma_cmd_get_jfs_opt_t *arg);
+int urma_ioctl_active_jfs(int ioctl_fd, urma_cmd_active_jfs_t *arg);
+int urma_ioctl_deactive_jfs(int ioctl_fd, urma_cmd_deactive_jfs_t *arg);
 int urma_ioctl_create_jfr(int ioctl_fd, urma_cmd_create_jfr_t *arg);
 int urma_ioctl_modify_jfr(int ioctl_fd, urma_cmd_modify_jfr_t *arg);
 int urma_ioctl_query_jfr(int ioctl_fd, urma_cmd_query_jfr_t *arg);
 int urma_ioctl_delete_jfr(int ioctl_fd, urma_cmd_delete_jfr_t *arg);
 int urma_ioctl_delete_jfr_batch(int ioctl_fd, urma_cmd_delete_jfr_batch_t *arg);
+int urma_ioctl_alloc_jfr(int ioctl_fd, urma_cmd_alloc_jfr_t *arg);
+int urma_ioctl_free_jfr(int ioctl_fd, urma_cmd_free_jfr_t *arg);
+int urma_ioctl_set_jfr_opt(int ioctl_fd, urma_cmd_set_jfr_opt_t *arg);
+int urma_ioctl_get_jfr_opt(int ioctl_fd, urma_cmd_get_jfr_opt_t *arg);
+int urma_ioctl_active_jfr(int ioctl_fd, urma_cmd_active_jfr_t *arg);
+int urma_ioctl_deactive_jfr(int ioctl_fd, urma_cmd_deactive_jfr_t *arg);
 int urma_ioctl_create_jfc(int ioctl_fd, urma_cmd_create_jfc_t *arg);
 int urma_ioctl_modify_jfc(int ioctl_fd, urma_cmd_modify_jfc_t *arg);
 int urma_ioctl_delete_jfc(int ioctl_fd, urma_cmd_delete_jfc_t *arg);
 int urma_ioctl_delete_jfc_batch(int ioctl_fd, urma_cmd_delete_jfc_batch_t *arg);
+int urma_ioctl_alloc_jfc(int ioctl_fd, urma_cmd_alloc_jfc_t *arg);
+int urma_ioctl_free_jfc(int ioctl_fd, urma_cmd_free_jfc_t *arg);
+int urma_ioctl_set_jfc_opt(int ioctl_fd, urma_cmd_set_jfc_opt_t *arg);
+int urma_ioctl_get_jfc_opt(int ioctl_fd, urma_cmd_get_jfc_opt_t *arg);
+int urma_ioctl_active_jfc(int ioctl_fd, urma_cmd_active_jfc_t *arg);
+int urma_ioctl_deactive_jfc(int ioctl_fd, urma_cmd_deactive_jfc_t *arg);
 int urma_ioctl_create_jfce(int ioctl_fd, urma_cmd_create_jfce_t *arg);
 int urma_ioctl_import_jfr(int ioctl_fd, urma_cmd_import_jfr_t *arg);
 int urma_ioctl_import_jfr_ex(int ioctl_fd, urma_cmd_import_jfr_ex_t *arg);
@@ -993,6 +1381,12 @@ int urma_ioctl_bind_jetty_ex(int ioctl_fd, urma_cmd_bind_jetty_ex_t *arg);
 int urma_ioctl_unbind_jetty(int ioctl_fd, urma_cmd_unadvise_jetty_t *arg);
 int urma_ioctl_create_jetty_grp(int ioctl_fd, urma_cmd_create_jetty_grp_t *arg);
 int urma_ioctl_delete_jetty_grp(int ioctl_fd, urma_cmd_delete_jetty_grp_t *arg);
+int urma_ioctl_alloc_jetty(int ioctl_fd, urma_cmd_alloc_jetty_t *arg);
+int urma_ioctl_free_jetty(int ioctl_fd, urma_cmd_free_jetty_t *arg);
+int urma_ioctl_set_jetty_opt(int ioctl_fd, urma_cmd_set_jetty_opt_t *arg);
+int urma_ioctl_get_jetty_opt(int ioctl_fd, urma_cmd_get_jetty_opt_t *arg);
+int urma_ioctl_active_jetty(int ioctl_fd, urma_cmd_active_jetty_t *arg);
+int urma_ioctl_deactive_jetty(int ioctl_fd, urma_cmd_deactive_jetty_t *arg);
 int urma_ioctl_user_ctl(int ioctl_fd, urma_cmd_user_ctl_t *arg);
 int urma_ioctl_get_eid_list(int ioctl_fd, urma_cmd_get_eid_list_t *arg);
 int urma_ioctl_get_netaddr_list(int ioctl_fd, urma_cmd_get_net_addr_list_t *arg);
