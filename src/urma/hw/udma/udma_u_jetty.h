@@ -16,6 +16,28 @@
 #define INVALID_TPN UINT32_MAX
 #define MAX_JETTY_IN_GRP 32
 
+enum udma_u_set_get_jetty_opt_perm {
+	PERM_R = 1,
+	PERM_W = 1 << 1,
+};
+
+enum udma_u_set_get_jetty_opt_ignore_attr {
+	JFS_IGNORE = 1,
+	JETTY_IGNORE = 1 << 1,
+};
+
+enum udma_u_set_get_jetty_opt_mode {
+	JFS_MODE = 1,
+	JETTY_MODE = 1 << 1,
+};
+
+struct udma_u_jetty_opt_info {
+	uint32_t buf_len;
+	enum udma_u_set_get_jetty_opt_perm perm;
+	enum udma_u_set_get_jetty_opt_ignore_attr ignore_attr;
+	enum udma_u_set_get_jetty_opt_mode mode;
+};
+
 urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg);
 urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty);
 urma_status_t udma_u_delete_jetty_batch(urma_jetty_t **jetty, int jetty_cnt, urma_jetty_t **bad_jetty);
@@ -53,4 +75,18 @@ urma_status_t insert_jetty_node(struct udma_u_context *udma_ctx,
 				struct udma_u_jetty *pointer);
 void udma_u_jetty_table_remove(struct udma_u_context *udma_ctx,
 				struct udma_u_jetty *jetty);
+urma_status_t udma_u_verify_jetty_opt(uint64_t opt, void *buf, uint32_t len,
+	enum udma_u_set_get_jetty_opt_mode jetty_mode,
+	enum udma_u_set_get_jetty_opt_perm jetty_perm);
+urma_status_t udma_u_set_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt, void *buf);
+void udma_u_get_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt, void *buf);
+urma_status_t udma_u_alloc_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg,
+				urma_jetty_t **jetty);
+urma_status_t udma_u_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
+urma_status_t udma_u_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
+urma_status_t udma_u_active_jetty(urma_jetty_t *jetty);
+urma_status_t udma_u_deactive_jetty(urma_jetty_t *jetty);
+urma_status_t udma_u_free_jetty(urma_jetty_t *jetty);
+void udma_u_get_jfs_cfg_field(urma_jfs_cfg_t *jfs_cfg, uint64_t opt, void *buf);
+
 #endif /* __UDMA_U_JETTY_H__ */

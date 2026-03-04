@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <errno.h>
+#include <string.h>
 #include "udma_u_jfc.h"
 #include "udma_u_jfs.h"
 #include "udma_u_jfr.h"
@@ -22,24 +24,46 @@
 #include "udma_u_buf.h"
 #include "udma_u_ops.h"
 
-/* udma_u_xx_ex interface thanks to rdma-core-master/providers/hns/hns_roce_u.c code. */
+static pthread_mutex_t g_sq_reserved_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint64_t g_sq_reserved_refcount = 0;
+static void *g_sq_reserved_va = NULL;
+static uint64_t g_sq_reserved_len = 0;
+
 static urma_ops_t g_udma_ops = {
 	.name = "UDMA_OPS",
 	.create_jfc = udma_u_create_jfc,
 	.modify_jfc = udma_u_modify_jfc,
 	.delete_jfc = udma_u_delete_jfc,
+	.alloc_jfc = udma_u_alloc_jfc,
+	.set_jfc_opt = udma_u_set_jfc_opt,
+	.active_jfc = udma_u_active_jfc,
+	.get_jfc_opt = udma_u_get_jfc_opt,
+	.deactive_jfc = udma_u_deactive_jfc,
+	.free_jfc = udma_u_free_jfc,
 	.create_jfs = udma_u_create_jfs,
 	.modify_jfs = udma_u_modify_jfs,
 	.query_jfs = udma_u_query_jfs,
 	.flush_jfs = udma_u_flush_jfs,
 	.delete_jfs = udma_u_delete_jfs,
 	.delete_jfs_batch = udma_u_delete_jfs_batch,
+	.alloc_jfs = udma_u_alloc_jfs,
+	.set_jfs_opt = udma_u_set_jfs_opt,
+	.active_jfs = udma_u_active_jfs,
+	.get_jfs_opt = udma_u_get_jfs_opt,
+	.deactive_jfs = udma_u_deactive_jfs,
+	.free_jfs = udma_u_free_jfs,
 	.create_jfr = udma_u_create_jfr,
 	.modify_jfr = udma_u_modify_jfr,
 	.query_jfr = udma_u_query_jfr,
 	.delete_jfr = udma_u_delete_jfr,
 	.delete_jfr_batch = udma_u_delete_jfr_batch,
 	.unimport_jfr = udma_u_unimport_jfr,
+	.alloc_jfr = udma_u_alloc_jfr,
+	.set_jfr_opt = udma_u_set_jfr_opt,
+	.active_jfr = udma_u_active_jfr,
+	.get_jfr_opt = udma_u_get_jfr_opt,
+	.deactive_jfr = udma_u_deactive_jfr,
+	.free_jfr = udma_u_free_jfr,
 	.create_jetty = udma_u_create_jetty,
 	.modify_jetty = udma_u_modify_jetty,
 	.query_jetty = udma_u_query_jetty,
@@ -48,6 +72,12 @@ static urma_ops_t g_udma_ops = {
 	.delete_jetty_batch = udma_u_delete_jetty_batch,
 	.unimport_jetty = udma_u_unimport_jetty,
 	.unbind_jetty = udma_u_unbind_jetty,
+	.alloc_jetty = udma_u_alloc_jetty,
+	.set_jetty_opt = udma_u_set_jetty_opt,
+	.active_jetty = udma_u_active_jetty,
+	.get_jetty_opt = udma_u_get_jetty_opt,
+	.deactive_jetty = udma_u_deactive_jetty,
+	.free_jetty = udma_u_free_jetty,
 	.create_jetty_grp = udma_u_create_jetty_grp,
 	.delete_jetty_grp = udma_u_delete_jetty_grp,
 	.create_jfce = udma_u_create_jfce,
@@ -76,6 +106,10 @@ static urma_ops_t g_udma_ops = {
 	.rearm_jfc = udma_u_rearm_jfc,
 	.wait_jfc = udma_u_wait_jfc,
 	.ack_jfc = udma_u_ack_jfc,
+	.get_eid_by_ip = udma_u_get_eid_by_ip,
+	.get_ip_by_eid = udma_u_get_ip_by_eid,
+	.get_smac = udma_u_get_smac,
+	.get_dmac = udma_u_get_dmac,
 };
 
 static urma_status_t udma_u_init(urma_init_attr_t *conf)
@@ -112,8 +146,49 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->die_id = resp->die_id;
 	udma_ctx->dump_aux_info = resp->dump_aux_info;
 	udma_ctx->jfr_sge = resp->jfr_sge;
+	udma_ctx->sq_reserved = resp->sq_reserved;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
+}
+
+static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_create_ctx_resp *resp)
+{
+	off_t offset = get_mmap_offset(0, udma_ctx->page_size, UDMA_MMAP_RESERVED_SQ);
+
+	(void)pthread_mutex_lock(&g_sq_reserved_lock);
+	if (g_sq_reserved_va) {
+		g_sq_reserved_refcount++;
+		(void)pthread_mutex_unlock(&g_sq_reserved_lock);
+		return 0;
+	}
+
+	// TODO: the mmap will be moved to the DTU
+	g_sq_reserved_va =
+		mmap((void *)(uintptr_t)resp->sq_reserved_va, resp->sq_reserved_len,
+			PROT_READ | PROT_WRITE, MAP_SHARED, udma_ctx->urma_ctx.dev_fd, offset);
+	if (g_sq_reserved_va == MAP_FAILED) {
+		g_sq_reserved_va = NULL;
+		(void)pthread_mutex_unlock(&g_sq_reserved_lock);
+		UDMA_LOG_ERR("failed to reserved sq, errno:%d, strerror:%s.\n",
+			     errno, strerror(errno));
+		return EINVAL;
+	}
+	g_sq_reserved_len = resp->sq_reserved_len;
+	g_sq_reserved_refcount++;
+	(void)pthread_mutex_unlock(&g_sq_reserved_lock);
+
+	return 0;
+}
+
+static void udma_u_free_reserved_sq(void)
+{
+	(void)pthread_mutex_lock(&g_sq_reserved_lock);
+	g_sq_reserved_refcount--;
+	if (g_sq_reserved_va != NULL && g_sq_reserved_refcount == 0) {
+		munmap(g_sq_reserved_va, g_sq_reserved_len);
+		g_sq_reserved_va = NULL;
+	}
+	(void)pthread_mutex_unlock(&g_sq_reserved_lock);
 }
 
 static void udma_u_destroy_jt_table(struct udma_u_context *udma_u_ctx)
@@ -181,10 +256,15 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 		goto err_alloc_db;
 	}
 
+	if (udma_ctx->sq_reserved && udma_u_reserved_sq(udma_ctx, &resp))
+		goto err_reserved_sq;
+
 	udma_u_init_jetty_table(udma_ctx);
 
 	return &udma_ctx->urma_ctx;
 
+err_reserved_sq:
+	udma_u_free_db(&udma_ctx->urma_ctx, &udma_ctx->db);
 err_alloc_db:
 	(void)urma_cmd_delete_context(&udma_ctx->urma_ctx);
 err_create_ctx:
@@ -203,6 +283,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	urma_status_t ret = URMA_SUCCESS;
 
 	udma_u_destroy_jt_table(udma_ctx);
+	udma_u_free_reserved_sq();
 	udma_u_free_db(ctx, &udma_ctx->db);
 	udma_u_destroy_hugepage(udma_ctx);
 

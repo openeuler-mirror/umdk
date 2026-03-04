@@ -50,6 +50,7 @@ enum udma_jetty_type {
 	UDMA_CCU_JETTY_TYPE,
 	UDMA_NORMAL_JETTY_TYPE,
 	UDMA_URMA_NORMAL_JETTY_TYPE,
+	UDMA_URMA_EX_JETTY_TYPE,
 	UDMA_JETTY_TYPE_MAX
 };
 
@@ -82,6 +83,10 @@ struct udma_create_jetty_ucmd {
 	__u32 rsv1;
 };
 
+struct udma_create_jetty_resp {
+	__aligned_u64 buf_addr;
+};
+
 struct udma_create_jfc_ucmd {
 	__aligned_u64 buf_addr;
 	__u32 buf_len;
@@ -97,6 +102,7 @@ struct udma_create_ctx_resp {
 	__u32 dwqe_enable : 1;
 	__u32 reduce_enable : 1;
 	__u32 dump_aux_info : 1;
+	__u32 sq_reserved : 1;
 	__u32 hugepage_enable : 1;
 	__u32 sva_sep_mode_en : 1;
 	__u32 rsv : 19;
@@ -104,7 +110,11 @@ struct udma_create_ctx_resp {
 	__u32 chip_id;
 	__u32 die_id;
 	__u32 jfr_sge;
+	__u32 ccu_jetty_start_id;
+	__u32 ccu_jetty_max_cnt;
 	__u32 rsv1;
+	__aligned_u64 sq_reserved_va;
+	__aligned_u64 sq_reserved_len;
 };
 
 struct udma_create_jfr_resp {
@@ -116,6 +126,7 @@ enum db_mmap_type {
 	UDMA_MMAP_HUGEPAGE,
 	UDMA_MMAP_JFC_PAGE,
 	UDMA_MMAP_JETTY_DSQE,
+	UDMA_MMAP_RESERVED_SQ,
 	UDMA_MMAP_KERNEL_BUF,
 };
 
