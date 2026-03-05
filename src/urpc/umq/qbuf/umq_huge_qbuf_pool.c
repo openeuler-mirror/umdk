@@ -491,7 +491,7 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     /**
      * The huge memory pool is not necessarily initialized
      * If it is not initialized, no statistics are returned, yet the operation itself returns successfully
-     */ 
+     */
     if (!g_huge_pool_ctx.inited) {
         UMQ_VLOG_DEBUG(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return UMQ_SUCCESS;
