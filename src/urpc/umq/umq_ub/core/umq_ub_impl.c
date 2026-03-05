@@ -394,7 +394,7 @@ static uint32_t target_slot_id_calcuate(uint64_t expire_time, uint64_t current_t
     return target_slot_id;
 }
 
-/* this function can be called only umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit function*/
+/* this function can be called only umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit function */
 static void umq_ub_idle_checker_uninit(ub_queue_idle_check_t *checker)
 {
     checker->umq = NULL;

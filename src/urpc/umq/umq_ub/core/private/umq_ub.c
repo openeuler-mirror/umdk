@@ -2003,7 +2003,8 @@ uint32_t umq_ub_ref_sge_cnt(umq_buf_t *buffer)
     uint32_t rest_size = tmp_buf->total_data_size;
     while (tmp_buf != NULL && rest_size != 0) {
         if (rest_size < tmp_buf->data_size) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "remaining size[%u] is smaller than data_size[%u]\n", rest_size, tmp_buf->data_size);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "remaining size[%u] is smaller than data_size[%u]\n",
+                rest_size, tmp_buf->data_size);
             return 0;
         }
         rest_size -= tmp_buf->data_size;
@@ -2145,8 +2146,8 @@ int umq_ub_plus_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *
             return 0;
         }
         if (rest_size > queue->tx_buf_size) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, total data size[%u] exceed max tx size[%u]\n"
-                , EID_ARGS(*eid), id, rest_size, queue->tx_buf_size);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, total data size[%u] exceed "
+                "max tx size[%u]\n", EID_ARGS(*eid), id, rest_size, queue->tx_buf_size);
             return -UMQ_ERR_EINVAL;
         }
         /* sges is defined as two-dimensional array, cast to a one-dimensional array for passing, and within the
@@ -2868,7 +2869,7 @@ void umq_ub_ack_import_tseg(ub_queue_t *queue)
 
 int umq_status_convert(urma_status_t urma_status)
 {
-    switch(urma_status) {
+    switch (urma_status) {
         case URMA_SUCCESS:
             return UMQ_SUCCESS;
         case URMA_FAIL:
