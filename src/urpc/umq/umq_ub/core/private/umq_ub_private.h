@@ -503,7 +503,7 @@ typedef struct mempool_info_ctx {
     bool mempool_info_record[UMQ_MAX_TSEG_NUM];
 } mempool_info_ctx_t;
 
-void fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge, umq_buf_t *buffer, mempool_info_ctx_t *ctx);
+int fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge, umq_buf_t *buffer, mempool_info_ctx_t *ctx);
 void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt);
 int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **buf);
 int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq_buf_t **buf);
