@@ -178,7 +178,7 @@ static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
         umq_perf_stats_cfg_t perf_stats_cfg;
         (void)memcpy(perf_stats_cfg.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
         perf_stats_cfg.thresh_num = cfg->thresh_num;
-        int str_size = umq_stats_perf_to_string(&umq_perf_stats, perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
+        int str_size = umq_stats_perf_to_str(&umq_perf_stats, perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
         if (str_size >= UMQ_PERFTEST_ERTF_INFO_STR_SIZE) {
             perf_info_str_buf[UMQ_PERFTEST_ERTF_INFO_STR_SIZE - 1] = '\0';
             LOG_PRINT("perf info str buf too small, str_size %u\n", str_size);
