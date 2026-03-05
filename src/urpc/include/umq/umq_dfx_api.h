@@ -135,7 +135,7 @@ int umq_stats_perf_stop(void);
  * Return string len on success, the length of the character to be written.
  * -UMQ_ERR_EINVAL: Invalid parameter
  */
-int umq_stats_perf_to_string(umq_perf_stats_t *umq_perf_stats, char *buf, int max_buf_len);
+int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_buf_len);
 
 #ifdef __cplusplus
 }
