@@ -161,13 +161,15 @@ int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
     bondp_topo_node_t *cur_node = &topo_map->topo_infos[cur_node_idx];
     bondp_topo_link_t *peer_map_idx = NULL;
     int ret = 0;
-
+    uint32_t valid_port_id = PORT_NUM;
+    
     for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
         for (uint32_t port_idx = 0; port_idx < PORT_NUM; ++port_idx) {
             peer_map_idx = (bondp_topo_link_t *)&cur_node->links[plane_idx][port_idx];
             if (peer_map_idx->peer_port > PORT_NUM - 1) {
                 continue;
             }
+            valid_port_id = port_idx;
             bondp_topo_link_t local_map_idx = {
                 .peer_node = cur_node->id,
                 .peer_iodie = plane_idx,
@@ -180,8 +182,8 @@ int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
             }
         }
     }
-
     bondp_topo_agg_dev_t *topo_dev = NULL;
+
     for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
         for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
             topo_dev = &cur_node->agg_devs[dev_idx];
@@ -191,7 +193,7 @@ int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
             bondp_topo_link_t local_map_idx = {
                 .peer_node = cur_node->id,
                 .peer_iodie = plane_idx,
-                .peer_port = 0,
+                .peer_port = valid_port_id,
             };
             int ret = update_each_direct_dev_table_entry(topo_map, topo_dev, &local_map_idx, &local_map_idx);
             if (ret) {
