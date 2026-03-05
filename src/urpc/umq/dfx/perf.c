@@ -315,7 +315,8 @@ static ALWAYS_INLINE void umq_perf_record_add(umq_perf_record_t *total_perf_reco
         }
         total_perf_record->type_record[i].accumulation += perf_record->type_record[i].accumulation;
         total_perf_record->type_record[i].min =
-            total_perf_record->type_record[i].min < perf_record->type_record[i].min ?
+            (total_perf_record->type_record[i].min != 0 &&
+            total_perf_record->type_record[i].min < perf_record->type_record[i].min) ?
             total_perf_record->type_record[i].min : perf_record->type_record[i].min;
         total_perf_record->type_record[i].max =
             total_perf_record->type_record[i].max > perf_record->type_record[i].max ?
