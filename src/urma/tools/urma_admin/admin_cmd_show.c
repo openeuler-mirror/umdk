@@ -769,29 +769,21 @@ void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
         (void)printf("\n");
     }
     char eid_str[INET6_ADDRSTRLEN];
-    char dev_name[URMA_ADMIN_MAX_DEV_NAME];
     for (uint32_t agg_dev_idx = 0; agg_dev_idx < DEV_NUM; agg_dev_idx++) {
         tool_topo_agg_dev_t *agg_dev = &cur_node_info->agg_devs[agg_dev_idx];
         if (!admin_is_eid_valid(agg_dev->agg_eid)) {
             continue;
         }
         urma_eid_to_ipv6_str((urma_eid_t *)agg_dev->agg_eid, eid_str, sizeof(eid_str));
-        if (admin_get_device_name_by_eid((urma_eid_t *)agg_dev->agg_eid, dev_name, sizeof(dev_name)) == 0) {
-            (void)printf("Dev %d %s: %s\n", agg_dev_idx, dev_name, eid_str);
-        } else {
-            (void)printf("Dev %d: %s\n", agg_dev_idx, eid_str);
-        }
+        (void)printf("Dev %d: %s\n", agg_dev_idx, eid_str);
         for (uint32_t iodie_idx = 0; iodie_idx < IODIE_NUM; iodie_idx++) {
             tool_topo_ue_t *ue = &agg_dev->ues[iodie_idx];
             if (!admin_is_eid_valid(ue->primary_eid)) {
                 continue;
             }
             urma_eid_to_ipv6_str((urma_eid_t *)ue->primary_eid, eid_str, sizeof(eid_str));
-            if (admin_get_device_name_by_eid((urma_eid_t *)ue->primary_eid, dev_name, sizeof(dev_name)) == 0) {
-                (void)printf("\t UE %d %s:\n", iodie_idx, dev_name);
-            } else {
-                printf("\t UE %d:\n", iodie_idx);
-            }
+            
+            printf("\t UE %d:\n", iodie_idx);
             printf("\t\t Socket id: %d\n", ue->socket_id);
             printf("\t\t Entity id: %d\n", ue->entity_id);
             printf("\t\t Primary eid:\n");
