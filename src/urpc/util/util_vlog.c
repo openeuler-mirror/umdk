@@ -71,7 +71,7 @@ void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_t
 {
     char log_msg[UTIL_VLOG_SIZE];
 
-    int len = snprintf(log_msg, UTIL_VLOG_SIZE, "%s%s[%lu]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
+    int len = snprintf(log_msg, UTIL_VLOG_SIZE, "%s%s[%ld]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
         syscall(__NR_gettid), function, line);
     if (len < 0) {
         return;
