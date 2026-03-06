@@ -108,7 +108,7 @@ static urma_status_t comp_post_recv(bjetty_ctx_t *bjetty_ctx, int recv_idx,
  * This function returns idx_start if no other dev is valid.
  * This function returns -1 when all devs are invalid.
  */
-static int find_next_valid_jetty_idx(bool *pjettys_valid, int dev_num, int idx_start)
+static int find_next_valid_jetty_idx(const bool *pjettys_valid, int dev_num, int idx_start)
 {
     int ret = -1;
     for (int i = 0; i < dev_num; ++i) {
@@ -120,7 +120,7 @@ static int find_next_valid_jetty_idx(bool *pjettys_valid, int dev_num, int idx_s
     return ret;
 }
 
-static bool is_all_pjetty_fail(bjetty_ctx_t *bjetty_ctx)
+static bool is_all_pjetty_fail(const bjetty_ctx_t *bjetty_ctx)
 {
     for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
         if (bjetty_ctx->pjettys_valid[i]) {
@@ -144,7 +144,7 @@ static inline void decode_wr_user_ctx(uint64_t user_ctx, uint32_t *wr_id, uint16
 {
     *wr_id = user_ctx & 0xffffffff;
     *pjetty_id = (user_ctx >> PJETTY_ID_ENCODE_OFFSET) & 0xffff;
-    *vjetty_id = user_ctx >> VJETTY_ID_ENCODE_OFFSET;
+    *vjetty_id = (uint16_t)(user_ctx >> VJETTY_ID_ENCODE_OFFSET);
 }
 
 static int get_send_idx_with_least_load(bjetty_ctx_t *bjetty_ctx)
@@ -154,14 +154,14 @@ static int get_send_idx_with_least_load(bjetty_ctx_t *bjetty_ctx)
     uint32_t count = 0;
     uint32_t send_idx = 0;
     for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
-        send_idx = (i + bjetty_ctx->send_idx + 1) % bjetty_ctx->dev_num;
+        send_idx = (uint32_t)((i + bjetty_ctx->send_idx + 1) % bjetty_ctx->dev_num);
         if (bjetty_ctx->pjettys_valid[send_idx] == false) {
             continue;
         }
-        count = wr_buf_count(bjetty_ctx->jfs_bufs[send_idx]);
+        count = (uint32_t)wr_buf_count(bjetty_ctx->jfs_bufs[send_idx]);
         if (count < least_load) {
             least_load = count;
-            least_load_idx = send_idx;
+            least_load_idx = (int)send_idx;
         }
     }
     return least_load_idx;
@@ -421,7 +421,7 @@ static urma_status_t set_send_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_targ
     for (int i = 0; i < send_wr->send.src.num_sge; ++i) {
         urma_target_seg_t *vtseg = (urma_target_seg_t *)send_wr->send.src.sge[i].tseg;
         if (vtseg == NULL) {
-            if (send_wr->flag.bs.inline_flag) {
+            if (send_wr->flag.bs.inline_flag != 0) {
                 continue;
             }
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
@@ -454,7 +454,7 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
     for (int i = 0; i < send_wr->rw.src.num_sge; ++i) {
         vtseg = (urma_target_seg_t *)send_wr->rw.src.sge[i].tseg;
         if (vtseg == NULL) {
-            if (send_wr->flag.bs.inline_flag) {
+            if (send_wr->flag.bs.inline_flag != 0) {
                 continue;
             }
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
@@ -475,7 +475,7 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
     for (int i = 0; i < send_wr->rw.dst.num_sge; ++i) {
         vtseg = (urma_target_seg_t *)send_wr->rw.dst.sge[i].tseg;
         if (vtseg == NULL) {
-            if (send_wr->flag.bs.inline_flag) {
+            if (send_wr->flag.bs.inline_flag != 0) {
                 continue;
             }
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
@@ -642,12 +642,12 @@ static urma_status_t update_send_wr_before_post(urma_jfs_wr_t *send_wr, wr_buf_e
 {
     urma_status_t ret = URMA_SUCCESS;
     ret = set_jfs_wr_ptseg_ptjetty(send_wr, value->vtjetty, value->send_idx, value->target_idx);
-    if (ret) {
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to set_jfs_wr_ptseg_ptjetty\n");
         return ret;
     }
     ret = encode_jfs_wr_reliable_info(send_wr, value);
-    if (ret) {
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to encode_jfs_wr_reliable_info\n");
         return ret;
     }
@@ -820,7 +820,7 @@ static bdp_v_conn_t *get_v_conn_on_send(bjetty_ctx_t *bjetty_ctx, bondp_target_j
     if (!v_conn) {
         int ret = bdp_v_conn_table_add_on_send(&bjetty_ctx->v_conn_table, vtjetty_id,
             bdp_tjetty, bdp_tjetty->target_dev_num, &v_conn);
-        if (ret) {
+        if (ret != 0) {
             URMA_LOG_ERR("Failed to create v_conn for vjetty, ret: %d, "
                 "[" URMA_JETTY_ID_FMT " -> " URMA_JETTY_ID_FMT "]\n",
                 ret, URMA_JETTY_ID_ARGS(comp_jetty_id), URMA_JETTY_ID_ARGS(vtjetty_id));
@@ -893,7 +893,7 @@ static urma_status_t bondp_post_send_wr_no_store(bjetty_ctx_t *bjetty_ctx,
         return URMA_FAIL;
     }
     ret = schedule_send(wr, bjetty_ctx, v_conn, &local_port, &target_port);
-    if (ret) {
+    if (ret != 0) {
         return URMA_FAIL;
     }
 
@@ -909,7 +909,7 @@ static urma_status_t bondp_post_send_wr_no_store(bjetty_ctx_t *bjetty_ctx,
         bondp_deep_copy_wr(&wr_list[index], cur_wr,
             g_bondp_tx_wr.src_sge[index], g_bondp_tx_wr.dst_sge[index]);
         ret = set_jfs_wr_ptseg_ptjetty(&wr_list[index], cur_wr->tjetty, local_port, target_port);
-        if (ret) {
+        if (ret != 0) {
             return ret;
         }
         cur_wr = cur_wr->next;
@@ -987,7 +987,7 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
             .send_wr_id = bjetty_ctx->send_wr_id,
             .ex_value = value
         };
-        if (bdp_v_conn_push_send_so(v_conn, &so_data)) {
+        if (bdp_v_conn_push_send_so(v_conn, &so_data) != 0) {
             ret = URMA_FAIL;
             goto FREE_SEND_WR;
         }
@@ -1161,7 +1161,7 @@ static urma_status_t schedule_next_recv_port_matrix_singlepath(bjetty_ctx_t *bje
             "It is likely because `urma_post_jetty_recv` was called before `urma_bind_jetty`.\n");
         return URMA_EINVAL;
     }
-    *recv_idx= bjetty_ctx->direct_local_port;
+    *recv_idx = bjetty_ctx->direct_local_port;
     return URMA_SUCCESS;
 }
 
@@ -1189,7 +1189,7 @@ static urma_status_t bondp_post_recv_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     int recv_idx = -1;
     urma_status_t ret = 0;
     ret = schedule_recv(bjetty_ctx, &recv_idx);
-    if (ret) {
+    if (ret != 0) {
         return URMA_FAIL;
     }
     urma_jfr_wr_t *copied_jfr_wr = deepcopy_jfr_wr(wr);
@@ -1199,7 +1199,7 @@ static urma_status_t bondp_post_recv_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     urma_jfr_wr_t *cur_wr = copied_jfr_wr;
     while (cur_wr != NULL) {
         ret = set_jfr_wr_ptjetty_ptseg_without_hdr(cur_wr, recv_idx, 0);
-        if (ret) {
+        if (ret != 0) {
             goto DELETE_JFR_WR;
         }
         cur_wr = cur_wr->next;
@@ -1220,7 +1220,7 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, urma
     int recv_idx = 0;
     /* Schedule receiving jetty */
     int ret = schedule_recv(bjetty_ctx, &recv_idx);
-    if (ret) {
+    if (ret != 0) {
         return URMA_FAIL;
     }
     /* get_comp_urma_jetty_id will return a non-null value,
@@ -1228,7 +1228,7 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, urma
     return copy_store_and_post_jfr_wr(get_comp_urma_jetty_id(bdp_comp)->id, bjetty_ctx, recv_idx, wr, bad_wr);
 }
 
-static urma_status_t post_recv_check_jfr_wr_valid(bondp_context_t *bdp_ctx, const urma_jfr_wr_t *wr)
+static urma_status_t post_recv_check_jfr_wr_valid(const bondp_context_t *bdp_ctx, const urma_jfr_wr_t *wr)
 {
     /* No need to handle cases where num_sge == 0 or sge == NULL; Certain hardware supports this usage. */
     if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfr_sge < wr->src.num_sge) {
@@ -1293,7 +1293,7 @@ static inline bool is_local_device_error(bjetty_ctx_t *bjetty_ctx, int send_idx)
     return !bjetty_ctx->pjettys_valid[send_idx];
 }
 
-static inline bool is_recv_cr(urma_cr_t *cr)
+static inline bool is_recv_cr(const urma_cr_t *cr)
 {
     return cr->flag.bs.s_r == 1;
 }
@@ -1318,8 +1318,8 @@ static int resend_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
         URMA_LOG_DEBUG("Skip in resend_wr_in_error_device_buf\n");
         return CALLBACK_SKIP;
     }
-    node->value.send_idx = migrate_idx;
-    node->value.target_idx = migrate_idx;
+    node->value.send_idx = (int)migrate_idx;
+    node->value.target_idx = (int)migrate_idx;
     /* get_comp_urma_jetty_id(bjetty_ctx->bdp_comp) always returns non-null value. */
     /* Because resend funciton access stored bjetty_ctx pointer which has been validated in post_send_check_valid */
     ret = send_and_store_jfs_wr(bjetty_ctx, get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id,
@@ -1335,7 +1335,8 @@ static int resend_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
  * @return <0: Error occurs in data migration, error code is the opposite of urma_status_t in urma_post_jetty_send_wr
  * @return >0: Data migration partially succeed. Return value is the number of WRs which are not migrated
  */
-int resend_error_device(bjetty_ctx_t *bjetty_ctx, uint32_t err_idx, uint32_t migrate_idx, urma_jfs_wr_t **bad_wr)
+static int resend_error_device(bjetty_ctx_t *bjetty_ctx, uint32_t err_idx,
+    uint32_t migrate_idx, urma_jfs_wr_t **bad_wr)
 {
     if (wr_buf_count(bjetty_ctx->jfs_bufs[err_idx]) == 0) {
         return 0;
@@ -1457,7 +1458,7 @@ static int handle_target_fail(bjetty_ctx_t *bjetty_ctx, uint32_t origin_send_idx
 /**
  * Determine whether an opcode in a CR is of the send type, which will be used in recovering cr->completion_len.
  */
-static inline bool is_cr_type_send(urma_cr_t *cr)
+static inline bool is_cr_type_send(const urma_cr_t *cr)
 {
     /* All opcodes other than this are related to opcode SEND. */
     return cr->opcode != URMA_CR_OPC_WRITE_WITH_IMM;
@@ -1516,7 +1517,7 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         return handle_target_fail(bjetty_ctx, send_idx, send_wr_id);
     }
     /* Do migration */
-    if (is_local_device_error(bjetty_ctx, send_idx)) {
+    if (is_local_device_error(bjetty_ctx, (int)send_idx)) {
         /*
         Do migration when the current jetty fail and at least one jetty is valid.
         Migrate all WRs from the current jetty to the next valid jetty
@@ -1528,9 +1529,9 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
                 migrate_idx = -1;
             }
         } else {
-            migrate_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->dev_num, send_idx);
+            migrate_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->dev_num, (int)send_idx);
         }
-        ret = resend_error_device(bjetty_ctx, send_idx, migrate_idx, &bad_wr);
+        ret = resend_error_device(bjetty_ctx, send_idx, (uint32_t)migrate_idx, &bad_wr);
         URMA_LOG_DEBUG("Migrate send from %d to %d, ret %d\n", send_idx, migrate_idx, ret);
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
@@ -1561,7 +1562,7 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     /* Send SO from queue */
     (void)send_so_from_snd_queue(bjetty_ctx, v_conn);
     /* If this jfs wr doesn't ask for cqe, we simply remove it from buffer */
-    if (!node->value.flag.bs.complete_enable) {
+    if (node->value.flag.bs.complete_enable == 0) {
         (void)jfs_wr_buf_remove_wr(bjetty_ctx->jfs_bufs[send_idx], send_wr_id);
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
@@ -1593,7 +1594,7 @@ static int rearm_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
         return CALLBACK_SKIP;
     }
     ret = comp_post_recv(bjetty_ctx, migrate_idx, node->wr, bad_wr);
-    if (ret) {
+    if (ret != 0) {
         /*
         When we fail to post recv, the following post_recv operation will probably fail
         Therefore we just directly exit the process
@@ -1616,7 +1617,7 @@ static int rearm_wr_in_error_device_buf(wr_buf_node_t *node, void *args)
  * @return <0: Error occurs, error code is the opposite of urma_status_t in urma_post_jetty_recv_wr
  * @return >0: Rearm partially succeed. Return value is the number of WRs which are not rearmed.
  */
-int rearm_error_device(bjetty_ctx_t *bjetty_ctx, int err_idx, int migrate_idx, urma_jfr_wr_t **bad_wr)
+static int rearm_error_device(bjetty_ctx_t *bjetty_ctx, int err_idx, int migrate_idx, urma_jfr_wr_t **bad_wr)
 {
     if (wr_buf_count(bjetty_ctx->jfr_bufs[err_idx]) == 0) {
         return 0;
@@ -1632,21 +1633,22 @@ int rearm_error_device(bjetty_ctx_t *bjetty_ctx, int err_idx, int migrate_idx, u
     return args.ret;
 }
 
-uint32_t parse_hdr(uint64_t start_addr, uint32_t ctx, bjetty_hdr_t *hdr)
+static uint32_t parse_hdr(uint64_t start_addr, uint32_t ctx, bjetty_hdr_t *hdr)
 {
     uintptr_t hdr_addr = get_hdr_addr(ctx, start_addr);
     *hdr = *((bjetty_hdr_t *)hdr_addr);
     return ((bjetty_hdr_t *)hdr_addr)->msn;
 }
 
-uint32_t parse_imm_data(uint64_t imm_data, bjetty_hdr_t *hdr)
+static uint32_t parse_imm_data(uint64_t imm_data, bjetty_hdr_t *hdr)
 {
     hdr->is_so = (imm_data >> WRITE_IMM_IS_SO_SHIFT) & 1;
     hdr->msn = (imm_data >> WRITE_IMM_USER_BITS) & (BONDP_MAX_BITMAP_SIZE - 1);
     return hdr->msn;
 }
 
-urma_status_t rearm_single_wr(bjetty_ctx_t *bjetty_ctx, int recv_idx, uint32_t id, urma_jfr_wr_t **bad_wr)
+static urma_status_t rearm_single_wr(bjetty_ctx_t *bjetty_ctx, int recv_idx,
+    uint32_t id, urma_jfr_wr_t **bad_wr)
 {
     urma_jfr_wr_t *wr = jfr_wr_buf_get_wr(bjetty_ctx->jfr_bufs[recv_idx], id);
     if (wr == NULL) {
@@ -1657,7 +1659,7 @@ urma_status_t rearm_single_wr(bjetty_ctx_t *bjetty_ctx, int recv_idx, uint32_t i
 
 static inline bdp_r_p2v_jetty_id_type_t get_remote_id_type_by_cr(urma_cr_t *cr)
 {
-    return cr->flag.bs.jetty ? REMOTE_JETTY : REMOTE_JFR;
+    return (cr->flag.bs.jetty != 0) ? REMOTE_JETTY : REMOTE_JFR;
 }
 
 /**
@@ -1699,7 +1701,7 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
     ret = jfr_wr_buf_get_user_ctx(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id, &original_user_ctx);
-    if (ret) {
+    if (ret != 0) {
         /*
         This packet has been ACKed
         Return directly
@@ -1729,7 +1731,8 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     }
     v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, &target_jetty_id);
     if (!v_conn) {
-        if (bdp_v_conn_table_add_on_recv(&bjetty_ctx->v_conn_table, &target_jetty_id, &v_conn)) {
+        ret = bdp_v_conn_table_add_on_recv(&bjetty_ctx->v_conn_table, &target_jetty_id, &v_conn);
+        if (ret != 0) {
             /* get_comp_urma_jetty_id will return a non-null value,
                because we check bjetty_ctx->bdp_comp type at the entrance of this function. */
             urma_jetty_id_t *jfr_jetty_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp);
@@ -1802,9 +1805,9 @@ static void handle_recv_so(bdp_v_conn_t *v_conn, urma_cr_t *cr_output, int so_cn
     }
 }
 
-static inline bdp_p_vjetty_type_t get_p_vjetty_type_by_cr(urma_cr_t *cr)
+static inline bdp_p_vjetty_type_t get_p_vjetty_type_by_cr(const urma_cr_t *cr)
 {
-    if (cr->flag.bs.jetty) {
+    if (cr->flag.bs.jetty != 0) {
         return JETTY;
     }
     if (cr->flag.bs.s_r == 0) {
@@ -1848,7 +1851,7 @@ static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, int dev_idx,
  * After calling the `get_bjetty_xxx` function, it is necessary to call this function to decrement the reference count.
  * The encapsulation of this function is primarily aimed at making the src/urma easier to understand.
  */
-static inline void put_bjetty_ctx(bjetty_ctx_t *bjetty_ctx)
+static inline void put_bjetty_ctx(const bjetty_ctx_t *bjetty_ctx)
 {
     if (bjetty_ctx == NULL) {
         return;
@@ -1860,7 +1863,7 @@ static inline void put_bjetty_ctx(bjetty_ctx_t *bjetty_ctx)
  * it indicates that the CR is a fake one constructed by hardware.
  * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
  */
-static inline bool is_cr_user_ctx_valid(urma_cr_t *cr)
+static inline bool is_cr_user_ctx_valid(const urma_cr_t *cr)
 {
     return !(cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE);
 }
@@ -1930,7 +1933,7 @@ static int bondp_poll_pjfc(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfc, int 
         remaining_poll -= cqe_cnt[dev_id];
         bdp_jfc->comp_ctx = (void *)(uintptr_t)dev_id;
         urma_status_t ret = update_device_valid_state(bdp_ctx, dev_id, cqe_cnt[dev_id], bdp_cr_buf[dev_id]);
-        if (ret) {
+        if (ret != 0) {
             return -ret;
         }
     }
@@ -1949,7 +1952,7 @@ static int restore_cr_local_id(bondp_context_t *bdp_ctx,  int dev_idx, urma_cr_t
     };
     int ret = bdp_p_vjetty_id_table_lookup(&bdp_ctx->p_vjetty_id_table, pjetty_id, get_p_vjetty_type_by_cr(cr),
         &vjetty_id);
-    if (ret) {
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to get vjetty.id of local_id: %u, ret: %d\n", pjetty_id.id, ret);
         return -1;
     }
@@ -2037,7 +2040,7 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
             // restore local_id, method #2 through bjetty_ctx
             cr->local_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id;
             // restore remote_id
-            if (restore_cr_remote_id(bdp_ctx, cr)) {
+            if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
                 restore_cr_remote_id_fallback(bdp_ctx, cr);
             }
             // report
@@ -2046,7 +2049,7 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
         put_bjetty_ctx(bjetty_ctx);
         return 0;
     }
-    if (restore_cr_local_id(bdp_ctx, dev_idx, cr)) {
+    if (restore_cr_local_id(bdp_ctx, dev_idx, cr) != 0) {
         cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
     }
     /* Perform remote_id restoration on both the sending and receiving ends.
@@ -2054,7 +2057,7 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
     according to the description of urma_cr_t.
     However, it has been found in actual testing that this field is generally valid, hence this approach is taken.
     */
-    if (restore_cr_remote_id(bdp_ctx, cr)) {
+    if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
         restore_cr_remote_id_fallback(bdp_ctx, cr);
     }
     /* When calling bondp_poll_pjfc,
@@ -2075,14 +2078,14 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
     /* Handle CR with status URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE */
     if (!is_cr_user_ctx_valid(cr)) {
         /* For these CRs where the user_ctx does not exist, simply restore the necessary values and then skip them. */
-        if (restore_cr_local_id(bdp_ctx, dev_idx, cr)) {
+        if (restore_cr_local_id(bdp_ctx, dev_idx, cr) != 0) {
             cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
         }
         /*
         Always attempt to restore the remote_id field, as it has been found to be correct in many cases during testing.
         Even if it is incorrect, we can invalidate it using the fallback function.
         */
-        if (restore_cr_remote_id(bdp_ctx, cr)) {
+        if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
             restore_cr_remote_id_fallback(bdp_ctx, cr);
         }
         /* recover completion len */
@@ -2124,7 +2127,7 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
         according to the description of urma_cr_t.
         However, it has been found in actual testing that this field is generally valid, hence this approach is taken.
         */
-        if (restore_cr_remote_id(bdp_ctx, cr)) {
+        if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
             restore_cr_remote_id_fallback(bdp_ctx, cr);
         }
         /* When calling bondp_poll_pjfc,
@@ -2136,7 +2139,7 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
     return ret == CR_HANDLER_ERR_AND_COPY || ret == CR_HANDLER_ERR_AND_SKIP ? -1 : 0;
 }
 
-int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
+int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
     bondp_comp_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_comp_t, v_jfc);
@@ -2152,7 +2155,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
     }
     /* Handle each CR */
     int total_cnt = 0;
-    for (int dev_id = 0; dev_id< bdp_jfc->dev_num; ++dev_id) {
+    for (int dev_id = 0; dev_id < bdp_jfc->dev_num; ++dev_id) {
         if (bdp_jfc->p_jfc[dev_id] == NULL) {
             continue;
         }
@@ -2160,10 +2163,10 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
             int ret = 0;
             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
                 ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &g_bondp_cr_buf[dev_id][cr_id],
-                    cr_output_array, &total_cnt);
+                    cr, &total_cnt);
             } else {
                 ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_cqe_cnt, cr_cnt,
-                    &g_bondp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
+                    &g_bondp_cr_buf[dev_id][cr_id], cr, &total_cnt);
             }
             if (ret < 0) {
                 return ret;
@@ -2171,15 +2174,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr_output_array)
         }
     }
     return total_cnt;
-}
-
-uint32_t bondp_get_jfs_msn(urma_jfs_wr_t *wr, uint32_t *msn)
-{
-    /* Only set msn for ops which need RQE */
-    if (wr->opcode != URMA_OPC_WRITE && wr->opcode != URMA_OPC_READ) {
-        return *msn;
-    }
-    return -1; /* valid msn < 2^24, so -1 indicates invalid */
 }
 
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
@@ -2267,22 +2261,22 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr_output_arra
     /* Handle each CR */
     int total_cnt = 0;
     for (int dev_id = 0; dev_id < bdp_jetty->dev_num; ++dev_id) {
-         if (bdp_jetty->p_jetty[dev_id] == NULL) {
-             continue;
-         }
-         for (int cr_id = 0; cr_id < flush_cnt[dev_id]; ++cr_id) {
-             int ret = 0;
-             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
-                 ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
-                     cr_output_array, &total_cnt);
-             } else {
-                 ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_flush_cnt, cr_cnt,
-                     &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
-             }
-             if (ret < 0) {
-                 return total_cnt;
-             }
-         }
-     }
+        if (bdp_jetty->p_jetty[dev_id] == NULL) {
+            continue;
+        }
+        for (int cr_id = 0; cr_id < flush_cnt[dev_id]; ++cr_id) {
+            int ret = 0;
+            if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
+                ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
+                    cr_output_array, &total_cnt);
+            } else {
+                ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_flush_cnt, cr_cnt,
+                    &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
+            }
+            if (ret < 0) {
+                return total_cnt;
+            }
+        }
+    }
     return total_cnt;
 }
