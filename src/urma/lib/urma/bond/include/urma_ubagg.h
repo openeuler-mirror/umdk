@@ -30,6 +30,7 @@ typedef enum urma_bond_user_ctl_opcode {
     URMA_USER_CTL_BOND_GET_SEG_INFO,
     URMA_USER_CTL_BOND_ADD_REMOTE_SEG_INFO,
     URMA_USER_CTL_BOND_SET_AGGR_MODE,
+    URMA_USER_CTL_BOND_ENABLE_SEG_CACHE,
 } urma_bond_user_ctl_opcode_t;
 
 typedef struct urma_bond_id_info_in {

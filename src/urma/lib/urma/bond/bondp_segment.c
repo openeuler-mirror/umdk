@@ -27,6 +27,7 @@
 #define BDP_VA_VTSEG_HASH_INFO_TABLE_SIZE (1024)
 
 static bondp_hash_table_t g_va_vtseg_tbl;
+static bool g_seg_cache_enable = false;
 
 // key is va
 typedef struct bdp_va_vtseg_info {
@@ -339,7 +340,7 @@ static bondp_ret_t import_matrix_port_seg_by_direct_route(bondp_context_t *bdp_c
     if (is_half_loopback(bdp_ctx->topo_map, &eid)) {
         return bondp_import_seg_half_loopback(bdp_ctx, bondp_seg_cfg, &eid);
     }
-    
+
     for (i = 0; i < direct_dev_info->direct_num; ++i) {
         local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
             direct_dev_info->local_map_idx[i].peer_port);
@@ -522,6 +523,11 @@ static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t
     return 0;
 }
 
+void bondp_toggle_seg_cache(bool enable)
+{
+    g_seg_cache_enable = enable;
+}
+
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag)
 {
@@ -538,31 +544,39 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     bdp_imprt_tseg->local_dev_num = bdp_ctx->dev_num;
     bdp_imprt_tseg->target_dev_num = URMA_UBAGG_DEV_MAX_NUM;
     bdp_imprt_tseg->is_reused = false;
+    bondp_udata_import_seg_t udata_out = {0};
+    bondp_seg_cfg_t bondp_seg_cfg = {
+        .token = token,
+        .addr = addr,
+        .flag = flag,
+        .udata_out = &udata_out,
+        .bdp_imprt_tseg = bdp_imprt_tseg,
+    };
+
     bondp_v2p_token_id_t v2p_token_id = {0};
     urma_eid_t v_remote_eid = {0};
-    (void)memcpy(&v_remote_eid, &seg->ubva.eid, sizeof(urma_eid_t));
-    int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
-        &v_remote_eid, &v2p_token_id);
-
-    bondp_udata_import_seg_t udata_out = {0};
-    bondp_seg_cfg_t bondp_seg_cfg = { .token = token,  .addr = addr, .flag = flag,
-        .udata_out = &udata_out,      .bdp_imprt_tseg = bdp_imprt_tseg };
-    if (ret == 0) {
-        (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(bondp_udata_import_seg_t));
-        bdp_imprt_tseg->is_reused = true;
-        bondp_fill_v_tseg(&bdp_imprt_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
-        ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
-        if (ret != 0) {
+    if (g_seg_cache_enable) {
+        (void)memcpy(&v_remote_eid, &seg->ubva.eid, sizeof(urma_eid_t));
+        int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
+            &v_remote_eid, &v2p_token_id);
+        if (ret == 0) {
+            (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(bondp_udata_import_seg_t));
+            bdp_imprt_tseg->is_reused = true;
+            bondp_fill_v_tseg(&bdp_imprt_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
+            ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
+            if (ret != 0) {
+                free(bdp_imprt_tseg);
+                return NULL;
+            }
+            return &bdp_imprt_tseg->v_tseg;
+        }
+        if (ret != BONDP_HASH_MAP_NOT_FOUND_ERROR) {
+            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret: %d.\n", ret);
             free(bdp_imprt_tseg);
             return NULL;
         }
-        return &bdp_imprt_tseg->v_tseg;
     }
-    if (ret != BONDP_HASH_MAP_NOT_FOUND_ERROR) {
-        URMA_LOG_ERR("Failed to lookup v2p_token_id, ret: %d.\n", ret);
-        free(bdp_imprt_tseg);
-        return NULL;
-    }
+
     /* ret is BONDP_HASH_MAP_NOT_FOUND_ERROR and start to import v_tseg */
     urma_import_tseg_cfg_t cfg = { .ubva = seg->ubva, .len = seg->len, .attr = seg->attr,
         .token_id = seg->token_id, .token = token,    .flag = flag,    .mva = addr };
@@ -573,18 +587,20 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         goto free_bdp_imprt_tseg;
     }
 
-    ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
+    int ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
     if (ret != 0) {
         goto cmd_unimport_seg;
     }
 
-    v2p_token_id.key.v_remote_eid = v_remote_eid;
-    v2p_token_id.key.v_token_id = seg->token_id;
-    (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(bondp_udata_import_seg_t));
-    v2p_token_id.v_handle = bdp_imprt_tseg->v_tseg.handle;
-    ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
-    if (ret != 0) {
-        goto unimport_p_seg;
+    if (g_seg_cache_enable) {
+        v2p_token_id.key.v_remote_eid = v_remote_eid;
+        v2p_token_id.key.v_token_id = seg->token_id;
+        (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(bondp_udata_import_seg_t));
+        v2p_token_id.v_handle = bdp_imprt_tseg->v_tseg.handle;
+        ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
+        if (ret != 0) {
+            goto unimport_p_seg;
+        }
     }
 
     return &bdp_imprt_tseg->v_tseg;
