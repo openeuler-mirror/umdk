@@ -139,10 +139,10 @@ int parse_args(ping_cfg_t *cfg)
                 break;
             case 'h':
                 usage(cfg->filename);
-                exit(EXIT_SUCCESS);
+                return -EINVAL;
             case 'V':
                 version();
-                exit(EXIT_SUCCESS);
+                return -EINVAL;
             case ':':
                 LOG_ERROR("Option -%c requires an argument\n", optopt);
                 return -EINVAL;
