@@ -1256,15 +1256,16 @@ int umq_ub_unbind_impl(uint64_t umqh)
         umq_modify_ubq_to_err(queue, UMQ_IO_ALL, UB_QUEUE_JETTY_IO);
     }
 
+    free(queue->bind_ctx);
+    queue->bind_ctx = NULL;
+    /* The `flush tx` and `flush rx` directives should be placed after `bind_ctx` is set to null,
+     * preventing requests from being sent under flow control. */
     if ((queue->dev_ctx->feature & UMQ_FEATURE_API_PRO) == 0) {
         umq_flush_tx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
         if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
             umq_flush_rx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
         }
     }
-
-    free(queue->bind_ctx);
-    queue->bind_ctx = NULL;
 
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
