@@ -7,7 +7,6 @@
 #include "umq_api.h"
 #include "umq_errno.h"
 #include "perf.h"
-#include "dfx.h"
 #include "umq_vlog.h"
 #include "urpc_util.h"
 
@@ -36,16 +35,16 @@ protected:
 
 // Test umq_perf_init function
 TEST_F(PerfTest, InitSuccess) {
-    int result = umq_perf_init();
-    EXPECT_EQ(result, UMQ_SUCCESS);
+    int ret = umq_perf_init();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, InitTwiceShouldFail) {
-    int result1 = umq_perf_init();
-    EXPECT_EQ(result1, UMQ_SUCCESS);
+    int ret = umq_perf_init();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    int result2 = umq_perf_init();
-    EXPECT_NE(result2, UMQ_SUCCESS);  // Should fail since already initialized
+    ret = umq_perf_init();
+    EXPECT_NE(ret, UMQ_SUCCESS); // Should fail since already initialized
 }
 
 // Test umq_perf_get_start_timestamp_with_feature
@@ -85,141 +84,118 @@ TEST_F(PerfTest, RecordWriteWithoutPerfFeature) {
     SUCCEED();  // If no crash, test passes
 }
 
+static void test_perf_cfg_set(umq_perf_stats_cfg_t *cfg)
+{
+    for (int i = 0; i < 3; ++i) {
+        cfg->thresh_array[i] = (i + 1) * 100;
+    }
+    cfg->thresh_num = 3;
+}
+
 // Test perf start/stop/clear operations
 TEST_F(PerfTest, PerfStartStop) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
 
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_EQ(start_result, UMQ_SUCCESS);
+    ret = umq_perf_reset(&cfg);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    int stop_result = umq_perf_stop();
-    EXPECT_EQ(stop_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, PerfStartWithNullArrayShouldFail) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    int start_result = umq_perf_start(NULL, 3);
-    EXPECT_NE(start_result, UMQ_SUCCESS);
+    ret = umq_perf_reset(NULL);
+    EXPECT_NE(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, PerfStartWithoutInitShouldFail) {
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
 
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_NE(start_result, UMQ_SUCCESS);
+    int ret = umq_perf_reset(&cfg);
+    EXPECT_NE(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, PerfClearWhenStartedShouldFail) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
 
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_EQ(start_result, UMQ_SUCCESS);
-
-    int clear_result = umq_perf_clear();
-    EXPECT_NE(clear_result, UMQ_SUCCESS);  // Should fail because perf is running
+    ret = umq_perf_reset(&cfg);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, PerfClearAfterStopping) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
 
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_EQ(start_result, UMQ_SUCCESS);
+    ret = umq_perf_reset(&cfg);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    int stop_result = umq_perf_stop();
-    EXPECT_EQ(stop_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    int clear_result = umq_perf_clear();
-    EXPECT_EQ(clear_result, UMQ_SUCCESS);
-}
-
-TEST_F(PerfTest, PerfInfoGetWhenRunningShouldFail) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
-
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
-
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_EQ(start_result, UMQ_SUCCESS);
-
-    umq_perf_infos_t *info = nullptr;
-    int info_result = umq_perf_info_get(&info);
-    EXPECT_NE(info_result, 0);  // Should fail because perf is running
+    umq_perf_stats_t info;
+    ret = umq_perf_info_get(&info);
+    EXPECT_EQ(ret, 0);
 }
 
 TEST_F(PerfTest, PerfInfoGetAfterStopping) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8];  // Fixed size array
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    uint32_t thresh_num = 3;
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
 
-    int start_result = umq_perf_start(thresh_array, thresh_num);
-    EXPECT_EQ(start_result, UMQ_SUCCESS);
+    ret = umq_perf_reset(&cfg);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    int stop_result = umq_perf_stop();
-    EXPECT_EQ(stop_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
-    umq_perf_infos_t *info = nullptr;
-    int info_result = umq_perf_info_get(&info);
-    EXPECT_EQ(info_result, 0);  // Should succeed after stopping
+    umq_perf_stats_t info;
+    ret = umq_perf_info_get(&info);
+    EXPECT_EQ(ret, 0);  // Should succeed after stopping
 }
 
 TEST_F(PerfTest, StartWithTooManyThresholds) {
-    umq_perf_init();
+    umq_perf_start();
 
+    umq_perf_stats_cfg_t cfg = {0};
     // Create an array larger than UMQ_PERF_QUANTILE_MAX_NUM
-    uint64_t large_thresh_array[UMQ_PERF_QUANTILE_MAX_NUM + 10];
-    for (size_t i = 0; i < UMQ_PERF_QUANTILE_MAX_NUM + 10; ++i) {
-        large_thresh_array[i] = (i + 1) * 100;
+    for (size_t i = 0; i < UMQ_PERF_QUANTILE_MAX_NUM; ++i) {
+        cfg.thresh_array[i] = (i + 1) * 100;
     }
+    cfg.thresh_num = UMQ_PERF_QUANTILE_MAX_NUM + 10;
 
-    int result = umq_perf_start(large_thresh_array, UMQ_PERF_QUANTILE_MAX_NUM + 10);
-    EXPECT_EQ(result, -UMQ_ERR_EAGAIN);  // Should return EAGAIN for too many thresholds
+    int ret = umq_perf_reset(&cfg);
+    EXPECT_EQ(ret, -UMQ_ERR_EAGAIN);  // Should return EAGAIN for too many thresholds
 }
 
 TEST_F(PerfTest, StartWithLargeThresholdValues) {
-    umq_perf_init();
+    umq_perf_start();
 
     // Test with threshold values larger than UMQ_PERF_MAX_THRESH_NS
-    uint64_t thresh_array[8] = {UMQ_PERF_MAX_THRESH_NS + 1, UMQ_PERF_MAX_THRESH_NS + 10};
-    int result = umq_perf_start(thresh_array, 2);
+    umq_perf_stats_cfg_t cfg = {0};
+    cfg.thresh_array[0] = UMQ_PERF_MAX_THRESH_NS + 1;
+    cfg.thresh_array[1] = UMQ_PERF_MAX_THRESH_NS + 10;
+    cfg.thresh_num = 2;
+    int ret = umq_perf_reset(&cfg);
 
     // Should still succeed but ignore large thresholds
-    EXPECT_EQ(result, UMQ_SUCCESS);
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 }
 
 TEST_F(PerfTest, PerfRecordWriteFunctions) {
@@ -244,16 +220,14 @@ TEST_F(PerfTest, PerfRecordWriteWithDirection) {
 }
 
 TEST_F(PerfTest, PerfRecordAllocFunction) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Need to start perf first to enable recording
-    uint64_t thresh_array[8];
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Now call umq_perf_get_start_timestamp which internally calls umq_dp_thread_run_once
     // and umq_perf_record_alloc
@@ -265,18 +239,16 @@ TEST_F(PerfTest, PerfRecordAllocFunction) {
 }
 
 TEST_F(PerfTest, PerfRecordAllocExhaustedCapacity) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Manually set all records as used to test exhaustion case
     // This requires access to internal state, so we'll just call the function indirectly
     // by triggering the path through umq_get_start_timestamp after enabling perf
-    uint64_t thresh_array[8];
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Call multiple times to exercise the allocation logic
     for (int i = 0; i < 5; ++i) {
@@ -291,14 +263,15 @@ TEST_F(PerfTest, PerfRecordAllocExhaustedCapacity) {
 }
 
 TEST_F(PerfTest, FindPerfRecordBucketNoThreshold) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Directly test the internal function by creating appropriate context
     // Since it's static, we need to trigger it through public API
-    uint64_t thresh_array[8] = {0}; // No thresholds set
-    int start_result = umq_perf_start(thresh_array, 1);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0}; // No thresholds set
+    cfg.thresh_num = 1;
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Now when we call perf recording functions, find_perf_record_bucket will be called
     g_mock_urpc_get_cpu_cycles_value = 3000;
@@ -315,12 +288,13 @@ TEST_F(PerfTest, FindPerfRecordBucketNoThreshold) {
 }
 
 TEST_F(PerfTest, FindPerfRecordBucketWithThresholds) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Now call perf recording which will trigger find_perf_record_bucket
     g_mock_urpc_get_cpu_cycles_value = 2500;
@@ -336,12 +310,13 @@ TEST_F(PerfTest, FindPerfRecordBucketWithThresholds) {
 }
 
 TEST_F(PerfTest, PerfFillPerfRecordFunction) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Enable perf
     // uint32_t feature = UMQ_FEATURE_ENABLE_PERF;
@@ -362,32 +337,34 @@ TEST_F(PerfTest, PerfFillPerfRecordFunction) {
 }
 
 TEST_F(PerfTest, PerfConvertCyclesToNs) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Stop perf to allow getting info
-    int stop_result = umq_perf_stop();
-    ASSERT_EQ(stop_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Get perf info which should call umq_perf_convert_cycles_to_ns
-    umq_perf_infos_t *info = nullptr;
-    int info_result = umq_perf_info_get(&info);
-    EXPECT_EQ(info_result, 0);
+    umq_perf_stats_t info;
+    ret = umq_perf_info_get(&info);
+    EXPECT_EQ(ret, 0);
 
     SUCCEED();
 }
 
 TEST_F(PerfTest, PerfRecordWriteFunctionsEdgeCases) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Enable perf recording
     umq_perf_record_type_t type = static_cast<umq_perf_record_type_t>(1);
@@ -404,15 +381,13 @@ TEST_F(PerfTest, PerfRecordWriteFunctionsEdgeCases) {
 }
 
 TEST_F(PerfTest, PerfRecordAllocationBoundary) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8];
-    for (int i = 0; i < 3; ++i) {
-        thresh_array[i] = (i + 1) * 100;
-    }
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Try to trigger multiple allocations
     for (int i = 0; i < 10; ++i) {
@@ -427,31 +402,31 @@ TEST_F(PerfTest, PerfRecordAllocationBoundary) {
 }
 
 TEST_F(PerfTest, ClearPerfRecordItem) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    int stop_result = umq_perf_stop();
-    ASSERT_EQ(stop_result, UMQ_SUCCESS);
-
-    // Clear should reset counters
-    int clear_result = umq_perf_clear();
-    EXPECT_EQ(clear_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     SUCCEED();
 }
 
 TEST_F(PerfTest, ComprehensivePerfTest) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Set up thresholds
     uint64_t thresh_array[8] = {50, 100, 200, 300, 400, 500, 600, 700};
-    int start_result = umq_perf_start(thresh_array, 8);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    cfg.thresh_num = 8;
+    memcpy(cfg.thresh_array, thresh_array, sizeof(thresh_array));
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Enable recording by getting timestamps
     for (int i = 0; i < 5; ++i) {
@@ -468,28 +443,25 @@ TEST_F(PerfTest, ComprehensivePerfTest) {
     }
 
     // Stop perf
-    int stop_result = umq_perf_stop();
-    EXPECT_EQ(stop_result, UMQ_SUCCESS);
+    ret = umq_perf_stop();
+    EXPECT_EQ(ret, UMQ_SUCCESS);
 
     // Get results (this calls umq_perf_convert_cycles_to_ns)
-    umq_perf_infos_t *info = nullptr;
-    int info_result = umq_perf_info_get(&info);
-    EXPECT_EQ(info_result, 0);
-
-    // Clear everything
-    int clear_result = umq_perf_clear();
-    EXPECT_EQ(clear_result, UMQ_SUCCESS);
+    umq_perf_stats_t info;
+    ret = umq_perf_info_get(&info);
+    EXPECT_EQ(ret, 0);
 
     SUCCEED();
 }
 
 TEST_F(PerfTest, MinValueConditionTest) {
-    int init_result = umq_perf_init();
-    ASSERT_EQ(init_result, UMQ_SUCCESS);
+    int ret = umq_perf_start();
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
-    uint64_t thresh_array[8] = {100, 200, 300};
-    int start_result = umq_perf_start(thresh_array, 3);
-    ASSERT_EQ(start_result, UMQ_SUCCESS);
+    umq_perf_stats_cfg_t cfg = {0};
+    test_perf_cfg_set(&cfg);
+    ret = umq_perf_reset(&cfg);
+    ASSERT_EQ(ret, UMQ_SUCCESS);
 
     // Set mock to same value to create zero delta
     g_mock_urpc_get_cpu_cycles_value = 1000;
