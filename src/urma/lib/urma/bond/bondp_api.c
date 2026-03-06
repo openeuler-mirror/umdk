@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/epoll.h>
+
 #include "ub_util.h"
 #include "urma_log.h"
 #include "urma_api.h"
@@ -19,6 +20,7 @@
 #include "bondp_jetty_ctx.h"
 #include "bondp_context_table.h"
 #include "bondp_provider_ops.h"
+#include "bondp_segment.h"
 #include "ubagg_ioctl.h"
 #include "urma_provider.h"
 #include "bondp_api.h"
@@ -941,6 +943,9 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
                 return -EINVAL;
             }
             return bondp_set_aggr_mode(ctx, *(urma_context_aggr_mode_t *)in->addr);
+        case URMA_USER_CTL_BOND_ENABLE_SEG_CACHE:
+            bondp_toggle_seg_cache(true);
+            return 0;
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode:%d\n", in->opcode);
             return -EINVAL;
