@@ -958,6 +958,10 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
+    if (strstr(cfg->dev_name, "bonding_dev") != NULL || !cfg->single_path) {
+        cfg->use_ctp = true;
+    }
+
     if (check_time_type(cfg) != 0) {
         return -1;
     }
@@ -1278,13 +1282,13 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (cfg->api_type == PERFTEST_SEND) {
-        if (cfg->single_path && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with single path for send opcode, max size: %u.\n",
+        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",
                 cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
             exit(1);
         }
-        if (!cfg->single_path && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with multi path for send opcode, max size: %u.\n",
+        if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n",
                 cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
             exit(1);
         }
