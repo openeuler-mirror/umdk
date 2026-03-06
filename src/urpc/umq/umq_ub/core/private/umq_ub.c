@@ -1596,6 +1596,7 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
             UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed",
                 EID_ARGS(*eid), id);
         }
+        return;
     }
     pthread_rwlock_wrlock(&queue->wait_ack_import.lock);
     if (queue->wait_ack_import.wait_ack_idx != UMQ_MAX_TSEG_NUM) {
@@ -2009,8 +2010,8 @@ int fill_big_data_ref_sge(ub_queue_t *queue, ub_ref_sge_t *ref_sge, umq_buf_t *b
     }
     urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[buffer->mempool_id];
     urma_seg_t *seg = &tseg->seg;
-    if (!queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][buffer->mempool_id]
-        && !ctx->mempool_info_record[buffer->mempool_id]) {
+    if (!queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][buffer->mempool_id] &&
+        !ctx->mempool_info_record[buffer->mempool_id]) {
         ub_import_mempool_info_t *import_mempool_info = ctx->import_mempool_info;
         ctx->umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
         ctx->umq_imm_head->mempool_num++;
