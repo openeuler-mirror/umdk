@@ -25,7 +25,6 @@
 #include "umq_api.h"
 #include "umq_pro_api.h"
 #include "umq_example_common.h"
-#include "threadpool.h"
 #include "connection_setup_tool.h"
 
 #define TOOL_SOCKET_SEND_RECV_TIMEOUT   10
@@ -48,13 +47,14 @@
 #define DEFAULT_QUEUE_CNT 16
 #define QUEUE_SIZE 2048
 #define MAIN_QUEUE_CNT EXAMPLE_MAX_DEV_NUM
+#define SERVER_LISENT_THREAD_NUM 8
 
+pthread_mutex_t g_server_accept_client_lock;
 static umq_info_t g_tatal_umq_info_list;
 static umq_info_t g_umq_info_list[CONNECTION_SETUP_LISTEN];
 static volatile uint32_t g_umq_cnt = 0;
 struct urpc_example_config *g_cfg;
 int g_epoll_fd = -1;
-threadpool_t *g_threadpool;
 
 static volatile uint32_t g_state_total_conn_cnt = 0;
 static volatile uint32_t g_state_conn_cnt[MAIN_QUEUE_CNT];
@@ -453,9 +453,8 @@ CLOSE_SOC:
 }
 
 static bool is_post_rx[MAIN_QUEUE_CNT];
-void serever_bind_one_client(void *bind_fd)
+void serever_bind_one_client(int client_fd)
 {
-    int client_fd = *(int *)bind_fd;
     uint8_t recv_data[UMQ_MAX_BIND_INFO_SIZE];
     uint32_t recv_len = UMQ_MAX_BIND_INFO_SIZE;
     if (recv_exchange_data(client_fd, recv_data, &recv_len) != 0) {
@@ -512,9 +511,25 @@ CLOSE_FD:
     close(client_fd);
 }
 
+void *server_wait_client(void *arg)
+{
+    int server_fd = *(int *)arg;
+    int client_fd = -1;
+    while (true) {
+        pthread_mutex_lock(&g_server_accept_client_lock);
+        client_fd = accept(server_fd, NULL, NULL);
+        pthread_mutex_unlock(&g_server_accept_client_lock);
+        if (client_fd < 0) {
+            LOG_PRINT_ERR("ip[%s] port[%u] accept failed\n", g_cfg->server_ip, g_cfg->tcp_port);
+            break;
+        }
+        serever_bind_one_client(client_fd);
+    }
+    return NULL;
+}
+
 void *start_server_lisent(void *arg)
 {
-    threadpool_t *pool = (threadpool_t *)arg;
     int ret = -1;
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -559,17 +574,21 @@ void *start_server_lisent(void *arg)
     }
     LOG_PRINT("Server listening on ip[%s] port[%u]...\n", g_cfg->server_ip, g_cfg->tcp_port);
 
-    while (true) {
-        int client_fd = accept(server_fd, NULL, NULL);
-        if (client_fd < 0) {
-            LOG_PRINT_ERR("ip[%s] port[%u] accept failed\n", g_cfg->server_ip, g_cfg->tcp_port);
-            goto CLOSE_SERVER;
+    if (pthread_mutex_init(&g_server_accept_client_lock, NULL) != 0) {
+        LOG_PRINT_ERR("init  g_server_wait_client_lock failed\n");
+        goto CLOSE_SERVER;
+    }
+
+    pthread_t accept_threads[SERVER_LISENT_THREAD_NUM];
+    for (uint32_t i = 0; i < SERVER_LISENT_THREAD_NUM; i++) {
+        if (pthread_create(&accept_threads[i], NULL, server_wait_client, (void *)&server_fd) != 0) {
+            LOG_PRINT_ERR("pthread_create failed, idx %u\n", i);
+            break;
         }
-        if (threadpool_add(pool, serever_bind_one_client,
-            (void *)(uintptr_t)&client_fd, sizeof(client_fd)) != UMQ_SUCCESS) {
-            LOG_PRINT_ERR("threadpool_add failed\n");
-            goto CLOSE_SERVER;
-        }
+    }
+
+    for (uint32_t i = 0; i < SERVER_LISENT_THREAD_NUM; i++) {
+        pthread_join(accept_threads[i], NULL);
     }
 
 CLOSE_SERVER:
@@ -640,9 +659,8 @@ static int send_req(umq_info_t *umq_info)
     return 0;
 }
 
-static void return_rsp(void *arg)
+static void return_rsp(umq_ctx_t *umq_ctx)
 {
-    umq_ctx_t *umq_ctx = *(umq_ctx_t **)arg;
     uint64_t umqh = umq_ctx->umqh;
     umq_buf_t *tx_post_buf = umq_buf_alloc(CONNETION_SETUP_MSG_SZIE, 1, umqh, NULL);
     (void)sprintf(tx_post_buf->buf_data, "hello client i am server");
@@ -661,9 +679,8 @@ static void return_rsp(void *arg)
     g_umq_info_list[umq_ctx->main_umq_idx].send_rsp_cnt++;
 }
 
-static void process_tx_interrupt(void *arg)
+static void process_tx_interrupt(fd_ctx_t *fd_ctx)
 {
-    fd_ctx_t *fd_ctx = (fd_ctx_t *)(uintptr_t)(*(uint64_t *)(uintptr_t)arg);
     uint64_t umqh = fd_ctx->umqh;
     umq_interrupt_option_t option = {
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
@@ -688,9 +705,8 @@ static void process_tx_interrupt(void *arg)
     fd_ctx->processing = false;
 }
 
-static void process_rx_interrupt(void *arg)
+static void process_rx_interrupt(fd_ctx_t *fd_ctx)
 {
-    fd_ctx_t *fd_ctx = (fd_ctx_t *)(uintptr_t)(*(uint64_t *)(uintptr_t)arg);
     uint64_t umqh = fd_ctx->umqh;
     umq_interrupt_option_t option = {
         .flag = UMQ_INTERRUPT_FLAG_IO_DIRECTION,
@@ -716,7 +732,7 @@ static void process_rx_interrupt(void *arg)
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)(uintptr_t)buf->qbuf_ext;
             umq_ctx_t *umq_ctx = (umq_ctx_t *)(uintptr_t)buf_pro->umq_ctx;
             g_umq_info_list[umq_ctx->main_umq_idx].recv_req_cnt++;
-            threadpool_add(g_threadpool, return_rsp, &umq_ctx, sizeof(uint64_t));
+            return_rsp(umq_ctx);
             umq_buf_reset(buf);
             umq_buf_t *bad_buf;
             if (umq_post(umq_ctx->umqh, buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
@@ -729,7 +745,7 @@ static void process_rx_interrupt(void *arg)
     fd_ctx->processing = false;
 }
 
-static int wait_work(threadpool_t *pool)
+static int wait_work(void)
 {
     struct epoll_event events[CONNECTION_SETUP_LISTEN] = {0};
     fd_ctx_t *fd_ctx;
@@ -752,14 +768,14 @@ static int wait_work(threadpool_t *pool)
                         continue;
                     }
                     fd_ctx->processing = true;
-                    threadpool_add(pool, process_tx_interrupt, &fd_ctx, sizeof(uint64_t));
+                    process_tx_interrupt(fd_ctx);
                     break;
                 case FD_CTX_TYPE_INTERRUPT_RX:
                     if (fd_ctx->processing) {
                         continue;
                     }
                     fd_ctx->processing = true;
-                    threadpool_add(pool, process_rx_interrupt, &fd_ctx, sizeof(uint64_t));
+                    process_rx_interrupt(fd_ctx);
                     break;
                 default:
                     LOG_PRINT_ERR("unknow type\n");
@@ -800,17 +816,10 @@ static int run_server(struct urpc_example_config *cfg)
         return -1;
     }
 
-    g_threadpool = threadpool_create(cfg->thread_poll_size, QUEUE_SIZE);
-    if (g_threadpool == NULL) {
-        LOG_PRINT_ERR("threadpool_create failed\n");
-        ret = -1;
-        goto CLOSE_FD;
-    }
-
     if (init_umq(cfg) != 0) {
         LOG_PRINT_ERR("init_umq failed\n");
         ret = -1;
-        goto DESTROY_THREADPOOL;
+        goto CLOSE_FD;
     }
 
     // create main umq
@@ -828,7 +837,7 @@ static int run_server(struct urpc_example_config *cfg)
 
     // wait client
     pthread_t lisent_threads;
-    if (pthread_create(&lisent_threads, NULL, start_server_lisent, (void *)g_threadpool) != 0) {
+    if (pthread_create(&lisent_threads, NULL, start_server_lisent, NULL) != 0) {
         LOG_PRINT_ERR("pthread_create failed\n");
         ret = -1;
         goto UNBIND_DESTROY_UMQ;
@@ -841,7 +850,7 @@ static int run_server(struct urpc_example_config *cfg)
         goto JION_STATE_THREAD;
     }
 
-    if (wait_work(g_threadpool) != 0) {
+    if (wait_work() != 0) {
         LOG_PRINT_ERR("wait_work failed\n");
     }
 
@@ -870,9 +879,6 @@ UNBIND_DESTROY_UMQ:
 
 UNINIT_UMQ:
     umq_uninit();
-
-DESTROY_THREADPOOL:
-    threadpool_destroy(g_threadpool);
 
 CLOSE_FD:
     close(g_epoll_fd);
