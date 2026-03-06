@@ -244,7 +244,7 @@ const opt_map_t JETTY_OPT_TABLE[] = {
 
 const size_t JETTY_OPT_MAP_COUNT = sizeof(JETTY_OPT_TABLE) / sizeof(JETTY_OPT_TABLE[0]);
 
-urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
+static urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, uint32_t len)
 {
     for (size_t i = 0; i < table_cnt; i++) {
@@ -264,7 +264,7 @@ urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
     return URMA_SUCCESS;
 }
 
-urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
+static urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, void *buf, uint32_t len,
     void *cfg_base, void *opt_base, void *jfs_cfg_base)
 {

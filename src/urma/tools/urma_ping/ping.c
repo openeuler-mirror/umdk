@@ -17,6 +17,7 @@
 #include "ping_log.h"
 #include "ping_parameters.h"
 #include "ping_run.h"
+#include "ping_stat.h"
 
 int main(int argc, char *argv[])
 {
@@ -45,6 +46,8 @@ int main(int argc, char *argv[])
     if ((ret = start_ping(&cfg)) != 0) {
         return EXIT_FAILURE;
     }
+
+    print_stat();
 
     return 0;
 }
