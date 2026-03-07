@@ -16,7 +16,7 @@
 
 #include "admin_cmd.h"
 
-int admin_nl_set_dev_sharing(bool enabled)
+static int admin_nl_set_dev_sharing(bool enabled)
 {
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
     if (msg == NULL) {
@@ -29,7 +29,7 @@ int admin_nl_set_dev_sharing(bool enabled)
     return ret;
 }
 
-int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
+static int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
 {
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
     if (msg == NULL) {
@@ -37,7 +37,7 @@ int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
     int ret = admin_nl_send_recv_msg_default(msg);
     admin_nl_free_msg(msg);
     return ret;
@@ -51,7 +51,7 @@ int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd)
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
     int ret = admin_nl_send_recv_msg_default(msg);
     admin_nl_free_msg(msg);
     return ret;
@@ -65,7 +65,7 @@ int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd)
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
     int ret = admin_nl_send_recv_msg_default(msg);
     admin_nl_free_msg(msg);
     return ret;

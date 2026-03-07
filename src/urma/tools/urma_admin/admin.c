@@ -8,15 +8,10 @@
  * History: 2021-11-30   create file
  */
 
-#include <dirent.h>
-#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "admin_cmd.h"

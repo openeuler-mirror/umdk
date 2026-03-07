@@ -245,7 +245,7 @@ static void sort_ubep_list(struct ub_list *ubep_list)
     admin_show_ubep_t *ubep, *ubep_next;
     int flag = 0;
 
-    while (!flag) {
+    while (flag == 0) {
         flag = 1;
         if (ubep_list == NULL || ubep_list->next == NULL) {
             return;
@@ -344,7 +344,7 @@ static inline void print_device_feat_str(urma_device_feature_t feat)
 
     (void)printf("feature                    : 0x%x [", feat.value);
     for (i = 0; i < URMA_DEVICE_FEAT_NUM; i++) {
-        if (!!(feat.value & (1 << i))) {
+        if ((feat.value & (1 << i)) != 0) {
             (void)printf("%s ", urma_device_feat_to_string(i));
         }
     }
@@ -357,7 +357,7 @@ static inline void print_atomic_feat_str(urma_atomic_feature_t feat)
 
     (void)printf("atomic_feature             : 0x%x [", feat.value);
     for (i = 0; i < URMA_ATOMIC_FEAT_NUM; i++) {
-        if (!!(feat.value & (1 << i))) {
+        if ((feat.value & (1 << i)) != 0) {
             (void)printf("%s ", urma_atomic_feat_to_string(i));
         }
     }
@@ -371,7 +371,7 @@ static inline void print_congestion_ctrl_alg_str(uint16_t cc_alg)
 
     (void)printf("congestion_ctrl_alg        : 0x%x [", cc_alg);
     for (i = 0; i < sizeof(cc_alg) * urma_char_bits; i++) {
-        if (!!(cc_alg & (1 << i))) {
+        if ((cc_alg & (1 << i)) != 0) {
             (void)printf("%s ", urma_congestion_ctrl_alg_to_string(i));
         }
     }
@@ -381,13 +381,13 @@ static inline void print_congestion_ctrl_alg_str(uint16_t cc_alg)
 static void print_trans_mode_str(uint16_t trans_mode)
 {
     (void)printf("trans_mode                 : 0x%x [", (uint32_t)trans_mode);
-    if (!!(trans_mode & URMA_TM_RM)) {
+    if ((trans_mode & URMA_TM_RM) != 0) {
         (void)printf("%s ", urma_trans_mode_to_string(URMA_TM_RM));
     }
-    if (!!(trans_mode & URMA_TM_RC)) {
+    if ((trans_mode & URMA_TM_RC) != 0) {
         (void)printf("%s ", urma_trans_mode_to_string(URMA_TM_RC));
     }
-    if (!!(trans_mode & URMA_TM_UM)) {
+    if ((trans_mode & URMA_TM_UM) != 0) {
         (void)printf("%s ", urma_trans_mode_to_string(URMA_TM_UM));
     }
 
@@ -676,17 +676,19 @@ bool admin_is_eid_valid(const char *eid)
 
 static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_len)
 {
-    uint16_t words[8];
+    uint8_t ipv6_addr_hex_count = 8, ipv6_min_compress_len = 2;
+    uint16_t words[ipv6_addr_hex_count];
     int i, zero_start = -1, zero_len = 0;
     int max_zero_start = -1, max_zero_len = 0;
 
     // 按2字节分组，转为16位整数（网络序）
-    for (i = 0; i < 8; ++i) {
-        words[i] = ((uint16_t)eid->raw[i * 2] << 8) | eid->raw[i * 2 + 1];
+    for (i = 0; i < ipv6_addr_hex_count; ++i) {
+        uint8_t offset = i * sizeof(uint16_t);
+        words[i] = ((uint16_t)eid->raw[offset] << 8) | eid->raw[offset + 1];
     }
 
     // 查找最长连续0区间
-    for (i = 0; i < 8; ++i) {
+    for (i = 0; i < ipv6_addr_hex_count; ++i) {
         if (words[i] == 0) {
             if (zero_start == -1) {
                 zero_start = i;
@@ -707,7 +709,7 @@ static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_le
         max_zero_start = zero_start;
         max_zero_len = zero_len;
     }
-    if (max_zero_len < 2) { // 只缩写长度大于1的区间
+    if (max_zero_len < ipv6_min_compress_len) { // 只缩写长度大于1的区间
         max_zero_start = -1;
         max_zero_len = 0;
     }
@@ -715,37 +717,45 @@ static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_le
     // 组装字符串
     char *ptr = out;
     size_t left = out_len;
-    int printed = 0;
-    for (i = 0; i < 8;) {
+    bool printed = false;
+    for (i = 0; i < ipv6_addr_hex_count;) {
+        int n = 0;
         if (i == max_zero_start) {
             if (!printed) {
-                snprintf(ptr, left, "::");
-                ptr += 2;
-                left -= 2;
+                n = snprintf(ptr, left, "::");
             } else {
-                snprintf(ptr, left, ":");
-                ptr += 1;
-                left -= 1;
+                n = snprintf(ptr, left, ":");
             }
+            if (n <= 0) {
+                printf("Failed convert eid to ipv6.\n");
+            }
+            ptr +=n;
+            left -= n;
             i += max_zero_len;
-            printed = 1;
+            printed = true;
             continue;
         }
         if (printed) {
-            snprintf(ptr, left, ":");
-            ptr += 1;
-            left -= 1;
+            n = snprintf(ptr, left, ":");
+            if (n <= 0) {
+                printf("Failed convert eid to ipv6.\n");
+            }
+            ptr += n;
+            left -= n;
         }
-        int n = snprintf(ptr, left, "%x", words[i]);
+        n = snprintf(ptr, left, "%x", words[i]);
+        if (n <= 0) {
+            printf("Failed convert eid to ipv6.\n");
+        }
         ptr += n;
         left -= n;
-        printed = 1;
+        printed = true;
         i++;
     }
     *ptr = '\0';
 }
 
-void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
+static void admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id)
 {
     (void)printf("========================== topo map start =============================\n");
     tool_topo_info_t *cur_node_info = NULL;
@@ -814,7 +824,7 @@ static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
     uint32_t node_id = 0;
     for (uint32_t i = 0; i < topo_map->node_num; i++) {
         tool_topo_info_t *cur_node_info = topo_map->topo_infos + i;
-        if (cur_node_info->is_current) {
+        if (cur_node_info->is_current != 0) {
             node_id = cur_node_info->id;
             break;
         }
@@ -826,7 +836,7 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
 {
     int ret = 0;
     admin_core_cmd_topo_info_t *arg = NULL;
-    int node_num = MAX_NODE_NUM;
+    uint32_t node_num = MAX_NODE_NUM;
     for (int i = 0; i < node_num; ++i) {
         arg = calloc(1, sizeof(admin_core_cmd_topo_info_t));
         if (arg == NULL) {

@@ -339,8 +339,9 @@ int pop_arg_eid_mode(admin_config_t *cfg)
  */
 static bool is_numeric_string(const char *s)
 {
-    if (!s || *s == '\0')
+    if (!s || *s == '\0') {
         return false;
+    }
     for (const char *p = s; *p != '\0'; ++p) {
         if (!isdigit((unsigned char)*p)) {
             return false;
