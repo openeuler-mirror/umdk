@@ -107,7 +107,7 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->bind_ctx != NULL || queue_info->is_binded) {
+    if (queue->bind_ctx != NULL || queue_info->is_binded != 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq has already been binded\n", EID_ARGS(*eid), id);
         return -UMQ_ERR_EEXIST;
     }
@@ -392,7 +392,12 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     }
 
     ctx->remote_pid = info->dev_info->pid;
-    strcpy(ctx->remote_namespace, info->dev_info->bind_namespace);
+    if (info->dev_info->namespace_len > UMQ_UB_NAMESPACE_SIZE) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "dev info namespace len %u exceeds the maximum length %u\n",
+            info->dev_info->namespace_len, UMQ_UB_NAMESPACE_SIZE);
+        goto RESET_BIND_CTX;
+    }
+    memcpy(ctx->remote_namespace, info->dev_info->bind_namespace, info->dev_info->namespace_len);
     queue->bind_ctx = ctx;
 
     ret = umq_ub_eid_id_get(queue, info, &ctx->remote_eid_id);
@@ -520,7 +525,7 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
     }
     urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
     umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info_tlv_head->value;
-    queue_info->is_binded = queue->bind_ctx != NULL ? true : false;
+    queue_info->is_binded = queue->bind_ctx != NULL ? 1 : 0;
     queue_info->jetty_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id;
     queue_info->type = URMA_JETTY;
     queue_info->token = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
@@ -653,6 +658,12 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
                 UMQ_VLOG_WARN(VLOG_UMQ, "unknown type %u\n", info_tlv_head->type);
                 break;
         }
+
+        if (urpc_tlv_get_aligned_len(info_tlv_head->len) >= UINT32_MAX - sizeof(urpc_tlv_head_t)) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "TLV length %u exceeds maximum allowed value\n");
+            return -UMQ_ERR_EINVAL;
+        }
+
         left_info_size -= urpc_tlv_get_total_len(info_tlv_head);
         if (left_info_size < (uint32_t)sizeof(urpc_tlv_head_t)) {
             break;
