@@ -261,7 +261,7 @@ static void admin_print_res_dev(struct nlattr *head, int len)
     (void)printf("\n");
 }
 
-static void print_query_res(struct nlattr *attr_ptr, admin_config_t *cfg, int len)
+static void print_query_res(struct nlattr *attr_ptr, const admin_config_t *cfg, int len)
 {
     (void)printf("**********%s**********\n", g_query_res_type[cfg->key.type]);
     switch (cfg->key.type) {
@@ -301,7 +301,7 @@ static int cb_handler(struct nl_msg *msg, void *arg)
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
     int len = genlmsg_attrlen(genlhdr, 0);
 
-    admin_config_t *cfg = (admin_config_t *)arg;
+    const admin_config_t *cfg = (const admin_config_t *)arg;
     print_query_res(attr_ptr, cfg, len);
 
     return 0;
@@ -455,7 +455,7 @@ static void admin_list_res_seg(struct nlattr *head, int len)
     }
 }
 
-static void print_list_res(struct nlattr *attr_ptr, admin_config_t *cfg, int len)
+static void print_list_res(struct nlattr *attr_ptr, const admin_config_t *cfg, int len)
 {
     (void)printf("**********%s**********\n", g_query_res_type[cfg->key.type]);
     switch (cfg->key.type) {
@@ -492,7 +492,7 @@ static int cb_handler_list(struct nl_msg *msg, void *arg)
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
     int len = genlmsg_attrlen(genlhdr, 0);
 
-    admin_config_t *cfg = (admin_config_t *)arg;
+    const admin_config_t *cfg = (const admin_config_t *)arg;
     print_list_res(attr_ptr, cfg, len);
 
     return 0;

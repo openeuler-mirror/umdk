@@ -27,7 +27,7 @@
 static struct nl_sock *sock = NULL;
 static int genl_id = 0;
 
-static int init_sock_and_genl_id()
+static int init_sock_and_genl_id(void)
 {
     if (sock != NULL) {
         return 0;
