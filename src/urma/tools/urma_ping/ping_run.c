@@ -521,7 +521,7 @@ static int recv_ping_msg(ping_cfg_t *cfg, ping_urma_resource_t *res, ping_per_se
 
         bool unmatched = (ret > 0 && cr.imm_data != seq_info->seq);
         bool received = (ret > 0 && cr.imm_data == seq_info->seq);
-        timed_out = (seq_info->rtt >= cfg->timeout * 1000);
+        timed_out = ((seq_info->rtt >= cfg->timeout * 1000) && (cfg->timeout != 0));
 
         if (unmatched) {
             LOG_VERBOSE("Unmatched reply received: expected seq=%d, got seq=%d\n",
