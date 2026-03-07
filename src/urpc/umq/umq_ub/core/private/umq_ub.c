@@ -26,7 +26,6 @@
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
-static const char *g_umq_ub_tp_type_str[UMQ_TP_TYPE_MAX + 1] = {"rtp", "ctp", "utp", "unknown"};
 
 static inline uint32_t umq_ub_bind_fature_allowlist_get(void)
 {
@@ -916,20 +915,6 @@ static urma_tp_type_t umq_tp_type_convert_to_urma(umq_tp_type_t tp_type)
     };
 }
 
-static umq_tp_type_t umq_tp_type_get(union urma_tp_type_en tp_type)
-{
-    if (tp_type.bs.rtp == 1 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 0) {
-        return UMQ_TP_TYPE_RTP;
-    }
-    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 1 && tp_type.bs.utp == 0) {
-        return UMQ_TP_TYPE_CTP;
-    }
-    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 1) {
-        return UMQ_TP_TYPE_UTP;
-    }
-    return UMQ_TP_TYPE_MAX;
-}
-
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue)
 {
     if (option->create_flag & UMQ_CREATE_FLAG_RX_BUF_SIZE) {
@@ -1020,17 +1005,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_RTP);
     }
 
-    umq_tp_type_t actual_tp_type = (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) != 0 ?
-        option->tp_type : UMQ_TP_TYPE_RTP;
     if (option->create_flag & UMQ_CREATE_FLAG_PRIORITY) {
         if (option->priority > URMA_MAX_PRIORITY) {
             UMQ_VLOG_ERR(VLOG_UMQ, "priority[%u] is invalid\n", option->priority);
-            return -UMQ_ERR_EINVAL;
-        }
-        umq_tp_type_t tp_type = umq_tp_type_get(dev_ctx->dev_attr.dev_cap.priority_info[option->priority].tp_type);
-        if (tp_type != actual_tp_type) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "priority[%u] is invalid, associated tp_type is %s, actual tp_type is %s\n",
-                option->priority, g_umq_ub_tp_type_str[tp_type], g_umq_ub_tp_type_str[actual_tp_type]);
             return -UMQ_ERR_EINVAL;
         }
         queue->priority = option->priority;
