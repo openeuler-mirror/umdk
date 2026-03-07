@@ -1071,7 +1071,7 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     if (cnt < 0) {
         if (errno != EAGAIN) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_wait_jfc failed, direction %u,"
-                " errno: %d\n", EID_ARGS(*eid), id, option->direction, errno);
+                " errno: %d, status: %d\n", EID_ARGS(*eid), id, option->direction, errno, cnt);
             return -1;
         }
         return 0;
