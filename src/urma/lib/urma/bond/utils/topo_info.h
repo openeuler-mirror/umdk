@@ -105,10 +105,6 @@ int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, 
 
 bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid);
 
-bool has_direct_route(topo_map_t *topo_map, urma_eid_t *agg_eid);
-
-direct_dev_info_t *get_direct_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid);
-
 #ifdef __cplusplus
 }
 #endif
