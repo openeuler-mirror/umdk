@@ -99,7 +99,7 @@ int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
     return ret;
 }
 
-int uvs_get_topo_info_inner(void *topo)
+static int uvs_get_topo_info_inner(void *topo)
 {
     int ret;
 

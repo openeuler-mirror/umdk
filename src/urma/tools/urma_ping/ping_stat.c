@@ -41,7 +41,7 @@ double get_time_in_ms(void)
     return cur.tv_sec * 1000.0 + cur.tv_nsec / 1000000.0;
 }
 
-static void print_stat(void)
+void print_stat(void)
 {
     g_stat.end_time = get_time_in_ms();
 
@@ -59,7 +59,6 @@ static void print_stat(void)
 
 void init_stat(void)
 {
-    atexit(print_stat);
     g_stat.start_time = get_time_in_ms();
 }
 

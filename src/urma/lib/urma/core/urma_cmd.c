@@ -1165,7 +1165,7 @@ int urma_cmd_delete_jfc(urma_jfc_t *jfc)
             jfc->comp_events_acked, arg.out.comp_events_reported, jfc->async_events_acked,
             arg.out.async_events_reported);
         (void)pthread_cond_wait(&jfc->event_cond, &jfc->event_mutex);
-           }
+    }
     (void)pthread_mutex_unlock(&jfc->event_mutex);
 
     return 0;
@@ -1297,9 +1297,10 @@ int urma_cmd_free_jfc(urma_jfc_t *jfc, urma_cmd_udrv_priv_t *udata)
     while (jfc->comp_events_acked != arg.out.comp_events_reported ||
            jfc->async_events_acked != arg.out.async_events_reported) {
         URMA_LOG_ERR("There is jfc event and it must be acked, jfc_comp:%u, comp:%u, jfc_async:%u, async:%u\n",
-        jfc->comp_events_acked, arg.out.comp_events_reported, jfc->async_events_acked, arg.out.async_events_reported);
+            jfc->comp_events_acked, arg.out.comp_events_reported,
+            jfc->async_events_acked, arg.out.async_events_reported);
         (void)pthread_cond_wait(&jfc->event_cond, &jfc->event_mutex);
-           }
+    }
     (void)pthread_mutex_unlock(&jfc->event_mutex);
 
     return 0;
@@ -2446,7 +2447,7 @@ int urma_cmd_active_jetty(urma_jetty_t *jetty, urma_cmd_udrv_priv_t *udata)
 {
     if (jetty == NULL || jetty->urma_ctx == NULL || jetty->urma_ctx->dev_fd < 0) {
         URMA_LOG_ERR("Invalid parameter");
-        return -1;   
+        return -1;
     }
 
     urma_context_t *ctx = jetty->urma_ctx;
