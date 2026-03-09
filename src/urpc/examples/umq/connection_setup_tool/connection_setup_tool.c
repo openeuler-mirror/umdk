@@ -663,6 +663,10 @@ static void return_rsp(umq_ctx_t *umq_ctx)
 {
     uint64_t umqh = umq_ctx->umqh;
     umq_buf_t *tx_post_buf = umq_buf_alloc(CONNETION_SETUP_MSG_SZIE, 1, umqh, NULL);
+    if (tx_post_buf == NULL) {
+        LOG_PRINT_ERR("tx_post_buf alloc failed\n");
+        return;
+    }
     (void)sprintf(tx_post_buf->buf_data, "hello client i am server");
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
