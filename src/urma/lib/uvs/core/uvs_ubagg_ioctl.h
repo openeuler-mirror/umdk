@@ -9,7 +9,9 @@
  */
 #ifndef UVS_UBAGG_IOCTL_H
 #define UVS_UBAGG_IOCTL_H
+#include <sys/ioctl.h>
 #include <stdint.h>
+
 #include "uvs_types.h"
 
 #define UVS_MAX_DEV_NAME_LEN 64
