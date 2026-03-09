@@ -58,7 +58,7 @@ int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
 {
     int ret = 0;
 
-    if (buf == NULL || len == 0 || eid == NULL) {
+    if (buf == NULL || len == 0 || len > UVS_MAX_DEV_NAME_LEN || eid == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
@@ -72,7 +72,7 @@ int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
     return 0;
 }
 
-int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
+static int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
 {
     int ret;
 
@@ -81,7 +81,7 @@ int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
         return -EINVAL;
     }
 
-    ret = uvs_ubagg_ioctl_set_topo(topo, topo_num);
+    ret = uvs_ubagg_ioctl_set_topo(topo, (int)topo_num);
     if (ret != 0) {
         TPSA_LOG_ERR("failed to set topo info in ubagg, ret = %d.\n", ret);
         return ret;
@@ -89,7 +89,7 @@ int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
         TPSA_LOG_INFO("success to set topo info in ubagg\n");
     }
 
-    ret = uvs_ubcore_ioctl_set_topo(topo, topo_num);
+    ret = uvs_ubcore_ioctl_set_topo(topo, (int)topo_num);
     if (ret != 0) {
         TPSA_LOG_ERR("failed to set topo info in ubcore, ret = %d.\n", ret);
     } else {
@@ -99,7 +99,7 @@ int uvs_set_topo_info_inner(void *topo, uint32_t topo_num)
     return ret;
 }
 
-int uvs_get_topo_info_inner(void *topo)
+static int uvs_get_topo_info_inner(void *topo)
 {
     int ret;
 

@@ -22,8 +22,6 @@
 #include "admin_cmd.h"
 #include "admin_file_ops.h"
 #include "admin_log.h"
-
-#define MAX_CMDLINE_LEN 896 /* must less than MAX_LOG_LEN */
 static int admin_check_cmd_len(int argc, char *argv[])
 {
     uint32_t len = 0;

@@ -180,9 +180,7 @@ static int admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ub
 
     admin_parse_priority_attr(sysfs_path, ubep);
 
-    if (ubep->dev_attr.port_cnt > 0 && ubep->dev_attr.port_cnt != UINT8_INVALID) {
-        admin_parse_port_attr(sysfs_path, ubep);
-    }
+    admin_parse_port_attr(sysfs_path, ubep);
 
     if (has_bonding_dev_prefix(ubep->dev_name)) {
         ubep->dev_attr.port_attr[0].state = URMA_PORT_ACTIVE; /* bonding dev port 0 state is always active */
