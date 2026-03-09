@@ -61,7 +61,7 @@ static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_i
     uint32_t eid_cnt = 0;
     urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
     if (eid_info_list == NULL || eid_cnt == 0) {
-        UMQ_VLOG_WARN(VLOG_UMQ_URMA_API, "urma_get_eid_list failed, dev: %s, errno: %d\n", urma_dev->name, errno);
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ_URMA_API, "urma_get_eid_list empty, dev: %s, errno: %d\n", urma_dev->name, errno);
         return UMQ_SUCCESS;
     }
 
