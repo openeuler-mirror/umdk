@@ -22,8 +22,8 @@ extern "C" __global__ __aicore__ void moe_distribute_combine_a2(
 
 {
     REGISTER_TILING_DEFAULT(MoeDistributeCombineA2TilingData);
-    TPipe pipe;
 #if (ORIG_DTYPE_EXPAND_X == DT_BF16 || ORIG_DTYPE_EXPAND_X == DT_FLOAT16)
+    TPipe pipe;
     if (TILING_KEY_IS(3000)) {
         GET_TILING_DATA_WITH_STRUCT(MoeDistributeCombineA2TilingData, tilingData, tilingGM);
         auto tiling = (__gm__ MoeDistributeCombineA2TilingData *)tilingGM;

@@ -244,6 +244,7 @@ static uint64_t MoeDistributeCombineA2CalcTilingKey(const gert::TilingContext &c
 static ge::graphStatus MoeDistributeCombineA2TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     OPS_LOG_I(nodeName, "Enter MoeDistributeCombineA2 tiling func.");
 
     // tilingData

@@ -46,6 +46,8 @@ constexpr uint32_t BITS32_PER_BLOCK = 8U;
 constexpr static uint32_t BW_ITEM_SIZE = 32;
 constexpr uint32_t FLAG_VALUE = 0xFFFFFFFF;
 constexpr uint32_t BS_UPPER = 4096;
+constexpr uint32_t RDMA_BUFFER_SIZE = 300 * 1024 * 1024;
+constexpr uint32_t BUFFER_BLOCK_NUM = 2;
 
 #define TemplateMC2TypeA2layeredClass \
     typename XType, typename ExpandXOutType, bool StaticQuant, bool DynamicQuant, bool IsSmoothScaleExist
@@ -235,9 +237,9 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
     localMoeExpertNum_ = moeExpertNum_ / worldSize_;
     kAlign_ = RoundUp(axisK_, (uint32_t)8);
     totalSize_ = winContext_->winSize;
-    totalWinSize_ = 300 * 1024 * 1024;  // RDMA 300 MB
+    totalWinSize_ = RDMA_BUFFER_SIZE;  // RDMA 300 MB
     shareMemOffset_ = totalWinSize_;
-    halfWinSize_ = totalWinSize_ / 2;
+    halfWinSize_ = totalWinSize_ / BUFFER_BLOCK_NUM;
     WIN_SIZE = halfWinSize_ - STATUS_SIZE_LAYERED;
     expertTokenNumsType_ = tilingData.moeDistributeDispatchInfo.expertTokenNumsType;
 
