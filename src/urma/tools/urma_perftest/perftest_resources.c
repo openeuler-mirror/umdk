@@ -213,7 +213,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     ctx->eid = ctx->urma_ctx->eid;
 
     if (cfg->enable_aggr_mode) {
-        status = urma_set_context_opt( ctx->urma_ctx, URMA_OPT_AGGR_MODE, &cfg->aggr_mode, sizeof(cfg->aggr_mode));
+        status = urma_set_context_opt(ctx->urma_ctx, URMA_OPT_AGGR_MODE, &cfg->aggr_mode, sizeof(cfg->aggr_mode));
         if (status != URMA_SUCCESS) {
             (void)fprintf(stderr, "Failed to set aggregation mode, status:%d!\n", (int)status);
             goto del_ctx;
@@ -729,14 +729,14 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     ctx->page_size = cfg->page_size;
     if (cfg->use_huge_page) {
         switch (cfg->huge_page) {
-        case UB_HUGE_PAGE_SIZE_2MB:
-            ctx->page_size = page_size_2MB;
-            break;
-        case UB_HUGE_PAGE_SIZE_1GB:
-            ctx->page_size = page_size_1GB;
-            break;
-        default:
-            break;
+            case UB_HUGE_PAGE_SIZE_2MB:
+                ctx->page_size = page_size_2MB;
+                break;
+            case UB_HUGE_PAGE_SIZE_1GB:
+                ctx->page_size = page_size_1GB;
+                break;
+            default:
+                break;
         }
     }
 
