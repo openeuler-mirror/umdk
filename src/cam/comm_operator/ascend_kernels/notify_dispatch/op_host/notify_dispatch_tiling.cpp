@@ -237,6 +237,7 @@ static ge::graphStatus TilingCheckTensor(gert::TilingContext &context, const cha
 static ge::graphStatus NotifyDispatchTilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     NotifyDispatchTilingData *tilingData = context.GetTilingData<NotifyDispatchTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
     std::string commGroup = "";

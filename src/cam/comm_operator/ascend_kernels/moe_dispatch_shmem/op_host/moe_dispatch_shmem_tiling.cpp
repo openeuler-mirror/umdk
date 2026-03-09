@@ -384,6 +384,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
                     return ge::GRAPH_FAILED);
     OPS_ERR_IF(expertTokenNumsTypePtr == nullptr, OPS_LOG_E(nodeName, "expertTokenNumsType is null."),
                     return ge::GRAPH_FAILED);
+    OPS_ERR_IF(shmemPtr == nullptr, OPS_LOG_E(nodeName, "shmemPtr is null."), return ge::GRAPH_FAILED);
     // 判断是否满足uint32_t及其他限制
     OPS_ERR_IF((*epWorldSizePtr <= 0) || (*epWorldSizePtr > MAX_EP_WORLD_SIZE),
                     OPS_LOG_E(nodeName, "epWorldSize is invalid, only support (0, %ld], but got epWorldSize=%ld.",
@@ -740,6 +741,7 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
 static ge::graphStatus MoeDistributeDispatchA3TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     MoeDispatchShmemTilingData *tilingData = context.GetTilingData<MoeDispatchShmemTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
     std::string groupEp = "";

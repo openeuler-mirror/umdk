@@ -229,6 +229,7 @@ static ge::graphStatus TilingCheckTensor(const gert::TilingContext &context, con
 static ge::graphStatus DispatchLayoutTilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     DispatchLayoutTilingData *tilingData = context.GetTilingData<DispatchLayoutTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
     OPS_LOG_I(nodeName, "Enter NotifyDispatch tiling check func.");
