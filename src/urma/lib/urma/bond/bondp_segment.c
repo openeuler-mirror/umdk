@@ -38,6 +38,7 @@ typedef struct bdp_va_vtseg_info {
 
 typedef struct bondp_udata_import_seg {
     urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t ports[IODIE_NUM][PORT_NUM];
 } bondp_udata_import_seg_t;
 
 typedef enum bondp_result {
@@ -251,70 +252,6 @@ static bondp_ret_t import_matrix_port_seg_on_iodie(bondp_context_t *bdp_ctx, bon
     return BONDP_SUCCESS;
 }
 
-static bool is_half_loopback(topo_map_t *topo_map, urma_eid_t *target_eid)
-{
-    for (int node_id = 0; node_id < MAX_NODE_NUM; node_id++) {
-        if (topo_map->topo_infos[node_id].is_current == 0) {
-            continue;
-        }
-        for (int dev_id = 0; dev_id < DEV_NUM; dev_id++) {
-            bondp_topo_agg_dev_t *agg_dev = &(topo_map->topo_infos[node_id].agg_devs[dev_id]);
-            if (memcmp(agg_dev->agg_eid, target_eid, sizeof(urma_eid_t)) == 0) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-/* v_eid is virtual eid, refering to initiator or target bonding eid */
-static int get_v_eid_valid_port(topo_map_t *topo_map, urma_eid_t *v_eid, int *port)
-{
-    for (int node_id = 0; node_id < MAX_NODE_NUM; node_id++) {
-        if (topo_map->topo_infos[node_id].is_current == 0) {
-            continue;
-        }
-
-        for (int dev_id = 0; dev_id < DEV_NUM; dev_id++) {
-            bondp_topo_agg_dev_t *agg_dev = &(topo_map->topo_infos[node_id].agg_devs[dev_id]);
-            if (memcmp(agg_dev->agg_eid, v_eid, sizeof(urma_eid_t)) == 0) {
-                for (int port_id = 0; port_id < PORT_NUM; port_id++) {
-                    if (!is_empty_eid((urma_eid_t *)(agg_dev->ues[0].port_eid[port_id]))) {
-                        *port = port_id + PRIMARY_EID_NUM;
-                        return 0;
-                    }
-                }
-            }
-        }
-    }
-
-    return -1;
-}
-
-static bondp_ret_t bondp_import_seg_half_loopback(bondp_context_t *bdp_ctx,
-    bondp_seg_cfg_t *bondp_seg_cfg, urma_eid_t *target_eid)
-{
-    int local_port, target_port;
-
-    if (get_v_eid_valid_port(bdp_ctx->topo_map, &bdp_ctx->v_ctx.eid, &local_port) != 0) {
-        URMA_LOG_ERR("Failed to get local port.\n");
-        return BONDP_ERROR;
-    }
-
-    if (get_v_eid_valid_port(bdp_ctx->topo_map, target_eid, &target_port) != 0) {
-        URMA_LOG_ERR("Failed to get target port.\n");
-        return BONDP_ERROR;
-    }
-
-    bondp_ret_t ret = import_p_tseg(bdp_ctx, bondp_seg_cfg, local_port, target_port);
-    if (ret != BONDP_SUCCESS) {
-        URMA_LOG_ERR("Failed to import p target seg, ret: %d.\n", ret);
-    }
-
-    return ret;
-}
-
 /**
 * Obtain topology information via eid Direct connection paths,
 * between local and remote devices in direct_dev_info_t.
@@ -323,43 +260,32 @@ static bondp_ret_t bondp_import_seg_half_loopback(bondp_context_t *bdp_ctx,
 static bondp_ret_t import_matrix_port_seg_by_direct_route(bondp_context_t *bdp_ctx,
     bondp_seg_cfg_t *bondp_seg_cfg, urma_eid_t eid)
 {
-    if (!has_direct_route(bdp_ctx->topo_map, &eid)) {
-        URMA_LOG_ERR("No direct route to target seg in single_path mode\n");
-        return BONDP_ERROR;
-    }
-    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_agg_eid(bdp_ctx->topo_map, &eid);
-    if (direct_dev_info == NULL) {
-        URMA_LOG_ERR("Can't get direct route by eid "EID_FMT"\n", EID_ARGS(eid));
-        return BONDP_ERROR;
-    }
-    int local_port;
-    int target_port;
-    int i = 0;
-    int success_import_num = 0;
+    bool has_valid_route = false;
 
-    if (is_half_loopback(bdp_ctx->topo_map, &eid)) {
-        return bondp_import_seg_half_loopback(bdp_ctx, bondp_seg_cfg, &eid);
-    }
+    for (int i = 0; i < IODIE_NUM; i++) {
+        for (int j = 0; j < PORT_NUM; j++) {
+            int local_port = IODIE_NUM + PORT_NUM * i + j;
+            int target_port = IODIE_NUM + PORT_NUM * i + bondp_seg_cfg->udata_out->ports[i][j];
 
-    for (i = 0; i < direct_dev_info->direct_num; ++i) {
-        local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
-            direct_dev_info->local_map_idx[i].peer_port);
-        target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].peer_iodie,
-            direct_dev_info->target_map_idx[i].peer_port);
-        if (local_port >= bdp_ctx->dev_num || bdp_ctx->p_ctxs[local_port] == NULL) {
-            URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
-            continue;
-        }
-        bondp_ret_t ret = import_p_tseg(bdp_ctx, bondp_seg_cfg, local_port, target_port);
-        if (ret == BONDP_SKIP) {
-            continue;
-        } else if (ret == BONDP_ERROR) {
-            return BONDP_ERROR;
-        } else {
-            success_import_num += 1;
+            if (local_port >= bdp_ctx->dev_num ||
+                bdp_ctx->p_ctxs[local_port] == NULL) {
+                URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
+                continue;
+            }
+            bondp_ret_t ret = import_p_tseg(bdp_ctx, bondp_seg_cfg, local_port, target_port);
+            if (ret == BONDP_SKIP) {
+                continue;
+            } else if (ret == BONDP_ERROR) {
+                return -1;
+            }
+            has_valid_route = true;
         }
     }
-    return (success_import_num > 0) ? BONDP_SUCCESS : BONDP_ERROR;
+    if (!has_valid_route) {
+        URMA_LOG_ERR("No valid direct route\n");
+        return -1;
+    }
+    return 0;
 }
 
 static bondp_ret_t import_matrix_port_seg_loopback(bondp_context_t *bdp_ctx,
@@ -468,7 +394,6 @@ static int bondp_import_pseg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
     urma_eid_t eid = seg->ubva.eid;
     if (is_empty_eid(&eid)) {
         URMA_LOG_WARN("Can't get direct route by seg->ubva.eid, it is empty. Import segment to all port eid.\n");
-        // fullmush import
         int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
         for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
             ret = import_matrix_port_seg_on_iodie(bdp_ctx, bondp_seg_cfg, iodie_idx);
@@ -502,7 +427,7 @@ static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
-            if (!bdp_tseg->p_tseg[i][j]) {
+            if (bdp_tseg->p_tseg[i][j] == NULL) {
                 continue;
             }
             bdp_tseg->p_tseg[i][j]->handle = bdp_tseg->p_orig_handle[i][j];
@@ -536,7 +461,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
                                                  seg->ubva.eid, &v2p_token_id);
         if (ret == 0) {
-            (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(bondp_udata_import_seg_t));
+            (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(udata_out.peer_p_seg));
             bdp_tseg->is_reused = true;
             bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
             // Hacky
@@ -575,7 +500,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         bondp_v2p_token_id_t v2p_token_id = {0};
         v2p_token_id.key.v_remote_eid = seg->ubva.eid;
         v2p_token_id.key.v_token_id = seg->token_id;
-        (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(bondp_udata_import_seg_t));
+        (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(udata_out.peer_p_seg));
         v2p_token_id.v_handle = bdp_tseg->v_tseg.handle;
         int ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
         if (ret != 0) {

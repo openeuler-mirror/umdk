@@ -15,105 +15,9 @@
 
 #define DIRECT_DEV_HASH_BASIS (9819876)
 
-static bool direct_dev_comp(struct ub_hmap_node *node, void *key)
-{
-    direct_dev_node_t *direct_dev_node = CONTAINER_OF_FIELD(node, direct_dev_node_t, hmap_node);
-    return memcmp(&direct_dev_node->agg_eid, key, sizeof(urma_eid_t)) == 0;
-}
-
-static void direct_dev_free(struct ub_hmap_node *node)
-{
-    direct_dev_node_t *direct_dev_node = CONTAINER_OF_FIELD(node, direct_dev_node_t, hmap_node);
-    free(direct_dev_node);
-}
-
-static uint32_t direct_dev_hash(void *key)
-{
-    urma_eid_t *eid = (urma_eid_t *)key;
-    return ub_hash_bytes(eid, sizeof(urma_eid_t), DIRECT_DEV_HASH_BASIS);
-}
-
-int direct_dev_hash_table_create(bondp_hash_table_t *tbl, uint32_t size)
-{
-    return bondp_hash_table_create(tbl, size, direct_dev_comp, direct_dev_free, direct_dev_hash);
-}
-
-int direct_dev_hash_table_add(bondp_hash_table_t *tbl, bondp_topo_agg_dev_t *topo_info,
-    bondp_topo_link_t *local_map_idx, bondp_topo_link_t *target_map_idx)
-{
-    urma_eid_t *target_bonding_eid = (urma_eid_t *)topo_info->agg_eid;
-    hmap_node_t *node = NULL;
-    uint32_t hash = tbl->hash_f(target_bonding_eid);
-    node = bondp_hash_table_lookup_without_lock(tbl, target_bonding_eid, hash);
-    if (node) {
-        return BONDP_HASH_MAP_COLLIDE_ERROR;
-    }
-    direct_dev_node_t *direct_dev_node = calloc(1, sizeof(direct_dev_node_t));
-    if (direct_dev_node == NULL) {
-        return BONDP_HASH_MAP_ALLOC_ERROR;
-    }
-    direct_dev_node->agg_eid = *target_bonding_eid;
-    direct_dev_node->direct_dev_info.direct_num = 1;
-    direct_dev_node->direct_dev_info.local_map_idx[0] = *local_map_idx;
-    direct_dev_node->direct_dev_info.target_map_idx[0] = *target_map_idx;
-    bondp_hash_table_add_with_hash(tbl, &direct_dev_node->hmap_node, hash);
-    return 0;
-}
-
-direct_dev_node_t *direct_dev_hash_table_lookup(bondp_hash_table_t *tbl, urma_eid_t *key)
-{
-    hmap_node_t *node = NULL;
-    node = bondp_hash_table_lookup(tbl, key, tbl->hash_f(key));
-    if (node == NULL) {
-        return NULL;
-    }
-    return CONTAINER_OF_FIELD(node, direct_dev_node_t, hmap_node);
-}
-
 static inline bool is_topo_map_idx_equal(bondp_topo_link_t *map_idx, bondp_topo_link_t* target_map_idx)
 {
     return !memcmp(map_idx, target_map_idx, sizeof(bondp_topo_link_t));
-}
-
-static int update_each_direct_dev_table_entry(topo_map_t *topo_map, bondp_topo_agg_dev_t *topo_info,
-                                              bondp_topo_link_t *local_map_idx, bondp_topo_link_t* target_map_idx)
-{
-    urma_eid_t *target_bonding_eid = (urma_eid_t *)topo_info->agg_eid;
-    direct_dev_node_t *dev_node = NULL;
-    int ret = 0;
-
-    /* If this target bonding eid doesn't exist, then add a new node in the hash table */
-    dev_node = direct_dev_hash_table_lookup(&topo_map->direct_dev_hash_table, target_bonding_eid);
-    if (dev_node == NULL) {
-        ret = direct_dev_hash_table_add(&topo_map->direct_dev_hash_table, topo_info, local_map_idx, target_map_idx);
-        if (ret) {
-            URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
-            return -1;
-        }
-        return 0;
-    }
-
-    /* If we already have target dev in hash map. Try to add a new route */
-    direct_dev_info_t *dev_info = &dev_node->direct_dev_info;
-    bool has_local_map_idx = false;
-    /* Check if this route already exists */
-    for (uint32_t i = 0; i < dev_info->direct_num; ++i) {
-        if (is_topo_map_idx_equal(&dev_info->local_map_idx[i], local_map_idx)) {
-            has_local_map_idx = true;
-            break;
-        }
-    }
-    if (!has_local_map_idx) {
-        if (dev_info->direct_num >= MAX_ALL_PORT_NUM) {
-            URMA_LOG_ERR("Try to append dev_info when the array is full\n");
-            return -1;
-        }
-        /* Append this route if it doesn't exist */
-        dev_info->local_map_idx[dev_info->direct_num] = *local_map_idx;
-        dev_info->target_map_idx[dev_info->direct_num] = *target_map_idx;
-        dev_info->direct_num++;
-    }
-    return 0;
 }
 
 static inline bool is_empty_eid(urma_eid_t *eid)
@@ -121,88 +25,9 @@ static inline bool is_empty_eid(urma_eid_t *eid)
     return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
 }
 
-int update_direct_dev_table_entry(topo_map_t *topo_map,
-    bondp_topo_link_t *local_map_idx, bondp_topo_link_t* target_map_idx)
-{
-    bondp_topo_node_t *node_info = NULL;
-    for (uint32_t node_idx = 0; node_idx < MAX_NODE_NUM; ++node_idx) {
-        if (topo_map->topo_infos[node_idx].id == target_map_idx->peer_node) {
-            node_info = &topo_map->topo_infos[node_idx];
-            break;
-        }
-    }
-    if (node_info == NULL) {
-        URMA_LOG_ERR("Failed to find target node info in topo map %d\n", target_map_idx->peer_node);
-        return -1;
-    }
-
-    bondp_topo_agg_dev_t *topo_info = NULL;
-    for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
-        topo_info = &node_info->agg_devs[dev_idx];
-        if (is_empty_eid((urma_eid_t *)topo_info->agg_eid)) {
-            continue;
-        }
-        int ret = update_each_direct_dev_table_entry(topo_map, topo_info, local_map_idx, target_map_idx);
-        if (ret) {
-            URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
-            return -1;
-        }
-    }
-    return 0;
-}
-
 static inline bool is_eid_equal(urma_eid_t *eid1, urma_eid_t *eid2)
 {
     return !memcmp(eid1, eid2, sizeof(urma_eid_t));
-}
-
-int update_direct_dev_table(topo_map_t *topo_map, uint32_t cur_node_idx)
-{
-    bondp_topo_node_t *cur_node = &topo_map->topo_infos[cur_node_idx];
-    bondp_topo_link_t *peer_map_idx = NULL;
-    int ret = 0;
-    uint32_t valid_port_id = PORT_NUM;
-    
-    for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
-        for (uint32_t port_idx = 0; port_idx < PORT_NUM; ++port_idx) {
-            peer_map_idx = (bondp_topo_link_t *)&cur_node->links[plane_idx][port_idx];
-            if (peer_map_idx->peer_port > PORT_NUM - 1) {
-                continue;
-            }
-            valid_port_id = port_idx;
-            bondp_topo_link_t local_map_idx = {
-                .peer_node = cur_node->id,
-                .peer_iodie = plane_idx,
-                .peer_port = port_idx
-            };
-            ret = update_direct_dev_table_entry(topo_map, &local_map_idx, peer_map_idx);
-            if (ret) {
-                URMA_LOG_ERR("Failed to update direct dev table entry %d\n", ret);
-                return -1;
-            }
-        }
-    }
-    bondp_topo_agg_dev_t *topo_dev = NULL;
-
-    for (uint32_t plane_idx = 0; plane_idx < IODIE_NUM; ++plane_idx) {
-        for (uint32_t dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
-            topo_dev = &cur_node->agg_devs[dev_idx];
-            if (is_empty_eid((urma_eid_t *)topo_dev->agg_eid)) {
-                continue;
-            }
-            bondp_topo_link_t local_map_idx = {
-                .peer_node = cur_node->id,
-                .peer_iodie = plane_idx,
-                .peer_port = valid_port_id,
-            };
-            int ret = update_each_direct_dev_table_entry(topo_map, topo_dev, &local_map_idx, &local_map_idx);
-            if (ret) {
-                URMA_LOG_ERR("Failed to add direct dev hash table %d\n", ret);
-                return -1;
-            }
-        }
-    }
-    return 0;
 }
 
 static bool eid_comp_func(struct ub_hmap_node *node, void *key)
@@ -326,13 +151,6 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num)
         return NULL;
     }
 
-    ret = direct_dev_hash_table_create(&topo_map->direct_dev_hash_table, MAX_NODE_NUM);
-    if (ret) {
-        URMA_LOG_ERR("Failed to create direct_dev_hash_table\n");
-        free(topo_map);
-        return NULL;
-    }
-    update_direct_dev_table(topo_map, cur_node_idx);
     update_mapping_hash_table(topo_map);
 
     return topo_map;
@@ -341,7 +159,6 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num)
 void delete_topo_map(topo_map_t *topo_map)
 {
     if (topo_map != NULL) {
-        bondp_hash_table_destroy(&topo_map->direct_dev_hash_table);
         bondp_hash_table_destroy(&topo_map->eid_mapping_hash_table);
         free(topo_map);
     }
@@ -375,18 +192,4 @@ bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_ei
         }
     }
     return NULL;
-}
-
-bool has_direct_route(topo_map_t *topo_map, urma_eid_t *agg_eid)
-{
-    return direct_dev_hash_table_lookup(&topo_map->direct_dev_hash_table, agg_eid) != NULL;
-}
-
-direct_dev_info_t *get_direct_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid)
-{
-    direct_dev_node_t *node = direct_dev_hash_table_lookup(&topo_map->direct_dev_hash_table, agg_eid);
-    if (node == NULL) {
-        return NULL;
-    }
-    return &node->direct_dev_info;
 }

@@ -26,10 +26,8 @@
 #include "bondp_api.h"
 
 typedef struct bondp_create_vjetty_udata {
-    urma_jetty_id_t base_id;
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
-    bool is_in_matrix_server;
     bool is_multipath;
 } bondp_create_vjetty_udata_t;
 
@@ -834,80 +832,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     return ret;
 }
 
-urma_status_t bondp_advise_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
-{
-    bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
-    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
-    int i = 0;
-    int j = 0;
-    if (!is_valid_bondp_comp(bdp_jetty)) {
-        URMA_LOG_ERR("Invalid param jetty\n");
-        return URMA_EINVAL;
-    }
-    if (!is_valid_bdp_tjetty(bdp_tjetty)) {
-        URMA_LOG_ERR("Invalid param tjetty\n");
-        return URMA_EINVAL;
-    }
-    for (i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (j = 0; j < bdp_tjetty->target_dev_num; ++j) {
-            if (urma_advise_jetty(bdp_jetty->p_jetty[i], bdp_tjetty->p_tjetty[i][j])) {
-                goto UNADVISE;
-            }
-        }
-    }
-    return URMA_SUCCESS;
-UNADVISE:
-    /*
-    This branch is only entered in error cases,
-    and both i and j are less than their respective maximum values,
-    so there is no out-of-bounds situation.
-    */
-    for (int p = 0; p < i + 1; ++p) {
-        for (int q = 0; q < j + 1; ++q) {
-            if (bdp_tjetty->p_tjetty[p][q] != NULL) {
-                urma_unadvise_jetty(bdp_jetty->p_jetty[i], bdp_tjetty->p_tjetty[p][q]);
-            }
-        }
-    }
-    return URMA_FAIL;
-}
-
-urma_status_t bondp_unadvise_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
-{
-    bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
-    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
-    bool has_error = false;
-    if (!is_valid_bondp_comp(bdp_jetty)) {
-        URMA_LOG_ERR("Invalid param jetty\n");
-        return URMA_EINVAL;
-    }
-    if (!is_valid_bdp_tjetty(bdp_tjetty)) {
-        URMA_LOG_ERR("Invalid param tjetty\n");
-        return URMA_EINVAL;
-    }
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
-            if (urma_unadvise_jetty(bdp_jetty->p_jetty[i], bdp_tjetty->p_tjetty[i][j])) {
-                has_error = true;
-            }
-        }
-    }
-    if (has_error) {
-        goto LOG_ERR_UNADVISE;
-    } else {
-        return URMA_SUCCESS;
-    }
-LOG_ERR_UNADVISE:
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
-            if (bdp_tjetty->p_tjetty[i][j]) {
-                URMA_LOG_ERR("Failed to unadvise tjetty (%d, %d)\n", i, j);
-            }
-        }
-    }
-    return URMA_FAIL;
-}
-
 urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
 {
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
@@ -986,44 +910,35 @@ static int import_direct_route(bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
                                urma_bond_id_info_out_t *rvjetty_info, urma_rjetty_t *rjetty,
                                urma_token_t *rjetty_token)
 {
-    if (!has_direct_route(bdp_ctx->topo_map, &rjetty->jetty_id.eid)) {
-        URMA_LOG_ERR("No direct route to target jetty in single-path mode\n");
-        return -1;
-    }
+    bool has_valid_route = false;
 
     urma_rjetty_t p_rjetty = *rjetty;
-    bdp_tjetty->direct_route_num = 0;
-    /* This function won't return NULL ptr because check function has_direct_route has been called before */
-    direct_dev_info_t *direct_dev_info = get_direct_dev_info_by_agg_eid(bdp_ctx->topo_map, &rjetty->jetty_id.eid);
-    for (int i = 0; i < direct_dev_info->direct_num; ++i) {
-        int local_port = get_matrix_port_p_idx(direct_dev_info->local_map_idx[i].peer_iodie,
-                                               direct_dev_info->local_map_idx[i].peer_port);
-        int target_port = get_matrix_port_p_idx(direct_dev_info->target_map_idx[i].peer_iodie,
-                                                direct_dev_info->target_map_idx[i].peer_port);
-        if (local_port >= bdp_ctx->dev_num ||
-            bdp_ctx->p_ctxs[local_port] == NULL ||
-            target_port >= rvjetty_info->dev_num ||
-            is_empty_eid(&rvjetty_info->slave_id[target_port].eid)) {
-            URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
-            continue;
+    for (int i = 0; i < IODIE_NUM; i++) {
+        for (int j = 0; j < PORT_NUM; j++) {
+            int local_port = IODIE_NUM + PORT_NUM * i + j;
+            int target_port = IODIE_NUM + PORT_NUM * i + rvjetty_info->ports[i][j];
+
+            if (local_port >= bdp_ctx->dev_num ||
+                bdp_ctx->p_ctxs[local_port] == NULL ||
+                target_port >= rvjetty_info->dev_num ||
+                is_empty_eid(&rvjetty_info->slave_id[target_port].eid)) {
+                URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
+                continue;
+            }
+            p_rjetty.jetty_id = rvjetty_info->slave_id[target_port];
+            bdp_tjetty->p_tjetty[local_port][target_port] =
+                urma_import_jetty(bdp_ctx->p_ctxs[local_port], &p_rjetty, rjetty_token);
+            if (bdp_tjetty->p_tjetty[local_port][target_port] == NULL) {
+                URMA_LOG_ERR("Failed to import direct tjetty %d %d\n", local_port, target_port);
+                return -1;
+            }
+            bdp_tjetty->local_valid[local_port] = true;
+            bdp_tjetty->target_valid[target_port] = true;
+            has_valid_route = true;
         }
-        p_rjetty.jetty_id = rvjetty_info->slave_id[target_port];
-        bdp_tjetty->p_tjetty[local_port][target_port] =
-            urma_import_jetty(bdp_ctx->p_ctxs[local_port], &p_rjetty, rjetty_token);
-        if (bdp_tjetty->p_tjetty[local_port][target_port] == NULL) {
-            URMA_LOG_ERR("Failed to import direct tjetty %d %d\n", local_port, target_port);
-            return -1;
-        }
-        bdp_tjetty->local_valid[local_port] = true;
-        bdp_tjetty->target_valid[target_port] = true;
-        bdp_tjetty->direct_tjetty_port[i] = target_port;
-        bdp_tjetty->direct_local_port[i] = local_port;
-        bdp_tjetty->direct_route_num++;
     }
-    if (bdp_tjetty->direct_route_num == 0) {
-        /* Because direct_route_num == 0, so we didn't import any route by now */
-        /* We can directly return */
-        URMA_LOG_ERR("No valid route when importing direct route\n");
+    if (!has_valid_route) {
+        URMA_LOG_ERR("No valid direct route\n");
         return -1;
     }
     return 0;
@@ -1032,35 +947,6 @@ static int import_direct_route(bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
 static inline bool is_well_known_jetty_id(int jetty_id)
 {
     return jetty_id > 0 && jetty_id < BONDP_MAX_WELL_KNOWN_JETTY_ID;
-}
-
-static bool is_same_eid(urma_eid_t *eid1, urma_eid_t *eid2)
-{
-    return !memcmp(eid1, eid2, sizeof(urma_eid_t));
-}
-
-static int import_loopback_matrix_jetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-                                        urma_bond_id_info_out_t *rjetty_id_info, urma_rjetty_t *rjetty,
-                                        urma_token_t *rjetty_token)
-{
-    urma_rjetty_t p_rjetty = *rjetty;
-    /* Select the first available port EID for import, so start traversing from index 2. */
-    for (int i = IODIE_NUM; i < bdp_tjetty->local_dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        p_rjetty.jetty_id = rjetty_id_info->slave_id[i];
-        bdp_tjetty->p_tjetty[i][i] = urma_import_jetty(bdp_ctx->p_ctxs[i], &p_rjetty, rjetty_token);
-        if (bdp_tjetty->p_tjetty[i][i] == NULL) {
-            URMA_LOG_ERR("Failed to import jetty.\n");
-            return -1;
-        }
-        bdp_tjetty->direct_local_port[0] = i;
-        bdp_tjetty->direct_tjetty_port[0] = i;
-        bdp_tjetty->direct_route_num = 1;
-        break;
-    }
-    return 0;
 }
 
 static int bondp_import_vjetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *rjetty_token,
@@ -1097,11 +983,7 @@ static int bondp_import_pjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
     } else {
         bdp_tjetty->local_dev_num = bdp_ctx->dev_num;
         bdp_tjetty->target_dev_num = rvjetty_info->dev_num;
-        if (is_same_eid(&bdp_ctx->v_ctx.eid, &rjetty->jetty_id.eid)) {
-            ret = import_loopback_matrix_jetty(bdp_ctx, bdp_tjetty, rvjetty_info, rjetty, rjetty_token);
-        } else {
-            ret = import_direct_route(bdp_ctx, bdp_tjetty, rvjetty_info, rjetty, rjetty_token);
-        }
+        ret = import_direct_route(bdp_ctx, bdp_tjetty, rvjetty_info, rjetty, rjetty_token);
     }
     return ret;
 }
@@ -1304,32 +1186,28 @@ UNBIND:
 
 static urma_status_t bind_jetty_single_path(bondp_comp_t *bdp_jetty, bondp_target_jetty_t *bdp_tjetty)
 {
-    int i = 0;
     int ret = 0;
     int local_port = 0;
     int target_port = 0;
     bool has_valid_route = false;
-    if (!is_same_eid(&bdp_jetty->v_jetty.jetty_id.eid, &bdp_tjetty->v_tjetty.id.eid) &&
-        !has_direct_route(bdp_jetty->bondp_ctx->topo_map, &bdp_tjetty->v_tjetty.id.eid)) {
-        URMA_LOG_ERR("No direct route to target jetty\n");
-        return URMA_EINVAL;
-    }
-    for (i = 0; i < bdp_tjetty->direct_route_num; ++i) {
-        //! Need to check device valid to handle device failure
-        local_port = bdp_tjetty->direct_local_port[i];
-        target_port = bdp_tjetty->direct_tjetty_port[i];
-        if (bdp_jetty->p_jetty[local_port] == NULL || bdp_tjetty->p_tjetty[local_port][target_port] == NULL) {
-            URMA_LOG_WARN("Invalid local jetty or target jetty in binding single path (%d, %d)\n",
-                local_port, target_port);
-            continue;
+
+    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
+        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
+            if (bdp_jetty->p_jetty[i] == NULL || bdp_tjetty->p_tjetty[i][j] == NULL) {
+                continue;
+            }
+            ret = urma_bind_jetty(bdp_jetty->p_jetty[i], bdp_tjetty->p_tjetty[i][j]);
+            if (ret != 0) {
+                return URMA_FAIL;
+            }
+            local_port = i;
+            target_port = j;
+            has_valid_route = true;
+            break;
         }
-        ret = urma_bind_jetty(bdp_jetty->p_jetty[local_port], bdp_tjetty->p_tjetty[local_port][target_port]);
-        if (ret) {
-            return URMA_FAIL;
+        if (has_valid_route) {
+            break;
         }
-        has_valid_route = true;
-        bdp_jetty->p_jetty[local_port]->remote_jetty = bdp_tjetty->p_tjetty[local_port][target_port];
-        break;
     }
     if (!has_valid_route) {
         URMA_LOG_ERR("No valid direct route\n");
@@ -1355,18 +1233,18 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
         URMA_LOG_ERR("Jetty already has a binded target jetty\n");
         return URMA_EINVAL;
     }
-    if (is_in_matrix_server(bdp_jetty->bondp_ctx) != bdp_tjetty->is_in_matrix_server) {
-        URMA_LOG_ERR("The in_matrix_server attributes of jetty and tjetty are different\n");
-        return URMA_EINVAL;
-    }
     if (is_in_matrix_server(bdp_jetty->bondp_ctx) && bdp_jetty->is_multipath != bdp_tjetty->is_multipath) {
         URMA_LOG_ERR("The is_multipath attributes of jetty and tjetty are different\n");
         return URMA_EINVAL;
     }
-    if (!is_in_matrix_server(bdp_jetty->bondp_ctx) || is_multipath_comp(bdp_jetty)) {
-        return bind_jetty_default(bdp_jetty, bdp_tjetty);
+
+    urma_status_t ret;
+    if (bdp_jetty->is_multipath) {
+        ret = bind_jetty_default(bdp_jetty, bdp_tjetty);
+    } else {
+        ret = bind_jetty_single_path(bdp_jetty, bdp_tjetty);
     }
-    return bind_jetty_single_path(bdp_jetty, bdp_tjetty);
+    return ret;
 }
 
 urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
