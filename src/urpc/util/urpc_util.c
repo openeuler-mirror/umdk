@@ -77,7 +77,7 @@ int urpc_rand_seed_init(void)
 
 int urpc_rand_generate(uint8_t *buf, uint32_t num)
 {
-    if (RAND_priv_bytes(buf, num) != 1) {
+    if (RAND_bytes(buf, num) != 1) {
         return -1;
     }
 
