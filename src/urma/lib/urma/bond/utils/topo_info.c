@@ -266,21 +266,24 @@ static int update_mapping_hash_table(topo_map_t *topo_map)
             if (is_empty_eid((urma_eid_t *)cur_dev->agg_eid)) {
                 continue;
             }
-            if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table, (urma_eid_t *)cur_dev->agg_eid, (urma_eid_t *)cur_dev->agg_eid)) {
+            if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table, (urma_eid_t *)cur_dev->agg_eid,
+                (urma_eid_t *)cur_dev->agg_eid)) {
                 URMA_LOG_ERR("Failed to add agg eid to mapping hash table\n");
                 return -1;
             }
             for (int iodie_idx = 0; iodie_idx < IODIE_NUM; ++iodie_idx) {
                 bondp_topo_ue_t *ue_info = &cur_dev->ues[iodie_idx];
                 if (!is_empty_eid((urma_eid_t *)ue_info->primary_eid)) {
-                    if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table, (urma_eid_t *)ue_info->primary_eid, (urma_eid_t *)cur_dev->agg_eid)) {
+                    if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table,
+                        (urma_eid_t *)ue_info->primary_eid, (urma_eid_t *)cur_dev->agg_eid)) {
                         URMA_LOG_ERR("Failed to add primary eid to mapping hash table\n");
                         return -1;
                     }
                 }
                 for (int port_idx = 0; port_idx < PORT_NUM; ++port_idx) {
                     if (!is_empty_eid((urma_eid_t *)ue_info->port_eid[port_idx])) {
-                        if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table, (urma_eid_t *)ue_info->port_eid[port_idx], (urma_eid_t *)cur_dev->agg_eid)) {
+                        if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table,
+                            (urma_eid_t *)ue_info->port_eid[port_idx], (urma_eid_t *)cur_dev->agg_eid)) {
                             URMA_LOG_ERR("Failed to add port eid to mapping hash table\n");
                             return -1;
                         }
@@ -319,7 +322,8 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num)
         return NULL;
     }
 
-    int ret = eid_mapping_hash_table_create(&topo_map->eid_mapping_hash_table, MAX_NODE_NUM * DEV_NUM * (1 + IODIE_NUM * (1 + PORT_NUM)));
+    int ret = eid_mapping_hash_table_create(&topo_map->eid_mapping_hash_table,
+        MAX_NODE_NUM * DEV_NUM * (1 + IODIE_NUM * (1 + PORT_NUM)));
     if (ret) {
         URMA_LOG_ERR("Failed to create eid_mapping_hash_table\n");
         free(topo_map);
