@@ -104,7 +104,7 @@ int bdp_queue_pop_tail(bdp_queue_t *q, void **data)
     return 0;
 }
 
-bool bdp_queue_is_empty(bdp_queue_t *q)
+bool bdp_queue_is_empty(const bdp_queue_t *q)
 {
     return STAILQ_EMPTY(&q->head);
 }

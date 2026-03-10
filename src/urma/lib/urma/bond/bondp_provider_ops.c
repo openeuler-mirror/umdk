@@ -8,10 +8,8 @@
  * History: 2025-02-05
  */
 
-#include <endian.h>
 #include <arpa/inet.h>
 #include <net/if.h>
-#include <sys/ioctl.h>
 #include <dirent.h>
 #include <stdatomic.h>
 #include <sys/epoll.h>
@@ -328,7 +326,7 @@ static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
     bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
 }
 
-static bondp_context_t* bondp_create_ctx()
+static bondp_context_t* bondp_create_ctx(void)
 {
     bondp_context_t *bond_ctx = NULL;
 
