@@ -69,9 +69,9 @@ static urma_ops_t g_bond_ops = {
     .delete_jetty = bondp_delete_jetty,
     .import_jetty = bondp_import_jetty,
     .unimport_jetty = bondp_unimport_jetty,
-    .advise_jetty = bondp_advise_jetty,         /* In case we need to bind two non-UB devices */
-    .unadvise_jetty = bondp_unadvise_jetty,     /* In case we need to bind two non-UB devices */
-    .advise_jetty_async = NULL,                 /* UB doesn't have this ops */
+    .advise_jetty = NULL,
+    .unadvise_jetty = NULL,
+    .advise_jetty_async = NULL,
     .bind_jetty = bondp_bind_jetty,
     .unbind_jetty = bondp_unbind_jetty,
     .create_jetty_grp = NULL,
@@ -297,13 +297,9 @@ static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Failed to create token_id_bitmap\n");
         return -1;
     }
-    if (bondp_id_store_init(&bond_ctx->ljetty_id_store, BONDP_MAX_NUM_JETTYS)) {
-        URMA_LOG_ERR("Failed to create ljetty_id_store");
-        goto FREE_TOKEN_ID_BITMAP;
-    }
     if (bdp_p_vjetty_id_table_create(&bond_ctx->p_vjetty_id_table, BONDP_MAX_NUM_JETTYS)) {
         URMA_LOG_ERR("Failed to create p_vjetty_id_table\n");
-        goto ID_STORE_UNINIT;
+        goto FREE_TOKEN_ID_BITMAP;
     }
     if (bdp_r_p2v_jetty_id_table_create(&bond_ctx->remote_p2v_jetty_id_table, BONDP_MAX_NUM_JETTYS)) {
         URMA_LOG_ERR("Failed to create remote_p2v_jetty_id_table\n");
@@ -319,8 +315,6 @@ FREE_V_PTOKEN_ID_TABLE:
     (void)bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
 FREE_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
-ID_STORE_UNINIT:
-    bondp_id_store_uninit(&bond_ctx->ljetty_id_store);
 FREE_TOKEN_ID_BITMAP:
     bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
     return -1;
@@ -331,7 +325,6 @@ static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
     bdp_r_v2p_token_id_table_destroy(&bond_ctx->remote_v2p_token_id_table);
     bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
-    bondp_id_store_uninit(&bond_ctx->ljetty_id_store);
     bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
 }
 
