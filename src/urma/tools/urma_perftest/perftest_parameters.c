@@ -259,7 +259,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->use_jfce = false;
     cfg->time_type.value = 0;
     // Update to max value of the device attr after creation context
-    cfg->inline_size = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_INLINE_BW : PERFTEST_DEF_INLINE_LAT;
+    cfg->inline_size = 0;
     cfg->jettys = PERFTEST_DEF_NUM_JETTYS;
     cfg->token_policy = URMA_TOKEN_NONE;
     cfg->iters = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_ITERS_BW : PERFTEST_DEF_ITERS_LAT;
@@ -958,7 +958,7 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
-    if (strstr(cfg->dev_name, "bonding_dev") != NULL || !cfg->single_path) {
+    if (strstr(cfg->dev_name, "bonding_dev") != NULL && !cfg->single_path) {
         cfg->use_ctp = true;
     }
 
