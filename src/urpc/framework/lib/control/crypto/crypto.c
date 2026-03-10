@@ -376,7 +376,7 @@ uint32_t crypto_security_field_size_get(void)
 
 int crypto_ssl_gen_crypto_key(crypto_key_t *crypto_key)
 {
-    return RAND_priv_bytes(crypto_key->key, URPC_CRYPTO_KEY_BYTES) == 1 ? URPC_SUCCESS : URPC_FAIL;
+    return RAND_bytes(crypto_key->key, URPC_CRYPTO_KEY_BYTES) == 1 ? URPC_SUCCESS : URPC_FAIL;
 }
 
 uint32_t crypto_gen_rand_channel_id(uint32_t id)
@@ -388,7 +388,7 @@ uint32_t crypto_gen_rand_channel_id(uint32_t id)
 
     uint32_t rand_id = id;
     // channel id use 24bit
-    if (RAND_priv_bytes((uint8_t *)&rand_id, sizeof(uint32_t) - 1) != 1) {
+    if (RAND_bytes((uint8_t *)&rand_id, sizeof(uint32_t) - 1) != 1) {
         URPC_LIB_LOG_WARN("generate rand channel id failed, use base id directly\n");
         return id;
     }
@@ -671,7 +671,7 @@ uint32_t crypto_gen_rand_token(void)
     }
 
     uint32_t rand_token;
-    if (RAND_priv_bytes((uint8_t *)&rand_token, sizeof(uint32_t)) != 1) {
+    if (RAND_bytes((uint8_t *)&rand_token, sizeof(uint32_t)) != 1) {
         URPC_LIB_LOG_WARN("generate rand token failed, use timestamp directly\n");
         return get_timestamp();
     }
