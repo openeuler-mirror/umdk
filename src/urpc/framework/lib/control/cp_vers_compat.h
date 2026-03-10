@@ -98,7 +98,7 @@ void urpc_detach_msg_v1_buffer_release(urpc_detach_msg_v1_t *data);
 
 typedef struct urpc_connection_info {
     urpc_instance_key_t key;
-}  __attribute__((aligned(URPC_DEFAULT_ALIGN))) urpc_connection_info_t;
+} urpc_connection_info_t;
 
 int meminfo_arr_serialize(urpc_channel_info_t *channel, urpc_tlv_arr_head_t *meminfo_arr_tlv_head, uint32_t mem_num);
 int meminfo_arr_deserialize(urpc_tlv_arr_head_t *meminfo_arr_tlv_head, xchg_mem_info_t **meminfo_arr);

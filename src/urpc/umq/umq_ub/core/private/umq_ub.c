@@ -23,6 +23,7 @@
 #define UMQ_MAX_QBUF_NUM 1
 #define UMQ_ENABLE_INLINE_LIMIT_SIZE 32
 #define UMQ_INLINE_ENABLE 1
+#define UMQ_LEN_ALIGNMENT_4 4
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
@@ -506,7 +507,9 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
         UMQ_VLOG_ERR(VLOG_UMQ, "get remote_namespace failed\n")
         return 0;
     }
-    dev_info->namespace_len = (uint32_t)ret;
+
+    // namespace len alignment 4 byte
+    dev_info->namespace_len = (uint32_t)((ret + UMQ_LEN_ALIGNMENT_4 - 1) & ~(UMQ_LEN_ALIGNMENT_4 - 1));
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
     info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_dev_info_t) + dev_info->namespace_len;
     return urpc_tlv_get_total_len(info_tlv_head);
@@ -656,11 +659,6 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
             default:
                 UMQ_VLOG_WARN(VLOG_UMQ, "unknown type %u\n", info_tlv_head->type);
                 break;
-        }
-
-        if (urpc_tlv_get_aligned_len(info_tlv_head->len) >= UINT32_MAX - sizeof(urpc_tlv_head_t)) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "TLV length %u exceeds maximum allowed value\n");
-            return -UMQ_ERR_EINVAL;
         }
 
         left_info_size -= urpc_tlv_get_total_len(info_tlv_head);
