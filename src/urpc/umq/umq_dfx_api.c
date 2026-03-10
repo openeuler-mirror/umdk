@@ -304,7 +304,7 @@ int umq_stats_io_reset(uint64_t umqh)
 
 int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int max_buf_len)
 {
-    if (packet_stats == NULL || buf == NULL || max_buf_len == 0) {
+    if (packet_stats == NULL || buf == NULL || max_buf_len <= 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
