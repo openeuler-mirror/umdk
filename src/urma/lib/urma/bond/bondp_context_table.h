@@ -141,7 +141,7 @@ int bdp_r_v2p_token_id_table_create(bondp_hash_table_t *tbl, uint32_t size);
 int bdp_r_v2p_token_id_table_destroy(bondp_hash_table_t *tbl);
 
 int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
-    urma_eid_t *v_remote_eid, bondp_v2p_token_id_t *item);
+    urma_eid_t v_remote_eid, bondp_v2p_token_id_t *item);
 int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index);
 int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_token_id_t *item);
 
