@@ -372,7 +372,6 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineNorma
     tilingData.moeCombineNormalInfo.k = static_cast<uint32_t>(topkWeightsDim1);
 
     // 校验recvX的维度并设h
-    int64_t tpWorldSize = static_cast<int64_t>(tilingData.moeCombineNormalInfo.tpWorldSize);
     const gert::StorageShape *recvXStorageShape = context.GetInputShape(RECV_X_INDEX);
     OPS_ERR_IF(recvXStorageShape == nullptr, OPS_LOG_E(nodeName, "recvX is null."), return false);
     int64_t recvXDim1 = recvXStorageShape->GetStorageShape().GetDim(1);
@@ -381,10 +380,6 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineNorma
                         H_MIN, H_MAX, recvXDim1),
                     return false); // 32对齐
     tilingData.moeCombineNormalInfo.h = static_cast<uint32_t>(recvXDim1);
-
-    // 校验epRecvCount和tpRecvCount的维度
-    int64_t epWorldSize = static_cast<int64_t>(tilingData.moeCombineNormalInfo.epWorldSize);
-    int64_t moeExpertPerRankNum = static_cast<int64_t>(tilingData.moeCombineNormalInfo.moeExpertPerRankNum);
 
     // 校验x的维度
     const gert::StorageShape *xStorageShape = context.GetOutputShape(OUTPUT_X_INDEX);
@@ -510,6 +505,7 @@ static void SetHCommCfg(const gert::TilingContext &context, MoeCombineNormalTili
 static ge::graphStatus MoeCombineNormalA3TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     OPS_LOG_D(nodeName, "Enter MoeCombineNormal Tiling func");
     MoeCombineNormalTilingData *tilingData = context.GetTilingData<MoeCombineNormalTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
@@ -565,8 +561,6 @@ static ge::graphStatus MoeCombineNormalA3TilingFuncImpl(gert::TilingContext &con
                     return ge::GRAPH_FAILED);
 
     SetHCommCfg(context, *tilingData, groupEp, groupTp);
-
-    uint64_t tpWorldSize = static_cast<uint64_t>(tilingData->moeCombineNormalInfo.tpWorldSize);
 
     uint32_t blockDim = 1U;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());

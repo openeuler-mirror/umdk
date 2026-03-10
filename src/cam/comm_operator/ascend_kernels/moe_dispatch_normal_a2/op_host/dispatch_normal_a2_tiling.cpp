@@ -399,6 +399,7 @@ static uint64_t MoeDistributeDispatchA2CalcTilingKey(const gert::TilingContext &
 static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     OPS_LOG_D(nodeName, "start MoeDistributeDispatchA2TilingFuncImpl func.");
     OPS_LOG_I(nodeName, "Enter MoeDistributeDispatchA2 tiling func.");
 

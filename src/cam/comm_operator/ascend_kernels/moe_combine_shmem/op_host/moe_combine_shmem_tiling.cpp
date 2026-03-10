@@ -146,6 +146,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OPS_ERR_IF(sharedExpertNumPtr == nullptr, OPS_LOG_E(nodeName, "sharedExpertNum is null."),
                     return ge::GRAPH_FAILED);
     OPS_ERR_IF(commQuantModePtr == nullptr, OPS_LOG_E(nodeName, "commQuantMode is null."), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(shmemPtr == nullptr, OPS_LOG_E(nodeName, "shmemPtr is null."), return ge::GRAPH_FAILED);
 
     // 判断是否满足uint32_t及其他限制
     OPS_ERR_IF((*epWorldSizePtr <= 0) || (*epWorldSizePtr > MAX_EP_WORLD_SIZE),
@@ -609,6 +610,7 @@ static void SetHCommCfg(const gert::TilingContext &context, MoeCombineShmemTilin
 static ge::graphStatus MoeDistributeCombineA3TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     OPS_LOG_D(nodeName, "Enter MoeCombineShmem Tiling func");
     MoeCombineShmemTilingData *tilingData = context.GetTilingData<MoeCombineShmemTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);

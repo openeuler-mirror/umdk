@@ -47,34 +47,6 @@ static void print_log(int level, char *message)
     printf("%s|%s\n", log_level_str[level], message);
 }
 
-static void check_device_inline(perftest_config_t *cfg)
-{
-    uint32_t default_inline = 0;
-    uint32_t expect_inline = 0;
-    if (cfg->tp_type == URMA_TRANSPORT_UB) {
-        if (cfg->type == PERFTEST_LAT) {
-            if (cfg->api_type == PERFTEST_WRITE) {
-                default_inline = PERFTEST_DEF_INLINE_LAT;
-                expect_inline = default_inline;
-            } else if (cfg->api_type == PERFTEST_SEND) {
-                default_inline = PERFTEST_DEF_INLINE_LAT;
-                expect_inline = (cfg->trans_mode == URMA_TM_RC) ? PERFTEST_INLINE_LAT_RC :
-                    (cfg->trans_mode == URMA_TM_RM) ? PERFTEST_INLINE_LAT_RM : PERFTEST_INLINE_LAT_UM;
-            }
-        }
-    }
-
-    if (cfg->inline_size == default_inline) {
-        cfg->inline_size = expect_inline;
-    }
-    /* inline_size check only available for latency test */
-    if (cfg->type == PERFTEST_LAT && cfg->inline_size != default_inline &&
-        cfg->inline_size > expect_inline) {
-        (void)fprintf(stderr, "The recommended inline_size is no larger than: %u, but it is: %u, "
-            "which may lead to performance reduction.\n", expect_inline, cfg->inline_size);
-    }
-}
-
 static int check_share_jfr(perftest_config_t *cfg, urma_device_t *urma_dev)
 {
     if (urma_dev->type == URMA_TRANSPORT_UB && cfg->share_jfr == false) {
@@ -105,7 +77,6 @@ static int check_dev_cap(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     cfg->tp_type = urma_dev->type;
-    check_device_inline(cfg);
 
     if (cfg->sge_num > ctx->dev_attr.dev_cap.max_jfs_sge) {
         (void)printf("Error: max_jfs_sge out of range, max_jfs_sge:%u.\n", ctx->dev_attr.dev_cap.max_jfs_sge);

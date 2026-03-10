@@ -32,8 +32,7 @@ urpc_tlv_head_t *urpc_tlv_search_element(char *buf, uint32_t buf_size, urpc_tlv_
     /* Assure next tlv head not exceeds buf_size */
     while (offset <= buf_size - sizeof(urpc_tlv_head_t)) {
         urpc_tlv_head_t *tlv_head = (urpc_tlv_head_t *)(uintptr_t)(buf + offset);
-        if (urpc_tlv_get_aligned_len(tlv_head->len) >= UINT32_MAX - sizeof(urpc_tlv_head_t) || 
-            tlv_head->len > urpc_tlv_get_aligned_len(tlv_head->len)) {
+        if (tlv_head->len >= UINT32_MAX - sizeof(urpc_tlv_head_t)) {
             return NULL;
         }
 

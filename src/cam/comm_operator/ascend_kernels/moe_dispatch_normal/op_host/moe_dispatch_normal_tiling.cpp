@@ -537,6 +537,7 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
 static ge::graphStatus MoeDispatchNormalA3TilingFuncImpl(gert::TilingContext &context)
 {
     const char *nodeName = context.GetNodeName();
+    OPS_ERR_IF(nodeName == nullptr, OPS_LOG_E("unKnownNodeName", "nodeName is nullptr."), return ge::GRAPH_FAILED);
     MoeDispatchNormalTilingData *tilingData = context.GetTilingData<MoeDispatchNormalTilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return ge::GRAPH_FAILED);
     std::string groupEp = "";

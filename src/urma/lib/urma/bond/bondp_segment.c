@@ -381,119 +381,6 @@ static bondp_ret_t import_matrix_port_seg_loopback(bondp_context_t *bdp_ctx,
     return (success_import_num > 0) ? BONDP_SUCCESS : BONDP_ERROR;
 }
 
-static bondp_ret_t import_matrix_port_seg(bondp_context_t *bdp_ctx, const urma_seg_t *seg, bondp_seg_cfg_t *bondp_seg_cfg)
-{
-    bondp_ret_t ret;
-    urma_eid_t eid = seg->ubva.eid;
-    if (is_empty_eid(&eid)) {
-        URMA_LOG_WARN("Can't get direct route by seg->ubva.eid, it is empty. Import segment to all port eid.\n");
-        // fullmush import
-        int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
-        for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
-            ret = import_matrix_port_seg_on_iodie(bdp_ctx, bondp_seg_cfg, iodie_idx);
-            if (ret != BONDP_SUCCESS) {
-                return BONDP_ERROR;
-            }
-        }
-        return BONDP_SUCCESS;
-    } else if (is_same_eid(&bdp_ctx->v_ctx.eid, &eid)) {
-        URMA_LOG_INFO("Import segment to loopback.\n");
-        ret = import_matrix_port_seg_loopback(bdp_ctx, bondp_seg_cfg);
-        return ret;
-    } else {
-        URMA_LOG_INFO("Import segment by direct route.\n");
-        ret = import_matrix_port_seg_by_direct_route(bdp_ctx, bondp_seg_cfg, eid);
-        return ret;
-    }
-    return BONDP_ERROR; // Unreachable
-}
-
-static void unimport_seg_default(bondp_import_tseg_t *bdp_imprt_tseg)
-{
-    for (int i = 0; i < bdp_imprt_tseg->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_imprt_tseg->target_dev_num; ++j) {
-            if (bdp_imprt_tseg->p_tseg[i][j] != NULL) {
-                urma_unimport_seg(bdp_imprt_tseg->p_tseg[i][j]);
-                URMA_LOG_ERR("unimport seg [%d][%d]", i, j);
-                bdp_imprt_tseg->p_tseg[i][j] = NULL;
-            }
-        }
-    }
-}
-
-static int import_seg_matrix_server(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_seg_cfg_t *bondp_seg_cfg)
-{
-    bondp_ret_t ret;
-    ret = import_matrix_primary_seg(bdp_ctx, bondp_seg_cfg);
-    if (ret != BONDP_SUCCESS) {
-        goto unimport;
-    }
-    ret = import_matrix_port_seg(bdp_ctx, seg, bondp_seg_cfg);
-    if (ret != BONDP_SUCCESS) {
-        goto unimport;
-    }
-    return 0;
-unimport:
-    unimport_seg_default(bondp_seg_cfg->bdp_imprt_tseg);
-    return -1;
-}
-
-static int import_seg_default(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *bondp_seg_cfg)
-{
-    for (int i = 0; i < bondp_seg_cfg->bdp_imprt_tseg->local_dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            URMA_LOG_ERR("BONDP default import seg p_ctxs is NULL: %d\n", i);
-            continue;
-        }
-        for (int j = 0; j < bondp_seg_cfg->bdp_imprt_tseg->target_dev_num; ++j) {
-            bondp_ret_t ret = import_p_tseg(bdp_ctx, bondp_seg_cfg, i, j);
-            if (ret == BONDP_SKIP) {
-                continue;
-            } else if (ret == BONDP_ERROR) {
-                goto unimport;
-            }
-        }
-    }
-    return 0;
-unimport:
-    unimport_seg_default(bondp_seg_cfg->bdp_imprt_tseg);
-    return -1;
-}
-
-static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t addr,
-    uint64_t handle, urma_context_t *ctx)
-{
-    tseg->seg.attr = seg->attr;
-    tseg->seg.ubva = seg->ubva;
-    tseg->seg.len = seg->len;
-    tseg->seg.token_id = seg->token_id;
-    tseg->mva = addr;
-    tseg->handle = handle;
-    tseg->urma_ctx = ctx;
-}
-
-static int bondp_import_p_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg, bondp_seg_cfg_t *bondp_seg_cfg)
-{
-    int ret;
-
-    if (is_in_matrix_server(bdp_ctx)) {
-        ret = import_seg_matrix_server(bdp_ctx, seg, bondp_seg_cfg);
-    } else {
-        ret = import_seg_default(bdp_ctx, bondp_seg_cfg);
-    }
-    if (ret != 0) {
-        return ret;
-    }
-
-    bondp_import_tseg_t *bdp_imprt_tseg = bondp_seg_cfg->bdp_imprt_tseg;
-    bdp_imprt_tseg->v_tseg.urma_ctx = &bdp_ctx->v_ctx;
-    bdp_imprt_tseg->v_orig_handle = bdp_imprt_tseg->v_tseg.handle;
-    bdp_imprt_tseg->v_tseg.handle = (uint64_t)&bdp_imprt_tseg->v_tseg;
-    bdp_imprt_tseg->v_tseg.seg.ubva = seg->ubva;
-
-    return ret;
-}
-
 static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t *v2p_token_id)
 {
     unsigned long token_id_cnt = atomic_load(&bdp_ctx->token_id_cnt);
@@ -528,124 +415,197 @@ void bondp_toggle_seg_cache(bool enable)
     g_seg_cache_enable = enable;
 }
 
+static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t addr,
+    uint64_t handle, urma_context_t *ctx)
+{
+    tseg->seg.attr = seg->attr;
+    tseg->seg.ubva = seg->ubva;
+    tseg->seg.len = seg->len;
+    tseg->seg.token_id = seg->token_id;
+    tseg->mva = addr;
+    tseg->handle = handle;
+    tseg->urma_ctx = ctx;
+}
+
+static int bondp_import_vseg(urma_context_t *ctx, urma_seg_t *seg,
+                             urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag,
+                             bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
+{
+    urma_import_tseg_cfg_t cfg = {
+        .ubva = seg->ubva,
+        .len = seg->len,
+        .attr = seg->attr,
+        .token_id = seg->token_id,
+        .token = token,
+        .flag = flag,
+        .mva = addr,
+    };
+    urma_cmd_udrv_priv_t udata = {
+        .in_addr = 0,
+        .in_len = 0,
+        .out_addr = (uint64_t)udata_out,
+        .out_len = sizeof(*udata_out),
+    };
+
+    int ret = urma_cmd_import_seg(ctx, &bdp_tseg->v_tseg, &cfg, &udata);
+    // Hacky
+    if (ret == 0) {
+        bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
+        bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
+    }
+    return ret;
+}
+
+static int bondp_import_pseg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
+                             bondp_seg_cfg_t *bondp_seg_cfg)
+{
+    bondp_ret_t ret;
+    ret = import_matrix_primary_seg(bdp_ctx, bondp_seg_cfg);
+    if (ret != BONDP_SUCCESS) {
+        return -1;
+    }
+
+    urma_eid_t eid = seg->ubva.eid;
+    if (is_empty_eid(&eid)) {
+        URMA_LOG_WARN("Can't get direct route by seg->ubva.eid, it is empty. Import segment to all port eid.\n");
+        // fullmush import
+        int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
+        for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
+            ret = import_matrix_port_seg_on_iodie(bdp_ctx, bondp_seg_cfg, iodie_idx);
+            if (ret != BONDP_SUCCESS) {
+                return -1;
+            }
+        }
+        return 0;
+    } else if (is_same_eid(&bdp_ctx->v_ctx.eid, &eid)) {
+        URMA_LOG_INFO("Import segment to loopback.\n");
+        ret = import_matrix_port_seg_loopback(bdp_ctx, bondp_seg_cfg);
+        return ret == BONDP_SUCCESS ? 0 : -1;
+    } else {
+        URMA_LOG_INFO("Import segment by direct route.\n");
+        ret = import_matrix_port_seg_by_direct_route(bdp_ctx, bondp_seg_cfg, eid);
+        return ret == BONDP_SUCCESS ? 0 : -1;
+    }
+    return -1;
+}
+
+
+static int bondp_unimport_vseg(bondp_import_tseg_t *bdp_tseg)
+{
+    bdp_tseg->v_tseg.handle = bdp_tseg->v_orig_handle;
+    return urma_cmd_unimport_seg(&bdp_tseg->v_tseg);
+}
+
+static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
+{
+    int ret = URMA_SUCCESS;
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
+            if (!bdp_tseg->p_tseg[i][j]) {
+                continue;
+            }
+            bdp_tseg->p_tseg[i][j]->handle = bdp_tseg->p_orig_handle[i][j];
+            if (urma_unimport_seg(bdp_tseg->p_tseg[i][j]) != URMA_SUCCESS) {
+                ret = URMA_FAIL;
+            }
+            bdp_tseg->p_tseg[i][j] = NULL;
+        }
+    }
+    return ret;
+}
+
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    if (!is_valid_ctx(bdp_ctx)) {
-        URMA_LOG_ERR("Invalid param ctx\n");
+
+    bondp_import_tseg_t *bdp_tseg = calloc(1, sizeof(bondp_import_tseg_t));
+    if (bdp_tseg == NULL) {
+        URMA_LOG_ERR("Failed to alloc target seg\n");
+        errno = ENOMEM;
         return NULL;
+    }
+    bdp_tseg->local_dev_num = bdp_ctx->dev_num;
+    bdp_tseg->target_dev_num = URMA_UBAGG_DEV_MAX_NUM;
+    bdp_tseg->is_reused = false;
+
+    bondp_udata_import_seg_t udata_out = {0};
+    if (g_seg_cache_enable) {
+        bondp_v2p_token_id_t v2p_token_id = {0};
+        int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
+                                                 seg->ubva.eid, &v2p_token_id);
+        if (ret == 0) {
+            (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(bondp_udata_import_seg_t));
+            bdp_tseg->is_reused = true;
+            bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
+            // Hacky
+            bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
+            bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
+        } else if (ret == BONDP_HASH_MAP_NOT_FOUND_ERROR) {
+            if (bondp_import_vseg(ctx, seg, token, addr, flag, bdp_tseg, &udata_out) != 0) {
+                URMA_LOG_ERR("Failed to import vseg\n");
+                goto free_bdp_tseg;
+            }
+        } else {
+            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret: %d.\n", ret);
+            free(bdp_tseg);
+            return NULL;
+        }
     }
 
-    bondp_import_tseg_t *bdp_imprt_tseg = calloc(1, sizeof(bondp_import_tseg_t));
-    if (bdp_imprt_tseg == NULL) {
-        return NULL;
+    if (bondp_import_vseg(ctx, seg, token, addr, flag, bdp_tseg, &udata_out) != 0) {
+        URMA_LOG_ERR("Failed to import vseg\n");
+        goto free_bdp_tseg;
     }
-    bdp_imprt_tseg->local_dev_num = bdp_ctx->dev_num;
-    bdp_imprt_tseg->target_dev_num = URMA_UBAGG_DEV_MAX_NUM;
-    bdp_imprt_tseg->is_reused = false;
-    bondp_udata_import_seg_t udata_out = {0};
+
     bondp_seg_cfg_t bondp_seg_cfg = {
         .token = token,
         .addr = addr,
         .flag = flag,
         .udata_out = &udata_out,
-        .bdp_imprt_tseg = bdp_imprt_tseg,
+        .bdp_imprt_tseg = bdp_tseg,
     };
-
-    bondp_v2p_token_id_t v2p_token_id = {0};
-    urma_eid_t v_remote_eid = {0};
-    if (g_seg_cache_enable) {
-        (void)memcpy(&v_remote_eid, &seg->ubva.eid, sizeof(urma_eid_t));
-        int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
-            &v_remote_eid, &v2p_token_id);
-        if (ret == 0) {
-            (void)memcpy(&udata_out, v2p_token_id.peer_p_seg, sizeof(bondp_udata_import_seg_t));
-            bdp_imprt_tseg->is_reused = true;
-            bondp_fill_v_tseg(&bdp_imprt_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
-            ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
-            if (ret != 0) {
-                free(bdp_imprt_tseg);
-                return NULL;
-            }
-            return &bdp_imprt_tseg->v_tseg;
-        }
-        if (ret != BONDP_HASH_MAP_NOT_FOUND_ERROR) {
-            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret: %d.\n", ret);
-            free(bdp_imprt_tseg);
-            return NULL;
-        }
+    if (bondp_import_pseg(bdp_ctx, seg, &bondp_seg_cfg) != 0) {
+        URMA_LOG_ERR("Failed to import pseg\n");
+        goto unimport_pseg;
     }
 
-    /* ret is BONDP_HASH_MAP_NOT_FOUND_ERROR and start to import v_tseg */
-    urma_import_tseg_cfg_t cfg = { .ubva = seg->ubva, .len = seg->len, .attr = seg->attr,
-        .token_id = seg->token_id, .token = token,    .flag = flag,    .mva = addr };
-    urma_cmd_udrv_priv_t udata = { .in_addr = 0,      .in_len = 0,
-        .out_addr = (uint64_t)&udata_out,             .out_len = sizeof(udata_out) };
-
-    if (urma_cmd_import_seg(ctx, &bdp_imprt_tseg->v_tseg, &cfg, &udata) != 0) {
-        goto free_bdp_imprt_tseg;
-    }
-
-    int ret = bondp_import_p_seg(bdp_ctx, seg, &bondp_seg_cfg);
-    if (ret != 0) {
-        goto cmd_unimport_seg;
-    }
-
-    if (g_seg_cache_enable) {
-        v2p_token_id.key.v_remote_eid = v_remote_eid;
+    if (g_seg_cache_enable && !bdp_tseg->is_reused) {
+        bondp_v2p_token_id_t v2p_token_id = {0};
+        v2p_token_id.key.v_remote_eid = seg->ubva.eid;
         v2p_token_id.key.v_token_id = seg->token_id;
         (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(bondp_udata_import_seg_t));
-        v2p_token_id.v_handle = bdp_imprt_tseg->v_tseg.handle;
-        ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
+        v2p_token_id.v_handle = bdp_tseg->v_tseg.handle;
+        int ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
         if (ret != 0) {
-            goto unimport_p_seg;
+            goto unimport_pseg;
         }
     }
 
-    return &bdp_imprt_tseg->v_tseg;
-unimport_p_seg:
-    for (int i = 0; i < bdp_ctx->dev_num; i++) {
-        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
-            if (bdp_imprt_tseg->p_tseg[i][j] == NULL) {
-                continue;
-            }
-            (void)urma_unimport_seg(bdp_imprt_tseg->p_tseg[i][j]);
-        }
-    }
-cmd_unimport_seg:
-    (void)urma_cmd_unimport_seg(&bdp_imprt_tseg->v_tseg);
-free_bdp_imprt_tseg:
-    free(bdp_imprt_tseg);
+    return &bdp_tseg->v_tseg;
+unimport_pseg:
+    bondp_unimport_pseg(bdp_tseg);
+    bondp_unimport_vseg(bdp_tseg);
+free_bdp_tseg:
+    free(bdp_tseg);
     return NULL;
 }
 
 urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg)
 {
-    bondp_import_tseg_t *bdp_imprt_tseg = CONTAINER_OF_FIELD(target_seg, bondp_import_tseg_t, v_tseg);
+    bondp_import_tseg_t *bdp_tseg = CONTAINER_OF_FIELD(target_seg, bondp_import_tseg_t, v_tseg);
     urma_status_t ret = URMA_SUCCESS;
 
-    if (!is_valid_import_tseg(bdp_imprt_tseg)) {
-        URMA_LOG_ERR("Invalid bdp import tseg\n");
-        return URMA_FAIL;
+
+    if (bondp_unimport_pseg(bdp_tseg) != URMA_SUCCESS) {
+        ret = URMA_FAIL;
     }
-    for (int i = 0; i < bdp_imprt_tseg->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_imprt_tseg->target_dev_num; ++j) {
-            if (bdp_imprt_tseg->p_tseg[i][j] == NULL) {
-                continue;
-            }
-            bdp_imprt_tseg->p_tseg[i][j]->handle = bdp_imprt_tseg->p_orig_handle[i][j];
-            if (urma_unimport_seg(bdp_imprt_tseg->p_tseg[i][j]) != URMA_SUCCESS) {
-                ret = URMA_FAIL;
-            }
-        }
-    }
-    if (!bdp_imprt_tseg->is_reused) {
-        bdp_imprt_tseg->v_tseg.handle = bdp_imprt_tseg->v_orig_handle;
-        if (urma_cmd_unimport_seg(&bdp_imprt_tseg->v_tseg) != URMA_SUCCESS) {
+    if (!bdp_tseg->is_reused) {
+        if (bondp_unimport_vseg(bdp_tseg) != URMA_SUCCESS) {
             ret = URMA_FAIL;
         }
     }
-    free(bdp_imprt_tseg);
+    free(bdp_tseg);
     return ret;
 }
