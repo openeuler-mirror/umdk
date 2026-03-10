@@ -50,7 +50,7 @@ int bdp_queue_pop_head(bdp_queue_t *q, void **data);
 
 int bdp_queue_pop_tail(bdp_queue_t *q, void **data);
 
-bool bdp_queue_is_empty(bdp_queue_t *q);
+bool bdp_queue_is_empty(const bdp_queue_t *q);
 
 void bdp_queue_for_each(bdp_queue_t *q, bdp_queue_visit_func_t func);
 

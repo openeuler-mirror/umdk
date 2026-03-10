@@ -66,13 +66,13 @@ bool comp_func_va_vtseg_tbl(hmap_node_t *node, void *key)
     return va_vtseg_info->va == *(uint64_t *)key;
 }
 
-void free_func_va_vtseg_tbl(hmap_node_t *node)
+static void free_func_va_vtseg_tbl(hmap_node_t *node)
 {
     bdp_va_vtseg_info_t *va_vtseg_info = CONTAINER_OF_FIELD(node, bdp_va_vtseg_info_t, hmap_node);
     free(va_vtseg_info);
 }
 
-uint32_t hash_func_va_vtseg_tbl(void *key)
+static uint32_t hash_func_va_vtseg_tbl(void *key)
 {
     return ub_hash_bytes(key, sizeof(uint64_t), BDP_VA_VTSEG_INFO_HASH_BASIS);
 }
