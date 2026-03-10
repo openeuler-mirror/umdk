@@ -306,7 +306,7 @@ int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
 
     const admin_cmd_t *cmd = cmds + 1;
     while (cmd->name) {
-        if (strncmp(cmd->name, cmd_name, strlen(cmd->name) + 1) == 0) {
+        if (strncmp(cmd->name, cmd_name, strnlen(cmd->name, MAX_CMDLINE_LEN) + 1) == 0) {
             return cmd->func(cfg);
         }
         cmd++;

@@ -15,6 +15,8 @@
 
 #include "admin_parameters.h"
 
+#define MAX_CMDLINE_LEN 896 /* must less than MAX_LOG_LEN */
+
 typedef struct admin_core_cmd_show_utp {
     struct {
         char dev_name[URMA_MAX_NAME];
