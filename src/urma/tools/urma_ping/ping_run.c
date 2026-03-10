@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "urma_api.h"
 #include "urma_types.h"
@@ -277,7 +278,7 @@ static int init_urma_resource(ping_cfg_t *cfg, ping_urma_resource_t *res)
 
     primary_eid_to_main_primary_eid(&dest_eid);
 
-    LOG_VERBOSE("Successful find dest primary eid: ");
+    LOG_VERBOSE("Successful find main dest primary eid: ");
     log_eid_verbose(dest_eid.raw);
 
     urma_eid_info_t *eid_list = urma_get_eid_list(dev, &eid_cnt);
@@ -566,6 +567,13 @@ static int recv_ping_msg(ping_cfg_t *cfg, ping_urma_resource_t *res, ping_per_se
     return 0;
 }
 
+static void signal_handler(int signum)
+{
+    LOG_VERBOSE("Received Signal: %d\n", signum);
+    print_stat();
+    exit(0);
+}
+
 int start_ping(ping_cfg_t *cfg)
 {
     verbose_set_level(cfg->verbose_level);
@@ -590,6 +598,7 @@ int start_ping(ping_cfg_t *cfg)
     LOG_VERBOSE("Timeout(s)  : %u\n", cfg->timeout);
 
     init_stat();
+    signal(SIGINT, signal_handler);
 
     double ping_start_time = get_time_in_ms();
 
