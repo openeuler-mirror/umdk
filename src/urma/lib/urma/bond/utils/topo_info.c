@@ -376,17 +376,3 @@ bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_ei
     }
     return NULL;
 }
-
-bool has_direct_route(topo_map_t *topo_map, urma_eid_t *agg_eid)
-{
-    return direct_dev_hash_table_lookup(&topo_map->direct_dev_hash_table, agg_eid) != NULL;
-}
-
-direct_dev_info_t *get_direct_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid)
-{
-    direct_dev_node_t *node = direct_dev_hash_table_lookup(&topo_map->direct_dev_hash_table, agg_eid);
-    if (node == NULL) {
-        return NULL;
-    }
-    return &node->direct_dev_info;
-}
