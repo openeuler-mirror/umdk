@@ -17,6 +17,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "urma_device.h"
 #include "urma_log.h"
@@ -640,12 +642,14 @@ static __attribute__((constructor)) void liburma_init(void)
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     urma_discover_sysfs_path();
 #endif
-    syslog(LOG_INFO, "LogTag_URMA|%s[%d]|Start to init liburma.\n", __func__, __LINE__);
+    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Start to init liburma.\n",
+        (long)syscall(__NR_gettid), __func__, __LINE__);
     return;
 }
 
 static __attribute__((destructor)) void liburma_uninit(void)
 {
-    syslog(LOG_INFO, "LogTag_URMA|%s[%d]|Finish to uninit liburma.\n", __func__, __LINE__);
+    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Finish to uninit liburma.\n",
+        (long)syscall(__NR_gettid), __func__, __LINE__);
     return;
 }
