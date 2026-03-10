@@ -10,7 +10,6 @@
 
 #include <threads.h>
 
-#include "bondp_datapath.h"
 #include "urma_log.h"
 #include "urma_api.h"
 #include "bondp_types.h"
@@ -20,6 +19,7 @@
 #include "bondp_jetty_ctx.h"
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_datapath.h"
 
 #define PJETTY_ID_ENCODE_OFFSET (32)
 #define VJETTY_ID_ENCODE_OFFSET (48)

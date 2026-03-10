@@ -28,6 +28,6 @@ void verbose_print(FILE *stream, ping_vlog_level_t level, const char *fmt, ...)
 
     va_list va;
     va_start(va, fmt);
-    vfprintf(stream, fmt, va);
+    (void)vfprintf(stream, fmt, va);
     va_end(va);
 }
