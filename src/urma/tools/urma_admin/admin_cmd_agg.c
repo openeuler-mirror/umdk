@@ -133,7 +133,7 @@ static int cmd_agg_del(admin_config_t *cfg)
     return 0;
 }
 
-static inline bool urma_eid_is_valid(urma_eid_t *eid)
+static inline bool urma_eid_is_valid(const urma_eid_t *eid)
 {
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
 }

@@ -41,10 +41,13 @@ int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd)
     if (msg == NULL) {
         return -ENOMEM;
     }
+    if (eid_idx > UINT16_MAX) {
+        return -EINVAL;
+    }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
-    admin_nl_put_u16(msg, UBCORE_ATTR_EID_IDX, eid_idx);
-    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, ns_fd);
+    admin_nl_put_u16(msg, UBCORE_ATTR_EID_IDX, (uint16_t)eid_idx);
+    admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
 
     int ret = admin_nl_send_recv_msg_default(msg);
     admin_nl_free_msg(msg);
@@ -96,7 +99,7 @@ static int nl_add_eid(const admin_config_t *cfg)
     int cb_ret = 0;
     int ret = admin_nl_send_recv_msg(msg, cb_update_eid_handler, &cb_ret);
     admin_nl_free_msg(msg);
-    return cb_ret | ret;
+    return (ret < 0) ? ret : cb_ret;
 }
 
 static int nl_del_eid(const admin_config_t *cfg)
@@ -117,7 +120,7 @@ static int nl_del_eid(const admin_config_t *cfg)
     int cb_ret = 0;
     int ret = admin_nl_send_recv_msg(msg, cb_update_eid_handler, &cb_ret);
     admin_nl_free_msg(msg);
-    return ret | cb_ret;
+    return (ret < 0) ? ret : cb_ret;
 }
 
 static int cmd_eid_usage(admin_config_t *cfg)
@@ -254,7 +257,7 @@ int admin_cmd_eid(admin_config_t *cfg)
 // Legacy cmd
 int admin_cmd_add_eid_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+    if (*cfg->dev_name != '\0' && is_ubc(cfg->dev_name)) {
         (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
@@ -276,7 +279,7 @@ int admin_cmd_add_eid_legacy(admin_config_t *cfg)
 
 int admin_cmd_del_eid_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+    if (*cfg->dev_name != '\0' && is_ubc(cfg->dev_name)) {
         (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
@@ -298,7 +301,7 @@ int admin_cmd_del_eid_legacy(admin_config_t *cfg)
 
 int admin_cmd_set_eid_mode_legacy(admin_config_t *cfg)
 {
-    if (*cfg->dev_name && is_ubc(cfg->dev_name)) {
+    if (*cfg->dev_name != '\0' && is_ubc(cfg->dev_name)) {
         (void)printf("This operation is not supported on ubc dev.\n");
         return -1;
     }
