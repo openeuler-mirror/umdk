@@ -309,8 +309,8 @@ typedef struct admin_cmd {
     int (*func)(admin_config_t *cfg);
 } admin_cmd_t;
 
-char *pop_arg(admin_config_t *cmds);
-int pop_arg_dev(admin_config_t *cmds);
+char *pop_arg(admin_config_t *cfg);
+int pop_arg_dev(admin_config_t *cfg);
 int pop_arg_ns(admin_config_t *cfg);
 int pop_arg_sharing(admin_config_t *cfg);
 int pop_arg_eid(admin_config_t *cfg);
