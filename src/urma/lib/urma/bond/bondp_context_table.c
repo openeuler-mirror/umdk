@@ -273,12 +273,12 @@ int bdp_r_v2p_token_id_table_destroy(bondp_hash_table_t *tbl)
 }
 
 int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
-    urma_eid_t *v_remote_eid, bondp_v2p_token_id_t *item)
+    urma_eid_t v_remote_eid, bondp_v2p_token_id_t *item)
 {
     hmap_node_t *node = NULL;
     bondp_v2p_token_id_key_t key = {
         .v_token_id = v_token_id,
-        .v_remote_eid = *v_remote_eid
+        .v_remote_eid = v_remote_eid
     };
     uint32_t hash = v_token_id;
     (void)pthread_rwlock_rdlock(&tbl->lock);
