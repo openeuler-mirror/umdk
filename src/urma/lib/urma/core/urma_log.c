@@ -98,6 +98,7 @@ const char *urma_log_get_thread_tag(void)
 void urma_log_set_thread_tag(const char *tag)
 {
     if (tag == NULL || strnlen(tag, URMA_MAX_NAME) >= URMA_MAX_NAME) {
+        URMA_LOG_ERR("Invalid parameter.\n");
         return;
     }
     (void)snprintf(g_thread_tag, sizeof(g_thread_tag), "%s", tag);

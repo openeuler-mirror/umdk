@@ -19,6 +19,8 @@
 #include <sys/types.h>
 #include <syslog.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 #include "tpsa_log.h"
 
 #ifdef UNIT_TEST
@@ -29,7 +31,8 @@
 
 #define MAX_LOG_LEN 1024
 #define MAX_PROCESS_NAME_LEN 1024
-#define TPSA_LOG_TAG "LogTag_TPSA"
+#define URMA_LOG_TAG "URMA"
+#define LIBUVS_LOG "libuvs"
 #define TPSA_PROCESS_PATH "/proc/self/exe"
 
 static pthread_mutex_t g_tpsa_log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -166,13 +169,14 @@ static int tpsa_vlog(const char *function, int line, unsigned int level, const c
 
     int woker_idx = uvs_get_worker_idx();
     if (woker_idx != -1) {
-        /* add log head info, "TPSA_LOG_TAG|*tpsaprocessname*|worker_idx|function|[line]|format" */
-        ret = snprintf(newformat, sizeof(newformat), "%s|*%s*|worker_%d|%s[%d]|%s",
-            TPSA_LOG_TAG, g_tpsa_process_name, woker_idx, function, line, format);
+        /* add log head info, "URMA|libuvs|thread_id|*tpsaprocessname*|worker_idx|function|[line]|format" */
+        ret = snprintf(newformat, sizeof(newformat), "%s|%s|%ld|*%s*|work_%d|%s[%d]|%s",
+            URMA_LOG_TAG, LIBUVS_LOG, (long)syscall(__NR_gettid), g_tpsa_process_name,
+            woker_idx, function, line, format);
     } else {
-        /* add log head info, "TPSA_LOG_TAG|*tpsaprocessname*|function|[line]|format" */
-        ret = snprintf(newformat, sizeof(newformat), "%s|*%s*|%s[%d]|%s",
-            TPSA_LOG_TAG, g_tpsa_process_name, function, line, format);
+        /* add log head info, "URMA|libuvs|thread_id|*tpsaprocessname*|-|function|[line]|format" */
+        ret = snprintf(newformat, sizeof(newformat), "%s|%s|%ld|*%s*|-|%s[%d]|%s",
+            URMA_LOG_TAG, LIBUVS_LOG, (long)syscall(__NR_gettid), g_tpsa_process_name, function, line, format);
     }
 
     if (ret < 0 || ret >= (int)sizeof(newformat)) {
