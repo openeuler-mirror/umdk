@@ -20,6 +20,8 @@
 
 #include "ping_parameters.h"
 
+#define MAX_PING_SIZE 4096
+
 int str_to_u32(const char *buf, uint32_t *u32)
 {
     unsigned long ret;
@@ -184,7 +186,7 @@ int check_args(ping_cfg_t *cfg)
         return -EINVAL;
     }
 
-    if (cfg->size > 4096) {
+    if (cfg->size > MAX_PING_SIZE) {
         LOG_ERROR("Size must be less than or equal to 4096\n");
         return -EINVAL;
     }
