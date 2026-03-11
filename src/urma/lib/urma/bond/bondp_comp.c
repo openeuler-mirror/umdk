@@ -645,7 +645,8 @@ static urma_status_t bondp_delete_comp_jfce(void *comp)
 static urma_status_t bondp_delete_comp_default(void *comp, bondp_comp_type_t type)
 {
     bondp_comp_t *bdp_comp = CONTAINER_OF_FIELD(comp, bondp_comp_t, base);
-    urma_status_t ret = URMA_SUCCESS;
+    urma_status_t delete_ret = URMA_SUCCESS;
+    urma_status_t uninit_ret = URMA_SUCCESS;
     for (int i = 0; i < bdp_comp->dev_num; ++i) {
         // special for BONDP_COMP_SEGMENT
         if (type == BONDP_COMP_SEGMENT && bdp_comp->p_tseg[i]) {
@@ -654,17 +655,17 @@ static urma_status_t bondp_delete_comp_default(void *comp, bondp_comp_type_t typ
         if (bdp_comp->members[i] &&
             g_bondp_comp_table[type].delete(bdp_comp->members[i]) != URMA_SUCCESS) {
             URMA_LOG_ERR("Failed to delete comp %d type %d\n", i, type);
-            ret = URMA_FAIL;
+            delete_ret = URMA_FAIL;
         }
     }
 
-    ret = g_bondp_comp_table[type].uninit_comp_attr(comp);
-    if (ret != 0) {
-        URMA_LOG_ERR("Fail to uninit comp attr, ret%d.\n", ret);
+    uninit_ret = g_bondp_comp_table[type].uninit_comp_attr(comp);
+    if (uninit_ret != 0) {
+        URMA_LOG_ERR("Fail to uninit comp attr, ret%d.\n", uninit_ret);
     }
 
     free(bdp_comp);
-    return ret;
+    return delete_ret == URMA_SUCCESS ? uninit_ret : delete_ret;
 }
 
 urma_status_t bondp_delete_comp(void *comp, bondp_comp_type_t type)
