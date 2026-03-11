@@ -163,7 +163,8 @@ void umq_perf_record_write(umq_perf_record_type_t type, uint64_t start)
 
 void umq_perf_record_write_with_direction(umq_perf_record_type_t type, uint64_t start, umq_io_direction_t direction)
 {
-    if (!g_umq_perf_record_enable || start == 0 || g_perf_record_index >= UMQ_PERF_REC_MAX_NUM) {
+    if (!g_umq_perf_record_enable || start == 0 ||
+        g_perf_record_index >= UMQ_PERF_REC_MAX_NUM || direction >= UMQ_IO_MAX) {
         return;
     }
 
@@ -178,7 +179,8 @@ void umq_perf_record_write_with_direction(umq_perf_record_type_t type, uint64_t 
 void umq_perf_record_write_interrupt_with_direction(
     umq_perf_record_type_t type, uint64_t start, umq_io_direction_t direction)
 {
-    if (!g_umq_perf_record_enable || start == 0 || g_perf_record_index >= UMQ_PERF_REC_MAX_NUM) {
+    if (!g_umq_perf_record_enable || start == 0 ||
+        g_perf_record_index >= UMQ_PERF_REC_MAX_NUM || direction >= UMQ_IO_MAX) {
         return;
     }
 
@@ -233,7 +235,7 @@ int umq_perf_reset(umq_perf_stats_cfg_t *perf_stats_cfg)
     // set quantile bucket
     uint32_t idx = 0;
     for (uint32_t i = 0; i < thresh_num; ++i) {
-        if (thresh_array[i] > UMQ_PERF_MAX_THRESH_NS) {
+        if (thresh_array[i] > UMQ_PERF_MAX_THRESH_NS || thresh_array[i] == 0) {
             continue;
         }
         if (idx == 0 || thresh_array[i] > g_umq_perf_record_ctx->perf_quantile_thresh[idx - 1]) {
