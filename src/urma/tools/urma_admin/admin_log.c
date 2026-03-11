@@ -11,11 +11,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "admin_log.h"
 
 #define MAX_LOG_LEN                1024
-#define URMA_ADMIN_LOG_TAG         "URMA_ADMIN_LOGTAG"
+#define URMA_LOG_TAG               "URMA"
+#define ADMIN_LOG_TAG              "urma_admin"
 #define URMA_ADMIN_VLOG_LEVEL_INFO 6
 
 static int urma_admin_vlog(const char *function, int line, const char *format, va_list va)
@@ -24,8 +27,9 @@ static int urma_admin_vlog(const char *function, int line, const char *format, v
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "URMA_LOG_TAG|function|[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s", URMA_ADMIN_LOG_TAG, function, line, format);
+    /* add log head info, "URMA|urma_admin|thread_id|-|function|[line]|format" */
+    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s|%ld|-|%s[%d]|%s",
+            URMA_LOG_TAG, ADMIN_LOG_TAG, (long)syscall(__NR_gettid), function, line, format);
     if (ret <= 0 || ret >= (int)sizeof(newformat)) {
         return ret;
     }
