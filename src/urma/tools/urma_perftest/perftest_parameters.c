@@ -105,7 +105,7 @@ static void usage(const char *argv0)
     (void)printf("  -f, --use_flat_api          Choose to use flat API, only works in SIMPLEX mode.\n");
     (void)printf("  -F, --cpu_freq_f            To report warnings when CPU frequency drifts, default as NOT.\n");
     (void)printf("  -h, --help                  Show help info.\n");
-    (void)printf("  -I, --inline_size <size>    Max size of message to be sent in inline.\n");
+    (void)printf("  -I, --inline_size <size>    Max size of message to be sent in inline (default 0).\n");
     (void)printf("  -j, --share_jfr <true/false> share jfr on create jetty.\n");
     (void)printf("  -J, --jettys <num of jetty> Num of jettys(default 1).\n");
     (void)printf("  -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.\n");
@@ -426,7 +426,6 @@ static int check_cfg_range(perftest_config_t *cfg)
         { cfg->iters,        PERFTEST_ITERS_MIN,         PERFTEST_ITERS_MAX,        "Iteration num" },
         { cfg->jfs_depth,    PERFTEST_JFS_DEPTH_MIN,     PERFTEST_JFS_DEPTH_MAX,    "Jfs depth" },
         { cfg->jettys,       PERFTEST_JETTYS_MIN,        PERFTEST_JETTYS_MAX,       "Jettys" },
-        { cfg->inline_size,  PERFTEST_INLINE_MIN,        PERFTEST_INLINE_MAX,       "Inline size" },
         { cfg->jfr_depth,    PERFTEST_JFR_DEPTH_MIN,     PERFTEST_JFR_DEPTH_MAX,    "Jfr depth" },
         { cfg->cq_mod,       PERFTEST_CQ_MOD_MIN,        PERFTEST_CQ_MOD_MAX,       "Cq mod" },
         { cfg->order,        PERFTEST_MIN_ORDER,         PERFTEST_MAX_ORDER,        "Order" },

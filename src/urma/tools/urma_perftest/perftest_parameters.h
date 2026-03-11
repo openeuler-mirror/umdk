@@ -59,10 +59,6 @@
 #define PERFTEST_JETTYS_MIN  (1)
 #define PERFTEST_JETTYS_MAX  (0xFFFF)
 
-// value range of perftest inline size
-#define PERFTEST_INLINE_MIN  (0)
-#define PERFTEST_INLINE_MAX  (912)
-
 // value range of perftest jfr_depth
 #define PERFTEST_JFR_DEPTH_MIN  (1)
 #define PERFTEST_JFR_DEPTH_MAX  (0x4000)
