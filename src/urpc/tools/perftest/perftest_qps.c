@@ -141,4 +141,5 @@ OUTPUT:
         begin = end;
         begin_cpu_time = end_cpu_time;
     }
+    perftest_force_quit();
 }
