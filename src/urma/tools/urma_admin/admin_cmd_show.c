@@ -868,6 +868,35 @@ free_topo:
     return ret;
 }
 
+int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
+    admin_urma_topo_bonding_dev_t *out)
+{
+    int ret;
+    admin_core_cmd_topo_bonding_dev_t *arg = NULL;
+
+    if (agg_eid == NULL || out == NULL)
+        return -EINVAL;
+
+    arg = calloc(1, sizeof(admin_core_cmd_topo_bonding_dev_t));
+    if (arg == NULL) {
+        return -ENOMEM;
+    }
+    arg->in.agg_eid = *agg_eid;
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_BONDING_DEV, 0);
+    if (msg == NULL) {
+        free(arg);
+        return -ENOMEM;
+    }
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+    ret = admin_nl_send_recv_msg_default(msg);
+
+    memcpy(out, &arg->out.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
+    admin_nl_free_msg(msg);
+    free(arg);
+    return ret;
+}
+
 static int cmd_show_topo(admin_config_t *cfg)
 {
     uint32_t node_id;
