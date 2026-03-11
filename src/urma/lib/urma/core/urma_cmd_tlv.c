@@ -13,6 +13,9 @@
 
 #include "urma_cmd_tlv.h"
 
+/* between 1 and MAX_ERRNO */
+#define URMA_KERNEL_DRV_ERRNO 2048
+
 static inline void fill_attr(urma_cmd_attr_t *attr, uint16_t type, uint16_t field_size, uint16_t el_num,
                              uint16_t el_size, uintptr_t data)
 {
@@ -48,7 +51,8 @@ static int urma_tlv_ioctl(int ioctl_fd, urma_cmd_t cmd, urma_cmd_attr_t *args, u
      };
     int ret = ioctl(ioctl_fd, URMA_CMD, &hdr);
     if (ret != 0) {
-        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d, cmd:%u.\n", ret, errno, hdr.command);
+        URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d, cmd:%u, kdrv_err: %d.\n",
+            ret, errno, hdr.command, (int)(errno == URMA_KERNEL_DRV_ERRNO));
     }
     return ret;
 }
