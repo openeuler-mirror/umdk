@@ -509,7 +509,7 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     }
 
     // namespace len alignment 4 byte
-    dev_info->namespace_len = (uint32_t)((ret + UMQ_LEN_ALIGNMENT_4 - 1) & ~(UMQ_LEN_ALIGNMENT_4 - 1));
+    dev_info->namespace_len = (((uint32_t)ret + UMQ_LEN_ALIGNMENT_4 - 1) & ~(UMQ_LEN_ALIGNMENT_4 - 1));
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
     info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_dev_info_t) + dev_info->namespace_len;
     return urpc_tlv_get_total_len(info_tlv_head);
