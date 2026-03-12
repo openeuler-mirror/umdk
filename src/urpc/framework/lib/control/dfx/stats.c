@@ -30,14 +30,11 @@ static int format_stats_string(char *buf, int len, uint64_t *stats, int stats_le
 
     for (int i = 0; i < stats_len; i++) {
         ret = snprintf(buf + offset, remain, "%s: %lu\n", name_get(i), stats[i]);
-        if (ret < 0) {
+        if (ret < 0 || ret >= remain) {
             URPC_LIB_LOG_ERR("format stats info failed, error %d\n", ret);
             return ret;
         }
 
-        if (remain <= ret) {
-            break;
-        }
         offset += ret;
         remain -= ret;
     }
