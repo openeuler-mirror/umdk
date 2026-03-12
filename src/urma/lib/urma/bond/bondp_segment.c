@@ -9,6 +9,7 @@
  */
 
 #include <stdlib.h>
+
 #include "urma_api.h"
 #include "urma_log.h"
 #include "urma_provider.h"
@@ -19,9 +20,6 @@
 #include "bondp_context_table.h"
 #include "bondp_hash_table.h"
 #include "bondp_segment.h"
-
-#define  SIMPLE_SEG_INFO_DEV_NUM      (2)
-#define  TOKEN_ID_BIT_NUM             (16)
 
 #define BDP_VA_VTSEG_INFO_HASH_BASIS (0x52989218)
 #define BDP_VA_VTSEG_HASH_INFO_TABLE_SIZE (1024)
