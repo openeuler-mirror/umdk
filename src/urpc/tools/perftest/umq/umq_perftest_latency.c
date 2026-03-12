@@ -447,9 +447,13 @@ static int process_tx_eagain_interrupt(uint64_t umqh, umq_interrupt_option_t *in
     umq_buf_t *buf;
     int ret;
     while (!is_perftest_force_quit()) {
-        if (umq_wait_interrupt(umqh, INTERRUPT_MAX_WAIT_TIME_MS, interrupt_option) != 1) {
+        ret = umq_wait_interrupt(umqh, INTERRUPT_MAX_WAIT_TIME_MS, interrupt_option);
+        if (ret < 0) {
             LOG_PRINT("umq_wait_interrupt failed\n");
             return -1;
+        }
+        if (ret == 0) {
+            continue;
         }
         if (umq_rearm_interrupt(umqh, false, interrupt_option) != 0) {
             LOG_PRINT("umq_rearm_interrupt failed\n");
