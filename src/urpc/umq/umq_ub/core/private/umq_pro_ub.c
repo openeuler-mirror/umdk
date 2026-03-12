@@ -773,7 +773,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    if (queue->flow_control.enabled && (queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.rx_fc_interrupt)) {
+    if (queue->flow_control.enabled) {
         qbuf_cnt += umq_ub_poll_fc_rx(queue, buf, max_batch);
     }
 
