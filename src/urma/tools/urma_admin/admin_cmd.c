@@ -112,7 +112,7 @@ static int usage(admin_config_t *cfg)
            "  -n, --ns </proc/$pid/ns/net>                ns path.\n"
            "  -M, --ns_mode <0 or 1>                      ns_mode with (exclusive: 0) | (shared: 1).\n"
            "  -p, --priority  <0 - 15>                    the serial number of priority.\n"
-           "  -u, --max_id  <0 - 15>                      the serial number of SL.\n");
+           "  -s, --sl                                    the serial number of SL.\n");
     return 0;
 }
 
