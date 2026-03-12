@@ -291,13 +291,9 @@ static void bondp_uninit_v_ctx(bondp_context_t *bond_ctx)
 
 static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
 {
-    if (bondp_bitmap_init(&bond_ctx->token_id_bitmap, BONDP_MAX_NUM_SEGS + 1)) {
-        URMA_LOG_ERR("Failed to create token_id_bitmap\n");
-        return -1;
-    }
     if (bdp_p_vjetty_id_table_create(&bond_ctx->p_vjetty_id_table, BONDP_MAX_NUM_JETTYS)) {
         URMA_LOG_ERR("Failed to create p_vjetty_id_table\n");
-        goto FREE_TOKEN_ID_BITMAP;
+        return -1;
     }
     if (bdp_r_p2v_jetty_id_table_create(&bond_ctx->remote_p2v_jetty_id_table, BONDP_MAX_NUM_JETTYS)) {
         URMA_LOG_ERR("Failed to create remote_p2v_jetty_id_table\n");
@@ -313,8 +309,6 @@ FREE_V_PTOKEN_ID_TABLE:
     (void)bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
 FREE_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
-FREE_TOKEN_ID_BITMAP:
-    bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
     return -1;
 }
 
@@ -323,7 +317,6 @@ static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
     bdp_r_v2p_token_id_table_destroy(&bond_ctx->remote_v2p_token_id_table);
     bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
-    bondp_bitmap_uninit(&bond_ctx->token_id_bitmap);
 }
 
 static bondp_context_t* bondp_create_ctx(void)
