@@ -14,7 +14,6 @@
 #include "urma_types.h"
 #include "urma_ubagg.h"
 #include "bondp_hash_table.h"
-#include "bondp_bitmap.h"
 #include "topo_info.h"
 
 #define BONDP_MAX_NUM_JFRS (10240)
@@ -79,7 +78,6 @@ typedef struct bondp_context {
     /* and valid devices are confirmed through the non-null p_ctxs[i]. */
     int dev_num;
     topo_map_t *topo_map;               /* Only valid when the node is in matrix server */
-    bondp_bitmap_t token_id_bitmap;     /* alloc token_id used by urma_jetty */
     bondp_hash_table_t tjetty_id_table; /* match target jetty's pjetty_id to vjetty_id */
     /* Record the mapping from the locally created jetty's pjetty.jetty_id.id to the vjetty.jetty_id.id, */
     /* used to restore the local_id in CR. */
