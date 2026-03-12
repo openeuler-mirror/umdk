@@ -393,6 +393,12 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     while (buffer) {
         uint32_t rest_size = buffer->total_data_size;
+        if (rest_size == 0) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                "eid: " EID_FMT ", jetty_id: %u, buffer total data size invalid\n", EID_ARGS(*eid), id);
+            goto PUT_ALL_RX_CTX;
+        }
+
         uint32_t sge_num = 0;
 
         rx_buf_ctx = queue_rx_buf_ctx_get(&queue->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list);
