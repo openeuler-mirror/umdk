@@ -107,7 +107,7 @@ static void umq_perftest_show_feature(uint32_t feature)
 
     if ((feature & UMQ_FEATURE_API_PRO) == 0) {
         ret = snprintf(feature_str, PERFTEST_STR_SIZE, "%s", "UMQ_FEATURE_API_BASE");
-        if (ret < 0) {
+        if (ret < 0 || ret >= PERFTEST_STR_SIZE) {
             LOG_PRINT("set feature string: UMQ_FEATURE_API_BASE failed\n");
             return;
         }
@@ -124,7 +124,7 @@ static void umq_perftest_show_feature(uint32_t feature)
         } else {
             ret = snprintf(feature_str + str_len, PERFTEST_STR_SIZE - str_len, " %s", array[i].str);
         }
-        if (ret < 0) {
+        if (ret < 0 || ret >= (PERFTEST_STR_SIZE - str_len)) {
             LOG_PRINT("set feature string: %s failed\n", array[i].str);
             return;
         }
