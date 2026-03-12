@@ -76,6 +76,7 @@ static int cmd_dev_usage(admin_config_t *cfg)
     printf("Usage:\n"
            "  urma_admin dev sharing {on|off}\n"
            "  urma_admin dev set <dev> ns <netns>\n"
+           "  urma_admin dev set <dev> sl --sl <sl> --priority <priority>\n"
            "  urma_admin dev expose <dev> <netns>\n"
            "  urma_admin dev unexpose <dev> <netns>\n"
            "\n"
