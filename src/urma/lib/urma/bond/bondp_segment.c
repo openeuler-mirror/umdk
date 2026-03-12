@@ -100,23 +100,15 @@ urma_target_seg_t *bondp_find_vtseg_by_va(uint64_t va)
     return va_vtseg_info->vtseg;
 }
 
+/*
+ * Since the actual token ID for bonding device is allocated by the kernel mode
+ * during segment registration, the function only returns an empty token ID to
+ * make api useable
+ */
 urma_token_id_t *bondp_alloc_token_id(urma_context_t *ctx)
 {
-    urma_token_id_t *token = NULL;
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-
-    if (!is_valid_ctx(bdp_ctx)) {
-        URMA_LOG_ERR("Invalid bdp_ctx");
-        return NULL;
-    }
-
-    token = calloc(1, sizeof(urma_token_id_t));
+    urma_token_id_t *token = calloc(1, sizeof(urma_token_id_t));
     if (token == NULL) {
-        return NULL;
-    }
-    if (bondp_bitmap_alloc_idx(&bdp_ctx->token_id_bitmap, &token->token_id)) {
-        URMA_LOG_ERR("Failed to alloc token id.\n");
-        free(token);
         return NULL;
     }
     token->urma_ctx = ctx;
@@ -125,16 +117,6 @@ urma_token_id_t *bondp_alloc_token_id(urma_context_t *ctx)
 
 urma_status_t bondp_free_token_id(urma_token_id_t *token_id)
 {
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(token_id->urma_ctx, bondp_context_t, v_ctx);
-
-    if (!is_valid_ctx(bdp_ctx)) {
-        URMA_LOG_ERR("Invalid bdp_ctx");
-        return URMA_FAIL;
-    }
-    if (bondp_bitmap_free_idx(&bdp_ctx->token_id_bitmap, token_id->token_id)) {
-        URMA_LOG_ERR("Failed to free idx, tid: %u.\n", token_id->token_id);
-        return URMA_FAIL;
-    }
     free(token_id);
     return URMA_SUCCESS;
 }
