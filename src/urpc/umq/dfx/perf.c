@@ -40,6 +40,7 @@ typedef struct umq_perf_record {
 
 typedef struct umq_perf_record_ctx {
     umq_perf_record_t perf_record_table[UMQ_PERF_REC_MAX_NUM];
+    pthread_once_t *dp_thread_run_once[UMQ_PERF_REC_MAX_NUM];
     uint64_t perf_quantile_thresh[UMQ_PERF_QUANTILE_MAX_NUM];
     uint64_t thresh_ns[UMQ_PERF_QUANTILE_MAX_NUM];
     uint32_t thresh_num;
@@ -69,6 +70,13 @@ void umq_perf_uninit(void)
     if (g_umq_perf_record_ctx == NULL) {
         return;
     }
+
+    for(uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+        if (g_umq_perf_record_ctx->dp_thread_run_once[i] != NULL) {
+            *g_umq_perf_record_ctx->dp_thread_run_once[i] = PTHREAD_ONCE_INIT;
+        }
+    }
+
     g_umq_perf_record_enable = false;
     pthread_mutex_destroy(&g_umq_perf_record_ctx->lock);
     free(g_umq_perf_record_ctx);
@@ -108,6 +116,7 @@ void umq_perf_record_alloc(void)
     (void)pthread_mutex_unlock(&g_umq_perf_record_ctx->lock);
 
     g_perf_record_index = idx;
+    g_umq_perf_record_ctx->dp_thread_run_once[idx] = &g_dp_thread_run_once;
 }
 
 static void umq_dp_thread_run_once(void)
@@ -239,8 +248,8 @@ int umq_perf_reset(umq_perf_stats_cfg_t *perf_stats_cfg)
             continue;
         }
         if (idx == 0 || thresh_array[i] > g_umq_perf_record_ctx->perf_quantile_thresh[idx - 1]) {
+            g_umq_perf_record_ctx->thresh_ns[idx] = thresh_array[i];
             g_umq_perf_record_ctx->perf_quantile_thresh[idx++] = thresh_array[i] * urpc_get_cpu_hz() / NS_PER_SEC;
-            g_umq_perf_record_ctx->thresh_ns[i] = thresh_array[i];
         }
     }
     g_umq_perf_record_ctx->thresh_num = idx;
