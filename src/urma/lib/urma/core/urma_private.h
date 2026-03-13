@@ -17,6 +17,7 @@
 #include "urma_provider.h"
 
 #define URMA_MAX_SYSFS_PATH 256
+#define URMA_UBAGG_DEV_PREFIX "bonding_dev"
 
 typedef struct urma_driver {
     struct urma_provider_ops *ops;
@@ -48,5 +49,15 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 int urma_open_cdev(char *path);
+
+static inline bool urma_is_bonding_dev(char *dev_name)
+{
+    if (strnlen(dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
+        return false;
+    }
+    
+    return memcmp(dev_name, URMA_UBAGG_DEV_PREFIX,
+        strlen(URMA_UBAGG_DEV_PREFIX)) == 0;
+}
 
 #endif // URMA_PRIVATE_H
