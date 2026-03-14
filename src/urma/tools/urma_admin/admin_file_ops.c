@@ -298,3 +298,34 @@ void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint
         }
     }
 }
+
+bool admin_is_eid_idx_valid(const char *dev_name, uint32_t eid_index)
+{
+    char tmp_eid[VALUE_LEN_MAX] = {0};
+    char tmp_value[VALUE_LEN_MAX] = {0};
+    char *sysfs_path = NULL;
+    urma_eid_info_t eid_info = {0};
+    
+    if (snprintf(tmp_eid, VALUE_LEN_MAX, "eids/eid%u", eid_index) <= 0) {
+        (void)printf("snprintf failed, eid idx: %u.\n", eid_index);
+        return false;
+    }
+
+    sysfs_path = calloc(1, DEV_PATH_MAX);
+    if (sysfs_path == NULL) {
+        return false;
+    }
+    if (admin_merge_sysfs_path(sysfs_path, SYS_CLASS_PATH, dev_name) != 0 ||
+        admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
+        admin_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
+        eid_info.eid.in4.prefix == 0) {
+        goto free_sysfs_path;
+    }
+
+    free(sysfs_path);
+    return true;
+
+free_sysfs_path:
+    free(sysfs_path);
+    return false;
+}

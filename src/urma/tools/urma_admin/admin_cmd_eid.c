@@ -201,6 +201,13 @@ static int cmd_eid_set_mode(admin_config_t *cfg)
 static int cmd_eid_set_ns(admin_config_t *cfg)
 {
     int ret;
+    
+    /* Validate EID index validity */
+    if (!admin_is_eid_idx_valid(cfg->dev_name, cfg->idx)) {
+        (void)printf("EID index %u is invalid or not configured\n", cfg->idx);
+        return -EINVAL;
+    }
+    
     if ((ret = pop_arg_ns(cfg)) != 0) {
         return ret;
     }
