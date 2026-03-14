@@ -397,3 +397,72 @@ int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_b
 FORMAT_ERR:
     return -UMQ_ERR_EINVAL;
 }
+
+int umq_stats_tp_perf_start(umq_trans_mode_t trans_mode)
+{
+#ifdef UMQ_STATIC_LIB
+    if (trans_mode != UMQ_TRANS_MODE_UB && trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
+        return -UMQ_ERR_EINVAL;
+    }
+#endif
+
+    if (trans_mode >= UMQ_TRANS_MODE_MAX) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans info mode[%u] is invalid\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_start == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return dfx_tp_ops->umq_tp_stats_tp_perf_start();
+}
+
+int umq_stats_tp_perf_stop(umq_trans_mode_t trans_mode)
+{
+#ifdef UMQ_STATIC_LIB
+    if (trans_mode != UMQ_TRANS_MODE_UB && trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
+        return -UMQ_ERR_EINVAL;
+    }
+#endif
+
+    if (trans_mode >= UMQ_TRANS_MODE_MAX) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans info mode[%u] is invalid\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_stop == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return dfx_tp_ops->umq_tp_stats_tp_perf_stop();
+}
+
+int umq_stats_tp_perf_info_get(umq_trans_mode_t trans_mode, char *perf_buf, uint32_t *length)
+{
+#ifdef UMQ_STATIC_LIB
+    if (trans_mode != UMQ_TRANS_MODE_UB && trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
+        return -UMQ_ERR_EINVAL;
+    }
+#endif
+
+    if (trans_mode >= UMQ_TRANS_MODE_MAX) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans info mode[%u] is invalid\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_info_get == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return dfx_tp_ops->umq_tp_stats_tp_perf_info_get(perf_buf, length);
+}
