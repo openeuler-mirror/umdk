@@ -948,6 +948,9 @@ urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only);
  *            timeout = -1: an infinite timeout
  * @param[out] jfc: address to put the jfc handle
  * Return: the number of jfc returned, 0 means no jfc returned, -1 on error
+ * Note: User should check error when wait_jfc returns 0, errno ERESTARTSYS(512)
+ *       means wait operation was interrupted by a signal and this error should
+ *       be ignored, users should continue to wait jfc.
  */
 int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[]);
 
