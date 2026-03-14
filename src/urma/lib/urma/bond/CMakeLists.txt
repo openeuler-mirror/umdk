@@ -9,6 +9,9 @@ add_library(urma_ubagg SHARED
     ${PROVIDER_AGG_UTILS_DIR_SRCS}
 )
 
+set(PROJECT_VERSION "0.0.2")
+set(PROJECT_VERSION_MAJOR "0")
+
 set_target_properties(urma_ubagg
     PROPERTIES
         C_STANDARD 99
