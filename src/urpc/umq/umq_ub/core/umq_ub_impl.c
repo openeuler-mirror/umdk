@@ -23,6 +23,7 @@
 #include "urpc_list.h"
 #include "urpc_timer.h"
 #include "urma_api.h"
+#include "urma_perf.h"
 #include "umq_symbol_private.h"
 #include "umq_vlog.h"
 #include "umq_errno.h"
@@ -2231,4 +2232,19 @@ int umq_ub_stats_io_reset_impl(uint64_t umqh_tp)
         (void)__atomic_exchange_n(&queue->packet_stats[i], 0, __ATOMIC_RELAXED);
     }
     return UMQ_SUCCESS;
+}
+
+int umq_ub_stats_tp_perf_start_impl(void)
+{
+    return umq_symbol_urma()->urma_start_perf();
+}
+
+int umq_ub_stats_tp_perf_stop_impl(void)
+{
+    return umq_symbol_urma()->urma_stop_perf();
+}
+
+int umq_ub_stats_tp_perf_info_get_impl(char *perf_buf, uint32_t *length)
+{
+    return umq_symbol_urma()->urma_get_perf_info(perf_buf, length);
 }

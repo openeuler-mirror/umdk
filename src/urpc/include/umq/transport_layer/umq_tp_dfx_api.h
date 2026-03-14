@@ -60,6 +60,26 @@ typedef struct umq_dfx_ops {
      * Return 0 on success, error code on failure
      */
     int (*umq_tp_stats_io_reset)(uint64_t umqh_tp);
+
+    /**
+     * start tp performance statistics.
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_stats_tp_perf_start)(void);
+
+    /**
+     * Stop tp performance statistics.
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_stats_tp_perf_stop)(void);
+
+    /**
+     * Get tp performance info statistical results.
+     * @param[out] perf_buf: buffer to store performance information;
+     * @param[out] length: length of performance information;
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_stats_tp_perf_info_get)(char *perf_buf, uint32_t *length);
 } umq_dfx_ops_t;
 
 typedef umq_dfx_ops_t* (*umq_dfx_ops_get_t)(void);
