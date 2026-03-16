@@ -616,14 +616,6 @@ dlock_status_t set_jetty_connection(jetty_mgr *p_jetty_mgr, struct urma_init_bod
     if (tp_mode == SEPERATE_CONN) {
         jetty_mgr_sepconn *p_mgr_sepconn = dynamic_cast<jetty_mgr_sepconn *>(p_jetty_mgr);
 
-#ifdef UB_AGG
-        if (jetty_info->is_bond &&
-            (p_mgr_sepconn->add_urma_bond_rjfr_id_info(&jetty_info->bond_id_info) != DLOCK_SUCCESS)) {
-            DLOCK_LOG_ERR("add urma bond rjfr id info error");
-            return DLOCK_FAIL;
-        }
-#endif /* UB_AGG */
-
         ret = p_mgr_sepconn->import_jfr(jetty_info->jfr_id, jetty_info->flag.bs.token_policy, jetty_info->token);
         if (ret != DLOCK_SUCCESS) {
             DLOCK_LOG_ERR("import jfr error");
@@ -631,14 +623,6 @@ dlock_status_t set_jetty_connection(jetty_mgr *p_jetty_mgr, struct urma_init_bod
         }
     } else {
         jetty_mgr_uniconn *p_mgr_uniconn = dynamic_cast<jetty_mgr_uniconn *>(p_jetty_mgr);
-
-#ifdef UB_AGG
-        if (jetty_info->is_bond &&
-            (p_mgr_uniconn->add_urma_bond_rjetty_id_info(&jetty_info->bond_id_info) != DLOCK_SUCCESS)) {
-            DLOCK_LOG_ERR("add urma bond rjetty id info error");
-            return DLOCK_FAIL;
-        }
-#endif /* UB_AGG */
 
         ret = p_mgr_uniconn->import_jetty(jetty_info->jetty_id, jetty_info->flag.bs.token_policy, jetty_info->token);
         if (ret != DLOCK_SUCCESS) {
