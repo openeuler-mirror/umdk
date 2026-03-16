@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
 
     admin_config_t cfg = {
         .ue_idx = OWN_UE_IDX,
+        .brief_info = true,
         .priority = URMA_MAX_PRIORITY_CNT,
         .SL = URMA_MAX_PRIORITY_CNT,
         .argc = argc,
