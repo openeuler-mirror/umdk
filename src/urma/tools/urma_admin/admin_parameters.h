@@ -279,6 +279,7 @@ typedef struct admin_config {
     char **argv;
     char *filename;
     bool specify_device;
+    bool brief_info; /* show command default: true(brief), false(all) */
     bool whole_info;
     bool help;
     char dev_name[URMA_ADMIN_MAX_DEV_NAME]; /* ubep device name */
