@@ -14,10 +14,6 @@
 
 #include <mutex>
 
-#ifdef UB_AGG
-#include "urma_ubagg.h"
-#endif /* UB_AGG */
-
 #include "dlock_types.h"
 #include "urma_ctx.h"
 #include "dlock_cipher.h"
@@ -59,10 +55,6 @@ public:
     dlock_status_t post_faa(uint32_t offset, uint64_t operand, uint64_t wr_id) const override;
     dlock_status_t post_cas(uint32_t offset, uint64_t cmp_data, uint64_t swap_data, uint64_t wr_id) const override;
 
-#ifdef UB_AGG
-    dlock_status_t add_urma_bond_rjetty_id_info(urma_bond_add_rjetty_id_info_in_t *info) const;
-#endif /* UB_AGG */
-
 private:
     inline uint32_t get_jfr_depth(void) const
     {
@@ -80,10 +72,6 @@ private:
     void modify_jetty_err(void);
 
     void fill_base_wr(urma_jfs_wr_t *wr, uint64_t wr_id) const override;
-
-#ifdef UB_AGG
-    dlock_status_t get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const override;
-#endif /* UB_AGG */
 
     urma_jfr_t *m_share_jfr; /* for UB dev */
     urma_jetty_t *m_jetty;

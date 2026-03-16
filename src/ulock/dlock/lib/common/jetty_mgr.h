@@ -16,10 +16,6 @@
 #include <vector>
 #include <cstring>
 
-#ifdef UB_AGG
-#include "urma_ubagg.h"
-#endif /* UB_AGG */
-
 #include "dlock_types.h"
 #include "urma_ctx.h"
 #include "dlock_cipher.h"
@@ -151,11 +147,6 @@ private:
         urma_sge_t *dst_sge, uint64_t operand) const;
     void fill_cas_wr(urma_jfs_wr_t *wr, urma_sge_t *src_sge,
         urma_sge_t *dst_sge, uint64_t cmp_data, uint64_t swap_data) const;
-
-#ifdef UB_AGG
-    virtual dlock_status_t get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const = 0;
-    dlock_status_t construct_urma_bond_id_xchg_info(struct urma_init_body *jetty_info) const;
-#endif /* UB_AGG */
 
     void wait_flush_err_done(void);
 

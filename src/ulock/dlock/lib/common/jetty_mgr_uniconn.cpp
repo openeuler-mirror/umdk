@@ -231,11 +231,7 @@ dlock_status_t jetty_mgr_uniconn::construct_jetty_xchg_info(struct urma_init_bod
     jetty_info->token = get_jfr_token();
     jetty_info->flag.bs.token_policy = get_token_policy();
 
-#ifdef UB_AGG
-    return construct_urma_bond_id_xchg_info(jetty_info);
-#else
     return DLOCK_SUCCESS;
-#endif /* UB_AGG */
 }
 
 dlock_status_t jetty_mgr_uniconn::import_jetty(const urma_jetty_id_t jetty_id, uint32_t token_policy, uint32_t token)
@@ -530,49 +526,4 @@ dlock_status_t jetty_mgr_uniconn::post_cas(uint32_t offset, uint64_t cmp_data, u
 
     return DLOCK_SUCCESS;
 }
-
-#ifdef UB_AGG
-dlock_status_t jetty_mgr_uniconn::get_urma_bond_id_info(urma_bond_id_info_out_t *bond_id_info) const
-{
-    urma_bond_id_info_in_t in = {0};
-    in.jetty = m_jetty;
-    in.type = URMA_JETTY;
-
-    urma_user_ctl_in_t user_ctl_in = {
-        .addr = (uint64_t)&in,
-        .len = sizeof(urma_bond_id_info_in_t),
-        .opcode = URMA_USER_CTL_BOND_GET_ID_INFO,
-    };
-
-    urma_user_ctl_out_t user_ctl_out = {
-        .addr = (uint64_t)bond_id_info,
-        .len = sizeof(urma_bond_id_info_out_t),
-    };
-
-    if (urma_user_ctl(m_jetty->urma_ctx, &user_ctl_in, &user_ctl_out)) {
-        DLOCK_LOG_ERR("failed to get ub bond jetty id info");
-        return DLOCK_FAIL;
-    }
-    return DLOCK_SUCCESS;
-}
-
-dlock_status_t jetty_mgr_uniconn::add_urma_bond_rjetty_id_info(urma_bond_add_rjetty_id_info_in_t *info) const
-{
-    urma_user_ctl_in_t user_ctl_in = {
-        .addr = (uint64_t)info,
-        .len = sizeof(urma_bond_add_rjetty_id_info_in_t),
-        .opcode = URMA_USER_CTL_BOND_ADD_RJETTY_ID_INFO,
-    };
-    urma_user_ctl_out_t user_ctl_out = {
-        .addr = 0,
-        .len = 0,
-    };
-
-    if (urma_user_ctl(m_urma_ctx->m_urma_ctx, &user_ctl_in, &user_ctl_out)) {
-        DLOCK_LOG_ERR("failed to add urma bond rjetty id info");
-        return DLOCK_FAIL;
-    }
-    return DLOCK_SUCCESS;
-}
-#endif /* UB_AGG */
 };
