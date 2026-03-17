@@ -1684,6 +1684,9 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
         goto FREE_UMQ_CTX_TBL;
     }
+    g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
+    g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
+    g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
     // register seg
     ret = umq_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], umq_ub_register_seg_callback);
     if (ret != UMQ_SUCCESS) {
@@ -1697,10 +1700,6 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf register seg failed, status: %d\n", ret);
         goto UNREGISTER_MEM;
     }
-
-    g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
-    g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
-    g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
     g_ub_ctx_count++;
 

@@ -641,6 +641,15 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
                     return -UMQ_ERR_EINVAL;
                 }
                 bind_info->dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
+                if (info_tlv_head->len != (sizeof(umq_ub_bind_dev_info_t) + bind_info->dev_info->namespace_len)) {
+                    UMQ_VLOG_ERR(VLOG_UMQ, "bind dev info namespace_len insufficient\n");
+                    return -UMQ_ERR_EINVAL;
+                }
+                size_t len = strnlen(bind_info->dev_info->bind_namespace, bind_info->dev_info->namespace_len);
+                if (len == bind_info->dev_info->namespace_len) {
+                    UMQ_VLOG_ERR(VLOG_UMQ, "bind dev info namespace not be null-terminated\n");
+                    return -UMQ_ERR_EINVAL;
+                }
                 break;
             case UMQ_UB_BIND_INFO_TYPE_QUEUE:
                 if (info_tlv_head->len < (uint32_t)sizeof(umq_ub_bind_queue_info_t)) {
@@ -1507,10 +1516,14 @@ static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(
     }
 
     umq_buf_mode_t buf_mode = umq_qbuf_mode_get();
+    uint64_t temp_size = read_alloc_mem_size * buf_num;
+    if (temp_size >= UINT32_MAX || temp_size < umq_qbuf_headroom_get()) {
+        return UINT32_MAX;
+    }
     if (buf_mode == UMQ_BUF_SPLIT) {
-        return read_alloc_mem_size * buf_num - umq_qbuf_headroom_get();
+        return temp_size - umq_qbuf_headroom_get();
     } else if (buf_mode == UMQ_BUF_COMBINE) {
-        return read_alloc_mem_size * buf_num - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
+        return temp_size - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
     }
 
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", buf_mode);
@@ -1737,7 +1750,10 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
     uint32_t src_buf_length = 0;
     for (uint32_t i = 0; i < buf_num; i++) {
         src_buf_length = ref_sge[i].length;
-
+        if (tmp_buf == NULL) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tmp_buf invalid\n", EID_ARGS(*eid), id);
+            goto FREE_CTX_BUF;
+        }
         dst_sge[i].addr = (uint64_t)(uintptr_t)tmp_buf->buf_data;
         dst_sge[i].len = src_buf_length;
         dst_sge[i].user_tseg = NULL;
@@ -1751,7 +1767,11 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
                 EID_ARGS(*eid), id);
             goto FREE_CTX_BUF;
         }
-
+        if (src_buf_length > tmp_buf->data_size) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, src_buf_length: %u invalid\n",
+                EID_ARGS(*eid), id, src_buf_length);
+            goto FREE_CTX_BUF;
+        }
         tmp_buf->data_size = src_buf_length;
         tmp_buf = QBUF_LIST_NEXT(tmp_buf);
         total_data_size += src_buf_length;
