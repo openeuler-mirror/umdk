@@ -977,24 +977,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     } else {
         value.msn = -1; /* valid msn < 2^24, so -1 indicates invalid */
     }
-    /* Handle Strong Order */
-    /* Sender needs to delay sending SO WRs until all previous WRs are acked
-       So we use send_wr_id to mark the order */
-    if (send_wr->flag.bs.place_order == URMA_STRONG_ORDER && v_conn->send_wnd.head != bjetty_ctx->send_wr_id) {
-        /* If we can't send SO WR now, we need to cache it until the previous WR is acked */
-        so_queue_data_t so_data = {
-            .send_wr = send_wr,
-            .send_wr_id = bjetty_ctx->send_wr_id,
-            .ex_value = value
-        };
-        if (bdp_v_conn_push_send_so(v_conn, &so_data) != 0) {
-            ret = URMA_FAIL;
-            goto FREE_SEND_WR;
-        }
-        increase_id_after_send(&bjetty_ctx->send_wr_id, &v_conn->msn, wr->opcode);
-        ret = URMA_SUCCESS;
-        goto EXIT;
-    }
     /* get_comp_urma_jetty_id will return a non-null value,
        because the previous post_send_check_valid has performed validation. */
     ret = send_and_store_jfs_wr(bjetty_ctx, get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id,
@@ -1784,7 +1766,7 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
  * @param total_cnt_limit: The maximum length of `cr_output`, is generally input by the user.
  * @param total_cnt(in/out): The length of the current cr queue, which will increase if an SO is dequeued.
  */
-static void handle_recv_so(bdp_v_conn_t *v_conn, urma_cr_t *cr_output, int so_cnt_limit, int total_cnt_limit,
+void handle_recv_so(bdp_v_conn_t *v_conn, urma_cr_t *cr_output, int so_cnt_limit, int total_cnt_limit,
     int *total_cnt)
 {
     if (v_conn == NULL) {
@@ -1897,48 +1879,7 @@ static urma_status_t update_device_valid_state(bondp_context_t *bdp_ctx, int dev
     }
     return URMA_SUCCESS;
 }
-/**
- * Poll pjfc in sequence until cr_cnt is exhausted or all pjfc have no CRs available for acquisition.
- * The traversal order will start from the `last_poll_idx` stored in `bdp_jfc->comp_ctx`,
- * which is the index of the last poll that resulted in a non-zero value (otherwise, it remains unchanged).
- * Each iteration starts from the next idx of the last obtainable CR from pjfc to prevent pjfc from starving.
- * @return: The total number of all CQEs obtained from all pjfcs,
- * where negative values represent errors and 0 indicates no CQEs were obtained.
- */
-static int bondp_poll_pjfc(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfc, int cr_cnt,
-    int cqe_cnt[], urma_cr_t (*bdp_cr_buf)[URMA_UBAGG_MAX_CR_CNT_PER_DEV])
-{
-    int total_cqe_cnt = 0;
-    int remaining_poll = cr_cnt;
-    uintptr_t last_poll_idx = (uintptr_t)bdp_jfc->comp_ctx;
-    /* Starting from the next idx of the last obtainable CR from pjfc, prevent pjfc from starving. */
-    for (int i = 1; i <= bdp_jfc->dev_num; ++i) {
-        int dev_id = (last_poll_idx + i) % bdp_jfc->dev_num;
-        if (remaining_poll <= 0) {
-            break;
-        }
-        if (bdp_jfc->p_jfc[dev_id] == NULL) {
-            continue;
-        }
-        int current_cr_cnt = remaining_poll > URMA_UBAGG_MAX_CR_CNT_PER_DEV ?
-            URMA_UBAGG_MAX_CR_CNT_PER_DEV : remaining_poll;
-        cqe_cnt[dev_id] = urma_poll_jfc(bdp_jfc->p_jfc[dev_id], current_cr_cnt, bdp_cr_buf[dev_id]);
-        if (cqe_cnt[dev_id] < 0) {
-            return cqe_cnt[dev_id];
-        }
-        if (cqe_cnt[dev_id] == 0) {
-            continue;
-        }
-        total_cqe_cnt += cqe_cnt[dev_id];
-        remaining_poll -= cqe_cnt[dev_id];
-        bdp_jfc->comp_ctx = (void *)(uintptr_t)dev_id;
-        urma_status_t ret = update_device_valid_state(bdp_ctx, dev_id, cqe_cnt[dev_id], bdp_cr_buf[dev_id]);
-        if (ret != 0) {
-            return -ret;
-        }
-    }
-    return total_cqe_cnt;
-}
+
 /**
  * Convert the local_id field of a CR from pjetty.id to vjetty.id if possible.
  * @return: If conversion is possible, perform the conversion and return 0; otherwise, do not replace and return -1.
@@ -1998,21 +1939,26 @@ static void restore_cr_remote_id_fallback(bondp_context_t *bdp_ctx, urma_cr_t *c
     cr->remote_id.id = 0;
 }
 
+typedef enum cr_convert_ret {
+    CONVERT_FAIL     = -1,
+    CONVERT_SUCCESS = 0,
+    CONVERT_SKIP = 1,
+} cr_convert_ret_t;
+
 /**
  * @param dev_idx: The index of pjfc used when polling jfc.
  * In fact, what we need is the index of pjetty relative to vjetty, but we cannot obtain it when calling this function.
  * Considering that the binding relationship between pjfc and pjetty keeps their indices consistent,
  * we use the index of pjfc as the index for pjetty.
  */
-static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr, urma_cr_t *cr_output_array,
-                                    int *total_cnt)
+static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     // Special handling is applied to the CRs constructed by the hardware of SUSPEND_DONE and FLUSH_ERROR_DONE.
     if (!is_cr_user_ctx_valid(cr)) {
         // find out the bjetty_ctx
-        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_idx, cr);
+        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, idx, cr);
         if (bjetty_ctx == NULL) {
-            return -1;
+            return CONVERT_FAIL;
         }
         uint8_t target_state_bit = 0;
         if (cr->status == URMA_CR_WR_SUSPEND_DONE) {
@@ -2022,9 +1968,9 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
         } else {
             URMA_LOG_ERR("Invalid cr error status: %d\n", cr->status);
             put_bjetty_ctx(bjetty_ctx);
-            return -1;
+            return CONVERT_FAIL;
         }
-        bjetty_ctx->pjettys_error_done[dev_idx] |= target_state_bit;
+        bjetty_ctx->pjettys_error_done[idx] |= target_state_bit;
         bool all_reported = true;
         // pjetty_idx
         for (int idx = 0; idx < URMA_UBAGG_DEV_MAX_NUM; idx++) {
@@ -2043,13 +1989,14 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
             if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
                 restore_cr_remote_id_fallback(bdp_ctx, cr);
             }
-            // report
-            cr_output_array[(*total_cnt)++] = *cr;
+            /* Caller should copy this CR to output array. */
+            put_bjetty_ctx(bjetty_ctx);
+            return CONVERT_SUCCESS;
         }
         put_bjetty_ctx(bjetty_ctx);
-        return 0;
+        return CONVERT_SKIP;
     }
-    if (restore_cr_local_id(bdp_ctx, dev_idx, cr) != 0) {
+    if (restore_cr_local_id(bdp_ctx, idx, cr) != 0) {
         cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
     }
     /* Perform remote_id restoration on both the sending and receiving ends.
@@ -2060,25 +2007,16 @@ static int bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int dev_idx, urma_
     if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
         restore_cr_remote_id_fallback(bdp_ctx, cr);
     }
-    /* When calling bondp_poll_pjfc,
-       it can be ensured that the total number of processed CRs is less than the `cr_cnt` parameter passed by the user.
-       Therefore, unless the user passes an array of incorrect size, there will be no array out-of-bounds issue. */
-    cr_output_array[(*total_cnt)++] = *cr;
-    return 0;
+    /* Caller should copy this CR to output array. */
+    return CONVERT_SUCCESS;
 }
 
-static inline bool is_cr_handler_ret_skip(bondp_cr_handler_ret_t ret)
-{
-    return ret == CR_HANDLER_SUCCESS_AND_SKIP || ret == CR_HANDLER_ERR_AND_SKIP;
-}
-
-static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int total_cqe_cnt, int cr_cnt_limit,
-                                      urma_cr_t *cr, urma_cr_t *cr_output_array, int *total_cnt)
+static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     /* Handle CR with status URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE */
     if (!is_cr_user_ctx_valid(cr)) {
         /* For these CRs where the user_ctx does not exist, simply restore the necessary values and then skip them. */
-        if (restore_cr_local_id(bdp_ctx, dev_idx, cr) != 0) {
+        if (restore_cr_local_id(bdp_ctx, idx, cr) != 0) {
             cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
         }
         /*
@@ -2090,12 +2028,12 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
         }
         /* recover completion len */
         recover_cr_completion_len(cr);
-        cr_output_array[(*total_cnt)++] = *cr;
-        return 0;
+        /* Caller should copy this CR to output array. */
+        return CONVERT_SUCCESS;
     }
-    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_idx, cr);
+    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, idx, cr);
     if (bjetty_ctx == NULL) {
-        return -1;
+        return CONVERT_FAIL;
     }
     uint32_t wr_id = 0;
     uint16_t _bjetty_id = 0;
@@ -2106,18 +2044,12 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
         /* handle recv */
         bdp_v_conn_t *v_conn = NULL;
         ret = handle_recv(bjetty_ctx, cr, pjetty_id, wr_id, &v_conn);
-        /* Since recv_so is cached in the queue, although it can ensure that total_cqe_cnt <= cr_cnt_limit,
-            this function will increase additional array space requirements.
-            The current implementation method results in a situation where,
-            when cr_cnt is not sufficiently large and the user still has an SO in the cache,
-            the user cannot retrieve the cached SO data when no messages are received from a certain Jetty.
-            This issue requires re-implementing the logic of handle_recv_so to resolve. */
-        handle_recv_so(v_conn, cr, cr_cnt_limit - total_cqe_cnt, cr_cnt_limit, total_cnt);
     } else {
         /* handle send */
         ret = handle_send(bjetty_ctx, cr, pjetty_id, wr_id);
     }
-    if (!is_cr_handler_ret_skip(ret)) {
+
+    if (ret != CR_HANDLER_SUCCESS_AND_SKIP && ret != CR_HANDLER_ERR_AND_SKIP) {
         /* restore cr local id with bjetty_ctx */
         /* non-null return value because bjetty_ctx->bdp_comp type is checked in `get_bjetty_ctx_by_cr` */
         cr->local_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id;
@@ -2130,52 +2062,71 @@ static int bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int dev_idx, int
         if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
             restore_cr_remote_id_fallback(bdp_ctx, cr);
         }
-        /* When calling bondp_poll_pjfc,
-        it can be ensured that the total number of processed CRs is less than the `cr_cnt` parameter passed by the user.
-        Therefore, unless the user passes an array of incorrect size, there will be no array out-of-bounds issue. */
-        cr_output_array[(*total_cnt)++] = *cr;
+        /* Caller should copy this CR to output array. */
+        put_bjetty_ctx(bjetty_ctx);
+        return CONVERT_SUCCESS;
     }
     put_bjetty_ctx(bjetty_ctx);
-    return ret == CR_HANDLER_ERR_AND_COPY || ret == CR_HANDLER_ERR_AND_SKIP ? -1 : 0;
+    return (ret == CR_HANDLER_ERR_AND_COPY || ret == CR_HANDLER_ERR_AND_SKIP) ? CONVERT_FAIL : CONVERT_SKIP;
 }
 
 int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
+    static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
+
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
     bondp_comp_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_comp_t, v_jfc);
 
-    if (!is_valid_bondp_comp(bdp_jfc)) {
-        return -EINVAL;
-    }
+    int cr_cnt_remaining = cr_cnt;
 
-    memset(g_bondp_cqe_cnt, 0, sizeof(g_bondp_cqe_cnt));
+    /* Start polling from the next device index to avoid starvation. */
+    uintptr_t start_idx = ((uintptr_t)bdp_jfc->comp_ctx + 1);
 
-    /* Get all CR from pjfc and check device status */
-    int total_cqe_cnt = bondp_poll_pjfc(bdp_ctx, bdp_jfc, cr_cnt, g_bondp_cqe_cnt, g_bondp_cr_buf);
-    if (total_cqe_cnt <= 0) {
-        return total_cqe_cnt;
-    }
-    /* Handle each CR */
-    int total_cnt = 0;
-    for (int dev_id = 0; dev_id < bdp_jfc->dev_num; ++dev_id) {
-        if (bdp_jfc->p_jfc[dev_id] == NULL) {
+    for (int i = 0; i < bdp_jfc->dev_num && cr_cnt_remaining > 0; i++) {
+        int idx = (int)((start_idx + i) % (uintptr_t)bdp_jfc->dev_num);
+
+        if (bdp_jfc->p_jfc[idx] == NULL) {
             continue;
         }
-        for (int cr_id = 0; cr_id < g_bondp_cqe_cnt[dev_id]; ++cr_id) {
-            int ret = 0;
+
+        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              : cr_cnt_remaining;
+        int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[idx], pcr_cnt_max, pcr_buf);
+        if (pcr_cnt < 0) {
+            return pcr_cnt;
+        }
+        if (pcr_cnt == 0) {
+            continue;
+        }
+
+        for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
+            urma_cr_t *pcr = &pcr_buf[cr_id];
+            cr_convert_ret_t conv_ret;
+
             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
-                ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &g_bondp_cr_buf[dev_id][cr_id],
-                    cr, &total_cnt);
+                conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
             } else {
-                ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_cqe_cnt, cr_cnt,
-                    &g_bondp_cr_buf[dev_id][cr_id], cr, &total_cnt);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, idx, pcr);
             }
-            if (ret < 0) {
-                return ret;
+            if (conv_ret == CONVERT_FAIL) {
+                return -1;
+            }
+            if (conv_ret == CONVERT_SUCCESS) {
+                cr[cr_cnt - cr_cnt_remaining] = *pcr;
+                cr_cnt_remaining--;
             }
         }
+
+        bdp_jfc->comp_ctx = (void *)(uintptr_t)idx;
+        /* update device state based on the PCRs we consumed */
+        urma_status_t uret = update_device_valid_state(bdp_ctx, idx, pcr_cnt, pcr_buf);
+        if (uret != 0) {
+            return -uret;
+        }
     }
-    return total_cnt;
+
+    return cr_cnt - cr_cnt_remaining;
 }
 
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
@@ -2215,70 +2166,51 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     }
 }
 
-static int bondp_flush_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty, int cr_cnt,
-    int flush_cnt[], urma_cr_t (*bdp_cr_buf)[URMA_UBAGG_MAX_CR_CNT_PER_DEV])
+int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
 {
-    int total_flush_cnt = 0;
-    int remaining_flush = cr_cnt;
+    static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
 
-    for (int i = 0; i <= bdp_jetty->dev_num; ++i) {
-        if (remaining_flush <= 0) {
-            break;
-        }
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jetty->urma_ctx, bondp_context_t, v_ctx);
+    bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
+
+    int cr_cnt_remaining = cr_cnt;
+
+    for (int i = 0; i < bdp_jetty->dev_num && cr_cnt_remaining > 0; i++) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
-        int current_cr_cnt = remaining_flush > URMA_UBAGG_MAX_CR_CNT_PER_DEV ?
-            URMA_UBAGG_MAX_CR_CNT_PER_DEV : remaining_flush;
-        flush_cnt[i] = urma_flush_jetty(bdp_jetty->p_jetty[i], current_cr_cnt, bdp_cr_buf[i]);
-        if (flush_cnt[i] < 0) {
-            URMA_LOG_ERR("Failed to flush pjetty[%d]: %d\n", i, flush_cnt[i]);
-            return flush_cnt[i];
+
+        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              : cr_cnt_remaining;
+        int pcr_cnt = urma_flush_jetty(bdp_jetty->p_jetty[i], pcr_cnt_max, pcr_buf);
+
+        if (pcr_cnt < 0) {
+            URMA_LOG_ERR("Failed to flush pjetty[%d]: %d\n", i, pcr_cnt);
+            return pcr_cnt;
         }
-        if (flush_cnt[i] == 0) {
+        if (pcr_cnt == 0) {
             continue;
         }
-        total_flush_cnt += flush_cnt[i];
-        remaining_flush -= flush_cnt[i];
-    }
-    return total_flush_cnt;
-}
 
-int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr_output_array)
-{
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jetty->urma_ctx, bondp_context_t, v_ctx);
-    bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
-    urma_cr_t bdp_cr_buf[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
-    int flush_cnt[URMA_UBAGG_DEV_MAX_NUM] = {0};
+        for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
+            urma_cr_t *pcr = &pcr_buf[cr_id];
+            cr_convert_ret_t conv_ret;
 
-    if (!is_valid_bondp_comp(bdp_jetty)) {
-        return -EINVAL;
-    }
-
-    /* Get all CR from pjetty and check device status */
-    int total_flush_cnt = bondp_flush_pjetty(bdp_ctx, bdp_jetty, cr_cnt, flush_cnt, bdp_cr_buf);
-    if (total_flush_cnt <= 0) {
-        return total_flush_cnt;
-    }
-    /* Handle each CR */
-    int total_cnt = 0;
-    for (int dev_id = 0; dev_id < bdp_jetty->dev_num; ++dev_id) {
-        if (bdp_jetty->p_jetty[dev_id] == NULL) {
-            continue;
-        }
-        for (int cr_id = 0; cr_id < flush_cnt[dev_id]; ++cr_id) {
-            int ret = 0;
             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
-                ret = bondp_handle_cr_no_store(bdp_ctx, dev_id, &bdp_cr_buf[dev_id][cr_id],
-                    cr_output_array, &total_cnt);
+                conv_ret = bondp_handle_cr_no_store(bdp_ctx, i, pcr);
             } else {
-                ret = bondp_handle_cr_with_store(bdp_ctx, dev_id, total_flush_cnt, cr_cnt,
-                    &bdp_cr_buf[dev_id][cr_id], cr_output_array, &total_cnt);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, i, pcr);
             }
-            if (ret < 0) {
-                return total_cnt;
+            if (conv_ret == CONVERT_FAIL) {
+                return -1;
+            }
+            if (conv_ret == CONVERT_SUCCESS) {
+                cr[cr_cnt - cr_cnt_remaining] = *pcr;
+                cr_cnt_remaining--;
             }
         }
     }
-    return total_cnt;
+
+    return cr_cnt - cr_cnt_remaining;
 }
