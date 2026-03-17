@@ -341,8 +341,11 @@ static void urma_read_sysfs_dev_attrs(urma_sysfs_dev_t *sysfs_dev)
     urma_parse_string(sysfs_dev->sysfs_path, "driver_name", sysfs_dev->driver_name, URMA_MAX_NAME);
 
     sysfs_dev->transport_type = (urma_transport_type_t)urma_parse_value_u32(sysfs_dev->sysfs_path, "transport_type");
-    sysfs_dev->vendor_id = urma_parse_value_u16(sysfs_dev->sysfs_path, "device/vendor");
-    sysfs_dev->device_id = urma_parse_value_u16(sysfs_dev->sysfs_path, "device/device");
+    /* bongding device does not have vendor and device char device file */
+    sysfs_dev->vendor_id = (urma_is_bonding_dev(sysfs_dev->dev_name)) ? 0 :
+        urma_parse_value_u16(sysfs_dev->sysfs_path, "device/vendor");
+    sysfs_dev->device_id = (urma_is_bonding_dev(sysfs_dev->dev_name)) ? 0 :
+        urma_parse_value_u16(sysfs_dev->sysfs_path, "device/device");
 
     if (urma_query_device_attr(sysfs_dev) == 0) {
         return;
