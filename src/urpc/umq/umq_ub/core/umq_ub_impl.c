@@ -1946,34 +1946,6 @@ void umq_ub_dev_info_list_free_impl(umq_trans_mode_t umq_trans_mode, umq_dev_inf
     }
 }
 
-static umq_tp_mode_t umq_tp_mode_convert(urma_transport_mode_t tp_mode)
-{
-    switch (tp_mode) {
-        case URMA_TM_RC:
-            return UMQ_TM_RC;
-        case URMA_TM_RM:
-            return UMQ_TM_RM;
-        case URMA_TM_UM:
-            return UMQ_TM_UM;
-        default:
-            return UMQ_TM_RC;
-    };
-}
-
-static umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type)
-{
-    switch (tp_type) {
-        case URMA_RTP:
-            return UMQ_TP_TYPE_RTP;
-        case URMA_CTP:
-            return UMQ_TP_TYPE_CTP;
-        case URMA_UTP:
-            return UMQ_TP_TYPE_UTP;
-        default:
-            return UMQ_TP_TYPE_RTP;
-    };
-}
-
 int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
 {
     if (cfg == NULL) {
