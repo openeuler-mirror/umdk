@@ -27,15 +27,16 @@ namespace dlock {
 static const uint32_t JETTY_MGR_WAIT_FLUSH_ERR_DONE_TIMEOUT = 60000000; // us
 static const uint32_t JETTY_MGR_SLEEP_INTERVAL = 1000; // us
 
-void jetty_mgr::jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const
+void jetty_mgr::jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_device_attr_t &dev_attr,
+    urma_transport_mode_t tp_mode, uint32_t order_type, uint8_t priority) const
 {
     jfs_cfg.flag.bs.order_type = order_type;
     jfs_cfg.flag.bs.multi_path = 0;
     jfs_cfg.trans_mode = tp_mode;
-    jfs_cfg.priority = URMA_MAX_PRIORITY;
-    jfs_cfg.max_sge = static_cast<uint8_t>(m_urma_ctx->m_dev_attr.dev_cap.max_jfs_sge);
-    jfs_cfg.max_rsge = static_cast<uint8_t>(m_urma_ctx->m_dev_attr.dev_cap.max_jfs_rsge);
-    jfs_cfg.max_inline_data = m_urma_ctx->m_dev_attr.dev_cap.max_jfs_inline_len;
+    jfs_cfg.priority = priority;
+    jfs_cfg.max_sge = static_cast<uint8_t>(dev_attr.dev_cap.max_jfs_sge);
+    jfs_cfg.max_rsge = static_cast<uint8_t>(dev_attr.dev_cap.max_jfs_rsge);
+    jfs_cfg.max_inline_data = dev_attr.dev_cap.max_jfs_inline_len;
     jfs_cfg.rnr_retry = URMA_TYPICAL_RNR_RETRY;
     jfs_cfg.err_timeout = URMA_TYPICAL_ERR_TIMEOUT;
     jfs_cfg.jfc = m_jfc;
@@ -46,13 +47,14 @@ void jetty_mgr::jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_transport_mode_t tp_m
     }
 }
 
-void jetty_mgr::jfr_cfg_init(urma_jfr_cfg_t &jfr_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const
+void jetty_mgr::jfr_cfg_init(urma_jfr_cfg_t &jfr_cfg, urma_device_attr_t &dev_attr,
+    urma_transport_mode_t tp_mode, uint32_t order_type) const
 {
     jfr_cfg.flag.bs.token_policy = get_token_policy();
     jfr_cfg.flag.bs.tag_matching = URMA_NO_TAG_MATCHING;
     jfr_cfg.flag.bs.order_type = order_type;
     jfr_cfg.trans_mode = tp_mode;
-    jfr_cfg.max_sge = static_cast<uint8_t>(m_urma_ctx->m_dev_attr.dev_cap.max_jfr_sge);
+    jfr_cfg.max_sge = static_cast<uint8_t>(dev_attr.dev_cap.max_jfr_sge);
     jfr_cfg.min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER;
     jfr_cfg.jfc = m_jfc;
     jfr_cfg.token_value = m_jfr_token;
@@ -673,5 +675,36 @@ void jetty_mgr::wait_flush_err_done(void)
 
         static_cast<void>(usleep(JETTY_MGR_SLEEP_INTERVAL));
     }
+}
+
+int jetty_mgr::get_jetty_priority_for_ctp(urma_device_attr_t &dev_attr) const
+{
+    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
+        if (dev_attr.dev_cap.priority_info[i].tp_type.bs.ctp != 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+int jetty_mgr::get_jetty_priority_for_rtp(urma_device_attr_t &dev_attr) const
+{
+    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
+        if (dev_attr.dev_cap.priority_info[i].tp_type.bs.rtp != 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+int jetty_mgr::get_jetty_priority_by_tp_type(urma_device_attr_t &dev_attr, urma_tp_type_t tp_type) const
+{
+    if (tp_type == URMA_CTP) {
+        return get_jetty_priority_for_ctp(dev_attr);
+    }
+
+    return get_jetty_priority_for_rtp(dev_attr);
 }
 };
