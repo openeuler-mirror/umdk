@@ -128,7 +128,8 @@ dlock_status_t urma_ctx::check_urma_device_state(char *dev_name)
         return DLOCK_FAIL;
     }
 
-    if (urma_query_device(urma_dev, &m_dev_attr) == URMA_SUCCESS) {
+    urma_device_attr_t dev_attr;
+    if (urma_query_device(urma_dev, &dev_attr) == URMA_SUCCESS) {
         /* The port_cnt value of the ub bonding device is 0 now, and the eid index is not related to the port index.
          * dlock cannot obtain the association between eid and port.
          * Therefore, we do not check whether the device port state is active.
@@ -148,8 +149,8 @@ dlock_status_t urma_ctx::check_urma_device_state(char *dev_name)
             return DLOCK_SUCCESS;
         }
 
-        for (port_idx = 0; port_idx < m_dev_attr.port_cnt; port_idx++) {
-            if (m_dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
+        for (port_idx = 0; port_idx < dev_attr.port_cnt; port_idx++) {
+            if (dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
                 m_dev_name = dev_name;
                 m_eid_index = eid_index;
                 return DLOCK_SUCCESS;
@@ -185,7 +186,8 @@ dlock_status_t urma_ctx::check_urma_device_state_by_eid(const dlock_eid_t eid)
         return DLOCK_FAIL;
     }
 
-    if (urma_query_device(urma_dev, &m_dev_attr) == URMA_SUCCESS) {
+    urma_device_attr_t dev_attr;
+    if (urma_query_device(urma_dev, &dev_attr) == URMA_SUCCESS) {
         /* The port_cnt value of the ub bonding device is 0 now, and the eid index is not related to the port index.
          * dlock cannot obtain the association between eid and port.
          * Therefore, we do not check whether the device port state is active.
@@ -204,8 +206,8 @@ dlock_status_t urma_ctx::check_urma_device_state_by_eid(const dlock_eid_t eid)
             m_eid_index = eid_index;
             return DLOCK_SUCCESS;
         }
-        for (port_idx = 0; port_idx < m_dev_attr.port_cnt; port_idx++) {
-            if (m_dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
+        for (port_idx = 0; port_idx < dev_attr.port_cnt; port_idx++) {
+            if (dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
                 m_dev_name = urma_dev->name;
                 m_eid_index = eid_index;
                 return DLOCK_SUCCESS;
