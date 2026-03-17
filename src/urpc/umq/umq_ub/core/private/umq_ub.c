@@ -38,6 +38,34 @@ static inline bool umq_ub_bind_feature_check(uint32_t local_feature, uint32_t re
     return ((local_feature ^ remote_feature) & (~umq_ub_bind_fature_allowlist_get())) == 0;
 }
 
+umq_tp_mode_t umq_tp_mode_convert(urma_transport_mode_t tp_mode)
+{
+    switch (tp_mode) {
+        case URMA_TM_RC:
+            return UMQ_TM_RC;
+        case URMA_TM_RM:
+            return UMQ_TM_RM;
+        case URMA_TM_UM:
+            return UMQ_TM_UM;
+        default:
+            return UMQ_TM_RC;
+    };
+}
+
+umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type)
+{
+    switch (tp_type) {
+        case URMA_RTP:
+            return UMQ_TP_TYPE_RTP;
+        case URMA_CTP:
+            return UMQ_TP_TYPE_CTP;
+        case URMA_UTP:
+            return UMQ_TP_TYPE_UTP;
+        default:
+            return UMQ_TP_TYPE_RTP;
+    };
+}
+
 int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
@@ -85,13 +113,13 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 
     if (queue->tp_mode != queue_info->tp_mode) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_mode misatch, local is %u but remote %u\n",
-            EID_ARGS(*eid), id, queue->tp_mode, queue_info->tp_mode);
+            EID_ARGS(*eid), id, umq_tp_mode_convert(queue->tp_mode), umq_tp_mode_convert(queue_info->tp_mode));
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->tp_type != queue_info->tp_type) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_type misatch, local is %u but remote %u\n",
-            EID_ARGS(*eid), id, queue->tp_type, queue_info->tp_type);
+            EID_ARGS(*eid), id, umq_tp_type_convert(queue->tp_type), umq_tp_type_convert(queue_info->tp_type));
         return -UMQ_ERR_EINVAL;
     }
 
@@ -333,6 +361,9 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
             EID_ARGS(queue->jetty[i]->jetty_id.eid), queue->jetty[i]->jetty_id.id,
             EID_ARGS(rjetty.jetty_id.eid), rjetty.jetty_id.id, i, errno);
         return NULL;
+    }
+    if (queue->tp_mode != URMA_TM_RC) {
+        return tjetty;
     }
 
     urma_status_t status = urma_bind_jetty(queue->jetty[i], tjetty);
@@ -1004,8 +1035,8 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     }
 
     if (option->create_flag & UMQ_CREATE_FLAG_TP_MODE) {
-        if (option->tp_mode != UMQ_TM_RC) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "tp_mode[%u] is invalid\n", option->tp_mode);
+        if (option->tp_mode > UMQ_TM_RM) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tp_mode[%d] is invalid\n", option->tp_mode);
             return -UMQ_ERR_EINVAL;
         }
         queue->tp_mode = umq_tp_mode_convert_to_urma(option->tp_mode);
@@ -1015,7 +1046,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
 
     if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
         if (option->tp_type != UMQ_TP_TYPE_RTP) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "tp_type[%u] is invalid\n", option->tp_type);
+            UMQ_VLOG_ERR(VLOG_UMQ, "tp_type[%d] is invalid\n", option->tp_type);
             return -UMQ_ERR_EINVAL;
         }
         queue->tp_type = umq_tp_type_convert_to_urma(option->tp_type);
