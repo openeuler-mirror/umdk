@@ -215,10 +215,10 @@ def test_base_test(mode):
     init_attrs.ip_port = ipPort
 
     shm_ret = 0
-    shm_ret = shm.shmem_init(init_attrs)
+    shm_ret = shm.aclshmem_init(init_attrs)
     if shm_ret != 0:
         raise ValueError('[ERROR] shmem_init failed')
-    shmem_ptr = shm.shmem_malloc(localMemSize)
+    shmem_ptr = shm.aclshmem_malloc(localMemSize)
     out = mod(
         expandX=expandXTensor,
         expertIds=expertIdsTensor,
@@ -234,8 +234,8 @@ def test_base_test(mode):
 
     torch.npu.synchronize()
 
-    shm_ret = shm.shmem_free(shmem_ptr)
-    shm_ret = shm.shmem_finialize()
+    shm_ret = shm.aclshmem_free(shmem_ptr)
+    shm_ret = shm.aclshmem_finialize()
 
     out_cpu = out.cpu()
     if sharedExpertRankNum > 0:
