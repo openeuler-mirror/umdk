@@ -1750,8 +1750,9 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
     uint32_t src_buf_length = 0;
     for (uint32_t i = 0; i < buf_num; i++) {
         src_buf_length = ref_sge[i].length;
-        if (tmp_buf == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tmp_buf invalid\n", EID_ARGS(*eid), id);
+        if (tmp_buf == NULL || ref_sge[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tmp_buf or mempool id: %u invalid\n",
+                EID_ARGS(*eid), id, ref_sge[i].mempool_id);
             goto FREE_CTX_BUF;
         }
         dst_sge[i].addr = (uint64_t)(uintptr_t)tmp_buf->buf_data;
@@ -1849,8 +1850,12 @@ static int process_write_imm(umq_buf_t *rx_buf, umq_ub_imm_t imm, uint64_t umqh)
         buf_pro->imm_data = imm.value;
     } else if (imm.bs.type == IMM_TYPE_MEM && imm.mem_import.sub_type == IMM_TYPE_MEM_IMPORT_DONE) {
         ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-        queue->dev_ctx->remote_imported_info->
-            tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
+        if (imm.mem_import.mempool_id >= UMQ_MAX_TSEG_NUM) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub mempool_id: %u invalid\n", imm.mem_import.mempool_id);
+        } else {
+            queue->dev_ctx->remote_imported_info->
+                tesg_imported[queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
+        }
         ret = UMQ_CONTINUE_FLAG;
         umq_buf_free(rx_buf);
     } else if (imm.bs.type == IMM_TYPE_NOTIFY) {

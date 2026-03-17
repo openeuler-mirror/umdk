@@ -22,6 +22,15 @@
 #define UMQ_UB_DEFAULT_MAX_CREDITS_REQUEST 512
 #define UMQ_UB_MIN_CREDITS_PER_REQUEST 2
 
+static ALWAYS_INLINE uint64_t umq_ub_rx_consumed_load(bool lock_free, volatile uint64_t *var)
+{
+    if (lock_free) {
+        return *var;
+    } else {
+        return __atomic_load_n(var, __ATOMIC_RELAXED);
+    }
+}
+
 static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uint16_t count, ub_credit_stat_u16_t type)
 {
     volatile uint16_t *counter = &pool->stats_u16[type];
@@ -918,6 +927,26 @@ void umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm
     ub_flow_control_t *fc = &queue->flow_control;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t return_credit = imm->flow_control.window;
+    uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
+        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id]);
+    uint64_t allocated_credit = fc->ops.local_rx_allocated_load(fc);
+    if (allocated_credit < consumed_credit) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, "
+            "allocated_credit less than consumed credit\n",
+            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
+            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id);
+        umq_ub_shared_credit_return_ack(queue, 0);
+        return;
+    }
+    uint64_t unconsumed = allocated_credit - consumed_credit;
+    if (return_credit > unconsumed) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, "
+            "return credit: %u > unconsumed credit: %u\n",
+            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
+            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, return_credit, (uint32_t)unconsumed);
+        return_credit = unconsumed;
+    }
+
     credit->ops.available_credit_return(credit, return_credit);
     (void)fc->ops.local_rx_allocated_dec(fc, return_credit);
     umq_ub_shared_credit_return_ack(queue, return_credit);
@@ -934,15 +963,6 @@ void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t cou
         *var = *var + count;
     } else {
         (void)__atomic_fetch_add(var, count, __ATOMIC_RELAXED);
-    }
-}
-
-static ALWAYS_INLINE uint64_t umq_ub_rx_consumed_load(bool lock_free, volatile uint64_t *var)
-{
-    if (lock_free) {
-        return *var;
-    } else {
-        return __atomic_load_n(var, __ATOMIC_RELAXED);
     }
 }
 
