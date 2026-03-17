@@ -208,7 +208,9 @@ static bondp_ret_t import_pseg_for_port_eid(bondp_context_t *bdp_ctx, bondp_seg_
             int target_port = IODIE_NUM + PORT_NUM * i + bondp_seg_cfg->udata_out->ports[i][j];
 
             if (local_port >= bdp_ctx->dev_num ||
-                bdp_ctx->p_ctxs[local_port] == NULL) {
+                bdp_ctx->p_ctxs[local_port] == NULL ||
+                bondp_seg_cfg->udata_out->ports[i][j] < 0 ||
+                bondp_seg_cfg->udata_out->ports[i][j] >= PORT_NUM) {
                 URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
                 continue;
             }
