@@ -287,10 +287,9 @@ void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
     * released in batch. */
     umq_buf_t *cur_node = NULL;
     umq_buf_t *next_node = NULL;
-    umq_buf_t *last_node = NULL;
-    umq_buf_t *free_node = qbuf; // head of the list to be released
     umq_buf_list_t free_head;
-    QBUF_LIST_FIRST(&free_head) = free_node;
+    umq_buf_t *last_node = qbuf;
+    umq_buf_t *free_node = qbuf; // head of the list to be released
     bool is_huge = qbuf->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID; // Specify the list to be released currently
                                                                     // belongs to large or general pool.
     QBUF_LIST_FIRST(&head) = QBUF_LIST_NEXT(qbuf);
@@ -304,15 +303,19 @@ void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
             continue;
         }
 
+        // free qbuf list in the same pool
         QBUF_LIST_NEXT(last_node) = NULL;
         QBUF_LIST_FIRST(&free_head) = free_node;
-        free_node = cur_node;
-        is_huge = cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID;
         if (free_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
             umq_huge_qbuf_free(&free_head);
         } else {
             umq_qbuf_free(&free_head);
         }
+
+        // update variables
+        free_node = cur_node;
+        last_node = cur_node;
+        is_huge = cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID;
     }
 
     QBUF_LIST_FIRST(&free_head) = free_node;
