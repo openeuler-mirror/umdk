@@ -14,25 +14,25 @@
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
 #include "moe_combine_shmem_tiling.h"
-#include "shmem_api.h"
+#include "shmem.h"
 
 using namespace AscendC;
 using namespace Moe;
 #define SHMEM_PUT_BY_DTYPE(dtype, ...)                            \
     do {                                                          \
         if constexpr (std::is_same_v<dtype, half>) {              \
-            shmem_put_half_mem_nbi(__VA_ARGS__);                  \
+            aclshmem_half_put_nbi(__VA_ARGS__);                  \
         } else if constexpr (std::is_same_v<dtype, bfloat16_t>) { \
-            shmem_put_bfloat16_mem_nbi(__VA_ARGS__);              \
+            aclshmem_bfloat16_put_nbi(__VA_ARGS__);              \
         }                                                         \
     } while (0)
 
 #define SHMEM_GET_BY_DTYPE(dtype, ...)                            \
     do {                                                          \
         if constexpr (std::is_same_v<dtype, half>) {              \
-            shmem_get_half_mem_nbi(__VA_ARGS__);                  \
+            aclshmem_half_get_nbi(__VA_ARGS__);                  \
         } else if constexpr (std::is_same_v<dtype, bfloat16_t>) { \
-            shmem_get_bfloat16_mem_nbi(__VA_ARGS__);              \
+            aclshmem_bfloat16_get_nbi(__VA_ARGS__);              \
         }                                                         \
     } while (0)
 
@@ -697,7 +697,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetStatus()
         OOMCheckAddrRange<int32_t>((__gm__ int32_t *)(GetWinStateAddrByRankId(epIdx, EP_DOMAIN)), STATE_SIZE);
 #endif
         rankStates_.SetGlobalBuffer((__gm__ int32_t *)stateGM_);
-        shmem_put_int32_mem_nbi(rankStates_, statusFlagUb, 8, epIdx);
+        aclshmem_int32_put_nbi(rankStates_, statusFlagUb, 8, epIdx);
     }
 }
 
