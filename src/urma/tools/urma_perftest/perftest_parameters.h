@@ -106,7 +106,7 @@
 #define PERFTEST_CHAR_MAX_VALUE (256)
 
 #define PERFTEST_RESULT_LINE "---------------------------------------------------------------------------------------\n"
-
+#define PERFTEST_INVALID_PRIORITY  (255)
 
 typedef enum perftest_api_type {
     PERFTEST_READ,
