@@ -94,7 +94,12 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
             cfg->element_size, cfg->element_num_per_block, cfg->block_num);
         return -EINVAL;
     }
-
+    uint64_t block_size = sizeof(urpc_pool_block_t) + cfg->element_num_per_block * cfg->element_size;
+    if (URPC_UNLIKELY(block_size > UINT32_MAX)) {
+        UTIL_LOG_ERR("block_size is greater than UINT32_MAX, block_size element_size %u, element_num_per_block %u\n",
+            cfg->element_size, cfg->element_num_per_block);
+        return -EINVAL;
+    }
     int ret = urpc_pool_id_get(&id);
     if (URPC_UNLIKELY(ret != 0)) {
         UTIL_LOG_ERR("malloc urpc pool id failed, status: %d\n", ret);
@@ -111,7 +116,8 @@ int urpc_pool_init(urpc_pool_config_t *cfg, urpc_pool_t *pool)
     pool->global_group->num = 0;
 
     pool->cfg = *cfg;
-    pool->block_size = (uint32_t)sizeof(urpc_pool_block_t) + cfg->element_num_per_block * cfg->element_size;
+    pool->block_size = (uint32_t)block_size;
+
     pool->container_size = (uint32_t)sizeof(urpc_pool_block_t) + cfg->element_num_per_block * (uint32_t)sizeof(void *);
     pthread_mutex_init(&pool->lock, NULL);
     urpc_list_init(&pool->global_free);
