@@ -1046,7 +1046,7 @@ static int add_remote_jetty_id_info(bondp_context_t *bdp_ctx, bondp_target_jetty
     return 0;
 }
 
-urma_target_jetty_t * bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value)
+urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
 

@@ -21,8 +21,8 @@
 #include "urma_types.h"
 #include "urma_types_str.h"
 #include "perftest_communication.h"
-#include "perftest_parameters.h"
 #include "urma_api.h"
+#include "perftest_parameters.h"
 
 #define PERFTEST_CACHE_LINE_FILE_SIZE (10)
 #define PERFTEST_JFC_MUL_THRESHOLD (4)
@@ -950,7 +950,7 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
     return (cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr)) >= (cfg->jettys * cfg->jfr_post_list);
 }
 
-int get_jetty_priority_by_tp_type(char *name, union urma_tp_type_en tp_type)
+static int get_jetty_priority_by_tp_type(char *name, union urma_tp_type_en tp_type)
 {
     int pri = 0;
     urma_device_t *urma_dev;
