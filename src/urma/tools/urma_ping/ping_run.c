@@ -64,7 +64,7 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid)
     bool find_entity_id = false;
     uint32_t target_entity_id;
     int target_node_id;
-    
+
     for (int i = 0; i < (int)topo_map.node_num; i++) {
         for (int j = 0; j < DEV_NUM; j++) {
             for (int k = 0; k < IODIE_NUM; k++) {
@@ -598,7 +598,7 @@ int start_ping(ping_cfg_t *cfg)
     LOG_VERBOSE("Timeout(s)  : %u\n", cfg->timeout);
 
     init_stat();
-    signal(SIGINT, signal_handler);
+    (void)signal(SIGINT, signal_handler);
 
     double ping_start_time = get_time_in_ms();
 

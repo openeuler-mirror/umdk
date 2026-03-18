@@ -424,7 +424,6 @@ urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg)
     bondp_import_tseg_t *bdp_tseg = CONTAINER_OF_FIELD(target_seg, bondp_import_tseg_t, v_tseg);
     urma_status_t ret = URMA_SUCCESS;
 
-
     if (bondp_unimport_pseg(bdp_tseg) != URMA_SUCCESS) {
         ret = URMA_FAIL;
     }
