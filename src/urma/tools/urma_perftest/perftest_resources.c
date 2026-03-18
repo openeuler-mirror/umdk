@@ -132,6 +132,20 @@ static int check_dev_cap(perftest_context_t *ctx, perftest_config_t *cfg)
     return 0;
 }
 
+static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urma_tp_type_en tp_type)
+{
+    int pri = -1;
+
+    for (int i = 0; i <= URMA_MAX_PRIORITY; i++) {
+        if (tp_type.value == dev_attr->dev_cap.priority_info[i].tp_type.value) {
+            pri = i;
+            return pri;
+        }
+    }
+    fprintf(stderr, "Failed to get sl resources");
+    return -1;
+}
+
 static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_status_t status;
@@ -168,6 +182,24 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     if (urma_query_device(urma_dev, &ctx->dev_attr) != URMA_SUCCESS) {
         (void)fprintf(stderr, "Failed to query device, name: %s.\n", cfg->dev_name);
         goto uninit;
+    }
+
+    union urma_tp_type_en tp_type = {0};
+    if (cfg->priority == PERFTEST_INVALID_PRIORITY) {
+        if (cfg->use_ctp) {
+            tp_type.bs.ctp = 1;
+            cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
+        } else {
+            tp_type.bs.rtp = 1;
+            cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
+        }
+        if (cfg->priority > URMA_MAX_PRIORITY) {
+            (void)fprintf(stderr, "The priority parameter %hhu is invalid; it should be 0-15.\n",
+                cfg->priority);
+        } else {
+            (void)fprintf(stderr, "Warning: %s should set priority to %hhu.\n",
+                (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
+        }
     }
 
     if (cfg->enable_user_tp == true &&

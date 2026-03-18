@@ -2148,6 +2148,8 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         return -EINVAL;
     }
 
+    memset(g_bondp_cqe_cnt, 0, sizeof(g_bondp_cqe_cnt));
+
     /* Get all CR from pjfc and check device status */
     int total_cqe_cnt = bondp_poll_pjfc(bdp_ctx, bdp_jfc, cr_cnt, g_bondp_cqe_cnt, g_bondp_cr_buf);
     if (total_cqe_cnt <= 0) {
