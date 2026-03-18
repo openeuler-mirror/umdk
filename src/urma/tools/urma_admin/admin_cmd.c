@@ -78,6 +78,8 @@ static int usage(admin_config_t *cfg)
            "\n"
            "Legacy Options (deprecated):\n"
            "  -d, --dev <dev_name>                        the name of UB device.\n"
+           "  -b, --brief                                 in show command, only show bonding devices if any.\n"
+           "  -a, --all                                   in show command, show all devices.\n"
            "  -e, --eid <eid>                             the eid of UB device.\n"
            "  -m, --eid_mode <eid_mode>                   the eid mode of UB device,/\n"
            "                                              (change to dynamic_mode: cmd with -m,\n"
@@ -119,6 +121,8 @@ static int usage(admin_config_t *cfg)
 static int parse_args(admin_config_t *cfg)
 {
     static const struct option long_options[] = {
+        {"brief", no_argument, NULL, 'b'},
+        {"all", no_argument, NULL, 'a'},
         {"dev", required_argument, NULL, 'd'},
         {"eid", required_argument, NULL, 'e'},
         {"eid_mode", no_argument, NULL, 'm'},
@@ -139,8 +143,14 @@ static int parse_args(admin_config_t *cfg)
     };
 
     int opt, ret = 0;
-    while ((opt = getopt_long(cfg->argc, cfg->argv, "C:d:e:mv:i:wR:k:K:n:M:p:s:hV", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(cfg->argc, cfg->argv, "abC:d:e:mv:i:wR:k:K:n:M:p:s:hV", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'a':
+                cfg->brief_info = false;
+                break;
+            case 'b':
+                cfg->brief_info = true;
+                break;
             case 'C':
                 ret = admin_str_to_u32(optarg, &cfg->key.key_cnt);
                 break;
