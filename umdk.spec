@@ -10,9 +10,6 @@
 # add --with test option, i.e. disable test by default
 %bcond_with test
 
-# add --with ubagg_disable option, i.e. enable ubagg by default
-%bcond_with ubagg_disable
-
 # add --with release_enable option, i.e. disable release by default
 %bcond_with release_enable
 
@@ -261,9 +258,6 @@ tools of ums, contains ums_run
 %if %{defined kernel_version}
     -DKERNEL_RELEASE=%{kernel_version} \
     -DKERNEL_PATH=%{kernel_build_path} \
-%endif
-%if %{without ubagg_disable}
-    -DUB_AGG="enable" \
 %endif
 %if %{with dfx_tool}
     -DDFX_TOOL="enable" \

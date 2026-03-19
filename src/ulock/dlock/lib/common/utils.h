@@ -88,7 +88,6 @@ inline bool check_msg_body_len_invalid(struct dlock_control_hdr *msg_hdr, uint16
     return ((msg_hdr->total_len - msg_hdr->hdr_len) != expected_msg_body_len);
 }
 
-#ifdef UB_AGG
 inline bool check_if_ub_bonding_dev(const urma_device_t *urma_dev)
 {
     /* If the device name contains "bonding", it is a ub bonding device.
@@ -97,7 +96,6 @@ inline bool check_if_ub_bonding_dev(const urma_device_t *urma_dev)
     return ((strstr(urma_dev->name, "bonding") != NULL) &&
         (urma_dev->type == URMA_TRANSPORT_UB));
 }
-#endif /* UB_AGG */
 
 };
 #endif
