@@ -98,7 +98,7 @@ jetty_mgr::jetty_mgr(urma_ctx *p_urma_ctx, dlock_server *p_server) noexcept
     : m_cr_data(0), m_gid_idx(GID_INDEX), m_urma_ctx(p_urma_ctx), m_jfc(nullptr),
     m_tp_mode(SEPERATE_CONN), m_is_exe(false), m_dlock_cipher(nullptr), m_p_rx_buf(nullptr),
     m_missing_rx_buf_num(0), m_ci(0), m_dst_tseg(nullptr), m_state(JETTY_MGR_ACTIVE), m_next_message_id(0),
-    m_local_id(0), m_modify_jetty2err(false), m_flush_err_done(false), m_p_server(p_server)
+    m_local_id(0), m_modify_jetty2err{false}, m_flush_err_done{false}, m_p_server(p_server)
 {
     m_jfr_token.token = 0;
 }
@@ -647,7 +647,7 @@ dlock_status_t jetty_mgr::post_cas_and_get_res(uint64_t wr_id, uint32_t offset,
 
 void jetty_mgr::wait_flush_err_done(void)
 {
-    if ((m_p_server == nullptr) || m_flush_err_done || (!m_urma_ctx->is_m_jfc_polling())) {
+    if ((m_p_server == nullptr) || m_flush_err_done.load() || (!m_urma_ctx->is_m_jfc_polling())) {
         return;
     }
 
@@ -665,7 +665,7 @@ void jetty_mgr::wait_flush_err_done(void)
     std::chrono::microseconds interval;
     std::chrono::steady_clock::time_point tp_start = std::chrono::steady_clock::now();
 
-    while ((!m_flush_err_done) && m_urma_ctx->is_m_jfc_polling()) {
+    while ((!m_flush_err_done.load()) && m_urma_ctx->is_m_jfc_polling()) {
         std::chrono::steady_clock::time_point tp_now = std::chrono::steady_clock::now();
         interval = std::chrono::duration_cast<std::chrono::microseconds>(tp_now - tp_start);
         if (interval.count() > JETTY_MGR_WAIT_FLUSH_ERR_DONE_TIMEOUT) { // 60s timeout
