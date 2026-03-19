@@ -986,7 +986,7 @@ static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_le
             if (n <= 0) {
                 printf("Failed convert eid to ipv6.\n");
             }
-            ptr +=n;
+            ptr += n;
             left -= n;
             i += max_zero_len;
             printed = true;
@@ -1216,8 +1216,9 @@ int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
     int ret;
     admin_core_cmd_topo_bonding_dev_t *arg = NULL;
 
-    if (agg_eid == NULL || out == NULL)
+    if (agg_eid == NULL || out == NULL) {
         return -EINVAL;
+    }
 
     arg = calloc(1, sizeof(admin_core_cmd_topo_bonding_dev_t));
     if (arg == NULL) {

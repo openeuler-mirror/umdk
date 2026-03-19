@@ -154,7 +154,8 @@ static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns
         return ret;
     }
 
-    printf("Setting EID index %d in bonding device %s, netns %d\n", bonding_info->bonding_eid_idx, bonding_info->dev_name, ns_fd);
+    printf("Setting EID index %d in bonding device %s, netns %d\n",
+        bonding_info->bonding_eid_idx, bonding_info->dev_name, ns_fd);
     ret = admin_nl_set_eid_ns(bonding_info->dev_name, bonding_info->bonding_eid_idx, ns_fd);
     if (ret != 0) {
         printf("Failed to set EID index %d in bonding device %s, netns %d, ret=%d\n", bonding_info->bonding_eid_idx,
@@ -181,7 +182,7 @@ static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns
         ret = admin_nl_set_eid_ns(dev_info->dev_name, dev_info->primary_eid_idx, ns_fd);
         if (ret != 0) {
             printf("Failed to set EID index %d in primary device %s, netns %d, ret=%d\n", dev_info->primary_eid_idx,
-                    dev_info->dev_name, ns_fd, ret);
+                   dev_info->dev_name, ns_fd, ret);
             admin_nl_unexpose_dev_ns(dev_info->dev_name, ns_fd);
             goto unexpose_agg_dev;
         }
@@ -195,8 +196,8 @@ static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns
                    dev_info->dev_name, ns_fd);
             ret = admin_nl_set_eid_ns(dev_info->dev_name, dev_info->port_eid_idx[i], ns_fd);
             if (ret != 0) {
-                printf("Failed to set port EID index %d in primary device %s, netns %d, ret=%d\n", dev_info->port_eid_idx[i],
-                       dev_info->dev_name, ns_fd, ret);
+                printf("Failed to set port EID index %d in primary device %s, netns %d, ret=%d\n",
+                       dev_info->port_eid_idx[i], dev_info->dev_name, ns_fd, ret);
             }
         }
     }
