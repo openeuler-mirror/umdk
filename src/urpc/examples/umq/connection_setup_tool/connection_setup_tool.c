@@ -109,7 +109,6 @@ static int init_umq(struct urpc_example_config *cfg)
     init_cfg->feature = cfg->feature;
     init_cfg->flow_control.use_atomic_window = true;
     init_cfg->flow_control.initial_credit = TOOL_INITIAL_CREDIT;
-    init_cfg->flow_control.credits_per_request = TOOL_REQIEST_CREDITS;
 
     if (cfg->instance_mode == SERVER) {
         if (parse_m_trans_info(cfg, init_cfg) != 0) {
@@ -476,7 +475,7 @@ void serever_bind_one_client(int client_fd)
         LOG_PRINT("umq_bind_info_get failed\n");
         goto DESTROY_UMQ;
     }
-    
+
     if (umq_bind(umqh, conn_bind_info->umq_bind_info, conn_bind_info->bind_info_size) != UMQ_SUCCESS) {
         LOG_PRINT("umq_bind failed\n");
         goto DESTROY_UMQ;
