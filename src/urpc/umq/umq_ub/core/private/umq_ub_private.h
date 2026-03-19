@@ -115,8 +115,6 @@ typedef struct ub_flow_control_window_ops {
     uint16_t (*remote_rx_window_inc)(struct ub_flow_control *fc, uint16_t new_win, bool is_return_rollback);
     // alloc tx window, may return [0, required_win]
     uint16_t (*remote_rx_window_dec)(struct ub_flow_control *fc, uint16_t required_win, bool is_return);
-    // exchange current tx window to 0 and return current tx window
-    uint16_t (*remote_rx_window_exchange)(struct ub_flow_control *fc);
     // load current tx window
     uint16_t (*remote_rx_window_load)(struct ub_flow_control *fc);
     uint64_t (*local_rx_allocated_inc)(struct ub_flow_control *fc, uint16_t new_win);
@@ -152,8 +150,6 @@ typedef struct ub_flow_control {
     volatile uint16_t local_rx_posted;
     volatile uint16_t remote_rx_window;
     volatile uint16_t stats_u16[FC_COUNTER_MAX_U16];
-    uint16_t initial_window;
-    uint16_t notify_interval;
     uint16_t credits_per_request;
     uint16_t max_credits_request;
     uint16_t initial_credit;
@@ -293,7 +289,6 @@ typedef struct ub_credit_pool_ops {
     uint16_t (*available_credit_dec)(struct ub_credit_pool *shared_credit, uint16_t count);
     // return unused credit
     uint16_t (*available_credit_return)(struct ub_credit_pool *shared_credit, uint16_t count);
-    uint16_t (*allocated_credit_inc)(struct ub_credit_pool *shared_credit, uint16_t count);
     uint16_t (*allocated_credit_dec)(struct ub_credit_pool *shared_credit, uint16_t count);
     void (*stats_query)(struct ub_credit_pool *fc, umq_credit_pool_stats_t *out);
 } ub_credit_pool_ops_t;
