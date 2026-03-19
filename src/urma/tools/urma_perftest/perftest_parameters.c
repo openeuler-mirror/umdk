@@ -21,7 +21,6 @@
 #include "urma_types.h"
 #include "urma_types_str.h"
 #include "perftest_communication.h"
-#include "urma_api.h"
 #include "perftest_parameters.h"
 
 #define PERFTEST_CACHE_LINE_FILE_SIZE (10)
@@ -32,7 +31,6 @@
 #define PERFTEST_CTP_MAX_SEND_SIZE (4096)
 #define PERFTEST_RTP_MAX_ORDER     (16)
 #define PERFTEST_CTP_MAX_ORDER     (12)
-#define PERFTEST_INVALID_PRIORITY  (255)
 
 typedef struct perftest_cmd {
     char *cmd;
@@ -128,13 +126,13 @@ static void usage(const char *argv0)
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
     (void)printf("  --single_path,              Bonding device works in single path mode.\n");
-    (void)printf("  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\
-                                                if set, value of infinite will be overwrite.\n");
+    (void)printf("  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
+                 "                              if set, value of infinite will be overwrite.\n");
     (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
     (void)printf("  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n");
     (void)printf("  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n");
-    (void)printf("  --sub_trans_mode <sub_mode>     Sub transport mode: 0 for non ordering(default),\
-                    1 for TA dest ordering (only valid for trans_mode RC).\n");
+    (void)printf("  --sub_trans_mode <sub_mode> Sub transport mode: 0 for non ordering(default),\n"
+                 "                              1 for TA dest ordering (only valid for trans_mode RC).\n");
     (void)printf("  --enable_ipv6               enable ipv6 for server ip. default disable.\n");
     (void)printf("  --enable_credit             enable send credit, default: disable.\n");
     (void)printf("  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n");
@@ -162,14 +160,16 @@ default: disable.\n");
     (void)printf("  --tp_reuse                  Reuse tp in RM mode if enable tp aware, default: disable.\n");
     (void)printf("  --ctp                       Use ctp, default: disable.\n");
     (void)printf("  --jetty_id                  Set the jetty_id, default: 0.\n");
-    (void)printf("  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n\
-                                                timeout = 0: return immediately even if no events are ready,\n\
-                                                timeout = -1: an infinite timeout,\n\
-                                                default: 1000(1s).\n");
+    (void)printf("  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n"
+                 "                              timeout = 0: return immediately even if no events are ready,\n"
+                 "                              timeout = -1: an infinite timeout,\n"
+                 "                              default: 1000(1s).\n");
     (void)printf("  --page_size                 Set page size, default: 4096.\n");
     (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
 2MB or 1GB currently.\n");
     (void)printf("  --stdout                    Print logs to console.\n");
+    (void)printf("  --aggr_mode                 Set bond device aggregation mode, support: standalone, \
+active_backup, balance, default: disable\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -431,7 +431,6 @@ static int check_cfg_range(perftest_config_t *cfg)
         { cfg->cq_mod,       PERFTEST_CQ_MOD_MIN,        PERFTEST_CQ_MOD_MAX,       "Cq mod" },
         { cfg->order,        PERFTEST_MIN_ORDER,         PERFTEST_MAX_ORDER,        "Order" },
         { cfg->err_timeout,  PERFTEST_ERR_TIMEOUT_MIN,   PERFTEST_ERR_TIMEOUT_MAX,  "err_timeout" },
-        { cfg->priority,     PERFTEST_PRIORITY_MIN,      PERFTEST_PRIORITY_MAX,     "priority" },
         { cfg->token_policy, URMA_TOKEN_NONE,            URMA_TOKEN_ALL_ENCRYPTED,  "token_policy" }
     };
     for (uint32_t i = 0; i < sizeof(value_range) / sizeof(perftest_value_range_t); i++) {
@@ -950,31 +949,6 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
     return (cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr)) >= (cfg->jettys * cfg->jfr_post_list);
 }
 
-static int get_jetty_priority_by_tp_type(char *name, union urma_tp_type_en tp_type)
-{
-    int pri = 0;
-    urma_device_t *urma_dev;
-    urma_device_attr_t dev_attr;
-
-    urma_dev = urma_get_device_by_name(name);
-    if (urma_dev == NULL) {
-        fprintf(stderr, "urma get device by name failed!\n");
-        return -1;
-    }
-    if (urma_query_device(urma_dev, &dev_attr) != URMA_SUCCESS) {
-        fprintf(stderr, "Failed to query device %s.\n", name);
-        return -1;
-    }
-    for (int i = 0; i <= URMA_MAX_PRIORITY; i++) {
-        if (tp_type.value == dev_attr.dev_cap.priority_info[i].tp_type.value) {
-            pri = i;
-            return pri;
-        }
-    }
-    fprintf(stderr, "Failed to get sl resources %s.\n", name);
-    return -1;
-}
-
 int check_local_cfg(perftest_config_t *cfg)
 {
     if (cfg == NULL) {
@@ -988,6 +962,10 @@ int check_local_cfg(perftest_config_t *cfg)
 
     if (strstr(cfg->dev_name, "bonding_dev") != NULL && !cfg->single_path) {
         cfg->use_ctp = true;
+        if (cfg->cq_mod != 1) {
+            cfg->cq_mod = 1;
+            (void)fprintf(stderr, "Warning, bonding_dev cq_mod should be 1.\n");
+        }
     }
 
     if (check_time_type(cfg) != 0) {
@@ -1321,13 +1299,13 @@ int check_local_cfg(perftest_config_t *cfg)
             exit(1);
         }
 
-        if (cfg->single_path && cfg->order > PERFTEST_RTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with single path for send opcode, max order: %u.\n",
+        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
                 cfg->order, PERFTEST_RTP_MAX_ORDER);
             exit(1);
         }
-        if (!cfg->single_path && cfg->order > PERFTEST_CTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with multi path for send opcode, max order: %u.\n",
+        if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
                 cfg->order, PERFTEST_CTP_MAX_ORDER);
             exit(1);
         }
@@ -1336,19 +1314,6 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->jfs_post_list > 1) {
         (void)fprintf(stderr, "Standalone aggregate mode currently does not support WQE list.\n");
         exit(1);
-    }
-
-    union urma_tp_type_en tp_type;
-    if (cfg->priority == PERFTEST_INVALID_PRIORITY) {
-        if (cfg->use_ctp) {
-            tp_type.bs.ctp = 1;
-            cfg->priority = get_jetty_priority_by_tp_type(cfg->dev_name, tp_type);
-        } else {
-            tp_type.bs.rtp = 1;
-            cfg->priority = get_jetty_priority_by_tp_type(cfg->dev_name, tp_type);
-        }
-        (void)fprintf(stderr, "Warning: %s should set priority to %hhu.\n",
-            (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
     }
     return 0;
 }
