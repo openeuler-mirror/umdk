@@ -50,8 +50,8 @@ public:
     dlock_status_t post_cas(uint32_t offset, uint64_t cmp_data, uint64_t swap_data, uint64_t wr_id) const override;
 
 private:
-    dlock_status_t create_jfs(void);
-    dlock_status_t create_jfr(void);
+    dlock_status_t create_jfs(urma_device_attr_t &dev_attr);
+    dlock_status_t create_jfr(urma_device_attr_t &dev_attr);
     void unimport_tjfr(void);
     void delete_jfr(void);
     void delete_jfs(void);

@@ -22,12 +22,19 @@
 #include "utils.h"
 
 namespace dlock {
-dlock_status_t jetty_mgr_sepconn::create_jfs(void)
+dlock_status_t jetty_mgr_sepconn::create_jfs(urma_device_attr_t &dev_attr)
 {
     urma_jfs_cfg_t jfs_cfg;
 
+    int priority = get_jetty_priority_by_tp_type(dev_attr, URMA_RTP);
+    if (priority < 0) {
+        DLOCK_LOG_ERR("Failed to get jetty priority by tp_type: %d, dev_name: %s.",
+            URMA_RTP, (m_urma_ctx->get_urma_dev())->name);
+        return DLOCK_FAIL;
+    }
+
     static_cast<void>(memset(&jfs_cfg, 0, sizeof(urma_jfs_cfg_t)));
-    jfs_cfg_init(jfs_cfg, URMA_TM_RM, URMA_OI);
+    jfs_cfg_init(jfs_cfg, dev_attr, URMA_TM_RM, URMA_OI, static_cast<uint8_t>(priority));
     m_jfs = urma_create_jfs(m_urma_ctx->m_urma_ctx, &jfs_cfg);
     if (m_jfs == nullptr) {
         DLOCK_LOG_ERR("Failed to create jfs");
@@ -42,12 +49,12 @@ dlock_status_t jetty_mgr_sepconn::create_jfs(void)
     return DLOCK_SUCCESS;
 }
 
-dlock_status_t jetty_mgr_sepconn::create_jfr(void)
+dlock_status_t jetty_mgr_sepconn::create_jfr(urma_device_attr_t &dev_attr)
 {
     urma_jfr_cfg_t jfr_cfg;
 
     static_cast<void>(memset(&jfr_cfg, 0, sizeof(urma_jfr_cfg_t)));
-    jfr_cfg_init(jfr_cfg, URMA_TM_RM, URMA_OI);
+    jfr_cfg_init(jfr_cfg, dev_attr, URMA_TM_RM, URMA_OI);
     m_jfr = urma_create_jfr(m_urma_ctx->m_urma_ctx, &jfr_cfg);
     if (m_jfr == nullptr) {
         DLOCK_LOG_ERR("Failed to create jfr");
@@ -94,12 +101,20 @@ dlock_status_t jetty_mgr_sepconn::jetty_mgr_sepconn_init(urma_ctx *p_urma_ctx, u
         return ret;
     }
 
-    ret = create_jfs();
+    urma_device_attr_t dev_attr;
+    urma_status_t rc = urma_query_device(m_urma_ctx->get_urma_dev(), &dev_attr);
+    if (rc != URMA_SUCCESS) {
+        DLOCK_LOG_ERR("Failed to query urma device, rc: %d, dev_name: %s",
+            static_cast<int>(rc), (m_urma_ctx->get_urma_dev())->name);
+        return DLOCK_FAIL;
+    }
+
+    ret = create_jfs(dev_attr);
     if (ret != DLOCK_SUCCESS) {
         return ret;
     }
 
-    ret = create_jfr();
+    ret = create_jfr(dev_attr);
     if (ret != DLOCK_SUCCESS) {
         return ret;
     }

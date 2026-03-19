@@ -93,6 +93,11 @@ public:
         return (m_ub_token_disable ? URMA_TOKEN_NONE : URMA_TOKEN_PLAIN_TEXT);
     }
 
+    inline urma_device_t *get_urma_dev(void) const
+    {
+        return m_urma_ctx->dev;
+    }
+
 private:
     dlock_status_t init_urma_ctx(void);
     dlock_status_t uninit_urma_ctx(void) noexcept;
@@ -114,7 +119,6 @@ private:
     uint32_t m_eid_index;
     trans_mode_t m_tp_mode;
     urma_context_t *m_urma_ctx;
-    urma_device_attr_t m_dev_attr;
     urma_jfce_t *m_jfce;
     urma_jfc_t *m_jfc;
     bool m_jfc_polling;
