@@ -453,16 +453,27 @@ CLOSE_SOC:
 }
 
 static bool is_post_rx[MAIN_QUEUE_CNT];
-void serever_bind_one_client(int client_fd)
+void server_bind_one_client(int client_fd)
 {
     uint8_t recv_data[UMQ_MAX_BIND_INFO_SIZE];
     uint32_t recv_len = UMQ_MAX_BIND_INFO_SIZE;
     if (recv_exchange_data(client_fd, recv_data, &recv_len) != 0) {
         LOG_PRINT("recv_data failed\n");
-        return;
+        goto CLOSE_FD;
     }
 
     connection_bind_info_t *conn_bind_info = (connection_bind_info_t *)recv_data;
+    if (recv_len < sizeof(connection_bind_info_t) ||
+        conn_bind_info->bind_info_size > recv_len - sizeof(connection_bind_info_t)) {
+        LOG_PRINT("bind info size invalid\n");
+        goto CLOSE_FD;
+    }
+
+    if (strnlen(conn_bind_info->dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE) {
+        LOG_PRINT("dev_name invalid\n");
+        goto CLOSE_FD;
+    }
+
     umq_info_t *umq_info = create_one_umq(g_cfg, false, conn_bind_info->dev_name, conn_bind_info->eid_idx);
     if (umq_info == NULL) {
         LOG_PRINT("create_one_umq failed\n");
@@ -523,7 +534,7 @@ void *server_wait_client(void *arg)
             LOG_PRINT_ERR("ip[%s] port[%u] accept failed\n", g_cfg->server_ip, g_cfg->tcp_port);
             break;
         }
-        serever_bind_one_client(client_fd);
+        server_bind_one_client(client_fd);
     }
     return NULL;
 }

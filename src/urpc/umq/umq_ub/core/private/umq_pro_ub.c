@@ -498,6 +498,14 @@ int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     return umq_ub_post_rx_inner_impl(queue, qbuf, bad_qbuf);
 }
 
+static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, const urma_cr_t *cr)
+{
+    if (cr->local_id >= queue->dev_ctx->dev_attr.dev_cap.max_jetty) {
+        return NULL;
+    }
+    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+}
+
 static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf, umq_buf_status_t *qbuf_status)
 {
     if (cr->opcode != URMA_CR_OPC_SEND_WITH_IMM) {
@@ -505,7 +513,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
-    ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+    ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
     if (real_queue != NULL) {
         umq_inc_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
         buf_pro->umq_ctx = real_queue->umq_ctx;
@@ -578,7 +586,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                     }
 
                     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-                    ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+                    ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
                     if (real_queue == NULL) {
                         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroy\n",
                             EID_ARGS(*eid), id);
@@ -613,7 +621,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
         }
         case URMA_CR_OPC_SEND: {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-            ub_queue_t *real_queue = (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+            ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
             if (real_queue != NULL) {
                 buf_pro->umq_ctx = real_queue->umq_ctx;
             } else {
@@ -890,9 +898,10 @@ static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
 
 static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
 {
-    urma_cr_t cr[buf_count];
+    uint32_t max_batach = buf_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : buf_count;
+    urma_cr_t cr[max_batach];
     int cnt = 0;
-    int cr_cnt = urma_flush_jetty(queue->jetty[UB_QUEUE_JETTY_IO], buf_count, cr);
+    int cr_cnt = urma_flush_jetty(queue->jetty[UB_QUEUE_JETTY_IO], max_batach, cr);
     for (int i = 0; i < cr_cnt; i++) {
         if (cr[i].status == URMA_CR_WR_SUSPEND_DONE || cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE ||
             cr[i].user_ctx <= UINT16_MAX) {
