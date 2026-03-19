@@ -191,12 +191,12 @@ void jetty_mgr_sepconn::modify_jfs_err(void)
     attr.mask = JFS_STATE;
     attr.state = URMA_JETTY_STATE_ERROR;
 
-    m_modify_jetty2err = true;
+    m_modify_jetty2err.store(true);
     urma_status_t ret = urma_modify_jfs(m_jfs, &attr);
     if (ret != URMA_SUCCESS) {
         DLOCK_LOG_ERR("failed to modify jfs to URMA_JETTY_STATE_ERROR, ret: %d", static_cast<int>(ret));
         /* If modify jfs to error state failed, don't wait URMA_CR_WR_FLUSH_ERR_DONE CR */
-        m_flush_err_done = true;
+        m_flush_err_done.store(true);
     }
 }
 

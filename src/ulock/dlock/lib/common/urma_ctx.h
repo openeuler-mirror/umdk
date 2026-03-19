@@ -16,6 +16,7 @@
 #include <string>
 #include <mutex>
 #include <openssl/rand.h>
+#include <atomic>
 
 #include "urma_api.h"
 #include "dlock_types.h"
@@ -70,17 +71,17 @@ public:
 
     inline void set_m_jfc_polling(void)
     {
-        m_jfc_polling = true;
+        m_jfc_polling.store(true);
     }
 
     inline void clear_m_jfc_polling(void)
     {
-        m_jfc_polling = false;
+        m_jfc_polling.store(false);
     }
 
     inline bool is_m_jfc_polling(void)
     {
-        return m_jfc_polling;
+        return m_jfc_polling.load();
     }
 
     inline bool is_ub_token_disable(void) const
@@ -121,7 +122,7 @@ private:
     urma_context_t *m_urma_ctx;
     urma_jfce_t *m_jfce;
     urma_jfc_t *m_jfc;
-    bool m_jfc_polling;
+    std::atomic<bool> m_jfc_polling;
     bool m_ub_token_disable;
 
     void *m_va;
