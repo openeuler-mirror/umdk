@@ -93,13 +93,6 @@ public:
         return (m_ub_token_disable ? URMA_TOKEN_NONE : URMA_TOKEN_PLAIN_TEXT);
     }
 
-#ifdef UB_AGG
-    inline bool is_ub_bonding_dev(void) const
-    {
-        return m_is_ub_bonding_dev;
-    }
-#endif /* UB_AGG */
-
 private:
     dlock_status_t init_urma_ctx(void);
     dlock_status_t uninit_urma_ctx(void) noexcept;
@@ -118,9 +111,6 @@ private:
     void delete_urma_context(void) noexcept;
 
     std::string m_dev_name;
-    #ifdef UB_AGG
-        bool m_is_ub_bonding_dev;
-    #endif /* UB_AGG */
     uint32_t m_eid_index;
     trans_mode_t m_tp_mode;
     urma_context_t *m_urma_ctx;

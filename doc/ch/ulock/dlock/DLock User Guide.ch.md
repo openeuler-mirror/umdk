@@ -17,7 +17,6 @@ rpmbuild -ba umdk.spec --with dlock
 
 **DLock额外编译选项说明**
 - RPM Compilation Options: \
---with ubagg_disable                      (option, i.e. enable ubagg by default) \
 --with asan                                       (option, i.e. disable asan by default) \
 --with tsan                                        (option, i.e. disable tsan by default) \
 --with gcov                                        (option, i.e. disable gcov by default)
@@ -38,7 +37,6 @@ make && make install
 
 **DLock额外编译选项说明**
 - cmake Compilation Options: \
--DUB_AGG_DIS=enable                               (option, i.e. enable ubagg by default) \
 -DASAN=enable                                     (option, i.e. disable asan by default) \
 -DTSAN=enable                                     (option, i.e. disable tsan by default) \
 -DCODE_COVERAGE=enable                            (option, i.e. disable gcov by default)

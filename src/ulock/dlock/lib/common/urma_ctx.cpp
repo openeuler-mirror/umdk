@@ -129,7 +129,6 @@ dlock_status_t urma_ctx::check_urma_device_state(char *dev_name)
     }
 
     if (urma_query_device(urma_dev, &m_dev_attr) == URMA_SUCCESS) {
-#ifdef UB_AGG
         /* The port_cnt value of the ub bonding device is 0 now, and the eid index is not related to the port index.
          * dlock cannot obtain the association between eid and port.
          * Therefore, we do not check whether the device port state is active.
@@ -146,10 +145,8 @@ dlock_status_t urma_ctx::check_urma_device_state(char *dev_name)
             }
             m_dev_name = dev_name;
             m_eid_index = eid_index;
-            m_is_ub_bonding_dev = true;
             return DLOCK_SUCCESS;
         }
-#endif /* UB_AGG */
 
         for (port_idx = 0; port_idx < m_dev_attr.port_cnt; port_idx++) {
             if (m_dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
@@ -189,7 +186,6 @@ dlock_status_t urma_ctx::check_urma_device_state_by_eid(const dlock_eid_t eid)
     }
 
     if (urma_query_device(urma_dev, &m_dev_attr) == URMA_SUCCESS) {
-#ifdef UB_AGG
         /* The port_cnt value of the ub bonding device is 0 now, and the eid index is not related to the port index.
          * dlock cannot obtain the association between eid and port.
          * Therefore, we do not check whether the device port state is active.
@@ -206,10 +202,8 @@ dlock_status_t urma_ctx::check_urma_device_state_by_eid(const dlock_eid_t eid)
             }
             m_dev_name = urma_dev->name;
             m_eid_index = eid_index;
-            m_is_ub_bonding_dev = true;
             return DLOCK_SUCCESS;
         }
-#endif /* UB_AGG */
         for (port_idx = 0; port_idx < m_dev_attr.port_cnt; port_idx++) {
             if (m_dev_attr.port_attr[port_idx].state == URMA_PORT_ACTIVE) {
                 m_dev_name = urma_dev->name;
@@ -453,13 +447,8 @@ void urma_ctx::delete_urma_context(void) noexcept
 }
 
 urma_ctx::urma_ctx(const struct urma_ctx_cfg &cfg)
-#ifdef UB_AGG
-    : m_is_ub_bonding_dev(false), m_eid_index(0), m_tp_mode(cfg.tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr),
-      m_jfc(nullptr), m_jfc_polling(false), m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
-#else
     : m_eid_index(0), m_tp_mode(cfg.tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr),
       m_jfc_polling(false), m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
-#endif /* UB_AGG */
     m_local_tseg(nullptr), m_p_buf_head(nullptr), m_ctx_inited(false)
 {
     m_local_tseg_token.token = 0;

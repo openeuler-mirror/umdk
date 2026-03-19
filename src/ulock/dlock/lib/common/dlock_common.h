@@ -18,9 +18,6 @@
 #include <string>
 
 #include "urma_types.h"
-#ifdef UB_AGG
-#include "urma_ubagg.h"
-#endif /* UB_AGG */
 #include "dlock_types.h"
 
 namespace dlock {
@@ -196,11 +193,6 @@ struct urma_init_body {
     } flag;
 
     uint32_t token; /* for jfr/jetty */
-
-#ifdef UB_AGG
-    bool is_bond;
-    urma_bond_id_info_out_t bond_id_info;
-#endif /* UB_AGG */
 };
 
 struct client_init_req_body {

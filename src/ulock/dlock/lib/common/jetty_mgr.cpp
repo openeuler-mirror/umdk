@@ -643,24 +643,6 @@ dlock_status_t jetty_mgr::post_cas_and_get_res(uint64_t wr_id, uint32_t offset,
     return DLOCK_SUCCESS;
 }
 
-#ifdef UB_AGG
-dlock_status_t jetty_mgr::construct_urma_bond_id_xchg_info(struct urma_init_body *jetty_info) const
-{
-    if (m_urma_ctx->is_ub_bonding_dev()) {
-        jetty_info->is_bond = true;
-        if (get_urma_bond_id_info(&jetty_info->bond_id_info) != DLOCK_SUCCESS) {
-            DLOCK_LOG_ERR("failed to get ub bond id info");
-            return DLOCK_FAIL;
-        }
-        return DLOCK_SUCCESS;
-    }
-
-    jetty_info->is_bond = false;
-    static_cast<void>(memset(&jetty_info->bond_id_info, 0, sizeof(urma_bond_id_info_out_t)));
-    return DLOCK_SUCCESS;
-}
-#endif /* UB_AGG */
-
 void jetty_mgr::wait_flush_err_done(void)
 {
     if ((m_p_server == nullptr) || m_flush_err_done || (!m_urma_ctx->is_m_jfc_polling())) {
