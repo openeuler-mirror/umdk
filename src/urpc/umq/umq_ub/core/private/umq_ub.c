@@ -514,6 +514,10 @@ static int umq_ub_get_namespace(char *remote_namespace, uint32_t namespace_buf_s
         return UMQ_FAIL;
     }
     memcpy(remote_namespace, buf, len);
+    if ((uint32_t)len < namespace_buf_size) {
+        // clean remote_namespace
+        (void)memset(remote_namespace + len, 0, namespace_buf_size - (uint32_t)len);
+    }
     return (int)len;
 }
 
@@ -2516,6 +2520,11 @@ void process_bad_qbuf(umq_buf_t *bad_qbuf, umq_buf_t *qbuf, ub_queue_t *queue)
     while (tmp_qbuf != NULL && tmp_qbuf != bad_qbuf) {
         count++;
         uint32_t rest_data_size = tmp_qbuf->total_data_size;
+        if (rest_data_size == 0) {
+            previous = tmp_qbuf;
+            tmp_qbuf = tmp_qbuf->qbuf_next;
+            continue;
+        }
         while (tmp_qbuf && rest_data_size > 0) {
             if (rest_data_size < tmp_qbuf->data_size) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, cannot put together tx buffer, rest size"

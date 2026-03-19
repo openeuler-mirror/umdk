@@ -804,11 +804,14 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, umq_create_opt
      * umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit free resoures */
     if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
         if (umq_ub_idle_checker_init(queue) != UMQ_SUCCESS) {
-            goto DELETE_FC_JFS_JFC;
+            goto CLEAR_TABLE;
         }
     }
 
     return UMQ_SUCCESS;
+
+CLEAR_TABLE:
+    dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id] = 0;
 
 DELETE_FC_JFS_JFC:
     (void)urma_delete_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL]);
@@ -917,9 +920,7 @@ FREE_NOTIFY_BUF:
     umq_buf_free(queue->notify_buf);
 
 DELETE_JETTY:
-    if ((option->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
-        dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = 0;
-    }
+    dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = 0;
     (void)urma_delete_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
 DELETE_JFS_JFC:
     (void)urma_delete_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO]);
@@ -977,9 +978,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         umq_ub_credit_clean_up(queue);
         UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, delete flowcontrol jetty\n",
             EID_ARGS(*fc_eid), fc_id);
-        if ((queue->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
-            queue->dev_ctx->umq_ctx_jetty_table[fc_id] = 0;
-        }
+        queue->dev_ctx->umq_ctx_jetty_table[fc_id] = 0;
         ret = urma_delete_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
         if (ret != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jetty for flowcontrol jetty "
@@ -1000,9 +999,9 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
 
     umq_ub_flow_control_uninit(&queue->flow_control);
     UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, delete jetty\n", EID_ARGS(*io_eid), io_id);
-    if ((queue->create_flag & UMQ_CREATE_FLAG_UMQ_CTX) != 0) {
-        queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = 0;
-    }
+
+    queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = 0;
+
     ret = urma_delete_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
     if (ret != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jetty failed, status: %d\n",
