@@ -108,8 +108,10 @@ public:
 
     uint64_t m_cr_data;
 protected:
-    void jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const;
-    void jfr_cfg_init(urma_jfr_cfg_t &jfr_cfg, urma_transport_mode_t tp_mode, uint32_t order_type) const;
+    void jfs_cfg_init(urma_jfs_cfg_t &jfs_cfg, urma_device_attr_t &dev_attr,
+        urma_transport_mode_t tp_mode, uint32_t order_type, uint8_t priority) const;
+    void jfr_cfg_init(urma_jfr_cfg_t &jfr_cfg, urma_device_attr_t &dev_attr,
+        urma_transport_mode_t tp_mode, uint32_t order_type) const;
     dlock_status_t get_jfc(void);
     dlock_status_t cmd_msg_cipher(int op_type, uint8_t *buf, uint32_t len, bool ssl_enable) const;
     dlock_status_t cmd_msg_cipher(int op_type, uint8_t *buf_in, uint32_t len, uint8_t *buf_out,
@@ -137,7 +139,7 @@ protected:
     std::atomic<jetty_mgr_state_t> m_state;
     dlock_conn_peer_info_t m_peer_info;
     uint16_t m_next_message_id;
-    
+
 private:
     virtual void fill_base_wr(urma_jfs_wr_t *wr, uint64_t wr_id) const = 0;
     void fill_read_sge(urma_sge_t *src_sge, urma_sge_t *dst_sge, uint32_t offset) const;
@@ -149,6 +151,10 @@ private:
         urma_sge_t *dst_sge, uint64_t cmp_data, uint64_t swap_data) const;
 
     void wait_flush_err_done(void);
+
+    int get_jetty_priority_for_ctp(urma_device_attr_t &dev_attr) const;
+    int get_jetty_priority_for_rtp(urma_device_attr_t &dev_attr) const;
+    int get_jetty_priority_by_tp_type(urma_device_attr_t &dev_attr, urma_tp_type_t tp_type) const;
 
     uint32_t m_local_id; /* local jetty/jfs id. */
     bool m_modify_jetty2err;
