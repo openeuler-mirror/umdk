@@ -15,6 +15,7 @@
 #include <mutex>
 #include <vector>
 #include <cstring>
+#include <atomic>
 
 #include "dlock_types.h"
 #include "urma_ctx.h"
@@ -83,17 +84,17 @@ public:
 
     inline bool get_m_modify_jetty2err(void) const
     {
-        return m_modify_jetty2err;
+        return m_modify_jetty2err.load();
     }
 
     inline bool get_m_flush_err_done(void) const
     {
-        return m_flush_err_done;
+        return m_flush_err_done.load();
     }
 
     inline void set_m_flush_err_done(void)
     {
-        m_flush_err_done = true;
+        m_flush_err_done.store(true);
     }
 
     inline uint32_t get_jfr_token(void) const
@@ -157,8 +158,8 @@ private:
     int get_jetty_priority_by_tp_type(urma_device_attr_t &dev_attr, urma_tp_type_t tp_type) const;
 
     uint32_t m_local_id; /* local jetty/jfs id. */
-    bool m_modify_jetty2err;
-    bool m_flush_err_done;
+    std::atomic<bool> m_modify_jetty2err;
+    std::atomic<bool> m_flush_err_done;
     dlock_server *m_p_server; /* If it is the client-side jetty_mgr, m_p_server is nullptr. */
     urma_token_t m_jfr_token;
 };

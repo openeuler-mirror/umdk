@@ -450,7 +450,7 @@ void urma_ctx::delete_urma_context(void) noexcept
 
 urma_ctx::urma_ctx(const struct urma_ctx_cfg &cfg)
     : m_eid_index(0), m_tp_mode(cfg.tp_mode), m_urma_ctx(nullptr), m_jfce(nullptr), m_jfc(nullptr),
-      m_jfc_polling(false), m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
+      m_jfc_polling{false}, m_ub_token_disable(cfg.ub_token_disable), m_va(nullptr),
     m_local_tseg(nullptr), m_p_buf_head(nullptr), m_ctx_inited(false)
 {
     m_local_tseg_token.token = 0;
