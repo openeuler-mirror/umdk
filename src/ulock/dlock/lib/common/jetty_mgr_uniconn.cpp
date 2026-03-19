@@ -245,6 +245,7 @@ dlock_status_t jetty_mgr_uniconn::construct_jetty_xchg_info(struct urma_init_bod
     static_cast<void>(memcpy(&(jetty_info->jetty_id), &(p_mgr_uniconn->m_jetty->jetty_id), sizeof(urma_jetty_id_t)));
     jetty_info->token = get_jfr_token();
     jetty_info->flag.bs.token_policy = get_token_policy();
+    jetty_info->flag.bs.reserved = 0;
 
     return DLOCK_SUCCESS;
 }
