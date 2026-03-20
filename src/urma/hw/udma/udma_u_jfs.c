@@ -297,7 +297,6 @@ err_create_sq:
 
 static void udma_u_free_jfs_prepare(urma_jfs_t *jfs)
 {
-	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 
 	if (!!jfs->jfs_cfg.jfc)
