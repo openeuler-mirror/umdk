@@ -643,12 +643,63 @@ static void ums_ubcore_create_jfr(struct ums_ubcore_jfc *ums_ub_jfc, struct ums_
 	return;
 }
 
+static int ums_ubcore_get_jetty_priority_for_ctp(struct ubcore_device_attr *dev_attr)
+{
+	int i;
+
+	for (i = 0; i < UBCORE_MAX_PRIORITY_CNT; i++) {
+		if (dev_attr->dev_cap.priority_info[i].tp_type.bs.ctp != 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+static int ums_ubcore_get_jetty_priority_for_rtp(struct ubcore_device_attr *dev_attr)
+{
+	int i;
+
+	for (i = 0; i < UBCORE_MAX_PRIORITY_CNT; i++) {
+		if (dev_attr->dev_cap.priority_info[i].tp_type.bs.rtp != 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+static int ums_ubcore_get_jetty_priority_by_tp_type(struct ubcore_device *ub_dev, enum ubcore_tp_type tp_type)
+{
+	struct ubcore_device_attr dev_attr = {0};
+	int rc;
+
+	rc = ubcore_query_device_attr(ub_dev, &dev_attr);
+	if (rc != 0) {
+		UMS_LOGE("ubcore query device attr failed, rc: %d, dev_name: %s", rc, ub_dev->dev_name);
+		return -1;
+	}
+
+	if (tp_type == UBCORE_CTP) {
+		return ums_ubcore_get_jetty_priority_for_ctp(&dev_attr);
+	}
+
+	return ums_ubcore_get_jetty_priority_for_rtp(&dev_attr);
+}
+
 /* create a queue pair within the protection domain for a link */
 int ums_ubcore_create_jetty(struct ums_link *lnk)
 {
+	int priority = ums_ubcore_get_jetty_priority_by_tp_type(lnk->ums_dev->ub_dev, UBCORE_RTP);
+	if (priority < 0) {
+		UMS_LOGE("Failed to get priority by ty_type: %d, dev_name: %s", UBCORE_RTP, lnk->ums_dev->ub_dev->dev_name);
+		return -EINVAL;
+	}
+
 	struct ums_ubcore_jfc *ums_ub_jfc = ums_ubcore_get_least_used_jfc(lnk->ums_dev);
 	struct ubcore_jetty_cfg jetty_cfg = {
 		.jfs_depth = UMS_JFS_DEPTH,
+		.priority = priority,
 		.jfr_depth = UMS_WR_BUF_CNT,
 		.send_jfc = ums_ub_jfc->jfc,
 		.recv_jfc = ums_ub_jfc->jfc,
