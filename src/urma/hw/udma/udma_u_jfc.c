@@ -72,6 +72,7 @@ static int udma_u_create_cq(struct udma_u_jetty_queue *cq, urma_jfc_cfg_t *cfg)
 {
 	uint32_t depth;
 
+	cq->ci = 0;
 	cq->lock_free = cfg->flag.bs.lock_free;
 	if (!cq->lock_free &&
 	    pthread_spin_init(&cq->lock, PTHREAD_PROCESS_PRIVATE)) {
@@ -220,10 +221,16 @@ err_alloc_sw_db:
 static int udma_u_set_jfc_depth(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
 {
 	urma_cmd_udrv_priv_t udata = {};
+	int ret;
 
+	ret = urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("fail to set jfc depth, depth = %u.\n", *(uint32_t *)buf);
+		return ret;
+	}
 	jfc->jfc_cfg.depth = *(uint32_t *)buf;
 
-	return urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	return ret;
 }
 
 static int udma_u_set_jfc_ceqn(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
@@ -922,7 +929,8 @@ void udma_u_clean_jfc(struct urma_jfc *jfc, uint32_t jetty_id)
 	urma_cr_t cr;
 	uint32_t pi;
 
-	if (udma_u_jfc->mode != (uint32_t)UDMA_U_NORMAL_JFC_TYPE)
+	if ((udma_u_jfc->mode != (uint32_t)UDMA_U_NORMAL_JFC_TYPE) ||
+	    (udma_u_jfc->cq.cstm))
 		return;
 
 	cq = &udma_u_jfc->cq;
