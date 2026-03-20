@@ -374,12 +374,29 @@ static bool CheckTensorShape(const gert::TilingContext &context, MoeCombineNorma
     // 校验recvX的维度并设h
     const gert::StorageShape *recvXStorageShape = context.GetInputShape(RECV_X_INDEX);
     OPS_ERR_IF(recvXStorageShape == nullptr, OPS_LOG_E(nodeName, "recvX is null."), return false);
+    int64_t recvXDim0 = recvXStorageShape->GetStorageShape().GetDim(0);
     int64_t recvXDim1 = recvXStorageShape->GetStorageShape().GetDim(1);
     OPS_ERR_IF((recvXDim1 < H_MIN) || (recvXDim1 > H_MAX),
                     OPS_LOG_E(nodeName, "recvX's dim1(H) should be in [%ld, %ld], but got %ld.",
                         H_MIN, H_MAX, recvXDim1),
                     return false); // 32对齐
     tilingData.moeCombineNormalInfo.h = static_cast<uint32_t>(recvXDim1);
+
+    // 校验输入dispatch输出的参数维度
+    const gert::StorageShape *sendCountStorageShape = context.GetInputShape(EP_RECV_COUNTS_INDEX);
+    OPS_ERR_IF(sendCountStorageShape == nullptr, OPS_LOG_E(nodeName, "sendCount is null."), return false);
+    int64_t sendCountDim0 = sendCountStorageShape->GetStorageShape().GetDim(0);
+    OPS_ERR_IF((sendCountDim0 < tilingData.moeCombineNormalInfo.moeExpertNum),
+                    OPS_LOG_E(nodeName, "Invalid sendCount dims0 %ld. Should not be smaller than %ld.",
+                        sendCountDim0, tilingData.moeCombineNormalInfo.moeExpertNum),
+                    return false);
+    const gert::StorageShape *srcInfoStorageShape = context.GetInputShape(TOKEN_SRC_INFO_INDEX);
+    OPS_ERR_IF(srcInfoStorageShape == nullptr, OPS_LOG_E(nodeName, "srcInfo is null."), return false);
+    int64_t srcInfoDim0 = srcInfoStorageShape->GetStorageShape().GetDim(0);
+    OPS_ERR_IF((srcInfoDim0 < recvXDim0 * TRIPLE),
+                    OPS_LOG_E(nodeName, "Invalid srcInfo dims0 %ld. Should not be smaller than %ld.",
+                        srcInfoDim0, recvXDim0 * TRIPLE),
+                    return false);
 
     // 校验x的维度
     const gert::StorageShape *xStorageShape = context.GetOutputShape(OUTPUT_X_INDEX);

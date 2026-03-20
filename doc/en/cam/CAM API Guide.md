@@ -188,6 +188,7 @@ Return value of this interface is a tuple made of 2 tensor, which stores number_
 5. Other Constraits need to be satisfy:
  - top_k value range: (0, 16].
  - Required: num_experts % num_ranks == 0
+ - Required: num_experts >= num_ranks
 
  #### 1.1.4 moe_dispatch_prefill ▶
 ##### 1.1.4.1 Prototype
@@ -240,6 +241,7 @@ Return value is a tuple made of 5 tensors，which stores：recv_x, dynamic_scale
  - num_experts range: (0, 512]
  - required: (num_experts % num_ranks) == 0
  - required: set HCCL_BUFFERSIZE = 4096
+ - Required: num_experts >= num_ranks
 
  #### 1.1.5 moe_combine_prefill ▶
 ##### 1.1.5.1 Prototype
@@ -286,6 +288,7 @@ Return value is a tensor，which stores combine_x。
  - num_experts range: (0, 512]
  - required: (num_experts % num_ranks) == 0
  - required: set HCCL_BUFFERSIZE = 4096
+ - Required: num_experts >= num_ranks
 
  #### 1.1.6 get_dispatch_layout_a2 ▶
 ##### 1.1.6.1 Prototype
