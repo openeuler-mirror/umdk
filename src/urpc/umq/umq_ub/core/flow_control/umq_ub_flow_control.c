@@ -312,11 +312,6 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_atomic(struct ub_flow_control
     return ret;
 }
 
-static ALWAYS_INLINE uint16_t remote_rx_window_exchange_atomic(struct ub_flow_control *fc)
-{
-    return __atomic_exchange_n(&fc->remote_rx_window, 0, __ATOMIC_RELAXED);
-}
-
 static ALWAYS_INLINE uint16_t remote_rx_window_dec_atomic(struct ub_flow_control *fc, uint16_t required_win,
     bool is_return)
 {
@@ -414,11 +409,6 @@ static ALWAYS_INLINE uint16_t available_credit_inc_atomic(ub_credit_pool_t *pool
     return ret;
 }
 
-static ALWAYS_INLINE uint16_t allocated_credit_inc_atomic(ub_credit_pool_t *pool, uint16_t count)
-{
-    return counter_inc_atomic_u16(pool, count, CREDIT_POOL_ALLOCATED);
-}
-
 static ALWAYS_INLINE uint16_t available_credit_return_atomic(ub_credit_pool_t *pool, uint16_t count)
 {
     (void)counter_dec_atomic_u16(pool, count, CREDIT_POOL_ALLOCATED);
@@ -464,11 +454,6 @@ static ALWAYS_INLINE uint16_t available_credit_return_non_atomic(ub_credit_pool_
     return counter_inc_non_atomic_u16(pool, count, CREDIT_POOL_IDLE);
 }
 
-static ALWAYS_INLINE uint16_t allocated_credit_inc_non_atomic(ub_credit_pool_t *pool, uint16_t count)
-{
-    return counter_inc_non_atomic_u16(pool, count, CREDIT_POOL_ALLOCATED);
-}
-
 static ALWAYS_INLINE uint16_t allocated_credit_dec_non_atomic(ub_credit_pool_t *pool, uint16_t count)
 {
     return counter_dec_non_atomic_u16(pool, count, CREDIT_POOL_ALLOCATED);
@@ -484,13 +469,11 @@ static void umq_ub_credit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flo
         pool->ops.available_credit_dec = available_credit_dec_atomic;
         pool->ops.available_credit_return = available_credit_return_atomic;
         pool->ops.allocated_credit_dec = allocated_credit_dec_atomic;
-        pool->ops.allocated_credit_inc = allocated_credit_inc_atomic;
         pool->ops.stats_query = credit_pool_stats_query_atomic;
     } else {
         pool->ops.available_credit_inc = available_credit_inc_non_atomic;
         pool->ops.available_credit_dec = available_credit_dec_non_atomic;
         pool->ops.allocated_credit_dec = allocated_credit_dec_non_atomic;
-        pool->ops.allocated_credit_inc = allocated_credit_inc_non_atomic;
         pool->ops.available_credit_return = available_credit_return_non_atomic;
         pool->ops.stats_query = credit_pool_stats_query_non_atomic;
     }
@@ -509,26 +492,12 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     }
     fc->local_rx_depth = queue->rx_depth;
     fc->local_tx_depth = queue->tx_depth;
-    fc->initial_window = cfg->initial_window;
-    fc->notify_interval = cfg->notify_interval;
-    fc->credits_per_request = cfg->credits_per_request;
     fc->initial_credit = cfg->initial_credit;
     fc->return_ratio = cfg->return_ratio;
     fc->min_reserved_credit = cfg->min_reserved_credit;
     fc->credit_multiple = cfg->credit_multiple;
     fc->max_credits_request = cfg->max_credits_request;
-    if (cfg->initial_window == 0 || cfg->initial_window > queue->rx_depth) {
-        fc->initial_window = fc->local_rx_depth >> 1;
-    }
-    if (fc->initial_window == 0) {
-        fc->initial_window = 1;
-    }
-    if (cfg->notify_interval == 0 || cfg->notify_interval > queue->rx_depth) {
-        fc->notify_interval = fc->local_rx_depth >> UMQ_UB_FLOW_CONTROL_NOTIFY_THR;
-    }
-    if (fc->notify_interval == 0) {
-        fc->notify_interval = 1;
-    }
+
     if (cfg->return_ratio == 0 || cfg->return_ratio > queue->rx_depth) {
         fc->return_ratio = UMQ_UB_RETURN_CREDIT_RATIO;
     }
@@ -557,7 +526,6 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     if (cfg->use_atomic_window) {
         fc->ops.remote_rx_window_inc = remote_rx_window_inc_atomic;
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_atomic;
-        fc->ops.remote_rx_window_exchange = remote_rx_window_exchange_atomic;
         fc->ops.remote_rx_window_load = remote_rx_window_load_atomic;
         fc->ops.local_rx_allocated_inc = local_rx_allocated_inc_atomic;
         fc->ops.local_rx_allocated_dec = local_rx_allocated_dec_atomic;
@@ -568,7 +536,6 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     } else {
         fc->ops.remote_rx_window_inc = remote_rx_window_inc_non_atomic;
         fc->ops.remote_rx_window_dec = remote_rx_window_dec_non_atomic;
-        fc->ops.remote_rx_window_exchange = remote_rx_window_exchange_non_atomic;
         fc->ops.remote_rx_window_load = remote_rx_window_load_non_atomic;
         fc->ops.local_rx_allocated_inc = local_rx_allocated_inc_non_atomic;
         fc->ops.local_rx_allocated_dec = local_rx_allocated_dec_non_atomic;
@@ -950,11 +917,6 @@ void umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm
     credit->ops.available_credit_return(credit, return_credit);
     (void)fc->ops.local_rx_allocated_dec(fc, return_credit);
     umq_ub_shared_credit_return_ack(queue, return_credit);
-}
-
-void umq_ub_shared_credit_return_ack_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
-{
-    return;
 }
 
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count)

@@ -175,12 +175,6 @@ typedef struct umq_trans_info {
 #define UMQ_FEATURE_ENABLE_FLOW_CONTROL     (1 << 4)    // enable flow control
 
 typedef struct umq_flow_control_cfg {
-    // set when rx >= initial_window at first, [1, rx_depth], otherwise use rx_depth / 2 by default
-    uint16_t initial_window;
-    // notify when rx >= notify_interval, [1, rx_depth], otherwise use rx_depth / 16 by default
-    uint16_t notify_interval;
-    // number of credits allocated per request for each umq
-    uint16_t credits_per_request;
     // initial available credit for each umq
     uint16_t initial_credit;
     // the max number of credits allocated per request for each umq
