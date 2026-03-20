@@ -14,6 +14,8 @@
 #include "perf.h"
 #include "jetty_public_func.h"
 
+#define TP_TYPE_CNT 4
+
 typedef struct send_recv_src_queue_info {
     urma_jetty_id_t remote_id;
     queue_t *l_queue;
@@ -23,6 +25,7 @@ _Static_assert(sizeof(send_recv_src_queue_info_t) <= QUEUE_MSG_SRC_QUEUE_INFO_SI
                "send_recv_src_queue_info_t > QUEUE_MSG_SRC_QUEUE_INFO_SIZE");
 
 static mem_hmap_t g_urpc_ip_mem_hmap;
+static const char *g_urpc_tp_type_str[TP_TYPE_CNT] = {"rtp", "ctp", "utp", "unknown"};
 
 int send_recv_mem_seg_token_get(uint64_t mem_h, mem_seg_token_t *token)
 {
@@ -134,6 +137,31 @@ static inline int send_recv_set_cq_depth(urpc_qcfg_get_t *cfg_get, urpc_qcfg_cre
     return send_recv_tx_cq_depth_set(cfg_get, cfg);
 }
 
+static urma_tp_type_t urpc_tp_type_get(union urma_tp_type_en tp_type)
+{
+    if (tp_type.bs.rtp == 1 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 0) {
+        return URMA_RTP;
+    }
+    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 1 && tp_type.bs.utp == 0) {
+        return URMA_CTP;
+    }
+    if (tp_type.bs.rtp == 0 && tp_type.bs.ctp == 0 && tp_type.bs.utp == 1) {
+        return URMA_UTP;
+    }
+    return URMA_UTP + 1;
+}
+
+static int urpc_default_priority_get(urma_device_attr_t dev_attr)
+{
+    for (int i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
+        urma_tp_type_t tp_type = urpc_tp_type_get(dev_attr.dev_cap.priority_info[i].tp_type);
+        if (tp_type == URMA_RTP) {
+            return i;
+        }
+    }
+   return URPC_FAIL;
+}
+
 int send_recv_set_local_queue_normal_cfg(
     jetty_provider_t *provider, urpc_qcfg_get_t *cfg_get, urpc_qcfg_create_t *cfg, urpc_queue_trans_mode_t trans_mode)
 {
@@ -142,7 +170,6 @@ int send_recv_set_local_queue_normal_cfg(
     cfg_get->rx_depth = (cfg->create_flag & QCREATE_FLAG_RX_DEPTH) != 0 ? cfg->rx_depth : 0;
     cfg_get->tx_depth = (cfg->create_flag & QCREATE_FLAG_TX_DEPTH) != 0 ? cfg->tx_depth : 0;
     cfg_get->custom_flag = (cfg->create_flag & QCREATE_FLAG_CUSTOM_FLAG) != 0 ? cfg->custom_flag : 0;
-    cfg_get->priority = (cfg->create_flag & QCREATE_FLAG_PRIORITY) != 0 ? cfg->priority : URPC_PLOG_PRIORITY;
     cfg_get->type = QUEUE_TYPE_NORMAL;
     cfg_get->max_rx_sge =
         (cfg->create_flag & QCREATE_FLAG_MAX_RX_SGE) != 0 ? cfg->max_rx_sge : provider->dev_attr.dev_cap.max_jfr_sge;
@@ -157,6 +184,26 @@ int send_recv_set_local_queue_normal_cfg(
     cfg_get->rnr_retry = (cfg->create_flag & QCREATE_FLAG_RNR_RETRY) != 0 ? cfg->rnr_retry : URPC_UB_TYPICAL_RNR_RETRY;
     cfg_get->min_rnr_timer =
         (cfg->create_flag & QCREATE_FLAG_MIN_RNR_TIMER) != 0 ? cfg->min_rnr_timer : URPC_UB_TYPICAL_MIN_RNR_TIMER;
+    if (cfg->create_flag & QCREATE_FLAG_PRIORITY) {
+        if (cfg->priority > URMA_MAX_PRIORITY) {
+            URPC_LIB_LOG_ERR("priority[%u] is invalid\n", cfg->priority);
+            return -URPC_ERR_EINVAL;
+        }
+        urma_tp_type_t tp_type = urpc_tp_type_get(provider->dev_attr.dev_cap.priority_info[cfg->priority].tp_type);
+        if (tp_type != URMA_RTP) {
+            URPC_LIB_LOG_ERR("priority[%u] is invalid, associated tp_type is %s, actual tp_type is rtp\n",
+                cfg->priority, g_urpc_tp_type_str[tp_type]);
+            return -URPC_ERR_EINVAL;
+        }
+        cfg_get->priority = cfg->priority;
+    } else {
+        int ret = urpc_default_priority_get(provider->dev_attr);
+        if (ret < 0) {
+            URPC_LIB_LOG_ERR("there is no priority for tp_type rtp\n");
+            return -URPC_ERR_EINVAL;
+        }
+        cfg_get->priority = (uint8_t)ret;
+    }
 
     return send_recv_set_cq_depth(cfg_get, cfg);
 }
