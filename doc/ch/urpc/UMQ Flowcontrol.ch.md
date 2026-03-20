@@ -3,38 +3,45 @@
 ## 功能简介
 UMQ支持在UB模式下启用流量控制功能，根据对端UMQ的接收队列实时可用深度确定本端UMQ是否可执行发包。
 
-启用流量控制时，UMQ会使用IO立即数交换接收队列的可用深度，并且在IO立即数中占用1bit位（LSB）用于区分该立即数是应用IO，还是UMQ内部流程使用的。因此，该场景下应用需关注，最多只能使用63bit立即数空间。
-
-UMQ流量控制维护了local_rx_posted和remote_rx_window两个计数，分别表示本端接收队列中下发的接收缓存数（在本端UMQ执行umq_post填充接收缓存时增加计数），以及本端接收到对端通告的对端接收队列可用深度（在接收到对端通告的接收缓存数时增加计数）。
-
-在UMQ初始化阶段，当第一次填充接收缓存数满足initial_window（默认为接收队列深度的一半）时，UMQ内部会将该初始值设置到可供对端UMQ读取的内存中，用于remote_rx_window初值更新。后续每当local_rx_posted计数更新间隔满足notify_interval后，UMQ会尝试在应用IO的立即数中携带本端接收队列可用深度（如果应用未使用立即数），或者直接发送一个立即数，表示本端接收队列的可用深度，以向对端通告本端的接收队列可用深度。
-
-对端UMQ接收到该通告立即数以后，增加remote_rx_window计数，并在umq_buf_t中设置status为UMQ_BUF_FLOW_CONTROL_UPDATE，应用可根据该状态确定继续发包的时机。
-
-当发送IO时，如果需要消耗对端的接收队列缓存，如UMQ_OPC_SEND/UMQ_OPC_SEND_IMM/UMQ_OPC_WRITE_IMM，UMQ内部会尝试根据发送wr的数量申请remote_rx_window，如果remote_rx_window不足，则返回-UMQ_ERR_EAGAIN，并且将bad_qbuf指向未成功发送的qbuf处。
-
 ## 使用说明
 可配置参数说明：
-* initial_window: 提供远端读取的窗口初始值，默认设置为接收队列深度的一半
-* notify_interval: 向对端通告本端接收队列可用深度的间隔，默认设置为接收队列的十六分之一
-* use_atomic_window: 流量控制相关计数是否采用原子变量维护，在同一个UMQ收发包存在并发的场景需设置为true
+* initial_credit：设置首次向对端请求的信用数量
+* max_credits_request：本端每次请求信用的最大值，当持有的对端信用低于阈值时，本端会再次发起请求，但每次请求量不超过该值
+* use_atomic_window：流量控制相关计数是否采用原子变量维护，在同一个UMQ收发包存在并发的场景需设置为true
+* credit_multiple：自适应调整请求量的倍数，若对端实际授予的信用等于本次请求的数量，则下次请求量乘以该倍数，否则除以该倍数
+* return_ratio：归还credit的比例
+* min_reserved_credit：当持有的对端信用低于或者等于此值时，本端会再次发起请求
+* timeout_ms：超时时间，若本端在timeout_ms内未发送I/O，则主动归还持有的对端信用
 
 统计信息查询：
-* local_rx_posted: 当前本端接收队列中下发的接收缓存数
-* remote_rx_window: 当前对端通告的对端接收队列可用深度
-* total_local_rx_posted: 本端接收队列中下发的接收缓存总数
-* total_local_rx_notified: 本端发出通告的本端接收队列可用深度总数
-* total_local_rx_posted_error: 不合法（会导致统计溢出）的本端接收队列可用深度统计
-* total_remote_rx_received: 接收到对端通告的对端接收队列可用深度总数
-* total_remote_rx_consumed: 发包流程中消耗的对端接收队列可用深度总数
-* total_remote_rx_received_error: 接收到不合法（会导致统计溢出）的对端接收队列深度通告数
-* total_flow_controlled_wr: 本端发包由于对端接收队列可用深度不足失败的wr数量
+主UMQ信用池统计信息结构体umq_credit_pool_stats有以下关键信息：
+* pool_idle：当前Pool可用的信用数量，指当前本端主UMQ接收缓存队列中可用的缓存数
+* pool_be_allocated：当前被分配取走的信用数量,指当前从主UMQ接收缓存队列中被分配走的缓存数
+* total_pool_idle：当前可用信用累计总数
+* total_pool_be_allocated：当前累计被分配取走的信用总数
+* total_pool_post_rx_err：不合法（会导致pool_idle统计溢出）信用总数
+
+子UMQ信用统计信息结构体umq_credit_private_stats_t主要有以下关键信息：
+* queue_idle：保留字段，始终为0
+* queue_be_allocted：当前本端作为接收方，为该队列已分配给对端的信用数
+* queue_acquired：当前本端作为发送方，为该队列持有的对端信用数
+* total_queue_idle：保留字段，始终为0
+* total_queue_acquired：从启动至今，本端为该队列累计持有的对端信用总数
+* total_queue_be_allocated：从启动至今，本端为该队列累计被分配的信用总数
+* total_queue_post_tx_success：本端作为发送方，成功发送I/O请求（WR）累计次数
+* total_queue_post_tx_err：本端作为发送方，因持有的对端信用不足而发送失败的I/O请求累计次数
+* total_queue_acquired_err：因非法操作导致信用计数异常（如溢出）的累计值
+
+子UMQ流控报文统计信息结构体umq_packet_stats_t主要有以下关键信息：
+* send_cnt：流控报文发送的次数
+* send_success：流控报文成功发送的次数
+* recv_cnt：流控请求接收的次数
+* send_error_cnt：流控报文发送失败的次数
+* recv_error_cnt：流控请求接收失败的次数
 
 统计查询接口使用示例如下：
 ```
-umq_flow_control_stats_t s = {0};
-umq_user_ctl_in_t in = {.opcode = UMQ_OPCODE_FLOW_CONTROL_STATS_QUERY};
-umq_user_ctl_out_t out = {.addr = &s, .len = sizeof(s)};
-int ret = umq_user_ctl(umqh, &in, &out);
+umq_flow_control_stats_t flow_control_stats = {0};
+int ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
 ...
 ```
