@@ -225,6 +225,7 @@ static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert:
     auto attrs = context.GetAttrs();
     OPS_ERR_IF(attrs == nullptr, OPS_LOG_E(K_INNER_DEBUG, "attrs is null."), return ge::GRAPH_FAILED);
     auto quantModePtr = attrs->GetAttrPointer<int>(ATTR_QUANT_MODE_INDEX);
+    OPS_ERR_IF(quantModePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "quantModePtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(h % BLOCK_SIZE_A2 != 0 || h <= 0 || h > MAX_HIDDEN_SIZE_A2,
                     OPS_LOG_E(K_INNER_DEBUG, "hiddensize is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(

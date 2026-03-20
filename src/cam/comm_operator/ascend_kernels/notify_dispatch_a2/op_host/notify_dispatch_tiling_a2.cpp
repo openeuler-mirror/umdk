@@ -49,7 +49,7 @@ constexpr uint32_t INPUT_SEND_DATA_INDEX = 0;
 constexpr uint32_t INPUT_TOKEN_PER_EXPERT_INDEX = 1;
 constexpr uint32_t INPUT_TMP_DATA_INDEX = 2;
 constexpr uint32_t NUM_2 = 2;
-constexpr uint32_t NUM_4 = 2;
+constexpr uint32_t NUM_4 = 4;
 
 constexpr uint32_t OUTPUT_SEND_DATA_OFFSET_INDEX = 0;
 constexpr uint32_t OUTPUT_RECV_DATA_INDEX = 1;
@@ -76,7 +76,7 @@ constexpr uint32_t ATTR_LOCAL_RANK_ID_INDEX = 8;
 
 constexpr size_t MAX_GROUP_NAME_LENGTH = 128UL;
 constexpr int64_t MAX_COMM_WORLD_SIZE = 384;
-constexpr int64_t MAX_A2_WORLD_SIZE = 64;
+constexpr int64_t SUPPORT_A2_WORLD_SIZE = 16;
 constexpr int64_t MAX_COMM_LOCAL_SIZE = 16;
 constexpr int64_t MAX_A2_LOCAL_SIZE = 8;
 
@@ -86,9 +86,6 @@ constexpr uint32_t KERNEL_A2_ARG_SIZE = 16 * 1024 * 1024;
 constexpr int32_t HCCL_BUFFER_SIZE_DEFAULT = 200 * 1024 * 1024;  // Bytes
 constexpr uint64_t MB_SIZE = 1024UL * 1024UL;
 
-constexpr static int TILING_KEY_FLOAT16 = 20;
-constexpr static int TILING_KEY_BFLOAT16 = 21;
-constexpr static int TILING_KEY_FLOAT = 22;
 constexpr static int TILING_KEY_INT = 23;
 constexpr static int TILING_KEY_A2_TYPE = 100;
 }  // namespace
@@ -137,9 +134,9 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
                     return ge::GRAPH_FAILED);
     OPS_ERR_IF(localRankIdPtr == nullptr, OPS_LOG_E(nodeName, "localRankIdPtr is null."), return ge::GRAPH_FAILED);
 
-    OPS_ERR_IF((*rankSizePtr <= 0) || (*rankSizePtr > MAX_A2_WORLD_SIZE),
-                    OPS_LOG_E(nodeName, "rankSize is invalid, only support (0, %ld], but got rankSize=%ld.",
-                            MAX_A2_WORLD_SIZE, *rankSizePtr),
+    OPS_ERR_IF((*rankSizePtr <= 0) || (*rankSizePtr != SUPPORT_A2_WORLD_SIZE),
+                    OPS_LOG_E(nodeName, "rankSize is invalid, only support %ld, but got rankSize=%ld.",
+                            SUPPORT_A2_WORLD_SIZE, *rankSizePtr),
                     return ge::GRAPH_FAILED);
     OPS_ERR_IF(
         (*rankIdPtr < 0) || (*rankIdPtr >= *rankSizePtr),
@@ -426,14 +423,6 @@ static ge::graphStatus NotifyDispatchA2TilingFuncImpl(gert::TilingContext &conte
     int tilingKey = TILING_KEY_INT;
     OPS_ERR_IF(context.GetInputDesc(0) == nullptr, OPS_LOG_E(nodeName, "input 0 is nullptr."),
         return ge::GRAPH_FAILED);
-    auto sendDtype = (context.GetInputDesc(0))->GetDataType();
-    if (sendDtype == ge::DT_FLOAT16) {
-        tilingKey = TILING_KEY_FLOAT16;
-    } else if (sendDtype == ge::DT_BF16) {
-        tilingKey = TILING_KEY_BFLOAT16;
-    } else if (sendDtype == ge::DT_FLOAT) {
-        tilingKey = TILING_KEY_FLOAT;
-    }
 
     fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
     OPS_ERR_IF(platformInfoPtr == nullptr, OPS_LOG_E(nodeName, "platformInfoPtr is nullptr."),
