@@ -47,6 +47,8 @@ void udma_u_init_jfr_param(struct udma_u_jfr *jfr, urma_jfr_cfg_t *cfg)
 	jfr->wqe_shift = UDMA_U_ILOG32(roundup_pow_of_two(UDMA_SGE_SIZE *
 							  jfr->max_sge));
 	jfr->lock_free = cfg->flag.bs.lock_free;
+	jfr->rq.pi = 0;
+	jfr->rq.ci = 0;
 }
 
 static int udma_u_create_rq(struct udma_u_context *udma_ctx,
