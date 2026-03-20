@@ -71,7 +71,8 @@ Output is a List of Tensor, which stores the following value sequencially: expan
 5. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 6. Data type of x do not support bfloat16.
 7. Current version does not support shared expert function.
-8. Other Constraits need to be satisfy:
+8. User should guarantee the validity of ext_info address.
+9. Other Constraits need to be satisfy:
  - top_k supports 8 only.
  - Required: (moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, where CAM_MAX_EXPERT_NUM is 512 currently.
  - Required: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0
@@ -148,7 +149,8 @@ Output is a tensor，which stores expand_x。
 3. Current interface do not support concurrent usage.
 4. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 5. Current version does not support shared expert function.
-6. Other Constraits need to be satisfy:
+6. User should guarantee the validity of ext_info address.
+7. Other Constraits need to be satisfy:
  - top_k supports 8 only.
  - Required: (moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, where CAM_MAX_EXPERT_NUM is 512 currently.
  - Required: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0

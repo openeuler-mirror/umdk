@@ -71,7 +71,8 @@ moe_dispatch_shmem(
 5. 当前接口在GE图模式下不支持动态图， 不支持fullgraph=true的选项。
 6. 当前x入参的输入格式不支持bfloat16类型。
 7. 当前不支持共享专家功能。
-8. 除满足上述形状约束外，其他参数取值要求：
+8. 用户应保证ext_info地址合法性。
+9. 除满足上述形状约束外，其他参数取值要求：
  - top_k当前仅支持8
  - 需要满足：(moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, 当前最大专家数为512
  - 需要满足: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0
@@ -149,7 +150,8 @@ moe_combine_shmem(
 3. 当前接口不支持并发调用。
 4. 当前接口在GE图模式下不支持动态图， 不支持fullgraph=true的选项。
 5. 当前不支持共享专家功能。
-6. 除满足上述形状约束外，其他参数取值要求：
+6. 用户应保证ext_info地址合法性。
+7. 除满足上述形状约束外，其他参数取值要求：
  - top_k当前仅支持8
  - 需要满足：(moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, 当前最大专家数为512
  - 需要满足: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0
