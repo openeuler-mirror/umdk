@@ -1977,32 +1977,7 @@ static urma_status_t urma_bind_jetty_compat(urma_jetty_t *jetty, urma_target_jet
 {
     urma_context_t *ctx = jetty->urma_ctx;
     urma_ops_t *ops = ctx->ops;
-
-    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, get_tp_list);
-    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, bind_jetty_ex);
-
-    urma_get_tp_cfg_t get_tp_cfg = {0};
-    urma_fill_get_tp_cfg(&get_tp_cfg, tjetty->trans_mode, tjetty->tp_type, &jetty->jetty_id.eid, &tjetty->id.eid);
-    uint32_t tp_cnt = 1;
-    urma_tp_info_t tp_info = {0};
-    urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
-    if (status != URMA_SUCCESS || tp_cnt != 1) {
-        errno = EIO;
-        return URMA_FAIL;
-    }
-
-    urma_active_tp_cfg_t active_tp_cfg = {
-        .tp_handle = tp_info.tp_handle,
-        .tp_attr.tx_psn = rand(),
-    };
-    /* Only exchange tp info for RC TP */
-    if (tjetty->tp_type == URMA_RTP) {
-        int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
-                                            &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
-        if (ret != 0) {
-            return URMA_FAIL;
-        }
-    }
+    urma_active_tp_cfg_t active_tp_cfg = {0};
 
     return ops->bind_jetty_ex(jetty, tjetty, &active_tp_cfg);
 }
