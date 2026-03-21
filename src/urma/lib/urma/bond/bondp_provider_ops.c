@@ -38,9 +38,6 @@
 #define UBAGG_MAX_EVENT 1
 #define UBAGG_ENABLE_RECOVERY "UBAGG_ENABLE_RECOVERY"
 
-static int get_dev_and_ctx_by_eid(urma_eid_t **topo_eid_list, urma_device_t **dev,
-                                  urma_context_t **ctx, urma_device_t *device);
-
 /* manager of global table in bonding device */
 bondp_global_context_t *g_bondp_global_ctx = NULL;
 
@@ -173,87 +170,6 @@ urma_status_t bondp_uninit(void)
     return URMA_SUCCESS;
 }
 
-static inline bool is_urma_eid_equal(urma_eid_t *eid1, urma_eid_t *eid2)
-{
-    return !memcmp(eid1, eid2, sizeof(urma_eid_t));
-}
-
-static int get_eid_index(urma_device_t *dev, urma_eid_t *eid)
-{
-    urma_eid_info_t *eid_list;
-    uint32_t eid_cnt;
-    int eid_index = -1;
-
-    eid_list = urma_get_eid_list(dev, &eid_cnt);
-    if (eid_list == NULL) {
-        return -1;
-    }
-    if (eid != NULL) {
-        for (int i = 0; i < eid_cnt; ++i) {
-            if (is_urma_eid_equal(&eid_list[i].eid, eid)) {
-                eid_index = eid_list[i].eid_index;
-                break;
-            }
-        }
-    } else {
-        if (eid_cnt > 0) {
-            eid_index = eid_list[0].eid_index;
-        }
-    }
-    urma_free_eid_list(eid_list);
-    return eid_index;
-}
-
-static int get_dev_and_ctx_by_name(char *dev_name, urma_device_t **dev, urma_context_t **ctx)
-{
-    *dev = urma_get_device_by_name(dev_name);
-    if (*dev == NULL) {
-        URMA_LOG_ERR("Failed to get device\n");
-        return -1;
-    }
-    int eid_index = get_eid_index(*dev, NULL);
-    if (eid_index < 0) {
-        URMA_LOG_ERR("Failed to get eid_idx\n");
-        return -1;
-    }
-    *ctx = urma_create_context(*dev, eid_index);
-    if (*ctx == NULL) {
-        URMA_LOG_ERR("Failed to create context\n");
-        return -1;
-    }
-    return 0;
-}
-/**
- * This function will only be called in matrix server mode
- * so all devices are UB devices
- */
-static int get_dev_and_ctx_by_eid(urma_eid_t **topo_eid_list, urma_device_t **dev,
-                                  urma_context_t **ctx, urma_device_t *device)
-{
-    urma_eid_info_t *eid_list;
-    uint32_t cnt = 0;
-
-    eid_list = urma_get_eid_list(device, &cnt);
-    for (uint32_t j = 0; eid_list != NULL && j < cnt; j++) {
-        for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
-            if (topo_eid_list[i] == NULL) {
-                continue;
-            }
-            if (memcmp(&eid_list[j].eid, topo_eid_list[i], sizeof(urma_eid_t)) == 0) {
-                dev[i] = device;
-                ctx[i] = urma_create_context(device, eid_list[j].eid_index);
-                if (ctx[i] == NULL) {
-                    URMA_LOG_ERR("Failed to create context\n");
-                    urma_free_eid_list(eid_list);
-                    return -1;
-                }
-            }
-        }
-    }
-    urma_free_eid_list(eid_list);
-    return 0;
-}
-
 static int get_topo_info_from_ko(bondp_context_t *bond_ctx)
 {
     if (g_bondp_global_ctx->topo_map) {
@@ -278,6 +194,8 @@ static int get_topo_info_from_ko(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Failed to create topo map\n");
         return -1;
     }
+
+    bond_ctx->topo_map = g_bondp_global_ctx->topo_map;
     return 0;
 }
 
@@ -424,65 +342,25 @@ roll_back:
     return ret;
 }
 
-static int init_general_slave_devices(bondp_context_t *bond_ctx)
+static int bondp_create_pctx(bondp_context_t *bond_ctx, urma_context_aggr_mode_t aggr_mode)
 {
-    /* user ioctl input and output */
-    struct ubagg_slave_device dev_info = {0};
+    bondp_userctl_physical_device_out_t dev_info = {0};
     urma_user_ctl_in_t in = {
         .opcode = GET_SLAVE_DEVICE
     };
     urma_user_ctl_out_t out = {
         .addr = (uint64_t)&dev_info,
-        .len = sizeof(struct ubagg_slave_device)
+        .len = sizeof(bondp_userctl_physical_device_out_t)
     };
     urma_udrv_t data = {0};
-    /* error handling param of urma_create_context */
-    int i = 0;
-
     if (urma_cmd_user_ctl(&bond_ctx->v_ctx, &in, &out, &data)) {
         URMA_LOG_ERR("Failed to get slave device info\n");
         return -1;
     }
 
-    if (!is_valid_dev_num(dev_info.slave_dev_num)) {
-        URMA_LOG_ERR("Invalid slave device number %d of device %s\n", dev_info.slave_dev_num,
-            bond_ctx->v_ctx.dev->name);
-        return -1;
-    }
-
-    if (is_single_dev_mode(&bond_ctx->v_ctx)) {
-        bond_ctx->dev_num = SINGLE_DIE_IODIE_NUM;
-    } else {
-        bond_ctx->dev_num = dev_info.slave_dev_num;
-    }
-
-    for (i = 0; i < bond_ctx->dev_num; ++i) {
-        if (get_dev_and_ctx_by_name(dev_info.slave_dev_name[i], &bond_ctx->p_devs[i], &bond_ctx->p_ctxs[i])) {
-            URMA_LOG_ERR("Failed to create dev ctx %d in bonding\n", i);
-            goto DELETE_SLAVE_CTX;
-        }
-    }
-    return init_slave_context_fd(bond_ctx);
-
-DELETE_SLAVE_CTX:
-    for (int j = 0; j < i; ++j) {
-        urma_delete_context(bond_ctx->p_ctxs[j]);
-    }
-    return -1;
-}
-
-static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_aggr_mode_t aggr_mode)
-{
-    int device_num = 0;
-    urma_device_t **device_list = urma_get_device_list(&device_num);
-    if (device_list == NULL || device_num == 0) {
-        URMA_LOG_ERR("urma get device list failed!\n");
-        return -1;
-    }
-    bond_ctx->topo_map = g_bondp_global_ctx->topo_map;
-    bondp_topo_agg_dev_t *topo_info = get_topo_dev_info_by_agg_eid(bond_ctx->topo_map, &bond_ctx->v_ctx.eid);
-    if (topo_info == NULL) {
-        URMA_LOG_ERR("Failed to get topo info by bonding eid\n");
+    if (dev_info.physical_dev_num <= 0 || dev_info.physical_dev_num > IODIE_NUM) {
+        URMA_LOG_ERR("Invalid slave device number %d of device %s\n",
+                     dev_info.physical_dev_num, bond_ctx->v_ctx.dev->name);
         return -1;
     }
 
@@ -490,65 +368,62 @@ static int init_matrix_slave_devices(bondp_context_t *bond_ctx, urma_context_agg
         ? SINGLE_DIE_IODIE_NUM
         : PRIMARY_EID_NUM;
 
-    urma_eid_t *eid_list[URMA_UBAGG_DEV_MAX_NUM] = {0};
-    for (int i = 0; i < iodie_num; ++i) {
-        eid_list[i] = (urma_eid_t *)(topo_info->ues[i].primary_eid);
-        if (is_empty_eid(eid_list[i])) {
-            URMA_LOG_ERR("Primary eid %d is empty\n", i);
+    const uint32_t INVALID_EID_INDEX = UINT32_MAX;
+    for (int i = 0; i < iodie_num; i++) {
+        bondp_physical_device_t *pdev = &dev_info.physical_devs[i];
+
+        urma_device_t *dev = urma_get_device_by_name(pdev->dev_name);
+        if (dev == NULL) {
+            URMA_LOG_ERR("Failed to get device by name %s\n", pdev->dev_name);
             return -1;
         }
 
-        bool port_eid_valid = false;
-        for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
-            int idx = PRIMARY_EID_NUM + i * PORT_EID_MAX_NUM_PER_DEV + j;
-            eid_list[idx] = (urma_eid_t *)(topo_info->ues[i].port_eid[j]);
-            if (is_empty_eid(eid_list[idx])) {
-                eid_list[idx] = NULL;
-                URMA_LOG_INFO("Skip port ctx [%d, %d], eid is empty", i, j);
-                continue;
+        int primary_eid_idx = pdev->primary_eid_idx;
+        if (primary_eid_idx != INVALID_EID_INDEX) {
+            bond_ctx->p_devs[i] = dev;
+            bond_ctx->p_ctxs[i] = urma_create_context(dev, primary_eid_idx);
+            if (bond_ctx->p_ctxs[i] == NULL) {
+                URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
+                             pdev->dev_name, primary_eid_idx);
+                return -1;
             }
-            port_eid_valid = true;
         }
 
-        if (!port_eid_valid) {
-            URMA_LOG_ERR("No port eid valid\n");
-            return -1;
+        for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
+            int port_eid_idx = pdev->port_eid_idx[j];
+            int ctx_idx = IODIE_NUM + PORT_EID_MAX_NUM_PER_DEV * i + j;
+            if (port_eid_idx != INVALID_EID_INDEX) {
+                bond_ctx->p_devs[ctx_idx] = dev;
+                bond_ctx->p_ctxs[ctx_idx] = urma_create_context(dev, port_eid_idx);
+                if (bond_ctx->p_ctxs[ctx_idx] == NULL) {
+                    URMA_LOG_ERR("Failed to create context for port eid, dev:%s, eid_idx:%d, port_idx:%d\n",
+                                 pdev->dev_name, port_eid_idx, j);
+                    return -1;
+                }
+            }
         }
-    }
-
-    urma_context_t *p_ctxs[URMA_UBAGG_DEV_MAX_NUM] = {0};
-    for (int i = 0; i < device_num; i++) {
-        if (device_list[i]->type != URMA_TRANSPORT_UB) {
-            continue;
-        }
-        int ret = get_dev_and_ctx_by_eid(eid_list, bond_ctx->p_devs, p_ctxs, device_list[i]);
-        if (ret != 0) {
-            URMA_LOG_ERR("Failed to create ctx for primary eid[%d]\n", i);
-            goto DELETE_CTX;
-        }
-    }
-
-    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
-        if (bond_ctx->p_ctxs[i] != NULL) {
-            urma_delete_context(bond_ctx->p_ctxs[i]);
-        }
-        bond_ctx->p_ctxs[i] = p_ctxs[i];
     }
 
     bond_ctx->dev_num = aggr_mode == URMA_AGGR_MODE_STANDALONE
-        ? SINGLE_DIE_DEVNUM
-        : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
-    urma_free_device_list(device_list);
+            ? SINGLE_DIE_DEVNUM
+            : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
     return init_slave_context_fd(bond_ctx);
+}
 
-DELETE_CTX:
-    urma_free_device_list(device_list);
-    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        if (p_ctxs[i] != NULL) {
-            urma_delete_context(p_ctxs[i]);
+static int bondp_delete_pctx(bondp_context_t *bond_ctx)
+{
+    int ret = 0, sub_ret = 0;
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (bond_ctx->p_ctxs[i] != NULL) {
+            sub_ret = urma_delete_context(bond_ctx->p_ctxs[i]);
+            if (sub_ret != 0) {
+                URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d", i, sub_ret);
+                ret = URMA_FAIL;
+            }
+            bond_ctx->p_ctxs[i] = NULL;
         }
     }
-    return -1;
+    return ret;
 }
 
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd)
@@ -592,13 +467,15 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     }
     bond_ctx->v_ctx.aggr_mode = URMA_AGGR_MODE_STANDALONE;
 
-    if (!g_bondp_global_ctx->skip_load_topo && get_topo_info_from_ko(bond_ctx) == 0) {
-        ret = init_matrix_slave_devices(bond_ctx, bond_ctx->v_ctx.aggr_mode);
-    } else {
-        ret = init_general_slave_devices(bond_ctx);
-    }
-    if (ret) {
+    if (get_topo_info_from_ko(bond_ctx) != 0) {
+        URMA_LOG_ERR("Failed to get topo info, change to general mode\n");
         goto CMD_DELETE_CONTEXT;
+    }
+
+    ret = bondp_create_pctx(bond_ctx, bond_ctx->v_ctx.aggr_mode);
+    if (ret) {
+        URMA_LOG_ERR("Failed to create pctx\n");
+        goto DELETE_PCTX;
     }
 
     if (bondp_create_health_check_ctx(bond_ctx) != 0) {
@@ -611,6 +488,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 
     return &bond_ctx->v_ctx;
 
+DELETE_PCTX:
+    bondp_delete_pctx(bond_ctx);
 CMD_DELETE_CONTEXT:
     bondp_destroy_health_check_ctx(bond_ctx);
     bondp_delete_p_ctx(bond_ctx);
@@ -632,15 +511,9 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
 
     (void)strcpy(dev_name, ctx->dev->name);
     bondp_destroy_health_check_ctx(bond_ctx);
-    for (int i = 0; i < bond_ctx->dev_num; ++i) {
-        if (bond_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        if (urma_delete_context(bond_ctx->p_ctxs[i])) {
-            URMA_LOG_ERR("Failed to delete context %d", i);
-            ret = URMA_FAIL;
-        }
-        bond_ctx->p_ctxs[i] = NULL;
+    if (bondp_delete_pctx(bond_ctx) != 0) {
+        URMA_LOG_ERR("Failed to delete pctx\n");
+        ret = URMA_FAIL;
     }
     bondp_restore_async_fd(bond_ctx);
     if (urma_cmd_delete_context(&bond_ctx->v_ctx)) {
@@ -659,14 +532,19 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
 int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode)
 {
     bondp_context_t *bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    if (!is_valid_ctx(bond_ctx)) {
-        URMA_LOG_ERR("bonding context is invalid in user ctl");
-        return -1;
+    int ret = 0;
+
+    ret = bondp_delete_pctx(bond_ctx);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to delete pctx when set aggr mode, ret:%d", ret);
+        return ret;
+    }
+    ret = bondp_create_pctx(bond_ctx, aggr_mode);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to create pctx when set aggr mode, ret:%d", ret);
+        return ret;
     }
 
-    int ret = init_matrix_slave_devices(bond_ctx, aggr_mode);
-    if (ret == 0) {
-        ctx->aggr_mode = aggr_mode;
-    }
+    ctx->aggr_mode = aggr_mode;
     return ret;
 }
