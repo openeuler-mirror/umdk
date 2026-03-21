@@ -29,10 +29,17 @@ typedef enum ubagg_userctl_opcode {
     GET_TOPO_INFO    = 2,
 } ubagg_userctl_opcode_t;
 
-struct ubagg_slave_device {
-    int slave_dev_num;
-    char slave_dev_name[URMA_UBAGG_DEV_MAX_NUM][UBAGG_MAX_DEV_NAME_LEN];
-};
+typedef struct bondp_physical_device {
+	char dev_name[UBAGG_MAX_DEV_NAME_LEN];
+	uint32_t chip_id;
+	uint32_t primary_eid_idx;
+	uint32_t port_eid_idx[PORT_NUM];
+} bondp_physical_device_t;
+
+typedef struct bondp_userctl_physical_device_out {
+	int physical_dev_num;
+	bondp_physical_device_t physical_devs[IODIE_NUM];
+} bondp_userctl_physical_device_out_t;
 
 struct ubagg_topo_info_out {
     bondp_topo_node_t topo_info[MAX_NODE_NUM];

@@ -85,8 +85,6 @@ void delete_topo_map(topo_map_t *topo_map);
  */
 int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, urma_eid_t *output);
 
-bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid);
-
 #ifdef __cplusplus
 }
 #endif
