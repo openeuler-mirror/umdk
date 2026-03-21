@@ -55,6 +55,7 @@ constexpr uint32_t ATTR_LOCAL_RANKSIZE_INDEX = 4;
 const int64_t MAX_COMM_WORLD_SIZE = 384;
 const int64_t MAX_MOE_EXPERTS_NUM = 512;
 const int64_t MAX_LOCAL_RANKSIZE = 8;
+const int64_t MAX_BATCH_SIZE = 4096;
 
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
 constexpr uint32_t KERNEL_USE_WORKSPACE = 1 * 1024 * 1024;
@@ -116,6 +117,10 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OPS_ERR_IF(localRankSizePtr == nullptr, OPS_LOG_E(nodeName, "localRankSizePtr is null."),
                     return ge::GRAPH_FAILED);
 
+    OPS_ERR_IF((*numTokensPtr <= 0) || (*numTokensPtr > MAX_BATCH_SIZE),
+                    OPS_LOG_E(nodeName, "tokenNum is invalid, only support (0, %ld], but got tokenNum=%ld.",
+                            MAX_BATCH_SIZE, *numTokensPtr),
+                    return ge::GRAPH_FAILED);
     OPS_ERR_IF((*numRanksPtr <= 0) || (*numRanksPtr > MAX_COMM_WORLD_SIZE),
                     OPS_LOG_E(nodeName, "rankSize is invalid, only support (0, %ld], but got rankSize=%ld.",
                             MAX_COMM_WORLD_SIZE, *numRanksPtr),

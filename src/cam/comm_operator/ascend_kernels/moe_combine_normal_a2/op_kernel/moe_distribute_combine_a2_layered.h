@@ -133,13 +133,7 @@ private:
     GM_ADDR XOutGM_;
 
     // layered related parameters
-    GM_ADDR shareAddrGM_;
-    GM_ADDR offsetInnerGM_;
-    GM_ADDR countInnerGM_;
-    GM_ADDR offsetOuterGM_;
-    GM_ADDR countOuterGM_;
     GM_ADDR recvCountInnerGM_;
-    GlobalTensor<int32_t> shareAddrGlobal_;
     GlobalTensor<int64_t> shareFlagGlobal_;
     GlobalTensor<ExpandXType> shareMemGlobal_;
     GlobalTensor<ExpandXType> dstshareMemGlobal_;
@@ -181,11 +175,6 @@ private:
     uint32_t serverNum{0};
     uint32_t ipcSliceSize{0};
     uint32_t ipcSliceNodeSize{0};
-    uint64_t send_counts_inner_offset{0};
-    uint64_t offset_inner_offset{0};
-    uint64_t send_counts_outer_offset{0};
-    uint64_t offset_outer_offset{0};
-    uint64_t share_offset{0};
     uint32_t IPC_DATA_SIZE{0};
     TQueBind<QuePosition::VECIN, QuePosition::VECOUT, BUFFER_NUM> moeQueue_;
     TQue<QuePosition::VECIN, BUFFER_NUM> moeSumQueue_;
@@ -306,19 +295,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
         DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE, AscendC::DcciDst::CACHELINE_OUT>(
             readStateGlobal_);
     }
-    send_counts_inner_offset = static_cast<uint64_t>(worldSize_ * localMoeExpertNum_);
-    offset_inner_offset = send_counts_inner_offset + static_cast<uint64_t>(globalBs * serverNum);
-    send_counts_outer_offset = offset_inner_offset + static_cast<uint64_t>(globalBs * axisK_ * serverNum);
-    offset_outer_offset = send_counts_outer_offset + static_cast<uint64_t>(axisBS_);
-    share_offset = offset_outer_offset + static_cast<uint64_t>(axisBS_ * serverNum);
 
-    shareAddrGM_ = sendCount + share_offset;
-    offsetInnerGM_ = sendCount + offset_inner_offset;
-    countInnerGM_ = sendCount + send_counts_inner_offset;
-    offsetOuterGM_ = sendCount + offset_outer_offset;
-    countOuterGM_ = sendCount + send_counts_outer_offset;
-
-    shareAddrGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(sendCount) + share_offset);
     PipeBarrier<PIPE_ALL>();
     for (int i = 0; i < SERVER_RANK_SIZE; i++) {
         shareAddreRank[i] = reinterpret_cast<uint64_t>(

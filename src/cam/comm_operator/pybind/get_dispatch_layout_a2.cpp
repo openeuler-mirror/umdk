@@ -51,6 +51,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplNpu(const at::Tensor &
     auto numTokensPerExpert = at::zeros({numExperts}, at::dtype(at::kInt).device(device));
     auto numTokensPerRank = at::zeros({numRanks}, at::dtype(at::kInt).device(device));
     auto isTokenInRank = at::zeros({numTokens, numRanks}, at::dtype(at::kInt).device(device));
+    TORCH_BIND_ASSERT(numTokens <= MAX_BATCH_SIZE);
     const int notifySendDataSize =
         numExperts * EXPERT_DATA_SIZE + serverNum + MAX_BATCH_SIZE * (1 + 2 * serverNum + numExperts);
     auto sendTokenIdxSmall = at::zeros({numTokens, numTopk}, at::dtype(at::kInt).device(device));

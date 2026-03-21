@@ -287,6 +287,7 @@ static ge::graphStatus MoeDistributeCombineA2TilingFuncImpl(gert::TilingContext 
     auto attrs = context.GetAttrs();
     OPS_ERR_IF(attrs == nullptr, OPS_LOG_E(nodeName, "attrs is null."), return ge::GRAPH_FAILED);
     auto group = attrs->GetAttrPointer<char>(static_cast<int>(ATTR_GROUP_EP_INDEX));
+    OPS_ERR_IF(group == nullptr, OPS_LOG_E(nodeName, "group is null."), return ge::GRAPH_FAILED);
     uint32_t opType = 18;  // batch write=18,
     std::string algConfig = "MultiPut=level0:fullmesh";
     AscendC::Mc2CcTilingConfig mc2CcTilingConfig(group, opType, algConfig);

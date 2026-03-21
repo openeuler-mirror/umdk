@@ -72,6 +72,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     TORCH_BIND_ASSERT(numTokensPerExpert.size(0) % numRanks == 0);
 
     auto numTokens = static_cast<int>(newX.size(0));
+    TORCH_BIND_ASSERT(numTokens <= MAX_BATCH_SIZE);
     auto hidden = static_cast<int>(newX.size(1));
     auto numExperts = static_cast<int64_t>(numTokensPerExpert.size(0));
     auto numLocalExperts = static_cast<int>(numExperts / numRanks);
