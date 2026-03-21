@@ -13,6 +13,7 @@
 #include <torch/csrc/autograd/custom_function.h>
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "pytorch_npu_helper.hpp"
+#include "torch_bind_exception.h"
 #include <hccl/hccl.h>
 #include <iostream>
 
@@ -22,6 +23,9 @@ using TensorVector = std::vector<at::Tensor>;
 using namespace at;
 using namespace std;
 
+namespace {
+const uint32_t DIM_TWO = 2;
+} // namespace
 
 TensorVector FusedDeepMoeImplNpu(
     const at::Tensor &x, \
@@ -43,6 +47,8 @@ TensorVector FusedDeepMoeImplNpu(
     int64_t globalBs
 )
 {
+    TORCH_BIND_ASSERT(x.dim() == DIM_TWO);
+    TORCH_BIND_ASSERT(expertIds.dim() == DIM_TWO);
     auto xShape = x.sizes();
     auto expertIdsShape = expertIds.sizes();
     int h = xShape[1];

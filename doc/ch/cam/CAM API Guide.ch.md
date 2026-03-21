@@ -480,13 +480,13 @@ fused_deep_moe(
 |gmm2_weight_scale|Tensor[]|必选|耦合模式下，只有一个Tensor, 形状:(localExpertNum, token_length); 分离模式下，包含localExpertNum个Tensor, 每个Tensor形状：（token_length），数据类型为float32|GMM2的权重矩阵量化时使用的缩放系数列表，支持耦合模式和分离模式|
 |expert_scales|Tensor|必选|形状：(batch_size, topk), 数据类型为float32|每个专家的权重，combine阶段使用|
 |expert_smooth_scales|Tensor|可选|--|预留参数，暂不参与计算|
-|x_active_mask|Tensor|可选|--|预留参数，传入None|
+|x_active_mask|Tensor|可选|形状： (batch_size)，数据类型bool，取值范围[true, false]，true值一定要在false之前|预留参数，传入None|
 |group_ep|str|必选|字符串长度范围：(0, 128), 且需要保证是有效的通信域名称|HCCL通信域名称|
-|ep_rank_size|int|必选|需要满足：(ep_rank_size * MoeExpertNumPerRank) ≤ 512|EP通信域大小|
+|ep_rank_size|int|必选|需要满足：(ep_rank_size * MoeExpertNumPerRank) ≤ 512且ep_rank_size > 0|EP通信域大小|
 |ep_rank_id|int|必选|[0, ep_rank_size)|本卡在通信域中的rankID|
 |moe_expert_num|int|必选|需要满足：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0|MOE专家数量|
 |shared_expert_num|int|必选|当前仅支持传1|共享专家数量|
-|shared_expert_rank_num|int|必选|需要满足：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0|共享专家卡数量|
+|shared_expert_rank_num|int|必选|需要满足：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0且shared_expert_rank_num < ep_rank_size|共享专家卡数量|
 |quant_mode|int|必选|预留入参，当前只支持传0|量化模式|
 |global_bs|int|必选|若所有卡的token数量一致，可以传入0或者batch_size * ep_rank_size; 若所有卡的token数量不一致，需要传入max_batch_size * ep_rank_size|所有卡的最大token总数|
 ##### 1.1.9.4 返回值 
