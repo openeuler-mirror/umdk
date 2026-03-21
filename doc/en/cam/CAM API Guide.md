@@ -474,13 +474,13 @@ Fused computation-communication operator in MoE Decode phase for A3, which merge
 |gmm2_weight_scale|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, token_length); In seperated mode，there are localExpertNum tensors, each tensor Shape：（token_length）; float32 type|GMM2 weight scale matrix，supports coupling mode and seperated mode|
 |expert_scales|Tensor|Required|Shape：(batch_size, topk), float32 type|weights of each expert，used in combine phase|
 |expert_smooth_scales|Tensor|Optional|--|Reserved parameter|
-|x_active_mask|Tensor|Optional|--|Reserved parameter，set to None|
+|x_active_mask|Tensor|Optional|Shape: (batch_size), bool type, value in[true, false], the true value must come before the false value|Reserved parameter，set to None|
 |group_ep|str|Required|Length of str：(0, 128), make sure it is valid|HCCL communication group name|
-|ep_rank_size|int|Required|Required：(ep_rank_size * MoeExpertNumPerRank) ≤ 512|EP group size|
+|ep_rank_size|int|Required|Required：(ep_rank_size * MoeExpertNumPerRank) ≤ 512, and ep_rank_size > 0|EP group size|
 |ep_rank_id|int|Required|range: [0, ep_rank_size)|rank ID in EP group|
 |moe_expert_num|int|Required|Required：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0|MOE expert number|
 |shared_expert_num|int|Required|support 1 only|shared expert number|
-|shared_expert_rank_num|int|Required|Required：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0|rank number of shared experts|
+|shared_expert_rank_num|int|Required|Required：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0, and shared_expert_rank_num < ep_rank_size|rank number of shared experts|
 |quant_mode|int|Required|Reserved parameter, set to 0|quant mode|
 |global_bs|int|Required|set to 0 or (batch_size * ep_rank_size) when token is the same in different ranks; set to (max_batch_size * ep_rank_size) otherwise.|max token number among all ranks|
 ##### 1.1.9.4 Return Value 

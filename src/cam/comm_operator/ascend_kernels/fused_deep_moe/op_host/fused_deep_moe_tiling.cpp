@@ -374,6 +374,9 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     uint32_t sharedExpertRankNum = static_cast<uint32_t>(*sharedExpertRankNumPtr);
     uint32_t moeExpertNumPerRank = moeExpertNum / (epRankSize - sharedExpertRankNum);
 
+    OPS_ERR_IF(epRankSize <= 0, OPS_LOG_E(nodeName, "epRankSize must > 0."), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(sharedExpertRankNum >= epRankSize, OPS_LOG_E(nodeName, "sharedExpertRankNum must < epRankSize."),
+                    return ge::GRAPH_FAILED);
     OPS_ERR_IF(epRankId < 0, OPS_LOG_E(nodeName, "epRankId must >= 0."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(epRankId >= epRankSize, OPS_LOG_E(nodeName, "epRankId must < epRankSize."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(moeExpertNum > MAX_MOE_EXERT_NUM, OPS_LOG_E(nodeName, "moeExpertNum must <= %u.", MAX_MOE_EXERT_NUM),
