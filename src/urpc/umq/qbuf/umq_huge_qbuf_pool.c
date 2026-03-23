@@ -344,7 +344,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     umq_alloc_option_t *option, umq_buf_list_t *list)
 {
     if (!g_huge_pool_ctx.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -400,7 +400,7 @@ static huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_mempool_id(uint32_t 
 void umq_huge_qbuf_free(umq_buf_list_t *list)
 {
     if (!g_huge_pool_ctx.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return;
     }
 
@@ -480,7 +480,7 @@ int umq_huge_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     huge_qbuf_pool_size_type_t type = umq_huge_qbuf_get_type_by_mempool_id(qbuf->mempool_id);
     huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
     if (!(pool->inited)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
     return headroom_reset(qbuf, headroom_size, g_huge_pool_ctx.mode, pool->block_size);

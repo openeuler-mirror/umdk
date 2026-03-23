@@ -575,7 +575,7 @@ umq_buf_t *umq_ubmm_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
     if (tp->qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
         return NULL;
     }
 
@@ -636,7 +636,7 @@ void umq_tp_ubmm_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
     }
 
     if (qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this qbuf\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this qbuf\n");
         return;
     }
 
@@ -655,11 +655,11 @@ int umq_tp_ubmm_buf_headroom_reset_impl(umq_buf_t *qbuf, uint16_t headroom_size)
     } else if (is_local_addr(tp, qbuf)) {
         qbuf_pool_handle = tp->qbuf_pool_handle;
     } else {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf is invalid for this umq\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf is invalid for this umq\n");
     }
 
     if (qbuf_pool_handle == UMQ_INVALID_HANDLE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "no qbuf pool is valid for this umq\n");
         return -UMQ_ERR_ENOMEM;
     }
 

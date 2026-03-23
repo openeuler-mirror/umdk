@@ -192,7 +192,7 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
             bool with_data = true;
             uint64_t buf_id = umq_buf_to_id_with_header(input, (char *)cur_node, shm, &with_data);
             // shm id and pool name may not right
-            UMQ_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s_data pool double free\n", buf_id,
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s_data pool double free\n", buf_id,
                 with_data ? "with" : "without");
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_FREE;
@@ -232,8 +232,8 @@ static ALWAYS_INLINE int32_t fetch_from_global(
 
     if (*global_buf_cnt < batch_count) {
         pthread_mutex_unlock(&global_pool->global_mutex);
-        UMQ_VLOG_ERR(VLOG_UMQ, "%s not enough, rest count: %u\n", with_data ? "buf with data" : "buf with no data",
-            *global_buf_cnt);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "%s not enough, rest count: %u\n", with_data ? "buf with data" :
+            "buf with no data", *global_buf_cnt);
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -365,7 +365,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_without_data) {
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, shm, false);
-            UMQ_VLOG_ERR(VLOG_UMQ, "qbuf %lu in without_data pool already allocated\n", buf_id);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu in without_data pool already allocated\n", buf_id);
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
 
@@ -404,7 +404,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
-            UMQ_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
 
@@ -457,7 +457,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
-            UMQ_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
 
