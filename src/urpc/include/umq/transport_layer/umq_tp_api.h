@@ -28,6 +28,13 @@ typedef struct umq_ops {
     uint8_t* (*umq_tp_init)(umq_init_cfg_t *cfg);
 
     /**
+    * Load dynamic symbols for transport mode.
+    * This must be called before umq_tp_log_config_set if log config requires external library functions.
+    * Return 0 on success, error code on failure
+    */
+    int (*umq_tp_load_symbol)(void);
+
+    /**
     * Thread safety function
     * Uninit umq
     */

@@ -110,8 +110,14 @@ static void umq_tp_ipc_ack_interrupt(uint64_t umqh_tp, uint32_t nevents, umq_int
     umq_ipc_ack_interrupt_impl(umqh_tp, nevents, option);
 }
 
+static int umq_tp_ipc_symbol_load(void)
+{
+    return 0;  // IPC mode does not need dynamic symbol loading
+}
+
 static umq_ops_t g_umq_ipc_ops = {
     .mode = UMQ_TRANS_MODE_IPC,
+    .umq_tp_load_symbol = umq_tp_ipc_symbol_load,
     .umq_tp_init = umq_tp_ipc_init,
     .umq_tp_uninit = umq_tp_ipc_uninit,
     .umq_tp_create = umq_tp_ipc_create,
