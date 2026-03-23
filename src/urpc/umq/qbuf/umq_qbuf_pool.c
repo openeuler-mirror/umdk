@@ -312,7 +312,7 @@ void umq_qbuf_pool_uninit(void)
 int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
     if (!g_qbuf_pool.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -333,19 +333,19 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
 
     if (request_size == 0) {
         if (flag && param.headroom_size > 0) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "headroom_size not supported when request_size is 0\n");
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "headroom_size not supported when request_size is 0\n");
             return -UMQ_ERR_EINVAL;
         }
 
         if (g_qbuf_pool.mode != UMQ_BUF_SPLIT) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "cannot alloc memory size 0 in combine mode\n");
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "cannot alloc memory size 0 in combine mode\n");
             return -UMQ_ERR_ENOMEM;
         }
 
         while (local_pool->buf_cnt_without_data < num) {
             ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, false, QBUF_POOL_BATCH_CNT);
             if (ret <= 0) {
-                UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
                     local_pool->buf_cnt_without_data, num, ret);
                 return ret;
             }
@@ -359,7 +359,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     while (local_pool->buf_cnt_with_data < param.actual_buf_count) {
         ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, true, QBUF_POOL_BATCH_CNT);
         if (ret <= 0) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, current size: %u, alloc num: %u, status: %d\n",
                 local_pool->buf_cnt_with_data, param.actual_buf_count, ret);
             return ret;
         }
@@ -376,7 +376,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
 void umq_qbuf_free(umq_buf_list_t *list)
 {
     if (!g_qbuf_pool.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return;
     }
 
@@ -407,7 +407,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
 int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 {
     if (!g_qbuf_pool.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
     return headroom_reset(qbuf, headroom_size, g_qbuf_pool.mode, g_qbuf_pool.block_size);
