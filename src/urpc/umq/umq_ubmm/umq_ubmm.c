@@ -127,8 +127,14 @@ static void umq_tp_ubmm_ack_interrupt(uint64_t umqh_tp, uint32_t nevents, umq_in
     umq_ubmm_ack_interrupt_impl(umqh_tp, nevents, option);
 }
 
+static int umq_tp_ubmm_symbol_load(void)
+{
+    return 0;  // UBMM mode does not need dynamic symbol loading
+}
+
 static umq_ops_t g_umq_ubmm_ops = {
     .mode = UMQ_TRANS_MODE_UBMM,
+    .umq_tp_load_symbol = umq_tp_ubmm_symbol_load,
     .umq_tp_init = umq_tp_ubmm_init,
     .umq_tp_uninit = umq_tp_ubmm_uninit,
     .umq_tp_create = umq_tp_ubmm_create,

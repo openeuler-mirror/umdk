@@ -9,6 +9,7 @@
 
 #include "umq_types.h"
 #include "urma_api.h"
+#include "umq_symbol_private.h"
 
 #include "umq_ub_private.h"
 
@@ -59,14 +60,14 @@ int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_le
 static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_info)
 {
     uint32_t eid_cnt = 0;
-    urma_eid_info_t *eid_info_list = urma_get_eid_list(urma_dev, &eid_cnt);
+    urma_eid_info_t *eid_info_list = umq_symbol_urma()->urma_get_eid_list(urma_dev, &eid_cnt);
     if (eid_info_list == NULL || eid_cnt == 0) {
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ_URMA_API, "urma_get_eid_list empty, dev: %s, errno: %d\n", urma_dev->name, errno);
         return UMQ_SUCCESS;
     }
 
     if (eid_cnt >= UMQ_MAX_EID_CNT) {
-        urma_free_eid_list(eid_info_list);
+        umq_symbol_urma()->urma_free_eid_list(eid_info_list);
         UMQ_VLOG_ERR(VLOG_UMQ, "number of eid exceeds the maximum limit %d, dev: %s\n", UMQ_MAX_EID_CNT,
             urma_dev->name);
         return -UMQ_ERR_ENOMEM;
@@ -81,7 +82,7 @@ static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_i
     umq_dev_info->ub.eid_cnt = eid_cnt;
     (void)strncpy(umq_dev_info->dev_name, urma_dev->name, UMQ_DEV_NAME_SIZE);
 
-    urma_free_eid_list(eid_info_list);
+    umq_symbol_urma()->urma_free_eid_list(eid_info_list);
 
     return UMQ_SUCCESS;
 }
@@ -89,7 +90,7 @@ static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_i
 int umq_ub_dev_info_init(void)
 {
     int ret = UMQ_SUCCESS;
-    g_umq_global_dev.urma_dev = urma_get_device_list(&g_umq_global_dev.dev_num);
+    g_umq_global_dev.urma_dev = umq_symbol_urma()->urma_get_device_list(&g_umq_global_dev.dev_num);
     if (g_umq_global_dev.urma_dev == NULL || g_umq_global_dev.dev_num <= 0) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_device_list failed, errno %d\n", errno);
         return -UMQ_ERR_ENODEV;
@@ -118,7 +119,7 @@ FREE_UMQ_DEV:
     g_umq_global_dev.umq_dev = NULL;
 
 FREE_DEV_LIST:
-    urma_free_device_list(g_umq_global_dev.urma_dev);
+    umq_symbol_urma()->urma_free_device_list(g_umq_global_dev.urma_dev);
     g_umq_global_dev.dev_num = 0;
 
     return ret;
@@ -132,7 +133,7 @@ void umq_ub_dev_info_uninit(void)
     }
 
     if (g_umq_global_dev.urma_dev != NULL) {
-        urma_free_device_list(g_umq_global_dev.urma_dev);
+        umq_symbol_urma()->urma_free_device_list(g_umq_global_dev.urma_dev);
         g_umq_global_dev.urma_dev = NULL;
     }
 
