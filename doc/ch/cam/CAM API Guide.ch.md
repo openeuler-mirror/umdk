@@ -191,6 +191,7 @@ A3代际Prefill阶段Dispatch使用的前置接口，用以在当前rank将Token
 5. 当前接口不支持入图使用。
 6. 除满足上述形状约束外，其他参数取值要求：
  - top_k取值范围：(0， 16]
+ - batch_size取值范围：(0, 8000]
  - 需要满足: num_experts % num_ranks == 0
  - 需要满足：num_experts >= num_ranks
 
