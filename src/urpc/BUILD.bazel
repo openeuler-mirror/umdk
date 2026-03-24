@@ -42,8 +42,6 @@ cc_library(
         "@boringssl//:ssl",
         "@boringssl//:crypto",
         "@urma//:urma_headers",
-        "@urma//:urma_lib",
-        "@urma//:tpsa_lib",
         "//include:framework_headers",
     ],
     features = [
