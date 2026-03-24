@@ -216,6 +216,7 @@ typedef enum urma_jfr_state {
 #define URMA_JFS_PI                0x0010
 #define URMA_JFS_PI_TYPE           0x0011
 #define URMA_JFS_CI                0x0012
+#define URMA_JFS_FULL_CTX          0x0013
 
 #define URMA_JFR_DEPTH             0x1001
 #define URMA_JFR_FLAG              0x1002
@@ -232,6 +233,7 @@ typedef enum urma_jfr_state {
 #define URMA_JFR_PI                0x100d
 #define URMA_JFR_PI_TYPE           0x100e
 #define URMA_JFR_CI                0x100f
+#define URMA_JFR_FULL_CTX          0x1010
 
 #define URMA_JFC_DEPTH             0x2001
 #define URMA_JFC_CEQN              0x2002
@@ -245,6 +247,7 @@ typedef enum urma_jfr_state {
 #define URMA_JFC_PI                0x200a
 #define URMA_JFC_PI_TYPE           0x200b
 #define URMA_JFC_CI                0x200c
+#define URMA_JFC_FULL_CTX          0x200d
 
 #define URMA_JETTY_ID              0x3001
 #define URMA_JETTY_FLAG            0x3002
@@ -252,5 +255,6 @@ typedef enum urma_jfr_state {
 #define URMA_JETTY_BIND_RX_JFC     0x3004
 #define URMA_JETTY_BIND_JTG        0x3005
 #define URMA_JETTY_USER_CTX        0x3006
+#define URMA_JETTY_FULL_CTX        0x3007
 
 #endif // URMA_OPCODE_H
