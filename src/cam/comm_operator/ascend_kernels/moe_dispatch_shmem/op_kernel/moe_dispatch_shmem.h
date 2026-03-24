@@ -105,11 +105,11 @@ private:
     __aicore__ inline void UpdateTokenNumsOut();
     __aicore__ inline GM_ADDR GetWindAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + IPC_DATA_OFFSET + winDataSizeOffset_ + rankId * OPT_RANK_OFFSET;
+        return (GM_ADDR)(gva_gm) + IPC_DATA_OFFSET + winDataSizeOffset_;
     }
     __aicore__ inline GM_ADDR GetWindStateAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * WIN_STATE_OFFSET;
+        return (GM_ADDR)(gva_gm) + dataState_ * WIN_STATE_OFFSET;
     }
 
     __aicore__ inline uint32_t MIN(uint32_t x, uint32_t y)
@@ -250,7 +250,7 @@ __aicore__ inline void MoeDispatchShmem<TemplateMC2TypeFunc>::Init(
     gva_gm = (GM_ADDR)tilingData->moeDistributeDispatchInfo.shmemPtr;
     halfWinSize_ = tilingData->moeDistributeDispatchInfo.totalWinSize / 2;
     statusDataSpaceGm = (GM_ADDR)(gva_gm);
-    selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm));
+    selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
         selfDataStatusTensor[aivId_ * UB_ALIGN]);
     // ================== 分两块内存 --> 可以同时跑多个 ===================

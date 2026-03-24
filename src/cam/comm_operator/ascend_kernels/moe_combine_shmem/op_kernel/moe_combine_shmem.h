@@ -98,12 +98,11 @@ private:
     __aicore__ inline void WaitDispatch();
     __aicore__ GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t domain, const uint8_t expertLocalId = 0U)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + IPC_DATA_OFFSET + winDataSizeOffset_ +
-               expertLocalId * expertPerSizeOnWin_;
+        return (GM_ADDR)(gva_gm) + IPC_DATA_OFFSET + winDataSizeOffset_;
     }
     __aicore__ GM_ADDR GetWinStateAddrByRankId(const int32_t rankId, const uint8_t domain)
     {
-        return (GM_ADDR)(gva_gm) + STATE_WIN_OFFSET + dataState_ * WIN_STATE_OFFSET;
+        return (GM_ADDR)(gva_gm) + dataState_ * WIN_STATE_OFFSET;
     }
 
     __aicore__ inline uint32_t MIN(uint32_t x, uint32_t y)
@@ -244,7 +243,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::Init(
     GlobalTensor<int32_t> selfDataStatusTensor;
     gva_gm = (GM_ADDR)tilingData->moeDistributeCombineInfo.shmemPtr;
     statusDataSpaceGm = (GM_ADDR)(gva_gm);
-    selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm));
+    selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
 
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
         selfDataStatusTensor[coreIdx_ * UB_ALIGN]);
