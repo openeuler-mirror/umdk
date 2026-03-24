@@ -11,6 +11,7 @@
 #include "umq_pro_types.h"
 #include "umq_ub_imm_data.h"
 #include "umq_ub_flow_control.h"
+#include "umq_symbol_private.h"
 
 #define UMQ_UB_FLOW_CONTROL_NOTIFY_THR 4
 #define UMQ_UB_FLOW_CONTROL_LEAK_CREDIT_THR 3
@@ -605,7 +606,8 @@ void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue)
         .opcode = URMA_OPC_READ,
         .flag = {.bs = {.complete_enable = 1, .inline_flag = 0}},
         .tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL]};
-    urma_status_t status = urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL], &urma_wr, &bad_wr);
+    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(
+        queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL], &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         fc->remote_get = true;
         queue->interrupt_ctx.tx_fc_interrupt = true;
@@ -684,7 +686,7 @@ void umq_ub_shared_credit_req_send(ub_queue_t *queue)
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return;
@@ -726,7 +728,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
@@ -835,7 +837,7 @@ void umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return;
@@ -879,7 +881,7 @@ static void umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_c
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t status = urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
     if (status == URMA_SUCCESS) {
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return;

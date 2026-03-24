@@ -494,6 +494,18 @@ static int umq_framework_init(umq_framework_t *umq_fw, umq_init_cfg_t *cfg)
         goto UNLOAD_OPS_GET_FUNC;
     }
 
+    // Load dynamic symbols - must succeed
+    if (umq_fw->tp_ops->umq_tp_load_symbol == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq_tp_load_symbol is NULL\n");
+        ret = -UMQ_ERR_EINVAL;
+        goto PUT_TP_OPS;
+    }
+    ret = umq_fw->tp_ops->umq_tp_load_symbol();
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "load symbol failed, status: %d\n", ret);
+        goto PUT_TP_OPS;
+    }
+
     // register log func if needed
     if (g_umq_log_config.is_set && umq_fw->tp_ops->umq_tp_log_config_set != NULL) {
         ret = umq_fw->tp_ops->umq_tp_log_config_set(&g_umq_log_config.cfg);
