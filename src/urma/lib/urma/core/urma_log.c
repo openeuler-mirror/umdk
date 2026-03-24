@@ -30,9 +30,11 @@ urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
 #define MAX_LOG_LEN                    512
 #define MAX_THREAD_TAG_LEN             64
 #define URMA_LOG_TAG                   "URMA"
-#define LIBURMA_LOG                    "libumra"
+#define LIBURMA_LOG                    "liburma"
 #define URMA_LOG_ENV_STR               "URMA_LOG_LEVEL"
 #define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN 32
+
+__thread char g_thread_tag[MAX_THREAD_TAG_LEN] = "-";
 
 static void urma_default_log_func(int level, char *message)
 {
@@ -54,7 +56,8 @@ urma_status_t urma_register_log_func(urma_log_cb_t func)
 urma_status_t urma_unregister_log_func(void)
 {
     char logmsg[MAX_LOG_LEN + 1] = {0};
-    (void)snprintf(logmsg, MAX_LOG_LEN, "%s|%s|unregister log succeed.\n", URMA_LOG_TAG, __func__);
+    (void)snprintf(logmsg, MAX_LOG_LEN, "%s|%s|%ld|%s|%s[%d]|unregister log succeed.\n",
+        URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, __func__, __LINE__);
     (*g_urma_log_func)((int)URMA_VLOG_LEVEL_INFO, logmsg);
     g_urma_log_func = urma_default_log_func;
     return URMA_SUCCESS;
@@ -87,8 +90,6 @@ void urma_log_set_level(urma_vlog_level_t level)
     pthread_mutex_unlock(&g_urma_log_lock);
     return;
 }
-
-__thread char g_thread_tag[MAX_THREAD_TAG_LEN] = "-";
 
 const char *urma_log_get_thread_tag(void)
 {
