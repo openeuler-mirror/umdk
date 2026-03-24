@@ -4,4 +4,3 @@
 add_subdirectory(urma_admin)
 add_subdirectory(urma_perftest)
 add_subdirectory(urma_ping)
-add_subdirectory(ubagg_cli)
