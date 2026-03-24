@@ -14,7 +14,9 @@ UMQ Abnormal Event作为UMQ组件提供的上报异步事件的能力。
     如果获得过对象产生的异常事件时，必须调用确认异常接口（umq_ack_async_event），然后才能删除该对象。
 
 **使用说明**：
-    (1) 用户调用umq_async_event_fd_get, 输入设备的trans_info（需要与umq_init传入的trans_info要一致）获取监听异常事件的fd
+    (1) 用户调用umq_async_event_fd_get接口来获取监听异常事件的文件描述符，调用时需根据设备注册方式传入对应的trans_info：
+        ·对于动态注册的设备，使用umq_dev_add接口中的trans_info
+        ·对于静态注册的设备，使用umq_int接口中的trans_info
     (2) 用户使用epoll机制监听异常事件上fd的可读事件，一旦有可读事件可以使用umq_get_async_event接口获取异常事件
     (3) 用户调用umq_get_async_event接口获取异常事件；
     (4) 用户根据异常事件类型，进行分类处理，例如打印log信息；
