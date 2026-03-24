@@ -498,7 +498,7 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
 ##### 1.1.9.5 Constraints and Precautions ⚠️
 1. Input Shape should satisfy the shape definition above.
 2. Current interface supports A3 only.
-3. Current interface do not support concurrent usage.
+3. Current interface do not support concurrent usage.In extreme cases, repeatedly calling the same operator in a single forward pass may result in undefined behavior. To avoid potential asynchronous timing issues in such scenarios, torch.npu.synchronize() should be added between operator executions.
 4. Support aclgraph only when graph in on.
 5. Do not support shared experts.
 6. The performance may decline when batch_size is lower than 16, as it is not the target scenario.
