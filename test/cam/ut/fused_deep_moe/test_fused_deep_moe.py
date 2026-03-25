@@ -280,58 +280,52 @@ def generate_datas(batch_size,
     is_shared_expert = global_rank_id < shared_expert_rank_num
     moe_expert_num_per_rank = moe_expert_num // (ep_world_size - shared_expert_rank_num)
     actual_bs = int(
-        torch.randint(2 if with_mc2_mask else 1, batch_size, [1]).item(
-        ) if enable_dynamic_bs else batch_size)
+        np.random.randint(2 if with_mc2_mask else 1, batch_size)
+        if enable_dynamic_bs else batch_size)
     local_expert_num = 1 if is_shared_expert else moe_expert_num_per_rank
     gmm1_input_dim = token_hidden_size
     gmm1_output_dim = moe_intermediate_size * 2
     gmm2_input_dim = moe_intermediate_size
     gmm2_output_dim = token_hidden_size
-    x = torch.rand([actual_bs, token_hidden_size]) * 10 - 5
-    expert_ids = torch.arange(
+    x = np.random.rand(actual_bs, token_hidden_size).astype(np.float32) * 10 - 5
+    expert_ids = np.arange(
         global_rank_id * batch_size * top_k,
-        global_rank_id * batch_size * top_k + actual_bs * top_k).to(
-            torch.int32).view(actual_bs, top_k)
+        global_rank_id * batch_size * top_k + actual_bs * top_k,
+        dtype=np.int32).reshape(actual_bs, top_k)
     expert_ids = expert_ids % moe_expert_num
     if is_shared_expert:
-        gmm1_weight = torch.ones([
+        gmm1_weight = np.full([
             local_expert_num, gmm1_input_dim, gmm1_output_dim
-        ]).to(torch.int8) * 4
-        gmm2_weight = torch.ones([
+        ], 4, dtype=np.int8)
+        gmm2_weight = np.full([
             local_expert_num, gmm2_input_dim, gmm2_output_dim
-        ]).to(torch.int8) * 4
-        gmm1_weight[:, :, ::2] = gmm1_weight[:, :, ::2] * -1
-        gmm2_weight[:, :, ::2] = gmm2_weight[:, :, ::2] * -1
-        gmm1_weight_scale = torch.ones([local_expert_num, gmm1_output_dim
-                                        ]) * 0.0015
-        gmm2_weight_scale = torch.ones([local_expert_num, gmm2_output_dim
-                                        ]) * 0.0015
+        ], 4, dtype=np.int8)
+        gmm1_weight[:, :, ::2] = -gmm1_weight[:, :, ::2]
+        gmm2_weight[:, :, ::2] = -gmm2_weight[:, :, ::2]
+        gmm1_weight_scale = np.ones([local_expert_num, gmm1_output_dim],
+                                    dtype=np.float32) * 0.0015
+        gmm2_weight_scale = np.ones([local_expert_num, gmm2_output_dim],
+                                    dtype=np.float32) * 0.0015
     else:
-        gmm1_weight = torch.randint(
+        gmm1_weight = np.random.randint(
             -16, 16,
-            [local_expert_num, gmm1_input_dim, gmm1_output_dim]).to(torch.int8)
-        gmm2_weight = torch.randint(
+            [local_expert_num, gmm1_input_dim, gmm1_output_dim]).astype(np.int8)
+        gmm2_weight = np.random.randint(
             -16, 16,
-            [local_expert_num, gmm2_input_dim, gmm2_output_dim]).to(torch.int8)
-        gmm1_weight_scale = torch.rand([local_expert_num, gmm1_output_dim
-                                        ]) * 0.003 + 0.0015
-        gmm2_weight_scale = torch.rand([local_expert_num, gmm2_output_dim
-                                        ]) * 0.003 + 0.0015
-    expert_scales = torch.rand(actual_bs, top_k)
-    if test_bfloat16:
-        x = x.bfloat16()
-        gmm1_weight_scale = gmm1_weight_scale.bfloat16()
-        gmm2_weight_scale = gmm2_weight_scale.bfloat16()
-    else:
-        x = x.half()
+            [local_expert_num, gmm2_input_dim, gmm2_output_dim]).astype(np.int8)
+        gmm1_weight_scale = (np.random.rand(local_expert_num, gmm1_output_dim
+                                            ).astype(np.float32) * 0.003 + 0.0015)
+        gmm2_weight_scale = (np.random.rand(local_expert_num, gmm2_output_dim
+                                            ).astype(np.float32) * 0.003 + 0.0015)
+    expert_scales = np.random.rand(actual_bs, top_k).astype(np.float32)
     smooth_sales = None
     x_active_mask = None
     valid_token_num = actual_bs
     if with_mc2_mask:
-        valid_token_num = int(torch.randint(1, actual_bs, [1]).item())
-        x_active_mask = torch.cat(
-            (torch.ones(valid_token_num),
-             torch.zeros(actual_bs - valid_token_num))).bool()
+        valid_token_num = int(np.random.randint(1, actual_bs))
+        x_active_mask = np.concatenate(
+            [np.ones(valid_token_num),
+             np.zeros(actual_bs - valid_token_num)]).astype(bool)
     return (x, expert_ids, smooth_sales, expert_scales, x_active_mask), \
             (gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale), \
             actual_bs, valid_token_num
@@ -397,11 +391,23 @@ def test_base_test(mode):
                  worldSize, totalExpertNum, rank, sharedExpertNum)
     input_datas, weight_datas, actual_bs, valid_token_num = generate_datas(
         *parameter, topk, test_bfloat16, dynamicBS, with_mc2_mask)
+
+    x_dtype = torch.bfloat16 if test_bfloat16 else torch.float16
+    scale_dtype = torch.bfloat16 if test_bfloat16 else torch.float32
+    x_np, expert_ids_np, smooth_sales_np, expert_scales_np, x_active_mask_np = input_datas
     input_datas = [
-        data.npu() if data is not None else None for data in input_datas
+        torch.from_numpy(x_np).to(dtype=x_dtype).npu(),
+        torch.from_numpy(expert_ids_np).npu(),
+        None,
+        torch.from_numpy(expert_scales_np).npu(),
+        torch.from_numpy(x_active_mask_np).npu() if x_active_mask_np is not None else None,
     ]
+    gmm1_w, gmm1_ws, gmm2_w, gmm2_ws = weight_datas
     weight_datas = [
-        data.npu() if data is not None else None for data in weight_datas
+        torch.from_numpy(gmm1_w).npu(),
+        torch.from_numpy(gmm1_ws).to(dtype=scale_dtype).npu(),
+        torch.from_numpy(gmm2_w).npu(),
+        torch.from_numpy(gmm2_ws).to(dtype=scale_dtype).npu(),
     ]
 
     small_ops = SmallOps(*weight_datas, ep_hcomm_info_small,
@@ -412,11 +418,11 @@ def test_base_test(mode):
     fused_op_token_output, fused_op_count_output = fused_ops(*input_datas)
     torch_npu.npu.synchronize()
 
-    torch.testing.assert_close(small_op_token_output.cpu(),
-                               fused_op_token_output.cpu(),
-                               atol=2.0,
-                               rtol=0.02)
+    small_token_np = small_op_token_output.cpu().float().numpy()
+    fused_token_np = fused_op_token_output.cpu().float().numpy()
+    tool.allclose_nparray(small_token_np, fused_token_np, rtol=0.02, atol=2.0)
     print("token output accuracy is achieved!")
-    torch.testing.assert_close(small_op_count_output.cpu(),
-                               fused_op_count_output.cpu())
+    small_count_np = small_op_count_output.cpu().numpy()
+    fused_count_np = fused_op_count_output.cpu().numpy()
+    np.testing.assert_array_equal(small_count_np, fused_count_np)
     print("count output accuracy is achieved!")

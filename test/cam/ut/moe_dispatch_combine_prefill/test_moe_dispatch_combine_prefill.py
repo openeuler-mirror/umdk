@@ -78,28 +78,23 @@ def per_token_cast_back(x_fp8: torch.Tensor, x_scales: torch.Tensor):
     x_scales = x_scales.view(x_fp8.size(0), -1, 1)
     return (x_fp32 * x_scales).view(x_fp8.shape).to(torch.bfloat16)
 
-def calc_diff(x: torch.Tensor, y: torch.Tensor):
-    x, y = x.double() + 1, y.double() + 1
+def calc_diff(x, y):
+    x, y = x.astype(np.float64) + 1, y.astype(np.float64) + 1
     denominator = (x * x + y * y).sum()
     sim = 2 * (x * y).sum() / denominator
-    return (1 - sim).item()
+    return 1 - sim
 
 def gen_x(rank, num_tokens, hidden_size):
-    x = torch.ones((num_tokens, hidden_size), dtype=torch.bfloat16, device="npu") * rank
+    x = np.ones((num_tokens, hidden_size), dtype=np.float32) * rank
     return x
 
 def gen_topk_idx(num_experts, num_tokens, num_topk):
-    scores = (
-        torch.randn(
-            (num_tokens, num_experts), dtype=torch.float32, device="npu"
-        ).abs()
-        + 1
-    )
-    topk_idx = torch.topk(scores, num_topk, dim=-1, largest=True, sorted=False)[1]
+    scores = np.abs(np.random.randn(num_tokens, num_experts).astype(np.float32)) + 1
+    topk_idx = np.argpartition(scores, -num_topk, axis=-1)[:, -num_topk:]
     return topk_idx
 
 def gen_topk_weights(rank, num_tokens, num_topk):
-    topk_weights = torch.ones((num_tokens, num_topk), dtype=torch.float32, device="npu") * rank
+    topk_weights = np.ones((num_tokens, num_topk), dtype=np.float32) * rank
     return topk_weights
 
 CASE_16RANK = {
@@ -141,9 +136,13 @@ def test_base_test(mode, use_quant):
         npu_backend = torchair.get_npu_backend(compiler_config=config)
         mod = torch.compile(Module().npu(), backend=npu_backend)
 
-    x = gen_x(rank, num_tokens, hidden_size)
-    topk_idx = gen_topk_idx(num_experts, num_tokens, num_topk)
-    topk_weights = gen_topk_weights(rank, num_tokens, num_topk)
+    x_np = gen_x(rank, num_tokens, hidden_size)
+    topk_idx_np = gen_topk_idx(num_experts, num_tokens, num_topk)
+    topk_weights_np = gen_topk_weights(rank, num_tokens, num_topk)
+
+    x = torch.from_numpy(x_np).to(dtype=torch.bfloat16).npu()
+    topk_idx = torch.from_numpy(topk_idx_np.astype(np.int64)).npu()
+    topk_weights = torch.from_numpy(topk_weights_np).npu()
 
     out = mod(
         x=x,
@@ -158,11 +157,9 @@ def test_base_test(mode, use_quant):
 
     torch.npu.synchronize()
 
-    check_x = out.float()
-    ref_x = x
+    check_x = out.cpu().float().numpy()
+    ref_weights = np.where(topk_idx_np == -1, np.float32(0), topk_weights_np).sum(axis=1).reshape(-1, 1)
+    ref_x = x_np * ref_weights
 
-    diff = calc_diff(
-            check_x,
-            ref_x * topk_weights.masked_fill(topk_idx == -1, 0).sum(dim=1).view(-1, 1),
-            )
+    diff = calc_diff(check_x, ref_x)
     assert(diff < 5e-5)
