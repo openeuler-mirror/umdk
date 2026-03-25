@@ -65,7 +65,7 @@ urma_status_t urma_unregister_log_func(void)
 
 int urma_log_init(void)
 {
-    openlog("", LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
+    openlog(NULL, LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
     return setlogmask(LOG_MASK(LOG_CRIT) | LOG_MASK(LOG_ERR) | LOG_MASK(LOG_WARNING) | LOG_MASK(LOG_INFO) |
                       LOG_MASK(LOG_DEBUG));
 }

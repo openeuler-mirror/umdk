@@ -57,7 +57,7 @@ void uvs_set_worker_idx(int idx)
 
 void tpsa_log_init(void)
 {
-    openlog("tpsa", LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
+    openlog(NULL, LOG_PID | LOG_CONS | LOG_NDELAY, LOG_USER);
     (void)setlogmask(LOG_MASK(LOG_ERR) | LOG_MASK(LOG_WARNING) | LOG_MASK(LOG_INFO) | LOG_MASK(LOG_DEBUG));
 }
 
