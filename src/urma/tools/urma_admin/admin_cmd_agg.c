@@ -89,7 +89,7 @@ static int admin_cmd_agg_del(urma_eid_t eid)
 
     urma_init(&init_attr);
     urma_device_t *urma_dev = urma_get_device_by_eid(eid, URMA_TRANSPORT_UB);
-    bool is_dev_disallowed = strcmp(urma_dev->name, "bonding_dev_0");
+    bool is_dev_disallowed = urma_dev != NULL && strcmp(urma_dev->name, "bonding_dev_0");
     urma_uninit();
 
     if (is_dev_disallowed == 0) {
