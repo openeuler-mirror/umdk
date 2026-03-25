@@ -98,7 +98,7 @@ private:
     __aicore__ inline void WaitDispatch();
     __aicore__ GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t domain, const uint8_t expertLocalId = 0U)
     {
-        return (GM_ADDR)(gva_gm) + IPC_DATA_OFFSET + winDataSizeOffset_;
+        return (GM_ADDR)(gva_gm) + IPC_DATA_OFFSET + winDataSizeOffset_ + expertLocalId * expertPerSizeOnWin_;
     }
     __aicore__ GM_ADDR GetWinStateAddrByRankId(const int32_t rankId, const uint8_t domain)
     {
