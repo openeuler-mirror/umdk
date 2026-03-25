@@ -1219,7 +1219,7 @@ int check_local_cfg(perftest_config_t *cfg)
         if (cfg->credit_threshold == 0 || cfg->credit_threshold + cfg->jfs_post_list > cfg->jfr_depth) {
             cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
             (void)fprintf(stderr, "credit_threshold out of range (1 ~ %u), change to %u.\n",
-                cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_notify_cnt);
+                cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_threshold);
         }
         if (cfg->trans_mode == URMA_TM_UM) {
             (void)fprintf(stderr, "Credit DOES NOT take effect in UM trans_mode.\n");

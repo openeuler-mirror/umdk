@@ -61,7 +61,7 @@
 
 // value range of perftest jfr_depth
 #define PERFTEST_JFR_DEPTH_MIN  (1)
-#define PERFTEST_JFR_DEPTH_MAX  (0x4000)
+#define PERFTEST_JFR_DEPTH_MAX  (0x8000)
 
 // value range of perftest cq_mod
 #define PERFTEST_CQ_MOD_MIN  (1)
