@@ -150,6 +150,7 @@ struct ums_link {
 	refcount_t refcnt;                  /* link reference count */
 	struct ums_link_group *lgr;         /* parent link group */
 	struct work_struct link_down_wrk;   /* wrk to bring link down */
+	struct work_struct link_clear_finish_wrk;  /* wrk to finish clearing link (deferred from softirq) */
 	char dev_name[UBCORE_MAX_DEV_NAME]; /* u device name */
 	int ndev_ifidx;                     /* network device ifindex */
 
