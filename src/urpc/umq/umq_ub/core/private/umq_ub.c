@@ -1824,15 +1824,27 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
     urma_sge_t src_sge[buf_num];
     urma_sge_t dst_sge[buf_num];
     uint32_t total_data_size = 0;
+    uint32_t buf_offset = 0;
     uint32_t src_buf_length = 0;
     for (uint32_t i = 0; i < buf_num; i++) {
         src_buf_length = ref_sge[i].length;
-        if (tmp_buf == NULL || ref_sge[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tmp_buf or mempool id: %u invalid\n",
+        if (ref_sge[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id: %u invalid\n",
                 EID_ARGS(*eid), id, ref_sge[i].mempool_id);
             goto FREE_CTX_BUF;
         }
-        dst_sge[i].addr = (uint64_t)(uintptr_t)tmp_buf->buf_data;
+        // To read a whole qbuf at once, jump to the next tmp-buf instead of filling tm_buf.
+        if (buf_offset + src_buf_length > tmp_buf->data_size) {
+            tmp_buf->data_size = buf_offset;
+            tmp_buf = QBUF_LIST_NEXT(tmp_buf);
+            buf_offset = 0;
+            if (tmp_buf == NULL || src_buf_length > tmp_buf->data_size) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tmp_buf or src_buf_length: %u invalid\n",
+                    EID_ARGS(*eid), id, src_buf_length);
+                goto FREE_CTX_BUF;
+            }
+        }
+        dst_sge[i].addr = (uint64_t)(uintptr_t)(tmp_buf->buf_data + buf_offset);
         dst_sge[i].len = src_buf_length;
         dst_sge[i].user_tseg = NULL;
         dst_sge[i].tseg = tseg_list[tmp_buf->mempool_id];
@@ -1845,13 +1857,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
                 EID_ARGS(*eid), id);
             goto FREE_CTX_BUF;
         }
-        if (src_buf_length > tmp_buf->data_size) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, src_buf_length: %u invalid\n",
-                EID_ARGS(*eid), id, src_buf_length);
-            goto FREE_CTX_BUF;
-        }
-        tmp_buf->data_size = src_buf_length;
-        tmp_buf = QBUF_LIST_NEXT(tmp_buf);
+        buf_offset += src_buf_length;
         total_data_size += src_buf_length;
 
         urma_status_t status = umq_ub_read_post_send(queue, src_sge + i, dst_sge + i, ctx_buf);
@@ -1867,6 +1873,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm)
             }
         }
     }
+    tmp_buf->data_size = buf_offset;
     dst_buf->total_data_size = total_data_size;
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->tx_outstanding, buf_num);
     return UMQ_SUCCESS;
