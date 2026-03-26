@@ -55,9 +55,13 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
     (void)memcpy(msg_ring_h->msg_ring_name, msg_ring_name, msg_ring_name_len);
 
     if (opt->addr == NULL) {
-        shm_size = opt->tx_depth * opt->tx_max_buf_size +
-                   opt->rx_depth * opt->rx_max_buf_size + NUM_RING_HEADERS * (uint32_t)sizeof(shm_ring_hdr_t);
-
+        uint64_t temp = opt->tx_depth * opt->tx_max_buf_size +
+            opt->rx_depth * opt->rx_max_buf_size + NUM_RING_HEADERS * (uint32_t)sizeof(shm_ring_hdr_t);
+        if (temp > UINT32_MAX) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "msg ring shm size invalid\n");
+            return NULL;
+        }
+        shm_size = temp;
         if (opt->owner) {
             shm_fd = shm_open(msg_ring_name, O_CREAT | O_RDWR | O_EXCL, SHM_MODE);
             if (shm_fd == -1) {
@@ -98,7 +102,7 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
     msg_ring_h->shm_rx_ring = msg_ring_h->shm_tx_ring + opt->tx_depth * opt->tx_max_buf_size;
     msg_ring_h->shm_tx_ring_hdr =
         (shm_ring_hdr_t *)(msg_ring_h->shm_rx_ring + opt->rx_depth * opt->rx_max_buf_size);
-    msg_ring_h->shm_rx_ring_hdr = (shm_ring_hdr_t *)(msg_ring_h->shm_tx_ring_hdr + sizeof(shm_ring_hdr_t));
+    msg_ring_h->shm_rx_ring_hdr = (shm_ring_hdr_t *)((char *)msg_ring_h->shm_tx_ring_hdr + sizeof(shm_ring_hdr_t));
     if (opt->owner) {
         msg_ring_h->shm_tx_ring_hdr->ci = 0;
         msg_ring_h->shm_tx_ring_hdr->pi = 0;
@@ -159,10 +163,14 @@ int msg_ring_post_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_buf_size)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, the queue is full\n");
         return -EAGAIN;
     }
-
+    uint32_t pi = tx_ring_hdr->pi;
+    if (pi > msg_ring_h->tx_depth) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, pi exceeded the limit\n");
+        return -EAGAIN;
+    }
     MB();
     shm_ring_buf_hdr_t *ring_buf_hdr = (shm_ring_buf_hdr_t *)(msg_ring_h->shm_tx_ring +
-        tx_ring_hdr->pi * msg_ring_h->tx_max_buf_size);
+        pi * msg_ring_h->tx_max_buf_size);
     char *ring_buf_p = (char *)(ring_buf_hdr + 1);
     (void)memcpy(ring_buf_p, tx_buf, tx_buf_size);
     ring_buf_hdr->avail_buf_size = tx_buf_size;
@@ -184,12 +192,17 @@ int msg_ring_post_tx_batch(msg_ring_t *msg_ring_h, char **tx_buf, uint32_t *tx_b
                            left_cnt, tx_buf_cnt);
         return -1;
     }
-
+    uint32_t payload_size = msg_ring_h->tx_max_buf_size - (uint32_t)sizeof(shm_ring_buf_hdr_t);
     MB();
     for (uint32_t i = 0; i < tx_buf_cnt; ++i) {
         shm_ring_buf_hdr_t *ring_buf_hdr = (shm_ring_buf_hdr_t *)(msg_ring_h->shm_tx_ring +
             ((tx_ring_hdr->pi + i) % msg_ring_h->tx_depth) * msg_ring_h->tx_max_buf_size);
         char *ring_buf_p = (char *)(ring_buf_hdr + 1);
+        if (tx_buf_size[i] > payload_size) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, payload_size %u is less than tx_buf_size %u\n",
+                        payload_size, tx_buf_size);
+            return -1;
+        }
         (void)memcpy(ring_buf_p, tx_buf[i], tx_buf_size[i]);
         ring_buf_hdr->avail_buf_size = tx_buf_size[i];
     }
@@ -212,13 +225,14 @@ int msg_ring_poll_tx(msg_ring_t *msg_ring_h, char *tx_buf, uint32_t tx_max_buf_s
     shm_ring_buf_hdr_t *ring_buf_hdr = (shm_ring_buf_hdr_t *)(msg_ring_h->shm_tx_ring +
         tx_ring_hdr->ci * msg_ring_h->tx_max_buf_size);
     char *ring_buf_p = (char *)(ring_buf_hdr + 1);
-    if (tx_max_buf_size < ring_buf_hdr->avail_buf_size) {
+    uint32_t temp_buf_size = ring_buf_hdr->avail_buf_size;
+    if (tx_max_buf_size < temp_buf_size) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_max_buf_size %u is less than avail_buf_size %u\n", tx_max_buf_size,
-                           ring_buf_hdr->avail_buf_size);
+                           temp_buf_size);
         return -1;
     }
-    (void)memcpy(tx_buf, ring_buf_p, ring_buf_hdr->avail_buf_size);
-    *avail_buf_size = ring_buf_hdr->avail_buf_size;
+    (void)memcpy(tx_buf, ring_buf_p, temp_buf_size);
+    *avail_buf_size = temp_buf_size;
 
     // Ensure that we poll tx_buf before we update ci
     MB();

@@ -476,14 +476,19 @@ int umq_shm_qbuf_alloc(
     param.shm = true;
     param.headroom_size = flag ? option->headroom_size : _pool->headroom_size;
     int ret = UMQ_SUCCESS;
-
+    uint64_t temp_actual_buf_count = 0;
     if (_pool->mode == UMQ_BUF_SPLIT) {
-        param.actual_buf_count =
+        temp_actual_buf_count =
             num * ((request_size + param.headroom_size + umq_buf_size_small() - 1) >> umq_buf_size_pow_small());
     } else {
         uint32_t align_size = umq_buf_size_small() - (uint32_t)sizeof(umq_buf_t);
-        param.actual_buf_count = num * ((request_size + param.headroom_size + align_size - 1) / align_size);
+        temp_actual_buf_count = num * ((request_size + param.headroom_size + align_size - 1) / align_size);
     }
+    if (temp_actual_buf_count > UINT32_MAX) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "actual buf count invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    param.actual_buf_count = temp_actual_buf_count;
     if (request_size == 0) {
         if (flag && param.headroom_size > 0) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "headroom_size not supported when request_size is 0\n");
