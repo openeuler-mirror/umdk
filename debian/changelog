@@ -1,0 +1,5 @@
+umdk (25.12.0-1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+-- guoyongqiang12 <guoyongqiang12@huawei.com> Thu, 16 Oct 2025 02:11:54 -0700

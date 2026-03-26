@@ -1,0 +1,4 @@
+### for umdk-urpc-framework
+usr/lib64/liburpc_framework.so.* usr/lib
+etc/rsyslog.d/urpc_framework.conf
+etc/logrotate.d/urpc_framework

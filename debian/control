@@ -1,0 +1,120 @@
+Source: umdk
+Section: devel
+Priority: optional
+Maintainer: YongQiang Guo<guoyongqiang12@huawei.com>
+Build-Depends:
+    debhelper (>= 10),
+    debhelper-compat (= 10),
+    cmake,
+    make,
+    gcc,
+    g++,
+    libssl-dev,
+    libglib2.0-dev,
+    libnl-3-dev,
+    linux-headers-generic
+Standards-Version: 3.9.8
+Homepage: https://atomgit.com/openeuler/umdk
+
+Package: umdk
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libc6
+Description: Unified memory development kit
+ A new system interconnect architecture
+
+Package: umdk-urma-lib
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk (= ${binary:Version})
+Description: Basic URMA libraries of UMDK
+ This package contains basic URMA libraries of UMDK, such as liburma.so.
+
+Package: umdk-urma-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: Include files and libraries mandatory for URMA
+ This package contains all necessary include files and libraries needed
+ to develop applications that require the provided includes and libraries.
+
+Package: umdk-urma-tools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: Tools of urma
+ tools of urma, contains urma_perftest, urma_admin, ubagg_cli.
+
+Package: umdk-urma-bin
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libc6
+Description: Binary file of urma
+ binary file of urma
+
+Package: umdk-urma-example
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: UMDK urma examples
+ This package contains all the executable examples of urma.
+
+Package: umdk-dlock-lib
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: umdk-dlock-lib
+ This package contains all the DLock libraries of UMDK, such as libdlock*.so.
+
+Package: umdk-dlock-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-dlock-lib (= ${binary:Version})
+Description: umdk-dlock-dev
+ This package contains all necessary headers and libraries for DLock development.
+
+Package: umdk-dlock-example
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib, umdk-dlock-dev (= ${binary:Version})
+Description: umdk-dlock-example
+ This package contains example cases for DLock.
+
+Package: umdk-urpc-framework
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: umdk-urpc-framework
+ This package contains all necessary framework shared libraries (eg. liburpc_framework.so).
+
+Package: umdk-urpc-framework-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urpc-framework (= ${binary:Version})
+Description: umdk-urpc-framework-dev
+ This package contains all necessary headers for URPC framework development.
+
+Package: umdk-urpc-framework-example
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib, umdk-urpc-framework-dev (= ${binary:Version})
+Description: umdk-urpc-framework-example
+ This package contains example for URPC framework.
+
+Package: umdk-urpc-framework-tools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib, umdk-urpc-framework-dev (= ${binary:Version})
+Description: umdk-urpc-framework-tools
+ This package contains urpc_admin and related URPC framework tools.
+
+Package: umdk-urpc-umq
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib (= ${binary:Version})
+Description: umdk-urpc-umq
+ This package contains umq shared libraries (eg. libumq.so).
+
+Package: umdk-urpc-umq-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urpc-umq (= ${binary:Version})
+Description: umdk-umq-dev
+ This package contains all necessary headers for UMQ development.
+
+Package: umdk-urpc-umq-example
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib, umdk-urpc-umq-dev (= ${binary:Version})
+Description: umdk-urpc-umq-example
+ This package contains example for URPC umq.
+
+Package: umdk-urpc-umq-tools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, umdk-urma-lib, umdk-urpc-umq-dev (= ${binary:Version})
+Description: umdk-urpc-umq-tools
+ This package contains umq_perftest and related UMQ tools.

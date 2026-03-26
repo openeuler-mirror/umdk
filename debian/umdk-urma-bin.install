@@ -1,0 +1,3 @@
+etc/rsyslog.d/tpsa.conf
+etc/logrotate.d/tpsa
+usr/lib64/libtpsa.so* /usr/lib

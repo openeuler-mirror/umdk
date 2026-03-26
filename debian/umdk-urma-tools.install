@@ -1,0 +1,4 @@
+etc/rsyslog.d/urma_admin.conf
+usr/bin/urma_admin
+usr/bin/urma_perftest
+usr/bin/ubagg_cli

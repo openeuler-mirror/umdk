@@ -1,0 +1,7 @@
+### for umdk-dlock-dev
+usr/include/ub/umdk/ulock/dlock/dlock_client_api.h
+usr/include/ub/umdk/ulock/dlock/dlock_types.h
+usr/include/ub/umdk/ulock/dlock/dlock_server_api.h
+usr/lib64/libdlockm.so usr/lib
+usr/lib64/libdlocks.so usr/lib
+usr/lib64/libdlockc.so usr/lib

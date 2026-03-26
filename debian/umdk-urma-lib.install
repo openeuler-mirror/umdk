@@ -1,0 +1,7 @@
+### for umdk-urma-lib
+usr/lib64/liburma.so.* /usr/lib
+usr/lib64/liburma_common.so.* /usr/lib
+usr/lib64/urma/liburma_ubagg.so.* /usr/lib/urma
+usr/lib/aarch64-linux-gnu/urma/liburma-udma.so /usr/lib/urma
+etc/rsyslog.d/urma.conf
+etc/logrotate.d/urma
