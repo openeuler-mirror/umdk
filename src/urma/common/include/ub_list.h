@@ -187,11 +187,11 @@ static inline int ub_list_insert_ordered_without_repetition(struct ub_list *list
 
 /* for list that each node has a different data struct */
 #define UB_LIST_FOR_EACH_BY_NODE(NODE, HEAD) \
-    for ((NODE = HEAD->next); ((NODE != HEAD) && (NODE != NULL)); (NODE = NODE->next))
+    for (((NODE) = (HEAD)->next); (((NODE) != (HEAD)) && ((NODE) != NULL)); ((NODE) = (NODE)->next))
 
 #define UB_LIST_FOR_EACH_BY_NODE_SAFE(NODE, NEXT_NODE, HEAD) \
-    for ((NODE = HEAD->next); ((NODE != HEAD) && (NODE != NULL) && (NEXT_NODE = NODE->next, 1)); \
-        (NODE = NEXT_NODE))
+    for (((NODE) = (HEAD)->next); (((NODE) != (HEAD)) && ((NODE) != NULL) && ((NEXT_NODE) = (NODE)->next, 1)); \
+        ((NODE) = (NEXT_NODE)))
 
 /* used to get first node of a list, if list is empty, ITER will be set to NULL */
 #define UB_LIST_FIRST_NODE(ITER, MEMBER, LIST)                              \
