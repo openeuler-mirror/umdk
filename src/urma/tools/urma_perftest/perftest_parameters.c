@@ -959,12 +959,9 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
-    if (strstr(cfg->dev_name, "bonding_dev") != NULL && !cfg->single_path) {
+    if (strstr(cfg->dev_name, "bonding_dev") != NULL && !cfg->single_path && !cfg->use_ctp) {
         cfg->use_ctp = true;
-        if (cfg->cq_mod != 1) {
-            cfg->cq_mod = 1;
-            (void)fprintf(stderr, "Warning, bonding_dev cq_mod should be 1.\n");
-        }
+        (void)fprintf(stderr, "Warning: ctp is enabled, and bonding_dev multi_path requires ctp to be enabled.\n");
     }
 
     if (check_time_type(cfg) != 0) {
