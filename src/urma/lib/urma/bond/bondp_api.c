@@ -266,6 +266,12 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
         goto DELETE_PJFC;
     }
 
+    if (wr_buf_init(&bdp_jfc->wr_buf, cfg->depth) != 0) {
+        URMA_LOG_ERR("Failed to init jfc wr buf, dev_name: %s, eid_idx: %u.\n",
+            ctx->dev->name, ctx->eid_index);
+        goto DELETE_PJFC;
+    }
+
     if (cfg->jfce != NULL) {
         bondp_comp_t *bdp_jfce = CONTAINER_OF_FIELD(cfg->jfce, bondp_comp_t, v_jfce);
         atomic_fetch_add(&bdp_jfce->use_cnt.atomic_cnt, 1);
@@ -312,6 +318,8 @@ urma_status_t bondp_delete_jfc(urma_jfc_t *jfc)
         URMA_LOG_ERR("Failed to delete jfc[%d], still in use. use_cnt: %lu\n", jfc->jfc_id.id, use_cnt);
         return URMA_EAGAIN;
     }
+
+    wr_buf_uninit(&bdp_jfc->wr_buf);
 
     if (bondp_delete_vjfc(bdp_jfc) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjfc\n");

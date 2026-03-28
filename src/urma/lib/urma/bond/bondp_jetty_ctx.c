@@ -15,44 +15,6 @@
 #include "bondp_connection.h"
 #include "bondp_jetty_ctx.h"
 
-static int create_bjetty_wr_bufs(bjetty_ctx_t *bjetty_ctx, size_t wr_buf_size)
-{
-    int p = 0, q = 0; // error handler of jfs/jfr buf
-    for (p = 0; p < bjetty_ctx->dev_num; ++p) {
-        bjetty_ctx->jfs_bufs[p] = jfs_wr_buf_new(wr_buf_size);
-        if (bjetty_ctx->jfs_bufs[p] == NULL) {
-            goto DEL_JFS_BUF;
-        }
-    }
-    for (q = 0; q < bjetty_ctx->dev_num; ++q) {
-        bjetty_ctx->jfr_bufs[q] = jfr_wr_buf_new(wr_buf_size);
-        if (bjetty_ctx->jfr_bufs[q] == NULL) {
-            goto DEL_JFR_BUF;
-        }
-    }
-    return 0;
-
-DEL_JFR_BUF:
-    for (int i = 0; i < q; ++i) {
-        jfr_wr_buf_delete(bjetty_ctx->jfr_bufs[i]);
-    }
-DEL_JFS_BUF:
-    for (int i = 0; i < p; ++i) {
-        jfs_wr_buf_delete(bjetty_ctx->jfs_bufs[i]);
-    }
-    return -1;
-}
-
-static void destroy_bjetty_wr_bufs(bjetty_ctx_t *bjetty_ctx)
-{
-    for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
-        jfr_wr_buf_delete(bjetty_ctx->jfr_bufs[i]);
-    }
-    for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
-        jfs_wr_buf_delete(bjetty_ctx->jfs_bufs[i]);
-    }
-}
-
 bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp,
     size_t wr_buf_size)
 {
@@ -76,19 +38,15 @@ bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp,
         bjetty_ctx->pjettys_valid[i] = true;
     }
 
-    if (create_bjetty_wr_bufs(bjetty_ctx, wr_buf_size)) {
-        goto FREE_CTX;
-    }
     if (bdp_v_conn_table_create(&bjetty_ctx->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
-        goto DESTROY_WR_BUFS;
+        goto FREE_CTX;
     }
 
     bjetty_ctx->direct_local_port = -1;
     bjetty_ctx->direct_target_port = -1;
 
     return bjetty_ctx;
-DESTROY_WR_BUFS:
-    destroy_bjetty_wr_bufs(bjetty_ctx);
+
 FREE_CTX:
     free(bjetty_ctx);
     return NULL;
@@ -100,6 +58,5 @@ void destroy_bjetty_ctx(bjetty_ctx_t *bjetty_ctx)
         return;
     }
     bondp_hash_table_destroy(&bjetty_ctx->v_conn_table);
-    destroy_bjetty_wr_bufs(bjetty_ctx);
     free(bjetty_ctx);
 }

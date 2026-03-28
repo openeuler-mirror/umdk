@@ -21,6 +21,7 @@
 #include "urma_ubagg.h"
 #include "bondp_hash_table.h"
 #include "topo_info.h"
+#include "bondp_wr_buf.h"
 
 #define BONDP_MAX_NUM_JFRS (10240)
 #define BONDP_MAX_NUM_JETTYS (10240)
@@ -120,18 +121,13 @@ typedef struct bondp_context {
     #endif
 } bondp_context_t;
 
-typedef struct bondp_tx_wr_list {
-    urma_sge_t src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
-    urma_sge_t dst_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
-    urma_jfs_wr_t wr_list[BONDP_MAX_WR_LIST_NUM];
-} bondp_tx_wr_list_t;
-
 typedef struct bondp_jfc {
     urma_jfc_t v_jfc;
     urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
     int lasted_polled_jfc_idx;
     urma_ref_t use_cnt; /* Initialize to 0 */
+    wr_buf_t wr_buf;
 } bondp_jfc_t;
 
 typedef enum bondp_comp_type {
