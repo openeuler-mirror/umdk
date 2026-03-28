@@ -78,7 +78,7 @@ static int ums_get_free_slot(struct ums_get_free_slot_param *param)
 	int rc;
 
 	rc = ums_wr_tx_get_free_slot(param->link, param->handler, param->wr_buf, param->wr_ub_buf,
-		param->pend);
+		param->pend, false);
 	if (rc < 0) {
 		UMS_LOGW_LIMITED("get free slot failed, in_sotfrq=%lu, rc=%d, peer_rq=%d, local_rq=%d",
 			in_softirq(), rc, atomic_read(&param->link->peer_rq_credits),

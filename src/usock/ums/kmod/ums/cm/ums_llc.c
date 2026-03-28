@@ -203,6 +203,7 @@ static void ums_llc_tx_handler(struct ums_wr_tx_pend_priv *pend, struct ums_link
  * @wr_buf: Out variable returning pointer to work request payload buffer.
  * @pend: Out variable returning pointer to private pending WR tracking.
  *	  It's the context the transmit complete handler will get.
+ * @emergency: If true, can use reserved emergency credits (for LLC announce credits only).
  *
  * Reserves and pre-fills an entry for a pending work request send/tx.
  * Used by mid-level ums_llc_send_msg() to prepare for later actual send/tx.
@@ -211,11 +212,11 @@ static void ums_llc_tx_handler(struct ums_wr_tx_pend_priv *pend, struct ums_link
  * Return: 0 on success, otherwise an error value.
  */
 int ums_llc_add_pending_send(struct ums_link *link, struct ums_wr_buf **wr_buf,
-	struct ums_wr_tx_pend_priv **pend)
+	struct ums_wr_tx_pend_priv **pend, bool emergency)
 {
 	int rc;
 
-	rc = ums_wr_tx_get_free_slot(link, ums_llc_tx_handler, wr_buf, NULL, pend);
+	rc = ums_wr_tx_get_free_slot(link, ums_llc_tx_handler, wr_buf, NULL, pend, emergency);
 	if (rc < 0) {
 		UMS_LOGW_LIMITED("get free slot failed, in_sotfrq=%ld, rc=%d, "
 			"peer_rq=%d, local_rq=%d", in_softirq(), rc, atomic_read(&link->peer_rq_credits),
@@ -251,7 +252,7 @@ int ums_llc_send_confirm_link(struct ums_link *link, enum ums_llc_reqresp reqres
 	if (!ums_wr_tx_link_hold(link))
 		return -ENOLINK;
 
-	rc = ums_llc_add_pending_send(link, &wr_buf, &pend);
+	rc = ums_llc_add_pending_send(link, &wr_buf, &pend, false);
 	if (rc != 0)
 		goto put_out;
 
@@ -285,7 +286,7 @@ static int ums_llc_send_delete_rkey(struct ums_link *link, struct ums_buf_desc *
 
 	if (!ums_wr_tx_link_hold(link))
 		return -ENOLINK;
-	rc = ums_llc_add_pending_send(link, &wr_buf, &pend);
+	rc = ums_llc_add_pending_send(link, &wr_buf, &pend, false);
 	if (rc != 0)
 		goto put_out;
 	rkeyllc = (struct ums_llc_msg_delete_rkey *)wr_buf;
@@ -318,7 +319,7 @@ int ums_llc_announce_credits(struct ums_link *link, enum ums_llc_reqresp reqresp
 		/* maybe synced by cdc msg */
 		return 0;
 
-	rc = ums_llc_add_pending_send(link, &wr_buf, &pend);
+	rc = ums_llc_add_pending_send(link, &wr_buf, &pend, true);
 	if (rc != 0) {
 		ums_wr_rx_put_credits(link, saved_credits);
 		return rc;
@@ -347,7 +348,7 @@ static int ums_llc_send_message_inner(struct ums_link *link, void *llcbuf, bool 
 
 	if (!ums_wr_tx_link_hold(link))
 		return -ENOLINK;
-	rc = ums_llc_add_pending_send(link, &wr_buf, &pend);
+	rc = ums_llc_add_pending_send(link, &wr_buf, &pend, false);
 	if (rc != 0)
 		goto put_out;
 	(void)memcpy(wr_buf, llcbuf, sizeof(union ums_llc_msg));

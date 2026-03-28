@@ -187,7 +187,7 @@ static int ums_llc_send_test_link(struct ums_link *link, u8 user_data[UMS_USER_D
 
 	if (!ums_wr_tx_link_hold(link))
 		return -ENOLINK;
-	rc = ums_llc_add_pending_send(link, &wr_buf, &pend);
+	rc = ums_llc_add_pending_send(link, &wr_buf, &pend, false);
 	if (rc != 0)
 		goto put_out;
 	testllc = (struct ums_llc_msg_test_link *)wr_buf;
