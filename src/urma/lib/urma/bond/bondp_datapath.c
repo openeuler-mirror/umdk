@@ -24,6 +24,8 @@
 #define PJETTY_ID_ENCODE_OFFSET (32)
 #define VJETTY_ID_ENCODE_OFFSET (48)
 #define WRITE_IMM_USER_BITS (32)
+#define IMM_OPCODE_SHIFT (56)
+#define IMM_OPCODE_MASK (0x3)
 #define WRITE_IMM_IS_SO_SHIFT (63)
 #define CALLBACK_SUCCESS (0)
 #define CALLBACK_SKIP (1)
@@ -291,18 +293,6 @@ static inline bool wr_buf_try_add(wr_buf_t *buf, uint32_t id)
 {
     return !wr_buf_contain(buf, id);
 }
-
-static inline uint64_t get_hdr_addr(uint32_t id, uint64_t start_addr)
-{
-    return (((uint64_t)id * sizeof(bjetty_hdr_t)) & (URMA_UBAGG_HDR_BUF_SIZE - 1)) + start_addr;
-}
-
-static inline void set_hdr_sge(urma_sge_t *sge, uint32_t id, uint64_t start_addr, urma_target_seg_t *tseg)
-{
-    sge->addr = get_hdr_addr(id, start_addr);
-    sge->len = sizeof(bjetty_hdr_t);
-    sge->tseg = tseg;
-}
 /**
  * Local register seg only need param local_idx
  * Imported seg need both idxs
@@ -326,16 +316,14 @@ static inline urma_target_jetty_t *get_p_tjetty(urma_target_jetty_t *tjetty, int
 /** Reconstruct a new WR according to the user input.
  * Do the following steps:
  * 1. Deepcopy the input WR.
- * 2. Add a new sge at wr.src.sge[0], and set its addr to the next valid hdr addr if the opcode is SEND_*.
+ * 2. Convert SEND opcode to SEND_IMM, so reliability metadata can be carried in imm_data.
  * Considering the WR split operation in the future (Fit for CTP/UTP), the return value is a list of WR, connected by
  * WR->next.
- * The content at the addr of the first sge of SEND is empty and need to be filled.
  * @return A list of WRs as the result of the split of input WR connected by WR->next.
  * Currently, it returns the modified WR of the input, and consider it as a single element. (It may have next != NULL)
  */
 static urma_jfs_wr_t *get_new_jfs_wr(const urma_jfs_wr_t *wr,
-    void *hdr_send_buf, urma_target_seg_t *hdr_send_tseg,
-    uint32_t send_wr_id, int send_idx, int recv_idx, int *output_len)
+    int *output_len)
 {
     urma_jfs_wr_t *new_wrs = NULL;
     urma_jfs_wr_t *copied_send_wr = NULL;
@@ -345,13 +333,15 @@ static urma_jfs_wr_t *get_new_jfs_wr(const urma_jfs_wr_t *wr,
         case URMA_OPC_SEND:
         case URMA_OPC_SEND_IMM:
         case URMA_OPC_SEND_INVALIDATE:
-            copied_send_wr = deepcopy_jfs_wr_and_add_hdr_sge(wr);
+            copied_send_wr = deepcopy_jfs_wr(wr);
             if (copied_send_wr == NULL) {
                 goto EXIT;
             }
-            /* set hdr sge */
-            set_hdr_sge(&copied_send_wr->send.src.sge[0], send_wr_id,
-                (uint64_t)hdr_send_buf, hdr_send_tseg);
+            if (wr->opcode == URMA_OPC_SEND || wr->opcode == URMA_OPC_SEND_INVALIDATE) {
+                /* Convert to SEND_IMM so reliability metadata can be carried in imm_data */
+                copied_send_wr->opcode = URMA_OPC_SEND_IMM;
+                copied_send_wr->send.imm_data = 0;
+            }
             /* We need cqe to do deduplication, so we have to set this flag */
             copied_send_wr->flag.bs.complete_enable = 1;
             new_wrs = copied_send_wr;
@@ -390,16 +380,60 @@ static inline uint64_t encode_and_replace_jfs_user_ctx(urma_jfs_wr_t *wr, uint32
     return user_ctx;
 }
 
-static inline void fill_send_hdr(urma_sge_t *sge, uint32_t msn, bool is_so)
+static urma_status_t get_original_opcode_tag(urma_opcode_t opcode, uint64_t *opcode_tag)
 {
-    ((bjetty_hdr_t *)(sge->addr))->msn = msn;
-    ((bjetty_hdr_t *)(sge->addr))->is_so = is_so;
+    switch (opcode) {
+        case URMA_OPC_SEND:
+            *opcode_tag = URMA_CR_OPC_SEND;
+            break;
+        case URMA_OPC_SEND_IMM:
+            *opcode_tag = URMA_CR_OPC_SEND_WITH_IMM;
+            break;
+        case URMA_OPC_SEND_INVALIDATE:
+            *opcode_tag = URMA_CR_OPC_SEND_WITH_INV;
+            break;
+        case URMA_OPC_WRITE_IMM:
+            *opcode_tag = URMA_CR_OPC_WRITE_WITH_IMM;
+            break;
+        default:
+            URMA_LOG_ERR("Unsupported original opcode %u for imm metadata\n", opcode);
+            return URMA_EINVAL;
+    }
+    return URMA_SUCCESS;
 }
 
-static inline void encode_imm_data(uint64_t *imm_data, uint32_t msn, bool is_so)
+static inline urma_status_t encode_imm_data(uint64_t *imm_data, uint32_t msn, bool is_so, urma_opcode_t opcode)
 {
+    uint64_t opcode_tag = 0;
+
+    if (get_original_opcode_tag(opcode, &opcode_tag) != URMA_SUCCESS) {
+        return URMA_EINVAL;
+    }
+    *imm_data &= ((uint64_t)1 << WRITE_IMM_USER_BITS) - 1;
     *imm_data |= (uint64_t)msn << WRITE_IMM_USER_BITS; /* msn takes up to 24 bits */
+    *imm_data |= opcode_tag << IMM_OPCODE_SHIFT;
     *imm_data |= (uint64_t)is_so << WRITE_IMM_IS_SO_SHIFT;
+    return URMA_SUCCESS;
+}
+
+static int parse_original_cr_opcode(uint64_t imm_data, urma_cr_opcode_t *opcode)
+{
+    switch ((imm_data >> IMM_OPCODE_SHIFT) & IMM_OPCODE_MASK) {
+        case URMA_CR_OPC_SEND:
+            *opcode = URMA_CR_OPC_SEND;
+            return 0;
+        case URMA_CR_OPC_SEND_WITH_IMM:
+            *opcode = URMA_CR_OPC_SEND_WITH_IMM;
+            return 0;
+        case URMA_CR_OPC_SEND_WITH_INV:
+            *opcode = URMA_CR_OPC_SEND_WITH_INV;
+            return 0;
+        case URMA_CR_OPC_WRITE_WITH_IMM:
+            *opcode = URMA_CR_OPC_WRITE_WITH_IMM;
+            return 0;
+        default:
+            return -1;
+    }
 }
 
 /** Change vseg and vtjetty to pseg and ptjetty in opcode URMA_OPC_SEND_*.
@@ -610,10 +644,10 @@ static urma_status_t encode_jfs_wr_reliable_info(urma_jfs_wr_t *send_wr, wr_buf_
         case URMA_OPC_SEND:
         case URMA_OPC_SEND_IMM:
         case URMA_OPC_SEND_INVALIDATE:
-            fill_send_hdr(send_wr->send.src.sge,
+            return encode_imm_data(&send_wr->send.imm_data,
                 value->msn,
-                value->flag.bs.place_order == URMA_STRONG_ORDER);
-            break;
+                value->flag.bs.place_order == URMA_STRONG_ORDER,
+                value->original_opcode);
         case URMA_OPC_WRITE:
         case URMA_OPC_WRITE_IMM:
         case URMA_OPC_WRITE_NOTIFY:
@@ -621,7 +655,8 @@ static urma_status_t encode_jfs_wr_reliable_info(urma_jfs_wr_t *send_wr, wr_buf_
             if (send_wr->opcode == URMA_OPC_WRITE_IMM) {
                 /* We need to use the imm data field to carry msn to the target.
                    So we have to limit user's data to WRITE_IMM_USER_BITS bits. */
-                encode_imm_data(&send_wr->rw.notify_data, value->msn, value->flag.bs.place_order == URMA_STRONG_ORDER);
+                return encode_imm_data(&send_wr->rw.notify_data, value->msn,
+                    value->flag.bs.place_order == URMA_STRONG_ORDER, value->original_opcode);
             }
             break;
         default:
@@ -633,9 +668,8 @@ static urma_status_t encode_jfs_wr_reliable_info(urma_jfs_wr_t *send_wr, wr_buf_
 /**
  * 1. Change tseg in sges from v_tseg to p_tseg
  * 2. Change tjetty in send_wr from v_tjetty to p_tjetty
- * 3. Fill in header sge for send opcode
- * 4. Encode imm_data for write_with_imm opcode
- * @param send_wr: A copy of original jfs wr. An extra sge should be appended at the header of sges for send ops.
+ * 3. Encode imm_data for SEND_IMM/WRITE_IMM opcode
+ * @param send_wr: A copy of original jfs wr.
  * @param value: Extra value to send the current WR, including send/target idx and msn, etc.
  */
 static urma_status_t update_send_wr_before_post(urma_jfs_wr_t *send_wr, wr_buf_extra_value_t *value)
@@ -655,7 +689,7 @@ static urma_status_t update_send_wr_before_post(urma_jfs_wr_t *send_wr, wr_buf_e
 }
 /**
  * Post send jfs wr and store it in bjetty_ctx->jfs_bufs
- * @param send_wr: A copy of original jfs wr. An extra sge should be appended at the header of sges for send ops.
+ * @param send_wr: A copy of original jfs wr.
  * @param value: Extra value to send the current WR, including send/target idx and msn, etc.
  */
 static urma_status_t send_and_store_jfs_wr(bjetty_ctx_t *bjetty_ctx, uint32_t v_jetty_id, urma_jfs_wr_t *send_wr,
@@ -951,13 +985,11 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     /* get new wr */
     /*
     ! Currently, we assume param `next` is not NULL
-    This function will deepcopy WR and add a sge at pos 0 to store user-space header
-    The hdr sge is empty after allocation, it needs to be filled afterwards
+    This function will deepcopy WR and convert SEND to SEND_IMM
     ! Only valid when we don't do WR split
     */
     int new_wrs_len = 0;
-    urma_jfs_wr_t *send_wr = get_new_jfs_wr(wr, bjetty_ctx->hdr_send_buf, bjetty_ctx->hdr_send_tseg,
-        bjetty_ctx->send_wr_id, send_idx, target_idx, &new_wrs_len);
+    urma_jfs_wr_t *send_wr = get_new_jfs_wr(wr, &new_wrs_len);
     if (send_wr == NULL) {
         return URMA_FAIL;
     }
@@ -965,6 +997,7 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx,
     wr_buf_extra_value_t value = {
         .user_ctx = wr->user_ctx,
         .flag = wr->flag,
+        .original_opcode = wr->opcode,
         .v_conn = v_conn,
         .vtjetty = wr->tjetty,
         .send_idx = send_idx,
@@ -1029,10 +1062,9 @@ static urma_status_t schedule_recv_idx_default(bjetty_ctx_t *bjetty_ctx, int *re
 /** Reconstruct a new WR according to the user input.
  * Do the following steps:
  * 1. Deepcopy the input WR.
- * 2. Add a new sge at wr.src.sge[0], and set its addr to the next valid hdr addr.
+ * 2. Convert each vseg in src.sge to pseg.
  * Considering the Wr split operation in the future (Fit for CTP/UTP), the return value is a list of WR, connected by
  * WR->next.
- * The content at the addr of the first sge is empty and need to be filled.
  * @return A list of WRs as the result of the split of input WR connected by WR->next.
  * Currently, it returns the modified WR of the input, and consider it as a single element. (It may have next != NULL)
 */
@@ -1041,17 +1073,13 @@ static urma_jfr_wr_t *get_new_jfr_wr(const urma_jfr_wr_t *wr, bjetty_ctx_t *bjet
     urma_jfr_wr_t *copied_jfr_wr = NULL;
     int wr_len = 1;
 
-    copied_jfr_wr = deepcopy_jfr_wr_and_add_hdr_sge(wr);
+    copied_jfr_wr = deepcopy_jfr_wr(wr);
     if (copied_jfr_wr == NULL) {
         return NULL;
     }
     *output_len = wr_len;
-    /* set hdr sge */
-    set_hdr_sge(&copied_jfr_wr->src.sge[0], bjetty_ctx->recv_wr_id,
-        (uint64_t)bjetty_ctx->hdr_recv_buf, get_p_tseg(bjetty_ctx->hdr_recv_tseg, recv_idx, 0));
-    /* set user sge */
     for (int i = 0; i < wr->src.num_sge; ++i) {
-        copied_jfr_wr->src.sge[1 + i].tseg = get_p_tseg(wr->src.sge[i].tseg, recv_idx, 0);
+        copied_jfr_wr->src.sge[i].tseg = get_p_tseg(wr->src.sge[i].tseg, recv_idx, 0);
     }
     return copied_jfr_wr;
 }
@@ -1438,27 +1466,6 @@ static int handle_target_fail(bjetty_ctx_t *bjetty_ctx, uint32_t origin_send_idx
     }
 }
 /**
- * Determine whether an opcode in a CR is of the send type, which will be used in recovering cr->completion_len.
- */
-static inline bool is_cr_type_send(const urma_cr_t *cr)
-{
-    /* All opcodes other than this are related to opcode SEND. */
-    return cr->opcode != URMA_CR_OPC_WRITE_WITH_IMM;
-}
-/**
- * Remove header len from completion_len if this CR using header for failover handling
- */
-static inline void recover_cr_completion_len(urma_cr_t *cr)
-{
-    /* recover completion len */
-    if (is_cr_type_send(cr)) {
-        /* If cr->completion_len is 0, we should not perform the conversion. */
-        if (cr->completion_len >= sizeof(bjetty_hdr_t)) {
-            cr->completion_len -= sizeof(bjetty_hdr_t);
-        }
-    }
-}
-/**
  * Perform the recovery operation for certain fields in the CR uniformly within the handle_send/handle_recv functions.
  * Subsequent updates may enhance the recovery capabilities for other fields in CR.
  */
@@ -1466,8 +1473,6 @@ static void restore_user_cr(urma_cr_t *cr, uint64_t original_user_ctx)
 {
     /* Restore the replaced value */
     cr->user_ctx = original_user_ctx;
-    /* recover completion len */
-    recover_cr_completion_len(cr);
 }
 
 /**
@@ -1615,18 +1620,14 @@ static int rearm_error_device(bjetty_ctx_t *bjetty_ctx, int err_idx, int migrate
     return args.ret;
 }
 
-static uint32_t parse_hdr(uint64_t start_addr, uint32_t ctx, bjetty_hdr_t *hdr)
+    static int parse_imm_data(uint64_t imm_data, bool *is_so, urma_cr_opcode_t *opcode, uint32_t *msn)
 {
-    uintptr_t hdr_addr = get_hdr_addr(ctx, start_addr);
-    *hdr = *((bjetty_hdr_t *)hdr_addr);
-    return ((bjetty_hdr_t *)hdr_addr)->msn;
-}
-
-static uint32_t parse_imm_data(uint64_t imm_data, bjetty_hdr_t *hdr)
-{
-    hdr->is_so = (imm_data >> WRITE_IMM_IS_SO_SHIFT) & 1;
-    hdr->msn = (imm_data >> WRITE_IMM_USER_BITS) & (BONDP_MAX_BITMAP_SIZE - 1);
-    return hdr->msn;
+    *is_so = ((imm_data >> WRITE_IMM_IS_SO_SHIFT) & 1);
+    *msn = (imm_data >> WRITE_IMM_USER_BITS) & (BONDP_MAX_BITMAP_SIZE - 1);
+    if (parse_original_cr_opcode(imm_data, opcode) != 0) {
+        return -1;
+    }
+    return 0;
 }
 
 static urma_status_t rearm_single_wr(bjetty_ctx_t *bjetty_ctx, int recv_idx,
@@ -1655,11 +1656,12 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
 {
     urma_jfr_wr_t *bad_wr = NULL;
     int ret = 0;
+    bool is_so = false;
     uint64_t original_user_ctx = 0;
     uint32_t msn = 0;
     int migrate_idx = 0;
     bdp_v_conn_t *v_conn = NULL;
-    bjetty_hdr_t hdr = {0};
+    urma_cr_opcode_t original_opcode = cr->opcode;
 
     if (bjetty_ctx->bdp_comp->comp_type != BONDP_COMP_JETTY && bjetty_ctx->bdp_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_comp type: %d\n", bjetty_ctx->bdp_comp->comp_type);
@@ -1705,11 +1707,20 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
         return CR_HANDLER_ERR_AND_COPY;
     }
     /* Do de-duplicating */
-    if (cr->opcode == URMA_CR_OPC_WRITE_WITH_IMM) {
-        msn = parse_imm_data(cr->imm_data, &hdr);
+    if (cr->opcode == URMA_CR_OPC_WRITE_WITH_IMM || cr->opcode == URMA_CR_OPC_SEND_WITH_IMM) {
+        if (parse_imm_data(cr->imm_data, &is_so, &original_opcode, &msn) != 0) {
+            URMA_LOG_ERR("Failed to parse original opcode from imm metadata\n");
+            (void)jfr_wr_buf_remove_wr(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id);
+            restore_user_cr(cr, original_user_ctx);
+            return CR_HANDLER_ERR_AND_COPY;
+        }
+        cr->opcode = original_opcode;
         cr->imm_data &= ((uint64_t)1 << WRITE_IMM_USER_BITS) - 1;
     } else {
-        msn = parse_hdr((uint64_t)bjetty_ctx->hdr_recv_buf, recv_wr_id, &hdr);
+        URMA_LOG_ERR("Unsupported CR opcode %u for bond metadata parsing\n", cr->opcode);
+        (void)jfr_wr_buf_remove_wr(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id);
+        restore_user_cr(cr, original_user_ctx);
+        return CR_HANDLER_ERR_AND_COPY;
     }
     v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, &target_jetty_id);
     if (!v_conn) {
@@ -1734,7 +1745,7 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
             bdp_slide_wnd_has(&v_conn->recv_wnd, msn));
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
-    if (hdr.is_so && v_conn->recv_wnd.head != msn) {
+    if (is_so && v_conn->recv_wnd.head != msn) {
         /* cache so cr */
         so_cr_queue_data_t cr_data = {
             .msn = msn,
@@ -2026,8 +2037,7 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int
         if (restore_cr_remote_id(bdp_ctx, cr) != 0) {
             restore_cr_remote_id_fallback(bdp_ctx, cr);
         }
-        /* recover completion len */
-        recover_cr_completion_len(cr);
+
         /* Caller should copy this CR to output array. */
         return CONVERT_SUCCESS;
     }
