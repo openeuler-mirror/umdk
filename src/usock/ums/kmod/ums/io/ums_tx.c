@@ -415,7 +415,7 @@ static inline void ums_update_tx_pi(struct ums_connection *conn, size_t len)
 	ums_curs_copy(&conn->tx_curs_sent, &sent, conn); /* src: local sndbuf */
 }
 
-static inline u32 ums_get_imm(struct ums_connection *conn, int skip_flag)
+static inline u32 ums_get_imm(struct ums_connection *conn, int skip_flag, u8 *credits)
 {
 	struct ums_link *link = conn->lnk;
 	u8 saved_credits = 0;
@@ -428,6 +428,7 @@ static inline u32 ums_get_imm(struct ums_connection *conn, int skip_flag)
 	if (ums_wr_rx_credits_need_announce_frequent(link))
 		saved_credits = (u8)ums_wr_rx_get_credits(link);
 	imm.credits = saved_credits;
+	*credits = saved_credits;
 
 	return imm.data;
 }
@@ -475,6 +476,7 @@ static int ums_tx_ub_write_imm(struct ums_connection *conn,
 	struct ubcore_jetty *jetty = conn->lnk->ub_jetty;
 	struct ubcore_jfs_wr *bad_wr = NULL;
 	struct ums_link *link = conn->lnk;
+	u8 credits = 0;
 	int rc;
 
 	/* if peer freed connection */
@@ -492,7 +494,7 @@ static int ums_tx_ub_write_imm(struct ums_connection *conn,
 	wr->rw.dst.sge->tseg = conn->tseg;
 	wr->rw.dst.num_sge = 1;
 	/* wr_id is set in get_free_slot */
-	wr->rw.notify_data = ums_get_imm(conn, wr_info->skip_flag);
+	wr->rw.notify_data = ums_get_imm(conn, wr_info->skip_flag, &credits);
 	wr->tjetty = link->ub_tjetty;
 
 	ums_update_tx_pi(conn, wr_info->len);
@@ -503,6 +505,8 @@ static int ums_tx_ub_write_imm(struct ums_connection *conn,
 	rc = ubcore_post_jetty_send_wr(jetty, wr, &bad_wr);
 	if (rc != 0) {
 		UMS_LOGE("failed to post jetty send wr WRITE_WITH_IMM, wr id is %llu", wr->user_ctx);
+		if (credits != 0)
+			ums_wr_rx_put_credits(link, credits);
 		ums_link_down_cond_sched(link);
 		if (atomic_dec_and_test(&conn->conn_pend_tx_wr))
 			wake_up(&conn->conn_pend_tx_wq);
