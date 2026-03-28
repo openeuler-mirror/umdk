@@ -48,7 +48,9 @@ void task_manager_timeout_manager_remove(urpc_async_task_ctx_t *entry)
     if (!g_urpc_task_timeout_manager.is_outer_lock) {
         (void)pthread_mutex_unlock(&g_urpc_task_timeout_manager.lock);
     }
-    entry->ref_cnt--;
+    if (entry->ref_cnt > 0) {
+        entry->ref_cnt--;
+    }
 }
 
 urpc_async_task_ctx_t *task_manager_server_task_get(task_instance_key_t *key)
@@ -101,13 +103,17 @@ void task_manager_client_task_remove(urpc_async_task_ctx_t *entry)
     (void)pthread_rwlock_wrlock(&g_urpc_client_task_hamp.rw_lock);
     urpc_hmap_remove(&g_urpc_client_task_hamp.hmap, &entry->task_hash_node);
     (void)pthread_rwlock_unlock(&g_urpc_client_task_hamp.rw_lock);
-    entry->ref_cnt--;
+    if (entry->ref_cnt > 0) {
+        entry->ref_cnt--;
+    }
 }
 
 void task_manager_server_task_remove(urpc_async_task_ctx_t *entry)
 {
     // server single-threaded processing, and does not require locking
-    entry->ref_cnt--;
+    if (entry->ref_cnt > 0) {
+        entry->ref_cnt--;
+    }
     urpc_hmap_remove(&g_urpc_server_task_hamp.hmap, &entry->task_hash_node);
 }
 
@@ -126,7 +132,9 @@ void task_manager_running_task_activate(void)
         (void)pthread_mutex_unlock(&g_urpc_task_activation_manager.lock);
         ASSIGN_CONTAINER_PTR(task_entry, node_ptr, flow_node);
         task_entry->list_type = TASK_LIST_TYPE_UNKNOWN;
-        task_entry->ref_cnt--;
+        if (task_entry->ref_cnt > 0) {
+            task_entry->ref_cnt--;
+        }
         task_engine_task_process(false, NULL, NULL, task_entry);
         count--;
     }

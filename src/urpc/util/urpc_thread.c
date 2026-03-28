@@ -124,7 +124,7 @@ int urpc_thread_create(const char *thread_name, urpc_thread_job_t *job, uint32_t
     } else {
         ret = snprintf(param->name, URPC_THREAD_NAME_SIZE, "%s", thread_name);
     }
-    if (ret < 0) {
+    if (ret < 0 || ret >= URPC_THREAD_NAME_SIZE) {
         UTIL_LOG_ERR("urpc thread name copy failed, status: %d\n", ret);
         goto THREAD_INDEX_FREE;
     }

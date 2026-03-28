@@ -715,7 +715,7 @@ void log_get_current_time(char *buffer, uint32_t len)
 
     int ret = snprintf(
         buffer, len - 1, "%02d%02d %02d:%02d:%02d", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-    if (ret < 0) {
+    if (ret < 0 || ret >= (int)(len - 1)) {
         buffer[0] = '\0';
     }
 }

@@ -131,7 +131,7 @@ void get_current_time(char *buffer, uint32_t len)
 
     int ret = snprintf(
         buffer, len - 1, "%02d%02d %02d:%02d:%02d", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-    if (ret < 0) {
+    if (ret < 0 || ret >= (int)(len - 1)) {
         buffer[0] = '\0';
     }
 }
@@ -509,7 +509,8 @@ static int fill_client_urpc_config(urpc_lib_example_config_t *cfg, urpc_config_t
     if (cfg->dev_assign_mode == DEV_ASSIGN_MODE_EID) {
         (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)(uintptr_t)&urpc_config->trans_info[0].ub.eid);
     } else {
-        if (snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name) < 0) {
+        int ret = snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name);
+        if (ret < 0 || ret >= URPC_DEV_NAME_SIZE) {
             LOG_PRINT("snprintf dev_name failed\n");
             return URPC_FAIL;
         }
@@ -556,8 +557,9 @@ static void show_queue_stats(uint64_t qh)
     char stats_msg[STATS_MSG_SIZE] = {0};
     for (int i = 0; i < STATS_TYPE_MAX; i++) {
         if (stats[i] != 0) {
-            if (snprintf(stats_msg + strlen(stats_msg), STATS_MSG_SIZE - strlen(stats_msg),
-                "[%s: %lu] ", urpc_queue_stats_name_get(i), stats[i]) < 0) {
+            int ret = snprintf(stats_msg + strlen(stats_msg), STATS_MSG_SIZE - strlen(stats_msg),
+                "[%s: %lu] ", urpc_queue_stats_name_get(i), stats[i]);
+            if (ret < 0 || ret >= (int)(STATS_MSG_SIZE - strlen(stats_msg))) {
                 LOG_PRINT("snprintf stats_msg failed\n");
                 return;
             }
@@ -1578,7 +1580,8 @@ static int fill_server_urpc_config(urpc_lib_example_config_t *cfg, urpc_config_t
     if (cfg->dev_assign_mode == DEV_ASSIGN_MODE_EID) {
         (void)urma_str_to_eid(cfg->eid, (urma_eid_t *)(uintptr_t)&urpc_config->trans_info[0].ub.eid);
     } else {
-        if (snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name) < 0) {
+        int ret = snprintf(urpc_config->trans_info[0].dev.dev_name, URPC_DEV_NAME_SIZE, "%s", cfg->dev_name);
+        if (ret < 0 || ret >= URPC_DEV_NAME_SIZE) {
             LOG_PRINT("snprintf dev_name failed\n");
             return URPC_FAIL;
         }

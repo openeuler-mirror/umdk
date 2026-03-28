@@ -1801,7 +1801,9 @@ int detach_server_final_step(urpc_async_task_ctx_t *task)
     ip_handshaker_ctx_t *ctx = (ip_handshaker_ctx_t *)(uintptr_t)task;
     urpc_client_connect_entry_t *entry = (urpc_client_connect_entry_t *)task->transport_handle;
     // detach success, decrement the reference count by one
-    entry->ref_cnt--;
+    if (entry->ref_cnt > 0) {
+        entry->ref_cnt--;
+    }
     urpc_channel_info_t *channel = ctx->client.channel;
     if (urpc_list_is_in_list(&channel->tcp_node)) {
         urpc_list_remove(&channel->tcp_node);
