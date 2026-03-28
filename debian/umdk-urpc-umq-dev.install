@@ -1,0 +1,6 @@
+### for umdk-urpc-umq-dev
+usr/include/ub/umdk/urpc/umq/umq*.h
+usr/lib64/libumq.so usr/lib
+usr/lib64/libumq_buf.so usr/lib
+usr/lib64/libumq_ub.so usr/lib
+usr/lib64/libumq_ipc.so usr/lib

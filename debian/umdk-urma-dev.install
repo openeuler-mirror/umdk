@@ -1,0 +1,6 @@
+usr/include/ub/umdk/urma/urma_*.h
+usr/include/ub/umdk/urma/uvs_api.h
+usr/include/ub/umdk/urma/uvs_types.h
+usr/lib64/liburma.so /usr/lib
+usr/lib64/liburma_common.so /usr/lib
+usr/lib64/urma/liburma_ubagg.so /usr/lib/urma

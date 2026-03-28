@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+        if [ -x /bin/systemctl ] && [ -x /usr/sbin/rsyslogd ]; then
+            /bin/systemctl restart rsyslog >/dev/null 2>&1 || true
+        fi
+        ;;
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

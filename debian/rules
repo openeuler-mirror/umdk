@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+
+# See debhelper(7) (uncomment to enable).
+# Output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+
+# See FEATURE AREAS in dpkg-buildflags(1).
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# See ENVIRONMENT in dpkg-buildflags(1).
+# Package maintainers to append CFLAGS.
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# Package maintainers to append LDFLAGS.
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+
+%:
+    dh $@  --buildsystem=cmake
+
+export DEB_BUILD_OPTIONS += nostrip noautodbgsym
+
+override_dh_auto_configure:
+    dh_auto_configure -- \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DBUILD_DATE=$(shell date +%Y%m%d) \
+    -DBUILD_URMA=enable \
+    -DBUILD_DLOCK=enable \
+    -DBUILD_URPC=enable \
+    -DBUILD_ALL=disable \
+    -DBUILD_UMS=disable \
+    -DCMAKE_CXX_STANDARD=17 \
+    -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+    -DCMAKE_VERBOSE_MAKEFILE=on \
+    -DUDMA_ST64B=enable \
+    $(if $(filter asan,$(DEB_BUILD_OPTIONS)), -DASAN=enable) \
+    $(if $(filter tsan,$(DEB_BUILD_OPTIONS)), -DTSAN=enable) \
+    $(if $(filter gcov,$(DEB_BUILD_OPTIONS)), -DCODE_COVERAGE=enable) \
+    $(if $(filter release_enable,$(DEB_BUILD_OPTIONS)), -DRELEASE_ENABLE=enable) \
+    $(if $(filter test,$(DEB_BUILD_OPTIONS)), -DURMA_TEST=enable -DRELEASE_ENABLE=enable) \
+    $(if $(filter urma,$(DEB_BUILD_OPTIONS)), -DBUILD_URMA=enable) \
+    $(if $(filter ubagg_disable,$(DEB_BUILD_OPTIONS)), -DUB_AGG=disable) \
+    $(if $(filter dlock,$(DEB_BUILD_OPTIONS)), -DBUILD_DLOCK=enable) \
+    $(if $(filter urpc,$(DEB_BUILD_OPTIONS)), -DBUILD_URPC=enable) \
+    $(if $(filter dfx_tool,$(DEB_BUILD_OPTIONS)), -DDFX_TOOL=enable) \
+    $(if $(filter build_all,$(DEB_BUILD_OPTIONS)), -DBUILD_ALL=enable) \
+    ../src/
+
+override_dh_auto_install:
+    dh_auto_install --destdir=$(CURDIR)/debian/tmp
+
+override_dh_install:
+    dh_install -O--buildsystem=cmake -v
+
+# Additional installation steps if needed
+
+
+# dh_make generated override targets.
+# This is an example for Cmake (see <https://bugs.debian.org/641051>).
+#override_dh_auto_configure:
+#   dh_auto_configure -- \
+#   -DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)

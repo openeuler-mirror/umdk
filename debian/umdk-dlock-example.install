@@ -1,0 +1,4 @@
+### for umdk-dlock-example
+usr/bin/dlock_primary_test
+usr/bin/dlock_client_test
+usr/bin/dlock_client_object_test

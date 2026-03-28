@@ -1,0 +1,4 @@
+### for umdk-dlock-lib
+usr/lib64/libdlockm.so.* usr/lib
+usr/lib64/libdlocks.so.* usr/lib
+usr/lib64/libdlockc.so.* usr/lib
