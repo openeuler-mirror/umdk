@@ -187,9 +187,51 @@ static int bondp_create_vjfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg, bondp_com
     return 0;
 }
 
+static int bondp_create_pjfs(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfs, urma_jfs_cfg_t *cfg)
+{
+    bondp_comp_t *bdp_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_comp_t, base);
+    urma_jfs_cfg_t p_cfg = *cfg;
+
+    for (int i = 0; i < bdp_jfs->dev_num; ++i) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        p_cfg.jfc = bdp_jfc->p_jfc[i];
+        urma_jfs_t *jfs = urma_create_jfs(bdp_ctx->p_ctxs[i], &p_cfg);
+        if (jfs == NULL) {
+            URMA_LOG_ERR("Failed to create pjfs %d.\n", i);
+            return -1;
+        }
+        bdp_jfs->p_jfs[i] = jfs;
+        bdp_jfs->p_jfs[i]->jfs_cfg.user_ctx = (uint64_t)bdp_jfs;
+    }
+
+    return 0;
+}
+
 static int bondp_delete_vjfs(bondp_comp_t *bdp_jfs)
 {
     return urma_cmd_delete_jfs(&bdp_jfs->v_jfs);
+}
+
+static int bondp_delete_pjfs(bondp_comp_t *bdp_jfs)
+{
+    int ret = 0;
+
+    for (int i = 0; i < bdp_jfs->dev_num; ++i) {
+        if (bdp_jfs->p_jfs[i] == NULL) {
+            continue;
+        }
+
+        int p_ret = urma_delete_jfs(bdp_jfs->p_jfs[i]);
+        if (p_ret != 0) {
+            URMA_LOG_ERR("Failed to delete pjfs %d, ret: %d.\n", i, p_ret);
+            ret = p_ret;
+        }
+        bdp_jfs->p_jfs[i] = NULL;
+    }
+
+    return ret;
 }
 
 static int bondp_add_jfs_p_vjetty_id_info(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfs, uint32_t jetty_id)
@@ -256,30 +298,46 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
         }
     }
 
-    bondp_comp_t *bdp_jfs = bondp_create_comp(ctx, BONDP_COMP_JFS, cfg);
+    bondp_comp_t *bdp_jfs = (bondp_comp_t *)calloc(1, sizeof(bondp_comp_t));
     if (bdp_jfs == NULL) {
         URMA_LOG_ERR("Failed to create bondp comp\n");
         return NULL;
     }
+
+    bdp_jfs->bondp_ctx = bdp_ctx;
+    bdp_jfs->comp_type = BONDP_COMP_JFS;
+    atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
+
+    if (cfg->flag.bs.multi_path) {
+        if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
+            bdp_jfs->dev_num = SINGLE_DIE_IODIE_NUM;
+        } else {
+            bdp_jfs->dev_num = PRIMARY_EID_NUM;
+        }
+    } else {
+        bdp_jfs->dev_num = bdp_ctx->dev_num;
+    }
+
+    if (bondp_create_pjfs(bdp_ctx, bdp_jfs, cfg) != 0) {
+        URMA_LOG_ERR("Failed to create pjfs\n");
+        goto DELETE_PJFS;
+    }
+
     if (bondp_create_vjfs(ctx, cfg, bdp_jfs)) {
         URMA_LOG_ERR("Failed to create vjfs\n");
-        goto DELETE_COMP;
+        goto DELETE_PJFS;
     }
     if (bondp_add_jfs_p_vjetty_id_info(bdp_ctx, bdp_jfs, bdp_jfs->v_jfs.jfs_id.id)) {
         URMA_LOG_ERR("Failed to add jfs p_vjetty_id info\n");
         goto DELETE_VJFS;
     }
-    for (int i = 0; i < bdp_jfs->dev_num; ++i) {
-        if (bdp_jfs->p_jfs[i] == NULL) {
-            continue;
-        }
-        bdp_jfs->p_jfs[i]->jfs_cfg.user_ctx = (uint64_t)bdp_jfs;
-    }
+
     bjetty_ctx_t *jfs_datapath_ctx = create_bjetty_ctx(ctx, bdp_jfs, URMA_UBAGG_WR_BUF_SIZE, URMA_UBAGG_HDR_BUF_SIZE);
     if (jfs_datapath_ctx == NULL) {
         URMA_LOG_ERR("Failed to create jfs datapath ctx");
         goto DEL_P_VJFS_ID;
     }
+
     bdp_jfs->comp_ctx = jfs_datapath_ctx;
     bdp_jfs->is_multipath = cfg->flag.bs.multi_path;
 
@@ -291,8 +349,9 @@ DEL_P_VJFS_ID:
     bondp_del_jfs_p_vjetty_info(bdp_jfs);
 DELETE_VJFS:
     (void)bondp_delete_vjfs(bdp_jfs);
-DELETE_COMP:
-    bondp_delete_comp(bdp_jfs, BONDP_COMP_JFS);
+DELETE_PJFS:
+    bondp_delete_pjfs(bdp_jfs);
+    free(bdp_jfs);
     return NULL;
 }
 
@@ -322,17 +381,21 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    int del_ret = bondp_delete_vjfs(bdp_jfs);
-    if (del_ret) {
-        URMA_LOG_ERR("ubcore delete jfs failed, ret: %d.\n", del_ret);
-        ret = URMA_FAIL;
-    }
+
     destroy_bjetty_ctx(bdp_jfs->comp_ctx);
-    del_ret = bondp_delete_comp(bdp_jfs, BONDP_COMP_JFS);
-    if (del_ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to delete_comp: %d", del_ret);
+
+    if (bondp_delete_vjfs(bdp_jfs) != URMA_SUCCESS) {
+        URMA_LOG_ERR("Failed to delete vjfs\n");
         ret = URMA_FAIL;
     }
+
+    if (bondp_delete_pjfs(bdp_jfs) != URMA_SUCCESS) {
+        URMA_LOG_ERR("Failed to delete pjfs\n");
+        ret = URMA_FAIL;
+    }
+
+    free(bdp_jfs);
+
     atomic_fetch_sub(&bdp_jfc->use_cnt.atomic_cnt, 1);
     return ret;
 }
