@@ -48,7 +48,7 @@ static int urpc_admin_connect(urpc_admin_config_t *cfg)
 
     ret = snprintf(g_urpc_admin_ctx.addr.sun_path, sizeof(g_urpc_admin_ctx.addr.sun_path),
         "%s/urpc.sock.%u", buf, cfg->pid);
-    if (ret < 0) {
+    if (ret < 0 || ret >= (int)sizeof(g_urpc_admin_ctx.addr.sun_path)) {
         LOG_PRINT("copy socket name failed, error %d\n", ret);
         goto ERROR;
     }
