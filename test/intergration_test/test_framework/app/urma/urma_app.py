@@ -27,7 +27,7 @@ def prepare_test_case_new(host_list, case_path, case_name="test_case"):
            f' {case_c} {public_c} -g -O0 ' \
            f'-rdynamic -lstdc++ -w -fPIC -fpermissive -o {case_out} '
 
-    lib_list = ['-lurma', '-lsecurec', '-lglib-2.0', '-lpthread', f'-I {local_path}', '-I /usr/include/umdk/', \
+    lib_list = ['-lurma', '-lglib-2.0', '-lpthread', f'-I {local_path}', '-I /usr/include/umdk/', \
                 '-ldl', '-I /usr/include/ub/umdk/urma/']
     _cmd += " ".join(lib_list)
 
