@@ -331,7 +331,7 @@ static int unix_server_socket_file_clean(const char *dir)
             continue;
         }
         ret = snprintf(buf, PATH_MAX + 1, "%s/%s", dir, entry->d_name);
-        if (ret < 0) {
+        if (ret < 0 || ret >= PATH_MAX + 1) {
             URPC_LIB_LOG_ERR("format unix domain socket file name %s/%s failed, ret %d\n", dir, entry->d_name, ret);
             continue;
         }
@@ -359,7 +359,7 @@ int unix_server_init(const char *unix_domain_file_path)
 
     ret = snprintf(g_urpc_unix_server.addr.sun_path, sizeof(g_urpc_unix_server.addr.sun_path),
         "%s/" URPC_UNIX_SOCKET_NAME_PREFIX "%u", buf, (uint32_t)getpid());
-    if (ret < 0) {
+    if (ret < 0 || ret >= (int)sizeof(g_urpc_unix_server.addr.sun_path)) {
         URPC_LIB_LOG_ERR("copy unix domain socket name failed, error %d\n", ret);
         return URPC_FAIL;
     }
