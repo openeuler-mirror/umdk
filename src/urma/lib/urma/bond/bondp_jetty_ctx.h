@@ -38,14 +38,6 @@ typedef struct bondp_jetty_ctx {
     // caching WRs
     jfs_wr_buf_t *jfs_bufs[URMA_UBAGG_DEV_MAX_NUM];  // store unacked jfs wr, in case of re-transmission
     jfr_wr_buf_t *jfr_bufs[URMA_UBAGG_DEV_MAX_NUM];  // store unacked jfr wr, in case of rearm
-    // -- hdr segments --
-    // user space local segment used to send/recv hdr
-    // to implement pkt-level retransmit and deduplication
-    void *hdr_send_buf;
-    void *hdr_recv_buf;
-    uint32_t hdr_buf_size;
-    urma_target_seg_t *hdr_send_tseg;
-    urma_target_seg_t *hdr_recv_tseg;
     // id to distinguish posted WRs
     uint32_t send_wr_id;
     uint32_t recv_wr_id;
@@ -56,13 +48,8 @@ typedef struct bondp_jetty_ctx {
     int direct_target_port;
 } bjetty_ctx_t;
 // Caller check param
-bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_jetty, size_t wr_buf_size, size_t hdr_buf_size);
+bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_jetty, size_t wr_buf_size);
 void destroy_bjetty_ctx(bjetty_ctx_t *bjetty);
-
-typedef struct bonding_jetty_hdr {
-    uint32_t msn;
-    bool is_so;
-} bjetty_hdr_t;
 
 #ifdef __cplusplus
 }
