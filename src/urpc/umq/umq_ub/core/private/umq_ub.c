@@ -1325,6 +1325,10 @@ int umq_ub_token_generate(bool enable_token, uint32_t *token)
 
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size)
 {
+    if (ctx->tseg_list[mempool_id] != NULL) {
+        UMQ_VLOG_WARN(VLOG_UMQ, "seg already registered, mempool_id: %u\n", mempool_id);
+        return UMQ_SUCCESS;
+    }
     bool enable_token = (ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
     uint32_t mem_token;
     int ret = umq_ub_token_generate(enable_token, &mem_token);
