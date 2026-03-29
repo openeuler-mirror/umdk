@@ -155,6 +155,7 @@ typedef struct ub_flow_control {
     uint16_t initial_credit;
     uint16_t credit_request_threshold;
     uint16_t return_ratio;
+    uint16_t peer_ratio;
     uint16_t min_reserved_credit;
     float credit_multiple;
     uint16_t local_tx_depth;

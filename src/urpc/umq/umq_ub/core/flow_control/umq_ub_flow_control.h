@@ -17,6 +17,8 @@
 extern "C" {
 #endif
 
+#define UMQ_UB_CREDIT_PERCENT 10
+
 typedef union umq_ub_fc_info {
     uint64_t value;
     struct {
@@ -41,6 +43,7 @@ typedef union umq_ub_fc_user_ctx {
     } bs;
 } umq_ub_fc_user_ctx_t;
 
+uint16_t umq_ub_fc_threashold_modify(uint16_t threashold, uint8_t ratio);
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
@@ -75,7 +78,7 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
     return fc->ops.remote_rx_window_dec(fc, win, false);
 }
 
-static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
+static ALWAYS_INLINE void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
     if (!fc->enabled) {
         return;
@@ -83,10 +86,10 @@ static inline void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, u
     if (queue->checker != NULL) {
         queue->checker->last_send = get_timestamp_us();
     }
-    if (fc->ops.remote_rx_window_load(fc) <= fc->credit_request_threshold) {
+    if (fc->ops.remote_rx_window_load(fc) <=
+        umq_ub_fc_threashold_modify(fc->credit_request_threshold, fc->peer_ratio)) {
         umq_ub_shared_credit_req_send(queue);
     }
-    return;
 }
 
 static ALWAYS_INLINE bool umq_ub_permission_acquire(struct ub_flow_control *fc)
