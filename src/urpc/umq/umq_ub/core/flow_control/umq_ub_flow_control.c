@@ -21,7 +21,45 @@
 #define UMQ_UB_MIN_RESERVED_CREDIT 2
 #define UMQ_UB_DEFAULT_CREDIT_MULTIPLE 2
 #define UMQ_UB_DEFAULT_MAX_CREDITS_REQUEST 512
-#define UMQ_UB_MIN_CREDITS_PER_REQUEST 2
+#define UMQ_UB_MIN_CREDITS_PER_REQUEST      2
+
+static uint8_t g_umq_ub_credit_ratio[] = {1, 3, 5, 7};
+#define UMQ_UB_CREDIT_RATIO_SIZE (sizeof(g_umq_ub_credit_ratio) / sizeof(uint8_t))
+
+static uint8_t umq_ub_fc_raito_to_imm(uint16_t available, uint16_t total)
+{
+    if (available > total || total == 0) {
+        return 0;
+    }
+
+    uint8_t i = 0;
+    uint8_t ratio = (available * UMQ_UB_CREDIT_PERCENT) / total;
+    for (i = 0; i < (uint8_t)UMQ_UB_CREDIT_RATIO_SIZE; i++) {
+        if (ratio <= g_umq_ub_credit_ratio[i]) {
+            return i;
+        }
+    }
+
+    return (i - 1);
+}
+
+static uint8_t umq_ub_fc_imm_to_ratio(uint8_t ratio)
+{
+    if (ratio >= (uint8_t)UMQ_UB_CREDIT_RATIO_SIZE) {
+        return g_umq_ub_credit_ratio[0];
+    }
+
+    return g_umq_ub_credit_ratio[ratio];
+}
+
+uint16_t umq_ub_fc_threashold_modify(uint16_t threashold, uint8_t ratio)
+{
+    uint16_t ret = threashold * umq_ub_fc_imm_to_ratio(ratio) / UMQ_UB_CREDIT_PERCENT;
+    if (ret == 0) {
+        ret = UMQ_UB_MIN_CREDITS_PER_REQUEST;
+    }
+    return ret;
+}
 
 static ALWAYS_INLINE uint64_t umq_ub_rx_consumed_load(bool lock_free, volatile uint64_t *var)
 {
@@ -705,15 +743,17 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify)
     (void)umq_ub_poll_fc_tx(queue);
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
-
+    ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+    uint16_t available = __atomic_load_n(&pool->stats_u16[CREDIT_POOL_IDLE], __ATOMIC_RELAXED);
     umq_ub_imm_t imm = {
         .flow_control = {
             .umq_private = UMQ_UB_IMM_PRIVATE,
             .type = IMM_TYPE_FLOW_CONTROL,
             .sub_type = IMM_TYPE_FC_CREDIT_REP,
             .in_user_buf = 0,
-            .window = notify}
-        };
+            .window = notify,
+            .ratio = umq_ub_fc_raito_to_imm(available, queue->flow_control.local_rx_depth),
+        }};
     umq_ub_fc_user_ctx_t obj = {
         .bs = {
             .type = IMM_TYPE_FC_CREDIT_REP,
@@ -759,19 +799,17 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t reply_credits = imm->flow_control.window;
     uint16_t credits_per_request = fc->credits_per_request;
+    fc->peer_ratio = imm->flow_control.ratio;
     uint32_t new_request;
     if (reply_credits < credits_per_request) {
         new_request = (uint32_t)(credits_per_request / fc->credit_multiple);
-        if (new_request == 0) {
-            new_request = 1;
-        }
     } else {
         new_request = (uint32_t)(credits_per_request * fc->credit_multiple);
         if (new_request > fc->max_credits_request) {
             new_request = fc->max_credits_request;
         }
     }
-    fc->credits_per_request = (uint16_t)new_request;
+    fc->credits_per_request = umq_ub_fc_threashold_modify((uint16_t)new_request, fc->peer_ratio);
     umq_ub_window_inc(fc, reply_credits);
     return;
 }
