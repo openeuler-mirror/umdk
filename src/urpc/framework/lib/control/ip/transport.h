@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define URPC_CTL_BUF_MAX_LEN                    (1UL << 28)
+#define URPC_CTL_BUF_MAX_LEN                    (1UL << 24)
 
 struct transport_handle;
 typedef int (*transport_send_async)(
