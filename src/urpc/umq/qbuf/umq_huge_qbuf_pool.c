@@ -10,6 +10,7 @@
 #include "umq_errno.h"
 #include "umq_vlog.h"
 #include "umq_huge_qbuf_pool.h"
+#include "util_lock.h"
 
 #define HUGE_QBUF_POOL_NUM_MAX (64)
 #define HUGE_QBUF_POOL_IDX_SHIFT (1)
@@ -140,7 +141,10 @@ static int do_umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EEXIST;
     }
 
-    umq_qbuf_block_pool_init(&pool->block_pool);
+    int ret = umq_qbuf_block_pool_init(&pool->block_pool);
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
 
     pool->total_size = cfg->total_size;
     uint32_t blk_size = umq_huge_qbuf_get_size_by_type(cfg->type);
@@ -350,7 +354,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
 
     huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
 
-    (void)pthread_mutex_lock(&pool->block_pool.global_mutex);
+    (void)util_mutex_lock(pool->block_pool.global_mutex);
 
     uint32_t actual_buf_count;
     uint32_t headroom_size =
@@ -368,7 +372,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     while (pool->block_pool.buf_cnt_with_data < actual_buf_count) {
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
-            (void)pthread_mutex_unlock(&pool->block_pool.global_mutex);
+            (void)util_mutex_unlock(pool->block_pool.global_mutex);
             UMQ_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %u, status: %d\n",
                 pool->block_pool.buf_cnt_with_data, ret);
             return -UMQ_ERR_ENOMEM;
@@ -379,7 +383,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     } else {
         umq_huge_qbuf_alloc_data_with_combine(pool, request_size, actual_buf_count, list, headroom_size);
     }
-    (void)pthread_mutex_unlock(&pool->block_pool.global_mutex);
+    (void)util_mutex_unlock(pool->block_pool.global_mutex);
 
     return UMQ_SUCCESS;
 }
@@ -410,7 +414,7 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
     umq_buf_t *cur_node = NULL;
     umq_buf_t *last_node = NULL;
 
-    (void)pthread_mutex_lock(&pool->block_pool.global_mutex);
+    (void)util_mutex_lock(pool->block_pool.global_mutex);
     QBUF_LIST_FOR_EACH(cur_node, list) {
         remove_cnt++;
         last_node = cur_node;
@@ -421,7 +425,7 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
     QBUF_LIST_FIRST(&pool->block_pool.head_with_data) = QBUF_LIST_FIRST(list); // switch head node
     QBUF_LIST_NEXT(last_node) = head; // append head node to last node
     pool->block_pool.buf_cnt_with_data += remove_cnt;
-    (void)pthread_mutex_unlock(&pool->block_pool.global_mutex);
+    (void)util_mutex_unlock(pool->block_pool.global_mutex);
 }
 
 int umq_huge_qbuf_register_seg(

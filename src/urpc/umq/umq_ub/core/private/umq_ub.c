@@ -220,6 +220,7 @@ static ALWAYS_INLINE uint32_t umq_ub_eid_id_hash_get(
 
 static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32_t *remote_eid_id)
 {
+    int ret = UMQ_SUCCESS;
     remote_imported_tseg_info_t *remote_imported_info = queue->dev_ctx->remote_imported_info;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
@@ -228,7 +229,7 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
         info->dev_info->pid, info->dev_info->bind_namespace, strlen(info->dev_info->bind_namespace));
     bool find = false;
     remote_eid_hmap_node_t *eid_node;
-    pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
+    (void)util_mutex_lock(remote_imported_info->remote_eid_id_table_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
         if ((memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0) && (info->dev_info->pid == eid_node->pid) &&
             strcmp(info->dev_info->bind_namespace, eid_node->remote_namespace) == 0) {
@@ -240,14 +241,14 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     if (find) {
         *remote_eid_id = eid_node->remote_eid_id;
         eid_node->ref_cnt++;
-        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
         return UMQ_SUCCESS;
     }
 
     // The jetty for a bind operation originates from a new EID
     eid_node = (remote_eid_hmap_node_t *)malloc(sizeof(remote_eid_hmap_node_t));
     if (eid_node == NULL) {
-        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, malloc eid node failed\n", EID_ARGS(*eid), id);
         return -UMQ_ERR_ENOMEM;
     }
@@ -255,11 +256,17 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     // allocating EID ID
     uint32_t eid_id = util_id_allocator_get(&remote_imported_info->eid_id_allocator);
     if (eid_id >= UMQ_UB_MAX_REMOTE_EID_NUM) {
-        free(eid_node);
-        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, remote eid cnt exceed maxinum limit\n",
             EID_ARGS(*eid), id);
-        return -UMQ_ERR_ENODEV;
+        ret = -UMQ_ERR_ENODEV;
+        goto FREE_EID_NODE;
+    }
+    remote_imported_info->imported_tseg_list_mutex[eid_id] = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (remote_imported_info->imported_tseg_list_mutex[eid_id] == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, imported tseg list mutex create failed\n",
+            EID_ARGS(*eid), id);
+        ret = -UMQ_ERR_ENOMEM;
+        goto ID_ALLOCATOR_RELEASE;
     }
 
     // importing the remote memory
@@ -277,16 +284,13 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     remote_imported_info->imported_tseg_list[eid_id][UMQ_QBUF_DEFAULT_MEMPOOL_ID] =
         import_mem(queue->dev_ctx->urma_ctx, &mem_info);
     if (remote_imported_info->imported_tseg_list[eid_id][UMQ_QBUF_DEFAULT_MEMPOOL_ID] == NULL) {
-        util_id_allocator_release(&remote_imported_info->eid_id_allocator, eid_id);
-        free(eid_node);
-        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "local eid: " EID_FMT ", local jetty_id: %u, remote eid " EID_FMT ", remote jetty_id: "
             "%u, import mem failed\n", EID_ARGS(*eid), id, EID_ARGS(info->queue_info->jetty_id.eid),
             info->queue_info->jetty_id.id);
-        return -UMQ_ERR_ENODEV;
+        ret = -UMQ_ERR_ENODEV;
+        goto MUTEX_DESTROY;
     }
 
-    (void)pthread_mutex_init(&remote_imported_info->imported_tseg_list_mutex[eid_id], NULL);
     eid_node->pid = info->dev_info->pid;
     eid_node->remote_eid_id = eid_id;
     eid_node->ref_cnt = 1;
@@ -296,8 +300,19 @@ static int umq_ub_eid_id_get(ub_queue_t *queue, umq_ub_bind_info_t *info, uint32
     remote_imported_info->tesg_imported[eid_id][UMQ_QBUF_DEFAULT_MEMPOOL_ID] = true;
     (void)memcpy(&eid_node->eid, remote_eid, sizeof(urma_eid_t));
     urpc_hmap_insert(&remote_imported_info->remote_eid_id_table, &eid_node->node, hash);
-    pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+    (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
     return UMQ_SUCCESS;
+
+MUTEX_DESTROY:
+    (void)util_mutex_lock_destroy(remote_imported_info->imported_tseg_list_mutex[eid_id]);
+    remote_imported_info->imported_tseg_list_mutex[eid_id] = NULL;
+ID_ALLOCATOR_RELEASE:
+    util_id_allocator_release(&remote_imported_info->eid_id_allocator, eid_id);
+
+FREE_EID_NODE:
+    free(eid_node);
+    (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
+    return ret;
 }
 
 int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx)
@@ -311,7 +326,7 @@ int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_
         ctx->remote_pid, ctx->remote_namespace, strlen(ctx->remote_namespace));
     bool find = false;
     remote_eid_hmap_node_t *eid_node;
-    pthread_mutex_lock(&remote_imported_info->remote_eid_id_table_lock);
+    (void)util_mutex_lock(remote_imported_info->remote_eid_id_table_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(eid_node, node, hash, &remote_imported_info->remote_eid_id_table) {
         if (memcmp(&eid_node->eid, remote_eid, sizeof(urma_eid_t)) == 0 && (ctx->remote_pid == eid_node->pid) &&
             eid_node->remote_eid_id == ctx->remote_eid_id &&
@@ -322,14 +337,15 @@ int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_
     }
 
     if (!find) {
-        pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+        (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "not find eid node %u\n", ctx->remote_eid_id);
         return -UMQ_ERR_ENODEV;
     }
 
     eid_node->ref_cnt--;
     if (eid_node->ref_cnt == 0) {
-        pthread_mutex_destroy(&remote_imported_info->imported_tseg_list_mutex[eid_node->remote_eid_id]);
+        (void)util_mutex_lock_destroy(remote_imported_info->imported_tseg_list_mutex[eid_node->remote_eid_id]);
+        remote_imported_info->imported_tseg_list_mutex[eid_node->remote_eid_id] = NULL;
         for (uint32_t i = 0; i < UMQ_MAX_TSEG_NUM; i++) {
             if (remote_imported_info->imported_tseg_list[eid_node->remote_eid_id][i] == NULL) {
                 continue;
@@ -342,7 +358,7 @@ int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_
         urpc_hmap_remove(&remote_imported_info->remote_eid_id_table, &eid_node->node);
         free(eid_node);
     }
-    pthread_mutex_unlock(&remote_imported_info->remote_eid_id_table_lock);
+    (void)util_mutex_unlock(remote_imported_info->remote_eid_id_table_lock);
     return UMQ_SUCCESS;
 }
 
@@ -883,8 +899,15 @@ remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void)
         goto REMOTE_EID_MAP_UNINIT;
     }
 
-    (void)pthread_mutex_init(&remote_imported_tseg_info->remote_eid_id_table_lock, NULL);
+    remote_imported_tseg_info->remote_eid_id_table_lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (remote_imported_tseg_info->remote_eid_id_table_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "remote eid_id_table mutex create failed\n");
+        goto ID_ALLOCATOR_UNINIT;
+    }
     return remote_imported_tseg_info;
+
+ID_ALLOCATOR_UNINIT:
+    util_id_allocator_uninit(&remote_imported_tseg_info->eid_id_allocator);
 
 REMOTE_EID_MAP_UNINIT:
     urpc_hmap_uninit(&remote_imported_tseg_info->remote_eid_id_table);
@@ -907,7 +930,8 @@ void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx)
         urpc_hmap_remove(&remote_imported_tseg_info->remote_eid_id_table, &cur->node);
         free(cur);
     }
-    (void)pthread_mutex_destroy(&remote_imported_tseg_info->remote_eid_id_table_lock);
+    (void)util_mutex_lock_destroy(remote_imported_tseg_info->remote_eid_id_table_lock);
+    remote_imported_tseg_info->remote_eid_id_table_lock = NULL;
     urpc_hmap_uninit(&remote_imported_tseg_info->remote_eid_id_table);
     util_id_allocator_uninit(&ub_ctx->remote_imported_info->eid_id_allocator);
     free(ub_ctx->remote_imported_info);
@@ -1383,7 +1407,7 @@ void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_
     umq_event->event_type = UMQ_EVENT_QH_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
-    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_rdlock(g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jfs_jfc[UB_QUEUE_JETTY_IO] == urma_event->element.jfc || (local->flow_control.enabled &&
             local->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jfc)) {
@@ -1406,7 +1430,7 @@ void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 
     if (!find) {
         UMQ_VLOG_WARN(VLOG_UMQ_URMA_AE, "find jfc id %u in all umq failed\n", urma_event->element.jfc->jfc_id.id);
@@ -1423,7 +1447,7 @@ void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_
     umq_event->event_type = UMQ_EVENT_QH_RQ_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
-    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_rdlock(g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr || (local->flow_control.enabled &&
             local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr)) {
@@ -1437,7 +1461,7 @@ void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 
     if (!find) {
         UMQ_VLOG_WARN(VLOG_UMQ_URMA_AE, "find jfr id %u in all umq failed\n", urma_event->element.jfr->jfr_id.id);
@@ -1454,7 +1478,7 @@ void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_even
     umq_event->event_type = UMQ_EVENT_QH_RQ_LIMIT;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
-    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_rdlock(g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == urma_event->element.jfr || (local->flow_control.enabled &&
             local->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr == urma_event->element.jfr)) {
@@ -1467,7 +1491,7 @@ void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_even
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 
     if (!find) {
         UMQ_VLOG_WARN(VLOG_UMQ_URMA_AE, "find jfr id %u in all umq failed\n", urma_event->element.jfr->jfr_id.id);
@@ -1484,7 +1508,7 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
     umq_event->event_type = UMQ_EVENT_QH_ERR;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
-    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_rdlock(g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control.enabled &&
             local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
@@ -1493,7 +1517,7 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 
     if (!find) {
         UMQ_VLOG_WARN(VLOG_UMQ_URMA_AE, "find jetty id %u in all umq failed\n",
@@ -1511,7 +1535,7 @@ void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_ev
     umq_event->event_type = UMQ_EVENT_QH_LIMIT;
     umq_event->element.umqh = UMQ_INVALID_HANDLE;
 
-    (void)pthread_rwlock_rdlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_rdlock(g_umq_ub_queue_ctx_list.lock);
     URPC_LIST_FOR_EACH(local, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control.enabled &&
             local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
@@ -1520,7 +1544,7 @@ void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_ev
             break;
         }
     }
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 
     if (!find) {
         UMQ_VLOG_WARN(VLOG_UMQ_URMA_AE, "find jetty id %u in all umq failed\n",
@@ -1531,10 +1555,15 @@ void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_ev
     }
 }
 
-void umq_ub_queue_ctx_list_init(void)
+int umq_ub_queue_ctx_list_init(void)
 {
     urpc_list_init(&g_umq_ub_queue_ctx_list.queue_list);
-    (void)pthread_rwlock_init(&g_umq_ub_queue_ctx_list.lock, NULL);
+    g_umq_ub_queue_ctx_list.lock = util_rwlock_create();
+    if (g_umq_ub_queue_ctx_list.lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ub queue ctx list lock create failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+    return UMQ_SUCCESS;
 }
 
 void umq_ub_queue_ctx_list_uninit(void)
@@ -1543,21 +1572,22 @@ void umq_ub_queue_ctx_list_uninit(void)
     URPC_LIST_FOR_EACH_SAFE(cur_node, next_node, qctx_node, &g_umq_ub_queue_ctx_list.queue_list) {
         urpc_list_remove(&cur_node->qctx_node);
     }
-    (void)pthread_rwlock_destroy(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_destroy(g_umq_ub_queue_ctx_list.lock);
+    g_umq_ub_queue_ctx_list.lock = NULL;
 }
 
 void umq_ub_queue_ctx_list_push(urpc_list_t *qctx_node)
 {
-    (void)pthread_rwlock_wrlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_wrlock(g_umq_ub_queue_ctx_list.lock);
     urpc_list_push_back(&g_umq_ub_queue_ctx_list.queue_list, qctx_node);
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 }
 
 void umq_ub_queue_ctx_list_remove(urpc_list_t *qctx_node)
 {
-    (void)pthread_rwlock_wrlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_wrlock(g_umq_ub_queue_ctx_list.lock);
     urpc_list_remove(qctx_node);
-    (void)pthread_rwlock_unlock(&g_umq_ub_queue_ctx_list.lock);
+    (void)util_rwlock_unlock(g_umq_ub_queue_ctx_list.lock);
 }
 
 int umq_ub_id_allocator_init(void)
@@ -1677,21 +1707,21 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
         }
         return;
     }
-    pthread_rwlock_wrlock(&queue->wait_ack_import.lock);
+    (void)util_rwlock_wrlock(queue->wait_ack_import.lock);
     if (queue->wait_ack_import.wait_ack_idx != UMQ_MAX_TSEG_NUM) {
         if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
             queue->wait_ack_import.wait_ack_pool_id = (uint16_t *)(uintptr_t)calloc(UMQ_MAX_TSEG_NUM, sizeof(uint16_t));
             if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
-                (void)pthread_rwlock_unlock(&queue->wait_ack_import.lock);
+                (void)util_rwlock_unlock(queue->wait_ack_import.lock);
                 UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc wait ack pool id failed",
                     EID_ARGS(*eid), id);
                 return;
             }
         }
         queue->wait_ack_import.wait_ack_pool_id[queue->wait_ack_import.wait_ack_idx++] = mempool_id;
-        (void)pthread_rwlock_unlock(&queue->wait_ack_import.lock);
+        (void)util_rwlock_unlock(queue->wait_ack_import.lock);
     } else {
-        (void)pthread_rwlock_unlock(&queue->wait_ack_import.lock);
+        (void)util_rwlock_unlock(queue->wait_ack_import.lock);
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wait ack import table is full",
             EID_ARGS(*eid), id);
     }
@@ -1729,13 +1759,13 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         return -UMQ_ERR_EINVAL;
     }
 
-    pthread_mutex_t *imported_tseg_list_mutex_lock =
-        &queue->dev_ctx->remote_imported_info->imported_tseg_list_mutex[queue->bind_ctx->remote_eid_id];
-    pthread_mutex_lock(imported_tseg_list_mutex_lock);
+    util_external_mutex_lock *imported_tseg_list_mutex_lock =
+        queue->dev_ctx->remote_imported_info->imported_tseg_list_mutex[queue->bind_ctx->remote_eid_id];
+    (void)util_mutex_lock(imported_tseg_list_mutex_lock);
     ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(rx_buf->buf_data + temp_size);
     for (uint32_t i = 0; i < umq_imm_head->mempool_num; i++) {
         if (import_mempool_info[i].mempool_id >= UMQ_MAX_TSEG_NUM) {
-            pthread_mutex_unlock(imported_tseg_list_mutex_lock);
+            (void)util_mutex_unlock(imported_tseg_list_mutex_lock);
             UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id %u invalid\n", EID_ARGS(*eid),
                 id, import_mempool_info[i].mempool_id);
             return -UMQ_ERR_EINVAL;
@@ -1758,7 +1788,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         (void)memcpy(&mem_info.ubva, &import_mempool_info[i].mempool_ubva, sizeof(urma_ubva_t));
         urma_target_seg_t *imported_tseg = import_mem(queue->dev_ctx->urma_ctx, &mem_info);
         if (imported_tseg == NULL) {
-            pthread_mutex_unlock(imported_tseg_list_mutex_lock);
+            (void)util_mutex_unlock(imported_tseg_list_mutex_lock);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, import memory failed\n", EID_ARGS(*eid), id);
             return UMQ_FAIL;
         }
@@ -1767,7 +1797,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         queue->dev_ctx->remote_imported_info->
             imported_tseg_list[queue->bind_ctx->remote_eid_id][import_mempool_info[i].mempool_id] = imported_tseg;
     }
-    pthread_mutex_unlock(imported_tseg_list_mutex_lock);
+    (void)util_mutex_unlock(imported_tseg_list_mutex_lock);
     return UMQ_SUCCESS;
 }
 

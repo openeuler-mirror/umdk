@@ -89,11 +89,15 @@ uint8_t *umq_ipc_ctx_init_impl(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "id allocator init failed, status: %d\n", ret);
         return NULL;
     }
+    ret = shm_qbuf_init();
+    if (ret != UMQ_SUCCESS) {
+        goto UNINIT_ALLOCATOR;
+    }
 
     g_ipc_ctx = (umq_ipc_init_ctx_t *)calloc(1, sizeof(umq_ipc_init_ctx_t));
     if (g_ipc_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "memory alloc failed\n");
-        goto UNINIT_ALLOCATOR;
+        goto LOCK_UNREGISTER;
     }
 
     for (uint32_t i = 0; i < cfg->trans_info_num; ++i) {
@@ -125,6 +129,9 @@ FREE_CTX:
     free(g_ipc_ctx);
     g_ipc_ctx = NULL;
 
+LOCK_UNREGISTER:
+    shm_qbuf_uninit();
+
 UNINIT_ALLOCATOR:
     util_id_allocator_uninit(&g_umq_id_allocator);
     return NULL;
@@ -144,6 +151,7 @@ void umq_ipc_ctx_uninit_impl(uint8_t *ipc_ctx)
     }
 
     umq_dec_ref(context->io_lock_free, &context->ref_cnt, 1);
+    shm_qbuf_uninit();
     util_id_allocator_uninit(&g_umq_id_allocator);
     free(context);
     g_ipc_ctx = NULL;

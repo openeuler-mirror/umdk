@@ -22,6 +22,33 @@ extern "C" {
 #define UMQ_LOG_FLAG_LEVEL             (1U << 1)
 #define UMQ_LOG_FLAG_RATE_LIMITED      (1U << 2)
 
+typedef enum umq_external_mutex_attr {
+    MUTEX_ATTR_EXCLUSIVE = 0,
+    MUTEX_ATTR_RECURSIVE,
+    MUTEX_ATTR_BUTT
+} umq_external_mutex_attr_t;
+
+typedef void* umq_external_mutex_t;
+typedef void* umq_external_rwlock_t;
+
+typedef struct umq_external_mutex_lock_ops {
+    umq_external_mutex_t *(*create)(umq_external_mutex_attr_t attr);
+    int (*destroy)(umq_external_mutex_t *m);
+    int (*lock)(umq_external_mutex_t *m);
+    int (*unlock)(umq_external_mutex_t *m);
+    int (*trylock)(umq_external_mutex_t *m);
+} umq_external_mutex_lock_ops_t;
+
+typedef struct umq_external_rw_lock_ops {
+    umq_external_rwlock_t *(*create)(void);
+    int (*destroy)(umq_external_rwlock_t *m);
+    int (*read_lock)(umq_external_rwlock_t *m);
+    int (*write_lock)(umq_external_rwlock_t *m);
+    int (*unlock)(umq_external_rwlock_t *m);
+    int (*try_read_lock)(umq_external_rwlock_t *m);
+    int (*try_write_lock)(umq_external_rwlock_t *m);
+} umq_external_rwlock_ops_t;
+
 typedef enum umq_log_level {
     UMQ_LOG_LEVEL_EMERG = 0,
     UMQ_LOG_LEVEL_ALERT,
