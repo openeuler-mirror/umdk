@@ -190,7 +190,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
     }
 
     local_block_pool_t *local_pool = get_thread_cache();
-    (void)pthread_mutex_lock(&g_qbuf_pool.block_pool.global_mutex);
+    (void)util_mutex_lock(g_qbuf_pool.block_pool.global_mutex);
     if (local_pool->head_with_data.first != NULL) {
         // release thread cache no need check double free
         uint32_t cnt = release_to_global(&local_pool->head_with_data,
@@ -204,7 +204,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
             &g_qbuf_pool.block_pool.head_without_data);
         g_qbuf_pool.block_pool.buf_cnt_without_data += cnt;
     }
-    (void)pthread_mutex_unlock(&g_qbuf_pool.block_pool.global_mutex);
+    (void)util_mutex_unlock(g_qbuf_pool.block_pool.global_mutex);
     g_thread_cache.inited = false;
 }
 
@@ -215,7 +215,11 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EEXIST;
     }
 
-    umq_qbuf_block_pool_init(&g_qbuf_pool.block_pool);
+    int ret = umq_qbuf_block_pool_init(&g_qbuf_pool.block_pool);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq qbuf block pool init failed, status: %d\n", ret);
+        return UMQ_FAIL;
+    }
     g_qbuf_pool.mode = cfg->mode;
     g_qbuf_pool.total_size = cfg->total_size;
     g_qbuf_pool.headroom_size = cfg->headroom_size;

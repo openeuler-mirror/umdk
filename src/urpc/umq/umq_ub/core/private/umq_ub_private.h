@@ -30,6 +30,7 @@
 #include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_ub_imm_data.h"
+#include "util_lock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -181,9 +182,9 @@ typedef struct remote_eid_hmap_node {
 typedef struct remote_imported_tseg_info {
     bool tesg_imported[UMQ_UB_MAX_REMOTE_EID_NUM][UMQ_MAX_TSEG_NUM];
     urma_target_seg_t *imported_tseg_list[UMQ_UB_MAX_REMOTE_EID_NUM][UMQ_MAX_TSEG_NUM];
-    pthread_mutex_t imported_tseg_list_mutex[UMQ_UB_MAX_REMOTE_EID_NUM];
+    util_external_mutex_lock *imported_tseg_list_mutex[UMQ_UB_MAX_REMOTE_EID_NUM];
     struct urpc_hmap remote_eid_id_table;
-    pthread_mutex_t remote_eid_id_table_lock;
+    util_external_mutex_lock *remote_eid_id_table_lock;
     util_id_allocator_t eid_id_allocator;
 } remote_imported_tseg_info_t;
 
@@ -333,7 +334,7 @@ typedef struct ub_queue_interrupt_ctx {
 typedef struct wait_ack_import {
     uint16_t *wait_ack_pool_id;
     uint16_t wait_ack_idx;
-    pthread_rwlock_t lock;
+    util_external_rwlock *lock;
 } wait_ack_import_t;
 
 typedef struct ub_queue_idle_check {
@@ -343,7 +344,7 @@ typedef struct ub_queue_idle_check {
     volatile uint64_t target_slot_id;
     volatile bool need_return_credit;
     int event_fd;
-    pthread_mutex_t lock;
+    util_external_mutex_lock *lock;
 } ub_queue_idle_check_t;
 
 typedef struct ub_queue {
@@ -404,7 +405,7 @@ typedef struct user_ctx {
 
 typedef struct ub_queue_ctx_list {
     urpc_list_t queue_list;
-    pthread_rwlock_t lock;
+    util_external_rwlock *lock;
 } ub_queue_ctx_list_t;
 
 typedef struct xchg_mem_info {
@@ -478,7 +479,7 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
 void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_event_t *umq_event);
 
 // queue ctx list
-void umq_ub_queue_ctx_list_init(void);
+int umq_ub_queue_ctx_list_init(void);
 void umq_ub_queue_ctx_list_uninit(void);
 void umq_ub_queue_ctx_list_push(urpc_list_t *qctx_node);
 void umq_ub_queue_ctx_list_remove(urpc_list_t *qctx_node);

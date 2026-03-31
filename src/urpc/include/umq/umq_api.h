@@ -329,6 +329,20 @@ void umq_dev_info_list_free(umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq
  */
 int umq_cfg_get(uint64_t umqh, umq_cfg_get_t *cfg);
 
+/**
+ * Register umq mutex lock ops. Notice: Lock register API MUST be called before all other APIs are executed.
+ * @param[in] ops: Mutex lock ops
+ * Return 0 on success, error code on failure
+ */
+int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops);
+
+/**
+ * Register umq rwlock ops. Notice: Lock register API MUST be called before all other APIs are executed.
+ * @param[in] ops: rw_lock ops
+ * Return 0 on success, error code on failure
+ */
+int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops);
+
 #ifdef __cplusplus
 }
 #endif
