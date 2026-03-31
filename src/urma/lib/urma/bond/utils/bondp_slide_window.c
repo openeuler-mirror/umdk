@@ -61,7 +61,7 @@ bool bdp_slide_wnd_seq_in_window(bdp_slide_wnd_t *wnd, uint32_t seq)
     }
     if (seq >= wnd->total_size) {
         URMA_LOG_ERR("Seq larger than total size of bitmap\n");
-        return -1;
+        return false;
     }
     return is_seq_in_loop_range(wnd->head, wnd->window_size, wnd->total_size, seq);
 }
@@ -70,11 +70,11 @@ bool bdp_slide_wnd_has(bdp_slide_wnd_t *wnd, uint32_t seq)
 {
     if (wnd == NULL) {
         URMA_LOG_ERR("Invalid param wnd\n");
-        return -1;
+        return false;
     }
     if (seq >= wnd->total_size) {
         URMA_LOG_ERR("Seq larger than total size of bitmap\n");
-        return -1;
+        return false;
     }
     return is_seq_in_loop_range(wnd->head, wnd->window_size, wnd->total_size, seq) &&
         ub_bitmap_is_set(wnd->bits, seq);
