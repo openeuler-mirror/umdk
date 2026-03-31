@@ -1112,7 +1112,7 @@ DELETE_VJETTY:
     bondp_delete_vjetty(bdp_jetty);
 DELETE_PJETTY:
     bondp_delete_pjetty(bdp_jetty);
-    bondp_delete_comp(bdp_jetty, BONDP_COMP_JETTY);
+    free(bdp_jetty);
     return NULL;
 }
 
