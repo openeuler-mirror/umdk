@@ -1082,6 +1082,9 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     uint32_t size_per_jetty = cfg->jfr_depth / cfg->jfr_post_list;
     uint32_t local_sge_idx;
 
+    if (cfg->share_jfr == true) {
+        size_per_jetty /= cfg->jettys;
+    }
     run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     if (alloc_jfr_ctx_buffer(ctx, cfg) != 0) {
