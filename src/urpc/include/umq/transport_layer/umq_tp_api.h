@@ -236,11 +236,11 @@ typedef struct umq_ops {
 
     /**
      * Get primary and port eid from topo info.
-     * @param[in] route: parameter that contains src_v_eid and dst_v_eid, refers to umq_route_t;
+     * @param[in] route_key: parameter that contains tp_type, src_v_eid and dst_v_eid;
      * @param[out] route_list: a list buffer, containing all routes returned;
      * Return: 0 on success, other value on error
      */
-    int (*umq_tp_get_topo)(const umq_route_t *route, umq_route_list_t *route_list);
+    int (*umq_tp_get_topo)(const umq_route_key_t *route_key, umq_route_list_t *route_list);
 
     /**
      * Thread safety function
