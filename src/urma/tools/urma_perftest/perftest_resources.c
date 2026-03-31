@@ -193,12 +193,25 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
             tp_type.bs.rtp = 1;
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
         }
+        (void)fprintf(stderr, "Warning: %s should set priority to %hhu.\n",
+                (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
+    } else {
         if (cfg->priority > URMA_MAX_PRIORITY) {
             (void)fprintf(stderr, "The priority parameter %hhu is invalid; it should be 0-15.\n",
                 cfg->priority);
+        }
+        if (cfg->use_ctp) {
+            tp_type.bs.ctp = 1;
+            if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
+                (void)fprintf(stderr, "You should set the priority of type CTP\n");
+                goto uninit;
+            }
         } else {
-            (void)fprintf(stderr, "Warning: %s should set priority to %hhu.\n",
-                (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
+            tp_type.bs.rtp = 1;
+            if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
+                (void)fprintf(stderr, "You should set the priority of type RTP\n");
+                goto uninit;
+            }
         }
     }
 
