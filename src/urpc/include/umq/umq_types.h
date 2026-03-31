@@ -479,27 +479,49 @@ typedef struct umq_async_event {
     void *priv;
 } umq_async_event_t;
 
-typedef union umq_route_flag {
+typedef enum umq_topo_type {
+    UMQ_TOPO_TYPE_FULLMESH_1D,
+    UMQ_TOPO_TYPE_CLOS,
+
+    UMQ_TOPO_TYPE_MAX,
+} umq_topo_type_t;
+
+typedef struct umq_route_key {
+    umq_eid_t src_bonding_eid;
+    umq_eid_t dst_bonding_eid;
+    umq_tp_type_t tp_type;
+} umq_route_key_t;
+
+typedef union umq_port_id {
     struct {
-        uint32_t rtp : 1;
-        uint32_t ctp : 1;
-        uint32_t utp : 1;
-        uint32_t reserved : 29;
+        uint32_t chip_id  : 8;
+        uint32_t die_id   : 8;
+        uint32_t port_idx : 8; // portEID: 0-8, primaryEID: UINT8_MAX
+        uint32_t reserved : 8;
     } bs;
     uint32_t value;
-} umq_route_flag_t;
+} umq_port_id_t;
+
+typedef struct umq_node_id {
+    uint32_t super_node_id;
+    uint32_t node_id;
+} umq_node_id_t;
 
 typedef struct umq_route {
-    umq_eid_t src;
-    umq_eid_t dst;
-    umq_route_flag_t flag;
-    uint32_t hops; // Only supports direct routes, currently 0
-    uint32_t chip_id;
+    umq_port_id_t src_port;
+    umq_port_id_t dst_port;
+    umq_eid_t src_eid;
+    umq_eid_t dst_eid;
 } umq_route_t;
 
 typedef struct umq_route_list {
-    uint32_t len;
-    umq_route_t buf[UMQ_MAX_ROUTES];
+    umq_topo_type_t topo_type;
+    umq_node_id_t src_node;
+    umq_node_id_t dst_node;
+    uint32_t chip_num;
+    uint32_t die_num;
+    uint32_t route_num;
+    umq_route_t routes[UMQ_MAX_ROUTES];
 } umq_route_list_t;
 
 typedef enum umq_user_ctl_opcode {
