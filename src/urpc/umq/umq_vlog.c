@@ -24,7 +24,6 @@ static umq_vlog_config_t g_umq_log_config = {
             .num = UTIL_VLOG_PRINT_TIMES,
         },
     },
-    .log_lock = PTHREAD_MUTEX_INITIALIZER,
 };
 
 umq_vlog_config_t *umq_get_log_config(void)
