@@ -19,6 +19,7 @@
 #include "umq_huge_qbuf_pool.h"
 #include "umq_errno.h"
 #include "urpc_util.h"
+#include "util_lock.h"
 
 #ifdef UMQ_STATIC_LIB
 #include "umq_ub_api.h"
@@ -54,7 +55,7 @@ static struct {
     bool is_set;
 } g_umq_log_config;
 static umq_init_cfg_t *g_umq_config;
-static pthread_mutex_t g_umq_config_mutex_lock = PTHREAD_MUTEX_INITIALIZER;
+static util_external_mutex_lock *g_umq_config_mutex_lock = NULL;
 
 static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     [UMQ_TRANS_MODE_UB] = {
@@ -291,7 +292,6 @@ int umq_log_config_set(umq_log_config_t *config)
     }
 
     umq_vlog_config_t *log_config = umq_get_log_config();
-    (void)pthread_mutex_lock(&log_config->log_lock);
     if (config->log_flag & UMQ_LOG_FLAG_FUNC) {
         if (config->func == NULL) {
             log_config->ctx.vlog_output_func = default_vlog_output;
@@ -307,7 +307,6 @@ int umq_log_config_set(umq_log_config_t *config)
         UMQ_VLOG_INFO(VLOG_UMQ, "set log configuration success, log level: %d\n", config->level);
     }
     if (umq_fw_log_config_set(config) != UMQ_SUCCESS) {
-        (void)pthread_mutex_unlock(&log_config->log_lock);
         return -UMQ_ERR_EINVAL;
     }
     if ((config->log_flag & UMQ_LOG_FLAG_RATE_LIMITED)) {
@@ -316,7 +315,6 @@ int umq_log_config_set(umq_log_config_t *config)
         UMQ_VLOG_INFO(VLOG_UMQ, "set log configuration success, limited interval(ms): %u, limited num: %u\n",
                       config->rate_limited.interval_ms, config->rate_limited.num);
     }
-    (void)pthread_mutex_unlock(&log_config->log_lock);
 
     g_umq_log_config.cfg = *config;
     g_umq_log_config.is_set = true;
@@ -332,7 +330,7 @@ int umq_log_config_get(umq_log_config_t *config)
     }
 
     umq_vlog_config_t *log_config = umq_get_log_config();
-    (void)pthread_mutex_lock(&log_config->log_lock);
+
     config->log_flag = log_config->log_flag;
     config->level = (umq_log_level_t)log_config->ctx.level;
     config->func = log_config->ctx.vlog_output_func;
@@ -341,7 +339,6 @@ int umq_log_config_get(umq_log_config_t *config)
     if (config->func == default_vlog_output) {
         config->func = NULL;
     }
-    (void)pthread_mutex_unlock(&log_config->log_lock);
 
     return UMQ_SUCCESS;
 }
@@ -457,6 +454,10 @@ void umq_uninit(void)
     }
     g_umq_log_config.is_set = false;
     g_umq_inited = false;
+    (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
+    g_umq_config_mutex_lock = NULL;
+    util_external_mutex_lock_ops_register(NULL);
+    util_external_rwlock_ops_register(NULL);
 }
 
 #ifndef UMQ_STATIC_LIB
@@ -661,9 +662,15 @@ int umq_init(umq_init_cfg_t *cfg)
         g_umq_fws[info->trans_mode].enable = true;
     }
 
+    g_umq_config_mutex_lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (g_umq_config_mutex_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq config mutex create failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
     ret = umq_thread_init(cfg);
     if (ret != UMQ_SUCCESS) {
-        return ret;
+        goto LOCK_DESTROY;
     }
 
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
@@ -694,6 +701,9 @@ int umq_init(umq_init_cfg_t *cfg)
 FW_UNINIT:
     framework_uninit();
     umq_thread_uninit(cfg);
+LOCK_DESTROY:
+    (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
+    g_umq_config_mutex_lock = NULL;
     return ret;
 }
 
@@ -1275,7 +1285,7 @@ int umq_dev_add(umq_trans_info_t *trans_info)
     }
 
     umq_framework_t *umq_fw = &g_umq_fws[trans_info->trans_mode];
-    pthread_mutex_lock(&g_umq_config_mutex_lock);
+    (void)util_mutex_lock(g_umq_config_mutex_lock);
     if (g_umq_config->trans_info_num >= MAX_UMQ_TRANS_INFO_NUM) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans info num[%u] exceeds maximum[%u] limit\n",
             g_umq_config->trans_info_num, MAX_UMQ_TRANS_INFO_NUM);
@@ -1292,7 +1302,7 @@ int umq_dev_add(umq_trans_info_t *trans_info)
             UMQ_VLOG_ERR(VLOG_UMQ, "umq framework init failed, status: %d\n", ret);
             goto DECREASE_TRANS_INFO_NUM;
         }
-        pthread_mutex_unlock(&g_umq_config_mutex_lock);
+        (void)util_mutex_unlock(g_umq_config_mutex_lock);
         return UMQ_SUCCESS;
     }
 
@@ -1308,14 +1318,14 @@ int umq_dev_add(umq_trans_info_t *trans_info)
         UMQ_VLOG_ERR(VLOG_UMQ, "add dev failed, status: %d\n", ret);
         goto DECREASE_TRANS_INFO_NUM;
     }
-    pthread_mutex_unlock(&g_umq_config_mutex_lock);
+    (void)util_mutex_unlock(g_umq_config_mutex_lock);
     return ret;
 
 DECREASE_TRANS_INFO_NUM:
     g_umq_config->trans_info_num--;
 
 UNLOCK:
-    pthread_mutex_unlock(&g_umq_config_mutex_lock);
+    (void)util_mutex_unlock(g_umq_config_mutex_lock);
 
 return ret;
 }
@@ -1489,4 +1499,40 @@ int umq_cfg_get(uint64_t umqh, umq_cfg_get_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
     return umq->tp_ops->umq_tp_cfg_get(umq->umqh_tp, cfg);
+}
+
+int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops)
+{
+    if (ops == NULL || ops->create == NULL || ops->destroy == NULL || ops->lock == NULL || ops->trylock == NULL ||
+        ops->unlock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    util_external_mutex_lock_ops_t util_ops;
+    util_ops.create = (util_external_mutex_lock *(*)(util_externel_mutex_attr_t attr))ops->create;
+    util_ops.destroy = (int (*)(util_external_mutex_lock *m))ops->destroy;
+    util_ops.lock = (int (*)(util_external_mutex_lock *m))ops->lock;
+    util_ops.unlock = (int (*)(util_external_mutex_lock *m))ops->unlock;
+    util_ops.trylock = (int (*)(util_external_mutex_lock *m))ops->trylock;
+    util_external_mutex_lock_ops_register(&util_ops);
+    return UMQ_SUCCESS;
+}
+ 	 
+int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops)
+{
+    if (ops == NULL || ops->create == NULL || ops->destroy == NULL || ops->write_lock == NULL || 
+        ops->read_lock == NULL || ops->unlock == NULL || ops->try_read_lock || ops->try_write_lock) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    util_external_rwlock_ops_t util_ops;
+    util_ops.create = (util_external_rwlock *(*)(void))ops->create;
+    util_ops.destroy = (int (*)(util_external_rwlock *m))ops->destroy;
+    util_ops.read_lock = (int (*)(util_external_rwlock *m))ops->read_lock;
+    util_ops.write_lock = (int (*)(util_external_rwlock *m))ops->write_lock;
+    util_ops.unlock = (int (*)(util_external_rwlock *m))ops->unlock;
+    util_ops.try_read_lock = (int (*)(util_external_rwlock *m))ops->try_read_lock;
+    util_ops.try_write_lock = (int (*)(util_external_rwlock *m))ops->try_write_lock;
+    util_external_rwlock_ops_register(&util_ops);
+    return UMQ_SUCCESS;
 }
