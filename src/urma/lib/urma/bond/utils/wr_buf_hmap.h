@@ -27,6 +27,7 @@ typedef struct wr_buf_extra_value {
     int send_idx;            /* Current  */
     int target_idx;          /* Current */
     urma_transport_mode_t trans_mode;
+    urma_opcode_t original_opcode; /* Original jfs opcode before bond rewrites */
     urma_target_jetty_t *vtjetty; /* Original vtjetty of jfs wr */
 } wr_buf_extra_value_t;
 
