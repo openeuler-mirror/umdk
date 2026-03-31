@@ -113,7 +113,7 @@ static void usage(const char *argv0)
     (void)printf("  -N, --no_peak               Cancel peak-bw calculation.\n");
     (void)printf("  -l, --jfs_post_list <size>  Post list of send WQEs of <list size> size.\n");
     (void)printf("  -L, --lock_free             Jetty's interior is unlocked.\n");
-
+    (void)printf("  -O, --priority              set the priority of JFS, ranging from [0, 15].\n");
     (void)printf("  -p, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM.\n");
     (void)printf("  -P, --port <id>             Server port for bind or connect, default 21115.\n");
     (void)printf("  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.\n");
@@ -486,7 +486,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"no_peak",       no_argument,       NULL, 'N'},
         {"jfs_post_list", required_argument, NULL, 'l'},
         {"lock_free",     no_argument,       NULL, 'L'},
-
+        {"priority",      required_argument, NULL, 'O'},
         {"trans_mode",    required_argument, NULL, 'p'},
         {"port",          required_argument, NULL, 'P'},
         {"cq_mod",        required_argument, NULL, 'Q'},
@@ -539,7 +539,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 
     /* Second parse the options */
     while (1) {
-        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:p:P:Q:r:R:s:S:T:wy::z",
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:wy::z",
             long_options, NULL);
         if (c == -1) {
             break;
@@ -652,7 +652,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'L':
                 cfg->lock_free = true;
                 break;
-
+            case 'O':
+                cfg->priority = PERFTEST_INVALID_PRIORITY;
+                break;
             case 'p':
                 if (ub_str_to_u32(optarg, &offset) != 0) {
                     (void)fprintf(stderr, "Invalid trans_mode, it has been changed to URMA_TM_RM.\n");
