@@ -948,6 +948,21 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
     return (cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr)) >= (cfg->jettys * cfg->jfr_post_list);
 }
 
+static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
+{
+    if (cfg->single_path && cfg->use_ctp) {
+        (void)fprintf(stderr, "Invalid config: --single_path: true conflicts with --ctp: true.\n");
+        return -1;
+    }
+
+    if (!cfg->single_path && !cfg->use_ctp) {
+        (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: false.\n");
+        return -1;
+    }
+ 
+ 	return 0;
+}
+
 int check_local_cfg(perftest_config_t *cfg)
 {
     if (cfg == NULL) {
@@ -959,9 +974,13 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
-    if (strstr(cfg->dev_name, "bonding_dev") != NULL && !cfg->single_path && !cfg->use_ctp) {
-        cfg->use_ctp = true;
-        (void)fprintf(stderr, "Warning: ctp is enabled, and bonding_dev multi_path requires ctp to be enabled.\n");
+    if (strstr(cfg->dev_name, "bonding_dev") != NULL && check_ctp_single_path_cfg(cfg) != 0) {
+ 	  	return -1;
+ 	}
+
+    if (cfg->priority != PERFTEST_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {
+        (void)fprintf(stderr, "Invalid parameter(priority): %hhu, should be 0-15.\n", cfg->priority);
+        return -1;
     }
 
     if (check_time_type(cfg) != 0) {
