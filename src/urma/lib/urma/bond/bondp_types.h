@@ -140,6 +140,14 @@ typedef struct bondp_comp {
     uint64_t v_orig_handle;
 } bondp_comp_t;
 
+typedef struct bondp_jfc {
+    urma_jfc_t v_jfc;
+    urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
+    int dev_num;
+    int lasted_polled_jfc_idx;
+    urma_ref_t use_cnt; /* Initialize to 0 */
+} bondp_jfc_t;
+
 typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
     urma_target_jetty_t *p_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
