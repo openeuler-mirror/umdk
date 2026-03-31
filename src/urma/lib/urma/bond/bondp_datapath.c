@@ -2085,15 +2085,15 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
     static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
 
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
-    bondp_comp_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_comp_t, v_jfc);
+    bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_jfc_t, v_jfc);
 
     int cr_cnt_remaining = cr_cnt;
 
     /* Start polling from the next device index to avoid starvation. */
-    uintptr_t start_idx = ((uintptr_t)bdp_jfc->comp_ctx + 1);
+    int start_idx = bdp_jfc->lasted_polled_jfc_idx + 1;
 
     for (int i = 0; i < bdp_jfc->dev_num && cr_cnt_remaining > 0; i++) {
-        int idx = (int)((start_idx + i) % (uintptr_t)bdp_jfc->dev_num);
+        int idx = ((start_idx + i) % bdp_jfc->dev_num);
 
         if (bdp_jfc->p_jfc[idx] == NULL) {
             continue;
@@ -2128,7 +2128,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
             }
         }
 
-        bdp_jfc->comp_ctx = (void *)(uintptr_t)idx;
+        bdp_jfc->lasted_polled_jfc_idx = idx;
         /* update device state based on the PCRs we consumed */
         urma_status_t uret = update_device_valid_state(bdp_ctx, idx, pcr_cnt, pcr_buf);
         if (uret != 0) {
