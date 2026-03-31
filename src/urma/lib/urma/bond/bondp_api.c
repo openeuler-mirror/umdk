@@ -33,19 +33,135 @@ typedef struct bondp_create_vjetty_udata {
 
 typedef bondp_create_vjetty_udata_t bondp_create_vjfr_udata_t;
 
+static int bondp_create_pjfce(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfce)
+{
+    for (int i = 0; i < bdp_jfce->dev_num; i++) {
+        if (!bdp_ctx->p_ctxs[i]) {
+            continue;
+        }
+
+        urma_jfce_t *jfce = urma_create_jfce(bdp_ctx->p_ctxs[i]);
+        if (jfce == NULL) {
+            URMA_LOG_ERR("Failed to create pjfce %d.\n", i);
+            return -1;
+        }
+        bdp_jfce->p_jfce[i] = jfce;
+    }
+
+    return 0;
+}
+
+static int bondp_delete_pjfce(bondp_comp_t *bdp_jfce)
+{
+    int ret = 0;
+    for (int i = 0; i < bdp_jfce->dev_num; i++) {
+        if (bdp_jfce->p_jfce[i] == NULL) {
+            continue;
+        }
+        ret = urma_delete_jfce(bdp_jfce->p_jfce[i]);
+        if (ret) {
+            URMA_LOG_ERR("Failed to delete pjfce: %d, ret: %d.\n", i, ret);
+        }
+        bdp_jfce->p_jfce[i] = NULL;
+    }
+
+    return ret;
+}
+
+static int bondp_create_vjfce(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfce)
+{
+    int epoll_fd = -1;
+
+    bdp_jfce->v_jfce.urma_ctx = &bdp_ctx->v_ctx;
+    epoll_fd = epoll_create(BOND_EPOLL_NUM);
+    if (epoll_fd < 0) {
+        URMA_LOG_ERR("Fail to create epoll_fd for vjfce.\n");
+        return -1;
+    }
+    bdp_jfce->v_jfce.fd = epoll_fd;
+
+    bdp_jfce->comp_ctx = (void *)calloc(1, sizeof(bondp_hash_table_t));
+    if (bdp_jfce->comp_ctx == NULL) {
+        goto CLOSE_FD;
+    }
+
+    if (bdp_vjfce_info_table_create((bondp_hash_table_t *)bdp_jfce->comp_ctx, BOND_EPOLL_NUM) != 0) {
+        URMA_LOG_ERR("Fail to create jfce hash table.\n");
+        goto FREE_COMP;
+    }
+    bdp_jfce->v_jfce.ref.atomic_cnt = 0;
+    return 0;
+
+FREE_COMP:
+    free(bdp_jfce->comp_ctx);
+    bdp_jfce->comp_ctx = NULL;
+CLOSE_FD:
+    close(epoll_fd);
+    bdp_jfce->v_jfce.fd = -1;
+    return -1;
+}
+
+static int bondp_delete_vjfce(bondp_comp_t *bdp_jfce)
+{
+    bdp_vjfce_info_table_close_fd(bdp_jfce);
+    bdp_vjfce_info_table_destroy((bondp_hash_table_t *)bdp_jfce->comp_ctx);
+    free(bdp_jfce->comp_ctx);
+    bdp_jfce->comp_ctx = NULL;
+
+    return 0;
+}
+
 urma_jfce_t *bondp_create_jfce(urma_context_t *ctx)
 {
-    bondp_comp_t *bdp_jfce = bondp_create_comp(ctx, BONDP_COMP_JFCE, NULL);
-
-    if (bdp_jfce == NULL) {
-        URMA_LOG_ERR("Failed to create bonding jfce\n");
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    if (!is_valid_ctx(bdp_ctx)) {
+        URMA_LOG_ERR("Invalid bond ctx.\n");
         return NULL;
     }
 
+    bondp_comp_t *bdp_jfce = (bondp_comp_t *)calloc(1, sizeof(bondp_comp_t));
+    if (bdp_jfce == NULL) {
+        return NULL;
+    }
+    bdp_jfce->dev_num = bdp_ctx->dev_num;
+    bdp_jfce->bondp_ctx = bdp_ctx;
+    bdp_jfce->comp_type = BONDP_COMP_JFCE;
+    atomic_init(&bdp_jfce->use_cnt.atomic_cnt, 0);
+
+    if (bondp_create_pjfce(bdp_ctx, bdp_jfce)) {
+        URMA_LOG_ERR("Failed to create pjfce.\n");
+        goto DELETE_PJFCE;
+    }
+
+    if (bondp_create_vjfce(bdp_ctx, bdp_jfce)) {
+        URMA_LOG_ERR("Failed to create vjfce.\n");
+        goto DELETE_PJFCE;
+    }
+
+    int i;
+    for (i = 0; i < bdp_jfce->dev_num; i++) {
+        if (bdp_jfce->p_jfce[i] == NULL) {
+            continue;
+        }
+        if (bondp_insert_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[i]) != 0) {
+            goto REMOVE_JFCE;
+        }
+    }
     URMA_LOG_INFO("Finish to create jfce, dev_name: %s, eid_idx: %u.\n",
         ctx->dev->name, ctx->eid_index);
 
     return &bdp_jfce->v_jfce;
+REMOVE_JFCE:
+    for (int j = 0; j < i; j++) {
+        if (bdp_jfce->p_jfce[j] != NULL) {
+            bondp_remove_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[j]);
+        }
+    }
+    (void)bondp_delete_vjfce(bdp_jfce);
+DELETE_PJFCE:
+    (void)bondp_delete_pjfce(bdp_jfce);
+    free(bdp_jfce);
+    return NULL;
 }
 
 urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
@@ -60,8 +176,20 @@ urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
     char dev_name[URMA_MAX_NAME] = {0};
     (void)strcpy(dev_name, jfce->urma_ctx->dev->name);
     uint32_t eid_index = jfce->urma_ctx->eid_index;
-    urma_status_t ret = bondp_delete_comp(jfce, BONDP_COMP_JFCE);
 
+    for (int i = 0; i < bdp_jfce->dev_num; i++) {
+        if (bdp_jfce->p_jfce[i] != NULL) {
+            bondp_remove_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[i]);
+        }
+    }
+
+    (void)bondp_delete_vjfce(bdp_jfce);
+
+    int ret = bondp_delete_pjfce(bdp_jfce);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to delete pjfce, ret: %d.\n", ret);
+    }
+    free(bdp_jfce);
     URMA_LOG_INFO("Finish to delete jfce, dev_name: %s, eid_idx: %u, ret: %d.\n",
         dev_name, eid_index, ret);
 

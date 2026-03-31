@@ -40,4 +40,7 @@ void bondp_ack_multiple_die_jfc(urma_jfc_t *jfc[], uint32_t jfc_cnt);
 
 void bdp_vjfce_info_table_close_fd(bondp_comp_t *bdp_comp);
 
+int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce);
+void bondp_remove_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce);
+
 #endif // BONDP_COMP_H

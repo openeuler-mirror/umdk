@@ -118,7 +118,7 @@ void bdp_vjfce_info_table_destroy(bondp_hash_table_t *tbl)
     (void)pthread_rwlock_destroy(&tbl->lock);
 }
 
-static int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
+int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
 {
     struct epoll_event ev = {0};
     ev.events = EPOLLIN;
@@ -139,7 +139,7 @@ static int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
     return ret;
 }
 
-static void bondp_remove_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
+void bondp_remove_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
 {
     struct epoll_event ev = {0};
     if (epoll_ctl(v_jfce->fd, EPOLL_CTL_DEL, p_jfce->fd, &ev) != 0) {
