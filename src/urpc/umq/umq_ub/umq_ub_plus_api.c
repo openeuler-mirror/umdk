@@ -172,9 +172,9 @@ static int umq_tp_ub_plus_dev_add_impl(umq_trans_info_t *trans_info, umq_init_cf
     return umq_ub_dev_add_impl(trans_info, cfg);
 }
 
-static int umq_tp_ub_plus_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+static int umq_tp_ub_plus_get_route_list_impl(const umq_route_key_t *route_key, umq_route_list_t *route_list)
 {
-    return umq_ub_get_route_list_impl(route, route_list);
+    return umq_ub_get_route_list_impl(route_key, route_list);
 }
 
 static int umq_tp_ub_plus_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
