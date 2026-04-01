@@ -1517,11 +1517,11 @@ int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops)
     util_external_mutex_lock_ops_register(&util_ops);
     return UMQ_SUCCESS;
 }
- 	 
+
 int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops)
 {
-    if (ops == NULL || ops->create == NULL || ops->destroy == NULL || ops->write_lock == NULL || 
-        ops->read_lock == NULL || ops->unlock == NULL || ops->try_read_lock || ops->try_write_lock) {
+    if (ops == NULL || ops->create == NULL || ops->destroy == NULL || ops->write_lock == NULL ||
+        ops->read_lock == NULL || ops->unlock == NULL || ops->try_read_lock == NULL || ops->try_write_lock == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
