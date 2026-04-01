@@ -285,7 +285,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
     }
 
     local_block_pool_t *local_pool = get_thread_cache();
-    (void)util_mutex_lock(g_qbuf_pool.block_pool.global_mutex);
+    (void)pthread_spin_lock(&g_qbuf_pool.block_pool.global_mutex);
     if (local_pool->head_with_data.first != NULL) {
         return_list_to_pools(QBUF_LIST_FIRST(&local_pool->head_with_data), &local_pool->buf_cnt_with_data,
             &g_qbuf_pool.block_pool.head_with_data, &g_qbuf_pool.block_pool.buf_cnt_with_data, true);
@@ -295,7 +295,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
         return_list_to_pools(QBUF_LIST_FIRST(&local_pool->head_without_data), &local_pool->buf_cnt_without_data,
             &g_qbuf_pool.block_pool.head_without_data, &g_qbuf_pool.block_pool.buf_cnt_without_data, false);
     }
-    (void)util_mutex_unlock(g_qbuf_pool.block_pool.global_mutex);
+    (void)pthread_spin_unlock(&g_qbuf_pool.block_pool.global_mutex);
     g_thread_cache.inited = false;
 }
 

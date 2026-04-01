@@ -109,7 +109,7 @@ static uint32_t release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
     local_block_pool_t *lblk_pool = &local_pool->block_pool;
 
     // return thread local buffer storage to global pool
-    (void)util_mutex_lock(gblk_pool->global_mutex);
+    (void)pthread_spin_lock(&gblk_pool->global_mutex);
     if (lblk_pool->head_with_data.first != NULL) {
         // release thread cache no need check double free
         gblk_pool->buf_cnt_with_data += release_to_global(&lblk_pool->head_with_data,
@@ -120,7 +120,7 @@ static uint32_t release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
         gblk_pool->buf_cnt_without_data += release_to_global(&lblk_pool->head_without_data,
             &gblk_pool->head_without_data);
     }
-    (void)util_mutex_unlock(gblk_pool->global_mutex);
+    (void)pthread_spin_unlock(&gblk_pool->global_mutex);
 
     // reset local record and free resource
     tls_mgmt_pool->pool = NULL;
@@ -310,11 +310,7 @@ uint64_t umq_shm_global_pool_init(shm_qbuf_pool_cfg_t *cfg)
         return UMQ_INVALID_HANDLE;
     }
 
-    pool->block_pool.global_mutex = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
-    if (pool->block_pool.global_mutex == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "block pool global mutex create failed\n");
-        goto FREE_POOL;
-    }
+    (void)pthread_spin_init(&pool->block_pool.global_mutex, PTHREAD_PROCESS_PRIVATE);
     QBUF_LIST_INIT(&pool->block_pool.head_with_data);
     pool->type = cfg->type;
     pool->mode = cfg->mode;
@@ -333,10 +329,6 @@ uint64_t umq_shm_global_pool_init(shm_qbuf_pool_cfg_t *cfg)
     }
 
     return (uint64_t)(uintptr_t)pool;
-
-FREE_POOL:
-    free(pool);
-    return UMQ_INVALID_HANDLE;
 }
 
 void umq_shm_global_pool_uninit(uint64_t pool)
@@ -348,8 +340,7 @@ void umq_shm_global_pool_uninit(uint64_t pool)
     }
 
     unregister_all_thread_cache(_pool);
-    (void)util_mutex_lock_destroy(_pool->block_pool.global_mutex);
-    _pool->block_pool.global_mutex = NULL;
+    (void)pthread_spin_destroy(&_pool->block_pool.global_mutex);
     free(_pool);
 }
 
