@@ -76,7 +76,7 @@ int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info);
 int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event);
 void umq_ub_async_event_ack(umq_async_event_t *event);
 int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg);
-int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list);
+int umq_ub_get_route_list_impl(const umq_route_key_t *route_key, umq_route_list_t *out);
 
 int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
 int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id);

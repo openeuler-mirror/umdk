@@ -1848,7 +1848,7 @@ static int umq_ub_get_local_rtp_route_list(umq_route_list_t *route_list)
     }
 
     for (int i = 0; i < dev_num; i++) {
-        if (route_list->len >= UMQ_MAX_ROUTES) {
+        if (route_list->route_num >= UMQ_MAX_ROUTES) {
             goto OUT;
         }
         
@@ -1863,14 +1863,12 @@ static int umq_ub_get_local_rtp_route_list(umq_route_list_t *route_list)
                 continue;
             }
 
-            (void)memcpy(&route_list->buf[route_list->len].src, eid, sizeof(umq_eid_t));
-            (void)memcpy(&route_list->buf[route_list->len].dst, eid, sizeof(umq_eid_t));
-            route_list->buf[route_list->len].flag.bs.rtp = 1;
-            route_list->buf[route_list->len].hops = 0;
-            route_list->buf[route_list->len].chip_id = umq_ub_get_local_rtp_chip_id(eid);
+            (void)memcpy(&route_list->routes[route_list->route_num].src_eid, eid, sizeof(umq_eid_t));
+            (void)memcpy(&route_list->routes[route_list->route_num].dst_eid, eid, sizeof(umq_eid_t));
+            route_list->routes[route_list->route_num].src_port.bs.chip_id = umq_ub_get_local_rtp_chip_id(eid);
 
-            route_list->len++;
-            if (route_list->len >= UMQ_MAX_ROUTES) {
+            route_list->route_num++;
+            if (route_list->route_num >= UMQ_MAX_ROUTES) {
                 goto OUT;
             }
         }
@@ -1882,22 +1880,34 @@ OUT:
     return UMQ_SUCCESS;
 }
 
-int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route_list)
+static bool umq_ub_route_tp_type_match(uvs_route_flag_t flag, umq_tp_type_t tp_type)
 {
-    if (route == NULL || route_list == NULL) {
+    if (tp_type == UMQ_TP_TYPE_RTP) {
+        return (flag.bs.rtp == 1);
+    }
+
+    if (tp_type == UMQ_TP_TYPE_CTP) {
+        return (flag.bs.ctp == 1);
+    }
+
+    return false;
+}
+
+int umq_ub_get_route_list_impl(const umq_route_key_t *route_key, umq_route_list_t *route_list)
+{
+    if (route_key == NULL || route_key->tp_type >= UMQ_TP_TYPE_UTP || route_list == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    bool rtp_find = false;
-    uvs_route_t uvs_route = {.flag.value = route->flag.value, .hops = route->hops, .chip_id = route->chip_id};
-    uvs_route_list_t uvs_route_list = {0};
-    (void)memcpy(&uvs_route.src, &route->src, sizeof(umq_eid_t));
-    (void)memcpy(&uvs_route.dst, &route->dst, sizeof(umq_eid_t));
+    uvs_route_t uvs_route = {0};
+    uvs_route_list_t uvs_route_list;
+    (void)memcpy(&uvs_route.src, &route_key->src_bonding_eid, sizeof(umq_eid_t));
+    (void)memcpy(&uvs_route.dst, &route_key->dst_bonding_eid, sizeof(umq_eid_t));
 
     int ret = umq_symbol_urma()->uvs_get_route_list(&uvs_route, &uvs_route_list);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "get route list failed, status: %d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "uvs_get_route_list failed, status: %d\n", ret);
         return ret;
     }
 
@@ -1906,21 +1916,21 @@ int umq_ub_get_route_list_impl(const umq_route_t *route, umq_route_list_t *route
         return -UMQ_ERR_ENOMEM;
     }
 
+    memset(route_list, 0, sizeof(umq_route_list_t));
     for (uint32_t i = 0; i < uvs_route_list.len; i++) {
-        (void)memcpy(&route_list->buf[i].src, &uvs_route_list.buf[i].src, sizeof(umq_eid_t));
-        (void)memcpy(&route_list->buf[i].dst, &uvs_route_list.buf[i].dst, sizeof(umq_eid_t));
-        route_list->buf[i].flag.value = uvs_route_list.buf[i].flag.value;
-        route_list->buf[i].hops = uvs_route_list.buf[i].hops;
-        route_list->buf[i].chip_id = uvs_route_list.buf[i].chip_id;
-
-        if (route_list->buf[i].flag.bs.rtp == 1) {
-            rtp_find = true;
+        if (!umq_ub_route_tp_type_match(uvs_route_list.buf[i].flag, route_key->tp_type)) {
+            continue;
         }
+
+        (void)memcpy(&route_list->routes[route_list->route_num].src_eid, &uvs_route_list.buf[i].src, sizeof(umq_eid_t));
+        (void)memcpy(&route_list->routes[route_list->route_num].dst_eid, &uvs_route_list.buf[i].dst, sizeof(umq_eid_t));
+        route_list->routes[route_list->route_num].src_port.bs.chip_id = uvs_route_list.buf[i].chip_id;
+        route_list->route_num++;
     }
-    route_list->len = uvs_route_list.len;
 
     // same eid use local rtp route
-    if (!rtp_find && memcmp(&route->src, &route->dst, sizeof(umq_eid_t)) == 0) {
+    if (route_list->route_num == 0 && route_key->tp_type == UMQ_TP_TYPE_RTP &&
+        memcmp(&route_key->src_bonding_eid, &route_key->dst_bonding_eid, sizeof(umq_eid_t)) == 0) {
         return umq_ub_get_local_rtp_route_list(route_list);
     }
 

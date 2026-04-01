@@ -1330,9 +1330,9 @@ UNLOCK:
 return ret;
 }
 
-int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list)
+int umq_get_route_list(const umq_route_key_t *route_key, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list)
 {
-    if (route == NULL || route_list == NULL) {
+    if (route_key == NULL || route_list == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
@@ -1360,7 +1360,7 @@ int umq_get_route_list(const umq_route_t *route, umq_trans_mode_t umq_trans_mode
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq_fw->tp_ops->umq_tp_get_topo(route, route_list);
+    return umq_fw->tp_ops->umq_tp_get_topo(route_key, route_list);
 }
 
 int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
