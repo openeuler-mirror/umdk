@@ -824,7 +824,7 @@ void umq_ubmm_notify_impl(uint64_t umqh_tp)
         return;
     }
 
-    umq_ub_imm_t imm = { .bs = { .umq_private = UMQ_UB_IMM_PRIVATE, .type = IMM_TYPE_NOTIFY} };
+    umq_ub_imm_t imm = { .bs = { .type = IMM_TYPE_NOTIFY} };
     umq_ub_write_imm(tp->ub_handle, tp->bind_ctx->remote_notify_addr, 1, imm.value);
 }
 
