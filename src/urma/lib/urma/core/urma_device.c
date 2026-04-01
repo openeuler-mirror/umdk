@@ -576,6 +576,86 @@ uint32_t urma_discover_devices(struct ub_list *dev_list, struct ub_list *driver_
     return cnt;
 }
 
+void urma_scan_sysfs_devices(struct ub_list *candidate_list, struct ub_list *dev_name_list,
+    struct ub_list *driver_list)
+{
+    DIR *class_dir = NULL;
+    struct dirent *dent = NULL;
+    urma_sysfs_dev_t *sysfs_dev = NULL;
+
+    class_dir = opendir(g_urma_class_path);
+    if (class_dir == NULL) {
+        URMA_LOG_ERR("%s open failed, errno: %d.\n", g_urma_class_path, errno);
+        return;
+    }
+
+    while ((dent = readdir(class_dir)) != NULL) {
+        sysfs_dev = urma_read_sysfs_device(dent);
+        if (sysfs_dev == NULL) {
+            continue;
+        }
+        urma_get_dev_name_list(dev_name_list, sysfs_dev);
+        if (!urma_match_driver(sysfs_dev, driver_list)) {
+            free(sysfs_dev);
+            continue;
+        }
+        if (urma_alloc_device(sysfs_dev) == NULL) {
+            free(sysfs_dev);
+            continue;
+        }
+        ub_list_insert_after(candidate_list, &sysfs_dev->node);
+    }
+    if (closedir(class_dir) < 0) {
+        URMA_LOG_ERR("Failed close dir: %s, errno: %d.\n", g_urma_class_path, errno);
+    }
+}
+
+uint32_t urma_merge_sysfs_devices(struct ub_list *dev_list, struct ub_list *candidate_list,
+    struct ub_list *dev_name_list)
+{
+    uint32_t cnt = (uint32_t)ub_list_size(dev_list);
+    urma_sysfs_dev_t *sysfs_dev, *next;
+
+    /* Merge candidates into dev_list, skip duplicates */
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev, next, node, candidate_list) {
+        urma_device_t *device = urma_find_dev_by_name(dev_list, sysfs_dev->dev_name);
+        if (device != NULL && urma_time_cmp_eq(&device->sysfs_dev->time_created, &sysfs_dev->time_created)) {
+            /* Device already exists, skip */
+            ub_list_remove(&sysfs_dev->node);
+            if (sysfs_dev->urma_device != NULL) {
+                free(sysfs_dev->urma_device);
+                sysfs_dev->urma_device = NULL;
+            }
+            free(sysfs_dev);
+            continue;
+        }
+        ub_list_remove(&sysfs_dev->node);
+        ub_list_insert_after(dev_list, &sysfs_dev->node);
+        cnt++;
+    }
+
+    /* Remove unloaded devices from dev_list */
+    UB_LIST_FOR_EACH_SAFE (sysfs_dev, next, node, dev_list) {
+        if ((sysfs_dev->flag & URMA_SYSFS_DEV_FLAG_DRIVER_CREATED) != 0) {
+            continue;
+        }
+        if (urma_check_loaded_devices(sysfs_dev, dev_name_list) == 0) {
+            continue;
+        }
+        ub_list_remove(&sysfs_dev->node);
+        sysfs_dev->driver = NULL;
+        if (sysfs_dev->urma_device != NULL) {
+            free(sysfs_dev->urma_device);
+            sysfs_dev->urma_device = NULL;
+        }
+        free(sysfs_dev);
+        cnt--;
+    }
+
+    urma_free_dev_name_list(dev_name_list);
+    return cnt;
+}
+
 urma_device_t *urma_find_dev_by_name(struct ub_list *dev_list, const char *dev_name)
 {
     urma_sysfs_dev_t *sysfs_dev;
