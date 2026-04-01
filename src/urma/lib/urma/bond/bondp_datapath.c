@@ -1362,37 +1362,6 @@ static int resend_error_device(bjetty_ctx_t *bjetty_ctx, uint32_t err_idx,
     return args.ret;
 }
 
-static urma_status_t send_so_from_snd_queue(bjetty_ctx_t *bjetty_ctx, bdp_v_conn_t *v_conn)
-{
-    so_queue_data_t *so_data = NULL;
-    so_queue_data_t tmp_data;
-    bdp_slide_wnd_t *snd_wnd = &v_conn->send_wnd;
-    urma_status_t ret = URMA_SUCCESS;
-    urma_jfs_wr_t *bad_wr = NULL;
-
-    while (!bdp_queue_is_empty(&v_conn->send_strong_order_queue)) {
-        if (v_conn->target_vjetty == NULL) {
-            URMA_LOG_ERR("v_conn has NULL target_vjetty in sending SO\n");
-            return URMA_FAIL;
-        }
-        (void)bdp_queue_front(&v_conn->send_strong_order_queue, (void **)&so_data);
-        if (snd_wnd->head == so_data->send_wr_id) {
-            /* do send SO */
-            /* get_comp_urma_jetty_id(bjetty_ctx->bdp_comp) always returns non-null value. */
-            /* Because stored bjetty_ctx pointer which has been validated in post_send_check_valid */
-            ret = send_and_store_jfs_wr(bjetty_ctx, get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id, so_data->send_wr,
-                so_data->send_wr_id, &so_data->ex_value, &bad_wr);
-            if (ret != URMA_SUCCESS) {
-                return ret;
-            }
-            (void)bdp_v_conn_pop_send_so(v_conn, &tmp_data);
-        } else {
-            return URMA_SUCCESS;
-        }
-    }
-    return URMA_SUCCESS;
-}
-
 static urma_status_t resend_wr_from_node(bjetty_ctx_t *bjetty_ctx, wr_buf_node_t *node,
     int send_idx, int target_idx, urma_jfs_wr_t **bad_wr)
 {
@@ -1546,8 +1515,6 @@ static bondp_cr_handler_ret_t handle_send(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     }
     /* Sender use send_wr_id to indicate the order of send, node->key is send_wr_id */
     (void)bdp_slide_wnd_add(&v_conn->send_wnd, send_wr_id);
-    /* Send SO from queue */
-    (void)send_so_from_snd_queue(bjetty_ctx, v_conn);
     /* If this jfs wr doesn't ask for cqe, we simply remove it from buffer */
     if (node->value.flag.bs.complete_enable == 0) {
         (void)jfs_wr_buf_remove_wr(bjetty_ctx->jfs_bufs[send_idx], send_wr_id);
@@ -1745,19 +1712,6 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
             bdp_slide_wnd_has(&v_conn->recv_wnd, msn));
         return CR_HANDLER_SUCCESS_AND_SKIP;
     }
-    if (is_so && v_conn->recv_wnd.head != msn) {
-        /* cache so cr */
-        so_cr_queue_data_t cr_data = {
-            .msn = msn,
-            .cr = *cr,
-        };
-        cr_data.cr.user_ctx = original_user_ctx;
-        bdp_v_conn_push_recv_so_cr(v_conn, &cr_data);
-        (void)jfr_wr_buf_remove_wr(bjetty_ctx->jfr_bufs[recv_idx], recv_wr_id);
-        *v_conn_out = v_conn;
-        URMA_LOG_DEBUG("Store jfr SO CR with recv_wr_id %u, msn %u\n", recv_wr_id, msn);
-        return CR_HANDLER_SUCCESS_AND_SKIP;
-    }
     (void)bdp_slide_wnd_add(&v_conn->recv_wnd, msn);
     /*
     We assure this entry exists by using jfs_wr_buf_get_user_ctx
@@ -1767,35 +1721,6 @@ static bondp_cr_handler_ret_t handle_recv(bjetty_ctx_t *bjetty_ctx, urma_cr_t *c
     restore_user_cr(cr, original_user_ctx);
     *v_conn_out = v_conn;
     return CR_HANDLER_SUCCESS_AND_COPY;
-}
-/**
- * After handle_recv, continuously check the SO queue and report all SOs that can be reported.
- * @param cr_output: The cr array used for output, i.e., the `cr` parameter of `bondp_poll_jfc`.
- * @param so_cnt_limit: The maximum length of the array queue for SO.
- * Please note that SO and bondp_poll_pjfc share the cr_output array,
- * so this value should not exceed the `cr_cnt` parameter of `bondp_poll_jfc`.
- * @param total_cnt_limit: The maximum length of `cr_output`, is generally input by the user.
- * @param total_cnt(in/out): The length of the current cr queue, which will increase if an SO is dequeued.
- */
-void handle_recv_so(bdp_v_conn_t *v_conn, urma_cr_t *cr_output, int so_cnt_limit, int total_cnt_limit,
-    int *total_cnt)
-{
-    if (v_conn == NULL) {
-        return;
-    }
-    so_cr_queue_data_t *cr_data;
-    int so_cnt = 0;
-    while (!bdp_queue_is_empty(&v_conn->recv_strong_order_cr_queue) &&
-        so_cnt < so_cnt_limit &&
-        *total_cnt < total_cnt_limit) {
-        (void)bdp_queue_front(&v_conn->recv_strong_order_cr_queue, (void **)&cr_data);
-        if (v_conn->recv_wnd.head != cr_data->msn) {
-            break;
-        }
-        (void)bdp_slide_wnd_add(&v_conn->recv_wnd, cr_data->msn);
-        so_cnt++;
-        cr_output[(*total_cnt)++] = cr_data->cr;
-    }
 }
 
 static inline bdp_p_vjetty_type_t get_p_vjetty_type_by_cr(const urma_cr_t *cr)
