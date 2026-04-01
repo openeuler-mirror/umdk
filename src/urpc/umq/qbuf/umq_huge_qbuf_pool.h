@@ -30,6 +30,10 @@ typedef enum huge_qbuf_pool_size_type {
     HUGE_QBUF_POOL_SIZE_TYPE_MAX,
 } huge_qbuf_pool_size_type_t;
 
+#define HUGE_QBUF_POOL_NUM_MAX_PER_TYPE (64)
+#define HUGE_QBUF_POOL_TOTAL_NUM ((HUGE_QBUF_POOL_NUM_MAX_PER_TYPE * HUGE_QBUF_POOL_SIZE_TYPE_MAX))
+#define HUGE_QBUF_POOL_MEMPOOL_ID_MAX (1 + HUGE_QBUF_POOL_TOTAL_NUM)
+
 typedef struct huge_qbuf_pool_cfg {
     uint64_t total_size;        // total buffer size
     uint32_t data_size;         // size of one data slab
@@ -50,9 +54,8 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
 void umq_huge_qbuf_free(umq_buf_list_t *list);
 int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
 
-int umq_huge_qbuf_register_seg(uint8_t *ctx,
-    register_seg_callback_t register_seg_func, unregister_seg_callback_t unregister_seg_func);
-void umq_huge_qbuf_unregister_seg(uint8_t *ctx, unregister_seg_callback_t unregister_seg_func);
+int umq_huge_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
+void umq_huge_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_size(uint32_t buf_size);
 uint32_t umq_huge_qbuf_get_size_by_type(huge_qbuf_pool_size_type_t type);
 int umq_huge_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size);

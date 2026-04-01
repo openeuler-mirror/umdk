@@ -860,6 +860,11 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     return umq->tp_ops->umq_tp_buf_alloc(request_size, request_qbuf_num, umq->umqh_tp, option);
 }
 
+static inline bool is_huge_mempool_pool(uint32_t mempool_id)
+{
+    return (mempool_id > UMQ_QBUF_DEFAULT_MEMPOOL_ID && mempool_id < HUGE_QBUF_POOL_MEMPOOL_ID_MAX);
+}
+
 void umq_buf_free(umq_buf_t *qbuf)
 {
     if (!g_umq_inited || qbuf == NULL) {
@@ -870,7 +875,7 @@ void umq_buf_free(umq_buf_t *qbuf)
     QBUF_LIST_FIRST(&head) = qbuf;
     if (qbuf->umqh == UMQ_INVALID_HANDLE) {
         if (QBUF_LIST_NEXT(qbuf) == NULL) {
-            if (qbuf->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            if (is_huge_mempool_pool(qbuf->mempool_id)) {
                 umq_huge_qbuf_free(&head);
             } else {
                 umq_qbuf_free(&head);
@@ -888,14 +893,14 @@ void umq_buf_free(umq_buf_t *qbuf)
         umq_buf_t *free_node = qbuf; // head of the list to be released
         umq_buf_list_t free_head;
         QBUF_LIST_FIRST(&free_head) = free_node;
-        bool is_huge = qbuf->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID; // Specify the list to be released currently
+        bool is_huge = is_huge_mempool_pool(qbuf->mempool_id); // Specify the list to be released currently
                                                                         // belongs to large or general pool.
         QBUF_LIST_FIRST(&head) = QBUF_LIST_NEXT(qbuf);
 
         QBUF_LIST_FOR_EACH_SAFE(cur_node, &head, next_node)
         {
-            if ((is_huge && (cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID)) ||
-                (!is_huge && (cur_node->mempool_id == 0))) {
+            if ((is_huge && is_huge_mempool_pool(cur_node->mempool_id)) ||
+                (!is_huge && !is_huge_mempool_pool(cur_node->mempool_id))) {
                 // current qbuf is in the same pool, scan the next one directly
                 last_node = cur_node;
                 continue;
@@ -904,8 +909,8 @@ void umq_buf_free(umq_buf_t *qbuf)
             QBUF_LIST_NEXT(last_node) = NULL;
             QBUF_LIST_FIRST(&free_head) = free_node;
             free_node = cur_node;
-            is_huge = cur_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID;
-            if (free_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            is_huge = is_huge_mempool_pool(cur_node->mempool_id);
+            if (is_huge_mempool_pool(free_node->mempool_id)) {
                 umq_huge_qbuf_free(&free_head);
             } else {
                 umq_qbuf_free(&free_head);
@@ -913,7 +918,7 @@ void umq_buf_free(umq_buf_t *qbuf)
         }
 
         QBUF_LIST_FIRST(&free_head) = free_node;
-        if (free_node->mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+        if (is_huge_mempool_pool(free_node->mempool_id)) {
             umq_huge_qbuf_free(&free_head);
         } else {
             umq_qbuf_free(&free_head);

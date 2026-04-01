@@ -233,6 +233,12 @@ typedef struct umq_buf_block_cfg {
     umq_buf_block_size_t small_block_size;
 } umq_buf_block_cfg_t;
 
+typedef struct umq_buf_pool_cfg {
+    // global pool
+    uint32_t expansion_block_count;  // number of blocks per expansion, default 8K
+    uint64_t expansion_mem_size_max; // maximum memory allowed for expansion, default 2G
+} umq_buf_pool_cfg_t;
+
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
     uint32_t feature;               // feature flags
@@ -244,6 +250,7 @@ typedef struct umq_init_cfg {
     uint16_t cna;
     uint32_t ubmm_eid;
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];
+    umq_buf_pool_cfg_t buf_pool_cfg;
 } umq_init_cfg_t;
 
 #define UMQ_NAME_MAX_LEN (32)
@@ -313,7 +320,8 @@ struct umq_buf {
     uint16_t rsvd1 : 14;
 
     uint32_t token_id : 20;               // token_id for reference operation
-    uint32_t mempool_id : 12;              // indicate which memory pool it is allocated from
+    uint32_t mempool_without_data : 1;    // 0 : with data, 1 : without data
+    uint32_t mempool_id : 11;             // indicate which memory pool it is allocated from
     uint32_t token_value;                 // token_value for reference operation
 
     uint64_t status : 32;                 // umq_buf_status_t
