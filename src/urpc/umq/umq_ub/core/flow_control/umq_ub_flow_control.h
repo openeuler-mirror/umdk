@@ -51,11 +51,11 @@ void umq_ub_window_read(ub_flow_control_t *fc, ub_queue_t *queue);
 void umq_ub_fc_depth_exchange(ub_queue_t *queue, ub_flow_control_t *fc);
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count);
 uint64_t umq_ub_rx_consumed_exchange(bool lock_free, volatile uint64_t *var, uint64_t count);
-void umq_ub_shared_credit_req_send(ub_queue_t *queue);
-void umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
+int umq_ub_shared_credit_req_send(ub_queue_t *queue);
+int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
 void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
-void umq_ub_shared_credit_return_req_send(ub_queue_t *queue);
-void umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
+int umq_ub_shared_credit_return_req_send(ub_queue_t *queue);
+int umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm);
 void umq_ub_credit_clean_up(ub_queue_t *queue);
 void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count);
 void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt) ;
@@ -78,18 +78,19 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
     return fc->ops.remote_rx_window_dec(fc, win, false);
 }
 
-static ALWAYS_INLINE void umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
+static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
     if (!fc->enabled) {
-        return;
+        return UMQ_SUCCESS;
     }
     if (queue->checker != NULL) {
         queue->checker->last_send = get_timestamp_us();
     }
     if (fc->ops.remote_rx_window_load(fc) <=
         umq_ub_fc_threashold_modify(fc->credit_request_threshold, fc->peer_ratio)) {
-        umq_ub_shared_credit_req_send(queue);
+        return umq_ub_shared_credit_req_send(queue);
     }
+    return UMQ_SUCCESS;
 }
 
 static ALWAYS_INLINE bool umq_ub_permission_acquire(struct ub_flow_control *fc)
