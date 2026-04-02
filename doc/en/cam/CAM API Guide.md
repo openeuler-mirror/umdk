@@ -292,6 +292,9 @@ Return value is a tensor，which stores combine_x。
  - required: (num_experts % num_ranks) == 0
  - required: set HCCL_BUFFERSIZE = 4096
  - Required: num_experts >= num_ranks
+6. combine_x accuracy verification standards
+ - Non-quantized scenarios: The average relative error shall be within 0.5%
+ - Quantized scenarios: The average relative error shall be within 1%
 
  #### 1.1.6 get_dispatch_layout_a2 ▶
 ##### 1.1.6.1 Prototype
