@@ -24,7 +24,8 @@ extern "C" {
  * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requeses in one call
  * @param[in] io_direction: Set post direction : tx or rx
  * @param[out] bad_qbuf: qbuf list faild to post. user should free these buf
- * Return 0 on success, error code on failure
+ * Return: UMQ_SUCCESS on success, error code on failure, the specific error code is as follows.
+ * -UMQ_ERR_EFLOWCTL: flow control error detected during post
  */
 int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_direction_t io_direction, umq_buf_t **bad_qbuf);
 
@@ -33,9 +34,10 @@ int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_direction_t io_direction, um
  * Poll tx/rx buf from umq
  * @param[in] umqh: umq handle
  * @param[in] io_direction: Set poll direction : tx or rx, or both
- * @param[out] buf: buffer polled. user should assure length not less than max_buf_count
+ * @param[out] buf: buffer polled. user should assure length not less than max_buf_count.
+ *         buf with status UMQ_FAKE_BUF_FC_ERR indicates flow control error.
  * @param[in] max_buf_count: max count of buf, if UMQ_IO_ALL is used, max_buf_count must be at least 2
- * Return count of qbuf polled on success, error code on fail
+ * Return: count of qbuf polled on success, error code on failure
  */
 int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count);
 
