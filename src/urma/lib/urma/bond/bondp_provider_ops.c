@@ -11,11 +11,16 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <dirent.h>
+#include <errno.h>
+#include <malloc.h>
 #include <stdatomic.h>
 #include <sys/epoll.h>
+#include <sys/prctl.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/eventfd.h>
+#include <stdlib.h>
+#include <string.h>
 #include "urma_log.h"
 #include "urma_types.h"
 #include "urma_device.h"
@@ -27,6 +32,7 @@
 #include "bondp_segment.h"
 #include "bondp_datapath.h"
 #include "bondp_context_table.h"
+#include "bondp_health_check.h"
 #include "bondp_provider_ops.h"
 
 #define UBAGG_MAX_EVENT 1
@@ -114,12 +120,14 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
     }
 
     ctx->pid = (uint32_t)getpid();
+    bondp_health_check_global_ctx_init(ctx);
     *bondp_global_ctx = ctx;
     return 0;
 }
 
 static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 {
+    bondp_stop_health_check_thread();
     if (bondp_global_ctx->topo_map) {
         delete_topo_map(bondp_global_ctx->topo_map);
     }
@@ -136,6 +144,13 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
     int ret = bondp_global_ctx_init(&g_bondp_global_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create global context.\n");
+        return URMA_FAIL;
+    }
+
+    if (bondp_start_health_check_thread() != 0) {
+        URMA_LOG_ERR("Failed to start health check thread.\n");
+        (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
+        g_bondp_global_ctx = NULL;
         return URMA_FAIL;
     }
     return URMA_SUCCESS;
@@ -289,6 +304,26 @@ static void bondp_uninit_v_ctx(bondp_context_t *bond_ctx)
     (void)pthread_mutex_destroy(&bond_ctx->v_ctx.mutex);
 }
 
+static void bondp_delete_p_ctx(bondp_context_t *bond_ctx)
+{
+    for (int i = 0; i < bond_ctx->dev_num; ++i) {
+        if (bond_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        (void)urma_delete_context(bond_ctx->p_ctxs[i]);
+        bond_ctx->p_ctxs[i] = NULL;
+    }
+}
+
+static void bondp_restore_async_fd(bondp_context_t *bond_ctx)
+{
+    if (bond_ctx->v_ctx.async_fd >= 0) {
+        (void)close(bond_ctx->v_ctx.async_fd);
+    }
+    bond_ctx->v_ctx.async_fd = bond_ctx->real_async_fd;
+    bond_ctx->real_async_fd = -1;
+}
+
 static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
 {
     if (bdp_p_vjetty_id_table_create(&bond_ctx->p_vjetty_id_table, BONDP_MAX_NUM_JETTYS)) {
@@ -327,6 +362,9 @@ static bondp_context_t* bondp_create_ctx(void)
     if (bond_ctx == NULL) {
         return NULL;
     }
+    bond_ctx->real_async_fd = -1;
+    bond_ctx->v_ctx.async_fd = -1;
+    bondp_health_check_ctx_init(bond_ctx);
     if (bondp_init_ctx_table(bond_ctx)) {
         free(bond_ctx);
         return NULL;
@@ -507,7 +545,7 @@ DELETE_CTX:
     urma_free_device_list(device_list);
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (p_ctxs[i] != NULL) {
-            urma_delete_context(bond_ctx->p_ctxs[i]);
+            urma_delete_context(p_ctxs[i]);
         }
     }
     return -1;
@@ -550,7 +588,7 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     bond_ctx->v_ctx.async_fd = epoll_create(UBAGG_MAX_EVENT);
     if (bond_ctx->v_ctx.async_fd == -1) {
         URMA_LOG_ERR("Failed to create epoll %s\n", ub_strerror(errno));
-        goto UNINIT_V_CTX;
+        goto CMD_DELETE_CONTEXT;
     }
     bond_ctx->v_ctx.aggr_mode = URMA_AGGR_MODE_STANDALONE;
 
@@ -563,12 +601,20 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         goto CMD_DELETE_CONTEXT;
     }
 
+    if (bondp_create_health_check_ctx(bond_ctx) != 0) {
+        URMA_LOG_ERR("Failed to create health check scene\n");
+        goto CMD_DELETE_CONTEXT;
+    }
+
     URMA_LOG_INFO("Finish to create ctx, dev_name: %s, eid_idx: %u.\n",
         dev->name, eid_index);
 
     return &bond_ctx->v_ctx;
 
 CMD_DELETE_CONTEXT:
+    bondp_destroy_health_check_ctx(bond_ctx);
+    bondp_delete_p_ctx(bond_ctx);
+    bondp_restore_async_fd(bond_ctx);
     (void)urma_cmd_delete_context(&bond_ctx->v_ctx);
 UNINIT_V_CTX:
     bondp_uninit_v_ctx(bond_ctx);
@@ -585,14 +631,18 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     uint32_t eid_index = ctx->eid_index;
 
     (void)strcpy(dev_name, ctx->dev->name);
+    bondp_destroy_health_check_ctx(bond_ctx);
     for (int i = 0; i < bond_ctx->dev_num; ++i) {
-        if (bond_ctx->p_ctxs[i] && urma_delete_context(bond_ctx->p_ctxs[i])) {
+        if (bond_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        if (urma_delete_context(bond_ctx->p_ctxs[i])) {
             URMA_LOG_ERR("Failed to delete context %d", i);
             ret = URMA_FAIL;
         }
+        bond_ctx->p_ctxs[i] = NULL;
     }
-    (void)close(bond_ctx->v_ctx.async_fd);
-    bond_ctx->v_ctx.async_fd = bond_ctx->real_async_fd;
+    bondp_restore_async_fd(bond_ctx);
     if (urma_cmd_delete_context(&bond_ctx->v_ctx)) {
         URMA_LOG_ERR("Failed to urma_cmd_delete_context");
         ret = URMA_FAIL;
