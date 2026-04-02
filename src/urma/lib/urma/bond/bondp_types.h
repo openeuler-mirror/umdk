@@ -10,6 +10,12 @@
 #ifndef BONDP_TYPES_H
 #define BONDP_TYPES_H
 
+#include <pthread.h>
+#ifndef __cplusplus
+#include <stdatomic.h>
+#else
+#include <atomic>
+#endif
 #include <stdbool.h>
 #include "urma_types.h"
 #include "urma_ubagg.h"
@@ -34,11 +40,31 @@
 #define URMA_JETTY_ID_ARGS(jetty_id) URMA_JETTY_ID_UNPACK(EID_ARGS((jetty_id)->eid), \
     (jetty_id)->uasid, (jetty_id)->id)
 
+
+typedef struct bondp_heath_check_ctx {
+    void *check_buf;
+    uint64_t check_buf_len;
+    int health_check_fd;
+    urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
+} bondp_heath_check_ctx_t;
+
+typedef struct bondp_health_thread_ctx {
+    bool health_check_enable;
+    int health_epoll_fd;
+    pthread_t health_thread;
+#ifndef __cplusplus
+    atomic_bool health_thread_stop;
+#else
+    std::atomic_bool health_thread_stop;
+#endif
+} bondp_health_thread_ctx_t;
+
 /** Process-granularity global variable */
 typedef struct bondp_global_context {
     uint32_t pid;
     topo_map_t *topo_map;
     bool skip_load_topo;
+    bondp_health_thread_ctx_t health_thread_ctx;
 } bondp_global_context_t;
 
 extern bondp_global_context_t *g_bondp_global_ctx;
@@ -85,6 +111,7 @@ typedef struct bondp_context {
     /* The mapping of pjetty_ids to vjetty_ids of all remote jettys that have been obtained. */
     bondp_hash_table_t remote_p2v_jetty_id_table;
     int real_async_fd; /* vcontex async_fd */
+    bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
     #ifndef __cplusplus
     atomic_ulong token_id_cnt;
