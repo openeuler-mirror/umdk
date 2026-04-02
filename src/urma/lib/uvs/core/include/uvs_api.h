@@ -47,9 +47,10 @@ typedef struct uvs_route_list {
 /**
  * Create an aggregation device in UVS.
  * @param[in] agg_eid  EID of the aggregation device to be created.
+ * @param[in] dev_name  Name of the aggregation device to be created.
  * @return 0 on success, other value on error.
  */
-int uvs_create_agg_dev(uvs_eid_t *agg_eid);
+int uvs_create_agg_dev(uvs_eid_t *agg_eid, const char *dev_name);
 
 /**
  * Delete an aggregation device from UVS.
