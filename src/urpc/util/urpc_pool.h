@@ -12,7 +12,6 @@
 #include <stdint.h>
 
 #include "urpc_list.h"
-#include "util_lock.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,7 +35,7 @@ typedef struct urpc_pool_config {
 } urpc_pool_config_t;
 
 typedef struct urpc_pool {
-    util_external_mutex_lock *lock;
+    pthread_spinlock_t lock;
     urpc_list_t global_free;            // container with element
     urpc_list_t global_free_container;  // only container
     urpc_pool_group_t *global_group;    // used for global uninit

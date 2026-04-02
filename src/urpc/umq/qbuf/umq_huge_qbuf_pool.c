@@ -353,7 +353,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
 
     huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
 
-    (void)util_mutex_lock(pool->block_pool.global_mutex);
+    (void)pthread_spin_lock(&pool->block_pool.global_mutex);
 
     uint32_t actual_buf_count;
     uint32_t headroom_size =
@@ -371,7 +371,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     while (pool->block_pool.buf_cnt_with_data < actual_buf_count) {
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
-            (void)util_mutex_unlock(pool->block_pool.global_mutex);
+            (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
             UMQ_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %u, status: %d\n",
                 pool->block_pool.buf_cnt_with_data, ret);
             return -UMQ_ERR_ENOMEM;
@@ -382,7 +382,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
     } else {
         umq_huge_qbuf_alloc_data_with_combine(pool, request_size, actual_buf_count, list, headroom_size);
     }
-    (void)util_mutex_unlock(pool->block_pool.global_mutex);
+    (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
 
     return UMQ_SUCCESS;
 }
@@ -413,7 +413,7 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
     umq_buf_t *cur_node = NULL;
     umq_buf_t *last_node = NULL;
 
-    (void)util_mutex_lock(pool->block_pool.global_mutex);
+    (void)pthread_spin_lock(&pool->block_pool.global_mutex);
     QBUF_LIST_FOR_EACH(cur_node, list) {
         remove_cnt++;
         last_node = cur_node;
@@ -424,7 +424,7 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
     QBUF_LIST_FIRST(&pool->block_pool.head_with_data) = QBUF_LIST_FIRST(list); // switch head node
     QBUF_LIST_NEXT(last_node) = head; // append head node to last node
     pool->block_pool.buf_cnt_with_data += remove_cnt;
-    (void)util_mutex_unlock(pool->block_pool.global_mutex);
+    (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
 }
 
 int umq_huge_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
