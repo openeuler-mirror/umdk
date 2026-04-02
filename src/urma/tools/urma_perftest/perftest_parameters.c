@@ -127,7 +127,8 @@ static void usage(const char *argv0)
     (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
-    (void)printf("  --single_path,              Bonding device works in single path mode.\n");
+    (void)printf("  --single_path,              Bonding device works in single path mode (mutually exclusive "
+                 "with --aggr_mode).\n");
     (void)printf("  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
                  "                              if set, value of infinite will be overwrite.\n");
     (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
@@ -1011,12 +1012,18 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
 static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
 {
     if (cfg->single_path && cfg->use_ctp) {
-        (void)fprintf(stderr, "Invalid config: --single_path: true conflicts with --ctp: true.\n");
+        (void)fprintf(stderr, "Invalid config: --single_path: true requires --ctp: false.\n");
         return -1;
     }
 
     if (!cfg->single_path && !cfg->use_ctp) {
-        (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: false.\n");
+        (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: true.\n");
+        return -1;
+    }
+
+    if (cfg->single_path && cfg->enable_aggr_mode) {
+        (void)fprintf(stderr,
+            "Invalid config: --single_path and --aggr_mode cannot be used together on bonding devices.\n");
         return -1;
     }
  
@@ -1035,8 +1042,8 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (strstr(cfg->dev_name, "bonding_dev") != NULL && check_ctp_single_path_cfg(cfg) != 0) {
- 	  	return -1;
- 	}
+        return -1;
+    }
 
     if (cfg->priority != PERFTEST_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {
         (void)fprintf(stderr, "Invalid parameter(priority): %hhu, should be 0-15.\n", cfg->priority);
