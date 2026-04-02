@@ -80,34 +80,13 @@ static int bondp_create_vjfce(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfce)
     }
     bdp_jfce->v_jfce.fd = epoll_fd;
 
-    bdp_jfce->comp_ctx = (void *)calloc(1, sizeof(bondp_hash_table_t));
-    if (bdp_jfce->comp_ctx == NULL) {
-        goto CLOSE_FD;
-    }
-
-    if (bdp_vjfce_info_table_create((bondp_hash_table_t *)bdp_jfce->comp_ctx, BOND_EPOLL_NUM) != 0) {
-        URMA_LOG_ERR("Fail to create jfce hash table.\n");
-        goto FREE_COMP;
-    }
     bdp_jfce->v_jfce.ref.atomic_cnt = 0;
     return 0;
-
-FREE_COMP:
-    free(bdp_jfce->comp_ctx);
-    bdp_jfce->comp_ctx = NULL;
-CLOSE_FD:
-    close(epoll_fd);
-    bdp_jfce->v_jfce.fd = -1;
-    return -1;
 }
 
 static int bondp_delete_vjfce(bondp_comp_t *bdp_jfce)
 {
     bdp_vjfce_info_table_close_fd(bdp_jfce);
-    bdp_vjfce_info_table_destroy((bondp_hash_table_t *)bdp_jfce->comp_ctx);
-    free(bdp_jfce->comp_ctx);
-    bdp_jfce->comp_ctx = NULL;
-
     return 0;
 }
 
@@ -1818,17 +1797,10 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
 int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[])
 {
     bondp_comp_t *bdp_jfce = CONTAINER_OF_FIELD(jfce, bondp_comp_t, v_jfce);
-    bondp_hash_table_t *v_jfce_table = bdp_jfce->comp_ctx;
-    bdp_vjfce_info_t *node = NULL;
 
     if (!is_valid_bondp_comp(bdp_jfce)) {
         URMA_LOG_ERR("Invalid param");
         return URMA_EINVAL;
-    }
-
-    if (v_jfce_table == NULL) {
-        URMA_LOG_ERR("v_jfce_table is NULL.\n");
-        return -1;
     }
     struct epoll_event events[BOND_EPOLL_NUM] = {0};
     int epoll_event_limit = jfc_cnt < BOND_EPOLL_NUM ? jfc_cnt : BOND_EPOLL_NUM;
@@ -1841,17 +1813,22 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
     }
 
     int actual_num = 0;
-    (void)pthread_rwlock_rdlock(&v_jfce_table->lock);
     for (int i = 0; i < num; i++) {
         int fd = events[i].data.fd;
-        node = bdp_vjfce_info_table_lookup(v_jfce_table, fd);
-        if (node == NULL) {
-            URMA_LOG_WARN("Fail to find fd:%d from table.\n", fd);
+        urma_jfce_t *p_jfce = NULL;
+        for (int j = 0; j < bdp_jfce->dev_num; j++) {
+            if (bdp_jfce->p_jfce[j] != NULL && bdp_jfce->p_jfce[j]->fd == fd) {
+                p_jfce = bdp_jfce->p_jfce[j];
+                break;
+            }
+        }
+        if (p_jfce == NULL) {
+            URMA_LOG_WARN("Fail to find fd:%d from p_jfce array.\n", fd);
             continue;
         }
 
         urma_jfc_t *p_jfc = NULL;
-        int p_num = urma_wait_jfc(node->p_jfce, 1, 0, &p_jfc);
+        int p_num = urma_wait_jfc(p_jfce, 1, 0, &p_jfc);
         if (p_num <= 0) {
             continue;
         }
@@ -1867,7 +1844,6 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
         jfc[actual_num++] = v_jfc;
         URMA_LOG_DEBUG("p_jfc:%p, add v_jfc:%p", p_jfc, v_jfc);
     }
-    (void)pthread_rwlock_unlock(&v_jfce_table->lock);
     return actual_num;
 }
 
