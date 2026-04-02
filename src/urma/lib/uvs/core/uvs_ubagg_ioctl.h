@@ -37,6 +37,7 @@ struct uvs_ubagg_cmd_hdr {
 struct uvs_ubagg_create_dev_arg {
     struct {
         uvs_eid_t agg_eid;
+        char dev_name[UVS_MAX_DEV_NAME_LEN];
     } in;
 };
 
@@ -62,7 +63,7 @@ struct uvs_ubagg_set_topo_info {
     } in;
 };
 
-int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid);
+int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid, const char *dev_name);
 int uvs_ubagg_ioctl_delete_agg_dev(uvs_eid_t *agg_eid);
 int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
 int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num);

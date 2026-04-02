@@ -20,13 +20,26 @@
 #define UVS_UBAGG_DEVICE_PATH "/dev/ubagg"
 #define UVS_UBCORE_DEVICE_PATH "/dev/ubcore/ubcore"
 
-int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid)
+int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid, const char *dev_name)
 {
     struct uvs_ubagg_create_dev_arg args = {0};
     struct uvs_ubagg_cmd_hdr hdr = {0};
     int ret;
+    size_t dev_name_len;
+
+    if (agg_eid == NULL || dev_name == NULL) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -1;
+    }
+
+    dev_name_len = strnlen(dev_name, UVS_MAX_DEV_NAME_LEN);
+    if (dev_name_len == 0 || dev_name_len >= UVS_MAX_DEV_NAME_LEN) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -1;
+    }
 
     args.in.agg_eid = *agg_eid;
+    (void)snprintf(args.in.dev_name, UVS_MAX_DEV_NAME_LEN, "%s", dev_name);
 
     hdr.command = UVS_UBAGG_CMD_CREATE_DEV;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
