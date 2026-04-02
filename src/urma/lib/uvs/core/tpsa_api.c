@@ -18,16 +18,23 @@
 
 #define UVS_MAX_TOPO_NUM 16
 
-int uvs_create_agg_dev(uvs_eid_t *agg_eid)
+int uvs_create_agg_dev(uvs_eid_t *agg_eid, const char *dev_name)
 {
     int ret = 0;
+    size_t dev_name_len;
 
-    if (agg_eid == NULL) {
+    if (agg_eid == NULL || dev_name == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
 
-    ret = uvs_ubagg_ioctl_create_agg_dev(agg_eid);
+    dev_name_len = strnlen(dev_name, UVS_MAX_DEV_NAME_LEN);
+    if (dev_name_len == 0 || dev_name_len >= UVS_MAX_DEV_NAME_LEN) {
+        TPSA_LOG_ERR("Invalid parameter.\n");
+        return -EINVAL;
+    }
+
+    ret = uvs_ubagg_ioctl_create_agg_dev(agg_eid, dev_name);
     if (ret != 0) {
         TPSA_LOG_ERR("failed to create agg dev in ubagg, ret = %d.\n", ret);
         return ret;
