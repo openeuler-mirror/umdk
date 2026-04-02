@@ -178,6 +178,7 @@ typedef struct bondp_comp {
 typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
     urma_target_jetty_t *p_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+    urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
     int target_dev_num;
     bool is_in_matrix_server;
