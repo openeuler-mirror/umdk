@@ -84,8 +84,8 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
 
 static int client_connect(perftest_config_t *cfg)
 {
-    struct addrinfo *res, *tmp;
-    struct addrinfo hints = {0};
+    struct addrinfo *res, *tmp, *client_res, *client_tmp = NULL;
+    struct addrinfo hints = {0}, client_hints = {0};
     uint32_t i = 0;
 
     perftest_comm_t *comm = &cfg->comm;
@@ -97,22 +97,53 @@ static int client_connect(perftest_config_t *cfg)
     hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
+    if (comm->bind_ip != NULL) {
+        int err, bound = 0;
+        client_hints.ai_family = hints.ai_family;
+        client_hints.ai_socktype = SOCK_STREAM;
+        err = getaddrinfo(comm->bind_ip, NULL, &client_hints, &client_res);
+        if (err != 0) {
+            (void)fprintf(stderr, "Problem in resolving bind IP '%s': %s\n",
+                comm->bind_ip, gai_strerror(err));
+            goto bind_client_error;
+        }
+        for (client_tmp = client_res; client_tmp != NULL; client_tmp = client_tmp->ai_next) {
+            if (client_tmp->ai_family == hints.ai_family) {
+                bound = 1;
+                break;
+            }
+        }
+        if (!bound) {
+            (void)fprintf(stderr, "Bind IP not found : %s\n",
+                    comm->bind_ip);
+            goto create_client_error;
+        }
+    }
+
     for (i = 0; i < cfg->pair_num; i++) {
         if (check_add_port((comm->port + i), comm->server_ip, &hints, &res)) {
-            fprintf(stderr, "Problem in resolving basic address and port\n");
+            (void)fprintf(stderr, "Problem in resolving basic address and port\n");
             free(comm->sock_fd);
             return -1;
         }
 
         for (tmp = res; tmp != NULL; tmp = tmp->ai_next) {
+            bool try_connect = true;
             comm->sock_fd[i] = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
-            if (comm->sock_fd[i] >= 0) {
-                if (connect_retry(comm->sock_fd[i], tmp->ai_addr, tmp->ai_addrlen) == 0) {
-                    break;
-                }
-                close(comm->sock_fd[i]);
-                comm->sock_fd[i] = -1;
+            if (comm->sock_fd[i] < 0) {
+                continue;
             }
+            if (comm->bind_ip != NULL) {
+                if (bind(comm->sock_fd[i], client_tmp->ai_addr, client_tmp->ai_addrlen) != 0) {
+                    try_connect = false;
+                    (void)fprintf(stderr, "Failed to bind ip: %s\n", comm->bind_ip);
+                }
+            }
+            if (try_connect && connect_retry(comm->sock_fd[i], tmp->ai_addr, tmp->ai_addrlen) == 0) {
+                break;
+            }
+            close(comm->sock_fd[i]);
+            comm->sock_fd[i] = -1;
         }
 
         freeaddrinfo(res);
@@ -129,12 +160,18 @@ static int client_connect(perftest_config_t *cfg)
         }
     }
 
+    if (comm->bind_ip != NULL) {
+        freeaddrinfo(client_res);
+    }
+
     return 0;
 create_client_error:
     for (uint32_t j = 0; j < i; j++) {
         (void)close(comm->sock_fd[j]);
     }
     free(comm->sock_fd);
+    freeaddrinfo(client_res);
+bind_client_error:
     return -1;
 }
 
@@ -155,8 +192,8 @@ static int server_connect(perftest_config_t *cfg)
     hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
-    if (check_add_port(comm->port, NULL, &hints, &res)) {
-        fprintf(stderr, "Problem in resolving basic address and port\n");
+    if (check_add_port(comm->port, comm->bind_ip, &hints, &res)) {
+        (void)fprintf(stderr, "Problem in resolving basic address and port\n");
         free(comm->sock_fd);
         return -1;
     }
@@ -255,6 +292,10 @@ void close_connection(perftest_config_t *cfg)
     comm->sock_fd = NULL;
     free(comm->server_ip);
     comm->server_ip = NULL;
+    if (comm->bind_ip) {
+        free(comm->bind_ip);
+        comm->bind_ip = NULL;
+    }
 }
 
 int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data)

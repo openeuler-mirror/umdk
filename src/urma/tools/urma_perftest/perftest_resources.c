@@ -721,7 +721,7 @@ static void free_memory(perftest_context_t *ctx, const perftest_config_t *cfg, c
             } else {
                 ret = ub_hugefree(ctx->local_buf[j], ctx->buf_len);
                 if (ret != 0) {
-                    (void)fprintf(stderr, "Failed to free huge page, len: %lu.\n", ctx->buf_len);
+                    (void)fprintf(stderr, "addr=%p, length=%lu\n", ctx->local_buf[j], ctx->buf_len);
                 }
             }
         }
@@ -733,8 +733,8 @@ static void free_memory(perftest_context_t *ctx, const perftest_config_t *cfg, c
 static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     uint32_t i = 0, j = 0, k = 0;
-    const uint64_t page_size_2MB = 2 * 1024 * 1024;
-    const uint64_t page_size_1GB = 1024 * 1024 * 1024;
+    const uint64_t perftest_page_size_2MB = 2 * 1024 * 1024;
+    const uint64_t perftest_page_size_1GB = 1024 * 1024 * 1024;
     ctx->local_buf = calloc(1, sizeof(void *) * cfg->jettys);
     if (ctx->local_buf == NULL) {
         return -ENOMEM;
@@ -746,10 +746,10 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     if (cfg->use_huge_page) {
         switch (cfg->huge_page) {
             case UB_HUGE_PAGE_SIZE_2MB:
-                ctx->page_size = page_size_2MB;
+                ctx->page_size = perftest_page_size_2MB;
                 break;
             case UB_HUGE_PAGE_SIZE_1GB:
-                ctx->page_size = page_size_1GB;
+                ctx->page_size = perftest_page_size_1GB;
                 break;
             default:
                 break;
@@ -780,10 +780,10 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
             } else {
                 ctx->local_buf[i] = ctx->local_buf[0];
             }
-            if (ctx->local_buf[i] == NULL) {
-                (void)fprintf(stderr, "Failed to memalign local buffer, i: %u.\n", i);
-                goto free_memory;
-            }
+        }
+        if (ctx->local_buf[i] == NULL) {
+            (void)fprintf(stderr, "Failed to alloc local buff: %u!\n", i);
+            goto free_memory;
         }
     }
 
@@ -939,7 +939,7 @@ static int exchange_jetty_id(perftest_context_t *ctx, perftest_comm_t *comm, per
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_jetty_id_t),
             (char *)local_jetty_id_buf, (char *)remote_jetty_id_buf) != 0) {
-            (void)fprintf(stderr, "Failed to exchange jetty!\n");
+            (void)fprintf(stderr, "Failed to exchange jetty id!\n");
             goto free_buf;
         }
     }
@@ -982,14 +982,14 @@ static int exchange_credit_info(perftest_context_t *ctx, perftest_comm_t *comm, 
     if (cfg->pair_flag) {
         for (uint32_t i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t),
-                (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
+                (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
                 (void)fprintf(stderr, "Failed to exchange seg %u!\n", i);
                 goto free_buf;
             }
         }
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_seg_t),
-            (char *)&local_seg_buf[0], (char *)&remote_seg_buf[0]) != 0) {
+            (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
             (void)fprintf(stderr, "Failed to exchange seg!\n");
             goto free_buf;
         }
@@ -1033,6 +1033,7 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
     } else {
         tp_cfg.flag.bs.rtp = 1;
     }
+    tp_cfg.flag.bs.uboe = cfg->uboe;
     tp_cfg.trans_mode = cfg->trans_mode;
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
@@ -1050,6 +1051,56 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
         if (ret != URMA_SUCCESS || tp_cnt != 1) {
             (void)fprintf(stderr, "Failed to get tpid list, ret:%d, tp_cnt:%u!\n", ret, tp_cnt);
             goto free_buf;
+        }
+        if (cfg->uboe) {
+            uint32_t set_tp_attr_flag = PERFTEST_SET_ATTR_BITMAP_UBOE;
+            uint8_t set_tp_attr_cnt = PERFTEST_SET_ATTR_CNT_UBOE;
+            if (cfg->use_ctp) {
+                (void)fprintf(stderr, "ctp is not supported by uboe!\n");
+                goto free_buf;
+            }
+            if (!cfg->uboe_dip || !cfg->uboe_sip) {
+                (void)fprintf(stderr, "uboe module need parametres: sip, dip, optional parametres: dscp, vlan, sl\n");
+                goto free_buf;
+            }
+            int ret = urma_get_smac(ctx->urma_ctx, cfg->smac);
+            if (ret != URMA_SUCCESS) {
+                (void)fprintf(stderr, "Failed to get smac, ret:%d\n", ret);
+                goto free_buf;
+            }
+            urma_net_addr_t net_addr;
+            net_addr.sin_family = AF_INET;
+            net_addr.in4.s_addr = cfg->dip.in4.addr;
+            ret = urma_get_dmac(ctx->urma_ctx, &net_addr, cfg->dmac);
+            if (ret != URMA_SUCCESS) {
+                (void)fprintf(stderr, "Failed to get dmac, ret:%d\n", ret);
+                goto free_buf;
+            }
+
+            urma_tp_attr_value_t tp_attr = {0};
+            memcpy(tp_attr.sip, cfg->sip.raw, URMA_IP_ADDR_BYTES);
+            memcpy(tp_attr.dip, cfg->dip.raw, URMA_IP_ADDR_BYTES);
+            memcpy(tp_attr.sma, cfg->smac, URMA_MAC_BYTES);
+            memcpy(tp_attr.dma, cfg->dmac, URMA_MAC_BYTES);
+            if (cfg->uboe_vlan) {
+                tp_attr.vlan_en = 1;
+                tp_attr.vlan_id = cfg->vlan_id;
+            }
+            if (cfg->uboe_dscp) {
+                tp_attr.dscp = cfg->dscp;
+            }
+            if (cfg->uboe_sl) {
+                tp_attr.sl = cfg->sl;
+                set_tp_attr_cnt++;
+                set_tp_attr_flag |= PERFTEST_SET_ATTR_BITMAP_SL_FLAG;
+            }
+
+            ret = urma_set_tp_attr(ctx->urma_ctx, ctx->tp_info[i].tp_handle, set_tp_attr_cnt,
+                set_tp_attr_flag, &tp_attr);
+            if (ret != URMA_SUCCESS) {
+                (void)fprintf(stderr, "Failed to set_tp_attr, ret:%d\n", ret);
+                goto free_buf;
+            }
         }
     }
     return 0;
@@ -1497,7 +1548,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
     }
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
-        urma_import_jetty_ex_cfg_t active_cfg = {0};
+        urma_import_jfr_ex_cfg_t active_cfg = {0};
         if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
             active_cfg.tp_handle = ctx->tp_info[i].tp_handle;
             active_cfg.tp_attr.tx_psn = (uint32_t)random();

@@ -95,11 +95,16 @@
 #define PERFTEST_G (1000000000)
 #define PERFTEST_MBS (0x100000)
 #define PERFTEST_KPPS (1000)
+#define PERFTEST_BW_KB 0x400 // 2^10
 #define PERFTEST_BW_MB 0x100000 // 2^20
+#define PERFTEST_BW_GB 0x40000000 // 2^30
 #define PERFTEST_BYTE_SIZE 8
 
 #define PERFTEST_WRITE_DIRTY_PERIOD (50)
 #define PERFTEST_CHAR_MAX_VALUE (256)
+#define PERFTEST_SET_ATTR_BITMAP_UBOE 0x1FC
+#define PERFTEST_SET_ATTR_BITMAP_SL_FLAG 0x400
+#define PERFTEST_SET_ATTR_CNT_UBOE (7)
 
 #define PERFTEST_RESULT_LINE "---------------------------------------------------------------------------------------\n"
 #define PERFTEST_INVALID_PRIORITY  (255)
@@ -183,8 +188,12 @@ enum perftest_opts {
     PERFTEST_OPT_WAIT_JFC_TIMEOUT,
     PERFTEST_OPT_HUGE_PAGE_SIZE,
     PERFTEST_OPT_PAGE_SIZE,
-    PERFTEST_OPT_AGGR_MODE,
-    PERFTEST_OPT_STDOUT,
+    PERFTEST_OPT_SIP,
+    PERFTEST_OPT_DIP,
+    PERFTEST_OPT_VLAN,
+    PERFTEST_OPT_DSCP,
+    PERFTEST_OPT_SL,
+    PERFTEST_OPT_BIND_IP
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -192,6 +201,19 @@ typedef enum perftest_rate_limiter_units {
     PERFTEST_RATE_LIMIT_GIGA_BIT,
     PERFTEST_RATE_LIMIT_PS
 } perftest_rate_limiter_units_t;
+
+typedef union perftest_net_addr {
+    uint8_t raw[URMA_IP_ADDR_BYTES]; /* Network Order */
+    struct {
+        uint64_t resv;   /* If IPv4 mapped to IPv6, == 0 */
+        uint32_t prefix; /* If IPv4 mapped to IPv6, == 0x0000ffff */
+        uint32_t addr;   /* If IPv4 mapped to IPv6, == IPv4 addr */
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
+} perftest_net_addr_t;
 
 typedef struct perftest_config {
     perftest_cmd_type_t cmd;
@@ -287,7 +309,20 @@ typedef struct perftest_config {
     bool use_huge_page;
     bool enable_aggr_mode;
     uint32_t aggr_mode;
-    bool enable_stdout;                    /* Print logs to console. */
+    bool enable_stdout;
+    bool uboe;
+    perftest_net_addr_t sip;
+    bool uboe_sip;
+    perftest_net_addr_t dip;
+    bool uboe_dip;
+    uint8_t smac[URMA_MAC_BYTES];
+    uint8_t dmac[URMA_MAC_BYTES];
+    uint16_t vlan_id;
+    bool uboe_vlan;
+    uint8_t dscp;
+    bool uboe_dscp;
+    uint8_t sl;
+    bool uboe_sl;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

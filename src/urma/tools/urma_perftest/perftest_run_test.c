@@ -2247,8 +2247,8 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         while ((run_ctx->scnt[cr_id] + scredit_pre_jetty[cr_id] -  run_ctx->ccnt[cr_id]) >=
                                 cfg->jfs_depth) {
                             sne = urma_poll_jfc(ctx->jfc_s[0], 1, &credit_cr);
-                            bool is_credit = credit_cr.user_ctx & (1UL << PERFTEST_FLAG_USER_CTX);
-                            uint64_t credit_id = credit_cr.user_ctx & ~(1UL << PERFTEST_FLAG_USER_CTX);
+                            bool is_credit = credit_cr.user_ctx & (1ULL << PERFTEST_FLAG_USER_CTX);
+                            uint64_t credit_id = credit_cr.user_ctx & ~(1ULL << PERFTEST_FLAG_USER_CTX);
                             if (sne > 0) {
                                 if (credit_cr.status != URMA_CR_SUCCESS) {
                                     (void)fprintf(stderr, "Poll send CQ error status=%u jetty %d \n",
@@ -2308,8 +2308,8 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
         bool is_credit_send = false;
         if (send_cqe_cnt > 0) {
             for (int i = 0; i < send_cqe_cnt; i++) {
-                if (cr_send[i].user_ctx & (1UL << PERFTEST_FLAG_USER_CTX)) {
-                    cr_id = cr_send[i].user_ctx & ~(1UL << PERFTEST_FLAG_USER_CTX);
+                if (cr_send[i].user_ctx & (1ULL << PERFTEST_FLAG_USER_CTX)) {
+                    cr_id = cr_send[i].user_ctx & ~(1ULL << PERFTEST_FLAG_USER_CTX);
                     is_credit_send = true;
                 } else {
                     cr_id = (uint32_t)cr_send[i].user_ctx;
@@ -2332,7 +2332,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 }
                 if (is_credit_send == true) {
                     if (!cfg->enable_credit) {
-                        (void)fprintf(stderr, "Polled WRITE completion without recv credit request\n");
+                        (void)fprintf(stderr, "Polled RDMA_WRITE completion without recv credit request\n");
                         ret = -1;
                         goto cleaning;
                     }
