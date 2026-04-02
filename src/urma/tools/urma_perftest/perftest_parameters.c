@@ -122,6 +122,8 @@ static void usage(const char *argv0)
     (void)printf("  -s, --size <size>           Size of message to exchange (default 2).\n");
     (void)printf("  -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .\n");
     (void)printf("  -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n");
+    (void)printf("  -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.\
+                                                                            dscp, vlan, sl are optional\n");
     (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
@@ -155,21 +157,24 @@ default: disable.\n");
 default: disable.\n");
     (void)printf("  --pair_num <num>            Enable multiplayer model and set the number of connection, \
 default: disable.\n");
+    (void)printf("  --sip <ip>                  Set source ip address.\n");
+    (void)printf("  --dip <ip>                  Set dest ip address.\n");
+    (void)printf("  --dscp <dscp>               Set dscp .\n");
+    (void)printf("  --vlan <vlan_id>            Set vlan_id .\n");
+    (void)printf("  --sl <sl>                   Set sl .\n");
     (void)printf("  --async_import              Enable asynchronous connection establishment\n");
     (void)printf("  --tp_aware                  Enable tp aware connect, default: disable.\n");
     (void)printf("  --tp_reuse                  Reuse tp in RM mode if enable tp aware, default: disable.\n");
     (void)printf("  --ctp                       Use ctp, default: disable.\n");
     (void)printf("  --jetty_id                  Set the jetty_id, default: 0.\n");
-    (void)printf("  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n"
-                 "                              timeout = 0: return immediately even if no events are ready,\n"
-                 "                              timeout = -1: an infinite timeout,\n"
-                 "                              default: 1000(1s).\n");
+    (void)printf("  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n\
+                                                timeout = 0: return immediately even if no events are ready,\n\
+                                                timeout = -1: an infinite timeout,\n\
+                                                default: 1000(1s).\n");
     (void)printf("  --page_size                 Set page size, default: 4096.\n");
     (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
 2MB or 1GB currently.\n");
-    (void)printf("  --stdout                    Print logs to console.\n");
-    (void)printf("  --aggr_mode                 Set bond device aggregation mode, support: standalone, \
-active_backup, balance, default: disable\n");
+    (void)printf("  --bind_ip <ip>          The ip for bind.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -278,11 +283,19 @@ static void init_cfg(perftest_config_t *cfg)
 
     cfg->comm.enable_ipv6 = false;
     cfg->comm.server_ip = NULL;
+    cfg->comm.bind_ip = NULL;
     cfg->comm.port = PERFTEST_DEF_PORT;
     cfg->comm.listen_fd = -1;
     cfg->comm.sock_fd = NULL;
     cfg->jfs_depth = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_JFS_DEPTH_BW : PERFTEST_DEF_JFS_DEPTH_LAT;
     cfg->trans_mode = URMA_TM_RM;
+
+    cfg->uboe = false;
+    cfg->uboe_vlan = false;
+    cfg->uboe_dscp = false;
+    cfg->uboe_sl = false;
+    cfg->uboe_dip = false;
+    cfg->uboe_sip = false;
 
     cfg->cache_line_size = (uint32_t)get_cache_line_size();
     cfg->page_size = (uint64_t)(uint32_t)getpagesize();
@@ -304,6 +317,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->burst_size = 0;
     cfg->rate_units = PERFTEST_RATE_LIMIT_GIGA_BIT;
     cfg->enable_credit = false;
+    /* credit_notify_cnt and credit_threshold should be updated according to jfr_depth */
     cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
     cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
 
@@ -443,6 +457,22 @@ static int check_cfg_range(perftest_config_t *cfg)
     return 0;
 }
 
+int str_to_ip(const char *str_ip, perftest_net_addr_t *ip)
+{
+    if (str_ip == NULL || ip == NULL) {
+        return -EINVAL;
+    }
+    if (inet_pton(AF_INET, str_ip, &ip->in4.addr) > 0) {
+        ip->in4.resv = 0;
+        ip->in4.prefix = 0;
+        return 0;
+    }
+    if (inet_pton(AF_INET6, str_ip, ip) > 0) {
+        return 0;
+    }
+    return -EINVAL;
+}
+
 int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 {
     uint32_t offset;
@@ -495,6 +525,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"size",          required_argument, NULL, 's'},
         {"server",        required_argument, NULL, 'S'},
         {"jfs_depth",     required_argument, NULL, 'T'},
+        {"uboe",          no_argument,       NULL, 'u'},
         {"warm_up",       no_argument,       NULL, 'w'},
         {"infinite",      optional_argument, NULL, 'y'},
         {"use_bonding",   no_argument,       NULL, 'z'},
@@ -530,17 +561,26 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"ctp",           no_argument,       NULL, PERFTEST_OPT_CTP},
         {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
-        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE },
-        {"page_size",     required_argument, NULL, PERFTEST_OPT_PAGE_SIZE },
-        {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
-        {"stdout",  no_argument,       NULL, PERFTEST_OPT_STDOUT },
-        {NULL,            no_argument,       NULL, '\0'},
+        {"hugepage-size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE},
+        {"page_size",     required_argument, NULL, PERFTEST_OPT_PAGE_SIZE},
+        {"sip",           required_argument, NULL, PERFTEST_OPT_SIP},
+        {"dip",           required_argument, NULL, PERFTEST_OPT_DIP},
+        {"dscp",          required_argument, NULL, PERFTEST_OPT_DSCP},
+        {"vlan",          required_argument, NULL, PERFTEST_OPT_VLAN},
+        {"sl",            required_argument, NULL, PERFTEST_OPT_SL},
+        {"bind_ip",       required_argument, NULL, PERFTEST_OPT_BIND_IP},
+        {NULL,            no_argument,       NULL, '\0'}
     };
 
     /* Second parse the options */
     while (1) {
-        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:wy::z",
+#ifdef UB_AGG
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:uwy::z",
             long_options, NULL);
+#else
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:LO:p:P:Q:r:R:s:S:T:uwy::",
+            long_options, NULL);
+#endif // #ifdef UB_AGG
         if (c == -1) {
             break;
         }
@@ -694,6 +734,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'T':
                 (void)ub_str_to_u32(optarg, &cfg->jfs_depth);
                 break;
+            case 'u':
+                cfg->uboe = true;
+                break;
             case 'w':
                 cfg->warm_up = true;
                 break;
@@ -817,40 +860,53 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 (void)ub_str_to_int(optarg, &cfg->wait_jfc_timeout);
                 break;
             case PERFTEST_OPT_HUGE_PAGE_SIZE:
-                cfg->use_huge_page = true;
-                if (strcmp("2MB", optarg) == 0) {
-                    cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
-                } else if (strcmp("1GB", optarg) == 0) {
-                    cfg->huge_page = UB_HUGE_PAGE_SIZE_1GB;
-                } else if (strcmp("ANY", optarg) == 0) {
-                    cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
-                } else {
-                    (void)fprintf(stderr, "Huge_page only support 2MB, 1GB and ANY.\n");
-                    return -1;
+                if (optarg != NULL) {
+                    cfg->use_huge_page = true;
+                    if (strcmp("2MB", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_2MB;
+                    } else if (strcmp("1GB", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_1GB;
+                    } else if (strcmp("ANY", optarg) == 0) {
+                        cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
+                    } else {
+                        (void)fprintf(stderr, "Huge_page only support 2MB1GB and ANY\n");
+                        return -1;
+                    }
                 }
                 break;
             case PERFTEST_OPT_PAGE_SIZE:
                 (void)ub_str_to_u64(optarg, &cfg->page_size);
-                if (cfg->page_size % PERFTEST_PAGE_SIZE != 0 || cfg->page_size == 0) {
+                if (cfg->page_size % 4096 != 0 || cfg->page_size == 0) {
                     (void)fprintf(stderr, "Invalid page size.\n");
                     return -1;
                 }
                 break;
-            case PERFTEST_OPT_AGGR_MODE:
-                cfg->enable_aggr_mode = true;
-                if (strcmp("standalone", optarg) == 0) {
-                    cfg->aggr_mode = URMA_AGGR_MODE_STANDALONE;
-                } else if (strcmp("active_backup", optarg) == 0) {
-                    cfg->aggr_mode = URMA_AGGR_MODE_ACTIVE_BACKUP;
-                } else if (strcmp("balance", optarg) == 0) {
-                    cfg->aggr_mode = URMA_AGGR_MODE_BALANCE;
-                } else {
-                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");
+            case PERFTEST_OPT_SIP:
+                (void)str_to_ip(optarg, &cfg->sip);
+                cfg->uboe_sip = true;
+                break;
+            case PERFTEST_OPT_DIP:
+                cfg->uboe_dip = true;
+                (void)str_to_ip(optarg, & cfg->dip);
+                break;
+            case PERFTEST_OPT_DSCP:
+                cfg->uboe_dscp = true;
+                (void)ub_str_to_u8(optarg, &cfg->dscp);
+                break;
+            case PERFTEST_OPT_VLAN:
+                cfg->uboe_vlan = true;
+                (void)ub_str_to_u16(optarg, &cfg->vlan_id);
+                break;
+            case PERFTEST_OPT_SL:
+                cfg->uboe_sl = true;
+                (void)ub_str_to_u8(optarg, &cfg->sl);
+                break;
+            case PERFTEST_OPT_BIND_IP:
+                cfg->comm.bind_ip = strdup(optarg);
+                if (cfg->comm.bind_ip == NULL) {
+                    (void)fprintf(stderr, "failed to allocate bind ip memory.\n");
                     return -1;
                 }
-                break;
-            case PERFTEST_OPT_STDOUT:
-                cfg->enable_stdout = true;
                 break;
             default:
                 usage(argv[0]);
@@ -882,6 +938,10 @@ void destroy_cfg(perftest_config_t *cfg)
     if (cfg->comm.server_ip != NULL) {
         free(cfg->comm.server_ip);
         cfg->comm.server_ip = NULL;
+    }
+    if (cfg->comm.bind_ip != NULL) {
+        free(cfg->comm.bind_ip);
+        cfg->comm.bind_ip = NULL;
     }
     return;
 }
@@ -1301,34 +1361,11 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
         (void)fprintf(stderr, "UM transport mode is not recommended for ctp.\n");
     }
-
-    if (cfg->api_type == PERFTEST_SEND) {
-        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",
-                cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
-            exit(1);
-        }
-        if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n",
-                cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
-            exit(1);
-        }
-
-        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
-                cfg->order, PERFTEST_RTP_MAX_ORDER);
-            exit(1);
-        }
-        if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
-                cfg->order, PERFTEST_CTP_MAX_ORDER);
-            exit(1);
-        }
-    }
-
-    if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->jfs_post_list > 1) {
-        (void)fprintf(stderr, "Standalone aggregate mode currently does not support WQE list.\n");
-        exit(1);
+    const int MIN_CQ_MOD_RATIO = 2;
+    if ((cfg->iters % cfg->cq_mod != 0) && (cfg->cq_mod >= cfg->iters / MIN_CQ_MOD_RATIO) &&
+        (cfg->bidirection) && (cfg->enable_credit)) {
+        (void)fprintf(stderr, "The cq_mod parameter must be divisible by iters and "
+            "must be less than half of the iters parameter when bidirection and credit are enabled.\n");
     }
     return 0;
 }

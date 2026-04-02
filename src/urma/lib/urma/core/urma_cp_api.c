@@ -244,7 +244,7 @@ const opt_map_t JETTY_OPT_TABLE[] = {
 
 const size_t JETTY_OPT_MAP_COUNT = sizeof(JETTY_OPT_TABLE) / sizeof(JETTY_OPT_TABLE[0]);
 
-static urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
+urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, uint32_t len)
 {
     for (size_t i = 0; i < table_cnt; i++) {
@@ -261,10 +261,10 @@ static urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *
             return URMA_SUCCESS;
         }
     }
-    return URMA_SUCCESS;
+    return URMA_EINVAL;
 }
 
-static urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
+urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, void *buf, uint32_t len,
     void *cfg_base, void *opt_base, void *jfs_cfg_base)
 {
@@ -365,6 +365,7 @@ urma_status_t urma_free_jfc(urma_jfc_t *jfc)
     if (ret == URMA_SUCCESS && jfce != NULL) {
         atomic_fetch_sub(&jfce->ref.atomic_cnt, 1);
     }
+    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     return ret;
 }
 
@@ -497,6 +498,7 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
         return status == URMA_SUCCESS ? URMA_ENOMEM : status;
     }
 
+    atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
     if ((*jfc)->jfc_cfg.jfce != NULL) {
         atomic_fetch_add(&(*jfc)->jfc_cfg.jfce->ref.atomic_cnt, 1);
     }
@@ -508,10 +510,16 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfc == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfc == NULL || buf == NULL || len == 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+
+    if (jfc->urma_jfc_opt.is_actived == true) {
+        URMA_LOG_ERR("Failed to set opt, jfc has been activated");
+        return URMA_EINVAL;
+    }
+
     urma_status_t status;
     status = urma_check_opt_valid(&jfc->urma_jfc_opt.jfc_opt_mask.value, JFC_OPT_TABLE, JFC_OPT_MAP_COUNT, opt, len);
     if (status != URMA_SUCCESS) {
@@ -614,6 +622,19 @@ urma_status_t urma_deactive_jfc(urma_jfc_t *jfc)
     return URMA_SUCCESS;
 }
 
+static inline int urma_check_order_type(urma_transport_mode_t trans_mode,
+    uint32_t order_type)
+{
+    if ((trans_mode != URMA_TM_RC && order_type == URMA_OT) ||
+        (trans_mode != URMA_TM_RC && order_type == URMA_OL) ||
+        (trans_mode != URMA_TM_RM && order_type == URMA_OI) ||
+        (trans_mode == URMA_TM_RM && order_type == URMA_NO)) {
+        return -1;
+    }
+
+    return 0;
+}
+
 urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
 {
     if (ctx == NULL || jfs_cfg == NULL || jfs_cfg->jfc == NULL) {
@@ -628,12 +649,20 @@ urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
         return NULL;
     }
 
+    uint32_t order_type = jfs_cfg->flag.bs.order_type;
+    if (urma_check_order_type(jfs_cfg->trans_mode, order_type) != 0) {
+        URMA_LOG_ERR("Invalid parameter, trans_mode: %d, order_type: %u.\n", (int)jfs_cfg->flag.bs.order_type,
+                     order_type);
+        errno = EINVAL;
+        return NULL;
+    }
+
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jfs);
 
     urma_device_attr_t *attr = &ctx->dev->sysfs_dev->dev_attr;
     if ((jfs_cfg->depth == 0 || jfs_cfg->depth > attr->dev_cap.max_jfs_depth) ||
-        (jfs_cfg->max_inline_data != 0 && jfs_cfg->max_inline_data > attr->dev_cap.max_jfs_inline_len) ||
+        (jfs_cfg->max_inline_data > attr->dev_cap.max_jfs_inline_len) ||
         (jfs_cfg->max_sge > attr->dev_cap.max_jfs_sge) || (jfs_cfg->max_rsge > attr->dev_cap.max_jfs_rsge)) {
         URMA_LOG_ERR("jfs cfg out of range, depth:%u, max_depth:%u, inline_data:%u, max_inline_len:%u, "
                      "sge:%hhu, max_sge:%u, rsge:%hhu, max_rsge:%u.\n",
@@ -705,6 +734,7 @@ urma_status_t urma_free_jfs(urma_jfs_t *jfs)
         URMA_LOG_ERR("Failed to free jfs.\n");
         return ret;
     }
+    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     return ret;
 }
 
@@ -845,10 +875,16 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfs == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfs == NULL || buf == NULL || len == 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+
+    if (jfs->urma_jfs_opt.is_actived == true) {
+        URMA_LOG_ERR("Failed to set opt, jfs has been activated");
+        return URMA_EINVAL;
+    }
+
     urma_status_t status;
     status = urma_check_opt_valid(&jfs->urma_jfs_opt.jfs_opt_mask.value, JFS_OPT_TABLE, JFS_OPT_MAP_COUNT, opt, len);
     if (status != URMA_SUCCESS) {
@@ -896,15 +932,31 @@ urma_status_t urma_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_
 
 urma_status_t urma_active_jfs(urma_jfs_t *jfs)
 {
-    if (jfs == NULL) {
+    urma_jfs_cfg_t *jfs_cfg = &jfs->jfs_cfg;
+
+    if (jfs == NULL || jfs->jfs_cfg.jfc == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
-    if (jfs->urma_jfs_opt.is_actived == true) {
-        URMA_LOG_ERR("jfs state is wrong in active_jfs.\n");
+    if (jfs->urma_jfs_opt.is_actived == true ||
+        jfs->jfs_cfg.jfc->urma_jfc_opt.is_actived == false) {
+        URMA_LOG_ERR("jfs or jfc state is wrong in active_jfs.\n");
         return URMA_EINVAL;
     }
+
+    if (urma_check_trans_mode_valid(jfs_cfg->trans_mode) != true) {
+        URMA_LOG_ERR("Invalid parameter, trans_mode: %d.\n", (int)jfs_cfg->trans_mode);
+        return URMA_EINVAL;
+    }
+
+    uint32_t order_type = jfs_cfg->flag.bs.order_type;
+    if (urma_check_order_type(jfs_cfg->trans_mode, order_type) != 0) {
+        URMA_LOG_ERR("Invalid parameter, trans_mode: %d, order_type: %u.\n", (int)jfs_cfg->flag.bs.order_type,
+                     order_type);
+        return URMA_EINVAL;
+    }
+
     urma_context_t *urma_ctx = jfs->urma_ctx;
     urma_jfs_cfg_t *cfg = &jfs->jfs_cfg;
     urma_ops_t *ops = NULL;
@@ -1046,6 +1098,7 @@ urma_status_t urma_free_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("Failed to free jfr.\n");
         return ret;
     }
+    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     return ret;
 }
 
@@ -1294,10 +1347,16 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfr == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfr == NULL || buf == NULL || len == 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+
+    if (jfr->urma_jfr_opt.is_actived == true) {
+        URMA_LOG_ERR("Failed to set opt, jfr has been activated");
+        return URMA_EINVAL;
+    }
+
     urma_status_t status;
     status = urma_check_opt_valid(&jfr->urma_jfr_opt.jfr_opt_mask.value, JFR_OPT_TABLE, JFR_OPT_MAP_COUNT, opt, len);
     if (status != URMA_SUCCESS) {
@@ -1344,7 +1403,7 @@ urma_status_t urma_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_
 
 urma_status_t urma_active_jfr(urma_jfr_t *jfr)
 {
-    if (jfr == NULL) {
+    if (jfr == NULL || jfr->jfr_cfg.jfc == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -1369,8 +1428,9 @@ urma_status_t urma_active_jfr(urma_jfr_t *jfr)
         return URMA_EINVAL;
         }
 
-    if (jfr->urma_jfr_opt.is_actived == true) {
-        URMA_LOG_ERR("jfr state is wrong in active_jfr.\n");
+    if (jfr->urma_jfr_opt.is_actived == true
+        || jfr->jfr_cfg.jfc->urma_jfc_opt.is_actived == false) {
+        URMA_LOG_ERR("jfr or jfc state is wrong in active_jfr.\n");
         return URMA_EINVAL;
     }
 
@@ -1457,10 +1517,10 @@ urma_status_t urma_delete_jfce(urma_jfce_t *jfce)
     return URMA_SUCCESS;
 }
 
-static inline int urma_check_order_type(urma_transport_mode_t trans_mode, uint32_t order_type)
+static inline int urma_check_tp_type_valid(urma_transport_mode_t trans_mode, uint32_t tp_type)
 {
-    if ((trans_mode != URMA_TM_RC && order_type == URMA_OT) || (trans_mode != URMA_TM_RC && order_type == URMA_OL) ||
-        (trans_mode != URMA_TM_RM && order_type == URMA_OI) || (trans_mode == URMA_TM_RM && order_type == URMA_NO)) {
+    if ((trans_mode != URMA_TM_UM && tp_type == URMA_UTP) ||
+        (trans_mode == URMA_TM_UM && tp_type == URMA_RTP)) {
         return -1;
     }
 
@@ -1519,7 +1579,7 @@ static int urma_create_jetty_check_dev_cap(urma_context_t *ctx, urma_jetty_cfg_t
         (void)pthread_mutex_unlock(&jetty_cfg->jetty_grp->list_mutex);
     }
     if ((jfs_cfg->depth == 0 || jfs_cfg->depth > cap->max_jfs_depth) ||
-        (jfs_cfg->max_inline_data != 0 && jfs_cfg->max_inline_data > cap->max_jfs_inline_len) ||
+        (jfs_cfg->max_inline_data > cap->max_jfs_inline_len) ||
         (jfr_cfg->depth == 0 || jfr_cfg->depth > cap->max_jfr_depth) ||
         (jfs_cfg->max_sge > cap->max_jfs_sge || jfs_cfg->max_rsge > cap->max_jfs_rsge ||
          jfr_cfg->max_sge > cap->max_jfr_sge)) {
@@ -1730,6 +1790,7 @@ urma_status_t urma_free_jetty(urma_jetty_t *jetty)
     if (status != URMA_SUCCESS) {
         (void)urma_add_jetty_to_jetty_grp(jetty, jetty->jetty_cfg.jetty_grp);
     }
+    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     return status;
 }
 
@@ -1883,6 +1944,8 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
             errno = EIO;
             return NULL;
         }
+        URMA_LOG_INFO("Get tp list, leid: "EID_FMT", deid: "EID_FMT".\n", EID_ARGS(get_tp_cfg.local_eid),
+            EID_ARGS(get_tp_cfg.peer_eid));
 
         active_tp_cfg.tp_handle = tp_info.tp_handle;
         active_tp_cfg.tp_attr.tx_psn = rand();
@@ -1914,9 +1977,13 @@ urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjett
         return NULL;
     }
 
-    if (rjetty->flag.bs.token_policy != URMA_TOKEN_NONE && token_value == NULL) {
-        URMA_LOG_ERR("Token value must be set when token policy is not URMA_TOKEN_NONE.\n");
-        errno = EINVAL;
+    if (urma_check_order_type(rjetty->trans_mode, rjetty->flag.bs.order_type) != 0) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return NULL;
+    }
+
+    if (urma_check_tp_type_valid(rjetty->trans_mode, rjetty->tp_type) != 0) {
+        URMA_LOG_ERR("Invalid parameter.\n");
         return NULL;
     }
 
@@ -2261,10 +2328,16 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
 urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jetty == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jetty == NULL || buf == NULL || len == 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+
+    if (jetty->urma_jetty_opt.is_actived == true) {
+        URMA_LOG_ERR("Failed to set opt, jetty has been activated");
+        return URMA_EINVAL;
+    }
+
     urma_status_t status;
     int ret;
 
@@ -2365,6 +2438,12 @@ urma_status_t urma_active_jetty(urma_jetty_t *jetty)
 
     if (jetty->urma_jetty_opt.is_actived == true) {
         URMA_LOG_ERR("Jetty state is wrong in active_jetty.\n");
+        return URMA_EINVAL;
+    }
+
+    if (jetty->jetty_cfg.shared.jfr->urma_jfr_opt.is_actived == false ||
+        jetty->jetty_cfg.shared.jfc->urma_jfc_opt.is_actived == false) {
+        URMA_LOG_ERR("jfc or jfr has not activated.\n");
         return URMA_EINVAL;
     }
 
@@ -3077,7 +3156,9 @@ urma_status_t urma_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_hand
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, set_tp_attr);
 
-    return ops->set_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr);
+    uint32_t tmp_bitmap = tp_attr_bitmap;
+    tmp_bitmap &= ~(1U << 16);
+    return ops->set_tp_attr(ctx, tp_handle, tp_attr_cnt, tmp_bitmap, tp_attr);
 }
 
 urma_status_t urma_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt,
