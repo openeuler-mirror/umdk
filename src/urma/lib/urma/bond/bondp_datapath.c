@@ -1860,36 +1860,6 @@ static inline bool is_cr_user_ctx_valid(const urma_cr_t *cr)
 {
     return !(cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE);
 }
-/**
- * Based on the cr read from the device with the index dev_id,
- * determine whether the device is experiencing an issue at this time.
- * When calling this function, it must be ensured that the user_ctx in this CR is valid.
- * That is to say, this interface cannot be called during URMA_CR_WR_SUSPEND_DONE and URMA_CR_WR_FLUSH_ERR_DONE.
- */
-static urma_status_t update_device_valid_state(bondp_context_t *bdp_ctx, int dev_id, int cqe_cnt, urma_cr_t *cr_buf)
-{
-    if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
-        return URMA_SUCCESS;
-    }
-    for (int cr_id = 0; cr_id < cqe_cnt; ++cr_id) {
-        if (!is_cr_user_ctx_valid(&cr_buf[cr_id])) {
-            continue;
-        }
-        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, dev_id, &cr_buf[cr_id]);
-        if (bjetty_ctx == NULL) {
-            return URMA_FAIL;
-        }
-        if (bjetty_ctx->pjettys_valid[dev_id] && is_device_error(cr_buf[cr_id].status)) {
-            bjetty_ctx->pjettys_valid[dev_id] = false;
-            put_bjetty_ctx(bjetty_ctx);
-            /* If a problem arises, then the equipment must already have an issue,
-               and there is no need to continue with subsequent CR checks. */
-            return URMA_SUCCESS;
-        }
-        put_bjetty_ctx(bjetty_ctx);
-    }
-    return URMA_SUCCESS;
-}
 
 /**
  * Convert the local_id field of a CR from pjetty.id to vjetty.id if possible.
@@ -2045,6 +2015,11 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int
     if (bjetty_ctx == NULL) {
         return CONVERT_FAIL;
     }
+
+    if (bjetty_ctx->pjettys_valid[idx] && is_device_error(cr->status)) {
+        bjetty_ctx->pjettys_valid[idx] = false;
+    }
+
     uint32_t wr_id = 0;
     uint16_t _bjetty_id = 0;
     uint16_t pjetty_id = 0;
@@ -2129,11 +2104,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         }
 
         bdp_jfc->lasted_polled_jfc_idx = idx;
-        /* update device state based on the PCRs we consumed */
-        urma_status_t uret = update_device_valid_state(bdp_ctx, idx, pcr_cnt, pcr_buf);
-        if (uret != 0) {
-            return -uret;
-        }
     }
 
     return cr_cnt - cr_cnt_remaining;
