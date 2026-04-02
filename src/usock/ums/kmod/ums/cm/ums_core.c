@@ -65,6 +65,7 @@ static DECLARE_WAIT_QUEUE_HEAD(g_lgrs_deleted);
 static void ums_buf_free(struct ums_link_group *lgr, bool is_rmb, struct ums_buf_desc *buf_desc);
 static void ums_lgr_terminate_inner(struct ums_link_group *lgr, bool soft);
 static void ums_link_down_work(struct work_struct *work);
+static void ums_link_clear_finish_work(struct work_struct *work);
 static int ums_modify_jetty_err(struct ums_link *lnk);
 
 /* return head of link group list and its lock for a given link group */
@@ -379,6 +380,7 @@ static void ums_link_fill_basic(struct ums_link_group *lgr, struct ums_link *lnk
 	atomic_set(&lnk->jetty_mod_cnt, 0);
 	ums_llc_link_set_uid(lnk);
 	INIT_WORK(&lnk->link_down_wrk, ums_link_down_work);
+	INIT_WORK(&lnk->link_clear_finish_wrk, ums_link_clear_finish_work);
 	get_random_bytes(rndvec, sizeof(rndvec));
 	lnk->psn_initial = (u32)(rndvec[0] + (rndvec[1] << 8) + (rndvec[2] << 16));
 }
@@ -719,6 +721,29 @@ static void ums_link_clear_inner(struct ums_link *lnk)
 	ums_lgr_put(lgr); /* lgr_hold in ums_link_init() */
 }
 
+/*
+ * ums_link_clear_finish_work - finish clearing link from workqueue context
+ * @work: the work_struct embedded in ums_link
+ *
+ * This function is scheduled when ums_link_put detects refcnt drops to 0 in
+ * softirq context (ums_link_down_cond_sched). It executes the second half of
+ * link cleanup (ums_link_clear_inner).
+ *
+ * No need to check clearing flag because:
+ * 1. If refcnt drops to 0, ums_link_clear must have been called already
+ * 2. ums_link_clear sets clearing=1 and executes the first half of cleanup
+ * 3. We only need to execute the second half (ums_link_clear_inner)
+ */
+static void ums_link_clear_finish_work(struct work_struct *work)
+{
+	struct ums_link *lnk = container_of(work, struct ums_link, link_clear_finish_wrk);
+
+	if (!lnk || !lnk->lgr)
+		return;
+
+	ums_link_clear_inner(lnk);
+}
+
 /* must be called under lgr->llc_conf_mutex lock */
 void ums_link_clear(struct ums_link *lnk, bool log)
 {
@@ -729,7 +754,12 @@ void ums_link_clear(struct ums_link *lnk, bool log)
 	ums_llc_link_clear(lnk, log);
 	ums_rtoken_clear_link(lnk);
 	ums_wr_free_link(lnk);
-	ums_link_put(lnk); /* theoretically last link_put */
+	/*
+	 * This is theoretically the last link_put, but may not be if there is a
+	 * concurrent link down operation (e.g., from ums_link_down_cond_sched in
+	 * softirq context) that already holds a reference.
+	 */
+	ums_link_put(lnk);
 }
 
 void ums_link_hold(struct ums_link *lnk)
@@ -741,8 +771,23 @@ void ums_link_put(struct ums_link *lnk)
 {
 	if (unlikely(!lnk))
 		return;
-	if (refcount_dec_and_test(&lnk->refcnt))
-		ums_link_clear_inner(lnk);
+
+	if (refcount_dec_and_test(&lnk->refcnt)) {
+		if (in_softirq()) {
+			/*
+			 * Cannot execute blocking operations in softirq context or when
+			 * softirq is disabled (e.g., spin_lock_bh/spin_lock_irqsave).
+			 * Defer to workqueue where blocking is safe.
+			 */
+			if (!schedule_work(&lnk->link_clear_finish_wrk)) {
+				UMS_LOGE("failed to schedule link_clear_finish_wrk, link %*phN resource leaked",
+					UMS_LGR_ID_SIZE, lnk->link_uid);
+			}
+		} else {
+			/* If lnk->refcnt drops to 0, ums_link_clear must have been called. */
+			ums_link_clear_inner(lnk);
+		}
+	}
 }
 
 static void ums_buf_free(struct ums_link_group *lgr, bool is_rmb, struct ums_buf_desc *buf_desc)
