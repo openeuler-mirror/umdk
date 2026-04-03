@@ -180,7 +180,7 @@ static void SetHcommCfg(const gert::TilingContext &context, NotifyDispatchA2Tili
     const char *nodeName = context.GetNodeName();
     OPS_LOG_D(nodeName, "NotifyDispatchA2 commGroup = %s", commGroup.c_str());
     uint32_t opType1 = OP_TYPE_ALL_TO_ALL;
-    std::string algConfigAllToAllStr = "AlltoAll=level0:fullmesh;level1:pairwise";
+    std::string algConfigAllToAllStr = "BatchWrite=level0:fullmesh"; // BatchWriteBySdma
 
     AscendC::Mc2CcTilingConfig mc2CcTilingConfig(commGroup, opType1, algConfigAllToAllStr);
     mc2CcTilingConfig.GetTiling(tiling.mc2InitTiling);
