@@ -37,7 +37,7 @@ class Test(UBUSFeature):
         p_list.append(self.urma_perftest_one_perf_single_dev
                       (self.host1, self.host2, cmd_syntax="send_lat", opt="-p 2 --ctp "))
 
-        # 感知tp primary_eid 仅支持ctp
+        # Sensing TP primary_eid only supports CTP
         cmd_list2 = ["read_lat", "write_lat", "send_lat"]
         mode_list2 = ["-p 0 --ctp --tp_aware", "-p 1 --ctp --tp_aware"]
         for cmd in cmd_list2:

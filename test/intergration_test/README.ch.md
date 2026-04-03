@@ -1,13 +1,13 @@
-# UMDK集成测试
-#### 一、测试目录
-1. test_framework：UMDK集成测试框架，使用pytest框架
+# UMDK Integration Testing
+#### 1. Test Directory
+1. test_framework: UMDK integration testing framework, using the pytest framework.
 
-2. test_suites：UMDK各组件测试套、用例
+2. test_suites: UMDK component test suites and cases.
 
-#### 二、测试依赖
-1. 测试环境要求
-- 你需要准备2台测试环境
-- 同时你需要安装以下依赖包：
+#### 2. Test Dependencies
+1. Test Environment Requirements
+- You need to prepare 2 test environments.
+- Meanwhile, you need to install the following dependency packages:
 
 ```bash
   yum install -y python3-devel
@@ -24,16 +24,16 @@
   pip install PyYAML
 ```
 
-2. 环境yaml文件准备
-- yaml格式要求如下：
-  - host1、host2代表2台测试环境
-  - user、passed为登录环境的用户名、密码
-  - manage_nic表示管理网卡
-  - name、ip表示管理网卡的网卡名称、ip地址
-  - test_nic1表示测试网卡
-  - name、ip、eid分别表示测试网卡的网卡设备名称、ip地址、eid信息
+2. Environment YAML File Preparation
+- YAML format requirements are as follows:
+  - host1 and host2 represent 2 test environments
+  - user and passed are the username and password for logging into the environment
+  - manage_nic represents the management network interface card (NIC)
+  - name and ip represent the NIC name and IP address of the management NIC
+  - test_nic1 represents the test NIC
+  - name, ip, and eid represent the device name, IP address, and EID information of the test NIC respectively
 
-- yaml文件路径：/etc/ubus_ci/test_env.yaml，2台host都需要存放
+- YAML file path: /etc/ubus_ci/test_env.yaml, needs to be stored on both hosts
 
 ```yaml
   host_info:
@@ -58,30 +58,30 @@
               ip: x.x.x.x
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
 ```
-**说明：** 
-- test_nic1的name、eid分别填写urma_admin show命令查询出来的设备名称和eid，推荐使用bonding_dev_0设备
-- test_nic1的ip现在未使用，填写manage_nic的ip即可
+**Notes:** 
+- For `test_nic1`, fill in the `name` and `eid` with the device name and EID queried by the `urma_admin show` command. It is recommended to use the `bonding_dev_0` device.
+- The `ip` for `test_nic1` is currently unused; you can fill in the IP of `manage_nic`.
 
-#### 三、用例运行
-1. UMDK集成测试框架依赖pytest测试框架，使用pytest来运行用例
-- 运行单条用例
+#### 3. Running Test Cases
+1. The UMDK integration testing framework depends on the pytest framework; use pytest to run test cases.
+- Run a single test case:
 ```bash
   pytest ./umdk/test/intergration_test/test_suites/UMQ/test_umq_demo_pro/test.py
 ```
 
-- 运行所有集成测试用例
+- Run all integration test cases:
 ```bash
   cd ./umdk/test/intergration_test
   find ./ -name test.py | xargs -i pytest {}
 ```
-**注意事项：**
-- 测试代码需要在2台host上都存放，且目录结构需保持一致
-- 请在host1上来执行用例
-- 日志检查：默认采用rsyslog记录日志，归档在/var/log/umdk/目录，日志文件名称为：二进制名称.log
+**Precautions:**
+- The test code needs to be stored on both hosts, and the directory structure must remain consistent.
+- Please execute the test cases on host1.
+- Log check: By default, rsyslog is used to record logs, archived in the /var/log/umdk/ directory. The log file name is: binary_name.log.
 
 
-#### 四、许可
+#### 4. License
 
-代码使用的许可证详见[LICENSES](./LICENSES/README)
+For details on the license used by the code, see[LICENSES](./LICENSES/README)
 
-doc目录下的文档使用许可证详见[LICENSE](./doc/LICENSE)
+For details on the license for documentation in the doc directory, see[LICENSE](./doc/LICENSE)

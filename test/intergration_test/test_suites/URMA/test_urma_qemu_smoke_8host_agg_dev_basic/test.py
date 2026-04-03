@@ -31,7 +31,7 @@ class Test(UBUSFeature):
             for _ in range(3):
                 p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))
 
-        # 再次随机打20条流
+        # Randomly generate 20 flows again
         for _ in range(20):
             host1, host2 = random.sample(self.host_list, 2)
             p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))
