@@ -34,9 +34,7 @@ typedef struct bondp_v_connection {
     uint32_t msn;
     bdp_slide_wnd_t recv_wnd;
     /* TA ordering */
-    bdp_queue_t send_strong_order_queue; /* Cache SO WRs waiting to be sent */
     bdp_slide_wnd_t send_wnd;
-    bdp_queue_t recv_strong_order_cr_queue; /* Cache SO CRs in polling */
 } bdp_v_conn_t;
 
 void init_v_conn_on_send(bdp_v_conn_t *v_conn, void *target_vjetty, int target_dev_num);
@@ -55,24 +53,5 @@ int bdp_v_conn_table_add_on_send(bondp_hash_table_t *tbl, urma_jetty_id_t *targe
     void *target_vjetty, int target_dev_num, bdp_v_conn_t **v_conn_out);
 
 int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bdp_v_conn_t **v_conn_out);
-
-typedef struct bdp_v_conn_snd_so_queue_data {
-    urma_jfs_wr_t *send_wr;
-    wr_buf_extra_value_t ex_value;
-    uint32_t send_wr_id;
-} so_queue_data_t;
-
-int bdp_v_conn_push_send_so(bdp_v_conn_t *v_conn, so_queue_data_t *data);
-
-int bdp_v_conn_pop_send_so(bdp_v_conn_t *v_conn, so_queue_data_t *data);
-
-typedef struct bdp_v_conn_rcv_so_queue_data {
-    uint32_t msn;
-    urma_cr_t cr;
-} so_cr_queue_data_t;
-
-int bdp_v_conn_push_recv_so_cr(bdp_v_conn_t *v_conn, so_cr_queue_data_t *data);
-
-int bdp_v_conn_pop_recv_so_cr(bdp_v_conn_t *v_conn, so_cr_queue_data_t *data);
 
 #endif // BONDP_CONNECTION_H
