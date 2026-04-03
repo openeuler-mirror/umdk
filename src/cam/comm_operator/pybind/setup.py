@@ -88,6 +88,8 @@ ext1 = NpuExtension(
              "./moe_combine_normal.cpp",
              "./moe_dispatch_shmem.cpp",
              "./moe_combine_shmem.cpp",
+             "./a2e.cpp",
+             "./e2a.cpp",
              "./pybind.cpp",
              "./ext_utils.cpp",
              "./all2_all_detour.cpp",

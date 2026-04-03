@@ -25,6 +25,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("cam_get_rank_size", &cam_get_rank_size, "cam_get_rank_size");
     m.def("cam_get_and_increase_magic", &cam_get_and_increase_magic, "cam_get_and_increase_magic");
     m.def("cam_get_magic", &cam_get_magic, "cam_get_magic");
+    m.def("a2e", &A2eImplAutograd, "a2e");
+    m.def("e2a", &E2aImplAutograd, "e2a");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -50,4 +52,10 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     m.def("reduce_scatter_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId, int op) -> Tensor");
     m.def("cam_get_comm(int comm_id, int rank, int group_size, str server_ip_port) -> Tensor");
     m.def("cam_free_comm(int comm_id) -> Tensor");
+    m.def("a2e(Tensor x, Tensor? expert_ids, Tensor? scales, int batch_size, int hidden_size, \
+    int topk, int expert_rank_size, int atten_rank_size, int rank, str group_ep, \
+    int aiv_num, int compute_gate) -> Tensor[]");
+    m.def("e2a(Tensor expand_x, Tensor atten_batch_size, int batch_size, int hidden_size, \
+    int topk, int expert_rank_size,  int attention_rank_size, int rank, str group_ep, \
+    int aiv_num) -> Tensor");
 }

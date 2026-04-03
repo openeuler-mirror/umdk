@@ -124,4 +124,31 @@ at::Tensor reduce_scatter_detour_impl_autograd( \
     const at::Tensor &commRankIds, \
     const int64_t commId, \
     const int64_t op);
+
+std::vector<at::Tensor> A2eImplAutograd(
+    const at::Tensor &x, \
+    const c10::optional<at::Tensor> &expertIds, \
+    const c10::optional<at::Tensor> &scales, \
+    int64_t batchSize, \
+    int64_t hiddenSize, \
+    int64_t topk, \
+    int64_t expertRankSize, \
+    int64_t attentionRankSize, \
+    int64_t rank, \
+    c10::string_view groupEp, \
+    int64_t aivNum,
+    int64_t computeGate);
+
+at::Tensor E2aImplAutograd(
+    const at::Tensor &expandX, \
+    const at::Tensor &attenBatchSize, \
+    int64_t batchSize, \
+    int64_t hiddenSize, \
+    int64_t topk, \
+    int64_t expertRankSize, \
+    int64_t attentionRankSize, \
+    int64_t rank, \
+    c10::string_view groupEp, \
+    int64_t aivNum);
+
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_
