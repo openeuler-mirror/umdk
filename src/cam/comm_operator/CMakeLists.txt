@@ -68,6 +68,7 @@ include_directories(
     ${ASCEND_HOME_PATH}/${ARCH}-linux/include/experiment
     ${ASCEND_HOME_PATH}/${ARCH}-linux/include/experiment/runtime/
     ${ASCEND_HOME_PATH}/${ARCH}-linux/include/experiment/msprof/
+    ${ASCEND_HOME_PATH}/${ARCH}-linux/pkg_inc/runtime/
     ${CUST_OPAPI_PATH}/include/
 )
 
