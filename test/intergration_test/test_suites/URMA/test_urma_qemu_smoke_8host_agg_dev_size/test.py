@@ -29,7 +29,7 @@ class Test(UBUSFeature):
         p_list = []
         cmd_list = ["send_lat", "read_lat", "write_lat",
                      "send_bw", "read_bw", "write_bw"]      
-        # send single模式最大64K 当前仿真性能不足
+        # send single mode maximum 64K, current simulation performance is insufficient
         size_ranges = [
             ("1", 1, 1),
             ("1-1K", 1, 1024),
@@ -40,7 +40,7 @@ class Test(UBUSFeature):
             ("4K-64K", 4097, 65536),
         ]
 
-        # 各个size随机打2条流
+        # Randomly generate 2 flows for each size
         for _ in range(2):
             host1, host2 = random.sample(self.host_list, 2)
             for cmd in cmd_list:

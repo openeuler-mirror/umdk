@@ -29,17 +29,17 @@ class Test(UBUSFeature):
         cmd_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
         mode_list = ["-p 0", "-p 1"]
 
-        # 随机打20条流
+        # Randomly generate 20 flows
         for _ in range(20):
             host1, host2 = random.sample(self.host_list, 2)
             p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))
-        # 遍历所有打流类型
+        # traverse all traffic types
         for cmd in cmd_list:
             for mode in mode_list:
                 host1, host2 = random.sample(self.host_list, 2)
                 p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2, cmd_syntax=cmd, opt=mode))
 
-        # 再次随机打20条流
+        # randomly generate 20 flows again
         for _ in range(20):
             host1, host2 = random.sample(self.host_list, 2)
             p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))

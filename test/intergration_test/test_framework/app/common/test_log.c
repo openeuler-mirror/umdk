@@ -13,11 +13,11 @@ uint32_t g_test_log_level = TEST_LOG_LEVEL_INFO;
 typedef struct Test_Log_File_info_s Test_Log_File_info_t;
 
 struct Test_Log_File_info_s {
-    // 文件句柄
+    // File handle
     FILE *fd;
-    // 日志文件名
+    // Log file name
     char file_name[MAX_FILE_NAME_LEN];
-    // 是否已经初始化
+    // Whether initialized
     int inited : 1;
 };
 
@@ -48,11 +48,11 @@ bool test_log_drop(uint32_t level)
 }
 
 /********************************************************************************************
-  函 数 名           :  test_log_set_level
-  功能描述           :  设置日志级别
-  输入参数           ： level:日志级别
-  输出参数           ： None
-  返 回 值           ： 0 设置成功 -1 设置失败
+  Function Name      :  test_log_set_level
+  Function Desc      :  Set log level
+  Input Parameter    :  level: Log level
+  Output Parameter   :  None
+  Return Value       :  0 Set successfully, -1 Set failed
 *********************************************************************************************/
 int test_log_set_level(enum test_log_level level)
 {

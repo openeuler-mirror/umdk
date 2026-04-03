@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-#define MAX_RETRY_CNT 60  // Linux默认WAIT_TIME为60s
+#define MAX_RETRY_CNT 60  // Linux default WAIT_TIME is 60s
 #define MAX_CONNECTIONS 100
 #define PARSE_CFG_MAX_LEN 100
 #define MAX_RECV_TIMEOUT 10800
@@ -56,7 +56,7 @@ int parse_config(int argc, char *argv[])
                                     {"mode", required_argument, NULL, 'm'},
                                     {"tp_kind", required_argument, NULL, 'k'},
                                     {"test_ipv6", required_argument, NULL, 'I'},
-                                    // 网卡支持配置多ip地址
+                                    // NIC supports multiple IP address configurations
                                     {"ip_num", required_argument, NULL, 1},
                                     {"ip_addrs", required_argument, NULL, 2},
                                     {NULL, no_argument, NULL, '\0'}};
@@ -583,10 +583,10 @@ int test_common_init(int max_thread_num)
 {
     int retval;
 
-    // 初始化日志模块
+    // Initialize log module
     test_log_init();
 
-    // 初始化线程池
+    // Initialize thread pool
     retval = TestThreadPoolInit(max_thread_num);
     if (retval != TEST_SUCCESS) {
         TEST_LOG_ERROR("test_common_init:create thread pool failed!\n");

@@ -27,7 +27,7 @@ def prepare_test_case_new(host_list, case_path, case_name="test_case"):
            f' {case_c} {public_c} -g -O0 ' \
            f'-rdynamic -lstdc++ -w -fPIC -fpermissive -o {case_out} '
 
-    lib_list = ['-lurma', '-lglib-2.0', '-lpthread', f'-I {local_path}', '-I /usr/include/umdk/', \
+    lib_list = ['-lurma', '-lsecurec', '-lglib-2.0', '-lpthread', f'-I {local_path}', '-I /usr/include/umdk/', \
                 '-ldl', '-I /usr/include/ub/umdk/urma/']
     _cmd += " ".join(lib_list)
 
@@ -61,7 +61,7 @@ def urma_admin_show_res_dev_ctx(self):
     return res_list
 
 def compare_res_list(list1, list2):
-    # 校验用例执行前后资源是否残留
+    # Check for resource leakage before and after test case execution
     for i, (d1, d2) in enumerate(zip(list1, list2)):
         for k, v2 in d2.items():
             if v2 > d1.get(k, 0):
@@ -70,11 +70,11 @@ def compare_res_list(list1, list2):
 def _get_host_list_for_type(self, host_list, app_num):
     if host_list:
         return host_list
-    # 如果没有指定 默认2节点
+    # Default to 2 nodes if not specified
     return [self.host1] + [self.host2] * (app_num - 1)
 
 def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, host_list=None, run_mode='async'):
-    # 设置环境变量和默认参数
+    # Set environment variables and default parameters
     mode = mode or const.URMA_MODE
     mode = [m for m in mode if m in const.URMA_MODE]
     kind = tp_kind or const.TP_KIND
@@ -87,14 +87,14 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
     case_path = os.path.join(path, "test_case")
     seed = random.randint(0, 10000)
 
-    # 特殊环境配置
+    # Special environment configuration
     before_list = urma_admin_show_res_dev_ctx(self)
     p_list = []
     tp_mode_dict = {'RM': 0, 'RC': 1, 'UM': 2}
     tp_kind_dict = {'TP': 0, 'CTP': 1}
 
     host_list = _get_host_list_for_type(self, host_list, app_num=app_num)
-    # 获取设备名列表
+    # Get device name list
     dev_list = [
         host_list[i].test_nic[1]['name']
         for i in range(app_num)
@@ -105,7 +105,7 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
         for m in mode:
             tp_mode = tp_mode_dict[m]
 
-            # bonding设备单路径只支持RC+TP 芯片不支持UM类型CTP
+            # Bonding device single path only supports RC+TP. Chip does not support UM type CTP.
             if host_list[0].test_nic[1]['name'] == 'bonding_dev_0':
                 if (k == 'TP' and m != 'RC') or (k == 'CTP' and m == 'UM'):
                     continue
@@ -120,7 +120,7 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
                        f'-d {dev_list[i]} -s {seed} -m {tp_mode} -x {eid} -k {tp_kind}'
                 p_list.append(host_list[i].exec_cmd(_cmd, background=True, env=env))
 
-            # 同步模式下等待当前组合完成
+            # Wait for current combination to finish in sync mode
             if run_mode == 'sync':
                 for p in p_list:
                     if not p.process_is_finished:

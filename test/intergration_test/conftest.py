@@ -10,11 +10,11 @@ import random
 import sys
 
 def pytest_addoption(parser):
-    parser.addoption("--random_seed", action="store", default=None, help="配置random库随机数种子")
+    parser.addoption("--random_seed", action="store", default=None, help="Configure the random library seed")
 
 
 def pytest_configure(config):
-    #设置随机数种子
+    # Set random seed
     random_seed = config.getoption("--random_seed")
     if random_seed is None:
         random_seed = random.randint(0, 10000)

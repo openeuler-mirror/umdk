@@ -76,12 +76,12 @@ class BaseTest(BaseObject):
             try:
                 host = UBUSHost(host_name, yaml_info['host_info'][host_name])
             except Exception as reason:
-                log.info("连接测试环境失败，用例退出")
+                log.info("Failed to connect to the test environment, exiting test case.")
                 raise
             self.host_list.append(host)
             exec("self.__class__." + host_name + "=host")
             ip_list.append(f"{host_name}:{host.manage_ip}")
-        log.info("host列表：%s" % ip_list)
+        log.info("host list：%s" % ip_list)
 
     def get_core_list(self, _core_list):
         for host in self.host_list:
