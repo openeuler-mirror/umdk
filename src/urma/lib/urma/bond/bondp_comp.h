@@ -21,15 +21,6 @@ typedef struct bdp_vjfce_info {
     urma_jfce_t *p_jfce;
 } bdp_vjfce_info_t;
 
-int bdp_vjfce_info_table_create(bondp_hash_table_t *tbl, uint32_t size);
-
-int bdp_vjfce_info_table_add(bondp_hash_table_t *tbl, bdp_vjfce_info_t *node);
-
-void bdp_vjfce_info_table_del(bondp_hash_table_t *tbl, int key);
-
-bdp_vjfce_info_t *bdp_vjfce_info_table_lookup(bondp_hash_table_t *tbl, int key);
-
-void bdp_vjfce_info_table_destroy(bondp_hash_table_t *tbl);
 
 void bondp_ack_multiple_die_jfc(urma_jfc_t *jfc[], uint32_t jfc_cnt);
 
