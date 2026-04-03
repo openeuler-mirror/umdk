@@ -21,18 +21,7 @@
 #include "bondp_hash_table.h"
 #include "bondp_segment.h"
 
-#define BDP_VA_VTSEG_INFO_HASH_BASIS (0x52989218)
-#define BDP_VA_VTSEG_HASH_INFO_TABLE_SIZE (1024)
-
-static bondp_hash_table_t g_va_vtseg_tbl;
 static bool g_seg_cache_enable = false;
-
-// key is va
-typedef struct bdp_va_vtseg_info {
-    hmap_node_t hmap_node;
-    uint64_t va;
-    urma_target_seg_t *vtseg;
-} bdp_va_vtseg_info_t;
 
 typedef struct bondp_udata_import_seg {
     urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
@@ -51,52 +40,7 @@ typedef struct bondp_seg_cfg {
     urma_import_seg_flag_t flag;
     bondp_udata_import_seg_t *udata_out;
     bondp_import_tseg_t *bdp_imprt_tseg;
-}bondp_seg_cfg_t;
-
-bool comp_func_va_vtseg_tbl(hmap_node_t *node, void *key)
-{
-    bdp_va_vtseg_info_t *va_vtseg_info = CONTAINER_OF_FIELD(node, bdp_va_vtseg_info_t, hmap_node);
-    return va_vtseg_info->va == *(uint64_t *)key;
-}
-
-static void free_func_va_vtseg_tbl(hmap_node_t *node)
-{
-    bdp_va_vtseg_info_t *va_vtseg_info = CONTAINER_OF_FIELD(node, bdp_va_vtseg_info_t, hmap_node);
-    free(va_vtseg_info);
-}
-
-static uint32_t hash_func_va_vtseg_tbl(void *key)
-{
-    return ub_hash_bytes(key, sizeof(uint64_t), BDP_VA_VTSEG_INFO_HASH_BASIS);
-}
-
-static void __attribute__((constructor)) bondp_create_va_vtseg_tbl(void)
-{
-    int ret = 0;
-    ret = bondp_hash_table_create(&g_va_vtseg_tbl, BDP_VA_VTSEG_HASH_INFO_TABLE_SIZE,
-        comp_func_va_vtseg_tbl, free_func_va_vtseg_tbl, hash_func_va_vtseg_tbl);
-    if (ret != 0) {
-        printf("bondp_create_va_tseg_tbl fail.\n");
-    }
-}
-
-static void __attribute__((destructor)) bondp_delete_va_vtseg_tbl(void)
-{
-    bondp_hash_table_destroy(&g_va_vtseg_tbl);
-}
-
-urma_target_seg_t *bondp_find_vtseg_by_va(uint64_t va)
-{
-    hmap_node_t *node = bondp_hash_table_lookup(&g_va_vtseg_tbl, &va,
-        ub_hash_bytes(&va, sizeof(uint64_t), BDP_VA_VTSEG_INFO_HASH_BASIS));
-    if (node == NULL) {
-        URMA_LOG_ERR("bondp_hash_table_lookup fail.\n");
-        return NULL;
-    }
-
-    bdp_va_vtseg_info_t *va_vtseg_info = CONTAINER_OF_FIELD(node, bdp_va_vtseg_info_t, hmap_node);
-    return va_vtseg_info->vtseg;
-}
+} bondp_seg_cfg_t;
 
 /*
  * Since the actual token ID for bonding device is allocated by the kernel mode
@@ -265,20 +209,8 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
         goto DELETE_PSEG;
     }
 
-    // va --> vtarget_seg hash table
-    bdp_va_vtseg_info_t *va_vtseg = calloc(1, sizeof(bdp_va_vtseg_info_t));
-    if (va_vtseg == NULL) {
-        goto DELETE_VSEG;
-    }
-    va_vtseg->va = bdp_seg->v_tseg.seg.token_id;
-    va_vtseg->vtseg = &bdp_seg->v_tseg;
-    bondp_hash_table_add_with_hash(&g_va_vtseg_tbl, &va_vtseg->hmap_node,
-        ub_hash_bytes(&va_vtseg->va, sizeof(uint64_t), BDP_VA_VTSEG_INFO_HASH_BASIS));
-
     return &bdp_seg->v_tseg;
 
-DELETE_VSEG:
-    (void)bondp_delete_vseg(bdp_seg);
 DELETE_PSEG:
     (void)bondp_delete_pseg(bdp_seg);
 FREE_BDP_SEG:
@@ -290,17 +222,6 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 {
     int ret = URMA_SUCCESS;
     bondp_comp_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_comp_t, base);
-    uint64_t key = bdp_seg->v_tseg.seg.token_id;
-
-    bdp_va_vtseg_info_t *va_vtseg = (bdp_va_vtseg_info_t *)bondp_hash_table_lookup(&g_va_vtseg_tbl, &key,
-        ub_hash_bytes(&key, sizeof(uint64_t), BDP_VA_VTSEG_INFO_HASH_BASIS));
-    if (va_vtseg == NULL) {
-        URMA_LOG_ERR("bondp_hash_table_lookup fail.\n");
-        ret = URMA_FAIL;
-    } else {
-        bondp_hash_table_remove(&g_va_vtseg_tbl, &va_vtseg->hmap_node);
-        free(va_vtseg);
-    }
 
     if (bondp_delete_vseg(bdp_seg) != 0) {
         URMA_LOG_ERR("Failed to delete vseg, token_id:%u, handle:%lu.\n",
