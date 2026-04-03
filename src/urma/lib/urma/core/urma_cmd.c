@@ -1008,9 +1008,20 @@ int urma_cmd_delete_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("ioctl failed in urma_cmd_delete_jfr, ret:%d, errno:%d.\n", ret, errno);
     }
 
+    if (jfr->jfr_cfg.flag.bs.non_blocking == 1) {
+        (void)pthread_mutex_lock(&jfr->event_mutex);
+        if (jfr->async_events_acked != arg.out.async_events_reported) {
+            (void)pthread_mutex_unlock(&jfr->event_mutex);
+            return URMA_EAGAIN;
+        }
+
+        (void)pthread_mutex_unlock(&jfr->event_mutex);
+        return URMA_SUCCESS;
+    }
+
     wait_async_event_ack(&jfr->event_mutex, &jfr->event_cond, &jfr->async_events_acked, arg.out.async_events_reported);
 
-    return ret;
+    return URMA_SUCCESS;
 }
 
 int urma_cmd_delete_jfr_batch(urma_jfr_t **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr)
