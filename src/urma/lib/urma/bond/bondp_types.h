@@ -126,9 +126,16 @@ typedef struct bondp_tx_wr_list {
     urma_jfs_wr_t wr_list[BONDP_MAX_WR_LIST_NUM];
 } bondp_tx_wr_list_t;
 
+typedef struct bondp_jfc {
+    urma_jfc_t v_jfc;
+    urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
+    int dev_num;
+    int lasted_polled_jfc_idx;
+    urma_ref_t use_cnt; /* Initialize to 0 */
+} bondp_jfc_t;
+
 typedef enum bondp_comp_type {
     BONDP_COMP_JFCE,
-    BONDP_COMP_JFC,
     BONDP_COMP_JFS,
     BONDP_COMP_JFR,
     BONDP_COMP_JETTY,
@@ -142,7 +149,6 @@ typedef struct bondp_comp {
     union {
         void *base;
         urma_jfce_t v_jfce;
-        urma_jfc_t v_jfc;
         urma_jfs_t v_jfs;
         urma_jfr_t v_jfr;
         urma_jetty_t v_jetty;
@@ -151,7 +157,6 @@ typedef struct bondp_comp {
     union {
         void *members[URMA_UBAGG_DEV_MAX_NUM];
         urma_jfce_t *p_jfce[URMA_UBAGG_DEV_MAX_NUM];
-        urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
         urma_jfs_t *p_jfs[URMA_UBAGG_DEV_MAX_NUM];
         urma_jfr_t *p_jfr[URMA_UBAGG_DEV_MAX_NUM];
         urma_jetty_t *p_jetty[URMA_UBAGG_DEV_MAX_NUM];
@@ -163,17 +168,11 @@ typedef struct bondp_comp {
     bool is_multipath;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
+    bondp_jfc_t *send_jfc;
+    bondp_jfc_t *recv_jfc;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_comp_t;
-
-typedef struct bondp_jfc {
-    urma_jfc_t v_jfc;
-    urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
-    int lasted_polled_jfc_idx;
-    urma_ref_t use_cnt; /* Initialize to 0 */
-} bondp_jfc_t;
 
 typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
