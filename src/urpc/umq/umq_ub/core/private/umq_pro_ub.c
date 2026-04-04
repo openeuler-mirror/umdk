@@ -19,6 +19,8 @@
 #include "umq_qbuf_pool.h"
 #include "umq_ub_private.h"
 
+#define UMQ_UB_FC_UNDATE_FAKE_BUF_SIZE 128 // in combind mode, buffer size more than umq_buf_t needs to be allocated
+
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
     void *addr = calloc(ctx_num, sizeof(rx_buf_ctx_t));
@@ -675,7 +677,8 @@ static inline void umq_perf_record_write_poll(umq_perf_record_type_t type, uint6
 
 static uint32_t umq_ub_fill_fc_buf(umq_buf_t **buf, umq_buf_status_t status)
 {
-    umq_buf_t *fc_buf = umq_buf_alloc(0, 1, UMQ_INVALID_HANDLE, NULL);
+    uint32_t request = (umq_qbuf_mode_get() == UMQ_BUF_SPLIT) ? 0 : UMQ_UB_FC_UNDATE_FAKE_BUF_SIZE;
+    umq_buf_t *fc_buf = umq_buf_alloc(request, 1, UMQ_INVALID_HANDLE, NULL);
     if (fc_buf == NULL) {
         return 0;
     }
