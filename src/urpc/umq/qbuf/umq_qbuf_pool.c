@@ -442,7 +442,8 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 
     if (cfg->mode == UMQ_BUF_SPLIT) {
         uint32_t blk_size = umq_buf_size_small();
-        uint64_t blk_num = cfg->total_size / ((uint32_t)sizeof(umq_buf_t) + blk_size);
+        uint64_t blk_num = cfg->total_size /
+            ((UMQ_EMPTY_HEADER_COEFFICIENT + 1) * (uint32_t)sizeof(umq_buf_t) + blk_size);
 
         g_qbuf_pool.block_size = blk_size;
         g_qbuf_pool.total_block_num = blk_num;
@@ -466,8 +467,23 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
             (void)memset(buf->qbuf_ext, 0, sizeof(buf->qbuf_ext));
             QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_with_data, buf);
         }
+        uint64_t head_without_data_count = blk_num * UMQ_EMPTY_HEADER_COEFFICIENT;
+        for (uint64_t i = 0; i < head_without_data_count; i++) {
+            umq_buf_t *head_buf = id_to_buf_without_data_split((char *)g_qbuf_pool.ext_header_buffer, i);
+            head_buf->umqh = UMQ_INVALID_HANDLE;
+            head_buf->buf_size = (uint32_t)sizeof(umq_buf_t);
+            head_buf->data_size = 0;
+            head_buf->total_data_size = 0;
+            head_buf->headroom_size = 0;
+            head_buf->buf_data = NULL;
+            head_buf->mempool_without_data = 1;
+            head_buf->mempool_id = 0;
+            head_buf->alloc_state = QBUF_ALLOC_STATE_FREE;
+            (void)memset(head_buf->qbuf_ext, 0, sizeof(head_buf->qbuf_ext));
+            QBUF_LIST_INSERT_HEAD(&g_qbuf_pool.block_pool.head_without_data, head_buf);
+        }
         g_qbuf_pool.block_pool.buf_cnt_with_data = blk_num;
-        g_qbuf_pool.block_pool.buf_cnt_without_data = 0;
+        g_qbuf_pool.block_pool.buf_cnt_without_data = head_without_data_count;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         uint32_t blk_size = umq_buf_size_small();
         uint64_t blk_num = cfg->total_size / blk_size;
@@ -601,7 +617,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
 
     local_block_pool_t *local_pool = get_thread_cache();
     // split mode and buf is in head no data zone
-    if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && QBUF_LIST_FIRST(list)->mempool_without_data == 1) {
+    if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && (void *)QBUF_LIST_FIRST(list) >= g_qbuf_pool.ext_header_buffer) {
         // put buf list before head of head_without_data
         uint32_t cnt = release_batch(list, &local_pool->head_without_data, false);
         local_pool->buf_cnt_without_data += cnt;
