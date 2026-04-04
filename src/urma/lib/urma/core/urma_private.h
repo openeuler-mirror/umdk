@@ -60,4 +60,8 @@ static inline bool urma_is_bonding_dev(char *dev_name)
         strlen(URMA_UBAGG_DEV_PREFIX)) == 0;
 }
 
+void urma_ubagg_switch_init(void);
+void urma_ubagg_switch_inc(void);
+uint32_t urma_ubagg_switch_get(void);
+
 #endif // URMA_PRIVATE_H
