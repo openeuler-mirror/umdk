@@ -431,7 +431,8 @@ void umq_ub_idle_queue_check(void *args)
         }
         ub_flow_control_t *fc = &queue->flow_control;
         uint16_t remote_credit = fc->ops.remote_rx_window_load(fc);
-        if (remote_credit <= fc->min_reserved_credit) {
+        uint16_t return_threshold = umq_ub_fc_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
+        if (remote_credit <= return_threshold) {
             (void)util_mutex_unlock(cur_node->lock);
             continue;
         }
@@ -1896,7 +1897,7 @@ static int umq_ub_get_local_rtp_route_list(umq_route_list_t *route_list)
         if (route_list->route_num >= UMQ_MAX_ROUTES) {
             goto OUT;
         }
-        
+
         // skip bonding dev
         if (strstr(dev_info[i].dev_name, "bonding") != NULL) {
             continue;
