@@ -219,6 +219,10 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
     return cnt;
 }
 
+// fetch list nodes from to global to local cache
+int expand_global_pool(bool with_data);
+void async_expand_global_pool(bool with_data, uint64_t g_buf_cnt);
+uint32_t fetch_from_expansion_pools(bool with_data, uint32_t need, umq_buf_list_t *local_head, uint64_t *local_buf_cnt);
 void return_list_to_pools(umq_buf_t *local_head, uint64_t *local_buf_cnt,
     umq_buf_list_t *global_head, uint64_t *global_buf_cnt, bool with_data);
 
@@ -230,7 +234,10 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     umq_buf_list_t *global_head;
     uint64_t *local_buf_cnt;
     umq_buf_list_t *local_head;
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    umq_buf_t *local_head_before;
+    uint64_t local_cnt_before;
+
+   (void)pthread_spin_lock(&global_pool->global_mutex);
     if (with_data) {
         global_buf_cnt = &global_pool->buf_cnt_with_data;
         global_head = &global_pool->head_with_data;
@@ -245,17 +252,53 @@ static ALWAYS_INLINE int32_t fetch_from_global(
         local_head = &cache_pool->head_without_data;
     }
 
+    local_head_before = QBUF_LIST_FIRST(local_head);
+    local_cnt_before = *local_buf_cnt;
+
     if (*global_buf_cnt >= batch_count) {
         count = allocate_batch(global_head, batch_count, local_head);
         *global_buf_cnt -= count;
         *local_buf_cnt += count;
-        // todo: try async expand;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
+        async_expand_global_pool(with_data, *global_buf_cnt);
         return count;
     }
+
+    if (*global_buf_cnt > 0) {
+        uint32_t take = allocate_batch(global_head, (uint32_t)*global_buf_cnt, local_head);
+        *global_buf_cnt -= take;
+        *local_buf_cnt += take;
+        count += take;
+    }
     (void)pthread_spin_unlock(&global_pool->global_mutex);
-    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "%s not enough, rest count: %u\n", with_data ? "buf with data" :
-            "buf with no data", *global_buf_cnt);
+
+    count += fetch_from_expansion_pools(with_data, batch_count - count, local_head, local_buf_cnt);
+    while (count < batch_count) {
+        int ret = expand_global_pool(with_data);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "%s not enough, expansion failed: %d, "
+                "suggestion: increase total_size or expansion_mem_size_max\n",
+                with_data ? "buf with data" : "buf with no data", ret);
+            goto ROLLBACK;
+        }
+
+        count += fetch_from_expansion_pools(with_data, batch_count - count, local_head, local_buf_cnt);
+    }
+    async_expand_global_pool(with_data, *global_buf_cnt);
+    return count;
+
+ROLLBACK:
+    if (*local_buf_cnt > local_cnt_before) {
+        umq_buf_t *head = QBUF_LIST_FIRST(local_head);
+        QBUF_LIST_FIRST(local_head) = local_head_before;
+        uint64_t alloc_cnt = ((*local_buf_cnt) - local_cnt_before);
+        umq_buf_t *tail = head;
+        for(uint64_t i = 0; i < alloc_cnt - 1; i++) {
+            tail = QBUF_LIST_NEXT(tail);
+        }
+        tail->qbuf_next = NULL;
+        return_list_to_pools(head, local_buf_cnt, global_head, global_buf_cnt, with_data);
+    }
     return -UMQ_ERR_ENOMEM;
 }
 
