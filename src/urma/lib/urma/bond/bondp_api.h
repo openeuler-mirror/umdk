@@ -45,7 +45,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty);
 urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
 
 urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty,
-    urma_token_t *rjetty_token);
+                                        urma_token_t *rjetty_token);
 
 urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty);
 

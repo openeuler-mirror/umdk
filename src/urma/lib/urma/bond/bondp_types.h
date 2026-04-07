@@ -16,31 +16,30 @@
 #else
 #include <atomic>
 #endif
-#include <stdbool.h>
+#include "bondp_hash_table.h"
+#include "bondp_wr_buf.h"
+#include "topo_info.h"
 #include "urma_types.h"
 #include "urma_ubagg.h"
-#include "bondp_hash_table.h"
-#include "topo_info.h"
-#include "bondp_wr_buf.h"
+#include <stdbool.h>
 
-#define BONDP_MAX_NUM_JFRS (10240)
-#define BONDP_MAX_NUM_JETTYS (10240)
-#define BONDP_MAX_NUM_SEGS (10240)
-#define BONDP_MAX_NUM_RSEGS (10240)
-#define BONDP_MAX_WR_LIST_NUM (300)
-#define BONDP_MAX_SGE_NUM (32)
-#define PRIMARY_EID_NUM (2)
-#define PORT_EID_MAX_NUM_PER_DEV (9)
-#define PORT_EID_MAX_NUM (PORT_EID_MAX_NUM_PER_DEV * PRIMARY_EID_NUM)
-#define BONDP_MAX_WELL_KNOWN_JETTY_ID    (1024)
+#define BONDP_MAX_NUM_JFRS            (10240)
+#define BONDP_MAX_NUM_JETTYS          (10240)
+#define BONDP_MAX_NUM_SEGS            (10240)
+#define BONDP_MAX_NUM_RSEGS           (10240)
+#define BONDP_MAX_WR_LIST_NUM         (300)
+#define BONDP_MAX_SGE_NUM             (32)
+#define PRIMARY_EID_NUM               (2)
+#define PORT_EID_MAX_NUM_PER_DEV      (9)
+#define PORT_EID_MAX_NUM              (PORT_EID_MAX_NUM_PER_DEV * PRIMARY_EID_NUM)
+#define BONDP_MAX_WELL_KNOWN_JETTY_ID (1024)
 /* Use single die primary eid and port eid to create urma_context */
-#define SINGLE_DIE_DEVNUM (11)
-#define SINGLE_DIE_IODIE_NUM (1)
-#define URMA_JETTY_ID_FMT "("EID_FMT", uasid: %u, id: %u)"
-#define URMA_JETTY_ID_UNPACK(...) __VA_ARGS__
-#define URMA_JETTY_ID_ARGS(jetty_id) URMA_JETTY_ID_UNPACK(EID_ARGS((jetty_id)->eid), \
-    (jetty_id)->uasid, (jetty_id)->id)
-
+#define SINGLE_DIE_DEVNUM             (11)
+#define SINGLE_DIE_IODIE_NUM          (1)
+#define URMA_JETTY_ID_FMT             "(" EID_FMT ", uasid: %u, id: %u)"
+#define URMA_JETTY_ID_UNPACK(...)     __VA_ARGS__
+#define URMA_JETTY_ID_ARGS(jetty_id)  URMA_JETTY_ID_UNPACK(EID_ARGS((jetty_id)->eid), \
+                                                           (jetty_id)->uasid, (jetty_id)->id)
 
 typedef struct bondp_heath_check_ctx {
     void *check_buf;
@@ -96,7 +95,7 @@ typedef struct bondp_context {
         /* The following struct is valid only when the node is in matrix server */
         struct {
             urma_context_t *primary_ctxs[PRIMARY_EID_NUM];
-            urma_context_t *port_ctxs[PORT_EID_MAX_NUM];   /* primary[0]->port[0:9], primary[1]->port[9:18] */
+            urma_context_t *port_ctxs[PORT_EID_MAX_NUM]; /* primary[0]->port[0:9], primary[1]->port[9:18] */
         };
     };
     /* This variable represents the maximum number of times all available devices need to be traversed. */
@@ -114,11 +113,11 @@ typedef struct bondp_context {
     int real_async_fd; /* vcontex async_fd */
     bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
-    #ifndef __cplusplus
+#ifndef __cplusplus
     atomic_ulong token_id_cnt;
-    #else
+#else
     std::atomic_ulong token_id_cnt;
-    #endif
+#endif
 } bondp_context_t;
 
 typedef struct bondp_jfc {
