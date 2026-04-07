@@ -24,7 +24,7 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
 urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg);
 
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
-    urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag);
+                                    urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag);
 
 urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg);
 

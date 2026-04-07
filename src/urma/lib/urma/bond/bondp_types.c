@@ -20,8 +20,8 @@ bool is_valid_bondp_comp(bondp_comp_t *comp)
         return false;
     }
     if ((comp->comp_type == BONDP_COMP_JETTY ||
-        comp->comp_type == BONDP_COMP_JFS ||
-        comp->comp_type == BONDP_COMP_JFR) &&
+         comp->comp_type == BONDP_COMP_JFS ||
+         comp->comp_type == BONDP_COMP_JFR) &&
         comp->comp_ctx == NULL) {
         return false;
     }
