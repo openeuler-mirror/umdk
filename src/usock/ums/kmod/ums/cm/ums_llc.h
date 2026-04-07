@@ -240,6 +240,6 @@ int ums_llc_send_message(struct ums_link *link, void *llcbuf);
 bool ums_llc_flow_start(struct ums_llc_flow *flow, struct ums_llc_qentry *qentry);
 void ums_llc_protocol_violation(struct ums_link_group *lgr, u8 type);
 int ums_llc_add_pending_send(struct ums_link *link, struct ums_wr_buf **wr_buf,
-	struct ums_wr_tx_pend_priv **pend);
+	struct ums_wr_tx_pend_priv **pend, bool emergency);
 void ums_llc_init_msg_hdr(struct ums_llc_hdr *hdr, const struct ums_link_group *lgr, size_t len);
 #endif /* UMS_LLC_H */
