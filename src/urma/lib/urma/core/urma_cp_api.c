@@ -1223,7 +1223,6 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
         urma_tp_info_t tp_info = {0};
         urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
         if (status != URMA_SUCCESS || tp_cnt != 1) {
-            errno = EIO;
             return NULL;
         }
 
@@ -1235,7 +1234,6 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
             int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
                                                 &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
             if (ret != 0) {
-                errno = EIO;
                 return NULL;
             }
         }
@@ -1941,7 +1939,6 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
         urma_tp_info_t tp_info = {0};
         urma_status_t status = ops->get_tp_list(ctx, &get_tp_cfg, &tp_cnt, &tp_info);
         if (status != URMA_SUCCESS || tp_cnt != 1) {
-            errno = EIO;
             return NULL;
         }
         URMA_LOG_INFO("Get tp list, leid: "EID_FMT", deid: "EID_FMT".\n", EID_ARGS(get_tp_cfg.local_eid),
@@ -1955,7 +1952,6 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
             int ret = urma_cmd_exchange_tp_info(ctx, &get_tp_cfg, active_tp_cfg.tp_handle, active_tp_cfg.tp_attr.tx_psn,
                                                 &active_tp_cfg.peer_tp_handle, &active_tp_cfg.tp_attr.rx_psn);
             if (ret != 0) {
-                errno = EIO;
                 return NULL;
             }
         }
