@@ -131,7 +131,8 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             urma_wr_ptr->rw.dst.num_sge = sge_num;
             break;
         case UMQ_OPC_WRITE_IMM:
-            urma_wr_ptr->rw.notify_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
+            buf_pro->imm.rsvd0 = 0;
+            urma_wr_ptr->rw.notify_data = buf_pro->imm_data;
             /* fall-through */
         case UMQ_OPC_WRITE:
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
@@ -154,7 +155,8 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             urma_wr_ptr->rw.src.num_sge = sge_num;
             break;
         case UMQ_OPC_SEND_IMM:
-            urma_wr_ptr->send.imm_data = buf_pro->imm_data & UMQ_UB_IMM_WITHOUT_PRIVATE_BITS;
+            buf_pro->imm.rsvd0 = 0;
+            urma_wr_ptr->send.imm_data = buf_pro->imm_data;
             /* fall-through */
         case UMQ_OPC_SEND:
             urma_wr_ptr->send.src.sge = sges_ptr;
