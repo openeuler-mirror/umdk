@@ -113,14 +113,19 @@ static void ums_wr_tx_process_cqe(struct ums_wc *wc)
 		wake_up(&link->wr_tx_wait);
 }
 
-static int ums_wr_tx_get_free_slot_index(struct ums_link *link, u32 *idx)
+static int ums_wr_tx_get_free_slot_index(struct ums_link *link, u32 *idx, bool emergency)
 {
 	*idx = link->wr_tx_cnt;
 	if (!ums_link_sendable(link))
 		return -ENOLINK;
 
-	if (ums_wr_tx_get_credit(link) == 0)
-		return -EBUSY;
+	if (unlikely(emergency)) {
+		if (ums_wr_tx_get_credit_emergency(link) == 0)
+			return -EBUSY;
+	} else {
+		if (ums_wr_tx_get_credit(link) == 0)
+			return -EBUSY;
+	}
 
 	for_each_clear_bit (*idx, link->wr_tx_mask, link->wr_tx_cnt) {
 		if (!test_and_set_bit(*idx, link->wr_tx_mask))
@@ -159,10 +164,11 @@ void ums_wr_tx_put_slot(struct ums_link *link, struct ums_wr_tx_pend_priv *wr_pe
  * @wr_buf:		Out value returns pointer to message buffer.
  * @wr_ub_buf:		Out value returns pointer to ub work request.
  * @wr_pend_priv:	Out value returns pointer serving as handler context.
+ * @emergency:		If true, can use reserved emergency credits (for LLC announce credits only).
  */
 int ums_wr_tx_get_free_slot(struct ums_link *link, ums_wr_tx_handler handler,
 	struct ums_wr_buf **wr_buf, struct ubcore_jfs_wr **wr_ub_buf,
-	struct ums_wr_tx_pend_priv **wr_pend_priv)
+	struct ums_wr_tx_pend_priv **wr_pend_priv, bool emergency)
 {
 	struct ums_link_group *lgr = ums_get_lgr(link);
 	struct ums_wr_tx_pend *wr_pend;
@@ -173,12 +179,12 @@ int ums_wr_tx_get_free_slot(struct ums_link *link, ums_wr_tx_handler handler,
 
 	*wr_pend_priv = NULL;
 	if (in_softirq() || (lgr->terminating != 0)) {
-		rc = ums_wr_tx_get_free_slot_index(link, &idx);
+		rc = ums_wr_tx_get_free_slot_index(link, &idx, emergency);
 		if (rc != 0)
 			return rc;
 	} else {
 		rc = (int)wait_event_interruptible_timeout(link->wr_tx_wait, !ums_link_sendable(link) ||
-			(lgr->terminating != 0) || (ums_wr_tx_get_free_slot_index(link, &idx) != -EBUSY),
+			(lgr->terminating != 0) || (ums_wr_tx_get_free_slot_index(link, &idx, emergency) != -EBUSY),
 			UMS_WR_TX_WAIT_FREE_SLOT_TIME);
 		if (rc == 0) {
 			/* timeout - terminate link */

@@ -37,6 +37,8 @@
 #define UCT_UBCORE_MEM_ACCESS_FLAGS UBCORE_ACCESS_LOCAL_ONLY
 #define UMS_WR_ID_NUM 2
 
+#define UMS_EMERGENCY_CREDITS 2
+
 struct ums_wr_tx_pend_priv {
 	u8 priv[UMS_WR_TX_PEND_PRIV_SIZE];
 };
@@ -94,6 +96,28 @@ static inline void ums_wr_wakeup_tx_wait(struct ums_link *lnk)
 
 /* get one tx credit, and peer rq credits dec */
 static inline int ums_wr_tx_get_credit(struct ums_link *link)
+{
+	int new_credits;
+
+	if (link->credits_enable == 0)
+		return 1;
+
+	new_credits = atomic_dec_if_positive(&link->peer_rq_credits);
+	if (likely(new_credits >= UMS_EMERGENCY_CREDITS))
+		return 1;
+
+	if (new_credits < 0)
+		return 0;
+
+	atomic_inc(&link->peer_rq_credits);
+	return 0;
+}
+
+/*
+ * get one tx credit for emergency use (LLC announce credits only).
+ * can use reserved emergency credits.
+ */
+static inline int ums_wr_tx_get_credit_emergency(struct ums_link *link)
 {
 	return (link->credits_enable == 0) || (atomic_dec_if_positive(&link->peer_rq_credits) >= 0);
 }
@@ -153,7 +177,7 @@ void ums_wr_remove_dev(struct ums_ubcore_device *ums_ub_dev);
 void ums_wr_add_dev(struct ums_ubcore_device *ums_ub_dev);
 int ums_wr_tx_get_free_slot(struct ums_link *link, ums_wr_tx_handler handler,
 	struct ums_wr_buf **wr_buf, struct ubcore_jfs_wr **wr_ub_buf,
-	struct ums_wr_tx_pend_priv **wr_pend_priv);
+	struct ums_wr_tx_pend_priv **wr_pend_priv, bool emergency);
 void ums_wr_tx_put_slot(struct ums_link *link, struct ums_wr_tx_pend_priv *wr_pend_priv);
 int ums_wr_tx_send(struct ums_link *link, struct ums_wr_tx_pend_priv *priv);
 int ums_wr_tx_send_wait(struct ums_link *link, struct ums_wr_tx_pend_priv *priv,
