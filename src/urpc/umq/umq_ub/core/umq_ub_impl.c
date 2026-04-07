@@ -1505,7 +1505,7 @@ int umq_ub_queue_addr_list_alloc(ub_queue_t *queue)
         return UMQ_SUCCESS;
     }
 
-    queue->addr_list = umq_buf_alloc(UMQ_MAX_ID_NUM * sizeof(uint64_t), 1, UMQ_INVALID_HANDLE, NULL);
+    queue->addr_list = umq_buf_alloc(UMQ_MAX_MSG_ID_NUM * sizeof(uint64_t), 1, UMQ_INVALID_HANDLE, NULL);
     if (queue->addr_list == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq_buf_alloc for addr_list failed\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
@@ -2033,8 +2033,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)send_buf->qbuf_ext;
-    umq_ub_imm_t imm = {.mem_import = {
-        .umq_private = UMQ_UB_IMM_PRIVATE, .type = IMM_TYPE_MEM, .sub_type = IMM_TYPE_MEM_IMPORT}};
+    umq_ub_imm_t imm = {.mem_import = {.type = IMM_TYPE_MEM_IMPORT}};
     buf_pro->imm_data = imm.value;
     buf_pro->opcode = UMQ_OPC_SEND_IMM;
 
