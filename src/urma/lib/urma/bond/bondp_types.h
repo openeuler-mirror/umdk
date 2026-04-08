@@ -129,6 +129,16 @@ typedef struct bondp_jfc {
     wr_buf_t wr_buf;
 } bondp_jfc_t;
 
+typedef struct bondp_tseg {
+    urma_target_seg_t v_tseg;
+    urma_target_seg_t *p_tseg[URMA_UBAGG_DEV_MAX_NUM];
+    int dev_num;
+    bondp_context_t *bondp_ctx;
+    urma_ref_t use_cnt; /* Initialize to 0 */
+    uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
+    uint64_t v_orig_handle;
+} bondp_tseg_t;
+
 typedef struct bondp_jfce {
     urma_jfce_t v_jfce;
     urma_jfce_t *p_jfce[URMA_UBAGG_DEV_MAX_NUM];
