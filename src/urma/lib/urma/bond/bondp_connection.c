@@ -10,7 +10,6 @@
 #include "ub_hash.h"
 #include "ub_util.h"
 #include "urma_log.h"
-#include "wr_utils.h"
 #include "bondp_types.h"
 #include "bondp_connection.h"
 
