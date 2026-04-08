@@ -14,21 +14,21 @@
 #include "bondp_comp.h"
 
 
-void bdp_vjfce_info_table_close_fd(bondp_comp_t *bdp_comp)
+void bdp_vjfce_info_table_close_fd(bondp_jfce_t *bdp_jfce)
 {
     int ret = URMA_SUCCESS;
     struct epoll_event ev = {0};
 
-    for (int i = 0; i < bdp_comp->dev_num; i++) {
-        if (bdp_comp->p_jfce[i] != NULL) {
-            ret = epoll_ctl(bdp_comp->v_jfce.fd, EPOLL_CTL_DEL, bdp_comp->p_jfce[i]->fd, &ev);
+    for (int i = 0; i < bdp_jfce->dev_num; i++) {
+        if (bdp_jfce->p_jfce[i] != NULL) {
+            ret = epoll_ctl(bdp_jfce->v_jfce.fd, EPOLL_CTL_DEL, bdp_jfce->p_jfce[i]->fd, &ev);
             if (ret != URMA_SUCCESS) {
                 URMA_LOG_WARN("non-zero return value of EPOLL_CTL_DEL, ret = %d.\n", ret);
             }
         }
     }
 
-    close(bdp_comp->v_jfce.fd);
+    close(bdp_jfce->v_jfce.fd);
 }
 
 int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
