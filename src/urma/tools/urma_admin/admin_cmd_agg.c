@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <sys/ioctl.h>
 
 #include "ub_util.h"
@@ -21,23 +22,37 @@
 static int cmd_agg_usage(admin_config_t *cfg)
 {
     printf("Usage:\n"
-           "  urma_admin agg add <eid>\n"
+           "  urma_admin agg add <eid> <dev_name>\n"
            "  urma_admin agg del <eid>\n"
            "  urma_admin agg expose <eid> <netns>\n"
            "\n"
            "Options:\n"
-           "  <eid>    EID value\n"
-           "  <netns>  Network namespace path (e.g., /proc/$pid/ns/net)\n");
+           "  <eid>       The EID value of the aggregation device.\n"
+           "  <dev_name>  The name of the aggregation device to be created (e.g., bonding_dev_0).\n"
+           "  <netns>     The network namespace path (e.g., /proc/$pid/ns/net).\n");
     return 0;
 }
 
-static int admin_cmd_agg_add(urma_eid_t eid)
+static int admin_cmd_agg_add(urma_eid_t eid, const char *dev_name)
 {
     struct cmd_agg_add_arg args = {0};
     struct admin_cmd_hdr hdr = {0};
     int ret;
+    size_t dev_name_len;
+
+    if (dev_name == NULL) {
+        printf("No device name specified.\n");
+        return -EINVAL;
+    }
+
+    dev_name_len = strnlen(dev_name, URMA_ADMIN_MAX_DEV_NAME);
+    if (dev_name_len == 0 || dev_name_len >= URMA_ADMIN_MAX_DEV_NAME) {
+        printf("dev_name:%s out of range(%d) or invalid.\n", dev_name, URMA_ADMIN_MAX_DEV_NAME);
+        return -EINVAL;
+    }
 
     args.in.agg_eid = eid;
+    (void)snprintf(args.in.dev_name, URMA_ADMIN_MAX_DEV_NAME, "%s", dev_name);
 
     hdr.command = CMD_AGG_ADD;
     hdr.args_addr = (uint64_t)(uintptr_t)&args;
@@ -62,12 +77,20 @@ static int admin_cmd_agg_add(urma_eid_t eid)
 
 static int cmd_agg_add(admin_config_t *cfg)
 {
+    char *dev_name;
     int ret;
+
     if ((ret = pop_arg_eid(cfg)) != 0) {
         return ret;
     }
 
-    ret = admin_cmd_agg_add(cfg->eid);
+    dev_name = pop_arg(cfg);
+    if (dev_name == NULL) {
+        printf("No device name specified.\n");
+        return -EINVAL;
+    }
+
+    ret = admin_cmd_agg_add(cfg->eid, dev_name);
     if (ret != 0) {
         printf("Failed to add agg dev\n");
         return ret;
@@ -89,10 +112,10 @@ static int admin_cmd_agg_del(urma_eid_t eid)
 
     urma_init(&init_attr);
     urma_device_t *urma_dev = urma_get_device_by_eid(eid, URMA_TRANSPORT_UB);
-    bool is_dev_disallowed = urma_dev != NULL && strcmp(urma_dev->name, "bonding_dev_0");
+    bool is_dev_disallowed = urma_dev != NULL && strcmp(urma_dev->name, "bonding_dev_0") == 0;
     urma_uninit();
 
-    if (is_dev_disallowed == 0) {
+    if (is_dev_disallowed) {
         printf("bonding_dev_0 cannot be deleted now.\n");
         return -1;
     }
