@@ -10,15 +10,15 @@
 
 #include <stdlib.h>
 
+#include "ub_hash.h"
 #include "urma_api.h"
 #include "urma_log.h"
 #include "urma_provider.h"
-#include "ub_hash.h"
 
-#include "bondp_types.h"
-#include "bondp_comp.h"
 #include "bondp_context_table.h"
 #include "bondp_hash_table.h"
+#include "bondp_types.h"
+
 #include "bondp_segment.h"
 
 static bool g_seg_cache_enable = false;
@@ -29,8 +29,8 @@ typedef struct bondp_udata_import_seg {
 } bondp_udata_import_seg_t;
 
 typedef enum bondp_result {
-    BONDP_SKIP    = -2,
-    BONDP_ERROR   = -1,
+    BONDP_SKIP = -2,
+    BONDP_ERROR = -1,
     BONDP_SUCCESS = 0,
 } bondp_ret_t;
 
@@ -84,7 +84,7 @@ static int bondp_delete_pseg(bondp_comp_t *bdp_seg)
 
 static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_seg, urma_seg_cfg_t *seg_cfg)
 {
-    if ((void *)seg_cfg->va ==NULL) {
+    if ((void *)seg_cfg->va == NULL) {
         URMA_LOG_ERR("Invalid segment address for bondp seg\n");
         return -1;
     }
@@ -129,7 +129,7 @@ static int bondp_delete_vseg(bondp_comp_t *bdp_seg)
 
     if (urma_cmd_unregister_seg(target_seg) != 0) {
         URMA_LOG_ERR("Failed to unregister segment, token_id:%u, handle:%lu.\n",
-            target_seg->seg.token_id, target_seg->handle);
+                     target_seg->seg.token_id, target_seg->handle);
         return URMA_FAIL;
     }
 
@@ -225,13 +225,13 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 
     if (bondp_delete_vseg(bdp_seg) != 0) {
         URMA_LOG_ERR("Failed to delete vseg, token_id:%u, handle:%lu.\n",
-            target_seg->seg.token_id, target_seg->handle);
+                     target_seg->seg.token_id, target_seg->handle);
         ret = URMA_FAIL;
     }
-    
+
     if (bondp_delete_pseg(bdp_seg) != 0) {
         URMA_LOG_ERR("Failed to delete pseg for vseg, token_id:%u, handle:%lu.\n",
-            target_seg->seg.token_id, target_seg->handle);
+                     target_seg->seg.token_id, target_seg->handle);
         ret = URMA_FAIL;
     }
 
@@ -240,7 +240,7 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 }
 
 static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg,
-    int local_idx, int target_idx)
+                               int local_idx, int target_idx)
 {
     if (bdp_ctx->p_ctxs[local_idx] == NULL) {
         URMA_LOG_INFO("BONDP import seg p_ctxs is NULL: %d\n", local_idx);
@@ -253,7 +253,7 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
         return BONDP_SKIP;
     }
     urma_target_seg_t *p_tseg = urma_import_seg(bdp_ctx->p_ctxs[local_idx], peer_p_seg, seg_cfg->token,
-        seg_cfg->addr, seg_cfg->flag);
+                                                seg_cfg->addr, seg_cfg->flag);
     if (p_tseg == NULL) {
         URMA_LOG_ERR("Failed to import seg (%d, %d)\n", local_idx, target_idx);
         return BONDP_ERROR;
@@ -262,9 +262,9 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
     p_tseg->handle = (uint64_t)(seg_cfg->bdp_imprt_tseg);
     seg_cfg->bdp_imprt_tseg->p_tseg[local_idx][target_idx] = p_tseg;
 
-    URMA_LOG_INFO("Import seg [%d]("EID_FMT")<-[%d]("EID_FMT")\n",
-            local_idx, EID_ARGS(bdp_ctx->p_ctxs[local_idx]->eid),
-            target_idx, EID_ARGS(p_tseg->seg.ubva.eid));
+    URMA_LOG_INFO("Import seg [%d](" EID_FMT ")<-[%d](" EID_FMT ")\n",
+                  local_idx, EID_ARGS(bdp_ctx->p_ctxs[local_idx]->eid),
+                  target_idx, EID_ARGS(p_tseg->seg.ubva.eid));
 
     return BONDP_SUCCESS;
 }
@@ -352,7 +352,7 @@ void bondp_toggle_seg_cache(bool enable)
 }
 
 static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t addr,
-    uint64_t handle, urma_context_t *ctx)
+                              uint64_t handle, urma_context_t *ctx)
 {
     tseg->seg.attr = seg->attr;
     tseg->seg.ubva = seg->ubva;
@@ -407,7 +407,6 @@ static int bondp_import_pseg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
     return 0;
 }
 
-
 static int bondp_unimport_vseg(bondp_import_tseg_t *bdp_tseg)
 {
     bdp_tseg->v_tseg.handle = bdp_tseg->v_orig_handle;
@@ -434,7 +433,7 @@ static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
 }
 
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
-    urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag)
+                                    urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
 
