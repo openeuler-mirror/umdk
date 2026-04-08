@@ -7,6 +7,7 @@
  * Note:
  * History: 2025-02-05   Create File
  */
+
 #ifndef BONDP_PROVIDER_OPS_H
 #define BONDP_PROVIDER_OPS_H
 
@@ -21,4 +22,5 @@ int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode)
 urma_status_t bondp_init(urma_init_attr_t *conf);
 
 urma_status_t bondp_uninit(void);
+
 #endif // BONDP_PROVIDER_OPS_H
