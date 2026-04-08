@@ -189,6 +189,7 @@ struct admin_cmd_hdr {
 struct cmd_agg_add_arg {
     struct {
         urma_eid_t agg_eid;
+        char dev_name[URMA_ADMIN_MAX_DEV_NAME];
     } in;
 };
 

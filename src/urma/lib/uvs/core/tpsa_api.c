@@ -10,6 +10,7 @@
 
 #include <sys/syscall.h>
 #include <errno.h>
+#include <string.h>
 #include "uvs_api.h"
 #include "uvs_cmd_tlv.h"
 #include "tpsa_ioctl.h"
