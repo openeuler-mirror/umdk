@@ -151,7 +151,6 @@ typedef enum bondp_comp_type {
     BONDP_COMP_JFS,
     BONDP_COMP_JFR,
     BONDP_COMP_JETTY,
-    BONDP_COMP_SEGMENT, /* register segment */
     BONDP_COMP_TYPE_MAX
 } bondp_comp_type_t;
 
@@ -160,7 +159,6 @@ struct bondp_comp;
 typedef struct bondp_jetty_ctx {
     bondp_context_t *bond_ctx;
     struct bondp_comp *bdp_comp;
-    int dev_num;
     urma_jetty_t **pjettys; // store the pointer array of bdp_comp->members, which could be jfs*/jfr*/jetty*.
     bool pjettys_valid[URMA_UBAGG_DEV_MAX_NUM];
     uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
@@ -185,14 +183,12 @@ typedef struct bondp_comp {
         urma_jfs_t v_jfs;
         urma_jfr_t v_jfr;
         urma_jetty_t v_jetty;
-        urma_target_seg_t v_tseg;
     };
     union {
         void *members[URMA_UBAGG_DEV_MAX_NUM];
         urma_jfs_t *p_jfs[URMA_UBAGG_DEV_MAX_NUM];
         urma_jfr_t *p_jfr[URMA_UBAGG_DEV_MAX_NUM];
         urma_jetty_t *p_jetty[URMA_UBAGG_DEV_MAX_NUM];
-        urma_target_seg_t *p_tseg[URMA_UBAGG_DEV_MAX_NUM];
     };
     int dev_num;
     bondp_context_t *bondp_ctx;
@@ -212,7 +208,6 @@ typedef struct bondp_target_jetty {
     urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
     int target_dev_num;
-    bool is_in_matrix_server;
     bool is_multipath;
     bool local_valid[URMA_UBAGG_DEV_MAX_NUM];
     bool target_valid[URMA_UBAGG_DEV_MAX_NUM];
@@ -233,14 +228,7 @@ static inline bool is_valid_dev_num(int dev_num)
     return dev_num > 0 && dev_num <= URMA_UBAGG_DEV_MAX_NUM;
 }
 
-static inline bool is_in_matrix_server(bondp_context_t *ctx)
-{
-    return ctx->topo_map != NULL;
-}
-
 bool is_valid_ctx(bondp_context_t *ctx);
-
-bool is_valid_bondp_comp(bondp_comp_t *comp);
 
 bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty);
 
