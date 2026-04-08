@@ -494,16 +494,6 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
             return URMA_EINVAL;
         }
-        // There is no longer self constructed seg, can be deleted
-        if ((void *)vtseg->handle == NULL) {
-            URMA_LOG_ERR("Write sge.dst->handle is NULL.\n");
-            vtseg = bondp_find_vtseg_by_va(send_wr->rw.src.sge[i].tseg->seg.token_id);
-            if (vtseg == NULL) {
-                URMA_LOG_ERR("bondp_find_vtseg_by_va fail.");
-                return URMA_FAIL;
-            }
-        }
-        vtseg = (urma_target_seg_t *)vtseg->handle;
         send_wr->rw.src.sge[i].tseg = get_p_tseg(vtseg, send_idx, target_idx);
     }
     for (int i = 0; i < send_wr->rw.dst.num_sge; ++i) {
@@ -515,16 +505,6 @@ static urma_status_t set_write_wr_ptseg_ptjetty(urma_jfs_wr_t *send_wr, urma_tar
             URMA_LOG_ERR("Failed to set ptseg, vtseg is NULL\n");
             return URMA_EINVAL;
         }
-        // There is no longer self constructed seg, can be deleted
-        if ((void *)vtseg->handle == NULL) {
-            URMA_LOG_ERR("Write sge.dst->handle is NULL.\n");
-            vtseg = bondp_find_vtseg_by_va(send_wr->rw.dst.sge[i].tseg->seg.token_id);
-            if (vtseg == NULL) {
-                URMA_LOG_ERR("bondp_find_vtseg_by_va fail.");
-                return URMA_FAIL;
-            }
-        }
-        vtseg = (urma_target_seg_t *)vtseg->handle;
         send_wr->rw.dst.sge[i].tseg = get_p_tseg(vtseg, send_idx, target_idx);
     }
     send_wr->tjetty = get_p_tjetty(vtjetty, send_idx, target_idx);
