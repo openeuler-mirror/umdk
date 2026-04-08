@@ -16,16 +16,7 @@ bool is_valid_ctx(bondp_context_t *ctx)
 
 bool is_valid_bondp_comp(bondp_comp_t *comp)
 {
-    if (!comp || !is_valid_dev_num(comp->dev_num)) {
-        return false;
-    }
-    if ((comp->comp_type == BONDP_COMP_JETTY ||
-         comp->comp_type == BONDP_COMP_JFS ||
-         comp->comp_type == BONDP_COMP_JFR) &&
-        comp->comp_ctx == NULL) {
-        return false;
-    }
-    return true;
+    return comp && is_valid_dev_num(comp->dev_num);
 }
 
 bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty)

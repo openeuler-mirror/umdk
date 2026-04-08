@@ -10,41 +10,22 @@
 #ifndef BONDP_JETTY_CTX_H
 #define BONDP_JETTY_CTX_H
 
-#include "urma_types.h"
-#include "bondp_types.h"
-#include "urma_ubagg.h"
 #include "bondp_hash_table.h"
+#include "bondp_types.h"
+#include "urma_types.h"
+#include "urma_ubagg.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef enum pjetty_error_done_type {
-    PJETTY_SUSPEND_DONE       = 1,
-    PJETTY_FLUSH_ERROR_DONE   = 2
+    PJETTY_SUSPEND_DONE = 1,
+    PJETTY_FLUSH_ERROR_DONE = 2
 } pjetty_error_done_type_t;
 
-typedef struct bondp_jetty_ctx {
-    bondp_context_t *bond_ctx;
-    bondp_comp_t *bdp_comp;
-    int dev_num;
-    urma_jetty_t **pjettys; // store the pointer array of bdp_comp->members, which could be jfs*/jfr*/jetty*.
-    bool pjettys_valid[URMA_UBAGG_DEV_MAX_NUM];
-    uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
-    int send_idx;
-    int post_recv_idx;
-    // -- wr buf --
-    // caching WRs
-    uint32_t inflight_cnt[URMA_UBAGG_DEV_MAX_NUM];
-    // slide window and other status for de-duplication
-    bondp_hash_table_t v_conn_table;
-    // single path
-    int direct_local_port;
-    int direct_target_port;
-} bjetty_ctx_t;
-// Caller check param
-bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_jetty, size_t wr_buf_size);
-void destroy_bjetty_ctx(bjetty_ctx_t *bjetty);
+int init_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_jetty, bjetty_ctx_t *bjetty_ctx, size_t wr_buf_size);
+void uninit_bjetty_ctx(bjetty_ctx_t *bjetty);
 
 #ifdef __cplusplus
 }
