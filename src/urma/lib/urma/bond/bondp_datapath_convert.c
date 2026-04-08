@@ -167,7 +167,7 @@ static inline urma_target_seg_t *get_p_tseg(urma_target_seg_t *tseg, int local_i
     /* Use token_id to distinguish local register seg and imported seg
        This is useful for write ops */
     if (tseg->token_id != NULL) {
-        return CONTAINER_OF_FIELD(tseg, bondp_comp_t, v_tseg)->p_tseg[local_idx];
+        return CONTAINER_OF_FIELD(tseg, bondp_tseg_t, v_tseg)->p_tseg[local_idx];
     } else {
         return CONTAINER_OF_FIELD(tseg, bondp_import_tseg_t, v_tseg)->p_tseg[local_idx][remote_idx];
     }
