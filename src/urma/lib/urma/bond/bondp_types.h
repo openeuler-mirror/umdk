@@ -138,7 +138,6 @@ typedef struct bondp_jfce {
 } bondp_jfce_t;
 
 typedef enum bondp_comp_type {
-    BONDP_COMP_JFCE,
     BONDP_COMP_JFS,
     BONDP_COMP_JFR,
     BONDP_COMP_JETTY,
