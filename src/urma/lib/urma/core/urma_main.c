@@ -239,11 +239,17 @@ urma_status_t urma_init(urma_init_attr_t *conf)
             free(driver);
         }
     }
-    (void)pthread_spin_lock(&g_dev_list_lock);
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
-    (void)urma_discover_devices(&g_dev_list, &g_driver_list);
-#endif
+    /* Phase 1: scan sysfs and match drivers outside the lock (I/O heavy) */
+    struct ub_list candidate_list = UB_LIST_INITIALIZER(&candidate_list);
+    struct ub_list dev_name_list = UB_LIST_INITIALIZER(&dev_name_list);
+    urma_scan_sysfs_devices(&candidate_list, &dev_name_list, &g_driver_list);
+
+    /* Phase 2: merge candidates into dev_list under the lock (lightweight) */
+    (void)pthread_spin_lock(&g_dev_list_lock);
+    (void)urma_merge_sysfs_devices(&g_dev_list, &candidate_list, &dev_name_list);
     (void)pthread_spin_unlock(&g_dev_list_lock);
+#endif
 
     atomic_fetch_add(&g_init_flag, 1);
     return URMA_SUCCESS;
@@ -264,9 +270,7 @@ urma_status_t urma_uninit(void)
             ret = URMA_FAIL;
         }
     }
-    (void)pthread_spin_lock(&g_dev_list_lock);
     urma_free_devices(&g_dev_list);
-    (void)pthread_spin_unlock(&g_dev_list_lock);
     (void)pthread_spin_destroy(&g_dev_list_lock);
     /* unload urma so */
     urma_so_t *so, *next;
@@ -316,9 +320,17 @@ urma_device_t **urma_get_device_list(int *num_devices)
         return NULL;
     }
 
-    (void)pthread_spin_lock(&g_dev_list_lock);
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
-    (void)urma_discover_devices(&g_dev_list, &g_driver_list);
+    /* Phase 1: scan sysfs and match drivers outside the lock (I/O heavy) */
+    struct ub_list candidate_list = UB_LIST_INITIALIZER(&candidate_list);
+    struct ub_list dev_name_list = UB_LIST_INITIALIZER(&dev_name_list);
+    urma_scan_sysfs_devices(&candidate_list, &dev_name_list, &g_driver_list);
+
+    /* Phase 2: merge candidates and build device list under the lock */
+    (void)pthread_spin_lock(&g_dev_list_lock);
+    (void)urma_merge_sysfs_devices(&g_dev_list, &candidate_list, &dev_name_list);
+#else
+    (void)pthread_spin_lock(&g_dev_list_lock);
 #endif
     *num_devices = (int)ub_list_size(&g_dev_list);
     if (*num_devices == 0) {
@@ -620,18 +632,20 @@ int urma_register_sysfs_dev(struct urma_sysfs_dev *dev)
         URMA_LOG_DEBUG("Register device failed. Invalid input.\n");
         return -1;
     }
+    /* Match driver outside the lock (read-only traversal of g_driver_list) */
+    if (!urma_match_driver(dev, &g_driver_list)) {
+        URMA_LOG_ERR("Register device failed. Failed to match driver for device %s.\n", dev->dev_name);
+        return -1;
+    }
+    dev->urma_device->ops = dev->driver->ops;
+
+    /* Only hold the lock for dev_list lookup and insertion */
     (void)pthread_spin_lock(&g_dev_list_lock);
     if (urma_find_dev_by_name(&g_dev_list, dev->dev_name) != NULL) {
         (void)pthread_spin_unlock(&g_dev_list_lock);
         URMA_LOG_DEBUG("Register device failed. %s device already existed.\n", dev->dev_name);
         return -1;
     }
-    if (!urma_match_driver(dev, &g_driver_list)) {
-        (void)pthread_spin_unlock(&g_dev_list_lock);
-        URMA_LOG_ERR("Register device failed. Failed to match driver for device %s.\n", dev->dev_name);
-        return -1;
-    }
-    dev->urma_device->ops = dev->driver->ops;
     ub_list_insert_after(&g_dev_list, &dev->node);
     (void)pthread_spin_unlock(&g_dev_list_lock);
     URMA_LOG_DEBUG("Success register the %s device.\n", dev->dev_name);
