@@ -175,6 +175,9 @@ default: disable.\n");
     (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
 2MB or 1GB currently.\n");
     (void)printf("  --bind_ip <ip>          The ip for bind.\n");
+    (void)printf("  --stdout                    Print logs to console.\n");
+    (void)printf("  --aggr_mode                 Set bond device aggregation mode, support: standalone, \
+ active_backup, balance, default: disable\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -561,7 +564,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"ctp",           no_argument,       NULL, PERFTEST_OPT_CTP},
         {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
         {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
-        {"hugepage-size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE},
+        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE},
         {"page_size",     required_argument, NULL, PERFTEST_OPT_PAGE_SIZE},
         {"sip",           required_argument, NULL, PERFTEST_OPT_SIP},
         {"dip",           required_argument, NULL, PERFTEST_OPT_DIP},
@@ -569,6 +572,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"vlan",          required_argument, NULL, PERFTEST_OPT_VLAN},
         {"sl",            required_argument, NULL, PERFTEST_OPT_SL},
         {"bind_ip",       required_argument, NULL, PERFTEST_OPT_BIND_IP},
+        {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
+        {"stdout",        no_argument,       NULL, PERFTEST_OPT_STDOUT },
         {NULL,            no_argument,       NULL, '\0'}
     };
 
@@ -881,6 +886,19 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     return -1;
                 }
                 break;
+            case PERFTEST_OPT_AGGR_MODE:	 
+                cfg->enable_aggr_mode = true;	 
+                if (strcmp("standalone", optarg) == 0) {	 
+                    cfg->aggr_mode = URMA_AGGR_MODE_STANDALONE;	 
+                } else if (strcmp("active_backup", optarg) == 0) {	 
+                    cfg->aggr_mode = URMA_AGGR_MODE_ACTIVE_BACKUP;	 
+                } else if (strcmp("balance", optarg) == 0) {	 
+                    cfg->aggr_mode = URMA_AGGR_MODE_BALANCE;	 
+                } else {	 
+                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");	 
+                    return -1;	 
+                }	 
+                break;
             case PERFTEST_OPT_SIP:
                 (void)str_to_ip(optarg, &cfg->sip);
                 cfg->uboe_sip = true;
@@ -907,6 +925,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     (void)fprintf(stderr, "failed to allocate bind ip memory.\n");
                     return -1;
                 }
+                break;
+            case PERFTEST_OPT_STDOUT: 
+                cfg->enable_stdout = true; 
                 break;
             default:
                 usage(argv[0]);
@@ -1361,6 +1382,34 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
         (void)fprintf(stderr, "UM transport mode is not recommended for ctp.\n");
     }
+    if (cfg->api_type == PERFTEST_SEND) {	 
+        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {	 
+            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",	 
+                cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);	 
+            exit(1); 
+        } 
+        if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) { 
+            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n", 
+                cfg->size, PERFTEST_CTP_MAX_SEND_SIZE); 
+            exit(1); 
+        } 
+        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) { 
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n", 
+                cfg->order, PERFTEST_RTP_MAX_ORDER); 
+            exit(1); 
+        } 
+        if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) { 
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n", 
+                cfg->order, PERFTEST_CTP_MAX_ORDER); 
+            exit(1); 
+        } 
+    }
+
+    if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->jfs_post_list > 1) { 
+        (void)fprintf(stderr, "Standalone aggregate mode currently does not support WQE list.\n"); 
+        exit(1); 
+    }
+
     const int MIN_CQ_MOD_RATIO = 2;
     if ((cfg->iters % cfg->cq_mod != 0) && (cfg->cq_mod >= cfg->iters / MIN_CQ_MOD_RATIO) &&
         (cfg->bidirection) && (cfg->enable_credit)) {
