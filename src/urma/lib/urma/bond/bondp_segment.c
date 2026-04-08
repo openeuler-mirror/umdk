@@ -63,7 +63,7 @@ urma_status_t bondp_free_token_id(urma_token_id_t *token_id)
     return URMA_SUCCESS;
 }
 
-static int bondp_delete_pseg(bondp_comp_t *bdp_seg)
+static int bondp_delete_pseg(bondp_tseg_t *bdp_seg)
 {
     int ret = URMA_SUCCESS;
 
@@ -82,7 +82,7 @@ static int bondp_delete_pseg(bondp_comp_t *bdp_seg)
     return ret;
 }
 
-static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_seg, urma_seg_cfg_t *seg_cfg)
+static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, urma_seg_cfg_t *seg_cfg)
 {
     if ((void *)seg_cfg->va ==NULL) {
         URMA_LOG_ERR("Invalid segment address for bondp seg\n");
@@ -118,7 +118,7 @@ DELETE_PSEG:
     return -1;
 }
 
-static int bondp_delete_vseg(bondp_comp_t *bdp_seg)
+static int bondp_delete_vseg(bondp_tseg_t *bdp_seg)
 {
     if (bdp_seg == NULL) {
         URMA_LOG_ERR("invalid param.\n");
@@ -137,7 +137,7 @@ static int bondp_delete_vseg(bondp_comp_t *bdp_seg)
     return URMA_SUCCESS;
 }
 
-static int bondp_create_vseg(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_seg, urma_seg_cfg_t *seg_cfg)
+static int bondp_create_vseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, urma_seg_cfg_t *seg_cfg)
 {
     urma_bond_seg_info_out_t in_seg_info = {0};
     urma_cmd_udrv_priv_t udata = {0};
@@ -188,14 +188,13 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
         return NULL;
     }
 
-    bondp_comp_t *bdp_seg = (bondp_comp_t *)calloc(1, sizeof(bondp_comp_t));
+    bondp_tseg_t *bdp_seg = (bondp_tseg_t *)calloc(1, sizeof(bondp_tseg_t));
     if (bdp_seg == NULL) {
         URMA_LOG_ERR("Failed to alloc bondp segment comp\n");
         return NULL;
     }
 
     bdp_seg->bondp_ctx = bdp_ctx;
-    bdp_seg->comp_type = BONDP_COMP_SEGMENT;
     bdp_seg->dev_num = bdp_ctx->dev_num;
     atomic_init(&bdp_seg->use_cnt.atomic_cnt, 0);
 
@@ -221,7 +220,7 @@ FREE_BDP_SEG:
 urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 {
     int ret = URMA_SUCCESS;
-    bondp_comp_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_comp_t, base);
+    bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_tseg_t, v_tseg);
 
     if (bondp_delete_vseg(bdp_seg) != 0) {
         URMA_LOG_ERR("Failed to delete vseg, token_id:%u, handle:%lu.\n",
