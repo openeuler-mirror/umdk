@@ -13,7 +13,6 @@
 #include "bondp_hash_table.h"
 #include "bondp_slide_window.h"
 #include "bdp_queue.h"
-#include "wr_buffer.h"
 
 #define BONDP_RECV_WND_SIZE (1U << 12)
 #define BONDP_MAX_BITMAP_SIZE (1U << 16)
