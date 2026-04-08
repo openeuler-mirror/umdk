@@ -38,43 +38,6 @@ typedef bondp_create_vjetty_udata_t bondp_create_vjfr_udata_t;
 
 #define BOND_EPOLL_NUM (32)
 
-void bdp_vjfce_info_table_close_fd(bondp_jfce_t *bdp_jfce)
-{
-    int ret = URMA_SUCCESS;
-    struct epoll_event ev = {0};
-
-    for (int i = 0; i < bdp_jfce->dev_num; i++) {
-        if (bdp_jfce->p_jfce[i] != NULL) {
-            ret = epoll_ctl(bdp_jfce->v_jfce.fd, EPOLL_CTL_DEL, bdp_jfce->p_jfce[i]->fd, &ev);
-            if (ret != URMA_SUCCESS) {
-                URMA_LOG_WARN("non-zero return value of EPOLL_CTL_DEL, ret = %d.\n", ret);
-            }
-        }
-    }
-
-    close(bdp_jfce->v_jfce.fd);
-}
-
-int bondp_insert_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
-{
-    struct epoll_event ev = {0};
-    ev.events = EPOLLIN;
-    ev.data.fd = p_jfce->fd;
-    if (epoll_ctl(v_jfce->fd, EPOLL_CTL_ADD, p_jfce->fd, &ev) != 0) {
-        URMA_LOG_ERR("Fail to add fd:%d to epoll fd:%d.\n", p_jfce->fd, v_jfce->fd);
-        return URMA_FAIL;
-    }
-    return 0;
-}
-
-void bondp_remove_p_jfce(urma_jfce_t *v_jfce, urma_jfce_t *p_jfce)
-{
-    struct epoll_event ev = {0};
-    if (epoll_ctl(v_jfce->fd, EPOLL_CTL_DEL, p_jfce->fd, &ev) != 0) {
-        URMA_LOG_ERR("Fail to del fd:%d to epoll fd:%d.\n", p_jfce->fd, v_jfce->fd);
-    }
-}
-
 static int bondp_create_pjfce(bondp_context_t *bdp_ctx, bondp_jfce_t *bdp_jfce)
 {
     for (int i = 0; i < bdp_jfce->dev_num; i++) {
@@ -88,6 +51,14 @@ static int bondp_create_pjfce(bondp_context_t *bdp_ctx, bondp_jfce_t *bdp_jfce)
             return -1;
         }
         bdp_jfce->p_jfce[i] = jfce;
+
+        struct epoll_event ev = {0};
+        ev.events = EPOLLIN;
+        ev.data.fd = jfce->fd;
+        if (epoll_ctl(bdp_jfce->v_jfce.fd, EPOLL_CTL_ADD, jfce->fd, &ev) != 0) {
+            URMA_LOG_ERR("Fail to add fd:%d to epoll fd:%d.\n", jfce->fd, bdp_jfce->v_jfce.fd);
+            return -1;
+        }
     }
 
     return 0;
@@ -96,13 +67,21 @@ static int bondp_create_pjfce(bondp_context_t *bdp_ctx, bondp_jfce_t *bdp_jfce)
 static int bondp_delete_pjfce(bondp_jfce_t *bdp_jfce)
 {
     int ret = 0;
+
     for (int i = 0; i < bdp_jfce->dev_num; i++) {
         if (bdp_jfce->p_jfce[i] == NULL) {
             continue;
         }
-        ret = urma_delete_jfce(bdp_jfce->p_jfce[i]);
-        if (ret) {
-            URMA_LOG_ERR("Failed to delete pjfce: %d, ret: %d.\n", i, ret);
+
+        struct epoll_event ev = {0};
+        if (epoll_ctl(bdp_jfce->v_jfce.fd, EPOLL_CTL_DEL, bdp_jfce->p_jfce[i]->fd, &ev) != 0) {
+            URMA_LOG_WARN("non-zero return value of EPOLL_CTL_DEL, ret = %d.\n", errno);
+        }
+
+        int p_ret = urma_delete_jfce(bdp_jfce->p_jfce[i]);
+        if (p_ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to delete pjfce %d, ret: %d.\n", i, p_ret);
+            ret = p_ret;
         }
         bdp_jfce->p_jfce[i] = NULL;
     }
@@ -128,7 +107,7 @@ static int bondp_create_vjfce(bondp_context_t *bdp_ctx, bondp_jfce_t *bdp_jfce)
 
 static int bondp_delete_vjfce(bondp_jfce_t *bdp_jfce)
 {
-    bdp_vjfce_info_table_close_fd(bdp_jfce);
+    close(bdp_jfce->v_jfce.fd);
     return 0;
 }
 
@@ -148,38 +127,24 @@ urma_jfce_t *bondp_create_jfce(urma_context_t *ctx)
     bdp_jfce->bondp_ctx = bdp_ctx;
     atomic_init(&bdp_jfce->use_cnt.atomic_cnt, 0);
 
+    if (bondp_create_vjfce(bdp_ctx, bdp_jfce)) {
+        URMA_LOG_ERR("Failed to create vjfce.\n");
+        goto FREE_JFCE;
+    }
+
     if (bondp_create_pjfce(bdp_ctx, bdp_jfce)) {
         URMA_LOG_ERR("Failed to create pjfce.\n");
         goto DELETE_PJFCE;
-    }
-
-    if (bondp_create_vjfce(bdp_ctx, bdp_jfce)) {
-        URMA_LOG_ERR("Failed to create vjfce.\n");
-        goto DELETE_PJFCE;
-    }
-
-    int i;
-    for (i = 0; i < bdp_jfce->dev_num; i++) {
-        if (bdp_jfce->p_jfce[i] == NULL) {
-            continue;
-        }
-        if (bondp_insert_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[i]) != 0) {
-            goto REMOVE_JFCE;
-        }
     }
     URMA_LOG_INFO("Finish to create jfce, dev_name: %s, eid_idx: %u.\n",
                   ctx->dev->name, ctx->eid_index);
 
     return &bdp_jfce->v_jfce;
-REMOVE_JFCE:
-    for (int j = 0; j < i; j++) {
-        if (bdp_jfce->p_jfce[j] != NULL) {
-            bondp_remove_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[j]);
-        }
-    }
-    (void)bondp_delete_vjfce(bdp_jfce);
+
 DELETE_PJFCE:
     (void)bondp_delete_pjfce(bdp_jfce);
+    (void)bondp_delete_vjfce(bdp_jfce);
+FREE_JFCE:
     free(bdp_jfce);
     return NULL;
 }
@@ -187,32 +152,25 @@ DELETE_PJFCE:
 urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
 {
     bondp_jfce_t *bdp_jfce = CONTAINER_OF_FIELD(jfce, bondp_jfce_t, v_jfce);
+    urma_status_t ret = URMA_SUCCESS;
+
     unsigned long use_cnt = atomic_load(&bdp_jfce->use_cnt.atomic_cnt);
     if (use_cnt > 0) {
         URMA_LOG_ERR("Failed to delete jfce[%d], still in use. use_cnt: %lu\n", jfce->fd, use_cnt);
         return URMA_EAGAIN;
     }
 
-    char dev_name[URMA_MAX_NAME] = {0};
-    (void)strcpy(dev_name, jfce->urma_ctx->dev->name);
-    uint32_t eid_index = jfce->urma_ctx->eid_index;
-
-    for (int i = 0; i < bdp_jfce->dev_num; i++) {
-        if (bdp_jfce->p_jfce[i] != NULL) {
-            bondp_remove_p_jfce(&bdp_jfce->v_jfce, bdp_jfce->p_jfce[i]);
-        }
+    if (bondp_delete_pjfce(bdp_jfce) != 0) {
+        URMA_LOG_ERR("Failed to delete pjfce.\n");
+        ret = URMA_FAIL;
     }
 
-    (void)bondp_delete_vjfce(bdp_jfce);
-
-    int ret = bondp_delete_pjfce(bdp_jfce);
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to delete pjfce, ret: %d.\n", ret);
+    if (bondp_delete_vjfce(bdp_jfce) != 0) {
+        URMA_LOG_ERR("Failed to delete vjfce.\n");
+        ret = URMA_FAIL;
     }
+
     free(bdp_jfce);
-    URMA_LOG_INFO("Finish to delete jfce, dev_name: %s, eid_idx: %u, ret: %d.\n",
-                  dev_name, eid_index, ret);
-
     return ret;
 }
 
