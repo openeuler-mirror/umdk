@@ -27,16 +27,11 @@ int init_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp, bjetty_ctx_t *b
             bjetty_ctx->pjettys_error_done[i] = PJETTY_SUSPEND_DONE | PJETTY_FLUSH_ERROR_DONE;
             continue;
         }
-        bjetty_ctx->pjettys_valid[i] = true;
     }
 
     if (bdp_v_conn_table_create(&bjetty_ctx->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
         return -1;
     }
-
-    bjetty_ctx->direct_local_port = -1;
-    bjetty_ctx->direct_target_port = -1;
-
     return 0;
 }
 

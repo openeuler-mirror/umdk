@@ -269,6 +269,7 @@ int establish_connection(perftest_config_t *cfg)
     if (cfg->comm.server_ip != NULL) {
         /* client side */
         ret = client_connect(cfg);
+        printf("QQQQ 2\n");
     } else {
         /* server side */
         (void)printf(PERFTEST_RESULT_LINE);
