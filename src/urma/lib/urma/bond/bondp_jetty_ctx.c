@@ -7,7 +7,6 @@
  * Note:
  * History: 2025-02-21   Create File
  */
-#include <malloc.h>
 #include "urma_api.h"
 #include "urma_log.h"
 #include "urma_private.h"
@@ -15,15 +14,9 @@
 #include "bondp_connection.h"
 #include "bondp_jetty_ctx.h"
 
-bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp,
-    size_t wr_buf_size)
+int init_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp, bjetty_ctx_t *bjetty_ctx, size_t wr_buf_size)
 {
-    bjetty_ctx_t *bjetty_ctx = NULL;
-
-    bjetty_ctx = (bjetty_ctx_t *)calloc(1, sizeof(bjetty_ctx_t));
-    if (bjetty_ctx == NULL) {
-        return NULL;
-    }
+    (void)wr_buf_size;
     bjetty_ctx->bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     bjetty_ctx->bdp_comp = bdp_comp;
     bjetty_ctx->dev_num = bdp_comp->dev_num;
@@ -39,24 +32,20 @@ bjetty_ctx_t *create_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp,
     }
 
     if (bdp_v_conn_table_create(&bjetty_ctx->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
-        goto FREE_CTX;
+        return -1;
     }
 
     bjetty_ctx->direct_local_port = -1;
     bjetty_ctx->direct_target_port = -1;
 
-    return bjetty_ctx;
-
-FREE_CTX:
-    free(bjetty_ctx);
-    return NULL;
+    return 0;
 }
 
-void destroy_bjetty_ctx(bjetty_ctx_t *bjetty_ctx)
+void uninit_bjetty_ctx(bjetty_ctx_t *bjetty_ctx)
 {
     if (bjetty_ctx == NULL) {
         return;
     }
     bondp_hash_table_destroy(&bjetty_ctx->v_conn_table);
-    free(bjetty_ctx);
+    (void)memset(bjetty_ctx, 0, sizeof(*bjetty_ctx));
 }

@@ -174,11 +174,7 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
             return URMA_EINVAL;
         }
     }
-    bjetty_ctx_t *bjetty_ctx = bdp_send_comp->comp_ctx;
-    if (bjetty_ctx == NULL) {
-        URMA_LOG_ERR("No bjetty_ctx\n");
-        return URMA_EINVAL;
-    }
+    bjetty_ctx_t *bjetty_ctx = &bdp_send_comp->bjetty_ctx;
     if (is_all_pjetty_fail(bjetty_ctx)) {
         URMA_LOG_ERR("All bonding devs are invalid");
         return URMA_FAIL;
@@ -345,7 +341,7 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
         return ret;
     }
 
-    bjetty_ctx_t *bjetty_ctx = bdp_jetty->comp_ctx;
+    bjetty_ctx_t *bjetty_ctx = &bdp_jetty->bjetty_ctx;
     if (is_single_dev_mode(jetty->urma_ctx)) {
         return bondp_post_send_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
@@ -357,7 +353,7 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
 {
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
-    bjetty_ctx_t *bjetty_ctx = bdp_jfs->comp_ctx;
+    bjetty_ctx_t *bjetty_ctx = &bdp_jfs->bjetty_ctx;
     urma_status_t ret = URMA_SUCCESS;
 
     ret = post_send_check_valid(bdp_jfs, bdp_tjetty, wr);
@@ -478,11 +474,6 @@ static urma_status_t post_recv_check_valid(bondp_comp_t *bdp_recv_comp, const ur
         URMA_LOG_ERR("Invalid bdp_comp\n");
         return URMA_EINVAL;
     }
-    bjetty_ctx_t *bjetty_ctx = bdp_recv_comp->comp_ctx;
-    if (bjetty_ctx == NULL) {
-        URMA_LOG_ERR("bjetty_ctx is NULL\n");
-        return URMA_EINVAL;
-    }
     if (bdp_recv_comp->comp_type != BONDP_COMP_JETTY && bdp_recv_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_recv_comp type: %d\n", bdp_recv_comp->comp_type);
         return URMA_EINVAL;
@@ -504,7 +495,7 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
     }
 
     /* non-null bjetty_ctx value because post_recv_check_valid performed validation. */
-    bjetty_ctx_t *bjetty_ctx = bdp_jetty->comp_ctx;
+    bjetty_ctx_t *bjetty_ctx = &bdp_jetty->bjetty_ctx;
     if (is_single_dev_mode(jetty->urma_ctx)) {
         return bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
@@ -522,7 +513,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     }
 
     /* non-null bjetty_ctx value because post_recv_check_valid performed validation. */
-    bjetty_ctx_t *bjetty_ctx = bdp_jfr->comp_ctx;
+    bjetty_ctx_t *bjetty_ctx = &bdp_jfr->bjetty_ctx;
     // workaround, at this point, jfr only support multipath
     bdp_jfr->is_multipath = true;
     if (is_single_dev_mode(jfr->urma_ctx)) {
@@ -723,14 +714,9 @@ static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, int dev_idx,
         URMA_LOG_ERR("Failed to get comp, local_id: %d\n", pjetty_id.id);
         return NULL;
     }
-    if (comp->comp_ctx == NULL) {
-        pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Null bjetty_ctx in bdp_comp\n");
-        return NULL;
-    }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    return (bjetty_ctx_t *)comp->comp_ctx;
+    return &comp->bjetty_ctx;
 }
 /**
  * After calling the `get_bjetty_xxx` function, it is necessary to call this function to decrement the reference count.

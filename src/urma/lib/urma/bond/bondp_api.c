@@ -496,12 +496,10 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
         goto DELETE_VJFS;
     }
 
-    bjetty_ctx_t *jfs_datapath_ctx = create_bjetty_ctx(ctx, bdp_jfs, URMA_UBAGG_WR_BUF_SIZE);
-    if (jfs_datapath_ctx == NULL) {
+    if (init_bjetty_ctx(ctx, bdp_jfs, &bdp_jfs->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
         URMA_LOG_ERR("Failed to create jfs datapath ctx");
         goto DEL_P_VJFS_ID;
     }
-    bdp_jfs->comp_ctx = jfs_datapath_ctx;
 
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     atomic_fetch_add(&bdp_jfc->use_cnt.atomic_cnt, 1);
@@ -544,7 +542,7 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
 
-    destroy_bjetty_ctx(bdp_jfs->comp_ctx);
+    uninit_bjetty_ctx(&bdp_jfs->bjetty_ctx);
 
     if (bondp_delete_vjfs(bdp_jfs) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjfs\n");
@@ -730,12 +728,10 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
         goto DELETE_VJFR;
     }
 
-    bjetty_ctx_t *jfr_datapath_ctx = create_bjetty_ctx(ctx, bdp_jfr, URMA_UBAGG_WR_BUF_SIZE);
-    if (jfr_datapath_ctx == NULL) {
+    if (init_bjetty_ctx(ctx, bdp_jfr, &bdp_jfr->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
         URMA_LOG_ERR("Failed to create jfr datapath ctx");
         goto DEL_P_VJFR_ID;
     }
-    bdp_jfr->comp_ctx = jfr_datapath_ctx;
 
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     atomic_fetch_add(&bdp_jfc->use_cnt.atomic_cnt, 1);
@@ -778,7 +774,7 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    destroy_bjetty_ctx(bdp_jfr->comp_ctx);
+    uninit_bjetty_ctx(&bdp_jfr->bjetty_ctx);
 
     if (bondp_delete_vjfr(bdp_jfr) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete_vjfr\n");
@@ -1075,12 +1071,10 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto DELETE_VJETTY;
     }
 
-    bjetty_ctx_t *bjetty_ctx = create_bjetty_ctx(ctx, bdp_jetty, URMA_UBAGG_WR_BUF_SIZE);
-    if (bjetty_ctx == NULL) {
+    if (init_bjetty_ctx(ctx, bdp_jetty, &bdp_jetty->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
         URMA_LOG_ERR("Failed to create jetty ctx");
         goto DEL_P_VJETTY_ID;
     }
-    bdp_jetty->comp_ctx = bjetty_ctx;
 
     /* Validate bdp_jfr below at the function entry point to ensure they are not empty. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, v_jfr);
@@ -1133,7 +1127,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    destroy_bjetty_ctx(bdp_jetty->comp_ctx);
+    uninit_bjetty_ctx(&bdp_jetty->bjetty_ctx);
     if (bondp_delete_vjetty(bdp_jetty) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjetty\n");
         ret = URMA_FAIL;
@@ -1532,9 +1526,8 @@ static urma_status_t bind_jetty_single_path(bondp_comp_t *bdp_jetty, bondp_targe
         return URMA_FAIL;
     }
     bdp_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
-    bjetty_ctx_t *bjetty_ctx = (bjetty_ctx_t *)(bdp_jetty->comp_ctx); /* Not NULL guaranteed by bondp_create_jetty */
-    bjetty_ctx->direct_local_port = local_port;
-    bjetty_ctx->direct_target_port = target_port;
+    bdp_jetty->bjetty_ctx.direct_local_port = local_port;
+    bdp_jetty->bjetty_ctx.direct_target_port = target_port;
     return URMA_SUCCESS;
 }
 
@@ -1591,8 +1584,8 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
         bdp_jetty->p_jetty[i]->remote_jetty = NULL;
     }
     bdp_jetty->v_jetty.remote_jetty = NULL;
-    ((bjetty_ctx_t *)bdp_jetty->comp_ctx)->direct_local_port = -1;
-    ((bjetty_ctx_t *)bdp_jetty->comp_ctx)->direct_target_port = -1;
+    bdp_jetty->bjetty_ctx.direct_local_port = -1;
+    bdp_jetty->bjetty_ctx.direct_target_port = -1;
     return ret;
 }
 
