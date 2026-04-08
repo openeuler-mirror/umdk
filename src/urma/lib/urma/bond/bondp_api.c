@@ -382,7 +382,7 @@ static int bondp_delete_pjfs(bondp_comp_t *bdp_jfs)
 {
     int ret = 0;
 
-    for (int i = 0; i < bdp_jfs->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfs->p_jfs[i] == NULL) {
             continue;
         }
@@ -402,7 +402,7 @@ static int bondp_add_jfs_p_vjetty_id_info(bondp_context_t *bdp_ctx, bondp_comp_t
 {
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
     int i = 0;
-    for (i = 0; i < bdp_jfs->dev_num; ++i) {
+    for (i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfs->p_jfs[i] == NULL) {
             continue;
         }
@@ -431,7 +431,7 @@ DEL_P_VJFS_ID:
 static void bondp_del_jfs_p_vjetty_info_without_lock(bondp_comp_t *bdp_jfs)
 {
     bondp_context_t *bdp_ctx = bdp_jfs->bondp_ctx;
-    for (int i = 0; i < bdp_jfs->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfs->p_jfs[i] == NULL) {
             continue;
         }
@@ -455,11 +455,9 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
 
-    if (is_in_matrix_server(bdp_ctx)) {
-        if (cfg->flag.bs.multi_path == false) {
-            URMA_LOG_ERR("In matrix server, JFS don't support single-path mode.\n");
-            return NULL;
-        }
+    if (cfg->flag.bs.multi_path == false) {
+        URMA_LOG_ERR("In matrix server, JFS don't support single-path mode.\n");
+        return NULL;
     }
 
     bondp_comp_t *bdp_jfs = (bondp_comp_t *)calloc(1, sizeof(bondp_comp_t));
@@ -568,7 +566,7 @@ urma_status_t bondp_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *attr)
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
 
-    for (int i = 0; i < bdp_jfs->dev_num; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jfs->p_jfs[i] == NULL) {
             continue;
         }
@@ -589,7 +587,7 @@ static int bondp_create_vjfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg, bondp_com
         .dev_num = bdp_jfr->dev_num,
         .is_multipath = bdp_jfr->is_multipath};
 
-    for (int i = 0; i < bdp_jfr->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
@@ -635,7 +633,7 @@ static int bondp_delete_vjfr(bondp_comp_t *bdp_jfr)
 static int bondp_delete_pjfr(bondp_comp_t *bdp_jfr)
 {
     int ret = 0;
-    for (int i = 0; i < bdp_jfr->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
@@ -653,7 +651,7 @@ static int bondp_add_jfr_p_vjetty_id_info(bondp_context_t *bdp_ctx, bondp_comp_t
 {
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
     int i = 0;
-    for (i = 0; i < bdp_jfr->dev_num; ++i) {
+    for (i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
@@ -682,7 +680,7 @@ DEL_P_VJFR_ID:
 static void bondp_del_jfr_p_vjetty_info_without_lock(bondp_comp_t *bdp_jfr)
 {
     bondp_context_t *bdp_ctx = bdp_jfr->bondp_ctx;
-    for (int i = 0; i < bdp_jfr->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
@@ -798,7 +796,7 @@ urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jfr, bondp_comp_t, v_jfr);
 
-    for (int i = 0; i < bdp_jfr->dev_num; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
@@ -940,7 +938,7 @@ static int bondp_delete_vjetty(bondp_comp_t *bdp_jetty)
 static int bondp_delete_pjetty(bondp_comp_t *bdp_jetty)
 {
     int ret = 0;
-    for (int i = 0; i < bdp_jetty->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
@@ -957,7 +955,7 @@ static int bondp_delete_pjetty(bondp_comp_t *bdp_jetty)
 static int bondp_add_jetty_p_vjetty_id_info(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty, uint32_t jetty_id)
 {
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
-    for (int i = 0; i < bdp_jetty->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (!bdp_jetty->p_jetty[i]) {
             continue;
         }
@@ -977,7 +975,7 @@ static int bondp_add_jetty_p_vjetty_id_info(bondp_context_t *bdp_ctx, bondp_comp
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     return 0;
 DEL_P_VJETTY_ID:
-    for (int i = 0; i < bdp_jetty->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (!bdp_jetty->p_jetty[i]) {
             continue;
         }
@@ -991,7 +989,7 @@ DEL_P_VJETTY_ID:
 static void bondp_del_jetty_p_vjetty_info_without_lock(bondp_comp_t *bdp_jetty)
 {
     bondp_context_t *bdp_ctx = bdp_jetty->bondp_ctx;
-    for (int i = 0; i < bdp_jetty->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
@@ -1025,23 +1023,21 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         URMA_LOG_ERR("Invalid well known jetty id: %d, should be in (0, 1024)\n", jetty_cfg->id);
         return NULL;
     }
-    if (is_in_matrix_server(bdp_ctx)) {
-        if (jetty_cfg->jfs_cfg.flag.bs.multi_path == false) {
-            if (jetty_cfg->jfs_cfg.trans_mode != URMA_TM_RC) {
-                URMA_LOG_ERR("In matrix server, jetty only supports single-path mode with RC.\n");
-                errno = EINVAL;
-                return NULL;
-            }
-            if (!is_single_dev_mode(ctx)) {
-                URMA_LOG_ERR("In matrix server, multi-device mode don't support single path currently.\n");
-                errno = EINVAL;
-                return NULL;
-            }
-            if (jetty_cfg->id != 0) {
-                URMA_LOG_WARN("In matrix server, wellknown jetty must use multi-path mode, "
-                              "set to multi-path mode forcely\n");
-                jetty_cfg->jfs_cfg.flag.bs.multi_path = true;
-            }
+    if (jetty_cfg->jfs_cfg.flag.bs.multi_path == false) {
+        if (jetty_cfg->jfs_cfg.trans_mode != URMA_TM_RC) {
+            URMA_LOG_ERR("In matrix server, jetty only supports single-path mode with RC.\n");
+            errno = EINVAL;
+            return NULL;
+        }
+        if (!is_single_dev_mode(ctx)) {
+            URMA_LOG_ERR("In matrix server, multi-device mode don't support single path currently.\n");
+            errno = EINVAL;
+            return NULL;
+        }
+        if (jetty_cfg->id != 0) {
+            URMA_LOG_WARN("In matrix server, wellknown jetty must use multi-path mode, "
+                          "set to multi-path mode forcely\n");
+            jetty_cfg->jfs_cfg.flag.bs.multi_path = true;
         }
     }
 
@@ -1161,7 +1157,7 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
 
-    for (int i = 0; i < bdp_jetty->dev_num; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
@@ -1392,7 +1388,6 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         errno = ENOMEM;
         return NULL;
     }
-    bdp_tjetty->is_in_matrix_server = is_in_matrix_server(bdp_ctx);
 
     urma_bond_id_info_out_t rvjetty_info = {0};
     if (bondp_import_vjetty(ctx, rjetty, token_value, bdp_tjetty, &rvjetty_info) != 0) {
@@ -1557,16 +1552,8 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
 
-    if (!is_valid_bondp_comp(bdp_jetty)) {
-        URMA_LOG_ERR("Invalid param jetty\n");
-        return URMA_EINVAL;
-    }
     if (jetty->remote_jetty) {
         URMA_LOG_ERR("Jetty already has a binded target jetty\n");
-        return URMA_EINVAL;
-    }
-    if (is_in_matrix_server(bdp_jetty->bondp_ctx) && bdp_jetty->is_multipath != bdp_tjetty->is_multipath) {
-        URMA_LOG_ERR("The is_multipath attributes of jetty and tjetty are different\n");
         return URMA_EINVAL;
     }
 
@@ -1586,10 +1573,6 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     urma_status_t ret = URMA_SUCCESS;
 
-    if (!is_valid_bondp_comp(bdp_jetty)) {
-        URMA_LOG_ERR("Invalid param jetty\n");
-        return URMA_EINVAL;
-    }
     for (int i = 0; i < bdp_tjetty->local_dev_num && bdp_tjetty->target_dev_num; ++i) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
@@ -1608,39 +1591,6 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
     bdp_jetty->bjetty_ctx.direct_local_port = -1;
     bdp_jetty->bjetty_ctx.direct_target_port = -1;
     return ret;
-}
-
-static int import_jfr_default(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-                              urma_bond_id_info_out_t *ex_info, urma_rjfr_t *rjfr, urma_token_t *rjfr_token)
-{
-    bool has_import = false;
-    urma_rjfr_t p_rjfr = *rjfr;
-    p_rjfr.tp_type = URMA_CTP;
-
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        bdp_tjetty->local_valid[i] = true;
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
-            if (is_empty_eid(&ex_info->slave_id[j].eid)) {
-                continue;
-            }
-            bdp_tjetty->target_valid[i] = true;
-            p_rjfr.jfr_id = ex_info->slave_id[j];
-            bdp_tjetty->p_tjetty[i][j] = urma_import_jfr(bdp_ctx->p_ctxs[i], &p_rjfr, rjfr_token);
-            if (bdp_tjetty->p_tjetty[i][j] == NULL) {
-                /* Allow unimported p_tjetty */
-                continue;
-            }
-            has_import = true;
-        }
-    }
-    if (!has_import) {
-        URMA_LOG_ERR("Failed to import jfr, no valid route to rjfr\n");
-        return -1;
-    }
-    return 0;
 }
 
 static int import_primary_ports_jfr(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
@@ -1692,23 +1642,16 @@ static int bondp_import_pjfr(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
 {
     int ret = 0;
 
-    if (is_in_matrix_server(bdp_ctx)) {
-        bdp_tjetty->is_in_matrix_server = true;
-        bdp_tjetty->is_multipath = true; /* JFR currently only support multipath mode */
+    bdp_tjetty->is_multipath = true; /* JFR currently only support multipath mode */
 
-        if (bdp_tjetty->is_multipath) {
-            int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
-            bdp_tjetty->local_dev_num = iodie_num;
-            bdp_tjetty->target_dev_num = iodie_num;
-            ret = import_primary_ports_jfr(bdp_ctx, bdp_tjetty, udata_out, rjfr, token_value);
-        } else {
-            URMA_LOG_ERR("Currently, jfr does not support single-path mode.\n");
-            return -1;
-        }
+    if (bdp_tjetty->is_multipath) {
+        int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
+        bdp_tjetty->local_dev_num = iodie_num;
+        bdp_tjetty->target_dev_num = iodie_num;
+        ret = import_primary_ports_jfr(bdp_ctx, bdp_tjetty, udata_out, rjfr, token_value);
     } else {
-        bdp_tjetty->local_dev_num = bdp_ctx->dev_num;
-        bdp_tjetty->target_dev_num = udata_out->dev_num;
-        ret = import_jfr_default(bdp_ctx, bdp_tjetty, udata_out, rjfr, token_value);
+        URMA_LOG_ERR("Currently, jfr does not support single-path mode.\n");
+        return -1;
     }
     return ret;
 }
@@ -1749,7 +1692,6 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
         URMA_LOG_ERR("Failed to alloc target jetty\n");
         return NULL;
     }
-    bdp_tjetty->is_in_matrix_server = is_in_matrix_server(bdp_ctx);
 
     urma_bond_id_info_out_t udata_out = {0};
     if (bondp_import_vjfr(ctx, rjfr, token_value, bdp_tjetty, &udata_out) != 0) {
