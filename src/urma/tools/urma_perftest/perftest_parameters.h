@@ -193,7 +193,9 @@ enum perftest_opts {
     PERFTEST_OPT_VLAN,
     PERFTEST_OPT_DSCP,
     PERFTEST_OPT_SL,
-    PERFTEST_OPT_BIND_IP
+    PERFTEST_OPT_BIND_IP,
+    PERFTEST_OPT_AGGR_MODE,
+    PERFTEST_OPT_STDOUT,
 };
 
 typedef enum perftest_rate_limiter_units {
