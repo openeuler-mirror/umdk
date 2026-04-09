@@ -839,7 +839,6 @@ void umq_qbuf_pool_uninit(void)
     if (!g_qbuf_pool.inited) {
         return;
     }
-    g_qbuf_pool.inited = false;
 
     release_thread_cache(0);
 
