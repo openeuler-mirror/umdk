@@ -236,7 +236,10 @@ typedef struct umq_buf_block_cfg {
 typedef struct umq_buf_pool_cfg {
     // global pool
     uint32_t expansion_block_count;  // number of blocks per expansion, default 8K
-    uint64_t expansion_mem_size_max; // maximum memory allowed for expansion, default 2G
+    uint64_t umq_buf_pool_max_size; // maximum memory allowed for umq buf pool, default 2G
+    // local qbuf pool cfg
+    uint64_t tls_qbuf_pool_depth;
+    uint64_t tls_expand_qbuf_pool_depth;
 } umq_buf_pool_cfg_t;
 
 typedef struct umq_init_cfg {

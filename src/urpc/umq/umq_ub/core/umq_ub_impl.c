@@ -669,14 +669,16 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .data_size = umq_buf_size_small(),
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
-        .expansion_mem_size_max = cfg->buf_pool_cfg.expansion_mem_size_max,
+        .umq_buf_pool_max_size = cfg->buf_pool_cfg.umq_buf_pool_max_size,
         .expansion_block_count = cfg->buf_pool_cfg.expansion_block_count,
         .seg_ops = {
             .register_seg_callback = umq_ub_register_seg_callback,
             .unregister_seg_callback = umq_ub_unregister_seg_callback,
         },
         .expansion_pool_id_min = HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
-        .expansion_pool_cnt_max = UMQ_MAX_TSEG_NUM - HUGE_QBUF_POOL_MEMPOOL_ID_MAX
+        .expansion_pool_cnt_max = UMQ_MAX_TSEG_NUM - HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
+        .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
+        .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
     };
     ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
