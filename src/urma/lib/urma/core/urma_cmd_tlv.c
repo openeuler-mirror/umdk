@@ -1248,7 +1248,6 @@ int urma_ioctl_query_dev_attr(int ioctl_fd, urma_cmd_query_device_attr_t *arg)
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_MAX_FETCH_AND_XOR_SIZE, arg->out.attr.dev_cap.max_fetch_and_xor_size);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_ATOMIC_FEAT, arg->out.attr.dev_cap.atomic_feat);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_TRANS_MODE, arg->out.attr.dev_cap.trans_mode);
-    ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_SUB_TRANS_MODE_CAP, arg->out.attr.dev_cap.sub_trans_mode_cap);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_CONGESTION_CTRL_ALG, arg->out.attr.dev_cap.congestion_ctrl_alg);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_CEQ_CNT, arg->out.attr.dev_cap.ceq_cnt);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_MAX_TP_IN_TPG, arg->out.attr.dev_cap.max_tp_in_tpg);
