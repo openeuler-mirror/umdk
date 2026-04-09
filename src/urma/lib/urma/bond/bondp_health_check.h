@@ -9,6 +9,7 @@
 #include "bondp_types.h"
 
 void bondp_health_check_global_ctx_init(bondp_global_context_t *ctx);
+void bondp_health_check_global_ctx_uninit(bondp_global_context_t *ctx);
 void bondp_health_check_ctx_init(bondp_context_t *bond_ctx);
 bool bondp_health_check_enabled(void);
 
@@ -22,5 +23,7 @@ int bondp_fill_vjetty_health_info(bondp_context_t *bond_ctx, bondp_comp_t *bdp_j
 int bondp_import_health_check_tseg(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
 	urma_bond_id_info_out_t *rvjetty_info, urma_rjetty_t *rjetty);
 int bondp_unimport_health_check_tseg(bondp_target_jetty_t *bdp_tjetty);
+int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty, bondp_comp_t *cfg_jetty);
+void bondp_unregister_health_check_task(bondp_target_jetty_t *bdp_tjetty);
 
 #endif // BONDP_HEALTH_CHECK_H
