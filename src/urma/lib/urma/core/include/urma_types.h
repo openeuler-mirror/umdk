@@ -221,12 +221,6 @@ typedef union urma_atomic_feature {
     uint32_t value;
 } urma_atomic_feature_t;
 
-typedef enum urma_sub_trans_mode_cap {
-    URMA_RC_TP_DST_ORDERING = 0x1,      /*  rc mode with tp dst ordering  */
-    URMA_RC_TA_DST_ORDERING = 0x1 << 1, /*  rc mode with ta dst ordering  */
-    URMA_RC_USER_TP = 0x1 << 2,         /*  rc mode with user tp */
-} urma_sub_trans_mode_cap_t;
-
 typedef union urma_order_type_cap {
     struct {
         uint32_t ot       : 1;
@@ -284,7 +278,6 @@ typedef struct urma_device_cap {
     uint32_t max_fetch_and_xor_size;
     urma_atomic_feature_t atomic_feat; /* [Public] support atomic feature of device */
     uint16_t trans_mode;               /* [Public] bit OR of supported transport modes */
-    uint16_t sub_trans_mode_cap;       /* [Public] bit OR of supported transport modes cap, urma_sub_trans_mode_cap_t */
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
     uint32_t max_tp_in_tpg;            /* [Public] max tp in tpg */
@@ -494,9 +487,6 @@ typedef struct urma_jfc {
     uint32_t async_events_acked;
     urma_jfc_opt_t urma_jfc_opt;
 } urma_jfc_t;
-
-#define URMA_SUB_TRANS_MODE_TA_DST_ORDERING_ENABLE (0x1)
-#define URMA_SUB_TRANS_MODE_USER_TP                (0x2)
 
 typedef enum urma_order_type {
     URMA_DEF_ORDER,

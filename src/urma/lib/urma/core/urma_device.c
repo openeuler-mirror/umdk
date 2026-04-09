@@ -316,7 +316,6 @@ static void urma_parse_device_attr(urma_sysfs_dev_t *sysfs_dev)
     attr->dev_cap.max_fetch_and_xor_size = urma_parse_value_u32(sysfs_path, "max_fetch_and_xor_size");
     attr->dev_cap.atomic_feat.value = urma_parse_value_u32(sysfs_path, "atomic_feat");
     attr->dev_cap.trans_mode = urma_parse_value_u16(sysfs_path, "trans_mode");
-    attr->dev_cap.sub_trans_mode_cap = urma_parse_value_u16(sysfs_path, "sub_trans_mode_cap");
     attr->dev_cap.congestion_ctrl_alg = urma_parse_value_u16(sysfs_path, "congestion_ctrl_alg");
     attr->dev_cap.ceq_cnt = urma_parse_value_u32(sysfs_path, "ceq_cnt");
     attr->dev_cap.max_tp_in_tpg = urma_parse_value_u32(sysfs_path, "max_tp_in_tpg");
