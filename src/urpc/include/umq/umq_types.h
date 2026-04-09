@@ -253,6 +253,22 @@ typedef struct umq_init_cfg {
     umq_buf_pool_cfg_t buf_pool_cfg;
 } umq_init_cfg_t;
 
+typedef union umq_port_id {
+    struct {
+        uint32_t chip_id  : 8;
+        uint32_t die_id   : 8;
+        uint32_t port_idx : 8;
+        uint32_t reserved : 8;
+    } bs;
+    uint32_t value;
+} umq_port_id_t;
+
+// port[0] is primary port, others as backup
+typedef struct umq_used_ports {
+    umq_port_id_t *port;
+    uint8_t num;
+} umq_used_ports_t;
+
 #define UMQ_NAME_MAX_LEN (32)
 
 #define UMQ_CREATE_FLAG_RX_BUF_SIZE         (1)             // enable arg rx_buf_size when create umq
@@ -260,12 +276,16 @@ typedef struct umq_init_cfg {
 #define UMQ_CREATE_FLAG_RX_DEPTH            (1 << 2)        // enable arg rx_depth when create umq
 #define UMQ_CREATE_FLAG_TX_DEPTH            (1 << 3)        // enable arg tx_depth when create umq
 #define UMQ_CREATE_FLAG_QUEUE_MODE          (1 << 4)        // enable arg mode when create umq
-#define UMQ_CREATE_FLAG_SHARE_RQ            (1 << 5)        // enable arg share_rq_umqh when create umq
+#define UMQ_CREATE_FLAG_SHARE_RQ            (1 << 5)        // enable arg share_rq_umqh when create umq,
+                                                            // associated with UMQ_CREATE_FLAG_SUB_UMQ
 #define UMQ_CREATE_FLAG_UMQ_CTX             (1 << 6)        // enable arg umq_ctx when create umq
-#define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 7)        // just indicates the umq is sub queue
-#define UMQ_CREATE_FLAG_TP_MODE             (1 << 8)        // enable arg tp_mode when create umq
-#define UMQ_CREATE_FLAG_TP_TYPE             (1 << 9)        // enable arg tp_type when create umq
+#define UMQ_CREATE_FLAG_TP_MODE             (1 << 7)        // enable arg tp_mode when create umq
+#define UMQ_CREATE_FLAG_TP_TYPE             (1 << 8)        // enable arg tp_type when create umq
+#define UMQ_CREATE_FLAG_USED_PORTS          (1 << 9)        // enable arg used ports when create umq
 #define UMQ_CREATE_FLAG_PRIORITY            (1 << 10)       // enable arg priority when create umq
+#define UMQ_CREATE_FLAG_MAIN_UMQ            (1 << 11)       // indicate that the umq creates shared jfr
+#define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 12)       // indicate that the umq uses shared jfr from main queue,
+                                                            // associated with UMQ_CREATE_FLAG_SHARE_RQ
 
 typedef struct umq_create_option {
     /*************Required paramenters start*****************/
@@ -285,6 +305,7 @@ typedef struct umq_create_option {
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     umq_tp_mode_t tp_mode;
     umq_tp_type_t tp_type;
+    umq_used_ports_t used_ports;
     uint8_t priority;
     /*************Optional paramenters end*******************/
 } umq_create_option_t;
@@ -499,16 +520,6 @@ typedef struct umq_route_key {
     umq_eid_t dst_bonding_eid;
     umq_tp_type_t tp_type;
 } umq_route_key_t;
-
-typedef union umq_port_id {
-    struct {
-        uint32_t chip_id  : 8;
-        uint32_t die_id   : 8;
-        uint32_t port_idx : 8; // portEID: 0-8, primaryEID: UINT8_MAX
-        uint32_t reserved : 8;
-    } bs;
-    uint32_t value;
-} umq_port_id_t;
 
 typedef struct umq_node_id {
     uint32_t super_node_id;
