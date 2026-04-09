@@ -44,6 +44,16 @@ typedef struct huge_qbuf_pool_cfg {
     void (*memory_uninit_callback)(uint16_t mempool_id, void *buf_addr);
 } huge_qbuf_pool_cfg_t;
 
+/**
+ * default mempool id : UMQ_QBUF_DEFAULT_MEMPOOL_ID
+ * huge mempool id : (UMQ_QBUF_DEFAULT_MEMPOOL_ID, HUGE_QBUF_POOL_MEMPOOL_ID_MAX)
+ * expansion mempool id : [HUGE_QBUF_POOL_MEMPOOL_ID_MAX, UMQ_MAX_TSEG_NUM)
+ */
+static inline bool is_huge_mempool_pool(uint32_t mempool_id)
+{
+    return (mempool_id > UMQ_QBUF_DEFAULT_MEMPOOL_ID && mempool_id < HUGE_QBUF_POOL_MEMPOOL_ID_MAX);
+}
+
 int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg);
 
 void umq_huge_qbuf_pool_uninit(void);
