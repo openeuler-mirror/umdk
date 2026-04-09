@@ -179,7 +179,7 @@ static int umq_tp_ub_plus_get_route_list_impl(const umq_route_key_t *route_key, 
 
 static int umq_tp_ub_plus_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 {
-    if (qbuf->mempool_id == UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+    if (!is_huge_mempool_pool(qbuf->mempool_id)) {
         return umq_qbuf_headroom_reset(qbuf, headroom_size);
     } else {
         return umq_huge_qbuf_headroom_reset(qbuf, headroom_size);
