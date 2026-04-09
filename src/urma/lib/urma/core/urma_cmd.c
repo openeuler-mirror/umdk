@@ -622,6 +622,17 @@ int urma_cmd_delete_jfs(urma_jfs_t *jfs)
         return ret;
     }
 
+    bool non_blocking = jfs->jfs_cfg.flag.bs.non_blocking;
+    if (non_blocking) {
+        (void)pthread_mutex_lock(&jfs->event_mutex);
+        if (jfs->async_events_acked != arg.out.async_events_reported) {
+            (void)pthread_mutex_unlock(&jfs->event_mutex);
+            return URMA_EAGAIN;
+        }
+        (void)pthread_mutex_unlock(&jfs->event_mutex);
+        return 0;
+    }
+
     wait_async_event_ack(&jfs->event_mutex, &jfs->event_cond, &jfs->async_events_acked, arg.out.async_events_reported);
 
     return 0;
@@ -2046,14 +2057,26 @@ int urma_cmd_delete_jetty(urma_jetty_t *jetty)
     int ret = urma_ioctl_delete_jetty(jetty->urma_ctx->dev_fd, &arg);
     if (ret != 0) {
         URMA_LOG_ERR("ioctl failed, ret:%d, errno:%d.\n", ret, errno);
+        return ret;
     }
 
     urma_uninit_jetty_cfg(&jetty->jetty_cfg);
 
+    bool non_blocking = jetty->jetty_cfg.flag.bs.non_blocking;
+    if (non_blocking) {
+        (void)pthread_mutex_lock(&jetty->event_mutex);
+        if (jetty->async_events_acked != arg.out.async_events_reported) {
+            (void)pthread_mutex_unlock(&jetty->event_mutex);
+            return URMA_EAGAIN;
+        }
+        (void)pthread_mutex_unlock(&jetty->event_mutex);
+        return 0;
+    }
+
     wait_async_event_ack(&jetty->event_mutex, &jetty->event_cond, &jetty->async_events_acked,
                          arg.out.async_events_reported);
 
-    return ret;
+    return 0;
 }
 
 int urma_cmd_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, urma_jetty_t **bad_jetty)
