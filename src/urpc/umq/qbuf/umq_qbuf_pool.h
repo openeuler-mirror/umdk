@@ -50,12 +50,17 @@ typedef struct qbuf_pool_cfg {
     uint32_t data_size;         // size of one data slab
     uint32_t headroom_size;     // reserve head room size
     umq_buf_mode_t mode;
+    uint64_t umq_buf_pool_max_size; // default 2G
 
-    uint64_t expansion_mem_size_max; // default 2G
+    // gloab expansion pool
     uint32_t expansion_pool_id_min;
     uint32_t expansion_pool_cnt_max;
     uint32_t expansion_block_count;  // number of blocks per expansion
     mempool_segment_ops_t seg_ops;
+
+    // thread local qbuf pool
+    uint64_t tls_qbuf_pool_depth;
+    uint64_t tls_expand_qbuf_pool_depth;
 } qbuf_pool_cfg_t;
 
 typedef struct qbuf_alloc_param {
@@ -125,8 +130,13 @@ void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg);
 typedef struct local_block_pool {
     umq_buf_list_t head_with_data;
     uint64_t buf_cnt_with_data;
+    uint64_t capacity_with_data;
+    uint64_t last_used_with_data;
+
     umq_buf_list_t head_without_data;
     uint64_t buf_cnt_without_data;
+    uint64_t capacity_without_data;
+    uint64_t last_used_without_data;
 } local_block_pool_t;
 
 typedef struct global_block_pool {
@@ -321,6 +331,14 @@ static ALWAYS_INLINE void return_to_global(
         global_buf_cnt = &global_pool->buf_cnt_without_data;
         local_buf_cnt = &cache->buf_cnt_without_data;
         local_head = &cache->head_without_data;
+    }
+
+    if (threshold == 0) {
+        umq_buf_t *head = QBUF_LIST_FIRST(local_head);
+        QBUF_LIST_FIRST(local_head) = NULL;
+        return_list_to_pools(head, local_buf_cnt, global_head, global_buf_cnt, with_data);
+        (void)pthread_spin_unlock(&global_pool->global_mutex);
+        return;
     }
 
     umq_buf_t *switch_node = NULL;
