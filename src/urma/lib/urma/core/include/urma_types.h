@@ -420,7 +420,8 @@ typedef union urma_jfc_flag {
     struct {
         uint32_t lock_free  : 1;
         uint32_t jfc_inline : 1;
-        uint32_t reserved   : 30;
+        uint32_t non_blocking : 1;
+        uint32_t reserved   : 29;
     } bs;
     uint32_t value;
 } urma_jfc_flag_t;
@@ -518,7 +519,8 @@ typedef union urma_jfs_flag {
                                            /* (0x4): UNO, unreliable non ordering */
         uint32_t multi_path           : 1; /* 1: multi-path, 0: single path, for ubagg only. */
         uint32_t ctp_rc_mul_path_mode : 1; /* 1: ctp rc mode multi-path */
-        uint32_t reserved             : 19;
+        uint32_t non_blocking         : 1;
+        uint32_t reserved             : 18;
     } bs;
     uint32_t value;
 } urma_jfs_flag_t;
@@ -608,7 +610,8 @@ typedef union urma_jfr_flag {
                                    /* (0x2): OI, initiator ordering */
                                    /* (0x3): OL, low layer ordering */
                                    /* (0x4): UNO, unreliable non ordering */
-        uint32_t reserved     : 19;
+        uint32_t non_blocking : 1;
+        uint32_t reserved     : 18;
     } bs;
     uint32_t value;
 } urma_jfr_flag_t;
@@ -711,9 +714,10 @@ typedef struct urma_tp {
 
 typedef union urma_jetty_flag {
     struct {
-        uint32_t share_jfr : 1; /* 0: URMA_NO_SHARE_JFR.
-                                   1: URMA_SHARE_JFR. */
-        uint32_t reserved  : 31;
+        uint32_t share_jfr    : 1; /* 0: URMA_NO_SHARE_JFR.
+                                      1: URMA_SHARE_JFR. */
+        uint32_t non_blocking : 1;
+        uint32_t reserved     : 30;
     } bs;
     uint32_t value;
 } urma_jetty_flag_t;
