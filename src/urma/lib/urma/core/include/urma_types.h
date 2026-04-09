@@ -420,7 +420,8 @@ typedef union urma_jfc_flag {
     struct {
         uint32_t lock_free  : 1;
         uint32_t jfc_inline : 1;
-        uint32_t reserved   : 30;
+        uint32_t non_blocking : 1;
+        uint32_t reserved   : 29;
     } bs;
     uint32_t value;
 } urma_jfc_flag_t;
