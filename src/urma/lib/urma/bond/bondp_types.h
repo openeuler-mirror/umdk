@@ -154,6 +154,28 @@ typedef enum bondp_comp_type {
     BONDP_COMP_SEGMENT, /* register segment */
     BONDP_COMP_TYPE_MAX
 } bondp_comp_type_t;
+
+struct bondp_comp;
+
+typedef struct bondp_jetty_ctx {
+    bondp_context_t *bond_ctx;
+    struct bondp_comp *bdp_comp;
+    int dev_num;
+    urma_jetty_t **pjettys; // store the pointer array of bdp_comp->members, which could be jfs*/jfr*/jetty*.
+    bool pjettys_valid[URMA_UBAGG_DEV_MAX_NUM];
+    uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
+    int send_idx;
+    int post_recv_idx;
+    // -- wr buf --
+    // caching WRs
+    uint32_t inflight_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    // slide window and other status for de-duplication
+    bondp_hash_table_t v_conn_table;
+    // single path
+    int direct_local_port;
+    int direct_target_port;
+} bjetty_ctx_t;
+
 /** A struct to mimic Polymorphism in creating/deleting some components of urma.
  * This will introduce extra memory cost due to union size taking the largest size.
  */
@@ -174,7 +196,7 @@ typedef struct bondp_comp {
     };
     int dev_num;
     bondp_context_t *bondp_ctx;
-    void *comp_ctx;
+    bjetty_ctx_t bjetty_ctx;
     bool is_multipath;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
