@@ -634,7 +634,6 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
         free(exp_pool->exp_slot_list);
         exp_pool->exp_slot_list = NULL;
     }
-    urpc_id_generator_uninit(&exp_pool->dynamic_id_gen);
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
 
     (void)pthread_spin_lock(&exp_pool->shrink_task_list.lock);
@@ -664,6 +663,7 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
         async_expand_expected = 0;
         usleep(QBUF_POOL_CHECK_ASYNC_PERIOD_US);
     }
+    urpc_id_generator_uninit(&exp_pool->dynamic_id_gen);
 
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
     (void)pthread_spin_destroy(&exp_pool->shrink_task_list.lock);
