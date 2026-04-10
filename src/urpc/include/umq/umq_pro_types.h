@@ -54,9 +54,14 @@ typedef struct umq_buf_pro {
     umq_opcode_flag_t flag;
 
     uint64_t user_ctx;               // completion data
-
-    uint64_t imm_data;               // imm_data in host byte order;
-
+    union {
+        uint64_t imm_data;
+        struct {
+            uint64_t rsvd0 : 4;
+            uint64_t user_data : 12;
+            uint64_t rsvd1 : 48;
+        } imm;
+    };
     struct umq_ref_sge {
         uint64_t addr;
 

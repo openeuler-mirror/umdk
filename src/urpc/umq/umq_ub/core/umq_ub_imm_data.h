@@ -15,9 +15,6 @@ extern "C" {
 #endif
 
 #define UMQ_UB_IMM_BITS (0xFFFFFFFFFFFFFFFF)
-// in host byte order and bit order
-#define UMQ_UB_IMM_WITHOUT_PRIVATE_BITS (0xFFFFFFFFFFFFFFFE)
-#define UMQ_UB_IMM_PRIVATE 1
 #define UMQ_UB_IMM_IN_USER_BUF 1  // user buffer with umq defined imm data
 
 typedef enum umq_ub_imm_type {
