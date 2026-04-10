@@ -134,8 +134,8 @@ static void usage(const char *argv0)
     (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
     (void)printf("  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n");
     (void)printf("  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n");
-    (void)printf("  --sub_trans_mode <sub_mode> Sub transport mode: 0 for non ordering(default),\n"
-                 "                              1 for TA dest ordering (only valid for trans_mode RC).\n");
+    (void)printf(" --order_type <type>          Order type: 0 for default order,\
+                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n");
     (void)printf("  --enable_ipv6               enable ipv6 for server ip. default disable.\n");
     (void)printf("  --enable_credit             enable send credit, default: disable.\n");
     (void)printf("  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n");
