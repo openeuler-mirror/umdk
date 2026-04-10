@@ -126,7 +126,7 @@ int schedule_send(const urma_jfs_wr_t *wr, bjetty_ctx_t *bjetty_ctx, bdp_v_conn_
 /** Select recv pjetty in post_jetty_recv_wr */
 static urma_status_t schedule_recv_idx_default(bjetty_ctx_t *bjetty_ctx, int *recv_idx)
 {
-    bjetty_ctx->post_recv_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->bdp_comp->dev_num,
+    bjetty_ctx->post_recv_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, URMA_UBAGG_DEV_MAX_NUM,
                                                           bjetty_ctx->post_recv_idx);
     if (bjetty_ctx->post_recv_idx < 0) {
         /* all pjetty fail */
