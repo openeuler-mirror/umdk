@@ -14,11 +14,6 @@ bool is_valid_ctx(bondp_context_t *ctx)
     return ctx && is_valid_dev_num(ctx->dev_num);
 }
 
-bool is_valid_bondp_comp(bondp_comp_t *comp)
-{
-    return comp && is_valid_dev_num(comp->dev_num);
-}
-
 bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty)
 {
     return bdp_tjetty && is_valid_dev_num(bdp_tjetty->local_dev_num) && is_valid_dev_num(bdp_tjetty->target_dev_num);

@@ -152,10 +152,6 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
 static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_target_jetty_t *bdp_tjetty,
     const urma_jfs_wr_t *wr)
 {
-    if (!is_valid_bondp_comp(bdp_send_comp)) {
-        URMA_LOG_ERR("Invalid bdp_send_comp");
-        return URMA_EINVAL;
-    }
     if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
         URMA_LOG_ERR("Try to call post_send api by invalid comp_type: %d\n", bdp_send_comp->comp_type);
         return URMA_EINVAL;
@@ -164,20 +160,9 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
         URMA_LOG_ERR("Invalid bdp_target_jetty");
         return URMA_EINVAL;
     }
-    if (is_in_matrix_server(bdp_send_comp->bondp_ctx) != bdp_tjetty->is_in_matrix_server) {
-        URMA_LOG_ERR("Data cannot be transferred between jettys in different matrix server mode\n");
+    if (is_multipath_comp(bdp_send_comp) != bdp_tjetty->is_multipath) {
+        URMA_LOG_ERR("Data cannot be transferred between jettys in different multipath mode\n");
         return URMA_EINVAL;
-    }
-    if (is_in_matrix_server(bdp_send_comp->bondp_ctx)) {
-        if (is_multipath_comp(bdp_send_comp) != bdp_tjetty->is_multipath) {
-            URMA_LOG_ERR("Data cannot be transferred between jettys in different multipath mode\n");
-            return URMA_EINVAL;
-        }
-    }
-    bjetty_ctx_t *bjetty_ctx = &bdp_send_comp->bjetty_ctx;
-    if (is_all_pjetty_fail(bjetty_ctx)) {
-        URMA_LOG_ERR("All bonding devs are invalid");
-        return URMA_FAIL;
     }
     urma_status_t ret = post_send_check_jfs_wr_valid(bdp_send_comp->bondp_ctx, wr);
     if (ret != URMA_SUCCESS) {
@@ -470,10 +455,6 @@ static urma_status_t post_recv_check_jfr_wr_valid(const bondp_context_t *bdp_ctx
 
 static urma_status_t post_recv_check_valid(bondp_comp_t *bdp_recv_comp, const urma_jfr_wr_t *wr)
 {
-    if (!is_valid_bondp_comp(bdp_recv_comp)) {
-        URMA_LOG_ERR("Invalid bdp_comp\n");
-        return URMA_EINVAL;
-    }
     if (bdp_recv_comp->comp_type != BONDP_COMP_JETTY && bdp_recv_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_recv_comp type: %d\n", bdp_recv_comp->comp_type);
         return URMA_EINVAL;
@@ -898,7 +879,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
 
     int cr_cnt_remaining = cr_cnt;
 
-    for (int i = 0; i < bdp_jetty->dev_num && cr_cnt_remaining > 0; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM && cr_cnt_remaining > 0; i++) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
