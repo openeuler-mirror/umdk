@@ -525,8 +525,8 @@ static void umq_ub_credit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flo
     } else {
         pool->ops.available_credit_inc = available_credit_inc_non_atomic;
         pool->ops.available_credit_dec = available_credit_dec_non_atomic;
-        pool->ops.allocated_credit_dec = allocated_credit_dec_non_atomic;
         pool->ops.available_credit_return = available_credit_return_non_atomic;
+        pool->ops.allocated_credit_dec = allocated_credit_dec_non_atomic;
         pool->ops.stats_query = credit_pool_stats_query_non_atomic;
     }
 }

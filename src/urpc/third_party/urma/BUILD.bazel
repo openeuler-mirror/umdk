@@ -10,13 +10,3 @@ cc_library(
     hdrs = glob(["include/ub/umdk/urma/*.h"]),
     includes = ["include/ub/umdk/urma"],
 )
-
-cc_import(
-    name = "urma_lib",
-    shared_library = "lib64/liburma.so",
-)
-
-cc_import(
-    name = "tpsa_lib",
-    shared_library = "lib64/libtpsa.so",
-)

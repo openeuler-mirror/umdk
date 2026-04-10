@@ -394,6 +394,20 @@ static uint16_t umq_ub_post_rx_failed_num(urma_jfr_wr_t *recv_wr, uint16_t num, 
     return 0;
 }
 
+static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
+{
+    if (queue->prefill_done) {
+        umq_ub_shared_credit_recharge(queue, count);
+        return;
+    }
+
+    uint32_t total_prefill = __atomic_add_fetch(&queue->prefill_rqe_cnt, count, __ATOMIC_RELAXED);
+    if (total_prefill >= queue->rqe_post_factor * queue->rx_depth) {
+        umq_ub_shared_credit_recharge(queue, queue->rx_depth);
+        queue->prefill_done = true;
+    }
+}
+
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
     uint32_t max_sge_num = queue->max_rx_sge;
@@ -475,23 +489,35 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     }
     (recv_wr_ptr - 1)->next = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], recv_wr, &bad_wr);
+    urma_status_t status;
+    // bondp with shared_jfr should use urma_post_jfr_wr
+    bool post_jfr = ((queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) != 0 && queue->used_port_num > 0);
+    if (post_jfr) {
+        status = umq_symbol_urma()->urma_post_jfr_wr(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, recv_wr, &bad_wr);
+    } else {
+        status = umq_symbol_urma()->urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], recv_wr, &bad_wr);
+    }
     if (status != URMA_SUCCESS) {
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_recv_wr failed, "
-            "status: %d\n", EID_ARGS(*eid), id, (int)status);
+        if (post_jfr) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jfr_wr failed, "
+                                                  "status: %d\n", EID_ARGS(*eid), id, (int)status);
+        } else {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_post_jetty_recv_wr failed, "
+                                                  "status: %d\n", EID_ARGS(*eid), id, (int)status);
+        }
         if (bad_wr != NULL) {
             *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
         } else {
             *bad_qbuf = qbuf;
             bad_wr = recv_wr;
         }
-        umq_ub_shared_credit_recharge(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
+        umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
         return -UMQ_ERR_EAGAIN;
     }
-    umq_ub_shared_credit_recharge(queue, wr_index);
+    umq_ub_rqe_posted_cnt_inc(queue, wr_index);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
     return UMQ_SUCCESS;
 

@@ -92,6 +92,7 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_flush_jetty_t, urma_flush_jetty);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jetty_send_wr_t, urma_post_jetty_send_wr);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jetty_recv_wr_t, urma_post_jetty_recv_wr);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jfr_wr_t, urma_post_jfr_wr);
 
     // Segment functions
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_seg_t, urma_register_seg);
@@ -107,6 +108,9 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_log_set_level_t, urma_log_set_level);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_log_func_t, urma_register_log_func);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_unregister_log_func_t, urma_unregister_log_func);
+
+    // UserCtl
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_user_ctl_t, urma_user_ctl);
 
     // Utility functions
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_str_to_eid_t, urma_str_to_eid);
