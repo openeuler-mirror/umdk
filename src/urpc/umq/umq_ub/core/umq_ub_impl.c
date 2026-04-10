@@ -956,6 +956,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
 
     queue->wait_ack_import.lock = util_rwlock_create();
     if (queue->wait_ack_import.lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue wait_ack_import lock create failed\n");
         goto FREE_NOTIFY_BUF;
     }
 
@@ -1770,12 +1771,14 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         g_ub_ctx[g_ub_ctx_count].dev_attr.dev_cap.max_jetty, sizeof(uint64_t));
     if (g_ub_ctx[g_ub_ctx_count].umq_ctx_jetty_table == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc umq_ctx_jetty_table failed\n");
+        ret = -UMQ_ERR_ENOMEM;
         goto DELETE_URMA_CTX;
     }
     g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table = (volatile uint64_t *)calloc(
         g_ub_ctx[g_ub_ctx_count].dev_attr.dev_cap.max_jetty, sizeof(uint64_t));
     if (g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
+        ret = -UMQ_ERR_ENOMEM;
         goto FREE_UMQ_CTX_TBL;
     }
     g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
