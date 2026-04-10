@@ -151,10 +151,10 @@ static urma_tp_type_t urpc_tp_type_get(union urma_tp_type_en tp_type)
     return URMA_UTP + 1;
 }
 
-static int urpc_default_priority_get(urma_device_attr_t dev_attr)
+static int urpc_default_priority_get(urma_device_attr_t *dev_attr)
 {
     for (int i = 0; i < URMA_MAX_PRIORITY_CNT; i++) {
-        urma_tp_type_t tp_type = urpc_tp_type_get(dev_attr.dev_cap.priority_info[i].tp_type);
+        urma_tp_type_t tp_type = urpc_tp_type_get(dev_attr->dev_cap.priority_info[i].tp_type);
         if (tp_type == URMA_RTP) {
             return i;
         }
@@ -197,7 +197,7 @@ int send_recv_set_local_queue_normal_cfg(
         }
         cfg_get->priority = cfg->priority;
     } else {
-        int ret = urpc_default_priority_get(provider->dev_attr);
+        int ret = urpc_default_priority_get(&provider->dev_attr);
         if (ret < 0) {
             URPC_LIB_LOG_ERR("there is no priority for tp_type rtp\n");
             return -URPC_ERR_EINVAL;
