@@ -349,6 +349,11 @@ static void *async_shrink_global_pool_callback(void *arg)
     async_shrink_pool_param_t *shrink_param = NULL;
     while ((shrink_param = async_shrink_pop_param(exp_pool)) != NULL) {
         (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+        if (!exp_pool->inited) {
+            (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+            free(shrink_param);
+            break;
+        }
         qbuf_expansion_pool_slot_t *slot = exp_pool->exp_slot_list[shrink_param->slot_id];
         if (slot == NULL) {
             (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
