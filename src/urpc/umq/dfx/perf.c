@@ -6,12 +6,13 @@
  */
 
 #include <pthread.h>
+#include <stdarg.h>
 
 #include "umq_errno.h"
 #include "urpc_util.h"
 #include "umq_vlog.h"
+#include "urpc_thread_closure.h"
 #include "perf.h"
-#include <stdarg.h>
 
 #define UMQ_PERF_MAX_THRESH_NS         (100000u)
 
@@ -44,9 +45,9 @@ typedef struct umq_perf_record_ctx {
     uint64_t perf_quantile_thresh[UMQ_PERF_QUANTILE_MAX_NUM];
     uint64_t thresh_ns[UMQ_PERF_QUANTILE_MAX_NUM];
     uint32_t thresh_num;
-    pthread_spinlock_t lock;
 } umq_perf_record_ctx_t;
 
+static pthread_spinlock_t g_umq_perf_record_lock;
 static umq_perf_record_ctx_t *g_umq_perf_record_ctx;
 
 int umq_perf_init(void)
@@ -61,7 +62,7 @@ int umq_perf_init(void)
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc for umq_perf_record failed\n");
         return -UMQ_ERR_ENOMEM;
     }
-    (void)pthread_spin_init(&g_umq_perf_record_ctx->lock, PTHREAD_PROCESS_PRIVATE);
+    (void)pthread_spin_init(&g_umq_perf_record_lock, PTHREAD_PROCESS_PRIVATE);
     return UMQ_SUCCESS;
 }
 
@@ -71,16 +72,17 @@ void umq_perf_uninit(void)
         return;
     }
 
+    (void)pthread_spin_lock(&g_umq_perf_record_lock);
     for(uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
         if (g_umq_perf_record_ctx->dp_thread_run_once[i] != NULL) {
             *g_umq_perf_record_ctx->dp_thread_run_once[i] = PTHREAD_ONCE_INIT;
         }
     }
-
     g_umq_perf_record_enable = false;
-    (void)pthread_spin_destroy(&g_umq_perf_record_ctx->lock);
     free(g_umq_perf_record_ctx);
     g_umq_perf_record_ctx = NULL;
+    (void)pthread_spin_unlock(&g_umq_perf_record_lock);
+    (void)pthread_spin_destroy(&g_umq_perf_record_lock);
 }
 
 static void umq_clear_perf_record_item(uint32_t record_idx)
@@ -95,17 +97,35 @@ static void umq_clear_perf_record_item(uint32_t record_idx)
     }
 }
 
+static void umq_perf_record_closure(uint64_t idx)
+{
+    (void)pthread_spin_lock(&g_umq_perf_record_lock);
+    if (g_umq_perf_record_ctx == NULL) {
+        (void)pthread_spin_unlock(&g_umq_perf_record_lock);
+        return;
+    }
+    g_umq_perf_record_ctx->perf_record_table[idx].is_used = false;
+    g_umq_perf_record_ctx->dp_thread_run_once[idx] = NULL;
+    (void)pthread_spin_unlock(&g_umq_perf_record_lock);
+}
+
 void umq_perf_record_alloc(void)
 {
     uint32_t idx;
-    (void)pthread_spin_lock(&g_umq_perf_record_ctx->lock);
+    (void)pthread_spin_lock(&g_umq_perf_record_lock);
+    if (g_umq_perf_record_ctx == NULL) {
+        (void)pthread_spin_unlock(&g_umq_perf_record_lock);
+        UMQ_VLOG_ERR(VLOG_UMQ, "perf record ctx invalid\n");
+        return;
+    }
+
     for (idx = 0; idx < UMQ_PERF_REC_MAX_NUM; ++idx) {
         if (!g_umq_perf_record_ctx->perf_record_table[idx].is_used) {
             break;
         }
     }
     if (idx == UMQ_PERF_REC_MAX_NUM) {
-        (void)pthread_spin_unlock(&g_umq_perf_record_ctx->lock);
+        (void)pthread_spin_unlock(&g_umq_perf_record_lock);
         UMQ_VLOG_WARN(VLOG_UMQ, "perf_rec table capacity %u were exhausted, alloc perf_rec failed\n",
             UMQ_PERF_REC_MAX_NUM);
         return;
@@ -113,10 +133,11 @@ void umq_perf_record_alloc(void)
 
     umq_clear_perf_record_item(idx);
     g_umq_perf_record_ctx->perf_record_table[idx].is_used = true;
-    (void)pthread_spin_unlock(&g_umq_perf_record_ctx->lock);
+    (void)pthread_spin_unlock(&g_umq_perf_record_lock);
 
     g_perf_record_index = idx;
     g_umq_perf_record_ctx->dp_thread_run_once[idx] = &g_dp_thread_run_once;
+    urpc_thread_closure_register(THREAD_CLOSURE_UMQ_PERF, idx, umq_perf_record_closure);
 }
 
 static void umq_dp_thread_run_once(void)
@@ -346,7 +367,7 @@ int umq_perf_info_get(umq_perf_stats_t *perf_info)
         return -UMQ_ERR_EINVAL;
     }
 
-    (void)pthread_spin_lock(&g_umq_perf_record_ctx->lock);
+    (void)pthread_spin_lock(&g_umq_perf_record_lock);
 
     umq_perf_record_t total_perf_record = {0};
     for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
@@ -375,6 +396,6 @@ int umq_perf_info_get(umq_perf_stats_t *perf_info)
             (uint64_t)(0.99 * total_perf_record.type_record[i].cnt), thresh, thresh_num);
     }
 
-    (void)pthread_spin_unlock(&g_umq_perf_record_ctx->lock);
+    (void)pthread_spin_unlock(&g_umq_perf_record_lock);
     return 0;
 }
