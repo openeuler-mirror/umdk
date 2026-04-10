@@ -860,11 +860,6 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     return umq->tp_ops->umq_tp_buf_alloc(request_size, request_qbuf_num, umq->umqh_tp, option);
 }
 
-static inline bool is_huge_mempool_pool(uint32_t mempool_id)
-{
-    return (mempool_id > UMQ_QBUF_DEFAULT_MEMPOOL_ID && mempool_id < HUGE_QBUF_POOL_MEMPOOL_ID_MAX);
-}
-
 void umq_buf_free(umq_buf_t *qbuf)
 {
     if (!g_umq_inited || qbuf == NULL) {
@@ -976,7 +971,7 @@ int umq_buf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     }
 
     if (qbuf->umqh == UMQ_INVALID_HANDLE) {
-        if (qbuf->mempool_id == UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+        if (!is_huge_mempool_pool(qbuf->mempool_id)) {
             return umq_qbuf_headroom_reset(qbuf, headroom_size);
         } else {
             return umq_huge_qbuf_headroom_reset(qbuf, headroom_size);
