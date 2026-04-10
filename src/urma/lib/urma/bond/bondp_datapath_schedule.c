@@ -30,23 +30,13 @@ int find_next_valid_jetty_idx(const bool *pjettys_valid, int dev_num, int idx_st
     return ret;
 }
 
-bool is_all_pjetty_fail(const bjetty_ctx_t *bjetty_ctx)
-{
-    for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
-        if (bjetty_ctx->pjettys_valid[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static int get_send_idx_with_least_load(bjetty_ctx_t *bjetty_ctx)
+static int __attribute__((unused)) get_send_idx_with_least_load(bjetty_ctx_t *bjetty_ctx)
 {
     int least_load_idx = -1;
     uint32_t least_load = UINT32_MAX;
     uint32_t send_idx = 0;
-    for (int i = 0; i < bjetty_ctx->dev_num; ++i) {
-        send_idx = (uint32_t)((i + bjetty_ctx->send_idx + 1) % bjetty_ctx->dev_num);
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        send_idx = (uint32_t)((i + bjetty_ctx->send_idx + 1) % URMA_UBAGG_DEV_MAX_NUM);
         if (bjetty_ctx->pjettys_valid[send_idx] == false) {
             continue;
         }
@@ -59,48 +49,6 @@ static int get_send_idx_with_least_load(bjetty_ctx_t *bjetty_ctx)
     return least_load_idx;
 }
 
-/** Select send pjetty idx in bjetty_ctx and target pjetty idx in bdp_target_jetty.
- * @return: 0 success.
- * @return: -1 when all local pjettys are invalid or all target pjettys are invalid.
- */
-static int schedule_send_target_idx_default(bjetty_ctx_t *bjetty_ctx, bdp_v_conn_t *v_conn,
-                                            int local_dev_num, int target_dev_num,
-                                            urma_opcode_t opcode, urma_transport_mode_t trans_mode, int *send_idx, int *target_idx)
-{
-    bjetty_ctx->send_idx = get_send_idx_with_least_load(bjetty_ctx);
-    if (bjetty_ctx->send_idx < 0) {
-        URMA_LOG_DEBUG("Failed to find valid send jetty idx.\n");
-        return -1;
-    }
-    *send_idx = bjetty_ctx->send_idx;
-    switch (opcode) {
-        case URMA_OPC_SEND:
-        case URMA_OPC_SEND_IMM:
-        case URMA_OPC_SEND_INVALIDATE:
-        case URMA_OPC_WRITE_IMM:
-        case URMA_OPC_WRITE_NOTIFY:
-            v_conn->rqe_idx = find_next_valid_jetty_idx(v_conn->target_valid, target_dev_num, v_conn->rqe_idx);
-            if (v_conn->rqe_idx < 0) {
-                URMA_LOG_DEBUG("Failed to find valid target jetty idx for rqe_idx.\n");
-                return -1;
-            }
-            *target_idx = v_conn->rqe_idx;
-            break;
-        default:
-            v_conn->non_rqe_idx = find_next_valid_jetty_idx(v_conn->target_valid,
-                                                            target_dev_num, v_conn->non_rqe_idx);
-            if (v_conn->non_rqe_idx < 0) {
-                URMA_LOG_DEBUG("Failed to find valid target jetty idx for non_rqe_idx.\n");
-                return -1;
-            }
-            *target_idx = v_conn->non_rqe_idx;
-            break;
-    }
-    if (trans_mode == URMA_TM_RC) {
-        *send_idx = *target_idx;
-    }
-    return 0;
-}
 /**
  * In matrix server, multipath mode has two different planes.
  * Each plane has one device which can connect to any other device identified by primary eid.
@@ -169,10 +117,6 @@ int schedule_send(const urma_jfs_wr_t *wr, bjetty_ctx_t *bjetty_ctx, bdp_v_conn_
         URMA_LOG_ERR("Invalid wr->tjetty: NULL\n");
         return URMA_EINVAL;
     }
-    if (!is_in_matrix_server(bjetty_ctx->bond_ctx)) {
-        return schedule_send_target_idx_default(bjetty_ctx, v_conn, bjetty_ctx->dev_num,
-                                                bdp_tjetty->target_dev_num, wr->opcode, bdp_tjetty->v_tjetty.trans_mode, send_idx, target_idx);
-    }
     if (is_multipath_comp(bjetty_ctx->bdp_comp)) {
         return schedule_next_route_in_matrix_server_multipath(wr, bdp_tjetty, v_conn, send_idx, target_idx);
     }
@@ -182,7 +126,7 @@ int schedule_send(const urma_jfs_wr_t *wr, bjetty_ctx_t *bjetty_ctx, bdp_v_conn_
 /** Select recv pjetty in post_jetty_recv_wr */
 static urma_status_t schedule_recv_idx_default(bjetty_ctx_t *bjetty_ctx, int *recv_idx)
 {
-    bjetty_ctx->post_recv_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->dev_num,
+    bjetty_ctx->post_recv_idx = find_next_valid_jetty_idx(bjetty_ctx->pjettys_valid, bjetty_ctx->bdp_comp->dev_num,
                                                           bjetty_ctx->post_recv_idx);
     if (bjetty_ctx->post_recv_idx < 0) {
         /* all pjetty fail */
@@ -215,9 +159,6 @@ static urma_status_t schedule_next_recv_port_matrix_singlepath(bjetty_ctx_t *bje
 
 urma_status_t schedule_recv(bjetty_ctx_t *bjetty_ctx, int *recv_idx)
 {
-    if (!is_in_matrix_server(bjetty_ctx->bdp_comp->bondp_ctx)) {
-        return schedule_recv_idx_default(bjetty_ctx, recv_idx);
-    }
     /* JFR is set to multipath mode at default */
     /* Only JETTY can be single_path mode in schedule_recv */
     if (is_multipath_comp(bjetty_ctx->bdp_comp)) {
