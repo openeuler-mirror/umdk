@@ -90,6 +90,10 @@ int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info);
 int umq_ub_stats_io_get_impl(uint64_t umqh_tp, umq_packet_stats_t *packet_stats);
 int umq_ub_stats_io_reset_impl(uint64_t umqh_tp);
 
+int umq_ub_stats_tp_perf_start_impl(void);
+int umq_ub_stats_tp_perf_stop_impl(void);
+int umq_ub_stats_tp_perf_info_get_impl(char *perf_buf, uint32_t *length);
+
 #ifdef __cplusplus
 }
 #endif

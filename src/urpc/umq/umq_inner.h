@@ -92,6 +92,7 @@ static ALWAYS_INLINE bool is_timeout(const struct timespec *last, uint32_t timeo
 
     return (t2 >= t1) && (t2 - t1) >= t3;
 }
+umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode);
 
 #ifdef __cplusplus
 }

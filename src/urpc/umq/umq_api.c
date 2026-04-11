@@ -243,6 +243,16 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     },
 };
 
+umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode)
+{
+    umq_framework_t *umq_fw = &g_umq_fws[trans_mode];
+    if (!umq_fw->enable) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not init\n", trans_mode);
+        return NULL;
+    }
+    return umq_fw->dfx_tp_ops;
+}
+
 static int umq_fw_log_config_set(umq_log_config_t *config)
 {
     uint8_t fw_i = 0;
