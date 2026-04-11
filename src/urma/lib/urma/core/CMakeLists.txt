@@ -50,5 +50,6 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/urma_provider.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/urma_types_str.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/urma_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/urma_perf.h
     DESTINATION /usr/include/ub/umdk/urma
 )
