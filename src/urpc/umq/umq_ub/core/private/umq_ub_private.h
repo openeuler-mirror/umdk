@@ -18,6 +18,7 @@
 
 #include "urma_api.h"
 #include "umq_inner.h"
+#include "urpc_bitmap.h"
 #include "urpc_hash.h"
 #include "urpc_hmap.h"
 #include "urpc_util.h"
@@ -170,22 +171,36 @@ typedef struct ub_flow_control {
     volatile bool is_credit_applying;
 } ub_flow_control_t;
 
+typedef struct imported_tseg_node {
+    struct urpc_hmap_node node;
+    uint32_t mempool_id;
+    urma_target_seg_t *tseg;
+} imported_tseg_node_t;
+
+typedef struct import_remote_record_node {
+    struct urpc_hmap_node node;
+    uint32_t mempool_id;
+    bool imported;
+} import_remote_record_node_t;
+
+typedef struct import_tseg_table {
+    struct urpc_hmap tseg_hmap;
+    util_external_rwlock *tseg_hmap_lock;
+} import_tseg_table_t;
+
 typedef struct remote_eid_hmap_node {
     struct urpc_hmap_node node;
     urma_eid_t eid;
     uint32_t pid;
     char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
-    uint32_t remote_eid_id;
     uint32_t ref_cnt;
+    import_tseg_table_t tseg; // save the current ub ctx imported tseg
+    urpc_bitmap_t tseg_imported; // record whether the peer has imported the local memory
 } remote_eid_hmap_node_t;
 
 typedef struct remote_imported_tseg_info {
-    bool tesg_imported[UMQ_UB_MAX_REMOTE_EID_NUM][UMQ_MAX_TSEG_NUM];
-    urma_target_seg_t *imported_tseg_list[UMQ_UB_MAX_REMOTE_EID_NUM][UMQ_MAX_TSEG_NUM];
-    util_external_mutex_lock *imported_tseg_list_mutex[UMQ_UB_MAX_REMOTE_EID_NUM];
-    struct urpc_hmap remote_eid_id_table;
-    util_external_mutex_lock *remote_eid_id_table_lock;
-    util_id_allocator_t eid_id_allocator;
+    struct urpc_hmap remote_eid_table;
+    util_external_mutex_lock *remote_eid_table_lock;
 } remote_imported_tseg_info_t;
 
 typedef struct umq_ub_ctx {
@@ -279,8 +294,9 @@ typedef struct ub_bind_ctx {
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
     char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
-    uint32_t remote_eid_id;
     uint64_t remote_notify_addr;
+    import_tseg_table_t *tseg_table;
+    urpc_bitmap_t tseg_imported;
 } ub_bind_ctx_t;
 
 struct ub_credit_pool;
@@ -363,7 +379,6 @@ typedef struct ub_queue {
     volatile uint64_t packet_stats[UB_PACKET_STATS_TYPE_MAX];
     uint32_t create_flag;
     uint64_t umq_ctx;
-    urma_target_seg_t **imported_tseg_list;   // read-only
     umq_buf_t *addr_list;
     wait_ack_import_t wait_ack_import;
 
@@ -450,7 +465,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
 uint32_t token_policy_get(bool enable);
 int umq_ub_token_generate(bool enable_token, uint32_t *token);
 int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info);
-int umq_ub_eid_id_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx);
+int umq_ub_remote_tseg_info_release(remote_imported_tseg_info_t *remote_imported_info, ub_bind_ctx_t *ctx);
 int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info);
 uint32_t umq_ub_bind_info_serialize(ub_queue_t *queue, uint8_t *bind_info, uint32_t bind_info_size);
 int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size, umq_ub_bind_info_t *bind_info);
@@ -558,6 +573,8 @@ static ALWAYS_INLINE void umq_ub_io_packet_stats(
         (void)__atomic_add_fetch(&queue->packet_stats[type], cnt, __ATOMIC_RELAXED);
     }
 }
+
+urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg, uint32_t mempool_id);
 
 #ifdef __cplusplus
 }
