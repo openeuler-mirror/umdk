@@ -182,7 +182,9 @@ static int import_check_tseg_for_port_eid(bondp_context_t *bdp_ctx, bondp_target
     for (int i = 0; i < IODIE_NUM; i++) {
         for (int j = 0; j < PORT_NUM; j++) {
             int local_port = IODIE_NUM + PORT_NUM * i + j;
-            int target_port = IODIE_NUM + PORT_NUM * i + rvjetty_info->ports[i][j];
+            // TODO
+            // int target_port = IODIE_NUM + PORT_NUM * i + rvjetty_info->ports[i][j];
+            int target_port = IODIE_NUM + PORT_NUM * i;
 
             if (local_port >= bdp_tjetty->local_dev_num ||
                 target_port >= bdp_tjetty->target_dev_num ||

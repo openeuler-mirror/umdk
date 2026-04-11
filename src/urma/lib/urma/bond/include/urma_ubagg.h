@@ -32,24 +32,6 @@ typedef enum urma_bond_user_ctl_opcode {
     URMA_USER_CTL_BOND_ENABLE_SEG_CACHE,
 } urma_bond_user_ctl_opcode_t;
 
-#define PORT_NUM  (9)
-#define IODIE_NUM (2)
-
-typedef struct urma_bond_seg_info_out {
-    urma_seg_t base;
-    urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
-} urma_bond_seg_info_out_t;
-
-typedef struct urma_bond_id_info_out {
-    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
-    bool is_multipath;
-    bool is_health_check_enable;
-    urma_bond_seg_info_out_t health_check_seg;
-    uint32_t ports[IODIE_NUM][PORT_NUM];
-} urma_bond_id_info_out_t;
-
 typedef union bondp_port_id {
     struct {
         uint8_t chip_id;
