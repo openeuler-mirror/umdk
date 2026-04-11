@@ -136,6 +136,29 @@ int umq_stats_perf_stop(void);
  */
 int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_buf_len);
 
+/**
+ * start tp performance statistics.
+ * @param[in] trans_mode: umq trans mdoe
+ * Return: 0 on success, other value on error
+ */
+int umq_stats_tp_perf_start(umq_trans_mode_t trans_mode);
+
+/**
+ * Stop tp performance statistics.
+ * @param[in] trans_mode: umq trans mdoe
+ * Return: 0 on success, other value on error
+ */
+int umq_stats_tp_perf_stop(umq_trans_mode_t trans_mode);
+
+/**
+ * Get tp performance info statistical results.
+ * @param[in] trans_mode: umq trans mdoe
+ * @param[out] perf_buf: buffer to store performance information;
+ * @param[out] length: length of performance information;
+ * Return: 0 on success, other value on error
+ */
+int umq_stats_tp_perf_info_get(umq_trans_mode_t trans_mode, char *perf_buf, uint32_t *length);
+
 #ifdef __cplusplus
 }
 #endif
