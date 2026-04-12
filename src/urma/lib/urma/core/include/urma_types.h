@@ -682,7 +682,8 @@ typedef union urma_import_jetty_flag {
                                    /* (0x4): UNO, unreliable non ordering */
         uint32_t share_tp     : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
                                          this flag can only be set to 0. */
-        uint32_t reserved     : 20;
+        uint32_t has_drv_ext  : 1;
+        uint32_t reserved     : 19;
     } bs;
     uint32_t value;
 } urma_import_jetty_flag_t;
