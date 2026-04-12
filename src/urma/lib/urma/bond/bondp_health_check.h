@@ -20,7 +20,7 @@ void bondp_destroy_health_check_ctx(bondp_context_t *bond_ctx);
 int bondp_fill_vjetty_health_info(bondp_context_t *bond_ctx, bondp_comp_t *bdp_jetty,
 	urma_bond_seg_info_out_t *health_check_seg, bool *is_health_check_enable);
 int bondp_import_health_check_tseg(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-	urma_bond_id_info_out_t *rvjetty_info);
+	urma_bond_id_info_out_t *rvjetty_info, urma_rjetty_t *rjetty);
 int bondp_unimport_health_check_tseg(bondp_target_jetty_t *bdp_tjetty);
 
 #endif // BONDP_HEALTH_CHECK_H
