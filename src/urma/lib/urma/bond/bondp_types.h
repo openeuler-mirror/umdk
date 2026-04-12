@@ -191,15 +191,18 @@ typedef struct bondp_comp {
         urma_jetty_t *p_jetty[URMA_UBAGG_DEV_MAX_NUM];
     };
     int dev_num;
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
     bondp_context_t *bondp_ctx;
     bjetty_ctx_t bjetty_ctx;
     bool is_multipath;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
+    // send
     bondp_jfc_t *send_jfc;
+    bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    // recv
     bondp_jfc_t *recv_jfc;
-    uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
-    uint64_t v_orig_handle;
 } bondp_comp_t;
 
 typedef struct bondp_target_jetty {
