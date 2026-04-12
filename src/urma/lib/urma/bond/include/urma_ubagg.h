@@ -77,6 +77,14 @@ typedef struct bondp_jetty_cfg {
     uint32_t port_count;
 } bondp_jetty_cfg_t;
 
+typedef struct bondp_rjetty {
+    urma_rjetty_t base;
+    union {
+        urma_jfs_t *jfs;
+        urma_jetty_t *jetty;
+    };
+} bondp_rjetty_t;
+
 #ifdef __cplusplus
 }
 #endif
