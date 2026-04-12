@@ -50,6 +50,33 @@ typedef struct urma_bond_id_info_out {
     uint32_t ports[IODIE_NUM][PORT_NUM];
 } urma_bond_id_info_out_t;
 
+typedef union bondp_port_id {
+    struct {
+        uint8_t chip_id;
+        uint8_t die_id;
+        uint8_t port_idx; // portEID：0~8；primaryEID: UINT8_MAX
+        uint8_t reserved;
+    };
+    uint64_t value;
+} bondp_port_id_t;
+
+typedef struct bondp_jfs_cfg {
+    urma_jfs_cfg_t base;
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
+} bondp_jfs_cfg_t;
+
+typedef struct bondp_jfr_cfg {
+    urma_jfr_cfg_t base;
+    bool multi_path;
+} bondp_jfr_cfg_t;
+
+typedef struct bondp_jetty_cfg {
+    urma_jetty_cfg_t base;
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
+} bondp_jetty_cfg_t;
+
 #ifdef __cplusplus
 }
 #endif

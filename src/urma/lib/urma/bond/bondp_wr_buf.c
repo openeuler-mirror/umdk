@@ -23,6 +23,8 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
     if (buf == NULL || max_wr_num == 0) {
         return -EINVAL;
     }
+    const uint32_t extra_wr_num = 1024;
+    max_wr_num += extra_wr_num;
     const uint32_t max_entry_size = MAX(sizeof(jfs_wr_entry_t), sizeof(jfr_wr_entry_t));
     buf->entries = calloc(max_wr_num, max_entry_size);
     if (buf->entries == NULL) {
@@ -30,7 +32,7 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
     }
     buf->max_wr_num = max_wr_num;
     buf->wr_entry_size = max_entry_size;
-    buf->latest_used = 0;
+    buf->latest_used = max_entry_size;
     return 0;
 }
 
@@ -59,7 +61,7 @@ void wr_buf_uninit(wr_buf_t *buf)
     buf->entries = NULL;
     buf->max_wr_num = 0;
     buf->wr_entry_size = 0;
-    buf->latest_used = 0;
+    buf->latest_used = buf->max_wr_num;
 }
 
 static void *wr_buf_alloc(wr_buf_t *buf, wr_buf_entry_type_t entry_type)
