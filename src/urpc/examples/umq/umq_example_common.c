@@ -390,14 +390,14 @@ int example_poll_rx(uint64_t umqh, const char *check_data, uint32_t data_size, b
         goto FREE;
     }
 
-    if (with_imm_data && pro->imm_data != EXAMPLE_TEST_IMM_DATA) {
-        LOG_PRINT_ERR("polled imm_data[%u] doesn't match imm data[%u]\n",
-            (uint32_t)pro->imm_data, EXAMPLE_TEST_IMM_DATA);
+    if (with_imm_data && pro->imm.user_data != EXAMPLE_TEST_IMM_DATA) {
+        LOG_PRINT_ERR("polled imm.user_data[%u] doesn't match imm data[%u]\n",
+                      (uint32_t)pro->imm.user_data, EXAMPLE_TEST_IMM_DATA);
         ret = -1;
         goto FREE;
     }
 
-    LOG_PRINT("polled data: %s, imm_data: %lu\n", (char *)buf[0]->buf_data, pro->imm_data);
+    LOG_PRINT("polled data: %s, imm.user_data: %u\n", (char *)buf[0]->buf_data, (uint32_t)pro->imm.user_data);
     ret = 0;
 
 FREE:
@@ -421,7 +421,7 @@ int example_post_tx(uint64_t umqh, const char *data, uint32_t data_size)
     buf->data_size = data_size;
     buf->total_data_size = data_size;
     umq_buf_pro_t *pro = (umq_buf_pro_t *)buf->qbuf_ext;
-    pro->imm_data = EXAMPLE_TEST_IMM_DATA;
+    pro->imm.user_data = EXAMPLE_TEST_IMM_DATA;
     pro->flag.bs.solicited_enable = 1;
     pro->flag.bs.complete_enable = 1;
     pro->opcode = UMQ_OPC_SEND_IMM;
