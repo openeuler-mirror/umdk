@@ -168,7 +168,6 @@ void delete_topo_map(topo_map_t *topo_map)
     }
 }
 
-
 int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, urma_eid_t *output)
 {
     if (topo_map == NULL || target_eid == NULL) {
@@ -181,19 +180,4 @@ int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, 
     }
     *output = entry->bonding_eid;
     return 0;
-}
-
-bondp_topo_agg_dev_t *get_topo_dev_info_by_agg_eid(topo_map_t *topo_map, urma_eid_t *agg_eid)
-{
-    if (topo_map == NULL) {
-        return NULL;
-    }
-    for (uint32_t i = 0; i < MAX_NODE_NUM; ++i) {
-        for (uint32_t j = 0; j < DEV_NUM; ++j) {
-            if (is_eid_equal((urma_eid_t *)topo_map->topo_infos[i].agg_devs[j].agg_eid, agg_eid)) {
-                return &topo_map->topo_infos[i].agg_devs[j];
-            }
-        }
-    }
-    return NULL;
 }
