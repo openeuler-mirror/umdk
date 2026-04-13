@@ -17,6 +17,8 @@ int admin_nl_send_msg(struct nl_msg *msg);
 int admin_nl_recv_msg(int (*cb)(struct nl_msg *msg, void *arg), void *arg);
 int admin_nl_send_recv_msg(struct nl_msg *msg, int (*cb)(struct nl_msg *msg, void *arg), void *arg);
 int admin_nl_send_recv_msg_default(struct nl_msg *msg);
+int admin_nl_send_recv_msg_default_silent_errno(struct nl_msg *msg, int silent_errno);
+int admin_nl_send_recv_msg_default_silent_notfound(struct nl_msg *msg);
 
 struct nl_msg *admin_nl_alloc_msg(uint8_t cmd, int flags);
 void admin_nl_free_msg(struct nl_msg *msg);
