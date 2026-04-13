@@ -1018,7 +1018,7 @@ static tool_topo_info_t *admin_find_topo_node(tool_topo_map_t *topo_map, uint32_
         return NULL;
     }
     for (uint32_t i = 0; i < topo_map->node_num; i++) {
-        if (topo_map->topo_infos[i].id == node_id) {
+        if (topo_map->topo_infos[i].node_id == node_id) {
             return &topo_map->topo_infos[i];
         }
     }
@@ -1139,7 +1139,8 @@ static int admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id, con
             } else {
                 printf("\t UE %d:\n", iodie_idx);
             }
-            printf("\t\t Socket id: %d\n", ue->socket_id);
+            printf("\t\t Chip id: %d\n", ue->chip_id);
+            printf("\t\t Die id: %d\n", ue->die_id);
             printf("\t\t Entity id: %d\n", ue->entity_id);
             printf("\t\t Primary eid:\n");
             printf("\t\t\t %s\n", eid_str);
@@ -1165,7 +1166,7 @@ static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
     for (uint32_t i = 0; i < topo_map->node_num; i++) {
         tool_topo_info_t *cur_node_info = topo_map->topo_infos + i;
         if (cur_node_info->is_current != 0) {
-            node_id = cur_node_info->id;
+            node_id = cur_node_info->node_id;
             break;
         }
     }

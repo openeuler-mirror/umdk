@@ -23,11 +23,13 @@
 #include "urma_types.h"
 #include "urma_types_str.h"
 
-#define MAX_NODE_NUM            (16)
+#define MAX_NODE_NUM            (64)
 #define EID_LEN                 (16)
 #define PORT_NUM                (9)
+#define CHIP_NUM                (2)
+#define IODIE_NUM_PER_CHIP      (1)
 #define IODIE_NUM               (2)
-#define DEV_NUM                 (128)
+#define DEV_NUM                 (256)
 #define URMA_ADMIN_MAX_DEV_NAME 64
 #define URMA_ADMIN_MAX_NS_PATH  128 /* /proc/$pid/ns/net */
 #define OWN_UE_IDX              (0xffff)
@@ -219,7 +221,8 @@ typedef struct tool_res_seg_val {
 } tool_res_seg_val_t;
 
 typedef struct tool_topo_ue {
-    uint32_t socket_id;
+    uint32_t chip_id;
+    uint32_t die_id;
     uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
@@ -237,7 +240,9 @@ typedef struct tool_topo_link {
 } tool_topo_link_t;
 
 typedef struct tool_topo_info {
-    uint32_t id;
+    uint32_t type;
+    uint32_t super_node_id;
+    uint32_t node_id;
     uint32_t is_current;
     tool_topo_link_t links[IODIE_NUM][PORT_NUM];
     tool_topo_agg_dev_t agg_devs[DEV_NUM];
