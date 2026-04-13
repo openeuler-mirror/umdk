@@ -109,6 +109,7 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     uint16_t mempool_id = buf_pro->remote_sge.mempool_id;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    urma_target_seg_t *tseg = NULL;
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (buf_pro->remote_sge.length > buffer->total_data_size) {
@@ -117,14 +118,20 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
                     buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
-            if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id invalid or remote tseg has "
-                    "not been imported, mempool_id %u\n", EID_ARGS(*eid), id, mempool_id);
+            if (mempool_id >= UMQ_MAX_TSEG_NUM) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u invalid\n",
+                    EID_ARGS(*eid), id, mempool_id);
+                return -UMQ_ERR_ETSEG_NON_IMPORTED;
+            }
+            tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
+            if (tseg == NULL) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u has not been imported\n",
+                    EID_ARGS(*eid), id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             src_sge->addr = buf_pro->remote_sge.addr;
             src_sge->len = buf_pro->remote_sge.length;
-            src_sge->tseg = queue->imported_tseg_list[mempool_id];
+            src_sge->tseg = tseg;
             urma_wr_ptr->rw.src.sge = src_sge;
             urma_wr_ptr->rw.src.num_sge = 1;
             urma_wr_ptr->rw.dst.sge = sges_ptr;
@@ -141,14 +148,20 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
                     buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
-            if (mempool_id >= UMQ_MAX_TSEG_NUM || queue->imported_tseg_list[mempool_id] == NULL) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id invalid or remote tseg has "
-                    "not been imported, mempool_id %u\n", EID_ARGS(*eid), id, mempool_id);
+            if (mempool_id >= UMQ_MAX_TSEG_NUM) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u invalid\n",
+                    EID_ARGS(*eid), id, mempool_id);
+                return -UMQ_ERR_ETSEG_NON_IMPORTED;
+            }
+            tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
+            if (tseg == NULL) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u has not been imported\n",
+                    EID_ARGS(*eid), id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             dst_sge->addr = buf_pro->remote_sge.addr;
             dst_sge->len = buf_pro->remote_sge.length;
-            dst_sge->tseg = queue->imported_tseg_list[mempool_id];
+            dst_sge->tseg = tseg;
             urma_wr_ptr->rw.dst.sge = dst_sge;
             urma_wr_ptr->rw.dst.num_sge = 1;
             urma_wr_ptr->rw.src.sge = sges_ptr;
@@ -610,8 +623,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                         return UMQ_SUCCESS;
                     }
 
-                    real_queue->dev_ctx->remote_imported_info->
-                        tesg_imported[real_queue->bind_ctx->remote_eid_id][imm.mem_import.mempool_id] = true;
+                    urpc_bitmap_set1(real_queue->bind_ctx->tseg_imported, imm.mem_import.mempool_id);
                     *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
                     umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
                     return UMQ_SUCCESS;

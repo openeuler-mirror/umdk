@@ -1327,7 +1327,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
     }
 
     urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
-    (void)umq_ub_eid_id_release(queue->dev_ctx->remote_imported_info, bind_ctx);
+    (void)umq_ub_remote_tseg_info_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     UMQ_VLOG_INFO(VLOG_UMQ, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u"
         ", unbind jetty\n", EID_ARGS(*eid), id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
     (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
@@ -2018,7 +2018,7 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
         return -UMQ_ERR_EINVAL;
     }
 
-    if (queue->dev_ctx->remote_imported_info->tesg_imported[queue->bind_ctx->remote_eid_id][mempool_id]) {
+    if (urpc_bitmap_is_set(queue->bind_ctx->tseg_imported, mempool_id)) {
         mempool_state->import_state = MEMPOOL_STATE_IMPORTED;
     } else {
         mempool_state->import_state = MEMPOOL_STATE_NON_IMPORTED;
