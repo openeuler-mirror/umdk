@@ -77,7 +77,8 @@ typedef urma_status_t (*urma_unregister_log_func_t)(void);
 typedef int (*urma_str_to_eid_t)(const char *buf, urma_eid_t *eid);
 
 // === UVS function pointer types ===
-typedef int (*uvs_get_route_list_t)(const void *route, void *route_list);
+typedef int (*uvs_get_path_set_t)(const void *src_bonding_eid, const void *dst_bonding_eid, uint32_t tp_type,
+    bool multi_path, void *path_set);
 
 // === DFX perf ===
 typedef urma_status_t (*urma_start_perf_t)(void);
@@ -145,7 +146,7 @@ typedef struct umq_symbol_urma {
     urma_str_to_eid_t urma_str_to_eid;
 
     // UVS
-    uvs_get_route_list_t uvs_get_route_list;
+    uvs_get_path_set_t uvs_get_path_set;
 
     // DFX
     urma_start_perf_t urma_start_perf;
