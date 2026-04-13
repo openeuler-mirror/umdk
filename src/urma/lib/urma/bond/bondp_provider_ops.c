@@ -136,7 +136,7 @@ static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 urma_status_t bondp_init(urma_init_attr_t *conf)
 {
     if (g_bondp_global_ctx != NULL) {
-        URMA_LOG_ERR("Initialized already\n");
+        URMA_LOG_WARN("Initialized already\n");
         return URMA_FAIL;
     }
     int ret = bondp_global_ctx_init(&g_bondp_global_ctx);
