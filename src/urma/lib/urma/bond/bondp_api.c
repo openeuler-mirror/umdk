@@ -1285,6 +1285,35 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
     return final_ret;
 }
 
+static int bondp_query_port(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+    if (in->len != sizeof(urma_bond_query_active_port_in_t) ||
+        out->len < sizeof(urma_bond_query_active_port_out_t) ||
+        in->addr == 0 || out->addr == 0) {
+        URMA_LOG_ERR("Invalid query port param.\n");
+        return -EINVAL;
+    }
+
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    urma_bond_query_active_port_in_t *query_in = (urma_bond_query_active_port_in_t *)(uintptr_t)in->addr;
+    urma_bond_query_active_port_out_t *query_out = (urma_bond_query_active_port_out_t *)(uintptr_t)out->addr;
+    if (query_in->jfr == NULL) {
+        URMA_LOG_ERR("Invalid jfr.\n");
+        return -EINVAL;
+    }
+    bondp_comp_t *bdp_comp = CONTAINER_OF_FIELD(query_in->jfr, bondp_comp_t, v_jfr);
+    if (bdp_comp->bondp_ctx != bdp_ctx) {
+        URMA_LOG_ERR("The object does not belong to current context.\n");
+        return -EINVAL;
+    }
+
+    query_out->enabled_count = bdp_comp->enabled_count;
+    query_out->active_count = bdp_comp->active_count;
+    (void)memcpy(query_out->enabled_indices, bdp_comp->enabled_indices, sizeof(query_out->enabled_indices));
+    (void)memcpy(query_out->active_indices, bdp_comp->active_indices, sizeof(query_out->active_indices));
+    return 0;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     switch (in->opcode) {
@@ -1303,6 +1332,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
         case URMA_USER_CTL_BOND_ENABLE_SEG_CACHE:
             bondp_toggle_seg_cache(true);
             return 0;
+        case URMA_USER_CTL_BOND_QUERY_PORT:
+            return bondp_query_port(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode:%d\n", in->opcode);
             return -EINVAL;
