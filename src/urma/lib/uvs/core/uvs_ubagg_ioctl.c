@@ -7,17 +7,17 @@
  * Note:
  * History:
  */
+#include "uvs_ubagg_ioctl.h"
+#include "tpsa_ioctl.h"
+#include "tpsa_log.h"
+#include "ub_util.h"
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <sys/ioctl.h>
-#include "ub_util.h"
-#include "tpsa_log.h"
-#include "tpsa_ioctl.h"
-#include "uvs_ubagg_ioctl.h"
 
-#define UVS_UBAGG_DEVICE_PATH "/dev/ubagg"
+#define UVS_UBAGG_DEVICE_PATH  "/dev/ubagg"
 #define UVS_UBCORE_DEVICE_PATH "/dev/ubcore/ubcore"
 
 int uvs_ubagg_ioctl_create_agg_dev(uvs_eid_t *agg_eid, const char *dev_name)
@@ -223,12 +223,47 @@ int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *
     ret = uvs_ioctl_get_route_list(&ioctl_ctx, &arg);
     if (ret != 0) {
         TPSA_LOG_ERR("Failed to get route list, ret: %d, errno: %d.\n",
-            ret, errno);
+                     ret, errno);
         close(dev_fd);
         return ret;
     }
 
     *route_list = arg.out;
+
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
+                                  const uvs_eid_t *dst_bonding_eid,
+                                  enum uvs_tp_type tp_type, bool multi_path,
+                                  uvs_path_set_t *uvs_path_set)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    uvs_cmd_get_path_set_t arg = {0};
+    int ret = 0;
+
+    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+    memcpy(&arg.in.src_bonding_eid, src_bondind_eid, sizeof(uvs_eid_t));
+    memcpy(&arg.in.dst_bonding_eid, dst_bonding_eid, sizeof(uvs_eid_t));
+    arg.in.tp_type = tp_type;
+    arg.in.multi_path = multi_path;
+
+    ret = uvs_ioctl_get_path_set(&ioctl_ctx, &arg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to get path set, ret: %d, errno: %d.\n",
+                     ret, errno);
+        close(dev_fd);
+        return ret;
+    }
+
+    *uvs_path_set = arg.out;
 
     close(dev_fd);
     return 0;

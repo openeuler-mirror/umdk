@@ -17,20 +17,23 @@
 #include "bondp_hash_table.h"
 #include "urma_types.h"
 
-#define CNA_LEN          (3)
-#define EID_LEN          (16)
-#define PORT_NUM         (9)
-#define MAX_ALL_PORT_NUM (18)
-#define MAX_NODE_NUM     (16)
-#define IODIE_NUM        (2)
-#define DEV_NUM          (128)
+#define CNA_LEN            (3)
+#define EID_LEN            (16)
+#define PORT_NUM           (9)
+#define MAX_ALL_PORT_NUM   (18)
+#define MAX_NODE_NUM       (64)
+#define IODIE_NUM_PER_CHIP (1)
+#define CHIP_NUM           (2)
+#define IODIE_NUM          (2)
+#define DEV_NUM            (256)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct bondp_topo_ue {
-    uint32_t socket_id;
+    uint32_t chip_id;
+    uint32_t die_id;
     uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
@@ -50,7 +53,9 @@ typedef struct bondp_topo_agg_dev {
 } bondp_topo_agg_dev_t;
 
 typedef struct bondp_topo_node {
-    uint32_t id;
+    uint32_t type;
+    uint32_t super_node_id;
+    uint32_t node_id;
     uint32_t is_current;
     bondp_topo_link_t links[IODIE_NUM][PORT_NUM];
     bondp_topo_agg_dev_t agg_devs[DEV_NUM];
