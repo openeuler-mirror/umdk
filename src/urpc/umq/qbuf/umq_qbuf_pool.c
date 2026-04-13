@@ -30,7 +30,7 @@
 #define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
 #define QBUF_POOL_SLOT_ARRAY_INIT_CAP 4
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
-#define QBUF_POOL_EXPANSION_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
+#define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_CHECK_ASYNC_PERIOD_US (1000)
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
 
@@ -762,9 +762,9 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EEXIST;
     }
 
-    if (cfg->umq_buf_pool_max_size > QBUF_POOL_EXPANSION_MEM_SIZE_MAX) {
+    if (cfg->umq_buf_pool_max_size > QBUF_POOL_MEM_SIZE_MAX) {
         UMQ_VLOG_INFO(VLOG_UMQ, "the maximum value of expansion mem size max %llu exceed %llu\n",
-            cfg->umq_buf_pool_max_size, QBUF_POOL_EXPANSION_MEM_SIZE_MAX);
+            cfg->umq_buf_pool_max_size, QBUF_POOL_MEM_SIZE_MAX);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1077,6 +1077,13 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     if (!g_qbuf_pool.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
+    }
+
+    if (((uint64_t)request_size * (uint64_t)num) > QBUF_POOL_MEM_SIZE_MAX) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+            "requested size %u multiplied by the requested num %u exceeds the memory pool size %llu\n",
+            request_size, num, QBUF_POOL_MEM_SIZE_MAX);
+        return -UMQ_ERR_EINVAL;
     }
 
     local_block_pool_t *local_pool = get_thread_cache();
