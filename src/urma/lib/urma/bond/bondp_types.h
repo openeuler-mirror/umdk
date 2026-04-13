@@ -161,8 +161,6 @@ typedef struct bondp_jetty_ctx {
     struct bondp_comp *bdp_comp;
     urma_jetty_t **pjettys; // store the pointer array of bdp_comp->members, which could be jfs*/jfr*/jetty*.
     uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
-    // -- wr buf --
-    // slide window and other status for de-duplication
     bondp_hash_table_t v_conn_table;
 } bjetty_ctx_t;
 
