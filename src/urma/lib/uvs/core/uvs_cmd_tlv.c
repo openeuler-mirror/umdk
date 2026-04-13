@@ -8,17 +8,17 @@
  * History: 2024-08-06 create this file to support uvs cmd tlv
  */
 
-#include <stdlib.h>
 #include <errno.h>
+#include <stdlib.h>
 
-#include "tpsa_log.h"
 #include "tpsa_ioctl.h"
+#include "tpsa_log.h"
 #include "uvs_cmd_tlv.h"
 
 static inline void fill_attr(uvs_cmd_attr_t *attr, uint16_t type, uint16_t field_size, uint16_t el_num,
-    uint16_t el_size, uintptr_t data)
+                             uint16_t el_size, uintptr_t data)
 {
-    *attr = (uvs_cmd_attr_t) {
+    *attr = (uvs_cmd_attr_t){
         .type = type,
         .flag = 0,
         .field_size = field_size,
@@ -73,4 +73,18 @@ int uvs_ioctl_get_route_list(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_route_list
     ATTR(a++, GET_ROUTE_LIST_OUT_ROUTE_LIST, arg->out);
 
     return uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_GET_TOPO_EID, (void *)attrs, sizeof(attrs));
+}
+
+int uvs_ioctl_get_path_set(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_path_set_t *arg)
+{
+    uvs_cmd_attr_t attrs[GET_PATH_SET_IN_NUM + GET_PATH_SET_OUT_NUM - UVS_CMD_OUT_TYPE_INIT] = {0};
+    uvs_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_PATH_SET_IN_SRC_BONDING_EID, arg->in.src_bonding_eid);
+    ATTR(a++, GET_PATH_SET_IN_DST_BONDING_EID, arg->in.dst_bonding_eid);
+    ATTR(a++, GET_PATH_SET_IN_TP_TYPE, arg->in.tp_type);
+    ATTR(a++, GET_PATH_SET_IN_MULTI_PATH, arg->in.multi_path);
+    ATTR(a++, GET_PATH_LIST_OUT_PATH_SET, arg->out);
+
+    return uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_GET_TOPO_PATH_EID, (void *)attrs, sizeof(attrs));
 }

@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define UVS_CMD_OUT_TYPE_INIT 0x80  // 128B
+#define UVS_CMD_OUT_TYPE_INIT 0x80 // 128B
 
 typedef struct uvs_cmd_attr {
     uint8_t type; /* See uvs_cmd_xxx_type_t */
@@ -27,8 +27,8 @@ typedef struct uvs_cmd_attr {
     uint16_t field_size;
     union {
         struct {
-            uint32_t el_num   : 20; /* Array element number if field is in an array */
-            uint32_t el_size  : 12; /* Array element size if field is in an array */
+            uint32_t el_num  : 20; /* Array element number if field is in an array */
+            uint32_t el_size : 12; /* Array element size if field is in an array */
         } bs;
         uint32_t value;
     } attr_data;
@@ -54,6 +54,16 @@ typedef enum uvs_cmd_get_route_list_type {
     GET_ROUTE_LIST_OUT_ROUTE_LIST = UVS_CMD_OUT_TYPE_INIT,
     GET_ROUTE_LIST_OUT_NUM
 } uvs_cmd_get_route_list_type_t;
+
+typedef enum uvs_cmd_set_path_set_type {
+    GET_PATH_SET_IN_SRC_BONDING_EID,
+    GET_PATH_SET_IN_DST_BONDING_EID,
+    GET_PATH_SET_IN_TP_TYPE,
+    GET_PATH_SET_IN_MULTI_PATH,
+    GET_PATH_SET_IN_NUM,
+    GET_PATH_LIST_OUT_PATH_SET = UVS_CMD_OUT_TYPE_INIT,
+    GET_PATH_SET_OUT_NUM
+} uvs_cmd_set_path_set_type_t;
 
 #ifdef __cplusplus
 }
