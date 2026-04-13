@@ -28,6 +28,7 @@ extern "C" {
 #define UMQ_ERR_EEXIST                             (EEXIST)
 #define UMQ_ERR_EINVAL                             (EINVAL)
 #define UMQ_ERR_ENODEV                             (ENODEV)
+#define UMQ_ERR_ENOSR                              (ENOSR)  /* Out of streams resources, like Jetty/TP */
 #define UMQ_ERR_ETIMEOUT                           (ETIMEDOUT)
 #define UMQ_ERR_EINPROGRESS                        (EINPROGRESS)
 #define UMQ_ERR_ETSEG_NON_IMPORTED                 (0x0201)
