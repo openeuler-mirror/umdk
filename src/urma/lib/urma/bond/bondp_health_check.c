@@ -18,15 +18,102 @@
 #include "bondp_health_check.h"
 
 #define UBAGG_MAX_EVENT 1
-#define BONDP_HEALTH_CHECK_ENV "BondHealthCheck"
 #define BONDP_HEALTH_CHECK_BUF_LEN (4096)
 #define BONDP_HEALTH_CHECK_4K_ALIGN (4096)
 #define BONDP_HEALTH_CHECK_EPOLL_TIMEOUT_MS (100)
 
-static bool bondp_read_health_check_enable(void)
+#define BONDP_HEALTH_CHECK_ENV                        "BondHealthCheck"
+#define BONDP_HEALTH_CHECK_PRIMARY_BACKUP_SWITCH      "PrimaryBackupSwitch"
+#define BONDP_HEALTH_CHECK_AUTO_FALLBACK_PRIMARY      "AutoFallbackPrimary"
+#define BONDP_HEALTH_CHECK_HEALTH_CHECK_START         "HealthCheckStart"
+#define BONDP_HEALTH_CHECK_HEALTH_CHECK_INTERVAL      "HealthCheckInterval"
+#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_START        "PrimaryCheckStart"
+#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_INTERVAL     "PrimaryCheckInterval"
+#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_MAX_BACKOFF  "PrimaryCheckMaxBackoffCnt"
+
+#define DEFAULT_PRIMARY_BACKUP_SWITCH      true
+#define DEFAULT_AUTO_FALLBACK_PRIMARY      true
+#define DEFAULT_HEALTH_CHECK_START_MS      2000
+#define DEFAULT_HEALTH_CHECK_INTERVAL_MS   32000
+#define DEFAULT_PRIMARY_CHECK_START_MS     2000
+#define DEFAULT_PRIMARY_CHECK_INTERVAL_MS  1000
+#define DEFAULT_PRIMARY_CHECK_MAX_BACKOFF  13
+
+#define BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS          100
+#define BONDP_HEALTH_CHECK_TIME_MS_MIN_1S             1000
+#define BONDP_HEALTH_CHECK_TIME_MS_MAX_60S            60000
+#define BONDP_HEALTH_CHECK_TIME_MS_MAX_1H             3600000
+#define BONDP_HEALTH_CHECK_CHECK_MIN_BACKOFF          1
+#define BONDP_HEALTH_CHECK_CHECK_MAX_BACKOFF          100
+
+static bool bondp_health_read_env_bool(const char *env_name, bool default_val)
 {
-    const char *value = getenv(BONDP_HEALTH_CHECK_ENV);
-    return (value != NULL && strcmp(value, "true") == 0);
+    const char *value = getenv(env_name);
+    if (value == NULL) {
+        return default_val;
+    }
+    if (strcmp(value, "true") == 0) {
+        return true;
+    }
+    if (strcmp(value, "false") == 0) {
+        return false;
+    }
+    URMA_LOG_WARN("Invalid value '%s' for env %s, using default %s\n",
+        value, env_name, default_val ? "true" : "false");
+    return default_val;
+}
+
+static uint64_t bondp_health_read_env_uint64(const char *env_name, uint64_t default_val,
+    uint64_t min_val, uint64_t max_val)
+{
+    const char *value = getenv(env_name);
+    if (value == NULL) {
+        return default_val;
+    }
+
+    char *end = NULL;
+    errno = 0;
+    unsigned long long parsed = strtoull(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' ||
+        parsed < (unsigned long long)min_val || parsed > (unsigned long long)max_val) {
+        URMA_LOG_WARN("Invalid value '%s' for env %s (range %lu~%lu), using default %lu\n",
+            value, env_name, (unsigned long)min_val, (unsigned long)max_val, (unsigned long)default_val);
+        return default_val;
+    }
+    return (uint64_t)parsed;
+}
+
+static void bondp_read_health_check_cfg(bondp_health_check_cfg_t *cfg)
+{
+    cfg->primary_backup_switch = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_PRIMARY_BACKUP_SWITCH,
+        DEFAULT_PRIMARY_BACKUP_SWITCH);
+    cfg->auto_fallback_primary = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_AUTO_FALLBACK_PRIMARY,
+        DEFAULT_AUTO_FALLBACK_PRIMARY);
+    cfg->health_check_start_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_HEALTH_CHECK_START,
+        DEFAULT_HEALTH_CHECK_START_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
+    cfg->health_check_interval_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_HEALTH_CHECK_INTERVAL,
+        DEFAULT_HEALTH_CHECK_INTERVAL_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_1S, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
+    cfg->primary_check_start_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_START,
+        DEFAULT_PRIMARY_CHECK_START_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
+    cfg->primary_check_interval_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_INTERVAL,
+        DEFAULT_PRIMARY_CHECK_INTERVAL_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_60S);
+    cfg->primary_check_max_backoff_cnt = (uint32_t)bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_MAX_BACKOFF,
+        DEFAULT_PRIMARY_CHECK_MAX_BACKOFF, BONDP_HEALTH_CHECK_CHECK_MIN_BACKOFF, BONDP_HEALTH_CHECK_CHECK_MAX_BACKOFF);
+}
+
+static void bondp_print_health_check_cfg(const bondp_health_check_cfg_t *cfg)
+{
+    URMA_LOG_INFO("Health check config: PrimaryBackupSwitch=%s, AutoFallbackPrimary=%s, "
+        "HealthCheckStart=%lums, HealthCheckInterval=%lums, "
+        "PrimaryCheckStart=%lums, PrimaryCheckInterval=%lums, "
+        "PrimaryCheckMaxBackoffCnt=%u\n",
+        cfg->primary_backup_switch ? "true" : "false",
+        cfg->auto_fallback_primary ? "true" : "false",
+        (unsigned long)cfg->health_check_start_ms,
+        (unsigned long)cfg->health_check_interval_ms,
+        (unsigned long)cfg->primary_check_start_ms,
+        (unsigned long)cfg->primary_check_interval_ms,
+        cfg->primary_check_max_backoff_cnt);
 }
 
 bool bondp_health_check_enabled(void)
@@ -37,7 +124,7 @@ bool bondp_health_check_enabled(void)
 void bondp_health_check_global_ctx_init(bondp_global_context_t *ctx)
 {
     ctx->health_thread_ctx.health_epoll_fd = -1;
-    ctx->health_thread_ctx.health_check_enable = bondp_read_health_check_enable();
+    ctx->health_thread_ctx.health_check_enable = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_ENV, false);
     atomic_init(&ctx->health_thread_ctx.health_thread_stop, false);
 }
 
@@ -290,6 +377,10 @@ int bondp_start_health_check_thread(void)
     }
 
     global_ctx->health_thread_ctx.health_epoll_fd = health_epoll_fd;
+
+    bondp_read_health_check_cfg(&global_ctx->health_thread_ctx.cfg);
+    bondp_print_health_check_cfg(&global_ctx->health_thread_ctx.cfg);
+
     atomic_store(&global_ctx->health_thread_ctx.health_thread_stop, false);
     if (pthread_create(&global_ctx->health_thread_ctx.health_thread, NULL, bondp_health_check_thread, global_ctx) != 0) {
         URMA_LOG_ERR("Failed to create health check thread\n");
