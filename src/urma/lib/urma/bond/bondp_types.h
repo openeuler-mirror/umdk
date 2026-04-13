@@ -193,6 +193,8 @@ typedef struct bondp_comp {
     int dev_num;
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
     bondp_context_t *bondp_ctx;
     bjetty_ctx_t bjetty_ctx;
     bool is_multipath;
@@ -212,8 +214,10 @@ typedef struct bondp_target_jetty {
     int local_dev_num;
     int target_dev_num;
     bool is_multipath;
-    bool local_valid[URMA_UBAGG_DEV_MAX_NUM];
-    bool target_valid[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t local_active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
+    bool valid[URMA_UBAGG_DEV_MAX_NUM];
 } bondp_target_jetty_t;
 
 typedef struct bondp_import_target_seg {
@@ -225,6 +229,22 @@ typedef struct bondp_import_target_seg {
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_import_tseg_t;
+
+typedef struct urma_bond_seg_info_out {
+    urma_seg_t base;
+    urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
+    int dev_num;
+} urma_bond_seg_info_out_t;
+
+typedef struct urma_bond_id_info_out {
+    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
+    bool is_multipath;
+    uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    bool is_health_check_enable;
+    urma_bond_seg_info_out_t health_check_seg;
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+} urma_bond_id_info_out_t;
 
 static inline bool is_valid_dev_num(int dev_num)
 {

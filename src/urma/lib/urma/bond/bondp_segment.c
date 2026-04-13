@@ -25,7 +25,7 @@ static bool g_seg_cache_enable = false;
 
 typedef struct bondp_udata_import_seg {
     urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
-    uint32_t ports[IODIE_NUM][PORT_NUM];
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } bondp_udata_import_seg_t;
 
 typedef enum bondp_result {
@@ -241,10 +241,6 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg,
                                int local_idx, int target_idx)
 {
-    if (bdp_ctx->p_ctxs[local_idx] == NULL) {
-        URMA_LOG_INFO("BONDP import seg p_ctxs is NULL: %d\n", local_idx);
-        return BONDP_SKIP;
-    }
     urma_seg_t *peer_p_seg = &seg_cfg->udata_out->peer_p_seg[target_idx];
     urma_eid_t eid = peer_p_seg->ubva.eid;
     if (is_empty_eid(&eid)) {
@@ -266,54 +262,6 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
                   target_idx, EID_ARGS(p_tseg->seg.ubva.eid));
 
     return BONDP_SUCCESS;
-}
-
-static bondp_ret_t import_pseg_for_primary_eid(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg)
-{
-    bool has_success = false;
-    int iodie_num = is_single_dev_mode(&bdp_ctx->v_ctx) ? SINGLE_DIE_IODIE_NUM : IODIE_NUM;
-    for (int iodie_idx = 0; iodie_idx < iodie_num; ++iodie_idx) {
-        bondp_ret_t ret = import_pseg(bdp_ctx, seg_cfg, iodie_idx, iodie_idx);
-        if (ret == BONDP_SKIP) {
-            continue;
-        } else if (ret == BONDP_ERROR) {
-            return BONDP_ERROR;
-        }
-        has_success = true;
-    }
-    return has_success ? BONDP_SUCCESS : BONDP_ERROR;
-}
-
-static bondp_ret_t import_pseg_for_port_eid(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *bondp_seg_cfg)
-{
-    bool has_valid_route = false;
-
-    for (int i = 0; i < IODIE_NUM; i++) {
-        for (int j = 0; j < PORT_NUM; j++) {
-            int local_port = IODIE_NUM + PORT_NUM * i + j;
-            int target_port = IODIE_NUM + PORT_NUM * i + bondp_seg_cfg->udata_out->ports[i][j];
-
-            if (local_port >= bdp_ctx->dev_num ||
-                bdp_ctx->p_ctxs[local_port] == NULL ||
-                bondp_seg_cfg->udata_out->ports[i][j] < 0 ||
-                bondp_seg_cfg->udata_out->ports[i][j] >= PORT_NUM) {
-                URMA_LOG_DEBUG("BONDP skip route (%d %d)\n", local_port, target_port);
-                continue;
-            }
-            bondp_ret_t ret = import_pseg(bdp_ctx, bondp_seg_cfg, local_port, target_port);
-            if (ret == BONDP_SKIP) {
-                continue;
-            } else if (ret == BONDP_ERROR) {
-                return -1;
-            }
-            has_valid_route = true;
-        }
-    }
-    if (!has_valid_route) {
-        URMA_LOG_ERR("No valid direct route\n");
-        return -1;
-    }
-    return 0;
 }
 
 static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t *v2p_token_id)
@@ -394,13 +342,27 @@ static int bondp_import_vseg(urma_context_t *ctx, urma_seg_t *seg,
 static int bondp_import_pseg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
                              bondp_seg_cfg_t *bondp_seg_cfg)
 {
-    bondp_ret_t ret;
-    ret = import_pseg_for_primary_eid(bdp_ctx, bondp_seg_cfg);
-    if (ret != BONDP_SUCCESS) {
-        return -1;
+    bool has_valid_route = false;
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
+            if (!bondp_seg_cfg->udata_out->connected[i][j]) {
+                continue;
+            }
+            bondp_ret_t ret = import_pseg(bdp_ctx, bondp_seg_cfg, i, j);
+            if (ret == BONDP_SKIP) {
+                continue;
+            } else if (ret == BONDP_ERROR) {
+                return -1;
+            }
+            has_valid_route = true;
+        }
     }
-    ret = import_pseg_for_port_eid(bdp_ctx, bondp_seg_cfg);
-    if (ret != BONDP_SUCCESS) {
+    if (!has_valid_route) {
+        URMA_LOG_ERR("No valid direct route\n");
         return -1;
     }
     return 0;
