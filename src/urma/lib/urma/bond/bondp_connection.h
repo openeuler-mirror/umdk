@@ -12,30 +12,24 @@
 
 #include "bondp_hash_table.h"
 #include "bondp_slide_window.h"
-#include "bdp_queue.h"
+#include "bondp_types.h"
 
 #define BONDP_RECV_WND_SIZE (1U << 12)
 #define BONDP_MAX_BITMAP_SIZE (1U << 16)
-#define BONDP_MAX_SO_QUEUE_SIZE (65535)
 
 /** A virtual connection between two vjettys.
  * Virtual connection is used to implement de-duplication between two vjettys.
 */
 typedef struct bondp_v_connection {
     /* only valid on sender side */
-    void *target_vjetty;
-    int target_dev_num;
-    bool target_valid[URMA_UBAGG_DEV_MAX_NUM];
-    int non_rqe_idx;
-    int rqe_idx;
-    /* ~ only valid on sender side ~ */
+    bondp_target_jetty_t *target_vjetty;
     /* de-duplication */
     uint32_t msn;
     bdp_slide_wnd_t recv_wnd;
     /* TA ordering */
     bdp_slide_wnd_t send_wnd;
     /* Valid for both TX and RX side */
- 	urma_context_aggr_mode_t aggr_mode;
+    urma_context_aggr_mode_t aggr_mode;
 } bdp_v_conn_t;
 
 void init_v_conn_on_send(bdp_v_conn_t *v_conn, void *target_vjetty, int target_dev_num);
