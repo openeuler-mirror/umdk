@@ -15,14 +15,16 @@
 
 #define EID_LEN            (16)
 #define MAX_PORT_NUM       (9)
-#define MAX_NODE_NUM       (16)
+#define MAX_NODE_NUM       (64)
+#define IODIE_NUM_PER_CHIP (1)
 #define IODIE_NUM          (2)
 #define PORT_NUM           (9)
-#define DEV_NUM            (128)
+#define DEV_NUM            (256)
 #define ENTITY_AGG_DEV_NUM (3) // bonding device number per entity
 
 struct urma_ping_ubcore_topo_ue {
     uint32_t chip_id;
+    uint32_t die_id;
     uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
@@ -40,7 +42,9 @@ struct urma_ping_ubcore_topo_link {
 };
 
 struct urma_ping_ubcore_topo_node {
-    uint32_t id;
+    uint32_t type;
+    uint32_t super_node_id;
+    uint32_t node_id;
     uint32_t is_current;
     struct urma_ping_ubcore_topo_link links[IODIE_NUM][PORT_NUM];
     struct urma_ping_ubcore_topo_agg_dev agg_devs[DEV_NUM];

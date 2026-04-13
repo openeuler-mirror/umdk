@@ -9,10 +9,11 @@
  */
 #ifndef UVS_UBAGG_IOCTL_H
 #define UVS_UBAGG_IOCTL_H
-#include <sys/ioctl.h>
-#include <stdint.h>
-
+#include "uvs_api.h"
 #include "uvs_types.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/ioctl.h>
 
 #define UVS_MAX_DEV_NAME_LEN 64
 
@@ -32,7 +33,7 @@ struct uvs_ubagg_cmd_hdr {
 };
 
 #define UVS_UBAGG_CMD_MAGIC 'B'
-#define UVS_UBAGG_CMD _IOWR(UVS_UBAGG_CMD_MAGIC, 1, struct uvs_ubagg_cmd_hdr)
+#define UVS_UBAGG_CMD       _IOWR(UVS_UBAGG_CMD_MAGIC, 1, struct uvs_ubagg_cmd_hdr)
 
 struct uvs_ubagg_create_dev_arg {
     struct {
@@ -70,5 +71,9 @@ int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_get_topo(void *topo_map);
 int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
+int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
+                                  const uvs_eid_t *dst_bonding_eid,
+                                  enum uvs_tp_type tp_type, bool multi_path,
+                                  uvs_path_set_t *uvs_path_set);
 
 #endif // UVS_UBAGG_IOCTL_H
