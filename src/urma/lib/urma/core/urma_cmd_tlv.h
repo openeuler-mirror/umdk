@@ -681,6 +681,8 @@ typedef enum urma_cmd_import_jfr_ex_type {
     IMPORT_JFR_EX_IN_TAG,
     IMPORT_JFR_EX_IN_TX_PSN,
     IMPORT_JFR_EX_IN_RX_PSN,
+    IMPORT_JFR_EX_IN_STAG,
+    IMPORT_JFR_EX_IN_DTAG,
     IMPORT_JFR_EX_IN_UDATA, /* Consider udata as an ordinary member of in attrs */
     IMPORT_JFR_EX_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
@@ -841,6 +843,8 @@ typedef enum urma_cmd_import_jetty_ex_type {
     IMPORT_JETTY_EX_IN_TAG,
     IMPORT_JETTY_EX_IN_TX_PSN,
     IMPORT_JETTY_EX_IN_RX_PSN,
+    IMPORT_JETTY_EX_IN_STAG,
+    IMPORT_JETTY_EX_IN_DTAG,
     IMPORT_JETTY_EX_IN_UDATA, /* Consider udata as an in/out attr */
     IMPORT_JETTY_EX_IN_NUM,   /* Only for calculating number of types */
     /* Out type */
