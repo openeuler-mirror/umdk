@@ -29,7 +29,7 @@ extern "C" {
 #define EXAMPLE_SLEEP_TIME_US     100
 #define EXAMPLE_MAX_WAIT_TIME_MS  3000
 #define EXAMPLE_FLUSH_TIME_MS     1000
-#define EXAMPLE_TEST_IMM_DATA     123456
+#define EXAMPLE_TEST_IMM_DATA     1234
 
 typedef enum instance_mode {
     NONE,
