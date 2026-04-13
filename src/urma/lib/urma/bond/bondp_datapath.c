@@ -50,8 +50,7 @@ static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
     }
 }
 
-static urma_status_t comp_post_send(bjetty_ctx_t *bjetty_ctx, int send_idx,
-    urma_jfs_wr_t *send_wr, urma_jfs_wr_t **bad_wr)
+static urma_status_t comp_post_send(bjetty_ctx_t *bjetty_ctx, int send_idx, urma_jfs_wr_t *send_wr, urma_jfs_wr_t **bad_wr)
 {
     urma_status_t ret;
     if (bjetty_ctx->bdp_comp->comp_type == BONDP_COMP_JETTY) {
@@ -62,11 +61,13 @@ static urma_status_t comp_post_send(bjetty_ctx_t *bjetty_ctx, int send_idx,
         URMA_LOG_ERR("Invalid post jfs wr type: %d\n", bjetty_ctx->bdp_comp->comp_type);
         ret = URMA_EINVAL;
     }
+    if (ret == URMA_SUCCESS) {
+        bjetty_ctx->bdp_comp->rqe_cnt[send_idx] += 1;
+    }
     return ret;
 }
 
-static urma_status_t comp_post_recv(bjetty_ctx_t *bjetty_ctx, int recv_idx,
-    urma_jfr_wr_t *recv_wr, urma_jfr_wr_t **bad_wr)
+static urma_status_t comp_post_recv(bjetty_ctx_t *bjetty_ctx, int recv_idx, urma_jfr_wr_t *recv_wr, urma_jfr_wr_t **bad_wr)
 {
     urma_status_t ret;
     if (bjetty_ctx->bdp_comp->comp_type == BONDP_COMP_JETTY) {
@@ -76,6 +77,9 @@ static urma_status_t comp_post_recv(bjetty_ctx_t *bjetty_ctx, int recv_idx,
     } else {
         URMA_LOG_ERR("Invalid post jfr wr type: %d\n", bjetty_ctx->bdp_comp->comp_type);
         ret = URMA_EINVAL;
+    }
+    if (ret == URMA_SUCCESS) {
+        bjetty_ctx->bdp_comp->rqe_cnt[recv_idx] += 1;
     }
     return ret;
 }
@@ -225,7 +229,7 @@ static urma_status_t bondp_post_send_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     }
 
     int send_idx = -1, target_idx = -1;
-    ret = schedule_send(wr, bjetty_ctx, v_conn, &send_idx, &target_idx);
+    ret = schedule_send(wr, bjetty_ctx->bdp_comp, &send_idx, &target_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -275,7 +279,7 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
     }
 
     int send_idx = 0, target_idx = 0;
-    ret = schedule_send(wr, bjetty_ctx, v_conn, &send_idx, &target_idx);
+    ret = schedule_send(wr, bjetty_ctx->bdp_comp, &send_idx, &target_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -297,6 +301,7 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
         URMA_LOG_ERR("Failed to copy jfs wr\n");
         goto FREE_PWR;
     }
+
     ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bjetty_ctx, v_conn);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to convert jfs wr\n");
@@ -304,7 +309,6 @@ static urma_status_t bondp_post_send_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
     }
 
     pwr->user_ctx = wr_entry->wr_id;
-    bjetty_ctx->inflight_cnt[send_idx] += 1;
     ret = comp_post_send(bjetty_ctx, send_idx, pwr, bad_wr);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to post send wr\n");
@@ -373,7 +377,7 @@ static urma_status_t bondp_post_recv_wr_no_store(bjetty_ctx_t *bjetty_ctx,
     urma_status_t ret = 0;
 
     int recv_idx = -1;
-    ret = schedule_recv(bjetty_ctx, &recv_idx);
+    ret = schedule_recv(bjetty_ctx->bdp_comp, &recv_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -412,7 +416,7 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
     int recv_idx = 0;
     urma_status_t ret;
 
-    ret = schedule_recv(bjetty_ctx, &recv_idx);
+    ret = schedule_recv(bjetty_ctx->bdp_comp, &recv_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -432,6 +436,7 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
         URMA_LOG_ERR("Failed to copy jfr wr\n");
         goto FREE_PWR;
     }
+
     ret = convert_jfr_vwr_to_pwr(pwr, recv_idx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to convert jfr wr\n");
@@ -444,6 +449,7 @@ static urma_status_t bondp_post_recv_wr_and_store(bjetty_ctx_t *bjetty_ctx, bond
         URMA_LOG_ERR("Failed to post recv wr\n");
         goto FREE_PWR;
     }
+
     return URMA_SUCCESS;
 
 FREE_PWR:
@@ -531,16 +537,6 @@ typedef enum cr_convert_ret {
     CONVERT_SKIP = 1,
 } cr_convert_ret_t;
 
-static inline bool is_device_error(urma_cr_status_t status)
-{
-    return status >= URMA_CR_ACK_TIMEOUT_ERR;
-}
-
-static inline bool is_local_device_error(bjetty_ctx_t *bjetty_ctx, int send_idx)
-{
-    return !bjetty_ctx->pjettys_valid[send_idx];
-}
-
 static inline bool is_recv_cr(const urma_cr_t *cr)
 {
     return cr->flag.bs.s_r == 1;
@@ -581,14 +577,13 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
 
     bjetty_ctx_t *bjetty_ctx = wr_entry->bjetty_ctx;
     uint32_t send_idx = wr_entry->send_idx;
-    if (bjetty_ctx->pjettys_valid[send_idx] && is_device_error(cr->status)) {
-        bjetty_ctx->pjettys_valid[send_idx] = false;
-    }
+    bjetty_ctx->bdp_comp->valid[send_idx] = false;
+    bjetty_ctx->bdp_comp->sqe_cnt[send_idx] -= 1;
 
     /* Do migration */
-    if (cr->status != 0) {
+    if (cr->status == URMA_CR_ACK_TIMEOUT_ERR) {
         int new_send_idx = -1, new_target_idx = -1;
-        if (schedule_send(&wr_entry->wr, bjetty_ctx, wr_entry->v_conn, &new_send_idx, &new_target_idx) != 0) {
+        if (schedule_send(&wr_entry->wr, bjetty_ctx->bdp_comp, &new_send_idx, &new_target_idx) != 0) {
             URMA_LOG_ERR("Failed to schedule send for migration\n");
             return CONVERT_FAIL;
         }
@@ -619,8 +614,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     cr->local_id = get_comp_urma_jetty_id(wr_entry->bjetty_ctx->bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
 
-    bjetty_ctx->inflight_cnt[send_idx] -= 1;
-
     /* Handle v_conn slide window */
     bdp_v_conn_t *v_conn = wr_entry->v_conn;
     if (cr->status == URMA_CR_SUCCESS) {
@@ -631,11 +624,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     free_jfs_wr(&wr_entry->wr);
     jfs_wr_buf_release(wr_entry);
     return CONVERT_SUCCESS;
-}
-
-static inline bdp_r_p2v_jetty_id_type_t get_remote_id_type_by_cr(urma_cr_t *cr)
-{
-    return (cr->flag.bs.jetty != 0) ? REMOTE_JETTY : REMOTE_JFR;
 }
 
 static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_t *cr)
@@ -653,6 +641,8 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     convert_pcr_to_vcr(cr, bjetty_ctx->bond_ctx, &msn);
     cr->local_id = get_comp_urma_jetty_id(wr_entry->bjetty_ctx->bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
+
+    bjetty_ctx->bdp_comp->rqe_cnt[recv_idx] -= 1;
 
     /* Do de-duplicating */
     int ret = 0;
@@ -769,13 +759,13 @@ static int restore_cr_local_id(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t 
  */
 static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
+    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, idx, cr);
+    if (bjetty_ctx == NULL) {
+        return CONVERT_FAIL;
+    }
+
     // Special handling is applied to the CRs constructed by the hardware of SUSPEND_DONE and FLUSH_ERROR_DONE.
     if (!is_cr_user_ctx_valid(cr)) {
-        // find out the bjetty_ctx
-        bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, idx, cr);
-        if (bjetty_ctx == NULL) {
-            return CONVERT_FAIL;
-        }
         uint8_t target_state_bit = 0;
         if (cr->status == URMA_CR_WR_SUSPEND_DONE) {
             target_state_bit = PJETTY_SUSPEND_DONE;
@@ -808,11 +798,15 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
         return CONVERT_SKIP;
     }
 
+    if (is_recv_cr(cr)) {
+        bjetty_ctx->bdp_comp->rqe_cnt[idx] -= 1;
+    } else {
+        bjetty_ctx->bdp_comp->sqe_cnt[idx] -= 1;
+    }
+
     uint32_t msn = 0;
     convert_pcr_to_vcr(cr, bdp_ctx, &msn);
-    if (restore_cr_local_id(bdp_ctx, idx, cr) != 0) {
-        cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
-    }
+    cr->local_id = bjetty_ctx->bdp_comp->v_jetty.jetty_id.id;
 
     /* Caller should copy this CR to output array. */
     return CONVERT_SUCCESS;

@@ -23,16 +23,11 @@ void init_v_conn_on_send(bdp_v_conn_t *v_conn, void *target_vjetty, int target_d
     }
     bondp_target_jetty_t *bdp_tjetty = target_vjetty;
     v_conn->target_vjetty = bdp_tjetty;
-    v_conn->target_dev_num = target_dev_num;
-    v_conn->non_rqe_idx = 0;
-    v_conn->rqe_idx = 0;
-    memcpy(v_conn->target_valid, bdp_tjetty->valid, sizeof(bool) * target_dev_num);
 }
 
 int bdp_v_conn_init(bdp_v_conn_t *v_conn)
 {
     v_conn->target_vjetty = NULL;
-    v_conn->target_dev_num = 0;
     v_conn->msn = 0;
     if (bdp_slide_wnd_init(&v_conn->recv_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
         URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add");
