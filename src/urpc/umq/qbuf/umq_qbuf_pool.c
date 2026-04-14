@@ -1130,7 +1130,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     uint32_t buf_cnt = (uint32_t)local_pool->buf_cnt_with_data;
 
     if (buf_cnt < needed) {
-        int ret = umq_qbuf_local_pool_fetch_and_expand(needed, local_pool, true);
+        int ret = umq_qbuf_local_pool_fetch_and_expand(needed - buf_cnt, local_pool, true);
         if (ret != UMQ_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq qbuf local pool fetch and expand failed, ret: %d\n", ret);
             return ret;
