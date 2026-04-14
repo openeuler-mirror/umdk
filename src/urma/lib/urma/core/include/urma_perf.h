@@ -40,12 +40,14 @@ typedef enum urma_perf_type {
 } urma_perf_record_type_t;
 
 typedef struct urma_perf_stats {
+    uint64_t retry_count;
     struct {
         urma_perf_record_type_t type;
         uint64_t sample_num;
         uint64_t average;
         uint64_t mininum;
         uint64_t maxinum;
+        uint64_t p50;
         uint64_t p90;
         uint64_t p99;
     } type_record[URMA_PERF_RECORD_TYPE_MAX];
