@@ -1894,7 +1894,7 @@ int ubmm_fill_ref_sge_info(uint64_t umqh_tp, umq_buf_t *qbuf, char *ub_ref_info,
     return UMQ_SUCCESS;
 }
 
-uvs_tp_type_t umq_tp_type_convert_to_uvs(umq_tp_type_t tp_type)
+static uvs_tp_type_t umq_tp_type_convert_to_uvs(umq_tp_type_t tp_type)
 {
     switch (tp_type) {
         case UMQ_TP_TYPE_RTP:
