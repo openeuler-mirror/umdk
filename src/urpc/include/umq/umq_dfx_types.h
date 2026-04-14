@@ -22,7 +22,8 @@ extern "C" {
 #define UMQ_STATS_QBUF_POOL_TYPE_MAX (16u)
 #define UMQ_PERF_QUANTILE_MAX_NUM (8u)
 #define UMQ_PERF_REC_MAX_NUM (64u)
-#define UMQ_DFX_TO_STRING_DEFAULT_LEN (8192)
+#define UMQ_DFX_TO_STRING_DEFAULT_LEN (20480)
+#define UMQ_LOCAL_QBUF_POOL_MAX_NUM (64)
 
 typedef struct umq_packet_stats {
     uint64_t send_cnt;              // number of packets sent
@@ -74,6 +75,36 @@ typedef struct umq_flow_control_stats {
     umq_packet_stats_t packet_stats; // flow control sacket statistics
 } umq_flow_control_stats_t;
 
+typedef struct umq_expansion_pool_stats {
+    uint32_t expansion_count;               // number of expansions performed
+    uint64_t exp_total_block_num;           // total number of blocks in the expansion pool
+    uint64_t exp_total_free_block_num;      // number of free blocks in the expansion pool
+    uint64_t exp_total_mem_size;            // total memory of the expansion pool
+    uint64_t exp_used_mem_size;             // used memory of the expansion pool
+    uint64_t total_expansion_count;         // cumulative number of expansions
+    uint64_t total_shrink_count;            // cumulative number of contractions
+} umq_expansion_pool_stats_t;
+
+typedef struct umq_local_qbuf_pool_stats {
+    uint64_t tid;                              // thread ID
+    uint64_t capacity_with_data;               // capacity of with-data buffer in the local memory pool
+    uint64_t buf_cnt_with_data;                // number of with-data buffer in the local memory pool
+    uint64_t capacity_without_data;            // capacity of without-data buffer in the local memory pool
+    uint64_t buf_cnt_without_data;             // number of without-data buffer in the local memory pool
+    uint64_t tls_fetch_cnt_with_data;          // total number of times buffer(withdata) acquired from the global pool
+    uint64_t tls_fetch_buf_cnt_with_data;      // total number of buffer(withdata) acquired from the global pool
+    uint64_t tls_fetch_cnt_without_data;       // total number of times buffer(nodata) acquired from the global pool
+    uint64_t tls_fetch_buf_cnt_without_data;   // total number of buffer(withdata) acquired from the global pool
+    uint64_t tls_return_cnt_with_data;         // total number of times buffer(withdata) returned to the global pool
+    uint64_t tls_return_buf_cnt_with_data;     // total number of buffer(withdata) returned to the global pool
+    uint64_t tls_return_cnt_without_data;      // total number of times buffer(nodata) returned to the global pool
+    uint64_t tls_return_buf_cnt_without_data;  // total number of buffer(nodata) returned to the global pool
+    uint64_t alloc_cnt_with_data;              // total number of buffer(withdata) allocation requests
+    uint64_t alloc_cnt_without_data;           // total number of buffer(nodata) allocation requests
+    uint64_t free_cnt_with_data;               // total number of buffer(withdata) free requests
+    uint64_t free_cnt_without_data;            // total number of buffer(nodata) free requests
+} umq_local_qbuf_pool_stats_t;
+
 typedef struct umq_qbuf_pool_info {
     umq_buf_mode_t mode;                      // split or combine
     uint64_t total_size;                      // qbuf pool total size
@@ -100,6 +131,12 @@ typedef struct umq_qbuf_pool_info {
 typedef struct umq_qbuf_pool_stats {
     umq_qbuf_pool_info_t qbuf_pool_info[UMQ_STATS_QBUF_POOL_TYPE_MAX]; // statistical information list for qbuf pool
     uint32_t num; // number of valid qbuf pool info structures
+
+    umq_expansion_pool_stats_t exp_pool_with_data;  // with_data expansion pool statistics
+    umq_expansion_pool_stats_t exp_pool_without_data; // without_data expansion pool statistics
+
+    umq_local_qbuf_pool_stats_t local_qbuf_pool_stats[UMQ_LOCAL_QBUF_POOL_MAX_NUM]; // local buf pool statistics
+    uint32_t local_qbuf_pool_num; // local buf pool statistics count
 } umq_qbuf_pool_stats_t;
 
 typedef struct umq_info {
