@@ -752,6 +752,8 @@ int urma_ioctl_import_jfr_ex(int ioctl_fd, urma_cmd_import_jfr_ex_t *arg)
     ATTR(a++, IMPORT_JFR_EX_IN_TAG, arg->in.tag);
     ATTR(a++, IMPORT_JFR_EX_IN_TX_PSN, arg->in.tx_psn);
     ATTR(a++, IMPORT_JFR_EX_IN_RX_PSN, arg->in.rx_psn);
+    ATTR(a++, IMPORT_JFR_EX_IN_STAG, arg->in.stag);
+    ATTR(a++, IMPORT_JFR_EX_IN_DTAG, arg->in.dtag);
     ATTR(a++, IMPORT_JFR_EX_IN_UDATA, arg->udata);
     ATTR(a++, IMPORT_JFR_EX_OUT_TPN, arg->out.tpn);
     ATTR(a++, IMPORT_JFR_EX_OUT_HANDLE, arg->out.handle);
@@ -922,6 +924,8 @@ int urma_ioctl_import_jetty_ex(int ioctl_fd, urma_cmd_import_jetty_ex_t *arg)
     ATTR(a++, IMPORT_JETTY_EX_IN_TAG, arg->in.tag);
     ATTR(a++, IMPORT_JETTY_EX_IN_TX_PSN, arg->in.tx_psn);
     ATTR(a++, IMPORT_JETTY_EX_IN_RX_PSN, arg->in.rx_psn);
+    ATTR(a++, IMPORT_JETTY_EX_IN_STAG, arg->in.stag);
+    ATTR(a++, IMPORT_JETTY_EX_IN_DTAG, arg->in.dtag);
     ATTR(a++, IMPORT_JETTY_EX_IN_UDATA, arg->udata);
     ATTR(a++, IMPORT_JETTY_EX_OUT_TPN, arg->out.tpn);
     ATTR(a++, IMPORT_JETTY_EX_OUT_HANDLE, arg->out.handle);

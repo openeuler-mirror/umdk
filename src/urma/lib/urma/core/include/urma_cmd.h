@@ -714,6 +714,8 @@ typedef struct urma_cmd_import_jfr_ex {
         uint64_t tag;
         uint32_t tx_psn;
         uint32_t rx_psn;
+        uint64_t stag;
+        uint64_t dtag;
     } in;
     struct {
         uint32_t tpn;
@@ -874,6 +876,9 @@ typedef struct urma_cmd_import_jetty_ex {
         uint64_t tag;
         uint32_t tx_psn;
         uint32_t rx_psn;
+        /* correspond to upper layer business */
+        uint64_t stag;
+        uint64_t dtag;
     } in;
     struct {
         uint32_t tpn;
