@@ -52,6 +52,8 @@ typedef struct qbuf_pool_cfg {
     umq_buf_mode_t mode;
     uint64_t umq_buf_pool_max_size; // default 2G
 
+    bool disable_scale_cap; // expansion and shrink switch
+
     // gloab expansion pool
     uint32_t expansion_pool_id_min;
     uint32_t expansion_pool_cnt_max;
@@ -236,6 +238,8 @@ uint32_t fetch_from_expansion_pools(bool with_data, uint32_t need, umq_buf_list_
 void return_list_to_pools(umq_buf_t *local_head, uint64_t *local_buf_cnt,
     umq_buf_list_t *global_head, uint64_t *global_buf_cnt, bool with_data);
 
+bool umq_disable_scale_cap(void);
+
 static ALWAYS_INLINE int32_t fetch_from_global(
         global_block_pool_t *global_pool, local_block_pool_t *cache_pool, bool with_data, uint32_t batch_count)
 {
@@ -272,6 +276,13 @@ static ALWAYS_INLINE int32_t fetch_from_global(
         (void)pthread_spin_unlock(&global_pool->global_mutex);
         async_expand_global_pool(with_data, *global_buf_cnt);
         return count;
+    }
+
+    if (umq_disable_scale_cap()) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "%s not enough suggestion: increase total_size\n",
+            with_data ? "buf with data" : "buf with no data");
+        (void)pthread_spin_unlock(&global_pool->global_mutex);
+        return -UMQ_ERR_ENOMEM;
     }
 
     if (*global_buf_cnt > 0) {
