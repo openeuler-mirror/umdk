@@ -6,6 +6,7 @@
 """
 
 import logging
+import pytest
 from public import UBUSFeature
 
 log = logging.getLogger()
@@ -25,7 +26,7 @@ class TestUrmaLoopback(UBUSFeature):
         Single-machine Loopback Traffic Test
         """
         if len(self.host_list) < 2:
-            self.skipTest("Insufficient hosts in host_list, skipping test.")
+            pytest.skip("Insufficient hosts in host_list, skipping test.")
 
         host1 = self.host_list[0]
         host2 = self.host_list[1]
