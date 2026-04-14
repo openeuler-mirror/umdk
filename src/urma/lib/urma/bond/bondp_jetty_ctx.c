@@ -19,11 +19,10 @@ int init_bjetty_ctx(urma_context_t *ctx, bondp_comp_t *bdp_comp, bjetty_ctx_t *b
     (void)wr_buf_size;
     bjetty_ctx->bond_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     bjetty_ctx->bdp_comp = bdp_comp;
-    bjetty_ctx->pjettys = (urma_jetty_t **)bdp_comp->members;
 
     // set all pjettys as valid
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        if (bjetty_ctx->pjettys[i] == NULL) {
+        if (bdp_comp->members[i] == NULL) {
             bjetty_ctx->pjettys_error_done[i] = PJETTY_SUSPEND_DONE | PJETTY_FLUSH_ERROR_DONE;
             continue;
         }
