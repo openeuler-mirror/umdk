@@ -30,6 +30,7 @@ typedef enum urma_bond_user_ctl_opcode {
     URMA_USER_CTL_BOND_ADD_REMOTE_SEG_INFO,
     URMA_USER_CTL_BOND_SET_AGGR_MODE,
     URMA_USER_CTL_BOND_ENABLE_SEG_CACHE,
+    URMA_USER_CTL_BOND_QUERY_PORT,
 } urma_bond_user_ctl_opcode_t;
 
 typedef union bondp_port_id {
@@ -66,6 +67,17 @@ typedef struct bondp_rjetty {
         urma_jetty_t *jetty;
     };
 } bondp_rjetty_t;
+
+typedef struct urma_bond_query_port_in {
+    urma_jfr_t *jfr;
+} urma_bond_query_active_port_in_t;
+
+typedef struct urma_bond_query_port_out {
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
+} urma_bond_query_active_port_out_t;
 
 #ifdef __cplusplus
 }
