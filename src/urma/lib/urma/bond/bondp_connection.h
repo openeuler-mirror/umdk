@@ -26,8 +26,6 @@ typedef struct bondp_v_connection {
     /* de-duplication */
     uint32_t msn;
     bdp_slide_wnd_t recv_wnd;
-    /* TA ordering */
-    bdp_slide_wnd_t send_wnd;
     /* Valid for both TX and RX side */
     urma_context_aggr_mode_t aggr_mode;
 } bdp_v_conn_t;

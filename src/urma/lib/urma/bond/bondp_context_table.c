@@ -94,26 +94,6 @@ int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, urma_jetty_i
     return 0;
 }
 
-int bdp_p_vjetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type,
-    uint32_t *vjetty_id)
-{
-    hmap_node_t *node = NULL;
-    bdp_p_vjetty_id_key_t key = {
-        .pjetty_id = pjetty_id,
-        .type = type
-    };
-    uint32_t hash = bdp_p_vjetty_id_hash(&key);
-    (void)pthread_rwlock_rdlock(&tbl->lock);
-    node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
-    if (node == NULL) {
-        (void)pthread_rwlock_unlock(&tbl->lock);
-        return -1;
-    }
-    *vjetty_id = CONTAINER_OF_FIELD(node, bdp_p_vjetty_id_t, hmap_node)->vjetty_id;
-    (void)pthread_rwlock_unlock(&tbl->lock);
-    return 0;
-}
-
 struct bondp_comp *bdp_p_vjetty_id_table_lookup_comp_without_lock(bondp_hash_table_t *tbl,
     urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type)
 {
