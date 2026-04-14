@@ -262,6 +262,17 @@ void urma_step_perf(urma_perf_record_type_t type, uint64_t latency)
     hdr_record_value(g_perf_ctx->histograms[type], latency);
 }
 
+void urma_perf_cleanup(void)
+{
+    if (g_perf_ctx == NULL) return;
+    
+    for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
+        hdr_free(g_perf_ctx->histograms[i]);
+    }
+    free(g_perf_ctx);
+    g_perf_ctx = NULL;
+}
+
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
 {
     if (g_perf_ctx == NULL || perf_buf == NULL || length == NULL) {
@@ -322,16 +333,6 @@ urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
     remaining -= written;
     
     *length = ptr - perf_buf;
+    urma_perf_cleanup();
     return URMA_SUCCESS;
-}
-
-void urma_perf_cleanup(void)
-{
-    if (g_perf_ctx == NULL) return;
-    
-    for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
-        hdr_free(g_perf_ctx->histograms[i]);
-    }
-    free(g_perf_ctx);
-    g_perf_ctx = NULL;
 }
