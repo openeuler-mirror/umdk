@@ -118,12 +118,6 @@ void urma_step_perf(urma_perf_record_type_t type, uint64_t latency);
  */
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length);
 
-/**
- * Cleanup performance monitoring resources.
- * Return: 0 on success, other value on error
- */
-void urma_perf_cleanup(void);
-
 #ifdef __cplusplus
 }
 #endif
