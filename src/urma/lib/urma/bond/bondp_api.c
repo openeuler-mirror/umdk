@@ -1285,18 +1285,44 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
     return final_ret;
 }
 
-static int bondp_query_port(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+static int bondp_user_ctl_set_bonding_mode_legacy(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
-    if (in->len != sizeof(urma_bond_query_active_port_in_t) ||
-        out->len < sizeof(urma_bond_query_active_port_out_t) ||
-        in->addr == 0 || out->addr == 0) {
+    (void)out;
+
+    if (in->addr == 0 || in->len != sizeof(urma_context_aggr_mode_t)) {
+        URMA_LOG_ERR("Invalid set bonding mode legacy param.\n");
+        return -EINVAL;
+    }
+
+    urma_context_aggr_mode_t aggr_mode = *(urma_context_aggr_mode_t *)(uintptr_t)in->addr;
+    return bondp_set_bonding_mode(ctx, (bondp_bonding_mode_t)aggr_mode, BONDP_BONDING_LEVEL_IODIE);
+}
+
+static int bondp_user_ctl_set_bonding_mode(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+    (void)out;
+
+    if (in->addr == 0 || in->len != sizeof(bondp_set_bonding_mode_in_t)) {
+        URMA_LOG_ERR("Invalid set bonding mode param.\n");
+        return -EINVAL;
+    }
+
+    bondp_set_bonding_mode_in_t *mode_in = (bondp_set_bonding_mode_in_t *)(uintptr_t)in->addr;
+    return bondp_set_bonding_mode(ctx, mode_in->bonding_mode, mode_in->bonding_level);
+}
+
+static int bondp_user_ctl_query_port(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+    if (in->addr == 0 || out->addr == 0 ||
+        in->len != sizeof(bondp_query_port_in_t) ||
+        out->len < sizeof(bondp_query_port_out_t)) {
         URMA_LOG_ERR("Invalid query port param.\n");
         return -EINVAL;
     }
 
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    urma_bond_query_active_port_in_t *query_in = (urma_bond_query_active_port_in_t *)(uintptr_t)in->addr;
-    urma_bond_query_active_port_out_t *query_out = (urma_bond_query_active_port_out_t *)(uintptr_t)out->addr;
+    bondp_query_port_in_t *query_in = (bondp_query_port_in_t *)(uintptr_t)in->addr;
+    bondp_query_port_out_t *query_out = (bondp_query_port_out_t *)(uintptr_t)out->addr;
     if (query_in->jfr == NULL) {
         URMA_LOG_ERR("Invalid jfr.\n");
         return -EINVAL;
@@ -1317,23 +1343,15 @@ static int bondp_query_port(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_us
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     switch (in->opcode) {
-        case URMA_USER_CTL_BOND_GET_ID_INFO:
-        case URMA_USER_CTL_BOND_ADD_RJFR_ID_INFO:
-        case URMA_USER_CTL_BOND_ADD_RJETTY_ID_INFO:
-        case URMA_USER_CTL_BOND_GET_SEG_INFO:
-        case URMA_USER_CTL_BOND_ADD_REMOTE_SEG_INFO:
-            break;
-        case URMA_USER_CTL_BOND_SET_AGGR_MODE:
-            if (in->len != sizeof(urma_context_aggr_mode_t)) {
-                URMA_LOG_ERR("Invalid len");
-                return -EINVAL;
-            }
-            return bondp_set_aggr_mode(ctx, *(urma_context_aggr_mode_t *)in->addr);
-        case URMA_USER_CTL_BOND_ENABLE_SEG_CACHE:
+        case BONDP_USER_CTL_SET_BONDING_MODE_LEGACY:
+            return bondp_user_ctl_set_bonding_mode_legacy(ctx, in, out);
+        case BONDP_USER_CTL_ENABLE_SEG_CACHE:
             bondp_toggle_seg_cache(true);
             return 0;
-        case URMA_USER_CTL_BOND_QUERY_PORT:
-            return bondp_query_port(ctx, in, out);
+        case BONDP_USER_CTL_QUERY_PORT:
+            return bondp_user_ctl_query_port(ctx, in, out);
+        case BONDP_USER_CTL_SET_BONDING_MODE:
+            return bondp_user_ctl_set_bonding_mode(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode:%d\n", in->opcode);
             return -EINVAL;

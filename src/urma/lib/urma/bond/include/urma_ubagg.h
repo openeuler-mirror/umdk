@@ -22,16 +22,43 @@ extern "C" {
 #define URMA_UBAGG_WR_BUF_SIZE        (3)
 #define URMA_UBAGG_MAX_CR_CNT_PER_DEV (16)
 
-typedef enum urma_bond_user_ctl_opcode {
-    URMA_USER_CTL_BOND_GET_ID_INFO = 0,
-    URMA_USER_CTL_BOND_ADD_RJFR_ID_INFO,
-    URMA_USER_CTL_BOND_ADD_RJETTY_ID_INFO,
-    URMA_USER_CTL_BOND_GET_SEG_INFO,
-    URMA_USER_CTL_BOND_ADD_REMOTE_SEG_INFO,
-    URMA_USER_CTL_BOND_SET_AGGR_MODE,
-    URMA_USER_CTL_BOND_ENABLE_SEG_CACHE,
-    URMA_USER_CTL_BOND_QUERY_PORT,
-} urma_bond_user_ctl_opcode_t;
+typedef enum bondp_user_ctl_opcode {
+    BONDP_USER_CTL_SET_BONDING_MODE_LEGACY = 4,
+    BONDP_USER_CTL_ENABLE_SEG_CACHE,
+    BONDP_USER_CTL_QUERY_PORT,
+    BONDP_USER_CTL_SET_BONDING_MODE,
+} bondp_user_ctl_opcode_t;
+
+// URMA_USER_CTL_BOND_SET_BONDING_MODE,
+typedef enum bondp_bonding_mode {
+    BONDP_BONDING_MODE_STANDALONE,
+    BONDP_BONDING_MODE_ACTIVE_BACKUP,
+    BONDP_BONDING_MODE_BALANCE,
+    BONDP_BONDING_MODE_MAX,
+} bondp_bonding_mode_t;
+
+typedef enum bondp_bonding_level {
+    BONDP_BONDING_LEVEL_IODIE,
+    BONDP_BONDING_LEVEL_PORT,
+    BONDP_BONDING_LEVEL_MAX,
+} bondp_bonding_level_t;
+
+typedef struct bondp_set_bonding_mode_in {
+    bondp_bonding_mode_t bonding_mode;
+    bondp_bonding_level_t bonding_level;
+} bondp_set_bonding_mode_in_t;
+
+// URMA_USER_CTL_BOND_QUERY_PORT
+typedef struct bondp_query_port_in {
+    urma_jfr_t *jfr;
+} bondp_query_port_in_t;
+
+typedef struct bondp_query_port_out {
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
+} bondp_query_port_out_t;
 
 typedef union bondp_port_id {
     struct {
@@ -67,17 +94,6 @@ typedef struct bondp_rjetty {
         urma_jetty_t *jetty;
     };
 } bondp_rjetty_t;
-
-typedef struct urma_bond_query_port_in {
-    urma_jfr_t *jfr;
-} urma_bond_query_active_port_in_t;
-
-typedef struct urma_bond_query_port_out {
-    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
-    uint32_t enabled_count;
-    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
-    uint32_t active_count;
-} urma_bond_query_active_port_out_t;
 
 #ifdef __cplusplus
 }

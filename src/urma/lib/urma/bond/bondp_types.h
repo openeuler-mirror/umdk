@@ -103,6 +103,8 @@ typedef struct bondp_context {
     /* In matrix server mode, dev_num is always PRIMARY_EID_NUM + PROT_EID_MAX_NUM, */
     /* and valid devices are confirmed through the non-null p_ctxs[i]. */
     int dev_num;
+    bondp_bonding_mode_t bonding_mode;
+    bondp_bonding_level_t bonding_level;
     topo_map_t *topo_map;               /* Only valid when the node is in matrix server */
     bondp_hash_table_t tjetty_id_table; /* match target jetty's pjetty_id to vjetty_id */
     /* Record the mapping from the locally created jetty's pjetty.jetty_id.id to the vjetty.jetty_id.id, */
