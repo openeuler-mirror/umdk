@@ -452,6 +452,11 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
                             .flag.bs.share_tp = 1,
                             .tp_type = info->queue_info->tp_type};
     urma_token_t token = i == UB_QUEUE_JETTY_IO ? info->queue_info->token : info->fc_info->token;
+    // Only RM mode supports shared tp
+    if (queue->tp_mode == URMA_TM_RM) {
+        rjetty.flag.user_tag.stag = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+        rjetty.flag.user_tag.dtag = info->queue_info->jetty_id.id;
+    }
     urma_target_jetty_t *tjetty = umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, &rjetty, &token);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
