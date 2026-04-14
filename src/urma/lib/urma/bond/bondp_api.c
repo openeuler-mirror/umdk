@@ -1498,11 +1498,13 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     }
 
     bondp_comp_t fake_jetty = {0};
+    bool is_fake_jetty = false;
     if (cfg_jetty == NULL) {
         if (rjetty->trans_mode == URMA_TM_RM && !bdp_tjetty->is_multipath) {
             URMA_LOG_ERR("RM jetty import requires drv_ext.vjetty.\n");
             return NULL;
         }
+        is_fake_jetty = true;
         cfg_jetty = &fake_jetty;
         fake_jetty.is_multipath = bdp_tjetty->is_multipath;
         if (init_active_indices(bdp_ctx, &fake_jetty, NULL, 0) != 0) {
@@ -1520,7 +1522,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_PJETTY;
     }
 
-    if (bondp_import_health_check_tseg(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
+    if (bondp_import_health_check_tseg(bdp_ctx, bdp_tjetty, &rvjetty_info, rjetty) != 0) {
         URMA_LOG_ERR("Failed to import health check seg for jetty\n");
         goto UNIMPORT_TSEG;
     }
@@ -1533,6 +1535,10 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_TSEG;
     }
     pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
+
+    if (rjetty->flag.bs.has_drv_ext && !is_fake_jetty) {
+        cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
+    }
 
     URMA_LOG_INFO("Successfully imported target jetty: " URMA_JETTY_ID_FMT,
                   URMA_JETTY_ID_ARGS(&rjetty->jetty_id));
