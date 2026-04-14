@@ -133,12 +133,10 @@ typedef struct local_block_pool {
     umq_buf_list_t head_with_data;
     uint64_t buf_cnt_with_data;
     uint64_t capacity_with_data;
-    uint64_t last_used_with_data;
 
     umq_buf_list_t head_without_data;
     uint64_t buf_cnt_without_data;
     uint64_t capacity_without_data;
-    uint64_t last_used_without_data;
 } local_block_pool_t;
 
 typedef struct global_block_pool {
