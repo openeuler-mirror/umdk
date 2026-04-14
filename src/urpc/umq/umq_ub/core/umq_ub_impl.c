@@ -676,6 +676,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
             .register_seg_callback = umq_ub_register_seg_callback,
             .unregister_seg_callback = umq_ub_unregister_seg_callback,
         },
+        .disable_scale_cap = cfg->buf_pool_cfg.disable_scale_cap,
         .expansion_pool_id_min = HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
         .expansion_pool_cnt_max = UMQ_MAX_TSEG_NUM - HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
         .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
