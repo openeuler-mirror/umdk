@@ -10,30 +10,30 @@
 
 #include <threads.h>
 
-#include "urma_log.h"
-#include "urma_api.h"
-#include "bondp_types.h"
-#include "urma_private.h"
-#include "bondp_jetty_ctx.h"
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
+#include "bondp_jetty_ctx.h"
+#include "bondp_types.h"
+#include "urma_api.h"
+#include "urma_log.h"
+#include "urma_private.h"
 
 #include "bondp_datapath.h"
-#include "urma_perf.h"
 #include "ub_get_clock.h"
+#include "urma_perf.h"
 
 #define PJETTY_ID_ENCODE_OFFSET (32)
 #define VJETTY_ID_ENCODE_OFFSET (48)
-#define WRITE_IMM_USER_BITS (32)
-#define IMM_OPCODE_SHIFT (56)
-#define IMM_OPCODE_MASK (0x3)
-#define WRITE_IMM_IS_SO_SHIFT (63)
-#define CALLBACK_SUCCESS (0)
-#define CALLBACK_SKIP (1)
-#define CALLBACK_FAIL (-1)
-#define RECV_WR_ID_MAX (1U << 31)
+#define WRITE_IMM_USER_BITS     (32)
+#define IMM_OPCODE_SHIFT        (56)
+#define IMM_OPCODE_MASK         (0x3)
+#define WRITE_IMM_IS_SO_SHIFT   (63)
+#define CALLBACK_SUCCESS        (0)
+#define CALLBACK_SKIP           (1)
+#define CALLBACK_FAIL           (-1)
+#define RECV_WR_ID_MAX          (1U << 31)
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
 {
@@ -95,8 +95,9 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
             */
             if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->send.src.num_sge) {
                 URMA_LOG_WARN("The number of sge %u the destination segment is greater than the maximum supported: %u"
-                    "by the device.\n", wr->send.src.num_sge,
-                    bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                              "by the device.\n",
+                              wr->send.src.num_sge,
+                              bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
             }
             break;
         case URMA_OPC_WRITE:
@@ -114,24 +115,28 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
             if (wr->opcode == URMA_OPC_READ) {
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.src.num_sge) {
                     URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported: %u"
-                        " by the device.\n", wr->rw.src.num_sge,
-                        bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
+                                  " by the device.\n",
+                                  wr->rw.src.num_sge,
+                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
                 }
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.dst.num_sge) {
                     URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported: %u"
-                        " by the device.\n", wr->rw.dst.num_sge,
-                        bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                                  " by the device.\n",
+                                  wr->rw.dst.num_sge,
+                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
                 }
             } else {
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.src.num_sge) {
                     URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported: %u"
-                        " by the device.\n", wr->rw.src.num_sge,
-                        bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                                  " by the device.\n",
+                                  wr->rw.src.num_sge,
+                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
                 }
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.dst.num_sge) {
                     URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported: %u"
-                        " by the device.\n", wr->rw.dst.num_sge,
-                        bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
+                                  " by the device.\n",
+                                  wr->rw.dst.num_sge,
+                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
                 }
             }
             break;
@@ -156,7 +161,7 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
 }
 
 static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_target_jetty_t *bdp_tjetty,
-    const urma_jfs_wr_t *wr)
+                                           const urma_jfs_wr_t *wr)
 {
     if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
         URMA_LOG_ERR("Try to call post_send api by invalid comp_type: %d\n", bdp_send_comp->comp_type);
@@ -191,11 +196,11 @@ static bdp_v_conn_t *get_v_conn_on_send(bjetty_ctx_t *bjetty_ctx, bondp_target_j
     bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, vtjetty_id);
     if (!v_conn) {
         int ret = bdp_v_conn_table_add_on_send(&bjetty_ctx->v_conn_table, vtjetty_id,
-            bdp_tjetty, bdp_tjetty->target_dev_num, &v_conn, bjetty_ctx->bond_ctx->v_ctx.aggr_mode);
+                                               bdp_tjetty, bdp_tjetty->target_dev_num, &v_conn, bjetty_ctx->bond_ctx->v_ctx.aggr_mode);
         if (ret != 0) {
             URMA_LOG_ERR("Failed to create v_conn for vjetty, ret: %d, "
-                "[" URMA_JETTY_ID_FMT " -> " URMA_JETTY_ID_FMT "]\n",
-                ret, URMA_JETTY_ID_ARGS(comp_jetty_id), URMA_JETTY_ID_ARGS(vtjetty_id));
+                         "[" URMA_JETTY_ID_FMT " -> " URMA_JETTY_ID_FMT "]\n",
+                         ret, URMA_JETTY_ID_ARGS(comp_jetty_id), URMA_JETTY_ID_ARGS(vtjetty_id));
             return NULL;
         }
     }
@@ -566,6 +571,105 @@ static int resend_jfs_wr(jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
     return 0;
 }
 
+/**
+ * Utilize certain fields in CR to get the corresponding bjetty_ctx, thereby executing failover and recovery functions.
+ * It may be necessary to modify the implementation of this function in the future.
+ * When calling this function, it must be ensured that the user_ctx in this CR is valid.
+ * That is to say, this interface cannot be called during URMA_CR_WR_SUSPEND_DONE and URMA_CR_WR_FLUSH_ERR_DONE.
+ * When obtaining the `bjetty_ctx`, this function will increment the reference count of its corresponding `bondp_comp`.
+ * The caller needs to decrement the reference count when bjetty_ctx is about to go out of scope.
+ * @return Return bjetty_ctx on success, return NULL on failure.
+ */
+static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
+{
+    urma_jetty_id_t pjetty_id = {
+        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
+        .id = cr->local_id,
+    };
+
+    bdp_p_vjetty_type_t p_vjetty_type;
+    if (cr->flag.bs.jetty != 0) {
+        p_vjetty_type = JETTY;
+    } else if (cr->flag.bs.s_r == 0) {
+        p_vjetty_type = JFS;
+    } else {
+        p_vjetty_type = JFR;
+    }
+
+    pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
+    bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(
+        &bdp_ctx->p_vjetty_id_table, pjetty_id, p_vjetty_type);
+    if (comp == NULL) {
+        pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+        URMA_LOG_ERR("Failed to get comp, local_id: %d\n", pjetty_id.id);
+        return NULL;
+    }
+    atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
+    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    return &comp->bjetty_ctx;
+}
+
+/**
+ * After calling the `get_bjetty_xxx` function, it is necessary to call this function to decrement the reference count.
+ * The encapsulation of this function is primarily aimed at making the src/urma easier to understand.
+ */
+static inline void put_bjetty_ctx(const bjetty_ctx_t *bjetty_ctx)
+{
+    if (bjetty_ctx == NULL) {
+        return;
+    }
+    atomic_fetch_sub(&bjetty_ctx->bdp_comp->use_cnt.atomic_cnt, 1);
+}
+
+/**
+ * When the cr status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
+ * it indicates that the CR is a fake one constructed by hardware.
+ * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
+ */
+static inline bool is_fake_cr(const urma_cr_t *cr)
+{
+    return cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE;
+}
+
+static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+{
+    bjetty_ctx_t *bjetty_ctx = get_bjetty_ctx_by_cr(bdp_ctx, idx, cr);
+    if (bjetty_ctx == NULL) {
+        return CONVERT_FAIL;
+    }
+
+    uint8_t target_state_bit = 0;
+    if (cr->status == URMA_CR_WR_SUSPEND_DONE) {
+        target_state_bit = PJETTY_SUSPEND_DONE;
+    } else if (cr->status == URMA_CR_WR_FLUSH_ERR_DONE) {
+        target_state_bit = PJETTY_FLUSH_ERROR_DONE;
+    } else {
+        URMA_LOG_ERR("Invalid cr error status: %d\n", cr->status);
+        put_bjetty_ctx(bjetty_ctx);
+        return CONVERT_FAIL;
+    }
+    bjetty_ctx->pjettys_error_done[idx] |= target_state_bit;
+    bool all_reported = true;
+    // pjetty_idx
+    for (int idx = 0; idx < URMA_UBAGG_DEV_MAX_NUM; idx++) {
+        if (bjetty_ctx->pjettys[idx] == NULL) {
+            continue;
+        }
+        if ((bjetty_ctx->pjettys_error_done[idx] & target_state_bit) == 0) {
+            all_reported = false;
+            break;
+        }
+    }
+    if (all_reported) {
+        cr->local_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id;
+        /* Caller should copy this CR to output array. */
+        put_bjetty_ctx(bjetty_ctx);
+        return CONVERT_SUCCESS;
+    }
+    put_bjetty_ctx(bjetty_ctx);
+    return CONVERT_SKIP;
+}
+
 static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_t *cr)
 {
     const uint64_t wr_id = cr->user_ctx;
@@ -613,13 +717,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     convert_pcr_to_vcr(cr, bjetty_ctx->bond_ctx, &msn);
     cr->local_id = get_comp_urma_jetty_id(wr_entry->bjetty_ctx->bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
-
-    /* Handle v_conn slide window */
-    bdp_v_conn_t *v_conn = wr_entry->v_conn;
-    if (cr->status == URMA_CR_SUCCESS) {
-        /* Sender use send_wr_id to indicate the order of send, node->key is send_wr_id */
-        (void)bdp_slide_wnd_add(&v_conn->send_wnd, wr_entry->wr_id);
-    }
 
     free_jfs_wr(&wr_entry->wr);
     jfs_wr_buf_release(wr_entry);
@@ -673,84 +770,6 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     return CONVERT_SUCCESS;
 }
 
-static inline bdp_p_vjetty_type_t get_p_vjetty_type_by_cr(const urma_cr_t *cr)
-{
-    if (cr->flag.bs.jetty != 0) {
-        return JETTY;
-    }
-    if (cr->flag.bs.s_r == 0) {
-        return JFS;
-    }
-    return JFR;
-}
-/**
- * Utilize certain fields in CR to get the corresponding bjetty_ctx, thereby executing failover and recovery functions.
- * It may be necessary to modify the implementation of this function in the future.
- * When calling this function, it must be ensured that the user_ctx in this CR is valid.
- * That is to say, this interface cannot be called during URMA_CR_WR_SUSPEND_DONE and URMA_CR_WR_FLUSH_ERR_DONE.
- * When obtaining the `bjetty_ctx`, this function will increment the reference count of its corresponding `bondp_comp`.
- * The caller needs to decrement the reference count when bjetty_ctx is about to go out of scope.
- * @return Return bjetty_ctx on success, return NULL on failure.
- */
-static bjetty_ctx_t *get_bjetty_ctx_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
-{
-    urma_jetty_id_t pjetty_id = {
-        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
-        .id = cr->local_id,
-    };
-    pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
-    bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(&bdp_ctx->p_vjetty_id_table, pjetty_id,
-                                                                        get_p_vjetty_type_by_cr(cr));
-    if (comp == NULL) {
-        pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to get comp, local_id: %d\n", pjetty_id.id);
-        return NULL;
-    }
-    atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
-    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    return &comp->bjetty_ctx;
-}
-/**
- * After calling the `get_bjetty_xxx` function, it is necessary to call this function to decrement the reference count.
- * The encapsulation of this function is primarily aimed at making the src/urma easier to understand.
- */
-static inline void put_bjetty_ctx(const bjetty_ctx_t *bjetty_ctx)
-{
-    if (bjetty_ctx == NULL) {
-        return;
-    }
-    atomic_fetch_sub(&bjetty_ctx->bdp_comp->use_cnt.atomic_cnt, 1);
-}
-/**
- * When the cr status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
- * it indicates that the CR is a fake one constructed by hardware.
- * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
- */
-static inline bool is_cr_user_ctx_valid(const urma_cr_t *cr)
-{
-    return !(cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE);
-}
-
-/**
- * Convert the local_id field of a CR from pjetty.id to vjetty.id if possible.
- * @return: If conversion is possible, perform the conversion and return 0; otherwise, do not replace and return -1.
- */
-static int restore_cr_local_id(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
-{
-    uint32_t vjetty_id;
-    urma_jetty_id_t pjetty_id = {
-        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
-        .id = cr->local_id,
-    };
-    int ret = bdp_p_vjetty_id_table_lookup(&bdp_ctx->p_vjetty_id_table, pjetty_id, get_p_vjetty_type_by_cr(cr), &vjetty_id);
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to get vjetty.id of local_id: %u, ret: %d\n", pjetty_id.id, ret);
-        return -1;
-    }
-    cr->local_id = vjetty_id;
-    return 0;
-}
-
 /**
  * @param dev_idx: The index of pjfc used when polling jfc.
  * In fact, what we need is the index of pjetty relative to vjetty, but we cannot obtain it when calling this function.
@@ -765,37 +784,9 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     }
 
     // Special handling is applied to the CRs constructed by the hardware of SUSPEND_DONE and FLUSH_ERROR_DONE.
-    if (!is_cr_user_ctx_valid(cr)) {
-        uint8_t target_state_bit = 0;
-        if (cr->status == URMA_CR_WR_SUSPEND_DONE) {
-            target_state_bit = PJETTY_SUSPEND_DONE;
-        } else if (cr->status == URMA_CR_WR_FLUSH_ERR_DONE) {
-            target_state_bit = PJETTY_FLUSH_ERROR_DONE;
-        } else {
-            URMA_LOG_ERR("Invalid cr error status: %d\n", cr->status);
-            put_bjetty_ctx(bjetty_ctx);
-            return CONVERT_FAIL;
-        }
-        bjetty_ctx->pjettys_error_done[idx] |= target_state_bit;
-        bool all_reported = true;
-        // pjetty_idx
-        for (int idx = 0; idx < URMA_UBAGG_DEV_MAX_NUM; idx++) {
-            if (bjetty_ctx->pjettys[idx] == NULL) {
-                continue;
-            }
-            if ((bjetty_ctx->pjettys_error_done[idx] & target_state_bit) == 0) {
-                all_reported = false;
-                break;
-            }
-        }
-        if (all_reported) {
-            cr->local_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp)->id;
-            /* Caller should copy this CR to output array. */
-            put_bjetty_ctx(bjetty_ctx);
-            return CONVERT_SUCCESS;
-        }
-        put_bjetty_ctx(bjetty_ctx);
-        return CONVERT_SKIP;
+    if (is_fake_cr(cr)) {
+        cr->local_id = bjetty_ctx->bdp_comp->v_jetty.jetty_id.id;
+        return CONVERT_SUCCESS;
     }
 
     if (is_recv_cr(cr)) {
@@ -815,16 +806,9 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
     /* Handle CR with status URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE */
-    if (!is_cr_user_ctx_valid(cr)) {
-        /* For these CRs where the user_ctx does not exist, simply restore the necessary values and then skip them. */
-        if (restore_cr_local_id(bdp_ctx, idx, cr) != 0) {
-            cr->local_id = 0; /* Replace with invalid value under exceptional circumstances */
-        }
-        /* Caller should copy this CR to output array. */
-        return CONVERT_SUCCESS;
-    }
-
-    if (is_recv_cr(cr)) {
+    if (is_fake_cr(cr)) {
+        return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
+    } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_jfc, cr);
     } else {
         return handle_send_cr_with_store(bdp_jfc, cr);

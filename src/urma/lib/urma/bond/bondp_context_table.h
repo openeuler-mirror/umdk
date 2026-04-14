@@ -49,21 +49,7 @@ int bdp_p_vjetty_id_table_add_without_lock(bondp_hash_table_t *tbl, urma_jetty_i
 
 int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id,
                                            bdp_p_vjetty_type_t type);
-/**
- * After querying the table, only the vjetty_id is returned.
- * This function does not consider the reference count corresponding to comp.
- * It is possible that a jetty is in the process of being released, but the vjetty_id has already been returned.
- * We consider this situation reasonable because when reporting CR, the current vjetty has correctly sent data,
- * so it should be findable.
- * However, after the vjetty is deleted,
- * if a CR related to the current vjetty is obtained again, it will return an error.
- * This is also expected because the related resources no longer exist, so there is no way to recover local_id field.
- * Unless we need to increase the reference count for vjetty for each cached WR.
- * @param vjetty_id: output
- * @return: 0 for success, other for error
- */
-int bdp_p_vjetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id, bdp_p_vjetty_type_t type,
-                                 uint32_t *vjetty_id);
+;
 /**
  * Return the bondp_comp corresponding to pjetty_id
  * Only perform table lookup operations, do not manage reference counts, external locking is required for use.

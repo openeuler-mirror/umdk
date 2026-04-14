@@ -33,20 +33,12 @@ int bdp_v_conn_init(bdp_v_conn_t *v_conn)
         URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add");
         return -1;
     }
-    if (bdp_slide_wnd_init(&v_conn->send_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
-        URMA_LOG_ERR("Failed to init sender slide window in bdp_v_conn_table_add");
-        goto UNINIT_RCV_WND;
-    }
     return 0;
-UNINIT_RCV_WND:
-    bdp_slide_wnd_uninit(&v_conn->recv_wnd);
-    return -1;
 }
 
 void bdp_v_conn_uninit(bdp_v_conn_t *v_conn)
 {
     bdp_slide_wnd_uninit(&v_conn->recv_wnd);
-    bdp_slide_wnd_uninit(&v_conn->send_wnd);
 }
 
 static bool v_conn_comp(struct ub_hmap_node *node, void *key)
