@@ -131,44 +131,7 @@ int bondp_fill_vjetty_health_info(bondp_context_t *bond_ctx, bondp_comp_t *bdp_j
     return 0;
 }
 
-static int import_check_tseg_for_primary_eid(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-    urma_bond_id_info_out_t *rvjetty_info)
-{
-    urma_import_seg_flag_t flag = {
-        .bs.cacheable = URMA_NON_CACHEABLE,
-        .bs.mapping = URMA_SEG_NOMAP,
-        .bs.reserved = 0,
-        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
-    };
-
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL || bdp_tjetty->p_tjetty[i][i] == NULL) {
-            URMA_LOG_ERR("Primary dev is NULL or p_tjetty is NULL (%d, %d)\n", i, i);
-            return -1;
-        }
-
-        if (i >= rvjetty_info->health_check_seg.dev_num) {
-            URMA_LOG_ERR("local dev num %d exceeds health check seg dev num %d\n", i,
-                rvjetty_info->health_check_seg.dev_num);
-            return -1;
-        }
-
-        urma_seg_t *check_seg = &rvjetty_info->health_check_seg.slaves[i];
-        bdp_tjetty->p_check_tseg[i][i] = urma_import_seg(bdp_ctx->p_ctxs[i], check_seg, NULL, 0, flag);
-        if (bdp_tjetty->p_check_tseg[i][i] == NULL) {
-            URMA_LOG_ERR("Failed to import health check seg (%d, %d)\n", i, i);
-            return -1;
-        }
-
-        URMA_LOG_INFO("Import health check seg [%d]("EID_FMT")<-[%d]("EID_FMT")\n", i,
-            EID_ARGS(bdp_ctx->p_ctxs[i]->eid), i, EID_ARGS(rvjetty_info->health_check_seg.slaves[i].ubva.eid));
-    }
-
-    URMA_LOG_INFO("Succeed to import health check segs\n");
-    return 0;
-}
-
-static int import_check_tseg_for_port_eid(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+static int import_check_tseg_by_import_result(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
     urma_bond_id_info_out_t *rvjetty_info)
 {
     bool has_valid_route = false;
@@ -179,44 +142,43 @@ static int import_check_tseg_for_port_eid(bondp_context_t *bdp_ctx, bondp_target
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
     };
 
-    for (int i = 0; i < IODIE_NUM; i++) {
-        for (int j = 0; j < PORT_NUM; j++) {
-            int local_port = IODIE_NUM + PORT_NUM * i + j;
-            // TODO
-            // int target_port = IODIE_NUM + PORT_NUM * i + rvjetty_info->ports[i][j];
-            int target_port = IODIE_NUM + PORT_NUM * i;
+    for (uint32_t n = 0; n < bdp_tjetty->active_count; ++n) {
+        uint32_t local_idx = bdp_tjetty->local_active_indices[n];
+        uint32_t target_idx = bdp_tjetty->active_indices[n];
 
-            if (local_port >= bdp_tjetty->local_dev_num ||
-                target_port >= bdp_tjetty->target_dev_num ||
-                local_port >= bdp_ctx->dev_num ||
-                target_port >= rvjetty_info->health_check_seg.dev_num ||
-                bdp_ctx->p_ctxs[local_port] == NULL ||
-                bdp_tjetty->p_tjetty[local_port][target_port] == NULL) {
-                URMA_LOG_DEBUG("BONDP skip check seg route (%d %d)\n", local_port, target_port);
-                continue;
-            }
-
-            urma_seg_t *check_seg = &rvjetty_info->health_check_seg.slaves[target_port];
-
-            bdp_tjetty->p_check_tseg[local_port][target_port] =
-                urma_import_seg(bdp_ctx->p_ctxs[local_port], check_seg, NULL, 0, flag);
-            if (bdp_tjetty->p_check_tseg[local_port][target_port] == NULL) {
-                URMA_LOG_ERR("Failed to import health check seg (%d, %d)\n", local_port, target_port);
-                return -1;
-            }
-
-            URMA_LOG_INFO("Import health check seg [%d]("EID_FMT")<-[%d]("EID_FMT")\n", local_port,
-                EID_ARGS(bdp_ctx->p_ctxs[local_port]->eid), target_port, EID_ARGS(rvjetty_info->health_check_seg.slaves[target_port].ubva.eid));
-            has_valid_route = true;
+        if (local_idx >= (uint32_t)bdp_ctx->dev_num ||
+            target_idx >= (uint32_t)rvjetty_info->health_check_seg.dev_num ||
+            bdp_ctx->p_ctxs[local_idx] == NULL ||
+            bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL) {
+            URMA_LOG_DEBUG("BONDP skip check seg route (%u %u)\n", local_idx, target_idx);
+            continue;
         }
+
+        if (bdp_tjetty->p_check_tseg[local_idx][target_idx] != NULL) {
+            has_valid_route = true;
+            continue;
+        }
+
+        urma_seg_t *check_seg = &rvjetty_info->health_check_seg.slaves[target_idx];
+        bdp_tjetty->p_check_tseg[local_idx][target_idx] =
+            urma_import_seg(bdp_ctx->p_ctxs[local_idx], check_seg, NULL, 0, flag);
+        if (bdp_tjetty->p_check_tseg[local_idx][target_idx] == NULL) {
+            URMA_LOG_ERR("Failed to import health check seg (%u, %u)\n", local_idx, target_idx);
+            return -1;
+        }
+
+        URMA_LOG_INFO("Import health check seg [%u]("EID_FMT")<-[%u]("EID_FMT")\n", local_idx,
+            EID_ARGS(bdp_ctx->p_ctxs[local_idx]->eid), target_idx,
+            EID_ARGS(rvjetty_info->health_check_seg.slaves[target_idx].ubva.eid));
+        has_valid_route = true;
     }
 
     if (!has_valid_route) {
-        URMA_LOG_ERR("No valid direct route for health check seg\n");
+        URMA_LOG_ERR("No valid imported route for health check seg\n");
         return -1;
     }
 
-    URMA_LOG_INFO("Succeed to import port health check segs\n");
+    URMA_LOG_INFO("Succeed to import health check segs\n");
     return 0;
 }
 
@@ -224,8 +186,8 @@ int bondp_unimport_health_check_tseg(bondp_target_jetty_t *bdp_tjetty)
 {
     int ret = URMA_SUCCESS;
 
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             if (bdp_tjetty->p_check_tseg[i][j] == NULL) {
                 continue;
             }
@@ -243,17 +205,24 @@ int bondp_unimport_health_check_tseg(bondp_target_jetty_t *bdp_tjetty)
 }
 
 int bondp_import_health_check_tseg(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-    urma_bond_id_info_out_t *rvjetty_info)
+    urma_bond_id_info_out_t *rvjetty_info, urma_rjetty_t *rjetty)
 {
     if (!rvjetty_info->is_health_check_enable || !bondp_health_check_enabled()) {
         return 0;
     }
 
-    if (bdp_tjetty->is_multipath) {
-        return import_check_tseg_for_primary_eid(bdp_ctx, bdp_tjetty, rvjetty_info);
+    bondp_comp_t *cfg_jetty = NULL;
+    if (rjetty->flag.bs.has_drv_ext) {
+        const bondp_rjetty_t *bdp_rjetty = (const bondp_rjetty_t *)rjetty;
+        cfg_jetty = CONTAINER_OF_FIELD(bdp_rjetty->jetty, bondp_comp_t, v_jetty);
     }
 
-    return import_check_tseg_for_port_eid(bdp_ctx, bdp_tjetty, rvjetty_info);
+    if (!rjetty->flag.bs.has_drv_ext || cfg_jetty == NULL) {
+        URMA_LOG_ERR("Invalid rjetty for health check seg import, health check disabled\n");
+        return 0;
+    }
+
+    return import_check_tseg_by_import_result(bdp_ctx, bdp_tjetty, rvjetty_info);
 }
 
 static void *bondp_health_check_thread(void *arg)
