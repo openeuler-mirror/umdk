@@ -1296,6 +1296,11 @@ static int bondp_user_ctl_set_bonding_mode_legacy(urma_context_t *ctx, urma_user
     }
 
     urma_context_aggr_mode_t aggr_mode = *(urma_context_aggr_mode_t *)(uintptr_t)in->addr;
+    if (aggr_mode < URMA_AGGR_MODE_STANDALONE ||
+        aggr_mode > URMA_AGGR_MODE_BALANCE) {
+        URMA_LOG_ERR("Invalid aggr mode: %d.\n", aggr_mode);
+        return -EINVAL;
+    }
     return bondp_set_bonding_mode(ctx, (bondp_bonding_mode_t)aggr_mode, BONDP_BONDING_LEVEL_IODIE);
 }
 
