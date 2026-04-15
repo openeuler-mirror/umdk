@@ -671,32 +671,30 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     bjetty_ctx->bdp_comp->valid[send_idx] = false;
     bjetty_ctx->bdp_comp->sqe_cnt[send_idx] -= 1;
 
-    /* Do migration */
-    if (cr->status == URMA_CR_ACK_TIMEOUT_ERR) {
-        int new_send_idx = -1, new_target_idx = -1;
-        if (schedule_send(&wr_entry->wr, bjetty_ctx->bdp_comp, &new_send_idx, &new_target_idx) != 0) {
-            URMA_LOG_ERR("Failed to schedule send for migration\n");
-            return CONVERT_FAIL;
-        }
+    if (cr->status != 0) {
+        if (bjetty_ctx->bdp_comp->valid[send_idx] == true) {
+            bjetty_ctx->bdp_comp->valid[send_idx] = false;
 
-        if (resend_jfs_wr(wr_entry, new_send_idx, new_target_idx) != 0) {
-            URMA_LOG_ERR("Failed to resend jfs wr\n");
-            return CONVERT_FAIL;
-        }
-        return CONVERT_SKIP;
+            int new_send_idx = -1, new_target_idx = -1;
+            if (schedule_send(&wr_entry->wr, bjetty_ctx->bdp_comp, &new_send_idx, &new_target_idx) != 0) {
+                URMA_LOG_ERR("Failed to schedule send for migration\n");
+                return CONVERT_FAIL;
+            }
 
-        for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
-            const int wr_id = __idx_to_wr_id((bdp_jfc->wr_buf.latest_used + 1 + i) % PRIMARY_EID_NUM);
-            jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
-            if (resend_wr_entry->send_idx != wr_entry->send_idx ||
-                resend_wr_entry->target_idx != wr_entry->target_idx) {
-                continue;
-            }
-            if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %d\n", wr_id);
+            URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
+
+            for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
+                const int wr_id = __idx_to_wr_id((bdp_jfc->wr_buf.latest_used + 1 + i) % PRIMARY_EID_NUM);
+                jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
+                if (resend_wr_entry->send_idx != wr_entry->send_idx ||
+                    resend_wr_entry->target_idx != wr_entry->target_idx) {
+                    continue;
+                }
+                if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+                    URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %d\n", wr_id);
+                }
             }
         }
-        URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
         return CONVERT_SKIP;
     }
 
@@ -872,7 +870,8 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
     int cr_cnt_remaining = cr_cnt;
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM && cr_cnt_remaining > 0; i++) {
-        if (bdp_jetty->p_jetty[i] == NULL) {
+        if (bdp_jetty->p_jetty[i] == NULL ||
+            bdp_jetty->valid[i] == false) {
             continue;
         }
 
