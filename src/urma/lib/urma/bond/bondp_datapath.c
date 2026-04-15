@@ -657,6 +657,10 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     bjetty_ctx->bdp_comp->valid[send_idx] = false;
     bjetty_ctx->bdp_comp->sqe_cnt[send_idx] -= 1;
 
+    if (bjetty_ctx->bdp_comp->valid[send_idx] == false) {
+        return CONVERT_SKIP;
+    }
+
     if (cr->status != 0) {
         if (bjetty_ctx->bdp_comp->valid[send_idx] == true) {
             bjetty_ctx->bdp_comp->valid[send_idx] = false;
@@ -779,6 +783,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
     if (is_ctrl_cr(cr)) {
+        bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
         return CONVERT_SKIP;
     } if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
@@ -814,6 +819,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
                               ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
                               : cr_cnt_remaining;
         int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[idx], pcr_cnt_max, pcr_buf);
+
         if (pcr_cnt < 0) {
             PERF_PROFILING_END(BOND_POLL_JFC);
             return pcr_cnt;
@@ -825,10 +831,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
             urma_cr_t *pcr = &pcr_buf[cr_id];
             cr_convert_ret_t conv_ret;
-
-            if (bondp_try_handle_health_check_cr(bdp_ctx, idx, pcr)) {
-                continue;
-            }
 
             if (is_single_dev_mode(&bdp_ctx->v_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
@@ -861,8 +863,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
     int cr_cnt_remaining = cr_cnt;
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM && cr_cnt_remaining > 0; i++) {
-        if (bdp_jetty->p_jetty[i] == NULL ||
-            bdp_jetty->valid[i] == false) {
+        if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
 
