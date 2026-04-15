@@ -124,7 +124,7 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
 
 static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 {
-    bondp_stop_health_check_thread();
+    bondp_health_check_global_ctx_uninit(bondp_global_ctx);
     if (bondp_global_ctx->topo_map) {
         delete_topo_map(bondp_global_ctx->topo_map);
     }
@@ -159,6 +159,8 @@ urma_status_t bondp_uninit(void)
         URMA_LOG_WARN("Deinitialized already.\n");
         return URMA_SUCCESS; /* Keep the same logic as urma_uninit */
     }
+
+    bondp_stop_health_check_thread();
 
     int ret = bondp_global_ctx_uninit(g_bondp_global_ctx);
     if (ret != 0) {
@@ -491,7 +493,6 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 DELETE_PCTX:
     bondp_delete_pctx(bond_ctx);
 CMD_DELETE_CONTEXT:
-    bondp_destroy_health_check_ctx(bond_ctx);
     bondp_delete_p_ctx(bond_ctx);
     bondp_restore_async_fd(bond_ctx);
     (void)urma_cmd_delete_context(&bond_ctx->v_ctx);
