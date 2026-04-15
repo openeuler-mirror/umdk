@@ -181,6 +181,28 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
     }
     return URMA_SUCCESS;
 }
+
+static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, const urma_jfs_wr_t *wr,
+    urma_jfs_wr_t **bad_wr)
+{
+    bondp_target_jetty_t *bdp_tjetty = NULL;
+    urma_status_t ret = URMA_SUCCESS;
+    urma_jfs_wr_t *cur = wr;
+
+    while (cur != NULL) {
+        /* No need to check NULL for tjetty of each wr */
+        bdp_tjetty = CONTAINER_OF_FIELD(cur->tjetty, bondp_target_jetty_t, v_tjetty);
+        ret = post_send_check_valid(bdp_send_comp, bdp_tjetty, cur);
+        if (ret != URMA_SUCCESS) {
+            *bad_wr = cur;
+            return ret;
+        }
+        cur = cur->next;
+    }
+
+    return URMA_SUCCESS;
+}
+
 /**
  * When sending data, attempt to retrieve the v_conn corresponding to the target tjetty from bjetty_ctx;
  * if it does not exist, try to create one, then init it with `init_v_conn_on_send` if needed.
@@ -328,13 +350,30 @@ FREE_PWR:
     return ret;
 }
 
+static urma_status_t bondp_post_send_wr_list_store(bjetty_ctx_t *bjetty_ctx, bondp_jfc_t *vjfc,
+    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
+{
+    urma_status_t ret = URMA_SUCCESS;
+    urma_jfs_wr_t *cur = wr;
+
+    while (cur != NULL) {
+        ret = bondp_post_send_wr_and_store(bjetty_ctx, vjfc, cur, bad_wr);
+        if (ret != URMA_SUCCESS) {
+            return ret;
+        }
+        cur = cur->next;
+    }
+    
+    return URMA_SUCCESS;
+}
+
 urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
-    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
-    urma_status_t ret = post_send_check_valid(bdp_jetty, bdp_tjetty, wr);
+    urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_JETTY_POST_SEND);
+    ret = post_send_check_wr_list_valid(bdp_jetty, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JETTY_POST_SEND);
         return ret;
@@ -342,34 +381,35 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
 
     bjetty_ctx_t *bjetty_ctx = &bdp_jetty->bjetty_ctx;
     if (is_single_dev_mode(jetty->urma_ctx)) {
-        PERF_PROFILING_END(BOND_JETTY_POST_SEND);
-        return bondp_post_send_wr_no_store(bjetty_ctx, wr, bad_wr);
+        ret = bondp_post_send_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
-        PERF_PROFILING_END(BOND_JETTY_POST_SEND);
-        return bondp_post_send_wr_and_store(bjetty_ctx, bdp_jetty->send_jfc, wr, bad_wr);
+        ret = bondp_post_send_wr_list_store(bjetty_ctx, bdp_jetty->send_jfc, wr, bad_wr);
     }
+    PERF_PROFILING_END(BOND_JETTY_POST_SEND);
+
+    return ret;
 }
 
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
-    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
     bjetty_ctx_t *bjetty_ctx = &bdp_jfs->bjetty_ctx;
     urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_JFS_POST_SEND);
-    ret = post_send_check_valid(bdp_jfs, bdp_tjetty, wr);
+    ret = post_send_check_wr_list_valid(bdp_jfs, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JFS_POST_SEND);
         return ret;
     }
     if (is_single_dev_mode(jfs->urma_ctx)) {
-        PERF_PROFILING_END(BOND_JFS_POST_SEND);
-        return bondp_post_send_wr_no_store(bjetty_ctx, wr, bad_wr);
+        ret = bondp_post_send_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
-        PERF_PROFILING_END(BOND_JFS_POST_SEND);
-        return bondp_post_send_wr_and_store(bjetty_ctx, bdp_jfs->send_jfc, wr, bad_wr);
+        ret = bondp_post_send_wr_list_store(bjetty_ctx, bdp_jfs->send_jfc, wr, bad_wr);
     }
+    PERF_PROFILING_END(BOND_JFS_POST_SEND);
+
+    return ret;
 }
 
 static urma_status_t bondp_post_recv_wr_no_store(bjetty_ctx_t *bjetty_ctx,
@@ -463,6 +503,23 @@ FREE_PWR:
     return ret;
 }
 
+static urma_status_t bondp_post_recv_wr_list_store(bjetty_ctx_t *bjetty_ctx, bondp_jfc_t *vjfc,
+    urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
+{
+    urma_status_t ret = URMA_SUCCESS;
+    urma_jfr_wr_t *cur = wr;
+
+    while (cur != NULL) {
+        ret = bondp_post_recv_wr_and_store(bjetty_ctx, vjfc, cur, bad_wr);
+        if (ret != URMA_SUCCESS) {
+            return ret;
+        }
+        cur = cur->next;
+    }
+
+    return URMA_SUCCESS;
+}
+
 static urma_status_t post_recv_check_jfr_wr_valid(const bondp_context_t *bdp_ctx, const urma_jfr_wr_t *wr)
 {
     /* No need to handle cases where num_sge == 0 or sge == NULL; Certain hardware supports this usage. */
@@ -475,16 +532,25 @@ static urma_status_t post_recv_check_jfr_wr_valid(const bondp_context_t *bdp_ctx
     return URMA_SUCCESS;
 }
 
-static urma_status_t post_recv_check_valid(bondp_comp_t *bdp_recv_comp, const urma_jfr_wr_t *wr)
+static urma_status_t post_recv_check_wr_list_valid(bondp_comp_t *bdp_recv_comp, const urma_jfr_wr_t *wr,
+    urma_jfr_wr_t **bad_wr)
 {
     if (bdp_recv_comp->comp_type != BONDP_COMP_JETTY && bdp_recv_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_recv_comp type: %d\n", bdp_recv_comp->comp_type);
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
-    urma_status_t ret = post_recv_check_jfr_wr_valid(bdp_recv_comp->bondp_ctx, wr);
-    if (ret != URMA_SUCCESS) {
-        return ret;
+    urma_status_t ret = URMA_SUCCESS;
+    urma_jfr_wr_t *cur = (urma_jfr_wr_t *)wr;
+    while (cur != NULL) {
+        ret = post_recv_check_jfr_wr_valid(bdp_recv_comp->bondp_ctx, cur);
+        if (ret != URMA_SUCCESS) {
+            *bad_wr = cur;
+            return ret;
+        }
+        cur = cur->next;
     }
+
     return URMA_SUCCESS;
 }
 
@@ -494,21 +560,22 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
     urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_JETTY_POST_RECV);
-    ret = post_recv_check_valid(bdp_jetty, wr);
+    ret = post_recv_check_wr_list_valid(bdp_jetty, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JETTY_POST_RECV);
         return ret;
     }
 
-    /* non-null bjetty_ctx value because post_recv_check_valid performed validation. */
+    /* non-null bjetty_ctx value because post_recv_check_wr_list_valid performed validation. */
     bjetty_ctx_t *bjetty_ctx = &bdp_jetty->bjetty_ctx;
     if (is_single_dev_mode(jetty->urma_ctx)) {
-        PERF_PROFILING_END(BOND_JETTY_POST_RECV);
-        return bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
+        ret = bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
-        PERF_PROFILING_END(BOND_JETTY_POST_RECV);
-        return bondp_post_recv_wr_and_store(bjetty_ctx, bdp_jetty->recv_jfc, wr, bad_wr);
+        ret = bondp_post_recv_wr_list_store(bjetty_ctx, bdp_jetty->recv_jfc, wr, bad_wr);
     }
+    PERF_PROFILING_END(BOND_JETTY_POST_RECV);
+
+    return ret;
 }
 
 urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
@@ -517,23 +584,24 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_POST_JFR_RECV);
-    ret = post_recv_check_valid(bdp_jfr, wr);
+    ret = post_recv_check_wr_list_valid(bdp_jfr, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_POST_JFR_RECV);
         return ret;
     }
 
-    /* non-null bjetty_ctx value because post_recv_check_valid performed validation. */
+    /* non-null bjetty_ctx value because post_recv_check_wr_list_valid performed validation. */
     bjetty_ctx_t *bjetty_ctx = &bdp_jfr->bjetty_ctx;
     // workaround, at this point, jfr only support multipath
     bdp_jfr->is_multipath = true;
     if (is_single_dev_mode(jfr->urma_ctx)) {
-        PERF_PROFILING_END(BOND_POST_JFR_RECV);
-        return bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
+        ret = bondp_post_recv_wr_no_store(bjetty_ctx, wr, bad_wr);
     } else {
-        PERF_PROFILING_END(BOND_POST_JFR_RECV);
-        return bondp_post_recv_wr_and_store(bjetty_ctx, bdp_jfr->recv_jfc, wr, bad_wr);
+        ret = bondp_post_recv_wr_list_store(bjetty_ctx, bdp_jfr->recv_jfc, wr, bad_wr);
     }
+    PERF_PROFILING_END(BOND_POST_JFR_RECV);
+
+    return ret;
 }
 
 typedef enum cr_convert_ret {
