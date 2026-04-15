@@ -54,9 +54,7 @@ static bool v_conn_comp(struct ub_hmap_node *node, void *key)
 static void v_conn_free(struct ub_hmap_node *node)
 {
     bdp_v_conn_node_t *v_conn_node = CONTAINER_OF_FIELD(node, bdp_v_conn_node_t, hmap_node);
-    if (v_conn_node->v_conn.aggr_mode != URMA_AGGR_MODE_STANDALONE) {
- 	  	bdp_v_conn_uninit(&v_conn_node->v_conn);
- 	}
+    bdp_v_conn_uninit(&v_conn_node->v_conn);
     free(v_conn_node);
 }
 
@@ -73,7 +71,7 @@ int bdp_v_conn_table_create(bondp_hash_table_t *tbl, uint32_t size)
 }
 
 int bdp_v_conn_table_add_on_send(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id,
-    void *target_vjetty, int target_dev_num, bdp_v_conn_t **v_conn_out, urma_context_aggr_mode_t aggr_mode)
+    void *target_vjetty, int target_dev_num, bdp_v_conn_t **v_conn_out, bool is_standalone)
 {
     hmap_node_t *node = NULL;
     uint32_t hash = tbl->hash_f(target_id);
@@ -87,13 +85,11 @@ int bdp_v_conn_table_add_on_send(bondp_hash_table_t *tbl, urma_jetty_id_t *targe
     if (v_conn_node == NULL) {
         return BONDP_HASH_MAP_ALLOC_ERROR;
     }
-    /* When aggr_mode is URMA_AGGR_MODE_STANDALONE, skip initialization */
- 	if (aggr_mode != URMA_AGGR_MODE_STANDALONE) {
+ 	if (!is_standalone) {
  	  	if (bdp_v_conn_init(&v_conn_node->v_conn)) {
  	  	  	goto FREE_VCONN_NODE;
  	  	}
  	}
- 	v_conn_node->v_conn.aggr_mode = aggr_mode;
     init_v_conn_on_send(&v_conn_node->v_conn, target_vjetty, target_dev_num);
     v_conn_node->target_id = *target_id;
     bondp_hash_table_add_with_hash(tbl, &v_conn_node->hmap_node, hash);
@@ -105,7 +101,7 @@ FREE_VCONN_NODE:
 }
 
 int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bdp_v_conn_t **v_conn_out,
-    urma_context_aggr_mode_t aggr_mode)
+    bool is_standalone)
 {
     hmap_node_t *node = NULL;
     uint32_t hash = tbl->hash_f(target_id);
@@ -119,13 +115,11 @@ int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *targe
     if (v_conn_node == NULL) {
         return BONDP_HASH_MAP_ALLOC_ERROR;
     }
-    /* When aggr_mode is URMA_AGGR_MODE_STANDALONE, skip initialization */
- 	if (aggr_mode != URMA_AGGR_MODE_STANDALONE) {
+ 	if (!is_standalone) {
  	  	if (bdp_v_conn_init(&v_conn_node->v_conn)) {
  	  	  	goto FREE_VCONN_NODE;
  	  	}
  	}
- 	v_conn_node->v_conn.aggr_mode = aggr_mode;
     v_conn_node->target_id = *target_id;
     bondp_hash_table_add_with_hash(tbl, &v_conn_node->hmap_node, hash);
     *v_conn_out = &v_conn_node->v_conn;

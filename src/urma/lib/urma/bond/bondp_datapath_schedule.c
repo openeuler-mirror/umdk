@@ -129,12 +129,12 @@ int schedule_send(const urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, int *send_idx
         return -1;
     }
 
-    switch (bdp_comp->bondp_ctx->v_ctx.aggr_mode) {
-        case URMA_AGGR_MODE_STANDALONE:
+    switch (bdp_comp->bondp_ctx->bonding_mode) {
+        case BONDP_BONDING_MODE_STANDALONE:
             return schedule_send_standalone(bdp_comp, bdp_tjetty, send_idx, target_idx);
-        case URMA_AGGR_MODE_ACTIVE_BACKUP:
+        case BONDP_BONDING_MODE_ACTIVE_BACKUP:
             return schedule_send_active_backup(bdp_comp, bdp_tjetty, send_idx, target_idx);
-        case URMA_AGGR_MODE_BALANCE:
+        case BONDP_BONDING_MODE_BALANCE:
             return schedule_send_balance(bdp_comp, bdp_tjetty, send_idx, target_idx);
         default:
             return -1;
@@ -148,11 +148,11 @@ int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx)
         return -1;
     }
 
-    switch (bdp_comp->bondp_ctx->v_ctx.aggr_mode) {
-        case URMA_AGGR_MODE_STANDALONE:
+    switch (bdp_comp->bondp_ctx->bonding_mode) {
+        case BONDP_BONDING_MODE_STANDALONE:
             return schedule_recv_standalone(bdp_comp, recv_idx);
-        case URMA_AGGR_MODE_ACTIVE_BACKUP:
-        case URMA_AGGR_MODE_BALANCE:
+        case BONDP_BONDING_MODE_ACTIVE_BACKUP:
+        case BONDP_BONDING_MODE_BALANCE:
             return schedule_recv_balance(bdp_comp, recv_idx);
         default:
             return -1;
