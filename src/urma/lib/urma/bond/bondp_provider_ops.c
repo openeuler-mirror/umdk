@@ -395,7 +395,13 @@ static int bondp_create_pctx(bondp_context_t *bond_ctx, bondp_bonding_mode_t bon
                 break;
             }
         }
-    } else {
+    }
+
+    // For compatibility reasons, we create contexts for both the primary EID
+    // and the port EID in standalone mode.
+    if (bonding_level == BONDP_BONDING_LEVEL_PORT ||
+        bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
+
         for (int i = 0; i < IODIE_NUM; i++) {
 
             bondp_physical_device_t *pdev = &dev_info.physical_devs[i];
