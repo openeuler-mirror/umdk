@@ -583,6 +583,10 @@ urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name
 
     switch (opt_name) {
         case URMA_OPT_AGGR_MODE:
+            if (opt_value == NULL) {
+                URMA_LOG_ERR("Invalid option value.\n");
+                return URMA_EINVAL;
+            }
             if (opt_len != sizeof(urma_context_aggr_mode_t)) {
                 URMA_LOG_ERR("Invalid option value len.\n");
                 return URMA_EINVAL;
