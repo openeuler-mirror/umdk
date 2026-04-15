@@ -487,7 +487,9 @@ UNIMPORT_JETTY:
 
 static void umq_ub_disconnect_jetty(ub_queue_t *queue, ub_bind_ctx_t *ctx, ub_queue_jetty_index_t i)
 {
-    umq_symbol_urma()->urma_unbind_jetty(queue->jetty[i]);
+    if (queue->tp_mode == URMA_TM_RC) {
+        umq_symbol_urma()->urma_unbind_jetty(queue->jetty[i]);
+    }
     umq_symbol_urma()->urma_unimport_jetty(ctx->tjetty[i]);
     ctx->tjetty[i] = NULL;
 }
