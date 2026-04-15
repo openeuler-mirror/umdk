@@ -1322,7 +1322,9 @@ int umq_ub_unbind_impl(uint64_t umqh)
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
         UMQ_VLOG_INFO(VLOG_UMQ, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id:"
             " %u, unbind flowcontrol jetty\n", EID_ARGS(*eid), id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
-        (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
+        if (queue->tp_mode == URMA_TM_RC) {
+            (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
+        }
         (void)umq_symbol_urma()->urma_unimport_jetty(tjetty);
         umq_modify_ubq_to_err(queue, UMQ_IO_ALL, UB_QUEUE_JETTY_FLOW_CONTROL);
     }
@@ -1331,7 +1333,9 @@ int umq_ub_unbind_impl(uint64_t umqh)
     (void)umq_ub_remote_tseg_info_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     UMQ_VLOG_INFO(VLOG_UMQ, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u"
         ", unbind jetty\n", EID_ARGS(*eid), id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
-    (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
+    if (queue->tp_mode == URMA_TM_RC) {
+        (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
+    }
     (void)umq_symbol_urma()->urma_unimport_jetty(tjetty);
     if (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
         UMQ_VLOG_DEBUG(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub umq only need set tx res error\n",
