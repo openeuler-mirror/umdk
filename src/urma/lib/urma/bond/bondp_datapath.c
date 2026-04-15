@@ -833,7 +833,9 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
     if (is_ctrl_cr(cr)) {
-        bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
+        if (!bondp_try_handle_fallback_cr(bdp_ctx, idx, cr)) {
+            (void)bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
+        }
         return CONVERT_SKIP;
     }
     if (is_fake_cr(cr)) {
