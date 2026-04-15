@@ -44,10 +44,17 @@
 
 struct bondp_target_jetty;
 
+
+typedef enum bondp_health_mode {
+    HEALTH_MODE_BACKUP_CHECK,
+    HEALTH_MODE_PRIMARY_CHECK,
+} bondp_health_mode_t;
+
 typedef struct bondp_health_sub_task {
     int local_idx;
     int target_idx;
     bool valid;
+    bool probe_pending;
 #ifndef __cplusplus
     atomic_bool link_ok;
 #else
@@ -60,6 +67,10 @@ typedef struct bondp_health_task {
     struct bondp_target_jetty *bdp_tjetty;
     struct bondp_comp *bondp_jetty;
     uint64_t next_probe_ts_us;
+    int primary_local_idx;
+    int active_local_idx;
+    bondp_health_mode_t mode;
+    uint32_t backoff_cnt;
     bondp_health_sub_task_t sub_tasks[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     struct ub_list node;
 } bondp_health_task_t;
