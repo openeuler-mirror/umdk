@@ -1554,7 +1554,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     }
     pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
 
-    if (rjetty->flag.bs.has_drv_ext && !is_fake_jetty) {
+    if (rjetty->trans_mode == URMA_TM_RM && rjetty->flag.bs.has_drv_ext && !is_fake_jetty) {
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
 
