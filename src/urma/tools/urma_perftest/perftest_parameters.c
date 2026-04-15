@@ -1041,12 +1041,6 @@ static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
         (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: true.\n");
         return -1;
     }
-
-    if (cfg->single_path && cfg->enable_aggr_mode) {
-        (void)fprintf(stderr,
-            "Invalid config: --single_path and --aggr_mode cannot be used together on bonding devices.\n");
-        return -1;
-    }
  
  	return 0;
 }

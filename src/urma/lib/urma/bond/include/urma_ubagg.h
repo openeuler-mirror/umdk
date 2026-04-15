@@ -95,6 +95,14 @@ typedef struct bondp_rjetty {
     };
 } bondp_rjetty_t;
 
+typedef struct bondp_rjfr {
+    urma_rjfr_t base;
+    union {
+        urma_jfs_t *jfs;
+        urma_jetty_t *jetty;
+    };
+} bondp_rjfr_t;
+
 #ifdef __cplusplus
 }
 #endif
