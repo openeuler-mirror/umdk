@@ -56,6 +56,12 @@ typedef struct bondp_health_ctx_node {
     struct ub_list node;
 } bondp_health_ctx_node_t;
 
+typedef struct bondp_health_event_node {
+    bondp_health_event_t event;
+    bondp_health_event_info_t info;
+    struct ub_list node;
+} bondp_health_event_node_t;
+
 static uint64_t bondp_get_monotonic_us(void)
 {
     struct timespec ts;
@@ -192,6 +198,154 @@ bool bondp_health_check_enabled(void)
     return g_bondp_global_ctx->health_thread_ctx.health_check_enable;
 }
 
+static bool bondp_valid_health_event(bondp_health_event_t event)
+{
+    return ((uint32_t)event < (uint32_t)BONDP_HEALTH_EVENT_MAX);
+}
+
+static bool bondp_health_event_push(bondp_context_t *bdp_ctx, bondp_health_event_t event,
+    const bondp_health_event_info_t *info)
+{
+    bondp_health_event_node_t *node = calloc(1, sizeof(*node));
+    if (node == NULL) {
+        URMA_LOG_WARN("Failed to alloc health event node, event:%d\n", event);
+        return false;
+    }
+
+    node->event = event;
+    node->info = *info;
+
+    ub_list_init(&node->node);
+
+    bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
+    pthread_spin_lock(&health->event_lock);
+    ub_list_push_back(&health->event_list, &node->node);
+    pthread_spin_unlock(&health->event_lock);
+    return true;
+}
+
+static void bondp_health_event_pop(bondp_heath_check_ctx_t *health, struct ub_list *list)
+{
+    pthread_spin_lock(&health->event_lock);
+    ub_list_move(&health->event_list, list);
+    pthread_spin_unlock(&health->event_lock);
+}
+
+static void bondp_free_health_event_list(struct ub_list *list)
+{
+    bondp_health_event_node_t *event = NULL;
+    bondp_health_event_node_t *next = NULL;
+
+    UB_LIST_FOR_EACH_SAFE(event, next, node, list) {
+        ub_list_remove(&event->node);
+        free(event);
+    }
+}
+
+void bondp_notify_health_event(bondp_context_t *bdp_ctx, bondp_health_event_t event,
+    const bondp_health_event_info_t *info)
+{
+    if (bdp_ctx == NULL || info == NULL || !bondp_health_check_enabled()) {
+        return;
+    }
+
+    bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
+    if (health->health_check_fd < 0) {
+        return;
+    }
+
+    if (!bondp_valid_health_event(event)) {
+        return;
+    }
+
+    if (!bondp_health_event_push(bdp_ctx, event, info)) {
+        return;
+    }
+
+    if (eventfd_write(health->health_check_fd, 1) != 0 && errno != EAGAIN) {
+        URMA_LOG_WARN("Failed to notify health event, fd:%d event:%d errno:%d\n",
+            health->health_check_fd, event, errno);
+    }
+}
+
+static void bondp_handle_health_event(bondp_context_t *bond_ctx, bondp_health_event_t event,
+    const bondp_health_event_info_t *info)
+{
+    switch (event) {
+        case BONDP_HEALTH_EVENT_TA_TIMEOUT:
+            if (info != NULL) {
+                URMA_LOG_DEBUG("Health event handled: CR update, dev_name:%s eid_idx:%u lidx:%d tidx:%d "
+                    "cr_status:%u\n", bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index,
+                    info->local_idx, info->target_idx, info->cr_status);
+            } else {
+                URMA_LOG_DEBUG("Health event handled: CR update, dev_name:%s eid_idx:%u\n",
+                    bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
+            }
+            break;
+        default:
+            URMA_LOG_WARN("Unknown health event:%d, dev_name:%s eid_idx:%u\n",
+                event, bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
+            break;
+    }
+}
+
+static void bondp_handle_health_queued_events(bondp_context_t *bond_ctx)
+{
+    struct ub_list event_list = UB_LIST_INITIALIZER(&event_list);
+    bondp_heath_check_ctx_t *health = &bond_ctx->bondp_heath_check_ctx;
+    bondp_health_event_node_t *cur = NULL;
+    bondp_health_event_node_t *next = NULL;
+
+    bondp_health_event_pop(health, &event_list);
+
+    UB_LIST_FOR_EACH_SAFE(cur, next, node, &event_list) {
+        bondp_handle_health_event(bond_ctx, cur->event, &cur->info);
+        ub_list_remove(&cur->node);
+        free(cur);
+    }
+}
+
+static void bondp_handle_epoll_event(const struct epoll_event *event)
+{
+    if (event == NULL) {
+        return;
+    }
+
+    if ((event->events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
+        URMA_LOG_WARN("Health epoll error event:0x%x\n", event->events);
+        return;
+    }
+
+    if ((event->events & EPOLLIN) == 0) {
+        return;
+    }
+
+    bondp_context_t *bond_ctx = (bondp_context_t *)event->data.ptr;
+    if (bond_ctx == NULL) {
+        URMA_LOG_WARN("Health epoll event has NULL context\n");
+        return;
+    }
+
+    bondp_heath_check_ctx_t *health = &bond_ctx->bondp_heath_check_ctx;
+    if (health->health_check_fd < 0) {
+        return;
+    }
+
+    while (true) {
+        eventfd_t cnt = 0;
+        if (eventfd_read(health->health_check_fd, &cnt) == 0) {
+            continue;
+        }
+        if (errno == EAGAIN || errno == EINTR) {
+            break;
+        }
+        URMA_LOG_WARN("Failed to read health eventfd, fd:%d errno:%d\n", health->health_check_fd, errno);
+        break;
+    }
+
+    bondp_handle_health_queued_events(bond_ctx);
+}
+
 void bondp_health_check_global_ctx_init(bondp_global_context_t *ctx)
 {
     ctx->health_thread_ctx.health_epoll_fd = -1;
@@ -217,6 +371,7 @@ void bondp_health_check_ctx_init(bondp_context_t *bond_ctx)
 {
     bond_ctx->bondp_heath_check_ctx.check_buf_len = BONDP_HEALTH_CHECK_BUF_LEN;
     bond_ctx->bondp_heath_check_ctx.health_check_fd = -1;
+    ub_list_init(&bond_ctx->bondp_heath_check_ctx.event_list);
 }
 
 static void bondp_unregister_health_check_seg(bondp_context_t *bond_ctx)
@@ -544,11 +699,17 @@ static void *bondp_health_check_thread(void *arg)
             break;
         }
 
-        if (epoll_wait(epoll_fd, events, UBAGG_MAX_EVENT, BONDP_HEALTH_CHECK_EPOLL_TIMEOUT_MS) < 0 &&
-            errno != EINTR) {
+        int event_num = epoll_wait(epoll_fd, events, UBAGG_MAX_EVENT, BONDP_HEALTH_CHECK_EPOLL_TIMEOUT_MS);
+        if (event_num < 0 && errno != EINTR) {
             URMA_LOG_ERR("Health check epoll_wait failed, errno: %d\n", errno);
             (void)usleep(BONDP_HEALTH_CHECK_EPOLL_TIMEOUT_MS * 1000);
             continue;
+        }
+		
+        if (event_num > 0) {
+            for (int i = 0; i < event_num; ++i) {
+                bondp_handle_epoll_event(&events[i]);
+            }
         }
 
         uint64_t now_us = bondp_get_monotonic_us();
@@ -639,9 +800,8 @@ int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jett
     ub_list_push_front(&health->task_list, &task->node);
     pthread_rwlock_unlock(&health->task_lock);
 
-    URMA_LOG_INFO("Health task registered, tjetty:%p sub_cnt:%d primary_idx:%d active_idx:%d start_ms:%lu\n",
-        (void *)bdp_tjetty, sub_task_cnt, task->primary_local_idx, task->active_local_idx,
-        (unsigned long)cfg->health_check_start_ms);
+    URMA_LOG_INFO("Health task registered, sub_cnt:%d primary_idx:%d active_idx:%d start_ms:%lu\n",
+        sub_task_cnt, task->primary_local_idx, task->active_local_idx, (unsigned long)cfg->health_check_start_ms);
     return 0;
 }
 
@@ -670,7 +830,7 @@ void bondp_unregister_health_check_task(bondp_target_jetty_t *bdp_tjetty)
         }
         pthread_rwlock_unlock(&health->task_lock);
         if (removed) {
-            URMA_LOG_INFO("Health check task unregistered, tjetty:%p\n", (void *)bdp_tjetty);
+            URMA_LOG_INFO("Health check task unregistered\n");
             break;
         }
     }
@@ -693,8 +853,8 @@ void bondp_health_update_active_idx(bondp_context_t *bdp_ctx, bondp_target_jetty
         }
         int old = task->active_local_idx;
         task->active_local_idx = new_active_idx;
-        URMA_LOG_INFO("Health active link updated, tjetty:%p old_idx:%d new_idx:%d\n",
-            (void *)bdp_tjetty, old, new_active_idx);
+        URMA_LOG_INFO("Health active link updated, tjetty_id:%u old_idx:%d new_idx:%d\n",
+            bdp_tjetty->v_tjetty.id.id, old, new_active_idx);
         break;
     }
     pthread_rwlock_unlock(&health->task_lock);
@@ -736,11 +896,11 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
         atomic_store(&sub->link_ok, ok);
         task->bondp_jetty->valid[sub->local_idx] = ok;
         if (old_ok != ok) {
-            URMA_LOG_INFO("Health link state changed, tjetty:%p lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
-                (void *)task->bdp_tjetty, local_idx, (int)target_idx, cr->user_ctx, old_ok, ok, cr->status);
+            URMA_LOG_INFO("Health link state changed, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
+                task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, old_ok, ok, cr->status);
         } else {
-            URMA_LOG_INFO("Health CR handled, tjetty:%p lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
-                (void *)task->bdp_tjetty, local_idx, (int)target_idx, cr->user_ctx, cr->status);
+            URMA_LOG_INFO("Health CR handled, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
+                task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, cr->status);
         }
         consumed = true;
         break;
@@ -837,6 +997,8 @@ void bondp_destroy_health_check_ctx(bondp_context_t *bond_ctx)
         health->health_check_fd = -1;
     }
 
+    bondp_free_health_event_list(&health->event_list);
+    pthread_spin_destroy(&health->event_lock);
     bondp_unregister_health_check_seg(bond_ctx);
 
     URMA_LOG_INFO("Health check ctx free, dev_name: %s, eid_idx: %u.\n",
@@ -853,9 +1015,14 @@ int bondp_create_health_check_ctx(bondp_context_t *bond_ctx)
         return 0;
     }
 
+    if (pthread_spin_init(&health->event_lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+        URMA_LOG_ERR("Failed to init health event lock\n");
+        goto ERR;
+    }
+
     if (global_ctx->health_thread_ctx.health_epoll_fd < 0) {
         URMA_LOG_ERR("Health check thread is not created\n");
-        return -1;
+        goto ERR_EVENT_LOCK;
     }
 
     pthread_rwlock_init(&health->task_lock, NULL);
@@ -872,11 +1039,11 @@ int bondp_create_health_check_ctx(bondp_context_t *bond_ctx)
     }
 
     ev.events = EPOLLIN;
-    ev.data.ptr = (void *)bond_ctx;
+    ev.data.ptr = bond_ctx;
     if (epoll_ctl(global_ctx->health_thread_ctx.health_epoll_fd,
         EPOLL_CTL_ADD, health->health_check_fd, &ev) != 0) {
         URMA_LOG_ERR("Failed to add ctx async fd to health epoll, errno: %d\n", errno);
-        goto DEL_FD;
+        goto ERR_EPOLL_ADD;
     }
 
     if (bondp_register_health_ctx_global(bond_ctx) != 0) {
@@ -891,12 +1058,15 @@ int bondp_create_health_check_ctx(bondp_context_t *bond_ctx)
 DEL_EPOLL:
     (void)epoll_ctl(global_ctx->health_thread_ctx.health_epoll_fd,
         EPOLL_CTL_DEL, health->health_check_fd, NULL);
-DEL_FD:
+ERR_EPOLL_ADD:
     (void)close(health->health_check_fd);
     health->health_check_fd = -1;
 UNREGISTER_SEG:
     bondp_unregister_health_check_seg(bond_ctx);
 DEL_LOCK:
     pthread_rwlock_destroy(&health->task_lock);
+ERR_EVENT_LOCK:
+    pthread_spin_destroy(&health->event_lock);
+ERR:
     return -1;
 }

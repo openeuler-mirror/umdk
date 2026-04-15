@@ -82,6 +82,8 @@ typedef struct bondp_heath_check_ctx {
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
     pthread_rwlock_t task_lock;
     struct ub_list task_list;
+    pthread_spinlock_t event_lock;
+    struct ub_list event_list;
 } bondp_heath_check_ctx_t;
 
 typedef struct bondp_health_check_cfg {
