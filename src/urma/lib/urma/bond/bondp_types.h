@@ -63,6 +63,17 @@ typedef struct bondp_health_sub_task {
     uint64_t user_ctx;
 } bondp_health_sub_task_t;
 
+typedef struct bondp_fallback_task {
+    bool pending;
+    bool local_rebuilt;
+    bool req_sent;
+    bool resp_received;
+    bool relink_done;
+    uint8_t req_seq;
+    uint32_t remote_primary_pjetty_id;
+    uint32_t primary_target_idx;
+} bondp_fallback_task_t;
+
 typedef struct bondp_health_task {
     struct bondp_target_jetty *bdp_tjetty;
     struct bondp_comp *bondp_jetty;
@@ -71,6 +82,7 @@ typedef struct bondp_health_task {
     int active_local_idx;
     bondp_health_mode_t mode;
     uint32_t backoff_cnt;
+    bondp_fallback_task_t fallback_task;
     bondp_health_sub_task_t sub_tasks[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     struct ub_list node;
 } bondp_health_task_t;
