@@ -1744,8 +1744,8 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
 
     bondp_comp_t *cfg_jfs = NULL;
     if (rjfr->flag.bs.has_drv_ext) {
-        const bondp_rjetty_t *bdp_rjetty = (const bondp_rjetty_t *)rjfr;
-        cfg_jfs = CONTAINER_OF_FIELD(bdp_rjetty->jfs, bondp_comp_t, v_jfs);
+        const bondp_rjfr_t *bdp_rjfr = (const bondp_rjfr_t *)rjfr;
+        cfg_jfs = CONTAINER_OF_FIELD(bdp_rjfr->jfs, bondp_comp_t, v_jfs);
     }
 
     bondp_target_jetty_t *bdp_tjetty = calloc(1, sizeof(bondp_target_jetty_t));
