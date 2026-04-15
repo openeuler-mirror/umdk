@@ -1186,9 +1186,14 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto DELETE_PJETTY;
     }
 
+    if (bondp_register_health_check_seg_for_jetty(bdp_ctx, bdp_jetty) != 0) {
+        URMA_LOG_ERR("Failed to register health check seg for jetty creation\n");
+        goto DELETE_PJETTY;
+    }
+
     if (bondp_create_vjetty(bdp_ctx, bdp_jetty, jetty_cfg) != 0) {
         URMA_LOG_ERR("Failed to create vjetty, %u\n", jetty_cfg->id);
-        goto DELETE_PJETTY;
+        goto UNREGISTER_HEALTH_SEG;
     }
 
     if (bondp_add_jetty_p_vjetty_id_info(bdp_ctx, bdp_jetty, bdp_jetty->v_jetty.jetty_id.id) != 0) {
@@ -1215,6 +1220,8 @@ DEL_P_VJETTY_ID:
     bondp_del_jetty_p_vjetty_info(bdp_jetty);
 DELETE_VJETTY:
     bondp_delete_vjetty(bdp_jetty);
+UNREGISTER_HEALTH_SEG:
+    bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
 DELETE_PJETTY:
     bondp_delete_pjetty(bdp_jetty);
 FREE_JETTY:
@@ -1253,6 +1260,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
     uninit_bjetty_ctx(&bdp_jetty->bjetty_ctx);
     if (bondp_delete_vjetty(bdp_jetty) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjetty\n");
@@ -1595,7 +1603,7 @@ urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty)
         return URMA_EINVAL;
     }
 
-    bondp_unregister_health_check_task(bdp_tjetty);
+    bondp_unregister_health_check_task(bdp_ctx, bdp_tjetty);
 
     pthread_rwlock_wrlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
     if (remove_remote_jetty_id_info(bdp_ctx, bdp_tjetty) != 0) {
