@@ -251,7 +251,6 @@ typedef struct bondp_comp {
     uint32_t active_count;
     bondp_context_t *bondp_ctx;
     bjetty_ctx_t bjetty_ctx;
-    bool is_multipath;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
     // send
@@ -270,7 +269,6 @@ typedef struct bondp_target_jetty {
     urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
     int target_dev_num;
-    bool is_multipath;
     uint32_t local_active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
@@ -295,7 +293,7 @@ typedef struct urma_bond_seg_info_out {
 
 typedef struct urma_bond_id_info_out {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    bool is_multipath;
+    bool is_multipath; // deprecated
     uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;
