@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-struct bondp_jetty_ctx;
+struct bondp_comp;
 struct bondp_v_connection;
 
 typedef enum wr_buf_entry_type {
@@ -32,7 +32,7 @@ typedef struct jfs_wr_entry {
     uint8_t entry_type;
     urma_jfs_wr_t wr;
     uint64_t user_ctx;
-    struct bondp_jetty_ctx *bjetty_ctx;
+    struct bondp_comp *bdp_comp;
     struct bondp_v_connection *v_conn;
     uint32_t send_idx;
     uint32_t target_idx;
@@ -43,7 +43,7 @@ typedef struct jfr_wr_entry {
     uint8_t entry_type;
     urma_jfr_wr_t wr;
     uint64_t user_ctx;
-    struct bondp_jetty_ctx *bjetty_ctx;
+    struct bondp_comp *bdp_comp;
     uint32_t recv_idx;
 } jfr_wr_entry_t;
 
