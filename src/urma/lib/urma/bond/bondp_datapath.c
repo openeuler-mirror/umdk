@@ -188,7 +188,7 @@ static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, 
 {
     bondp_target_jetty_t *bdp_tjetty = NULL;
     urma_status_t ret = URMA_SUCCESS;
-    urma_jfs_wr_t *cur = wr;
+    urma_jfs_wr_t *cur = (urma_jfs_wr_t *)wr;
 
     while (cur != NULL) {
         /* No need to check NULL for tjetty of each wr */
@@ -538,7 +538,7 @@ static urma_status_t post_recv_check_wr_list_valid(bondp_comp_t *bdp_recv_comp, 
 {
     if (bdp_recv_comp->comp_type != BONDP_COMP_JETTY && bdp_recv_comp->comp_type != BONDP_COMP_JFR) {
         URMA_LOG_ERR("Invalid bdp_recv_comp type: %d\n", bdp_recv_comp->comp_type);
-        *bad_wr = wr;
+        *bad_wr = (urma_jfr_wr_t *)wr;
         return URMA_EINVAL;
     }
     urma_status_t ret = URMA_SUCCESS;
