@@ -8,6 +8,19 @@
 
 #include "bondp_types.h"
 
+typedef enum bondp_health_event {
+    BONDP_HEALTH_EVENT_TA_TIMEOUT  = 0,
+    BONDP_HEALTH_EVENT_MAX,
+} bondp_health_event_t;
+
+typedef struct bondp_health_event_info {
+    int local_idx;
+	int target_idx;
+	uint64_t user_ctx;
+	uint32_t cr_status;
+	bondp_comp_t *bdp_jetty;
+} bondp_health_event_info_t;
+
 void bondp_health_check_global_ctx_init(bondp_global_context_t *ctx);
 void bondp_health_check_global_ctx_uninit(bondp_global_context_t *ctx);
 void bondp_health_check_ctx_init(bondp_context_t *bond_ctx);
