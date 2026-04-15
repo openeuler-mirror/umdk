@@ -44,4 +44,44 @@ int convert_jfs_pwr_to_another_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtje
 
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn);
 
+static inline bool is_recv_cr(const urma_cr_t *cr)
+{
+    return cr->flag.bs.s_r == 1;
+}
+
+/**
+ * When the cr status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
+ * it indicates that the CR is a fake one constructed by hardware.
+ * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
+ */
+static inline bool is_fake_cr(const urma_cr_t *cr)
+{
+    return cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE;
+}
+
+/*
+ * Control packet mark rules:
+ * - A control WR is identified by setting bit 63 of user_ctx.
+ * - A RECV CR is identified as control when opcode == URMA_CR_OPC_SEND.
+ * - A SEND CR is identified as control when bit 63 of user_ctx is set.
+ */
+#define BONDP_CTRL_USER_CTX_BIT  63
+#define BONDP_CTRL_USER_CTX_MASK (1ULL << BONDP_CTRL_USER_CTX_BIT)
+
+static inline void mark_jfs_wr_ctrl(urma_jfs_wr_t *wr)
+{
+    wr->user_ctx |= BONDP_CTRL_USER_CTX_MASK;
+}
+
+static inline bool is_ctrl_cr(const urma_cr_t *cr)
+{
+    if (is_recv_cr(cr)) {
+        // RECV CR
+        return cr->opcode == URMA_CR_OPC_SEND;
+    } else {
+        // SEND CR
+        return (cr->user_ctx & BONDP_CTRL_USER_CTX_MASK) != 0;
+    }
+}
+
 #endif // BONDP_DATAPATH_CONVERT_H

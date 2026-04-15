@@ -543,11 +543,6 @@ typedef enum cr_convert_ret {
     CONVERT_SKIP = 1,
 } cr_convert_ret_t;
 
-static inline bool is_recv_cr(const urma_cr_t *cr)
-{
-    return cr->flag.bs.s_r == 1;
-}
-
 static int resend_jfs_wr(jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
 {
     int ret;
@@ -607,16 +602,6 @@ static inline void put_comp(bondp_comp_t *bdp_comp)
         return;
     }
     atomic_fetch_sub(&bdp_comp->use_cnt.atomic_cnt, 1);
-}
-
-/**
- * When the cr status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
- * it indicates that the CR is a fake one constructed by hardware.
- * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
- */
-static inline bool is_fake_cr(const urma_cr_t *cr)
-{
-    return cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE;
 }
 
 static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
@@ -793,8 +778,9 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
-    /* Handle CR with status URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE */
-    if (is_fake_cr(cr)) {
+    if (is_ctrl_cr(cr)) {
+        return CONVERT_SKIP;
+    } if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_jfc, cr);
