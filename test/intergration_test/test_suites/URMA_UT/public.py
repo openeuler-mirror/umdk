@@ -147,3 +147,52 @@ class UBUSFeature(BaseTest):
         if not expect_failed:
             self.assertEqual(perf_ret, 0, "ERROR: Traffic performance anomaly detected!")
         return perf_ret
+
+    def urma_perftest_bonding_scenario(self, server, client, cmd_syntax="send_bw", timeout=60, **kwargs):
+        """
+        Executes precise, targeted traffic testing specifically for bonding devices.
+        :param server: urma_perftest server side
+        :param client: urma_perftest client side
+        :param cmd_syntax: "read_bw", "write_bw", "send_bw"
+        :param timeout: Timeout duration in seconds, defaults to 120s
+        """
+        opt = kwargs.get("opt", "").strip()
+        expect_failed = kwargs.get("expect_failed", False)
+        s_opt = kwargs.get("s_opt", "")
+        c_opt = kwargs.get("c_opt", "")
+
+        # Provide default values if basic parameters are missing to ensure the test executes successfully
+        if "-n " not in opt and "--iters " not in opt:
+            opt += " -n 32"          # Default to 32 iterations
+        if "-s " not in opt and "--size " not in opt:
+            opt += " -s 2048"        # Default message size: 2048
+        if "-I " not in opt and "--inline_size " not in opt:
+            opt += " -I 128"         # Default inline data size: 128
+        if " -E " not in opt and "--err_timeout " not in opt:
+            opt += " -E 2"           # Aggregation timeout config typically required in bonding scenarios
+
+        # Support for expected failure scenarios
+        if expect_failed:
+            opt += " --enable_err_continue"
+
+        # Core modification: Dynamically allocate a free port and enforce the use of bonding_dev_0
+        _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()}"
+        s_cmd = f"{_cmd} {s_opt} -d bonding_dev_0"
+        c_cmd = f"{_cmd} {c_opt} -d bonding_dev_0 -S {server.test_nic1_ip}"
+
+        # Execute commands asynchronously in the background
+        p1 = server.exec_cmd(s_cmd, background=True)
+        p2 = client.exec_cmd(c_cmd, background=True)
+        p1.wait(timeout)
+        p2.wait(timeout)
+
+        log.info("Verifying urma_perftest bonding scenario results")
+        perf_ret = 0
+        if p1.ret != 0 or p2.ret != 0:
+            perf_ret = -1
+
+        # Result verification
+        if not expect_failed:
+            self.assertEqual(perf_ret, 0, "ERROR: Traffic performance anomaly detected in bonding scenario!")
+
+        return perf_ret
