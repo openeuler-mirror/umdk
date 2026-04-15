@@ -21,6 +21,7 @@ set_target_properties(umq_ub PROPERTIES
 target_include_directories(umq_ub
     PUBLIC
         ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/bond/include
         ${CMAKE_SOURCE_DIR}/urma/lib/uvs/core/include
 )
 

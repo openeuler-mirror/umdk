@@ -1015,6 +1015,9 @@ UNINIT_FLOW_CONTROL:
 DESTROY_JFR_CTX:
     umq_ub_jfr_ctx_put(queue);
 FREE_QUEUE:
+    if (queue->used_port != NULL) {
+        free(queue->used_port);
+    }
     free(queue);
 DEC_REF:
     umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
@@ -1115,6 +1118,9 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         (void)util_mutex_lock(queue->checker->lock);
         queue->checker->umq = NULL;
         (void)util_mutex_unlock(queue->checker->lock);
+    }
+    if (queue->used_port != NULL) {
+        free(queue->used_port);
     }
     free(queue);
     return UMQ_SUCCESS;
@@ -2118,6 +2124,7 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
     cfg->mode = queue->mode;
     cfg->state = queue->state;
     cfg->priority = queue->priority;
+    cfg->rqe_post_factor = queue->rqe_post_factor;
     cfg->tp_mode = umq_tp_mode_convert(queue->tp_mode);
     cfg->tp_type = umq_tp_type_convert(queue->tp_type);
     return UMQ_SUCCESS;
