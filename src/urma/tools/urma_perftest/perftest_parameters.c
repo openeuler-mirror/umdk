@@ -19,6 +19,7 @@
 #include "ub_util.h"
 #include "ub_get_clock.h"
 #include "urma_types.h"
+#include "urma_ubagg.h"
 #include "urma_types_str.h"
 #include "perftest_communication.h"
 #include "perftest_parameters.h"
@@ -887,18 +888,18 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     return -1;
                 }
                 break;
-            case PERFTEST_OPT_AGGR_MODE:	 
+            case PERFTEST_OPT_AGGR_MODE:
                 cfg->enable_aggr_mode = true;	 
                 if (strcmp("standalone", optarg) == 0) {	 
-                    cfg->aggr_mode = URMA_AGGR_MODE_STANDALONE;	 
-                } else if (strcmp("active_backup", optarg) == 0) {	 
-                    cfg->aggr_mode = URMA_AGGR_MODE_ACTIVE_BACKUP;	 
-                } else if (strcmp("balance", optarg) == 0) {	 
-                    cfg->aggr_mode = URMA_AGGR_MODE_BALANCE;	 
-                } else {	 
-                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");	 
-                    return -1;	 
-                }	 
+                    cfg->aggr_mode = BONDP_BONDING_MODE_STANDALONE;
+                } else if (strcmp("active_backup", optarg) == 0) {
+                    cfg->aggr_mode = BONDP_BONDING_MODE_ACTIVE_BACKUP;
+                } else if (strcmp("balance", optarg) == 0) {
+                    cfg->aggr_mode = BONDP_BONDING_MODE_BALANCE;
+                } else {
+                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");
+                    return -1;
+                }
                 break;
             case PERFTEST_OPT_SIP:
                 (void)str_to_ip(optarg, &cfg->sip);

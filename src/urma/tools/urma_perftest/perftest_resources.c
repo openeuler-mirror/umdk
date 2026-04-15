@@ -228,10 +228,20 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     ctx->eid = ctx->urma_ctx->eid;
 
-    if (cfg->enable_aggr_mode) {
-        status = urma_set_context_opt(ctx->urma_ctx, URMA_OPT_AGGR_MODE, &cfg->aggr_mode, sizeof(cfg->aggr_mode));
+    if (cfg->enable_aggr_mode || cfg->single_path) {
+        bondp_set_bonding_mode_in_t in_arg = {
+            .bonding_mode = cfg->aggr_mode,
+            .bonding_level = cfg->single_path ? BONDP_BONDING_LEVEL_PORT : BONDP_BONDING_LEVEL_IODIE,
+        };
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)&in_arg,
+            .len = sizeof(in_arg),
+            .opcode = BONDP_USER_CTL_SET_BONDING_MODE,
+        };
+        urma_user_ctl_out_t out = {0};
+        status = urma_user_ctl(ctx->urma_ctx, &in, &out);
         if (status != URMA_SUCCESS) {
-            (void)fprintf(stderr, "Failed to set aggregation mode, status:%d!\n", (int)status);
+            (void)fprintf(stderr, "Failed to set bonding mode, status:%d!\n", (int)status);
             goto del_ctx;
         }
     }
