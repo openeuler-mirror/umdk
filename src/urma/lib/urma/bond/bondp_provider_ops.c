@@ -493,7 +493,6 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         URMA_LOG_ERR("Failed to create epoll %s\n", ub_strerror(errno));
         goto CMD_DELETE_CONTEXT;
     }
-    bond_ctx->v_ctx.aggr_mode = URMA_AGGR_MODE_STANDALONE;
     bond_ctx->bonding_mode = BONDP_BONDING_MODE_STANDALONE;
     bond_ctx->bonding_level = BONDP_BONDING_LEVEL_IODIE;
 
@@ -596,7 +595,7 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
 
     ret = bondp_create_pctx(bond_ctx, bonding_mode, bonding_level);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to create pctx when set aggr mode, ret:%d\n", ret);
+        URMA_LOG_ERR("Failed to create pctx when set bonding mode, ret:%d\n", ret);
         goto EXIT;
     }
 
