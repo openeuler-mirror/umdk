@@ -374,7 +374,7 @@ static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
 {
     if (port_ids == NULL || port_count == 0) {
         int start, end;
-        if (bdp_comp->is_multipath) {
+        if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
             start = 0;
             end = IODIE_NUM;
         } else {
@@ -437,9 +437,14 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
                 bdp_tjetty->active_indices[active_count] = target_indice;
                 bdp_tjetty->local_active_indices[active_count] = local_indice;
                 active_count += 1;
+                if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
+                    goto FIND_FINISH;
+                }
             }
         }
     }
+
+FIND_FINISH:
     if (active_count == 0) {
         URMA_LOG_ERR("Failed to find connected port\n")
         return -1;

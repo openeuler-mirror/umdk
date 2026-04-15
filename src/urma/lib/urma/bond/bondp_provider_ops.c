@@ -585,6 +585,9 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
         goto EXIT;
     }
 
+    bond_ctx->bonding_mode = bonding_mode;
+    bond_ctx->bonding_level = bonding_level;
+
     ret = bondp_delete_pctx(bond_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to delete pctx when set bonding mode, ret:%d\n", ret);
