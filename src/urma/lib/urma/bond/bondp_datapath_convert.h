@@ -14,7 +14,6 @@
 #include <stdint.h>
 
 #include "bondp_connection.h"
-#include "bondp_jetty_ctx.h"
 
 static inline bool is_rw_wr(const urma_jfs_wr_t *wr)
 {
@@ -36,7 +35,7 @@ void free_jfr_wr(urma_jfr_wr_t *wr);
 void free_jfs_wr(urma_jfs_wr_t *wr);
 
 int convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                           bjetty_ctx_t *bjetty_ctx, bdp_v_conn_t *v_conn);
+                           bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn);
 
 int convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx);
 

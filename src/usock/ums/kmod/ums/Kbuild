@@ -1,0 +1,17 @@
+obj-m := ums.o
+ums-objs := cm/ums_clc.o cm/ums_core.o cm/ums_llc.o cm/ums_process_link.o
+ums-objs += dev/ums_pnet.o dev/ums_ubcore.o dev/ums_wr.o
+ums-objs += dfx/ums_dfx.o
+ums-objs += utils/ums_common.o utils/ums_ns.o
+ums-objs += io/ums_cdc.o io/ums_rx.o io/ums_tx.o
+ums-objs += sockops/ums_accept.o sockops/ums_bind.o sockops/ums_close.o sockops/ums_connect.o sockops/ums_listen.o sockops/ums_release.o sockops/ums_sockops.o
+ums-objs += ums_mod.o
+ums-objs += dim/ums_dim.o
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/utils
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/sockops
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/dev
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/cm
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/io
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/dim
+ccflags-y += -I/home/wh/Projects/umdk/src/usock/ums/kmod/ums/dfx
