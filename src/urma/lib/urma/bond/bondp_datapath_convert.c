@@ -337,12 +337,18 @@ int convert_jfs_pwr_to_another_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtje
 
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn)
 {
-    decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data);
+    if (is_recv_cr(cr)) {
+        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data);
 
-    // for recv cr
-    if (cr->flag.bs.s_r == 1) {
         urma_eid_t target_eid;
         (void)get_bonding_eid_by_target_eid(bdp_ctx->topo_map, &cr->remote_id.eid, &target_eid);
         cr->remote_id.eid = target_eid;
+    } else {
+        /*
+         * NOTE: imm_data should only be valid for RECV CR.
+         * However, for some reason, it is also valid for SEND CR.
+         * This unexpected behavior is intentionally used to convert SEND CR.
+         */
+        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data);
     }
 }
