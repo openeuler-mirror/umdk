@@ -12,12 +12,14 @@
 #define BONDP_PROVIDER_OPS_H
 
 #include "urma_types.h"
+#include "urma_ubagg.h"
 
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd);
 
 urma_status_t bondp_delete_context(urma_context_t *ctx);
 
-int bondp_set_aggr_mode(urma_context_t *ctx, urma_context_aggr_mode_t aggr_mode);
+int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mode,
+                        bondp_bonding_level_t bonding_level);
 
 urma_status_t bondp_init(urma_init_attr_t *conf);
 
