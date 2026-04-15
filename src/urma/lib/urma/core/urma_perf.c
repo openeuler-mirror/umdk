@@ -21,6 +21,7 @@
 #include "urma_api.h"
 #include "urma_perf.h"
 #include "urma_types.h"
+#include "urma_private.h"
 
 #define URMA_PERF_MIN_VALUE 32
 #define URMA_PERF_MAX_VALUE 1000000000L
@@ -202,6 +203,7 @@ static void update_stats(urma_perf_context* ctx, urma_perf_record_type_t type)
     ctx->stats.type_record[type].average = hdr_get_mean(hist);
     ctx->stats.type_record[type].mininum = hist->total_count > 0 ? hist->min_value : 0;
     ctx->stats.type_record[type].maxinum = hist->max_value;
+    ctx->stats.type_record[type].p50 = hdr_get_value_at_percentile(hist, 50.0);
     ctx->stats.type_record[type].p90 = hdr_get_value_at_percentile(hist, 90.0);
     ctx->stats.type_record[type].p99 = hdr_get_value_at_percentile(hist, 99.0);
 }
@@ -218,6 +220,8 @@ urma_status_t urma_start_perf(void)
         printf("g_perf_ctx == NULL");
         return URMA_ERROR;
     }
+    
+    g_perf_ctx->stats.retry_count = 0;
     
     for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
         g_perf_ctx->histograms[i] = hdr_init(URMA_PERF_MIN_VALUE, URMA_PERF_MAX_VALUE, URMA_PERF_SIGNIFICANT_FIGURES);
@@ -251,7 +255,22 @@ void urma_step_perf(urma_perf_record_type_t type, uint64_t latency)
     if (g_perf_ctx == NULL || !g_perf_ctx->is_running) return;
     if (type >= URMA_PERF_RECORD_TYPE_MAX) return;
 
+    uint32_t current_retry = urma_ubagg_switch_get();
+    if (current_retry > g_perf_ctx->stats.retry_count) {
+        g_perf_ctx->stats.retry_count = current_retry;
+    }
     hdr_record_value(g_perf_ctx->histograms[type], latency);
+}
+
+void urma_perf_cleanup(void)
+{
+    if (g_perf_ctx == NULL) return;
+    
+    for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
+        hdr_free(g_perf_ctx->histograms[i]);
+    }
+    free(g_perf_ctx);
+    g_perf_ctx = NULL;
 }
 
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
@@ -268,14 +287,32 @@ urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
     uint32_t remaining = *length;
     int written;
     
+    written = snprintf(ptr, remaining, "retry_count: %lu\n", g_perf_ctx->stats.retry_count);
+    if (written < 0 || written >= remaining) {
+        return URMA_ERROR;
+    }
+    ptr += written;
+    remaining -= written;
+    
+    written = snprintf(ptr, remaining, 
+        "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n"
+        "| Type                 | samples  | avg      | min      | max      | p50      | p90      | p99      |\n"
+        "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n");
+    if (written < 0 || written >= remaining) {
+        return URMA_ERROR;
+    }
+    ptr += written;
+    remaining -= written;
+    
     for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
         written = snprintf(ptr, remaining, 
-            "[%s] samples: %lu, avg: %lu, min: %lu, max: %lu, p90: %lu, p99: %lu\n",
+            "| %-20s | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu |\n",
             perf_type_names[i],
             g_perf_ctx->stats.type_record[i].sample_num,
             g_perf_ctx->stats.type_record[i].average,
             g_perf_ctx->stats.type_record[i].mininum,
             g_perf_ctx->stats.type_record[i].maxinum,
+            g_perf_ctx->stats.type_record[i].p50,
             g_perf_ctx->stats.type_record[i].p90,
             g_perf_ctx->stats.type_record[i].p99);
         
@@ -287,17 +324,15 @@ urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
         remaining -= written;
     }
     
-    *length = ptr - perf_buf;
-    return URMA_SUCCESS;
-}
-
-void urma_perf_cleanup(void)
-{
-    if (g_perf_ctx == NULL) return;
-    
-    for (int i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
-        hdr_free(g_perf_ctx->histograms[i]);
+    written = snprintf(ptr, remaining, 
+        "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n");
+    if (written < 0 || written >= remaining) {
+        return URMA_ERROR;
     }
-    free(g_perf_ctx);
-    g_perf_ctx = NULL;
+    ptr += written;
+    remaining -= written;
+    
+    *length = ptr - perf_buf;
+    urma_perf_cleanup();
+    return URMA_SUCCESS;
 }
