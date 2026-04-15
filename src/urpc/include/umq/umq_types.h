@@ -604,6 +604,7 @@ typedef struct umq_cfg_get {
     uint8_t max_rx_sge;           // max sge number of receive array
     uint8_t max_tx_sge;           // max sge number of send array
     uint8_t priority;             // queue jetty priority
+    uint8_t rqe_post_factor;      // rqe post factor may > 1 when use bonding dev
     umq_trans_mode_t trans_mode;  // transmission mode of the queue
     umq_queue_mode_t mode;        // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;            // queue state

@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "urma_api.h"
+#include "urma_ubagg.h"
 #include "umq_inner.h"
 #include "urpc_bitmap.h"
 #include "urpc_hash.h"
@@ -373,6 +374,7 @@ typedef struct ub_queue {
     ub_queue_interrupt_ctx_t interrupt_ctx;
     umq_ub_ctx_t *dev_ctx;
     struct ub_bind_ctx *bind_ctx;
+    volatile uint32_t prefill_rqe_cnt;
     volatile uint32_t ref_cnt;
     volatile uint32_t require_rx_count;
     volatile uint32_t tx_outstanding;
@@ -401,14 +403,18 @@ typedef struct ub_queue {
     uint8_t err_timeout;        // jetty timeout before report error
     uint8_t rnr_retry;          // number of times that jfs will resend packets before report error, when remote (RNR)
     uint8_t min_rnr_timer;      // minimum RNR NACK timer
+    uint8_t rqe_post_factor;    // 1 by default, and multiple times when use port_ids
+    uint8_t used_port_num;
     bool tx_flush_done;         // tx recv flush err done
     bool rx_flush_done;         // rx buf ctx all report
+    bool prefill_done;          // until prefill_rqe_cnt = rqe_post_factor * rx_depth, prefill is done
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;
     umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
     uint64_t share_rq_umqh;
     ub_queue_idle_check_t *checker;
+    bondp_port_id_t *used_port;
 } ub_queue_t;
 
 typedef struct user_ctx {
