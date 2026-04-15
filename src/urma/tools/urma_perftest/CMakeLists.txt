@@ -14,6 +14,13 @@ set_target_properties(urma_perftest
         C_STANDARD 99
 )
 
+target_include_directories(urma_perftest
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/bond/include
+        ${CMAKE_SOURCE_DIR}/urma/common/include
+)
+
 target_link_libraries(urma_perftest
     PRIVATE
         urma pthread m
