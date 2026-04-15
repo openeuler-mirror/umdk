@@ -20,6 +20,7 @@
 
 #include "ub_util.h"
 #include "urma_api.h"
+#include "urma_ubagg.h"
 
 #include "perftest_resources.h"
 
@@ -1363,6 +1364,8 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_rjfr_t rjfr = {0};
+        bondp_rjfr_t bondp_rjfr = {0};
+        bool use_bondp_jfr = false;
         rjfr.jfr_id = ctx->remote_jetty_id[i];
         rjfr.trans_mode = cfg->trans_mode;
         if (cfg->use_ctp) {
@@ -1373,7 +1376,15 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
             rjfr.tp_type = URMA_RTP;
         }
 
-        ctx->import_tjfr[i] = urma_import_jfr(ctx->urma_ctx, &rjfr, &g_perftest_token);
+        if (cfg->single_path && cfg->trans_mode == URMA_TM_RM) {
+            rjfr.flag.bs.has_drv_ext = 1;
+            bondp_rjfr.base = rjfr;
+            bondp_rjfr.jfs = ctx->jfs[i];
+            use_bondp_jfr = true;
+        }
+
+        ctx->import_tjfr[i] = urma_import_jfr(ctx->urma_ctx, use_bondp_jfr ? &bondp_rjfr.base : &rjfr,
+            &g_perftest_token);
         if (ctx->import_tjfr[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jfr, loop:%u!\n", i);
             goto disconnect_jfr;
@@ -1489,6 +1500,8 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_rjetty_t rjetty = {0};
+        bondp_rjetty_t bondp_rjetty = {0};
+        bool use_bondp_jetty = false;
         rjetty.jetty_id = ctx->remote_jetty_id[i];
         rjetty.trans_mode = cfg->trans_mode;
         rjetty.type = URMA_JETTY;
@@ -1505,7 +1518,15 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
             rjetty.flag.bs.share_tp = 1;
         }
 
-        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, &rjetty, &g_perftest_token);
+        if (cfg->single_path && cfg->trans_mode == URMA_TM_RM) {
+            rjetty.flag.bs.has_drv_ext = 1;
+            bondp_rjetty.base = rjetty;
+            bondp_rjetty.jetty = ctx->jetty[i];
+            use_bondp_jetty = true;
+        }
+
+        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, use_bondp_jetty ? &bondp_rjetty.base : &rjetty,
+			&g_perftest_token);
         if (ctx->import_tjetty[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jetty: %u!\n", i);
             goto disconnect_jetty;
