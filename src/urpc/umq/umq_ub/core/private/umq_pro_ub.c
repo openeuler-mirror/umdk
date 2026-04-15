@@ -1106,7 +1106,11 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         }
         if ((queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.tx_fc_interrupt)) {
             /* buf is not NULL here, so umq_ub_poll_fc_tx returns qbuf_cnt >= 0 */
-            qbuf_cnt += (int32_t)umq_ub_poll_fc_tx(queue, buf, buf_count);
+            int ret = umq_ub_poll_fc_tx(queue, buf, buf_count);
+            if (ret < 0) {
+                return ret;
+            }
+            qbuf_cnt += ret;
         }
     }
 
