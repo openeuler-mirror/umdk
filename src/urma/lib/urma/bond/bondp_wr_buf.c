@@ -32,7 +32,7 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
     }
     buf->max_wr_num = max_wr_num;
     buf->wr_entry_size = max_entry_size;
-    buf->latest_used = max_entry_size;
+    buf->latest_used = max_wr_num - 1;
     return 0;
 }
 
@@ -61,7 +61,7 @@ void wr_buf_uninit(wr_buf_t *buf)
     buf->entries = NULL;
     buf->max_wr_num = 0;
     buf->wr_entry_size = 0;
-    buf->latest_used = buf->max_wr_num;
+    buf->latest_used = 0;
 }
 
 static void *wr_buf_alloc(wr_buf_t *buf, wr_buf_entry_type_t entry_type)
