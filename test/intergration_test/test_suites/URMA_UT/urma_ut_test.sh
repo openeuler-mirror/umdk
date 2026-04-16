@@ -12,6 +12,22 @@ LOCAL_YAML="$CURRENT_PATH/test_env.yaml"
 TARGET_YAML_DIR="/etc/ubus_ci"
 TARGET_YAML_PATH="$TARGET_YAML_DIR/test_env.yaml"
 
+LOG_SWITCH=${ENABLE_LOG:-"false"}
+
+function run_test() {
+    local test_file=$1
+
+    if [ "$LOG_SWITCH" = "true" ]; then
+        export PYTEST_ADDOPTS="--log-cli-level=INFO -s"
+    else
+        export PYTEST_ADDOPTS="--log-cli-level=ERROR"
+    fi
+
+    echo "------------------------------------------------"
+    echo "Running pytest for: $test_file (Log Switch: $LOG_SWITCH)"
+    pytest "$test_file"
+}
+
 function prepare_and_run() {
     echo $SRC_BUILD_DIR
     mkdir -p "$SRC_BUILD_DIR"
@@ -54,17 +70,11 @@ function prepare_and_run() {
     echo "Starting Pytest execution..."
     cd "$CURRENT_PATH"
 
-    find . -maxdepth 2 -type d -name "test_*" | while read -r test_dir; do
-        if [ -f "$test_dir/test.py" ]; then
-            echo "----------------------------------------"
-            echo "Running test in: $test_dir"
-            if pytest "$test_dir/test.py"; then
-                echo -e "\033[32m[PASS]\033[0m $test_dir"
-            else
-                echo -e "\033[31m[FAIL]\033[0m $test_dir"
-            fi
-        fi
-    done
+    run_test "./test_urma_basic_loopback/test.py"
+    run_test "./test_bonding_brpc/test.py"
+    run_test "./test_bonding_hcom/test.py"
+    run_test "./test_bonding_kvache/test.py"
+    run_test "./test_bonding_vm_migration/test.py"
 
     echo "========================================"
     echo "All tasks finished at $(date)"
