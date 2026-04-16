@@ -700,7 +700,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
 
     bondp_comp_t *bdp_comp = wr_entry->bdp_comp;
     uint32_t send_idx = wr_entry->send_idx;
-    bdp_comp->valid[send_idx] = false;
     bdp_comp->sqe_cnt[send_idx] -= 1;
 
     if (bdp_comp->valid[send_idx] == false) {
@@ -834,8 +833,7 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bon
             (void)bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
         }
         return CONVERT_SKIP;
-    }
-    if (is_fake_cr(cr)) {
+    } else if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_jfc, cr);
