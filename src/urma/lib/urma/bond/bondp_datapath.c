@@ -243,7 +243,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
     }
 
     int send_idx = -1, target_idx = -1;
-    ret = schedule_send(wr, bdp_comp, &send_idx, &target_idx);
+    ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -293,7 +293,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
     }
 
     int send_idx = 0, target_idx = 0;
-    ret = schedule_send(wr, bdp_comp, &send_idx, &target_idx);
+    ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx);
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -711,7 +711,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
             bdp_comp->valid[send_idx] = false;
 
             int new_send_idx = -1, new_target_idx = -1;
-            if (schedule_send(&wr_entry->wr, bdp_comp, &new_send_idx, &new_target_idx) != 0) {
+            if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp, &new_send_idx, &new_target_idx) != 0) {
                 URMA_LOG_ERR("Failed to schedule send for migration\n");
                 return CONVERT_FAIL;
             }
