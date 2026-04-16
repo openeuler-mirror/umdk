@@ -116,9 +116,9 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
     return 0;
 }
 
-int schedule_send(const urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx)
+int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx)
 {
-    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
+    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
         URMA_LOG_ERR("Invalid wr->tjetty: NULL\n");
         return URMA_EINVAL;
