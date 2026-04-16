@@ -1075,12 +1075,8 @@ int check_local_cfg(perftest_config_t *cfg)
         }
 
         uint64_t tot_iters = cfg->iters * cfg->jettys;
-        if (cfg->api_type == PERFTEST_SEND || cfg->enable_imm == true) {
-            if (cfg->share_jfr == true && cfg->jfr_depth > tot_iters) {
-                cfg->jfr_depth = (uint32_t)tot_iters;
-            } else if (cfg->share_jfr == false && cfg->jfr_depth > cfg->iters) {
-                cfg->jfr_depth = (uint32_t)cfg->iters;
-            }
+        if ((cfg->api_type == PERFTEST_SEND || cfg->enable_imm == true) && cfg->jfr_depth > tot_iters) {
+            cfg->jfr_depth = (uint32_t)tot_iters;
         }
     }
 
