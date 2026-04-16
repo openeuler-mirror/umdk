@@ -1144,6 +1144,11 @@ void async_expand_global_pool(bool with_data, uint64_t g_buf_cnt)
 
     pthread_t tid;
     async_expand_pool_param_t *arg = (async_expand_pool_param_t *)malloc(sizeof(async_expand_pool_param_t));
+    if (arg == NULL) {
+        __atomic_store_n(&exp_pool->is_async_expanding, 0, __ATOMIC_RELEASE);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "malloc async_expand_pool_param failed\n");
+        return;
+    }
     arg->exp_pool = exp_pool;
     arg->with_data = with_data;
     if (pthread_create(&tid, NULL, async_expand_global_pool_callback, arg) != 0) {
@@ -1393,7 +1398,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_stats->exp_pool_with_data.exp_total_block_num =
         exp_with_data->expansion_count * exp_with_data->expansion_block_count;
     qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size =
-        qbuf_pool_stats->exp_pool_with_data.exp_total_block_num * (umq_buf_size_small() + sizeof(umq_buf_list_t));
+        qbuf_pool_stats->exp_pool_with_data.exp_total_block_num * (umq_buf_size_small() + sizeof(umq_buf_t));
 
     // expansion pool stats - without_data
     qbuf_expansion_pool_t *exp_without_data = &g_qbuf_pool.exp_pool_without_date;
