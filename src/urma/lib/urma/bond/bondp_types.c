@@ -16,10 +16,10 @@ bool is_valid_ctx(bondp_context_t *ctx)
 
 bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty)
 {
-    return bdp_tjetty && is_valid_dev_num(bdp_tjetty->local_dev_num) && is_valid_dev_num(bdp_tjetty->target_dev_num);
+    return bdp_tjetty;
 }
 
 bool is_valid_import_tseg(bondp_import_tseg_t *rtseg)
 {
-    return rtseg && is_valid_dev_num(rtseg->local_dev_num) && is_valid_dev_num(rtseg->target_dev_num);
+    return rtseg;
 }
