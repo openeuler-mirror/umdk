@@ -70,8 +70,8 @@ static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *preall
  *   URMA_OPC_WRITE, URMA_OPC_WRITE_IMM, URMA_OPC_WRITE_NOTIFY, URMA_OPC_READ
  *   URMA_OPC_SEND, URMA_OPC_SEND_IMM, URMA_OPC_SEND_INVALIDATE
  */
-int copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
-                urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge)
+urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
+            urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge)
 {
     *dst = *src;
     dst->next = NULL;
@@ -79,14 +79,14 @@ int copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
     if (is_rw_wr(src)) {
         if (copy_sg_list(&src->rw.src, &dst->rw.src, prealloc_src_sge) != 0 ||
             copy_sg_list(&src->rw.dst, &dst->rw.dst, prealloc_dst_sge) != 0) {
-            return -1;
+            return URMA_ENOMEM;
         }
     } else if (is_send_wr(src)) {
         if (copy_sg_list(&src->send.src, &dst->send.src, prealloc_src_sge) != 0) {
-            return -1;
+            return URMA_ENOMEM;
         }
     } else {
-        return -1;
+        return URMA_EINVAL;
     }
     return 0;
 }
@@ -94,16 +94,16 @@ int copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
 /**
  * Performs a deep copy of a JFR work request.
  */
-int copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
-                urma_sge_t *prealloc_src_sge)
+urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
+    urma_sge_t *prealloc_src_sge)
 {
     *dst = *src;
     dst->next = NULL;
 
     if (copy_sg_list(&src->src, &dst->src, prealloc_src_sge) != 0) {
-        return -1;
+        return URMA_ENOMEM;
     }
-    return 0;
+    return URMA_SUCCESS;
 }
 
 /**
@@ -261,8 +261,8 @@ static urma_status_t set_fadd_wr_ptseg_pjetty(urma_jfs_wr_t *send_wr, urma_targe
     return URMA_SUCCESS;
 }
 
-int convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                           bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn)
+urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
+    bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn)
 {
     uint64_t opcode_tag = 0;
 
@@ -310,12 +310,12 @@ int convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
     return URMA_SUCCESS;
 }
 
-int convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
+urma_status_t convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
 {
     for (int i = 0; i < wr->src.num_sge; ++i) {
         wr->src.sge[i].tseg = get_p_tseg(wr->src.sge[i].tseg, recv_idx, 0);
     }
-    return 0;
+    return URMA_SUCCESS;
 }
 
 int convert_jfs_pwr_to_another_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty, int send_idx, int target_idx)

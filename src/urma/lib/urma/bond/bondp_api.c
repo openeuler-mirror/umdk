@@ -1965,12 +1965,12 @@ urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_e
     int nfds = epoll_wait(ctx->async_fd, &event, 1, 0);
     if (nfds == -1) {
         URMA_LOG_ERR("epoll_wait no event or err.\n");
-        return URMA_EVENT_ELR_ERR;
+        return URMA_FAIL;
     }
 
     if ((event.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
         URMA_LOG_ERR("bondp get error epoll_event: 0x%x.\n", event.events);
-        return URMA_EVENT_ELR_ERR;
+        return URMA_FAIL;
     }
     if (event.events & EPOLLIN) {
         urma_context_t *p_contex = (urma_context_t *)event.data.ptr;
