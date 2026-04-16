@@ -86,9 +86,6 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, random_host=True
     p_list = []
     tp_mode_list = [SEPERATE_CONN, UNI_CONN]
     for tp_mode in tp_mode_list:
-        if const.BONDING_DEV:
-            if tp_mode == SEPERATE_CONN:
-                continue
         test_host = []
         log.info(f'-------- tp_mode is {tp_mode} ----------')
         if random_host is True:
@@ -106,6 +103,9 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, random_host=True
         _appid = 1
         test_dev = get_test_dev(test_host, 0)
         test_eid = get_test_eid(test_host, 0)
+        if test_dev.startswith("bonding_dev"):
+            if tp_mode == SEPERATE_CONN:
+                continue
         _cmd = f'{path}/test_case -a {app_num}:{_appid}:{tcp_port} -d {test_dev} '\
                f'-e {test_eid} -p {test_port} -s {seed} {_test_ip}  -x {case_path} -m {tp_mode}'
         p_list.append(test_host[0].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
@@ -138,4 +138,4 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, random_host=True
                     log.error(f"exec_test_case failed!  p_list[{i}],ret={p_list[i].ret}!")
                     raise
             p_list = []
-        return p_list
+    return p_list

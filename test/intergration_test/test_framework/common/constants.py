@@ -28,6 +28,5 @@ const.URMA_MODE = ['RM', 'RC', 'UM']
 const.TP_KIND = ['TP', 'CTP']
 const.GCC_INCLUDE_PATH_URPC = "/usr/include/ub/umdk/urpc"
 const.URPC_LIB_LOG_PATH = "/var/log/umdk/urpc"
-const.UMQ_MODE = ['UB_PLUS', 'UB_IPC', 'UBMM_PLUS']
+const.UMQ_MODE = ['UB_PLUS', 'UB']
 const.FLAG_LOCK_FREE = 0
-const.BONDING_DEV = 1
