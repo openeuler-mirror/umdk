@@ -325,8 +325,8 @@ static inline bool is_empty_eid(urma_eid_t *eid)
     return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
 }
 
-static inline bool is_single_dev_mode(urma_context_t *ctx)
+static inline bool is_single_dev_mode(bondp_context_t *ctx)
 {
-    return ctx->aggr_mode == URMA_AGGR_MODE_STANDALONE;
+    return ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE;
 }
 #endif // BONDP_TYPES_H
