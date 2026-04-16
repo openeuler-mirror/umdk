@@ -259,7 +259,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         if (ret != 0) {
             return URMA_FAIL;
         }
-        if (pwr->next != NULL) {
+        if (vwr->next != NULL) {
             pwr->next = &prealloc_wr_list[index + 1];
         }
 
@@ -422,7 +422,7 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
         if (ret != 0) {
             return URMA_FAIL;
         }
-        if (pwr->next != NULL) {
+        if (vwr->next != NULL) {
             pwr->next = &prealloc_wr_list[index + 1];
         }
 
