@@ -26,9 +26,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 TORCH_LIBRARY(umdk_cam_op_lib, m)
 {
     m.def("fused_deep_moe(Tensor x, Tensor expert_ids, Tensor[] gmm1_weight, Tensor[] gmm1_weight_scale, \
-    Tensor[] gmm2_weight, Tensor[] gmm2_weight_scale, Tensor expert_scales, Tensor? expert_smooth_scales, \
-    Tensor? x_active_mask, str group_ep, int ep_rank_size, int ep_rank_id, int moe_expert_num, int shared_expert_num, \
-    int shared_expert_rank_num, int quant_mode, int global_bs) -> Tensor[]");
+    Tensor[] gmm2_weight, Tensor[] gmm2_weight_scale, Tensor expert_scales, \
+    Tensor? share_gmm1_weight, Tensor? share_gmm1_weight_scale, \
+    Tensor? share_gmm2_weight, Tensor? share_gmm2_weight_scale, \
+    Tensor? expert_smooth_scales, Tensor? share_smooth_scales, Tensor? x_active_mask, \
+    str group_ep, int ep_rank_size, int ep_rank_id, int moe_expert_num, \
+    int quant_mode, int global_bs) -> Tensor[]");
     m.def("get_dispatch_layout(Tensor topk_idx, int num_experts, int num_ranks) -> (Tensor, Tensor)");
     m.def("moe_dispatch_prefill(Tensor x, Tensor topk_idx, Tensor topk_weights, Tensor num_tokens_per_expert, \
     Tensor send_token_idx_small, str group_ep, int rank, int num_ranks, bool use_quant) \

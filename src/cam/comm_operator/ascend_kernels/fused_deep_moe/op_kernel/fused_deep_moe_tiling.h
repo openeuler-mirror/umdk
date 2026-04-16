@@ -19,8 +19,6 @@ struct FusedDeepMoeInfo {
     uint32_t epRankId;             // epRankId
     uint32_t moeExpertNum;         // moe expert number
     uint32_t moeExpertNumPerRank;  // moe expert number per rank
-    uint32_t sharedExpertNum;      // shared expert number
-    uint32_t sharedExpertRankNum;  // shared expert rank number
     uint32_t quantMode;            // quant mode
     uint32_t globalBs;             // globalBs = BS * worldSize
     uint32_t bs;                   // bs
@@ -31,6 +29,7 @@ struct FusedDeepMoeInfo {
     uint64_t totalUbSize;
     uint64_t totalWinSize;
     uint64_t gmm1HLen;
+    uint64_t shareGmm1HLen;  // shared expert gmm1 hidden length
     bool isTensorList;
 };
 
@@ -74,5 +73,7 @@ constexpr uint32_t WORKSPACE_STAGES = 4;
 constexpr uint32_t EXEC_FLAG_DEEP_FUSE = (1U << 0);
 constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 1);
 constexpr uint32_t EXEC_FLAG_X_ACTIVE_MASK = (1U << 2);
+constexpr uint32_t EXEC_FLAG_SHARED_EXPERT = (1U << 3);
+constexpr uint32_t EXEC_FLAG_SMOOTH_QUANT = (1U << 4);
 } // namespace Cam
 #endif  // FUSED_DEEP_MOE_TILING_H
