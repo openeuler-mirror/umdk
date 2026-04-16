@@ -22,6 +22,7 @@
 #include "urma_log.h"
 #include "urma_perf.h"
 #include "urma_private.h"
+#include "urma_provider.h"
 
 #include "bondp_datapath.h"
 
@@ -395,6 +396,41 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
     PERF_PROFILING_END(BOND_JFS_POST_SEND);
 
     return ret;
+}
+
+urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,   //
+                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,     //
+                        uint64_t dst, uint64_t src, uint32_t len,                     //
+                        urma_jfs_wr_flag_t flag, uint64_t user_ctx,                   //
+                        uint32_t src_chip_id, uint32_t dst_chip_id)
+{
+    /* check parameter */
+    if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.jfc == NULL) {
+        return URMA_EINVAL;
+    }
+    urma_ops_t *dp_ops = jfs->urma_ctx->ops;
+    /* src_tseg could be NULL as src data could be inline data */
+    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || target_jfr == NULL || dst_tseg == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
+    urma_sge_t dst_sge = {.addr = dst, .len = len, .tseg = (urma_target_seg_t *)dst_tseg};
+    bondp_jfs_wr_t wr;
+    urma_jfs_wr_t *base = &wr.base;
+    urma_jfs_wr_t *bad_wr;
+    base->opcode = URMA_OPC_WRITE;
+    base->flag = flag;
+    base->flag.bs.has_drv_ext = 1;
+    base->user_ctx = user_ctx;
+    base->rw.src.num_sge = 1;
+    base->rw.src.sge = &src_sge;
+    base->rw.dst.num_sge = 1;
+    base->rw.dst.sge = &dst_sge;
+    base->tjetty = (urma_target_jetty_t *)target_jfr;
+    base->next = NULL;
+    return dp_ops->post_jfs_wr(jfs, base, &bad_wr);
 }
 
 static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,

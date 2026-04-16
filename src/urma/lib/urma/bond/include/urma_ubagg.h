@@ -18,6 +18,9 @@
 extern "C" {
 #endif
 
+/* For version compatibility */
+#define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
+
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
 #define URMA_UBAGG_WR_BUF_SIZE        (3)
 #define URMA_UBAGG_MAX_CR_CNT_PER_DEV (16)
@@ -102,6 +105,18 @@ typedef struct bondp_rjfr {
         urma_jetty_t *jetty;
     };
 } bondp_rjfr_t;
+
+typedef struct bondp_jfs_wr {
+    urma_jfs_wr_t base;
+    uint32_t src_chip_id;
+    uint32_t dst_chip_id;
+} bondp_jfs_wr_t;
+
+urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
+                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
+                        uint64_t dst, uint64_t src, uint32_t len,
+                        urma_jfs_wr_flag_t flag, uint64_t user_ctx,
+                        uint32_t src_chip_id, uint32_t dst_chip_id);
 
 #ifdef __cplusplus
 }
