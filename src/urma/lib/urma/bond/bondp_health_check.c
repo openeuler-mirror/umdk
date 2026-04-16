@@ -736,7 +736,7 @@ static urma_status_t bondp_send_health_probe(bondp_context_t *bdp_ctx,
     if (ret != URMA_SUCCESS) {
         URMA_LOG_WARN("Health probe write failed, lidx:%d tidx:%d ret:%d\n", local_idx, target_idx, ret);
     } else {
-        URMA_LOG_INFO("Health probe sent, lidx:%d tidx:%d user_ctx:0x%lx\n",
+        URMA_LOG_DEBUG("Health probe sent, lidx:%d tidx:%d user_ctx:0x%lx\n",
             local_idx, target_idx, user_ctx);
     }
     return ret;
@@ -1085,7 +1085,7 @@ static void *bondp_health_check_thread(void *arg)
                 if (now_us < task->next_probe_ts_us) {
                     continue;
                 }
-                URMA_LOG_INFO("Health check round mode:%s active_idx:%d primary_idx:%d backoff:%u\n",
+                URMA_LOG_DEBUG("Health check round mode:%s active_idx:%d primary_idx:%d backoff:%u\n",
                     task->mode == HEALTH_MODE_BACKUP_CHECK ? "BACKUP" : "PRIMARY",
                     task->active_local_idx, task->primary_local_idx, task->backoff_cnt);
                 bondp_health_do_check(ctx_node->bdp_ctx, task);
@@ -1336,11 +1336,11 @@ static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const
             atomic_store(&sub->link_ok, ok);
             task->bondp_jetty->valid[sub->local_idx] = ok;
             if (old_ok != ok) {
-                URMA_LOG_INFO("Health link state changed, tjetty:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
+                URMA_LOG_WARN("Health link state changed, tjetty:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx, info->user_ctx, old_ok, ok,
                     info->cr_status);
             } else {
-                URMA_LOG_INFO("Health CR handled, tjetty:%u lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
+                URMA_LOG_DEBUG("Health CR handled, tjetty:%u lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx, info->user_ctx, info->cr_status);
             }
             consumed = true;
@@ -1388,7 +1388,7 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
             atomic_store(&sub->link_ok, ok);
             task->bondp_jetty->valid[sub->local_idx] = ok;
             if (old_ok != ok) {
-                URMA_LOG_INFO("Health link state changed, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
+                URMA_LOG_WARN("Health link state changed, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, old_ok, ok, cr->status);
                 bondp_health_event_info_t info = {
                 .local_idx = (int)cr_local_idx,
@@ -1401,7 +1401,7 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
                 };
                 bondp_notify_health_event(bdp_ctx, BONDP_HEALTH_EVENT_TA_TIMEOUT, &info);
             } else {
-                URMA_LOG_INFO("Health CR handled, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
+                URMA_LOG_DEBUG("Health CR handled, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, cr->status);
             }
             consumed = true;
