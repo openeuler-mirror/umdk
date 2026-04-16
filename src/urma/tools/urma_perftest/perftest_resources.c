@@ -1528,15 +1528,14 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
             rjetty.flag.bs.share_tp = 1;
         }
 
-        if (cfg->single_path && cfg->trans_mode == URMA_TM_RM) {
+        if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->trans_mode == URMA_TM_RM) {
             rjetty.flag.bs.has_drv_ext = 1;
             bondp_rjetty.base = rjetty;
             bondp_rjetty.jetty = ctx->jetty[i];
             use_bondp_jetty = true;
         }
 
-        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, use_bondp_jetty ? &bondp_rjetty.base : &rjetty,
-			&g_perftest_token);
+        ctx->import_tjetty[i] = urma_import_jetty(ctx->urma_ctx, use_bondp_jetty ? &bondp_rjetty.base : &rjetty, &g_perftest_token);
         if (ctx->import_tjetty[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jetty: %u!\n", i);
             goto disconnect_jetty;

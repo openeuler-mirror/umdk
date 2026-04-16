@@ -52,7 +52,7 @@ static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, urma_jfs_w
         ret = URMA_EINVAL;
     }
     if (ret == URMA_SUCCESS) {
-        comp->rqe_cnt[send_idx] += 1;
+        comp->sqe_cnt[send_idx] += 1;
     }
     return ret;
 }
