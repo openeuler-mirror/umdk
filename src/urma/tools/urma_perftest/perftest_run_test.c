@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "urma_api.h"
+#include "urma_ubagg.h"
 
 #include "perftest_parameters.h"
 #include "perftest_resources.h"
@@ -1445,11 +1446,34 @@ static void *run_send_lat_duplex(void *arg)
 
     bool is_server = cfg->comm.server_ip == NULL;
 
+    /* The bonding device needs to issue RQE for active port multiples */
+    uint32_t rqe_multiple = 1;
+    if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
+        bondp_query_port_in_t in_arg = {
+            .jetty = ctx->jetty[id],
+        };
+        bondp_query_port_out_t out_arg = {0};
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)&in_arg,
+            .len = sizeof(in_arg),
+            .opcode = BONDP_USER_CTL_QUERY_PORT,
+        };
+        urma_user_ctl_out_t out = {
+            .addr = (uint64_t)&out_arg,
+            .len = sizeof(out_arg),
+        };
+        if (urma_user_ctl(ctx->urma_ctx, &in, &out) != URMA_SUCCESS) {
+            printf("Failed query port for bonding device\n");
+            return NULL;
+        }
+        rqe_multiple = out_arg.active_count;
+    }
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
      */
-    if (send_lat_post_jetty_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list)) != 0) {
+    if (send_lat_post_jetty_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list * rqe_multiple)) != 0) {
         goto free_cr;
     }
     if (sync_time(cfg->comm.sock_fd[id], "send_lat_post_recv") != 0) {

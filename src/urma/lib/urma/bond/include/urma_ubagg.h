@@ -50,7 +50,10 @@ typedef struct bondp_set_bonding_mode_in {
 
 // URMA_USER_CTL_BOND_QUERY_PORT
 typedef struct bondp_query_port_in {
-    urma_jfr_t *jfr;
+    union {
+        urma_jfr_t *jfr;
+        urma_jetty_t *jetty;
+    };
 } bondp_query_port_in_t;
 
 typedef struct bondp_query_port_out {
