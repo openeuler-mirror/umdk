@@ -348,20 +348,20 @@ static int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, 
                                                 uint32_t *active_index)
 {
     if (port_id.port_idx == UINT8_MAX) {
-        if (port_id.chip_id >= PRIMARY_EID_NUM) {
+        if (port_id.chip_id > PRIMARY_EID_NUM) {
             URMA_LOG_ERR("Invalid primary chip_id: %u.\n", port_id.chip_id);
             return -1;
         }
-        *active_index = port_id.chip_id;
+        *active_index = port_id.chip_id - 1;
         return 0;
     }
 
-    if (port_id.port_idx >= PORT_NUM || port_id.chip_id >= PRIMARY_EID_NUM) {
+    if (port_id.port_idx > PORT_NUM || port_id.chip_id > PRIMARY_EID_NUM) {
         URMA_LOG_ERR("Invalid port id, chip_id: %u, port_idx: %u.\n", port_id.chip_id, port_id.port_idx);
         return -1;
     }
 
-    *active_index = (uint32_t)get_matrix_port_p_idx(port_id.chip_id, port_id.port_idx);
+    *active_index = (uint32_t)get_matrix_port_p_idx(port_id.chip_id - 1, port_id.port_idx);
     if (*active_index >= (uint32_t)bdp_ctx->dev_num) {
         URMA_LOG_ERR("Invalid converted active index: %u.\n", *active_index);
         return -1;
