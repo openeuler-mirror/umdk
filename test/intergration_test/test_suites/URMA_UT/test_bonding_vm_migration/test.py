@@ -37,7 +37,7 @@ class TestBondingVmMigration(UBUSFeature):
             server=host1,
             client=host2,
             timeout=120,
-            cmd_syntax="send_bw",
+            cmd_syntax="write_bw",
             opt=opt
         )
 
