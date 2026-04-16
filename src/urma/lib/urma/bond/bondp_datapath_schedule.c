@@ -35,20 +35,6 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
 
         *send_idx = (int)active_idx;
         *target_idx = (int)bdp_tjetty->active_indices[i];
-
-        bondp_health_event_info_t event_info = {
-            .local_idx = -1,
-            .target_idx = -1,
-            .user_ctx = 0,
-            .cr_status = 0,
-            .new_active_idx = *send_idx,
-            .bdp_jetty = NULL,
-            .bdp_tjetty = (bondp_target_jetty_t *)bdp_tjetty,
-        };
-        bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_ACTIVE_IDX_UPDATE, &event_info);
-        if (bdp_comp->active_count > 0 && *send_idx != (int)bdp_comp->active_indices[0]) {
-            bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
-        }
         return 0;
     }
 
