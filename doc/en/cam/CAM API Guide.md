@@ -458,38 +458,44 @@ fused_deep_moe(
     Tensor[] gmm2_weight, 
     Tensor[] gmm2_weight_scale, 
     Tensor expert_scales, 
-    Tensor? expert_smooth_scales, \
+    Tensor? share_gmm1_weight, 
+    Tensor? share_gmm1_weight_scale, 
+    Tensor? share_gmm2_weight, 
+    Tensor? share_gmm2_weight_scale, 
+    Tensor? expert_smooth_scales,
+    Tensor? share_smooth_scales,
     Tensor? x_active_mask, 
     str group_ep, 
     int ep_rank_size, 
     int ep_rank_id, 
     int moe_expert_num, 
-    int shared_expert_num, 
-    int shared_expert_rank_num, 
     int quant_mode, 
     int global_bs) 
 -> output: Tensor[]
 ```
 ##### 1.1.9.2 Interface Description
-Fused computation-communication operator in MoE Decode phase for A3, which merges [Dispatch + FFN(GMM1 + Swiglu + GMM2) + Combine] into an operator for better inference and training performance.
+Fused computation-communication operator in MoE Decode phase for A3, which merges [Dispatch + FFN(GMM1 + Swiglu + GMM2) + Combine] ,(optional) and shared expert computation in the current card, into an operator for better inference performance.
 ##### 1.1.9.3 Input Parameters 
 | **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|--------------|----------|
 |x|Tensor|Required|Shape:(batch_size, token_length), support bf16 and float16 type|token to be sent of this rank in dispatch phase |
 |expert_ids|Tensor|Required|Shape:(batch_size, topk)，int32 type, range: [-1, num_experts)，where -1 is used as a placeholder. A token cannot sent to an expert beyond one time.|target expert IDs of each token|
 |gmm1_weight|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, token_length, gmm1_hidden_size); In seperated mode，there are localExpertNum tensors, TensorShape：（token_length, gmm1_hidden_size; int8 type|GMM1 weight matrix，supports coupling mode and seperated mode|
-|gmm1_weight_scale|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, gmm1_hidden_size); In seperated mode，there are localExpertNum tensors, each tensor Shape：（gmm1_hidden_size）; float32 type|GMM1 weight scale matrix，supports coupling mode and seperated mode|
+|gmm1_weight_scale|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, gmm1_hidden_size); In seperated mode，there are localExpertNum tensors, each tensor Shape：（gmm1_hidden_size）; float32 type or the same type with x|GMM1 weight scale matrix，supports coupling mode and seperated mode|
 |gmm2_weight|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, gmm1_hidden_size/2, token_length); In seperated mode，there are localExpertNum tensors, each tensor Shape：（gmm1_hidden_size/2, token_length）; int8 type|GMM2 weight matrix，supports coupling mode and seperated mode|
-|gmm2_weight_scale|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, token_length); In seperated mode，there are localExpertNum tensors, each tensor Shape：（token_length）; float32 type|GMM2 weight scale matrix，supports coupling mode and seperated mode|
+|gmm2_weight_scale|Tensor[]|Required|In coupling mode，there is one tensor, Shape:(localExpertNum, token_length); In seperated mode，there are localExpertNum tensors, each tensor Shape：（token_length）; float32 type or the same type with x|GMM2 weight scale matrix，supports coupling mode and seperated mode|
 |expert_scales|Tensor|Required|Shape：(batch_size, topk), float32 type|weights of each expert，used in combine phase|
-|expert_smooth_scales|Tensor|Optional|--|Reserved parameter|
-|x_active_mask|Tensor|Optional|Shape: (batch_size), bool type, value in[true, false], the true value must come before the false value|Reserved parameter，set to None|
+|share_gmm1_weight|Tensor|Optional|Shape：（token_length, share_gmm1_hidden_size）; int8 type|shared expert MM1 weight matrix|
+|share_gmm1_weight_scale|Tensor|Optional|Shape：（share_gmm1_hidden_size）; the same type with gmm1_weight_scale|shared expert MM1 weight scale matrix|
+|share_gmm2_weight|Tensor|Optional|Shape：（share_gmm1_hidden_size/2, token_length）; int8 type|shared expert MM2 weight matrix，supports coupling mode and seperated mode|
+|share_gmm2_weight_scale|Tensor|Optional|Shape：（token_length）; the same type with gmm2_weight_scale|shared expert MM2 weight scale|
+|expert_smooth_scales|Tensor|Optional|Shape: (moe_expert_num, token_length), float32 type|smooth quant scales of routed experts|
+|share_smooth_scales|Tensor|Optional|Shape: (token_length), float32 type|smooth quant scales of shared experts|
+|x_active_mask|Tensor|Optional|Shape: (batch_size), bool type, value in[true, false], the true value must come before the false value|mask of input x. true means the token will be dispatched, false means the token will not be dispatched|
 |group_ep|str|Required|Length of str：(0, 128), make sure it is valid|HCCL communication group name|
 |ep_rank_size|int|Required|Required：(ep_rank_size * MoeExpertNumPerRank) ≤ 512, and ep_rank_size > 0|EP group size|
 |ep_rank_id|int|Required|range: [0, ep_rank_size)|rank ID in EP group|
-|moe_expert_num|int|Required|Required：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0|MOE expert number|
-|shared_expert_num|int|Required|support 1 only|shared expert number|
-|shared_expert_rank_num|int|Required|Required：(ep_rank_size - shared_expert_rank_num) % moe_expert_num == 0, and shared_expert_rank_num < ep_rank_size|rank number of shared experts|
+|moe_expert_num|int|Required|Required：moe_expert_num % ep_rank_size == 0|MOE expert number|
 |quant_mode|int|Required|Reserved parameter, set to 0|quant mode|
 |global_bs|int|Required|set to 0 or (batch_size * ep_rank_size) when token is the same in different ranks; set to (max_batch_size * ep_rank_size) otherwise.|max token number among all ranks|
 ##### 1.1.9.4 Return Value 
@@ -497,13 +503,14 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
 | **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|----------|
 |combine_x|Tensor|Shape：(batch_size, token_length), the same type as input x|token after combination from experts in different ranks|
+|share_output|Tensor|Shape：(batch_size, token_length), the same type as input x|token result from shared expert in current card. This output will exist as placeholder even though shared expert is not enabled|
 |expert_token_nums|Tensor|Shape：(local_expert_num), int64 type|token number received by each expert in current rank|
 ##### 1.1.9.5 Constraints and Precautions ⚠️
 1. Input Shape should satisfy the shape definition above.
 2. Current interface supports A3 only.
 3. Current interface do not support concurrent usage.In extreme cases, repeatedly calling the same operator in a single forward pass may result in undefined behavior. To avoid potential asynchronous timing issues in such scenarios, torch.npu.synchronize() should be added between operator executions.
 4. Support aclgraph only when graph in on.
-5. Do not support shared experts.
+5. Do not support external shared experts, that is, shared experts are deployed on dedicated cards .
 6. The performance may decline when batch_size is lower than 16, as it is not the target scenario.
 7. Other Constraits need to be satisfy:
  - top_k range：[0， 12] and it should be lower than expert number.
@@ -512,6 +519,9 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
  - Required: local_expert_num ≤ (aivnum / 2), where aivnum is the vector core number
  - Required: token length range: [1024, 7168] and (hidden_size % 256) == 0
  - Required: gmm1_hiden_size range: [1024, 6144] and (gmm1_hiden_size % 256) == 0
+ - Required: share_gmm1_hiden_size range: [1024, 6144] and (share_gmm1_hiden_size % 256) == 0
  - Required：HCCL_BUFFERSIZE should be greater than [(ep_rank_size * max_batch_size * moe_expert_num_per_rank * total_length * sizeof(x) * 2) / 1024 / 1024], which should be round up to the nearest integer.
  - Required：global_bs ≥ 0 and（global_bs % ep_rank_size） == 0
  - Required: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale should be in the same mode
+ - Required: share_gmm1_weight, share_gmm1_weight_scale, share_gmm2_weight, share_gmm2_weight_scale must exist at the same time if shared expert computation is enabled
+ - Required: expert_smooth_scales must exist if routed expert smooth quantization is enabled, furthermore, share_smooth_scales must exist if shared expert computation is enabled

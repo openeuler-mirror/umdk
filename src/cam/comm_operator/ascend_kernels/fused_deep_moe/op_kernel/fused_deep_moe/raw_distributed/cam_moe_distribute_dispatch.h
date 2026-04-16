@@ -383,10 +383,10 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Quant
 template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::QuantForShareExpert()
 {
-    uint32_t sendTokenNum = axisBS_ / aivNum_;       // 每个aiv需要发送的token数
-    uint32_t remainderTokenNum = axisBS_ % aivNum_;  // 余数
-    uint32_t startTokenId = sendTokenNum * aivId_;  // 每个aiv发送时的起始rankid
-    if (aivId_ < remainderTokenNum) {               // 前remainderRankNum个aiv需要多发1个卡的数据
+    uint32_t sendTokenNum = axisBS_ / aivNum_;
+    uint32_t remainderTokenNum = axisBS_ % aivNum_;
+    uint32_t startTokenId = sendTokenNum * aivId_;
+    if (aivId_ < remainderTokenNum) {
         sendTokenNum += 1;
         startTokenId += aivId_;
     } else {
@@ -399,7 +399,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Quant
     DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
     for (uint32_t tokenIndex = startTokenId; tokenIndex < endTokenId; ++tokenIndex) {
         xInTensor_ = xInQueue_.AllocTensor<XType>();
-        DataCopy(xInTensor_, xGMTensor_[tokenIndex * axisH_], axisH_);  // 约束对齐
+        DataCopy(xInTensor_, xGMTensor_[tokenIndex * axisH_], axisH_);
         xInQueue_.EnQue(xInTensor_);
         xInTensor_ = xInQueue_.DeQue<XType>();
         xOutTensor_ = xOutQueue_.AllocTensor<ExpandXOutType>();
@@ -416,7 +416,6 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Quant
 template <TemplateDispatchTypeClass>
 __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::TokenActiveMaskCal()
 {
-    // 搬运x_active_mask, 当前仅用于计算有效token总数
     LocalTensor<half> maskTmpTensor;
     LocalTensor<half> sumOutTensor;
     LocalTensor<bool> maskInputTensor;
