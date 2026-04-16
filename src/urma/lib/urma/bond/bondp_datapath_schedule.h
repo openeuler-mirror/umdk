@@ -16,7 +16,7 @@
 #include "bondp_connection.h"
 #include "bondp_jetty_ctx.h"
 
-int schedule_send(const urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx);
+int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx);
 
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx);
 
