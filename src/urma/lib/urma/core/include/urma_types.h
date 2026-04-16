@@ -1035,7 +1035,8 @@ typedef union urma_jfs_wr_flag {
                                           1: inline data. */
 
         uint32_t db_bypass        : 1;
-        uint32_t reserved         : 24;
+        uint32_t has_drv_ext      : 1;
+        uint32_t reserved         : 23;
     } bs;
     uint32_t value;
 } urma_jfs_wr_flag_t;
