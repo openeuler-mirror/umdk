@@ -29,8 +29,8 @@ constexpr uint8_t EP_DOMAIN = 0;
 constexpr uint8_t TP_DOMAIN = 1;
 constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
-constexpr uint16_t SEND_SYNC_EVENT_ID = 9;
-constexpr uint16_t RECV_SYNC_EVENT_ID = 10;
+constexpr uint16_t SEND_SYNC_EVENT_ID = 6;
+constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
 
 template <AscendC::HardEvent event>
 __aicore__ inline void SyncFunc()
@@ -47,10 +47,8 @@ struct CombineCalcInfo {
     uint32_t epRankId_;
     uint32_t epWorldSize_;
     uint32_t moeExpertPerRankNum_;
-    uint32_t sharedExpertRankNum_;
     uint32_t axisH_;
     uint32_t moeSendNum_;
-    bool isShardExpert_;
     GM_ADDR epSendCount_;
     __gm__ HcclOpResParam *epWinContext_;
     uint64_t winDataSizeOffset_;
@@ -66,6 +64,7 @@ public:
     __aicore__ inline void Process();
     __aicore__ inline void AllToAllSend();
     __aicore__ inline void ReducePermute();
+    __aicore__ inline void ProcessCombine();
 
     __aicore__ inline CombineCalcInfo &GetCalcInfo()
     {
@@ -179,7 +178,7 @@ private:
     uint32_t epRankId_{0};
     uint32_t tpRankId_{0};
     uint32_t coreIdx_{0};  // aiv id
-    uint32_t sharedExpertRankNum_{0};
+    uint32_t RankNum_{0};
     uint32_t moeExpertNum_{0};
     uint32_t moeExpertPerRankNum_{0};
     uint32_t moeSendNum_{0};  // moeExpertPerRankNum_ * epWorldSize_
@@ -231,7 +230,6 @@ private:
     TBuf<> xActMaskSumTBuf_;
     float sumTarget_{0.0};
     int32_t epStateValue_;
-    bool isShardExpert_{false};
 };
 
 template <TemplateMC2TypeClass>
@@ -275,13 +273,12 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
     axisK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        aivNum_ = get_block_num();
+    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
+        aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
     } else {
         aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aivNum;
     }
     ubSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalUbSize;
-    sharedExpertRankNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.sharedExpertRankNum;
     moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
     moeExpertPerRankNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
     epWorldSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
@@ -299,7 +296,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     epStatusSpaceGlobalTensor_.SetGlobalBuffer((__gm__ float *)epStatusSpaceGm_);
     epDataOffsetOnWin_ = epRankId_ * moeExpertPerRankNum_ * static_cast<uint32_t>(expertPerSizeOnWin_);
     epStateOffsetOnWin_ = epRankId_ * stateOffset_;
-    isShardExpert_ = (epRankId_ < sharedExpertRankNum_);
     axisHFloatSize_ = axisH_ * sizeof(float);
     axisHExpandXTypeSize_ = axisH_ * sizeof(ExpandXType);
     bsKNum_ = axisBS_ * axisK_;
@@ -317,8 +313,8 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     }
 
     InitStatusTargetSum();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        coreIdx_ = get_block_idx();
+    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
+        coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum(); // AscendC::GetBlockIdx() / 2;
     }
     SplitCoreCal();
 
@@ -326,10 +322,8 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     calcInfo_.epWorldSize_ = epWorldSize_;
     calcInfo_.expertPerSizeOnWin_ = expertPerSizeOnWin_;
     calcInfo_.moeExpertPerRankNum_ = moeExpertPerRankNum_;
-    calcInfo_.sharedExpertRankNum_ = sharedExpertRankNum_;
     calcInfo_.axisH_ = axisH_;
     calcInfo_.moeSendNum_ = moeSendNum_;
-    calcInfo_.isShardExpert_ = isShardExpert_;
     calcInfo_.epSendCount_ = epSendCount;
     calcInfo_.epWinContext_ = epWinContext_;
     calcInfo_.winDataSizeOffset_ = winDataSizeOffset_;
@@ -515,13 +509,8 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ExpertAllto
     }
     uint32_t curRankExpertNum = 0;
     DataCopyExtParams epSendCntParams;
-    if (isShardExpert_) {
-        curRankExpertNum = 1;
-        epSendCntParams = {1U, static_cast<uint32_t>(epWorldSize_ * sizeof(uint32_t)), 0U, 0U, 0U};
-    } else {
-        curRankExpertNum = moeExpertPerRankNum_;
-        epSendCntParams = {1U, static_cast<uint32_t>(moeSendNum_ * sizeof(uint32_t)), 0U, 0U, 0U};
-    }
+    curRankExpertNum = moeExpertPerRankNum_;
+    epSendCntParams = {1U, static_cast<uint32_t>(moeSendNum_ * sizeof(uint32_t)), 0U, 0U, 0U};
     DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
     DataCopyPad(epSendCountLocal_, epSendCountGM_, epSendCntParams, copyPadParams);
     SyncFunc<AscendC::HardEvent::MTE2_S>();
@@ -553,9 +542,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ExpertAllto
     uint32_t tokenNumLoop, uint32_t srcStartTokenIdx, uint32_t ep, uint32_t expertIdx)
 {
     GM_ADDR rankGM = GetWinAddrByRankId(ep, EP_DOMAIN, expertIdx) + epDataOffsetOnWin_;
-    if ((isShardExpert_) && (ep < sharedExpertRankNum_)) {
-        rankGM = GetWinAddrByRankId(epRankId_, EP_DOMAIN, expertIdx) + ep * moeExpertPerRankNum_ * expertPerSizeOnWin_;
-    }
     rankWindow_.SetGlobalBuffer((__gm__ ExpandXType *)rankGM);
     uint32_t dataCnt = axisH_;
     for (uint32_t loopIdx = 0; loopIdx < tokenNumLoop; loopIdx++) {
@@ -660,15 +646,14 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitDispatc
             Sum(statusSumOutTensor, gatherMaskOutTensor, sumParams);
             SyncFunc<AscendC::HardEvent::V_S>();
             sumOfFlag = statusSumOutTensor.GetValue(0);
+            if ((sumOfFlag < minTarget) || (sumOfFlag > maxTarget)) {
+                SPIN_WAIT_CYCLES();
+            }
         }
     }
 
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(RECV_SYNC_EVENT_ID);
-        AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
-    } else {
-        SyncAll<true>();
-    }
+    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(RECV_SYNC_EVENT_ID);
+    AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
 }
 
 template <TemplateMC2TypeClass>
@@ -736,7 +721,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindow
             }
             float scaleVal = expandScalesLocal.GetValue(index);
             GM_ADDR wAddr = (__gm__ uint8_t *)(epWindowGM_) +
-                            expertPerSizeOnWin_ * moeExpertPerRankNum_ * sharedExpertRankNum_ +
                             expertPerSizeOnWin_ * moeExpert +
                             indexCountsLocal.GetValue(index) * axisHExpandXTypeSize_ +
                             tokenOffset * sizeof(ExpandXType);
@@ -755,24 +739,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindow
             moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
         }
         LocalTensor<ExpandXType> rowTmpLocal = tokenBuf_.Get<ExpandXType>();
-        if (sharedExpertRankNum_ > 0U) {
-            uint32_t temp = (epRankId_ * activeMaskBsCnt_) / sharedExpertRankNum_;
-            uint32_t moeOnShareRank = Ceil((tokenIndex + 1 + temp) * sharedExpertRankNum_, activeMaskBsCnt_) -
-                                      1 - epRankId_;
-            uint32_t preCnt = (moeOnShareRank + epRankId_) * activeMaskBsCnt_ / sharedExpertRankNum_ -
-                              epRankId_ * activeMaskBsCnt_ / sharedExpertRankNum_;
-            __gm__ ExpandXType *shareAddr =
-                (__gm__ ExpandXType *)(epWindowGM_ + moeOnShareRank * expertPerSizeOnWin_ * moeExpertPerRankNum_) +
-                (tokenIndex - preCnt) * axisH_ + tokenOffset;
-            GlobalTensor<ExpandXType> shareTokGlobal;
-            shareTokGlobal.SetGlobalBuffer((__gm__ ExpandXType *)(shareAddr));
-            SyncFunc<AscendC::HardEvent::V_MTE2>();
-            DataCopy(rowTmpLocal, shareTokGlobal, processLen);
-            SyncFunc<AscendC::HardEvent::MTE2_V>();
-            Cast(rowTmpFloatLocal, rowTmpLocal, AscendC::RoundMode::CAST_NONE, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, rowTmpFloatLocal, processLen);
-        }
 
         AscendC::PipeBarrier<PIPE_V>();
         LocalTensor<ExpandXType> sumBufLocal = tokenBuf_.Get<ExpandXType>();
@@ -842,6 +808,21 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermu
     if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
         AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
     }
+}
+
+template <TemplateMC2TypeClass>
+__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ProcessCombine()
+{
+    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
+    AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
+        BuffInit();
+        SetWaitTpStatusAndDisPatch();
+    }
+    AlltoAllBuffInit();
+    SetStatus();
+    WaitDispatch();
+    LocalWindowCopy();
 }
 }  // namespace MoeDistributeCombineImpl
 

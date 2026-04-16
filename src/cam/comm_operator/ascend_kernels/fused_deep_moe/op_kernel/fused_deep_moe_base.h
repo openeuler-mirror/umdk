@@ -11,8 +11,10 @@
 
 #include "moe_distribute_base.h"
 
-#define TemplateMC2TypeClass typename ExpandXType, typename ExpandIdxType, bool IsNeedReduceScatter, uint32_t EXEC_FLAG
-#define TemplateMC2TypeFunc ExpandXType, ExpandIdxType, IsNeedReduceScatter, EXEC_FLAG
+#define TemplateMC2TypeClass                                                                      \
+        typename ExpandXType, typename W1ScaleType, typename W2ScaleType, typename ExpandIdxType, \
+        bool IsNeedReduceScatter, uint32_t EXEC_FLAG
+#define TemplateMC2TypeFunc ExpandXType, W1ScaleType, W2ScaleType, ExpandIdxType, IsNeedReduceScatter, EXEC_FLAG
 
 #define TemplateDispatchTypeClass                                                                                  \
             typename XType, typename ExpandXOutType, bool StaticQuant, bool DynamicQuant, bool IsSmoothScaleExist, \
@@ -20,5 +22,15 @@
 #define TemplateDispatchTypeFunc                                                  \
             XType, ExpandXOutType, StaticQuant, DynamicQuant, IsSmoothScaleExist, \
             IsNeedAllgater, EXEC_FLAG
+
+constexpr int64_t SLEEP_CYCLE = 25;
+
+__aicore__ inline void SPIN_WAIT_CYCLES()
+{
+    int64_t st = AscendC::GetSystemCycle();
+    while (AscendC::GetSystemCycle() - st < (SLEEP_CYCLE)) {
+        ;
+    }
+}
 
 #endif  // FUSED_DEEP_MOE_BASE_H
