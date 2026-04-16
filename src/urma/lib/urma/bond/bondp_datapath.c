@@ -254,11 +254,11 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         urma_jfs_wr_t *pwr = &prealloc_wr_list[index];
         ret = copy_jfs_wr(vwr, pwr, prealloc_src_sge[index], prealloc_dst_sge[index]);
         if (ret != 0) {
-            return URMA_FAIL;
+            return ret;
         }
         ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp, v_conn);
         if (ret != 0) {
-            return URMA_FAIL;
+            return ret;
         }
         if (vwr->next != NULL) {
             pwr->next = &prealloc_wr_list[index + 1];
@@ -353,10 +353,10 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
         ret = bondp_post_send_wr_no_store(bdp_jetty, wr, bad_wr);
     } else {
         urma_jfs_wr_t *cur = wr;
-
         while (cur != NULL) {
             ret = bondp_post_send_wr_and_store(bdp_jetty, cur, bad_wr);
             if (ret != URMA_SUCCESS) {
+                PERF_PROFILING_END(BOND_JETTY_POST_SEND);
                 return ret;
             }
             cur = cur->next;
@@ -386,6 +386,7 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
         while (cur != NULL) {
             ret = bondp_post_send_wr_and_store(bdp_jfs, cur, bad_wr);
             if (ret != URMA_SUCCESS) {
+                PERF_PROFILING_END(BOND_JFS_POST_SEND);
                 return ret;
             }
             cur = cur->next;
@@ -417,11 +418,11 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
         urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
         ret = copy_jfr_wr(vwr, pwr, prealloc_src_sge[index]);
         if (ret != 0) {
-            return URMA_FAIL;
+            return ret;
         }
         ret = convert_jfr_vwr_to_pwr(pwr, recv_idx);
         if (ret != 0) {
-            return URMA_FAIL;
+            return ret;
         }
         if (vwr->next != NULL) {
             pwr->next = &prealloc_wr_list[index + 1];
@@ -541,6 +542,7 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
         while (cur != NULL) {
             ret = bondp_post_recv_wr_and_store(bdp_jetty, cur, bad_wr);
             if (ret != URMA_SUCCESS) {
+                PERF_PROFILING_END(BOND_JETTY_POST_RECV);
                 return ret;
             }
             cur = cur->next;
@@ -571,6 +573,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
         while (cur != NULL) {
             ret = bondp_post_recv_wr_and_store(bdp_jfr, cur, bad_wr);
             if (ret != URMA_SUCCESS) {
+                PERF_PROFILING_END(BOND_POST_JFR_RECV);
                 return ret;
             }
             cur = cur->next;
