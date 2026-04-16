@@ -1007,7 +1007,9 @@ static void bondp_health_probe_sub(bondp_context_t *bdp_ctx, bondp_health_task_t
         return;
     }
 
+    sub->probe_pending = true;
     if (bondp_send_health_probe(bdp_ctx, task->bdp_tjetty, task->bondp_jetty, sub, task->vjetty_id) != URMA_SUCCESS) {
+        sub->probe_pending = false;
         if (atomic_load(&sub->link_ok)) {
             URMA_LOG_WARN("Health probe send failed, lidx:%d tidx:%d\n", sub->local_idx, sub->target_idx);
         }
@@ -1015,7 +1017,6 @@ static void bondp_health_probe_sub(bondp_context_t *bdp_ctx, bondp_health_task_t
         task->bondp_jetty->valid[sub->local_idx] = false;
         return;
     }
-    sub->probe_pending = true;
 }
 
 static void bondp_health_do_check(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
