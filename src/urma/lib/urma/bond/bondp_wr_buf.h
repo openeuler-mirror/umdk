@@ -84,12 +84,16 @@ void wr_buf_uninit(wr_buf_t *buf);
 
 static inline jfs_wr_entry_t *jfs_wr_buf_get(wr_buf_t *buf, uint64_t wr_id)
 {
-    return (jfs_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
+    jfs_wr_entry_t *wr_entry;
+    wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
+    return wr_entry->wr_id == wr_id ? wr_entry : NULL;
 }
 
 static inline jfr_wr_entry_t *jfr_wr_buf_get(wr_buf_t *buf, uint64_t wr_id)
 {
-    return (jfr_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
+    jfr_wr_entry_t *wr_entry;
+    wr_entry = (jfr_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
+    return wr_entry->wr_id == wr_id ? wr_entry : NULL;
 }
 
 jfs_wr_entry_t *jfs_wr_buf_alloc(wr_buf_t *buf);

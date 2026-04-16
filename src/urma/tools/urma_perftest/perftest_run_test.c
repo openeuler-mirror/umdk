@@ -88,6 +88,56 @@ void catch_alarm(int sig)
     }
 }
 
+static uint32_t get_rqe_prefill_multiple_simplex(urma_context_t *urma_ctx, urma_jfr_t *jfr)
+{
+    /* The bonding device needs to issue RQE for active port multiples */
+    if (strncmp(urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
+        bondp_query_port_in_t in_arg = {
+            .jfr = jfr,
+        };
+        bondp_query_port_out_t out_arg = {0};
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)&in_arg,
+            .len = sizeof(in_arg),
+            .opcode = BONDP_USER_CTL_QUERY_PORT,
+        };
+        urma_user_ctl_out_t out = {
+            .addr = (uint64_t)&out_arg,
+            .len = sizeof(out_arg),
+        };
+        if (urma_user_ctl(urma_ctx, &in, &out) != URMA_SUCCESS) {
+            return 0;
+        }
+        return out_arg.active_count;
+    }
+    return 1;
+}
+
+static uint32_t get_rqe_prefill_multiple_duplex(urma_context_t *urma_ctx, urma_jetty_t *jetty)
+{
+    /* The bonding device needs to issue RQE for active port multiples */
+    if (strncmp(urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
+        bondp_query_port_in_t in_arg = {
+            .jetty = jetty,
+        };
+        bondp_query_port_out_t out_arg = {0};
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)&in_arg,
+            .len = sizeof(in_arg),
+            .opcode = BONDP_USER_CTL_QUERY_PORT,
+        };
+        urma_user_ctl_out_t out = {
+            .addr = (uint64_t)&out_arg,
+            .len = sizeof(out_arg),
+        };
+        if (urma_user_ctl(urma_ctx, &in, &out) != URMA_SUCCESS) {
+            return 0;
+        }
+        return out_arg.active_count;
+    }
+    return 1;
+}
+
 static int wait_jfc_event(urma_jfce_t *jfce, int timeout)
 {
     urma_jfc_t *jfc;
@@ -367,11 +417,17 @@ static void *run_send_lat_simplex(void *arg)
 
     bool is_server = cfg->comm.server_ip == NULL;
 
+    uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(ctx->urma_ctx, ctx->jfr[id]);
+    if (rqe_multiple == 0) {
+        printf("Failed query port for bonding device\n");
+        return NULL;
+    }
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
      */
-    if (send_lat_post_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list)) != 0) {
+    if (send_lat_post_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list * rqe_multiple)) != 0) {
         goto free_cr;
     }
     if (sync_time(cfg->comm.sock_fd[id], "send_lat_post_recv") != 0) {
@@ -1088,6 +1144,18 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
+    uint32_t rqe_multiple;
+    if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
+        rqe_multiple = get_rqe_prefill_multiple_simplex(ctx->urma_ctx, ctx->jfr[0]);
+    } else {
+        rqe_multiple = get_rqe_prefill_multiple_duplex(ctx->urma_ctx, ctx->jetty[0]);
+    }
+    if (rqe_multiple == 0) {
+        printf("Failed query port for bonding device\n");
+        return -1;
+    }
+    size_per_jetty *= rqe_multiple;
+
     if (alloc_jfr_ctx_buffer(ctx, cfg) != 0) {
         (void)fprintf(stderr, "Failed to calloc jfr ctx buffer.\n");
         return -1;
@@ -1446,27 +1514,10 @@ static void *run_send_lat_duplex(void *arg)
 
     bool is_server = cfg->comm.server_ip == NULL;
 
-    /* The bonding device needs to issue RQE for active port multiples */
-    uint32_t rqe_multiple = 1;
-    if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
-        bondp_query_port_in_t in_arg = {
-            .jetty = ctx->jetty[id],
-        };
-        bondp_query_port_out_t out_arg = {0};
-        urma_user_ctl_in_t in = {
-            .addr = (uint64_t)&in_arg,
-            .len = sizeof(in_arg),
-            .opcode = BONDP_USER_CTL_QUERY_PORT,
-        };
-        urma_user_ctl_out_t out = {
-            .addr = (uint64_t)&out_arg,
-            .len = sizeof(out_arg),
-        };
-        if (urma_user_ctl(ctx->urma_ctx, &in, &out) != URMA_SUCCESS) {
-            printf("Failed query port for bonding device\n");
-            return NULL;
-        }
-        rqe_multiple = out_arg.active_count;
+    uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(ctx->urma_ctx, ctx->jetty[id]);
+    if (rqe_multiple == 0) {
+        printf("Failed query port for bonding device\n");
+        return NULL;
     }
 
     /*
