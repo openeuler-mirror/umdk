@@ -271,10 +271,18 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
         goto DELETE_PJFC;
     }
 
-    if (wr_buf_init(&bdp_jfc->wr_buf, cfg->depth) != 0) {
-        URMA_LOG_ERR("Failed to init jfc wr buf, dev_name: %s, eid_idx: %u.\n",
-                     ctx->dev->name, ctx->eid_index);
-        goto DELETE_PJFC;
+    if (bdp_ctx->bonding_mode != BONDP_BONDING_MODE_STANDALONE) {
+        uint32_t wr_buf_multiple = 1;
+        if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
+            wr_buf_multiple = IODIE_NUM;
+        } else if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
+            wr_buf_multiple = PORT_NUM * 2;
+        }
+        if (wr_buf_init(&bdp_jfc->wr_buf, cfg->depth * wr_buf_multiple) != 0) {
+            URMA_LOG_ERR("Failed to init jfc wr buf, dev_name: %s, eid_idx: %u.\n",
+                        ctx->dev->name, ctx->eid_index);
+            goto DELETE_VJFC;
+        }
     }
 
     if (cfg->jfce != NULL) {
@@ -284,6 +292,8 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 
     return &bdp_jfc->v_jfc;
 
+DELETE_VJFC:
+    bondp_delete_vjfc(bdp_jfc);
 DELETE_PJFC:
     bondp_delete_pjfc(bdp_jfc);
     free(bdp_jfc);
