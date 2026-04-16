@@ -398,11 +398,11 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
     return ret;
 }
 
-urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,   //
-                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,     //
-                        uint64_t dst, uint64_t src, uint32_t len,                     //
-                        urma_jfs_wr_flag_t flag, uint64_t user_ctx,                   //
-                        uint32_t src_chip_id, uint32_t dst_chip_id)
+urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,         //
+                                  urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg, //
+                                  uint64_t dst, uint64_t src, uint32_t len,                 //
+                                  urma_jfs_wr_flag_t flag, uint64_t user_ctx,               //
+                                  uint32_t src_chip_id, uint32_t dst_chip_id)
 {
     /* check parameter */
     if (jfs == NULL || jfs->urma_ctx == NULL || jfs->jfs_cfg.jfc == NULL) {
@@ -728,20 +728,26 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, bond
     return CONVERT_SKIP;
 }
 
-static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_t *cr)
+static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
     const uint64_t wr_id = cr->user_ctx;
     jfs_wr_entry_t *wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
     if (wr_entry == NULL) {
-        // wr_entry could not be NULL
-        return CONVERT_FAIL;
+        /*
+         * For backup path retransmission: the CR for the retransmitted WR may complete
+         * before the error-reporting CR from the original path, causing premature WR
+         * entry release and NULL retrieval. The current fix is to skip these CRs,
+         * but this is risky because subsequent WRs may reuse the same memory,
+         * resulting in WR/CR mismatch.
+         */
+        return CONVERT_SKIP;
     }
 
     bondp_comp_t *bdp_comp = wr_entry->bdp_comp;
     uint32_t send_idx = wr_entry->send_idx;
     uint32_t target_idx = wr_entry->target_idx;
 
-    if (bdp_comp->valid[send_idx] == false) {
+    if (bdp_comp->valid[idx] == false || idx != send_idx) {
         return CONVERT_SKIP;
     }
 
@@ -765,6 +771,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
                     resend_wr_entry->target_idx != target_idx) {
                     continue;
                 }
+                bdp_comp->sqe_cnt[send_idx] -= 1;
                 if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
                     URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
                 }
@@ -774,8 +781,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
             bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
 
             bool is_primary_failover = (bdp_comp->active_count > 0 &&
-                send_idx == (uint32_t)bdp_comp->active_indices[0] &&
-                new_send_idx != (int)bdp_comp->active_indices[0]);
+                                        send_idx == (uint32_t)bdp_comp->active_indices[0] &&
+                                        new_send_idx != (int)bdp_comp->active_indices[0]);
             if (is_primary_failover) {
                 bondp_health_event_info_t event_info = {
                     .local_idx = -1,
@@ -791,6 +798,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
         }
         return CONVERT_SKIP;
     }
+
+    bdp_comp->sqe_cnt[send_idx] -= 1;
 
     uint32_t msn = 0;
     convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
@@ -899,7 +908,7 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bon
     } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_jfc, cr);
     } else {
-        return handle_send_cr_with_store(bdp_jfc, cr);
+        return handle_send_cr_with_store(bdp_jfc, idx, cr);
     }
 }
 
