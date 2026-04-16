@@ -1424,8 +1424,8 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
 
     memset(bdp_tjetty->valid, 0, sizeof(bdp_tjetty->valid));
 
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             if (!bdp_tjetty->p_tjetty[i][j]) {
                 continue;
             }
@@ -1441,8 +1441,8 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
 static int remove_remote_jetty_id_info(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
 {
     int ret = 0;
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             urma_target_jetty_t *p_tjetty = bdp_tjetty->p_tjetty[i][j];
             if (p_tjetty == NULL) {
                 continue;
@@ -1729,8 +1729,8 @@ static int bondp_unimport_pjfr(bondp_target_jetty_t *bdp_tjetty)
 {
     int ret = URMA_SUCCESS;
 
-    for (int i = 0; i < bdp_tjetty->local_dev_num; ++i) {
-        for (int j = 0; j < bdp_tjetty->target_dev_num; ++j) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             if (!bdp_tjetty->p_tjetty[i][j]) {
                 continue;
             }
