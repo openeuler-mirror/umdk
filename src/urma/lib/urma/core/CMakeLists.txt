@@ -10,7 +10,7 @@ add_library(urma SHARED
 add_library(urma_static STATIC
     ${URMA_DIR_SRCS}
 )
-set(PROJECT_VERSION "0.0.2")
+set(PROJECT_VERSION "0.0.3")
 set(PROJECT_VERSION_MAJOR "0")
 
 set_target_properties(urma
