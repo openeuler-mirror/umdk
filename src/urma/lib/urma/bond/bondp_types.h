@@ -143,23 +143,7 @@ typedef struct bondp_device {
  */
 typedef struct bondp_context {
     urma_context_t v_ctx;
-    union {
-        urma_device_t *p_devs[URMA_UBAGG_DEV_MAX_NUM];
-        struct {
-            urma_device_t *primary_devs[PRIMARY_EID_NUM];
-            urma_device_t *port_devs[PORT_EID_MAX_NUM];
-        };
-    };
-    union {
-        struct {
-            urma_context_t *p_ctxs[URMA_UBAGG_DEV_MAX_NUM]; /* every unit is symmetrical. */
-        };
-        /* The following struct is valid only when the node is in matrix server */
-        struct {
-            urma_context_t *primary_ctxs[PRIMARY_EID_NUM];
-            urma_context_t *port_ctxs[PORT_EID_MAX_NUM]; /* primary[0]->port[0:9], primary[1]->port[9:18] */
-        };
-    };
+    urma_context_t *p_ctxs[URMA_UBAGG_DEV_MAX_NUM]; /* every unit is symmetrical. */
     /* This variable represents the maximum number of times all available devices need to be traversed. */
     /* In general mode, dev_num is the same as the number of non-empty devices in the first few positions. */
     /* In matrix server mode, dev_num is always PRIMARY_EID_NUM + PROT_EID_MAX_NUM, */
@@ -167,13 +151,10 @@ typedef struct bondp_context {
     int dev_num;
     bondp_bonding_mode_t bonding_mode;
     bondp_bonding_level_t bonding_level;
-    topo_map_t *topo_map;               /* Only valid when the node is in matrix server */
-    bondp_hash_table_t tjetty_id_table; /* match target jetty's pjetty_id to vjetty_id */
+    topo_map_t *topo_map;
     /* Record the mapping from the locally created jetty's pjetty.jetty_id.id to the vjetty.jetty_id.id, */
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
-    /* The mapping of pjetty_ids to vjetty_ids of all remote jettys that have been obtained. */
-    bondp_hash_table_t remote_p2v_jetty_id_table;
     int real_async_fd; /* vcontex async_fd */
     bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;

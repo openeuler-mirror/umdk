@@ -58,58 +58,6 @@ int bdp_p_vjetty_id_table_del_without_lock(bondp_hash_table_t *tbl, urma_jetty_i
 struct bondp_comp *bdp_p_vjetty_id_table_lookup_comp_without_lock(bondp_hash_table_t *tbl, urma_jetty_id_t pjetty_id,
                                                                   bdp_p_vjetty_type_t type);
 
-typedef enum bdp_remote_p_to_v_jetty_id_type {
-    REMOTE_JETTY,
-    REMOTE_JFR
-} bdp_r_p2v_jetty_id_type_t;
-/**
- * Used to record all the mapping relationships from the remote pjetty_id to vjetty_id obtained by this end.
- */
-typedef struct bdp_remote_p_to_v_jetty_id_key {
-    urma_jetty_id_t rpjetty_id;
-    bdp_r_p2v_jetty_id_type_t type;
-} bdp_r_p2v_jetty_id_key_t;
-
-typedef struct bdp_remote_p_to_v_jetty_id {
-    hmap_node_t hmap_node;
-    bdp_r_p2v_jetty_id_key_t key;
-    urma_jetty_id_t rvjetty_id;
-    /* Since the same rjetty might be imported multiple times,
-       it is possible for an entry to be created and deleted multiple times.
-       Therefore, we need to manage the reference count each node.
-    */
-    /* This implementation will cause us to cache repeated mapping of vjetty_id->pjetty_id for
-       each bondp_target_jetty_t additionally zin the aforementioned scenario.
-       This may lead to an increase in memory consumption.
-        A better approach is to cache the mapping between remote Jetty's vjetty and pjetty in a specific hash map.
-    */
-    uint32_t ref_cnt;
-} bdp_r_p2v_jetty_id_t;
-
-int bdp_r_p2v_jetty_id_table_create(bondp_hash_table_t *tbl, uint32_t size);
-
-int bdp_r_p2v_jetty_id_table_destroy(bondp_hash_table_t *tbl);
-/**
- * Try to add a mapping of rpjetty_id to rvjetty_id
- * Add the reference count of the hash map node if it already exists.
- * Add write lock of the hash table before calling this function.
- * @return: Return 0 for success, other for error.
- */
-int bdp_r_p2v_jetty_id_table_add_without_lock(bondp_hash_table_t *tbl, urma_jetty_id_t *rpjetty_id,
-    bdp_r_p2v_jetty_id_type_t type, urma_jetty_id_t *rvjetty_id);
-/**
- * Try to delete a mapping of rpjetty_id to rvjetty_id
- * If the reference count has not yet been decremented to zero, decrement the reference count by 1;
- * otherwise, delete the table entry.
- * Add write lock of the hash table before calling this function.
- * @return: Return 0 for success, other for error.
- */
-int bdp_r_p2v_jetty_id_table_del_without_lock(bondp_hash_table_t *tbl,
-    urma_jetty_id_t *rpjetty_id, bdp_r_p2v_jetty_id_type_t type);
-
-int bdp_r_p2v_jetty_id_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *rpjetty_id,
-    bdp_r_p2v_jetty_id_type_t type, urma_jetty_id_t *rvjetty_id);
-
 typedef struct bondp_v2p_token_id_key {
     uint32_t v_token_id;
     urma_eid_t v_remote_eid;
