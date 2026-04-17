@@ -38,7 +38,7 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
 
 void wr_buf_uninit(wr_buf_t *buf)
 {
-    if (buf == NULL) {
+    if (buf == NULL || buf->entries == NULL) {
         return;
     }
 
