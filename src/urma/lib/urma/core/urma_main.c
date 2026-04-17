@@ -234,7 +234,7 @@ urma_status_t urma_init(urma_init_attr_t *conf)
     urma_driver_t *driver, *next;
     UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
         if (driver->ops->init == NULL || driver->ops->init(conf) != URMA_SUCCESS) {
-            URMA_LOG_WARN("Provider init failed %s", driver->ops->name);
+            URMA_LOG_WARN("Provider init failed %s\n", driver->ops->name);
             ub_list_remove(&driver->node);
             free(driver);
         }
@@ -364,7 +364,7 @@ urma_eid_info_t *urma_get_eid_list(urma_device_t *dev, uint32_t *cnt)
 
     uint32_t max_eid_cnt = dev->sysfs_dev->dev_attr.dev_cap.max_eid_cnt;
     if (max_eid_cnt == 0) {
-        URMA_LOG_ERR("max eid cnt %u is err", max_eid_cnt);
+        URMA_LOG_ERR("max eid cnt %u is err\n", max_eid_cnt);
         errno = EINVAL;
         return NULL;
     }

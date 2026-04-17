@@ -46,7 +46,7 @@ ssize_t urma_read_sysfs_file(const char *dir, const char *file, char *buf, size_
     char *file_path;
 
     if (snprintf(path, URMA_MAX_SYSFS_PATH, "%s/%s", dir, file) < 0) {
-        URMA_LOG_ERR("snprintf failed");
+        URMA_LOG_ERR("snprintf failed\n");
         return -1;
     }
     file_path = realpath(path, NULL);
@@ -102,7 +102,7 @@ static uint32_t read_eid_list_sysyf(urma_sysfs_dev_t *sysfs_dev, char *subpath, 
             continue;
         }
         if (urma_read_sysfs_file(sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME) <= 0) {
-            URMA_LOG_ERR("Failed to read sysfs file");
+            URMA_LOG_ERR("Failed to read sysfs file\n");
             continue;
         }
         if (urma_str_to_eid(tmp_value, &eid) != 0 || !urma_eid_is_valid(&eid)) {
@@ -124,7 +124,7 @@ static int read_eid_sysfs_with_index(urma_sysfs_dev_t *sysfs_dev, char *pattern,
         return -1;
     }
     if (urma_read_sysfs_file(sysfs_dev->sysfs_path, tmp_eid, tmp_value, URMA_MAX_NAME) <= 0) {
-        URMA_LOG_ERR("Failed to read sysfs file");
+        URMA_LOG_ERR("Failed to read sysfs file\n");
         return -1;
     }
     if (urma_str_to_eid(tmp_value, eid) != 0 || !urma_eid_is_valid(eid)) {
@@ -365,10 +365,10 @@ void urma_discover_sysfs_path(void)
     ret = stat(URMA_CLASS_PATH_OBSOLETED, &stat_buf);
     if (ret == 0) {
         (void)strncpy(g_urma_class_path, URMA_CLASS_PATH_OBSOLETED, URMA_MAX_SYSFS_PATH - 1);
-        URMA_LOG_WARN("urma sysfs path is obseleted");
+        URMA_LOG_WARN("urma sysfs path is obseleted\n");
         return;
     }
-    URMA_LOG_WARN("urma sysfs path is not found");
+    URMA_LOG_WARN("urma sysfs path is not found\n");
     return;
 }
 
@@ -452,7 +452,7 @@ static urma_device_t *urma_alloc_device(urma_sysfs_dev_t *sysfs_dev)
     dev->sysfs_dev = sysfs_dev;
     (void)memcpy(dev->name, sysfs_dev->dev_name, URMA_MAX_NAME);
     if (snprintf(dev->path, URMA_MAX_PATH, "%s/%s", URMA_DEV_PATH, sysfs_dev->dev_name) <= 0) {
-        URMA_LOG_ERR("snprintf failed");
+        URMA_LOG_ERR("snprintf failed\n");
         goto FAIL_OUT;
     }
     sysfs_dev->urma_device = dev;

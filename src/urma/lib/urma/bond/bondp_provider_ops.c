@@ -436,7 +436,7 @@ static int bondp_delete_pctx(bondp_context_t *bond_ctx)
         if (bond_ctx->p_ctxs[i] != NULL) {
             sub_ret = urma_delete_context(bond_ctx->p_ctxs[i]);
             if (sub_ret != 0) {
-                URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d", i, sub_ret);
+                URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d\n", i, sub_ret);
                 ret = URMA_FAIL;
             }
             bond_ctx->p_ctxs[i] = NULL;
@@ -448,13 +448,13 @@ static int bondp_delete_pctx(bondp_context_t *bond_ctx)
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd)
 {
     if (!g_bondp_global_ctx) {
-        URMA_LOG_ERR("Uninitialized variables");
+        URMA_LOG_ERR("Uninitialized variables\n");
         return NULL;
     }
 
     bondp_context_t *bond_ctx = bondp_create_ctx();
     if (bond_ctx == NULL) {
-        URMA_LOG_ERR("Failed to create ctx");
+        URMA_LOG_ERR("Failed to create ctx\n");
         return NULL;
     }
 
@@ -536,7 +536,7 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     }
     bondp_restore_async_fd(bond_ctx);
     if (urma_cmd_delete_context(&bond_ctx->v_ctx)) {
-        URMA_LOG_ERR("Failed to urma_cmd_delete_context");
+        URMA_LOG_ERR("Failed to urma_cmd_delete_context\n");
         ret = URMA_FAIL;
     }
     bondp_uninit_v_ctx(bond_ctx);
