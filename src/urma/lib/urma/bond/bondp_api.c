@@ -280,7 +280,7 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
         }
         if (wr_buf_init(&bdp_jfc->wr_buf, cfg->depth * wr_buf_multiple) != 0) {
             URMA_LOG_ERR("Failed to init jfc wr buf, dev_name: %s, eid_idx: %u.\n",
-                        ctx->dev->name, ctx->eid_index);
+                         ctx->dev->name, ctx->eid_index);
             goto DELETE_VJFC;
         }
     }
@@ -1634,7 +1634,7 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
         uint32_t target_idx = bdp_tjetty->active_indices[n];
 
         urma_jetty_t *pjetty = bdp_jetty->p_jetty[local_idx];
-        urma_target_jetty_t *ptjetty = bdp_tjetty->p_tjetty[target_idx][target_idx];
+        urma_target_jetty_t *ptjetty = bdp_tjetty->p_tjetty[local_idx][target_idx];
 
         if (urma_bind_jetty(pjetty, ptjetty) != 0) {
             goto UNBIND;
