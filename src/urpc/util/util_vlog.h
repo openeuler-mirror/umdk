@@ -21,7 +21,7 @@ extern "C" {
 #define UTIL_VLOG_SIZE              (1024)
 #define UTIL_VLOG_NAME_STR_LEN      (64)
 #define UTIL_VLOG_PRINT_PERIOD_MS   (1000)
-#define UTIL_VLOG_PRINT_TIMES       (10)
+#define UTIL_VLOG_PRINT_TIMES       (5)
 
 typedef enum util_vlog_level {
     UTIL_VLOG_LEVEL_EMERG = 0,
