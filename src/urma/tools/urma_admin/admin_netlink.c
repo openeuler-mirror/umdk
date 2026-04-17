@@ -26,6 +26,39 @@
 
 static struct nl_sock *sock = NULL;
 static int genl_id = 0;
+static int init_sock_and_genl_id(void);
+
+static int admin_nl_recv_msg_inner(int (*cb)(struct nl_msg *msg, void *arg), void *arg, int silent_errno)
+{
+    int ret;
+
+    ret = init_sock_and_genl_id();
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, cb, arg);
+    if (ret < 0) {
+        printf("Failed to set netlink callback, ret:%d\n", ret);
+        return ret;
+    }
+
+    ret = nl_recvmsgs_default(sock);
+    if (ret < 0) {
+        if (!(silent_errno != 0 && ret == silent_errno)) {
+            printf("Failed to recv netlink msg, ret:%d\n", ret);
+        }
+        return ret;
+    }
+
+    ret = nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, NULL, arg);
+    if (ret < 0) {
+        printf("Failed to reset netlink callback, ret:%d\n", ret);
+        return ret;
+    }
+
+    return 0;
+}
 
 static int init_sock_and_genl_id(void)
 {
@@ -82,32 +115,7 @@ int admin_nl_send_msg(struct nl_msg *msg)
 
 int admin_nl_recv_msg(int (*cb)(struct nl_msg *msg, void *arg), void *arg)
 {
-    int ret;
-
-    ret = init_sock_and_genl_id();
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, cb, arg);
-    if (ret < 0) {
-        printf("Failed to set netlink callback, ret:%d\n", ret);
-        return ret;
-    }
-
-    ret = nl_recvmsgs_default(sock);
-    if (ret < 0) {
-        printf("Failed to recv netlink msg, ret:%d\n", ret);
-        return ret;
-    }
-
-    ret = nl_socket_modify_cb(sock, NL_CB_MSG_IN, NL_CB_CUSTOM, NULL, arg);
-    if (ret < 0) {
-        printf("Failed to reset netlink callback, ret:%d\n", ret);
-        return ret;
-    }
-
-    return 0;
+    return admin_nl_recv_msg_inner(cb, arg, 0);
 }
 
 int admin_nl_send_recv_msg(struct nl_msg *msg, int (*cb)(struct nl_msg *msg, void *arg), void *arg)
@@ -129,12 +137,30 @@ int admin_nl_send_recv_msg(struct nl_msg *msg, int (*cb)(struct nl_msg *msg, voi
 
 static int nl_default_cb(struct nl_msg *msg, void *arg)
 {
+    (void)msg;
+    (void)arg;
     return NL_OK;
 }
 
 int admin_nl_send_recv_msg_default(struct nl_msg *msg)
 {
     return admin_nl_send_recv_msg(msg, nl_default_cb, NULL);
+}
+
+int admin_nl_send_recv_msg_default_silent_errno(struct nl_msg *msg, int silent_errno)
+{
+    int ret;
+
+    ret = admin_nl_send_msg(msg);
+    if (ret != 0) {
+        return ret;
+    }
+    return admin_nl_recv_msg_inner(nl_default_cb, NULL, silent_errno);
+}
+
+int admin_nl_send_recv_msg_default_silent_notfound(struct nl_msg *msg)
+{
+    return admin_nl_send_recv_msg_default_silent_errno(msg, -NLE_OBJ_NOTFOUND);
 }
 
 struct nl_msg *admin_nl_alloc_msg(uint8_t cmd, int flags)

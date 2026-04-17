@@ -10,6 +10,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <netlink/errno.h>
 #include <stdio.h>
 
 #include "ub_list.h"
@@ -1233,9 +1234,10 @@ int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
         return -ENOMEM;
     }
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-    ret = admin_nl_send_recv_msg_default(msg);
-
-    memcpy(out, &arg->out.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
+    ret = admin_nl_send_recv_msg_default_silent_errno(msg, -NLE_OBJ_NOTFOUND);
+    if (ret == 0) {
+        memcpy(out, &arg->out.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
+    }
     admin_nl_free_msg(msg);
     free(arg);
     return ret;
