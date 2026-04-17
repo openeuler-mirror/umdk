@@ -242,6 +242,8 @@ typedef struct bondp_comp {
 
 typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
+    urma_token_t import_token_value;
+    bool import_token_valid;
     urma_target_jetty_t *p_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;

@@ -191,6 +191,31 @@ static int bondp_get_target_idx_by_local_idx(const bondp_health_task_t *task, in
     return -1;
 }
 
+static int bondp_select_backup_local_idx(const bondp_health_task_t *task, int *backup_local_idx)
+{
+    if (task == NULL || backup_local_idx == NULL || task->bondp_jetty == NULL) {
+        return -1;
+    }
+
+    const bondp_comp_t *bdp_jetty = task->bondp_jetty;
+    for (uint32_t i = 0; i < bdp_jetty->active_count; ++i) {
+        int local_idx = (int)bdp_jetty->active_indices[i];
+        if (local_idx < 0 || local_idx >= URMA_UBAGG_DEV_MAX_NUM || local_idx == task->primary_local_idx) {
+            continue;
+        }
+        if (bdp_jetty->p_jetty[local_idx] == NULL) {
+            continue;
+        }
+        int target_idx = -1;
+        if (bondp_get_target_idx_by_local_idx(task, local_idx, &target_idx) != 0) {
+            continue;
+        }
+        *backup_local_idx = local_idx;
+        return 0;
+    }
+    return -1;
+}
+
 static bool bondp_health_task_comp_f(hmap_node_t *node, void *key)
 {
     bondp_health_task_t *task = CONTAINER_OF_FIELD(node, bondp_health_task_t, hmap_node);
@@ -223,24 +248,6 @@ static bondp_health_task_t *bondp_find_health_task_by_tjetty_nolock(
         }
     }
     return NULL;
-}
-
-static bondp_health_task_t *bondp_find_health_task_by_comp_nolock(
-    bondp_heath_check_ctx_t *health, bondp_comp_t *bdp_jetty)
-{
-    if (bdp_jetty == NULL) {
-        return NULL;
-    }
-
-    uint32_t vjetty_id = bdp_jetty->v_jetty.jetty_id.id;
-    uint32_t hash = bondp_health_task_hash(vjetty_id);
-    hmap_node_t *node = bondp_hash_table_lookup_without_lock(&health->task_table, &vjetty_id, hash);
-    if (node == NULL) {
-        return NULL;
-    }
-
-    bondp_health_task_t *task = CONTAINER_OF_FIELD(node, bondp_health_task_t, hmap_node);
-    return (task->bondp_jetty == bdp_jetty) ? task : NULL;
 }
 
 static int bondp_register_health_ctx_global(bondp_context_t *bond_ctx)
@@ -765,104 +772,6 @@ static int bondp_update_pjetty_id_mapping(
     return 0;
 }
 
-typedef struct bondp_recv_wr_snapshot {
-    urma_jfr_wr_t wr;
-    uint64_t user_ctx;
-} bondp_recv_wr_snapshot_t;
-
-static void bondp_free_recv_wr_snapshot(bondp_recv_wr_snapshot_t *snapshots, uint32_t count)
-{
-    if (snapshots == NULL) {
-        return;
-    }
-    for (uint32_t i = 0; i < count; ++i) {
-        free_jfr_wr(&snapshots[i].wr);
-    }
-    free(snapshots);
-}
-
-static int bondp_snapshot_recv_wr_for_local_idx(
-    bondp_comp_t *bdp_jetty, int local_idx, bondp_recv_wr_snapshot_t **snapshots, uint32_t *snapshot_cnt)
-{
-    *snapshots = NULL;
-    *snapshot_cnt = 0;
-    if (bdp_jetty->recv_jfc == NULL) {
-        return 0;
-    }
-
-    wr_buf_t *wr_buf = &bdp_jetty->recv_jfc->wr_buf;
-    if (wr_buf->entries == NULL || wr_buf->max_wr_num == 0) {
-        return 0;
-    }
-
-    bondp_recv_wr_snapshot_t *buf = calloc(wr_buf->max_wr_num, sizeof(*buf));
-    if (buf == NULL) {
-        return -1;
-    }
-
-    uint32_t cnt = 0;
-    jfr_wr_entry_t *entry = NULL;
-    JFR_WR_BUF_FOREACH(wr_buf, idx, entry) {
-        if (entry->wr_id == 0 || entry->recv_idx != (uint32_t)local_idx) {
-            continue;
-        }
-
-        if (copy_jfr_wr(&entry->wr, &buf[cnt].wr, NULL) != 0) {
-            bondp_free_recv_wr_snapshot(buf, cnt);
-            return -1;
-        }
-        buf[cnt].user_ctx = entry->user_ctx;
-        cnt++;
-    }
-
-    *snapshots = buf;
-    *snapshot_cnt = cnt;
-    return 0;
-}
-
-static int bondp_restore_recv_wr_for_local_idx(
-    bondp_comp_t *bdp_jetty, urma_jetty_t *new_jetty, int local_idx,
-    const bondp_recv_wr_snapshot_t *snapshots, uint32_t snapshot_cnt)
-{
-    if (snapshot_cnt == 0 || snapshots == NULL || bdp_jetty->recv_jfc == NULL) {
-        return 0;
-    }
-
-    int fail_cnt = 0;
-    wr_buf_t *wr_buf = &bdp_jetty->recv_jfc->wr_buf;
-    for (uint32_t i = 0; i < snapshot_cnt; ++i) {
-        jfr_wr_entry_t *entry = jfr_wr_buf_alloc(wr_buf);
-        if (entry == NULL) {
-            URMA_LOG_ERR("Failed to alloc recv wr entry while restoring primary idx:%d\n", local_idx);
-            fail_cnt++;
-            continue;
-        }
-
-        entry->user_ctx = snapshots[i].user_ctx;
-        entry->bdp_comp = bdp_jetty;
-        entry->recv_idx = (uint32_t)local_idx;
-        if (copy_jfr_wr(&snapshots[i].wr, &entry->wr, NULL) != 0) {
-            jfr_wr_buf_release(entry);
-            URMA_LOG_ERR("Failed to copy recv wr while restoring primary idx:%d\n", local_idx);
-            fail_cnt++;
-            continue;
-        }
-
-        entry->wr.user_ctx = entry->wr_id;
-        urma_jfr_wr_t *bad_wr = NULL;
-        urma_status_t ret = urma_post_jetty_recv_wr(new_jetty, &entry->wr, &bad_wr);
-        if (ret != URMA_SUCCESS) {
-            URMA_LOG_ERR("Failed to repost recv wr after primary rebuild, idx:%d ret:%d\n", local_idx, ret);
-            free_jfr_wr(&entry->wr);
-            jfr_wr_buf_release(entry);
-            fail_cnt++;
-            continue;
-        }
-        bdp_jetty->rqe_cnt[local_idx] += 1;
-    }
-    return (fail_cnt == 0) ? 0 : -1;
-}
-
 static void bondp_drain_primary_jetty_wr(urma_jetty_t *old_jetty, int local_idx)
 {
     urma_cr_t cr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
@@ -889,13 +798,13 @@ static int bondp_rebuild_primary_pjetty(bondp_health_task_t *task)
     if (local_idx < 0 || local_idx >= URMA_UBAGG_DEV_MAX_NUM || bdp_jetty->p_jetty[local_idx] == NULL) {
         return -1;
     }
-
-    bondp_recv_wr_snapshot_t *recv_wr_snapshots = NULL;
-    uint32_t recv_wr_snapshot_cnt = 0;
-    if (bondp_snapshot_recv_wr_for_local_idx(
-        bdp_jetty, local_idx, &recv_wr_snapshots, &recv_wr_snapshot_cnt) != 0) {
-        URMA_LOG_ERR("Failed to snapshot recv wr before rebuilding primary idx:%d\n", local_idx);
-        return -1;
+    int target_idx = -1;
+    bondp_health_sub_task_t *primary_sub_task = NULL;
+    if (bondp_get_target_idx_by_local_idx(task, local_idx, &target_idx) == 0 &&
+        target_idx >= 0 && target_idx < URMA_UBAGG_DEV_MAX_NUM) {
+        primary_sub_task = &task->sub_tasks[local_idx][target_idx];
+        primary_sub_task->valid = false;
+        primary_sub_task->probe_pending = false;
     }
 
     urma_jetty_t *old_jetty = bdp_jetty->p_jetty[local_idx];
@@ -917,33 +826,28 @@ static int bondp_rebuild_primary_pjetty(bondp_health_task_t *task)
     urma_jetty_id_t old_id = old_jetty->jetty_id;
     if (urma_delete_jetty(old_jetty) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete primary pjetty at idx:%d\n", local_idx);
-        bondp_free_recv_wr_snapshot(recv_wr_snapshots, recv_wr_snapshot_cnt);
         return -1;
     }
 
     urma_jetty_t *new_jetty = urma_create_jetty(bdp_ctx->p_ctxs[local_idx], &p_cfg);
     if (new_jetty == NULL) {
         URMA_LOG_ERR("Failed to recreate primary pjetty at idx:%d\n", local_idx);
-        bondp_free_recv_wr_snapshot(recv_wr_snapshots, recv_wr_snapshot_cnt);
         return -1;
     }
+    /* Recreated primary pjetty should not keep stale peer binding. */
+    new_jetty->remote_jetty = NULL;
     new_jetty->jetty_cfg.user_ctx = (uint64_t)bdp_jetty;
     bdp_jetty->p_jetty[local_idx] = new_jetty;
     bdp_jetty->valid[local_idx] = false;
 
     if (bondp_update_pjetty_id_mapping(bdp_ctx, old_id, new_jetty->jetty_id, bdp_jetty) != 0) {
-        bondp_free_recv_wr_snapshot(recv_wr_snapshots, recv_wr_snapshot_cnt);
         return -1;
     }
 
-    if (bondp_restore_recv_wr_for_local_idx(
-        bdp_jetty, new_jetty, local_idx, recv_wr_snapshots, recv_wr_snapshot_cnt) != 0) {
-        URMA_LOG_ERR("Failed to restore recv wr after rebuilding primary idx:%d\n", local_idx);
-        bondp_free_recv_wr_snapshot(recv_wr_snapshots, recv_wr_snapshot_cnt);
-        return -1;
+    if (primary_sub_task != NULL) {
+        primary_sub_task->valid = true;
+        primary_sub_task->probe_pending = false;
     }
-
-    bondp_free_recv_wr_snapshot(recv_wr_snapshots, recv_wr_snapshot_cnt);
     URMA_LOG_INFO("Primary pjetty rebuilt, idx:%d old:" URMA_JETTY_ID_FMT " new:" URMA_JETTY_ID_FMT "\n",
         local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
     return 0;
@@ -992,6 +896,8 @@ static int bondp_send_fallback_ctrl_msg(
         .next = NULL,
     };
     mark_jfs_wr_ctrl(&wr);
+    URMA_LOG_INFO("Fallback WRITE_IMM send, lidx:%d tidx:%d type:%u seq:%u payload:%u notify_data:0x%lx\n",
+        local_idx, target_idx, ctrl_type, req_seq, (uint32_t)payload, wr.rw.notify_data);
 
     urma_jfs_wr_t *bad_wr = NULL;
     urma_status_t ret = urma_post_jetty_send_wr(jetty, &wr, &bad_wr);
@@ -1035,7 +941,8 @@ static int bondp_relink_primary_import(bondp_health_task_t *task)
     }
     task->bdp_tjetty->p_tjetty[local_idx][target_idx] = NULL;
 
-    urma_target_jetty_t *new_tjetty = urma_import_jetty(bdp_ctx->p_ctxs[local_idx], &rjetty, NULL);
+    urma_token_t *import_token = task->bdp_tjetty->import_token_valid ? &task->bdp_tjetty->import_token_value : NULL;
+    urma_target_jetty_t *new_tjetty = urma_import_jetty(bdp_ctx->p_ctxs[local_idx], &rjetty, import_token);
     if (new_tjetty == NULL) {
         URMA_LOG_ERR("Failed to import recreated primary ptjetty, local_idx:%d target_idx:%d pjetty_id:%u\n",
             local_idx, target_idx, rjetty.jetty_id.id);
@@ -1046,55 +953,99 @@ static int bondp_relink_primary_import(bondp_health_task_t *task)
     return 0;
 }
 
-static void bondp_process_fallback_task(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
+static void bondp_fallback_reset_for_new_round(bondp_health_task_t *task)
+{
+    task->fallback_task.pending = true;
+    task->fallback_task.local_rebuilt = false;
+    task->fallback_task.req_sent = false;
+    task->fallback_task.resp_received = false;
+    task->fallback_task.relink_done = false;
+    task->fallback_task.req_seq++;
+    task->fallback_task.remote_primary_pjetty_id = BONDP_FALLBACK_PRIMARY_INVALID_ID;
+}
+
+static uint64_t bondp_fallback_build_req_payload(const bondp_health_task_t *task)
+{
+    int primary_local_idx = task->primary_local_idx;
+    if (primary_local_idx < 0 || primary_local_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return BONDP_FALLBACK_PRIMARY_INVALID_ID;
+    }
+    urma_jetty_t *primary_pjetty = task->bondp_jetty->p_jetty[primary_local_idx];
+    if (primary_pjetty == NULL || primary_pjetty->remote_jetty == NULL) {
+        return BONDP_FALLBACK_PRIMARY_INVALID_ID;
+    }
+    return (uint64_t)primary_pjetty->remote_jetty->id.id;
+}
+
+static int bondp_send_fallback_req(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
+{
+    int active_local_idx = task->active_local_idx;
+    int active_target_idx = -1;
+    if (bondp_get_target_idx_by_local_idx(task, active_local_idx, &active_target_idx) != 0) {
+        return -1;
+    }
+    uint64_t req_payload = bondp_fallback_build_req_payload(task);
+    if (bondp_send_fallback_ctrl_msg(bdp_ctx, task, active_local_idx, active_target_idx,
+        BONDP_FALLBACK_CTRL_REQ, task->fallback_task.req_seq, req_payload) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static bool bondp_process_fallback_task(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
 {
     bondp_fallback_task_t *fallback = &task->fallback_task;
     if (!fallback->pending) {
-        return;
+        return false;
     }
 
     if (!fallback->local_rebuilt) {
         if (bondp_rebuild_primary_pjetty(task) != 0) {
-            return;
+            return false;
         }
         fallback->local_rebuilt = true;
     }
 
-    if (!fallback->req_sent) {
-        int active_local_idx = task->active_local_idx;
-        int active_target_idx = -1;
-        if (bondp_get_target_idx_by_local_idx(task, active_local_idx, &active_target_idx) != 0) {
-            return;
-        }
-        uint64_t req_payload = BONDP_FALLBACK_PRIMARY_INVALID_ID;
-        int primary_local_idx = task->primary_local_idx;
-        int primary_target_idx = (int)fallback->primary_target_idx;
-        if (primary_local_idx >= 0 && primary_local_idx < URMA_UBAGG_DEV_MAX_NUM &&
-            primary_target_idx >= 0 && primary_target_idx < URMA_UBAGG_DEV_MAX_NUM) {
-            urma_target_jetty_t *primary_tjetty = task->bdp_tjetty->p_tjetty[primary_local_idx][primary_target_idx];
-            if (primary_tjetty != NULL) {
-                req_payload = (uint64_t)primary_tjetty->id.id;
-            }
-        }
-        if (bondp_send_fallback_ctrl_msg(bdp_ctx, task, active_local_idx, active_target_idx,
-            BONDP_FALLBACK_CTRL_REQ, fallback->req_seq, req_payload) == 0) {
-            fallback->req_sent = true;
-        }
-        return;
+    if (!fallback->req_sent && bondp_send_fallback_req(bdp_ctx, task) == 0) {
+        fallback->req_sent = true;
+        return false;
     }
 
     if (!fallback->resp_received || fallback->relink_done ||
         fallback->remote_primary_pjetty_id == BONDP_FALLBACK_PRIMARY_INVALID_ID) {
-        return;
+        return false;
     }
 
     if (bondp_relink_primary_import(task) == 0) {
         fallback->relink_done = true;
         fallback->pending = false;
+        fallback->local_rebuilt = false;
+        fallback->req_sent = false;
+        fallback->resp_received = false;
+        fallback->remote_primary_pjetty_id = BONDP_FALLBACK_PRIMARY_INVALID_ID;
+        for (uint32_t n = 0; n < task->bdp_tjetty->active_count; ++n) {
+            uint32_t local_idx = task->bdp_tjetty->local_active_indices[n];
+            uint32_t target_idx = task->bdp_tjetty->active_indices[n];
+            if (local_idx >= URMA_UBAGG_DEV_MAX_NUM || target_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+                continue;
+            }
+            if (task->bondp_jetty->p_jetty[local_idx] == NULL ||
+                task->bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL ||
+                task->bdp_tjetty->p_check_tseg[local_idx][target_idx] == NULL) {
+                continue;
+            }
+            bondp_health_sub_task_t *sub = &task->sub_tasks[local_idx][target_idx];
+            sub->local_idx = (int)local_idx;
+            sub->target_idx = (int)target_idx;
+            sub->valid = true;
+            sub->probe_pending = false;
+        }
         task->next_probe_ts_us = bondp_get_monotonic_us();
-        URMA_LOG_INFO("Fallback relink prepared, waiting health probe to validate primary idx:%d\n",
+        URMA_LOG_INFO("Fallback relink finished, health subtasks resumed, waiting health probe to validate primary idx:%d\n",
             task->primary_local_idx);
+        return true;
     }
+    return false;
 }
 
 static void bondp_health_task_check_mode(bondp_health_task_t *task,
@@ -1225,6 +1176,25 @@ static void *bondp_health_check_thread(void *arg)
     return NULL;
 }
 
+static bondp_health_task_t *bondp_find_health_task_by_cr_local_id_nolock(
+    bondp_heath_check_ctx_t *health, uint32_t cr_local_id, int *parsed_local_idx)
+{
+    bondp_health_task_t *task = NULL;
+    HMAP_FOR_EACH(task, hmap_node, &health->task_table.hmap) {
+        for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+            urma_jetty_t *pjetty = task->bondp_jetty->p_jetty[i];
+            if (pjetty == NULL) {
+                continue;
+            }
+            if (pjetty->jetty_id.id == cr_local_id) {
+                *parsed_local_idx = i;
+                return task;
+            }
+        }
+    }
+    return NULL;
+}
+
 int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty, bondp_comp_t *cfg_jetty)
 {
     if (!bondp_health_check_enabled() || cfg_jetty == NULL) {
@@ -1333,6 +1303,16 @@ void bondp_health_update_active_idx(bondp_context_t *bdp_ctx, bondp_target_jetty
         }
         int old = task->active_local_idx;
         task->active_local_idx = new_active_idx;
+        if (new_active_idx == task->primary_local_idx) {
+            task->fallback_task.relink_done = false;
+            task->fallback_task.pending = false;
+            task->fallback_task.local_rebuilt = false;
+            task->fallback_task.req_sent = false;
+            task->fallback_task.resp_received = false;
+            task->fallback_task.remote_primary_pjetty_id = BONDP_FALLBACK_PRIMARY_INVALID_ID;
+            URMA_LOG_INFO("Primary active link resumed, re-enable next fallback round, tjetty:%u primary_idx:%d\n",
+                bdp_tjetty->v_tjetty.id.id, task->primary_local_idx);
+        }
         URMA_LOG_INFO("Health active link updated, tjetty:%u old_idx:%d new_idx:%d\n",
             bdp_tjetty->v_tjetty.id.id, old, new_active_idx);
         break;
@@ -1351,29 +1331,25 @@ void bondp_health_kick_fallback_task(bondp_context_t *bdp_ctx, bondp_target_jett
     bondp_health_task_t *task = bondp_find_health_task_by_tjetty_nolock(health, bdp_tjetty);
     if (task != NULL && task->active_local_idx >= 0 &&
         task->active_local_idx != task->primary_local_idx &&
-        !task->fallback_task.pending) {
+        !task->fallback_task.pending &&
+        !task->fallback_task.relink_done) {
         task->mode = HEALTH_MODE_PRIMARY_CHECK;
         task->backoff_cnt = 0;
-        task->fallback_task.pending = true;
-        task->fallback_task.local_rebuilt = false;
-        task->fallback_task.req_sent = false;
-        task->fallback_task.resp_received = false;
-        task->fallback_task.relink_done = false;
-        task->fallback_task.req_seq++;
-        task->fallback_task.remote_primary_pjetty_id = BONDP_FALLBACK_PRIMARY_INVALID_ID;
+        bondp_fallback_reset_for_new_round(task);
         int primary_target_idx = -1;
         if (bondp_get_target_idx_by_local_idx(task, task->primary_local_idx, &primary_target_idx) == 0) {
             task->fallback_task.primary_target_idx = (uint32_t)primary_target_idx;
         }
         URMA_LOG_INFO("Fallback task armed by kick, active_idx:%d primary_idx:%d seq:%u\n",
             task->active_local_idx, task->primary_local_idx, task->fallback_task.req_seq);
-        bondp_process_fallback_task(bdp_ctx, task);
+        (void)bondp_process_fallback_task(bdp_ctx, task);
     }
     pthread_rwlock_unlock(&health->task_table.lock);
 }
 
 bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_cr_t *cr)
 {
+    (void)local_idx;
     if (!bondp_health_check_enabled() || !is_recv_cr(cr) || cr->opcode != URMA_CR_OPC_WRITE_WITH_IMM) {
         return false;
     }
@@ -1385,21 +1361,11 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
         return false;
     }
 
-    urma_jetty_id_t pjetty_id = {
-        .eid = bdp_ctx->p_ctxs[local_idx]->eid,
-        .id = cr->local_id,
-    };
-    pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
-    bondp_comp_t *bdp_jetty = bdp_p_vjetty_id_table_lookup_comp_without_lock(
-        &bdp_ctx->p_vjetty_id_table, pjetty_id, JETTY);
-    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    if (bdp_jetty == NULL) {
-        return false;
-    }
-
     bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
     pthread_rwlock_wrlock(&health->task_table.lock);
-    bondp_health_task_t *task = bondp_find_health_task_by_comp_nolock(health, bdp_jetty);
+    int req_recv_local_idx = -1;
+    bondp_health_task_t *task = bondp_find_health_task_by_cr_local_id_nolock(
+        health, cr->local_id, &req_recv_local_idx);
     if (task == NULL) {
         pthread_rwlock_unlock(&health->task_table.lock);
         return false;
@@ -1416,22 +1382,44 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
         }
         bool need_rebuild = (local_primary_id == BONDP_FALLBACK_PRIMARY_INVALID_ID ||
             req_expected_primary_id != local_primary_id);
-        if (need_rebuild && !task->fallback_task.local_rebuilt && bondp_rebuild_primary_pjetty(task) == 0) {
+        if (need_rebuild && !task->fallback_task.local_rebuilt && !task->fallback_task.relink_done) {
+            if (bondp_rebuild_primary_pjetty(task) != 0) {
+                URMA_LOG_WARN("Fallback REQ rebuild failed, skip RESP for this round, seq:%u\n", req_seq);
+                pthread_rwlock_unlock(&health->task_table.lock);
+                return true;
+            }
             task->fallback_task.local_rebuilt = true;
+            if (task->active_local_idx == task->primary_local_idx) {
+                int backup_local_idx = -1;
+                if (bondp_select_backup_local_idx(task, &backup_local_idx) == 0) {
+                    task->active_local_idx = backup_local_idx;
+                    URMA_LOG_INFO("Fallback REQ rebuild primary active link, switch active idx to backup, old:%d new:%d\n",
+                        task->primary_local_idx, backup_local_idx);
+                } else {
+                    URMA_LOG_WARN("Fallback REQ rebuilt primary active link, but no backup route available, keep active idx:%d\n",
+                        task->active_local_idx);
+                }
+            }
             local_primary_jetty = task->bondp_jetty->p_jetty[task->primary_local_idx];
             local_primary_id = (local_primary_jetty == NULL) ?
                 BONDP_FALLBACK_PRIMARY_INVALID_ID : local_primary_jetty->jetty_id.id;
         } else if (!need_rebuild) {
             URMA_LOG_INFO("Fallback REQ matched local primary pjetty id:%u, skip rebuild\n", local_primary_id);
         }
-        int resp_local_idx = task->active_local_idx;
+
+        /* Process local fallback stage before replying to peer request. */
+        (void)bondp_process_fallback_task(bdp_ctx, task);
+
+        int resp_local_idx = req_recv_local_idx;
         int resp_target_idx = -1;
         uint64_t payload = (uint64_t)local_primary_id;
         if (bondp_get_target_idx_by_local_idx(task, resp_local_idx, &resp_target_idx) == 0) {
             (void)bondp_send_fallback_ctrl_msg(bdp_ctx, task, resp_local_idx, resp_target_idx,
                 BONDP_FALLBACK_CTRL_RESP, req_seq, payload);
+        } else {
+            URMA_LOG_WARN("Fallback RESP route not found for req link lidx:%d seq:%u\n",
+                resp_local_idx, req_seq);
         }
-        bondp_process_fallback_task(bdp_ctx, task);
         pthread_rwlock_unlock(&health->task_table.lock);
         return true;
     }
@@ -1441,7 +1429,12 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
         task->fallback_task.resp_received = true;
         task->fallback_task.remote_primary_pjetty_id = (health_buf == NULL) ?
             BONDP_FALLBACK_PRIMARY_INVALID_ID : (uint32_t)health_buf[0];
-        bondp_process_fallback_task(bdp_ctx, task);
+        URMA_LOG_INFO("Fallback RESP accepted, seq:%u remote_primary_id:%u\n",
+            req_seq, task->fallback_task.remote_primary_pjetty_id);
+        (void)bondp_process_fallback_task(bdp_ctx, task);
+    } else {
+        URMA_LOG_WARN("Fallback RESP dropped due to seq mismatch, recv_seq:%u expect_seq:%u\n",
+            req_seq, task->fallback_task.req_seq);
     }
     pthread_rwlock_unlock(&health->task_table.lock);
     return true;
@@ -1531,6 +1524,20 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
             bool ok = (cr->status == URMA_CR_SUCCESS);
             atomic_store(&sub->link_ok, ok);
             task->bondp_jetty->valid[sub->local_idx] = ok;
+            if (ok && local_idx == task->primary_local_idx && task->active_local_idx != task->primary_local_idx) {
+                bondp_health_event_info_t active_info = {
+                    .local_idx = -1,
+                    .target_idx = -1,
+                    .user_ctx = 0,
+                    .cr_status = 0,
+                    .new_active_idx = task->primary_local_idx,
+                    .bdp_jetty = NULL,
+                    .bdp_tjetty = task->bdp_tjetty,
+                };
+                bondp_notify_health_event(bdp_ctx, BONDP_HEALTH_EVENT_ACTIVE_IDX_UPDATE, &active_info);
+                URMA_LOG_INFO("Primary health probe success, switch active idx back to primary, tjetty_id:%u old_active:%d new_active:%d\n",
+                    task->bdp_tjetty->v_tjetty.id.id, task->active_local_idx, task->primary_local_idx);
+            }
             if (old_ok != ok) {
                 URMA_LOG_WARN("Health link state changed, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, old_ok, ok, cr->status);
