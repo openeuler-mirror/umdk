@@ -12,13 +12,11 @@
 #define URMA_PERF_H
 
 #include <stdint.h>
-#include <stdbool.h>
-#include <threads.h>
-#include <time.h>
+#include "urma_opcode.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define URMA_PERF_BUCKET_MAX_NUM        (32u)
+#define URMA_PERF_THREAD_MAX_NUM        (64u)
+#define URMA_PERF_MAX_THRESH_NS         (1000000u)
 
 typedef enum urma_perf_type {
     UB_JETTY_POST_SEND,
@@ -39,6 +37,11 @@ typedef enum urma_perf_type {
     URMA_PERF_RECORD_TYPE_MAX,
 } urma_perf_record_type_t;
 
+typedef struct urma_perf_attr {
+    uint32_t thresh_num;
+    uint64_t thresh_array[URMA_PERF_BUCKET_MAX_NUM];
+} urma_perf_attr_t;
+
 typedef struct urma_perf_stats {
     uint64_t retry_count;
     struct {
@@ -53,49 +56,6 @@ typedef struct urma_perf_stats {
     } type_record[URMA_PERF_RECORD_TYPE_MAX];
 } urma_perf_stats_t;
 
-typedef struct {
-    int64_t lowest_trackable_value;
-    int64_t highest_trackable_value;
-    int32_t significant_figures;
-    int32_t unit_magnitude;
-    int32_t sub_bucket_magnitude;
-    int32_t sub_bucket_half_count;
-    int32_t sub_bucket_mask;
-    int32_t sub_bucket_count;
-    int32_t bucket_count;
-    int64_t total_count;
-    int64_t min_value;
-    int64_t max_value;
-    int64_t *counts;
-} hdr_histogram_data;
-
-typedef struct {
-    hdr_histogram_data* histograms[URMA_PERF_RECORD_TYPE_MAX];
-    urma_perf_stats_t stats;
-    int32_t is_running;
-} urma_perf_context;
-
-extern thread_local urma_perf_context* g_perf_ctx;
-
-#define PERF_PROFILING_START(type) \
-    struct timespec __perf_start_##type; \
-    do { \
-        if (g_perf_ctx != NULL && g_perf_ctx->is_running == 1) { \
-            clock_gettime(CLOCK_MONOTONIC, &__perf_start_##type); \
-        } \
-    } while (0)
-
-#define PERF_PROFILING_END(type) \
-    do { \
-        if (g_perf_ctx != NULL && g_perf_ctx->is_running == 1) { \
-            struct timespec _perf_end; \
-            clock_gettime(CLOCK_MONOTONIC, &_perf_end); \
-            uint64_t _perf_elapsed_ns = (_perf_end.tv_sec - __perf_start_##type.tv_sec) * 1000000000UL + \
-                (_perf_end.tv_nsec - __perf_start_##type.tv_nsec); \
-            urma_step_perf(type, _perf_elapsed_ns); \
-        } \
-    } while (0)
-
 /**
  * Start performance monitoring for urma devices.
  * Return: 0 on success, other value on error
@@ -108,7 +68,16 @@ urma_status_t urma_start_perf(void);
  */
 urma_status_t urma_stop_perf(void);
 
-void urma_step_perf(urma_perf_record_type_t type, uint64_t latency);
+/**
+ * Configure performance monitoring attributes.
+ * @param[in] perf_attr: Pointer to performance attributes structure;
+ * Return: 0 on success, other value on error
+ * 
+ * Constraints:
+ * - This function can only be called after urma_start_perf()
+ * - The param perf_attr->thresh_array must use nanosecond granularity
+ */
+urma_status_t urma_config_perf_attr(urma_perf_attr_t *perf_attr);
 
 /**
  * Get performance statistics information.
@@ -117,9 +86,5 @@ void urma_step_perf(urma_perf_record_type_t type, uint64_t latency);
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif
