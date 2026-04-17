@@ -45,7 +45,7 @@ static const char *log_level_str[] = {
 
 static void print_log(int level, char *message)
 {
-    printf("%s|%s\n", log_level_str[level], message);
+    printf("%s|%s", log_level_str[level], message);
 }
 
 static int check_share_jfr(perftest_config_t *cfg, urma_device_t *urma_dev)
