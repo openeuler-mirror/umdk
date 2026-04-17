@@ -18,9 +18,9 @@
 #include "urma_log.h"
 #include "urma_provider.h"
 
+#include "bondp_connection.h"
 #include "bondp_context_table.h"
 #include "bondp_hash_table.h"
-#include "bondp_jetty_ctx.h"
 #include "bondp_provider_ops.h"
 #include "bondp_segment.h"
 #include "bondp_types.h"
@@ -39,6 +39,28 @@ typedef struct bondp_create_vjetty_udata {
     bool is_health_check_enable;
     urma_bond_seg_info_out_t health_check_seg;
 } bondp_create_vjetty_udata_t;
+
+static int bondp_init_connection_table(bondp_comp_t *bdp_comp)
+{
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_comp->members[i] == NULL) {
+            bdp_comp->pjettys_error_done[i] = PJETTY_SUSPEND_DONE | PJETTY_FLUSH_ERROR_DONE;
+        }
+    }
+
+    if (bdp_v_conn_table_create(&bdp_comp->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
+        return -1;
+    }
+    return 0;
+}
+
+static void bondp_uninit_connection_table(bondp_comp_t *bdp_comp)
+{
+    if (bdp_comp == NULL) {
+        return;
+    }
+    bondp_hash_table_destroy(&bdp_comp->v_conn_table);
+}
 
 typedef bondp_create_vjetty_udata_t bondp_create_vjfr_udata_t;
 
@@ -618,7 +640,7 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
         goto DELETE_VJFS;
     }
 
-    if (init_bjetty_ctx(ctx, bdp_jfs, &bdp_jfs->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
+    if (bondp_init_connection_table(bdp_jfs) != 0) {
         URMA_LOG_ERR("Failed to create jfs datapath ctx");
         goto DEL_P_VJFS_ID;
     }
@@ -646,8 +668,8 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jfs->jfs_cfg.jfc, bondp_jfc_t, v_jfc);
     bondp_context_t *bdp_ctx = bdp_jfs->bondp_ctx;
     /*
-    ! This locking mechanism is implemented to prevent other threads from accessing bjetty_ctx through this table.
-    ! Currently, the only way to access bjetty_ctx in a multi-threaded senario is through this table.
+    ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
+    ! Currently, the only multi-threaded access path to this bondp_comp is through this table.
     ! Therefore, by locking it, we can avoid the scenario where the reference count is incremented again after
     ! the check use_cnt > 0 but before the lock is acquired.
      */
@@ -666,7 +688,7 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
 
-    uninit_bjetty_ctx(&bdp_jfs->bjetty_ctx);
+    bondp_uninit_connection_table(bdp_jfs);
 
     if (bondp_delete_vjfs(bdp_jfs) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjfs\n");
@@ -860,7 +882,7 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
         goto DELETE_VJFR;
     }
 
-    if (init_bjetty_ctx(ctx, bdp_jfr, &bdp_jfr->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
+    if (bondp_init_connection_table(bdp_jfr) != 0) {
         URMA_LOG_ERR("Failed to create jfr datapath ctx");
         goto DEL_P_VJFR_ID;
     }
@@ -888,8 +910,8 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jfr->jfr_cfg.jfc, bondp_jfc_t, v_jfc);
     bondp_context_t *bdp_ctx = bdp_jfr->bondp_ctx;
     /*
-    ! This locking mechanism is implemented to prevent other threads from accessing bjetty_ctx through this table.
-    ! Currently, the only way to access bjetty_ctx in a multi-threaded senario is through this table.
+    ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
+    ! Currently, the only multi-threaded access path to this bondp_comp is through this table.
     ! Therefore, by locking it, we can avoid the scenario where the reference count is incremented again after
     ! the check use_cnt > 0 but before the lock is acquired.
     */
@@ -907,7 +929,7 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    uninit_bjetty_ctx(&bdp_jfr->bjetty_ctx);
+    bondp_uninit_connection_table(bdp_jfr);
 
     if (bondp_delete_vjfr(bdp_jfr) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete_vjfr\n");
@@ -1199,7 +1221,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto DELETE_VJETTY;
     }
 
-    if (init_bjetty_ctx(ctx, bdp_jetty, &bdp_jetty->bjetty_ctx, URMA_UBAGG_WR_BUF_SIZE) != 0) {
+    if (bondp_init_connection_table(bdp_jetty) != 0) {
         URMA_LOG_ERR("Failed to create jetty ctx");
         goto DEL_P_VJETTY_ID;
     }
@@ -1239,8 +1261,8 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
         bdp_jfc = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfc, bondp_jfc_t, v_jfc);
     }
     /*
-    ! This locking mechanism is implemented to prevent other threads from accessing bjetty_ctx through this table.
-    ! Currently, the only way to access bjetty_ctx in a multi-threaded senario is through this table.
+    ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
+    ! Currently, the only multi-threaded access path to this bondp_comp is through this table.
     ! Therefore, by locking it, we can avoid the scenario where the reference count is incremented again after
     ! the check use_cnt > 0 but before the lock is acquired.
     */
@@ -1259,7 +1281,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
-    uninit_bjetty_ctx(&bdp_jetty->bjetty_ctx);
+    bondp_uninit_connection_table(bdp_jetty);
     if (bondp_delete_vjetty(bdp_jetty) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjetty\n");
         ret = URMA_FAIL;
