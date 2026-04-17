@@ -8,9 +8,10 @@
 #include "gtest/gtest.h"
 
 #include "umq_api.h"
-#include "urma_api.h"
-#include "umq_ub_private.h"
 #include "umq_qbuf_pool.h"
+#include "umq_ub_flow_control.h"
+#include "umq_ub_private.h"
+#include "urma_api.h"
 #include "util_id_generator.h"
 
 #define TEST_DEV_NUM 1
@@ -40,8 +41,9 @@ class UmqUBTest : public ::testing::Test {
         static uint32_t eid_num = 1;
         static urma_context_t urma_ctx = {0};
         urma_ctx.dev = &dev;
-        static urma_device_attr_t dev_attr = {0};
         static urma_target_seg_t tseg;
+        static urma_device_attr_t dev_attr = {0};
+        dev_attr.dev_cap.priority_info[0].tp_type.bs.rtp = 1;
         dev_attr.dev_cap.max_jetty = 65536;
         dev_attr.dev_cap.max_msg_size = 65536;
         dev_attr.dev_cap.max_jfc_depth = 8192;
@@ -84,6 +86,7 @@ class UmqUBTest : public ::testing::Test {
         MOCKER(urma_import_seg).stubs().will(returnValue(&tseg));
         MOCKER(urma_bind_jetty).stubs().will(returnValue(URMA_SUCCESS));
         MOCKER(urma_post_jetty_recv_wr).stubs().will(returnValue(URMA_SUCCESS));
+        MOCKER(urma_user_ctl).stubs().will(returnValue(URMA_SUCCESS));
     }
 
     // TearDown 在每一个 TEST_F 测试完成后执行一次
@@ -130,14 +133,14 @@ TEST_F(UmqUBTest, test_ub_control_plane_success)
     cfg.trans_info[0].dev_info.dev.eid_idx = 0;
     umq_create_option_t option = {
         .trans_mode = cfg.trans_info[0].trans_mode,
-        .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
-            UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_UMQ_CTX,
+        .create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE |
+                       UMQ_CREATE_FLAG_RX_DEPTH | UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE |\
+                       UMQ_CREATE_FLAG_UMQ_CTX,
         .rx_buf_size = EXAMPLE_BUFFER_SIZE,
         .tx_buf_size = EXAMPLE_BUFFER_SIZE,
         .rx_depth = EXAMPLE_DEPTH,
         .tx_depth = EXAMPLE_DEPTH,
-        .mode = (umq_queue_mode_t)1
-    };
+        .mode = (umq_queue_mode_t)1};
 
     ret = umq_init(&cfg);
     ASSERT_EQ(ret, 0);
@@ -150,6 +153,7 @@ TEST_F(UmqUBTest, test_ub_control_plane_success)
     ASSERT_NE(umqh, 0);
     bind_info_size = umq_bind_info_get(umqh, local_bind_info, bind_info_size);
 
+    option.create_flag &= ~UMQ_CREATE_FLAG_MAIN_UMQ;
     option.create_flag |= UMQ_CREATE_FLAG_SHARE_RQ;
     option.create_flag |= UMQ_CREATE_FLAG_SUB_UMQ;
     option.share_rq_umqh = umqh;
@@ -160,6 +164,7 @@ TEST_F(UmqUBTest, test_ub_control_plane_success)
     ASSERT_NE(umqh1, 0);
 
     MOCKER(umq_ub_post_rx_inner_impl).stubs().will(returnValue(0));
+    MOCKER(umq_ub_shared_credit_req_send).stubs().will(returnValue(0));
     ret = umq_bind(umqh1, local_bind_info, bind_info_size);
     ASSERT_EQ(ret, 0);
 
@@ -215,3 +220,77 @@ TEST_F(UmqUBTest, test_ub_init_failure)
     ASSERT_NE(ret, 0);
 }
 
+TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
+{
+    ub_queue_t queue;
+    memset(&queue, 0, sizeof(queue));
+    umq_ub_bind_info_t info;
+    memset(&info, 0, sizeof(info));
+    umq_ub_bind_version_info_t version;
+    memset(&version, 0, sizeof(version));
+    umq_ub_bind_dev_info_t dev;
+    memset(&dev, 0, sizeof(dev));
+    umq_ub_bind_queue_info_t queue_info;
+    memset(&queue_info, 0, sizeof(queue_info));
+    queue_info.tp_mode = URMA_TM_RM;
+    umq_ub_bind_fc_info_t fc_info;
+    memset(&fc_info, 0, sizeof(fc_info));
+    umq_ub_ctx_t dev_ctx;
+    memset(&dev_ctx, 0, sizeof(dev_ctx));
+    queue.dev_ctx = &dev_ctx;
+    urma_jetty_t jetty;
+    memset(&jetty, 0, sizeof(jetty));
+    queue.jetty[0] = &jetty;
+
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    info.version_info = &version;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    info.dev_info = &dev;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    queue.flow_control.enabled = true;
+    info.queue_info = &queue_info;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    info.fc_info = &fc_info;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    dev.umq_trans_mode = UMQ_TRANS_MODE_IPC;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    dev.umq_trans_mode = UMQ_TRANS_MODE_UB;
+
+    queue.state = QUEUE_STATE_ERR;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    queue.state = QUEUE_STATE_READY;
+
+    dev_ctx.trans_info.trans_mode = UMQ_TRANS_MODE_IPC;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    dev_ctx.trans_info.trans_mode = UMQ_TRANS_MODE_UB;
+
+    queue.tp_mode = URMA_TM_UM;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    queue.tp_mode = URMA_TM_RM;
+
+    queue.tp_type = URMA_UTP;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    queue.tp_type = URMA_RTP;
+
+    info.dev_info->feature = UMQ_FEATURE_ENABLE_TOKEN_POLICY;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    info.dev_info->feature = 0;
+
+    info.dev_info->buf_pool_mode = UMQ_BUF_COMBINE;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    info.dev_info->buf_pool_mode = UMQ_BUF_SPLIT;
+
+    info.queue_info->is_binded = true;
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+    info.queue_info->is_binded = false;
+
+    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
+
+    queue.jetty[0]->jetty_id.id++;
+    ASSERT_EQ(umq_ub_bind_info_check(&queue, &info), 0);
+}

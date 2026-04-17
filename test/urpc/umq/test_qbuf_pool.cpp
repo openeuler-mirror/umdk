@@ -148,6 +148,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_zero)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_SPLIT, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -182,6 +183,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_with_data)
     cfg.data_size = blk_size;
     cfg.headroom_size = 64;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_SPLIT, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -217,6 +219,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_return_to_global)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_SPLIT, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -253,6 +256,7 @@ TEST_F(QbufPoolTest, test_qbuf_alloc_zero_in_combine)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_COMBINE, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -275,6 +279,7 @@ TEST_F(QbufPoolTest, test_qbuf_data_to_head_out_of_range)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_COMBINE, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
