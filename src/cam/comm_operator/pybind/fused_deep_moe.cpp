@@ -65,11 +65,9 @@ TensorVector FusedDeepMoeImplNpu(
     auto opts = expertIds.options().dtype(at::kLong);
     at::Tensor expertTokenNums = at::empty({localExpertNum}, opts);
     
-    // 必须要求对齐fused_deep_moe.cpp 先input 跟着 attr， 然后output
     const std::string groupEpStr(groupEp.data(), groupEp.size());
     const char* groupEpPtr = groupEpStr.c_str();
 
-    // 必须要求对齐fused_deep_moe.cpp 先input 跟着 attr, 然后output
     EXEC_NPU_CMD(aclnnFusedDeepMoe,
         // input
         x, expertIds, gmm1Weight, gmm1WeightScale, gmm2Weight, gmm2WeightScale, \
@@ -86,7 +84,7 @@ TensorVector FusedDeepMoeImplNpu(
 
 TensorVector FusedDeepMoeBackwardImplNpu(const at::Tensor &self)
 {
-    at::Tensor result = at::Tensor(self); // 创建输出内存
+    at::Tensor result = at::Tensor(self);
     return {result, result};
 }
 
@@ -158,7 +156,6 @@ TensorVector FusedDeepMoeImpl(
         groupEp, epRankSize, epRankId, moeExpertNum, quantMode, globalBs);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
 class FusedDeepMoe : public torch::autograd::Function<FusedDeepMoe> {
 public:
     static TensorVector forward(AutogradContext *ctx, \
@@ -257,7 +254,6 @@ TORCH_LIBRARY_IMPL(umdk_cam_op_lib, AutogradPrivateUse1, m)
     m.impl("fused_deep_moe", &FusedDeepMoeImplAutograd);
 }
 
-// 为Meta设备注册前反向实现
 TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m)
 {
     m.impl("fused_deep_moe", &FusedDeepMoeImplMeta);

@@ -1113,11 +1113,11 @@ public:
             return;
         }
         AscendC::SetDeqScale(static_cast<half>(1.0));
-        AscendC::GlobalTensor<XType> srcXGMTensor; // token输入
+        AscendC::GlobalTensor<XType> srcXGMTensor;
         srcXGMTensor.SetGlobalBuffer((__gm__ XType*)gmX);
-        AscendC::GlobalTensor<int8_t> dstXInt8GMTensor; // token输出
+        AscendC::GlobalTensor<int8_t> dstXInt8GMTensor;
         dstXInt8GMTensor.SetGlobalBuffer((__gm__ int8_t*)gmShareX1Token);
-        AscendC::GlobalTensor<float> dstXScaleGMTensor; // token scale输出
+        AscendC::GlobalTensor<float> dstXScaleGMTensor;
         dstXScaleGMTensor.SetGlobalBuffer((__gm__ float*)gmShareX1Scale);
         AscendC::GlobalTensor<float> shareSmoothScaleGMTensor;
         shareSmoothScaleGMTensor.SetGlobalBuffer((__gm__ float*)gmShareSmoothScales);
@@ -1142,9 +1142,9 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(EVENT_ID2);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(EVENT_ID2);
         }
-        // 输入输出开double buffer
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0); // MTE2等MTE3
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(1); // MTE2等MTE3
+        // double buffer
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(1);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(1);
         AscendC::DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
@@ -1166,12 +1166,12 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(eventId);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventId);
         }
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0); // MTE2等MTE3
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(1); // MTE2等MTE3
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(1);
         AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(0);
         AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(1);
 
-        // 量化完成，通过写GM告知C核
+        // Set GM to info AIC
         AscendC::PipeBarrier<PIPE_ALL>();
         AscendC::LocalTensor<int32_t> tmpLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
         subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
@@ -1183,7 +1183,7 @@ public:
             (__gm__ int32_t*)(statusDataSpaceGm + SHARE_QUANT_SOFT_SYNC_OFFSET));
         AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
         AscendC::SetAtomicAdd<int32_t>();
-        // 用原子加，写入vToCFlag
+        // Atomic add
         AscendC::DataCopy(shareQuantTokenStateTensor, tmpLocalTensor, INT32_COUNT_PER_BLOCK);
         AscendC::SetAtomicNone();
         AscendC::PipeBarrier<PIPE_ALL>();
@@ -1452,7 +1452,6 @@ public:
             AscendC::ListTensorDesc gmScaleListTensor;
             AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-                // 前面不需要等待，C核已经等待过了
                 uint32_t currentM = axisBS;
                 GemmCoord inGroupProblemShape{currentM, shareN, k};
                 LayoutPerTokenScale layoutPerTokenScale =
@@ -1481,7 +1480,7 @@ public:
                     auto gmBlockC = gmC[gmOffsetC];
                     auto layoutBlockC = layoutC.GetTileLayout(actualBlockShapeMNK.GetCoordMN());
                     CheckSyncFlag(statusDataSpaceGm + SOFT_SYNC_OFFSET,
-                        static_cast<uint8_t>(compCoreNum + compCoreIdx), target); // AIV等待的信号在24~28
+                        static_cast<uint8_t>(compCoreNum + compCoreIdx), target);
                     target += 1;
                     blockEpilogue(blockShapeMNK, blockCoordMNK, actualBlockShapeMNK, gmBlockC, layoutBlockC);
                     EncreaseSyncFlag(statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(compCoreIdx));
@@ -1562,7 +1561,6 @@ public:
                 startCoreIdx = (startCoreIdx + coreLoops) % aiCoreGroupNum;
             }
         }
-        // clean
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
@@ -1607,7 +1605,7 @@ public:
             recvCoreNum = aiCoreGroupNum;
         }
         if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-            // 接收核参与计算共享专家量化
+            // Recv cores quantize tokens for shared expert first
             isShareQuantCore = isRecvCore;
             shareQuantCoreNum = recvCoreNum;
             shareQuantCoreIdx = recvCoreIdx;
@@ -1698,7 +1696,6 @@ public:
     void UpdateAndCleanInfo(__gm__ ElementGroupList_ *ptrGroupList, GM_ADDR gmEpSendCount, GM_ADDR gmExpertTokenNums)
     {
         if (isCompCore) {
-            // 清理软同步残留信息，避免影响别处或者下次运行
             AscendC::GlobalTensor<int32_t> softSyncTensor;
             softSyncTensor.SetGlobalBuffer((__gm__ int32_t*)(statusDataSpaceGm + SOFT_SYNC_OFFSET));
             AscendC::LocalTensor<int32_t> tmpZeroLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(0);
@@ -1706,10 +1703,8 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
             if (AscendC::GetSubBlockIdx() == 0) {
-                // 前一半为V核写的Flag
                 AscendC::DataCopy(softSyncTensor[compCoreIdx * SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
                                                     tmpZeroLocalTensor, INT32_COUNT_PER_BLOCK);
-                // 后一半为C核写的Flag
                 AscendC::DataCopy(softSyncTensor[(compCoreIdx + compCoreNum)
                                 * SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)], tmpZeroLocalTensor, INT32_COUNT_PER_BLOCK);
             } else {

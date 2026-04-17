@@ -314,7 +314,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
 
     InitStatusTargetSum();
     if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum(); // AscendC::GetBlockIdx() / 2;
+        coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
     }
     SplitCoreCal();
 
@@ -667,7 +667,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindow
     uint32_t processLen = 0;
     uint32_t tokenOffset = 0;
     if (activeMaskBsCnt_ < aivNum_) {
-        uint32_t aivNumPerToken = aivNum_ / activeMaskBsCnt_;  // activeMaskBsCnt_ < aivNum_
+        uint32_t aivNumPerToken = aivNum_ / activeMaskBsCnt_;
         if (coreIdx_ >= (activeMaskBsCnt_ * aivNumPerToken)) {
             return;
         }

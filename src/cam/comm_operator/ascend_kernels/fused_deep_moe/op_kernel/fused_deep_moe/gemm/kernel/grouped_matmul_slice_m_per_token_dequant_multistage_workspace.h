@@ -539,7 +539,7 @@ private:
         void Call() const
         {
             constexpr uint32_t waitValue = g_coreType == AscendC::AIC ? 0 : 1;
-            // 查看flag，类似wait flag
+            // wait flag
             AscendC::PipeBarrier<PIPE_ALL>();
             AscendC::GlobalTensor<uint8_t> global;
             global.SetGlobalBuffer(ptr->syncGmAddr + stageId * GMM2::SOFT_SYNC_SPACE_SIZE * GMM2::CORE_NUM_PER_GROUP +
@@ -566,7 +566,7 @@ private:
         void Call2() const
         {
             constexpr uint32_t waitValue = g_coreType == AscendC::AIC ? 0 : 1;
-            // 查看flag，类似wait flag
+            // wait flag
             AscendC::PipeBarrier<PIPE_ALL>();
             AscendC::GlobalTensor<uint8_t> global;
             global.SetGlobalBuffer(ptr->syncGmAddr + stageId *  GMM2::SOFT_SYNC_SPACE_SIZE * GMM2::CORE_NUM_PER_GROUP);
