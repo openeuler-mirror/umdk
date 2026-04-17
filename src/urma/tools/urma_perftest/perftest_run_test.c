@@ -88,8 +88,11 @@ void catch_alarm(int sig)
     }
 }
 
-static uint32_t get_rqe_prefill_multiple_simplex(urma_context_t *urma_ctx, urma_jfr_t *jfr)
+static uint32_t get_rqe_prefill_multiple_simplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jfr_t *jfr)
 {
+    if (!cfg->enable_aggr_mode || cfg->aggr_mode == URMA_AGGR_MODE_STANDALONE) {
+        return 1;
+    }
     /* The bonding device needs to issue RQE for active port multiples */
     if (strncmp(urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
         bondp_query_port_in_t in_arg = {
@@ -113,8 +116,11 @@ static uint32_t get_rqe_prefill_multiple_simplex(urma_context_t *urma_ctx, urma_
     return 1;
 }
 
-static uint32_t get_rqe_prefill_multiple_duplex(urma_context_t *urma_ctx, urma_jetty_t *jetty)
+static uint32_t get_rqe_prefill_multiple_duplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jetty_t *jetty)
 {
+    if (!cfg->enable_aggr_mode || cfg->aggr_mode == URMA_AGGR_MODE_STANDALONE) {
+        return 1;
+    }
     /* The bonding device needs to issue RQE for active port multiples */
     if (strncmp(urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
         bondp_query_port_in_t in_arg = {
@@ -417,7 +423,7 @@ static void *run_send_lat_simplex(void *arg)
 
     bool is_server = cfg->comm.server_ip == NULL;
 
-    uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(ctx->urma_ctx, ctx->jfr[id]);
+    uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(cfg, ctx->urma_ctx, ctx->jfr[id]);
     if (rqe_multiple == 0) {
         printf("Failed query port for bonding device\n");
         return NULL;
@@ -1146,9 +1152,9 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
 
     uint32_t rqe_multiple;
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
-        rqe_multiple = get_rqe_prefill_multiple_simplex(ctx->urma_ctx, ctx->jfr[0]);
+        rqe_multiple = get_rqe_prefill_multiple_simplex(cfg, ctx->urma_ctx, ctx->jfr[0]);
     } else {
-        rqe_multiple = get_rqe_prefill_multiple_duplex(ctx->urma_ctx, ctx->jetty[0]);
+        rqe_multiple = get_rqe_prefill_multiple_duplex(cfg, ctx->urma_ctx, ctx->jetty[0]);
     }
     if (rqe_multiple == 0) {
         printf("Failed query port for bonding device\n");
@@ -1514,7 +1520,7 @@ static void *run_send_lat_duplex(void *arg)
 
     bool is_server = cfg->comm.server_ip == NULL;
 
-    uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(ctx->urma_ctx, ctx->jetty[id]);
+    uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(cfg, ctx->urma_ctx, ctx->jetty[id]);
     if (rqe_multiple == 0) {
         printf("Failed query port for bonding device\n");
         return NULL;
