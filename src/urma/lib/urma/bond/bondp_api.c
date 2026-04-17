@@ -1449,50 +1449,6 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
     return ret;
 }
 
-static int remove_remote_jetty_id_info(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
-{
-    int ret = 0;
-    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
-            urma_target_jetty_t *p_tjetty = bdp_tjetty->p_tjetty[i][j];
-            if (p_tjetty == NULL) {
-                continue;
-            }
-            ret = bdp_r_p2v_jetty_id_table_del_without_lock(
-                &bdp_ctx->remote_p2v_jetty_id_table, &p_tjetty->id, REMOTE_JETTY);
-            if (ret != 0) {
-                URMA_LOG_ERR("Failed to del bdp_r_p2v_vjetty_id[%d]: ret: %d, jetty_id: " URMA_JETTY_ID_FMT "\n",
-                             i, ret, URMA_JETTY_ID_ARGS(&p_tjetty->id));
-                ret = URMA_FAIL;
-            }
-        }
-    }
-    return ret;
-}
-
-static int add_remote_jetty_id_info(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
-{
-    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
-            urma_target_jetty_t *p_tjetty = bdp_tjetty->p_tjetty[i][j];
-            if (p_tjetty == NULL) {
-                continue;
-            }
-            int ret = bdp_r_p2v_jetty_id_table_add_without_lock(
-                &bdp_ctx->remote_p2v_jetty_id_table, &p_tjetty->id,
-                REMOTE_JETTY, &bdp_tjetty->v_tjetty.id);
-            if (ret != 0) {
-                URMA_LOG_ERR("Failed to add bdp_r_p2v_vjetty_id[%d]: ret: %d, jetty_id: " URMA_JETTY_ID_FMT "\n",
-                             i, ret, URMA_JETTY_ID_ARGS(&p_tjetty->id));
-                return -1;
-            }
-            URMA_LOG_INFO("Succeed to add bdp_r_p2v_vjetty_id[%d]: ret: %d, jetty_id: " URMA_JETTY_ID_FMT "\n", i, 0,
-                          URMA_JETTY_ID_ARGS(&p_tjetty->id));
-        }
-    }
-    return 0;
-}
-
 urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
@@ -1546,15 +1502,6 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_TSEG;
     }
 
-    pthread_rwlock_wrlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
-    if (add_remote_jetty_id_info(bdp_ctx, bdp_tjetty) != 0) {
-        URMA_LOG_ERR("Failed to add remote jetty id info\n");
-        remove_remote_jetty_id_info(bdp_ctx, bdp_tjetty);
-        pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
-        goto UNIMPORT_TSEG;
-    }
-    pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
-
     if (rjetty->trans_mode == URMA_TM_RM && rjetty->flag.bs.has_drv_ext && !is_fake_jetty) {
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
@@ -1592,12 +1539,6 @@ urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty)
     }
 
     bondp_unregister_health_check_task(bdp_ctx, bdp_tjetty);
-
-    pthread_rwlock_wrlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
-    if (remove_remote_jetty_id_info(bdp_ctx, bdp_tjetty) != 0) {
-        ret = URMA_FAIL;
-    }
-    pthread_rwlock_unlock(&bdp_ctx->remote_p2v_jetty_id_table.lock);
 
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;

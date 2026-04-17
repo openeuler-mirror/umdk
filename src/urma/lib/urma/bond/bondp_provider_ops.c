@@ -251,18 +251,12 @@ static int bondp_init_ctx_table(bondp_context_t *bond_ctx)
         URMA_LOG_ERR("Failed to create p_vjetty_id_table\n");
         return -1;
     }
-    if (bdp_r_p2v_jetty_id_table_create(&bond_ctx->remote_p2v_jetty_id_table, BONDP_MAX_NUM_JETTYS)) {
-        URMA_LOG_ERR("Failed to create remote_p2v_jetty_id_table\n");
-        goto FREE_P_VJETTY_ID_TABLE;
-    }
     if (bdp_r_v2p_token_id_table_create(&bond_ctx->remote_v2p_token_id_table, BONDP_MAX_NUM_RSEGS)) {
         URMA_LOG_ERR("Failed to create remote_v2p_token_id_table\n");
-        goto FREE_V_PTOKEN_ID_TABLE;
+        goto FREE_P_VJETTY_ID_TABLE;
     }
     atomic_init(&bond_ctx->token_id_cnt, 0);
     return 0;
-FREE_V_PTOKEN_ID_TABLE:
-    (void)bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
 FREE_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
     return -1;
@@ -271,7 +265,6 @@ FREE_P_VJETTY_ID_TABLE:
 static void bondp_uninit_ctx_table(bondp_context_t *bond_ctx)
 {
     bdp_r_v2p_token_id_table_destroy(&bond_ctx->remote_v2p_token_id_table);
-    bdp_r_p2v_jetty_id_table_destroy(&bond_ctx->remote_p2v_jetty_id_table);
     bdp_p_vjetty_id_table_destroy(&bond_ctx->p_vjetty_id_table);
 }
 
@@ -382,7 +375,6 @@ static int bondp_create_pctx(bondp_context_t *bond_ctx, bondp_bonding_mode_t bon
 
             int primary_eid_idx = pdev->primary_eid_idx;
             if (primary_eid_idx != INVALID_EID_INDEX) {
-                bond_ctx->p_devs[i] = dev;
                 bond_ctx->p_ctxs[i] = urma_create_context(dev, primary_eid_idx);
                 if (bond_ctx->p_ctxs[i] == NULL) {
                     URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
@@ -416,7 +408,6 @@ static int bondp_create_pctx(bondp_context_t *bond_ctx, bondp_bonding_mode_t bon
                 int port_eid_idx = pdev->port_eid_idx[j];
                 int ctx_idx = IODIE_NUM + PORT_EID_MAX_NUM_PER_DEV * i + j;
                 if (port_eid_idx != INVALID_EID_INDEX) {
-                    bond_ctx->p_devs[ctx_idx] = dev;
                     bond_ctx->p_ctxs[ctx_idx] = urma_create_context(dev, port_eid_idx);
                     if (bond_ctx->p_ctxs[ctx_idx] == NULL) {
                         URMA_LOG_ERR("Failed to create context for port eid, dev:%s, eid_idx:%d, port_idx:%d\n",
