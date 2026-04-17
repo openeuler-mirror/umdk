@@ -199,15 +199,10 @@ typedef enum bondp_comp_type {
     BONDP_COMP_TYPE_MAX
 } bondp_comp_type_t;
 
-struct bondp_comp;
-
-typedef struct bondp_jetty_ctx {
-    bondp_context_t *bond_ctx;
-    struct bondp_comp *bdp_comp;
-    urma_jetty_t **pjettys; // store the pointer array of bdp_comp->members, which could be jfs*/jfr*/jetty*.
-    uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
-    bondp_hash_table_t v_conn_table;
-} bjetty_ctx_t;
+typedef enum pjetty_error_done_type {
+    PJETTY_SUSPEND_DONE = 1,
+    PJETTY_FLUSH_ERROR_DONE = 2
+} pjetty_error_done_type_t;
 
 /** A struct to mimic Polymorphism in creating/deleting some components of urma.
  * This will introduce extra memory cost due to union size taking the largest size.
@@ -231,7 +226,8 @@ typedef struct bondp_comp {
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
     bondp_context_t *bondp_ctx;
-    bjetty_ctx_t bjetty_ctx;
+    uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
+    bondp_hash_table_t v_conn_table;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
     // send
