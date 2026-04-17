@@ -84,7 +84,7 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
 
 static int client_connect(perftest_config_t *cfg)
 {
-    struct addrinfo *res, *tmp, *client_res, *client_tmp = NULL;
+    struct addrinfo *res = NULL, *tmp = NULL, *client_res = NULL, *client_tmp = NULL;
     struct addrinfo hints = {0}, client_hints = {0};
     uint32_t i = 0;
 
@@ -146,7 +146,10 @@ static int client_connect(perftest_config_t *cfg)
             comm->sock_fd[i] = -1;
         }
 
-        freeaddrinfo(res);
+        if (res != NULL) {
+            freeaddrinfo(res);
+            res = NULL;
+        }
 
         if (comm->sock_fd[i] < 0) {
             (void)fprintf(stderr, "Failed to connect %s:%d\n\n", comm->server_ip, (comm->port + i));
@@ -161,7 +164,9 @@ static int client_connect(perftest_config_t *cfg)
     }
 
     if (comm->bind_ip != NULL) {
-        freeaddrinfo(client_res);
+        if (client_res != NULL) {
+            freeaddrinfo(client_res);
+        }
     }
 
     return 0;
@@ -170,7 +175,9 @@ create_client_error:
         (void)close(comm->sock_fd[j]);
     }
     free(comm->sock_fd);
-    freeaddrinfo(client_res);
+    if (client_res != NULL) {
+        freeaddrinfo(client_res);
+    }
 bind_client_error:
     return -1;
 }
