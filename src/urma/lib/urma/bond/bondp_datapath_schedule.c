@@ -83,10 +83,6 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
 
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t active_idx = bdp_comp->active_indices[i];
-        if (!bdp_comp->valid[active_idx]) {
-            continue;
-        }
-
         uint32_t rqe_cnt = bdp_comp->rqe_cnt[active_idx];
         if (rqe_cnt < least_load) {
             least_load = rqe_cnt;

@@ -638,14 +638,14 @@ static int resend_jfs_wr(jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
     urma_target_jetty_t *vtjetty = (urma_target_jetty_t *)(wr_entry->v_conn->target_vjetty);
     ret = convert_jfs_pwr_to_another_path(wr, vtjetty, send_idx, target_idx);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to set_jfs_wr_ptseg_ptjetty\n");
+        URMA_LOG_ERR("Failed to convert when resend\n");
         return -1;
     }
 
     urma_jfs_wr_t *bad_wr = NULL;
     ret = comp_post_send(wr_entry->bdp_comp, send_idx, wr, &bad_wr);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to set_jfs_wr_ptseg_ptjetty\n");
+        URMA_LOG_ERR("Failed to resend wr\n");
         return -1;
     }
 
@@ -739,7 +739,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
 
     bondp_comp_t *bdp_comp = wr_entry->bdp_comp;
     uint32_t send_idx = wr_entry->send_idx;
-    bdp_comp->sqe_cnt[send_idx] -= 1;
+    uint32_t target_idx = wr_entry->target_idx;
 
     if (bdp_comp->valid[send_idx] == false) {
         return CONVERT_SKIP;
@@ -758,15 +758,15 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
             URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
 
             for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
-                const int wr_id = __idx_to_wr_id((bdp_jfc->wr_buf.latest_used + 1 + i) % bdp_jfc->wr_buf.max_wr_num);
+                const uint64_t wr_id = (wr_entry->wr_id + i) % bdp_jfc->wr_buf.max_wr_num + 1;
                 jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
-                if (resend_wr_entry->wr_id == 0 ||
-                    resend_wr_entry->send_idx != wr_entry->send_idx ||
-                    resend_wr_entry->target_idx != wr_entry->target_idx) {
+                if (resend_wr_entry == NULL ||
+                    resend_wr_entry->send_idx != send_idx ||
+                    resend_wr_entry->target_idx != target_idx) {
                     continue;
                 }
                 if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                    URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %d\n", wr_id);
+                    URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
                 }
             }
 
