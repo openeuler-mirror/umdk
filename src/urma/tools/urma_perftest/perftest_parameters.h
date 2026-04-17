@@ -20,7 +20,7 @@
 #include "perftest_communication.h"
 
 /* Default Values of perftest parameters */
-#define PERFTEST_DEF_JFC_DEPTH_LAT (1)
+#define PERFTEST_DEF_JFC_DEPTH_LAT (512)
 #define PERFTEST_DEF_PORT (21115)
 #define PERFTEST_DEF_SIZE_LAT (2)
 #define PERFTEST_DEF_SIZE_BW (65536)
