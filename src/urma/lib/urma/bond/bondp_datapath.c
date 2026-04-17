@@ -15,7 +15,6 @@
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
 #include "bondp_health_check.h"
-#include "bondp_jetty_ctx.h"
 #include "bondp_types.h"
 #include "ub_get_clock.h"
 #include "urma_api.h"
@@ -190,23 +189,18 @@ static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, 
     return URMA_SUCCESS;
 }
 
-/**
- * When sending data, attempt to retrieve the v_conn corresponding to the target tjetty from bjetty_ctx;
- * if it does not exist, try to create one, then init it with `init_v_conn_on_send` if needed.
- * @return: NULL if lookup failed and creation failed
- */
-static bdp_v_conn_t *get_v_conn_on_send(bjetty_ctx_t *bjetty_ctx, bondp_target_jetty_t *bdp_tjetty)
+static bdp_v_conn_t *get_v_conn_on_send(bondp_comp_t *bdp_comp, bondp_target_jetty_t *bdp_tjetty)
 {
-    urma_jetty_id_t *comp_jetty_id = get_comp_urma_jetty_id(bjetty_ctx->bdp_comp);
+    urma_jetty_id_t *comp_jetty_id = get_comp_urma_jetty_id(bdp_comp);
     if (comp_jetty_id == NULL) {
         return NULL;
     }
     urma_jetty_id_t *vtjetty_id = &bdp_tjetty->v_tjetty.id;
-    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, vtjetty_id);
+    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bdp_comp->v_conn_table, vtjetty_id);
     if (!v_conn) {
-        int ret = bdp_v_conn_table_add_on_send(&bjetty_ctx->v_conn_table, vtjetty_id,
+        int ret = bdp_v_conn_table_add_on_send(&bdp_comp->v_conn_table, vtjetty_id,
                                                bdp_tjetty, bdp_tjetty->target_dev_num, &v_conn,
-                                               is_single_dev_mode(bjetty_ctx->bond_ctx));
+                                               is_single_dev_mode(bdp_comp->bondp_ctx));
         if (ret != 0) {
             URMA_LOG_ERR("Failed to create v_conn for vjetty, ret: %d, "
                          "[" URMA_JETTY_ID_FMT " -> " URMA_JETTY_ID_FMT "]\n",
@@ -238,7 +232,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         return URMA_EINVAL;
     }
 
-    bdp_v_conn_t *v_conn = get_v_conn_on_send(&bdp_comp->bjetty_ctx, bdp_tjetty);
+    bdp_v_conn_t *v_conn = get_v_conn_on_send(bdp_comp, bdp_tjetty);
     if (v_conn == NULL) {
         return URMA_FAIL;
     }
@@ -288,7 +282,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         return URMA_EINVAL;
     }
 
-    bdp_v_conn_t *v_conn = get_v_conn_on_send(&bdp_comp->bjetty_ctx, bdp_tjetty);
+    bdp_v_conn_t *v_conn = get_v_conn_on_send(bdp_comp, bdp_tjetty);
     if (v_conn == NULL) {
         return URMA_FAIL;
     }
@@ -706,14 +700,14 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, bond
         put_comp(comp);
         return CONVERT_FAIL;
     }
-    comp->bjetty_ctx.pjettys_error_done[idx] |= target_state_bit;
+    comp->pjettys_error_done[idx] |= target_state_bit;
     bool all_reported = true;
     // pjetty_idx
     for (int idx = 0; idx < URMA_UBAGG_DEV_MAX_NUM; idx++) {
         if (comp->members[idx] == NULL) {
             continue;
         }
-        if ((comp->bjetty_ctx.pjettys_error_done[idx] & target_state_bit) == 0) {
+        if ((comp->pjettys_error_done[idx] & target_state_bit) == 0) {
             all_reported = false;
             break;
         }
@@ -830,13 +824,12 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
     bdp_comp->rqe_cnt[recv_idx] -= 1;
 
     /* Do de-duplicating */
-    bjetty_ctx_t *bjetty_ctx = &bdp_comp->bjetty_ctx;
     int ret = 0;
     urma_jetty_id_t target_jetty_id = cr->remote_id;
-    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bjetty_ctx->v_conn_table, &target_jetty_id);
+    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bdp_comp->v_conn_table, &target_jetty_id);
     if (!v_conn) {
-        ret = bdp_v_conn_table_add_on_recv(&bjetty_ctx->v_conn_table, &target_jetty_id, &v_conn,
-                                           is_single_dev_mode(bjetty_ctx->bond_ctx));
+        ret = bdp_v_conn_table_add_on_recv(&bdp_comp->v_conn_table, &target_jetty_id, &v_conn,
+                                           is_single_dev_mode(bdp_comp->bondp_ctx));
         if (ret != 0) {
             free_jfr_wr(&wr_entry->wr);
             jfr_wr_buf_release(wr_entry);
