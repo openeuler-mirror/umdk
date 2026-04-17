@@ -88,6 +88,8 @@ int shm_qbuf_init(void)
 
 void shm_qbuf_uninit(void)
 {
+    (void)util_rwlock_destroy(g_register_rwlock);
+    g_register_rwlock = NULL;
 }
 
 static uint32_t release_thread_cache(local_qbuf_pool_t *tls_mgmt_pool)
