@@ -641,7 +641,7 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     }
 
     if (bondp_init_connection_table(bdp_jfs) != 0) {
-        URMA_LOG_ERR("Failed to create jfs datapath ctx");
+        URMA_LOG_ERR("Failed to create jfs datapath ctx\n");
         goto DEL_P_VJFS_ID;
     }
 
@@ -883,7 +883,7 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
     }
 
     if (bondp_init_connection_table(bdp_jfr) != 0) {
-        URMA_LOG_ERR("Failed to create jfr datapath ctx");
+        URMA_LOG_ERR("Failed to create jfr datapath ctx\n");
         goto DEL_P_VJFR_ID;
     }
 
@@ -1222,7 +1222,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     }
 
     if (bondp_init_connection_table(bdp_jetty) != 0) {
-        URMA_LOG_ERR("Failed to create jetty ctx");
+        URMA_LOG_ERR("Failed to create jetty ctx\n");
         goto DEL_P_VJETTY_ID;
     }
 
@@ -1537,7 +1537,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_TSEG;
     }
 
-    URMA_LOG_INFO("Successfully imported target jetty: " URMA_JETTY_ID_FMT,
+    URMA_LOG_INFO("Successfully imported target jetty: " URMA_JETTY_ID_FMT "\n",
                   URMA_JETTY_ID_ARGS(&rjetty->jetty_id));
 
     return &bdp_tjetty->v_tjetty;
@@ -1854,7 +1854,7 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
             continue;
         }
         jfc[actual_num++] = v_jfc;
-        URMA_LOG_DEBUG("p_jfc:%p, add v_jfc:%p", p_jfc, v_jfc);
+        URMA_LOG_DEBUG("p_jfc:%p, add v_jfc:%p\n", p_jfc, v_jfc);
     }
     PERF_PROFILING_END(BOND_WAIT_JFC);
     return actual_num;
@@ -1917,7 +1917,7 @@ static int init_elment_vjetty(urma_async_event_t *v_event, urma_async_event_t *p
 urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_event)
 {
     if (ctx == NULL || ctx->async_fd < 0 || v_event == NULL) {
-        URMA_LOG_ERR("Invalid parameter");
+        URMA_LOG_ERR("Invalid parameter\n");
         return URMA_EINVAL;
     }
     struct epoll_event event;
@@ -1961,7 +1961,7 @@ urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_e
 void bondp_ack_async_event(urma_async_event_t *event)
 {
     if (event->priv == NULL) {
-        URMA_LOG_ERR("Invalid parameter");
+        URMA_LOG_ERR("Invalid parameter\n");
         return;
     }
     urma_async_event_t *p_event = (urma_async_event_t *)event->priv;

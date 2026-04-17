@@ -30,7 +30,7 @@ int bdp_v_conn_init(bdp_v_conn_t *v_conn)
     v_conn->target_vjetty = NULL;
     v_conn->msn = 0;
     if (bdp_slide_wnd_init(&v_conn->recv_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
-        URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add");
+        URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add\n");
         return -1;
     }
     v_conn->is_init = true;
