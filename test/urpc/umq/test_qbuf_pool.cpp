@@ -22,7 +22,6 @@ class QbufPoolTest : public ::testing::Test {
 
     void TearDown() override
     {
-        umq_qbuf_pool_uninit();
         umq_io_buf_free();
         GlobalMockObject::verify();
     }
@@ -69,6 +68,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_init_invalid_mode)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_COMBINE, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_NE(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -87,10 +87,13 @@ TEST_F(QbufPoolTest, test_qbuf_pool_double_init)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_COMBINE, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
     ASSERT_NE(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_combine_alloc_free)
@@ -106,6 +109,7 @@ TEST_F(QbufPoolTest, test_qbuf_pool_combine_alloc_free)
     cfg.data_size = blk_size;
     cfg.headroom_size = 0;
     cfg.buf_addr = umq_io_buf_malloc(UMQ_BUF_COMBINE, total_size);
+    cfg.disable_scale_cap = true;
 
     ASSERT_NE(cfg.buf_addr, nullptr);
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), UMQ_SUCCESS);
@@ -133,6 +137,8 @@ TEST_F(QbufPoolTest, test_qbuf_pool_combine_alloc_free)
 
     ASSERT_EQ(umq_qbuf_pool_info_get(&qbuf_pool_stats), UMQ_SUCCESS);
     ASSERT_EQ(qbuf_pool_stats.qbuf_pool_info[0].mode, UMQ_BUF_COMBINE);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_zero)
@@ -168,6 +174,8 @@ TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_zero)
     ASSERT_EQ(qbuf->data_size, 0);
 
     umq_qbuf_free(&list);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_with_data)
@@ -202,6 +210,8 @@ TEST_F(QbufPoolTest, test_qbuf_pool_split_alloc_with_data)
     ASSERT_NE(qbuf->qbuf_next, nullptr);
 
     umq_qbuf_free(&list);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_pool_return_to_global)
@@ -231,6 +241,8 @@ TEST_F(QbufPoolTest, test_qbuf_pool_return_to_global)
     ASSERT_EQ(umq_qbuf_alloc(128, num, nullptr, &list), UMQ_SUCCESS);
 
     umq_qbuf_free(&list);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_alloc_errors_not_inited)
@@ -264,6 +276,8 @@ TEST_F(QbufPoolTest, test_qbuf_alloc_zero_in_combine)
     umq_buf_list_t list;
     QBUF_LIST_INIT(&list);
     ASSERT_NE(umq_qbuf_alloc(0, 1, nullptr, &list), UMQ_SUCCESS);
+
+    umq_qbuf_pool_uninit();
 }
 
 TEST_F(QbufPoolTest, test_qbuf_data_to_head_out_of_range)
@@ -286,4 +300,6 @@ TEST_F(QbufPoolTest, test_qbuf_data_to_head_out_of_range)
 
     char dummy[16];
     ASSERT_EQ(umq_qbuf_data_to_head(dummy), nullptr);
+
+    umq_qbuf_pool_uninit();
 }
