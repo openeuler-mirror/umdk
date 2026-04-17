@@ -804,6 +804,18 @@ static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
     return UMQ_SUCCESS;
 }
 
+static void umq_qbuf_expansion_pool_uninit(void)
+{
+    if (g_qbuf_pool.disable_scale_cap) {
+        return;
+    }
+    // with data uninit
+    umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_with_date, true);
+
+    // without data uninit
+    umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_without_date, false);
+}
+
 int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 {
     if (g_qbuf_pool.inited) {
@@ -844,8 +856,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 
     ret = umq_qbuf_expansion_pool_init(cfg);
     if (ret != UMQ_SUCCESS) {
-        umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool);
-        return ret;
+        goto BLOCK_POOL_UNINIT;
     }
 
     if (cfg->mode == UMQ_BUF_SPLIT) {
@@ -930,27 +941,23 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         g_qbuf_pool.block_pool.buf_cnt_with_data = blk_num;
         g_qbuf_pool.block_pool.buf_cnt_without_data = 0;
     } else {
-        umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool);
         UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", cfg->mode);
-        return -UMQ_ERR_EINVAL;
+        ret = -UMQ_ERR_EINVAL;
+        goto EXPANSION_POOL_UNINIT;
     }
 
     (void)pthread_spin_init(&g_tls_stats_lock, PTHREAD_PROCESS_PRIVATE);
     urpc_list_init(&g_tls_register_head);
     g_qbuf_pool.inited = true;
     return UMQ_SUCCESS;
-}
 
-static void umq_qbuf_expansion_pool_uninit(void)
-{
-    if (g_qbuf_pool.disable_scale_cap) {
-        return;
-    }
-    // with data uninit
-    umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_with_date, true);
+EXPANSION_POOL_UNINIT:
+    umq_qbuf_expansion_pool_uninit();
 
-    // without data uninit
-    umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_without_date, false);
+BLOCK_POOL_UNINIT:
+    umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool);
+
+    return ret;
 }
 
 void umq_qbuf_pool_uninit(void)

@@ -54,6 +54,7 @@ class ShmQbufPoolTest : public ::testing::Test {
   public:
     void SetUp() override
     {
+        ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
         // Ensure a stable small block size for all shm qbuf tests.
         (void)umq_buf_size_pow_small_set(BLOCK_SIZE_8K);
         uint32_t blk_size = umq_buf_size_small();
@@ -104,19 +105,18 @@ class ShmQbufPoolTest : public ::testing::Test {
         if (buf_addr_ != nullptr) {
             free(buf_addr_);
         }
+        shm_qbuf_uninit();
         GlobalMockObject::verify();
     }
 
     // SetUpTestCase 在所有 TEST_F 测试开始前执行一次
     static void SetUpTestCase()
     {
-        ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
     }
 
     // TearDownTestCase 在所有 TEST_F 测试完成后执行一次
     static void TearDownTestCase()
     {
-        shm_qbuf_uninit();
     }
 
   protected:
@@ -258,6 +258,7 @@ TEST_F(ShmQbufPoolTest, test_shm_qbuf_alloc_mock_poll_failure)
 
 TEST(ShmQbufPoolCombineTest, test_shm_combine_mode_alloc)
 {
+    ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
     // Combine mode init and basic alloc/free path.
     (void)umq_buf_size_pow_small_set(BLOCK_SIZE_8K);
     uint32_t blk_size = umq_buf_size_small();
@@ -302,18 +303,23 @@ TEST(ShmQbufPoolCombineTest, test_shm_combine_mode_alloc)
     umq_shm_global_pool_uninit(pool);
     msg_ring_destroy(msg_ring);
     free(buf_addr);
+    shm_qbuf_uninit();
 }
 
 TEST(ShmQbufPoolInvalidTest, test_shm_qbuf_invalid_pool)
 {
+    ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
     // Invalid pool handle should fail.
     umq_buf_list_t list;
     QBUF_LIST_INIT(&list);
     ASSERT_NE(umq_shm_qbuf_alloc(0, 128, 1, nullptr, &list), UMQ_SUCCESS);
+    shm_qbuf_uninit();
 }
 
 TEST(ShmQbufPoolInvalidTest, test_shm_qbuf_invalid_headroom_reset)
 {
+    ASSERT_EQ(shm_qbuf_init(), UMQ_SUCCESS);
     // Invalid pool for headroom reset should fail.
     ASSERT_NE(umq_shm_qbuf_headroom_reset(0, nullptr, 0), UMQ_SUCCESS);
+    shm_qbuf_uninit();
 }
