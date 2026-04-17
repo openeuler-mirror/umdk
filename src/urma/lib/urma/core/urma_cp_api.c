@@ -300,7 +300,7 @@ static inline bool urma_check_trans_mode_valid(urma_transport_mode_t trans_mode)
 urma_jfc_t *urma_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *jfc_cfg)
 {
     if (ctx == NULL || jfc_cfg == NULL) {
-        URMA_LOG_ERR("Invalid parameter.");
+        URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
     }
@@ -353,7 +353,7 @@ urma_status_t urma_free_jfc(urma_jfc_t *jfc)
     }
 
     if (jfc->urma_jfc_opt.is_actived == true) {
-        URMA_LOG_ERR("jfc still actived, please deactived first");
+        URMA_LOG_ERR("jfc still actived, please deactived first\n");
         return URMA_EINVAL;
     }
     urma_context_t *urma_ctx = jfc->urma_ctx;
@@ -389,9 +389,8 @@ urma_status_t urma_delete_jfc(urma_jfc_t *jfc)
 
     urma_status_t ret = ops->delete_jfc(jfc);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR(
-            "[DRV_ERR]Failed to delete jfc, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, jfc_id, ret);
+        URMA_LOG_ERR("[DRV_ERR]Failed to delete jfc, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
+                     urma_ctx->dev->name, urma_ctx->eid_index, jfc_id, ret);
     }
     if (ret == URMA_SUCCESS && jfce != NULL) {
         atomic_fetch_sub(&jfce->ref.atomic_cnt, 1);
@@ -475,7 +474,7 @@ free_urma_ctx_arr:
 urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma_jfc_t **jfc)
 {
     if (urma_ctx == NULL || cfg == NULL || jfc == NULL) {
-        URMA_LOG_ERR("Invalid parameter.");
+        URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
@@ -494,7 +493,7 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
     urma_status_t status = ops->alloc_jfc(urma_ctx, cfg, jfc);
     if (status != URMA_SUCCESS || (*jfc) == NULL) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
-        URMA_LOG_ERR("failed to exec ops->alloc_jfc");
+        URMA_LOG_ERR("failed to exec ops->alloc_jfc\n");
         return status == URMA_SUCCESS ? URMA_ENOMEM : status;
     }
 
@@ -516,7 +515,7 @@ urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_
     }
 
     if (jfc->urma_jfc_opt.is_actived == true) {
-        URMA_LOG_ERR("Failed to set opt, jfc has been activated");
+        URMA_LOG_ERR("Failed to set opt, jfc has been activated\n");
         return URMA_EINVAL;
     }
 
@@ -722,7 +721,7 @@ urma_status_t urma_free_jfs(urma_jfs_t *jfs)
     }
 
     if (jfs->urma_jfs_opt.is_actived == true) {
-        URMA_LOG_ERR("jfs still actived, please deactived first");
+        URMA_LOG_ERR("jfs still actived, please deactived first\n");
         return URMA_EINVAL;
     }
     urma_context_t *urma_ctx = jfs->urma_ctx;
@@ -757,9 +756,8 @@ urma_status_t urma_delete_jfs(urma_jfs_t *jfs)
 
     urma_status_t ret = ops->delete_jfs(jfs);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR(
-            "[DRV_ERR]Failed to delete jfs, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, jfs_id, ret);
+        URMA_LOG_ERR("[DRV_ERR]Failed to delete jfs, dev_name: %s, eid_idx: %u, id: %u, ret: %d.\n",
+                     urma_ctx->dev->name, urma_ctx->eid_index, jfs_id, ret);
         return ret;
     }
 
@@ -841,7 +839,7 @@ int urma_flush_jfs(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr)
 urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma_jfs_t **jfs)
 {
     if (urma_ctx == NULL || cfg == NULL || jfs == NULL || cfg->jfc == NULL) {
-        URMA_LOG_ERR("Invalid parameter.");
+        URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
@@ -881,7 +879,7 @@ urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_
     }
 
     if (jfs->urma_jfs_opt.is_actived == true) {
-        URMA_LOG_ERR("Failed to set opt, jfs has been activated");
+        URMA_LOG_ERR("Failed to set opt, jfs has been activated\n");
         return URMA_EINVAL;
     }
 
@@ -1086,7 +1084,7 @@ urma_status_t urma_free_jfr(urma_jfr_t *jfr)
     }
 
     if (jfr->urma_jfr_opt.is_actived == true) {
-        URMA_LOG_ERR("jfr still actived, please deactived first");
+        URMA_LOG_ERR("jfr still actived, please deactived first\n");
         return URMA_EINVAL;
     }
     urma_context_t *urma_ctx = jfr->urma_ctx;
@@ -1120,9 +1118,8 @@ urma_status_t urma_delete_jfr(urma_jfr_t *jfr)
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, delete_jfr);
     urma_status_t status = ops->delete_jfr(jfr);
     if (status != URMA_SUCCESS) {
-        URMA_LOG_ERR(
-            "[DRV_ERR]Failed to delete jfr, dev_name: %s, eid_idx: %u, id: %u, status: %d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, jfr_id, status);
+        URMA_LOG_ERR("[DRV_ERR]Failed to delete jfr, dev_name: %s, eid_idx: %u, id: %u, status: %d.\n",
+                     urma_ctx->dev->name, urma_ctx->eid_index, jfr_id, status);
         return status;
     }
 
@@ -1275,7 +1272,7 @@ urma_status_t urma_unimport_jfr(urma_target_jetty_t *target_jfr)
 urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma_jfr_t **jfr)
 {
     if (urma_ctx == NULL || cfg == NULL || jfr == NULL || cfg->jfc == NULL) {
-        URMA_LOG_ERR("Invalid parameter.");
+        URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
@@ -1310,7 +1307,7 @@ urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_
     }
 
     if (jfr->urma_jfr_opt.is_actived == true) {
-        URMA_LOG_ERR("Failed to set opt, jfr has been activated");
+        URMA_LOG_ERR("Failed to set opt, jfr has been activated\n");
         return URMA_EINVAL;
     }
 
@@ -1491,7 +1488,7 @@ static int urma_create_jetty_check_trans_mode(urma_context_t *ctx, urma_jetty_cf
         return -1;
     }
     if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR && ctx->dev->type == URMA_TRANSPORT_UB) {
-        URMA_LOG_ERR("UB dev should use share jfr!");
+        URMA_LOG_ERR("UB dev should use share jfr!\n");
         return -1;
     }
 
@@ -1724,12 +1721,12 @@ urma_status_t urma_free_jetty(urma_jetty_t *jetty)
     }
 
     if (jetty->urma_jetty_opt.is_actived == true) {
-        URMA_LOG_ERR("jetty still actived, please deactived first");
+        URMA_LOG_ERR("jetty still actived, please deactived first\n");
         return URMA_EINVAL;
     }
 
     if (jetty->jetty_cfg.jfs_cfg.trans_mode == URMA_TM_RC && jetty->remote_jetty != NULL) {
-        URMA_LOG_ERR("Failed to delete jetty because it has remote jetty, try unbind first");
+        URMA_LOG_ERR("Failed to delete jetty because it has remote jetty, try unbind first\n");
         return URMA_ENOPERM;
     }
 
@@ -1763,7 +1760,7 @@ urma_status_t urma_delete_jetty(urma_jetty_t *jetty)
         return URMA_EINVAL;
     }
     if (jetty->jetty_cfg.jfs_cfg.trans_mode == URMA_TM_RC && jetty->remote_jetty != NULL) {
-        URMA_LOG_ERR("Failed to delete jetty because it has remote jetty, try unbind first");
+        URMA_LOG_ERR("Failed to delete jetty because it has remote jetty, try unbind first\n");
         return URMA_ENOPERM;
     }
 
@@ -1820,7 +1817,7 @@ urma_status_t urma_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, u
         }
 
         if (jetty->jetty_cfg.jfs_cfg.trans_mode == URMA_TM_RC && jetty->remote_jetty != NULL) {
-            URMA_LOG_ERR("Failed to delete as jetty has remote jetty, try unbind, index: %d", i);
+            URMA_LOG_ERR("Failed to delete as jetty has remote jetty, try unbind, index: %d\n", i);
             *bad_jetty = jetty_arr[0];
             ret = URMA_ENOPERM;
             goto free_urma_ctx_arr;
@@ -2262,7 +2259,7 @@ urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
     }
 
     if (jetty->urma_jetty_opt.is_actived == true) {
-        URMA_LOG_ERR("Failed to set opt, jetty has been activated");
+        URMA_LOG_ERR("Failed to set opt, jetty has been activated\n");
         return URMA_EINVAL;
     }
 
@@ -2294,7 +2291,7 @@ urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
     }
 
     if (jetty->jetty_cfg.flag.bs.share_jfr == URMA_NO_SHARE_JFR && jetty->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
-        URMA_LOG_ERR("UB dev should use share jfr!");
+        URMA_LOG_ERR("UB dev should use share jfr!\n");
         return URMA_EINVAL;
     }
 
@@ -2729,9 +2726,8 @@ urma_status_t urma_free_token_id(urma_token_id_t *token_id)
     if (ret == URMA_SUCCESS) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     } else {
-        URMA_LOG_ERR(
-            "[DRV_ERR]Failed to free token_id, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, tid, ret);
+        URMA_LOG_ERR("[DRV_ERR]Failed to free token_id, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
+                     urma_ctx->dev->name, urma_ctx->eid_index, tid, ret);
     }
 
     return ret;
@@ -2833,9 +2829,8 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
             atomic_fetch_sub(&token_id->ref.atomic_cnt, 1);
         }
     } else {
-        URMA_LOG_ERR(
-            "[DRV_ERR]Unregister seg fail, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, token_id->token_id, ret);
+        URMA_LOG_ERR("[DRV_ERR]Unregister seg fail, dev_name: %s, eid_idx: %u, tid: %u, ret: %d.\n",
+                     urma_ctx->dev->name, urma_ctx->eid_index, token_id->token_id, ret);
     }
 
     if (free_token_id == true) {

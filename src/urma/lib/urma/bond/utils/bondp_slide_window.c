@@ -35,7 +35,7 @@ int bdp_slide_wnd_init(bdp_slide_wnd_t *wnd, uint32_t total_size, uint32_t windo
     }
     wnd->bits = ub_bitmap_alloc(total_size);
     if (wnd->bits == NULL) {
-        URMA_LOG_ERR("Failed to init bitmap");
+        URMA_LOG_ERR("Failed to init bitmap\n");
         return -1;
     }
     wnd->total_size = total_size;
