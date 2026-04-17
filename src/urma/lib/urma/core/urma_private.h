@@ -15,6 +15,7 @@
 
 #include "ub_list.h"
 #include "urma_provider.h"
+#include "urma_perf.h"
 
 #define URMA_MAX_SYSFS_PATH 256
 #define URMA_UBAGG_DEV_PREFIX "bonding_dev"
@@ -63,5 +64,29 @@ static inline bool urma_is_bonding_dev(char *dev_name)
 void urma_ubagg_switch_init(void);
 void urma_ubagg_switch_inc(void);
 uint32_t urma_ubagg_switch_get(void);
+
+
+/**
+ * just for urma perftest profiling
+*/
+#define PERF_PROFILING_START(type) \
+    uint64_t __perf_start_##type = 0; \
+    do { \
+        if (urma_perf_is_enabled()) { \
+            __perf_start_##type = urma_get_perf_timestamp(); \
+        } \
+    } while (0)
+
+#define PERF_PROFILING_END(type) \
+    do { \
+        if (urma_perf_is_enabled()) { \
+            uint64_t _perf_end = urma_get_perf_timestamp(); \
+            urma_step_perf(type, _perf_end - __perf_start_##type); \
+        } \
+    } while (0)
+
+bool urma_perf_is_enabled();
+uint64_t urma_get_perf_timestamp(void);
+urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t latency);
 
 #endif // URMA_PRIVATE_H

@@ -20,7 +20,6 @@
 #include "ub_get_clock.h"
 #include "urma_api.h"
 #include "urma_log.h"
-#include "urma_perf.h"
 #include "urma_private.h"
 #include "urma_provider.h"
 
