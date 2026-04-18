@@ -235,6 +235,7 @@ typedef struct bondp_comp {
     bool valid[URMA_UBAGG_DEV_MAX_NUM];
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    pthread_spinlock_t send_lock; /* For jfs/jetty */
     // recv
     bondp_jfc_t *recv_jfc;
     uint32_t rqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
