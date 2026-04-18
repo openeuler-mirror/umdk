@@ -2479,7 +2479,8 @@ static int umq_ub_send_big_data(ub_queue_t *queue, umq_buf_t **buffer)
     while ((*buffer) && rest_size != 0) {
         if (mempool_info_size < (umq_imm_head->mempool_num * sizeof(ub_import_mempool_info_t))) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the buf num [%d] mempool info num [%u] "
-                "exceeds the maximum limit [%u]\n", EID_ARGS(*eid), id, ref_sge_cnt, umq_imm_head->mempool_num);
+                "exceeds the maximum limit [%u]\n", EID_ARGS(*eid), id, ref_sge_cnt, umq_imm_head->mempool_num,
+                mempool_info_size / sizeof(ub_import_mempool_info_t));
             goto FREE_BUF;
         }
 
