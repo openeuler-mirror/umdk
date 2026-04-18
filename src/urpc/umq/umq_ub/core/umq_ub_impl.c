@@ -657,6 +657,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
         g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
         g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
+        pthread_spin_init(&g_ub_ctx[g_ub_ctx_count].tseg_list_lock, PTHREAD_PROCESS_PRIVATE);
         ++g_ub_ctx_count;
     }
 
@@ -761,6 +762,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         context[i].umq_ctx_jetty_table = NULL;
         free((void*)context[i].rx_consumed_jetty_table);
         context[i].rx_consumed_jetty_table = NULL;
+        pthread_spin_destroy(&g_ub_ctx[g_ub_ctx_count].tseg_list_lock);
     }
 
     umq_io_buf_free();
