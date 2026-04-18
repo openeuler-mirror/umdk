@@ -42,22 +42,41 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
 }
 
 static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
-                                 int *send_idx, int *target_idx)
+                                 int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
     int least_load_pos = -1;
     uint32_t least_load = UINT32_MAX;
 
-    for (uint32_t i = 0; i < min_active_count; i++) {
-        uint32_t active_idx = bdp_comp->active_indices[i];
-        if (!bdp_comp->valid[active_idx]) {
-            continue;
-        }
+    if (info == NULL || info->src_chip_id == BONDP_CHIP_ID_MIN) {
+        for (uint32_t i = 0; i < min_active_count; i++) {
+            uint32_t active_idx = bdp_comp->active_indices[i];
+            if (!bdp_comp->valid[active_idx]) {
+                continue;
+            }
 
-        uint32_t sqe_cnt = bdp_comp->sqe_cnt[active_idx];
-        if (sqe_cnt < least_load) {
-            least_load = sqe_cnt;
-            least_load_pos = (int)i;
+            uint32_t sqe_cnt = bdp_comp->sqe_cnt[active_idx];
+            if (sqe_cnt < least_load) {
+                least_load = sqe_cnt;
+                least_load_pos = (int)i;
+            }
+        }
+    } else {
+        if (min_active_count == 0) {
+            URMA_LOG_ERR("Invalid min_active_count.\n");
+            return EINVAL;
+        }
+        for (int i = min_active_count - 1; i >= 0; i--) {
+            uint32_t active_idx = bdp_comp->active_indices[i];
+            if (!bdp_comp->valid[active_idx]) {
+                continue;
+            }
+
+            uint32_t sqe_cnt = bdp_comp->sqe_cnt[active_idx];
+            if (sqe_cnt < least_load) {
+                least_load = sqe_cnt;
+                least_load_pos = i;
+            }
         }
     }
 
@@ -98,7 +117,8 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
     return 0;
 }
 
-int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx)
+int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx,
+    bondp_chip_id_info_t *info)
 {
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
@@ -117,7 +137,7 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
         case BONDP_BONDING_MODE_ACTIVE_BACKUP:
             return schedule_send_active_backup(bdp_comp, bdp_tjetty, send_idx, target_idx);
         case BONDP_BONDING_MODE_BALANCE:
-            return schedule_send_balance(bdp_comp, bdp_tjetty, send_idx, target_idx);
+            return schedule_send_balance(bdp_comp, bdp_tjetty, send_idx, target_idx, info);
         default:
             return -1;
     }

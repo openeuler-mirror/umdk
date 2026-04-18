@@ -15,7 +15,16 @@
 
 #include "bondp_connection.h"
 
-int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx);
+#define BONDP_CHIP_ID_MIN 1
+#define BONDP_CHIP_ID_MAX 2
+
+typedef struct bondp_chip_id_info {
+    uint32_t src_chip_id;
+    uint32_t dst_chip_id;
+} bondp_chip_id_info_t;
+
+int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx,
+    bondp_chip_id_info_t *info);
 
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx);
 

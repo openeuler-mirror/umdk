@@ -165,6 +165,14 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
     if (ret != URMA_SUCCESS) {
         return ret;
     }
+    if (wr->flag.bs.has_drv_ext) {
+        bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
+        /* currently only check src_chip_id */
+        if (bwr->src_chip_id < BONDP_CHIP_ID_MIN || bwr->src_chip_id > BONDP_CHIP_ID_MAX) {
+            URMA_LOG_ERR("Invalid src_chip_id: %u.\n", bwr->src_chip_id);
+            return URMA_EINVAL;
+        }
+    }
     return URMA_SUCCESS;
 }
 
@@ -238,7 +246,13 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
     }
 
     int send_idx = -1, target_idx = -1;
-    ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx);
+    if (!wr->flag.bs.has_drv_ext) {
+        ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
+    } else {
+        bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
+        bondp_chip_id_info_t info = { .src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id };
+        ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, &info);
+    }
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -288,7 +302,13 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
     }
 
     int send_idx = 0, target_idx = 0;
-    ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx);
+    if (!wr->flag.bs.has_drv_ext) {
+        ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
+    } else {
+        bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
+        bondp_chip_id_info_t info = { .src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id };
+        ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, &info);
+    }
     if (ret != 0) {
         return URMA_FAIL;
     }
@@ -424,6 +444,8 @@ urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_j
     base->rw.dst.sge = &dst_sge;
     base->tjetty = (urma_target_jetty_t *)target_jfr;
     base->next = NULL;
+    wr.src_chip_id = src_chip_id;
+    wr.dst_chip_id = dst_chip_id;
     return dp_ops->post_jfs_wr(jfs, base, &bad_wr);
 }
 
@@ -750,7 +772,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
             bdp_comp->valid[send_idx] = false;
 
             int new_send_idx = -1, new_target_idx = -1;
-            if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp, &new_send_idx, &new_target_idx) != 0) {
+            if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
+                &new_send_idx, &new_target_idx, NULL) != 0) {
                 URMA_LOG_ERR("Failed to schedule send for migration\n");
                 return CONVERT_FAIL;
             }
