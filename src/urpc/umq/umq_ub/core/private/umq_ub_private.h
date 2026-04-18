@@ -212,6 +212,7 @@ typedef struct umq_ub_ctx {
     urma_context_t *urma_ctx;
     urma_device_attr_t dev_attr;
     umq_dev_assign_t dev_info;
+    pthread_spinlock_t tseg_list_lock;
     urma_target_seg_t *tseg_list[UMQ_MAX_TSEG_NUM];
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
