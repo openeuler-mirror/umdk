@@ -313,7 +313,9 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         return URMA_FAIL;
     }
 
+    (void)pthread_spin_lock(&bdp_comp->send_lock);
     jfs_wr_entry_t *wr_entry = jfs_wr_buf_alloc(&bdp_comp->send_jfc->wr_buf);
+    (void)pthread_spin_unlock(&bdp_comp->send_lock);
     if (wr_entry == NULL) {
         URMA_LOG_ERR("Failed to allocate jfs wr entry\n");
         return URMA_EAGAIN;
