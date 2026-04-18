@@ -228,7 +228,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     ctx->eid = ctx->urma_ctx->eid;
 
-    if (cfg->enable_aggr_mode || cfg->single_path) {
+    if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0 && cfg->enable_aggr_mode) {
         bondp_set_bonding_mode_in_t in_arg = {
             .bonding_mode = cfg->aggr_mode,
             .bonding_level = cfg->single_path ? BONDP_BONDING_LEVEL_PORT : BONDP_BONDING_LEVEL_IODIE,
