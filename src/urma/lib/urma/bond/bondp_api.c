@@ -281,6 +281,7 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
     bdp_jfc->dev_num = bdp_ctx->dev_num;
     bdp_jfc->lasted_polled_jfc_idx = 0;
     atomic_init(&bdp_jfc->use_cnt.atomic_cnt, 0);
+    (void)pthread_spin_init(&bdp_jfc->wr_lock, PTHREAD_PROCESS_PRIVATE);
 
     if (bondp_create_pjfc(bdp_ctx, bdp_jfc, cfg) != 0) {
         URMA_LOG_ERR("Failed to create pjfc\n");
@@ -318,6 +319,7 @@ DELETE_VJFC:
     bondp_delete_vjfc(bdp_jfc);
 DELETE_PJFC:
     bondp_delete_pjfc(bdp_jfc);
+    (void)pthread_spin_destroy(&bdp_jfc->wr_lock);
     free(bdp_jfc);
     return NULL;
 }
@@ -367,6 +369,7 @@ urma_status_t bondp_delete_jfc(urma_jfc_t *jfc)
         URMA_LOG_ERR("Failed to delete pjfc\n");
         ret = URMA_FAIL;
     }
+    (void)pthread_spin_destroy(&bdp_jfc->wr_lock);
 
     free(bdp_jfc);
 
@@ -612,7 +615,6 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
     bdp_jfs->send_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     bdp_jfs->recv_jfc = NULL;
-    (void)pthread_spin_init(&bdp_jfs->send_lock, PTHREAD_PROCESS_PRIVATE);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
@@ -658,7 +660,6 @@ DELETE_VJFS:
 DELETE_PJFS:
     bondp_delete_pjfs(bdp_jfs);
 FREE_JFS:
-    (void)pthread_spin_destroy(&bdp_jfs->send_lock);
     free(bdp_jfs);
     return NULL;
 }
@@ -702,7 +703,6 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
         ret = URMA_FAIL;
     }
 
-    (void)pthread_spin_destroy(&bdp_jfs->send_lock);
     free(bdp_jfs);
 
     atomic_fetch_sub(&bdp_jfc->use_cnt.atomic_cnt, 1);
@@ -1190,7 +1190,6 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     atomic_init(&bdp_jetty->use_cnt.atomic_cnt, 0);
     bdp_jetty->send_jfc = CONTAINER_OF_FIELD(jetty_cfg->jfs_cfg.jfc, bondp_jfc_t, v_jfc);
     bdp_jetty->recv_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr->jfr_cfg.jfc, bondp_jfc_t, v_jfc);
-    (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
@@ -1249,7 +1248,6 @@ UNREGISTER_HEALTH_SEG:
 DELETE_PJETTY:
     bondp_delete_pjetty(bdp_jetty);
 FREE_JETTY:
-    (void)pthread_spin_destroy(&bdp_jetty->send_lock);
     free(bdp_jetty);
     return NULL;
 }
@@ -1295,7 +1293,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
         URMA_LOG_ERR("Failed to delete pjetty\n");
         ret = URMA_FAIL;
     }
-    (void)pthread_spin_destroy(&bdp_jetty->send_lock);
     free(bdp_jetty);
 
     atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
