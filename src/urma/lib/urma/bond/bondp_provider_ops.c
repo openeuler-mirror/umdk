@@ -241,7 +241,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     bdp_ctx->real_async_fd = bdp_ctx->v_ctx.async_fd;
     bdp_ctx->v_ctx.async_fd = async_fd;
     bdp_ctx->bonding_mode = BONDP_BONDING_MODE_STANDALONE;
-    bdp_ctx->bonding_level = BONDP_BONDING_LEVEL_IODIE;
+    bdp_ctx->bonding_level = BONDP_BONDING_LEVEL_PORT;
     atomic_init(&bdp_ctx->token_id_cnt, 0);
     return 0;
 
@@ -290,38 +290,14 @@ static int set_fd_noblock(int fd)
     return 0;
 }
 
-static int init_slave_context_fd(bondp_context_t *bdp_ctx)
-{
-    int ret = -1, i, j;
-    struct epoll_event ev;
+typedef struct urma_member_eid_info {
+    urma_device_t *dev;
+    uint32_t eid_index;
+    bondp_bonding_level_t level;
+} urma_member_eid_info_t;
 
-    for (i = 0; i < bdp_ctx->dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] != NULL) {
-            int fd = bdp_ctx->p_ctxs[i]->async_fd;
-            if (set_fd_noblock(fd) != 0) {
-                goto roll_back;
-            }
-            ev.events = EPOLLIN;
-            ev.data.fd = fd;
-            ev.data.ptr = (void *)bdp_ctx->p_ctxs[i];
-            if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
-                URMA_LOG_ERR("failed to add fd: %u, errno: %d.\n", fd, errno);
-                goto roll_back;
-            }
-        }
-    }
-    return 0;
-
-roll_back:
-    for (j = 0; j < i; j++) {
-        (void)epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_DEL,
-                        bdp_ctx->p_ctxs[j]->async_fd, NULL);
-    }
-    return ret;
-}
-
-static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t bonding_mode,
-                                 bondp_bonding_level_t bonding_level)
+static int bondp_init_member_eid_info_list(bondp_context_t *bdp_ctx,
+                                           urma_member_eid_info_t members[URMA_UBAGG_DEV_MAX_NUM])
 {
     bondp_userctl_physical_device_out_t dev_info = {0};
     urma_user_ctl_in_t in = {
@@ -344,85 +320,100 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
     }
 
     const uint32_t INVALID_EID_INDEX = UINT32_MAX;
+    for (int i = 0; i < IODIE_NUM; i++) {
+        bondp_physical_device_t *pdev = &dev_info.physical_devs[i];
 
-    if (bonding_level == BONDP_BONDING_LEVEL_IODIE) {
-        for (int i = 0; i < IODIE_NUM; i++) {
-            bondp_physical_device_t *pdev = &dev_info.physical_devs[i];
+        urma_device_t *dev = urma_get_device_by_name(pdev->dev_name);
+        if (dev == NULL) {
+            URMA_LOG_ERR("Failed to get device by name %s\n", pdev->dev_name);
+            continue;
+        }
 
-            urma_device_t *dev = urma_get_device_by_name(pdev->dev_name);
-            if (dev == NULL) {
-                URMA_LOG_ERR("Failed to get device by name %s\n", pdev->dev_name);
-                return -1;
-            }
-
-            int primary_eid_idx = pdev->primary_eid_idx;
-            if (primary_eid_idx != INVALID_EID_INDEX) {
-                bdp_ctx->p_ctxs[i] = urma_create_context(dev, primary_eid_idx);
-                if (bdp_ctx->p_ctxs[i] == NULL) {
-                    URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
-                                 pdev->dev_name, primary_eid_idx);
-                    return -1;
-                }
-            }
-
-            if (bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
-                break;
+        int primary_eid_idx = pdev->primary_eid_idx;
+        if (primary_eid_idx != INVALID_EID_INDEX) {
+            int ctx_idx = i;
+            members[ctx_idx].dev = dev;
+            members[ctx_idx].eid_index = primary_eid_idx;
+            members[ctx_idx].level = BONDP_BONDING_LEVEL_IODIE;
+        }
+        for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
+            int port_eid_idx = pdev->port_eid_idx[j];
+            if (port_eid_idx != INVALID_EID_INDEX) {
+                int ctx_idx = IODIE_NUM + PORT_EID_MAX_NUM_PER_DEV * i + j;
+                members[ctx_idx].dev = dev;
+                members[ctx_idx].eid_index = port_eid_idx;
+                members[ctx_idx].level = BONDP_BONDING_LEVEL_PORT;
             }
         }
     }
+    return 0;
+}
 
-    // For compatibility reasons, we create contexts for both the primary EID
-    // and the port EID in standalone mode.
-    if (bonding_level == BONDP_BONDING_LEVEL_PORT ||
-        bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
+static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t bonding_mode,
+                                 bondp_bonding_level_t bonding_level)
+{
+    urma_member_eid_info_t members[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    if (bondp_init_member_eid_info_list(bdp_ctx, members) != 0) {
+        URMA_LOG_ERR("Failed to init port info list\n");
+        return -1;
+    }
 
-        for (int i = 0; i < IODIE_NUM; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        urma_member_eid_info_t *m = &members[i];
+        if (m->dev == NULL || m->level != bdp_ctx->bonding_level) {
+            continue;
+        }
+        urma_context_t *ctx = urma_create_context(m->dev, m->eid_index);
+        if (ctx == NULL) {
+            URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
+                         m->dev->name, m->eid_index);
+            return -1;
+        }
 
-            bondp_physical_device_t *pdev = &dev_info.physical_devs[i];
+        int fd = ctx->async_fd;
+        if (set_fd_noblock(fd) != 0) {
+            return -1;
+        }
+        struct epoll_event ev = {
+            .events = EPOLLIN,
+            .data.fd = fd,
+            .data.ptr = (void *)ctx,
+        };
+        if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
+            URMA_LOG_ERR("failed to add fd: %u, errno: %d.\n", fd, errno);
+            return -1;
+        }
 
-            urma_device_t *dev = urma_get_device_by_name(pdev->dev_name);
-            if (dev == NULL) {
-                URMA_LOG_ERR("Failed to get device by name %s\n", pdev->dev_name);
-                return -1;
-            }
+        bdp_ctx->p_ctxs[i] = ctx;
 
-            for (int j = 0; j < PORT_EID_MAX_NUM_PER_DEV; ++j) {
-                int port_eid_idx = pdev->port_eid_idx[j];
-                int ctx_idx = IODIE_NUM + PORT_EID_MAX_NUM_PER_DEV * i + j;
-                if (port_eid_idx != INVALID_EID_INDEX) {
-                    bdp_ctx->p_ctxs[ctx_idx] = urma_create_context(dev, port_eid_idx);
-                    if (bdp_ctx->p_ctxs[ctx_idx] == NULL) {
-                        URMA_LOG_ERR("Failed to create context for port eid, dev:%s, eid_idx:%d, port_idx:%d\n",
-                                     pdev->dev_name, port_eid_idx, j);
-                        return -1;
-                    }
-                }
-            }
-
-            if (bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
-                break;
-            }
+        if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
+            break;
         }
     }
 
     bdp_ctx->dev_num = bonding_mode == BONDP_BONDING_MODE_STANDALONE
-                            ? SINGLE_DIE_DEVNUM
-                            : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
-    return init_slave_context_fd(bdp_ctx);
+                           ? SINGLE_DIE_DEVNUM
+                           : PRIMARY_EID_NUM + PORT_EID_MAX_NUM;
+
+    return 0;
 }
 
 static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
 {
     int ret = 0, sub_ret = 0;
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
-        if (bdp_ctx->p_ctxs[i] != NULL) {
-            sub_ret = urma_delete_context(bdp_ctx->p_ctxs[i]);
-            if (sub_ret != 0) {
-                URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d\n", i, sub_ret);
-                ret = URMA_FAIL;
-            }
-            bdp_ctx->p_ctxs[i] = NULL;
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
         }
+        (void)epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_DEL,
+                        bdp_ctx->p_ctxs[i]->async_fd, NULL);
+
+        sub_ret = urma_delete_context(bdp_ctx->p_ctxs[i]);
+        if (sub_ret != 0) {
+            URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d\n", i, sub_ret);
+            ret = URMA_FAIL;
+        }
+        bdp_ctx->p_ctxs[i] = NULL;
     }
     return ret;
 }
