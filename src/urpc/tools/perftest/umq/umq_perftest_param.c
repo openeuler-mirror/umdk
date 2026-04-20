@@ -29,6 +29,7 @@ static struct option g_long_options[] = {
     {"trans-mode", required_argument, NULL, 'T'},
     {"rx-depth", required_argument, NULL, 'R'},
     {"tx-depth", required_argument, NULL, 'U'},
+    {"tp-mode", required_argument, NULL, 'M'},
 
     {"buf-mode", required_argument, NULL, 'b'},
     {"interrupt", no_argument, NULL, 'I'},
@@ -48,14 +49,14 @@ static struct option g_long_options[] = {
 static void usage(void)
 {
     (void)printf("Usage:\n");
-    (void)printf("  -d, --dev-name <dev>                device name <dev>\n");
+    (void)printf("  -d, --dev <dev>                     device name <dev>\n");
     (void)printf("  -l, --local-ip <ip-address>         local ip address\n");
     (void)printf("  -r, --remote-ip <ip-address>        remote ip address\n");
     (void)printf("  -p, --port <port>                   listen on/connect to server's port <port>\n");
     (void)printf("  -c, --test-case <case index>        test case to be performed(default: 0)\n");
     (void)printf("                                      0: test umq latency(default)\n");
     (void)printf("                                      1: test umq qps\n");
-    (void)printf("  -u, --cpu-core <cpu_core>           from which cpu core to set affinity for each thread\n");
+    (void)printf("  -u, --cpu_core <cpu_core>           from which cpu core to set affinity for each thread\n");
     (void)printf("      --server                        to launch server.\n");
     (void)printf("      --client                        to launch client.\n");
 
@@ -68,6 +69,7 @@ static void usage(void)
     (void)printf("      --trans-mode                    set umq_trans_mode_t.\n");
     (void)printf("      --tx-depth                      set queue tx-depth(default 512).\n");
     (void)printf("      --rx-depth                      set queue rx-depth(default 512).\n");
+    (void)printf("      --tp-mode                       set queue umq_tp_mode_t(default UMQ_TM_RC).\n");
     (void)printf("      --eid-index                     set eid index.\n");
     (void)printf("      --use_atomic_window             use atomic window when enable flow control.\n");
     (void)printf("      --num                           set number of iterations.\n");
@@ -175,6 +177,12 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                 break;
             case 'B':
                 cfg->config.buf_multiplex = true;
+                break;
+            case 'M':
+                cfg->tp_mode = (umq_tp_mode_t)strtoul(optarg, NULL, 0);
+                if (cfg->tp_mode >= UMQ_TM_MAX) {
+                    return -1;
+                }
                 break;
             case 'N':
                 cfg->cna = (uint16_t)strtoul(optarg, NULL, 0);
