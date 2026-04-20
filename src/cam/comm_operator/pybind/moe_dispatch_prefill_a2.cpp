@@ -33,6 +33,8 @@ constexpr int A2_MAX_HCCS_PEERS = 8;
 constexpr int DYNAMIC_SCALES = 2;
 constexpr int NO_SCALES = 0;
 constexpr int X_DIM = 2;
+constexpr int A2_TOPK_MIN = 2;
+constexpr int A2_TOPK_MAX = 8;
 
 #define MOE_DISPATCH_PREFILL_A2_DEF \
     const at::Tensor& x, \
@@ -79,6 +81,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
 
     // Top-k checks
     int numTopk = static_cast<int>(topkIdx.size(1));
+    TORCH_BIND_ASSERT(numTopk >= A2_TOPK_MIN && numTopk <= A2_TOPK_MAX);
 
     auto device = x.device();
     at::Tensor newTopkWeights;

@@ -93,6 +93,7 @@ constexpr uint32_t DYNAMIC_QUANT_MODE = 2;
 constexpr uint32_t RANK_NUM_PER_NODE_A2 = 8;
 constexpr uint32_t BLOCK_SIZE_A2 = 32;
 constexpr uint32_t MAX_K_VALUE_A2 = 8;
+constexpr uint32_t MIN_K_VALUE_A2 = 2;
 constexpr int32_t MAX_HIDDEN_SIZE_A2 = 7168;
 constexpr int32_t MAX_EP_WORLD_SIZE_A2 = 256;
 constexpr int32_t MAX_MOE_EXPERT_NUMS_A2 = 512;
@@ -232,7 +233,7 @@ static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert:
         bs <= 0 || bs > BS_UPPER_BOUND,
         OPS_LOG_E(K_INNER_DEBUG, "batchsize is invalid. bs: %u, should satisfy 0<bs<=%ld", bs, BS_UPPER_BOUND),
         return GRAPH_FAILED);
-    OPS_ERR_IF(k <= 0 || k > MAX_K_VALUE_A2, OPS_LOG_E(K_INNER_DEBUG, "k is invalid."), return GRAPH_FAILED);
+    OPS_ERR_IF(k < MIN_K_VALUE_A2 || k > MAX_K_VALUE_A2, OPS_LOG_E(K_INNER_DEBUG, "k is invalid, only support [%u, %u].", MIN_K_VALUE_A2, MAX_K_VALUE_A2), return GRAPH_FAILED);
     OPS_ERR_IF(*quantModePtr == UNQUANT_MODE && isScales,
                     OPS_LOG_E(K_INNER_DEBUG, "scales should be null when quantMode is unQuant."), return GRAPH_FAILED);
 
@@ -434,7 +435,9 @@ static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext
     uint64_t tilingKey = MoeDistributeDispatchA2CalcTilingKey(context);
     context.SetTilingKey(tilingKey);
     if ((tilingKey & TILING_KEY_LAYERED_COMM_A2) != 0) {
-        OPS_ERR_IF(info.k != 8, OPS_LOG_E(nodeName, "As layered, K must be 8."), return ge::GRAPH_FAILED);
+        OPS_ERR_IF(info.k < MIN_K_VALUE_A2 || info.k > MAX_K_VALUE_A2,
+            OPS_LOG_E(nodeName, "As layered, K must be in range [%u, %u].", MIN_K_VALUE_A2, MAX_K_VALUE_A2),
+            return ge::GRAPH_FAILED);
     }
     // 2. workspace
     size_t *workSpaces = context.GetWorkspaceSizes(1);

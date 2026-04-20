@@ -327,7 +327,7 @@ Return value is a tuple made of 2 tensors, which stores number_tokens_per_expert
 4. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 5. Do not support shared experts.
 6. Other Constraits need to be satisfy:
- - top_k range：(2， 16]
+ - top_k range：[2, 8]
  - Required: num_experts % num_ranks == 0
  - Required: num_ranks % 8 == 0
  - Required：export HCCL_INTRA_PCIE_ENABLE = 1, export HCCL_INTRA_ROCE_ENABLE = 0
@@ -381,7 +381,7 @@ Return value is a list made of 8 tensors, which stores: recv_x, dynamic_scales_o
 4. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 5. Do not support shared experts.
 6. Other Constraits need to be satisfy:
- - top_k range：(2， 16]
+ - top_k range：[2, 8]
  - BS range：[1，4k]
  - num_experts range：(0， 256]
  - Required: num_experts % num_ranks == 0
@@ -438,7 +438,7 @@ Return value is a tensor，which stores combine_x.
 4. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 5. Do not support shared experts.
 6. Other Constraits need to be satisfy:
- - top_k range：(2， 16]
+ - top_k range：[2, 8]
  - BS range：[1，4k]
  - num_experts range：(0， 256]
  - Required: num_experts % num_ranks == 0
