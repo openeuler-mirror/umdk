@@ -18,6 +18,12 @@
 #define BONDP_CHIP_ID_MIN 1
 #define BONDP_CHIP_ID_MAX 2
 
+#define BONDP_CHIP_ID_MIN_START_PORT 2
+#define BONDP_CHIP_ID_MIN_END_PORT   10
+
+#define BONDP_CHIP_ID_MAX_START_PORT 11
+#define BONDP_CHIP_ID_MAX_END_PORT   19
+
 typedef struct bondp_chip_id_info {
     uint32_t src_chip_id;
     uint32_t dst_chip_id;

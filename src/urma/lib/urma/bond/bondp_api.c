@@ -614,6 +614,9 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
     bdp_jfs->send_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     bdp_jfs->recv_jfc = NULL;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        atomic_init(&bdp_jfs->sqe_cnt[i], 0);
+    }
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
