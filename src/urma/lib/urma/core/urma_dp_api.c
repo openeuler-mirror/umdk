@@ -16,7 +16,6 @@
 #include "urma_private.h"
 #include "urma_provider.h"
 #include "ub_get_clock.h"
-#include "urma_perf.h"
 
 static inline urma_ops_t *get_ops_by_urma_jfc(urma_jfc_t *jfc)
 {

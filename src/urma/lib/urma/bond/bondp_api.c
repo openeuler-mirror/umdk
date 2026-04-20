@@ -16,7 +16,7 @@
 #include "urma_api.h"
 #include "urma_cmd.h"
 #include "urma_log.h"
-#include "urma_provider.h"
+#include "urma_private.h"
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
@@ -29,7 +29,6 @@
 #include "bondp_api.h"
 #include "bondp_health_check.h"
 #include "ub_get_clock.h"
-#include "urma_perf.h"
 
 typedef struct bondp_create_vjetty_udata {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
