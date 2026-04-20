@@ -35,6 +35,7 @@ constexpr int NO_SCALES = 0;
 constexpr int X_DIM = 2;
 constexpr int A2_TOPK_MIN = 2;
 constexpr int A2_TOPK_MAX = 8;
+constexpr int A2_LAYERED_RANK_NUM = 16;
 
 #define MOE_DISPATCH_PREFILL_A2_DEF \
     const at::Tensor& x, \
@@ -67,6 +68,8 @@ tensorList MoeDispatchPrefillA2ImplNpu(
 
     // Type checks
     TORCH_BIND_ASSERT(numTokensPerExpert.scalar_type() == at::kInt);
+    // topkIdx dtype must be int or long
+    TORCH_BIND_ASSERT(topkIdx.scalar_type() == at::kInt || topkIdx.scalar_type() == at::kLong);
 
     // Shape and contiguous checks
     TORCH_BIND_ASSERT(newX.dim() == X_DIM and newX.is_contiguous());
@@ -82,6 +85,12 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     // Top-k checks
     int numTopk = static_cast<int>(topkIdx.size(1));
     TORCH_BIND_ASSERT(numTopk >= A2_TOPK_MIN && numTopk <= A2_TOPK_MAX);
+
+    // topkWeights dtype must be float (not bf16)
+    TORCH_BIND_ASSERT(topkWeights.scalar_type() == at::kFloat);
+
+    // numRanks must equal A2_LAYERED_RANK_NUM (16) for layered communication
+    TORCH_BIND_ASSERT(numRanks == A2_LAYERED_RANK_NUM);
 
     auto device = x.device();
     at::Tensor newTopkWeights;
