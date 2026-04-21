@@ -41,42 +41,47 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
     return -1;
 }
 
-static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
-                                 int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
+static int schedule_send_balance_iodie(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                                       int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
+{
+    URMA_LOG_ERR("Currently do not support iodie balance.");
+    return EINVAL;
+}
+
+static int schedule_send_balance_port(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                                      int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
     int least_load_pos = -1;
     uint32_t least_load = UINT32_MAX;
+    int min, max;
 
-    if (info == NULL || info->src_chip_id == BONDP_CHIP_ID_MIN) {
-        for (uint32_t i = 0; i < min_active_count; i++) {
-            uint32_t active_idx = bdp_comp->active_indices[i];
-            if (!bdp_comp->valid[active_idx]) {
-                continue;
-            }
+    if (min_active_count == 0) {
+        URMA_LOG_ERR("Invalid min_active_count.\n");
+        return EINVAL;
+    }
 
-            uint32_t sqe_cnt = bdp_comp->sqe_cnt[active_idx];
-            if (sqe_cnt < least_load) {
-                least_load = sqe_cnt;
-                least_load_pos = (int)i;
-            }
-        }
+    if (info == NULL) {
+        min = 0;
+        max = URMA_UBAGG_DEV_MAX_NUM;
+    } else if (info->src_chip_id == BONDP_CHIP_ID_MIN) {
+        min = BONDP_CHIP_ID_MIN_START_PORT;
+        max = BONDP_CHIP_ID_MIN_END_PORT;
     } else {
-        if (min_active_count == 0) {
-            URMA_LOG_ERR("Invalid min_active_count.\n");
-            return EINVAL;
-        }
-        for (int i = min_active_count - 1; i >= 0; i--) {
-            uint32_t active_idx = bdp_comp->active_indices[i];
-            if (!bdp_comp->valid[active_idx]) {
-                continue;
-            }
+        min = BONDP_CHIP_ID_MAX_START_PORT;
+        max = BONDP_CHIP_ID_MAX_END_PORT;
+    }
 
-            uint32_t sqe_cnt = bdp_comp->sqe_cnt[active_idx];
-            if (sqe_cnt < least_load) {
-                least_load = sqe_cnt;
-                least_load_pos = i;
-            }
+    for (uint32_t i = 0; i < min_active_count; i++) {
+        uint32_t active_idx = bdp_comp->active_indices[i];
+        if (!bdp_comp->valid[active_idx] || active_idx < min || active_idx > max) {
+            continue;
+        }
+
+        uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[active_idx]);
+        if (sqe_cnt < least_load) {
+            least_load = sqe_cnt;
+            least_load_pos = (int)i;
         }
     }
 
@@ -87,6 +92,19 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     *send_idx = (int)bdp_comp->active_indices[least_load_pos];
     *target_idx = (int)bdp_tjetty->active_indices[least_load_pos];
     return 0;
+}
+
+static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                                 int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
+{
+    if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
+        return schedule_send_balance_port(bdp_comp, bdp_tjetty, send_idx, target_idx, info);
+    }
+    if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
+        return schedule_send_balance_iodie(bdp_comp, bdp_tjetty, send_idx, target_idx, info);
+    }
+
+    return EINVAL;
 }
 
 static int schedule_recv_standalone(const bondp_comp_t *bdp_comp, int *recv_idx)
