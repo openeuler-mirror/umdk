@@ -9,6 +9,7 @@
 
 #include <malloc.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "umq_errno.h"
 #include "umq_vlog.h"
@@ -34,6 +35,7 @@
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_CHECK_ASYNC_PERIOD_US (1000)
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
+#define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 
 typedef struct qbuf_expansion_pool_slot {
     uint32_t slot_id;
@@ -186,7 +188,7 @@ static ALWAYS_INLINE bool try_inc_atomic_exp_mem_size(uint64_t add_size)
     do {
         sum = before + add_size;
         if (sum > g_qbuf_pool.expansion_mem_size_max) {
-            return false;   
+            return false;
         }
     } while(!__atomic_compare_exchange_n(
         &g_qbuf_pool.exp_total_mem_pool_size, &before, sum, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
@@ -224,12 +226,13 @@ static int slot_with_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansion_p
             return -UMQ_ERR_ENOMEM;
         }
 
-        slot->buffer = (void *)memalign(exp_pool->align_size, total_size);
+        slot->buffer = (void *)memalign(QBUF_MEMALIGN_SIZE, total_size);
         if (slot->buffer == NULL) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to alloc expansion pool memory\n");
             goto ROLLBACK_MEM_SIZE;
         }
 
+        madvise(slot->buffer, total_size, MADV_HUGEPAGE);
         slot->header_buffer = (char *)slot->buffer + blk_count * blk_size;
         slot->total_buf_size = total_size;
         slot->total_block_cnt = blk_count;
@@ -257,12 +260,12 @@ static int slot_with_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansion_p
             return -UMQ_ERR_ENOMEM;
         }
 
-        slot->buffer = (void *)memalign(exp_pool->align_size, total_size);
+        slot->buffer = (void *)memalign(QBUF_MEMALIGN_SIZE, total_size);
         if (slot->buffer == NULL) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to alloc expansion pool memory\n");
             goto ROLLBACK_MEM_SIZE;
         }
-
+        madvise(slot->buffer, total_size, MADV_HUGEPAGE);
         slot->header_buffer = NULL;
         slot->total_buf_size = total_size;
         slot->total_block_cnt = blk_count;
@@ -540,12 +543,12 @@ void *umq_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
         g_total_len = UMQ_BUF_DEFAULT_TOTAL_SIZE;
     }
 
-    g_buffer_addr = (void *)memalign(umq_buf_size_small(), g_total_len);
+    g_buffer_addr = (void *)memalign(QBUF_MEMALIGN_SIZE, g_total_len);
     if (g_buffer_addr == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "memalign for qbuf pool failed, errno: %d\n", errno);
         return NULL;
     }
-
+    madvise(g_buffer_addr, g_total_len, MADV_HUGEPAGE);
     UMQ_VLOG_INFO(VLOG_UMQ, "malloc umq io buf %lu bytes\n", g_total_len);
 
     return g_buffer_addr;
@@ -1377,10 +1380,23 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
                 ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
             return (umq_buf_t *)(g_qbuf_pool.header_buffer + id * sizeof(umq_buf_t));
         } else {
-            uint64_t buffer_head = (uint64_t)(uintptr_t)data & g_qbuf_pool.exp_pool_with_date.qbuf_data_to_head_mask;
-            uint64_t id = ((uint64_t)(uintptr_t)data - buffer_head) / umq_buf_size_small();
-            return (umq_buf_t *)(buffer_head +
-                g_qbuf_pool.exp_pool_with_date.expansion_block_count * umq_buf_size_small() + id * sizeof(umq_buf_t));
+            qbuf_expansion_pool_t *exp_pool = &g_qbuf_pool.exp_pool_with_date;
+            (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+            uint32_t valid_slot = 0;
+            for (uint32_t i = 0; i < exp_pool->expansion_pool_cnt_max && valid_slot < exp_pool->expansion_count; i++) {
+                qbuf_expansion_pool_slot_t *slot = exp_pool->exp_slot_list[i];
+                if (slot == NULL) {
+                    continue;
+                }
+                if (data >= slot->buffer && data < slot->header_buffer) {
+                    uint64_t id =
+                        ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)slot->buffer) / umq_buf_size_small();
+                    (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+                    return (umq_buf_t *)(slot->header_buffer + id * sizeof(umq_buf_t));
+                }
+                valid_slot++;
+            }
+            (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
         }
     } else {
         if (data >= g_qbuf_pool.data_buffer && data < g_qbuf_pool.data_buffer + g_qbuf_pool.total_size) {
@@ -1388,9 +1404,23 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
                 ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_buffer) / g_qbuf_pool.block_size;
             return (umq_buf_t *)(g_qbuf_pool.data_buffer + id * g_qbuf_pool.block_size);
         } else {
-            uint64_t buffer_head = (uint64_t)(uintptr_t)data & g_qbuf_pool.exp_pool_with_date.qbuf_data_to_head_mask;
-            uint64_t id = ((uint64_t)(uintptr_t)data - buffer_head) / umq_buf_size_small();
-            return (umq_buf_t *)(buffer_head + id * umq_buf_size_small());
+            qbuf_expansion_pool_t *exp_pool = &g_qbuf_pool.exp_pool_with_date;
+            (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+            uint32_t valid_slot = 0;
+            for (uint32_t i = 0; i < exp_pool->expansion_pool_cnt_max && valid_slot < exp_pool->expansion_count; i++) {
+                qbuf_expansion_pool_slot_t *slot = exp_pool->exp_slot_list[i];
+                if (slot == NULL) {
+                    continue;
+                }
+                if (data >= slot->buffer && data < slot->buffer + slot->total_buf_size) {
+                    uint64_t id =
+                        ((uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)slot->buffer) / umq_buf_size_small();
+                    (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+                    return (umq_buf_t *)(slot->buffer + id * umq_buf_size_small());
+                }
+                valid_slot++;
+            }
+            (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
         }
     }
 
