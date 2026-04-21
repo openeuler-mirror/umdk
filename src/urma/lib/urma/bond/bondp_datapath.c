@@ -156,10 +156,6 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
         URMA_LOG_ERR("Try to call post_send api by invalid comp_type: %d\n", bdp_send_comp->comp_type);
         return URMA_EINVAL;
     }
-    if (!is_valid_bdp_tjetty(bdp_tjetty)) {
-        URMA_LOG_ERR("Invalid bdp_target_jetty\n");
-        return URMA_EINVAL;
-    }
     urma_status_t ret = post_send_check_jfs_wr_valid(bdp_send_comp->bondp_ctx, wr);
     if (ret != URMA_SUCCESS) {
         return ret;

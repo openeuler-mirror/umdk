@@ -141,10 +141,6 @@ static int bondp_delete_vjfce(bondp_jfce_t *bdp_jfce)
 urma_jfce_t *bondp_create_jfce(urma_context_t *ctx)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    if (!is_valid_ctx(bdp_ctx)) {
-        URMA_LOG_ERR("Invalid bond ctx.\n");
-        return NULL;
-    }
 
     bondp_jfce_t *bdp_jfce = (bondp_jfce_t *)calloc(1, sizeof(bondp_jfce_t));
     if (bdp_jfce == NULL) {
@@ -376,6 +372,11 @@ urma_status_t bondp_delete_jfc(urma_jfc_t *jfc)
         atomic_fetch_sub(&bdp_jfce->use_cnt.atomic_cnt, 1);
     }
     return ret;
+}
+
+static inline int get_matrix_port_p_idx(int primary_idx, int port_idx)
+{
+    return primary_idx * PORT_EID_MAX_NUM_PER_DEV + port_idx + PRIMARY_EID_NUM;
 }
 
 static int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_port_id_t port_id,
@@ -1564,11 +1565,6 @@ urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty)
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(target_jetty->urma_ctx, bondp_context_t, v_ctx);
     urma_status_t ret = URMA_SUCCESS;
 
-    if (!is_valid_bdp_tjetty(bdp_tjetty)) {
-        URMA_LOG_ERR("Invalid bdp tjetty\n");
-        return URMA_EINVAL;
-    }
-
     bondp_unregister_health_check_task(bdp_ctx, bdp_tjetty);
 
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
@@ -1771,10 +1767,6 @@ urma_status_t bondp_unimport_jfr(urma_target_jetty_t *target_jfr)
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(target_jfr, bondp_target_jetty_t, v_tjetty);
     urma_status_t ret = URMA_SUCCESS;
 
-    if (!is_valid_bdp_tjetty(bdp_tjetty)) {
-        URMA_LOG_ERR("Invalid bdp tjetty\n");
-        return URMA_EINVAL;
-    }
     if (bondp_unimport_pjfr(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;
     }
