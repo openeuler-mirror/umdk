@@ -340,6 +340,11 @@ fi
     /var/lib/ub/umdk/urma/gcov/%{name}/
 %endif
 
+%pre urma-tools
+if [ -d /usr/bin/urma_admin ] && [ ! -L /usr/bin/urma_admin ]; then
+    rm -rf /usr/bin/urma_admin
+fi
+
 %files urma-tools
 %defattr(-,root,root)
     %{_bindir}/urma_admin
