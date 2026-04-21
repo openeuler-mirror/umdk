@@ -15,6 +15,7 @@
 #include <malloc.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "urma_api.h"
 #include "urma_ubagg.h"
@@ -56,6 +57,8 @@ extern "C" {
 #define UMQ_UB_DEV_STR_LENGTH 64
 #define UMQ_UB_NAMESPACE_SIZE 256
 #define UMQ_UB_NAMESPACE_PATH "/proc/self/ns/net"
+
+#define UMQ_UB_ENABLE_SHARE_FC_JFR (true)
 
 typedef enum umq_size_interval {
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
@@ -138,6 +141,12 @@ typedef enum ub_queue_fc_stat_u64 {
     FC_COUNTER_MAX_U64
 } ub_queue_fc_stat_u64_t;
 
+typedef enum ub_queue_fc_msg_type {
+    UB_QUEUE_FC_MSG_TYPE_REQ = 0,
+    UB_QUEUE_FC_MSG_TYPE_RSP = 1,
+    UB_QUEUE_FC_MSG_TYPE_MAX = 2
+} ub_queue_fc_msg_type_t;
+
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
     volatile uint64_t total_local_rx_posted;
@@ -171,6 +180,7 @@ typedef struct ub_flow_control {
     bool remote_get;
     bool enabled;
     volatile bool is_credit_applying;
+    volatile uint16_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
 } ub_flow_control_t;
 
 typedef struct imported_tseg_node {
@@ -219,7 +229,7 @@ typedef struct umq_ub_ctx {
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
     uint64_t remote_notify_addr;
-    uint64_t *umq_ctx_jetty_table;
+    volatile uint64_t *umq_ctx_jetty_table;
     volatile uint64_t *rx_consumed_jetty_table;
 } umq_ub_ctx_t;
 
@@ -398,6 +408,7 @@ typedef struct ub_queue {
     uint32_t rx_depth;
     uint32_t tx_depth;
     uint32_t remote_rx_buf_size;
+    uint32_t fc_rx_depth;
 
     uint8_t priority;           // priority of the queue
     uint8_t max_rx_sge;         // max sge number of receive array
@@ -485,9 +496,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id);
 int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq);
-void umq_ub_jfr_ctx_put(ub_queue_t *queue);
+void umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
-                       ub_queue_t *share_queue);
+                       ub_queue_t *share_queue, ub_queue_jetty_index_t jetty_idx);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 int umq_status_convert(urma_status_t urma_status);
@@ -542,7 +553,6 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
                         urma_sge_t *sges, uint32_t remain_tx);
 
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
-int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
@@ -587,6 +597,23 @@ urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg, uint32_t mempoo
 static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 {
     return (feature & UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS) != 0;
+}
+
+// for exclusive acquisition of umq, it needs to be put back after use
+static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_jetty_id(ub_queue_t *queue, const uint32_t jetty_id)
+{
+    if (jetty_id >= queue->dev_ctx->dev_attr.dev_cap.max_jetty) {
+        return NULL;
+    }
+ 
+    return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
+        &queue->dev_ctx->umq_ctx_jetty_table[jetty_id], 0, __ATOMIC_ACQUIRE);
+}
+
+static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t jetty_idx)
+{
+    __atomic_store_n(&queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[jetty_idx]->jetty_id.id],
+        (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
 }
 
 #ifdef __cplusplus
