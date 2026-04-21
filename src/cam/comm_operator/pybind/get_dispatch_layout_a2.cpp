@@ -31,12 +31,16 @@ const uint32_t ZERO = 0;
 const uint32_t FIRST = 1;
 constexpr int A2_TOPK_MIN = 2;
 constexpr int A2_TOPK_MAX = 8;
+constexpr int A2_LAYERED_RANK_NUM = 16;
 } // namespace
 
 // dispatch requires return: num_tokens_per_expert, notify_send_data
 std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplNpu(const at::Tensor &topkIdx, int64_t numExperts,
     int64_t numRanks)
 {
+    // topkIdx dtype must be int or long
+    TORCH_BIND_ASSERT(topkIdx.scalar_type() == at::kInt || topkIdx.scalar_type() == at::kLong);
+
     // Convert topk_idx to int64 if necessary
     at::Tensor topkIdxInt64 = topkIdx.scalar_type() == at::kLong ? topkIdx : topkIdx.to(at::kLong);
 
@@ -47,6 +51,9 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplNpu(const at::Tensor &
     const int numTokens = topkIdxInt64.size(0);
     const int numTopk = topkIdxInt64.size(1);
     TORCH_BIND_ASSERT(numTopk >= A2_TOPK_MIN && numTopk <= A2_TOPK_MAX);
+
+    // numRanks must equal A2_LAYERED_RANK_NUM (16) for layered communication
+    TORCH_BIND_ASSERT(numRanks == A2_LAYERED_RANK_NUM);
     const int localRanksize = LOCAL_RANK_SIZE;
     auto serverNum = numRanks / localRanksize;
 
