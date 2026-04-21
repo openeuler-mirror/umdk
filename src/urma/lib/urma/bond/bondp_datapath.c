@@ -249,7 +249,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
     } else {
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
-        bondp_chip_id_info_t info = { .src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id };
+        bondp_chip_id_info_t info = {.src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id};
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, &info);
     }
     if (ret != 0) {
@@ -305,7 +305,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
     } else {
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
-        bondp_chip_id_info_t info = { .src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id };
+        bondp_chip_id_info_t info = {.src_chip_id = bwr->src_chip_id, .dst_chip_id = bwr->dst_chip_id};
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, &info);
     }
     if (ret != 0) {
@@ -776,7 +776,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
 
             int new_send_idx = -1, new_target_idx = -1;
             if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
-                &new_send_idx, &new_target_idx, NULL) != 0) {
+                              &new_send_idx, &new_target_idx, NULL) != 0) {
                 URMA_LOG_ERR("Failed to schedule send for migration\n");
                 return CONVERT_FAIL;
             }
@@ -831,34 +831,42 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
     return CONVERT_SUCCESS;
 }
 
-static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_t *cr)
+static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
+    bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
+    if (recv_comp == NULL) {
+        URMA_LOG_ERR("Failed to find local jetty, idx:%u, id:%u\n", idx, cr->local_id);
+        return CONVERT_SKIP;
+    }
+
     const uint64_t wr_id = cr->user_ctx;
     jfr_wr_entry_t *wr_entry = jfr_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
     if (wr_entry == NULL) {
         // wr_entry could not be NULL
+        put_comp(recv_comp);
         return CONVERT_FAIL;
     }
 
-    bondp_comp_t *bdp_comp = wr_entry->bdp_comp;
+    bondp_comp_t *post_comp = wr_entry->bdp_comp;
     uint32_t recv_idx = wr_entry->recv_idx;
     uint32_t msn = 0;
-    convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
-    cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
+    convert_pcr_to_vcr(cr, bdp_ctx, &msn);
+    cr->local_id = recv_comp->v_jetty.jetty_id.id;
     cr->user_ctx = wr_entry->user_ctx;
 
-    bdp_comp->rqe_cnt[recv_idx] -= 1;
+    post_comp->rqe_cnt[recv_idx] -= 1;
 
     /* Do de-duplicating */
     int ret = 0;
     urma_jetty_id_t target_jetty_id = cr->remote_id;
-    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bdp_comp->v_conn_table, &target_jetty_id);
+    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&recv_comp->v_conn_table, &target_jetty_id);
     if (!v_conn) {
-        ret = bdp_v_conn_table_add_on_recv(&bdp_comp->v_conn_table, &target_jetty_id, &v_conn,
-                                           is_single_dev_mode(bdp_comp->bondp_ctx));
+        ret = bdp_v_conn_table_add_on_recv(&recv_comp->v_conn_table, &target_jetty_id, &v_conn,
+                                           is_single_dev_mode(bdp_ctx));
         if (ret != 0) {
             free_jfr_wr(&wr_entry->wr);
             jfr_wr_buf_release(wr_entry);
+            put_comp(recv_comp);
             return CONVERT_FAIL;
         }
     }
@@ -867,7 +875,8 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
                        !bdp_slide_wnd_seq_in_window(&v_conn->recv_wnd, msn),
                        bdp_slide_wnd_has(&v_conn->recv_wnd, msn));
         urma_jfr_wr_t *bad_wr = NULL;
-        ret = comp_post_recv(bdp_comp, recv_idx, &wr_entry->wr, &bad_wr);
+        ret = comp_post_recv(post_comp, recv_idx, &wr_entry->wr, &bad_wr);
+        put_comp(recv_comp);
         return CONVERT_SKIP;
     }
 
@@ -875,6 +884,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_jfc_t *bdp_jfc, urma_cr_
 
     free_jfr_wr(&wr_entry->wr);
     jfr_wr_buf_release(wr_entry);
+    put_comp(recv_comp);
     return CONVERT_SUCCESS;
 }
 
@@ -925,7 +935,7 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bon
     } else if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else if (is_recv_cr(cr)) {
-        return handle_recv_cr_with_store(bdp_jfc, cr);
+        return handle_recv_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else {
         return handle_send_cr_with_store(bdp_jfc, idx, cr);
     }
