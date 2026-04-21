@@ -56,6 +56,7 @@ static struct {
 } g_umq_log_config;
 static umq_init_cfg_t *g_umq_config;
 static util_external_mutex_lock *g_umq_config_mutex_lock = NULL;
+static umq_io_perf_callback_t g_umq_io_perf_callback = NULL;
 
 static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     [UMQ_TRANS_MODE_UB] = {
@@ -1545,4 +1546,24 @@ int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops)
     util_ops.try_write_lock = (int (*)(util_external_rwlock *m))ops->try_write_lock;
     util_external_rwlock_ops_register(&util_ops);
     return UMQ_SUCCESS;
+}
+
+int umq_io_perf_callback_register(umq_io_perf_callback_t func)
+{
+    if (func == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    g_umq_io_perf_callback = func;
+    return UMQ_SUCCESS;
+}
+
+void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf)
+{
+    if (g_umq_io_perf_callback == NULL) {
+        return;
+    }
+
+    g_umq_io_perf_callback(record_type, qbuf);
 }
