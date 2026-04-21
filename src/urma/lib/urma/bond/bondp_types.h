@@ -7,26 +7,25 @@
  * Note:
  * History: 2025-02-05   Create File
  */
+
 #ifndef BONDP_TYPES_H
 #define BONDP_TYPES_H
 
-#include <pthread.h>
 #ifndef __cplusplus
 #include <stdatomic.h>
 #else
 #include <atomic>
 #endif
+#include <stdbool.h>
+
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
 #include "topo_info.h"
 #include "ub_list.h"
 #include "urma_types.h"
 #include "urma_ubagg.h"
-#include <stdbool.h>
 
-#define BONDP_MAX_NUM_JFRS            (10240)
 #define BONDP_MAX_NUM_JETTYS          (10240)
-#define BONDP_MAX_NUM_SEGS            (10240)
 #define BONDP_MAX_NUM_RSEGS           (10240)
 #define BONDP_MAX_WR_LIST_NUM         (300)
 #define BONDP_MAX_SGE_NUM             (32)
@@ -43,7 +42,6 @@
                                                            (jetty_id)->uasid, (jetty_id)->id)
 
 struct bondp_target_jetty;
-
 
 typedef enum bondp_health_mode {
     HEALTH_MODE_BACKUP_CHECK,
@@ -285,23 +283,6 @@ typedef struct urma_bond_id_info_out {
     bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_id_info_out_t;
 
-static inline bool is_valid_dev_num(int dev_num)
-{
-    return dev_num > 0 && dev_num <= URMA_UBAGG_DEV_MAX_NUM;
-}
-
-bool is_valid_ctx(bondp_context_t *ctx);
-
-bool is_valid_bdp_tjetty(bondp_target_jetty_t *bdp_tjetty);
-
-bool is_valid_import_tseg(bondp_import_tseg_t *rtseg);
-
-/* Get index of matrix server port in p_ctx, p_jetty, etc. */
-static inline int get_matrix_port_p_idx(int primary_idx, int port_idx)
-{
-    return primary_idx * PORT_EID_MAX_NUM_PER_DEV + port_idx + PRIMARY_EID_NUM;
-}
-
 static inline bool is_empty_eid(urma_eid_t *eid)
 {
     return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
@@ -311,4 +292,5 @@ static inline bool is_single_dev_mode(bondp_context_t *ctx)
 {
     return ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE;
 }
+
 #endif // BONDP_TYPES_H
