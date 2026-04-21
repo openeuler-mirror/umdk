@@ -29,6 +29,8 @@ const int EXPERT_DATA_SIZE = 1 + MAX_BATCH_SIZE; // 4097
 const uint32_t DIM_TWO = 2;
 const uint32_t ZERO = 0;
 const uint32_t FIRST = 1;
+constexpr int A2_TOPK_MIN = 2;
+constexpr int A2_TOPK_MAX = 8;
 } // namespace
 
 // dispatch requires return: num_tokens_per_expert, notify_send_data
@@ -44,6 +46,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplNpu(const at::Tensor &
 
     const int numTokens = topkIdxInt64.size(0);
     const int numTopk = topkIdxInt64.size(1);
+    TORCH_BIND_ASSERT(numTopk >= A2_TOPK_MIN && numTopk <= A2_TOPK_MAX);
     const int localRanksize = LOCAL_RANK_SIZE;
     auto serverNum = numRanks / localRanksize;
 

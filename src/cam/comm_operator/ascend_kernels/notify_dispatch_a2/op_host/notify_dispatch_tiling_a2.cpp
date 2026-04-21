@@ -79,6 +79,8 @@ constexpr int64_t MAX_COMM_WORLD_SIZE = 384;
 constexpr int64_t SUPPORT_A2_WORLD_SIZE = 16;
 constexpr int64_t MAX_COMM_LOCAL_SIZE = 16;
 constexpr int64_t MAX_A2_LOCAL_SIZE = 8;
+constexpr uint32_t MIN_K_VALUE_A2 = 2;
+constexpr uint32_t MAX_K_VALUE_A2 = 8;
 
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
 constexpr uint32_t KERNEL_USE_WORKSPACE = 1 * 1024 * 1024;
@@ -127,6 +129,10 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OPS_ERR_IF(sendCountPtr == nullptr, OPS_LOG_E(nodeName, "sendCountPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(numTokenPtr == nullptr, OPS_LOG_E(nodeName, "numTokenPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(topkNumPtr == nullptr, OPS_LOG_E(nodeName, "topkNumPtr is null."), return ge::GRAPH_FAILED);
+    OPS_ERR_IF((*topkNumPtr < MIN_K_VALUE_A2) || (*topkNumPtr > MAX_K_VALUE_A2),
+                    OPS_LOG_E(nodeName, "topkNum is invalid, only support [%u, %u], but got topkNum=%ld.",
+                            MIN_K_VALUE_A2, MAX_K_VALUE_A2, *topkNumPtr),
+                    return ge::GRAPH_FAILED);
     OPS_ERR_IF(numExpertsPtr == nullptr, OPS_LOG_E(nodeName, "numExpertsPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(rankSizePtr == nullptr, OPS_LOG_E(nodeName, "rankSizePtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(rankIdPtr == nullptr, OPS_LOG_E(nodeName, "rankIdPtr is null."), return ge::GRAPH_FAILED);
