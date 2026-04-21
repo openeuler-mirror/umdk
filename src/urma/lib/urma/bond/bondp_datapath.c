@@ -51,7 +51,7 @@ static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, urma_jfs_w
         ret = URMA_EINVAL;
     }
     if (ret == URMA_SUCCESS) {
-        comp->sqe_cnt[send_idx] += 1;
+        atomic_fetch_add(&comp->sqe_cnt[send_idx], 1);
     }
     return ret;
 }
@@ -791,7 +791,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
                     resend_wr_entry->target_idx != target_idx) {
                     continue;
                 }
-                bdp_comp->sqe_cnt[send_idx] -= 1;
+                atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
                 if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
                     URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
                 }
@@ -819,7 +819,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
         return CONVERT_SKIP;
     }
 
-    bdp_comp->sqe_cnt[send_idx] -= 1;
+    atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
 
     uint32_t msn = 0;
     convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
@@ -901,7 +901,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     if (is_recv_cr(cr)) {
         comp->rqe_cnt[idx] -= 1;
     } else {
-        comp->sqe_cnt[idx] -= 1;
+        atomic_fetch_sub(&comp->sqe_cnt[idx], 1);
     }
 
     uint32_t msn = 0;
