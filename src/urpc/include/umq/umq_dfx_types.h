@@ -29,6 +29,7 @@ typedef struct umq_packet_stats {
     uint64_t send_cnt;              // number of packets sent
     uint64_t send_success;          // number of packets successfully sent
     uint64_t recv_cnt;              // number of packets received
+    uint64_t send_eagain_cnt;       // number of packets failed to send due to flowcontrol eagain
     uint64_t send_error_cnt;        // number of packets failed to send
     uint64_t recv_error_cnt;        // number of packets failed to receive
 } umq_packet_stats_t;
