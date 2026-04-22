@@ -9,15 +9,16 @@
 
 #include <sys/eventfd.h>
 
-#include "urma_api.h"
-#include "umq_symbol_private.h"
 #include "perf.h"
-#include "umq_vlog.h"
 #include "umq_errno.h"
+#include "umq_inner.h"
+#include "umq_qbuf_pool.h"
+#include "umq_symbol_private.h"
 #include "umq_ub_flow_control.h"
 #include "umq_ub_imm_data.h"
-#include "umq_qbuf_pool.h"
 #include "umq_ub_private.h"
+#include "umq_vlog.h"
+#include "urma_api.h"
 
 #define UMQ_UB_FC_UNDATE_FAKE_BUF_SIZE 128 // in combind mode, buffer size more than umq_buf_t needs to be allocated
 
@@ -231,6 +232,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     uint16_t wr_index = 0;
     uint16_t max_tx = 0;
     bool opcode_consume_rqe = false;
+    bool user_send_imm = false;
     uint32_t max_send_size =
         (queue->remote_rx_buf_size > queue->tx_buf_size) ? queue->tx_buf_size : queue->remote_rx_buf_size;
 
@@ -246,6 +248,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             ret = -UMQ_ERR_EINVAL;
             *bad_qbuf = qbuf;
             goto ERROR;
+        }
+        if (!user_send_imm) {
+            user_send_imm = (opcode == UMQ_OPC_SEND_IMM);
         }
         sges_ptr = sges[wr_index];
         uint32_t sge_num = 0;
@@ -338,6 +343,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
+    if (user_send_imm) {
+        umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, qbuf);
+    }
     urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp);
     if (status != URMA_SUCCESS) {
@@ -370,6 +378,10 @@ RECOVER_WINDOW:
         max_tx - umq_ub_tx_failed_num(urma_wr, max_tx, *bad_qbuf), queue->dev_ctx->io_lock_free);
 
 ERROR:
+    if (user_send_imm && (ret == -UMQ_ERR_EAGAIN)) {
+        umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POST_SEND_EAGAIN, qbuf);
+    }
+
     return ret;
 }
 
@@ -592,6 +604,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     umq_ub_imm_t imm = {.value = cr->imm_data};
     if (imm.bs.type == IMM_TYPE_USER) {
         buf_pro->imm_data = imm.value;
+        umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, rx_buf);
         goto OUT;
     }
 
