@@ -807,7 +807,12 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     }
     uint64_t diff = timestamp - queue->checker->last_send;
     uint16_t remote_credit = fc->ops.remote_rx_window_load(fc);
-    uint16_t return_threshold = umq_ub_fc_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
+    uint16_t return_threshold = 0;
+    if (fc->peer_ratio == 0) {
+        return_threshold = 0;
+    } else {
+        return_threshold = umq_ub_fc_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
+    }
     if (diff < queue->flow_control.timeout_us || remote_credit <= return_threshold) {
         return UMQ_SUCCESS;
     }
@@ -885,10 +890,14 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     }
     urma_jetty_t *jetty  = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
+    ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+    uint16_t available = __atomic_load_n(&pool->stats_u16[CREDIT_POOL_IDLE], __ATOMIC_RELAXED);
     umq_ub_imm_t imm = {
         .flow_control = {
             .type = IMM_TYPE_FC_CREDIT_RETURN_ACK,
-            .window = return_credit}
+            .window = return_credit,
+            .ratio = umq_ub_fc_raito_to_imm(available, queue->flow_control.local_rx_depth)
+            }
         };
 
     umq_ub_fc_user_ctx_t obj = {
