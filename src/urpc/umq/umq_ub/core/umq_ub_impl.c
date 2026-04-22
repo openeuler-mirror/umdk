@@ -2204,6 +2204,7 @@ int umq_ub_stats_io_get_impl(uint64_t umqh_tp, umq_packet_stats_t *packet_stats)
     packet_stats->send_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND];
     packet_stats->send_success = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND_SUCCESS];
     packet_stats->recv_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_RECV];
+    packet_stats->send_eagain_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND_EAGAIN];
     packet_stats->send_error_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_SEND_ERROR];
     packet_stats->recv_error_cnt = queue->packet_stats[UB_PACKET_STATS_TYPE_RECV_ERROR];
 

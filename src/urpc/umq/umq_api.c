@@ -1561,9 +1561,10 @@ int umq_io_perf_callback_register(umq_io_perf_callback_t func)
 
 void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf)
 {
-    if (g_umq_io_perf_callback == NULL) {
+    umq_io_perf_callback_t func = g_umq_io_perf_callback;
+    if (func == NULL) {
         return;
     }
 
-    g_umq_io_perf_callback(record_type, qbuf);
+    func(record_type, qbuf);
 }

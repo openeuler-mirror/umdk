@@ -436,8 +436,9 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
         "send_success", packet_stats->send_success);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "recv_cnt", packet_stats->recv_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
+                         "send_eagain_cnt", packet_stats->send_eagain_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
         "send_error_cnt", packet_stats->send_error_cnt);
-
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
         "recv_error_cnt", packet_stats->recv_error_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
