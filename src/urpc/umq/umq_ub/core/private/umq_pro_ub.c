@@ -798,6 +798,7 @@ static uint32_t umq_ub_process_fc_msg(ub_queue_t *queue, umq_ub_imm_t imm, umq_b
         }
         case IMM_TYPE_FC_CREDIT_RETURN_ACK: {
             queue->flow_control.peer_ratio = imm.flow_control.ratio;
+            break;
         }
         default:
             break;
