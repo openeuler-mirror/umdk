@@ -30,6 +30,16 @@ typedef struct exchange_info {
     uint8_t data[0];
 } exchange_info_t;
 
+static struct {
+    int client_fd;
+    int accept_fd;
+    int listen_fd;
+} g_example_connect = {
+    .client_fd = -1,
+    .accept_fd = -1,
+    .listen_fd = -1,
+};
+
 #define GREETER_CASE_NUM 8
 
 static struct option g_long_options[] = {
@@ -56,28 +66,38 @@ static struct option g_long_options[] = {
     {NULL,                 0,                 NULL,  0 }
 };
 
-uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind_info, uint32_t *bind_info_size)
+int example_init_umq(struct urpc_example_config *cfg)
 {
     umq_init_cfg_t *init_cfg = (umq_init_cfg_t *)calloc(1, sizeof(*init_cfg));
     if (init_cfg == NULL) {
         LOG_PRINT_ERR("calloc init_cfg failed\n");
-        return UMQ_INVALID_HANDLE;
+        return -1;
     }
     init_cfg->feature = cfg->feature;
     init_cfg->cna = cfg->cna;
     init_cfg->ubmm_eid = cfg->deid;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
-        goto FREE_CFG;
+        free(init_cfg);
+        return -1;
     }
+
+    (void)memcpy(&cfg->dev_info, &init_cfg->trans_info[0].dev_info, sizeof(umq_dev_assign_t));
 
     if (umq_init(init_cfg) != UMQ_SUCCESS) {
         LOG_PRINT_ERR("umq_init failed\n");
-        goto FREE_CFG;
+        free(init_cfg);
+        return -1;
     }
 
+    free(init_cfg);
+    return 0;
+}
+
+uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind_info, uint32_t *bind_info_size)
+{
     umq_create_option_t option = {
-        .trans_mode = init_cfg->trans_info[0].trans_mode,
+        .trans_mode = cfg->trans_mode,
         .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
                        UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE |
                        UMQ_CREATE_FLAG_TP_TYPE,
@@ -92,19 +112,26 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
     if (cfg->instance_mode == SERVER) {
         if (sprintf(option.name, "%s", "server") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            goto UNINIT;
+            return -1;
         }
     } else {
         if (sprintf(option.name, "%s", "client") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            goto UNINIT;
+            return -1;
         }
     }
-    (void)memcpy(&option.dev_info, &init_cfg->trans_info[0].dev_info, sizeof(umq_dev_assign_t));
+
+    if (strstr(cfg->dev_name, "bond") != NULL) {
+        option.create_flag |= UMQ_CREATE_FLAG_USED_PORTS;
+        option.used_ports.port = &cfg->src_port_id;
+        option.used_ports.num = 1;
+    }
+
+    (void)memcpy(&option.dev_info, &cfg->dev_info, sizeof(umq_dev_assign_t));
     uint64_t umqh = umq_create(&option);
     if (umqh == UMQ_INVALID_HANDLE) {
         LOG_PRINT_ERR("umq_create failed\n");
-        goto UNINIT;
+        return -1;
     }
 
     *bind_info_size = umq_bind_info_get(umqh, local_bind_info, *bind_info_size);
@@ -112,17 +139,12 @@ uint64_t init_and_create_umq(struct urpc_example_config *cfg, uint8_t *local_bin
         LOG_PRINT_ERR("umq_bind_info_get failed\n");
         goto DESTROY;
     }
-    free(init_cfg);
+
     return umqh;
 
 DESTROY:
     umq_destroy(umqh);
 
-UNINIT:
-    umq_uninit();
-
-FREE_CFG:
-    free(init_cfg);
     return UMQ_INVALID_HANDLE;
 }
 
@@ -139,10 +161,10 @@ int send_exchange_data(int sock, uint8_t *send_data, uint32_t send_len)
     exchange_info->msg_len = send_len;
     (void)memcpy(exchange_info->data, send_data, send_len);
     if (send(sock, buf, buf_len, 0) < 0) {
-        LOG_PRINT_ERR("send exchange data failed\n");
+        LOG_PRINT_ERR("send exchange data failed, errno %s\n", strerror(errno));
         return -1;
     }
-    LOG_PRINT("send exchange data done, len: %u\n", buf_len);
+    LOG_PRINT("send exchange data done, len: %u\n", send_len);
 
     return 0;
 }
@@ -157,7 +179,7 @@ int recv_exchange_data(int sock, uint8_t *recv_data, uint32_t *recv_len)
     while (1) {
         int len = recv(sock, recv_buf + offset, recv_size - offset, 0);
         if (len <= 0) {
-            LOG_PRINT_ERR("receive exchange data failed\n");
+            LOG_PRINT_ERR("receive exchange data failed, errno %s\n", strerror(errno));
             return -1;
         }
 
@@ -184,8 +206,20 @@ int recv_exchange_data(int sock, uint8_t *recv_data, uint32_t *recv_len)
     return 0;
 }
 
-int client_exchange_bind_info(const char *ip, uint16_t port, uint8_t *send_data, uint32_t send_len,
-    uint8_t *recv_data, uint32_t *recv_len)
+int client_exchange_data(uint8_t *send_data, uint32_t send_len, uint8_t *recv_data, uint32_t *recv_len)
+{
+    if (send_exchange_data(g_example_connect.client_fd, send_data, send_len) != 0) {
+        return -1;
+    }
+
+    if (recv_exchange_data(g_example_connect.client_fd, recv_data, recv_len) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int client_connect(const char *ip, uint16_t port)
 {
     int ret = -1;
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -229,23 +263,36 @@ int client_exchange_bind_info(const char *ip, uint16_t port, uint8_t *send_data,
         goto CLOSE_SOC;
     }
     LOG_PRINT("server connected, ip: %s, port: %u\n", ip, port);
+    g_example_connect.client_fd = client_fd;
 
-    if (send_exchange_data(client_fd, send_data, send_len) != 0) {
-        goto CLOSE_SOC;
-    }
-
-    if (recv_exchange_data(client_fd, recv_data, recv_len) != 0) {
-        goto CLOSE_SOC;
-    }
-    ret = 0;
+    return 0;
 
 CLOSE_SOC:
     close(client_fd);
     return ret;
 }
 
-int server_exchange_bind_info(const char *ip, uint16_t port, uint8_t *send_data, uint32_t send_len,
-    uint8_t *recv_data, uint32_t *recv_len)
+void client_dsiconnect(void)
+{
+    close(g_example_connect.client_fd);
+    g_example_connect.client_fd = -1;
+}
+
+int server_exchange_data(uint8_t *send_data, uint32_t send_len, uint8_t *recv_data, uint32_t *recv_len)
+{
+    if (recv_exchange_data(g_example_connect.accept_fd, recv_data, recv_len) != 0) {
+        return -1;
+    }
+
+    if (send_exchange_data(g_example_connect.accept_fd, send_data, send_len) != 0) {
+        return -1;
+    }
+
+    usleep(EXAMPLE_SLEEP_TIME_US);
+    return 0;
+}
+
+int server_accept(const char *ip, uint16_t port)
 {
     int ret = -1;
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -304,17 +351,10 @@ int server_exchange_bind_info(const char *ip, uint16_t port, uint8_t *send_data,
         goto CLOSE_CLI;
     }
 
-    if (recv_exchange_data(client_fd, recv_data, recv_len) != 0) {
-        goto CLOSE_CLI;
-    }
+    g_example_connect.accept_fd = client_fd;
+    g_example_connect.listen_fd = server_fd;
 
-    // 发送回应数据
-    if (send_exchange_data(client_fd, send_data, send_len) != 0) {
-        goto CLOSE_CLI;
-    }
-
-    usleep(EXAMPLE_SLEEP_TIME_US);
-    ret = 0;
+    return 0;
 
 CLOSE_CLI:
     close(client_fd);
@@ -322,6 +362,14 @@ CLOSE_CLI:
 CLOSE_SVR:
     close(server_fd);
     return ret;
+}
+
+void server_dsiconnect(void)
+{
+    close(g_example_connect.accept_fd);
+    close(g_example_connect.listen_fd);
+    g_example_connect.accept_fd = -1;
+    g_example_connect.listen_fd = -1;
 }
 
 int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg)
@@ -720,3 +768,52 @@ void log_get_current_time(char *buffer, uint32_t len)
     }
 }
 
+int dev_eid_query(struct urpc_example_config *cfg, umq_eid_t *dev_eid)
+{
+    umq_dev_info_t dev_info;
+    int ret = umq_dev_info_get(cfg->dev_name, cfg->trans_mode, &dev_info);
+    if (ret != 0) {
+        LOG_PRINT_ERR("umq_dev_info_get for %s failed\n", cfg->dev_name);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < dev_info.ub.eid_cnt; i++) {
+        if (dev_info.ub.eid_list[i].eid_index == (uint32_t)cfg->eid_idx) {
+            *dev_eid = dev_info.ub.eid_list[i].eid;
+            return 0;
+        }
+    }
+
+    LOG_PRINT_ERR("dev_eid_query for %s:%d failed\n", cfg->dev_name, cfg->eid_idx);
+    return -1;
+}
+
+int used_port_query(struct urpc_example_config *cfg)
+{
+    umq_route_list_t route_list;
+    umq_route_key_t route_key = {
+        .src_bonding_eid = cfg->src_eid,
+        .dst_bonding_eid = cfg->dst_eid,
+        .tp_type = cfg->tp_type
+    };
+
+    if (strstr(cfg->dev_name, "bond") == NULL) {
+        return 0;
+    }
+
+    if (umq_get_route_list(&route_key, UMQ_TRANS_MODE_UB, &route_list) != UMQ_SUCCESS) {
+        LOG_PRINT("umq_get_route_list for %s failed\n", cfg->dev_name);
+        return -1;
+    }
+
+    if (route_list.route_num == 0) {
+        LOG_PRINT("umq_get_route_list for %s, route num is 0\n", cfg->dev_name);
+        return -1;
+    }
+
+    // chose 1st port
+    cfg->src_port_id = route_list.routes[0].src_port;
+    cfg->dst_port_id = route_list.routes[0].dst_port;
+
+    return 0;
+}
