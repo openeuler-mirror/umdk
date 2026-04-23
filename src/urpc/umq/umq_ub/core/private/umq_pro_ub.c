@@ -618,6 +618,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
+    buf_pro->opcode = UMQ_OPC_SEND_IMM;
     ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
     if (real_queue != NULL) {
         umq_inc_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
@@ -677,6 +678,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                 umq_ub_imm_t imm = {.value = cr->imm_data};
                 if (imm.bs.type == IMM_TYPE_USER) {
                     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+                    buf_pro->opcode = UMQ_OPC_WRITE_IMM;
                     buf_pro->imm_data = imm.value;
                     return UMQ_SUCCESS;
                 }
@@ -690,6 +692,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                     }
 
                     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+                    buf_pro->opcode = UMQ_OPC_WRITE_IMM;
                     ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
                     if (real_queue == NULL) {
                         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroy\n",
@@ -724,6 +727,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
         }
         case URMA_CR_OPC_SEND: {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
+            buf_pro->opcode = UMQ_OPC_SEND;
             ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
             if (real_queue != NULL) {
                 buf_pro->umq_ctx = real_queue->umq_ctx;
@@ -780,9 +784,10 @@ static uint32_t umq_ub_fill_fc_buf(umq_buf_t **buf, umq_buf_status_t status)
     if (fc_buf == NULL) {
         return 0;
     }
-
     fc_buf->io_direction = UMQ_IO_RX;
     fc_buf->status = status;
+    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)fc_buf->qbuf_ext;
+    buf_pro->opcode = UMQ_OPC_SEND;
     *buf = fc_buf;
     return 1;
 }
