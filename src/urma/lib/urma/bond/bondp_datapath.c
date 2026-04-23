@@ -366,7 +366,9 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
     } else {
         urma_jfs_wr_t *cur = wr;
         while (cur != NULL) {
+            (void)pthread_spin_lock(&bdp_jetty->send_lock);
             ret = bondp_post_send_wr_and_store(bdp_jetty, cur, bad_wr);
+            (void)pthread_spin_unlock(&bdp_jetty->send_lock);
             if (ret != URMA_SUCCESS) {
                 PERF_PROFILING_END(BOND_JETTY_POST_SEND);
                 return ret;
@@ -396,7 +398,9 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
         urma_jfs_wr_t *cur = wr;
 
         while (cur != NULL) {
+            (void)pthread_spin_lock(&bdp_jfs->send_lock);
             ret = bondp_post_send_wr_and_store(bdp_jfs, cur, bad_wr);
+            (void)pthread_spin_unlock(&bdp_jfs->send_lock);
             if (ret != URMA_SUCCESS) {
                 PERF_PROFILING_END(BOND_JFS_POST_SEND);
                 return ret;
@@ -767,22 +771,25 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
     }
 
     if (cr->status != 0) {
+        (void)pthread_spin_lock(&bdp_comp->send_lock);
         bdp_comp->valid[send_idx] = false;
 
         int new_send_idx = -1, new_target_idx = -1;
         if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx, NULL) != 0) {
-            /*When all ports are closed and no suitable port can be found to resend
-            the data, the error CQE for that transaction will be returned directly to 
-            the upper layer. */
-            URMA_LOG_ERR("Failed to schedule send for migration\n");
+            /*
+             * When all ports are invalid and no port is available to resend the wr,
+             * this error CQE is returned directly to the upper layer.
+             */
+            URMA_LOG_ERR("Failed to find valid port for retransmission.\n");
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
             goto CONVERT_CR;
         }
 
         URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
 
         for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
-            const uint64_t wr_id = (wr_entry->wr_id + i) % bdp_jfc->wr_buf.max_wr_num + 1;
+            const uint64_t wr_id = (wr_entry->wr_id + i - 1) % bdp_jfc->wr_buf.max_wr_num + 1;
             jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
             if (resend_wr_entry == NULL ||
                 resend_wr_entry->send_idx != send_idx ||
@@ -813,6 +820,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
             };
             bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
         }
+        (void)pthread_spin_unlock(&bdp_comp->send_lock);
         return CONVERT_SKIP;
     }
 
