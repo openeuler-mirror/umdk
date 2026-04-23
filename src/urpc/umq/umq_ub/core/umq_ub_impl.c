@@ -1988,7 +1988,7 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue->dev_ctx == NULL || queue->dev_ctx->remote_imported_info == NULL || queue->bind_ctx == NULL ||
         mempool_id >= UMQ_MAX_TSEG_NUM) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub get mempool state parameter invalid\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub get mempool state parameter invalid\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
         return -UMQ_ERR_EINVAL;
     }
@@ -2003,24 +2003,31 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
 
 int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
 {
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
+    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, "
+            "UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS is not enabled, refresh mempool state is not supported\n",
+            EID_ARGS(*eid), id);
+        return -UMQ_ERR_EPERM;
+    }
+
     umq_mempool_state_t mempool_state;
     int ret = umq_ub_mempool_state_get_impl(umqh_tp, mempool_id, &mempool_state);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "get mempool state failed, status: %d\n", ret);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "get mempool state failed, status: %d\n", ret);
         return ret;
     }
 
     if (mempool_state.import_state == MEMPOOL_STATE_IMPORTED) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "mempool %u is imported\n", mempool_id);
+        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "mempool %u is imported\n", mempool_id);
         return UMQ_SUCCESS;
     }
 
-    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[mempool_id];
     if (tseg == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u tseg not exist\n", EID_ARGS(*eid),
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u tseg not exist\n", EID_ARGS(*eid),
             id, mempool_id);
         return -UMQ_ERR_ENODEV;
     }
@@ -2028,7 +2035,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
 
     umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), 1, queue->umqh, NULL);
     if (send_buf == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq malloc failed\n", EID_ARGS(*eid), id);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq malloc failed\n", EID_ARGS(*eid), id);
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -2065,7 +2072,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
 
     ret = umq_ub_send_imm(queue, imm.value, &sge, (uint64_t)(uintptr_t)send_buf);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub send imm failed, status: %d\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq ub send imm failed, status: %d\n",
             EID_ARGS(*eid), id, ret);
         goto INC_FC_WIN;
     }
