@@ -194,12 +194,13 @@ typedef struct umq_trans_info {
 #define MAX_UMQ_TRANS_INFO_NUM (128)
 
 /* umq feature */
-#define UMQ_FEATURE_API_BASE                (0)         // enable base feature. set when use umq_enqueue/umq_dequeue
-#define UMQ_FEATURE_API_PRO                 (1)         // enable pro feature. set when use umq_post/umq_poll
-#define UMQ_FEATURE_ENABLE_TOKEN_POLICY     (1 << 1)    // enable token policy.
-#define UMQ_FEATURE_ENABLE_STATS            (1 << 2)    // enable stats collection
-#define UMQ_FEATURE_ENABLE_PERF             (1 << 3)    // enable performance collection
-#define UMQ_FEATURE_ENABLE_FLOW_CONTROL     (1 << 4)    // enable flow control
+#define UMQ_FEATURE_API_BASE                    (0)         // enable base feature. set when use umq_enqueue/umq_dequeue
+#define UMQ_FEATURE_API_PRO                     (1)         // enable pro feature. set when use umq_post/umq_poll
+#define UMQ_FEATURE_ENABLE_TOKEN_POLICY         (1 << 1)    // enable token policy.
+#define UMQ_FEATURE_ENABLE_STATS                (1 << 2)    // enable stats collection
+#define UMQ_FEATURE_ENABLE_PERF                 (1 << 3)    // enable performance collection
+#define UMQ_FEATURE_ENABLE_FLOW_CONTROL         (1 << 4)    // enable flow control
+#define UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS    (1 << 5)    // enable single side memory access
 
 typedef struct umq_flow_control_cfg {
     // initial available credit for each umq
