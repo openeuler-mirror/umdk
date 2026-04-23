@@ -113,6 +113,12 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     urma_target_seg_t *tseg = NULL;
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
+            if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, "
+                    "UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS is not enabled, read is not supported\n",
+                    EID_ARGS(*eid), id);
+                return -UMQ_ERR_EPERM;
+            }
             if (buf_pro->remote_sge.length > buffer->total_data_size) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, local buffer size[%u] is smaller than "
                     "remote buffer size[%u]\n", EID_ARGS(*eid), id, buffer->total_data_size,
@@ -143,6 +149,12 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             urma_wr_ptr->rw.notify_data = buf_pro->imm_data;
             /* fall-through */
         case UMQ_OPC_WRITE:
+            if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, "
+                    "UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS is not enabled, write or write imm is not supported\n",
+                    EID_ARGS(*eid), id);
+                return -UMQ_ERR_EPERM;
+            }
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, local buffer size[%u] is larger than "
                     "remote buffer size[%u]\n", EID_ARGS(*eid), id, buffer->total_data_size,
