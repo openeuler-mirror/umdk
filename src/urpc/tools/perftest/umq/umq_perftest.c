@@ -226,19 +226,26 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
 {
     umq_create_option_t option = {
         .trans_mode = (umq_trans_mode_t)cfg->trans_mode,
-        .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE |
-            UMQ_CREATE_FLAG_RX_DEPTH | UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE,
+        .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_TP_MODE |
+                       UMQ_CREATE_FLAG_RX_DEPTH | UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE,
         .rx_buf_size = cfg->config.size,
         .tx_buf_size = cfg->config.size,
         .rx_depth = cfg->config.rx_depth,
         .tx_depth = cfg->config.tx_depth,
         .mode = cfg->config.interrupt ? UMQ_MODE_INTERRUPT : UMQ_MODE_POLLING,
+        .tp_mode = cfg->tp_mode,
     };
     char *name = cfg->config.instance_mode == PERF_INSTANCE_SERVER ? "umq_perftest_server" : "umq_perftest_client";
     (void)sprintf(option.name, "%s", name);
     if (fill_dev_info(&option.dev_info, cfg) != 0) {
         LOG_PRINT("dev info copy failed\n");
         return -1;
+    }
+
+    if (strstr(cfg->config.dev_name, "bond") != NULL) {
+        option.create_flag |= UMQ_CREATE_FLAG_USED_PORTS;
+        option.used_ports.port = &cfg->port_id;
+        option.used_ports.num = 1;
     }
 
     uint64_t umqh = umq_create(&option);
@@ -400,6 +407,93 @@ static int umq_perftest_client_exchange_data(void)
     return 0;
 }
 
+static int umq_perftest_query_eid(umq_perftest_config_t *cfg, umq_eid_t *eid)
+{
+    umq_dev_info_t dev_info;
+    int ret = umq_dev_info_get(cfg->config.dev_name, cfg->trans_mode, &dev_info);
+    if (ret != 0) {
+        LOG_PRINT("umq_dev_info_get for %s failed\n", cfg->config.dev_name);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < dev_info.ub.eid_cnt; i++) {
+        if (dev_info.ub.eid_list[i].eid_index == (uint32_t)cfg->eid_idx) {
+            *eid = dev_info.ub.eid_list[i].eid;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+static int umq_perftest_client_exchange_port(umq_perftest_config_t *cfg)
+{
+    exchange_info_t send_info = {
+        .msg_len = sizeof(umq_eid_t),
+    };
+    umq_eid_t *eid = (umq_eid_t *)send_info.data;
+    int ret = umq_perftest_query_eid(cfg, eid);
+    if (ret != 0) {
+        LOG_PRINT("umq_perftest_query_eid for %s failed\n", cfg->config.dev_name);
+        return -1;
+    }
+
+    if (send_exchange_data(g_umq_perftest_ctx.fd, &send_info) < 0) {
+        return -1;
+    }
+
+    exchange_info_t recv_info = {0};
+    if (recv_exchange_data(g_umq_perftest_ctx.fd, &recv_info) != 0) {
+        return -1;
+    }
+
+    if (recv_info.msg_len != sizeof(umq_eid_t)) {
+        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
+        return -1;
+    }
+
+    umq_eid_t *dst = (umq_eid_t *)recv_info.data;
+    umq_route_list_t route_list;
+    umq_route_key_t route_key = {
+        .src_bonding_eid = *eid,
+        .dst_bonding_eid = *dst,
+        .tp_type = UMQ_TP_TYPE_RTP
+    };
+
+    if (strstr(cfg->config.dev_name, "bond") != NULL) {
+        if (umq_get_route_list(&route_key, cfg->trans_mode, &route_list) != UMQ_SUCCESS) {
+            LOG_PRINT("umq_get_route_list for %s failed\n", cfg->config.dev_name);
+            return -1;
+        }
+
+        if (route_list.route_num == 0) {
+            LOG_PRINT("umq_get_route_list for %s, route num is 0\n", cfg->config.dev_name);
+            return -1;
+        }
+    }
+
+    send_info.msg_len = sizeof(umq_port_id_t);
+    umq_port_id_t *port = (umq_port_id_t *)send_info.data;
+    // chose 1st port
+    cfg->port_id = route_list.routes[0].src_port;
+    *port = route_list.routes[0].dst_port;
+
+    if (send_exchange_data(g_umq_perftest_ctx.fd, &send_info) < 0) {
+        return -1;
+    }
+
+    if (recv_exchange_data(g_umq_perftest_ctx.fd, &recv_info) != 0) {
+        return -1;
+    }
+
+    if (recv_info.msg_len != sizeof(umq_port_id_t)) {
+        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int umq_perftest_run_client(umq_perftest_config_t *cfg)
 {
     int ret = -1;
@@ -414,21 +508,25 @@ static int umq_perftest_run_client(umq_perftest_config_t *cfg)
         return -1;
     }
 
-    // create umqh
-    if (umq_perftest_create_umqh(cfg) != 0) {
-        goto UNINIT;
-    }
-
     // create socket for exchange info and sync，and attach server
     g_umq_perftest_ctx.fd = perftest_create_client_socket(&cfg->config);
     if (g_umq_perftest_ctx.fd < 0) {
-        goto DESTROY;
+        goto UNINIT;
+    }
+
+    if (umq_perftest_client_exchange_port(cfg) != 0) {
+        goto CLOSE_SOC;
+    }
+
+    // create umqh
+    if (umq_perftest_create_umqh(cfg) != 0) {
+        goto CLOSE_SOC;
     }
 
     // exchange bind info and bind
     ret = umq_perftest_client_exchange_data();
     if (ret != 0) {
-        goto CLOSE_SOC;
+        goto DESTROY;
     }
 
     // post rx
@@ -462,13 +560,13 @@ UNBIND:
     // unbind and flush tx and rx
     (void)umq_unbind(g_umq_perftest_ctx.umqh);
 
-CLOSE_SOC:
-    // destroy socket
-    (void)close(g_umq_perftest_ctx.fd);
-
 DESTROY:
     // destroy umqh
     (void)umq_destroy(g_umq_perftest_ctx.umqh);
+
+CLOSE_SOC:
+    // destroy socket
+    (void)close(g_umq_perftest_ctx.fd);
 
 UNINIT:
     // uninit
@@ -508,6 +606,48 @@ static int umq_perftest_server_exchange_and_bind(umq_perftest_config_t *cfg)
     return 0;
 }
 
+static int umq_perftest_server_exchange_port(umq_perftest_config_t *cfg)
+{
+    exchange_info_t send_info = {
+        .msg_len = sizeof(umq_eid_t),
+    };
+    exchange_info_t recv_info = {0};
+    umq_eid_t *eid = (umq_eid_t *)send_info.data;
+    int ret = umq_perftest_query_eid(cfg, eid);
+    if (ret != 0) {
+        LOG_PRINT("umq_perftest_query_eid for %s failed\n", cfg->config.dev_name);
+        return -1;
+    }
+
+    if (recv_exchange_data(g_umq_perftest_ctx.accept_fd, &recv_info) != 0) {
+        return -1;
+    }
+    if (recv_info.msg_len != sizeof(umq_eid_t)) {
+        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
+        return -1;
+    }
+
+    if (send_exchange_data(g_umq_perftest_ctx.accept_fd, &send_info) < 0) {
+        return -1;
+    }
+
+    if (recv_exchange_data(g_umq_perftest_ctx.accept_fd, &recv_info) != 0) {
+        return -1;
+    }
+    if (recv_info.msg_len != sizeof(umq_port_id_t)) {
+        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
+        return -1;
+    }
+
+    cfg->port_id = *((umq_port_id_t *)recv_info.data);
+
+    if (send_exchange_data(g_umq_perftest_ctx.accept_fd, &recv_info) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 static int umq_perftest_run_server(umq_perftest_config_t *cfg)
 {
     int ret = -1;
@@ -521,15 +661,10 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
         return -1;
     }
 
-    // create umqh
-    if (umq_perftest_create_umqh(cfg) != 0) {
-        goto UNINIT;
-    }
-
     // create socket for exchange attach info and sync
     g_umq_perftest_ctx.fd = perftest_create_server_socket(&cfg->config);
     if (g_umq_perftest_ctx.fd < 0) {
-        goto DESTROY;
+        goto UNINIT;
     }
 
     g_umq_perftest_ctx.accept_fd =
@@ -538,10 +673,19 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
         goto CLOSE_FD;
     }
 
+    if (umq_perftest_server_exchange_port(cfg) != 0) {
+        goto CLOSE_ACCEPT_FD;
+    }
+
+    // create umqh
+    if (umq_perftest_create_umqh(cfg) != 0) {
+        goto CLOSE_ACCEPT_FD;
+    }
+
     // exchange bind info and bind
     ret = umq_perftest_server_exchange_and_bind(cfg);
     if (ret != 0) {
-        goto CLOSE_ACCEPT_FD;
+        goto DESTROY;
     }
 
     // fill rx
