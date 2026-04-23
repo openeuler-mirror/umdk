@@ -15,6 +15,9 @@ typedef enum bondp_health_event {
     BONDP_HEALTH_EVENT_MAX,
 } bondp_health_event_t;
 
+typedef int (*bondp_fallback_ctrl_send_cb_t)(bondp_context_t *bdp_ctx, uint32_t vjetty_id,
+    int local_idx, int target_idx, uint8_t ctrl_type, uint8_t req_seq, uint32_t payload);
+
 typedef struct bondp_health_event_info {
     int local_idx;
 	int target_idx;
@@ -48,7 +51,8 @@ void bondp_health_update_active_idx(bondp_context_t *bdp_ctx, bondp_target_jetty
 	int new_active_idx);
 bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, urma_cr_t *cr);
 void bondp_health_kick_fallback_task(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty);
-bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_cr_t *cr);
+void bondp_health_notify_fallback_ctrl_rx(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
+    uint8_t ctrl_type, uint8_t req_seq, uint32_t payload);
 void bondp_notify_health_event(bondp_context_t *bdp_ctx, bondp_health_event_t event,
 	const bondp_health_event_info_t *info);
 
