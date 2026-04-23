@@ -22,8 +22,8 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 
-#include "../../../../../src/urpc/include/framework/urpc_framework_api.h"
-#include "../../../../../src/urpc/include/framework/urpc_framework_errno.h"
+#include "urpc_framework_api.h"
+#include "urpc_framework_errno.h"
 #include "../common/common.h"
 
 #define THREAD_NAME_MAX_LEN 16

@@ -13,9 +13,9 @@
 #include <climits>
 #include "../common/common.h"
 
-#include "../../../../../src/ulock/dlock/lib/include/dlock_client_api.h"
-#include "../../../../../src/ulock/dlock/lib/include/dlock_server_api.h"
-#include "../../../../../src/ulock/dlock/lib/include/dlock_types.h"
+#include "dlock_client_api.h"
+#include "dlock_server_api.h"
+#include "dlock_types.h"
 
 using namespace dlock;
 
