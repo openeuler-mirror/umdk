@@ -767,54 +767,56 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
     }
 
     if (cr->status != 0) {
-        if (bdp_comp->valid[send_idx] == true) {
-            bdp_comp->valid[send_idx] = false;
+        bdp_comp->valid[send_idx] = false;
 
-            int new_send_idx = -1, new_target_idx = -1;
-            if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
-                              &new_send_idx, &new_target_idx, NULL) != 0) {
-                URMA_LOG_ERR("Failed to schedule send for migration\n");
-                return CONVERT_FAIL;
+        int new_send_idx = -1, new_target_idx = -1;
+        if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
+                          &new_send_idx, &new_target_idx, NULL) != 0) {
+            /*When all ports are closed and no suitable port can be found to resend
+            the data, the error CQE for that transaction will be returned directly to 
+            the upper layer. */
+            URMA_LOG_ERR("Failed to schedule send for migration\n");
+            goto CONVERT_CR;
+        }
+
+        URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
+
+        for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
+            const uint64_t wr_id = (wr_entry->wr_id + i) % bdp_jfc->wr_buf.max_wr_num + 1;
+            jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
+            if (resend_wr_entry == NULL ||
+                resend_wr_entry->send_idx != send_idx ||
+                resend_wr_entry->target_idx != target_idx) {
+                continue;
             }
-
-            URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
-
-            for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
-                const uint64_t wr_id = (wr_entry->wr_id + i) % bdp_jfc->wr_buf.max_wr_num + 1;
-                jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
-                if (resend_wr_entry == NULL ||
-                    resend_wr_entry->send_idx != send_idx ||
-                    resend_wr_entry->target_idx != target_idx) {
-                    continue;
-                }
-                atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
-                if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                    URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
-                }
+            atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
+            if (resend_jfs_wr(resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+                URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
             }
+        }
 
-            /* Update active link after failover is finished. */
-            bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
+        /* Update active link after failover is finished. */
+        bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
 
-            bool is_primary_failover = (bdp_comp->active_count > 0 &&
-                                        send_idx == (uint32_t)bdp_comp->active_indices[0] &&
-                                        new_send_idx != (int)bdp_comp->active_indices[0]);
-            if (is_primary_failover) {
-                bondp_health_event_info_t event_info = {
-                    .local_idx = -1,
-                    .target_idx = -1,
-                    .user_ctx = 0,
-                    .cr_status = 0,
-                    .new_active_idx = -1,
-                    .bdp_jetty = NULL,
-                    .bdp_tjetty = wr_entry->v_conn->target_vjetty,
-                };
-                bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
-            }
+        bool is_primary_failover = (bdp_comp->active_count > 0 &&
+                                    send_idx == (uint32_t)bdp_comp->active_indices[0] &&
+                                    new_send_idx != (int)bdp_comp->active_indices[0]);
+        if (is_primary_failover) {
+            bondp_health_event_info_t event_info = {
+                .local_idx = -1,
+                .target_idx = -1,
+                .user_ctx = 0,
+                .cr_status = 0,
+                .new_active_idx = -1,
+                .bdp_jetty = NULL,
+                .bdp_tjetty = wr_entry->v_conn->target_vjetty,
+            };
+            bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
         }
         return CONVERT_SKIP;
     }
 
+CONVERT_CR:
     atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
 
     uint32_t msn = 0;
