@@ -684,9 +684,10 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         },
         .disable_scale_cap = cfg->buf_pool_cfg.disable_scale_cap,
         .expansion_pool_id_min = HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
-        .expansion_pool_cnt_max = UMQ_MAX_TSEG_NUM - HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
+        .expansion_pool_cnt_max = QBUF_POOL_MEMPOOL_ID_MAX - HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
         .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
         .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
+        .disable_malloc_escape = cfg->buf_pool_cfg.disable_malloc_escape,
     };
     ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
@@ -2037,6 +2038,12 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     if (send_buf == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq malloc failed\n", EID_ARGS(*eid), id);
         return -UMQ_ERR_ENOMEM;
+    }
+
+    if (send_buf->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send_buf is not a pooled memory\n",
+            EID_ARGS(*eid), id);
+        goto FREE_BUF;
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)send_buf->qbuf_ext;

@@ -303,6 +303,13 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             } else {
                 real_buf = buffer;
             }
+
+            if (real_buf->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, ub only supports using pooled memory\n",
+                    EID_ARGS(*eid), id);
+                goto ERROR;
+            }
+
             sges_ptr->tseg = tseg_list[real_buf->mempool_id];
             if (sges_ptr->tseg == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u tseg not exist\n",
@@ -506,6 +513,13 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
             sges_ptr->addr = (uint64_t)(uintptr_t)buffer->buf_data;
             sges_ptr->len = buffer->data_size;
             sges_ptr->user_tseg = NULL;
+
+            if (buffer->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, ub only supports using pooled memory\n",
+                    EID_ARGS(*eid), id);
+                goto PUT_CUR_RX_CTX;
+            }
+
             sges_ptr->tseg = tseg_list[buffer->mempool_id];
             if (sges_ptr->tseg == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u tseg not exist\n",
