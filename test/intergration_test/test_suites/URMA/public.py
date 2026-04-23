@@ -132,7 +132,7 @@ class UBUSFeature(BaseTest):
             
         if expect_failed:
             opt +=" --enable_err_continue"  
-        _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()}"
+        _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()} --ctp"
         s_cmd = f"{_cmd} {s_opt} -d bonding_dev_0"
         c_cmd = f"{_cmd} {c_opt} -d bonding_dev_0 -S {server.test_nic1_ip}"
         
