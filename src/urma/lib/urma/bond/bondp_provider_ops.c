@@ -23,6 +23,7 @@
 #include "bondp_segment.h"
 #include "bondp_types.h"
 #include "ubagg_ioctl.h"
+#include "bondp_netlink.h"
 #include "urma_device.h"
 #include "urma_log.h"
 #include "urma_provider.h"
@@ -138,8 +139,16 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
         return URMA_FAIL;
     }
 
+    if (bondp_nl_init() != 0) {
+        URMA_LOG_ERR("Failed to init bondp netlink context.\n");
+        (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
+        g_bondp_global_ctx = NULL;
+        return URMA_FAIL;
+    }
+
     if (bondp_start_health_check_thread() != 0) {
         URMA_LOG_ERR("Failed to start health check thread.\n");
+        bondp_nl_uninit();
         (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
         g_bondp_global_ctx = NULL;
         return URMA_FAIL;
@@ -155,6 +164,7 @@ urma_status_t bondp_uninit(void)
     }
 
     bondp_stop_health_check_thread();
+    bondp_nl_uninit();
 
     int ret = bondp_global_ctx_uninit(g_bondp_global_ctx);
     if (ret != 0) {

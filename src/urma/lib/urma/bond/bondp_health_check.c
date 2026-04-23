@@ -19,6 +19,7 @@
 #include "bondp_context_table.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_health_check.h"
+#include "bondp_netlink.h"
 #include "urma_private.h"
 
 #define UBAGG_MAX_EVENT 1
@@ -60,9 +61,6 @@
 #define BONDP_HEALTH_CHECK_CHECK_MAX_BACKOFF          100
 #define BONDP_FALLBACK_CTRL_REQ                        1
 #define BONDP_FALLBACK_CTRL_RESP                       2
-#define BONDP_FALLBACK_CTRL_TYPE_SHIFT                 8
-#define BONDP_FALLBACK_CTRL_TYPE_MASK                  0xFF
-#define BONDP_FALLBACK_CTRL_SEQ_MASK                   0xFF
 #define BONDP_FALLBACK_PRIMARY_INVALID_ID              UINT32_MAX
 
 typedef struct bondp_health_ctx_node {
@@ -164,18 +162,8 @@ void bondp_notify_health_event(bondp_context_t *bdp_ctx, bondp_health_event_t ev
 }
 
 static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const bondp_health_event_info_t *info);
-
-static uint64_t bondp_fallback_ctrl_encode(uint8_t ctrl_type, uint8_t req_seq)
-{
-    return (((uint64_t)ctrl_type & BONDP_FALLBACK_CTRL_TYPE_MASK) << BONDP_FALLBACK_CTRL_TYPE_SHIFT) |
-        ((uint64_t)req_seq & BONDP_FALLBACK_CTRL_SEQ_MASK);
-}
-
-static void bondp_fallback_ctrl_decode(uint64_t ctrl_data, uint8_t *ctrl_type, uint8_t *req_seq)
-{
-    *ctrl_type = (uint8_t)((ctrl_data >> BONDP_FALLBACK_CTRL_TYPE_SHIFT) & BONDP_FALLBACK_CTRL_TYPE_MASK);
-    *req_seq = (uint8_t)(ctrl_data & BONDP_FALLBACK_CTRL_SEQ_MASK);
-}
+static bool bondp_health_handle_fallback_ctrl_rx_impl(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
+    uint8_t ctrl_type, uint8_t req_seq, uint32_t payload, bool silent_unmatched);
 
 static int bondp_get_target_idx_by_local_idx(const bondp_health_task_t *task, int local_idx, int *target_idx)
 {
@@ -643,6 +631,44 @@ static void bondp_handle_health_queued_events(bondp_context_t *bond_ctx)
     bondp_free_health_event_list(&event_list);
 }
 
+static void bondp_handle_netlink_events(void)
+{
+    while (true) {
+        bondp_switchback_msg_t msg = {0};
+        int ret = bondp_nl_recv_switchback_msg(&msg);
+        if (ret == -EAGAIN) {
+            break;
+        }
+        if (ret != 0) {
+            URMA_LOG_WARN("Failed to recv switchback msg from netlink, ret:%d\n", ret);
+            break;
+        }
+
+        bool consumed = false;
+        bondp_global_context_t *global_ctx = g_bondp_global_ctx;
+        if (global_ctx == NULL) {
+            break;
+        }
+        pthread_rwlock_rdlock(&global_ctx->health_thread_ctx.health_ctx_lock);
+        bondp_health_ctx_node_t *ctx_node = NULL;
+        UB_LIST_FOR_EACH(ctx_node, node, &global_ctx->health_thread_ctx.health_ctx_list) {
+            if (ctx_node->bdp_ctx == NULL) {
+                continue;
+            }
+            if (bondp_health_handle_fallback_ctrl_rx_impl(ctx_node->bdp_ctx, msg.in.recv_local_id,
+                msg.in.ctrl_type, msg.in.req_seq, msg.in.payload, true)) {
+                consumed = true;
+                break;
+            }
+        }
+        pthread_rwlock_unlock(&global_ctx->health_thread_ctx.health_ctx_lock);
+        if (!consumed) {
+            URMA_LOG_WARN("Drop switchback netlink msg: local_id:%u type:%u seq:%u payload:%u not matched\n",
+                msg.in.recv_local_id, msg.in.ctrl_type, msg.in.req_seq, msg.in.payload);
+        }
+    }
+}
+
 static void bondp_handle_epoll_event(const struct epoll_event *event)
 {
     if (event == NULL) {
@@ -655,6 +681,12 @@ static void bondp_handle_epoll_event(const struct epoll_event *event)
     }
 
     if ((event->events & EPOLLIN) == 0) {
+        return;
+    }
+
+    int nl_fd = bondp_nl_get_fd();
+    if (nl_fd >= 0 && event->data.fd == nl_fd) {
+        bondp_handle_netlink_events();
         return;
     }
 
@@ -858,55 +890,19 @@ static int bondp_send_fallback_ctrl_msg(
     bondp_context_t *bdp_ctx, bondp_health_task_t *task,
     int local_idx, int target_idx, uint8_t ctrl_type, uint8_t req_seq, uint64_t payload)
 {
-    if (local_idx < 0 || target_idx < 0) {
+    if (local_idx < 0 || target_idx < 0 || payload > UINT32_MAX) {
         return -1;
     }
-    urma_jetty_t *jetty = task->bondp_jetty->p_jetty[local_idx];
-    urma_target_jetty_t *tjetty = task->bdp_tjetty->p_tjetty[local_idx][target_idx];
-    urma_target_seg_t *tseg = task->bdp_tjetty->p_check_tseg[local_idx][target_idx];
-    urma_target_seg_t *local_tseg = task->bondp_jetty->check_tseg[local_idx];
-    uint64_t *health_buf = (uint64_t *)bdp_ctx->bondp_heath_check_ctx.check_buf;
-    if (jetty == NULL || tjetty == NULL || tseg == NULL || local_tseg == NULL || health_buf == NULL) {
+
+    int ret = bondp_fallback_ctrl_send_default(bdp_ctx, task->vjetty_id, local_idx, target_idx,
+        ctrl_type, req_seq, (uint32_t)payload);
+    if (ret != 0) {
+        URMA_LOG_WARN("Failed to send fallback ctrl msg by netlink, vjetty:%u lidx:%d tidx:%d type:%u seq:%u ret:%d\n",
+            task->vjetty_id, local_idx, target_idx, ctrl_type, req_seq, ret);
         return -1;
     }
-    health_buf[0] = payload;
-
-    urma_sge_t src_sge = {
-        .addr = (uint64_t)health_buf,
-        .len = sizeof(uint64_t),
-        .tseg = local_tseg,
-        .user_tseg = NULL,
-    };
-    urma_sge_t dst_sge = {
-        .addr = tseg->seg.ubva.va,
-        .len = sizeof(uint64_t),
-        .tseg = tseg,
-        .user_tseg = NULL,
-    };
-
-    urma_jfs_wr_t wr = {
-        .opcode = URMA_OPC_WRITE_IMM,
-        .flag.bs.complete_enable = 1,
-        .tjetty = tjetty,
-        .user_ctx = BONDP_CTRL_USER_CTX_MASK | BONDP_HEALTH_CHECK_MAGIC,
-        .rw = {
-            .src = { .sge = &src_sge, .num_sge = 1 },
-            .dst = { .sge = &dst_sge, .num_sge = 1 },
-            .notify_data = bondp_fallback_ctrl_encode(ctrl_type, req_seq),
-        },
-        .next = NULL,
-    };
-    mark_jfs_wr_ctrl(&wr);
-    URMA_LOG_INFO("Fallback WRITE_IMM send, lidx:%d tidx:%d type:%u seq:%u payload:%u notify_data:0x%lx\n",
-        local_idx, target_idx, ctrl_type, req_seq, (uint32_t)payload, wr.rw.notify_data);
-
-    urma_jfs_wr_t *bad_wr = NULL;
-    urma_status_t ret = urma_post_jetty_send_wr(jetty, &wr, &bad_wr);
-    if (ret != URMA_SUCCESS) {
-        URMA_LOG_WARN("Failed to send fallback ctrl msg, lidx:%d tidx:%d type:%u seq:%u ret:%d\n",
-            local_idx, target_idx, ctrl_type, req_seq, ret);
-        return -1;
-    }
+    URMA_LOG_INFO("Fallback ctrl sent by netlink, vjetty:%u lidx:%d tidx:%d type:%u seq:%u payload:%u\n",
+        task->vjetty_id, local_idx, target_idx, ctrl_type, req_seq, (uint32_t)payload);
     return 0;
 }
 
@@ -1349,17 +1345,17 @@ void bondp_health_kick_fallback_task(bondp_context_t *bdp_ctx, bondp_target_jett
     pthread_rwlock_unlock(&health->task_table.lock);
 }
 
-bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_cr_t *cr)
+static bool bondp_health_handle_fallback_ctrl_rx_impl(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
+    uint8_t ctrl_type, uint8_t req_seq, uint32_t payload, bool silent_unmatched)
 {
-    (void)local_idx;
-    if (!bondp_health_check_enabled() || !is_recv_cr(cr) || cr->opcode != URMA_CR_OPC_WRITE_WITH_IMM) {
+    if (!bondp_health_check_enabled()) {
         return false;
     }
 
-    uint8_t ctrl_type = 0;
-    uint8_t req_seq = 0;
-    bondp_fallback_ctrl_decode(cr->imm_data & 0xFFFFULL, &ctrl_type, &req_seq);
     if (ctrl_type != BONDP_FALLBACK_CTRL_REQ && ctrl_type != BONDP_FALLBACK_CTRL_RESP) {
+        if (!silent_unmatched) {
+            URMA_LOG_WARN("Invalid fallback ctrl type:%u local_id:%u\n", ctrl_type, recv_local_id);
+        }
         return false;
     }
 
@@ -1367,16 +1363,17 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
     pthread_rwlock_wrlock(&health->task_table.lock);
     int req_recv_local_idx = -1;
     bondp_health_task_t *task = bondp_find_health_task_by_cr_local_id_nolock(
-        health, cr->local_id, &req_recv_local_idx);
+        health, recv_local_id, &req_recv_local_idx);
     if (task == NULL) {
         pthread_rwlock_unlock(&health->task_table.lock);
+        if (!silent_unmatched) {
+            URMA_LOG_WARN("Fallback ctrl not matched by local_id:%u\n", recv_local_id);
+        }
         return false;
     }
 
     if (ctrl_type == BONDP_FALLBACK_CTRL_REQ) {
-        uint64_t *health_buf = (uint64_t *)bdp_ctx->bondp_heath_check_ctx.check_buf;
-        uint32_t req_expected_primary_id = (health_buf == NULL) ?
-            BONDP_FALLBACK_PRIMARY_INVALID_ID : (uint32_t)health_buf[0];
+        uint32_t req_expected_primary_id = payload;
         uint32_t local_primary_id = BONDP_FALLBACK_PRIMARY_INVALID_ID;
         urma_jetty_t *local_primary_jetty = task->bondp_jetty->p_jetty[task->primary_local_idx];
         if (local_primary_jetty != NULL) {
@@ -1409,15 +1406,14 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
             URMA_LOG_INFO("Fallback REQ matched local primary pjetty id:%u, skip rebuild\n", local_primary_id);
         }
 
-        /* Process local fallback stage before replying to peer request. */
         (void)bondp_process_fallback_task(bdp_ctx, task);
 
         int resp_local_idx = req_recv_local_idx;
         int resp_target_idx = -1;
-        uint64_t payload = (uint64_t)local_primary_id;
+        uint64_t resp_payload = (uint64_t)local_primary_id;
         if (bondp_get_target_idx_by_local_idx(task, resp_local_idx, &resp_target_idx) == 0) {
             (void)bondp_send_fallback_ctrl_msg(bdp_ctx, task, resp_local_idx, resp_target_idx,
-                BONDP_FALLBACK_CTRL_RESP, req_seq, payload);
+                BONDP_FALLBACK_CTRL_RESP, req_seq, resp_payload);
         } else {
             URMA_LOG_WARN("Fallback RESP route not found for req link lidx:%d seq:%u\n",
                 resp_local_idx, req_seq);
@@ -1428,10 +1424,8 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
     }
 
     if (task->fallback_task.req_seq == req_seq) {
-        uint64_t *health_buf = (uint64_t *)bdp_ctx->bondp_heath_check_ctx.check_buf;
         task->fallback_task.resp_received = true;
-        task->fallback_task.remote_primary_pjetty_id = (health_buf == NULL) ?
-            BONDP_FALLBACK_PRIMARY_INVALID_ID : (uint32_t)health_buf[0];
+        task->fallback_task.remote_primary_pjetty_id = payload;
         URMA_LOG_INFO("Fallback RESP accepted, seq:%u remote_primary_id:%u\n",
             req_seq, task->fallback_task.remote_primary_pjetty_id);
         (void)bondp_process_fallback_task(bdp_ctx, task);
@@ -1441,6 +1435,12 @@ bool bondp_try_handle_fallback_cr(bondp_context_t *bdp_ctx, int local_idx, urma_
     }
     pthread_rwlock_unlock(&health->task_table.lock);
     return true;
+}
+
+void bondp_health_notify_fallback_ctrl_rx(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
+    uint8_t ctrl_type, uint8_t req_seq, uint32_t payload)
+{
+    (void)bondp_health_handle_fallback_ctrl_rx_impl(bdp_ctx, recv_local_id, ctrl_type, req_seq, payload, false);
 }
 
 static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const bondp_health_event_info_t *info)
@@ -1599,6 +1599,8 @@ int bondp_start_health_check_thread(void)
 {
     bondp_global_context_t *global_ctx = g_bondp_global_ctx;
     int health_epoll_fd;
+    int nl_fd;
+    struct epoll_event ev = {0};
 
     if (!bondp_health_check_enabled()) {
         return 0;
@@ -1614,6 +1616,16 @@ int bondp_start_health_check_thread(void)
     }
 
     global_ctx->health_thread_ctx.health_epoll_fd = health_epoll_fd;
+
+    nl_fd = bondp_nl_get_fd();
+    if (nl_fd >= 0) {
+        ev.events = EPOLLIN;
+        ev.data.fd = nl_fd;
+        if (epoll_ctl(health_epoll_fd, EPOLL_CTL_ADD, nl_fd, &ev) != 0) {
+            URMA_LOG_WARN("Failed to add bondp netlink fd to health epoll, errno:%d\n", errno);
+        }
+    }
+
     atomic_store(&global_ctx->health_thread_ctx.health_thread_stop, false);
     if (pthread_create(&global_ctx->health_thread_ctx.health_thread, NULL, bondp_health_check_thread, global_ctx) != 0) {
         URMA_LOG_ERR("Failed to create health check thread\n");
