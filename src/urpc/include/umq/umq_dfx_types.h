@@ -138,6 +138,9 @@ typedef struct umq_qbuf_pool_stats {
 
     umq_local_qbuf_pool_stats_t local_qbuf_pool_stats[UMQ_LOCAL_QBUF_POOL_MAX_NUM]; // local buf pool statistics
     uint32_t local_qbuf_pool_num; // local buf pool statistics count
+
+    // escape
+    uint64_t escape_buf_cnt;
 } umq_qbuf_pool_stats_t;
 
 typedef struct umq_info {
