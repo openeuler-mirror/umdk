@@ -22,8 +22,8 @@
 
 #include "../common/common.h"
 
-#include "umq/umq_api.h"
-#include "umq/umq_errno.h"
+#include "umq_api.h"
+#include "umq_errno.h"
 #include "umq_pro_api.h"
 
 #define UMQ_IPV4_MAP_IPV6_PREFIX (0x0000ffff)
