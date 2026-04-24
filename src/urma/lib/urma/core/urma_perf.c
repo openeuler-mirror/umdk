@@ -289,7 +289,7 @@ urma_status_t urma_start_perf(void)
 {
     // singleton
     if (pthread_once(&g_perf_start_once, urma_perf_global_context_init) != 0) {
-        URMA_LOG_ERR("Urma perf failed to initialize performance record context");
+        URMA_LOG_ERR("Urma perf failed to initialize performance record context\n");
         return URMA_FAIL;
     }
     // reset context
@@ -301,11 +301,11 @@ urma_status_t urma_start_perf(void)
 urma_status_t urma_stop_perf(void)
 {
     if (!urma_perf_is_enabled()) {
-        URMA_LOG_WARN("Urma perf stop failed. perf is not started. ");
+        URMA_LOG_WARN("Urma perf stop failed. perf is not started.\n");
         return URMA_SUCCESS;
     }
     if (pthread_once(&g_perf_stop_once, urma_perf_global_context_uninit) != 0) {
-        URMA_LOG_ERR("Urma perf failed to uninitialize performance record context");
+        URMA_LOG_ERR("Urma perf failed to uninitialize performance record context\n");
         return URMA_FAIL;
     }
     g_urma_perf_record_enable = false;
@@ -348,7 +348,7 @@ urma_status_t urma_config_perf_attr(urma_perf_attr_t *perf_attr)
     // set thresh
     for (uint32_t i = 0; i < thresh_num; ++i) {
         if ((thresh_array[i] > URMA_PERF_MAX_THRESH_NS) || (thresh_array[i] == 0)) {
-            URMA_LOG_WARN("Urma perf config failed. thresh: %lu is invalid. \n", thresh_array[i]);
+            URMA_LOG_WARN("Urma perf config failed. thresh: %lu is invalid.\n", thresh_array[i]);
             continue;
         }
         if ((bucket_idx == 0) || (thresh_array[i] > g_urma_perf_record_ctx.thresh_ns[bucket_idx - 1])) {
@@ -368,7 +368,7 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
     urma_perf_record_t *cur_record = &g_urma_perf_record_ctx.record_table[g_perf_record_index];
 
     if (!urma_perf_is_enabled()){
-        URMA_LOG_ERR("Urma perf step failed. perf record is not started or thread %d is not using. \n",
+        URMA_LOG_ERR("Urma perf step failed. perf record is not started or thread %d is not using.\n",
             g_perf_record_index);
         return URMA_ENOPERM;
     }
@@ -377,7 +377,7 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
         return URMA_EINVAL;
     }
     if (delta < g_urma_perf_record_ctx.thresh_cycle[0]) {
-        URMA_LOG_WARN("Urma perf type %d delta is %lu, less than threshold %lu. \n", 
+        URMA_LOG_WARN("Urma perf type %d delta is %lu, less than threshold %lu.\n",
             type, delta, g_urma_perf_record_ctx.thresh_cycle[0]);
         return URMA_EINVAL;
     }
