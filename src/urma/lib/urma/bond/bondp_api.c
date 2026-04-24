@@ -40,7 +40,7 @@ typedef struct bondp_create_vjetty_udata {
 } bondp_create_vjetty_udata_t;
 
 typedef struct bondp_import_vobj_udata_in {
-    uint16_t ue_idx;
+    uint32_t ue_idx;
 } bondp_import_vobj_udata_in_t;
 
 static int bondp_init_connection_table(bondp_comp_t *bdp_comp)
@@ -1437,7 +1437,7 @@ static int bondp_import_vjetty(
     };
     int ret = -1;
 
-    for (uint16_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
+    for (uint32_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
         bondp_import_vobj_udata_in_t udata_in = {
             .ue_idx = ue_idx,
         };
