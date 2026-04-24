@@ -29,7 +29,7 @@ typedef struct bondp_udata_import_seg {
 } bondp_udata_import_seg_t;
 
 typedef struct bondp_import_vobj_udata_in {
-    uint16_t ue_idx;
+    uint32_t ue_idx;
 } bondp_import_vobj_udata_in_t;
 
 typedef enum bondp_result {
@@ -329,7 +329,7 @@ static int bondp_import_vseg(urma_context_t *ctx, urma_seg_t *seg,
     };
     int ret = -1;
 
-    for (uint16_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
+    for (uint32_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
         bondp_import_vobj_udata_in_t udata_in = {
             .ue_idx = ue_idx,
         };
