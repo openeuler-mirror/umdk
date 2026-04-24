@@ -141,7 +141,7 @@ void tpsa_getenv_log_level(void)
     }
 
     if (strnlen(level_str, UVS_LOG_LEVEL_ENV_MAX_BUF_LEN) >= UVS_LOG_LEVEL_ENV_MAX_BUF_LEN) {
-        TPSA_LOG_ERR("Invalid parameter: log level str.");
+        TPSA_LOG_ERR("Invalid parameter: log level str.\n");
         return;
     }
 
