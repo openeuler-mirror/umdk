@@ -110,7 +110,7 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
                 if (k == 'TP' and m != 'RC') or (k == 'CTP' and m == 'UM'):
                     continue
 
-            eid = 0 if host_list[0].test_nic[1]['name'] == 'bonding_dev_0' else 7
+            eid = 0
             tcp_port = self.get_free_port()
 
             _cmd = f'{case_path} -a {app_num}:1:{tcp_port} -d {dev_list[0]} -s {seed} -m {tp_mode} -x {eid} -k {tp_kind}'
