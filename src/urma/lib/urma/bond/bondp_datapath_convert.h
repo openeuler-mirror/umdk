@@ -27,15 +27,15 @@ static inline bool is_send_wr(const urma_jfs_wr_t *wr)
 }
 
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
-    urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge);
+                          urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge);
 urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
-    urma_sge_t *prealloc_src_sge);
+                          urma_sge_t *prealloc_src_sge);
 
 void free_jfr_wr(urma_jfr_wr_t *wr);
 void free_jfs_wr(urma_jfs_wr_t *wr);
 
 urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-    bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn);
+                                     bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn);
 
 urma_status_t convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx);
 
@@ -48,14 +48,26 @@ static inline bool is_recv_cr(const urma_cr_t *cr)
     return cr->flag.bs.s_r == 1;
 }
 
-/**
+/*
  * When the cr status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
  * it indicates that the CR is a fake one constructed by hardware.
  * At this time, the `urma_ctx` field in CR is invalid and most likely 0.
  */
 static inline bool is_fake_cr(const urma_cr_t *cr)
 {
-    return cr->status == URMA_CR_WR_SUSPEND_DONE || cr->status == URMA_CR_WR_FLUSH_ERR_DONE;
+    return cr->status == URMA_CR_WR_SUSPEND_DONE ||
+           cr->status == URMA_CR_WR_FLUSH_ERR_DONE;
+}
+
+/*
+ * We currently consider the following status codes on the sender side
+ * as indicators of a fault that should recover.
+ */
+static inline bool is_failover_cr(const urma_cr_t *cr)
+{
+    return cr->status == URMA_CR_LOC_LEN_ERR ||
+           cr->status == URMA_CR_LOC_ACCESS_ERR ||
+           cr->status == URMA_CR_ACK_TIMEOUT_ERR;
 }
 
 /*
