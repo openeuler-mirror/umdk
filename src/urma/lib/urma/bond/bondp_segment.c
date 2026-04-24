@@ -28,6 +28,10 @@ typedef struct bondp_udata_import_seg {
     bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } bondp_udata_import_seg_t;
 
+typedef struct bondp_import_vobj_udata_in {
+    uint16_t ue_idx;
+} bondp_import_vobj_udata_in_t;
+
 typedef enum bondp_result {
     BONDP_SKIP = -2,
     BONDP_ERROR = -1,
@@ -323,19 +327,28 @@ static int bondp_import_vseg(urma_context_t *ctx, urma_seg_t *seg,
         .flag = flag,
         .mva = addr,
     };
-    urma_cmd_udrv_priv_t udata = {
-        .in_addr = 0,
-        .in_len = 0,
-        .out_addr = (uint64_t)udata_out,
-        .out_len = sizeof(*udata_out),
-    };
+    int ret = -1;
 
-    int ret = urma_cmd_import_seg(ctx, &bdp_tseg->v_tseg, &cfg, &udata);
-    // Hacky
-    if (ret == 0) {
-        bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
-        bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
+    for (uint16_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
+        bondp_import_vobj_udata_in_t udata_in = {
+            .ue_idx = ue_idx,
+        };
+        urma_cmd_udrv_priv_t udata = {
+            .in_addr = (uint64_t)&udata_in,
+            .in_len = sizeof(udata_in),
+            .out_addr = (uint64_t)udata_out,
+            .out_len = sizeof(*udata_out),
+        };
+
+        ret = urma_cmd_import_seg(ctx, &bdp_tseg->v_tseg, &cfg, &udata);
+        if (ret == 0) {
+            // Hacky
+            bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
+            bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
+            return 0;
+        }
     }
+
     return ret;
 }
 

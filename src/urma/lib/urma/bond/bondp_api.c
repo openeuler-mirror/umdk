@@ -39,6 +39,10 @@ typedef struct bondp_create_vjetty_udata {
     urma_bond_seg_info_out_t health_check_seg;
 } bondp_create_vjetty_udata_t;
 
+typedef struct bondp_import_vobj_udata_in {
+    uint16_t ue_idx;
+} bondp_import_vobj_udata_in_t;
+
 static int bondp_init_connection_table(bondp_comp_t *bdp_comp)
 {
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
@@ -1431,14 +1435,26 @@ static int bondp_import_vjetty(
         .policy = rjetty->policy,
         .type = rjetty->type,
     };
-    urma_cmd_udrv_priv_t udata = {
-        .in_addr = 0,
-        .in_len = 0,
-        .out_addr = (uint64_t)udata_out,
-        .out_len = sizeof(*udata_out),
-    };
+    int ret = -1;
 
-    return urma_cmd_import_jetty(ctx, &bdp_tjetty->v_tjetty, &cfg, &udata);
+    for (uint16_t ue_idx = 0; ue_idx < IODIE_NUM; ++ue_idx) {
+        bondp_import_vobj_udata_in_t udata_in = {
+            .ue_idx = ue_idx,
+        };
+        urma_cmd_udrv_priv_t udata = {
+            .in_addr = (uint64_t)&udata_in,
+            .in_len = sizeof(udata_in),
+            .out_addr = (uint64_t)udata_out,
+            .out_len = sizeof(*udata_out),
+        };
+
+        ret = urma_cmd_import_jetty(ctx, &bdp_tjetty->v_tjetty, &cfg, &udata);
+        if (ret == 0) {
+            return 0;
+        }
+    }
+
+    return ret;
 }
 
 static int bondp_import_pjetty(
