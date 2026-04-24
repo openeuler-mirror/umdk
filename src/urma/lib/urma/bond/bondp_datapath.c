@@ -801,7 +801,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
                 URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
             }
         }
-
+        bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty,
+            (int)send_idx, (int)target_idx);
         /* Update active link after failover is finished. */
         bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
 
@@ -929,12 +930,15 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     return CONVERT_SUCCESS;
 }
 
-static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr, bool is_flush)
 {
     if (is_ctrl_cr(cr)) {
         (void)bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
         return CONVERT_SKIP;
     } else if (is_fake_cr(cr)) {
+        if (!is_flush) {
+            return CONVERT_SKIP;
+        }
         return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
@@ -984,7 +988,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jfc, idx, pcr);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jfc, idx, pcr, false);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;
@@ -1036,7 +1040,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, i, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jetty->send_jfc, i, pcr);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jetty->send_jfc, i, pcr, true);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;

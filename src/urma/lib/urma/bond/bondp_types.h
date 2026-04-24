@@ -53,6 +53,7 @@ typedef struct bondp_health_sub_task {
     int target_idx;
     bool valid;
     bool probe_pending;
+    bool need_check;
 #ifndef __cplusplus
     atomic_bool link_ok;
 #else
