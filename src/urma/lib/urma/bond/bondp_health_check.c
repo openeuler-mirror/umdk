@@ -163,6 +163,8 @@ void bondp_notify_health_event(bondp_context_t *bdp_ctx, bondp_health_event_t ev
 }
 
 static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const bondp_health_event_info_t *info);
+static void bondp_health_handle_datapath_link_fail_event(bondp_context_t *bdp_ctx,
+    const bondp_health_event_info_t *info);
 static bool bondp_health_handle_fallback_ctrl_rx_impl(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
     uint8_t ctrl_type, uint8_t req_seq, uint32_t payload, bool silent_unmatched);
 
@@ -610,6 +612,9 @@ static void bondp_handle_health_event(bondp_context_t *bond_ctx, bondp_health_ev
                 bondp_health_kick_fallback_task(bond_ctx, info->bdp_tjetty);
             }
             break;
+        case BONDP_HEALTH_EVENT_DATAPATH_LINK_FAIL:
+            bondp_health_handle_datapath_link_fail_event(bond_ctx, info);
+            break;
         default:
             URMA_LOG_WARN("Unknown health event:%d, dev_name:%s eid_idx:%u\n",
                 event, bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
@@ -977,6 +982,7 @@ static void bondp_health_task_check_mode(bondp_health_task_t *task,
 static void bondp_health_probe_sub(bondp_context_t *bdp_ctx, bondp_health_task_t *task,
     bondp_health_sub_task_t *sub)
 {
+    bool is_balance = (task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE);
     if (sub->probe_pending) {
         URMA_LOG_INFO("Health probe skipped (pending), lidx:%d tidx:%d\n", sub->local_idx, sub->target_idx);
         return;
@@ -989,17 +995,45 @@ static void bondp_health_probe_sub(bondp_context_t *bdp_ctx, bondp_health_task_t
             URMA_LOG_WARN("Health probe send failed, lidx:%d tidx:%d\n", sub->local_idx, sub->target_idx);
         }
         atomic_store(&sub->link_ok, false);
+        sub->need_check = true;
         task->bondp_jetty->valid[sub->local_idx] = false;
+        if (is_balance) {
+            bondp_health_notify_datapath_link_fail(bdp_ctx, task->bdp_tjetty, sub->local_idx, sub->target_idx);
+        }
         return;
     }
 }
 
-static void bondp_health_do_check(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
+static bool bondp_health_balance_has_pending_probe(const bondp_health_task_t *task)
 {
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+            const bondp_health_sub_task_t *sub = &task->sub_tasks[i][j];
+            if (!sub->valid) {
+                continue;
+            }
+            if (sub->need_check || sub->probe_pending) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void bondp_health_do_check(bondp_context_t *bdp_ctx, bondp_health_task_t *task)
+{
+    bool is_balance = (task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE);
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             bondp_health_sub_task_t *sub = &task->sub_tasks[i][j];
-            if (!sub->valid || sub->local_idx == task->active_local_idx) {
+            if (!sub->valid) {
+                continue;
+            }
+            if (is_balance) {
+                if (!sub->need_check) {
+                    continue;
+                }
+            } else if (sub->local_idx == task->active_local_idx) {
                 continue;
             }
             bondp_health_probe_sub(bdp_ctx, task, sub);
@@ -1055,7 +1089,10 @@ static void *bondp_health_check_thread(void *arg)
             pthread_rwlock_rdlock(&health->task_table.lock);
             bondp_health_task_t *task = NULL;
             HMAP_FOR_EACH(task, hmap_node, &health->task_table.hmap) {
-                bondp_health_task_check_mode(task, cfg, now_us);
+                bool is_balance = (task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE);
+                if (!is_balance) {
+                    bondp_health_task_check_mode(task, cfg, now_us);
+                }
                 if (now_us < task->next_probe_ts_us) {
                     continue;
                 }
@@ -1063,7 +1100,13 @@ static void *bondp_health_check_thread(void *arg)
                     task->mode == HEALTH_MODE_BACKUP_CHECK ? "BACKUP" : "PRIMARY",
                     task->active_local_idx, task->primary_local_idx, task->backoff_cnt);
                 bondp_health_do_check(ctx_node->bdp_ctx, task);
-                if (task->mode == HEALTH_MODE_BACKUP_CHECK) {
+                if (is_balance) {
+                    if (bondp_health_balance_has_pending_probe(task)) {
+                        task->next_probe_ts_us = now_us + cfg->primary_check_interval_ms * 1000ULL;
+                    } else {
+                        task->next_probe_ts_us = UINT64_MAX;
+                    }
+                } else if (task->mode == HEALTH_MODE_BACKUP_CHECK) {
                     task->next_probe_ts_us = now_us + cfg->health_check_interval_ms * 1000ULL;
                 } else {
                     task->next_probe_ts_us = now_us +
@@ -1113,7 +1156,8 @@ int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jett
     }
     task->bdp_tjetty = bdp_tjetty;
     task->bondp_jetty = cfg_jetty;
-    task->next_probe_ts_us = bondp_get_monotonic_us() + cfg->health_check_start_ms * 1000ULL;
+    task->next_probe_ts_us = (cfg_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE) ?
+        UINT64_MAX : (bondp_get_monotonic_us() + cfg->health_check_start_ms * 1000ULL);
     task->primary_local_idx = -1;
     task->active_local_idx = -1;
     task->vjetty_id = cfg_jetty->v_jetty.jetty_id.id;
@@ -1145,6 +1189,7 @@ int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jett
         sub->target_idx = (int)target_idx;
         sub->valid = true;
         sub->probe_pending = false;
+        sub->need_check = (cfg_jetty->bondp_ctx->bonding_mode != BONDP_BONDING_MODE_BALANCE);
         atomic_store(&sub->link_ok, true);
         sub->user_ctx = 0;
         if (task->primary_local_idx < 0) {
@@ -1349,6 +1394,58 @@ void bondp_health_notify_fallback_ctrl_rx(bondp_context_t *bdp_ctx, uint32_t rec
     (void)bondp_health_handle_fallback_ctrl_rx_impl(bdp_ctx, recv_local_id, ctrl_type, req_seq, payload, false);
 }
 
+static void bondp_health_handle_datapath_link_fail_event(bondp_context_t *bdp_ctx,
+    const bondp_health_event_info_t *info)
+{
+    if (info == NULL || info->bdp_tjetty == NULL ||
+        info->local_idx < 0 || info->target_idx < 0 ||
+        info->local_idx >= URMA_UBAGG_DEV_MAX_NUM || info->target_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return;
+    }
+
+    bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
+    const bondp_health_check_cfg_t *cfg = &g_bondp_global_ctx->health_thread_ctx.cfg;
+    pthread_rwlock_wrlock(&health->task_table.lock);
+    bondp_health_task_t *task = bondp_find_health_task_by_tjetty_nolock(health, info->bdp_tjetty);
+    if (task != NULL && task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE) {
+        bondp_health_sub_task_t *sub = &task->sub_tasks[info->local_idx][info->target_idx];
+        if (sub->valid) {
+            sub->probe_pending = false;
+            sub->need_check = true;
+            atomic_store(&sub->link_ok, false);
+            task->bondp_jetty->valid[sub->local_idx] = false;
+            if (bondp_rebuild_local_pjetty(task, info->local_idx) != 0) {
+                URMA_LOG_WARN("Balance link recover failed, tjetty:%u lidx:%d tidx:%d\n",
+                    task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx);
+            } else {
+                URMA_LOG_INFO("Balance link recovered, start health check, tjetty:%u lidx:%d tidx:%d\n",
+                    task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx);
+            }
+            task->next_probe_ts_us = bondp_get_monotonic_us() + cfg->primary_check_start_ms * 1000ULL;
+        }
+    }
+    pthread_rwlock_unlock(&health->task_table.lock);
+}
+
+void bondp_health_notify_datapath_link_fail(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+    int local_idx, int target_idx)
+{
+    if (!bondp_health_check_enabled() || bdp_ctx == NULL || bdp_tjetty == NULL) {
+        return;
+    }
+
+    bondp_health_event_info_t info = {
+        .local_idx = local_idx,
+        .target_idx = target_idx,
+        .user_ctx = 0,
+        .cr_status = 0,
+        .new_active_idx = -1,
+        .bdp_jetty = NULL,
+        .bdp_tjetty = bdp_tjetty,
+    };
+    bondp_notify_health_event(bdp_ctx, BONDP_HEALTH_EVENT_DATAPATH_LINK_FAIL, &info);
+}
+
 static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const bondp_health_event_info_t *info)
 {
     if (info == NULL || info->local_idx < 0 || info->target_idx < 0 ||
@@ -1439,8 +1536,10 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
             sub->probe_pending = false;
             bool old_ok = atomic_load(&sub->link_ok);
             bool ok = (cr->status == URMA_CR_SUCCESS);
+            bool is_balance = (task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE);
             atomic_store(&sub->link_ok, ok);
             task->bondp_jetty->valid[sub->local_idx] = ok;
+            sub->need_check = is_balance ? (!ok) : sub->need_check;
             if (ok && task->mode == HEALTH_MODE_PRIMARY_CHECK &&
                 local_idx == task->primary_local_idx && task->active_local_idx != task->primary_local_idx) {
                 bondp_health_event_info_t active_info = {
@@ -1456,7 +1555,9 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
                 URMA_LOG_INFO("Primary health probe success, switch active idx back to primary, tjetty_id:%u old_active:%d new_active:%d\n",
                     task->bdp_tjetty->v_tjetty.id.id, task->active_local_idx, task->primary_local_idx);
             }
-            if (old_ok != ok) {
+            if (is_balance && !ok) {
+                bondp_health_notify_datapath_link_fail(bdp_ctx, task->bdp_tjetty, (int)cr_local_idx, (int)target_idx);
+            } else if (old_ok != ok) {
                 URMA_LOG_WARN("Health link state changed, tjetty_id:%u lidx:%d tidx:%d user_ctx:0x%lx old:%d new:%d cr_status:%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, old_ok, ok, cr->status);
                 bondp_health_event_info_t info = {

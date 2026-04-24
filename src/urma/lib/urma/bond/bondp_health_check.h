@@ -12,6 +12,7 @@ typedef enum bondp_health_event {
     BONDP_HEALTH_EVENT_TA_TIMEOUT  = 0,
     BONDP_HEALTH_EVENT_ACTIVE_IDX_UPDATE,
     BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK,
+    BONDP_HEALTH_EVENT_DATAPATH_LINK_FAIL,
     BONDP_HEALTH_EVENT_MAX,
 } bondp_health_event_t;
 
@@ -53,6 +54,8 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
 void bondp_health_kick_fallback_task(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty);
 void bondp_health_notify_fallback_ctrl_rx(bondp_context_t *bdp_ctx, uint32_t recv_local_id,
     uint8_t ctrl_type, uint8_t req_seq, uint32_t payload);
+void bondp_health_notify_datapath_link_fail(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+    int local_idx, int target_idx);
 void bondp_notify_health_event(bondp_context_t *bdp_ctx, bondp_health_event_t event,
 	const bondp_health_event_info_t *info);
 
