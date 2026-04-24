@@ -44,7 +44,7 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
 static int schedule_send_balance_iodie(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                        int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
 {
-    URMA_LOG_ERR("Currently do not support iodie balance.");
+    URMA_LOG_ERR("Currently do not support iodie balance.\n");
     return EINVAL;
 }
 
