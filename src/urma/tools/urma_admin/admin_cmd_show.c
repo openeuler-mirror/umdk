@@ -831,7 +831,9 @@ int admin_get_device_name_by_eid(const urma_eid_t *eid, char *dev_name, size_t d
         }
         for (uint32_t i = 0; i < ubep->dev_attr.dev_cap.max_eid_cnt; i++) {
             if (is_eid_equal(&ubep->eid_list[i].eid, eid)) {
-                strncpy(dev_name, ubep->dev_name, dev_name_len);
+                if (dev_name_len == 0 || snprintf(dev_name, dev_name_len, "%s", ubep->dev_name) < 0) {
+                    ret = -1;
+                }
                 goto free_list;
             }
         }
@@ -897,9 +899,10 @@ int admin_get_eid_list_by_eid(urma_eid_t *eid, urma_eid_info_t **eid_info_list, 
 
         for (uint32_t i = 0; i < eid_cnt; i++) {
             if (memcmp(&tmp_eid_list[i].eid, eid, sizeof(urma_eid_t)) == 0) {
+                size_t name_len = strnlen(entry->d_name, URMA_MAX_NAME - 1);
                 found = true;
-                strncpy(dev_name, entry->d_name, URMA_MAX_NAME - 1);
-                dev_name[URMA_MAX_NAME - 1] = '\0';
+                (void)memcpy(dev_name, entry->d_name, name_len);
+                dev_name[name_len] = '\0';
                 *eid_info_list = tmp_eid_list;
                 break;
             }
