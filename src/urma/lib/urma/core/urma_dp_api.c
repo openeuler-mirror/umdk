@@ -58,6 +58,46 @@ static inline urma_ops_t *get_ops_by_urma_jetty(urma_jetty_t *jetty)
     return jetty->urma_ctx->ops;
 }
 
+static inline urma_device_t *get_device_by_urma_jfc(urma_jfc_t *jfc)
+{
+    if (jfc == NULL || jfc->urma_ctx == NULL) {
+        return NULL;
+    }
+    return jfc->urma_ctx->dev;
+}
+
+static inline urma_device_t *get_device_by_urma_jfs(urma_jfs_t *jfs)
+{
+    if (jfs == NULL || jfs->urma_ctx == NULL) {
+        return NULL;
+    }
+    return jfs->urma_ctx->dev;
+}
+
+static inline urma_device_t *get_device_by_urma_jfr(urma_jfr_t *jfr)
+{
+    if (jfr == NULL || jfr->urma_ctx == NULL) {
+        return NULL;
+    }
+    return jfr->urma_ctx->dev;
+}
+
+static inline urma_device_t *get_device_by_urma_jfce(urma_jfce_t *jfce)
+{
+    if (jfce == NULL || jfce->urma_ctx == NULL) {
+        return NULL;
+    }
+    return jfce->urma_ctx->dev;
+}
+
+static inline urma_device_t *get_device_by_urma_jetty(urma_jetty_t *jetty)
+{
+    if (jetty == NULL || jetty->urma_ctx == NULL) {
+        return NULL;
+    }
+    return jetty->urma_ctx->dev;
+}
+
 static inline urma_status_t checkout_valid_tjfr(urma_target_jetty_t *tjfr)
 {
     if (tjfr == NULL || tjfr->urma_ctx == NULL || tjfr->urma_ctx->dev == NULL) {
@@ -210,15 +250,17 @@ urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg, //
 int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfc(jfc);
-    if (dp_ops == NULL || dp_ops->poll_jfc == NULL || cr == NULL || cr_cnt < 0) {
+    urma_device_t *urma_dev = get_device_by_urma_jfc(jfc);
+    if (dp_ops == NULL || dp_ops->poll_jfc == NULL || cr == NULL || cr_cnt < 0 ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return -1;
     }
 
     int ret;
-    PERF_PROFILING_START(UB_POLL_JFC);
+    UDMA_PERF_PROFILING_START(UB_POLL_JFC, urma_dev->name);
     ret = dp_ops->poll_jfc(jfc, cr_cnt, cr);
-    PERF_PROFILING_END(UB_POLL_JFC);
+    UDMA_PERF_PROFILING_END(UB_POLL_JFC, urma_dev->name);
     
     return ret;
 }
@@ -226,15 +268,17 @@ int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfc(jfc);
-    if (dp_ops == NULL || dp_ops->rearm_jfc == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jfc(jfc);
+    if (dp_ops == NULL || dp_ops->rearm_jfc == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
     urma_status_t ret;
-    PERF_PROFILING_START(UB_REARM_JFC);
+    UDMA_PERF_PROFILING_START(UB_REARM_JFC, urma_dev->name);
     ret = dp_ops->rearm_jfc(jfc, solicited_only);
-    PERF_PROFILING_END(UB_REARM_JFC);
+    UDMA_PERF_PROFILING_END(UB_REARM_JFC, urma_dev->name);
     
     return ret;
 }
@@ -242,15 +286,17 @@ urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
 int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[])
 {
     urma_ops_t *dp_ops = get_ops_by_urma_jfce(jfce);
-    if (dp_ops == NULL || dp_ops->wait_jfc == NULL || jfc_cnt == 0 || jfc == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jfce(jfce);
+    if (dp_ops == NULL || dp_ops->wait_jfc == NULL || jfc_cnt == 0 || jfc == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return -1;
     }
 
     int ret;
-    PERF_PROFILING_START(UB_WAIT_JFC);
+    UDMA_PERF_PROFILING_START(UB_WAIT_JFC, urma_dev->name);
     ret = dp_ops->wait_jfc(jfce, jfc_cnt, time_out, jfc);
-    PERF_PROFILING_END(UB_WAIT_JFC);
+    UDMA_PERF_PROFILING_END(UB_WAIT_JFC, urma_dev->name);
 
     return ret;
 }
@@ -262,28 +308,32 @@ void urma_ack_jfc(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt)
         return;
     }
     urma_ops_t *dp_ops = get_ops_by_urma_jfc(jfc[0]);
-    if (dp_ops == NULL || dp_ops->ack_jfc == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jfc(jfc[0]);
+    if (dp_ops == NULL || dp_ops->ack_jfc == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return;
     }
-    PERF_PROFILING_START(UB_ACK_JFC);
+    UDMA_PERF_PROFILING_START(UB_ACK_JFC, urma_dev->name);
     dp_ops->ack_jfc(jfc, nevents, jfc_cnt);
-    PERF_PROFILING_END(UB_ACK_JFC);
+    UDMA_PERF_PROFILING_END(UB_ACK_JFC, urma_dev->name);
 }
 
 urma_status_t urma_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfs(jfs);
-    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || wr == NULL || bad_wr == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jfs(jfs);
+    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || wr == NULL || bad_wr == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
     urma_status_t ret;
-    PERF_PROFILING_START(UB_JFS_POST_SEND);
+    UDMA_PERF_PROFILING_START(UB_JFS_POST_SEND, urma_dev->name);
     ret = dp_ops->post_jfs_wr(jfs, wr, bad_wr);
-    PERF_PROFILING_END(UB_JFS_POST_SEND);
+    UDMA_PERF_PROFILING_END(UB_JFS_POST_SEND, urma_dev->name);
     
     return ret;
 }
@@ -292,15 +342,17 @@ urma_status_t urma_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jfr(jfr);
-    if (dp_ops == NULL || dp_ops->post_jfr_wr == NULL || wr == NULL || bad_wr == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jfr(jfr);
+    if (dp_ops == NULL || dp_ops->post_jfs_wr == NULL || wr == NULL || bad_wr == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
     urma_status_t ret;
-    PERF_PROFILING_START(UB_POST_JFR_RECV);
+    UDMA_PERF_PROFILING_START(UB_POST_JFR_RECV, urma_dev->name);
     ret = dp_ops->post_jfr_wr(jfr, wr, bad_wr);
-    PERF_PROFILING_END(UB_POST_JFR_RECV);
+    UDMA_PERF_PROFILING_END(UB_POST_JFR_RECV, urma_dev->name);
 
     return ret;
 }
@@ -309,15 +361,17 @@ urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, ur
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
-    if (dp_ops == NULL || dp_ops->post_jetty_send_wr == NULL || wr == NULL || bad_wr == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jetty(jetty);
+    if (dp_ops == NULL || dp_ops->post_jetty_send_wr == NULL || wr == NULL || bad_wr == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
-
+    
     urma_status_t ret;
-    PERF_PROFILING_START(UB_JETTY_POST_SEND);
+    UDMA_PERF_PROFILING_START(UB_JETTY_POST_SEND, urma_dev->name);
     ret = dp_ops->post_jetty_send_wr(jetty, wr, bad_wr);
-    PERF_PROFILING_END(UB_JETTY_POST_SEND);
+    UDMA_PERF_PROFILING_END(UB_JETTY_POST_SEND, urma_dev->name);
     
     return ret;
 }
@@ -326,15 +380,17 @@ urma_status_t urma_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, ur
 {
     /* check parameter */
     urma_ops_t *dp_ops = get_ops_by_urma_jetty(jetty);
-    if (dp_ops == NULL || dp_ops->post_jetty_recv_wr == NULL || wr == NULL || bad_wr == NULL) {
+    urma_device_t *urma_dev = get_device_by_urma_jetty(jetty);
+    if (dp_ops == NULL || dp_ops->post_jetty_recv_wr == NULL || wr == NULL || bad_wr == NULL ||
+        urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
     urma_status_t ret;
-    PERF_PROFILING_START(UB_JETTY_POST_RECV);
+    UDMA_PERF_PROFILING_START(UB_JETTY_POST_RECV, urma_dev->name);
     ret = dp_ops->post_jetty_recv_wr(jetty, wr, bad_wr);
-    PERF_PROFILING_END(UB_JETTY_POST_RECV);
+    UDMA_PERF_PROFILING_END(UB_JETTY_POST_RECV, urma_dev->name);
     
     return ret;
 }
