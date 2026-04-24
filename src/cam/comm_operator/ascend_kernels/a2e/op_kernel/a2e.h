@@ -65,6 +65,7 @@ public:
 
         this->attnToMoeRatio = attentionRankSize > expertRankSize ? (attentionRankSize + expertRankSize - 1) /
             expertRankSize : 1;
+        recvBatchSize = batchSize / attnToMoeRatio;
         if (expertRankSize != 1 && attentionRankSize > expertRankSize && rank % expertRankSize >= attentionRankSize %
             expertRankSize && attentionRankSize % expertRankSize != 0) {
             this->attnToMoeRatio-=1;
@@ -130,10 +131,7 @@ public:
             } else {
                 int sendRank = rank + expertRankSize;
                 for (int i = 0; i < attnToMoeRatio; i++) {
-                    recvBatchSize = batchSize / attnToMoeRatio;
-
                     recvWithMte(i);
-
                     sendRank += expertRankSize;
                 }
             }
@@ -142,7 +140,6 @@ public:
                 int maskOutOffset = 0;
                 int sendRank = rank + expertRankSize;
                 for ( int i = 0; i < attnToMoeRatio; i++) {
-                    recvBatchSize = batchSize / attnToMoeRatio;
                     // computeGate == 1 时去掉 mask 逻辑，保留分核逻辑
                     if (blockIdx < blockNum - 1) {
                         recvWithMte(i);
