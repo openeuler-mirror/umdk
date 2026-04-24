@@ -2600,11 +2600,6 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
     uint32_t burst_iter = 0;
     bool is_send_burst = false;
 
-    double cpu_mhz = get_cpu_mhz(true);
-    uint64_t last_cycle = get_cycles();
-    uint64_t cur_cycle = 0;
-    uint64_t threshold_time_us = PERFTEST_MSEC_TO_USEC;
-
     urma_cr_t *cr = calloc(1, sizeof(urma_cr_t) * PERFTEST_POLL_BATCH);
     if (cr == NULL) {
         return -1;
@@ -2720,16 +2715,9 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
                     tot_ccnt += cfg->cq_mod;
                     run_ctx->ccnt[cr_id] += cfg->cq_mod;
                 }
-                last_cycle = get_cycles();
             } else if (cqe_cnt < 0) {
                 (void)fprintf(stderr, "Failed to poll jfc, cqe_cnt: %d.\n", cqe_cnt);
                 goto err_exit;
-            } else {
-                cur_cycle = get_cycles();
-                if ((cur_cycle - last_cycle) / cpu_mhz >= threshold_time_us) {
-                    (void)fprintf(stderr, "no new cqe after %luus.\n", threshold_time_us);
-                    goto err_exit;
-                }
             }
         }
     }
