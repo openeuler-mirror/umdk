@@ -462,19 +462,28 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
                                       urma_bond_id_info_out_t *rvjetty_info, bondp_comp_t *jetty)
 {
     uint32_t active_count = 0;
+    bool target_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
 
     for (uint32_t n = 0; n < jetty->enabled_count; ++n) {
         uint32_t local_indice = jetty->enabled_indices[n];
         for (uint32_t m = 0; m < rvjetty_info->enabled_count; ++m) {
             uint32_t target_indice = rvjetty_info->enabled_indices[m];
+            if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_ACTIVE_BACKUP && target_used[target_indice]) {
+                continue;
+            }
+
             if (rvjetty_info->connected[local_indice][target_indice]) {
                 jetty->active_indices[active_count] = local_indice;
                 bdp_tjetty->active_indices[active_count] = target_indice;
                 bdp_tjetty->local_active_indices[active_count] = local_indice;
                 active_count += 1;
+
                 if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
                     goto FIND_FINISH;
                 }
+
+                target_used[target_indice] = true;
+                break;
             }
         }
     }
