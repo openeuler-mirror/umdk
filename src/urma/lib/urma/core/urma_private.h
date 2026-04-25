@@ -80,8 +80,8 @@ uint32_t urma_ubagg_switch_get(void);
 #define UDMA_PERF_PROFILING_END(type, dev_name) \
     do { \
         uint64_t perf_end = 0; \
-        perf_end = urma_get_perf_timestamp(); \
         if (urma_perf_is_enabled() && (!urma_is_bonding_dev(dev_name))) { \
+            perf_end = urma_get_perf_timestamp(); \
             urma_step_perf(type, perf_end - __perf_start_##type); \
         } \
     } while (0); \
