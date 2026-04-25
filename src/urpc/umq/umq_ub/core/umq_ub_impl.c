@@ -2065,6 +2065,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     if (send_buf->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send_buf is not a pooled memory\n",
             EID_ARGS(*eid), id);
+        ret = -UMQ_ERR_EFAULT;
         goto FREE_BUF;
     }
 
