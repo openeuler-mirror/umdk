@@ -1033,11 +1033,6 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
 
 static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
 {
-    if (cfg->single_path && cfg->use_ctp) {
-        (void)fprintf(stderr, "Invalid config: --single_path: true requires --ctp: false.\n");
-        return -1;
-    }
-
     if (!cfg->single_path && !cfg->use_ctp) {
         (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: true.\n");
         return -1;
