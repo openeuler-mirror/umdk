@@ -7,7 +7,6 @@
 
 from itertools import combinations
 import pytest
-import random
 import logging
 from public import UBUSFeature
  
@@ -24,14 +23,19 @@ class Test(UBUSFeature):
         log.info('---------- [ Test teardown ] ----------')
         super(Test, self).teardown()
 
-    @pytest.mark.timeout(800)
+    @pytest.mark.timeout(1600)
     def test_urma_qemu_smoke_8host_agg_dev_basic(self):
         p_list = []
-        for host1, host2 in combinations(self.host_list, 2):
-            for _ in range(3):
-                p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))
+        cmd_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
+        mode_list = [
+            "-p 0 --single_path",
+            "-p 1 --single_path",
+            "-p 0 --ctp",
+            "-p 1 --ctp"
+        ]
 
-        # Randomly generate 20 flows again
-        for _ in range(20):
-            host1, host2 = random.sample(self.host_list, 2)
-            p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2))
+        # Traverse all hosts, all types, and all modes to perform pairwise traffic generation
+        for host1, host2 in combinations(self.host_list, 2):
+            for cmd in cmd_list:
+                for mode in mode_list:
+                    p_list.append(self.urma_perftest_one_perf_ubagg(host1, host2, cmd_syntax=cmd, opt=mode))

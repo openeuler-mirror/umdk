@@ -45,27 +45,24 @@ class UBUSFeature(BaseTest):
             cmd_syntax = random.choice(cmd_syntax_list) 
  
         opt += f" -n 10" 
-        if "-s " not in opt and "--size " not in opt:
+        if " -s" not in opt and " --size" not in opt:
             opt += f" -s {random.randint(1, 4096)}"
-        if "-I " not in opt and "--inline_size " not in opt:
+        if " -I" not in opt and " --inline_size" not in opt:
             opt += f" -I {random.randint(1, 188)}"
-        if "-d " not in opt and "--dev_name " not in opt:
-            if random.randint(0, 1) == 1:
-                opt += f" -d udma2"
-            else:
-                opt += f" -d udma5"
-        if "-p " not in opt and "--trans_mode " not in opt:
+        if " -d" not in opt and " --dev_name" not in opt:
+            opt += f" -d udma2"
+        if " -p" not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
                 opt += f" -p {random.randint(0, 2)}"
             else:
                 opt += f" -p {random.randint(0, 1)}"
-        if "-e " not in opt and cmd_syntax not in ["write_bw", "write_lat"]:
+        if " -e" not in opt and cmd_syntax not in ["write_bw", "write_lat"]:
             if random.randint(0, 1) == 1:
                 opt += f" -e"
-        if "-b " not in opt and "-p 1" not in opt:
+        if " -b" not in opt and " -p 1" not in opt:
             if random.randint(0, 1) == 1:
                 opt += f" -b"
-        if "--jetty_id " not in opt and server.test_nic1_ip != client.test_nic1_ip:
+        if " --jetty_id" not in opt and server.test_nic1_ip != client.test_nic1_ip:
             if random.randint(0, 1) == 1:
                 opt += f" --jetty_id {random.randint(3, 1024)}"
             
@@ -110,29 +107,30 @@ class UBUSFeature(BaseTest):
  
         opt += f" -n 10 -E 2" 
         if server.test_nic1_ip == client.test_nic1_ip:
-            opt += f" -p 1 --single_path"
-        if "-s " not in opt and "--size " not in opt:
+            if " --single_path" not in opt:
+                opt += f" -p 1 --single_path"
+        if " -s" not in opt and " --size" not in opt:
             opt += f" -s {random.randint(1, 4096)}"
-        if "-I " not in opt and "--inline_size " not in opt:
+        if " -I" not in opt and " --inline_size" not in opt:
             opt += f" -I {random.randint(1, 188)}"
-        if "-p " not in opt and "--trans_mode " not in opt:
+        if " -p" not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
                 opt += f" -p {random.randint(0, 1)}"
             else:
                 opt += f" -p {random.randint(0, 1)}"
-        if "-b " not in opt and "-p 1" not in opt:
+        if " -b" not in opt and " -p 1" not in opt:
             if random.randint(0, 1) == 1:
                 opt += f" -b"
-        if "-e " not in opt and cmd_syntax not in ["write_bw", "write_lat"]:
+        if " -e" not in opt and cmd_syntax not in ["write_bw", "write_lat"]:
             if random.randint(0, 1) == 1:
                 opt += f" -e"                
-        if "--jetty_id " not in opt and "--single_path " not in opt:
+        if " --jetty_id" not in opt and " --single_path" not in opt:
             if random.randint(0, 1) == 1:
                 opt += f" --jetty_id {random.randint(3, 998)}"
             
         if expect_failed:
             opt +=" --enable_err_continue"  
-        _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()} --ctp"
+        _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()}"
         s_cmd = f"{_cmd} {s_opt} -d bonding_dev_0"
         c_cmd = f"{_cmd} {c_opt} -d bonding_dev_0 -S {server.test_nic1_ip}"
         
