@@ -179,7 +179,7 @@ typedef struct bondp_tseg {
     urma_target_seg_t *p_tseg[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
     bondp_context_t *bondp_ctx;
-    urma_ref_t use_cnt; /* Initialize to 0 */
+    urma_ref_t use_cnt;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_tseg_t;
@@ -257,6 +257,7 @@ typedef struct bondp_target_jetty {
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
     bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    urma_ref_t use_cnt;
 } bondp_target_jetty_t;
 
 typedef struct bondp_import_target_seg {
@@ -265,6 +266,7 @@ typedef struct bondp_import_target_seg {
     int local_dev_num;
     int target_dev_num;
     bool is_reused;
+    urma_ref_t use_cnt;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_import_tseg_t;
