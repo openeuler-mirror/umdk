@@ -100,7 +100,10 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
     }
 
     urma_jetty_id_t old_id = old_jetty->jetty_id;
+    /* Clear the slot before delete so concurrent readers never observe a freed jetty. */
+    bdp_jetty->p_jetty[local_idx] = NULL;
     if (urma_delete_jetty(old_jetty) != URMA_SUCCESS) {
+        bdp_jetty->p_jetty[local_idx] = old_jetty;
         URMA_LOG_ERR("Failed to delete pjetty at idx:%d\n", local_idx);
         return -1;
     }
