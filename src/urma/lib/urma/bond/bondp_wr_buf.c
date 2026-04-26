@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "bondp_datapath_convert.h"
+#include "bondp_segment.h"
 #include "bondp_types.h"
 #include "ub_hash.h"
 #include "ub_hmap.h"
@@ -50,6 +51,7 @@ void wr_buf_uninit(wr_buf_t *buf)
 
         if (entry_hdr->entry_type == WR_BUF_ENTRY_JFS) {
             jfs_wr_entry_t *entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, idx);
+            release_vwr_use_cnt(&entry->wr);
             free_jfs_wr(&entry->wr);
         } else if (entry_hdr->entry_type == WR_BUF_ENTRY_JFR) {
             jfr_wr_entry_t *entry = (jfr_wr_entry_t *)__wr_buf_idx(buf, idx);
