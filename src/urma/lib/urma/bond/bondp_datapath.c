@@ -642,8 +642,11 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
 }
 
 typedef enum cr_convert_ret {
+    // CR conversion failed and the caller should abort the polling flow.
     CONVERT_FAIL = -1,
+    // CR is converted successfully and should be returned to the caller, regardless of cr's own status.
     CONVERT_SUCCESS = 0,
+    // CR is consumed internally and should not be returned to the caller.
     CONVERT_SKIP = 1,
 } cr_convert_ret_t;
 
@@ -708,11 +711,13 @@ static inline void put_comp(bondp_comp_t *bdp_comp)
     atomic_fetch_sub(&bdp_comp->use_cnt.atomic_cnt, 1);
 }
 
-static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     bondp_comp_t *comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (comp == NULL) {
-        return CONVERT_FAIL;
+        URMA_LOG_ERR("Skip fake cr because vjetty is not found, idx:%d, local_id:%u\n",
+                     idx, cr->local_id);
+        return CONVERT_SKIP;
     }
 
     uint8_t target_state_bit = 0;
@@ -802,7 +807,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
             }
         }
         bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty,
-            (int)send_idx, (int)target_idx);
+                                               (int)send_idx, (int)target_idx);
         /* Update active link after failover is finished. */
         bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
 
@@ -930,16 +935,13 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     return CONVERT_SUCCESS;
 }
 
-static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr, bool is_flush)
+static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
 {
     if (is_ctrl_cr(cr)) {
         (void)bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
         return CONVERT_SKIP;
     } else if (is_fake_cr(cr)) {
-        if (!is_flush) {
-            return CONVERT_SKIP;
-        }
-        return handle_fake_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
+        return handle_fake_cr_with_store(bdp_ctx, idx, cr);
     } else if (is_recv_cr(cr)) {
         return handle_recv_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
     } else {
@@ -988,7 +990,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jfc, idx, pcr, false);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jfc, idx, pcr);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;
@@ -1040,7 +1042,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, i, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jetty->send_jfc, i, pcr, true);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jetty->send_jfc, i, pcr);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;
