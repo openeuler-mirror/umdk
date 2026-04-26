@@ -178,7 +178,6 @@ static void urma_perf_thread_context_init(void)
     }
     urma_perf_reset_record_item(false, thread_idx);
     g_perf_record_index = thread_idx;
-    g_urma_perf_record_ctx.record_table[thread_idx].is_used = true;
     g_urma_perf_record_ctx.thread_run_once[thread_idx] = &g_thread_run_once;
 
     // execute when thread exit
@@ -300,10 +299,6 @@ urma_status_t urma_start_perf(void)
 
 urma_status_t urma_stop_perf(void)
 {
-    if (!urma_perf_is_enabled()) {
-        URMA_LOG_WARN("Urma perf stop failed. perf is not started.\n");
-        return URMA_SUCCESS;
-    }
     if (pthread_once(&g_perf_stop_once, urma_perf_global_context_uninit) != 0) {
         URMA_LOG_ERR("Urma perf failed to uninitialize performance record context\n");
         return URMA_FAIL;
@@ -313,11 +308,10 @@ urma_status_t urma_stop_perf(void)
 }
 uint64_t urma_get_perf_timestamp(void)
 {
-    if (!urma_perf_is_enabled()) {
-        URMA_LOG_ERR("Urma perf get timestamp failed. perf record is not started. \n");
-        return URMA_ENOPERM;
+    if (urma_perf_is_enabled()) {
+        pthread_once(&g_thread_run_once, urma_perf_thread_context_init);
+        g_urma_perf_record_ctx.record_table[g_perf_record_index].is_used = true;
     }
-    pthread_once(&g_thread_run_once, urma_perf_thread_context_init);
     return get_cycles();
 }
 
@@ -368,8 +362,6 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
     urma_perf_record_t *cur_record = &g_urma_perf_record_ctx.record_table[g_perf_record_index];
 
     if (!urma_perf_is_enabled()){
-        URMA_LOG_ERR("Urma perf step failed. perf record is not started or thread %d is not using.\n",
-            g_perf_record_index);
         return URMA_ENOPERM;
     }
     if (type >= URMA_PERF_RECORD_TYPE_MAX) {

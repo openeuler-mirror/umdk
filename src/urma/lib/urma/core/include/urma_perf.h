@@ -15,7 +15,7 @@
 #include "urma_opcode.h"
 
 #define URMA_PERF_BUCKET_MAX_NUM        (32u)
-#define URMA_PERF_THREAD_MAX_NUM        (64u)
+#define URMA_PERF_THREAD_MAX_NUM        (128u)
 #define URMA_PERF_MAX_THRESH_NS         (1000000u)
 
 typedef enum urma_perf_type {
