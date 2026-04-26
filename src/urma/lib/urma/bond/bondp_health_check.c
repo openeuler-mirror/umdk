@@ -1253,6 +1253,7 @@ void bondp_health_update_active_idx(bondp_context_t *bdp_ctx, bondp_target_jetty
         int old = task->active_local_idx;
         task->active_local_idx = new_active_idx;
         if (new_active_idx == task->primary_local_idx) {
+            task->bondp_jetty->pjettys_error_done[new_active_idx] &= (uint8_t)(~PJETTY_FLUSH_ERROR_DONE);
             task->fallback_task.relink_done = false;
             task->fallback_task.pending = false;
             task->fallback_task.local_rebuilt = false;
