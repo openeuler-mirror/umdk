@@ -328,21 +328,24 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         goto FREE_PWR;
     }
 
+    add_vwr_use_cnt(pwr);
     ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp, v_conn);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to convert jfs wr\n");
-        goto FREE_PWR;
+        goto RELEASE_WR;
     }
 
     pwr->user_ctx = wr_entry->wr_id;
     ret = comp_post_send(bdp_comp, send_idx, pwr, bad_wr);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to post send wr\n");
-        goto FREE_PWR;
+        goto RELEASE_WR;
     }
-
     return URMA_SUCCESS;
 
+RELEASE_WR:
+    convert_jfs_pwr_to_vwr_resend(pwr, &wr_entry->v_conn->target_vjetty->v_tjetty);
+    release_vwr_use_cnt(pwr);
 FREE_PWR:
     free_jfs_wr(pwr);
     jfs_wr_buf_release(wr_entry);
@@ -652,26 +655,24 @@ typedef enum cr_convert_ret {
 
 static int resend_jfs_wr(jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
 {
-    int ret;
-
     wr_entry->send_idx = send_idx;
     wr_entry->target_idx = target_idx;
     urma_jfs_wr_t *wr = &wr_entry->wr;
-    urma_target_jetty_t *vtjetty = (urma_target_jetty_t *)(wr_entry->v_conn->target_vjetty);
-    ret = convert_jfs_pwr_to_another_path(wr, vtjetty, send_idx, target_idx);
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to convert when resend\n");
-        return -1;
-    }
+    urma_target_jetty_t *vtjetty = wr->tjetty;
+    convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
+    convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
     urma_jfs_wr_t *bad_wr = NULL;
-    ret = comp_post_send(wr_entry->bdp_comp, send_idx, wr, &bad_wr);
+    int ret = comp_post_send(wr_entry->bdp_comp, send_idx, wr, &bad_wr);
+
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to resend wr\n");
-        return -1;
+        convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
+        release_vwr_use_cnt(wr);
+        free_jfs_wr(wr);
+        jfs_wr_buf_release(wr_entry);
     }
 
-    return 0;
+    return ret;
 }
 
 static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
@@ -838,6 +839,8 @@ CONVERT_CR:
     cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
 
+    convert_jfs_pwr_to_vwr_resend(&wr_entry->wr, &wr_entry->v_conn->target_vjetty->v_tjetty);
+    release_vwr_use_cnt(&wr_entry->wr);
     free_jfs_wr(&wr_entry->wr);
     jfs_wr_buf_release(wr_entry);
     return CONVERT_SUCCESS;

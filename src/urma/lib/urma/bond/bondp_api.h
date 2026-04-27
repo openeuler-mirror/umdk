@@ -49,6 +49,10 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
 
 urma_status_t bondp_unimport_jetty(urma_target_jetty_t *target_jetty);
 
+void bondp_tjetty_get(urma_target_jetty_t *target_jetty);
+
+void bondp_tjetty_put(urma_target_jetty_t *target_jetty);
+
 urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 
 urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty);
