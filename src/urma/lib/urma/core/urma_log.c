@@ -33,8 +33,13 @@ urma_vlog_level_t g_urma_log_level = URMA_VLOG_LEVEL_INFO;
 #define LIBURMA_LOG                    "liburma"
 #define URMA_LOG_ENV_STR               "URMA_LOG_LEVEL"
 #define URMA_LOG_LEVEL_ENV_MAX_BUF_LEN 32
+#define URMA_LOG_SEPARATOR_ENV_STR     "URMA_LOG_SEPARATOR"
+#define URMA_LOG_SEPARATOR_MAX_LEN     8
+#define URMA_LOG_SEPARATOR_VALID_CHARS "|,;:-/.~#"
+#define URMA_LOG_SEPARATOR_DEFAULT     "|"
 
 __thread char g_thread_tag[MAX_THREAD_TAG_LEN] = "-";
+static char g_urma_log_separator[URMA_LOG_SEPARATOR_MAX_LEN] = URMA_LOG_SEPARATOR_DEFAULT;
 
 static void urma_default_log_func(int level, char *message)
 {
@@ -56,8 +61,10 @@ urma_status_t urma_register_log_func(urma_log_cb_t func)
 urma_status_t urma_unregister_log_func(void)
 {
     char logmsg[MAX_LOG_LEN + 1] = {0};
-    (void)snprintf(logmsg, MAX_LOG_LEN, "%s|%s|%ld|%s|%s[%d]|unregister log succeed.\n",
-        URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, __func__, __LINE__);
+    (void)snprintf(logmsg, MAX_LOG_LEN, "%s%s%s%s%ld%s%s%s%s[%d]%sunregister log succeed.\n",
+        URMA_LOG_TAG, g_urma_log_separator, LIBURMA_LOG, g_urma_log_separator,
+        (long)syscall(__NR_gettid), g_urma_log_separator, g_thread_tag, g_urma_log_separator,
+        __func__, __LINE__, g_urma_log_separator);
     (*g_urma_log_func)((int)URMA_VLOG_LEVEL_INFO, logmsg);
     g_urma_log_func = urma_default_log_func;
     return URMA_SUCCESS;
@@ -175,15 +182,44 @@ void urma_getenv_log_level(void)
     }
 }
 
+static bool urma_is_valid_separator_char(char c)
+{
+    return strchr(URMA_LOG_SEPARATOR_VALID_CHARS, c) != NULL;
+}
+
+void urma_getenv_log_separator(void)
+{
+    char *sep_str = getenv(URMA_LOG_SEPARATOR_ENV_STR);
+    if (sep_str == NULL || sep_str[0] == '\0') {
+        return;
+    }
+
+    size_t len = strnlen(sep_str, URMA_LOG_SEPARATOR_MAX_LEN);
+    if (len >= URMA_LOG_SEPARATOR_MAX_LEN) {
+        return;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (!urma_is_valid_separator_char(sep_str[i])) {
+            return;
+        }
+    }
+
+    pthread_mutex_lock(&g_urma_log_lock);
+    (void)snprintf(g_urma_log_separator, URMA_LOG_SEPARATOR_MAX_LEN, "%s", sep_str);
+    pthread_mutex_unlock(&g_urma_log_lock);
+}
+
 static int urma_vlog(const char *function, int line, urma_vlog_level_t level, const char *format, va_list va)
 {
     int ret;
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "URMA|liburma|thread_id|thread_tag|function[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s|%ld|%s|%s[%d]|%s",
-        URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, function, line, format);
+    ret = snprintf(newformat, MAX_LOG_LEN, "%s%s%s%s%ld%s%s%s%s[%d]%s%s",
+        URMA_LOG_TAG, g_urma_log_separator, LIBURMA_LOG, g_urma_log_separator,
+        (long)syscall(__NR_gettid), g_urma_log_separator, g_thread_tag, g_urma_log_separator,
+        function, line, g_urma_log_separator, format);
     if (ret <= 0 || ret >= sizeof(newformat)) {
         return ret;
     }
