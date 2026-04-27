@@ -305,6 +305,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, &info);
     }
     if (ret != 0) {
+        URMA_LOG_WARN("Failed to schedule send.\n");
         return URMA_FAIL;
     }
 
@@ -788,8 +789,16 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_jfc_t *bdp_jfc, int idx,
              * this error CQE is returned directly to the upper layer.
              */
             URMA_LOG_ERR("Failed to find valid port for retransmission.\n");
+            /* Port down can be recovered, currently for simplex mode */
+            if (cr->status == URMA_CR_LOC_ACCESS_ERR && bdp_comp->comp_type == BONDP_COMP_JFS) {
+                bdp_comp->valid[send_idx] = true;
+            }
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
             goto CONVERT_CR;
+        }
+        /* Port down can be recovered, currently for simplex mode */
+        if (cr->status == URMA_CR_LOC_ACCESS_ERR && bdp_comp->comp_type == BONDP_COMP_JFS) {
+            bdp_comp->valid[send_idx] = true;
         }
 
         URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
