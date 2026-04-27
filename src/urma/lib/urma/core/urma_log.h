@@ -23,6 +23,7 @@ extern "C" {
 
 int urma_log_init(void);
 void urma_getenv_log_level(void);
+void urma_getenv_log_separator(void);
 bool urma_log_drop(urma_vlog_level_t level);
 void __attribute__((format(printf, LOG_FORMAT_IDX, LOG_VA_ARG_IDX)))
 urma_log(const char *function, int line, urma_vlog_level_t level, const char *format, ...);
