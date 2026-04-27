@@ -658,7 +658,7 @@ static int resend_jfs_wr(jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
     wr_entry->send_idx = send_idx;
     wr_entry->target_idx = target_idx;
     urma_jfs_wr_t *wr = &wr_entry->wr;
-    urma_target_jetty_t *vtjetty = wr->tjetty;
+    urma_target_jetty_t *vtjetty = &wr_entry->v_conn->target_vjetty->v_tjetty;
     convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
     convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
