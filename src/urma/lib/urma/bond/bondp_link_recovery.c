@@ -48,19 +48,6 @@ static int bondp_update_pjetty_id_mapping(
     return 0;
 }
 
-static void bondp_drain_pjetty_wr(urma_jetty_t *old_jetty, int local_idx)
-{
-    urma_cr_t cr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV] = {0};
-    int flushed = 0;
-    do {
-        flushed = urma_flush_jetty(old_jetty, URMA_UBAGG_MAX_CR_CNT_PER_DEV, cr_buf);
-        if (flushed < 0) {
-            URMA_LOG_WARN("Failed to flush pjetty before rebuild, idx:%d ret:%d\n", local_idx, flushed);
-            break;
-        }
-    } while (flushed > 0);
-}
-
 int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
 {
     if (task == NULL || task->bondp_jetty == NULL ||
@@ -84,7 +71,6 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
     }
 
     urma_jetty_t *old_jetty = bdp_jetty->p_jetty[local_idx];
-    bondp_drain_pjetty_wr(old_jetty, local_idx);
 
     urma_jetty_cfg_t p_cfg = bdp_jetty->v_jetty.jetty_cfg;
     bondp_jfc_t *bdp_jfs_jfc = CONTAINER_OF_FIELD(p_cfg.jfs_cfg.jfc, bondp_jfc_t, v_jfc);
