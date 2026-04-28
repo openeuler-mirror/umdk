@@ -231,6 +231,7 @@ typedef struct bondp_comp {
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
     // send
+    bool modify_to_error;
     bondp_jfc_t *send_jfc;
     pthread_spinlock_t send_lock;
     bool valid[URMA_UBAGG_DEV_MAX_NUM];

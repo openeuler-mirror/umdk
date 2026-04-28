@@ -629,6 +629,7 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     (void)pthread_spin_init(&bdp_jfs->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jfs->send_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     bdp_jfs->recv_jfc = NULL;
+    bdp_jfs->modify_to_error = false;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         atomic_init(&bdp_jfs->sqe_cnt[i], 0);
     }
@@ -733,6 +734,9 @@ urma_status_t bondp_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *attr)
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
 
+    if ((attr->mask & JFS_STATE) && attr->state == URMA_JETTY_STATE_ERROR) {
+        bdp_jfs->modify_to_error = true;
+    }
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jfs->p_jfs[i] == NULL) {
             continue;
@@ -1210,6 +1214,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jetty->send_jfc = CONTAINER_OF_FIELD(jetty_cfg->jfs_cfg.jfc, bondp_jfc_t, v_jfc);
     bdp_jetty->recv_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr->jfr_cfg.jfc, bondp_jfc_t, v_jfc);
+    bdp_jetty->modify_to_error = false;
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
@@ -1330,6 +1335,9 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
     urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
 
+    if ((attr->mask & JETTY_STATE) && attr->state == URMA_JETTY_STATE_ERROR) {
+        bdp_jetty->modify_to_error = true;
+    }
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
