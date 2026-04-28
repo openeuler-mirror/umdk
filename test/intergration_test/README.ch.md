@@ -39,7 +39,7 @@
   host_info:
       host1:
           user: root
-          passed: xxx
+          passwd: xxx
           manage_nic:
               name: xxx
               ip: x.x.x.x
@@ -49,7 +49,7 @@
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
       host2:
           user: root
-          passed: xxx
+          passwd: xxx
           manage_nic:
               name: xxx
               ip: x.x.x.x
