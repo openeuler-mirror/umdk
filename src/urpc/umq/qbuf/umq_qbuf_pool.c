@@ -1030,6 +1030,8 @@ void umq_qbuf_pool_uninit(void)
 
     release_thread_cache(0);
 
+    (void)pthread_spin_destroy(&g_tls_stats_lock);
+
     umq_qbuf_expansion_pool_uninit();
 
     umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool);
