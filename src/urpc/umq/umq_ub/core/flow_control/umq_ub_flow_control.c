@@ -802,7 +802,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         return UMQ_SUCCESS;
     }
     uint64_t timestamp = get_timestamp_us();
-    if (timestamp < queue->checker->last_send) {
+    if ((queue->checker == NULL) || (timestamp < queue->checker->last_send)) {
         return UMQ_SUCCESS;
     }
     uint64_t diff = timestamp - queue->checker->last_send;
