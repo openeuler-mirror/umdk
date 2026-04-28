@@ -516,8 +516,8 @@ fused_deep_moe(
 7. 除满足上述形状约束外，其他参数取值要求：
  - 需要满足：BS取值范围[0, 256]
  - 需要满足: token_length取值范围[1024， 7168]且(token_length % 256) == 0
- - 需要满足: gmm1_hiden_size取值范围[1024， 6144]且(gmm1_hiden_size % 256) == 0
- - 需要满足: share_mm1_hidden_size取值范围[1024， 6144]且(gmm1_hiden_size % 256) == 0
+ - 需要满足: gmm1_hiden_size取值范围[1024， 6144]且(gmm1_hiden_size % 1024) == 0
+ - 需要满足: share_gmm1_hiden_size取值范围[1024， 6144]且(share_gmm1_hiden_size % 1024) == 0
  - 需要满足: topk取值范围[0, 12]且应保证小于等于专家数
  - 需要满足：global_bs ≥ 0 且保证（global_bs % ep_rank_size） == 0
  - 需要满足: 路由专家卡需满足local_expert_num ≤ (aivnum / 2)，其中aivnum为硬件aiv核心数
