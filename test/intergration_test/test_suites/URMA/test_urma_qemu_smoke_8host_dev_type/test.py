@@ -27,7 +27,7 @@ class Test(UBUSFeature):
     def test_urma_qemu_smoke_8host_dev_type(self):
         p_list = []
         cmd_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
-        mode_list = ["-p 0 --eid_idx 7", "-p 1  --eid_idx 7", "-p 0 --ctp", "-p 1 --ctp"]
+        mode_list = ["-p 0 --eid_idx 0", "-p 1  --eid_idx 0", "-p 0 --ctp", "-p 1 --ctp"]
         for cmd in cmd_list:
             for mode in mode_list:
                 p_list.append(self.urma_perftest_one_perf_single_dev(self.host1, self.host2, cmd_syntax=cmd, opt=mode))
@@ -50,4 +50,4 @@ class Test(UBUSFeature):
                 host1, host2 = random.sample(self.host_list, 2)
                 p_list.append(self.urma_perftest_one_perf_single_dev(host1, host2, opt="--ctp "))
             else:
-                p_list.append(self.urma_perftest_one_perf_single_dev(self.host1, self.host2, opt="--eid_idx 7 "))
+                p_list.append(self.urma_perftest_one_perf_single_dev(self.host1, self.host2, opt="--eid_idx 0 "))
