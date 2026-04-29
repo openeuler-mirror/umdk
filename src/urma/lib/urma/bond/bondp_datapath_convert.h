@@ -35,7 +35,7 @@ void free_jfr_wr(urma_jfr_wr_t *wr);
 void free_jfs_wr(urma_jfs_wr_t *wr);
 
 urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                                     bondp_comp_t *bdp_comp, bdp_v_conn_t *v_conn);
+                                     bondp_comp_t *bdp_comp);
 
 void convert_jfs_pwr_to_vwr_resend(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty);
 
