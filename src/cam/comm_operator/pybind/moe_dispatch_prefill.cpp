@@ -31,6 +31,8 @@ const uint32_t FIRST = 1;
 const uint32_t SECOND = 2;
 const uint32_t THIRD = 3;
 const uint32_t FOURTH = 4;
+const uint32_t NUM_RANKS_MIN = 2;
+const uint32_t NUM_RANKS_MAX = 384;
 } // namespace
 
 std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispatchPrefillImplNpu(
@@ -56,6 +58,9 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
 
     // Type checks
     TORCH_BIND_ASSERT(numTokensPerExpert.scalar_type() == at::kInt);
+
+    // numRanks range check
+    TORCH_BIND_ASSERT(numRanks >= NUM_RANKS_MIN && numRanks <= NUM_RANKS_MAX);
 
     // Shape and contiguous checks
     TORCH_BIND_ASSERT(x.dim() == DIM_TWO and x.is_contiguous());

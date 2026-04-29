@@ -173,7 +173,7 @@ Interface used before dispatch in prefill phase for A3, which copies the current
 ##### 1.1.3.3 Input Parameters 
 | **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|--------------|----------|
-|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type|ID info for target experts|
+|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type，Range：[0, num_experts)|ID info for target experts|
 |num_experts|int|Required|Range：(0, 512]|MOE experts number|
 |num_ranks|int|Required|Range：[1, 384]|rank number in EP communication group|
 ##### 1.1.3.4 Return Value
@@ -215,10 +215,10 @@ Dispatch interface in prefill phase for A3, which sends the tokens to the target
 | **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|--------------|----------|
 |x|Tensor|Required|Shape:(batch_size, hidden_size), support bf16 and float16|token sent from current rank|
-|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type|target ID of each token|
+|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type，Range：[0, num_experts)|target ID of each token|
 |topk_weights|Tensor|Required|Shape:(batch_size, topk)， float32 type|weights of target experts for each token|
-|number_tokens_per_expert|Tensor|Required|Shape：（num_experts），int type|token number sent to each expert in current rank|
-|send_token_idx_small|Tensor|Required|Shape：(batch_size, top_k), int type|The position offset of each token after re-arrangement in experts' perspective|
+|number_tokens_per_expert|Tensor|Required|Shape：（num_experts），int type|token number sent to each expert in current rank, must be output number_tokens_per_expert from get_dispatch_layout, cannot be modified|
+|send_token_idx_small|Tensor|Required|Shape：(batch_size, top_k), int type|The position offset of each token after re-arrangement in experts' perspective, must be output send_token_idx from get_dispatch_layout, cannot be modified|
 |group_ep|str|Required|--|name of HCCL communication group|
 |rank|int|Required|[0, num_ranks)|rank ID in communication group|
 |num_ranks|int|Required|[2, 384]|rank number of EP group|
@@ -267,10 +267,10 @@ combine interface in prefill phase for A3, which combines the token sent to each
 | **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
 |----------|----------|--------------|--------------|----------|
 |x|Tensor|Required|Shape:(recv_token_num, hidden_size), support bf16 and float16 types|token received of this rank in dispatch phase|
-|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 phase|target experts info for each token|
+|topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 type，Range：[0, num_experts)|target experts info for each token|
 |topk_weights|Tensor|Required|Shape:(batch_size, topk)， float32 type|weights of topk experts for each token|
-|src_idx|Tensor|Shape：(recv_token_num * 3), int type|info triplet of token received by this rank, the three numbers of each triplet is: source rank, index of token in source rank(from BS's perspective), token offset after the re-arrangement in source rank in experts' perspective. Corresponds to return value "expand_idx_out" of moe_dispatch_prefill.|
-|send_head|Tensor|Shape：(num_experts), int type|prefix-sum number of token received in this rank from each other ranks. Corresponds to return value "recv_count" of moe_dispatch_prefill.|
+|src_idx|Tensor|Shape：(recv_token_num * 3), int type|info triplet of token received by this rank, the three numbers of each triplet is: source rank, index of token in source rank(from BS's perspective), token offset after the re-arrangement in source rank in experts' perspective. Must be output expand_idx_out from moe_dispatch_prefill, cannot be modified|
+|send_head|Tensor|Shape：(num_experts), int type|prefix-sum number of token received in this rank from each other ranks. Must be output recv_count from moe_dispatch_prefill, cannot be modified|
 |group_ep|str|Required|--|name of HCCL communication group|
 |rank|int|Required|[0, num_ranks)|rank ID of current rank in EP group|
 |num_ranks|int|Required|[2, 384]|rank number of EP group|
@@ -356,8 +356,8 @@ Dispatch interface in prefill phase for A2, which send token to target experts i
 |x|Tensor|Required|Shape:(batch_size, hidden_size), support bf16 and float16 type|token sent from this rank|
 |topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 or int32 type，range: [0, num_experts)|target expert IDs for each token|
 |topk_weights|Tensor|Required|Shape:(batch_size, topk)， float32 type|topk weights of target experts for each token|
-|number_tokens_per_expert|Tensor|Required|Shape：（num_experts），int type|token numbers to each expert in current rank|
-|notify_send_data|Tensor|Required|Shape：(num_experts * EXPERT_DATA_SIZE + server_num + max_bs * (1 + 2* server_num + num_experts)), int type|output of get_dispatch_layout_a2，refer to the descriptions above|
+|number_tokens_per_expert|Tensor|Required|Shape：（num_experts），int type|token numbers to each expert in current rank, must be output number_tokens_per_expert from get_dispatch_layout_a2, cannot be modified|
+|notify_send_data|Tensor|Required|Shape：(num_experts * EXPERT_DATA_SIZE + server_num + max_bs * (1 + 2* server_num + num_experts)), int type|must be output notify_send_data from get_dispatch_layout_a2, cannot be modified|
 |group_ep|str|Required|--|name of HCCL communication group|
 |rank|int|Required|[0, num_ranks)|rank ID of this rank in EP group|
 |num_ranks|int|Required|support 16 only|rank number in EP group|
@@ -417,12 +417,12 @@ combine interface in prefill phase for A2, which combines the token from the top
 |x|Tensor|Required|Shape:(recv_token_num, hidden_size), support bf16 and float16 type|token received in dispatch phase of this rank|
 |topk_idx|Tensor|Required|Shape:(batch_size, topk)， int64 or int32 type, range: [0, num_experts)|target expert ID of each token|
 |topk_weights|Tensor|Required|Shape:(batch_size, topk)， float32 type|weights of topK target expert for each token|
-|src_idx|Tensor|Required|Shape：(max_bs, num_experts), int type|corresponding to the output "expand_idx_out" of "moe_dispatch_prefill_a2"|
-|send_head|Tensor|Required|Shape：(num_experts), int type|corresponding to the output "ep_rank_token_cnt" of "moe_dispatch_prefill_a2"|
-|expand_scales|Tensor|Required|Shape：(num_recv_tokens), float type|corresponding to the output "expand_scales" of "moe_dispatch_prefill_a2"|
-|offset_inner|Tensor|Required|Shape：(2, max_bs, num_experts), int type|corresponding to the output "offset_inner" of "moe_dispatch_prefill_a2"|
-|offset_outer|Tensor|Required|Shape：(max_bs, num_experts), int type|corresponding to the output "offset_outer" of "moe_dispatch_prefill_a2"|
-|count_outer|Tensor|Shape：(max_bs), int type|corresponding to the output "count_outer" of "moe_dispatch_prefill_a2"|
+|src_idx|Tensor|Required|Shape：(max_bs, num_experts), int type|must be output expand_idx_out from moe_dispatch_prefill_a2, cannot be modified|
+|send_head|Tensor|Required|Shape：(num_experts), int type|must be output ep_rank_token_cnt from moe_dispatch_prefill_a2, cannot be modified|
+|expand_scales|Tensor|Required|Shape：(num_recv_tokens), float type|must be output expand_scales from moe_dispatch_prefill_a2, cannot be modified|
+|offset_inner|Tensor|Required|Shape：(2, max_bs, num_experts), int type|must be output offset_inner from moe_dispatch_prefill_a2, cannot be modified|
+|offset_outer|Tensor|Required|Shape：(max_bs, num_experts), int type|must be output offset_outer from moe_dispatch_prefill_a2, cannot be modified|
+|count_outer|Tensor|Shape：(max_bs), int type|must be output count_outer from moe_dispatch_prefill_a2, cannot be modified|
 |group_ep|str|Required|--|HCCL communication group name|
 |rank|int|Required|[0, num_ranks)|rank ID in EP group|
 |num_ranks|int|Required|support 16 only |rank number in EP group|
