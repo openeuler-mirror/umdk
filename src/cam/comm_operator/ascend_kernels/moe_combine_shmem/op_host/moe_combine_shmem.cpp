@@ -100,6 +100,7 @@ public:
         this->Attr("extInfo").AttrType(REQUIRED).Int();
         this->Attr("out_dtype").AttrType(OPTIONAL).Int(0);
         this->Attr("group_list_type").AttrType(OPTIONAL).Int(0);
+        this->Attr("window_size").AttrType(REQUIRED).Int();
 
         OpAICoreConfig aicore_config;
         aicore_config.DynamicCompileStaticFlag(true)

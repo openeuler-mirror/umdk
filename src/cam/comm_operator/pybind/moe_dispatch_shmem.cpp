@@ -129,7 +129,8 @@ TensorVector MoeDispatchShmemImplNpu(
     int64_t quantMode, \
     int64_t globalBS, \
     int64_t expertTokenNumsType, \
-    int64_t extInfo)
+    int64_t extInfo, \
+    int64_t windowSize)
 {
     TensorVector outList = GenerateDispatchOutputTensor(x, expertIds, epWorldSize, epRankId, moeExpertNum,
                                                             tpWorldSize, sharedExpertRankNum, quantMode, false);
@@ -145,7 +146,7 @@ TensorVector MoeDispatchShmemImplNpu(
         x, expertIds, scales, xActiveMask, \
         // attr
         epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
-        sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, \
+        sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, windowSize, \
         // output
         expandXOut, dynamicScalesOut, expandIdxOut, expertTokenNumsOut, epSendCountOut, tpSendCountOut);
 
@@ -174,7 +175,8 @@ TensorVector MoeDispatchShmemImplMeta(
     int64_t quantMode, \
     int64_t globalBS, \
     int64_t expertTokenNumsType, \
-    int64_t extInfo)
+    int64_t extInfo, \
+    int64_t windowSize)
 {
     // reserved parameters
     (void) xActiveMask;
@@ -184,6 +186,7 @@ TensorVector MoeDispatchShmemImplMeta(
     (void) globalBS;
     (void) expertTokenNumsType;
     (void) extInfo;
+    (void) windowSize;
 
     return GenerateDispatchOutputTensor(x, expertIds, epWorldSize, epRankId, moeExpertNum,
         tpWorldSize, sharedExpertRankNum, quantMode, true);
@@ -205,14 +208,15 @@ TensorVector MoeDispatchShmemImpl(
     int64_t quantMode, \
     int64_t globalBS, \
     int64_t expertTokenNumsType, \
-    int64_t extInfo)
+    int64_t extInfo, \
+    int64_t windowSize)
 {
     static auto op = torch::Dispatcher::singleton()
                         .findSchemaOrThrow("umdk_cam_op_lib::moe_dispatch_shmem", "")
                         .typed<decltype(MoeDispatchShmemImpl)>();
     return op.call(x, expertIds, scales, xActiveMask, \
         epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
-        sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo);
+        sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, windowSize);
 }
 
 // 通过继承torch::autograd::Function类实现前反向绑定
@@ -235,12 +239,13 @@ public:
         int64_t quantMode, \
         int64_t globalBS, \
         int64_t expertTokenNumsType, \
-        int64_t extInfo)
+        int64_t extInfo, \
+        int64_t windowSize)
     {
         at::AutoDispatchBelowADInplaceOrView guard;
         auto result = MoeDispatchShmemImpl(x, expertIds, scales, xActiveMask, \
             epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
-            sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo);
+            sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, windowSize);
 
         return result;
     }
@@ -269,11 +274,12 @@ TensorVector MoeDispatchShmemImplAutograd(
     int64_t quantMode, \
     int64_t globalBS, \
     int64_t expertTokenNumsType, \
-    int64_t extInfo)
+    int64_t extInfo, \
+    int64_t windowSize)
 {
     auto result = MoeDispatchShmem::apply(x, expertIds, scales, xActiveMask, \
             epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId, expertShardType, \
-            sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo);
+            sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, windowSize);
     return result;
 }
 

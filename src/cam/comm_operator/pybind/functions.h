@@ -80,7 +80,8 @@ std::vector<at::Tensor> MoeDispatchShmemImplAutograd( \
     int64_t quantMode, \
     int64_t globalBS, \
     int64_t expertTokenNumsType, \
-    int64_t extInfo);
+    int64_t extInfo, \
+    int64_t windowSize);
 
 at::Tensor MoeCombineShmemImplAutograd( \
     const at::Tensor &expandX, \
@@ -106,7 +107,8 @@ at::Tensor MoeCombineShmemImplAutograd( \
     int64_t commQuantMode, \
     int64_t extInfo, \
     int64_t outDtype, \
-    int64_t groupListType);
+    int64_t groupListType, \
+    int64_t windowSize);
 
 std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplAutograd(
     const at::Tensor &topIdx,

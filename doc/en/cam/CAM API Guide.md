@@ -28,7 +28,8 @@ moe_dispatch_shmem(
     int quant_mode, 
     int global_bs, 
     int expert_token_nums_type, 
-    int ext_info)
+    int ext_info,
+    int window_size)
 -> output: List[Tensor]
 ```
 ##### 1.1.1.2 Interface Description 
@@ -52,6 +53,7 @@ Dispatch interface based on SHMEM, which is used for token dispatch to different
 |global_bs|int|Required|Value constrains by the total Memory buffer size.|Global BS value upper bound in the EP communicator|
 |expert_token_nums_type|int|Required|0: Output is the token processing number of each expert；1：Output is the prefix sum of each expert's token processing number|expert_token_nums_out data format indicator|
 |ext_info|int|Required|--|Basic address pointer return value after SHMEM initiation|
+|window_size|int|Required|> 0, unit: Byte|Window size allocated by SHMEM for this operator|
 ##### 1.1.1.4 Return Values 
 Output is a List of Tensor, which stores the following value sequencially: expand_x, dynamic_scales, expand_idx, expert_token_nums, ep_send_count, tp_send_count and expand_scales.
 | **📌Parameter** | **🔧Type** | **📋Value Range** | **📝Details** |
@@ -71,14 +73,14 @@ Output is a List of Tensor, which stores the following value sequencially: expan
 5. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 6. Data type of x do not support bfloat16.
 7. Current version does not support shared expert function.
-8. User should guarantee the validity of ext_info address.
+8. User should guarantee the validity of ext_info address and window_size.
 9. Other Constraits need to be satisfy:
  - top_k supports 8 only.
  - Required: (moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, where CAM_MAX_EXPERT_NUM is 512 currently.
  - Required: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0
  - Required：moe_expert_num / (ep_world_size - shared_expert_rank_num) ≤ MAX_EXPERT_PER_RANK, where MAX_EXPERT_PER_RANK is 32 currently. 
  - Required： if shared_expert_rank_num is not 0，ep_world_size % shared_expert_rank_num == 0，and ep_world_size ≠ shared_expert_rank_num.
- - Required：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2) ≤ the space allocated by SHMEM, which is pointed by ext_info.
+ - Required：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2) ≤ window_size.
 #### 1.1.2 moe_combine_shmem ▶
 ##### 1.1.2.1 Prototype 
 ```python
@@ -106,7 +108,8 @@ moe_combine_shmem(
     int comm_quant_mode, 
     int ext_info, 
     int out_dtype, 
-    int group_list_type)
+    int group_list_type,
+    int window_size)
 -> output: Tensor
 ```
 ##### 1.1.2.2 Inrterface Description 
@@ -138,6 +141,7 @@ Combine interface based on SHMEM, which is used for token combine from different
 |comm_quant_mode|int|Required|Set to 0 when no quant, set to 2 when quant|Quant mode|
 |group_list_type|int|Required|Not support，set to 0|--|
 |ext_info|int|Required|--|Basic address pointer return value after SHMEM initiation|
+|window_size|int|Required|> 0, unit: Byte|Window size allocated by SHMEM for this operator|
 ##### 1.1.2.4 Return Values 
 Output is a tensor，which stores expand_x。
 | **📌Parameter** | **🔧Type** | **📋Value Range** | **📝Details** |
@@ -149,14 +153,14 @@ Output is a tensor，which stores expand_x。
 3. Current interface do not support concurrent usage.
 4. Do not support dynamic graph when in GE mode; Do not support fullgraph=true.
 5. Current version does not support shared expert function.
-6. User should guarantee the validity of ext_info address.
+6. User should guarantee the validity of ext_info address and window_size.
 7. Other Constraits need to be satisfy:
  - top_k supports 8 only.
  - Required: (moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, where CAM_MAX_EXPERT_NUM is 512 currently.
  - Required: moe_expert_num % (ep_world_size - shared_expert_rank_num) == 0
  - Required：moe_expert_num / (ep_world_size - shared_expert_rank_num) ≤ MAX_EXPERT_PER_RANK, where MAX_EXPERT_PER_RANK is 32 currently. 
  - Required： if shared_expert_rank_num is not 0，ep_world_size % shared_expert_rank_num == 0，and ep_world_size ≠ shared_expert_rank_num.
- - Required：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2) ≤ the space allocated by SHMEM, which is pointed by ext_info.
+ - Required：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2) ≤ window_size.
 
  #### 1.1.3 get_dispatch_layout ▶
 ##### 1.1.3.1 Prototype 

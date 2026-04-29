@@ -80,6 +80,7 @@ public:
         this->Attr("global_bs").AttrType(OPTIONAL).Int(0);
         this->Attr("expert_token_nums_type").AttrType(OPTIONAL).Int(1);
         this->Attr("extInfo").AttrType(REQUIRED).Int();  // shmem_ptr
+        this->Attr("window_size").AttrType(REQUIRED).Int();
 
         OpAICoreConfig aicore_config;
         aicore_config.DynamicCompileStaticFlag(true)

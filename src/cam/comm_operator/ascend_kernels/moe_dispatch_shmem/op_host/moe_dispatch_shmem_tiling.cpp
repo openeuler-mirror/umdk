@@ -56,6 +56,7 @@ constexpr uint32_t ATTR_QUANT_MODE_INDEX = 8;
 constexpr uint32_t ATTR_GLOBAL_BS_INDEX = 9;
 constexpr uint32_t ATTR_EXPERT_TOKEN_NUMS_TYPE_INDEX = 10;
 constexpr uint32_t ATTR_EXT_INFO_INDEX = 11;
+constexpr uint32_t ATTR_WINDOW_SIZE_INDEX = 12;
 
 constexpr uint32_t TWO_DIMS = 2;
 constexpr uint32_t ONE_DIM = 1;
@@ -369,6 +370,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     auto sharedExpertNumPtr = attrs->GetAttrPointer<int64_t>(static_cast<int>(ATTR_SHARED_EXPERT_NUM_INDEX));
     auto expertTokenNumsTypePtr = attrs->GetAttrPointer<int64_t>(static_cast<int>(ATTR_EXPERT_TOKEN_NUMS_TYPE_INDEX));
     auto shmemPtr = attrs->GetAttrPointer<int64_t>(ATTR_EXT_INFO_INDEX);
+    auto windowSizePtr = attrs->GetAttrPointer<int64_t>(ATTR_WINDOW_SIZE_INDEX);
 
     // 判空
     OPS_ERR_IF(epWorldSizePtr == nullptr, OPS_LOG_E(nodeName, "epWorldSizePtr is null."), return ge::GRAPH_FAILED);
@@ -385,6 +387,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OPS_ERR_IF(expertTokenNumsTypePtr == nullptr, OPS_LOG_E(nodeName, "expertTokenNumsType is null."),
                     return ge::GRAPH_FAILED);
     OPS_ERR_IF(shmemPtr == nullptr, OPS_LOG_E(nodeName, "shmemPtr is null."), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(windowSizePtr == nullptr, OPS_LOG_E(nodeName, "windowSize is null."), return ge::GRAPH_FAILED);
     // 判断是否满足uint32_t及其他限制
     OPS_ERR_IF((*epWorldSizePtr <= 0) || (*epWorldSizePtr > MAX_EP_WORLD_SIZE),
                     OPS_LOG_E(nodeName, "epWorldSize is invalid, only support (0, %ld], but got epWorldSize=%ld.",
@@ -435,6 +438,10 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
                     OPS_LOG_E(nodeName, "expertTokenNumsType only support 0 or 1, but got expertTokenNumsType=%ld.",
                             *expertTokenNumsTypePtr),
                     return ge::GRAPH_FAILED);
+    OPS_ERR_IF(*windowSizePtr <= 0,
+                    OPS_LOG_E(nodeName, "windowSize should be greater than 0, but got windowSize=%ld.",
+                            *windowSizePtr),
+                    return ge::GRAPH_FAILED);
 
     tilingData.moeDistributeDispatchInfo.epWorldSize = static_cast<uint32_t>(*epWorldSizePtr);
     tilingData.moeDistributeDispatchInfo.tpWorldSize = static_cast<uint32_t>(*tpWorldSizePtr);
@@ -446,6 +453,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.moeDistributeDispatchInfo.quantMode = static_cast<uint32_t>(*quantModePtr);
     tilingData.moeDistributeDispatchInfo.expertTokenNumsType = static_cast<uint32_t>(*expertTokenNumsTypePtr);
     tilingData.moeDistributeDispatchInfo.shmemPtr = static_cast<uint64_t>(*shmemPtr);
+    tilingData.moeDistributeDispatchInfo.totalWinSize = static_cast<uint64_t>(*windowSizePtr);
 
     OPS_LOG_I(nodeName, "shmemPtr send to tilingInfo is %ld", tilingData.moeDistributeDispatchInfo.shmemPtr);
 
@@ -784,13 +792,19 @@ static ge::graphStatus MoeDistributeDispatchA3TilingFuncImpl(gert::TilingContext
                                      static_cast<int64_t>(localMoeExpertNum)) != ge::GRAPH_SUCCESS,
                     OPS_LOG_E(nodeName, "Check tensor shape failed."), return ge::GRAPH_FAILED);
     // 校验win区大小
-    uint16_t defaultWindowSize = 1024;
-    const uint64_t maxWindowSize = static_cast<uint64_t>(defaultWindowSize) * 1024UL * 1024UL;
+    const uint64_t maxWindowSize = tilingData->moeDistributeDispatchInfo.totalWinSize;
     uint64_t bs = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.bs);
     uint64_t h = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.h);
     uint64_t epWorldSize = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.epWorldSize);
     uint64_t maxBs = static_cast<uint64_t>(tilingData->moeDistributeDispatchInfo.globalBs) / epWorldSize;
-    uint64_t actualSize = epWorldSize * maxBs * h * 2UL * 2UL * static_cast<uint64_t>(localMoeExpertNum);
+    uint64_t actualWinSize = epWorldSize * maxBs * h * 2UL * 2UL * static_cast<uint64_t>(localMoeExpertNum);
+    OPS_ERR_IF(actualWinSize > maxWindowSize,
+                    OPS_LOG_E(nodeName,
+                            "actualWinSize is too large, bs = %lu, maxBs = %lu, h = %lu, epWorldSize = %lu, "
+                            "localMoeExpertNum = %u, actualWinSize = %luMB, maxWindowSize = %luMB.",
+                            bs, maxBs, h, epWorldSize, localMoeExpertNum, actualWinSize / MB_SIZE + 1UL,
+                            maxWindowSize / MB_SIZE),
+                    return ge::GRAPH_FAILED);
     tilingData->moeDistributeDispatchInfo.totalWinSize = maxWindowSize;
 
     OPS_ERR_IF(SetWorkSpace(context, nodeName) != ge::GRAPH_SUCCESS,

@@ -28,13 +28,14 @@ aclnnStatus aclnnMoeDispatchShmemGetWorkspaceSize(
     const aclTensor *xActiveMaskOptional, int64_t epWorldSize, int64_t epRankId, int64_t moeExpertNum,
     int64_t tpWorldSize, int64_t tpRankId, int64_t expertShardType, int64_t sharedExpertNum,
     int64_t sharedExpertRankNum, int64_t quantMode, int64_t globalBs, int64_t expertTokenNumsType, int64_t extInfo,
-    const aclTensor *expandXOut, const aclTensor *dynamicScalesOut, const aclTensor *expandIdxOut,
+    int64_t windowSize, const aclTensor *expandXOut, const aclTensor *dynamicScalesOut, const aclTensor *expandIdxOut,
     const aclTensor *expertTokenNumsOut, const aclTensor *epRecvCountOut, const aclTensor *tpRecvCountOut,
     uint64_t *workspaceSize, aclOpExecutor **executor)
 {
     return aclnnInnerMoeDispatchShmemGetWorkspaceSize(
         x, expertIds, scalesOptional, xActiveMaskOptional, epWorldSize, epRankId, moeExpertNum, tpWorldSize, tpRankId,
         expertShardType, sharedExpertNum, sharedExpertRankNum, quantMode, globalBs, expertTokenNumsType, extInfo,
+        windowSize,
         expandXOut, dynamicScalesOut, expandIdxOut, expertTokenNumsOut, epRecvCountOut, tpRecvCountOut,
         workspaceSize, executor);
 }
