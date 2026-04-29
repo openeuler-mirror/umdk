@@ -12,10 +12,6 @@
 #include <string.h>
 
 #include "bondp_datapath_convert.h"
-#include "bondp_segment.h"
-#include "bondp_types.h"
-#include "ub_hash.h"
-#include "ub_hmap.h"
 
 #include "bondp_wr_buf.h"
 
@@ -24,8 +20,6 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
     if (buf == NULL || max_wr_num == 0) {
         return -EINVAL;
     }
-    const uint32_t extra_wr_num = 1024;
-    max_wr_num += extra_wr_num;
     const uint32_t max_entry_size = MAX(sizeof(jfs_wr_entry_t), sizeof(jfr_wr_entry_t));
     buf->entries = calloc(max_wr_num, max_entry_size);
     if (buf->entries == NULL) {
