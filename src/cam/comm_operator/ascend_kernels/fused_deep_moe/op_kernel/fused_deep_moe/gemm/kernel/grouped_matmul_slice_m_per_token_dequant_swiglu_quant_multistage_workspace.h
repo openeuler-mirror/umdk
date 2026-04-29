@@ -800,6 +800,7 @@ public:
         AscendC::LocalTensor<half> sumOutTensor = (resource.ubBuf.template
                                                             GetBufferByByte<half>(subUbOffset));
         subUbOffset += CEIL_UP(SUM_TMP_TENSOR_SIZE);
+        AscendC::LocalTensor<uint8_t> sharedTmpBuffer = resource.ubBuf.template GetBufferByByte<uint8_t>(subUbOffset);
 
         AscendC::GlobalTensor<bool> xActiveMaskGMTensor;
         xActiveMaskGMTensor.SetGlobalBuffer((__gm__ bool *)gmXActiveMask);
@@ -813,7 +814,7 @@ public:
         AscendC::Cast(maskTmpTensor, maskInputInt8Tensor, AscendC::RoundMode::CAST_NONE, axisBS);
         AscendC::PipeBarrier<PIPE_V>();
         AscendC::SumParams params{1, axisBsAlignSize, axisBS};
-        AscendC::Sum(sumOutTensor, maskTmpTensor, params);
+        AscendC::Sum(sumOutTensor, maskTmpTensor, sharedTmpBuffer, params);
         AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
         activeMaskBsCnt = static_cast<int32_t>(sumOutTensor.GetValue(0));
