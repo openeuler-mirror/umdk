@@ -747,7 +747,7 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int 
             break;
         }
     }
-    if (all_reported) {
+    if (all_reported && !comp->modify_to_error) {
         cr->local_id = get_comp_urma_jetty_id(comp)->id;
         /* Caller should copy this CR to output array. */
         put_comp(comp);
