@@ -66,6 +66,7 @@ constexpr uint32_t MIN_TOKEN_LENGTH = 512;
 constexpr uint32_t MAX_TOKEN_LENGTH = 7168;
 constexpr uint32_t MIN_GMM1_HIDDEN = 1024;
 constexpr uint32_t MAX_GMM1_HIDDEN = 6144;
+constexpr uint32_t GMM1_HIDDEN_ALIGN = 1024;
 constexpr uint32_t TENSOR_HIDDEN_INDEX = 1;
 constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
@@ -176,6 +177,15 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
         shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(2));
     }
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen = shareGmm1HLen;
+    OPS_ERR_IF(
+        shareGmm1HLen < MIN_GMM1_HIDDEN || shareGmm1HLen > MAX_GMM1_HIDDEN,
+        OPS_LOG_E(nodeName, "shareGmm1 hidden size is invalid. Only support [%u, %u].",
+            MIN_GMM1_HIDDEN, MAX_GMM1_HIDDEN),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(shareGmm1HLen % GMM1_HIDDEN_ALIGN != 0,
+        OPS_LOG_E(nodeName, "shareGmm1 hidden size must be divisible by %u, but got %lu.",
+            GMM1_HIDDEN_ALIGN, shareGmm1HLen),
+        return ge::GRAPH_FAILED);
 
     // Check share_gmm1_weight_scale: [shareGmm1HLen] (1D) or [1, shareGmm1HLen] (2D)
     const gert::StorageShape* shareGmm1ScaleStorageShape = context.GetOptionalInputShape(INPUT_SHARE_GMM1_WEIGHT_SCALE_INDEX);
@@ -509,6 +519,10 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
     OPS_ERR_IF(
         gmm1HLen < MIN_GMM1_HIDDEN || gmm1HLen > MAX_GMM1_HIDDEN,
         OPS_LOG_E(nodeName, "gmm1 hidden size is invalid. Only support [%u, %u].", MIN_GMM1_HIDDEN, MAX_GMM1_HIDDEN),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(gmm1HLen % GMM1_HIDDEN_ALIGN != 0,
+        OPS_LOG_E(nodeName, "gmm1 hidden size must be divisible by %u, but got %u.",
+            GMM1_HIDDEN_ALIGN, gmm1HLen),
         return ge::GRAPH_FAILED);
     uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
     OPS_ERR_IF(topK > SUPPORT_TOP_K, OPS_LOG_E(nodeName, "topK(k) must <= %u.", SUPPORT_TOP_K),

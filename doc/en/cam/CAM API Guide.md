@@ -518,8 +518,8 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
  - num_experts range：(0， 512]
  - Required: local_expert_num ≤ (aivnum / 2), where aivnum is the vector core number
  - Required: token length range: [1024, 7168] and (hidden_size % 256) == 0
- - Required: gmm1_hiden_size range: [1024, 6144] and (gmm1_hiden_size % 256) == 0
- - Required: share_gmm1_hiden_size range: [1024, 6144] and (share_gmm1_hiden_size % 256) == 0
+ - Required: gmm1_hiden_size range: [1024, 6144] and (gmm1_hiden_size % 1024) == 0
+ - Required: share_gmm1_hiden_size range: [1024, 6144] and (share_gmm1_hiden_size % 1024) == 0
  - Required：HCCL_BUFFERSIZE should be greater than [(ep_rank_size * max_batch_size * moe_expert_num_per_rank * total_length * sizeof(x) * 2) / 1024 / 1024], which should be round up to the nearest integer.
  - Required：global_bs ≥ 0 and（global_bs % ep_rank_size） == 0
  - Required: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale should be in the same mode
