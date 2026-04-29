@@ -23,7 +23,8 @@ __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineShmemGetWorksp
     const aclTensor *expandScalesOptional, int64_t epWorldSize, int64_t epRankId, int64_t moeExpertNum,
     int64_t tpWorldSize, int64_t tpRankId, int64_t expertShardType, int64_t sharedExpertNum,
     int64_t sharedExpertRankNum, int64_t globalBs, int64_t commQuantMode, int64_t extInfo, int64_t outDtype,
-    int64_t groupListType, const aclTensor *out, uint64_t *workspaceSize, aclOpExecutor **executor);
+    int64_t groupListType, int64_t windowSize, const aclTensor *out, uint64_t *workspaceSize,
+    aclOpExecutor **executor);
 
 __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineShmem(void *workspace,
                                                                         uint64_t workspaceSize,

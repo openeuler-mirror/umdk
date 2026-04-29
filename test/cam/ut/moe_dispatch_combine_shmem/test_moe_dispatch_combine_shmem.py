@@ -35,7 +35,7 @@ class Module(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, expandX, expertIds, scales, shmPtr, world_size, rank, totalExpertNum, sharedExpertRankNum, sharedExpertNum, expertScales):
+    def forward(self, expandX, expertIds, scales, shmPtr, windowSize, world_size, rank, totalExpertNum, sharedExpertRankNum, sharedExpertNum, expertScales):
         output = torch.ops.umdk_cam_op_lib.moe_dispatch_shmem(
             x=expandX,
             expert_ids=expertIds,
@@ -52,7 +52,8 @@ class Module(torch.nn.Module):
             quant_mode=0,
             global_bs=0,
             expert_token_nums_type=0,
-            ext_info=shmPtr
+            ext_info=shmPtr,
+            window_size=windowSize
         )
 
         expandXOut, dynamicScalesOut, expandIdxOut, expertTokenNumsOut, epSendCountOut, tpSendCountOut = output[0:6]
@@ -96,7 +97,8 @@ class Module(torch.nn.Module):
             comm_quant_mode=comm_quant_mode,
             ext_info=shmPtr,
             out_dtype=out_dtype,
-            group_list_type=group_list_type)
+            group_list_type=group_list_type,
+            window_size=windowSize)
         return output1
 
 def gen_x(rank, batchSize, hidden_size):
@@ -224,6 +226,7 @@ def test_base_test(mode):
         expertIds=expertIdsTensor,
         scales=scalesTensor,
         shmPtr=shmem_ptr,
+        windowSize=localMemSize,
         world_size=worldSize,
         rank=rank,
         totalExpertNum=totalExpertNum,

@@ -28,7 +28,8 @@ moe_dispatch_shmem(
     int quant_mode, 
     int global_bs, 
     int expert_token_nums_type, 
-    int ext_info)
+    int ext_info,
+    int window_size)
 -> output: List[Tensor]
 ```
 ##### 1.1.1.2 接口描述 
@@ -52,6 +53,7 @@ moe_dispatch_shmem(
 |global_bs|int|必选|根据实际情况传入，由实际内存大小约束|EP通信域全局BS大小|
 |expert_token_nums_type|int|必选|传入0：输出每个专家处理的token数量；传入1：输出每个专家处理的token前缀和。|输出expert_token_nums_out的数据格式|
 |ext_info|int|必选|--|SHMEM初始化后返回的基地址指针|
+|window_size|int|必选|> 0，单位：Byte|用户为该算子在SHMEM通信域上分配的window大小|
 ##### 1.1.1.4 返回值 
 函数返回值是一个由Tensor构成的List，依次存放：expand_x, dynamic_scales, expand_idx, expert_token_nums, ep_send_count, tp_send_count和expand_scales.
 | **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
@@ -71,7 +73,7 @@ moe_dispatch_shmem(
 5. 当前接口在GE图模式下不支持动态图， 不支持fullgraph=true的选项。
 6. 当前x入参的输入格式不支持bfloat16类型。
 7. 当前不支持共享专家功能。
-8. 用户应保证ext_info地址合法性。
+8. 用户应保证ext_info地址和window_size合法性。
 9. 除满足上述形状约束外，其他参数取值要求：
  - top_k当前仅支持8
  - 需要满足：(moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, 当前最大专家数为512
@@ -79,7 +81,7 @@ moe_dispatch_shmem(
  - 需要满足：moe_expert_num / (ep_world_size - shared_expert_rank_num) ≤ MAX_EXPERT_PER_RANK, 当前该值设置为32
  - 需要满足： (ep_world_size + block_num -1) / block_num ≤ MULTI_RANK_SIZE
  - 需要满足： 如果shared_expert_rank_num不为0，则ep_world_size需要为其整数倍，切ep_world_size ≠ shared_expert_rank_num
- - 需要满足：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2)小于ext_info指向的地址空间大小
+ - 需要满足：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2)小于等于window_size
 #### 1.1.2 moe_combine_shmem ▶
 ##### 1.1.2.1 接口原型 
 ```python
@@ -107,7 +109,8 @@ moe_combine_shmem(
     int comm_quant_mode, 
     int ext_info, 
     int out_dtype, 
-    int group_list_type)
+    int group_list_type,
+    int window_size)
 -> output: Tensor
 ```
 ##### 1.1.2.2 接口描述 
@@ -139,6 +142,7 @@ moe_combine_shmem(
 |comm_quant_mode|int|必选|非量化传0，量化传2|量化模式|
 |group_list_type|int|必选|暂不支持，传入0|--|
 |ext_info|int|必选|--|SHMEM初始化后返回的基地址指针|
+|window_size|int|必选|> 0，单位：Byte|用户为该算子在SHMEM通信域上分配的window大小|
 ##### 1.1.2.4 返回值 
 函数返回值是一个Tensor，存放expand_x信息。
 | **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
@@ -150,7 +154,7 @@ moe_combine_shmem(
 3. 当前接口不支持并发调用。
 4. 当前接口在GE图模式下不支持动态图， 不支持fullgraph=true的选项。
 5. 当前不支持共享专家功能。
-6. 用户应保证ext_info地址合法性。
+6. 用户应保证ext_info地址和window_size合法性。
 7. 除满足上述形状约束外，其他参数取值要求：
  - top_k当前仅支持8
  - 需要满足：(moe_expert_num + shared_expert_rank_num) ≤ CAM_MAX_EXPERT_NUM, 当前最大专家数为512
@@ -158,7 +162,7 @@ moe_combine_shmem(
  - 需要满足：moe_expert_num / (ep_world_size - shared_expert_rank_num) ≤ MAX_EXPERT_PER_RANK, 当前该值设置为32
  - 需要满足： (ep_world_size + block_num -1) / block_num ≤ MULTI_RANK_SIZE, 
  - 需要满足： 如果shared_expert_rank_num不为0，则ep_world_size需要为其整数倍，切ep_world_size ≠ shared_expert_rank_num
- - 需要满足：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2)小于ext_info指向的地址空间大小
+ - 需要满足：(batch_size * hidden_size * ep_world_size * expert_num_per_rank * 2)小于等于window_size
 
  #### 1.1.3 get_dispatch_layout ▶
 ##### 1.1.3.1 接口原型 
