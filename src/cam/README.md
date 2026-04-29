@@ -43,7 +43,8 @@ UMDK/
 |    |    |    |--- ascend_kernels/ # code of ascend kernels
 |    |    |    |--- pybind/         # code of python interface bindings
 |    |    |--- examples/            # examples for different kernels
-|    |    |--- third_party/         # third party dependencies
+|    |    |--- third_party/         # third party dependencies (git submodules)
+|    |    |    |--- catlass/        # catlass (git submodule, pinned commit)
 |--- test/
 |    |--- cam/                      # UT test code of cam
 ```
@@ -63,6 +64,9 @@ CAM offers a basic ".run" packet for kernels and a ".whl" packet for python inte
 ```bash
 # enter UMDK folder
 cd UMDK/
+# initialize git submodules (catlass, etc.)
+git submodule update --init --recursive
+# build
 ./build/cam/build.sh
 ```
 To enable debug mode, use the following command instead:
