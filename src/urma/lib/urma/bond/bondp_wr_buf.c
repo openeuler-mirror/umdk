@@ -51,7 +51,7 @@ void wr_buf_uninit(wr_buf_t *buf)
 
         if (entry_hdr->entry_type == WR_BUF_ENTRY_JFS) {
             jfs_wr_entry_t *entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, idx);
-            convert_jfs_pwr_to_vwr_resend(&entry->wr, &entry->v_conn->target_vjetty->v_tjetty);
+            convert_jfs_pwr_to_vwr_resend(&entry->wr, &entry->target_vjetty->v_tjetty);
             release_vwr_use_cnt(&entry->wr);
             free_jfs_wr(&entry->wr);
         } else if (entry_hdr->entry_type == WR_BUF_ENTRY_JFR) {
