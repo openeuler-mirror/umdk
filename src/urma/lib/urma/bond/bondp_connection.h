@@ -17,26 +17,13 @@
 #define BONDP_RECV_WND_SIZE   (1U << 12)
 #define BONDP_MAX_BITMAP_SIZE (1U << 16)
 
-/** A virtual connection between two vjettys.
- * Virtual connection is used to implement de-duplication between two vjettys.
- */
-typedef struct bondp_v_connection {
+typedef struct bondp_conn {
     /* de-duplication */
     bdp_slide_wnd_t recv_wnd;
-    bool is_init;
-} bdp_v_conn_t;
+} bondp_conn_t;
 
-typedef struct bdp_v_conn_node {
-    hmap_node_t hmap_node;
-    urma_jetty_id_t target_id; /* key */
-    bdp_v_conn_t v_conn;
-} bdp_v_conn_node_t;
+int bondp_conn_table_create(bondp_hash_table_t *tbl, uint32_t size);
 
-int bdp_v_conn_table_create(bondp_hash_table_t *tbl, uint32_t size);
-
-bdp_v_conn_t *bdp_v_conn_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id);
-
-int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id,
-                                 bdp_v_conn_t **v_conn_out, bool is_standalone);
+int bondp_conn_table_get_or_create(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bondp_conn_t **v_conn_out);
 
 #endif // BONDP_CONNECTION_H

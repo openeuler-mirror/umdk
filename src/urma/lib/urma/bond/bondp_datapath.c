@@ -858,16 +858,13 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, bond
     /* Do de-duplicating */
     int ret = 0;
     urma_jetty_id_t target_jetty_id = cr->remote_id;
-    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&recv_comp->v_conn_table, &target_jetty_id);
-    if (!v_conn) {
-        ret = bdp_v_conn_table_add_on_recv(&recv_comp->v_conn_table, &target_jetty_id, &v_conn,
-                                           is_single_dev_mode(bdp_ctx));
-        if (ret != 0) {
-            free_jfr_wr(&wr_entry->wr);
-            jfr_wr_buf_release(wr_entry);
-            put_comp(recv_comp);
-            return CONVERT_FAIL;
-        }
+    bondp_conn_t *v_conn = NULL;
+    ret = bondp_conn_table_get_or_create(&recv_comp->v_conn_table, &target_jetty_id, &v_conn);
+    if (ret != 0) {
+        free_jfr_wr(&wr_entry->wr);
+        jfr_wr_buf_release(wr_entry);
+        put_comp(recv_comp);
+        return CONVERT_FAIL;
     }
     if (!bdp_slide_wnd_seq_in_window(&v_conn->recv_wnd, msn) || bdp_slide_wnd_has(&v_conn->recv_wnd, msn)) {
         URMA_LOG_DEBUG("Rearm recv WR due to: outside of window: %d or duplicate %d\n",

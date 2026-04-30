@@ -7,35 +7,40 @@
  * Note:
  * History: 2025-03-06  Create file
  */
+
 #include <stdlib.h>
+
+#include "urma_log.h"
 
 #include "bondp_types.h"
 #include "ub_hash.h"
 #include "ub_util.h"
-#include "urma_log.h"
 
 #include "bondp_connection.h"
 
-int bdp_v_conn_init(bdp_v_conn_t *v_conn)
+typedef struct bondp_conn_node {
+    hmap_node_t hmap_node;
+    urma_jetty_id_t target_id; /* key */
+    bondp_conn_t v_conn;
+} bondp_conn_node_t;
+
+int bdp_v_conn_init(bondp_conn_t *v_conn)
 {
     if (bdp_slide_wnd_init(&v_conn->recv_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
         URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add\n");
         return -1;
     }
-    v_conn->is_init = true;
     return 0;
 }
 
-void bdp_v_conn_uninit(bdp_v_conn_t *v_conn)
+void bdp_v_conn_uninit(bondp_conn_t *v_conn)
 {
-    if (v_conn->is_init == true) {
-        bdp_slide_wnd_uninit(&v_conn->recv_wnd);
-    }
+    bdp_slide_wnd_uninit(&v_conn->recv_wnd);
 }
 
 static bool v_conn_comp(struct ub_hmap_node *node, void *key)
 {
-    bdp_v_conn_node_t *v_conn_node = CONTAINER_OF_FIELD(node, bdp_v_conn_node_t, hmap_node);
+    bondp_conn_node_t *v_conn_node = CONTAINER_OF_FIELD(node, bondp_conn_node_t, hmap_node);
     urma_jetty_id_t *jetty_id = (urma_jetty_id_t *)key;
     return v_conn_node->target_id.eid.in6.interface_id == jetty_id->eid.in6.interface_id &&
            v_conn_node->target_id.eid.in6.subnet_prefix == jetty_id->eid.in6.subnet_prefix &&
@@ -45,7 +50,7 @@ static bool v_conn_comp(struct ub_hmap_node *node, void *key)
 
 static void v_conn_free(struct ub_hmap_node *node)
 {
-    bdp_v_conn_node_t *v_conn_node = CONTAINER_OF_FIELD(node, bdp_v_conn_node_t, hmap_node);
+    bondp_conn_node_t *v_conn_node = CONTAINER_OF_FIELD(node, bondp_conn_node_t, hmap_node);
     bdp_v_conn_uninit(&v_conn_node->v_conn);
     free(v_conn_node);
 }
@@ -57,46 +62,34 @@ static uint32_t v_conn_hash(void *key)
            jetty_id->id + jetty_id->uasid;
 }
 
-int bdp_v_conn_table_create(bondp_hash_table_t *tbl, uint32_t size)
+int bondp_conn_table_create(bondp_hash_table_t *tbl, uint32_t size)
 {
     return bondp_hash_table_create(tbl, size, v_conn_comp, v_conn_free, v_conn_hash);
 }
 
-int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bdp_v_conn_t **v_conn_out,
-                                 bool is_standalone)
+int bondp_conn_table_get_or_create(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bondp_conn_t **conn)
 {
     hmap_node_t *node = NULL;
     uint32_t hash = tbl->hash_f(target_id);
-    bdp_v_conn_node_t *v_conn_node = NULL;
+    bondp_conn_node_t *new_node = NULL;
 
     node = bondp_hash_table_lookup_without_lock(tbl, target_id, hash);
     if (node) {
-        return BONDP_HASH_MAP_COLLIDE_ERROR;
+        *conn = &(CONTAINER_OF_FIELD(node, bondp_conn_node_t, hmap_node)->v_conn);
+        return 0;
     }
-    v_conn_node = calloc(1, sizeof(bdp_v_conn_node_t));
-    if (v_conn_node == NULL) {
+    new_node = calloc(1, sizeof(bondp_conn_node_t));
+    if (new_node == NULL) {
         return BONDP_HASH_MAP_ALLOC_ERROR;
     }
-    if (!is_standalone) {
-        if (bdp_v_conn_init(&v_conn_node->v_conn)) {
-            goto FREE_VCONN_NODE;
-        }
+    if (bdp_v_conn_init(&new_node->v_conn)) {
+        goto FREE_VCONN_NODE;
     }
-    v_conn_node->target_id = *target_id;
-    bondp_hash_table_add_with_hash(tbl, &v_conn_node->hmap_node, hash);
-    *v_conn_out = &v_conn_node->v_conn;
+    new_node->target_id = *target_id;
+    bondp_hash_table_add_with_hash(tbl, &new_node->hmap_node, hash);
+    *conn = &new_node->v_conn;
     return 0;
 FREE_VCONN_NODE:
-    free(v_conn_node);
+    free(new_node);
     return BONDP_HASH_MAP_ALLOC_ERROR;
-}
-
-bdp_v_conn_t *bdp_v_conn_table_lookup(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id)
-{
-    hmap_node_t *node = NULL;
-    node = bondp_hash_table_lookup_without_lock(tbl, target_id, tbl->hash_f(target_id));
-    if (node == NULL) {
-        return NULL;
-    }
-    return &(CONTAINER_OF_FIELD(node, bdp_v_conn_node_t, hmap_node)->v_conn);
 }

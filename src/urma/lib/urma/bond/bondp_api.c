@@ -52,7 +52,7 @@ static int bondp_init_connection_table(bondp_comp_t *bdp_comp)
         }
     }
 
-    if (bdp_v_conn_table_create(&bdp_comp->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
+    if (bondp_conn_table_create(&bdp_comp->v_conn_table, BONDP_MAX_NUM_JETTYS)) {
         return -1;
     }
     return 0;
