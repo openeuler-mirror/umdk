@@ -1,0 +1,4 @@
+[submodule "src/cam/third_party/catlass"]
+	path = src/cam/third_party/catlass
+	url = https://gitcode.com/cann/catlass.git
+	branch = catlass-v1-stable

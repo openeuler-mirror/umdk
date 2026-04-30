@@ -70,21 +70,16 @@ function prepare_cam_third_party() {
     local third_party="$1"
     local catlass_dir="${third_party}/catlass"
 
-    if [[ ! -d "${third_party}" ]]; then
-        mkdir -p "${third_party}"
-    fi
-
-    if [[ -d "${catlass_dir}" ]]; then
-        echo "catlass has existed: ${catlass_dir}"
+    if [[ -d "${catlass_dir}" && -d "${catlass_dir}/include" ]]; then
+        echo "catlass submodule has existed: ${catlass_dir}"
         return 0
     fi
 
-    branch="catlass-v1-stable"
-    echo "Clone catlass branch ${branch}..."
-    if git clone --branch ${branch} --depth 1 https://gitcode.com/cann/catlass.git ${catlass_dir}; then
+    echo "Initializing catlass submodule..."
+    if git submodule update --init --recursive src/cam/third_party/catlass; then
         return 0
     else
-        echo "Clone catlass failed! You can manually download it and place it in ${third_party}"
+        echo "Failed to initialize catlass submodule! You can manually run: git submodule update --init --recursive"
         return 1
     fi
 }
