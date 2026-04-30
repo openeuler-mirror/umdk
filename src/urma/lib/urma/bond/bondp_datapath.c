@@ -192,33 +192,6 @@ static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, 
     return URMA_SUCCESS;
 }
 
-static bdp_v_conn_t *get_v_conn_on_send(bondp_comp_t *bdp_comp, bondp_target_jetty_t *bdp_tjetty)
-{
-    urma_jetty_id_t *comp_jetty_id = get_comp_urma_jetty_id(bdp_comp);
-    if (comp_jetty_id == NULL) {
-        return NULL;
-    }
-    urma_jetty_id_t *vtjetty_id = &bdp_tjetty->v_tjetty.id;
-    bdp_v_conn_t *v_conn = bdp_v_conn_table_lookup(&bdp_comp->v_conn_table, vtjetty_id);
-    if (!v_conn) {
-        int ret = bdp_v_conn_table_add_on_send(&bdp_comp->v_conn_table, vtjetty_id,
-                                               bdp_tjetty, bdp_tjetty->target_dev_num, &v_conn,
-                                               is_single_dev_mode(bdp_comp->bondp_ctx));
-        if (ret != 0) {
-            URMA_LOG_ERR("Failed to create v_conn for vjetty, ret: %d, "
-                         "[" URMA_JETTY_ID_FMT " -> " URMA_JETTY_ID_FMT "]\n",
-                         ret, URMA_JETTY_ID_ARGS(comp_jetty_id), URMA_JETTY_ID_ARGS(vtjetty_id));
-            return NULL;
-        }
-    }
-    /* v_conn is not null */
-    /* If this v_conn is created by handle_recv, then we need to initialize it */
-    if (v_conn->target_vjetty == NULL) {
-        init_v_conn_on_send(v_conn, bdp_tjetty, bdp_tjetty->target_dev_num);
-    }
-    return v_conn;
-}
-
 static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                                                  const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
@@ -233,11 +206,6 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
     if (bdp_tjetty == NULL) {
         URMA_LOG_ERR("WR->tjetty is NULL\n");
         return URMA_EINVAL;
-    }
-
-    bdp_v_conn_t *v_conn = get_v_conn_on_send(bdp_comp, bdp_tjetty);
-    if (v_conn == NULL) {
-        return URMA_FAIL;
     }
 
     int send_idx = -1, target_idx = -1;
@@ -260,7 +228,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         if (ret != 0) {
             return ret;
         }
-        ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp, v_conn);
+        ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp);
         if (ret != 0) {
             return ret;
         }
@@ -291,11 +259,6 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         return URMA_EINVAL;
     }
 
-    bdp_v_conn_t *v_conn = get_v_conn_on_send(bdp_comp, bdp_tjetty);
-    if (v_conn == NULL) {
-        return URMA_FAIL;
-    }
-
     int send_idx = 0, target_idx = 0;
     if (!wr->flag.bs.has_drv_ext) {
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
@@ -317,7 +280,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
     }
     wr_entry->user_ctx = wr->user_ctx;
     wr_entry->bdp_comp = bdp_comp;
-    wr_entry->v_conn = v_conn;
+    wr_entry->target_vjetty = bdp_tjetty;
     wr_entry->send_idx = send_idx;
     wr_entry->target_idx = target_idx;
 
@@ -329,7 +292,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
     }
 
     add_vwr_use_cnt(pwr);
-    ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp, v_conn);
+    ret = convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, bdp_comp);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to convert jfs wr\n");
         goto RELEASE_WR;
@@ -344,7 +307,7 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
     return URMA_SUCCESS;
 
 RELEASE_WR:
-    convert_jfs_pwr_to_vwr_resend(pwr, &wr_entry->v_conn->target_vjetty->v_tjetty);
+    convert_jfs_pwr_to_vwr_resend(pwr, &wr_entry->target_vjetty->v_tjetty);
     release_vwr_use_cnt(pwr);
 FREE_PWR:
     free_jfs_wr(pwr);
@@ -660,7 +623,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     wr_entry->send_idx = send_idx;
     wr_entry->target_idx = target_idx;
     urma_jfs_wr_t *wr = &wr_entry->wr;
-    urma_target_jetty_t *vtjetty = &wr_entry->v_conn->target_vjetty->v_tjetty;
+    urma_target_jetty_t *vtjetty = &wr_entry->target_vjetty->v_tjetty;
     convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
     convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
@@ -791,12 +754,12 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
         return CONVERT_SKIP;
     }
 
-    if (false && is_failover_cr(cr) && !bdp_comp->modify_to_error) {
+    if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         bdp_comp->valid[send_idx] = false;
 
         int new_send_idx = -1, new_target_idx = -1;
-        if (schedule_send(&wr_entry->v_conn->target_vjetty->v_tjetty, bdp_comp,
+        if (schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx, NULL) != 0) {
             /*
              * When all ports are invalid and no port is available to resend the wr,
@@ -824,10 +787,10 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
                 URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
             }
         }
-        bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty,
+        bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->target_vjetty,
                                                (int)send_idx, (int)target_idx);
         /* Update active link after failover is finished. */
-        bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->v_conn->target_vjetty, new_send_idx);
+        bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->target_vjetty, new_send_idx);
 
         bool is_primary_failover = (bdp_comp->active_count > 0 &&
                                     send_idx == (uint32_t)bdp_comp->active_indices[0] &&
@@ -840,7 +803,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
                 .cr_status = 0,
                 .new_active_idx = -1,
                 .bdp_jetty = NULL,
-                .bdp_tjetty = wr_entry->v_conn->target_vjetty,
+                .bdp_tjetty = wr_entry->target_vjetty,
             };
             bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
         }
@@ -857,7 +820,7 @@ CONVERT_CR:
     cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
 
-    convert_jfs_pwr_to_vwr_resend(&wr_entry->wr, &wr_entry->v_conn->target_vjetty->v_tjetty);
+    convert_jfs_pwr_to_vwr_resend(&wr_entry->wr, &wr_entry->target_vjetty->v_tjetty);
     release_vwr_use_cnt(&wr_entry->wr);
     free_jfs_wr(&wr_entry->wr);
     (void)pthread_spin_lock(&bdp_comp->send_jfc->wr_lock);

@@ -7,28 +7,17 @@
  * Note:
  * History: 2025-03-06  Create file
  */
-#include "bondp_connection.h"
+#include <stdlib.h>
+
 #include "bondp_types.h"
 #include "ub_hash.h"
 #include "ub_util.h"
 #include "urma_log.h"
 
-#define BDP_V_CONN_HASH_BASIS (0x87820129)
-
-void init_v_conn_on_send(bdp_v_conn_t *v_conn, void *target_vjetty, int target_dev_num)
-{
-    if (v_conn == NULL || target_vjetty == NULL) {
-        URMA_LOG_ERR("Invalid param\n");
-        return;
-    }
-    bondp_target_jetty_t *bdp_tjetty = target_vjetty;
-    v_conn->target_vjetty = bdp_tjetty;
-}
+#include "bondp_connection.h"
 
 int bdp_v_conn_init(bdp_v_conn_t *v_conn)
 {
-    v_conn->target_vjetty = NULL;
-    v_conn->msn = 0;
     if (bdp_slide_wnd_init(&v_conn->recv_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
         URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add\n");
         return -1;
@@ -73,36 +62,6 @@ int bdp_v_conn_table_create(bondp_hash_table_t *tbl, uint32_t size)
     return bondp_hash_table_create(tbl, size, v_conn_comp, v_conn_free, v_conn_hash);
 }
 
-int bdp_v_conn_table_add_on_send(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id,
-                                 void *target_vjetty, int target_dev_num, bdp_v_conn_t **v_conn_out, bool is_standalone)
-{
-    hmap_node_t *node = NULL;
-    uint32_t hash = tbl->hash_f(target_id);
-    bdp_v_conn_node_t *v_conn_node = NULL;
-
-    node = bondp_hash_table_lookup_without_lock(tbl, target_id, hash);
-    if (node) {
-        return BONDP_HASH_MAP_COLLIDE_ERROR;
-    }
-    v_conn_node = malloc(sizeof(bdp_v_conn_node_t));
-    if (v_conn_node == NULL) {
-        return BONDP_HASH_MAP_ALLOC_ERROR;
-    }
-    if (!is_standalone) {
-        if (bdp_v_conn_init(&v_conn_node->v_conn)) {
-            goto FREE_VCONN_NODE;
-        }
-    }
-    init_v_conn_on_send(&v_conn_node->v_conn, target_vjetty, target_dev_num);
-    v_conn_node->target_id = *target_id;
-    bondp_hash_table_add_with_hash(tbl, &v_conn_node->hmap_node, hash);
-    *v_conn_out = &v_conn_node->v_conn;
-    return 0;
-FREE_VCONN_NODE:
-    free(v_conn_node);
-    return BONDP_HASH_MAP_ALLOC_ERROR;
-}
-
 int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bdp_v_conn_t **v_conn_out,
                                  bool is_standalone)
 {
@@ -114,7 +73,7 @@ int bdp_v_conn_table_add_on_recv(bondp_hash_table_t *tbl, urma_jetty_id_t *targe
     if (node) {
         return BONDP_HASH_MAP_COLLIDE_ERROR;
     }
-    v_conn_node = malloc(sizeof(bdp_v_conn_node_t));
+    v_conn_node = calloc(1, sizeof(bdp_v_conn_node_t));
     if (v_conn_node == NULL) {
         return BONDP_HASH_MAP_ALLOC_ERROR;
     }
