@@ -937,83 +937,10 @@ bool admin_is_eid_valid(const char *eid)
 
 static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_len)
 {
-    uint8_t ipv6_addr_hex_count = 8, ipv6_min_compress_len = 2;
-    uint16_t words[ipv6_addr_hex_count];
-    int i, zero_start = -1, zero_len = 0;
-    int max_zero_start = -1, max_zero_len = 0;
-
-    // 按2字节分组，转为16位整数（网络序）
-    for (i = 0; i < ipv6_addr_hex_count; ++i) {
-        uint8_t offset = i * sizeof(uint16_t);
-        words[i] = ((uint16_t)eid->raw[offset] << 8) | eid->raw[offset + 1];
+    int ret = snprintf(out, out_len, EID_FMT, EID_RAW_ARGS(eid->raw));
+    if (ret <= 0 || (size_t)ret >= out_len) {
+        (void)printf("Failed convert eid to full format, ret = %d.\n", ret);
     }
-
-    // 查找最长连续0区间
-    for (i = 0; i < ipv6_addr_hex_count; ++i) {
-        if (words[i] == 0) {
-            if (zero_start == -1) {
-                zero_start = i;
-                zero_len = 1;
-            } else {
-                zero_len++;
-            }
-        } else {
-            if (zero_len > max_zero_len) {
-                max_zero_start = zero_start;
-                max_zero_len = zero_len;
-            }
-            zero_start = -1;
-            zero_len = 0;
-        }
-    }
-    if (zero_len > max_zero_len) {
-        max_zero_start = zero_start;
-        max_zero_len = zero_len;
-    }
-    if (max_zero_len < ipv6_min_compress_len) { // 只缩写长度大于1的区间
-        max_zero_start = -1;
-        max_zero_len = 0;
-    }
-
-    // 组装字符串
-    char *ptr = out;
-    size_t left = out_len;
-    bool printed = false;
-    for (i = 0; i < ipv6_addr_hex_count;) {
-        int n = 0;
-        if (i == max_zero_start) {
-            if (!printed) {
-                n = snprintf(ptr, left, "::");
-            } else {
-                n = snprintf(ptr, left, ":");
-            }
-            if (n <= 0) {
-                printf("Failed convert eid to ipv6.\n");
-            }
-            ptr += n;
-            left -= n;
-            i += max_zero_len;
-            printed = true;
-            continue;
-        }
-        if (printed) {
-            n = snprintf(ptr, left, ":");
-            if (n <= 0) {
-                printf("Failed convert eid to ipv6.\n");
-            }
-            ptr += n;
-            left -= n;
-        }
-        n = snprintf(ptr, left, "%x", words[i]);
-        if (n <= 0) {
-            printf("Failed convert eid to ipv6.\n");
-        }
-        ptr += n;
-        left -= n;
-        printed = true;
-        i++;
-    }
-    *ptr = '\0';
 }
 
 static tool_topo_info_t *admin_find_topo_node(tool_topo_map_t *topo_map, uint32_t node_id)
