@@ -28,8 +28,8 @@ class Test(UBUSFeature):
     def test_urma_qemu_smoke_8host_agg_dev_size(self):
         p_list = []
         cmd_list = ["send_lat", "read_lat", "write_lat",
-                     "send_bw", "read_bw", "write_bw"]      
-        # send single mode maximum 64K, current simulation performance is insufficient
+                     "send_bw", "read_bw", "write_bw"]
+        # Send single mode maximum 64K, current simulation performance is insufficient
         size_ranges = [
             ("1", 1, 1),
             ("1-1K", 1, 1024),
