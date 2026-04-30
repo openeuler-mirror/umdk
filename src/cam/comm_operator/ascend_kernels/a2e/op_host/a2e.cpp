@@ -12,6 +12,7 @@
 #include "tiling/platform/platform_ascendc.h"
 
 #include "tiling/hccl/hccl_tiling.h"
+#include "error_log.h"
 
 using namespace Cam;
 namespace {
@@ -36,9 +37,56 @@ constexpr int INPUT_EXPERT_IDS_IDX = 1;
 
 constexpr int MAX_TOPK = 8;
 constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8; // numeric representation of AlltoAll
+constexpr int MAX_BATCH_SIZE = 1024;
+constexpr int MIN_HIDDEN_SIZE = 1024;
+constexpr int MAX_HIDDEN_SIZE = 7168;
+constexpr int HIDDEN_SIZE_ALIGN = 256;
+constexpr int AIV_ALG_NUM_MIN = 4;
+constexpr int AIV_ALG_NUM_MAX = 48;
 }  // namespace
 
 namespace optiling {
+    struct A2ECheckParams {
+        int rank;
+        int batchSize;
+        int hiddenSize;
+        int topk;
+        int expertRankSize;
+        int attentionRankSize;
+        int aivAlgNum;
+        uint32_t aivNum;
+    };
+
+    static ge::graphStatus CheckData(const char* nodeName, const A2ECheckParams& params)
+    {
+        OP_TILING_CHECK(params.rank < 0 || params.rank >= params.expertRankSize + params.attentionRankSize,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: rank must >= 0 and < expertRankSize + attentionRankSize"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.batchSize <= 0 || params.batchSize > MAX_BATCH_SIZE,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: batchSize must >= 0 and <= 1024"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.hiddenSize < MIN_HIDDEN_SIZE || params.hiddenSize > MAX_HIDDEN_SIZE ||
+                        params.hiddenSize % HIDDEN_SIZE_ALIGN != 0,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: hiddenSize must >= 1024 and <= 7168 and be divisible by 256"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.topk <= 0 || params.topk > MAX_TOPK,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: topk must >= 1 and <= 8"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.expertRankSize <= 0 || params.expertRankSize > params.attentionRankSize,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: expertRankSize must > 0 and <= attentionRankSize"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.aivAlgNum < AIV_ALG_NUM_MIN || params.aivAlgNum > AIV_ALG_NUM_MAX,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: aivAlgNum must >= 4 and <= 48"),
+            return ge::GRAPH_FAILED);
+
+        return ge::GRAPH_SUCCESS;
+    }
+
     static ge::graphStatus TilingFunc(gert::TilingContext* context)
     {
         A2ETilingData *tiling = context->GetTilingData<A2ETilingData>();
@@ -69,11 +117,12 @@ namespace optiling {
         uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
         blockNum = ascendcPlatform.CalcTschBlockDim(aivNum, 0, aivNum);
 
-        if (rank < 0 || rank >= expertRankSize + attentionRankSize) {
-            printf("[ERROR] CAM A2E PARAMETER INVALID: rank must >= 0 and < expertRankSize + attentionRankSize, "
-                    "but rank = %d, expertRankSize = %d, attentionRankSize = %d\n", rank, expertRankSize, attentionRankSize);
-            return ge::GRAPH_FAILED;
-        }
+        const char* nodeName = context->GetNodeName();
+        A2ECheckParams checkParams{rank, batchSize, hiddenSize, topk, expertRankSize,
+            attentionRankSize, aivAlgNum, aivNum};
+        OP_TILING_CHECK(CheckData(nodeName, checkParams) != ge::GRAPH_SUCCESS,
+            OP_LOGE(nodeName, "CheckData failed."),
+            return ge::GRAPH_FAILED);
 
         tiling->batchSize = batchSize;
         tiling->hiddenSize = hiddenSize;
