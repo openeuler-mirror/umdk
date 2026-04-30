@@ -169,6 +169,31 @@ int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
     return ret;
 }
 
+static void uvs_filter_path_set(uvs_path_set_t *uvs_path_set, bool multi_path)
+{
+    uvs_path_set_t filtered = *uvs_path_set;
+    uint32_t i, j;
+
+    filtered.path_count = 0;
+    for (i = 0, j = 0; i < uvs_path_set->path_count; i++) {
+        uvs_path_t *path_src = &uvs_path_set->paths[i];
+        uvs_path_t *path_dst = &filtered.paths[j];
+
+        if (multi_path && path_src->src_port.port_idx != 255) {
+            continue;
+        }
+
+        if (!multi_path && path_src->src_port.port_idx == 255) {
+            continue;
+        }
+
+        *path_dst = *path_src;
+        j++;
+    }
+    filtered.path_count = j;
+    *uvs_path_set = filtered;
+}
+
 int uvs_get_path_set(const uvs_eid_t *src_bondind_eid,
                      const uvs_eid_t *dst_bonding_eid,
                      enum uvs_tp_type tp_type, bool multi_path,
@@ -196,6 +221,12 @@ int uvs_get_path_set(const uvs_eid_t *src_bondind_eid,
                                         dst_bonding_eid, tp_type, multi_path, uvs_path_set);
     if (ret != 0) {
         TPSA_LOG_ERR("Failed to get path set, ret = %d.\n", ret);
+        return ret;
+    }
+    // Temporary fix for the issue where kernel FULLMESH_1D returns all eids
+    if (uvs_path_set->topo_type == UVS_TOPO_TYPE_FULLMESH_1D) {
+        uvs_filter_path_set(uvs_path_set, multi_path);
+        TPSA_LOG_DEBUG("Filtered path set for FULLMESH_1D\n");
     }
     return ret;
 }
