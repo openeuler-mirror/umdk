@@ -170,8 +170,6 @@ typedef struct bondp_jfc {
     int dev_num;
     int lasted_polled_jfc_idx;
     urma_ref_t use_cnt; /* Initialize to 0 */
-    wr_buf_t wr_buf;
-    pthread_spinlock_t wr_lock;
 } bondp_jfc_t;
 
 typedef struct bondp_tseg {
@@ -232,8 +230,9 @@ typedef struct bondp_comp {
     urma_ref_t use_cnt; /* Initialize to 0 */
     // send
     bool modify_to_error;
-    bondp_jfc_t *send_jfc;
     pthread_spinlock_t send_lock;
+    wr_buf_t send_wr_buf;
+    pthread_spinlock_t send_wr_lock;
     bool valid[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t msn;
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
@@ -243,7 +242,8 @@ typedef struct bondp_comp {
     std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 #endif
     // recv
-    bondp_jfc_t *recv_jfc;
+    wr_buf_t recv_wr_buf;
+    pthread_spinlock_t recv_wr_lock;
     uint32_t rqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 } bondp_comp_t;
 

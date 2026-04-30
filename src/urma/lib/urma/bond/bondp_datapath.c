@@ -271,9 +271,9 @@ static urma_status_t bondp_post_send_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         return URMA_FAIL;
     }
 
-    (void)pthread_spin_lock(&bdp_comp->send_jfc->wr_lock);
-    jfs_wr_entry_t *wr_entry = jfs_wr_buf_alloc(&bdp_comp->send_jfc->wr_buf);
-    (void)pthread_spin_unlock(&bdp_comp->send_jfc->wr_lock);
+    (void)pthread_spin_lock(&bdp_comp->send_wr_lock);
+    jfs_wr_entry_t *wr_entry = jfs_wr_buf_alloc(&bdp_comp->send_wr_buf);
+    (void)pthread_spin_unlock(&bdp_comp->send_wr_lock);
     if (wr_entry == NULL) {
         URMA_LOG_ERR("Failed to allocate jfs wr entry\n");
         return URMA_EAGAIN;
@@ -311,9 +311,9 @@ RELEASE_WR:
     release_vwr_use_cnt(pwr);
 FREE_PWR:
     free_jfs_wr(pwr);
-    (void)pthread_spin_lock(&bdp_comp->send_jfc->wr_lock);
+    (void)pthread_spin_lock(&bdp_comp->send_wr_lock);
     jfs_wr_buf_release(wr_entry);
-    (void)pthread_spin_unlock(&bdp_comp->send_jfc->wr_lock);
+    (void)pthread_spin_unlock(&bdp_comp->send_wr_lock);
     return ret;
 }
 
@@ -472,9 +472,9 @@ static urma_status_t bondp_post_recv_wr_and_store(bondp_comp_t *bdp_comp, urma_j
         return URMA_FAIL;
     }
 
-    (void)pthread_spin_lock(&bdp_comp->recv_jfc->wr_lock);
-    jfr_wr_entry_t *wr_entry = jfr_wr_buf_alloc(&bdp_comp->recv_jfc->wr_buf);
-    (void)pthread_spin_unlock(&bdp_comp->recv_jfc->wr_lock);
+    (void)pthread_spin_lock(&bdp_comp->recv_wr_lock);
+    jfr_wr_entry_t *wr_entry = jfr_wr_buf_alloc(&bdp_comp->recv_wr_buf);
+    (void)pthread_spin_unlock(&bdp_comp->recv_wr_lock);
     if (wr_entry == NULL) {
         URMA_LOG_ERR("Failed to allocate jfr wr entry\n");
         return URMA_EAGAIN;
@@ -634,9 +634,9 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
         convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
         release_vwr_use_cnt(wr);
         free_jfs_wr(wr);
-        (void)pthread_spin_lock(&bdp_comp->send_jfc->wr_lock);
+        (void)pthread_spin_lock(&bdp_comp->send_wr_lock);
         jfs_wr_buf_release(wr_entry);
-        (void)pthread_spin_unlock(&bdp_comp->send_jfc->wr_lock);
+        (void)pthread_spin_unlock(&bdp_comp->send_wr_lock);
     }
 
     return ret;
@@ -720,10 +720,16 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int 
     return CONVERT_SKIP;
 }
 
-static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     const uint64_t wr_id = cr->user_ctx;
-    jfs_wr_entry_t *wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
+    bondp_comp_t *bdp_comp = get_comp_by_cr(bdp_ctx, idx, cr);
+    if (bdp_comp == NULL) {
+        URMA_LOG_ERR("Failed find jetty when handle send cr, cr.local_id:%u.\n", cr->local_id);
+        return CONVERT_SKIP;
+    }
+
+    jfs_wr_entry_t *wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
     if (wr_entry == NULL) {
         /*
          * For backup path retransmission: the CR for the retransmitted WR may complete
@@ -732,16 +738,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
          * but this is risky because subsequent WRs may reuse the same memory,
          * resulting in WR/CR mismatch.
          */
-        return CONVERT_SKIP;
-    }
-
-    bondp_comp_t *bdp_comp = get_comp_by_cr(bdp_ctx, idx, cr);
-    if (bdp_comp == NULL) {
-        URMA_LOG_ERR("Failed find jetty when handle send cr, cr.local_id:%u.\n", cr->local_id);
-        return CONVERT_SKIP;
-    }
-    if (wr_entry->bdp_comp != bdp_comp) {
-        URMA_LOG_ERR("Corrupted wr entry, bdp_comp not match, in_entry:%p, found:%p.\n", wr_entry->bdp_comp, bdp_comp);
         put_comp(bdp_comp);
         return CONVERT_SKIP;
     }
@@ -772,9 +768,9 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
 
         URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
 
-        for (int i = 0; i < bdp_jfc->wr_buf.max_wr_num; i++) {
-            const uint64_t wr_id = (wr_entry->wr_id + i - 1) % bdp_jfc->wr_buf.max_wr_num + 1;
-            jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
+        for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+            const uint64_t resend_wr_id = (wr_entry->wr_id + i - 1) % bdp_comp->send_wr_buf.max_wr_num + 1;
+            jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
             if (resend_wr_entry == NULL ||
                 resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
                 resend_wr_entry->bdp_comp != bdp_comp ||
@@ -784,7 +780,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, bond
             }
             atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
             if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", wr_id);
+                URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", resend_wr_id);
             }
         }
         bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->target_vjetty,
@@ -823,14 +819,14 @@ CONVERT_CR:
     convert_jfs_pwr_to_vwr_resend(&wr_entry->wr, &wr_entry->target_vjetty->v_tjetty);
     release_vwr_use_cnt(&wr_entry->wr);
     free_jfs_wr(&wr_entry->wr);
-    (void)pthread_spin_lock(&bdp_comp->send_jfc->wr_lock);
+    (void)pthread_spin_lock(&bdp_comp->send_wr_lock);
     jfs_wr_buf_release(wr_entry);
-    (void)pthread_spin_unlock(&bdp_comp->send_jfc->wr_lock);
+    (void)pthread_spin_unlock(&bdp_comp->send_wr_lock);
     put_comp(bdp_comp);
     return CONVERT_SUCCESS;
 }
 
-static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (recv_comp == NULL) {
@@ -839,7 +835,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, bond
     }
 
     const uint64_t wr_id = cr->user_ctx;
-    jfr_wr_entry_t *wr_entry = jfr_wr_buf_get(&bdp_jfc->wr_buf, wr_id);
+    jfr_wr_entry_t *wr_entry = jfr_wr_buf_get(&recv_comp->recv_wr_buf, wr_id);
     if (wr_entry == NULL) {
         // wr_entry could not be NULL
         put_comp(recv_comp);
@@ -922,7 +918,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     return CONVERT_SUCCESS;
 }
 
-static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, int idx, urma_cr_t *cr)
+static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     if (is_ctrl_cr(cr)) {
         (void)bondp_try_handle_health_check_cr(bdp_ctx, idx, cr);
@@ -930,9 +926,9 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, bon
     } else if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, idx, cr);
     } else if (is_recv_cr(cr)) {
-        return handle_recv_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
+        return handle_recv_cr_with_store(bdp_ctx, idx, cr);
     } else {
-        return handle_send_cr_with_store(bdp_ctx, bdp_jfc, idx, cr);
+        return handle_send_cr_with_store(bdp_ctx, idx, cr);
     }
 }
 
@@ -977,7 +973,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jfc, idx, pcr);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, idx, pcr);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;
@@ -1029,7 +1025,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
             if (is_single_dev_mode(bdp_ctx)) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, i, pcr);
             } else {
-                conv_ret = bondp_handle_cr_with_store(bdp_ctx, bdp_jetty->send_jfc, i, pcr);
+                conv_ret = bondp_handle_cr_with_store(bdp_ctx, i, pcr);
             }
             if (conv_ret == CONVERT_FAIL) {
                 return -1;
