@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <stdatomic.h>
 
 #include "ub_util.h"
 #include "ubagg_ioctl.h"
@@ -1111,6 +1112,12 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
 
 static int bondp_delete_vjetty(bondp_comp_t *bdp_jetty)
 {
+    unsigned long ref_cnt;
+
+    ref_cnt = atomic_load(&(bdp_jetty->use_cnt.atomic_cnt));
+
+    URMA_LOG_INFO("bondp delete, v_jetty id is %u, modify_to err is %d, vjetty_use_cnt is %lu.\n",
+        bdp_jetty->v_jetty.jetty_id.id, bdp_jetty->modify_to_error, ref_cnt);
     return urma_cmd_delete_jetty(&bdp_jetty->v_jetty);
 }
 
@@ -1121,6 +1128,9 @@ static int bondp_delete_pjetty(bondp_comp_t *bdp_jetty)
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
         }
+
+        URMA_LOG_INFO("bondp delete, p_jetty id is %u.\n", 
+            bdp_jetty->p_jetty[i]->jetty_id.id);
         int p_ret = urma_delete_jetty(bdp_jetty->p_jetty[i]);
         if (p_ret) {
             URMA_LOG_ERR("Failed to delete pjetty %d, ret: %d.\n", i, ret);
@@ -1338,6 +1348,8 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
     if ((attr->mask & JETTY_STATE) && attr->state == URMA_JETTY_STATE_ERROR) {
         bdp_jetty->modify_to_error = true;
     }
+    URMA_LOG_DEBUG("bondp modify_jetty v_jetty id is %u, old_state is %d.\n",
+        bdp_jetty->v_jetty.jetty_id.id, attr->state);
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jetty->p_jetty[i] == NULL) {
             continue;
@@ -1347,6 +1359,8 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr)
             final_ret = ret;
             URMA_LOG_ERR("modify pjetty fail, index:%d, ret:%d\n", i, final_ret);
         }
+        URMA_LOG_DEBUG("bondp modify_jetty p_jetty id is %u, new_state is %d.\n",
+            bdp_jetty->p_jetty[i]->jetty_id.id, attr->state);
     }
     return final_ret;
 }
@@ -1489,6 +1503,11 @@ static int bondp_import_pjetty(
 
 static int bondp_unimport_vjetty(bondp_target_jetty_t *bdp_tjetty)
 {
+    unsigned long ref_cnt;
+
+    ref_cnt = atomic_load(&(bdp_tjetty->use_cnt.atomic_cnt));
+    URMA_LOG_INFO("bondp vjetty id is %u, v_jetty use_cnt before import is %lu.\n",
+        bdp_tjetty->v_tjetty.id.id, ref_cnt);
     return urma_cmd_unimport_jetty(&bdp_tjetty->v_tjetty);
 }
 
@@ -1507,6 +1526,8 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
             if (!bdp_tjetty->p_tjetty[i][j]) {
                 continue;
             }
+            URMA_LOG_INFO("bondp unimport pjetty is done, jetty id is %u.\n",
+                bdp_tjetty->p_tjetty[i][j]->id.id);
             if (urma_unimport_jetty(bdp_tjetty->p_tjetty[i][j]) != URMA_SUCCESS) {
                 ret = URMA_FAIL;
             }
@@ -1954,7 +1975,6 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
             continue;
         }
         jfc[actual_num++] = v_jfc;
-        URMA_LOG_DEBUG("p_jfc:%p, add v_jfc:%p\n", p_jfc, v_jfc);
     }
     PERF_PROFILING_END(BOND_WAIT_JFC);
     return actual_num;
