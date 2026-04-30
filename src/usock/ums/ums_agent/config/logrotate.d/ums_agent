@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+
+/var/log/umdk/ums/ums_agent/ums_agent.log
+{
+    maxage 365
+    rotate 30
+    notifempty
+    compress
+    copytruncate
+    missingok
+    size +1024k
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+    endscript
+}
