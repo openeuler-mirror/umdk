@@ -227,6 +227,15 @@ kmod file of ums
 Summary:        tools of ums
 %description ums-tools
 tools of ums, contains ums_run
+
+%package ums-agent
+Summary:        UMS Agent daemon for secure token exchange
+BuildRequires:  systemd-devel, glib2-devel, libnl3-devel, openssl-devel, keyutils-libs-devel
+Requires:       systemd-libs, glib2, libnl3, openssl, keyutils
+Requires(pre):  shadow-utils
+%description ums-agent
+UMS Agent is a user-space daemon for secure TokenValue exchange
+between UMS kernel modules via TLS 1.3 channel.
 %endif
 
 %if "%{build_all}" == "0"
@@ -510,6 +519,31 @@ if [ $1 -eq 0 ]; then
     [ -f /usr/lib/libums-preload.so ] && %{__rm} -f /usr/lib/libums-preload.so || :
     [ -f /usr/bin/ums_run ] && %{__rm} -f /usr/bin/ums_run || :
 fi
+
+%pre ums-agent
+getent passwd ums >/dev/null || \
+    useradd -r -s /sbin/nologin -d /var/lib/ums ums
+
+%post ums-agent
+if [ -x %{_bindir}/systemctl ] && [ -x %{_sbindir}/rsyslogd ]; then
+    %{_bindir}/systemctl restart rsyslog >/dev/null  2>&1
+fi
+%systemd_post ums_agent.service
+
+%preun ums-agent
+%systemd_preun ums_agent.service
+
+%postun ums-agent
+%systemd_postun ums_agent.service
+
+%files ums-agent
+%defattr(-,root,root)
+    %attr(750,root,ums) %{_sbindir}/ums_agent
+    %attr(644,root,root) %{_unitdir}/ums_agent.service
+    %dir %attr(750,root,ums) /etc/ums_agent
+    %attr(640,root,ums) %config(noreplace) /etc/ums_agent/ums_agent.conf
+    %attr(644,root,root) /etc/rsyslog.d/ums_agent.conf
+    %attr(644,root,root) /etc/logrotate.d/ums_agent
 %endif
 
 %changelog
