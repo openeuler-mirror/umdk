@@ -390,7 +390,7 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
 {
     urma_perf_stats_t perf_info = {0};
-    char temp_buf[8192];
+    char temp_buf[8192] = {0};
     int buffer_used = 0;
     int ret;
 
