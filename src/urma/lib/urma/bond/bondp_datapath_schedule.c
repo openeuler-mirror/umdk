@@ -8,11 +8,21 @@
  * History: 2026-04-06   Create File
  */
 
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "bondp_health_check.h"
 #include "bondp_types.h"
 #include "urma_log.h"
-#include "bondp_health_check.h"
 
 #include "bondp_datapath_schedule.h"
+
+static __thread struct random_data g_schedule_rand_data;
+static __thread char g_schedule_rand_state[32];
+static __thread bool g_schedule_rand_inited;
 
 static int schedule_send_standalone(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                     int *send_idx, int *target_idx)
@@ -45,8 +55,11 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
                                  int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
-    int least_load_pos = -1;
     uint32_t least_load = UINT32_MAX;
+    uint32_t least_load_pos[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    uint32_t least_load_cnt = 0;
+    uint32_t selected_pos;
+    int32_t rand_val;
     int min, max;
 
     if (min_active_count == 0) {
@@ -82,16 +95,30 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
         uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[active_idx]);
         if (sqe_cnt < least_load) {
             least_load = sqe_cnt;
-            least_load_pos = (int)i;
+            least_load_pos[0] = i;
+            least_load_cnt = 1;
+        } else if (sqe_cnt == least_load) {
+            least_load_pos[least_load_cnt++] = i;
         }
     }
 
-    if (least_load_pos < 0) {
+    if (least_load_cnt == 0) {
         return -1;
     }
 
-    *send_idx = (int)bdp_comp->active_indices[least_load_pos];
-    *target_idx = (int)bdp_tjetty->active_indices[least_load_pos];
+    if (!g_schedule_rand_inited) {
+        unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid() ^
+                            (unsigned int)(uintptr_t)pthread_self();
+        (void)memset(&g_schedule_rand_data, 0, sizeof(g_schedule_rand_data));
+        (void)initstate_r((unsigned int)seed, g_schedule_rand_state, sizeof(g_schedule_rand_state),
+                          &g_schedule_rand_data);
+        g_schedule_rand_inited = true;
+    }
+
+    (void)random_r(&g_schedule_rand_data, &rand_val);
+    selected_pos = least_load_pos[(uint32_t)rand_val % least_load_cnt];
+    *send_idx = (int)bdp_comp->active_indices[selected_pos];
+    *target_idx = (int)bdp_tjetty->active_indices[selected_pos];
     return 0;
 }
 
@@ -124,7 +151,7 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
 }
 
 int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx,
-    bondp_chip_id_info_t *info)
+                  bondp_chip_id_info_t *info)
 {
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
