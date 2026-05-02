@@ -194,7 +194,7 @@ TEST_F(HugeQbufPoolTest, test_huge_qbuf_split_alloc_multi_fragment)
     memset(&cfg, 0, sizeof(cfg));
 
     uint32_t blk_size = umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID);
-    g_huge_pool_total_size = static_cast<uint64_t>(blk_size) * 4;
+    g_huge_pool_total_size = static_cast<uint64_t>(blk_size) * 64;
 
     cfg.total_size = g_huge_pool_total_size;
     cfg.data_size = blk_size;
