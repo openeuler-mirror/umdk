@@ -27,7 +27,7 @@ static __thread bool g_schedule_rand_inited;
 static int schedule_send_standalone(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                     int *send_idx, int *target_idx)
 {
-    *send_idx = (int)bdp_comp->active_indices[0];
+    *send_idx = (int)bdp_tjetty->local_active_indices[0];
     *target_idx = (int)bdp_tjetty->active_indices[0];
     return 0;
 }

@@ -1403,11 +1403,6 @@ int check_local_cfg(perftest_config_t *cfg)
         } 
     }
 
-    if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->jfs_post_list > 1) { 
-        (void)fprintf(stderr, "Standalone aggregate mode currently does not support WQE list.\n"); 
-        exit(1); 
-    }
-
     const int MIN_CQ_MOD_RATIO = 2;
     if ((cfg->iters % cfg->cq_mod != 0) && (cfg->cq_mod >= cfg->iters / MIN_CQ_MOD_RATIO) &&
         (cfg->bidirection) && (cfg->enable_credit)) {
