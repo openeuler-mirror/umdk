@@ -99,7 +99,7 @@ static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
     p_cfg.token_id = NULL;
     p_cfg.flag.bs.token_id_valid = URMA_TOKEN_ID_INVALID;
 
-    for (int i = 0; i < bdp_seg->dev_num; ++i) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_ctx->p_ctxs[i] == NULL) {
             continue;
         }
