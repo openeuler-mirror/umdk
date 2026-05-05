@@ -299,6 +299,7 @@ static int set_fd_noblock(int fd)
 }
 
 typedef struct urma_member_eid_info {
+    uint32_t iodie_idx;
     urma_device_t *dev;
     uint32_t eid_index;
     bondp_bonding_level_t level;
@@ -340,6 +341,7 @@ static int bondp_init_member_eid_info_list(bondp_context_t *bdp_ctx,
         int primary_eid_idx = pdev->primary_eid_idx;
         if (primary_eid_idx != INVALID_EID_INDEX) {
             int ctx_idx = i;
+            members[ctx_idx].iodie_idx = i;
             members[ctx_idx].dev = dev;
             members[ctx_idx].eid_index = primary_eid_idx;
             members[ctx_idx].level = BONDP_BONDING_LEVEL_IODIE;
@@ -348,6 +350,7 @@ static int bondp_init_member_eid_info_list(bondp_context_t *bdp_ctx,
             int port_eid_idx = pdev->port_eid_idx[j];
             if (port_eid_idx != INVALID_EID_INDEX) {
                 int ctx_idx = IODIE_NUM + PORT_EID_MAX_NUM_PER_DEV * i + j;
+                members[ctx_idx].iodie_idx = i;
                 members[ctx_idx].dev = dev;
                 members[ctx_idx].eid_index = port_eid_idx;
                 members[ctx_idx].level = BONDP_BONDING_LEVEL_PORT;
@@ -371,6 +374,10 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
         if (m->dev == NULL || m->level != bdp_ctx->bonding_level) {
             continue;
         }
+        if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE && m->iodie_idx != 0) {
+            continue;
+        }
+
         urma_context_t *ctx = urma_create_context(m->dev, m->eid_index);
         if (ctx == NULL) {
             URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
@@ -392,10 +399,6 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
         if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
             URMA_LOG_ERR("failed to add fd: %u, errno: %d.\n", fd, errno);
             return -1;
-        }
-
-        if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
-            break;
         }
     }
 
