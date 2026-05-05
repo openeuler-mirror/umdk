@@ -1,0 +1,146 @@
+package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "perf_cycle_enabled",
+    values = {"define": "perf_cycle=true"},
+)
+
+config_setting(
+    name = "build_udma_enabled",
+    values = {"define": "build_udma=true"},
+)
+
+URMA_COMMON_SRCS = glob(
+    ["common/*.c"],
+    exclude = ["common/ub_perf_cycle.c"],
+) + select({
+    ":perf_cycle_enabled": ["common/ub_perf_cycle.c"],
+    "//conditions:default": [],
+})
+
+cc_library(
+    name = "urma_common",
+    srcs = URMA_COMMON_SRCS,
+    hdrs = glob(["common/include/**/*.h"]),
+    includes = ["common/include"],
+    copts = ["-std=gnu99"],
+    linkopts = ["-ldl", "-lrt"] + select({
+        ":perf_cycle_enabled": ["-lm"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
+    name = "urma",
+    srcs = glob(["lib/urma/core/*.c"]),
+    hdrs = glob([
+        "lib/urma/core/include/**/*.h",
+        "lib/urma/core/*.h",
+    ]),
+    includes = [
+        "common/include",
+        "lib/urma/core",
+        "lib/urma/core/include",
+    ],
+    copts = ["-std=gnu99"],
+    deps = [":urma_common"],
+    linkopts = ["-ldl", "-lrt"],
+)
+
+cc_library(
+    name = "urma_ubagg",
+    srcs = glob([
+        "lib/urma/bond/*.c",
+        "lib/urma/bond/utils/*.c",
+    ]),
+    hdrs = glob(["lib/urma/bond/**/*.h"]),
+    includes = [
+        "common/include",
+        "lib/urma/bond",
+        "lib/urma/bond/include",
+        "lib/urma/bond/utils",
+    ],
+    copts = [
+        "-std=gnu99",
+        "-I/usr/include/libnl3",
+    ],
+    deps = [
+        ":urma",
+        ":urma_common",
+    ],
+    linkopts = ["-lnl-genl-3", "-lnl-3"],
+)
+
+cc_library(
+    name = "tpsa",
+    srcs = glob(["lib/uvs/core/*.c"]),
+    hdrs = glob([
+        "lib/uvs/core/include/**/*.h",
+        "lib/uvs/core/*.h",
+    ]),
+    includes = [
+        "common/include",
+        "lib/urma/core/include",
+        "lib/uvs/core",
+        "lib/uvs/core/include",
+    ],
+    copts = [
+        "-std=gnu99",
+        "-I/usr/include/libnl3",
+    ],
+    deps = [
+        ":urma",
+        ":urma_common",
+    ],
+    linkopts = [
+        "-lnl-genl-3",
+        "-lnl-3",
+        "-lz",
+        "-lssl",
+        "-lcrypto",
+    ],
+)
+
+cc_library(
+    name = "uvs",
+    deps = [":tpsa"],
+)
+
+alias(
+    name = "uvs_tpsa",
+    actual = ":tpsa",
+)
+
+cc_library(
+    name = "urma_udma",
+    srcs = select({
+        ":build_udma_enabled": glob(["hw/udma/*.c"]),
+        "//conditions:default": [],
+    }),
+    hdrs = glob([
+        "hw/udma/*.h",
+        "hw/udma/include/**/*.h",
+        "hw/udma/kernel_headers/**/*.h",
+    ]),
+    includes = [
+        "hw/udma",
+        "hw/udma/include",
+        "hw/udma/kernel_headers",
+        "lib/urma/core",
+        "lib/urma/core/include",
+    ],
+    copts = ["-std=gnu99"],
+    deps = [
+        ":urma",
+        ":urma_common",
+    ],
+    linkopts = select({
+        ":build_udma_enabled": ["-lummu"],
+        "//conditions:default": [],
+    }),
+)
+
+alias(
+    name = "hw_udma",
+    actual = ":urma_udma",
+)
