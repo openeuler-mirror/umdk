@@ -1386,7 +1386,8 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
             rjfr.tp_type = URMA_RTP;
         }
 
-        if (cfg->single_path && cfg->trans_mode == URMA_TM_RM) {
+        if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0 &&
+            cfg->trans_mode == URMA_TM_RM) {
             rjfr.flag.bs.has_drv_ext = 1;
             bondp_rjfr.base = rjfr;
             bondp_rjfr.jfs = ctx->jfs[i];
@@ -1528,7 +1529,8 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
             rjetty.flag.bs.share_tp = 1;
         }
 
-        if (cfg->aggr_mode != URMA_AGGR_MODE_STANDALONE && cfg->trans_mode == URMA_TM_RM) {
+        if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0 &&
+            cfg->trans_mode == URMA_TM_RM) {
             rjetty.flag.bs.has_drv_ext = 1;
             bondp_rjetty.base = rjetty;
             bondp_rjetty.jetty = ctx->jetty[i];
