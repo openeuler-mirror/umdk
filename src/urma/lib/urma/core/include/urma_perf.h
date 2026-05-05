@@ -50,9 +50,9 @@ typedef struct urma_perf_stats {
         uint64_t average;
         uint64_t mininum;
         uint64_t maxinum;
-        uint64_t p50;
         uint64_t p90;
         uint64_t p99;
+        uint64_t p9999;
     } type_record[URMA_PERF_RECORD_TYPE_MAX];
 } urma_perf_stats_t;
 

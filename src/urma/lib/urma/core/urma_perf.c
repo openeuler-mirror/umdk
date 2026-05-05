@@ -194,7 +194,7 @@ static uint64_t urma_perf_cal_quantile(urma_perf_record_t *record, urma_perf_rec
     uint64_t cur_count = quantile_count;
     uint64_t *thresh_arr = g_urma_perf_record_ctx.thresh_ns;
     uint32_t thresh_num = g_urma_perf_record_ctx.thresh_num;
-    uint64_t p90 = 0;
+    uint64_t p = 0;
 
     if ((thresh_num == 0) || (thresh_arr == NULL)) {
         return 0;
@@ -211,11 +211,11 @@ static uint64_t urma_perf_cal_quantile(urma_perf_record_t *record, urma_perf_rec
         return thresh_arr[thresh_num - 1];
     }
     base = (bucket_idx == 0) ? 0 : thresh_arr[bucket_idx - 1];
-    p90 = ((double)cur_count / record->type_record[type].bucket[bucket_idx]) * (thresh_arr[bucket_idx] - base) + base;
-    if (p90 > record->type_record[type].max) {
-        p90 = record->type_record[type].max;
+    p = ((double)cur_count / record->type_record[type].bucket[bucket_idx]) * (thresh_arr[bucket_idx] - base) + base;
+    if (p > record->type_record[type].max) {
+        p = record->type_record[type].max;
     }
-    return p90;
+    return p;
 }
 
 static void urma_perf_record_merge(urma_perf_record_t *total_perf_record, urma_perf_record_t *perf_record)
@@ -267,12 +267,12 @@ static int urma_perf_info_get_internal(urma_perf_stats_t *perf_info)
             (total_perf_record.type_record[i].accumulation / total_perf_record.type_record[i].cnt) : 0;
         perf_info->type_record[i].maxinum = total_perf_record.type_record[i].max;
         perf_info->type_record[i].mininum = total_perf_record.type_record[i].min;
-        perf_info->type_record[i].p50 = urma_perf_cal_quantile(&total_perf_record, i,
-            (uint64_t)(0.5 * total_perf_record.type_record[i].cnt));
         perf_info->type_record[i].p90 = urma_perf_cal_quantile(&total_perf_record, i,
             (uint64_t)(0.9 * total_perf_record.type_record[i].cnt));
         perf_info->type_record[i].p99 = urma_perf_cal_quantile(&total_perf_record, i,
             (uint64_t)(0.99 * total_perf_record.type_record[i].cnt));
+        perf_info->type_record[i].p9999 = urma_perf_cal_quantile(&total_perf_record, i,
+            (uint64_t)(0.9999 * total_perf_record.type_record[i].cnt));
     }
     perf_info->retry_count = urma_ubagg_switch_get();
 
@@ -412,7 +412,7 @@ urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
     buffer_used += snprintf(temp_buf + buffer_used, sizeof(temp_buf) - buffer_used,
         "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n");
     buffer_used += snprintf(temp_buf + buffer_used, sizeof(temp_buf) - buffer_used,
-        "  Type                 | samples  | avg      | min      | max      | p50      | p90      | p99       \n");
+        "  Type                 | samples  | avg[ns]  | min[ns]  | max[ns]  | p90[ns]  | p99[ns]  | p9999[ns]\n");
     buffer_used += snprintf(temp_buf + buffer_used, sizeof(temp_buf) - buffer_used,
         "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n");
     for (uint32_t i = 0; i < URMA_PERF_RECORD_TYPE_MAX; i++) {
@@ -426,9 +426,9 @@ urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length)
             perf_info.type_record[i].average,
             perf_info.type_record[i].mininum,
             perf_info.type_record[i].maxinum,
-            perf_info.type_record[i].p50,
             perf_info.type_record[i].p90,
-            perf_info.type_record[i].p99);
+            perf_info.type_record[i].p99,
+            perf_info.type_record[i].p9999);
     }
     buffer_used += snprintf(temp_buf + buffer_used, sizeof(temp_buf) - buffer_used,
         "+----------------------+----------+----------+----------+----------+----------+----------+----------+\n");
