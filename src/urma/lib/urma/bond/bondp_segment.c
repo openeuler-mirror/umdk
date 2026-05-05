@@ -139,12 +139,12 @@ static int bondp_delete_vseg(bondp_tseg_t *bdp_seg)
             bdp_seg->v_tseg.seg.token_id, ref_cnt);
 
     if (urma_cmd_unregister_seg(target_seg) != 0) {
-        URMA_LOG_ERR("Failed to unregister segment, token_id:%u, handle:%lu.\n",
+        URMA_LOG_ERR("Failed to unregister segment, token_id=%u, handle=%lu.\n",
                      target_seg->seg.token_id, target_seg->handle);
         return URMA_FAIL;
     }
 
-    URMA_LOG_INFO("Success unregister seg, handle:%lu.\n", target_seg->handle);
+    URMA_LOG_INFO("Successfully unregistered seg, handle=%lu.\n", target_seg->handle);
     return URMA_SUCCESS;
 }
 
@@ -178,14 +178,14 @@ static int bondp_create_vseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
 
     int ret = urma_cmd_register_seg(&bdp_ctx->v_ctx, &t_seg, seg_cfg, &udata);
     if (ret != 0) {
-        URMA_LOG_ERR("Fail to register vseg, ret:%d.\n", ret);
+        URMA_LOG_ERR("Failed to register vseg, ret=%d.\n", ret);
         return ret;
     }
 
     bdp_seg->v_tseg.seg.token_id = t_seg.seg.token_id;
     bdp_seg->v_orig_handle = t_seg.handle;
     bdp_seg->v_tseg.handle = (uint64_t)&bdp_seg->v_tseg;
-    URMA_LOG_INFO("Success register seg, handle:%lu.\n", t_seg.handle);
+    URMA_LOG_INFO("Successfully registered seg, handle=%lu.\n", t_seg.handle);
 
     return 0;
 }
@@ -234,13 +234,13 @@ static urma_status_t bondp_unregister_seg_inner(urma_target_seg_t *target_seg)
     bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_tseg_t, v_tseg);
 
     if (bondp_delete_vseg(bdp_seg) != 0) {
-        URMA_LOG_ERR("Failed to delete vseg, token_id:%u, handle:%lu.\n",
+        URMA_LOG_ERR("Failed to delete vseg, token_id=%u, handle=%lu.\n",
                      target_seg->seg.token_id, target_seg->handle);
         ret = URMA_FAIL;
     }
 
     if (bondp_delete_pseg(bdp_seg) != 0) {
-        URMA_LOG_ERR("Failed to delete pseg for vseg, token_id:%u, handle:%lu.\n",
+        URMA_LOG_ERR("Failed to delete pseg for vseg, token_id=%u, handle=%lu.\n",
                      target_seg->seg.token_id, target_seg->handle);
         ret = URMA_FAIL;
     }
@@ -275,7 +275,7 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
     urma_seg_t *peer_p_seg = &seg_cfg->udata_out->peer_p_seg[target_idx];
     urma_eid_t eid = peer_p_seg->ubva.eid;
     if (is_empty_eid(&eid)) {
-        URMA_LOG_INFO("BONDP import p_seg has empty EID: %d\n", target_idx);
+        URMA_LOG_INFO("BONDP import p_seg has empty EID=%d\n", target_idx);
         return BONDP_SKIP;
     }
     urma_target_seg_t *p_tseg = urma_import_seg(bdp_ctx->p_ctxs[local_idx], peer_p_seg, seg_cfg->token,
@@ -462,7 +462,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
             bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
             bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
         } else if (ret != BONDP_HASH_MAP_NOT_FOUND_ERROR) {
-            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret: %d.\n", ret);
+            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret=%d.\n", ret);
             free(bdp_tseg);
             return NULL;
         }

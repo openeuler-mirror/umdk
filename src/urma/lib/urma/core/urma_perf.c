@@ -342,7 +342,7 @@ urma_status_t urma_config_perf_attr(urma_perf_attr_t *perf_attr)
     // set thresh
     for (uint32_t i = 0; i < thresh_num; ++i) {
         if ((thresh_array[i] > URMA_PERF_MAX_THRESH_NS) || (thresh_array[i] == 0)) {
-            URMA_LOG_WARN("Urma perf config failed. thresh: %lu is invalid.\n", thresh_array[i]);
+            URMA_LOG_WARN("Urma perf config failed. thresh=%lu is invalid.\n", thresh_array[i]);
             continue;
         }
         if ((bucket_idx == 0) || (thresh_array[i] > g_urma_perf_record_ctx.thresh_ns[bucket_idx - 1])) {
