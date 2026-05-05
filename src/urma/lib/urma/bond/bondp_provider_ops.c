@@ -227,7 +227,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     urma_cmd_udrv_priv_t udata = {0};
     int ret = urma_cmd_create_context(&bdp_ctx->v_ctx, &cfg, &udata);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to create context, ret:%d\n", ret);
+        URMA_LOG_ERR("Failed to create context, ret=%d\n", ret);
         goto DESTROY_R_V2P_TOKEN_ID_TABLE;
     }
 
@@ -287,12 +287,12 @@ static int set_fd_noblock(int fd)
     int ret, flags;
     flags = fcntl(fd, F_GETFL);
     if (flags == -1) {
-        URMA_LOG_ERR("flags: %d\n", flags);
+        URMA_LOG_ERR("flags=%d\n", flags);
         return -1;
     }
     ret = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     if (ret != 0) {
-        URMA_LOG_ERR("ret: %d\n", ret);
+        URMA_LOG_ERR("ret=%d\n", ret);
         return ret;
     }
     return 0;
@@ -380,7 +380,7 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
 
         urma_context_t *ctx = urma_create_context(m->dev, m->eid_index);
         if (ctx == NULL) {
-            URMA_LOG_ERR("Failed to create context for primary eid, dev:%s, eid_idx:%d\n",
+            URMA_LOG_ERR("Failed to create context for primary eid, dev=%s, eid_idx=%d\n",
                          m->dev->name, m->eid_index);
             return -1;
         }
@@ -397,7 +397,7 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
             .data.ptr = (void *)ctx,
         };
         if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
-            URMA_LOG_ERR("failed to add fd: %u, errno: %d.\n", fd, errno);
+            URMA_LOG_ERR("failed to add fd=%u, errno=%d.\n", fd, errno);
             return -1;
         }
     }
@@ -423,7 +423,7 @@ static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
 
         sub_ret = urma_delete_context(bdp_ctx->p_ctxs[i]);
         if (sub_ret != 0) {
-            URMA_LOG_ERR("Failed to delete pctx, idx:%d, ret:%d\n", i, sub_ret);
+            URMA_LOG_ERR("Failed to delete pctx, idx=%d, ret=%d\n", i, sub_ret);
             ret = URMA_FAIL;
         }
         bdp_ctx->p_ctxs[i] = NULL;
@@ -469,7 +469,7 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         goto DELETE_PCONTEXT;
     }
 
-    URMA_LOG_INFO("Finish to create ctx, dev_name: %s, eid_idx: %u.\n",
+    URMA_LOG_INFO("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
                   dev->name, eid_index);
 
     return &bdp_ctx->v_ctx;
@@ -505,7 +505,7 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
 
     free(bdp_ctx);
 
-    URMA_LOG_INFO("Finish to delete ctx, dev_name: %s, eid_idx: %u.\n",
+    URMA_LOG_INFO("Finish to delete ctx, dev_name=%s, eid_idx=%u.\n",
                   dev_name, eid_index);
 
     return ret;
@@ -521,18 +521,18 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
 
     uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (cnt > 1) {
-        URMA_LOG_WARN("already in use, atomic_cnt: %lu, dev_name: %s.\n",
+        URMA_LOG_WARN("already in use, atomic_cnt=%lu, dev_name=%s.\n",
             cnt, ctx->dev->name);
         return URMA_EAGAIN;
     }
 
     if (bonding_mode < 0 || bonding_mode >= BONDP_BONDING_MODE_MAX) {
-        URMA_LOG_ERR("Invalid bonding mode: %d\n", bonding_mode);
+        URMA_LOG_ERR("Invalid bonding mode=%d\n", bonding_mode);
         return -EINVAL;
     }
 
     if (bonding_level < 0 || bonding_level >= BONDP_BONDING_LEVEL_MAX) {
-        URMA_LOG_ERR("Unsupported bonding level: %d\n", bonding_level);
+        URMA_LOG_ERR("Unsupported bonding level=%d\n", bonding_level);
         return -EINVAL;
     }
 
@@ -550,13 +550,13 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
 
     ret = bondp_delete_pcontext(bdp_ctx);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to delete pctx when set bonding mode, ret:%d\n", ret);
+        URMA_LOG_ERR("Failed to delete pctx when set bonding mode, ret=%d\n", ret);
         goto EXIT;
     }
 
     ret = bondp_create_pcontext(bdp_ctx, bonding_mode, bonding_level);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to create pctx when set bonding mode, ret:%d\n", ret);
+        URMA_LOG_ERR("Failed to create pctx when set bonding mode, ret=%d\n", ret);
         goto EXIT;
     }
 
