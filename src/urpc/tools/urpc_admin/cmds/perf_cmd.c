@@ -152,6 +152,11 @@ static uint64_t urpc_admin_perf_cal_quantile(
 {
     uint32_t idx;
     uint64_t quantile_cnt = count;
+
+    if (cfg == NULL || cfg->perf.count_thresh_num == 0 || count == 0) {
+        return 0;
+    }
+
     for (idx = 0; idx < URPC_PERF_QUANTILE_MAX_NUM + 1; ++idx) {
         if (record->type_record[type].bucket[idx] >= quantile_cnt) {
             break;
