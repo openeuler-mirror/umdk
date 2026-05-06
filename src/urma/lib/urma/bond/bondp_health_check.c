@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <malloc.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
@@ -37,29 +36,6 @@
 #define BONDP_HEALTH_TASK_TABLE_SIZE        64
 #define BONDP_HEALTH_TASK_HASH_BASIS        0x983571U
 
-#define BONDP_HEALTH_CHECK_ENV                        "BondHealthCheck"
-#define BONDP_HEALTH_CHECK_PRIMARY_BACKUP_SWITCH      "PrimaryBackupSwitch"
-#define BONDP_HEALTH_CHECK_AUTO_FALLBACK_PRIMARY      "AutoFallbackPrimary"
-#define BONDP_HEALTH_CHECK_HEALTH_CHECK_START         "HealthCheckStart"
-#define BONDP_HEALTH_CHECK_HEALTH_CHECK_INTERVAL      "HealthCheckInterval"
-#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_START        "PrimaryCheckStart"
-#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_INTERVAL     "PrimaryCheckInterval"
-#define BONDP_HEALTH_CHECK_PRIMARY_CHECK_MAX_BACKOFF  "PrimaryCheckMaxBackoffCnt"
-
-#define DEFAULT_PRIMARY_BACKUP_SWITCH      true
-#define DEFAULT_AUTO_FALLBACK_PRIMARY      true
-#define DEFAULT_HEALTH_CHECK_START_MS      2000
-#define DEFAULT_HEALTH_CHECK_INTERVAL_MS   32000
-#define DEFAULT_PRIMARY_CHECK_START_MS     2000
-#define DEFAULT_PRIMARY_CHECK_INTERVAL_MS  1000
-#define DEFAULT_PRIMARY_CHECK_MAX_BACKOFF  13
-
-#define BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS          100
-#define BONDP_HEALTH_CHECK_TIME_MS_MIN_1S             1000
-#define BONDP_HEALTH_CHECK_TIME_MS_MAX_60S            60000
-#define BONDP_HEALTH_CHECK_TIME_MS_MAX_1H             3600000
-#define BONDP_HEALTH_CHECK_CHECK_MIN_BACKOFF          1
-#define BONDP_HEALTH_CHECK_CHECK_MAX_BACKOFF          100
 #define BONDP_FALLBACK_CTRL_REQ                        1
 #define BONDP_FALLBACK_CTRL_RESP                       2
 #define BONDP_FALLBACK_PRIMARY_INVALID_ID              UINT32_MAX
@@ -286,90 +262,17 @@ static void bondp_unregister_health_ctx_global(bondp_context_t *bond_ctx)
     pthread_rwlock_unlock(&thread_ctx->health_ctx_lock);
 }
 
-static bool bondp_health_read_env_bool(const char *env_name, bool default_val)
-{
-    const char *value = getenv(env_name);
-    if (value == NULL) {
-        return default_val;
-    }
-    if (strcmp(value, "true") == 0) {
-        return true;
-    }
-    if (strcmp(value, "false") == 0) {
-        return false;
-    }
-    URMA_LOG_WARN("Invalid value '%s' for env %s, using default %s\n",
-        value, env_name, default_val ? "true" : "false");
-    return default_val;
-}
-
-static uint64_t bondp_health_read_env_uint64(const char *env_name, uint64_t default_val,
-    uint64_t min_val, uint64_t max_val)
-{
-    const char *value = getenv(env_name);
-    if (value == NULL) {
-        return default_val;
-    }
-
-    char *end = NULL;
-    errno = 0;
-    unsigned long long parsed = strtoull(value, &end, 10);
-    if (errno != 0 || end == value || *end != '\0' ||
-        parsed < (unsigned long long)min_val || parsed > (unsigned long long)max_val) {
-        URMA_LOG_WARN("Invalid value '%s' for env %s (range %lu~%lu), using default %lu\n",
-            value, env_name, (unsigned long)min_val, (unsigned long)max_val, (unsigned long)default_val);
-        return default_val;
-    }
-    return (uint64_t)parsed;
-}
-
-static void bondp_read_health_check_cfg(bondp_health_check_cfg_t *cfg)
-{
-    cfg->primary_backup_switch = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_PRIMARY_BACKUP_SWITCH,
-        DEFAULT_PRIMARY_BACKUP_SWITCH);
-    cfg->auto_fallback_primary = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_AUTO_FALLBACK_PRIMARY,
-        DEFAULT_AUTO_FALLBACK_PRIMARY);
-    cfg->health_check_start_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_HEALTH_CHECK_START,
-        DEFAULT_HEALTH_CHECK_START_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
-    cfg->health_check_interval_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_HEALTH_CHECK_INTERVAL,
-        DEFAULT_HEALTH_CHECK_INTERVAL_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_1S, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
-    cfg->primary_check_start_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_START,
-        DEFAULT_PRIMARY_CHECK_START_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_1H);
-    cfg->primary_check_interval_ms = bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_INTERVAL,
-        DEFAULT_PRIMARY_CHECK_INTERVAL_MS, BONDP_HEALTH_CHECK_TIME_MS_MIN_100MS, BONDP_HEALTH_CHECK_TIME_MS_MAX_60S);
-    cfg->primary_check_max_backoff_cnt = (uint32_t)bondp_health_read_env_uint64(BONDP_HEALTH_CHECK_PRIMARY_CHECK_MAX_BACKOFF,
-        DEFAULT_PRIMARY_CHECK_MAX_BACKOFF, BONDP_HEALTH_CHECK_CHECK_MIN_BACKOFF, BONDP_HEALTH_CHECK_CHECK_MAX_BACKOFF);
-}
-
-static void bondp_print_health_check_cfg(const bondp_health_check_cfg_t *cfg)
-{
-    URMA_LOG_INFO("Health check config: PrimaryBackupSwitch=%s, AutoFallbackPrimary=%s, "
-        "HealthCheckStart=%lums, HealthCheckInterval=%lums, "
-        "PrimaryCheckStart=%lums, PrimaryCheckInterval=%lums, "
-        "PrimaryCheckMaxBackoffCnt=%u\n",
-        cfg->primary_backup_switch ? "true" : "false",
-        cfg->auto_fallback_primary ? "true" : "false",
-        (unsigned long)cfg->health_check_start_ms,
-        (unsigned long)cfg->health_check_interval_ms,
-        (unsigned long)cfg->primary_check_start_ms,
-        (unsigned long)cfg->primary_check_interval_ms,
-        cfg->primary_check_max_backoff_cnt);
-}
-
 bool bondp_health_check_enabled(void)
 {
-    return g_bondp_global_ctx->health_thread_ctx.health_check_enable;
+    return g_bondp_global_ctx->health_thread_ctx.enable_health_check;
 }
 
 void bondp_health_check_global_ctx_init(bondp_global_context_t *ctx)
 {
     ctx->health_thread_ctx.health_epoll_fd = -1;
-    ctx->health_thread_ctx.health_check_enable = bondp_health_read_env_bool(BONDP_HEALTH_CHECK_ENV, false);
     pthread_rwlock_init(&ctx->health_thread_ctx.health_ctx_lock, NULL);
     ub_list_init(&ctx->health_thread_ctx.health_ctx_list);
     atomic_init(&ctx->health_thread_ctx.health_thread_stop, false);
-    URMA_LOG_INFO("Health check global init, enabled=%s\n",
-        ctx->health_thread_ctx.health_check_enable ? "true" : "false");
 }
 
 void bondp_health_check_global_ctx_uninit(bondp_global_context_t *ctx)
@@ -967,14 +870,14 @@ static void bondp_health_task_check_mode(bondp_health_task_t *task,
         /* Primary link went down, switch to primary check mode */
         task->mode = HEALTH_MODE_PRIMARY_CHECK;
         task->backoff_cnt = 0;
-        task->next_probe_ts_us = now_us + cfg->primary_check_start_ms * 1000ULL;
+        task->next_probe_ts_us = now_us + cfg->active_start_ms * 1000ULL;
         URMA_LOG_INFO("Primary link (lidx=%d) down, switch to PRIMARY_CHECK mode, start after %lums\n",
-            task->primary_local_idx, (unsigned long)cfg->primary_check_start_ms);
+            task->primary_local_idx, (unsigned long)cfg->active_start_ms);
     } else if (task->mode == HEALTH_MODE_PRIMARY_CHECK && primary_valid) {
         /* Primary link recovered (user switched back), resume backup check */
         task->mode = HEALTH_MODE_BACKUP_CHECK;
         task->backoff_cnt = 0;
-        task->next_probe_ts_us = now_us + cfg->health_check_interval_ms * 1000ULL;
+        task->next_probe_ts_us = now_us + cfg->backup_interval_ms * 1000ULL;
         URMA_LOG_INFO("Primary link (lidx=%d) recovered, switch to BACKUP_CHECK mode\n",
             task->primary_local_idx);
     }
@@ -1044,9 +947,9 @@ static void bondp_health_do_check(bondp_context_t *bdp_ctx, bondp_health_task_t 
 
 static uint64_t bondp_health_calc_primary_interval_us(const bondp_health_check_cfg_t *cfg, uint32_t backoff_cnt)
 {
-    uint64_t interval_ms = cfg->primary_check_interval_ms;
-    uint32_t shift = (backoff_cnt < cfg->primary_check_max_backoff_cnt) ?
-        backoff_cnt : cfg->primary_check_max_backoff_cnt;
+    uint64_t interval_ms = cfg->active_interval_ms;
+    uint32_t shift = (backoff_cnt < cfg->active_max_backoff) ?
+        backoff_cnt : cfg->active_max_backoff;
     interval_ms <<= shift;
     return interval_ms * 1000ULL;
 }
@@ -1103,16 +1006,16 @@ static void *bondp_health_check_thread(void *arg)
                 bondp_health_do_check(ctx_node->bdp_ctx, task);
                 if (is_balance) {
                     if (bondp_health_balance_has_pending_probe(task)) {
-                        task->next_probe_ts_us = now_us + cfg->primary_check_interval_ms * 1000ULL;
+                        task->next_probe_ts_us = now_us + cfg->active_interval_ms * 1000ULL;
                     } else {
                         task->next_probe_ts_us = UINT64_MAX;
                     }
                 } else if (task->mode == HEALTH_MODE_BACKUP_CHECK) {
-                    task->next_probe_ts_us = now_us + cfg->health_check_interval_ms * 1000ULL;
+                    task->next_probe_ts_us = now_us + cfg->backup_interval_ms * 1000ULL;
                 } else {
                     task->next_probe_ts_us = now_us +
                         bondp_health_calc_primary_interval_us(cfg, task->backoff_cnt);
-                    if (task->backoff_cnt < cfg->primary_check_max_backoff_cnt) {
+                    if (task->backoff_cnt < cfg->active_max_backoff) {
                         task->backoff_cnt++;
                     }
                 }
@@ -1158,7 +1061,7 @@ int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jett
     task->bdp_tjetty = bdp_tjetty;
     task->bondp_jetty = cfg_jetty;
     task->next_probe_ts_us = (cfg_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE) ?
-        UINT64_MAX : (bondp_get_monotonic_us() + cfg->health_check_start_ms * 1000ULL);
+        UINT64_MAX : (bondp_get_monotonic_us() + cfg->backup_start_ms * 1000ULL);
     task->primary_local_idx = -1;
     task->active_local_idx = -1;
     task->vjetty_id = cfg_jetty->v_jetty.jetty_id.id;
@@ -1212,7 +1115,7 @@ int bondp_register_health_check_task(bondp_context_t *bdp_ctx, bondp_target_jett
 
     URMA_LOG_INFO("Health task registered, tjetty=%u sub_cnt=%d primary_idx=%d active_idx=%d start_ms=%lu\n",
         bdp_tjetty->v_tjetty.id.id, sub_task_cnt, task->primary_local_idx, task->active_local_idx,
-        (unsigned long)cfg->health_check_start_ms);
+        (unsigned long)cfg->backup_start_ms);
     return 0;
 }
 
@@ -1425,7 +1328,7 @@ static void bondp_health_handle_datapath_link_fail_event(bondp_context_t *bdp_ct
                 URMA_LOG_INFO("Balance link recovered, start health check, tjetty=%u lidx=%d tidx=%d\n",
                     task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx);
             }
-            task->next_probe_ts_us = bondp_get_monotonic_us() + cfg->primary_check_start_ms * 1000ULL;
+            task->next_probe_ts_us = bondp_get_monotonic_us() + cfg->active_start_ms * 1000ULL;
         }
     }
     pthread_rwlock_unlock(&health->task_table.lock);
@@ -1630,9 +1533,6 @@ int bondp_start_health_check_thread(void)
     if (!bondp_health_check_enabled()) {
         return 0;
     }
-
-    bondp_read_health_check_cfg(&global_ctx->health_thread_ctx.cfg);
-    bondp_print_health_check_cfg(&global_ctx->health_thread_ctx.cfg);
 
     health_epoll_fd = epoll_create(UBAGG_MAX_EVENT);
     if (health_epoll_fd == -1) {
