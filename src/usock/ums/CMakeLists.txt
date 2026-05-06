@@ -31,6 +31,7 @@ include_directories(include)
 
 add_subdirectory(kmod)
 add_subdirectory(tools)
+add_subdirectory(ums_agent)
 
 # uninstall target
 if(NOT TARGET uninstall)
