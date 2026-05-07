@@ -82,7 +82,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
             max = BONDP_CHIP_ID_MAX_END_PORT;
         }
     } else {
-        URMA_LOG_ERR("Unsupported bonding level: %d.\n", bdp_comp->bondp_ctx->bonding_level);
+        URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
         return EINVAL;
     }
 

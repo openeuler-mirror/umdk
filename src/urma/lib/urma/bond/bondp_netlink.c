@@ -69,7 +69,8 @@ int bondp_fallback_ctrl_send_default(bondp_context_t *bdp_ctx, uint32_t vjetty_i
 
     int ret = bondp_nl_send_switchback_req(&req);
     if (ret != 0) {
-        URMA_LOG_WARN("Failed to send switchback ctrl by netlink, ret:%d vjetty:%u lidx:%d tidx:%d type:%u seq:%u payload:%u\n",
+        URMA_LOG_WARN(
+            "Failed to send switchback ctrl by netlink, ret=%d vjetty=%u lidx=%d tidx=%d type=%u seq=%u payload=%u\n",
             ret, vjetty_id, local_idx, target_idx, ctrl_type, req_seq, payload);
         return ret;
     }

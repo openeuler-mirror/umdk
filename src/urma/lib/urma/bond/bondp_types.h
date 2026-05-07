@@ -36,7 +36,7 @@
 /* Use single die primary eid and port eid to create urma_context */
 #define SINGLE_DIE_DEVNUM             (11)
 #define SINGLE_DIE_IODIE_NUM          (1)
-#define URMA_JETTY_ID_FMT             "(" EID_FMT ", uasid: %u, id: %u)"
+#define URMA_JETTY_ID_FMT             "(" EID_FMT ", uasid=%u, id=%u)"
 #define URMA_JETTY_ID_UNPACK(...)     __VA_ARGS__
 #define URMA_JETTY_ID_ARGS(jetty_id)  URMA_JETTY_ID_UNPACK(EID_ARGS((jetty_id)->eid), \
                                                            (jetty_id)->uasid, (jetty_id)->id)
