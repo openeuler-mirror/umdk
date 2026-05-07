@@ -127,6 +127,17 @@ static uint32_t cfg_size_get(uint32_t *size, uint32_t *total, char *data)
     return i;
 }
 
+static int copy_optarg_to_buf(char *dst, size_t dst_size, const char *opt_name, const char *opt_arg)
+{
+    int ret = snprintf(dst, dst_size, "%s", opt_arg);
+    if (ret < 0 || (size_t)ret >= dst_size) {
+        LOG_PRINT("%s is too long\n", opt_name);
+        return -1;
+    }
+
+    return 0;
+}
+
 int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_config_t *cfg)
 {
     if (argc == 1) {
@@ -145,7 +156,9 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
 
         switch (c) {
             case 'd':
-                strcpy(cfg->dev_name, optarg);
+                if (copy_optarg_to_buf(cfg->dev_name, sizeof(cfg->dev_name), "--dev", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 'c':
                 cfg->case_type = (uint32_t)strtoul(optarg, NULL, 0);
@@ -155,16 +168,22 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
                 }
                 break;
             case 'f':
-                strcpy(cfg->path, optarg);
+                if (copy_optarg_to_buf(cfg->path, sizeof(cfg->path), "--unix-file-path", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 'p':
                 cfg->tcp_port = (uint16_t)strtoul(optarg, NULL, 0);
                 break;
             case 'l':
-                strcpy(cfg->local_ip, optarg);
+                if (copy_optarg_to_buf(cfg->local_ip, sizeof(cfg->local_ip), "--local-ip", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 'r':
-                strcpy(cfg->remote_ip, optarg);
+                if (copy_optarg_to_buf(cfg->remote_ip, sizeof(cfg->remote_ip), "--remote-ip", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 's':
                 cfg->size_len = cfg_size_get(cfg->size, &cfg->size_total, optarg);

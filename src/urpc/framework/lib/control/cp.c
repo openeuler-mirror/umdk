@@ -1078,7 +1078,7 @@ int urpc_channel_server_attach(uint32_t urpc_chid, urpc_host_info_t *server, urp
         return ret;
     }
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1136,7 +1136,7 @@ int urpc_channel_server_refresh(uint32_t urpc_chid, urpc_channel_connect_option_
     }
 
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1195,7 +1195,7 @@ int urpc_channel_server_detach(uint32_t urpc_chid, urpc_host_info_t *server, urp
         return ret;
     }
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1348,7 +1348,7 @@ int urpc_channel_queue_add(
     }
 
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1429,7 +1429,7 @@ int urpc_channel_queue_rm(
     }
 
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1498,7 +1498,7 @@ int urpc_channel_queue_pair(
 
     task_workflow_type_t type = WORKFLOW_TYPE_CHANNEL_PAIR_QUEUE;
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
@@ -1575,7 +1575,7 @@ int urpc_channel_queue_unpair(
     }
 
     urpc_channel_info_t *channel = channel_get(urpc_chid);
-    if (channel == NULL) {
+    if (channel == NULL || channel->provider == NULL) {
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
