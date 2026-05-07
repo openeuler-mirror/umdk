@@ -248,8 +248,15 @@ uint64_t umq_ubmm_create_impl(uint64_t umqh, uint8_t *ubmm_ctx, umq_create_optio
 
     tp->local_ring.tx_buf_size = (option->create_flag & UMQ_CREATE_FLAG_TX_BUF_SIZE) ?
                                  option->tx_buf_size : UMQ_DEFAULT_BUF_SIZE;
-    tp->local_ring.tx_depth = (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) ?
-                              option->tx_depth : UMQ_DEFAULT_DEPTH;
+    if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
+        if (option->tx_depth == 0) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tx_depth must be greater than 0\n");
+            return -UMQ_ERR_EINVAL;
+        }
+        tp->local_ring.tx_depth = option->tx_depth;
+    } else {
+        tp->local_ring.tx_depth = UMQ_DEFAULT_DEPTH;
+    }
 
     /*
         shared memory layout
@@ -508,7 +515,7 @@ int32_t umq_ubmm_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_i
         goto UNIMPORT;
     }
 
-    if (tmp_info->size < tmp_info->transmit_queue_buf_size) {
+    if (tmp_info->size <= tmp_info->transmit_queue_buf_size) {
         UMQ_VLOG_ERR(VLOG_UMQ, "transmit queue buf size should be less than shm buf size\n");
         ret = UMQ_FAIL;
         goto DESTROY_IPC;
