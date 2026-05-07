@@ -33,7 +33,7 @@ static int bondp_update_pjetty_id_mapping(
     ret = bdp_p_vjetty_id_table_del_without_lock(&bdp_ctx->p_vjetty_id_table, old_id, JETTY);
     if (ret != 0) {
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to delete stale pjetty id mapping: " URMA_JETTY_ID_FMT ", ret:%d\n",
+        URMA_LOG_ERR("Failed to delete stale pjetty id mapping: " URMA_JETTY_ID_FMT ", ret=%d\n",
             URMA_JETTY_ID_ARGS(&old_id), ret);
         return -1;
     }
@@ -41,7 +41,7 @@ static int bondp_update_pjetty_id_mapping(
         &bdp_ctx->p_vjetty_id_table, new_id, JETTY, bdp_jetty->v_jetty.jetty_id.id, bdp_jetty);
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to add recreated pjetty id mapping: " URMA_JETTY_ID_FMT ", ret:%d\n",
+        URMA_LOG_ERR("Failed to add recreated pjetty id mapping: " URMA_JETTY_ID_FMT ", ret=%d\n",
             URMA_JETTY_ID_ARGS(&new_id), ret);
         return -1;
     }
@@ -90,13 +90,13 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
     bdp_jetty->p_jetty[local_idx] = NULL;
     if (urma_delete_jetty(old_jetty) != URMA_SUCCESS) {
         bdp_jetty->p_jetty[local_idx] = old_jetty;
-        URMA_LOG_ERR("Failed to delete pjetty at idx:%d\n", local_idx);
+        URMA_LOG_ERR("Failed to delete pjetty at idx=%d\n", local_idx);
         return -1;
     }
 
     urma_jetty_t *new_jetty = urma_create_jetty(bdp_ctx->p_ctxs[local_idx], &p_cfg);
     if (new_jetty == NULL) {
-        URMA_LOG_ERR("Failed to recreate pjetty at idx:%d\n", local_idx);
+        URMA_LOG_ERR("Failed to recreate pjetty at idx=%d\n", local_idx);
         return -1;
     }
 
@@ -115,7 +115,7 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
         sub_task->probe_pending = false;
         atomic_store(&sub_task->link_ok, true);
     }
-    URMA_LOG_INFO("Health link pjetty rebuilt, idx:%d old:" URMA_JETTY_ID_FMT " new:" URMA_JETTY_ID_FMT "\n",
+    URMA_LOG_INFO("Health link pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
         local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
     return 0;
 }

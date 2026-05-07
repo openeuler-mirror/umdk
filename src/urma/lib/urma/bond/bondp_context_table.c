@@ -186,7 +186,7 @@ int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index)
         node = next;
     }
 
-    URMA_LOG_ERR("Failed to find node, index: %u.\n", index);
+    URMA_LOG_ERR("Failed to find node, index=%u.\n", index);
     return -1;
 }
 
@@ -196,7 +196,7 @@ int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_tok
     uint32_t hash = key.v_token_id;
     hmap_node_t *node = bondp_hash_table_lookup_without_lock(tbl, &key, hash);
     if (node != NULL) {
-        URMA_LOG_DEBUG("Node already added into hash table, hash: %u, index: %u.\n", hash, item->index);
+        URMA_LOG_DEBUG("Node already added into hash table, hash=%u, index=%u.\n", hash, item->index);
         return 0;
     }
 

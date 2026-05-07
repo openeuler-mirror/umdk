@@ -56,6 +56,6 @@ int urma_str_to_eid(const char *buf, urma_eid_t *eid)
         return 0;
     }
 
-    URMA_LOG_ERR("format error: %s.\n", buf);
+    URMA_LOG_ERR("format error, buf=%s.\n", buf);
     return -EINVAL;
 }

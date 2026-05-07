@@ -34,7 +34,7 @@ static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
         case BONDP_COMP_JFR:
             return &bdp_comp->v_jfr.jfr_id;
         default:
-            URMA_LOG_ERR("Failed to get_comp_urma_jetty, Invalid type: %d\n", bdp_comp->comp_type);
+            URMA_LOG_ERR("Failed to get_comp_urma_jetty, Invalid type=%d\n", bdp_comp->comp_type);
             return NULL;
     }
 }
@@ -47,7 +47,7 @@ static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, urma_jfs_w
     } else if (comp->comp_type == BONDP_COMP_JFS) {
         ret = urma_post_jfs_wr(comp->p_jfs[send_idx], send_wr, bad_wr);
     } else {
-        URMA_LOG_ERR("Invalid post jfs wr type: %d\n", comp->comp_type);
+        URMA_LOG_ERR("Invalid post jfs wr type=%d\n", comp->comp_type);
         ret = URMA_EINVAL;
     }
     if (ret == URMA_SUCCESS) {
@@ -64,7 +64,7 @@ static urma_status_t comp_post_recv(bondp_comp_t *comp, int recv_idx, urma_jfr_w
     } else if (comp->comp_type == BONDP_COMP_JFR) {
         ret = urma_post_jfr_wr(comp->p_jfr[recv_idx], recv_wr, bad_wr);
     } else {
-        URMA_LOG_ERR("Invalid post jfr wr type: %d\n", comp->comp_type);
+        URMA_LOG_ERR("Invalid post jfr wr type=%d\n", comp->comp_type);
         ret = URMA_EINVAL;
     }
     if (ret == URMA_SUCCESS) {
@@ -83,7 +83,7 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
                UDMA will take care of it, as SEND_WITH_IMM may allow NULL to be passed.
             */
             if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->send.src.num_sge) {
-                URMA_LOG_WARN("The number of sge %u the destination segment is greater than the maximum supported: %u"
+                URMA_LOG_WARN("The number of sge %u the destination segment is greater than the maximum supported=%u"
                               "by the device.\n",
                               wr->send.src.num_sge,
                               bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
@@ -103,26 +103,26 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
                whether for write or read operations. */
             if (wr->opcode == URMA_OPC_READ) {
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.src.num_sge) {
-                    URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported: %u"
+                    URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.src.num_sge,
                                   bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
                 }
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.dst.num_sge) {
-                    URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported: %u"
+                    URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.dst.num_sge,
                                   bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
                 }
             } else {
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.src.num_sge) {
-                    URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported: %u"
+                    URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.src.num_sge,
                                   bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
                 }
                 if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.dst.num_sge) {
-                    URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported: %u"
+                    URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.dst.num_sge,
                                   bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
@@ -153,7 +153,7 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
                                            const urma_jfs_wr_t *wr)
 {
     if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
-        URMA_LOG_ERR("Try to call post_send api by invalid comp_type: %d\n", bdp_send_comp->comp_type);
+        URMA_LOG_ERR("Try to call post_send api by invalid comp_type=%d\n", bdp_send_comp->comp_type);
         return URMA_EINVAL;
     }
     urma_status_t ret = post_send_check_jfs_wr_valid(bdp_send_comp->bondp_ctx, wr);
@@ -164,7 +164,7 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
         /* currently only check src_chip_id */
         if (bwr->src_chip_id < BONDP_CHIP_ID_MIN || bwr->src_chip_id > BONDP_CHIP_ID_MAX) {
-            URMA_LOG_ERR("Invalid src_chip_id: %u.\n", bwr->src_chip_id);
+            URMA_LOG_ERR("Invalid src_chip_id=%u.\n", bwr->src_chip_id);
             return URMA_EINVAL;
         }
     }
@@ -515,7 +515,7 @@ static urma_status_t post_recv_check_jfr_wr_valid(const bondp_context_t *bdp_ctx
 {
     /* No need to handle cases where num_sge == 0 or sge == NULL; Certain hardware supports this usage. */
     if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfr_sge < wr->src.num_sge) {
-        URMA_LOG_WARN("The number of sge %u the src segment is greater than the maximum supported: %u"
+        URMA_LOG_WARN("The number of sge %u the src segment is greater than the maximum supported=%u"
                       " by the device.\n",
                       wr->src.num_sge,
                       bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfr_sge);
@@ -527,7 +527,7 @@ static urma_status_t post_recv_check_wr_list_valid(bondp_comp_t *bdp_recv_comp, 
                                                    urma_jfr_wr_t **bad_wr)
 {
     if (bdp_recv_comp->comp_type != BONDP_COMP_JETTY && bdp_recv_comp->comp_type != BONDP_COMP_JFR) {
-        URMA_LOG_ERR("Invalid bdp_recv_comp type: %d\n", bdp_recv_comp->comp_type);
+        URMA_LOG_ERR("Invalid bdp_recv_comp type=%d\n", bdp_recv_comp->comp_type);
         *bad_wr = (urma_jfr_wr_t *)wr;
         return URMA_EINVAL;
     }
@@ -663,7 +663,7 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
         &bdp_ctx->p_vjetty_id_table, pjetty_id, p_vjetty_type);
     if (comp == NULL) {
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to get comp, local_id: %d\n", pjetty_id.id);
+        URMA_LOG_ERR("Failed to get comp, local_id=%d\n", pjetty_id.id);
         return NULL;
     }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
@@ -683,7 +683,7 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int 
 {
     bondp_comp_t *comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (comp == NULL) {
-        URMA_LOG_ERR("Skip fake cr because vjetty is not found, idx:%d, local_id:%u\n",
+        URMA_LOG_ERR("Skip fake cr because vjetty is not found, idx=%d, local_id=%u\n",
                      idx, cr->local_id);
         return CONVERT_SKIP;
     }
@@ -694,7 +694,7 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int 
     } else if (cr->status == URMA_CR_WR_FLUSH_ERR_DONE) {
         target_state_bit = PJETTY_FLUSH_ERROR_DONE;
     } else {
-        URMA_LOG_ERR("Invalid cr error status: %d\n", cr->status);
+        URMA_LOG_ERR("Invalid cr error status=%d\n", cr->status);
         put_comp(comp);
         return CONVERT_FAIL;
     }
@@ -725,7 +725,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     const uint64_t wr_id = cr->user_ctx;
     bondp_comp_t *bdp_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (bdp_comp == NULL) {
-        URMA_LOG_ERR("Failed find jetty when handle send cr, cr.local_id:%u.\n", cr->local_id);
+        URMA_LOG_ERR("Failed to find jetty when handle send cr, cr.local_id=%u.\n", cr->local_id);
         return CONVERT_SKIP;
     }
 
@@ -780,7 +780,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             }
             atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
             if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                URMA_LOG_ERR("Failed to resend jfs wr, wr_id: %lu\n", resend_wr_id);
+                URMA_LOG_ERR("Failed to resend jfs wr, wr_id=%lu\n", resend_wr_id);
             }
         }
         bondp_health_notify_datapath_link_fail(bdp_comp->bondp_ctx, wr_entry->target_vjetty,
@@ -830,7 +830,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
 {
     bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (recv_comp == NULL) {
-        URMA_LOG_ERR("Failed to find local jetty, idx:%u, id:%u\n", idx, cr->local_id);
+        URMA_LOG_ERR("Failed to find local jetty, idx=%u, id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
 
@@ -863,7 +863,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
         return CONVERT_FAIL;
     }
     if (!bdp_slide_wnd_seq_in_window(&v_conn->recv_wnd, msn) || bdp_slide_wnd_has(&v_conn->recv_wnd, msn)) {
-        URMA_LOG_DEBUG("Rearm recv WR due to: outside of window: %d or duplicate %d\n",
+        URMA_LOG_DEBUG("Rearm recv WR due to: outside of window=%d or duplicate %d\n",
                        !bdp_slide_wnd_seq_in_window(&v_conn->recv_wnd, msn),
                        bdp_slide_wnd_has(&v_conn->recv_wnd, msn));
         urma_jfr_wr_t *bad_wr = NULL;
@@ -1006,9 +1006,8 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
                               ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
                               : cr_cnt_remaining;
         int pcr_cnt = urma_flush_jetty(bdp_jetty->p_jetty[i], pcr_cnt_max, pcr_buf);
-
         if (pcr_cnt < 0) {
-            URMA_LOG_ERR("Failed to flush pjetty[%d]: %d\n", i, pcr_cnt);
+            URMA_LOG_ERR("Failed to flush pjetty[%d], pcr_cnt=%d\n", i, pcr_cnt);
             return pcr_cnt;
         }
         if (pcr_cnt == 0) {

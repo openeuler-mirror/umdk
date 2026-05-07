@@ -39,7 +39,7 @@ static int open_file(const char *dir, const char *file, int flag)
 
     real_path = realpath(path, NULL);
     if (real_path == NULL) {
-        (void)printf("file_path:%s is not standardize, errno: %d.\n", path, errno);
+        (void)printf("file_path=%s is not standardized, errno=%d.\n", path, errno);
         free(path);
         return -1;
     }
