@@ -391,7 +391,12 @@ uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32
     tmp_info->shm_qbuf_pool_headroom_size = global_pool_cfg.headroom_size;
     tmp_info->shm_qbuf_pool_mode = global_pool_cfg.mode;
 
-    strcpy(tmp_info->ipc_name, tp->local_ring.ipc_name);
+    int ret = snprintf(tmp_info->ipc_name, MAX_MSG_RING_NAME + 1, "%s", tp->local_ring.ipc_name);
+    if (ret < 0 || ret >= MAX_MSG_RING_NAME + 1) {
+        errno = UMQ_ERR_EINVAL;
+        UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+        return 0;
+    }
 
     return sizeof(umq_ipc_bind_info_t);
 }
