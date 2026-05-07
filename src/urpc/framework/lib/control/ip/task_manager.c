@@ -365,7 +365,6 @@ static void task_activation_manager_uninit(void)
     pthread_mutex_destroy(&g_urpc_task_activation_manager.lock);
 }
 
-
 static int task_timeout_manager_init(void)
 {
     urpc_list_init(&g_urpc_task_timeout_manager.list);
@@ -463,6 +462,9 @@ static void task_manager_timeout_check(void *args)
         // resource clean up
         if (cur->workflow_type == WORKFLOW_TYPE_RELEASE_RESOURCE) {
             task_engine_task_process(false, NULL, NULL, cur);
+        } else if (cur->workflow_type == WORKFLOW_TYPE_CONNECT_TIMER) {
+            transport_connect_timer_destroy(cur);
+            transport_acception_shutdown((urpc_server_accept_entry_t *)cur->transport_handle, true, false);
         } else {
             cur->result = URPC_ERR_TIMEOUT;
             if (task_can_stop_immediately(cur)) {
