@@ -80,7 +80,11 @@ static int umq_ub_dev_eid_set(urma_device_t *urma_dev, umq_dev_info_t *umq_dev_i
 
     // notice: umq_dev_info.umq_trans_mode is NOT set
     umq_dev_info->ub.eid_cnt = eid_cnt;
-    (void)strncpy(umq_dev_info->dev_name, urma_dev->name, UMQ_DEV_NAME_SIZE);
+    int ret = snprintf(umq_dev_info->dev_name, UMQ_DEV_NAME_SIZE, "%s", urma_dev->name);
+    if (ret < 0 || ret >= UMQ_DEV_NAME_SIZE) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+        return -UMQ_ERR_EINVAL;
+    }
 
     umq_symbol_urma()->urma_free_eid_list(eid_info_list);
 
