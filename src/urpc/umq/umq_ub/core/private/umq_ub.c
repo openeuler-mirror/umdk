@@ -332,6 +332,11 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tseg hmap lock create failed\n", EID_ARGS(*eid), id);
         goto UNINIT_HAMP;
     }
+    int ret = snprintf(eid_node->remote_namespace, info->dev_info->namespace_len, "%s", info->dev_info->bind_namespace);
+    if (ret < 0 || ret >= (int)info->dev_info->namespace_len) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+        goto DESTORY_LOCK;
+    }
 
     if (umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
         imported_tseg_node_t *tseg_node =
@@ -352,7 +357,6 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
 
     eid_node->pid = info->dev_info->pid;
     eid_node->ref_cnt = 1;
-    strcpy(eid_node->remote_namespace, info->dev_info->bind_namespace);
     (void)memcpy(&eid_node->eid, remote_eid, sizeof(urma_eid_t));
     urpc_bitmap_set1(eid_node->tseg_imported, UMQ_QBUF_DEFAULT_MEMPOOL_ID);
 
@@ -572,7 +576,11 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
             info->dev_info->namespace_len, UMQ_UB_NAMESPACE_SIZE);
         goto RESET_BIND_CTX;
     }
-    memcpy(ctx->remote_namespace, info->dev_info->bind_namespace, info->dev_info->namespace_len);
+    ret = snprintf(ctx->remote_namespace, info->dev_info->namespace_len, "%s", info->dev_info->bind_namespace);
+    if (ret < 0 || ret >= (int)info->dev_info->namespace_len) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+        goto RESET_BIND_CTX;
+    }
     queue->bind_ctx = ctx;
 
     ret = umq_ub_remote_tseg_info_get(queue, info, ctx);
