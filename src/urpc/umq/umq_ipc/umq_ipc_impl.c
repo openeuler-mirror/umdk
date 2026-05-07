@@ -227,7 +227,15 @@ static ALWAYS_INLINE int fill_ring_info(umq_create_option_t *option, umq_ipc_rin
 
     ring->tx_buf_size = (option->create_flag & UMQ_CREATE_FLAG_TX_BUF_SIZE) ?
         option->tx_buf_size : UMQ_DEFAULT_BUF_SIZE;
-    ring->tx_depth = (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) ? option->tx_depth : UMQ_DEFAULT_DEPTH;
+    if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
+        if (option->tx_depth == 0) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tx_depth must be greater than 0\n");
+            return -UMQ_ERR_EINVAL;
+        }
+        ring->tx_depth = option->tx_depth;
+    } else {
+        ring->tx_depth = UMQ_DEFAULT_DEPTH;
+    }
     ring->rx_depth = ring->tx_depth;
 
     uint64_t data_zone_size =
@@ -398,16 +406,15 @@ uint32_t umq_ipc_bind_info_get_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32
 
 int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_info_size)
 {
+    if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size: %u is invalid\n", bind_info_size);
+        return -UMQ_ERR_EINVAL;
+    }
     umq_ipc_info_t *tp = (umq_ipc_info_t *)(uintptr_t)umqh_tp;
     umq_ipc_bind_info_t *tmp_info = (umq_ipc_bind_info_t *)bind_info;
     if (tp->bind_ctx != NULL || tmp_info->is_binded != 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq has already been binded\n");
         return -UMQ_ERR_EEXIST;
-    }
-
-    if (bind_info_size < sizeof(umq_ipc_bind_info_t)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size is invalid\n");
-        return -UMQ_ERR_EINVAL;
     }
 
     if (tmp_info->trans_mode != UMQ_TRANS_MODE_IPC) {

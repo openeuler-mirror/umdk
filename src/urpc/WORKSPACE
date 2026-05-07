@@ -64,7 +64,7 @@ compatibility_proxy_repo()
 git_repository(
     name = "rules_perl",
     remote = "https://github.com/bazelbuild/rules_perl.git",
-    branch = "0.4.0",
+    commit = "db9b602f02590137a60c3e3ca00ff9efeda86ca4",
 )
 
 load("@rules_perl//perl:deps.bzl", "perl_register_toolchains", "perl_rules_dependencies")

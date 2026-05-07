@@ -1310,6 +1310,7 @@ int umq_dev_add(umq_trans_info_t *trans_info)
         umq_fw->enable = true;
         ret = umq_framework_init(umq_fw, g_umq_config);
         if (ret != UMQ_SUCCESS) {
+            umq_fw->enable = false;
             UMQ_VLOG_ERR(VLOG_UMQ, "umq framework init failed, status: %d\n", ret);
             goto DECREASE_TRANS_INFO_NUM;
         }
@@ -1338,7 +1339,7 @@ DECREASE_TRANS_INFO_NUM:
 UNLOCK:
     (void)util_mutex_unlock(g_umq_config_mutex_lock);
 
-return ret;
+    return ret;
 }
 
 int umq_get_route_list(const umq_route_key_t *route_key, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list)
