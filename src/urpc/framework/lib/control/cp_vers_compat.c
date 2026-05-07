@@ -1129,7 +1129,11 @@ static int connect_msg_deserialize_chmsg_arr(urpc_tlv_arr_head_t *chmsg_arr_tlv_
             return URPC_FAIL;
         }
 
-        connect_msg_deserialize_chmsg(chmsg_tlv_head->value, chmsg_tlv_head->len, chmsg_arr->chmsgs + i);
+        if (connect_msg_deserialize_chmsg(
+            chmsg_tlv_head->value, chmsg_tlv_head->len, chmsg_arr->chmsgs + i) != URPC_SUCCESS) {
+            URPC_LIB_LOG_ERR("failed to deserialize channel message\n");
+            return -URPC_ERR_EINVAL;
+        }
 
         // 3. search next channel message
         uint32_t left_len = urpc_tlv_get_left_len(chmsg_buf, chmsg_len, chmsg_tlv_head);
