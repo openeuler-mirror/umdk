@@ -535,7 +535,7 @@ static int attach_msg_v1_deserialize_chmsg_arr(urpc_tlv_arr_head_t *chmsg_arr_tl
     char *chmsg_buf = chmsg_arr_tlv_head->value.user_data;
     uint32_t chmsg_len = urpc_tlv_arr_get_user_data_len(chmsg_arr_tlv_head);
     urpc_tlv_head_t *chmsg_tlv_head = urpc_tlv_search_element(chmsg_buf, chmsg_len, URPC_TLV_TYPE_CHANNEL_MSG);
-
+    int ret = URPC_SUCCESS;
     for (uint32_t i = 0; i < chmsg_arr_tlv_head->value.arr_num; i++) {
         // 2. deserialize channel message
         if (chmsg_tlv_head == NULL) {
@@ -543,7 +543,10 @@ static int attach_msg_v1_deserialize_chmsg_arr(urpc_tlv_arr_head_t *chmsg_arr_tl
             return URPC_FAIL;
         }
 
-        attach_msg_v1_deserialize_chmsg(chmsg_tlv_head->value, chmsg_tlv_head->len, chmsg_arr->chmsgs + i);
+        ret = attach_msg_v1_deserialize_chmsg(chmsg_tlv_head->value, chmsg_tlv_head->len, chmsg_arr->chmsgs + i);
+        if (ret != URPC_SUCCESS) {
+            return ret;
+        }
 
         // 3. search next channel message
         uint32_t left_len = urpc_tlv_get_left_len(chmsg_buf, chmsg_len, chmsg_tlv_head);
