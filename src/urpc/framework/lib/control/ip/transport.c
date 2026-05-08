@@ -23,6 +23,7 @@
 #define TRANSPORT_MAX_CONNECTIONS 8192
 #define TRANSPORT_RETRY_TIMES 1
 #define TRANSPORT_EVENT_ERR_TIMES 3
+#define TRANSPORT_CONNECT_TIMEOUT 1000
 
 static urpc_client_connect_table_t g_urpc_client_connect_hamp = {0};
 static urpc_server_accept_manager_t g_urpc_server_accept_manager;
@@ -262,6 +263,36 @@ static void transport_server_task_clear(urpc_server_accept_entry_t *entry)
     }
 }
 
+static int transport_connect_timer_create(urpc_server_accept_entry_t *entry)
+{
+    urpc_async_task_ctx_t *connect_timer = (urpc_async_task_ctx_t *)urpc_dbuf_calloc(
+        URPC_DBUF_TYPE_CP, 1, sizeof(urpc_async_task_ctx_t));
+    if (connect_timer == NULL) {
+        URPC_LIB_LOG_ERR("create connect_timer failed\n");
+        return URPC_FAIL;
+    }
+
+    connect_timer->workflow_type = WORKFLOW_TYPE_CONNECT_TIMER;
+    connect_timer->transport_handle = (void *)entry;
+    connect_timer->timeout = TRANSPORT_CONNECT_TIMEOUT;
+    connect_timer->timestamp = get_timestamp_ms() + (uint64_t)(connect_timer->timeout);
+    entry->connect_timer = connect_timer;
+    task_manager_timeout_manager_lock();
+    task_manager_timeout_manager_insert(connect_timer);
+    task_manager_timeout_manager_unlock();
+
+    return URPC_SUCCESS;
+}
+
+void transport_connect_timer_destroy(urpc_async_task_ctx_t *connect_timer)
+{
+    if (connect_timer == NULL) {
+        return;
+    }
+    task_manager_timeout_manager_remove(connect_timer);
+    urpc_dbuf_free(connect_timer);
+}
+
 static void transport_shutdown_and_reconnect(urpc_client_connect_entry_t *entry)
 {
     connection_close(&entry->conn_handle);
@@ -318,7 +349,7 @@ static void transport_connection_shutdown(urpc_client_connect_entry_t *entry, bo
     return;
 }
 
-static void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal, bool is_delay_release)
+void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal, bool is_delay_release)
 {
     URPC_LIB_LOG_DEBUG("go to %s shutdown acception:%d\n", normal ? "normal" : "forced", entry->conn_handle.fd);
     if (is_delay_release) {
@@ -343,6 +374,8 @@ static void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool
     transport_server_task_clear(entry);
     URPC_LIB_LOG_INFO("acception force closed\n");
     server_accept_manager_remove(entry);
+    transport_connect_timer_destroy(entry->connect_timer);
+    entry->connect_timer = NULL;
 }
 
 static int transport_recv_socket_async(transport_handle_t *ctl_hdl, void *data, size_t data_size)
@@ -498,6 +531,8 @@ static int transport_send_ssl_async(
 
 static int server_handshake_completed(urpc_server_accept_entry_t *handle, bool support_ssl)
 {
+    transport_connect_timer_destroy(handle->connect_timer);
+    handle->connect_timer = NULL;
     if (support_ssl) {
         handle->conn_handle.send_async = transport_send_ssl_async;
         handle->conn_handle.recv_async = transport_recv_ssl_async;
@@ -1126,12 +1161,21 @@ urpc_server_accept_entry_t *transport_connection_accept(int listen_fd, void *use
     entry->user_ctx = user_ctx;
     urpc_list_init(&entry->list);
     urpc_list_init(&entry->server_channel_list);
+    if (transport_connect_timer_create(entry) != URPC_SUCCESS) {
+        URPC_LIB_LOG_ERR("server create connect timer failed\n");
+        goto TLS_UNINIT;
+    }
+
     if (server_do_ssl_handshake(entry) != URPC_SUCCESS) {
         URPC_LIB_LOG_ERR("server do ssl handshake failed\n");
-        goto TLS_UNINIT;
+        goto DESTROY_TIMER;
     }
     server_accept_manager_insert(entry);
     return entry;
+
+DESTROY_TIMER:
+    transport_connect_timer_destroy(entry->connect_timer);
+    entry->connect_timer = NULL;
 
 TLS_UNINIT:
     if (ctl_hdl->ssl != NULL) {
