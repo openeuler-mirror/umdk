@@ -161,7 +161,7 @@ static int bondp_create_vseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
     bdp_seg->v_tseg.seg.attr.value = seg_cfg->flag.value;
     bdp_seg->v_tseg.mva = seg_cfg->va;
     bdp_seg->v_tseg.urma_ctx = &bdp_ctx->v_ctx;
-    bdp_seg->v_tseg.user_ctx = (uint64_t)&bdp_seg->v_tseg;
+    bdp_seg->v_tseg.user_ctx = seg_cfg->user_ctx;
     bdp_seg->v_tseg.token_id = seg_cfg->token_id;
 
     in_seg_info.base = bdp_seg->v_tseg.seg;
