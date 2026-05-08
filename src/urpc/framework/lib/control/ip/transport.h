@@ -107,6 +107,7 @@ typedef struct urpc_server_accept_entry {
     urpc_list_t server_channel_list; // record the server channel, used to release resources when heartbeat is lost
     uint32_t ref_cnt;
     void *user_ctx;
+    urpc_async_task_ctx_t *connect_timer;
 } urpc_server_accept_entry_t;
 
 urpc_client_connect_entry_t *transport_connection_establish(urpc_async_task_ctx_t *task);
@@ -121,6 +122,9 @@ void transport_uninit(void);
 urpc_client_connect_entry_t *transport_connection_get(urpc_host_info_t *server);
 void transport_server_release_resource(urpc_async_task_ctx_t *task);
 void transport_server_releaser_remove(urpc_async_task_ctx_t *task);
+
+void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal, bool is_delay_release);
+void transport_connect_timer_destroy(urpc_async_task_ctx_t *connect_timer);
 
 #ifdef __cplusplus
 }

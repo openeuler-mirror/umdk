@@ -970,10 +970,25 @@ static int client_func_recv(urpc_async_task_ctx_t *task)
 
 int urpc_mem_info_set(uint32_t chid, uint64_t addr, uint32_t len)
 {
+    if (len < sizeof(urpc_tlv_arr_head_t)) {
+        URPC_LIB_LOG_ERR("length of addr is insufficient for the size of urpc_tlv_arr_head_t\n");
+        return -URPC_ERR_EINVAL;
+    }
     urpc_tlv_arr_head_t *meminfo_arr_tlv_head = (urpc_tlv_arr_head_t *)(uintptr_t)addr;
     uint32_t mem_info_num = meminfo_arr_tlv_head->value.arr_num;
     if (mem_info_num > MAX_MEM_H_SIZE) {
         URPC_LIB_LOG_ERR("mem_info_num %u is too large\n", mem_info_num);
+        return -URPC_ERR_EINVAL;
+    }
+
+    if (len < urpc_tlv_arr_get_user_data_len(meminfo_arr_tlv_head) + sizeof(urpc_tlv_arr_head_t)) {
+        URPC_LIB_LOG_ERR("length of addr is insufficient to accommodate all mem_info\n");
+        return -URPC_ERR_EINVAL;
+    }
+
+    if (meminfo_arr_tlv_head->len <
+        sizeof(uint32_t) + mem_info_num * (sizeof(urpc_tlv_head_t) + sizeof(xchg_mem_info_t))) {
+        URPC_LIB_LOG_ERR("meminfo arr tlv head len is insufficient to accommodate all mem_info\n");
         return -URPC_ERR_EINVAL;
     }
 
