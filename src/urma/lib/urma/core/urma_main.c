@@ -596,7 +596,7 @@ urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name
                 URMA_LOG_ERR("Cannot set aggregated mode for non-aggregated device.\n");
                 return URMA_EINVAL;
             }
-            const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 5;
+            const uint32_t URMA_USER_CTL_BOND_SET_AGGR_MODE = 4;
             urma_user_ctl_in_t in = {
                 .opcode = URMA_USER_CTL_BOND_SET_AGGR_MODE,
                 .addr = (uint64_t)opt_value,
