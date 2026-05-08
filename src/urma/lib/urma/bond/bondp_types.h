@@ -97,17 +97,15 @@ typedef struct bondp_heath_check_ctx {
 } bondp_heath_check_ctx_t;
 
 typedef struct bondp_health_check_cfg {
-    bool primary_backup_switch;             /* PrimaryBackupSwitch, default true */
-    bool auto_fallback_primary;             /* AutoFallbackPrimary, default true */
-    uint64_t health_check_start_ms;         /* HealthCheckStart, 100ms~3600000ms, default 2000ms */
-    uint64_t health_check_interval_ms;      /* HealthCheckInterval, 1000ms~3600000ms, default 32000ms */
-    uint64_t primary_check_start_ms;        /* PrimaryCheckStart, 100ms~3600000ms, default 2000ms */
-    uint64_t primary_check_interval_ms;     /* PrimaryCheckInterval, 100ms~60000ms, default 1000ms */
-    uint32_t primary_check_max_backoff_cnt; /* PrimaryCheckMaxBackoffCnt, 1~100, default 13 */
+    uint64_t backup_start_ms;
+    uint64_t backup_interval_ms;
+    uint64_t active_start_ms;
+    uint64_t active_interval_ms;
+    uint32_t active_max_backoff;
 } bondp_health_check_cfg_t;
 
 typedef struct bondp_health_thread_ctx {
-    bool health_check_enable;
+    bool enable_health_check;
     int health_epoll_fd;
     pthread_t health_thread;
     bondp_health_check_cfg_t cfg;
@@ -125,6 +123,8 @@ typedef struct bondp_global_context {
     uint32_t pid;
     topo_map_t *topo_map;
     bool skip_load_topo;
+    bool enable_failover;
+    bool enable_failback;
     bondp_health_thread_ctx_t health_thread_ctx;
 } bondp_global_context_t;
 
