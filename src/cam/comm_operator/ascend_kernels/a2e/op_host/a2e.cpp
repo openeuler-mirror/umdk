@@ -55,6 +55,7 @@ namespace optiling {
         int attentionRankSize;
         int aivAlgNum;
         uint32_t aivNum;
+        int computeGate;
     };
 
     static ge::graphStatus CheckData(const char* nodeName, const A2ECheckParams& params)
@@ -82,6 +83,10 @@ namespace optiling {
 
         OP_TILING_CHECK(params.aivAlgNum < AIV_ALG_NUM_MIN || params.aivAlgNum > AIV_ALG_NUM_MAX,
             OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: aivAlgNum must >= 4 and <= 48"),
+            return ge::GRAPH_FAILED);
+
+        OP_TILING_CHECK(params.computeGate != 0 && params.computeGate != 1,
+            OP_LOGE(nodeName, "CAM A2E PARAMETER INVALID: computeGate must be 0 or 1"),
             return ge::GRAPH_FAILED);
 
         return ge::GRAPH_SUCCESS;
@@ -119,7 +124,7 @@ namespace optiling {
 
         const char* nodeName = context->GetNodeName();
         A2ECheckParams checkParams{rank, batchSize, hiddenSize, topk, expertRankSize,
-            attentionRankSize, aivAlgNum, aivNum};
+            attentionRankSize, aivAlgNum, aivNum, computeGate};
         OP_TILING_CHECK(CheckData(nodeName, checkParams) != ge::GRAPH_SUCCESS,
             OP_LOGE(nodeName, "CheckData failed."),
             return ge::GRAPH_FAILED);
