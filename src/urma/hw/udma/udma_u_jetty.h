@@ -16,6 +16,9 @@
 #define INVALID_TPN UINT32_MAX
 #define MAX_JETTY_IN_GRP 32
 
+#define UDMA_JETTY_CTX_SIZE 256
+#define UDMA_JFS_CTX_SIZE 256
+
 enum udma_u_set_get_jetty_opt_perm {
 	PERM_R = 1,
 	PERM_W = 1 << 1,
