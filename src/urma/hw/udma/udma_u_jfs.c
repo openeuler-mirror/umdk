@@ -90,7 +90,7 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 			  struct udma_create_jetty_resp *resp)
 {
-	if (!sq->sq_reserved || sq->cstm)
+	if (!sq->dtu_en && (!sq->sq_reserved || sq->cstm))
 		return 0;
 
 	if (resp->buf_addr == 0) {
@@ -166,6 +166,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	cmd.is_hugepage = jfs->sq.hugepage != NULL;
 	cmd.jetty_type = jfs->jfs_type;
 	cmd.jfs_id = jfs->sq.db.id;
+	cmd.dtu_en = jfs->sq.dtu_en;
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
 	if (ret != 0) {
@@ -210,6 +211,7 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 		       sq->db.id < ctx->ccu_jetty_start_id + ctx->ccu_jetty_max_cnt;
 	aligned_size = is_ccu_jetty ?
 		(UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB) : UDMA_HW_PAGE_SIZE;
+	sq->aligned_size = aligned_size;
 	if (!udma_u_alloc_queue_buf(sq, sqe_bb_cnt * cfg->depth,
 				    UDMA_JFS_WQEBB, aligned_size, true)) {
 		UDMA_LOG_ERR("failed to alloc jfs wqe buf.\n");
@@ -268,6 +270,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	jfs->sq.ctx = udma_ctx;
 	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
+	jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_sq(&jfs->sq, cfg)) {
 		UDMA_LOG_ERR("failed to create sq.\n");
 		goto err_create_sq;
@@ -275,7 +278,18 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	jfs->jfs_type = UDMA_URMA_NORMAL_JETTY_TYPE;
 	if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
-		goto err_exec_cmd;
+		if (jfs->sq.dtu_en) {
+			jfs->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&jfs->sq, jfs->sq.sqe_bb_cnt * cfg->depth,
+			    UDMA_JFS_WQEBB, jfs->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc sq buf after dtu failed.\n");
+				goto err_exec_cmd;
+			}
+			if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
+				goto err_exec_cmd;
+		} else {
+			goto err_exec_cmd;
+		}
 
 	jfs->sq.db.id = jfs->base.jfs_id.id;
 	jfs->sq.db.type = UDMA_MMAP_JETTY_DSQE;
@@ -1282,11 +1296,13 @@ static int udma_u_active_jfs_after(urma_jfs_t *jfs)
 
 urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 	urma_jfs_cfg_t *cfg = &jfs->jfs_cfg;
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
+	udma_jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	ret = udma_u_active_jfs_prepare(jfs, cfg);
 	if (ret)
 		return ret;
@@ -1294,8 +1310,18 @@ urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 	udma_jfs->jfs_type = UDMA_URMA_EX_JETTY_TYPE;
 	ret = udma_u_exec_jfs_active_cmd(udma_jfs, cfg);
 	if (ret) {
-		UDMA_LOG_ERR("exec active jfs cmd failed, ret = %d.\n", ret);
-		goto err_active_jfs_cmd;
+		if(udma_jfs->sq.dtu_en) {
+			udma_jfs->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&udma_jfs->sq, udma_jfs->sq.sqe_bb_cnt * cfg->depth,
+			    UDMA_JFS_WQEBB, udma_jfs->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc sq buf after dtu failed.\n");
+				goto err_active_jfs_cmd;
+			}
+			if (udma_u_exec_jfs_active_cmd(udma_jfs, cfg))
+				goto err_active_jfs_cmd;
+		} else {
+			goto err_active_jfs_cmd;
+		}
 	}
 
 	ret = udma_u_active_jfs_after(jfs);
