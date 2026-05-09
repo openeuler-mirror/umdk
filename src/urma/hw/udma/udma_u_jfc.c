@@ -40,17 +40,31 @@ static int udma_u_check_jfc_cfg(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 static int udma_u_jfc_cmd(urma_context_t *ctx, struct udma_u_jfc *jfc,
 			  urma_jfc_cfg_t *cfg)
 {
+	struct udma_create_jfc_resp resp = {};
 	struct udma_create_jfc_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udata = {};
+	int ret;
 
 	cmd.buf_addr = (uintptr_t)jfc->cq.qbuf;
 	cmd.db_addr = (uintptr_t)jfc->sw_db;
 	cmd.buf_len = jfc->cq.qbuf_size;
 	cmd.is_hugepage = jfc->cq.hugepage != NULL;
+	cmd.dtu_en = jfc->cq.dtu_en;
+	udma_u_set_udata(&udata, &cmd, sizeof(cmd), &resp, sizeof(resp));
 
-	udma_u_set_udata(&udata, &cmd, sizeof(cmd), NULL, 0);
+	ret = urma_cmd_create_jfc(ctx, &jfc->base, cfg, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("failed to urma cmd create jfc, ret = %d.\n", ret);
+		return ret;
+	}
 
-	return urma_cmd_create_jfc(ctx, &jfc->base, cfg, &udata);
+	if (jfc->cq.dtu_en) {
+		jfc->cq.qbuf = (void *)(uintptr_t)resp.buf_addr;
+		jfc->cq.qbuf_curr = jfc->cq.qbuf;
+		jfc->cq.qbuf_end = jfc->cq.qbuf + jfc->cq.qbuf_size;
+	}
+
+	return ret;
 }
 
 static int udma_u_active_jfc_cmd(struct udma_u_jfc *jfc)
@@ -107,6 +121,7 @@ urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
 	struct udma_u_jfc *jfc;
+	uint32_t depth;
 	int ret;
 
 	ret = udma_u_check_jfc_cfg(ctx, cfg);
@@ -120,6 +135,7 @@ urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 	}
 
 	jfc->cq.ctx = udma_ctx;
+	jfc->cq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_cq(&jfc->cq, cfg)) {
 		UDMA_LOG_ERR("failed to create cq.\n");
 		goto err_create_cq;
@@ -133,8 +149,20 @@ urma_jfc_t *udma_u_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 
 	ret = udma_u_jfc_cmd(ctx, jfc, cfg);
 	if (ret) {
-		UDMA_LOG_ERR("udma jfc failed to create urma cmd.\n");
-		goto err_create_jfc;
+		if (jfc->cq.dtu_en) {
+			jfc->cq.dtu_en = false;
+			depth = cfg->depth < UDMA_U_MIN_JFC_DEPTH ? UDMA_U_MIN_JFC_DEPTH : cfg->depth;
+			if (!udma_u_alloc_queue_buf(&jfc->cq, depth, jfc->cq.ctx->cqe_size,
+						    UDMA_HW_PAGE_SIZE, false)) {
+				UDMA_LOG_ERR("failed to alloc jfc wqe buf after dtu failed.\n");
+				goto err_create_jfc;
+			}
+			if (udma_u_jfc_cmd(ctx, jfc, cfg))
+				goto err_create_jfc;
+		} else {
+			UDMA_LOG_ERR("udma jfc failed to create urma cmd.\n");
+			goto err_create_jfc;
+		}
 	}
 
 	jfc->cq_shift = align_power2(jfc->cq.baseblk_cnt);
@@ -184,9 +212,12 @@ urma_status_t udma_u_alloc_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg, urma_jf
 
 urma_status_t udma_u_active_jfc(urma_jfc_t *jfc)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfc->urma_ctx);
 	struct udma_u_jfc *ujfc = to_udma_u_jfc(jfc);
+	uint32_t depth;
 	int ret;
 
+	ujfc->cq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_cq(&ujfc->cq, &jfc->jfc_cfg)) {
 		UDMA_LOG_ERR("failed to create cq.\n");
 		return URMA_FAIL;
@@ -200,8 +231,21 @@ urma_status_t udma_u_active_jfc(urma_jfc_t *jfc)
 
 	ret = udma_u_active_jfc_cmd(ujfc);
 	if (ret != 0) {
-		UDMA_LOG_ERR("udma jfc failed to create urma cmd.\n");
-		goto err_create_jfc;
+		if (ujfc->cq.dtu_en) {
+			ujfc->cq.dtu_en = false;
+			depth = jfc->jfc_cfg.depth < UDMA_U_MIN_JFC_DEPTH ?
+				UDMA_U_MIN_JFC_DEPTH : jfc->jfc_cfg.depth;
+			if (!udma_u_alloc_queue_buf(&ujfc->cq, depth, ujfc->cq.ctx->cqe_size,
+						    UDMA_HW_PAGE_SIZE, false)) {
+				UDMA_LOG_ERR("failed to alloc jfc wqe buf after dtu failed.\n");
+				goto err_create_jfc;
+			}
+			if (udma_u_active_jfc_cmd(ujfc))
+				goto err_create_jfc;
+		} else {
+			UDMA_LOG_ERR("udma jfc failed to create urma cmd.\n");
+			goto err_create_jfc;
+		}
 	}
 
 	ujfc->cq_shift = align_power2(ujfc->cq.baseblk_cnt);

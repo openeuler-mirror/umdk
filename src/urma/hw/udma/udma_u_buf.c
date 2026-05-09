@@ -47,19 +47,20 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 	q->baseblk_mask = q->baseblk_cnt - 1U;
 
 	if (wrid_en) {
-		q->wrid = (uintptr_t *)calloc(1, q->baseblk_cnt * sizeof(uint64_t));
 		if (!q->wrid) {
-			UDMA_LOG_ERR("failed to alloc buffer for wrid.\n");
-			return false;
+			q->wrid = (uintptr_t *)calloc(1, q->baseblk_cnt * sizeof(uint64_t));
+			if (!q->wrid) {
+				UDMA_LOG_ERR("failed to alloc buffer for wrid.\n");
+				return false;
+			}
 		}
 	}
 
 	if (q->cstm)
 		goto alloc_queue_buf_finish;
 
-	if (q->sq_reserved)
+	if (q->dtu_en || q->sq_reserved)
 		return true;
-
 	if (!q->cstm && q->ctx->hugepage_enable) {
 		q->hugepage = udma_u_alloc_hugepage(q->ctx, q->qbuf_size);
 		if (q->hugepage) {
@@ -94,7 +95,7 @@ void udma_u_free_queue_buf(struct udma_u_jetty_queue *q)
 		q->wrid = NULL;
 	}
 
-	if (q->cstm || q->sq_reserved)
+	if (q->dtu_en || q->cstm || q->sq_reserved)
 		return;
 
 	if (q->qbuf != NULL) {
