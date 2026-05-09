@@ -450,9 +450,8 @@ static int udma_u_create_jetty_check_cap(urma_context_t *ctx, urma_jetty_cfg_t *
 }
 
 static int udma_u_check_jetty_param_ex(urma_context_t *ctx,
-				       struct udma_u_jetty_cfg_ex *cfg_ex)
+				       urma_jetty_cfg_t *jetty_cfg)
 {
-	urma_jetty_cfg_t *jetty_cfg = &cfg_ex->base_cfg;
 	urma_transport_mode_t trans_mode;
 
 	if (jetty_cfg->jfs_cfg.jfc == NULL) {
@@ -502,7 +501,7 @@ static int udma_u_verify_jetty_param_ex(urma_context_t *ctx,
 	if (udma_u_check_jetty_cfg_ex(cfg_ex))
 		return EINVAL;
 
-	if (udma_u_check_jetty_param_ex(ctx, cfg_ex))
+	if (udma_u_check_jetty_param_ex(ctx, &cfg_ex->base_cfg))
 		return EINVAL;
 
 	if (udma_u_verify_jfs_cstm_cfg(&cfg_ex->jfs_cstm)) {
@@ -521,6 +520,38 @@ static void udma_u_init_jetty_param_ex(struct udma_u_jetty *jetty,
 	jetty->jetty_type = (uint32_t)cfg_ex->jetty_type;
 	jetty->sq.pi_type = cfg_ex->pi_type;
 	cfg_ex->base_cfg.jfs_cfg.depth = 1;
+}
+
+static int udma_u_create_common_jetty(urma_context_t *ctx, struct udma_u_jetty *jetty, urma_jetty_cfg_t *cfg)
+{
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+
+	if (exec_jetty_create_cmd(ctx, jetty, cfg)) {
+		UDMA_LOG_ERR("failed to create jetty.\n");
+		return EINVAL;
+	}
+
+	jetty->sq.db.id = jetty->base.jetty_id.id;
+	jetty->sq.db.type = UDMA_MMAP_JETTY_DSQE;
+	if (udma_u_alloc_db(ctx, &jetty->sq.db)) {
+		UDMA_LOG_ERR("failed to alloc db.\n");
+		goto err_alloc_db;
+	}
+
+	jetty->sq.dwqe_addr = (void *)jetty->sq.db.addr;
+	jetty->sq.idx = jetty->base.jetty_id.id;
+	if (insert_jetty_node(udma_ctx, jetty)) {
+		UDMA_LOG_ERR("failed to insert jetty_queue.\n");
+		goto err_insert_node;
+	}
+
+	return 0;
+err_insert_node:
+	udma_u_free_db(ctx, &jetty->sq.db);
+err_alloc_db:
+	(void)urma_cmd_delete_jetty(&jetty->base);
+
+	return EINVAL;
 }
 
 static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_jetty_cfg_ex *cfg_ex)
@@ -553,31 +584,11 @@ static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_j
 
 	udma_u_init_jetty_param_ex(jetty, cfg_ex);
 
-	if (exec_jetty_create_cmd(ctx, jetty, &cfg_ex->base_cfg)) {
-		UDMA_LOG_ERR("failed to create jetty.\n");
-		goto err_jetty_create_cmd;
-	}
-
-	jetty->sq.db.id = jetty->base.jetty_id.id;
-	jetty->sq.db.type = UDMA_MMAP_JETTY_DSQE;
-	if (udma_u_alloc_db(ctx, &jetty->sq.db)) {
-		UDMA_LOG_ERR("failed to alloc db.\n");
-		goto err_alloc_db;
-	}
-
-	jetty->sq.dwqe_addr = (void *)jetty->sq.db.addr;
-	jetty->sq.idx = jetty->base.jetty_id.id;
-	if (insert_jetty_node(udma_ctx, jetty)) {
-		UDMA_LOG_ERR("failed to insert jetty_queue.\n");
-		goto err_insert_node;
-	}
+	if(udma_u_create_common_jetty(ctx, jetty, &cfg_ex->base_cfg))
+		goto err_jetty_create_common_jetty;
 
 	return &jetty->base;
-err_insert_node:
-	udma_u_free_db(ctx, &jetty->sq.db);
-err_alloc_db:
-	urma_cmd_delete_jetty(&jetty->base);
-err_jetty_create_cmd:
+err_jetty_create_common_jetty:
 	udma_u_delete_sq(&jetty->sq);
 err_init_jetty_trans_mode:
 	free(jetty);
@@ -586,60 +597,48 @@ err_init_jetty_trans_mode:
 }
 
 static int udma_u_jfc_cmd_ex(urma_context_t *ctx, struct udma_u_jfc *jfc,
-			     struct udma_u_jfc_cfg_ex *cfg, uint32_t jfc_depth)
+			     urma_jfc_cfg_t *base_cfg, uint32_t jfc_depth)
 {
 	struct udma_create_jfc_ucmd cmd = {};
 	urma_cmd_udrv_priv_t udata = {};
 
-	cmd.mode = (uint32_t)cfg->jfc_mode;
+	cmd.mode = (uint32_t)jfc->mode;
 	cmd.buf_len = jfc_depth;
 
 	udma_u_set_udata(&udata, &cmd, sizeof(cmd), NULL, 0);
 
-	return urma_cmd_create_jfc(ctx, &jfc->base, &cfg->base_cfg, &udata);
+	return urma_cmd_create_jfc(ctx, &jfc->base, base_cfg, &udata);
 }
 
-static int udma_u_verify_jfc_param_ex(urma_context_t *ctx, struct udma_u_jfc_cfg_ex *cfg_ex)
+static int udma_u_verify_jfc_param_ex(urma_context_t *ctx, urma_jfc_cfg_t *base_cfg)
 {
 	urma_device_cap_t *cap;
 
-	if (ctx == NULL || cfg_ex == NULL) {
-		UDMA_LOG_ERR("invalid param, jfc ctx or cfg_ex is null.\n");
-		return EINVAL;
-	}
-
-	if (cfg_ex->jfc_mode < UDMA_U_STARS_JFC_TYPE ||
-	    cfg_ex->jfc_mode > UDMA_U_CCU_JFC_TYPE) {
-		UDMA_LOG_ERR("invalid param, STARS jfc mode = %u.\n",
-			     cfg_ex->jfc_mode);
-		return EINVAL;
-	}
-
 	cap = &ctx->dev->sysfs_dev->dev_attr.dev_cap;
 
-	if (!cfg_ex->base_cfg.depth || cfg_ex->base_cfg.depth > cap->max_jfc_depth) {
+	if (!base_cfg->depth || base_cfg->depth > cap->max_jfc_depth) {
 		UDMA_LOG_ERR("invalid STARS jfc depth = %u, cap depth = %u.\n",
-			     cfg_ex->base_cfg.depth, cap->max_jfc_depth);
+			     base_cfg->depth, cap->max_jfc_depth);
 		return EINVAL;
 	}
 
-	if (cfg_ex->base_cfg.ceqn >= cap->ceq_cnt) {
+	if (base_cfg->ceqn >= cap->ceq_cnt) {
 		UDMA_LOG_ERR("invalid STARS jfc ceqn = %u, cap ceq cnt = %u.\n",
-			     cfg_ex->base_cfg.ceqn, cap->ceq_cnt);
+			     base_cfg->ceqn, cap->ceq_cnt);
 		return EINVAL;
 	}
 
 	return 0;
 }
 
-static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
-					struct udma_u_jfc_cfg_ex *cfg_ex)
+static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t *base_cfg,
+					     enum udma_u_jfc_type jfc_mode)
 {
 	struct udma_u_jfc *jfc;
 	uint32_t depth;
 	int ret;
 
-	if (udma_u_verify_jfc_param_ex(ctx, cfg_ex))
+	if (udma_u_verify_jfc_param_ex(ctx, base_cfg))
 		return NULL;
 
 	jfc = (struct udma_u_jfc *)calloc(1, sizeof(*jfc));
@@ -648,18 +647,18 @@ static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
 		return NULL;
 	}
 
-	jfc->cq.lock_free = cfg_ex->base_cfg.flag.bs.lock_free;
-	jfc->mode = cfg_ex->jfc_mode;
+	jfc->cq.lock_free = base_cfg->flag.bs.lock_free;
+	jfc->mode = jfc_mode;
 	if (!jfc->cq.lock_free &&
 	    pthread_spin_init(&jfc->cq.lock, PTHREAD_PROCESS_PRIVATE)) {
 		UDMA_LOG_ERR("failed to init user udma STARS jfc spinlock.\n");
 		goto err_init_lock;
 	}
 
-	depth = cfg_ex->base_cfg.depth < UDMA_U_MIN_JFC_DEPTH ?
-		UDMA_U_MIN_JFC_DEPTH : roundup_pow_of_two(cfg_ex->base_cfg.depth);
+	depth = base_cfg->depth < UDMA_U_MIN_JFC_DEPTH ?
+		UDMA_U_MIN_JFC_DEPTH : roundup_pow_of_two(base_cfg->depth);
 
-	ret = udma_u_jfc_cmd_ex(ctx, jfc, cfg_ex, depth);
+	ret = udma_u_jfc_cmd_ex(ctx, jfc, base_cfg, depth);
 	if (ret) {
 		UDMA_LOG_ERR("udma STARS jfc failed to create urma cmd, ret = %d.\n", ret);
 		goto err_create_jfc;
@@ -676,6 +675,19 @@ err_init_lock:
 	free(jfc);
 
 	return NULL;
+}
+
+static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
+					struct udma_u_jfc_cfg_ex *cfg_ex)
+{
+	if (cfg_ex->jfc_mode < UDMA_U_STARS_JFC_TYPE ||
+	    cfg_ex->jfc_mode > UDMA_U_CCU_JFC_TYPE) {
+		UDMA_LOG_ERR("invalid param, STARS jfc mode = %u.\n",
+			     cfg_ex->jfc_mode);
+		return NULL;
+	}
+
+	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, cfg_ex->jfc_mode);
 }
 
 static int udma_u_jfr_ops_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,

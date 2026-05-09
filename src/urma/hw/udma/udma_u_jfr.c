@@ -267,7 +267,6 @@ static void udma_u_free_jfr_prepare(urma_jfr_t *jfr)
 		udma_u_free_sw_db(udma_ctx, udma_jfr->sw_db, UDMA_JFR_TYPE_DB);
 
 	udma_u_free_queue_buf(&udma_jfr->rq);
-
 	udma_u_free_idx_que(&udma_jfr->idx_que);
 
 	if (!udma_jfr->lock_free)
@@ -590,7 +589,7 @@ urma_status_t udma_u_alloc_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg, urma_jf
 	urma_cmd_udrv_priv_t udata = {};
 	struct udma_u_jfr *udma_jfr;
 	int ret;
-	
+
 	udma_jfr = (struct udma_u_jfr *)calloc(1, sizeof(*udma_jfr));
 	if (!udma_jfr) {
 		UDMA_LOG_ERR("calloc jfr is NULL.\n");
@@ -656,7 +655,7 @@ urma_status_t udma_u_active_jfr(urma_jfr_t *jfr)
 			UDMA_LOG_ERR("failed to alloc sw db.\n");
 			goto err_alloc_sw_db;
 		}
-	
+
 		udma_jfr->long_sleeptime = (bool *)udma_u_alloc_sw_db(udma_ctx, UDMA_JFR_PAYLOAD);
 		if (!udma_jfr->long_sleeptime) {
 			UDMA_LOG_ERR("failed to alloc sw db for payload\n");

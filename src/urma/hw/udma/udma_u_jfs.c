@@ -281,7 +281,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	}
 
 	jfs->jfs_type = UDMA_URMA_NORMAL_JETTY_TYPE;
-	if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
+	if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg)) {
 		if (jfs->sq.dtu_en) {
 			jfs->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&jfs->sq, jfs->sq.sqe_bb_cnt * cfg->depth,
@@ -294,6 +294,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 		} else {
 			goto err_exec_cmd;
 		}
+	}
 
 	jfs->sq.db.id = jfs->base.jfs_id.id;
 	jfs->sq.db.type = UDMA_MMAP_JETTY_DSQE;
@@ -363,7 +364,6 @@ urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t 
 	return URMA_SUCCESS;
 }
 
-#ifdef ST64B
 static void st64b(uint64_t *src, uint64_t *dst)
 {
 	asm volatile (
@@ -381,7 +381,6 @@ static void st64b(uint64_t *src, uint64_t *dst)
 		::"r" (src), "r"(dst):"cc", "memory"
 	);
 }
-#endif
 
 static void udma_write_dsqe(struct udma_u_jetty_queue *sq,
 			    struct udma_jfs_sqe_ctl *ctrl)
@@ -1351,6 +1350,7 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 
 static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 	int ret;
 
@@ -1359,7 +1359,7 @@ static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 		return EINVAL;
 	}
 
-	udma_jfs->sq.sq_reserved = udma_jfs->sq.sq_reserved;
+	udma_jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq(&udma_jfs->sq, cfg);
 	if (ret)
 		UDMA_LOG_ERR("failed to create sq, ret = %d.\n", ret);
