@@ -34,7 +34,8 @@ struct udma_jfs_sqe_ctl {
 	uint32_t sge_num : 8;
 	/* byte 16 */
 	uint32_t rmt_jetty_or_seg_id : 20;
-	uint32_t rsv2 : 12;
+	uint32_t write_len : 10;
+	uint32_t rsv2 : 2;
 	/* byte 20 - 32 */
 	uint8_t rmt_eid[URMA_EID_SIZE];
 	/* byte 36 */
@@ -59,9 +60,19 @@ struct udma_jfs_wqebb {
 };
 
 struct udma_token_info {
-	uint32_t token_id : 20;
-	uint32_t rsv : 12;
-	uint32_t token_value;
+	union {
+		struct {
+			uint32_t token_id : 20;
+			uint32_t rsv : 12;
+			uint32_t token_value;
+		} normal;
+		struct {
+			uint32_t token_id : 20;
+			uint32_t local_token_id_l : 12;
+			uint32_t token_value : 24;
+			uint32_t local_token_id_h : 8;
+		} atomic_add;
+	};
 };
 
 enum udma_jfs_opcode {
@@ -75,17 +86,22 @@ enum udma_jfs_opcode {
 	UDMA_OPCODE_CAS,
 	UDMA_OPCODE_FAA = 0xb,
 	UDMA_OPCODE_NOP = 0x11,
-	UDMA_OPCODE_INVALID = 0x12,
+	UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD = 0x19,
+	UDMA_OPCODE_INVALID,
 };
 
 #define MAX_SQE_BB_NUM 4
 #define UDMA_JFS_MAX_SGE_READ 6
 #define UDMA_JFS_MAX_SGE_NOTIFY 11
 #define UDMA_JFS_MAX_SGE_WRITE_IMM 12
+#define UDMA_JFS_MAX_SGE_STOMICADD 1
 #define NOP_WQEBB_CNT 1
+#define WRITE_WITH_ATOMICSTORE_ADD_WQEBB_CNT 1
 #define SQE_NORMAL_CTL_LEN 48
 #define SQE_WRITE_IMM_CTL_LEN 64
 #define SQE_WRITE_NOTIFY_CTL_LEN 80
+#define SQE_WRITE_ATOMICADD_CTL_LEN 56
+#define SQE_WRITE_ATOMICADD_INLINE_SIZE 8
 #define SQE_WRITE_IMM_INLINE_SIZE 192u
 #define SQE_WRITE_NTF_INLINE_SIZE 176u
 #define UDMA_ATOMIC_WQE_BB_NUM 2
@@ -96,15 +112,30 @@ enum udma_jfs_opcode {
 #define UDMASQE_FIELD_LOC(h, l)   ((uint64_t)(h) << 32 | (l))
 
 #define UDMAWQE_INLINE_EN 0x40
-
 #define SQE_SEND_IMM_FIELD 40
 #define SQE_WRITE_IMM_FIELD 48
+#define SQE_WRITE_ATOMICADD_EID_FIELD 16
+#define SQE_WRITE_ATOMICADD_RMT_TOKEN_FIELD 20
+#define SQE_WRITE_ATOMICADD_RMT_ADDR_FIELD 24
 #define WRITE_IMM_TOKEN_FIELD 56
 #define WRITE_NOTIFY_TOKEN_FIELD 48
+#define WRITE_ATOMICADD_TOKEN_FIELD 32
+#define WRITE_ATOMICADD_DSGE_NUM 2
+#define SQE_CTL_ATOMICADD_LEN_L_BIT GENMASK(7, 0)
+#define SQE_CTL_ATOMICADD_LEN_H_BIT GENMASK(17, 8)
+#define SQE_CTL_ATOMICADD_LEN_BIT GENMASK(17, 0)
+#define WRITE_ATOMICADD_LEN_H_OFFSET 8
+#define SQE_CTL_ATOMICADD_TOKEN_ID_BIT GENMASK(24, 0)
+#define SQE_CTL_ATOMICADD_LOCAL_TOKEN_L_BIT GENMASK(11, 0)
+#define SQE_CTL_ATOMICADD_LOCAL_TOKEN_H_BIT GENMASK(19, 12)
 #define SQE_NOTIFY_ADDR_FIELD 56
+#define SQE_ATOMICADD_ADDR_FIELD 40
 #define SQE_NOTIFY_DATA_FIELD 64
 #define SQE_ATOMIC_DATA_FIELD 64
+#define SQE_ATOMICADD_DATA_FIELD 48
+#define SQE_ATOMICADD_DATA_ADDR_FIELD 56
 
+#define UDMA_SQE_RMT_EID_SIZE 4
 #define UDMA_ATOMIC_LEN_4 4
 #define UDMA_ATOMIC_LEN_8 8
 #define UDMA_ATOMIC_LEN_16 16

@@ -107,6 +107,7 @@ struct udma_u_context {
 	dtu_u_munmap_func	dtu_munmap_fun_ptr;
 	void			*dtu_provider_handle;
 	bool			sva_sep_mode_en;
+	bool			atomic_add_en;
 	uint32_t		ccu_jetty_start_id;
 	uint32_t		ccu_jetty_max_cnt;
 	bool			hugepage_enable;

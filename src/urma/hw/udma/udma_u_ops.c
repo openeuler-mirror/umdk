@@ -153,6 +153,7 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->dtu_va_base = resp->dtu_va_base;
 	udma_ctx->dtu_va_size = resp->dtu_va_size;
 	udma_ctx->dtu_enable = resp->u_dtu_enable;
+	udma_ctx->atomic_add_en = resp->atomic_add_en;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
 }
