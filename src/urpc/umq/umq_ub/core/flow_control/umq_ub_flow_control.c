@@ -7,11 +7,11 @@
  * History: 2025-12-22
  */
 
-#include "umq_types.h"
 #include "umq_pro_types.h"
+#include "umq_symbol_private.h"
+#include "umq_types.h"
 #include "umq_ub_imm_data.h"
 #include "umq_ub_flow_control.h"
-#include "umq_symbol_private.h"
 
 #define UMQ_UB_FLOW_CONTROL_NOTIFY_THR 4
 #define UMQ_UB_FLOW_CONTROL_LEAK_CREDIT_THR 3

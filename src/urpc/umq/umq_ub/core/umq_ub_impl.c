@@ -1222,6 +1222,7 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
 
 int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
 {
+    uint64_t start_timestamp;
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
@@ -1237,7 +1238,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
     }
 
     urma_status_t status = URMA_SUCCESS;
-    uint64_t start_timestamp = umq_perf_get_start_timestamp();
+    start_timestamp = umq_perf_get_start_timestamp();
     if (option->direction == UMQ_IO_TX) {
         status = umq_symbol_urma()->urma_rearm_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], solicated);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_REARM_TX, start_timestamp);
@@ -1252,7 +1253,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
     }
 
     if (queue->flow_control.enabled) {
-        uint64_t start_timestamp = umq_perf_get_start_timestamp();
+        start_timestamp = umq_perf_get_start_timestamp();
         if (option->direction == UMQ_IO_RX) {
             status = umq_symbol_urma()->urma_rearm_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfc, solicated);
             umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_REARM_RX, start_timestamp);
@@ -1766,7 +1767,7 @@ static int umq_ub_register_seg_callback(uint8_t *ctx, uint16_t mempool_id, void 
         if (ret != UMQ_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ, "register sge failed, status: %d, dev idx %u, eid: " EID_FMT "\n",
                 ret, idx, EID_ARGS(g_ub_ctx[idx].dev_info.eid.eid));
-           goto ROLLBACK;
+            goto ROLLBACK;
         }
     }
     return UMQ_SUCCESS;

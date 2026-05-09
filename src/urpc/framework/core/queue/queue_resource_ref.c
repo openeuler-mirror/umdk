@@ -23,7 +23,9 @@ static inline bool ref_test_and_inc(atomic_uint *ref_cnt)
 {
     uint32_t old = atomic_load(ref_cnt);
     do {
-        if (old == 0) return false;
+        if (old == 0) {
+            return false;
+        }
     } while (!atomic_compare_exchange_weak(ref_cnt, &old, old + 1));
 
     return true;

@@ -159,7 +159,7 @@ static int urpc_default_priority_get(urma_device_attr_t *dev_attr)
             return i;
         }
     }
-   return URPC_FAIL;
+    return URPC_FAIL;
 }
 
 int send_recv_set_local_queue_normal_cfg(

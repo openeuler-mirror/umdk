@@ -9,8 +9,8 @@
 
 #include "umq_errno.h"
 #include "umq_vlog.h"
-#include "umq_huge_qbuf_pool.h"
 #include "util_lock.h"
+#include "umq_huge_qbuf_pool.h"
 
 #define HUGE_QBUF_POOL_IDX_SHIFT (1)
 #define HUGE_QBUF_HEAD_POWER_OF_TWO (7)
@@ -437,7 +437,8 @@ int umq_huge_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
     for (int i = 0; i < HUGE_QBUF_POOL_SIZE_TYPE_MAX; i++) {
         pool = &g_huge_pool_ctx.pool[i];
         for (uint32_t j = 0; j < pool->pool_idx; j++) {
-            ret = ops->register_seg_callback(ctx, pool->pool_idx_shift + j, pool->pool_info[j].data_buffer, pool->total_size);
+            ret = ops->register_seg_callback(ctx, pool->pool_idx_shift + j,
+                                             pool->pool_info[j].data_buffer, pool->total_size);
             if (ret != UMQ_SUCCESS) {
                 failed_idx = j;
                 failed_type = i;

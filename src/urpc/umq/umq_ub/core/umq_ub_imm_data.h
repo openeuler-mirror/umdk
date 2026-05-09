@@ -38,13 +38,13 @@ typedef union umq_ub_imm {
     uint16_t value;
     struct {
         uint16_t type : 4;
-        uint16_t rsvd1: 12;
+        uint16_t rsvd1 : 12;
     } bs;
     struct {
         uint16_t type : 4;
         uint16_t msg_id : 5;
         uint16_t msg_num : 5;
-        uint16_t rsvd1: 2;
+        uint16_t rsvd1 : 2;
     } ub_plus;
     struct {
         uint16_t type : 4;
