@@ -811,12 +811,14 @@ static uint64_t udma_jetty_opt[] = {
 	URMA_JFS_PI,
 	URMA_JFS_PI_TYPE,
 	URMA_JFS_CI,
+	URMA_JFS_FULL_CTX,
 	URMA_JETTY_ID,
 	URMA_JETTY_FLAG,
 	URMA_JETTY_BIND_JFR,
 	URMA_JETTY_BIND_RX_JFC,
 	URMA_JETTY_BIND_JTG,
 	URMA_JETTY_USER_CTX,
+	URMA_JETTY_FULL_CTX,
 };
 
 static struct udma_u_jetty_opt_info opt_info[] = {
@@ -838,17 +840,19 @@ static struct udma_u_jetty_opt_info opt_info[] = {
 	{sizeof(uint16_t), PERM_R, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint16_t), PERM_R | PERM_W, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint16_t), PERM_R, 0, JFS_MODE | JETTY_MODE},
+	{UDMA_JFS_CTX_SIZE, PERM_R, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint32_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint32_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, JETTY_IGNORE, JETTY_MODE},
+	{UDMA_JETTY_CTX_SIZE, PERM_R, 0, JETTY_MODE},
 };
 
 urma_status_t udma_u_verify_jetty_opt(uint64_t opt, void *buf, uint32_t len,
-	enum udma_u_set_get_jetty_opt_mode jetty_mode,
-	enum udma_u_set_get_jetty_opt_perm jetty_perm)
+				      enum udma_u_set_get_jetty_opt_mode jetty_mode,
+				      enum udma_u_set_get_jetty_opt_perm jetty_perm)
 {
 	uint32_t opt_index = ARRAY_SIZE(udma_jetty_opt);
 	uint32_t i;
@@ -1068,7 +1072,7 @@ urma_status_t udma_u_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf,
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jetty_opt(jetty, opt, buf, len, &udata);
 		if (ret) {
-			UDMA_LOG_ERR("set jetty opt failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("get jetty opt failed, ret = %d.\n", ret);
 			return URMA_FAIL;
 		}
 	}
