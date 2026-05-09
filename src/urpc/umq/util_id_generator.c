@@ -28,6 +28,7 @@ int util_id_allocator_init(util_id_allocator_t *id_allocator, uint32_t max_num, 
     id_allocator->lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
     if (id_allocator->lock == NULL) {
         free(id_allocator->available_ids);
+        id_allocator->available_ids = NULL;
         return -ENOMEM;
     }
     return 0;

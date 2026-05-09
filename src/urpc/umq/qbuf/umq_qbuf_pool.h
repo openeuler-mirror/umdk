@@ -312,7 +312,7 @@ ROLLBACK:
         QBUF_LIST_FIRST(local_head) = local_head_before;
         uint64_t alloc_cnt = ((*local_buf_cnt) - local_cnt_before);
         umq_buf_t *tail = head;
-        for(uint64_t i = 0; i < alloc_cnt - 1; i++) {
+        for (uint64_t i = 0; i < alloc_cnt - 1; i++) {
             tail = QBUF_LIST_NEXT(tail);
         }
         tail->qbuf_next = NULL;
