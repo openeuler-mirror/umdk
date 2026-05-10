@@ -8,17 +8,21 @@
  * History: 2026-04-20  Create File
  */
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include <stdbool.h>
 
 #include <glib.h>
 
+#include "ums_agent_utils.h"
 #include "ums_agent_config.h"
+
+#define UMS_AGENT_MAX_CONNS_MIN     1
+#define UMS_AGENT_MAX_CONNS_MAX     65535
+#define UMS_AGENT_MAX_CONNS_DEFAULT 1024
 
 #define UMS_AGENT_MIN_LISTEN_PORT     1024
 #define UMS_AGENT_MAX_LISTEN_PORT     65535
@@ -26,18 +30,20 @@
 #define UMS_AGENT_DEFAULT_LISTEN_ADDR  "0.0.0.0"
 #define UMS_AGENT_DEFAULT_CIPHER_SUITE "TLS_AES_256_GCM_SHA384"
 
-static const char *g_supported_cipher_suites[] = {
+#define UMS_AGENT_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+static const char *g_ums_agent_supported_cipher_suites[] = {
     "TLS_AES_256_GCM_SHA384"
 };
 
-static const char *g_log_level_names[] = {
+static const char *g_ums_agent_log_level_names[] = {
     "emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"
 };
 
 static enum ums_agent_log_level ums_agent_str_to_log_level(const char *str)
 {
     for (int i = 0; i < UMS_AGENT_LOG_LEVEL_MAX; i++) {
-        if (strcasecmp(str, g_log_level_names[i]) == 0) {
+        if (strcasecmp(str, g_ums_agent_log_level_names[i]) == 0) {
             return (enum ums_agent_log_level)i;
         }
     }
@@ -48,31 +54,38 @@ static void ums_agent_set_defaults(struct ums_agent_config *config)
 {
     config->log_level = UMS_AGENT_LOG_LEVEL_INFO;
     config->listen_port = UMS_AGENT_DEFAULT_LISTEN_PORT;
-    (void)snprintf(config->listen_addr, UMS_AGENT_MAX_ADDR_LEN, UMS_AGENT_DEFAULT_LISTEN_ADDR);
-    (void)snprintf(config->cipher_suite, UMS_AGENT_MAX_CIPHER_LEN, UMS_AGENT_DEFAULT_CIPHER_SUITE);
+    config->max_conns = UMS_AGENT_MAX_CONNS_DEFAULT;
+    (void)ums_agent_ip_addr_from_str(&config->listen_addr, UMS_AGENT_DEFAULT_LISTEN_ADDR);
+    (void)snprintf(config->cipher_suite, sizeof(config->cipher_suite), "%s", UMS_AGENT_DEFAULT_CIPHER_SUITE);
 
     memset(&config->client, 0, sizeof(config->client));
     memset(&config->server, 0, sizeof(config->server));
 }
 
-static int ums_agent_is_valid_port(int port)
+static bool ums_agent_is_valid_port(int port)
 {
     return (port >= UMS_AGENT_MIN_LISTEN_PORT) && (port <= UMS_AGENT_MAX_LISTEN_PORT);
 }
 
-static int ums_agent_is_valid_cipher_suite(const char *cipher_suite)
+static bool ums_agent_is_valid_cipher_suite(const char *cipher_suite)
 {
-    for (size_t i = 0; i < sizeof(g_supported_cipher_suites) / sizeof(g_supported_cipher_suites[0]); i++) {
-        if (strcmp(cipher_suite, g_supported_cipher_suites[i]) == 0) {
-            return 1;
+    for (size_t i = 0; i < UMS_AGENT_ARRAY_SIZE(g_ums_agent_supported_cipher_suites); i++) {
+        if (strcmp(cipher_suite, g_ums_agent_supported_cipher_suites[i]) == 0) {
+            return true;
         }
     }
 
-    return 0;
+    return false;
 }
 
 int ums_agent_resolve_path(const char *path, const char *config_name, char *resolved_path)
 {
+    if (!path || !config_name || !resolved_path) {
+        UMS_AGENT_LOG_ERR("invalid parameter: path=%p, config_name=%p, resolved_path=%p",
+            path, config_name, resolved_path);
+        return -1;
+    }
+
     size_t path_len = strnlen(path, PATH_MAX);
     if (path_len == 0) {
         UMS_AGENT_LOG_ERR("%s is empty", config_name);
@@ -272,24 +285,36 @@ static int ums_agent_load_network_listen_addr(GKeyFile *kf, struct ums_agent_con
         return 0;
     }
 
-    size_t addr_len = strnlen(value, UMS_AGENT_MAX_ADDR_LEN);
-    if (addr_len >= UMS_AGENT_MAX_ADDR_LEN) {
-        UMS_AGENT_LOG_ERR("listen_addr exceeds maximum length (%u characters, "
-            "including null terminator)", UMS_AGENT_MAX_ADDR_LEN);
-        g_free(value);
-        return -1;
-    }
-
-    struct in_addr addr4;
-    struct in6_addr addr6;
-    if (inet_pton(AF_INET, value, &addr4) <= 0 && inet_pton(AF_INET6, value, &addr6) <= 0) {
+    if (ums_agent_ip_addr_from_str(&cfg->listen_addr, value) != 0) {
         UMS_AGENT_LOG_ERR("invalid listen_addr: %s", value);
         g_free(value);
         return -1;
     }
 
-    (void)snprintf(cfg->listen_addr, sizeof(cfg->listen_addr), "%s", value);
     g_free(value);
+    return 0;
+}
+
+static int ums_agent_load_network_max_conns(GKeyFile *kf, struct ums_agent_config *cfg)
+{
+    if (!g_key_file_has_key(kf, "network", "max_conns", NULL)) {
+        return 0;
+    }
+
+    GError *error = NULL;
+    int max_conns = g_key_file_get_integer(kf, "network", "max_conns", &error);
+    if (error) {
+        UMS_AGENT_LOG_ERR("invalid max_conns: %s", error->message);
+        g_error_free(error);
+        return -1;
+    }
+    if (max_conns < UMS_AGENT_MAX_CONNS_MIN || max_conns > UMS_AGENT_MAX_CONNS_MAX) {
+        UMS_AGENT_LOG_ERR("max_conns %d out of range [%d-%d]",
+            max_conns, UMS_AGENT_MAX_CONNS_MIN, UMS_AGENT_MAX_CONNS_MAX);
+        return -1;
+    }
+
+    cfg->max_conns = max_conns;
     return 0;
 }
 
@@ -300,6 +325,10 @@ static int ums_agent_load_network_config(GKeyFile *kf, struct ums_agent_config *
     }
 
     if (ums_agent_load_network_listen_addr(kf, cfg) != 0) {
+        return -1;
+    }
+
+    if (ums_agent_load_network_max_conns(kf, cfg) != 0) {
         return -1;
     }
 

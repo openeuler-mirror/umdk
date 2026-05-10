@@ -16,6 +16,11 @@ add_executable(ums_agent
     ums_agent_config.h
     ums_agent_log.c
     ums_agent_log.h
+    ums_agent_types.h
+    ums_agent_utils.c
+    ums_agent_utils.h
+    ums_agent_epoll.c
+    ums_agent_epoll.h
 )
 
 set_target_properties(ums_agent
