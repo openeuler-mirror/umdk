@@ -98,7 +98,7 @@ void usage(const char *filename)
               "  -c <count>       Packet count (default: INT_MAX)\n"
               "  -i <interval>    Interval between packets in seconds (default: 1)\n"
               "  -s <size>        Send buffer size in bytes (default: 4)\n"
-              "  -w <deadline>    Total execution time limit in seconds (default: umlimited)\n"
+              "  -w <deadline>    Total execution time limit in seconds (default: unlimited)\n"
               "  -W <timeout>     Per-reply timeout in seconds (default: 1)\n"
               "  -q               Quiet output\n"
               "  -v --verbose     Verbose output\n"
