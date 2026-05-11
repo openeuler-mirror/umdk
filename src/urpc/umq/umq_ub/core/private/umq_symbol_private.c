@@ -7,8 +7,8 @@
  */
 
 #include <dlfcn.h>
-#include "umq_symbol_private.h"
 #include "umq_vlog.h"
+#include "umq_symbol_private.h"
 
 // Global URMA/UVS symbol instance
 static umq_symbol_urma_t g_umq_symbol_urma = {0};
