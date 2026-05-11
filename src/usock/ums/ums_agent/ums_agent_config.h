@@ -15,9 +15,9 @@
 #include <limits.h>
 
 #include "ums_agent_log.h"
+#include "ums_agent_types.h"
 
-#define UMS_AGENT_MAX_ADDR_LEN     64
-#define UMS_AGENT_MAX_CIPHER_LEN   64
+#define UMS_AGENT_MAX_CIPHER_LEN     256
 #define UMS_AGENT_MAX_PWD_DESC_LEN 128
 
 struct ums_agent_x509_config {
@@ -34,13 +34,14 @@ struct ums_agent_config {
     struct ums_agent_x509_config client;
     struct ums_agent_x509_config server;
 
-    char listen_addr[UMS_AGENT_MAX_ADDR_LEN];
-    int  listen_port;
+    struct ums_agent_ip_addr listen_addr;
+    int listen_port;
+    int max_conns;
 
     char cipher_suite[UMS_AGENT_MAX_CIPHER_LEN];
 };
 
-int  ums_agent_config_init(const char *path, struct ums_agent_config **config);
+int ums_agent_config_init(const char *path, struct ums_agent_config **config);
 void ums_agent_config_deinit(struct ums_agent_config *config);
 int ums_agent_resolve_path(const char *path, const char *config_name, char *resolved_path);
 

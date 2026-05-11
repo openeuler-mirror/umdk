@@ -11,8 +11,6 @@
 #ifndef UMS_AGENT_LOG_H
 #define UMS_AGENT_LOG_H
 
-#include <stdint.h>
-
 enum ums_agent_log_level {
     UMS_AGENT_LOG_LEVEL_EMERG   = 0,
     UMS_AGENT_LOG_LEVEL_ALERT   = 1,
@@ -52,4 +50,4 @@ void ums_agent_log_output(enum ums_agent_log_level level, const char *func,
     int line, const char *fmt, ...)
     __attribute__((format(printf, UMS_AGENT_LOG_FMT_ARG_IDX, UMS_AGENT_LOG_VA_ARG_IDX)));
 
-#endif
+#endif /* UMS_AGENT_LOG_H */
