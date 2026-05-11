@@ -159,6 +159,7 @@ static void free_expansion_pool_slot(qbuf_expansion_pool_t *exp_pool, qbuf_expan
 
     if (slot->buffer != NULL) {
         free(slot->buffer);
+        slot->buffer = NULL;
     }
     free(slot);
 }
@@ -195,7 +196,7 @@ static ALWAYS_INLINE bool try_inc_atomic_exp_mem_size(uint64_t add_size)
         if (sum > g_qbuf_pool.expansion_mem_size_max) {
             return false;
         }
-    } while(!__atomic_compare_exchange_n(
+    } while (!__atomic_compare_exchange_n(
         &g_qbuf_pool.exp_total_mem_pool_size, &before, sum, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
     return true;
 }
@@ -344,7 +345,7 @@ ROLLBACK_MEM_SIZE:
 static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansion_pool_slot_t *slot)
 {
     uint64_t blk_count = exp_pool->expansion_block_count;
-    uint64_t total_size = blk_count * sizeof(umq_buf_t);;
+    uint64_t total_size = blk_count * sizeof(umq_buf_t);
 
     if (!try_inc_atomic_exp_mem_size(total_size)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
@@ -1609,7 +1610,8 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 
 int umq_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
 {
-    int ret = ops->register_seg_callback(ctx, UMQ_QBUF_DEFAULT_MEMPOOL_ID, g_qbuf_pool.data_buffer, g_qbuf_pool.total_size);
+    int ret = ops->register_seg_callback(ctx, UMQ_QBUF_DEFAULT_MEMPOOL_ID,
+                                         g_qbuf_pool.data_buffer, g_qbuf_pool.total_size);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }

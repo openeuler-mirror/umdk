@@ -234,4 +234,4 @@ int util_rwlock_tryrdlock(util_external_rwlock *lock)
 int util_rwlock_trywrlock(util_external_rwlock *lock)
 {
     return g_util_rwlock_ops.try_write_lock(lock);
-}   
+}
