@@ -422,7 +422,7 @@ typedef union urma_jfc_flag {
 typedef struct urma_jfc_cfg {
     uint32_t depth;       /* [Required] the depth of jfc, no greater than urma_device_cap_t->jfc_depth */
     urma_jfc_flag_t flag; /* [Optional] see urma_jfc_flag_t, set flag.value to be 0 by default */
-    uint32_t ceqn;        /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+    uint32_t ceqn;        /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                               set to 0 by default */
     urma_jfce_t *jfce;    /* [Required] the event of jfc */
     uint64_t user_ctx;    /* [Optional] private data of jfc, set to NULL by default */

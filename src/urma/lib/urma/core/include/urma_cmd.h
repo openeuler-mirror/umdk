@@ -556,7 +556,7 @@ typedef struct urma_cmd_create_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
-        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+        uint32_t ceqn;     /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                             * set to 0 by default */
     } in;
     struct {
@@ -605,7 +605,7 @@ typedef struct urma_cmd_alloc_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
-        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+        uint32_t ceqn;     /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                             * set to 0 by default */
     } in;
     struct {
