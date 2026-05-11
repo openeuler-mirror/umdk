@@ -21,6 +21,8 @@ add_executable(ums_agent
     ums_agent_utils.h
     ums_agent_epoll.c
     ums_agent_epoll.h
+    ums_agent_tls_ctx.c
+    ums_agent_tls_ctx.h
 )
 
 set_target_properties(ums_agent
