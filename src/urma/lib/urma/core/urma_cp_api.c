@@ -624,6 +624,9 @@ urma_status_t urma_deactive_jfc(urma_jfc_t *jfc)
 static inline int urma_check_order_type(urma_transport_mode_t trans_mode,
     uint32_t order_type)
 {
+    if (order_type > URMA_NO) {
+        return -1;
+    }
     if ((trans_mode != URMA_TM_RC && order_type == URMA_OT) ||
         (trans_mode != URMA_TM_RC && order_type == URMA_OL) ||
         (trans_mode != URMA_TM_RM && order_type == URMA_OI) ||
