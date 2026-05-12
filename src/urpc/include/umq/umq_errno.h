@@ -31,6 +31,7 @@ extern "C" {
 #define UMQ_ERR_ENOSR                              (ENOSR)  /* Out of streams resources, like Jetty/TP */
 #define UMQ_ERR_ETIMEOUT                           (ETIMEDOUT)
 #define UMQ_ERR_EINPROGRESS                        (EINPROGRESS)
+#define UMQ_ERR_ETOOMANYREFS                       (ETOOMANYREFS)
 #define UMQ_ERR_ETSEG_NON_IMPORTED                 (0x0201)
 #define UMQ_ERR_EFLOWCTL                           (0x0202)  /* Umq flow control error */
 
@@ -61,6 +62,7 @@ typedef enum umq_buf_status {
 
     // fake buf
     UMQ_FAKE_BUF_FC_UPDATE = 192,       /* Umq fake flow control window is updated, this is not error case */
+    UMQ_FAKE_BUF_FC_MSG,                /* Umq fake flow control received request, this is not error case */
     UMQ_FAKE_BUF_FC_ERR,                /* Umq fake flow control error, CR status is abnormal */
     UMQ_FAKE_BUF_MAX = 256,
 } umq_buf_status_t;
