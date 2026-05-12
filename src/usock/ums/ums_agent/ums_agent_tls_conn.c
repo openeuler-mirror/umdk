@@ -432,16 +432,6 @@ static bool ums_agent_tls_conn_is_unexpected_eof(int ssl_err, int ret)
     if (ssl_err == SSL_ERROR_SYSCALL && ret == 0) {
         return true;
     }
-
-#if OPENSSL_VERSION_NUMBER >= 0x10101050L
-    if (ssl_err == SSL_ERROR_SSL) {
-        int reason = ERR_GET_REASON(ERR_peek_error());
-        if (reason == SSL_R_UNEXPECTED_EOF_WHILE_READING) {
-            return true;
-        }
-    }
-#endif
-
     return false;
 }
 

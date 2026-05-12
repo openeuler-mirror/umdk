@@ -48,7 +48,7 @@ static int ums_agent_keyring_get_password(const char *desc, char *pwd_buf, size_
 
     long ret = keyctl_read(key, pwd_buf, pwd_buf_len - 1);
     if (ret < 0) {
-        UMS_AGENT_LOG_ERR("keyctl_read key '%s' failed: %s (errno=%d)",
+        UMS_AGENT_LOG_ERR("keyctl_read for key desc '%s' failed: %s (errno=%d)",
             desc, strerror(errno), errno);
         ums_agent_secure_zero(pwd_buf, pwd_buf_len);
         return -1;
@@ -56,7 +56,7 @@ static int ums_agent_keyring_get_password(const char *desc, char *pwd_buf, size_
 
     if (ret > (long)(pwd_buf_len - 1)) {
         ums_agent_secure_zero(pwd_buf, pwd_buf_len);
-        UMS_AGENT_LOG_ERR("password in keyring '%s' too long (>= %zu chars)",
+        UMS_AGENT_LOG_ERR("private key password (key desc '%s') too long (>= %zu chars)",
             desc, pwd_buf_len - 1);
         return -1;
     }
@@ -386,8 +386,8 @@ int ums_agent_tls_check_certs_expiry(const char *server_cert_path,
 int ums_agent_tls_ctx_init(const struct ums_agent_config *config)
 {
     if (g_ums_agent_tls_ctx.initialized) {
-        UMS_AGENT_LOG_ERR("tls ctx already initialized");
-        return -1;
+        UMS_AGENT_LOG_WARN("tls ctx already initialized");
+        return 0;
     }
 
     (void)memset(&g_ums_agent_tls_ctx, 0, sizeof(g_ums_agent_tls_ctx));
