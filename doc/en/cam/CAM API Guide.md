@@ -520,7 +520,6 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
  - top_k range：[0， 12] and it should be lower than expert number.
  - BS range：[0，256]
  - num_experts range：(0， 512]
- - Required: local_expert_num ≤ (aivnum / 2), where aivnum is the vector core number
  - Required: token length range: [1024, 7168] and (hidden_size % 256) == 0
  - Required: gmm1_hiden_size range: [1024, 6144] and (gmm1_hiden_size % 1024) == 0
  - Required: share_gmm1_hiden_size range: [1024, 6144] and (share_gmm1_hiden_size % 1024) == 0

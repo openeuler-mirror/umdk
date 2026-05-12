@@ -13,7 +13,32 @@
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
+#define ENABLE_REUSE_MEMORY
+
 namespace Cam {
+struct WorkSpaceOffset {
+    // MM1/GMM1-Swiglu input
+    int64_t shareX1TokenOffset;
+    int64_t x1TokenOffset;
+    int64_t shareX1ScaleOffset;
+    int64_t x1ScaleOffset;
+    // MM1/GMM1-Swiglu output
+    int64_t shareSwigluOffset;
+    int64_t swigluOffset;
+    // MM2/GMM2 input
+    int64_t shareX2TokenOffset;
+    int64_t x2TokenOffset;
+    int64_t shareX2ScaleOffset;
+    int64_t x2ScaleOffset;
+
+    int64_t swapSpaceOffset;   // Swap space for C->V data exchange
+    int64_t y2TokenOffset;     // Used by shallow fusion, already dequantized without scale
+    int64_t groupListOffset;   // Prefix sum of token counts per expert
+    int64_t expandIdxOffset;   // Remote token index during dispatch
+    int64_t epSendCountOffset; // Token count received by each expert from each rank
+    int64_t reservedOffset;    // Reserved space
+};
+
 struct FusedDeepMoeInfo {
     uint32_t epRankSize;           // epRankSize
     uint32_t epRankId;             // epRankId
@@ -36,7 +61,8 @@ struct FusedDeepMoeInfo {
 struct FusedDeepMoeTilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
-    FusedDeepMoeInfo disGmmDeqSwigluQuantGmmDeqComInfo;
+    FusedDeepMoeInfo fusedDeepMoeInfo;
+    WorkSpaceOffset workSpaceOffset;
 };
 
 constexpr uint32_t GM_ALIGN_BYTE = 512;
