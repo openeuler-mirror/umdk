@@ -8,6 +8,7 @@
  * History: 2026-04-20  Create File
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
@@ -29,11 +30,14 @@
 #include "ums_agent_config.h"
 #include "ums_agent_epoll.h"
 #include "ums_agent_log.h"
+#include "ums_agent_tls.h"
 
 #define UMS_AGENT_VERSION             "0.1.0"
 #define UMS_AGENT_CONFIG_PATH_PREFIX  "/etc/ums_agent/"
 #define UMS_AGENT_DEFAULT_CONFIG_PATH "/etc/ums_agent/ums_agent.conf"
 #define UMS_AGENT_EPOLL_MAX_EVENTS    32
+
+#define UMS_AGENT_TIMER_INTERVAL_SEC 60
 
 struct ums_agent_ctx {
     int nl_fd;
@@ -170,6 +174,17 @@ static int ums_agent_setup_timer_fd(void)
         return -1;
     }
 
+    struct itimerspec its;
+    memset(&its, 0, sizeof(its));
+    its.it_interval.tv_sec = UMS_AGENT_TIMER_INTERVAL_SEC;
+    its.it_value.tv_sec = UMS_AGENT_TIMER_INTERVAL_SEC;
+
+    if (timerfd_settime(tfd, 0, &its, NULL) < 0) {
+        UMS_AGENT_LOG_ERR("timerfd_settime failed: %s (errno=%d)", strerror(errno), errno);
+        close(tfd);
+        return -1;
+    }
+
     if (ums_agent_epoll_add_fd(tfd, EPOLLIN) < 0) {
         close(tfd);
         return -1;
@@ -227,6 +242,8 @@ static void ums_agent_handle_timer_event(int tfd)
         UMS_AGENT_LOG_WARN("read timerfd: unexpected size %zd, expected %zu", n, sizeof(expirations));
         return;
     }
+
+    ums_agent_tls_timer_tick(g_ums_agent_ctx.config);
 }
 
 static void ums_agent_dispatch_event(struct epoll_event *ev)
@@ -248,7 +265,7 @@ static void ums_agent_dispatch_event(struct epoll_event *ev)
         return;
     }
 
-    // handle tls event
+    ums_agent_tls_handle_event(fd, ev->events);
 }
 
 static int ums_agent_epoll_loop(void)
@@ -349,6 +366,8 @@ static void ums_agent_shutdown(void)
 
     ums_agent_notify_systemd("STOPPING=1");
 
+    ums_agent_tls_deinit();
+
     if (g_ums_agent_ctx.nl_fd >= 0) {
         // sending DOWN notification to kernel
         (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.nl_fd);
@@ -419,6 +438,12 @@ int main(int argc, char *argv[])
         goto err_signal;
     }
 
+    ret = ums_agent_tls_init(g_ums_agent_ctx.config);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("TLS init failed");
+        goto err_timer;
+    }
+
     atomic_store(&g_ums_agent_ctx.running, true);
 
     UMS_AGENT_LOG_INFO("ums_agent initialized successfully");
@@ -431,6 +456,12 @@ int main(int argc, char *argv[])
 
     return ret < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 
+err_timer:
+    if (g_ums_agent_ctx.timer_fd >= 0) {
+        (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.timer_fd);
+        close(g_ums_agent_ctx.timer_fd);
+        g_ums_agent_ctx.timer_fd = -1;
+    }
 err_signal:
     if (g_ums_agent_ctx.signal_fd >= 0) {
         (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.signal_fd);
