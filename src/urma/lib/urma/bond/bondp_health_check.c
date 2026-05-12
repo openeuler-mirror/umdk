@@ -1183,12 +1183,12 @@ void bondp_health_kick_fallback_task(bondp_context_t *bdp_ctx, bondp_target_jett
     bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
     pthread_rwlock_wrlock(&health->task_table.lock);
     bondp_health_task_t *task = bondp_find_health_task_by_tjetty_nolock(health, bdp_tjetty);
+
     if (task != NULL && task->active_local_idx >= 0 &&
         task->active_local_idx != task->primary_local_idx &&
         !task->fallback_task.pending &&
         !task->fallback_task.relink_done) {
         task->mode = HEALTH_MODE_PRIMARY_CHECK;
-        task->backoff_cnt = 0;
         bondp_fallback_reset_for_new_round(task);
         int primary_target_idx = -1;
         if (bondp_get_target_idx_by_local_idx(task, task->primary_local_idx, &primary_target_idx) == 0) {
@@ -1372,6 +1372,7 @@ static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const
 
     bondp_heath_check_ctx_t *health = &bdp_ctx->bondp_heath_check_ctx;
     bool consumed = false;
+    bool need_kick = false;
     pthread_rwlock_wrlock(&health->task_table.lock);
     uint32_t hash = bondp_health_task_hash(vjetty_id);
     hmap_node_t *node_ptr = bondp_hash_table_lookup_without_lock(&health->task_table, &vjetty_id, hash);
@@ -1403,6 +1404,11 @@ static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const
                         task->bdp_tjetty->v_tjetty.id.id, info->local_idx, info->target_idx);
                 }
             }
+            if (!ok && info->local_idx == task->primary_local_idx) {
+                task->fallback_task.relink_done = false;
+                task->fallback_task.pending = false;
+                need_kick = true;
+            }
             consumed = true;
         }
     }
@@ -1410,6 +1416,9 @@ static void bondp_health_handle_ta_timeout_event(bondp_context_t *bdp_ctx, const
     if (!consumed) {
         URMA_LOG_WARN("Health CR not matched to subtask, local_idx=%d user_ctx=0x%lx\n",
             info->local_idx, info->user_ctx);
+    }
+    if (need_kick) {
+        bondp_health_kick_fallback_task(bdp_ctx, info->bdp_tjetty);
     }
 }
 
@@ -1485,6 +1494,16 @@ bool bondp_try_handle_health_check_cr(bondp_context_t *bdp_ctx, int local_idx, u
             } else {
                 URMA_LOG_DEBUG("Health CR handled, tjetty_id=%u lidx=%d tidx=%d user_ctx=0x%lx status=%u\n",
                     task->bdp_tjetty->v_tjetty.id.id, local_idx, (int)target_idx, cr->user_ctx, cr->status);
+                bondp_health_event_info_t info = {
+                .local_idx = (int)cr_local_idx,
+                .target_idx = (int)target_idx,
+                .user_ctx = cr->user_ctx,
+                .cr_status = cr->status,
+                .new_active_idx = -1,
+                .bdp_jetty = NULL,
+                .bdp_tjetty = task->bdp_tjetty,
+                };
+                bondp_notify_health_event(bdp_ctx, BONDP_HEALTH_EVENT_TA_TIMEOUT, &info);
             }
             consumed = true;
         }
