@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+# Description: cam docker compose file sample.
+# Create: 2026-05-11
+# Note:
+# History: 2026-05-11 create cam docker compose file sample.
+
+services:
+  cam-dev:
+    image: ${IMAGE_NAME}
+    container_name: ${CONTAINER_NAME}
+    privileged: true
+    tty: true
+    stdin_open: true
+    command: /bin/bash
+
+    networks:
+      - cam-net
+
+    volumes:
+      - /home:/home
+      - /ssd_0:/ssd_0
+      - /mnt:/mnt
+      - /sys:/sys
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver
+      - /usr/local/bin/npu-smi:/usr/local/bin/npu-smi
+      - /etc/ascend_install.info:/etc/ascend_install.info
+      - /etc/localtime:/etc/localtime
+
+    devices:
+      - /dev/vfio/vfio
+      - /dev/uio0
+      - /dev/uio1
+      - /dev/uio2
+      - /dev/uio3
+      - /dev/uio4
+      - /dev/uio5
+      - /dev/uio6
+      - /dev/uio7
+
+networks:
+  cam-net:
+    driver: bridge
