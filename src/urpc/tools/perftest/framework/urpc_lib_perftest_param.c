@@ -233,6 +233,10 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
                 break;
             case 'W':
                 cfg->con_num = (uint32_t)strtoul(optarg, NULL, 0);
+                if (cfg->con_num == 0 || cfg->con_num > MAX_CONCURRENT_NUM) {
+                    LOG_PRINT("concurrent num should be in [1, %u]\n", MAX_CONCURRENT_NUM);
+                    return -1;
+                }
                 break;
             case 'E':
                 cfg->data_trans_mode = (data_trans_mode_t)strtoul(optarg, NULL, 0);
