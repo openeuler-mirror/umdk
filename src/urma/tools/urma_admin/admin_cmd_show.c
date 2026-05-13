@@ -1117,7 +1117,7 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
         }
         arg->in.node_idx = i;
 
-        struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_INFO, 0);
+        struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_INFO, 0, UBCORE_GENL);
         if (msg == NULL) {
             ret = -ENOMEM;
             goto free_topo;
@@ -1125,7 +1125,7 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
 
         admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_topo_info_t));
         admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-        ret = admin_nl_send_recv_msg_default(msg);
+        ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
         admin_nl_free_msg(msg);
         if (ret < 0) {
             goto free_topo;
@@ -1158,13 +1158,13 @@ int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
     }
     arg->in.agg_eid = *agg_eid;
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_BONDING_DEV, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_GET_PHYSICAL_DEVICE, 0, UBAGG_GENL);
     if (msg == NULL) {
         free(arg);
         return -ENOMEM;
     }
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-    ret = admin_nl_send_recv_msg_default_silent_errno(msg, -NLE_OBJ_NOTFOUND);
+    admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+    ret = admin_nl_send_recv_msg_default_silent_errno(msg, -NLE_OBJ_NOTFOUND, UBAGG_GENL);
     if (ret == 0) {
         memcpy(out, &arg->out.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
     }

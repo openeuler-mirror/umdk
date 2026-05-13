@@ -18,55 +18,55 @@
 
 static int admin_nl_set_dev_sharing(bool enabled)
 {
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_NS_MODE, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
     admin_nl_put_u8(msg, UBCORE_ATTR_NS_MODE, (uint8_t)enabled);
-    int ret = admin_nl_send_recv_msg_default(msg);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
 
 static int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
 {
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
     admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
-    int ret = admin_nl_send_recv_msg_default(msg);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
 
 int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd)
 {
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_EXPOSE_DEV_NS, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_EXPOSE_DEV_NS, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
     admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
-    int ret = admin_nl_send_recv_msg_default(msg);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
 
 int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd)
 {
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_UNEXPOSE_DEV_NS, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_UNEXPOSE_DEV_NS, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
     admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
     admin_nl_put_u32(msg, UBCORE_ATTR_NS_FD, (uint32_t)ns_fd);
-    int ret = admin_nl_send_recv_msg_default(msg);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
@@ -127,14 +127,14 @@ static int cmd_dev_set_sl(admin_config_t *cfg)
     arg.in.SL = cfg->SL;
     (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_SL, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_SL, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_sl_info_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
-    ret = admin_nl_send_recv_msg_default(msg);
+    ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     if (ret < 0) {
         (void)printf("set_sl fail, please check input, ret:%d, errno:%d.\n", ret, errno);
