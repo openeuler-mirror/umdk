@@ -1558,8 +1558,13 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_stats->exp_pool_with_data.total_shrink_count = exp_with_data->total_shrink_count;
     qbuf_pool_stats->exp_pool_with_data.exp_total_block_num =
         exp_with_data->expansion_count * exp_with_data->expansion_block_count;
-    qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size =
-        qbuf_pool_stats->exp_pool_with_data.exp_total_block_num * (umq_buf_size_small() + sizeof(umq_buf_t));
+    if (mode == UMQ_BUF_SPLIT) {
+        qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size =
+            qbuf_pool_stats->exp_pool_with_data.exp_total_block_num * (umq_buf_size_small() + sizeof(umq_buf_t));
+    } else {
+        qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size =
+            qbuf_pool_stats->exp_pool_with_data.exp_total_block_num * umq_buf_size_small();
+    }
 
     // expansion pool stats - without_data
     qbuf_expansion_pool_t *exp_without_data = &g_qbuf_pool.exp_pool_without_date;
