@@ -12,15 +12,17 @@
 #define ADMIN_NETLINK
 
 #include <netlink/msg.h>
+#include "admin_cmd.h"
 
-int admin_nl_send_msg(struct nl_msg *msg);
-int admin_nl_recv_msg(int (*cb)(struct nl_msg *msg, void *arg), void *arg);
-int admin_nl_send_recv_msg(struct nl_msg *msg, int (*cb)(struct nl_msg *msg, void *arg), void *arg);
-int admin_nl_send_recv_msg_default(struct nl_msg *msg);
-int admin_nl_send_recv_msg_default_silent_errno(struct nl_msg *msg, int silent_errno);
-int admin_nl_send_recv_msg_default_silent_notfound(struct nl_msg *msg);
+int admin_nl_send_msg(struct nl_msg *msg, genl_family_t family);
+int admin_nl_recv_msg(int (*cb)(struct nl_msg *msg, void *arg), void *arg, genl_family_t family);
+int admin_nl_send_recv_msg(struct nl_msg *msg, int (*cb)(struct nl_msg *msg, void *arg),
+                           void *arg, genl_family_t family);
+int admin_nl_send_recv_msg_default(struct nl_msg *msg, genl_family_t family);
+int admin_nl_send_recv_msg_default_silent_errno(struct nl_msg *msg, int silent_errno, genl_family_t family);
+int admin_nl_send_recv_msg_default_silent_notfound(struct nl_msg *msg, genl_family_t family);
 
-struct nl_msg *admin_nl_alloc_msg(uint8_t cmd, int flags);
+struct nl_msg *admin_nl_alloc_msg(uint8_t cmd, int flags, genl_family_t family);
 void admin_nl_free_msg(struct nl_msg *msg);
 
 static inline int admin_nl_put_string(struct nl_msg *msg, int attr, const char *str)

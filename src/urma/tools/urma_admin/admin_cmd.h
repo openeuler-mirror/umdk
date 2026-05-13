@@ -116,7 +116,14 @@ typedef struct admin_core_cmd_sl_info {
 } admin_core_cmd_sl_info_t;
 
 #define UBCORE_GENL_FAMILY_NAME    "UBCORE_GENL"
-#define UBCORE_GENL_FAMILY_VERSION 1
+#define UBAGG_GENL_FAMILY_NAME     "UBAGG_GENL"
+#define GENL_FAMILY_VERSION  1
+
+typedef enum genl_family_enum {
+    UBCORE_GENL,
+    UBAGG_GENL,
+    GENL_FAMILY_COUNT
+} genl_family_t;
 
 enum {
     UBCORE_ATTR_UNSPEC,
@@ -129,6 +136,12 @@ enum {
     UBCORE_ATTR_EID_IDX,
     UBCORE_ATTR_AFTER_LAST
 };
+
+typedef enum ubagg_genl_attr {
+    UBAGG_ATTR_UNSPEC,
+    UBAGG_HDR_ARGS_ADDR = 4,
+    UBAGG_ATTR_AFTER_LAST
+} ubagg_genl_attr_t;
 
 enum {
     UBCORE_RES_TPG_TP_CNT,
