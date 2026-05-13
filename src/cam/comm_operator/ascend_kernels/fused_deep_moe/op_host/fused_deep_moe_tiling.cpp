@@ -190,7 +190,8 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
     // Check share_gmm1_weight_scale: [shareGmm1HLen] (1D) or [1, shareGmm1HLen] (2D)
     const gert::StorageShape* shareGmm1ScaleStorageShape = context.GetOptionalInputShape(INPUT_SHARE_GMM1_WEIGHT_SCALE_INDEX);
     OPS_ERR_IF(shareGmm1ScaleStorageShape == nullptr,
-        OPS_LOG_E(nodeName, "shareGmm1Scale is null."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "share_gmm1_weight_scale must be provided when shared expert is enabled."),
+        return ge::GRAPH_FAILED);
     auto shareGmm1ScaleOriginShape = shareGmm1ScaleStorageShape->GetOriginShape();
     uint32_t gmm1ScaleDims = shareGmm1ScaleOriginShape.GetDimNum();
     OPS_ERR_IF(gmm1ScaleDims != ONE_DIMS && gmm1ScaleDims != TWO_DIMS,
@@ -216,7 +217,8 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
     // Check share_gmm2_weight: [shareGmm1HLen/2, h] (2D) or [1, shareGmm1HLen/2, h] (3D)
     const gert::StorageShape* shareGmm2WeightStorageShape = context.GetOptionalInputShape(INPUT_SHARE_GMM2_WEIGHT_INDEX);
     OPS_ERR_IF(shareGmm2WeightStorageShape == nullptr,
-        OPS_LOG_E(nodeName, "shareGmm2Weight is null."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "share_gmm2_weight must be provided when shared expert is enabled."),
+        return ge::GRAPH_FAILED);
     auto shareGmm2OriginShape = shareGmm2WeightStorageShape->GetOriginShape();
     uint32_t gmm2WeightDims = shareGmm2OriginShape.GetDimNum();
     OPS_ERR_IF(gmm2WeightDims != TWO_DIMS && gmm2WeightDims != THREE_DIMS,
@@ -248,7 +250,8 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
     // Check share_gmm2_weight_scale: [h] (1D) or [1, h] (2D)
     const gert::StorageShape* shareGmm2ScaleStorageShape = context.GetOptionalInputShape(INPUT_SHARE_GMM2_WEIGHT_SCALE_INDEX);
     OPS_ERR_IF(shareGmm2ScaleStorageShape == nullptr,
-        OPS_LOG_E(nodeName, "shareGmm2Scale is null."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "share_gmm2_weight_scale must be provided when shared expert is enabled."),
+        return ge::GRAPH_FAILED);
     auto shareGmm2ScaleOriginShape = shareGmm2ScaleStorageShape->GetOriginShape();
     uint32_t gmm2ScaleDims = shareGmm2ScaleOriginShape.GetDimNum();
     OPS_ERR_IF(gmm2ScaleDims != ONE_DIMS && gmm2ScaleDims != TWO_DIMS,
@@ -724,10 +727,10 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     const gert::StorageShape* shareGmm1WeightStorageShape = context.GetOptionalInputShape(INPUT_SHARE_GMM1_WEIGHT_INDEX);
     bool calShareExpert = (shareGmm1WeightStorageShape != nullptr);
     if (calShareExpert) {
-        OPS_ERR_IF(CheckShareExpertDtypes(context, *tilingData) != ge::GRAPH_SUCCESS,
-                OPS_LOG_E(nodeName, "CheckShareExpertDtypes failed."), return ge::GRAPH_FAILED);
         OPS_ERR_IF(CheckShareExpertShapes(context, *tilingData) != ge::GRAPH_SUCCESS,
                 OPS_LOG_E(nodeName, "CheckShareExpertShapes failed."), return ge::GRAPH_FAILED);
+        OPS_ERR_IF(CheckShareExpertDtypes(context, *tilingData) != ge::GRAPH_SUCCESS,
+                OPS_LOG_E(nodeName, "CheckShareExpertDtypes failed."), return ge::GRAPH_FAILED);
     }
     bool expertSmoothScalesExist = CheckOptionalInputExist(context, INPUT_SMOOTH_SCALE_INDEX);
     if (expertSmoothScalesExist) {
