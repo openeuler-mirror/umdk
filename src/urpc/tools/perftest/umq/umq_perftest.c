@@ -719,15 +719,15 @@ UNBIND:
     // unbind and flush rx and tx
     (void)umq_unbind(g_umq_perftest_ctx.umqh);
 
+DESTROY:
+    // destroy umqh
+    (void)umq_destroy(g_umq_perftest_ctx.umqh);
+
 CLOSE_ACCEPT_FD:
     // destroy socket
     (void)close(g_umq_perftest_ctx.accept_fd);
 CLOSE_FD:
     (void)close(g_umq_perftest_ctx.fd);
-
-DESTROY:
-    // destroy umqh
-    (void)umq_destroy(g_umq_perftest_ctx.umqh);
 
 UNINIT:
     // uninit
