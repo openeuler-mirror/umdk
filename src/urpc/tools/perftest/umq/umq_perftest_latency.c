@@ -362,7 +362,7 @@ static void umq_perftest_server_run_latency_pro_polling(uint64_t umqh, umq_perft
     uint32_t send_cnt = 0;
     uint32_t recv_cnt = 0;
     bool buf_multiplex = lat_arg->cfg->config.buf_multiplex;
-    umq_buf_t *rx_buf;
+    umq_buf_t *rx_buf = NULL;
     int ret = 0;
     while (g_perftest_latency_ctx.iters < lat_arg->cfg->test_round && !is_perftest_force_quit()) {
         recv_cnt = 0;
@@ -514,7 +514,7 @@ static void umq_perftest_server_run_latency_pro_interrupt(uint64_t umqh, umq_per
         LOG_PRINT("umq_rearm_interrupt failed\n");
         goto FINISH;
     }
-    umq_buf_t *rx_buf;
+    umq_buf_t *rx_buf = NULL;
     int ret = 0;
     while (g_perftest_latency_ctx.iters < test_round && !is_perftest_force_quit()) {
         // recv req, release rx
@@ -646,7 +646,7 @@ static void umq_perftest_client_run_latency_pro_polling(uint64_t umqh, umq_perft
     uint32_t send_cnt = 0;
     uint32_t recv_cnt = 0;
     bool buf_multiplex = lat_arg->cfg->config.buf_multiplex;
-    umq_buf_t *rx_buf;
+    umq_buf_t *rx_buf = NULL;
     while (g_perftest_latency_ctx.iters < lat_arg->cfg->test_round && !is_perftest_force_quit()) {
         send_cnt = 0;
         // send req
@@ -756,7 +756,7 @@ static void umq_perftest_client_run_latency_pro_interrupt(uint64_t umqh, umq_per
 
     umq_buf_t *polled_buf = NULL;
     umq_buf_t *bad_buf = NULL;
-    umq_buf_t *rx_buf;
+    umq_buf_t *rx_buf = NULL;
     uint32_t send_cnt = 0;
     uint32_t recv_cnt = 0;
     bool buf_multiplex = lat_arg->cfg->config.buf_multiplex;
