@@ -30,6 +30,7 @@ typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_ENABLE_SEG_CACHE,
     BONDP_USER_CTL_QUERY_PORT,
     BONDP_USER_CTL_SET_BONDING_MODE,
+    BONDP_USER_CTL_GET_JFCE_FD_LIST,
 } bondp_user_ctl_opcode_t;
 
 // URMA_USER_CTL_BOND_SET_BONDING_MODE,
@@ -65,6 +66,15 @@ typedef struct bondp_query_port_out {
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
 } bondp_query_port_out_t;
+
+typedef struct bondp_get_jfce_fd_list_in {
+    urma_jfce_t *jfce;
+} bondp_get_jfce_fd_list_in_t;
+
+typedef struct bondp_get_jfce_fd_list_out {
+    int fd_list[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t count;
+} bondp_get_jfce_fd_list_out_t;
 
 typedef union bondp_port_id {
     struct {

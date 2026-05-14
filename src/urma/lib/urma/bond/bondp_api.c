@@ -1465,6 +1465,42 @@ static int bondp_user_ctl_query_port(urma_context_t *ctx, urma_user_ctl_in_t *in
     return 0;
 }
 
+static int bondp_user_ctl_get_jfce_fd_list(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
+{
+    if (in->addr == 0 || out->addr == 0 ||
+        in->len != sizeof(bondp_get_jfce_fd_list_in_t) ||
+        out->len < sizeof(bondp_get_jfce_fd_list_out_t)) {
+        URMA_LOG_ERR("Invalid get jfce fd list param.\n");
+        return -EINVAL;
+    }
+
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    bondp_get_jfce_fd_list_in_t *get_in = (bondp_get_jfce_fd_list_in_t *)(uintptr_t)in->addr;
+    bondp_get_jfce_fd_list_out_t *get_out = (bondp_get_jfce_fd_list_out_t *)(uintptr_t)out->addr;
+    
+    if (get_in->jfce == NULL) {
+        URMA_LOG_ERR("Invalid jfce.\n");
+        return -EINVAL;
+    }
+    
+    bondp_jfce_t *bdp_jfce = CONTAINER_OF_FIELD(get_in->jfce, bondp_jfce_t, v_jfce);
+    if (bdp_jfce->bondp_ctx != bdp_ctx) {
+        URMA_LOG_ERR("The object does not belong to current context.\n");
+        return -EINVAL;
+    }
+
+    get_out->count = 0;
+    for (int i = 0; i < bdp_jfce->dev_num && i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (bdp_jfce->p_jfce[i] != NULL) {
+            get_out->fd_list[i] = bdp_jfce->p_jfce[i]->fd;
+            get_out->count++;
+        } else {
+            get_out->fd_list[i] = -1;
+        }
+    }
+    return 0;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     switch (in->opcode) {
@@ -1477,6 +1513,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_user_ctl_query_port(ctx, in, out);
         case BONDP_USER_CTL_SET_BONDING_MODE:
             return bondp_user_ctl_set_bonding_mode(ctx, in, out);
+        case BONDP_USER_CTL_GET_JFCE_FD_LIST:
+            return bondp_user_ctl_get_jfce_fd_list(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;
