@@ -1183,13 +1183,22 @@ static int umq_default_priority_get(umq_ub_ctx_t *dev_ctx, umq_tp_type_t actual_
    return UMQ_FAIL;
 }
 
-static void umq_bondp_port_id_set(umq_create_option_t *option, ub_queue_t *queue)
+static int umq_bondp_port_id_set(umq_create_option_t *option, ub_queue_t *queue)
 {
     for (uint8_t i = 0; i < option->used_ports.num; i++) {
+        for (uint8_t j = i + 1; j < option->used_ports.num; j++) {
+            if (option->used_ports.port[i].bs.chip_id == option->used_ports.port[j].bs.chip_id &&
+                option->used_ports.port[i].bs.die_id == option->used_ports.port[j].bs.die_id &&
+                option->used_ports.port[i].bs.port_idx == option->used_ports.port[j].bs.port_idx) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "chip_id %d, die_id %d, port_idx %d are duplicated\n");
+                return -UMQ_ERR_EINVAL;
+            }
+        }
         queue->used_port[i].chip_id = option->used_ports.port[i].bs.chip_id;
         queue->used_port[i].die_id = option->used_ports.port[i].bs.die_id;
         queue->used_port[i].port_idx = option->used_ports.port[i].bs.port_idx;
     }
+    return UMQ_SUCCESS;
 }
 
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue)
@@ -1338,7 +1347,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
             return -UMQ_ERR_ENOMEM;
         }
 
-        umq_bondp_port_id_set(option, queue);
+        if (umq_bondp_port_id_set(option, queue) != UMQ_SUCCESS) {
+            return -UMQ_ERR_EINVAL;
+        }
     } else if (is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
         UMQ_VLOG_ERR(VLOG_UMQ, "bonding device must set UMQ_CREATE_FLAG_USED_PORTS flag\n");
         return -UMQ_ERR_EINVAL;
