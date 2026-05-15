@@ -169,6 +169,10 @@ typedef struct bondp_jfc {
     urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
     int lasted_polled_jfc_idx;
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
 
