@@ -78,6 +78,9 @@ struct udma_u_hugepage {
 	struct udma_u_hugepage_priv *priv;
 };
 
+typedef int (*dtu_u_mmap_func)(uint64_t va_base, uint64_t va_size, void **dtu_va);
+typedef void (*dtu_u_munmap_func)(void **g_dtu_va, uint64_t va_size);
+
 /* 32 */
 #define UDMA_JETTY_TABLE_NUM 1 << 5
 
@@ -97,7 +100,14 @@ struct udma_u_context {
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
 	bool			sq_reserved;
+	bool			dtu_enable;
+	uint64_t		dtu_va_base;
+	uint64_t		dtu_va_size;
+	dtu_u_mmap_func		dtu_mmap_fun_ptr;
+	dtu_u_munmap_func	dtu_munmap_fun_ptr;
+	void			*dtu_provider_handle;
 	bool			sva_sep_mode_en;
+	bool			atomic_add_en;
 	uint32_t		ccu_jetty_start_id;
 	uint32_t		ccu_jetty_max_cnt;
 	bool			hugepage_enable;
@@ -149,6 +159,8 @@ struct udma_u_jetty_queue {
 	uint8_t db_status;
 	bool need_ring_db;
 	bool pi_type;
+	bool dtu_en;
+	uint32_t aligned_size;
 };
 
 struct udma_wqe_sge {
@@ -198,6 +210,7 @@ struct udma_u_jfc {
 	urma_jfc_t base;
 	struct udma_u_jetty_queue cq;
 	uint32_t *sw_db;
+	bool db_cstm;
 	uint32_t arm_sn;
 	uint32_t mode;
 	uint32_t cq_shift;

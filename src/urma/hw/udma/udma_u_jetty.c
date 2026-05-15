@@ -82,6 +82,7 @@ int exec_jetty_create_cmd(urma_context_t *ctx, struct udma_u_jetty *jetty,
 	cmd.pi_type = jetty->sq.pi_type;
 	cmd.jetty_type = jetty->jetty_type;
 	cmd.non_pin = jetty->sq.cstm;
+	cmd.dtu_en = jetty->sq.dtu_en;
 	cmd.is_hugepage = jetty->sq.hugepage != NULL;
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jetty(ctx, &jetty->base, cfg, &udata);
@@ -236,15 +237,26 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg)
 	}
 
 	jetty->sq.ctx = udma_ctx;
-
+	jetty->sq.dtu_en = udma_ctx->dtu_enable;
 	ret = udma_u_active_jetty_prepare(&jetty->base, cfg);
 	if (ret)
 		goto err_active_jetty_prepare;
 
 	jetty->jetty_type = UDMA_URMA_NORMAL_JETTY_TYPE;
 	if (exec_jetty_create_cmd(ctx, jetty, cfg)) {
-		UDMA_LOG_ERR("failed to create jetty.\n");
-		goto err_jetty_create_cmd;
+		if(jetty->sq.dtu_en) {
+			jetty->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&jetty->sq, jetty->sq.sqe_bb_cnt * cfg->jfs_cfg.depth,
+			    UDMA_JFS_WQEBB, jetty->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc jetty sq after dtu failed.\n");
+				goto err_jetty_create_cmd;
+			}
+			if (exec_jetty_create_cmd(ctx, jetty, cfg))
+				goto err_jetty_create_cmd;
+		} else {
+			UDMA_LOG_ERR("failed to create jetty.\n");
+			goto err_jetty_create_cmd;
+		}
 	}
 
 	jetty->sq.db.type = UDMA_MMAP_JETTY_DSQE;
@@ -799,12 +811,14 @@ static uint64_t udma_jetty_opt[] = {
 	URMA_JFS_PI,
 	URMA_JFS_PI_TYPE,
 	URMA_JFS_CI,
+	URMA_JFS_FULL_CTX,
 	URMA_JETTY_ID,
 	URMA_JETTY_FLAG,
 	URMA_JETTY_BIND_JFR,
 	URMA_JETTY_BIND_RX_JFC,
 	URMA_JETTY_BIND_JTG,
 	URMA_JETTY_USER_CTX,
+	URMA_JETTY_FULL_CTX,
 };
 
 static struct udma_u_jetty_opt_info opt_info[] = {
@@ -826,17 +840,19 @@ static struct udma_u_jetty_opt_info opt_info[] = {
 	{sizeof(uint16_t), PERM_R, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint16_t), PERM_R | PERM_W, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint16_t), PERM_R, 0, JFS_MODE | JETTY_MODE},
+	{UDMA_JFS_CTX_SIZE, PERM_R, 0, JFS_MODE | JETTY_MODE},
 	{sizeof(uint32_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint32_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, JETTY_IGNORE, JETTY_MODE},
+	{UDMA_JETTY_CTX_SIZE, PERM_R, 0, JETTY_MODE},
 };
 
 urma_status_t udma_u_verify_jetty_opt(uint64_t opt, void *buf, uint32_t len,
-	enum udma_u_set_get_jetty_opt_mode jetty_mode,
-	enum udma_u_set_get_jetty_opt_perm jetty_perm)
+				      enum udma_u_set_get_jetty_opt_mode jetty_mode,
+				      enum udma_u_set_get_jetty_opt_perm jetty_perm)
 {
 	uint32_t opt_index = ARRAY_SIZE(udma_jetty_opt);
 	uint32_t i;
@@ -1056,7 +1072,7 @@ urma_status_t udma_u_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf,
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jetty_opt(jetty, opt, buf, len, &udata);
 		if (ret) {
-			UDMA_LOG_ERR("set jetty opt failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("get jetty opt failed, ret = %d.\n", ret);
 			return URMA_FAIL;
 		}
 	}
@@ -1089,11 +1105,13 @@ static int udma_u_active_jetty_after(urma_jetty_t *jetty)
 
 urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jetty->urma_ctx);
 	struct udma_u_jetty *udma_jetty = to_udma_u_jetty(jetty);
 	urma_jetty_cfg_t *cfg = &jetty->jetty_cfg;
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
+	udma_jetty->sq.dtu_en = udma_ctx->dtu_enable;
 	ret = udma_u_active_jetty_prepare(jetty, cfg);
 	if (ret)
 		return ret;
@@ -1101,8 +1119,19 @@ urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 	udma_jetty->jetty_type = UDMA_URMA_EX_JETTY_TYPE;
 	ret = exec_jetty_active_cmd(udma_jetty, cfg);
 	if (ret) {
-		UDMA_LOG_ERR("exec active jetty cmd failed, ret = %d.\n", ret);
-		goto err_active_jetty_cmd;
+		if (udma_jetty->sq.dtu_en) {
+			udma_jetty->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&udma_jetty->sq, udma_jetty->sq.sqe_bb_cnt * cfg->jfs_cfg.depth,
+			    UDMA_JFS_WQEBB, udma_jetty->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc jetty sq after dtu failed.\n");
+				goto err_active_jetty_cmd;
+			}
+			if (exec_jetty_active_cmd(udma_jetty, cfg))
+				goto err_active_jetty_cmd;
+		} else {
+			UDMA_LOG_ERR("failed to create jetty.\n");
+			goto err_active_jetty_cmd;
+		}
 	}
 
 	ret = udma_u_active_jetty_after(jetty);
