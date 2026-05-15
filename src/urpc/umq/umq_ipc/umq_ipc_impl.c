@@ -452,7 +452,7 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
         .tx_max_buf_size = sizeof(uint64_t) + sizeof(uint32_t),
         .tx_depth = ctx->remote_ring.tx_depth,
         .rx_max_buf_size = sizeof(uint64_t) + sizeof(uint32_t),
-        .rx_depth = ctx->remote_ring.tx_depth,
+        .rx_depth = ctx->remote_ring.rx_depth,
         .addr = ctx->remote_ring.addr,
     };
 
