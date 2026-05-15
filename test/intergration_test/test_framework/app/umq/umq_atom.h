@@ -75,6 +75,7 @@ typedef struct {
     umq_create_option_t option;
     int tx_fd;
     int rx_fd;
+    int event_fd;
     uint32_t src_app_id;
     uint32_t dst_app_id;
     uint32_t r_qidx;
@@ -82,6 +83,8 @@ typedef struct {
     uint32_t r_binfo_len;
     uint8_t l_binfo[TEST_UMQ_MAX_BIND_INFO_SIZE];
     uint8_t r_binfo[TEST_UMQ_MAX_BIND_INFO_SIZE];
+    umq_port_id_t used_ports[UMQ_MAX_ROUTES];
+    uint8_t used_ports_num;
     bool not_check_data;
     umq_opcode_t opcode;
 } umqh_ops_t;
@@ -127,9 +130,19 @@ typedef struct {
     umq_trans_mode_t trans_mode;
     umq_init_cfg_t cfg;
     uint32_t umqh_num;
+    uint32_t umqh_sub_num;
     umqh_ops_t *umqh_ops;
+    umqh_ops_t *umqh_sub_ops;
     umqh_async_ops_t async_ops;
     uint32_t ctx_flag;
+    umq_log_config_t log_cfg;
+    bool is_self_log;
+    bool is_share_jfr;
+    umq_tp_mode_t tp_mode;
+    umq_tp_type_t tp_type;
+    bool is_lock_free;
+    bool is_bonding;
+
 } test_umq_ctx_t;
 
 typedef struct {
@@ -150,6 +163,12 @@ extern size_t post_data_len;
 #define NS_PER_SEC 1000000000UL
 #define MS_PER_SEC 1000
 #define NS_PER_MS 1000000
+
+#define EID_FMT          "%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x:%2.2x%2.2x"
+#define EID_RAW_ARGS(eid)                                                                                              \
+    eid[0], eid[1], eid[2], eid[3], eid[4], eid[5], eid[6], eid[7], eid[8], eid[9], eid[10], eid[11], eid[12],         \
+        eid[13], eid[14], eid[15]
+#define EID_ARGS(eid)             EID_RAW_ARGS((eid).raw)
 
 static inline uint64_t get_timestamp_ns(void)
 {
@@ -213,5 +232,6 @@ int test_umq_poll_rx_buf(umqh_ops_t *umqh_ops, const char *data = POST_DATA_DEFA
 void test_umq_flush(umqh_ops_t *umqh_ops, umq_io_direction_t direction = UMQ_IO_ALL, uint64_t timeout = DEFAULT_FLUSH_TIME_MS);
 int test_umq_pro_func_req(test_data_args_t *data_args);
 int test_umq_pro_func_rsp(test_data_args_t *data_args);
+int get_used_ports(test_umq_ctx_t *ctx, umqh_ops_t *umqh_ops);
 
 #endif
