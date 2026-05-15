@@ -65,6 +65,28 @@ typedef enum uvs_cmd_set_path_set_type {
     GET_PATH_SET_OUT_NUM
 } uvs_cmd_set_path_set_type_t;
 
+typedef enum uvs_cmd_insert_main_ue_eid_type {
+    INSERT_MAIN_UE_EID_IN_ENTRY,
+    INSERT_MAIN_UE_EID_IN_NUM
+} uvs_cmd_insert_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_delete_main_ue_eid_type {
+    DELETE_MAIN_UE_EID_IN_EID,
+    DELETE_MAIN_UE_EID_IN_NUM
+} uvs_cmd_delete_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_lookup_main_ue_eid_type {
+    LOOKUP_MAIN_UE_EID_IN_EID,
+    LOOKUP_MAIN_UE_EID_IN_NUM,
+    LOOKUP_MAIN_UE_EID_OUT_MAIN_UE_EID = UVS_CMD_OUT_TYPE_INIT,
+    LOOKUP_MAIN_UE_EID_OUT_NUM
+} uvs_cmd_lookup_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_insert_main_ue_eid_batch_type {
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY,
+    INSERT_MAIN_UE_EID_BATCH_IN_NUM
+} uvs_cmd_insert_main_ue_eid_batch_type_t;
+
 #ifdef __cplusplus
 }
 #endif
