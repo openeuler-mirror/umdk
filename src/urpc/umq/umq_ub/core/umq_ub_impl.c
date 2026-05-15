@@ -830,9 +830,16 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
     if (!queue->flow_control.enabled) {
         return UMQ_SUCCESS;
     }
-    urma_jfc_cfg_t jfc_cfg = {
-        .depth = UMQ_UB_FLOW_CONTORL_JETTY_DEPTH, // jfs_jfce is shared between fc jfs_jfc and io jfs_jfc
-        .jfce = queue->jfs_jfce};
+    bondp_jfc_cfg_t bondp_jfc_cfg = {
+        .base = {
+            .depth = UMQ_UB_FLOW_CONTORL_JETTY_DEPTH, // jfs_jfce is shared between fc jfs_jfc and io jfs_jfc
+            .jfce = queue->jfs_jfce,
+            .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0)
+        },
+        .port_ids = queue->used_port,
+        .port_count = queue->used_port_num,
+    };
+
     umq_ub_ctx_t *dev_ctx = queue->dev_ctx;
     // fc jetty
     umq_ub_rx_consumed_exchange(dev_ctx->io_lock_free,
@@ -842,7 +849,8 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
         return UMQ_FAIL;
     }
 
-    queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &jfc_cfg);
+    queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] =
+        umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &bondp_jfc_cfg.base);
     if (queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfc for flowcontrol jfs_jfc failed, errno: %d\n", errno);
         goto DESTROY_FC_JFR_CTX;
@@ -965,11 +973,16 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         }
     }
 
-    urma_jfc_cfg_t jfc_cfg = {
-        .depth = queue->tx_depth + 1, // flush done consumes one cqe
-        .jfce = queue->jfs_jfce
+    bondp_jfc_cfg_t bondp_jfc_cfg = {
+        .base = {
+            .depth = queue->tx_depth + 1, // flush done consumes one cqe
+            .jfce = queue->jfs_jfce,
+            .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0)
+        },
+        .port_ids = queue->used_port,
+        .port_count = queue->used_port_num,
     };
-    queue->jfs_jfc[UB_QUEUE_JETTY_IO] = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &jfc_cfg);
+    queue->jfs_jfc[UB_QUEUE_JETTY_IO] = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &bondp_jfc_cfg.base);
     if (queue->jfs_jfc[UB_QUEUE_JETTY_IO] == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfc for jfs_jfc failed, errno: %d\n", errno);
         goto DELETE_JFCE;
