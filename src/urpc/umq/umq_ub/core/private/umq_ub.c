@@ -1528,28 +1528,44 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
         }
     }
     // create jfr_jfc
+    // jfr_jfc of the main umq needs to be used by the sub-queues of all ports, so it needs to be created on all ports.
     uint32_t jfr_depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->rx_depth : queue->fc_rx_depth;
-    urma_jfc_cfg_t jfr_jfc_cfg = {
-        .depth = jfr_depth,
-        .jfce = jfr_ctx->jfr_jfce
+
+    bondp_jfc_cfg_t bondp_jfc_cfg = {
+        .base = {
+            .depth = jfr_depth,
+            .jfce = jfr_ctx->jfr_jfce,
+            .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0) &&
+                ((queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0)
+        },
+        .port_ids = queue->used_port,
+        .port_count = queue->used_port_num,
     };
-    jfr_ctx->jfr_jfc = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &jfr_jfc_cfg);
+    jfr_ctx->jfr_jfc = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &bondp_jfc_cfg.base);
     if (jfr_ctx->jfr_jfc == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfc failed, errno: %d\n", errno);
         goto DELETE_JFR_JFCE;
     }
     // create jfr
-    urma_jfr_cfg_t jfr_cfg = {
-        .flag.bs.token_policy = token_policy_get(enable_token),
-        .trans_mode = queue->tp_mode,
-        .depth = jfr_depth,
-        .max_sge = queue->max_rx_sge,
-        .min_rnr_timer = queue->min_rnr_timer,
-        .jfc = jfr_ctx->jfr_jfc,
-        .token_value = {.token = jetty_token},
+    // jfr of the main umq needs to be used by the sub-queues of all ports, so it needs to be created on all ports.
+    bondp_jfr_cfg_t bondp_jfr_cfg = {
+        .base = {
+            .flag.bs.token_policy = token_policy_get(enable_token),
+            .trans_mode = queue->tp_mode,
+            .depth = jfr_depth,
+            .max_sge = queue->max_rx_sge,
+            .min_rnr_timer = queue->min_rnr_timer,
+            .jfc = jfr_ctx->jfr_jfc,
+            .token_value = {.token = jetty_token},
+            .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0) &&
+                ((queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0)
+        },
+        .port_ids = queue->used_port,
+        .port_count = queue->used_port_num,
     };
-    jfr_cfg.flag.bs.order_type = queue->order_type;
-    jfr_ctx->jfr = umq_symbol_urma()->urma_create_jfr(dev_ctx->urma_ctx, &jfr_cfg);
+
+    bondp_jfr_cfg.base.flag.bs.order_type = queue->order_type;
+    jfr_ctx->jfr = umq_symbol_urma()->urma_create_jfr(dev_ctx->urma_ctx, &bondp_jfr_cfg.base);
     if (jfr_ctx->jfr == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfr failed, errno: %d\n", errno);
         goto DELETE_JFR_JFC;
