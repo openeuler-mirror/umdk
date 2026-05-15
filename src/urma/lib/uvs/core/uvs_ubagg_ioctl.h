@@ -9,11 +9,13 @@
  */
 #ifndef UVS_UBAGG_IOCTL_H
 #define UVS_UBAGG_IOCTL_H
-#include "uvs_api.h"
-#include "uvs_types.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
+
+#include "tpsa_ioctl.h"
+#include "uvs_api.h"
+#include "uvs_types.h"
 
 #define UVS_MAX_DEV_NAME_LEN 64
 
@@ -70,6 +72,13 @@ int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
 int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_get_topo(void *topo_map);
 int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num);
+int uvs_ubcore_ioctl_insert_main_ue_eid(const uvs_main_ue_eid_entry_t *entry);
+int uvs_ubcore_ioctl_delete_main_ue_eid(const uvs_eid_t *eid);
+int uvs_ubcore_ioctl_lookup_main_ue_eid(const uvs_eid_t *eid,
+    uvs_eid_t *main_ue_eid);
+int uvs_ubcore_ioctl_flush_main_ue_eid(void);
+int uvs_ubcore_ioctl_insert_main_ue_eid_batch(
+    const uvs_main_ue_eid_batch_entry_t *entry);
 int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
 int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
                                   const uvs_eid_t *dst_bonding_eid,

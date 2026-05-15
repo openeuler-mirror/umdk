@@ -46,6 +46,11 @@ typedef enum uvs_global_cmd {
     UVS_CMD_GET_TOPO_EID = 2,
     UVS_CMD_GET_TOPO = 3,
     UVS_CMD_GET_TOPO_PATH_EID = 4,
+    UVS_CMD_INSERT_MAIN_UE_EID = 5,
+    UVS_CMD_DELETE_MAIN_UE_EID = 6,
+    UVS_CMD_LOOKUP_MAIN_UE_EID = 7,
+    UVS_CMD_FLUSH_MAIN_UE_EID = 8,
+    UVS_CMD_INSERT_MAIN_UE_EID_BATCH = 9,
     UVS_CMD_GLOBAL_LAST
 } uvs_global_cmd_t;
 
@@ -61,6 +66,33 @@ typedef struct uvs_get_topo {
         void *topo_map;
     } out;
 } uvs_get_topo_t;
+
+typedef struct uvs_cmd_main_ue_eid_entry {
+    struct {
+        uvs_main_ue_eid_entry_t entry;
+    } in;
+} uvs_cmd_main_ue_eid_entry_t;
+
+typedef struct uvs_cmd_main_ue_eid_delete {
+    struct {
+        uvs_eid_t eid;
+    } in;
+} uvs_cmd_main_ue_eid_delete_t;
+
+typedef struct uvs_cmd_main_ue_eid_lookup {
+    struct {
+        uvs_eid_t eid;
+    } in;
+    struct {
+        uvs_eid_t main_ue_eid;
+    } out;
+} uvs_cmd_main_ue_eid_lookup_t;
+
+typedef struct uvs_cmd_main_ue_eid_batch {
+    struct {
+        uvs_main_ue_eid_batch_entry_t entry;
+    } in;
+} uvs_cmd_main_ue_eid_batch_t;
 
 typedef struct uvs_cmd_get_route_list {
     uvs_route_t in;
@@ -82,7 +114,15 @@ int uvs_ioctl_set_topo(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_set_topo_t *arg);
 int uvs_ioctl_get_topo(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_get_topo_t *arg);
 int uvs_ioctl_get_route_list(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_route_list_t *arg);
 int uvs_ioctl_get_path_set(tpsa_ioctl_ctx_t *ioctl_ctx, uvs_cmd_get_path_set_t *arg);
-
+int uvs_ioctl_insert_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx,
+    uvs_cmd_main_ue_eid_entry_t *arg);
+int uvs_ioctl_delete_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx,
+    uvs_cmd_main_ue_eid_delete_t *arg);
+int uvs_ioctl_lookup_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx,
+    uvs_cmd_main_ue_eid_lookup_t *arg);
+int uvs_ioctl_flush_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx);
+int uvs_ioctl_insert_main_ue_eid_batch(tpsa_ioctl_ctx_t *ioctl_ctx,
+    uvs_cmd_main_ue_eid_batch_t *arg);
 #ifdef __cplusplus
 }
 #endif
