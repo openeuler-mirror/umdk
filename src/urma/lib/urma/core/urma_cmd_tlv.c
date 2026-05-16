@@ -1296,7 +1296,7 @@ int urma_ioctl_wait_jfc(int ioctl_fd, urma_cmd_jfce_wait_t *arg)
         .args_addr = (uint64_t)(uintptr_t)attrs,
      };
     int ret = ioctl(ioctl_fd, URMA_CMD_WAIT_JFC, &hdr);
-    if (ret != 0) {
+    if (ret != 0 && errno != EAGAIN) {
         URMA_LOG_ERR("wait jfc ioctl failed, ret=%d, errno=%d.\n", ret, errno);
     }
     return ret;
