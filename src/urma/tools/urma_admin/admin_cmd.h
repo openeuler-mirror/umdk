@@ -255,5 +255,6 @@ int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
 int admin_cmd_main_ue_eid(admin_config_t *cfg);
 int admin_cmd_show(admin_config_t *cfg);
+int admin_cmd_perf(admin_config_t *cfg);
 
 #endif
