@@ -27,6 +27,8 @@ add_executable(ums_agent
     ums_agent_tls_conn.h
     ums_agent_tls.c
     ums_agent_tls.h
+    ums_agent_nl.c
+    ums_agent_nl.h
 )
 
 set_target_properties(ums_agent
@@ -38,6 +40,11 @@ set_target_properties(ums_agent
 target_include_directories(ums_agent
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_compile_definitions(ums_agent
+    PRIVATE
+        _GNU_SOURCE
 )
 
 target_link_libraries(ums_agent
