@@ -31,6 +31,7 @@
 #include "ums_agent_epoll.h"
 #include "ums_agent_log.h"
 #include "ums_agent_tls.h"
+#include "ums_agent_nl.h"
 
 #define UMS_AGENT_VERSION             "0.1.0"
 #define UMS_AGENT_CONFIG_PATH_PREFIX  "/etc/ums_agent/"
@@ -40,7 +41,6 @@
 #define UMS_AGENT_TIMER_INTERVAL_SEC 60
 
 struct ums_agent_ctx {
-    int nl_fd;
     int timer_fd;
     int signal_fd;
     atomic_bool running;
@@ -49,7 +49,6 @@ struct ums_agent_ctx {
 };
 
 static struct ums_agent_ctx g_ums_agent_ctx = {
-    .nl_fd = -1,
     .timer_fd = -1,
     .signal_fd = -1,
     .running = ATOMIC_VAR_INIT(false),
@@ -199,69 +198,83 @@ static void ums_agent_request_stop(void)
     atomic_store(&g_ums_agent_ctx.running, false);
 }
 
-static void ums_agent_handle_signal_event(int sfd)
+static void ums_agent_handle_signal_event(int sfd, uint32_t events)
 {
-    struct signalfd_siginfo si;
-    ssize_t n = read(sfd, &si, sizeof(si));
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-            return;
+    if (events & EPOLLIN) {
+        struct signalfd_siginfo si;
+        ssize_t n = read(sfd, &si, sizeof(si));
+        if (n < 0) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                UMS_AGENT_LOG_ERR("read signalfd failed: %s (errno=%d)", strerror(errno), errno);
+            }
+        } else if (n != sizeof(si)) {
+            UMS_AGENT_LOG_ERR("read signalfd: unexpected size %zd, expected %zu", n, sizeof(si));
+        } else if (si.ssi_signo != SIGTERM && si.ssi_signo != SIGINT) {
+            UMS_AGENT_LOG_WARN("received unexpected signal %d, ignoring", si.ssi_signo);
+        } else {
+            UMS_AGENT_LOG_INFO("received signal %d (%s), stopping",
+                si.ssi_signo,
+                si.ssi_signo == SIGTERM ? "SIGTERM" : "SIGINT");
+            ums_agent_request_stop();
         }
-        UMS_AGENT_LOG_ERR("read signalfd failed: %s (errno=%d)", strerror(errno), errno);
-        return;
-    }
-    if (n != sizeof(si)) {
-        UMS_AGENT_LOG_ERR("read signalfd: unexpected size %zd, expected %zu", n, sizeof(si));
-        return;
     }
 
-    if (si.ssi_signo != SIGTERM && si.ssi_signo != SIGINT) {
-        UMS_AGENT_LOG_WARN("received unexpected signal %d, ignoring", si.ssi_signo);
-        return;
+    if (events & (EPOLLERR | EPOLLHUP)) {
+        UMS_AGENT_LOG_WARN("signal_fd received error event 0x%x, re-setting up", events);
+        ums_agent_teardown_signal_fd();
+        if (ums_agent_setup_signal_fd() < 0) {
+            UMS_AGENT_LOG_ERR("signal_fd re-setup failed, requesting stop");
+            ums_agent_request_stop();
+        }
     }
-
-    UMS_AGENT_LOG_INFO("received signal %d (%s), stopping",
-        si.ssi_signo,
-        si.ssi_signo == SIGTERM ? "SIGTERM" : "SIGINT");
-
-    ums_agent_request_stop();
 }
 
-static void ums_agent_handle_timer_event(int tfd)
+static void ums_agent_handle_timer_event(int tfd, uint32_t events)
 {
-    uint64_t expirations;
-    ssize_t n = read(tfd, &expirations, sizeof(expirations));
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-            return;
+    if (events & EPOLLIN) {
+        uint64_t expirations;
+        ssize_t n = read(tfd, &expirations, sizeof(expirations));
+        if (n < 0) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                UMS_AGENT_LOG_ERR("read timerfd failed: %s (errno=%d)", strerror(errno), errno);
+            }
+        } else if (n != sizeof(expirations)) {
+            UMS_AGENT_LOG_WARN("read timerfd: unexpected size %zd, expected %zu", n, sizeof(expirations));
+        } else {
+            ums_agent_tls_timer_tick(g_ums_agent_ctx.config);
         }
-        UMS_AGENT_LOG_ERR("read timerfd failed: %s (errno=%d)", strerror(errno), errno);
-        return;
-    }
-    if (n != sizeof(expirations)) {
-        UMS_AGENT_LOG_WARN("read timerfd: unexpected size %zd, expected %zu", n, sizeof(expirations));
-        return;
     }
 
-    ums_agent_tls_timer_tick(g_ums_agent_ctx.config);
+    if (events & (EPOLLERR | EPOLLHUP)) {
+        UMS_AGENT_LOG_WARN("timer_fd received error event 0x%x, re-setting up", events);
+        if (g_ums_agent_ctx.timer_fd >= 0) {
+            (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.timer_fd);
+            close(g_ums_agent_ctx.timer_fd);
+            g_ums_agent_ctx.timer_fd = -1;
+        }
+        if (ums_agent_setup_timer_fd() < 0) {
+            UMS_AGENT_LOG_ERR("timer_fd re-setup failed, requesting stop");
+            ums_agent_request_stop();
+        }
+    }
 }
 
 static void ums_agent_dispatch_event(struct epoll_event *ev)
 {
     int fd = ev->data.fd;
 
-    if (fd == g_ums_agent_ctx.signal_fd && (ev->events & EPOLLIN)) {
-        ums_agent_handle_signal_event(fd);
+    if (fd == g_ums_agent_ctx.signal_fd) {
+        ums_agent_handle_signal_event(fd, ev->events);
         return;
     }
 
-    if (fd == g_ums_agent_ctx.timer_fd && (ev->events & EPOLLIN)) {
-        ums_agent_handle_timer_event(fd);
+    if (fd == g_ums_agent_ctx.timer_fd) {
+        ums_agent_handle_timer_event(fd, ev->events);
         return;
     }
 
-    if (fd == g_ums_agent_ctx.nl_fd && (ev->events & EPOLLIN)) {
-        // handle netlink event
+    if (ums_agent_nl_owns_fd(fd)) {
+        ums_agent_nl_handle_event(fd, ev->events);
         return;
     }
 
@@ -367,13 +380,7 @@ static void ums_agent_shutdown(void)
     ums_agent_notify_systemd("STOPPING=1");
 
     ums_agent_tls_deinit();
-
-    if (g_ums_agent_ctx.nl_fd >= 0) {
-        // sending DOWN notification to kernel
-        (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.nl_fd);
-        close(g_ums_agent_ctx.nl_fd);
-        g_ums_agent_ctx.nl_fd = -1;
-    }
+    ums_agent_nl_deinit();
 
     if (g_ums_agent_ctx.timer_fd >= 0) {
         (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.timer_fd);
@@ -438,10 +445,16 @@ int main(int argc, char *argv[])
         goto err_signal;
     }
 
+    ret = ums_agent_nl_init();
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("netlink init failed");
+        goto err_timer;
+    }
+
     ret = ums_agent_tls_init(g_ums_agent_ctx.config);
     if (ret < 0) {
         UMS_AGENT_LOG_ERR("TLS init failed");
-        goto err_timer;
+        goto err_nl;
     }
 
     atomic_store(&g_ums_agent_ctx.running, true);
@@ -456,6 +469,8 @@ int main(int argc, char *argv[])
 
     return ret < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 
+err_nl:
+    ums_agent_nl_deinit();
 err_timer:
     if (g_ums_agent_ctx.timer_fd >= 0) {
         (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.timer_fd);
