@@ -352,11 +352,6 @@ static void ums_agent_tls_free_ssl_ctx(SSL_CTX *ctx)
     SSL_CTX_free(ctx);
 }
 
-void ums_agent_secure_zero(void *ptr, size_t len)
-{
-    OPENSSL_cleanse(ptr, len);
-}
-
 int ums_agent_tls_check_certs_expiry(const char *server_cert_path,
     const char *client_cert_path, bool force)
 {
