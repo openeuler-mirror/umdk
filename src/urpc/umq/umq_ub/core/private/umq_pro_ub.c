@@ -225,7 +225,7 @@ static ALWAYS_INLINE void umq_ub_tx_eagain_cnt(int ret, bool user_send_imm, ub_q
     }
 
     umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND_EAGAIN, eagain_wr_cnt, queue->dev_ctx->io_lock_free);
-    if (user_send_imm ) {
+    if (user_send_imm) {
         umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POST_SEND_EAGAIN, qbuf);
     }
 }
@@ -382,7 +382,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     if (user_send_imm) {
         umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, qbuf);
     }
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
+    urma_status_t status =
+        umq_symbol_urma()->urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO], urma_wr, &bad_wr);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp);
     if (status != URMA_SUCCESS) {
         ret = umq_status_convert(status);
