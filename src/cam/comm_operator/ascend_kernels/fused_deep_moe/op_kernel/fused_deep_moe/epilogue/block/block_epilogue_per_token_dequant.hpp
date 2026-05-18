@@ -85,6 +85,7 @@ public:
                   "TileShape is too large to fit in UB");
 
     struct Params {
+        __gm__ ElementC *ptrC{nullptr}; // layoutC = layoutD
         __gm__ ElementRawScale *ptrScale{nullptr};
         LayoutScale layoutScale{};
         __gm__ ElementPerTokenScale *ptrPerTokenScale{nullptr};
@@ -96,10 +97,11 @@ public:
         Params(){};
 
         CATLASS_DEVICE
-        Params(__gm__ ElementRawScale *ptrScale_, LayoutScale const &layoutScale_,
+        Params(__gm__ ElementC *ptrC_, __gm__ ElementRawScale *ptrScale_, LayoutScale const &layoutScale_,
                __gm__ ElementPerTokenScale *ptrPerTokenScale_, LayoutPerTokenScale const &layoutPerTokenScale_,
                __gm__ ElementD *ptrD_, LayoutD const &layoutD_)
-            : ptrScale(ptrScale_),
+            : ptrC(ptrC_),
+              ptrScale(ptrScale_),
               layoutScale(layoutScale_),
               ptrPerTokenScale(ptrPerTokenScale_),
               layoutPerTokenScale(layoutPerTokenScale_),
@@ -250,7 +252,6 @@ public:
     CATLASS_DEVICE
     void operator()(int64_t groupOffsetD, uint32_t expertIdx, GemmCoord const &blockShapeMNK,
                     GemmCoord const &blockCoordMNK, GemmCoord const &actualBlockShapeMNK,
-                    AscendC::GlobalTensor<ElementC> const &gmBlockC, LayoutC const &layoutBlockC,
                     Callback &&callback = Callback{})
     {
         if (actualBlockShapeMNK.k() == 0) {
@@ -268,6 +269,8 @@ public:
         MatrixCoord actualBlockShape = actualBlockShapeMNK.GetCoordMN();
         MatrixCoord blockOffset = blockCoord * blockShape;
 
+        AscendC::GlobalTensor<ElementC> gmC;
+        gmC.SetGlobalBuffer(params.ptrC);
         AscendC::GlobalTensor<ElementRawScale> gmScale;
         gmScale.SetGlobalBuffer(params.ptrScale);
         AscendC::GlobalTensor<ElementPerTokenScale> gmPerTokenScale;
@@ -287,8 +290,8 @@ public:
             auto tileOffsetInBlock = tileCoord * tileShape;
             auto tileOffset = blockOffset + tileOffsetInBlock;
 
-            auto gmTileC = gmBlockC[layoutBlockC.GetOffset(tileOffsetInBlock)];
-            auto layoutGmTileC = layoutBlockC.GetTileLayout(actualTileShape);
+            auto gmTileC = gmC[params.layoutD.GetOffset(tileOffset)];
+            auto layoutGmTileC = params.layoutD.GetTileLayout(actualTileShape);
 
             auto &ubC = ubCList[ubListId];
             LayoutC layoutUbC{actualTileShape, ubTileStride};

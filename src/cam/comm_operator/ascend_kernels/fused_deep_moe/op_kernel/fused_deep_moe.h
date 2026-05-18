@@ -65,14 +65,13 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
                                   layout::RowMajor layoutShareD, GM_ADDR gmShareX2Scale, GM_ADDR gmSwigluOut,
                                   GM_ADDR gmWorkspace, GM_ADDR gmX, GM_ADDR gmMoeSmoothScales,
                                   GM_ADDR gmShareSmoothScales, GM_ADDR gmexpertIds, GM_ADDR gmExpandIdx,
-                                  GM_ADDR gmEpSendCount, GM_ADDR xActiveMask, GM_ADDR gmResvered,
-                                  GM_ADDR gmExpertTokenNums, const FusedDeepMoeInfo &disGmmDeqSwigluQuantGmmDeqComInfo)
+                                  GM_ADDR gmEpSendCount, GM_ADDR xActiveMask, GM_ADDR gmReserved,
+                                  GM_ADDR gmExpertTokenNums, const FusedDeepMoeInfo &fusedDeepMoeInfo)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
     using L1TileShape = L1TileShape_;
     using L0TileShape = L0TileShape_;
-
 
     using AType = Gemm::GemmType<int8_t, layout::RowMajor>;
     using BType = Gemm::GemmType<int8_t, layout::zN>;
@@ -108,87 +107,48 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
     // kernel level
     using ElementGroupList = int64_t;
 
-    using GemmKernel = typename std::conditional<
-        (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE),
-        Gemm::Kernel::GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspace<
-            TemplateMC2TypeFunc, BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>,
-        Gemm::Kernel::GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspaceWithShallowDispatch<
-            TemplateMC2TypeFunc, BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>>::type;
-
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        typename GemmKernel::Params params{problemShape,
-                                           groupCount,
-                                           gmGroupList,
-                                           gmA,
-                                           layoutA,
-                                           gmShareB,
-                                           layoutShareB,
-                                           gmB,
-                                           layoutB,
-                                           gmShareScale,
-                                           layoutShareScale,
-                                           gmScale,
-                                           layoutScale,
-                                           gmPerTokenScale,
-                                           layoutPerTokenScale,
-                                           gmD,
-                                           layoutD,
-                                           gmDequantScale,
-                                           layoutDequantScale,
-                                           gmWorkspace,
-                                           gmX,
-                                           gmMoeSmoothScales,
-                                           gmShareSmoothScales,
-                                           gmexpertIds,
-                                           gmExpandIdx,
-                                           gmEpSendCount,
-                                           xActiveMask,
-                                           gmResvered,
-                                           gmExpertTokenNums,
-                                           gmShareX1,
-                                           gmShareX1Scale,
-                                           gmShareSwigluOut,
-                                           gmShareX2,
-                                           layoutShareD,
-                                           gmShareX2Scale,
-                                           gmSwigluOut,
-                                           disGmmDeqSwigluQuantGmmDeqComInfo};
-        // call a kernel
-        GemmKernel gemm;
-        gemm(params);
-    } else {
-        typename GemmKernel::Params params{problemShape,
-                                           groupCount,
-                                           gmGroupList,
-                                           gmA,
-                                           layoutA,
-                                           gmShareB,
-                                           layoutShareB,
-                                           gmB,
-                                           layoutB,
-                                           gmShareScale,
-                                           layoutShareScale,
-                                           gmScale,
-                                           layoutScale,
-                                           gmPerTokenScale,
-                                           layoutPerTokenScale,
-                                           gmD,
-                                           layoutD,
-                                           gmDequantScale,
-                                           layoutDequantScale,
-                                           gmWorkspace,
-                                           gmShareX1,
-                                           gmShareX1Scale,
-                                           gmShareSwigluOut,
-                                           gmShareX2,
-                                           layoutShareD,
-                                           gmShareX2Scale,
-                                           gmSwigluOut,
-                                           disGmmDeqSwigluQuantGmmDeqComInfo};
-        // call a kernel
-        GemmKernel gemm;
-        gemm(params);
-    }
+    using GemmKernel = typename Gemm::Kernel::GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspace<
+            TemplateMC2TypeFunc, BlockMmad, BlockEpilogue, BlockScheduler, WORKSPACE_STAGES, ElementGroupList>;
+    typename GemmKernel::Params params{problemShape,
+                                        groupCount,
+                                        gmGroupList,
+                                        gmA,
+                                        layoutA,
+                                        gmShareB,
+                                        layoutShareB,
+                                        gmB,
+                                        layoutB,
+                                        gmShareScale,
+                                        layoutShareScale,
+                                        gmScale,
+                                        layoutScale,
+                                        gmPerTokenScale,
+                                        layoutPerTokenScale,
+                                        gmD,
+                                        layoutD,
+                                        gmDequantScale,
+                                        layoutDequantScale,
+                                        gmWorkspace,
+                                        gmX,
+                                        gmMoeSmoothScales,
+                                        gmShareSmoothScales,
+                                        gmexpertIds,
+                                        gmExpandIdx,
+                                        gmEpSendCount,
+                                        xActiveMask,
+                                        gmReserved,
+                                        gmExpertTokenNums,
+                                        gmShareX1,
+                                        gmShareX1Scale,
+                                        gmShareSwigluOut,
+                                        gmShareX2,
+                                        layoutShareD,
+                                        gmShareX2Scale,
+                                        gmSwigluOut,
+                                        fusedDeepMoeInfo};
+    // call a kernel
+    GemmKernel gemm;
+    gemm(params);
 }
 
 template <TemplateMC2TypeClass, class L1TileShape_, class L0TileShape_, class EpilogueTileShape_, class BlockScheduler_,
@@ -373,19 +333,19 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     gmexpertScales_ = expert_scales;
     xActiveMask_ = x_active_mask;
     tilingData_ = tilingData;
-    epRankSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-    epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
-    moeExpertNumPerRank_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
-    globalBs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
-    bs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
-    topK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
+    epRankSize_ = tilingData->fusedDeepMoeInfo.epRankSize;
+    epRankId_ = tilingData->fusedDeepMoeInfo.epRankId;
+    moeExpertNumPerRank_ = tilingData->fusedDeepMoeInfo.moeExpertNumPerRank;
+    globalBs_ = tilingData->fusedDeepMoeInfo.globalBs;
+    bs_ = tilingData->fusedDeepMoeInfo.bs;
+    topK_ = tilingData->fusedDeepMoeInfo.k;
     maxBs_ = globalBs_ / epRankSize_;
 
     maxTokenNum_ = maxBs_ * epRankSize_ * (topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_);
-    shareGmm1OutputDim_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
-    gmm1OutputDim_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
-    tokenHiddenSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
-    groupCount_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
+    shareGmm1OutputDim_ = tilingData->fusedDeepMoeInfo.shareGmm1HLen;
+    gmm1OutputDim_ = tilingData->fusedDeepMoeInfo.gmm1HLen;
+    tokenHiddenSize_ = tilingData->fusedDeepMoeInfo.h;
+    groupCount_ = tilingData->fusedDeepMoeInfo.moeExpertNumPerRank;
     gmm2OutputDim_ = tokenHiddenSize_;
     shareGmm2InputDim_ = shareGmm1OutputDim_ / 2;
     gmm2InputDim_ = gmm1OutputDim_ / 2;
@@ -415,59 +375,25 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     layout::VectorLayout layoutShareX2Scale{bs_};
     layout::RowMajor layoutShareOutput{bs_, gmm2OutputDim_};
 
-    GM_ADDR gmShareX1 = nullptr;
-    GM_ADDR gmShareX1Scale = nullptr;
-    GM_ADDR gmShareSwigluOut = nullptr;
-    GM_ADDR gmShareX2 = nullptr;
-    GM_ADDR gmShareX2Scale = nullptr;
+    // Use precomputed workspace offsets from tilingData, no need to recompute here
+    GM_ADDR gmShareX1 = workspaceGM_ + tilingData_->workSpaceOffset.shareX1TokenOffset;
+    GM_ADDR gmShareX1Scale = workspaceGM_ + tilingData_->workSpaceOffset.shareX1ScaleOffset;
+    GM_ADDR gmShareSwigluOut = workspaceGM_ + tilingData_->workSpaceOffset.shareSwigluOffset;
+    GM_ADDR gmShareX2 = workspaceGM_ + tilingData_->workSpaceOffset.shareX2TokenOffset;
+    GM_ADDR gmShareX2Scale = workspaceGM_ + tilingData_->workSpaceOffset.shareX2ScaleOffset;
 
-    GM_ADDR gmX1 = nullptr;
-    GM_ADDR gmX1Scale = nullptr;
-    GM_ADDR gmSwigluOut = nullptr;
-    GM_ADDR gmX2 = nullptr;
-    GM_ADDR gmX2Scale = nullptr;
-    size_t shareExpertTokenNum = 0;
-    if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-        shareExpertTokenNum = bs_;
-    }
-    size_t maxHandleTokenNum = maxTokenNum_ + shareExpertTokenNum;
-    size_t workspaceOffset = 0;
-    constexpr int32_t resveredWorkSpaceSize = 256 * 1024;
-    int64_t x1TokenSize = maxHandleTokenNum * tokenHiddenSize_ * sizeof(int8_t);
-    int64_t x2TokenSize = (maxTokenNum_ * gmm2InputDim_ + shareExpertTokenNum * shareGmm2InputDim_) * sizeof(int8_t);
-    int64_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
-    int64_t tokenScaleSize = maxHandleTokenNum * sizeof(float);
-    gmShareX1 = workspaceGM_ + workspaceOffset;
-    gmShareX2 = workspaceGM_ + workspaceOffset;
-    gmX1 = gmShareX1 + (static_cast<size_t>(shareExpertTokenNum) * tokenHiddenSize_ * sizeof(int8_t));
-    gmX2 = gmShareX2 + (static_cast<size_t>(shareExpertTokenNum) * shareGmm2InputDim_ * sizeof(int8_t));
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxTokenSize);
-    gmShareX1Scale = workspaceGM_ + workspaceOffset;
-    gmShareX2Scale = workspaceGM_ + workspaceOffset;
-    gmX1Scale = gmShareX1Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
-    gmX2Scale = gmShareX2Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(tokenScaleSize);
+    GM_ADDR gmX1 = workspaceGM_ + tilingData_->workSpaceOffset.x1TokenOffset;
+    GM_ADDR gmX1Scale = workspaceGM_ + tilingData_->workSpaceOffset.x1ScaleOffset;
+    GM_ADDR gmSwigluOut = workspaceGM_ + tilingData_->workSpaceOffset.swigluOffset;
+    GM_ADDR gmX2 = workspaceGM_ + tilingData_->workSpaceOffset.x2TokenOffset;
+    GM_ADDR gmX2Scale = workspaceGM_ + tilingData_->workSpaceOffset.x2ScaleOffset;
 
-    GM_ADDR gmWorkspace = workspaceGM_ + workspaceOffset;
-    GM_ADDR gmCVSwap = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(blockDim_) * (GMM1_L1M * GMM1_L1N) *
-                                              WORKSPACE_STAGES * sizeof(int32_t));
-    int64_t swigluOutSize = (maxTokenNum_ * gmm1OutputDim_ + shareExpertTokenNum * shareGmm1OutputDim_) * sizeof(float);
-    int64_t gmm2OutSize = maxTokenNum_ * tokenHiddenSize_ * sizeof(ExpandXType);
-    int64_t maxSwigluGmm2Size = swigluOutSize < gmm2OutSize ? gmm2OutSize : swigluOutSize;
-    gmShareSwigluOut = workspaceGM_ + workspaceOffset;
-    gmSwigluOut = gmShareSwigluOut + (static_cast<size_t>(shareExpertTokenNum) * shareGmm1OutputDim_ * sizeof(float));
-    GM_ADDR gmGmm2DepOut = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxSwigluGmm2Size);
-
-    GM_ADDR gmGroupList = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(groupCount_) * sizeof(int64_t));
-    GM_ADDR gmExpandIdx = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * sizeof(int32_t));
-    GM_ADDR gmEpSendCount = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * groupCount_ * sizeof(int32_t));
-    GM_ADDR gmResvered = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(resveredWorkSpaceSize);
+    GM_ADDR gmWorkspace = workspaceGM_ + tilingData_->workSpaceOffset.swapSpaceOffset;
+    GM_ADDR gmGmm2DepOut = workspaceGM_ + tilingData_->workSpaceOffset.y2TokenOffset;
+    GM_ADDR gmGroupList = workspaceGM_ + tilingData_->workSpaceOffset.groupListOffset;
+    GM_ADDR gmExpandIdx = workspaceGM_ + tilingData_->workSpaceOffset.expandIdxOffset;
+    GM_ADDR gmEpSendCount = workspaceGM_ + tilingData_->workSpaceOffset.epSendCountOffset;
+    GM_ADDR gmReserved = workspaceGM_ + tilingData_->workSpaceOffset.reservedOffset;
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         if constexpr (g_coreType == AscendC::AIV) {
@@ -497,8 +423,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         gmWeight1_, layoutWeight1, gmShareWeight1Scale_, layoutShareW1Scale, gmScale1_, layoutW1Scale,
         gmX1Scale, layoutX1Scale, gmX2, layoutX2, gmX2Scale, layoutX2Scale, gmShareX1, gmShareX1Scale,
         gmShareSwigluOut, gmShareX2, layoutShareX2, gmShareX2Scale, gmSwigluOut, gmWorkspace, gmX_, gmSmoothScales_,
-        gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_, gmResvered, gmExpertTokenNums_,
-        tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo);
+        gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_, gmReserved, gmExpertTokenNums_,
+        tilingData_->fusedDeepMoeInfo);
     AscendC::PipeBarrier<PIPE_ALL>();
     Arch::CrossCoreFlag gmm1AivFinished{0};
     if constexpr (g_coreType == AscendC::AIV) {

@@ -524,7 +524,6 @@ fused_deep_moe(
  - 需要满足: share_gmm1_hiden_size取值范围[1024， 6144]且(share_gmm1_hiden_size % 1024) == 0
  - 需要满足: topk取值范围[0, 12]且应保证小于等于专家数
  - 需要满足：global_bs ≥ 0 且保证（global_bs % ep_rank_size） == 0
- - 需要满足: 路由专家卡需满足local_expert_num ≤ (aivnum / 2)，其中aivnum为硬件aiv核心数
  - 需要满足: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale四个入参的模式必须统一，不能一部分耦合模式一部分分离模式
  - 需要满足: HCCL_BUFFERSIZE环境变量配置应不小于[(ep_rank_size * max_batch_size * moe_expert_num_per_rank * total_length * sizeof(x) * 2) / 1024 / 1024]向上取整
  - 需要满足: 若要进行内置共享专家计算，则共享专家所需的share_gmm1_weight、share_gmm1_weight_scale、share_gmm2_weight、share_gmm2_weight_scale需同时存在

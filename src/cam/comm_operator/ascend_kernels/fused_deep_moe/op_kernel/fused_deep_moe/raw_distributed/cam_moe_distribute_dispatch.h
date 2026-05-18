@@ -15,6 +15,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 #include "../../fused_deep_moe_base.h"
 #include "../../fused_deep_moe_tiling.h"
+#include "../fused_deep_moe_utils.h"
 
 using namespace Cam;
 namespace MoeDistributeDispatchImpl {
@@ -228,7 +229,7 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
 {
     tpipe_ = pipe;
     aivId_ = GetBlockIdx();
-    epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
+    epRankId_ = tilingData->fusedDeepMoeInfo.epRankId;
     GlobalTensor<int32_t> selfDataStatusTensor;
     GM_ADDR statusDataSpaceGm;
 
@@ -238,24 +239,15 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     statusDataSpaceGm = (GM_ADDR)(winContext_[COMM_EP_IDX]->localWindowsExp);
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
 
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfDataStatusTensor[aivId_ * UB_ALIGN]);
-    __asm__ __volatile__("");
-    dataState_ = selfDataStatusTensor(aivId_ * UB_ALIGN);
-    selfDataStatusTensor(aivId_ * UB_ALIGN) = (dataState_ == 0);
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfDataStatusTensor[aivId_ * UB_ALIGN]);
-    __asm__ __volatile__("");
+    dataState_ = FlushAndSpinValue<int32_t>(selfDataStatusTensor, aivId_ * UB_ALIGN);
     pipe_barrier(PIPE_ALL);
-    axisBS_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
-    axisH_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
-    epWorldSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-    axisMaxBS_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs / epWorldSize_;
-    moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
+    axisBS_ = tilingData->fusedDeepMoeInfo.bs;
+    axisH_ = tilingData->fusedDeepMoeInfo.h;
+    epWorldSize_ = tilingData->fusedDeepMoeInfo.epRankSize;
+    axisMaxBS_ = tilingData->fusedDeepMoeInfo.globalBs / epWorldSize_;
+    moeExpertNum_ = tilingData->fusedDeepMoeInfo.moeExpertNum;
     expertTokenNumsType_ = 0;
-    totalWinSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalWinSize;
+    totalWinSize_ = tilingData->fusedDeepMoeInfo.totalWinSize;
     moeExpertRankNum_ = epWorldSize_;
     moeExpertNumPerRank_ = moeExpertNum_ / moeExpertRankNum_;
     expertPerSizeOnWin_ = axisMaxBS_ * axisH_ * sizeof(XType);
@@ -264,8 +256,8 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     windowGM_ = GetWindAddrByRankId(COMM_EP_IDX, epRankId_);
     statusSpaceGm_ = GetWindStateAddrByRankId(COMM_EP_IDX, epRankId_);
     tpGatherRankId_ = tpRankId_ == 0 ? 1 : 0;
-    axisK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
-    aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aivNum;
+    axisK_ = tilingData->fusedDeepMoeInfo.k;
+    aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
     tpWorldSize_ = 1;
     if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
         shareX1TokenGMTensor_.SetGlobalBuffer((__gm__ ExpandXOutType *)shareX1Token);

@@ -14,6 +14,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 #include "../../fused_deep_moe_base.h"
 #include "../../fused_deep_moe_tiling.h"
+#include "../fused_deep_moe_utils.h"
 
 using namespace Cam;
 namespace MoeDistributeCombineImpl {
@@ -239,26 +240,13 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
 {
     tpipe_ = pipe;
     coreIdx_ = GetBlockIdx();
-    epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
+    epRankId_ = tilingData->fusedDeepMoeInfo.epRankId;
     auto contextGM0 = AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
     epWinContext_ = (__gm__ HcclOpResParam *)contextGM0;
     GlobalTensor<int32_t> selfDataStatusTensor;
     GM_ADDR statusDataSpaceGm = (GM_ADDR)epWinContext_->localWindowsExp;
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfDataStatusTensor[coreIdx_ * UB_ALIGN]);
-    __asm__ __volatile__("");
-    dataState_ = selfDataStatusTensor(coreIdx_ * UB_ALIGN);
-    if (dataState_ == 0) {
-        selfDataStatusTensor(coreIdx_ * UB_ALIGN) = 1;
-    } else {
-        selfDataStatusTensor(coreIdx_ * UB_ALIGN) = 0;
-    }
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfDataStatusTensor[coreIdx_ * UB_ALIGN]);
-    __asm__ __volatile__("");
+    dataState_ = FlushAndSpinValue<int32_t>(selfDataStatusTensor, coreIdx_ * UB_ALIGN);
     pipe_barrier(PIPE_ALL);
 
     workspaceGM_ = workspaceGM;
@@ -269,24 +257,24 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     expandScalesGM_.SetGlobalBuffer((__gm__ float *)scales);
     xActiveMaskGM_.SetGlobalBuffer((__gm__ bool*)xActiveMask);
     expandOutGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)XOut);
-    axisBS_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
+    axisBS_ = tilingData->fusedDeepMoeInfo.bs;
     activeMaskBsCnt_ = axisBS_;
-    axisH_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
-    axisK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
+    axisH_ = tilingData->fusedDeepMoeInfo.h;
+    axisK_ = tilingData->fusedDeepMoeInfo.k;
     if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
+        aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
     } else {
-        aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aivNum;
+        aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
     }
-    ubSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalUbSize;
-    moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
-    moeExpertPerRankNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
-    epWorldSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-    axisMaxBs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs / epWorldSize_;
+    ubSize_ = tilingData->fusedDeepMoeInfo.totalUbSize;
+    moeExpertNum_ = tilingData->fusedDeepMoeInfo.moeExpertNum;
+    moeExpertPerRankNum_ = tilingData->fusedDeepMoeInfo.moeExpertNumPerRank;
+    epWorldSize_ = tilingData->fusedDeepMoeInfo.epRankSize;
+    axisMaxBs_ = tilingData->fusedDeepMoeInfo.globalBs / epWorldSize_;
     moeSendNum_ = epWorldSize_ * moeExpertPerRankNum_;
     tpWorldSize_ = 1;
     tpRankId_ = 0;
-    totalWinSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalWinSize;
+    totalWinSize_ = tilingData->fusedDeepMoeInfo.totalWinSize;
     stateOffset_ = (moeSendNum_ > 512) ? (STATE_OFFSET / 2) : STATE_OFFSET;
     expertPerSizeOnWin_ =
         static_cast<uint64_t>(axisMaxBs_) * static_cast<uint64_t>(axisH_) * static_cast<uint64_t>(sizeof(ExpandXType));
@@ -335,24 +323,14 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::InitStatusT
     // ep state
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(epStatusSpaceGm_ + SELF_STATE_OFFSET));
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfStatusTensor[coreIdx_ * UB_ALIGN]);
-    __asm__ __volatile__("");
-    int32_t state = selfStatusTensor(coreIdx_ * UB_ALIGN);
+    int32_t state = FlushAndGetValue<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN);
+    sumTarget_ = state == 0 ? 1.0f : 0.0f;
+    epStateValue_ = state == 0 ? 0x3F800000 : 0;
     if (state == 0) {
-        sumTarget_ = static_cast<float>(1.0);
-        selfStatusTensor(coreIdx_ * UB_ALIGN) = 0x3F800000;  // 1.0f
-        epStateValue_ = 0x3F800000;                          // 1.0f
+        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN, 0x3F800000);
     } else {
-        sumTarget_ = static_cast<float>(0.0);
-        selfStatusTensor(coreIdx_ * UB_ALIGN) = 0;
-        epStateValue_ = 0;
+        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN, 0);
     }
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfStatusTensor[coreIdx_ * UB_ALIGN]);
-    __asm__ __volatile__("");
 }
 
 template <TemplateMC2TypeClass>
@@ -437,27 +415,15 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::SplitCoreCa
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReduceScatterTrans()
 {
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-                                tpSendCountGM_[tpRankId_]);
-    __asm__ __volatile__("");
-    uint32_t offset = tpSendCountGM_.GetValue(tpRankId_) * axisH_;
+    uint32_t offset = FlushAndGetValue<ExpandIdxType>(tpSendCountGM_, tpRankId_) * axisH_;
     GlobalTensor<ExpandXType> dataCopyInGM = expandXGM_[offset];
     GM_ADDR rankGM = GetWinAddrByRankId(1 - tpRankId_, TP_DOMAIN) + tpDataOffsetOnWin_;
     rankWindow_.SetGlobalBuffer((__gm__ ExpandXType *)rankGM);
     uint32_t copyStartIdx = 0;
     if (startRankId_ > 0) {
-        __asm__ __volatile__("");
-        DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-            epSendCountGM_[epWorldSize_ + startRankId_ - 1]);
-        __asm__ __volatile__("");
-        copyStartIdx = epSendCountGM_.GetValue(epWorldSize_ + startRankId_ - 1);
+        copyStartIdx = FlushAndGetValue<ExpandIdxType>(epSendCountGM_, epWorldSize_ + startRankId_ - 1);
     }
-    __asm__ __volatile__("");
-    DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        epSendCountGM_[epWorldSize_ + endRankId_ - 1]);
-    __asm__ __volatile__("");
-    uint32_t copyEndIdx = epSendCountGM_.GetValue(epWorldSize_ + endRankId_ - 1);
+    uint32_t copyEndIdx = FlushAndGetValue<ExpandIdxType>(epSendCountGM_, epWorldSize_ + endRankId_ - 1);
     LocalTensor<ExpandXType> tmpUb;
     for (uint32_t tokenNumIdx = copyStartIdx; tokenNumIdx < copyEndIdx; tokenNumIdx++) {
         tmpUb = moeQueue_.AllocTensor<ExpandXType>();
