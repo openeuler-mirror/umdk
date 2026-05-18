@@ -1062,7 +1062,6 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
             EID_ARGS(*io_eid), io_id, queue->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
-
     uint32_t ref_cnt = umq_fetch_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt);
     if (!queue->dev_ctx->io_lock_free && ref_cnt != 1) {
         UMQ_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umqh ref cnt %u is not 0\n", EID_ARGS(*io_eid),

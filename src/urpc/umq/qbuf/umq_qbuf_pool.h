@@ -252,7 +252,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     umq_buf_t *local_head_before;
     uint64_t local_cnt_before;
 
-   (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)pthread_spin_lock(&global_pool->global_mutex);
     if (with_data) {
         global_buf_cnt = &global_pool->buf_cnt_with_data;
         global_head = &global_pool->head_with_data;

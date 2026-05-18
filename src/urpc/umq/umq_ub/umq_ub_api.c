@@ -8,12 +8,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "umq_vlog.h"
 #include "umq_errno.h"
-#include "umq_ub_impl.h"
 #include "umq_qbuf_pool.h"
-#include "umq_ub_api.h"
 #include "umq_symbol_private.h"
+#include "umq_ub_impl.h"
+#include "umq_vlog.h"
+#include "umq_ub_api.h"
 
 static int umq_tp_ub_symbol_load(void)
 {
