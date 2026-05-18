@@ -12,7 +12,6 @@
 #include "umq_vlog.h"
 #include "urpc_thread_closure.h"
 #include "urpc_util.h"
-
 #include "perf.h"
 
 #define UMQ_PERF_MAX_THRESH_NS         (100000u)
