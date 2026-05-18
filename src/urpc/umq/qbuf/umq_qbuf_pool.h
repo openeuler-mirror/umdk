@@ -143,6 +143,22 @@ typedef struct local_block_pool {
     uint64_t capacity_without_data;
 } local_block_pool_t;
 
+typedef struct local_qbuf_pool_stats {
+    uint64_t tid;
+    uint64_t tls_fetch_cnt_with_data;
+    uint64_t tls_fetch_buf_cnt_with_data;
+    uint64_t tls_fetch_cnt_without_data;
+    uint64_t tls_fetch_buf_cnt_without_data;
+    uint64_t tls_return_cnt_with_data;
+    uint64_t tls_return_buf_cnt_with_data;
+    uint64_t tls_return_cnt_without_data;
+    uint64_t tls_return_buf_cnt_without_data;
+    uint64_t alloc_cnt_with_data;
+    uint64_t alloc_cnt_without_data;
+    uint64_t free_cnt_with_data;
+    uint64_t free_cnt_without_data;
+} local_qbuf_pool_stats_t;
+
 typedef struct global_block_pool {
     pthread_spinlock_t global_mutex;
     umq_buf_list_t head_with_data;
@@ -237,10 +253,49 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
 int expand_global_pool(bool with_data);
 void async_expand_global_pool(bool with_data, uint64_t g_buf_cnt);
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t need, umq_buf_list_t *local_head, uint64_t *local_buf_cnt);
-void return_list_to_pools(umq_buf_t *local_head, uint64_t *local_buf_cnt,
+uint64_t return_list_to_pools(umq_buf_t *local_head,
     umq_buf_list_t *global_head, uint64_t *global_buf_cnt, bool with_data);
 
 bool umq_disable_scale_cap(void);
+
+static ALWAYS_INLINE void thread_local_pool_rollback(umq_buf_t *buf_head_old, uint64_t buf_cnt_old,
+    local_block_pool_t *local_pool, global_block_pool_t *global_pool, bool with_data)
+{
+    uint64_t *global_buf_cnt;
+    umq_buf_list_t *global_head;
+    uint64_t *local_buf_cnt;
+    umq_buf_list_t *local_head;
+
+    if (with_data) {
+        global_buf_cnt = &global_pool->buf_cnt_with_data;
+        global_head = &global_pool->head_with_data;
+
+        local_buf_cnt = &local_pool->buf_cnt_with_data;
+        local_head = &local_pool->head_with_data;
+    } else {
+        global_buf_cnt = &global_pool->buf_cnt_without_data;
+        global_head = &global_pool->head_without_data;
+
+        local_buf_cnt = &local_pool->buf_cnt_without_data;
+        local_head = &local_pool->head_without_data;
+    }
+
+    if (*local_buf_cnt <= buf_cnt_old) {
+        return;
+    }
+
+    umq_buf_t *head = QBUF_LIST_FIRST(local_head);
+    QBUF_LIST_FIRST(local_head) = buf_head_old;
+    uint64_t alloc_cnt = ((*local_buf_cnt) - buf_cnt_old);
+    umq_buf_t *tail = head;
+    for (uint64_t i = 0; i < alloc_cnt - 1; i++) {
+        tail = QBUF_LIST_NEXT(tail);
+    }
+    tail->qbuf_next = NULL;
+    (void)pthread_spin_lock(&global_pool->global_mutex);
+    *local_buf_cnt -= return_list_to_pools(head, global_head, global_buf_cnt, with_data);
+    (void)pthread_spin_unlock(&global_pool->global_mutex);
+}
 
 static ALWAYS_INLINE int32_t fetch_from_global(
         global_block_pool_t *global_pool, local_block_pool_t *cache_pool, bool with_data, uint32_t batch_count)
@@ -308,45 +363,41 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     return count;
 
 ROLLBACK:
-    if (*local_buf_cnt > local_cnt_before) {
-        umq_buf_t *head = QBUF_LIST_FIRST(local_head);
-        QBUF_LIST_FIRST(local_head) = local_head_before;
-        uint64_t alloc_cnt = ((*local_buf_cnt) - local_cnt_before);
-        umq_buf_t *tail = head;
-        for (uint64_t i = 0; i < alloc_cnt - 1; i++) {
-            tail = QBUF_LIST_NEXT(tail);
-        }
-        tail->qbuf_next = NULL;
-        return_list_to_pools(head, local_buf_cnt, global_head, global_buf_cnt, with_data);
-    }
+    thread_local_pool_rollback(local_head_before, local_cnt_before, cache_pool, global_pool, with_data);
     return -UMQ_ERR_ENOMEM;
 }
 
 // flush list from local to global, threshold means the local pool size that needs to be returned
-static ALWAYS_INLINE void return_to_global(
-        global_block_pool_t *global_pool, local_block_pool_t *cache, bool with_data, uint32_t threshold)
+static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, local_block_pool_t *cache,
+    local_qbuf_pool_stats_t *stats, bool with_data, uint32_t threshold)
 {
     uint64_t *global_buf_cnt;
     umq_buf_list_t *global_head;
     uint64_t *local_buf_cnt;
     umq_buf_list_t *local_head;
+    uint64_t return_buf_cnt;
+    uint64_t *tls_return_buf_cnt;
     (void)pthread_spin_lock(&global_pool->global_mutex);
     if (with_data) {
         global_head = &global_pool->head_with_data;
         global_buf_cnt = &global_pool->buf_cnt_with_data;
         local_buf_cnt = &cache->buf_cnt_with_data;
         local_head = &cache->head_with_data;
+        tls_return_buf_cnt = &stats->tls_return_buf_cnt_with_data;
     } else {
         global_head = &global_pool->head_without_data;
         global_buf_cnt = &global_pool->buf_cnt_without_data;
         local_buf_cnt = &cache->buf_cnt_without_data;
         local_head = &cache->head_without_data;
+        tls_return_buf_cnt = &stats->tls_return_buf_cnt_without_data;
     }
 
     if (threshold == 0) {
         umq_buf_t *head = QBUF_LIST_FIRST(local_head);
         QBUF_LIST_FIRST(local_head) = NULL;
-        return_list_to_pools(head, local_buf_cnt, global_head, global_buf_cnt, with_data);
+        return_buf_cnt = return_list_to_pools(head, global_head, global_buf_cnt, with_data);
+        *local_buf_cnt -= return_buf_cnt;
+        *tls_return_buf_cnt += return_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
         return;
     }
@@ -362,7 +413,9 @@ static ALWAYS_INLINE void return_to_global(
     if (switch_node != NULL && QBUF_LIST_NEXT(switch_node) != NULL) {
         umq_buf_t *head = QBUF_LIST_NEXT(switch_node);
         QBUF_LIST_NEXT(switch_node) = NULL;
-        return_list_to_pools(head, local_buf_cnt, global_head, global_buf_cnt, with_data);
+        return_buf_cnt = return_list_to_pools(head, global_head, global_buf_cnt, with_data);
+        *local_buf_cnt -= return_buf_cnt;
+        *tls_return_buf_cnt += return_buf_cnt;
     }
 
     (void)pthread_spin_unlock(&global_pool->global_mutex);
