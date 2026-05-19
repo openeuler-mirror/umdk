@@ -32,6 +32,7 @@
 #include "ums_agent_log.h"
 #include "ums_agent_tls.h"
 #include "ums_agent_nl.h"
+#include "ums_agent_token_proxy.h"
 
 #define UMS_AGENT_VERSION             "0.1.0"
 #define UMS_AGENT_CONFIG_PATH_PREFIX  "/etc/ums_agent/"
@@ -242,6 +243,7 @@ static void ums_agent_handle_timer_event(int tfd, uint32_t events)
             UMS_AGENT_LOG_WARN("read timerfd: unexpected size %zd, expected %zu", n, sizeof(expirations));
         } else {
             ums_agent_tls_timer_tick(g_ums_agent_ctx.config);
+            ums_agent_tp_timer_tick();
         }
     }
 
@@ -379,6 +381,7 @@ static void ums_agent_shutdown(void)
 
     ums_agent_notify_systemd("STOPPING=1");
 
+    ums_agent_tp_deinit();
     ums_agent_tls_deinit();
     ums_agent_nl_deinit();
 
@@ -457,6 +460,12 @@ int main(int argc, char *argv[])
         goto err_nl;
     }
 
+    ret = ums_agent_tp_init((uint16_t)g_ums_agent_ctx.config->listen_port);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("token proxy init failed");
+        goto err_tls;
+    }
+
     atomic_store(&g_ums_agent_ctx.running, true);
 
     UMS_AGENT_LOG_INFO("ums_agent initialized successfully");
@@ -469,6 +478,8 @@ int main(int argc, char *argv[])
 
     return ret < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 
+err_tls:
+    ums_agent_tls_deinit();
 err_nl:
     ums_agent_nl_deinit();
 err_timer:
