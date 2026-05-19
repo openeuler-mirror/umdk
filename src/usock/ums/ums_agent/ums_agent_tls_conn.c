@@ -34,7 +34,7 @@
 #include "ums_agent_tls_conn.h"
 
 struct ums_agent_tls_conn_pool {
-    struct ums_agent_tls_conn *head;
+    struct ums_agent_list_node head;
     uint32_t conn_count;
     uint32_t max_conns;
     GHashTable *fd_ht;
@@ -268,6 +268,7 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_alloc(int fd, SSL *ssl,
     conn->close_pending = false;
     conn->peer_addr = *peer_addr;
     conn->peer_port = peer_port;
+    ums_agent_list_init(&conn->node);
 
     ums_agent_get_monotonic_time(&conn->create_time);
     ums_agent_get_monotonic_time(&conn->handshake_start_time);
@@ -300,12 +301,7 @@ static void ums_agent_tls_conn_destroy(struct ums_agent_tls_conn *conn)
 
 static void ums_agent_tls_conn_pool_add(struct ums_agent_tls_conn *conn)
 {
-    conn->next = g_ums_agent_tls_conn_pool.head;
-    conn->prev = NULL;
-    if (g_ums_agent_tls_conn_pool.head) {
-        g_ums_agent_tls_conn_pool.head->prev = conn;
-    }
-    g_ums_agent_tls_conn_pool.head = conn;
+    ums_agent_list_add_tail(&conn->node, &g_ums_agent_tls_conn_pool.head);
     g_ums_agent_tls_conn_pool.conn_count++;
 
     if (conn->fd >= 0 && g_ums_agent_tls_conn_pool.fd_ht) {
@@ -315,16 +311,7 @@ static void ums_agent_tls_conn_pool_add(struct ums_agent_tls_conn *conn)
 
 static void ums_agent_tls_conn_pool_remove(struct ums_agent_tls_conn *conn)
 {
-    if (conn->prev) {
-        conn->prev->next = conn->next;
-    } else {
-        g_ums_agent_tls_conn_pool.head = conn->next;
-    }
-    if (conn->next) {
-        conn->next->prev = conn->prev;
-    }
-    conn->next = NULL;
-    conn->prev = NULL;
+    ums_agent_list_remove(&conn->node);
     g_ums_agent_tls_conn_pool.conn_count--;
 
     if (conn->fd >= 0 && g_ums_agent_tls_conn_pool.fd_ht) {
@@ -332,19 +319,17 @@ static void ums_agent_tls_conn_pool_remove(struct ums_agent_tls_conn *conn)
     }
 }
 
-static struct ums_agent_tls_conn *ums_agent_tls_pool_find(const struct ums_agent_ip_addr *peer_addr,
-    uint16_t peer_port)
+static struct ums_agent_tls_conn *ums_agent_tls_pool_find(const struct ums_agent_ip_addr *peer_addr)
 {
-    struct ums_agent_tls_conn *conn = g_ums_agent_tls_conn_pool.head;
-    while (conn) {
-        if (conn->peer_port == peer_port &&
-            ums_agent_ip_addr_equal(&conn->peer_addr, peer_addr) &&
+    struct ums_agent_list_node *pos;
+    ums_agent_list_for_each(pos, &g_ums_agent_tls_conn_pool.head) {
+        struct ums_agent_tls_conn *conn = ums_agent_list_entry(pos, struct ums_agent_tls_conn, node);
+        if (ums_agent_ip_addr_equal(&conn->peer_addr, peer_addr) &&
             conn->state == UMS_AGENT_TLS_CONN_CONNECTED &&
             conn->ref_count == 0 &&
             !conn->close_pending) {
             return conn;
         }
-        conn = conn->next;
     }
     return NULL;
 }
@@ -352,11 +337,11 @@ static struct ums_agent_tls_conn *ums_agent_tls_pool_find(const struct ums_agent
 static void ums_agent_tls_pool_foreach(void (*cb)(struct ums_agent_tls_conn *conn, void *user_data),
     void *user_data)
 {
-    struct ums_agent_tls_conn *conn = g_ums_agent_tls_conn_pool.head;
-    while (conn) {
-        struct ums_agent_tls_conn *next = conn->next;
+    struct ums_agent_list_node *pos;
+    struct ums_agent_list_node *n;
+    ums_agent_list_for_each_safe(pos, n, &g_ums_agent_tls_conn_pool.head) {
+        struct ums_agent_tls_conn *conn = ums_agent_list_entry(pos, struct ums_agent_tls_conn, node);
         cb(conn, user_data);
-        conn = next;
     }
 }
 
@@ -456,12 +441,21 @@ static int ums_agent_tls_conn_check_connect_result(struct ums_agent_tls_conn *co
     return 0;
 }
 
+static void ums_agent_tls_conn_notify_close(struct ums_agent_tls_conn *conn)
+{
+    if (g_ums_agent_tls_conn_pool.ops.on_close) {
+        g_ums_agent_tls_conn_pool.ops.on_close(conn,
+            g_ums_agent_tls_conn_pool.ops.user_data);
+    }
+}
+
 static void ums_agent_tls_conn_close(struct ums_agent_tls_conn *conn)
 {
     if (!conn) {
         return;
     }
 
+    ums_agent_tls_conn_notify_close(conn);
     ums_agent_tls_conn_pool_remove(conn);
     ums_agent_tls_conn_destroy(conn);
 }
@@ -569,6 +563,14 @@ static void ums_agent_tls_conn_notify_data_available(struct ums_agent_tls_conn *
     }
 }
 
+static void ums_agent_tls_conn_notify_writable(struct ums_agent_tls_conn *conn)
+{
+    if (g_ums_agent_tls_conn_pool.ops.on_writable) {
+        g_ums_agent_tls_conn_pool.ops.on_writable(conn,
+            g_ums_agent_tls_conn_pool.ops.user_data);
+    }
+}
+
 static void ums_agent_tls_conn_handle_handshaking(struct ums_agent_tls_conn *conn,
     uint32_t events)
 {
@@ -616,6 +618,26 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
         return;
     }
 
+    if (events & EPOLLIN) {
+        ums_agent_get_monotonic_time(&conn->last_active_time);
+        ums_agent_tls_conn_notify_data_available(conn);
+        if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
+            return;
+        }
+    }
+
+    if (events & EPOLLOUT) {
+        ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
+        ums_agent_tls_conn_notify_data_available(conn);
+        if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
+            return;
+        }
+        ums_agent_tls_conn_notify_writable(conn);
+        if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
+            return;
+        }
+    }
+
     if (events & EPOLLHUP) {
         char ip_str[INET6_ADDRSTRLEN] = {0};
         ums_agent_ip_addr_to_str(&conn->peer_addr, ip_str, sizeof(ip_str));
@@ -633,15 +655,6 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
         conn->state = UMS_AGENT_TLS_CONN_CLOSED;
         ums_agent_tls_conn_close(conn);
         return;
-    }
-
-    if (events & EPOLLOUT) {
-        ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
-    }
-
-    if (events & EPOLLIN) {
-        ums_agent_get_monotonic_time(&conn->last_active_time);
-        ums_agent_tls_conn_notify_data_available(conn);
     }
 }
 
@@ -865,6 +878,12 @@ static int ums_agent_tls_conn_create_client_socket(const struct ums_agent_ip_add
         return -1;
     }
 
+    /*
+     * Non-blocking connect: socket created with SOCK_NONBLOCK.
+     * Returns 0 if connection established immediately (e.g. loopback),
+     * returns -1 with errno==EINPROGRESS if connection is in progress,
+     * returns -1 with other errno on real failure.
+     */
     *connect_ret = connect(fd, (struct sockaddr *)&sa_storage, sa_len);
     if (*connect_ret < 0 && errno != EINPROGRESS) {
         char ip_str[INET6_ADDRSTRLEN] = {0};
@@ -888,7 +907,7 @@ int ums_agent_tls_conn_pool_init(uint32_t max_conns,
         return -1;
     }
 
-    g_ums_agent_tls_conn_pool.head = NULL;
+    ums_agent_list_init(&g_ums_agent_tls_conn_pool.head);
     g_ums_agent_tls_conn_pool.conn_count = 0;
     g_ums_agent_tls_conn_pool.max_conns = max_conns;
     g_ums_agent_tls_conn_pool.fd_ht = fd_ht;
@@ -904,13 +923,13 @@ int ums_agent_tls_conn_pool_init(uint32_t max_conns,
 
 void ums_agent_tls_conn_pool_deinit(void)
 {
-    struct ums_agent_tls_conn *conn = g_ums_agent_tls_conn_pool.head;
-    while (conn) {
-        struct ums_agent_tls_conn *next = conn->next;
+    struct ums_agent_list_node *pos;
+    struct ums_agent_list_node *n;
+    ums_agent_list_for_each_safe(pos, n, &g_ums_agent_tls_conn_pool.head) {
+        struct ums_agent_tls_conn *conn = ums_agent_list_entry(pos, struct ums_agent_tls_conn, node);
         ums_agent_tls_conn_close(conn);
-        conn = next;
     }
-    g_ums_agent_tls_conn_pool.head = NULL;
+    ums_agent_list_init(&g_ums_agent_tls_conn_pool.head);
     g_ums_agent_tls_conn_pool.conn_count = 0;
     if (g_ums_agent_tls_conn_pool.fd_ht) {
         g_hash_table_destroy(g_ums_agent_tls_conn_pool.fd_ht);
@@ -919,14 +938,28 @@ void ums_agent_tls_conn_pool_deinit(void)
     memset(&g_ums_agent_tls_conn_pool.ops, 0, sizeof(g_ums_agent_tls_conn_pool.ops));
 }
 
+void ums_agent_tls_conn_register_ops(const struct ums_agent_tls_conn_ops *ops)
+{
+    if (!ops) {
+        return;
+    }
+
+    g_ums_agent_tls_conn_pool.ops = *ops;
+}
+
+void ums_agent_tls_conn_unregister_ops(void)
+{
+    memset(&g_ums_agent_tls_conn_pool.ops, 0, sizeof(g_ums_agent_tls_conn_pool.ops));
+}
+
 struct ums_agent_tls_conn *ums_agent_tls_conn_pool_get(
-    const struct ums_agent_ip_addr *peer_addr, uint16_t peer_port)
+    const struct ums_agent_ip_addr *peer_addr)
 {
     if (!peer_addr) {
         return NULL;
     }
 
-    struct ums_agent_tls_conn *conn = ums_agent_tls_pool_find(peer_addr, peer_port);
+    struct ums_agent_tls_conn *conn = ums_agent_tls_pool_find(peer_addr);
     if (!conn) {
         return NULL;
     }
@@ -945,7 +978,6 @@ void ums_agent_tls_conn_pool_put(struct ums_agent_tls_conn *conn)
     if (conn->ref_count > 0) {
         conn->ref_count--;
     }
-    ums_agent_get_monotonic_time(&conn->last_active_time);
     if (conn->ref_count == 0 && conn->close_pending) {
         ums_agent_tls_conn_shutdown(conn);
     }
@@ -962,7 +994,7 @@ int ums_agent_tls_conn_connect(const struct ums_agent_ip_addr *peer_addr,
     char ip_str[INET6_ADDRSTRLEN] = {0};
     ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
 
-    struct ums_agent_tls_conn *existing = ums_agent_tls_pool_find(peer_addr, peer_port);
+    struct ums_agent_tls_conn *existing = ums_agent_tls_pool_find(peer_addr);
     if (existing) {
         UMS_AGENT_LOG_DEBUG("reusing existing TLS connection to %s:%u",
             ip_str, peer_port);
@@ -1098,6 +1130,10 @@ void ums_agent_tls_conn_shutdown(struct ums_agent_tls_conn *conn)
         return;
     }
 
+    if (conn->state == UMS_AGENT_TLS_CONN_CLOSED) {
+        return;
+    }
+
     if (conn->ref_count > 0) {
         char ip_str[INET6_ADDRSTRLEN] = {0};
         ums_agent_ip_addr_to_str(&conn->peer_addr, ip_str, sizeof(ip_str));
@@ -1124,8 +1160,7 @@ void ums_agent_tls_conn_shutdown(struct ums_agent_tls_conn *conn)
     }
 
     conn->state = UMS_AGENT_TLS_CONN_CLOSED;
-    ums_agent_tls_conn_pool_remove(conn);
-    ums_agent_tls_conn_destroy(conn);
+    ums_agent_tls_conn_close(conn);
 }
 
 void ums_agent_tls_conn_handle_event(struct ums_agent_tls_conn *conn,
