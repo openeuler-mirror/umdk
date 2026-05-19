@@ -29,6 +29,8 @@ add_executable(ums_agent
     ums_agent_tls.h
     ums_agent_nl.c
     ums_agent_nl.h
+    ums_agent_token_proxy.c
+    ums_agent_token_proxy.h
     ums_agent_list.h
 )
 
