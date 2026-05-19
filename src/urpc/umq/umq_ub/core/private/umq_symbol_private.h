@@ -11,7 +11,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
 #include "urma_types.h"
 
 // === URMA function pointer types - Device/Init ===

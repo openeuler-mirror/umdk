@@ -656,8 +656,8 @@ static ALWAYS_INLINE void umq_qbuf_block_pool_uninit(global_block_pool_t *block_
 uint32_t umq_qbuf_headroom_get(void);
 umq_buf_mode_t umq_qbuf_mode_get(void);
 
-int umq_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *sps);
-void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *sps);
+int umq_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
+void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 
 #ifdef __cplusplus
 }

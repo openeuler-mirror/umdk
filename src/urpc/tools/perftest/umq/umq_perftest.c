@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stddef.h>
-#include <stdarg.h>
 
 #include "umq_api.h"
 #include "umq_pro_api.h"
@@ -181,7 +180,7 @@ static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
         int str_size = umq_stats_perf_to_str(&umq_perf_stats, perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
         if (str_size >= UMQ_PERFTEST_ERTF_INFO_STR_SIZE) {
             perf_info_str_buf[UMQ_PERFTEST_ERTF_INFO_STR_SIZE - 1] = '\0';
-            LOG_PRINT("perf info str buf too small, str_size %u\n", str_size);
+            LOG_PRINT("perf info str buf too small, str_size %d\n", str_size);
         }
         printf("%s\n", perf_info_str_buf);
         free(perf_info_str_buf);
