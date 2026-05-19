@@ -769,7 +769,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         context[i].umq_ctx_jetty_table = NULL;
         free((void*)context[i].rx_consumed_jetty_table);
         context[i].rx_consumed_jetty_table = NULL;
-        (void)pthread_spin_destroy(&g_ub_ctx[i].tseg_list_lock);
+        (void)pthread_spin_destroy(&context[i].tseg_list_lock);
     }
 
     umq_io_buf_free();
@@ -1974,8 +1974,8 @@ int umq_ub_get_route_list_impl(const umq_route_key_t *route_key, umq_route_list_
 
     uvs_path_set_t uvs_path_set;
     uvs_tp_type_t uvs_tp_type = umq_tp_type_convert_to_uvs(route_key->tp_type);
-    int ret = umq_symbol_urma()->uvs_get_path_set((uvs_eid_t *)&route_key->src_bonding_eid,
-        (uvs_eid_t *)&route_key->dst_bonding_eid, uvs_tp_type, false, &uvs_path_set);
+    int ret = umq_symbol_urma()->uvs_get_path_set((uvs_eid_t *)(uintptr_t)&route_key->src_bonding_eid,
+        (uvs_eid_t *)(uintptr_t)&route_key->dst_bonding_eid, uvs_tp_type, false, &uvs_path_set);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "uvs_get_path_set failed, status: %d\n", ret);
         return ret;

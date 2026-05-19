@@ -474,7 +474,7 @@ static int umq_perftest_client_exchange_port(umq_perftest_config_t *cfg)
         }
     }
 
-    send_info.msg_len = sizeof(umq_port_id_t);
+    send_info.msg_len = (uint32_t)sizeof(umq_port_id_t);
     umq_port_id_t *port = (umq_port_id_t *)send_info.data;
     // chose 1st port
     cfg->port_id = route_list.routes[0].src_port;

@@ -1521,7 +1521,7 @@ int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops)
         return -UMQ_ERR_EINVAL;
     }
     util_external_mutex_lock_ops_t util_ops;
-    util_ops.create = (util_external_mutex_lock *(*)(util_externel_mutex_attr_t attr))ops->create;
+    util_ops.create = (util_external_mutex_lock *(*)(util_externel_mutex_attr_t attr))(uintptr_t)ops->create;
     util_ops.destroy = (int (*)(util_external_mutex_lock *m))ops->destroy;
     util_ops.lock = (int (*)(util_external_mutex_lock *m))ops->lock;
     util_ops.unlock = (int (*)(util_external_mutex_lock *m))ops->unlock;
