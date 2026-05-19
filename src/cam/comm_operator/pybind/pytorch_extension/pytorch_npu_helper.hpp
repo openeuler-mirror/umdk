@@ -5,6 +5,11 @@
  * Create: 2025-11-29
  * Note:
  * History: 2025-11-29 create pytorch npu helper file
+ *
+ * Part of codes modified from: mmcv
+ * Original Source: https://github.com/open-mmlab/mmcv.git
+ * Licensed under the Apache License, Version 2.0. (the "License")
+ * Copyright (c) 2018-2026 OpenMMLab. All Rights Reserved.
  */
 
 #ifndef PYTORCH_NPU_HELPER_HPP_
