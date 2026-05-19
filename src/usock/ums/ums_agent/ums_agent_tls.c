@@ -150,14 +150,23 @@ void ums_agent_tls_deinit(void)
 
 void ums_agent_tls_handle_event(int fd, uint32_t events)
 {
-    if (fd == g_ums_agent_tls.listen_fd && (events & EPOLLIN)) {
-        int ret;
-        do {
-            ret = ums_agent_tls_conn_accept(fd);
-        } while (ret > 0);
+    if (fd == g_ums_agent_tls.listen_fd) {
+        if (events & (EPOLLERR | EPOLLHUP)) {
+            UMS_AGENT_LOG_ERR("epoll error on listen fd=%d, events=0x%x, stopping listener",
+                fd, events);
+            ums_agent_tls_stop_listen();
+            return;
+        }
 
-        if (ret < 0) {
-            UMS_AGENT_LOG_ERR("accept loop terminated due to error");
+        if (events & EPOLLIN) {
+            int ret;
+            do {
+                ret = ums_agent_tls_conn_accept(fd);
+            } while (ret > 0);
+
+            if (ret < 0) {
+                UMS_AGENT_LOG_ERR("accept loop terminated due to error");
+            }
         }
         return;
     }
