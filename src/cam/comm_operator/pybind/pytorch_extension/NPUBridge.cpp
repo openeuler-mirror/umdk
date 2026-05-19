@@ -5,6 +5,11 @@
  * Create: 2026-01-13
  * Note:
  * History: 2026-01-13 create npu bridge file
+ *
+ * Part of codes modified from: DIOPI
+ * Original Source: https://github.com/DeepLink-org/deeplink.framework.git
+ * Licensed under BSD-3-Clause. (the "License")
+ * Copyright (c) 2024, DeepLink.
  */
 
 #include "NPUBridge.h"

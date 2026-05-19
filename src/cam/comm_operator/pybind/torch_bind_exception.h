@@ -5,6 +5,11 @@
  * Create: 2026-01-19
  * Note:
  * History: 2026-01-19 add pybind utils header file
+ *
+ * Part of codes modified from: PaddlePaddle
+ * Original Source: https://github.com/PaddlePaddle/Paddle.git
+ * Licensed under the Apache License, Version 2.0. (the "License")
+ * Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
  */
 
 #pragma once

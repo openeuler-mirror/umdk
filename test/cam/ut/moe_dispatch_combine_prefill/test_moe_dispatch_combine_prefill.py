@@ -1,4 +1,3 @@
-#
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
 # Description: UT for dispatch/combine prefill op
@@ -6,6 +5,10 @@
 # Note:
 # History: 2026-1-21 create file
 #
+# Part of codes modified from: MagiAttention
+# Original Source: https://github.com/SandAI-org/MagiAttention.git
+# Licensed under the Apache License, Version 2.0 (the "License")
+# Copyright (c) 2025-2026 SandAI. All Rights Reserved.
 
 import pytest
 import torch
