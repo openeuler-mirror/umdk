@@ -8,7 +8,6 @@
 #ifndef UTIL_LOCK_H
 #define UTIL_LOCK_H
 
-#include <stdbool.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -48,19 +47,19 @@ void util_external_rwlock_ops_register(util_external_rwlock_ops_t *ops);
 
 // mutex api
 util_external_mutex_lock *util_mutex_lock_create(int attr);
-int util_mutex_lock_destroy(util_external_mutex_lock *m);
-int util_mutex_lock(util_external_mutex_lock *m);
-int util_mutex_unlock(util_external_mutex_lock *m);
-int util_mutex_try_lock(util_external_mutex_lock *m);
+int util_mutex_lock_destroy(util_external_mutex_lock *lock);
+int util_mutex_lock(util_external_mutex_lock *lock);
+int util_mutex_unlock(util_external_mutex_lock *lock);
+int util_mutex_try_lock(util_external_mutex_lock *lock);
 
 // read-write mutex api
 util_external_rwlock *util_rwlock_create(void);
-int util_rwlock_destroy(util_external_rwlock *m);
-int util_rwlock_rdlock(util_external_rwlock *m);
-int util_rwlock_wrlock(util_external_rwlock *m);
-int util_rwlock_unlock(util_external_rwlock *m);
-int util_rwlock_tryrdlock(util_external_rwlock *m);
-int util_rwlock_trywrlock(util_external_rwlock *m);
+int util_rwlock_destroy(util_external_rwlock *lock);
+int util_rwlock_rdlock(util_external_rwlock *lock);
+int util_rwlock_wrlock(util_external_rwlock *lock);
+int util_rwlock_unlock(util_external_rwlock *lock);
+int util_rwlock_tryrdlock(util_external_rwlock *lock);
+int util_rwlock_trywrlock(util_external_rwlock *lock);
 
 #ifdef __cplusplus
 }

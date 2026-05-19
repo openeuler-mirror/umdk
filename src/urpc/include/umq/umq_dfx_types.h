@@ -10,7 +10,6 @@
 #ifndef UMQ_DFX_TYPES_H
 #define UMQ_DFX_TYPES_H
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "umq_types.h"
