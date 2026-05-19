@@ -211,10 +211,6 @@ static int urma_open_drivers(void)
 
 urma_status_t urma_init(urma_init_attr_t *conf)
 {
-    urma_log_init();
-    urma_getenv_log_separator();
-    urma_getenv_log_level();
-
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
         URMA_LOG_ERR("urma_init has been called before.\n");
@@ -659,6 +655,9 @@ int urma_register_sysfs_dev(struct urma_sysfs_dev *dev)
 
 static __attribute__((constructor)) void liburma_init(void)
 {
+    urma_log_init();
+    urma_getenv_log_separator();
+    urma_getenv_log_level();
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     urma_discover_sysfs_path();
 #endif
