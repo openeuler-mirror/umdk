@@ -67,6 +67,7 @@ typedef struct bondp_v2p_token_id {
     hmap_node_t hmap_node;
     bondp_v2p_token_id_key_t key;
     urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_handle;
     uint32_t index;
 } bondp_v2p_token_id_t;
