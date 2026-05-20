@@ -112,7 +112,7 @@ alias(
 )
 
 cc_library(
-    name = "urma_udma",
+    name = "urma-udma",
     srcs = select({
         ":build_udma_enabled": glob(["hw/udma/*.c"]),
         "//conditions:default": [],
@@ -142,5 +142,5 @@ cc_library(
 
 alias(
     name = "hw_udma",
-    actual = ":urma_udma",
+    actual = ":urma-udma",
 )
