@@ -264,7 +264,7 @@ urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
             return URMA_SUCCESS;
         }
     }
-    return URMA_EINVAL;
+    return URMA_SUCCESS;
 }
 
 urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
@@ -484,18 +484,12 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfc);
 
-    urma_device_attr_t *attr = &urma_ctx->dev->sysfs_dev->dev_attr;
-    if (cfg->depth == 0 || cfg->depth > attr->dev_cap.max_jfc_depth) {
-        URMA_LOG_ERR("jfc cfg depth out of range, depth=%u, max_depth=%u.\n",
-            cfg->depth, attr->dev_cap.max_jfc_depth);
-        return URMA_EINVAL;
-    }
-
-    atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
+    /* urma_alloc_jfc alloc memory for jetty context, so we just check the validity of input parameters,
+     * while detailed cfg parameters will be check in urma_active_jfc.
+     */
 
     urma_status_t status = ops->alloc_jfc(urma_ctx, cfg, jfc);
     if (status != URMA_SUCCESS || (*jfc) == NULL) {
-        atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
         URMA_LOG_ERR("failed to exec ops->alloc_jfc\n");
         return status == URMA_SUCCESS ? URMA_ENOMEM : status;
     }
@@ -619,7 +613,6 @@ urma_status_t urma_deactive_jfc(urma_jfc_t *jfc)
         URMA_LOG_ERR("Failed to exec ops->deactive_jfc.\n");
         return status;
     }
-    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     jfc->urma_jfc_opt.is_actived = false;
     return URMA_SUCCESS;
 }
@@ -851,21 +844,12 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
         return URMA_EINVAL;
     }
 
+    /* urma_alloc_jfs alloc memory for jetty context, so we just check the validity of input parameters,
+     * while detailed cfg parameters will be check in urma_active_jfs.
+     */
+
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfs);
-
-    urma_device_attr_t *attr = &urma_ctx->dev->sysfs_dev->dev_attr;
-    if ((cfg->depth == 0 || cfg->depth > attr->dev_cap.max_jfs_depth) ||
-        (cfg->max_inline_data > attr->dev_cap.max_jfs_inline_len) ||
-        (cfg->max_sge > attr->dev_cap.max_jfs_sge) || (cfg->max_rsge > attr->dev_cap.max_jfs_rsge)) {
-        URMA_LOG_ERR("jfs cfg out of range, depth=%u, max_depth=%u, inline_data=%u, max_inline_len=%u, " \
-            "sge=%hhu, max_sge=%u, rsge=%hhu, max_rsge=%u.\n",
-            cfg->depth, attr->dev_cap.max_jfs_depth,
-            cfg->max_inline_data, attr->dev_cap.max_jfs_inline_len,
-            cfg->max_sge, attr->dev_cap.max_jfs_sge,
-            cfg->max_rsge, attr->dev_cap.max_jfs_rsge);
-        return URMA_EINVAL;
-        }
 
     urma_status_t status = ops->alloc_jfs(urma_ctx, cfg, jfs);
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
@@ -975,7 +959,7 @@ urma_status_t urma_active_jfs(urma_jfs_t *jfs)
             cfg->max_sge, attr->dev_cap.max_jfs_sge,
             cfg->max_rsge, attr->dev_cap.max_jfs_rsge);
         return URMA_EINVAL;
-        }
+    }
 
     status = ops->active_jfs(jfs);
     if (status != URMA_SUCCESS) {
@@ -1007,7 +991,6 @@ urma_status_t urma_deactive_jfs(urma_jfs_t *jfs)
         URMA_LOG_ERR("Failed to exec ops->deactive_jfs.\n");
         return status;
     }
-    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     jfs->urma_jfs_opt.is_actived = false;
     return URMA_SUCCESS;
 }
@@ -1284,21 +1267,11 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
         return URMA_EINVAL;
     }
 
-    if (urma_check_trans_mode_valid(cfg->trans_mode) != true) {
-        URMA_LOG_ERR("Invalid parameter, trans_mode=%d.\n", (int)cfg->trans_mode);
-        return URMA_EINVAL;
-    }
-
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfr);
-
-    urma_device_attr_t *attr = &urma_ctx->dev->sysfs_dev->dev_attr;
-    if (cfg->depth == 0 || cfg->depth > attr->dev_cap.max_jfr_depth ||
-        cfg->max_sge > attr->dev_cap.max_jfr_sge) {
-        URMA_LOG_ERR("jfr cfg out of range, depth=%u, max_depth=%u, sge=%u, max_sge=%u.\n",
-            cfg->depth, attr->dev_cap.max_jfr_depth, cfg->max_sge, attr->dev_cap.max_jfr_sge);
-        return URMA_EINVAL;
-        }
+    /* urma_alloc_jfr alloc memory for jetty context, so we just check the validity of input parameters,
+     * while detailed cfg parameters will be check in urma_active_jfr.
+     */
 
     urma_status_t status = ops->alloc_jfr(urma_ctx, cfg, jfr);
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
@@ -1388,7 +1361,7 @@ urma_status_t urma_active_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("jfr cfg out of range, depth=%u, max_depth=%u, sge=%u, max_sge=%u.\n",
             cfg->depth, attr->dev_cap.max_jfr_depth, cfg->max_sge, attr->dev_cap.max_jfr_sge);
         return URMA_EINVAL;
-        }
+    }
 
     if (jfr->urma_jfr_opt.is_actived == true
         || jfr->jfr_cfg.jfc->urma_jfc_opt.is_actived == false) {
@@ -1425,7 +1398,6 @@ urma_status_t urma_deactive_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("Failed to exec ops->deactive_jfr.\n");
         return status;
     }
-    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     jfr->urma_jfr_opt.is_actived = false;
     return URMA_SUCCESS;
 }
@@ -1746,7 +1718,7 @@ urma_status_t urma_free_jetty(urma_jetty_t *jetty)
     if (jetty->jetty_cfg.jetty_grp != NULL &&
         urma_delete_jetty_to_jetty_grp(jetty, jetty->jetty_cfg.jetty_grp) != 0) {
         return URMA_FAIL;
-        }
+    }
 
     urma_status_t status = ops->free_jetty(jetty);
     if (status != URMA_SUCCESS) {
@@ -2302,27 +2274,11 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
         return URMA_EINVAL;
     }
 
-    if (urma_create_jetty_check_jfc(cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-
-    if (urma_create_jetty_check_trans_mode(urma_ctx, cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-
-    if (urma_check_jetty_cfg_with_jetty_grp(cfg) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jetty);
-
-    if (urma_create_jetty_check_dev_cap(urma_ctx, cfg) != 0) {
-        return URMA_EINVAL;
-    }
+    /* urma_alloc_jetty alloc memory for jetty context, so we just check the validity of input parameters,
+     * while detailed cfg parameters will be check in urma_active_jetty.
+     */
 
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
     urma_status_t status = ops->alloc_jetty(urma_ctx, cfg, jetty);
@@ -2496,7 +2452,6 @@ urma_status_t urma_deactive_jetty(urma_jetty_t *jetty)
         URMA_LOG_ERR("Failed to exec ops->deactive_jetty.\n");
         return status;
     }
-    atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     jetty->urma_jetty_opt.is_actived = false;
     return URMA_SUCCESS;
 }
