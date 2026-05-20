@@ -956,7 +956,7 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
             .bonding_level = BONDP_BONDING_LEVEL_PORT,
         };
         urma_user_ctl_in_t in = {
-            .addr = (uint64_t)&bond_in,
+            .addr = (uint64_t)(uintptr_t)&bond_in,
             .len = sizeof(bond_in),
             .opcode = BONDP_USER_CTL_SET_BONDING_MODE};
         urma_user_ctl_out_t out = {0};
@@ -1479,11 +1479,11 @@ static int umq_ub_rqe_post_factor_query(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx
     bondp_query_port_in_t bond_in = {.jfr = jfr};
     bondp_query_port_out_t bond_out;
     urma_user_ctl_in_t in = {
-        .addr = (uint64_t)&bond_in,
+        .addr = (uint64_t)(uintptr_t)&bond_in,
         .len = sizeof(bond_in),
         .opcode = BONDP_USER_CTL_QUERY_PORT,
     };
-    urma_user_ctl_out_t out = {.addr = (uint64_t)&bond_out, .len = sizeof(bond_out)};
+    urma_user_ctl_out_t out = {.addr = (uint64_t)(uintptr_t)&bond_out, .len = sizeof(bond_out)};
     urma_status_t status = umq_symbol_urma()->urma_user_ctl(dev_ctx->urma_ctx, &in, &out);
     if (status != URMA_SUCCESS) {
         errno = status;

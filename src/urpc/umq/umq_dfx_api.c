@@ -21,17 +21,16 @@
 #define UMQ_DFX_PERF_REC_NAME_MAX_LEN 20
 #define UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN 20
 
-#define UMQ_DFX_SNPRINTF_BUF(__buf, __max_buf_len, __offset, __format, ...)            \
-    do {                                                                                            \
-        int __ret;                                                                                  \
-        if ((__max_buf_len) <= (__offset)) {                                                        \
-            __ret = snprintf(NULL, 0, __format, ##__VA_ARGS__);                                     \
-        } else {                                                                                    \
-            __ret = snprintf((__buf) + (__offset), (__max_buf_len) - (__offset),                    \
-                            __format, ##__VA_ARGS__);                                               \
-        }                                                                                           \
-        (__offset) += __ret;                                                                        \
-    } while (0)                                                                                     \
+#define UMQ_DFX_SNPRINTF_BUF(__buf, __max_buf_len, __offset, __format, ...)                                 \
+    do {                                                                                                    \
+        int __ret;                                                                                          \
+        if ((__max_buf_len) <= (__offset)) {                                                                \
+            __ret = snprintf(NULL, 0, __format, ##__VA_ARGS__);                                             \
+        } else {                                                                                            \
+            __ret = snprintf((__buf) + (__offset), (__max_buf_len) - (__offset), __format, ##__VA_ARGS__);  \
+        }                                                                                                   \
+        (__offset) += __ret;                                                                                \
+    } while (0)                                                                                             \
 
 int umq_stats_flow_control_get(uint64_t umqh, umq_flow_control_stats_t *flow_control_stats)
 {

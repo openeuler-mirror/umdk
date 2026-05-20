@@ -361,6 +361,8 @@ void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal
         }
     }
     connection_close(&entry->conn_handle);
+    transport_connect_timer_destroy(entry->connect_timer);
+    entry->connect_timer = NULL;
     if (normal) {
         // detaching the server, it should shut down normally
         if (entry->ref_cnt == 0 && urpc_list_is_empty(&entry->list)) {
@@ -374,8 +376,6 @@ void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal
     transport_server_task_clear(entry);
     URPC_LIB_LOG_INFO("acception force closed\n");
     server_accept_manager_remove(entry);
-    transport_connect_timer_destroy(entry->connect_timer);
-    entry->connect_timer = NULL;
 }
 
 static int transport_recv_socket_async(transport_handle_t *ctl_hdl, void *data, size_t data_size)
