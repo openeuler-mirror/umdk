@@ -90,6 +90,63 @@ chmod 777 /dev/ummu/tid
 chmod 755 /usr/lib64/liburma*
 ```
 
+4. Build URMA with Bazel (workspace root: `src/urma`)
+
+From the UMDK repository root, install Bazel plus headers/libs used by the URMA Bazel graph. If you already ran the package list in step 1, you still need `bazel` (and ensure `libnl3-devel` is present; it is required by `urma_ubagg`/UVS paths).
+
+```bash
+yum install -y bazel libnl3-devel openssl-devel zlib-devel
+
+cd src/urma
+# Typical release build for AArch64, including UDMA hardware glue (liburma_udma.so)
+bazel build --config=release --config=arm64 --define=build_udma=true //...
+```
+
+If **libummu** was built and installed manually (not via `libummu-devel` RPM), configure the linker before using `--define=build_udma=true`:
+
+- Installed to the system default path (e.g. `make install` with `CMAKE_INSTALL_PREFIX=/usr`, then `sudo ldconfig`): no extra Bazel flags; the command above is enough.
+- Installed to a custom prefix (e.g. `/usr/local/lib64`): pass the library directory to Bazel and set rpath for runtime loading:
+
+```bash
+cd src/urma
+bazel build --config=release --config=arm64 --define=build_udma=true \
+  --linkopt=-L/usr/local/lib64 \
+  --linkopt=-Wl,-rpath,/usr/local/lib64 \
+  //...
+```
+
+Replace `/usr/local/lib64` with your actual `libummu.so` directory. After install, run `sudo ldconfig` if the path is listed in `/etc/ld.so.conf.d/`.
+
+Optional Bazel configurations (pick the architecture config that matches the host; `x86_64` is also defined in `.bazelrc`):
+
+```bash
+# Release without UDMA user library (AArch64)
+bazel build --config=release --config=arm64 //...
+
+# Release with UDMA on x86_64 (on AArch64 hosts use `--config=arm64` instead)
+bazel build --config=release --config=x86_64 --define=build_udma=true //...
+
+# Debug + AddressSanitizer / LeakSanitizer (useful for local diagnosis)
+bazel build --config=debug --config=asan //...
+
+# ThreadSanitizer on urma_common with cycle profiling enabled
+bazel build --config=tsan --define=perf_cycle=true //:urma_common
+
+# Build only the hardware abstraction target with UDMA enabled
+bazel build --define=build_udma=true //:hw
+```
+
+Install built shared libraries (run as root or with `sudo`; create `/usr/lib64/urma` if it does not exist). `liburma_udma.so` is produced only when `build_udma=true` was used in the build command.
+
+```bash
+cd src/urma/bazel-bin
+install -D -m 0755 libtpsa.so /usr/lib64/libtpsa.so
+install -D -m 0755 liburma.so /usr/lib64/liburma.so
+install -D -m 0755 liburma_common.so /usr/lib64/liburma_common.so
+install -D -m 0755 liburma_ubagg.so /usr/lib64/urma/liburma_ubagg.so
+install -D -m 0755 liburma_udma.so /usr/lib64/urma/liburma_udma.so
+```
+
 #### 4. Contributing
 
 We warmly welcome contributions from developers. If you have discovered a bug or would like to discuss ideas, please feel free to [send an email to the development mailing list](https://openeuler.org/zh/community/mailing-list) or [submit an issue](https://atomgit.com/openeuler/umdk/issues) 。

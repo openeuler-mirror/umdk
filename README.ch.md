@@ -91,6 +91,63 @@ chmod 777 /dev/ummu/tid
 chmod 755 /usr/lib64/liburma*
 ```
 
+4. 使用 Bazel 编译 URMA（工作区根目录：`src/urma`）
+
+在 UMDK 仓库根目录下，安装 Bazel 以及 URMA Bazel 依赖图所需的头文件与开发库。若已按上文「1. 编译环境要求」安装过依赖，仍需单独安装 **bazel**，并确认已安装 **libnl3-devel**（`urma_ubagg`/UVS 相关路径需要）。
+
+```bash
+yum install -y bazel libnl3-devel openssl-devel zlib-devel
+
+cd src/urma
+# 典型 AArch64 Release 构建，并生成 UDMA 用户态胶水库 liburma_udma.so
+bazel build --config=release --config=arm64 --define=build_udma=true //...
+```
+
+若 **libummu** 为手动编译、手动安装（未通过 `libummu-devel` RPM 安装），在使用 `--define=build_udma=true` 前需确认链接器能找到该库：
+
+- 安装到系统默认路径（例如 `CMAKE_INSTALL_PREFIX=/usr` 后执行 `sudo ldconfig`）：无需额外 Bazel 参数，使用上文命令即可。
+- 安装到自定义前缀（例如 `/usr/local/lib64`）：向 Bazel 传入库搜索路径，并设置运行时 rpath：
+
+```bash
+cd src/urma
+bazel build --config=release --config=arm64 --define=build_udma=true \
+  --linkopt=-L/usr/local/lib64 \
+  --linkopt=-Wl,-rpath,/usr/local/lib64 \
+  //...
+```
+
+请将 `/usr/local/lib64` 替换为 `libummu.so` 所在目录。若该路径已写入 `/etc/ld.so.conf.d/`，安装后请执行 `sudo ldconfig`。
+
+可选 Bazel 配置（请根据主机架构选用 `--config=arm64` 或 `--config=x86_64`；二者均在 `src/urma/.bazelrc` 中定义）：
+
+```bash
+# Release，不包含 UDMA 用户态库（AArch64）
+bazel build --config=release --config=arm64 //...
+
+# 在 x86_64 主机上带 UDMA 的 Release（AArch64 主机请将 --config 换为 arm64）
+bazel build --config=release --config=x86_64 --define=build_udma=true //...
+
+# Debug + AddressSanitizer / LeakSanitizer（便于本地问题定位）
+bazel build --config=debug --config=asan //...
+
+# 对 urma_common 开启 ThreadSanitizer，并启用周期性能统计
+bazel build --config=tsan --define=perf_cycle=true //:urma_common
+
+# 仅构建硬件抽象目标，并启用 UDMA
+bazel build --define=build_udma=true //:hw
+```
+
+安装生成的共享库（需 **root** 或 **sudo**；`install -D` 会在目标路径不存在时创建父目录，例如 `/usr/lib64/urma`）。**`liburma_udma.so` 仅在构建命令中使用 `build_udma=true` 时才会生成。**
+
+```bash
+cd src/urma/bazel-bin
+install -D -m 0755 libtpsa.so /usr/lib64/libtpsa.so
+install -D -m 0755 liburma.so /usr/lib64/liburma.so
+install -D -m 0755 liburma_common.so /usr/lib64/liburma_common.so
+install -D -m 0755 liburma_ubagg.so /usr/lib64/urma/liburma_ubagg.so
+install -D -m 0755 liburma_udma.so /usr/lib64/urma/liburma_udma.so
+```
+
 #### 四、参与贡献
 
 我们非常欢迎开发者提交贡献, 如果您发现了一个bug或者有一些想法想要交流，欢迎[发邮件到dev列表](https://openeuler.org/zh/community/mailing-list) 或者[提交一个issue](https://atomgit.com/openeuler/umdk/issues) 。

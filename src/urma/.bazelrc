@@ -1,0 +1,57 @@
+common --enable_bzlmod=false
+
+# Match urpc / URMA CMake defaults: optimized release flags (avoids _FORTIFY_SOURCE + -O0 warnings as errors).
+build --compilation_mode=opt
+
+build --copt=-Wall
+build --copt=-Werror
+build --copt=-Wformat
+build --copt=-Wfloat-equal
+build --copt=-Wtrampolines
+build --copt=-fno-strict-aliasing
+build --copt=-fstack-protector-strong
+build --copt=-fPIC
+build --copt=-std=gnu99
+build --linkopt=-Wl,-z,noexecstack
+build --linkopt=-Wl,-z,relro
+build --linkopt=-Wl,-z,now
+build --linkopt=-rdynamic
+
+build:debug --compilation_mode=dbg
+build:debug --copt=-U_FORTIFY_SOURCE
+build:debug --copt=-O0
+build:debug --copt=-g
+build:debug --copt=-DUNIT_TEST
+
+build:release --compilation_mode=opt
+build:release --copt=-O2
+build:release --copt=-DNDEBUG
+
+build:perf_cycle --define=perf_cycle=true
+build:perf_cycle --copt=-DPERF_CYCLE_FLAG
+
+build:arm64 --copt=-DUB_ARCH_ARM64
+build:arm64 --copt=-march=armv8-a+crc
+
+build:x86_64 --copt=-DUB_ARCH_X86_64
+build:x86_64 --copt=-msse4.2
+
+build:asan --strip=never
+build:asan --copt=-fsanitize=address
+build:asan --copt=-fsanitize-recover=address
+build:asan --copt=-fsanitize=leak
+build:asan --copt=-fno-omit-frame-pointer
+build:asan --linkopt=-fsanitize=address
+build:asan --linkopt=-fsanitize=leak
+
+build:tsan --strip=never
+build:tsan --copt=-fsanitize=thread
+build:tsan --copt=-fno-omit-frame-pointer
+build:tsan --linkopt=-fsanitize=thread
+
+build:coverage --collect_code_coverage
+build:coverage --copt=-fprofile-arcs
+build:coverage --copt=-ftest-coverage
+build:coverage --linkopt=-fprofile-arcs
+build:coverage --linkopt=-ftest-coverage
+build:coverage --linkopt=-lgcov
