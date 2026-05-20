@@ -4,7 +4,22 @@ ColumnLimit: 0
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterFunction: true
-ForEachMacros: [UB_LIST_FOR_EACH, UB_LIST_FOR_EACH_SAFE]
+ForEachMacros:
+  - UB_LIST_FOR_EACH
+  - UB_LIST_FOR_EACH_SAFE
+  - HMAP_FOR_EACH
+  - HMAP_FOR_EACH_SAFE
+  - HMAP_FOR_EACH_WITH_HASH
+  - HMAP_FOR_EACH_WITH_HASH_SAFE
+TypenameMacros:
+  - TAILQ_ENTRY
+  - TAILQ_HEAD
+  - STAILQ_ENTRY
+  - STAILQ_HEAD
+  - LIST_ENTRY
+  - LIST_HEAD
+  - SLIST_ENTRY
+  - SLIST_HEAD
 AlignConsecutiveBitFields: AcrossComments
 AlignConsecutiveMacros: AcrossComments
 AllowShortFunctionsOnASingleLine: None
