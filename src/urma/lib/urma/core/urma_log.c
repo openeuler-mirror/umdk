@@ -216,8 +216,8 @@ static int urma_vlog(const char *function, int line, urma_vlog_level_t level, co
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "[URMA][liburma][thread_id=tid][thread_tag][function[Line=line]][format]" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s][thread_id=%ld][%s][%s[Line=%d]][%s]",
+    /* add log head info, "[URMA][liburma][thread_id=tid][thread_tag][function[Line=line]]format" */
+    ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s][thread_id=%ld][%s][%s[Line=%d]]%s",
                    URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, function,
                    line, format);
     if (ret <= 0 || ret >= sizeof(newformat)) {
