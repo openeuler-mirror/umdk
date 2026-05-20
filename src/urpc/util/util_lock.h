@@ -42,8 +42,8 @@ typedef struct util_external_rwlock_ops {
 } util_external_rwlock_ops_t;
 
 // if ops is NULL, reset global ops
-void util_external_mutex_lock_ops_register(util_external_mutex_lock_ops_t *ops);
-void util_external_rwlock_ops_register(util_external_rwlock_ops_t *ops);
+void util_external_mutex_lock_ops_register(const util_external_mutex_lock_ops_t *ops);
+void util_external_rwlock_ops_register(const util_external_rwlock_ops_t *ops);
 
 // mutex api
 util_external_mutex_lock *util_mutex_lock_create(int attr);

@@ -258,7 +258,7 @@ int client_connect(const char *ip, uint16_t port)
         LOG_PRINT_ERR("ip[%s] not valid\n", ip);
         goto CLOSE_SOC;
     }
-    if (connect(client_fd, (struct sockaddr*)&server, sizeof(server)) != 0) {
+    if (connect(client_fd, (struct sockaddr*)(uintptr_t)&server, sizeof(server)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] connect failed\n", ip, port);
         goto CLOSE_SOC;
     }
@@ -327,7 +327,7 @@ int server_accept(const char *ip, uint16_t port)
         goto CLOSE_SVR;
     }
 
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    if (bind(server_fd, (struct sockaddr*)(uintptr_t)&addr, sizeof(addr)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] bind failed\n", ip, port);
         goto CLOSE_SVR;
     }

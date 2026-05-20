@@ -154,7 +154,7 @@ static util_external_rwlock_ops_t g_util_rwlock_ops = {
 };
 
 // if ops is NULL, reset global ops
-void util_external_mutex_lock_ops_register(util_external_mutex_lock_ops_t *ops)
+void util_external_mutex_lock_ops_register(const util_external_mutex_lock_ops_t *ops)
 {
     if (ops == NULL) {
         g_util_mutex_lock_ops = g_util_default_mutex_lock_ops;
@@ -164,7 +164,7 @@ void util_external_mutex_lock_ops_register(util_external_mutex_lock_ops_t *ops)
     g_util_mutex_lock_ops = *ops;
 }
 
-void util_external_rwlock_ops_register(util_external_rwlock_ops_t *ops)
+void util_external_rwlock_ops_register(const util_external_rwlock_ops_t *ops)
 {
     if (ops == NULL) {
         g_util_rwlock_ops = g_util_default_rwlock_ops;

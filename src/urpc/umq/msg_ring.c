@@ -59,7 +59,7 @@ msg_ring_t *msg_ring_create(char *msg_ring_name, uint32_t msg_ring_name_len, msg
             opt->rx_depth * opt->rx_max_buf_size + NUM_RING_HEADERS * (uint32_t)sizeof(shm_ring_hdr_t);
         if (temp > UINT32_MAX) {
             UMQ_VLOG_ERR(VLOG_UMQ, "msg ring shm size invalid\n");
-            return NULL;
+            goto ERR_SHM_OPEN;
         }
         shm_size = temp;
         if (opt->owner) {
@@ -200,7 +200,7 @@ int msg_ring_post_tx_batch(msg_ring_t *msg_ring_h, char **tx_buf, uint32_t *tx_b
         char *ring_buf_p = (char *)(ring_buf_hdr + 1);
         if (tx_buf_size[i] > payload_size) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "post tx failed, payload_size %u is less than tx_buf_size %u\n",
-                               payload_size, tx_buf_size);
+                               payload_size, tx_buf_size[i]);
             return -1;
         }
         (void)memcpy(ring_buf_p, tx_buf[i], tx_buf_size[i]);
