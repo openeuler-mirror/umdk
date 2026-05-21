@@ -827,10 +827,8 @@ static int bondp_create_pjfr(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfr, ur
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(cfg->jfc, bondp_jfc_t, v_jfc);
     urma_jfr_cfg_t p_cfg = *cfg;
 
-    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
+    for (uint32_t n = 0; n < bdp_jfr->enabled_count; ++n) {
+        uint32_t i = bdp_jfr->enabled_indices[n];
         p_cfg.jfc = bdp_jfc->p_jfc[i];
         urma_jfr_t *jfr = urma_create_jfr(bdp_ctx->p_ctxs[i], &p_cfg);
         if (jfr == NULL) {
@@ -934,6 +932,15 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
+    if (cfg->flag.bs.has_drv_ext) {
+        const bondp_jfr_cfg_t *bdp_cfg = (const bondp_jfr_cfg_t *)cfg;
+        if (bdp_cfg->port_ids == NULL || bdp_cfg->port_count == 0) {
+            URMA_LOG_ERR("Invalid active port config, port_ids is NULL or port_count is 0.\n");
+            goto FREE_JFR;
+        }
+        cfg_active_port_count = bdp_cfg->port_count;
+        cfg_active_port_ids = bdp_cfg->port_ids;
+    }
 
     if (init_active_indices(bdp_ctx, bdp_jfr, cfg_active_port_ids, cfg_active_port_count) != 0) {
         URMA_LOG_ERR("Failed to init active indices\n");
