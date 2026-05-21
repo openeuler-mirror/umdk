@@ -637,6 +637,10 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     uint32_t cfg_active_port_count = 0;
     if (cfg->flag.bs.has_drv_ext) {
         const bondp_jfs_cfg_t *bdp_cfg = (const bondp_jfs_cfg_t *)cfg;
+        if (bdp_cfg->port_ids == NULL || bdp_cfg->port_count == 0) {
+            URMA_LOG_ERR("Invalid active port config for jfs, port_ids is NULL or port_count is 0.\n");
+            goto FREE_JFS;
+        }
         cfg_active_port_count = bdp_cfg->port_count;
         cfg_active_port_ids = bdp_cfg->port_ids;
     }
@@ -1249,6 +1253,10 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     uint32_t cfg_active_port_count = 0;
     if (jetty_cfg->flag.bs.has_drv_ext) {
         const bondp_jetty_cfg_t *bdp_cfg = (const bondp_jetty_cfg_t *)jetty_cfg;
+        if (bdp_cfg->port_ids == NULL || bdp_cfg->port_count == 0) {
+            URMA_LOG_ERR("Invalid active port config for jetty, port_ids is NULL or port_count is 0\n");
+            goto FREE_JETTY;
+        }
         cfg_active_port_count = bdp_cfg->port_count;
         cfg_active_port_ids = bdp_cfg->port_ids;
     }
