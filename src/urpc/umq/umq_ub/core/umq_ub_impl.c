@@ -991,18 +991,10 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     }
     dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = (uint64_t)(uintptr_t)queue;
 
-    queue->notify_buf = umq_buf_alloc(umq_buf_size_small(), 1, UMQ_INVALID_HANDLE, NULL);
-    if (queue->notify_buf == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, buf alloc failed\n",
-            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
-        goto CLEAR_TABLE;
-    }
-    memset(queue->notify_buf->buf_data, 0, queue->notify_buf->data_size);
-
     queue->wait_ack_import.lock = util_rwlock_create();
     if (queue->wait_ack_import.lock == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "queue wait_ack_import lock create failed\n");
-        goto FREE_NOTIFY_BUF;
+        goto CLEAR_TABLE;
     }
 
     if (umq_ub_create_flow_control_resource(queue, share_rq, option) != UMQ_SUCCESS) {
@@ -1020,9 +1012,6 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
 LOCK_DESTROY:
     (void)util_rwlock_destroy(queue->wait_ack_import.lock);
     queue->wait_ack_import.lock = NULL;
-
-FREE_NOTIFY_BUF:
-    umq_buf_free(queue->notify_buf);
 
 CLEAR_TABLE:
     dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id] = 0;
@@ -1111,7 +1100,6 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL);
     }
 
-    umq_buf_free(queue->notify_buf);
     umq_buf_free(queue->addr_list);
 
     umq_ub_flow_control_uninit(&queue->flow_control);
