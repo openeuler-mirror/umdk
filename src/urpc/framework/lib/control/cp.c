@@ -628,7 +628,7 @@ uint64_t queue_create(urpc_queue_trans_mode_t trans_mode, urpc_qcfg_create_t *cf
         goto CREATE_FINISH;
     }
 
-    if (is_feature_enable(URPC_FEATURE_TIMEOUT) && !is_manager_queue(q->flag) &&
+    if (is_feature_enable(URPC_FEATURE_TIMEOUT) && !is_manager_queue(&q->flag) &&
         add_queue_notify_msg_table((uint64_t)(uintptr_t)q)) {
         queue_slab_uninit(local_q);
         ops->delete_local_queue(q, NULL);

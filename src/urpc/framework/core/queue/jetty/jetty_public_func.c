@@ -548,7 +548,7 @@ static void send_recv_flush_jfr(queue_local_t *local_q)
 static ALWAYS_INLINE void send_recv_destroy_jfr_ctx(q_res_ref_t *ref, void *args)
 {
     queue_local_t *local_q = (queue_local_t *)args;
-    if (local_q != NULL && is_manager_queue(local_q->queue.flag)) {
+    if (local_q != NULL && is_manager_queue(&local_q->queue.flag)) {
         send_recv_flush_jfr(local_q);
     }
 
@@ -1252,7 +1252,7 @@ int send_recv_flush_jetty(queue_local_t *local_q, urma_jetty_t *jetty, urma_jfc_
                           uint64_t (*user_ctx_get)(uint64_t cr_user_ctx))
 {
     // only manage queue need flush, user queue flush by user
-    if (!is_manager_queue(local_q->queue.flag)) {
+    if (!is_manager_queue(&local_q->queue.flag)) {
         return URPC_SUCCESS;
     }
 

@@ -986,7 +986,7 @@ uint32_t urpc_get_local_qh(uint64_t **qh_list)
         return URPC_FAIL;
     }
     URPC_LIST_FOR_EACH(local_q, node, &g_urpc_queue_transport_ctx.queue_list) {
-        if (is_manager_queue(local_q->queue.flag)) {
+        if (is_manager_queue(&local_q->queue.flag)) {
             continue;
         }
         tmp_qh_list[index++] = (uint64_t)(uintptr_t)local_q;
