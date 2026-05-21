@@ -631,6 +631,38 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, 
     return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
 }
 
+static void process_rx_mem_import_done(umq_ub_imm_t imm, ub_queue_t *queue, ub_queue_t *real_queue,
+                                       umq_buf_pro_t *buf_pro, umq_buf_status_t *qbuf_status)
+{
+    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
+    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    if (imm.mem_import.mempool_id >= UMQ_MAX_TSEG_NUM) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id exceed maxinum\n",
+                           EID_ARGS(*eid), id);
+        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+        return;
+    }
+
+    if (real_queue == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroyed\n",
+                           EID_ARGS(*eid), id);
+        buf_pro->umq_ctx = 0;
+        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+        return;
+    }
+
+    buf_pro->umq_ctx = real_queue->umq_ctx;
+    if (real_queue->bind_ctx == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue has been unbind\n",
+                           EID_ARGS(*eid), real_queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
+        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
+        return;
+    }
+
+    urpc_bitmap_set1(real_queue->bind_ctx->tseg_imported, imm.mem_import.mempool_id);
+    *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
+}
+
 static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf, umq_buf_status_t *qbuf_status)
 {
     if (cr->opcode != URMA_CR_OPC_SEND_WITH_IMM) {
@@ -660,6 +692,9 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
                 break;
             }
             *qbuf_status = UMQ_IMPORT_TSEG_SUCCESS;
+            break;
+        case IMM_TYPE_MEM_IMPORT_DONE:
+            process_rx_mem_import_done(imm, queue, real_queue, buf_pro, qbuf_status);
             break;
         default:
             break;
@@ -702,42 +737,6 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                     buf_pro->imm_data = imm.value;
                     return UMQ_SUCCESS;
                 }
-
-                if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
-                    if (imm.mem_import.mempool_id >= UMQ_MAX_TSEG_NUM) {
-                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id exceed maxinum\n",
-                            EID_ARGS(*eid), id);
-                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
-                        return UMQ_SUCCESS;
-                    }
-
-                    umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
-                    buf_pro->opcode = UMQ_OPC_WRITE_IMM;
-                    ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
-                    if (real_queue == NULL) {
-                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroyed\n",
-                            EID_ARGS(*eid), id);
-                        buf_pro->umq_ctx = 0;
-                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
-                        return UMQ_SUCCESS;
-                    }
-
-                    buf_pro->umq_ctx = real_queue->umq_ctx;
-                    umq_inc_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
-                    if (real_queue->bind_ctx == NULL) {
-                        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue has been unbind\n",
-                            EID_ARGS(*eid), real_queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
-                        umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
-                        *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
-                        return UMQ_SUCCESS;
-                    }
-
-                    urpc_bitmap_set1(real_queue->bind_ctx->tseg_imported, imm.mem_import.mempool_id);
-                    *qbuf_status = UMQ_MEMPOOL_UPDATE_SUCCESS;
-                    umq_dec_ref(real_queue->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
-                    return UMQ_SUCCESS;
-                }
-                ret = UMQ_SUCCESS;
             }
             break;
         }
