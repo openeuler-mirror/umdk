@@ -158,8 +158,6 @@ typedef struct ub_flow_control {
     volatile uint64_t total_flow_controlled_wr;
     volatile uint64_t packet_stats[UB_PACKET_STATS_TYPE_MAX];
     volatile uint64_t stats_u64[FC_COUNTER_MAX_U64];
-    uint64_t remote_win_buf_addr;
-    uint32_t remote_win_buf_len;
     volatile uint16_t local_rx_posted;
     volatile uint16_t remote_rx_window;
     volatile uint16_t stats_u16[FC_COUNTER_MAX_U16];
@@ -228,7 +226,6 @@ typedef struct umq_ub_ctx {
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
-    uint64_t remote_notify_addr;
     volatile uint64_t *umq_ctx_jetty_table;
     volatile uint64_t *rx_consumed_jetty_table;
 } umq_ub_ctx_t;
@@ -282,7 +279,7 @@ typedef struct umq_ub_bind_queue_info {
     urma_transport_mode_t tp_mode;
     urma_tp_type_t tp_type;
     urma_token_t token;
-    uint64_t notify_buf;
+    uint64_t rsvd;
     uint32_t rx_depth;
     uint32_t tx_depth;
     uint32_t rx_buf_size;
@@ -292,8 +289,8 @@ typedef struct umq_ub_bind_queue_info {
 typedef struct umq_ub_bind_fc_info {
     urma_jetty_id_t jetty_id;
     urma_token_t token;
-    uint64_t win_buf_addr;
-    uint32_t win_buf_len;
+    uint64_t rsvd1;
+    uint32_t rsvd2;
 } umq_ub_bind_fc_info_t;
 
 typedef struct umq_ub_bind_info {
@@ -307,7 +304,6 @@ typedef struct ub_bind_ctx {
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
     char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
-    uint64_t remote_notify_addr;
     import_tseg_table_t *tseg_table;
     urpc_bitmap_t tseg_imported;
 } ub_bind_ctx_t;
@@ -423,7 +419,6 @@ typedef struct ub_queue {
     bool prefill_done;          // until prefill_rqe_cnt = rqe_post_factor * rx_depth, prefill is done
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;
-    umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
     uint64_t share_rq_umqh;
     ub_queue_idle_check_t *checker;
@@ -450,21 +445,11 @@ typedef struct xchg_mem_info {
     urma_ubva_t ubva;
 } __attribute__((packed)) xchg_mem_info_t;
 
-typedef enum umq_ub_rw_segment_offset {
-    OFFSET_MEM_IMPORT = 0,
-    OFFSET_FLOW_CONTROL, // 16bit local window, 16bit remote window
-} umq_ub_rw_segment_offset_t;
-
 typedef struct umq_ub_raw_dev {
     urma_device_t *urma_dev;
     umq_eid_t eid;
     uint32_t eid_index;
 } umq_ub_raw_dev_t;
-
-static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_segment_offset_t offset)
-{
-    return (uint64_t)((uintptr_t)queue->notify_buf->buf_data + offset * UMQ_UB_RW_SEGMENT_LEN);
-}
 
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num);
 void rx_buf_ctx_list_uninit(rx_buf_ctx_list_t *rx_buf_ctx_list);

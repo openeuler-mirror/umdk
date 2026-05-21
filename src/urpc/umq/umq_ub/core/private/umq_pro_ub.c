@@ -1137,14 +1137,11 @@ static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
     }
 
     switch (buf_pro->opcode) {
-        case UMQ_OPC_WRITE_IMM:
-            if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
-                return UMQ_CONTINUE_FLAG;
-            }
-            break;
         case UMQ_OPC_SEND_IMM:
             if (imm.bs.type == IMM_TYPE_MEM_IMPORT) {
                 umq_buf_free(buf);
+                return UMQ_CONTINUE_FLAG;
+            } else if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
                 return UMQ_CONTINUE_FLAG;
             }
             break;
