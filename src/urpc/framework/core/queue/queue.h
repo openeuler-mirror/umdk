@@ -57,8 +57,8 @@ typedef struct read_cache read_cache_t;
 
 typedef struct urpc_queue_flag {
     uint8_t is_remote : 1;
-    uint8_t rsvd : 3;
     uint8_t is_keepalive : 1;
+    uint8_t rsvd : 6;
 } urpc_queue_flag_t;
 
 typedef enum queue_event {
@@ -798,9 +798,9 @@ static ALWAYS_INLINE void queue_dma_sge_stats_record(queue_t *queue, urpc_stats_
     }
 }
 
-static ALWAYS_INLINE bool is_manager_queue(urpc_queue_flag_t flag)
+static ALWAYS_INLINE bool is_manager_queue(urpc_queue_flag_t *flag)
 {
-    return (flag.is_keepalive == URPC_TRUE);
+    return (flag->is_keepalive == URPC_TRUE);
 }
 
 static ALWAYS_INLINE void queue_error_stats_record(queue_t *queue, urpc_error_stats_type_t type)
@@ -825,19 +825,14 @@ static ALWAYS_INLINE void queue_error_stats_record(queue_t *queue, urpc_error_st
 void queue_stats_get(queue_t *queue, uint64_t *stats, int stats_len);
 void queue_error_stats_get(queue_t *queue, uint64_t *stats, int stats_len);
 
-static ALWAYS_INLINE bool queue_use_default_allocator(urpc_queue_flag_t flag)
-{
-    return (flag.is_keepalive != 0);
-}
-
 static ALWAYS_INLINE bool is_queue_need_advise(queue_t *l_queue, queue_t *r_queue)
 {
     return (l_queue->flag.is_keepalive == r_queue->flag.is_keepalive);
 }
 
-static ALWAYS_INLINE bool is_queue_flag_same(urpc_queue_flag_t flag1, urpc_queue_flag_t flag2)
+static ALWAYS_INLINE bool is_queue_flag_same(urpc_queue_flag_t *flag1, urpc_queue_flag_t *flag2)
 {
-    return (flag1.is_remote == flag2.is_remote) && (flag1.is_keepalive == flag2.is_keepalive);
+    return (flag1->is_remote == flag2->is_remote) && (flag1->is_keepalive == flag2->is_keepalive);
 }
 
 static ALWAYS_INLINE void queue_stats_record(queue_t *queue, urpc_stats_type_t type)
