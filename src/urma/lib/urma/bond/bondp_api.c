@@ -240,10 +240,8 @@ static int bondp_create_pjfc(bondp_context_t *bdp_ctx, bondp_jfc_t *bdp_jfc, urm
 {
     urma_jfc_cfg_t p_cfg = *cfg;
 
-    for (int i = 0; i < bdp_jfc->dev_num; ++i) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
+    for (uint32_t n = 0; n < bdp_jfc->enabled_count; ++n) {
+        uint32_t i = bdp_jfc->enabled_indices[n];
         if (cfg->jfce != NULL) {
             bondp_jfce_t *bdp_jfce = CONTAINER_OF_FIELD(cfg->jfce, bondp_jfce_t, v_jfce);
             p_cfg.jfce = bdp_jfce->p_jfce[i];
@@ -284,6 +282,11 @@ static int bondp_delete_pjfc(bondp_jfc_t *bdp_jfc)
     return ret;
 }
 
+static int init_active_indices_ex(bondp_context_t *bdp_ctx,
+                                  uint32_t enabled_indices[], uint32_t *enabled_count,
+                                  uint32_t active_indices[], uint32_t *active_count,
+                                  const bondp_port_id_t *port_ids, uint32_t port_count);
+
 urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
@@ -295,6 +298,25 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
     bdp_jfc->dev_num = bdp_ctx->dev_num;
     bdp_jfc->lasted_polled_jfc_idx = 0;
     atomic_init(&bdp_jfc->use_cnt.atomic_cnt, 0);
+
+    const bondp_port_id_t *cfg_active_port_ids = NULL;
+    uint32_t cfg_active_port_count = 0;
+    if (cfg->flag.bs.has_drv_ext) {
+        const bondp_jfc_cfg_t *bdp_cfg = (const bondp_jfc_cfg_t *)cfg;
+        if (bdp_cfg->port_ids == NULL || bdp_cfg->port_count == 0) {
+            URMA_LOG_ERR("Invalid active port config, port_ids is NULL or port_count is 0.\n");
+            goto FREE_JFC;
+        }
+        cfg_active_port_count = bdp_cfg->port_count;
+        cfg_active_port_ids = bdp_cfg->port_ids;
+    }
+
+    if (init_active_indices_ex(bdp_ctx, bdp_jfc->enabled_indices, &bdp_jfc->enabled_count,
+                               bdp_jfc->active_indices, &bdp_jfc->active_count,
+                               cfg_active_port_ids, cfg_active_port_count) != 0) {
+        URMA_LOG_ERR("Failed to init active indices\n");
+        goto FREE_JFC;
+    }
 
     if (bondp_create_pjfc(bdp_ctx, bdp_jfc, cfg) != 0) {
         URMA_LOG_ERR("Failed to create pjfc\n");
@@ -316,6 +338,7 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
 
 DELETE_PJFC:
     bondp_delete_pjfc(bdp_jfc);
+FREE_JFC:
     free(bdp_jfc);
     return NULL;
 }
@@ -408,8 +431,10 @@ static int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, 
     return 0;
 }
 
-static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
-                               const bondp_port_id_t *port_ids, uint32_t port_count)
+static int init_active_indices_ex(bondp_context_t *bdp_ctx,
+                                  uint32_t enabled_indices[], uint32_t *enabled_count,
+                                  uint32_t active_indices[], uint32_t *active_count,
+                                  const bondp_port_id_t *port_ids, uint32_t port_count)
 {
     if (port_ids == NULL || port_count == 0) {
         int start, end;
@@ -422,10 +447,10 @@ static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
         }
         for (int i = start; i < end; i++) {
             if (bdp_ctx->p_ctxs[i] != NULL) {
-                bdp_comp->enabled_indices[bdp_comp->enabled_count] = i;
-                bdp_comp->enabled_count += 1;
-                bdp_comp->active_indices[bdp_comp->active_count] = i;
-                bdp_comp->active_count += 1;
+                enabled_indices[*enabled_count] = i;
+                *enabled_count += 1;
+                active_indices[*active_count] = i;
+                *active_count += 1;
             }
         }
         return 0;
@@ -436,7 +461,7 @@ static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
         return -1;
     }
 
-    bdp_comp->enabled_count = 0;
+    *enabled_count = 0;
     for (uint32_t n = 0; n < port_count; ++n) {
         uint32_t active_index = 0;
         if (convert_bond_port_id_to_active_index(bdp_ctx, port_ids[n], &active_index) != 0) {
@@ -445,8 +470,8 @@ static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
         }
 
         bool is_duplicate = false;
-        for (uint32_t i = 0; i < bdp_comp->enabled_count; ++i) {
-            if (bdp_comp->enabled_indices[i] == active_index) {
+        for (uint32_t i = 0; i < *enabled_count; ++i) {
+            if (enabled_indices[i] == active_index) {
                 is_duplicate = true;
                 break;
             }
@@ -454,12 +479,20 @@ static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
         if (is_duplicate) {
             continue;
         }
-        bdp_comp->enabled_indices[bdp_comp->enabled_count] = active_index;
-        bdp_comp->enabled_count += 1;
-        bdp_comp->active_indices[bdp_comp->active_count] = active_index;
-        bdp_comp->active_count += 1;
+        enabled_indices[*enabled_count] = active_index;
+        *enabled_count += 1;
+        active_indices[*active_count] = active_index;
+        *active_count += 1;
     }
     return 0;
+}
+
+static int init_active_indices(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_comp,
+                               const bondp_port_id_t *port_ids, uint32_t port_count)
+{
+    return init_active_indices_ex(bdp_ctx, bdp_comp->enabled_indices, &bdp_comp->enabled_count,
+                                  bdp_comp->active_indices, &bdp_comp->active_count,
+                                  port_ids, port_count);
 }
 
 static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
