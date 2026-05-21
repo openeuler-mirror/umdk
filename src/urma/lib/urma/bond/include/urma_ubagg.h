@@ -90,6 +90,8 @@ typedef struct bondp_jfc_cfg {
 
 typedef struct bondp_jfr_cfg {
     urma_jfr_cfg_t base;
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
 } bondp_jfr_cfg_t;
 
 typedef struct bondp_jetty_cfg {
