@@ -414,7 +414,6 @@ fi
     %{_libdir}/libumq.so.*
     %{_libdir}/libumq_buf.so.*
     %{_libdir}/libumq_ub.so.*
-    %{_libdir}/libumq_ipc.so.*
     /etc/rsyslog.d/umq.conf
     /etc/logrotate.d/umq
 
@@ -433,7 +432,6 @@ fi
     %{_libdir}/libumq.so
     %{_libdir}/libumq_buf.so
     %{_libdir}/libumq_ub.so
-    %{_libdir}/libumq_ipc.so
     %dir %{_includedir}/ub
     %dir %{_includedir}/ub/umdk
     %dir %{_includedir}/ub/umdk/urpc
