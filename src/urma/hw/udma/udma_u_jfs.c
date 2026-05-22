@@ -378,19 +378,21 @@ static void st64b(uint64_t *src, uint64_t *dst)
 		"ldr x6, [x9, #48]\n"
 		"ldr x7, [x9, #56]\n"
 		".inst 0xf83f9140\n"
-		::"r" (src), "r"(dst):"cc", "memory"
+		::"r" (src), "r"(dst)
+		: "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
+		  "x9", "x10", "cc", "memory"
 	);
 }
 
-static void udma_write_dsqe(struct udma_u_jetty_queue *sq,
+static void udma_write_dsqe(struct udma_u_context *udma_ctx, struct udma_u_jetty_queue *sq,
 			    struct udma_jfs_sqe_ctl *ctrl)
 {
 	ctrl->sqe_bb_idx = sq->pi;
-#ifdef ST64B
-	st64b(((uint64_t *)ctrl), (uint64_t *)sq->dwqe_addr);
-#else
-	mmio_memcpy_x64((uint64_t *)sq->dwqe_addr, (uint64_t *)ctrl);
-#endif
+
+	if (udma_ctx->st64b_en)
+		st64b(((uint64_t *)ctrl), (uint64_t *)sq->dwqe_addr);
+	else
+		mmio_memcpy_x64((uint64_t *)sq->dwqe_addr, (uint64_t *)ctrl);
 }
 
 static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_jetty_queue *sq,
@@ -1031,11 +1033,11 @@ urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 	if (wr_cnt) {
 		UDMA_TO_DEVICE_BARRIER();
 
-		if (UNLIKELY(sq->db_status)) {
+		if (UNLIKELY(sq->db_status || wr->flag.bs.db_bypass)) {
 			sq->need_ring_db = true;
 		} else {
 			if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
-				udma_write_dsqe(sq, wqe_addr);
+				udma_write_dsqe(udma_ctx, sq, wqe_addr);
 			else
 				udma_update_sq_db(sq);
 		}

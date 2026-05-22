@@ -100,6 +100,7 @@ struct udma_u_context {
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
 	bool			sq_reserved;
+	bool			st64b_en;
 	bool			dtu_enable;
 	uint64_t		dtu_va_base;
 	uint64_t		dtu_va_size;
