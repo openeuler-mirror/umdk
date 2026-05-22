@@ -220,6 +220,7 @@ typedef struct umq_flow_control_cfg {
 } umq_flow_control_cfg_t;
 
 typedef enum umq_buf_block_size {
+    BLOCK_SIZE_4K,
     BLOCK_SIZE_8K,
     BLOCK_SIZE_16K,
     BLOCK_SIZE_32K,

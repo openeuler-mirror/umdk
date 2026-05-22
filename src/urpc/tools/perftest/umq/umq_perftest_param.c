@@ -75,7 +75,7 @@ static void usage(void)
     (void)printf("      --num                           set number of iterations.\n");
     (void)printf("      --perf-thresh                   set perf thresh array, length not exceed 8.\n");
     (void)printf("      --enable-perf                   enable perf.\n");
-    (void)printf("      --blk-size                      set umq_buf_block_size(default:0), 0=BLOCK_SIZE_8K\n");
+    (void)printf("      --blk-size                      set umq_buf_block_size(default:0), 0=BLOCK_SIZE_4K\n");
     (void)printf("  -h, --help                          show help info.\n\n");
 }
 
