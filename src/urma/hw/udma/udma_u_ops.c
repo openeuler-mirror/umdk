@@ -158,6 +158,7 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->ccu_jetty_max_cnt = resp->ccu_jetty_max_cnt;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
+	udma_ctx->st64b_en = resp->st64b_en;
 }
 
 static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_create_ctx_resp *resp)
