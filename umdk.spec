@@ -72,6 +72,24 @@ Requires: libasan
 %if %{with tsan}
 Requires: libtsan
 %endif
+%if %{build_all}
+Requires: umdk-urma-lib = %{version}
+Requires: umdk-urma-devel = %{version}
+Requires: umdk-urma-tools = %{version}
+Requires: umdk-urma-bin = %{version}
+Requires: umdk-urpc-framework = %{version}
+Requires: umdk-urpc-framework-devel = %{version}
+Requires: umdk-urpc-framework-tools = %{version}
+Requires: umdk-urpc-umq = %{version}
+Requires: umdk-urpc-umq-devel = %{version}
+Requires: umdk-urpc-umq-tools = %{version}
+Requires: umdk-dlock-lib = %{version}
+Requires: umdk-dlock-devel = %{version}
+Requires: umdk-ums = %{version}
+Requires: umdk-ums-tools = %{version}
+Requires: umdk-ums-agent = %{version}
+%files
+%endif
 
 %description
 A new system interconnect architecture
