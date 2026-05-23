@@ -273,7 +273,8 @@ int dlock_client::init_client_do(int *p_client_id, const char *ip_str, bool rein
 
     message_id = p_conn->generate_message_id();
     buff = construct_control_msg(((reinit_flag) ? CLIENT_REINIT_REQUEST : CLIENT_INIT_REQUEST),
-        DLOCK_PROTO_VERSION, DLOCK_FIXED_CTRL_MSG_HDR_LEN, msg_len, message_id, *p_client_id);
+        DLOCK_PROTO_VERSION, DLOCK_FIXED_CTRL_MSG_HDR_LEN, msg_len, message_id, (reinit_flag) ?
+        *p_client_id : 0);
     if (buff == nullptr) {
         DLOCK_LOG_ERR("construct_control_msg error");
         goto err_del_p_jetty_mgr;
