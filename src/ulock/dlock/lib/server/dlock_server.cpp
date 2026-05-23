@@ -2431,7 +2431,16 @@ int dlock_server::batch_get_lock_do(dlock_connection * /* p_conn */,
     uint32_t lock_num = msg_batch_get_lock_body->lock_num;
     lock_entry_s *lock_entry = nullptr;
     uint32_t i;
+    if (lock_num > MAX_LOCK_BATCH_SIZE) {
+        DLOCK_LOG_ERR("batch get %u locks exceeds max lock batch size limit %u", lock_num, MAX_LOCK_BATCH_SIZE);
+        return -1;
+    }
     for (i = 0; i < lock_num; i++) {
+         /* To ensure the access of msg_get_lock_body->desc_len is valid */
+        if ((offset + DLOCK_GET_LOCK_BODY_LEN) >= msg_body_len) {
+            DLOCK_LOG_ERR("batch get lock body msg error, with incomplete msg");
+            return -1;
+        }
         msg_get_lock_body = reinterpret_cast<struct get_lock_body *>(msg_body + offset);
         offset += DLOCK_GET_LOCK_BODY_LEN + msg_get_lock_body->desc_len;
         if (offset > msg_body_len) {
@@ -2718,7 +2727,16 @@ int dlock_server::batch_update_locks_do(dlock_connection *p_conn, struct dlock_c
     uint32_t lock_num = msg_batch_update_lock_body->lock_num;
     lock_entry_s *lock_entry = nullptr;
     uint32_t i;
+    if (lock_num > MAX_LOCK_BATCH_SIZE) {
+        DLOCK_LOG_ERR("batch update %u locks exceeds max lock batch size limit %u", lock_num, MAX_LOCK_BATCH_SIZE);
+        return -1;
+    }
     for (i = 0; i < lock_num; i++) {
+        /* To ensure the access of p_msg_update->desc_len is valid */
+        if ((offset + DLOCK_UPDATE_LOCK_BODY_LEN) >= msg_body_len) {
+            DLOCK_LOG_ERR("batch update locks body msg error, with incomplete msg");
+            return -1;
+        }
         p_msg_update = reinterpret_cast<struct update_lock_body *>(msg_body + offset);
         offset += DLOCK_UPDATE_LOCK_BODY_LEN + p_msg_update->desc_len;
         if (offset > msg_body_len) {
