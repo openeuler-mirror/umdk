@@ -77,7 +77,7 @@ umq_tp_mode_t umq_tp_mode_convert(urma_transport_mode_t tp_mode)
         case URMA_TM_UM:
             return UMQ_TM_UM;
         default:
-            return UMQ_TM_RC;
+            return UMQ_TM_RM;
     };
 }
 
@@ -91,7 +91,7 @@ umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type)
         case URMA_UTP:
             return UMQ_TP_TYPE_UTP;
         default:
-            return UMQ_TP_TYPE_RTP;
+            return UMQ_TP_TYPE_CTP;
     };
 }
 
@@ -1122,8 +1122,9 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
         return NULL;
     }
     UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u,%s create jetty[%d] success, urma transmode %d, "
-                  "priority %d, rnr_retry %d, err_timeout %d\n", EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id,
-                  port_str, jetty_idx, queue->tp_mode, queue->priority, queue->rnr_retry, queue->err_timeout);
+                  "tp_type %d, priority %d, rnr_retry %d, err_timeout %d\n", EID_ARGS(jetty->jetty_id.eid),
+                  jetty->jetty_id.id, port_str, jetty_idx, queue->tp_mode, queue->tp_type, queue->priority,
+                  queue->rnr_retry, queue->err_timeout);
     return jetty;
 }
 
@@ -1137,7 +1138,7 @@ static urma_transport_mode_t umq_tp_mode_convert_to_urma(umq_tp_mode_t tp_mode)
         case UMQ_TM_UM:
             return URMA_TM_UM;
         default:
-            return URMA_TM_RC;
+            return URMA_TM_RM;
     };
 }
 
@@ -1151,7 +1152,7 @@ static urma_tp_type_t umq_tp_type_convert_to_urma(umq_tp_type_t tp_type)
         case UMQ_TP_TYPE_UTP:
             return URMA_UTP;
         default:
-            return URMA_RTP;
+            return URMA_CTP;
     };
 }
 
@@ -1287,21 +1288,22 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         }
         queue->tp_mode = umq_tp_mode_convert_to_urma(option->tp_mode);
     } else {
-        queue->tp_mode = umq_tp_mode_convert_to_urma(UMQ_TM_RC);
+        queue->tp_mode = umq_tp_mode_convert_to_urma(UMQ_TM_RM);
     }
 
     if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
-        if (option->tp_type != UMQ_TP_TYPE_RTP) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "tp_type[%d] is invalid\n", option->tp_type);
-            return -UMQ_ERR_EINVAL;
-        }
         queue->tp_type = umq_tp_type_convert_to_urma(option->tp_type);
     } else {
-        queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_RTP);
+        queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_CTP);
+    }
+
+    if (queue->tp_type == URMA_CTP && umq_buf_size_pow_small() != UMQ_QBUF_SIZE_POW_4K) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ctp type only support 4K block size, current block size is %u\n", umq_buf_size_small());
+        return -UMQ_ERR_EINVAL;
     }
 
     umq_tp_type_t actual_tp_type = (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) != 0 ?
-        option->tp_type : UMQ_TP_TYPE_RTP;
+        option->tp_type : UMQ_TP_TYPE_CTP;
     if (option->create_flag & UMQ_CREATE_FLAG_PRIORITY) {
         if (option->priority > URMA_MAX_PRIORITY) {
             UMQ_VLOG_ERR(VLOG_UMQ, "priority[%u] is invalid\n", option->priority);

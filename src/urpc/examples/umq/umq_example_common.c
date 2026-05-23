@@ -112,12 +112,12 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
     if (cfg->instance_mode == SERVER) {
         if (sprintf(option.name, "%s", "server") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            return -1;
+            return UMQ_INVALID_HANDLE;
         }
     } else {
         if (sprintf(option.name, "%s", "client") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            return -1;
+            return UMQ_INVALID_HANDLE;
         }
     }
 
@@ -131,7 +131,7 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
     uint64_t umqh = umq_create(&option);
     if (umqh == UMQ_INVALID_HANDLE) {
         LOG_PRINT_ERR("umq_create failed\n");
-        return -1;
+        return UMQ_INVALID_HANDLE;
     }
 
     *bind_info_size = umq_bind_info_get(umqh, local_bind_info, *bind_info_size);

@@ -1955,7 +1955,7 @@ static uvs_tp_type_t umq_tp_type_convert_to_uvs(umq_tp_type_t tp_type)
         case UMQ_TP_TYPE_UTP:
             return UVS_UTP;
         default:
-            return UVS_RTP;
+            return UVS_CTP;
     };
 }
 
