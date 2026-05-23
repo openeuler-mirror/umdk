@@ -322,21 +322,27 @@ static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
     if (g_bondp_global_ctx->topo_map) {
         return 0;
     }
-    struct ubagg_topo_info_out info_out;
+    struct ubagg_topo_info_out *info_out = calloc(1, sizeof(*info_out));
+    if (info_out == NULL) {
+        URMA_LOG_ERR("Failed to alloc topo info buffer\n");
+        return -1;
+    }
     urma_user_ctl_in_t in = {
         .opcode = GET_TOPO_INFO,
     };
     urma_user_ctl_out_t out = {
-        .addr = (uint64_t)&info_out,
-        .len = sizeof(info_out),
+        .addr = (uint64_t)info_out,
+        .len = sizeof(*info_out),
     };
     urma_udrv_t data = {0};
     if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data)) {
         URMA_LOG_ERR("Failed to get topo info, change to general mode\n");
         g_bondp_global_ctx->skip_load_topo = true;
+        free(info_out);
         return -1;
     }
-    g_bondp_global_ctx->topo_map = create_topo_map(info_out.topo_info, info_out.node_num);
+    g_bondp_global_ctx->topo_map = create_topo_map(info_out->topo_info, info_out->node_num);
+    free(info_out);
     if (g_bondp_global_ctx->topo_map == NULL) {
         URMA_LOG_ERR("Failed to create topo map\n");
         return -1;
