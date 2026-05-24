@@ -11,8 +11,8 @@
  * History: 2026-05-13  Create File
  */
 
-#ifndef UMS_AGENT_NETLINK_H
-#define UMS_AGENT_NETLINK_H
+#ifndef UMS_AGENT_NL_H
+#define UMS_AGENT_NL_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -37,8 +37,8 @@ enum ums_nl_attr {
     UMS_ATTR_UNSPEC,
     UMS_ATTR_ROLE,
     UMS_ATTR_RESULT,
-    UMS_ATTR_ID_FOR_PEER,
-    UMS_ATTR_CLC_ID,
+    UMS_ATTR_INITIATOR_ID,
+    UMS_ATTR_CLC_SESSION_ID,
     UMS_ATTR_DST_IP,
     UMS_ATTR_DST_IP6,
     UMS_ATTR_FIRST_CONTACT,
@@ -70,9 +70,11 @@ bool ums_agent_nl_owns_fd(int fd);
 void ums_agent_nl_handle_event(int fd, uint32_t events);
 
 void ums_agent_nl_set_token_submit_cb(ums_agent_nl_token_submit_cb cb);
-int ums_agent_nl_send_token_submit_fail(uint32_t clc_id, int result);
-int ums_agent_nl_send_token_deliver(uint32_t clc_id,
+int ums_agent_nl_send_token_submit_fail(uint32_t clc_session_id,
+    const uint8_t *initiator_id, int result);
+int ums_agent_nl_send_token_deliver(uint32_t clc_session_id,
+    const uint8_t *initiator_id,
     uint32_t peer_jetty_token, uint32_t peer_seg_token,
     uint8_t first_contact);
 
-#endif /* UMS_AGENT_NETLINK_H */
+#endif /* UMS_AGENT_NL_H */

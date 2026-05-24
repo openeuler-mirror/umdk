@@ -25,9 +25,13 @@ struct ums_agent_ip_addr {
     } ip;
 };
 
+struct ums_agent_ip_str {
+    char str[INET6_ADDRSTRLEN];
+};
+
 struct ums_token_entry {
-    uint32_t clc_id;
-    uint8_t  id_for_peer[UMS_SYSTEMID_LEN];
+    uint32_t clc_session_id;
+    uint8_t  initiator_id[UMS_SYSTEMID_LEN];
     uint8_t  first_contact;
     struct ums_agent_ip_addr dst_addr;
     uint32_t jetty_token_value;

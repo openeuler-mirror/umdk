@@ -169,19 +169,19 @@ static void ums_agent_nl_teardown_probe_timer(void)
 
 static int ums_agent_nl_validate_token_submit(struct nlattr *attrs[])
 {
-    if (!attrs[UMS_ATTR_CLC_ID]) {
-        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT missing UMS_ATTR_CLC_ID");
+    if (!attrs[UMS_ATTR_CLC_SESSION_ID]) {
+        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT missing UMS_ATTR_CLC_SESSION_ID");
         return -1;
     }
 
-    if (!attrs[UMS_ATTR_ID_FOR_PEER]) {
-        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT missing UMS_ATTR_ID_FOR_PEER");
+    if (!attrs[UMS_ATTR_INITIATOR_ID]) {
+        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT missing UMS_ATTR_INITIATOR_ID");
         return -1;
     }
 
-    if (nla_len(attrs[UMS_ATTR_ID_FOR_PEER]) != UMS_SYSTEMID_LEN) {
-        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT invalid ID_FOR_PEER length=%d",
-            nla_len(attrs[UMS_ATTR_ID_FOR_PEER]));
+    if (nla_len(attrs[UMS_ATTR_INITIATOR_ID]) != UMS_SYSTEMID_LEN) {
+        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT invalid INITIATOR_ID length=%d",
+            nla_len(attrs[UMS_ATTR_INITIATOR_ID]));
         return -1;
     }
 
@@ -222,11 +222,11 @@ static int ums_agent_nl_process_token_submit(struct nlattr *attrs[])
     struct ums_token_entry entry;
 
     memset(&entry, 0, sizeof(entry));
-    entry.clc_id = nla_get_u32(attrs[UMS_ATTR_CLC_ID]);
+    entry.clc_session_id = nla_get_u32(attrs[UMS_ATTR_CLC_SESSION_ID]);
     entry.first_contact = nla_get_u8(attrs[UMS_ATTR_FIRST_CONTACT]);
     entry.seg_token_value = nla_get_u32(attrs[UMS_ATTR_SEG_TOKEN]);
 
-    nla_memcpy(entry.id_for_peer, attrs[UMS_ATTR_ID_FOR_PEER],
+    nla_memcpy(entry.initiator_id, attrs[UMS_ATTR_INITIATOR_ID],
         UMS_SYSTEMID_LEN);
 
     if (attrs[UMS_ATTR_DST_IP]) {
@@ -251,8 +251,8 @@ static int ums_agent_nl_process_token_submit(struct nlattr *attrs[])
 
     ret = g_ums_agent_nl.token_submit_cb(&entry);
     if (ret != 0) {
-        UMS_AGENT_LOG_ERR("token_submit_cb failed, clc_id=%u, ret=%d",
-            entry.clc_id, ret);
+        UMS_AGENT_LOG_ERR("token_submit_cb failed, clc_session_id=%u, ret=%d",
+            entry.clc_session_id, ret);
         goto cleanup;
     }
 
@@ -293,11 +293,13 @@ static int ums_agent_nl_ums_cb(struct nl_msg *msg, void *arg)
     ret = ums_agent_nl_process_token_submit(attrs);
     if (ret < 0) {
         int err_code = -ret;
-        uint32_t clc_id = nla_get_u32(attrs[UMS_ATTR_CLC_ID]);
-        ret = ums_agent_nl_send_token_submit_fail(clc_id, err_code);
+        uint32_t clc_session_id = nla_get_u32(attrs[UMS_ATTR_CLC_SESSION_ID]);
+        uint8_t initiator_id[UMS_SYSTEMID_LEN];
+        nla_memcpy(initiator_id, attrs[UMS_ATTR_INITIATOR_ID], UMS_SYSTEMID_LEN);
+        ret = ums_agent_nl_send_token_submit_fail(clc_session_id, initiator_id, err_code);
         if (ret < 0) {
             UMS_AGENT_LOG_WARN("TOKEN_SUBMIT_FAIL send failed (result=%d), "
-                "clc_id=%u, kernel will timeout", err_code, clc_id);
+                "clc_session_id=%u, kernel will timeout", err_code, clc_session_id);
         }
         goto cleanup;
     }
@@ -366,7 +368,13 @@ static int ums_agent_nl_try_connect_ums(void)
         return -1;
     }
 
-    nl_socket_set_nonblocking(sock);
+    ret = nl_socket_set_nonblocking(sock);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("nl_socket_set_nonblocking failed: %s",
+            nl_geterror(ret));
+        nl_socket_free(sock);
+        return -1;
+    }
 
     nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM,
         ums_agent_nl_ums_cb, NULL);
@@ -498,7 +506,13 @@ static int ums_agent_nl_setup_nlctrl(void)
         return -1;
     }
 
-    nl_socket_set_nonblocking(sock);
+    ret = nl_socket_set_nonblocking(sock);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("nl_socket_set_nonblocking failed: %s",
+            nl_geterror(ret));
+        nl_socket_free(sock);
+        return -1;
+    }
 
     nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM,
         ums_agent_nlctrl_cb, NULL);
@@ -738,11 +752,12 @@ void ums_agent_nl_set_token_submit_cb(ums_agent_nl_token_submit_cb cb)
     g_ums_agent_nl.token_submit_cb = cb;
 }
 
-int ums_agent_nl_send_token_submit_fail(uint32_t clc_id, int result)
+int ums_agent_nl_send_token_submit_fail(uint32_t clc_session_id,
+    const uint8_t *initiator_id, int result)
 {
     if (!g_ums_agent_nl.ums_available) {
         UMS_AGENT_LOG_WARN("UMS_GENL not available, cannot send "
-            "TOKEN_SUBMIT_FAIL, clc_id=%u", clc_id);
+            "TOKEN_SUBMIT_FAIL, clc_session_id=%u", clc_session_id);
         return -1;
     }
 
@@ -761,9 +776,15 @@ int ums_agent_nl_send_token_submit_fail(uint32_t clc_id, int result)
         goto err_free;
     }
 
-    ret = nla_put_u32(msg, UMS_ATTR_CLC_ID, clc_id);
+    ret = nla_put_u32(msg, UMS_ATTR_CLC_SESSION_ID, clc_session_id);
     if (ret < 0) {
-        UMS_AGENT_LOG_ERR("nla_put CLC_ID failed: %s", nl_geterror(ret));
+        UMS_AGENT_LOG_ERR("nla_put CLC_SESSION_ID failed: %s", nl_geterror(ret));
+        goto err_free;
+    }
+
+    ret = nla_put(msg, UMS_ATTR_INITIATOR_ID, UMS_SYSTEMID_LEN, initiator_id);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("nla_put INITIATOR_ID failed: %s", nl_geterror(ret));
         goto err_free;
     }
 
@@ -776,12 +797,12 @@ int ums_agent_nl_send_token_submit_fail(uint32_t clc_id, int result)
     ret = nl_send_auto(g_ums_agent_nl.ums_sock, msg);
     if (ret < 0) {
         UMS_AGENT_LOG_ERR("nl_send_auto TOKEN_SUBMIT_FAIL failed: %s, "
-            "clc_id=%u, result=%d", nl_geterror(ret), clc_id, result);
+            "clc_session_id=%u, result=%d", nl_geterror(ret), clc_session_id, result);
         goto err_free;
     }
 
-    UMS_AGENT_LOG_INFO("sent TOKEN_SUBMIT_FAIL, clc_id=%u, result=%d",
-        clc_id, result);
+    UMS_AGENT_LOG_INFO("sent TOKEN_SUBMIT_FAIL, clc_session_id=%u, result=%d",
+        clc_session_id, result);
     nlmsg_free(msg);
     return 0;
 
@@ -790,13 +811,14 @@ err_free:
     return -1;
 }
 
-int ums_agent_nl_send_token_deliver(uint32_t clc_id,
+int ums_agent_nl_send_token_deliver(uint32_t clc_session_id,
+    const uint8_t *initiator_id,
     uint32_t peer_jetty_token, uint32_t peer_seg_token,
     uint8_t first_contact)
 {
     if (!g_ums_agent_nl.ums_available) {
         UMS_AGENT_LOG_WARN("UMS_GENL not available, cannot send TOKEN_DELIVER, "
-            "clc_id=%u", clc_id);
+            "clc_session_id=%u", clc_session_id);
         return -1;
     }
 
@@ -815,9 +837,15 @@ int ums_agent_nl_send_token_deliver(uint32_t clc_id,
         goto err_free;
     }
 
-    ret = nla_put_u32(msg, UMS_ATTR_CLC_ID, clc_id);
+    ret = nla_put_u32(msg, UMS_ATTR_CLC_SESSION_ID, clc_session_id);
     if (ret < 0) {
-        UMS_AGENT_LOG_ERR("nla_put CLC_ID failed: %s", nl_geterror(ret));
+        UMS_AGENT_LOG_ERR("nla_put CLC_SESSION_ID failed: %s", nl_geterror(ret));
+        goto err_free;
+    }
+
+    ret = nla_put(msg, UMS_ATTR_INITIATOR_ID, UMS_SYSTEMID_LEN, initiator_id);
+    if (ret < 0) {
+        UMS_AGENT_LOG_ERR("nla_put INITIATOR_ID failed: %s", nl_geterror(ret));
         goto err_free;
     }
 
@@ -847,11 +875,11 @@ int ums_agent_nl_send_token_deliver(uint32_t clc_id,
     ret = nl_send_auto(g_ums_agent_nl.ums_sock, msg);
     if (ret < 0) {
         UMS_AGENT_LOG_ERR("nl_send_auto TOKEN_DELIVER failed: %s, "
-            "clc_id=%u", nl_geterror(ret), clc_id);
+            "clc_session_id=%u", nl_geterror(ret), clc_session_id);
         goto err_free;
     }
 
-    UMS_AGENT_LOG_INFO("sent TOKEN_DELIVER, clc_id=%u", clc_id);
+    UMS_AGENT_LOG_INFO("sent TOKEN_DELIVER, clc_session_id=%u", clc_session_id);
     ums_agent_nl_secure_zero_msg(msg);
     nlmsg_free(msg);
     return 0;
