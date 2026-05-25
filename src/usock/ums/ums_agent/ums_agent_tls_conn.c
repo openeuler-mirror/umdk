@@ -175,30 +175,37 @@ static int ums_agent_tls_conn_setup_socket_options(int fd)
     return 0;
 }
 
-static void ums_agent_tls_conn_parse_peer_address(const struct sockaddr *peer_addr,
+static int ums_agent_tls_conn_parse_peer_address(const struct sockaddr *peer_addr,
     socklen_t peer_addr_len, struct ums_agent_ip_addr *peer_ip, uint16_t *peer_port)
 {
-    if (peer_addr->sa_family == AF_INET6) {
-        if (peer_addr_len < (socklen_t)sizeof(struct sockaddr_in6)) {
-            return;
-        }
-        const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)peer_addr;
-        peer_ip->family = AF_INET6;
-        peer_ip->ip.in6 = addr6->sin6_addr;
-        *peer_port = ntohs(addr6->sin6_port);
-    } else if (peer_addr->sa_family == AF_INET) {
-        if (peer_addr_len < (socklen_t)sizeof(struct sockaddr_in)) {
-            return;
-        }
-        const struct sockaddr_in *addr4 = (const struct sockaddr_in *)peer_addr;
-        peer_ip->family = AF_INET;
-        peer_ip->ip.in4 = addr4->sin_addr;
-        *peer_port = ntohs(addr4->sin_port);
-    } else {
-        return;
+    switch (peer_addr->sa_family) {
+        case AF_INET6:
+            if (peer_addr_len < (socklen_t)sizeof(struct sockaddr_in6)) {
+                UMS_AGENT_LOG_ERR("AF_INET6 address too short (len=%u)",
+                    (unsigned int)peer_addr_len);
+                return -1;
+            }
+            peer_ip->family = AF_INET6;
+            peer_ip->ip.in6 = ((const struct sockaddr_in6 *)peer_addr)->sin6_addr;
+            *peer_port = ntohs(((const struct sockaddr_in6 *)peer_addr)->sin6_port);
+            break;
+        case AF_INET:
+            if (peer_addr_len < (socklen_t)sizeof(struct sockaddr_in)) {
+                UMS_AGENT_LOG_ERR("AF_INET address too short (len=%u)",
+                    (unsigned int)peer_addr_len);
+                return -1;
+            }
+            peer_ip->family = AF_INET;
+            peer_ip->ip.in4 = ((const struct sockaddr_in *)peer_addr)->sin_addr;
+            *peer_port = ntohs(((const struct sockaddr_in *)peer_addr)->sin_port);
+            break;
+        default:
+            UMS_AGENT_LOG_ERR("unknown address family=%d", peer_addr->sa_family);
+            return -1;
     }
 
     ums_agent_ip_addr_normalize(peer_ip);
+    return 0;
 }
 
 static SSL *ums_agent_tls_conn_create_server_ssl(int fd)
@@ -351,11 +358,10 @@ static int ums_agent_tls_conn_do_handshake(struct ums_agent_tls_conn *conn)
     if (ret == 1) {
         conn->state = UMS_AGENT_TLS_CONN_CONNECTED;
         ums_agent_get_monotonic_time(&conn->handshake_complete_time);
-
-        UMS_AGENT_LOG_DEBUG("TLS handshake completed, peer=%s:%u, is_server=%d",
-            ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port, conn->is_server);
-
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
+        UMS_AGENT_LOG_DEBUG("TLS handshake completed, peer=%s:%u, is_server=%d",
+            ums_agent_ip_addr_fmt(&conn->peer_addr).str,
+            conn->peer_port, conn->is_server);
         return 0;
     }
 
@@ -379,38 +385,105 @@ static int ums_agent_tls_conn_do_handshake(struct ums_agent_tls_conn *conn)
     return -1;
 }
 
+static bool ums_agent_tls_conn_is_unexpected_eof(int ssl_err)
+{
+#if ((OPENSSL_VERSION_NUMBER >= 0x30000000L) || (OPENSSL_VERSION_NUMBER == 0x1010105fL))
+    unsigned long ec = ERR_peek_last_error();
+    return ((ssl_err == SSL_ERROR_SSL) &&
+        (ERR_GET_REASON(ec) == SSL_R_UNEXPECTED_EOF_WHILE_READING));
+#else
+    return ((ssl_err == SSL_ERROR_SYSCALL) && (ERR_peek_last_error() == 0u));
+#endif
+}
+
+/*
+ * ums_agent_tls_conn_do_shutdown - Perform one step of the TLS graceful
+ * shutdown (close_notify exchange).
+ *
+ * SSL_shutdown follows a two-phase protocol:
+ *   Phase 1: Send close_notify to peer. SSL_shutdown returns 0.
+ *   Phase 2: Wait for peer's close_notify. SSL_shutdown returns 1.
+ *
+ * Returns:
+ *   0  - Shutdown complete (both close_notify exchanged), state set to CLOSED
+ *   1  - Shutdown in progress, need to wait for epoll event and retry
+ *  -1  - Shutdown failed, state set to CLOSED (force close)
+ */
 static int ums_agent_tls_conn_do_shutdown(struct ums_agent_tls_conn *conn)
 {
     int ret = SSL_shutdown(conn->ssl);
+    int saved_errno = errno;
     if (ret == 1) {
+        /* Shutdown complete: both sides exchanged close_notify */
         conn->state = UMS_AGENT_TLS_CONN_CLOSED;
         return 0;
     }
 
     if (ret == 0) {
+        /*
+         * Phase 1 complete: our close_notify sent, waiting for peer's close_notify.
+         * Ensure only EPOLLIN is registered to wait for the peer's response,
+         * as the previous epoll mask may include EPOLLOUT from prior write operations.
+         */
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
         return 1;
     }
 
     int ssl_err = SSL_get_error(conn->ssl, ret);
     if (ssl_err == SSL_ERROR_WANT_READ) {
+        /* Non-blocking I/O: SSL needs to read data to continue shutdown */
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
         return 1;
-    } else if (ssl_err == SSL_ERROR_WANT_WRITE) {
+    }
+    if (ssl_err == SSL_ERROR_WANT_WRITE) {
+        /* Non-blocking I/O: SSL needs to write data (e.g. send close_notify) */
         ums_agent_epoll_mod_fd(conn->fd, EPOLLOUT);
         return 1;
     }
+    if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+        /* Peer sent close_notify during shutdown, treat as normal close */
+        conn->state = UMS_AGENT_TLS_CONN_CLOSED;
+        return 0;
+    }
+    if (ssl_err == SSL_ERROR_SYSCALL) {
+        if (ums_agent_tls_conn_is_unexpected_eof(ssl_err)) {
+            UMS_AGENT_LOG_DEBUG("peer disconnected without close_notify during shutdown, "
+                "peer=%s:%u", ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+        } else {
+            UMS_AGENT_LOG_WARN("SSL_shutdown syscall error, peer=%s:%u: %s (errno=%d)",
+                ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port,
+                strerror(saved_errno), saved_errno);
+        }
+        ERR_clear_error();
+        conn->state = UMS_AGENT_TLS_CONN_CLOSED;
+        return -1;
+    }
+    if (ssl_err == SSL_ERROR_SSL) {
+        if (ums_agent_tls_conn_is_unexpected_eof(ssl_err)) {
+            UMS_AGENT_LOG_DEBUG("peer disconnected without close_notify during shutdown, "
+                "peer=%s:%u", ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+            ERR_clear_error();
+            conn->state = UMS_AGENT_TLS_CONN_CLOSED;
+            return -1;
+        }
+        unsigned long err = ERR_get_error();
+        char err_buf[UMS_AGENT_TLS_MAX_ERR_BUF_LEN];
+        ERR_error_string_n(err, err_buf, sizeof(err_buf));
+        UMS_AGENT_LOG_WARN("SSL_shutdown SSL protocol error, peer=%s:%u, openssl_err='%s'",
+            ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port, err_buf);
+        ERR_clear_error();
+        conn->state = UMS_AGENT_TLS_CONN_CLOSED;
+        return -1;
+    }
 
+    unsigned long err = ERR_get_error();
+    char err_buf[UMS_AGENT_TLS_MAX_ERR_BUF_LEN];
+    ERR_error_string_n(err, err_buf, sizeof(err_buf));
+    UMS_AGENT_LOG_WARN("SSL_shutdown error, peer=%s:%u, ssl_err=%d, openssl_err='%s'",
+        ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port, ssl_err, err_buf);
+    ERR_clear_error();
     conn->state = UMS_AGENT_TLS_CONN_CLOSED;
     return -1;
-}
-
-static bool ums_agent_tls_conn_is_unexpected_eof(int ssl_err, int ret)
-{
-    if (ssl_err == SSL_ERROR_SYSCALL && ret == 0) {
-        return true;
-    }
-    return false;
 }
 
 static int ums_agent_tls_conn_check_connect_result(struct ums_agent_tls_conn *conn)
@@ -457,7 +530,17 @@ static int ums_agent_tls_conn_handle_write_error(struct ums_agent_tls_conn *conn
 {
     int saved_errno = errno;
     int ssl_err = SSL_get_error(conn->ssl, ssl_ret);
-    if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+    if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+        UMS_AGENT_LOG_DEBUG("peer sent close_notify during write, peer=%s:%u",
+            ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+        conn->state = UMS_AGENT_TLS_CONN_SHUTTING_DOWN;
+        return -EAGAIN;
+    }
+    if (ssl_err == SSL_ERROR_WANT_WRITE) {
+        ums_agent_epoll_mod_fd(conn->fd, EPOLLOUT);
+        return -EAGAIN;
+    }
+    if (ssl_err == SSL_ERROR_WANT_READ) {
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN | EPOLLOUT);
         return -EAGAIN;
     }
@@ -465,16 +548,21 @@ static int ums_agent_tls_conn_handle_write_error(struct ums_agent_tls_conn *conn
         if (ssl_ret == 0) {
             UMS_AGENT_LOG_WARN("SSL_write received unexpected EOF, peer=%s:%u",
                 ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+            ERR_clear_error();
             conn->state = UMS_AGENT_TLS_CONN_ERROR;
             return -1;
         }
-        if (saved_errno == EINTR || saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
-            ums_agent_epoll_mod_fd(conn->fd, EPOLLIN | EPOLLOUT);
+        if (saved_errno == EINTR) {
+            return -EINTR;
+        }
+        if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
+            ums_agent_epoll_mod_fd(conn->fd, EPOLLOUT);
             return -EAGAIN;
         }
         UMS_AGENT_LOG_ERR("SSL_write syscall error, peer=%s:%u: %s (errno=%d)",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port,
             strerror(saved_errno), saved_errno);
+        ERR_clear_error();
         conn->state = UMS_AGENT_TLS_CONN_ERROR;
         return -1;
     }
@@ -482,9 +570,8 @@ static int ums_agent_tls_conn_handle_write_error(struct ums_agent_tls_conn *conn
     unsigned long err = ERR_get_error();
     char err_buf[UMS_AGENT_TLS_MAX_ERR_BUF_LEN];
     ERR_error_string_n(err, err_buf, sizeof(err_buf));
-    UMS_AGENT_LOG_ERR("SSL_write failed, peer=%s:%u, ssl_err=%d, "
-        "openssl_err='%s'", ums_agent_ip_addr_fmt(&conn->peer_addr).str,
-        conn->peer_port, ssl_err, err_buf);
+    UMS_AGENT_LOG_ERR("SSL_write failed, peer=%s:%u, ssl_err=%d, openssl_err='%s'",
+        ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port, ssl_err, err_buf);
     ERR_clear_error();
     conn->state = UMS_AGENT_TLS_CONN_ERROR;
     return -1;
@@ -503,31 +590,36 @@ static int ums_agent_tls_conn_handle_read_error(struct ums_agent_tls_conn *conn,
     }
     if (ssl_err == SSL_ERROR_WANT_READ) {
         return -EAGAIN;
-    } else if (ssl_err == SSL_ERROR_WANT_WRITE) {
+    }
+    if (ssl_err == SSL_ERROR_WANT_WRITE) {
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN | EPOLLOUT);
         return -EAGAIN;
     }
-
-    if (ums_agent_tls_conn_is_unexpected_eof(ssl_err, ssl_ret)) {
+    if (ums_agent_tls_conn_is_unexpected_eof(ssl_err)) {
         UMS_AGENT_LOG_WARN("unexpected EOF on TLS connection, peer=%s:%u",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+        ERR_clear_error();
         conn->state = UMS_AGENT_TLS_CONN_ERROR;
         return -1;
     }
-
     if (ssl_err == SSL_ERROR_SYSCALL) {
         if (ssl_ret == 0) {
             UMS_AGENT_LOG_WARN("SSL_read received unexpected EOF, peer=%s:%u",
                 ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
+            ERR_clear_error();
             conn->state = UMS_AGENT_TLS_CONN_ERROR;
             return -1;
         }
-        if (saved_errno == EINTR || saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
+        if (saved_errno == EINTR) {
+            return -EINTR;
+        }
+        if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
             return -EAGAIN;
         }
         UMS_AGENT_LOG_ERR("SSL_read syscall error, peer=%s:%u: %s (errno=%d)",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port,
             strerror(saved_errno), saved_errno);
+        ERR_clear_error();
         conn->state = UMS_AGENT_TLS_CONN_ERROR;
         return -1;
     }
@@ -619,14 +711,13 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
             return;
         }
     }
-
     if (events & EPOLLOUT) {
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
-        ums_agent_tls_conn_notify_data_available(conn);
+        ums_agent_tls_conn_notify_writable(conn);
         if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
             return;
         }
-        ums_agent_tls_conn_notify_writable(conn);
+        ums_agent_tls_conn_notify_data_available(conn);
         if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
             return;
         }
@@ -777,28 +868,31 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_create_server(int fd,
     const struct sockaddr *peer_addr, socklen_t peer_addr_len)
 {
     if (ums_agent_tls_conn_setup_socket_options(fd) < 0) {
-        (void)close(fd);
         return NULL;
     }
 
     SSL *ssl = ums_agent_tls_conn_create_server_ssl(fd);
     if (!ssl) {
-        (void)close(fd);
         return NULL;
     }
 
-    struct ums_agent_ip_addr peer_ip;
+    struct ums_agent_ip_addr peer_ip = {0};
     uint16_t peer_port = 0;
-    ums_agent_tls_conn_parse_peer_address(peer_addr, peer_addr_len, &peer_ip, &peer_port);
+    if (ums_agent_tls_conn_parse_peer_address(peer_addr, peer_addr_len,
+        &peer_ip, &peer_port) != 0) {
+        UMS_AGENT_LOG_ERR("failed to parse peer address");
+        SSL_free(ssl);
+        return NULL;
+    }
 
     struct ums_agent_tls_conn *conn = ums_agent_tls_conn_alloc(fd, ssl, true, &peer_ip, peer_port);
     if (!conn) {
         SSL_free(ssl);
-        (void)close(fd);
         return NULL;
     }
 
     if (ums_agent_epoll_add_fd(fd, EPOLLIN) < 0) {
+        conn->fd = -1;
         ums_agent_tls_conn_destroy(conn);
         return NULL;
     }
@@ -808,6 +902,8 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_create_server(int fd,
     int handshake_ret = ums_agent_tls_conn_do_handshake(conn);
     if (handshake_ret < 0) {
         ums_agent_tls_conn_pool_remove(conn);
+        (void)ums_agent_epoll_del_fd(conn->fd);
+        conn->fd = -1;
         ums_agent_tls_conn_destroy(conn);
         return NULL;
     }
@@ -820,19 +916,18 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_create_client(int fd,
 {
     SSL *ssl = ums_agent_tls_conn_create_client_ssl(fd);
     if (!ssl) {
-        (void)close(fd);
         return NULL;
     }
 
     struct ums_agent_tls_conn *conn = ums_agent_tls_conn_alloc(fd, ssl, false, peer_addr, peer_port);
     if (!conn) {
         SSL_free(ssl);
-        (void)close(fd);
         return NULL;
     }
 
     uint32_t events = (connect_ret == 0) ? EPOLLIN : (EPOLLIN | EPOLLOUT);
     if (ums_agent_epoll_add_fd(conn->fd, events) < 0) {
+        conn->fd = -1;
         ums_agent_tls_conn_destroy(conn);
         return NULL;
     }
@@ -843,6 +938,8 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_create_client(int fd,
         int handshake_ret = ums_agent_tls_conn_do_handshake(conn);
         if (handshake_ret < 0) {
             ums_agent_tls_conn_pool_remove(conn);
+            (void)ums_agent_epoll_del_fd(conn->fd);
+            conn->fd = -1;
             ums_agent_tls_conn_destroy(conn);
             return NULL;
         }
@@ -868,6 +965,11 @@ static int ums_agent_tls_conn_create_client_socket(const struct ums_agent_ip_add
         return -1;
     }
 
+    if (ums_agent_tls_conn_setup_socket_options(fd) < 0) {
+        (void)close(fd);
+        return -1;
+    }
+
     /*
      * Non-blocking connect: socket created with SOCK_NONBLOCK.
      * Returns 0 if connection established immediately (e.g. loopback),
@@ -877,7 +979,8 @@ static int ums_agent_tls_conn_create_client_socket(const struct ums_agent_ip_add
     *connect_ret = connect(fd, (struct sockaddr *)&sa_storage, sa_len);
     if (*connect_ret < 0 && errno != EINPROGRESS) {
         UMS_AGENT_LOG_ERR("connect to %s:%u failed: %s (errno=%d)",
-            ums_agent_ip_addr_fmt(peer_addr).str, peer_port, strerror(errno), errno);
+            ums_agent_ip_addr_fmt(peer_addr).str, peer_port,
+            strerror(errno), errno);
         (void)close(fd);
         return -1;
     }
@@ -1002,6 +1105,7 @@ int ums_agent_tls_conn_connect(const struct ums_agent_ip_addr *peer_addr,
     struct ums_agent_tls_conn *conn = ums_agent_tls_conn_create_client(fd, peer_addr, peer_port,
         connect_ret);
     if (!conn) {
+        (void)close(fd);
         return -1;
     }
 
@@ -1035,6 +1139,7 @@ int ums_agent_tls_conn_accept(int listen_fd)
     struct ums_agent_tls_conn *conn = ums_agent_tls_conn_create_server(client_fd,
         (struct sockaddr *)&peer_addr, peer_len);
     if (!conn) {
+        (void)close(client_fd);
         return -1;
     }
 
@@ -1061,8 +1166,7 @@ int ums_agent_tls_conn_send(struct ums_agent_tls_conn *conn,
     if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
         UMS_AGENT_LOG_ERR("connection not in CONNECTED state, peer=%s:%u, "
             "state=%s", ums_agent_ip_addr_fmt(&conn->peer_addr).str,
-            conn->peer_port,
-            ums_agent_tls_conn_state_to_str(conn->state));
+            conn->peer_port, ums_agent_tls_conn_state_to_str(conn->state));
         return -1;
     }
 
@@ -1092,8 +1196,7 @@ int ums_agent_tls_conn_recv(struct ums_agent_tls_conn *conn,
         conn->state != UMS_AGENT_TLS_CONN_SHUTTING_DOWN) {
         UMS_AGENT_LOG_ERR("connection not in CONNECTED/SHUTTING_DOWN state, "
             "peer=%s:%u, state=%s", ums_agent_ip_addr_fmt(&conn->peer_addr).str,
-            conn->peer_port,
-            ums_agent_tls_conn_state_to_str(conn->state));
+            conn->peer_port, ums_agent_tls_conn_state_to_str(conn->state));
         return -1;
     }
 
@@ -1118,9 +1221,8 @@ void ums_agent_tls_conn_shutdown(struct ums_agent_tls_conn *conn)
 
     if (conn->ref_count > 0) {
         UMS_AGENT_LOG_WARN("deferring close, connection has active references, "
-            "peer=%s:%u, ref_count=%u",
-            ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port,
-            conn->ref_count);
+            "peer=%s:%u, ref_count=%u", ums_agent_ip_addr_fmt(&conn->peer_addr).str,
+            conn->peer_port, conn->ref_count);
         conn->close_pending = true;
         return;
     }
