@@ -806,6 +806,26 @@ int dlock_server::check_control_msg_client_id(const struct dlock_control_hdr msg
     return 0;
 }
 
+bool dlock_server::check_conn_type_valid(dlock_connection *p_conn) const
+{
+    dlock_conn_peer_info_t peer_info;
+
+    p_conn->get_peer_info(peer_info);
+    /* 1. An attack can create a new conn which peer_type is set to DLOCK_CONN_PEER_DEFAULT by default,
+    *  and will pass the check_control_msg_client_id check. For occasions like client reinit at recovery
+    *  phase, attacks of client_reinit_done reqs will lead to decrease m_recovery_num to 0 before clients
+    *  really got reinited.
+    *  2. As only "peer_info.peer_type == DLOCK_CONN_PEER_DEFAULT" case can pass check_control_msg_client_id
+    *  check at process_control_msg func. Occasions that "peer_info.peer_id != msg_hdr.client_id" has been
+    *  intercepted at check_control_msg_client_id func, in that there is no need to recheck that again.
+    */
+    if (peer_info.peer_type == DLOCK_CONN_PEER_DEFAULT) {
+        return false;
+    }
+
+    return true;
+}
+
 void dlock_server::fake_client_msg_process(dlock_connection *p_conn)
 {
     dlock_conn_peer_info_t peer_info;
@@ -2599,6 +2619,10 @@ int dlock_server::reinit_client_done(dlock_connection * p_conn,
         DLOCK_LOG_WARN("replica got reinit done msg");
         return -1;
     }
+    if (!check_conn_type_valid(p_conn)) {
+        DLOCK_LOG_ERR("reinit client done req from invalid connection");
+        return -1;
+    }
 
     uint8_t *buff = nullptr;
     size_t msg_len = DLOCK_FIXED_CTRL_MSG_HDR_LEN;
@@ -2716,6 +2740,10 @@ int dlock_server::batch_update_locks_do(dlock_connection *p_conn, struct dlock_c
 {
     if (!m_is_primary) {
         DLOCK_LOG_WARN("replica got batch update locks msg");
+        return -1;
+    }
+    if (!check_conn_type_valid(p_conn)) {
+        DLOCK_LOG_ERR("update locks req from invalid connection");
         return -1;
     }
     /* To avoid invalid access of msg_batch_update_lock_body pointer and ensure msg_body is non NULL */

@@ -166,6 +166,7 @@ private:
     void clear_object_client_relation(int client_id, client_entry_s *client_entry);
     int delete_except_client_entry();
     int check_control_msg_client_id(const struct dlock_control_hdr msg_hdr, dlock_connection *p_conn) const;
+    bool check_conn_type_valid(dlock_connection *p_conn) const;
     void fake_client_msg_process(dlock_connection *p_conn);
     int check_msg_type_range(const struct dlock_control_hdr msg_hdr, const uint8_t min_type, const uint8_t max_type,
         int32_t *ret_status) const;
