@@ -676,8 +676,8 @@ int umq_tp_ubmm_buf_headroom_reset_impl(umq_buf_t *qbuf, uint16_t headroom_size)
 static ALWAYS_INLINE int enqueue_data(uint64_t umqh_tp, uint64_t *offset, uint32_t num)
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
-    if (num > UMQ_POST_POLL_BATCH) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "enqueue data num %u exceeds max_post_size %d\n", num, UMQ_POST_POLL_BATCH);
+    if (num > UMQ_BATCH_SIZE) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "enqueue data num %u exceeds max_post_size %d\n", num, UMQ_BATCH_SIZE);
         return -UMQ_ERR_EINVAL;
     }
 

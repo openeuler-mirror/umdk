@@ -184,7 +184,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     do {
-        cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
+        cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
         umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, 0, NULL);
         if (qbuf == NULL) {
             UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, alloc rx failed\n",
@@ -2372,10 +2372,10 @@ static void umq_ub_non_rev_pull_tx_cqe(ub_queue_t *queue, umq_buf_t *cur_tx_buf,
 
 int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **buf, int return_rx_cnt)
 {
-    umq_buf_t *tx_buf[UMQ_POST_POLL_BATCH];
+    umq_buf_t *tx_buf[UMQ_BATCH_SIZE];
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_POST_POLL_BATCH, cr);
+    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_BATCH_SIZE, cr);
     if (tx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
@@ -2719,10 +2719,10 @@ int umq_ub_plus_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *
         urma_wr_ptr++;
         (urma_wr_ptr - 1)->next = urma_wr_ptr;
         wr_index++;
-        if ((wr_index == remain_tx || wr_index == UMQ_POST_POLL_BATCH) && buffer != NULL) {
-            // wr count exceed remain_tx or UMQ_POST_POLL_BATCH
+        if ((wr_index == remain_tx || wr_index == UMQ_BATCH_SIZE) && buffer != NULL) {
+            // wr count exceed remain_tx or UMQ_BATCH_SIZE
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wr count %u exceeds remain_tx %u or "
-                "max_post_size %d, not supported\n", EID_ARGS(*eid), id, wr_index, remain_tx, UMQ_POST_POLL_BATCH);
+                "max_post_size %d, not supported\n", EID_ARGS(*eid), id, wr_index, remain_tx, UMQ_BATCH_SIZE);
             return -UMQ_ERR_EINVAL;
         }
     }
@@ -2784,7 +2784,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
         urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
         uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
         do {
-            cur_batch_count = require_rx_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : require_rx_count;
+            cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
             umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, UMQ_INVALID_HANDLE, NULL);
             if (qbuf == NULL) {
                 __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_RELAXED);
@@ -2817,11 +2817,11 @@ int umq_ub_dequeue_with_poll_rx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **bu
     // merge rx buffer
     umq_buf_t *previous_last = NULL;
     if (queue->state == QUEUE_STATE_ERR) {
-        return umq_report_incomplete_and_merge_rx(queue, UMQ_POST_POLL_BATCH, buf, &previous_last);
+        return umq_report_incomplete_and_merge_rx(queue, UMQ_BATCH_SIZE, buf, &previous_last);
     }
 
     int rx_cr_cnt =
-        umq_symbol_urma()->urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, UMQ_POST_POLL_BATCH, cr);
+        umq_symbol_urma()->urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, UMQ_BATCH_SIZE, cr);
     if (rx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports rx_cr_cnt[%d]\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
@@ -2867,14 +2867,14 @@ int umq_ub_dequeue_plus_with_poll_rx(uint64_t umqh_tp, urma_cr_t *cr, umq_buf_t 
     // merge rx buffer
     umq_buf_t *previous_last = NULL;
     if (queue->state == QUEUE_STATE_ERR) {
-        return umq_report_incomplete_and_merge_rx(queue, UMQ_POST_POLL_BATCH, buf, &previous_last);
+        return umq_report_incomplete_and_merge_rx(queue, UMQ_BATCH_SIZE, buf, &previous_last);
     }
 
     int qbuf_cnt = 0;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     int rx_cr_cnt =
-        umq_symbol_urma()->urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, UMQ_POST_POLL_BATCH, cr);
+        umq_symbol_urma()->urma_poll_jfc(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfc, UMQ_BATCH_SIZE, cr);
     if (rx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports rx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, rx_cr_cnt);
@@ -2954,10 +2954,10 @@ void process_bad_qbuf(umq_buf_t *bad_qbuf, umq_buf_t *qbuf, ub_queue_t *queue)
 
 void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
 {
-    urma_cr_t cr[UMQ_POST_POLL_BATCH];
+    urma_cr_t cr[UMQ_BATCH_SIZE];
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_POST_POLL_BATCH, cr);
+    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_BATCH_SIZE, cr);
     if (tx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
@@ -3001,10 +3001,10 @@ void umq_ub_enqueue_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
 
 void umq_ub_enqueue_plus_with_poll_tx(ub_queue_t *queue, umq_buf_t **buf)
 {
-    urma_cr_t cr[UMQ_POST_POLL_BATCH];
+    urma_cr_t cr[UMQ_BATCH_SIZE];
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_POST_POLL_BATCH, cr);
+    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_BATCH_SIZE, cr);
     if (tx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
@@ -3262,10 +3262,10 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
         urma_wr_ptr++;
         (urma_wr_ptr - 1)->next = urma_wr_ptr;
         wr_index++;
-        if ((wr_index == remain_tx || wr_index == UMQ_POST_POLL_BATCH) && buffer != NULL) {
-            // wr count exceed remain_tx or UMQ_POST_POLL_BATCH
+        if ((wr_index == remain_tx || wr_index == UMQ_BATCH_SIZE) && buffer != NULL) {
+            // wr count exceed remain_tx or UMQ_BATCH_SIZE
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wr count %u exceeds remain_tx %u or "
-                "max_post_size %d, not supported\n", EID_ARGS(*eid), id, wr_index, remain_tx, UMQ_POST_POLL_BATCH);
+                "max_post_size %d, not supported\n", EID_ARGS(*eid), id, wr_index, remain_tx, UMQ_BATCH_SIZE);
             return -UMQ_ERR_EINVAL;
         }
     }
@@ -3277,10 +3277,10 @@ void umq_flush_rx(ub_queue_t *queue, uint32_t max_retry_times)
 {
     int rx_cnt = 0;
     uint32_t retry_times = 0;
-    umq_buf_t *buf[UMQ_POST_POLL_BATCH];
+    umq_buf_t *buf[UMQ_BATCH_SIZE];
     uint32_t remain = umq_ub_pjfr_depth(queue) - __atomic_load_n(&queue->require_rx_count, __ATOMIC_ACQUIRE);
     while (remain > 0 && retry_times < max_retry_times) {
-        rx_cnt = umq_ub_poll_rx((uint64_t)(uintptr_t)queue, buf, UMQ_POST_POLL_BATCH);
+        rx_cnt = umq_ub_poll_rx((uint64_t)(uintptr_t)queue, buf, UMQ_BATCH_SIZE);
         if (rx_cnt < 0) {
             return;
         }
@@ -3296,9 +3296,9 @@ void umq_flush_tx(ub_queue_t *queue, uint32_t max_retry_times)
 {
     int tx_cnt = 0;
     uint32_t retry_times = 0;
-    umq_buf_t *buf[UMQ_POST_POLL_BATCH];
+    umq_buf_t *buf[UMQ_BATCH_SIZE];
     while (!queue->tx_flush_done && retry_times < max_retry_times) {
-        tx_cnt = umq_ub_poll_tx((uint64_t)(uintptr_t)queue, buf, UMQ_POST_POLL_BATCH);
+        tx_cnt = umq_ub_poll_tx((uint64_t)(uintptr_t)queue, buf, UMQ_BATCH_SIZE);
         if (tx_cnt < 0) {
             return;
         }
