@@ -46,6 +46,7 @@ typedef struct qbuf_pool {
 typedef struct queue_local_pool {
     local_block_pool_t block_pool;
     qbuf_pool_t *global_pool;
+    local_qbuf_pool_stats_t stats;
 } queue_local_pool_t;
 
 struct local_qbuf_pool {
@@ -613,7 +614,7 @@ void umq_shm_qbuf_free(uint64_t pool, umq_buf_list_t *list)
         /* if local list node count reaches SHM_QBUF_POOL_TLS_MAX + SHM_QBUF_POOL_BATCH_CNT,
          * return some nodes to global */
         if (lblk_pool->buf_cnt_without_data >= SHM_QBUF_POOL_TLS_MAX + SHM_QBUF_POOL_BATCH_CNT) {
-            return_to_global(gblk_pool, lblk_pool, false, SHM_QBUF_POOL_TLS_MAX);
+            return_to_global(gblk_pool, lblk_pool, &local_pool->stats, false, SHM_QBUF_POOL_TLS_MAX);
         }
 
         return;
@@ -625,7 +626,7 @@ void umq_shm_qbuf_free(uint64_t pool, umq_buf_list_t *list)
     /* if local list node count reaches SHM_QBUF_POOL_TLS_MAX + SHM_QBUF_POOL_BATCH_CNT,
      * return some nodes to global */
     if (lblk_pool->buf_cnt_with_data > SHM_QBUF_POOL_TLS_MAX + SHM_QBUF_POOL_BATCH_CNT) {
-        return_to_global(gblk_pool, lblk_pool, true, SHM_QBUF_POOL_TLS_MAX);
+        return_to_global(gblk_pool, lblk_pool, &local_pool->stats, true, SHM_QBUF_POOL_TLS_MAX);
     }
 }
 
