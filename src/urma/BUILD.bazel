@@ -133,9 +133,21 @@ cc_library(
     deps = [
         ":urma",
         ":urma_common",
-    ],
+    ] + select({
+        ":build_udma_enabled": ["@libummu//:ummu_api"],
+        "//conditions:default": [],
+    }),
+    additional_linker_inputs = select({
+        ":build_udma_enabled": ["@libummu//:ummu_linklib"],
+        "//conditions:default": [],
+    }),
     linkopts = select({
-        ":build_udma_enabled": ["-lummu"],
+        ":build_udma_enabled": [
+            "-Wl,--no-as-needed",
+            "-L$(GENDIR)/external/libummu/linklib",
+            "-lummu",
+            "-Wl,--as-needed",
+        ],
         "//conditions:default": [],
     }),
 )
