@@ -56,8 +56,8 @@ struct ums_agent_msg_hdr {
 } __attribute__((packed));
 
 struct ums_agent_token_transfer {
-    uint32_t clc_id;
-    uint8_t  id_for_peer[UMS_SYSTEMID_LEN];
+    uint32_t clc_session_id;
+    uint8_t  initiator_id[UMS_SYSTEMID_LEN];
     uint32_t jetty_token_value;
     uint32_t seg_token_value;
     union {
@@ -104,24 +104,26 @@ struct ums_agent_token_proxy {
 
 static struct ums_agent_token_proxy g_ums_agent_tp = {0};
 
-static void ums_agent_tp_notify_token_deliver(uint32_t clc_id,
+static void ums_agent_tp_notify_token_deliver(uint32_t clc_session_id,
+    const uint8_t *initiator_id,
     uint32_t peer_jetty_token, uint32_t peer_seg_token,
     uint8_t first_contact)
 {
-    int ret = ums_agent_nl_send_token_deliver(clc_id,
+    int ret = ums_agent_nl_send_token_deliver(clc_session_id, initiator_id,
         peer_jetty_token, peer_seg_token, first_contact);
     if (ret < 0) {
-        UMS_AGENT_LOG_WARN("TOKEN_DELIVER send failed, clc_id=%u, "
-            "kernel will timeout", clc_id);
+        UMS_AGENT_LOG_WARN("TOKEN_DELIVER send failed, clc_session_id=%u, "
+            "kernel will timeout", clc_session_id);
     }
 }
 
-static void ums_agent_tp_notify_token_submit_fail(uint32_t clc_id, int result)
+static void ums_agent_tp_notify_token_submit_fail(uint32_t clc_session_id,
+    const uint8_t *initiator_id, int result)
 {
-    int ret = ums_agent_nl_send_token_submit_fail(clc_id, result);
+    int ret = ums_agent_nl_send_token_submit_fail(clc_session_id, initiator_id, result);
     if (ret < 0) {
-        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT_FAIL send failed, clc_id=%u, "
-            "kernel will timeout", clc_id);
+        UMS_AGENT_LOG_WARN("TOKEN_SUBMIT_FAIL send failed, clc_session_id=%u, "
+            "kernel will timeout", clc_session_id);
     }
 }
 
@@ -228,8 +230,8 @@ static void ums_agent_tp_serialize_msg_hdr(struct ums_agent_conn_ctx *ctx,
 static void ums_agent_tp_serialize_token_transfer(const struct ums_token_entry *entry,
     struct ums_agent_token_transfer *payload)
 {
-    payload->clc_id = htonl(entry->clc_id);
-    memcpy(payload->id_for_peer, entry->id_for_peer, UMS_SYSTEMID_LEN);
+    payload->clc_session_id = htonl(entry->clc_session_id);
+    memcpy(payload->initiator_id, entry->initiator_id, UMS_SYSTEMID_LEN);
     payload->jetty_token_value = htonl(entry->jetty_token_value);
     payload->seg_token_value = htonl(entry->seg_token_value);
     payload->flags.value = 0;
@@ -252,8 +254,8 @@ static void ums_agent_tp_deserialize_msg_hdr(const struct ums_agent_msg_hdr *raw
 static void ums_agent_tp_deserialize_token_transfer(const struct ums_agent_token_transfer *raw,
     struct ums_agent_token_transfer *out)
 {
-    out->clc_id = ntohl(raw->clc_id);
-    memcpy(out->id_for_peer, raw->id_for_peer, UMS_SYSTEMID_LEN);
+    out->clc_session_id = ntohl(raw->clc_session_id);
+    memcpy(out->initiator_id, raw->initiator_id, UMS_SYSTEMID_LEN);
     out->jetty_token_value = ntohl(raw->jetty_token_value);
     out->seg_token_value = ntohl(raw->seg_token_value);
     out->flags.value = raw->flags.value;
@@ -273,20 +275,16 @@ static int ums_agent_tp_flush_send_buf(struct ums_agent_tls_conn *conn,
             ctx->send_buf + ctx->send_offset,
             ctx->send_len - ctx->send_offset);
         if (ret == 0) {
-            char ip_str[INET6_ADDRSTRLEN] = {0};
-            ums_agent_ip_addr_to_str(&conn->peer_addr, ip_str, sizeof(ip_str));
             UMS_AGENT_LOG_ERR("TLS send returned 0 bytes, peer=%s:%u",
-                ip_str, conn->peer_port);
+                ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
             return -EIO;
         }
         if (ret < 0) {
             if (ret == -EAGAIN) {
                 return -EAGAIN;
             }
-            char ip_str[INET6_ADDRSTRLEN] = {0};
-            ums_agent_ip_addr_to_str(&conn->peer_addr, ip_str, sizeof(ip_str));
             UMS_AGENT_LOG_ERR("TLS send failed, peer=%s:%u",
-                ip_str, conn->peer_port);
+                ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
             return -EIO;
         }
 
@@ -310,10 +308,9 @@ static int ums_agent_tp_send_entry(struct ums_agent_tls_conn *conn,
     }
 
     if (ums_agent_tp_conn_has_pending_send(ctx)) {
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(&entry->dst_addr, ip_str, sizeof(ip_str));
-        UMS_AGENT_LOG_WARN("send buffer busy, dropping entry, clc_id=%u, peer=%s:%u",
-            entry->clc_id, ip_str, conn->peer_port);
+        UMS_AGENT_LOG_WARN("send buffer busy, dropping entry, clc_session_id=%u, peer=%s:%u",
+            entry->clc_session_id, ums_agent_ip_addr_fmt(&entry->dst_addr).str,
+            conn->peer_port);
         return -EBUSY;
     }
 
@@ -332,48 +329,45 @@ static int ums_agent_tp_send_entry(struct ums_agent_tls_conn *conn,
 
     int ret = ums_agent_tp_flush_send_buf(conn, ctx);
     if (ret == -EAGAIN) {
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(&entry->dst_addr, ip_str, sizeof(ip_str));
-        UMS_AGENT_LOG_DEBUG("TLS send pending (EAGAIN), clc_id=%u, peer=%s:%u",
-            entry->clc_id, ip_str, conn->peer_port);
+        UMS_AGENT_LOG_DEBUG("TLS send pending (EAGAIN), clc_session_id=%u, peer=%s:%u",
+            entry->clc_session_id, ums_agent_ip_addr_fmt(&entry->dst_addr).str,
+            conn->peer_port);
         return 0;
     }
     if (ret < 0) {
         return ret;
     }
 
-    UMS_AGENT_LOG_DEBUG("TOKEN_TRANSFER sent, clc_id=%u, first_contact=%u",
-        entry->clc_id, entry->first_contact);
+    UMS_AGENT_LOG_DEBUG("TOKEN_TRANSFER sent, clc_session_id=%u, first_contact=%u",
+        entry->clc_session_id, entry->first_contact);
     return 0;
 }
 
 static int ums_agent_tp_validate_msg_hdr(const struct ums_agent_msg_hdr *hdr,
     const struct ums_agent_ip_addr *peer_addr, uint16_t peer_port)
 {
-    char ip_str[INET6_ADDRSTRLEN] = {0};
-    ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
-
     if (hdr->magic != UMS_AGENT_MSG_MAGIC) {
         UMS_AGENT_LOG_WARN("invalid magic=0x%08x from %s:%u, expected=0x%08x",
-            hdr->magic, ip_str, peer_port, UMS_AGENT_MSG_MAGIC);
+            hdr->magic, ums_agent_ip_addr_fmt(peer_addr).str, peer_port,
+            UMS_AGENT_MSG_MAGIC);
         return -EBADMSG;
     }
 
     if (hdr->version != UMS_AGENT_VERSION) {
         UMS_AGENT_LOG_WARN("unsupported version=%u from %s:%u",
-            hdr->version, ip_str, peer_port);
+            hdr->version, ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
     if (hdr->msg_type != UMS_AGENT_MSG_TOKEN_TRANSFER) {
         UMS_AGENT_LOG_WARN("invalid msg_type=%u from %s:%u",
-            hdr->msg_type, ip_str, peer_port);
+            hdr->msg_type, ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
     if (hdr->payload_len > UMS_AGENT_MAX_MSG_LEN - UMS_AGENT_MSG_HDR_LEN) {
         UMS_AGENT_LOG_WARN("payload_len=%u exceeds max from %s:%u",
-            hdr->payload_len, ip_str, peer_port);
+            hdr->payload_len, ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
@@ -383,19 +377,16 @@ static int ums_agent_tp_validate_msg_hdr(const struct ums_agent_msg_hdr *hdr,
 static int ums_agent_tp_validate_token_transfer(const struct ums_agent_msg_hdr *hdr,
     const struct ums_agent_ip_addr *peer_addr, uint16_t peer_port)
 {
-    char ip_str[INET6_ADDRSTRLEN] = {0};
-    ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
-
     if (hdr->payload_len != UMS_AGENT_TOKEN_TRANSFER_LEN) {
         UMS_AGENT_LOG_WARN("payload_len=%u mismatch, expected=%zu, from %s:%u",
             hdr->payload_len, UMS_AGENT_TOKEN_TRANSFER_LEN,
-            ip_str, peer_port);
+            ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
     if (hdr->cipher_id != UMS_AGENT_CIPHER_TLS_AES_256_GCM_SHA384) {
         UMS_AGENT_LOG_WARN("cipher_id=%u mismatch from %s:%u",
-            hdr->cipher_id, ip_str, peer_port);
+            hdr->cipher_id, ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
@@ -418,14 +409,16 @@ static void ums_agent_tp_process_pending_for_conn(struct ums_agent_tls_conn *con
         ums_agent_pending_entry_dequeue(cur);
 
         if (status != 0) {
-            UMS_AGENT_LOG_ERR("pending entry failed, clc_id=%u, result=%d",
-                cur->entry.clc_id, status);
-            ums_agent_tp_notify_token_submit_fail(cur->entry.clc_id, ECONNREFUSED);
+            UMS_AGENT_LOG_ERR("pending entry failed, clc_session_id=%u, result=%d",
+                cur->entry.clc_session_id, status);
+            ums_agent_tp_notify_token_submit_fail(cur->entry.clc_session_id,
+                cur->entry.initiator_id, ECONNREFUSED);
             ums_agent_pending_entry_destroy(cur);
         } else {
             int ret = ums_agent_tp_send_entry(conn, &cur->entry);
             if (ret != 0) {
-                ums_agent_tp_notify_token_submit_fail(cur->entry.clc_id, -ret);
+                ums_agent_tp_notify_token_submit_fail(cur->entry.clc_session_id,
+                    cur->entry.initiator_id, -ret);
             }
             ums_agent_pending_entry_destroy(cur);
         }
@@ -447,15 +440,12 @@ static void ums_agent_tp_on_connect_complete(
         return;
     }
 
-    char ip_str[INET6_ADDRSTRLEN] = {0};
-    ums_agent_ip_addr_to_str(addr, ip_str, sizeof(ip_str));
-
     if (status != 0) {
         UMS_AGENT_LOG_ERR("TLS connect failed, peer=%s:%u",
-            ip_str, conn->peer_port);
+            ums_agent_ip_addr_fmt(addr).str, conn->peer_port);
     } else {
         UMS_AGENT_LOG_DEBUG("TLS connect succeeded, peer=%s:%u",
-            ip_str, conn->peer_port);
+            ums_agent_ip_addr_fmt(addr).str, conn->peer_port);
     }
 
     ums_agent_tp_process_pending_for_conn(conn, addr, status);
@@ -477,10 +467,8 @@ static int ums_agent_tp_process_one_msg(struct ums_agent_tls_conn *conn,
 
     int ret = ums_agent_tp_validate_msg_hdr(&hdr, peer_addr, peer_port);
     if (ret != 0) {
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
         UMS_AGENT_LOG_WARN("header validation failed, dropping connection %s:%u",
-            ip_str, peer_port);
+            ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
         return -EBADMSG;
     }
 
@@ -502,14 +490,12 @@ static int ums_agent_tp_process_one_msg(struct ums_agent_tls_conn *conn,
         struct ums_agent_token_transfer msg;
         ums_agent_tp_deserialize_token_transfer(&raw_payload, &msg);
 
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
-        UMS_AGENT_LOG_DEBUG("TOKEN_TRANSFER received, clc_id=%u, "
+        UMS_AGENT_LOG_DEBUG("TOKEN_TRANSFER received, clc_session_id=%u, "
             "first_contact=%u, seqno=%u from %s:%u",
-            msg.clc_id, msg.flags.bs.first_contact, hdr.seqno,
-            ip_str, peer_port);
+            msg.clc_session_id, msg.flags.bs.first_contact, hdr.seqno,
+            ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
 
-        ums_agent_tp_notify_token_deliver(msg.clc_id,
+        ums_agent_tp_notify_token_deliver(msg.clc_session_id, msg.initiator_id,
             msg.jetty_token_value, msg.seg_token_value,
             msg.flags.bs.first_contact);
 
@@ -575,10 +561,8 @@ static void ums_agent_tp_on_data_available(struct ums_agent_tls_conn *conn,
     while (iterations < UMS_AGENT_MAX_RECV_ITERATIONS) {
         uint32_t avail = UMS_AGENT_RECV_BUF_SIZE - ctx->recv_len;
         if (avail == 0) {
-            char ip_str[INET6_ADDRSTRLEN] = {0};
-            ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
             UMS_AGENT_LOG_WARN("recv buffer full, closing connection %s:%u",
-                ip_str, peer_port);
+                ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
             ums_agent_tls_conn_shutdown(conn);
             return;
         }
@@ -589,9 +573,8 @@ static void ums_agent_tp_on_data_available(struct ums_agent_tls_conn *conn,
             if (recv_len == -EAGAIN) {
                 return;
             }
-            char ip_str[INET6_ADDRSTRLEN] = {0};
-            ums_agent_ip_addr_to_str(peer_addr, ip_str, sizeof(ip_str));
-            UMS_AGENT_LOG_ERR("recv failed from %s:%u", ip_str, peer_port);
+            UMS_AGENT_LOG_ERR("recv failed from %s:%u",
+                ums_agent_ip_addr_fmt(peer_addr).str, peer_port);
             ums_agent_tls_conn_shutdown(conn);
             return;
         }
@@ -685,27 +668,27 @@ static int ums_agent_tp_on_token_submit(struct ums_token_entry *entry)
     }
     ums_agent_pending_entry_enqueue(p);
 
-    char ip_str[INET6_ADDRSTRLEN] = {0};
-    ums_agent_ip_addr_to_str(&entry->dst_addr, ip_str, sizeof(ip_str));
-
     if (!need_connect) {
-        UMS_AGENT_LOG_DEBUG("TOKEN_SUBMIT queued, clc_id=%u, peer=%s:%u "
-            "(connection pending)", entry->clc_id, ip_str,
+        UMS_AGENT_LOG_DEBUG("TOKEN_SUBMIT queued, clc_session_id=%u, peer=%s:%u "
+            "(connection pending)", entry->clc_session_id,
+            ums_agent_ip_addr_fmt(&entry->dst_addr).str,
             g_ums_agent_tp.listen_port);
         return 0;
     }
 
     ret = ums_agent_tls_conn_connect(&entry->dst_addr, g_ums_agent_tp.listen_port);
     if (ret < 0) {
-        UMS_AGENT_LOG_ERR("TLS connect failed for %s:%u", ip_str,
+        UMS_AGENT_LOG_ERR("TLS connect failed for %s:%u",
+            ums_agent_ip_addr_fmt(&entry->dst_addr).str,
             g_ums_agent_tp.listen_port);
         ums_agent_pending_entry_dequeue(p);
         ums_agent_pending_entry_destroy(p);
         return -ECONNREFUSED;
     }
 
-    UMS_AGENT_LOG_DEBUG("TOKEN_SUBMIT queued, clc_id=%u, peer=%s:%u",
-        entry->clc_id, ip_str, g_ums_agent_tp.listen_port);
+    UMS_AGENT_LOG_DEBUG("TOKEN_SUBMIT queued, clc_session_id=%u, peer=%s:%u",
+        entry->clc_session_id, ums_agent_ip_addr_fmt(&entry->dst_addr).str,
+        g_ums_agent_tp.listen_port);
     return 0;
 }
 
@@ -722,10 +705,11 @@ static void ums_agent_tp_check_pending_timeout(void)
 
         int64_t elapsed = ums_agent_timespec_diff_sec(&cur->submit_time, &now);
         if (elapsed >= UMS_AGENT_TOKEN_ENTRY_PENDING_TIMEOUT_SEC) {
-            UMS_AGENT_LOG_WARN("pending entry timed out, clc_id=%u, "
-                "elapsed=%lds", cur->entry.clc_id, (long)elapsed);
+            UMS_AGENT_LOG_WARN("pending entry timed out, clc_session_id=%u, "
+                "elapsed=%lds", cur->entry.clc_session_id, (long)elapsed);
             ums_agent_pending_entry_dequeue(cur);
-            ums_agent_tp_notify_token_submit_fail(cur->entry.clc_id, ETIMEDOUT);
+            ums_agent_tp_notify_token_submit_fail(cur->entry.clc_session_id,
+                cur->entry.initiator_id, ETIMEDOUT);
             ums_agent_pending_entry_destroy(cur);
         }
     }
@@ -785,7 +769,8 @@ void ums_agent_tp_deinit(void)
         struct ums_agent_pending_entry *cur =
             ums_agent_list_entry(pos, struct ums_agent_pending_entry, node);
         ums_agent_pending_entry_dequeue(cur);
-        ums_agent_tp_notify_token_submit_fail(cur->entry.clc_id, ESHUTDOWN);
+        ums_agent_tp_notify_token_submit_fail(cur->entry.clc_session_id,
+            cur->entry.initiator_id, ESHUTDOWN);
         ums_agent_pending_entry_destroy(cur);
     }
     ums_agent_list_init(&g_ums_agent_tp.pending_list);

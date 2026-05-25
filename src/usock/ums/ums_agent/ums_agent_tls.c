@@ -59,19 +59,15 @@ static int ums_agent_tls_start_listen(const struct ums_agent_ip_addr *addr, int 
     }
 
     if (bind(fd, (struct sockaddr *)&sa_storage, sa_len) < 0) {
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(addr, ip_str, sizeof(ip_str));
         UMS_AGENT_LOG_ERR("bind %s:%d failed: %s (errno=%d)",
-            ip_str, port, strerror(errno), errno);
+            ums_agent_ip_addr_fmt(addr).str, port, strerror(errno), errno);
         close(fd);
         return -1;
     }
 
     if (listen(fd, SOMAXCONN) < 0) {
-        char ip_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(addr, ip_str, sizeof(ip_str));
         UMS_AGENT_LOG_ERR("listen %s:%d failed: %s (errno=%d)",
-            ip_str, port, strerror(errno), errno);
+            ums_agent_ip_addr_fmt(addr).str, port, strerror(errno), errno);
         close(fd);
         return -1;
     }
@@ -82,9 +78,8 @@ static int ums_agent_tls_start_listen(const struct ums_agent_ip_addr *addr, int 
     }
 
     g_ums_agent_tls.listen_fd = fd;
-    char ip_str[INET6_ADDRSTRLEN] = {0};
-    ums_agent_ip_addr_to_str(addr, ip_str, sizeof(ip_str));
-    UMS_AGENT_LOG_DEBUG("TLS listening on %s:%d, fd=%d", ip_str, port, fd);
+    UMS_AGENT_LOG_DEBUG("TLS listening on %s:%d, fd=%d",
+        ums_agent_ip_addr_fmt(addr).str, port, fd);
     return 0;
 }
 
@@ -123,9 +118,8 @@ int ums_agent_tls_init(const struct ums_agent_config *config)
     }
 
     if (ums_agent_tls_start_listen(&config->listen_addr, config->listen_port) != 0) {
-        char addr_str[INET6_ADDRSTRLEN] = {0};
-        ums_agent_ip_addr_to_str(&config->listen_addr, addr_str, sizeof(addr_str));
-        UMS_AGENT_LOG_ERR("TLS listen failed on %s:%d", addr_str, config->listen_port);
+        UMS_AGENT_LOG_ERR("TLS listen failed on %s:%d",
+            ums_agent_ip_addr_fmt(&config->listen_addr).str, config->listen_port);
         ums_agent_tls_conn_pool_deinit();
         ums_agent_tls_ctx_deinit();
         return -1;

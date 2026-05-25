@@ -150,3 +150,16 @@ int ums_agent_ip_addr_to_sockaddr(const struct ums_agent_ip_addr *addr,
 
     return -1;
 }
+
+struct ums_agent_ip_str ums_agent_ip_addr_fmt(const struct ums_agent_ip_addr *addr)
+{
+    struct ums_agent_ip_str s = {{0}};
+
+    if (addr->family == AF_INET) {
+        inet_ntop(AF_INET, &addr->ip.in4, s.str, sizeof(s.str));
+        return s;
+    }
+
+    inet_ntop(AF_INET6, &addr->ip.in6, s.str, sizeof(s.str));
+    return s;
+}
