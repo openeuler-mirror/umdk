@@ -74,6 +74,7 @@ public:
 
     __aicore__ inline void TPipeSet(AscendC::TPipe *pipe)
     {
+        pipe_barrier(PIPE_ALL);
         tpipe_ = pipe;
     }
 
