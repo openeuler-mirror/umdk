@@ -248,9 +248,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         return ret;
     }
     uint32_t max_sge_num = queue->max_tx_sge;
-    urma_jfs_wr_t urma_wr[UMQ_POST_POLL_BATCH];
+    urma_jfs_wr_t urma_wr[UMQ_BATCH_SIZE];
     urma_jfs_wr_t *urma_wr_ptr = urma_wr;
-    urma_sge_t sges[UMQ_POST_POLL_BATCH][max_sge_num];
+    urma_sge_t sges[UMQ_BATCH_SIZE][max_sge_num];
     urma_sge_t src_sge, dst_sge;
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
@@ -476,10 +476,10 @@ static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
     uint32_t max_sge_num = queue->max_rx_sge;
-    urma_jfr_wr_t recv_wr[UMQ_POST_POLL_BATCH] = {0};
+    urma_jfr_wr_t recv_wr[UMQ_BATCH_SIZE] = {0};
     urma_jfr_wr_t *recv_wr_ptr = recv_wr;
 
-    urma_sge_t sges[UMQ_POST_POLL_BATCH][max_sge_num];
+    urma_sge_t sges[UMQ_BATCH_SIZE][max_sge_num];
     urma_sge_t *sges_ptr;
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_jfr_wr_t *bad_wr = NULL;
@@ -1017,7 +1017,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     }
     int ret;
     uint32_t qbuf_cnt = 0;
-    uint32_t max_batch = buf_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : buf_count;
+    uint32_t max_batch = buf_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : buf_count;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
@@ -1152,7 +1152,7 @@ static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
 
 static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
 {
-    uint32_t max_batach = buf_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : buf_count;
+    uint32_t max_batach = buf_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : buf_count;
     urma_cr_t cr[max_batach];
     int cnt = 0;
     int cr_cnt = umq_symbol_urma()->urma_flush_jetty(queue->jetty[UB_QUEUE_JETTY_IO], max_batach, cr);
@@ -1280,7 +1280,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
         return 0;
     }
     int32_t qbuf_cnt = 0;
-    uint32_t max_batch = buf_count > UMQ_POST_POLL_BATCH ? UMQ_POST_POLL_BATCH : buf_count;
+    uint32_t max_batch = buf_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : buf_count;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
