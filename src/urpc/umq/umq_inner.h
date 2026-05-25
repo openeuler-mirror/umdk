@@ -23,7 +23,6 @@
 extern "C" {
 #endif
 
-#define UMQ_POST_POLL_BATCH             64
 #define UMQ_EID_MAP_PREFIX              (0x0000ffff)
 #define UMQ_DEFAULT_BUF_SIZE            4096
 #define UMQ_DEFAULT_DEPTH               1024
@@ -41,13 +40,13 @@ typedef struct umq {
 
 static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, volatile uint32_t *require_rx_count)
 {
-    if (rx_depth <= UMQ_POST_POLL_BATCH) {
+    if (rx_depth <= UMQ_BATCH_SIZE) {
         return __atomic_exchange_n(require_rx_count, 0, __ATOMIC_RELAXED);
     }
 
     unsigned int rx_num = (uint32_t)__atomic_load_n(require_rx_count, __ATOMIC_RELAXED);
     do {
-        if (rx_num < UMQ_POST_POLL_BATCH) {
+        if (rx_num < UMQ_BATCH_SIZE) {
             return 0;
         }
     } while (!__atomic_compare_exchange_n(require_rx_count, &rx_num, 0, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
