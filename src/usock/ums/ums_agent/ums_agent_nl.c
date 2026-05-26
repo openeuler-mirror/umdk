@@ -348,6 +348,8 @@ static int ums_agent_nl_try_connect_ums(void)
         return -1;
     }
 
+    nl_socket_disable_seq_check(sock);
+
     int ret = genl_connect(sock);
     if (ret < 0) {
         UMS_AGENT_LOG_ERR("genl_connect failed: %s", nl_geterror(ret));
@@ -474,6 +476,8 @@ static int ums_agent_nl_setup_nlctrl(void)
         UMS_AGENT_LOG_ERR("nl_socket_alloc failed for nlctrl");
         return -1;
     }
+
+    nl_socket_disable_seq_check(sock);
 
     int ret = genl_connect(sock);
     if (ret < 0) {
@@ -614,7 +618,8 @@ static void ums_agent_nl_handle_ums_event(uint32_t events)
             UMS_AGENT_LOG_WARN("nl_recvmsgs_default ums failed: %s (%d)",
                 nl_geterror(ret), ret);
 
-            if (ret == -NLE_OBJ_NOTFOUND || ret == -NLE_FAILURE) {
+            if (ret == -NLE_OBJ_NOTFOUND || ret == -NLE_FAILURE ||
+                ret == -NLE_DUMP_INTR) {
                 UMS_AGENT_LOG_INFO("ums.ko may have been unloaded, ret=%d", ret);
                 ums_agent_nl_disconnect_and_probe();
                 return;
