@@ -90,7 +90,7 @@ static struct ums_nl_state g_ums_nl_state = {
  *   ums_nl_claim_conn transfers ownership from A to B without changing the count.
  *   Each holder is responsible for calling ums_conn_nl_put when done.
  */
-static __attribute__((unused)) void ums_conn_nl_put(struct ums_connection *conn)
+static void ums_conn_nl_put(struct ums_connection *conn)
 {
 	if (refcount_dec_and_test(&conn->nl_refcnt))
 		wake_up(&conn->nl_free_wait);
@@ -132,7 +132,7 @@ static int ums_nl_verify_sender_gid(kgid_t sender_gid)
 	return 0;
 }
 
-static __attribute__((unused)) int ums_nl_check_agent_portid(struct genl_info *info)
+static int ums_nl_check_agent_portid(struct genl_info *info)
 {
 	if (!info || !info->snd_portid)
 		return -EINVAL;
@@ -265,7 +265,7 @@ static u32 ums_nl_session_hash(u32 clc_session_id, const u8 *initiator_id)
 		UMS_NL_CLC_HASH_BITS);
 }
 
-static __attribute__((unused)) struct ums_nl_clc_entry *ums_nl_find_clc_entry(u32 clc_session_id,
+static struct ums_nl_clc_entry *ums_nl_find_clc_entry(u32 clc_session_id,
 	const u8 *initiator_id)
 {
 	struct ums_nl_clc_entry *entry;
@@ -279,6 +279,167 @@ static __attribute__((unused)) struct ums_nl_clc_entry *ums_nl_find_clc_entry(u3
 	return NULL;
 }
 
+/*
+ * Atomically remove a clc entry from the hash table and return its conn.
+ * This transfers nl_refcnt ownership from holder A (hash table entry) to
+ * holder B (the calling netlink callback) without incrementing nl_refcnt.
+ * The caller becomes the new owner and must call ums_conn_nl_put when done.
+ * Returns NULL if the entry was already removed (e.g., by unregister or a
+ * prior claim), which also prevents duplicate callbacks on the same session.
+ */
+static struct ums_connection *ums_nl_claim_conn(u32 clc_session_id,
+	const u8 *initiator_id)
+{
+	struct ums_nl_clc_entry *entry;
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
+	entry = ums_nl_find_clc_entry(clc_session_id, initiator_id);
+	if (entry) {
+		struct ums_connection *conn = entry->conn;
+		hash_del(&entry->hnode);
+		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+		kfree(entry);
+		return conn;
+	}
+	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+	return NULL;
+}
+
+static int ums_nl_token_submit_fail(struct sk_buff *skb, struct genl_info *info)
+{
+	u32 clc_session_id;
+	u8 initiator_id[UMS_SYSTEMID_LEN];
+	u32 result;
+	struct ums_connection *conn;
+	int ret;
+
+	if (!info || !info->attrs)
+		return -EINVAL;
+
+	ret = ums_nl_check_agent_portid(info);
+	if (ret != 0)
+		return ret;
+
+	if (!info->attrs[UMS_ATTR_CLC_SESSION_ID] ||
+		!info->attrs[UMS_ATTR_INITIATOR_ID] ||
+		!info->attrs[UMS_ATTR_RESULT])
+		return -EINVAL;
+
+	clc_session_id = nla_get_u32(info->attrs[UMS_ATTR_CLC_SESSION_ID]);
+	nla_memcpy(initiator_id, info->attrs[UMS_ATTR_INITIATOR_ID], UMS_SYSTEMID_LEN);
+	result = nla_get_u32(info->attrs[UMS_ATTR_RESULT]);
+
+	UMS_LOGE_LIMITED("TOKEN_SUBMIT_FAIL, clc_session_id=%u, result=%u",
+		clc_session_id, result);
+
+	conn = ums_nl_claim_conn(clc_session_id, initiator_id);
+	if (!conn) {
+		UMS_LOGW_LIMITED("TOKEN_SUBMIT_FAIL no conn for clc_session_id=%u",
+			clc_session_id);
+		return 0;
+	}
+
+	if (result == 0) {
+		UMS_LOGE_LIMITED("TOKEN_SUBMIT_FAIL with result=0, clc_session_id=%u, treat as protocol error",
+			clc_session_id);
+		ums_token_xchg_complete(&conn->token_xchg, -EPROTO);
+	} else {
+		ums_token_xchg_complete(&conn->token_xchg, -(int)result);
+	}
+
+	ums_conn_nl_put(conn); /* release holder B reference */
+	return 0;
+}
+
+static int ums_nl_token_deliver(struct sk_buff *skb, struct genl_info *info)
+{
+	u32 clc_session_id;
+	u8 initiator_id[UMS_SYSTEMID_LEN];
+	u32 result;
+	bool first_contact;
+	struct ums_connection *conn;
+	struct ums_link *lnk;
+	int ret;
+
+	if (!info || !info->attrs)
+		return -EINVAL;
+
+	ret = ums_nl_check_agent_portid(info);
+	if (ret != 0)
+		return ret;
+
+	if (!info->attrs[UMS_ATTR_CLC_SESSION_ID] ||
+		!info->attrs[UMS_ATTR_INITIATOR_ID] ||
+		!info->attrs[UMS_ATTR_FIRST_CONTACT] ||
+		!info->attrs[UMS_ATTR_SEG_TOKEN])
+		return -EINVAL;
+
+	clc_session_id = nla_get_u32(info->attrs[UMS_ATTR_CLC_SESSION_ID]);
+	nla_memcpy(initiator_id, info->attrs[UMS_ATTR_INITIATOR_ID], UMS_SYSTEMID_LEN);
+	result = info->attrs[UMS_ATTR_RESULT] ?
+		nla_get_u32(info->attrs[UMS_ATTR_RESULT]) : 0;
+	first_contact = nla_get_u8(info->attrs[UMS_ATTR_FIRST_CONTACT]) != 0;
+
+	UMS_LOGD("TOKEN_DELIVER recv, clc_session_id=%u, initiator_id=%s, result=%u, first_contact=%d",
+		clc_session_id, initiator_id, result, first_contact);
+
+	conn = ums_nl_claim_conn(clc_session_id, initiator_id);
+	if (!conn) {
+		UMS_LOGW_LIMITED("TOKEN_DELIVER no conn for clc_session_id=%u",
+			clc_session_id);
+		goto zero_out;
+	}
+
+	lnk = conn->lnk;
+	if (WARN_ON(!lnk)) {
+		UMS_LOGE_LIMITED("TOKEN_DELIVER conn has no link, clc_session_id=%u",
+			clc_session_id);
+		ums_token_xchg_complete(&conn->token_xchg, -EFAULT);
+		goto nl_put;
+	}
+
+	if (result != 0) {
+		UMS_LOGE_LIMITED("TOKEN_DELIVER failure, clc_session_id=%u, result=%u",
+			clc_session_id, result);
+		ums_token_xchg_complete(&conn->token_xchg, -(int)result);
+		goto nl_put;
+	}
+
+	if (first_contact && !info->attrs[UMS_ATTR_JETTY_TOKEN]) {
+		UMS_LOGE_LIMITED("TOKEN_DELIVER missing JETTY_TOKEN, clc_session_id=%u",
+			clc_session_id);
+		ums_token_xchg_complete(&conn->token_xchg, -EBADMSG);
+		goto nl_put;
+	}
+
+	if (first_contact)
+		lnk->ub_tjetty_cfg.token_value.token =
+			nla_get_u32(info->attrs[UMS_ATTR_JETTY_TOKEN]);
+
+	conn->peer_seg_token_value.token =
+		nla_get_u32(info->attrs[UMS_ATTR_SEG_TOKEN]);
+
+	UMS_LOGD("TOKEN_DELIVER received, clc_session_id=%u, first_contact=%d, jetty_token_value=0x%x, seg_token_value=0x%x",
+		clc_session_id, first_contact,
+		first_contact ? lnk->ub_tjetty_cfg.token_value.token : 0,
+		conn->peer_seg_token_value.token);
+
+	ums_token_xchg_complete(&conn->token_xchg, 0);
+
+nl_put:
+	ums_conn_nl_put(conn); /* release holder B reference */
+zero_out:
+	if (info->attrs[UMS_ATTR_JETTY_TOKEN])
+		memzero_explicit(nla_data(info->attrs[UMS_ATTR_JETTY_TOKEN]),
+			sizeof(u32));
+	if (info->attrs[UMS_ATTR_SEG_TOKEN])
+		memzero_explicit(nla_data(info->attrs[UMS_ATTR_SEG_TOKEN]),
+			sizeof(u32));
+
+	return 0;
+}
+
 static const struct genl_ops ums_nl_ops[] = {
 	{
 		.cmd = UMS_CMD_READY,
@@ -288,6 +449,16 @@ static const struct genl_ops ums_nl_ops[] = {
 	{
 		.cmd = UMS_CMD_DOWN,
 		.doit = ums_nl_down,
+		.flags = GENL_ADMIN_PERM,
+	},
+	{
+		.cmd = UMS_CMD_TOKEN_SUBMIT_FAIL,
+		.doit = ums_nl_token_submit_fail,
+		.flags = GENL_ADMIN_PERM,
+	},
+	{
+		.cmd = UMS_CMD_TOKEN_DELIVER,
+		.doit = ums_nl_token_deliver,
 		.flags = GENL_ADMIN_PERM,
 	},
 };
@@ -309,6 +480,247 @@ bool ums_nl_agent_available(void)
 	return atomic_read(&g_ums_nl_state.agent.available) != 0;
 }
 
+/*
+ * Register a clc session: insert an entry into clc_ht so that netlink
+ * callbacks can find the conn. Sets nl_refcnt=1 inside clc_lock, making
+ * the hash table entry (holder A) the initial owner of the reference.
+ */
+static int ums_nl_register_clc_session(u32 clc_session_id, const u8 *initiator_id,
+	struct ums_connection *conn)
+{
+	struct ums_nl_clc_entry *entry;
+	unsigned long flags;
+	u32 hash;
+
+	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+	if (!entry)
+		return -ENOMEM;
+
+	entry->clc_session_id = clc_session_id;
+	memcpy(entry->initiator_id, initiator_id, UMS_SYSTEMID_LEN);
+	entry->conn = conn;
+
+	hash = ums_nl_session_hash(clc_session_id, initiator_id);
+	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
+	if (ums_nl_find_clc_entry(clc_session_id, initiator_id)) {
+		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+		UMS_LOGW_LIMITED("duplicate clc session, clc_session_id=%u",
+			clc_session_id);
+		kfree(entry);
+		return -EEXIST;
+	}
+	hash_add(g_ums_nl_state.clc_ht, &entry->hnode, hash);
+	/*
+	 * Set nl_refcnt=1 inside clc_lock: the hash table entry (holder A)
+	 * becomes the initial owner. Safe in spinlock: refcount_set is atomic.
+	 */
+	refcount_set(&conn->nl_refcnt, 1);
+	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+	return 0;
+}
+
+/*
+ * Unregister a clc session: remove the entry from clc_ht.
+ * If the entry is found (holder A still owns the reference), remove it and
+ * call ums_conn_nl_put to release the reference (nl_refcnt: 1→0).
+ * If the entry is not found, it was already claimed by a netlink callback
+ * (ownership transferred to holder B); in that case we must NOT call
+ * ums_conn_nl_put because holder B is responsible for its own release.
+ */
+void ums_nl_unregister_clc_session(u32 clc_session_id, const u8 *initiator_id)
+{
+	struct ums_nl_clc_entry *entry;
+	struct ums_connection *conn;
+	unsigned long flags;
+
+	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
+		return;
+
+	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
+	entry = ums_nl_find_clc_entry(clc_session_id, initiator_id);
+	if (entry) {
+		conn = entry->conn;
+		hash_del(&entry->hnode);
+		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+		kfree(entry);
+		ums_conn_nl_put(conn); /* release holder A reference */
+		return;
+	}
+	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
+	UMS_LOGW_LIMITED("unregister clc session not found, clc_session_id=%u",
+		clc_session_id);
+}
+
+static int ums_nl_send_token_submit_msg(const struct ums_nl_token_params *params)
+{
+	struct sk_buff *skb;
+	void *msg_head;
+	int rc;
+
+	skb = genlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	if (!skb)
+		return -ENOMEM;
+
+	msg_head = genlmsg_put(skb, 0, 0, &g_ums_nl_family, 0, UMS_CMD_TOKEN_SUBMIT);
+	if (!msg_head) {
+		nlmsg_free(skb);
+		return -ENOMEM;
+	}
+
+	rc = nla_put_u32(skb, UMS_ATTR_CLC_SESSION_ID, params->clc_session_id);
+	if (rc != 0)
+		goto err_out;
+
+	rc = nla_put(skb, UMS_ATTR_INITIATOR_ID, UMS_SYSTEMID_LEN, params->initiator_id);
+	if (rc != 0)
+		goto err_out;
+
+	rc = nla_put_u8(skb, UMS_ATTR_FIRST_CONTACT, params->first_contact ? 1 : 0);
+	if (rc != 0)
+		goto err_out;
+
+	rc = nla_put_u32(skb, UMS_ATTR_SEG_TOKEN, params->seg_token->token);
+	if (rc != 0)
+		goto err_out;
+
+	UMS_LOGD("TOKEN_SUBMIT seg_token_value=0x%x, clc_session_id=%u",
+		params->seg_token->token, params->clc_session_id);
+
+	if (params->dst_addr.family == AF_INET6)
+		rc = nla_put(skb, UMS_ATTR_DST_IP6, sizeof(params->dst_addr.ip.in6),
+			&params->dst_addr.ip.in6);
+	else
+		rc = nla_put_u32(skb, UMS_ATTR_DST_IP, params->dst_addr.ip.in4.s_addr);
+	if (rc != 0)
+		goto err_out;
+
+	if (params->first_contact && params->jetty_token) {
+		rc = nla_put_u32(skb, UMS_ATTR_JETTY_TOKEN, params->jetty_token->token);
+		if (rc != 0)
+			goto err_out;
+		UMS_LOGD("TOKEN_SUBMIT jetty_token_value=0x%x, clc_session_id=%u",
+			params->jetty_token->token, params->clc_session_id);
+	}
+
+	genlmsg_end(skb, msg_head);
+
+	rc = genlmsg_unicast(&init_net, skb, g_ums_nl_state.agent.portid);
+	if (rc != 0) {
+		UMS_LOGE_LIMITED("TOKEN_SUBMIT send failed, clc_session_id=%u, rc=%d",
+			params->clc_session_id, rc);
+		return rc;
+	}
+
+	UMS_LOGD("TOKEN_SUBMIT sent, clc_session_id=%u, first_contact=%u",
+		params->clc_session_id, params->first_contact);
+	return 0;
+
+err_out:
+	nlmsg_free(skb);
+	return rc;
+}
+
+int ums_nl_register_and_submit_tokens(struct ums_sock *ums, bool first_contact)
+{
+	struct ums_connection *conn = &ums->conn;
+	struct ums_link *lnk = conn->lnk;
+	struct sockaddr_storage peer_addr;
+	struct sockaddr_in *sin4;
+	struct sockaddr_in6 *sin6;
+	struct ums_nl_token_params params = {
+		.jetty_token = first_contact ? &lnk->jetty_token_value : NULL,
+		.seg_token = &conn->rmb_desc->seg_token_value,
+		.first_contact = first_contact,
+		.clc_session_id = conn->clc_session_id,
+		.initiator_id = conn->initiator_id,
+	};
+	int rc;
+
+	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
+		return 0;
+
+	if (!ums_nl_agent_available()) {
+		UMS_LOGE_LIMITED("ums_agent not available in SECURE mode, conn=%u",
+			conn->conn_id);
+		return -ENOTCONN;
+	}
+
+	rc = ums_nl_register_clc_session(conn->clc_session_id, conn->initiator_id, conn);
+	if (rc != 0) {
+		UMS_LOGE_LIMITED("register clc_session_id failed, clc_session_id=%u, rc=%d",
+			conn->clc_session_id, rc);
+		return rc;
+	}
+
+	rc = kernel_getpeername(ums->clcsock, (struct sockaddr *)&peer_addr);
+	if (rc < 0) {
+		UMS_LOGE_LIMITED("kernel_getpeername failed, rc=%d, conn=%u",
+			rc, conn->conn_id);
+		ums_nl_unregister_clc_session(conn->clc_session_id, conn->initiator_id);
+		return rc;
+	}
+
+	if (peer_addr.ss_family == AF_INET6) {
+		sin6 = (struct sockaddr_in6 *)&peer_addr;
+		params.dst_addr.family = AF_INET6;
+		params.dst_addr.ip.in6 = sin6->sin6_addr;
+	} else {
+		sin4 = (struct sockaddr_in *)&peer_addr;
+		params.dst_addr.family = AF_INET;
+		params.dst_addr.ip.in4.s_addr = sin4->sin_addr.s_addr;
+	}
+
+	rc = ums_nl_send_token_submit_msg(&params);
+	if (rc != 0) {
+		ums_nl_unregister_clc_session(conn->clc_session_id, conn->initiator_id);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int ums_nl_netlink_notify(struct notifier_block *nb,
+	unsigned long event, void *data)
+{
+	struct netlink_notify *notify = data;
+
+	(void)nb;
+
+	if (!data)
+		return NOTIFY_DONE;
+
+	if (event != NETLINK_URELEASE)
+		return NOTIFY_DONE;
+
+	if (notify->protocol != NETLINK_GENERIC)
+		return NOTIFY_DONE;
+
+	mutex_lock(&g_ums_nl_state.agent_mutex);
+
+	if (notify->portid != g_ums_nl_state.agent.portid) {
+		mutex_unlock(&g_ums_nl_state.agent_mutex);
+		return NOTIFY_DONE;
+	}
+
+	atomic_set(&g_ums_nl_state.agent.available, 0);
+	g_ums_nl_state.agent.portid = 0;
+
+	UMS_LOGW_LIMITED("ums_agent socket closed unexpectedly (portid=%u, uid=%u, gid=%u)",
+		notify->portid,
+		from_kuid(&init_user_ns, g_ums_nl_state.agent.uid),
+		from_kgid(&init_user_ns, g_ums_nl_state.agent.gid));
+
+	g_ums_nl_state.agent.uid = INVALID_UID;
+	g_ums_nl_state.agent.gid = INVALID_GID;
+
+	mutex_unlock(&g_ums_nl_state.agent_mutex);
+	return NOTIFY_OK;
+}
+
+static struct notifier_block g_ums_nl_notifier = {
+	.notifier_call = ums_nl_netlink_notify,
+};
+
 int __init ums_nl_init(void)
 {
 	int rc;
@@ -317,9 +729,16 @@ int __init ums_nl_init(void)
 	spin_lock_init(&g_ums_nl_state.clc_lock);
 	mutex_init(&g_ums_nl_state.agent_mutex);
 
+	rc = netlink_register_notifier(&g_ums_nl_notifier);
+	if (rc != 0) {
+		UMS_LOGE("netlink_register_notifier failed, rc=%d", rc);
+		return rc;
+	}
+
 	rc = genl_register_family(&g_ums_nl_family);
 	if (rc != 0) {
 		UMS_LOGE("genl_register_family failed, rc=%d", rc);
+		netlink_unregister_notifier(&g_ums_nl_notifier);
 		return rc;
 	}
 
@@ -329,14 +748,44 @@ int __init ums_nl_init(void)
 
 void ums_nl_exit(void)
 {
+	struct ums_nl_clc_entry *entry;
+	struct hlist_node *tmp;
+	int bkt;
 	int rc;
 
 	rc = genl_unregister_family(&g_ums_nl_family);
 	if (rc != 0)
 		UMS_LOGE("genl_unregister_family failed, rc=%d", rc);
 
+	netlink_unregister_notifier(&g_ums_nl_notifier);
+
 	atomic_set(&g_ums_nl_state.agent.available, 0);
 	g_ums_nl_state.agent.portid = 0;
 	g_ums_nl_state.agent.uid = INVALID_UID;
 	g_ums_nl_state.agent.gid = INVALID_GID;
+
+	/*
+	 * Defensive cleanup: iterate clc_ht without clc_lock because:
+	 * 1) genl_unregister_family() guarantees no new .doit callbacks can
+	 *    start, and any in-flight callback has already completed (it
+	 *    either claimed and removed its entry via ums_nl_claim_conn, or
+	 *    never found one);
+	 * 2) ums_core_exit() -> ums_terminate_all() waits for all
+	 *    connections to be freed before we reach here, and each
+	 *    ums_conn_free() calls ums_nl_unregister_clc_session which
+	 *    removes the entry and calls ums_conn_nl_put. Therefore the
+	 *    hash table should be empty at this point.
+	 * If any entry remains, it indicates a bug. WARN and log to make
+	 * the anomaly visible, then clean up as a safety net.
+	 */
+	hash_for_each_safe(g_ums_nl_state.clc_ht, bkt, tmp, entry, hnode) {
+		struct ums_connection *conn = entry->conn;
+
+		WARN_ON(1);
+		UMS_LOGE("residual clc entry during nl_exit, clc_session_id=%u",
+			entry->clc_session_id);
+		hash_del(&entry->hnode);
+		kfree(entry);
+		ums_conn_nl_put(conn);
+	}
 }
