@@ -31,6 +31,7 @@ typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_QUERY_PORT,
     BONDP_USER_CTL_SET_BONDING_MODE,
     BONDP_USER_CTL_GET_JFCE_FD_LIST,
+    BONDP_USER_CTL_DISABLE_MSN,
 } bondp_user_ctl_opcode_t;
 
 // URMA_USER_CTL_BOND_SET_BONDING_MODE,

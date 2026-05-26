@@ -905,6 +905,11 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
 
     post_comp->rqe_cnt[recv_idx] -= 1;
 
+    bool msn_enable = bdp_ctx->msn_enable;
+    if (!msn_enable) {
+        goto CONVERT_SUCCESS_OUT;
+    }
+
     /* Do de-duplicating */
     int ret = 0;
     urma_jetty_id_t target_jetty_id = cr->remote_id;
@@ -930,6 +935,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
 
     (void)bdp_slide_wnd_add(&v_conn->recv_wnd, msn);
 
+CONVERT_SUCCESS_OUT:
     free_jfr_wr(&wr_entry->wr);
     (void)pthread_spin_lock(recv_wr_lock);
     jfr_wr_buf_release(wr_entry);
