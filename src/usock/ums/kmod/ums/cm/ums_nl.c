@@ -31,6 +31,7 @@
 #include "ums_nl.h"
 
 #define UMS_NL_CLC_HASH_BITS 8
+#define UMS_IPV6_ADDR_LEN    sizeof(struct in6_addr)
 
 struct ums_process_entry {
 	u32 portid;
@@ -102,7 +103,7 @@ static const struct nla_policy g_ums_nl_policy[__UMS_ATTR_MAX] = {
 	[UMS_ATTR_INITIATOR_ID]    = { .type = NLA_BINARY, .len = UMS_SYSTEMID_LEN },
 	[UMS_ATTR_CLC_SESSION_ID]  = { .type = NLA_U32 },
 	[UMS_ATTR_DST_IP]          = { .type = NLA_U32 },
-	[UMS_ATTR_DST_IP6]         = { .type = NLA_BINARY, .len = sizeof(struct in6_addr) },
+	[UMS_ATTR_DST_IP6]         = { .type = NLA_BINARY, .len = UMS_IPV6_ADDR_LEN },
 	[UMS_ATTR_FIRST_CONTACT]   = { .type = NLA_U8 },
 	[UMS_ATTR_JETTY_TOKEN]     = { .type = NLA_U32 },
 	[UMS_ATTR_SEG_TOKEN]       = { .type = NLA_U32 },
@@ -420,11 +421,6 @@ static int ums_nl_token_deliver(struct sk_buff *skb, struct genl_info *info)
 	conn->peer_seg_token_value.token =
 		nla_get_u32(info->attrs[UMS_ATTR_SEG_TOKEN]);
 
-	UMS_LOGD("TOKEN_DELIVER received, clc_session_id=%u, first_contact=%d, jetty_token_value=0x%x, seg_token_value=0x%x",
-		clc_session_id, first_contact,
-		first_contact ? lnk->ub_tjetty_cfg.token_value.token : 0,
-		conn->peer_seg_token_value.token);
-
 	ums_token_xchg_complete(&conn->token_xchg, 0);
 
 nl_put:
@@ -583,9 +579,6 @@ static int ums_nl_send_token_submit_msg(const struct ums_nl_token_params *params
 	if (rc != 0)
 		goto err_out;
 
-	UMS_LOGD("TOKEN_SUBMIT seg_token_value=0x%x, clc_session_id=%u",
-		params->seg_token->token, params->clc_session_id);
-
 	if (params->dst_addr.family == AF_INET6)
 		rc = nla_put(skb, UMS_ATTR_DST_IP6, sizeof(params->dst_addr.ip.in6),
 			&params->dst_addr.ip.in6);
@@ -598,8 +591,6 @@ static int ums_nl_send_token_submit_msg(const struct ums_nl_token_params *params
 		rc = nla_put_u32(skb, UMS_ATTR_JETTY_TOKEN, params->jetty_token->token);
 		if (rc != 0)
 			goto err_out;
-		UMS_LOGD("TOKEN_SUBMIT jetty_token_value=0x%x, clc_session_id=%u",
-			params->jetty_token->token, params->clc_session_id);
 	}
 
 	genlmsg_end(skb, msg_head);

@@ -618,12 +618,15 @@ static void ums_agent_nl_handle_ums_event(uint32_t events)
             UMS_AGENT_LOG_WARN("nl_recvmsgs_default ums failed: %s (%d)",
                 nl_geterror(ret), ret);
 
-            if (ret == -NLE_OBJ_NOTFOUND || ret == -NLE_FAILURE ||
-                ret == -NLE_DUMP_INTR) {
-                UMS_AGENT_LOG_INFO("ums.ko may have been unloaded, ret=%d", ret);
-                ums_agent_nl_disconnect_and_probe();
+            if (ret == -NLE_INTR) {
                 return;
             }
+
+            if (ret == -NLE_OBJ_NOTFOUND || ret == -NLE_FAILURE) {
+                UMS_AGENT_LOG_INFO("ums.ko may have been unloaded, ret=%d", ret);
+            }
+            ums_agent_nl_disconnect_and_probe();
+            return;
         }
     }
 

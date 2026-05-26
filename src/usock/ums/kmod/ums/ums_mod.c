@@ -39,6 +39,7 @@
 #include "ums_dfx.h"
 #include "ums_llc.h"
 #include "ums_log.h"
+#include "ums_nl.h"
 #include "ums_pnet.h"
 #include "ums_rx.h"
 #include "ums_tx.h"
@@ -72,10 +73,102 @@ struct workqueue_struct *g_ums_close_wq = NULL;
 
 unsigned int g_ums_net_id;
 
-static uint32_t ub_token_disable;
+static uint32_t ub_token_mode = UINT_MAX;
+module_param(ub_token_mode, uint, 0);
+MODULE_PARM_DESC(ub_token_mode,
+	"UB token exchange mode: "
+	"0:secure (out-of-band via ums_agent TLS, default), "
+	"1:legacy (in-band via CLC msg plaintext), "
+	"2:disable (no UB token access control)");
 
+static uint32_t ub_token_disable = UINT_MAX;
 module_param(ub_token_disable, uint, 0);
-MODULE_PARM_DESC(ub_token_disable, "1:disable ub token, 0: enable ub token, default:0");
+MODULE_PARM_DESC(ub_token_disable,
+	"DEPRECATED: use ub_token_mode instead. "
+	"0:legacy (maps to ub_token_mode=1), "
+	"1:disable (maps to ub_token_mode=2)");
+
+static int ums_agent_uid_param_set(const char *val, const struct kernel_param *kp)
+{
+	unsigned int new_uid;
+	int rc;
+
+	if (ums_nl_agent_available()) {
+		UMS_LOGW("ums_agent_uid: cannot modify while agent is online");
+		return -EBUSY;
+	}
+
+	rc = kstrtouint(val, 0, &new_uid);
+	if (rc != 0) {
+		UMS_LOGW("ums_agent_uid: invalid value %s", val);
+		return rc;
+	}
+
+	if (new_uid == g_ums_sys_tuning_config.ums_agent_uid)
+		return 0;
+
+	WRITE_ONCE(g_ums_sys_tuning_config.ums_agent_uid, new_uid);
+
+	UMS_LOGI("ums_agent_uid updated: %u (%s)", new_uid,
+		new_uid != UMS_AGENT_UID_UNSET ? "strict verification" : "auto-learn");
+	return 0;
+}
+
+static int ums_agent_uid_param_get(char *buf, const struct kernel_param *kp)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", READ_ONCE(g_ums_sys_tuning_config.ums_agent_uid));
+}
+
+static const struct kernel_param_ops ums_agent_uid_ops = {
+	.set = ums_agent_uid_param_set,
+	.get = ums_agent_uid_param_get,
+};
+module_param_cb(ums_agent_uid, &ums_agent_uid_ops, NULL, 0644);
+MODULE_PARM_DESC(ums_agent_uid,
+	"Expected UID of the process registering as UMS agent. "
+	"UINT_MAX: auto-learn from first agent registration (default), "
+	"A valid UID: strict verification");
+
+static int ums_agent_gid_param_set(const char *val, const struct kernel_param *kp)
+{
+	unsigned int new_gid;
+	int rc;
+
+	if (ums_nl_agent_available()) {
+		UMS_LOGW("ums_agent_gid: cannot modify while agent is online");
+		return -EBUSY;
+	}
+
+	rc = kstrtouint(val, 0, &new_gid);
+	if (rc != 0) {
+		UMS_LOGW("ums_agent_gid: invalid value %s", val);
+		return rc;
+	}
+
+	if (new_gid == g_ums_sys_tuning_config.ums_agent_gid)
+		return 0;
+
+	WRITE_ONCE(g_ums_sys_tuning_config.ums_agent_gid, new_gid);
+
+	UMS_LOGI("ums_agent_gid updated: %u (%s)", new_gid,
+		new_gid != UMS_AGENT_GID_UNSET ? "strict verification" : "auto-learn");
+	return 0;
+}
+
+static int ums_agent_gid_param_get(char *buf, const struct kernel_param *kp)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", READ_ONCE(g_ums_sys_tuning_config.ums_agent_gid));
+}
+
+static const struct kernel_param_ops ums_agent_gid_ops = {
+	.set = ums_agent_gid_param_set,
+	.get = ums_agent_gid_param_get,
+};
+module_param_cb(ums_agent_gid, &ums_agent_gid_ops, NULL, 0644);
+MODULE_PARM_DESC(ums_agent_gid,
+	"Expected GID of the process registering as UMS agent. "
+	"UINT_MAX: auto-learn from first agent registration (default), "
+	"A valid GID: strict verification");
 
 static void ums_tcp_listen_work(struct work_struct *work);
 
@@ -1077,9 +1170,15 @@ static int __init ums_init_base(void)
 		return rc;
 	ums_clc_init();
 
+	rc = ums_nl_init();
+	if (rc != 0) {
+		UMS_LOGE("nl initialization failed with %d", rc);
+		goto pernet_subsys_out;
+	}
+
 	rc = ums_pnet_init();
 	if (rc != 0)
-		goto pernet_subsys_out;
+		goto nl_out;
 
 	rc = ums_init_work_queue();
 	if (rc != 0)
@@ -1113,6 +1212,8 @@ destroy_work_queue:
 	ums_destroy_work_queue();
 pnet_out:
 	ums_pnet_exit();
+nl_out:
+	ums_nl_exit();
 pernet_subsys_out:
 	unregister_pernet_subsys(&g_ums_pernet_ops);
 	return rc;
@@ -1126,18 +1227,62 @@ static void ums_destroy_base(void)
 	ums_core_exit();
 	ums_destroy_work_queue();
 	ums_pnet_exit();
+	ums_nl_exit();
 	unregister_pernet_subsys(&g_ums_pernet_ops);
+}
+
+static const char *ums_token_mode_name(enum ums_token_mode mode)
+{
+	switch (mode) {
+	case UMS_TOKEN_MODE_SECURE:
+		return "SECURE";
+	case UMS_TOKEN_MODE_LEGACY:
+		return "LEGACY";
+	case UMS_TOKEN_MODE_DISABLE:
+		return "DISABLE";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static enum ums_token_mode ums_resolve_ub_token_mode(void)
+{
+	if (ub_token_disable != UINT_MAX && ub_token_mode == UINT_MAX) {
+		UMS_LOGW("ums: ub_token_disable is deprecated, use ub_token_mode instead");
+		if (ub_token_disable == 0)
+			return UMS_TOKEN_MODE_LEGACY;
+		return UMS_TOKEN_MODE_DISABLE;
+	}
+
+	if (ub_token_mode == UINT_MAX)
+		return UMS_TOKEN_MODE_SECURE;
+
+	if (ub_token_mode >= UMS_TOKEN_MODE_MAX) {
+		UMS_LOGW("ums: invalid ub_token_mode=%u, fallback to secure mode", ub_token_mode);
+		return UMS_TOKEN_MODE_SECURE;
+	}
+
+	return ub_token_mode;
 }
 
 static void ums_init_sys_config(void)
 {
-	if (ub_token_disable == 0) {
-		g_ums_sys_tuning_config.ub_token_disable = false;
-		UMS_LOGI_LIMITED("ub_token is enable");
-	} else {
-		g_ums_sys_tuning_config.ub_token_disable = true;
-		UMS_LOGI_LIMITED("ub_token is disable");
-	}
+	g_ums_sys_tuning_config.ub_token_mode = ums_resolve_ub_token_mode();
+	UMS_LOGI("ub_token_mode=%s(%u)",
+		ums_token_mode_name(g_ums_sys_tuning_config.ub_token_mode),
+		g_ums_sys_tuning_config.ub_token_mode);
+
+	if (g_ums_sys_tuning_config.ums_agent_uid != UMS_AGENT_UID_UNSET)
+		UMS_LOGI("ums_agent_uid=%u (strict verification enabled)",
+			g_ums_sys_tuning_config.ums_agent_uid);
+	else
+		UMS_LOGI("ums_agent_uid=auto-learn (from first agent registration)");
+
+	if (g_ums_sys_tuning_config.ums_agent_gid != UMS_AGENT_GID_UNSET)
+		UMS_LOGI("ums_agent_gid=%u (strict verification enabled)",
+			g_ums_sys_tuning_config.ums_agent_gid);
+	else
+		UMS_LOGI("ums_agent_gid=auto-learn (from first agent registration)");
 }
 
 static int __init ums_init(void)
@@ -1202,6 +1347,7 @@ static void __exit ums_exit(void)
 	proto_unregister(&g_ums_proto6);
 	proto_unregister(&g_ums_proto);
 	ums_pnet_exit();
+	ums_nl_exit();
 	ums_clc_exit();
 	unregister_pernet_subsys(&g_ums_pernet_ops);
 	rcu_barrier();

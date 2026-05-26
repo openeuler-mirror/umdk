@@ -259,6 +259,7 @@ void ums_link_save_peer_info(struct ums_link *link,
 	struct ums_clc_msg_accept_confirm *clc, struct ums_init_info *ini)
 {
 	struct ubcore_device *ub_dev = link->ums_dev->ub_dev;
+	struct ubcore_token saved_token_value = {0};
 
 	link->tjetty_id = ntohl(clc->r0.jetty_id);
 	(void)memcpy(link->peer_eid.raw, ini->peer_eid.raw, UMS_EID_SIZE);
@@ -268,6 +269,9 @@ void ums_link_save_peer_info(struct ums_link *link,
 	link->credits_enable = clc->r0.init_credits != 0 ? 1 : 0;
 	if (link->credits_enable != 0)
 		atomic_set(&link->peer_rq_credits, clc->r0.init_credits);
+
+	if (g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_SECURE)
+		saved_token_value = link->ub_tjetty_cfg.token_value;
 
 	(void)memset(&link->ub_tjetty_cfg.id, 0, sizeof(struct ubcore_jetty_id));
 	(void)memset(&link->ub_tjetty_cfg, 0, sizeof(struct ubcore_tjetty_cfg));
@@ -280,7 +284,10 @@ void ums_link_save_peer_info(struct ums_link *link,
 		link->ub_tjetty_cfg.flag.bs.order_type = UBCORE_OL; /* low layer ordering */
 		link->ub_tjetty_cfg.flag.bs.share_tp = 1;
 		link->ub_tjetty_cfg.flag.bs.token_policy = clc->r0.jetty_token_policy;
-		link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
+		if (g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_SECURE)
+			link->ub_tjetty_cfg.token_value = saved_token_value;
+		else
+			link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
 		link->ub_tjetty_cfg.type = UBCORE_JETTY;
 		link->ub_tjetty_cfg.tp_type = UBCORE_RTP;
 	}

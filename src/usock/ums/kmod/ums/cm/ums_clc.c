@@ -507,6 +507,7 @@ static int ums_clc_init_proposal(struct ums_sock *ums, struct ums_clc_msg_propos
 	}
 
 	pclc_umsd->v2_ext_offset = 0;
+	pclc_base->lcl.clc_session_id = htonl(ini->clc_session_id);
 	pclc_base->hdr.length = htons(plen);
 	(void)memcpy(pclc->pclc_trl.eyecatcher, UMS_EYECATCHER, UMS_EYECATCHER_LEN);
 
@@ -590,6 +591,7 @@ static void ums_clc_confirm_accept_init_basic(struct ums_sock *ums,
 	clc->hdr.length = htons(UMS_CLC_ACCEPT_CONFIRM_LEN);
 	(void)memcpy(clc->r0.lcl.id_for_peer, g_local_systemid, UMS_SYSTEMID_LEN);
 	(void)memcpy(clc->r0.lcl.eid.raw, link->eid.raw, UMS_EID_SIZE);
+	clc->r0.lcl.clc_session_id = htonl(conn->clc_session_id);
 	(void)memcpy(clc->r0.lcl.mac, link->ums_dev->mac[link->port], ETH_ALEN);
 	clc->r0.rmbe_idx = 1; /* for now: 1 RMB = 1 RMBE */
 	clc->r0.rmbe_alert_token = htonl(conn->conn_id);
@@ -613,15 +615,27 @@ static void ums_clc_confirm_accept_init_basic(struct ums_sock *ums,
 	hton24(clc->r0.psn, link->psn_initial);
 	clc->r0.jetty_id = htonl(link->ub_jetty->jetty_id.id);
 	clc->r0.seg_flag = htonl(conn->rmb_desc->seg[link->link_idx]->seg.attr.value);
-	if (g_ums_sys_tuning_config.ub_token_disable) {
-		clc->r0.jetty_token_policy = UBCORE_TOKEN_NONE;
+
+	switch (g_ums_sys_tuning_config.ub_token_mode) {
+	case UMS_TOKEN_MODE_SECURE:
+		clc->r0.jetty_token_policy = UBCORE_TOKEN_PLAIN_TEXT;
 		clc->r0.jetty_token_value = 0;
 		clc->r0.seg_token_value = 0;
-	} else {
+		break;
+	case UMS_TOKEN_MODE_LEGACY:
 		clc->r0.jetty_token_policy = UBCORE_TOKEN_PLAIN_TEXT;
 		clc->r0.jetty_token_value = htonl(link->jetty_token_value.token);
 		clc->r0.seg_token_value = htonl(conn->rmb_desc->seg_token_value.token);
+		break;
+	case UMS_TOKEN_MODE_DISABLE:
+	default:
+		clc->r0.jetty_token_policy = UBCORE_TOKEN_NONE;
+		clc->r0.jetty_token_value = 0;
+		clc->r0.seg_token_value = 0;
+		break;
 	}
+	clc->r0.ub_token_mode = (u8)g_ums_sys_tuning_config.ub_token_mode;
+
 	clc->r0.seg_token_id = htonl(conn->rmb_desc->seg[link->link_idx]->seg.token_id);
 }
 
@@ -631,6 +645,22 @@ static inline void ums_clc_confirm_accept_init_trl(struct ums_clc_msg_trail *trl
 }
 
 /* build and send CLC CONFIRM / ACCEPT message */
+void ums_clc_clear_msg_token_values(struct ums_clc_msg_accept_confirm *clc)
+{
+	memzero_explicit(&clc->r0.jetty_token_value, sizeof(clc->r0.jetty_token_value));
+	memzero_explicit(&clc->r0.seg_token_value, sizeof(clc->r0.seg_token_value));
+}
+
+static void ums_clc_clear_token_values(struct ums_clc_msg_accept_confirm *clc,
+	struct ums_sock *ums)
+{
+	struct ums_connection *conn = &ums->conn;
+
+	ums_clc_clear_msg_token_values(clc);
+	memzero_explicit(&conn->lnk->jetty_token_value, sizeof(conn->lnk->jetty_token_value));
+	memzero_explicit(&conn->rmb_desc->seg_token_value, sizeof(conn->rmb_desc->seg_token_value));
+}
+
 static int ums_clc_send_confirm_accept(struct ums_sock *ums,
 	struct ums_clc_msg_accept_confirm_v2 *clc_v2, bool first_contact, u8 *eid,
 	struct ums_init_info *ini)
@@ -640,6 +670,7 @@ static int ums_clc_send_confirm_accept(struct ums_sock *ums,
 	struct ums_clc_msg_trail trl;
 	struct msghdr msg;
 	int i;
+	int len;
 
 	/* send UMS Confirm CLC msg */
 	clc = (struct ums_clc_msg_accept_confirm *)clc_v2;
@@ -663,7 +694,9 @@ static int ums_clc_send_confirm_accept(struct ums_sock *ums,
 
 	vec[i].iov_base = &trl;
 	vec[i++].iov_len = sizeof(struct ums_clc_msg_trail);
-	return kernel_sendmsg(ums->clcsock, &msg, vec, 1, ntohs(clc->hdr.length));
+	len = kernel_sendmsg(ums->clcsock, &msg, vec, 1, ntohs(clc->hdr.length));
+	ums_clc_clear_token_values(clc, ums);
+	return len;
 }
 
 /* send CLC CONFIRM message across internal TCP socket */

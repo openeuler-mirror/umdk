@@ -24,6 +24,7 @@
 #include "ums_clc.h"
 #include "ums_llc.h"
 #include "ums_log.h"
+#include "ums_nl.h"
 #include "ums_close.h"
 #include "ums_rx.h"
 #include "ums_tx.h"
@@ -166,6 +167,7 @@ static int ums_find_ub_device_serv(struct ums_sock *new_ums,
 
 	/* prepare UB check */
 	(void)memcpy(ini->peer_systemid, pclc->lcl.id_for_peer, UMS_SYSTEMID_LEN);
+	(void)memcpy(ini->initiator_id, pclc->lcl.id_for_peer, UMS_SYSTEMID_LEN);
 
 	if (pclc->lcl.ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) {
 		ini->ubcore_route_enable = pclc->lcl.ubcore_route_enable;
@@ -331,6 +333,7 @@ void ums_listen_work(struct work_struct *work)
 	}
 
 	ini->ums_type_v1 = pclc->hdr.typev1;
+	ini->clc_session_id = ntohl(pclc->lcl.clc_session_id);
 
 	ums_lgr_pending_lock(ini, &g_ums_server_lgr_pending);
 	ums_close_init(new_ums);
@@ -344,11 +347,17 @@ void ums_listen_work(struct work_struct *work)
 		goto out_unlock;
 	}
 
+	rc = ums_nl_register_and_submit_tokens(new_ums, ini->first_contact_local != 0);
+	if (rc != 0) {
+		rc = UMS_CLC_DECL_ERR_TOKEN_SUBMIT;
+		goto out_unlock;
+	}
+
 	/* send UMS Accept CLC message */
 	rc = ums_clc_send_accept(new_ums, ini->first_contact_local, ini->negotiated_eid, ini);
 	if (rc != 0) {
 		UMS_LOGE("send accept failed, ret: %d", rc);
-		goto out_unlock;
+		goto out_unregister_clc_session;
 	}
 
 	/* receive UMS Confirm CLC message */
@@ -357,26 +366,46 @@ void ums_listen_work(struct work_struct *work)
 	rc = ums_clc_wait_msg(new_ums, cclc, sizeof(*buf), UMS_CLC_CONFIRM, CLC_WAIT_TIME);
 	if (rc != 0) {
 		UMS_LOGE("wait msg failed, ret %d, conn %u", rc, new_ums->conn.conn_id);
-		goto out_unlock;
+		goto out_unregister_clc_session;
+	}
+
+	if (!ums_token_mode_valid(cclc->r0.ub_token_mode) ||
+		!ums_token_mode_match(g_ums_sys_tuning_config.ub_token_mode,
+			(enum ums_token_mode)cclc->r0.ub_token_mode)) {
+		UMS_LOGE("token mode mismatch or invalid, peer=%u, local=%u",
+			cclc->r0.ub_token_mode, g_ums_sys_tuning_config.ub_token_mode);
+		rc = UMS_CLC_DECL_TOKMDMIS;
+		goto out_unregister_clc_session;
+	}
+
+	rc = ums_wait_token_xchg(&new_ums->conn);
+	if (rc != 0) {
+		rc = UMS_CLC_DECL_ERR_TOKEN_XCHG;
+		goto out_unregister_clc_session;
 	}
 
 	/* finish worker */
 	rc = ums_listen_ub_finish(new_ums, cclc, ini->first_contact_local, ini);
 	if (rc != 0)
-		goto out_unlock;
+		goto out_unregister_clc_session;
 	ums_lgr_pending_unlock(ini, &g_ums_server_lgr_pending);
 
 	ums_conn_save_peer_info(new_ums, cclc);
 	ums_copy_conn_jetty_info(new_ums);
 	ums_listen_out_connected(new_ums);
+	ums_nl_unregister_clc_session(new_ums->conn.clc_session_id, new_ums->conn.initiator_id);
 	goto out_free;
 
+out_unregister_clc_session:
+	ums_nl_unregister_clc_session(new_ums->conn.clc_session_id, new_ums->conn.initiator_id);
 out_unlock:
 	ums_lgr_pending_unlock(ini, &g_ums_server_lgr_pending);
 out_decl:
 	ums_listen_decline(new_ums, rc, ini ? ini->first_contact_local : 0);
 out_free:
 	kfree(ini);
+	if (buf)
+		ums_clc_clear_msg_token_values((struct ums_clc_msg_accept_confirm *)buf);
 	kfree(buf);
 }
 

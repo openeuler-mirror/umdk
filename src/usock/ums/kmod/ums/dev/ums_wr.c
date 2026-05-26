@@ -756,7 +756,8 @@ int ums_wr_create_link(struct ums_link *lnk)
 {
 	struct ubcore_device *ubdev = lnk->ums_dev->ub_dev;
 	union ubcore_reg_seg_flag flag = {
-		.bs.token_policy = g_ums_sys_tuning_config.ub_token_disable ? UBCORE_TOKEN_NONE : UBCORE_TOKEN_PLAIN_TEXT,
+		.bs.token_policy = g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_DISABLE ?
+			UBCORE_TOKEN_NONE : UBCORE_TOKEN_PLAIN_TEXT,
 		.bs.cacheable = UBCORE_NON_CACHEABLE,
 		.bs.access = UCT_UBCORE_MEM_ACCESS_FLAGS,
 		.bs.reserved = 0
@@ -778,7 +779,7 @@ int ums_wr_create_link(struct ums_link *lnk)
 		.iova = 0
 	};
 	int rc = 0;
-	if (!g_ums_sys_tuning_config.ub_token_disable) {
+	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_DISABLE) {
 		get_random_bytes(&rx_cfg.token_value.token, sizeof(rx_cfg.token_value.token));
 		get_random_bytes(&tx_cfg.token_value.token, sizeof(tx_cfg.token_value.token));
 	}
