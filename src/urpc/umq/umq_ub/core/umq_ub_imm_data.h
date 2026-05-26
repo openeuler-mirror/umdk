@@ -35,30 +35,32 @@ typedef enum umq_ub_imm_type {
 } umq_ub_imm_type_t;
 
 typedef union umq_ub_imm {
-    uint16_t value;
+    uint64_t value;
     struct {
-        uint16_t type : 4;
-        uint16_t rsvd1 : 12;
+        uint64_t type : 4;
+        uint64_t rsvd1 : 60;
     } bs;
     struct {
-        uint16_t type : 4;
-        uint16_t msg_id : 5;
-        uint16_t msg_num : 5;
-        uint16_t rsvd1 : 2;
+        uint64_t type : 4;
+        uint64_t msg_id : 5;
+        uint64_t msg_num : 5;
+        uint64_t rsvd1 : 50;
     } ub_plus;
     struct {
-        uint16_t type : 4;
-        uint16_t window : 10;
-        uint16_t ratio : 2;     // 0: 10%, 1: 30%, 2: 50%, 3: 70%, min reserved credit: modify to 70%
+        uint64_t type : 4;
+        uint64_t window : 10;
+        uint64_t ratio : 2;     // 0: 10%, 1: 30%, 2: 50%, 3: 70%, min reserved credit: modify to 70%
+        uint64_t rsvd1 : 48;
     } flow_control;
     struct {
-        uint16_t type : 4;
-        uint16_t rsvd1 : 2;
-        uint16_t mempool_id : 10;
+        uint64_t type : 4;
+        uint64_t rsvd1 : 2;
+        uint64_t mempool_id : 10;
+        uint64_t rsvd2 : 48;
     } mem_import;
     struct {
-        uint16_t type : 4;
-        uint16_t rsvd1 : 12;
+        uint64_t type : 4;
+        uint64_t rsvd1 : 60;
     } notify;
 } umq_ub_imm_t;
 
