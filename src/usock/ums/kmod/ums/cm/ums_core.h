@@ -213,6 +213,31 @@ static inline void ums_wait_conn_tx_rx_refcnt(struct ums_connection *conn)
 	lock_sock(&ums->sk);
 }
 
+static inline bool ums_token_mode_valid(u8 mode)
+{
+	return mode < UMS_TOKEN_MODE_MAX;
+}
+
+static inline bool ums_token_mode_match(enum ums_token_mode local,
+	enum ums_token_mode peer)
+{
+	if (local == UMS_TOKEN_MODE_SECURE || peer == UMS_TOKEN_MODE_SECURE)
+		return local == peer;
+	return true;
+}
+
+static inline void ums_token_xchg_init(struct ums_token_xchg *xchg)
+{
+	init_completion(&xchg->done);
+	xchg->result = 0;
+}
+
+static inline void ums_token_xchg_complete(struct ums_token_xchg *xchg, int result)
+{
+	xchg->result = result;
+	complete(&xchg->done);
+}
+
 struct ums_clc_msg_accept_confirm;
 
 void ums_lgr_cleanup_early(struct ums_link_group *lgr);
@@ -226,6 +251,8 @@ int ums_buf_create(struct ums_sock *ums);
 int ums_buf_register(struct ums_sock *ums);
 void ums_snd_recv_bufs_free(struct ums_sock *ums);
 int ums_uncompress_bufsize(u8 compressed);
+u32 ums_clc_session_id_generate(void);
+int ums_wait_token_xchg(struct ums_connection *conn);
 int ums_rmb_import_seg(struct ums_connection *conn, struct ums_clc_msg_accept_confirm *clc);
 void ums_rmb_unimport_seg(struct ums_connection *conn);
 int ums_rtoken_delete(struct ums_link *lnk, __be32 nw_rkey);

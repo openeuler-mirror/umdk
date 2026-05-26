@@ -11,7 +11,7 @@ set(DRIVER_FILE ums.ko)
 
 # Generate the Kbuild file through cmake.
 FILE(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "obj-m := ums.o\n")
-FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums-objs := cm/ums_clc.o cm/ums_core.o cm/ums_llc.o cm/ums_process_link.o\n")
+FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums-objs := cm/ums_clc.o cm/ums_nl.o cm/ums_core.o cm/ums_llc.o cm/ums_process_link.o\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums-objs += dev/ums_pnet.o dev/ums_ubcore.o dev/ums_wr.o\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums-objs += dfx/ums_dfx.o\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums-objs += utils/ums_common.o utils/ums_ns.o\n")

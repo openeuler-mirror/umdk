@@ -1,5 +1,5 @@
 obj-m := ums.o
-ums-objs := cm/ums_clc.o cm/ums_core.o cm/ums_llc.o cm/ums_process_link.o
+ums-objs := cm/ums_clc.o cm/ums_nl.o cm/ums_core.o cm/ums_llc.o cm/ums_process_link.o
 ums-objs += dev/ums_pnet.o dev/ums_ubcore.o dev/ums_wr.o
 ums-objs += dfx/ums_dfx.o
 ums-objs += utils/ums_common.o utils/ums_ns.o
