@@ -988,6 +988,15 @@ urma_status_t urma_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_us
 urma_status_t urma_register_log_func(urma_log_cb_t func);
 
 /**
+ * User register location log function with file, function and line info.
+ * @param[in] func: location log callback function;
+ * Return: 0 on success, other value on error
+ * Note: If both urma_register_log_func and urma_register_loc_log_func are called,
+ *       the last registered function will be used.
+ */
+urma_status_t urma_register_loc_log_func(urma_loc_log_cb func);
+
+/**
  * User unregister own log function, use rsyslog.
  * Return: 0 on success, other value on error
  */
