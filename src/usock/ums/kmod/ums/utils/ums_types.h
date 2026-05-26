@@ -656,7 +656,6 @@ enum ums_token_mode {
 };
 
 struct ums_sys_tuning_config {
-	bool ub_token_disable;
 	enum ums_token_mode ub_token_mode;
 	unsigned int ums_agent_uid;
 	unsigned int ums_agent_gid;

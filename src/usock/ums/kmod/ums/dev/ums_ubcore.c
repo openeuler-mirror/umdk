@@ -448,9 +448,11 @@ static int ums_ubcore_import_jetty(struct ums_link *lnk)
 	if (IS_ERR_OR_NULL(lnk->ub_tjetty)) {
 		lnk->ub_tjetty = NULL;
 		UMS_LOGE("failed to importing jetty");
+		memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 		return -1;
 	}
 
+	memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 	return 0;
 }
 
@@ -587,6 +589,7 @@ void ums_ubcore_destroy_jetty(struct ums_link *lnk)
 	ums_ubcore_put_jfc(lnk->ums_ub_jfc);
 	lnk->ub_tjetty = NULL;
 	lnk->ums_ub_jfc = NULL;
+	memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 	(void)memset(&lnk->ub_tjetty_cfg, 0, sizeof(struct ubcore_tjetty_cfg));
 }
 
@@ -626,7 +629,7 @@ static void ums_ubcore_create_jfr(struct ums_ubcore_jfc *ums_ub_jfc, struct ums_
 	cfg.eid_index = lnk->eid_index;
 	cfg.max_sge = 1;
 	cfg.min_rnr_timer = UMS_TYPICAL_MIN_RNR_TIMER;
-	if (g_ums_sys_tuning_config.ub_token_disable) {
+	if (g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_DISABLE) {
 		cfg.flag.bs.token_policy = UBCORE_TOKEN_NONE;
 		cfg.token_value.token = 0;
 	} else {
@@ -640,6 +643,7 @@ static void ums_ubcore_create_jfr(struct ums_ubcore_jfc *ums_ub_jfc, struct ums_
 	if (IS_ERR(lnk->jfr))
 		lnk->jfr = NULL;
 
+	memzero_explicit(&cfg.token_value, sizeof(cfg.token_value));
 	return;
 }
 
