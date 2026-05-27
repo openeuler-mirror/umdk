@@ -100,8 +100,10 @@ git_repository(
     remote = "https://github.com/google/boringssl",
 )
 
-new_local_repository(
+git_repository(
     name = "urma",
     build_file = "//third_party/urma:BUILD.bazel",
-    path = "/usr",
+    commit = "19b0cfe670700c4f88388f97effce6c476753046",
+    remote = "https://gitcode.com/openeuler/umdk.git",
+    strip_prefix = "src/urma",
 )
