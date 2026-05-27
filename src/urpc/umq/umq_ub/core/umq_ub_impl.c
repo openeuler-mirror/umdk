@@ -879,11 +879,9 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
         // sub umq does not need to post flow control rx
         post_fc_rx_cnt = 0;
     }
-    for (uint32_t i = 0; i < post_fc_rx_cnt; i++) {
-        int ret = umq_ub_fill_fc_rx_buf(queue);
-        if (ret != UMQ_SUCCESS) {
-            goto DELETE_FC_JETTY;
-        }
+
+    if (umq_ub_fill_fc_rx_buf_batch(queue, post_fc_rx_cnt) != UMQ_SUCCESS) {
+        goto DELETE_FC_JETTY;
     }
 
     dev_ctx->umq_ctx_jetty_table[queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id] =
