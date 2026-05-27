@@ -1089,11 +1089,11 @@ Note: urma_free_device_list() needs to be called to free memory.
 
 ```c
 typedef struct urma_device {
-    char name[URMA_MAX_NAME]; /* [Public] urma device\'s name, the names of devices
+    char name[URMA_MAX_NAME]; /* [Public] urma device's name, the names of devices
     in different transport modes are different. */
-    char path[URMA_MAX_PATH]; /* [Public] urma device\'s path in sysfs. */
-    urma_transport_type_t type; /* [Public] urma device\'s transport type. */
-    struct urma_provider_ops_t *ops; /* [Private] urma device driver\'s ops. */
+    char path[URMA_MAX_PATH]; /* [Public] urma device's path in sysfs. */
+    urma_transport_type_t type; /* [Public] urma device's transport type. */
+    struct urma_provider_ops_t *ops; /* [Private] urma device driver's ops. */
     struct urma_sysfs_dev_t *sysfs_dev; /* [Private] internal device corresponding to the urma device */
 } urma_device_t;
 ```
@@ -1224,7 +1224,7 @@ void
 
 4.  参数
 
-@param[in] [Required] dev_name: device\'s name;
+@param[in] [Required] dev_name: device's name;
 
 5.  返回值
 
@@ -1248,9 +1248,9 @@ Return: urma_device; NULL means no device returned;
 
 4.  参数
 
-@param[in] [Required] eid: device\'s eid;
+@param[in] [Required] eid: device's eid;
 
-@param[in] [Required] type: device\'s transport type;
+@param[in] [Required] type: device's transport type;
 
 5.  返回值
 
@@ -1815,7 +1815,7 @@ Return: 0 on success, other value on error.
 
 @param[in] [Required] dev: urma device, by get_device apis.
 
-@param[in] [Required] eid_index: device\'s eid index.
+@param[in] [Required] eid_index: device's eid index.
 
 5.  返回值
 
@@ -1829,8 +1829,8 @@ Return: urma context pointer on success, NULL on error.
 typedef struct urma_context {
     struct urma_device_t *dev; /* [Private] point to the corresponding urma device. */
     struct urma_ops_t *ops; /* [Private] operation of urma device. */
-    int dev_fd; /* [Private] fd of urma device\'s sysfs file. */
-    int async_fd; /* [Private] fd of urma device\'s async event file. */
+    int dev_fd; /* [Private] fd of urma device's sysfs file. */
+    int async_fd; /* [Private] fd of urma device's async event file. */
     pthread_mutex_t mutex; /* [Private] mutex of urma context. */
     urma_eid_t eid; /* [Public] eid of urma device. */
     uint32_t eid_index;
@@ -2799,13 +2799,13 @@ typedef struct urma_jfs_cfg {
     uint8_t max_sge; /* [Optional] max sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge */
     uint8_t max_rsge; /* [Optional] max remote sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge */
     uint32_t max_inline_data; /* [Optional] the max inline data size of JFS. if the parameter is 0,
-    the system will assign device\'s max inline data length. */
+    the system will assign device's max inline data length. */
     uint8_t rnr_retry; /* [Optional] number of times that jfs will resend packets before report error,
     when the remote side is not ready to receive (RNR), ranging from [0, 7],
     the value 0 means never retry and,
     the value 7 means retry infinite number of times for RDMA devices */
     uint8_t err_timeout; /* [Optional] the timeout before report error, ranging from [0, 31],
-    the actual timeout in usec is caculated by: 4.096*(2\^err_timeout) */
+    the actual timeout in usec is caculated by: 4.096*(2^err_timeout) */
     urma_jfc_t *jfc; /* [Required] need to specify jfc */
     uint64_t user_ctx; /* [Optional] private data of jfs */
 } urma_jfs_cfg_t;
@@ -2813,7 +2813,7 @@ typedef struct urma_jfs_cfg {
 
 ![](figures/urma_info.png)
 
-err_timeout取值范围0\~31，实际超时值计算方法：Timeout=4.096us*（2\^ err_timeout）
+err_timeout取值范围0\~31，实际超时值计算方法：Timeout=4.096us*（2^ err_timeout）
 
 7.  [urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext)
 
@@ -3271,37 +3271,37 @@ typedef struct urma_jfr_cfg {
 
 min_rnr_timer的值对应的时间定义如下：
 
-5\'b00000 :655.36ms 5\'b10000 :2.56ms
+5'b00000 :655.36ms 5'b10000 :2.56ms
 
-5\'b00001 :0.01ms 5\'b10001 :3.84ms
+5'b00001 :0.01ms 5'b10001 :3.84ms
 
-5\'b00010 :0.02ms 5\'b10010 :5.12ms
+5'b00010 :0.02ms 5'b10010 :5.12ms
 
-5\'b00011 :0.03ms 5\'b10011 :7.68ms
+5'b00011 :0.03ms 5'b10011 :7.68ms
 
-5\'b00100 :0.04ms 5\'b10100 :10.24ms
+5'b00100 :0.04ms 5'b10100 :10.24ms
 
-5\'b00101 :0.06ms 5\'b10101 :15.36ms
+5'b00101 :0.06ms 5'b10101 :15.36ms
 
-5\'b00110 :0.08ms 5\'b10110 :20.48ms
+5'b00110 :0.08ms 5'b10110 :20.48ms
 
-5\'b00111 :0.12ms 5\'b10111 :30.72ms
+5'b00111 :0.12ms 5'b10111 :30.72ms
 
-5\'b01000 :0.16ms 5\'b11000 :40.96ms
+5'b01000 :0.16ms 5'b11000 :40.96ms
 
-5\'b01001 :0.24ms 5\'b11001 :61.44ms
+5'b01001 :0.24ms 5'b11001 :61.44ms
 
-5\'b01010 :0.32ms 5\'b11010 :81.92ms
+5'b01010 :0.32ms 5'b11010 :81.92ms
 
-5\'b01011 :0.48ms 5\'b11011 :122.88ms
+5'b01011 :0.48ms 5'b11011 :122.88ms
 
-5\'b01100 :0.64ms 5\'b11100 :163.84ms
+5'b01100 :0.64ms 5'b11100 :163.84ms
 
-5\'b01101 :0.96ms 5\'b11101 :245.76ms
+5'b01101 :0.96ms 5'b11101 :245.76ms
 
-5\'b01110 :1.28ms 5\'b11110 :327.68ms
+5'b01110 :1.28ms 5'b11110 :327.68ms
 
-5\'b01111 :1.92ms 5\'b11111 :491.52ms
+5'b01111 :1.92ms 5'b11111 :491.52ms
 
 7.  [urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext)
 
