@@ -438,7 +438,7 @@ static int transport_recv_ssl_async(transport_handle_t *ctl_hdl, void *data, siz
         int err = SSL_get_error(ctl_hdl->ssl, done);
         if (err == SSL_ERROR_WANT_READ) {
             ctl_hdl->recv_record.offset = data_size - (size_t)total;
-            URPC_LIB_LOG_DEBUG("ssl reading data, total size: %zu, readed size: %zu, err: %s\n",
+            URPC_LIB_LOG_DEBUG("ssl reading data, total size: %zu, read size: %zu, err: %s\n",
                 data_size, ctl_hdl->recv_record.offset, strerror(errno));
             return URPC_RUNNING;
         }
@@ -733,7 +733,7 @@ static bool recv_one_message(transport_handle_t *ctl_hdl, bool *completed_msg)
         if (data == NULL) {
             URPC_LIB_LOG_ERR("malloc data memory failed\n");
             ctl_hdl->recv_record.data = NULL;
-            // shoud discard this msg
+            // should discard this msg
             ctl_hdl->state = TCP_ERROR;
             return true;
         }

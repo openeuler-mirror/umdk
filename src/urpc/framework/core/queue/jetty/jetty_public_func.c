@@ -1451,14 +1451,14 @@ int jetty_provider_import_mem(provider_t *provider, xchg_mem_info_t *mem_info, u
         uint32_t list_size = provider_get_list_size();
         if (list_size == 0) {
             (void)pthread_rwlock_unlock(&g_urpc_ip_mem_hmap.lock);
-            URPC_LIB_LOG_ERR("no provider is avaliable, please init urpc at first\n");
+            URPC_LIB_LOG_ERR("no provider is available, please init urpc at first\n");
             return URPC_FAIL;
         }
         size_t size = sizeof(tseg_handle_t) + list_size * sizeof(uint64_t);
         tseg_handle = (tseg_handle_t *)urpc_dbuf_calloc(URPC_DBUF_TYPE_ALLOCATOR, 1, size);
         if (tseg_handle == NULL) {
             (void)pthread_rwlock_unlock(&g_urpc_ip_mem_hmap.lock);
-            URPC_LIB_LOG_ERR("tseg hanle calloc failed\n");
+            URPC_LIB_LOG_ERR("tseg handle calloc failed\n");
             return -URPC_ERR_ENOMEM;
         }
         new_tsge_handle = true;
