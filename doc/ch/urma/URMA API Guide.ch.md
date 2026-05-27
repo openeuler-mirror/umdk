@@ -1,1217 +1,624 @@
-# 目 录 {#目-录 .Contents}
-
-[1 修订记录 [1](#修订记录)](#修订记录)
-
-[2 使用约束与限制 [2](#使用约束与限制)](#使用约束与限制)
-
-[2.1 版本配套约束 [2](#版本配套约束)](#版本配套约束)
-
-[3 URMA用户态API [3](#urma用户态api)](#urma用户态api)
-
-[3.1 编程示例 [3](#编程示例)](#编程示例)
-
-[3.1.1 管理面 [4](#管理面)](#管理面)
-
-[3.1.2 控制面 [5](#控制面)](#控制面)
-
-[3.1.3 数据面 [7](#数据面)](#数据面)
-
-[3.1.3.1 单边read/write [7](#单边readwrite)](#单边readwrite)
-
-[3.1.3.2 双边send/recv [9](#双边sendrecv)](#双边sendrecv)
-
-[3.1.4 开源示例 [10](#开源示例)](#开源示例)
-
-[3.2 管理面 [10](#管理面-1)](#管理面-1)
-
-[3.2.1 初始化 [10](#初始化)](#初始化)
-
-[3.2.1.1 urma_init [10](#urma_init)](#urma_init)
-
-[3.2.1.1.1 urma_init_attr_t [11](#urma_init_attr_t)](#urma_init_attr_t)
-
-[3.2.1.1.2 urma_status_t [11](#urma_status_t)](#urma_status_t)
-
-[3.2.1.2 urma_uninit [11](#urma_uninit)](#urma_uninit)
-
-[3.2.2 设备及上下文 [12](#设备及上下文)](#设备及上下文)
-
-[3.2.2.1 device [12](#device)](#device)
-
-[3.2.2.1.1 urma_get_device_list [12](#urma_get_device_list)](#urma_get_device_list)
-
-[3.2.2.1.2 urma_free_device_list [14](#urma_free_device_list)](#urma_free_device_list)
-
-[3.2.2.1.3 urma_get_device_by_name [14](#urma_get_device_by_name)](#urma_get_device_by_name)
-
-[3.2.2.1.4 urma_get_device_by_eid [15](#urma_get_device_by_eid)](#urma_get_device_by_eid)
-
-[3.2.2.1.5 urma_query_device [15](#urma_query_device)](#urma_query_device)
-
-[3.2.2.2 eid [20](#eid)](#eid)
-
-[3.2.2.2.1 urma_get_eid_list [20](#urma_get_eid_list)](#urma_get_eid_list)
-
-[3.2.2.2.2 urma_free_eid_list [21](#urma_free_eid_list)](#urma_free_eid_list)
-
-[3.2.2.3 uasid [22](#uasid)](#uasid)
-
-[3.2.2.3.1 urma_get_uasid [22](#urma_get_uasid)](#urma_get_uasid)
-
-[3.2.2.4 context [22](#context)](#context)
-
-[3.2.2.4.1 urma_create_context [22](#urma_create_context)](#urma_create_context)
-
-[3.2.2.4.2 urma_delete_context [26](#urma_delete_context)](#urma_delete_context)
-
-[3.2.2.4.3 urma_set_context_opt [27](#urma_set_context_opt)](#urma_set_context_opt)
-
-[3.2.2.5 net addr [27](#net-addr)](#net-addr)
-
-[3.2.2.5.1 urma_get_net_addr_list [27](#urma_get_net_addr_list)](#urma_get_net_addr_list)
-
-[3.2.2.5.2 urma_free_net_addr_list [28](#urma_free_net_addr_list)](#urma_free_net_addr_list)
-
-[3.2.3 安全 [29](#安全)](#安全)
-
-[3.2.3.1 urma_alloc_token_id [29](#urma_alloc_token_id)](#urma_alloc_token_id)
-
-[3.2.3.1.1 urma_token_id_t [29](#urma_token_id_t)](#urma_token_id_t)
-
-[3.2.3.1.2 urma_token_id_flag_t [30](#urma_token_id_flag_t)](#urma_token_id_flag_t)
-
-[3.2.3.2 urma_alloc_token_id_ex [30](#urma_alloc_token_id_ex)](#urma_alloc_token_id_ex)
-
-[3.2.3.3 urma_free_token_id [30](#urma_free_token_id)](#urma_free_token_id)
-
-[3.3 控制面 [31](#控制面-1)](#控制面-1)
-
-[3.3.1 Jetty相关 [31](#jetty相关)](#jetty相关)
-
-[3.3.1.1 JFC [31](#jfc)](#jfc)
-
-[3.3.1.1.1 urma_create_jfc [31](#urma_create_jfc)](#urma_create_jfc)
-
-[3.3.1.1.2 urma_modify_jfc [33](#urma_modify_jfc)](#urma_modify_jfc)
-
-[3.3.1.1.3 urma_delete_jfc [34](#urma_delete_jfc)](#urma_delete_jfc)
-
-[3.3.1.1.4 urma_delete_jfc_batch [34](#urma_delete_jfc_batch)](#urma_delete_jfc_batch)
-
-[3.3.1.2 JFCE [35](#jfce)](#jfce)
-
-[3.3.1.2.1 urma_create_jfce [35](#urma_create_jfce)](#urma_create_jfce)
-
-[3.3.1.2.2 urma_delete_jfce [36](#urma_delete_jfce)](#urma_delete_jfce)
-
-[3.3.1.3 JFAE [36](#jfae)](#jfae)
-
-[3.3.1.3.1 urma_get_async_event [36](#urma_get_async_event)](#urma_get_async_event)
-
-[3.3.1.3.2 urma_ack_async_event [37](#urma_ack_async_event)](#urma_ack_async_event)
-
-[3.3.1.4 JFS [38](#jfs)](#jfs)
-
-[3.3.1.4.1 urma_create_jfs [38](#urma_create_jfs)](#urma_create_jfs)
-
-[3.3.1.4.2 urma_modify_jfs [40](#urma_modify_jfs)](#urma_modify_jfs)
-
-[3.3.1.4.3 urma_query_jfs [41](#urma_query_jfs)](#urma_query_jfs)
-
-[3.3.1.4.4 urma_delete_jfs [41](#urma_delete_jfs)](#urma_delete_jfs)
-
-[3.3.1.4.5 urma_delete_jfs_batch [42](#urma_delete_jfs_batch)](#urma_delete_jfs_batch)
-
-[3.3.1.4.6 urma_flush_jfs [43](#urma_flush_jfs)](#urma_flush_jfs)
-
-[3.3.1.5 JFR [43](#jfr)](#jfr)
-
-[3.3.1.5.1 urma_create_jfr [43](#urma_create_jfr)](#urma_create_jfr)
-
-[3.3.1.5.2 urma_modify_jfr [46](#urma_modify_jfr)](#urma_modify_jfr)
-
-[3.3.1.5.3 urma_query_jfr [47](#urma_query_jfr)](#urma_query_jfr)
-
-[3.3.1.5.4 urma_delete_jfr [47](#urma_delete_jfr)](#urma_delete_jfr)
-
-[3.3.1.5.5 urma_delete_jfr_batch [48](#urma_delete_jfr_batch)](#urma_delete_jfr_batch)
-
-[3.3.1.5.6 urma_import_jfr [49](#urma_import_jfr)](#urma_import_jfr)
-
-[3.3.1.5.7 urma_import_jfr_ex [51](#urma_import_jfr_ex)](#urma_import_jfr_ex)
-
-[3.3.1.5.8 urma_unimport_jfr [52](#urma_unimport_jfr)](#urma_unimport_jfr)
-
-[3.3.1.6 Jetty [52](#jetty)](#jetty)
-
-[3.3.1.6.1 urma_create_jetty [52](#urma_create_jetty)](#urma_create_jetty)
-
-[3.3.1.6.2 urma_modify_jetty [55](#urma_modify_jetty)](#urma_modify_jetty)
-
-[3.3.1.6.3 urma_query_jetty [56](#urma_query_jetty)](#urma_query_jetty)
-
-[3.3.1.6.4 urma_delete_jetty [56](#urma_delete_jetty)](#urma_delete_jetty)
-
-[3.3.1.6.5 urma_delete_jetty_batch [57](#urma_delete_jetty_batch)](#urma_delete_jetty_batch)
-
-[3.3.1.6.6 urma_import_jetty [58](#urma_import_jetty)](#urma_import_jetty)
-
-[3.3.1.6.7 urma_import_jetty_ex [59](#urma_import_jetty_ex)](#urma_import_jetty_ex)
-
-[3.3.1.6.8 urma_unimport_jetty [59](#urma_unimport_jetty)](#urma_unimport_jetty)
-
-[3.3.1.6.9 urma_bind_jetty [60](#urma_bind_jetty)](#urma_bind_jetty)
-
-[3.3.1.6.10 urma_bind_jetty_ex [61](#urma_bind_jetty_ex)](#urma_bind_jetty_ex)
-
-[3.3.1.6.11 urma_unbind_jetty [61](#urma_unbind_jetty)](#urma_unbind_jetty)
-
-[3.3.1.6.12 urma_flush_jetty [62](#urma_flush_jetty)](#urma_flush_jetty)
-
-[3.3.1.6.13 urma_import_jetty_async [63](#urma_import_jetty_async)](#urma_import_jetty_async)
-
-[3.3.1.6.14 urma_unimport_jetty_async [64](#urma_unimport_jetty_async)](#urma_unimport_jetty_async)
-
-[3.3.1.6.15 urma_bind_jetty_async [64](#urma_bind_jetty_async)](#urma_bind_jetty_async)
-
-[3.3.1.6.16 urma_unbind_jetty_async [65](#urma_unbind_jetty_async)](#urma_unbind_jetty_async)
-
-[3.3.1.6.17 urma_create_notifier [65](#urma_create_notifier)](#urma_create_notifier)
-
-[3.3.1.6.18 urma_delete_notifier [66](#urma_delete_notifier)](#urma_delete_notifier)
-
-[3.3.1.6.19 urma_wait_notify [67](#urma_wait_notify)](#urma_wait_notify)
-
-[3.3.1.6.20 urma_ack_notify [68](#urma_ack_notify)](#urma_ack_notify)
-
-[3.3.1.7 Jetty Group [68](#jetty-group)](#jetty-group)
-
-[3.3.1.7.1 urma_create_jetty_grp [68](#urma_create_jetty_grp)](#urma_create_jetty_grp)
-
-[3.3.1.7.2 urma_delete_jetty_grp [69](#urma_delete_jetty_grp)](#urma_delete_jetty_grp)
-
-[3.3.2 Segment [69](#segment)](#segment)
-
-[3.3.2.1 urma_register_seg [70](#urma_register_seg)](#urma_register_seg)
-
-[3.3.2.1.1 urma_seg_cfg_t [70](#urma_seg_cfg_t)](#urma_seg_cfg_t)
-
-[3.3.2.1.2 urma_reg_seg_flag_t [70](#urma_reg_seg_flag_t)](#urma_reg_seg_flag_t)
-
-[3.3.2.1.3 urma_target_seg_t [71](#urma_target_seg_t)](#urma_target_seg_t)
-
-[3.3.2.1.4 urma_seg_t [72](#urma_seg_t)](#urma_seg_t)
-
-[3.3.2.1.5 urma_ubva_t [72](#urma_ubva_t)](#urma_ubva_t)
-
-[3.3.2.1.6 urma_seg_attr_t [72](#urma_seg_attr_t)](#urma_seg_attr_t)
-
-[3.3.2.1.7 urma_token_t [72](#urma_token_t)](#urma_token_t)
-
-[3.3.2.2 urma_unregister_seg [73](#urma_unregister_seg)](#urma_unregister_seg)
-
-[3.3.2.3 urma_import_seg [73](#urma_import_seg)](#urma_import_seg)
-
-[3.3.2.3.1 urma_import_seg_flag_t [74](#urma_import_seg_flag_t)](#urma_import_seg_flag_t)
-
-[3.3.2.4 urma_unimport_seg [74](#urma_unimport_seg)](#urma_unimport_seg)
-
-[3.3.3 TP Channel [75](#tp-channel)](#tp-channel)
-
-[3.3.3.1 urma_get_tpn [75](#urma_get_tpn)](#urma_get_tpn)
-
-[3.3.3.2 urma_modify_tp [76](#urma_modify_tp)](#urma_modify_tp)
-
-[3.3.3.2.1 urma_tp_cfg_t [76](#urma_tp_cfg_t)](#urma_tp_cfg_t)
-
-[3.3.3.2.2 urma_tp_cfg_flag_t [76](#urma_tp_cfg_flag_t)](#urma_tp_cfg_flag_t)
-
-[3.3.3.2.3 urma_tp_attr_t [77](#urma_tp_attr_t)](#urma_tp_attr_t)
-
-[3.3.3.2.4 urma_tp_mod_flag_t [77](#urma_tp_mod_flag_t)](#urma_tp_mod_flag_t)
-
-[3.3.3.2.5 urma_tp_state_t [77](#urma_tp_state_t)](#urma_tp_state_t)
-
-[3.3.3.2.6 urma_tp_attr_mask_t [78](#urma_tp_attr_mask_t)](#urma_tp_attr_mask_t)
-
-[3.3.3.3 urma_get_tp_list [78](#urma_get_tp_list)](#urma_get_tp_list)
-
-[3.3.3.3.1 urma_get_tp_cfg_t [79](#urma_get_tp_cfg_t)](#urma_get_tp_cfg_t)
-
-[3.3.3.3.2 urma_get_tp_cfg_flag_t [79](#urma_get_tp_cfg_flag_t)](#urma_get_tp_cfg_flag_t)
-
-[3.3.3.3.3 urma_tp_info_t [79](#urma_tp_info_t)](#urma_tp_info_t)
-
-[3.3.3.4 urma_get_tp_attr [79](#urma_get_tp_attr)](#urma_get_tp_attr)
-
-[3.3.3.4.1 urma_tp_attr_value_t [80](#urma_tp_attr_value_t)](#urma_tp_attr_value_t)
-
-[3.3.3.5 urma_set_tp_attr [80](#urma_set_tp_attr)](#urma_set_tp_attr)
-
-[3.4 数据面 [81](#数据面-1)](#数据面-1)
-
-[3.4.1 post [81](#post)](#post)
-
-[3.4.1.1 urma_post_jfs_wr [81](#urma_post_jfs_wr)](#urma_post_jfs_wr)
-
-[3.4.1.1.1 urma_jfs_wr_t [82](#urma_jfs_wr_t)](#urma_jfs_wr_t)
-
-[3.4.1.1.2 urma_rw_wr_t [82](#urma_rw_wr_t)](#urma_rw_wr_t)
-
-[3.4.1.1.3 urma_send_wr_t [83](#urma_send_wr_t)](#urma_send_wr_t)
-
-[3.4.1.1.4 urma_cas_wr_t [83](#urma_cas_wr_t)](#urma_cas_wr_t)
-
-[3.4.1.1.5 urma_faa_wr_t [83](#urma_faa_wr_t)](#urma_faa_wr_t)
-
-[3.4.1.1.6 urma_opcode_t [83](#urma_opcode_t)](#urma_opcode_t)
-
-[3.4.1.1.7 urma_jfs_wr_flag_t [84](#urma_jfs_wr_flag_t)](#urma_jfs_wr_flag_t)
-
-[3.4.1.1.8 urma_place_order_t [85](#urma_place_order_t)](#urma_place_order_t)
-
-[3.4.1.1.9 urma_sge_t [85](#urma_sge_t)](#urma_sge_t)
-
-[3.4.1.1.10 urma_sg_t [85](#urma_sg_t)](#urma_sg_t)
-
-[3.4.1.2 urma_post_jfr_wr [85](#urma_post_jfr_wr)](#urma_post_jfr_wr)
-
-[3.4.1.2.1 urma_jfr_wr_t [86](#urma_jfr_wr_t)](#urma_jfr_wr_t)
-
-[3.4.1.3 urma_post_jetty_send_wr [86](#urma_post_jetty_send_wr)](#urma_post_jetty_send_wr)
-
-[3.4.1.4 urma_post_jetty_recv_wr [87](#urma_post_jetty_recv_wr)](#urma_post_jetty_recv_wr)
-
-[3.4.2 poll相关 [88](#poll相关)](#poll相关)
-
-[3.4.2.1 urma_poll_jfc [88](#urma_poll_jfc)](#urma_poll_jfc)
-
-[3.4.2.1.1 urma_cr_t [89](#urma_cr_t)](#urma_cr_t)
-
-[3.4.2.1.2 urma_cr_status_t [89](#urma_cr_status_t)](#urma_cr_status_t)
-
-[3.4.2.1.3 urma_cr_opcode_t [90](#urma_cr_opcode_t)](#urma_cr_opcode_t)
-
-[3.4.2.1.4 urma_cr_flag_t [90](#urma_cr_flag_t)](#urma_cr_flag_t)
-
-[3.4.2.1.5 urma_cr_token_t [90](#urma_cr_token_t)](#urma_cr_token_t)
-
-[3.4.2.2 urma_rearm_jfc [90](#urma_rearm_jfc)](#urma_rearm_jfc)
-
-[3.4.2.3 urma_wait_jfc [91](#urma_wait_jfc)](#urma_wait_jfc)
-
-[3.4.2.4 urma_ack_jfc [92](#urma_ack_jfc)](#urma_ack_jfc)
-
-[3.4.3 read/write [93](#readwrite)](#readwrite)
-
-[3.4.3.1 urma_write [93](#urma_write)](#urma_write)
-
-[3.4.3.2 urma_read [94](#urma_read)](#urma_read)
-
-[3.4.4 send/recv [95](#sendrecv)](#sendrecv)
-
-[3.4.4.1 urma_send [95](#urma_send)](#urma_send)
-
-[3.4.4.2 urma_recv [96](#urma_recv)](#urma_recv)
-
-[3.5 其他 [97](#其他)](#其他)
-
-[3.5.1 扩展 [97](#扩展)](#扩展)
-
-[3.5.1.1 urma_user_ctl [97](#urma_user_ctl)](#urma_user_ctl)
-
-[3.5.1.1.1 urma_user_ctl_in_t [98](#urma_user_ctl_in_t)](#urma_user_ctl_in_t)
-
-[3.5.1.1.2 urma_user_ctl_out_t [98](#urma_user_ctl_out_t)](#urma_user_ctl_out_t)
-
-[3.5.2 日志 [98](#日志)](#日志)
-
-[3.5.2.1 urma_register_log_func [98](#urma_register_log_func)](#urma_register_log_func)
-
-[3.5.2.1.1 urma_log_cb_t [99](#urma_log_cb_t)](#urma_log_cb_t)
-
-[3.5.2.2 urma_unregister_log_func [99](#urma_unregister_log_func)](#urma_unregister_log_func)
-
-[3.5.2.3 urma_log_get_level [99](#urma_log_get_level)](#urma_log_get_level)
-
-[3.5.2.3.1 urma_vlog_level_t [100](#urma_vlog_level_t)](#urma_vlog_level_t)
-
-[3.5.2.4 urma_log_set_level [100](#urma_log_set_level)](#urma_log_set_level)
-
-[3.5.2.5 urma_log_get_thread_tag [100](#urma_log_get_thread_tag)](#urma_log_get_thread_tag)
-
-[3.5.2.6 urma_log_set_thread_tag [101](#urma_log_set_thread_tag)](#urma_log_set_thread_tag)
-
-[3.5.3 宏定义 [101](#宏定义)](#宏定义)
-
-[4 URMA内核态API [103](#urma内核态api)](#urma内核态api)
-
-[4.1 编程示例 [103](#编程示例-1)](#编程示例-1)
-
-[4.1.1 管理面 [104](#管理面-2)](#管理面-2)
-
-[4.1.2 控制面 [106](#控制面-2)](#控制面-2)
-
-[4.1.3 数据面 [107](#数据面-2)](#数据面-2)
-
-[4.1.3.1 双边send/recv [107](#双边sendrecv-1)](#双边sendrecv-1)
-
-[4.2 设备及上下文管理 [109](#设备及上下文管理)](#设备及上下文管理)
-
-[4.2.1 ubcore_register_device [109](#ubcore_register_device)](#ubcore_register_device)
-
-[4.2.1.1 ubcore_device [110](#ubcore_device)](#ubcore_device)
-
-[4.2.1.2 ubcore_ops [110](#ubcore_ops)](#ubcore_ops)
-
-[4.2.1.3 ubcore_device_cfg [127](#ubcore_device_cfg)](#ubcore_device_cfg)
-
-[4.2.1.4 ubcore_device_cfg_mask [127](#ubcore_device_cfg_mask)](#ubcore_device_cfg_mask)
-
-[4.2.1.5 ubcore_rc_cfg [128](#ubcore_rc_cfg)](#ubcore_rc_cfg)
-
-[4.2.1.6 ubcore_hash_table [128](#ubcore_hash_table)](#ubcore_hash_table)
-
-[4.2.1.7 ubcore_ht_param [128](#ubcore_ht_param)](#ubcore_ht_param)
-
-[4.2.1.8 ubcore_eid_table [128](#ubcore_eid_table)](#ubcore_eid_table)
-
-[4.2.1.9 ubcore_eid_entry [128](#ubcore_eid_entry)](#ubcore_eid_entry)
-
-[4.2.1.10 ubcore_cg_device [129](#ubcore_cg_device)](#ubcore_cg_device)
-
-[4.2.1.11 ubcore_sip_table [129](#ubcore_sip_table)](#ubcore_sip_table)
-
-[4.2.1.12 ubcore_sip_entry [129](#ubcore_sip_entry)](#ubcore_sip_entry)
-
-[4.2.1.13 ubcore_logic_device [129](#ubcore_logic_device)](#ubcore_logic_device)
-
-[4.2.1.14 ubcore_port_kobj [129](#ubcore_port_kobj)](#ubcore_port_kobj)
-
-[4.2.1.15 ubcore_vtp_bitmap [129](#ubcore_vtp_bitmap)](#ubcore_vtp_bitmap)
-
-[4.2.2 ubcore_unregister_device [130](#ubcore_unregister_device)](#ubcore_unregister_device)
-
-[4.2.3 ubcore_stop_requests [130](#ubcore_stop_requests)](#ubcore_stop_requests)
-
-[4.2.4 ubcore_alloc_ucontext [130](#ubcore_alloc_ucontext)](#ubcore_alloc_ucontext)
-
-[4.2.4.1 ubcore_ucontext [131](#ubcore_ucontext)](#ubcore_ucontext)
-
-[4.2.4.2 ubcore_udrv_priv [131](#ubcore_udrv_priv)](#ubcore_udrv_priv)
-
-[4.2.5 ubcore_free_ucontext [131](#ubcore_free_ucontext)](#ubcore_free_ucontext)
-
-[4.2.6 ubcore_register_client [132](#ubcore_register_client)](#ubcore_register_client)
-
-[4.2.6.1 ubcore_client [132](#ubcore_client)](#ubcore_client)
-
-[4.2.7 ubcore_unregister_client [133](#ubcore_unregister_client)](#ubcore_unregister_client)
-
-[4.2.8 ubcore_set_client_ctx_data [133](#ubcore_set_client_ctx_data)](#ubcore_set_client_ctx_data)
-
-[4.2.9 ubcore_get_client_ctx_data [134](#ubcore_get_client_ctx_data)](#ubcore_get_client_ctx_data)
-
-[4.2.10 ubcore_get_eid_list [134](#ubcore_get_eid_list)](#ubcore_get_eid_list)
-
-[4.2.10.1 ubcore_eid_info [135](#ubcore_eid_info)](#ubcore_eid_info)
-
-[4.2.10.2 ubcore_eid [135](#ubcore_eid)](#ubcore_eid)
-
-[4.2.11 ubcore_free_eid_list [135](#ubcore_free_eid_list)](#ubcore_free_eid_list)
-
-[4.2.12 ubcore_query_device_attr [136](#ubcore_query_device_attr)](#ubcore_query_device_attr)
-
-[4.2.12.1 ubcore_device_attr [136](#ubcore_device_attr)](#ubcore_device_attr)
-
-[4.2.12.2 ubcore_pattern [136](#ubcore_pattern)](#ubcore_pattern)
-
-[4.2.12.3 ubcore_guid [136](#ubcore_guid)](#ubcore_guid)
-
-[4.2.12.4 ubcore_device_cap [137](#ubcore_device_cap)](#ubcore_device_cap)
-
-[4.2.12.5 ubcore_device_feat [138](#ubcore_device_feat)](#ubcore_device_feat)
-
-[4.2.12.6 ubcore_atomic_feat [138](#ubcore_atomic_feat)](#ubcore_atomic_feat)
-
-[4.2.12.7 ubcore_slice [138](#ubcore_slice)](#ubcore_slice)
-
-[4.2.12.8 ubcore_congestion_ctrl_alg [139](#ubcore_congestion_ctrl_alg)](#ubcore_congestion_ctrl_alg)
-
-[4.2.12.9 ubcore_port_attr [139](#ubcore_port_attr)](#ubcore_port_attr)
-
-[4.2.13 ubcore_query_device_status [139](#ubcore_query_device_status)](#ubcore_query_device_status)
-
-[4.2.13.1 ubcore_device_status [139](#ubcore_device_status)](#ubcore_device_status)
-
-[4.2.13.2 ubcore_port_status [140](#ubcore_port_status)](#ubcore_port_status)
-
-[4.2.13.3 ubcore_port_state [140](#ubcore_port_state)](#ubcore_port_state)
-
-[4.2.13.4 ubcore_speed [140](#ubcore_speed)](#ubcore_speed)
-
-[4.2.13.5 ubcore_link_width [140](#ubcore_link_width)](#ubcore_link_width)
-
-[4.2.14 ubcore_cgroup_reg_dev [140](#ubcore_cgroup_reg_dev)](#ubcore_cgroup_reg_dev)
-
-[4.2.15 ubcore_cgroup_unreg_dev [141](#ubcore_cgroup_unreg_dev)](#ubcore_cgroup_unreg_dev)
-
-[4.2.16 ubcore_cgroup_try_charge [141](#ubcore_cgroup_try_charge)](#ubcore_cgroup_try_charge)
-
-[4.2.16.1 struct ubcore_cg_object [142](#struct-ubcore_cg_object)](#struct-ubcore_cg_object)
-
-[4.2.16.2 enum ubcore_resource_type [142](#enum-ubcore_resource_type)](#enum-ubcore_resource_type)
-
-[4.2.17 ubcore_cgroup_uncharge [142](#ubcore_cgroup_uncharge)](#ubcore_cgroup_uncharge)
-
-[4.2.18 ubcore_get_mtu [143](#ubcore_get_mtu)](#ubcore_get_mtu)
-
-[4.2.18.1 ubcore_mtu [143](#ubcore_mtu)](#ubcore_mtu)
-
-[4.2.19 ubcore_recv_req [144](#ubcore_recv_req)](#ubcore_recv_req)
-
-[4.2.19.1 ubcore_req_host [144](#ubcore_req_host)](#ubcore_req_host)
-
-[4.2.19.2 ubcore_req [144](#ubcore_req)](#ubcore_req)
-
-[4.2.19.3 ubcore_msg_opcode [144](#ubcore_msg_opcode)](#ubcore_msg_opcode)
-
-[4.2.20 ubcore_recv_resp [145](#ubcore_recv_resp)](#ubcore_recv_resp)
-
-[4.2.20.1 ubcore_resp [145](#ubcore_resp)](#ubcore_resp)
-
-[4.2.21 ubcore_get_device_by_eid [146](#ubcore_get_device_by_eid)](#ubcore_get_device_by_eid)
-
-[4.2.21.1 ubcore_transport_type [146](#ubcore_transport_type)](#ubcore_transport_type)
-
-[4.3 segment管理 [146](#segment管理)](#segment管理)
-
-[4.3.1 ubcore_alloc_token_id [146](#ubcore_alloc_token_id)](#ubcore_alloc_token_id)
-
-[4.3.1.1 ubcore_token_id_flag [147](#ubcore_token_id_flag)](#ubcore_token_id_flag)
-
-[4.3.1.2 ubcore_udata [147](#ubcore_udata)](#ubcore_udata)
-
-[4.3.1.3 ubcore_token_id [147](#ubcore_token_id)](#ubcore_token_id)
-
-[4.3.2 ubcore_free_token_id [147](#ubcore_free_token_id)](#ubcore_free_token_id)
-
-[4.3.3 ubcore_register_seg [148](#ubcore_register_seg)](#ubcore_register_seg)
-
-[4.3.3.1 ubcore_seg_cfg [149](#ubcore_seg_cfg)](#ubcore_seg_cfg)
-
-[4.3.3.2 ubcore_token [149](#ubcore_token)](#ubcore_token)
-
-[4.3.3.3 ubcore_reg_seg_flag [149](#ubcore_reg_seg_flag)](#ubcore_reg_seg_flag)
-
-[4.3.3.4 ubcore_target_seg [150](#ubcore_target_seg)](#ubcore_target_seg)
-
-[4.3.3.5 ubcore_seg [150](#ubcore_seg)](#ubcore_seg)
-
-[4.3.3.6 ubcore_ubva [150](#ubcore_ubva)](#ubcore_ubva)
-
-[4.3.3.7 ubcore_seg_attr [150](#ubcore_seg_attr)](#ubcore_seg_attr)
-
-[4.3.4 ubcore_unregister_seg [150](#ubcore_unregister_seg)](#ubcore_unregister_seg)
-
-[4.3.5 ubcore_import_seg [151](#ubcore_import_seg)](#ubcore_import_seg)
-
-[4.3.5.1 ubcore_target_seg_cfg [151](#ubcore_target_seg_cfg)](#ubcore_target_seg_cfg)
-
-[4.3.5.2 ubcore_import_seg_flag [152](#ubcore_import_seg_flag)](#ubcore_import_seg_flag)
-
-[4.3.6 ubcore_unimport_seg [152](#ubcore_unimport_seg)](#ubcore_unimport_seg)
-
-[4.4 Jetty管理 [153](#jetty管理)](#jetty管理)
-
-[4.4.1 JFC管理 [153](#jfc管理)](#jfc管理)
-
-[4.4.1.1 ubcore_create_jfc [153](#ubcore_create_jfc)](#ubcore_create_jfc)
-
-[4.4.1.1.1 ubcore_jfc_cfg [154](#ubcore_jfc_cfg)](#ubcore_jfc_cfg)
-
-[4.4.1.1.2 ubcore_jfc_flag [154](#ubcore_jfc_flag)](#ubcore_jfc_flag)
-
-[4.4.1.1.3 ubcore_comp_callback_t [154](#ubcore_comp_callback_t)](#ubcore_comp_callback_t)
-
-[4.4.1.1.4 ubcore_event_callback_t [154](#ubcore_event_callback_t)](#ubcore_event_callback_t)
-
-[4.4.1.1.5 ubcore_jfc [154](#ubcore_jfc)](#ubcore_jfc)
-
-[4.4.1.2 ubcore_modify_jfc [155](#ubcore_modify_jfc)](#ubcore_modify_jfc)
-
-[4.4.1.2.1 ubcore_jfc_attr [155](#ubcore_jfc_attr)](#ubcore_jfc_attr)
-
-[4.4.1.2.2 ubcore_jfc_attr_mask [155](#ubcore_jfc_attr_mask)](#ubcore_jfc_attr_mask)
-
-[4.4.1.3 ubcore_delete_jfc [155](#ubcore_delete_jfc)](#ubcore_delete_jfc)
-
-[4.4.1.4 ubcore_delete_jfc_batch [156](#ubcore_delete_jfc_batch)](#ubcore_delete_jfc_batch)
-
-[4.4.2 JFS管理 [157](#jfs管理)](#jfs管理)
-
-[4.4.2.1 ubcore_create_jfs [157](#ubcore_create_jfs)](#ubcore_create_jfs)
-
-[4.4.2.1.1 ubcore_jfs_cfg [157](#ubcore_jfs_cfg)](#ubcore_jfs_cfg)
-
-[4.4.2.1.2 ubcore_jfs_flag [158](#ubcore_jfs_flag)](#ubcore_jfs_flag)
-
-[4.4.2.1.3 ubcore_transport_mode [158](#ubcore_transport_mode)](#ubcore_transport_mode)
-
-[4.4.2.1.4 ubcore_jfs [158](#ubcore_jfs)](#ubcore_jfs)
-
-[4.4.2.1.5 ubcore_jetty_id [159](#ubcore_jetty_id)](#ubcore_jetty_id)
-
-[4.4.2.2 ubcore_modify_jfs [159](#ubcore_modify_jfs)](#ubcore_modify_jfs)
-
-[4.4.2.2.1 ubcore_jfs_attr [159](#ubcore_jfs_attr)](#ubcore_jfs_attr)
-
-[4.4.2.2.2 ubcore_jfs_attr_mask [159](#ubcore_jfs_attr_mask)](#ubcore_jfs_attr_mask)
-
-[4.4.2.2.3 ubcore_jetty_state [160](#ubcore_jetty_state)](#ubcore_jetty_state)
-
-[4.4.2.3 ubcore_query_jfs [160](#ubcore_query_jfs)](#ubcore_query_jfs)
-
-[4.4.2.4 ubcore_delete_jfs [160](#ubcore_delete_jfs)](#ubcore_delete_jfs)
-
-[4.4.2.5 ubcore_delete_jfs_batch [161](#ubcore_delete_jfs_batch)](#ubcore_delete_jfs_batch)
-
-[4.4.2.6 ubcore_flush_jfs [161](#ubcore_flush_jfs)](#ubcore_flush_jfs)
-
-[4.4.2.6.1 ubcore_cr [162](#ubcore_cr)](#ubcore_cr)
-
-[4.4.2.6.2 ubcore_cr_status [162](#ubcore_cr_status)](#ubcore_cr_status)
-
-[4.4.2.6.3 ubcore_cr_opcode [163](#ubcore_cr_opcode)](#ubcore_cr_opcode)
-
-[4.4.2.6.4 ubcore_cr_flag [163](#ubcore_cr_flag)](#ubcore_cr_flag)
-
-[4.4.2.6.5 ubcore_cr_token [163](#ubcore_cr_token)](#ubcore_cr_token)
-
-[4.4.3 JFR管理 [163](#jfr管理)](#jfr管理)
-
-[4.4.3.1 ubcore_create_jfr [163](#ubcore_create_jfr)](#ubcore_create_jfr)
-
-[4.4.3.1.1 ubcore_jfr_cfg [164](#ubcore_jfr_cfg)](#ubcore_jfr_cfg)
-
-[4.4.3.1.2 ubcore_jfr_flag [164](#ubcore_jfr_flag)](#ubcore_jfr_flag)
-
-[4.4.3.1.3 ubcore_jfr [165](#ubcore_jfr)](#ubcore_jfr)
-
-[4.4.3.2 ubcore_modify_jfr [165](#ubcore_modify_jfr)](#ubcore_modify_jfr)
-
-[4.4.3.2.1 ubcore_jfr_attr [166](#ubcore_jfr_attr)](#ubcore_jfr_attr)
-
-[4.4.3.2.2 ubcore_jfr_attr_mask [166](#ubcore_jfr_attr_mask)](#ubcore_jfr_attr_mask)
-
-[4.4.3.2.3 ubcore_jfr_state [166](#ubcore_jfr_state)](#ubcore_jfr_state)
-
-[4.4.3.3 ubcore_query_jfr [166](#ubcore_query_jfr)](#ubcore_query_jfr)
-
-[4.4.3.4 ubcore_delete_jfr [167](#ubcore_delete_jfr)](#ubcore_delete_jfr)
-
-[4.4.3.5 ubcore_delete_jfr_batch [167](#ubcore_delete_jfr_batch)](#ubcore_delete_jfr_batch)
-
-[4.4.3.6 ubcore_import_jfr [168](#ubcore_import_jfr)](#ubcore_import_jfr)
-
-[4.4.3.6.1 ubcore_tjetty_cfg [168](#ubcore_tjetty_cfg)](#ubcore_tjetty_cfg)
-
-[4.4.3.6.2 ubcore_import_jetty_flag [169](#ubcore_import_jetty_flag)](#ubcore_import_jetty_flag)
-
-[4.4.3.6.3 ubcore_target_type [169](#ubcore_target_type)](#ubcore_target_type)
-
-[4.4.3.6.4 ubcore_jetty_grp_policy [169](#ubcore_jetty_grp_policy)](#ubcore_jetty_grp_policy)
-
-[4.4.3.6.5 ubcore_tjetty [169](#ubcore_tjetty)](#ubcore_tjetty)
-
-[4.4.3.6.6 ubcore_tp [169](#ubcore_tp)](#ubcore_tp)
-
-[4.4.3.6.7 ubcore_vtpn [170](#ubcore_vtpn)](#ubcore_vtpn)
-
-[4.4.3.6.8 ubcore_vtp_state [171](#ubcore_vtp_state)](#ubcore_vtp_state)
-
-[4.4.3.7 ubcore_import_jfr_ex [171](#ubcore_import_jfr_ex)](#ubcore_import_jfr_ex)
-
-[4.4.3.7.1 ubcore_active_tp_cfg [172](#ubcore_active_tp_cfg)](#ubcore_active_tp_cfg)
-
-[4.4.3.7.2 ubcore_active_tp_attr [172](#ubcore_active_tp_attr)](#ubcore_active_tp_attr)
-
-[4.4.3.8 ubcore_unimport_jfr [172](#ubcore_unimport_jfr)](#ubcore_unimport_jfr)
-
-[4.4.4 Jetty管理 [173](#jetty管理-1)](#jetty管理-1)
-
-[4.4.4.1 ubcore_create_jetty [173](#ubcore_create_jetty)](#ubcore_create_jetty)
-
-[4.4.4.1.1 ubcore_jetty_cfg [174](#ubcore_jetty_cfg)](#ubcore_jetty_cfg)
-
-[4.4.4.1.2 ubcore_jetty_flag [174](#ubcore_jetty_flag)](#ubcore_jetty_flag)
-
-[4.4.4.1.3 ubcore_jetty [174](#ubcore_jetty)](#ubcore_jetty)
-
-[4.4.4.2 ubcore_modify_jetty [175](#ubcore_modify_jetty)](#ubcore_modify_jetty)
-
-[4.4.4.2.1 ubcore_jetty_attr [175](#ubcore_jetty_attr)](#ubcore_jetty_attr)
-
-[4.4.4.2.2 ubcore_jetty_attr_mask [175](#ubcore_jetty_attr_mask)](#ubcore_jetty_attr_mask)
-
-[4.4.4.3 ubcore_query_jetty [176](#ubcore_query_jetty)](#ubcore_query_jetty)
-
-[4.4.4.4 ubcore_delete_jetty [176](#ubcore_delete_jetty)](#ubcore_delete_jetty)
-
-[4.4.4.5 ubcore_delete_jetty_batch [177](#ubcore_delete_jetty_batch)](#ubcore_delete_jetty_batch)
-
-[4.4.4.6 ubcore_flush_jetty [178](#ubcore_flush_jetty)](#ubcore_flush_jetty)
-
-[4.4.4.7 ubcore_import_jetty [178](#ubcore_import_jetty)](#ubcore_import_jetty)
-
-[4.4.4.8 ubcore_import_jetty_ex [179](#ubcore_import_jetty_ex)](#ubcore_import_jetty_ex)
-
-[4.4.4.9 ubcore_unimport_jetty [180](#ubcore_unimport_jetty)](#ubcore_unimport_jetty)
-
-[4.4.4.10 ubcore_bind_jetty [180](#ubcore_bind_jetty)](#ubcore_bind_jetty)
-
-[4.4.4.11 ubcore_bind_jetty_ex [181](#ubcore_bind_jetty_ex)](#ubcore_bind_jetty_ex)
-
-[4.4.4.12 ubcore_unbind_jetty [182](#ubcore_unbind_jetty)](#ubcore_unbind_jetty)
-
-[4.4.4.13 ubcore_import_jetty_async [182](#ubcore_import_jetty_async)](#ubcore_import_jetty_async)
-
-[4.4.4.13.1 ubcore_import_cb [183](#ubcore_import_cb)](#ubcore_import_cb)
-
-[4.4.4.14 ubcore_unimport_jetty_async [183](#ubcore_unimport_jetty_async)](#ubcore_unimport_jetty_async)
-
-[4.4.4.14.1 ubcore_unimport_cb [184](#ubcore_unimport_cb)](#ubcore_unimport_cb)
-
-[4.4.4.15 ubcore_bind_jetty_async [184](#ubcore_bind_jetty_async)](#ubcore_bind_jetty_async)
-
-[4.4.4.15.1 ubcore_bind_cb [185](#ubcore_bind_cb)](#ubcore_bind_cb)
-
-[4.4.4.16 ubcore_unbind_jetty_async [185](#ubcore_unbind_jetty_async)](#ubcore_unbind_jetty_async)
-
-[4.4.4.16.1 ubcore_unbind_cb [186](#ubcore_unbind_cb)](#ubcore_unbind_cb)
-
-[4.4.5 Jetty Group管理 [186](#jetty-group管理)](#jetty-group管理)
-
-[4.4.5.1 ubcore_create_jetty_grp [186](#ubcore_create_jetty_grp)](#ubcore_create_jetty_grp)
-
-[4.4.5.1.1 ubcore_jetty_grp_flag [187](#ubcore_jetty_grp_flag)](#ubcore_jetty_grp_flag)
-
-[4.4.5.1.2 ubcore_jetty_grp_cfg [187](#ubcore_jetty_grp_cfg)](#ubcore_jetty_grp_cfg)
-
-[4.4.5.1.3 ubcore_jetty_group [187](#ubcore_jetty_group)](#ubcore_jetty_group)
-
-[4.4.5.2 ubcore_delete_jetty_grp [187](#ubcore_delete_jetty_grp)](#ubcore_delete_jetty_grp)
-
-[4.5 异步事件 [188](#异步事件)](#异步事件)
-
-[4.5.1 ubcore_register_event_handler [188](#ubcore_register_event_handler)](#ubcore_register_event_handler)
-
-[4.5.1.1 ubcore_event_handler [188](#ubcore_event_handler)](#ubcore_event_handler)
-
-[4.5.1.2 ubcore_event [188](#ubcore_event)](#ubcore_event)
-
-[4.5.1.3 ubcore_event_type [189](#ubcore_event_type)](#ubcore_event_type)
-
-[4.5.2 ubcore_unregister_event_handler [189](#ubcore_unregister_event_handler)](#ubcore_unregister_event_handler)
-
-[4.6 Post WR操作 [190](#post-wr操作)](#post-wr操作)
-
-[4.6.1 ubcore_post_jfs_wr [190](#ubcore_post_jfs_wr)](#ubcore_post_jfs_wr)
-
-[4.6.1.1 ubcore_jfs_wr [191](#ubcore_jfs_wr)](#ubcore_jfs_wr)
-
-[4.6.1.2 ubcore_opcode [191](#ubcore_opcode)](#ubcore_opcode)
-
-[4.6.1.3 ubcore_jfs_wr_flag [191](#ubcore_jfs_wr_flag)](#ubcore_jfs_wr_flag)
-
-[4.6.1.4 ubcore_rw_wr [192](#ubcore_rw_wr)](#ubcore_rw_wr)
-
-[4.6.1.5 ubcore_sg [193](#ubcore_sg)](#ubcore_sg)
-
-[4.6.1.6 ubcore_sge [193](#ubcore_sge)](#ubcore_sge)
-
-[4.6.1.7 ubcore_send_wr [193](#ubcore_send_wr)](#ubcore_send_wr)
-
-[4.6.1.8 ubcore_cas_wr [193](#ubcore_cas_wr)](#ubcore_cas_wr)
-
-[4.6.1.9 ubcore_faa_wr [194](#ubcore_faa_wr)](#ubcore_faa_wr)
-
-[4.6.2 ubcore_post_jfr_wr [194](#ubcore_post_jfr_wr)](#ubcore_post_jfr_wr)
-
-[4.6.2.1 ubcore_jfr_wr [194](#ubcore_jfr_wr)](#ubcore_jfr_wr)
-
-[4.6.3 ubcore_post_jetty_send_wr [195](#ubcore_post_jetty_send_wr)](#ubcore_post_jetty_send_wr)
-
-[4.6.4 ubcore_post_jetty_recv_wr [195](#ubcore_post_jetty_recv_wr)](#ubcore_post_jetty_recv_wr)
-
-[4.7 完成记录 [196](#完成记录)](#完成记录)
-
-[4.7.1 ubcore_poll_jfc [196](#ubcore_poll_jfc)](#ubcore_poll_jfc)
-
-[4.7.2 ubcore_rearm_jfc [196](#ubcore_rearm_jfc)](#ubcore_rearm_jfc)
-
-[4.8 ubcore面向UVS接口 [197](#ubcore面向uvs接口)](#ubcore面向uvs接口)
-
-[4.8.1 ubcore_set_port_netdev [197](#ubcore_set_port_netdev)](#ubcore_set_port_netdev)
-
-[4.8.2 ubcore_unset_port_netdev [198](#ubcore_unset_port_netdev)](#ubcore_unset_port_netdev)
-
-[4.8.3 ubcore_put_port_netdev [198](#ubcore_put_port_netdev)](#ubcore_put_port_netdev)
-
-[4.8.4 ubcore_add_ueid [199](#ubcore_add_ueid)](#ubcore_add_ueid)
-
-[4.8.4.1 ubcore_ueid_cfg [199](#ubcore_ueid_cfg)](#ubcore_ueid_cfg)
-
-[4.8.5 ubcore_delete_ueid [199](#ubcore_delete_ueid)](#ubcore_delete_ueid)
-
-[4.8.6 ubcore_config_device [200](#ubcore_config_device)](#ubcore_config_device)
-
-[4.8.7 ubcore_add_sip [201](#ubcore_add_sip)](#ubcore_add_sip)
-
-[4.8.7.1 ubcore_sip_info [201](#ubcore_sip_info)](#ubcore_sip_info)
-
-[4.8.7.2 ubcore_net_addr [201](#ubcore_net_addr)](#ubcore_net_addr)
-
-[4.8.7.3 ubcore_net_addr_type [201](#ubcore_net_addr_type)](#ubcore_net_addr_type)
-
-[4.8.7.4 ubcore_net_addr_union [202](#ubcore_net_addr_union)](#ubcore_net_addr_union)
-
-[4.8.8 ubcore_delete_sip [202](#ubcore_delete_sip)](#ubcore_delete_sip)
-
-[4.9 DFX接口 [202](#dfx接口)](#dfx接口)
-
-[4.9.1 ubcore_query_stats [203](#ubcore_query_stats)](#ubcore_query_stats)
-
-[4.9.1.1 ubcore_stats_key [203](#ubcore_stats_key)](#ubcore_stats_key)
-
-[4.9.1.2 ubcore_stats_val [203](#ubcore_stats_val)](#ubcore_stats_val)
-
-[4.9.2 ubcore_query_resource [204](#ubcore_query_resource)](#ubcore_query_resource)
-
-[4.9.2.1 ubcore_res_key [204](#ubcore_res_key)](#ubcore_res_key)
-
-[4.9.2.2 ubcore_res_val [204](#ubcore_res_val)](#ubcore_res_val)
-
-[4.10 驱动自定义接口 [205](#驱动自定义接口)](#驱动自定义接口)
-
-[4.10.1 ubcore_user_control [205](#ubcore_user_control)](#ubcore_user_control)
-
-[4.10.1.1 ubcore_user_ctl [205](#ubcore_user_ctl)](#ubcore_user_ctl)
-
-[4.10.1.2 ubcore_user_ctl_in [205](#ubcore_user_ctl_in)](#ubcore_user_ctl_in)
-
-[4.10.1.3 ubcore_user_ctl_out [205](#ubcore_user_ctl_out)](#ubcore_user_ctl_out)
-
-[4.11 异步事件分发接口 [206](#异步事件分发接口)](#异步事件分发接口)
-
-[4.11.1 ubcore_dispatch_async_event [206](#ubcore_dispatch_async_event)](#ubcore_dispatch_async_event)
-
-[4.12 内存映射接口 [206](#内存映射接口)](#内存映射接口)
-
-[4.12.1 ubcore_umem_get [206](#ubcore_umem_get)](#ubcore_umem_get)
-
-[4.12.1.1 ubcore_umem [207](#ubcore_umem)](#ubcore_umem)
-
-[4.12.1.2 ubcore_umem_flag [207](#ubcore_umem_flag)](#ubcore_umem_flag)
-
-[4.12.2 ubcore_umem_release [207](#ubcore_umem_release)](#ubcore_umem_release)
-
-[4.12.3 ubcore_umem_find_best_page_size [208](#ubcore_umem_find_best_page_size)](#ubcore_umem_find_best_page_size)
-
-[4.13 其他API [209](#其他api)](#其他api)
-
-[4.13.1 ubcore_dispatch_mgmt_event [209](#ubcore_dispatch_mgmt_event)](#ubcore_dispatch_mgmt_event)
-
-[4.13.1.1 ubcore_mgmt_event [209](#ubcore_mgmt_event)](#ubcore_mgmt_event)
-
-[4.13.1.2 ubcore_mgmt_event_type [209](#ubcore_mgmt_event_type)](#ubcore_mgmt_event_type)
-
-[4.13.2 ubcore_get_tp_list [209](#ubcore_get_tp_list)](#ubcore_get_tp_list)
-
-[4.13.2.1 ubcore_get_tp_cfg [210](#ubcore_get_tp_cfg)](#ubcore_get_tp_cfg)
-
-[4.13.2.2 ubcore_get_tp_cfg_flag [210](#ubcore_get_tp_cfg_flag)](#ubcore_get_tp_cfg_flag)
-
-[4.13.2.3 ubcore_tp_info [210](#ubcore_tp_info)](#ubcore_tp_info)
-
-[4.13.2.4 ubcore_tp_handle [210](#ubcore_tp_handle)](#ubcore_tp_handle)
-
-[4.13.3 ubcore_set_tp_attr [211](#ubcore_set_tp_attr)](#ubcore_set_tp_attr)
-
-[4.13.3.1 ubcore_tp_attr_value [212](#ubcore_tp_attr_value)](#ubcore_tp_attr_value)
-
-[4.13.4 ubcore_get_tp_attr [212](#ubcore_get_tp_attr)](#ubcore_get_tp_attr)
-
-[4.13.5 ubcore_exchange_tp_info [213](#ubcore_exchange_tp_info)](#ubcore_exchange_tp_info)
-
-[5 URMA用户态驱动接口 [214](#urma用户态驱动接口)](#urma用户态驱动接口)
-
-[6 URMA内核态驱动接口 [215](#urma内核态驱动接口)](#urma内核态驱动接口)
-
-[6.1 内核态UB设备管理接口 [215](#内核态ub设备管理接口)](#内核态ub设备管理接口)
-
-[6.1.1 UB设备注册接口 [215](#ub设备注册接口)](#ub设备注册接口)
-
-[6.1.1.1 ubcore_device [216](#ubcore_device-1)](#ubcore_device-1)
-
-[6.1.1.2 ubcore_eid_entry [216](#ubcore_eid_entry-1)](#ubcore_eid_entry-1)
-
-[6.1.1.3 ubcore_eid_table [217](#ubcore_eid_table-1)](#ubcore_eid_table-1)
-
-[6.1.1.4 ubcore_sip_info [217](#ubcore_sip_info-1)](#ubcore_sip_info-1)
-
-[6.1.1.5 ubcore_sip_entry [217](#ubcore_sip_entry-1)](#ubcore_sip_entry-1)
-
-[6.1.1.6 ubcore_sip_table [217](#ubcore_sip_table-1)](#ubcore_sip_table-1)
-
-[6.1.1.7 ubcore_port_kobj [217](#ubcore_port_kobj-1)](#ubcore_port_kobj-1)
-
-[6.1.1.8 ubcore_eid_attr [217](#ubcore_eid_attr)](#ubcore_eid_attr)
-
-[6.1.1.9 ubcore_logic_device [218](#ubcore_logic_device-1)](#ubcore_logic_device-1)
-
-[6.1.1.10 ubcore_vtp_bitmap [218](#ubcore_vtp_bitmap-1)](#ubcore_vtp_bitmap-1)
-
-[6.1.1.11 ubcore_ops [218](#ubcore_ops-1)](#ubcore_ops-1)
-
-[6.1.1.12 ubcore_transport_type [233](#ubcore_transport_type-1)](#ubcore_transport_type-1)
-
-[6.1.2 UB设备解注册接口 [233](#ub设备解注册接口)](#ub设备解注册接口)
-
-[6.1.3 内存映射接口 [234](#内存映射接口-1)](#内存映射接口-1)
-
-[6.1.3.1 ubcore_umem [235](#ubcore_umem-1)](#ubcore_umem-1)
-
-[6.1.3.2 ubcore_umem_flag [235](#ubcore_umem_flag-1)](#ubcore_umem_flag-1)
-
-[6.1.4 内存反映射接口 [235](#内存反映射接口)](#内存反映射接口)
-
-[6.1.5 查找内存最优页面大小接口 [235](#查找内存最优页面大小接口)](#查找内存最优页面大小接口)
-
-[6.1.6 获取MTU接口 [236](#获取mtu接口)](#获取mtu接口)
-
-[6.1.7 获取ue接口 [237](#获取ue接口)](#获取ue接口)
-
-[6.1.7.1 查询ue_idx接口 [237](#查询ue_idx接口)](#查询ue_idx接口)
-
-[6.1.7.2 查询ue状态接口 [237](#查询ue状态接口)](#查询ue状态接口)
-
-[6.1.8 发送和接口消息接口 [238](#发送和接口消息接口)](#发送和接口消息接口)
-
-[6.1.8.1 发送请求ops接口 [238](#发送请求ops接口)](#发送请求ops接口)
-
-[6.1.8.1.1 ubcore_req [238](#ubcore_req-1)](#ubcore_req-1)
-
-[6.1.8.1.2 ubcore_msg_opcode [238](#ubcore_msg_opcode-1)](#ubcore_msg_opcode-1)
-
-[6.1.8.2 发送响应ops接口 [239](#发送响应ops接口)](#发送响应ops接口)
-
-[6.1.8.2.1 ubcore_resp_host [239](#ubcore_resp_host)](#ubcore_resp_host)
-
-[6.1.8.2.2 ubcore_resp [239](#ubcore_resp-1)](#ubcore_resp-1)
-
-[6.1.8.3 接收请求接口 [240](#接收请求接口)](#接收请求接口)
-
-[6.1.8.3.1 ubcore_req_host [240](#ubcore_req_host-1)](#ubcore_req_host-1)
-
-[6.1.8.4 接收响应接口 [240](#接收响应接口)](#接收响应接口)
-
-[6.1.8.5 热迁移请求和响应 [241](#热迁移请求和响应)](#热迁移请求和响应)
-
-[6.1.8.5.1 ubcore_function_mig_req [241](#ubcore_function_mig_req)](#ubcore_function_mig_req)
-
-[6.1.8.5.2 ubcore_mig_resp_status [241](#ubcore_mig_resp_status)](#ubcore_mig_resp_status)
-
-[6.1.8.5.3 ubcore_function_mig_resp [241](#ubcore_function_mig_resp)](#ubcore_function_mig_resp)
-
-[6.1.9 设备属性查询ops接口 [241](#设备属性查询ops接口)](#设备属性查询ops接口)
-
-[6.1.10 设备状态查询ops接口 [242](#设备状态查询ops接口)](#设备状态查询ops接口)
-
-[6.1.11 设备属性配置ops接口 [242](#设备属性配置ops接口)](#设备属性配置ops接口)
-
-[6.1.11.1 ubcore_device_cfg [243](#ubcore_device_cfg-1)](#ubcore_device_cfg-1)
-
-[6.1.11.2 ubcore_device_cfg_mask [243](#ubcore_device_cfg_mask-1)](#ubcore_device_cfg_mask-1)
-
-[6.1.11.3 ubcore_rc_cfg [244](#ubcore_rc_cfg-1)](#ubcore_rc_cfg-1)
-
-[6.1.11.4 ubcore_pattern [244](#ubcore_pattern-1)](#ubcore_pattern-1)
-
-[6.1.12 设备绑定ops接口 [244](#设备绑定ops接口)](#设备绑定ops接口)
-
-[6.1.13 设备解除绑定ops接口 [244](#设备解除绑定ops接口)](#设备解除绑定ops接口)
-
-[6.1.14 设备添加端口ops接口 [245](#设备添加端口ops接口)](#设备添加端口ops接口)
-
-[6.1.15 配置端口和netdev映射 [245](#配置端口和netdev映射)](#配置端口和netdev映射)
-
-[6.1.16 解除端口和netdev映射 [246](#解除端口和netdev映射)](#解除端口和netdev映射)
-
-[6.2 内核态ID配置、地址配置ops接口 [247](#内核态id配置地址配置ops接口)](#内核态id配置地址配置ops接口)
-
-[6.2.1 配置网络地址ops接口 [247](#配置网络地址ops接口)](#配置网络地址ops接口)
-
-[6.2.1.1 ubcore_net_addr [247](#ubcore_net_addr-1)](#ubcore_net_addr-1)
-
-[6.2.1.2 ubcore_net_addr_type [247](#ubcore_net_addr_type-1)](#ubcore_net_addr_type-1)
-
-[6.2.2 删除网络地址ops接口 [248](#删除网络地址ops接口)](#删除网络地址ops接口)
-
-[6.2.3 配置UEID ops接口 [248](#配置ueid-ops接口)](#配置ueid-ops接口)
-
-[6.2.3.1 ubcore_ueid_cfg [249](#ubcore_ueid_cfg-1)](#ubcore_ueid_cfg-1)
-
-[6.2.4 删除UEID ops接口 [249](#删除ueid-ops接口)](#删除ueid-ops接口)
-
-[6.2.5 配置Funtion热迁移状态ops接口 [250](#配置funtion热迁移状态ops接口)](#配置funtion热迁移状态ops接口)
-
-[6.2.5.1 ubcore_mig_state [251](#ubcore_mig_state)](#ubcore_mig_state)
-
-[6.3 内核态context管理ops接口 [251](#内核态context管理ops接口)](#内核态context管理ops接口)
-
-[6.3.1 context创建ops接口 [251](#context创建ops接口)](#context创建ops接口)
-
-[6.3.1.1 ubcore_ucontext [251](#ubcore_ucontext-1)](#ubcore_ucontext-1)
-
-[6.3.1.2 ubcore_udrv_priv [252](#ubcore_udrv_priv-1)](#ubcore_udrv_priv-1)
-
-[6.3.1.3 ubcore_udata [252](#ubcore_udata-1)](#ubcore_udata-1)
-
-[6.3.2 context销毁ops接口 [252](#context销毁ops接口)](#context销毁ops接口)
-
-[6.4 内核态mmap接口 [252](#内核态mmap接口)](#内核态mmap接口)
-
-[6.4.1 mmap ops接口 [252](#mmap-ops接口)](#mmap-ops接口)
-
-[6.5 内核态资源管理ops接口 [253](#内核态资源管理ops接口)](#内核态资源管理ops接口)
-
-[6.5.1 TP协商和配置管理 [253](#tp协商和配置管理)](#tp协商和配置管理)
-
-[6.5.1.1 TPG创建ops接口 [253](#tpg创建ops接口)](#tpg创建ops接口)
-
-[6.5.1.1.1 ubcore_tpg_cfg [254](#ubcore_tpg_cfg)](#ubcore_tpg_cfg)
-
-[6.5.1.1.2 ubcore_tpg_ext [254](#ubcore_tpg_ext)](#ubcore_tpg_ext)
-
-[6.5.1.1.3 ubcore_tpg [254](#ubcore_tpg)](#ubcore_tpg)
-
-[6.5.1.2 TPG销毁ops接口 [255](#tpg销毁ops接口)](#tpg销毁ops接口)
-
-[6.5.1.3 TP创建和使用流程 [255](#tp创建和使用流程)](#tp创建和使用流程)
-
-[6.5.1.4 TP参数协商 [256](#tp参数协商)](#tp参数协商)
-
-[6.5.1.5 TP创建ops接口 [257](#tp创建ops接口)](#tp创建ops接口)
-
-[6.5.1.5.1 ubcore_tp_cfg [258](#ubcore_tp_cfg)](#ubcore_tp_cfg)
-
-[6.5.1.5.2 ubcore_tp_cfg_flag [258](#ubcore_tp_cfg_flag)](#ubcore_tp_cfg_flag)
-
-[6.5.1.5.3 ubcore_transport_mode [258](#ubcore_transport_mode-1)](#ubcore_transport_mode-1)
-
-[6.5.1.5.4 ubcore_tp_state [259](#ubcore_tp_state)](#ubcore_tp_state)
-
-[6.5.1.5.5 ubcore_tp_ext [259](#ubcore_tp_ext)](#ubcore_tp_ext)
-
-[6.5.1.5.6 ubcore_tp_flag [259](#ubcore_tp_flag)](#ubcore_tp_flag)
-
-[6.5.1.5.7 ubcore_tp_cc_alg [259](#ubcore_tp_cc_alg)](#ubcore_tp_cc_alg)
-
-[6.5.1.5.8 ubcore_tp [260](#ubcore_tp-1)](#ubcore_tp-1)
-
-[6.5.1.6 TP修改ops接口 [261](#tp修改ops接口)](#tp修改ops接口)
-
-[6.5.1.6.1 ubcore_tp_attr [261](#ubcore_tp_attr)](#ubcore_tp_attr)
-
-[6.5.1.6.2 ubcore_tp_attr_mask [262](#ubcore_tp_attr_mask)](#ubcore_tp_attr_mask)
-
-[6.5.1.6.3 ubcore_tp_mod_flag [262](#ubcore_tp_mod_flag)](#ubcore_tp_mod_flag)
-
-[6.5.1.7 TP销毁ops接口 [262](#tp销毁ops接口)](#tp销毁ops接口)
-
-[6.5.1.8 多TP创建ops接口 [263](#多tp创建ops接口)](#多tp创建ops接口)
-
-[6.5.1.9 多TP销毁ops接口 [263](#多tp销毁ops接口)](#多tp销毁ops接口)
-
-[6.5.1.10 多TP修改ops接口 [264](#多tp修改ops接口)](#多tp修改ops接口)
-
-[6.5.1.11 查询拥塞控制算法模板ops接口 [265](#查询拥塞控制算法模板ops接口)](#查询拥塞控制算法模板ops接口)
-
-[6.5.1.11.1 ubcore_cc_entry [265](#ubcore_cc_entry)](#ubcore_cc_entry)
-
-[6.5.1.12 VTPN分配ops接口 [265](#vtpn分配ops接口)](#vtpn分配ops接口)
-
-[6.5.1.12.1 ubcore_vtpn [266](#ubcore_vtpn-1)](#ubcore_vtpn-1)
-
-[6.5.1.13 VTPN释放ops接口 [266](#vtpn释放ops接口)](#vtpn释放ops接口)
-
-[6.5.1.14 VTP创建ops接口 [267](#vtp创建ops接口)](#vtp创建ops接口)
-
-[6.5.1.14.1 ubcore_vtp_cfg [267](#ubcore_vtp_cfg)](#ubcore_vtp_cfg)
-
-[6.5.1.14.2 ubcore_vtp_cfg_flag [268](#ubcore_vtp_cfg_flag)](#ubcore_vtp_cfg_flag)
-
-[6.5.1.14.3 ubcore_vtp [268](#ubcore_vtp)](#ubcore_vtp)
-
-[6.5.1.15 VTP销毁ops接口 [268](#vtp销毁ops接口)](#vtp销毁ops接口)
-
-[6.5.1.16 VTP修改ops接口 [269](#vtp修改ops接口)](#vtp修改ops接口)
-
-[6.5.1.16.1 ubcore_vtp_attr [269](#ubcore_vtp_attr)](#ubcore_vtp_attr)
-
-[6.5.1.16.2 ubcore_vtp_attr_mask [269](#ubcore_vtp_attr_mask)](#ubcore_vtp_attr_mask)
-
-[6.5.1.17 UTP创建ops接口 [270](#utp创建ops接口)](#utp创建ops接口)
-
-[6.5.1.17.1 ubcore_utp_cfg [270](#ubcore_utp_cfg)](#ubcore_utp_cfg)
-
-[6.5.1.17.2 ubcore_utp_cfg_flag [271](#ubcore_utp_cfg_flag)](#ubcore_utp_cfg_flag)
-
-[6.5.1.17.3 ubcore_utp [271](#ubcore_utp)](#ubcore_utp)
-
-[6.5.1.18 UTP销毁ops接口 [271](#utp销毁ops接口)](#utp销毁ops接口)
-
-[6.5.1.19 CTP创建ops接口 [271](#ctp创建ops接口)](#ctp创建ops接口)
-
-[6.5.1.19.1 ubcore_ctp_cfg [272](#ubcore_ctp_cfg)](#ubcore_ctp_cfg)
-
-[6.5.1.19.2 ubcore_ctp [272](#ubcore_ctp)](#ubcore_ctp)
-
-[6.5.1.20 CTP销毁ops接口 [272](#ctp销毁ops接口)](#ctp销毁ops接口)
-
-[6.5.2 JFC管理接口 [273](#jfc管理接口)](#jfc管理接口)
-
-[6.5.2.1 JFC创建ops接口 [273](#jfc创建ops接口)](#jfc创建ops接口)
-
-[6.5.2.2 JFC修改ops接口 [273](#jfc修改ops接口)](#jfc修改ops接口)
-
-[6.5.2.3 JFC销毁ops接口 [274](#jfc销毁ops接口)](#jfc销毁ops接口)
-
-[6.5.2.4 JFC rearm ops接口 [274](#jfc-rearm-ops接口)](#jfc-rearm-ops接口)
-
-[6.5.3 JFS管理接口 [275](#jfs管理接口)](#jfs管理接口)
-
-[6.5.3.1 JFS创建ops接口 [275](#jfs创建ops接口)](#jfs创建ops接口)
-
-[6.5.3.2 JFS修改ops接口 [275](#jfs修改ops接口)](#jfs修改ops接口)
-
-[6.5.3.3 JFS查询ops接口 [276](#jfs查询ops接口)](#jfs查询ops接口)
-
-[6.5.3.4 JFS flush ops接口 [276](#jfs-flush-ops接口)](#jfs-flush-ops接口)
-
-[6.5.3.5 JFS销毁ops接口 [277](#jfs销毁ops接口)](#jfs销毁ops接口)
-
-[6.5.4 JFR管理接口 [277](#jfr管理接口)](#jfr管理接口)
-
-[6.5.4.1 JFR创建ops接口 [277](#jfr创建ops接口)](#jfr创建ops接口)
-
-[6.5.4.2 JFR修改ops接口 [278](#jfr修改ops接口)](#jfr修改ops接口)
-
-[6.5.4.3 JFR查询ops接口 [279](#jfr查询ops接口)](#jfr查询ops接口)
-
-[6.5.4.4 JFR销毁ops接口 [279](#jfr销毁ops接口)](#jfr销毁ops接口)
-
-[6.5.4.5 JFR导入ops接口 [280](#jfr导入ops接口)](#jfr导入ops接口)
-
-[6.5.4.6 JFR反导入ops接口 [280](#jfr反导入ops接口)](#jfr反导入ops接口)
-
-[6.5.5 Jetty管理接口 [281](#jetty管理接口)](#jetty管理接口)
-
-[6.5.5.1 Jetty创建ops接口 [281](#jetty创建ops接口)](#jetty创建ops接口)
-
-[6.5.5.2 Jetty修改ops接口 [281](#jetty修改ops接口)](#jetty修改ops接口)
-
-[6.5.5.3 Jetty查询ops接口 [282](#jetty查询ops接口)](#jetty查询ops接口)
-
-[6.5.5.4 Jetty销毁ops接口 [282](#jetty销毁ops接口)](#jetty销毁ops接口)
-
-[6.5.5.5 Jetty导入ops接口 [283](#jetty导入ops接口)](#jetty导入ops接口)
-
-[6.5.5.6 Jetty反导入ops接口 [283](#jetty反导入ops接口)](#jetty反导入ops接口)
-
-[6.5.5.7 Jetty bind ops接口 [284](#jetty-bind-ops接口)](#jetty-bind-ops接口)
-
-[6.5.5.8 Jetty unbind ops接口 [284](#jetty-unbind-ops接口)](#jetty-unbind-ops接口)
-
-[6.5.5.9 Jetty flush ops接口 [285](#jetty-flush-ops接口)](#jetty-flush-ops接口)
-
-[6.5.6 Jetty group管理接口 [285](#jetty-group管理接口)](#jetty-group管理接口)
-
-[6.5.6.1 Jetty group创建ops接口 [285](#jetty-group创建ops接口)](#jetty-group创建ops接口)
-
-[6.5.6.2 Jetty group销毁ops接口 [286](#jetty-group销毁ops接口)](#jetty-group销毁ops接口)
-
-[6.5.7 segment和token管理接口 [286](#segment和token管理接口)](#segment和token管理接口)
-
-[6.5.7.1 token_id分配ops接口 [286](#token_id分配ops接口)](#token_id分配ops接口)
-
-[6.5.7.2 token_id释放ops接口 [287](#token_id释放ops接口)](#token_id释放ops接口)
-
-[6.5.7.3 segment注册ops接口 [287](#segment注册ops接口)](#segment注册ops接口)
-
-[6.5.7.4 segment反注册ops接口 [288](#segment反注册ops接口)](#segment反注册ops接口)
-
-[6.5.7.5 segment导入ops接口 [288](#segment导入ops接口)](#segment导入ops接口)
-
-[6.5.7.6 segment反导入ops接口 [289](#segment反导入ops接口)](#segment反导入ops接口)
-
-[6.5.8 dscp-vl映射管理接口 [289](#dscp-vl映射管理接口)](#dscp-vl映射管理接口)
-
-[6.5.8.1 dscp-vl映射配置接口 [289](#dscp-vl映射配置接口)](#dscp-vl映射配置接口)
-
-[6.5.8.2 dscp-vl映射查询接口 [290](#dscp-vl映射查询接口)](#dscp-vl映射查询接口)
-
-[6.5.9 其他ops接口 [291](#其他ops接口)](#其他ops接口)
-
-[6.5.9.1 驱动自定义控制user_ctl ops接口 [291](#驱动自定义控制user_ctl-ops接口)](#驱动自定义控制user_ctl-ops接口)
-
-[6.5.10 内核态异常事件上报接口 [291](#内核态异常事件上报接口)](#内核态异常事件上报接口)
-
-[6.5.10.1 Jetty异步事件回调接口 [291](#jetty异步事件回调接口)](#jetty异步事件回调接口)
-
-[6.5.10.2 异步事件分发接口 [292](#异步事件分发接口-1)](#异步事件分发接口-1)
-
-[6.5.11 内核态状态查询和DFX 接口 [292](#内核态状态查询和dfx-接口)](#内核态状态查询和dfx-接口)
-
-[6.5.11.1 统计查询ops接口 [292](#统计查询ops接口)](#统计查询ops接口)
-
-[6.5.11.2 资源查询ops接口 [293](#资源查询ops接口)](#资源查询ops接口)
-
-[6.5.12 内核态数据面接口 [294](#内核态数据面接口)](#内核态数据面接口)
-
-[6.5.12.1 JFS发送WR ops接口 [294](#jfs发送wr-ops接口)](#jfs发送wr-ops接口)
-
-[6.5.12.2 JFR接收WR ops接口 [294](#jfr接收wr-ops接口)](#jfr接收wr-ops接口)
-
-[6.5.12.3 Jetty发送WR ops接口 [295](#jetty发送wr-ops接口)](#jetty发送wr-ops接口)
-
-[6.5.12.4 Jetty接收WR ops接口 [295](#jetty接收wr-ops接口)](#jetty接收wr-ops接口)
-
-[6.5.12.5 rearm JFC ops接口 [296](#rearm-jfc-ops接口)](#rearm-jfc-ops接口)
-
-[6.5.12.6 轮询 JFC ops接口 [296](#轮询-jfc-ops接口)](#轮询-jfc-ops接口)
-
-[7 UVS编程接口 [298](#uvs编程接口)](#uvs编程接口)
-
-[7.1 uvs_set_topo_info [298](#uvs_set_topo_info)](#uvs_set_topo_info)
-
-[7.2 编程示例 [298](#编程示例-2)](#编程示例-2)
-
 # 修订记录
 
 1.  修订记录表
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------
-  修订时间    修订章节   修订内容简介   修复问题单连接或问题背景   修订人员
-  ----------- ---------- -------------- -------------------------- --------------------------------------------------------------------------------------------
-  2026.2.12   ALL        文档基线                                  \@qianguoxin、@jerry_lilijun、@wuyuyan_98、@pinchen2025、@autoreconf、@heyu_1014、@wdmmsyf
+| 修订时间 | 修订章节 | 修订内容简介 | 修复问题单连接或问题背景 | 修订人员 |
+| --- | --- | --- | --- | --- |
+| 2026.2.12 | ALL | 文档基线 | | @qianguoxin、@jerry_lilijun、@wuyuyan_98、@pinchen2025、@autoreconf、@heyu_1014、@wdmmsyf |
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
-# 使用约束与限制
+# 目 录
 
-![](figures/urma-api-constraint-01.png)
+- [修订记录](#修订记录)
+
+- [1 使用约束与限制](#1-使用约束与限制)
+    - [1.1 版本配套约束](#11-版本配套约束)
+
+- [2 URMA用户态API](#2-urma用户态api)
+    - [2.1 编程示例](#21-编程示例)
+        - [2.1.1 管理面](#211-管理面)
+        - [2.1.2 控制面](#212-控制面)
+        - [2.1.3 数据面](#213-数据面)
+            - [2.1.3.1 单边read/write](#2131-单边readwrite)
+            - [2.1.3.2 双边send/recv](#2132-双边sendrecv)
+        - [2.1.4 开源示例](#214-开源示例)
+    - [2.2 管理面](#22-管理面)
+        - [2.2.1 初始化](#221-初始化)
+            - [2.2.1.1 urma_init](#2211-urma_init)
+                - [2.2.1.1.1 urma_init_attr_t](#22111-urma_init_attr_t)
+                - [2.2.1.1.2 urma_status_t](#22112-urma_status_t)
+            - [2.2.1.2 urma_uninit](#2212-urma_uninit)
+        - [2.2.2 设备及上下文](#222-设备及上下文)
+            - [2.2.2.1 device](#2221-device)
+                - [2.2.2.1.1 urma_get_device_list](#22211-urma_get_device_list)
+                - [2.2.2.1.2 urma_free_device_list](#22212-urma_free_device_list)
+                - [2.2.2.1.3 urma_get_device_by_name](#22213-urma_get_device_by_name)
+                - [2.2.2.1.4 urma_get_device_by_eid](#22214-urma_get_device_by_eid)
+                - [2.2.2.1.5 urma_query_device](#22215-urma_query_device)
+            - [2.2.2.2 eid](#2222-eid)
+                - [2.2.2.2.1 urma_get_eid_list](#22221-urma_get_eid_list)
+                - [2.2.2.2.2 urma_free_eid_list](#22222-urma_free_eid_list)
+            - [2.2.2.3 uasid](#2223-uasid)
+                - [2.2.2.3.1 urma_get_uasid](#22231-urma_get_uasid)
+            - [2.2.2.4 context](#2224-context)
+                - [2.2.2.4.1 urma_create_context](#22241-urma_create_context)
+                - [2.2.2.4.2 urma_delete_context](#22242-urma_delete_context)
+                - [2.2.2.4.3 urma_set_context_opt](#22243-urma_set_context_opt)
+            - [2.2.2.5 net addr](#2225-net-addr)
+                - [2.2.2.5.1 urma_get_net_addr_list](#22251-urma_get_net_addr_list)
+                - [2.2.2.5.2 urma_free_net_addr_list](#22252-urma_free_net_addr_list)
+        - [2.2.3 安全](#223-安全)
+            - [2.2.3.1 urma_alloc_token_id](#2231-urma_alloc_token_id)
+                - [2.2.3.1.1 urma_token_id_t](#22311-urma_token_id_t)
+                - [2.2.3.1.2 urma_token_id_flag_t](#22312-urma_token_id_flag_t)
+            - [2.2.3.2 urma_alloc_token_id_ex](#2232-urma_alloc_token_id_ex)
+            - [2.2.3.3 urma_free_token_id](#2233-urma_free_token_id)
+    - [2.3 控制面](#23-控制面)
+        - [2.3.1 Jetty相关](#231-jetty相关)
+            - [2.3.1.1 JFC](#2311-jfc)
+                - [2.3.1.1.1 urma_create_jfc](#23111-urma_create_jfc)
+                - [2.3.1.1.2 urma_modify_jfc](#23112-urma_modify_jfc)
+                - [2.3.1.1.3 urma_delete_jfc](#23113-urma_delete_jfc)
+                - [2.3.1.1.4 urma_delete_jfc_batch](#23114-urma_delete_jfc_batch)
+            - [2.3.1.2 JFCE](#2312-jfce)
+                - [2.3.1.2.1 urma_create_jfce](#23121-urma_create_jfce)
+                - [2.3.1.2.2 urma_delete_jfce](#23122-urma_delete_jfce)
+            - [2.3.1.3 JFAE](#2313-jfae)
+                - [2.3.1.3.1 urma_get_async_event](#23131-urma_get_async_event)
+                - [2.3.1.3.2 urma_ack_async_event](#23132-urma_ack_async_event)
+            - [2.3.1.4 JFS](#2314-jfs)
+                - [2.3.1.4.1 urma_create_jfs](#23141-urma_create_jfs)
+                - [2.3.1.4.2 urma_modify_jfs](#23142-urma_modify_jfs)
+                - [2.3.1.4.3 urma_query_jfs](#23143-urma_query_jfs)
+                - [2.3.1.4.4 urma_delete_jfs](#23144-urma_delete_jfs)
+                - [2.3.1.4.5 urma_delete_jfs_batch](#23145-urma_delete_jfs_batch)
+                - [2.3.1.4.6 urma_flush_jfs](#23146-urma_flush_jfs)
+            - [2.3.1.5 JFR](#2315-jfr)
+                - [2.3.1.5.1 urma_create_jfr](#23151-urma_create_jfr)
+                - [2.3.1.5.2 urma_modify_jfr](#23152-urma_modify_jfr)
+                - [2.3.1.5.3 urma_query_jfr](#23153-urma_query_jfr)
+                - [2.3.1.5.4 urma_delete_jfr](#23154-urma_delete_jfr)
+                - [2.3.1.5.5 urma_delete_jfr_batch](#23155-urma_delete_jfr_batch)
+                - [2.3.1.5.6 urma_import_jfr](#23156-urma_import_jfr)
+                - [2.3.1.5.7 urma_import_jfr_ex](#23157-urma_import_jfr_ex)
+                - [2.3.1.5.8 urma_unimport_jfr](#23158-urma_unimport_jfr)
+            - [2.3.1.6 Jetty](#2316-jetty)
+                - [2.3.1.6.1 urma_create_jetty](#23161-urma_create_jetty)
+                - [2.3.1.6.2 urma_modify_jetty](#23162-urma_modify_jetty)
+                - [2.3.1.6.3 urma_query_jetty](#23163-urma_query_jetty)
+                - [2.3.1.6.4 urma_delete_jetty](#23164-urma_delete_jetty)
+                - [2.3.1.6.5 urma_delete_jetty_batch](#23165-urma_delete_jetty_batch)
+                - [2.3.1.6.6 urma_import_jetty](#23166-urma_import_jetty)
+                - [2.3.1.6.7 urma_import_jetty_ex](#23167-urma_import_jetty_ex)
+                - [2.3.1.6.8 urma_unimport_jetty](#23168-urma_unimport_jetty)
+                - [2.3.1.6.9 urma_bind_jetty](#23169-urma_bind_jetty)
+                - [2.3.1.6.10 urma_bind_jetty_ex](#231610-urma_bind_jetty_ex)
+                - [2.3.1.6.11 urma_unbind_jetty](#231611-urma_unbind_jetty)
+                - [2.3.1.6.12 urma_flush_jetty](#231612-urma_flush_jetty)
+                - [2.3.1.6.13 urma_import_jetty_async](#231613-urma_import_jetty_async)
+                - [2.3.1.6.14 urma_unimport_jetty_async](#231614-urma_unimport_jetty_async)
+                - [2.3.1.6.15 urma_bind_jetty_async](#231615-urma_bind_jetty_async)
+                - [2.3.1.6.16 urma_unbind_jetty_async](#231616-urma_unbind_jetty_async)
+                - [2.3.1.6.17 urma_create_notifier](#231617-urma_create_notifier)
+                - [2.3.1.6.18 urma_delete_notifier](#231618-urma_delete_notifier)
+                - [2.3.1.6.19 urma_wait_notify](#231619-urma_wait_notify)
+                - [2.3.1.6.20 urma_ack_notify](#231620-urma_ack_notify)
+            - [2.3.1.7 Jetty Group](#2317-jetty-group)
+                - [2.3.1.7.1 urma_create_jetty_grp](#23171-urma_create_jetty_grp)
+                - [2.3.1.7.2 urma_delete_jetty_grp](#23172-urma_delete_jetty_grp)
+        - [2.3.2 Segment](#232-segment)
+            - [2.3.2.1 urma_register_seg](#2321-urma_register_seg)
+                - [2.3.2.1.1 urma_seg_cfg_t](#23211-urma_seg_cfg_t)
+                - [2.3.2.1.2 urma_reg_seg_flag_t](#23212-urma_reg_seg_flag_t)
+                - [2.3.2.1.3 urma_target_seg_t](#23213-urma_target_seg_t)
+                - [2.3.2.1.4 urma_seg_t](#23214-urma_seg_t)
+                - [2.3.2.1.5 urma_ubva_t](#23215-urma_ubva_t)
+                - [2.3.2.1.6 urma_seg_attr_t](#23216-urma_seg_attr_t)
+                - [2.3.2.1.7 urma_token_t](#23217-urma_token_t)
+            - [2.3.2.2 urma_unregister_seg](#2322-urma_unregister_seg)
+            - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
+                - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
+            - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
+        - [2.3.3 TP Channel](#233-tp-channel)
+            - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
+            - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
+                - [2.3.3.2.1 urma_tp_cfg_t](#23321-urma_tp_cfg_t)
+                - [2.3.3.2.2 urma_tp_cfg_flag_t](#23322-urma_tp_cfg_flag_t)
+                - [2.3.3.2.3 urma_tp_attr_t](#23323-urma_tp_attr_t)
+                - [2.3.3.2.4 urma_tp_mod_flag_t](#23324-urma_tp_mod_flag_t)
+                - [2.3.3.2.5 urma_tp_state_t](#23325-urma_tp_state_t)
+                - [2.3.3.2.6 urma_tp_attr_mask_t](#23326-urma_tp_attr_mask_t)
+            - [2.3.3.3 urma_get_tp_list](#2333-urma_get_tp_list)
+                - [2.3.3.3.1 urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t)
+                - [2.3.3.3.2 urma_get_tp_cfg_flag_t](#23332-urma_get_tp_cfg_flag_t)
+                - [2.3.3.3.3 urma_tp_info_t](#23333-urma_tp_info_t)
+            - [2.3.3.4 urma_get_tp_attr](#2334-urma_get_tp_attr)
+                - [2.3.3.4.1 urma_tp_attr_value_t](#23341-urma_tp_attr_value_t)
+            - [2.3.3.5 urma_set_tp_attr](#2335-urma_set_tp_attr)
+    - [2.4 数据面](#24-数据面)
+        - [2.4.1 post](#241-post)
+            - [2.4.1.1 urma_post_jfs_wr](#2411-urma_post_jfs_wr)
+                - [2.4.1.1.1 urma_jfs_wr_t](#24111-urma_jfs_wr_t)
+                - [2.4.1.1.2 urma_rw_wr_t](#24112-urma_rw_wr_t)
+                - [2.4.1.1.3 urma_send_wr_t](#24113-urma_send_wr_t)
+                - [2.4.1.1.4 urma_cas_wr_t](#24114-urma_cas_wr_t)
+                - [2.4.1.1.5 urma_faa_wr_t](#24115-urma_faa_wr_t)
+                - [2.4.1.1.6 urma_opcode_t](#24116-urma_opcode_t)
+                - [2.4.1.1.7 urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t)
+                - [2.4.1.1.8 urma_place_order_t](#24118-urma_place_order_t)
+                - [2.4.1.1.9 urma_sge_t](#24119-urma_sge_t)
+                - [2.4.1.1.10 urma_sg_t](#241110-urma_sg_t)
+            - [2.4.1.2 urma_post_jfr_wr](#2412-urma_post_jfr_wr)
+                - [2.4.1.2.1 urma_jfr_wr_t](#24121-urma_jfr_wr_t)
+            - [2.4.1.3 urma_post_jetty_send_wr](#2413-urma_post_jetty_send_wr)
+            - [2.4.1.4 urma_post_jetty_recv_wr](#2414-urma_post_jetty_recv_wr)
+        - [2.4.2 poll相关](#242-poll相关)
+            - [2.4.2.1 urma_poll_jfc](#2421-urma_poll_jfc)
+                - [2.4.2.1.1 urma_cr_t](#24211-urma_cr_t)
+                - [2.4.2.1.2 urma_cr_status_t](#24212-urma_cr_status_t)
+                - [2.4.2.1.3 urma_cr_opcode_t](#24213-urma_cr_opcode_t)
+                - [2.4.2.1.4 urma_cr_flag_t](#24214-urma_cr_flag_t)
+                - [2.4.2.1.5 urma_cr_token_t](#24215-urma_cr_token_t)
+            - [2.4.2.2 urma_rearm_jfc](#2422-urma_rearm_jfc)
+            - [2.4.2.3 urma_wait_jfc](#2423-urma_wait_jfc)
+            - [2.4.2.4 urma_ack_jfc](#2424-urma_ack_jfc)
+        - [2.4.3 read/write](#243-readwrite)
+            - [2.4.3.1 urma_write](#2431-urma_write)
+            - [2.4.3.2 urma_read](#2432-urma_read)
+        - [2.4.4 send/recv](#244-sendrecv)
+            - [2.4.4.1 urma_send](#2441-urma_send)
+            - [2.4.4.2 urma_recv](#2442-urma_recv)
+    - [2.5 其他](#25-其他)
+        - [2.5.1 扩展](#251-扩展)
+            - [2.5.1.1 urma_user_ctl](#2511-urma_user_ctl)
+                - [2.5.1.1.1 urma_user_ctl_in_t](#25111-urma_user_ctl_in_t)
+                - [2.5.1.1.2 urma_user_ctl_out_t](#25112-urma_user_ctl_out_t)
+        - [2.5.2 日志](#252-日志)
+            - [2.5.2.1 urma_register_log_func](#2521-urma_register_log_func)
+                - [2.5.2.1.1 urma_log_cb_t](#25211-urma_log_cb_t)
+            - [2.5.2.2 urma_unregister_log_func](#2522-urma_unregister_log_func)
+            - [2.5.2.3 urma_log_get_level](#2523-urma_log_get_level)
+                - [2.5.2.3.1 urma_vlog_level_t](#25231-urma_vlog_level_t)
+            - [2.5.2.4 urma_log_set_level](#2524-urma_log_set_level)
+            - [2.5.2.5 urma_log_get_thread_tag](#2525-urma_log_get_thread_tag)
+            - [2.5.2.6 urma_log_set_thread_tag](#2526-urma_log_set_thread_tag)
+        - [2.5.3 宏定义](#253-宏定义)
+
+- [3 URMA内核态API](#3-urma内核态api)
+    - [3.1 编程示例](#31-编程示例)
+        - [3.1.1 管理面](#311-管理面)
+        - [3.1.2 控制面](#312-控制面)
+        - [3.1.3 数据面](#313-数据面)
+            - [3.1.3.1 双边send/recv](#3131-双边sendrecv)
+    - [3.2 设备及上下文管理](#32-设备及上下文管理)
+        - [3.2.1 ubcore_register_device](#321-ubcore_register_device)
+            - [3.2.1.1 ubcore_device](#3211-ubcore_device)
+            - [3.2.1.2 ubcore_ops](#3212-ubcore_ops)
+            - [3.2.1.3 ubcore_device_cfg](#3213-ubcore_device_cfg)
+            - [3.2.1.4 ubcore_device_cfg_mask](#3214-ubcore_device_cfg_mask)
+            - [3.2.1.5 ubcore_rc_cfg](#3215-ubcore_rc_cfg)
+            - [3.2.1.6 ubcore_hash_table](#3216-ubcore_hash_table)
+            - [3.2.1.7 ubcore_ht_param](#3217-ubcore_ht_param)
+            - [3.2.1.8 ubcore_eid_table](#3218-ubcore_eid_table)
+            - [3.2.1.9 ubcore_eid_entry](#3219-ubcore_eid_entry)
+            - [3.2.1.10 ubcore_cg_device](#32110-ubcore_cg_device)
+            - [3.2.1.11 ubcore_sip_table](#32111-ubcore_sip_table)
+            - [3.2.1.12 ubcore_sip_entry](#32112-ubcore_sip_entry)
+            - [3.2.1.13 ubcore_logic_device](#32113-ubcore_logic_device)
+            - [3.2.1.14 ubcore_port_kobj](#32114-ubcore_port_kobj)
+            - [3.2.1.15 ubcore_vtp_bitmap](#32115-ubcore_vtp_bitmap)
+        - [3.2.2 ubcore_unregister_device](#322-ubcore_unregister_device)
+        - [3.2.3 ubcore_stop_requests](#323-ubcore_stop_requests)
+        - [3.2.4 ubcore_alloc_ucontext](#324-ubcore_alloc_ucontext)
+            - [3.2.4.1 ubcore_ucontext](#3241-ubcore_ucontext)
+            - [3.2.4.2 ubcore_udrv_priv](#3242-ubcore_udrv_priv)
+        - [3.2.5 ubcore_free_ucontext](#325-ubcore_free_ucontext)
+        - [3.2.6 ubcore_register_client](#326-ubcore_register_client)
+            - [3.2.6.1 ubcore_client](#3261-ubcore_client)
+        - [3.2.7 ubcore_unregister_client](#327-ubcore_unregister_client)
+        - [3.2.8 ubcore_set_client_ctx_data](#328-ubcore_set_client_ctx_data)
+        - [3.2.9 ubcore_get_client_ctx_data](#329-ubcore_get_client_ctx_data)
+        - [3.2.10 ubcore_get_eid_list](#3210-ubcore_get_eid_list)
+            - [3.2.10.1 ubcore_eid_info](#32101-ubcore_eid_info)
+            - [3.2.10.2 ubcore_eid](#32102-ubcore_eid)
+        - [3.2.11 ubcore_free_eid_list](#3211-ubcore_free_eid_list)
+        - [3.2.12 ubcore_query_device_attr](#3212-ubcore_query_device_attr)
+            - [3.2.12.1 ubcore_device_attr](#32121-ubcore_device_attr)
+            - [3.2.12.2 ubcore_pattern](#32122-ubcore_pattern)
+            - [3.2.12.3 ubcore_guid](#32123-ubcore_guid)
+            - [3.2.12.4 ubcore_device_cap](#32124-ubcore_device_cap)
+            - [3.2.12.5 ubcore_device_feat](#32125-ubcore_device_feat)
+            - [3.2.12.6 ubcore_atomic_feat](#32126-ubcore_atomic_feat)
+            - [3.2.12.7 ubcore_slice](#32127-ubcore_slice)
+            - [3.2.12.8 ubcore_congestion_ctrl_alg](#32128-ubcore_congestion_ctrl_alg)
+            - [3.2.12.9 ubcore_port_attr](#32129-ubcore_port_attr)
+        - [3.2.13 ubcore_query_device_status](#3213-ubcore_query_device_status)
+            - [3.2.13.1 ubcore_device_status](#32131-ubcore_device_status)
+            - [3.2.13.2 ubcore_port_status](#32132-ubcore_port_status)
+            - [3.2.13.3 ubcore_port_state](#32133-ubcore_port_state)
+            - [3.2.13.4 ubcore_speed](#32134-ubcore_speed)
+            - [3.2.13.5 ubcore_link_width](#32135-ubcore_link_width)
+        - [3.2.14 ubcore_cgroup_reg_dev](#3214-ubcore_cgroup_reg_dev)
+        - [3.2.15 ubcore_cgroup_unreg_dev](#3215-ubcore_cgroup_unreg_dev)
+        - [3.2.16 ubcore_cgroup_try_charge](#3216-ubcore_cgroup_try_charge)
+            - [3.2.16.1 struct ubcore_cg_object](#32161-struct-ubcore_cg_object)
+            - [3.2.16.2 enum ubcore_resource_type](#32162-enum-ubcore_resource_type)
+        - [3.2.17 ubcore_cgroup_uncharge](#3217-ubcore_cgroup_uncharge)
+        - [3.2.18 ubcore_get_mtu](#3218-ubcore_get_mtu)
+            - [3.2.18.1 ubcore_mtu](#32181-ubcore_mtu)
+        - [3.2.19 ubcore_recv_req](#3219-ubcore_recv_req)
+            - [3.2.19.1 ubcore_req_host](#32191-ubcore_req_host)
+            - [3.2.19.2 ubcore_req](#32192-ubcore_req)
+            - [3.2.19.3 ubcore_msg_opcode](#32193-ubcore_msg_opcode)
+        - [3.2.20 ubcore_recv_resp](#3220-ubcore_recv_resp)
+            - [3.2.20.1 ubcore_resp](#32201-ubcore_resp)
+        - [3.2.21 ubcore_get_device_by_eid](#3221-ubcore_get_device_by_eid)
+            - [3.2.21.1 ubcore_transport_type](#32211-ubcore_transport_type)
+    - [3.3 segment管理](#33-segment管理)
+        - [3.3.1 ubcore_alloc_token_id](#331-ubcore_alloc_token_id)
+            - [3.3.1.1 ubcore_token_id_flag](#3311-ubcore_token_id_flag)
+            - [3.3.1.2 ubcore_udata](#3312-ubcore_udata)
+            - [3.3.1.3 ubcore_token_id](#3313-ubcore_token_id)
+        - [3.3.2 ubcore_free_token_id](#332-ubcore_free_token_id)
+        - [3.3.3 ubcore_register_seg](#333-ubcore_register_seg)
+            - [3.3.3.1 ubcore_seg_cfg](#3331-ubcore_seg_cfg)
+            - [3.3.3.2 ubcore_token](#3332-ubcore_token)
+            - [3.3.3.3 ubcore_reg_seg_flag](#3333-ubcore_reg_seg_flag)
+            - [3.3.3.4 ubcore_target_seg](#3334-ubcore_target_seg)
+            - [3.3.3.5 ubcore_seg](#3335-ubcore_seg)
+            - [3.3.3.6 ubcore_ubva](#3336-ubcore_ubva)
+            - [3.3.3.7 ubcore_seg_attr](#3337-ubcore_seg_attr)
+        - [3.3.4 ubcore_unregister_seg](#334-ubcore_unregister_seg)
+        - [3.3.5 ubcore_import_seg](#335-ubcore_import_seg)
+            - [3.3.5.1 ubcore_target_seg_cfg](#3351-ubcore_target_seg_cfg)
+            - [3.3.5.2 ubcore_import_seg_flag](#3352-ubcore_import_seg_flag)
+        - [3.3.6 ubcore_unimport_seg](#336-ubcore_unimport_seg)
+    - [3.4 Jetty管理](#34-jetty管理)
+        - [3.4.1 JFC管理](#341-jfc管理)
+            - [3.4.1.1 ubcore_create_jfc](#3411-ubcore_create_jfc)
+                - [3.4.1.1.1 ubcore_jfc_cfg](#34111-ubcore_jfc_cfg)
+                - [3.4.1.1.2 ubcore_jfc_flag](#34112-ubcore_jfc_flag)
+                - [3.4.1.1.3 ubcore_comp_callback_t](#34113-ubcore_comp_callback_t)
+                - [3.4.1.1.4 ubcore_event_callback_t](#34114-ubcore_event_callback_t)
+                - [3.4.1.1.5 ubcore_jfc](#34115-ubcore_jfc)
+            - [3.4.1.2 ubcore_modify_jfc](#3412-ubcore_modify_jfc)
+                - [3.4.1.2.1 ubcore_jfc_attr](#34121-ubcore_jfc_attr)
+                - [3.4.1.2.2 ubcore_jfc_attr_mask](#34122-ubcore_jfc_attr_mask)
+            - [3.4.1.3 ubcore_delete_jfc](#3413-ubcore_delete_jfc)
+            - [3.4.1.4 ubcore_delete_jfc_batch](#3414-ubcore_delete_jfc_batch)
+        - [3.4.2 JFS管理](#342-jfs管理)
+            - [3.4.2.1 ubcore_create_jfs](#3421-ubcore_create_jfs)
+                - [3.4.2.1.1 ubcore_jfs_cfg](#34211-ubcore_jfs_cfg)
+                - [3.4.2.1.2 ubcore_jfs_flag](#34212-ubcore_jfs_flag)
+                - [3.4.2.1.3 ubcore_transport_mode](#34213-ubcore_transport_mode)
+                - [3.4.2.1.4 ubcore_jfs](#34214-ubcore_jfs)
+                - [3.4.2.1.5 ubcore_jetty_id](#34215-ubcore_jetty_id)
+            - [3.4.2.2 ubcore_modify_jfs](#3422-ubcore_modify_jfs)
+                - [3.4.2.2.1 ubcore_jfs_attr](#34221-ubcore_jfs_attr)
+                - [3.4.2.2.2 ubcore_jfs_attr_mask](#34222-ubcore_jfs_attr_mask)
+                - [3.4.2.2.3 ubcore_jetty_state](#34223-ubcore_jetty_state)
+            - [3.4.2.3 ubcore_query_jfs](#3423-ubcore_query_jfs)
+            - [3.4.2.4 ubcore_delete_jfs](#3424-ubcore_delete_jfs)
+            - [3.4.2.5 ubcore_delete_jfs_batch](#3425-ubcore_delete_jfs_batch)
+            - [3.4.2.6 ubcore_flush_jfs](#3426-ubcore_flush_jfs)
+                - [3.4.2.6.1 ubcore_cr](#34261-ubcore_cr)
+                - [3.4.2.6.2 ubcore_cr_status](#34262-ubcore_cr_status)
+                - [3.4.2.6.3 ubcore_cr_opcode](#34263-ubcore_cr_opcode)
+                - [3.4.2.6.4 ubcore_cr_flag](#34264-ubcore_cr_flag)
+                - [3.4.2.6.5 ubcore_cr_token](#34265-ubcore_cr_token)
+        - [3.4.3 JFR管理](#343-jfr管理)
+            - [3.4.3.1 ubcore_create_jfr](#3431-ubcore_create_jfr)
+                - [3.4.3.1.1 ubcore_jfr_cfg](#34311-ubcore_jfr_cfg)
+                - [3.4.3.1.2 ubcore_jfr_flag](#34312-ubcore_jfr_flag)
+                - [3.4.3.1.3 ubcore_jfr](#34313-ubcore_jfr)
+            - [3.4.3.2 ubcore_modify_jfr](#3432-ubcore_modify_jfr)
+                - [3.4.3.2.1 ubcore_jfr_attr](#34321-ubcore_jfr_attr)
+                - [3.4.3.2.2 ubcore_jfr_attr_mask](#34322-ubcore_jfr_attr_mask)
+                - [3.4.3.2.3 ubcore_jfr_state](#34323-ubcore_jfr_state)
+            - [3.4.3.3 ubcore_query_jfr](#3433-ubcore_query_jfr)
+            - [3.4.3.4 ubcore_delete_jfr](#3434-ubcore_delete_jfr)
+            - [3.4.3.5 ubcore_delete_jfr_batch](#3435-ubcore_delete_jfr_batch)
+            - [3.4.3.6 ubcore_import_jfr](#3436-ubcore_import_jfr)
+                - [3.4.3.6.1 ubcore_tjetty_cfg](#34361-ubcore_tjetty_cfg)
+                - [3.4.3.6.2 ubcore_import_jetty_flag](#34362-ubcore_import_jetty_flag)
+                - [3.4.3.6.3 ubcore_target_type](#34363-ubcore_target_type)
+                - [3.4.3.6.4 ubcore_jetty_grp_policy](#34364-ubcore_jetty_grp_policy)
+                - [3.4.3.6.5 ubcore_tjetty](#34365-ubcore_tjetty)
+                - [3.4.3.6.6 ubcore_tp](#34366-ubcore_tp)
+                - [3.4.3.6.7 ubcore_vtpn](#34367-ubcore_vtpn)
+                - [3.4.3.6.8 ubcore_vtp_state](#34368-ubcore_vtp_state)
+            - [3.4.3.7 ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex)
+                - [3.4.3.7.1 ubcore_active_tp_cfg](#34371-ubcore_active_tp_cfg)
+                - [3.4.3.7.2 ubcore_active_tp_attr](#34372-ubcore_active_tp_attr)
+            - [3.4.3.8 ubcore_unimport_jfr](#3438-ubcore_unimport_jfr)
+        - [3.4.4 Jetty管理](#344-jetty管理)
+            - [3.4.4.1 ubcore_create_jetty](#3441-ubcore_create_jetty)
+                - [3.4.4.1.1 ubcore_jetty_cfg](#34411-ubcore_jetty_cfg)
+                - [3.4.4.1.2 ubcore_jetty_flag](#34412-ubcore_jetty_flag)
+                - [3.4.4.1.3 ubcore_jetty](#34413-ubcore_jetty)
+            - [3.4.4.2 ubcore_modify_jetty](#3442-ubcore_modify_jetty)
+                - [3.4.4.2.1 ubcore_jetty_attr](#34421-ubcore_jetty_attr)
+                - [3.4.4.2.2 ubcore_jetty_attr_mask](#34422-ubcore_jetty_attr_mask)
+            - [3.4.4.3 ubcore_query_jetty](#3443-ubcore_query_jetty)
+            - [3.4.4.4 ubcore_delete_jetty](#3444-ubcore_delete_jetty)
+            - [3.4.4.5 ubcore_delete_jetty_batch](#3445-ubcore_delete_jetty_batch)
+            - [3.4.4.6 ubcore_flush_jetty](#3446-ubcore_flush_jetty)
+            - [3.4.4.7 ubcore_import_jetty](#3447-ubcore_import_jetty)
+            - [3.4.4.8 ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex)
+            - [3.4.4.9 ubcore_unimport_jetty](#3449-ubcore_unimport_jetty)
+            - [3.4.4.10 ubcore_bind_jetty](#34410-ubcore_bind_jetty)
+            - [3.4.4.11 ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex)
+            - [3.4.4.12 ubcore_unbind_jetty](#34412-ubcore_unbind_jetty)
+            - [3.4.4.13 ubcore_import_jetty_async](#34413-ubcore_import_jetty_async)
+                - [3.4.4.13.1 ubcore_import_cb](#344131-ubcore_import_cb)
+            - [3.4.4.14 ubcore_unimport_jetty_async](#34414-ubcore_unimport_jetty_async)
+                - [3.4.4.14.1 ubcore_unimport_cb](#344141-ubcore_unimport_cb)
+            - [3.4.4.15 ubcore_bind_jetty_async](#34415-ubcore_bind_jetty_async)
+                - [3.4.4.15.1 ubcore_bind_cb](#344151-ubcore_bind_cb)
+            - [3.4.4.16 ubcore_unbind_jetty_async](#34416-ubcore_unbind_jetty_async)
+                - [3.4.4.16.1 ubcore_unbind_cb](#344161-ubcore_unbind_cb)
+        - [3.4.5 Jetty Group管理](#345-jetty-group管理)
+            - [3.4.5.1 ubcore_create_jetty_grp](#3451-ubcore_create_jetty_grp)
+                - [3.4.5.1.1 ubcore_jetty_grp_flag](#34511-ubcore_jetty_grp_flag)
+                - [3.4.5.1.2 ubcore_jetty_grp_cfg](#34512-ubcore_jetty_grp_cfg)
+                - [3.4.5.1.3 ubcore_jetty_group](#34513-ubcore_jetty_group)
+            - [3.4.5.2 ubcore_delete_jetty_grp](#3452-ubcore_delete_jetty_grp)
+    - [3.5 异步事件](#35-异步事件)
+        - [3.5.1 ubcore_register_event_handler](#351-ubcore_register_event_handler)
+            - [3.5.1.1 ubcore_event_handler](#3511-ubcore_event_handler)
+            - [3.5.1.2 ubcore_event](#3512-ubcore_event)
+            - [3.5.1.3 ubcore_event_type](#3513-ubcore_event_type)
+        - [3.5.2 ubcore_unregister_event_handler](#352-ubcore_unregister_event_handler)
+    - [3.6 Post WR操作](#36-post-wr操作)
+        - [3.6.1 ubcore_post_jfs_wr](#361-ubcore_post_jfs_wr)
+            - [3.6.1.1 ubcore_jfs_wr](#3611-ubcore_jfs_wr)
+            - [3.6.1.2 ubcore_opcode](#3612-ubcore_opcode)
+            - [3.6.1.3 ubcore_jfs_wr_flag](#3613-ubcore_jfs_wr_flag)
+            - [3.6.1.4 ubcore_rw_wr](#3614-ubcore_rw_wr)
+            - [3.6.1.5 ubcore_sg](#3615-ubcore_sg)
+            - [3.6.1.6 ubcore_sge](#3616-ubcore_sge)
+            - [3.6.1.7 ubcore_send_wr](#3617-ubcore_send_wr)
+            - [3.6.1.8 ubcore_cas_wr](#3618-ubcore_cas_wr)
+            - [3.6.1.9 ubcore_faa_wr](#3619-ubcore_faa_wr)
+        - [3.6.2 ubcore_post_jfr_wr](#362-ubcore_post_jfr_wr)
+            - [3.6.2.1 ubcore_jfr_wr](#3621-ubcore_jfr_wr)
+        - [3.6.3 ubcore_post_jetty_send_wr](#363-ubcore_post_jetty_send_wr)
+        - [3.6.4 ubcore_post_jetty_recv_wr](#364-ubcore_post_jetty_recv_wr)
+    - [3.7 完成记录](#37-完成记录)
+        - [3.7.1 ubcore_poll_jfc](#371-ubcore_poll_jfc)
+        - [3.7.2 ubcore_rearm_jfc](#372-ubcore_rearm_jfc)
+    - [3.8 ubcore面向UVS接口](#38-ubcore面向uvs接口)
+        - [3.8.1 ubcore_set_port_netdev](#381-ubcore_set_port_netdev)
+        - [3.8.2 ubcore_unset_port_netdev](#382-ubcore_unset_port_netdev)
+        - [3.8.3 ubcore_put_port_netdev](#383-ubcore_put_port_netdev)
+        - [3.8.4 ubcore_add_ueid](#384-ubcore_add_ueid)
+            - [3.8.4.1 ubcore_ueid_cfg](#3841-ubcore_ueid_cfg)
+        - [3.8.5 ubcore_delete_ueid](#385-ubcore_delete_ueid)
+        - [3.8.6 ubcore_config_device](#386-ubcore_config_device)
+        - [3.8.7 ubcore_add_sip](#387-ubcore_add_sip)
+            - [3.8.7.1 ubcore_sip_info](#3871-ubcore_sip_info)
+            - [3.8.7.2 ubcore_net_addr](#3872-ubcore_net_addr)
+            - [3.8.7.3 ubcore_net_addr_type](#3873-ubcore_net_addr_type)
+            - [3.8.7.4 ubcore_net_addr_union](#3874-ubcore_net_addr_union)
+        - [3.8.8 ubcore_delete_sip](#388-ubcore_delete_sip)
+    - [3.9 DFX接口](#39-dfx接口)
+        - [3.9.1 ubcore_query_stats](#391-ubcore_query_stats)
+            - [3.9.1.1 ubcore_stats_key](#3911-ubcore_stats_key)
+            - [3.9.1.2 ubcore_stats_val](#3912-ubcore_stats_val)
+        - [3.9.2 ubcore_query_resource](#392-ubcore_query_resource)
+            - [3.9.2.1 ubcore_res_key](#3921-ubcore_res_key)
+            - [3.9.2.2 ubcore_res_val](#3922-ubcore_res_val)
+    - [3.10 驱动自定义接口](#310-驱动自定义接口)
+        - [3.10.1 ubcore_user_control](#3101-ubcore_user_control)
+            - [3.10.1.1 ubcore_user_ctl](#31011-ubcore_user_ctl)
+            - [3.10.1.2 ubcore_user_ctl_in](#31012-ubcore_user_ctl_in)
+            - [3.10.1.3 ubcore_user_ctl_out](#31013-ubcore_user_ctl_out)
+    - [3.11 异步事件分发接口](#311-异步事件分发接口)
+        - [3.11.1 ubcore_dispatch_async_event](#3111-ubcore_dispatch_async_event)
+    - [3.12 内存映射接口](#312-内存映射接口)
+        - [3.12.1 ubcore_umem_get](#3121-ubcore_umem_get)
+            - [3.12.1.1 ubcore_umem](#31211-ubcore_umem)
+            - [3.12.1.2 ubcore_umem_flag](#31212-ubcore_umem_flag)
+        - [3.12.2 ubcore_umem_release](#3122-ubcore_umem_release)
+        - [3.12.3 ubcore_umem_find_best_page_size](#3123-ubcore_umem_find_best_page_size)
+    - [3.13 其他API](#313-其他api)
+        - [3.13.1 ubcore_dispatch_mgmt_event](#3131-ubcore_dispatch_mgmt_event)
+            - [3.13.1.1 ubcore_mgmt_event](#31311-ubcore_mgmt_event)
+            - [3.13.1.2 ubcore_mgmt_event_type](#31312-ubcore_mgmt_event_type)
+        - [3.13.2 ubcore_get_tp_list](#3132-ubcore_get_tp_list)
+            - [3.13.2.1 ubcore_get_tp_cfg](#31321-ubcore_get_tp_cfg)
+            - [3.13.2.2 ubcore_get_tp_cfg_flag](#31322-ubcore_get_tp_cfg_flag)
+            - [3.13.2.3 ubcore_tp_info](#31323-ubcore_tp_info)
+            - [3.13.2.4 ubcore_tp_handle](#31324-ubcore_tp_handle)
+        - [3.13.3 ubcore_set_tp_attr](#3133-ubcore_set_tp_attr)
+            - [3.13.3.1 ubcore_tp_attr_value](#31331-ubcore_tp_attr_value)
+        - [3.13.4 ubcore_get_tp_attr](#3134-ubcore_get_tp_attr)
+        - [3.13.5 ubcore_exchange_tp_info](#3135-ubcore_exchange_tp_info)
+
+- [4 URMA用户态驱动接口](#4-urma用户态驱动接口)
+
+- [5 URMA内核态驱动接口](#5-urma内核态驱动接口)
+    - [5.1 内核态UB设备管理接口](#51-内核态ub设备管理接口)
+        - [5.1.1 UB设备注册接口](#511-ub设备注册接口)
+            - [5.1.1.1 ubcore_device](#5111-ubcore_device)
+            - [5.1.1.2 ubcore_eid_entry](#5112-ubcore_eid_entry)
+            - [5.1.1.3 ubcore_eid_table](#5113-ubcore_eid_table)
+            - [5.1.1.4 ubcore_sip_info](#5114-ubcore_sip_info)
+            - [5.1.1.5 ubcore_sip_entry](#5115-ubcore_sip_entry)
+            - [5.1.1.6 ubcore_sip_table](#5116-ubcore_sip_table)
+            - [5.1.1.7 ubcore_port_kobj](#5117-ubcore_port_kobj)
+            - [5.1.1.8 ubcore_eid_attr](#5118-ubcore_eid_attr)
+            - [5.1.1.9 ubcore_logic_device](#5119-ubcore_logic_device)
+            - [5.1.1.10 ubcore_vtp_bitmap](#51110-ubcore_vtp_bitmap)
+            - [5.1.1.11 ubcore_ops](#51111-ubcore_ops)
+            - [5.1.1.12 ubcore_transport_type](#51112-ubcore_transport_type)
+        - [5.1.2 UB设备解注册接口](#512-ub设备解注册接口)
+        - [5.1.3 内存映射接口](#513-内存映射接口)
+            - [5.1.3.1 ubcore_umem](#5131-ubcore_umem)
+            - [5.1.3.2 ubcore_umem_flag](#5132-ubcore_umem_flag)
+        - [5.1.4 内存反映射接口](#514-内存反映射接口)
+        - [5.1.5 查找内存最优页面大小接口](#515-查找内存最优页面大小接口)
+        - [5.1.6 获取MTU接口](#516-获取mtu接口)
+        - [5.1.7 获取ue接口](#517-获取ue接口)
+            - [5.1.7.1 查询ue_idx接口](#5171-查询ue_idx接口)
+            - [5.1.7.2 查询ue状态接口](#5172-查询ue状态接口)
+        - [5.1.8 发送和接口消息接口](#518-发送和接口消息接口)
+            - [5.1.8.1 发送请求ops接口](#5181-发送请求ops接口)
+                - [5.1.8.1.1 ubcore_req](#51811-ubcore_req)
+                - [5.1.8.1.2 ubcore_msg_opcode](#51812-ubcore_msg_opcode)
+            - [5.1.8.2 发送响应ops接口](#5182-发送响应ops接口)
+                - [5.1.8.2.1 ubcore_resp_host](#51821-ubcore_resp_host)
+                - [5.1.8.2.2 ubcore_resp](#51822-ubcore_resp)
+            - [5.1.8.3 接收请求接口](#5183-接收请求接口)
+                - [5.1.8.3.1 ubcore_req_host](#51831-ubcore_req_host)
+            - [5.1.8.4 接收响应接口](#5184-接收响应接口)
+            - [5.1.8.5 热迁移请求和响应](#5185-热迁移请求和响应)
+                - [5.1.8.5.1 ubcore_function_mig_req](#51851-ubcore_function_mig_req)
+                - [5.1.8.5.2 ubcore_mig_resp_status](#51852-ubcore_mig_resp_status)
+                - [5.1.8.5.3 ubcore_function_mig_resp](#51853-ubcore_function_mig_resp)
+        - [5.1.9 设备属性查询ops接口](#519-设备属性查询ops接口)
+        - [5.1.10 设备状态查询ops接口](#5110-设备状态查询ops接口)
+        - [5.1.11 设备属性配置ops接口](#5111-设备属性配置ops接口)
+            - [5.1.11.1 ubcore_device_cfg](#51111-ubcore_device_cfg)
+            - [5.1.11.2 ubcore_device_cfg_mask](#51112-ubcore_device_cfg_mask)
+            - [5.1.11.3 ubcore_rc_cfg](#51113-ubcore_rc_cfg)
+            - [5.1.11.4 ubcore_pattern](#51114-ubcore_pattern)
+        - [5.1.12 设备绑定ops接口](#5112-设备绑定ops接口)
+        - [5.1.13 设备解除绑定ops接口](#5113-设备解除绑定ops接口)
+        - [5.1.14 设备添加端口ops接口](#5114-设备添加端口ops接口)
+        - [5.1.15 配置端口和netdev映射](#5115-配置端口和netdev映射)
+        - [5.1.16 解除端口和netdev映射](#5116-解除端口和netdev映射)
+    - [5.2 内核态ID配置、地址配置ops接口](#52-内核态id配置地址配置ops接口)
+        - [5.2.1 配置网络地址ops接口](#521-配置网络地址ops接口)
+            - [5.2.1.1 ubcore_net_addr](#5211-ubcore_net_addr)
+            - [5.2.1.2 ubcore_net_addr_type](#5212-ubcore_net_addr_type)
+        - [5.2.2 删除网络地址ops接口](#522-删除网络地址ops接口)
+        - [5.2.3 配置UEID ops接口](#523-配置ueid-ops接口)
+            - [5.2.3.1 ubcore_ueid_cfg](#5231-ubcore_ueid_cfg)
+        - [5.2.4 删除UEID ops接口](#524-删除ueid-ops接口)
+        - [5.2.5 配置Funtion热迁移状态ops接口](#525-配置funtion热迁移状态ops接口)
+            - [5.2.5.1 ubcore_mig_state](#5251-ubcore_mig_state)
+    - [5.3 内核态context管理ops接口](#53-内核态context管理ops接口)
+        - [5.3.1 context创建ops接口](#531-context创建ops接口)
+            - [5.3.1.1 ubcore_ucontext](#5311-ubcore_ucontext)
+            - [5.3.1.2 ubcore_udrv_priv](#5312-ubcore_udrv_priv)
+            - [5.3.1.3 ubcore_udata](#5313-ubcore_udata)
+        - [5.3.2 context销毁ops接口](#532-context销毁ops接口)
+    - [5.4 内核态mmap接口](#54-内核态mmap接口)
+        - [5.4.1 mmap ops接口](#541-mmap-ops接口)
+    - [5.5 内核态资源管理ops接口](#55-内核态资源管理ops接口)
+        - [5.5.1 TP协商和配置管理](#551-tp协商和配置管理)
+            - [5.5.1.1 TPG创建ops接口](#5511-tpg创建ops接口)
+                - [5.5.1.1.1 ubcore_tpg_cfg](#55111-ubcore_tpg_cfg)
+                - [5.5.1.1.2 ubcore_tpg_ext](#55112-ubcore_tpg_ext)
+                - [5.5.1.1.3 ubcore_tpg](#55113-ubcore_tpg)
+            - [5.5.1.2 TPG销毁ops接口](#5512-tpg销毁ops接口)
+            - [5.5.1.3 TP创建和使用流程](#5513-tp创建和使用流程)
+            - [5.5.1.4 TP参数协商](#5514-tp参数协商)
+            - [5.5.1.5 TP创建ops接口](#5515-tp创建ops接口)
+                - [5.5.1.5.1 ubcore_tp_cfg](#55151-ubcore_tp_cfg)
+                - [5.5.1.5.2 ubcore_tp_cfg_flag](#55152-ubcore_tp_cfg_flag)
+                - [5.5.1.5.3 ubcore_transport_mode](#55153-ubcore_transport_mode)
+                - [5.5.1.5.4 ubcore_tp_state](#55154-ubcore_tp_state)
+                - [5.5.1.5.5 ubcore_tp_ext](#55155-ubcore_tp_ext)
+                - [5.5.1.5.6 ubcore_tp_flag](#55156-ubcore_tp_flag)
+                - [5.5.1.5.7 ubcore_tp_cc_alg](#55157-ubcore_tp_cc_alg)
+                - [5.5.1.5.8 ubcore_tp](#55158-ubcore_tp)
+            - [5.5.1.6 TP修改ops接口](#5516-tp修改ops接口)
+                - [5.5.1.6.1 ubcore_tp_attr](#55161-ubcore_tp_attr)
+                - [5.5.1.6.2 ubcore_tp_attr_mask](#55162-ubcore_tp_attr_mask)
+                - [5.5.1.6.3 ubcore_tp_mod_flag](#55163-ubcore_tp_mod_flag)
+            - [5.5.1.7 TP销毁ops接口](#5517-tp销毁ops接口)
+            - [5.5.1.8 多TP创建ops接口](#5518-多tp创建ops接口)
+            - [5.5.1.9 多TP销毁ops接口](#5519-多tp销毁ops接口)
+            - [5.5.1.10 多TP修改ops接口](#55110-多tp修改ops接口)
+            - [5.5.1.11 查询拥塞控制算法模板ops接口](#55111-查询拥塞控制算法模板ops接口)
+                - [5.5.1.11.1 ubcore_cc_entry](#551111-ubcore_cc_entry)
+            - [5.5.1.12 VTPN分配ops接口](#55112-vtpn分配ops接口)
+                - [5.5.1.12.1 ubcore_vtpn](#551121-ubcore_vtpn)
+            - [5.5.1.13 VTPN释放ops接口](#55113-vtpn释放ops接口)
+            - [5.5.1.14 VTP创建ops接口](#55114-vtp创建ops接口)
+                - [5.5.1.14.1 ubcore_vtp_cfg](#551141-ubcore_vtp_cfg)
+                - [5.5.1.14.2 ubcore_vtp_cfg_flag](#551142-ubcore_vtp_cfg_flag)
+                - [5.5.1.14.3 ubcore_vtp](#551143-ubcore_vtp)
+            - [5.5.1.15 VTP销毁ops接口](#55115-vtp销毁ops接口)
+            - [5.5.1.16 VTP修改ops接口](#55116-vtp修改ops接口)
+                - [5.5.1.16.1 ubcore_vtp_attr](#551161-ubcore_vtp_attr)
+                - [5.5.1.16.2 ubcore_vtp_attr_mask](#551162-ubcore_vtp_attr_mask)
+            - [5.5.1.17 UTP创建ops接口](#55117-utp创建ops接口)
+                - [5.5.1.17.1 ubcore_utp_cfg](#551171-ubcore_utp_cfg)
+                - [5.5.1.17.2 ubcore_utp_cfg_flag](#551172-ubcore_utp_cfg_flag)
+                - [5.5.1.17.3 ubcore_utp](#551173-ubcore_utp)
+            - [5.5.1.18 UTP销毁ops接口](#55118-utp销毁ops接口)
+            - [5.5.1.19 CTP创建ops接口](#55119-ctp创建ops接口)
+                - [5.5.1.19.1 ubcore_ctp_cfg](#551191-ubcore_ctp_cfg)
+                - [5.5.1.19.2 ubcore_ctp](#551192-ubcore_ctp)
+            - [5.5.1.20 CTP销毁ops接口](#55120-ctp销毁ops接口)
+        - [5.5.2 JFC管理接口](#552-jfc管理接口)
+            - [5.5.2.1 JFC创建ops接口](#5521-jfc创建ops接口)
+            - [5.5.2.2 JFC修改ops接口](#5522-jfc修改ops接口)
+            - [5.5.2.3 JFC销毁ops接口](#5523-jfc销毁ops接口)
+            - [5.5.2.4 JFC rearm ops接口](#5524-jfc-rearm-ops接口)
+        - [5.5.3 JFS管理接口](#553-jfs管理接口)
+            - [5.5.3.1 JFS创建ops接口](#5531-jfs创建ops接口)
+            - [5.5.3.2 JFS修改ops接口](#5532-jfs修改ops接口)
+            - [5.5.3.3 JFS查询ops接口](#5533-jfs查询ops接口)
+            - [5.5.3.4 JFS flush ops接口](#5534-jfs-flush-ops接口)
+            - [5.5.3.5 JFS销毁ops接口](#5535-jfs销毁ops接口)
+        - [5.5.4 JFR管理接口](#554-jfr管理接口)
+            - [5.5.4.1 JFR创建ops接口](#5541-jfr创建ops接口)
+            - [5.5.4.2 JFR修改ops接口](#5542-jfr修改ops接口)
+            - [5.5.4.3 JFR查询ops接口](#5543-jfr查询ops接口)
+            - [5.5.4.4 JFR销毁ops接口](#5544-jfr销毁ops接口)
+            - [5.5.4.5 JFR导入ops接口](#5545-jfr导入ops接口)
+            - [5.5.4.6 JFR反导入ops接口](#5546-jfr反导入ops接口)
+        - [5.5.5 Jetty管理接口](#555-jetty管理接口)
+            - [5.5.5.1 Jetty创建ops接口](#5551-jetty创建ops接口)
+            - [5.5.5.2 Jetty修改ops接口](#5552-jetty修改ops接口)
+            - [5.5.5.3 Jetty查询ops接口](#5553-jetty查询ops接口)
+            - [5.5.5.4 Jetty销毁ops接口](#5554-jetty销毁ops接口)
+            - [5.5.5.5 Jetty导入ops接口](#5555-jetty导入ops接口)
+            - [5.5.5.6 Jetty反导入ops接口](#5556-jetty反导入ops接口)
+            - [5.5.5.7 Jetty bind ops接口](#5557-jetty-bind-ops接口)
+            - [5.5.5.8 Jetty unbind ops接口](#5558-jetty-unbind-ops接口)
+            - [5.5.5.9 Jetty flush ops接口](#5559-jetty-flush-ops接口)
+        - [5.5.6 Jetty group管理接口](#556-jetty-group管理接口)
+            - [5.5.6.1 Jetty group创建ops接口](#5561-jetty-group创建ops接口)
+            - [5.5.6.2 Jetty group销毁ops接口](#5562-jetty-group销毁ops接口)
+        - [5.5.7 segment和token管理接口](#557-segment和token管理接口)
+            - [5.5.7.1 token_id分配ops接口](#5571-token_id分配ops接口)
+            - [5.5.7.2 token_id释放ops接口](#5572-token_id释放ops接口)
+            - [5.5.7.3 segment注册ops接口](#5573-segment注册ops接口)
+            - [5.5.7.4 segment反注册ops接口](#5574-segment反注册ops接口)
+            - [5.5.7.5 segment导入ops接口](#5575-segment导入ops接口)
+            - [5.5.7.6 segment反导入ops接口](#5576-segment反导入ops接口)
+        - [5.5.8 dscp-vl映射管理接口](#558-dscp-vl映射管理接口)
+            - [5.5.8.1 dscp-vl映射配置接口](#5581-dscp-vl映射配置接口)
+            - [5.5.8.2 dscp-vl映射查询接口](#5582-dscp-vl映射查询接口)
+        - [5.5.9 其他ops接口](#559-其他ops接口)
+            - [5.5.9.1 驱动自定义控制user_ctl ops接口](#5591-驱动自定义控制user_ctl-ops接口)
+        - [5.5.10 内核态异常事件上报接口](#5510-内核态异常事件上报接口)
+            - [5.5.10.1 Jetty异步事件回调接口](#55101-jetty异步事件回调接口)
+            - [5.5.10.2 异步事件分发接口](#55102-异步事件分发接口)
+        - [5.5.11 内核态状态查询和DFX 接口](#5511-内核态状态查询和dfx-接口)
+            - [5.5.11.1 统计查询ops接口](#55111-统计查询ops接口)
+            - [5.5.11.2 资源查询ops接口](#55112-资源查询ops接口)
+        - [5.5.12 内核态数据面接口](#5512-内核态数据面接口)
+            - [5.5.12.1 JFS发送WR ops接口](#55121-jfs发送wr-ops接口)
+            - [5.5.12.2 JFR接收WR ops接口](#55122-jfr接收wr-ops接口)
+            - [5.5.12.3 Jetty发送WR ops接口](#55123-jetty发送wr-ops接口)
+            - [5.5.12.4 Jetty接收WR ops接口](#55124-jetty接收wr-ops接口)
+            - [5.5.12.5 rearm JFC ops接口](#55125-rearm-jfc-ops接口)
+            - [5.5.12.6 轮询 JFC ops接口](#55126-轮询-jfc-ops接口)
+
+- [6 UVS编程接口](#6-uvs编程接口)
+    - [6.1 uvs_set_topo_info](#61-uvs_set_topo_info)
+    - [6.2 编程示例](#62-编程示例)
+
+# 1 使用约束与限制
+
+![](figures/urma_warning.png)
 
 1、数据面参数合法性由API调用者保证，URMA只校验入参的一级指针是否为空；指针对应的类型的成员变量为指针的，不执行空指针校验。
 
@@ -1219,29 +626,18 @@
 
 3、管理面参数指针校验针对URMA和驱动来说遵循谁使用谁校验的基本原则，同时不允许对API调用者授权范围外的环境产生恶意影响。
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 urma框架的API不支持任意并发调用，如使用jetty对象与销毁jetty对应并发等会导致不可预期的异常，需要用户保证调用逻辑正确。
 
 这些对象包括urma_context、jetty、segment、jfc、jfr、jfs等。
 
-[2.1 版本配套约束](#版本配套约束)
+## 1.1 版本配套约束
 
-## 版本配套约束
+---
+# 2 URMA用户态API
 
-# URMA用户态API
-
-[3.1 编程示例](#编程示例)
-
-[3.2 管理面](#管理面-1)
-
-[3.3 控制面](#控制面-1)
-
-[3.4 数据面](#数据面-1)
-
-[3.5 其他](#其他)
-
-## 编程示例
+## 2.1 编程示例
 
 本节示例主要基于URMA_TM_RM传输模式的jetty，具体配置（如Jetty depth等）需由用户确定。用户也可自行尝试其他用法（如其他传输模式）。
 
@@ -1251,298 +647,314 @@ urma框架的API不支持任意并发调用，如使用jetty对象与销毁jetty
 
 下面分管理面、控制面、数据面分别展示参数填写、API使用。反初始化和初始化相关操作对称，且不涉及复杂参数填写，故不再赘述。
 
-### 管理面
+### 2.1.1 管理面
 
-- Initiator和Target分别调用[3.2.1.1](#urma_init) [urma_init](#urma_init)初始化资源。
+- Initiator和Target分别调用[3.2.1.1](#2211-urma_init) [urma_init](#2211-urma_init)初始化资源。
 
-urma_init_attr_t init_attr = {\
-.token = 0,\
-.uasid = 0\
-};\
+```c
+urma_init_attr_t init_attr = {
+    .token = 0,
+    .uasid = 0
+};
 urma_init(&init_attr);
+```
 
 - Initiator和Target分别获取device和eid（以使用一个device，一个eid为例），查询device属性（规格等）。
 
-int dev_num = 1;\
-urma_device_t \*\*device_list = [3.2.2.1.1](#urma_get_device_list) [urma_get_device_list](#urma_get_device_list)(&dev_num);\
-// 用户从设备列表中选取设备urma_dev\
-urma_device_attr_t dev_attr = {0};\
-[3.2.2.1.5](#urma_query_device) [urma_query_device](#urma_query_device)(urma_dev, &dev_attr);\
-\
-uint32_t eid_cnt = 1;\
-urma_eid_info_t \*eid_list = [3.2.2.2.1](#urma_get_eid_list) [urma_get_eid_list](#urma_get_eid_list)(urma_dev, &eid_cnt);\
-// 用户从eid列表中选取eid对应的eid_index，下面以eid_list\[0\]为例\
-uint32_t eid_index = eid_list\[0\].eid_index;
+```c
+int dev_num = 1;
+urma_device_t **device_list = urma_get_device_list(&dev_num);
+// 用户从设备列表中选取设备urma_dev
+urma_device_attr_t dev_attr = {0};
+urma_query_device(urma_dev, &dev_attr);
+uint32_t eid_cnt = 1;
+urma_eid_info_t *eid_list = urma_get_eid_list(urma_dev, &eid_cnt);
+// 用户从eid列表中选取eid对应的eid_index，下面以eid_list[0]为例
+uint32_t eid_index = eid_list[0].eid_index;
+```
 
 - Initiator和Target分别创建 urma_ctx上下文。
 
-urma_context_t \*urma_ctx = [3.2.2.4.1](#urma_create_context) [urma_create_context](#urma_create_context)(urma_dev, eid_index);
+urma_context_t *urma_ctx = [3.2.2.4.1](#22241-urma_create_context) [urma_create_context](#22241-urma_create_context)(urma_dev, eid_index);
 
-### 控制面
+### 2.1.2 控制面
 
 - Initiator和Target分别创建jfc。
 
-urma_jfc_cfg_t jfc_cfg = {\
-.depth = 64,\
-.flag = {.value = 0},\
-.ceqn = 0,\
-.jfce = nullptr,\
-.user_ctx = 0,\
-};\
-urma_jfc_t \*jfc = [3.3.1.1.1](#urma_create_jfc) [urma_create_jfc](#urma_create_jfc)(urma_ctx, &jfc_cfg);
+```c
+urma_jfc_cfg_t jfc_cfg = {
+    .depth = 64,
+    .flag = {.value = 0},
+    .ceqn = 0,
+    .jfce = nullptr,
+    .user_ctx = 0,
+};
+urma_jfc_t *jfc = urma_create_jfc(urma_ctx, &jfc_cfg);
+```
 
 - Initiator和Target分别创建jfr。
 
-static urma_token_t test_token = {\
-.token = 0xABCDEF, // 由用户确定\
-};\
-urma_jfr_cfg_t jfr_cfg = {\
-.depth = 64,\
-.flag.bs.tag_matching = URMA_NO_TAG_MATCHING,\
-.flag.bs.order_type = 0,\
-.trans_mode = URMA_TM_RM,\
-.min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER,\
-.jfc = jfc,\
-.token_value = test_token,\
-.id = 0,\
-.max_sge = 1\
-};\
-urma_jfr_t \*jfr = [3.3.1.5.1](#urma_create_jfr) [urma_create_jfr](#urma_create_jfr)(urma_ctx, &jfr_cfg);
+```c
+static urma_token_t test_token = {
+    .token = 0xABCDEF, // 由用户确定
+};
+urma_jfr_cfg_t jfr_cfg = {
+    .depth = 64,
+    .flag.bs.tag_matching = URMA_NO_TAG_MATCHING,
+    .flag.bs.order_type = 0,
+    .trans_mode = URMA_TM_RM,
+    .min_rnr_timer = URMA_TYPICAL_MIN_RNR_TIMER,
+    .jfc = jfc,
+    .token_value = test_token,
+    .id = 0,
+    .max_sge = 1
+};
+urma_jfr_t *jfr = urma_create_jfr(urma_ctx, &jfr_cfg);
+```
 
 - Initiator和Target分别创建jetty。
 
-urma_jfs_cfg_t jfs_cfg = {\
-.depth = 256,\
-.flag.bs.order_type = 0,\
-.flag.bs.multi_path = 0,\
-.trans_mode = URMA_TM_RM,\
-.priority = URMA_MAX_PRIORITY, /\* Highest priority \*/\
-.max_sge = 1,\
-.max_inline_data = 0,\
-.rnr_retry = URMA_TYPICAL_RNR_RETRY,\
-.err_timeout = URMA_TYPICAL_ERR_TIMEOUT,\
-.jfc = jfc,\
-.user_ctx = (uint64_t)NULL\
-};\
-urma_jetty_cfg_t jetty_cfg = {\
-.flag.bs.share_jfr = 1,\
-.jfs_cfg = jfs_cfg,\
-.shared.jfr = jfr\
-};\
-urma_jetty_t \*jetty = [3.3.1.6.1](#urma_create_jetty) [urma_create_jetty](#urma_create_jetty)(urma_ctx, &jetty_cfg);
+```c
+urma_jfs_cfg_t jfs_cfg = {
+    .depth = 256,
+    .flag.bs.order_type = 0,
+    .flag.bs.multi_path = 0,
+    .trans_mode = URMA_TM_RM,
+    .priority = URMA_MAX_PRIORITY, /* Highest priority */
+    .max_sge = 1,
+    .max_inline_data = 0,
+    .rnr_retry = URMA_TYPICAL_RNR_RETRY,
+    .err_timeout = URMA_TYPICAL_ERR_TIMEOUT,
+    .jfc = jfc,
+    .user_ctx = (uint64_t)NULL
+};
+urma_jetty_cfg_t jetty_cfg = {
+    .flag.bs.share_jfr = 1,
+    .jfs_cfg = jfs_cfg,
+    .shared.jfr = jfr
+};
+urma_jetty_t *jetty = urma_create_jetty(urma_ctx, &jetty_cfg);
+```
 
 - Initiator和Target分配各自的数据buffer，并将该数据buffer注册为segment。
 
-// 以分配4KB对齐的1GB buffer为例\
-#define PAGE_SIZE (0x1 \<\< PAGE_SHIFT) // 4KB\
-#define MEM_SIZE 0x40000000 // 1GB\
-\
-void \*va = memalign(PAGE_SIZE, MEM_SIZE);\
-(void)memset(va, 0, MEM_SIZE);\
-urma_reg_seg_flag_t flag = {\
-.bs.token_policy = URMA_TOKEN_NONE,\
-.bs.cacheable = URMA_NON_CACHEABLE,\
-.bs.access = URMA_ACCESS_READ \| URMA_ACCESS_WRITE \| URMA_ACCESS_ATOMIC,\
-.bs.token_id_valid = 0,\
-.bs.reserved = 0\
-};\
-urma_seg_cfg_t seg_cfg = {\
-.va = (uint64_t)va,\
-.len = MEM_SIZE,\
-.token_id = NULL,\
-.token_value = test_token,\
-.flag = flag,\
-.user_ctx = (uintptr_t)NULL,\
-.iova = 0\
-};\
-urma_target_seg_t \*local_tseg = [3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)(urma_ctx, &seg_cfg);
+```c
+// 以分配4KB对齐的1GB buffer为例
+#define PAGE_SIZE (0x1 << PAGE_SHIFT) // 4KB
+#define MEM_SIZE 0x40000000 // 1GB
+void *va = memalign(PAGE_SIZE, MEM_SIZE);
+(void)memset(va, 0, MEM_SIZE);
+urma_reg_seg_flag_t flag = {
+    .bs.token_policy = URMA_TOKEN_NONE,
+    .bs.cacheable = URMA_NON_CACHEABLE,
+    .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
+    .bs.token_id_valid = 0,
+    .bs.reserved = 0
+};
+urma_seg_cfg_t seg_cfg = {
+    .va = (uint64_t)va,
+    .len = MEM_SIZE,
+    .token_id = NULL,
+    .token_value = test_token,
+    .flag = flag,
+    .user_ctx = (uintptr_t)NULL,
+    .iova = 0
+};
+urma_target_seg_t *local_tseg = urma_register_seg(urma_ctx, &seg_cfg);
+```
 
 - Initiator和Target交换jetty和segment信息，可以通过带外socket，或带内公知Jetty通道。
 
-// 获取对端info\
-urma_seg_t remote_seg = {\
-.ubva.eid = info-\>eid;\
-.ubva.uasid = info-\>uasid;\
-.ubva.va = info-\>seg_va;\
-.len = info-\>seg_len;\
-.attr.value = info-\>seg_flag;\
-.token_id = info-\>seg_token_id;\
-};\
+```c
+// 获取对端info
+urma_seg_t remote_seg = {
+    .ubva.eid = info-\>eid;
+    .ubva.uasid = info-\>uasid;
+    .ubva.va = info-\>seg_va;
+    .len = info-\>seg_len;
+    .attr.value = info-\>seg_flag;
+    .token_id = info-\>seg_token_id;
+};
 urma_jetty_id_t remote_jetty_id = info-\>jetty_id;
+```
 
 - Initiator和Target导入对端jetty和segment信息。
 
-urma_rjetty_t remote_jetty = {\
-.jetty_id = remote_jetty_id,\
-.trans_mode = URMA_TM_RM,\
-.type = URMA_JETTY,\
-.tp_type = URMA_RTP,\
-.flag.bs.order_type = 0,\
-.flag.bs.share_tp = 0\
-};\
-urma_target_jetty_t \*t_jetty = [3.3.1.6.6](#urma_import_jetty) [urma_import_jetty](#urma_import_jetty)(urma_ctx, &remote_jetty, &test_token);\
-\
-urma_import_seg_flag_t flag = {\
-.bs.cacheable = URMA_NON_CACHEABLE,\
-.bs.access = URMA_ACCESS_READ \| URMA_ACCESS_WRITE \| URMA_ACCESS_ATOMIC,\
-.bs.mapping = URMA_SEG_NOMAP,\
-.bs.reserved = 0\
-};\
-urma_target_seg_t \*import_tseg = [3.3.2.3](#urma_import_seg) [urma_import_seg](#urma_import_seg)(urma_ctx, &remote_seg, &test_token, 0, flag);
+```c
+urma_rjetty_t remote_jetty = {
+    .jetty_id = remote_jetty_id,
+    .trans_mode = URMA_TM_RM,
+    .type = URMA_JETTY,
+    .tp_type = URMA_RTP,
+    .flag.bs.order_type = 0,
+    .flag.bs.share_tp = 0
+};
+urma_target_jetty_t *t_jetty = urma_import_jetty(urma_ctx, &remote_jetty, &test_token);
+urma_import_seg_flag_t flag = {
+    .bs.cacheable = URMA_NON_CACHEABLE,
+    .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
+    .bs.mapping = URMA_SEG_NOMAP,
+    .bs.reserved = 0
+};
+urma_target_seg_t *import_tseg = urma_import_seg(urma_ctx, &remote_seg, &test_token, 0, flag);
+```
 
-### 数据面
+### 2.1.3 数据面
 
 数据面主要分单边read/write、双边send/recv。单边指对端处理器可以不参与，双边则是对端必须参与。
 
-#### 单边read/write
+#### 2.1.3.1 单边read/write
 
 read、write所需准备的参数、API使用方式差不多，差别在wr src、dst相反，opcode不同。
 
-// read/write共同参数准备\
-urma_sge_t src_sge = {\
-.addr = (uint64_t)va,\
-.len = MSG_SIZE,\
-.tseg = local_tseg\
-};\
-urma_sge_t dst_sge = {\
-.addr = remote_seg.ubva.va,\
-.len = MSG_SIZE,\
-.tseg = import_tseg\
-};\
-urma_sg_t src_sg = {\
-.sge = &src_sge,\
-.num_sge = 1\
-};\
-urma_sg_t dst_sg = {\
-.sge = &dst_sge,\
-.num_sge = 1\
-};\
-\
-/\* 先示例write \*/\
-// write是把本端src_sg的数据写到对端dst_sg\
-urma_rw_wr_t rw = {\
-.src = src_sg,\
-.dst = dst_sg\
-};\
-urma_jfs_wr_t wr = {\
-.opcode = URMA_OPC_WRITE,\
-.flag.bs.complete_enable = 1,\
-.flag.bs.inline_flag = 0,\
-.tjetty = t_jetty,\
-.rw = rw,\
-.next = NULL\
-};\
-urma_jfs_wr_t \*bad_wr = NULL;\
-[3.4.1.3](#urma_post_jetty_send_wr) [urma_post_jetty_send_wr](#urma_post_jetty_send_wr)(jetty, &wr, &bad_wr);\
-\
-urma_cr_t cr = {0};\
-[3.4.2.1](#urma_poll_jfc) [urma_poll_jfc](#urma_poll_jfc)(jfc, 1, &cr);\
-\
-/\* read示例 \*/\
-// read是把对端dst_sg数据读到本端src_sg\
-rw.src = dst_sg;\
-rw.dst = src_sg;\
-wr.rw = rw;\
-wr.opcode = URMA_OPC_READ;\
-urma_post_jetty_send_wr(ctx-\>jetty, &wr, &bad_wr);\
+```c
+// read/write共同参数准备
+urma_sge_t src_sge = {
+    .addr = (uint64_t)va,
+    .len = MSG_SIZE,
+    .tseg = local_tseg
+};
+urma_sge_t dst_sge = {
+    .addr = remote_seg.ubva.va,
+    .len = MSG_SIZE,
+    .tseg = import_tseg
+};
+urma_sg_t src_sg = {
+    .sge = &src_sge,
+    .num_sge = 1
+};
+urma_sg_t dst_sg = {
+    .sge = &dst_sge,
+    .num_sge = 1
+};
+/* 先示例write */
+// write是把本端src_sg的数据写到对端dst_sg
+urma_rw_wr_t rw = {
+    .src = src_sg,
+    .dst = dst_sg
+};
+urma_jfs_wr_t wr = {
+    .opcode = URMA_OPC_WRITE,
+    .flag.bs.complete_enable = 1,
+    .flag.bs.inline_flag = 0,
+    .tjetty = t_jetty,
+    .rw = rw,
+    .next = NULL
+};
+urma_jfs_wr_t *bad_wr = NULL;
+urma_post_jetty_send_wr(jetty, &wr, &bad_wr);
+urma_cr_t cr = {0};
 urma_poll_jfc(jfc, 1, &cr);
+/* read示例 */
+// read是把对端dst_sg数据读到本端src_sg
+rw.src = dst_sg;
+rw.dst = src_sg;
+wr.rw = rw;
+wr.opcode = URMA_OPC_READ;
+urma_post_jetty_send_wr(ctx-\>jetty, &wr, &bad_wr);
+urma_poll_jfc(jfc, 1, &cr);
+```
 
 poll操作说明：从上面可以看出，post、poll是异步通信，post下发通信任务wr（work request）触发通信，poll尝试获取完成信息cr（completion record）。post后立马poll，通信可能尚未完成，poll的返回值\--cr cnt可能为0，表示暂无cr。因此，需要一些手段在通信完成时再去获取cr，这些手段分为轮询、中断。轮询指循环调poll，直至poll到成功/失败的cr。注意轮询不建议写成死循环，建议在poll间插入sleep，同时设置最大轮询次数。中断指利用硬件中断通知通信完成，相比轮询用起来更复杂，但能更大发挥异步特点。
 
-/\* 轮询示例 \*/\
-for (int i = 0; i \< MAX_POLL_JFC_CNT; i++) {\
-cnt = urma_poll_jfc(jfc, 1, &cr);\
-if (cnt \< 0) {\
-fprintf(stderr, \"Failed to poll jfc, return_value of urma_poll_jfc is %d\\n\", cnt);\
-return -1;\
-} else if (cnt \> 0) {\
-if (cr.status == URMA_CR_SUCCESS) {\
-return 0;\
-} else {\
-fprintf(stderr, \"Failed to poll jfc, cr_status:%d\\n\", cr.status);\
-return -1;\
-}\
-}\
-usleep(SLEEP_TIME);\
-}\
-\
-/\* 中断示例 \*/\
-cnt = [3.4.2.3](#urma_wait_jfc) [urma_wait_jfc](#urma_wait_jfc)(jfce, 1, TIMEOUT, &ev_jfc);\
-if (cnt \< 0 \|\| (cnt == 1 && jfc != ev_jfc)) {\
-fprintf(stderr, \"Failed to wait jfc\\n\");\
-return -1;\
-}\
-cnt = urma_poll_jfc(jfc, 1, &cr);\
-if (cnt \<= 0 \|\| cr.status != URMA_CR_SUCCESS) {\
-return -1;\
-}\
-uint32_t ack_cnt = 1;\
-[3.4.2.4](#urma_ack_jfc) [urma_ack_jfc](#urma_ack_jfc)((urma_jfc_t \*\*)&ev_jfc, &ack_cnt, 1);\
-if ([3.4.2.2](#urma_rearm_jfc) [urma_rearm_jfc](#urma_rearm_jfc)(jfc, false) != URMA_SUCCESS) {\
-return -1;\
+```c
+/* 轮询示例 */
+for (int i = 0; i < MAX_POLL_JFC_CNT; i++) {
+    cnt = urma_poll_jfc(jfc, 1, &cr);
+    if (cnt < 0) {
+        fprintf(stderr, "Failed to poll jfc, return_value of urma_poll_jfc is %d\n", cnt);
+        return -1;
+    } else if (cnt \> 0) {
+        if (cr.status == URMA_CR_SUCCESS) {
+            return 0;
+        } else {
+            fprintf(stderr, "Failed to poll jfc, cr_status:%d\n", cr.status);
+            return -1;
+        }
+    }
+    usleep(SLEEP_TIME);
 }
+/* 中断示例 */
+cnt = urma_wait_jfc(jfce, 1, TIMEOUT, &ev_jfc);
+if (cnt < 0 || (cnt == 1 && jfc != ev_jfc)) {
+    fprintf(stderr, "Failed to wait jfc\n");
+    return -1;
+}
+cnt = urma_poll_jfc(jfc, 1, &cr);
+if (cnt <= 0 || cr.status != URMA_CR_SUCCESS) {
+    return -1;
+}
+uint32_t ack_cnt = 1;
+urma_ack_jfc((urma_jfc_t **)&ev_jfc, &ack_cnt, 1);
+if (urma_rearm_jfc(jfc, false) != URMA_SUCCESS) {
+    return -1;
+}
+```
 
-#### 双边send/recv
+#### 2.1.3.2 双边send/recv
 
-双边操作也是把数据从本端seg发到对端seg，它和单边write的差异主要在于post。双边操作不仅需要本端调[3.4.1.3](#urma_post_jetty_send_wr) [urma_post_jetty_send_wr](#urma_post_jetty_send_wr)下发发送任务，还需要对端调[3.4.1.4](#urma_post_jetty_recv_wr) [urma_post_jetty_recv_wr](#urma_post_jetty_recv_wr)准备接收。图示中post recv先于post send调用，这并非强制要求，本端的报文到对端时若发现recv wr还未下发，会暂时缓存在对端buffer，但为了保证通信性能，并且避免耗尽对端buffer，建议对端预先post一批recv wr，并且每次消耗后要及时补充。至于poll操作，双边操作两端都post了，相应两端都可以poll，poll的具体使用请参考[3.1.3.1](#单边readwrite) [单边read/write](#单边readwrite)，这里不再赘述。
+双边操作也是把数据从本端seg发到对端seg，它和单边write的差异主要在于post。双边操作不仅需要本端调[3.4.1.3](#2413-urma_post_jetty_send_wr) [urma_post_jetty_send_wr](#2413-urma_post_jetty_send_wr)下发发送任务，还需要对端调[3.4.1.4](#2414-urma_post_jetty_recv_wr) [urma_post_jetty_recv_wr](#2414-urma_post_jetty_recv_wr)准备接收。图示中post recv先于post send调用，这并非强制要求，本端的报文到对端时若发现recv wr还未下发，会暂时缓存在对端buffer，但为了保证通信性能，并且避免耗尽对端buffer，建议对端预先post一批recv wr，并且每次消耗后要及时补充。至于poll操作，双边操作两端都post了，相应两端都可以poll，poll的具体使用请参考[3.1.3.1](#2131-单边readwrite) [单边read/write](#2131-单边readwrite)，这里不再赘述。
 
 Target post recv示例：
 
-// 预先post一批recv wr\
-uint64_t offset = MSG_SIZE;\
-for (int i = 0; i \< RECV_BATCH_CNT; i++) {\
-if (offset + MSG_SIZE \> MEM_SIZE) {\
-return NULL;\
-}\
-src_sge.addr = (uint64_t)va + offset;\
-src_sge.len = MSG_SIZE;\
-src_sge.tseg = local_tseg;\
-src_sg.sge = &src_sge;\
-src_sg.num_sge = 1;\
-wr.src = src_sg;\
-wr.user_ctx = offset;\
-wr.next = NULL;\
-if (urma_post_jetty_recv_wr(jetty, &wr, &bad_wr) != URMA_SUCCESS) {\
-fprintf(stderr, \"Failed to recv %i in server jfr thread\\n\", i);\
-return NULL;\
-}\
-offset += MSG_SIZE;\
-}\
-\
-// poll到成功的cr后，补充消耗的recv wr\
-if (cr.opcode == URMA_CR_OPC_SEND) {\
-if (urma_post_jetty_recv_wr(jetty, &wr, &bad_wr) != URMA_SUCCESS) {\
-fprintf(stderr, \"Failed to recv in server jetty thread\\n\");\
-return NULL;\
-}\
+```c
+// 预先post一批recv wr
+uint64_t offset = MSG_SIZE;
+for (int i = 0; i < RECV_BATCH_CNT; i++) {
+    if (offset + MSG_SIZE \> MEM_SIZE) {
+        return NULL;
+    }
+    src_sge.addr = (uint64_t)va + offset;
+    src_sge.len = MSG_SIZE;
+    src_sge.tseg = local_tseg;
+    src_sg.sge = &src_sge;
+    src_sg.num_sge = 1;
+    wr.src = src_sg;
+    wr.user_ctx = offset;
+    wr.next = NULL;
+    if (urma_post_jetty_recv_wr(jetty, &wr, &bad_wr) != URMA_SUCCESS) {
+        fprintf(stderr, "Failed to recv %i in server jfr thread\n", i);
+        return NULL;
+    }
+    offset += MSG_SIZE;
 }
+// poll到成功的cr后，补充消耗的recv wr
+if (cr.opcode == URMA_CR_OPC_SEND) {
+    if (urma_post_jetty_recv_wr(jetty, &wr, &bad_wr) != URMA_SUCCESS) {
+        fprintf(stderr, "Failed to recv in server jetty thread\n");
+        return NULL;
+    }
+}
+```
 
 Initiator post send示例：
 
-urma_sge_t src_sge = {\
-.addr = (uint64_t)va\
-.len = MSG_SIZE,\
-.tseg = local_tseg\
-};\
-urma_sg_t src_sg = {\
-.sge = &src_sge,\
-.num_sge = 1\
-};\
-urma_send_wr_t send_wr = {\
-.src = src_sg,\
-.tseg = local_tseg\
-};\
-urma_jfs_wr_t jfs_wr = {\
-.opcode = URMA_OPC_SEND,\
-.flag.bs.complete_enable = 1,\
-.tjetty = t_jetty,\
-.send = send_wr,\
-.next = NULL\
-};\
-urma_jfs_wr_t \*bad_jfs_wr = NULL;\
+```c
+urma_sge_t src_sge = {
+    .addr = (uint64_t)va
+    .len = MSG_SIZE,
+    .tseg = local_tseg
+};
+urma_sg_t src_sg = {
+    .sge = &src_sge,
+    .num_sge = 1
+};
+urma_send_wr_t send_wr = {
+    .src = src_sg,
+    .tseg = local_tseg
+};
+urma_jfs_wr_t jfs_wr = {
+    .opcode = URMA_OPC_SEND,
+    .flag.bs.complete_enable = 1,
+    .tjetty = t_jetty,
+    .send = send_wr,
+    .next = NULL
+};
+urma_jfs_wr_t *bad_jfs_wr = NULL;
 urma_post_jetty_send_wr(jetty, &jfs_wr, &bad_jfs_wr);
+```
 
-### 开源示例
+### 2.1.4 开源示例
 
 开源代码中的编程示例链接：
 
@@ -1558,19 +970,19 @@ urma_post_jetty_send_wr(jetty, &jfs_wr, &bad_jfs_wr);
 
 rpm包安装的结果在：/usr/bin/urma_sample
 
-## 管理面
+## 2.2 管理面
 
-### 初始化
+### 2.2.1 初始化
 
-#### urma_init
+#### 2.2.1.1 urma_init
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_init([3.2.1.1.1](#urma_init_attr_t) [urma_init_attr_t](#urma_init_attr_t) \*conf);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_init([3.2.1.1.1](#22111-urma_init_attr_t) [urma_init_attr_t](#22111-urma_init_attr_t) *conf);
 
 3.  描述
 
@@ -1578,48 +990,52 @@ rpm包安装的结果在：/usr/bin/urma_sample
 
 4.  参数
 
-\@param\[in\] \[Required\] conf: urma init attr, a random uasid will be assigned when conf is null.
+@param[in] [Required] conf: urma init attr, a random uasid will be assigned when conf is null.
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_init_attr_t
-
+##### 2.2.1.1.1 urma_init_attr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_init_attr {\
-uint64_t token; /\* \[Optional\] security token \*/\
-uint32_t uasid; /\* \[Optional\] uasid to set and reserve. If the parameter is 0, the system will randomly assign a non-0 value. \*/\
+```c
+typedef struct urma_init_attr {
+    uint64_t token; /* [Optional] security token */
+    uint32_t uasid; /* [Optional] uasid to set and reserve. If the parameter is 0, the system will randomly assign a non-0 value. */
 } urma_init_attr_t;
+```
 
-##### urma_status_t
+##### 2.2.1.1.2 urma_status_t
 
-typedef int urma_status_t;\
+```c
+typedef int urma_status_t;
+```
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-#define URMA_SUCCESS 0\
-#define URMA_EAGAIN EAGAIN // Resource temporarily unavailable\
-#define URMA_ENOMEM ENOMEM // Failed to allocate memory\
-#define URMA_ENOPERM EPERM // Operation not permitted\
-#define URMA_ETIMEOUT ETIMEDOUT // Operation time out\
-#define URMA_EINVAL EINVAL // Invalid argument\
-#define URMA_EEXIST EEXIST // Exist\
-#define URMA_EINPROGRESS EINPROGRESS\
-#define URMA_FAIL 0x1000 /\* 0x1000 \*/
+```c
+#define URMA_SUCCESS 0
+#define URMA_EAGAIN EAGAIN // Resource temporarily unavailable
+#define URMA_ENOMEM ENOMEM // Failed to allocate memory
+#define URMA_ENOPERM EPERM // Operation not permitted
+#define URMA_ETIMEOUT ETIMEDOUT // Operation time out
+#define URMA_EINVAL EINVAL // Invalid argument
+#define URMA_EEXIST EEXIST // Exist
+#define URMA_EINPROGRESS EINPROGRESS
+#define URMA_FAIL 0x1000 /* 0x1000 */
+```
 
-#### urma_uninit
+#### 2.2.1.2 urma_uninit
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_uninit(void);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_uninit(void);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1635,20 +1051,19 @@ void
 
 Return: 0 on success, other value on error.
 
-### 设备及上下文
+### 2.2.2 设备及上下文
 
-#### device
+#### 2.2.2.1 device
 
-##### urma_get_device_list
+##### 2.2.2.1.1 urma_get_device_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*\*urma_get_device_list(int \*num_devices);
-
+[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) **urma_get_device_list(int *num_devices);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1658,7 +1073,7 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[out\] num_devices: number of urma device.
+@param[out] num_devices: number of urma device.
 
 5.  返回值
 
@@ -1670,100 +1085,108 @@ Note: urma_free_device_list() needs to be called to free memory.
 
 7.  [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_device {\
-char name\[URMA_MAX_NAME\]; /\* \[Public\] urma device\'s name, the names of devices\
-in different transport modes are different. \*/\
-char path\[URMA_MAX_PATH\]; /\* \[Public\] urma device\'s path in sysfs. \*/\
-[urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) type; /\* \[Public\] urma device\'s transport type. \*/\
-struct [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext) \*ops; /\* \[Private\] urma device driver\'s ops. \*/\
-struct [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext) \*sysfs_dev; /\* \[Private\] internal device corresponding to the urma device \*/\
+```c
+typedef struct urma_device {
+    char name[URMA_MAX_NAME]; /* [Public] urma device\'s name, the names of devices
+    in different transport modes are different. */
+    char path[URMA_MAX_PATH]; /* [Public] urma device\'s path in sysfs. */
+    urma_transport_type_t type; /* [Public] urma device\'s transport type. */
+    struct urma_provider_ops_t *ops; /* [Private] urma device driver\'s ops. */
+    struct urma_sysfs_dev_t *sysfs_dev; /* [Private] internal device corresponding to the urma device */
 } urma_device_t;
+```
 
 8.  [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_transport_type {\
-URMA_TRANSPORT_INVALID = -1,\
-URMA_TRANSPORT_UB = 0,\
-URMA_TRANSPORT_MAX\
+```c
+typedef enum urma_transport_type {
+    URMA_TRANSPORT_INVALID = -1,
+    URMA_TRANSPORT_UB = 0,
+    URMA_TRANSPORT_MAX
 } urma_transport_type_t;
+```
 
 9.  [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_provider_ops {\
-const char \*name;\
-[urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) attr;\
-[urma_match_entry_t](#_ZH-CN_TOPIC_0000002496889932-chtext) \*match_table;\
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) (\*init)(urma_init_attr_t \*conf);\
-urma_status_t (\*uninit)(void);\
-/\* Device OPs \*/\
-urma_status_t (\*query_device)(urma_device_t \*dev, urma_device_attr_t \*dev_attr);\
-urma_context_t \*(\*create_context)(urma_device_t \*dev, uint32_t eid_index, int dev_fd);\
-urma_status_t (\*delete_context)(urma_context_t \*ctx);\
-urma_status_t (\*get_uasid)(uint32_t \*uasid); /\* obsolete \*/\
+```c
+typedef struct urma_provider_ops {
+    const char *name;
+    urma_device_attr_t attr;
+    urma_match_entry_t *match_table;
+    urma_status_t (*init)(urma_init_attr_t *conf);
+    urma_status_t (*uninit)(void);
+    /* Device OPs */
+    urma_status_t (*query_device)(urma_device_t *dev, urma_device_attr_t *dev_attr);
+    urma_context_t *(*create_context)(urma_device_t *dev, uint32_t eid_index, int dev_fd);
+    urma_status_t (*delete_context)(urma_context_t *ctx);
+    urma_status_t (*get_uasid)(uint32_t *uasid); /* obsolete */
 } urma_provider_ops_t;
+```
 
 10. [urma_match_entry_t](#_ZH-CN_TOPIC_0000002496889932-chtext)
 
-
 定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
-typedef struct urma_match_entry {\
-uint16_t vendor_id;\
-uint16_t device_id;\
+```c
+typedef struct urma_match_entry {
+    uint16_t vendor_id;
+    uint16_t device_id;
 } urma_match_entry_t;
+```
 
 11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_sysfs_dev {\
-char dev_name\[URMA_MAX_NAME\];\
-char sysfs_path\[URMA_MAX_SYSFS_PATH\];\
-char driver_name\[URMA_MAX_NAME\];\
-[urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) transport_type; /\* transport type \*/\
-[urma_driver_t](#_ZH-CN_TOPIC_0000002496570596-chtext) \*driver;\
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*urma_device;\
-[urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) dev_attr;\
-uint16_t device_id;\
-uint16_t vendor_id;\
-struct [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext) node; /\* Add to device list \*/\
-uint32_t flag;\
-struct timespec time_created;\
+```c
+typedef struct urma_sysfs_dev {
+    char dev_name[URMA_MAX_NAME];
+    char sysfs_path[URMA_MAX_SYSFS_PATH];
+    char driver_name[URMA_MAX_NAME];
+    urma_transport_type_t transport_type; /* transport type */
+    urma_driver_t *driver;
+    urma_device_t *urma_device;
+    urma_device_attr_t dev_attr;
+    uint16_t device_id;
+    uint16_t vendor_id;
+    struct ub_list node; /* Add to device list */
+    uint32_t flag;
+    struct timespec time_created;
 } urma_sysfs_dev_t;
+```
 
 12. [urma_driver_t](#_ZH-CN_TOPIC_0000002496570596-chtext)
 
-typedef struct urma_driver {\
-struct [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext) \*ops;\
-struct [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext) node; /\* Add to driver list \*/\
+```c
+typedef struct urma_driver {
+    struct urma_provider_ops_t *ops;
+    struct ub_list node; /* Add to driver list */
 } urma_driver_t;
+```
 
 13. [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext)
 
-struct ub_list {\
-struct ub_list \*prev, \*next;\
+```c
+struct ub_list {
+    struct ub_list *prev, *next;
 };
+```
 
-##### urma_free_device_list
+##### 2.2.2.1.2 urma_free_device_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_free_device_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*\*device_list);
-
+void urma_free_device_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) **device_list);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1773,26 +1196,25 @@ void urma_free_device_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext
 
 4.  参数
 
-\@param\[in\] \[Required\] device_list: pointer array of urma_device, return value of urma_get_device_list.
+@param[in] [Required] device_list: pointer array of urma_device, return value of urma_get_device_list.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数device_list来自[3.2.2.1.1](#urma_get_device_list) [urma_get_device_list](#urma_get_device_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数device_list来自[3.2.2.1.1](#22211-urma_get_device_list) [urma_get_device_list](#22211-urma_get_device_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 void
 
-##### urma_get_device_by_name
+##### 2.2.2.1.3 urma_get_device_by_name
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*urma_get_device_by_name(char \*dev_name);
-
+[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *urma_get_device_by_name(char *dev_name);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1802,49 +1224,47 @@ void
 
 4.  参数
 
-\@param\[in\] \[Required\] dev_name: device\'s name;
+@param[in] [Required] dev_name: device\'s name;
 
 5.  返回值
 
 Return: urma_device; NULL means no device returned;
 
-##### urma_get_device_by_eid
+##### 2.2.2.1.4 urma_get_device_by_eid
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*urma_get_device_by_eid([urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid, [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) type);
-
+[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *urma_get_device_by_eid([urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid, [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) type);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-根据设备eid获取其句柄。基于[3.2.2.1.1](#urma_get_device_list) [urma_get_device_list](#urma_get_device_list)封装。支持多线程操作重入操作。
+根据设备eid获取其句柄。基于[3.2.2.1.1](#22211-urma_get_device_list) [urma_get_device_list](#22211-urma_get_device_list)封装。支持多线程操作重入操作。
 
 4.  参数
 
-\@param\[in\] \[Required\] eid: device\'s eid;
+@param[in] [Required] eid: device\'s eid;
 
-\@param\[in\] \[Required\] type: device\'s transport type;
+@param[in] [Required] type: device\'s transport type;
 
 5.  返回值
 
 Return: pointer of urma_device; NULL means no device returned.
 
-##### urma_query_device
+##### 2.2.2.1.5 urma_query_device
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_query_device([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*dev, [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) \*dev_attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_device([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) *dev_attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1854,9 +1274,9 @@ Return: pointer of urma_device; NULL means no device returned.
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: urma_device;
+@param[in] [Required] dev: urma_device;
 
-\@param\[out\] dev_attr: Return device attributes, user needs to allocate and free the memory;
+@param[out] dev_attr: Return device attributes, user needs to allocate and free the memory;
 
 5.  返回值
 
@@ -1864,285 +1284,300 @@ Return: 0 on success, other value on error.
 
 6.  [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_device_attr {\
-[urma_guid_t](#_ZH-CN_TOPIC_0000002489752730-chtext) guid; /\* \[Public\] \*/\
-[urma_device_cap_t](#_ZH-CN_TOPIC_0000002521992515-chtext) dev_cap; /\* \[Public\] capabilities of device. \*/\
-uint8_t port_cnt; /\* \[Public\] port number of device. \*/\
-struct [urma_port_attr_t](#_ZH-CN_TOPIC_0000002521872505-chtext) port_attr\[MAX_PORT_CNT\];\
-uint32_t reserved_jetty_id_min;\
-uint32_t reserved_jetty_id_max;\
+```c
+typedef struct urma_device_attr {
+    urma_guid_t guid; /* [Public] */
+    urma_device_cap_t dev_cap; /* [Public] capabilities of device. */
+    uint8_t port_cnt; /* [Public] port number of device. */
+    struct urma_port_attr_t port_attr[MAX_PORT_CNT];
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
 } urma_device_attr_t;
+```
 
 7.  [urma_guid_t](#_ZH-CN_TOPIC_0000002489752730-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_guid {\
-uint8_t raw\[URMA_GUID_SIZE\];\
+```c
+typedef struct urma_guid {
+    uint8_t raw[URMA_GUID_SIZE];
 } urma_guid_t;
+```
 
 8.  [urma_device_cap_t](#_ZH-CN_TOPIC_0000002521992515-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_device_cap {\
-[urma_device_feature_t](#_ZH-CN_TOPIC_0000002489912708-chtext) feature; /\* \[Public\] support feature of device, such as OOO, LS etc. \*/\
-uint32_t max_jfc; /\* \[Public\] max number of jfc supported by the device. \*/\
-uint32_t max_jfs; /\* \[Public\] max number of jfs supported by the device. \*/\
-uint32_t max_jfr; /\* \[Public\] max number of jfr supported by the device. \*/\
-uint32_t max_jetty; /\* \[Public\] max number of jetty supported by the device. \*/\
-uint32_t max_jetty_grp; /\* \[Public\] max number of jetty group supported by the device. \*/\
-uint32_t max_jetty_in_jetty_grp; /\* \[Public\] max number of jetty per jetty group supported by the device. \*/\
-uint32_t max_jfc_depth; /\* \[Public\] max depth of jfc supported by the device. \*/\
-uint32_t max_jfs_depth; /\* \[Public\] max depth of jfs supported by the device. \*/\
-uint32_t max_jfr_depth; /\* \[Public\] max depth of jfr supported by the device. \*/\
-uint32_t max_jfs_inline_len; /\* \[Public\] max inline length(byte) supported by the jfs. \*/\
-uint32_t max_jfs_sge; /\* \[Public\] max number of sge supported by the jfs. \*/\
-uint32_t max_jfs_rsge; /\* \[Public\] max number of remote sge supported by the jfs. \*/\
-uint32_t max_jfr_sge; /\* \[Public\] max number of sge supported by the jfr. \*/\
-uint64_t max_msg_size; /\* \[Public\] max message size supported by the device. \*/\
-uint32_t max_read_size;\
-uint32_t max_write_size;\
-uint32_t max_cas_size;\
-uint32_t max_swap_size;\
-uint32_t max_fetch_and_add_size;\
-uint32_t max_fetch_and_sub_size;\
-uint32_t max_fetch_and_and_size;\
-uint32_t max_fetch_and_or_size;\
-uint32_t max_fetch_and_xor_size;\
-[urma_atomic_feature_t](#_ZH-CN_TOPIC_0000002489752732-chtext) atomic_feat; /\* \[Public\] support atomic feature of device \*/\
-uint16_t trans_mode; /\* \[Public\] bit OR of supported transport modes \*/\
-uint16_t sub_trans_mode_cap; /\* \[Public\] bit OR of supported transport modes cap, [urma_sub_trans_mode_cap_t](#_ZH-CN_TOPIC_0000002528411323-chtext) \*/\
-uint16_t congestion_ctrl_alg; /\* \[Public\] one or more mode from [urma_congestion_ctrl_alg_t](#_ZH-CN_TOPIC_0000002528409915-chtext) \*/\
-uint32_t ceq_cnt; /\* \[Public\] ceq_cnt \*/\
-uint32_t max_tp_in_tpg; /\* \[Public\] max tp in tpg \*/\
-uint32_t max_eid_cnt; /\* \[Public\] max eid count \*/\
-uint64_t page_size_cap; /\* \[Public\] page size capability, must include PAGE_SIZE(4k) \*/\
-uint32_t max_oor_cnt; /\* \[Public\] max OOR window size by packet, only for user tp \*/\
-uint32_t mn; /\* \[Public\] only for user tp \*/\
-uint32_t max_netaddr_cnt; /\* \[Public\] only for user tp \*/\
-[urma_order_type_cap_t](#_ZH-CN_TOPIC_0000002491667086-chtext) rm_order_cap;\
-urma_order_type_cap_t rc_order_cap;\
-[urma_tp_type_cap_t](#_ZH-CN_TOPIC_0000002491827052-chtext) rm_tp_cap;\
-urma_tp_type_cap_t rc_tp_cap;\
-urma_tp_type_cap_t um_tp_cap;\
-[urma_tp_feature_t](#_ZH-CN_TOPIC_0000002523906825-chtext) tp_feature;\
+```c
+typedef struct urma_device_cap {
+    urma_device_feature_t feature; /* [Public] support feature of device, such as OOO, LS etc. */
+    uint32_t max_jfc; /* [Public] max number of jfc supported by the device. */
+    uint32_t max_jfs; /* [Public] max number of jfs supported by the device. */
+    uint32_t max_jfr; /* [Public] max number of jfr supported by the device. */
+    uint32_t max_jetty; /* [Public] max number of jetty supported by the device. */
+    uint32_t max_jetty_grp; /* [Public] max number of jetty group supported by the device. */
+    uint32_t max_jetty_in_jetty_grp; /* [Public] max number of jetty per jetty group supported by the device. */
+    uint32_t max_jfc_depth; /* [Public] max depth of jfc supported by the device. */
+    uint32_t max_jfs_depth; /* [Public] max depth of jfs supported by the device. */
+    uint32_t max_jfr_depth; /* [Public] max depth of jfr supported by the device. */
+    uint32_t max_jfs_inline_len; /* [Public] max inline length(byte) supported by the jfs. */
+    uint32_t max_jfs_sge; /* [Public] max number of sge supported by the jfs. */
+    uint32_t max_jfs_rsge; /* [Public] max number of remote sge supported by the jfs. */
+    uint32_t max_jfr_sge; /* [Public] max number of sge supported by the jfr. */
+    uint64_t max_msg_size; /* [Public] max message size supported by the device. */
+    uint32_t max_read_size;
+    uint32_t max_write_size;
+    uint32_t max_cas_size;
+    uint32_t max_swap_size;
+    uint32_t max_fetch_and_add_size;
+    uint32_t max_fetch_and_sub_size;
+    uint32_t max_fetch_and_and_size;
+    uint32_t max_fetch_and_or_size;
+    uint32_t max_fetch_and_xor_size;
+    urma_atomic_feature_t atomic_feat; /* [Public] support atomic feature of device */
+    uint16_t trans_mode; /* [Public] bit OR of supported transport modes */
+    uint16_t sub_trans_mode_cap; /* [Public] bit OR of supported transport modes cap, urma_sub_trans_mode_cap_t */
+    uint16_t congestion_ctrl_alg; /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
+    uint32_t ceq_cnt; /* [Public] ceq_cnt */
+    uint32_t max_tp_in_tpg; /* [Public] max tp in tpg */
+    uint32_t max_eid_cnt; /* [Public] max eid count */
+    uint64_t page_size_cap; /* [Public] page size capability, must include PAGE_SIZE(4k) */
+    uint32_t max_oor_cnt; /* [Public] max OOR window size by packet, only for user tp */
+    uint32_t mn; /* [Public] only for user tp */
+    uint32_t max_netaddr_cnt; /* [Public] only for user tp */
+    urma_order_type_cap_t rm_order_cap;
+    urma_order_type_cap_t rc_order_cap;
+    urma_tp_type_cap_t rm_tp_cap;
+    urma_tp_type_cap_t rc_tp_cap;
+    urma_tp_type_cap_t um_tp_cap;
+    urma_tp_feature_t tp_feature;
 } urma_device_cap_t;
+```
 
 9.  [urma_device_feature_t](#_ZH-CN_TOPIC_0000002489912708-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_device_feature {\
-struct {\
-uint32_t oor : 1; /\* \[Public\] URMA_OUT_OF_ORDER_RECEIVING. \*/\
-uint32_t jfc_per_wr : 1; /\* \[Public\] URMA_JFC_PER_WR. \*/\
-uint32_t stride_op : 1; /\* \[Public\] URMA_STRIDE_OP. \*/\
-uint32_t load_store_op : 1; /\* \[Public\] URMA_LOAD_STORE_OP. \*/\
-uint32_t non_pin : 1; /\* \[Public\] URMA_NON_PIN. \*/\
-uint32_t pmem : 1; /\* \[Public\] URMA_PERSISTENCE_MEM. \*/\
-uint32_t jfc_inline : 1; /\* \[Public\] URMA_JFC_INLINE. \*/\
-uint32_t spray_en : 1; /\* \[Public\] URMA_SPRAY_ENABLE for UDP port. \*/\
-uint32_t selective_retrans : 1; /\* \[Public\] URMA_SELECTIVE_RETRANS. \*/\
-uint32_t live_migrate : 1; /\* \[Public\] support live migration. \*/\
-uint32_t dca : 1; /\* \[Public\] for user tp \*/\
-uint32_t jetty_grp : 1; /\* \[Public\] support jetty group. \*/\
-uint32_t error_suspend : 1; /\* \[Public\] support suspend jetty or jfs on error. \*/\
-uint32_t outorder_comp : 1; /\* \[Public\] support out-of-order completion. \*/\
-uint32_t mn : 1; /\* \[Public\] for user tp \*/\
-uint32_t clan : 1; /\* \[Public\] for user tp \*/\
-uint32_t muti_seg_per_token_id : 1;\
-uint32_t reserved : 15;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_device_feature {
+    struct {
+        uint32_t oor : 1; /* [Public] URMA_OUT_OF_ORDER_RECEIVING. */
+        uint32_t jfc_per_wr : 1; /* [Public] URMA_JFC_PER_WR. */
+        uint32_t stride_op : 1; /* [Public] URMA_STRIDE_OP. */
+        uint32_t load_store_op : 1; /* [Public] URMA_LOAD_STORE_OP. */
+        uint32_t non_pin : 1; /* [Public] URMA_NON_PIN. */
+        uint32_t pmem : 1; /* [Public] URMA_PERSISTENCE_MEM. */
+        uint32_t jfc_inline : 1; /* [Public] URMA_JFC_INLINE. */
+        uint32_t spray_en : 1; /* [Public] URMA_SPRAY_ENABLE for UDP port. */
+        uint32_t selective_retrans : 1; /* [Public] URMA_SELECTIVE_RETRANS. */
+        uint32_t live_migrate : 1; /* [Public] support live migration. */
+        uint32_t dca : 1; /* [Public] for user tp */
+        uint32_t jetty_grp : 1; /* [Public] support jetty group. */
+        uint32_t error_suspend : 1; /* [Public] support suspend jetty or jfs on error. */
+        uint32_t outorder_comp : 1; /* [Public] support out-of-order completion. */
+        uint32_t mn : 1; /* [Public] for user tp */
+        uint32_t clan : 1; /* [Public] for user tp */
+        uint32_t muti_seg_per_token_id : 1;
+        uint32_t reserved : 15;
+    } bs;
+    uint32_t value;
 } urma_device_feature_t;
+```
 
 10. [urma_atomic_feature_t](#_ZH-CN_TOPIC_0000002489752732-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_atomic_feature {\
-struct {\
-uint32_t cas : 1;\
-uint32_t swap : 1;\
-uint32_t fetch_and_add : 1;\
-uint32_t fetch_and_sub : 1;\
-uint32_t fetch_and_and : 1;\
-uint32_t fetch_and_or : 1;\
-uint32_t fetch_and_xor : 1;\
-uint32_t reserved : 25;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_atomic_feature {
+    struct {
+        uint32_t cas : 1;
+        uint32_t swap : 1;
+        uint32_t fetch_and_add : 1;
+        uint32_t fetch_and_sub : 1;
+        uint32_t fetch_and_and : 1;
+        uint32_t fetch_and_or : 1;
+        uint32_t fetch_and_xor : 1;
+        uint32_t reserved : 25;
+    } bs;
+    uint32_t value;
 } urma_atomic_feature_t;
+```
 
 11. [urma_sub_trans_mode_cap_t](#_ZH-CN_TOPIC_0000002528411323-chtext)
 
-typedef enum urma_sub_trans_mode_cap {\
-URMA_RC_TP_DST_ORDERING = 0x1, /\* rc mode with tp dst ordering \*/\
-URMA_RC_TA_DST_ORDERING = 0x1 \<\< 1, /\* rc mode with ta dst ordering \*/\
-URMA_RC_USER_TP = 0x1 \<\< 2, /\* rc mode with user tp \*/\
+```c
+typedef enum urma_sub_trans_mode_cap {
+    URMA_RC_TP_DST_ORDERING = 0x1, /* rc mode with tp dst ordering */
+    URMA_RC_TA_DST_ORDERING = 0x1 << 1, /* rc mode with ta dst ordering */
+    URMA_RC_USER_TP = 0x1 << 2, /* rc mode with user tp */
 } urma_sub_trans_mode_cap_t;
+```
 
 12. [urma_congestion_ctrl_alg_t](#_ZH-CN_TOPIC_0000002528409915-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_congestion_ctrl_alg {\
-URMA_CC_NONE = 0x1 \<\< URMA_TP_CC_NONE,\
-URMA_CC_DCQCN = 0x1 \<\< URMA_TP_CC_DCQCN,\
-URMA_CC_DCQCN_AND_NETWORK_CC = 0x1 \<\< URMA_TP_CC_DCQCN_AND_NETWORK_CC,\
-URMA_CC_LDCP = 0x1 \<\< URMA_TP_CC_LDCP,\
-URMA_CC_LDCP_AND_CAQM = 0x1 \<\< URMA_TP_CC_LDCP_AND_CAQM,\
-URMA_CC_LDCP_AND_OPEN_CC = 0x1 \<\< URMA_TP_CC_LDCP_AND_OPEN_CC,\
-URMA_CC_HC3 = 0x1 \<\< URMA_TP_CC_HC3,\
-URMA_CC_DIP = 0x1 \<\< URMA_TP_CC_DIP,\
-URMA_CC_ACC = 0x1 \<\< URMA_TP_CC_ACC\
+```c
+typedef enum urma_congestion_ctrl_alg {
+    URMA_CC_NONE = 0x1 << URMA_TP_CC_NONE,
+    URMA_CC_DCQCN = 0x1 << URMA_TP_CC_DCQCN,
+    URMA_CC_DCQCN_AND_NETWORK_CC = 0x1 << URMA_TP_CC_DCQCN_AND_NETWORK_CC,
+    URMA_CC_LDCP = 0x1 << URMA_TP_CC_LDCP,
+    URMA_CC_LDCP_AND_CAQM = 0x1 << URMA_TP_CC_LDCP_AND_CAQM,
+    URMA_CC_LDCP_AND_OPEN_CC = 0x1 << URMA_TP_CC_LDCP_AND_OPEN_CC,
+    URMA_CC_HC3 = 0x1 << URMA_TP_CC_HC3,
+    URMA_CC_DIP = 0x1 << URMA_TP_CC_DIP,
+    URMA_CC_ACC = 0x1 << URMA_TP_CC_ACC
 } urma_congestion_ctrl_alg_t;
+```
 
 13. [urma_order_type_cap_t](#_ZH-CN_TOPIC_0000002491667086-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_order_type_cap {\
-struct {\
-uint32_t ot : 1;\
-uint32_t oi : 1;\
-uint32_t ol : 1;\
-uint32_t no : 1;\
-uint32_t reserved : 28;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_order_type_cap {
+    struct {
+        uint32_t ot : 1;
+        uint32_t oi : 1;
+        uint32_t ol : 1;
+        uint32_t no : 1;
+        uint32_t reserved : 28;
+    } bs;
+    uint32_t value;
 } urma_order_type_cap_t;
+```
 
 14. [urma_tp_type_cap_t](#_ZH-CN_TOPIC_0000002491827052-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_tp_type_cap {\
-struct {\
-uint32_t rtp : 1;\
-uint32_t ctp : 1;\
-uint32_t utp : 1;\
-uint32_t reserved : 29;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_tp_type_cap {
+    struct {
+        uint32_t rtp : 1;
+        uint32_t ctp : 1;
+        uint32_t utp : 1;
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
 } urma_tp_type_cap_t;
+```
 
 15. [urma_tp_feature_t](#_ZH-CN_TOPIC_0000002523906825-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_tp_feature {\
-struct {\
-uint32_t rm_multi_path : 1;\
-uint32_t rc_multi_path : 1;\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_tp_feature {
+    struct {
+        uint32_t rm_multi_path : 1;
+        uint32_t rc_multi_path : 1;
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 } urma_tp_feature_t;
+```
 
 16. [urma_port_attr_t](#_ZH-CN_TOPIC_0000002521872505-chtext)
 
 一个URMA物理设备可包含一个或者多个port。active mtu不能超过max mtu之值。
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_port_attr {\
-[urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext) max_mtu; /\* \[Public\] MTU_256, MTU_512, MTU_1024 etc. \*/\
-[urma_port_state_t](#_ZH-CN_TOPIC_0000002521992517-chtext) state; /\* \[Public\] PORT_DOWN, PORT_INIT, PORT_ACTIVE \*/\
-[urma_link_width_t](#_ZH-CN_TOPIC_0000002489752734-chtext) active_width; /\* \[Public\] link width: X1, X2, X4. \*/\
-[urma_speed_t](#_ZH-CN_TOPIC_0000002489912710-chtext) active_speed; /\* \[Public\] bandwidth. \*/\
-urma_mtu_t active_mtu; /\* \[Public\] current effective mtu. \*/\
+```c
+typedef struct urma_port_attr {
+    urma_mtu_t max_mtu; /* [Public] MTU_256, MTU_512, MTU_1024 etc. */
+    urma_port_state_t state; /* [Public] PORT_DOWN, PORT_INIT, PORT_ACTIVE */
+    urma_link_width_t active_width; /* [Public] link width: X1, X2, X4. */
+    urma_speed_t active_speed; /* [Public] bandwidth. */
+    urma_mtu_t active_mtu; /* [Public] current effective mtu. */
 } urma_port_attr_t;
+```
 
 17. [urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_mtu {\
-URMA_MTU_256 = 1,\
-URMA_MTU_512,\
-URMA_MTU_1024,\
-URMA_MTU_2048,\
-URMA_MTU_4096,\
-URMA_MTU_8192,\
+```c
+typedef enum urma_mtu {
+    URMA_MTU_256 = 1,
+    URMA_MTU_512,
+    URMA_MTU_1024,
+    URMA_MTU_2048,
+    URMA_MTU_4096,
+    URMA_MTU_8192,
 } urma_mtu_t;
+```
 
 18. [urma_port_state_t](#_ZH-CN_TOPIC_0000002521992517-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_port_state {\
-URMA_PORT_NOP = 0,\
-URMA_PORT_DOWN,\
-URMA_PORT_INIT,\
-URMA_PORT_ARMED,\
-URMA_PORT_ACTIVE,\
-URMA_PORT_ACTIVE_DEFER,\
+```c
+typedef enum urma_port_state {
+    URMA_PORT_NOP = 0,
+    URMA_PORT_DOWN,
+    URMA_PORT_INIT,
+    URMA_PORT_ARMED,
+    URMA_PORT_ACTIVE,
+    URMA_PORT_ACTIVE_DEFER,
 } urma_port_state_t;
+```
 
 19. [urma_link_width_t](#_ZH-CN_TOPIC_0000002489752734-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_link_width {\
-URMA_LINK_X1 = 0x1,\
-URMA_LINK_X2 = 0x1 \<\< 1,\
-URMA_LINK_X4 = 0x1 \<\< 2,\
-URMA_LINK_X8 = 0x1 \<\< 3,\
-URMA_LINK_X16 = 0x1 \<\< 4,\
-URMA_LINK_X32 = 0x1 \<\< 5,\
+```c
+typedef enum urma_link_width {
+    URMA_LINK_X1 = 0x1,
+    URMA_LINK_X2 = 0x1 << 1,
+    URMA_LINK_X4 = 0x1 << 2,
+    URMA_LINK_X8 = 0x1 << 3,
+    URMA_LINK_X16 = 0x1 << 4,
+    URMA_LINK_X32 = 0x1 << 5,
 } urma_link_width_t;
+```
 
 20. [urma_speed_t](#_ZH-CN_TOPIC_0000002489912710-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_speed {\
-URMA_SP_10M = 0,\
-URMA_SP_100M,\
-URMA_SP_1G,\
-URMA_SP_2_5G,\
-URMA_SP_5G,\
-URMA_SP_10G,\
-URMA_SP_14G,\
-URMA_SP_25G,\
-URMA_SP_40G,\
-URMA_SP_50G,\
-URMA_SP_100G,\
-URMA_SP_200G,\
-URMA_SP_400G,\
-URMA_SP_800G,\
+```c
+typedef enum urma_speed {
+    URMA_SP_10M = 0,
+    URMA_SP_100M,
+    URMA_SP_1G,
+    URMA_SP_2_5G,
+    URMA_SP_5G,
+    URMA_SP_10G,
+    URMA_SP_14G,
+    URMA_SP_25G,
+    URMA_SP_40G,
+    URMA_SP_50G,
+    URMA_SP_100G,
+    URMA_SP_200G,
+    URMA_SP_400G,
+    URMA_SP_800G,
 } urma_speed_t;
+```
 
-#### eid
+#### 2.2.2.2 eid
 
-##### urma_get_eid_list
+##### 2.2.2.2.1 urma_get_eid_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) \* urma_get_eid_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*dev, uint32_t \*cnt);
-
+[urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) * urma_get_eid_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, uint32_t *cnt);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2152,13 +1587,13 @@ URMA_SP_800G,\
 
 受操作系统sysfs缓存大小限制（一页），每个namespace的每个urma设备最多支持获取80个EID。
 
-需用户调用[3.2.2.2.2](#urma_free_eid_list) [urma_free_eid_list](#urma_free_eid_list)()释放相关资源。
+需用户调用[3.2.2.2.2](#22222-urma_free_eid_list) [urma_free_eid_list](#22222-urma_free_eid_list)()释放相关资源。
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: urma_device;
+@param[in] [Required] dev: urma_device;
 
-\@param\[out\] cnt: Return the number of valid eids;
+@param[out] cnt: Return the number of valid eids;
 
 5.  返回值
 
@@ -2166,42 +1601,43 @@ If it succeeds, it will return the eid_info array pointer. If it fails, it will 
 
 6.  [urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_eid_info {\
-[urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid;\
-uint32_t eid_index; /\* 0\~UBCORE_MAX_EID_CNT -1 \*/\
+```c
+typedef struct urma_eid_info {
+    urma_eid_t eid;
+    uint32_t eid_index; /* 0\~UBCORE_MAX_EID_CNT -1 */
 } urma_eid_info_t;
+```
 
 7.  [urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_eid {\
-uint8_t raw\[URMA_EID_SIZE\]; /\* Network Order \*/\
-struct {\
-uint64_t reserved; /\* If IPv4 mapped to IPv6, == 0 \*/\
-uint32_t prefix; /\* If IPv4 mapped to IPv6, == 0x0000ffff \*/\
-uint32_t addr; /\* If IPv4 mapped to IPv6, == IPv4 addr \*/\
-} in4;\
-struct {\
-uint64_t subnet_prefix;\
-uint64_t interface_id;\
-} in6;\
+```c
+typedef union urma_eid {
+    uint8_t raw[URMA_EID_SIZE]; /* Network Order */
+    struct {
+        uint64_t reserved; /* If IPv4 mapped to IPv6, == 0 */
+        uint32_t prefix; /* If IPv4 mapped to IPv6, == 0x0000ffff */
+        uint32_t addr; /* If IPv4 mapped to IPv6, == IPv4 addr */
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
 } urma_eid_t;
+```
 
-##### urma_free_eid_list
+##### 2.2.2.2.2 urma_free_eid_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_free_eid_list([urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) \*eid_list);
-
+void urma_free_eid_list([urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) *eid_list);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2211,18 +1647,17 @@ void urma_free_eid_list([urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext)
 
 4.  参数
 
-\@param\[in\] \[Required\] eid_list: The eid array pointer to be released
+@param[in] [Required] eid_list: The eid array pointer to be released
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数eid_list来自[3.2.2.2.1](#urma_get_eid_list) [urma_get_eid_list](#urma_get_eid_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数eid_list来自[3.2.2.2.1](#22221-urma_get_eid_list) [urma_get_eid_list](#22221-urma_get_eid_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 void
 
-#### uasid
-
+#### 2.2.2.3 uasid
 
 ##### urma_get_smac
 
@@ -2233,7 +1668,6 @@ void
 2.  原型
 
 urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2251,7 +1685,6 @@ urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_dmac
 
 1.  头文件
@@ -2261,7 +1694,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2281,7 +1713,6 @@ urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *ne
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_eid_by_ip
 
 1.  头文件
@@ -2291,7 +1722,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2311,7 +1741,6 @@ urma_status_t urma_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_ip_by_eid
 
 1.  头文件
@@ -2321,7 +1750,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2340,16 +1768,16 @@ urma_status_t urma_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *ei
 5.  返回值
 
 Return: 0 on success, other value on error.
-##### urma_get_uasid
+
+##### 2.2.2.3.1 urma_get_uasid
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_get_uasid(uint32_t \*uasid);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_uasid(uint32_t *uasid);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2359,24 +1787,23 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[out\] uasid: the address to put uasid
+@param[out] uasid: the address to put uasid
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-#### context
+#### 2.2.2.4 context
 
-##### urma_create_context
+##### 2.2.2.4.1 urma_create_context
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_create_context([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*dev, uint32_t eid_index)
-
+[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *urma_create_context([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, uint32_t eid_index)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2386,9 +1813,9 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: urma device, by get_device apis.
+@param[in] [Required] dev: urma device, by get_device apis.
 
-\@param\[in\] \[Required\] eid_index: device\'s eid index.
+@param[in] [Required] eid_index: device\'s eid index.
 
 5.  返回值
 
@@ -2396,169 +1823,164 @@ Return: urma context pointer on success, NULL on error.
 
 6.  [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_context {\
-struct [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) \*dev; /\* \[Private\] point to the corresponding urma device. \*/\
-struct [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext) \*ops; /\* \[Private\] operation of urma device. \*/\
-int dev_fd; /\* \[Private\] fd of urma device\'s sysfs file. \*/\
-int async_fd; /\* \[Private\] fd of urma device\'s async event file. \*/\
-pthread_mutex_t mutex; /\* \[Private\] mutex of urma context. \*/\
-[urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid; /\* \[Public\] eid of urma device. \*/\
-uint32_t eid_index;\
-uint32_t uasid; /\* \[Public\] uasid of current process. \*/\
-struct [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext) ref; /\* \[Private\] reference count of urma context. \*/\
-[urma_context_aggr_mode_t](#_ZH-CN_TOPIC_0000002528412247-chtext) aggr_mode; /\* \[Public\] aggregated mode of urma context. \*/\
+```c
+typedef struct urma_context {
+    struct urma_device_t *dev; /* [Private] point to the corresponding urma device. */
+    struct urma_ops_t *ops; /* [Private] operation of urma device. */
+    int dev_fd; /* [Private] fd of urma device\'s sysfs file. */
+    int async_fd; /* [Private] fd of urma device\'s async event file. */
+    pthread_mutex_t mutex; /* [Private] mutex of urma context. */
+    urma_eid_t eid; /* [Public] eid of urma device. */
+    uint32_t eid_index;
+    uint32_t uasid; /* [Public] uasid of current process. */
+    struct urma_ref_t ref; /* [Private] reference count of urma context. */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
+```
 
 7.  [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_ops {\
-/\* OPs name \*/\
-const char \*name;\
-\
-/\* Jetty OPs \*/\
-urma_jfc_t \*(\*create_jfc)(urma_context_t \*ctx, urma_jfc_cfg_t \*jfc_cfg);\
-urma_status_t (\*modify_jfc)(urma_jfc_t \*jfc, urma_jfc_attr_t \*attr);\
-urma_status_t (\*delete_jfc)(urma_jfc_t \*jfc);\
-urma_status_t (\*delete_jfc_batch)(urma_jfc_t \*\*jfc, int jfc_num, urma_jfc_t \*\*bad_jfc);\
-urma_jfs_t \*(\*create_jfs)(urma_context_t \*ctx, urma_jfs_cfg_t \*jfs);\
-urma_status_t (\*modify_jfs)(urma_jfs_t \*jfs, urma_jfs_attr_t \*attr);\
-urma_status_t (\*query_jfs)(urma_jfs_t \*jfs, urma_jfs_cfg_t \*cfg, urma_jfs_attr_t \*attr);\
-int (\*flush_jfs)(urma_jfs_t \*jfs, int cr_cnt, urma_cr_t \*cr);\
-urma_status_t (\*delete_jfs)(urma_jfs_t \*jfs);\
-urma_status_t (\*delete_jfs_batch)(urma_jfs_t \*\*jfs_arr, int jfs_num, urma_jfs_t \*\*bad_jfs);\
-urma_jfr_t \*(\*create_jfr)(urma_context_t \*ctx, urma_jfr_cfg_t \*jfr);\
-urma_status_t (\*modify_jfr)(urma_jfr_t \*jfr, urma_jfr_attr_t \*attr);\
-urma_status_t (\*query_jfr)(urma_jfr_t \*jfr, urma_jfr_cfg_t \*cfg, urma_jfr_attr_t \*attr);\
-urma_status_t (\*delete_jfr)(urma_jfr_t \*jfr);\
-urma_status_t (\*delete_jfr_batch)(urma_jfr_t \*\*jfr_arr, int jfr_num, urma_jfr_t \*\*bad_jfr);\
-urma_target_jetty_t \*(\*import_jfr)(urma_context_t \*ctx, urma_rjfr_t \*rjfr, urma_token_t \*token);\
-urma_status_t (\*unimport_jfr)(urma_target_jetty_t \*target_jfr);\
-urma_status_t (\*advise_jfr)(urma_jfs_t \*jfs, urma_target_jetty_t \*tjfr);\
-urma_status_t (\*unadvise_jfr)(urma_jfs_t \*jfs, urma_target_jetty_t \*tjfr);\
-urma_status_t (\*advise_jfr_async)(urma_jfs_t \*jfs, urma_target_jetty_t \*tjfr, urma_advise_async_cb_func cb_fun,\
-void \*cb_arg);\
-urma_jetty_t \*(\*create_jetty)(urma_context_t \*ctx, urma_jetty_cfg_t \*jetty_cfg);\
-urma_status_t (\*modify_jetty)(urma_jetty_t \*jetty, urma_jetty_attr_t \*jetty_attr);\
-urma_status_t (\*query_jetty)(urma_jetty_t \*jetty, urma_jetty_cfg_t \*cfg, urma_jetty_attr_t \*attr);\
-int (\*flush_jetty)(urma_jetty_t \*jetty, int cr_cnt, urma_cr_t \*cr);\
-urma_status_t (\*delete_jetty)(urma_jetty_t \*jetty);\
-urma_status_t (\*delete_jetty_batch)(urma_jetty_t \*\*jetty_arr, int jetty_num, urma_jetty_t \*\*bad_jetty);\
-urma_target_jetty_t \*(\*import_jetty)(urma_context_t \*ctx, urma_rjetty_t \*rjetty, urma_token_t \*rjetty_token);\
-urma_status_t (\*unimport_jetty)(urma_target_jetty_t \*target_jetty);\
-urma_status_t (\*advise_jetty)(urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty);\
-urma_status_t (\*unadvise_jetty)(urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty);\
-urma_status_t (\*advise_jetty_async)(urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty,\
-urma_advise_async_cb_func cb_fun, void \*cb_arg);\
-urma_status_t (\*bind_jetty)(urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty);\
-urma_status_t (\*unbind_jetty)(urma_jetty_t \*jetty);\
-urma_jetty_grp_t \*(\*create_jetty_grp)(urma_context_t \*ctx, urma_jetty_grp_cfg_t \*cfg);\
-urma_status_t (\*delete_jetty_grp)(urma_jetty_grp_t \*jetty_grp);\
-urma_jfce_t \*(\*create_jfce)(urma_context_t \*ctx);\
-urma_status_t (\*delete_jfce)(urma_jfce_t \*jfce);\
-/\*\*\
-\* Get tpn of current jetty\
-\* \@param\[in\] jetty: the jetty pointer created before\
-\* Return: 0 or positive as correct tpn; negative as get tpn failure\
-\*/\
-int (\*get_tpn)(urma_jetty_t \*jetty);\
-int (\*modify_tp)(urma_context_t \*ctx, uint32_t tpn, urma_tp_cfg_t \*cfg, urma_tp_attr_t \*attr,\
-urma_tp_attr_mask_t mask);\
-/\* Control plane OPs \*/\
-urma_status_t (\*get_tp_list)(urma_context_t \*ctx, urma_get_tp_cfg_t \*cfg, uint32_t \*tp_cnt,\
-urma_tp_info_t \*tp_list);\
-urma_status_t (\*set_tp_attr)(const urma_context_t \*ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt,\
-const uint32_t tp_attr_bitmap, const urma_tp_attr_value_t \*tp_attr);\
-urma_status_t (\*get_tp_attr)(const urma_context_t \*ctx, const uint64_t tp_handle, uint8_t \*tp_attr_cnt,\
-uint32_t \*tp_attr_bitmap, urma_tp_attr_value_t \*tp_attr);\
-urma_target_jetty_t \*(\*import_jetty_ex)(urma_context_t \*ctx, urma_rjetty_t \*rjetty, urma_token_t \*token_value,\
-urma_active_tp_cfg_t \*active_tp_cfg);\
-urma_target_jetty_t \*(\*import_jfr_ex)(urma_context_t \*ctx, urma_rjfr_t \*rjfr, urma_token_t \*token_value,\
-urma_active_tp_cfg_t \*active_tp_cfg);\
-urma_status_t (\*bind_jetty_ex)(urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty,\
-urma_active_tp_cfg_t \*active_tp_cfg);\
-\
-/\* Segment OPs \*/\
-urma_token_id_t \*(\*alloc_token_id)(urma_context_t \*ctx);\
-urma_token_id_t \*(\*alloc_token_id_ex)(urma_context_t \*ctx, urma_token_id_flag_t flag);\
-urma_status_t (\*free_token_id)(urma_token_id_t \*token_id);\
-urma_target_seg_t \*(\*register_seg)(urma_context_t \*ctx, urma_seg_cfg_t \*seg_cfg);\
-urma_status_t (\*unregister_seg)(urma_target_seg_t \*target_seg);\
-urma_target_seg_t \*(\*import_seg)(urma_context_t \*ctx, urma_seg_t \*seg, urma_token_t \*token, uint64_t addr,\
-urma_import_seg_flag_t flag);\
-urma_status_t (\*unimport_seg)(urma_target_seg_t \*target_seg);\
-\
-/\* Events OPs \*/\
-urma_status_t (\*get_async_event)(urma_context_t \*ctx, urma_async_event_t \*event);\
-void (\*ack_async_event)(urma_async_event_t \*event);\
-\
-/\* Other OPs \*/\
-int (\*user_ctl)(urma_context_t \*ctx, urma_user_ctl_in_t \*in, urma_user_ctl_out_t \*out);\
-\
-/\* Dataplane OPs \*/\
-urma_status_t (\*post_jfs_wr)(urma_jfs_t \*jfs, urma_jfs_wr_t \*wr, urma_jfs_wr_t \*\*bad_wr);\
-urma_status_t (\*post_jfr_wr)(urma_jfr_t \*jfr, urma_jfr_wr_t \*wr, urma_jfr_wr_t \*\*bad_wr);\
-urma_status_t (\*post_jetty_send_wr)(urma_jetty_t \*jetty, urma_jfs_wr_t \*wr, urma_jfs_wr_t \*\*bad_wr);\
-urma_status_t (\*post_jetty_recv_wr)(urma_jetty_t \*jetty, urma_jfr_wr_t \*wr, urma_jfr_wr_t \*\*bad_wr);\
-int (\*poll_jfc)(urma_jfc_t \*jfc, int cr_cnt, urma_cr_t \*cr);\
-urma_status_t (\*rearm_jfc)(urma_jfc_t \*jfc, bool solicited_only);\
-int (\*wait_jfc)(urma_jfce_t \*jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t \*jfc\[\]);\
-void (\*ack_jfc)(urma_jfc_t \*jfc\[\], uint32_t nevents\[\], uint32_t jfc_cnt);\
-\
-/\* Jetty async OPs \*/\
-urma_target_jetty_t \*(\*import_jetty_async)(urma_notifier_t \*notifier, const urma_rjetty_t \*rjetty,\
-const urma_token_t \*token_value, uint64_t user_ctx, int timeout);\
-urma_status_t (\*unimport_jetty_async)(urma_target_jetty_t \*target_jetty);\
-\
-urma_status_t (\*bind_jetty_async)(urma_notifier_t \*notifier, urma_jetty_t \*jetty, urma_target_jetty_t \*tjetty,\
-uint64_t user_ctx, int timeout);\
-urma_status_t (\*unbind_jetty_async)(urma_jetty_t \*jetty);\
-\
-urma_notifier_t \*(\*create_notifier)(urma_context_t \*ctx);\
-urma_status_t (\*delete_notifier)(urma_notifier_t \*notifier);\
-int (\*wait_notify)(urma_notifier_t \*notifier, uint32_t cnt, urma_notify_t \*notify, int timeout);\
-void (\*ack_notify)(uint32_t cnt, urma_notify_t \*notify);\
+```c
+typedef struct urma_ops {
+    /* OPs name */
+    const char *name;
+    /* Jetty OPs */
+    urma_jfc_t *(*create_jfc)(urma_context_t *ctx, urma_jfc_cfg_t *jfc_cfg);
+    urma_status_t (*modify_jfc)(urma_jfc_t *jfc, urma_jfc_attr_t *attr);
+    urma_status_t (*delete_jfc)(urma_jfc_t *jfc);
+    urma_status_t (*delete_jfc_batch)(urma_jfc_t **jfc, int jfc_num, urma_jfc_t **bad_jfc);
+    urma_jfs_t *(*create_jfs)(urma_context_t *ctx, urma_jfs_cfg_t *jfs);
+    urma_status_t (*modify_jfs)(urma_jfs_t *jfs, urma_jfs_attr_t *attr);
+    urma_status_t (*query_jfs)(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg, urma_jfs_attr_t *attr);
+    int (*flush_jfs)(urma_jfs_t *jfs, int cr_cnt, urma_cr_t *cr);
+    urma_status_t (*delete_jfs)(urma_jfs_t *jfs);
+    urma_status_t (*delete_jfs_batch)(urma_jfs_t **jfs_arr, int jfs_num, urma_jfs_t **bad_jfs);
+    urma_jfr_t *(*create_jfr)(urma_context_t *ctx, urma_jfr_cfg_t *jfr);
+    urma_status_t (*modify_jfr)(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
+    urma_status_t (*query_jfr)(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_attr_t *attr);
+    urma_status_t (*delete_jfr)(urma_jfr_t *jfr);
+    urma_status_t (*delete_jfr_batch)(urma_jfr_t **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr);
+    urma_target_jetty_t *(*import_jfr)(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *token);
+    urma_status_t (*unimport_jfr)(urma_target_jetty_t *target_jfr);
+    urma_status_t (*advise_jfr)(urma_jfs_t *jfs, urma_target_jetty_t *tjfr);
+    urma_status_t (*unadvise_jfr)(urma_jfs_t *jfs, urma_target_jetty_t *tjfr);
+    urma_status_t (*advise_jfr_async)(urma_jfs_t *jfs, urma_target_jetty_t *tjfr, urma_advise_async_cb_func cb_fun,
+    void *cb_arg);
+    urma_jetty_t *(*create_jetty)(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg);
+    urma_status_t (*modify_jetty)(urma_jetty_t *jetty, urma_jetty_attr_t *jetty_attr);
+    urma_status_t (*query_jetty)(urma_jetty_t *jetty, urma_jetty_cfg_t *cfg, urma_jetty_attr_t *attr);
+    int (*flush_jetty)(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
+    urma_status_t (*delete_jetty)(urma_jetty_t *jetty);
+    urma_status_t (*delete_jetty_batch)(urma_jetty_t **jetty_arr, int jetty_num, urma_jetty_t **bad_jetty);
+    urma_target_jetty_t *(*import_jetty)(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *rjetty_token);
+    urma_status_t (*unimport_jetty)(urma_target_jetty_t *target_jetty);
+    urma_status_t (*advise_jetty)(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
+    urma_status_t (*unadvise_jetty)(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
+    urma_status_t (*advise_jetty_async)(urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
+    urma_advise_async_cb_func cb_fun, void *cb_arg);
+    urma_status_t (*bind_jetty)(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
+    urma_status_t (*unbind_jetty)(urma_jetty_t *jetty);
+    urma_jetty_grp_t *(*create_jetty_grp)(urma_context_t *ctx, urma_jetty_grp_cfg_t *cfg);
+    urma_status_t (*delete_jetty_grp)(urma_jetty_grp_t *jetty_grp);
+    urma_jfce_t *(*create_jfce)(urma_context_t *ctx);
+    urma_status_t (*delete_jfce)(urma_jfce_t *jfce);
+    /**
+    * Get tpn of current jetty
+    * @param[in] jetty: the jetty pointer created before
+    * Return: 0 or positive as correct tpn; negative as get tpn failure
+    */
+    int (*get_tpn)(urma_jetty_t *jetty);
+    int (*modify_tp)(urma_context_t *ctx, uint32_t tpn, urma_tp_cfg_t *cfg, urma_tp_attr_t *attr,
+    urma_tp_attr_mask_t mask);
+    /* Control plane OPs */
+    urma_status_t (*get_tp_list)(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint32_t *tp_cnt,
+    urma_tp_info_t *tp_list);
+    urma_status_t (*set_tp_attr)(const urma_context_t *ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt,
+    const uint32_t tp_attr_bitmap, const urma_tp_attr_value_t *tp_attr);
+    urma_status_t (*get_tp_attr)(const urma_context_t *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt,
+    uint32_t *tp_attr_bitmap, urma_tp_attr_value_t *tp_attr);
+    urma_target_jetty_t *(*import_jetty_ex)(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value,
+    urma_active_tp_cfg_t *active_tp_cfg);
+    urma_target_jetty_t *(*import_jfr_ex)(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *token_value,
+    urma_active_tp_cfg_t *active_tp_cfg);
+    urma_status_t (*bind_jetty_ex)(urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
+    urma_active_tp_cfg_t *active_tp_cfg);
+    /* Segment OPs */
+    urma_token_id_t *(*alloc_token_id)(urma_context_t *ctx);
+    urma_token_id_t *(*alloc_token_id_ex)(urma_context_t *ctx, urma_token_id_flag_t flag);
+    urma_status_t (*free_token_id)(urma_token_id_t *token_id);
+    urma_target_seg_t *(*register_seg)(urma_context_t *ctx, urma_seg_cfg_t *seg_cfg);
+    urma_status_t (*unregister_seg)(urma_target_seg_t *target_seg);
+    urma_target_seg_t *(*import_seg)(urma_context_t *ctx, urma_seg_t *seg, urma_token_t *token, uint64_t addr,
+    urma_import_seg_flag_t flag);
+    urma_status_t (*unimport_seg)(urma_target_seg_t *target_seg);
+    /* Events OPs */
+    urma_status_t (*get_async_event)(urma_context_t *ctx, urma_async_event_t *event);
+    void (*ack_async_event)(urma_async_event_t *event);
+    /* Other OPs */
+    int (*user_ctl)(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
+    /* Dataplane OPs */
+    urma_status_t (*post_jfs_wr)(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
+    urma_status_t (*post_jfr_wr)(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+    urma_status_t (*post_jetty_send_wr)(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
+    urma_status_t (*post_jetty_recv_wr)(urma_jetty_t *jetty, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+    int (*poll_jfc)(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
+    urma_status_t (*rearm_jfc)(urma_jfc_t *jfc, bool solicited_only);
+    int (*wait_jfc)(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[]);
+    void (*ack_jfc)(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt);
+    /* Jetty async OPs */
+    urma_target_jetty_t *(*import_jetty_async)(urma_notifier_t *notifier, const urma_rjetty_t *rjetty,
+    const urma_token_t *token_value, uint64_t user_ctx, int timeout);
+    urma_status_t (*unimport_jetty_async)(urma_target_jetty_t *target_jetty);
+    urma_status_t (*bind_jetty_async)(urma_notifier_t *notifier, urma_jetty_t *jetty, urma_target_jetty_t *tjetty,
+    uint64_t user_ctx, int timeout);
+    urma_status_t (*unbind_jetty_async)(urma_jetty_t *jetty);
+    urma_notifier_t *(*create_notifier)(urma_context_t *ctx);
+    urma_status_t (*delete_notifier)(urma_notifier_t *notifier);
+    int (*wait_notify)(urma_notifier_t *notifier, uint32_t cnt, urma_notify_t *notify, int timeout);
+    void (*ack_notify)(uint32_t cnt, urma_notify_t *notify);
 } urma_ops_t;
+```
 
 8.  [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_ref {\
-#ifndef \_\_cplusplus\
-atomic_ulong atomic_cnt;\
-#else\
-std::atomic_ulong atomic_cnt;\
-#endif\
+```c
+typedef struct urma_ref {
+#ifndef \_\_cplusplus
+    atomic_ulong atomic_cnt;
+#else
+    std::atomic_ulong atomic_cnt;
+#endif
 } urma_ref_t;
+```
 
 9.  [urma_context_aggr_mode_t](#_ZH-CN_TOPIC_0000002528412247-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_context_aggr_mode {\
-URMA_AGGR_MODE_STANDALONE,\
-URMA_AGGR_MODE_ACTIVE_BACKUP,\
-URMA_AGGR_MODE_BALANCE,\
+```c
+typedef enum urma_context_aggr_mode {
+    URMA_AGGR_MODE_STANDALONE,
+    URMA_AGGR_MODE_ACTIVE_BACKUP,
+    URMA_AGGR_MODE_BALANCE,
 } urma_context_aggr_mode_t;
+```
 
-##### urma_delete_context
+##### 2.2.2.4.2 urma_delete_context
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_context([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_context([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2568,26 +1990,25 @@ URMA_AGGR_MODE_BALANCE,\
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: handle of the created context.
+@param[in] [Required] ctx: handle of the created context.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数ctx来自[3.2.2.4.1](#urma_create_context) [urma_create_context](#urma_create_context)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数ctx来自[3.2.2.4.1](#22241-urma_create_context) [urma_create_context](#22241-urma_create_context)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_set_context_opt
+##### 2.2.2.4.3 urma_set_context_opt
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_set_context_opt([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext) opt_name, const void \*opt_value, size_t opt_len);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_context_opt([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext) opt_name, const void *opt_value, size_t opt_len);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2597,13 +2018,13 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: handle of the created context.
+@param[in] [Required] ctx: handle of the created context.
 
-\@param\[in\] \[Required\] opt_name: name of option.
+@param[in] [Required] opt_name: name of option.
 
-\@param\[in\] \[Required\] opt_value: opt value pointer.
+@param[in] [Required] opt_value: opt value pointer.
 
-\@param\[in\] \[Required\] opt_len: len of opt_value.
+@param[in] [Required] opt_len: len of opt_value.
 
 5.  返回值
 
@@ -2611,25 +2032,25 @@ Return: 0 on success, other value on error.
 
 6.  [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_context_opt_name {\
-URMA_OPT_AGGR_MODE,\
+```c
+typedef enum urma_context_opt_name {
+    URMA_OPT_AGGR_MODE,
 } urma_opt_name_t;
+```
 
-#### net addr
+#### 2.2.2.5 net addr
 
-##### urma_get_net_addr_list
+##### 2.2.2.5.1 urma_get_net_addr_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) \*urma_get_net_addr_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, uint32_t \*cnt)
-
+[urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) *urma_get_net_addr_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t *cnt)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2639,9 +2060,9 @@ URMA_OPT_AGGR_MODE,\
 
 4.  参数
 
-\@param\[in\] ctx: the created urma context pointer;
+@param[in] ctx: the created urma context pointer;
 
-\@param\[out\] cnt: numer of net address info
+@param[out] cnt: numer of net address info
 
 5.  返回值
 
@@ -2649,70 +2070,71 @@ Return: pointer of net address list; NULL on error。
 
 6.  [urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_net_addr_info {\
-[urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext) netaddr;\
-uint32_t index;\
+```c
+typedef struct urma_net_addr_info {
+    urma_net_addr_t netaddr;
+    uint32_t index;
 } urma_net_addr_info_t;
+```
 
 7.  [urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_net_addr {\
-sa_family_t sin_family; /\* AF_INET/AF_INET6 \*/\
-union {\
-struct in_addr in4;\
-struct in6_addr in6;\
-};\
-uint64_t vlan;\
-uint8_t mac\[URMA_MAC_BYTES\];\
-uint32_t prefix_len;\
+```c
+typedef struct urma_net_addr {
+    sa_family_t sin_family; /* AF_INET/AF_INET6 */
+    union {
+        struct in_addr in4;
+        struct in6_addr in6;
+    };
+    uint64_t vlan;
+    uint8_t mac[URMA_MAC_BYTES];
+    uint32_t prefix_len;
 } urma_net_addr_t;
+```
 
-##### urma_free_net_addr_list
+##### 2.2.2.5.2 urma_free_net_addr_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_free_net_addr_list([urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) \*net_addr_list);
-
+void urma_free_net_addr_list([urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) *net_addr_list);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-释放通过[3.2.2.5.1](#urma_get_net_addr_list) [urma_get_net_addr_list](#urma_get_net_addr_list)()获取的net address信息。
+释放通过[3.2.2.5.1](#22251-urma_get_net_addr_list) [urma_get_net_addr_list](#22251-urma_get_net_addr_list)()获取的net address信息。
 
 4.  参数
 
-\@param\[in\] net_addr_list: pointer of net address list
+@param[in] net_addr_list: pointer of net address list
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数net_addr_list来自[3.2.2.5.1](#urma_get_net_addr_list) [urma_get_net_addr_list](#urma_get_net_addr_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。并且释放之后用户不应再访问该net_addr_list指针。
+由调用者保证参数net_addr_list来自[3.2.2.5.1](#22251-urma_get_net_addr_list) [urma_get_net_addr_list](#22251-urma_get_net_addr_list)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。并且释放之后用户不应再访问该net_addr_list指针。
 
 5.  返回值
 
 void
 
-### 安全
+### 2.2.3 安全
 
-#### urma_alloc_token_id
+#### 2.2.3.1 urma_alloc_token_id
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.3.1.1](#urma_token_id_t) [urma_token_id_t](#urma_token_id_t) \*urma_alloc_token_id([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx);
+[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
 
 3.  描述
 
@@ -2720,73 +2142,74 @@ void
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: specifies the urma context;
+@param[in] [Required] ctx: specifies the urma context;
 
 5.  返回值
 
 Return: pointer to token_id on success, NULL on error.
 
-##### urma_token_id_t
-
+##### 2.2.3.1.1 urma_token_id_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_token_id {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx;\
-uint32_t token_id;\
-uint64_t handle;\
-[urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext) ref;\
+```c
+typedef struct urma_token_id {
+    urma_context_t *urma_ctx;
+    uint32_t token_id;
+    uint64_t handle;
+    urma_ref_t ref;
 } urma_token_id_t;
+```
 
-##### urma_token_id_flag_t
-
+##### 2.2.3.1.2 urma_token_id_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_token_id_flag {\
-struct {\
-uint32_t multi_seg : 1;\
-uint32_t reserved : 31;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_token_id_flag {
+    struct {
+        uint32_t multi_seg : 1;
+        uint32_t reserved : 31;
+    } bs;
+    uint32_t value;
 } urma_token_id_flag_t;
+```
 
-#### urma_alloc_token_id_ex
+#### 2.2.3.2 urma_alloc_token_id_ex
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.3.1.1](#urma_token_id_t) [urma_token_id_t](#urma_token_id_t) \*urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [3.2.3.1.2](#urma_token_id_flag_t) [urma_token_id_flag_t](#urma_token_id_flag_t) flag);
-
+[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
 3.  描述
 
-[3.2.3.1](#urma_alloc_token_id) [urma_alloc_token_id](#urma_alloc_token_id)()扩展接口，增加flag参数控制用table mode还是entry mode。若用table mode，注册的seg地址需按页对齐。
+[3.2.3.1](#2231-urma_alloc_token_id) [urma_alloc_token_id](#2231-urma_alloc_token_id)()扩展接口，增加flag参数控制用table mode还是entry mode。若用table mode，注册的seg地址需按页对齐。
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: specifies the urma context;
+@param[in] [Required] ctx: specifies the urma context;
 
-\@param\[in\] \[Required\] flag: decides the mode of token id. use table mode if enable multi_seg in flag.
+@param[in] [Required] flag: decides the mode of token id. use table mode if enable multi_seg in flag.
 
 5.  返回值
 
 Return: pointer to token_id on success, NULL on error.
 
-#### urma_free_token_id
+#### 2.2.3.3 urma_free_token_id
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_free_token_id([3.2.3.1.1](#urma_token_id_t) [urma_token_id_t](#urma_token_id_t) \*token_id)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_free_token_id([3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *token_id)
 
 3.  描述
 
@@ -2794,32 +2217,31 @@ Return: pointer to token_id on success, NULL on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] token_id: Specifies the token id to be released;
+@param[in] [Required] token_id: Specifies the token id to be released;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数token_id来自[3.2.3.1](#urma_alloc_token_id) [urma_alloc_token_id](#urma_alloc_token_id)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数token_id来自[3.2.3.1](#2231-urma_alloc_token_id) [urma_alloc_token_id](#2231-urma_alloc_token_id)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## 控制面
+## 2.3 控制面
 
-### Jetty相关
+### 2.3.1 Jetty相关
 
-#### JFC
+#### 2.3.1.1 JFC
 
-##### urma_create_jfc
+##### 2.3.1.1.1 urma_create_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*urma_create_jfc([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext) \*jfc_cfg);
-
+[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *urma_create_jfc([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext) *jfc_cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2829,11 +2251,11 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] jfc_cfg: configuration including: depth, flag, jfce, user context;
+@param[in] [Required] jfc_cfg: configuration including: depth, flag, jfce, user context;
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 正常时，JFC的队列深度配置不足，可能会影响应用的正常运行。异常时，硬件可能构造错误CR通知应用Jetty或JFS的状态发生了变化，构造的错误CR类型包括URMA_CR_WR_FLUSH_ERR_DONE和URMA_CR_WR_SUSPEND_ERR_DONE，也应为JFC预留足够的空间来存放硬件构造的CR，否则JFC会发生溢出。故推荐按照JFC队列深度 \>= 关联jetty的队列深度总和 / 每多少个WR生成一个CR来配置（默认为1）+ 关联jetty数。
 
@@ -2843,73 +2265,76 @@ Return: the handle of created jfc, not NULL on success; NULL on error.
 
 6.  [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfc_cfg {\
-uint32_t depth; /\* \[Required\] the depth of jfc, no greater than urma_device_cap_t-\>jfc_depth \*/\
-[urma_jfc_flag_t](#_ZH-CN_TOPIC_0000002489752740-chtext) flag; /\* \[Optional\] see urma_jfc_flag_t, set flag.value to be 0 by default \*/\
-uint32_t ceqn; /\* \[Optional\] event queue id, no greater than urma_device_cap_t-\>ceq_cnt\
-set to 0 by default \*/\
-[urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) \*jfce; /\* \[Required\] the event of jfc \*/\
-uint64_t user_ctx; /\* \[Optional\] private data of jfc, set to NULL by default \*/\
+```c
+typedef struct urma_jfc_cfg {
+    uint32_t depth; /* [Required] the depth of jfc, no greater than urma_device_cap_t-\>jfc_depth */
+    urma_jfc_flag_t flag; /* [Optional] see urma_jfc_flag_t, set flag.value to be 0 by default */
+    uint32_t ceqn; /* [Optional] event queue id, no greater than urma_device_cap_t-\>ceq_cnt
+    set to 0 by default */
+    urma_jfce_t *jfce; /* [Required] the event of jfc */
+    uint64_t user_ctx; /* [Optional] private data of jfc, set to NULL by default */
 } urma_jfc_cfg_t;
+```
 
 7.  [urma_jfc_flag_t](#_ZH-CN_TOPIC_0000002489752740-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jfc_flag {\
-struct {\
-uint32_t lock_free : 1;\
-uint32_t jfc_inline : 1;\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jfc_flag {
+    struct {
+        uint32_t lock_free : 1;
+        uint32_t jfc_inline : 1;
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 } urma_jfc_flag_t;
+```
 
 8.  [urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfce {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-int fd; /\* \[Private\] fd of completed event. \*/\
-struct [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext) ref; /\* \[Private\] reference count of urma context. \*/\
+```c
+typedef struct urma_jfce {
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    int fd; /* [Private] fd of completed event. */
+    struct urma_ref_t ref; /* [Private] reference count of urma context. */
 } urma_jfce_t;
+```
 
 9.  [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfc {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-[urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext) jfc_id; /\* \[Public\] see urma_jetty_id. \*/\
-[urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext) jfc_cfg; /\* \[Public\] storage jfc config. \*/\
-uint64_t handle;\
-pthread_mutex_t event_mutex;\
-pthread_cond_t event_cond;\
-uint32_t comp_events_acked;\
-uint32_t async_events_acked;\
+```c
+typedef struct urma_jfc {
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    urma_jfc_id_t jfc_id; /* [Public] see urma_jetty_id. */
+    urma_jfc_cfg_t jfc_cfg; /* [Public] storage jfc config. */
+    uint64_t handle;
+    pthread_mutex_t event_mutex;
+    pthread_cond_t event_cond;
+    uint32_t comp_events_acked;
+    uint32_t async_events_acked;
 } urma_jfc_t;
+```
 
 10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)
 
 typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
 
-##### urma_modify_jfc
+##### 2.3.1.1.2 urma_modify_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc, [3.3.1.1.2](#urma_modify_jfc) [urma_modify_jfc](#urma_modify_jfc) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2919,9 +2344,9 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc
 
 4.  参数
 
-\@param\[in\] \[Required\] jfc: specify JFC;
+@param[in] [Required] jfc: specify JFC;
 
-\@param\[in\] \[Required\] attr: attributes to be modified. 支持修改JFC的两种中断抑制参数：CQE消息个数、中断间隔时间。
+@param[in] [Required] attr: attributes to be modified. 支持修改JFC的两种中断抑制参数：CQE消息个数、中断间隔时间。
 
 5.  返回值
 
@@ -2929,35 +2354,36 @@ Return: 0 on success, other value on error.
 
 6.  ?.1.urma_jfc_attr_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfc_attr {\
-uint32_t mask; /\* mask value, refer to urma_jfc_attr_mask_t \*/\
-uint16_t moderate_count;\
-uint16_t moderate_period; /\* in micro seconds \*/\
+```c
+typedef struct urma_jfc_attr {
+    uint32_t mask; /* mask value, refer to urma_jfc_attr_mask_t */
+    uint16_t moderate_count;
+    uint16_t moderate_period; /* in micro seconds */
 } urma_jfc_attr_t;
+```
 
 7.  ?.2.urma_jfc_attr_mask_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_jfc_attr_mask {\
-JFC_MODERATE_COUNT = 0x1,\
-JFC_MODERATE_PERIOD = 0x1 \<\< 1\
+```c
+typedef enum urma_jfc_attr_mask {
+    JFC_MODERATE_COUNT = 0x1,
+    JFC_MODERATE_PERIOD = 0x1 << 1
 } urma_jfc_attr_mask_t;
+```
 
-##### urma_delete_jfc
+##### 2.3.1.1.3 urma_delete_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2965,32 +2391,31 @@ JFC_MODERATE_PERIOD = 0x1 \<\< 1\
 
 删除JFC。删除成功后，JFC不能再被访问。
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 由调用者保证调用urma_delete_jfc接口时，其它依赖jfc的urma对象（例如jetty，jfs和jfr）的生存周期已经结束，否则可能导致use_after_free问题。
 
 4.  参数
 
-\@param\[in\] \[Required\] jfc: handle of the created jfc;
+@param[in] [Required] jfc: handle of the created jfc;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfc来自[3.3.1.1.1](#urma_create_jfc) [urma_create_jfc](#urma_create_jfc)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfc来自[3.3.1.1.1](#23111-urma_create_jfc) [urma_create_jfc](#23111-urma_create_jfc)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_delete_jfc_batch
+##### 2.3.1.1.4 urma_delete_jfc_batch
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfc_batch([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*\*jfc_arr, int jfc_num, urma_jfc_t \*\*bad_jfc);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc_batch([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) **jfc_arr, int jfc_num, urma_jfc_t **bad_jfc);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3000,24 +2425,23 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfc_arr: the array of the jfc pointer;
+@param[in] [Required] jfc_arr: the array of the jfc pointer;
 
-\@param\[in\] \[Required\] jfc_num: array length;
+@param[in] [Required] jfc_num: array length;
 
-\@param\[out\] \[Required\] bad_jfc: the address of the first failed jfc pointer;
+@param[out] [Required] bad_jfc: the address of the first failed jfc pointer;
 
 5.  返回值
 
 Return: 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1\. 会优先按序对数组中全部输入的jfc进行检查，存在空指针会直接返回bad_jfc，不进入批量删除操作；
 
 2\. 由于本接口需要将整个数组一次下发删除操作，所以必须保证全部jfc是属于同一个dev；
 
 3\. 只有接口返回失败才会填写bad_jfc，否则为默认传入值。
-
 
 ##### urma_alloc_jfc
 
@@ -3028,7 +2452,6 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 2.  原型
 
 urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma_jfc_t **jfc);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3048,7 +2471,6 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_free_jfc
 
 1.  头文件
@@ -3058,7 +2480,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_free_jfc(urma_jfc_t *jfc);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3074,7 +2495,6 @@ urma_status_t urma_free_jfc(urma_jfc_t *jfc);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_active_jfc
 
 1.  头文件
@@ -3084,7 +2504,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_active_jfc(urma_jfc_t *jfc);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3100,7 +2519,6 @@ urma_status_t urma_active_jfc(urma_jfc_t *jfc);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_deactive_jfc
 
 1.  头文件
@@ -3110,7 +2528,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_deactive_jfc(urma_jfc_t *jfc);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3126,7 +2543,6 @@ urma_status_t urma_deactive_jfc(urma_jfc_t *jfc);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_set_jfc_opt
 
 1.  头文件
@@ -3136,7 +2552,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3158,7 +2573,6 @@ urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_jfc_opt
 
 1.  头文件
@@ -3168,7 +2582,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3189,18 +2602,18 @@ urma_status_t urma_get_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_
 5.  返回值
 
 Return: 0 on success, other value on error.
-#### JFCE
 
-##### urma_create_jfce
+#### 2.3.1.2 JFCE
+
+##### 2.3.1.2.1 urma_create_jfce
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) \*urma_create_jfce([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx);
-
+[urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *urma_create_jfce([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3210,22 +2623,21 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
 5.  返回值
 
 Return: the address of created jfce, not NULL on success, NULL on error.
 
-##### urma_delete_jfce
+##### 2.3.1.2.2 urma_delete_jfce
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfce([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) \*jfce);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfce([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *jfce);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3235,28 +2647,27 @@ Return: the address of created jfce, not NULL on success, NULL on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfce: the jfce to be deleted;
+@param[in] [Required] jfce: the jfce to be deleted;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfc来自[3.3.1.2.1](#urma_create_jfce) [urma_create_jfce](#urma_create_jfce)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfc来自[3.3.1.2.1](#23121-urma_create_jfce) [urma_create_jfce](#23121-urma_create_jfce)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### JFAE
+#### 2.3.1.3 JFAE
 
-##### urma_get_async_event
+##### 2.3.1.3.1 urma_get_async_event
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_get_async_event([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) \*event);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_async_event([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) *event);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3266,9 +2677,9 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: handle of the created urma context;
+@param[in] [Required] ctx: handle of the created urma context;
 
-\@param\[out\] \[Required\] event: the address to put event.
+@param[out] [Required] event: the address to put event.
 
 5.  返回值
 
@@ -3276,56 +2687,57 @@ Return: 0 on success, other value on error.
 
 6.  [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_async_event {\
-/\* may be SW queue error, may be HW port error \*/\
-const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx;\
-union {\
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc;\
-[urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs;\
-[urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr;\
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty;\
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) \*jetty_grp;\
-uint32_t port_id;\
-uint32_t eid_idx;\
-} element;\
-[urma_async_event_type_t](#_ZH-CN_TOPIC_0000002521872571-chtext) event_type;\
-void \*priv;\
+```c
+typedef struct urma_async_event {
+    /* may be SW queue error, may be HW port error */
+    const urma_context_t *urma_ctx;
+    union {
+        urma_jfc_t *jfc;
+        urma_jfs_t *jfs;
+        urma_jfr_t *jfr;
+        urma_jetty_t *jetty;
+        urma_jetty_grp_t *jetty_grp;
+        uint32_t port_id;
+        uint32_t eid_idx;
+    } element;
+    urma_async_event_type_t event_type;
+    void *priv;
 } urma_async_event_t;
+```
 
 7.  [urma_async_event_type_t](#_ZH-CN_TOPIC_0000002521872571-chtext)
 
-
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_async_event_type {\
-URMA_EVENT_JFC_ERR,\
-URMA_EVENT_JFS_ERR,\
-URMA_EVENT_JFR_ERR,\
-URMA_EVENT_JFR_LIMIT,\
-URMA_EVENT_JETTY_ERR,\
-URMA_EVENT_JETTY_LIMIT,\
-URMA_EVENT_JETTY_GRP_ERR,\
-URMA_EVENT_PORT_ACTIVE,\
-URMA_EVENT_PORT_DOWN,\
-URMA_EVENT_DEV_FATAL,\
-URMA_EVENT_EID_CHANGE, // eid change, HNM and other management roles will be modified.\
-URMA_EVENT_ELR_ERR, /\* Entity level error \*/\
-URMA_EVENT_ELR_DONE /\* Entity flush done \*/\
+```c
+typedef enum urma_async_event_type {
+    URMA_EVENT_JFC_ERR,
+    URMA_EVENT_JFS_ERR,
+    URMA_EVENT_JFR_ERR,
+    URMA_EVENT_JFR_LIMIT,
+    URMA_EVENT_JETTY_ERR,
+    URMA_EVENT_JETTY_LIMIT,
+    URMA_EVENT_JETTY_GRP_ERR,
+    URMA_EVENT_PORT_ACTIVE,
+    URMA_EVENT_PORT_DOWN,
+    URMA_EVENT_DEV_FATAL,
+    URMA_EVENT_EID_CHANGE, // eid change, HNM and other management roles will be modified.
+    URMA_EVENT_ELR_ERR, /* Entity level error */
+    URMA_EVENT_ELR_DONE /* Entity flush done */
 } urma_async_event_type_t;
+```
 
-##### urma_ack_async_event
+##### 2.3.1.3.2 urma_ack_async_event
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_ack_async_event([urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) \*event);
-
+void urma_ack_async_event([urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) *event);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3333,30 +2745,29 @@ void urma_ack_async_event([urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-ch
 
 对异步事件做出应答。
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 事件的port_id不应该在调用这个api之后被取消引用。
 
 4.  参数
 
-\@param\[in\] event: the address to ack event；
+@param[in] event: the address to ack event；
 
 5.  返回值
 
 Return: void
 
-#### JFS
+#### 2.3.1.4 JFS
 
-##### urma_create_jfs
+##### 2.3.1.4.1 urma_create_jfs
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*urma_create_jfs([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) \*jfs_cfg);
-
+[urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *urma_create_jfs([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) *jfs_cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3366,9 +2777,9 @@ Return: void
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] jfs_cfg: address to pu the jfs config;
+@param[in] [Required] jfs_cfg: address to pu the jfs config;
 
 5.  返回值
 
@@ -3376,56 +2787,58 @@ Return: the handle of created jfs, not NULL on success, NULL on error.
 
 6.  [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfs_cfg {\
-uint32_t depth; /\* \[Required\] the depth of jfs, defaut urma_device_cap_t-\>jfs_depth \*/\
-[urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext) flag; /\* \[Optional\] see urma_jfs_flag_t definition \*/\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode; /\* \[Required\] transport mode, must be supported by the device \*/\
-uint8_t priority; /\* \[Optional\] set the priority of JFS, ranging from \[0, 15\]\
-Services with low delay need to set high priority. \*/\
-uint8_t max_sge; /\* \[Optional\] max sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge \*/\
-uint8_t max_rsge; /\* \[Optional\] max remote sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge \*/\
-uint32_t max_inline_data; /\* \[Optional\] the max inline data size of JFS. if the parameter is 0,\
-the system will assign device\'s max inline data length. \*/\
-uint8_t rnr_retry; /\* \[Optional\] number of times that jfs will resend packets before report error,\
-when the remote side is not ready to receive (RNR), ranging from \[0, 7\],\
-the value 0 means never retry and,\
-the value 7 means retry infinite number of times for RDMA devices \*/\
-uint8_t err_timeout; /\* \[Optional\] the timeout before report error, ranging from \[0, 31\],\
-the actual timeout in usec is caculated by: 4.096\*(2\^err_timeout) \*/\
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc; /\* \[Required\] need to specify jfc \*/\
-uint64_t user_ctx; /\* \[Optional\] private data of jfs \*/\
+```c
+typedef struct urma_jfs_cfg {
+    uint32_t depth; /* [Required] the depth of jfs, defaut urma_device_cap_t-\>jfs_depth */
+    urma_jfs_flag_t flag; /* [Optional] see urma_jfs_flag_t definition */
+    urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
+    uint8_t priority; /* [Optional] set the priority of JFS, ranging from [0, 15]
+    Services with low delay need to set high priority. */
+    uint8_t max_sge; /* [Optional] max sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge */
+    uint8_t max_rsge; /* [Optional] max remote sge count in one wr, defaut urma_device_cap_t-\>max_jfs_sge */
+    uint32_t max_inline_data; /* [Optional] the max inline data size of JFS. if the parameter is 0,
+    the system will assign device\'s max inline data length. */
+    uint8_t rnr_retry; /* [Optional] number of times that jfs will resend packets before report error,
+    when the remote side is not ready to receive (RNR), ranging from [0, 7],
+    the value 0 means never retry and,
+    the value 7 means retry infinite number of times for RDMA devices */
+    uint8_t err_timeout; /* [Optional] the timeout before report error, ranging from [0, 31],
+    the actual timeout in usec is caculated by: 4.096*(2\^err_timeout) */
+    urma_jfc_t *jfc; /* [Required] need to specify jfc */
+    uint64_t user_ctx; /* [Optional] private data of jfs */
 } urma_jfs_cfg_t;
+```
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-err_timeout取值范围0\~31，实际超时值计算方法：Timeout=4.096us\*（2\^ err_timeout）
+err_timeout取值范围0\~31，实际超时值计算方法：Timeout=4.096us*（2\^ err_timeout）
 
 7.  [urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jfs_flag {\
-struct {\
-uint32_t lock_free : 1; /\* default as 0, lock protected \*/\
-uint32_t error_suspend : 1; /\* 0: error continue; 1: error suspend \*/\
-uint32_t outorder_comp : 1; /\* 0: not support; 1: support out-of-order completion \*/\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t multi_path : 1; /\* 1: multi-path, 0: single path, for ubagg only. \*/\
-uint32_t ctp_rc_mul_path_mode : 1; /\* 1: ctp rc mode multi-path \*/\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jfs_flag {
+    struct {
+        uint32_t lock_free : 1; /* default as 0, lock protected */
+        uint32_t error_suspend : 1; /* 0: error continue; 1: error suspend */
+        uint32_t outorder_comp : 1; /* 0: not support; 1: support out-of-order completion */
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t multi_path : 1; /* 1: multi-path, 0: single path, for ubagg only. */
+        uint32_t ctp_rc_mul_path_mode : 1; /* 1: ctp rc mode multi-path */
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 } urma_jfs_flag_t;
+```
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 1\. error_suspend
 
@@ -3439,46 +2852,47 @@ uint32_t value;\
 
 8.  ?.3.urma_order_type_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_order_type {\
-URMA_DEF_ORDER,\
-URMA_OT, // target ordering\
-URMA_OI, // initiator ordering\
-URMA_OL, // low layer ordering\
-URMA_NO // unreliable non ordering\
+```c
+typedef enum urma_order_type {
+    URMA_DEF_ORDER,
+    URMA_OT, // target ordering
+    URMA_OI, // initiator ordering
+    URMA_OL, // low layer ordering
+    URMA_NO // unreliable non ordering
 } urma_order_type_t;
+```
 
 9.  [urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfs {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-[urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext) jfs_id; /\* \[Public\] see urma_jetty_id. \*/\
-[urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) jfs_cfg; /\* \[Public\] storage jfs config. \*/\
-uint64_t handle;\
-pthread_mutex_t event_mutex;\
-pthread_cond_t event_cond;\
-uint32_t async_events_acked;\
+```c
+typedef struct urma_jfs {
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    urma_jfs_id_t jfs_id; /* [Public] see urma_jetty_id. */
+    urma_jfs_cfg_t jfs_cfg; /* [Public] storage jfs config. */
+    uint64_t handle;
+    pthread_mutex_t event_mutex;
+    pthread_cond_t event_cond;
+    uint32_t async_events_acked;
 } urma_jfs_t;
+```
 
 10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
 
 typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
 
-##### urma_modify_jfs
+##### 2.3.1.4.2 urma_modify_jfs
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_modify_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3488,9 +2902,9 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
-\@param\[in\] \[Required\]attr: attributes to be modified.
+@param[in] [Required]attr: attributes to be modified.
 
 5.  返回值
 
@@ -3498,37 +2912,38 @@ Return: 0 on success, other value on error.
 
 6.  [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfs_attr {\
-uint32_t mask; /\* mask value refer to urma_jfs_attr_mask_t \*/\
-[urma_jfs_state_t](#_ZH-CN_TOPIC_0000002521872521-chtext) state;\
+```c
+typedef struct urma_jfs_attr {
+    uint32_t mask; /* mask value refer to urma_jfs_attr_mask_t */
+    urma_jfs_state_t state;
 } urma_jfs_attr_t;
+```
 
 7.  ?.2.urma_jfs_attr_mask_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_jfs_attr_mask {\
-JFS_STATE = 0x1\
+```c
+typedef enum urma_jfs_attr_mask {
+    JFS_STATE = 0x1
 } urma_jfs_attr_mask_t;
+```
 
 8.  [urma_jfs_state_t](#_ZH-CN_TOPIC_0000002521872521-chtext)
 
 typedef urma_jetty_state_t urma_jfs_state_t;
 
-##### urma_query_jfs
+##### 2.3.1.4.3 urma_query_jfs
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_query_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) \*cfg, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) *cfg, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3538,26 +2953,25 @@ typedef urma_jetty_state_t urma_jfs_state_t;
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
-\@param\[out\] \[Required\]cfg: config of jfs；
+@param[out] [Required]cfg: config of jfs；
 
-\@param\[out\] \[Required\]attr: attributes of jfs;
+@param[out] [Required]attr: attributes of jfs;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_delete_jfs
+##### 2.3.1.4.4 urma_delete_jfs
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3567,26 +2981,25 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#urma_create_jfs) [urma_create_jfs](#urma_create_jfs)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_delete_jfs_batch
+##### 2.3.1.4.5 urma_delete_jfs_batch
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfs_batch([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*\*jfs_arr, int jfs_num, urma_jfs_t \*\*bad_jfs);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs_batch([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) **jfs_arr, int jfs_num, urma_jfs_t **bad_jfs);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3596,17 +3009,17 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs_arr: the array of the jfs pointer;
+@param[in] [Required] jfs_arr: the array of the jfs pointer;
 
-\@param\[in\] \[Required\] jfs_num: array length;
+@param[in] [Required] jfs_num: array length;
 
-\@param\[out\] \[Required\] bad_jfs: the address of the first failed jfs pointer;
+@param[out] [Required] bad_jfs: the address of the first failed jfs pointer;
 
 5.  返回值
 
 Return: 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1\. 会优先按序对数组中全部输入的jfs进行检查，存在空指针会直接返回bad_jfs，不进入批量删除操作；
 
@@ -3614,16 +3027,15 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 3\. 只有接口返回失败才会填写bad_jfs，否则为默认传入值。
 
-##### urma_flush_jfs
+##### 2.3.1.4.6 urma_flush_jfs
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_flush_jfs([3.3.1.4.6](#urma_flush_jfs) [urma_flush_jfs](#urma_flush_jfs) \*jfs, int cr_cnt, [3.4.2.1.1](#urma_cr_t) [urma_cr_t](#urma_cr_t) \*cr);
-
+int urma_flush_jfs([3.3.1.4.6](#23146-urma_flush_jfs) [urma_flush_jfs](#23146-urma_flush_jfs) *jfs, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3633,20 +3045,19 @@ JFS状态切为Error态，或poll到status为URMA_CR_WR_SUSPEND_DONE的cr后调�
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
-\@param\[in\] \[Required\] cr_cnt: Number of CR expected to be received;
+@param[in] [Required] cr_cnt: Number of CR expected to be received;
 
-\@param\[out\] \[Required\] cr: Address for storing CR;
+@param[out] [Required] cr: Address for storing CR;
 
 5.  返回值
 
 Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 若执行成功，则出参cr status为URMA_CR_WR_FLUSH_ERR。
-
 
 ##### urma_alloc_jfs
 
@@ -3657,7 +3068,6 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 2.  原型
 
 urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma_jfs_t **jfs);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3677,7 +3087,6 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_free_jfs
 
 1.  头文件
@@ -3687,7 +3096,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_free_jfs(urma_jfs_t *jfs);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3703,7 +3111,6 @@ urma_status_t urma_free_jfs(urma_jfs_t *jfs);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_active_jfs
 
 1.  头文件
@@ -3713,7 +3120,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_active_jfs(urma_jfs_t *jfs);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3729,7 +3135,6 @@ urma_status_t urma_active_jfs(urma_jfs_t *jfs);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_deactive_jfs
 
 1.  头文件
@@ -3739,7 +3144,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_deactive_jfs(urma_jfs_t *jfs);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3755,7 +3159,6 @@ urma_status_t urma_deactive_jfs(urma_jfs_t *jfs);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_set_jfs_opt
 
 1.  头文件
@@ -3765,7 +3168,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3787,7 +3189,6 @@ urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_jfs_opt
 
 1.  头文件
@@ -3797,7 +3198,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3818,18 +3218,18 @@ urma_status_t urma_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_
 5.  返回值
 
 Return: 0 on success, other value on error.
-#### JFR
 
-##### urma_create_jfr
+#### 2.3.1.5 JFR
+
+##### 2.3.1.5.1 urma_create_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*urma_create_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) \*jfr_cfg);
-
+[urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *urma_create_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) *jfr_cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3839,9 +3239,9 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] jfr_cfg: address to put the jfr config;
+@param[in] [Required] jfr_cfg: address to put the jfr config;
 
 5.  返回值
 
@@ -3849,24 +3249,25 @@ Return: the handle of created jfr, not NULL on success, NULL on error.
 
 6.  [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfr_cfg {\
-uint32_t id; /\* \[Optional\] specify jfr id. If the parameter is 0,\
-the system will randomly assign a non-0 value. \*/\
-uint32_t depth; /\* \[Required\] total depth, include berth, default urma_device_cap_t-\>jfr_depth. \*/\
-[urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext) flag; /\* \[Optional\] whether is in TAG_matching, whether is in DC/IDC mode. \*/\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode; /\* \[Required\] transport mode, must be supported by the device \*/\
-uint8_t max_sge; /\* \[Optional\] max sge count in one wr, default urma_device_cap_t-\>max_jfr_sge. \*/\
-uint8_t min_rnr_timer; /\* \[Optional\] the minimum RNR NACK timer, ranging from \[0, 31\], i.e.\
-the time before jfr sends NACK to the sender for the reason of \"ready to receive\" \*/\
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc; /\* \[Required\] need to specify jfc. \*/\
-[3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) token_value; /\* \[Required\] specify token_value for jfr. \*/\
-uint64_t user_ctx; /\* \[Optional\] private data of jfr \*/\
+```c
+typedef struct urma_jfr_cfg {
+    uint32_t id; /* [Optional] specify jfr id. If the parameter is 0,
+    the system will randomly assign a non-0 value. */
+    uint32_t depth; /* [Required] total depth, include berth, default urma_device_cap_t-\>jfr_depth. */
+    urma_jfr_flag_t flag; /* [Optional] whether is in TAG_matching, whether is in DC/IDC mode. */
+    urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
+    uint8_t max_sge; /* [Optional] max sge count in one wr, default urma_device_cap_t-\>max_jfr_sge. */
+    uint8_t min_rnr_timer; /* [Optional] the minimum RNR NACK timer, ranging from [0, 31], i.e.
+    the time before jfr sends NACK to the sender for the reason of "ready to receive" */
+    urma_jfc_t *jfc; /* [Required] need to specify jfc. */
+    urma_token_t token_value; /* [Required] specify token_value for jfr. */
+    uint64_t user_ctx; /* [Optional] private data of jfr */
 } urma_jfr_cfg_t;
+```
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 min_rnr_timer的值对应的时间定义如下：
 
@@ -3904,69 +3305,71 @@ min_rnr_timer的值对应的时间定义如下：
 
 7.  [urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jfr_flag {\
-struct {\
-uint32_t token_policy : 3; /\* 0: URMA_TOKEN_NONE\
-1: URMA_TOKEN_PLAIN_TEXT\
-2: URMA_TOKEN_SIGNED\
-3: URMA_TOKEN_ALL_ENCRYPTED\
-4: URMA_TOKEN_RESERVED \*/\
-uint32_t tag_matching : 1; /\* 0: URMA_NO_TAG_MATCHING.\
-1: URMA_WITH_TAG_MATCHING. \*/\
-uint32_t lock_free : 1;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jfr_flag {
+    struct {
+        uint32_t token_policy : 3; /* 0: URMA_TOKEN_NONE
+        1: URMA_TOKEN_PLAIN_TEXT
+        2: URMA_TOKEN_SIGNED
+        3: URMA_TOKEN_ALL_ENCRYPTED
+        4: URMA_TOKEN_RESERVED */
+        uint32_t tag_matching : 1; /* 0: URMA_NO_TAG_MATCHING.
+        1: URMA_WITH_TAG_MATCHING. */
+        uint32_t lock_free : 1;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 } urma_jfr_flag_t;
+```
 
 8.  [urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_transport_mode {\
-URMA_TM_RM = 0x1, /\* Reliable message \*/\
-URMA_TM_RC = 0x1 \<\< 1, /\* Reliable connection \*/\
-URMA_TM_UM = 0x1 \<\< 2, /\* Unreliable message \*/\
+```c
+typedef enum urma_transport_mode {
+    URMA_TM_RM = 0x1, /* Reliable message */
+    URMA_TM_RC = 0x1 << 1, /* Reliable connection */
+    URMA_TM_UM = 0x1 << 2, /* Unreliable message */
 } urma_transport_mode_t;
+```
 
 9.  [urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfr {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-[urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext) jfr_id; /\* \[Public\] see urma_jetty_id. \*/\
-[urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) jfr_cfg; /\* \[Public\] storage jfr config. \*/\
-uint64_t handle;\
-pthread_mutex_t event_mutex;\
-pthread_cond_t event_cond;\
-uint32_t async_events_acked;\
+```c
+typedef struct urma_jfr {
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    urma_jfr_id_t jfr_id; /* [Public] see urma_jetty_id. */
+    urma_jfr_cfg_t jfr_cfg; /* [Public] storage jfr config. */
+    uint64_t handle;
+    pthread_mutex_t event_mutex;
+    pthread_cond_t event_cond;
+    uint32_t async_events_acked;
 } urma_jfr_t;
+```
 
 10. [urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext)
 
 typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
-##### urma_modify_jfr
+##### 2.3.1.5.2 urma_modify_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_modify_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3976,9 +3379,9 @@ typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: specify JFR;
+@param[in] [Required] jfr: specify JFR;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
 5.  返回值
 
@@ -3986,46 +3389,48 @@ Return: 0 on success, other value on error.
 
 6.  [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfr_attr {\
-uint32_t mask; // mask value refer to urma_jfr_attr_mask_t\
-uint32_t rx_threshold;\
-[urma_jfr_state_t](#_ZH-CN_TOPIC_0000002489912732-chtext) state;\
+```c
+typedef struct urma_jfr_attr {
+    uint32_t mask; // mask value refer to urma_jfr_attr_mask_t
+    uint32_t rx_threshold;
+    urma_jfr_state_t state;
 } urma_jfr_attr_t;
+```
 
 7.  ?.2.urma_jfr_attr_mask_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_jfr_attr_mask {\
-JFR_RX_THRESHOLD = 0x1,\
-JFR_STATE = 0x1 \<\< 1\
+```c
+typedef enum urma_jfr_attr_mask {
+    JFR_RX_THRESHOLD = 0x1,
+    JFR_STATE = 0x1 << 1
 } urma_jfr_attr_mask_t;
+```
 
 8.  [urma_jfr_state_t](#_ZH-CN_TOPIC_0000002489912732-chtext)
 
-
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_jfr_state {\
-URMA_JFR_STATE_RESET = 0,\
-URMA_JFR_STATE_READY,\
-URMA_JFR_STATE_ERROR\
+```c
+typedef enum urma_jfr_state {
+    URMA_JFR_STATE_RESET = 0,
+    URMA_JFR_STATE_READY,
+    URMA_JFR_STATE_ERROR
 } urma_jfr_state_t;
+```
 
-##### urma_query_jfr
+##### 2.3.1.5.3 urma_query_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_query_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) \*cfg, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) *cfg, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4035,26 +3440,25 @@ URMA_JFR_STATE_ERROR\
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: specify JFR;
+@param[in] [Required] jfr: specify JFR;
 
-\@param\[out\] \[Required\] cfg: config of jfr;
+@param[out] [Required] cfg: config of jfr;
 
-\@param\[out\] \[Required\] attr: attributes of jfr;
+@param[out] [Required] attr: attributes of jfr;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_delete_jfr
+##### 2.3.1.5.4 urma_delete_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4064,28 +3468,27 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: the jfr created before;
+@param[in] [Required] jfr: the jfr created before;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-1\. 由调用者保证参数jfr来自[3.3.1.5.1](#urma_create_jfr) [urma_create_jfr](#urma_create_jfr)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+1\. 由调用者保证参数jfr来自[3.3.1.5.1](#23151-urma_create_jfr) [urma_create_jfr](#23151-urma_create_jfr)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 2\. 由调用者保证调用urma_delete_jfr接口时，其它依赖jfr的urma对象(使用共享jfr的jetty）的生存周期已经结束，否则可能导致use_after_free问题。
 
-##### urma_delete_jfr_batch
+##### 2.3.1.5.5 urma_delete_jfr_batch
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jfr_batch([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*\*jfr_arr, int jfr_num, urma_jfr_t \*\*bad_jfr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr_batch([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4095,17 +3498,17 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr_arr: the array of the jfr pointer;
+@param[in] [Required] jfr_arr: the array of the jfr pointer;
 
-\@param\[in\] \[Required\] jfr_num: array length;
+@param[in] [Required] jfr_num: array length;
 
-\@param\[out\] \[Required\] bad_jfr: the address of the first failed jfr pointer;
+@param[out] [Required] bad_jfr: the address of the first failed jfr pointer;
 
 5.  返回值
 
 Return: 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1\. 会优先按序对数组中全部输入的jfr进行检查，存在空指针会直接返回bad_jfr，不进入批量删除操作；
 
@@ -4113,16 +3516,15 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 3\. 只有接口返回失败才会填写bad_jfr，否则为默认传入值。
 
-##### urma_import_jfr
+##### 2.3.1.5.6 urma_import_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*urma_import_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) \*rjfr, [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value);
-
+[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4132,11 +3534,11 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
+@param[in] [Required] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
 
-\@param\[in\] \[Required\] token_value: token_valueto put into output jetty/protection table;
+@param[in] [Required] token_value: token_valueto put into output jetty/protection table;
 
 5.  返回值
 
@@ -4144,131 +3546,138 @@ Return: the address of target jfr, not NULL on success, NULL on error.
 
 6.  [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_rjfr {\
-[urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext) jfr_id; /\* see urma_jetty_id \*/\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode;\
-[urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext) flag;\
-[urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext) tp_type;\
+```c
+typedef struct urma_rjfr {
+    urma_jfr_id_t jfr_id; /* see urma_jetty_id */
+    urma_transport_mode_t trans_mode;
+    urma_import_jetty_flag_t flag;
+    urma_tp_type_t tp_type;
 } urma_rjfr_t;
+```
 
 7.  [urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_import_jetty_flag {\
-struct {\
-uint32_t token_policy : 3;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t share_tp : 1; /\* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,\
-this flag can only be set to 0. \*/\
-uint32_t reserved : 20;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_import_jetty_flag {
+    struct {
+        uint32_t token_policy : 3;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t share_tp : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
+        this flag can only be set to 0. */
+        uint32_t reserved : 20;
+    } bs;
+    uint32_t value;
 } urma_import_jetty_flag_t;
+```
 
 8.  [urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_tp_type {\
-URMA_RTP,\
-URMA_CTP,\
-URMA_UTP\
+```c
+typedef enum urma_tp_type {
+    URMA_RTP,
+    URMA_CTP,
+    URMA_UTP
 } urma_tp_type_t;
+```
 
 9.  [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_target_jetty {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-[urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) id; /\* \[Private\] see urma_jetty_id. \*/\
-uint64_t handle;\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode;\
-[urma_tp_t](#_ZH-CN_TOPIC_0000002489912738-chtext) tp;\
-[urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext) type; // todo supplementary target type\
-[urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext) flag;\
-[urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext) policy;\
-[urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext) tp_type;\
+```c
+typedef struct urma_target_jetty {
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    urma_jetty_id_t id; /* [Private] see urma_jetty_id. */
+    uint64_t handle;
+    urma_transport_mode_t trans_mode;
+    urma_tp_t tp;
+    urma_target_type_t type; // todo supplementary target type
+    urma_import_jetty_flag_t flag;
+    urma_jetty_grp_policy_t policy;
+    urma_tp_type_t tp_type;
 } urma_target_jetty_t;
+```
 
 10. [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jetty_id {\
-[urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid;\
-uint32_t uasid; /\* maybe zero(stand for kernel) or non-zero(stand for app) \*/\
-uint32_t id;\
+```c
+typedef struct urma_jetty_id {
+    urma_eid_t eid;
+    uint32_t uasid; /* maybe zero(stand for kernel) or non-zero(stand for app) */
+    uint32_t id;
 } urma_jetty_id_t;
+```
 
 11. [urma_tp_t](#_ZH-CN_TOPIC_0000002489912738-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_tp {\
-uint32_t tpn; /\* vtpn \*/\
+```c
+typedef struct urma_tp {
+    uint32_t tpn; /* vtpn */
 } urma_tp_t;
+```
 
 12. [urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_target_type {\
-URMA_JFR = 0,\
-URMA_JETTY,\
-URMA_JETTY_GROUP\
+```c
+typedef enum urma_target_type {
+    URMA_JFR = 0,
+    URMA_JETTY,
+    URMA_JETTY_GROUP
 } urma_target_type_t;
+```
 
 13. [urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_jetty_grp_policy {\
-URMA_JETTY_GRP_POLICY_RR = 0,\
-URMA_JETTY_GRP_POLICY_HASH_HINT = 1\
+```c
+typedef enum urma_jetty_grp_policy {
+    URMA_JETTY_GRP_POLICY_RR = 0,
+    URMA_JETTY_GRP_POLICY_HASH_HINT = 1
 } urma_jetty_grp_policy_t;
+```
 
-##### urma_import_jfr_ex
+##### 2.3.1.5.7 urma_import_jfr_ex
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*urma_import_jfr_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) \*rjfr, [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value, [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext) \*cfg);
-
+[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jfr_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext) *cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.5.6](#urma_import_jfr) [urma_import_jfr](#urma_import_jfr)()扩展接口，增加入参urma_import_jfr_ex_cfg_t \*cfg。
+[3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23156-urma_import_jfr)()扩展接口，增加入参urma_import_jfr_ex_cfg_t *cfg。
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
+@param[in] [Required] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
 
-\@param\[in\] \[Required\] token_value: token to put into output jetty/protection table;
+@param[in] [Required] token_value: token to put into output jetty/protection table;
 
-\@param\[in\] \[Required\] cfg: tp active configuration to exchange with target;
+@param[in] [Required] cfg: tp active configuration to exchange with target;
 
 5.  返回值
 
@@ -4280,37 +3689,38 @@ typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urm
 
 7.  [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_active_tp_cfg {\
-uint64_t tp_handle;\
-uint64_t peer_tp_handle;\
-uint64_t tag;\
-[urma_active_tp_attr_t](#_ZH-CN_TOPIC_0000002528696683-chtext) tp_attr;\
+```c
+typedef struct urma_active_tp_cfg {
+    uint64_t tp_handle;
+    uint64_t peer_tp_handle;
+    uint64_t tag;
+    urma_active_tp_attr_t tp_attr;
 } urma_active_tp_cfg_t;
+```
 
 8.  [urma_active_tp_attr_t](#_ZH-CN_TOPIC_0000002528696683-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_active_tp_attr {\
-uint32_t tx_psn;\
-uint32_t rx_psn;\
-uint64_t reserved;\
+```c
+typedef struct urma_active_tp_attr {
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    uint64_t reserved;
 } urma_active_tp_attr_t;
+```
 
-##### urma_unimport_jfr
+##### 2.3.1.5.8 urma_unimport_jfr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unimport_jfr([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*target_jfr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jfr([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4320,16 +3730,15 @@ unimport远端JFR。操作成功后，进程不可访问这个远端JFR。
 
 4.  参数
 
-\@param\[in\] \[Required\] target_jfr: the target jfr to unimport;
+@param[in] [Required] target_jfr: the target jfr to unimport;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数target_jfr来自[3.3.1.5.6](#urma_import_jfr) [urma_import_jfr](#urma_import_jfr)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数target_jfr来自[3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23156-urma_import_jfr)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
-
 
 ##### urma_alloc_jfr
 
@@ -4340,7 +3749,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma_jfr_t **jfr);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4360,7 +3768,6 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_free_jfr
 
 1.  头文件
@@ -4370,7 +3777,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_free_jfr(urma_jfr_t *jfr);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4386,7 +3792,6 @@ urma_status_t urma_free_jfr(urma_jfr_t *jfr);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_active_jfr
 
 1.  头文件
@@ -4396,7 +3801,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_active_jfr(urma_jfr_t *jfr);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4412,7 +3816,6 @@ urma_status_t urma_active_jfr(urma_jfr_t *jfr);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_deactive_jfr
 
 1.  头文件
@@ -4422,7 +3825,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_deactive_jfr(urma_jfr_t *jfr);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4438,7 +3840,6 @@ urma_status_t urma_deactive_jfr(urma_jfr_t *jfr);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_set_jfr_opt
 
 1.  头文件
@@ -4448,7 +3849,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4470,7 +3870,6 @@ urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_jfr_opt
 
 1.  头文件
@@ -4480,7 +3879,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4501,18 +3899,18 @@ urma_status_t urma_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_
 5.  返回值
 
 Return: 0 on success, other value on error.
-#### Jetty
 
-##### urma_create_jetty
+#### 2.3.1.6 Jetty
+
+##### 2.3.1.6.1 urma_create_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*urma_create_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) \*jetty_cfg);
-
+[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *urma_create_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) *jetty_cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4522,11 +3920,11 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] jetty_cfg: pointer of the jetty config;
+@param[in] [Required] jetty_cfg: pointer of the jetty config;
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 1\. 用户指定的jetty id可能已被占用，应以实际分配出的id为准。
 
@@ -4540,116 +3938,123 @@ Return: the handle of created jetty, not NULL on success, NULL on error.
 
 6.  [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jetty_cfg {\
-uint32_t id; /\* \[Optional\] user specified jetty id. \*/\
-[urma_jetty_flag_t](#_ZH-CN_TOPIC_0000002521872541-chtext) flag; /\* \[Optional\] Connection or connection less \*/\
-/\* send configuration \*/\
-[urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) jfs_cfg; /\* \[Required\] see urma_jfs_cfg_t \*/\
-/\* recv configuration \*/\
-union {\
-struct {\
-[urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr; /\* \[Optional\] shared jfr to receive msg \*/\
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc; /\* \[Optional\] To replace the jfc related to the above jfr \*/\
-} shared; /\* \[Required\] \*/\
-[urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) \*jfr_cfg; /\* deprecated \*/\
-};\
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) \*jetty_grp; /\* \[Optional\] user specified jetty group. \*/\
-uint64_t user_ctx; /\* \[Optional\] private data of jetty \*/\
+```c
+typedef struct urma_jetty_cfg {
+    uint32_t id; /* [Optional] user specified jetty id. */
+    urma_jetty_flag_t flag; /* [Optional] Connection or connection less */
+    /* send configuration */
+    urma_jfs_cfg_t jfs_cfg; /* [Required] see urma_jfs_cfg_t */
+    /* recv configuration */
+    union {
+        struct {
+            urma_jfr_t *jfr; /* [Optional] shared jfr to receive msg */
+            urma_jfc_t *jfc; /* [Optional] To replace the jfc related to the above jfr */
+        } shared; /* [Required] */
+        urma_jfr_cfg_t *jfr_cfg; /* deprecated */
+    };
+    urma_jetty_grp_t *jetty_grp; /* [Optional] user specified jetty group. */
+    uint64_t user_ctx; /* [Optional] private data of jetty */
 } urma_jetty_cfg_t;
+```
 
 7.  [urma_jetty_flag_t](#_ZH-CN_TOPIC_0000002521872541-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jetty_flag {\
-struct {\
-uint32_t share_jfr : 1; /\* 0: URMA_NO_SHARE_JFR.\
-1: URMA_SHARE_JFR. \*/\
-uint32_t reserved : 31;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jetty_flag {
+    struct {
+        uint32_t share_jfr : 1; /* 0: URMA_NO_SHARE_JFR.
+        1: URMA_SHARE_JFR. */
+        uint32_t reserved : 31;
+    } bs;
+    uint32_t value;
 } urma_jetty_flag_t;
+```
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 UB设备只支持share_jfr指定为URMA_SHARE \_JFR.
 
 8.  [urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext)
 
-struct urma_jetty_grp {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx;\
-[urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) jetty_grp_id;\
-[urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) cfg;\
-uint32_t jetty_cnt;\
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*\*jetty_list;\
-pthread_mutex_t list_mutex;\
-uint64_t handle; /\* use to quickly get uobj of jetty group in kernel module \*/\
-pthread_mutex_t event_mutex;\
-pthread_cond_t event_cond;\
-uint32_t async_events_acked;\
+```c
+struct urma_jetty_grp {
+    urma_context_t *urma_ctx;
+    urma_jetty_id_t jetty_grp_id;
+    urma_jetty_grp_cfg_t cfg;
+    uint32_t jetty_cnt;
+    urma_jetty_t **jetty_list;
+    pthread_mutex_t list_mutex;
+    uint64_t handle; /* use to quickly get uobj of jetty group in kernel module */
+    pthread_mutex_t event_mutex;
+    pthread_cond_t event_cond;
+    uint32_t async_events_acked;
 };
+```
 
 9.  [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jetty_grp_cfg {\
-char name\[URMA_MAX_NAME\];\
-[urma_jetty_grp_flag_t](#_ZH-CN_TOPIC_0000002521872565-chtext) flag;\
-[3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) token_value; /\* \[Required\] specify token_value for Jetty group. \*/\
-uint32_t id; /\* \[Optional\] specify Jetty group id.\
-If the parameter is 0, UMDK will assign a non_0 value. \*/\
-[urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext) policy; /\* Hash or RR(on default) \*/\
-uint64_t user_ctx; /\* \[Optional\] private data of jetty \*/\
+```c
+typedef struct urma_jetty_grp_cfg {
+    char name[URMA_MAX_NAME];
+    urma_jetty_grp_flag_t flag;
+    urma_token_t token_value; /* [Required] specify token_value for Jetty group. */
+    uint32_t id; /* [Optional] specify Jetty group id.
+    If the parameter is 0, UMDK will assign a non_0 value. */
+    urma_jetty_grp_policy_t policy; /* Hash or RR(on default) */
+    uint64_t user_ctx; /* [Optional] private data of jetty */
 } urma_jetty_grp_cfg_t;
+```
 
 10. [urma_jetty_grp_flag_t](#_ZH-CN_TOPIC_0000002521872565-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jetty_grp_flag {\
-struct {\
-uint32_t token_policy : 3; /\* 0: URMA_TOKEN_NONE\
-1: URMA_TOKEN_PLAIN_TEXT\
-2: URMA_TOKEN_SIGNED\
-3: URMA_TOKEN_ALL_ENCRYPTED\
-4: URMA_TOKEN_RESERVED \*/\
-uint32_t reserved : 29;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jetty_grp_flag {
+    struct {
+        uint32_t token_policy : 3; /* 0: URMA_TOKEN_NONE
+        1: URMA_TOKEN_PLAIN_TEXT
+        2: URMA_TOKEN_SIGNED
+        3: URMA_TOKEN_ALL_ENCRYPTED
+        4: URMA_TOKEN_RESERVED */
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
 } urma_jetty_grp_flag_t;
+```
 
 11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)
 
-struct urma_jetty_grp {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx;\
-[urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) jetty_grp_id;\
-[urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) cfg;\
-uint32_t jetty_cnt;\
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*\*jetty_list;\
-pthread_mutex_t list_mutex;\
-uint64_t handle; /\* use to quickly get uobj of jetty group in kernel module \*/\
-pthread_mutex_t event_mutex;\
-pthread_cond_t event_cond;\
-uint32_t async_events_acked;\
+```c
+struct urma_jetty_grp {
+    urma_context_t *urma_ctx;
+    urma_jetty_id_t jetty_grp_id;
+    urma_jetty_grp_cfg_t cfg;
+    uint32_t jetty_cnt;
+    urma_jetty_t **jetty_list;
+    pthread_mutex_t list_mutex;
+    uint64_t handle; /* use to quickly get uobj of jetty group in kernel module */
+    pthread_mutex_t event_mutex;
+    pthread_cond_t event_cond;
+    uint32_t async_events_acked;
 };
+```
 
-##### urma_modify_jetty
+##### 2.3.1.6.2 urma_modify_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_modify_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) \*attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4657,15 +4062,15 @@ uint32_t async_events_acked;\
 
 修改Jetty属性。
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 UB设备的Jetty只支持使用共享JFR，不支持修改Jetty水线。
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: specify jetty;
+@param[in] [Required] jetty: specify jetty;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
 5.  返回值
 
@@ -4673,47 +4078,49 @@ Return: 0 on success, other value on error.
 
 6.  [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jetty_attr {\
-uint32_t mask; // mask value refer to urma_jetty_attr_mask_t\
-uint32_t rx_threshold;\
-[urma_jetty_state_t](#_ZH-CN_TOPIC_0000002489912748-chtext) state;\
+```c
+typedef struct urma_jetty_attr {
+    uint32_t mask; // mask value refer to urma_jetty_attr_mask_t
+    uint32_t rx_threshold;
+    urma_jetty_state_t state;
 } urma_jetty_attr_t;
+```
 
 7.  ?.2.urma_jetty_attr_mask_t
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_jetty_attr_mask {\
-JETTY_RX_THRESHOLD = 0x1,\
-JETTY_STATE = 0x1 \<\< 1\
+```c
+typedef enum urma_jetty_attr_mask {
+    JETTY_RX_THRESHOLD = 0x1,
+    JETTY_STATE = 0x1 << 1
 } urma_jetty_attr_mask_t;
+```
 
 8.  [urma_jetty_state_t](#_ZH-CN_TOPIC_0000002489912748-chtext)
 
-
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_jetty_state {\
-URMA_JETTY_STATE_RESET = 0,\
-URMA_JETTY_STATE_READY,\
-URMA_JETTY_STATE_SUSPENDED,\
-URMA_JETTY_STATE_ERROR\
+```c
+typedef enum urma_jetty_state {
+    URMA_JETTY_STATE_RESET = 0,
+    URMA_JETTY_STATE_READY,
+    URMA_JETTY_STATE_SUSPENDED,
+    URMA_JETTY_STATE_ERROR
 } urma_jetty_state_t;
+```
 
-##### urma_query_jetty
+##### 2.3.1.6.3 urma_query_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_query_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) \*cfg, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) \*attr)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) *cfg, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) *attr)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4723,30 +4130,29 @@ URMA_JETTY_STATE_ERROR\
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: the jetty created before;
+@param[in] [Required] jetty: the jetty created before;
 
-\@param\[out\] \[Required\] cfg: config to query;
+@param[out] [Required] cfg: config to query;
 
-\@param\[out\] \[Required\] attr: attributes to query;
+@param[out] [Required] attr: attributes to query;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-对于采用share jfr的jetty，[3.3.1.6.3](#urma_query_jetty) [urma_query_jetty](#urma_query_jetty)不会查询jfr的属性，请使用[3.3.1.5.3](#urma_query_jfr) [urma_query_jfr](#urma_query_jfr)进行查询。
+对于采用share jfr的jetty，[3.3.1.6.3](#23163-urma_query_jetty) [urma_query_jetty](#23163-urma_query_jetty)不会查询jfr的属性，请使用[3.3.1.5.3](#23153-urma_query_jfr) [urma_query_jfr](#23153-urma_query_jfr)进行查询。
 
-##### urma_delete_jetty
+##### 2.3.1.6.4 urma_delete_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4756,22 +4162,21 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: the jetty created before;
+@param[in] [Required] jetty: the jetty created before;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_delete_jetty_batch
+##### 2.3.1.6.5 urma_delete_jetty_batch
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jetty_batch([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*\*jetty_arr, int jetty_num, urma_jetty_t \*\*bad_jetty);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_batch([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) **jetty_arr, int jetty_num, urma_jetty_t **bad_jetty);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4781,17 +4186,17 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty_arr: the array of the jetty pointer;
+@param[in] [Required] jetty_arr: the array of the jetty pointer;
 
-\@param\[in\] \[Required\] jetty_num: array length;
+@param[in] [Required] jetty_num: array length;
 
-\@param\[out\] \[Required\] bad_jetty: the address of the first failed jetty pointer;
+@param[out] [Required] bad_jetty: the address of the first failed jetty pointer;
 
 5.  返回值
 
 Return: 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1\. 会优先按序对数组中全部输入的jetty进行检查，存在空指针会直接返回bad_jetty，不进入批量删除操作；
 
@@ -4799,16 +4204,15 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 3\. 只有接口返回失败才会填写bad_jetty，否则为默认传入值。
 
-##### urma_import_jetty
+##### 2.3.1.6.6 urma_import_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*urma_import_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) \*rjetty, [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value);
-
+[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4822,60 +4226,60 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] rjetty: information of remote jetty to import, including jetty id and mode, trans_mode same to create_jetty trans_mode;
+@param[in] [Required] rjetty: information of remote jetty to import, including jetty id and mode, trans_mode same to create_jetty trans_mode;
 
-\@param\[in\] \[Required\] token_value: token to put into output jetty protection table;
+@param[in] [Required] token_value: token to put into output jetty protection table;
 
 5.  返回值
 
 Return: the address of target jetty, not NULL on success, NULL on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 ubcore等待UVS的最大响应时间为30s，如果import任务发送给UVS后30秒内得不到响应，就会返回import失败给用户。
 
 6.  [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_rjetty {\
-[urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) jetty_id;\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode;\
-[urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext) policy;\
-[urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext) type;\
-[urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext) flag;\
-[urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext) tp_type;\
+```c
+typedef struct urma_rjetty {
+    urma_jetty_id_t jetty_id;
+    urma_transport_mode_t trans_mode;
+    urma_jetty_grp_policy_t policy;
+    urma_target_type_t type;
+    urma_import_jetty_flag_t flag;
+    urma_tp_type_t tp_type;
 } urma_rjetty_t;
+```
 
-##### urma_import_jetty_ex
+##### 2.3.1.6.7 urma_import_jetty_ex
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*urma_import_jetty_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) \*rjetty, [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value, [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) \*cfg);
-
+[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) *cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.6.6](#urma_import_jetty) [urma_import_jetty](#urma_import_jetty)的扩展接口，增加参数[urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) \*cfg。
+[3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty)的扩展接口，增加参数[urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) *cfg。
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] rjetty: information of remote jetty to import, including jetty id and trans_mode,trans_mode same to create_jetty trans_mode;
+@param[in] [Required] rjetty: information of remote jetty to import, including jetty id and trans_mode,trans_mode same to create_jetty trans_mode;
 
-\@param\[in\] \[Required\] token_value: token to put into output jetty protection table;
+@param[in] [Required] token_value: token to put into output jetty protection table;
 
-\@param\[in\] \[Required\] cfg: tp active configuration to exchange with target;
+@param[in] [Required] cfg: tp active configuration to exchange with target;
 
 5.  返回值
 
@@ -4885,16 +4289,15 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
 
-##### urma_unimport_jetty
+##### 2.3.1.6.8 urma_unimport_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unimport_jetty([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4904,26 +4307,25 @@ unimport远端Jetty信息。操作成功后，进程不可访问这个远端jett
 
 4.  参数
 
-\@param\[in\] \[Required\] tjetty: the target jetty to unimport;
+@param[in] [Required] tjetty: the target jetty to unimport;
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-由调用者保证参数tjetty来自[3.3.1.6.6](#urma_import_jetty) [urma_import_jetty](#urma_import_jetty)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数tjetty来自[3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_bind_jetty
+##### 2.3.1.6.9 urma_bind_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_bind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4931,7 +4333,7 @@ Return: 0 on success, other value on error.
 
 绑定远端target Jetty，建立连接。
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 1\. bind的Jetty和target Jetty必须是RC模式，不支持非RC模式Jetty间进行bind。
 
@@ -4943,15 +4345,15 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to construct the transport channel;
+@param[in] [Required] jetty: local jetty to construct the transport channel;
 
-\@param\[in\] \[Required\] tjetty: target jetty imported before;
+@param[in] [Required] tjetty: target jetty imported before;
 
 5.  返回值
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 1\. jetty或者tjetty的模式不为RC，返回URMA_ENOPERM错误。
 
@@ -4959,30 +4361,29 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 3\. 对jetty和tjetty的重入操作，返回URMA_SUCCESS。
 
-##### urma_bind_jetty_ex
+##### 2.3.1.6.10 urma_bind_jetty_ex
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_bind_jetty_ex([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty, [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext) \*cfg);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_ex([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty, [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext) *cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.6.9](#urma_bind_jetty) [urma_bind_jetty](#urma_bind_jetty)扩展接口，增加参数urma_bind_jetty_ex_cfg_t \*cfg。
+[3.3.1.6.9](#23169-urma_bind_jetty) [urma_bind_jetty](#23169-urma_bind_jetty)扩展接口，增加参数urma_bind_jetty_ex_cfg_t *cfg。
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to construct the transport channel;
+@param[in] [Required] jetty: local jetty to construct the transport channel;
 
-\@param\[in\] \[Required\] tjetty: target jetty imported before;
+@param[in] [Required] tjetty: target jetty imported before;
 
-\@param\[in\] \[Required\] cfg: tp active configuration to exchange with target;
+@param[in] [Required] cfg: tp active configuration to exchange with target;
 
 5.  返回值
 
@@ -4992,16 +4393,15 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
 
-##### urma_unbind_jetty
+##### 2.3.1.6.11 urma_unbind_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unbind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5009,7 +4409,7 @@ typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urm
 
 解绑远端Jetty，断开连接。
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 1\. unbind的Jetty必须是RC模式，不支持非RC模式Jetty进行unbind。
 
@@ -5019,22 +4419,21 @@ typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urm
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to deconstruct the transport channel;
+@param[in] [Required] jetty: local jetty to deconstruct the transport channel;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_flush_jetty
+##### 2.3.1.6.12 urma_flush_jetty
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_flush_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, int cr_cnt, [3.4.2.1.1](#urma_cr_t) [urma_cr_t](#urma_cr_t) \*cr);
-
+int urma_flush_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5044,48 +4443,47 @@ Jetty状态切为Error态，或poll到status为URMA_CR_WR_SUSPEND_DONE的cr后�
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to deconstruct the transport channel;
+@param[in] [Required] jetty: local jetty to deconstruct the transport channel;
 
-\@param\[in\] \[Required\] cr_cnt: Number of CR expected to be received;
+@param[in] [Required] cr_cnt: Number of CR expected to be received;
 
-\@param\[out\] \[Required\] cr: Address for storing CR;
+@param[out] [Required] cr: Address for storing CR;
 
 5.  返回值
 
 Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 若执行成功，则出参cr status为URMA_CR_WR_FLUSH_ERR。
 
-##### urma_import_jetty_async
+##### 2.3.1.6.13 urma_import_jetty_async
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*urma_import_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*notifier, const [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) \*rjetty, const [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value, uint64_t user_ctx, int timeout);
-
+[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, const [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, const [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t user_ctx, int timeout);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.6.6](#urma_import_jetty) [urma_import_jetty](#urma_import_jetty)的异步版本。
+[3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty)的异步版本。
 
 4.  参数
 
-\@param\[in\] \[Required\] notifier: data structure used for sensing asynchronous link establishment results;
+@param[in] [Required] notifier: data structure used for sensing asynchronous link establishment results;
 
-\@param\[in\] \[Required\] rjetty: information of remote jetty to import, including jetty id and trans_mode, trans_mode same to create_jetty trans_mode;
+@param[in] [Required] rjetty: information of remote jetty to import, including jetty id and trans_mode, trans_mode same to create_jetty trans_mode;
 
-\@param\[in\] \[Required\] token_value: token to put into output jetty protection table;
+@param[in] [Required] token_value: token to put into output jetty protection table;
 
-\@param\[in\] \[Required\] user_ctx: user_ctx create by user;
+@param[in] [Required] user_ctx: user_ctx create by user;
 
-\@param\[in\] \[Required\] timeout: task timeout set by user (milliseconds);
+@param[in] [Required] timeout: task timeout set by user (milliseconds);
 
 5.  返回值
 
@@ -5093,83 +4491,81 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 6.  [urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_notifier {\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx;\
-int fd;\
-void \*incomplete_tjetty_list;\
+```c
+typedef struct urma_notifier {
+    urma_context_t *urma_ctx;
+    int fd;
+    void *incomplete_tjetty_list;
 } urma_notifier_t;
+```
 
-##### urma_unimport_jetty_async
+##### 2.3.1.6.14 urma_unimport_jetty_async
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unimport_jetty_async([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty_async([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.6.8](#urma_unimport_jetty) [urma_unimport_jetty](#urma_unimport_jetty)的异步版本。
+[3.3.1.6.8](#23168-urma_unimport_jetty) [urma_unimport_jetty](#23168-urma_unimport_jetty)的异步版本。
 
 4.  参数
 
-\@param\[in\] \[Required\] tjetty: the target jetty to unimport;
+@param[in] [Required] tjetty: the target jetty to unimport;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_bind_jetty_async
+##### 2.3.1.6.15 urma_bind_jetty_async
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_bind_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*notifier, [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty, uint64_t user_ctx, int timeout);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty, uint64_t user_ctx, int timeout);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
-[3.3.1.6.9](#urma_bind_jetty) [urma_bind_jetty](#urma_bind_jetty)的异步版本。
+[3.3.1.6.9](#23169-urma_bind_jetty) [urma_bind_jetty](#23169-urma_bind_jetty)的异步版本。
 
 4.  参数
 
-\@param\[in\] \[Required\] notifier: data structure used for sensing asynchronous link establishment results;
+@param[in] [Required] notifier: data structure used for sensing asynchronous link establishment results;
 
-\@param\[in\] \[Required\] jetty: local jetty to construct the transport channel;
+@param[in] [Required] jetty: local jetty to construct the transport channel;
 
-\@param\[in\] \[Required\] tjetty: target jetty imported before;
+@param[in] [Required] tjetty: target jetty imported before;
 
-\@param\[in\] \[Required\] user_ctx: user_ctx create by user;
+@param[in] [Required] user_ctx: user_ctx create by user;
 
-\@param\[in\] \[Required\] timeout: task timeout set by user (milliseconds);
+@param[in] [Required] timeout: task timeout set by user (milliseconds);
 
 5.  返回值
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-##### urma_unbind_jetty_async
+##### 2.3.1.6.16 urma_unbind_jetty_async
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unbind_jetty_async([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty)；
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty_async([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty)；
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5187,26 +4583,25 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to deconstruct the transport channel;
+@param[in] [Required] jetty: local jetty to deconstruct the transport channel;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#urma_create_jetty) [urma_create_jetty](#urma_create_jetty)接口返回，tjetty来自[3.3.1.6.16](#urma_unbind_jetty_async) [urma_unbind_jetty_async](#urma_unbind_jetty_async)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，tjetty来自[3.3.1.6.16](#231616-urma_unbind_jetty_async) [urma_unbind_jetty_async](#231616-urma_unbind_jetty_async)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-##### urma_create_notifier
+##### 2.3.1.6.17 urma_create_notifier
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*urma_create_notifier([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx);
-
+[urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *urma_create_notifier([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5216,22 +4611,21 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
 5.  返回值
 
 Return: the address of urma notifier, not NULL on success, NULL on error.
 
-##### urma_delete_notifier
+##### 2.3.1.6.18 urma_delete_notifier
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_notifier([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*notifier);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_notifier([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5241,26 +4635,25 @@ Return: the address of urma notifier, not NULL on success, NULL on error.
 
 4.  参数
 
-\@param\[in\] \[Required\] notifier: data structure used for sensing asynchronous link establishment results;
+@param[in] [Required] notifier: data structure used for sensing asynchronous link establishment results;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.17](#urma_create_notifier) [urma_create_notifier](#urma_create_notifier)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty来自[3.3.1.6.17](#231617-urma_create_notifier) [urma_create_notifier](#231617-urma_create_notifier)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_wait_notify
+##### 2.3.1.6.19 urma_wait_notify
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_wait_notify([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*notifier, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) \*notify, int timeout);
-
+int urma_wait_notify([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) *notify, int timeout);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5270,13 +4663,13 @@ int urma_wait_notify([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) \*
 
 4.  参数
 
-\@param\[in\] \[Required\] notifier: data structure used for sensing asynchronous link establishment results;
+@param[in] [Required] notifier: data structure used for sensing asynchronous link establishment results;
 
-\@param\[in\] \[Required\] cnt: expected number of target jetty to return;
+@param[in] [Required] cnt: expected number of target jetty to return;
 
-\@param\[out\] \[Required\] notify: created by user to store target jetty results;
+@param[out] [Required] notify: created by user to store target jetty results;
 
-\@param\[in\] \[Required\] timeout: max time to wait (milliseconds), timeout = 0: return immediately even if no events are ready, timeout = -1: an infinite timeout;
+@param[in] [Required] timeout: max time to wait (milliseconds), timeout = 0: return immediately even if no events are ready, timeout = -1: an infinite timeout;
 
 5.  返回值
 
@@ -5284,39 +4677,40 @@ Return: the number of target jetty returned, 0 means no target jetty returned, -
 
 6.  [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_notify {\
-[urma_notify_type_t](#_ZH-CN_TOPIC_0000002524072171-chtext) type;\
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) status;\
-uint64_t user_ctx;\
-union {\
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty; /\* IMPORT \*/\
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty; /\* BIND \*/\
-};\
+```c
+typedef struct urma_notify {
+    urma_notify_type_t type;
+    urma_status_t status;
+    uint64_t user_ctx;
+    union {
+        urma_target_jetty_t *tjetty; /* IMPORT */
+        urma_jetty_t *jetty; /* BIND */
+    };
 } urma_notify_t;
+```
 
 7.  [urma_notify_type_t](#_ZH-CN_TOPIC_0000002524072171-chtext)
 
-
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_notify_type {\
-URMA_IMPORT_JETTY_NOTIFY = 0,\
-URMA_BIND_JETTY_NOTIFY\
+```c
+typedef enum urma_notify_type {
+    URMA_IMPORT_JETTY_NOTIFY = 0,
+    URMA_BIND_JETTY_NOTIFY
 } urma_notify_type_t;
+```
 
-##### urma_ack_notify
+##### 2.3.1.6.20 urma_ack_notify
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_ack_notify([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) \*notify);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_ack_notify([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) *notify);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5328,16 +4722,15 @@ Keep parameter checks to ensure the function works as before.
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] cnt: notify array count;
+@param[in] [Required] cnt: notify array count;
 
-\@param\[in\] \[Required\] notify: notify array to be acknowledged;
+@param[in] [Required] notify: notify array to be acknowledged;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
-
 
 ##### urma_alloc_jetty
 
@@ -5348,7 +4741,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, urma_jetty_t **jetty);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5368,7 +4760,6 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_free_jetty
 
 1.  头文件
@@ -5378,7 +4769,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_free_jetty(urma_jetty_t *jetty);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5394,7 +4784,6 @@ urma_status_t urma_free_jetty(urma_jetty_t *jetty);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_active_jetty
 
 1.  头文件
@@ -5404,7 +4793,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_active_jetty(urma_jetty_t *jetty);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5420,7 +4808,6 @@ urma_status_t urma_active_jetty(urma_jetty_t *jetty);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_deactive_jetty
 
 1.  头文件
@@ -5430,7 +4817,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_deactive_jetty(urma_jetty_t *jetty);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5446,7 +4832,6 @@ urma_status_t urma_deactive_jetty(urma_jetty_t *jetty);
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_set_jetty_opt
 
 1.  头文件
@@ -5456,7 +4841,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5478,7 +4862,6 @@ urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
 
 Return: 0 on success, other value on error.
 
-
 ##### urma_get_jetty_opt
 
 1.  头文件
@@ -5488,7 +4871,6 @@ Return: 0 on success, other value on error.
 2.  原型
 
 urma_status_t urma_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len);
-
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5509,24 +4891,24 @@ urma_status_t urma_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
 5.  返回值
 
 Return: 0 on success, other value on error.
-#### Jetty Group
+
+#### 2.3.1.7 Jetty Group
 
 Jetty group管理API包括创建、删除Jetty group等API。
 
-![](figures/urma-api-constraint-01.png)
+![](figures/urma_warning.png)
 
 部分芯片不支持Jetty group管理的API。
 
-##### urma_create_jetty_grp
+##### 2.3.1.7.1 urma_create_jetty_grp
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) \*urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) \*cfg)；
-
+[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg)；
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5536,24 +4918,23 @@ Jetty group管理API包括创建、删除Jetty group等API。
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the urma context created before;
+@param[in] [Required] ctx: the urma context created before;
 
-\@param\[in\] \[Required\] cfg: pointer of the jetty group config;
+@param[in] [Required] cfg: pointer of the jetty group config;
 
 5.  返回值
 
 Return: 若创建成功，返回非空的urma_jetty_grp_t指针；若同名的Jetty group已经存在，返回已经创建的非空的urma_jetty_grp_t指针。若创建失败，则返回NULL。
 
-##### urma_delete_jetty_grp
+##### 2.3.1.7.2 urma_delete_jetty_grp
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_delete_jetty_grp([urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) \*jetty_grp);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_grp([urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *jetty_grp);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5563,29 +4944,29 @@ Return: 若创建成功，返回非空的urma_jetty_grp_t指针；若同名的Je
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty_grp: the Jetty group created before;
+@param[in] [Required] jetty_grp: the Jetty group created before;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jetty_grp来自[3.3.1.7.1](#urma_create_jetty_grp) [urma_create_jetty_grp](#urma_create_jetty_grp)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty_grp来自[3.3.1.7.1](#23171-urma_create_jetty_grp) [urma_create_jetty_grp](#23171-urma_create_jetty_grp)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-### Segment
+### 2.3.2 Segment
 
 segment API包括注册和反注册segment，导入和反导入segment等API。
 
-#### urma_register_seg
+#### 2.3.2.1 urma_register_seg
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*urma_register_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [3.3.2.1.1](#urma_seg_cfg_t) [urma_seg_cfg_t](#urma_seg_cfg_t) \*seg_cfg);
+[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_register_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.2.1.1](#23211-urma_seg_cfg_t) [urma_seg_cfg_t](#23211-urma_seg_cfg_t) *seg_cfg);
 
 3.  描述
 
@@ -5593,11 +4974,11 @@ segment API包括注册和反注册segment，导入和反导入segment等API。
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] seg_cfg: Specify cfg of seg to be registered, including address, len, key, and so on;
+@param[in] [Required] seg_cfg: Specify cfg of seg to be registered, including address, len, key, and so on;
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 1\. 鲲鹏950芯片UBMMU模块支持应用不指定key，由ubmmu内部自动产生key。
 
@@ -5607,52 +4988,54 @@ segment API包括注册和反注册segment，导入和反导入segment等API。
 
 Return: pointer to target segment on success, NULL on error.
 
-##### urma_seg_cfg_t
-
+##### 2.3.2.1.1 urma_seg_cfg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_seg_cfg {\
-uint64_t va; /\* specify the address of the segment to be registered \*/\
-uint64_t len; /\* specify the length of the segment to be registered \*/\
-[3.2.3.1.1](#urma_token_id_t) [urma_token_id_t](#urma_token_id_t) \*token_id;\
-[3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) token_value; /\* Security authentication for access \*/\
-[3.3.2.1.2](#urma_reg_seg_flag_t) [urma_reg_seg_flag_t](#urma_reg_seg_flag_t) flag;\
-uint64_t user_ctx;\
-uint64_t iova; /\* user iova, maybe zero-based-address \*/\
+```c
+typedef struct urma_seg_cfg {
+    uint64_t va; /* specify the address of the segment to be registered */
+    uint64_t len; /* specify the length of the segment to be registered */
+    urma_token_id_t *token_id;
+    urma_token_t token_value; /* Security authentication for access */
+    urma_reg_seg_flag_t flag;
+    uint64_t user_ctx;
+    uint64_t iova; /* user iova, maybe zero-based-address */
 } urma_seg_cfg_t;
+```
 
-##### urma_reg_seg_flag_t
-
+##### 2.3.2.1.2 urma_reg_seg_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_reg_seg_flag {\
-struct {\
-uint32_t token_policy : 3; /\* 0: URMA_TOKEN_NONE.\
-1: URMA_TOKEN_PLAIN_TEXT.\
-2: URMA_TOKEN_SIGNED.\
-3: URMA_TOKEN_ALL_ENCRYPTED.\
-4: URMA_TOKEN_RESERVED. \*/\
-uint32_t cacheable : 1; /\* 0: URMA_NON_CACHEABLE.\
-1: URMA_CACHEABLE. \*/\
-uint32_t dsva : 1;\
-uint32_t access : 6; /\* (0x1): URMA_ACCESS_LOCAL_ONLY.\
-(0x1 \<\< 1): URMA_ACCESS_READ.\
-(0x1 \<\< 2): URMA_ACCESS_WRITE.\
-(0x1 \<\< 3): URMA_ACCESS_ATOMIC. \*/\
-uint32_t non_pin : 1; /\* 0: segment pages pinned.\
-1: segment pages non-pinned. \*/\
-uint32_t user_iova : 1; /\* 0: segment without user iova addr.\
-1: segment with user iova addr. \*/\
-uint32_t token_id_valid : 1; /\* 0: token id in cfg is invalid.\
-1: token id in cfg is valid. \*/\
-uint32_t reserved : 18;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_reg_seg_flag {
+    struct {
+        uint32_t token_policy : 3; /* 0: URMA_TOKEN_NONE.
+        1: URMA_TOKEN_PLAIN_TEXT.
+        2: URMA_TOKEN_SIGNED.
+        3: URMA_TOKEN_ALL_ENCRYPTED.
+        4: URMA_TOKEN_RESERVED. */
+        uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
+        1: URMA_CACHEABLE. */
+        uint32_t dsva : 1;
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_ONLY.
+        (0x1 << 1): URMA_ACCESS_READ.
+        (0x1 << 2): URMA_ACCESS_WRITE.
+        (0x1 << 3): URMA_ACCESS_ATOMIC. */
+        uint32_t non_pin : 1; /* 0: segment pages pinned.
+        1: segment pages non-pinned. */
+        uint32_t user_iova : 1; /* 0: segment without user iova addr.
+        1: segment with user iova addr. */
+        uint32_t token_id_valid : 1; /* 0: token id in cfg is invalid.
+        1: token id in cfg is valid. */
+        uint32_t reserved : 18;
+    } bs;
+    uint32_t value;
 } urma_reg_seg_flag_t;
+```
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 关于urma_reg_seg_flag_t：
 
@@ -5666,93 +5049,97 @@ uint32_t value;\
 
 5\. 配置URMA_ACCESS_ATOMIC标识，必须也配置URMA_ACCESS_READ和URMA_ACCESS_WRITE标识，否则urma将会拦截此错误配置。
 
-##### urma_target_seg_t
-
+##### 2.3.2.1.3 urma_target_seg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_target_seg {\
-[3.3.2.1.4](#urma_seg_t) [urma_seg_t](#urma_seg_t) seg; /\* \[Private\] see urma_seg_t. \*/\
-uint64_t user_ctx; /\* \[Private\] private data of segment \*/\
-uint64_t mva; /\* \[Public\] mapping addr when import remote seg. \*/\
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*urma_ctx; /\* \[Private\] point to urma context. \*/\
-[3.2.3.1.1](#urma_token_id_t) [urma_token_id_t](#urma_token_id_t) \*token_id; /\* When registering seg, it is a valid address; when importing seg, it is NULL \*/\
-uint64_t handle;\
+```c
+typedef struct urma_target_seg {
+    urma_seg_t seg; /* [Private] see urma_seg_t. */
+    uint64_t user_ctx; /* [Private] private data of segment */
+    uint64_t mva; /* [Public] mapping addr when import remote seg. */
+    urma_context_t *urma_ctx; /* [Private] point to urma context. */
+    urma_token_id_t *token_id; /* When registering seg, it is a valid address; when importing seg, it is NULL */
+    uint64_t handle;
 } urma_target_seg_t;
+```
 
-##### urma_seg_t
-
+##### 2.3.2.1.4 urma_seg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_seg {\
-[3.3.2.1.5](#urma_ubva_t) [urma_ubva_t](#urma_ubva_t) ubva; /\* \[Public\] ubva of segment. \*/\
-uint64_t len; /\* \[Public\] length of segment. \*/\
-[3.3.2.1.6](#urma_seg_attr_t) [urma_seg_attr_t](#urma_seg_attr_t) attr; /\* \[Public\] include: access flag, token policy, cacheability. \*/\
-uint32_t token_id; /\* \[Private\] match token \*/\
+```c
+typedef struct urma_seg {
+    urma_ubva_t ubva; /* [Public] ubva of segment. */
+    uint64_t len; /* [Public] length of segment. */
+    urma_seg_attr_t attr; /* [Public] include: access flag, token policy, cacheability. */
+    uint32_t token_id; /* [Private] match token */
 } urma_seg_t;
+```
 
-##### urma_ubva_t
-
+##### 2.3.2.1.5 urma_ubva_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_ubva {\
-[urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid;\
-uint32_t uasid; // 24 bit for UB; 16 bit for IB\
-uint64_t va;\
+```c
+typedef struct urma_ubva {
+    urma_eid_t eid;
+    uint32_t uasid; // 24 bit for UB; 16 bit for IB
+    uint64_t va;
 } \_\_attribute\_\_((packed)) urma_ubva_t;
+```
 
-##### urma_seg_attr_t
-
+##### 2.3.2.1.6 urma_seg_attr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_seg_attr {\
-struct {\
-uint32_t token_policy : 3; /\* 0: URMA_TOKEN_NONE.\
-1: URMA_TOKEN_PLAIN_TEXT.\
-2: URMA_TOKEN_SIGNED.\
-3: URMA_TOKEN_ALL_ENCRYPTED.\
-4: URMA_TOKEN_RESERVED. \*/\
-uint32_t cacheable : 1; /\* 0: URMA_NON_CACHEABLE.\
-1: URMA_CACHEABLE. \*/\
-uint32_t dsva : 1;\
-uint32_t access : 6; /\* (0x1): URMA_ACCESS_LOCAL_WRITE.\
-(0x1 \<\< 1): URMA_ACCESS_REMOTE_READ.\
-(0x1 \<\< 2): URMA_ACCESS_REMOTE_WRITE.\
-(0x1 \<\< 3): URMA_ACCESS_REMOTE_ATOMIC.\
-(0x1 \<\< 4): URMA_ACCESS_REMOTE_INVALIDATE. \*/\
-uint32_t non_pin : 1; /\* 0: segment pages pinned.\
-1: segment pages non-pinned. \*/\
-uint32_t user_iova : 1; /\* 0: segment without user iova addr.\
-1: segment with user iova addr. \*/\
-uint32_t user_token_id : 1; /\* 0: token_id is allocated and should be freed by urma.\
-1: token_id is allocated by user in urma_seg_cfg. \*/\
-uint32_t reserved : 18;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_seg_attr {
+    struct {
+        uint32_t token_policy : 3; /* 0: URMA_TOKEN_NONE.
+        1: URMA_TOKEN_PLAIN_TEXT.
+        2: URMA_TOKEN_SIGNED.
+        3: URMA_TOKEN_ALL_ENCRYPTED.
+        4: URMA_TOKEN_RESERVED. */
+        uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
+        1: URMA_CACHEABLE. */
+        uint32_t dsva : 1;
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
+        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
+        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
+        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
+        (0x1 << 4): URMA_ACCESS_REMOTE_INVALIDATE. */
+        uint32_t non_pin : 1; /* 0: segment pages pinned.
+        1: segment pages non-pinned. */
+        uint32_t user_iova : 1; /* 0: segment without user iova addr.
+        1: segment with user iova addr. */
+        uint32_t user_token_id : 1; /* 0: token_id is allocated and should be freed by urma.
+        1: token_id is allocated by user in urma_seg_cfg. */
+        uint32_t reserved : 18;
+    } bs;
+    uint32_t value;
 } urma_seg_attr_t;
+```
 
-##### urma_token_t
-
+##### 2.3.2.1.7 urma_token_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_token {\
-uint32_t token;\
+```c
+typedef struct urma_token {
+    uint32_t token;
 } urma_token_t;
+```
 
-#### urma_unregister_seg
+#### 2.3.2.2 urma_unregister_seg
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unregister_seg([3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*target_seg)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *target_seg)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -5762,31 +5149,31 @@ uint32_t token;\
 
 4.  参数
 
-\@param\[in\] \[Required\] target_seg: target segment to be unregistered;
+@param[in] [Required] target_seg: target segment to be unregistered;
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数target_seg来自[3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数target_seg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-#### urma_import_seg
+#### 2.3.2.3 urma_import_seg
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*urma_import_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [3.3.2.1.4](#urma_seg_t) [urma_seg_t](#urma_seg_t) \*seg, [3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) \*token_value, uint64_t addr, [3.3.2.3.1](#urma_import_seg_flag_t) [urma_import_seg_flag_t](#urma_import_seg_flag_t) flag);
+[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_import_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t addr, [3.3.2.3.1](#23231-urma_import_seg_flag_t) [urma_import_seg_flag_t](#23231-urma_import_seg_flag_t) flag);
 
 3.  描述
 
 向function entity设备注册对端segment信息（包括内存段的UBVA地址和长度）。
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 1\. 该接口将填好MMU页表和和UBMMU页表。
 
@@ -5800,52 +5187,52 @@ ctx用于定位TPA的范围，找到对应FUNCTION ENTITY设备上的TPA-UBVA的
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] seg: handle of memory segment to import;
+@param[in] [Required] seg: handle of memory segment to import;
 
-\@param\[in\] \[Required\] token_value: token to put into output protection table;
+@param[in] [Required] token_value: token to put into output protection table;
 
-\@param\[in\] \[Optional\] addr: the virtual address to which the segment will be mapped;
+@param[in] [Optional] addr: the virtual address to which the segment will be mapped;
 
-\@param\[in\] \[Required\] flag: flag to indicate the import attribute of memory segment;
+@param[in] [Required] flag: flag to indicate the import attribute of memory segment;
 
 5.  返回值
 
 Return: pointer to target segment on success, NULL on error.
 
-##### urma_import_seg_flag_t
-
+##### 2.3.2.3.1 urma_import_seg_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_import_seg_flag {\
-struct {\
-uint32_t cacheable : 1; /\* 0: URMA_NON_CACHEABLE.\
-1: URMA_CACHEABLE. \*/\
-uint32_t access : 6; /\* (0x1): URMA_ACCESS_LOCAL_WRITE.\
-(0x1 \<\< 1): URMA_ACCESS_REMOTE_READ.\
-(0x1 \<\< 2): URMA_ACCESS_REMOTE_WRITE.\
-(0x1 \<\< 3): URMA_ACCESS_REMOTE_ATOMIC.\
-(0x1 \<\< 4)：URMA_ACCESS_REMOTE_INVALIDATE.\
-\*/\
-uint32_t mapping : 1; /\* 0: URMA_SEG_NOMAP/\
-1: URMA_SEG_MAPPED. \*/\
-uint32_t reserved : 24;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_import_seg_flag {
+    struct {
+        uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
+        1: URMA_CACHEABLE. */
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
+        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
+        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
+        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
+        (0x1 << 4)：URMA_ACCESS_REMOTE_INVALIDATE.
+        */
+        uint32_t mapping : 1; /* 0: URMA_SEG_NOMAP/
+        1: URMA_SEG_MAPPED. */
+        uint32_t reserved : 24;
+    } bs;
+    uint32_t value;
 } urma_import_seg_flag_t;
+```
 
-#### urma_unimport_seg
+#### 2.3.2.4 urma_unimport_seg
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unimport_seg([3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*tseg);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -5859,55 +5246,55 @@ unimport对端segment信息。unimport成功后，应用不可继续访问该seg
 
 4.  参数
 
-\@param\[in\] \[Required\] tseg: the address of the target segment to unimport;
+@param[in] [Required] tseg: the address of the target segment to unimport;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数tseg来自[3.3.2.3](#urma_import_seg) [urma_import_seg](#urma_import_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-### TP Channel
+### 2.3.3 TP Channel
 
 TP层传输通道资源TP Channel相关接口。
 
-#### urma_get_tpn
+#### 2.3.3.1 urma_get_tpn
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_get_tpn([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty);
+int urma_get_tpn([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty);
 
 3.  描述
 
 根据用户传入的jetty指针，从驱动中获取对应的tpn。
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-该接口只用于UB协议的用户建链方案，应当在调用[3.3.1.6.1](#urma_create_jetty) [urma_create_jetty](#urma_create_jetty)接口之后调用。
+该接口只用于UB协议的用户建链方案，应当在调用[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口之后调用。
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: the created jetty pointer
+@param[in] [Required] jetty: the created jetty pointer
 
 5.  返回值
 
-Return: \>= 0 on success, return as tpn; \< 0 on error。
+Return: \>= 0 on success, return as tpn; < 0 on error。
 
-#### urma_modify_tp
+#### 2.3.3.2 urma_modify_tp
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, uint32_t tpn, [3.3.3.2.1](#urma_tp_cfg_t) [urma_tp_cfg_t](#urma_tp_cfg_t) \*cfg, [3.3.3.2.3](#urma_tp_attr_t) [urma_tp_attr_t](#urma_tp_attr_t) \*attr, [3.3.3.2.6](#urma_tp_attr_mask_t) [urma_tp_attr_mask_t](#urma_tp_attr_mask_t) mask);
+int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t tpn, [3.3.3.2.1](#23321-urma_tp_cfg_t) [urma_tp_cfg_t](#23321-urma_tp_cfg_t) *cfg, [3.3.3.2.3](#23323-urma_tp_attr_t) [urma_tp_attr_t](#23323-urma_tp_attr_t) *attr, [3.3.3.2.6](#23326-urma_tp_attr_mask_t) [urma_tp_attr_mask_t](#23326-urma_tp_attr_mask_t) mask);
 
 3.  描述
 
@@ -5915,154 +5302,159 @@ int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx
 
 4.  参数
 
-\@param\[in\] ctx: the created urma context pointer;
+@param[in] ctx: the created urma context pointer;
 
-\@param\[in\] tpn: tpn of tp created before;
+@param[in] tpn: tpn of tp created before;
 
-\@param\[in\] cfg: tp configurations filled by user;
+@param[in] cfg: tp configurations filled by user;
 
-\@param\[in\] attr: tp attributes filled by user;
+@param[in] attr: tp attributes filled by user;
 
-\@param\[in\] mask: bitmap configurations for tp attributes
+@param[in] mask: bitmap configurations for tp attributes
 
 5.  返回值
 
 Return: 0 on success; other values on error.
 
-##### urma_tp_cfg_t
-
+##### 2.3.3.2.1 urma_tp_cfg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_tp_cfg {\
-[3.3.3.2.2](#urma_tp_cfg_flag_t) [urma_tp_cfg_flag_t](#urma_tp_cfg_flag_t) flag; /\* flag of initial tp \*/\
-/\* transport layer attributes \*/\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode;\
-uint8_t retry_num;\
-uint8_t retry_factor; /\* for calculate the time slot to retry \*/\
-uint8_t ack_timeout;\
-uint8_t dscp;\
-uint32_t oor_cnt; /\* OOR window size: by packet \*/\
+```c
+typedef struct urma_tp_cfg {
+    urma_tp_cfg_flag_t flag; /* flag of initial tp */
+    /* transport layer attributes */
+    urma_transport_mode_t trans_mode;
+    uint8_t retry_num;
+    uint8_t retry_factor; /* for calculate the time slot to retry */
+    uint8_t ack_timeout;
+    uint8_t dscp;
+    uint32_t oor_cnt; /* OOR window size: by packet */
 } urma_tp_cfg_t;
+```
 
-##### urma_tp_cfg_flag_t
-
+##### 2.3.3.2.2 urma_tp_cfg_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_tp_cfg_flag {\
-struct {\
-uint32_t target : 1; /\* 0: initiator, 1: target \*/\
-uint32_t loopback : 1;\
-uint32_t dca_enable : 1;\
-/\* for the bonding case, the hardware selects the port\
-\* ignoring the port of the tp context and\
-\* selects the port based on the hash value\
-\* along with the information in the bonding group table.\
-\*/\
-uint32_t bonding : 1;\
-uint32_t reserved : 28;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_tp_cfg_flag {
+    struct {
+        uint32_t target : 1; /* 0: initiator, 1: target */
+        uint32_t loopback : 1;
+        uint32_t dca_enable : 1;
+        /* for the bonding case, the hardware selects the port
+        * ignoring the port of the tp context and
+        * selects the port based on the hash value
+        * along with the information in the bonding group table.
+        */
+        uint32_t bonding : 1;
+        uint32_t reserved : 28;
+    } bs;
+    uint32_t value;
 } urma_tp_cfg_flag_t;
+```
 
-##### urma_tp_attr_t
-
+##### 2.3.3.2.3 urma_tp_attr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_tp_attr {\
-[3.3.3.2.4](#urma_tp_mod_flag_t) [urma_tp_mod_flag_t](#urma_tp_mod_flag_t) flag;\
-uint32_t peer_tpn;\
-[3.3.3.2.5](#urma_tp_state_t) [urma_tp_state_t](#urma_tp_state_t) state;\
-uint32_t tx_psn;\
-uint32_t rx_psn;\
-[urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext) mtu;\
-uint8_t cc_pattern_idx;\
-uint32_t oos_cnt; /\* out of standing packet cnt \*/\
-uint32_t local_net_addr_idx;\
-[urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext) peer_net_addr;\
-uint16_t data_udp_start;\
-uint16_t ack_udp_start;\
-uint8_t udp_range;\
-uint8_t hop_limit;\
-uint32_t flow_label;\
-uint8_t port_id;\
-uint8_t mn; /\* 0\~15, a packet contains only one msg if mn is set as 0 \*/\
-[urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) peer_trans_type;\
+```c
+typedef struct urma_tp_attr {
+    urma_tp_mod_flag_t flag;
+    uint32_t peer_tpn;
+    urma_tp_state_t state;
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    urma_mtu_t mtu;
+    uint8_t cc_pattern_idx;
+    uint32_t oos_cnt; /* out of standing packet cnt */
+    uint32_t local_net_addr_idx;
+    urma_net_addr_t peer_net_addr;
+    uint16_t data_udp_start;
+    uint16_t ack_udp_start;
+    uint8_t udp_range;
+    uint8_t hop_limit;
+    uint32_t flow_label;
+    uint8_t port_id;
+    uint8_t mn; /* 0\~15, a packet contains only one msg if mn is set as 0 */
+    urma_transport_type_t peer_trans_type;
 } urma_tp_attr_t;
+```
 
-##### urma_tp_mod_flag_t
-
+##### 2.3.3.2.4 urma_tp_mod_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_tp_mod_flag {\
-struct {\
-uint32_t oor_en : 1; /\* out of order receive, 0: disable 1: enable \*/\
-uint32_t sr_en : 1; /\* selective retransmission, 0: disable 1: enable \*/\
-uint32_t cc_en : 1; /\* congestion control algorithm, 0: disable 1: enable \*/\
-uint32_t cc_alg : 4; /\* The value is ubcore_tp_cc_alg_t \*/\
-uint32_t spray_en : 1; /\* spray with src udp port, 0: disable 1: enable \*/\
-uint32_t clan : 1; /\* clan domain, 0: disable 1: enable \*/\
-uint32_t reserved : 23;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_tp_mod_flag {
+    struct {
+        uint32_t oor_en : 1; /* out of order receive, 0: disable 1: enable */
+        uint32_t sr_en : 1; /* selective retransmission, 0: disable 1: enable */
+        uint32_t cc_en : 1; /* congestion control algorithm, 0: disable 1: enable */
+        uint32_t cc_alg : 4; /* The value is ubcore_tp_cc_alg_t */
+        uint32_t spray_en : 1; /* spray with src udp port, 0: disable 1: enable */
+        uint32_t clan : 1; /* clan domain, 0: disable 1: enable */
+        uint32_t reserved : 23;
+    } bs;
+    uint32_t value;
 } urma_tp_mod_flag_t;
+```
 
-##### urma_tp_state_t
-
+##### 2.3.3.2.5 urma_tp_state_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_tp_state {\
-URMA_TP_STATE_RESET = 0,\
-URMA_TP_STATE_PASSIVE,\
-URMA_TP_STATE_ACTIVE,\
-URMA_TP_STATE_BRAKE,\
-URMA_TP_STATE_ERROR\
+```c
+typedef enum urma_tp_state {
+    URMA_TP_STATE_RESET = 0,
+    URMA_TP_STATE_PASSIVE,
+    URMA_TP_STATE_ACTIVE,
+    URMA_TP_STATE_BRAKE,
+    URMA_TP_STATE_ERROR
 } urma_tp_state_t;
+```
 
-##### urma_tp_attr_mask_t
-
+##### 2.3.3.2.6 urma_tp_attr_mask_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_tp_attr_mask {\
-struct {\
-uint32_t flag : 1;\
-uint32_t peer_tpn : 1;\
-uint32_t state : 1;\
-uint32_t tx_psn : 1;\
-uint32_t rx_psn : 1; /\* modify both rx psn and tx psn when restore tp \*/\
-uint32_t mtu : 1;\
-uint32_t cc_pattern_idx : 1;\
-uint32_t oos_cnt : 1;\
-uint32_t local_net_addr_idx : 1;\
-uint32_t peer_net_addr : 1;\
-uint32_t data_udp_start : 1;\
-uint32_t ack_udp_start : 1;\
-uint32_t udp_range : 1;\
-uint32_t hop_limit : 1;\
-uint32_t flow_label : 1;\
-uint32_t port_id : 1;\
-uint32_t mn : 1;\
-uint32_t peer_trans_type : 1;\
-uint32_t reserved : 14;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_tp_attr_mask {
+    struct {
+        uint32_t flag : 1;
+        uint32_t peer_tpn : 1;
+        uint32_t state : 1;
+        uint32_t tx_psn : 1;
+        uint32_t rx_psn : 1; /* modify both rx psn and tx psn when restore tp */
+        uint32_t mtu : 1;
+        uint32_t cc_pattern_idx : 1;
+        uint32_t oos_cnt : 1;
+        uint32_t local_net_addr_idx : 1;
+        uint32_t peer_net_addr : 1;
+        uint32_t data_udp_start : 1;
+        uint32_t ack_udp_start : 1;
+        uint32_t udp_range : 1;
+        uint32_t hop_limit : 1;
+        uint32_t flow_label : 1;
+        uint32_t port_id : 1;
+        uint32_t mn : 1;
+        uint32_t peer_trans_type : 1;
+        uint32_t reserved : 14;
+    } bs;
+    uint32_t value;
 } urma_tp_attr_mask_t;
+```
 
-#### urma_get_tp_list
+#### 2.3.3.3 urma_get_tp_list
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [3.3.3.3.1](#urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#urma_get_tp_cfg_t) \*cfg, uint32_t \*tp_cnt, [3.3.3.3.3](#urma_tp_info_t) [urma_tp_info_t](#urma_tp_info_t) \*tp_list);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6072,67 +5464,69 @@ uint32_t value;\
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] tp_cfg: tp configuration to get;
+@param[in] [Required] tp_cfg: tp configuration to get;
 
-\@param\[in && out\] \[Required\] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter; tp_cnt is the number of tp as out parameter;
+@param[in && out] [Required] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter; tp_cnt is the number of tp as out parameter;
 
-\@param\[out\] \[Required\] tp_list: tp list to get, the buffer is allocated by user;
+@param[out] [Required] tp_list: tp list to get, the buffer is allocated by user;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### urma_get_tp_cfg_t
-
+##### 2.3.3.3.1 urma_get_tp_cfg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_get_tp_cfg {\
-[3.3.3.3.2](#urma_get_tp_cfg_flag_t) [urma_get_tp_cfg_flag_t](#urma_get_tp_cfg_flag_t) flag;\
-[urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext) trans_mode;\
-[urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) local_eid;\
-urma_eid_t peer_eid;\
+```c
+typedef struct urma_get_tp_cfg {
+    urma_get_tp_cfg_flag_t flag;
+    urma_transport_mode_t trans_mode;
+    urma_eid_t local_eid;
+    urma_eid_t peer_eid;
 } urma_get_tp_cfg_t;
+```
 
-##### urma_get_tp_cfg_flag_t
-
+##### 2.3.3.3.2 urma_get_tp_cfg_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_get_tp_cfg_flag {\
-struct {\
-uint32_t ctp : 1;\
-uint32_t rtp : 1;\
-uint32_t utp : 1;\
-uint32_t uboe : 1;\
-uint32_t pre_defined : 1;\
-uint32_t dynamic_defined : 1;\
-uint32_t reserved : 26;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_get_tp_cfg_flag {
+    struct {
+        uint32_t ctp : 1;
+        uint32_t rtp : 1;
+        uint32_t utp : 1;
+        uint32_t uboe : 1;
+        uint32_t pre_defined : 1;
+        uint32_t dynamic_defined : 1;
+        uint32_t reserved : 26;
+    } bs;
+    uint32_t value;
 } urma_get_tp_cfg_flag_t;
+```
 
-##### urma_tp_info_t
-
+##### 2.3.3.3.3 urma_tp_info_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_tp_info {\
-uint64_t tp_handle;\
+```c
+typedef struct urma_tp_info {
+    uint64_t tp_handle;
 } urma_tp_info_t;
+```
 
-#### urma_get_tp_attr
+#### 2.3.3.4 urma_get_tp_attr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_get_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, const uint64_t tp_handle, uint8_t \*tp_attr_cnt, uint32_t \*tp_attr_bitmap, [3.3.3.4.1](#urma_tp_attr_value_t) [urma_tp_attr_value_t](#urma_tp_attr_value_t) \*tp_attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap, [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6142,19 +5536,19 @@ uint64_t tp_handle;\
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] tp_handle: tp_handle got by urma_get_tp_list;
+@param[in] [Required] tp_handle: tp_handle got by urma_get_tp_list;
 
-\@param\[in\] \[Required\] tp_attr_cnt: number of tp attributions;
+@param[in] [Required] tp_attr_cnt: number of tp attributions;
 
-\@param\[in\] \[Required\] tp_attr_bitmap: tp attributions bitmap
+@param[in] [Required] tp_attr_bitmap: tp attributions bitmap
 
-\@param\[in\] \[Required\] tp_attr: tp attribution values to set;
+@param[in] [Required] tp_attr: tp attribution values to set;
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-tp_attr_bitmap各bit和tp_attr字段对应关系如下（字段含义见[3.3.3.4.1](#urma_tp_attr_value_t) [urma_tp_attr_value_t](#urma_tp_attr_value_t)）：
+tp_attr_bitmap各bit和tp_attr字段对应关系如下（字段含义见[3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t)）：
 
 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit
 
@@ -6168,39 +5562,42 @@ tp_attr_bitmap各bit和tp_attr字段对应关系如下（字段含义见[3.3.3.4
 
 Return: 0 on success, other value on error.
 
-##### urma_tp_attr_value_t
+##### 2.3.3.4.1 urma_tp_attr_value_t
 
-#pragma pack(1)\
+```c
+#pragma pack(1)
+```
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_tp_attr_value {\
-uint8_t retry_times_init : 3;\
-uint8_t at : 5; // ack timeout\
-uint8_t sip\[URMA_IP_ADDR_BYTES\]; // src ip\
-uint8_t dip\[URMA_IP_ADDR_BYTES\]; // dst ip\
-uint8_t sma\[URMA_MAC_BYTES\]; // src mac\
-uint8_t dma\[URMA_MAC_BYTES\]; // dst mac\
-uint16_t vlan_id : 12;\
-uint8_t vlan_en : 1;\
-uint8_t dscp : 6; // differentiated services code point\
-uint8_t at_times : 5; // ack timeout max times\
-uint8_t sl : 4; // service level\
-uint8_t ttl; // time to live\
-uint8_t reserved\[78\];\
-} urma_tp_attr_value_t;\
+```c
+typedef struct urma_tp_attr_value {
+    uint8_t retry_times_init : 3;
+    uint8_t at : 5; // ack timeout
+    uint8_t sip[URMA_IP_ADDR_BYTES]; // src ip
+    uint8_t dip[URMA_IP_ADDR_BYTES]; // dst ip
+    uint8_t sma[URMA_MAC_BYTES]; // src mac
+    uint8_t dma[URMA_MAC_BYTES]; // dst mac
+    uint16_t vlan_id : 12;
+    uint8_t vlan_en : 1;
+    uint8_t dscp : 6; // differentiated services code point
+    uint8_t at_times : 5; // ack timeout max times
+    uint8_t sl : 4; // service level
+    uint8_t ttl; // time to live
+    uint8_t reserved[78];
+} urma_tp_attr_value_t;
 #pragma pack()
+```
 
-#### urma_set_tp_attr
+#### 2.3.3.5 urma_set_tp_attr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_set_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap, const [3.3.3.4.1](#urma_tp_attr_value_t) [urma_tp_attr_value_t](#urma_tp_attr_value_t) \*tp_attr);
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap, const [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6210,33 +5607,33 @@ uint8_t reserved\[78\];\
 
 4.  参数
 
-\@param\[in\] \[Required\] ctx: the created urma context pointer;
+@param[in] [Required] ctx: the created urma context pointer;
 
-\@param\[in\] \[Required\] tp_handle: tp_handle got by urma_get_tp_list;
+@param[in] [Required] tp_handle: tp_handle got by urma_get_tp_list;
 
-\@param\[in\] \[Required\] tp_attr_cnt: number of tp attributions;
+@param[in] [Required] tp_attr_cnt: number of tp attributions;
 
-\@param\[in\] \[Required\] tp_attr_bitmap: tp attributions bitmap;
+@param[in] [Required] tp_attr_bitmap: tp attributions bitmap;
 
-\@param\[in\] \[Required\] tp_attr: tp attribution values to set;
+@param[in] [Required] tp_attr: tp attribution values to set;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-## 数据面
+## 2.4 数据面
 
-### post
+### 2.4.1 post
 
-#### urma_post_jfs_wr
+#### 2.4.1.1 urma_post_jfs_wr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_post_jfs_wr([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [3.4.1.1.1](#urma_jfs_wr_t) [urma_jfs_wr_t](#urma_jfs_wr_t) \*wr, [3.4.1.1.1](#urma_jfs_wr_t) [urma_jfs_wr_t](#urma_jfs_wr_t) \*\*bad_wr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfs_wr([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr);
 
 3.  描述
 
@@ -6250,153 +5647,160 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before, which is used to put command;
+@param[in] jfs: the jfs created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
+@param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#urma_create_jfs) [urma_create_jfs](#urma_create_jfs)接口返回，参数内部指针等合法性已由urma_create_jfs接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，参数内部指针等合法性已由urma_create_jfs接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-##### urma_jfs_wr_t
-
+##### 2.4.1.1.1 urma_jfs_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfs_wr {\
-[3.4.1.1.6](#urma_opcode_t) [urma_opcode_t](#urma_opcode_t) opcode;\
-[3.4.1.1.7](#urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#urma_jfs_wr_flag_t) flag;\
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*tjetty;\
-uint64_t user_ctx; // completion data\
-union {\
-[3.4.1.1.2](#urma_rw_wr_t) [urma_rw_wr_t](#urma_rw_wr_t) rw;\
-[3.4.1.1.3](#urma_send_wr_t) [urma_send_wr_t](#urma_send_wr_t) send;\
-[3.4.1.1.4](#urma_cas_wr_t) [urma_cas_wr_t](#urma_cas_wr_t) cas;\
-[3.4.1.1.5](#urma_faa_wr_t) [urma_faa_wr_t](#urma_faa_wr_t) faa;\
-};\
-struct [3.4.1.1.1](#urma_jfs_wr_t) [urma_jfs_wr_t](#urma_jfs_wr_t) \*next;\
+```c
+typedef struct urma_jfs_wr {
+    urma_opcode_t opcode;
+    urma_jfs_wr_flag_t flag;
+    urma_target_jetty_t *tjetty;
+    uint64_t user_ctx; // completion data
+    union {
+        urma_rw_wr_t rw;
+        urma_send_wr_t send;
+        urma_cas_wr_t cas;
+        urma_faa_wr_t faa;
+    };
+    struct urma_jfs_wr_t *next;
 } urma_jfs_wr_t;
+```
 
-##### urma_rw_wr_t
-
+##### 2.4.1.1.2 urma_rw_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_rw_wr {\
-[3.4.1.1.10](#urma_sg_t) [urma_sg_t](#urma_sg_t) src; // including total data length. src is local va for write, and remote va for read.\
-urma_sg_t dst; // dst is remote va for write, and local va for read.\
-uint8_t target_hint; // required when using jetty group\
-uint64_t notify_data; // notify data or imm data in host byte order;\
+```c
+typedef struct urma_rw_wr {
+    urma_sg_t src; // including total data length. src is local va for write, and remote va for read.
+    urma_sg_t dst; // dst is remote va for write, and local va for read.
+    uint8_t target_hint; // required when using jetty group
+    uint64_t notify_data; // notify data or imm data in host byte order;
 } urma_rw_wr_t;
+```
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 - 根据UB协议，write和read操作只支持一个远端sge。因此对于write操作，dst.num_sge必须为1，对于read操作，src.num_sge必须为1。超出部分sge可能被网卡忽略，也可能导致数据面操作失败，取决于底层硬件的实现。
 
-- urma还支持write_with_notify特性，在将信息写到远端内存后，在远端不产生CQE，也不消耗RQE。对于write_with_notify，dst.num_sge = 2, notify data表示待写入到对端的notify数据，dst\[1\]表示notify地址和target segment； dst\[0\]含义与write一致，表示src sg待写入的远端内存信息。支持dst\[0\]和dst\[1\]源于不同的target segment。Notify长度固定为8B。
+- urma还支持write_with_notify特性，在将信息写到远端内存后，在远端不产生CQE，也不消耗RQE。对于write_with_notify，dst.num_sge = 2, notify data表示待写入到对端的notify数据，dst[1]表示notify地址和target segment； dst[0]含义与write一致，表示src sg待写入的远端内存信息。支持dst[0]和dst[1]源于不同的target segment。Notify长度固定为8B。
 
-##### urma_send_wr_t
-
+##### 2.4.1.1.3 urma_send_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_send_wr {\
-[3.4.1.1.10](#urma_sg_t) [urma_sg_t](#urma_sg_t) src; // including total data length\
-uint8_t target_hint; // required when using jetty group\
-uint64_t imm_data; // imm_data in host byte order;\
-[3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*tseg; /\* tseg used only when send with invalidate \*/\
+```c
+typedef struct urma_send_wr {
+    urma_sg_t src; // including total data length
+    uint8_t target_hint; // required when using jetty group
+    uint64_t imm_data; // imm_data in host byte order;
+    urma_target_seg_t *tseg; /* tseg used only when send with invalidate */
 } urma_send_wr_t;
+```
 
-##### urma_cas_wr_t
-
+##### 2.4.1.1.4 urma_cas_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_cas_wr {\
-[3.4.1.1.9](#urma_sge_t) [urma_sge_t](#urma_sge_t) \*dst; // len is the data length of CAS operation\
-urma_sge_t \*src; // local address for destination original value writeback, len represents the buffer length.\
-union { // Value compared with destination value\
-uint64_t cmp_data; // When the len \<= 8B, it indicates the CMP value.\
-uint64_t cmp_addr; // When the len \> 8B, it indicates the data address.\
-};\
-union { // If destination value is the same as cmp_data, destination value will be changed to swap_data\
-uint64_t swap_data; // When the len \<= 8B, it indicates the swap value.\
-uint64_t swap_addr; // When the len \> 8B, it indicates the data address.\
-};\
+```c
+typedef struct urma_cas_wr {
+    urma_sge_t *dst; // len is the data length of CAS operation
+    urma_sge_t *src; // local address for destination original value writeback, len represents the buffer length.
+    union { // Value compared with destination value
+        uint64_t cmp_data; // When the len <= 8B, it indicates the CMP value.
+        uint64_t cmp_addr; // When the len \> 8B, it indicates the data address.
+    };
+    union { // If destination value is the same as cmp_data, destination value will be changed to swap_data
+        uint64_t swap_data; // When the len <= 8B, it indicates the swap value.
+        uint64_t swap_addr; // When the len \> 8B, it indicates the data address.
+    };
 } urma_cas_wr_t;
+```
 
-##### urma_faa_wr_t
-
+##### 2.4.1.1.5 urma_faa_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_faa_wr {\
-[3.4.1.1.9](#urma_sge_t) [urma_sge_t](#urma_sge_t) \*dst; // len is the data length of FAA operation\
-urma_sge_t \*src; // local address for destination original value writeback, len represents the buffer length.\
-union {\
-uint64_t operand; // When the len \<= 8B, it indicates the operand value.\
-uint64_t operand_addr; // When the len \> 8B, it indicates the data address.\
-};\
+```c
+typedef struct urma_faa_wr {
+    urma_sge_t *dst; // len is the data length of FAA operation
+    urma_sge_t *src; // local address for destination original value writeback, len represents the buffer length.
+    union {
+        uint64_t operand; // When the len <= 8B, it indicates the operand value.
+        uint64_t operand_addr; // When the len \> 8B, it indicates the data address.
+    };
 } urma_faa_wr_t;
+```
 
-##### urma_opcode_t
-
+##### 2.4.1.1.6 urma_opcode_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_opcode {\
-URMA_OPC_WRITE = 0x00,\
-URMA_OPC_WRITE_IMM = 0x01,\
-URMA_OPC_WRITE_NOTIFY = 0x02, // not support result will return for URMA_OPC_WRITE_NOTIFY\
-URMA_OPC_READ = 0x10,\
-URMA_OPC_CAS = 0x20,\
-URMA_OPC_SWAP = 0x21,\
-URMA_OPC_FADD = 0x22,\
-URMA_OPC_FSUB = 0x23,\
-URMA_OPC_FAND = 0x24,\
-URMA_OPC_FOR = 0x25,\
-URMA_OPC_FXOR = 0x26,\
-URMA_OPC_SEND = 0x40, // remote JFR/jetty ID\
-URMA_OPC_SEND_IMM = 0x41, // remote JFR/jetty ID\
-URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id\
-URMA_OPC_NOP = 0x51,\
-URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE\
-URMA_OPC_LAST\
+```c
+typedef enum urma_opcode {
+    URMA_OPC_WRITE = 0x00,
+    URMA_OPC_WRITE_IMM = 0x01,
+    URMA_OPC_WRITE_NOTIFY = 0x02, // not support result will return for URMA_OPC_WRITE_NOTIFY
+    URMA_OPC_READ = 0x10,
+    URMA_OPC_CAS = 0x20,
+    URMA_OPC_SWAP = 0x21,
+    URMA_OPC_FADD = 0x22,
+    URMA_OPC_FSUB = 0x23,
+    URMA_OPC_FAND = 0x24,
+    URMA_OPC_FOR = 0x25,
+    URMA_OPC_FXOR = 0x26,
+    URMA_OPC_SEND = 0x40, // remote JFR/jetty ID
+    URMA_OPC_SEND_IMM = 0x41, // remote JFR/jetty ID
+    URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
+    URMA_OPC_NOP = 0x51,
+    URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
+    URMA_OPC_LAST
 } urma_opcode_t;
+```
 
-##### urma_jfs_wr_flag_t
-
+##### 2.4.1.1.7 urma_jfs_wr_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_jfs_wr_flag {\
-struct {\
-uint32_t place_order : 2; /\* 0: There is no order with other WR\
-1: relax order\
-2: strong order\
-3: reserve \*/ /\* see urma_order_type_t \*/\
-uint32_t comp_order : 1; /\* 0: There is no completion order with othwe WR.\
-1: Completion order with previous WR. \*/\
-uint32_t fence : 1; /\* 0: There is not fence.\
-1: Fence with previous read and atomic WR \*/\
-uint32_t solicited_enable : 1; /\* 0: There is not solicited.\
-1: solicited. It will trigger an event on remote side \*/\
-uint32_t complete_enable : 1; /\* 0: Do not notify local process after the task is complete.\
-1: Notify local process after the task is completed. \*/\
-uint32_t inline_flag : 1; /\* 0: not inline.\
-1: inline data. \*/\
-uint32_t reserved : 25;\
-} bs;\
-uint32_t value;\
+```c
+typedef union urma_jfs_wr_flag {
+    struct {
+        uint32_t place_order : 2; /* 0: There is no order with other WR
+        1: relax order
+        2: strong order
+        3: reserve */ /* see urma_order_type_t */
+        uint32_t comp_order : 1; /* 0: There is no completion order with othwe WR.
+        1: Completion order with previous WR. */
+        uint32_t fence : 1; /* 0: There is not fence.
+        1: Fence with previous read and atomic WR */
+        uint32_t solicited_enable : 1; /* 0: There is not solicited.
+        1: solicited. It will trigger an event on remote side */
+        uint32_t complete_enable : 1; /* 0: Do not notify local process after the task is complete.
+        1: Notify local process after the task is completed. */
+        uint32_t inline_flag : 1; /* 0: not inline.
+        1: inline data. */
+        uint32_t reserved : 25;
+    } bs;
+    uint32_t value;
 } urma_jfs_wr_flag_t;
+```
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 - 如果jetty/jfs是UM模式，那么WR不支持fence, place_order和comp_order
 
@@ -6404,48 +5808,50 @@ uint32_t value;\
 
 - 当Jetty/JFS是RM或RC模式，并且配置成完成保序模式时，如果WR指定了comp_order，代表接收侧cqe上报是保序的，发送的报文会带comp_order标志。
 
-##### urma_place_order_t
-
+##### 2.4.1.1.8 urma_place_order_t
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_place_order{\
-URMA_NO_ORDER = 0, // No order\
-URMA_RELAX_ORDER, // Relax order\
-URMA_STRONG_ORDER // Strong order\
+```c
+typedef enum urma_place_order{
+    URMA_NO_ORDER = 0, // No order
+    URMA_RELAX_ORDER, // Relax order
+    URMA_STRONG_ORDER // Strong order
 } urma_place_order_t;
+```
 
-##### urma_sge_t
-
+##### 2.4.1.1.9 urma_sge_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_sge {\
-uint64_t addr;\
-uint32_t len;\
-[3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*tseg;\
+```c
+typedef struct urma_sge {
+    uint64_t addr;
+    uint32_t len;
+    urma_target_seg_t *tseg;
 } urma_sge_t;
+```
 
-##### urma_sg_t
-
+##### 2.4.1.1.10 urma_sg_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_sg {\
-[3.4.1.1.9](#urma_sge_t) [urma_sge_t](#urma_sge_t) \*sge;\
-uint32_t num_sge;\
+```c
+typedef struct urma_sg {
+    urma_sge_t *sge;
+    uint32_t num_sge;
 } urma_sg_t;
+```
 
-#### urma_post_jfr_wr
+#### 2.4.1.2 urma_post_jfr_wr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_post_jfr_wr([3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t)\*jfr, [3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t) \*wr, [3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t) \*\*bad_wr)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfr_wr([3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t)*jfr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) **bad_wr)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6459,45 +5865,45 @@ uint32_t num_sge;\
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before, which is used to put command;
+@param[in] jfr: the jfr created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including sge, flag.
+@param[in] wr: the posting request all information, including sge, flag.
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 返回执行结果：0 on success, other value on error。
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfr来自[3.3.1.5.1](#urma_create_jfr) [urma_create_jfr](#urma_create_jfr)接口返回，参数内部指针等合法性已由urma_create_jfr接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfr来自[3.3.1.5.1](#23151-urma_create_jfr) [urma_create_jfr](#23151-urma_create_jfr)接口返回，参数内部指针等合法性已由urma_create_jfr接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-##### urma_jfr_wr_t
-
+##### 2.4.1.2.1 urma_jfr_wr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_jfr_wr {\
-[3.4.1.1.10](#urma_sg_t) [urma_sg_t](#urma_sg_t) src; // includeing buffer length\
-uint64_t user_ctx; // completion data, eg. wr id\
-struct [3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t) \*next;\
+```c
+typedef struct urma_jfr_wr {
+    urma_sg_t src; // includeing buffer length
+    uint64_t user_ctx; // completion data, eg. wr id
+    struct urma_jfr_wr_t *next;
 } urma_jfr_wr_t;
+```
 
-![](figures/urma-api-constraint-01.png)
+![](figures/urma_warning.png)
 
 IB场景下urma_jfr_wr中src包含len为0的sge时对应的行为由网卡驱动和硬件决定，mlnx cx5环境下可能会产生不可预知的错误。
 
-#### urma_post_jetty_send_wr
+#### 2.4.1.3 urma_post_jetty_send_wr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_post_jetty_send_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [3.4.1.1.1](#urma_jfs_wr_t) [urma_jfs_wr_t](#urma_jfs_wr_t) \*wr, [3.4.1.1.1](#urma_jfs_wr_t) [urma_jfs_wr_t](#urma_jfs_wr_t) \*\*bad_wr)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_send_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6513,29 +5919,29 @@ IB场景下urma_jfr_wr中src包含len为0的sge时对应的行为由网卡驱动
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before, which is used to put command;
+@param[in] jetty: the jetty created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
+@param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#urma_create_jetty) [urma_create_jetty](#urma_create_jetty)接口返回，参数内部指针等合法性已由urma_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，参数内部指针等合法性已由urma_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-#### urma_post_jetty_recv_wr
+#### 2.4.1.4 urma_post_jetty_recv_wr
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_post_jetty_recv_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) \*jetty, [3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t) \*wr, [3.4.1.2.1](#urma_jfr_wr_t) [urma_jfr_wr_t](#urma_jfr_wr_t)\*\*bad_wr)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_recv_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t)**bad_wr)
 
 3.  描述
 
@@ -6547,31 +5953,31 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before, which is used to put command;
+@param[in] jetty: the jetty created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including sge, flag.
+@param[in] wr: the posting request all information, including sge, flag.
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#urma_create_jetty) [urma_create_jetty](#urma_create_jetty)接口返回，参数内部指针等合法性已由urma_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，参数内部指针等合法性已由urma_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-### poll相关
+### 2.4.2 poll相关
 
-#### urma_poll_jfc
+#### 2.4.2.1 urma_poll_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_poll_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc, int cr_cnt, [3.4.2.1.1](#urma_cr_t) [urma_cr_t](#urma_cr_t) \*cr)
+int urma_poll_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr)
 
 3.  描述
 
@@ -6581,11 +5987,11 @@ int urma_poll_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc, int
 
 4.  参数
 
-\@param\[in\] jfc: jetty completion queue to poll
+@param[in] jfc: jetty completion queue to poll
 
-\@param\[in\] cr_cnt: the expected number of completion record to get
+@param[in] cr_cnt: the expected number of completion record to get
 
-\@param\[out\] cr: the completion record array to fill at least cr_cnt completion records
+@param[out] cr: the completion record array to fill at least cr_cnt completion records
 
 5.  返回值
 
@@ -6595,108 +6001,111 @@ Return: the number of completion record returned, 0 means no completion record r
 
 Note that: at most 16 completion records can be polled for RDMA device
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfc来自[3.3.1.1.1](#urma_create_jfc) [urma_create_jfc](#urma_create_jfc)接口返回，参数内部指针等合法性已由urma_create_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfc来自[3.3.1.1.1](#23111-urma_create_jfc) [urma_create_jfc](#23111-urma_create_jfc)接口返回，参数内部指针等合法性已由urma_create_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 由调用者保证参数cr_cnt与cr指定地址个数一致，接口内仅对cr_cnt做非0校验。否则可能导致调用者进程异常退出。
 
-##### urma_cr_t
-
+##### 2.4.2.1.1 urma_cr_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_cr {\
-[3.4.2.1.2](#urma_cr_status_t) [urma_cr_status_t](#urma_cr_status_t) status;\
-uint64_t user_ctx; // user_ctx related to a work request\
-[3.4.2.1.3](#urma_cr_opcode_t) [urma_cr_opcode_t](#urma_cr_opcode_t) opcode; // Only for recv\
-[3.4.2.1.4](#urma_cr_flag_t) [urma_cr_flag_t](#urma_cr_flag_t) flag; // indicate notify data or swap data is valid or not\
-uint32_t completion_len; // The number of bytes transferred\
-\
-uint32_t local_id; // Local jetty ID, or JFS ID, or JFR ID, depends on flag\
-[urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) remote_id; // Valid only for receiving CR. The remote jetty where the\
-// received msg comes from Jetty ID or JFS ID, depends on flag.\
-union {\
-uint64_t imm_data; // Valid only for receiving CR: send/write/read with imm.\
-[3.4.2.1.5](#urma_cr_token_t) [urma_cr_token_t](#urma_cr_token_t) invalid_token; // Valid only for receiving CR: send with invalidate.\
-};\
-uint32_t tpn ; // TP number or TPG number\
-uintptr_t user_data; // e.g. use as pointer to local jetty struct.\
+```c
+typedef struct urma_cr {
+    urma_cr_status_t status;
+    uint64_t user_ctx; // user_ctx related to a work request
+    urma_cr_opcode_t opcode; // Only for recv
+    urma_cr_flag_t flag; // indicate notify data or swap data is valid or not
+    uint32_t completion_len; // The number of bytes transferred
+    uint32_t local_id; // Local jetty ID, or JFS ID, or JFR ID, depends on flag
+    urma_jetty_id_t remote_id; // Valid only for receiving CR. The remote jetty where the
+    // received msg comes from Jetty ID or JFS ID, depends on flag.
+    union {
+        uint64_t imm_data; // Valid only for receiving CR: send/write/read with imm.
+        urma_cr_token_t invalid_token; // Valid only for receiving CR: send with invalidate.
+    };
+    uint32_t tpn ; // TP number or TPG number
+    uintptr_t user_data; // e.g. use as pointer to local jetty struct.
 } urma_cr_t;
+```
 
-##### urma_cr_status_t
-
+##### 2.4.2.1.2 urma_cr_status_t
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_cr_status { // completion record status\
-URMA_CR_SUCCESS = 0,\
-URMA_CR_UNSUPPORTED_OPCODE_ERR, /\* Opcode in the WR is not supported \*/\
-URMA_CR_LOC_LEN_ERR, /\* Local data too long error \*/\
-URMA_CR_LOC_OPERATION_ERR, /\* Local operation err \*/\
-URMA_CR_LOC_ACCESS_ERR, /\* Access to local memory error \*/\
-URMA_CR_REM_RESP_LEN_ERR, /\* Local Operation Error, with sub-status of Remote Response Length Error \*/\
-URMA_CR_REM_UNSUPPORTED_REQ_ERR,\
-URMA_CR_REM_OPERATION_ERR, /\* Error when target jetty can not complete the operation \*/\
-URMA_CR_REM_ACCESS_ABORT_ERR, /\* Error when target jetty access memory error or abort the operation \*/\
-URMA_CR_ACK_TIMEOUT_ERR, /\* Retransmission exceeds the maximum number of times \*/\
-URMA_CR_RNR_RETRY_CNT_EXC_ERR, /\* RNR retries exceeded the maximum number: remote jfr has no buffer \*/\
-URMA_CR_WR_FLUSH_ERR, /\* Jetty in the error state, and the hardware has processed the WR. \*/\
-URMA_CR_WR_SUSPEND_DONE, /\* Hardware constructs a fake CQE, and user_ctx is invalid. \*/\
-URMA_CR_WR_FLUSH_ERR_DONE, /\* Hardware constructs a fake CQE, and user_ctx is invalid. \*/\
-URMA_CR_WR_UNHANDLED, /\* Return of flush jetty/jfs, and the hardware has not processed the WR. \*/\
-URMA_CR_LOC_DATA_POISON, /\* Local Data Poison \*/\
-URMA_CR_REM_DATA_POISON, /\* Remote Data Poison \*/\
+```c
+typedef enum urma_cr_status { // completion record status
+    URMA_CR_SUCCESS = 0,
+    URMA_CR_UNSUPPORTED_OPCODE_ERR, /* Opcode in the WR is not supported */
+    URMA_CR_LOC_LEN_ERR, /* Local data too long error */
+    URMA_CR_LOC_OPERATION_ERR, /* Local operation err */
+    URMA_CR_LOC_ACCESS_ERR, /* Access to local memory error */
+    URMA_CR_REM_RESP_LEN_ERR, /* Local Operation Error, with sub-status of Remote Response Length Error */
+    URMA_CR_REM_UNSUPPORTED_REQ_ERR,
+    URMA_CR_REM_OPERATION_ERR, /* Error when target jetty can not complete the operation */
+    URMA_CR_REM_ACCESS_ABORT_ERR, /* Error when target jetty access memory error or abort the operation */
+    URMA_CR_ACK_TIMEOUT_ERR, /* Retransmission exceeds the maximum number of times */
+    URMA_CR_RNR_RETRY_CNT_EXC_ERR, /* RNR retries exceeded the maximum number: remote jfr has no buffer */
+    URMA_CR_WR_FLUSH_ERR, /* Jetty in the error state, and the hardware has processed the WR. */
+    URMA_CR_WR_SUSPEND_DONE, /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_FLUSH_ERR_DONE, /* Hardware constructs a fake CQE, and user_ctx is invalid. */
+    URMA_CR_WR_UNHANDLED, /* Return of flush jetty/jfs, and the hardware has not processed the WR. */
+    URMA_CR_LOC_DATA_POISON, /* Local Data Poison */
+    URMA_CR_REM_DATA_POISON, /* Remote Data Poison */
 } urma_cr_status_t;
+```
 
-##### urma_cr_opcode_t
-
+##### 2.4.2.1.3 urma_cr_opcode_t
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-typedef enum urma_cr_opcode {\
-URMA_CR_OPC_SEND = 0x00,\
-URMA_CR_OPC_SEND_WITH_IMM,\
-URMA_CR_OPC_SEND_WITH_INV,\
-URMA_CR_OPC_WRITE_WITH_IMM,\
+```c
+typedef enum urma_cr_opcode {
+    URMA_CR_OPC_SEND = 0x00,
+    URMA_CR_OPC_SEND_WITH_IMM,
+    URMA_CR_OPC_SEND_WITH_INV,
+    URMA_CR_OPC_WRITE_WITH_IMM,
 } urma_cr_opcode_t;
+```
 
-##### urma_cr_flag_t
-
+##### 2.4.2.1.4 urma_cr_flag_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef union urma_cr_flag {\
-struct {\
-uint8_t s_r : 1; // Indicate CR stands for sending or receiving, 0: send, 1: recv.\
-uint8_t jetty : 1; // Indicate CR stands for jetty or jfs/jfr, 0: jfs/jfr, 1: jetty.\
-uint8_t suspend_done : 1; // Real CR associated with the WR, user_ctx is valid\
-uint8_t flush_err_done : 1; // Real CR associated with the WR, user_ctx is valid\
-uint8_t reserved : 4;\
-} bs;\
-uint8_t value;\
+```c
+typedef union urma_cr_flag {
+    struct {
+        uint8_t s_r : 1; // Indicate CR stands for sending or receiving, 0: send, 1: recv.
+        uint8_t jetty : 1; // Indicate CR stands for jetty or jfs/jfr, 0: jfs/jfr, 1: jetty.
+        uint8_t suspend_done : 1; // Real CR associated with the WR, user_ctx is valid
+        uint8_t flush_err_done : 1; // Real CR associated with the WR, user_ctx is valid
+        uint8_t reserved : 4;
+    } bs;
+    uint8_t value;
 } urma_cr_flag_t;
+```
 
-##### urma_cr_token_t
-
+##### 2.4.2.1.5 urma_cr_token_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_cr_token {\
-uint32_t token_id;\
-[3.3.2.1.7](#urma_token_t) [urma_token_t](#urma_token_t) token_value;\
+```c
+typedef struct urma_cr_token {
+    uint32_t token_id;
+    urma_token_t token_value;
 } urma_cr_token_t;
+```
 
-#### urma_rearm_jfc
+#### 2.4.2.2 urma_rearm_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc, bool solicited_only)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, bool solicited_only)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6706,71 +6115,71 @@ uint32_t token_id;\
 
 4.  参数
 
-\@param\[in\] jfc: jetty completion queue to arm to interrupt mode
+@param[in] jfc: jetty completion queue to arm to interrupt mode
 
-\@param\[in\] solicited_only: indicate it will trigger event only for packets with solicited flag.
+@param[in] solicited_only: indicate it will trigger event only for packets with solicited flag.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfc来自[3.3.1.1.1](#urma_create_jfc) [urma_create_jfc](#urma_create_jfc)接口返回，参数内部指针等合法性已由urma_create_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfc来自[3.3.1.1.1](#23111-urma_create_jfc) [urma_create_jfc](#23111-urma_create_jfc)接口返回，参数内部指针等合法性已由urma_create_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-#### urma_wait_jfc
+#### 2.4.2.3 urma_wait_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-int urma_wait_jfc([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) \*jfce, uint32_t jfc_cnt, int time_out, [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc\[\])
+int urma_wait_jfc([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *jfce, uint32_t jfc_cnt, int time_out, [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc[])
 
 3.  描述
 
 等待某个JFC产生新的JFCE，该操作阻塞调用进程。若进程被唤醒，则jfc handle返回到指定的地址中。应用需要进一步调用urma_poll_jfc来获得cr
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-中断模式的要严格保证urma_wait_jfc，[3.4.2.1](#urma_poll_jfc) [urma_poll_jfc](#urma_poll_jfc)和[3.4.2.4](#urma_ack_jfc) [urma_ack_jfc](#urma_ack_jfc)的相对顺序，否则可能会产生意外结果。
+中断模式的要严格保证urma_wait_jfc，[3.4.2.1](#2421-urma_poll_jfc) [urma_poll_jfc](#2421-urma_poll_jfc)和[3.4.2.4](#2424-urma_ack_jfc) [urma_ack_jfc](#2424-urma_ack_jfc)的相对顺序，否则可能会产生意外结果。
 
 4.  参数
 
-\@param\[in\] jfce: jetty event channel to wait on
+@param[in] jfce: jetty event channel to wait on
 
-\@param\[in\] jfc_cnt: expected jfc count to return
+@param[in] jfc_cnt: expected jfc count to return
 
-\@param\[in\] time_out: max time to wait (milliseconds),
+@param[in] time_out: max time to wait (milliseconds),
 
 timeout = 0: return immediately even if no events are ready，
 
 timeout=-1: an infinite timeout
 
-\@param\[out\] jfc: address to put the jfc handle
+@param[out] jfc: address to put the jfc handle
 
 5.  返回值
 
 Return: the number of jfc returned, 0 means no jfc returned, -1 on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfce来自[3.3.1.2.1](#urma_create_jfce) [urma_create_jfce](#urma_create_jfce)接口返回，参数内部指针等合法性已由urma_create_jfce接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfce来自[3.3.1.2.1](#23121-urma_create_jfce) [urma_create_jfce](#23121-urma_create_jfce)接口返回，参数内部指针等合法性已由urma_create_jfce接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 由调用者保证jfc_cnt与jfc中地址个数一致，接口内仅校验jfc_cnt非0。否则可能导致调用者进程异常退出。
 
-Repeatedly calling this API without calling \[urma_poll_jfc\] may lead to number of jfc which is larger than expected in IP provider. This error is controllable.
+Repeatedly calling this API without calling [urma_poll_jfc] may lead to number of jfc which is larger than expected in IP provider. This error is controllable.
 
-#### urma_ack_jfc
+#### 2.4.2.4 urma_ack_jfc
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_ack_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc\[\], uint32_t nevents\[\], uint32_t jfc_cnt)
+void urma_ack_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc[], uint32_t nevents[], uint32_t jfc_cnt)
 
 3.  描述
 
@@ -6778,33 +6187,33 @@ void urma_ack_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) \*jfc\[\],
 
 4.  参数
 
-\@param\[in\] jfc: jfc pointer array to be acknowledged;
+@param[in] jfc: jfc pointer array to be acknowledged;
 
-\@param\[in\] nevents: event count array to be acknowledged;
+@param[in] nevents: event count array to be acknowledged;
 
-\@param\[in\] jfc_cnt: number of elements in the array
+@param[in] jfc_cnt: number of elements in the array
 
 5.  返回值
 
 Return: void
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfc来自[3.4.2.3](#urma_wait_jfc) [urma_wait_jfc](#urma_wait_jfc)接口返回，参数内部指针等合法性已由urma_wait_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jfc来自[3.4.2.3](#2423-urma_wait_jfc) [urma_wait_jfc](#2423-urma_wait_jfc)接口返回，参数内部指针等合法性已由urma_wait_jfc接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 由调用者保证参数jfc的地址个数、nevents的数组元素个数和jfc_cnt数量一致，接口内仅校验jfc_cnt非0。否则可能导致调用者进程异常退出。
 
-### read/write
+### 2.4.3 read/write
 
-#### urma_write
+#### 2.4.3.1 urma_write
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_write([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)\*target_jfr, [3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*dst_tseg, [3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t)\*src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_write([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t)*src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3.  描述
 
@@ -6816,41 +6225,41 @@ Return: void
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before, which is used to put command;
+@param[in] jfs: the jfs created before, which is used to put command;
 
-\@param\[in\] target_jfr: destination jetty receiver;
+@param[in] target_jfr: destination jetty receiver;
 
-\@param\[in\] dst_tseg: the dst target seg imported before;
+@param[in] dst_tseg: the dst target seg imported before;
 
-\@param\[in\] src_tseg: the src target seg registered before;
+@param[in] src_tseg: the src target seg registered before;
 
-\@param\[in\] dst: destination address(mapping va on user node or rva in ubva on home node) to be written into
+@param[in] dst: destination address(mapping va on user node or rva in ubva on home node) to be written into
 
-\@param\[in\] src: source address(local process address space) to fetch data
+@param[in] src: source address(local process address space) to fetch data
 
-\@param\[in\] len: the data len to be written
+@param[in] len: the data len to be written
 
-\@param\[in\] flag: flag to control jfs work request attribute
+@param[in] flag: flag to control jfs work request attribute
 
-\@param\[in\] user_ctx: the user context, such as request id(rid) etc.
+@param[in] user_ctx: the user context, such as request id(rid) etc.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#urma_create_jfs) [urma_create_jfs](#urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#urma_import_seg) [urma_import_seg](#urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
-#### urma_read
+#### 2.4.3.2 urma_read
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_read([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)\*target_jfr, [3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*dst_tseg, urma_target_seg_t \*src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_read([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, urma_target_seg_t *src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3.  描述
 
@@ -6862,43 +6271,43 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before, which is used to put command;
+@param[in] jfs: the jfs created before, which is used to put command;
 
-\@param\[in\] target_jfr: destination jetty receiver;
+@param[in] target_jfr: destination jetty receiver;
 
-\@param\[in\] dst_tseg: the seg registered before;
+@param[in] dst_tseg: the seg registered before;
 
-\@param\[in\] src_tseg: the target seg imported before;
+@param[in] src_tseg: the target seg imported before;
 
-\@param\[in\] dst: destination address(local process address space) to be written into
+@param[in] dst: destination address(local process address space) to be written into
 
-\@param\[in\] src: source address(mapping va or rva in ubva) to fetch data
+@param[in] src: source address(mapping va or rva in ubva) to fetch data
 
-\@param\[in\] len: the data len to be written
+@param[in] len: the data len to be written
 
-\@param\[in\] flag: the flag to control jfs work request attribute
+@param[in] flag: the flag to control jfs work request attribute
 
-\@param\[in\] user_ctx: the user context, such as request id(rid) etc.
+@param[in] user_ctx: the user context, such as request id(rid) etc.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#urma_create_jfs) [urma_create_jfs](#urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#urma_import_seg) [urma_import_seg](#urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
-### send/recv
+### 2.4.4 send/recv
 
-#### urma_send
+#### 2.4.4.1 urma_send
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) \*jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) \*target_jfr, [3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3.  描述
 
@@ -6910,37 +6319,37 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before, which is used to put command;
+@param[in] jfs: the jfs created before, which is used to put command;
 
-\@param\[in\] target_jfr: destination jetty receiver(with full qualified jfr id);
+@param[in] target_jfr: destination jetty receiver(with full qualified jfr id);
 
-\@param\[in\] src_tseg: the seg registered before;
+@param[in] src_tseg: the seg registered before;
 
-\@param\[in\] src: source address for sending;
+@param[in] src: source address for sending;
 
-\@param\[in\] len: data length;
+@param[in] len: data length;
 
-\@param\[in\] flag: flag to control jfs work request attribute
+@param[in] flag: flag to control jfs work request attribute
 
-\@param\[in\] user_ctx: the user context, such as request id(rid) etc;
+@param[in] user_ctx: the user context, such as request id(rid) etc;
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#urma_create_jfs) [urma_create_jfs](#urma_create_jfs)接口返回，target_jfr来自[3.3.1.5.6](#urma_import_jfr) [urma_import_jfr](#urma_import_jfr)接口返回，src_tseg来自[3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，target_jfr来自[3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23156-urma_import_jfr)接口返回，src_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
-#### urma_recv
+#### 2.4.4.2 urma_recv
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_recv([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) \*jfr, [3.3.2.1.3](#urma_target_seg_t) [urma_target_seg_t](#urma_target_seg_t) \*recv_tseg, uint64_t buf, uint32_t len, uint64_t user_ctx)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_recv([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *recv_tseg, uint64_t buf, uint32_t len, uint64_t user_ctx)
 
 3.  描述
 
@@ -6950,37 +6359,37 @@ Return: 0 on success, other value on error.
 
 4.  参数
 
-\@param\[in\] jfr: jetty receiver;
+@param[in] jfr: jetty receiver;
 
-\@param\[in\] recv_tseg: the locally registered segment before for receiving;
+@param[in] recv_tseg: the locally registered segment before for receiving;
 
-\@param\[in\] buf: buffer address for receiving;
+@param[in] buf: buffer address for receiving;
 
-\@param\[in\] len: buffer length;
+@param[in] len: buffer length;
 
-\@param\[in\] user_ctx: the user context, such as request id(rid) etc;
+@param[in] user_ctx: the user context, such as request id(rid) etc;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数jfr来自[3.3.1.5.1](#urma_create_jfr) [urma_create_jfr](#urma_create_jfr)接口返回，recv_tseg来自[3.3.2.1](#urma_register_seg) [urma_register_seg](#urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfr来自[3.3.1.5.1](#23151-urma_create_jfr) [urma_create_jfr](#23151-urma_create_jfr)接口返回，recv_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
-## 其他
+## 2.5 其他
 
-### 扩展
+### 2.5.1 扩展
 
-#### urma_user_ctl
+#### 2.5.1.1 urma_user_ctl
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_user_ctl([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) \*ctx, [3.5.1.1.1](#urma_user_ctl_in_t) [urma_user_ctl_in_t](#urma_user_ctl_in_t) \*in, [3.5.1.1.2](#urma_user_ctl_out_t) [urma_user_ctl_out_t](#urma_user_ctl_out_t) \*out)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_user_ctl([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.5.1.1.1](#25111-urma_user_ctl_in_t) [urma_user_ctl_in_t](#25111-urma_user_ctl_in_t) *in, [3.5.1.1.2](#25112-urma_user_ctl_out_t) [urma_user_ctl_out_t](#25112-urma_user_ctl_out_t) *out)
 
 3.  描述
 
@@ -6988,58 +6397,59 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] ctx: the created urma context pointer;
+@param[in] ctx: the created urma context pointer;
 
-\@param\[in\] in: user ioctl cmd;
+@param[in] in: user ioctl cmd;
 
-\@param\[out\] out: result of execution;
+@param[out] out: result of execution;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
-由调用者保证参数ctx来自[3.2.2.4.1](#urma_create_context) [urma_create_context](#urma_create_context)接口返回，参数内部指针等合法性已由urma_create_context接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数ctx来自[3.2.2.4.1](#22241-urma_create_context) [urma_create_context](#22241-urma_create_context)接口返回，参数内部指针等合法性已由urma_create_context接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-##### urma_user_ctl_in_t
-
+##### 2.5.1.1.1 urma_user_ctl_in_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_user_ctl_in {\
-uint64_t addr; /\* \[Required\] the address of the input parameter buffer. \*/\
-uint32_t len; /\* \[Required\] the length of the input parameter buffer \*/\
-/\*\
-\* Opcode is simultaneously recognized by user and driver.\
-\* User opcode should be distinguished with enum urma_user_ctl_ops_t, which is only used by URMA.\
-\*/\
-uint32_t opcode; /\* \[Required\] \*/\
+```c
+typedef struct urma_user_ctl_in {
+    uint64_t addr; /* [Required] the address of the input parameter buffer. */
+    uint32_t len; /* [Required] the length of the input parameter buffer */
+    /*
+    * Opcode is simultaneously recognized by user and driver.
+    * User opcode should be distinguished with enum urma_user_ctl_ops_t, which is only used by URMA.
+    */
+    uint32_t opcode; /* [Required] */
 } urma_user_ctl_in_t;
+```
 
-##### urma_user_ctl_out_t
-
+##### 2.5.1.1.2 urma_user_ctl_out_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef struct urma_user_ctl_out {\
-uint64_t addr; /\* \[Optional\] the address of the output parameter buffer. \*/\
-uint32_t len; /\* \[Optional\] the length of the output parameter buffer \*/\
-uint32_t reserved;\
+```c
+typedef struct urma_user_ctl_out {
+    uint64_t addr; /* [Optional] the address of the output parameter buffer. */
+    uint32_t len; /* [Optional] the length of the output parameter buffer */
+    uint32_t reserved;
 } urma_user_ctl_out_t;
+```
 
-### 日志
+### 2.5.2 日志
 
-#### urma_register_log_func
+#### 2.5.2.1 urma_register_log_func
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t)urma_register_log_func([3.5.2.1.1](#urma_log_cb_t) [urma_log_cb_t](#urma_log_cb_t) func)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -7049,26 +6459,25 @@ uint32_t reserved;\
 
 4.  参数
 
-\@param\[in\] func: log callback func
+@param[in] func: log callback func
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### urma_log_cb_t
+##### 2.5.2.1.1 urma_log_cb_t
 
-typedef void (\*urma_log_cb_t)(int level, char \*message);
+typedef void (*urma_log_cb_t)(int level, char *message);
 
-#### urma_unregister_log_func
+#### 2.5.2.2 urma_unregister_log_func
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.2.1.1.2](#urma_status_t) [urma_status_t](#urma_status_t) urma_unregister_log_func(void)
-
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_log_func(void)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -7084,15 +6493,15 @@ NA
 
 Return: 0 on success, other value on error
 
-#### urma_log_get_level
+#### 2.5.2.3 urma_log_get_level
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-[3.5.2.3.1](#urma_vlog_level_t) [urma_vlog_level_t](#urma_vlog_level_t) urma_log_get_level(void)
+[3.5.2.3.1](#25231-urma_vlog_level_t) [urma_vlog_level_t](#25231-urma_vlog_level_t) urma_log_get_level(void)
 
 3.  描述
 
@@ -7106,33 +6515,33 @@ NA
 
 Return: 返回日志级别urma_vlog_level_t
 
-##### urma_vlog_level_t
-
+##### 2.5.2.3.1 urma_vlog_level_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
-typedef enum urma_vlog_level {\
-URMA_VLOG_LEVEL_EMERG = 0,\
-URMA_VLOG_LEVEL_ALERT = 1,\
-URMA_VLOG_LEVEL_CRIT = 2,\
-URMA_VLOG_LEVEL_ERR = 3,\
-URMA_VLOG_LEVEL_WARNING = 4,\
-URMA_VLOG_LEVEL_NOTICE = 5,\
-URMA_VLOG_LEVEL_INFO = 6,\
-URMA_VLOG_LEVEL_DEBUG = 7,\
-URMA_VLOG_LEVEL_MAX = 8,\
+```c
+typedef enum urma_vlog_level {
+    URMA_VLOG_LEVEL_EMERG = 0,
+    URMA_VLOG_LEVEL_ALERT = 1,
+    URMA_VLOG_LEVEL_CRIT = 2,
+    URMA_VLOG_LEVEL_ERR = 3,
+    URMA_VLOG_LEVEL_WARNING = 4,
+    URMA_VLOG_LEVEL_NOTICE = 5,
+    URMA_VLOG_LEVEL_INFO = 6,
+    URMA_VLOG_LEVEL_DEBUG = 7,
+    URMA_VLOG_LEVEL_MAX = 8,
 } urma_vlog_level_t;
+```
 
-#### urma_log_set_level
+#### 2.5.2.4 urma_log_set_level
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_log_set_level([3.5.2.3.1](#urma_vlog_level_t) [urma_vlog_level_t](#urma_vlog_level_t) level)
-
+void urma_log_set_level([3.5.2.3.1](#25231-urma_vlog_level_t) [urma_vlog_level_t](#25231-urma_vlog_level_t) level)
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -7142,21 +6551,21 @@ void urma_log_set_level([3.5.2.3.1](#urma_vlog_level_t) [urma_vlog_level_t](#urm
 
 4.  参数
 
-\@param\[in\] level: log level to set;
+@param[in] level: log level to set;
 
 5.  返回值
 
 Return: void
 
-#### urma_log_get_thread_tag
+#### 2.5.2.5 urma_log_get_thread_tag
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-const char\* urma_log_get_thread_tag(void);
+const char* urma_log_get_thread_tag(void);
 
 3.  描述
 
@@ -7168,17 +6577,17 @@ NA
 
 5.  返回值
 
-Return: const char \*
+Return: const char *
 
-#### urma_log_set_thread_tag
+#### 2.5.2.6 urma_log_set_thread_tag
 
 1.  头文件
 
-#include \"urma_api.h\"
+#include "urma_api.h"
 
 2.  原型
 
-void urma_log_set_thread_tag(const char\* tag);
+void urma_log_set_thread_tag(const char* tag);
 
 3.  描述
 
@@ -7186,112 +6595,90 @@ void urma_log_set_thread_tag(const char\* tag);
 
 4.  参数
 
-\@param\[in\] tag: log tag per thread;
+@param[in] tag: log tag per thread;
 
 5.  返回值
 
 Return: void
 
-### 宏定义
-
-
-定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
-
-#define URMA_TOKEN_NONE 0 /\* Indicates the verification policy of the key. \*/\
-#define URMA_TOKEN_PLAIN_TEXT 1\
-#define URMA_TOKEN_SIGNED 2\
-#define URMA_TOKEN_ALL_ENCRYPTED 3\
-#define URMA_TOKEN_RESERVED 4\
-#define URMA_TOKEN_ID_INVALID 0\
-#define URMA_TOKEN_ID_VALID 1\
-#define URMA_DSVA_DISABLE 0 /\* Indicates whether it is a segment of dsva. \*/\
-#define URMA_DSVA_ENABLE 1\
-#define URMA_NON_CACHEABLE 0 /\* Indicates whether the segment can be cached by multiple hosts. \*/\
-#define URMA_CACHEABLE 1\
-#define URMA_ACCESS_LOCAL_ONLY (0x1 \<\< 0)\
-#define URMA_ACCESS_READ (0x1 \<\< 1)\
-#define URMA_ACCESS_WRITE (0x1 \<\< 2)\
-#define URMA_ACCESS_ATOMIC (0x1 \<\< 3)\
-#define URMA_LOCAL_MEMORY 0 /\* Indicates that the physical memory is remote. \*/\
-#define URMA_REMOTE_MEMORY 1\
-#define URMA_SEG_NOMAP 0 /\* Indicates that the current process has mapped this segment \*/\
-#define URMA_SEG_MAPPED 1\
-#define URMA_ADDR_TYPE_MVA 0\
-#define URMA_ADDR_TYPE_UBVA 1\
-#define URMA_COMPLETE_ENABLE 1 /\* Notify the source after the task is completed. \*/\
-#define URMA_COMPLETE_DISABLE 0 /\* Do not notify the source after the task is complete. \*/\
-#define URMA_COMPLETE_TYPE_JFC 0 /\* Complete notification via JFC. \*/\
-#define URMA_COMPLETE_TYPE_CF 1 /\* Complete notification via DDR address \*/\
-#define URMA_DEPENDENCY_NONE 0 /\* There is no dependency between commands. \*/\
-#define URMA_DEPENDENCY_FIRST 1 /\* Subsequent commands depend on the execution result of the current command. \*/\
-#define URMA_DEPENDENCY_DELAY 2 /\* The current command is executed only when the command that the preamble depends on is executed \\\
-successfully. \*/\
+### 2.5.3 宏定义
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
-#define URMA_NOTIFY_DISABLE 0 /\* The destination is not notified when the task is completed. \*/\
-#define URMA_NOTIFY_ENABLE 1 /\* Notify the destination when the task is completed. \*/\
-#define URMA_NOTIFY_TYPE_JFC 0 /\* Complete notification via JFC. \*/\
-#define URMA_NOTIFY_TYPE_RVA 1 /\* Complete notification via DDR address. \*/\
-#define URMA_INLINE_DISABLE 0 /\* The data is generated by source_address assignment. \*/\
-#define URMA_INLINE_ENABLE 1 /\* The data is carried in the command. \*/\
-#define URMA_SOLICITED_DISABLE 0 /\* There is no interruption when notifying through JFC. \*/\
-#define URMA_SOLICITED_ENABLE 1 /\* Interrupt occurred while notifying via JFC. \*/\
-#define URMA_FENCE_DISABLE 0 /\* There is no fence. \*/\
-#define URMA_FENCE_ENABLE 1 /\* Fence with previous WRs. \*/\
-#define URMA_REGULAR 1 /\* regular, specifies stride format. \*/\
-#define URMA_IRREGULAR 0 /\* irregular, specifies S/G format. \*/\
-#define URMA_NO_TAG_MATCHING 0\
-#define URMA_WITH_TAG_MATCHING 1\
-#define URMA_NONPOST_LS 0\
-#define URMA_POST_LS 1\
-#define URMA_NO_SHARE_JFR 0\
-#define URMA_SHARE_JFR 1\
-#define URMA_TYPICAL_RNR_RETRY 7 /\* typical value of rnr retry for jfs cfg \*/\
-#define URMA_TYPICAL_ERR_TIMEOUT 17 /\* typical value of err_timeout for jfs cfg \*/\
-#define URMA_TYPICAL_MIN_RNR_TIMER 12 /\* typical value of min_rnr_timer for jfr cfg \*/\
-#define URMA_MAX_PRIORITY 15\
-#define URMA_SUCCESS 0\
-#define URMA_EAGAIN EAGAIN /\* Resource temporarily unavailable \*/\
-#define URMA_ENOMEM ENOMEM /\* Failed to allocate memory \*/\
-#define URMA_ENOPERM EPERM /\* Operation not permitted \*/\
-#define URMA_ETIMEOUT ETIMEDOUT /\* Operation time out \*/\
-#define URMA_EINVAL EINVAL /\* Invalid argument \*/\
-#define URMA_EEXIST EEXIST /\* Exist \*/\
-#define URMA_EINPROGRESS EINPROGRESS\
-#define URMA_FAIL 0x1000 /\* 0x1000 \*/
+```c
+#define URMA_TOKEN_NONE 0 /* Indicates the verification policy of the key. */
+#define URMA_TOKEN_PLAIN_TEXT 1
+#define URMA_TOKEN_SIGNED 2
+#define URMA_TOKEN_ALL_ENCRYPTED 3
+#define URMA_TOKEN_RESERVED 4
+#define URMA_TOKEN_ID_INVALID 0
+#define URMA_TOKEN_ID_VALID 1
+#define URMA_DSVA_DISABLE 0 /* Indicates whether it is a segment of dsva. */
+#define URMA_DSVA_ENABLE 1
+#define URMA_NON_CACHEABLE 0 /* Indicates whether the segment can be cached by multiple hosts. */
+#define URMA_CACHEABLE 1
+#define URMA_ACCESS_LOCAL_ONLY (0x1 << 0)
+#define URMA_ACCESS_READ (0x1 << 1)
+#define URMA_ACCESS_WRITE (0x1 << 2)
+#define URMA_ACCESS_ATOMIC (0x1 << 3)
+#define URMA_LOCAL_MEMORY 0 /* Indicates that the physical memory is remote. */
+#define URMA_REMOTE_MEMORY 1
+#define URMA_SEG_NOMAP 0 /* Indicates that the current process has mapped this segment */
+#define URMA_SEG_MAPPED 1
+#define URMA_ADDR_TYPE_MVA 0
+#define URMA_ADDR_TYPE_UBVA 1
+#define URMA_COMPLETE_ENABLE 1 /* Notify the source after the task is completed. */
+#define URMA_COMPLETE_DISABLE 0 /* Do not notify the source after the task is complete. */
+#define URMA_COMPLETE_TYPE_JFC 0 /* Complete notification via JFC. */
+#define URMA_COMPLETE_TYPE_CF 1 /* Complete notification via DDR address */
+#define URMA_DEPENDENCY_NONE 0 /* There is no dependency between commands. */
+#define URMA_DEPENDENCY_FIRST 1 /* Subsequent commands depend on the execution result of the current command. */
+#define URMA_DEPENDENCY_DELAY 2 /* The current command is executed only when the command that the preamble depends on is executed \
+successfully. */
+```
 
-# URMA内核态API
+定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
+
+```c
+#define URMA_NOTIFY_DISABLE 0 /* The destination is not notified when the task is completed. */
+#define URMA_NOTIFY_ENABLE 1 /* Notify the destination when the task is completed. */
+#define URMA_NOTIFY_TYPE_JFC 0 /* Complete notification via JFC. */
+#define URMA_NOTIFY_TYPE_RVA 1 /* Complete notification via DDR address. */
+#define URMA_INLINE_DISABLE 0 /* The data is generated by source_address assignment. */
+#define URMA_INLINE_ENABLE 1 /* The data is carried in the command. */
+#define URMA_SOLICITED_DISABLE 0 /* There is no interruption when notifying through JFC. */
+#define URMA_SOLICITED_ENABLE 1 /* Interrupt occurred while notifying via JFC. */
+#define URMA_FENCE_DISABLE 0 /* There is no fence. */
+#define URMA_FENCE_ENABLE 1 /* Fence with previous WRs. */
+#define URMA_REGULAR 1 /* regular, specifies stride format. */
+#define URMA_IRREGULAR 0 /* irregular, specifies S/G format. */
+#define URMA_NO_TAG_MATCHING 0
+#define URMA_WITH_TAG_MATCHING 1
+#define URMA_NONPOST_LS 0
+#define URMA_POST_LS 1
+#define URMA_NO_SHARE_JFR 0
+#define URMA_SHARE_JFR 1
+#define URMA_TYPICAL_RNR_RETRY 7 /* typical value of rnr retry for jfs cfg */
+#define URMA_TYPICAL_ERR_TIMEOUT 17 /* typical value of err_timeout for jfs cfg */
+#define URMA_TYPICAL_MIN_RNR_TIMER 12 /* typical value of min_rnr_timer for jfr cfg */
+#define URMA_MAX_PRIORITY 15
+#define URMA_SUCCESS 0
+#define URMA_EAGAIN EAGAIN /* Resource temporarily unavailable */
+#define URMA_ENOMEM ENOMEM /* Failed to allocate memory */
+#define URMA_ENOPERM EPERM /* Operation not permitted */
+#define URMA_ETIMEOUT ETIMEDOUT /* Operation time out */
+#define URMA_EINVAL EINVAL /* Invalid argument */
+#define URMA_EEXIST EEXIST /* Exist */
+#define URMA_EINPROGRESS EINPROGRESS
+#define URMA_FAIL 0x1000 /* 0x1000 */
+```
+
+---
+# 3 URMA内核态API
 
 内核态应用，例如smc-r，和支持用户态进程的应用，例如uburma，复用同一套URMA内核态API接口。用 udata区分用户态和内核态，传入udata=NULL表示内核态，udata！=NULL表示用户态。
 
-[4.1 编程示例](#编程示例-1)
-
-[4.2 设备及上下文管理](#设备及上下文管理)
-
-[4.3 segment管理](#segment管理)
-
-[4.4 Jetty管理](#jetty管理)
-
-[4.5 异步事件](#异步事件)
-
-[4.6 Post WR操作](#post-wr操作)
-
-[4.7 完成记录](#完成记录)
-
-[4.8 ubcore面向UVS接口](#ubcore面向uvs接口)
-
-[4.9 DFX接口](#dfx接口)
-
-[4.10 驱动自定义接口](#驱动自定义接口)
-
-[4.11 异步事件分发接口](#异步事件分发接口)
-
-[4.12 内存映射接口](#内存映射接口)
-
-[4.13 其他API](#其他api)
-
-## 编程示例
+## 3.1 编程示例
 
 先注册client，然后回调add函数（根据用户需求，自定义）
 
@@ -7299,265 +6686,273 @@ successfully. \*/\
 
 ![](figures/urma-api-kernel-example-01.png)
 
-### 管理面
+### 3.1.1 管理面
 
 - 内核态URMA通信需要向ubcore注册客户端及回调函数，从而取得ubcore_device用于通信，首先创建客户端结构体
 
-static int mymod_ubcore_add_device(struct ubcore_device \*ubc_dev);\
-static void mymod_ubcore_remove_device(struct ubcore_device \*ubc_dev, void \*client_ctx);\
-\
-struct ubcore_client g_mymod_ubcore_client = {\
-.list_node = LIST_HEAD_INIT(g_mymod_ubcore_client.list_node),\
-.client_name = \"mymod\",\
-.add = mymod_ubcore_add_device,\
-.remove = mymod_ubcore_remove_device,\
+```c
+static int mymod_ubcore_add_device(struct ubcore_device *ubc_dev);
+static void mymod_ubcore_remove_device(struct ubcore_device *ubc_dev, void *client_ctx);
+struct ubcore_client g_mymod_ubcore_client = {
+    .list_node = LIST_HEAD_INIT(g_mymod_ubcore_client.list_node),
+    .client_name = "mymod",
+    .add = mymod_ubcore_add_device,
+    .remove = mymod_ubcore_remove_device,
 };
+```
 
 - 可以使用全局链表在回调函数中将ubc_device存下来用于后续通信
 
-struct mymod_dev_priv {\
-struct list_head list;\
-struct ubcore_device \*ubc_dev;\
-/\* other priv data\
-\* \...\
-\* \...\
-\* \... \*/\
-};\
-\
-DEFINE_SPINLOCK(priv_list_lock);\
-struct list_head priv_list_head = LIST_HEAD_INIT(priv_list_head);\
-\
-static int mymod_ubcore_add_device(struct ubcore_device \*ubc_dev)\
-{\
-struct mymod_dev_priv \*priv = kzalloc(sizeof(struct mymod_dev_priv), GFP_KERNEL);\
-priv-\>ubc_dev = ubc_dev;\
-spin_lock(&priv_list_lock);\
-list_add_tail(&priv-\>list, &priv_list_head);\
-spin_unlock(&priv_list_lock);\
-ubcore_set_client_ctx_data(ubc_dev, &g_mymod_ubcore_client, priv); // 第三个参数会记录在client_ctx中，在remove回调时成为入参\
+```c
+struct mymod_dev_priv {
+    struct list_head list;
+    struct ubcore_device *ubc_dev;
+    /* other priv data
+    * \...
+    * \...
+    * \... */
+};
+DEFINE_SPINLOCK(priv_list_lock);
+struct list_head priv_list_head = LIST_HEAD_INIT(priv_list_head);
+static int mymod_ubcore_add_device(struct ubcore_device *ubc_dev)
+{
+    struct mymod_dev_priv *priv = kzalloc(sizeof(struct mymod_dev_priv), GFP_KERNEL);
+    priv-\>ubc_dev = ubc_dev;
+    spin_lock(&priv_list_lock);
+    list_add_tail(&priv-\>list, &priv_list_head);
+    spin_unlock(&priv_list_lock);
+    ubcore_set_client_ctx_data(ubc_dev, &g_mymod_ubcore_client, priv); // 第三个参数会记录在client_ctx中，在remove回调时成为入参
 }
+```
 
 - 反注册回调函数中释放私有结构体，也可以选择遍历链表进行释放
 
-static void mymod_ubcore_remove_device(struct ubcore_device \*ubc_dev, void \*client_ctx)\
-{\
-struct mymod_dev_priv \*priv = client_ctx;\
-\
-if (priv == NULL)\
-return;\
-spin_lock(&priv_list_lock);\
-list_del(&priv-\>list, &priv_list_head);\
-spin_unlock(&priv_list_lock);\
-return ;\
+```c
+static void mymod_ubcore_remove_device(struct ubcore_device *ubc_dev, void *client_ctx)
+{
+    struct mymod_dev_priv *priv = client_ctx;
+    if (priv == NULL)
+    return;
+    spin_lock(&priv_list_lock);
+    list_del(&priv-\>list, &priv_list_head);
+    spin_unlock(&priv_list_lock);
+    return ;
 }
+```
 
 - 内核模块init/exit时注册/反注册ubcore cilent
 
 - 注：ubcore_register_client对于已经存在的ubcore_device会直接串行调用回调，若不考虑动态新增设备的复杂情况，注册客户端后就可以使用全局链表中的设备做通信
 
-static int \_\_init mymod_init(void)\
-{\
-int ret = 0;\
-\
-ret = ubcore_register_client(&g_mymod_ubcore_client);\
-if (ret != 0) {\
-pr_err(\"Register ubcore client failed.\\n\");\
-return ret;\
-}\
-pr_info(\"Register ubcore client success.\\n\");\
-\
-/\* create communication resources\
-\* \...\
-\* \...\
-\* \...\*/\
-\
-return 0;\
-}\
-\
-\
-static void \_\_exit mymod_exit(void)\
-{\
-/\* release communication resources\
-\* \...\
-\* \...\
-\* \...\*/\
-ubcore_unregister_client(&g_mymod_ubcore_client);\
+```c
+static int \_\_init mymod_init(void)
+{
+    int ret = 0;
+    ret = ubcore_register_client(&g_mymod_ubcore_client);
+    if (ret != 0) {
+        pr_err("Register ubcore client failed.\n");
+        return ret;
+    }
+    pr_info("Register ubcore client success.\n");
+    /* create communication resources
+    * \...
+    * \...
+    * \...*/
+    return 0;
 }
+static void \_\_exit mymod_exit(void)
+{
+    /* release communication resources
+    * \...
+    * \...
+    * \...*/
+    ubcore_unregister_client(&g_mymod_ubcore_client);
+}
+```
 
-### 控制面
+### 3.1.2 控制面
 
 - client和server分别创建jfc
 
-void my_jfce(struct ubcore_jfc \*jfc){\
-// 用户自定义如何处理cqe\
-}\
-struct ubcore_jfc_cfg jfc_cfg = {\
-.depth = 64,\
-.flag = {.value = 0},\
-.ceqn = 0,\
-.jfc_context = NULL,\
-}\
-struct ubcore_jfc \*jfc = ubcore_create_jfc(ubc_dev, &jfc_cfg, my_jfce, NULL, NULL);
+```c
+void my_jfce(struct ubcore_jfc *jfc){
+    // 用户自定义如何处理cqe
+}
+struct ubcore_jfc_cfg jfc_cfg = {
+    .depth = 64,
+    .flag = {.value = 0},
+    .ceqn = 0,
+    .jfc_context = NULL,
+}
+struct ubcore_jfc *jfc = ubcore_create_jfc(ubc_dev, &jfc_cfg, my_jfce, NULL, NULL);
+```
 
 - client和server分别创建jfr
 
-struct ubcore_jfr_cfg jfr_cfg = {\
-.depth = 64;\
-.flag.bs.token_policy = UBCORE_TOKEN_NONE;\
-.trans_mode = UBCORE_TP_RM;\
-.eid_index = eid_index;\
-.max_sge = 1;\
-.jfc = jfc;\
-};\
+```c
+struct ubcore_jfr_cfg jfr_cfg = {
+    .depth = 64;
+    .flag.bs.token_policy = UBCORE_TOKEN_NONE;
+    .trans_mode = UBCORE_TP_RM;
+    .eid_index = eid_index;
+    .max_sge = 1;
+    .jfc = jfc;
+};
 ubcore_create_jfr(urma_dev, &jfr_cfg, NULL, NULL);
+```
 
 - client和server分别创建jetty
 
-struct ubcore_jetty_cfg jetty_cfg = {\
-.id = jetty_id;\
-.flag.bs.share_jfr = 1;\
-.trans_mode = UBCORE_TP_RM;\
-.eid_index = eid_index;\
-.jfs_depth = 64;\
-.priority = 0; /\* Highest priority \*/\
-.max_send_sge = 1;\
-.max_send_rsge = 1;\
-.jfr_depth = 64;\
-.max_recv_sge = 1;\
-.send_jfc = tx_jfc;\
-.recv_jfc = rx_jfc;\
-.jfr = jfr;\
-};\
+```c
+struct ubcore_jetty_cfg jetty_cfg = {
+    .id = jetty_id;
+    .flag.bs.share_jfr = 1;
+    .trans_mode = UBCORE_TP_RM;
+    .eid_index = eid_index;
+    .jfs_depth = 64;
+    .priority = 0; /* Highest priority */
+    .max_send_sge = 1;
+    .max_send_rsge = 1;
+    .jfr_depth = 64;
+    .max_recv_sge = 1;
+    .send_jfc = tx_jfc;
+    .recv_jfc = rx_jfc;
+    .jfr = jfr;
+};
 ubcore_create_jetty(ubc_dev, &jetty_cfg, NULL, NULL);
+```
 
 - client和server分配各自的数据buffer，并将该数据buffer注册为segment
 
-// 以分配4KB的buffer为例\
-#define BUFFER_SIZE (0x1 \<\< PAGE_SHIFT)\
-union ubcore_reg_seg_flag flag = {\
-.bs.token_policy = UBCORE_TOKEN_NONE,\
-.bs.cacheable = UBCORE_NON_CACHEABLE,\
-.bs.access = (UBCORE_ACCESS_READ \| UBCORE_ACCESS_WRITE),\
-.bs.token_id_valid = 0,\
-.bs.reserved = 0\
-};\
-void \*va = kzalloc(BUFFER_SIZE, GFP_KERNEL);\
-struct ubcore_seg_cfg cfg = {\
-.va = va;\
-.len = BUFFER_SIZE;\
-.flag = flag;\
-};\
-struct ubcore_target_seg \*local_tseg = ubcore_register_seg(ubc_dev, &cfg, NULL);
+```c
+// 以分配4KB的buffer为例
+#define BUFFER_SIZE (0x1 << PAGE_SHIFT)
+union ubcore_reg_seg_flag flag = {
+    .bs.token_policy = UBCORE_TOKEN_NONE,
+    .bs.cacheable = UBCORE_NON_CACHEABLE,
+    .bs.access = (UBCORE_ACCESS_READ | UBCORE_ACCESS_WRITE),
+    .bs.token_id_valid = 0,
+    .bs.reserved = 0
+};
+void *va = kzalloc(BUFFER_SIZE, GFP_KERNEL);
+struct ubcore_seg_cfg cfg = {
+    .va = va;
+    .len = BUFFER_SIZE;
+    .flag = flag;
+};
+struct ubcore_target_seg *local_tseg = ubcore_register_seg(ubc_dev, &cfg, NULL);
+```
 
 - client和server交换jetty信息，可以通过带外socket，或带内公知Jetty通道。以公知Jetty为例
 
-struct ubcore_tjetty_cfg tjetty_cfg = {\
-.id.eid = dst_eid;\
-.id.id = jetty_id;\
-.flag.bs.token_policy = UBCORE_TOKEN_NONE;\
-.tp_type = UBCORE_CTP;\
-.trans_mode = UBCORE_TP_RM;\
-.type = UBCORE_JETTY;\
-.eid_index = eid_index;\
-};\
-struct ubcore_tjetty \*tjetty = ubcore_import_jetty(ubc_dev, &tjetty_cfg, NULL);
+```c
+struct ubcore_tjetty_cfg tjetty_cfg = {
+    .id.eid = dst_eid;
+    .id.id = jetty_id;
+    .flag.bs.token_policy = UBCORE_TOKEN_NONE;
+    .tp_type = UBCORE_CTP;
+    .trans_mode = UBCORE_TP_RM;
+    .type = UBCORE_JETTY;
+    .eid_index = eid_index;
+};
+struct ubcore_tjetty *tjetty = ubcore_import_jetty(ubc_dev, &tjetty_cfg, NULL);
+```
 
-### 数据面
+### 3.1.3 数据面
 
-#### 双边send/recv
+#### 3.1.3.1 双边send/recv
 
 双边操作是把数据从本端seg发到对端seg。双边操作既需要本端调ubcore_post_jetty_send_wr下发发送任务，又需要对端调ubcore_post_jetty_recv_wr准备接收。本端的报文到对端时若发现recv wr还未下发，会暂时缓存在对端buffer，为了保证通信性能，并且避免耗尽对端buffer，建议对端预先post一批recv wr，并且每次消耗后要及时补充。
 
 Server端post recv wr
 
-/\* post recv wr \*/\
-struct ubcore_jfr_wr rx_wr;\
-struct ubcore_sge rx_sge;\
-struct ubcore_jfr_wr \*jfr_bad_wr = NULL;\
-\
-rx_wr.user_ctx = user_ctx;\
-rx_wr.src.sge = &rx_sge;\
-rx_wr.src.num_sge = 1;\
-\
-rx_sge.tseg = local_tseg; /\* 之前register得到的tseg \*/\
-rx_sge.addr = local_tseg-\>seg.ubva.va;\
-rx_sge.len = BUFFER_SIZE;\
-\
-ret = ubcore_post_jetty_recv_wr(jetty, &rx_wr, &jfr_bad_wr);\
-if (ret != 0) {\
-pr_err(\"post jetty recv wr failed.\\n\");\
-return NULL;\
+```c
+/* post recv wr */
+struct ubcore_jfr_wr rx_wr;
+struct ubcore_sge rx_sge;
+struct ubcore_jfr_wr *jfr_bad_wr = NULL;
+rx_wr.user_ctx = user_ctx;
+rx_wr.src.sge = &rx_sge;
+rx_wr.src.num_sge = 1;
+rx_sge.tseg = local_tseg; /* 之前register得到的tseg */
+rx_sge.addr = local_tseg-\>seg.ubva.va;
+rx_sge.len = BUFFER_SIZE;
+ret = ubcore_post_jetty_recv_wr(jetty, &rx_wr, &jfr_bad_wr);
+if (ret != 0) {
+    pr_err("post jetty recv wr failed.\n");
+    return NULL;
 }
+```
 
 Client端post send wr
 
-/\* post send wr \*/\
-struct ubcore_sge tx_sge = { 0 };\
-struct ubcore_jfs_wr tx_wr = { 0 };\
-struct ubcore_jfs_wr \*jfs_bad_wr = NULL;\
-\
-tx_wr.user_ctx = user_ctx;\
-tx_wr.opcode = UBCORE_OPC_SEND;\
-tx_wr.send.src.sge = &tx_sge;\
-tx_wr.flag.bs.complete_enable = 1;\
-tx_wr.tjetty = tjetty;\
-\
-tx_sge.tseg = local_tseg;\
-tx_sge.addr = local_tseg-\>seg.ubva.va;\
-tx_sge.len = tx_size; /\* 实际发送的数据长度 \*/\
-\
-ret = ubcore_post_jetty_send_wr(jetty, &tx_wr, &jfs_bad_wr);\
-if (ret != 0) {\
-pr_err(\"post jetty send wr failed.\\n\");\
-return NULL;\
+```c
+/* post send wr */
+struct ubcore_sge tx_sge = { 0 };
+struct ubcore_jfs_wr tx_wr = { 0 };
+struct ubcore_jfs_wr *jfs_bad_wr = NULL;
+tx_wr.user_ctx = user_ctx;
+tx_wr.opcode = UBCORE_OPC_SEND;
+tx_wr.send.src.sge = &tx_sge;
+tx_wr.flag.bs.complete_enable = 1;
+tx_wr.tjetty = tjetty;
+tx_sge.tseg = local_tseg;
+tx_sge.addr = local_tseg-\>seg.ubva.va;
+tx_sge.len = tx_size; /* 实际发送的数据长度 */
+ret = ubcore_post_jetty_send_wr(jetty, &tx_wr, &jfs_bad_wr);
+if (ret != 0) {
+    pr_err("post jetty send wr failed.\n");
+    return NULL;
 }
+```
 
-post wr后当发送/接收完成后可以通过poll操作尝试获取完成信息。可以使用轮询或者中断的方式获取（见[3.1.3.1](#单边readwrite) [单边read/write](#单边readwrite)）在内核态建议使用中断。
+post wr后当发送/接收完成后可以通过poll操作尝试获取完成信息。可以使用轮询或者中断的方式获取（见[3.1.3.1](#2131-单边readwrite) [单边read/write](#2131-单边readwrite)）在内核态建议使用中断。
 
-/\* 中断+napi 获取并处理接收完成信息，补充recv wr例子 \*/\
-#define MY_NAPI_RX_WEIGHT 64\
-struct my_napi_struct {\
-struct ubcore_jfc \*rx_jfc;\
-struct napi_struct napi;\
-}\
-void handle_rx_wc(struct ubcore_cr rx_cr)\
-{\
-/\* 用户自定义处理完成信息 \*/\
-}\
-int my_napi_rx_poll(struct napi_struct \*napi, int budget)\
-{\
-struct ubcore_jfc \*rx_jfc = container_of(napi, struct my_napi_struct, napi)-\>rx_jfc;\
-struct ubcore_cr rx_cr\[MY_NAPI_RX_WEIGHT\];\
-int left, max_num, actual_num, i, ret;\
-int done = 0;\
-\
-while(done \< budget) {\
-left = budget - done;\
-max_num = min(MY_NAPI_RX_WEIGHT, left);\
-actual_num = ubcore_poll_jfc(rx_jfc, max_num, rx_cr);\
-if (actual_num \< 0) {\
-pr_info(\"poll jfc failed\\n\");\
-break;\
-}\
-for (i = 0; i \< actual_num; i++) {\
-handle_rx_wc(rx_cr\[i\]);\
-done++;\
-}\
-}\
-ubcore_rearm_jfc(rx_jfc, false);\
+```c
+/* 中断+napi 获取并处理接收完成信息，补充recv wr例子 */
+#define MY_NAPI_RX_WEIGHT 64
+struct my_napi_struct {
+    struct ubcore_jfc *rx_jfc;
+    struct napi_struct napi;
 }
+void handle_rx_wc(struct ubcore_cr rx_cr)
+{
+    /* 用户自定义处理完成信息 */
+}
+int my_napi_rx_poll(struct napi_struct *napi, int budget)
+{
+    struct ubcore_jfc *rx_jfc = container_of(napi, struct my_napi_struct, napi)-\>rx_jfc;
+    struct ubcore_cr rx_cr[MY_NAPI_RX_WEIGHT];
+    int left, max_num, actual_num, i, ret;
+    int done = 0;
+    while(done < budget) {
+        left = budget - done;
+        max_num = min(MY_NAPI_RX_WEIGHT, left);
+        actual_num = ubcore_poll_jfc(rx_jfc, max_num, rx_cr);
+        if (actual_num < 0) {
+            pr_info("poll jfc failed\n");
+            break;
+        }
+        for (i = 0; i < actual_num; i++) {
+            handle_rx_wc(rx_cr[i]);
+            done++;
+        }
+    }
+    ubcore_rearm_jfc(rx_jfc, false);
+}
+```
 
-## 设备及上下文管理
+## 3.2 设备及上下文管理
 
-### ubcore_register_device
+### 3.2.1 ubcore_register_device
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_register_device([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);
+int ubcore_register_device([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev);
 
 3.  描述
 
@@ -7565,1108 +6960,1073 @@ int ubcore_register_device([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_dev
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_device
+#### 3.2.1.1 ubcore_device
 
-struct ubcore_device {\
-struct list_head list_node; /\* add to device list \*/\
-\
-/\* driver fills start \*/\
-char dev_name\[UBCORE_MAX_DEV_NAME\];\
-\
-struct device \*dma_dev;\
-struct device dev;\
-struct net_device \*netdev;\
-[4.2.1.2](#ubcore_ops) [ubcore_ops](#ubcore_ops) \*ops;\
-[4.2.21.1](#ubcore_transport_type) [ubcore_transport_type](#ubcore_transport_type) transport_type;\
-[4.2.12.1](#ubcore_device_attr) [ubcore_device_attr](#ubcore_device_attr) attr;\
-struct attribute_group\
-\*group\[UBCORE_MAX_ATTR_GROUP\]; /\* driver may fill group \[1\] \*/\
-/\* driver fills end \*/\
-\
-[4.2.1.3](#ubcore_device_cfg) [ubcore_device_cfg](#ubcore_device_cfg) cfg;\
-\
-/\* port management \*/\
-struct list_head port_list;\
-\
-/\* For ubcore client \*/\
-struct rw_semaphore client_ctx_rwsem;\
-struct list_head client_ctx_list;\
-struct list_head event_handler_list;\
-struct rw_semaphore event_handler_rwsem;\
-[4.2.1.6](#ubcore_hash_table) [ubcore_hash_table](#ubcore_hash_table) ht\[UBCORE_HT_NUM\]; /\* to be replaced with uobj \*/\
-\
-/\* protect from unregister device \*/\
-atomic_t use_cnt;\
-struct completion comp;\
-bool dynamic_eid; /\* Assign eid dynamically with netdev notifier \*/\
-[4.2.1.8](#ubcore_eid_table) [ubcore_eid_table](#ubcore_eid_table) eid_table;\
-[4.2.1.10](#ubcore_cg_device) [ubcore_cg_device](#ubcore_cg_device) cg_device;\
-[4.2.1.11](#ubcore_sip_table) [ubcore_sip_table](#ubcore_sip_table) sip_table;\
-\
-/\* logic device list and mutex \*/\
-[4.2.1.13](#ubcore_logic_device) [ubcore_logic_device](#ubcore_logic_device) ldev;\
-struct mutex ldev_mutex;\
-struct list_head ldev_list;\
-\
-/\* ue_idx to uvs_instance mapping \*/\
-void \*\*ue2uvs_table;\
-struct rw_semaphore ue2uvs_rwsem;\
-\
-/\* for vtp audit \*/\
-[4.2.1.15](#ubcore_vtp_bitmap) [ubcore_vtp_bitmap](#ubcore_vtp_bitmap) vtp_bitmap;\
+```c
+struct ubcore_device {
+    struct list_head list_node; /* add to device list */
+    /* driver fills start */
+    char dev_name[UBCORE_MAX_DEV_NAME];
+    struct device *dma_dev;
+    struct device dev;
+    struct net_device *netdev;
+    ubcore_ops *ops;
+    ubcore_transport_type transport_type;
+    ubcore_device_attr attr;
+    struct attribute_group
+    *group[UBCORE_MAX_ATTR_GROUP]; /* driver may fill group [1] */
+    /* driver fills end */
+    ubcore_device_cfg cfg;
+    /* port management */
+    struct list_head port_list;
+    /* For ubcore client */
+    struct rw_semaphore client_ctx_rwsem;
+    struct list_head client_ctx_list;
+    struct list_head event_handler_list;
+    struct rw_semaphore event_handler_rwsem;
+    ubcore_hash_table ht[UBCORE_HT_NUM]; /* to be replaced with uobj */
+    /* protect from unregister device */
+    atomic_t use_cnt;
+    struct completion comp;
+    bool dynamic_eid; /* Assign eid dynamically with netdev notifier */
+    ubcore_eid_table eid_table;
+    ubcore_cg_device cg_device;
+    ubcore_sip_table sip_table;
+    /* logic device list and mutex */
+    ubcore_logic_device ldev;
+    struct mutex ldev_mutex;
+    struct list_head ldev_list;
+    /* ue_idx to uvs_instance mapping */
+    void **ue2uvs_table;
+    struct rw_semaphore ue2uvs_rwsem;
+    /* for vtp audit */
+    ubcore_vtp_bitmap vtp_bitmap;
 };
+```
 
-#### ubcore_ops
+#### 3.2.1.2 ubcore_ops
 
-struct ubcore_ops {\
-struct module \*owner; /\* kernel driver module \*/\
-char driver_name\[UBCORE_MAX_DRIVER_NAME\]; /\* user space driver name \*/\
-uint32_t abi_version; /\* abi version of kernel driver \*/\
-\
-/\*\*\
-\* add a function entity id (eid) to ub device (for uvs)\
-\* \@param\[in\] dev: the ubcore_device handle;\
-\* \@param\[in\] ue_idx: ue_idx;\
-\* \@param\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;\
-\* \@return: the index of eid/upi, less than 0 indicating error\
-\*/\
-int (\*add_ueid)(struct ubcore_device \*dev, uint16_t ue_idx,\
-struct ubcore_ueid_cfg \*cfg);\
-\
-/\*\*\
-\* delete a function entity id (eid) to ub device (for uvs)\
-\* \@param\[in\] dev: the ubcore_device handle;\
-\* \@param\[in\] ue_idx: ue_idx;\
-\* \@param\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*delete_ueid)(struct ubcore_device \*dev, uint16_t ue_idx,\
-struct ubcore_ueid_cfg \*cfg);\
-\
-/\*\*\
-\* query device attributes\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[out\] attr: attributes for the driver to fill in\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_device_attr)(struct ubcore_device \*dev,\
-struct ubcore_device_attr \*attr);\
-\
-/\*\*\
-\* query device status\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[out\] status: status for the driver to fill in\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_device_status)(struct ubcore_device \*dev,\
-struct ubcore_device_status \*status);\
-\
-/\*\*\
-\* query resource\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] key: resource type and key;\
-\* \@param\[in/out\] val: addr and len of value\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_res)(struct ubcore_device \*dev, struct ubcore_res_key \*key,\
-struct ubcore_res_val \*val);\
-\
-/\*\*\
-\* config device\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: device configuration\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*config_device)(struct ubcore_device \*dev,\
-struct ubcore_device_cfg \*cfg);\
-\
-/\*\*\
-\* set ub network address\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] net_addr: net_addr to set\
-\* \@param\[in\] index: index by sip table\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*add_net_addr)(struct ubcore_device \*dev,\
-struct ubcore_net_addr \*net_addr, uint32_t index);\
-\
-/\*\*\
-\* unset ub network address\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] idx: net_addr idx by sip table entry\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*delete_net_addr)(struct ubcore_device \*dev, uint32_t idx);\
-\
-/\*\*\
-\* allocate a context from ubep for a user process\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] eid: function entity id (eid) index to set;\
-\* \@param\[in\] udrv_data: user space driver data\
-\* \@return: pointer to user context on success, null or error,\
-\*/\
-struct ubcore_ucontext \*(\*alloc_ucontext)(\
-struct ubcore_device \*dev, uint32_t eid_index,\
-struct ubcore_udrv_priv \*udrv_data);\
-\
-/\*\*\
-\* free a context to ubep\
-\* \@param\[in\] uctx: the user context created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*free_ucontext)(struct ubcore_ucontext \*uctx);\
-\
-/\*\*\
-\* mmap doorbell or jetty buffer, etc\
-\* \@param\[in\] uctx: the user context created before;\
-\* \@param\[in\] vma: linux vma including vm_start, vm_pgoff, etc;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*mmap)(struct ubcore_ucontext \*ctx, struct vm_area_struct \*vma);\
-\
-/\* segment part \*/\
-/\*\* alloc token id to ubep\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] flag: token_id_flag;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: token id pointer on success, NULL on error\
-\*/\
-struct ubcore_token_id \*(\*alloc_token_id)(\
-struct ubcore_device \*dev, union ubcore_token_id_flag flag,\
-struct ubcore_udata \*udata);\
-\
-/\*\* free key id from ubep\
-\* \@param\[in\] token_id: the token id alloced before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*free_token_id)(struct ubcore_token_id \*token_id);\
-\
-/\*\* register segment to ubep\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: segment attributes and configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target segment pointer on success, NULL on error\
-\*/\
-struct ubcore_target_seg \*(\*register_seg)(struct ubcore_device \*dev,\
-struct ubcore_seg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\* unregister segment from ubep\
-\* \@param\[in\] tseg: the segment registered before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*unregister_seg)(struct ubcore_target_seg \*tseg);\
-\
-/\*\* import a remote segment to ubep\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: segment attributes and import configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target segment handle on success, NULL on error\
-\*/\
-struct ubcore_target_seg \*(\*import_seg)(\
-struct ubcore_device \*dev, struct ubcore_target_seg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\* unimport seg from ubep\
-\* \@param\[in\] tseg: the segment imported before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*unimport_seg)(struct ubcore_target_seg \*tseg);\
-\
-/\*\* add port for bound device\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] port_cnt: port count\
-\* \@param\[in\] port_list: port list\
-\* \@return: target segment handle on success, NULL on error\
-\*/\
-int (\*add_port)(struct ubcore_device \*dev, uint32_t port_cnt,\
-uint32_t \*port_list);\
-\
-/\* jetty part \*/\
-/\*\*\
-\* create jfc with ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: jfc attributes and configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: jfc pointer on success, NULL on error\
-\*/\
-struct ubcore_jfc \*(\*create_jfc)(struct ubcore_device \*dev,\
-struct ubcore_jfc_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* modify jfc from ubep.\
-\* \@param\[in\] jfc: the jfc created before;\
-\* \@param\[in\] attr: ubcore jfc attr;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_jfc)(struct ubcore_jfc \*jfc, struct ubcore_jfc_attr \*attr,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* destroy jfc from ubep.\
-\* \@param\[in\] jfc: the jfc created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfc)(struct ubcore_jfc \*jfc);\
-\
-/\*\*\
-\* batch destroy jfc from ubep.\
-\* \@param\[in\] jfc_arr: the jfc array created before;\
-\* \@param\[in\] jfc_num: jfc array length;\
-\* \@param\[out\] bad_jfc_index: when delete err, return jfc index in the array;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfc_batch)(struct ubcore_jfc \*\*jfc_arr, int jfc_num,\
-int \*bad_jfc_index);\
-\
-/\*\*\
-\* rearm jfc.\
-\* \@param\[in\] jfc: the jfc created before;\
-\* \@param\[in\] solicited_only: rearm notify by message marked with solicited flag\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*rearm_jfc)(struct ubcore_jfc \*jfc, bool solicited_only);\
-\
-/\*\*\
-\* create jfs with ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: jfs attributes and configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: jfs pointer on success, NULL on error\
-\*/\
-struct ubcore_jfs \*(\*create_jfs)(struct ubcore_device \*dev,\
-struct ubcore_jfs_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* modify jfs from ubep.\
-\* \@param\[in\] jfs: the jfs created before;\
-\* \@param\[in\] attr: ubcore jfs attr;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_attr \*attr,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* query jfs from ubep.\
-\* \@param\[in\] jfs: the jfs created before;\
-\* \@param\[out\] cfg: jfs configurations;\
-\* \@param\[out\] attr: ubcore jfs attributes;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_cfg \*cfg,\
-struct ubcore_jfs_attr \*attr);\
-/\*\*\
-\* flush jfs from ubep.\
-\* \@param\[in\] jfs: the jfs created before;\
-\* \@param\[in\] cr_cnt: the maximum number of CRs expected to be returned;\
-\* \@param\[out\] cr: the addr of returned CRs;\
-\* \@return: the number of CR returned, 0 means no completion record returned, -1 on error\
-\*/\
-int (\*flush_jfs)(struct ubcore_jfs \*jfs, int cr_cnt,\
-struct ubcore_cr \*cr);\
-/\*\*\
-\* destroy jfs from ubep.\
-\* \@param\[in\] jfs: the jfs created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfs)(struct ubcore_jfs \*jfs);\
-/\*\*\
-\* batch destroy jfs from ubep.\
-\* \@param\[in\] jfs_arr: the jfs array created before;\
-\* \@param\[in\] jfs_num: jfs array length;\
-\* \@param\[out\] bad_jfs_index: when error, return error jfs index in the array;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfs_batch)(struct ubcore_jfs \*\*jfs_arr, int jfs_num,\
-int \*bad_jfs_index);\
-/\*\*\
-\* create jfr with ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: jfr attributes and configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: jfr pointer on success, NULL on error\
-\*/\
-struct ubcore_jfr \*(\*create_jfr)(struct ubcore_device \*dev,\
-struct ubcore_jfr_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* modify jfr from ubep.\
-\* \@param\[in\] jfr: the jfr created before;\
-\* \@param\[in\] attr: ubcore jfr attr;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_attr \*attr,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* query jfr from ubep.\
-\* \@param\[in\] jfr: the jfr created before;\
-\* \@param\[out\] cfg: jfr configurations;\
-\* \@param\[out\] attr: ubcore jfr attributes;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_cfg \*cfg,\
-struct ubcore_jfr_attr \*attr);\
-/\*\*\
-\* destroy jfr from ubep.\
-\* \@param\[in\] jfr: the jfr created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfr)(struct ubcore_jfr \*jfr);\
-/\*\*\
-\* batch destroy jfr from ubep.\
-\* \@param\[in\] jfr_arr: the jfr array created before;\
-\* \@param\[in\] jfr_num: jfr array length;\
-\* \@param\[out\] bad_jfr_index: when error, return error jfr index in the array;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jfr_batch)(struct ubcore_jfr \*\*jfr_arr, int jfr_num,\
-int \*bad_jfr_index);\
-/\*\*\
-\* import jfr to ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: remote jfr attributes and import configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target jfr pointer on success, NULL on error\
-\*/\
-struct ubcore_tjetty \*(\*import_jfr)(struct ubcore_device \*dev,\
-struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* import jfr to ubep by control plane.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: remote jfr attributes and import configurations;\
-\* \@param\[in\] active_tp_cfg: tp configuration to active;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target jfr pointer on success, NULL on error\
-\*/\
-struct ubcore_tjetty \*(\*import_jfr_ex)(\
-struct ubcore_device \*dev, struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* unimport jfr from ubep.\
-\* \@param\[in\] tjfr: the target jfr imported before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*unimport_jfr)(struct ubcore_tjetty \*tjfr);\
-\
-/\*\*\
-\* create jetty with ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: jetty attributes and configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: jetty pointer on success, NULL on error\
-\*/\
-struct ubcore_jetty \*(\*create_jetty)(struct ubcore_device \*dev,\
-struct ubcore_jetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* modify jetty from ubep.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] attr: ubcore jetty attr;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_jetty_attr \*attr,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* query jetty from ubep.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[out\] cfg: jetty configurations;\
-\* \@param\[out\] attr: ubcore jetty attributes;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_jetty_cfg \*cfg,\
-struct ubcore_jetty_attr \*attr);\
-/\*\*\
-\* flush jetty from ubep.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] cr_cnt: the maximum number of CRs expected to be returned;\
-\* \@param\[out\] cr: the addr of returned CRs;\
-\* \@return: the number of CR returned, 0 means no completion record returned, -1 on error\
-\*/\
-int (\*flush_jetty)(struct ubcore_jetty \*jetty, int cr_cnt,\
-struct ubcore_cr \*cr);\
-/\*\*\
-\* destroy jetty from ubep.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jetty)(struct ubcore_jetty \*jetty);\
-/\*\*\
-\* batch destroy jetty from ubep.\
-\* \@param\[in\] jetty_arr: the jetty array created before;\
-\* \@param\[in\] jetty_num: jetty array length;\
-\* \@param\[out\] bad_jetty_index: when error, return error jetty index in the array;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_jetty_batch)(struct ubcore_jetty \*\*jetty_arr,\
-int jetty_num, int \*bad_jetty_index);\
-/\*\*\
-\* import jetty to ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: remote jetty attributes and import configurations\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target jetty pointer on success, NULL on error\
-\*/\
-struct ubcore_tjetty \*(\*import_jetty)(struct ubcore_device \*dev,\
-struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* import jetty to ubep by control plane.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: remote jetty attributes and import configurations\
-\* \@param\[in\] active_tp_cfg: tp configuration to active\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: target jetty pointer on success, NULL on error\
-\*/\
-struct ubcore_tjetty \*(\*import_jetty_ex)(\
-struct ubcore_device \*dev, struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* unimport jetty from ubep.\
-\* \@param\[in\] tjetty: the target jetty imported before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*unimport_jetty)(struct ubcore_tjetty \*tjetty);\
-/\*\*\
-\* bind jetty from ubep.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] tjetty: the target jetty imported before;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*bind_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_tjetty \*tjetty,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* bind jetty from ubep by control plane.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] tjetty: the target jetty imported before;\
-\* \@param\[in\] active_tp_cfg: tp configuration to active;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*bind_jetty_ex)(struct ubcore_jetty \*jetty,\
-struct ubcore_tjetty \*tjetty,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* unbind jetty from ubep.\
-\* \@param\[in\] jetty: the jetty binded before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*unbind_jetty)(struct ubcore_jetty \*jetty);\
-\
-/\*\*\
-\* create jetty group to ubep.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: pointer of the jetty group config;\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: jetty group pointer on success, NULL on error\
-\*/\
-struct ubcore_jetty_group \*(\*create_jetty_grp)(\
-struct ubcore_device \*dev, struct ubcore_jetty_grp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* destroy jetty group to ubep.\
-\* \@param\[in\] jetty_grp: the jetty group created before;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*delete_jetty_grp)(struct ubcore_jetty_group \*jetty_grp);\
-\
-/\*\*\
-\* create tpg.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: tpg init attributes\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: tp pointer on success, NULL on error\
-\*/\
-struct ubcore_tpg \*(\*create_tpg)(struct ubcore_device \*dev,\
-struct ubcore_tpg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* destroy tpg.\
-\* \@param\[in\] tp: tp pointer created before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_tpg)(struct ubcore_tpg \*tpg);\
-\
-/\*\*\
-\* get tpid list by control plane.\
-\* \@param\[in\] dev: ubcore device pointer created before\
-\* \@param\[in\] cfg: tpid configuration to be matched\
-\* \@param\[in && out\] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter;\
-\* tp_cnt is the number of tp as out parameter\
-\* \@param\[out\] tp_list: tp list to get, the buffer is allocated by user;\
-\* \@param\[in && out\] udata: ucontext and user space driver data\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*get_tp_list)(struct ubcore_device \*dev,\
-struct ubcore_get_tp_cfg \*cfg, uint32_t \*tp_cnt,\
-struct ubcore_tp_info \*tp_list,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* set tp attributions by control plane.\
-\* \@param\[in\] dev: ubcore device pointer created before;\
-\* \@param\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;\
-\* \@param\[in\] tp_attr_cnt: number of tp attributions;\
-\* \@param\[in\] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:\
-\* 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit\
-\* 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit\
-\* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit\
-\* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit\
-\* \@param\[in\] tp_attr: tp attribution values to set;\
-\* \@param\[in && out\] udata: ucontext and user space driver data;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*set_tp_attr)(struct ubcore_device \*dev, const uint64_t tp_handle,\
-const uint8_t tp_attr_cnt,\
-const uint32_t tp_attr_bitmap,\
-const struct ubcore_tp_attr_value \*tp_attr,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* get tp attributions by control plane.\
-\* \@param\[in\] dev: ubcore device pointer created before;\
-\* \@param\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;\
-\* \@param\[out\] tp_attr_cnt: number of tp attributions;\
-\* \@param\[out\] tp_attr_bitmap: tp bitmap, the same as tp_attr_bitmap in set_tp_attr;\
-\* \@param\[out\] tp_attr: tp attribution values to get;\
-\* \@param\[in && out\] udata: ucontext and user space driver data;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*get_tp_attr)(struct ubcore_device \*dev, const uint64_t tp_handle,\
-uint8_t \*tp_attr_cnt, uint32_t \*tp_attr_bitmap,\
-struct ubcore_tp_attr_value \*tp_attr,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* active tp by control plane.\
-\* \@param\[in\] dev: ubcore device pointer created before\
-\* \@param\[in\] active_cfg: tp configuration to active\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*active_tp)(struct ubcore_device \*dev,\
-struct ubcore_active_tp_cfg \*active_cfg);\
-\
-/\*\*\
-\* deactivate tp by control plane.\
-\* \@param\[in\] dev: ubcore device pointer created before\
-\* \@param\[in\] tp_handle: tp_handle value got before\
-\* \@param\[in\] udata: \[Optional\] udata should be NULL when called\
-\* by kernel application and be valid when called\
-\* by user space application\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*deactive_tp)(struct ubcore_device \*dev,\
-union ubcore_tp_handle tp_handle,\
-struct ubcore_udata \*udata);\
-\
-/\*\*\
-\* create tp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: tp init attributes\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: tp pointer on success, NULL on error\
-\*/\
-struct ubcore_tp \*(\*create_tp)(struct ubcore_device \*dev,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* modify tp.\
-\* \@param\[in\] tp: tp pointer created before\
-\* \@param\[in\] attr: tp attributes\
-\* \@param\[in\] mask: attr mask indicating the attributes to be modified\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_tp)(struct ubcore_tp \*tp, struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask mask);\
-/\*\*\
-\* modify user tp.\
-\* \@param\[in\] dev: the ub device handle\
-\* \@param\[in\] tpn: tp number of the tp created before\
-\* \@param\[in\] cfg: user configuration of the tp\
-\* \@param\[in\] attr: tp attributes\
-\* \@param\[in\] mask: attr mask indicating the attributes to be modified\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_user_tp)(struct ubcore_device \*dev, uint32_t tpn,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask mask);\
-/\*\*\
-\* destroy tp.\
-\* \@param\[in\] tp: tp pointer created before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_tp)(struct ubcore_tp \*tp);\
-\
-/\*\*\
-\* create multi tp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cnt: the number of tp, must be less than or equal to 32;\
-\* \@param\[in\] cfg: array of tp init attributes\
-\* \@param\[in\] udata: array of ucontext and user space driver data\
-\* \@param\[out\] tp: pointer array of tp\
-\* \@return: created tp cnt, 0 on error\
-\*/\
-int (\*create_multi_tp)(struct ubcore_device \*dev, uint32_t cnt,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_udata \*udata,\
-struct ubcore_tp \*\*tp);\
-/\*\*\
-\* modify multi tp.\
-\* \@param\[in\] cnt: the number of tp;\
-\* \@param\[in\] tp: pointer array of tp created before\
-\* \@param\[in\] attr: array of tp attributes\
-\* \@param\[in\] mask: array of attr mask indicating the attributes to be modified\
-\* \@param\[in\] fail_tp: pointer of tp failed to modify\
-\* \@return: modified successfully tp cnt, 0 on error\
-\*/\
-int (\*modify_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp,\
-struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask \*mask,\
-struct ubcore_tp \*\*fail_tp);\
-/\*\*\
-\* destroy multi tp.\
-\* \@param\[in\] cnt: the number of tp;\
-\* \@param\[in\] tp: pointer array of tp created before\
-\* \@return: destroyed tp cnt, 0 on error\
-\*/\
-int (\*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp);\
-\
-/\*\*\
-\* allocate vtp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@return: vtpn pointer on success, NULL on error\
-\*/\
-struct ubcore_vtpn \*(\*alloc_vtpn)(struct ubcore_device \*dev);\
-\
-/\*\*\
-\* free vtpn.\
-\* \@param\[in\] vtpn: vtpn pointer allocated before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*free_vtpn)(struct ubcore_vtpn \*vtpn);\
-\
-/\*\*\
-\* create vtp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: vtp init attributes\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: vtp pointer on success, NULL on error\
-\*/\
-struct ubcore_vtp \*(\*create_vtp)(struct ubcore_device \*dev,\
-struct ubcore_vtp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* destroy vtp.\
-\* \@param\[in\] vtp: vtp pointer created before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_vtp)(struct ubcore_vtp \*vtp);\
-\
-/\*\*\
-\* create utp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: utp init attributes\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: utp pointer on success, NULL on error\
-\*/\
-struct ubcore_utp \*(\*create_utp)(struct ubcore_device \*dev,\
-struct ubcore_utp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* destroy utp.\
-\* \@param\[in\] utp: utp pointer created before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_utp)(struct ubcore_utp \*utp);\
-\
-/\*\*\
-\* create ctp.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cfg: ctp init attributes\
-\* \@param\[in\] udata: ucontext and user space driver data\
-\* \@return: ctp pointer on success, NULL on error\
-\*/\
-struct ubcore_ctp \*(\*create_ctp)(struct ubcore_device \*dev,\
-struct ubcore_ctp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-/\*\*\
-\* destroy ctp.\
-\* \@param\[in\] ctp: ctp pointer created before\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*destroy_ctp)(struct ubcore_ctp \*ctp);\
-\
-/\*\*\
-\* UE send msg to MUE device.\
-\* \@param\[in\] dev: UE or MUE device;\
-\* \@param\[in\] msg: msg to send;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*send_req)(struct ubcore_device \*dev, struct ubcore_req \*msg);\
-\
-/\*\*\
-\* MUE send msg to UE device.\
-\* \@param\[in\] dev: MUE device;\
-\* \@param\[in\] msg: msg to send;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*send_resp)(struct ubcore_device \*dev,\
-struct ubcore_resp_host \*msg);\
-\
-/\*\*\
-\* query cc table to get cc pattern idx\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cc_entry_cnt: cc entry cnt;\
-\* \@return: return NULL on fail, otherwise, return cc entry array\
-\*/\
-struct ubcore_cc_entry \*(\*query_cc)(struct ubcore_device \*dev,\
-uint32_t \*cc_entry_cnt);\
-\
-/\*\*\
-\* bond slave net device\
-\* \@param\[in\] bond: bond netdev;\
-\* \@param\[in\] slave: slave netdev;\
-\* \@param\[in\] upper_info: change upper event info;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*bond_add)(struct net_device \*bond, struct net_device \*slave,\
-struct netdev_lag_upper_info \*upper_info);\
-\
-/\*\*\
-\* unbond slave net device\
-\* \@param\[in\] bond: bond netdev;\
-\* \@param\[in\] slave: slave netdev;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*bond_remove)(struct net_device \*bond, struct net_device \*slave);\
-\
-/\*\*\
-\* update slave net device\
-\* \@param\[in\] bond: bond netdev;\
-\* \@param\[in\] slave: slave netdev;\
-\* \@param\[in\] lower_info: change lower state event info;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*slave_update)(struct net_device \*bond, struct net_device \*slave,\
-struct netdev_lag_lower_state_info \*lower_info);\
-\
-/\*\*\
-\* operation of user ioctl cmd.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] user_ctl: kdrv user control command pointer;\
-\* Return: 0 on success, other value on error\
-\*/\
-int (\*user_ctl)(struct ubcore_device \*dev,\
-struct ubcore_user_ctl \*user_ctl);\
-\
-/\*\* data path ops \*/\
-/\*\*\
-\* post jfs wr.\
-\* \@param\[in\] jfs: the jfs created before;\
-\* \@param\[in\] wr: the wr to be posted;\
-\* \@param\[out\] bad_wr: the first failed wr;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*post_jfs_wr)(struct ubcore_jfs \*jfs, struct ubcore_jfs_wr \*wr,\
-struct ubcore_jfs_wr \*\*bad_wr);\
-/\*\*\
-\* post jfr wr.\
-\* \@param\[in\] jfr: the jfr created before;\
-\* \@param\[in\] wr: the wr to be posted;\
-\* \@param\[out\] bad_wr: the first failed wr;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*post_jfr_wr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_wr \*wr,\
-struct ubcore_jfr_wr \*\*bad_wr);\
-/\*\*\
-\* post jetty send wr.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] wr: the wr to be posted;\
-\* \@param\[out\] bad_wr: the first failed wr;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*post_jetty_send_wr)(struct ubcore_jetty \*jetty,\
-struct ubcore_jfs_wr \*wr,\
-struct ubcore_jfs_wr \*\*bad_wr);\
-/\*\*\
-\* post jetty receive wr.\
-\* \@param\[in\] jetty: the jetty created before;\
-\* \@param\[in\] wr: the wr to be posted;\
-\* \@param\[out\] bad_wr: the first failed wr;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*post_jetty_recv_wr)(struct ubcore_jetty \*jetty,\
-struct ubcore_jfr_wr \*wr,\
-struct ubcore_jfr_wr \*\*bad_wr);\
-/\*\*\
-\* poll jfc.\
-\* \@param\[in\] jfc: the jfc created before;\
-\* \@param\[in\] cr_cnt: the maximum number of CRs expected to be polled;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*poll_jfc)(struct ubcore_jfc \*jfc, int cr_cnt,\
-struct ubcore_cr \*cr);\
-\
-/\*\*\
-\* query_stats. success to query and buffer length is enough\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] key: type and key value of the ub device to query;\
-\* \@param\[in/out\] val: address and buffer length of query results\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_stats)(struct ubcore_device \*dev,\
-struct ubcore_stats_key \*key,\
-struct ubcore_stats_val \*val);\
-/\*\*\
-\* config function migrate state.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] ue_idx: ue id;\
-\* \@param\[in\] cnt: config count;\
-\* \@param\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;\
-\* \@param\[in\] state: config state (start, rollback and finish)\
-\* \@return: config success count, -1 on error\
-\*/\
-int (\*config_function_migrate_state)(struct ubcore_device \*dev,\
-uint16_t ue_idx, uint32_t cnt,\
-struct ubcore_ueid_cfg \*cfg,\
-enum ubcore_mig_state state);\
-/\*\*\
-\* modify vtp.\
-\* \@param\[in\] vtp: vtp pointer to be modified;\
-\* \@param\[in\] attr: vtp attr, tp that we want to change;\
-\* \@param\[in\] mask: attr mask;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*modify_vtp)(struct ubcore_vtp \*vtp, struct ubcore_vtp_attr \*attr,\
-union ubcore_vtp_attr_mask \*mask);\
-/\*\*\
-\* query ue index.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] devid: ue devid to query\
-\* \@param\[out\] ue_idx: ue id;\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_ue_idx)(struct ubcore_device \*dev,\
-struct ubcore_devid \*devid, uint16_t \*ue_idx);\
-/\*\*\
-\* config dscp-vl mapping\
-\* \@param\[in\] dev:the ub dev handle;\
-\* \@param\[in\] dscp: the dscp value array\
-\* \@param\[in\] vl: the vl value array\
-\* \@param\[in\] num: array num\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*config_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,\
-uint8_t \*vl, uint8_t num);\
-/\*\*\
-\* query ue stats, for migration currently.\
-\* \@param\[in\] dev: the ub device handle;\
-\* \@param\[in\] cnt: array count;\
-\* \@param\[in\] ue_idx: ue id array;\
-\* \@param\[out\] stats: ue counters\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_ue_stats)(struct ubcore_device \*dev, uint32_t cnt,\
-uint16_t \*ue_idx, struct ubcore_ue_stats \*stats);\
-\
-/\*\*\
-\* query dscp-vl mapping\
-\* \@param\[in\] dev:the ub dev handle;\
-\* \@param\[in\] dscp: the dscp value array\
-\* \@param\[in\] num: array num\
-\* \@param\[out\] vl: the vl value array\
-\* \@return: 0 on success, other value on error\
-\*/\
-int (\*query_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,\
-uint8_t num, uint8_t \*vl);\
-\
-/\*\*\
-\* When UVS or UB dataplane is running:\
-\* 1. disassociate_ucontext != NULL means support rmmod driver.\
-\* 2. disassociate_ucontext == NULL means rmmod driver will fail because module is in use.\
-\* If disassociate_ucontext != NULL:\
-\* 1. When remove MUE/UE device, will call it;\
-\* 2. When remove MUE device, will not call it because there are no uctx.\
-\* \@param\[in\] uctx: the ubcore_ucontext\
-\*/\
-void (\*disassociate_ucontext)(struct ubcore_ucontext \*uctx);\
+```c
+struct ubcore_ops {
+    struct module *owner; /* kernel driver module */
+    char driver_name[UBCORE_MAX_DRIVER_NAME]; /* user space driver name */
+    uint32_t abi_version; /* abi version of kernel driver */
+    /**
+    * add a function entity id (eid) to ub device (for uvs)
+    * @param[in] dev: the ubcore_device handle;
+    * @param[in] ue_idx: ue_idx;
+    * @param[in] cfg: eid and the upi of ue to which the eid belongs can be specified;
+    * @return: the index of eid/upi, less than 0 indicating error
+    */
+    int (*add_ueid)(struct ubcore_device *dev, uint16_t ue_idx,
+    struct ubcore_ueid_cfg *cfg);
+    /**
+    * delete a function entity id (eid) to ub device (for uvs)
+    * @param[in] dev: the ubcore_device handle;
+    * @param[in] ue_idx: ue_idx;
+    * @param[in] cfg: eid and the upi of ue to which the eid belongs can be specified;
+    * @return: 0 on success, other value on error
+    */
+    int (*delete_ueid)(struct ubcore_device *dev, uint16_t ue_idx,
+    struct ubcore_ueid_cfg *cfg);
+    /**
+    * query device attributes
+    * @param[in] dev: the ub device handle;
+    * @param[out] attr: attributes for the driver to fill in
+    * @return: 0 on success, other value on error
+    */
+    int (*query_device_attr)(struct ubcore_device *dev,
+    struct ubcore_device_attr *attr);
+    /**
+    * query device status
+    * @param[in] dev: the ub device handle;
+    * @param[out] status: status for the driver to fill in
+    * @return: 0 on success, other value on error
+    */
+    int (*query_device_status)(struct ubcore_device *dev,
+    struct ubcore_device_status *status);
+    /**
+    * query resource
+    * @param[in] dev: the ub device handle;
+    * @param[in] key: resource type and key;
+    * @param[in/out] val: addr and len of value
+    * @return: 0 on success, other value on error
+    */
+    int (*query_res)(struct ubcore_device *dev, struct ubcore_res_key *key,
+    struct ubcore_res_val *val);
+    /**
+    * config device
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: device configuration
+    * @return: 0 on success, other value on error
+    */
+    int (*config_device)(struct ubcore_device *dev,
+    struct ubcore_device_cfg *cfg);
+    /**
+    * set ub network address
+    * @param[in] dev: the ub device handle;
+    * @param[in] net_addr: net_addr to set
+    * @param[in] index: index by sip table
+    * @return: 0 on success, other value on error
+    */
+    int (*add_net_addr)(struct ubcore_device *dev,
+    struct ubcore_net_addr *net_addr, uint32_t index);
+    /**
+    * unset ub network address
+    * @param[in] dev: the ub device handle;
+    * @param[in] idx: net_addr idx by sip table entry
+    * @return: 0 on success, other value on error
+    */
+    int (*delete_net_addr)(struct ubcore_device *dev, uint32_t idx);
+    /**
+    * allocate a context from ubep for a user process
+    * @param[in] dev: the ub device handle;
+    * @param[in] eid: function entity id (eid) index to set;
+    * @param[in] udrv_data: user space driver data
+    * @return: pointer to user context on success, null or error,
+    */
+    struct ubcore_ucontext *(*alloc_ucontext)(
+    struct ubcore_device *dev, uint32_t eid_index,
+    struct ubcore_udrv_priv *udrv_data);
+    /**
+    * free a context to ubep
+    * @param[in] uctx: the user context created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*free_ucontext)(struct ubcore_ucontext *uctx);
+    /**
+    * mmap doorbell or jetty buffer, etc
+    * @param[in] uctx: the user context created before;
+    * @param[in] vma: linux vma including vm_start, vm_pgoff, etc;
+    * @return: 0 on success, other value on error
+    */
+    int (*mmap)(struct ubcore_ucontext *ctx, struct vm_area_struct *vma);
+    /* segment part */
+    /** alloc token id to ubep
+    * @param[in] dev: the ub device handle;
+    * @param[in] flag: token_id_flag;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: token id pointer on success, NULL on error
+    */
+    struct ubcore_token_id *(*alloc_token_id)(
+    struct ubcore_device *dev, union ubcore_token_id_flag flag,
+    struct ubcore_udata *udata);
+    /** free key id from ubep
+    * @param[in] token_id: the token id alloced before;
+    * @return: 0 on success, other value on error
+    */
+    int (*free_token_id)(struct ubcore_token_id *token_id);
+    /** register segment to ubep
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: segment attributes and configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target segment pointer on success, NULL on error
+    */
+    struct ubcore_target_seg *(*register_seg)(struct ubcore_device *dev,
+    struct ubcore_seg_cfg *cfg,
+    struct ubcore_udata *udata);
+    /** unregister segment from ubep
+    * @param[in] tseg: the segment registered before;
+    * @return: 0 on success, other value on error
+    */
+    int (*unregister_seg)(struct ubcore_target_seg *tseg);
+    /** import a remote segment to ubep
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: segment attributes and import configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target segment handle on success, NULL on error
+    */
+    struct ubcore_target_seg *(*import_seg)(
+    struct ubcore_device *dev, struct ubcore_target_seg_cfg *cfg,
+    struct ubcore_udata *udata);
+    /** unimport seg from ubep
+    * @param[in] tseg: the segment imported before;
+    * @return: 0 on success, other value on error
+    */
+    int (*unimport_seg)(struct ubcore_target_seg *tseg);
+    /** add port for bound device
+    * @param[in] dev: the ub device handle;
+    * @param[in] port_cnt: port count
+    * @param[in] port_list: port list
+    * @return: target segment handle on success, NULL on error
+    */
+    int (*add_port)(struct ubcore_device *dev, uint32_t port_cnt,
+    uint32_t *port_list);
+    /* jetty part */
+    /**
+    * create jfc with ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: jfc attributes and configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: jfc pointer on success, NULL on error
+    */
+    struct ubcore_jfc *(*create_jfc)(struct ubcore_device *dev,
+    struct ubcore_jfc_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * modify jfc from ubep.
+    * @param[in] jfc: the jfc created before;
+    * @param[in] attr: ubcore jfc attr;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_jfc)(struct ubcore_jfc *jfc, struct ubcore_jfc_attr *attr,
+    struct ubcore_udata *udata);
+    /**
+    * destroy jfc from ubep.
+    * @param[in] jfc: the jfc created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfc)(struct ubcore_jfc *jfc);
+    /**
+    * batch destroy jfc from ubep.
+    * @param[in] jfc_arr: the jfc array created before;
+    * @param[in] jfc_num: jfc array length;
+    * @param[out] bad_jfc_index: when delete err, return jfc index in the array;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfc_batch)(struct ubcore_jfc **jfc_arr, int jfc_num,
+    int *bad_jfc_index);
+    /**
+    * rearm jfc.
+    * @param[in] jfc: the jfc created before;
+    * @param[in] solicited_only: rearm notify by message marked with solicited flag
+    * @return: 0 on success, other value on error
+    */
+    int (*rearm_jfc)(struct ubcore_jfc *jfc, bool solicited_only);
+    /**
+    * create jfs with ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: jfs attributes and configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: jfs pointer on success, NULL on error
+    */
+    struct ubcore_jfs *(*create_jfs)(struct ubcore_device *dev,
+    struct ubcore_jfs_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * modify jfs from ubep.
+    * @param[in] jfs: the jfs created before;
+    * @param[in] attr: ubcore jfs attr;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_attr *attr,
+    struct ubcore_udata *udata);
+    /**
+    * query jfs from ubep.
+    * @param[in] jfs: the jfs created before;
+    * @param[out] cfg: jfs configurations;
+    * @param[out] attr: ubcore jfs attributes;
+    * @return: 0 on success, other value on error
+    */
+    int (*query_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_cfg *cfg,
+    struct ubcore_jfs_attr *attr);
+    /**
+    * flush jfs from ubep.
+    * @param[in] jfs: the jfs created before;
+    * @param[in] cr_cnt: the maximum number of CRs expected to be returned;
+    * @param[out] cr: the addr of returned CRs;
+    * @return: the number of CR returned, 0 means no completion record returned, -1 on error
+    */
+    int (*flush_jfs)(struct ubcore_jfs *jfs, int cr_cnt,
+    struct ubcore_cr *cr);
+    /**
+    * destroy jfs from ubep.
+    * @param[in] jfs: the jfs created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfs)(struct ubcore_jfs *jfs);
+    /**
+    * batch destroy jfs from ubep.
+    * @param[in] jfs_arr: the jfs array created before;
+    * @param[in] jfs_num: jfs array length;
+    * @param[out] bad_jfs_index: when error, return error jfs index in the array;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfs_batch)(struct ubcore_jfs **jfs_arr, int jfs_num,
+    int *bad_jfs_index);
+    /**
+    * create jfr with ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: jfr attributes and configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: jfr pointer on success, NULL on error
+    */
+    struct ubcore_jfr *(*create_jfr)(struct ubcore_device *dev,
+    struct ubcore_jfr_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * modify jfr from ubep.
+    * @param[in] jfr: the jfr created before;
+    * @param[in] attr: ubcore jfr attr;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_attr *attr,
+    struct ubcore_udata *udata);
+    /**
+    * query jfr from ubep.
+    * @param[in] jfr: the jfr created before;
+    * @param[out] cfg: jfr configurations;
+    * @param[out] attr: ubcore jfr attributes;
+    * @return: 0 on success, other value on error
+    */
+    int (*query_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_cfg *cfg,
+    struct ubcore_jfr_attr *attr);
+    /**
+    * destroy jfr from ubep.
+    * @param[in] jfr: the jfr created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfr)(struct ubcore_jfr *jfr);
+    /**
+    * batch destroy jfr from ubep.
+    * @param[in] jfr_arr: the jfr array created before;
+    * @param[in] jfr_num: jfr array length;
+    * @param[out] bad_jfr_index: when error, return error jfr index in the array;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jfr_batch)(struct ubcore_jfr **jfr_arr, int jfr_num,
+    int *bad_jfr_index);
+    /**
+    * import jfr to ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: remote jfr attributes and import configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target jfr pointer on success, NULL on error
+    */
+    struct ubcore_tjetty *(*import_jfr)(struct ubcore_device *dev,
+    struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * import jfr to ubep by control plane.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: remote jfr attributes and import configurations;
+    * @param[in] active_tp_cfg: tp configuration to active;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target jfr pointer on success, NULL on error
+    */
+    struct ubcore_tjetty *(*import_jfr_ex)(
+    struct ubcore_device *dev, struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    /**
+    * unimport jfr from ubep.
+    * @param[in] tjfr: the target jfr imported before;
+    * @return: 0 on success, other value on error
+    */
+    int (*unimport_jfr)(struct ubcore_tjetty *tjfr);
+    /**
+    * create jetty with ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: jetty attributes and configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: jetty pointer on success, NULL on error
+    */
+    struct ubcore_jetty *(*create_jetty)(struct ubcore_device *dev,
+    struct ubcore_jetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * modify jetty from ubep.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] attr: ubcore jetty attr;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_jetty_attr *attr,
+    struct ubcore_udata *udata);
+    /**
+    * query jetty from ubep.
+    * @param[in] jetty: the jetty created before;
+    * @param[out] cfg: jetty configurations;
+    * @param[out] attr: ubcore jetty attributes;
+    * @return: 0 on success, other value on error
+    */
+    int (*query_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_jetty_cfg *cfg,
+    struct ubcore_jetty_attr *attr);
+    /**
+    * flush jetty from ubep.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] cr_cnt: the maximum number of CRs expected to be returned;
+    * @param[out] cr: the addr of returned CRs;
+    * @return: the number of CR returned, 0 means no completion record returned, -1 on error
+    */
+    int (*flush_jetty)(struct ubcore_jetty *jetty, int cr_cnt,
+    struct ubcore_cr *cr);
+    /**
+    * destroy jetty from ubep.
+    * @param[in] jetty: the jetty created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jetty)(struct ubcore_jetty *jetty);
+    /**
+    * batch destroy jetty from ubep.
+    * @param[in] jetty_arr: the jetty array created before;
+    * @param[in] jetty_num: jetty array length;
+    * @param[out] bad_jetty_index: when error, return error jetty index in the array;
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_jetty_batch)(struct ubcore_jetty **jetty_arr,
+    int jetty_num, int *bad_jetty_index);
+    /**
+    * import jetty to ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: remote jetty attributes and import configurations
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target jetty pointer on success, NULL on error
+    */
+    struct ubcore_tjetty *(*import_jetty)(struct ubcore_device *dev,
+    struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * import jetty to ubep by control plane.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: remote jetty attributes and import configurations
+    * @param[in] active_tp_cfg: tp configuration to active
+    * @param[in] udata: ucontext and user space driver data
+    * @return: target jetty pointer on success, NULL on error
+    */
+    struct ubcore_tjetty *(*import_jetty_ex)(
+    struct ubcore_device *dev, struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    /**
+    * unimport jetty from ubep.
+    * @param[in] tjetty: the target jetty imported before;
+    * @return: 0 on success, other value on error
+    */
+    int (*unimport_jetty)(struct ubcore_tjetty *tjetty);
+    /**
+    * bind jetty from ubep.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] tjetty: the target jetty imported before;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*bind_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_tjetty *tjetty,
+    struct ubcore_udata *udata);
+    /**
+    * bind jetty from ubep by control plane.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] tjetty: the target jetty imported before;
+    * @param[in] active_tp_cfg: tp configuration to active;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*bind_jetty_ex)(struct ubcore_jetty *jetty,
+    struct ubcore_tjetty *tjetty,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    /**
+    * unbind jetty from ubep.
+    * @param[in] jetty: the jetty binded before;
+    * @return: 0 on success, other value on error
+    */
+    int (*unbind_jetty)(struct ubcore_jetty *jetty);
+    /**
+    * create jetty group to ubep.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: pointer of the jetty group config;
+    * @param[in] udata: ucontext and user space driver data
+    * @return: jetty group pointer on success, NULL on error
+    */
+    struct ubcore_jetty_group *(*create_jetty_grp)(
+    struct ubcore_device *dev, struct ubcore_jetty_grp_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * destroy jetty group to ubep.
+    * @param[in] jetty_grp: the jetty group created before;
+    * @return: 0 on success, other value on error
+    */
+    int (*delete_jetty_grp)(struct ubcore_jetty_group *jetty_grp);
+    /**
+    * create tpg.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: tpg init attributes
+    * @param[in] udata: ucontext and user space driver data
+    * @return: tp pointer on success, NULL on error
+    */
+    struct ubcore_tpg *(*create_tpg)(struct ubcore_device *dev,
+    struct ubcore_tpg_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * destroy tpg.
+    * @param[in] tp: tp pointer created before
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_tpg)(struct ubcore_tpg *tpg);
+    /**
+    * get tpid list by control plane.
+    * @param[in] dev: ubcore device pointer created before
+    * @param[in] cfg: tpid configuration to be matched
+    * @param[in && out] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter;
+    * tp_cnt is the number of tp as out parameter
+    * @param[out] tp_list: tp list to get, the buffer is allocated by user;
+    * @param[in && out] udata: ucontext and user space driver data
+    * @return: 0 on success, other value on error
+    */
+    int (*get_tp_list)(struct ubcore_device *dev,
+    struct ubcore_get_tp_cfg *cfg, uint32_t *tp_cnt,
+    struct ubcore_tp_info *tp_list,
+    struct ubcore_udata *udata);
+    /**
+    * set tp attributions by control plane.
+    * @param[in] dev: ubcore device pointer created before;
+    * @param[in] tp_handle: tp_handle got by ubcore_get_tp_list;
+    * @param[in] tp_attr_cnt: number of tp attributions;
+    * @param[in] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:
+    * 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit
+    * 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit
+    * 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit
+    * 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit
+    * @param[in] tp_attr: tp attribution values to set;
+    * @param[in && out] udata: ucontext and user space driver data;
+    * @return: 0 on success, other value on error
+    */
+    int (*set_tp_attr)(struct ubcore_device *dev, const uint64_t tp_handle,
+    const uint8_t tp_attr_cnt,
+    const uint32_t tp_attr_bitmap,
+    const struct ubcore_tp_attr_value *tp_attr,
+    struct ubcore_udata *udata);
+    /**
+    * get tp attributions by control plane.
+    * @param[in] dev: ubcore device pointer created before;
+    * @param[in] tp_handle: tp_handle got by ubcore_get_tp_list;
+    * @param[out] tp_attr_cnt: number of tp attributions;
+    * @param[out] tp_attr_bitmap: tp bitmap, the same as tp_attr_bitmap in set_tp_attr;
+    * @param[out] tp_attr: tp attribution values to get;
+    * @param[in && out] udata: ucontext and user space driver data;
+    * @return: 0 on success, other value on error
+    */
+    int (*get_tp_attr)(struct ubcore_device *dev, const uint64_t tp_handle,
+    uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap,
+    struct ubcore_tp_attr_value *tp_attr,
+    struct ubcore_udata *udata);
+    /**
+    * active tp by control plane.
+    * @param[in] dev: ubcore device pointer created before
+    * @param[in] active_cfg: tp configuration to active
+    * @return: 0 on success, other value on error
+    */
+    int (*active_tp)(struct ubcore_device *dev,
+    struct ubcore_active_tp_cfg *active_cfg);
+    /**
+    * deactivate tp by control plane.
+    * @param[in] dev: ubcore device pointer created before
+    * @param[in] tp_handle: tp_handle value got before
+    * @param[in] udata: [Optional] udata should be NULL when called
+    * by kernel application and be valid when called
+    * by user space application
+    * @return: 0 on success, other value on error
+    */
+    int (*deactive_tp)(struct ubcore_device *dev,
+    union ubcore_tp_handle tp_handle,
+    struct ubcore_udata *udata);
+    /**
+    * create tp.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: tp init attributes
+    * @param[in] udata: ucontext and user space driver data
+    * @return: tp pointer on success, NULL on error
+    */
+    struct ubcore_tp *(*create_tp)(struct ubcore_device *dev,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * modify tp.
+    * @param[in] tp: tp pointer created before
+    * @param[in] attr: tp attributes
+    * @param[in] mask: attr mask indicating the attributes to be modified
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_tp)(struct ubcore_tp *tp, struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask mask);
+    /**
+    * modify user tp.
+    * @param[in] dev: the ub device handle
+    * @param[in] tpn: tp number of the tp created before
+    * @param[in] cfg: user configuration of the tp
+    * @param[in] attr: tp attributes
+    * @param[in] mask: attr mask indicating the attributes to be modified
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_user_tp)(struct ubcore_device *dev, uint32_t tpn,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask mask);
+    /**
+    * destroy tp.
+    * @param[in] tp: tp pointer created before
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_tp)(struct ubcore_tp *tp);
+    /**
+    * create multi tp.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cnt: the number of tp, must be less than or equal to 32;
+    * @param[in] cfg: array of tp init attributes
+    * @param[in] udata: array of ucontext and user space driver data
+    * @param[out] tp: pointer array of tp
+    * @return: created tp cnt, 0 on error
+    */
+    int (*create_multi_tp)(struct ubcore_device *dev, uint32_t cnt,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_udata *udata,
+    struct ubcore_tp **tp);
+    /**
+    * modify multi tp.
+    * @param[in] cnt: the number of tp;
+    * @param[in] tp: pointer array of tp created before
+    * @param[in] attr: array of tp attributes
+    * @param[in] mask: array of attr mask indicating the attributes to be modified
+    * @param[in] fail_tp: pointer of tp failed to modify
+    * @return: modified successfully tp cnt, 0 on error
+    */
+    int (*modify_multi_tp)(uint32_t cnt, struct ubcore_tp **tp,
+    struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask *mask,
+    struct ubcore_tp **fail_tp);
+    /**
+    * destroy multi tp.
+    * @param[in] cnt: the number of tp;
+    * @param[in] tp: pointer array of tp created before
+    * @return: destroyed tp cnt, 0 on error
+    */
+    int (*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp **tp);
+    /**
+    * allocate vtp.
+    * @param[in] dev: the ub device handle;
+    * @return: vtpn pointer on success, NULL on error
+    */
+    struct ubcore_vtpn *(*alloc_vtpn)(struct ubcore_device *dev);
+    /**
+    * free vtpn.
+    * @param[in] vtpn: vtpn pointer allocated before
+    * @return: 0 on success, other value on error
+    */
+    int (*free_vtpn)(struct ubcore_vtpn *vtpn);
+    /**
+    * create vtp.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: vtp init attributes
+    * @param[in] udata: ucontext and user space driver data
+    * @return: vtp pointer on success, NULL on error
+    */
+    struct ubcore_vtp *(*create_vtp)(struct ubcore_device *dev,
+    struct ubcore_vtp_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * destroy vtp.
+    * @param[in] vtp: vtp pointer created before
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_vtp)(struct ubcore_vtp *vtp);
+    /**
+    * create utp.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: utp init attributes
+    * @param[in] udata: ucontext and user space driver data
+    * @return: utp pointer on success, NULL on error
+    */
+    struct ubcore_utp *(*create_utp)(struct ubcore_device *dev,
+    struct ubcore_utp_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * destroy utp.
+    * @param[in] utp: utp pointer created before
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_utp)(struct ubcore_utp *utp);
+    /**
+    * create ctp.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cfg: ctp init attributes
+    * @param[in] udata: ucontext and user space driver data
+    * @return: ctp pointer on success, NULL on error
+    */
+    struct ubcore_ctp *(*create_ctp)(struct ubcore_device *dev,
+    struct ubcore_ctp_cfg *cfg,
+    struct ubcore_udata *udata);
+    /**
+    * destroy ctp.
+    * @param[in] ctp: ctp pointer created before
+    * @return: 0 on success, other value on error
+    */
+    int (*destroy_ctp)(struct ubcore_ctp *ctp);
+    /**
+    * UE send msg to MUE device.
+    * @param[in] dev: UE or MUE device;
+    * @param[in] msg: msg to send;
+    * @return: 0 on success, other value on error
+    */
+    int (*send_req)(struct ubcore_device *dev, struct ubcore_req *msg);
+    /**
+    * MUE send msg to UE device.
+    * @param[in] dev: MUE device;
+    * @param[in] msg: msg to send;
+    * @return: 0 on success, other value on error
+    */
+    int (*send_resp)(struct ubcore_device *dev,
+    struct ubcore_resp_host *msg);
+    /**
+    * query cc table to get cc pattern idx
+    * @param[in] dev: the ub device handle;
+    * @param[in] cc_entry_cnt: cc entry cnt;
+    * @return: return NULL on fail, otherwise, return cc entry array
+    */
+    struct ubcore_cc_entry *(*query_cc)(struct ubcore_device *dev,
+    uint32_t *cc_entry_cnt);
+    /**
+    * bond slave net device
+    * @param[in] bond: bond netdev;
+    * @param[in] slave: slave netdev;
+    * @param[in] upper_info: change upper event info;
+    * @return: 0 on success, other value on error
+    */
+    int (*bond_add)(struct net_device *bond, struct net_device *slave,
+    struct netdev_lag_upper_info *upper_info);
+    /**
+    * unbond slave net device
+    * @param[in] bond: bond netdev;
+    * @param[in] slave: slave netdev;
+    * @return: 0 on success, other value on error
+    */
+    int (*bond_remove)(struct net_device *bond, struct net_device *slave);
+    /**
+    * update slave net device
+    * @param[in] bond: bond netdev;
+    * @param[in] slave: slave netdev;
+    * @param[in] lower_info: change lower state event info;
+    * @return: 0 on success, other value on error
+    */
+    int (*slave_update)(struct net_device *bond, struct net_device *slave,
+    struct netdev_lag_lower_state_info *lower_info);
+    /**
+    * operation of user ioctl cmd.
+    * @param[in] dev: the ub device handle;
+    * @param[in] user_ctl: kdrv user control command pointer;
+    * Return: 0 on success, other value on error
+    */
+    int (*user_ctl)(struct ubcore_device *dev,
+    struct ubcore_user_ctl *user_ctl);
+    /** data path ops */
+    /**
+    * post jfs wr.
+    * @param[in] jfs: the jfs created before;
+    * @param[in] wr: the wr to be posted;
+    * @param[out] bad_wr: the first failed wr;
+    * @return: 0 on success, other value on error
+    */
+    int (*post_jfs_wr)(struct ubcore_jfs *jfs, struct ubcore_jfs_wr *wr,
+    struct ubcore_jfs_wr **bad_wr);
+    /**
+    * post jfr wr.
+    * @param[in] jfr: the jfr created before;
+    * @param[in] wr: the wr to be posted;
+    * @param[out] bad_wr: the first failed wr;
+    * @return: 0 on success, other value on error
+    */
+    int (*post_jfr_wr)(struct ubcore_jfr *jfr, struct ubcore_jfr_wr *wr,
+    struct ubcore_jfr_wr **bad_wr);
+    /**
+    * post jetty send wr.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] wr: the wr to be posted;
+    * @param[out] bad_wr: the first failed wr;
+    * @return: 0 on success, other value on error
+    */
+    int (*post_jetty_send_wr)(struct ubcore_jetty *jetty,
+    struct ubcore_jfs_wr *wr,
+    struct ubcore_jfs_wr **bad_wr);
+    /**
+    * post jetty receive wr.
+    * @param[in] jetty: the jetty created before;
+    * @param[in] wr: the wr to be posted;
+    * @param[out] bad_wr: the first failed wr;
+    * @return: 0 on success, other value on error
+    */
+    int (*post_jetty_recv_wr)(struct ubcore_jetty *jetty,
+    struct ubcore_jfr_wr *wr,
+    struct ubcore_jfr_wr **bad_wr);
+    /**
+    * poll jfc.
+    * @param[in] jfc: the jfc created before;
+    * @param[in] cr_cnt: the maximum number of CRs expected to be polled;
+    * @return: 0 on success, other value on error
+    */
+    int (*poll_jfc)(struct ubcore_jfc *jfc, int cr_cnt,
+    struct ubcore_cr *cr);
+    /**
+    * query_stats. success to query and buffer length is enough
+    * @param[in] dev: the ub device handle;
+    * @param[in] key: type and key value of the ub device to query;
+    * @param[in/out] val: address and buffer length of query results
+    * @return: 0 on success, other value on error
+    */
+    int (*query_stats)(struct ubcore_device *dev,
+    struct ubcore_stats_key *key,
+    struct ubcore_stats_val *val);
+    /**
+    * config function migrate state.
+    * @param[in] dev: the ub device handle;
+    * @param[in] ue_idx: ue id;
+    * @param[in] cnt: config count;
+    * @param[in] cfg: eid and the upi of ue to which the eid belongs can be specified;
+    * @param[in] state: config state (start, rollback and finish)
+    * @return: config success count, -1 on error
+    */
+    int (*config_function_migrate_state)(struct ubcore_device *dev,
+    uint16_t ue_idx, uint32_t cnt,
+    struct ubcore_ueid_cfg *cfg,
+    enum ubcore_mig_state state);
+    /**
+    * modify vtp.
+    * @param[in] vtp: vtp pointer to be modified;
+    * @param[in] attr: vtp attr, tp that we want to change;
+    * @param[in] mask: attr mask;
+    * @return: 0 on success, other value on error
+    */
+    int (*modify_vtp)(struct ubcore_vtp *vtp, struct ubcore_vtp_attr *attr,
+    union ubcore_vtp_attr_mask *mask);
+    /**
+    * query ue index.
+    * @param[in] dev: the ub device handle;
+    * @param[in] devid: ue devid to query
+    * @param[out] ue_idx: ue id;
+    * @return: 0 on success, other value on error
+    */
+    int (*query_ue_idx)(struct ubcore_device *dev,
+    struct ubcore_devid *devid, uint16_t *ue_idx);
+    /**
+    * config dscp-vl mapping
+    * @param[in] dev:the ub dev handle;
+    * @param[in] dscp: the dscp value array
+    * @param[in] vl: the vl value array
+    * @param[in] num: array num
+    * @return: 0 on success, other value on error
+    */
+    int (*config_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
+    uint8_t *vl, uint8_t num);
+    /**
+    * query ue stats, for migration currently.
+    * @param[in] dev: the ub device handle;
+    * @param[in] cnt: array count;
+    * @param[in] ue_idx: ue id array;
+    * @param[out] stats: ue counters
+    * @return: 0 on success, other value on error
+    */
+    int (*query_ue_stats)(struct ubcore_device *dev, uint32_t cnt,
+    uint16_t *ue_idx, struct ubcore_ue_stats *stats);
+    /**
+    * query dscp-vl mapping
+    * @param[in] dev:the ub dev handle;
+    * @param[in] dscp: the dscp value array
+    * @param[in] num: array num
+    * @param[out] vl: the vl value array
+    * @return: 0 on success, other value on error
+    */
+    int (*query_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
+    uint8_t num, uint8_t *vl);
+    /**
+    * When UVS or UB dataplane is running:
+    * 1. disassociate_ucontext != NULL means support rmmod driver.
+    * 2. disassociate_ucontext == NULL means rmmod driver will fail because module is in use.
+    * If disassociate_ucontext != NULL:
+    * 1. When remove MUE/UE device, will call it;
+    * 2. When remove MUE device, will not call it because there are no uctx.
+    * @param[in] uctx: the ubcore_ucontext
+    */
+    void (*disassociate_ucontext)(struct ubcore_ucontext *uctx);
 };
+```
 
-#### ubcore_device_cfg
+#### 3.2.1.3 ubcore_device_cfg
 
-struct ubcore_device_cfg {\
-uint16_t ue_idx; /\* ue id or mue id. e.g: bdf id \*/\
-union [4.2.1.4](#ubcore_device_cfg_mask) [ubcore_device_cfg_mask](#ubcore_device_cfg_mask) mask;\
-struct [4.2.1.5](#ubcore_rc_cfg) [ubcore_rc_cfg](#ubcore_rc_cfg) rc_cfg;\
-uint32_t slice; /\* TA slice size byte \*/\
-uint8_t pattern; /\* 0: pattern1; 1: pattern3 \*/\
-bool virtualization;\
-uint32_t suspend_period; /\* us \*/\
-uint32_t suspend_cnt; /\* TP resend cnt \*/\
-uint32_t min_jetty_cnt;\
-uint32_t max_jetty_cnt;\
-uint32_t min_jfr_cnt;\
-uint32_t max_jfr_cnt;\
-uint32_t reserved_jetty_id_min;\
-uint32_t reserved_jetty_id_max;\
+```c
+struct ubcore_device_cfg {
+    uint16_t ue_idx; /* ue id or mue id. e.g: bdf id */
+    union ubcore_device_cfg_mask mask;
+    struct ubcore_rc_cfg rc_cfg;
+    uint32_t slice; /* TA slice size byte */
+    uint8_t pattern; /* 0: pattern1; 1: pattern3 */
+    bool virtualization;
+    uint32_t suspend_period; /* us */
+    uint32_t suspend_cnt; /* TP resend cnt */
+    uint32_t min_jetty_cnt;
+    uint32_t max_jetty_cnt;
+    uint32_t min_jfr_cnt;
+    uint32_t max_jfr_cnt;
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
 };
+```
 
-#### ubcore_device_cfg_mask
+#### 3.2.1.4 ubcore_device_cfg_mask
 
-union ubcore_device_cfg_mask {\
-struct {\
-uint32_t rc_cnt : 1;\
-uint32_t rc_depth : 1;\
-uint32_t slice : 1;\
-uint32_t pattern : 1;\
-uint32_t virtualization : 1;\
-uint32_t suspend_period : 1;\
-uint32_t suspend_cnt : 1;\
-uint32_t min_jetty_cnt : 1;\
-uint32_t max_jetty_cnt : 1;\
-uint32_t min_jfr_cnt : 1;\
-uint32_t max_jfr_cnt : 1;\
-uint32_t reserved_jetty_id_min : 1;\
-uint32_t reserved_jetty_id_max : 1;\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_device_cfg_mask {
+    struct {
+        uint32_t rc_cnt : 1;
+        uint32_t rc_depth : 1;
+        uint32_t slice : 1;
+        uint32_t pattern : 1;
+        uint32_t virtualization : 1;
+        uint32_t suspend_period : 1;
+        uint32_t suspend_cnt : 1;
+        uint32_t min_jetty_cnt : 1;
+        uint32_t max_jetty_cnt : 1;
+        uint32_t min_jfr_cnt : 1;
+        uint32_t max_jfr_cnt : 1;
+        uint32_t reserved_jetty_id_min : 1;
+        uint32_t reserved_jetty_id_max : 1;
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_rc_cfg
+#### 3.2.1.5 ubcore_rc_cfg
 
-struct ubcore_rc_cfg {\
-uint32_t rc_cnt; /\* rc queue count \*/\
-uint32_t depth;\
+```c
+struct ubcore_rc_cfg {
+    uint32_t rc_cnt; /* rc queue count */
+    uint32_t depth;
 };
+```
 
-#### ubcore_hash_table
+#### 3.2.1.6 ubcore_hash_table
 
-struct ubcore_hash_table {\
-[4.2.1.7](#ubcore_ht_param) [ubcore_ht_param](#ubcore_ht_param) p;\
-struct hlist_head \*head;\
-/\* Prevent the same jetty\
-\* from being bound by different tjetty\
-\*/\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) rc_tjetty_id;\
-spinlock_t lock;\
-struct kref kref;\
+```c
+struct ubcore_hash_table {
+    ubcore_ht_param p;
+    struct hlist_head *head;
+    /* Prevent the same jetty
+    * from being bound by different tjetty
+    */
+    ubcore_jetty_id rc_tjetty_id;
+    spinlock_t lock;
+    struct kref kref;
 };
+```
 
-#### ubcore_ht_param
+#### 3.2.1.7 ubcore_ht_param
 
-struct ubcore_ht_param {\
-uint32_t size;\
-uint32_t node_offset; /\* offset of hlist node in the hash table object \*/\
-uint32_t key_offset;\
-uint32_t key_size;\
-int (\*cmp_f)(void \*obj, const void \*key);\
-void (\*free_f)(void \*obj);\
-void (\*get_f)(void \*obj);\
+```c
+struct ubcore_ht_param {
+    uint32_t size;
+    uint32_t node_offset; /* offset of hlist node in the hash table object */
+    uint32_t key_offset;
+    uint32_t key_size;
+    int (*cmp_f)(void *obj, const void *key);
+    void (*free_f)(void *obj);
+    void (*get_f)(void *obj);
 };
+```
 
-#### ubcore_eid_table
+#### 3.2.1.8 ubcore_eid_table
 
-struct ubcore_eid_table {\
-uint32_t eid_cnt;\
-[4.2.1.9](#ubcore_eid_entry) [ubcore_eid_entry](#ubcore_eid_entry) \*eid_entries;\
-spinlock_t lock;\
+```c
+struct ubcore_eid_table {
+    uint32_t eid_cnt;
+    ubcore_eid_entry *eid_entries;
+    spinlock_t lock;
 };
+```
 
-#### ubcore_eid_entry
+#### 3.2.1.9 ubcore_eid_entry
 
-struct ubcore_eid_entry {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t eid_index;\
-struct net \*net;\
-bool valid;\
+```c
+struct ubcore_eid_entry {
+    ubcore_eid eid;
+    uint32_t eid_index;
+    struct net *net;
+    bool valid;
 };
+```
 
-#### ubcore_cg_device
+#### 3.2.1.10 ubcore_cg_device
 
-struct ubcore_cg_device {\
-#ifdef CONFIG_CGROUP_RDMA\
-struct rdmacg_device dev;\
-#endif\
+```c
+struct ubcore_cg_device {
+#ifdef CONFIG_CGROUP_RDMA
+    struct rdmacg_device dev;
+#endif
 };
+```
 
-#### ubcore_sip_table
+#### 3.2.1.11 ubcore_sip_table
 
-struct ubcore_sip_table {\
-struct mutex lock;\
-uint32_t max_sip_cnt;\
-[4.2.1.12](#ubcore_sip_entry) [ubcore_sip_entry](#ubcore_sip_entry) \*entry;\
-DECLARE_BITMAP(index_bitmap, UBCORE_MAX_SIP);\
+```c
+struct ubcore_sip_table {
+    struct mutex lock;
+    uint32_t max_sip_cnt;
+    ubcore_sip_entry *entry;
+    DECLARE_BITMAP(index_bitmap, UBCORE_MAX_SIP);
 };
+```
 
-#### ubcore_sip_entry
+#### 3.2.1.12 ubcore_sip_entry
 
-struct ubcore_sip_entry {\
-[4.8.7.1](#ubcore_sip_info) [ubcore_sip_info](#ubcore_sip_info) sip_info;\
-atomic_t uvs_cnt;\
-uint64_t reserve;\
+```c
+struct ubcore_sip_entry {
+    ubcore_sip_info sip_info;
+    atomic_t uvs_cnt;
+    uint64_t reserve;
 };
+```
 
-#### ubcore_logic_device
+#### 3.2.1.13 ubcore_logic_device
 
-struct ubcore_logic_device {\
-struct device \*dev;\
-[4.2.1.14](#ubcore_port_kobj) [ubcore_port_kobj](#ubcore_port_kobj) port\[UBCORE_MAX_PORT_CNT\];\
-struct list_head node; /\* add to ldev list \*/\
-possible_net_t net;\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-const struct attribute_group \*dev_group\[UBCORE_ATTR_GROUP_MAX\];\
+```c
+struct ubcore_logic_device {
+    struct device *dev;
+    ubcore_port_kobj port[UBCORE_MAX_PORT_CNT];
+    struct list_head node; /* add to ldev list */
+    possible_net_t net;
+    ubcore_device *ub_dev;
+    const struct attribute_group *dev_group[UBCORE_ATTR_GROUP_MAX];
 };
+```
 
-#### ubcore_port_kobj
+#### 3.2.1.14 ubcore_port_kobj
 
-struct ubcore_port_kobj {\
-struct kobject kobj;\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev;\
-uint8_t port_id;\
+```c
+struct ubcore_port_kobj {
+    struct kobject kobj;
+    ubcore_device *dev;
+    uint8_t port_id;
 };
+```
 
-#### ubcore_vtp_bitmap
+#### 3.2.1.15 ubcore_vtp_bitmap
 
-struct ubcore_vtp_bitmap {\
-struct mutex lock;\
-uint32_t max_vtp_cnt;\
-uint64_t \*bitmap;\
+```c
+struct ubcore_vtp_bitmap {
+    struct mutex lock;
+    uint32_t max_vtp_cnt;
+    uint64_t *bitmap;
 };
+```
 
-### ubcore_unregister_device
+### 3.2.2 ubcore_unregister_device
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_unregister_device([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev)
+void ubcore_unregister_device([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev)
 
 3.  描述
 
@@ -8674,21 +8034,21 @@ UDMA驱动卸载时主动调用，解注册UB设备
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
 5.  返回值
 
 void
 
-### ubcore_stop_requests
+### 3.2.3 ubcore_stop_requests
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void **ubcore_stop_requests**([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);
+void **ubcore_stop_requests**([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev);
 
 3.  描述
 
@@ -8696,21 +8056,21 @@ UDMA驱动调用该接口停流
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
 5.  返回值
 
 void
 
-### ubcore_alloc_ucontext
+### 3.2.4 ubcore_alloc_ucontext
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*ubcore_alloc_ucontext([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, uint32_t eid_index, [4.2.4.2](#ubcore_udrv_priv) [ubcore_udrv_priv](#ubcore_udrv_priv) \*udrv_data);
+[4.2.4.1](#3241-ubcore_ucontext) [ubcore_ucontext](#3241-ubcore_ucontext) *ubcore_alloc_ucontext([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, uint32_t eid_index, [4.2.4.2](#3242-ubcore_udrv_priv) [ubcore_udrv_priv](#3242-ubcore_udrv_priv) *udrv_data);
 
 3.  描述
 
@@ -8718,11 +8078,11 @@ Application specifies the device to allocate an context.
 
 4.  参数
 
-\@param\[in\] dev: ubcore_device found by add ops in the client.
+@param[in] dev: ubcore_device found by add ops in the client.
 
-\@param\[in\] eid_index: function entity id (eid) index to set;
+@param[in] eid_index: function entity id (eid) index to set;
 
-\@param\[in\] udrv_data (optional): ucontext and user space driver data
+@param[in] udrv_data (optional): ucontext and user space driver data
 
 5.  返回值
 
@@ -8730,35 +8090,39 @@ ubcore_ucontext pointer on success, NULL on fail.
 
 Note: this API is called only by uburma representing user-space application, not by other kernel modules.
 
-#### ubcore_ucontext
+#### 3.2.4.1 ubcore_ucontext
 
-struct ubcore_ucontext {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t eid_index;\
-void \*jfae; /\* jfae uobj \*/\
-[4.2.16.1](#struct-ubcore_cg_object) [struct ubcore_cg_object](#struct-ubcore_cg_object) cg_obj;\
-atomic_t use_cnt;\
+```c
+struct ubcore_ucontext {
+    ubcore_device *ub_dev;
+    ubcore_eid eid;
+    uint32_t eid_index;
+    void *jfae; /* jfae uobj */
+    [struct ubcore_cg_object](#32161-struct-ubcore_cg_object) cg_obj;
+    atomic_t use_cnt;
 };
+```
 
-#### ubcore_udrv_priv
+#### 3.2.4.2 ubcore_udrv_priv
 
-struct ubcore_udrv_priv {\
-uint64_t in_addr;\
-uint32_t in_len;\
-uint64_t out_addr;\
-uint32_t out_len;\
+```c
+struct ubcore_udrv_priv {
+    uint64_t in_addr;
+    uint32_t in_len;
+    uint64_t out_addr;
+    uint32_t out_len;
 };
+```
 
-### ubcore_free_ucontext
+### 3.2.5 ubcore_free_ucontext
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_free_ucontext([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*ucontext);
+void ubcore_free_ucontext([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.4.1](#3241-ubcore_ucontext) [ubcore_ucontext](#3241-ubcore_ucontext) *ucontext);
 
 3.  描述
 
@@ -8766,21 +8130,21 @@ Free the allocated context.
 
 4.  参数
 
-\@param\[in\] dev: device to free context.
+@param[in] dev: device to free context.
 
-\@param\[in\] ucontext: handle of the allocated context.
+@param[in] ucontext: handle of the allocated context.
 
 Note: this API is called only by uburma representing user-space application, not by other kernel modules
 
-### ubcore_register_client
+### 3.2.6 ubcore_register_client
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_register_client([4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_client) \*new_client);
+int ubcore_register_client([4.2.6.1](#3261-ubcore_client) [ubcore_client](#3261-ubcore_client) *new_client);
 
 3.  描述
 
@@ -8788,35 +8152,37 @@ int ubcore_register_client([4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_cli
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: the ubcore_device handle;
+@param[in] [Required] dev: the ubcore_device handle;
 
-\@param\[in\] \[Required\] new_client: ubcore client to be registered
+@param[in] [Required] new_client: ubcore client to be registered
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_client
+#### 3.2.6.1 ubcore_client
 
-struct ubcore_client {\
-struct list_head list_node;\
-char \*client_name;\
-int (\*add)([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);\
-void (\*remove)([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, void \*client_ctx);\
-/\* The driver needs to stay and resolve the memory mapping first, \*/\
-/\* and then release the jetty resources. \*/\
-void (\*stop)([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, void \*client_ctx);\
+```c
+struct ubcore_client {
+    struct list_head list_node;
+    char *client_name;
+    int (*add)(ubcore_device *dev);
+    void (*remove)(ubcore_device *dev, void *client_ctx);
+    /* The driver needs to stay and resolve the memory mapping first, */
+    /* and then release the jetty resources. */
+    void (*stop)(ubcore_device *dev, void *client_ctx);
 };
+```
 
-### ubcore_unregister_client
+### 3.2.7 ubcore_unregister_client
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_unregister_client([4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_client) \*rm_client);
+void ubcore_unregister_client([4.2.6.1](#3261-ubcore_client) [ubcore_client](#3261-ubcore_client) *rm_client);
 
 3.  描述
 
@@ -8824,21 +8190,21 @@ void ubcore_unregister_client([4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_
 
 4.  参数
 
-\@param\[in\] \[Required\] rm_client: ubcore client to be unregistered
+@param[in] [Required] rm_client: ubcore client to be unregistered
 
 5.  返回值
 
 NA
 
-### ubcore_set_client_ctx_data
+### 3.2.8 ubcore_set_client_ctx_data
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_set_client_ctx_data([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_client) \*client, void \*data);
+void ubcore_set_client_ctx_data([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.6.1](#3261-ubcore_client) [ubcore_client](#3261-ubcore_client) *client, void *data);
 
 3.  描述
 
@@ -8846,25 +8212,25 @@ void ubcore_set_client_ctx_data([4.2.1.1](#ubcore_device) [ubcore_device](#ubcor
 
 4.  参数
 
-\@param\[in\] dev: the ubcore_device handle;
+@param[in] dev: the ubcore_device handle;
 
-\@param\[in\] client: ubcore client pointer;
+@param[in] client: ubcore client pointer;
 
-\@param\[in\] data: client private data to be set;
+@param[in] data: client private data to be set;
 
 5.  返回值
 
 NA
 
-### ubcore_get_client_ctx_data
+### 3.2.9 ubcore_get_client_ctx_data
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void \*ubcore_get_client_ctx_data([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.6.1](#ubcore_client) [ubcore_client](#ubcore_client) \*client);
+void *ubcore_get_client_ctx_data([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.6.1](#3261-ubcore_client) [ubcore_client](#3261-ubcore_client) *client);
 
 3.  描述
 
@@ -8872,9 +8238,9 @@ void \*ubcore_get_client_ctx_data([4.2.1.1](#ubcore_device) [ubcore_device](#ubc
 
 4.  参数
 
-\@param\[in\] dev: the ubcore_device handle;
+@param[in] dev: the ubcore_device handle;
 
-\@param\[in\] client: ubcore client pointer;
+@param[in] client: ubcore client pointer;
 
 5.  返回值
 
@@ -8882,15 +8248,15 @@ client private data set before.
 
 用户调用ubcore_set_client_ctx_data设置过的data指针，可能为NULL
 
-### ubcore_get_eid_list
+### 3.2.10 ubcore_get_eid_list
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-[4.2.10.1](#ubcore_eid_info) [ubcore_eid_info](#ubcore_eid_info) \*ubcore_get_eid_list([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, uint32_t \*cnt);
+[4.2.10.1](#32101-ubcore_eid_info) [ubcore_eid_info](#32101-ubcore_eid_info) *ubcore_get_eid_list([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, uint32_t *cnt);
 
 3.  描述
 
@@ -8898,45 +8264,49 @@ client private data set before.
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: the ubcore device;
+@param[in] [Required] dev: the ubcore device;
 
-\@param\[out\] \[Required\] cnt: eid cnt;
+@param[out] [Required] cnt: eid cnt;
 
 5.  返回值
 
 成功返回eid_info数组指针，元素个数为cnt；失败返回NULL；由用户调用ubcore_free_eid_list释放
 
-#### ubcore_eid_info
+#### 3.2.10.1 ubcore_eid_info
 
-struct ubcore_eid_info {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t eid_index; /\* 0\~MAX_EID_CNT -1 \*/\
+```c
+struct ubcore_eid_info {
+    ubcore_eid eid;
+    uint32_t eid_index; /* 0\~MAX_EID_CNT -1 */
 };
+```
 
-#### ubcore_eid
+#### 3.2.10.2 ubcore_eid
 
-union ubcore_eid {\
-uint8_t raw\[UBCORE_EID_SIZE\];\
-struct {\
-uint64_t reserved;\
-uint32_t prefix;\
-uint32_t addr;\
-} in4;\
-struct {\
-uint64_t subnet_prefix;\
-uint64_t interface_id;\
-} in6;\
+```c
+union ubcore_eid {
+    uint8_t raw[UBCORE_EID_SIZE];
+    struct {
+        uint64_t reserved;
+        uint32_t prefix;
+        uint32_t addr;
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
 };
+```
 
-### ubcore_free_eid_list
+### 3.2.11 ubcore_free_eid_list
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_free_eid_list([4.2.10.1](#ubcore_eid_info) [ubcore_eid_info](#ubcore_eid_info) \*eid_list);
+void ubcore_free_eid_list([4.2.10.1](#32101-ubcore_eid_info) [ubcore_eid_info](#32101-ubcore_eid_info) *eid_list);
 
 3.  描述
 
@@ -8944,21 +8314,21 @@ ubcore_free_eid_list释放ubcore_get_eid_list返回的eid_list
 
 4.  参数
 
-\@param\[in\] eid_list: the eid list to be freed;
+@param[in] eid_list: the eid list to be freed;
 
 5.  返回值
 
 void
 
-### ubcore_query_device_attr
+### 3.2.12 ubcore_query_device_attr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_device_attr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.12.1](#ubcore_device_attr) [ubcore_device_attr](#ubcore_device_attr) \*attr);
+int ubcore_query_device_attr([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.12.1](#32121-ubcore_device_attr) [ubcore_device_attr](#32121-ubcore_device_attr) *attr);
 
 3.  描述
 
@@ -8966,178 +8336,196 @@ int ubcore_query_device_attr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_d
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: ubcore_device;
+@param[in] [Required] dev: ubcore_device;
 
-\@param\[out\] attr: Return device attributes, user needs to allocate and free the memory;
+@param[out] attr: Return device attributes, user needs to allocate and free the memory;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_device_attr
+#### 3.2.12.1 ubcore_device_attr
 
-struct ubcore_device_attr {\
-[4.2.12.3](#ubcore_guid) [ubcore_guid](#ubcore_guid) guid;\
-uint16_t fe_idx;\
-[4.2.12.4](#ubcore_device_cap) [ubcore_device_cap](#ubcore_device_cap) dev_cap;\
-uint32_t reserved_jetty_id_min;\
-uint32_t reserved_jetty_id_max;\
-[4.2.12.9](#ubcore_port_attr) [ubcore_port_attr](#ubcore_port_attr) port_attr\[UBCORE_MAX_PORT_CNT\];\
-uint8_t port_cnt;\
-bool virtualization; /\* In VM or not, must set by driver when register device \*/\
-bool tp_maintainer; /\* device used to maintain TP resource \*/\
-[4.2.12.2](#ubcore_pattern) [ubcore_pattern](#ubcore_pattern) pattern;\
+```c
+struct ubcore_device_attr {
+    ubcore_guid guid;
+    uint16_t fe_idx;
+    ubcore_device_cap dev_cap;
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
+    ubcore_port_attr port_attr[UBCORE_MAX_PORT_CNT];
+    uint8_t port_cnt;
+    bool virtualization; /* In VM or not, must set by driver when register device */
+    bool tp_maintainer; /* device used to maintain TP resource */
+    ubcore_pattern pattern;
 };
+```
 
-#### ubcore_pattern
+#### 3.2.12.2 ubcore_pattern
 
-enum ubcore_pattern {\
-UBCORE_PATTERN_1 = 0,\
-UBCORE_PATTERN_3\
+```c
+enum ubcore_pattern {
+    UBCORE_PATTERN_1 = 0,
+    UBCORE_PATTERN_3
 };
+```
 
-#### ubcore_guid
+#### 3.2.12.3 ubcore_guid
 
-struct ubcore_guid {\
-uint8_t raw\[UBCORE_GUID_SIZE\];\
+```c
+struct ubcore_guid {
+    uint8_t raw[UBCORE_GUID_SIZE];
 };
+```
 
-#### ubcore_device_cap
+#### 3.2.12.4 ubcore_device_cap
 
-struct ubcore_device_cap {\
-[4.2.12.5](#ubcore_device_feat) [ubcore_device_feat](#ubcore_device_feat) feature;\
-uint32_t max_jfc;\
-uint32_t max_jfs;\
-uint32_t max_jfr;\
-uint32_t max_jetty;\
-uint32_t max_tp_cnt;\
-uint32_t max_tpg_cnt;\
-/\* max_vtp_cnt_per_fe \* max_fe_cnt Equal to the number of VTPs on the entire card \*/\
-uint32_t max_vtp_cnt_per_fe;\
-uint32_t max_jetty_grp;\
-uint32_t max_jetty_in_jetty_grp;\
-uint32_t max_rc; /\* max rc queues \*/\
-uint32_t max_jfc_depth;\
-uint32_t max_jfs_depth;\
-uint32_t max_jfr_depth;\
-uint32_t max_rc_depth; /\* max depth of each rc queue \*/\
-uint32_t max_jfs_inline_size;\
-uint32_t max_jfs_sge;\
-uint32_t max_jfs_rsge;\
-uint32_t max_jfr_sge;\
-uint64_t max_msg_size;\
-uint32_t max_read_size;\
-uint32_t max_write_size;\
-uint32_t max_cas_size;\
-uint32_t max_swap_size;\
-uint32_t max_fetch_and_add_size;\
-uint32_t max_fetch_and_sub_size;\
-uint32_t max_fetch_and_and_size;\
-uint32_t max_fetch_and_or_size;\
-uint32_t max_fetch_and_xor_size;\
-/\* max read command outstanding count in the function entity \*/\
-uint64_t max_rc_outstd_cnt;\
-uint32_t max_sip_cnt_per_fe;\
-uint32_t max_dip_cnt_per_fe;\
-uint32_t max_seid_cnt_per_fe;\
-uint16_t trans_mode; /\* one or more from ubcore_transport_mode_t \*/\
-uint16_t sub_trans_mode_cap; /\* one or more from ubcore_sub_trans_mode_cap \*/\
-uint16_t congestion_ctrl_alg; /\* one or more mode from ubcore_congestion_ctrl_alg_t \*/\
-uint16_t ceq_cnt; /\* completion vector count \*/\
-uint32_t max_tp_in_tpg;\
-uint32_t max_utp_cnt;\
-uint32_t max_oor_cnt; /\* max OOR window size by packet \*/\
-uint32_t mn;\
-uint32_t min_slice; /\* 32K, 64K \*/\
-uint32_t max_slice; /\* 256K, 64K \*/\
-[4.2.12.6](#ubcore_atomic_feat) [ubcore_atomic_feat](#ubcore_atomic_feat) atomic_feat;\
-uint32_t max_eid_cnt;\
-uint32_t max_upi_cnt;\
-uint32_t max_netaddr_cnt;\
-uint16_t max_fe_cnt; /\* PF: greater than or equal to 0; FE: must be 0 \*/\
-uint64_t page_size_cap;\
+```c
+struct ubcore_device_cap {
+    ubcore_device_feat feature;
+    uint32_t max_jfc;
+    uint32_t max_jfs;
+    uint32_t max_jfr;
+    uint32_t max_jetty;
+    uint32_t max_tp_cnt;
+    uint32_t max_tpg_cnt;
+    /* max_vtp_cnt_per_fe * max_fe_cnt Equal to the number of VTPs on the entire card */
+    uint32_t max_vtp_cnt_per_fe;
+    uint32_t max_jetty_grp;
+    uint32_t max_jetty_in_jetty_grp;
+    uint32_t max_rc; /* max rc queues */
+    uint32_t max_jfc_depth;
+    uint32_t max_jfs_depth;
+    uint32_t max_jfr_depth;
+    uint32_t max_rc_depth; /* max depth of each rc queue */
+    uint32_t max_jfs_inline_size;
+    uint32_t max_jfs_sge;
+    uint32_t max_jfs_rsge;
+    uint32_t max_jfr_sge;
+    uint64_t max_msg_size;
+    uint32_t max_read_size;
+    uint32_t max_write_size;
+    uint32_t max_cas_size;
+    uint32_t max_swap_size;
+    uint32_t max_fetch_and_add_size;
+    uint32_t max_fetch_and_sub_size;
+    uint32_t max_fetch_and_and_size;
+    uint32_t max_fetch_and_or_size;
+    uint32_t max_fetch_and_xor_size;
+    /* max read command outstanding count in the function entity */
+    uint64_t max_rc_outstd_cnt;
+    uint32_t max_sip_cnt_per_fe;
+    uint32_t max_dip_cnt_per_fe;
+    uint32_t max_seid_cnt_per_fe;
+    uint16_t trans_mode; /* one or more from ubcore_transport_mode_t */
+    uint16_t sub_trans_mode_cap; /* one or more from ubcore_sub_trans_mode_cap */
+    uint16_t congestion_ctrl_alg; /* one or more mode from ubcore_congestion_ctrl_alg_t */
+    uint16_t ceq_cnt; /* completion vector count */
+    uint32_t max_tp_in_tpg;
+    uint32_t max_utp_cnt;
+    uint32_t max_oor_cnt; /* max OOR window size by packet */
+    uint32_t mn;
+    uint32_t min_slice; /* 32K, 64K */
+    uint32_t max_slice; /* 256K, 64K */
+    ubcore_atomic_feat atomic_feat;
+    uint32_t max_eid_cnt;
+    uint32_t max_upi_cnt;
+    uint32_t max_netaddr_cnt;
+    uint16_t max_fe_cnt; /* PF: greater than or equal to 0; FE: must be 0 */
+    uint64_t page_size_cap;
 };
+```
 
-#### ubcore_device_feat
+#### 3.2.12.5 ubcore_device_feat
 
-union ubcore_device_feat {\
-struct {\
-uint32_t oor : 1;\
-uint32_t jfc_per_wr : 1;\
-uint32_t stride_op : 1;\
-uint32_t load_store_op : 1;\
-uint32_t non_pin : 1;\
-uint32_t pmem : 1;\
-uint32_t jfc_inline : 1;\
-uint32_t spray_en : 1;\
-uint32_t selective_retrans : 1;\
-uint32_t live_migrate : 1;\
-uint32_t dca : 1;\
-uint32_t jetty_grp : 1;\
-uint32_t err_suspend : 1;\
-uint32_t outorder_comp : 1;\
-uint32_t mn : 1;\
-uint32_t clan : 1;\
-uint32_t muti_seg_per_token_id : 1;\
-uint32_t reserved : 15;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_device_feat {
+    struct {
+        uint32_t oor : 1;
+        uint32_t jfc_per_wr : 1;
+        uint32_t stride_op : 1;
+        uint32_t load_store_op : 1;
+        uint32_t non_pin : 1;
+        uint32_t pmem : 1;
+        uint32_t jfc_inline : 1;
+        uint32_t spray_en : 1;
+        uint32_t selective_retrans : 1;
+        uint32_t live_migrate : 1;
+        uint32_t dca : 1;
+        uint32_t jetty_grp : 1;
+        uint32_t err_suspend : 1;
+        uint32_t outorder_comp : 1;
+        uint32_t mn : 1;
+        uint32_t clan : 1;
+        uint32_t muti_seg_per_token_id : 1;
+        uint32_t reserved : 15;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_atomic_feat
+#### 3.2.12.6 ubcore_atomic_feat
 
-union ubcore_atomic_feat {\
-struct {\
-uint32_t cas : 1;\
-uint32_t swap : 1;\
-uint32_t fetch_and_add : 1;\
-uint32_t fetch_and_sub : 1;\
-uint32_t fetch_and_and : 1;\
-uint32_t fetch_and_or : 1;\
-uint32_t fetch_and_xor : 1;\
-uint32_t reserved : 25;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_atomic_feat {
+    struct {
+        uint32_t cas : 1;
+        uint32_t swap : 1;
+        uint32_t fetch_and_add : 1;
+        uint32_t fetch_and_sub : 1;
+        uint32_t fetch_and_and : 1;
+        uint32_t fetch_and_or : 1;
+        uint32_t fetch_and_xor : 1;
+        uint32_t reserved : 25;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_slice
+#### 3.2.12.7 ubcore_slice
 
-enum ubcore_slice {\
-UBCORE_SLICE_32K = 1 \<\< 15,\
-UBCORE_SLICE_64K = 1 \<\< 16,\
-UBCORE_SLICE_128K = 1 \<\< 17,\
-UBCORE_SLICE_256K = 1 \<\< 18\
+```c
+enum ubcore_slice {
+    UBCORE_SLICE_32K = 1 << 15,
+    UBCORE_SLICE_64K = 1 << 16,
+    UBCORE_SLICE_128K = 1 << 17,
+    UBCORE_SLICE_256K = 1 << 18
 };
+```
 
-#### ubcore_congestion_ctrl_alg
+#### 3.2.12.8 ubcore_congestion_ctrl_alg
 
-enum ubcore_congestion_ctrl_alg {\
-UBCORE_CC_NONE = 0x1 \<\< UBCORE_TP_CC_NONE,\
-UBCORE_CC_DCQCN = 0x1 \<\< UBCORE_TP_CC_DCQCN,\
-UBCORE_CC_DCQCN_AND_NETWORK_CC = 0x1 \<\< UBCORE_TP_CC_DCQCN_AND_NETWORK_CC,\
-UBCORE_CC_LDCP = 0x1 \<\< UBCORE_TP_CC_LDCP,\
-UBCORE_CC_LDCP_AND_CAQM = 0x1 \<\< UBCORE_TP_CC_LDCP_AND_CAQM,\
-UBCORE_CC_LDCP_AND_OPEN_CC = 0x1 \<\< UBCORE_TP_CC_LDCP_AND_OPEN_CC,\
-UBCORE_CC_HC3 = 0x1 \<\< UBCORE_TP_CC_HC3,\
-UBCORE_CC_DIP = 0x1 \<\< UBCORE_TP_CC_DIP,\
-UBCORE_CC_ACC = 0x1 \<\< UBCORE_TP_CC_ACC\
+```c
+enum ubcore_congestion_ctrl_alg {
+    UBCORE_CC_NONE = 0x1 << UBCORE_TP_CC_NONE,
+    UBCORE_CC_DCQCN = 0x1 << UBCORE_TP_CC_DCQCN,
+    UBCORE_CC_DCQCN_AND_NETWORK_CC = 0x1 << UBCORE_TP_CC_DCQCN_AND_NETWORK_CC,
+    UBCORE_CC_LDCP = 0x1 << UBCORE_TP_CC_LDCP,
+    UBCORE_CC_LDCP_AND_CAQM = 0x1 << UBCORE_TP_CC_LDCP_AND_CAQM,
+    UBCORE_CC_LDCP_AND_OPEN_CC = 0x1 << UBCORE_TP_CC_LDCP_AND_OPEN_CC,
+    UBCORE_CC_HC3 = 0x1 << UBCORE_TP_CC_HC3,
+    UBCORE_CC_DIP = 0x1 << UBCORE_TP_CC_DIP,
+    UBCORE_CC_ACC = 0x1 << UBCORE_TP_CC_ACC
 };
+```
 
-#### ubcore_port_attr
+#### 3.2.12.9 ubcore_port_attr
 
-struct ubcore_port_attr {\
-[4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) max_mtu;\
+```c
+struct ubcore_port_attr {
+    ubcore_mtu max_mtu;
 };
+```
 
-### ubcore_query_device_status
+### 3.2.13 ubcore_query_device_status
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_device_status([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.13.1](#ubcore_device_status) [ubcore_device_status](#ubcore_device_status) \*status);
+int ubcore_query_device_status([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.13.1](#32131-ubcore_device_status) [ubcore_device_status](#32131-ubcore_device_status) *status);
 
 3.  描述
 
@@ -9145,79 +8533,89 @@ int ubcore_query_device_status([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: ubcore device, by get_device apis.
+@param[in] [Required] dev: ubcore device, by get_device apis.
 
-\@param\[out\] \[Required\] status: status returned to client.
+@param[out] [Required] status: status returned to client.
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_device_status
+#### 3.2.13.1 ubcore_device_status
 
-struct ubcore_device_status {\
-[4.2.13.2](#ubcore_port_status) [ubcore_port_status](#ubcore_port_status) port_status\[UBCORE_MAX_PORT_CNT\];\
+```c
+struct ubcore_device_status {
+    ubcore_port_status port_status[UBCORE_MAX_PORT_CNT];
 };
+```
 
-#### ubcore_port_status
+#### 3.2.13.2 ubcore_port_status
 
-struct ubcore_port_status {\
-[4.2.13.3](#ubcore_port_state) [ubcore_port_state](#ubcore_port_state) state; /\* PORT_DOWN, PORT_INIT, PORT_ACTIVE \*/\
-[4.2.13.4](#ubcore_speed) [ubcore_speed](#ubcore_speed) active_speed; /\* bandwidth \*/\
-[4.2.13.5](#ubcore_link_width) [ubcore_link_width](#ubcore_link_width) active_width; /\* link width: X1, X2, X4 \*/\
-[4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) active_mtu;\
+```c
+struct ubcore_port_status {
+    ubcore_port_state state; /* PORT_DOWN, PORT_INIT, PORT_ACTIVE */
+    ubcore_speed active_speed; /* bandwidth */
+    ubcore_link_width active_width; /* link width: X1, X2, X4 */
+    ubcore_mtu active_mtu;
 };
+```
 
-#### ubcore_port_state
+#### 3.2.13.3 ubcore_port_state
 
-enum ubcore_port_state {\
-UBCORE_PORT_NOP = 0,\
-UBCORE_PORT_DOWN,\
-UBCORE_PORT_INIT,\
-UBCORE_PORT_ARMED,\
-UBCORE_PORT_ACTIVE,\
-UBCORE_PORT_ACTIVE_DEFER\
+```c
+enum ubcore_port_state {
+    UBCORE_PORT_NOP = 0,
+    UBCORE_PORT_DOWN,
+    UBCORE_PORT_INIT,
+    UBCORE_PORT_ARMED,
+    UBCORE_PORT_ACTIVE,
+    UBCORE_PORT_ACTIVE_DEFER
 };
+```
 
-#### ubcore_speed
+#### 3.2.13.4 ubcore_speed
 
-enum ubcore_speed {\
-UBCORE_SP_10M = 0,\
-UBCORE_SP_100M,\
-UBCORE_SP_1G,\
-UBCORE_SP_2_5G,\
-UBCORE_SP_5G,\
-UBCORE_SP_10G,\
-UBCORE_SP_14G,\
-UBCORE_SP_25G,\
-UBCORE_SP_40G,\
-UBCORE_SP_50G,\
-UBCORE_SP_100G,\
-UBCORE_SP_200G,\
-UBCORE_SP_400G,\
-UBCORE_SP_800G\
+```c
+enum ubcore_speed {
+    UBCORE_SP_10M = 0,
+    UBCORE_SP_100M,
+    UBCORE_SP_1G,
+    UBCORE_SP_2_5G,
+    UBCORE_SP_5G,
+    UBCORE_SP_10G,
+    UBCORE_SP_14G,
+    UBCORE_SP_25G,
+    UBCORE_SP_40G,
+    UBCORE_SP_50G,
+    UBCORE_SP_100G,
+    UBCORE_SP_200G,
+    UBCORE_SP_400G,
+    UBCORE_SP_800G
 };
+```
 
-#### ubcore_link_width
+#### 3.2.13.5 ubcore_link_width
 
-enum ubcore_link_width {\
-UBCORE_LINK_X1 = 0x1,\
-UBCORE_LINK_X2 = 0x1 \<\< 1,\
-UBCORE_LINK_X4 = 0x1 \<\< 2,\
-UBCORE_LINK_X8 = 0x1 \<\< 3,\
-UBCORE_LINK_X16 = 0x1 \<\< 4,\
-UBCORE_LINK_X32 = 0x1 \<\< 5\
+```c
+enum ubcore_link_width {
+    UBCORE_LINK_X1 = 0x1,
+    UBCORE_LINK_X2 = 0x1 << 1,
+    UBCORE_LINK_X4 = 0x1 << 2,
+    UBCORE_LINK_X8 = 0x1 << 3,
+    UBCORE_LINK_X16 = 0x1 << 4,
+    UBCORE_LINK_X32 = 0x1 << 5
 };
+```
 
-### ubcore_cgroup_reg_dev
+### 3.2.14 ubcore_cgroup_reg_dev
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_cgroup_reg_dev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);
+void ubcore_cgroup_reg_dev([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev);
 
 3.  描述
 
@@ -9225,21 +8623,21 @@ void ubcore_cgroup_reg_dev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_dev
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: ubcore device, by get_device apis.
+@param[in] [Required] dev: ubcore device, by get_device apis.
 
 5.  返回值
 
 void
 
-### ubcore_cgroup_unreg_dev
+### 3.2.15 ubcore_cgroup_unreg_dev
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_cgroup_unreg_dev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);
+void ubcore_cgroup_unreg_dev([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev);
 
 3.  描述
 
@@ -9247,21 +8645,21 @@ void ubcore_cgroup_unreg_dev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_d
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: ubcore device, by get_device apis.
+@param[in] [Required] dev: ubcore device, by get_device apis.
 
 5.  返回值
 
 无
 
-### ubcore_cgroup_try_charge
+### 3.2.16 ubcore_cgroup_try_charge
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_cgroup_try_charge([4.2.16.1](#struct-ubcore_cg_object) [struct ubcore_cg_object](#struct-ubcore_cg_object) \*cg_obj, [4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.16.2](#enum-ubcore_resource_type) [enum ubcore_resource_type](#enum-ubcore_resource_type) type);
+int ubcore_cgroup_try_charge([4.2.16.1](#32161-struct-ubcore_cg_object) [struct ubcore_cg_object](#32161-struct-ubcore_cg_object) *cg_obj, [4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.16.2](#32162-enum-ubcore_resource_type) [enum ubcore_resource_type](#32162-enum-ubcore_resource_type) type);
 
 3.  描述
 
@@ -9269,31 +8667,35 @@ int ubcore_cgroup_try_charge([4.2.16.1](#struct-ubcore_cg_object) [struct ubcore
 
 4.  参数
 
-\@param\[in\] \[Required\] cg_obj: the cgroup obj;
+@param[in] [Required] cg_obj: the cgroup obj;
 
-\@param\[in\] \[Required\] dev: the ubcore device handle;
+@param[in] [Required] dev: the ubcore device handle;
 
-\@param\[in\] type: the cgroup resource type
+@param[in] type: the cgroup resource type
 
 5.  返回值
 
 0 on success, other value on error
 
-#### struct ubcore_cg_object
+#### 3.2.16.1 struct ubcore_cg_object
 
-struct ubcore_cg_object {\
-#ifdef CONFIG_CGROUP_RDMA\
-struct rdma_cgroup \*cg;\
-#endif\
+```c
+struct ubcore_cg_object {
+#ifdef CONFIG_CGROUP_RDMA
+    struct rdma_cgroup *cg;
+#endif
 };
+```
 
-#### enum ubcore_resource_type
+#### 3.2.16.2 enum ubcore_resource_type
 
-enum ubcore_resource_type {\
-UBCORE_RESOURCE_HCA_HANDLE = 0,\
-UBCORE_RESOURCE_HCA_OBJECT,\
-UBCORE_RESOURCE_HCA_MAX\
+```c
+enum ubcore_resource_type {
+    UBCORE_RESOURCE_HCA_HANDLE = 0,
+    UBCORE_RESOURCE_HCA_OBJECT,
+    UBCORE_RESOURCE_HCA_MAX
 };
+```
 
 当前支持两种资源类型，分别是
 
@@ -9303,15 +8705,15 @@ UBCORE_RESOURCE_HCA_OBJECT： 对如下资源进行计数
 
 token, segement, target_seg, jfr, jfs, jfc, target_jfr, jetty, target jetty, jetty_group
 
-### ubcore_cgroup_uncharge
+### 3.2.17 ubcore_cgroup_uncharge
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_cgroup_uncharge([4.2.16.1](#struct-ubcore_cg_object) [struct ubcore_cg_object](#struct-ubcore_cg_object) \*cg_obj, [4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.16.2](#enum-ubcore_resource_type) [enum ubcore_resource_type](#enum-ubcore_resource_type) type);
+int ubcore_cgroup_uncharge([4.2.16.1](#32161-struct-ubcore_cg_object) [struct ubcore_cg_object](#32161-struct-ubcore_cg_object) *cg_obj, [4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.16.2](#32162-enum-ubcore_resource_type) [enum ubcore_resource_type](#32162-enum-ubcore_resource_type) type);
 
 3.  描述
 
@@ -9319,25 +8721,25 @@ int ubcore_cgroup_uncharge([4.2.16.1](#struct-ubcore_cg_object) [struct ubcore_c
 
 4.  参数
 
-\@param\[in\] \[Required\] cg_obj: the cgroup obj;
+@param[in] [Required] cg_obj: the cgroup obj;
 
-\@param\[in\] \[Required\] dev: the ubcore device handle;
+@param[in] [Required] dev: the ubcore device handle;
 
-\@param\[in\] type: the cgroup resource type.
+@param[in] type: the cgroup resource type.
 
 5.  返回值
 
 void
 
-### ubcore_get_mtu
+### 3.2.18 ubcore_get_mtu
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-[4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) ubcore_get_mtu(int mtu);
+[4.2.18.1](#32181-ubcore_mtu) [ubcore_mtu](#32181-ubcore_mtu) ubcore_get_mtu(int mtu);
 
 3.  描述
 
@@ -9345,32 +8747,34 @@ void
 
 4.  参数
 
-\@param\[in\] \[Required\] mtu: specifies the MTU value of the NIC interface.
+@param[in] [Required] mtu: specifies the MTU value of the NIC interface.
 
 5.  返回值
 
 The MTU of the UB protocol, this value removes the length of the network layer, transport layer, transaction layer header and ICRC.
 
-#### ubcore_mtu
+#### 3.2.18.1 ubcore_mtu
 
-enum ubcore_mtu {\
-UBCORE_MTU_256 = 1,\
-UBCORE_MTU_512,\
-UBCORE_MTU_1024,\
-UBCORE_MTU_2048,\
-UBCORE_MTU_4096,\
-UBCORE_MTU_8192\
+```c
+enum ubcore_mtu {
+    UBCORE_MTU_256 = 1,
+    UBCORE_MTU_512,
+    UBCORE_MTU_1024,
+    UBCORE_MTU_2048,
+    UBCORE_MTU_4096,
+    UBCORE_MTU_8192
 };
+```
 
-### ubcore_recv_req
+### 3.2.19 ubcore_recv_req
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_recv_req([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.19.1](#ubcore_req_host) [ubcore_req_host](#ubcore_req_host) \*req);
+int ubcore_recv_req([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.19.1](#32191-ubcore_req_host) [ubcore_req_host](#32191-ubcore_req_host) *req);
 
 3.  描述
 
@@ -9378,72 +8782,75 @@ ubcore用于接收请求消息。当驱动接收到消息，调用该接口把�
 
 4.  参数
 
-\@param\[in\] dev: TPF device;
+@param[in] dev: TPF device;
 
-\@param\[in\] msg: received msg;
+@param[in] msg: received msg;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_req_host
+#### 3.2.19.1 ubcore_req_host
 
-struct ubcore_req_host {\
-uint16_t src_fe_idx;\
-[4.2.19.2](#ubcore_req) [ubcore_req](#ubcore_req) req;\
+```c
+struct ubcore_req_host {
+    uint16_t src_fe_idx;
+    ubcore_req req;
 };
+```
 
-#### ubcore_req
+#### 3.2.19.2 ubcore_req
 
-struct ubcore_req {\
-uint32_t msg_id;\
-[4.2.19.3](#ubcore_msg_opcode) [ubcore_msg_opcode](#ubcore_msg_opcode) opcode;\
-uint32_t len;\
-uint8_t data\[0\];\
+```c
+struct ubcore_req {
+    uint32_t msg_id;
+    ubcore_msg_opcode opcode;
+    uint32_t len;
+    uint8_t data[0];
 };
+```
 
-#### ubcore_msg_opcode
+#### 3.2.19.3 ubcore_msg_opcode
 
-enum ubcore_msg_opcode {\
-/\* 630 Verion msg start \*/\
-UBCORE_MSG_CREATE_VTP = 0x0,\
-UBCORE_MSG_DESTROY_VTP = 0x1,\
-UBCORE_MSG_ALLOC_EID = 0x2,\
-UBCORE_MSG_DEALLOC_EID = 0x3,\
-UBCORE_MSG_CONFIG_DEVICE = 0x4,\
-UBCORE_MSG_VTP_STATUS_NOTIFY = 0x5, // TPF notify PF/VF\
-/\* 630 Verion msg end. Do not change! \*/\
-\
-/\* 930 Verion msg start. \*/\
-UBCORE_MSG_UPDATE_EID_TABLE_NOTIFY = 0x6, // TPF notify PF/VF\
-UBCORE_MSG_FE2TPF_TRANSFER = 0x7, // FE-TPF common transfer\
-/\* 930 Verion msg end. \*/\
-\
-/\* 630 Verion msg start \*/\
-UBCORE_MSG_STOP_PROC_VTP_MSG = 0x10, // Live migration\
-UBCORE_MSG_QUERY_VTP_MIG_STATUS = 0x11, // Live migration\
-UBCORE_MSG_FLOW_STOPPED = 0x12, // Live migration\
-UBCORE_MSG_MIG_ROLLBACK = 0x13, // Live migration\
-UBCORE_MSG_MIG_VM_START = 0x14, // Live migration\
-UBCORE_MSG_NEGO_VER = 0x15, // Verion negotiation, processed by backend ubcore.\
-/\* 630 Verion msg start end. Do not change! \*/\
-\
-/\* 930 Verion msg start. \*/\
-UBCORE_MSG_NOTIFY_FASTMSG_DRAIN = 0x16,\
-/\* 930 Verion msg end. \*/\
-UBCORE_MSG_UPDATE_NET_ADDR = 0x17,\
-UBCORE_MSP_UPDATE_EID = 0x18\
+```c
+enum ubcore_msg_opcode {
+    /* 630 Verion msg start */
+    UBCORE_MSG_CREATE_VTP = 0x0,
+    UBCORE_MSG_DESTROY_VTP = 0x1,
+    UBCORE_MSG_ALLOC_EID = 0x2,
+    UBCORE_MSG_DEALLOC_EID = 0x3,
+    UBCORE_MSG_CONFIG_DEVICE = 0x4,
+    UBCORE_MSG_VTP_STATUS_NOTIFY = 0x5, // TPF notify PF/VF
+    /* 630 Verion msg end. Do not change! */
+    /* 930 Verion msg start. */
+    UBCORE_MSG_UPDATE_EID_TABLE_NOTIFY = 0x6, // TPF notify PF/VF
+    UBCORE_MSG_FE2TPF_TRANSFER = 0x7, // FE-TPF common transfer
+    /* 930 Verion msg end. */
+    /* 630 Verion msg start */
+    UBCORE_MSG_STOP_PROC_VTP_MSG = 0x10, // Live migration
+    UBCORE_MSG_QUERY_VTP_MIG_STATUS = 0x11, // Live migration
+    UBCORE_MSG_FLOW_STOPPED = 0x12, // Live migration
+    UBCORE_MSG_MIG_ROLLBACK = 0x13, // Live migration
+    UBCORE_MSG_MIG_VM_START = 0x14, // Live migration
+    UBCORE_MSG_NEGO_VER = 0x15, // Verion negotiation, processed by backend ubcore.
+    /* 630 Verion msg start end. Do not change! */
+    /* 930 Verion msg start. */
+    UBCORE_MSG_NOTIFY_FASTMSG_DRAIN = 0x16,
+    /* 930 Verion msg end. */
+    UBCORE_MSG_UPDATE_NET_ADDR = 0x17,
+    UBCORE_MSP_UPDATE_EID = 0x18
 };
+```
 
-### ubcore_recv_resp
+### 3.2.20 ubcore_recv_resp
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_recv_resp([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.20.1](#ubcore_resp) [ubcore_resp](#ubcore_resp)\*resp);
+int ubcore_recv_resp([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.20.1](#32201-ubcore_resp) [ubcore_resp](#32201-ubcore_resp)*resp);
 
 3.  描述
 
@@ -9451,32 +8858,34 @@ ubcore用于接收响应消息。当驱动接收到消息，调用该接口把�
 
 4.  参数
 
-\@param\[in\] dev: VF or PF device;
+@param[in] dev: VF or PF device;
 
-\@param\[in\] msg: received msg;
+@param[in] msg: received msg;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_resp
+#### 3.2.20.1 ubcore_resp
 
-struct ubcore_resp {\
-uint32_t msg_id;\
-[4.2.19.3](#ubcore_msg_opcode) [ubcore_msg_opcode](#ubcore_msg_opcode) opcode;\
-uint32_t len;\
-uint8_t data\[0\];\
+```c
+struct ubcore_resp {
+    uint32_t msg_id;
+    ubcore_msg_opcode opcode;
+    uint32_t len;
+    uint8_t data[0];
 };
+```
 
-### ubcore_get_device_by_eid
+### 3.2.21 ubcore_get_device_by_eid
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ubcore_get_device_by_eid([4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid), [4.2.21.1](#ubcore_transport_type) [ubcore_transport_type](#ubcore_transport_type) type);
+[4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *ubcore_get_device_by_eid([4.2.10.2](#32102-ubcore_eid) [ubcore_eid](#32102-ubcore_eid), [4.2.21.1](#32211-ubcore_transport_type) [ubcore_transport_type](#32211-ubcore_transport_type) type);
 
 3.  描述
 
@@ -9484,33 +8893,35 @@ uint8_t data\[0\];\
 
 4.  参数
 
-\@param\[in\] eid: the eid of device;
+@param[in] eid: the eid of device;
 
-\@param\[in\] type: transport type;
+@param[in] type: transport type;
 
 5.  返回值
 
 ubcore device pointer on success, NULL on error
 
-#### ubcore_transport_type
+#### 3.2.21.1 ubcore_transport_type
 
-enum ubcore_transport_type {\
-UBCORE_TRANSPORT_INVALID = -1,\
-UBCORE_TRANSPORT_UB = 0,\
-UBCORE_TRANSPORT_MAX\
+```c
+enum ubcore_transport_type {
+    UBCORE_TRANSPORT_INVALID = -1,
+    UBCORE_TRANSPORT_UB = 0,
+    UBCORE_TRANSPORT_MAX
 };
+```
 
-## segment管理
+## 3.3 segment管理
 
-### ubcore_alloc_token_id
+### 3.3.1 ubcore_alloc_token_id
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_token_id)\*ubcore_alloc_token_id([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.3.1.1](#ubcore_token_id_flag) [ubcore_token_id_flag](#ubcore_token_id_flag) flag, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.3.1.3](#3313-ubcore_token_id) [ubcore_token_id](#3313-ubcore_token_id)*ubcore_alloc_token_id([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.3.1.1](#3311-ubcore_token_id_flag) [ubcore_token_id_flag](#3311-ubcore_token_id_flag) flag, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -9518,53 +8929,59 @@ UBCORE_TRANSPORT_MAX\
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: the ubcore device handle;
+@param[in] [Required] dev: the ubcore device handle;
 
-\@param\[in\] flag: token_id_flag;
+@param[in] flag: token_id_flag;
 
-\@param\[in\] \[Required\] udata：ucontext and user space driver data;
+@param[in] [Required] udata：ucontext and user space driver data;
 
 5.  返回值
 
 成功则返回token id指针，失败返回NULL
 
-#### ubcore_token_id_flag
+#### 3.3.1.1 ubcore_token_id_flag
 
-union ubcore_token_id_flag {\
-struct {\
-uint32_t pa : 1;\
-uint32_t multi_seg : 1;\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_token_id_flag {
+    struct {
+        uint32_t pa : 1;
+        uint32_t multi_seg : 1;
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_udata
+#### 3.3.1.2 ubcore_udata
 
-struct ubcore_udata {\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.2.4.2](#ubcore_udrv_priv) [ubcore_udrv_priv](#ubcore_udrv_priv) \*udrv_data;\
+```c
+struct ubcore_udata {
+    ubcore_ucontext *uctx;
+    ubcore_udrv_priv *udrv_data;
 };
+```
 
-#### ubcore_token_id
+#### 3.3.1.3 ubcore_token_id
 
-struct ubcore_token_id {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-uint32_t token_id; // driver fill\
-[4.3.1.1](#ubcore_token_id_flag) [ubcore_token_id_flag](#ubcore_token_id_flag) flag;\
-atomic_t use_cnt;\
+```c
+struct ubcore_token_id {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    uint32_t token_id; // driver fill
+    ubcore_token_id_flag flag;
+    atomic_t use_cnt;
 };
+```
 
-### ubcore_free_token_id
+### 3.3.2 ubcore_free_token_id
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_free_token_id([4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_token_id) \*token_id);
+int ubcore_free_token_id([4.3.1.3](#3313-ubcore_token_id) [ubcore_token_id](#3313-ubcore_token_id) *token_id);
 
 3.  描述
 
@@ -9572,21 +8989,21 @@ int ubcore_free_token_id([4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_t
 
 4.  参数
 
-\@param\[in\] \[Required\] token_id：the token_id id alloced before;
+@param[in] [Required] token_id：the token_id id alloced before;
 
 5.  返回值
 
 0 on success, other value on error
 
-### ubcore_register_seg
+### 3.3.3 ubcore_register_seg
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*ubcore_register_seg([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.3.3.1](#ubcore_seg_cfg) [ubcore_seg_cfg](#ubcore_seg_cfg) \*cfg, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.3.3.4](#3334-ubcore_target_seg) [ubcore_target_seg](#3334-ubcore_target_seg) *ubcore_register_seg([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.3.3.1](#3331-ubcore_seg_cfg) [ubcore_seg_cfg](#3331-ubcore_seg_cfg) *cfg, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -9596,57 +9013,63 @@ int ubcore_free_token_id([4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_t
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: the ubcore device handle;
+@param[in] [Required] dev: the ubcore device handle;
 
-\@param\[in\] \[Required\] cfg：segment configurations;
+@param[in] [Required] cfg：segment configurations;
 
-\@param\[in\] \[Required\] udata: ucontext and user space driver data;
+@param[in] [Required] udata: ucontext and user space driver data;
 
 5.  返回值
 
 成功返回target segment指针，失败返回NULL
 
-#### ubcore_seg_cfg
+#### 3.3.3.1 ubcore_seg_cfg
 
-struct ubcore_seg_cfg {\
-uint64_t va;\
-uint64_t len;\
-uint32_t eid_index;\
-[4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_token_id) \*token_id;\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value;\
-[4.3.3.3](#ubcore_reg_seg_flag) [ubcore_reg_seg_flag](#ubcore_reg_seg_flag) flag;\
-uint64_t user_ctx;\
-uint64_t iova;\
+```c
+struct ubcore_seg_cfg {
+    uint64_t va;
+    uint64_t len;
+    uint32_t eid_index;
+    ubcore_token_id *token_id;
+    ubcore_token token_value;
+    ubcore_reg_seg_flag flag;
+    uint64_t user_ctx;
+    uint64_t iova;
 };
+```
 
-#### ubcore_token
+#### 3.3.3.2 ubcore_token
 
-struct ubcore_token {\
-uint32_t token;\
+```c
+struct ubcore_token {
+    uint32_t token;
 };
+```
 
-#### ubcore_reg_seg_flag
+#### 3.3.3.3 ubcore_reg_seg_flag
 
-#define UBCORE_ACCESS_LOCAL_ONLY 0x1\
-#define UBCORE_ACCESS_READ (0x1 \<\< 1)\
-#define UBCORE_ACCESS_WRITE (0x1 \<\< 2)\
-#define UBCORE_ACCESS_ATOMIC (0x1 \<\< 3)\
-union ubcore_reg_seg_flag {\
-struct {\
-uint32_t token_policy : 3;\
-uint32_t cacheable : 1;\
-uint32_t dsva : 1;\
-uint32_t access : 6;\
-uint32_t non_pin : 1;\
-uint32_t user_iova : 1;\
-uint32_t token_id_valid : 1;\
-uint32_t pa : 1;\
-uint32_t reserved : 17;\
-} bs;\
-uint32_t value;\
+```c
+#define UBCORE_ACCESS_LOCAL_ONLY 0x1
+#define UBCORE_ACCESS_READ (0x1 << 1)
+#define UBCORE_ACCESS_WRITE (0x1 << 2)
+#define UBCORE_ACCESS_ATOMIC (0x1 << 3)
+union ubcore_reg_seg_flag {
+    struct {
+        uint32_t token_policy : 3;
+        uint32_t cacheable : 1;
+        uint32_t dsva : 1;
+        uint32_t access : 6;
+        uint32_t non_pin : 1;
+        uint32_t user_iova : 1;
+        uint32_t token_id_valid : 1;
+        uint32_t pa : 1;
+        uint32_t reserved : 17;
+    } bs;
+    uint32_t value;
 };
+```
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 1、注册segment时，无论用户指定任何标识，segment权限默认具有本端读、写和原子操作权限；
 
@@ -9658,59 +9081,67 @@ uint32_t value;\
 
 5、注册segment时，配置UBCORE_ACCESS_ATOMIC标识，必须也配置UBCORE_ACCESS_READ和UBCORE_ACCESS_WRITE标识，否则urma将会拦截此错误配置。
 
-#### ubcore_target_seg
+#### 3.3.3.4 ubcore_target_seg
 
-struct ubcore_target_seg {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.3.3.5](#ubcore_seg) [ubcore_seg](#ubcore_seg) seg;\
-uint64_t mva;\
-[4.3.1.3](#ubcore_token_id) [ubcore_token_id](#ubcore_token_id) \*token_id;\
-atomic_t use_cnt;\
+```c
+struct ubcore_target_seg {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_seg seg;
+    uint64_t mva;
+    ubcore_token_id *token_id;
+    atomic_t use_cnt;
 };
+```
 
-#### ubcore_seg
+#### 3.3.3.5 ubcore_seg
 
-struct ubcore_seg {\
-[4.3.3.6](#ubcore_ubva) [ubcore_ubva](#ubcore_ubva) ubva;\
-uint64_t len;\
-[4.3.3.7](#ubcore_seg_attr) [ubcore_seg_attr](#ubcore_seg_attr) attr;\
-uint32_t token_id;\
+```c
+struct ubcore_seg {
+    ubcore_ubva ubva;
+    uint64_t len;
+    ubcore_seg_attr attr;
+    uint32_t token_id;
 };
+```
 
-#### ubcore_ubva
+#### 3.3.3.6 ubcore_ubva
 
-struct ubcore_ubva {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint64_t va;\
+```c
+struct ubcore_ubva {
+    ubcore_eid eid;
+    uint64_t va;
 } \_\_packed;
+```
 
-#### ubcore_seg_attr
+#### 3.3.3.7 ubcore_seg_attr
 
-union ubcore_seg_attr {\
-struct {\
-uint32_t token_policy : 3;\
-uint32_t cacheable : 1;\
-uint32_t dsva : 1;\
-uint32_t access : 6;\
-uint32_t non_pin : 1;\
-uint32_t user_iova : 1;\
-uint32_t user_token_id : 1;\
-uint32_t pa : 1;\
-uint32_t reserved : 17;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_seg_attr {
+    struct {
+        uint32_t token_policy : 3;
+        uint32_t cacheable : 1;
+        uint32_t dsva : 1;
+        uint32_t access : 6;
+        uint32_t non_pin : 1;
+        uint32_t user_iova : 1;
+        uint32_t user_token_id : 1;
+        uint32_t pa : 1;
+        uint32_t reserved : 17;
+    } bs;
+    uint32_t value;
 };
+```
 
-### ubcore_unregister_seg
+### 3.3.4 ubcore_unregister_seg
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unregister_seg([4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*tseg);
+int ubcore_unregister_seg([4.3.3.4](#3334-ubcore_target_seg) [ubcore_target_seg](#3334-ubcore_target_seg) *tseg);
 
 3.  描述
 
@@ -9718,21 +9149,21 @@ int ubcore_unregister_seg([4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubc
 
 4.  参数
 
-\@param\[in\] \[Required\] tseg: 注册得到的tseg指针;
+@param[in] [Required] tseg: 注册得到的tseg指针;
 
 5.  返回值
 
 Return: 0 on success, other value on erron
 
-### ubcore_import_seg
+### 3.3.5 ubcore_import_seg
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*ubcore_import_seg([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.3.5.1](#ubcore_target_seg_cfg) [ubcore_target_seg_cfg](#ubcore_target_seg_cfg) \*cfg, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.3.3.4](#3334-ubcore_target_seg) [ubcore_target_seg](#3334-ubcore_target_seg) *ubcore_import_seg([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.3.5.1](#3351-ubcore_target_seg_cfg) [ubcore_target_seg_cfg](#3351-ubcore_target_seg_cfg) *cfg, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -9740,46 +9171,50 @@ Return: 0 on success, other value on erron
 
 4.  参数
 
-\@param\[in\] \[Required\] dev: ubcore_device指针;
+@param[in] [Required] dev: ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg：待导入的远端segment配置信息;
+@param[in] [Required] cfg：待导入的远端segment配置信息;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: pointer to target segment on success, NULL on error
 
-#### ubcore_target_seg_cfg
+#### 3.3.5.1 ubcore_target_seg_cfg
 
-struct ubcore_target_seg_cfg {\
-[4.3.3.5](#ubcore_seg) [ubcore_seg](#ubcore_seg) seg;\
-[4.3.5.2](#ubcore_import_seg_flag) [ubcore_import_seg_flag](#ubcore_import_seg_flag) flag;\
-uint64_t mva; /\* optional \*/\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value;\
+```c
+struct ubcore_target_seg_cfg {
+    ubcore_seg seg;
+    ubcore_import_seg_flag flag;
+    uint64_t mva; /* optional */
+    ubcore_token token_value;
 };
+```
 
-#### ubcore_import_seg_flag
+#### 3.3.5.2 ubcore_import_seg_flag
 
-union ubcore_import_seg_flag {\
-struct {\
-uint32_t cacheable : 1;\
-uint32_t access : 6;\
-uint32_t mapping : 1;\
-uint32_t reserved : 24;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_import_seg_flag {
+    struct {
+        uint32_t cacheable : 1;
+        uint32_t access : 6;
+        uint32_t mapping : 1;
+        uint32_t reserved : 24;
+    } bs;
+    uint32_t value;
 };
+```
 
-### ubcore_unimport_seg
+### 3.3.6 ubcore_unimport_seg
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unimport_seg([4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*tseg);
+int ubcore_unimport_seg([4.3.3.4](#3334-ubcore_target_seg) [ubcore_target_seg](#3334-ubcore_target_seg) *tseg);
 
 3.  描述
 
@@ -9787,27 +9222,27 @@ int ubcore_unimport_seg([4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcor
 
 4.  参数
 
-\@param\[in\] \[Required\] tseg: the address of the target segment to unimport;
+@param[in] [Required] tseg: the address of the target segment to unimport;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## Jetty管理
+## 3.4 Jetty管理
 
-### JFC管理
+### 3.4.1 JFC管理
 
-#### ubcore_create_jfc
+#### 3.4.1.1 ubcore_create_jfc
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*ubcore_create_jfc([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.1.1.1](#ubcore_jfc_cfg) [ubcore_jfc_cfg](#ubcore_jfc_cfg) \*cfg,
+[4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *ubcore_create_jfc([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.1.1.1](#34111-ubcore_jfc_cfg) [ubcore_jfc_cfg](#34111-ubcore_jfc_cfg) *cfg,
 
-[4.4.1.1.3](#ubcore_comp_callback_t) [ubcore_comp_callback_t](#ubcore_comp_callback_t) jfce_handler, [4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.1.1.3](#34113-ubcore_comp_callback_t) [ubcore_comp_callback_t](#34113-ubcore_comp_callback_t) jfce_handler, [4.4.1.1.4](#34114-ubcore_event_callback_t) [ubcore_event_callback_t](#34114-ubcore_event_callback_t) jfae_handler, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -9827,74 +9262,82 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jfc配置信息;
+@param[in] [Required] cfg: jfc配置信息;
 
-\@param\[in\] \[Required\] jfce_handler: 完成事件回调函数;
+@param[in] [Required] jfce_handler: 完成事件回调函数;
 
-\@param\[in\] \[Required\] jfae_handler: 异步事件回调函数;
+@param[in] [Required] jfae_handler: 异步事件回调函数;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the handle of created jfc, not NULL on success; NULL on error
 
-##### ubcore_jfc_cfg
+##### 3.4.1.1.1 ubcore_jfc_cfg
 
-struct ubcore_jfc_cfg {\
-uint32_t depth;\
-[4.4.1.1.2](#ubcore_jfc_flag) [ubcore_jfc_flag](#ubcore_jfc_flag) flag;\
-uint32_t ceqn;\
-void \*jfc_context;\
+```c
+struct ubcore_jfc_cfg {
+    uint32_t depth;
+    ubcore_jfc_flag flag;
+    uint32_t ceqn;
+    void *jfc_context;
 };
+```
 
 eq_id：表示JFC使用的EQ编号，从0到device中的num_comp_vectors - 1
 
-##### ubcore_jfc_flag
+##### 3.4.1.1.2 ubcore_jfc_flag
 
-union ubcore_jfc_flag {\
-struct {\
-uint32_t lock_free : 1;\
-uint32_t jfc_inline : 1;\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_jfc_flag {
+    struct {
+        uint32_t lock_free : 1;
+        uint32_t jfc_inline : 1;
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_comp_callback_t
+##### 3.4.1.1.3 ubcore_comp_callback_t
 
-typedef void (\*ubcore_comp_callback_t)([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc);
+typedef void (*ubcore_comp_callback_t)([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *jfc);
 
-##### ubcore_event_callback_t
+##### 3.4.1.1.4 ubcore_event_callback_t
 
-typedef void (\*ubcore_event_callback_t)([4.5.1.2](#ubcore_event) [ubcore_event](#ubcore_event) \*event,\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*ctx);
+```c
+typedef void (*ubcore_event_callback_t)(ubcore_event *event,
+ubcore_ucontext *ctx);
+```
 
-##### ubcore_jfc
+##### 3.4.1.1.5 ubcore_jfc
 
-struct ubcore_jfc {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.1.1.1](#ubcore_jfc_cfg) [ubcore_jfc_cfg](#ubcore_jfc_cfg) jfc_cfg;\
-uint32_t id; /\* allocated by driver \*/\
-[4.4.1.1.3](#ubcore_comp_callback_t) [ubcore_comp_callback_t](#ubcore_comp_callback_t) jfce_handler;\
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler;\
-uint64_t urma_jfc; /\* user space jfc pointer \*/\
-struct hlist_node hnode;\
-atomic_t use_cnt;\
+```c
+struct ubcore_jfc {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_jfc_cfg jfc_cfg;
+    uint32_t id; /* allocated by driver */
+    ubcore_comp_callback_t jfce_handler;
+    ubcore_event_callback_t jfae_handler;
+    uint64_t urma_jfc; /* user space jfc pointer */
+    struct hlist_node hnode;
+    atomic_t use_cnt;
 };
+```
 
-#### ubcore_modify_jfc
+#### 3.4.1.2 ubcore_modify_jfc
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_modify_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc, [4.4.1.2.1](#ubcore_jfc_attr) [ubcore_jfc_attr](#ubcore_jfc_attr)r \*attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_modify_jfc([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *jfc, [4.4.1.2.1](#34121-ubcore_jfc_attr) [ubcore_jfc_attr](#34121-ubcore_jfc_attr)r *attr, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -9902,40 +9345,44 @@ int ubcore_modify_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc, 
 
 4.  参数
 
-\@param\[in\] \[Required\] jfc: specify JFC;
+@param[in] [Required] jfc: specify JFC;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### ubcore_jfc_attr
+##### 3.4.1.2.1 ubcore_jfc_attr
 
-struct ubcore_jfc_attr {\
-uint32_t mask; /\* mask value refer to enum ubcore_jfc_attr_mask \*/\
-uint16_t moderate_count;\
-uint16_t moderate_period; /\* in micro seconds \*/\
+```c
+struct ubcore_jfc_attr {
+    uint32_t mask; /* mask value refer to enum ubcore_jfc_attr_mask */
+    uint16_t moderate_count;
+    uint16_t moderate_period; /* in micro seconds */
 };
+```
 
-##### ubcore_jfc_attr_mask
+##### 3.4.1.2.2 ubcore_jfc_attr_mask
 
-enum ubcore_jfc_attr_mask {\
-UBCORE_JFC_MODERATE_COUNT = 0x1,\
-UBCORE_JFC_MODERATE_PERIOD = 0x1 \<\< 1\
+```c
+enum ubcore_jfc_attr_mask {
+    UBCORE_JFC_MODERATE_COUNT = 0x1,
+    UBCORE_JFC_MODERATE_PERIOD = 0x1 << 1
 };
+```
 
-#### ubcore_delete_jfc
+#### 3.4.1.3 ubcore_delete_jfc
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc);
+int ubcore_delete_jfc([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *jfc);
 
 3.  描述
 
@@ -9943,21 +9390,21 @@ int ubcore_delete_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc);
 
 4.  参数
 
-\@param\[in\] \[Required\] jfc: handle of the created jfc;
+@param[in] [Required] jfc: handle of the created jfc;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jfc_batch
+#### 3.4.1.4 ubcore_delete_jfc_batch
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfc_batch([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*\*jfc_arr, int jfc_num, int \*bad_jfc_index);
+int ubcore_delete_jfc_batch([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) **jfc_arr, int jfc_num, int *bad_jfc_index);
 
 3.  描述
 
@@ -9965,33 +9412,33 @@ int ubcore_delete_jfc_batch([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \
 
 4.  参数
 
-\@param\[in\] jfc_arr: the jfc array created before;
+@param[in] jfc_arr: the jfc array created before;
 
-\@param\[in\] jfc_num: jfc array length;
+@param[in] jfc_num: jfc array length;
 
-\@param\[out\] bad_jfc_index: when error, return error jfc index in the array;
+@param[out] bad_jfc_index: when error, return error jfc index in the array;
 
 5.  返回值
 
 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1、如果发生删除失败的情况（包括非法的参数），接口会在第一个删除失败的jfc返回，在这个jfc之前的jfc都会被正常删除。
 
-### JFS管理
+### 3.4.2 JFS管理
 
-#### ubcore_create_jfs
+#### 3.4.2.1 ubcore_create_jfs
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*ubcore_create_jfs([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.2.1.1](#ubcore_jfs_cfg) [ubcore_jfs_cfg](#ubcore_jfs_cfg) \*cfg,
+[4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *ubcore_create_jfs([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.2.1.1](#34211-ubcore_jfs_cfg) [ubcore_jfs_cfg](#34211-ubcore_jfs_cfg) *cfg,
 
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.1.1.4](#34114-ubcore_event_callback_t) [ubcore_event_callback_t](#34114-ubcore_event_callback_t) jfae_handler, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10003,103 +9450,113 @@ int ubcore_delete_jfc_batch([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jfs配置信息;
+@param[in] [Required] cfg: jfs配置信息;
 
-\@param\[in\] \[Required\] jfae_handler: 异步事件回调函数;
+@param[in] [Required] jfae_handler: 异步事件回调函数;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the handle of created jfs, not NULL on success, NULL on error
 
-##### ubcore_jfs_cfg
+##### 3.4.2.1.1 ubcore_jfs_cfg
 
-struct ubcore_jfs_cfg {\
-uint32_t depth;\
-[4.4.2.1.2](#ubcore_jfs_flag) [ubcore_jfs_flag](#ubcore_jfs_flag) flag;\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-uint32_t eid_index;\
-uint8_t priority;\
-uint8_t max_sge;\
-uint8_t max_rsge;\
-uint32_t max_inline_data;\
-uint8_t rnr_retry;\
-uint8_t err_timeout;\
-void \*jfs_context;\
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc;\
+```c
+struct ubcore_jfs_cfg {
+    uint32_t depth;
+    ubcore_jfs_flag flag;
+    ubcore_transport_mode trans_mode;
+    uint32_t eid_index;
+    uint8_t priority;
+    uint8_t max_sge;
+    uint8_t max_rsge;
+    uint32_t max_inline_data;
+    uint8_t rnr_retry;
+    uint8_t err_timeout;
+    void *jfs_context;
+    ubcore_jfc *jfc;
 };
+```
 
-##### ubcore_jfs_flag
+##### 3.4.2.1.2 ubcore_jfs_flag
 
-enum ubcore_order_type {\
-UBCORE_DEF_ORDER,\
-UBCORE_OT, // target ordering\
-UBCORE_OI, // initiator ordering\
-UBCORE_OL, // low layer ordering\
-UBCORE_NO // unreliable non ordering\
-};\
-union ubcore_jfs_flag {\
-struct {\
-uint32_t lock_free : 1;\
-uint32_t error_suspend : 1;\
-uint32_t outorder_comp : 1;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t multi_path : 1;\
-uint32_t ctp_rc_mul_path_mode : 1; /\* 1: ctp rc mode multi-path \*/\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+enum ubcore_order_type {
+    UBCORE_DEF_ORDER,
+    UBCORE_OT, // target ordering
+    UBCORE_OI, // initiator ordering
+    UBCORE_OL, // low layer ordering
+    UBCORE_NO // unreliable non ordering
 };
+union ubcore_jfs_flag {
+    struct {
+        uint32_t lock_free : 1;
+        uint32_t error_suspend : 1;
+        uint32_t outorder_comp : 1;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t multi_path : 1;
+        uint32_t ctp_rc_mul_path_mode : 1; /* 1: ctp rc mode multi-path */
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
+};
+```
 
 outorder_comp为1时，表示完成乱序模式，WR不支持fence, place_order和comp_order；
 
-##### ubcore_transport_mode
+##### 3.4.2.1.3 ubcore_transport_mode
 
-enum ubcore_transport_mode {\
-UBCORE_TP_RM = 0x1, /\* Reliable message \*/\
-UBCORE_TP_RC = 0x1 \<\< 1, /\* Reliable connection \*/\
-UBCORE_TP_UM = 0x1 \<\< 2 /\* Unreliable message \*/\
+```c
+enum ubcore_transport_mode {
+    UBCORE_TP_RM = 0x1, /* Reliable message */
+    UBCORE_TP_RC = 0x1 << 1, /* Reliable connection */
+    UBCORE_TP_UM = 0x1 << 2 /* Unreliable message */
 };
+```
 
-##### ubcore_jfs
+##### 3.4.2.1.4 ubcore_jfs
 
-struct ubcore_jfs {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.2.1.1](#ubcore_jfs_cfg) [ubcore_jfs_cfg](#ubcore_jfs_cfg) jfs_cfg;\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) jfs_id; /\* driver fill jfs_id-\>id \*/\
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler;\
-uint64_t urma_jfs; /\* user space jfs pointer \*/\
-struct hlist_node hnode;\
-atomic_t use_cnt;\
-struct kref ref_cnt;\
-struct completion comp;\
-[4.2.1.6](#ubcore_hash_table) [ubcore_hash_table](#ubcore_hash_table) \*tptable; /\* Only for devices not natively supporting RM mode \*/\
+```c
+struct ubcore_jfs {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_jfs_cfg jfs_cfg;
+    ubcore_jetty_id jfs_id; /* driver fill jfs_id-\>id */
+    ubcore_event_callback_t jfae_handler;
+    uint64_t urma_jfs; /* user space jfs pointer */
+    struct hlist_node hnode;
+    atomic_t use_cnt;
+    struct kref ref_cnt;
+    struct completion comp;
+    ubcore_hash_table *tptable; /* Only for devices not natively supporting RM mode */
 };
+```
 
-##### ubcore_jetty_id
+##### 3.4.2.1.5 ubcore_jetty_id
 
-struct ubcore_jetty_id {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t id;\
+```c
+struct ubcore_jetty_id {
+    ubcore_eid eid;
+    uint32_t id;
 };
+```
 
-#### ubcore_modify_jfs
+#### 3.4.2.2 ubcore_modify_jfs
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_modify_jfs( [4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs, [4.4.2.2.1](#ubcore_jfs_attr) [ubcore_jfs_attr](#ubcore_jfs_attr) \*attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_modify_jfs( [4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *jfs, [4.4.2.2.1](#34221-ubcore_jfs_attr) [ubcore_jfs_attr](#34221-ubcore_jfs_attr) *attr, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10107,47 +9564,53 @@ UB Core调用UBN厂商驱动修改JFS，支持修改RX WR的最低水位和状�
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: specify JFs;
+@param[in] [Required] jfs: specify JFs;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### ubcore_jfs_attr
+##### 3.4.2.2.1 ubcore_jfs_attr
 
-struct ubcore_jfs_attr {\
-uint32_t mask; /\* mask value refer to ubcore_jfs_attr_mask_t \*/\
-[4.4.2.2.3](#ubcore_jetty_state) [ubcore_jetty_state](#ubcore_jetty_state) state;\
+```c
+struct ubcore_jfs_attr {
+    uint32_t mask; /* mask value refer to ubcore_jfs_attr_mask_t */
+    ubcore_jetty_state state;
 };
+```
 
-##### ubcore_jfs_attr_mask
+##### 3.4.2.2.2 ubcore_jfs_attr_mask
 
-enum ubcore_jfs_attr_mask {\
-UBCORE_JFS_STATE = 0x1\
+```c
+enum ubcore_jfs_attr_mask {
+    UBCORE_JFS_STATE = 0x1
 };
+```
 
-##### ubcore_jetty_state
+##### 3.4.2.2.3 ubcore_jetty_state
 
-enum ubcore_jetty_state {\
-UBCORE_JETTY_STATE_RESET = 0,\
-UBCORE_JETTY_STATE_READY,\
-UBCORE_JETTY_STATE_SUSPENDED,\
-UBCORE_JETTY_STATE_ERROR\
+```c
+enum ubcore_jetty_state {
+    UBCORE_JETTY_STATE_RESET = 0,
+    UBCORE_JETTY_STATE_READY,
+    UBCORE_JETTY_STATE_SUSPENDED,
+    UBCORE_JETTY_STATE_ERROR
 };
+```
 
-#### ubcore_query_jfs
+#### 3.4.2.3 ubcore_query_jfs
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_jfs([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs, [4.4.2.1.1](#ubcore_jfs_cfg) [ubcore_jfs_cfg](#ubcore_jfs_cfg) \*cfg, [4.4.2.2.1](#ubcore_jfs_attr) [ubcore_jfs_attr](#ubcore_jfs_attr) \*attr);
+int ubcore_query_jfs([4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *jfs, [4.4.2.1.1](#34211-ubcore_jfs_cfg) [ubcore_jfs_cfg](#34211-ubcore_jfs_cfg) *cfg, [4.4.2.2.1](#34221-ubcore_jfs_attr) [ubcore_jfs_attr](#34221-ubcore_jfs_attr) *attr);
 
 3.  描述
 
@@ -10155,25 +9618,25 @@ int ubcore_query_jfs([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs, [
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: specify JFs;
+@param[in] [Required] jfs: specify JFs;
 
-\@param\[out\] \[Required\] cfg: attributes to be query;
+@param[out] [Required] cfg: attributes to be query;
 
-\@param\[out\] \[Required\] attr: attributes to be query;
+@param[out] [Required] attr: attributes to be query;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jfs
+#### 3.4.2.4 ubcore_delete_jfs
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfs([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs);
+int ubcore_delete_jfs([4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *jfs);
 
 3.  描述
 
@@ -10181,21 +9644,21 @@ int ubcore_delete_jfs([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs);
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jfs_batch
+#### 3.4.2.5 ubcore_delete_jfs_batch
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfs_batch([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*\*jfs_arr, int jfs_num, int \*bad_jfs_index);
+int ubcore_delete_jfs_batch([4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) **jfs_arr, int jfs_num, int *bad_jfs_index);
 
 3.  描述
 
@@ -10203,29 +9666,29 @@ int ubcore_delete_jfs_batch([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \
 
 4.  参数
 
-\@param\[in\] jfs_arr: the jfs array created before;
+@param[in] jfs_arr: the jfs array created before;
 
-\@param\[in\] jfs_num: jfs array length;
+@param[in] jfs_num: jfs array length;
 
-\@param\[out\] bad_jfs_index: when error, return error jfs index in the array;
+@param[out] bad_jfs_index: when error, return error jfs index in the array;
 
 5.  返回值
 
 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1、如果发生删除失败的情况（包括非法的参数），接口会在第一个删除失败的jfs返回，在这个jfs之前的jfs都会被正常删除。
 
-#### ubcore_flush_jfs
+#### 3.4.2.6 ubcore_flush_jfs
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_flush_jfs([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs, int cr_cnt, [4.4.2.6.1](#ubcore_cr) [ubcore_cr](#ubcore_cr) \*cr);
+int ubcore_flush_jfs([4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *jfs, int cr_cnt, [4.4.2.6.1](#34261-ubcore_cr) [ubcore_cr](#34261-ubcore_cr) *cr);
 
 3.  描述
 
@@ -10233,104 +9696,114 @@ udma驱动把jfs中未被硬件执行的wr，通过cr返回给应用。
 
 4.  参数
 
-\@param\[in\] \[Required\] jfs: the jfs created before;
+@param[in] [Required] jfs: the jfs created before;
 
-\@param\[in\] \[Required\] cr_cnt: 希望收到完成记录的个数;
+@param[in] [Required] cr_cnt: 希望收到完成记录的个数;
 
-\@param\[out\] \[Required\] cr: 存放完成记录信息的地址;
+@param[out] [Required] cr: 存放完成记录信息的地址;
 
 5.  返回值
 
 the number of completion record returned, 0 means no completion record returned, -1 on error
 
-##### ubcore_cr
+##### 3.4.2.6.1 ubcore_cr
 
-struct ubcore_cr {\
-[4.4.2.6.2](#ubcore_cr_status) [ubcore_cr_status](#ubcore_cr_status) status;\
-uint64_t user_ctx;\
-[4.4.2.6.3](#ubcore_cr_opcode) [ubcore_cr_opcode](#ubcore_cr_opcode) opcode;\
-[4.4.2.6.4](#ubcore_cr_flag) [ubcore_cr_flag](#ubcore_cr_flag) flag;\
-uint32_t completion_len; /\* The number of bytes transferred \*/\
-uint32_t local_id; /\* Local jetty ID, or JFS ID, or JFR ID, depending on flag \*/\
-/\* Valid only for receiving CR. The remote jetty where received msg\
-\* comes from, may be jetty ID or JFS ID, depending on flag.\
-\*/\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) remote_id;\
-union {\
-uint64_t imm_data; /\* Valid only for received CR \*/\
-struct ubcore_cr_token invalid_token;\
-};\
-uint32_t tpn;\
-uintptr_t user_data; /\* Use as pointer to local jetty struct \*/\
+```c
+struct ubcore_cr {
+    ubcore_cr_status status;
+    uint64_t user_ctx;
+    ubcore_cr_opcode opcode;
+    ubcore_cr_flag flag;
+    uint32_t completion_len; /* The number of bytes transferred */
+    uint32_t local_id; /* Local jetty ID, or JFS ID, or JFR ID, depending on flag */
+    /* Valid only for receiving CR. The remote jetty where received msg
+    * comes from, may be jetty ID or JFS ID, depending on flag.
+    */
+    ubcore_jetty_id remote_id;
+    union {
+        uint64_t imm_data; /* Valid only for received CR */
+        struct ubcore_cr_token invalid_token;
+    };
+    uint32_t tpn;
+    uintptr_t user_data; /* Use as pointer to local jetty struct */
 };
+```
 
-##### ubcore_cr_status
+##### 3.4.2.6.2 ubcore_cr_status
 
-/\* Must be consistent with urma_cr_status_t \*/\
-enum ubcore_cr_status { // completion record status\
-UBCORE_CR_SUCCESS = 0,\
-UBCORE_CR_UNSUPPORTED_OPCODE_ERR,\
-UBCORE_CR_LOC_LEN_ERR, // Local data too long error\
-UBCORE_CR_LOC_OPERATION_ERR, // Local operation err\
-UBCORE_CR_LOC_ACCESS_ERR, // Access to local memory error when WRITE_WITH_IMM\
-UBCORE_CR_REM_RESP_LEN_ERR,\
-UBCORE_CR_REM_UNSUPPORTED_REQ_ERR,\
-UBCORE_CR_REM_OPERATION_ERR,\
-/\* Memory access protection error occurred in the remote node \*/\
-UBCORE_CR_REM_ACCESS_ABORT_ERR,\
-UBCORE_CR_ACK_TIMEOUT_ERR,\
-/\* RNR retries exceeded the maximum number: remote jfr has no buffer \*/\
-UBCORE_CR_RNR_RETRY_CNT_EXC_ERR,\
-UBCORE_CR_FLUSH_ERR,\
-UBCORE_CR_WR_SUSPEND_DONE,\
-UBCORE_CR_WR_FLUSH_ERR_DONE,\
-UBCORE_CR_WR_UNHANDLED,\
-UBCORE_CR_LOC_DATA_POISON,\
-UBCORE_CR_REM_DATA_POISON\
+```c
+/* Must be consistent with urma_cr_status_t */
+enum ubcore_cr_status { // completion record status
+    UBCORE_CR_SUCCESS = 0,
+    UBCORE_CR_UNSUPPORTED_OPCODE_ERR,
+    UBCORE_CR_LOC_LEN_ERR, // Local data too long error
+    UBCORE_CR_LOC_OPERATION_ERR, // Local operation err
+    UBCORE_CR_LOC_ACCESS_ERR, // Access to local memory error when WRITE_WITH_IMM
+    UBCORE_CR_REM_RESP_LEN_ERR,
+    UBCORE_CR_REM_UNSUPPORTED_REQ_ERR,
+    UBCORE_CR_REM_OPERATION_ERR,
+    /* Memory access protection error occurred in the remote node */
+    UBCORE_CR_REM_ACCESS_ABORT_ERR,
+    UBCORE_CR_ACK_TIMEOUT_ERR,
+    /* RNR retries exceeded the maximum number: remote jfr has no buffer */
+    UBCORE_CR_RNR_RETRY_CNT_EXC_ERR,
+    UBCORE_CR_FLUSH_ERR,
+    UBCORE_CR_WR_SUSPEND_DONE,
+    UBCORE_CR_WR_FLUSH_ERR_DONE,
+    UBCORE_CR_WR_UNHANDLED,
+    UBCORE_CR_LOC_DATA_POISON,
+    UBCORE_CR_REM_DATA_POISON
 };
+```
 
-##### ubcore_cr_opcode
+##### 3.4.2.6.3 ubcore_cr_opcode
 
-enum ubcore_cr_opcode {\
-UBCORE_CR_OPC_SEND = 0x00,\
-UBCORE_CR_OPC_SEND_WITH_IMM,\
-UBCORE_CR_OPC_SEND_WITH_INV,\
-UBCORE_CR_OPC_WRITE_WITH_IMM\
+```c
+enum ubcore_cr_opcode {
+    UBCORE_CR_OPC_SEND = 0x00,
+    UBCORE_CR_OPC_SEND_WITH_IMM,
+    UBCORE_CR_OPC_SEND_WITH_INV,
+    UBCORE_CR_OPC_WRITE_WITH_IMM
 };
+```
 
-##### ubcore_cr_flag
+##### 3.4.2.6.4 ubcore_cr_flag
 
-union ubcore_cr_flag {\
-struct {\
-uint8_t s_r : 1; /\* Indicate CR stands for sending or receiving \*/\
-uint8_t jetty : 1; /\* Indicate id in the CR stands for jetty or JFS/JFR \*/\
-uint8_t suspend_done : 1;\
-uint8_t flush_err_done : 1;\
-uint8_t reserved : 4;\
-} bs;\
-uint8_t value;\
+```c
+union ubcore_cr_flag {
+    struct {
+        uint8_t s_r : 1; /* Indicate CR stands for sending or receiving */
+        uint8_t jetty : 1; /* Indicate id in the CR stands for jetty or JFS/JFR */
+        uint8_t suspend_done : 1;
+        uint8_t flush_err_done : 1;
+        uint8_t reserved : 4;
+    } bs;
+    uint8_t value;
 };
+```
 
-##### ubcore_cr_token
+##### 3.4.2.6.5 ubcore_cr_token
 
-struct ubcore_cr_token {\
-uint32_t token_id;\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value;\
+```c
+struct ubcore_cr_token {
+    uint32_t token_id;
+    ubcore_token token_value;
 };
+```
 
-### JFR管理
+### 3.4.3 JFR管理
 
-#### ubcore_create_jfr
+#### 3.4.3.1 ubcore_create_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*ubcore_create_jfr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.3.1.1](#ubcore_jfr_cfg) [ubcore_jfr_cfg](#ubcore_jfr_cfg) \*cfg,
+[4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) *ubcore_create_jfr([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.3.1.1](#34311-ubcore_jfr_cfg) [ubcore_jfr_cfg](#34311-ubcore_jfr_cfg) *cfg,
 
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.1.1.4](#34114-ubcore_event_callback_t) [ubcore_event_callback_t](#34114-ubcore_event_callback_t) jfae_handler, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10340,81 +9813,87 @@ JFR ID可以标识一项服务，因此用户可以指定JFR ID创建JFR。用�
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jfr配置信息;
+@param[in] [Required] cfg: jfr配置信息;
 
-\@param\[in\] \[Required\] jfae_handler: 异步事件回调函数;
+@param[in] [Required] jfae_handler: 异步事件回调函数;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the handle of created jfr, not NULL on success, NULL on error
 
-##### ubcore_jfr_cfg
+##### 3.4.3.1.1 ubcore_jfr_cfg
 
-struct ubcore_jfr_cfg {\
-uint32_t id; /\* user may assign id \*/\
-uint32_t depth;\
-[4.4.3.1.2](#ubcore_jfr_flag) [ubcore_jfr_flag](#ubcore_jfr_flag) flag;\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-uint32_t eid_index;\
-uint8_t max_sge;\
-uint8_t min_rnr_timer;\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value;\
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc;\
-void \*jfr_context;\
+```c
+struct ubcore_jfr_cfg {
+    uint32_t id; /* user may assign id */
+    uint32_t depth;
+    ubcore_jfr_flag flag;
+    ubcore_transport_mode trans_mode;
+    uint32_t eid_index;
+    uint8_t max_sge;
+    uint8_t min_rnr_timer;
+    ubcore_token token_value;
+    ubcore_jfc *jfc;
+    void *jfr_context;
 };
+```
 
-##### ubcore_jfr_flag
+##### 3.4.3.1.2 ubcore_jfr_flag
 
-union ubcore_jfr_flag {\
-struct {\
-/\* 0: UBCORE_TOKEN_NONE\
-\* 1: UBCORE_TOKEN_PLAIN_TEXT\
-\* 2: UBCORE_TOKEN_SIGNED\
-\* 3: UBCORE_TOKEN_ALL_ENCRYPTED\
-\* 4: UBCORE_TOKEN_RESERVED\
-\*/\
-uint32_t token_policy : 3;\
-uint32_t tag_matching : 1;\
-uint32_t lock_free : 1;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_jfr_flag {
+    struct {
+        /* 0: UBCORE_TOKEN_NONE
+        * 1: UBCORE_TOKEN_PLAIN_TEXT
+        * 2: UBCORE_TOKEN_SIGNED
+        * 3: UBCORE_TOKEN_ALL_ENCRYPTED
+        * 4: UBCORE_TOKEN_RESERVED
+        */
+        uint32_t token_policy : 3;
+        uint32_t tag_matching : 1;
+        uint32_t lock_free : 1;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_jfr
+##### 3.4.3.1.3 ubcore_jfr
 
-struct ubcore_jfr {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.3.1.1](#ubcore_jfr_cfg) [ubcore_jfr_cfg](#ubcore_jfr_cfg) jfr_cfg;\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) jfr_id; /\* driver fill jfr_id-\>id \*/\
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler;\
-uint64_t urma_jfr; /\* user space jfr pointer \*/\
-struct hlist_node hnode;\
-atomic_t use_cnt;\
-struct kref ref_cnt;\
-struct completion comp;\
-[4.2.1.6](#ubcore_hash_table) [ubcore_hash_table](#ubcore_hash_table) \*tptable; /\* Only for devices not natively supporting RM mode \*/\
+```c
+struct ubcore_jfr {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_jfr_cfg jfr_cfg;
+    ubcore_jetty_id jfr_id; /* driver fill jfr_id-\>id */
+    ubcore_event_callback_t jfae_handler;
+    uint64_t urma_jfr; /* user space jfr pointer */
+    struct hlist_node hnode;
+    atomic_t use_cnt;
+    struct kref ref_cnt;
+    struct completion comp;
+    ubcore_hash_table *tptable; /* Only for devices not natively supporting RM mode */
 };
+```
 
-#### ubcore_modify_jfr
+#### 3.4.3.2 ubcore_modify_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_modify_jfr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr, [4.4.3.2.1](#ubcore_jfr_attr) [ubcore_jfr_attr](#ubcore_jfr_attr) \*attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_modify_jfr([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) *jfr, [4.4.3.2.1](#34321-ubcore_jfr_attr) [ubcore_jfr_attr](#34321-ubcore_jfr_attr) *attr, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10422,48 +9901,54 @@ int ubcore_modify_jfr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr, 
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: specify JFR;
+@param[in] [Required] jfr: specify JFR;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### ubcore_jfr_attr
+##### 3.4.3.2.1 ubcore_jfr_attr
 
-struct ubcore_jfr_attr {\
-uint32_t mask; /\* mask value refer to enum ubcore_jfr_attr_mask \*/\
-uint32_t rx_threshold;\
-[4.4.3.2.3](#ubcore_jfr_state) [ubcore_jfr_state](#ubcore_jfr_state) state;\
+```c
+struct ubcore_jfr_attr {
+    uint32_t mask; /* mask value refer to enum ubcore_jfr_attr_mask */
+    uint32_t rx_threshold;
+    ubcore_jfr_state state;
 };
+```
 
-##### ubcore_jfr_attr_mask
+##### 3.4.3.2.2 ubcore_jfr_attr_mask
 
-enum ubcore_jfr_attr_mask {\
-UBCORE_JFR_RX_THRESHOLD = 0x1,\
-UBCORE_JFR_STATE = 0x1 \<\< 1\
+```c
+enum ubcore_jfr_attr_mask {
+    UBCORE_JFR_RX_THRESHOLD = 0x1,
+    UBCORE_JFR_STATE = 0x1 << 1
 };
+```
 
-##### ubcore_jfr_state
+##### 3.4.3.2.3 ubcore_jfr_state
 
-enum ubcore_jfr_state {\
-UBCORE_JFR_STATE_RESET = 0,\
-UBCORE_JFR_STATE_READY,\
-UBCORE_JFR_STATE_ERROR\
+```c
+enum ubcore_jfr_state {
+    UBCORE_JFR_STATE_RESET = 0,
+    UBCORE_JFR_STATE_READY,
+    UBCORE_JFR_STATE_ERROR
 };
+```
 
-#### ubcore_query_jfr
+#### 3.4.3.3 ubcore_query_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_jfr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr, [4.4.3.1.1](#ubcore_jfr_cfg) [ubcore_jfr_cfg](#ubcore_jfr_cfg) \*cfg, [4.4.3.2.1](#ubcore_jfr_attr) [ubcore_jfr_attr](#ubcore_jfr_attr) \*attr);
+int ubcore_query_jfr([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) *jfr, [4.4.3.1.1](#34311-ubcore_jfr_cfg) [ubcore_jfr_cfg](#34311-ubcore_jfr_cfg) *cfg, [4.4.3.2.1](#34321-ubcore_jfr_attr) [ubcore_jfr_attr](#34321-ubcore_jfr_attr) *attr);
 
 3.  描述
 
@@ -10471,25 +9956,25 @@ int ubcore_query_jfr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr, [
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: specify JFR;
+@param[in] [Required] jfr: specify JFR;
 
-\@param\[out\] \[Required\] cfg: attributes to be query;
+@param[out] [Required] cfg: attributes to be query;
 
-\@param\[out\] \[Required\] attr: attributes to be query;
+@param[out] [Required] attr: attributes to be query;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jfr
+#### 3.4.3.4 ubcore_delete_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr);
+int ubcore_delete_jfr([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) *jfr);
 
 3.  描述
 
@@ -10497,21 +9982,21 @@ destroy jfr from ubcore device.
 
 4.  参数
 
-\@param\[in\] \[Required\] jfr: the jfr created before;
+@param[in] [Required] jfr: the jfr created before;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jfr_batch
+#### 3.4.3.5 ubcore_delete_jfr_batch
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jfr_batch([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*\*jfr_arr, int jfr_num, int \*bad_jfr_index);
+int ubcore_delete_jfr_batch([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) **jfr_arr, int jfr_num, int *bad_jfr_index);
 
 3.  描述
 
@@ -10519,29 +10004,29 @@ int ubcore_delete_jfr_batch([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \
 
 4.  参数
 
-\@param\[in\] jfr_arr: the jfr array created before;
+@param[in] jfr_arr: the jfr array created before;
 
-\@param\[in\] jfr_num: jfr array length;
+@param[in] jfr_num: jfr array length;
 
-\@param\[out\] bad_jfr_index: when error, return error jfr index in the array;
+@param[out] bad_jfr_index: when error, return error jfr index in the array;
 
 5.  返回值
 
 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1、如果发生删除失败的情况（包括非法的参数），接口会在第一个删除失败的jfr返回，在这个jfr之前的jfr都会被正常删除。
 
-#### ubcore_import_jfr
+#### 3.4.3.6 ubcore_import_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*ubcore_import_jfr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.3.6.1](#ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#ubcore_tjetty_cfg) \*cfg, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *ubcore_import_jfr([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.3.6.1](#34361-ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#34361-ubcore_tjetty_cfg) *cfg, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10551,172 +10036,188 @@ int ubcore_delete_jfr_batch([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jfr配置信息;
+@param[in] [Required] cfg: jfr配置信息;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the address of target jfr, not NULL on success, NULL on error
 
-##### ubcore_tjetty_cfg
+##### 3.4.3.6.1 ubcore_tjetty_cfg
 
-struct ubcore_tjetty_cfg {\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id)\
-id; /\* jfr, jetty or jetty group id to be imported \*/\
-[4.4.3.6.2](#ubcore_import_jetty_flag) [ubcore_import_jetty_flag](#ubcore_import_jetty_flag) flag;\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-uint32_t eid_index;\
-[4.4.3.6.3](#ubcore_target_type) [ubcore_target_type](#ubcore_target_type) type;\
-[4.4.3.6.4](#ubcore_jetty_grp_policy) [ubcore_jetty_grp_policy](#ubcore_jetty_grp_policy) policy;\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value; /\* jfr, jetty or jetty group token_value to be imported \*/\
+```c
+struct ubcore_tjetty_cfg {
+    ubcore_jetty_id
+    id; /* jfr, jetty or jetty group id to be imported */
+    ubcore_import_jetty_flag flag;
+    ubcore_transport_mode trans_mode;
+    uint32_t eid_index;
+    ubcore_target_type type;
+    ubcore_jetty_grp_policy policy;
+    ubcore_token token_value; /* jfr, jetty or jetty group token_value to be imported */
 };
+```
 
-##### ubcore_import_jetty_flag
+##### 3.4.3.6.2 ubcore_import_jetty_flag
 
-union ubcore_import_jetty_flag {\
-struct {\
-uint32_t token_policy : 3;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t share_tp : 1;\
-uint32_t reserved : 20;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_import_jetty_flag {
+    struct {
+        uint32_t token_policy : 3;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t share_tp : 1;
+        uint32_t reserved : 20;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_target_type
+##### 3.4.3.6.3 ubcore_target_type
 
 enum ubcore_target_type { UBCORE_JFR = 0, UBCORE_JETTY, UBCORE_JETTY_GROUP };
 
-##### ubcore_jetty_grp_policy
+##### 3.4.3.6.4 ubcore_jetty_grp_policy
 
-enum ubcore_jetty_grp_policy {\
-UBCORE_JETTY_GRP_POLICY_RR = 0,\
-UBCORE_JETTY_GRP_POLICY_HASH_HINT = 1\
+```c
+enum ubcore_jetty_grp_policy {
+    UBCORE_JETTY_GRP_POLICY_RR = 0,
+    UBCORE_JETTY_GRP_POLICY_HASH_HINT = 1
 };
+```
 
-##### ubcore_tjetty
+##### 3.4.3.6.5 ubcore_tjetty
 
-struct ubcore_tjetty {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.3.6.1](#ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#ubcore_tjetty_cfg) cfg;\
-[4.4.3.6.6](#ubcore_tp) [ubcore_tp](#ubcore_tp) \*tp;\
-[4.4.3.6.7](#ubcore_vtpn) [ubcore_vtpn](#ubcore_vtpn) \*vtpn;\
-atomic_t use_cnt;\
-struct mutex lock;\
+```c
+struct ubcore_tjetty {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_tjetty_cfg cfg;
+    ubcore_tp *tp;
+    ubcore_vtpn *vtpn;
+    atomic_t use_cnt;
+    struct mutex lock;
 };
+```
 
-##### ubcore_tp
+##### 3.4.3.6.6 ubcore_tp
 
-struct ubcore_tp {\
-uint32_t tpn; /\* driver assigned in creating tp \*/\
-uint32_t peer_tpn;\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[6.5.1.5.6](#ubcore_tp_flag) [ubcore_tp_flag](#ubcore_tp_flag) flag; /\* indicate initiator or target, etc \*/\
-uint32_t local_net_addr_idx;\
-struct ubcore_net_addr peer_net_addr;\
-/\* only for RC START \*/\
-union {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) local_jetty;\
-};\
-union {\
-union ubcore_eid peer_eid;\
-struct ubcore_jetty_id peer_jetty;\
-};\
-/\* only for RC END \*/\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-[6.5.1.5.4](#ubcore_tp_state) [ubcore_tp_state](#ubcore_tp_state) state;\
-uint32_t rx_psn;\
-uint32_t tx_psn;\
-[4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) mtu;\
-uint16_t data_udp_start; /\* src udp port start, for multipath data \*/\
-uint16_t ack_udp_start; /\* src udp port start, for multipath ack \*/\
-uint8_t udp_range; /\* src udp port range, for both multipath data and ack \*/\
-uint8_t port_id; /\* optional, physical port, only for non-bonding \*/\
-uint8_t retry_num;\
-uint8_t retry_factor;\
-uint8_t ack_timeout;\
-uint8_t dscp;\
-uint8_t cc_pattern_idx;\
-uint8_t hop_limit;\
-struct ubcore_tpg \*tpg; /\* NULL if no tpg, eg. UM mode \*/\
-uint32_t oor_cnt; /\* out of order window size for recv: packet cnt \*/\
-uint32_t oos_cnt; /\* out of order window size for send: packet cnt \*/\
-struct ubcore_tp_ext tp_ext; /\* driver fill in creating tp \*/\
-struct ubcore_tp_ext peer_ext; /\* ubcore fill before modifying tp \*/\
-atomic_t use_cnt;\
-struct hlist_node hnode; /\* driver inaccessible \*/\
-struct kref ref_cnt;\
-struct completion comp;\
-uint32_t flow_label;\
-uint8_t mn; /\* 0\~15, a packet contains only one msg if mn is set as 0 \*/\
-[4.2.21.1](#ubcore_transport_type) [ubcore_transport_type](#ubcore_transport_type)\
-peer_trans_type; /\* Only for user tp connection \*/\
-struct mutex lock; /\* protect TP state \*/\
-void \*priv; /\* ubcore private data for tp management \*/\
-uint32_t ue_idx;\
+```c
+struct ubcore_tp {
+    uint32_t tpn; /* driver assigned in creating tp */
+    uint32_t peer_tpn;
+    ubcore_device *ub_dev;
+    ubcore_tp_flag flag; /* indicate initiator or target, etc */
+    uint32_t local_net_addr_idx;
+    struct ubcore_net_addr peer_net_addr;
+    /* only for RC START */
+    union {
+        ubcore_eid local_eid;
+        ubcore_jetty_id local_jetty;
+    };
+    union {
+        union ubcore_eid peer_eid;
+        struct ubcore_jetty_id peer_jetty;
+    };
+    /* only for RC END */
+    ubcore_transport_mode trans_mode;
+    ubcore_tp_state state;
+    uint32_t rx_psn;
+    uint32_t tx_psn;
+    ubcore_mtu mtu;
+    uint16_t data_udp_start; /* src udp port start, for multipath data */
+    uint16_t ack_udp_start; /* src udp port start, for multipath ack */
+    uint8_t udp_range; /* src udp port range, for both multipath data and ack */
+    uint8_t port_id; /* optional, physical port, only for non-bonding */
+    uint8_t retry_num;
+    uint8_t retry_factor;
+    uint8_t ack_timeout;
+    uint8_t dscp;
+    uint8_t cc_pattern_idx;
+    uint8_t hop_limit;
+    struct ubcore_tpg *tpg; /* NULL if no tpg, eg. UM mode */
+    uint32_t oor_cnt; /* out of order window size for recv: packet cnt */
+    uint32_t oos_cnt; /* out of order window size for send: packet cnt */
+    struct ubcore_tp_ext tp_ext; /* driver fill in creating tp */
+    struct ubcore_tp_ext peer_ext; /* ubcore fill before modifying tp */
+    atomic_t use_cnt;
+    struct hlist_node hnode; /* driver inaccessible */
+    struct kref ref_cnt;
+    struct completion comp;
+    uint32_t flow_label;
+    uint8_t mn; /* 0\~15, a packet contains only one msg if mn is set as 0 */
+    ubcore_transport_type
+    peer_trans_type; /* Only for user tp connection */
+    struct mutex lock; /* protect TP state */
+    void *priv; /* ubcore private data for tp management */
+    uint32_t ue_idx;
 };
+```
 
-##### ubcore_vtpn
+##### 3.4.3.6.7 ubcore_vtpn
 
-struct ubcore_vtpn {\
-uint32_t vtpn; /\* driver fills \*/\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-/\* ubcore private, inaccessible to driver \*/\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-/\* vtpn key start \*/\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-union ubcore_eid peer_eid;\
-uint32_t local_jetty;\
-uint32_t peer_jetty;\
-/\* vtpn key end \*/\
-uint32_t eid_index;\
-struct mutex state_lock;\
-[4.4.3.6.8](#ubcore_vtp_state) [ubcore_vtp_state](#ubcore_vtp_state) state; /\* protect by state_lock \*/\
-struct hlist_node hnode; /\* key: eid + jetty \*/\
-struct hlist_node vtpn_hnode; /\* key: vtpn \*/\
-atomic_t use_cnt;\
-struct kref ref_cnt;\
-struct completion comp;\
-struct list_head node; /\* vtpn node in vtpn_wait_list \*/\
-struct list_head list; /\* vtpn head to restore tjetty/jetty/cb node \*/\
-struct list_head\
-disconnect_list; /\* vtpn head to restore disconnect vtpn node \*/\
-uint64_t tp_handle;\
-uint64_t peer_tp_handle;\
-uint64_t tag;\
-bool uspace; /\* true: user space; false: kernel space \*/\
+```c
+struct ubcore_vtpn {
+    uint32_t vtpn; /* driver fills */
+    ubcore_device *ub_dev;
+    /* ubcore private, inaccessible to driver */
+    ubcore_transport_mode trans_mode;
+    /* vtpn key start */
+    ubcore_eid local_eid;
+    union ubcore_eid peer_eid;
+    uint32_t local_jetty;
+    uint32_t peer_jetty;
+    /* vtpn key end */
+    uint32_t eid_index;
+    struct mutex state_lock;
+    ubcore_vtp_state state; /* protect by state_lock */
+    struct hlist_node hnode; /* key: eid + jetty */
+    struct hlist_node vtpn_hnode; /* key: vtpn */
+    atomic_t use_cnt;
+    struct kref ref_cnt;
+    struct completion comp;
+    struct list_head node; /* vtpn node in vtpn_wait_list */
+    struct list_head list; /* vtpn head to restore tjetty/jetty/cb node */
+    struct list_head
+    disconnect_list; /* vtpn head to restore disconnect vtpn node */
+    uint64_t tp_handle;
+    uint64_t peer_tp_handle;
+    uint64_t tag;
+    bool uspace; /* true: user space; false: kernel space */
 };
+```
 
-##### ubcore_vtp_state
+##### 3.4.3.6.8 ubcore_vtp_state
 
-enum ubcore_vtp_state {\
-UBCORE_VTPS_RESET = 0,\
-UBCORE_VTPS_READY = 1,\
-UBCORE_VTPS_WAIT_DESTROY = 2,\
+```c
+enum ubcore_vtp_state {
+    UBCORE_VTPS_RESET = 0,
+    UBCORE_VTPS_READY = 1,
+    UBCORE_VTPS_WAIT_DESTROY = 2,
 };
+```
 
-#### ubcore_import_jfr_ex
+#### 3.4.3.7 ubcore_import_jfr_ex
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-struct ubcore_tjetty \*\
-ubcore_import_jfr_ex([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev,\
-[4.4.3.6.1](#ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#ubcore_tjetty_cfg) \*cfg,\
-[4.4.3.7.1](#ubcore_active_tp_cfg) [ubcore_active_tp_cfg](#ubcore_active_tp_cfg) \*active_tp_cfg,\
-[4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+struct ubcore_tjetty *
+ubcore_import_jfr_ex(ubcore_device *dev,
+ubcore_tjetty_cfg *cfg,
+ubcore_active_tp_cfg *active_tp_cfg,
+ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -10726,44 +10227,48 @@ ubcore_import_jfr_ex([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device handle;
+@param[in] dev: the ubcore device handle;
 
-\@param\[in\] cfg: remote jfr attributes and import configurations;
+@param[in] cfg: remote jfr attributes and import configurations;
 
-\@param\[in\] active_tp_cfg: tp configuration to active;
+@param[in] active_tp_cfg: tp configuration to active;
 
-\@param\[in\] udata (optional): ucontext and user space driver data；
+@param[in] udata (optional): ucontext and user space driver data；
 
 5.  返回值
 
 target jfr pointer on success, NULL on error
 
-##### ubcore_active_tp_cfg
+##### 3.4.3.7.1 ubcore_active_tp_cfg
 
-struct ubcore_active_tp_cfg {\
-[4.13.2.4](#ubcore_tp_handle) [ubcore_tp_handle](#ubcore_tp_handle) tp_handle;\
-[4.13.2.4](#ubcore_tp_handle) [ubcore_tp_handle](#ubcore_tp_handle) peer_tp_handle;\
-uint64_t tag;\
-[4.4.3.7.2](#ubcore_active_tp_attr) [ubcore_active_tp_attr](#ubcore_active_tp_attr) tp_attr;\
+```c
+struct ubcore_active_tp_cfg {
+    ubcore_tp_handle tp_handle;
+    ubcore_tp_handle peer_tp_handle;
+    uint64_t tag;
+    ubcore_active_tp_attr tp_attr;
 };
+```
 
-##### ubcore_active_tp_attr
+##### 3.4.3.7.2 ubcore_active_tp_attr
 
-struct ubcore_active_tp_attr {\
-uint32_t tx_psn;\
-uint32_t rx_psn;\
-uint64_t reserved;\
+```c
+struct ubcore_active_tp_attr {
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    uint64_t reserved;
 };
+```
 
-#### ubcore_unimport_jfr
+#### 3.4.3.8 ubcore_unimport_jfr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unimport_jfr([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjfr);
+int ubcore_unimport_jfr([4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *tjfr);
 
 3.  描述
 
@@ -10773,29 +10278,29 @@ int ubcore_unimport_jfr([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjet
 
 4.  参数
 
-\@param\[in\] \[Required\] tjfr: the target jfr imported before;
+@param[in] [Required] tjfr: the target jfr imported before;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### Jetty管理
+### 3.4.4 Jetty管理
 
-#### ubcore_create_jetty
+#### 3.4.4.1 ubcore_create_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*ubcore_create_jetty([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.4.1.1](#ubcore_jetty_cfg) [ubcore_jetty_cfg](#ubcore_jetty_cfg) \*cfg,
+[4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *ubcore_create_jetty([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.4.1.1](#34411-ubcore_jetty_cfg) [ubcore_jetty_cfg](#34411-ubcore_jetty_cfg) *cfg,
 
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.1.1.4](#34114-ubcore_event_callback_t) [ubcore_event_callback_t](#34114-ubcore_event_callback_t) jfae_handler, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
-创建RM\\RC\\UM模式的Jetty。创建Jetty时，用户需要传入发送配置参数，例如发送深度、关联的发送JFC、发送sge数、最大inline长度、优先级、rnr_rertry、 err_timeout等参数。用户创建Jetty时，可以传入自定义jetty_context和异步事件回调函数。
+创建RM\RC\UM模式的Jetty。创建Jetty时，用户需要传入发送配置参数，例如发送深度、关联的发送JFC、发送sge数、最大inline长度、优先级、rnr_rertry、 err_timeout等参数。用户创建Jetty时，可以传入自定义jetty_context和异步事件回调函数。
 
 UB设备只支持Jetty绑定共享JFR，用户创建Jetty之前必须先创建接收共享JFR，创建Jetty时，必须传入JFR指针和接收JFC指针。
 
@@ -10807,89 +10312,95 @@ UB设备只支持Jetty绑定共享JFR，用户创建Jetty之前必须先创建�
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jetty配置信息;
+@param[in] [Required] cfg: jetty配置信息;
 
-\@param\[in\] \[Required\] jfae_handler: 异步事件回调函数;
+@param[in] [Required] jfae_handler: 异步事件回调函数;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the handle of created jetty, not NULL on success, NULL on error
 
-##### ubcore_jetty_cfg
+##### 3.4.4.1.1 ubcore_jetty_cfg
 
-struct ubcore_jetty_cfg {\
-uint32_t id; /\* user may assign id \*/\
-[4.4.4.1.2](#ubcore_jetty_flag) [ubcore_jetty_flag](#ubcore_jetty_flag) flag;\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-uint32_t eid_index;\
-uint32_t jfs_depth;\
-uint8_t priority;\
-uint8_t max_send_sge;\
-uint8_t max_send_rsge;\
-uint32_t max_inline_data;\
-uint8_t rnr_retry;\
-uint8_t err_timeout;\
-uint32_t jfr_depth; /\* deprecated \*/\
-uint8_t min_rnr_timer; /\* deprecated \*/\
-uint8_t max_recv_sge; /\* deprecated \*/\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value; /\* deprecated \*/\
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*send_jfc;\
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*recv_jfc; /\* must set \*/\
-[4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr; /\* must set, shared jfr \*/\
-[4.4.5.1.3](#ubcore_jetty_group) [ubcore_jetty_group](#ubcore_jetty_group)\
-\*jetty_grp; /\* \[Optional\] user specified jetty group \*/\
-void \*jetty_context;\
+```c
+struct ubcore_jetty_cfg {
+    uint32_t id; /* user may assign id */
+    ubcore_jetty_flag flag;
+    ubcore_transport_mode trans_mode;
+    uint32_t eid_index;
+    uint32_t jfs_depth;
+    uint8_t priority;
+    uint8_t max_send_sge;
+    uint8_t max_send_rsge;
+    uint32_t max_inline_data;
+    uint8_t rnr_retry;
+    uint8_t err_timeout;
+    uint32_t jfr_depth; /* deprecated */
+    uint8_t min_rnr_timer; /* deprecated */
+    uint8_t max_recv_sge; /* deprecated */
+    ubcore_token token_value; /* deprecated */
+    ubcore_jfc *send_jfc;
+    ubcore_jfc *recv_jfc; /* must set */
+    ubcore_jfr *jfr; /* must set, shared jfr */
+    ubcore_jetty_group
+    *jetty_grp; /* [Optional] user specified jetty group */
+    void *jetty_context;
 };
+```
 
-##### ubcore_jetty_flag
+##### 3.4.4.1.2 ubcore_jetty_flag
 
-union ubcore_jetty_flag {\
-struct {\
-uint32_t share_jfr : 1; /\* 0: URMA_NO_SHARE_JFR. 1: URMA_SHARE_JFR. \*/\
-uint32_t lock_free : 1;\
-uint32_t error_suspend : 1;\
-uint32_t outorder_comp : 1;\
-uint32_t order_type : 8; /\* (0x0): default, auto config by driver \*/\
-/\* (0x1): OT, target ordering \*/\
-/\* (0x2): OI, initiator ordering \*/\
-/\* (0x3): OL, low layer ordering \*/\
-/\* (0x4): UNO, unreliable non ordering \*/\
-uint32_t multi_path : 1;\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_jetty_flag {
+    struct {
+        uint32_t share_jfr : 1; /* 0: URMA_NO_SHARE_JFR. 1: URMA_SHARE_JFR. */
+        uint32_t lock_free : 1;
+        uint32_t error_suspend : 1;
+        uint32_t outorder_comp : 1;
+        uint32_t order_type : 8; /* (0x0): default, auto config by driver */
+        /* (0x1): OT, target ordering */
+        /* (0x2): OI, initiator ordering */
+        /* (0x3): OL, low layer ordering */
+        /* (0x4): UNO, unreliable non ordering */
+        uint32_t multi_path : 1;
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_jetty
+##### 3.4.4.1.3 ubcore_jetty
 
-struct ubcore_jetty {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.4.1.1](#ubcore_jetty_cfg) [ubcore_jetty_cfg](#ubcore_jetty_cfg) jetty_cfg;\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) jetty_id; /\* driver fill jetty_id-\>id \*/\
-[4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*remote_jetty; // bind to remote jetty\
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler;\
-uint64_t urma_jetty; /\* user space jetty pointer \*/\
-struct hlist_node hnode;\
-atomic_t use_cnt;\
-struct kref ref_cnt;\
-struct completion comp;\
-[4.2.1.6](#ubcore_hash_table) [ubcore_hash_table](#ubcore_hash_table) \*tptable; /\* Only for devices not natively supporting RM mode \*/\
+```c
+struct ubcore_jetty {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_jetty_cfg jetty_cfg;
+    ubcore_jetty_id jetty_id; /* driver fill jetty_id-\>id */
+    ubcore_tjetty *remote_jetty; // bind to remote jetty
+    ubcore_event_callback_t jfae_handler;
+    uint64_t urma_jetty; /* user space jetty pointer */
+    struct hlist_node hnode;
+    atomic_t use_cnt;
+    struct kref ref_cnt;
+    struct completion comp;
+    ubcore_hash_table *tptable; /* Only for devices not natively supporting RM mode */
 };
+```
 
-#### ubcore_modify_jetty
+#### 3.4.4.2 ubcore_modify_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_modify_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.4.4.2.1](#ubcore_jetty_attr) [ubcore_jetty_attr](#ubcore_jetty_attr) \*attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_modify_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.4.4.2.1](#34421-ubcore_jetty_attr) [ubcore_jetty_attr](#34421-ubcore_jetty_attr) *attr, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -10897,40 +10408,44 @@ int ubcore_modify_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty)
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: specify jetty;
+@param[in] [Required] jetty: specify jetty;
 
-\@param\[in\] \[Required\] attr: attributes to be modified;
+@param[in] [Required] attr: attributes to be modified;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### ubcore_jetty_attr
+##### 3.4.4.2.1 ubcore_jetty_attr
 
-struct ubcore_jetty_attr {\
-uint32_t mask; /\* mask value refer to enum ubcore_jetty_attr_mask \*/\
-uint32_t rx_threshold;\
-[4.4.2.2.3](#ubcore_jetty_state) [ubcore_jetty_state](#ubcore_jetty_state) state;\
+```c
+struct ubcore_jetty_attr {
+    uint32_t mask; /* mask value refer to enum ubcore_jetty_attr_mask */
+    uint32_t rx_threshold;
+    ubcore_jetty_state state;
 };
+```
 
-##### ubcore_jetty_attr_mask
+##### 3.4.4.2.2 ubcore_jetty_attr_mask
 
-enum ubcore_jetty_attr_mask {\
-UBCORE_JETTY_RX_THRESHOLD = 0x1,\
-UBCORE_JETTY_STATE = 0x1 \<\< 1\
+```c
+enum ubcore_jetty_attr_mask {
+    UBCORE_JETTY_RX_THRESHOLD = 0x1,
+    UBCORE_JETTY_STATE = 0x1 << 1
 };
+```
 
-#### ubcore_query_jetty
+#### 3.4.4.3 ubcore_query_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.4.4.1.1](#ubcore_jetty_cfg) [ubcore_jetty_cfg](#ubcore_jetty_cfg) \*cfg, [4.4.4.2.1](#ubcore_jetty_attr) [ubcore_jetty_attr](#ubcore_jetty_attr) \*attr);
+int ubcore_query_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.4.4.1.1](#34411-ubcore_jetty_cfg) [ubcore_jetty_cfg](#34411-ubcore_jetty_cfg) *cfg, [4.4.4.2.1](#34421-ubcore_jetty_attr) [ubcore_jetty_attr](#34421-ubcore_jetty_attr) *attr);
 
 3.  描述
 
@@ -10938,25 +10453,25 @@ int ubcore_query_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) 
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: specify jetty;
+@param[in] [Required] jetty: specify jetty;
 
-\@param\[out\] \[Required\] cfg: cfg to be query;
+@param[out] [Required] cfg: cfg to be query;
 
-\@param\[out\] \[Required\] attr: attributes to be query;
+@param[out] [Required] attr: attributes to be query;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_delete_jetty
+#### 3.4.4.4 ubcore_delete_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty);
+int ubcore_delete_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty);
 
 3.  描述
 
@@ -10964,25 +10479,25 @@ int ubcore_delete_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty)
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: the jetty created before;
+@param[in] [Required] jetty: the jetty created before;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 由调用者保证参数jetty来自ubcore_create_jetty接口返回，参数内部指针等合法性已由ubcore_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-#### ubcore_delete_jetty_batch
+#### 3.4.4.5 ubcore_delete_jetty_batch
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jetty_batch([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*\*jetty_arr, int jetty_num, int \*bad_jetty_index);
+int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **jetty_arr, int jetty_num, int *bad_jetty_index);
 
 3.  描述
 
@@ -10990,31 +10505,31 @@ int ubcore_delete_jetty_batch([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_
 
 4.  参数
 
-\@param\[in\] jetty_arr: the jetty array created before;
+@param[in] jetty_arr: the jetty array created before;
 
-\@param\[in\] jetty_num: jetty array length;
+@param[in] jetty_num: jetty array length;
 
-\@param\[out\] bad_jetty_index: when error, return error jetty index in the array;
+@param[out] bad_jetty_index: when error, return error jetty index in the array;
 
 5.  返回值
 
 0 on success, EINVAL on invalid parameter, other value on other batch delete errors.
 
-![](figures/urma-api-device-ctx-01.png)
+![](figures/urma_notice.png)
 
 1、由调用者保证参数jetty来自ubcore_create_jetty接口返回，参数内部指针等合法性已由ubcore_create_jetty接口保证，该接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 2、如果发生删除失败的情况（包括非法的参数），接口会在第一个删除失败的jetty返回，在这个jetty之前的jetty都会被正常删除。
 
-#### ubcore_flush_jetty
+#### 3.4.4.6 ubcore_flush_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_flush_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, int cr_cnt, [4.4.2.6.1](#ubcore_cr) [ubcore_cr](#ubcore_cr) \*cr);
+int ubcore_flush_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, int cr_cnt, [4.4.2.6.1](#34261-ubcore_cr) [ubcore_cr](#34261-ubcore_cr) *cr);
 
 3.  描述
 
@@ -11022,25 +10537,25 @@ udma驱动把jetty中未被硬件执行的wr，通过cr返回给应用。
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: the jetty created before;
+@param[in] [Required] jetty: the jetty created before;
 
-\@param\[in\] \[Required\] cr_cnt: the maximum number of CRs expected to be returned;
+@param[in] [Required] cr_cnt: the maximum number of CRs expected to be returned;
 
-\@param\[out\] \[Required\] cr: the addr of returned CRs
+@param[out] [Required] cr: the addr of returned CRs
 
 5.  返回值
 
 Return: the number of completion record returned, 0 means no completion record returned, -1 on error
 
-#### ubcore_import_jetty
+#### 3.4.4.7 ubcore_import_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*ubcore_import_jetty([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.4.1.1](#ubcore_jetty_cfg) [ubcore_jetty_cfg](#ubcore_jetty_cfg) \*cfg, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *ubcore_import_jetty([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.4.1.1](#34411-ubcore_jetty_cfg) [ubcore_jetty_cfg](#34411-ubcore_jetty_cfg) *cfg, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -11050,27 +10565,29 @@ Return: the number of completion record returned, 0 means no completion record r
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：the ubcore device handle;
+@param[in] [Required] dev：the ubcore device handle;
 
-\@param\[in\] \[Required\] cfg: remote jetty attributes and import configurations;
+@param[in] [Required] cfg: remote jetty attributes and import configurations;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: the address of target jetty, not NULL on success, NULL on error
 
-#### ubcore_import_jetty_ex
+#### 3.4.4.8 ubcore_import_jetty_ex
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-struct ubcore_tjetty \*ubcore_import_jetty_ex([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev,\
-[4.4.3.6.1](#ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#ubcore_tjetty_cfg) \*cfg, [4.4.3.7.1](#ubcore_active_tp_cfg) [ubcore_active_tp_cfg](#ubcore_active_tp_cfg) \*active_tp_cfg,\
-[4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+struct ubcore_tjetty *ubcore_import_jetty_ex(ubcore_device *dev,
+ubcore_tjetty_cfg *cfg, ubcore_active_tp_cfg *active_tp_cfg,
+ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -11080,27 +10597,27 @@ struct ubcore_tjetty \*ubcore_import_jetty_ex([4.2.1.1](#ubcore_device) [ubcore_
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device handle;
+@param[in] dev: the ubcore device handle;
 
-\@param\[in\] cfg: remote jetty attributes and import configurations
+@param[in] cfg: remote jetty attributes and import configurations
 
-\@param\[in\] active_tp_cfg: tp configuration to active
+@param[in] active_tp_cfg: tp configuration to active
 
-\@param\[in\] udata (optional): ucontext and user space driver data
+@param[in] udata (optional): ucontext and user space driver data
 
 5.  返回值
 
 target jetty pointer on success, NULL on error
 
-#### ubcore_unimport_jetty
+#### 3.4.4.9 ubcore_unimport_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unimport_jetty([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty);
+int ubcore_unimport_jetty([4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *tjetty);
 
 3.  描述
 
@@ -11110,21 +10627,21 @@ int ubcore_unimport_jetty([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tj
 
 4.  参数
 
-\@param\[in\] \[Required\] tjetty: the target jetty to unimport;
+@param[in] [Required] tjetty: the target jetty to unimport;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_bind_jetty
+#### 3.4.4.10 ubcore_bind_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_bind_jetty(struct [4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_bind_jetty(struct [4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *tjetty, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -11134,11 +10651,11 @@ bind可以一方单独完成，不依赖对端已经导入jetty，也不要求�
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to construct the transport channel;
+@param[in] [Required] jetty: local jetty to construct the transport channel;
 
-\@param\[in\] \[Required\] tjetty: target jetty imported before;
+@param[in] [Required] tjetty: target jetty imported before;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
@@ -11148,16 +10665,18 @@ Return: 0 on success, other value on error
 
 Note: A local jetty can be binded with only one remote jetty. Only supported by jetty under URMA_TM_RC.
 
-#### ubcore_bind_jetty_ex
+#### 3.4.4.11 ubcore_bind_jetty_ex
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_bind_jetty_ex([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty,\
-[4.4.3.7.1](#ubcore_active_tp_cfg) [ubcore_active_tp_cfg](#ubcore_active_tp_cfg) \*active_tp_cfg, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+int ubcore_bind_jetty_ex(ubcore_jetty *jetty, ubcore_tjetty *tjetty,
+ubcore_active_tp_cfg *active_tp_cfg, ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -11167,13 +10686,13 @@ bind可以一方单独完成，不依赖对端已经导入jetty，也不要求�
 
 4.  参数
 
-\@param\[in\] jetty: local jetty to bind;
+@param[in] jetty: local jetty to bind;
 
-\@param\[in\] tjetty: target jetty imported before;
+@param[in] tjetty: target jetty imported before;
 
-\@param\[in\] active_tp_cfg: tp configuration to active;
+@param[in] active_tp_cfg: tp configuration to active;
 
-\@param\[in\] udata (optional): ucontext and user space driver data
+@param[in] udata (optional): ucontext and user space driver data
 
 5.  返回值
 
@@ -11183,15 +10702,15 @@ bind可以一方单独完成，不依赖对端已经导入jetty，也不要求�
 
 Note: A local jetty can be binded with only one remote jetty. Only supported by jetty under URMA_TM_RC.
 
-#### ubcore_unbind_jetty
+#### 3.4.4.12 ubcore_unbind_jetty
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unbind_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty);
+int ubcore_unbind_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty);
 
 3.  描述
 
@@ -11199,21 +10718,21 @@ int ubcore_unbind_jetty([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty)
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to unbind;
+@param[in] [Required] jetty: local jetty to unbind;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_import_jetty_async
+#### 3.4.4.13 ubcore_import_jetty_async
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*ubcore_import_jetty_async([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.3.6.1](#ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#ubcore_tjetty_cfg) \*cfg, int timeout, [4.4.4.13.1](#ubcore_import_cb) [ubcore_import_cb](#ubcore_import_cb) \*cb,[4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *ubcore_import_jetty_async([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.3.6.1](#34361-ubcore_tjetty_cfg) [ubcore_tjetty_cfg](#34361-ubcore_tjetty_cfg) *cfg, int timeout, [4.4.4.13.1](#344131-ubcore_import_cb) [ubcore_import_cb](#344131-ubcore_import_cb) *cb,[4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -11225,37 +10744,39 @@ Return: 0 on success, other value on error
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：the ubcore device handle;
+@param[in] [Required] dev：the ubcore device handle;
 
-\@param\[in\] \[Required\] cfg: remote jetty attributes and import configurations;
+@param[in] [Required] cfg: remote jetty attributes and import configurations;
 
-\@param\[in\] \[Required\] timeout: max time to wait (milliseconds)
+@param[in] [Required] timeout: max time to wait (milliseconds)
 
-\@param\[in\] \[Required\] cb: callback function pointer with custom user argument
+@param[in] [Required] cb: callback function pointer with custom user argument
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
-\@return: target jetty pointer on success, NULL on error
+@return: target jetty pointer on success, NULL on error
 
-##### ubcore_import_cb
+##### 3.4.4.13.1 ubcore_import_cb
 
-struct ubcore_import_cb {\
-void \*user_arg; /\* uburma_tjetty \*/\
-void (\*callback)([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty, int status,\
-void \*user_arg);\
+```c
+struct ubcore_import_cb {
+    void *user_arg; /* uburma_tjetty */
+    void (*callback)(ubcore_tjetty *tjetty, int status,
+    void *user_arg);
 };
+```
 
-#### ubcore_unimport_jetty_async
+#### 3.4.4.14 ubcore_unimport_jetty_async
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unimport_jetty_async([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty, int timeout, [4.4.4.14.1](#ubcore_unimport_cb) [ubcore_unimport_cb](#ubcore_unimport_cb) \*cb);
+int ubcore_unimport_jetty_async([4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *tjetty, int timeout, [4.4.4.14.1](#344141-ubcore_unimport_cb) [ubcore_unimport_cb](#344141-ubcore_unimport_cb) *cb);
 
 3.  描述
 
@@ -11265,32 +10786,34 @@ int ubcore_unimport_jetty_async([4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubc
 
 4.  参数
 
-\@param\[in\] \[Required\] tjetty: the target jetty to unimport;
+@param[in] [Required] tjetty: the target jetty to unimport;
 
-\@param\[in\] \[Required\] timeout: max time to wait (milliseconds);
+@param[in] [Required] timeout: max time to wait (milliseconds);
 
-\@param\[in\] \[Required\] cb: callback function pointer with custom user argument;
+@param[in] [Required] cb: callback function pointer with custom user argument;
 
 5.  返回值
 
-\@return: 0 on success, other value on error
+@return: 0 on success, other value on error
 
-##### ubcore_unimport_cb
+##### 3.4.4.14.1 ubcore_unimport_cb
 
-struct ubcore_unimport_cb {\
-void \*user_arg;\
-void (\*callback)(int status, void \*user_arg);\
+```c
+struct ubcore_unimport_cb {
+    void *user_arg;
+    void (*callback)(int status, void *user_arg);
 };
+```
 
-#### ubcore_bind_jetty_async
+#### 3.4.4.15 ubcore_bind_jetty_async
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_bind_jetty_async([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty, int timeout, [4.4.4.15.1](#ubcore_bind_cb) [ubcore_bind_cb](#ubcore_bind_cb) \*cb, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+int ubcore_bind_jetty_async([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365-ubcore_tjetty) *tjetty, int timeout, [4.4.4.15.1](#344151-ubcore_bind_cb) [ubcore_bind_cb](#344151-ubcore_bind_cb) *cb, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -11300,15 +10823,15 @@ bind可以一方单独完成，不依赖对端已经导入jetty，也不要求�
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to construct the transport channel;
+@param[in] [Required] jetty: local jetty to construct the transport channel;
 
-\@param\[in\] \[Required\] tjetty: target jetty imported before;
+@param[in] [Required] tjetty: target jetty imported before;
 
-\@param\[in\] \[Required\] timeout: max time to wait (milliseconds);
+@param[in] [Required] timeout: max time to wait (milliseconds);
 
-\@param\[in\] \[Required\] cb: callback function pointer with custom user argument;
+@param[in] [Required] cb: callback function pointer with custom user argument;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
@@ -11318,24 +10841,26 @@ Return: 0 on success, other value on error
 
 Note: A local jetty can be binded with only one remote jetty. Only supported by jetty under URMA_TM_RC.
 
-##### ubcore_bind_cb
+##### 3.4.4.15.1 ubcore_bind_cb
 
-struct ubcore_bind_cb {\
-void \*user_arg; /\* uburma_tjetty \*/\
-void (\*callback)([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty,\
-[4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty, int status,\
-void \*user_arg);\
+```c
+struct ubcore_bind_cb {
+    void *user_arg; /* uburma_tjetty */
+    void (*callback)(ubcore_jetty *jetty,
+    ubcore_tjetty *tjetty, int status,
+    void *user_arg);
 };
+```
 
-#### ubcore_unbind_jetty_async
+#### 3.4.4.16 ubcore_unbind_jetty_async
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_unbind_jetty_async([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, int timeout, [4.4.4.16.1](#ubcore_unbind_cb) [ubcore_unbind_cb](#ubcore_unbind_cb) \*cb);
+int ubcore_unbind_jetty_async([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, int timeout, [4.4.4.16.1](#344161-ubcore_unbind_cb) [ubcore_unbind_cb](#344161-ubcore_unbind_cb) *cb);
 
 3.  描述
 
@@ -11343,36 +10868,38 @@ int ubcore_unbind_jetty_async([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty: local jetty to unbind;
+@param[in] [Required] jetty: local jetty to unbind;
 
-\@param\[in\] \[Required\] timeout: max time to wait (milliseconds);
+@param[in] [Required] timeout: max time to wait (milliseconds);
 
-\@param\[in\] \[Required\] cb: callback function pointer with custom user argument;
+@param[in] [Required] cb: callback function pointer with custom user argument;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-##### ubcore_unbind_cb
+##### 3.4.4.16.1 ubcore_unbind_cb
 
-struct ubcore_unbind_cb {\
-void \*user_arg;\
-void (\*callback)(int status, void \*user_arg);\
+```c
+struct ubcore_unbind_cb {
+    void *user_arg;
+    void (*callback)(int status, void *user_arg);
 };
+```
 
-### Jetty Group管理
+### 3.4.5 Jetty Group管理
 
-#### ubcore_create_jetty_grp
+#### 3.4.5.1 ubcore_create_jetty_grp
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-[4.4.5.1.3](#ubcore_jetty_group) [ubcore_jetty_group](#ubcore_jetty_group) \*ubcore_create_jetty_grp([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.4.5.1.2](#ubcore_jetty_grp_cfg) [ubcore_jetty_grp_cfg](#ubcore_jetty_grp_cfg) \*cfg,
+[4.4.5.1.3](#34513-ubcore_jetty_group) [ubcore_jetty_group](#34513-ubcore_jetty_group) *ubcore_create_jetty_grp([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.4.5.1.2](#34512-ubcore_jetty_grp_cfg) [ubcore_jetty_grp_cfg](#34512-ubcore_jetty_grp_cfg) *cfg,
 
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+[4.4.1.1.4](#34114-ubcore_event_callback_t) [ubcore_event_callback_t](#34114-ubcore_event_callback_t) jfae_handler, [4.3.1.2](#3312-ubcore_udata) [ubcore_udata](#3312-ubcore_udata) *udata);
 
 3.  描述
 
@@ -11384,63 +10911,69 @@ Jetty group收到消息，但jetty group没有有效的jetty时，将调用jfae_
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] cfg: jetty group配置信息;
+@param[in] [Required] cfg: jetty group配置信息;
 
-\@param\[in\] \[Required\] jfae_handler: 异步事件回调函数;
+@param[in] [Required] jfae_handler: 异步事件回调函数;
 
-\@param\[in\] \[Required\] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
+@param[in] [Required] udata: 用户态驱动自定义数据。内核态应用直接调用该接口时，填NULL;
 
 5.  返回值
 
 Return: etty group pointer on success, NULL on error
 
-##### ubcore_jetty_grp_flag
+##### 3.4.5.1.1 ubcore_jetty_grp_flag
 
-union ubcore_jetty_grp_flag {\
-struct {\
-uint32_t token_policy : 3;\
-uint32_t reserved : 29;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_jetty_grp_flag {
+    struct {
+        uint32_t token_policy : 3;
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_jetty_grp_cfg
+##### 3.4.5.1.2 ubcore_jetty_grp_cfg
 
-struct ubcore_jetty_grp_cfg {\
-char name\[UBCORE_JETTY_GRP_MAX_NAME\];\
-uint32_t eid_index;\
-[4.4.5.1.1](#ubcore_jetty_grp_flag) [ubcore_jetty_grp_flag](#ubcore_jetty_grp_flag) flag;\
-[4.3.3.2](#ubcore_token) [ubcore_token](#ubcore_token) token_value;\
-uint32_t id;\
-[4.4.3.6.4](#ubcore_jetty_grp_policy) [ubcore_jetty_grp_policy](#ubcore_jetty_grp_policy) policy;\
-uint64_t user_ctx;\
+```c
+struct ubcore_jetty_grp_cfg {
+    char name[UBCORE_JETTY_GRP_MAX_NAME];
+    uint32_t eid_index;
+    ubcore_jetty_grp_flag flag;
+    ubcore_token token_value;
+    uint32_t id;
+    ubcore_jetty_grp_policy policy;
+    uint64_t user_ctx;
 };
+```
 
-##### ubcore_jetty_group
+##### 3.4.5.1.3 ubcore_jetty_group
 
-struct ubcore_jetty_group {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.4.5.1.2](#ubcore_jetty_grp_cfg) [ubcore_jetty_grp_cfg](#ubcore_jetty_grp_cfg) jetty_grp_cfg;\
-[4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) jetty_grp_id; /\* driver fill jetty_grp_id-\>id \*/\
-uint32_t jetty_cnt; /\* current jetty cnt in the jetty group \*/\
-[4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*\*jetty;\
-[4.4.1.1.4](#ubcore_event_callback_t) [ubcore_event_callback_t](#ubcore_event_callback_t) jfae_handler;\
-uint64_t urma_jetty_grp; /\* user space jetty_grp pointer \*/\
-struct mutex lock; /\* Protect jetty array \*/\
+```c
+struct ubcore_jetty_group {
+    ubcore_device *ub_dev;
+    ubcore_ucontext *uctx;
+    ubcore_jetty_grp_cfg jetty_grp_cfg;
+    ubcore_jetty_id jetty_grp_id; /* driver fill jetty_grp_id-\>id */
+    uint32_t jetty_cnt; /* current jetty cnt in the jetty group */
+    ubcore_jetty **jetty;
+    ubcore_event_callback_t jfae_handler;
+    uint64_t urma_jetty_grp; /* user space jetty_grp pointer */
+    struct mutex lock; /* Protect jetty array */
 };
+```
 
-#### ubcore_delete_jetty_grp
+#### 3.4.5.2 ubcore_delete_jetty_grp
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_jetty_grp([4.4.5.1.3](#ubcore_jetty_group) [ubcore_jetty_group](#ubcore_jetty_group) \*jetty_grp);
+int ubcore_delete_jetty_grp([4.4.5.1.3](#34513-ubcore_jetty_group) [ubcore_jetty_group](#34513-ubcore_jetty_group) *jetty_grp);
 
 3.  描述
 
@@ -11448,23 +10981,23 @@ int ubcore_delete_jetty_grp([4.4.5.1.3](#ubcore_jetty_group) [ubcore_jetty_group
 
 4.  参数
 
-\@param\[in\] \[Required\] jetty_grp: 待删除的jetty group指针;
+@param[in] [Required] jetty_grp: 待删除的jetty group指针;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## 异步事件
+## 3.5 异步事件
 
-### ubcore_register_event_handler
+### 3.5.1 ubcore_register_event_handler
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_register_event_handler([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.5.1.1](#ubcore_event_handler) [ubcore_event_handler](#ubcore_event_handler) \*handler);
+void ubcore_register_event_handler([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.5.1.1](#3511-ubcore_event_handler) [ubcore_event_handler](#3511-ubcore_event_handler) *handler);
 
 3.  描述
 
@@ -11472,72 +11005,78 @@ void ubcore_register_event_handler([4.2.1.1](#ubcore_device) [ubcore_device](#ub
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：包含厂商自定义的设备私有数据;
+@param[in] [Required] dev：包含厂商自定义的设备私有数据;
 
-\@param\[out\] \[Required\] event: async_event handler to be unregistered
+@param[out] [Required] event: async_event handler to be unregistered
 
 5.  返回值
 
 Return: void
 
-#### ubcore_event_handler
+#### 3.5.1.1 ubcore_event_handler
 
-struct ubcore_event_handler {\
-void (\*event_callback)([4.5.1.2](#ubcore_event) [ubcore_event](#ubcore_event) \*event,\
-[4.5.1.1](#ubcore_event_handler) [ubcore_event_handler](#ubcore_event_handler) \*handler);\
-struct list_head node;\
+```c
+struct ubcore_event_handler {
+    void (*event_callback)(ubcore_event *event,
+    ubcore_event_handler *handler);
+    struct list_head node;
 };
+```
 
-#### ubcore_event
+#### 3.5.1.2 ubcore_event
 
-struct ubcore_event {\
-struct ubcore_device \*ub_dev;\
-union {\
-[4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc;\
-[4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs;\
-[4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr;\
-[4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty;\
-[4.4.5.1.3](#ubcore_jetty_group) [ubcore_jetty_group](#ubcore_jetty_group) \*jetty_grp;\
-[4.4.3.6.6](#ubcore_tp) [ubcore_tp](#ubcore_tp) \*tp;\
-[6.5.1.14.3](#ubcore_vtp) [ubcore_vtp](#ubcore_vtp) \*vtp;\
-uint32_t port_id;\
-uint32_t eid_idx;\
-} element;\
-[4.5.1.3](#ubcore_event_type) [ubcore_event_type](#ubcore_event_type) event_type;\
+```c
+struct ubcore_event {
+    struct ubcore_device *ub_dev;
+    union {
+        ubcore_jfc *jfc;
+        ubcore_jfs *jfs;
+        ubcore_jfr *jfr;
+        ubcore_jetty *jetty;
+        ubcore_jetty_group *jetty_grp;
+        ubcore_tp *tp;
+        ubcore_vtp *vtp;
+        uint32_t port_id;
+        uint32_t eid_idx;
+    } element;
+    ubcore_event_type event_type;
 };
+```
 
-#### ubcore_event_type
+#### 3.5.1.3 ubcore_event_type
 
-enum ubcore_event_type {\
-UBCORE_EVENT_JFC_ERR = 0,\
-UBCORE_EVENT_JFS_ERR,\
-UBCORE_EVENT_JFR_ERR,\
-UBCORE_EVENT_JFR_LIMIT_REACHED,\
-UBCORE_EVENT_JETTY_ERR,\
-UBCORE_EVENT_JETTY_LIMIT_REACHED,\
-UBCORE_EVENT_JETTY_GRP_ERR,\
-UBCORE_EVENT_PORT_ACTIVE,\
-UBCORE_EVENT_PORT_DOWN,\
-UBCORE_EVENT_DEV_FATAL,\
-UBCORE_EVENT_EID_CHANGE,\
-UBCORE_EVENT_TP_ERR,\
-UBCORE_EVENT_TP_SUSPEND,\
-UBCORE_EVENT_TP_FLUSH_DONE,\
-UBCORE_EVENT_ELR_ERR,\
-UBCORE_EVENT_ELR_DONE,\
-UBCORE_EVENT_MIGRATE_VTP_SWITCH,\
-UBCORE_EVENT_MIGRATE_VTP_ROLLBACK\
+```c
+enum ubcore_event_type {
+    UBCORE_EVENT_JFC_ERR = 0,
+    UBCORE_EVENT_JFS_ERR,
+    UBCORE_EVENT_JFR_ERR,
+    UBCORE_EVENT_JFR_LIMIT_REACHED,
+    UBCORE_EVENT_JETTY_ERR,
+    UBCORE_EVENT_JETTY_LIMIT_REACHED,
+    UBCORE_EVENT_JETTY_GRP_ERR,
+    UBCORE_EVENT_PORT_ACTIVE,
+    UBCORE_EVENT_PORT_DOWN,
+    UBCORE_EVENT_DEV_FATAL,
+    UBCORE_EVENT_EID_CHANGE,
+    UBCORE_EVENT_TP_ERR,
+    UBCORE_EVENT_TP_SUSPEND,
+    UBCORE_EVENT_TP_FLUSH_DONE,
+    UBCORE_EVENT_ELR_ERR,
+    UBCORE_EVENT_ELR_DONE,
+    UBCORE_EVENT_MIGRATE_VTP_SWITCH,
+    UBCORE_EVENT_MIGRATE_VTP_ROLLBACK
 };
+```
 
-### ubcore_unregister_event_handler
+### 3.5.2 ubcore_unregister_event_handler
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-void ubcore_unregister_event_handler([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.5.1.1](#ubcore_event_handler) [ubcore_event_handler](#ubcore_event_handler) \*handler);
+void ubcore_unregister_event_handler([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.5.1.1](#3511-ubcore_event_handler) [ubcore_event_handler](#3511-ubcore_event_handler) *handler);
 
 3.  描述
 
@@ -11545,25 +11084,25 @@ void ubcore_unregister_event_handler([4.2.1.1](#ubcore_device) [ubcore_device](#
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：包含厂商自定义的设备私有数据;
+@param[in] [Required] dev：包含厂商自定义的设备私有数据;
 
-\@param\[in\] \[Required\] handler: async_event handler to be unregistered
+@param[in] [Required] handler: async_event handler to be unregistered
 
 5.  返回值
 
 Return: void
 
-## Post WR操作
+## 3.6 Post WR操作
 
-### ubcore_post_jfs_wr
+### 3.6.1 ubcore_post_jfs_wr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_post_jfs_wr([4.4.2.1.4](#ubcore_jfs) [ubcore_jfs](#ubcore_jfs) \*jfs, [4.6.1.1](#ubcore_jfs_wr) [ubcore_jfs_wr](#ubcore_jfs_wr) \*wr, [4.6.1.1](#ubcore_jfs_wr) [ubcore_jfs_wr](#ubcore_jfs_wr) \*\*bad_wr);
+int ubcore_post_jfs_wr([4.4.2.1.4](#34214-ubcore_jfs) [ubcore_jfs](#34214-ubcore_jfs) *jfs, [4.6.1.1](#3611-ubcore_jfs_wr) [ubcore_jfs_wr](#3611-ubcore_jfs_wr) *wr, [4.6.1.1](#3611-ubcore_jfs_wr) [ubcore_jfs_wr](#3611-ubcore_jfs_wr) **bad_wr);
 
 3.  描述
 
@@ -11577,93 +11116,99 @@ JFS只能向相同传输（RM或UM）类型的远端JFR（已经导入为target 
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before, which is used to put command;
+@param[in] jfs: the jfs created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc;
+@param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc;
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_jfs_wr
+#### 3.6.1.1 ubcore_jfs_wr
 
-struct ubcore_jfs_wr {\
-[4.6.1.2](#ubcore_opcode) [ubcore_opcode](#ubcore_opcode) opcode;\
-[4.6.1.3](#ubcore_jfs_wr_flag) [ubcore_jfs_wr_flag](#ubcore_jfs_wr_flag) flag;\
-uint64_t user_ctx;\
-[4.4.3.6.5](#ubcore_tjetty) [ubcore_tjetty](#ubcore_tjetty) \*tjetty;\
-union {\
-[4.6.1.4](#ubcore_rw_wr) [ubcore_rw_wr](#ubcore_rw_wr) rw;\
-[4.6.1.7](#ubcore_send_wr) [ubcore_send_wr](#ubcore_send_wr) send;\
-[4.6.1.8](#ubcore_cas_wr) [ubcore_cas_wr](#ubcore_cas_wr) cas;\
-[4.6.1.9](#ubcore_faa_wr) [ubcore_faa_wr](#ubcore_faa_wr) faa;\
-};\
-struct ubcore_jfs_wr \*next;\
+```c
+struct ubcore_jfs_wr {
+    ubcore_opcode opcode;
+    ubcore_jfs_wr_flag flag;
+    uint64_t user_ctx;
+    ubcore_tjetty *tjetty;
+    union {
+        ubcore_rw_wr rw;
+        ubcore_send_wr send;
+        ubcore_cas_wr cas;
+        ubcore_faa_wr faa;
+    };
+    struct ubcore_jfs_wr *next;
 };
+```
 
-#### ubcore_opcode
+#### 3.6.1.2 ubcore_opcode
 
-enum ubcore_opcode {\
-UBCORE_OPC_WRITE = 0x00,\
-UBCORE_OPC_WRITE_IMM = 0x01,\
-UBCORE_OPC_WRITE_NOTIFY = 0x02,\
-UBCORE_OPC_READ = 0x10,\
-UBCORE_OPC_CAS = 0x20,\
-UBCORE_OPC_SWAP = 0x21,\
-UBCORE_OPC_FADD = 0x22,\
-UBCORE_OPC_FSUB = 0x23,\
-UBCORE_OPC_FAND = 0x24,\
-UBCORE_OPC_FOR = 0x25,\
-UBCORE_OPC_FXOR = 0x26,\
-UBCORE_OPC_SEND = 0x40, // remote JFR/jetty ID\
-UBCORE_OPC_SEND_IMM = 0x41, // remote JFR/jetty ID\
-UBCORE_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id\
-UBCORE_OPC_NOP = 0x51,\
-UBCORE_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE\
-UBCORE_OPC_LAST\
+```c
+enum ubcore_opcode {
+    UBCORE_OPC_WRITE = 0x00,
+    UBCORE_OPC_WRITE_IMM = 0x01,
+    UBCORE_OPC_WRITE_NOTIFY = 0x02,
+    UBCORE_OPC_READ = 0x10,
+    UBCORE_OPC_CAS = 0x20,
+    UBCORE_OPC_SWAP = 0x21,
+    UBCORE_OPC_FADD = 0x22,
+    UBCORE_OPC_FSUB = 0x23,
+    UBCORE_OPC_FAND = 0x24,
+    UBCORE_OPC_FOR = 0x25,
+    UBCORE_OPC_FXOR = 0x26,
+    UBCORE_OPC_SEND = 0x40, // remote JFR/jetty ID
+    UBCORE_OPC_SEND_IMM = 0x41, // remote JFR/jetty ID
+    UBCORE_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
+    UBCORE_OPC_NOP = 0x51,
+    UBCORE_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
+    UBCORE_OPC_LAST
 };
+```
 
-#### ubcore_jfs_wr_flag
+#### 3.6.1.3 ubcore_jfs_wr_flag
 
-union ubcore_jfs_wr_flag {\
-struct {\
-/\* 0: There is no order with other WR.\
-\* 1: relax order.\
-\* 2: strong order.\
-\* 3: reserve.\
-\*/\
-uint32_t place_order : 2;\
-/\* 0: There is no completion order with other WR\
-\* 1: Completion order with previous WR.\
-\*/\
-uint32_t comp_order : 1;\
-/\* 0: There is no fence.\
-\* 1: Fence with previous read and atomic WR\
-\*/\
-uint32_t fence : 1;\
-/\* 0: not solicited.\
-\* 1: solicited. It will trigger an event\
-\* on remote side\
-\*/\
-uint32_t solicited_enable : 1;\
-/\* 0: Do not notify local process\
-\* after the task is complete.\
-\* 1: Notify local process\
-\* after the task is completed.\
-\*/\
-uint32_t complete_enable : 1;\
-/\* 0: No inline.\
-\* 1: Inline data.\
-\*/\
-uint32_t inline_flag : 1;\
-uint32_t reserved : 25;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_jfs_wr_flag {
+    struct {
+        /* 0: There is no order with other WR.
+        * 1: relax order.
+        * 2: strong order.
+        * 3: reserve.
+        */
+        uint32_t place_order : 2;
+        /* 0: There is no completion order with other WR
+        * 1: Completion order with previous WR.
+        */
+        uint32_t comp_order : 1;
+        /* 0: There is no fence.
+        * 1: Fence with previous read and atomic WR
+        */
+        uint32_t fence : 1;
+        /* 0: not solicited.
+        * 1: solicited. It will trigger an event
+        * on remote side
+        */
+        uint32_t solicited_enable : 1;
+        /* 0: Do not notify local process
+        * after the task is complete.
+        * 1: Notify local process
+        * after the task is completed.
+        */
+        uint32_t complete_enable : 1;
+        /* 0: No inline.
+        * 1: Inline data.
+        */
+        uint32_t inline_flag : 1;
+        uint32_t reserved : 25;
+    } bs;
+    uint32_t value;
 };
+```
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
 - solicited_enable：表示希望对端接收到该请求时，产生完成记录的同时也产生完成事件。
 
@@ -11677,7 +11222,7 @@ uint32_t value;\
 
 - place_order: 事务序，控制是否按序执行请求，strong表示等待前面的标注relax和strong的WR完成后，才能执行改WR；relax请求之间没有序的保证；no order没有任何执行序的限制
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 - 如果jetty/jfs是UM模式，那么WR不支持fence, place_order和comp_order
 
@@ -11685,85 +11230,97 @@ uint32_t value;\
 
 - 当Jetty/JFS是RM或RC模式，并且配置成完成保序模式时，如果WR指定了comp_order，代表接收侧cqe上报是保序的，发送的报文会带comp_order标志。
 
-#### ubcore_rw_wr
+#### 3.6.1.4 ubcore_rw_wr
 
-struct ubcore_rw_wr {\
-[4.6.1.5](#ubcore_sg) [ubcore_sg](#ubcore_sg) src;\
-[4.6.1.5](#ubcore_sg) [ubcore_sg](#ubcore_sg) dst;\
-uint8_t target_hint; /\* hint of jetty in a target jetty group \*/\
-uint64_t notify_data; /\* notify data or immeditate data in host byte order \*/\
+```c
+struct ubcore_rw_wr {
+    ubcore_sg src;
+    ubcore_sg dst;
+    uint8_t target_hint; /* hint of jetty in a target jetty group */
+    uint64_t notify_data; /* notify data or immeditate data in host byte order */
 };
+```
 
-![](figures/urma-api-constraint-02.png)
+![](figures/urma_info.png)
 
-对于write和write_imm操作，src表示本地内存信息，dst\[0\]表示远端目的内存信息，dst.num_sge = 1，只能写入到连续远端地址；
+对于write和write_imm操作，src表示本地内存信息，dst[0]表示远端目的内存信息，dst.num_sge = 1，只能写入到连续远端地址；
 
 对于read操作，src表示远端源内存信息，src.num_sge = 1, 只能从连续远端地址读数据， dst表示本地目的内存信息；
 
-对于write notify操作，dst.num_sge = 2, notify data表示待写入到对端的notify数据，dst\[1\]表示notify地址和target segen； dst\[0\]含义与write一致，表示src sg待写入的远端内存信息。支持dst\[0\]和dst\[1\]源于不同的target segment。
+对于write notify操作，dst.num_sge = 2, notify data表示待写入到对端的notify数据，dst[1]表示notify地址和target segen； dst[0]含义与write一致，表示src sg待写入的远端内存信息。支持dst[0]和dst[1]源于不同的target segment。
 
-#### ubcore_sg
+#### 3.6.1.5 ubcore_sg
 
-struct ubcore_sg {\
-[4.6.1.6](#ubcore_sge) [ubcore_sge](#ubcore_sge) \*sge;\
-uint32_t num_sge;\
+```c
+struct ubcore_sg {
+    ubcore_sge *sge;
+    uint32_t num_sge;
 };
+```
 
-#### ubcore_sge
+#### 3.6.1.6 ubcore_sge
 
-struct ubcore_sge {\
-uint64_t addr;\
-uint32_t len;\
-[4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*tseg;\
+```c
+struct ubcore_sge {
+    uint64_t addr;
+    uint32_t len;
+    ubcore_target_seg *tseg;
 };
+```
 
-#### ubcore_send_wr
+#### 3.6.1.7 ubcore_send_wr
 
-struct ubcore_send_wr {\
-[4.6.1.5](#ubcore_sg) [ubcore_sg](#ubcore_sg) src;\
-uint8_t target_hint; /\* hint of jetty in a target jetty group \*/\
-uint64_t imm_data; /\* immeditate data in host byte order \*/\
-[4.3.3.4](#ubcore_target_seg) [ubcore_target_seg](#ubcore_target_seg) \*tseg; /\* Used only when send with invalidate \*/\
+```c
+struct ubcore_send_wr {
+    ubcore_sg src;
+    uint8_t target_hint; /* hint of jetty in a target jetty group */
+    uint64_t imm_data; /* immeditate data in host byte order */
+    ubcore_target_seg *tseg; /* Used only when send with invalidate */
 };
+```
 
-#### ubcore_cas_wr
+#### 3.6.1.8 ubcore_cas_wr
 
-struct ubcore_cas_wr {\
-[4.6.1.6](#ubcore_sge) [ubcore_sge](#ubcore_sge) \*dst; /\* len is the data length of CAS operation \*/\
-[4.6.1.6](#ubcore_sge) [ubcore_sge](#ubcore_sge) \*src; /\* Local address for destination original value written back \*/\
-union {\
-uint64_t cmp_data; /\* When the len \<= 8B, it indicates the CMP value. \*/\
-uint64_t cmp_addr; /\* When the len \> 8B, it indicates the data address. \*/\
-};\
-union {\
-/\* If destination value is the same as cmp_data,\
-\* destination value will be change to swap_data.\
-\*/\
-uint64_t swap_data;\
-uint64_t swap_addr;\
-};\
+```c
+struct ubcore_cas_wr {
+    ubcore_sge *dst; /* len is the data length of CAS operation */
+    ubcore_sge *src; /* Local address for destination original value written back */
+    union {
+        uint64_t cmp_data; /* When the len <= 8B, it indicates the CMP value. */
+        uint64_t cmp_addr; /* When the len \> 8B, it indicates the data address. */
+    };
+    union {
+        /* If destination value is the same as cmp_data,
+        * destination value will be change to swap_data.
+        */
+        uint64_t swap_data;
+        uint64_t swap_addr;
+    };
 };
+```
 
-#### ubcore_faa_wr
+#### 3.6.1.9 ubcore_faa_wr
 
-struct ubcore_faa_wr {\
-[4.6.1.6](#ubcore_sge) [ubcore_sge](#ubcore_sge) \*dst; /\* len in the sge is the length of faa at remote side \*/\
-[4.6.1.6](#ubcore_sge) [ubcore_sge](#ubcore_sge) \*src; /\* Local address for destination original value written back \*/\
-union {\
-uint64_t operand; /\* Addend \*/\
-uint64_t operand_addr;\
-};\
+```c
+struct ubcore_faa_wr {
+    ubcore_sge *dst; /* len in the sge is the length of faa at remote side */
+    ubcore_sge *src; /* Local address for destination original value written back */
+    union {
+        uint64_t operand; /* Addend */
+        uint64_t operand_addr;
+    };
 };
+```
 
-### ubcore_post_jfr_wr
+### 3.6.2 ubcore_post_jfr_wr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_post_jfr_wr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr, [4.6.2.1](#ubcore_jfr_wr) [ubcore_jfr_wr](#ubcore_jfr_wr) \*wr, [4.6.2.1](#ubcore_jfr_wr) [ubcore_jfr_wr](#ubcore_jfr_wr) \*\*bad_wr);
+int ubcore_post_jfr_wr([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-ubcore_jfr) *jfr, [4.6.2.1](#3621-ubcore_jfr_wr) [ubcore_jfr_wr](#3621-ubcore_jfr_wr) *wr, [4.6.2.1](#3621-ubcore_jfr_wr) [ubcore_jfr_wr](#3621-ubcore_jfr_wr) **bad_wr);
 
 3.  描述
 
@@ -11771,33 +11328,35 @@ int ubcore_post_jfr_wr([4.4.3.1.3](#ubcore_jfr) [ubcore_jfr](#ubcore_jfr) \*jfr,
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before, which is used to put command;
+@param[in] jfr: the jfr created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including sge, flag;
+@param[in] wr: the posting request all information, including sge, flag;
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 成功返回零，失败返回非零
 
-#### ubcore_jfr_wr
+#### 3.6.2.1 ubcore_jfr_wr
 
-struct ubcore_jfr_wr {\
-[4.6.1.5](#ubcore_sg) [ubcore_sg](#ubcore_sg) src;\
-uint64_t user_ctx;\
-struct ubcore_jfr_wr \*next;\
+```c
+struct ubcore_jfr_wr {
+    ubcore_sg src;
+    uint64_t user_ctx;
+    struct ubcore_jfr_wr *next;
 };
+```
 
-### ubcore_post_jetty_send_wr
+### 3.6.3 ubcore_post_jetty_send_wr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_post_jetty_send_wr([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.6.1.1](#ubcore_jfs_wr) [ubcore_jfs_wr](#ubcore_jfs_wr) \*wr, [4.6.1.1](#ubcore_jfs_wr) [ubcore_jfs_wr](#ubcore_jfs_wr) \*\*bad_wr);
+int ubcore_post_jetty_send_wr([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.6.1.1](#3611-ubcore_jfs_wr) [ubcore_jfs_wr](#3611-ubcore_jfs_wr) *wr, [4.6.1.1](#3611-ubcore_jfs_wr) [ubcore_jfs_wr](#3611-ubcore_jfs_wr) **bad_wr);
 
 3.  描述
 
@@ -11805,25 +11364,25 @@ int ubcore_post_jetty_send_wr([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before, which is used to put command;
+@param[in] jetty: the jetty created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc;
+@param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc;
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### ubcore_post_jetty_recv_wr
+### 3.6.4 ubcore_post_jetty_recv_wr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_post_jetty_recv_wr([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_jetty) \*jetty, [4.6.2.1](#ubcore_jfr_wr) [ubcore_jfr_wr](#ubcore_jfr_wr) \*wr, [4.6.2.1](#ubcore_jfr_wr) [ubcore_jfr_wr](#ubcore_jfr_wr) \*\*bad_wr);
+int ubcore_post_jetty_recv_wr([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) *jetty, [4.6.2.1](#3621-ubcore_jfr_wr) [ubcore_jfr_wr](#3621-ubcore_jfr_wr) *wr, [4.6.2.1](#3621-ubcore_jfr_wr) [ubcore_jfr_wr](#3621-ubcore_jfr_wr) **bad_wr);
 
 3.  描述
 
@@ -11831,27 +11390,27 @@ int ubcore_post_jetty_recv_wr([4.4.4.1.3](#ubcore_jetty) [ubcore_jetty](#ubcore_
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before, which is used to put command;
+@param[in] jetty: the jetty created before, which is used to put command;
 
-\@param\[in\] wr: the posting request all information, including sge, flag;
+@param[in] wr: the posting request all information, including sge, flag;
 
-\@param\[out\] bad_wr: the first of failure request.
+@param[out] bad_wr: the first of failure request.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## 完成记录
+## 3.7 完成记录
 
-### ubcore_poll_jfc
+### 3.7.1 ubcore_poll_jfc
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_poll_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc, int cr_cnt, [4.4.2.6.1](#ubcore_cr) [ubcore_cr](#ubcore_cr) \*cr);
+int ubcore_poll_jfc([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *jfc, int cr_cnt, [4.4.2.6.1](#34261-ubcore_cr) [ubcore_cr](#34261-ubcore_cr) *cr);
 
 3.  描述
 
@@ -11859,11 +11418,11 @@ int ubcore_poll_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc, in
 
 4.  参数
 
-\@param\[in\] jfc: jetty completion queue to poll;
+@param[in] jfc: jetty completion queue to poll;
 
-\@param\[in\] cr_cnt: the maximum number of CRs expected to be polled;
+@param[in] cr_cnt: the maximum number of CRs expected to be polled;
 
-\@param\[out\] cr: the completion record array to fill at least cr_cnt completion records.
+@param[out] cr: the completion record array to fill at least cr_cnt completion records.
 
 5.  返回值
 
@@ -11873,15 +11432,15 @@ Return: the number of completion record returned, 0 means no completion record r
 
 Note that: at most 16 completion records can be polled for RDMA device
 
-### ubcore_rearm_jfc
+### 3.7.2 ubcore_rearm_jfc
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_rearm_jfc([4.4.1.1.5](#ubcore_jfc) [ubcore_jfc](#ubcore_jfc) \*jfc, bool solicited_only);
+int ubcore_rearm_jfc([4.4.1.1.5](#34115-ubcore_jfc) [ubcore_jfc](#34115-ubcore_jfc) *jfc, bool solicited_only);
 
 3.  描述
 
@@ -11891,25 +11450,25 @@ solicited_only置位后，接收到"发送端设置了solicited的WR，包括Sen
 
 4.  参数
 
-\@param\[in\] jfc: jetty completion queue to arm to interrupt mode;
+@param[in] jfc: jetty completion queue to arm to interrupt mode;
 
-\@param\[in\] solicited_only: indicate it will trigger event only for packets with solicited flag.
+@param[in] solicited_only: indicate it will trigger event only for packets with solicited flag.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## ubcore面向UVS接口
+## 3.8 ubcore面向UVS接口
 
-### ubcore_set_port_netdev
+### 3.8.1 ubcore_set_port_netdev
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_set_port_netdev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, struct net_device \*ndev, unsigned int port_id);
+int ubcore_set_port_netdev([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, struct net_device *ndev, unsigned int port_id);
 
 3.  描述
 
@@ -11917,25 +11476,25 @@ Invoke ndev bind port_id, called only by driver
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] ndev: The netdev corresponding to the initial port;
+@param[in] ndev: The netdev corresponding to the initial port;
 
-\@param\[in\] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
+@param[in] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### ubcore_unset_port_netdev
+### 3.8.2 ubcore_unset_port_netdev
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_unset_port_netdev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, struct net_device \*ndev, unsigned int port_id);
+int ubcore_unset_port_netdev([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, struct net_device *ndev, unsigned int port_id);
 
 3.  描述
 
@@ -11943,25 +11502,25 @@ Invoke ndev unbind port_id, called only by driver
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] ndev: The netdev corresponding to the initial port;
+@param[in] ndev: The netdev corresponding to the initial port;
 
-\@param\[in\] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
+@param[in] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### ubcore_put_port_netdev
+### 3.8.3 ubcore_put_port_netdev
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_put_port_netdev([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev);
+void ubcore_put_port_netdev([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev);
 
 3.  描述
 
@@ -11969,21 +11528,21 @@ Invoke ndev unbind port_id, called only by driver
 
 4.  参数
 
-\@param\[in\] dev：ubcore_device指针.
+@param[in] dev：ubcore_device指针.
 
 5.  返回值
 
 Return: void
 
-### ubcore_add_ueid
+### 3.8.4 ubcore_add_ueid
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_add_ueid([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, uint16_t ue_idx, [4.8.4.1](#ubcore_ueid_cfg) [ubcore_ueid_cfg](#ubcore_ueid_cfg) \*cfg);
+int ubcore_add_ueid([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, uint16_t ue_idx, [4.8.4.1](#3841-ubcore_ueid_cfg) [ubcore_ueid_cfg](#3841-ubcore_ueid_cfg) *cfg);
 
 3.  描述
 
@@ -11991,34 +11550,36 @@ int ubcore_add_ueid([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*
 
 4.  参数
 
-\@param\[in\] dev：ubcore_device指针;
+@param[in] dev：ubcore_device指针;
 
-\@param\[in\] ue_idx：ue_eid;
+@param[in] ue_idx：ue_eid;
 
-\@param\[in\] cfg：待添加的UEID信息，包含EID、UPI值和EID index.
+@param[in] cfg：待添加的UEID信息，包含EID、UPI值和EID index.
 
 5.  返回值
 
 Return: the index of eid/upi, less than 0 indicating error
 
-#### ubcore_ueid_cfg
+#### 3.8.4.1 ubcore_ueid_cfg
 
-struct ubcore_ueid_cfg {\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t upi;\
-uint32_t eid_index;\
-guid_t guid;\
+```c
+struct ubcore_ueid_cfg {
+    ubcore_eid eid;
+    uint32_t upi;
+    uint32_t eid_index;
+    guid_t guid;
 };
+```
 
-### ubcore_delete_ueid
+### 3.8.5 ubcore_delete_ueid
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_delete_ueid([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, uint16_t ue_idx, [4.8.4.1](#ubcore_ueid_cfg) [ubcore_ueid_cfg](#ubcore_ueid_cfg) \*cfg);
+int ubcore_delete_ueid([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, uint16_t ue_idx, [4.8.4.1](#3841-ubcore_ueid_cfg) [ubcore_ueid_cfg](#3841-ubcore_ueid_cfg) *cfg);
 
 3.  描述
 
@@ -12026,25 +11587,25 @@ int ubcore_delete_ueid([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device)
 
 4.  参数
 
-\@param\[in\] dev：ubcore_device指针;
+@param[in] dev：ubcore_device指针;
 
-\@param\[in\] ue_idx：ue_idx;
+@param[in] ue_idx：ue_idx;
 
-\@param\[in\] cfg：待删除的UEID信息，包含EID、UPI值和EID index.
+@param[in] cfg：待删除的UEID信息，包含EID、UPI值和EID index.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### ubcore_config_device
+### 3.8.6 ubcore_config_device
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_config_device([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.2.1.3](#ubcore_device_cfg) [ubcore_device_cfg](#ubcore_device_cfg) \*cfg);
+int ubcore_config_device([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.2.1.3](#3213-ubcore_device_cfg) [ubcore_device_cfg](#3213-ubcore_device_cfg) *cfg);
 
 3.  描述
 
@@ -12052,23 +11613,23 @@ uvs配置function属性
 
 4.  参数
 
-\@param\[in\] dev：ubcore_device指针;
+@param[in] dev：ubcore_device指针;
 
-\@param\[in\] cfg：设备配置信息.
+@param[in] cfg：设备配置信息.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-### ubcore_add_sip
+### 3.8.7 ubcore_add_sip
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_add_sip([4.8.7.1](#ubcore_sip_info) [ubcore_sip_info](#ubcore_sip_info) \*sip, uint32_t \*sip_idx);
+int ubcore_add_sip([4.8.7.1](#3871-ubcore_sip_info) [ubcore_sip_info](#3871-ubcore_sip_info) *sip, uint32_t *sip_idx);
 
 3.  描述
 
@@ -12076,68 +11637,76 @@ int ubcore_add_sip([4.8.7.1](#ubcore_sip_info) [ubcore_sip_info](#ubcore_sip_inf
 
 4.  参数
 
-\@param\[in\] sip：Specify the sip information used to establish the link, including device name, Specify the sip information used to establish the link, including device name;
+@param[in] sip：Specify the sip information used to establish the link, including device name, Specify the sip information used to establish the link, including device name;
 
-\@param\[in\] sip_idx: sip_idx.
+@param[in] sip_idx: sip_idx.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_sip_info
+#### 3.8.7.1 ubcore_sip_info
 
-struct ubcore_sip_info {\
-char dev_name\[UBCORE_MAX_DEV_NAME\];\
-[4.8.7.2](#ubcore_net_addr) [ubcore_net_addr](#ubcore_net_addr) addr;\
-uint32_t prefix_len;\
-uint8_t port_cnt;\
-uint8_t port_id\[UBCORE_MAX_PORT_CNT\];\
-uint32_t mtu;\
-char netdev_name\[UBCORE_MAX_DEV_NAME\]; /\* for change mtu \*/\
-bool is_active;\
+```c
+struct ubcore_sip_info {
+    char dev_name[UBCORE_MAX_DEV_NAME];
+    ubcore_net_addr addr;
+    uint32_t prefix_len;
+    uint8_t port_cnt;
+    uint8_t port_id[UBCORE_MAX_PORT_CNT];
+    uint32_t mtu;
+    char netdev_name[UBCORE_MAX_DEV_NAME]; /* for change mtu */
+    bool is_active;
 };
+```
 
-#### ubcore_net_addr
+#### 3.8.7.2 ubcore_net_addr
 
-struct ubcore_net_addr {\
-[4.8.7.3](#ubcore_net_addr_type) [ubcore_net_addr_type](#ubcore_net_addr_type) type;\
-[4.8.7.4](#ubcore_net_addr_union) [ubcore_net_addr_union](#ubcore_net_addr_union) net_addr;\
-uint64_t vlan; /\* available for UBOE \*/\
-uint8_t mac\[UBCORE_MAC_BYTES\]; /\* available for UBOE \*/\
-uint32_t prefix_len;\
+```c
+struct ubcore_net_addr {
+    ubcore_net_addr_type type;
+    ubcore_net_addr_union net_addr;
+    uint64_t vlan; /* available for UBOE */
+    uint8_t mac[UBCORE_MAC_BYTES]; /* available for UBOE */
+    uint32_t prefix_len;
 };
+```
 
-#### ubcore_net_addr_type
+#### 3.8.7.3 ubcore_net_addr_type
 
-enum ubcore_net_addr_type {\
-UBCORE_NET_ADDR_TYPE_IPV4 = 0,\
-UBCORE_NET_ADDR_TYPE_IPV6\
+```c
+enum ubcore_net_addr_type {
+    UBCORE_NET_ADDR_TYPE_IPV4 = 0,
+    UBCORE_NET_ADDR_TYPE_IPV6
 };
+```
 
-#### ubcore_net_addr_union
+#### 3.8.7.4 ubcore_net_addr_union
 
-union ubcore_net_addr_union {\
-uint8_t raw\[UBCORE_NET_ADDR_BYTES\];\
-struct {\
-uint64_t reserved1;\
-uint32_t reserved2;\
-uint32_t addr;\
-} in4;\
-struct {\
-uint64_t subnet_prefix;\
-uint64_t interface_id;\
-} in6;\
+```c
+union ubcore_net_addr_union {
+    uint8_t raw[UBCORE_NET_ADDR_BYTES];
+    struct {
+        uint64_t reserved1;
+        uint32_t reserved2;
+        uint32_t addr;
+    } in4;
+    struct {
+        uint64_t subnet_prefix;
+        uint64_t interface_id;
+    } in6;
 };
+```
 
-### ubcore_delete_sip
+### 3.8.8 ubcore_delete_sip
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_delete_sip([4.8.7.1](#ubcore_sip_info) [ubcore_sip_info](#ubcore_sip_info) \*sip);
+int ubcore_delete_sip([4.8.7.1](#3871-ubcore_sip_info) [ubcore_sip_info](#3871-ubcore_sip_info) *sip);
 
 3.  描述
 
@@ -12145,25 +11714,25 @@ int ubcore_delete_sip([4.8.7.1](#ubcore_sip_info) [ubcore_sip_info](#ubcore_sip_
 
 4.  参数
 
-\@param\[in\] sip：Specify the sip information used to establish the link, including device name, sip, mac, vlan, physical port list.
+@param[in] sip：Specify the sip information used to establish the link, including device name, sip, mac, vlan, physical port list.
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-## DFX接口
+## 3.9 DFX接口
 
 本节只定义DFX函数，DFX接口中的数据结构定义见《UMDK URMA驱动编程接口说明书》
 
-### ubcore_query_stats
+### 3.9.1 ubcore_query_stats
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_stats([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.9.1.1](#ubcore_stats_key) [ubcore_stats_key](#ubcore_stats_key) \*key, [4.9.1.2](#ubcore_stats_val) [ubcore_stats_val](#ubcore_stats_val) \*val);
+int ubcore_query_stats([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.9.1.1](#3911-ubcore_stats_key) [ubcore_stats_key](#3911-ubcore_stats_key) *key, [4.9.1.2](#3912-ubcore_stats_val) [ubcore_stats_val](#3912-ubcore_stats_val) *val);
 
 3.  描述
 
@@ -12171,46 +11740,50 @@ int ubcore_query_stats([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device)
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] key：指定待查询信息的类型和key值;
+@param[in] [Required] key：指定待查询信息的类型和key值;
 
-\@param\[in/out\] \[Required\] val：返回查询结果的存放地址和实际数据的长度.
+@param[in/out] [Required] val：返回查询结果的存放地址和实际数据的长度.
 
 5.  返回值
 
 0表示查询成功，非0表示查询失败。Val中指定的buffer足够时，查询操作成功，返回实际填写的数据长度；Buffer不足时，返回失败，驱动填期望的buffer长度。
 
-#### ubcore_stats_key
+#### 3.9.1.1 ubcore_stats_key
 
-struct ubcore_stats_key {\
-uint8_t type; /\* stats type, refer to enum ubcore_stats_key_type \*/\
-uint32_t key; /\* key can be tpn/tpgn/jetty_id/token_id/ctx_id/etc \*/\
+```c
+struct ubcore_stats_key {
+    uint8_t type; /* stats type, refer to enum ubcore_stats_key_type */
+    uint32_t key; /* key can be tpn/tpgn/jetty_id/token_id/ctx_id/etc */
 };
+```
 
-#### ubcore_stats_val
+#### 3.9.1.2 ubcore_stats_val
 
-struct ubcore_stats_val {\
-/\* this addr is alloc and free by ubcore,\
-\* refer to struct ubcore_stats_com_val\
-\*/\
-uint64_t addr;\
-/\* \[in/out\] real length filled when success\
-\* to query and buffer length enough;\
-\* expected length filled and return failure when buffer length not enough\
-\*/\
-uint32_t len;\
+```c
+struct ubcore_stats_val {
+    /* this addr is alloc and free by ubcore,
+    * refer to struct ubcore_stats_com_val
+    */
+    uint64_t addr;
+    /* [in/out] real length filled when success
+    * to query and buffer length enough;
+    * expected length filled and return failure when buffer length not enough
+    */
+    uint32_t len;
 };
+```
 
-### ubcore_query_resource
+### 3.9.2 ubcore_query_resource
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_query_resource([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.9.2.1](#ubcore_res_key) [ubcore_res_key](#ubcore_res_key) \*key, [4.9.2.2](#ubcore_res_val) [ubcore_res_val](#ubcore_res_val) \*val);
+int ubcore_query_resource([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.9.2.1](#3921-ubcore_res_key) [ubcore_res_key](#3921-ubcore_res_key) *key, [4.9.2.2](#3922-ubcore_res_val) [ubcore_res_val](#3922-ubcore_res_val) *val);
 
 3.  描述
 
@@ -12218,49 +11791,53 @@ query_res为一个函数指针，是ubcore_ops_t结构体成员，在ubcore_regi
 
 4.  参数
 
-\@param\[in\] \[Required\] dev：ubcore_device指针;
+@param[in] [Required] dev：ubcore_device指针;
 
-\@param\[in\] \[Required\] key：指定待查询信息的类型和key值;
+@param[in] [Required] key：指定待查询信息的类型和key值;
 
-\@param\[in/out\] \[Required\] val：返回查询结果的存放地址和实际数据的长度.
+@param[in/out] [Required] val：返回查询结果的存放地址和实际数据的长度.
 
 5.  返回值
 
 0表示查询成功，非0表示查询失败。Val中指定的buffer足够时，查询操作成功，返回实际填写的数据长度；Buffer不足时，返回失败，驱动填期望的buffer长度。
 
-#### ubcore_res_key
+#### 3.9.2.1 ubcore_res_key
 
-struct ubcore_res_key {\
-uint8_t type; /\* refer to ubcore_res_key_type_t \*/\
-uint32_t key; /\* as UPI, key is ue_idx \*/\
-uint32_t key_ext; /\* only for vtp \*/\
-uint32_t key_cnt; /\* only for rc \*/\
+```c
+struct ubcore_res_key {
+    uint8_t type; /* refer to ubcore_res_key_type_t */
+    uint32_t key; /* as UPI, key is ue_idx */
+    uint32_t key_ext; /* only for vtp */
+    uint32_t key_cnt; /* only for rc */
 };
+```
 
-#### ubcore_res_val
+#### 3.9.2.2 ubcore_res_val
 
-struct ubcore_res_val {\
-uint64_t addr; /\* allocated and free by ubcore \*/\
-/\* in&out. As a input parameter,\
-\* it indicates the length allocated by the ubcore\
-\* As a output parameter, it indicates the actual data length.\
-\*/\
-uint32_t len;\
+```c
+struct ubcore_res_val {
+    uint64_t addr; /* allocated and free by ubcore */
+    /* in&out. As a input parameter,
+    * it indicates the length allocated by the ubcore
+    * As a output parameter, it indicates the actual data length.
+    */
+    uint32_t len;
 };
+```
 
-## 驱动自定义接口
+## 3.10 驱动自定义接口
 
 本节只定义DFX函数，DFX接口中的数据结构定义见《UMDK URMA驱动编程接口说明书》
 
-### ubcore_user_control
+### 3.10.1 ubcore_user_control
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_user_control([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.10.1.1](#ubcore_user_ctl) [ubcore_user_ctl](#ubcore_user_ctl) \*k_user_ctl);
+int ubcore_user_control([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, [4.10.1.1](#31011-ubcore_user_ctl) [ubcore_user_ctl](#31011-ubcore_user_ctl) *k_user_ctl);
 
 3.  描述
 
@@ -12268,50 +11845,56 @@ int ubcore_user_control([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device handle;
+@param[in] dev: the ubcore device handle;
 
-\@param\[in\] k_user_ctl: async_event handler to be registered. Note: the handler will be called when driver reports an async_event with ubcore_dispatch_async_event.
+@param[in] k_user_ctl: async_event handler to be registered. Note: the handler will be called when driver reports an async_event with ubcore_dispatch_async_event.
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_user_ctl
+#### 3.10.1.1 ubcore_user_ctl
 
-struct ubcore_user_ctl {\
-[4.2.4.1](#ubcore_ucontext) [ubcore_ucontext](#ubcore_ucontext) \*uctx;\
-[4.10.1.2](#ubcore_user_ctl_in) [ubcore_user_ctl_in](#ubcore_user_ctl_in) in;\
-[4.10.1.3](#ubcore_user_ctl_out) [ubcore_user_ctl_out](#ubcore_user_ctl_out) out;\
-[4.2.4.2](#ubcore_udrv_priv) [ubcore_udrv_priv](#ubcore_udrv_priv) udrv_data;\
+```c
+struct ubcore_user_ctl {
+    ubcore_ucontext *uctx;
+    ubcore_user_ctl_in in;
+    ubcore_user_ctl_out out;
+    ubcore_udrv_priv udrv_data;
 };
+```
 
-#### ubcore_user_ctl_in
+#### 3.10.1.2 ubcore_user_ctl_in
 
-struct ubcore_user_ctl_in {\
-uint64_t addr;\
-uint32_t len;\
-uint32_t opcode;\
+```c
+struct ubcore_user_ctl_in {
+    uint64_t addr;
+    uint32_t len;
+    uint32_t opcode;
 };
+```
 
-#### ubcore_user_ctl_out
+#### 3.10.1.3 ubcore_user_ctl_out
 
-struct ubcore_user_ctl_out {\
-uint64_t addr;\
-uint32_t len;\
-uint32_t reserved;\
+```c
+struct ubcore_user_ctl_out {
+    uint64_t addr;
+    uint32_t len;
+    uint32_t reserved;
 };
+```
 
-## 异步事件分发接口
+## 3.11 异步事件分发接口
 
-### ubcore_dispatch_async_event
+### 3.11.1 ubcore_dispatch_async_event
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_dispatch_async_event([4.5.1.2](#ubcore_event) [ubcore_event](#ubcore_event) \*event);
+void ubcore_dispatch_async_event([4.5.1.2](#3512-ubcore_event) [ubcore_event](#3512-ubcore_event) *event);
 
 3.  描述
 
@@ -12321,25 +11904,25 @@ void ubcore_dispatch_async_event([4.5.1.2](#ubcore_event) [ubcore_event](#ubcore
 
 4.  参数
 
-\@param\[in\] event: asynchronous event.
+@param[in] event: asynchronous event.
 
 5.  返回值
 
 void
 
-## 内存映射接口
+## 3.12 内存映射接口
 
-### ubcore_umem_get
+### 3.12.1 ubcore_umem_get
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-[4.12.1.1](#ubcore_umem) [ubcore_umem](#ubcore_umem) \*ubcore_umem_get([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, uint64_t va,
+[4.12.1.1](#31211-ubcore_umem) [ubcore_umem](#31211-ubcore_umem) *ubcore_umem_get([4.2.1.1](#3211-ubcore_device) [ubcore_device](#3211-ubcore_device) *dev, uint64_t va,
 
-uint64_t len, [4.12.1.2](#ubcore_umem_flag) [ubcore_umem_flag](#ubcore_umem_flag) flag)
+uint64_t len, [4.12.1.2](#31212-ubcore_umem_flag) [ubcore_umem_flag](#31212-ubcore_umem_flag) flag)
 
 3.  描述
 
@@ -12347,50 +11930,54 @@ UDMA驱动需要分配Jetty队列和非sva情况下segment的物理内存并进�
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] va: the VA address to be mapped;
+@param[in] va: the VA address to be mapped;
 
-\@param\[in\] len: Length of the address space to be allocated and mapped by DMA;
+@param[in] len: Length of the address space to be allocated and mapped by DMA;
 
-\@param\[in\] flag: Attribute flags.
+@param[in] flag: Attribute flags.
 
 5.  返回值
 
 umem ptr on success, ERR_PTR on error
 
-#### ubcore_umem
+#### 3.12.1.1 ubcore_umem
 
-struct ubcore_umem {\
-struct ubcore_device \*ub_dev;\
-struct mm_struct \*owning_mm;\
-uint64_t length;\
-uint64_t va;\
-union ubcore_umem_flag flag;\
-struct sg_table sg_head;\
-uint32_t nmap;\
+```c
+struct ubcore_umem {
+    struct ubcore_device *ub_dev;
+    struct mm_struct *owning_mm;
+    uint64_t length;
+    uint64_t va;
+    union ubcore_umem_flag flag;
+    struct sg_table sg_head;
+    uint32_t nmap;
 };
+```
 
-#### ubcore_umem_flag
+#### 3.12.1.2 ubcore_umem_flag
 
-union ubcore_umem_flag {\
-struct {\
-uint32_t non_pin : 1; /\* 0: pinned to physical memory. 1: non pin. \*/\
-uint32_t writable : 1; /\* 0: read-only. 1: writable. \*/\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_umem_flag {
+    struct {
+        uint32_t non_pin : 1; /* 0: pinned to physical memory. 1: non pin. */
+        uint32_t writable : 1; /* 0: read-only. 1: writable. */
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 };
+```
 
-### ubcore_umem_release
+### 3.12.2 ubcore_umem_release
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_umem_release([4.12.1.1](#ubcore_umem) [ubcore_umem](#ubcore_umem) \*umem);
+void ubcore_umem_release([4.12.1.1](#31211-ubcore_umem) [ubcore_umem](#31211-ubcore_umem) *umem);
 
 3.  描述
 
@@ -12398,21 +11985,21 @@ void ubcore_umem_release([4.12.1.1](#ubcore_umem) [ubcore_umem](#ubcore_umem) \*
 
 4.  参数
 
-\@param\[in\] \[Required\]umem: the ubcore umem created before.
+@param[in] [Required]umem: the ubcore umem created before.
 
 5.  返回值
 
 void
 
-### ubcore_umem_find_best_page_size
+### 3.12.3 ubcore_umem_find_best_page_size
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-uint64_t ubcore_umem_find_best_page_size([4.12.1.1](#ubcore_umem) [ubcore_umem](#ubcore_umem) \*umem, uint64_t page_size_bitmap, uint64_t va)
+uint64_t ubcore_umem_find_best_page_size([4.12.1.1](#31211-ubcore_umem) [ubcore_umem](#31211-ubcore_umem) *umem, uint64_t page_size_bitmap, uint64_t va)
 
 3.  描述
 
@@ -12420,27 +12007,27 @@ uint64_t ubcore_umem_find_best_page_size([4.12.1.1](#ubcore_umem) [ubcore_umem](
 
 4.  参数
 
-\@param\[in\] umem: umem struct, return of ubcore_umem_get;
+@param[in] umem: umem struct, return of ubcore_umem_get;
 
-\@param\[in\] page_size_bitmap: bitmap of HW supported page sizes, must include PAGE_SIZE;
+@param[in] page_size_bitmap: bitmap of HW supported page sizes, must include PAGE_SIZE;
 
-\@param\[in\] va: Initial address of this segment.
+@param[in] va: Initial address of this segment.
 
 5.  返回值
 
 Return: 早于5.3的内核版本，返回固定大小4k；5.3及之后的内核版本，当内存不支持获取最优页面大小，返回0；否则返回最优页面大小。
 
-## 其他API
+## 3.13 其他API
 
-### ubcore_dispatch_mgmt_event
+### 3.13.1 ubcore_dispatch_mgmt_event
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_dispatch_mgmt_event([4.13.1.1](#ubcore_mgmt_event) [ubcore_mgmt_event](#ubcore_mgmt_event) \*event);
+void ubcore_dispatch_mgmt_event([4.13.1.1](#31311-ubcore_mgmt_event) [ubcore_mgmt_event](#31311-ubcore_mgmt_event) *event);
 
 3.  描述
 
@@ -12448,39 +12035,45 @@ UB设备分发驱动管理事件。由UDMA调用。
 
 4.  参数
 
-\@param\[in\] event: event message, including event type, eid_info, etc.
+@param[in] event: event message, including event type, eid_info, etc.
 
 5.  返回值
 
 void
 
-#### ubcore_mgmt_event
+#### 3.13.1.1 ubcore_mgmt_event
 
-struct ubcore_mgmt_event {\
-[4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*ub_dev;\
-union {\
-[4.2.10.1](#ubcore_eid_info) [ubcore_eid_info](#ubcore_eid_info) \*eid_info;\
-} element;\
-[4.13.1.2](#ubcore_mgmt_event_type) [ubcore_mgmt_event_type](#ubcore_mgmt_event_type) event_type;\
+```c
+struct ubcore_mgmt_event {
+    ubcore_device *ub_dev;
+    union {
+        ubcore_eid_info *eid_info;
+    } element;
+    ubcore_mgmt_event_type event_type;
 };
+```
 
-#### ubcore_mgmt_event_type
+#### 3.13.1.2 ubcore_mgmt_event_type
 
-enum ubcore_mgmt_event_type {\
-UBCORE_MGMT_EVENT_EID_ADD,\
-UBCORE_MGMT_EVENT_EID_RMV,\
+```c
+enum ubcore_mgmt_event_type {
+    UBCORE_MGMT_EVENT_EID_ADD,
+    UBCORE_MGMT_EVENT_EID_RMV,
 };
+```
 
-### ubcore_get_tp_list
+### 3.13.2 ubcore_get_tp_list
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_get_tp_list([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, [4.13.2.1](#ubcore_get_tp_cfg) [ubcore_get_tp_cfg](#ubcore_get_tp_cfg) \*cfg,\
-uint32_t \*tp_cnt, [4.13.2.3](#ubcore_tp_info) [ubcore_tp_info](#ubcore_tp_info) \*tp_list, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+int ubcore_get_tp_list(ubcore_device *dev, ubcore_get_tp_cfg *cfg,
+uint32_t *tp_cnt, ubcore_tp_info *tp_list, ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -12488,79 +12081,89 @@ uint32_t \*tp_cnt, [4.13.2.3](#ubcore_tp_info) [ubcore_tp_info](#ubcore_tp_info)
 
 4.  参数
 
-\@param\[in\] dev: ubcore device pointer created before;
+@param[in] dev: ubcore device pointer created before;
 
-\@param\[in\] cfg: configuration to be matched;
+@param[in] cfg: configuration to be matched;
 
-\@param\[in && out\] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter; tp_cnt is the number of tp as out parameter;
+@param[in && out] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter; tp_cnt is the number of tp as out parameter;
 
-\@param\[out\] tp_list: tp info list to get;
+@param[out] tp_list: tp info list to get;
 
-\@param\[in && out\] udata: ucontext and user space driver data.
+@param[in && out] udata: ucontext and user space driver data.
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_get_tp_cfg
+#### 3.13.2.1 ubcore_get_tp_cfg
 
-struct ubcore_get_tp_cfg {\
-[4.13.2.2](#ubcore_get_tp_cfg_flag) [ubcore_get_tp_cfg_flag](#ubcore_get_tp_cfg_flag) flag;\
-[4.4.2.1.3](#ubcore_transport_mode) [ubcore_transport_mode](#ubcore_transport_mode) trans_mode;\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-[4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) peer_eid;\
+```c
+struct ubcore_get_tp_cfg {
+    ubcore_get_tp_cfg_flag flag;
+    ubcore_transport_mode trans_mode;
+    ubcore_eid local_eid;
+    ubcore_eid peer_eid;
 };
+```
 
-#### ubcore_get_tp_cfg_flag
+#### 3.13.2.2 ubcore_get_tp_cfg_flag
 
-union ubcore_get_tp_cfg_flag {\
-struct {\
-uint32_t ctp : 1;\
-uint32_t rtp : 1;\
-uint32_t utp : 1;\
-uint32_t uboe : 1;\
-uint32_t pre_defined : 1;\
-uint32_t dynamic_defined : 1;\
-uint32_t reserved : 26;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_get_tp_cfg_flag {
+    struct {
+        uint32_t ctp : 1;
+        uint32_t rtp : 1;
+        uint32_t utp : 1;
+        uint32_t uboe : 1;
+        uint32_t pre_defined : 1;
+        uint32_t dynamic_defined : 1;
+        uint32_t reserved : 26;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_tp_info
+#### 3.13.2.3 ubcore_tp_info
 
-struct ubcore_tp_info {\
-[4.13.2.4](#ubcore_tp_handle) [ubcore_tp_handle](#ubcore_tp_handle) tp_handle;\
+```c
+struct ubcore_tp_info {
+    ubcore_tp_handle tp_handle;
 };
+```
 
-#### ubcore_tp_handle
+#### 3.13.2.4 ubcore_tp_handle
 
-union ubcore_tp_handle {\
-struct {\
-uint64_t tpid : 24;\
-uint64_t tpn_start : 24;\
-uint64_t tp_cnt : 5;\
-uint64_t ctp : 1;\
-uint64_t rtp : 1;\
-uint64_t utp : 1;\
-uint64_t uboe : 1;\
-uint64_t pre_defined : 1;\
-uint64_t dynamic_defined : 1;\
-uint64_t reserved : 5;\
-} bs;\
-uint64_t value;\
+```c
+union ubcore_tp_handle {
+    struct {
+        uint64_t tpid : 24;
+        uint64_t tpn_start : 24;
+        uint64_t tp_cnt : 5;
+        uint64_t ctp : 1;
+        uint64_t rtp : 1;
+        uint64_t utp : 1;
+        uint64_t uboe : 1;
+        uint64_t pre_defined : 1;
+        uint64_t dynamic_defined : 1;
+        uint64_t reserved : 5;
+    } bs;
+    uint64_t value;
 };
+```
 
-### ubcore_set_tp_attr
+### 3.13.3 ubcore_set_tp_attr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_set_tp_attr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, const uint64_t tp_handle,\
-const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap,\
-const [4.13.3.1](#ubcore_tp_attr_value) [ubcore_tp_attr_value](#ubcore_tp_attr_value) \*tp_attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+int ubcore_set_tp_attr(ubcore_device *dev, const uint64_t tp_handle,
+const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap,
+const ubcore_tp_attr_value *tp_attr, ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -12568,55 +12171,62 @@ const [4.13.3.1](#ubcore_tp_attr_value) [ubcore_tp_attr_value](#ubcore_tp_attr_v
 
 4.  参数
 
-\@param\[in\] dev: ubcore device pointer created before;
+@param[in] dev: ubcore device pointer created before;
 
-\@param\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;
+@param[in] tp_handle: tp_handle got by ubcore_get_tp_list;
 
-\@param\[in\] tp_attr_cnt: number of tp attributions;
+@param[in] tp_attr_cnt: number of tp attributions;
 
-\@param\[in\] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:
+@param[in] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:
 
-\* 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit\
-\* 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit\
-\* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit\
-\* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit
+```c
+* 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit
+* 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit
+* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit
+```
 
-\@param\[in\] tp_attr: tp attribution values to set;
+* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit
 
-\@param\[in && out\] udata: ucontext and user space driver data.
+@param[in] tp_attr: tp attribution values to set;
+
+@param[in && out] udata: ucontext and user space driver data.
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_tp_attr_value
+#### 3.13.3.1 ubcore_tp_attr_value
 
-struct ubcore_tp_attr_value {\
-uint8_t retry_times_init : 3;\
-uint8_t at : 5;\
-uint8_t sip\[UBCORE_IP_ADDR_BYTES\];\
-uint8_t dip\[UBCORE_IP_ADDR_BYTES\];\
-uint8_t sma\[UBCORE_MAC_BYTES\];\
-uint8_t dma\[UBCORE_MAC_BYTES\];\
-uint16_t vlan_id : 12;\
-uint8_t vlan_en : 1;\
-uint8_t dscp : 6;\
-uint8_t at_times : 5;\
-uint8_t sl : 4;\
-uint8_t ttl;\
-uint8_t reserved\[78\];\
+```c
+struct ubcore_tp_attr_value {
+    uint8_t retry_times_init : 3;
+    uint8_t at : 5;
+    uint8_t sip[UBCORE_IP_ADDR_BYTES];
+    uint8_t dip[UBCORE_IP_ADDR_BYTES];
+    uint8_t sma[UBCORE_MAC_BYTES];
+    uint8_t dma[UBCORE_MAC_BYTES];
+    uint16_t vlan_id : 12;
+    uint8_t vlan_en : 1;
+    uint8_t dscp : 6;
+    uint8_t at_times : 5;
+    uint8_t sl : 4;
+    uint8_t ttl;
+    uint8_t reserved[78];
 };
+```
 
-### ubcore_get_tp_attr
+### 3.13.4 ubcore_get_tp_attr
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_get_tp_attr([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev, const uint64_t tp_handle, uint8_t \*tp_attr_cnt,\
-uint32_t \*tp_attr_bitmap, [4.13.3.1](#ubcore_tp_attr_value) [ubcore_tp_attr_value](#ubcore_tp_attr_value) \*tp_attr, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+int ubcore_get_tp_attr(ubcore_device *dev, const uint64_t tp_handle, uint8_t *tp_attr_cnt,
+uint32_t *tp_attr_bitmap, ubcore_tp_attr_value *tp_attr, ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -12624,39 +12234,44 @@ uint32_t \*tp_attr_bitmap, [4.13.3.1](#ubcore_tp_attr_value) [ubcore_tp_attr_val
 
 4.  参数
 
-\@param\[in\] dev: ubcore device pointer created before;
+@param[in] dev: ubcore device pointer created before;
 
-\@param\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;
+@param[in] tp_handle: tp_handle got by ubcore_get_tp_list;
 
-\@param\[in\] tp_attr_cnt: number of tp attributions;
+@param[in] tp_attr_cnt: number of tp attributions;
 
-\@param\[in\] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:
+@param[in] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:
 
-\* 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit\
-\* 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit\
-\* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit\
-\* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit
+```c
+* 0-retry_times_init: 3 bit 1-at: 5 bit 2-SIP: 128 bit
+* 3-DIP: 128 bit 4-SMA: 48 bit 5-DMA: 48 bit
+* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit
+```
 
-\@param\[in\] tp_attr: tp attribution values to set;
+* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit
 
-\@param\[in && out\] udata: ucontext and user space driver data.
+@param[in] tp_attr: tp attribution values to set;
+
+@param[in && out] udata: ucontext and user space driver data.
 
 5.  返回值
 
 0 on success, other value on error
 
-### ubcore_exchange_tp_info
+### 3.13.5 ubcore_exchange_tp_info
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int ubcore_exchange_tp_info([4.2.1.1](#ubcore_device) [ubcore_device](#ubcore_device) \*dev,\
-[4.13.2.1](#ubcore_get_tp_cfg) [ubcore_get_tp_cfg](#ubcore_get_tp_cfg) \*cfg, uint64_t tp_handle,\
-uint32_t tx_psn, uint64_t \*peer_tp_handle,\
-uint32_t \*rx_psn, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udata);
+```c
+int ubcore_exchange_tp_info(ubcore_device *dev,
+ubcore_get_tp_cfg *cfg, uint64_t tp_handle,
+uint32_t tx_psn, uint64_t *peer_tp_handle,
+uint32_t *rx_psn, ubcore_udata *udata);
+```
 
 3.  描述
 
@@ -12664,53 +12279,45 @@ uint32_t \*rx_psn, [4.3.1.2](#ubcore_udata) [ubcore_udata](#ubcore_udata) \*udat
 
 4.  参数
 
-\@param\[in\] dev: ubcore device pointer created before;
+@param[in] dev: ubcore device pointer created before;
 
-\@param\[in\] cfg: configuration to be matched;
+@param[in] cfg: configuration to be matched;
 
-\@param\[in\] tp_handle: local tp handle;
+@param[in] tp_handle: local tp handle;
 
-\@param\[in\] tx_psn: local packet sequence number;
+@param[in] tx_psn: local packet sequence number;
 
-\@param\[out\] peer_tp_handle: tp_handle got by ubcore_exchange_tp_info;
+@param[out] peer_tp_handle: tp_handle got by ubcore_exchange_tp_info;
 
-\@param\[out\] rx_psn: remote packet sequence number;
+@param[out] rx_psn: remote packet sequence number;
 
-\@param\[in\] \[Optional\] udata: udata should be NULL when called by kernel application and be valid when called by user space application.
+@param[in] [Optional] udata: udata should be NULL when called by kernel application and be valid when called by user space application.
 
 5.  返回值
 
 0 on success, other value on error
 
-# URMA用户态驱动接口
+---
+# 4 URMA用户态驱动接口
 
 \-\-\--暂不刷新
 
-# URMA内核态驱动接口
+---
+# 5 URMA内核态驱动接口
 
-[6.1 内核态UB设备管理接口](#内核态ub设备管理接口)
-
-[6.2 内核态ID配置、地址配置ops接口](#内核态id配置地址配置ops接口)
-
-[6.3 内核态context管理ops接口](#内核态context管理ops接口)
-
-[6.4 内核态mmap接口](#内核态mmap接口)
-
-[6.5 内核态资源管理ops接口](#内核态资源管理ops接口)
-
-## 内核态UB设备管理接口
+## 5.1 内核态UB设备管理接口
 
 UDMA驱动加载时注册设备到UB Core中，同时提供ops函数。
 
-### UB设备注册接口
+### 5.1.1 UB设备注册接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_register_device(struct ubcore_device \*dev);
+int ubcore_register_device(struct ubcore_device *dev);
 
 3.  描述
 
@@ -12718,993 +12325,1014 @@ int ubcore_register_device(struct ubcore_device \*dev);
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
 5.  返回值
 
 Return: 0 on success, other value on error
 
-#### ubcore_device
+#### 5.1.1.1 ubcore_device
 
-struct ubcore_device {\
-struct list_head list_node; /\* add to device list \*/\
-/\* driver fills start \*/\
-char dev_name\[UBCORE_MAX_DEV_NAME\];\
-struct device \*dma_dev;\
-struct device dev;\
-struct net_device \*netdev;\
-struct [6.1.1.11](#ubcore_ops-1) [ubcore_ops](#ubcore_ops-1) \*ops;\
-enum [6.1.1.12](#ubcore_transport_type-1) [ubcore_transport_type](#ubcore_transport_type-1) transport_type;\
-struct ubcore_device_attr attr;\
-struct attribute_group \*group\[UBCORE_MAX_ATTR_GROUP\]; /\* driver may fill group \[1\] \*/\
-\
-/\* driver fills end \*/\
-struct ubcore_device_cfg cfg;\
-/\* port management \*/\
-struct list_head port_list;\
-/\* For ubcore client \*/\
-struct rw_semaphore client_ctx_rwsem;\
-struct list_head client_ctx_list;\
-struct list_head event_handler_list;\
-struct rw_semaphore event_handler_rwsem;\
-struct ubcore_hash_table ht\[UBCORE_HT_NUM\]; /\* to be replaced with uobj \*/\
-\
-/\* protect from unregister device \*/\
-atomic_t use_cnt;\
-struct completion comp;\
-bool dynamic_eid; /\* Assign eid dynamically with netdev notifier \*/\
-struct [6.1.1.3](#ubcore_eid_table-1) [ubcore_eid_table](#ubcore_eid_table-1) eid_table;\
-struct ubcore_cg_device cg_device;\
-struct [6.1.1.6](#ubcore_sip_table-1) [ubcore_sip_table](#ubcore_sip_table-1) sip_table;\
-\
-/\* logic device list and mutex \*/\
-struct [6.1.1.9](#ubcore_logic_device-1) [ubcore_logic_device](#ubcore_logic_device-1) ldev;\
-struct mutex ldev_mutex;\
-struct list_head ldev_list;\
-/\* ue_idx to uvs_instance mapping \*/\
-void \*\*ue2uvs_table;\
-struct rw_semaphore ue2uvs_rwsem;\
-/\* for vtp audit \*/\
-struct [6.1.1.10](#ubcore_vtp_bitmap-1) [ubcore_vtp_bitmap](#ubcore_vtp_bitmap-1) vtp_bitmap;\
+```c
+struct ubcore_device {
+    struct list_head list_node; /* add to device list */
+    /* driver fills start */
+    char dev_name[UBCORE_MAX_DEV_NAME];
+    struct device *dma_dev;
+    struct device dev;
+    struct net_device *netdev;
+    struct ubcore_ops *ops;
+    enum ubcore_transport_type transport_type;
+    struct ubcore_device_attr attr;
+    struct attribute_group *group[UBCORE_MAX_ATTR_GROUP]; /* driver may fill group [1] */
+    /* driver fills end */
+    struct ubcore_device_cfg cfg;
+    /* port management */
+    struct list_head port_list;
+    /* For ubcore client */
+    struct rw_semaphore client_ctx_rwsem;
+    struct list_head client_ctx_list;
+    struct list_head event_handler_list;
+    struct rw_semaphore event_handler_rwsem;
+    struct ubcore_hash_table ht[UBCORE_HT_NUM]; /* to be replaced with uobj */
+    /* protect from unregister device */
+    atomic_t use_cnt;
+    struct completion comp;
+    bool dynamic_eid; /* Assign eid dynamically with netdev notifier */
+    struct ubcore_eid_table eid_table;
+    struct ubcore_cg_device cg_device;
+    struct ubcore_sip_table sip_table;
+    /* logic device list and mutex */
+    struct ubcore_logic_device ldev;
+    struct mutex ldev_mutex;
+    struct list_head ldev_list;
+    /* ue_idx to uvs_instance mapping */
+    void **ue2uvs_table;
+    struct rw_semaphore ue2uvs_rwsem;
+    /* for vtp audit */
+    struct ubcore_vtp_bitmap vtp_bitmap;
 };
+```
 
-#### ubcore_eid_entry
+#### 5.1.1.2 ubcore_eid_entry
 
-struct ubcore_eid_entry {\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t eid_index;\
-struct net \*net;\
-bool valid;\
+```c
+struct ubcore_eid_entry {
+    union ubcore_eid eid;
+    uint32_t eid_index;
+    struct net *net;
+    bool valid;
 };
+```
 
-#### ubcore_eid_table
+#### 5.1.1.3 ubcore_eid_table
 
-struct ubcore_eid_table {\
-uint32_t eid_cnt;\
-struct [6.1.1.2](#ubcore_eid_entry-1) [ubcore_eid_entry](#ubcore_eid_entry-1) \*eid_entries;\
-spinlock_t lock;\
+```c
+struct ubcore_eid_table {
+    uint32_t eid_cnt;
+    struct ubcore_eid_entry *eid_entries;
+    spinlock_t lock;
 };
+```
 
-#### ubcore_sip_info
+#### 5.1.1.4 ubcore_sip_info
 
-struct ubcore_sip_info {\
-char dev_name\[UBCORE_MAX_DEV_NAME\];\
-struct [4.8.7.2](#ubcore_net_addr) [ubcore_net_addr](#ubcore_net_addr) addr;\
-uint32_t prefix_len;\
-uint8_t port_cnt;\
-uint8_t port_id\[UBCORE_MAX_PORT_CNT\];\
-uint32_t mtu;\
-char netdev_name\[UBCORE_MAX_DEV_NAME\]; */\* for change mtu \*/*\
-bool is_active;\
+```c
+struct ubcore_sip_info {
+    char dev_name[UBCORE_MAX_DEV_NAME];
+    struct ubcore_net_addr addr;
+    uint32_t prefix_len;
+    uint8_t port_cnt;
+    uint8_t port_id[UBCORE_MAX_PORT_CNT];
+    uint32_t mtu;
+    char netdev_name[UBCORE_MAX_DEV_NAME]; */* for change mtu */*
+    bool is_active;
 };
+```
 
-#### ubcore_sip_entry
+#### 5.1.1.5 ubcore_sip_entry
 
-struct ubcore_sip_entry {\
-struct [6.1.1.4](#ubcore_sip_info-1) [ubcore_sip_info](#ubcore_sip_info-1) sip_info;\
-atomic_t uvs_cnt;\
-uint64_t reserve;\
+```c
+struct ubcore_sip_entry {
+    struct ubcore_sip_info sip_info;
+    atomic_t uvs_cnt;
+    uint64_t reserve;
 };
+```
 
-#### ubcore_sip_table
+#### 5.1.1.6 ubcore_sip_table
 
-struct ubcore_sip_table {\
-struct mutex lock;\
-uint32_t max_sip_cnt;\
-struct [6.1.1.5](#ubcore_sip_entry-1) [ubcore_sip_entry](#ubcore_sip_entry-1) \*entry;\
-DECLARE_BITMAP(index_bitmap, UBCORE_MAX_SIP);\
+```c
+struct ubcore_sip_table {
+    struct mutex lock;
+    uint32_t max_sip_cnt;
+    struct ubcore_sip_entry *entry;
+    DECLARE_BITMAP(index_bitmap, UBCORE_MAX_SIP);
 };
+```
 
-#### ubcore_port_kobj
+#### 5.1.1.7 ubcore_port_kobj
 
-struct ubcore_port_kobj {\
-struct kobject kobj;\
-struct ubcore_device \*dev;\
-uint8_t port_id;\
+```c
+struct ubcore_port_kobj {
+    struct kobject kobj;
+    struct ubcore_device *dev;
+    uint8_t port_id;
 };
+```
 
-#### ubcore_eid_attr
+#### 5.1.1.8 ubcore_eid_attr
 
-struct ubcore_eid_attr {\
-char name\[UBCORE_EID_GROUP_NAME_LEN\];\
-uint32_t eid_idx;\
-struct device_attribute attr;\
+```c
+struct ubcore_eid_attr {
+    char name[UBCORE_EID_GROUP_NAME_LEN];
+    uint32_t eid_idx;
+    struct device_attribute attr;
 };
+```
 
-#### ubcore_logic_device
+#### 5.1.1.9 ubcore_logic_device
 
-struct ubcore_logic_device {\
-struct device \*dev;\
-struct ubcore_port_kobj port\[UBCORE_MAX_PORT_CNT\];\
-struct list_head node; */\* add to ldev list \*/*\
-possible_net_t net;\
-struct ubcore_device \*ub_dev;\
-const struct attribute_group \*dev_group\[UBCORE_ATTR_GROUP_MAX\];\
+```c
+struct ubcore_logic_device {
+    struct device *dev;
+    struct ubcore_port_kobj port[UBCORE_MAX_PORT_CNT];
+    struct list_head node; */* add to ldev list */*
+    possible_net_t net;
+    struct ubcore_device *ub_dev;
+    const struct attribute_group *dev_group[UBCORE_ATTR_GROUP_MAX];
 };
+```
 
-#### ubcore_vtp_bitmap
+#### 5.1.1.10 ubcore_vtp_bitmap
 
-struct ubcore_vtp_bitmap {\
-struct mutex lock;\
-uint32_t max_vtp_cnt;\
-uint64_t \*bitmap;\
+```c
+struct ubcore_vtp_bitmap {
+    struct mutex lock;
+    uint32_t max_vtp_cnt;
+    uint64_t *bitmap;
 };
+```
 
-#### ubcore_ops
+#### 5.1.1.11 ubcore_ops
 
-struct ubcore_ops {\
-struct module \*owner; */\* kernel driver module \*/*\
-char driver_name\[UBCORE_MAX_DRIVER_NAME\]; */\* user space driver name \*/*\
-uint32_t abi_version; */\* abi version of kernel driver \*/*\
-*/\*\**\
-*\* add a function entity id (eid) to ub device (for uvs)*\
-*\** \@param*\[in\] dev: the ubcore_device handle;*\
-*\** \@param*\[in\] ue_idx: ue_idx;*\
-*\** \@param*\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;*\
-*\** \@return*: the index of eid/upi, less than 0 indicating error*\
-*\*/*\
-int (\*add_ueid)(struct ubcore_device \*dev, uint16_t ue_idx,\
-struct ubcore_ueid_cfg \*cfg);\
-*/\*\**\
-*\* delete a function entity id (eid) to ub device (for uvs)*\
-*\** \@param*\[in\] dev: the ubcore_device handle;*\
-*\** \@param*\[in\] ue_idx: ue_idx;*\
-*\** \@param*\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*delete_ueid)(struct ubcore_device \*dev, uint16_t ue_idx,\
-struct ubcore_ueid_cfg \*cfg);\
-*/\*\**\
-*\* query device attributes*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[out\] attr: attributes for the driver to fill in*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_device_attr)(struct ubcore_device \*dev,\
-struct ubcore_device_attr \*attr);\
-*/\*\**\
-*\* query device status*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[out\] status: status for the driver to fill in*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_device_status)(struct ubcore_device \*dev,\
-struct ubcore_device_status \*status);\
-*/\*\**\
-*\* query resource*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] key: resource type and key;*\
-*\** \@param*\[in/out\] val: addr and len of value*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_res)(struct ubcore_device \*dev, struct ubcore_res_key \*key,\
-struct ubcore_res_val \*val);\
-*/\*\**\
-*\* config device*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: device configuration*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*config_device)(struct ubcore_device \*dev,\
-struct ubcore_device_cfg \*cfg);\
-*/\*\**\
-*\* set ub network address*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] net_addr: net_addr to set*\
-*\** \@param*\[in\] index: index by sip table*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*add_net_addr)(struct ubcore_device \*dev,\
-struct ubcore_net_addr \*net_addr, uint32_t index);\
-*/\*\**\
-*\* unset ub network address*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] idx: net_addr idx by sip table entry*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*delete_net_addr)(struct ubcore_device \*dev, uint32_t idx);\
-*/\*\**\
-*\* allocate a context from ubep for a user process*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] eid: function entity id (eid) index to set;*\
-*\** \@param*\[in\] udrv_data: user space driver data*\
-*\** \@return*: pointer to user context on success, null or error,*\
-*\*/*\
-struct ubcore_ucontext \*(\*alloc_ucontext)(\
-struct ubcore_device \*dev, uint32_t eid_index,\
-struct ubcore_udrv_priv \*udrv_data);\
-*/\*\**\
-*\* free a context to ubep*\
-*\** \@param*\[in\] uctx: the user context created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*free_ucontext)(struct ubcore_ucontext \*uctx);\
-*/\*\**\
-*\* mmap doorbell or jetty buffer, etc*\
-*\** \@param*\[in\] uctx: the user context created before;*\
-*\** \@param*\[in\] vma: linux vma including vm_start, vm_pgoff, etc;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*mmap)(struct ubcore_ucontext \*ctx, struct vm_area_struct \*vma);\
-*/\* segment part \*/*\
-*/\*\* alloc token id to ubep*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] flag: token_id_flag;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: token id pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_token_id \*(\*alloc_token_id)(\
-struct ubcore_device \*dev, union ubcore_token_id_flag flag,\
-struct ubcore_udata \*udata);\
-*/\*\* free key id from ubep*\
-*\** \@param*\[in\] token_id: the token id alloced before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*free_token_id)(struct ubcore_token_id \*token_id);\
-*/\*\* register segment to ubep*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: segment attributes and configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target segment pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_target_seg \*(\*register_seg)(struct ubcore_device \*dev,\
-struct ubcore_seg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\* unregister segment from ubep*\
-*\** \@param*\[in\] tseg: the segment registered before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*unregister_seg)(struct ubcore_target_seg \*tseg);\
-*/\*\* import a remote segment to ubep*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: segment attributes and import configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target segment handle on success, NULL on error*\
-*\*/*\
-struct ubcore_target_seg \*(\*import_seg)(\
-struct ubcore_device \*dev, struct ubcore_target_seg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\* unimport seg from ubep*\
-*\** \@param*\[in\] tseg: the segment imported before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*unimport_seg)(struct ubcore_target_seg \*tseg);\
-*/\*\* add port for bound device*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] port_cnt: port count*\
-*\** \@param*\[in\] port_list: port list*\
-*\** \@return*: target segment handle on success, NULL on error*\
-*\*/*\
-int (\*add_port)(struct ubcore_device \*dev, uint32_t port_cnt,\
-uint32_t \*port_list);\
-*/\* jetty part \*/*\
-*/\*\**\
-*\* create jfc with ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: jfc attributes and configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: jfc pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_jfc \*(\*create_jfc)(struct ubcore_device \*dev,\
-struct ubcore_jfc_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* modify jfc from ubep.*\
-*\** \@param*\[in\] jfc: the jfc created before;*\
-*\** \@param*\[in\] attr: ubcore jfc attr;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_jfc)(struct ubcore_jfc \*jfc, struct ubcore_jfc_attr \*attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy jfc from ubep.*\
-*\** \@param*\[in\] jfc: the jfc created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfc)(struct ubcore_jfc \*jfc);\
-*/\*\**\
-*\* batch destroy jfc from ubep.*\
-*\** \@param*\[in\] jfc_arr: the jfc array created before;*\
-*\** \@param*\[in\] jfc_num: jfc array length;*\
-*\** \@param*\[out\] bad_jfc_index: when delete err, return jfc index in the array;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfc_batch)(struct ubcore_jfc \*\*jfc_arr, int jfc_num,\
-int \*bad_jfc_index);\
-*/\*\**\
-*\* rearm jfc.*\
-*\** \@param*\[in\] jfc: the jfc created before;*\
-*\** \@param*\[in\] solicited_only: rearm notify by message marked with solicited flag*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*rearm_jfc)(struct ubcore_jfc \*jfc, bool solicited_only);\
-*/\*\**\
-*\* create jfs with ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: jfs attributes and configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: jfs pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_jfs \*(\*create_jfs)(struct ubcore_device \*dev,\
-struct ubcore_jfs_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* modify jfs from ubep.*\
-*\** \@param*\[in\] jfs: the jfs created before;*\
-*\** \@param*\[in\] attr: ubcore jfs attr;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_attr \*attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* query jfs from ubep.*\
-*\** \@param*\[in\] jfs: the jfs created before;*\
-*\** \@param*\[out\] cfg: jfs configurations;*\
-*\** \@param*\[out\] attr: ubcore jfs attributes;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_cfg \*cfg,\
-struct ubcore_jfs_attr \*attr);\
-*/\*\**\
-*\* flush jfs from ubep.*\
-*\** \@param*\[in\] jfs: the jfs created before;*\
-*\** \@param*\[in\] cr_cnt: the maximum number of CRs expected to be returned;*\
-*\** \@param*\[out\] cr: the addr of returned CRs;*\
-*\** \@return*: the number of CR returned, 0 means no completion record returned, -1 on error*\
-*\*/*\
-int (\*flush_jfs)(struct ubcore_jfs \*jfs, int cr_cnt,\
-struct ubcore_cr \*cr);\
-*/\*\**\
-*\* destroy jfs from ubep.*\
-*\** \@param*\[in\] jfs: the jfs created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfs)(struct ubcore_jfs \*jfs);\
-*/\*\**\
-*\* batch destroy jfs from ubep.*\
-*\** \@param*\[in\] jfs_arr: the jfs array created before;*\
-*\** \@param*\[in\] jfs_num: jfs array length;*\
-*\** \@param*\[out\] bad_jfs_index: when error, return error jfs index in the array;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfs_batch)(struct ubcore_jfs \*\*jfs_arr, int jfs_num,\
-int \*bad_jfs_index);\
-*/\*\**\
-*\* create jfr with ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: jfr attributes and configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: jfr pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_jfr \*(\*create_jfr)(struct ubcore_device \*dev,\
-struct ubcore_jfr_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* modify jfr from ubep.*\
-*\** \@param*\[in\] jfr: the jfr created before;*\
-*\** \@param*\[in\] attr: ubcore jfr attr;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_attr \*attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* query jfr from ubep.*\
-*\** \@param*\[in\] jfr: the jfr created before;*\
-*\** \@param*\[out\] cfg: jfr configurations;*\
-*\** \@param*\[out\] attr: ubcore jfr attributes;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_cfg \*cfg,\
-struct ubcore_jfr_attr \*attr);\
-*/\*\**\
-*\* destroy jfr from ubep.*\
-*\** \@param*\[in\] jfr: the jfr created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfr)(struct ubcore_jfr \*jfr);\
-*/\*\**\
-*\* batch destroy jfr from ubep.*\
-*\** \@param*\[in\] jfr_arr: the jfr array created before;*\
-*\** \@param*\[in\] jfr_num: jfr array length;*\
-*\** \@param*\[out\] bad_jfr_index: when error, return error jfr index in the array;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jfr_batch)(struct ubcore_jfr \*\*jfr_arr, int jfr_num,\
-int \*bad_jfr_index);\
-*/\*\**\
-*\* import jfr to ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: remote jfr attributes and import configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target jfr pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tjetty \*(\*import_jfr)(struct ubcore_device \*dev,\
-struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* import jfr to ubep by control plane.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: remote jfr attributes and import configurations;*\
-*\** \@param*\[in\] active_tp_cfg: tp configuration to active;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target jfr pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tjetty \*(\*import_jfr_ex)(\
-struct ubcore_device \*dev, struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* unimport jfr from ubep.*\
-*\** \@param*\[in\] tjfr: the target jfr imported before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*unimport_jfr)(struct ubcore_tjetty \*tjfr);\
-*/\*\**\
-*\* create jetty with ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: jetty attributes and configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: jetty pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_jetty \*(\*create_jetty)(struct ubcore_device \*dev,\
-struct ubcore_jetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* modify jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] attr: ubcore jetty attr;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_jetty_attr \*attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* query jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[out\] cfg: jetty configurations;*\
-*\** \@param*\[out\] attr: ubcore jetty attributes;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_jetty_cfg \*cfg,\
-struct ubcore_jetty_attr \*attr);\
-*/\*\**\
-*\* flush jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] cr_cnt: the maximum number of CRs expected to be returned;*\
-*\** \@param*\[out\] cr: the addr of returned CRs;*\
-*\** \@return*: the number of CR returned, 0 means no completion record returned, -1 on error*\
-*\*/*\
-int (\*flush_jetty)(struct ubcore_jetty \*jetty, int cr_cnt,\
-struct ubcore_cr \*cr);\
-*/\*\**\
-*\* destroy jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jetty)(struct ubcore_jetty \*jetty);\
-*/\*\**\
-*\* batch destroy jetty from ubep.*\
-*\** \@param*\[in\] jetty_arr: the jetty array created before;*\
-*\** \@param*\[in\] jetty_num: jetty array length;*\
-*\** \@param*\[out\] bad_jetty_index: when error, return error jetty index in the array;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_jetty_batch)(struct ubcore_jetty \*\*jetty_arr,\
-int jetty_num, int \*bad_jetty_index);\
-*/\*\**\
-*\* import jetty to ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: remote jetty attributes and import configurations*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target jetty pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tjetty \*(\*import_jetty)(struct ubcore_device \*dev,\
-struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* import jetty to ubep by control plane.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: remote jetty attributes and import configurations*\
-*\** \@param*\[in\] active_tp_cfg: tp configuration to active*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: target jetty pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tjetty \*(\*import_jetty_ex)(\
-struct ubcore_device \*dev, struct ubcore_tjetty_cfg \*cfg,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* unimport jetty from ubep.*\
-*\** \@param*\[in\] tjetty: the target jetty imported before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*unimport_jetty)(struct ubcore_tjetty \*tjetty);\
-*/\*\**\
-*\* bind jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] tjetty: the target jetty imported before;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*bind_jetty)(struct ubcore_jetty \*jetty,\
-struct ubcore_tjetty \*tjetty,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* bind jetty from ubep by control plane.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] tjetty: the target jetty imported before;*\
-*\** \@param*\[in\] active_tp_cfg: tp configuration to active;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*bind_jetty_ex)(struct ubcore_jetty \*jetty,\
-struct ubcore_tjetty \*tjetty,\
-struct ubcore_active_tp_cfg \*active_tp_cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* unbind jetty from ubep.*\
-*\** \@param*\[in\] jetty: the jetty binded before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*unbind_jetty)(struct ubcore_jetty \*jetty);\
-*/\*\**\
-*\* create jetty group to ubep.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: pointer of the jetty group config;*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: jetty group pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_jetty_group \*(\*create_jetty_grp)(\
-struct ubcore_device \*dev, struct ubcore_jetty_grp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy jetty group to ubep.*\
-*\** \@param*\[in\] jetty_grp: the jetty group created before;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*delete_jetty_grp)(struct ubcore_jetty_group \*jetty_grp);\
-*/\*\**\
-*\* create tpg.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: tpg init attributes*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: tp pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tpg \*(\*create_tpg)(struct ubcore_device \*dev,\
-struct ubcore_tpg_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy tpg.*\
-*\** \@param*\[in\] tp: tp pointer created before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_tpg)(struct ubcore_tpg \*tpg);\
-*/\*\**\
-*\* get tpid list by control plane.*\
-*\** \@param*\[in\] dev: ubcore device pointer created before*\
-*\** \@param*\[in\] cfg: tpid configuration to be matched*\
-*\** \@param*\[in && out\] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter;*\
-*\* tp_cnt is the number of tp as out parameter*\
-*\** \@param*\[out\] tp_list: tp list to get, the buffer is allocated by user;*\
-*\** \@param*\[in && out\] udata: ucontext and user space driver data*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*get_tp_list)(struct ubcore_device \*dev,\
-struct ubcore_get_tp_cfg \*cfg, uint32_t \*tp_cnt,\
-struct ubcore_tp_info \*tp_list,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* set tp attributions by control plane.*\
-*\** \@param*\[in\] dev: ubcore device pointer created before;*\
-*\** \@param*\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;*\
-*\** \@param*\[in\] tp_attr_cnt: number of tp attributions;*\
-*\** \@param*\[in\] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:*\
-*\* 0-retry_times_init: 3 bit 1-at: 5 bit 2-*SIP: *128 bit*\
-*\* 3-*DIP: *128 bit 4-*SMA: *48 bit 5-*DMA: *48 bit*\
-*\* 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit*\
-*\* 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit*\
-*\** \@param*\[in\] tp_attr: tp attribution values to set;*\
-*\** \@param*\[in && out\] udata: ucontext and user space driver data;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*set_tp_attr)(struct ubcore_device \*dev, const uint64_t tp_handle,\
-const uint8_t tp_attr_cnt,\
-const uint32_t tp_attr_bitmap,\
-const struct ubcore_tp_attr_value \*tp_attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* get tp attributions by control plane.*\
-*\** \@param*\[in\] dev: ubcore device pointer created before;*\
-*\** \@param*\[in\] tp_handle: tp_handle got by ubcore_get_tp_list;*\
-*\** \@param*\[out\] tp_attr_cnt: number of tp attributions;*\
-*\** \@param*\[out\] tp_attr_bitmap: tp bitmap, the same as tp_attr_bitmap in set_tp_attr;*\
-*\** \@param*\[out\] tp_attr: tp attribution values to get;*\
-*\** \@param*\[in && out\] udata: ucontext and user space driver data;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*get_tp_attr)(struct ubcore_device \*dev, const uint64_t tp_handle,\
-uint8_t \*tp_attr_cnt, uint32_t \*tp_attr_bitmap,\
-struct ubcore_tp_attr_value \*tp_attr,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* active tp by control plane.*\
-*\** \@param*\[in\] dev: ubcore device pointer created before*\
-*\** \@param*\[in\] active_cfg: tp configuration to active*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*active_tp)(struct ubcore_device \*dev,\
-struct ubcore_active_tp_cfg \*active_cfg);\
-*/\*\**\
-*\* deactivate tp by control plane.*\
-*\** \@param*\[in\] dev: ubcore device pointer created before*\
-*\** \@param*\[in\] tp_handle: tp_handle value got before*\
-*\** \@param*\[in\] udata: \[Optional\] udata should be NULL when called*\
-*\* by kernel application and be valid when called*\
-*\* by user space application*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*deactive_tp)(struct ubcore_device \*dev,\
-union ubcore_tp_handle tp_handle,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* create tp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: tp init attributes*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: tp pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_tp \*(\*create_tp)(struct ubcore_device \*dev,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* modify tp.*\
-*\** \@param*\[in\] tp: tp pointer created before*\
-*\** \@param*\[in\] attr: tp attributes*\
-*\** \@param*\[in\] mask: attr mask indicating the attributes to be modified*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_tp)(struct ubcore_tp \*tp, struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask mask);\
-*/\*\**\
-*\* modify user tp.*\
-*\** \@param*\[in\] dev: the ub device handle*\
-*\** \@param*\[in\] tpn: tp number of the tp created before*\
-*\** \@param*\[in\] cfg: user configuration of the tp*\
-*\** \@param*\[in\] attr: tp attributes*\
-*\** \@param*\[in\] mask: attr mask indicating the attributes to be modified*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_user_tp)(struct ubcore_device \*dev, uint32_t tpn,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask mask);\
-*/\*\**\
-*\* destroy tp.*\
-*\** \@param*\[in\] tp: tp pointer created before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_tp)(struct ubcore_tp \*tp);\
-*/\*\**\
-*\* create multi tp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cnt: the number of tp, must be less than or equal to 32;*\
-*\** \@param*\[in\] cfg: array of tp init attributes*\
-*\** \@param*\[in\] udata: array of ucontext and user space driver data*\
-*\** \@param*\[out\] tp: pointer array of tp*\
-*\** \@return*: created tp cnt, 0 on error*\
-*\*/*\
-int (\*create_multi_tp)(struct ubcore_device \*dev, uint32_t cnt,\
-struct ubcore_tp_cfg \*cfg,\
-struct ubcore_udata \*udata,\
-struct ubcore_tp \*\*tp);\
-*/\*\**\
-*\* modify multi tp.*\
-*\** \@param*\[in\] cnt: the number of tp;*\
-*\** \@param*\[in\] tp: pointer array of tp created before*\
-*\** \@param*\[in\] attr: array of tp attributes*\
-*\** \@param*\[in\] mask: array of attr mask indicating the attributes to be modified*\
-*\** \@param*\[in\] fail_tp: pointer of tp failed to modify*\
-*\** \@return*: modified successfully tp cnt, 0 on error*\
-*\*/*\
-int (\*modify_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp,\
-struct ubcore_tp_attr \*attr,\
-union ubcore_tp_attr_mask \*mask,\
-struct ubcore_tp \*\*fail_tp);\
-*/\*\**\
-*\* destroy multi tp.*\
-*\** \@param*\[in\] cnt: the number of tp;*\
-*\** \@param*\[in\] tp: pointer array of tp created before*\
-*\** \@return*: destroyed tp cnt, 0 on error*\
-*\*/*\
-int (\*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp);\
-*/\*\**\
-*\* allocate vtp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@return*: vtpn pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_vtpn \*(\*alloc_vtpn)(struct ubcore_device \*dev);\
-*/\*\**\
-*\* free vtpn.*\
-*\** \@param*\[in\] vtpn: vtpn pointer allocated before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*free_vtpn)(struct ubcore_vtpn \*vtpn);\
-*/\*\**\
-*\* create vtp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: vtp init attributes*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: vtp pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_vtp \*(\*create_vtp)(struct ubcore_device \*dev,\
-struct ubcore_vtp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy vtp.*\
-*\** \@param*\[in\] vtp: vtp pointer created before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_vtp)(struct ubcore_vtp \*vtp);\
-*/\*\**\
-*\* create utp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: utp init attributes*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: utp pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_utp \*(\*create_utp)(struct ubcore_device \*dev,\
-struct ubcore_utp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy utp.*\
-*\** \@param*\[in\] utp: utp pointer created before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_utp)(struct ubcore_utp \*utp);\
-*/\*\**\
-*\* create ctp.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cfg: ctp init attributes*\
-*\** \@param*\[in\] udata: ucontext and user space driver data*\
-*\** \@return*: ctp pointer on success, NULL on error*\
-*\*/*\
-struct ubcore_ctp \*(\*create_ctp)(struct ubcore_device \*dev,\
-struct ubcore_ctp_cfg \*cfg,\
-struct ubcore_udata \*udata);\
-*/\*\**\
-*\* destroy ctp.*\
-*\** \@param*\[in\] ctp: ctp pointer created before*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*destroy_ctp)(struct ubcore_ctp \*ctp);\
-*/\*\**\
-*\* UE send msg to MUE device.*\
-*\** \@param*\[in\] dev: UE or MUE device;*\
-*\** \@param*\[in\] msg: msg to send;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*send_req)(struct ubcore_device \*dev, struct ubcore_req \*msg);\
-*/\*\**\
-*\* MUE send msg to UE device.*\
-*\** \@param*\[in\] dev: MUE device;*\
-*\** \@param*\[in\] msg: msg to send;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*send_resp)(struct ubcore_device \*dev,\
-struct ubcore_resp_host \*msg);\
-*/\*\**\
-*\* query cc table to get cc pattern idx*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cc_entry_cnt: cc entry cnt;*\
-*\** \@return*: return NULL on fail, otherwise, return cc entry array*\
-*\*/*\
-struct ubcore_cc_entry \*(\*query_cc)(struct ubcore_device \*dev,\
-uint32_t \*cc_entry_cnt);\
-*/\*\**\
-*\* bond slave net device*\
-*\** \@param*\[in\] bond: bond netdev;*\
-*\** \@param*\[in\] slave: slave netdev;*\
-*\** \@param*\[in\] upper_info: change upper event info;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*bond_add)(struct net_device \*bond, struct net_device \*slave,\
-struct netdev_lag_upper_info \*upper_info);\
-*/\*\**\
-*\* unbond slave net device*\
-*\** \@param*\[in\] bond: bond netdev;*\
-*\** \@param*\[in\] slave: slave netdev;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*bond_remove)(struct net_device \*bond, struct net_device \*slave);\
-*/\*\**\
-*\* update slave net device*\
-*\** \@param*\[in\] bond: bond netdev;*\
-*\** \@param*\[in\] slave: slave netdev;*\
-*\** \@param*\[in\] lower_info: change lower state event info;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*slave_update)(struct net_device \*bond, struct net_device \*slave,\
-struct netdev_lag_lower_state_info \*lower_info);\
-*/\*\**\
-*\* operation of user ioctl cmd.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] user_ctl: kdrv user control command pointer;*\
-*\* Return: 0 on success, other value on error*\
-*\*/*\
-int (\*user_ctl)(struct ubcore_device \*dev,\
-struct ubcore_user_ctl \*user_ctl);\
-*/\*\* data path ops \*/*\
-*/\*\**\
-*\* post jfs wr.*\
-*\** \@param*\[in\] jfs: the jfs created before;*\
-*\** \@param*\[in\] wr: the wr to be posted;*\
-*\** \@param*\[out\] bad_wr: the first failed wr;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*post_jfs_wr)(struct ubcore_jfs \*jfs, struct ubcore_jfs_wr \*wr,\
-struct ubcore_jfs_wr \*\*bad_wr);\
-*/\*\**\
-*\* post jfr wr.*\
-*\** \@param*\[in\] jfr: the jfr created before;*\
-*\** \@param*\[in\] wr: the wr to be posted;*\
-*\** \@param*\[out\] bad_wr: the first failed wr;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*post_jfr_wr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_wr \*wr,\
-struct ubcore_jfr_wr \*\*bad_wr);\
-*/\*\**\
-*\* post jetty send wr.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] wr: the wr to be posted;*\
-*\** \@param*\[out\] bad_wr: the first failed wr;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*post_jetty_send_wr)(struct ubcore_jetty \*jetty,\
-struct ubcore_jfs_wr \*wr,\
-struct ubcore_jfs_wr \*\*bad_wr);\
-*/\*\**\
-*\* post jetty receive wr.*\
-*\** \@param*\[in\] jetty: the jetty created before;*\
-*\** \@param*\[in\] wr: the wr to be posted;*\
-*\** \@param*\[out\] bad_wr: the first failed wr;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*post_jetty_recv_wr)(struct ubcore_jetty \*jetty,\
-struct ubcore_jfr_wr \*wr,\
-struct ubcore_jfr_wr \*\*bad_wr);\
-*/\*\**\
-*\* poll jfc.*\
-*\** \@param*\[in\] jfc: the jfc created before;*\
-*\** \@param*\[in\] cr_cnt: the maximum number of CRs expected to be polled;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*poll_jfc)(struct ubcore_jfc \*jfc, int cr_cnt,\
-struct ubcore_cr \*cr);\
-*/\*\**\
-*\* query_stats. success to query and buffer length is enough*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] key: type and key value of the ub device to query;*\
-*\** \@param*\[in/out\] val: address and buffer length of query results*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_stats)(struct ubcore_device \*dev,\
-struct ubcore_stats_key \*key,\
-struct ubcore_stats_val \*val);\
-*/\*\**\
-*\* config function migrate state.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] ue_idx: ue id;*\
-*\** \@param*\[in\] cnt: config count;*\
-*\** \@param*\[in\] cfg: eid and the upi of ue to which the eid belongs can be specified;*\
-*\** \@param*\[in\] state: config state (start, rollback and finish)*\
-*\** \@return*: config success count, -1 on error*\
-*\*/*\
-int (\*config_function_migrate_state)(struct ubcore_device \*dev,\
-uint16_t ue_idx, uint32_t cnt,\
-struct ubcore_ueid_cfg \*cfg,\
-enum ubcore_mig_state state);\
-*/\*\**\
-*\* modify vtp.*\
-*\** \@param*\[in\] vtp: vtp pointer to be modified;*\
-*\** \@param*\[in\] attr: vtp attr, tp that we want to change;*\
-*\** \@param*\[in\] mask: attr mask;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*modify_vtp)(struct ubcore_vtp \*vtp, struct ubcore_vtp_attr \*attr,\
-union ubcore_vtp_attr_mask \*mask);\
-*/\*\**\
-*\* query ue index.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] devid: ue devid to query*\
-*\** \@param*\[out\] ue_idx: ue id;*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_ue_idx)(struct ubcore_device \*dev,\
-struct ubcore_devid \*devid, uint16_t \*ue_idx);\
-*/\*\**\
-*\* config dscp-vl mapping*\
-*\** \@param*\[in\] dev:the ub dev handle;*\
-*\** \@param*\[in\] dscp: the dscp value array*\
-*\** \@param*\[in\] vl: the vl value array*\
-*\** \@param*\[in\] num: array num*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*config_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,\
-uint8_t \*vl, uint8_t num);\
-*/\*\**\
-*\* query ue stats, for migration currently.*\
-*\** \@param*\[in\] dev: the ub device handle;*\
-*\** \@param*\[in\] cnt: array count;*\
-*\** \@param*\[in\] ue_idx: ue id array;*\
-*\** \@param*\[out\] stats: ue counters*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_ue_stats)(struct ubcore_device \*dev, uint32_t cnt,\
-uint16_t \*ue_idx, struct ubcore_ue_stats \*stats);\
-*/\*\**\
-*\* query dscp-vl mapping*\
-*\** \@param*\[in\] dev:the ub dev handle;*\
-*\** \@param*\[in\] dscp: the dscp value array*\
-*\** \@param*\[in\] num: array num*\
-*\** \@param*\[out\] vl: the vl value array*\
-*\** \@return*: 0 on success, other value on error*\
-*\*/*\
-int (\*query_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,\
-uint8_t num, uint8_t \*vl);\
-*/\*\**\
-*\* When UVS or UB dataplane is running:*\
-*\* 1. disassociate_ucontext != NULL means support rmmod driver.*\
-*\* 2. disassociate_ucontext == NULL means rmmod driver will fail because module is in use.*\
-*\* If disassociate_ucontext !=* NULL:\
-*\* 1. When remove MUE/UE device, will call it;*\
-*\* 2. When remove MUE device, will not call it because there are no uctx.*\
-*\** \@param*\[in\] uctx: the ubcore_ucontext*\
-*\*/*\
-void (\*disassociate_ucontext)(struct ubcore_ucontext \*uctx);\
+```c
+struct ubcore_ops {
+    struct module *owner; */* kernel driver module */*
+    char driver_name[UBCORE_MAX_DRIVER_NAME]; */* user space driver name */*
+    uint32_t abi_version; */* abi version of kernel driver */*
+    */***
+    ** add a function entity id (eid) to ub device (for uvs)*
+    *** @param*[in] dev: the ubcore_device handle;*
+    *** @param*[in] ue_idx: ue_idx;*
+    *** @param*[in] cfg: eid and the upi of ue to which the eid belongs can be specified;*
+    *** @return*: the index of eid/upi, less than 0 indicating error*
+    **/*
+    int (*add_ueid)(struct ubcore_device *dev, uint16_t ue_idx,
+    struct ubcore_ueid_cfg *cfg);
+    */***
+    ** delete a function entity id (eid) to ub device (for uvs)*
+    *** @param*[in] dev: the ubcore_device handle;*
+    *** @param*[in] ue_idx: ue_idx;*
+    *** @param*[in] cfg: eid and the upi of ue to which the eid belongs can be specified;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*delete_ueid)(struct ubcore_device *dev, uint16_t ue_idx,
+    struct ubcore_ueid_cfg *cfg);
+    */***
+    ** query device attributes*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[out] attr: attributes for the driver to fill in*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_device_attr)(struct ubcore_device *dev,
+    struct ubcore_device_attr *attr);
+    */***
+    ** query device status*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[out] status: status for the driver to fill in*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_device_status)(struct ubcore_device *dev,
+    struct ubcore_device_status *status);
+    */***
+    ** query resource*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] key: resource type and key;*
+    *** @param*[in/out] val: addr and len of value*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_res)(struct ubcore_device *dev, struct ubcore_res_key *key,
+    struct ubcore_res_val *val);
+    */***
+    ** config device*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: device configuration*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*config_device)(struct ubcore_device *dev,
+    struct ubcore_device_cfg *cfg);
+    */***
+    ** set ub network address*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] net_addr: net_addr to set*
+    *** @param*[in] index: index by sip table*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*add_net_addr)(struct ubcore_device *dev,
+    struct ubcore_net_addr *net_addr, uint32_t index);
+    */***
+    ** unset ub network address*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] idx: net_addr idx by sip table entry*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*delete_net_addr)(struct ubcore_device *dev, uint32_t idx);
+    */***
+    ** allocate a context from ubep for a user process*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] eid: function entity id (eid) index to set;*
+    *** @param*[in] udrv_data: user space driver data*
+    *** @return*: pointer to user context on success, null or error,*
+    **/*
+    struct ubcore_ucontext *(*alloc_ucontext)(
+    struct ubcore_device *dev, uint32_t eid_index,
+    struct ubcore_udrv_priv *udrv_data);
+    */***
+    ** free a context to ubep*
+    *** @param*[in] uctx: the user context created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*free_ucontext)(struct ubcore_ucontext *uctx);
+    */***
+    ** mmap doorbell or jetty buffer, etc*
+    *** @param*[in] uctx: the user context created before;*
+    *** @param*[in] vma: linux vma including vm_start, vm_pgoff, etc;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*mmap)(struct ubcore_ucontext *ctx, struct vm_area_struct *vma);
+    */* segment part */*
+    */** alloc token id to ubep*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] flag: token_id_flag;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: token id pointer on success, NULL on error*
+    **/*
+    struct ubcore_token_id *(*alloc_token_id)(
+    struct ubcore_device *dev, union ubcore_token_id_flag flag,
+    struct ubcore_udata *udata);
+    */** free key id from ubep*
+    *** @param*[in] token_id: the token id alloced before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*free_token_id)(struct ubcore_token_id *token_id);
+    */** register segment to ubep*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: segment attributes and configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target segment pointer on success, NULL on error*
+    **/*
+    struct ubcore_target_seg *(*register_seg)(struct ubcore_device *dev,
+    struct ubcore_seg_cfg *cfg,
+    struct ubcore_udata *udata);
+    */** unregister segment from ubep*
+    *** @param*[in] tseg: the segment registered before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*unregister_seg)(struct ubcore_target_seg *tseg);
+    */** import a remote segment to ubep*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: segment attributes and import configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target segment handle on success, NULL on error*
+    **/*
+    struct ubcore_target_seg *(*import_seg)(
+    struct ubcore_device *dev, struct ubcore_target_seg_cfg *cfg,
+    struct ubcore_udata *udata);
+    */** unimport seg from ubep*
+    *** @param*[in] tseg: the segment imported before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*unimport_seg)(struct ubcore_target_seg *tseg);
+    */** add port for bound device*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] port_cnt: port count*
+    *** @param*[in] port_list: port list*
+    *** @return*: target segment handle on success, NULL on error*
+    **/*
+    int (*add_port)(struct ubcore_device *dev, uint32_t port_cnt,
+    uint32_t *port_list);
+    */* jetty part */*
+    */***
+    ** create jfc with ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: jfc attributes and configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: jfc pointer on success, NULL on error*
+    **/*
+    struct ubcore_jfc *(*create_jfc)(struct ubcore_device *dev,
+    struct ubcore_jfc_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** modify jfc from ubep.*
+    *** @param*[in] jfc: the jfc created before;*
+    *** @param*[in] attr: ubcore jfc attr;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_jfc)(struct ubcore_jfc *jfc, struct ubcore_jfc_attr *attr,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy jfc from ubep.*
+    *** @param*[in] jfc: the jfc created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfc)(struct ubcore_jfc *jfc);
+    */***
+    ** batch destroy jfc from ubep.*
+    *** @param*[in] jfc_arr: the jfc array created before;*
+    *** @param*[in] jfc_num: jfc array length;*
+    *** @param*[out] bad_jfc_index: when delete err, return jfc index in the array;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfc_batch)(struct ubcore_jfc **jfc_arr, int jfc_num,
+    int *bad_jfc_index);
+    */***
+    ** rearm jfc.*
+    *** @param*[in] jfc: the jfc created before;*
+    *** @param*[in] solicited_only: rearm notify by message marked with solicited flag*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*rearm_jfc)(struct ubcore_jfc *jfc, bool solicited_only);
+    */***
+    ** create jfs with ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: jfs attributes and configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: jfs pointer on success, NULL on error*
+    **/*
+    struct ubcore_jfs *(*create_jfs)(struct ubcore_device *dev,
+    struct ubcore_jfs_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** modify jfs from ubep.*
+    *** @param*[in] jfs: the jfs created before;*
+    *** @param*[in] attr: ubcore jfs attr;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_attr *attr,
+    struct ubcore_udata *udata);
+    */***
+    ** query jfs from ubep.*
+    *** @param*[in] jfs: the jfs created before;*
+    *** @param*[out] cfg: jfs configurations;*
+    *** @param*[out] attr: ubcore jfs attributes;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_cfg *cfg,
+    struct ubcore_jfs_attr *attr);
+    */***
+    ** flush jfs from ubep.*
+    *** @param*[in] jfs: the jfs created before;*
+    *** @param*[in] cr_cnt: the maximum number of CRs expected to be returned;*
+    *** @param*[out] cr: the addr of returned CRs;*
+    *** @return*: the number of CR returned, 0 means no completion record returned, -1 on error*
+    **/*
+    int (*flush_jfs)(struct ubcore_jfs *jfs, int cr_cnt,
+    struct ubcore_cr *cr);
+    */***
+    ** destroy jfs from ubep.*
+    *** @param*[in] jfs: the jfs created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfs)(struct ubcore_jfs *jfs);
+    */***
+    ** batch destroy jfs from ubep.*
+    *** @param*[in] jfs_arr: the jfs array created before;*
+    *** @param*[in] jfs_num: jfs array length;*
+    *** @param*[out] bad_jfs_index: when error, return error jfs index in the array;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfs_batch)(struct ubcore_jfs **jfs_arr, int jfs_num,
+    int *bad_jfs_index);
+    */***
+    ** create jfr with ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: jfr attributes and configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: jfr pointer on success, NULL on error*
+    **/*
+    struct ubcore_jfr *(*create_jfr)(struct ubcore_device *dev,
+    struct ubcore_jfr_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** modify jfr from ubep.*
+    *** @param*[in] jfr: the jfr created before;*
+    *** @param*[in] attr: ubcore jfr attr;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_attr *attr,
+    struct ubcore_udata *udata);
+    */***
+    ** query jfr from ubep.*
+    *** @param*[in] jfr: the jfr created before;*
+    *** @param*[out] cfg: jfr configurations;*
+    *** @param*[out] attr: ubcore jfr attributes;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_cfg *cfg,
+    struct ubcore_jfr_attr *attr);
+    */***
+    ** destroy jfr from ubep.*
+    *** @param*[in] jfr: the jfr created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfr)(struct ubcore_jfr *jfr);
+    */***
+    ** batch destroy jfr from ubep.*
+    *** @param*[in] jfr_arr: the jfr array created before;*
+    *** @param*[in] jfr_num: jfr array length;*
+    *** @param*[out] bad_jfr_index: when error, return error jfr index in the array;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jfr_batch)(struct ubcore_jfr **jfr_arr, int jfr_num,
+    int *bad_jfr_index);
+    */***
+    ** import jfr to ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: remote jfr attributes and import configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target jfr pointer on success, NULL on error*
+    **/*
+    struct ubcore_tjetty *(*import_jfr)(struct ubcore_device *dev,
+    struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** import jfr to ubep by control plane.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: remote jfr attributes and import configurations;*
+    *** @param*[in] active_tp_cfg: tp configuration to active;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target jfr pointer on success, NULL on error*
+    **/*
+    struct ubcore_tjetty *(*import_jfr_ex)(
+    struct ubcore_device *dev, struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** unimport jfr from ubep.*
+    *** @param*[in] tjfr: the target jfr imported before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*unimport_jfr)(struct ubcore_tjetty *tjfr);
+    */***
+    ** create jetty with ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: jetty attributes and configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: jetty pointer on success, NULL on error*
+    **/*
+    struct ubcore_jetty *(*create_jetty)(struct ubcore_device *dev,
+    struct ubcore_jetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** modify jetty from ubep.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] attr: ubcore jetty attr;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_jetty_attr *attr,
+    struct ubcore_udata *udata);
+    */***
+    ** query jetty from ubep.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[out] cfg: jetty configurations;*
+    *** @param*[out] attr: ubcore jetty attributes;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_jetty_cfg *cfg,
+    struct ubcore_jetty_attr *attr);
+    */***
+    ** flush jetty from ubep.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] cr_cnt: the maximum number of CRs expected to be returned;*
+    *** @param*[out] cr: the addr of returned CRs;*
+    *** @return*: the number of CR returned, 0 means no completion record returned, -1 on error*
+    **/*
+    int (*flush_jetty)(struct ubcore_jetty *jetty, int cr_cnt,
+    struct ubcore_cr *cr);
+    */***
+    ** destroy jetty from ubep.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jetty)(struct ubcore_jetty *jetty);
+    */***
+    ** batch destroy jetty from ubep.*
+    *** @param*[in] jetty_arr: the jetty array created before;*
+    *** @param*[in] jetty_num: jetty array length;*
+    *** @param*[out] bad_jetty_index: when error, return error jetty index in the array;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_jetty_batch)(struct ubcore_jetty **jetty_arr,
+    int jetty_num, int *bad_jetty_index);
+    */***
+    ** import jetty to ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: remote jetty attributes and import configurations*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target jetty pointer on success, NULL on error*
+    **/*
+    struct ubcore_tjetty *(*import_jetty)(struct ubcore_device *dev,
+    struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** import jetty to ubep by control plane.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: remote jetty attributes and import configurations*
+    *** @param*[in] active_tp_cfg: tp configuration to active*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: target jetty pointer on success, NULL on error*
+    **/*
+    struct ubcore_tjetty *(*import_jetty_ex)(
+    struct ubcore_device *dev, struct ubcore_tjetty_cfg *cfg,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** unimport jetty from ubep.*
+    *** @param*[in] tjetty: the target jetty imported before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*unimport_jetty)(struct ubcore_tjetty *tjetty);
+    */***
+    ** bind jetty from ubep.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] tjetty: the target jetty imported before;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*bind_jetty)(struct ubcore_jetty *jetty,
+    struct ubcore_tjetty *tjetty,
+    struct ubcore_udata *udata);
+    */***
+    ** bind jetty from ubep by control plane.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] tjetty: the target jetty imported before;*
+    *** @param*[in] active_tp_cfg: tp configuration to active;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*bind_jetty_ex)(struct ubcore_jetty *jetty,
+    struct ubcore_tjetty *tjetty,
+    struct ubcore_active_tp_cfg *active_tp_cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** unbind jetty from ubep.*
+    *** @param*[in] jetty: the jetty binded before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*unbind_jetty)(struct ubcore_jetty *jetty);
+    */***
+    ** create jetty group to ubep.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: pointer of the jetty group config;*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: jetty group pointer on success, NULL on error*
+    **/*
+    struct ubcore_jetty_group *(*create_jetty_grp)(
+    struct ubcore_device *dev, struct ubcore_jetty_grp_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy jetty group to ubep.*
+    *** @param*[in] jetty_grp: the jetty group created before;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*delete_jetty_grp)(struct ubcore_jetty_group *jetty_grp);
+    */***
+    ** create tpg.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: tpg init attributes*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: tp pointer on success, NULL on error*
+    **/*
+    struct ubcore_tpg *(*create_tpg)(struct ubcore_device *dev,
+    struct ubcore_tpg_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy tpg.*
+    *** @param*[in] tp: tp pointer created before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_tpg)(struct ubcore_tpg *tpg);
+    */***
+    ** get tpid list by control plane.*
+    *** @param*[in] dev: ubcore device pointer created before*
+    *** @param*[in] cfg: tpid configuration to be matched*
+    *** @param*[in && out] tp_cnt: tp_cnt is the length of tp_list buffer as in parameter;*
+    ** tp_cnt is the number of tp as out parameter*
+    *** @param*[out] tp_list: tp list to get, the buffer is allocated by user;*
+    *** @param*[in && out] udata: ucontext and user space driver data*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*get_tp_list)(struct ubcore_device *dev,
+    struct ubcore_get_tp_cfg *cfg, uint32_t *tp_cnt,
+    struct ubcore_tp_info *tp_list,
+    struct ubcore_udata *udata);
+    */***
+    ** set tp attributions by control plane.*
+    *** @param*[in] dev: ubcore device pointer created before;*
+    *** @param*[in] tp_handle: tp_handle got by ubcore_get_tp_list;*
+    *** @param*[in] tp_attr_cnt: number of tp attributions;*
+    *** @param*[in] tp_attr_bitmap: tp attributions bitmap, current bitmap is as follow:*
+    ** 0-retry_times_init: 3 bit 1-at: 5 bit 2-*SIP: *128 bit*
+    ** 3-*DIP: *128 bit 4-*SMA: *48 bit 5-*DMA: *48 bit*
+    ** 6-vlan_id: 12 bit 7-vlan_en: 1 bit 8-dscp: 6 bit*
+    ** 9-at_times: 5 bit 10-sl: 4 bit 11-tti: 8 bit*
+    *** @param*[in] tp_attr: tp attribution values to set;*
+    *** @param*[in && out] udata: ucontext and user space driver data;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*set_tp_attr)(struct ubcore_device *dev, const uint64_t tp_handle,
+    const uint8_t tp_attr_cnt,
+    const uint32_t tp_attr_bitmap,
+    const struct ubcore_tp_attr_value *tp_attr,
+    struct ubcore_udata *udata);
+    */***
+    ** get tp attributions by control plane.*
+    *** @param*[in] dev: ubcore device pointer created before;*
+    *** @param*[in] tp_handle: tp_handle got by ubcore_get_tp_list;*
+    *** @param*[out] tp_attr_cnt: number of tp attributions;*
+    *** @param*[out] tp_attr_bitmap: tp bitmap, the same as tp_attr_bitmap in set_tp_attr;*
+    *** @param*[out] tp_attr: tp attribution values to get;*
+    *** @param*[in && out] udata: ucontext and user space driver data;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*get_tp_attr)(struct ubcore_device *dev, const uint64_t tp_handle,
+    uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap,
+    struct ubcore_tp_attr_value *tp_attr,
+    struct ubcore_udata *udata);
+    */***
+    ** active tp by control plane.*
+    *** @param*[in] dev: ubcore device pointer created before*
+    *** @param*[in] active_cfg: tp configuration to active*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*active_tp)(struct ubcore_device *dev,
+    struct ubcore_active_tp_cfg *active_cfg);
+    */***
+    ** deactivate tp by control plane.*
+    *** @param*[in] dev: ubcore device pointer created before*
+    *** @param*[in] tp_handle: tp_handle value got before*
+    *** @param*[in] udata: [Optional] udata should be NULL when called*
+    ** by kernel application and be valid when called*
+    ** by user space application*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*deactive_tp)(struct ubcore_device *dev,
+    union ubcore_tp_handle tp_handle,
+    struct ubcore_udata *udata);
+    */***
+    ** create tp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: tp init attributes*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: tp pointer on success, NULL on error*
+    **/*
+    struct ubcore_tp *(*create_tp)(struct ubcore_device *dev,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** modify tp.*
+    *** @param*[in] tp: tp pointer created before*
+    *** @param*[in] attr: tp attributes*
+    *** @param*[in] mask: attr mask indicating the attributes to be modified*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_tp)(struct ubcore_tp *tp, struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask mask);
+    */***
+    ** modify user tp.*
+    *** @param*[in] dev: the ub device handle*
+    *** @param*[in] tpn: tp number of the tp created before*
+    *** @param*[in] cfg: user configuration of the tp*
+    *** @param*[in] attr: tp attributes*
+    *** @param*[in] mask: attr mask indicating the attributes to be modified*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_user_tp)(struct ubcore_device *dev, uint32_t tpn,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask mask);
+    */***
+    ** destroy tp.*
+    *** @param*[in] tp: tp pointer created before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_tp)(struct ubcore_tp *tp);
+    */***
+    ** create multi tp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cnt: the number of tp, must be less than or equal to 32;*
+    *** @param*[in] cfg: array of tp init attributes*
+    *** @param*[in] udata: array of ucontext and user space driver data*
+    *** @param*[out] tp: pointer array of tp*
+    *** @return*: created tp cnt, 0 on error*
+    **/*
+    int (*create_multi_tp)(struct ubcore_device *dev, uint32_t cnt,
+    struct ubcore_tp_cfg *cfg,
+    struct ubcore_udata *udata,
+    struct ubcore_tp **tp);
+    */***
+    ** modify multi tp.*
+    *** @param*[in] cnt: the number of tp;*
+    *** @param*[in] tp: pointer array of tp created before*
+    *** @param*[in] attr: array of tp attributes*
+    *** @param*[in] mask: array of attr mask indicating the attributes to be modified*
+    *** @param*[in] fail_tp: pointer of tp failed to modify*
+    *** @return*: modified successfully tp cnt, 0 on error*
+    **/*
+    int (*modify_multi_tp)(uint32_t cnt, struct ubcore_tp **tp,
+    struct ubcore_tp_attr *attr,
+    union ubcore_tp_attr_mask *mask,
+    struct ubcore_tp **fail_tp);
+    */***
+    ** destroy multi tp.*
+    *** @param*[in] cnt: the number of tp;*
+    *** @param*[in] tp: pointer array of tp created before*
+    *** @return*: destroyed tp cnt, 0 on error*
+    **/*
+    int (*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp **tp);
+    */***
+    ** allocate vtp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @return*: vtpn pointer on success, NULL on error*
+    **/*
+    struct ubcore_vtpn *(*alloc_vtpn)(struct ubcore_device *dev);
+    */***
+    ** free vtpn.*
+    *** @param*[in] vtpn: vtpn pointer allocated before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*free_vtpn)(struct ubcore_vtpn *vtpn);
+    */***
+    ** create vtp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: vtp init attributes*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: vtp pointer on success, NULL on error*
+    **/*
+    struct ubcore_vtp *(*create_vtp)(struct ubcore_device *dev,
+    struct ubcore_vtp_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy vtp.*
+    *** @param*[in] vtp: vtp pointer created before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_vtp)(struct ubcore_vtp *vtp);
+    */***
+    ** create utp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: utp init attributes*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: utp pointer on success, NULL on error*
+    **/*
+    struct ubcore_utp *(*create_utp)(struct ubcore_device *dev,
+    struct ubcore_utp_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy utp.*
+    *** @param*[in] utp: utp pointer created before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_utp)(struct ubcore_utp *utp);
+    */***
+    ** create ctp.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cfg: ctp init attributes*
+    *** @param*[in] udata: ucontext and user space driver data*
+    *** @return*: ctp pointer on success, NULL on error*
+    **/*
+    struct ubcore_ctp *(*create_ctp)(struct ubcore_device *dev,
+    struct ubcore_ctp_cfg *cfg,
+    struct ubcore_udata *udata);
+    */***
+    ** destroy ctp.*
+    *** @param*[in] ctp: ctp pointer created before*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*destroy_ctp)(struct ubcore_ctp *ctp);
+    */***
+    ** UE send msg to MUE device.*
+    *** @param*[in] dev: UE or MUE device;*
+    *** @param*[in] msg: msg to send;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*send_req)(struct ubcore_device *dev, struct ubcore_req *msg);
+    */***
+    ** MUE send msg to UE device.*
+    *** @param*[in] dev: MUE device;*
+    *** @param*[in] msg: msg to send;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*send_resp)(struct ubcore_device *dev,
+    struct ubcore_resp_host *msg);
+    */***
+    ** query cc table to get cc pattern idx*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cc_entry_cnt: cc entry cnt;*
+    *** @return*: return NULL on fail, otherwise, return cc entry array*
+    **/*
+    struct ubcore_cc_entry *(*query_cc)(struct ubcore_device *dev,
+    uint32_t *cc_entry_cnt);
+    */***
+    ** bond slave net device*
+    *** @param*[in] bond: bond netdev;*
+    *** @param*[in] slave: slave netdev;*
+    *** @param*[in] upper_info: change upper event info;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*bond_add)(struct net_device *bond, struct net_device *slave,
+    struct netdev_lag_upper_info *upper_info);
+    */***
+    ** unbond slave net device*
+    *** @param*[in] bond: bond netdev;*
+    *** @param*[in] slave: slave netdev;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*bond_remove)(struct net_device *bond, struct net_device *slave);
+    */***
+    ** update slave net device*
+    *** @param*[in] bond: bond netdev;*
+    *** @param*[in] slave: slave netdev;*
+    *** @param*[in] lower_info: change lower state event info;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*slave_update)(struct net_device *bond, struct net_device *slave,
+    struct netdev_lag_lower_state_info *lower_info);
+    */***
+    ** operation of user ioctl cmd.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] user_ctl: kdrv user control command pointer;*
+    ** Return: 0 on success, other value on error*
+    **/*
+    int (*user_ctl)(struct ubcore_device *dev,
+    struct ubcore_user_ctl *user_ctl);
+    */** data path ops */*
+    */***
+    ** post jfs wr.*
+    *** @param*[in] jfs: the jfs created before;*
+    *** @param*[in] wr: the wr to be posted;*
+    *** @param*[out] bad_wr: the first failed wr;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*post_jfs_wr)(struct ubcore_jfs *jfs, struct ubcore_jfs_wr *wr,
+    struct ubcore_jfs_wr **bad_wr);
+    */***
+    ** post jfr wr.*
+    *** @param*[in] jfr: the jfr created before;*
+    *** @param*[in] wr: the wr to be posted;*
+    *** @param*[out] bad_wr: the first failed wr;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*post_jfr_wr)(struct ubcore_jfr *jfr, struct ubcore_jfr_wr *wr,
+    struct ubcore_jfr_wr **bad_wr);
+    */***
+    ** post jetty send wr.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] wr: the wr to be posted;*
+    *** @param*[out] bad_wr: the first failed wr;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*post_jetty_send_wr)(struct ubcore_jetty *jetty,
+    struct ubcore_jfs_wr *wr,
+    struct ubcore_jfs_wr **bad_wr);
+    */***
+    ** post jetty receive wr.*
+    *** @param*[in] jetty: the jetty created before;*
+    *** @param*[in] wr: the wr to be posted;*
+    *** @param*[out] bad_wr: the first failed wr;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*post_jetty_recv_wr)(struct ubcore_jetty *jetty,
+    struct ubcore_jfr_wr *wr,
+    struct ubcore_jfr_wr **bad_wr);
+    */***
+    ** poll jfc.*
+    *** @param*[in] jfc: the jfc created before;*
+    *** @param*[in] cr_cnt: the maximum number of CRs expected to be polled;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*poll_jfc)(struct ubcore_jfc *jfc, int cr_cnt,
+    struct ubcore_cr *cr);
+    */***
+    ** query_stats. success to query and buffer length is enough*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] key: type and key value of the ub device to query;*
+    *** @param*[in/out] val: address and buffer length of query results*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_stats)(struct ubcore_device *dev,
+    struct ubcore_stats_key *key,
+    struct ubcore_stats_val *val);
+    */***
+    ** config function migrate state.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] ue_idx: ue id;*
+    *** @param*[in] cnt: config count;*
+    *** @param*[in] cfg: eid and the upi of ue to which the eid belongs can be specified;*
+    *** @param*[in] state: config state (start, rollback and finish)*
+    *** @return*: config success count, -1 on error*
+    **/*
+    int (*config_function_migrate_state)(struct ubcore_device *dev,
+    uint16_t ue_idx, uint32_t cnt,
+    struct ubcore_ueid_cfg *cfg,
+    enum ubcore_mig_state state);
+    */***
+    ** modify vtp.*
+    *** @param*[in] vtp: vtp pointer to be modified;*
+    *** @param*[in] attr: vtp attr, tp that we want to change;*
+    *** @param*[in] mask: attr mask;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*modify_vtp)(struct ubcore_vtp *vtp, struct ubcore_vtp_attr *attr,
+    union ubcore_vtp_attr_mask *mask);
+    */***
+    ** query ue index.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] devid: ue devid to query*
+    *** @param*[out] ue_idx: ue id;*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_ue_idx)(struct ubcore_device *dev,
+    struct ubcore_devid *devid, uint16_t *ue_idx);
+    */***
+    ** config dscp-vl mapping*
+    *** @param*[in] dev:the ub dev handle;*
+    *** @param*[in] dscp: the dscp value array*
+    *** @param*[in] vl: the vl value array*
+    *** @param*[in] num: array num*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*config_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
+    uint8_t *vl, uint8_t num);
+    */***
+    ** query ue stats, for migration currently.*
+    *** @param*[in] dev: the ub device handle;*
+    *** @param*[in] cnt: array count;*
+    *** @param*[in] ue_idx: ue id array;*
+    *** @param*[out] stats: ue counters*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_ue_stats)(struct ubcore_device *dev, uint32_t cnt,
+    uint16_t *ue_idx, struct ubcore_ue_stats *stats);
+    */***
+    ** query dscp-vl mapping*
+    *** @param*[in] dev:the ub dev handle;*
+    *** @param*[in] dscp: the dscp value array*
+    *** @param*[in] num: array num*
+    *** @param*[out] vl: the vl value array*
+    *** @return*: 0 on success, other value on error*
+    **/*
+    int (*query_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
+    uint8_t num, uint8_t *vl);
+    */***
+    ** When UVS or UB dataplane is running:*
+    ** 1. disassociate_ucontext != NULL means support rmmod driver.*
+    ** 2. disassociate_ucontext == NULL means rmmod driver will fail because module is in use.*
+    ** If disassociate_ucontext !=* NULL:
+    ** 1. When remove MUE/UE device, will call it;*
+    ** 2. When remove MUE device, will not call it because there are no uctx.*
+    *** @param*[in] uctx: the ubcore_ucontext*
+    **/*
+    void (*disassociate_ucontext)(struct ubcore_ucontext *uctx);
 };
+```
 
-#### ubcore_transport_type
+#### 5.1.1.12 ubcore_transport_type
 
-enum ubcore_transport_type {\
-UBCORE_TRANSPORT_INVALID = -1,\
-UBCORE_TRANSPORT_UB = 0,\
-UBCORE_TRANSPORT_MAX\
+```c
+enum ubcore_transport_type {
+    UBCORE_TRANSPORT_INVALID = -1,
+    UBCORE_TRANSPORT_UB = 0,
+    UBCORE_TRANSPORT_MAX
 };
+```
 
-### UB设备解注册接口
+### 5.1.2 UB设备解注册接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_unregister_device(struct ubcore_device \*dev)
+void ubcore_unregister_device(struct ubcore_device *dev)
 
 3.  描述
 
@@ -13712,21 +13340,21 @@ UDMA驱动卸载时主动调用，解注册UB设备
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
 5.  返回值
 
 NA
 
-### 内存映射接口
+### 5.1.3 内存映射接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-struct ubcore_umem \*ubcore_umem_get(struct ubcore_device \*dev, uint64_t va,
+struct ubcore_umem *ubcore_umem_get(struct ubcore_device *dev, uint64_t va,
 
 uint64_t len, union ubcore_umem_flag flag)
 
@@ -13736,50 +13364,54 @@ UDMA驱动需要分配Jetty队列和非sva情况下segment的物理内存并进�
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] va: the VA address to be mapped.
+@param[in] va: the VA address to be mapped.
 
-\@param\[in\] len: Length of the address space to be allocated and mapped by DMA.
+@param[in] len: Length of the address space to be allocated and mapped by DMA.
 
-\@param\[in\] flag: Attribute flags
+@param[in] flag: Attribute flags
 
 5.  返回值
 
 umem ptr on success, ERR_PTR on error
 
-#### ubcore_umem
+#### 5.1.3.1 ubcore_umem
 
-struct ubcore_umem {\
-struct ubcore_device \*ub_dev;\
-struct mm_struct \*owning_mm;\
-uint64_t length;\
-uint64_t va;\
-union [6.1.3.2](#ubcore_umem_flag-1) [ubcore_umem_flag](#ubcore_umem_flag-1) flag;\
-struct sg_table sg_head;\
-uint32_t nmap;\
+```c
+struct ubcore_umem {
+    struct ubcore_device *ub_dev;
+    struct mm_struct *owning_mm;
+    uint64_t length;
+    uint64_t va;
+    union ubcore_umem_flag flag;
+    struct sg_table sg_head;
+    uint32_t nmap;
 };
+```
 
-#### ubcore_umem_flag
+#### 5.1.3.2 ubcore_umem_flag
 
-union ubcore_umem_flag {\
-struct {\
-uint32_t non_pin : 1; /\* 0: pinned to physical memory. 1: non pin. \*/\
-uint32_t writable : 1; /\* 0: read-only. 1: writable. \*/\
-uint32_t reserved : 30;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_umem_flag {
+    struct {
+        uint32_t non_pin : 1; /* 0: pinned to physical memory. 1: non pin. */
+        uint32_t writable : 1; /* 0: read-only. 1: writable. */
+        uint32_t reserved : 30;
+    } bs;
+    uint32_t value;
 };
+```
 
-### 内存反映射接口
+### 5.1.4 内存反映射接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_umem_release(struct ubcore_umem \*umem);
+void ubcore_umem_release(struct ubcore_umem *umem);
 
 3.  描述
 
@@ -13787,21 +13419,21 @@ void ubcore_umem_release(struct ubcore_umem \*umem);
 
 4.  参数
 
-\@param\[in\] \[Required\]umem: the ubcore umem created before
+@param[in] [Required]umem: the ubcore umem created before
 
 5.  返回值
 
 NA
 
-### 查找内存最优页面大小接口
+### 5.1.5 查找内存最优页面大小接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-uint64_t ubcore_umem_find_best_page_size(struct ubcore_umem \*umem, uint64_t page_size_bitmap, uint64_t va)
+uint64_t ubcore_umem_find_best_page_size(struct ubcore_umem *umem, uint64_t page_size_bitmap, uint64_t va)
 
 3.  描述
 
@@ -13809,21 +13441,21 @@ uint64_t ubcore_umem_find_best_page_size(struct ubcore_umem \*umem, uint64_t pag
 
 4.  参数
 
-\@param\[in\] umem: umem struct, return of ubcore_umem_get;
+@param[in] umem: umem struct, return of ubcore_umem_get;
 
-\@param\[in\] page_size_bitmap: bitmap of HW supported page sizes, must include PAGE_SIZE;
+@param[in] page_size_bitmap: bitmap of HW supported page sizes, must include PAGE_SIZE;
 
-\@param\[in\] va: Initial address of this segment.
+@param[in] va: Initial address of this segment.
 
 5.  返回值
 
 Return: 早于5.3的内核版本，返回固定大小4k；5.3及之后的内核版本，当内存不支持获取最优页面大小，返回0；否则返回最优页面大小。
 
-### 获取MTU接口
+### 5.1.6 获取MTU接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
@@ -13835,23 +13467,23 @@ enum ubcore_mtu ubcore_get_mtu(int mtu);
 
 4.  参数
 
-\@param\[in\] \[Required\] mtu: specifies the MTU value of the NIC interface.
+@param[in] [Required] mtu: specifies the MTU value of the NIC interface.
 
 5.  返回值
 
 The MTU of the UB protocol, this value removes the length of the network layer, transport layer, transaction layer header and ICRC.
 
-### 获取ue接口
+### 5.1.7 获取ue接口
 
-#### 查询ue_idx接口
+#### 5.1.7.1 查询ue_idx接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int (\*query_ue_idx)(struct ubcore_device \*dev, struct ubcore_devid \*devid, uint16_t \*ue_idx);
+int (*query_ue_idx)(struct ubcore_device *dev, struct ubcore_devid *devid, uint16_t *ue_idx);
 
 3.  描述
 
@@ -13859,27 +13491,27 @@ int (\*query_ue_idx)(struct ubcore_device \*dev, struct ubcore_devid \*devid, ui
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] devid: ue devid to query
+@param[in] devid: ue devid to query
 
-\@param\[out\] ue_idx: ue id;
+@param[out] ue_idx: ue id;
 
 5.  返回值
 
 *0 on success, other value on error*。
 
-#### 查询ue状态接口
+#### 5.1.7.2 查询ue状态接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int (\*query_ue_stats)(struct ubcore_device \*dev, uint32_t cnt,
+int (*query_ue_stats)(struct ubcore_device *dev, uint32_t cnt,
 
-uint16_t \*ue_idx, struct ubcore_ue_stats \*stats);
+uint16_t *ue_idx, struct ubcore_ue_stats *stats);
 
 3.  描述
 
@@ -13887,29 +13519,29 @@ uint16_t \*ue_idx, struct ubcore_ue_stats \*stats);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cnt: array count;
+@param[in] cnt: array count;
 
-\@param\[in\] ue_idx: ue id array;
+@param[in] ue_idx: ue id array;
 
-\@param\[out\] stats: ue counters
+@param[out] stats: ue counters
 
 5.  返回值
 
 *0 on success, other value on error*。
 
-### 发送和接口消息接口
+### 5.1.8 发送和接口消息接口
 
-#### 发送请求ops接口
+#### 5.1.8.1 发送请求ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*send_req)(struct ubcore_device \*dev, struct ubcore_req \*msg);
+int (*send_req)(struct ubcore_device *dev, struct ubcore_req *msg);
 
 3.  描述
 
@@ -13917,55 +13549,59 @@ int (\*send_req)(struct ubcore_device \*dev, struct ubcore_req \*msg);
 
 4.  参数
 
-\@param\[in\] dev: VF or PF device;
+@param[in] dev: VF or PF device;
 
-\@param\[in\] msg: msg to send;
+@param[in] msg: msg to send;
 
 5.  返回值
 
 0 on success, other value on error
 
-##### ubcore_req
+##### 5.1.8.1.1 ubcore_req
 
-struct ubcore_req {\
-uint32_t msg_id;\
-enum [6.1.8.1.2](#ubcore_msg_opcode-1) [ubcore_msg_opcode](#ubcore_msg_opcode-1) opcode;\
-uint32_t len;\
-uint8_t data\[\];\
+```c
+struct ubcore_req {
+    uint32_t msg_id;
+    enum ubcore_msg_opcode opcode;
+    uint32_t len;
+    uint8_t data[];
 };
+```
 
-##### ubcore_msg_opcode
+##### 5.1.8.1.2 ubcore_msg_opcode
 
-enum ubcore_msg_opcode {\
-*/\* 630 Verion msg start \*/*\
-UBCORE_MSG_CREATE_VTP = 0x0,\
-UBCORE_MSG_DESTROY_VTP = 0x1,\
-UBCORE_MSG_ALLOC_EID = 0x2,\
-UBCORE_MSG_DEALLOC_EID = 0x3,\
-UBCORE_MSG_CONFIG_DEVICE = 0x4,\
-UBCORE_MSG_VTP_STATUS_NOTIFY = 0x5, *// MUE notify MUE/UE*\
-UBCORE_MSG_UPDATE_EID_TABLE_NOTIFY = 0x6, *// MUE notify MUE/UE*\
-UBCORE_MSG_UE2MUE_TRANSFER = 0x7, *// UE-MUE common transfer*\
-UBCORE_MSG_STOP_PROC_VTP_MSG = 0x10, *// Live migration*\
-UBCORE_MSG_QUERY_VTP_MIG_STATUS = 0x11, *// Live migration*\
-UBCORE_MSG_FLOW_STOPPED = 0x12, *// Live migration*\
-UBCORE_MSG_MIG_ROLLBACK = 0x13, *// Live migration*\
-UBCORE_MSG_MIG_VM_START = 0x14, *// Live migration*\
-UBCORE_MSG_NEGO_VER = 0x15, *// Verion negotiation, processed by backend ubcore.*\
-UBCORE_MSG_NOTIFY_FASTMSG_DRAIN = 0x16,\
-UBCORE_MSG_UPDATE_NET_ADDR = 0x17,\
-UBCORE_MSP_UPDATE_EID = 0x18\
+```c
+enum ubcore_msg_opcode {
+    */* 630 Verion msg start */*
+    UBCORE_MSG_CREATE_VTP = 0x0,
+    UBCORE_MSG_DESTROY_VTP = 0x1,
+    UBCORE_MSG_ALLOC_EID = 0x2,
+    UBCORE_MSG_DEALLOC_EID = 0x3,
+    UBCORE_MSG_CONFIG_DEVICE = 0x4,
+    UBCORE_MSG_VTP_STATUS_NOTIFY = 0x5, *// MUE notify MUE/UE*
+    UBCORE_MSG_UPDATE_EID_TABLE_NOTIFY = 0x6, *// MUE notify MUE/UE*
+    UBCORE_MSG_UE2MUE_TRANSFER = 0x7, *// UE-MUE common transfer*
+    UBCORE_MSG_STOP_PROC_VTP_MSG = 0x10, *// Live migration*
+    UBCORE_MSG_QUERY_VTP_MIG_STATUS = 0x11, *// Live migration*
+    UBCORE_MSG_FLOW_STOPPED = 0x12, *// Live migration*
+    UBCORE_MSG_MIG_ROLLBACK = 0x13, *// Live migration*
+    UBCORE_MSG_MIG_VM_START = 0x14, *// Live migration*
+    UBCORE_MSG_NEGO_VER = 0x15, *// Verion negotiation, processed by backend ubcore.*
+    UBCORE_MSG_NOTIFY_FASTMSG_DRAIN = 0x16,
+    UBCORE_MSG_UPDATE_NET_ADDR = 0x17,
+    UBCORE_MSP_UPDATE_EID = 0x18
 };
+```
 
-#### 发送响应ops接口
+#### 5.1.8.2 发送响应ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*send_resp)(struct ubcore_device \*dev, struct ubcore_resp_host \*msg);
+int (*send_resp)(struct ubcore_device *dev, struct ubcore_resp_host *msg);
 
 3.  描述
 
@@ -13973,39 +13609,43 @@ int (\*send_resp)(struct ubcore_device \*dev, struct ubcore_resp_host \*msg);
 
 4.  参数
 
-\@param\[in\] dev: TPF device;
+@param[in] dev: TPF device;
 
-\@param\[in\] msg: msg to send;
+@param[in] msg: msg to send;
 
 5.  返回值
 
 0 on success, other value on error
 
-##### ubcore_resp_host
+##### 5.1.8.2.1 ubcore_resp_host
 
-struct ubcore_req_host {\
-uint16_t src_fe_idx;\
-struct [6.1.8.1.1](#ubcore_req-1) [ubcore_req](#ubcore_req-1) req;\
+```c
+struct ubcore_req_host {
+    uint16_t src_fe_idx;
+    struct ubcore_req req;
 };
+```
 
-##### ubcore_resp
+##### 5.1.8.2.2 ubcore_resp
 
-struct ubcore_resp {\
-uint32_t msg_id;\
-enum ubcore_msg_opcode opcode;\
-uint32_t len;\
-uint8_t data\[\];\
+```c
+struct ubcore_resp {
+    uint32_t msg_id;
+    enum ubcore_msg_opcode opcode;
+    uint32_t len;
+    uint8_t data[];
 };
+```
 
-#### 接收请求接口
+#### 5.1.8.3 接收请求接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_recv_req(struct ubcore_device \*dev, struct ubcore_req_host \*req);
+int ubcore_recv_req(struct ubcore_device *dev, struct ubcore_req_host *req);
 
 3.  描述
 
@@ -14013,30 +13653,32 @@ ubcore用于接收请求消息。当驱动接收到消息，调用该接口把�
 
 4.  参数
 
-\@param\[in\] dev: TPF device;
+@param[in] dev: TPF device;
 
-\@param\[in\] req: received msg;
+@param[in] req: received msg;
 
 5.  返回值
 
 0 on success, other value on error
 
-##### ubcore_req_host
+##### 5.1.8.3.1 ubcore_req_host
 
-struct ubcore_req_host {\
-uint16_t src_fe_idx;\
-struct ubcore_req req;\
+```c
+struct ubcore_req_host {
+    uint16_t src_fe_idx;
+    struct ubcore_req req;
 };
+```
 
-#### 接收响应接口
+#### 5.1.8.4 接收响应接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_recv_resp(struct ubcore_device \*dev, struct ubcore_resp \*resp);
+int ubcore_recv_resp(struct ubcore_device *dev, struct ubcore_resp *resp);
 
 3.  描述
 
@@ -14044,49 +13686,55 @@ ubcore用于接收响应消息。当驱动接收到消息，调用该接口把�
 
 4.  参数
 
-\@param\[in\] dev: VF or PF device;
+@param[in] dev: VF or PF device;
 
-\@param\[in\] msg: received msg;
+@param[in] msg: received msg;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### 热迁移请求和响应
+#### 5.1.8.5 热迁移请求和响应
 
 迁移驱动和qemu对接，感知迁移的各个状态：在停流时要通知UVS停止处理删除和新建连接请求，需要查询UVS是否完成了迁移目的端新建连接，停流完成时通知UVS停流完成，回滚时通知UVS发生回滚，目的端虚机起来后通知UVS.
 
-##### ubcore_function_mig_req
+##### 5.1.8.5.1 ubcore_function_mig_req
 
-struct ubcore_function_mig_req {\
-uint16_t mig_fe_idx;\
+```c
+struct ubcore_function_mig_req {
+    uint16_t mig_fe_idx;
 };
+```
 
-##### ubcore_mig_resp_status
+##### 5.1.8.5.2 ubcore_mig_resp_status
 
-enum ubcore_mig_resp_status {\
-UBCORE_MIG_MSG_PROC_SUCCESS,\
-UBCORE_MIG_MSG_PROC_FAILURE,\
-UBCORE_VTP_MIG_COMPLETE,\
-UBCORE_VTP_MIG_UNCOMPLETE\
+```c
+enum ubcore_mig_resp_status {
+    UBCORE_MIG_MSG_PROC_SUCCESS,
+    UBCORE_MIG_MSG_PROC_FAILURE,
+    UBCORE_VTP_MIG_COMPLETE,
+    UBCORE_VTP_MIG_UNCOMPLETE
 };
+```
 
-##### ubcore_function_mig_resp
+##### 5.1.8.5.3 ubcore_function_mig_resp
 
-struct ubcore_function_mig_resp {\
-uint16_t mig_fe_idx;\
-enum ubcore_mig_resp_status status;\
+```c
+struct ubcore_function_mig_resp {
+    uint16_t mig_fe_idx;
+    enum ubcore_mig_resp_status status;
 };
+```
 
-### 设备属性查询ops接口
+### 5.1.9 设备属性查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_device_attr)(struct ubcore_device \*dev, struct ubcore_device_attr \*attr);
+int (*query_device_attr)(struct ubcore_device *dev, struct ubcore_device_attr *attr);
 
 3.  描述
 
@@ -14094,23 +13742,23 @@ ubcore在UB设备注册后，调用该接口查询并保存设备的属性。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[out\] attr: attributes for the driver to fill in
+@param[out] attr: attributes for the driver to fill in
 
 5.  返回值
 
 0 on success, other value on error
 
-### 设备状态查询ops接口
+### 5.1.10 设备状态查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_device_status)(struct ubcore_device \*dev, struct ubcore_device_status \*status);
+int (*query_device_status)(struct ubcore_device *dev, struct ubcore_device_status *status);
 
 3.  描述
 
@@ -14118,23 +13766,23 @@ query_device_status为一个函数指针，是ubcore_ops_t结构体成员，在u
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[out\] status: status for the driver to fill in
+@param[out] status: status for the driver to fill in
 
 5.  返回值
 
 0 on success, other value on error
 
-### 设备属性配置ops接口
+### 5.1.11 设备属性配置ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*config_device)(struct ubcore_device \*dev, struct ubcore_device_cfg \*cfg);
+int (*config_device)(struct ubcore_device *dev, struct ubcore_device_cfg *cfg);
 
 3.  描述
 
@@ -14142,78 +13790,86 @@ int (\*config_device)(struct ubcore_device \*dev, struct ubcore_device_cfg \*cfg
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: device configuration
+@param[in] cfg: device configuration
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_device_cfg
+#### 5.1.11.1 ubcore_device_cfg
 
-struct ubcore_device_cfg {\
-uint16_t ue_idx; */\* ue id or mue id. e.g: bdf id \*/*\
-union [6.1.11.2](#ubcore_device_cfg_mask-1) [ubcore_device_cfg_mask](#ubcore_device_cfg_mask-1)mask;\
-struct ubcore_rc_cfg rc_cfg;\
-uint32_t slice; */\* TA slice size byte \*/*\
-uint8_t pattern; */\* 0: pattern1; 1: pattern3 \*/*\
-bool virtualization;\
-uint32_t suspend_period; */\* us \*/*\
-uint32_t suspend_cnt; */\* TP resend cnt \*/*\
-uint32_t min_jetty_cnt;\
-uint32_t max_jetty_cnt;\
-uint32_t min_jfr_cnt;\
-uint32_t max_jfr_cnt;\
-uint32_t reserved_jetty_id_min;\
-uint32_t reserved_jetty_id_max;\
+```c
+struct ubcore_device_cfg {
+    uint16_t ue_idx; */* ue id or mue id. e.g: bdf id */*
+    union ubcore_device_cfg_maskmask;
+    struct ubcore_rc_cfg rc_cfg;
+    uint32_t slice; */* TA slice size byte */*
+    uint8_t pattern; */* 0: pattern1; 1: pattern3 */*
+    bool virtualization;
+    uint32_t suspend_period; */* us */*
+    uint32_t suspend_cnt; */* TP resend cnt */*
+    uint32_t min_jetty_cnt;
+    uint32_t max_jetty_cnt;
+    uint32_t min_jfr_cnt;
+    uint32_t max_jfr_cnt;
+    uint32_t reserved_jetty_id_min;
+    uint32_t reserved_jetty_id_max;
 };
+```
 
-#### ubcore_device_cfg_mask
+#### 5.1.11.2 ubcore_device_cfg_mask
 
-union ubcore_device_cfg_mask {\
-struct {\
-uint32_t rc_cnt : 1;\
-uint32_t rc_depth : 1;\
-uint32_t slice : 1;\
-uint32_t pattern : 1;\
-uint32_t virtualization : 1;\
-uint32_t suspend_period : 1;\
-uint32_t suspend_cnt : 1;\
-uint32_t min_jetty_cnt : 1;\
-uint32_t max_jetty_cnt : 1;\
-uint32_t min_jfr_cnt : 1;\
-uint32_t max_jfr_cnt : 1;\
-uint32_t reserved_jetty_id_min : 1;\
-uint32_t reserved_jetty_id_max : 1;\
-uint32_t reserved : 19;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_device_cfg_mask {
+    struct {
+        uint32_t rc_cnt : 1;
+        uint32_t rc_depth : 1;
+        uint32_t slice : 1;
+        uint32_t pattern : 1;
+        uint32_t virtualization : 1;
+        uint32_t suspend_period : 1;
+        uint32_t suspend_cnt : 1;
+        uint32_t min_jetty_cnt : 1;
+        uint32_t max_jetty_cnt : 1;
+        uint32_t min_jfr_cnt : 1;
+        uint32_t max_jfr_cnt : 1;
+        uint32_t reserved_jetty_id_min : 1;
+        uint32_t reserved_jetty_id_max : 1;
+        uint32_t reserved : 19;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### ubcore_rc_cfg
+#### 5.1.11.3 ubcore_rc_cfg
 
-struct ubcore_rc_cfg {\
-uint32_t rc_cnt; /\* rc queue count \*/\
-uint32_t depth;\
+```c
+struct ubcore_rc_cfg {
+    uint32_t rc_cnt; /* rc queue count */
+    uint32_t depth;
 };
+```
 
-#### ubcore_pattern
+#### 5.1.11.4 ubcore_pattern
 
-enum ubcore_pattern {\
-UBCORE_PATTERN_1 = 0,\
-UBCORE_PATTERN_3\
+```c
+enum ubcore_pattern {
+    UBCORE_PATTERN_1 = 0,
+    UBCORE_PATTERN_3
 };
+```
 
-### 设备绑定ops接口
+### 5.1.12 设备绑定ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*bond_add)(struct net_device \*bond, struct net_device \*slave, struct netdev_lag_upper_info \*upper_info);
+int (*bond_add)(struct net_device *bond, struct net_device *slave, struct netdev_lag_upper_info *upper_info);
 
 3.  描述
 
@@ -14221,25 +13877,25 @@ bond slave net devic
 
 4.  参数
 
-\@param\[in\] bond: bond netdev;
+@param[in] bond: bond netdev;
 
-\@param\[in\] slave: slave netdev;
+@param[in] slave: slave netdev;
 
-\@param\[in\] upper_info: change upper event info;
+@param[in] upper_info: change upper event info;
 
 5.  返回值
 
 0 on success, other value on error
 
-### 设备解除绑定ops接口
+### 5.1.13 设备解除绑定ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*bond_remove)(struct net_device \*bond, struct net_device \*slave);
+int (*bond_remove)(struct net_device *bond, struct net_device *slave);
 
 3.  描述
 
@@ -14247,23 +13903,23 @@ unbond slave net device
 
 4.  参数
 
-\@param\[in\] bond: bond netdev;
+@param[in] bond: bond netdev;
 
-\@param\[in\] slave: slave netdev;
+@param[in] slave: slave netdev;
 
 5.  返回值
 
 0 on success, other value on error
 
-### 设备添加端口ops接口
+### 5.1.14 设备添加端口ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*add_port)(struct ubcore_device \*dev, uint32_t port_cnt, uint32_t \*port_list);
+int (*add_port)(struct ubcore_device *dev, uint32_t port_cnt, uint32_t *port_list);
 
 3.  描述
 
@@ -14271,25 +13927,25 @@ ubcore接收到添加端口的命令后，调用udma驱动对bond设备添加端
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] port_cnt: port count
+@param[in] port_cnt: port count
 
-\@param\[in\] port_list: port list
+@param[in] port_list: port list
 
 5.  返回值
 
 0 on success, other value on error
 
-### 配置端口和netdev映射
+### 5.1.15 配置端口和netdev映射
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_set_port_netdev(struct ubcore_device \*dev, struct net_device \*ndev,
+int ubcore_set_port_netdev(struct ubcore_device *dev, struct net_device *ndev,
 
 unsigned int port_id);
 
@@ -14299,25 +13955,25 @@ unsigned int port_id);
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] ndev: The netdev corresponding to the initial port
+@param[in] ndev: The netdev corresponding to the initial port
 
-\@param\[in\] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
+@param[in] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
 
 5.  返回值
 
 0 on success, other value on error
 
-### 解除端口和netdev映射
+### 5.1.16 解除端口和netdev映射
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-int ubcore_unset_port_netdev(struct ubcore_device \*dev, struct net_device \*ndev,
+int ubcore_unset_port_netdev(struct ubcore_device *dev, struct net_device *ndev,
 
 unsigned int port_id);
 
@@ -14327,29 +13983,29 @@ unsigned int port_id);
 
 4.  参数
 
-\@param\[in\] dev: the ubcore device;
+@param[in] dev: the ubcore device;
 
-\@param\[in\] ndev: The netdev corresponding to the initial port
+@param[in] ndev: The netdev corresponding to the initial port
 
-\@param\[in\] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
+@param[in] port_id: The physical port_id is the same as the port_id presented in the sysfs file, and port_id is configured in TP during link establishment.
 
 5.  返回值
 
 0 on success, other value on error
 
-## 内核态ID配置、地址配置ops接口
+## 5.2 内核态ID配置、地址配置ops接口
 
 本节描述ubcore和UDMA驱动之间EID及网络地址配置接口。
 
-### 配置网络地址ops接口
+### 5.2.1 配置网络地址ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*add_net_addr)(struct ubcore_device \*dev, struct ubcore_net_addr \*net_addr,
+int (*add_net_addr)(struct ubcore_device *dev, struct ubcore_net_addr *net_addr,
 
 uint32_t index);
 
@@ -14359,42 +14015,46 @@ UB Core调用UDMA驱动设置网络地址等信息。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] net_addr: net_addr to set
+@param[in] net_addr: net_addr to set
 
-\@param\[in\] index: index by sip table
+@param[in] index: index by sip table
 
 5.  返回值
 
 0 on success, other value on error
 
-#### ubcore_net_addr
+#### 5.2.1.1 ubcore_net_addr
 
-struct ubcore_net_addr {\
-enum [6.2.1.2](#ubcore_net_addr_type-1) [ubcore_net_addr_type](#ubcore_net_addr_type-1) type;\
-union [4.8.7.4](#ubcore_net_addr_union) [ubcore_net_addr_union](#ubcore_net_addr_union) net_addr;\
-uint64_t vlan; */\* available for UBOE \*/*\
-uint8_t mac\[UBCORE_MAC_BYTES\]; */\* available for UBOE \*/*\
-uint32_t prefix_len;\
+```c
+struct ubcore_net_addr {
+    enum ubcore_net_addr_type type;
+    union ubcore_net_addr_union net_addr;
+    uint64_t vlan; */* available for UBOE */*
+    uint8_t mac[UBCORE_MAC_BYTES]; */* available for UBOE */*
+    uint32_t prefix_len;
 };
+```
 
-#### ubcore_net_addr_type
+#### 5.2.1.2 ubcore_net_addr_type
 
-enum ubcore_net_addr_type {\
-UBCORE_NET_ADDR_TYPE_IPV4 = 0,\
-UBCORE_NET_ADDR_TYPE_IPV6\
+```c
+enum ubcore_net_addr_type {
+    UBCORE_NET_ADDR_TYPE_IPV4 = 0,
+    UBCORE_NET_ADDR_TYPE_IPV6
 };
+```
 
-### 删除网络地址ops接口
+### 5.2.2 删除网络地址ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*delete_net_addr)(struct ubcore_device \*dev, uint32_t idx);
+int (*delete_net_addr)(struct ubcore_device *dev, uint32_t idx);
 
 3.  描述
 
@@ -14402,23 +14062,23 @@ UB Core调用UDMA驱动删除网络地址等信息。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] idx: net_addr idx by sip table entry
+@param[in] idx: net_addr idx by sip table entry
 
 5.  返回值
 
 0 on success, other value on error
 
-### 配置UEID ops接口
+### 5.2.3 配置UEID ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*add_ueid)(struct ubcore_device \*dev, uint16_t ue_idx, struct ubcore_ueid_cfg \*cfg);
+int (*add_ueid)(struct ubcore_device *dev, uint16_t ue_idx, struct ubcore_ueid_cfg *cfg);
 
 3.  描述
 
@@ -14430,17 +14090,17 @@ UB Core统调用UDMA驱动配置function的eid和upi。驱动在此接口实现�
 
 4.  参数
 
-\@param\[in\] dev: the ubcore_device handle;
+@param[in] dev: the ubcore_device handle;
 
-\@param\[in\] ue_idx: ue_idx;
+@param[in] ue_idx: ue_idx;
 
-\@param\[in\] cfg: eid and the upi of fe to which the eid belongs can be specified;
+@param[in] cfg: eid and the upi of fe to which the eid belongs can be specified;
 
 5.  返回值
 
 the index of eid/upi, less than 0 indicating error
 
-![](figures/urma-api-jetty-01.png)
+![](figures/urma_caution.png)
 
 UB Core统一使用add_ueid接口配置eid和upi，包括虚拟化场景和非虚拟化场景，pattern1和pattern3。
 
@@ -14450,24 +14110,26 @@ UB Core统一使用add_ueid接口配置eid和upi，包括虚拟化场景和非�
 
 （3）非虚拟化配置pattern1 EID，使用function本身对应的dev指针配置，fe_idx写入0xFFFF，upi填无效值（0）
 
-#### ubcore_ueid_cfg
+#### 5.2.3.1 ubcore_ueid_cfg
 
-struct ubcore_ueid_cfg {\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t upi;\
-uint32_t eid_index;\
-guid_t guid;\
+```c
+struct ubcore_ueid_cfg {
+    union ubcore_eid eid;
+    uint32_t upi;
+    uint32_t eid_index;
+    guid_t guid;
 };
+```
 
-### 删除UEID ops接口
+### 5.2.4 删除UEID ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*delete_ueid)(struct ubcore_device \*dev, uint16_t ue_idx, struct ubcore_ueid_cfg \*cfg);
+int (*delete_ueid)(struct ubcore_device *dev, uint16_t ue_idx, struct ubcore_ueid_cfg *cfg);
 
 3.  描述
 
@@ -14475,29 +14137,29 @@ UB Core调用UDMA驱动删除VF或者PF的EID和UPI值。
 
 4.  参数
 
-\@param\[in\] dev: the ubcore_device handle;
+@param[in] dev: the ubcore_device handle;
 
-\@param\[in\] ue_idx: ue_idx;
+@param[in] ue_idx: ue_idx;
 
-\@param\[in\] cfg: eid and the upi of fe to which the eid belongs can be specified;
+@param[in] cfg: eid and the upi of fe to which the eid belongs can be specified;
 
 5.  返回值
 
 0 on success, other value on error
 
-### 配置Funtion热迁移状态ops接口
+### 5.2.5 配置Funtion热迁移状态ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*config_function_migrate_state)(
+int (*config_function_migrate_state)(
 
-struct ubcore_device \*dev, uint16_t ue_idx, uint32_t cnt,
+struct ubcore_device *dev, uint16_t ue_idx, uint32_t cnt,
 
-struct ubcore_ueid_cfg \*cfg, enum ubcore_mig_state state);
+struct ubcore_ueid_cfg *cfg, enum ubcore_mig_state state);
 
 3.  描述
 
@@ -14505,43 +14167,45 @@ struct ubcore_ueid_cfg \*cfg, enum ubcore_mig_state state);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] ue_idx: ue id;
+@param[in] ue_idx: ue id;
 
-\@param\[in\] cnt: config count;
+@param[in] cnt: config count;
 
-\@param\[in\] cfg: eid and the upi of fe to which the eid belongs can be specified;
+@param[in] cfg: eid and the upi of fe to which the eid belongs can be specified;
 
-\@param\[in\] state: config state (start, rollback and finish)
+@param[in] state: config state (start, rollback and finish)
 
 5.  返回值
 
 config success count, -1 on error
 
-#### ubcore_mig_state
+#### 5.2.5.1 ubcore_mig_state
 
-enum ubcore_mig_state {\
-UBCORE_MIG_STATE_START,\
-UBCORE_MIG_STATE_ROLLBACK,\
-UBCORE_MIG_STATE_FINISH\
+```c
+enum ubcore_mig_state {
+    UBCORE_MIG_STATE_START,
+    UBCORE_MIG_STATE_ROLLBACK,
+    UBCORE_MIG_STATE_FINISH
 };
+```
 
-## 内核态context管理ops接口
+## 5.3 内核态context管理ops接口
 
 本节描述UBCore和UB内核态驱动之间URMA context生命周期接口。
 
-### context创建ops接口
+### 5.3.1 context创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_ucontext \*(\*alloc_ucontext)(struct ubcore_device \*dev,
+struct ubcore_ucontext *(*alloc_ucontext)(struct ubcore_device *dev,
 
-uint32_t eid_index, struct ubcore_udrv_priv \*udrv_data);
+uint32_t eid_index, struct ubcore_udrv_priv *udrv_data);
 
 3.  描述
 
@@ -14549,52 +14213,58 @@ UB Core调用UDMA驱动创建URMA context。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] eid: function entity id (eid) index to set;
+@param[in] eid: function entity id (eid) index to set;
 
-\@param\[in\] udrv_data: user space driver data
+@param[in] udrv_data: user space driver data
 
 5.  返回值
 
 pointer to user context on success, null or error,
 
-#### ubcore_ucontext
+#### 5.3.1.1 ubcore_ucontext
 
-struct ubcore_ucontext {\
-struct ubcore_device \*ub_dev;\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) eid;\
-uint32_t eid_index;\
-void \*jfae; */\* jfae uobj \*/*\
-struct ubcore_cg_object cg_obj;\
-atomic_t use_cnt;\
+```c
+struct ubcore_ucontext {
+    struct ubcore_device *ub_dev;
+    union ubcore_eid eid;
+    uint32_t eid_index;
+    void *jfae; */* jfae uobj */*
+    struct ubcore_cg_object cg_obj;
+    atomic_t use_cnt;
 };
+```
 
-#### ubcore_udrv_priv
+#### 5.3.1.2 ubcore_udrv_priv
 
-struct ubcore_udrv_priv {\
-uint64_t in_addr;\
-uint32_t in_len;\
-uint64_t out_addr;\
-uint32_t out_len;\
+```c
+struct ubcore_udrv_priv {
+    uint64_t in_addr;
+    uint32_t in_len;
+    uint64_t out_addr;
+    uint32_t out_len;
 };
+```
 
-#### ubcore_udata
+#### 5.3.1.3 ubcore_udata
 
-struct ubcore_udata {\
-struct [6.3.1.1](#ubcore_ucontext-1) [ubcore_ucontext](#ubcore_ucontext-1) \*uctx;\
-struct [6.3.1.2](#ubcore_udrv_priv-1) [ubcore_udrv_priv](#ubcore_udrv_priv-1) \*udrv_data;\
+```c
+struct ubcore_udata {
+    struct ubcore_ucontext *uctx;
+    struct ubcore_udrv_priv *udrv_data;
 };
+```
 
-### context销毁ops接口
+### 5.3.2 context销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*free_ucontext)(struct ubcore_ucontext \*uctx);
+int (*free_ucontext)(struct ubcore_ucontext *uctx);
 
 3.  描述
 
@@ -14602,23 +14272,23 @@ UB Core调用UDMA驱动销毁URMA Context。
 
 4.  参数
 
-\@param\[in\] uctx: the user context created before;
+@param[in] uctx: the user context created before;
 
 5.  返回值
 
 0 on success, other value on error
 
-## 内核态mmap接口
+## 5.4 内核态mmap接口
 
-### mmap ops接口
+### 5.4.1 mmap ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*mmap)(struct ubcore_ucontext \*ctx, struct vm_area_struct \*vma);
+int (*mmap)(struct ubcore_ucontext *ctx, struct vm_area_struct *vma);
 
 3.  描述
 
@@ -14626,33 +14296,33 @@ UB Core调用UDMA驱动映射jetty的doorbell等物理空间。
 
 4.  参数
 
-\@param\[in\] uctx: the user context created before;
+@param[in] uctx: the user context created before;
 
-\@param\[in\] vma: linux vma including vm_start, vm_pgoff, etc;
+@param[in] vma: linux vma including vm_start, vm_pgoff, etc;
 
 5.  返回值
 
 0 on success, other value on error
 
-## 内核态资源管理ops接口
+## 5.5 内核态资源管理ops接口
 
 本节描述UBCore和UB内核态驱动之间的控制面接口。主要包括Jetty资源的生命周期和Segment生命周期（包括安全token）的接口。UBCore负责连接关系协商和路由通信关系建立，驱动负责硬件强相关的真正的连接资源管理。
 
-### TP协商和配置管理
+### 5.5.1 TP协商和配置管理
 
 TP是两个node/multi-path dev之间的物理连接群或者Jetty之间逻辑连接。由transport type来指定。
 
 ![](figures/urma-api-kernel-tp-01.png)
 
-#### TPG创建ops接口
+#### 5.5.1.1 TPG创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_tpg \*(\*create_tpg)(struct ubcore_device \*dev, struct ubcore_tpg_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_tpg *(*create_tpg)(struct ubcore_device *dev, struct ubcore_tpg_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -14660,66 +14330,72 @@ struct ubcore_tpg \*(\*create_tpg)(struct ubcore_device \*dev, struct ubcore_tpg
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
 DPU智能网卡上，dev是TPF的设备指针，或者用于建链的设备指针；鲲鹏950上dev可能为PF。
 
-\@param\[in\] cfg: tpg init attributes
+@param[in] cfg: tpg init attributes
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 tp pointer on success, NULL on error
 
-##### ubcore_tpg_cfg
+##### 5.5.1.1.1 ubcore_tpg_cfg
 
-struct ubcore_tpg_cfg {\
-*/\* transaction layer attributes \*/*\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid)local_eid;\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid)peer_eid;\
-*/\* tranport layer attributes \*/*\
-enum [6.5.1.5.3](#ubcore_transport_mode-1) [ubcore_transport_mode](#ubcore_transport_mode-1)trans_mode;\
-uint8_t dscp;\
-enum [6.5.1.5.7](#ubcore_tp_cc_alg) [ubcore_tp_cc_alg](#ubcore_tp_cc_alg) cc_alg;\
-uint8_t cc_pattern_idx;\
-uint32_t tp_cnt;\
-struct [6.2.1.1](#ubcore_net_addr-1) [ubcore_net_addr](#ubcore_net_addr-1)local_net_addr;\
+```c
+struct ubcore_tpg_cfg {
+    */* transaction layer attributes */*
+    union ubcore_eidlocal_eid;
+    union ubcore_eidpeer_eid;
+    */* tranport layer attributes */*
+    enum ubcore_transport_modetrans_mode;
+    uint8_t dscp;
+    enum ubcore_tp_cc_alg cc_alg;
+    uint8_t cc_pattern_idx;
+    uint32_t tp_cnt;
+    struct ubcore_net_addrlocal_net_addr;
 };
+```
 
-##### ubcore_tpg_ext
+##### 5.5.1.1.2 ubcore_tpg_ext
 
-struct ubcore_tpg_ext {\
-uint64_t addr;\
-uint32_t len;\
+```c
+struct ubcore_tpg_ext {
+    uint64_t addr;
+    uint32_t len;
 };
+```
 
-##### ubcore_tpg
+##### 5.5.1.1.3 ubcore_tpg
 
-struct ubcore_tpg {\
-uint32_t tpgn;\
-struct ubcore_device \*ub_dev;\
-struct [6.5.1.1.1](#ubcore_tpg_cfg) [ubcore_tpg_cfg](#ubcore_tpg_cfg)tpg_cfg; */\* filled by ubcore when creating tp \*/*\
-struct [6.5.1.1.2](#ubcore_tpg_ext) [ubcore_tpg_ext](#ubcore_tpg_ext)tpg_ext; */\* filled by ubn driver when creating tp \*/*\
-struct [6.5.1.1.2](#ubcore_tpg_ext) [ubcore_tpg_ext](#ubcore_tpg_ext) peer_ext; */\* filled by ubcore before modifying tp \*/*\
-struct ubcore_tp \*\
-tp_list\[UBCORE_MAX_TP_CNT_IN_GRP\]; *// UBCORE_MAX_TP_CNT_IN_GRP=32*\
-struct hlist_node hnode; */\* driver inaccessible \*/*\
-struct kref ref_cnt;\
-struct mutex mutex;\
-uint32_t ue_idx;\
-uint32_t peer_tpgn; *// Only for tpg audit with peer, driver inaccessible*\
+```c
+struct ubcore_tpg {
+    uint32_t tpgn;
+    struct ubcore_device *ub_dev;
+    struct ubcore_tpg_cfgtpg_cfg; */* filled by ubcore when creating tp */*
+    struct ubcore_tpg_exttpg_ext; */* filled by ubn driver when creating tp */*
+    struct ubcore_tpg_ext peer_ext; */* filled by ubcore before modifying tp */*
+    struct ubcore_tp *
+    tp_list[UBCORE_MAX_TP_CNT_IN_GRP]; *// UBCORE_MAX_TP_CNT_IN_GRP=32*
+    struct hlist_node hnode; */* driver inaccessible */*
+    struct kref ref_cnt;
+    struct mutex mutex;
+    uint32_t ue_idx;
+    uint32_t peer_tpgn; *// Only for tpg audit with peer, driver inaccessible*
 };
+```
 
-#### TPG销毁ops接口
+#### 5.5.1.2 TPG销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_tpg)(struct ubcore_tpg \*tpg);
+int (*destroy_tpg)(struct ubcore_tpg *tpg);
 
 3.  描述
 
@@ -14727,13 +14403,13 @@ destroy_tpg为一个函数指针，是ubcore_ops_t结构体成员，在ubcore_re
 
 4.  参数
 
-\@param\[in\] tp: tp pointer created before
+@param[in] tp: tp pointer created before
 
 5.  返回值
 
 0 on success, other value on error
 
-#### TP创建和使用流程
+#### 5.5.1.3 TP创建和使用流程
 
 ![](figures/urma-api-kernel-tp-02.png)
 
@@ -14745,57 +14421,40 @@ destroy_tpg为一个函数指针，是ubcore_ops_t结构体成员，在ubcore_re
 
 4、应用通过Post Send接口下发WQE，用户态驱动需要在WQE中填入tpgn，芯片根据tpgn选路。
 
-#### TP参数协商
+#### 5.5.1.4 TP参数协商
 
 TP参数协商可以采用公知Jetty或Socket方式进行TP参数协商，协商参数参考TP属性域段表。
 
 ![](figures/urma-api-kernel-tp-03.png)
 
-  -----------------------------------------------------------------------------
-  TP属性域段         域段描述
-  ------------------ ----------------------------------------------------------
-  local flag         包含：本地节点拥塞控制算法
+| TP属性域段 | 域段描述 |
+| --- | --- |
+| local flag | 包含：本地节点拥塞控制算法 |
+| remote flag | 包含：远端拥塞控制算法 |
+| local_net_addr | 本地节点network address |
+| peer_net_addr | 远端节点network address |
+| local_eid | 本地节点EID, TA连接时使用 |
+| peer_eid | 远端节点EID, TA连接时使用 |
+| trans_mode | 传输服务类型，分三种：URMA_TM_RM，URMA_TM_RC，URMA_TM_UM |
+| State | TP状态，分四种：Reset, RTR, RTS, Error |
+| rx_psn | 期待接收的PSN |
+| tx_psn | 发送方向初始PSN |
+| local MTU | 本地节点maximum transfer unit，最大传输单元 |
+| remote MTU | 远端maximum transfer unit，最大传输单元 |
+| local tpn | 本地节点TP编号 |
+| remote tpn | 远端TP编号 |
+| tp cnt | tp数量（需要协商，但不放到tp context中） |
+| slice | 报文分片大小 |
 
-  remote flag        包含：远端拥塞控制算法
-
-  local_net_addr     本地节点network address
-
-  peer_net_addr      远端节点network address
-
-  local_eid          本地节点EID, TA连接时使用
-
-  peer_eid           远端节点EID, TA连接时使用
-
-  trans_mode         传输服务类型，分三种：URMA_TM_RM，URMA_TM_RC，URMA_TM_UM
-
-  State              TP状态，分四种：Reset, RTR, RTS, Error
-
-  rx_psn             期待接收的PSN
-
-  tx_psn             发送方向初始PSN
-
-  local MTU          本地节点maximum transfer unit，最大传输单元
-
-  remote MTU         远端maximum transfer unit，最大传输单元
-
-  local tpn          本地节点TP编号
-
-  remote tpn         远端TP编号
-
-  tp cnt             tp数量（需要协商，但不放到tp context中）
-
-  slice              报文分片大小
-  -----------------------------------------------------------------------------
-
-#### TP创建ops接口
+#### 5.5.1.5 TP创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_tp \*(\*create_tp)(struct ubcore_device \*dev, struct ubcore_tp_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_tp *(*create_tp)(struct ubcore_device *dev, struct ubcore_tp_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -14805,180 +14464,196 @@ struct ubcore_tp \*(\*create_tp)(struct ubcore_device \*dev, struct ubcore_tp_cf
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: tp init attributes
+@param[in] cfg: tp init attributes
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 返回TP对象。成功，返回ubcore_tp_t的结构体地址；失败，返回NULL。
 
-##### ubcore_tp_cfg
+##### 5.5.1.5.1 ubcore_tp_cfg
 
-struct ubcore_tp_cfg {\
-union ubcore_tp_cfg_flag flag; /\* flag of initial tp \*/\
-/\* transaction layer attributes \*/\
-union {\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-struct [4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id)local_jetty;\
-};\
-uint16_t ue_idx; /\* rc mode only \*/\
-union {\
-union [6.5.1.5.1](#ubcore_tp_cfg) [ubcore_tp_cfg](#ubcore_tp_cfg) peer_eid;\
-struct [4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) peer_jetty;\
-};\
-/\* tranport layer attributes \*/\
-enum [6.5.1.5.3](#ubcore_transport_mode-1) [ubcore_transport_mode](#ubcore_transport_mode-1)trans_mode;\
-uint8_t retry_num;\
-uint8_t retry_factor; /\* for calculate the time slot to retry \*/\
-uint8_t ack_timeout;\
-uint8_t dscp; /\* priority \*/\
-uint32_t oor_cnt; /\* OOR window size: by packet \*/\
-struct [6.5.1.1.3](#ubcore_tpg) [ubcore_tpg](#ubcore_tpg) \*tpg; /\* NULL if no tpg, eg.UM mode \*/\
+```c
+struct ubcore_tp_cfg {
+    union ubcore_tp_cfg_flag flag; /* flag of initial tp */
+    /* transaction layer attributes */
+    union {
+        union ubcore_eid local_eid;
+        struct ubcore_jetty_idlocal_jetty;
+    };
+    uint16_t ue_idx; /* rc mode only */
+    union {
+        union ubcore_tp_cfg peer_eid;
+        struct ubcore_jetty_id peer_jetty;
+    };
+    /* tranport layer attributes */
+    enum ubcore_transport_modetrans_mode;
+    uint8_t retry_num;
+    uint8_t retry_factor; /* for calculate the time slot to retry */
+    uint8_t ack_timeout;
+    uint8_t dscp; /* priority */
+    uint32_t oor_cnt; /* OOR window size: by packet */
+    struct ubcore_tpg *tpg; /* NULL if no tpg, eg.UM mode */
 };
+```
 
-##### ubcore_tp_cfg_flag
+##### 5.5.1.5.2 ubcore_tp_cfg_flag
 
-union ubcore_tp_cfg_flag {\
-struct {\
-uint32_t target : 1; /\* 0: initiator, 1: target \*/\
-uint32_t loopback : 1;\
-uint32_t ack_resp : 1;\
-uint32_t dca_enable : 1;\
-/\* for the bonding case, the hardware selects the port\
-\* ignoring the port of the tp context and\
-\* selects the port based on the hash value\
-\* along with the information in the bonding group table.\
-\*/\
-uint32_t bonding : 1;\
-uint32_t reserved : 27;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_tp_cfg_flag {
+    struct {
+        uint32_t target : 1; /* 0: initiator, 1: target */
+        uint32_t loopback : 1;
+        uint32_t ack_resp : 1;
+        uint32_t dca_enable : 1;
+        /* for the bonding case, the hardware selects the port
+        * ignoring the port of the tp context and
+        * selects the port based on the hash value
+        * along with the information in the bonding group table.
+        */
+        uint32_t bonding : 1;
+        uint32_t reserved : 27;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_transport_mode
+##### 5.5.1.5.3 ubcore_transport_mode
 
-enum ubcore_transport_mode {\
-UBCORE_TP_RM = 0x1, /\* Reliable message \*/\
-UBCORE_TP_RC = 0x1 \<\< 1, /\* Reliable connection \*/\
-UBCORE_TP_UM = 0x1 \<\< 2 /\* Unreliable message \*/\
+```c
+enum ubcore_transport_mode {
+    UBCORE_TP_RM = 0x1, /* Reliable message */
+    UBCORE_TP_RC = 0x1 << 1, /* Reliable connection */
+    UBCORE_TP_UM = 0x1 << 2 /* Unreliable message */
 };
+```
 
-##### ubcore_tp_state
+##### 5.5.1.5.4 ubcore_tp_state
 
-enum ubcore_tp_state {\
-UBCORE_TP_STATE_RESET = 0,\
-UBCORE_TP_STATE_RTR,\
-UBCORE_TP_STATE_RTS,\
-UBCORE_TP_STATE_SUSPENDED,\
-UBCORE_TP_STATE_ERR\
+```c
+enum ubcore_tp_state {
+    UBCORE_TP_STATE_RESET = 0,
+    UBCORE_TP_STATE_RTR,
+    UBCORE_TP_STATE_RTS,
+    UBCORE_TP_STATE_SUSPENDED,
+    UBCORE_TP_STATE_ERR
 };
+```
 
-##### ubcore_tp_ext
+##### 5.5.1.5.5 ubcore_tp_ext
 
-struct ubcore_tp_ext {\
-uint64_t addr;\
-uint32_t len;\
+```c
+struct ubcore_tp_ext {
+    uint64_t addr;
+    uint32_t len;
 };
+```
 
-##### ubcore_tp_flag
+##### 5.5.1.5.6 ubcore_tp_flag
 
-union ubcore_tp_flag {\
-struct {\
-uint32_t target : 1; */\* 0: initiator, 1: target \*/*\
-uint32_t oor_en : 1; */\* out of order receive, 0: disable 1: enable \*/*\
-uint32_t sr_en : 1; */\* selective retransmission, 0: disable 1: enable \*/*\
-uint32_t cc_en : 1; */\* congestion control algorithm, 0: disable 1: enable \*/*\
-uint32_t cc_alg : 4; */\* The value is ubcore_tp_cc_alg_t \*/*\
-uint32_t spray_en : 1; */\* spray with src udp port, 0: disable 1: enable \*/*\
-uint32_t loopback : 1;\
-uint32_t ack_resp : 1;\
-uint32_t dca_enable : 1; */\* dynamic connection, 0: disable 1: enable \*/*\
-uint32_t bonding : 1;\
-uint32_t clan : 1;\
-uint32_t reserved : 18;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_tp_flag {
+    struct {
+        uint32_t target : 1; */* 0: initiator, 1: target */*
+        uint32_t oor_en : 1; */* out of order receive, 0: disable 1: enable */*
+        uint32_t sr_en : 1; */* selective retransmission, 0: disable 1: enable */*
+        uint32_t cc_en : 1; */* congestion control algorithm, 0: disable 1: enable */*
+        uint32_t cc_alg : 4; */* The value is ubcore_tp_cc_alg_t */*
+        uint32_t spray_en : 1; */* spray with src udp port, 0: disable 1: enable */*
+        uint32_t loopback : 1;
+        uint32_t ack_resp : 1;
+        uint32_t dca_enable : 1; */* dynamic connection, 0: disable 1: enable */*
+        uint32_t bonding : 1;
+        uint32_t clan : 1;
+        uint32_t reserved : 18;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_tp_cc_alg
+##### 5.5.1.5.7 ubcore_tp_cc_alg
 
-enum ubcore_tp_cc_alg {\
-UBCORE_TP_CC_NONE = 0,\
-UBCORE_TP_CC_DCQCN,\
-UBCORE_TP_CC_DCQCN_AND_NETWORK_CC,\
-UBCORE_TP_CC_LDCP,\
-UBCORE_TP_CC_LDCP_AND_CAQM,\
-UBCORE_TP_CC_LDCP_AND_OPEN_CC,\
-UBCORE_TP_CC_HC3,\
-UBCORE_TP_CC_DIP,\
-UBCORE_TP_CC_ACC,\
-UBCORE_TP_CC_NUM\
+```c
+enum ubcore_tp_cc_alg {
+    UBCORE_TP_CC_NONE = 0,
+    UBCORE_TP_CC_DCQCN,
+    UBCORE_TP_CC_DCQCN_AND_NETWORK_CC,
+    UBCORE_TP_CC_LDCP,
+    UBCORE_TP_CC_LDCP_AND_CAQM,
+    UBCORE_TP_CC_LDCP_AND_OPEN_CC,
+    UBCORE_TP_CC_HC3,
+    UBCORE_TP_CC_DIP,
+    UBCORE_TP_CC_ACC,
+    UBCORE_TP_CC_NUM
 };
+```
 
-##### ubcore_tp
+##### 5.5.1.5.8 ubcore_tp
 
-struct ubcore_tp {\
-uint32_t tpn; */\* driver assigned in creating tp \*/*\
-uint32_t peer_tpn;\
-struct ubcore_device \*ub_dev;\
-union [6.5.1.5.6](#ubcore_tp_flag) [ubcore_tp_flag](#ubcore_tp_flag) flag; */\* indicate initiator or target, etc \*/*\
-uint32_t local_net_addr_idx;\
-struct [6.2.1.1](#ubcore_net_addr-1) [ubcore_net_addr](#ubcore_net_addr-1) peer_net_addr;\
-*/\* only for RC START \*/*\
-union {\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-struct [4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) local_jetty;\
-};\
-union {\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) peer_eid;\
-struct [4.4.2.1.5](#ubcore_jetty_id) [ubcore_jetty_id](#ubcore_jetty_id) peer_jetty;\
-};\
-*/\* only for RC END \*/*\
-enum [6.5.1.5.3](#ubcore_transport_mode-1) [ubcore_transport_mode](#ubcore_transport_mode-1) trans_mode;\
-enum [6.5.1.5.4](#ubcore_tp_state) [ubcore_tp_state](#ubcore_tp_state) state;\
-uint32_t rx_psn;\
-uint32_t tx_psn;\
-enum ubcore_mtu mtu;\
-uint16_t data_udp_start; */\* src udp port start, for multipath data \*/*\
-uint16_t ack_udp_start; */\* src udp port start, for multipath ack \*/*\
-uint8_t udp_range; */\* src udp port range, for both multipath data and ack \*/*\
-uint8_t port_id; */\* optional, physical port, only for non-bonding \*/*\
-uint8_t retry_num;\
-uint8_t retry_factor;\
-uint8_t ack_timeout;\
-uint8_t dscp;\
-uint8_t cc_pattern_idx;\
-uint8_t hop_limit;\
-struct [6.5.1.1.3](#ubcore_tpg) [ubcore_tpg](#ubcore_tpg) \*tpg; */\* NULL if no tpg, eg. UM mode \*/*\
-uint32_t oor_cnt; */\* out of order window size for recv: packet cnt \*/*\
-uint32_t oos_cnt; */\* out of order window size for send: packet cnt \*/*\
-struct [6.5.1.5.5](#ubcore_tp_ext) [ubcore_tp_ext](#ubcore_tp_ext) tp_ext; */\* driver fill in creating tp \*/*\
-struct [6.5.1.5.5](#ubcore_tp_ext) [ubcore_tp_ext](#ubcore_tp_ext) peer_ext; */\* ubcore fill before modifying tp \*/*\
-atomic_t use_cnt;\
-struct hlist_node hnode; */\* driver inaccessible \*/*\
-struct kref ref_cnt;\
-struct completion comp;\
-uint32_t flow_label;\
-uint8_t mn; */\* 0\~15, a packet contains only one msg if mn is set as 0 \*/*\
-enum [6.1.1.12](#ubcore_transport_type-1) [ubcore_transport_type](#ubcore_transport_type-1)\
-peer_trans_type; */\* Only for user tp connection \*/*\
-struct mutex lock; */\* protect TP state \*/*\
-void \*priv; */\* ubcore private data for tp management \*/*\
-uint32_t ue_idx;\
+```c
+struct ubcore_tp {
+    uint32_t tpn; */* driver assigned in creating tp */*
+    uint32_t peer_tpn;
+    struct ubcore_device *ub_dev;
+    union ubcore_tp_flag flag; */* indicate initiator or target, etc */*
+    uint32_t local_net_addr_idx;
+    struct ubcore_net_addr peer_net_addr;
+    */* only for RC START */*
+    union {
+        union ubcore_eid local_eid;
+        struct ubcore_jetty_id local_jetty;
+    };
+    union {
+        union ubcore_eid peer_eid;
+        struct ubcore_jetty_id peer_jetty;
+    };
+    */* only for RC END */*
+    enum ubcore_transport_mode trans_mode;
+    enum ubcore_tp_state state;
+    uint32_t rx_psn;
+    uint32_t tx_psn;
+    enum ubcore_mtu mtu;
+    uint16_t data_udp_start; */* src udp port start, for multipath data */*
+    uint16_t ack_udp_start; */* src udp port start, for multipath ack */*
+    uint8_t udp_range; */* src udp port range, for both multipath data and ack */*
+    uint8_t port_id; */* optional, physical port, only for non-bonding */*
+    uint8_t retry_num;
+    uint8_t retry_factor;
+    uint8_t ack_timeout;
+    uint8_t dscp;
+    uint8_t cc_pattern_idx;
+    uint8_t hop_limit;
+    struct ubcore_tpg *tpg; */* NULL if no tpg, eg. UM mode */*
+    uint32_t oor_cnt; */* out of order window size for recv: packet cnt */*
+    uint32_t oos_cnt; */* out of order window size for send: packet cnt */*
+    struct ubcore_tp_ext tp_ext; */* driver fill in creating tp */*
+    struct ubcore_tp_ext peer_ext; */* ubcore fill before modifying tp */*
+    atomic_t use_cnt;
+    struct hlist_node hnode; */* driver inaccessible */*
+    struct kref ref_cnt;
+    struct completion comp;
+    uint32_t flow_label;
+    uint8_t mn; */* 0\~15, a packet contains only one msg if mn is set as 0 */*
+    enum ubcore_transport_type
+    peer_trans_type; */* Only for user tp connection */*
+    struct mutex lock; */* protect TP state */*
+    void *priv; */* ubcore private data for tp management */*
+    uint32_t ue_idx;
 };
+```
 
-#### TP修改ops接口
+#### 5.5.1.6 TP修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_tp)(struct ubcore_tp \*tp, struct ubcore_tp_attr \*attr, union ubcore_tp_attr_mask mask);
+int (*modify_tp)(struct ubcore_tp *tp, struct ubcore_tp_attr *attr, union ubcore_tp_attr_mask mask);
 
 3.  描述
 
@@ -14986,93 +14661,99 @@ int (\*modify_tp)(struct ubcore_tp \*tp, struct ubcore_tp_attr \*attr, union ubc
 
 4.  参数
 
-\@param\[in\] tp: tp pointer created before
+@param[in] tp: tp pointer created before
 
-\@param\[in\] attr: tp attributes
+@param[in] attr: tp attributes
 
-\@param\[in\] mask: attr mask indicating the attributes to be modified
+@param[in] mask: attr mask indicating the attributes to be modified
 
 5.  返回值
 
 0 on success, other value on error
 
-##### ubcore_tp_attr
+##### 5.5.1.6.1 ubcore_tp_attr
 
-struct ubcore_tp_attr {\
-union [6.5.1.6.3](#ubcore_tp_mod_flag) [ubcore_tp_mod_flag](#ubcore_tp_mod_flag) flag;\
-uint32_t peer_tpn;\
-enum [6.5.1.5.4](#ubcore_tp_state) [ubcore_tp_state](#ubcore_tp_state) state;\
-uint32_t tx_psn;\
-uint32_t rx_psn;\
-enum [4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) mtu;\
-uint8_t cc_pattern_idx;\
-struct ubcore_tp_ext peer_ext;\
-uint32_t oos_cnt; */\* out of standing packet cnt \*/*\
-uint32_t local_net_addr_idx;\
-struct ubcore_net_addr peer_net_addr;\
-uint16_t data_udp_start;\
-uint16_t ack_udp_start;\
-uint8_t udp_range;\
-uint8_t hop_limit;\
-uint32_t flow_label;\
-uint8_t port_id;\
-uint8_t mn; */\* 0\~15, a packet contains only one msg if mn is set as 0 \*/*\
-enum [6.1.1.12](#ubcore_transport_type-1) [ubcore_transport_type](#ubcore_transport_type-1)\
-peer_trans_type; */\* Only for user tp connection \*/*\
+```c
+struct ubcore_tp_attr {
+    union ubcore_tp_mod_flag flag;
+    uint32_t peer_tpn;
+    enum ubcore_tp_state state;
+    uint32_t tx_psn;
+    uint32_t rx_psn;
+    enum ubcore_mtu mtu;
+    uint8_t cc_pattern_idx;
+    struct ubcore_tp_ext peer_ext;
+    uint32_t oos_cnt; */* out of standing packet cnt */*
+    uint32_t local_net_addr_idx;
+    struct ubcore_net_addr peer_net_addr;
+    uint16_t data_udp_start;
+    uint16_t ack_udp_start;
+    uint8_t udp_range;
+    uint8_t hop_limit;
+    uint32_t flow_label;
+    uint8_t port_id;
+    uint8_t mn; */* 0\~15, a packet contains only one msg if mn is set as 0 */*
+    enum ubcore_transport_type
+    peer_trans_type; */* Only for user tp connection */*
 };
+```
 
-##### ubcore_tp_attr_mask
+##### 5.5.1.6.2 ubcore_tp_attr_mask
 
-union ubcore_tp_attr_mask {\
-struct {\
-uint32_t flag : 1;\
-uint32_t peer_tpn : 1;\
-uint32_t state : 1;\
-uint32_t tx_psn : 1;\
-uint32_t rx_psn : 1; */\* modify both rx psn and tx psn when restore tp \*/*\
-uint32_t mtu : 1;\
-uint32_t cc_pattern_idx : 1;\
-uint32_t peer_ext : 1;\
-uint32_t oos_cnt : 1;\
-uint32_t local_net_addr_idx : 1;\
-uint32_t peer_net_addr : 1;\
-uint32_t data_udp_start : 1;\
-uint32_t ack_udp_start : 1;\
-uint32_t udp_range : 1;\
-uint32_t hop_limit : 1;\
-uint32_t flow_label : 1;\
-uint32_t port_id : 1;\
-uint32_t mn : 1;\
-uint32_t peer_trans_type : 1; */\* user tp only \*/*\
-uint32_t reserved : 13;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_tp_attr_mask {
+    struct {
+        uint32_t flag : 1;
+        uint32_t peer_tpn : 1;
+        uint32_t state : 1;
+        uint32_t tx_psn : 1;
+        uint32_t rx_psn : 1; */* modify both rx psn and tx psn when restore tp */*
+        uint32_t mtu : 1;
+        uint32_t cc_pattern_idx : 1;
+        uint32_t peer_ext : 1;
+        uint32_t oos_cnt : 1;
+        uint32_t local_net_addr_idx : 1;
+        uint32_t peer_net_addr : 1;
+        uint32_t data_udp_start : 1;
+        uint32_t ack_udp_start : 1;
+        uint32_t udp_range : 1;
+        uint32_t hop_limit : 1;
+        uint32_t flow_label : 1;
+        uint32_t port_id : 1;
+        uint32_t mn : 1;
+        uint32_t peer_trans_type : 1; */* user tp only */*
+        uint32_t reserved : 13;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_tp_mod_flag
+##### 5.5.1.6.3 ubcore_tp_mod_flag
 
-union ubcore_tp_mod_flag {\
-struct {\
-uint32_t oor_en : 1; */\* out of order receive, 0: disable 1: enable \*/*\
-uint32_t sr_en : 1; */\* selective retransmission, 0: disable 1: enable \*/*\
-uint32_t cc_en : 1; */\* congestion control algorithm, 0: disable 1: enable \*/*\
-uint32_t cc_alg : 4; */\* The value is ubcore_tp_cc_alg_t \*/*\
-uint32_t spray_en : 1; */\* spray with src udp port, 0: disable 1: enable \*/*\
-uint32_t clan : 1; */\* clan domain, 0: disable 1: enable \*/*\
-uint32_t reserved : 23;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_tp_mod_flag {
+    struct {
+        uint32_t oor_en : 1; */* out of order receive, 0: disable 1: enable */*
+        uint32_t sr_en : 1; */* selective retransmission, 0: disable 1: enable */*
+        uint32_t cc_en : 1; */* congestion control algorithm, 0: disable 1: enable */*
+        uint32_t cc_alg : 4; */* The value is ubcore_tp_cc_alg_t */*
+        uint32_t spray_en : 1; */* spray with src udp port, 0: disable 1: enable */*
+        uint32_t clan : 1; */* clan domain, 0: disable 1: enable */*
+        uint32_t reserved : 23;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### TP销毁ops接口
+#### 5.5.1.7 TP销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_tp)(struct ubcore_tp \*tp);
+int (*destroy_tp)(struct ubcore_tp *tp);
 
 3.  描述
 
@@ -15080,23 +14761,23 @@ destroy_tp为一个函数指针，是ubcore_ops_t结构体成员，在ubcore_reg
 
 4.  参数
 
-\@param\[in\] tp: tp pointer created before
+@param[in] tp: tp pointer created before
 
 5.  返回值
 
 0 on success, other value on error
 
-#### 多TP创建ops接口
+#### 5.5.1.8 多TP创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*create_multi_tp)(struct ubcore_device \*dev, uint32_t cnt, struct ubcore_tp_cfg \*cfg,
+int (*create_multi_tp)(struct ubcore_device *dev, uint32_t cnt, struct ubcore_tp_cfg *cfg,
 
-struct ubcore_udata \*udata, struct ubcore_tp \*\*tp);
+struct ubcore_udata *udata, struct ubcore_tp **tp);
 
 3.  描述
 
@@ -15104,29 +14785,29 @@ struct ubcore_udata \*udata, struct ubcore_tp \*\*tp);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cnt: the number of tp, must be less than or equal to 32;
+@param[in] cnt: the number of tp, must be less than or equal to 32;
 
-\@param\[in\] cfg: array of tp init attributes
+@param[in] cfg: array of tp init attributes
 
-\@param\[in\] udata: array of ucontext and user space driver data
+@param[in] udata: array of ucontext and user space driver data
 
-\@param\[out\] tp: pointer array of tp
+@param[out] tp: pointer array of tp
 
 5.  返回值
 
 created tp cnt, 0 on error
 
-#### 多TP销毁ops接口
+#### 5.5.1.9 多TP销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp);
+int (*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp **tp);
 
 3.  描述
 
@@ -15134,25 +14815,25 @@ int (\*destroy_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp);
 
 4.  参数
 
-\@param\[in\] cnt: the number of tp;
+@param[in] cnt: the number of tp;
 
-\@param\[in\] tp: pointer array of tp created before
+@param[in] tp: pointer array of tp created before
 
 5.  返回值
 
 destroyed tp cnt, 0 on error
 
-#### 多TP修改ops接口
+#### 5.5.1.10 多TP修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_multi_tp)(uint32_t cnt, struct ubcore_tp \*\*tp, struct ubcore_tp_attr \*attr,
+int (*modify_multi_tp)(uint32_t cnt, struct ubcore_tp **tp, struct ubcore_tp_attr *attr,
 
-union ubcore_tp_attr_mask \*mask, struct ubcore_tp \*\*fail_tp);
+union ubcore_tp_attr_mask *mask, struct ubcore_tp **fail_tp);
 
 3.  描述
 
@@ -15160,29 +14841,29 @@ Modify多个tp的属性。UDMA第一次修改失败即返回
 
 4.  参数
 
-\@param\[in\] cnt: the number of tp;
+@param[in] cnt: the number of tp;
 
-\@param\[in\] tp: pointer array of tp created before
+@param[in] tp: pointer array of tp created before
 
-\@param\[in\] attr: array of tp attributes
+@param[in] attr: array of tp attributes
 
-\@param\[in\] mask: array of attr mask indicating the attributes to be modified
+@param[in] mask: array of attr mask indicating the attributes to be modified
 
-\@param\[in\] fail_tp: pointer of tp failed to modify
+@param[in] fail_tp: pointer of tp failed to modify
 
 5.  返回值
 
 modified successfully tp cnt, 0 on error
 
-#### 查询拥塞控制算法模板ops接口
+#### 5.5.1.11 查询拥塞控制算法模板ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_cc_entry \*(\*query_cc)(struct ubcore_device \*dev, uint32_t \*cc_entry_cnt);
+struct ubcore_cc_entry *(*query_cc)(struct ubcore_device *dev, uint32_t *cc_entry_cnt);
 
 3.  描述
 
@@ -15192,31 +14873,33 @@ struct ubcore_cc_entry \*(\*query_cc)(struct ubcore_device \*dev, uint32_t \*cc_
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cc_entry_cnt: cc entry cnt;
+@param[in] cc_entry_cnt: cc entry cnt;
 
 5.  返回值
 
 return NULL on fail, otherwise, return cc entry array
 
-##### ubcore_cc_entry
+##### 5.5.1.11.1 ubcore_cc_entry
 
-struct ubcore_cc_entry {\
-enum ubcore_tp_cc_alg alg;\
-uint8_t cc_pattern_idx;\
-uint8_t cc_priority;\
+```c
+struct ubcore_cc_entry {
+    enum ubcore_tp_cc_alg alg;
+    uint8_t cc_pattern_idx;
+    uint8_t cc_priority;
 } \_\_packed;
+```
 
-#### VTPN分配ops接口
+#### 5.5.1.12 VTPN分配ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_vtpn \*(\*alloc_vtpn)(struct ubcore_device \*dev);
+struct ubcore_vtpn *(*alloc_vtpn)(struct ubcore_device *dev);
 
 3.  描述
 
@@ -15224,76 +14907,78 @@ struct ubcore_vtpn \*(\*alloc_vtpn)(struct ubcore_device \*dev);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
 5.  返回值
 
 vtpn pointer on success, NULL on error
 
-##### ubcore_vtpn
+##### 5.5.1.12.1 ubcore_vtpn
 
-struct ubcore_vtpn {\
-uint32_t vtpn; */\* driver fills \*/*\
-struct ubcore_device \*ub_dev;\
-*/\* ubcore private, inaccessible to driver \*/*\
-enum ubcore_transport_mode trans_mode;\
-*/\* vtpn key start \*/*\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) peer_eid;\
-uint32_t local_jetty;\
-uint32_t peer_jetty;\
-*/\* vtpn key end \*/*\
-uint32_t eid_index;\
-struct mutex state_lock;\
-enum [4.4.3.6.8](#ubcore_vtp_state) [ubcore_vtp_state](#ubcore_vtp_state) state; */\* protect by state_lock \*/*\
-struct hlist_node hnode; */\* key: eid + jetty \*/*\
-struct hlist_node vtpn_hnode; */\* key: vtpn \*/*\
-atomic_t use_cnt;\
-struct kref ref_cnt;\
-struct completion comp;\
-struct list_head node; */\* vtpn node in vtpn_wait_list \*/*\
-struct list_head list; */\* vtpn head to restore tjetty/jetty/cb node \*/*\
-struct list_head\
-disconnect_list; */\* vtpn head to restore disconnect vtpn node \*/*\
-uint64_t tp_handle;\
-uint64_t peer_tp_handle;\
-uint64_t tag;\
-bool uspace; */\* true: user space; false: kernel space \*/*\
+```c
+struct ubcore_vtpn {
+    uint32_t vtpn; */* driver fills */*
+    struct ubcore_device *ub_dev;
+    */* ubcore private, inaccessible to driver */*
+    enum ubcore_transport_mode trans_mode;
+    */* vtpn key start */*
+    union ubcore_eid local_eid;
+    union ubcore_eid peer_eid;
+    uint32_t local_jetty;
+    uint32_t peer_jetty;
+    */* vtpn key end */*
+    uint32_t eid_index;
+    struct mutex state_lock;
+    enum ubcore_vtp_state state; */* protect by state_lock */*
+    struct hlist_node hnode; */* key: eid + jetty */*
+    struct hlist_node vtpn_hnode; */* key: vtpn */*
+    atomic_t use_cnt;
+    struct kref ref_cnt;
+    struct completion comp;
+    struct list_head node; */* vtpn node in vtpn_wait_list */*
+    struct list_head list; */* vtpn head to restore tjetty/jetty/cb node */*
+    struct list_head
+    disconnect_list; */* vtpn head to restore disconnect vtpn node */*
+    uint64_t tp_handle;
+    uint64_t peer_tp_handle;
+    uint64_t tag;
+    bool uspace; */* true: user space; false: kernel space */*
 };
+```
 
-#### VTPN释放ops接口
+#### 5.5.1.13 VTPN释放ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*free_vtpn)(struct ubcore_vtpn \*vtpn);
+int (*free_vtpn)(struct ubcore_vtpn *vtpn);
 
 3.  描述
 
-\@param\[in\] vtpn: vtpn pointer allocated before
+@param[in] vtpn: vtpn pointer allocated before
 
 4.  参数
 
-\@param\[in\] \[Required\] rm_client: 待注销的内核态应用客户端.
+@param[in] [Required] rm_client: 待注销的内核态应用客户端.
 
 5.  返回值
 
 0 on success, other value on error
 
-#### VTP创建ops接口
+#### 5.5.1.14 VTP创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_vtp \*(\*create_vtp)(struct ubcore_device \*dev,
+struct ubcore_vtp *(*create_vtp)(struct ubcore_device *dev,
 
-struct ubcore_vtp_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_vtp_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15301,70 +14986,76 @@ struct ubcore_vtp_cfg \*cfg, struct ubcore_udata \*udata);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: vtp init attributes
+@param[in] cfg: vtp init attributes
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 vtp pointer on success, NULL on error
 
-##### ubcore_vtp_cfg
+##### 5.5.1.14.1 ubcore_vtp_cfg
 
-struct ubcore_vtp_cfg {\
-uint16_t fe_idx; // vfid or pfid\
-uint32_t vtpn;\
-uint32_t local_jetty;\
-/\* key start \*/\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) local_eid;\
-union [4.2.10.2](#ubcore_eid) [ubcore_eid](#ubcore_eid) peer_eid;\
-uint32_t peer_jetty;\
-/\* key end \*/\
-union ubcore_vtp_cfg_flag flag;\
-enum ubcore_transport_mode trans_mode;\
-union {\
-struct [6.5.1.1.3](#ubcore_tpg) [ubcore_tpg](#ubcore_tpg) \*tpg;\
-struct [6.5.1.5.8](#ubcore_tp-1) [ubcore_tp](#ubcore_tp-1) \*tp;\
-struct [6.5.1.17.3](#ubcore_utp) [ubcore_utp](#ubcore_utp) \*utp; // idx of dip\
-struct [6.5.1.19.2](#ubcore_ctp) [ubcore_ctp](#ubcore_ctp) \*ctp; /\* valid when clan is true \*/\
-};\
+```c
+struct ubcore_vtp_cfg {
+    uint16_t fe_idx; // vfid or pfid
+    uint32_t vtpn;
+    uint32_t local_jetty;
+    /* key start */
+    union ubcore_eid local_eid;
+    union ubcore_eid peer_eid;
+    uint32_t peer_jetty;
+    /* key end */
+    union ubcore_vtp_cfg_flag flag;
+    enum ubcore_transport_mode trans_mode;
+    union {
+        struct ubcore_tpg *tpg;
+        struct ubcore_tp *tp;
+        struct ubcore_utp *utp; // idx of dip
+        struct ubcore_ctp *ctp; /* valid when clan is true */
+    };
 };
+```
 
-##### ubcore_vtp_cfg_flag
+##### 5.5.1.14.2 ubcore_vtp_cfg_flag
 
-union ubcore_vtp_cfg_flag {\
-struct {\
-uint32_t clan_tp : 1;\
-uint32_t migrate : 1;\
-uint32_t reserve : 30;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_vtp_cfg_flag {
+    struct {
+        uint32_t clan_tp : 1;
+        uint32_t migrate : 1;
+        uint32_t reserve : 30;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_vtp
+##### 5.5.1.14.3 ubcore_vtp
 
-struct ubcore_vtp {\
-struct ubcore_device \*ub_dev;\
-struct [6.5.1.14.1](#ubcore_vtp_cfg) [ubcore_vtp_cfg](#ubcore_vtp_cfg) cfg; */\* driver fills \*/*\
-struct hlist_node hnode; */\* driver inaccessible \*/*\
-uint32_t role; */\* current side is initiator, target or duplex \*/*\
-struct kref ref_cnt;\
-uint32_t eid_idx;\
-uint32_t upi;\
-bool share_mode;\
+```c
+struct ubcore_vtp {
+    struct ubcore_device *ub_dev;
+    struct ubcore_vtp_cfg cfg; */* driver fills */*
+    struct hlist_node hnode; */* driver inaccessible */*
+    uint32_t role; */* current side is initiator, target or duplex */*
+    struct kref ref_cnt;
+    uint32_t eid_idx;
+    uint32_t upi;
+    bool share_mode;
 };
+```
 
-#### VTP销毁ops接口
+#### 5.5.1.15 VTP销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_vtp)(struct ubcore_vtp \*vtp);
+int (*destroy_vtp)(struct ubcore_vtp *vtp);
 
 3.  描述
 
@@ -15372,23 +15063,23 @@ int (\*destroy_vtp)(struct ubcore_vtp \*vtp);
 
 4.  参数
 
-\@param\[in\] vtp: vtp pointer created before
+@param[in] vtp: vtp pointer created before
 
 5.  返回值
 
 0 on success, other value on error
 
-#### VTP修改ops接口
+#### 5.5.1.16 VTP修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_vtp)(struct ubcore_vtp \*vtp, struct ubcore_vtp_attr \*attr,
+int (*modify_vtp)(struct ubcore_vtp *vtp, struct ubcore_vtp_attr *attr,
 
-union ubcore_vtp_attr_mask \*mask);
+union ubcore_vtp_attr_mask *mask);
 
 3.  描述
 
@@ -15396,48 +15087,52 @@ UB数据面发送报文的时候，根据wqe中携带的vtpn找到vtp表项中�
 
 4.  参数
 
-\@param\[in\] vtp: vtp pointer to be modified;
+@param[in] vtp: vtp pointer to be modified;
 
-\@param\[in\] attr: vtp attr, tp that we want to change;
+@param[in] attr: vtp attr, tp that we want to change;
 
-\@param\[in\] mask: attr mask;
+@param[in] mask: attr mask;
 
 5.  返回值
 
 0 on success, other value on error
 
-##### ubcore_vtp_attr
+##### 5.5.1.16.1 ubcore_vtp_attr
 
-struct ubcore_vtp_attr {\
-union {\
-struct [6.5.1.1.3](#ubcore_tpg) [ubcore_tpg](#ubcore_tpg) \*tpg;\
-struct [6.5.1.5.8](#ubcore_tp-1) [ubcore_tp](#ubcore_tp-1) \*tp;\
-struct [6.5.1.17.3](#ubcore_utp) [ubcore_utp](#ubcore_utp) \*utp; // idx of dip\
-struct [6.5.1.19.2](#ubcore_ctp) [ubcore_ctp](#ubcore_ctp) \*ctp; /\* clan domain \*/\
-} tp;\
+```c
+struct ubcore_vtp_attr {
+    union {
+        struct ubcore_tpg *tpg;
+        struct ubcore_tp *tp;
+        struct ubcore_utp *utp; // idx of dip
+        struct ubcore_ctp *ctp; /* clan domain */
+    } tp;
 };
+```
 
-##### ubcore_vtp_attr_mask
+##### 5.5.1.16.2 ubcore_vtp_attr_mask
 
-union ubcore_vtp_attr_mask {\
-struct {\
-uint32_t tp : 1;\
-uint32_t reserved : 31;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_vtp_attr_mask {
+    struct {
+        uint32_t tp : 1;
+        uint32_t reserved : 31;
+    } bs;
+    uint32_t value;
 };
+```
 
-#### UTP创建ops接口
+#### 5.5.1.17 UTP创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_utp \*(\*create_utp)(struct ubcore_device \*dev,
+struct ubcore_utp *(*create_utp)(struct ubcore_device *dev,
 
-struct ubcore_utp_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_utp_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15445,64 +15140,70 @@ struct ubcore_utp_cfg \*cfg, struct ubcore_udata \*udata);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: utp init attributes
+@param[in] cfg: utp init attributes
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 utp pointer on success, NULL on error
 
-##### ubcore_utp_cfg
+##### 5.5.1.17.1 ubcore_utp_cfg
 
-struct ubcore_utp_cfg {\
-/\* transaction layer attributes \*/\
-union ubcore_utp_cfg_flag flag;\
-uint16_t udp_start; // src udp port start\
-uint8_t udp_range; // src udp port range\
-uint32_t local_net_addr_idx;\
-struct ubcore_net_addr peer_net_addr;\
-uint32_t flow_label;\
-uint8_t dscp;\
-uint8_t hop_limit;\
-uint32_t port_id;\
-enum [4.2.18.1](#ubcore_mtu) [ubcore_mtu](#ubcore_mtu) mtu;\
+```c
+struct ubcore_utp_cfg {
+    /* transaction layer attributes */
+    union ubcore_utp_cfg_flag flag;
+    uint16_t udp_start; // src udp port start
+    uint8_t udp_range; // src udp port range
+    uint32_t local_net_addr_idx;
+    struct ubcore_net_addr peer_net_addr;
+    uint32_t flow_label;
+    uint8_t dscp;
+    uint8_t hop_limit;
+    uint32_t port_id;
+    enum ubcore_mtu mtu;
 };
+```
 
-##### ubcore_utp_cfg_flag
+##### 5.5.1.17.2 ubcore_utp_cfg_flag
 
-union ubcore_utp_cfg_flag {\
-struct {\
-uint32_t loopback : 1;\
-uint32_t spray_en : 1;\
-uint32_t clan : 1;\
-uint32_t reserved : 29;\
-} bs;\
-uint32_t value;\
+```c
+union ubcore_utp_cfg_flag {
+    struct {
+        uint32_t loopback : 1;
+        uint32_t spray_en : 1;
+        uint32_t clan : 1;
+        uint32_t reserved : 29;
+    } bs;
+    uint32_t value;
 };
+```
 
-##### ubcore_utp
+##### 5.5.1.17.3 ubcore_utp
 
-struct ubcore_utp {\
-uint32_t utpn; */\* driver fills \*/*\
-struct ubcore_device \*ub_dev;\
-struct [6.5.1.17.1](#ubcore_utp_cfg) [ubcore_utp_cfg](#ubcore_utp_cfg) utp_cfg; */\* filled by ubcore when createing utp. \*/*\
-struct hlist_node hnode;\
-struct kref ref_cnt;\
-uint32_t ue_idx;\
+```c
+struct ubcore_utp {
+    uint32_t utpn; */* driver fills */*
+    struct ubcore_device *ub_dev;
+    struct ubcore_utp_cfg utp_cfg; */* filled by ubcore when createing utp. */*
+    struct hlist_node hnode;
+    struct kref ref_cnt;
+    uint32_t ue_idx;
 };
+```
 
-#### UTP销毁ops接口
+#### 5.5.1.18 UTP销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_utp)(struct ubcore_utp \*utp);
+int (*destroy_utp)(struct ubcore_utp *utp);
 
 3.  描述
 
@@ -15510,23 +15211,23 @@ int (\*destroy_utp)(struct ubcore_utp \*utp);
 
 4.  参数
 
-\@param\[in\] utp: utp pointer created before
+@param[in] utp: utp pointer created before
 
 5.  返回值
 
 0 on success, other value on error
 
-#### CTP创建ops接口
+#### 5.5.1.19 CTP创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_ctp \*(\*create_ctp)(struct ubcore_device \*dev,
+struct ubcore_ctp *(*create_ctp)(struct ubcore_device *dev,
 
-struct ubcore_ctp_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_ctp_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15534,45 +15235,49 @@ struct ubcore_ctp_cfg \*cfg, struct ubcore_udata \*udata);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: ctp init attributes
+@param[in] cfg: ctp init attributes
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 ctp pointer on success, NULL on error
 
-##### ubcore_ctp_cfg
+##### 5.5.1.19.1 ubcore_ctp_cfg
 
-struct ubcore_ctp_cfg {\
-struct [6.2.1.1](#ubcore_net_addr-1) [ubcore_net_addr](#ubcore_net_addr-1) peer_net_addr;\
-uint32_t cna_len;\
+```c
+struct ubcore_ctp_cfg {
+    struct ubcore_net_addr peer_net_addr;
+    uint32_t cna_len;
 };
+```
 
-##### ubcore_ctp
+##### 5.5.1.19.2 ubcore_ctp
 
-struct ubcore_ctp {\
-uint32_t ctpn; */\* driver fills \*/*\
-struct ubcore_device \*ub_dev;\
-struct [6.5.1.19.1](#ubcore_ctp_cfg) [ubcore_ctp_cfg](#ubcore_ctp_cfg) ctp_cfg; */\* filled by ubcore when createing cp. \*/*\
-atomic_t use_cnt;\
-struct hlist_node hnode;\
-struct kref ref_cnt;\
-struct completion comp;\
-uint32_t ue_idx;\
+```c
+struct ubcore_ctp {
+    uint32_t ctpn; */* driver fills */*
+    struct ubcore_device *ub_dev;
+    struct ubcore_ctp_cfg ctp_cfg; */* filled by ubcore when createing cp. */*
+    atomic_t use_cnt;
+    struct hlist_node hnode;
+    struct kref ref_cnt;
+    struct completion comp;
+    uint32_t ue_idx;
 };
+```
 
-#### CTP销毁ops接口
+#### 5.5.1.20 CTP销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_ctp)(struct ubcore_ctp \*ctp);
+int (*destroy_ctp)(struct ubcore_ctp *ctp);
 
 3.  描述
 
@@ -15580,23 +15285,23 @@ int (\*destroy_ctp)(struct ubcore_ctp \*ctp);
 
 4.  参数
 
-\@param\[in\] ctp: ctp pointer created before
+@param[in] ctp: ctp pointer created before
 
 5.  返回值
 
 0 on success, other value on error
 
-### JFC管理接口
+### 5.5.2 JFC管理接口
 
-#### JFC创建ops接口
+#### 5.5.2.1 JFC创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_jfc \*(\*create_jfc)(struct ubcore_device \*dev, struct ubcore_jfc_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_jfc *(*create_jfc)(struct ubcore_device *dev, struct ubcore_jfc_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15604,25 +15309,25 @@ UB Core调用UDMA驱动创建JFC。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: jfc attributes and configurations
+@param[in] cfg: jfc attributes and configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 jfc pointer on success, NULL on error
 
-#### JFC修改ops接口
+#### 5.5.2.2 JFC修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_jfc)(struct ubcore_jfc \*jfc, struct ubcore_jfc_attr \*attr, struct ubcore_udata \*udata);
+int (*modify_jfc)(struct ubcore_jfc *jfc, struct ubcore_jfc_attr *attr, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15630,25 +15335,25 @@ UB Core调用UDMA驱动修改JFC
 
 4.  参数
 
-\@param\[in\] jfc: the jfc created before;
+@param[in] jfc: the jfc created before;
 
-\@param\[in\] attr: ubcore jfc attr;
+@param[in] attr: ubcore jfc attr;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFC销毁ops接口
+#### 5.5.2.3 JFC销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_jfc)(struct ubcore_jfc \*jfc);
+int (*destroy_jfc)(struct ubcore_jfc *jfc);
 
 3.  描述
 
@@ -15656,21 +15361,21 @@ int (\*destroy_jfc)(struct ubcore_jfc \*jfc);
 
 4.  参数
 
-\@param\[in\] jfc: the jfc created before;
+@param[in] jfc: the jfc created before;
 
 5.  返回值
 
-\@return: 0 on success, other value on error
+@return: 0 on success, other value on error
 
-#### JFC rearm ops接口
+#### 5.5.2.4 JFC rearm ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*rearm_jfc)(struct ubcore_jfc \*jfc, bool solicited_only);
+int (*rearm_jfc)(struct ubcore_jfc *jfc, bool solicited_only);
 
 3.  描述
 
@@ -15678,9 +15383,9 @@ UB Core调用UDMA驱动使能JFC的中断。
 
 4.  参数
 
-\@param\[in\] jfc: the jfc created before;
+@param[in] jfc: the jfc created before;
 
-\@param\[in\] solicited_only: rearm notify by message marked with solicited flag
+@param[in] solicited_only: rearm notify by message marked with solicited flag
 
 指示是否solicited，即接收到的请求带有solicited标志产生的cqe才产生事件。
 
@@ -15688,17 +15393,17 @@ UB Core调用UDMA驱动使能JFC的中断。
 
 0 on success, other value on error
 
-### JFS管理接口
+### 5.5.3 JFS管理接口
 
-#### JFS创建ops接口
+#### 5.5.3.1 JFS创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_jfs \*(\*create_jfs)(struct ubcore_device \*dev, struct ubcore_jfs_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_jfs *(*create_jfs)(struct ubcore_device *dev, struct ubcore_jfs_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15706,27 +15411,27 @@ UB Core调用UDMA驱动创建JFS。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: jfs attributes and configurations
+@param[in] cfg: jfs attributes and configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 jfs pointer on success, NULL on error
 
-#### JFS修改ops接口
+#### 5.5.3.2 JFS修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_attr \*attr,
+int (*modify_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_attr *attr,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15734,25 +15439,25 @@ UB Core调用UDMA驱动修改JFS，支持修改RX WR/WQE的最低水位和状态
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before;
+@param[in] jfs: the jfs created before;
 
-\@param\[in\] attr: ubcore jfs attr;
+@param[in] attr: ubcore jfs attr;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFS查询ops接口
+#### 5.5.3.3 JFS查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_cfg \*cfg, struct ubcore_jfs_attr \*attr);
+int (*query_jfs)(struct ubcore_jfs *jfs, struct ubcore_jfs_cfg *cfg, struct ubcore_jfs_attr *attr);
 
 3.  描述
 
@@ -15760,25 +15465,25 @@ int (\*query_jfs)(struct ubcore_jfs \*jfs, struct ubcore_jfs_cfg \*cfg, struct u
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before;
+@param[in] jfs: the jfs created before;
 
-\@param\[out\] cfg: jfs configurations;
+@param[out] cfg: jfs configurations;
 
-\@param\[out\] attr: ubcore jfs attributes;
+@param[out] attr: ubcore jfs attributes;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFS flush ops接口
+#### 5.5.3.4 JFS flush ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*flush_jfs)(struct ubcore_jfs \*jfs, int cr_cnt, struct ubcore_cr \*cr);
+int (*flush_jfs)(struct ubcore_jfs *jfs, int cr_cnt, struct ubcore_cr *cr);
 
 3.  描述
 
@@ -15786,25 +15491,25 @@ UDMA驱动把jfs中未被硬件执行的wr，通过cr返回给应用。
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before;
+@param[in] jfs: the jfs created before;
 
-\@param\[in\] cr_cnt: the maximum number of CRs expected to be returned;
+@param[in] cr_cnt: the maximum number of CRs expected to be returned;
 
-\@param\[out\] cr: the addr of returned CRs;
+@param[out] cr: the addr of returned CRs;
 
 5.  返回值
 
 the number of CR returned, 0 means no completion record returned, -1 on error
 
-#### JFS销毁ops接口
+#### 5.5.3.5 JFS销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_jfs)(struct ubcore_jfs \*jfs);
+int (*destroy_jfs)(struct ubcore_jfs *jfs);
 
 3.  描述
 
@@ -15812,27 +15517,27 @@ UB Core调用UDMA驱动销毁JFS。
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before;
+@param[in] jfs: the jfs created before;
 
 5.  返回值
 
 0 on success, other value on error
 
-### JFR管理接口
+### 5.5.4 JFR管理接口
 
-#### JFR创建ops接口
+#### 5.5.4.1 JFR创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_jfr \*(\*create_jfr)(struct ubcore_device \*dev,
+struct ubcore_jfr *(*create_jfr)(struct ubcore_device *dev,
 
-struct ubcore_jfr_cfg \*cfg,
+struct ubcore_jfr_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15840,27 +15545,27 @@ UB Core调用UDMA驱动创建JFR。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: jfr attributes and configurations
+@param[in] cfg: jfr attributes and configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 jfr pointer on success, NULL on error
 
-#### JFR修改ops接口
+#### 5.5.4.2 JFR修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_attr \*attr,
+int (*modify_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_attr *attr,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15868,27 +15573,27 @@ UB Core调用UDMA驱动修改JFR
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before;
+@param[in] jfr: the jfr created before;
 
-\@param\[in\] attr: ubcore jfr attr;
+@param[in] attr: ubcore jfr attr;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFR查询ops接口
+#### 5.5.4.3 JFR查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_jfr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_cfg \*cfg,
+int (*query_jfr)(struct ubcore_jfr *jfr, struct ubcore_jfr_cfg *cfg,
 
-struct ubcore_jfr_attr \*attr);
+struct ubcore_jfr_attr *attr);
 
 3.  描述
 
@@ -15896,25 +15601,25 @@ struct ubcore_jfr_attr \*attr);
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before;
+@param[in] jfr: the jfr created before;
 
-\@param\[out\] cfg: jfr configurations;
+@param[out] cfg: jfr configurations;
 
-\@param\[out\] attr: ubcore jfr attributes;
+@param[out] attr: ubcore jfr attributes;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFR销毁ops接口
+#### 5.5.4.4 JFR销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*destroy_jfr)(struct ubcore_jfr \*jfr);
+int (*destroy_jfr)(struct ubcore_jfr *jfr);
 
 3.  描述
 
@@ -15922,25 +15627,25 @@ UB Core调用UDMA驱动销毁JFR。
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before;
+@param[in] jfr: the jfr created before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFR导入ops接口
+#### 5.5.4.5 JFR导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_tjetty \*(\*import_jfr)(struct ubcore_device \*dev,
+struct ubcore_tjetty *(*import_jfr)(struct ubcore_device *dev,
 
-struct ubcore_tjetty_cfg \*cfg,
+struct ubcore_tjetty_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -15948,25 +15653,25 @@ UB Core调用UDMA驱动导入JFR。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: remote jfr attributes and import configurations
+@param[in] cfg: remote jfr attributes and import configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 target jfr pointer on success, NULL on error
 
-#### JFR反导入ops接口
+#### 5.5.4.6 JFR反导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*unimport_jfr)(struct ubcore_tjetty \*tjfr);
+int (*unimport_jfr)(struct ubcore_tjetty *tjfr);
 
 3.  描述
 
@@ -15974,27 +15679,27 @@ UB Core调用UDMA驱动反导入JFR
 
 4.  参数
 
-\@param\[in\] tjfr: the target jfr imported before;
+@param[in] tjfr: the target jfr imported before;
 
 5.  返回值
 
 0 on success, other value on error
 
-### Jetty管理接口
+### 5.5.5 Jetty管理接口
 
-#### Jetty创建ops接口
+#### 5.5.5.1 Jetty创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_jetty \*(\*create_jetty)(struct ubcore_device \*dev,
+struct ubcore_jetty *(*create_jetty)(struct ubcore_device *dev,
 
-struct ubcore_jetty_cfg \*cfg,
+struct ubcore_jetty_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16002,27 +15707,27 @@ UB Core调用UDMA驱动创建Jetty。
 
 4.  参数ubco
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: jetty attributes and configurations
+@param[in] cfg: jetty attributes and configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 jetty pointer on success, NULL on error
 
-#### Jetty修改ops接口
+#### 5.5.5.2 Jetty修改ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*modify_jetty)(struct ubcore_jetty \*jetty, struct ubcore_jetty_attr \*attr,
+int (*modify_jetty)(struct ubcore_jetty *jetty, struct ubcore_jetty_attr *attr,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16030,27 +15735,27 @@ UB Core调用UDMA驱动修改Jetty，支持修改RX WR的最低水位和状态�
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[in\] attr: ubcore jetty attr;
+@param[in] attr: ubcore jetty attr;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty查询ops接口
+#### 5.5.5.3 Jetty查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_jetty)(struct ubcore_jetty \*jetty, struct ubcore_jetty_cfg \*cfg,
+int (*query_jetty)(struct ubcore_jetty *jetty, struct ubcore_jetty_cfg *cfg,
 
-struct ubcore_jetty_attr \*attr);
+struct ubcore_jetty_attr *attr);
 
 3.  描述
 
@@ -16058,25 +15763,25 @@ struct ubcore_jetty_attr \*attr);
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[out\] cfg: jetty configurations;
+@param[out] cfg: jetty configurations;
 
-\@param\[out\] attr: ubcore jetty attributes;
+@param[out] attr: ubcore jetty attributes;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty销毁ops接口
+#### 5.5.5.4 Jetty销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int (\*destroy_jetty)(struct ubcore_jetty \*jetty);
+int (*destroy_jetty)(struct ubcore_jetty *jetty);
 
 3.  描述
 
@@ -16084,25 +15789,25 @@ UB Core调用UDMA驱动销毁Jetty。
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty导入ops接口
+#### 5.5.5.5 Jetty导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_tjetty \*(\*import_jetty)(struct ubcore_device \*dev,
+struct ubcore_tjetty *(*import_jetty)(struct ubcore_device *dev,
 
-struct ubcore_tjetty_cfg \*cfg,
+struct ubcore_tjetty_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16110,25 +15815,25 @@ UB Core调用UDMA驱动导入Jetty或者Jetty group。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: remote jetty attributes and import configurations
+@param[in] cfg: remote jetty attributes and import configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 target jetty pointer on success, NULL on error
 
-#### Jetty反导入ops接口
+#### 5.5.5.6 Jetty反导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*unimport_jetty)(struct ubcore_tjetty \*tjetty);
+int (*unimport_jetty)(struct ubcore_tjetty *tjetty);
 
 3.  描述
 
@@ -16136,23 +15841,23 @@ UB Core调用UDMA驱动反导入Jetty或者Jetty group。
 
 4.  参数
 
-\@param\[in\] tjetty: the target jetty imported before;
+@param[in] tjetty: the target jetty imported before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty bind ops接口
+#### 5.5.5.7 Jetty bind ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*bind_jetty)(struct ubcore_jetty \*jetty, struct ubcore_tjetty \*tjetty,
+int (*bind_jetty)(struct ubcore_jetty *jetty, struct ubcore_tjetty *tjetty,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16160,25 +15865,25 @@ UB Core调用UDMA驱动导入bind Jetty。
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[in\] tjetty: the target jetty imported before;
+@param[in] tjetty: the target jetty imported before;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty unbind ops接口
+#### 5.5.5.8 Jetty unbind ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*unbind_jetty)(struct ubcore_jetty \*jetty);
+int (*unbind_jetty)(struct ubcore_jetty *jetty);
 
 3.  描述
 
@@ -16186,21 +15891,21 @@ UB Core调用UDMA驱动unbind Jetty。
 
 4.  参数
 
-\@param\[in\] jetty: the jetty binded before;
+@param[in] jetty: the jetty binded before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty flush ops接口
+#### 5.5.5.9 Jetty flush ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*flush_jetty)(struct ubcore_jetty \*jetty, int cr_cnt, struct ubcore_cr \*cr);
+int (*flush_jetty)(struct ubcore_jetty *jetty, int cr_cnt, struct ubcore_cr *cr);
 
 3.  描述
 
@@ -16208,29 +15913,29 @@ int (\*flush_jetty)(struct ubcore_jetty \*jetty, int cr_cnt, struct ubcore_cr \*
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[in\] cr_cnt: the maximum number of CRs expected to be returned;
+@param[in] cr_cnt: the maximum number of CRs expected to be returned;
 
-\@param\[out\] cr: the addr of returned CRs;
+@param[out] cr: the addr of returned CRs;
 
 5.  返回值
 
 the number of CR returned, 0 means no completion record returned, -1 on error
 
-### Jetty group管理接口
+### 5.5.6 Jetty group管理接口
 
-#### Jetty group创建ops接口
+#### 5.5.6.1 Jetty group创建ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_jetty_group \*(\*create_jetty_grp)(struct ubcore_device \*dev,
+struct ubcore_jetty_group *(*create_jetty_grp)(struct ubcore_device *dev,
 
-struct ubcore_jetty_grp_cfg \*cfg, struct ubcore_udata \*udata);
+struct ubcore_jetty_grp_cfg *cfg, struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16238,25 +15943,25 @@ struct ubcore_jetty_grp_cfg \*cfg, struct ubcore_udata \*udata);
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: pointer of the jetty group config;
+@param[in] cfg: pointer of the jetty group config;
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 jetty group pointer on success, NULL on error
 
-#### Jetty group销毁ops接口
+#### 5.5.6.2 Jetty group销毁ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*delete_jetty_grp)(struct ubcore_jetty_group \*jetty_grp);
+int (*delete_jetty_grp)(struct ubcore_jetty_group *jetty_grp);
 
 3.  描述
 
@@ -16264,25 +15969,25 @@ int (\*delete_jetty_grp)(struct ubcore_jetty_group \*jetty_grp);
 
 4.  参数
 
-\@param\[in\] jetty_grp: the jetty group created before;
+@param[in] jetty_grp: the jetty group created before;
 
 5.  返回值
 
 0 on success, other value on error
 
-### segment和token管理接口
+### 5.5.7 segment和token管理接口
 
-#### token_id分配ops接口
+#### 5.5.7.1 token_id分配ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_token_id \*(\*alloc_token_id)(struct ubcore_device \*dev, union ubcore_token_id_flag flag,
+struct ubcore_token_id *(*alloc_token_id)(struct ubcore_device *dev, union ubcore_token_id_flag flag,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16290,25 +15995,25 @@ UB Core调用UDMA驱动分配token id。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-**@**param*\[in\] flag: token_id_flag;*
+**@**param*[in] flag: token_id_flag;*
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 token id pointer on success, NULL on error
 
-#### token_id释放ops接口
+#### 5.5.7.2 token_id释放ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*free_token_id)(struct ubcore_token_id \*token_id);
+int (*free_token_id)(struct ubcore_token_id *token_id);
 
 3.  描述
 
@@ -16316,25 +16021,25 @@ UB Core调用UDMA驱动释放token id。
 
 4.  参数
 
-\@param\[in\] token_id: the token id alloced before;
+@param[in] token_id: the token id alloced before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### segment注册ops接口
+#### 5.5.7.3 segment注册ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_target_seg \*(\*register_seg)(struct ubcore_device \*dev,
+struct ubcore_target_seg *(*register_seg)(struct ubcore_device *dev,
 
-struct ubcore_seg_cfg \*cfg,
+struct ubcore_seg_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16342,25 +16047,25 @@ UB Core调用UDMA驱动注册segment
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: segment attributes and configurations
+@param[in] cfg: segment attributes and configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 target segment pointer on success, NULL on error
 
-#### segment反注册ops接口
+#### 5.5.7.4 segment反注册ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*unregister_seg)(struct ubcore_target_seg \*tseg);
+int (*unregister_seg)(struct ubcore_target_seg *tseg);
 
 3.  描述
 
@@ -16368,25 +16073,25 @@ UB Core调用UDMA驱动反注册segment和token。
 
 4.  参数
 
-\@param\[in\] tseg: the segment registered before;
+@param[in] tseg: the segment registered before;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### segment导入ops接口
+#### 5.5.7.5 segment导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-struct ubcore_target_seg \*(\*import_seg)(struct ubcore_device \*dev,
+struct ubcore_target_seg *(*import_seg)(struct ubcore_device *dev,
 
-struct ubcore_target_seg_cfg \*cfg,
+struct ubcore_target_seg_cfg *cfg,
 
-struct ubcore_udata \*udata);
+struct ubcore_udata *udata);
 
 3.  描述
 
@@ -16394,25 +16099,25 @@ UB Core调用UDMA驱动导入segment。
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] cfg: segment attributes and import configurations
+@param[in] cfg: segment attributes and import configurations
 
-\@param\[in\] udata: ucontext and user space driver data
+@param[in] udata: ucontext and user space driver data
 
 5.  返回值
 
 target segment handle on success, NULL on error
 
-#### segment反导入ops接口
+#### 5.5.7.6 segment反导入ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*unimport_seg)(struct ubcore_target_seg \*tseg);
+int (*unimport_seg)(struct ubcore_target_seg *tseg);
 
 3.  描述
 
@@ -16420,25 +16125,25 @@ UB Core调用UDMA驱动反导入远端segment和token。
 
 4.  参数
 
-\@param\[in\] tseg: the segment imported before;
+@param[in] tseg: the segment imported before;
 
 5.  返回值
 
 0 on success, other value on error
 
-### dscp-vl映射管理接口
+### 5.5.8 dscp-vl映射管理接口
 
-#### dscp-vl映射配置接口
+#### 5.5.8.1 dscp-vl映射配置接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*config_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,
+int (*config_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
 
-uint8_t \*vl, uint8_t num);
+uint8_t *vl, uint8_t num);
 
 3.  描述
 
@@ -16446,29 +16151,29 @@ uint8_t \*vl, uint8_t num);
 
 4.  参数
 
-\@param\[in\] dev:the ub dev handle;
+@param[in] dev:the ub dev handle;
 
-\@param\[in\] dscp: the dscp value array
+@param[in] dscp: the dscp value array
 
-\@param\[in\] vl: the vl value array
+@param[in] vl: the vl value array
 
-\@param\[in\] num: array num
+@param[in] num: array num
 
 5.  返回值
 
 0 on success, other value on error
 
-#### dscp-vl映射查询接口
+#### 5.5.8.2 dscp-vl映射查询接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_dscp_vl)(struct ubcore_device \*dev, uint8_t \*dscp,
+int (*query_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
 
-uint8_t num, uint8_t \*vl);
+uint8_t num, uint8_t *vl);
 
 3.  描述
 
@@ -16476,29 +16181,29 @@ uint8_t num, uint8_t \*vl);
 
 4.  参数
 
-\@param\[in\] dev:the ub dev handle;
+@param[in] dev:the ub dev handle;
 
-\@param\[in\] dscp: the dscp value array
+@param[in] dscp: the dscp value array
 
-\@param\[in\] num: array num
+@param[in] num: array num
 
-\@param\[out\] vl: the vl value array
+@param[out] vl: the vl value array
 
 5.  返回值
 
 0 on success, other value on error
 
-### 其他ops接口
+### 5.5.9 其他ops接口
 
-#### 驱动自定义控制user_ctl ops接口
+#### 5.5.9.1 驱动自定义控制user_ctl ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*user_ctl)(struct ubcore_device \*dev, struct ubcore_user_ctl \*user_ctl);
+int (*user_ctl)(struct ubcore_device *dev, struct ubcore_user_ctl *user_ctl);
 
 3.  描述
 
@@ -16506,25 +16211,25 @@ UB Core调用UDMA驱动执行user ctl命令
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] user_ctl: kdrv user control command pointer;
+@param[in] user_ctl: kdrv user control command pointer;
 
 5.  返回值
 
 0 on success, other value on error
 
-### 内核态异常事件上报接口
+### 5.5.10 内核态异常事件上报接口
 
-#### Jetty异步事件回调接口
+#### 5.5.10.1 Jetty异步事件回调接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-typedef void (\*ubcore_event_callback_t)(struct ubcore_event \*event, struct ubcore_ucontext \*ctx);
+typedef void (*ubcore_event_callback_t)(struct ubcore_event *event, struct ubcore_ucontext *ctx);
 
 3.  描述
 
@@ -16532,23 +16237,23 @@ ubcore_event_callback_t为一个函数指针，是JFS、JFR、Jetty、JFC和Jett
 
 4.  参数
 
-\@param\[in\] \[Required\] event: 异常事件描述结构体，包括设备编号、Jetty类型编号和异常事件类型等，UB Core根据该域段选择不同的后处理策略。
+@param[in] [Required] event: 异常事件描述结构体，包括设备编号、Jetty类型编号和异常事件类型等，UB Core根据该域段选择不同的后处理策略。
 
-\@param\[in\] \[Required\] ctx: UB Core协议栈定义的上下文信息，通过该域段可以找到对应的JFAE（Jetty For Asyn Event）
+@param[in] [Required] ctx: UB Core协议栈定义的上下文信息，通过该域段可以找到对应的JFAE（Jetty For Asyn Event）
 
 5.  返回值
 
 NA
 
-#### 异步事件分发接口
+#### 5.5.10.2 异步事件分发接口
 
 1.  头文件
 
-#include \"ubcore_api.h\"
+#include "ubcore_api.h"
 
 2.  原型
 
-void ubcore_dispatch_async_event(struct ubcore_event \*event);
+void ubcore_dispatch_async_event(struct ubcore_event *event);
 
 3.  描述
 
@@ -16558,27 +16263,27 @@ void ubcore_dispatch_async_event(struct ubcore_event \*event);
 
 4.  参数
 
-\@param\[in\] event: asynchronous event;
+@param[in] event: asynchronous event;
 
 5.  返回值
 
 NA
 
-### 内核态状态查询和DFX 接口
+### 5.5.11 内核态状态查询和DFX 接口
 
 芯片状态查询需要下沉至内核态，实现内核态驱动与用户态DFX工具通信。
 
-#### 统计查询ops接口
+#### 5.5.11.1 统计查询ops接口
 
 1.  头文件
 
-#include \"ubcore_uapi.h\"
+#include "ubcore_uapi.h"
 
 2.  原型
 
-int (\*query_stats)(struct ubcore_device \*dev, struct ubcore_stats_key \*key,
+int (*query_stats)(struct ubcore_device *dev, struct ubcore_stats_key *key,
 
-struct ubcore_stats_val \*val);
+struct ubcore_stats_val *val);
 
 3.  描述
 
@@ -16586,27 +16291,27 @@ query_stats为一个函数指针。query_stats提供设备级统计信息查询�
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] key: type and key value of the ub device to query;
+@param[in] key: type and key value of the ub device to query;
 
-\@param\[in/out\] val: address and buffer length of query results
+@param[in/out] val: address and buffer length of query results
 
 5.  返回值
 
 0 on success, other value on error
 
-#### 资源查询ops接口
+#### 5.5.11.2 资源查询ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*query_res)(struct ubcore_device \*dev, struct ubcore_res_key \*key,
+int (*query_res)(struct ubcore_device *dev, struct ubcore_res_key *key,
 
-struct ubcore_res_val \*val);
+struct ubcore_res_val *val);
 
 3.  描述
 
@@ -16614,29 +16319,29 @@ query_res为一个函数指针。query_res提供设备级资源使用情况查�
 
 4.  参数
 
-\@param\[in\] dev: the ub device handle;
+@param[in] dev: the ub device handle;
 
-\@param\[in\] key: resource type and key;
+@param[in] key: resource type and key;
 
-\@param\[in/out\] val: addr and len of value
+@param[in/out] val: addr and len of value
 
 5.  返回值
 
 0 on success, other value on error
 
-### 内核态数据面接口
+### 5.5.12 内核态数据面接口
 
-#### JFS发送WR ops接口
+#### 5.5.12.1 JFS发送WR ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*post_jfs_wr)(struct ubcore_jfs \*jfs, struct ubcore_jfs_wr \*wr,
+int (*post_jfs_wr)(struct ubcore_jfs *jfs, struct ubcore_jfs_wr *wr,
 
-struct ubcore_jfs_wr \*\*bad_wr);
+struct ubcore_jfs_wr **bad_wr);
 
 3.  描述
 
@@ -16644,27 +16349,27 @@ struct ubcore_jfs_wr \*\*bad_wr);
 
 4.  参数
 
-\@param\[in\] jfs: the jfs created before;
+@param[in] jfs: the jfs created before;
 
-\@param\[in\] wr: the wr to be posted;
+@param[in] wr: the wr to be posted;
 
-\@param\[out\] bad_wr: the first failed wr;
+@param[out] bad_wr: the first failed wr;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### JFR接收WR ops接口
+#### 5.5.12.2 JFR接收WR ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*post_jfr_wr)(struct ubcore_jfr \*jfr, struct ubcore_jfr_wr \*wr,
+int (*post_jfr_wr)(struct ubcore_jfr *jfr, struct ubcore_jfr_wr *wr,
 
-struct ubcore_jfr_wr \*\*bad_wr);
+struct ubcore_jfr_wr **bad_wr);
 
 3.  描述
 
@@ -16672,27 +16377,27 @@ struct ubcore_jfr_wr \*\*bad_wr);
 
 4.  参数
 
-\@param\[in\] jfr: the jfr created before;
+@param[in] jfr: the jfr created before;
 
-\@param\[in\] wr: the wr to be posted;
+@param[in] wr: the wr to be posted;
 
-\@param\[out\] bad_wr: the first failed wr;
+@param[out] bad_wr: the first failed wr;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty发送WR ops接口
+#### 5.5.12.3 Jetty发送WR ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*post_jetty_send_wr)(struct ubcore_jetty \*jetty, struct ubcore_jfs_wr \*wr,
+int (*post_jetty_send_wr)(struct ubcore_jetty *jetty, struct ubcore_jfs_wr *wr,
 
-struct ubcore_jfs_wr \*\*bad_wr);
+struct ubcore_jfs_wr **bad_wr);
 
 3.  描述
 
@@ -16700,27 +16405,27 @@ struct ubcore_jfs_wr \*\*bad_wr);
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[in\] wr: the wr to be posted;
+@param[in] wr: the wr to be posted;
 
-\@param\[out\] bad_wr: the first failed wr;
+@param[out] bad_wr: the first failed wr;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### Jetty接收WR ops接口
+#### 5.5.12.4 Jetty接收WR ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*post_jetty_recv_wr)(struct ubcore_jetty \*jetty, struct ubcore_jfr_wr \*wr,
+int (*post_jetty_recv_wr)(struct ubcore_jetty *jetty, struct ubcore_jfr_wr *wr,
 
-struct ubcore_jfr_wr \*\*bad_wr);
+struct ubcore_jfr_wr **bad_wr);
 
 3.  描述
 
@@ -16728,25 +16433,25 @@ struct ubcore_jfr_wr \*\*bad_wr);
 
 4.  参数
 
-\@param\[in\] jetty: the jetty created before;
+@param[in] jetty: the jetty created before;
 
-\@param\[in\] wr: the wr to be posted;
+@param[in] wr: the wr to be posted;
 
-\@param\[out\] bad_wr: the first failed wr;
+@param[out] bad_wr: the first failed wr;
 
 5.  返回值
 
 0 on success, other value on error
 
-#### rearm JFC ops接口
+#### 5.5.12.5 rearm JFC ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*rearm_jfc)(struct ubcore_jfc \*jfc, bool solicited_only);
+int (*rearm_jfc)(struct ubcore_jfc *jfc, bool solicited_only);
 
 3.  描述
 
@@ -16754,23 +16459,23 @@ int (\*rearm_jfc)(struct ubcore_jfc \*jfc, bool solicited_only);
 
 4.  参数
 
-\@param\[in\] jfc: the jfc created before;
+@param[in] jfc: the jfc created before;
 
-\@param\[in\] solicited_only: rearm notify by message marked with solicited flag
+@param[in] solicited_only: rearm notify by message marked with solicited flag
 
 5.  返回值
 
 0 on success, other value on error
 
-#### 轮询 JFC ops接口
+#### 5.5.12.6 轮询 JFC ops接口
 
 1.  头文件
 
-#include \"ubcore_types.h\"
+#include "ubcore_types.h"
 
 2.  原型
 
-int (\*poll_jfc)(struct ubcore_jfc \*jfc, int cr_cnt, struct ubcore_cr \*cr);
+int (*poll_jfc)(struct ubcore_jfc *jfc, int cr_cnt, struct ubcore_cr *cr);
 
 3.  描述
 
@@ -16778,29 +16483,26 @@ int (\*poll_jfc)(struct ubcore_jfc \*jfc, int cr_cnt, struct ubcore_cr \*cr);
 
 4.  参数
 
-\@param\[in\] jfc: the jfc created before;
+@param[in] jfc: the jfc created before;
 
-\@param\[in\] cr_cnt: the maximum number of CRs expected to be polled;
+@param[in] cr_cnt: the maximum number of CRs expected to be polled;
 
 5.  返回值
 
 0 on success, other value on error
 
-# UVS编程接口
+---
+# 6 UVS编程接口
 
-[7.1 uvs_set_topo_info](#uvs_set_topo_info)
-
-[7.2 编程示例](#编程示例-2)
-
-## uvs_set_topo_info
+## 6.1 uvs_set_topo_info
 
 1.  头文件
 
-#include \"uvs_api.h\"
+#include "uvs_api.h"
 
 2.  原型
 
-int **uvs_set_topo_info**(void \**topo*, uint32_t *topo_num*);
+int **uvs_set_topo_info**(void **topo*, uint32_t *topo_num*);
 
 3.  场景
 
@@ -16812,12 +16514,12 @@ int **uvs_set_topo_info**(void \**topo*, uint32_t *topo_num*);
 
 5.  参数
 
-*\@param\[in\] topo: topo info of one bonding device*
+*@param[in] topo: topo info of one bonding device*
 
-*\@param\[in\] topo_num: number of bonding devices*
+*@param[in] topo_num: number of bonding devices*
 
 6.  返回值
 
 *Return: 0 on success, other value on error*
 
-## 编程示例
+## 6.2 编程示例
