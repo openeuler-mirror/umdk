@@ -467,7 +467,6 @@ static ALWAYS_INLINE void return_batch_to_expansion_pool(
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_date : &g_qbuf_pool.exp_pool_without_date;
     uint32_t slot_id = mempool_id - exp_pool->expansion_pool_id_min;
     if (slot_id >= exp_pool->expansion_pool_cnt_max) {
-        (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "slot id %u invalid, expansion pool capacity %u\n",
             slot_id, exp_pool->expansion_pool_cnt_max);
         return;
