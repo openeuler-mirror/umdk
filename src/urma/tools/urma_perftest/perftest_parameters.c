@@ -60,6 +60,15 @@ static const char *g_jetty_mode_str[] = {
     [PERFTEST_JETTY_SIMPLEX] = "SIMPLEX",
     [PERFTEST_JETTY_DUPLEX] = "DUPLEX",
 };
+static const char *g_bond_mode_str[] = {
+    [BONDP_BONDING_MODE_STANDALONE] = "standalone",
+    [BONDP_BONDING_MODE_ACTIVE_BACKUP] = "active_backup",
+    [BONDP_BONDING_MODE_BALANCE] = "balance",
+};
+static const char *g_bond_level_str[] = {
+    [BONDP_BONDING_LEVEL_IODIE] = "iodie",
+    [BONDP_BONDING_LEVEL_PORT] = "port",
+};
 
 #define PERFTEST_BOOL_TO_STR(val) ((val) == true ? "true" : "false")
 
@@ -131,8 +140,6 @@ static void usage(const char *argv0)
     (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
     (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
                  "                              Print period for infinite mode, default 2 seconds.\n");
-    (void)printf("  --single_path,              Bonding device works in single path mode (mutually exclusive "
-                 "with --aggr_mode).\n");
     (void)printf("  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
                  "                              if set, value of infinite will be overwrite.\n");
     (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
@@ -181,8 +188,9 @@ default: disable.\n");
 2MB or 1GB currently.\n");
     (void)printf("  --bind_ip <ip>          The ip for bind.\n");
     (void)printf("  --stdout                    Print logs to console.\n");
-    (void)printf("  --aggr_mode                 Set bond device aggregation mode, support: standalone, \
- active_backup, balance, default: disable\n");
+    (void)printf("  --bond_mode                 Set bonding device mode, support: "
+                 "standalone, active_backup, balance.\n");
+    (void)printf("  --bond_level                Set bonding device level, support: iodie, port.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -355,6 +363,9 @@ static void init_cfg(perftest_config_t *cfg)
 
     cfg->wait_jfc_timeout = PERFTEST_DEF_WAIT_JFC_TIME;
     cfg->use_huge_page = false;
+    cfg->enable_bond_mode = false;
+    cfg->bond_mode = BONDP_BONDING_MODE_STANDALONE;
+    cfg->bond_level = BONDP_BONDING_LEVEL_IODIE;
     cfg->enable_stdout = false;
 }
 
@@ -430,6 +441,35 @@ static void parse_arge_atomic_type(perftest_config_t *cfg, char *opt)
         (void)fprintf(stderr, "Invalid Atomic type! please choose from {cas, faa}\n");
         exit(1);
     }
+}
+
+static int parse_bond_mode(perftest_config_t *cfg, const char *opt)
+{
+    cfg->enable_bond_mode = true;
+    if (strcmp(g_bond_mode_str[BONDP_BONDING_MODE_STANDALONE], opt) == 0) {
+        cfg->bond_mode = BONDP_BONDING_MODE_STANDALONE;
+    } else if (strcmp(g_bond_mode_str[BONDP_BONDING_MODE_ACTIVE_BACKUP], opt) == 0) {
+        cfg->bond_mode = BONDP_BONDING_MODE_ACTIVE_BACKUP;
+    } else if (strcmp(g_bond_mode_str[BONDP_BONDING_MODE_BALANCE], opt) == 0) {
+        cfg->bond_mode = BONDP_BONDING_MODE_BALANCE;
+    } else {
+        (void)fprintf(stderr, "Bond mode only support standalone, active_backup and balance.\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int parse_bond_level(perftest_config_t *cfg, const char *opt)
+{
+    if (strcmp(g_bond_level_str[BONDP_BONDING_LEVEL_IODIE], opt) == 0) {
+        cfg->bond_level = BONDP_BONDING_LEVEL_IODIE;
+    } else if (strcmp(g_bond_level_str[BONDP_BONDING_LEVEL_PORT], opt) == 0) {
+        cfg->bond_level = BONDP_BONDING_LEVEL_PORT;
+    } else {
+        (void)fprintf(stderr, "Bond level only support iodie and port.\n");
+        return -1;
+    }
+    return 0;
 }
 
 static inline int check_value_range(const perftest_value_range_t *value_range)
@@ -581,6 +621,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"bind_ip",             required_argument, NULL, PERFTEST_OPT_BIND_IP},
         {"aggr_mode",           required_argument, NULL, PERFTEST_OPT_AGGR_MODE},
         {"stdout",              no_argument,       NULL, PERFTEST_OPT_STDOUT},
+        {"bond_mode",           required_argument, NULL, PERFTEST_OPT_BOND_MODE},
+        {"bond_level",          required_argument, NULL, PERFTEST_OPT_BOND_LEVEL},
         {NULL,                  no_argument,       NULL, '\0'},
     };
     /* clang-format on */
@@ -763,7 +805,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 cfg->use_bonding = true;
                 break;
             case PERFTEST_OPT_SINGLE_PATH:
-                cfg->single_path = true;
+                cfg->bond_level = BONDP_BONDING_LEVEL_PORT;
                 break;
             case PERFTEST_OPT_RATE_LIMIT:
                 cfg->rate_limit = atof(optarg);
@@ -895,15 +937,17 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 }
                 break;
             case PERFTEST_OPT_AGGR_MODE:
-                cfg->enable_aggr_mode = true;
-                if (strcmp("standalone", optarg) == 0) {
-                    cfg->aggr_mode = BONDP_BONDING_MODE_STANDALONE;
-                } else if (strcmp("active_backup", optarg) == 0) {
-                    cfg->aggr_mode = BONDP_BONDING_MODE_ACTIVE_BACKUP;
-                } else if (strcmp("balance", optarg) == 0) {
-                    cfg->aggr_mode = BONDP_BONDING_MODE_BALANCE;
-                } else {
-                    (void)fprintf(stderr, "Aggr mode only support standalone, active_backup and balance.\n");
+                if (parse_bond_mode(cfg, optarg) != 0) {
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_BOND_MODE:
+                if (parse_bond_mode(cfg, optarg) != 0) {
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_BOND_LEVEL:
+                if (parse_bond_level(cfg, optarg) != 0) {
                     return -1;
                 }
                 break;
@@ -1037,16 +1081,6 @@ bool is_jfr_depth_valid(perftest_config_t *cfg)
     return (cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr)) >= (cfg->jettys * cfg->jfr_post_list);
 }
 
-static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
-{
-    if (!cfg->single_path && !cfg->use_ctp) {
-        (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: true.\n");
-        return -1;
-    }
-
-    return 0;
-}
-
 int check_local_cfg(perftest_config_t *cfg)
 {
     if (cfg == NULL) {
@@ -1058,8 +1092,11 @@ int check_local_cfg(perftest_config_t *cfg)
         return -1;
     }
 
-    if (strstr(cfg->dev_name, "bonding_dev") != NULL && check_ctp_single_path_cfg(cfg) != 0) {
-        return -1;
+    if (strstr(cfg->dev_name, "bonding_dev") != NULL) {
+        if (cfg->bond_level != BONDP_BONDING_LEVEL_PORT && !cfg->use_ctp) {
+            (void)fprintf(stderr, "Invalid config: --bond_level iodie requires --ctp.\n");
+            return -1;
+        }
     }
 
     if (cfg->priority != PERFTEST_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {

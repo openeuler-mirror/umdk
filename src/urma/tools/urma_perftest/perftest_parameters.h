@@ -195,6 +195,8 @@ enum perftest_opts {
     PERFTEST_OPT_SL,
     PERFTEST_OPT_BIND_IP,
     PERFTEST_OPT_AGGR_MODE,
+    PERFTEST_OPT_BOND_MODE,
+    PERFTEST_OPT_BOND_LEVEL,
     PERFTEST_OPT_STDOUT,
 };
 
@@ -301,7 +303,6 @@ typedef struct perftest_config {
 
     bool enable_async_import;
     bool use_bonding;
-    bool single_path;
     bool tp_aware;
     bool tp_reuse;
     bool use_ctp;
@@ -309,8 +310,9 @@ typedef struct perftest_config {
     int32_t wait_jfc_timeout;
     urma_huge_page_size_t huge_page;
     bool use_huge_page;
-    bool enable_aggr_mode;
-    uint32_t aggr_mode;
+    bool enable_bond_mode;
+    uint32_t bond_mode;
+    uint32_t bond_level;
     bool enable_stdout;
     bool uboe;
     perftest_net_addr_t sip;
