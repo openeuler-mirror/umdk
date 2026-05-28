@@ -1549,20 +1549,64 @@ static int bondp_user_ctl_get_jfce_fd_list(urma_context_t *ctx, urma_user_ctl_in
     return 0;
 }
 
+static int bondp_toggle_seg_cache(urma_context_t *ctx, bool enable)
+{
+    if (ctx == NULL) {
+        URMA_LOG_ERR("Urma context is NULL\n");
+        return -EINVAL;
+    }
+
+    uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+
+    if (cnt > 1) {
+        URMA_LOG_WARN("Context already in use, atomic_cnt=%lu, dev_name=%s.\n",
+                      cnt, ctx->dev->name);
+        return URMA_EAGAIN;
+    }
+    bdp_ctx->seg_cache_enable = enable;
+    return 0;
+}
+
+static int bondp_toggle_msn(urma_context_t *ctx, bool enable)
+{
+    if (ctx == NULL) {
+        URMA_LOG_ERR("Urma context is NULL\n");
+        return -EINVAL;
+    }
+
+    uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+
+    if (cnt > 1) {
+        URMA_LOG_WARN("Context already in use, atomic_cnt=%lu, dev_name=%s.\n",
+                      cnt, ctx->dev->name);
+        return URMA_EAGAIN;
+    }
+    bdp_ctx->msn_enable = enable;
+    return 0;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
+    if (in == NULL) {
+        URMA_LOG_ERR("Input parameter is NULL\n");
+        return -EINVAL;
+    }
+
     switch (in->opcode) {
         case BONDP_USER_CTL_SET_BONDING_MODE_LEGACY:
             return bondp_user_ctl_set_bonding_mode_legacy(ctx, in, out);
         case BONDP_USER_CTL_ENABLE_SEG_CACHE:
-            bondp_toggle_seg_cache(true);
-            return 0;
+            return bondp_toggle_seg_cache(ctx, true);
         case BONDP_USER_CTL_QUERY_PORT:
             return bondp_user_ctl_query_port(ctx, in, out);
         case BONDP_USER_CTL_SET_BONDING_MODE:
             return bondp_user_ctl_set_bonding_mode(ctx, in, out);
         case BONDP_USER_CTL_GET_JFCE_FD_LIST:
             return bondp_user_ctl_get_jfce_fd_list(ctx, in, out);
+        case BONDP_USER_CTL_DISABLE_MSN:
+            return bondp_toggle_msn(ctx, false);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;

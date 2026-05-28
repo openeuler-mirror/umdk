@@ -592,6 +592,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     }
 
     bondp_health_check_ctx_init(bdp_ctx);
+    bdp_ctx->msn_enable = true;
+    bdp_ctx->seg_cache_enable = false;
 
     int ret = 0;
     ret = bondp_create_vcontext(bdp_ctx, dev, eid_index, dev_fd);
