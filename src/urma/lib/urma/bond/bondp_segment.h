@@ -28,8 +28,6 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
 urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg);
 
-void bondp_toggle_seg_cache(bool enable);
-
 void bondp_tseg_get(urma_target_seg_t *target_seg);
 
 void bondp_tseg_put(urma_target_seg_t *target_seg);

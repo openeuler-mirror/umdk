@@ -21,8 +21,6 @@
 
 #include "bondp_segment.h"
 
-static bool g_seg_cache_enable = false;
-
 typedef struct bondp_udata_import_seg {
     urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
     bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
@@ -324,11 +322,6 @@ static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t
     return 0;
 }
 
-void bondp_toggle_seg_cache(bool enable)
-{
-    g_seg_cache_enable = enable;
-}
-
 static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t addr,
                               uint64_t handle, urma_context_t *ctx)
 {
@@ -458,8 +451,9 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     atomic_init(&bdp_tseg->use_cnt.atomic_cnt, 1);
 
     bondp_udata_import_seg_t udata_out = {0};
-    URMA_LOG_DEBUG("g_seg_cache_enable is %d.\n", g_seg_cache_enable);
-    if (g_seg_cache_enable) {
+    bool seg_cache_enable = bdp_ctx->seg_cache_enable;
+    URMA_LOG_DEBUG("seg_cache_enable is %d.\n", seg_cache_enable);
+    if (seg_cache_enable) {
         bondp_v2p_token_id_t v2p_token_id = {0};
         ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
                                                  seg->ubva.eid, &v2p_token_id);
@@ -498,7 +492,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         goto unimport_pseg;
     }
 
-    if (g_seg_cache_enable && !bdp_tseg->is_reused) {
+    if (seg_cache_enable && !bdp_tseg->is_reused) {
         bondp_v2p_token_id_t v2p_token_id = {0};
         v2p_token_id.key.v_remote_eid = seg->ubva.eid;
         v2p_token_id.key.v_token_id = seg->token_id;

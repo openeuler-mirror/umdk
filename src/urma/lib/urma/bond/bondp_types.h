@@ -157,6 +157,8 @@ typedef struct bondp_context {
     int real_async_fd; /* vcontex async_fd */
     bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
+    bool msn_enable;
+    bool seg_cache_enable;
 #ifndef __cplusplus
     atomic_ulong token_id_cnt;
 #else

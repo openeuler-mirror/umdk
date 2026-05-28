@@ -113,8 +113,8 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
  *
  *   Bits   | Field       | Bits | Description
  *   -------|-------------|------|--------------------------------
- *   0-15   | user_data   | 16   | User-defined custom data
- *   16-21  | reserved    | 6    | Reserved
+ *   0-15   | user_data   | 20   | User-defined custom data
+ *   16-21  | reserved    | 2    | Reserved
  *   22-37  | vjetty_id   | 16   | Virtual jetty identifier (0-65535)
  *   38-61  | msn         | 24   | Message sequence number (0-16M)
  *   62-63  | cr_opcode   | 2    | Operation code tag (0-3)
@@ -122,8 +122,8 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
  * Use encode_imm_data() and decode_imm_data() to pack/unpack fields.
  */
 
-#define IMM_USER_BITS      16
-#define IMM_RESERVED_BITS  6
+#define IMM_USER_BITS      20
+#define IMM_RESERVED_BITS  2
 #define IMM_VJETTY_ID_BITS 16
 #define IMM_MSN_BITS       24
 #define IMM_CR_OPCODE_BITS 2
@@ -139,24 +139,33 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
 #define IMM_MSN_MASK       ((1ULL << IMM_MSN_BITS) - 1)
 #define IMM_CR_OPCODE_MASK ((1ULL << IMM_CR_OPCODE_BITS) - 1)
 
-static inline uint64_t encode_imm_data(uint32_t cr_opcode, uint32_t msn, uint32_t vjetty_id, uint64_t user_data)
+static inline uint64_t encode_imm_data(uint32_t cr_opcode, uint32_t msn, uint32_t vjetty_id,
+                                       uint64_t user_data, bool msn_enable)
 {
     uint64_t imm_data = 0;
 
     imm_data |= ((uint64_t)cr_opcode & IMM_CR_OPCODE_MASK) << IMM_CR_OPCODE_SHIFT;
-    imm_data |= ((uint64_t)msn & IMM_MSN_MASK) << IMM_MSN_SHIFT;
+    if (msn_enable) {
+        imm_data |= ((uint64_t)msn & IMM_MSN_MASK) << IMM_MSN_SHIFT;
+    } else {
+        imm_data |= (((uint64_t)user_data >> IMM_MSN_SHIFT) & IMM_MSN_MASK) << IMM_MSN_SHIFT;
+    }
     imm_data |= ((uint64_t)vjetty_id & IMM_VJETTY_ID_MASK) << IMM_VJETTY_ID_SHIFT;
     imm_data |= ((uint64_t)user_data & IMM_USER_MASK) << IMM_USER_SHIFT;
-
     return imm_data;
 }
 
-static inline void decode_imm_data(uint64_t imm_data, uint32_t *cr_opcode, uint32_t *msn, uint32_t *vjetty_id, uint64_t *user_data)
+static inline void decode_imm_data(uint64_t imm_data, uint32_t *cr_opcode, uint32_t *msn,
+                                   uint32_t *vjetty_id, uint64_t *user_data, bool msn_enable)
 {
     *cr_opcode = (uint32_t)((imm_data >> IMM_CR_OPCODE_SHIFT) & IMM_CR_OPCODE_MASK);
-    *msn = (uint32_t)((imm_data >> IMM_MSN_SHIFT) & IMM_MSN_MASK);
     *vjetty_id = (uint32_t)((imm_data >> IMM_VJETTY_ID_SHIFT) & IMM_VJETTY_ID_MASK);
     *user_data = (uint64_t)((imm_data >> IMM_USER_SHIFT) & IMM_USER_MASK);
+    if (msn_enable) {
+        *msn = (uint32_t)((imm_data >> IMM_MSN_SHIFT) & IMM_MSN_MASK);
+    } else {
+        *user_data |= (uint64_t)(((imm_data >> IMM_MSN_SHIFT) & IMM_MSN_MASK) << IMM_MSN_SHIFT);
+    }
 }
 
 static inline urma_target_jetty_t *get_p_tjetty(urma_target_jetty_t *tjetty, int send_idx, int target_idx)
@@ -240,6 +249,7 @@ urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target
                                      bondp_comp_t *bdp_comp)
 {
     uint64_t opcode_tag = 0;
+    bool msn_enable = bdp_comp->bondp_ctx->msn_enable;
 
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -257,7 +267,8 @@ urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target
                 opcode_tag,
                 bdp_comp->msn,
                 bdp_comp->v_jetty.jetty_id.id,
-                wr->send.imm_data);
+                wr->send.imm_data,
+                msn_enable);
             bdp_comp->msn = (bdp_comp->msn + 1) % BONDP_MAX_BITMAP_SIZE;
 
             map_send_vwr_to_path(wr, send_idx, target_idx);
@@ -271,7 +282,8 @@ urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target
                     opcode_tag,
                     bdp_comp->msn,
                     bdp_comp->v_jetty.jetty_id.id,
-                    wr->rw.notify_data);
+                    wr->rw.notify_data,
+                    msn_enable);
                 bdp_comp->msn = (bdp_comp->msn + 1) % BONDP_MAX_BITMAP_SIZE;
             }
             map_write_vwr_to_path(wr, send_idx, target_idx);
@@ -401,8 +413,10 @@ urma_status_t convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
 
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn)
 {
+    bool msn_enable = bdp_ctx->msn_enable;
+
     if (is_recv_cr(cr)) {
-        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data);
+        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data, msn_enable);
 
         urma_eid_t target_eid;
         (void)get_bonding_eid_by_target_eid(bdp_ctx->topo_map, &cr->remote_id.eid, &target_eid);
@@ -413,6 +427,6 @@ void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn)
          * However, for some reason, it is also valid for SEND CR.
          * This unexpected behavior is intentionally used to convert SEND CR.
          */
-        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data);
+        decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data, msn_enable);
     }
 }
