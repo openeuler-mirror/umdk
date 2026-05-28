@@ -27,6 +27,7 @@
 #define UMQ_LEN_ALIGNMENT_4 4
 #define TSEG_MAP_NUM 256
 #define UMQ_PORT_STR_SIZE 512
+#define UMQ_CTP_MAX_BUF_SIZE 4096
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
@@ -135,25 +136,25 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
     }
 
     if (queue->dev_ctx->trans_info.trans_mode != dev_info->umq_trans_mode) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, trans mode misatch, local is %u but remote %u\n",
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, trans mode mismatch, local is %u but remote %u\n",
             EID_ARGS(*eid), id, queue->dev_ctx->trans_info.trans_mode, dev_info->umq_trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->tp_mode != queue_info->tp_mode) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_mode misatch, local is %u but remote %u\n",
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_mode mismatch, local is %u but remote %u\n",
             EID_ARGS(*eid), id, umq_tp_mode_convert(queue->tp_mode), umq_tp_mode_convert(queue_info->tp_mode));
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->tp_type != queue_info->tp_type) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_type misatch, local is %u but remote %u\n",
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, tp_type mismatch, local is %u but remote %u\n",
             EID_ARGS(*eid), id, umq_tp_type_convert(queue->tp_type), umq_tp_type_convert(queue_info->tp_type));
         return -UMQ_ERR_EINVAL;
     }
 
     if (!umq_ub_bind_feature_check(queue->dev_ctx->feature, dev_info->feature)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, feature misatch, local is %u but remote %u\n",
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, feature mismatch, local is %u but remote %u\n",
             EID_ARGS(*eid), id, queue->dev_ctx->feature, dev_info->feature);
         return -UMQ_ERR_EINVAL;
     }
@@ -537,6 +538,14 @@ static void umq_ub_disconnect_jetty(ub_queue_t *queue, ub_bind_ctx_t *ctx, ub_qu
     ctx->tjetty[i] = NULL;
 }
 
+static uint32_t max_msg_size_get(ub_queue_t *queue)
+{
+    if (queue->tp_type != URMA_CTP || UMQ_CTP_MAX_BUF_SIZE > queue->dev_ctx->dev_attr.dev_cap.max_msg_size) {
+        return queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
+    }
+    return UMQ_CTP_MAX_BUF_SIZE;
+}
+
 int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
@@ -589,7 +598,7 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         goto RESET_BIND_CTX;
     }
 
-    uint32_t max_msg_size = queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
+    uint32_t max_msg_size = max_msg_size_get(queue);
     queue->remote_rx_buf_size =
         (max_msg_size > info->queue_info->rx_buf_size) ? info->queue_info->rx_buf_size : max_msg_size;
 
@@ -1201,27 +1210,34 @@ static int umq_bondp_port_id_set(umq_create_option_t *option, ub_queue_t *queue)
 
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue)
 {
+    if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
+        queue->tp_type = umq_tp_type_convert_to_urma(option->tp_type);
+    } else {
+        queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_CTP);
+    }
+    if (queue->tp_type == URMA_CTP && umq_buf_size_pow_small() != UMQ_QBUF_SIZE_POW_4K) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ctp type only support 4K block size, current block size is %u\n", umq_buf_size_small());
+        return -UMQ_ERR_EINVAL;
+    }
+    queue->dev_ctx = dev_ctx;
+    uint32_t max_msg_size = max_msg_size_get(queue);
     if (option->create_flag & UMQ_CREATE_FLAG_RX_BUF_SIZE) {
-        if (option->rx_buf_size > dev_ctx->dev_attr.dev_cap.max_msg_size) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "rx buf size [%u] exceed max buf size [%d]\n", option->rx_buf_size,
-                         dev_ctx->dev_attr.dev_cap.max_msg_size);
+        if (option->rx_buf_size > max_msg_size) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "rx buf size [%u] exceed max buf size [%d]\n", option->rx_buf_size, max_msg_size);
             return -UMQ_ERR_EINVAL;
         }
         queue->rx_buf_size = option->rx_buf_size;
     } else {
-        queue->rx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size < UMQ_DEFAULT_BUF_SIZE ?
-                             dev_ctx->dev_attr.dev_cap.max_msg_size : UMQ_DEFAULT_BUF_SIZE;
+        queue->rx_buf_size = max_msg_size < UMQ_DEFAULT_BUF_SIZE ? max_msg_size : UMQ_DEFAULT_BUF_SIZE;
     }
     if (option->create_flag & UMQ_CREATE_FLAG_TX_BUF_SIZE) {
-        if (option->tx_buf_size > dev_ctx->dev_attr.dev_cap.max_msg_size) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "tx buf size [%u] exceed max buf size [%d]\n", option->tx_buf_size,
-                         dev_ctx->dev_attr.dev_cap.max_msg_size);
+        if (option->tx_buf_size > max_msg_size) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tx buf size [%u] exceed max buf size [%d]\n", option->tx_buf_size, max_msg_size);
             return -UMQ_ERR_EINVAL;
         }
         queue->tx_buf_size = option->tx_buf_size;
     } else {
-        queue->tx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size < UMQ_DEFAULT_BUF_SIZE ?
-                             dev_ctx->dev_attr.dev_cap.max_msg_size : UMQ_DEFAULT_BUF_SIZE;
+        queue->tx_buf_size = max_msg_size < UMQ_DEFAULT_BUF_SIZE ? max_msg_size : UMQ_DEFAULT_BUF_SIZE;
     }
 
     uint32_t min_dev_rx = dev_ctx->dev_attr.dev_cap.max_jfr_depth < dev_ctx->dev_attr.dev_cap.max_jfc_depth ?
@@ -1291,17 +1307,6 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         queue->tp_mode = umq_tp_mode_convert_to_urma(UMQ_TM_RM);
     }
 
-    if (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) {
-        queue->tp_type = umq_tp_type_convert_to_urma(option->tp_type);
-    } else {
-        queue->tp_type = umq_tp_type_convert_to_urma(UMQ_TP_TYPE_CTP);
-    }
-
-    if (queue->tp_type == URMA_CTP && umq_buf_size_pow_small() != UMQ_QBUF_SIZE_POW_4K) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "ctp type only support 4K block size, current block size is %u\n", umq_buf_size_small());
-        return -UMQ_ERR_EINVAL;
-    }
-
     umq_tp_type_t actual_tp_type = (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) != 0 ?
         option->tp_type : UMQ_TP_TYPE_CTP;
     if (option->create_flag & UMQ_CREATE_FLAG_PRIORITY) {
@@ -1363,10 +1368,9 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     queue->min_rnr_timer = DEFAULT_MIN_RNR_TIMER;
     queue->prefill_rqe_cnt = 0;
     (void)memcpy(queue->name, option->name, UMQ_NAME_MAX_LEN);
-    queue->dev_ctx = dev_ctx;
     queue->umq_trans_mode = option->trans_mode;
     queue->order_type = URMA_DEF_ORDER;
-    queue->remote_rx_buf_size = dev_ctx->dev_attr.dev_cap.max_msg_size;
+    queue->remote_rx_buf_size = max_msg_size;
     queue->create_flag = option->create_flag;
     return UMQ_SUCCESS;
 }
