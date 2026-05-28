@@ -73,7 +73,7 @@ int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num);
 int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
 int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
                                   const uvs_eid_t *dst_bonding_eid,
-                                  enum uvs_tp_type tp_type, bool multi_path,
+                                  enum uvs_tp_type tp_type, bool iodie_level,
                                   uvs_path_set_t *uvs_path_set);
 
 #endif // UVS_UBAGG_IOCTL_H

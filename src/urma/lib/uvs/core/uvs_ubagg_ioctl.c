@@ -236,7 +236,7 @@ int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *
 
 int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
                                   const uvs_eid_t *dst_bonding_eid,
-                                  enum uvs_tp_type tp_type, bool multi_path,
+                                  enum uvs_tp_type tp_type, bool iodie_level,
                                   uvs_path_set_t *uvs_path_set)
 {
     tpsa_ioctl_ctx_t ioctl_ctx = {0};
@@ -253,7 +253,7 @@ int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
     memcpy(&arg.in.src_bonding_eid, src_bondind_eid, sizeof(uvs_eid_t));
     memcpy(&arg.in.dst_bonding_eid, dst_bonding_eid, sizeof(uvs_eid_t));
     arg.in.tp_type = tp_type;
-    arg.in.multi_path = multi_path;
+    arg.in.iodie_level = iodie_level;
 
     ret = uvs_ioctl_get_path_set(&ioctl_ctx, &arg);
     if (ret != 0) {
