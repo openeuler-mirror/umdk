@@ -300,3 +300,91 @@ void urma_log_loc(const char *file, const char *function, int line, urma_vlog_le
     (void)urma_vlog_loc(file, function, line, level, format, va);
     va_end(va);
 }
+
+/* Time acquisition optimization function */
+static inline time_t urma_log_rl_get_time(void)
+{
+    struct timespec ts;
+    (void)clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+    return ts.tv_sec;
+}
+
+bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
+                       const char *function, int line)
+{
+    time_t now = urma_log_rl_get_time();
+    bool ret = false;
+
+    /* Check if initialized first (without lock) */
+    if (!(rs->flags & URMA_LOG_RL_INITIALIZED)) {
+        /* Not initialized yet, need to initialize spinlock first */
+        if (pthread_spin_init(&rs->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+            /* Spinlock initialization failed, allow log output (safe fallback) */
+            return true;
+        }
+
+        /* Mark as initialized (atomic operation to ensure visibility) */
+        rs->begin = now;
+        atomic_store(&rs->n_left, URMA_LOG_RL_LIMIT);
+        atomic_store(&rs->missed, 0);
+        /* Record log point location on first call */
+        rs->file = file;
+        rs->function = function;
+        rs->line = line;
+        /* Set INITIALIZED flag last (acts as memory barrier) */
+        rs->flags |= URMA_LOG_RL_INITIALIZED;
+
+        return true;  /* First call always allows log output */
+    }
+
+    /* Already initialized, proceed with normal flow */
+
+    /* Check if window has expired (before trylock for performance) */
+    bool window_expired = (now - rs->begin >= URMA_LOG_RL_WINDOW_SEC);
+
+    /* Fast path: use atomic operations when trylock fails */
+    if (pthread_spin_trylock(&rs->lock) != 0) {
+        /* Lock contention: atomic check of remaining quota */
+        long left = atomic_fetch_sub(&rs->n_left, 1);
+        if (left > 0) {
+            /* Has quota, allow log output */
+            ret = true;
+        }
+        /* Note: window check will be done by the thread holding the lock */
+        /* else: no quota (left <= 0), will be suppressed */
+        goto out;
+    }
+
+    /* Full processing after acquiring lock */
+
+    /* Check if window has expired */
+    if (window_expired) {
+        /* Output summary for previous window if there were suppressed logs */
+        unsigned long m = atomic_exchange(&rs->missed, 0);
+        if (m > 0) {
+            /* Use recorded log point location for summary output */
+            urma_log_loc(rs->file, rs->function, rs->line, URMA_VLOG_LEVEL_INFO,
+                    "rate limit: %lu logs suppressed in last %ds",
+                    m, URMA_LOG_RL_WINDOW_SEC);
+        }
+
+        /* Reset for new window */
+        atomic_store(&rs->n_left, URMA_LOG_RL_LIMIT);
+        rs->begin = now;
+    }
+
+    /* Atomic check of quota */
+    long left = atomic_fetch_sub(&rs->n_left, 1);
+    if (left > 0) {
+        ret = true;  /* Has quota, allow log output */
+    }
+    /* else: no quota (left <= 0), log suppressed, will be counted in missed */
+
+    pthread_spin_unlock(&rs->lock);
+
+out:
+    if (!ret) {
+        atomic_fetch_add(&rs->missed, 1);
+    }
+    return ret;
+}
