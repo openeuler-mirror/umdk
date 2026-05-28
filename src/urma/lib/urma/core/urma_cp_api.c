@@ -1902,6 +1902,12 @@ urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjett
         return NULL;
     }
 
+    if (urma_check_trans_mode_valid(rjetty->trans_mode) != true) {
+        URMA_LOG_ERR("Invalid parameter, trans_mode=%d.\n", (int)rjetty->trans_mode);
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (urma_check_order_type(rjetty->trans_mode, rjetty->flag.bs.order_type) != 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return NULL;
