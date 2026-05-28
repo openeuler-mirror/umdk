@@ -792,7 +792,7 @@ static int wait_work(void)
                     process_rx_interrupt(fd_ctx);
                     break;
                 default:
-                    LOG_PRINT_ERR("unknow type\n");
+                    LOG_PRINT_ERR("unknown type\n");
                     break;
             }
         }

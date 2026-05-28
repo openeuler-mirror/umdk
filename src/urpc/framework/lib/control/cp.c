@@ -1765,7 +1765,7 @@ uint64_t urpc_mem_seg_register(uint64_t va, uint64_t len)
 
     uint32_t list_size = provider_get_list_size();
     if (list_size == 0) {
-        URPC_LIB_LOG_ERR("no provider is avaliable, please init urpc at first\n");
+        URPC_LIB_LOG_ERR("no provider is available, please init urpc at first\n");
         return URPC_INVALID_HANDLE;
     }
 
@@ -1824,7 +1824,7 @@ int urpc_mem_seg_unregister(uint64_t mem_h)
 
     uint32_t list_size = provider_get_list_size();
     if (list_size == 0) {
-        URPC_LIB_LOG_ERR("no provider is avaliable, please init urpc at first\n");
+        URPC_LIB_LOG_ERR("no provider is available, please init urpc at first\n");
         return URPC_FAIL;
     }
 
