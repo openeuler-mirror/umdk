@@ -963,6 +963,15 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
                          urma_dev->name, (int)status);
             goto DEL_CTX;
         }
+        in.addr = 0;
+        in.len = 0;
+        in.opcode = BONDP_USER_CTL_DISABLE_MSN;
+        status = umq_symbol_urma()->urma_user_ctl(ub_ctx->urma_ctx, &in, &out);
+        if (status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_user_ctl for %s setting disable msn failed, status:%d\n",
+                         urma_dev->name, (int)status);
+            goto DEL_CTX;
+        }
     }
 
     return UMQ_SUCCESS;
