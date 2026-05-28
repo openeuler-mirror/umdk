@@ -48,7 +48,7 @@ static int udma_u_init_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entr
 
 	q->wrid = (uintptr_t *)malloc(q->baseblk_cnt * sizeof(uint64_t));
 	if (!q->wrid) {
-		UDMA_LOG_ERR("failed to alloc STARS buffer for wrid!\n");
+		UDMA_LOG_ERR("failed to alloc STARS buffer for work request id!\n");
 		return ENOMEM;
 	}
 
@@ -75,14 +75,14 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 	if (q->baseblk_cnt != roundup_pow_of_two(q->baseblk_cnt) ||
 		q->baseblk_cnt < min_wqebb_cnt ||
 		q->baseblk_cnt > UDMA_MAX_JFS_WQEBB_CNT) {
-		UDMA_LOG_ERR("invalid sqebb num %u!\n", q->baseblk_cnt);
+		UDMA_LOG_ERR("invalid SQEBB number %u!\n", q->baseblk_cnt);
 		return EINVAL;
 	}
 	q->qbuf_size = cstm ? buf_size : q->baseblk_cnt << q->baseblk_shift;
 
 	q->wrid = (uintptr_t *)malloc(q->baseblk_cnt * sizeof(uint64_t));
 	if (q->wrid == NULL) {
-		UDMA_LOG_ERR("failed to alloc stars buffer for wrid!\n");
+		UDMA_LOG_ERR("failed to alloc STARS buffer for work request id!\n");
 		return ENOMEM;
 	}
 
@@ -96,7 +96,7 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 		if (q->hugepage) {
 			q->qbuf = q->hugepage->va_start;
 		} else {
-			UDMA_LOG_WARN("failed to alloc hugepage buf, switch to alloc standard buf.\n");
+			UDMA_LOG_WARN("hugepage buffer unavailable, fallback to standard buffer.\n");
 			q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 		}
 	} else {
@@ -125,7 +125,7 @@ static int udma_u_create_idx_que_ex(struct udma_u_jfr *jfr, struct udma_u_jfr_cf
 					      UDMA_HW_PAGE_SIZE);
 
 	if (idx_que->buf.length != cstm_cfg->idx_que.buff_size) {
-		UDMA_LOG_ERR("idx_que length is wrong, size = %u.\n", idx_que->buf.length);
+		UDMA_LOG_ERR("index queue length is wrong, size = %u.\n", idx_que->buf.length);
 		return EINVAL;
 	}
 
@@ -152,12 +152,12 @@ static int udma_u_create_rq_ex(struct udma_u_context *udma_ctx, struct udma_u_jf
 	ret = udma_u_init_queue_buf(rq, wqebb_cnt, UDMA_JFR_WQEBB,
 				    UDMA_HW_PAGE_SIZE, cstm_cfg->rq.buff);
 	if (ret) {
-		UDMA_LOG_ERR("init queue buf error, ret = %u.\n", ret);
+		UDMA_LOG_ERR("init queue buffer error, ret = %u.\n", ret);
 		return EINVAL;
 	}
 
 	if (rq->qbuf_size != cstm_cfg->rq.buff_size) {
-		UDMA_LOG_ERR("user cfg buffsize is error, rq->qbuf_size = %u.\n",
+		UDMA_LOG_ERR("user config buffer size is error, RQ buffer size = %u.\n",
 			     rq->qbuf_size);
 		udma_u_uninit_queue_buf(rq);
 		return EINVAL;
@@ -169,13 +169,13 @@ static int udma_u_create_rq_ex(struct udma_u_context *udma_ctx, struct udma_u_jf
 static int udma_u_verify_que_cstm_cfg(struct udma_u_que_cfg_ex *que_cfg)
 {
 	if (que_cfg->buff == NULL || que_cfg->buff_size == 0) {
-		UDMA_LOG_ERR("cstm cfg is invalid, que_cfg->buff_size = %u.\n",
+		UDMA_LOG_ERR("custom config is invalid, que_cfg->buff_size = %u.\n",
 			     que_cfg->buff_size);
 		return EINVAL;
 	}
 
 	if (((uint64_t)que_cfg->buff & (uint64_t)PARTITION_ALIGNMENT) != 0) {
-		UDMA_LOG_ERR("queue addr is not partition alignment.\n");
+		UDMA_LOG_ERR("queue address is not partition alignment.\n");
 		return EINVAL;
 	}
 
@@ -185,19 +185,19 @@ static int udma_u_verify_que_cstm_cfg(struct udma_u_que_cfg_ex *que_cfg)
 static int udma_u_verify_jfr_cstm_cfg(struct udma_u_jfr_cstm_cfg *cstm_cfg)
 {
 	if (!cstm_cfg->flag.bs.idxq_cstm || udma_u_verify_que_cstm_cfg(&cstm_cfg->idx_que)) {
-		UDMA_LOG_ERR("jfr idxq cstm cfg is invalid, idxq_cstm = %d.\n",
+		UDMA_LOG_ERR("JFR index queue custom config is invalid, index queue custom = %d.\n",
 			     cstm_cfg->flag.bs.idxq_cstm);
 		return EINVAL;
 	}
 
 	if (!cstm_cfg->flag.bs.rq_cstm || udma_u_verify_que_cstm_cfg(&cstm_cfg->rq)) {
-		UDMA_LOG_ERR("jfr rq cstm cfg is invalid, rq_cstm = %d.\n",
+		UDMA_LOG_ERR("JFR RQ custom config is invalid, RQ custom = %d.\n",
 			     cstm_cfg->flag.bs.rq_cstm);
 		return EINVAL;
 	}
 
 	if (!cstm_cfg->flag.bs.swdb_cstm || cstm_cfg->sw_db == NULL) {
-		UDMA_LOG_ERR("jfr swdb cstm cfg is invalid, swdb_cstm = %d.\n",
+		UDMA_LOG_ERR("JFR SW DB custom config is invalid, SW DB custom = %d.\n",
 			     cstm_cfg->flag.bs.swdb_cstm);
 		return EINVAL;
 	}
@@ -208,7 +208,7 @@ static int udma_u_verify_jfr_cstm_cfg(struct udma_u_jfr_cstm_cfg *cstm_cfg)
 static int udma_u_verify_jfr_param_ex(urma_context_t *ctx, struct udma_u_jfr_cfg_ex *cfg_ex)
 {
 	if (cfg_ex == NULL || ctx == NULL) {
-		UDMA_LOG_ERR("jfr ctx or cfg is null.\n");
+		UDMA_LOG_ERR("JFR context or config is null.\n");
 		return EINVAL;
 	}
 
@@ -244,7 +244,7 @@ static urma_jfr_t *udma_u_create_jfr_ex(urma_context_t *ctx,
 
 	udma_jfr = (struct udma_u_jfr *)calloc(1, sizeof(*udma_jfr));
 	if (!udma_jfr) {
-		UDMA_LOG_ERR("alloc jfr ex failed.\n");
+		UDMA_LOG_ERR("alloc JFR ex failed.\n");
 		return NULL;
 	}
 
@@ -255,12 +255,12 @@ static urma_jfr_t *udma_u_create_jfr_ex(urma_context_t *ctx,
 		goto err_spin_init;
 
 	if (udma_u_create_idx_que_ex(udma_jfr, cfg_ex)) {
-		UDMA_LOG_ERR("failed to create jfr idx que.\n");
+		UDMA_LOG_ERR("failed to create JFR index queue.\n");
 		goto err_create_idx_que;
 	}
 
 	if (udma_u_create_rq_ex(udma_ctx, udma_jfr, cfg_ex)) {
-		UDMA_LOG_ERR("failed to create jfr rqe buf.\n");
+		UDMA_LOG_ERR("failed to create JFR RQE buffer.\n");
 		goto err_create_rq;
 	}
 
@@ -268,7 +268,7 @@ static urma_jfr_t *udma_u_create_jfr_ex(urma_context_t *ctx,
 
 	ret = exec_jfr_create_cmd(ctx, udma_jfr, &cfg_ex->base_cfg);
 	if (ret) {
-		UDMA_LOG_ERR("urma cmd create jfr failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command create JFR failed, ret = %d.\n", ret);
 		goto err_exec_cmd;
 	}
 
@@ -310,7 +310,7 @@ static int udma_u_create_sq_ex(struct udma_u_jetty_queue *sq,
 	sq->sqe_bb_cnt = 1;
 	ret = udma_u_init_jfs_queue_buf(sq, cfg_ex);
 	if (ret) {
-		UDMA_LOG_ERR("init queue buf wrong, ret = %d.\n", ret);
+		UDMA_LOG_ERR("init queue buffer wrong, ret = %d.\n", ret);
 		goto err_init_sq_buf;
 	}
 
@@ -325,12 +325,12 @@ err_init_sq_buf:
 static int udma_u_verify_jfs_cstm_cfg(struct udma_u_jfs_cstm_cfg *cstm_cfg)
 {
 	if (cstm_cfg->flag.bs.sq_cstm && udma_u_verify_que_cstm_cfg(&cstm_cfg->sq)) {
-		UDMA_LOG_ERR("invalid sq buff parameter.\n");
+		UDMA_LOG_ERR("invalid SQ buffer parameter.\n");
 		return EINVAL;
 	}
 
 	if (cstm_cfg->flag.bs.sq_cstm && ((cstm_cfg->sq.buff_size & (UDMA_JFS_WQEBB - 1)) != 0)) {
-		UDMA_LOG_ERR("queue len is not partition alignment.\n");
+		UDMA_LOG_ERR("queue length is not partition alignment.\n");
 		return EINVAL;
 	}
 
@@ -343,7 +343,7 @@ static int udma_u_verify_jfs_param_ex(urma_context_t *ctx, struct udma_u_jfs_cfg
 	urma_jfs_cfg_t *jfs_cfg;
 
 	if (ctx == NULL || cfg_ex == NULL) {
-		UDMA_LOG_ERR("urma ctx or cfg ex is null.\n");
+		UDMA_LOG_ERR("URMA context or config ex is null.\n");
 		return EINVAL;
 	}
 
@@ -353,8 +353,8 @@ static int udma_u_verify_jfs_param_ex(urma_context_t *ctx, struct udma_u_jfs_cfg
 	if ((jfs_cfg->max_inline_data != 0 && jfs_cfg->max_inline_data > attr->dev_cap.max_jfs_inline_len) ||
 	    (jfs_cfg->max_sge > attr->dev_cap.max_jfs_sge) || (jfs_cfg->max_rsge > attr->dev_cap.max_jfs_rsge) ||
 	    (cfg_ex->base_cfg.trans_mode == URMA_TM_RC)) {
-		UDMA_LOG_ERR("jfs cfg out of range, depth:%u, max_depth:%u, inline_data:%u, max_inline_len:%u, " \
-			     "sge:%hhu, max_sge:%u, rsge:%hhu, max_rsge:%u, trans_mode = %u.\n",
+		UDMA_LOG_ERR("JFS config out of range, depth:%u, max depth:%u, inline data:%u, max inline length:%u, " \
+			     "sge:%hhu, max_SGE:%u, RSGE:%hhu, max_RSGE:%u, trans_mode = %u.\n",
 			     jfs_cfg->depth, attr->dev_cap.max_jfs_depth,
 			     jfs_cfg->max_inline_data, attr->dev_cap.max_jfs_inline_len,
 			     jfs_cfg->max_sge, attr->dev_cap.max_jfs_sge,
@@ -377,14 +377,14 @@ static urma_jfs_t *udma_u_create_jfs_ex(urma_context_t *ctx,
 
 	jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
 	if (jfs == NULL) {
-		UDMA_LOG_ERR("alloc jfs failed.\n");
+		UDMA_LOG_ERR("alloc JFS failed.\n");
 		return NULL;
 	}
 
 	jfs->sq.ctx = udma_ctx;
 	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	if (udma_u_create_sq_ex(&jfs->sq, cfg_ex)) {
-		UDMA_LOG_ERR("failed to create sq.\n");
+		UDMA_LOG_ERR("failed to create SQ.\n");
 		goto err_create_sq;
 	}
 
@@ -394,14 +394,14 @@ static urma_jfs_t *udma_u_create_jfs_ex(urma_context_t *ctx,
 	jfs->sq.db.id = cfg_ex->id;
 	cfg_ex->base_cfg.depth = 1;
 	if (udma_u_exec_jfs_create_cmd(ctx, jfs, &cfg_ex->base_cfg)) {
-		UDMA_LOG_ERR("failed to exec jfs create cmd.\n");
+		UDMA_LOG_ERR("failed to execute JFS create command.\n");
 		goto err_exec_cmd;
 	}
 
 	jfs->sq.db.id = jfs->base.jfs_id.id;
 	jfs->sq.db.type = UDMA_MMAP_JETTY_DSQE;
 	if (udma_u_alloc_db(ctx, &jfs->sq.db)) {
-		UDMA_LOG_ERR("failed to alloc db.\n");
+		UDMA_LOG_ERR("failed to alloc doorbell.\n");
 		goto err_alloc_db;
 	}
 
@@ -437,9 +437,10 @@ static int udma_u_create_jetty_check_cap(urma_context_t *ctx, urma_jetty_cfg_t *
 	    (jfr_cfg->depth == 0 || jfr_cfg->depth > cap->max_jfr_depth) ||
 	    (jfs_cfg->max_sge > cap->max_jfs_sge || jfs_cfg->max_rsge > cap->max_jfs_rsge ||
 	     jfr_cfg->max_sge > cap->max_jfr_sge)) {
-		UDMA_LOG_ERR("jetty cfg out of range, jfs_depth:%u, max_jfs_depth: %u, " \
-			"inline_data:%u, max_jfs_inline_len: %u, jfr_depth:%u, max_jfr_depth: %u, " \
-			"jfs_sge:%hhu, max_jfs_sge:%u, jfs_rsge:%hhu, max_jfs_rsge:%u, jfr_sge:%hhu, max_jfr_sge:%u.\n",
+		UDMA_LOG_ERR("JETTY config out of range, JFS depth:%u, max JFS depth: %u, " \
+			"inline data:%u, max JFS inline len: %u, JFR depth:%u, max JFR depth: %u, " \
+			"JFS SGE:%hhu, max JFS sge:%u, JFS RSGE:%hhu, max JFS RSGE:%u, JFR SGE:%hhu," \
+			"max JFR SGE:%u.\\n",
 			jfs_cfg->depth, cap->max_jfs_depth, jfs_cfg->max_inline_data, cap->max_jfs_inline_len,
 			jfr_cfg->depth, cap->max_jfr_depth, jfs_cfg->max_sge, cap->max_jfs_sge,
 			jfs_cfg->max_rsge, cap->max_jfs_rsge, jfr_cfg->max_sge, cap->max_jfr_sge);
@@ -455,21 +456,21 @@ static int udma_u_check_jetty_param_ex(urma_context_t *ctx,
 	urma_transport_mode_t trans_mode;
 
 	if (jetty_cfg->jfs_cfg.jfc == NULL) {
-		UDMA_LOG_ERR("jfc in jfs_cfg is null.\n");
+		UDMA_LOG_ERR("JFC in JFS config is null.\n");
 		return EINVAL;
 	}
 
 	if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR ||
 	    jetty_cfg->shared.jfr == NULL ||
 	    jetty_cfg->shared.jfr->jfr_cfg.jfc == NULL) {
-		UDMA_LOG_ERR("only support share jfr.\n");
+		UDMA_LOG_ERR("only support shared JFR.\n");
 		return EINVAL;
 	}
 
 	trans_mode = jetty_cfg->jfs_cfg.trans_mode;
 	if (trans_mode != URMA_TM_RM && trans_mode != URMA_TM_RC &&
 	    trans_mode != URMA_TM_UM) {
-		UDMA_LOG_ERR("invalid jetty parameter, jetty trans_mode = %d.\n",
+		UDMA_LOG_ERR("invalid JETTY parameter, JETTY transport mode = %d.\n",
 			     (int)trans_mode);
 		return EINVAL;
 	}
@@ -494,7 +495,7 @@ static int udma_u_verify_jetty_param_ex(urma_context_t *ctx,
 					struct udma_u_jetty_cfg_ex *cfg_ex)
 {
 	if (ctx == NULL || cfg_ex == NULL) {
-		UDMA_LOG_ERR("jetty ctx or cfg_ex is null.\n");
+		UDMA_LOG_ERR("JETTY context or config ex is null.\n");
 		return EINVAL;
 	}
 
@@ -505,7 +506,7 @@ static int udma_u_verify_jetty_param_ex(urma_context_t *ctx,
 		return EINVAL;
 
 	if (udma_u_verify_jfs_cstm_cfg(&cfg_ex->jfs_cstm)) {
-		UDMA_LOG_ERR("jetty jfs_cstm is invalid.\n");
+		UDMA_LOG_ERR("JFS custom config is invalid.\n");
 		return EINVAL;
 	}
 
@@ -534,14 +535,14 @@ static int udma_u_create_common_jetty(urma_context_t *ctx, struct udma_u_jetty *
 	jetty->sq.db.id = jetty->base.jetty_id.id;
 	jetty->sq.db.type = UDMA_MMAP_JETTY_DSQE;
 	if (udma_u_alloc_db(ctx, &jetty->sq.db)) {
-		UDMA_LOG_ERR("failed to alloc db.\n");
+		UDMA_LOG_ERR("failed to alloc doorbell.\n");
 		goto err_alloc_db;
 	}
 
 	jetty->sq.dwqe_addr = (void *)jetty->sq.db.addr;
 	jetty->sq.idx = jetty->base.jetty_id.id;
 	if (insert_jetty_node(udma_ctx, jetty)) {
-		UDMA_LOG_ERR("failed to insert jetty_queue.\n");
+		UDMA_LOG_ERR("failed to insert JETTY queue.\n");
 		goto err_insert_node;
 	}
 
@@ -578,7 +579,7 @@ static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_j
 	jetty->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq_ex(&jetty->sq, &jfs_cfg);
 	if (ret != 0) {
-		UDMA_LOG_ERR("jetty create sq failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("JETTY create SQ failed, ret = %d.\n", ret);
 		goto err_init_jetty_trans_mode;
 	}
 
@@ -617,13 +618,13 @@ static int udma_u_verify_jfc_param_ex(urma_context_t *ctx, urma_jfc_cfg_t *base_
 	cap = &ctx->dev->sysfs_dev->dev_attr.dev_cap;
 
 	if (!base_cfg->depth || base_cfg->depth > cap->max_jfc_depth) {
-		UDMA_LOG_ERR("invalid STARS jfc depth = %u, cap depth = %u.\n",
+		UDMA_LOG_ERR("invalid STARS JFC depth = %u, cap depth = %u.\n",
 			     base_cfg->depth, cap->max_jfc_depth);
 		return EINVAL;
 	}
 
 	if (base_cfg->ceqn >= cap->ceq_cnt) {
-		UDMA_LOG_ERR("invalid STARS jfc ceqn = %u, cap ceq cnt = %u.\n",
+		UDMA_LOG_ERR("invalid STARS JFC ceqn = %u, cap CEQ count = %u.\n",
 			     base_cfg->ceqn, cap->ceq_cnt);
 		return EINVAL;
 	}
@@ -643,7 +644,7 @@ static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t
 
 	jfc = (struct udma_u_jfc *)calloc(1, sizeof(*jfc));
 	if (!jfc) {
-		UDMA_LOG_ERR("failed to alloc user udma STARS jfc memory.\n");
+		UDMA_LOG_ERR("failed to alloc user UDMA STARS JFC memory.\n");
 		return NULL;
 	}
 
@@ -651,7 +652,7 @@ static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t
 	jfc->mode = jfc_mode;
 	if (!jfc->cq.lock_free &&
 	    pthread_spin_init(&jfc->cq.lock, PTHREAD_PROCESS_PRIVATE)) {
-		UDMA_LOG_ERR("failed to init user udma STARS jfc spinlock.\n");
+		UDMA_LOG_ERR("failed to init user UDMA STARS JFC spinlock.\n");
 		goto err_init_lock;
 	}
 
@@ -660,7 +661,7 @@ static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t
 
 	ret = udma_u_jfc_cmd_ex(ctx, jfc, base_cfg, depth);
 	if (ret) {
-		UDMA_LOG_ERR("udma STARS jfc failed to create urma cmd, ret = %d.\n", ret);
+		UDMA_LOG_ERR("UDMA STARS JFC failed to create URMA command, ret = %d.\n", ret);
 		goto err_create_jfc;
 	}
 
@@ -682,7 +683,7 @@ static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
 {
 	if (cfg_ex->jfc_mode < UDMA_U_STARS_JFC_TYPE ||
 	    cfg_ex->jfc_mode > UDMA_U_CCU_JFC_TYPE) {
-		UDMA_LOG_ERR("invalid param, STARS jfc mode = %u.\n",
+		UDMA_LOG_ERR("invalid parameter, STARS JFC mode = %u.\n",
 			     cfg_ex->jfc_mode);
 		return NULL;
 	}
@@ -873,7 +874,7 @@ static bool udma_valid_reduce_opcode(struct udma_u_context *udma_ctx,
 
 	if (cur_wr_ex->wr.opcode != URMA_OPC_WRITE &&
 	    cur_wr_ex->wr.opcode != URMA_OPC_WRITE_NOTIFY && cur_wr_ex->wr.opcode != URMA_OPC_READ) {
-		UDMA_LOG_ERR("Invalid opcode(%u) for reduce ops!\n", cur_wr_ex->wr.opcode);
+		UDMA_LOG_ERR("Invalid opcode(%u) for reduce operations!\n", cur_wr_ex->wr.opcode);
 		return false;
 	}
 
@@ -883,7 +884,7 @@ static bool udma_valid_reduce_opcode(struct udma_u_context *udma_ctx,
 	}
 
 	if (cur_wr_ex->reduce_data_type > REDUCE_DATA_TYPE_MAX) {
-		UDMA_LOG_ERR("Invalid reduce data_type(%u) for reduce ops!\n", cur_wr_ex->reduce_data_type);
+		UDMA_LOG_ERR("Invalid reduce data type(%u) for reduce ops!\n", cur_wr_ex->reduce_data_type);
 		return false;
 	}
 
@@ -967,7 +968,7 @@ static urma_status_t udma_u_post_jetty_wr_ex(struct udma_u_wr_ex *wr_ex,
 	ret = udma_u_post_sq_wr_ex(udma_ctx, &udma_jetty->sq, bad_wr,
 				wr_ex, info);
 	if (ret)
-		UDMA_LOG_ERR("Jetty post sq wr_ex failed, ret = %d, id = %u.\n",
+		UDMA_LOG_ERR("Jetty post SQ WR ex failed, ret = %d, id = %u.\n",
 			     ret, udma_jetty->sq.idx);
 
 	return ret;
@@ -988,7 +989,7 @@ static urma_status_t udma_u_post_jfs_wr_ex(struct udma_u_wr_ex *wr_ex,
 	ret = udma_u_post_sq_wr_ex(udma_ctx, &udma_jfs->sq, wr_ex->bad_wr,
 				wr_ex, info);
 	if (ret)
-		UDMA_LOG_ERR("JFS post sq wr_ex failed, ret = %d, id = %u.\n",
+		UDMA_LOG_ERR("JFS post SQ WR ex failed, ret = %d, id = %u.\n",
 			     ret, udma_jfs->sq.idx);
 
 	return ret;
@@ -1094,7 +1095,7 @@ static int udma_u_ctrlq_query_tp_sport(urma_context_t *ctx, urma_user_ctl_in_t *
 
 	ret = urma_cmd_user_ctl(ctx, in, out, &udrv_data);
 	if (ret)
-		UDMA_LOG_ERR("failed to query tp sport, ret: %d.\n", ret);
+		UDMA_LOG_ERR("failed to query TP sport, ret: %d.\n", ret);
 
 	in->opcode = UDMA_U_USER_CTL_QUERY_TP_SPORT;
 
@@ -1116,7 +1117,7 @@ int udma_u_query_cqe_aux_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 	ret = urma_cmd_user_ctl(ctx, in, out, &udrv_data);
 	if (ret)
-		UDMA_LOG_ERR("failed to query cqe aux info, ret: %d.\n", ret);
+		UDMA_LOG_ERR("failed to query CQE aux info, ret: %d.\n", ret);
 
 	in->opcode = UDMA_U_USER_CTL_QUERY_CQE_AUX_INFO;
 
@@ -1138,7 +1139,7 @@ static int udma_u_query_ae_aux_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 	ret = urma_cmd_user_ctl(ctx, in, out, &udrv_data);
 	if (ret)
-		UDMA_LOG_ERR("failed to query cqe aux info, ret: %d.\n", ret);
+		UDMA_LOG_ERR("failed to query CQE aux info, ret: %d.\n", ret);
 
 	in->opcode = UDMA_U_USER_CTL_QUERY_AE_AUX_INFO;
 
@@ -1166,7 +1167,7 @@ bool udma_u_user_ctl_check_param(uint64_t addr, uint32_t in_len, uint32_t len,
 				 enum udma_u_user_ctl_opcode opcode)
 {
 	if (addr == 0 || (in_len != len)) {
-		UDMA_LOG_ERR("parameter invalid in user ctl process,"
+		UDMA_LOG_ERR("parameter invalid in user control process,"
 			     "opcode = %u, len = %u.\n", opcode, in_len);
 		return false;
 	}
@@ -1178,7 +1179,7 @@ int udma_u_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in,
 		    urma_user_ctl_out_t *out)
 {
 	if (ctx == NULL || in == NULL || out == NULL) {
-		UDMA_LOG_ERR("parameter invalid in urma_user_ctl.\n");
+		UDMA_LOG_ERR("parameter invalid in URMA user control.\n");
 		return URMA_EINVAL;
 	}
 

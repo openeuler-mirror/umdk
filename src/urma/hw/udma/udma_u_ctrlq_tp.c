@@ -19,7 +19,7 @@ int udma_u_ctrlq_get_tp_list(urma_context_t *ctx, urma_get_tp_cfg_t *cfg, uint32
 
 	ret = urma_cmd_get_tp_list(ctx, cfg, tp_cnt, tp_list, &udata);
 	if (ret)
-		UDMA_LOG_ERR("urma get tp list failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA get TP list failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -32,7 +32,7 @@ int udma_u_ctrlq_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle
 
 	ret = urma_cmd_set_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr, NULL);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd set tp attr failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command set TP attributes failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -45,7 +45,7 @@ int udma_u_ctrlq_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle
 
 	ret = urma_cmd_get_tp_attr(ctx, tp_handle, tp_attr_cnt, tp_attr_bitmap, tp_attr, NULL);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd get tp attr failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command get TP attributes failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -56,7 +56,7 @@ urma_status_t udma_u_get_smac(const urma_context_t *ctx, uint8_t *mac)
 
 	ret = urma_cmd_get_smac(ctx, mac);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd get smac failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command get smac failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -67,7 +67,7 @@ urma_status_t udma_u_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *
 
 	ret = urma_cmd_get_dmac(ctx, net_addr, mac);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd get dmac failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command get dmac failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -78,7 +78,7 @@ urma_status_t udma_u_get_eid_by_ip(const urma_context_t *ctx, const urma_net_add
 
 	ret = urma_cmd_get_eid_by_ip(ctx, net_addr, eid);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd get eid by ip failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command get EID by IP failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -89,7 +89,7 @@ urma_status_t udma_u_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *
 
 	ret = urma_cmd_get_ip_by_eid(ctx, eid, net_addr);
 	if (ret)
-		UDMA_LOG_ERR("urma cmd get ip by eid failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command get IP by EID failed, ret = %d.\n", ret);
 
 	return ret;
 }

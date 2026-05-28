@@ -178,7 +178,7 @@ static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_creat
 	if (g_sq_reserved_va == MAP_FAILED) {
 		g_sq_reserved_va = NULL;
 		(void)pthread_mutex_unlock(&g_sq_reserved_lock);
-		UDMA_LOG_ERR("failed to reserved sq, errno:%d, strerror:%s.\n",
+		UDMA_LOG_ERR("failed to reserve SQ, errno:%d, strerror:%s.\n",
 			     errno, strerror(errno));
 		return EINVAL;
 	}
@@ -276,17 +276,17 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 
 	udma_ctx = (struct udma_u_context *)calloc(1, sizeof(*udma_ctx));
 	if (!udma_ctx) {
-		UDMA_LOG_ERR("Failed to alloc memory for udma_ctx.\n");
+		UDMA_LOG_ERR("Failed to alloc memory for UDMA context.\n");
 		return NULL;
 	}
 
 	if (pthread_mutex_init(&udma_ctx->db_list_mutex, NULL)) {
-		UDMA_LOG_ERR("Failed to init db_list_mutex.\n");
+		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
 		goto err_db_list_mutex;
 	}
 
 	if (pthread_mutex_init(&udma_ctx->hugepage_lock, NULL)) {
-		UDMA_LOG_ERR("Failed to init db_list_mutex.\n");
+		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
 		goto err_hugepage_lock;
 	}
 	udma_ctx->hugepage_list = NULL;
@@ -313,7 +313,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	}
 
 	if (udma_u_alloc_db(&udma_ctx->urma_ctx, &udma_ctx->db)) {
-		UDMA_LOG_ERR("Failed to alloc jfc db.\n");
+		UDMA_LOG_ERR("Failed to alloc JFC doorbell.\n");
 		goto err_alloc_db;
 	}
 
@@ -354,7 +354,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	udma_u_destroy_hugepage(udma_ctx);
 
 	if (urma_cmd_delete_context(&udma_ctx->urma_ctx)) {
-		UDMA_LOG_ERR("udma destroy ctx failed.\n");
+		UDMA_LOG_ERR("UDMA destroy context failed.\n");
 		ret = URMA_FAIL;
 	}
 

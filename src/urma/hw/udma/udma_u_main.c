@@ -15,7 +15,7 @@ static __attribute__((constructor)) void urma_provider_ub_init(void)
 
 	ret = urma_register_provider_ops(&g_udma_provider_ops);
 	if (ret)
-		UDMA_LOG_ERR("Provider UB register ops failed(%d).\n", ret);
+		UDMA_LOG_ERR("Provider UB register operations failed(%d).\n", ret);
 	return;
 }
 
@@ -25,7 +25,7 @@ static __attribute__((destructor)) void urma_provider_ub_uninit(void)
 
 	ret = urma_unregister_provider_ops(&g_udma_provider_ops);
 	if (ret)
-		UDMA_LOG_ERR("Provider UB register ops unregister failed(%d).\n", ret);
+		UDMA_LOG_ERR("Provider UB register operations unregister failed(%d).\n", ret);
 
 	return;
 }
