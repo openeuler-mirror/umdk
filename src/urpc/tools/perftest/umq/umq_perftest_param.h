@@ -31,6 +31,7 @@ typedef struct umq_perftest_config {
     uint32_t test_round;
     umq_buf_mode_t buf_mode;
     umq_tp_mode_t tp_mode;
+    umq_tp_type_t tp_type;
     uint16_t cna;
     uint32_t deid;
     uint16_t eid_idx;
