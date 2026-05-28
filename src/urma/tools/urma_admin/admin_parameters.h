@@ -233,18 +233,12 @@ typedef struct tool_topo_agg_dev {
     tool_topo_ue_t ues[IODIE_NUM];
 } tool_topo_agg_dev_t;
 
-typedef struct tool_topo_link {
-    uint32_t peer_node;
-    uint32_t peer_iodie;
-    uint32_t peer_port;
-} tool_topo_link_t;
-
 typedef struct tool_topo_info {
     uint32_t type;
     uint32_t super_node_id;
     uint32_t node_id;
     uint32_t is_current;
-    tool_topo_link_t links[IODIE_NUM][PORT_NUM];
+    bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
     tool_topo_agg_dev_t agg_devs[DEV_NUM];
 } tool_topo_info_t;
 
