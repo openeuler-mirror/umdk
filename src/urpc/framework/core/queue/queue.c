@@ -982,6 +982,7 @@ uint32_t urpc_get_local_qh(uint64_t **qh_list)
     uint32_t index = 0;
     uint64_t *tmp_qh_list = urpc_dbuf_calloc(URPC_DBUF_TYPE_CP, queue_num, sizeof(uint64_t));
     if (tmp_qh_list == NULL) {
+        (void)pthread_mutex_unlock(&g_urpc_queue_transport_ctx.queue_list_mutex);
         URPC_LIB_LOG_ERR("get local qh list failed to calloc\n");
         return URPC_FAIL;
     }
