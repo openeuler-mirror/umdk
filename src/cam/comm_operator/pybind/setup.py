@@ -86,8 +86,6 @@ ext1 = NpuExtension(
     sources=["./fused_deep_moe.cpp",
              "./moe_dispatch_normal.cpp",
              "./moe_combine_normal.cpp",
-             "./moe_dispatch_shmem.cpp",
-             "./moe_combine_shmem.cpp",
              "./a2e.cpp",
              "./e2a.cpp",
              "./pybind.cpp",

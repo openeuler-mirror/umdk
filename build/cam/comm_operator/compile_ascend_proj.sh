@@ -7,10 +7,11 @@
 # History: 2025-07-20 create cam building script
 
 # 定义全局屏蔽列表
+# cam_feature的shmem dispatch/combine未适配最新shmem，暂不启用
 exclude_list=()
 if [ -z "${SHMEM_HOME_PATH}" ]; then
     echo "Skipping shmem (SHMEM_HOME_PATH not set)"
-    exclude_list+=("moe_combine_shmem" "moe_dispatch_shmem")
+    exclude_list+=("fused_deep_moe")
 fi
 
 CopyOps() {
