@@ -298,7 +298,7 @@ static imported_tseg_node_t *umq_ub_tseg_node_create(
     return tseg_node;
 }
 
-static void umq_tseg_node_destory(imported_tseg_node_t *tseg_node)
+static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node)
 {
     umq_symbol_urma()->urma_unimport_seg(tseg_node->tseg);
     free(tseg_node);
@@ -335,7 +335,7 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
     int ret = snprintf(eid_node->remote_namespace, info->dev_info->namespace_len, "%s", info->dev_info->bind_namespace);
     if (ret < 0 || ret >= (int)info->dev_info->namespace_len) {
         UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
-        goto DESTORY_LOCK;
+        goto DESTROY_LOCK;
     }
 
     if (umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
@@ -346,7 +346,7 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
                 "local eid: " EID_FMT ", local jetty_id: %u, remote eid " EID_FMT ", remote jetty_id: "
                 "%u, create tseg node failed\n", EID_ARGS(*eid), id, EID_ARGS(info->queue_info->jetty_id.eid),
                 info->queue_info->jetty_id.id);
-            goto DESTORY_LOCK;
+            goto DESTROY_LOCK;
         }
 
         (void)util_rwlock_wrlock(import_tseg_table->tseg_hmap_lock);
@@ -362,7 +362,7 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
 
     return eid_node;
 
-DESTORY_LOCK:
+DESTROY_LOCK:
     util_rwlock_destroy(import_tseg_table->tseg_hmap_lock);
 
 UNINIT_HAMP:
@@ -384,7 +384,7 @@ static void umq_ub_eid_node_destroy(remote_eid_hmap_node_t *eid_node)
     imported_tseg_node_t *tseg_next = NULL;
     URPC_HMAP_FOR_EACH_SAFE(tseg_node, tseg_next, node, &eid_node->tseg.tseg_hmap) {
         urpc_hmap_remove(&eid_node->tseg.tseg_hmap, &tseg_node->node);
-        umq_tseg_node_destory(tseg_node);
+        umq_tseg_node_destroy(tseg_node);
     }
     (void)util_rwlock_unlock(eid_node->tseg.tseg_hmap_lock);
     (void)util_rwlock_destroy(eid_node->tseg.tseg_hmap_lock);

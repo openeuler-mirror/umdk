@@ -1731,7 +1731,7 @@ static int server_process_detach_resource_release(urpc_async_task_ctx_t *task)
         if (channel != NULL) {
             (void)pthread_rwlock_unlock(&channel->rw_lock);
         }
-        URPC_LIB_LOG_INFO("recv unkown client detach msg, server channel[%u], " EID_FMT ", pid: %u\n",
+        URPC_LIB_LOG_INFO("recv unknown client detach msg, server channel[%u], " EID_FMT ", pid: %u\n",
             server_chid, EID_ARGS(q_info->chinfo->key.eid), q_info->chinfo->key.pid);
         server_channel_connect_hmap_unlock();
         return URPC_FAIL;

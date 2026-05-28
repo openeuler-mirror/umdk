@@ -398,7 +398,7 @@ typedef struct queue_import_ctx {
     uint64_t notifier_handle;
     int fd;
     int total; // indicates the number of pre-delivered import send.
-    int running_count;  // indicates the number of delivered import send sucessfully.
+    int running_count;  // indicates the number of delivered import send successfully.
     int result;
     provider_t *provider;
     urpc_epoll_event_t *event;
