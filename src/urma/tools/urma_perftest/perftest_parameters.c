@@ -8,25 +8,28 @@
  * History: 2022-04-03   create file
  */
 
-#include <stdio.h>
+#include <getopt.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 #include <unistd.h>
+
 #include <linux/limits.h>
 
-#include "ub_util.h"
 #include "ub_get_clock.h"
+#include "ub_util.h"
 #include "urma_types.h"
-#include "urma_ubagg.h"
 #include "urma_types_str.h"
+#include "urma_ubagg.h"
+
 #include "perftest_communication.h"
+
 #include "perftest_parameters.h"
 
 #define PERFTEST_CACHE_LINE_FILE_SIZE (10)
-#define PERFTEST_JFC_MUL_THRESHOLD (4)
-#define PERFTEST_DEFAULT_DURATION (5)
+#define PERFTEST_JFC_MUL_THRESHOLD    (4)
+#define PERFTEST_DEFAULT_DURATION     (5)
 
 #define PERFTEST_RTP_MAX_SEND_SIZE (65536)
 #define PERFTEST_CTP_MAX_SEND_SIZE (4096)
@@ -39,36 +42,36 @@ typedef struct perftest_cmd {
 } perftest_cmd_t;
 
 static const char *g_atomic_types_str[] = {
-    [PERFTEST_CAS] =           "cas",
-    [PERFTEST_FAA] =           "faa"
+    [PERFTEST_CAS] = "cas",
+    [PERFTEST_FAA] = "faa",
 };
 static const char *g_print_test_str[] = {
-    [PERFTEST_READ] =          "URMA_READ",
-    [PERFTEST_WRITE] =         "URMA_WRITE",
-    [PERFTEST_SEND] =          "URMA_SEND",
-    [PERFTEST_ATOMIC] =        "URMA_ATOMIC"
+    [PERFTEST_READ] = "URMA_READ",
+    [PERFTEST_WRITE] = "URMA_WRITE",
+    [PERFTEST_SEND] = "URMA_SEND",
+    [PERFTEST_ATOMIC] = "URMA_ATOMIC",
 };
 static const char *g_trans_mode_str[] = {
-    [URMA_TM_RM] =     "URMA_TM_RM",
-    [URMA_TM_RC] =     "URMA_TM_RC",
-    [URMA_TM_UM] =     "URMA_TM_UM"
+    [URMA_TM_RM] = "URMA_TM_RM",
+    [URMA_TM_RC] = "URMA_TM_RC",
+    [URMA_TM_UM] = "URMA_TM_UM",
 };
 static const char *g_jetty_mode_str[] = {
     [PERFTEST_JETTY_SIMPLEX] = "SIMPLEX",
-    [PERFTEST_JETTY_DUPLEX] =  "DUPLEX"
+    [PERFTEST_JETTY_DUPLEX] = "DUPLEX",
 };
 
-#define PERFTEST_BOOL_TO_STR(val)    ((val) == true ? "true" : "false")
+#define PERFTEST_BOOL_TO_STR(val) ((val) == true ? "true" : "false")
 
 static const perftest_cmd_t g_cmd[] = {
-    { "read_lat",          PERFTEST_READ_LAT },
-    { "write_lat",         PERFTEST_WRITE_LAT },
-    { "send_lat",          PERFTEST_SEND_LAT },
-    { "atomic_lat",        PERFTEST_ATOMIC_LAT },
-    { "read_bw",           PERFTEST_READ_BW },
-    { "write_bw",          PERFTEST_WRITE_BW },
-    { "send_bw",           PERFTEST_SEND_BW },
-    { "atomic_bw",         PERFTEST_ATOMIC_BW }
+    {"read_lat", PERFTEST_READ_LAT},
+    {"write_lat", PERFTEST_WRITE_LAT},
+    {"send_lat", PERFTEST_SEND_LAT},
+    {"atomic_lat", PERFTEST_ATOMIC_LAT},
+    {"read_bw", PERFTEST_READ_BW},
+    {"write_bw", PERFTEST_WRITE_BW},
+    {"send_bw", PERFTEST_SEND_BW},
+    {"atomic_bw", PERFTEST_ATOMIC_BW},
 };
 
 static void command_usage(const char *argv0)
@@ -281,8 +284,9 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->jetty_mode = PERFTEST_JETTY_DUPLEX;
     cfg->cq_mod = PERFTEST_DEF_CQ_NUM;
     cfg->jfr_post_list = 1;
-    cfg->jfr_depth = (cfg->api_type == PERFTEST_SEND || cfg->api_type == PERFTEST_WRITE) ?
-        PERFTEST_DEF_JFR_DEPTH_SEND : PERFTEST_DEF_JFR_DEPTH_OTHER;
+    cfg->jfr_depth = (cfg->api_type == PERFTEST_SEND || cfg->api_type == PERFTEST_WRITE)
+                         ? PERFTEST_DEF_JFR_DEPTH_SEND
+                         : PERFTEST_DEF_JFR_DEPTH_OTHER;
 
     init_cfg_size(cfg);
 
@@ -384,10 +388,10 @@ void print_cfg(const perftest_config_t *cfg)
     }
 
     (void)printf(" Number of jettys    : %-10u\t\t Transport mode   : %s\n", cfg->jettys,
-        urma_tp_type_to_string(cfg->tp_type));
+                 urma_tp_type_to_string(cfg->tp_type));
     (void)printf(" JFC depth           : %-10u\t\t Device name      : %s\n", cfg->jfc_depth, cfg->dev_name);
     (void)printf(" Trans mode          : %-10s\t\t JETTY mode       : %s\n", g_trans_mode_str[cfg->trans_mode],
-        g_jetty_mode_str[cfg->jetty_mode]);
+                 g_jetty_mode_str[cfg->jetty_mode]);
     if (cfg->comm.server_ip != NULL || cfg->bidirection) {
         (void)printf(" JFS depth           : %u\n", cfg->jfs_depth);
     }
@@ -433,7 +437,7 @@ static inline int check_value_range(const perftest_value_range_t *value_range)
     if (value_range->value < (uint64_t)value_range->min ||
         value_range->value > (uint64_t)value_range->max) {
         (void)fprintf(stderr, "%s should be between %u and %u.\n", value_range->name,
-            value_range->min, value_range->max);
+                      value_range->min, value_range->max);
         return -1;
     }
     return 0;
@@ -442,19 +446,19 @@ static inline int check_value_range(const perftest_value_range_t *value_range)
 static int check_cfg_range(perftest_config_t *cfg)
 {
     perftest_value_range_t value_range[] = {
-        { cfg->iters,        PERFTEST_ITERS_MIN,         PERFTEST_ITERS_MAX,        "Iteration num" },
-        { cfg->jfs_depth,    PERFTEST_JFS_DEPTH_MIN,     PERFTEST_JFS_DEPTH_MAX,    "Jfs depth" },
-        { cfg->jettys,       PERFTEST_JETTYS_MIN,        PERFTEST_JETTYS_MAX,       "Jettys" },
-        { cfg->jfr_depth,    PERFTEST_JFR_DEPTH_MIN,     PERFTEST_JFR_DEPTH_MAX,    "Jfr depth" },
-        { cfg->cq_mod,       PERFTEST_CQ_MOD_MIN,        PERFTEST_CQ_MOD_MAX,       "Cq mod" },
-        { cfg->order,        PERFTEST_MIN_ORDER,         PERFTEST_MAX_ORDER,        "Order" },
-        { cfg->err_timeout,  PERFTEST_ERR_TIMEOUT_MIN,   PERFTEST_ERR_TIMEOUT_MAX,  "err_timeout" },
-        { cfg->token_policy, URMA_TOKEN_NONE,            URMA_TOKEN_ALL_ENCRYPTED,  "token_policy" }
+        {cfg->iters, PERFTEST_ITERS_MIN, PERFTEST_ITERS_MAX, "Iteration num"},
+        {cfg->jfs_depth, PERFTEST_JFS_DEPTH_MIN, PERFTEST_JFS_DEPTH_MAX, "Jfs depth"},
+        {cfg->jettys, PERFTEST_JETTYS_MIN, PERFTEST_JETTYS_MAX, "Jettys"},
+        {cfg->jfr_depth, PERFTEST_JFR_DEPTH_MIN, PERFTEST_JFR_DEPTH_MAX, "Jfr depth"},
+        {cfg->cq_mod, PERFTEST_CQ_MOD_MIN, PERFTEST_CQ_MOD_MAX, "Cq mod"},
+        {cfg->order, PERFTEST_MIN_ORDER, PERFTEST_MAX_ORDER, "Order"},
+        {cfg->err_timeout, PERFTEST_ERR_TIMEOUT_MIN, PERFTEST_ERR_TIMEOUT_MAX, "err_timeout"},
+        {cfg->token_policy, URMA_TOKEN_NONE, URMA_TOKEN_ALL_ENCRYPTED, "token_policy"},
     };
     for (uint32_t i = 0; i < sizeof(value_range) / sizeof(perftest_value_range_t); i++) {
         if (check_value_range(&value_range[i]) != 0) {
             (void)fprintf(stderr, "Failed to check value, value: %lu, min: %u, max: %u, name: %s.\n",
-                value_range[i].value, value_range[i].min, value_range[i].max, value_range[i].name);
+                          value_range[i].value, value_range[i].min, value_range[i].max, value_range[i].name);
             return -1;
         }
     }
@@ -499,94 +503,96 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 
     init_cfg(cfg);
 
+    /* clang-format off */
     static const struct option long_options[] = {
-        {"all",           optional_argument, NULL, 'a'},
-        {"atomic_type",   required_argument, NULL, 'A'},
-        {"simplex_mode",  no_argument,       NULL, 'b'},
-        {"bidirection",   no_argument,       NULL, 'B'},
-        {"jfc_inline",    no_argument,       NULL, 'c'},
-        {"jfc_depth",     required_argument, NULL, 'C'},
-        {"dev",           required_argument, NULL, 'd'},
-        {"duration",      required_argument, NULL, 'D'},
-        {"use_jfce",      no_argument,       NULL, 'e'},
-        {"err_timeout",   required_argument, NULL, 'E'},
-        {"use_flat_api",  no_argument,       NULL, 'f'},
-        {"cpu_freq_f",    no_argument,       NULL, 'F'},
-        {"help",          no_argument,       NULL, 'h'},
-        {"inline_size",   required_argument, NULL, 'I'},
-        {"share_jfr",     required_argument, NULL, 'j'},
-        {"jettys",        required_argument, NULL, 'J'},
-        {"token_policy",  required_argument, NULL, 'K'},
-        {"iters",         required_argument, NULL, 'n'},
-        {"no_peak",       no_argument,       NULL, 'N'},
-        {"jfs_post_list", required_argument, NULL, 'l'},
-        {"lock_free",     no_argument,       NULL, 'L'},
-        {"priority",      required_argument, NULL, 'O'},
-        {"trans_mode",    required_argument, NULL, 'p'},
-        {"port",          required_argument, NULL, 'P'},
-        {"cq_mod",        required_argument, NULL, 'Q'},
-        {"jfr_post_list", required_argument, NULL, 'r'},
-        {"jfr_depth",     required_argument, NULL, 'R'},
-        {"size",          required_argument, NULL, 's'},
-        {"server",        required_argument, NULL, 'S'},
-        {"jfs_depth",     required_argument, NULL, 'T'},
-        {"uboe",          no_argument,       NULL, 'u'},
-        {"warm_up",       no_argument,       NULL, 'w'},
-        {"infinite",      optional_argument, NULL, 'y'},
-        {"use_bonding",   no_argument,       NULL, 'z'},
-        {"single_path",   no_argument,       NULL, PERFTEST_OPT_SINGLE_PATH},
-        {"eid_idx",       required_argument, NULL, PERFTEST_OPT_EID_IDX},
-        {"rate_limit",    required_argument, NULL, PERFTEST_OPT_RATE_LIMIT},
-        {"rate_units",    required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
-        {"burst_size",    required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
-        {"order_type",    required_argument, NULL, PERFTEST_OPT_ORDER_TYPE},
-        {"enable_ipv6",    no_argument, NULL, PERFTEST_OPT_ENABLE_IPV6},
-        {"enable_credit",    no_argument, NULL, PERFTEST_OPT_ENABLE_CREDIT},
+        {"all",                 optional_argument, NULL, 'a'},
+        {"atomic_type",         required_argument, NULL, 'A'},
+        {"simplex_mode",        no_argument,       NULL, 'b'},
+        {"bidirection",         no_argument,       NULL, 'B'},
+        {"jfc_inline",          no_argument,       NULL, 'c'},
+        {"jfc_depth",           required_argument, NULL, 'C'},
+        {"dev",                 required_argument, NULL, 'd'},
+        {"duration",            required_argument, NULL, 'D'},
+        {"use_jfce",            no_argument,       NULL, 'e'},
+        {"err_timeout",         required_argument, NULL, 'E'},
+        {"use_flat_api",        no_argument,       NULL, 'f'},
+        {"cpu_freq_f",          no_argument,       NULL, 'F'},
+        {"help",                no_argument,       NULL, 'h'},
+        {"inline_size",         required_argument, NULL, 'I'},
+        {"share_jfr",           required_argument, NULL, 'j'},
+        {"jettys",              required_argument, NULL, 'J'},
+        {"token_policy",        required_argument, NULL, 'K'},
+        {"iters",               required_argument, NULL, 'n'},
+        {"no_peak",             no_argument,       NULL, 'N'},
+        {"jfs_post_list",       required_argument, NULL, 'l'},
+        {"lock_free",           no_argument,       NULL, 'L'},
+        {"priority",            required_argument, NULL, 'O'},
+        {"trans_mode",          required_argument, NULL, 'p'},
+        {"port",                required_argument, NULL, 'P'},
+        {"cq_mod",              required_argument, NULL, 'Q'},
+        {"jfr_post_list",       required_argument, NULL, 'r'},
+        {"jfr_depth",           required_argument, NULL, 'R'},
+        {"size",                required_argument, NULL, 's'},
+        {"server",              required_argument, NULL, 'S'},
+        {"jfs_depth",           required_argument, NULL, 'T'},
+        {"uboe",                no_argument,       NULL, 'u'},
+        {"warm_up",             no_argument,       NULL, 'w'},
+        {"infinite",            optional_argument, NULL, 'y'},
+        {"use_bonding",         no_argument,       NULL, 'z'},
+        {"single_path",         no_argument,       NULL, PERFTEST_OPT_SINGLE_PATH},
+        {"eid_idx",             required_argument, NULL, PERFTEST_OPT_EID_IDX},
+        {"rate_limit",          required_argument, NULL, PERFTEST_OPT_RATE_LIMIT},
+        {"rate_units",          required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
+        {"burst_size",          required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
+        {"order_type",          required_argument, NULL, PERFTEST_OPT_ORDER_TYPE},
+        {"enable_ipv6",         no_argument,       NULL, PERFTEST_OPT_ENABLE_IPV6},
+        {"enable_credit",       no_argument,       NULL, PERFTEST_OPT_ENABLE_CREDIT},
         {"credit_threshold",    required_argument, NULL, PERFTEST_OPT_CREDIT_THRESHOLD},
-        {"credit_notify_cnt",    required_argument, NULL, PERFTEST_OPT_CREDIT_NOTIFY_CNT},
-        {"jettys_pre_jfr",    required_argument, NULL, PERFTEST_OPT_JETTYS_PRE_JFR},
-        {"seg_pre_jetty", no_argument,       NULL, PERFTEST_OPT_SEG_PRE_JETTY},
-        {"enable_imm",    no_argument,       NULL, PERFTEST_OPT_ENABLE_IMM},
-        {"inf_period_ms", required_argument, NULL, PERFTEST_OPT_INF_PERIOD_MS},
-        {"enable_err_continue", no_argument, NULL, PERFTEST_OPT_ENABLE_ERR_CONTINUE},
-        {"notify_data",   required_argument, NULL, PERFTEST_OPT_NOTIFY_DATA},
-        {"enable_user_tp", no_argument,      NULL, PERFTEST_OPT_ENABLE_USER_TP},
-        {"oor_en",        no_argument,       NULL, PERFTEST_OPT_OOR_EN},
-        {"spray_en",      no_argument,       NULL, PERFTEST_OPT_SPRAY_EN},
-        {"cc_en",         no_argument,       NULL, PERFTEST_OPT_CC_EN},
-        {"cc_alg",        required_argument, NULL, PERFTEST_OPT_CC_ALG},
-        {"retry_num",     required_argument, NULL, PERFTEST_OPT_RETRY_NUM},
-        {"ack_timeout",   required_argument, NULL, PERFTEST_OPT_ACK_TIMEOUT},
-        {"sge_num",       required_argument, NULL, PERFTEST_OPT_SGE_NUM},
-        {"enable_write_dirty", required_argument, NULL, PERFTEST_OPT_WRITE_DIRTY},
-        {"pair_num",      required_argument, NULL, PERFTEST_OPT_PAIR_NUM},
-        {"async_import",  no_argument,       NULL, PERFTEST_OPT_ASYNC_CONNECT},
-        {"tp_aware",      no_argument,       NULL, PERFTEST_OPT_TP_AWARE},
-        {"tp_reuse",      no_argument,       NULL, PERFTEST_OPT_TP_REUSE},
-        {"ctp",           no_argument,       NULL, PERFTEST_OPT_CTP},
-        {"jetty_id",      required_argument, NULL, PERFTEST_OPT_JETTY_ID },
-        {"wait_jfc_timeout", required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT },
-        {"hugepage_size", required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE},
-        {"page_size",     required_argument, NULL, PERFTEST_OPT_PAGE_SIZE},
-        {"sip",           required_argument, NULL, PERFTEST_OPT_SIP},
-        {"dip",           required_argument, NULL, PERFTEST_OPT_DIP},
-        {"dscp",          required_argument, NULL, PERFTEST_OPT_DSCP},
-        {"vlan",          required_argument, NULL, PERFTEST_OPT_VLAN},
-        {"sl",            required_argument, NULL, PERFTEST_OPT_SL},
-        {"bind_ip",       required_argument, NULL, PERFTEST_OPT_BIND_IP},
-        {"aggr_mode",     required_argument, NULL, PERFTEST_OPT_AGGR_MODE },
-        {"stdout",        no_argument,       NULL, PERFTEST_OPT_STDOUT },
-        {NULL,            no_argument,       NULL, '\0'}
+        {"credit_notify_cnt",   required_argument, NULL, PERFTEST_OPT_CREDIT_NOTIFY_CNT},
+        {"jettys_pre_jfr",      required_argument, NULL, PERFTEST_OPT_JETTYS_PRE_JFR},
+        {"seg_pre_jetty",       no_argument,       NULL, PERFTEST_OPT_SEG_PRE_JETTY},
+        {"enable_imm",          no_argument,       NULL, PERFTEST_OPT_ENABLE_IMM},
+        {"inf_period_ms",       required_argument, NULL, PERFTEST_OPT_INF_PERIOD_MS},
+        {"enable_err_continue", no_argument,       NULL, PERFTEST_OPT_ENABLE_ERR_CONTINUE},
+        {"notify_data",         required_argument, NULL, PERFTEST_OPT_NOTIFY_DATA},
+        {"enable_user_tp",      no_argument,       NULL, PERFTEST_OPT_ENABLE_USER_TP},
+        {"oor_en",              no_argument,       NULL, PERFTEST_OPT_OOR_EN},
+        {"spray_en",            no_argument,       NULL, PERFTEST_OPT_SPRAY_EN},
+        {"cc_en",               no_argument,       NULL, PERFTEST_OPT_CC_EN},
+        {"cc_alg",              required_argument, NULL, PERFTEST_OPT_CC_ALG},
+        {"retry_num",           required_argument, NULL, PERFTEST_OPT_RETRY_NUM},
+        {"ack_timeout",         required_argument, NULL, PERFTEST_OPT_ACK_TIMEOUT},
+        {"sge_num",             required_argument, NULL, PERFTEST_OPT_SGE_NUM},
+        {"enable_write_dirty",  required_argument, NULL, PERFTEST_OPT_WRITE_DIRTY},
+        {"pair_num",            required_argument, NULL, PERFTEST_OPT_PAIR_NUM},
+        {"async_import",        no_argument,       NULL, PERFTEST_OPT_ASYNC_CONNECT},
+        {"tp_aware",            no_argument,       NULL, PERFTEST_OPT_TP_AWARE},
+        {"tp_reuse",            no_argument,       NULL, PERFTEST_OPT_TP_REUSE},
+        {"ctp",                 no_argument,       NULL, PERFTEST_OPT_CTP},
+        {"jetty_id",            required_argument, NULL, PERFTEST_OPT_JETTY_ID},
+        {"wait_jfc_timeout",    required_argument, NULL, PERFTEST_OPT_WAIT_JFC_TIMEOUT},
+        {"hugepage_size",       required_argument, NULL, PERFTEST_OPT_HUGE_PAGE_SIZE},
+        {"page_size",           required_argument, NULL, PERFTEST_OPT_PAGE_SIZE},
+        {"sip",                 required_argument, NULL, PERFTEST_OPT_SIP},
+        {"dip",                 required_argument, NULL, PERFTEST_OPT_DIP},
+        {"dscp",                required_argument, NULL, PERFTEST_OPT_DSCP},
+        {"vlan",                required_argument, NULL, PERFTEST_OPT_VLAN},
+        {"sl",                  required_argument, NULL, PERFTEST_OPT_SL},
+        {"bind_ip",             required_argument, NULL, PERFTEST_OPT_BIND_IP},
+        {"aggr_mode",           required_argument, NULL, PERFTEST_OPT_AGGR_MODE},
+        {"stdout",              no_argument,       NULL, PERFTEST_OPT_STDOUT},
+        {NULL,                  no_argument,       NULL, '\0'},
     };
+    /* clang-format on */
 
     /* Second parse the options */
     while (1) {
 #ifdef UB_AGG
         int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:uwy::z",
-            long_options, NULL);
+                            long_options, NULL);
 #else
         int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:LO:p:P:Q:r:R:s:S:T:uwy::",
-            long_options, NULL);
+                            long_options, NULL);
 #endif // #ifdef UB_AGG
         if (c == -1) {
             break;
@@ -625,7 +631,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 (void)ub_str_to_u32(optarg, &cfg->duration);
                 if (cfg->duration < PERFTEST_DEF_WARMUP_TIME) {
                     (void)fprintf(stderr, "Duration should be no less than %d, please check.\n",
-                        PERFTEST_DEF_WARMUP_TIME);
+                                  PERFTEST_DEF_WARMUP_TIME);
                     return -1;
                 }
                 cfg->time_type.bs.duration = 1;
@@ -722,7 +728,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'R':
                 (void)ub_str_to_u32(optarg, &cfg->jfr_depth);
                 if ((cfg->credit_notify_cnt == 0) || (cfg->credit_notify_cnt ==
-                    PERFTEST_DEF_JFR_DEPTH_SEND / PERFTEST_DEF_CREDIT_RATE)) {
+                                                      PERFTEST_DEF_JFR_DEPTH_SEND / PERFTEST_DEF_CREDIT_RATE)) {
                     /* credit parameters should be updated according to jfr_depth */
                     cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
                     cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
@@ -889,8 +895,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 }
                 break;
             case PERFTEST_OPT_AGGR_MODE:
-                cfg->enable_aggr_mode = true;	 
-                if (strcmp("standalone", optarg) == 0) {	 
+                cfg->enable_aggr_mode = true;
+                if (strcmp("standalone", optarg) == 0) {
                     cfg->aggr_mode = BONDP_BONDING_MODE_STANDALONE;
                 } else if (strcmp("active_backup", optarg) == 0) {
                     cfg->aggr_mode = BONDP_BONDING_MODE_ACTIVE_BACKUP;
@@ -907,7 +913,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case PERFTEST_OPT_DIP:
                 cfg->uboe_dip = true;
-                (void)str_to_ip(optarg, & cfg->dip);
+                (void)str_to_ip(optarg, &cfg->dip);
                 break;
             case PERFTEST_OPT_DSCP:
                 cfg->uboe_dscp = true;
@@ -928,8 +934,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     return -1;
                 }
                 break;
-            case PERFTEST_OPT_STDOUT: 
-                cfg->enable_stdout = true; 
+            case PERFTEST_OPT_STDOUT:
+                cfg->enable_stdout = true;
                 break;
             default:
                 usage(argv[0]);
@@ -1037,8 +1043,8 @@ static int check_ctp_single_path_cfg(const perftest_config_t *cfg)
         (void)fprintf(stderr, "Invalid config: --single_path: false requires --ctp: true.\n");
         return -1;
     }
- 
- 	return 0;
+
+    return 0;
 }
 
 int check_local_cfg(perftest_config_t *cfg)
@@ -1084,8 +1090,8 @@ int check_local_cfg(perftest_config_t *cfg)
             exit(1);
         }
         if (!is_jfr_depth_valid(cfg)) {
-            (void)fprintf(stderr, "Using share jfr jfr_depth and iters should be greater than " \
-                "cfg->jettys_pre_jfr * jfr_post_list.\n");
+            (void)fprintf(stderr, "Using share jfr jfr_depth and iters should be greater than "
+                                  "cfg->jettys_pre_jfr * jfr_post_list.\n");
             exit(1);
         }
     }
@@ -1131,7 +1137,7 @@ int check_local_cfg(perftest_config_t *cfg)
     }
     if (cfg->jfs_post_list == 0 || cfg->jfr_post_list == 0) {
         (void)fprintf(stderr, "Invalid parameter with jfs_post_list: %u, jfr_post_list: %u.\n",
-            cfg->jfs_post_list, cfg->jfr_post_list);
+                      cfg->jfs_post_list, cfg->jfr_post_list);
         exit(1);
     }
 
@@ -1235,7 +1241,8 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (cfg->type == PERFTEST_BW && (cfg->jfc_depth != PERFTEST_DEF_JFC_DEPTH_BW ||
-        cfg->jfr_depth != PERFTEST_DEF_JFR_DEPTH_SEND || cfg->jfs_depth != PERFTEST_DEF_JFS_DEPTH_BW)) {
+                                     cfg->jfr_depth != PERFTEST_DEF_JFR_DEPTH_SEND ||
+                                     cfg->jfs_depth != PERFTEST_DEF_JFS_DEPTH_BW)) {
         uint32_t jfr_mul = cfg->jfc_depth / cfg->jfr_depth;
         uint32_t jfs_mul = cfg->jfc_depth / cfg->jfs_depth;
         if (jfr_mul < PERFTEST_JFC_MUL_THRESHOLD || jfs_mul < PERFTEST_JFC_MUL_THRESHOLD) {
@@ -1259,12 +1266,12 @@ int check_local_cfg(perftest_config_t *cfg)
                 exit(1);
             }
             (void)printf("Info: Infinite with duration, period: %u, inf_period: %u.\n",
-                cfg->duration, cfg->inf_period);
+                         cfg->duration, cfg->inf_period);
         }
         if (cfg->bidirection == true && (cfg->api_type == PERFTEST_SEND ||
-                (cfg->api_type == PERFTEST_WRITE && cfg->enable_imm == true))) {
+                                         (cfg->api_type == PERFTEST_WRITE && cfg->enable_imm == true))) {
             (void)fprintf(stderr, "run_infinitely does not support SEND or WRITE_IMM "
-                "Bidirectional BW test\n");
+                                  "Bidirectional BW test\n");
             exit(1);
         }
     }
@@ -1309,12 +1316,12 @@ int check_local_cfg(perftest_config_t *cfg)
         if (cfg->credit_notify_cnt == 0 || cfg->credit_notify_cnt > cfg->jfr_depth) {
             cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
             (void)fprintf(stderr, "credit_notify_cnt out of range (1 ~ %u), change to %u.\n",
-                cfg->jfr_depth, cfg->credit_notify_cnt);
+                          cfg->jfr_depth, cfg->credit_notify_cnt);
         }
         if (cfg->credit_threshold == 0 || cfg->credit_threshold + cfg->jfs_post_list > cfg->jfr_depth) {
             cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
             (void)fprintf(stderr, "credit_threshold out of range (1 ~ %u), change to %u.\n",
-                cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_threshold);
+                          cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_threshold);
         }
         if (cfg->trans_mode == URMA_TM_UM) {
             (void)fprintf(stderr, "Credit DOES NOT take effect in UM trans_mode.\n");
@@ -1380,34 +1387,35 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
         (void)fprintf(stderr, "UM transport mode is not recommended for ctp.\n");
     }
-    if (cfg->api_type == PERFTEST_SEND) {	 
-        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {	 
-            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",	 
-                cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);	 
-            exit(1); 
-        } 
-        if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) { 
-            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n", 
-                cfg->size, PERFTEST_CTP_MAX_SEND_SIZE); 
-            exit(1); 
-        } 
-        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) { 
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n", 
-                cfg->order, PERFTEST_RTP_MAX_ORDER); 
-            exit(1); 
-        } 
-        if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) { 
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n", 
-                cfg->order, PERFTEST_CTP_MAX_ORDER); 
-            exit(1); 
-        } 
+    if (cfg->api_type == PERFTEST_SEND) {
+        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",
+                          cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
+            exit(1);
+        }
+        if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
+            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n",
+                          cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
+            exit(1);
+        }
+        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
+                          cfg->order, PERFTEST_RTP_MAX_ORDER);
+            exit(1);
+        }
+        if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) {
+            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
+                          cfg->order, PERFTEST_CTP_MAX_ORDER);
+            exit(1);
+        }
     }
 
     const int MIN_CQ_MOD_RATIO = 2;
     if ((cfg->iters % cfg->cq_mod != 0) && (cfg->cq_mod >= cfg->iters / MIN_CQ_MOD_RATIO) &&
         (cfg->bidirection) && (cfg->enable_credit)) {
         (void)fprintf(stderr, "The cq_mod parameter must be divisible by iters and "
-            "must be less than half of the iters parameter when bidirection and credit are enabled.\n");
+                              "must be less than half of the iters parameter when "
+                              "bidirection and credit are enabled.\n");
     }
     return 0;
 }
@@ -1420,79 +1428,79 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
 
     if (local_cfg->cmd != remote_cfg->cmd) {
         (void)fprintf(stderr, "Config inconsistent[cmd],local: %s, remote: %s.\n",
-            g_cmd[local_cfg->cmd].cmd, g_cmd[remote_cfg->cmd].cmd);
+                      g_cmd[local_cfg->cmd].cmd, g_cmd[remote_cfg->cmd].cmd);
         return -1;
     }
 
     if (local_cfg->all != remote_cfg->all) {
         (void)fprintf(stderr, "Config inconsistent[all],local: %s, remote: %s.\n",
-            PERFTEST_BOOL_TO_STR(local_cfg->all), PERFTEST_BOOL_TO_STR(remote_cfg->all));
+                      PERFTEST_BOOL_TO_STR(local_cfg->all), PERFTEST_BOOL_TO_STR(remote_cfg->all));
         return -1;
     }
 
     if (local_cfg->atomic_type != remote_cfg->atomic_type) {
         (void)fprintf(stderr, "Config inconsistent[atomic_type],local: %s, remote: %s.\n",
-            g_atomic_types_str[local_cfg->atomic_type], g_atomic_types_str[remote_cfg->atomic_type]);
+                      g_atomic_types_str[local_cfg->atomic_type], g_atomic_types_str[remote_cfg->atomic_type]);
         return -1;
     }
 
     if (local_cfg->duration != remote_cfg->duration) {
         (void)fprintf(stderr, "Config inconsistent[duration],local: %u, remote: %u.\n",
-            local_cfg->duration, remote_cfg->duration);
+                      local_cfg->duration, remote_cfg->duration);
         return -1;
     }
 
     if (local_cfg->time_type.value != remote_cfg->time_type.value) {
         (void)fprintf(stderr, "Config inconsistent[time_type],local: %u, remote: %u.\n",
-            local_cfg->time_type.value, remote_cfg->time_type.value);
+                      local_cfg->time_type.value, remote_cfg->time_type.value);
         return -1;
     }
 
     if (local_cfg->jettys != remote_cfg->jettys && local_cfg->pair_flag == false) {
         (void)fprintf(stderr, "Config inconsistent[jettys],local: %u, remote: %u.\n",
-            local_cfg->jettys, remote_cfg->jettys);
+                      local_cfg->jettys, remote_cfg->jettys);
         return -1;
     }
 
     if (local_cfg->token_policy != remote_cfg->token_policy) {
         (void)fprintf(stderr, "Config inconsistent[token_policy],local: %u, remote: %u.\n",
-            local_cfg->token_policy, remote_cfg->token_policy);
+                      local_cfg->token_policy, remote_cfg->token_policy);
         return -1;
     }
 
     if (local_cfg->iters != remote_cfg->iters) {
         (void)fprintf(stderr, "Config inconsistent[iters],local: %lu, remote: %lu.\n",
-            local_cfg->iters, remote_cfg->iters);
+                      local_cfg->iters, remote_cfg->iters);
         return -1;
     }
 
     if (local_cfg->jetty_mode != remote_cfg->jetty_mode) {
         (void)fprintf(stderr, "Config inconsistent[jetty_mode],local: %s, remote: %s.\n",
-            g_jetty_mode_str[local_cfg->jetty_mode], g_jetty_mode_str[remote_cfg->jetty_mode]);
+                      g_jetty_mode_str[local_cfg->jetty_mode], g_jetty_mode_str[remote_cfg->jetty_mode]);
         return -1;
     }
 
     if (local_cfg->size != remote_cfg->size) {
         (void)fprintf(stderr, "Config inconsistent[size],local: %u, remote: %u.\n",
-            local_cfg->size, remote_cfg->size);
+                      local_cfg->size, remote_cfg->size);
         return -1;
     }
 
     if (local_cfg->trans_mode != remote_cfg->trans_mode) {
         (void)fprintf(stderr, "Config inconsistent[trans_mode],local: %s, remote: %s.\n",
-            g_trans_mode_str[local_cfg->trans_mode], g_trans_mode_str[remote_cfg->trans_mode]);
+                      g_trans_mode_str[local_cfg->trans_mode], g_trans_mode_str[remote_cfg->trans_mode]);
         return -1;
     }
 
     if (local_cfg->use_flat_api != remote_cfg->use_flat_api) {
         (void)fprintf(stderr, "Config inconsistent[use_flat_api],local: %s, remote: %s.\n",
-            PERFTEST_BOOL_TO_STR(local_cfg->use_flat_api), PERFTEST_BOOL_TO_STR(remote_cfg->use_flat_api));
+                      PERFTEST_BOOL_TO_STR(local_cfg->use_flat_api), PERFTEST_BOOL_TO_STR(remote_cfg->use_flat_api));
         return -1;
     }
 
     if (local_cfg->order != remote_cfg->order) {
         (void)fprintf(stderr, "Config inconsistent[order],local: %u, remote: %u.\n",
-            local_cfg->order, remote_cfg->order);
+                      local_cfg->order, remote_cfg->order);
         return -1;
     }
     if (local_cfg->comm.enable_ipv6 != remote_cfg->comm.enable_ipv6) {
@@ -1505,7 +1513,7 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
     }
     if (local_cfg->seg_pre_jetty != remote_cfg->seg_pre_jetty) {
         (void)fprintf(stderr, "Config inconsistent[seg_pre_jetty], local: %d, remote: %d.\n",
-            (int)local_cfg->seg_pre_jetty, (int)remote_cfg->seg_pre_jetty);
+                      (int)local_cfg->seg_pre_jetty, (int)remote_cfg->seg_pre_jetty);
         return -1;
     }
     if (local_cfg->enable_imm != remote_cfg->enable_imm) {
