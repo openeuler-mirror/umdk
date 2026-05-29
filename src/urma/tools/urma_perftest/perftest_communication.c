@@ -8,19 +8,20 @@
  * History: 2022-04-03   create file
  */
 
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/tcp.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "perftest_parameters.h"
+
 #include "perftest_communication.h"
 
 static int ip_set_sockopts(int sockfd)
@@ -34,7 +35,7 @@ static int ip_set_sockopts(int sockfd)
     ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &enable_reuse, sizeof(enable_reuse));
     if (ret < 0) {
         (void)fprintf(stderr, "server socket set_opt failed. enable_reuse:%d, ret: %d, err: [%d]%s.\n",
-            SO_REUSEPORT, ret, errno, strerror(errno));
+                      SO_REUSEPORT, ret, errno, strerror(errno));
         return ret;
     }
 
@@ -42,7 +43,7 @@ static int ip_set_sockopts(int sockfd)
     ret = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &enable_nodelay, sizeof(enable_nodelay));
     if (ret < 0) {
         (void)fprintf(stderr, "server socket set_opt failed. opt:%d, ret: %d, err: [%d]%s.\n",
-            TCP_NODELAY, ret, errno, strerror(errno));
+                      TCP_NODELAY, ret, errno, strerror(errno));
         return ret;
     }
 
@@ -94,7 +95,7 @@ static int client_connect(perftest_config_t *cfg)
     if (comm->sock_fd == NULL) {
         return -1;
     }
-    hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
+    hints.ai_family = comm->enable_ipv6 ? AF_INET6 : AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     if (comm->bind_ip != NULL) {
@@ -104,7 +105,7 @@ static int client_connect(perftest_config_t *cfg)
         err = getaddrinfo(comm->bind_ip, NULL, &client_hints, &client_res);
         if (err != 0) {
             (void)fprintf(stderr, "Problem in resolving bind IP '%s': %s\n",
-                comm->bind_ip, gai_strerror(err));
+                          comm->bind_ip, gai_strerror(err));
             goto bind_client_error;
         }
         for (client_tmp = client_res; client_tmp != NULL; client_tmp = client_tmp->ai_next) {
@@ -114,8 +115,7 @@ static int client_connect(perftest_config_t *cfg)
             }
         }
         if (!bound) {
-            (void)fprintf(stderr, "Bind IP not found : %s\n",
-                    comm->bind_ip);
+            (void)fprintf(stderr, "Bind IP not found : %s\n", comm->bind_ip);
             goto create_client_error;
         }
     }
@@ -156,7 +156,7 @@ static int client_connect(perftest_config_t *cfg)
             goto create_client_error;
         }
 
-        if (ip_set_sockopts(comm->sock_fd[i]) !=  0) {
+        if (ip_set_sockopts(comm->sock_fd[i]) != 0) {
             (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: %s\n", comm->sock_fd[i], strerror(errno));
             (void)close(comm->sock_fd[i]);
             goto create_client_error;
@@ -196,7 +196,7 @@ static int server_connect(perftest_config_t *cfg)
         return -1;
     }
     hints.ai_flags = AI_PASSIVE;
-    hints.ai_family   = comm->enable_ipv6 ? AF_INET6 : AF_INET;
+    hints.ai_family = comm->enable_ipv6 ? AF_INET6 : AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     if (check_add_port(comm->port, comm->bind_ip, &hints, &res)) {
@@ -212,9 +212,9 @@ static int server_connect(perftest_config_t *cfg)
 
         comm->listen_fd = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
         if (comm->listen_fd >= 0) {
-            if (ip_set_sockopts(comm->listen_fd) !=  0) {
+            if (ip_set_sockopts(comm->listen_fd) != 0) {
                 (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: %s\n",
-                    comm->listen_fd, strerror(errno));
+                              comm->listen_fd, strerror(errno));
                 goto close_listen_fd;
             }
             if (bind(comm->listen_fd, tmp->ai_addr, tmp->ai_addrlen) == 0) {
@@ -232,7 +232,7 @@ static int server_connect(perftest_config_t *cfg)
 
     if (listen(comm->listen_fd, PERFTEST_MAX_CONNECTIONS) != 0) {
         (void)fprintf(stderr, "Failed to listen, listenfd:%d, errno: [%d]%s\n",
-            comm->listen_fd, errno, strerror(errno));
+                      comm->listen_fd, errno, strerror(errno));
         goto close_listen_fd;
     }
 
@@ -240,13 +240,13 @@ static int server_connect(perftest_config_t *cfg)
         comm->sock_fd[accept_num] = accept(comm->listen_fd, NULL, 0);
         if (comm->sock_fd[accept_num] < 0) {
             (void)fprintf(stderr, "Failed to accept, listenfd:%d, errno: [%d]%s\n",
-                comm->listen_fd, errno, strerror(errno));
+                          comm->listen_fd, errno, strerror(errno));
             goto create_server_error;
         }
 
-        if (ip_set_sockopts(comm->sock_fd[accept_num]) !=  0) {
+        if (ip_set_sockopts(comm->sock_fd[accept_num]) != 0) {
             (void)fprintf(stderr, "Failed to set_sockopts, sockfd:%d, errno: [%d]%s\n",
-                comm->sock_fd[accept_num], errno, strerror(errno));
+                          comm->sock_fd[accept_num], errno, strerror(errno));
             (void)close(comm->sock_fd[accept_num]);
             goto create_server_error;
         }
@@ -254,7 +254,7 @@ static int server_connect(perftest_config_t *cfg)
     }
 
     freeaddrinfo(res);
-    (void)close(comm->listen_fd);  // No other connections need to be accepted.
+    (void)close(comm->listen_fd); // No other connections need to be accepted.
     comm->listen_fd = -1;
     return 0;
 
@@ -332,7 +332,7 @@ int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data)
     }
 
     (void)fprintf(stderr, "Failed to read data during sock_sync_data, errno: %s total_size:%d, expect_size:%d.\n",
-        strerror(errno), total_read_bytes, size);
+                  strerror(errno), total_read_bytes, size);
     return -1;
 }
 

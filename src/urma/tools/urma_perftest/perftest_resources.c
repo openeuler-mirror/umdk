@@ -9,17 +9,18 @@
  */
 
 #include <errno.h>
+#include <malloc.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <malloc.h>
-#include <unistd.h>
-#include <stddef.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include "ub_util.h"
 #include "urma_api.h"
+#include "urma_provider.h"
 #include "urma_ubagg.h"
 
 #include "perftest_resources.h"
@@ -33,14 +34,14 @@ static urma_token_t g_perftest_token = {
 };
 
 static const char *log_level_str[] = {
-    "EMERG",     /* URMA_VLOG_LEVEL_EMERG */
-    "ALERT",     /* URMA_VLOG_LEVEL_ALERT */
-    "CRIT",      /* URMA_VLOG_LEVEL_CRIT */
-    "ERROR",     /* URMA_VLOG_LEVEL_ERR */
-    "WARN",      /* URMA_VLOG_LEVEL_WARNING */
-    "NOTICE",    /* URMA_VLOG_LEVEL_NOTICE */
-    "INFO",      /* URMA_VLOG_LEVEL_INFO */
-    "DEBUG"      /* URMA_VLOG_LEVEL_DEBUG */
+    "EMERG",  /* URMA_VLOG_LEVEL_EMERG */
+    "ALERT",  /* URMA_VLOG_LEVEL_ALERT */
+    "CRIT",   /* URMA_VLOG_LEVEL_CRIT */
+    "ERROR",  /* URMA_VLOG_LEVEL_ERR */
+    "WARN",   /* URMA_VLOG_LEVEL_WARNING */
+    "NOTICE", /* URMA_VLOG_LEVEL_NOTICE */
+    "INFO",   /* URMA_VLOG_LEVEL_INFO */
+    "DEBUG"   /* URMA_VLOG_LEVEL_DEBUG */
 };
 
 static void print_log(int level, char *message)
@@ -57,8 +58,8 @@ static int check_share_jfr(perftest_config_t *cfg, urma_device_t *urma_dev)
 
     // share_jfr updated, check realted cfg
     if (cfg->share_jfr && !is_jfr_depth_valid(cfg)) {
-        (void)fprintf(stderr, "Using share jfr depth should be greater than number of " \
-            "cfg->jettys_pre_jfr * jfr_post_list.\n");
+        (void)fprintf(stderr, "Using share jfr depth should be greater than number of "
+                              "cfg->jettys_pre_jfr * jfr_post_list.\n");
         return -1;
     }
 
@@ -96,37 +97,37 @@ static int check_dev_cap(perftest_context_t *ctx, perftest_config_t *cfg)
 
     if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX && cfg->jettys > ctx->dev_attr.dev_cap.max_jetty) {
         (void)printf("Error: jettys: %u out of range, max_jetty: %u.\n", cfg->jettys,
-            ctx->dev_attr.dev_cap.max_jetty);
+                     ctx->dev_attr.dev_cap.max_jetty);
         return -1;
     }
 
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX && cfg->jettys > ctx->dev_attr.dev_cap.max_jfs) {
         (void)printf("Error: jettys: %u out of range, max_jfs: %u.\n", cfg->jettys,
-            ctx->dev_attr.dev_cap.max_jfs);
+                     ctx->dev_attr.dev_cap.max_jfs);
         return -1;
     }
 
     if (cfg->jettys > ctx->dev_attr.dev_cap.max_jfr) {
         (void)printf("Error: jettys: %u out of range, max_jfr: %u.\n", cfg->jettys,
-            ctx->dev_attr.dev_cap.max_jfr);
+                     ctx->dev_attr.dev_cap.max_jfr);
         return -1;
     }
 
     if (cfg->jfc_depth > ctx->dev_attr.dev_cap.max_jfc_depth) {
         (void)printf("Error: jfc_depth: %u out of range, max_jfc_depth: %u.\n", cfg->jfc_depth,
-            ctx->dev_attr.dev_cap.max_jfc_depth);
+                     ctx->dev_attr.dev_cap.max_jfc_depth);
         return -1;
     }
 
     if (cfg->jfs_depth > ctx->dev_attr.dev_cap.max_jfs_depth) {
         (void)printf("Error: jfs_depth: %u out of range, max_jfs_depth: %u.\n", cfg->jfs_depth,
-            ctx->dev_attr.dev_cap.max_jfs_depth);
+                     ctx->dev_attr.dev_cap.max_jfs_depth);
         return -1;
     }
 
     if (cfg->jfr_depth > ctx->dev_attr.dev_cap.max_jfr_depth) {
         (void)printf("Error: jfr_depth: %u out of range, max_jfr_depth: %u.\n", cfg->jfr_depth,
-            ctx->dev_attr.dev_cap.max_jfr_depth);
+                     ctx->dev_attr.dev_cap.max_jfr_depth);
         return -1;
     }
 
@@ -152,7 +153,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     urma_status_t status;
     urma_init_attr_t init_attr = {
         .token = 0,
-        .uasid = 0
+        .uasid = 0,
     };
 
     status = urma_init(&init_attr);
@@ -195,11 +196,11 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
         }
         (void)fprintf(stderr, "Warning: %s should set priority to %hhu.\n",
-                (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
+                      (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
     } else {
         if (cfg->priority > URMA_MAX_PRIORITY) {
             (void)fprintf(stderr, "The priority parameter %hhu is invalid; it should be 0-15.\n",
-                cfg->priority);
+                          cfg->priority);
         }
         if (cfg->use_ctp) {
             tp_type.bs.ctp = 1;
@@ -354,7 +355,7 @@ static int create_jfc(perftest_context_t *ctx, perftest_config_t *cfg)
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         if (i > 0 && (cfg->pair_flag == false || cfg->type == PERFTEST_BW)) {
             if (cfg->use_jfce == true) {
-                ctx->jfce_s[i] =  ctx->jfce_s[0];
+                ctx->jfce_s[i] = ctx->jfce_s[0];
                 ctx->jfce_r[i] = ctx->jfce_r[0];
             }
             ctx->jfc_s[i] = ctx->jfc_s[0];
@@ -409,7 +410,7 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     if (cfg->inline_size > ctx->dev_attr.dev_cap.max_jfs_inline_len) {
         (void)fprintf(stderr, "Failed parameter, jfs inline size %u exceeds the device max_inline_data %u\n",
-            cfg->inline_size, ctx->dev_attr.dev_cap.max_jfs_inline_len);
+                      cfg->inline_size, ctx->dev_attr.dev_cap.max_jfs_inline_len);
         return -1;
     }
 
@@ -422,7 +423,7 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
         .max_inline_data = cfg->inline_size,
         .rnr_retry = URMA_TYPICAL_RNR_RETRY,
         .err_timeout = cfg->err_timeout,
-        .user_ctx = (uint64_t)NULL
+        .user_ctx = (uint64_t)NULL,
     };
     if (cfg->use_bonding) {
         jfs_cfg.max_sge += 1; /* there is one more sge in bonding mode */
@@ -475,7 +476,7 @@ static int create_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
         .max_sge = 1,
         .token_value = g_perftest_token,
         .id = 0,
-        .user_ctx = (uint64_t)NULL
+        .user_ctx = (uint64_t)NULL,
     };
 
     ctx->jfr = calloc(1, sizeof(urma_jfr_t *) * cfg->jettys);
@@ -500,7 +501,7 @@ delete_jfr:
 }
 
 static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t jfs_max_inline_data,
-    urma_jfs_cfg_t *jfs_cfg)
+                         urma_jfs_cfg_t *jfs_cfg)
 {
     jfs_cfg->depth = cfg->jfs_depth;
     jfs_cfg->flag.value = 0;
@@ -569,7 +570,7 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
     uint32_t jfs_max_inline_data = cfg->inline_size;
     if (jfs_max_inline_data > ctx->dev_attr.dev_cap.max_jfs_inline_len) {
         (void)fprintf(stderr, "Failed parameter, jfs_max_inline_data %u exceeds the device max_inline_data %u\n",
-            jfs_max_inline_data, ctx->dev_attr.dev_cap.max_jfs_inline_len);
+                      jfs_max_inline_data, ctx->dev_attr.dev_cap.max_jfs_inline_len);
         return -1;
     }
     urma_jfs_cfg_t jfs_cfg = {0};
@@ -581,7 +582,7 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
 
     urma_jetty_cfg_t jetty_cfg = {0};
     if (cfg->share_jfr == false) {
-        jetty_flag.bs.share_jfr = 0;   /* No shared jfr */
+        jetty_flag.bs.share_jfr = 0; /* No shared jfr */
         jetty_cfg.flag = jetty_flag;
         jetty_cfg.jfs_cfg = jfs_cfg;
         jetty_cfg.jfr_cfg = &jfr_cfg;
@@ -621,7 +622,7 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
             goto err_delete_jetty;
         }
         (void)fprintf(stderr, "Set jetty id %u, actually jetty id %d\n",
-            cfg->jetty_id, ctx->jetty[i]->jetty_id.id);
+                      cfg->jetty_id, ctx->jetty[i]->jetty_id.id);
     }
 
     return 0;
@@ -771,7 +772,7 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
     ctx->buf_size = PERFTEST_ALIGN_CACHELINE(max_size, cfg->cache_line_size);
     // Buff is divided into two parts, one for recv and the other for send
     ctx->buf_len = ctx->buf_size * PERFTEST_BUF_NUM *
-        ((cfg->seg_pre_jetty == true) ? 1 : cfg->jettys);
+                   ((cfg->seg_pre_jetty == true) ? 1 : cfg->jettys);
 
     for (i = 0; i < cfg->jettys; i++) {
         if (cfg->use_huge_page) {
@@ -817,7 +818,7 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
 
     ctx->local_tseg = calloc(1, sizeof(urma_target_seg_t *) * cfg->jettys);
     if (ctx->local_tseg == NULL) {
-            goto free_token_id;
+        goto free_token_id;
     }
 
     urma_reg_seg_flag_t flag = {
@@ -825,7 +826,7 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.access = PERFTEST_DEF_ACCESS,
         .bs.token_id_valid = URMA_TOKEN_ID_VALID,
-        .bs.reserved = 0
+        .bs.reserved = 0,
     };
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
@@ -833,7 +834,7 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
         .token_value = g_perftest_token,
         .flag = flag,
         .user_ctx = (uintptr_t)NULL,
-        .iova = 0
+        .iova = 0,
     };
     for (j = 0; j < cfg->jettys; j++) {
         if (j < seg_num) {
@@ -894,14 +895,14 @@ static int exchange_seg_info(perftest_context_t *ctx, perftest_comm_t *comm, per
     if (cfg->pair_flag) {
         for (uint32_t i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t),
-                (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
+                               (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
                 (void)fprintf(stderr, "Failed to exchange seg %u!\n", i);
                 goto free_buf;
             }
         }
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_seg_t),
-            (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
+                           (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
             (void)fprintf(stderr, "Failed to exchange seg!\n");
             goto free_buf;
         }
@@ -934,21 +935,21 @@ static int exchange_jetty_id(perftest_context_t *ctx, perftest_comm_t *comm, per
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         local_jetty_id_buf[i] =
             cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
-            ? ctx->jfr[i]->jfr_id
-            : ctx->jetty[i]->jetty_id;
+                ? ctx->jfr[i]->jfr_id
+                : ctx->jetty[i]->jetty_id;
     }
 
     if (cfg->pair_flag) {
         for (uint32_t i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(comm->sock_fd[i], sizeof(urma_jetty_id_t),
-                (char *)&local_jetty_id_buf[i], (char *)&remote_jetty_id_buf[i]) != 0) {
+                               (char *)&local_jetty_id_buf[i], (char *)&remote_jetty_id_buf[i]) != 0) {
                 (void)fprintf(stderr, "Failed to exchange jetty %u!\n", i);
                 goto free_buf;
             }
         }
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_jetty_id_t),
-            (char *)local_jetty_id_buf, (char *)remote_jetty_id_buf) != 0) {
+                           (char *)local_jetty_id_buf, (char *)remote_jetty_id_buf) != 0) {
             (void)fprintf(stderr, "Failed to exchange jetty id!\n");
             goto free_buf;
         }
@@ -992,14 +993,14 @@ static int exchange_credit_info(perftest_context_t *ctx, perftest_comm_t *comm, 
     if (cfg->pair_flag) {
         for (uint32_t i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(comm->sock_fd[i], sizeof(urma_seg_t),
-                (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
+                               (char *)&local_seg_buf[i], (char *)&remote_seg_buf[i]) != 0) {
                 (void)fprintf(stderr, "Failed to exchange seg %u!\n", i);
                 goto free_buf;
             }
         }
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(urma_seg_t),
-            (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
+                           (char *)local_seg_buf, (char *)remote_seg_buf) != 0) {
             (void)fprintf(stderr, "Failed to exchange seg!\n");
             goto free_buf;
         }
@@ -1053,8 +1054,8 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
         }
         tp_cfg.local_eid =
             cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
-            ? ctx->jfs[i]->jfs_id.eid
-            : ctx->jetty[i]->jetty_id.eid;
+                ? ctx->jfs[i]->jfs_id.eid
+                : ctx->jetty[i]->jetty_id.eid;
         tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
         uint32_t tp_cnt = 1;
         int ret = urma_get_tp_list(ctx->urma_ctx, &tp_cfg, &tp_cnt, &ctx->tp_info[i]);
@@ -1106,7 +1107,7 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
             }
 
             ret = urma_set_tp_attr(ctx->urma_ctx, ctx->tp_info[i].tp_handle, set_tp_attr_cnt,
-                set_tp_attr_flag, &tp_attr);
+                                   set_tp_attr_flag, &tp_attr);
             if (ret != URMA_SUCCESS) {
                 (void)fprintf(stderr, "Failed to set_tp_attr, ret:%d\n", ret);
                 goto free_buf;
@@ -1151,14 +1152,14 @@ static int exchange_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perf
     if (cfg->pair_flag) {
         for (uint32_t i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(comm->sock_fd[i], sizeof(perftest_tp_info_t),
-                (char *)&local_tp_info_buf[i], (char *)&remote_tp_info_buf[i]) != 0) {
+                               (char *)&local_tp_info_buf[i], (char *)&remote_tp_info_buf[i]) != 0) {
                 (void)fprintf(stderr, "Failed to exchange tp info %u!\n", i);
                 goto free_buf;
             }
         }
     } else {
         if (sock_sync_data(comm->sock_fd[0], ctx->jetty_num * sizeof(perftest_tp_info_t),
-            (char *)local_tp_info_buf, (char *)remote_tp_info_buf) != 0) {
+                           (char *)local_tp_info_buf, (char *)remote_tp_info_buf) != 0) {
             (void)fprintf(stderr, "Failed to exchange tp info!\n");
             goto free_buf;
         }
@@ -1260,7 +1261,7 @@ static int import_seg_for_simplex(perftest_context_t *ctx, perftest_config_t *cf
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
         .bs.mapping = URMA_SEG_NOMAP,
-        .bs.reserved = 0
+        .bs.reserved = 0,
     };
 
     if (cfg->enable_credit == true) {
@@ -1270,7 +1271,7 @@ static int import_seg_for_simplex(perftest_context_t *ctx, perftest_config_t *cf
         }
         for (i = 0; i < (int)ctx->jetty_num; i++) {
             ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_credit_seg[i],
-                &g_perftest_token, 0, flag);
+                                                        &g_perftest_token, 0, flag);
             if (ctx->import_credit_seg[i] == NULL) {
                 (void)fprintf(stderr, "Failed to import seg for simplex, loop: %d!\n", i);
                 goto free_credit;
@@ -1309,7 +1310,7 @@ static int import_seg_for_duplex(perftest_context_t *ctx, perftest_config_t *cfg
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
         .bs.mapping = URMA_SEG_NOMAP,
-        .bs.reserved = 0
+        .bs.reserved = 0,
     };
 
     if (cfg->enable_credit == true) {
@@ -1319,7 +1320,7 @@ static int import_seg_for_duplex(perftest_context_t *ctx, perftest_config_t *cfg
         }
         for (i = 0; i < (int)ctx->jetty_num; i++) {
             ctx->import_credit_seg[i] = urma_import_seg(ctx->urma_ctx, &ctx->remote_credit_seg[i],
-                &g_perftest_token, 0, flag);
+                                                        &g_perftest_token, 0, flag);
             if (ctx->import_credit_seg[i] == NULL) {
                 (void)fprintf(stderr, "Failed to import seg, loop:%d!\n", i);
                 goto free_credit;
@@ -1395,7 +1396,7 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
         }
 
         ctx->import_tjfr[i] = urma_import_jfr(ctx->urma_ctx, use_bondp_jfr ? &bondp_rjfr.base : &rjfr,
-            &g_perftest_token);
+                                              &g_perftest_token);
         if (ctx->import_tjfr[i] == NULL) {
             (void)fprintf(stderr, "Failed to import jfr, loop:%u!\n", i);
             goto disconnect_jfr;
@@ -1885,7 +1886,7 @@ static int create_credit_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     if (ctx->ctrl_buf == NULL) {
         return -1;
     }
-    for (i = 0 ; i < cfg->jettys; i++) {
+    for (i = 0; i < cfg->jettys; i++) {
         ctx->ctrl_buf[i] = (uint64_t *)memalign(ctx->page_size, buf_size);
         if (ctx->ctrl_buf[i] == NULL) {
             goto free_buf;
@@ -1897,7 +1898,7 @@ static int create_credit_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.access = PERFTEST_DEF_ACCESS,
         .bs.token_id_valid = URMA_TOKEN_ID_VALID,
-        .bs.reserved = 0
+        .bs.reserved = 0,
     };
     urma_seg_cfg_t seg_cfg = {
         .va = 0,
@@ -1905,7 +1906,7 @@ static int create_credit_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
         .token_value = g_perftest_token,
         .flag = flag,
         .user_ctx = (uintptr_t)NULL,
-        .iova = 0
+        .iova = 0,
     };
 
     if (ctx->urma_ctx->dev->type == URMA_TRANSPORT_UB) {
@@ -2021,16 +2022,16 @@ uninit_dev:
 }
 
 int find_net_addr_by_eid(urma_net_addr_info_t *net_addr_list, uint32_t net_addr_cnt,
-    urma_eid_t eid, urma_net_addr_info_t *addr_info)
+                         urma_eid_t eid, urma_net_addr_info_t *addr_info)
 {
     (void)fprintf(stderr, "eid: " EID_FMT ".\n", EID_ARGS(eid));
-    for (uint32_t i = 0 ; i < net_addr_cnt; i++) {
+    for (uint32_t i = 0; i < net_addr_cnt; i++) {
         (void)fprintf(stderr, "netaddr: fam:%hu, ipv4:0x%x\n",
-            net_addr_list[i].netaddr.sin_family, net_addr_list[i].netaddr.in4.s_addr);
+                      net_addr_list[i].netaddr.sin_family, net_addr_list[i].netaddr.in4.s_addr);
         if ((net_addr_list[i].netaddr.sin_family == AF_INET &&
-            net_addr_list[i].netaddr.in4.s_addr == eid.in4.addr) ||
+             net_addr_list[i].netaddr.in4.s_addr == eid.in4.addr) ||
             (net_addr_list[i].netaddr.sin_family == AF_INET6 &&
-            memcmp(net_addr_list[i].netaddr.in6.__in6_u.__u6_addr8, eid.raw, sizeof(eid.in6)) == 0)) {
+             memcmp(net_addr_list[i].netaddr.in6.__in6_u.__u6_addr8, eid.raw, sizeof(eid.in6)) == 0)) {
             *addr_info = net_addr_list[i];
             return 0;
         }
@@ -2100,14 +2101,14 @@ static int fill_user_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
 
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(user_tp_ctx_t) * cfg->jettys, (char *)&ctx->user_tp[i],
-            (char *)&ctx->remote_user_tp[i]) != 0) {
+                           (char *)&ctx->remote_user_tp[i]) != 0) {
             (void)fprintf(stderr, "Failed to sync user tp info.\n");
             goto free_net_addr_list;
         }
         uint32_t net_addr_cnt = MIN(ctx->user_tp->net_addr_cnt, ctx->remote_user_tp[i].net_addr_cnt);
         if (net_addr_cnt == 0) {
             (void)fprintf(stderr, "net_addr_cnt == 0, local:%u, remote:%u.\n",
-                ctx->user_tp[i].net_addr_cnt, ctx->remote_user_tp[i].net_addr_cnt);
+                          ctx->user_tp[i].net_addr_cnt, ctx->remote_user_tp[i].net_addr_cnt);
             goto free_net_addr_list;
         }
         ctx->remote_user_tp[i].net_addr_list = calloc(1, sizeof(urma_net_addr_info_t) * net_addr_cnt);
@@ -2115,7 +2116,7 @@ static int fill_user_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
             goto free_net_addr_list;
         }
         if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(urma_net_addr_info_t) * net_addr_cnt,
-            (char *)ctx->user_tp[i].net_addr_list, (char *)ctx->remote_user_tp[i].net_addr_list) != 0) {
+                           (char *)ctx->user_tp[i].net_addr_list, (char *)ctx->remote_user_tp[i].net_addr_list) != 0) {
             (void)fprintf(stderr, "Failed to sync user tp info.\n");
             goto free_remote_net_addr_list;
         }
@@ -2164,7 +2165,7 @@ static int modify_user_tp(perftest_context_t *ctx, perftest_config_t *cfg)
     mask.value = 0xffffffff;
     urma_net_addr_info_t net_addr = {0};
     (void)find_net_addr_by_eid(ctx->remote_user_tp->net_addr_list, ctx->remote_user_tp->net_addr_cnt,
-        ctx->remote_jetty_id[0].eid, &net_addr);
+                               ctx->remote_jetty_id[0].eid, &net_addr);
 
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         uint32_t tpn = ctx->user_tp[i].attr.peer_tpn;
@@ -2359,7 +2360,8 @@ int perform_warm_up(perftest_context_t *ctx, perftest_config_t *cfg)
             status = warm_up_post_send(ctx, i, cfg);
             if (status) {
                 (void)fprintf(stderr, "Failed to post send during warm up: index: %u, warmindex: %u, "
-                "status: %d.\n", i, warmindex, (int)status);
+                                      "status: %d.\n",
+                              i, warmindex, (int)status);
                 free(cr_for_cleaning);
                 return -1;
             }
