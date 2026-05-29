@@ -113,11 +113,11 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
  *
  *   Bits   | Field       | Bits | Description
  *   -------|-------------|------|--------------------------------
- *   0-15   | user_data   | 20   | User-defined custom data
- *   16-21  | reserved    | 2    | Reserved
+ *   0-19   | user_data   | 20   | User-defined custom data
+ *   20-21  | reserved    | 2    | Reserved
  *   22-37  | vjetty_id   | 16   | Virtual jetty identifier (0-65535)
- *   38-61  | msn         | 24   | Message sequence number (0-16M)
- *   62-63  | cr_opcode   | 2    | Operation code tag (0-3)
+ *   38-39  | cr_opcode   | 2    | Operation code tag (0-3)
+ *   40-63  | msn         | 24   | Message sequence number (0-16M)
  *
  * Use encode_imm_data() and decode_imm_data() to pack/unpack fields.
  */
@@ -125,19 +125,19 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
 #define IMM_USER_BITS      20
 #define IMM_RESERVED_BITS  2
 #define IMM_VJETTY_ID_BITS 16
-#define IMM_MSN_BITS       24
 #define IMM_CR_OPCODE_BITS 2
+#define IMM_MSN_BITS       24
 
 #define IMM_USER_SHIFT      0
 #define IMM_RESERVED_SHIFT  (IMM_USER_SHIFT + IMM_USER_BITS)
 #define IMM_VJETTY_ID_SHIFT (IMM_RESERVED_SHIFT + IMM_RESERVED_BITS)
-#define IMM_MSN_SHIFT       (IMM_VJETTY_ID_SHIFT + IMM_VJETTY_ID_BITS)
-#define IMM_CR_OPCODE_SHIFT (IMM_MSN_SHIFT + IMM_MSN_BITS)
+#define IMM_CR_OPCODE_SHIFT (IMM_VJETTY_ID_SHIFT + IMM_VJETTY_ID_BITS)
+#define IMM_MSN_SHIFT       (IMM_CR_OPCODE_SHIFT + IMM_CR_OPCODE_BITS)
 
 #define IMM_USER_MASK      ((1ULL << IMM_USER_BITS) - 1)
 #define IMM_VJETTY_ID_MASK ((1ULL << IMM_VJETTY_ID_BITS) - 1)
-#define IMM_MSN_MASK       ((1ULL << IMM_MSN_BITS) - 1)
 #define IMM_CR_OPCODE_MASK ((1ULL << IMM_CR_OPCODE_BITS) - 1)
+#define IMM_MSN_MASK       ((1ULL << IMM_MSN_BITS) - 1)
 
 static inline uint64_t encode_imm_data(uint32_t cr_opcode, uint32_t msn, uint32_t vjetty_id,
                                        uint64_t user_data, bool msn_enable)
