@@ -28,7 +28,7 @@ Refer to the overall build steps for UMDK in the Readme.md.
 
 **Build separately**
 1. Navigate to the root directory of the UMDK project
-2. tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
+2. tar -cvf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git $(ls -A)
 3. rpmbuild -ba umdk.spec --with ums
 
 **Additional Build Options**
