@@ -439,7 +439,14 @@ int32_t umq_ipc_bind_impl(uint64_t umqh_tp, uint8_t *bind_info, uint32_t bind_in
     ctx->remote_ring.rx_depth = tmp_info->rx_depth;
     ctx->remote_ring.transmit_queue_buf_size = tmp_info->transmit_queue_buf_size;
     ctx->remote_ring.owner = false;
-    (void)memcpy(ctx->remote_ring.ipc_name, tmp_info->ipc_name, sizeof(tmp_info->ipc_name));
+
+    size_t ipc_name_len = strnlen(tmp_info->ipc_name, MAX_MSG_RING_NAME + 1);
+    if (ipc_name_len > MAX_MSG_RING_NAME) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "ipc_name is not null-terminated or too long\n");
+        free(ctx);
+        return -UMQ_ERR_EINVAL;
+    }
+    (void)memcpy(ctx->remote_ring.ipc_name, tmp_info->ipc_name, ipc_name_len + 1);
 
     int ret = umq_ipc_map_memory(&ctx->remote_ring);
     if (ret != 0) {
