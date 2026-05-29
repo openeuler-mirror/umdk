@@ -237,11 +237,13 @@ int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event);
  * Return: void
  */
 void umq_ack_async_event(umq_async_event_t *event);
+
 /**
  * Set configuration for UMQ log.
  * @param[in] config: Configuration, if 'func' is set to NULL, the default log output function is used
  * Return UMQ_SUCCESS on success, error code on failure, the specific error code is as follows
  * -UMQ_ERR_EINVAL: Invalid parameter
+ * Notice: Cannot configure umq_log_func_t and umq_log_ext_func_t at the same time
  */
 int umq_log_config_set(umq_log_config_t *config);
 
