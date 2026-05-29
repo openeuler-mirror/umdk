@@ -1524,7 +1524,7 @@ static int urma_create_jetty_check_dev_cap(urma_context_t *ctx, urma_jetty_cfg_t
 
     if (jetty_cfg->jetty_grp != NULL) {
         (void)pthread_mutex_lock(&jetty_cfg->jetty_grp->list_mutex);
-        if (jetty_cfg->jetty_grp->jetty_cnt >= cap->max_jetty_in_jetty_grp) {
+        if (jetty_cfg->jetty_grp->jetty_cnt > cap->max_jetty_in_jetty_grp) {
             (void)pthread_mutex_unlock(&jetty_cfg->jetty_grp->list_mutex);
             URMA_LOG_ERR("jetty_grp jetty cnt=%u, max_jetty in grp=%u.\n", jetty_cfg->jetty_grp->jetty_cnt,
                 cap->max_jetty_in_jetty_grp);
@@ -2266,7 +2266,8 @@ urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
     urma_status_t status;
     int ret;
 
-    status = urma_check_opt_valid(NULL, JETTY_OPT_TABLE, JETTY_OPT_MAP_COUNT, opt, len);
+    status = urma_check_opt_valid(&jetty->urma_jetty_opt.jfs_opt.jfs_opt_mask.value,
+                                  JETTY_OPT_TABLE, JETTY_OPT_MAP_COUNT, opt, len);
     if (status != URMA_SUCCESS) {
         URMA_LOG_ERR("invalid opt id or opt len\n");
         return status;
