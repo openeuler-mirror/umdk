@@ -90,7 +90,7 @@ void catch_alarm(int sig)
 
 static uint32_t get_rqe_prefill_multiple_simplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jfr_t *jfr)
 {
-    if (!cfg->enable_aggr_mode || cfg->aggr_mode == URMA_AGGR_MODE_STANDALONE) {
+    if (!cfg->enable_bond_mode || cfg->bond_mode == BONDP_BONDING_MODE_STANDALONE) {
         return 1;
     }
     /* The bonding device needs to issue RQE for active port multiples */
@@ -118,7 +118,7 @@ static uint32_t get_rqe_prefill_multiple_simplex(perftest_config_t *cfg, urma_co
 
 static uint32_t get_rqe_prefill_multiple_duplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jetty_t *jetty)
 {
-    if (!cfg->enable_aggr_mode || cfg->aggr_mode == URMA_AGGR_MODE_STANDALONE) {
+    if (!cfg->enable_bond_mode || cfg->bond_mode == BONDP_BONDING_MODE_STANDALONE) {
         return 1;
     }
     /* The bonding device needs to issue RQE for active port multiples */

@@ -234,8 +234,8 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 
     if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
         bondp_set_bonding_mode_in_t in_arg = {
-            .bonding_mode = cfg->aggr_mode,
-            .bonding_level = cfg->single_path ? BONDP_BONDING_LEVEL_PORT : BONDP_BONDING_LEVEL_IODIE,
+            .bonding_mode = cfg->bond_mode,
+            .bonding_level = cfg->bond_level,
         };
         urma_user_ctl_in_t in = {
             .addr = (uint64_t)&in_arg,
@@ -431,11 +431,6 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
     if (cfg->use_bonding) {
         jfs_cfg.max_sge += 1; /* there is one more sge in bonding mode */
     }
-    if (cfg->single_path) {
-        jfs_cfg.flag.bs.multi_path = 0;
-    } else {
-        jfs_cfg.flag.bs.multi_path = 1;
-    }
 
     ctx->jfs = calloc(1, sizeof(urma_jfs_t *) * cfg->jettys);
     if (ctx->jfs == NULL) {
@@ -523,11 +518,6 @@ static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     }
     if (cfg->use_bonding) {
         jfs_cfg->max_sge += 1; /* there is one more sge in bonding mode */
-    }
-    if (cfg->single_path) {
-        jfs_cfg->flag.bs.multi_path = 0;
-    } else {
-        jfs_cfg->flag.bs.multi_path = 1;
     }
     jfs_cfg->flag.bs.order_type = cfg->order_type;
     if (jfs_cfg->trans_mode == URMA_TM_RC &&
