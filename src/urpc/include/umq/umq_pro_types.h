@@ -57,9 +57,8 @@ typedef struct umq_buf_pro {
     union {
         uint64_t imm_data;
         struct {
-            uint64_t rsvd0 : 38;
+            uint64_t rsvd0 : 40;
             uint64_t user_data : 24;
-            uint64_t rsvd1 : 2;
         } imm;
     };
     struct umq_ref_sge {
