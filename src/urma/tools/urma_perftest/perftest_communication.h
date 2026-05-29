@@ -11,15 +11,17 @@
 #ifndef PERFTEST_COMMUNICATION_H
 #define PERFTEST_COMMUNICATION_H
 
-#define PERFTEST_MAX_CONNECTIONS    (10)
-#define PERFTEST_CONNECT_COUNT      (5)
-#define ERFTEST_SLEEP_TIME (100 * 1000) /* Sleep for 100 ms */
+#include <stdbool.h>
+
+#define PERFTEST_MAX_CONNECTIONS (10)
+#define PERFTEST_CONNECT_COUNT   (5)
+#define ERFTEST_SLEEP_TIME       (100 * 1000) /* Sleep for 100 ms */
 
 typedef struct perftest_comm {
     char *server_ip;
     char *bind_ip;
     bool enable_ipv6;
-    uint16_t port;                          /* Server port for bind or connect, default 21115. */
+    uint16_t port; /* Server port for bind or connect, default 21115. */
     int listen_fd;
     int *sock_fd;
 } perftest_comm_t;

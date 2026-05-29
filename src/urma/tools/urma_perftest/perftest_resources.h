@@ -18,11 +18,10 @@
 #include "perftest_parameters.h"
 #include "ub_get_clock.h"
 
-#define PERFTEST_BUF_NUM (2)
+#define PERFTEST_BUF_NUM     (2)
 #define PERFTEST_MAX_BUF_LEN (1UL << PERFTEST_SIZE_ORDER)
 
-#define PERFTEST_ALIGN_CACHELINE(size, cache_line_size) (((size) > (cache_line_size)) ? \
-    ROUND_UP((size), (cache_line_size)) : (cache_line_size))
+#define PERFTEST_ALIGN_CACHELINE(size, cache_line_size) (((size) > (cache_line_size)) ? ROUND_UP((size), (cache_line_size)) : (cache_line_size))
 
 typedef enum duration_states {
     WARMUP_STATE,
@@ -48,7 +47,7 @@ typedef struct run_test_ctx {
     volatile duration_states_t state;
     uint64_t rid;
     uint64_t *tposted;    // cycles
-    uint64_t *tcompleted;  // cycles
+    uint64_t *tcompleted; // cycles
     int rposted;
     uint64_t *scnt;
     uint64_t *ccnt;
@@ -84,7 +83,7 @@ typedef struct perftest_context {
     uint64_t page_size;
     void **local_buf;
     uint64_t buf_size;
-    uint64_t buf_len;     // buf_len = buf_size * PERFTEST_BUF_NUM
+    uint64_t buf_len; // buf_len = buf_size * PERFTEST_BUF_NUM
     urma_target_seg_t **local_tseg;
 
     // remote info
@@ -128,7 +127,7 @@ typedef struct perftest_thread_arg {
 
 /* calculate sge addr offset and step forward. */
 static inline void increase_loc_addr(urma_sge_t *sge, uint32_t size, uint64_t rcnt, uint64_t prim_addr,
-    uint32_t cache_line_size, uint64_t page_size)
+                                     uint32_t cache_line_size, uint64_t page_size)
 {
     sge->addr += PERFTEST_ALIGN_CACHELINE(size, cache_line_size);
     /* if sge addr reaches the end of cycle buffer, it returns to primary address. */
