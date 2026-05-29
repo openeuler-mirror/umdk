@@ -12,8 +12,8 @@
 
 #include "urma_api.h"
 
-#include "perftest_parameters.h"
 #include "perftest_communication.h"
+#include "perftest_parameters.h"
 #include "perftest_resources.h"
 #include "perftest_run_test.h"
 
@@ -112,7 +112,7 @@ static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
 
 static void *write_dirty_thread(void *args)
 {
-    context_cfg_t *ctx_cfg = (context_cfg_t*)args;
+    context_cfg_t *ctx_cfg = (context_cfg_t *)args;
     perftest_context_t *ctx = ctx_cfg->ctx;
     perftest_config_t *cfg = ctx_cfg->cfg;
 
