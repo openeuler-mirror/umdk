@@ -83,10 +83,10 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 	case UDMA_ATOMIC_LEN_16:
 		if (opcode == URMA_OPC_CAS)
 			return true;
-		UDMA_LOG_ERR("the atomic opcode must be CAS when len is 16.\n");
+		UDMA_LOG_ERR("the atomic opcode must be CAS when length is 16.\n");
 		return false;
 	default:
-		UDMA_LOG_ERR("invalid atomic len %u.\n", len);
+		UDMA_LOG_ERR("invalid atomic length %u.\n", len);
 		return false;
 	}
 }
@@ -98,7 +98,7 @@ int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 		return 0;
 
 	if (resp->buf_addr == 0) {
-		UDMA_LOG_ERR("failed to get reserved addr.\n");
+		UDMA_LOG_ERR("failed to get reserved address.\n");
 		return EINVAL;
 	}
 
@@ -117,7 +117,7 @@ static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cf
 	int ret;
 
 	if (cfg->priority >= UDMA_MAX_PRIORITY) {
-		UDMA_LOG_ERR("user mode jfs priority is out of range, priority is %u.\n",
+		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
 			     cfg->priority);
 		return EINVAL;
 	}
@@ -134,7 +134,7 @@ static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cf
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_active_jfs(&jfs->base, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to urma cmd active jfs, ret is %d.\n", ret);
+		UDMA_LOG_ERR("failed to URMA command active JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -156,7 +156,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	int ret;
 
 	if (cfg->priority >= UDMA_MAX_PRIORITY) {
-		UDMA_LOG_ERR("user mode jfs priority is out of range, priority is %u.\n",
+		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
 			     cfg->priority);
 		return EINVAL;
 	}
@@ -174,7 +174,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to urma cmd create jfs, ret is %d.\n", ret);
+		UDMA_LOG_ERR("failed to URMA command create JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -218,7 +218,7 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	sq->aligned_size = aligned_size;
 	if (!udma_u_alloc_queue_buf(sq, sqe_bb_cnt * cfg->depth,
 				    UDMA_JFS_WQEBB, aligned_size, true)) {
-		UDMA_LOG_ERR("failed to alloc jfs wqe buf.\n");
+		UDMA_LOG_ERR("failed to alloc JFS work queue entry buffer.\n");
 		goto err_alloc_buf;
 	}
 
@@ -276,7 +276,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_sq(&jfs->sq, cfg)) {
-		UDMA_LOG_ERR("failed to create sq.\n");
+		UDMA_LOG_ERR("failed to create SQ.\n");
 		goto err_create_sq;
 	}
 
@@ -286,7 +286,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 			jfs->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&jfs->sq, jfs->sq.sqe_bb_cnt * cfg->depth,
 			    UDMA_JFS_WQEBB, jfs->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc sq buf after dtu failed.\n");
+				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
 				goto err_exec_cmd;
 			}
 			if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
@@ -351,7 +351,7 @@ urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t 
 	}
 
 	if (!jfs_cnt) {
-		UDMA_LOG_ERR("jfs cnt is 0.\n");
+		UDMA_LOG_ERR("JFS count is 0.\n");
 		return URMA_EINVAL;
 	}
 
@@ -436,7 +436,7 @@ static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_je
 		*udma_opcode = UDMA_OPCODE_NOP;
 		goto default_sge_num;
 	default:
-		UDMA_LOG_ERR("invalid opcode :%u\n", (uint8_t)opcode);
+		UDMA_LOG_ERR("invalid opcode: %u\n", (uint8_t)opcode);
 		return true;
 	}
 
@@ -495,7 +495,7 @@ static int udma_fill_send_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 	if (wr->flag.bs.inline_flag) {
 		for (i = 0; i < wr->send.src.num_sge; i++) {
 			if (total_len + sgl[i].len > sq->max_inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					     total_len + sgl[i].len, sq->max_inline_size);
 				return EINVAL;
 			}
@@ -553,7 +553,7 @@ static int udma_fill_write_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 	if (wr->flag.bs.inline_flag) {
 		for (i = 0; i < wr->rw.src.num_sge; i++) {
 			if (total_len + sgl[i].len > inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					     total_len + sgl[i].len, inline_size);
 				return EINVAL;
 			}
@@ -911,7 +911,7 @@ static bool udma_check_sq_overflow(struct udma_u_jetty_queue *sq, urma_jfs_wr_t 
 		for (i = 0; i < num_sge_wr; i++) {
 			total_len += sgl[i].len;
 			if (total_len > max_inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					      total_len, max_inline_size);
 				return true;
 			}
@@ -963,7 +963,7 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 
 	wqe_ctl->rmt_jetty_type = (uint8_t)(tjetty->type);
 	if (udma_parse_jfs_wr(wqe_ctl, wr, sq, wqe_info, tjetty) != 0) {
-		UDMA_LOG_ERR("failed to parse wr\n");
+		UDMA_LOG_ERR("failed to parse work request.\n");
 		return URMA_EINVAL;
 	}
 
@@ -983,7 +983,7 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 
 	if (udma_check_sge_num_and_opcode(wr->opcode, sq, wr, &wqe_info.opcode,
 					  udma_ctx->atomic_add_en)) {
-		UDMA_LOG_ERR("wr sge num or opcode is invalid.\n");
+		UDMA_LOG_ERR("WR SGE number or opcode is invalid.\n");
 		return URMA_EINVAL;
 	}
 
@@ -1088,7 +1088,7 @@ urma_status_t udma_u_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *jfs_attr)
 
 	ret = urma_cmd_modify_jfs(jfs, jfs_attr, NULL);
 	if (ret) {
-		UDMA_LOG_ERR("urma cmd modify jfs failed, ret = %d\n", ret);
+		UDMA_LOG_ERR("URMA command modify JFS failed, ret = %d\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1105,7 +1105,7 @@ urma_status_t udma_u_query_jfs(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg,
 
 	ret = urma_cmd_query_jfs(jfs, cfg, attr);
 	if (ret) {
-		UDMA_LOG_ERR("failed to query jfs in urma cmd, ret = %d.\n", ret);
+		UDMA_LOG_ERR("failed to query JFS in URMA command, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1158,7 +1158,7 @@ static void udma_u_process_opcode_for_cr(struct udma_jfs_sqe_ctl *wqe_ctl,
 		       sizeof(uint64_t));
 		break;
 	default:
-		UDMA_LOG_ERR("invalid opcode %u when flush jfs.\n", opcode);
+		UDMA_LOG_ERR("invalid opcode %u when flush JFS.\n", opcode);
 		break;
 	}
 
@@ -1197,7 +1197,7 @@ static void fill_cr_by_wqe_ctl(struct udma_jfs_sqe_ctl *wqe_ctl,
 
 	if (total_len > UINT32_MAX) {
 		cr->completion_len = UINT32_MAX;
-		UDMA_LOG_WARN("total_len %lu is overflow.\n", total_len);
+		UDMA_LOG_WARN("total length %lu is overflow.\n", total_len);
 	} else {
 		cr->completion_len = total_len;
 	}
@@ -1256,13 +1256,13 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 
 	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
 	if (udma_jfs == NULL) {
-		UDMA_LOG_ERR("udma jfs allocation failed.\n");
+		UDMA_LOG_ERR("UDMA JFS allocation failed.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = urma_cmd_alloc_jfs(ctx, cfg, &udma_jfs->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("alloc jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("alloc JFS failed, ret = %d.\n", ret);
 		free(udma_jfs);
 		return URMA_FAIL;
 	}
@@ -1280,7 +1280,7 @@ urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_free_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("free jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("free JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1314,7 +1314,7 @@ urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 
 	ret = urma_cmd_set_jfs_opt(jfs, opt, buf, len, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("set JFS option failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1335,7 +1335,7 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jfs_opt(jfs, opt, buf, len, &udata);
 		if (ret) {
-			UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("set JFS option failed, ret = %d.\n", ret);
 			return URMA_FAIL;
 		}
 	}
@@ -1364,7 +1364,7 @@ static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 	udma_jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq(&udma_jfs->sq, cfg);
 	if (ret)
-		UDMA_LOG_ERR("failed to create sq, ret = %d.\n", ret);
+		UDMA_LOG_ERR("failed to create SQ, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -1405,7 +1405,7 @@ urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 			udma_jfs->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&udma_jfs->sq, udma_jfs->sq.sqe_bb_cnt * cfg->depth,
 			    UDMA_JFS_WQEBB, udma_jfs->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc sq buf after dtu failed.\n");
+				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
 				goto err_active_jfs_cmd;
 			}
 			if (udma_u_exec_jfs_active_cmd(udma_jfs, cfg))
@@ -1435,7 +1435,7 @@ urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_deactive_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("deactive jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("deactivate JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
