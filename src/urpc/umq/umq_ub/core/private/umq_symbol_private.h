@@ -71,6 +71,7 @@ typedef void (*urma_ack_async_event_t)(urma_async_event_t *event);
 // === URMA function pointer types - Log ===
 typedef urma_status_t (*urma_log_set_level_t)(urma_vlog_level_t level);
 typedef urma_status_t (*urma_register_log_func_t)(urma_log_cb_t func);
+typedef urma_status_t (*urma_register_loc_log_func_t)(urma_loc_log_cb func);
 typedef urma_status_t (*urma_unregister_log_func_t)(void);
 
 // === URMA function pointer types - UserCtl ===
@@ -144,6 +145,7 @@ typedef struct umq_symbol_urma {
     // Log
     urma_log_set_level_t urma_log_set_level;
     urma_register_log_func_t urma_register_log_func;
+    urma_register_loc_log_func_t urma_register_loc_log_func;
     urma_unregister_log_func_t urma_unregister_log_func;
 
     // UserCtl

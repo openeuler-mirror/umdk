@@ -21,6 +21,7 @@ extern "C" {
 #define UMQ_LOG_FLAG_FUNC              (1U)
 #define UMQ_LOG_FLAG_LEVEL             (1U << 1)
 #define UMQ_LOG_FLAG_RATE_LIMITED      (1U << 2)
+#define UMQ_LOG_FLAG_EXT_FUNC          (1U << 3)
 
 typedef enum umq_external_mutex_attr {
     MUTEX_ATTR_EXCLUSIVE = 0,
@@ -62,10 +63,12 @@ typedef enum umq_log_level {
 } umq_log_level_t;
 
 typedef void (*umq_log_func_t)(int level, char *log_msg);
+typedef void (*umq_log_ext_func_t)(int level, const char *file, const char *function, int line, char *log_msg);
 
 typedef struct umq_log_config {
     uint32_t log_flag;
     umq_log_func_t func;
+    umq_log_ext_func_t ext_func;
     umq_log_level_t level;
     struct {
         uint32_t interval_ms;    // rate-limited log output interval. If the value is 0, rate is not limited.

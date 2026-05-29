@@ -615,12 +615,16 @@ int umq_ubmm_log_config_set_impl(umq_log_config_t *config)
         urma_log_set_level((urma_vlog_level_t)config->level);
     }
 
+    if (((config->log_flag & UMQ_LOG_FLAG_FUNC) && config->func == NULL) ||
+        ((config->log_flag & UMQ_LOG_FLAG_EXT_FUNC) && config->ext_func == NULL)) {
+        return urma_unregister_log_func();
+    }
+
+    if (config->log_flag & UMQ_LOG_FLAG_EXT_FUNC) {
+        return urma_register_loc_log_func(config->ext_func);
+    }
     if (config->log_flag & UMQ_LOG_FLAG_FUNC) {
-        if (config->func == NULL) {
-            return urma_unregister_log_func();
-        } else {
-            return urma_register_log_func(config->func);
-        }
+        return urma_register_log_func(config->func);
     }
     return UMQ_SUCCESS;
 }
