@@ -222,9 +222,9 @@ static int admin_parse_sharing(char *buf, admin_config_t *cfg)
 
     // 先复用ns_mode
     if (strcmp(buf, "on") == 0) {
-        cfg->ns_mode = 1;
+        cfg->sharing_on = true;
     } else if (strcmp(buf, "off") == 0) {
-        cfg->ns_mode = 0;
+        cfg->sharing_on = false;
     } else {
         URMA_ADMIN_LOG("Invalid sharing mode:%s, expect 'on' or 'off'.\n", buf);
         return -1;

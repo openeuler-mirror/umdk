@@ -16,6 +16,19 @@
 
 #include "admin_cmd.h"
 
+static int admin_nl_set_eid_sharing(bool enabled)
+{
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_EID_NS_MODE, 0, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u8(msg, UBCORE_ATTR_EID_NS_MODE, (uint8_t)enabled);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    return ret;
+}
+
 static int admin_nl_set_eid_mode(const char *dev_name, bool is_dynamic)
 {
     admin_core_cmd_set_eid_mode_t arg = {0};
@@ -126,6 +139,7 @@ static int nl_del_eid(const admin_config_t *cfg)
 static int cmd_eid_usage(admin_config_t *cfg)
 {
     printf("Usage:\n"
+           "  urma_admin eid set-sharing {on|off}\n"
            "  urma_admin eid add <dev> <eid_idx> <eid> [--ns <netns>] [--mode <eid_mode>]\n"
            "  urma_admin eid del <dev> <eid_idx>\n"
            "  urma_admin eid set <dev> <eid_idx> ns <netns>\n"
@@ -137,6 +151,17 @@ static int cmd_eid_usage(admin_config_t *cfg)
            "  <eid>      EID value\n"
            "  <netns>    Network namespace path (e.g., /proc/$pid/ns/net)\n");
     return 0;
+}
+
+static int cmd_eid_toggle_sharing(admin_config_t *cfg)
+{
+    int ret;
+
+    if ((ret = pop_arg_sharing(cfg)) != 0) {
+        return ret;
+    }
+
+    return admin_nl_set_eid_sharing(cfg->sharing_on);
 }
 
 static int cmd_eid_add(admin_config_t *cfg)
@@ -253,6 +278,7 @@ int admin_cmd_eid(admin_config_t *cfg)
     }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_eid_usage},
+        {"set-sharing", cmd_eid_toggle_sharing},
         {"add", cmd_eid_add},
         {"del", cmd_eid_del},
         {"set", cmd_eid_set},
