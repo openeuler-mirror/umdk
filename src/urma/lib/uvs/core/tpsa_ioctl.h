@@ -72,7 +72,7 @@ typedef struct uvs_cmd_get_path_set {
         uvs_eid_t src_bonding_eid;
         uvs_eid_t dst_bonding_eid;
         uvs_tp_type_t tp_type;
-        bool multi_path;
+        bool iodie_level;
     } in;
     uvs_path_set_t out;
 } uvs_cmd_get_path_set_t;

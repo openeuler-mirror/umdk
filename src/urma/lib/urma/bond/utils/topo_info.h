@@ -39,14 +39,6 @@ typedef struct bondp_topo_ue {
     char port_eid[PORT_NUM][EID_LEN];
 } bondp_topo_ue_t;
 
-/* Locate a specific port in topo_infos */
-/* All params set to -1 means doesn't exist */
-typedef struct bondp_topo_link {
-    uint32_t peer_node;
-    uint32_t peer_iodie;
-    uint32_t peer_port;
-} bondp_topo_link_t;
-
 typedef struct bondp_topo_agg_dev {
     char agg_eid[EID_LEN];
     bondp_topo_ue_t ues[IODIE_NUM];
@@ -57,7 +49,7 @@ typedef struct bondp_topo_node {
     uint32_t super_node_id;
     uint32_t node_id;
     uint32_t is_current;
-    bondp_topo_link_t links[IODIE_NUM][PORT_NUM];
+    bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
     bondp_topo_agg_dev_t agg_devs[DEV_NUM];
 } bondp_topo_node_t;
 

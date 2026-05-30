@@ -15,11 +15,6 @@
 
 #define DIRECT_DEV_HASH_BASIS (9819876)
 
-static inline bool is_topo_map_idx_equal(bondp_topo_link_t *map_idx, bondp_topo_link_t* target_map_idx)
-{
-    return !memcmp(map_idx, target_map_idx, sizeof(bondp_topo_link_t));
-}
-
 static inline bool is_empty_eid(urma_eid_t *eid)
 {
     return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
