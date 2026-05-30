@@ -3,6 +3,7 @@
 
 add_executable(urma_perftest
     urma_perftest.c
+    perftest_log.c
     perftest_parameters.c
     perftest_communication.c
     perftest_resources.c
