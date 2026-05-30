@@ -107,6 +107,7 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     // Log functions
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_log_set_level_t, urma_log_set_level);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_log_func_t, urma_register_log_func);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_loc_log_func_t, urma_register_loc_log_func);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_unregister_log_func_t, urma_unregister_log_func);
 
     // UserCtl
