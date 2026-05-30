@@ -18,6 +18,7 @@
 #include "urma_types.h"
 
 #include "perftest_communication.h"
+#include "perftest_log.h"
 
 /* Default Values of perftest parameters */
 #define PERFTEST_DEF_JFC_DEPTH_LAT   (512)
@@ -313,7 +314,6 @@ typedef struct perftest_config {
     bool enable_bond_mode;
     uint32_t bond_mode;
     uint32_t bond_level;
-    bool enable_stdout;
     bool uboe;
     perftest_net_addr_t sip;
     bool uboe_sip;

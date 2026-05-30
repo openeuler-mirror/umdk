@@ -366,7 +366,6 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->enable_bond_mode = false;
     cfg->bond_mode = BONDP_BONDING_MODE_STANDALONE;
     cfg->bond_level = BONDP_BONDING_LEVEL_IODIE;
-    cfg->enable_stdout = false;
 }
 
 void print_cfg(const perftest_config_t *cfg)
@@ -578,6 +577,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"uboe",                no_argument,       NULL, 'u'},
         {"warm_up",             no_argument,       NULL, 'w'},
         {"infinite",            optional_argument, NULL, 'y'},
+        {"verbose",             no_argument,       NULL, 'v'},
         {"use_bonding",         no_argument,       NULL, 'z'},
         {"single_path",         no_argument,       NULL, PERFTEST_OPT_SINGLE_PATH},
         {"eid_idx",             required_argument, NULL, PERFTEST_OPT_EID_IDX},
@@ -630,10 +630,10 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
     /* Second parse the options */
     while (1) {
 #ifdef UB_AGG
-        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:uwy::z",
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:Lo:O:p:P:Q:r:R:s:S:T:uvwy::z",
                             long_options, NULL);
 #else
-        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:LO:p:P:Q:r:R:s:S:T:uwy::",
+        int c = getopt_long(argc, argv, "a::A:bBcC:d:t:D:eE:fFhI:j:J:K:n:Nl:LO:p:P:Q:r:R:s:S:T:uvwy::",
                             long_options, NULL);
 #endif // #ifdef UB_AGG
         if (c == -1) {
@@ -794,6 +794,11 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'w':
                 cfg->warm_up = true;
+                break;
+            case 'v':
+                if (verbose_get_level() < VLOG_LEVEL_VVERBOSE) {
+                    verbose_set_level(verbose_get_level() + 1);
+                }
                 break;
             case 'y':
                 cfg->time_type.bs.infinite = 1;
@@ -979,7 +984,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 }
                 break;
             case PERFTEST_OPT_STDOUT:
-                cfg->enable_stdout = true;
+                verbose_set_level(VLOG_LEVEL_VVERBOSE);
                 break;
             default:
                 usage(argv[0]);
