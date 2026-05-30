@@ -162,7 +162,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         return -1;
     }
 
-    if (cfg->enable_stdout == true) {
+    if (verbose_get_level() >= VLOG_LEVEL_VVERBOSE) {
         status = urma_register_log_func(print_log);
         if (status != URMA_SUCCESS) {
             (void)fprintf(stderr, "Failed to register log func, status:%d!\n", (int)status);
