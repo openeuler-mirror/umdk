@@ -488,18 +488,12 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
             .flag.bs.token_policy =
                 token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0),
             .flag.bs.order_type = info->queue_info->order_type,
-            .flag.bs.share_tp = (queue->tp_mode == URMA_TM_RM),
             .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0),
             .tp_type = info->queue_info->tp_type},
         .jetty = queue->jetty[i],
     };
 
     urma_token_t token = i == UB_QUEUE_JETTY_IO ? info->queue_info->token : info->fc_info->token;
-    // Only RM mode supports shared tp
-    if (queue->tp_mode == URMA_TM_RM) {
-        bondp_rjetty.base.flag.user_tag.stag = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-        bondp_rjetty.base.flag.user_tag.dtag = info->queue_info->jetty_id.id;
-    }
     urma_target_jetty_t *tjetty =
         umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, &bondp_rjetty.base, &token);
     if (tjetty == NULL) {
