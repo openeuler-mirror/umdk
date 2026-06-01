@@ -123,7 +123,7 @@ typedef struct qbuf_pool {
 
 static qbuf_pool_t g_qbuf_pool = {0};
 static __thread local_qbuf_pool_t g_thread_cache = {0};
-static uint8_t g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_4K;
+static uint8_t g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_4K;
 
 static urpc_list_t g_tls_register_head;
 static pthread_spinlock_t g_tls_stats_lock;
@@ -565,7 +565,8 @@ void *umq_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
         return NULL;
     }
     madvise(g_buffer_addr, g_total_len, MADV_HUGEPAGE);
-    UMQ_VLOG_INFO(VLOG_UMQ, "malloc umq io buf %lu bytes\n", g_total_len);
+    UMQ_VLOG_INFO(VLOG_UMQ, "malloc umq io buf %lu bytes, qbuf block size %u bytes\n", g_total_len,
+        umq_buf_size_small());
 
     return g_buffer_addr;
 }
@@ -598,15 +599,15 @@ int umq_buf_size_pow_small_set(umq_buf_block_size_t block_size)
     }
 
     if (block_size == BLOCK_SIZE_4K) {
-        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_4K;
+        g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_4K;
     } else if (block_size == BLOCK_SIZE_8K) {
-        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_8K;
+        g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_8K;
     } else if (block_size == BLOCK_SIZE_16K) {
-        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_16K;
+        g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_16K;
     } else if (block_size == BLOCK_SIZE_32K) {
-        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_32K;
+        g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_32K;
     } else {
-        g_umq_qbuf_size_pow_samll = UMQ_QBUF_SIZE_POW_64K;
+        g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_64K;
     }
 
     return UMQ_SUCCESS;
@@ -614,7 +615,7 @@ int umq_buf_size_pow_small_set(umq_buf_block_size_t block_size)
 
 uint8_t umq_buf_size_pow_small(void)
 {
-    return g_umq_qbuf_size_pow_samll;
+    return g_umq_qbuf_size_pow_small;
 }
 
 uint64_t umq_buf_to_id(char *buf, bool shm, bool with_data)
@@ -1469,7 +1470,7 @@ static ALWAYS_INLINE umq_buf_t *umq_qbuf_data_to_head_escape(void *data)
 umq_buf_t *umq_qbuf_data_to_head(void *data)
 {
     if (!g_qbuf_pool.inited) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return NULL;
     }
 

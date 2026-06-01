@@ -26,7 +26,6 @@
 #define UMQ_INLINE_ENABLE 1
 #define UMQ_LEN_ALIGNMENT_4 4
 #define TSEG_MAP_NUM 256
-#define UMQ_PORT_STR_SIZE 512
 #define UMQ_CTP_MAX_BUF_SIZE 4096
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
@@ -1083,28 +1082,9 @@ void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx)
     ub_ctx->remote_imported_info = NULL;
 }
 
-static void umq_jetty_port_info(char *buf, int size, ub_queue_t *queue)
+urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx,
+    const char *port_str)
 {
-    int ret;
-    int offset = 0, remain = size;
-
-    for (uint8_t i = 0; i < queue->used_port_num; i++) {
-        ret = snprintf(buf + offset, remain, " [chip: %hhu, die: %hhu, port: %hhu]", queue->used_port[i].chip_id,
-                       queue->used_port[i].die_id, queue->used_port[i].port_idx);
-        if (ret < 0 || ret >= remain) {
-            buf[0] = 0;
-            UMQ_VLOG_ERR(VLOG_UMQ, "format jetty port info failed, port_num %d, error %d\n", queue->used_port_num, ret);
-            return;
-        }
-
-        offset += ret;
-        remain -= ret;
-    }
-}
-
-urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx)
-{
-    char port_str[UMQ_PORT_STR_SIZE] = {0};
     bondp_jetty_cfg_t bondp_jetty_cfg = {
         .base = {
             .jfs_cfg = {
@@ -1127,16 +1107,11 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
     bondp_jetty_cfg.base.flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0);
     bondp_jetty_cfg.base.shared.jfr = queue->jfr_ctx[jetty_idx]->jfr;
 
-    umq_jetty_port_info(port_str, UMQ_PORT_STR_SIZE, queue);
     urma_jetty_t *jetty = umq_symbol_urma()->urma_create_jetty(dev_ctx->urma_ctx, &bondp_jetty_cfg.base);
     if (jetty == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jetty failed,%s errno: %d\n", port_str, errno);
         return NULL;
     }
-    UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u,%s create jetty[%d] success, urma transmode %d, "
-                  "tp_type %d, priority %d, rnr_retry %d, err_timeout %d\n", EID_ARGS(jetty->jetty_id.eid),
-                  jetty->jetty_id.id, port_str, jetty_idx, queue->tp_mode, queue->tp_type, queue->priority,
-                  queue->rnr_retry, queue->err_timeout);
     return jetty;
 }
 
@@ -1295,7 +1270,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     }
 
     if (is_umq_ub_main_queue(option->create_flag) && is_umq_ub_sub_queue(option->create_flag)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "queue create_flag[%u] is invalid, main_umq and sub_umq are conflict\n",
+        UMQ_VLOG_ERR(VLOG_UMQ, "queue create_flag[%u] is invalid, main_umq and sub_umq are conflicting\n",
                      option->create_flag);
         return -UMQ_ERR_EINVAL;
     }
@@ -1596,8 +1571,6 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
     }
 
     jfr_ctx->ref_cnt = 1;
-    UMQ_VLOG_INFO(VLOG_UMQ, "create jfr_ctx success, eid: " EID_FMT ", jfr_id: %u\n",
-                  EID_ARGS(jfr_ctx->jfr->jfr_id.eid), jfr_ctx->jfr->jfr_id.id);
     return jfr_ctx;
 
 DELETE_JFR:
