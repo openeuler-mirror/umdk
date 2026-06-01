@@ -901,8 +901,18 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
             continue;
         }
 
-        // Record the imm of the flow control message, and process the flow control message when sub umq poll rx.
         umq_ub_imm_t imm = {.value = cr[i].imm_data};
+
+        // Flow control messages sent to the main umq are processed directly.
+        if (real_queue == queue) {
+            qbuf_cnt += (int32_t)umq_ub_process_fc_msg(queue, imm, &buf[qbuf_cnt]);
+            (void)umq_ub_fill_fc_rx_buf(queue);
+            umq_ub_fill_rx_buff_post_process(queue, imm);
+            umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+            continue;
+        }
+
+        // Record the imm of the flow control message, and process the flow control message when sub umq poll rx.
         switch (imm.bs.type) {
             case IMM_TYPE_FC_CREDIT_REQ:
             case IMM_TYPE_FC_CREDIT_RETURN_REQ:
@@ -932,7 +942,7 @@ static int sub_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t bu
             continue;
         }
         qbuf_cnt += umq_ub_process_fc_msg(queue, imm, &buf[qbuf_cnt]);
-        (void)umq_ub_fill_rx_buff_post_process(queue, imm);
+        umq_ub_fill_rx_buff_post_process(queue, imm);
     }
     return (int)qbuf_cnt;
 }
@@ -978,7 +988,7 @@ static int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_co
         umq_ub_imm_t imm = {.value = cr[i].imm_data};
         qbuf_cnt += (int32_t)umq_ub_process_fc_msg(queue, imm, &buf[qbuf_cnt]);
         (void)umq_ub_fill_fc_rx_buf(queue);
-        (void)umq_ub_fill_rx_buff_post_process(queue, imm);
+        umq_ub_fill_rx_buff_post_process(queue, imm);
     }
     /* If buf is not NULL, return qbuf_cnt (0 if no error, >0 if has error);
      * If buf is NULL, return ret (0 if no error, error code if has error) */
