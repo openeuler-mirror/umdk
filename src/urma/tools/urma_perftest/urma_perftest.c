@@ -30,7 +30,7 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
     for (i = 0; i < cfg->pair_num; i++) {
         ret = sync_time(cfg->comm.sock_fd[i], "Start test");
         if (ret != 0) {
-            (void)fprintf(stderr, "Failed to sync time, start test.\n");
+            LOG_ERROR("Failed to sync time, start test.\n");
             return ret;
         }
     }
@@ -70,14 +70,14 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     if (ret != 0) {
-        (void)fprintf(stderr, "Failed to run test: %d.\n", (int)cfg->cmd);
+        LOG_ERROR("Failed to run test: %d.\n", (int)cfg->cmd);
         return ret;
     }
 
     for (i = 0; i < cfg->pair_num; i++) {
         ret = sync_time(cfg->comm.sock_fd[i], "End test");
         if (ret != 0) {
-            (void)fprintf(stderr, "Failed to sync time, End test.\n");
+            LOG_ERROR("Failed to sync time, End test.\n");
             return ret;
         }
     }
@@ -93,13 +93,13 @@ static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         status = urma_rearm_jfc(ctx->jfc_s[i], false);
         if (status != URMA_SUCCESS) {
-            (void)fprintf(stderr, "Couldn't rearm jfc_s %u\n", i);
+            LOG_ERROR("Couldn't rearm jfc_s %u\n", i);
             return -1;
         }
         if (cfg->api_type == PERFTEST_SEND) {
             status = urma_rearm_jfc(ctx->jfc_r[i], false);
             if (status != URMA_SUCCESS) {
-                (void)fprintf(stderr, "Couldn't rearm jfc_r %u\n", i);
+                LOG_ERROR("Couldn't rearm jfc_r %u\n", i);
                 return -1;
             }
         }
@@ -147,7 +147,7 @@ static int prepare_test(perftest_context_t *ctx, perftest_config_t *cfg, context
 
     if (cfg->type == PERFTEST_BW && cfg->enable_write_dirty == true) {
         if (pthread_create(&ctx->write_dirty_thread_id, NULL, write_dirty_thread, args) != 0) {
-            (void)fprintf(stderr, "Failed to create write_dirty_thread.\n");
+            LOG_ERROR("Failed to create write_dirty_thread.\n");
             return -1;
         }
     }
