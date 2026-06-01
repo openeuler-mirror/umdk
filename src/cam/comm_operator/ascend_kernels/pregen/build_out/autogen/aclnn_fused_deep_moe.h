@@ -37,6 +37,8 @@ __attribute__((visibility("default"))) aclnnStatus aclnnFusedDeepMoeGetWorkspace
     int64_t moeExpertNum,
     int64_t quantMode,
     int64_t globalBs,
+    int64_t extInfo,
+    int64_t shmemWorkspace,
     const aclTensor *output,
     const aclTensor *shareOutput,
     const aclTensor *expertTokenNums,

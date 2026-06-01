@@ -30,6 +30,8 @@ struct FusedDeepMoeInfo {
     uint64_t totalWinSize;
     uint64_t gmm1HLen;
     uint64_t shareGmm1HLen;  // shared expert gmm1 hidden length
+    uint64_t shmemWorkspacePtr;  // shmemWorkSpaceGm address
+    uint64_t metaInfoPtr;        // MetaInfo (ext_info) address
     bool isTensorList;
 };
 
@@ -75,5 +77,6 @@ constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 1);
 constexpr uint32_t EXEC_FLAG_X_ACTIVE_MASK = (1U << 2);
 constexpr uint32_t EXEC_FLAG_SHARED_EXPERT = (1U << 3);
 constexpr uint32_t EXEC_FLAG_SMOOTH_QUANT = (1U << 4);
+constexpr uint32_t EXEC_FLAG_ZERO_BUFFER = (1U << 5);
 } // namespace Cam
 #endif  // FUSED_DEEP_MOE_TILING_H

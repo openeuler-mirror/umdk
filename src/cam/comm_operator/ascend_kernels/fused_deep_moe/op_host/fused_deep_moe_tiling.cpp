@@ -54,9 +54,12 @@ constexpr uint32_t ATTR_EP_RANK_ID_INDEX = 2;
 constexpr uint32_t ATTR_MOE_EXPERT_NUM_INDEX = 3;
 constexpr uint32_t ATTR_QUANT_MODE_INDEX = 4;
 constexpr uint32_t ATTR_GLOBAL_BS_INDEX = 5;
+constexpr uint32_t ATTR_EXT_INFO_INDEX = 6;
+constexpr uint32_t ATTR_SHMEM_WORKSPACE_INDEX = 7;
 
 constexpr uint32_t MIN_BATCH_SIZE = 0;
 constexpr uint32_t MAX_BATCH_SIZE = 256;
+constexpr uint32_t ZB_MAX_BATCH_SIZE = 8192;
 constexpr uint32_t MAX_MOE_EXERT_NUM = 512;
 constexpr uint32_t SUPPORT_TOP_K = 12;
 constexpr uint32_t ONE_DIMS = 1;
@@ -510,8 +513,14 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
     uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
     OPS_ERR_IF(batchSize < MIN_BATCH_SIZE, OPS_LOG_E(nodeName, "batchSize(bs) must >= %u.", MIN_BATCH_SIZE),
                     return ge::GRAPH_FAILED);
-    OPS_ERR_IF(batchSize > MAX_BATCH_SIZE, OPS_LOG_E(nodeName, "batchSize(bs) must <= %u.", MAX_BATCH_SIZE),
-                    return ge::GRAPH_FAILED);
+    uint64_t shmemWorkspacePtr = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr;
+    if (shmemWorkspacePtr == 0) {
+        OPS_ERR_IF(batchSize > MAX_BATCH_SIZE, OPS_LOG_E(nodeName, "batchSize(bs) must <= %u.", MAX_BATCH_SIZE),
+                        return ge::GRAPH_FAILED);
+    } else {
+        OPS_ERR_IF(batchSize > ZB_MAX_BATCH_SIZE, OPS_LOG_E(nodeName, "batchSize(bs) must <= %u.", ZB_MAX_BATCH_SIZE),
+                        return ge::GRAPH_FAILED);
+    }
     uint32_t tokenLength = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
     OPS_ERR_IF(
         tokenLength < MIN_TOKEN_LENGTH || tokenLength > MAX_TOKEN_LENGTH,
@@ -561,6 +570,8 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     auto moeExpertNumPtr = attrs->GetAttrPointer<int64_t>(ATTR_MOE_EXPERT_NUM_INDEX);
     auto quantModePtr = attrs->GetAttrPointer<int64_t>(ATTR_QUANT_MODE_INDEX);
     auto globalBsPtr = attrs->GetAttrPointer<int64_t>(ATTR_GLOBAL_BS_INDEX);
+    auto extInfoPtr = attrs->GetAttrPointer<int64_t>(ATTR_EXT_INFO_INDEX);
+    auto shmemWorkspacePtr = attrs->GetAttrPointer<int64_t>(ATTR_SHMEM_WORKSPACE_INDEX);
 
     uint32_t epRankSize = static_cast<uint32_t>(*epRankSizePtr);
     uint32_t epRankId = static_cast<uint32_t>(*epRankIdPtr);
@@ -587,6 +598,8 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.quantMode = static_cast<uint32_t>(*quantModePtr);
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs = static_cast<uint32_t>(*globalBsPtr);
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank = moeExpertNumPerRank;
+    tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.metaInfoPtr = static_cast<uint64_t>(*extInfoPtr);
+    tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr = static_cast<uint64_t>(*shmemWorkspacePtr);
     return ge::GRAPH_SUCCESS;
 }
 
@@ -605,6 +618,10 @@ static void SetHcommCfg(const gert::TilingContext &context, FusedDeepMoeTilingDa
 
 static ge::graphStatus CheckHcclBufferSize(const char *nodeName, const FusedDeepMoeTilingData &tilingData)
 {
+    uint64_t shmemWorkspacePtr = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr;
+    if (shmemWorkspacePtr != 0) {
+        return ge::GRAPH_SUCCESS;
+    }
     uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
     uint32_t globalBatchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
     uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
@@ -626,44 +643,49 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
 {
     size_t *workSpaces = context.GetWorkspaceSizes(1);
     OPS_ERR_IF(workSpaces == nullptr, OPS_LOG_E(nodeName, "workSpaces is nullptr."), return ge::GRAPH_FAILED);
-    size_t maxTokenNum;
-    size_t maxHandleTokenNum;
-    uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-    uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
-    uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
-    uint32_t globalBs = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
-    uint32_t maxBatchSize = globalBs / epRankSize;
-    uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
-    uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
-    uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
-    uint32_t aicNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
-    uint32_t shareExpertTokenNum = calShareExpert ? batchSize : 0;
-    uint64_t shareGmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
-    uint64_t shareGmm2HLen = shareGmm1HLen / 2;
-    uint64_t gmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
-    uint64_t gmm2HLen = gmm1HLen / 2;
-    maxTokenNum = maxBatchSize * epRankSize * std::min(topK, moeExpertNumPerRank);
-    maxHandleTokenNum = shareExpertTokenNum + maxTokenNum;
+    uint64_t shmemWorkspacePtr = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr;
+    if (shmemWorkspacePtr == 0) {
+        size_t maxTokenNum;
+        size_t maxHandleTokenNum;
+        uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
+        uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
+        uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
+        uint32_t globalBs = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
+        uint32_t maxBatchSize = globalBs / epRankSize;
+        uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
+        uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
+        uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
+        uint32_t aicNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
+        uint32_t shareExpertTokenNum = calShareExpert ? batchSize : 0;
+        uint64_t shareGmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
+        uint64_t shareGmm2HLen = shareGmm1HLen / 2;
+        uint64_t gmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
+        uint64_t gmm2HLen = gmm1HLen / 2;
+        maxTokenNum = maxBatchSize * epRankSize * std::min(topK, moeExpertNumPerRank);
+        maxHandleTokenNum = shareExpertTokenNum + maxTokenNum;
 
-    size_t x1TokenSize = maxHandleTokenNum * h * sizeof(int8_t);
-    size_t x2TokenSize = (maxTokenNum * gmm2HLen + shareExpertTokenNum * shareGmm2HLen) * sizeof(int8_t);
-    size_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
-    maxTokenSize = CeilUp(maxTokenSize, GM_ALIGN_SIZE);
-    size_t tokenScaleSize = CeilUp(maxHandleTokenNum * sizeof(float), GM_ALIGN_SIZE);
-    size_t CVSwapBufferSize =
-        CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
-    size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
-    size_t gmm2DepOutSize = maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE;
-    size_t maxSwigluGmm2Size = swigluOutSize < gmm2DepOutSize ? gmm2DepOutSize : swigluOutSize;
-    maxSwigluGmm2Size = CeilUp(maxSwigluGmm2Size, GM_ALIGN_SIZE);
-    size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
-    size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
-    size_t epSendCountSize = CeilUp(epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
-    size_t resveredSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
-    size_t usrSize = maxTokenSize + tokenScaleSize + CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
-                     expandIdxSize + epSendCountSize + resveredSize;
+        size_t x1TokenSize = maxHandleTokenNum * h * sizeof(int8_t);
+        size_t x2TokenSize = (maxTokenNum * gmm2HLen + shareExpertTokenNum * shareGmm2HLen) * sizeof(int8_t);
+        size_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
+        maxTokenSize = CeilUp(maxTokenSize, GM_ALIGN_SIZE);
+        size_t tokenScaleSize = CeilUp(maxHandleTokenNum * sizeof(float), GM_ALIGN_SIZE);
+        size_t CVSwapBufferSize =
+            CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
+        size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
+        size_t gmm2DepOutSize = maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE;
+        size_t maxSwigluGmm2Size = swigluOutSize < gmm2DepOutSize ? gmm2DepOutSize : swigluOutSize;
+        maxSwigluGmm2Size = CeilUp(maxSwigluGmm2Size, GM_ALIGN_SIZE);
+        size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
+        size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
+        size_t epSendCountSize = CeilUp(epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
+        size_t resveredSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
+        size_t usrSize = maxTokenSize + tokenScaleSize + CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
+                        expandIdxSize + epSendCountSize + resveredSize;
 
-    workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
+        workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
+    } else {
+        workSpaces[0] = SYSTEM_NEED_WORKSPACE;
+    }
     return ge::GRAPH_SUCCESS;
 }
 
@@ -751,6 +773,9 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     }
     if (expertSmoothScalesExist) {
         tilingKey |= EXEC_FLAG_SMOOTH_QUANT;
+    }
+    if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr != 0) {
+        tilingKey |= EXEC_FLAG_ZERO_BUFFER;
     }
     context.SetTilingKey(tilingKey);
     context.SetBlockDim(aicNum);
