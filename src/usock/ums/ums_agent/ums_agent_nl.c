@@ -809,7 +809,7 @@ int ums_agent_nl_send_token_submit_fail(uint32_t clc_session_id,
         goto err_free;
     }
 
-    UMS_AGENT_LOG_INFO("sent TOKEN_SUBMIT_FAIL, clc_session_id=%u, result=%d",
+    UMS_AGENT_LOG_DEBUG("sent TOKEN_SUBMIT_FAIL, clc_session_id=%u, result=%d",
         clc_session_id, result);
     nlmsg_free(msg);
     return 0;
@@ -887,7 +887,7 @@ int ums_agent_nl_send_token_deliver(uint32_t clc_session_id,
         goto err_free;
     }
 
-    UMS_AGENT_LOG_INFO("sent TOKEN_DELIVER, clc_session_id=%u", clc_session_id);
+    UMS_AGENT_LOG_DEBUG("sent TOKEN_DELIVER, clc_session_id=%u", clc_session_id);
     ums_agent_nl_secure_zero_msg(msg);
     nlmsg_free(msg);
     return 0;

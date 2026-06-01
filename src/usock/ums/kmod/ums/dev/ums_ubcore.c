@@ -445,14 +445,13 @@ static void ums_ubcore_port_event_work(struct work_struct *work)
 static int ums_ubcore_import_jetty(struct ums_link *lnk)
 {
 	lnk->ub_tjetty = ubcore_import_jetty(lnk->ums_dev->ub_dev, &lnk->ub_tjetty_cfg, NULL);
+	memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 	if (IS_ERR_OR_NULL(lnk->ub_tjetty)) {
 		lnk->ub_tjetty = NULL;
 		UMS_LOGE("failed to importing jetty");
-		memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 		return -1;
 	}
 
-	memzero_explicit(&lnk->ub_tjetty_cfg.token_value, sizeof(lnk->ub_tjetty_cfg.token_value));
 	return 0;
 }
 

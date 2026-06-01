@@ -279,7 +279,6 @@ static struct ums_agent_tls_conn *ums_agent_tls_conn_alloc(int fd, SSL *ssl,
 
     ums_agent_get_monotonic_time(&conn->create_time);
     ums_agent_get_monotonic_time(&conn->handshake_start_time);
-    ums_agent_get_monotonic_time(&conn->last_active_time);
 
     return conn;
 }
@@ -357,7 +356,7 @@ static int ums_agent_tls_conn_do_handshake(struct ums_agent_tls_conn *conn)
     int ret = SSL_do_handshake(conn->ssl);
     if (ret == 1) {
         conn->state = UMS_AGENT_TLS_CONN_CONNECTED;
-        ums_agent_get_monotonic_time(&conn->handshake_complete_time);
+        ums_agent_get_monotonic_time(&conn->last_active_time);
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
         UMS_AGENT_LOG_DEBUG("TLS handshake completed, peer=%s:%u, is_server=%d",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str,
@@ -705,7 +704,6 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
     }
 
     if (events & EPOLLIN) {
-        ums_agent_get_monotonic_time(&conn->last_active_time);
         ums_agent_tls_conn_notify_data_available(conn);
         if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
             return;
@@ -756,6 +754,7 @@ static bool ums_agent_tls_conn_check_handshake_timeout(const struct ums_agent_tl
     return false;
 }
 
+#ifdef UMS_AGENT_ENABLE_IDLE_TIMEOUT_CHECK
 static bool ums_agent_tls_conn_check_idle_timeout(const struct ums_agent_tls_conn *conn,
     const struct timespec *now, const char **reason)
 {
@@ -764,21 +763,16 @@ static bool ums_agent_tls_conn_check_idle_timeout(const struct ums_agent_tls_con
     }
 
     int64_t idle_elapsed = ums_agent_timespec_diff_sec(&conn->last_active_time, now);
-    if (idle_elapsed > UMS_AGENT_TLS_IDLE_TIMEOUT_SEC) {
-        *reason = "idle timeout";
+    int64_t threshold = conn->ever_used ? UMS_AGENT_TLS_IDLE_TIMEOUT_SEC
+                                        : UMS_AGENT_TLS_EMPTY_CONN_TIMEOUT_SEC;
+    if (idle_elapsed > threshold) {
+        *reason = conn->ever_used ? "idle timeout" : "empty connection timeout";
         return true;
     }
 
-    if (!conn->ever_used) {
-        int64_t empty_elapsed = ums_agent_timespec_diff_sec(
-            &conn->handshake_complete_time, now);
-        if (empty_elapsed > UMS_AGENT_TLS_EMPTY_CONN_TIMEOUT_SEC) {
-            *reason = "empty connection timeout";
-            return true;
-        }
-    }
     return false;
 }
+#endif
 
 static bool ums_agent_tls_conn_check_ttl_timeout(const struct ums_agent_tls_conn *conn,
     const struct timespec *now, const char **reason)
@@ -823,9 +817,11 @@ static bool ums_agent_tls_conn_check_timeout(const struct ums_agent_tls_conn *co
         return true;
     }
 
+#ifdef UMS_AGENT_ENABLE_IDLE_TIMEOUT_CHECK
     if (ums_agent_tls_conn_check_idle_timeout(conn, now, reason)) {
         return true;
     }
+#endif
 
     if (ums_agent_tls_conn_check_ttl_timeout(conn, now, reason)) {
         return true;
@@ -1056,8 +1052,6 @@ struct ums_agent_tls_conn *ums_agent_tls_conn_pool_get(
     }
 
     conn->ref_count++;
-    conn->ever_used = true;
-    ums_agent_get_monotonic_time(&conn->last_active_time);
     return conn;
 }
 
@@ -1172,6 +1166,7 @@ int ums_agent_tls_conn_send(struct ums_agent_tls_conn *conn,
 
     int ret = SSL_write(conn->ssl, data, (int)len);
     if (ret > 0) {
+        conn->ever_used = true;
         ums_agent_get_monotonic_time(&conn->last_active_time);
         return ret;
     }
@@ -1202,6 +1197,7 @@ int ums_agent_tls_conn_recv(struct ums_agent_tls_conn *conn,
 
     int ret = SSL_read(conn->ssl, buf, (int)buf_len);
     if (ret > 0) {
+        conn->ever_used = true;
         ums_agent_get_monotonic_time(&conn->last_active_time);
         return ret;
     }

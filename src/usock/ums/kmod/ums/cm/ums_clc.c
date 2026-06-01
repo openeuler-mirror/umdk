@@ -507,7 +507,7 @@ static int ums_clc_init_proposal(struct ums_sock *ums, struct ums_clc_msg_propos
 	}
 
 	pclc_umsd->v2_ext_offset = 0;
-	pclc_base->lcl.clc_session_id = htonl(ini->clc_session_id);
+	pclc_base->lcl.clc_session_id = htonl(ums->conn.token_ctx.clc_session_id);
 	pclc_base->hdr.length = htons(plen);
 	(void)memcpy(pclc->pclc_trl.eyecatcher, UMS_EYECATCHER, UMS_EYECATCHER_LEN);
 
@@ -591,7 +591,7 @@ static void ums_clc_confirm_accept_init_basic(struct ums_sock *ums,
 	clc->hdr.length = htons(UMS_CLC_ACCEPT_CONFIRM_LEN);
 	(void)memcpy(clc->r0.lcl.id_for_peer, g_local_systemid, UMS_SYSTEMID_LEN);
 	(void)memcpy(clc->r0.lcl.eid.raw, link->eid.raw, UMS_EID_SIZE);
-	clc->r0.lcl.clc_session_id = htonl(conn->clc_session_id);
+	clc->r0.lcl.clc_session_id = htonl(conn->token_ctx.clc_session_id);
 	(void)memcpy(clc->r0.lcl.mac, link->ums_dev->mac[link->port], ETH_ALEN);
 	clc->r0.rmbe_idx = 1; /* for now: 1 RMB = 1 RMBE */
 	clc->r0.rmbe_alert_token = htonl(conn->conn_id);
@@ -659,6 +659,8 @@ static void ums_clc_clear_token_values(struct ums_clc_msg_accept_confirm *clc,
 	ums_clc_clear_msg_token_values(clc);
 	memzero_explicit(&conn->lnk->jetty_token_value, sizeof(conn->lnk->jetty_token_value));
 	memzero_explicit(&conn->rmb_desc->seg_token_value, sizeof(conn->rmb_desc->seg_token_value));
+	memzero_explicit(&conn->token_ctx.jetty_token, sizeof(conn->token_ctx.jetty_token));
+	memzero_explicit(&conn->token_ctx.seg_token, sizeof(conn->token_ctx.seg_token));
 }
 
 static int ums_clc_send_confirm_accept(struct ums_sock *ums,

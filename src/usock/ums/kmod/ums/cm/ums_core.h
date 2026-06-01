@@ -252,7 +252,9 @@ int ums_buf_register(struct ums_sock *ums);
 void ums_snd_recv_bufs_free(struct ums_sock *ums);
 int ums_uncompress_bufsize(u8 compressed);
 u32 ums_clc_session_id_generate(void);
-int ums_wait_token_xchg(struct ums_connection *conn);
+void ums_token_xchg_ctx_init(struct ums_token_xchg_ctx *ctx,
+	u32 clc_session_id, const u8 *initiator_id);
+int ums_wait_token_xchg(struct ums_token_xchg_ctx *ctx);
 int ums_rmb_import_seg(struct ums_connection *conn, struct ums_clc_msg_accept_confirm *clc);
 void ums_rmb_unimport_seg(struct ums_connection *conn);
 int ums_rtoken_delete(struct ums_link *lnk, __be32 nw_rkey);
