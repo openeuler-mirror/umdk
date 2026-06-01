@@ -129,8 +129,21 @@ int uvs_ioctl_lookup_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx,
 
 int uvs_ioctl_flush_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx)
 {
-    return uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_FLUSH_MAIN_UE_EID,
-                               NULL, 0);
+    uvs_cmd_main_ue_eid_flush_t arg = {0};
+    uvs_cmd_attr_t attrs[FLUSH_MAIN_UE_EID_OUT_NUM - UVS_CMD_OUT_TYPE_INIT] = {0};
+    uvs_cmd_attr_t *a = attrs;
+    int ret;
+
+    arg.out.status = -1;
+    ATTR(a++, FLUSH_MAIN_UE_EID_OUT_STATUS, arg.out.status);
+
+    ret = uvs_ioctl_in_global(ioctl_ctx, UVS_CMD_FLUSH_MAIN_UE_EID,
+                              (void *)attrs, sizeof(attrs));
+    if (ret != 0) {
+        return ret;
+    }
+
+    return arg.out.status;
 }
 
 int uvs_ioctl_insert_main_ue_eid_batch(tpsa_ioctl_ctx_t *ioctl_ctx,
