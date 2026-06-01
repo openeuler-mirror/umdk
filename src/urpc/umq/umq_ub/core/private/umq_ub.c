@@ -1309,6 +1309,10 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     } else {
         queue->tp_mode = umq_tp_mode_convert_to_urma(UMQ_TM_RM);
     }
+    if (queue->tp_mode == URMA_TM_RC && queue->tp_type == URMA_CTP) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "the combination of tp_mode rc and tp_type ctp is not supported\n");
+        return -UMQ_ERR_EINVAL;
+    }
 
     umq_tp_type_t actual_tp_type = (option->create_flag & UMQ_CREATE_FLAG_TP_TYPE) != 0 ?
         option->tp_type : UMQ_TP_TYPE_CTP;
