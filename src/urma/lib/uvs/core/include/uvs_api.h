@@ -29,6 +29,7 @@ extern "C" {
 #define CHIP_NUM           (2)
 #define DEV_NUM            (256)
 #define IODIE_NUM          (2)
+#define UVS_MAIN_UE_EID_BATCH_EID_MAX 128U
 
 typedef enum uvs_tp_type {
     UVS_RTP,
@@ -119,6 +120,17 @@ struct urma_topo_node {
     struct urma_topo_agg_dev agg_devs[DEV_NUM];
 };
 
+typedef struct uvs_main_ue_eid_entry {
+    uvs_eid_t eid;
+    uvs_eid_t main_ue_eid;
+} uvs_main_ue_eid_entry_t;
+
+typedef struct uvs_main_ue_eid_batch_entry {
+    uvs_eid_t main_ue_eid;
+    uint32_t eid_num;
+    uvs_eid_t eids[UVS_MAIN_UE_EID_BATCH_EID_MAX];
+} uvs_main_ue_eid_batch_entry_t;
+
 /**
  * Create an aggregation device in UVS.
  * @param[in] agg_eid  EID of the aggregation device to be created.
@@ -150,6 +162,16 @@ int uvs_get_device_name_by_eid(uvs_eid_t *eid, char *buf, size_t len);
  * Return: 0 on success, other value on error
  */
 int uvs_set_topo_info(void *topo_buf, uint32_t node_size, uint32_t node_num);
+
+int uvs_insert_main_ue_eid(const uvs_main_ue_eid_entry_t *entry);
+
+int uvs_insert_main_ue_eid_batch(const uvs_main_ue_eid_batch_entry_t *entry);
+
+int uvs_delete_main_ue_eid(const uvs_eid_t *eid);
+
+int uvs_lookup_main_ue_eid(const uvs_eid_t *eid, uvs_eid_t *main_ue_eid);
+
+int uvs_flush_main_ue_eid(void);
 
 /**
  * UVS get topo info.
