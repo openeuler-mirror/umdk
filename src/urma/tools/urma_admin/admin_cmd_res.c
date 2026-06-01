@@ -45,7 +45,7 @@ int admin_cmd_show_stats_legacy(admin_config_t *cfg)
     arg.in.key = cfg->key.key;
     arg.in.type = (uint32_t)cfg->key.type;
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_STATS, 0);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_STATS, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -53,7 +53,7 @@ int admin_cmd_show_stats_legacy(admin_config_t *cfg)
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_stats_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    int ret = admin_nl_send_recv_msg_default(msg);
+    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
 
     if (ret == 0) {
@@ -525,7 +525,7 @@ int admin_cmd_show_res_legacy(admin_config_t *cfg)
     }
     (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -533,7 +533,7 @@ int admin_cmd_show_res_legacy(admin_config_t *cfg)
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg);
+    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
@@ -557,7 +557,7 @@ int admin_cmd_list_res_legacy(admin_config_t *cfg)
     arg.in.key_cnt = cfg->key.key_cnt;
     (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP);
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -565,7 +565,7 @@ int admin_cmd_list_res_legacy(admin_config_t *cfg)
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg);
+    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
