@@ -20,9 +20,8 @@
 #include "umq_example_common.h"
 
 static const uint32_t EXAMPLE_MAX_POLL_BATCH = 64;
-static const uint32_t EXAMPLE_REQUEST_SIZE = 8192;
 static const uint32_t SOCKET_SEND_RECV_TIMEOUT = 5;
-static const uint32_t EXAMPLE_BUFFER_SIZE = 8192;
+static const uint32_t EXAMPLE_BUFFER_SIZE = 4096;
 static const uint32_t EXAMPLE_DEPTH = 128;
 
 typedef struct exchange_info {
@@ -394,7 +393,7 @@ int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg)
 
 int example_post_rx(uint64_t umqh, uint32_t depth)
 {
-    uint32_t request_size = EXAMPLE_REQUEST_SIZE;
+    uint32_t request_size = EXAMPLE_BUFFER_SIZE;
     umq_buf_t *buf = umq_buf_alloc(request_size, depth, umqh, NULL);
     if (buf == NULL) {
         LOG_PRINT_ERR("alloc buf failed\n");
