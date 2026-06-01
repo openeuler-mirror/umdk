@@ -26,9 +26,11 @@ torch_path = os.path.dirname(torch.__file__)
 torch_npu_spec = importlib.util.find_spec("torch_npu")
 torch_npu_path = os.path.dirname(torch_npu_spec.origin)
 cam_comm_path = os.environ["CAM_COMM_PATH"]
+shmem_home_path = os.environ["SHMEM_HOME_PATH"]
 print(f"torch_path: {torch_path}")
 print(f"torch_npu_path: {torch_npu_path}")
 print(f"cam_comm_path: {cam_comm_path}")
+print(f"shmem_home_path: {shmem_home_path}")
 PYTORCH_NPU_INSTALL_PATH = os.path.dirname(os.path.abspath(torch_npu_spec.origin))
 architecture = str(platform.machine())
 if architecture.startswith("x86"):
@@ -67,13 +69,15 @@ ext1 = NpuExtension(
         os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "runtime"),
         os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "msprof"),
         os.path.join(torch_path, "include"),
-        os.path.join(os.path.dirname(__file__), "./", "pytorch_extension")],
+        os.path.join(os.path.dirname(__file__), "./", "pytorch_extension"),
+        os.path.join(os.environ["SHMEM_HOME_PATH"], 'shmem', 'include')],
 
     library_dirs=[
         os.path.join(os.environ["CAM_COMM_PATH"], 'build/'),
         os.path.join(torch_path, "lib"),
         os.path.join(torch_npu_path, "lib"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64")],
+        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64"),
+        os.path.join(os.environ["SHMEM_HOME_PATH"], 'shmem', 'lib')],
     libraries=[
         'cam_static',
         "torch_npu",
@@ -82,7 +86,8 @@ ext1 = NpuExtension(
         "torch",
         "ascendcl",
         "profapi",
-        "nnopbase"],
+        "nnopbase",
+        "shmem"],
     sources=["./fused_deep_moe.cpp",
              "./moe_dispatch_normal.cpp",
              "./moe_combine_normal.cpp",
@@ -91,7 +96,8 @@ ext1 = NpuExtension(
              "./pybind.cpp",
              "./ext_utils.cpp",
              "./all2_all_detour.cpp",
-             "./reduce_scatter_detour.cpp"
+             "./reduce_scatter_detour.cpp",
+             "./buffer.cpp"
             ],
     
     extra_compile_args = compile_args,

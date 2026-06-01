@@ -10,6 +10,7 @@
 #include <torch/extension.h>
 #include "functions.h"
 #include "ext_utils.h"
+#include "buffer.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
@@ -25,6 +26,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("cam_get_magic", &cam_get_magic, "cam_get_magic");
     m.def("a2e", &A2eImplAutograd, "a2e");
     m.def("e2a", &E2aImplAutograd, "e2a");
+    pybind11::class_<fused_deep_moe::Buffer>(m, "FusedDeepMoeBuffer")
+        .def(pybind11::init<>())
+        .def("init", &fused_deep_moe::Buffer::init,
+             pybind11::arg("rank"), pybind11::arg("num_ranks"),
+             pybind11::arg("memsize"), pybind11::arg("ip_port"))
+        .def("zb_fused_deep_moe", &fused_deep_moe::Buffer::zb_fused_deep_moe)
+        .def("is_initialized", &fused_deep_moe::Buffer::is_initialized)
+        .def("get_ext_info", &fused_deep_moe::Buffer::get_ext_info)
+        .def("get_shmem_workspace", &fused_deep_moe::Buffer::get_shmem_workspace);
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {

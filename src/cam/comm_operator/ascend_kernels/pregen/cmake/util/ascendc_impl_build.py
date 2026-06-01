@@ -173,6 +173,8 @@ def {}({}, kernel_name="{}", impl_mode=""):
     #options.append("-I" + SHMEM_HOME_PATH +"/shmem/include/host")
     options.append("-I" + SHMEM_HOME_PATH + "/shmem/include/host_device")
     options.append("-I" + SHMEM_HOME_PATH + "/shmem/include/internal")
+    options.append("-I" + SHMEM_HOME_PATH + "/shmem/src")
+    options.append("-I" + SHMEM_HOME_PATH + "/shmem/src/device")
     options.append("-I" + SHMEM_HOME_PATH + "/memfabric_hybrid/include/smem/device")
     #options.append("-I" + SHMEM_HOME_PATH + "/memfabric_hybrid/include/smem/host")
 

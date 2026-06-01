@@ -161,8 +161,9 @@ public:
         this->Attr("moe_expert_num").Int();
         this->Attr("quant_mode").Int();
         this->Attr("global_bs").Int();
+        this->Attr("ext_info").Int();
+        this->Attr("shmem_workspace").Int();
 
-        this->MC2().HcclGroup({"group_ep"});
         this->AICore().AddConfig("ascend910_93");
     }
 };

@@ -66,7 +66,9 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
                                   GM_ADDR gmWorkspace, GM_ADDR gmX, GM_ADDR gmMoeSmoothScales,
                                   GM_ADDR gmShareSmoothScales, GM_ADDR gmexpertIds, GM_ADDR gmExpandIdx,
                                   GM_ADDR gmEpSendCount, GM_ADDR xActiveMask, GM_ADDR gmResvered,
-                                  GM_ADDR gmExpertTokenNums, const FusedDeepMoeInfo &disGmmDeqSwigluQuantGmmDeqComInfo)
+                                  GM_ADDR gmExpertTokenNums, GM_ADDR gmAllExpertTokenNums,
+                                  GM_ADDR metaInfoGm_, GM_ADDR gmTokenFlag,
+                                  const FusedDeepMoeInfo &disGmmDeqSwigluQuantGmmDeqComInfo, GM_ADDR gmCombineSend)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
@@ -152,7 +154,11 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
                                            layoutShareD,
                                            gmShareX2Scale,
                                            gmSwigluOut,
-                                           disGmmDeqSwigluQuantGmmDeqComInfo};
+                                           metaInfoGm_,
+                                           gmAllExpertTokenNums,
+                                           gmTokenFlag,
+                                           disGmmDeqSwigluQuantGmmDeqComInfo,
++                                          gmCombineSend};
         // call a kernel
         GemmKernel gemm;
         gemm(params);
@@ -202,7 +208,8 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                        GM_ADDR gmSharedScale, GM_ADDR gmSharedPtrPerTokenScale,
                        layout::RowMajor sharedLayoutA, layout::zN sharedLayoutB,
                        layout::VectorLayout sharedLayoutPerTokenScale, layout::RowMajor sharedLayoutD,
-                       uint32_t epRankId, GM_ADDR gmWorkspace, void *combiner)
+                       uint32_t epRankId, GM_ADDR gmWorkspace, void *combiner, GM_ADDR metaInfoGm,
+                       uint64_t statusDataSpaceOffset)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
@@ -273,7 +280,7 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                                        combiner};
 
     // call a kernel
-    GemmKernel gemm{epRankId};
+    GemmKernel gemm{epRankId, metaInfoGm, statusDataSpaceOffset};
     gemm(params);
 }
 
@@ -310,6 +317,7 @@ private:
     GM_ADDR gmShareOutput_;
     GM_ADDR gmExpertTokenNums_;
     GM_ADDR workspaceGM_;
+    GM_ADDR metaInfoGm_;
     GM_ADDR gmSmoothScales_;
     GM_ADDR gmShareSmoothScales_;
     GM_ADDR gmexpertScales_;
@@ -333,6 +341,8 @@ private:
     uint32_t bs_{0};
     uint32_t maxBs_{0};
     uint32_t topK_{0};
+    uint64_t statusDataSpaceOffset_{0};
+    uint32_t moeExpertNum_{0};
 
     AscendC::TPipe *tpipe_{nullptr};
     const FusedDeepMoeTilingData *tilingData_;
@@ -369,13 +379,19 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     gmShareWeight2Scale_ = share_gmm2_weight_scale;
     gmShareOutput_ = share_output;
     gmExpertTokenNums_ = expertTokenNums;
-    workspaceGM_ = workspaceGM;
+    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
+        workspaceGM_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr);
+    } else {
+        workspaceGM_ = workspaceGM;
+    }
+    metaInfoGm_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.metaInfoPtr);
     gmexpertScales_ = expert_scales;
     xActiveMask_ = x_active_mask;
     tilingData_ = tilingData;
     epRankSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
     epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
     moeExpertNumPerRank_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
+    moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
     globalBs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
     bs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
     topK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
@@ -389,6 +405,10 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     gmm2OutputDim_ = tokenHiddenSize_;
     shareGmm2InputDim_ = shareGmm1OutputDim_ / 2;
     gmm2InputDim_ = gmm1OutputDim_ / 2;
+
+    statusDataSpaceOffset_ = blockDim_ * 2 * UB_32B_ALIGN + epRankSize_ * UB_32B_ALIGN +
+                            moeExpertNumPerRank_ * epRankSize_ * sizeof(int32_t) +
+                            4 * epRankSize_ * sizeof(uint64_t);
 }
 
 template <TemplateMC2TypeClass>
@@ -424,6 +444,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmX1 = nullptr;
     GM_ADDR gmX1Scale = nullptr;
     GM_ADDR gmSwigluOut = nullptr;
+    GM_ADDR gmTokenFlag = nullptr;
     GM_ADDR gmX2 = nullptr;
     GM_ADDR gmX2Scale = nullptr;
     size_t shareExpertTokenNum = 0;
@@ -457,6 +478,9 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     int64_t maxSwigluGmm2Size = swigluOutSize < gmm2OutSize ? gmm2OutSize : swigluOutSize;
     gmShareSwigluOut = workspaceGM_ + workspaceOffset;
     gmSwigluOut = gmShareSwigluOut + (static_cast<size_t>(shareExpertTokenNum) * shareGmm1OutputDim_ * sizeof(float));
+    uint32_t maxTokenNum1 = maxBs_ * epRankSize_ * ((topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_) - 1);
+    gmTokenFlag = gmSwigluOut + (maxTokenNum1 * gmm1OutputDim_ + shareExpertTokenNum * shareGmm1OutputDim_) *
+        sizeof(float);
     GM_ADDR gmGmm2DepOut = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxSwigluGmm2Size);
 
@@ -465,9 +489,17 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmExpandIdx = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * sizeof(int32_t));
     GM_ADDR gmEpSendCount = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * groupCount_ * sizeof(int32_t));
+    workspaceOffset +=
+        RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int32_t));
     GM_ADDR gmResvered = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(resveredWorkSpaceSize);
+    GM_ADDR gmAllExpertTokenNums = workspaceGM_ + workspaceOffset;
+    workspaceOffset +=
+        RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
+    GM_ADDR gmCombineSend = workspaceGM_ + workspaceOffset;
+    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
+    GM_ADDR gmAllEpRecvCount = workspaceGM_ + workspaceOffset;
+    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * moeExpertNum_ * sizeof(int32_t));
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         if constexpr (g_coreType == AscendC::AIV) {
@@ -498,7 +530,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         gmX1Scale, layoutX1Scale, gmX2, layoutX2, gmX2Scale, layoutX2Scale, gmShareX1, gmShareX1Scale,
         gmShareSwigluOut, gmShareX2, layoutShareX2, gmShareX2Scale, gmSwigluOut, gmWorkspace, gmX_, gmSmoothScales_,
         gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_, gmResvered, gmExpertTokenNums_,
-        tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo);
+        gmAllExpertTokenNums, metaInfoGm_, gmTokenFlag, tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo, gmCombineSend);
     AscendC::PipeBarrier<PIPE_ALL>();
     Arch::CrossCoreFlag gmm1AivFinished{0};
     if constexpr (g_coreType == AscendC::AIV) {
@@ -510,14 +542,17 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
 
     MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> combiner;
     if (g_coreType == AscendC::AIV) {
-        combiner.Init(gmGmm2DepOut, gmexpertIds_, gmExpandIdx, gmEpSendCount, nullptr, gmexpertScales_, xActiveMask_,
-                      gmOutput_, workspaceGM_, nullptr, tilingData_);
+        combiner.Init(gmGmm2DepOut, gmexpertIds_, gmExpandIdx, (GM_ADDR)(gmEpSendCount + epRankId_ * epRankSize_ *
+                      moeExpertNumPerRank_ * sizeof(int32_t)), nullptr, gmexpertScales_, xActiveMask_, gmOutput_,
+                      workspaceGM_, nullptr, tilingData_, gmAllExpertTokenNums, gmAllEpRecvCount, gmCombineSend,
+                      statusDataSpaceOffset_);
     }
     GmmDeq<TemplateMC2TypeFunc, Gmm2L1TileShape, Gmm2L0TileShape, Gmm2EpilogueTileShape, Gmm2BlockScheduler,
            Gmm2DispatchPolicy>(gmm2ProblemShape, groupCount_, gmGroupList, gmX2, layoutX2, gmWeight2_, layoutWeight2,
                                gmScale2_, layoutW2Scale, gmX2Scale, layoutX2Scale, gmGmm2DepOut, layoutOutput, bs_,
                                shareGmm2ProblemShape, gmShareX2, gmShareWeight2_, gmShareOutput_, gmShareWeight2Scale_,
                                gmShareX2Scale, layoutShareX2, layoutShareWeight2, layoutShareX2Scale,
-                               layoutShareOutput, epRankId_, gmWorkspace, &combiner);
+                               layoutShareOutput, epRankId_, gmWorkspace, &combiner, metaInfoGm_,
+                               statusDataSpaceOffset_);
 }
 #endif  // FUSED_DEEP_MOE_H
