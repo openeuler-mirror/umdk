@@ -606,9 +606,6 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
         fc->ops.packet_stats = flow_control_packet_stats_non_atomic;
     }
     fc->timeout_us = umq_ub_timer_timeout_get();
-    UMQ_VLOG_INFO(VLOG_UMQ, "umq flow control init success, use %s window\n",
-        cfg->use_atomic_window ? "atomic" : "non-atomic");
-
     return UMQ_SUCCESS;
 }
 
