@@ -4,6 +4,7 @@
 # Create: 2026-05-11
 # Note:
 # History: 2026-05-11 create cam docker file sample.
+#          2026-05-30 add CANN 9.0 build stage
 
 ARG BUILD_ARG=a3_8.3_open
 
@@ -112,6 +113,26 @@ RUN ln -s /opt/conda/envs/cam_py311_pt28/bin/python3 /usr/local/bin/python3.11 &
 RUN cd /tmp && \
     wget --no-check-certificate https://gitcode.com/Ascend/pytorch/releases/download/v7.3.0-pytorch2.8.0/torch_npu-2.8.0.post2-cp311-cp311-manylinux_2_28_aarch64.whl && \
     conda run -n cam_py311_pt28 pip install torch_npu-2.8.0.post2-cp311-cp311-manylinux_2_28_aarch64.whl && \
+    rm -rf /tmp/*
+
+# ==========================================
+# CANN 9.0
+# ==========================================
+FROM base AS config_a3_9.0_open
+
+# CANN installer requires python3.11 in PATH
+RUN ln -s /opt/conda/envs/cam_py311_pt28/bin/python3 /usr/local/bin/python3.11 && \
+    cd /tmp && \
+    wget --no-check-certificate https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/aarch64/Ascend-cann-toolkit_9.0.0_linux-aarch64.run && \
+    wget --no-check-certificate https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/aarch64/Ascend-cann-A3-ops_9.0.0_linux-aarch64.run && \
+    chmod +x *.run && \
+    ./Ascend-cann-toolkit_9.0.0_linux-aarch64.run --full -q && \
+    ./Ascend-cann-A3-ops_9.0.0_linux-aarch64.run --install -q && \
+    rm -rf /tmp/*.run
+
+RUN cd /tmp && \
+    wget --no-check-certificate https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.8.0/torch_npu-2.8.0.post4-cp311-cp311-manylinux_2_28_aarch64.whl && \
+    conda run -n cam_py311_pt28 pip install torch_npu-2.8.0.post4-cp311-cp311-manylinux_2_28_aarch64.whl && \
     rm -rf /tmp/*
 
 # ==========================================
