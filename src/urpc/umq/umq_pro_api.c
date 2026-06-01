@@ -65,7 +65,7 @@ int umq_interrupt_fd_get(uint64_t umqh, umq_interrupt_option_t *option)
 
     if (option == NULL || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_interrupt_fd_get == NULL)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -78,7 +78,7 @@ int umq_get_cq_event(uint64_t umqh, umq_interrupt_option_t *option)
 
     if (option == NULL || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->pro_tp_ops == NULL) ||
         (umq->pro_tp_ops->umq_tp_get_cq_event == NULL)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umqh or option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 

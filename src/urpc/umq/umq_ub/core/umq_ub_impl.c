@@ -39,6 +39,7 @@
 #define UMQ_FLUSH_MAX_RETRY_TIMES 10000
 #define UMQ_UB_DEFAULT_SLOT_NUM 10
 #define UMQ_UB_EVENT_QUEUE_IDLE 1
+#define UMQ_PORT_STR_SIZE 512
 
 #define UMQ_ALIGN_64K(__size)    (((__size) + 65535) & ~65535)
 
@@ -829,7 +830,8 @@ FREE_CHECKER:
     return ret;
 }
 
-static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *share_queue, umq_create_option_t *option)
+static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *share_queue, umq_create_option_t *option,
+    const char *port_str)
 {
     if (!queue->flow_control.enabled) {
         return UMQ_SUCCESS;
@@ -860,7 +862,7 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
         goto DESTROY_FC_JFR_CTX;
     }
 
-    queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] = umq_create_jetty(queue, dev_ctx, UB_QUEUE_JETTY_FLOW_CONTROL);
+    queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] = umq_create_jetty(queue, dev_ctx, UB_QUEUE_JETTY_FLOW_CONTROL, port_str);
     if (queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
         goto DELETE_FC_JFS_JFC;
     }
@@ -919,6 +921,26 @@ DESTROY_FC_JFR_CTX:
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL);
 
     return UMQ_FAIL;
+}
+
+static void umq_jetty_port_info(char *buf, int size, ub_queue_t *queue)
+{
+    int ret;
+    int offset = 0;
+    int remain = size;
+
+    for (uint8_t i = 0; i < queue->used_port_num; i++) {
+        ret = snprintf(buf + offset, remain, " [chip: %hhu, die: %hhu, port: %hhu]", queue->used_port[i].chip_id,
+                       queue->used_port[i].die_id, queue->used_port[i].port_idx);
+        if (ret < 0 || ret >= remain) {
+            buf[0] = 0;
+            UMQ_VLOG_ERR(VLOG_UMQ, "format jetty port info failed, port_num %d, error %d\n", queue->used_port_num, ret);
+            return;
+        }
+
+        offset += ret;
+        remain -= ret;
+    }
 }
 
 uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *option)
@@ -990,7 +1012,9 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto DELETE_JFCE;
     }
 
-    queue->jetty[UB_QUEUE_JETTY_IO] = umq_create_jetty(queue, dev_ctx, UB_QUEUE_JETTY_IO);
+    char port_str[UMQ_PORT_STR_SIZE] = {0};
+    umq_jetty_port_info(port_str, UMQ_PORT_STR_SIZE, queue);
+    queue->jetty[UB_QUEUE_JETTY_IO] = umq_create_jetty(queue, dev_ctx, UB_QUEUE_JETTY_IO, port_str);
     if (queue->jetty[UB_QUEUE_JETTY_IO] == NULL) {
         goto DELETE_JFS_JFC;
     }
@@ -1012,7 +1036,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto CLEAR_TABLE;
     }
 
-    if (umq_ub_create_flow_control_resource(queue, share_rq, option) != UMQ_SUCCESS) {
+    if (umq_ub_create_flow_control_resource(queue, share_rq, option, port_str) != UMQ_SUCCESS) {
         goto LOCK_DESTROY;
     }
 
@@ -1022,6 +1046,22 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
+    if (queue->flow_control.enabled) {
+        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u, jetty_id[1]: %u,%s create "
+            "success, jfr_id[0]: %u, jfr_id[1]: %u, urma transmode %d, tp_type %d, priority %d, rnr_retry %d, "
+            "err_timeout %d, flowcontrol use %s window\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
+            queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id,
+            port_str, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id,
+            queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr->jfr_id.id, queue->tp_mode, queue->tp_type,
+            queue->priority, queue->rnr_retry, queue->err_timeout,
+            dev_ctx->flow_control.use_atomic_window ? "atomic" : "non-atomic");
+    } else {
+        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u,%s create success, jfr_id[0]: %u, "
+            "urma transmode %d, tp_type %d, priority %d, rnr_retry %d, err_timeout %d\n",
+            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
+            port_str, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id, queue->tp_mode, queue->tp_type,
+            queue->priority, queue->rnr_retry, queue->err_timeout);
+    }
     return (uint64_t)(uintptr_t)queue;
 
 LOCK_DESTROY:
@@ -1218,11 +1258,11 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
     }
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "option invalid\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
         return -UMQ_ERR_EINVAL;
     }
     if (queue->jfs_jfce == NULL || queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, get interrupt fd error, jfce is NULL\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, get interrupt fd error, jfce is NULL\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
         return -UMQ_ERR_EINVAL;
     }
@@ -1263,7 +1303,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_REARM_RX, start_timestamp);
     }
     if (status != URMA_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for io jfc failed, "
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for io jfc failed, "
             "status: %d\n", EID_ARGS(*eid), id, (int)status);
         return umq_status_convert(status);
     }
@@ -1278,8 +1318,8 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
             umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_REARM_RX, start_timestamp);
         }
         if (status != URMA_SUCCESS) {
-            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for flowcontrol jfc failed"
-                ", status: %d\n", EID_ARGS(*eid), id, (int)status);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for flowcontrol jfc"
+                " failed, status: %d\n", EID_ARGS(*eid), id, (int)status);
             return umq_status_convert(status);
         }
     }
