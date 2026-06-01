@@ -54,7 +54,9 @@ void ums_nl_exit(void);
 
 bool ums_nl_agent_available(void);
 
-int ums_nl_register_and_submit_tokens(struct ums_sock *ums, bool first_contact);
-void ums_nl_unregister_clc_session(u32 clc_session_id, const u8 *initiator_id);
+int ums_nl_register_clc_session(struct ums_token_xchg_ctx *token_ctx);
+int ums_nl_submit_tokens(struct ums_token_xchg_ctx *ctx,
+	const struct ums_ip_addr *peer_addr, bool first_contact);
+void ums_nl_unregister_clc_session(struct ums_token_xchg_ctx *token_ctx);
 
 #endif /* UMS_NL_H */

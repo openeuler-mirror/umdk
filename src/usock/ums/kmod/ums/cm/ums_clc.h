@@ -60,6 +60,7 @@
 #define UMS_CLC_DECL_TOKMDMIS 0x09990006   /* ub token mode mismatch */
 #define UMS_CLC_DECL_ERR_TOKEN_SUBMIT 0x09990007 /* ub token submit failed */
 #define UMS_CLC_DECL_ERR_TOKEN_XCHG 0x09990008 /* ub token wait timeout or failed */
+#define UMS_CLC_DECL_ERR_SESS_SEG 0x09990009   /* CLC session registration failed */
 #define UMS_FIRST_CONTACT_MASK 0b10        /* first contact bit within typev2 */
 #define UMS_CLC_MAX_V6_PREFIX 8
 #define UMS_CLC_MAX_UEID 8

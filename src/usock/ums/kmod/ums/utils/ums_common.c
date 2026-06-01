@@ -22,7 +22,9 @@
 
 #include <linux/if_vlan.h>
 #include <linux/in.h>
+#include <linux/in6.h>
 #include <linux/module.h>
+#include <linux/net.h>
 #include <linux/rcupdate_wait.h>
 #include <linux/sched/signal.h>
 #include <linux/socket.h>
@@ -259,7 +261,6 @@ void ums_link_save_peer_info(struct ums_link *link,
 	struct ums_clc_msg_accept_confirm *clc, struct ums_init_info *ini)
 {
 	struct ubcore_device *ub_dev = link->ums_dev->ub_dev;
-	struct ubcore_token saved_token_value = {0};
 
 	link->tjetty_id = ntohl(clc->r0.jetty_id);
 	(void)memcpy(link->peer_eid.raw, ini->peer_eid.raw, UMS_EID_SIZE);
@@ -270,9 +271,6 @@ void ums_link_save_peer_info(struct ums_link *link,
 	if (link->credits_enable != 0)
 		atomic_set(&link->peer_rq_credits, clc->r0.init_credits);
 
-	if (g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_SECURE)
-		saved_token_value = link->ub_tjetty_cfg.token_value;
-
 	(void)memset(&link->ub_tjetty_cfg.id, 0, sizeof(struct ubcore_jetty_id));
 	(void)memset(&link->ub_tjetty_cfg, 0, sizeof(struct ubcore_tjetty_cfg));
 	link->ub_tjetty_cfg.id.eid = ini->peer_eid;
@@ -282,15 +280,23 @@ void ums_link_save_peer_info(struct ums_link *link,
 
 	if ((ub_dev != NULL) && (ub_dev->transport_type == UBCORE_TRANSPORT_UB)) {
 		link->ub_tjetty_cfg.flag.bs.order_type = UBCORE_OL; /* low layer ordering */
-		link->ub_tjetty_cfg.flag.bs.share_tp = 1;
+		link->ub_tjetty_cfg.flag.bs.share_tp = 0;
 		link->ub_tjetty_cfg.flag.bs.token_policy = clc->r0.jetty_token_policy;
-		if (g_ums_sys_tuning_config.ub_token_mode == UMS_TOKEN_MODE_SECURE)
-			link->ub_tjetty_cfg.token_value = saved_token_value;
-		else
+		if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
 			link->ub_tjetty_cfg.token_value.token = ntohl(clc->r0.jetty_token_value);
 		link->ub_tjetty_cfg.type = UBCORE_JETTY;
 		link->ub_tjetty_cfg.tp_type = UBCORE_RTP;
 	}
+}
+
+void ums_link_update_peer_jetty_token(struct ums_link *link,
+	struct ums_token_xchg_ctx *token_ctx)
+{
+	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
+		return;
+
+	link->ub_tjetty_cfg.token_value.token = token_ctx->peer_jetty_token.token;
+	memzero_explicit(&token_ctx->peer_jetty_token, sizeof(token_ctx->peer_jetty_token));
 }
 
 /* check if there is a ub device available for this connection. */
@@ -305,6 +311,30 @@ int ums_find_ub_device(struct ums_sock *ums, struct ums_init_info *ini)
 	if (!ini->ub_dev) {
 		UMS_LOGE("find ub device failed, vlan is %hu.\n", ini->vlan_id);
 		return UMS_CLC_DECL_NOUMSDEV;
+	}
+
+	return 0;
+}
+
+int ums_sock_get_peer_addr(struct socket *sock, struct ums_ip_addr *addr)
+{
+	struct sockaddr_storage peer_addr;
+	int rc;
+
+	rc = kernel_getpeername(sock, (struct sockaddr *)&peer_addr);
+	if (rc < 0)
+		return rc;
+
+	if (peer_addr.ss_family == AF_INET6) {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&peer_addr;
+
+		addr->family = AF_INET6;
+		addr->ip.in6 = sin6->sin6_addr;
+	} else {
+		struct sockaddr_in *sin4 = (struct sockaddr_in *)&peer_addr;
+
+		addr->family = AF_INET;
+		addr->ip.in4.s_addr = sin4->sin_addr.s_addr;
 	}
 
 	return 0;

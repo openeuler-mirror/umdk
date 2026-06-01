@@ -16,7 +16,6 @@
 #include <linux/jiffies.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/net.h>
 #include <linux/random.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -55,9 +54,7 @@ struct ums_nl_state {
 };
 
 struct ums_nl_clc_entry {
-	u32 clc_session_id;
-	u8 initiator_id[UMS_SYSTEMID_LEN];
-	struct ums_connection *conn;
+	struct ums_token_xchg_ctx *token_ctx;
 	struct hlist_node hnode;
 };
 
@@ -80,7 +77,7 @@ static struct ums_nl_state g_ums_nl_state = {
 };
 
 /*
- * Decrement conn->nl_refcnt; wake up ums_conn_free if this is the last
+ * Decrement token_ctx->nl_refcnt; wake up ums_conn_free if this is the last
  * reference. Must be called after spin_unlock(&clc_lock) to avoid calling
  * wake_up inside the spinlock critical section.
  *
@@ -88,13 +85,13 @@ static struct ums_nl_state g_ums_nl_state = {
  *   nl_refcnt=1 means exactly one holder owns the reference:
  *     - Holder A: the clc_ht hash table entry (entry still in hash table)
  *     - Holder B: a netlink callback (entry already claimed, callback in progress)
- *   ums_nl_claim_conn transfers ownership from A to B without changing the count.
- *   Each holder is responsible for calling ums_conn_nl_put when done.
+ *   ums_nl_claim_token_ctx transfers ownership from A to B without changing the count.
+ *   Each holder is responsible for calling ums_token_ctx_nl_put when done.
  */
-static void ums_conn_nl_put(struct ums_connection *conn)
+static void ums_token_ctx_nl_put(struct ums_token_xchg_ctx *ctx)
 {
-	if (refcount_dec_and_test(&conn->nl_refcnt))
-		wake_up(&conn->nl_free_wait);
+	if (refcount_dec_and_test(&ctx->nl_refcnt))
+		wake_up(&ctx->nl_free_wait);
 }
 
 static const struct nla_policy g_ums_nl_policy[__UMS_ATTR_MAX] = {
@@ -273,35 +270,36 @@ static struct ums_nl_clc_entry *ums_nl_find_clc_entry(u32 clc_session_id,
 	u32 hash = ums_nl_session_hash(clc_session_id, initiator_id);
 
 	hash_for_each_possible(g_ums_nl_state.clc_ht, entry, hnode, hash) {
-		if (entry->clc_session_id == clc_session_id &&
-			memcmp(entry->initiator_id, initiator_id, UMS_SYSTEMID_LEN) == 0)
+		if (entry->token_ctx->clc_session_id == clc_session_id &&
+			memcmp(entry->token_ctx->initiator_id, initiator_id, UMS_SYSTEMID_LEN) == 0)
 			return entry;
 	}
 	return NULL;
 }
 
 /*
- * Atomically remove a clc entry from the hash table and return its conn.
+ * Atomically remove a clc entry from the hash table and return its token_ctx.
  * This transfers nl_refcnt ownership from holder A (hash table entry) to
  * holder B (the calling netlink callback) without incrementing nl_refcnt.
- * The caller becomes the new owner and must call ums_conn_nl_put when done.
+ * The caller becomes the new owner and must call ums_token_ctx_nl_put when done.
  * Returns NULL if the entry was already removed (e.g., by unregister or a
  * prior claim), which also prevents duplicate callbacks on the same session.
  */
-static struct ums_connection *ums_nl_claim_conn(u32 clc_session_id,
+static struct ums_token_xchg_ctx *ums_nl_claim_token_ctx(u32 clc_session_id,
 	const u8 *initiator_id)
 {
+	struct ums_token_xchg_ctx *token_ctx;
 	struct ums_nl_clc_entry *entry;
 	unsigned long flags;
 
 	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
 	entry = ums_nl_find_clc_entry(clc_session_id, initiator_id);
 	if (entry) {
-		struct ums_connection *conn = entry->conn;
+		token_ctx = entry->token_ctx;
 		hash_del(&entry->hnode);
 		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
 		kfree(entry);
-		return conn;
+		return token_ctx;
 	}
 	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
 	return NULL;
@@ -309,10 +307,10 @@ static struct ums_connection *ums_nl_claim_conn(u32 clc_session_id,
 
 static int ums_nl_token_submit_fail(struct sk_buff *skb, struct genl_info *info)
 {
+	struct ums_token_xchg_ctx *token_ctx;
 	u32 clc_session_id;
 	u8 initiator_id[UMS_SYSTEMID_LEN];
 	u32 result;
-	struct ums_connection *conn;
 	int ret;
 
 	if (!info || !info->attrs)
@@ -331,12 +329,12 @@ static int ums_nl_token_submit_fail(struct sk_buff *skb, struct genl_info *info)
 	nla_memcpy(initiator_id, info->attrs[UMS_ATTR_INITIATOR_ID], UMS_SYSTEMID_LEN);
 	result = nla_get_u32(info->attrs[UMS_ATTR_RESULT]);
 
-	UMS_LOGE_LIMITED("TOKEN_SUBMIT_FAIL, clc_session_id=%u, result=%u",
+	UMS_LOGE_LIMITED("TOKEN_SUBMIT_FAIL recv, clc_session_id=%u, result=%u",
 		clc_session_id, result);
 
-	conn = ums_nl_claim_conn(clc_session_id, initiator_id);
-	if (!conn) {
-		UMS_LOGW_LIMITED("TOKEN_SUBMIT_FAIL no conn for clc_session_id=%u",
+	token_ctx = ums_nl_claim_token_ctx(clc_session_id, initiator_id);
+	if (!token_ctx) {
+		UMS_LOGW_LIMITED("TOKEN_SUBMIT_FAIL no ctx for clc_session_id=%u",
 			clc_session_id);
 		return 0;
 	}
@@ -344,23 +342,22 @@ static int ums_nl_token_submit_fail(struct sk_buff *skb, struct genl_info *info)
 	if (result == 0) {
 		UMS_LOGE_LIMITED("TOKEN_SUBMIT_FAIL with result=0, clc_session_id=%u, treat as protocol error",
 			clc_session_id);
-		ums_token_xchg_complete(&conn->token_xchg, -EPROTO);
+		ums_token_xchg_complete(&token_ctx->xchg, -EPROTO);
 	} else {
-		ums_token_xchg_complete(&conn->token_xchg, -(int)result);
+		ums_token_xchg_complete(&token_ctx->xchg, -(int)result);
 	}
 
-	ums_conn_nl_put(conn); /* release holder B reference */
+	ums_token_ctx_nl_put(token_ctx); /* release holder B reference */
 	return 0;
 }
 
 static int ums_nl_token_deliver(struct sk_buff *skb, struct genl_info *info)
 {
+	struct ums_token_xchg_ctx *token_ctx;
 	u32 clc_session_id;
 	u8 initiator_id[UMS_SYSTEMID_LEN];
 	u32 result;
 	bool first_contact;
-	struct ums_connection *conn;
-	struct ums_link *lnk;
 	int ret;
 
 	if (!info || !info->attrs)
@@ -382,49 +379,41 @@ static int ums_nl_token_deliver(struct sk_buff *skb, struct genl_info *info)
 		nla_get_u32(info->attrs[UMS_ATTR_RESULT]) : 0;
 	first_contact = nla_get_u8(info->attrs[UMS_ATTR_FIRST_CONTACT]) != 0;
 
-	UMS_LOGD("TOKEN_DELIVER recv, clc_session_id=%u, initiator_id=%s, result=%u, first_contact=%d",
-		clc_session_id, initiator_id, result, first_contact);
+	UMS_LOGD("TOKEN_DELIVER recv, clc_session_id=%u, result=%u, first_contact=%d",
+		clc_session_id, result, first_contact);
 
-	conn = ums_nl_claim_conn(clc_session_id, initiator_id);
-	if (!conn) {
-		UMS_LOGW_LIMITED("TOKEN_DELIVER no conn for clc_session_id=%u",
+	token_ctx = ums_nl_claim_token_ctx(clc_session_id, initiator_id);
+	if (!token_ctx) {
+		UMS_LOGW_LIMITED("TOKEN_DELIVER no ctx for clc_session_id=%u",
 			clc_session_id);
 		goto zero_out;
-	}
-
-	lnk = conn->lnk;
-	if (WARN_ON(!lnk)) {
-		UMS_LOGE_LIMITED("TOKEN_DELIVER conn has no link, clc_session_id=%u",
-			clc_session_id);
-		ums_token_xchg_complete(&conn->token_xchg, -EFAULT);
-		goto nl_put;
 	}
 
 	if (result != 0) {
 		UMS_LOGE_LIMITED("TOKEN_DELIVER failure, clc_session_id=%u, result=%u",
 			clc_session_id, result);
-		ums_token_xchg_complete(&conn->token_xchg, -(int)result);
+		ums_token_xchg_complete(&token_ctx->xchg, -(int)result);
 		goto nl_put;
 	}
 
 	if (first_contact && !info->attrs[UMS_ATTR_JETTY_TOKEN]) {
 		UMS_LOGE_LIMITED("TOKEN_DELIVER missing JETTY_TOKEN, clc_session_id=%u",
 			clc_session_id);
-		ums_token_xchg_complete(&conn->token_xchg, -EBADMSG);
+		ums_token_xchg_complete(&token_ctx->xchg, -EBADMSG);
 		goto nl_put;
 	}
 
 	if (first_contact)
-		lnk->ub_tjetty_cfg.token_value.token =
+		token_ctx->peer_jetty_token.token =
 			nla_get_u32(info->attrs[UMS_ATTR_JETTY_TOKEN]);
 
-	conn->peer_seg_token_value.token =
+	token_ctx->peer_seg_token.token =
 		nla_get_u32(info->attrs[UMS_ATTR_SEG_TOKEN]);
 
-	ums_token_xchg_complete(&conn->token_xchg, 0);
+	ums_token_xchg_complete(&token_ctx->xchg, 0);
 
 nl_put:
-	ums_conn_nl_put(conn); /* release holder B reference */
+	ums_token_ctx_nl_put(token_ctx); /* release holder B reference */
 zero_out:
 	if (info->attrs[UMS_ATTR_JETTY_TOKEN])
 		memzero_explicit(nla_data(info->attrs[UMS_ATTR_JETTY_TOKEN]),
@@ -478,30 +467,34 @@ bool ums_nl_agent_available(void)
 
 /*
  * Register a clc session: insert an entry into clc_ht so that netlink
- * callbacks can find the conn. Sets nl_refcnt=1 inside clc_lock, making
+ * callbacks can find the token_ctx. Sets nl_refcnt=1 inside clc_lock, making
  * the hash table entry (holder A) the initial owner of the reference.
+ *
+ * Must be called early in the connect/listen flow, before the peer side
+ * can initiate a token exchange that causes the local agent to deliver
+ * tokens. This ensures ums_nl_token_deliver can always find the entry.
  */
-static int ums_nl_register_clc_session(u32 clc_session_id, const u8 *initiator_id,
-	struct ums_connection *conn)
+int ums_nl_register_clc_session(struct ums_token_xchg_ctx *token_ctx)
 {
 	struct ums_nl_clc_entry *entry;
 	unsigned long flags;
 	u32 hash;
 
+	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
+		return 0;
+
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return -ENOMEM;
 
-	entry->clc_session_id = clc_session_id;
-	memcpy(entry->initiator_id, initiator_id, UMS_SYSTEMID_LEN);
-	entry->conn = conn;
+	entry->token_ctx = token_ctx;
 
-	hash = ums_nl_session_hash(clc_session_id, initiator_id);
+	hash = ums_nl_session_hash(token_ctx->clc_session_id, token_ctx->initiator_id);
 	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
-	if (ums_nl_find_clc_entry(clc_session_id, initiator_id)) {
+	if (ums_nl_find_clc_entry(token_ctx->clc_session_id, token_ctx->initiator_id)) {
 		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
-		UMS_LOGW_LIMITED("duplicate clc session, clc_session_id=%u",
-			clc_session_id);
+		UMS_LOGE_LIMITED("duplicate clc session, clc_session_id=%u",
+			token_ctx->clc_session_id);
 		kfree(entry);
 		return -EEXIST;
 	}
@@ -510,7 +503,7 @@ static int ums_nl_register_clc_session(u32 clc_session_id, const u8 *initiator_i
 	 * Set nl_refcnt=1 inside clc_lock: the hash table entry (holder A)
 	 * becomes the initial owner. Safe in spinlock: refcount_set is atomic.
 	 */
-	refcount_set(&conn->nl_refcnt, 1);
+	refcount_set(&token_ctx->nl_refcnt, 1);
 	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
 	return 0;
 }
@@ -518,33 +511,31 @@ static int ums_nl_register_clc_session(u32 clc_session_id, const u8 *initiator_i
 /*
  * Unregister a clc session: remove the entry from clc_ht.
  * If the entry is found (holder A still owns the reference), remove it and
- * call ums_conn_nl_put to release the reference (nl_refcnt: 1→0).
+ * call ums_token_ctx_nl_put to release the reference (nl_refcnt: 1→0).
  * If the entry is not found, it was already claimed by a netlink callback
  * (ownership transferred to holder B); in that case we must NOT call
- * ums_conn_nl_put because holder B is responsible for its own release.
+ * ums_token_ctx_nl_put because holder B is responsible for its own release.
  */
-void ums_nl_unregister_clc_session(u32 clc_session_id, const u8 *initiator_id)
+void ums_nl_unregister_clc_session(struct ums_token_xchg_ctx *token_ctx)
 {
 	struct ums_nl_clc_entry *entry;
-	struct ums_connection *conn;
 	unsigned long flags;
 
 	if (g_ums_sys_tuning_config.ub_token_mode != UMS_TOKEN_MODE_SECURE)
 		return;
 
 	spin_lock_irqsave(&g_ums_nl_state.clc_lock, flags);
-	entry = ums_nl_find_clc_entry(clc_session_id, initiator_id);
+	entry = ums_nl_find_clc_entry(token_ctx->clc_session_id, token_ctx->initiator_id);
 	if (entry) {
-		conn = entry->conn;
 		hash_del(&entry->hnode);
 		spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
 		kfree(entry);
-		ums_conn_nl_put(conn); /* release holder A reference */
+		ums_token_ctx_nl_put(token_ctx); /* release holder A reference */
 		return;
 	}
 	spin_unlock_irqrestore(&g_ums_nl_state.clc_lock, flags);
-	UMS_LOGW_LIMITED("unregister clc session not found, clc_session_id=%u",
-		clc_session_id);
+	UMS_LOGD("unregister clc session not found, clc_session_id=%u",
+		token_ctx->clc_session_id);
 }
 
 static int ums_nl_send_token_submit_msg(const struct ums_nl_token_params *params)
@@ -611,19 +602,16 @@ err_out:
 	return rc;
 }
 
-int ums_nl_register_and_submit_tokens(struct ums_sock *ums, bool first_contact)
+int ums_nl_submit_tokens(struct ums_token_xchg_ctx *ctx,
+	const struct ums_ip_addr *peer_addr, bool first_contact)
 {
-	struct ums_connection *conn = &ums->conn;
-	struct ums_link *lnk = conn->lnk;
-	struct sockaddr_storage peer_addr;
-	struct sockaddr_in *sin4;
-	struct sockaddr_in6 *sin6;
 	struct ums_nl_token_params params = {
-		.jetty_token = first_contact ? &lnk->jetty_token_value : NULL,
-		.seg_token = &conn->rmb_desc->seg_token_value,
+		.jetty_token = first_contact ? &ctx->jetty_token : NULL,
+		.seg_token = &ctx->seg_token,
 		.first_contact = first_contact,
-		.clc_session_id = conn->clc_session_id,
-		.initiator_id = conn->initiator_id,
+		.clc_session_id = ctx->clc_session_id,
+		.initiator_id = ctx->initiator_id,
+		.dst_addr = *peer_addr,
 	};
 	int rc;
 
@@ -631,41 +619,14 @@ int ums_nl_register_and_submit_tokens(struct ums_sock *ums, bool first_contact)
 		return 0;
 
 	if (!ums_nl_agent_available()) {
-		UMS_LOGE_LIMITED("ums_agent not available in SECURE mode, conn=%u",
-			conn->conn_id);
+		UMS_LOGE_LIMITED("ums_agent not available in SECURE mode, clc_session_id=%u",
+			ctx->clc_session_id);
 		return -ENOTCONN;
 	}
 
-	rc = ums_nl_register_clc_session(conn->clc_session_id, conn->initiator_id, conn);
-	if (rc != 0) {
-		UMS_LOGE_LIMITED("register clc_session_id failed, clc_session_id=%u, rc=%d",
-			conn->clc_session_id, rc);
-		return rc;
-	}
-
-	rc = kernel_getpeername(ums->clcsock, (struct sockaddr *)&peer_addr);
-	if (rc < 0) {
-		UMS_LOGE_LIMITED("kernel_getpeername failed, rc=%d, conn=%u",
-			rc, conn->conn_id);
-		ums_nl_unregister_clc_session(conn->clc_session_id, conn->initiator_id);
-		return rc;
-	}
-
-	if (peer_addr.ss_family == AF_INET6) {
-		sin6 = (struct sockaddr_in6 *)&peer_addr;
-		params.dst_addr.family = AF_INET6;
-		params.dst_addr.ip.in6 = sin6->sin6_addr;
-	} else {
-		sin4 = (struct sockaddr_in *)&peer_addr;
-		params.dst_addr.family = AF_INET;
-		params.dst_addr.ip.in4.s_addr = sin4->sin_addr.s_addr;
-	}
-
 	rc = ums_nl_send_token_submit_msg(&params);
-	if (rc != 0) {
-		ums_nl_unregister_clc_session(conn->clc_session_id, conn->initiator_id);
+	if (rc != 0)
 		return rc;
-	}
 
 	return 0;
 }
@@ -739,6 +700,7 @@ int __init ums_nl_init(void)
 
 void ums_nl_exit(void)
 {
+	struct ums_token_xchg_ctx *token_ctx;
 	struct ums_nl_clc_entry *entry;
 	struct hlist_node *tmp;
 	int bkt;
@@ -759,24 +721,23 @@ void ums_nl_exit(void)
 	 * Defensive cleanup: iterate clc_ht without clc_lock because:
 	 * 1) genl_unregister_family() guarantees no new .doit callbacks can
 	 *    start, and any in-flight callback has already completed (it
-	 *    either claimed and removed its entry via ums_nl_claim_conn, or
+	 *    either claimed and removed its entry via ums_nl_claim_token_ctx, or
 	 *    never found one);
 	 * 2) ums_core_exit() -> ums_terminate_all() waits for all
 	 *    connections to be freed before we reach here, and each
 	 *    ums_conn_free() calls ums_nl_unregister_clc_session which
-	 *    removes the entry and calls ums_conn_nl_put. Therefore the
+	 *    removes the entry and calls ums_token_ctx_nl_put. Therefore the
 	 *    hash table should be empty at this point.
 	 * If any entry remains, it indicates a bug. WARN and log to make
 	 * the anomaly visible, then clean up as a safety net.
 	 */
 	hash_for_each_safe(g_ums_nl_state.clc_ht, bkt, tmp, entry, hnode) {
-		struct ums_connection *conn = entry->conn;
-
+		token_ctx = entry->token_ctx;
 		WARN_ON(1);
 		UMS_LOGE("residual clc entry during nl_exit, clc_session_id=%u",
-			entry->clc_session_id);
+			token_ctx->clc_session_id);
 		hash_del(&entry->hnode);
 		kfree(entry);
-		ums_conn_nl_put(conn);
+		ums_token_ctx_nl_put(token_ctx);
 	}
 }

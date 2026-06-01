@@ -51,7 +51,6 @@ struct ums_agent_tls_conn {
     enum ums_agent_tls_conn_state state;
     struct timespec create_time;
     struct timespec handshake_start_time;
-    struct timespec handshake_complete_time;
     struct timespec last_active_time;
     struct timespec shutdown_start_time;
     uint32_t conn_ttl_sec;

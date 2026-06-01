@@ -167,7 +167,6 @@ static int ums_find_ub_device_serv(struct ums_sock *new_ums,
 
 	/* prepare UB check */
 	(void)memcpy(ini->peer_systemid, pclc->lcl.id_for_peer, UMS_SYSTEMID_LEN);
-	(void)memcpy(ini->initiator_id, pclc->lcl.id_for_peer, UMS_SYSTEMID_LEN);
 
 	if (pclc->lcl.ubcore_route_enable == UMS_UBCORE_ROUTE_ENABLE) {
 		ini->ubcore_route_enable = pclc->lcl.ubcore_route_enable;
@@ -277,6 +276,7 @@ static int ums_listen_ub_finish(struct ums_sock *new_ums, struct ums_clc_msg_acc
 		return UMS_CLC_DECL_ERR_RTOK;
 
 	if (local_first) {
+		ums_link_update_peer_jetty_token(link, &new_ums->conn.token_ctx);
 		if (ums_ubcore_ready_link(link) != 0)
 			return UMS_CLC_DECL_ERR_RDYLNK;
 		/* QP confirmation over UB fabric */
@@ -295,6 +295,7 @@ void ums_listen_work(struct work_struct *work)
 	struct ums_clc_msg_proposal_area *buf;
 	struct ums_clc_msg_proposal *pclc;
 	struct ums_init_info *ini = NULL;
+	struct ums_ip_addr peer_addr;
 	int rc = 0;
 
 	if (new_ums->listen_ums->sk.sk_state != (unsigned char)UMS_LISTEN) {
@@ -333,7 +334,9 @@ void ums_listen_work(struct work_struct *work)
 	}
 
 	ini->ums_type_v1 = pclc->hdr.typev1;
-	ini->clc_session_id = ntohl(pclc->lcl.clc_session_id);
+
+	ums_token_xchg_ctx_init(&new_ums->conn.token_ctx,
+		ntohl(pclc->lcl.clc_session_id), pclc->lcl.id_for_peer);
 
 	ums_lgr_pending_lock(ini, &g_ums_server_lgr_pending);
 	ums_close_init(new_ums);
@@ -347,10 +350,25 @@ void ums_listen_work(struct work_struct *work)
 		goto out_unlock;
 	}
 
-	rc = ums_nl_register_and_submit_tokens(new_ums, ini->first_contact_local != 0);
+	rc = ums_sock_get_peer_addr(new_ums->clcsock, &peer_addr);
+	if (rc != 0) {
+		rc = UMS_CLC_DECL_INTERR;
+		goto out_unlock;
+	}
+
+	rc = ums_nl_register_clc_session(&new_ums->conn.token_ctx);
+	if (rc != 0) {
+		rc = UMS_CLC_DECL_ERR_SESS_SEG;
+		goto out_unlock;
+	}
+
+	new_ums->conn.token_ctx.jetty_token = new_ums->conn.lnk->jetty_token_value;
+	new_ums->conn.token_ctx.seg_token = new_ums->conn.rmb_desc->seg_token_value;
+	rc = ums_nl_submit_tokens(&new_ums->conn.token_ctx,
+		&peer_addr, ini->first_contact_local != 0);
 	if (rc != 0) {
 		rc = UMS_CLC_DECL_ERR_TOKEN_SUBMIT;
-		goto out_unlock;
+		goto out_unregister_clc_session;
 	}
 
 	/* send UMS Accept CLC message */
@@ -378,7 +396,7 @@ void ums_listen_work(struct work_struct *work)
 		goto out_unregister_clc_session;
 	}
 
-	rc = ums_wait_token_xchg(&new_ums->conn);
+	rc = ums_wait_token_xchg(&new_ums->conn.token_ctx);
 	if (rc != 0) {
 		rc = UMS_CLC_DECL_ERR_TOKEN_XCHG;
 		goto out_unregister_clc_session;
@@ -393,11 +411,10 @@ void ums_listen_work(struct work_struct *work)
 	ums_conn_save_peer_info(new_ums, cclc);
 	ums_copy_conn_jetty_info(new_ums);
 	ums_listen_out_connected(new_ums);
-	ums_nl_unregister_clc_session(new_ums->conn.clc_session_id, new_ums->conn.initiator_id);
 	goto out_free;
 
 out_unregister_clc_session:
-	ums_nl_unregister_clc_session(new_ums->conn.clc_session_id, new_ums->conn.initiator_id);
+	ums_nl_unregister_clc_session(&new_ums->conn.token_ctx);
 out_unlock:
 	ums_lgr_pending_unlock(ini, &g_ums_server_lgr_pending);
 out_decl:
