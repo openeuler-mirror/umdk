@@ -20,17 +20,14 @@
 
 #define QBUF_POOL_TLS_MAX (2048)     // max count of thread local buffer storage
 #define QBUF_POOL_BATCH_CNT (64) // batch size when fetch from global or return to global
-#define QBUF_POOL_TLS_QBUF_POOL_DEPTH (12 * 1024) // all thread-local pool capacity sum budget
+#define QBUF_POOL_TLS_QBUF_DEPTH (12 * 1024) // all thread-local pool capacity sum budget
 #define QBUF_POOL_EXPAND_MAX(__total_size) ((__total_size) - (__total_size) / 8) // single thread capacity cap
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
-#define QBUF_POOL_SHRINK_IDLE_S (1) // idle threshold for global shrink trigger (1s)
-#define QBUF_POOL_SHRINK_CLEAR_THRESHOLD (64) // clear to zero if capacity below this
 
 #define QBUF_POOL_EXPANSION_RATIO 10 // percentage that triggers expansion
 
 #define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
-#define QBUF_POOL_SLOT_ARRAY_INIT_CAP 4
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_CHECK_ASYNC_PERIOD_US (1000)
@@ -136,6 +133,29 @@ static volatile uint64_t g_total_escape_buf_cnt = 0;  // sum of all threads' cap
 
 static void *g_buffer_addr = NULL;
 static uint64_t g_total_len = 0;
+
+static inline uint32_t umq_qbuf_pool_batch_cnt(void)
+{
+    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ? (QBUF_POOL_BATCH_CNT << 1) : QBUF_POOL_BATCH_CNT;
+}
+
+static inline uint32_t umq_qbuf_pool_tls_depth(void)
+{
+    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
+        (QBUF_POOL_TLS_QBUF_DEPTH << 1) : QBUF_POOL_TLS_QBUF_DEPTH;
+}
+
+static inline uint32_t umq_qbuf_pool_shrink_threshold(void)
+{
+    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
+        (QBUF_POOL_SHRINK_THRESHOLD << 1) : QBUF_POOL_SHRINK_THRESHOLD;
+}
+
+static inline uint32_t umq_qbuf_expansion_count(void)
+{
+    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
+        (QBUF_POOL_DEFAULT_EXPANSION_COUNT << 1) : QBUF_POOL_DEFAULT_EXPANSION_COUNT;
+}
 
 static void free_expansion_pool_slot(qbuf_expansion_pool_t *exp_pool, qbuf_expansion_pool_slot_t *slot)
 {
@@ -784,7 +804,7 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
     exp_pool->expansion_count = 0;
     if (with_data) {
         exp_pool->expansion_block_count = (cfg->expansion_block_count == 0) ?
-            QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count;
+            umq_qbuf_expansion_count() : cfg->expansion_block_count;
         if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
             exp_pool->sub_slot_blk_count = QBUF_MEMALIGN_SIZE / (umq_buf_size_small() + (uint32_t)sizeof(umq_buf_t));
         } else {
@@ -795,7 +815,7 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
         exp_pool->sub_slot_data_buf_size = exp_pool->sub_slot_blk_count * umq_buf_size_small();
     } else {
         exp_pool->expansion_block_count = UMQ_EMPTY_HEADER_COEFFICIENT *
-            ((cfg->expansion_block_count == 0) ? QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count);
+            ((cfg->expansion_block_count == 0) ? umq_qbuf_expansion_count() : cfg->expansion_block_count);
         exp_pool->trigger_expand_block_num = exp_pool->expansion_block_count / QBUF_POOL_EXPANSION_RATIO;
     }
     exp_pool->expansion_pool_id_min = cfg->expansion_pool_id_min;
@@ -877,7 +897,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     uint64_t without_data_expand_mem_size = 0;
     if (cfg->mode == UMQ_BUF_SPLIT) {
         without_data_expand_mem_size = (uint32_t)sizeof(umq_buf_t) * UMQ_EMPTY_HEADER_COEFFICIENT *
-            ((cfg->expansion_block_count == 0) ? QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count);
+            ((cfg->expansion_block_count == 0) ? umq_qbuf_expansion_count() : cfg->expansion_block_count);
     }
 
     if (!cfg->disable_scale_cap && max_umq_buf_pool_size < g_total_len + without_data_expand_mem_size) {
@@ -900,9 +920,9 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     g_qbuf_pool.expansion_mem_size_max = max_umq_buf_pool_size - g_total_len;
     g_qbuf_pool.seg_ops = cfg->seg_ops;
     g_qbuf_pool.local_pool_cfg.tls_qbuf_pool_depth =
-        (cfg->tls_qbuf_pool_depth == 0) ? QBUF_POOL_TLS_QBUF_POOL_DEPTH : cfg->tls_qbuf_pool_depth;
+        (cfg->tls_qbuf_pool_depth == 0) ? umq_qbuf_pool_tls_depth() : cfg->tls_qbuf_pool_depth;
     g_qbuf_pool.local_pool_cfg.tls_expand_qbuf_pool_depth = cfg->tls_expand_qbuf_pool_depth == 0 ?
-        QBUF_POOL_EXPAND_MAX(g_qbuf_pool.local_pool_cfg.tls_qbuf_pool_depth) :  cfg->tls_expand_qbuf_pool_depth;
+        QBUF_POOL_EXPAND_MAX(g_qbuf_pool.local_pool_cfg.tls_qbuf_pool_depth) : cfg->tls_expand_qbuf_pool_depth;
     g_qbuf_pool.disable_malloc_escape = cfg->disable_malloc_escape;
 
     ret = umq_qbuf_expansion_pool_init(cfg);
@@ -1034,10 +1054,11 @@ void umq_qbuf_pool_uninit(void)
 static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(
     uint32_t needed, local_block_pool_t *local_pool, bool with_data)
 {
+    int ret;
     if (g_qbuf_pool.disable_scale_cap) {
         uint32_t fetch_count = 0;
         while (fetch_count < needed) {
-            int32_t ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, with_data, QBUF_POOL_BATCH_CNT);
+            ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, with_data, umq_qbuf_pool_batch_cnt());
             if (ret <= 0) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, fetch count: %u\n", needed);
                 return ret;
@@ -1072,7 +1093,8 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(
     uint64_t local_cnt_before = *local_buf_cnt;
 
     // Round up based on QBUF_POOL_BATCH_CNT, with a minimum expansion of QBUF_POOL_BATCH_CNT each time
-    uint32_t batch_cnt = (needed + QBUF_POOL_BATCH_CNT - 1) / QBUF_POOL_BATCH_CNT * QBUF_POOL_BATCH_CNT;
+    uint32_t batch_cnt =
+        (needed + umq_qbuf_pool_batch_cnt() - 1) / umq_qbuf_pool_batch_cnt() * umq_qbuf_pool_batch_cnt();
     uint64_t grow = batch_cnt;
     if ((*cap) + grow > g_qbuf_pool.local_pool_cfg.tls_expand_qbuf_pool_depth) {
         grow = ((*cap) >= g_qbuf_pool.local_pool_cfg.tls_expand_qbuf_pool_depth) ?
@@ -1084,9 +1106,8 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(
     }
 
     uint32_t fetch_count = 0;
-    int32_t ret = 0;
     while (fetch_count < batch_cnt) {
-        ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, with_data, QBUF_POOL_BATCH_CNT);
+        ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, with_data, umq_qbuf_pool_batch_cnt());
         if (ret <= 0) {
             if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, fetch count: %u\n", batch_cnt);
@@ -1130,7 +1151,7 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data)
     }
 
     uint64_t shrink = remaining / QBUF_POOL_SELF_SHRINK_RATIO;
-    if (shrink < QBUF_POOL_SHRINK_THRESHOLD || (*cap_ptr) == 0) {
+    if (shrink < umq_qbuf_pool_shrink_threshold() || (*cap_ptr) == 0) {
         return;
     }
     *cap_ptr = (*cap_ptr) - shrink;
@@ -1399,7 +1420,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
 
         uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : local_pool->capacity_without_data;
         if (local_pool->buf_cnt_without_data > cap) {
-            uint32_t threshold = cap > QBUF_POOL_BATCH_CNT ? cap - QBUF_POOL_BATCH_CNT : 0;
+            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
             return_to_global(&g_qbuf_pool.block_pool, local_pool, &g_thread_cache.stats, false, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
         }
@@ -1415,7 +1436,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
     uint32_t buf_cnt = (uint32_t)local_pool->buf_cnt_with_data;
 
     if (buf_cnt > cap) {
-        uint32_t threshold = cap > QBUF_POOL_BATCH_CNT ? cap - QBUF_POOL_BATCH_CNT : 0;
+        uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
         return_to_global(&g_qbuf_pool.block_pool, local_pool, &g_thread_cache.stats, true, threshold);
         g_thread_cache.stats.tls_return_cnt_with_data++;
     }

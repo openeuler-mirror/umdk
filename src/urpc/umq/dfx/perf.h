@@ -18,7 +18,6 @@
 extern "C" {
 #endif
 
-#define UMQ_PERF_REC_NAME_MAX_LEN                   (128u)
 #define UMQ_PERF_RECORD_TRANSPORT_POLL_EMPTY_OFFSET (2)
 
 #define UMQ_DFX_PERF_EQUALS "=========================================================================================\
