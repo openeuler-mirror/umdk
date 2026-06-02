@@ -21,7 +21,7 @@
 #define EID_LEN            (16)
 #define PORT_NUM           (9)
 #define MAX_ALL_PORT_NUM   (18)
-#define MAX_NODE_NUM       (64)
+#define MAX_NODE_NUM       (1024)
 #define IODIE_NUM_PER_CHIP (1)
 #define CHIP_NUM           (2)
 #define IODIE_NUM          (2)
@@ -76,7 +76,7 @@ void delete_topo_map(topo_map_t *topo_map);
 
 /**
  * This function requires traversing all EIDS in the topo_map to return a result,
- * with a maximum time complexity of O(MAX_NODE_NUM(16) * (BONDING_EID_NUM(1) +
+ * with a maximum time complexity of O(MAX_NODE_NUM(1024) * (BONDING_EID_NUM(1) +
  * IODIE_NUM(2) * (PRIMARY_EID_NUM(1) + PORT_NUM(9)))) = O(336).
  * @return 0 for success, other for error or not found
  */
