@@ -85,112 +85,109 @@ static const perftest_cmd_t g_cmd[] = {
 
 static void command_usage(const char *argv0)
 {
-    (void)printf("Usage: %s command [command options]\n", argv0);
-    (void)printf("  %s   URMA perftest tool\n", argv0);
-    (void)printf("Command syntax:\n");
-    (void)printf("  read_lat                    Test for read latency.\n");
-    (void)printf("  write_lat                   Test for write latency.\n");
-    (void)printf("  send_lat                    Test for send latency.\n");
-    (void)printf("  atomic_lat                  Test for atomic latency.\n");
-    (void)printf("  read_bw                     Test for read bandwidth.\n");
-    (void)printf("  write_bw                    Test for write bandwidth.\n");
-    (void)printf("  send_bw                     Test for send bandwidth.\n");
-    (void)printf("  atomic_bw                   Test for atomic bandwidth.\n");
+    LOG_QUIET(
+        "Usage: %s command [command options]\n"
+        "  %s   URMA perftest tool\n"
+        "Command syntax:\n"
+        "  read_lat                    Test for read latency.\n"
+        "  write_lat                   Test for write latency.\n"
+        "  send_lat                    Test for send latency.\n"
+        "  atomic_lat                  Test for atomic latency.\n"
+        "  read_bw                     Test for read bandwidth.\n"
+        "  write_bw                    Test for write bandwidth.\n"
+        "  send_bw                     Test for send bandwidth.\n"
+        "  atomic_bw                   Test for atomic bandwidth.\n",
+        argv0, argv0);
 }
 
 static void usage(const char *argv0)
 {
     command_usage(argv0);
-    (void)printf("Options:\n");
-    (void)printf("  -a, --all[order]            Run sizes from 2 till 2^23,\n"
-                 "                              default 2^12 for send, 2^16 for others, order: exponent of 2.\n");
-    (void)printf("  -A, --atomic_type <type>    Specify atomic type, {cas|faa}.\n");
-    (void)printf("  -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.\n");
-    (void)printf("  -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).\n");
-    (void)printf("  -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.\n");
-    (void)printf("  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.\n");
-    (void)printf("  -d, --dev <dev_name>        The name of ubep device.\n");
-    (void)printf("  -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.\n");
-    (void)printf("  -e, --use_jfce              use jfc event.\n");
-    (void)printf("  --eid_idx                   Specified eid index of device.\n");
-    (void)printf("  -E, --err_timeout <time>    the timeout before report error, ranging from [0, 31],\n"
-                 "                              the actual timeout in usec is caculated by: 4.096*(2^err_timeout).\n");
-    (void)printf("  -f, --use_flat_api          Choose to use flat API, only works in SIMPLEX mode.\n");
-    (void)printf("  -F, --cpu_freq_f            To report warnings when CPU frequency drifts, default as NOT.\n");
-    (void)printf("  -h, --help                  Show help info.\n");
-    (void)printf("  -I, --inline_size <size>    Max size of message to be sent in inline (default 0).\n");
-    (void)printf("  -j, --share_jfr <true/false> share jfr on create jetty.\n");
-    (void)printf("  -J, --jettys <num of jetty> Num of jettys(default 1).\n");
-    (void)printf("  -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.\n");
-    (void)printf("  -n, --iters <iters>         Number of exchanges (at least 5, default 10000).\n");
-    (void)printf("  -N, --no_peak               Cancel peak-bw calculation.\n");
-    (void)printf("  -l, --jfs_post_list <size>  Post list of send WQEs of <list size> size.\n");
-    (void)printf("  -L, --lock_free             Jetty's interior is unlocked.\n");
-    (void)printf("  -O, --priority              set the priority of JFS, ranging from [0, 15].\n");
-    (void)printf("  -p, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM.\n");
-    (void)printf("  -P, --port <id>             Server port for bind or connect, default 21115.\n");
-    (void)printf("  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.\n");
-    (void)printf("  -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.\n");
-    (void)printf("  -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).\n");
-    (void)printf("  -s, --size <size>           Size of message to exchange (default 2).\n");
-    (void)printf("  -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .\n");
-    (void)printf("  -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n");
-    (void)printf("  -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.\
-                                                                            dscp, vlan, sl are optional\n");
-    (void)printf("  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n");
-    (void)printf("  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
-                 "                              Print period for infinite mode, default 2 seconds.\n");
-    (void)printf("  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
-                 "                              if set, value of infinite will be overwrite.\n");
-    (void)printf("  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n");
-    (void)printf("  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n");
-    (void)printf("  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n");
-    (void)printf(" --order_type <type>          Order type: 0 for default order,\
-                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n");
-    (void)printf("  --enable_ipv6               enable ipv6 for server ip. default disable.\n");
-    (void)printf("  --enable_credit             enable send credit, default: disable.\n");
-    (void)printf("  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n");
-    (void)printf("  --credit_notify_cnt <num>   Notify the send side after recv packets, default: jfr_depth / 4.\n");
-    (void)printf("  --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.\n");
-    (void)printf("  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.\n");
-    (void)printf("  --enable_imm                Enable immediate data for write or send, default: disable.\n");
-    (void)printf("  --enable_err_continue       Enable continue running when cr erros, default: disable.\n");
-    (void)printf("  --notify_data <value>       enable write_with_notify, value is ensured by hardware.\n");
-    (void)printf("  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. \
-default: disable.\n");
-    (void)printf("  --oor_en                    Enable out of order for user_tp, default: disable.\n");
-    (void)printf("  --spray_en                  Enable multipathing for user_tp, default: disable.\n");
-    (void)printf("  --cc_en                     Enable congestion control for user_tp, default: disable.\n");
-    (void)printf("  --cc_alg <num>              Set congestion Control Algorithm for user_tp, [0, 7], default: 0.\n");
-    (void)printf("  --retry_num  <num>          Set retry num for user_tp, default: 7.\n");
-    (void)printf("  --ack_timeout <num>         Set ack timeout for user_tp, default: 15.\n");
-    (void)printf("  --sge_num <num>             Set sge_num for wr, default: 1.\n");
-    (void)printf("  --enable_write_dirty <time> Enable write dirty and set the period of write dirty, \
-default: disable.\n");
-    (void)printf("  --pair_num <num>            Enable multiplayer model and set the number of connection, \
-default: disable.\n");
-    (void)printf("  --sip <ip>                  Set source ip address.\n");
-    (void)printf("  --dip <ip>                  Set dest ip address.\n");
-    (void)printf("  --dscp <dscp>               Set dscp .\n");
-    (void)printf("  --vlan <vlan_id>            Set vlan_id .\n");
-    (void)printf("  --sl <sl>                   Set sl .\n");
-    (void)printf("  --async_import              Enable asynchronous connection establishment\n");
-    (void)printf("  --tp_aware                  Enable tp aware connect, default: disable.\n");
-    (void)printf("  --tp_reuse                  Reuse tp in RM mode if enable tp aware, default: disable.\n");
-    (void)printf("  --ctp                       Use ctp, default: disable.\n");
-    (void)printf("  --jetty_id                  Set the jetty_id, default: 0.\n");
-    (void)printf("  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n\
-                                                timeout = 0: return immediately even if no events are ready,\n\
-                                                timeout = -1: an infinite timeout,\n\
-                                                default: 1000(1s).\n");
-    (void)printf("  --page_size                 Set page size, default: 4096.\n");
-    (void)printf("  --hugepage_size <size>      Page size for allocated memory. Only support \
-2MB or 1GB currently.\n");
-    (void)printf("  --bind_ip <ip>          The ip for bind.\n");
-    (void)printf("  --stdout                    Print logs to console.\n");
-    (void)printf("  --bond_mode                 Set bonding device mode, support: "
-                 "standalone, active_backup, balance.\n");
-    (void)printf("  --bond_level                Set bonding device level, support: iodie, port.\n");
+    LOG_QUIET(
+        "Options:\n"
+        "  -a, --all[order]            Run sizes from 2 till 2^23,\n"
+        "                              default 2^12 for send, 2^16 for others, order: exponent of 2.\n"
+        "  -A, --atomic_type <type>    Specify atomic type, {cas|faa}.\n"
+        "  -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.\n"
+        "  -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).\n"
+        "  -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.\n"
+        "  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.\n"
+        "  -d, --dev <dev_name>        The name of ubep device.\n"
+        "  -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.\n"
+        "  -e, --use_jfce              use jfc event.\n"
+        "  --eid_idx                   Specified eid index of device.\n"
+        "  -E, --err_timeout <time>    the timeout before report error, ranging from [0, 31],\n"
+        "                              the actual timeout in usec is caculated by: 4.096*(2^err_timeout).\n"
+        "  -f, --use_flat_api          Choose to use flat API, only works in SIMPLEX mode.\n"
+        "  -F, --cpu_freq_f            To report warnings when CPU frequency drifts, default as NOT.\n"
+        "  -h, --help                  Show help info.\n"
+        "  -I, --inline_size <size>    Max size of message to be sent in inline (default 0).\n"
+        "  -j, --share_jfr <true/false> share jfr on create jetty.\n"
+        "  -J, --jettys <num of jetty> Num of jettys(default 1).\n"
+        "  -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.\n"
+        "  -n, --iters <iters>         Number of exchanges (at least 5, default 10000).\n"
+        "  -N, --no_peak               Cancel peak-bw calculation.\n"
+        "  -l, --jfs_post_list <size>  Post list of send WQEs of <list size> size.\n"
+        "  -L, --lock_free             Jetty's interior is unlocked.\n"
+        "  -O, --priority              set the priority of JFS, ranging from [0, 15].\n"
+        "  -p, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM.\n"
+        "  -P, --port <id>             Server port for bind or connect, default 21115.\n"
+        "  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.\n"
+        "  -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.\n"
+        "  -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).\n"
+        "  -s, --size <size>           Size of message to exchange (default 2).\n"
+        "  -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .\n"
+        "  -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n"
+        "  -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required."
+        "                                                                            dscp, vlan, sl are optional\n"
+        "  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n"
+        "  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
+        "                              Print period for infinite mode, default 2 seconds.\n"
+        "  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
+        "                              if set, value of infinite will be overwrite.\n"
+        "  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n"
+        "  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n"
+        "  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n"
+        " --order_type <type>          Order type: 0 for default order,"
+        "                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n"
+        "  --enable_ipv6               enable ipv6 for server ip. default disable.\n"
+        "  --enable_credit             enable send credit, default: disable.\n"
+        "  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n"
+        "  --credit_notify_cnt <num>   Notify the send side after recv packets, default: jfr_depth / 4.\n"
+        "  --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.\n"
+        "  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.\n"
+        "  --enable_imm                Enable immediate data for write or send, default: disable.\n"
+        "  --enable_err_continue       Enable continue running when cr erros, default: disable.\n"
+        "  --notify_data <value>       enable write_with_notify, value is ensured by hardware.\n"
+        "  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.\n"
+        "  --oor_en                    Enable out of order for user_tp, default: disable.\n"
+        "  --spray_en                  Enable multipathing for user_tp, default: disable.\n"
+        "  --cc_en                     Enable congestion control for user_tp, default: disable.\n"
+        "  --cc_alg <num>              Set congestion Control Algorithm for user_tp, [0, 7], default: 0.\n"
+        "  --retry_num  <num>          Set retry num for user_tp, default: 7.\n"
+        "  --ack_timeout <num>         Set ack timeout for user_tp, default: 15.\n"
+        "  --sge_num <num>             Set sge_num for wr, default: 1.\n"
+        "  --enable_write_dirty <time> Enable write dirty and set the period of write dirty, default: disable.\n"
+        "  --pair_num <num>            Enable multiplayer model and set the number of connection, default: disable.\n"
+        "  --sip <ip>                  Set source ip address.\n"
+        "  --dip <ip>                  Set dest ip address.\n"
+        "  --dscp <dscp>               Set dscp .\n"
+        "  --vlan <vlan_id>            Set vlan_id .\n"
+        "  --sl <sl>                   Set sl .\n"
+        "  --async_import              Enable asynchronous connection establishment\n"
+        "  --tp_aware                  Enable tp aware connect, default: disable.\n"
+        "  --tp_reuse                  Reuse tp in RM mode if enable tp aware, default: disable.\n"
+        "  --ctp                       Use ctp, default: disable.\n"
+        "  --jetty_id                  Set the jetty_id, default: 0.\n"
+        "  --wait_jfc_timeout          Set timeout parameter for urma_wait_jfc (in milliseconds),\n"
+        "                                                timeout = 0: return immediately even if no events are ready,\n"
+        "                                                timeout = -1: an infinite timeout,\n"
+        "                                                default: 1000(1s).\n"
+        "  --page_size                 Set page size, default: 4096.\n"
+        "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
+        "  --bind_ip <ip>              The ip for bind.\n"
+        "  --bond_mode                 Set bonding device mode, support: standalone, active_backup, balance.\n"
+        "  --bond_level                Set bonding device level, support: iodie, port.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
@@ -373,62 +370,62 @@ void print_cfg(const perftest_config_t *cfg)
     if (cfg == NULL) {
         return;
     }
-    (void)printf(PERFTEST_RESULT_LINE);
-    (void)printf("                    ");
-    (void)printf("%s ", g_print_test_str[cfg->api_type]);
+    LOG_QUIET(PERFTEST_RESULT_LINE);
+    LOG_QUIET("                    ");
+    LOG_QUIET("%s ", g_print_test_str[cfg->api_type]);
     if (cfg->api_type == PERFTEST_ATOMIC) {
-        (void)printf("%s ", g_atomic_types_str[cfg->atomic_type]);
+        LOG_QUIET("%s ", g_atomic_types_str[cfg->atomic_type]);
     }
 
     if (cfg->type == PERFTEST_BW) {
         if (cfg->bidirection) {
-            (void)printf("Bidirectional ");
+            LOG_QUIET("Bidirectional ");
         }
         if (cfg->jfs_post_list > 1) {
-            (void)printf("JFS Post List ");
+            LOG_QUIET("JFS Post List ");
         }
-        (void)printf("BandWidth ");
+        LOG_QUIET("BandWidth ");
     } else if (cfg->type == PERFTEST_LAT) {
-        (void)printf("Latency ");
+        LOG_QUIET("Latency ");
     }
-    (void)printf("Test\n");
+    LOG_QUIET("Test\n");
 
     if (cfg->use_jfce) {
-        (void)printf(" Test with jfc events.\n");
+        LOG_QUIET(" Test with jfc events.\n");
     }
 
-    (void)printf(" Number of jettys    : %-10u\t\t Transport mode   : %s\n", cfg->jettys,
-                 urma_tp_type_to_string(cfg->tp_type));
-    (void)printf(" JFC depth           : %-10u\t\t Device name      : %s\n", cfg->jfc_depth, cfg->dev_name);
-    (void)printf(" Trans mode          : %-10s\t\t JETTY mode       : %s\n", g_trans_mode_str[cfg->trans_mode],
-                 g_jetty_mode_str[cfg->jetty_mode]);
+    LOG_QUIET(" Number of jettys    : %-10u\t\t Transport mode   : %s\n", cfg->jettys,
+              urma_tp_type_to_string(cfg->tp_type));
+    LOG_QUIET(" JFC depth           : %-10u\t\t Device name      : %s\n", cfg->jfc_depth, cfg->dev_name);
+    LOG_QUIET(" Trans mode          : %-10s\t\t JETTY mode       : %s\n", g_trans_mode_str[cfg->trans_mode],
+              g_jetty_mode_str[cfg->jetty_mode]);
     if (cfg->comm.server_ip != NULL || cfg->bidirection) {
-        (void)printf(" JFS depth           : %u\n", cfg->jfs_depth);
+        LOG_QUIET(" JFS depth           : %u\n", cfg->jfs_depth);
     }
     if (cfg->jfs_post_list > 1) {
-        (void)printf(" JFS post list       : %u\n", cfg->jfs_post_list);
+        LOG_QUIET(" JFS post list       : %u\n", cfg->jfs_post_list);
     }
     if (cfg->jfr_post_list > 1) {
-        (void)printf(" JFR post list       : %u\n", cfg->jfr_post_list);
+        LOG_QUIET(" JFR post list       : %u\n", cfg->jfr_post_list);
     }
     if (cfg->api_type == PERFTEST_SEND && (cfg->comm.server_ip == NULL || cfg->bidirection)) {
-        (void)printf(" JFR depth           : %u\n", cfg->jfr_depth);
+        LOG_QUIET(" JFR depth           : %u\n", cfg->jfr_depth);
     }
 
     if (cfg->type == PERFTEST_BW) {
-        (void)printf(" CQ Moderation       : %u\n", cfg->cq_mod);
+        LOG_QUIET(" CQ Moderation       : %u\n", cfg->cq_mod);
     }
 
     if (cfg->api_type != PERFTEST_READ && cfg->api_type != PERFTEST_ATOMIC) {
-        (void)printf(" Max inline size     : %u[B]\n", cfg->inline_size);
+        LOG_QUIET(" Max inline size     : %u[B]\n", cfg->inline_size);
     }
-    (void)printf(PERFTEST_RESULT_LINE);
+    LOG_QUIET(PERFTEST_RESULT_LINE);
 }
 
 static void parse_arge_atomic_type(perftest_config_t *cfg, char *opt)
 {
     if (cfg->api_type != PERFTEST_ATOMIC) {
-        (void)fprintf(stderr, "You are not running the atomic_lat/bw test!\n");
+        LOG_ERROR("You are not running the atomic_lat/bw test!\n");
         exit(1);
     }
 
@@ -437,7 +434,7 @@ static void parse_arge_atomic_type(perftest_config_t *cfg, char *opt)
     } else if (strcmp(g_atomic_types_str[1], opt) == 0) {
         cfg->atomic_type = PERFTEST_FAA;
     } else {
-        (void)fprintf(stderr, "Invalid Atomic type! please choose from {cas, faa}\n");
+        LOG_ERROR("Invalid Atomic type! please choose from {cas, faa}\n");
         exit(1);
     }
 }
@@ -452,7 +449,7 @@ static int parse_bond_mode(perftest_config_t *cfg, const char *opt)
     } else if (strcmp(g_bond_mode_str[BONDP_BONDING_MODE_BALANCE], opt) == 0) {
         cfg->bond_mode = BONDP_BONDING_MODE_BALANCE;
     } else {
-        (void)fprintf(stderr, "Bond mode only support standalone, active_backup and balance.\n");
+        LOG_ERROR("Bond mode only support standalone, active_backup and balance.\n");
         return -1;
     }
     return 0;
@@ -465,7 +462,7 @@ static int parse_bond_level(perftest_config_t *cfg, const char *opt)
     } else if (strcmp(g_bond_level_str[BONDP_BONDING_LEVEL_PORT], opt) == 0) {
         cfg->bond_level = BONDP_BONDING_LEVEL_PORT;
     } else {
-        (void)fprintf(stderr, "Bond level only support iodie and port.\n");
+        LOG_ERROR("Bond level only support iodie and port.\n");
         return -1;
     }
     return 0;
@@ -475,8 +472,8 @@ static inline int check_value_range(const perftest_value_range_t *value_range)
 {
     if (value_range->value < (uint64_t)value_range->min ||
         value_range->value > (uint64_t)value_range->max) {
-        (void)fprintf(stderr, "%s should be between %u and %u.\n", value_range->name,
-                      value_range->min, value_range->max);
+        LOG_ERROR("%s should be between %u and %u.\n", value_range->name,
+                  value_range->min, value_range->max);
         return -1;
     }
     return 0;
@@ -496,8 +493,8 @@ static int check_cfg_range(perftest_config_t *cfg)
     };
     for (uint32_t i = 0; i < sizeof(value_range) / sizeof(perftest_value_range_t); i++) {
         if (check_value_range(&value_range[i]) != 0) {
-            (void)fprintf(stderr, "Failed to check value, value: %lu, min: %u, max: %u, name: %s.\n",
-                          value_range[i].value, value_range[i].min, value_range[i].max, value_range[i].name);
+            LOG_ERROR("Failed to check value, value: %lu, min: %u, max: %u, name: %s.\n",
+                      value_range[i].value, value_range[i].min, value_range[i].max, value_range[i].name);
             return -1;
         }
     }
@@ -525,7 +522,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 {
     uint32_t offset;
     if (argc == 1) {
-        (void)printf("Input invalid with argc: %d.\n", argc);
+        LOG_ERROR("Input invalid with argc: %d.\n", argc);
         usage(argv[0]);
         return -1;
     }
@@ -535,7 +532,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
     /* First parse the command */
     cfg->cmd = parse_command(argv[1]);
     if (cfg->cmd == PERFTEST_CMD_NUM) {
-        (void)printf("Input command invalid with argv[1]: %s.\n", argv[1]);
+        LOG_ERROR("Input command invalid with argv[1]: %s.\n", argv[1]);
         command_usage(argv[0]);
         return -1;
     }
@@ -656,7 +653,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'B':
                 cfg->bidirection = true;
                 if (cfg->type == PERFTEST_LAT) {
-                    (void)fprintf(stderr, "Bidirectional is only available in BW test.\n");
+                    LOG_ERROR("Bidirectional is only available in BW test.\n");
                     return -1;
                 }
                 break;
@@ -672,8 +669,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'D':
                 (void)ub_str_to_u32(optarg, &cfg->duration);
                 if (cfg->duration < PERFTEST_DEF_WARMUP_TIME) {
-                    (void)fprintf(stderr, "Duration should be no less than %d, please check.\n",
-                                  PERFTEST_DEF_WARMUP_TIME);
+                    LOG_ERROR("Duration should be no less than %d, please check.\n",
+                              PERFTEST_DEF_WARMUP_TIME);
                     return -1;
                 }
                 cfg->time_type.bs.duration = 1;
@@ -681,7 +678,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'e':
                 cfg->use_jfce = true;
                 if (cfg->api_type == PERFTEST_WRITE) {
-                    (void)fprintf(stderr, "Events feature not available on WRITE test\n");
+                    LOG_ERROR("Events feature not available on WRITE test\n");
                     return -1;
                 }
                 break;
@@ -693,7 +690,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'f':
                 if (cfg->api_type == PERFTEST_ATOMIC) {
-                    (void)fprintf(stderr, "Use_flat_api feature NOT available on ATOMIC test.\n");
+                    LOG_ERROR("Use_flat_api feature NOT available on ATOMIC test.\n");
                     return -1;
                 }
                 cfg->use_flat_api = true;
@@ -706,24 +703,24 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 return -1;
             case 'I':
                 if (cfg->api_type == PERFTEST_READ || cfg->api_type == PERFTEST_ATOMIC) {
-                    (void)fprintf(stderr, "Warning: Inline feature not available for READ/ATOMIC.\n");
+                    LOG_ERROR("Warning: Inline feature not available for READ/ATOMIC.\n");
                 }
                 (void)ub_str_to_u32(optarg, &cfg->inline_size);
                 break;
             case 'j':
                 if (ub_str_to_bool(optarg, &cfg->share_jfr) != 0) {
-                    (void)fprintf(stderr, "Invalid parameter(share_jfr).\n");
+                    LOG_ERROR("Invalid parameter(share_jfr).\n");
                     return -1;
                 }
                 break;
             case 'J':
                 (void)ub_str_to_u32(optarg, &cfg->jettys);
                 if (cfg->jettys == 0) {
-                    (void)fprintf(stderr, "Invalid parameter(jettys).\n");
+                    LOG_ERROR("Invalid parameter(jettys).\n");
                     return -1;
                 }
                 if (cfg->type != PERFTEST_BW && cfg->jettys > 1) {
-                    (void)fprintf(stderr, "Multiple jettys only available on band width tests.\n");
+                    LOG_ERROR("Multiple jettys only available on band width tests.\n");
                     return -1;
                 }
                 break;
@@ -737,7 +734,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'N':
                 cfg->no_peak = true;
                 if (cfg->type == PERFTEST_LAT) {
-                    (void)fprintf(stderr, "NoPeak only valid for BW tests\n");
+                    LOG_ERROR("NoPeak only valid for BW tests\n");
                     return -1;
                 }
                 break;
@@ -752,7 +749,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'p':
                 if (ub_str_to_u32(optarg, &offset) != 0) {
-                    (void)fprintf(stderr, "Invalid trans_mode, it has been changed to URMA_TM_RM.\n");
+                    LOG_ERROR("Invalid trans_mode, it has been changed to URMA_TM_RM.\n");
                     cfg->trans_mode = URMA_TM_RM;
                 } else {
                     cfg->trans_mode = (urma_transport_mode_t)(0x1U << offset);
@@ -782,7 +779,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case 'S':
                 cfg->comm.server_ip = strdup(optarg);
                 if (cfg->comm.server_ip == NULL) {
-                    (void)fprintf(stderr, "failed to allocate server ip memory.\n");
+                    LOG_ERROR("failed to allocate server ip memory.\n");
                     return -1;
                 }
                 break;
@@ -815,7 +812,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_RATE_LIMIT:
                 cfg->rate_limit = atof(optarg);
                 if (cfg->rate_limit <= 0) {
-                    (void)fprintf(stderr, " Rate limit must be non-negative\n");
+                    LOG_ERROR(" Rate limit must be non-negative\n");
                     return -1;
                 }
                 cfg->is_rate_limit = true;
@@ -828,7 +825,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 } else if (strcmp("P", optarg) == 0) {
                     cfg->rate_units = PERFTEST_RATE_LIMIT_PS;
                 } else {
-                    (void)fprintf(stderr, " Invalid rate limit units. Please use M, G or P\n");
+                    LOG_ERROR(" Invalid rate limit units. Please use M, G or P\n");
                     return -1;
                 }
                 break;
@@ -929,7 +926,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     } else if (strcmp("ANY", optarg) == 0) {
                         cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
                     } else {
-                        (void)fprintf(stderr, "Huge_page only support 2MB1GB and ANY\n");
+                        LOG_ERROR("Huge_page only support 2MB1GB and ANY\n");
                         return -1;
                     }
                 }
@@ -937,7 +934,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_PAGE_SIZE:
                 (void)ub_str_to_u64(optarg, &cfg->page_size);
                 if (cfg->page_size % 4096 != 0 || cfg->page_size == 0) {
-                    (void)fprintf(stderr, "Invalid page size.\n");
+                    LOG_ERROR("Invalid page size.\n");
                     return -1;
                 }
                 break;
@@ -979,7 +976,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_BIND_IP:
                 cfg->comm.bind_ip = strdup(optarg);
                 if (cfg->comm.bind_ip == NULL) {
-                    (void)fprintf(stderr, "failed to allocate bind ip memory.\n");
+                    LOG_ERROR("failed to allocate bind ip memory.\n");
                     return -1;
                 }
                 break;
@@ -994,11 +991,11 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 
     if (cfg->pair_flag == true) {
         cfg->jettys = cfg->pair_num;
-        (void)fprintf(stderr, "Warning: Multi-play multi-mode jettys must be pair_num\n");
+        LOG_ERROR("Warning: Multi-play multi-mode jettys must be pair_num\n");
     }
 
     if (check_cfg_range(cfg) != 0) {
-        (void)fprintf(stderr, "Failed to check config range.\n");
+        LOG_ERROR("Failed to check config range.\n");
         return -1;
     }
     if (optind < argc - 1) {
@@ -1031,11 +1028,11 @@ static int check_time_type(perftest_config_t *cfg)
         return 0;
     }
     if (cfg->time_type.bs.iterations == 1 && (cfg->time_type.bs.duration == 1 || cfg->time_type.bs.infinite == 1)) {
-        (void)fprintf(stderr, "Time type conflict: %x.\n", cfg->time_type.value);
+        LOG_ERROR("Time type conflict: %x.\n", cfg->time_type.value);
         return -1;
     }
     if (cfg->time_type.bs.duration == 1 && cfg->time_type.bs.infinite == 1) {
-        (void)fprintf(stderr, "Configure both duration and infinite, and the first and last results may be invalid.\n");
+        LOG_ERROR("Configure both duration and infinite, and the first and last results may be invalid.\n");
     }
     return 0;
 }
@@ -1064,11 +1061,11 @@ static int calc_rate_limit_gap(perftest_config_t *cfg)
 
     cpu_mhz = get_cpu_mhz(cfg->cpu_freq_f);
     if (cpu_mhz <= 0.0) {
-        (void)fprintf(stderr, "Failed: couldn't acquire cpu frequency for rate limiter.\n");
+        LOG_ERROR("Failed: couldn't acquire cpu frequency for rate limiter.\n");
         return -1;
     }
     if (rate_limit_pps < cfg->burst_size) {
-        (void)fprintf(stderr, "Failed: burst_size is too large.\n");
+        LOG_ERROR("Failed: burst_size is too large.\n");
         return -1;
     }
     num_of_burst = rate_limit_pps / cfg->burst_size;
@@ -1093,19 +1090,19 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
-        (void)fprintf(stderr, "No device specified, name: %s.\n", cfg->dev_name);
+        LOG_ERROR("No device specified, name: %s.\n", cfg->dev_name);
         return -1;
     }
 
     if (strstr(cfg->dev_name, "bonding_dev") != NULL) {
         if (cfg->bond_level != BONDP_BONDING_LEVEL_PORT && !cfg->use_ctp) {
-            (void)fprintf(stderr, "Invalid config: --bond_level iodie requires --ctp.\n");
+            LOG_ERROR("Invalid config: --bond_level iodie requires --ctp.\n");
             return -1;
         }
     }
 
     if (cfg->priority != PERFTEST_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {
-        (void)fprintf(stderr, "Invalid parameter(priority): %hhu, should be 0-15.\n", cfg->priority);
+        LOG_ERROR("Invalid parameter(priority): %hhu, should be 0-15.\n", cfg->priority);
         return -1;
     }
 
@@ -1128,12 +1125,12 @@ int check_local_cfg(perftest_config_t *cfg)
     }
     if (cfg->share_jfr == true) {
         if (cfg->jettys < cfg->jettys_pre_jfr || cfg->jettys % cfg->jettys_pre_jfr != 0) {
-            (void)fprintf(stderr, "Number of jettys must be a multiple of jettys_pre_jfr.\n");
+            LOG_ERROR("Number of jettys must be a multiple of jettys_pre_jfr.\n");
             exit(1);
         }
         if (!is_jfr_depth_valid(cfg)) {
-            (void)fprintf(stderr, "Using share jfr jfr_depth and iters should be greater than "
-                                  "cfg->jettys_pre_jfr * jfr_post_list.\n");
+            LOG_ERROR("Using share jfr jfr_depth and iters should be greater than "
+                      "cfg->jettys_pre_jfr * jfr_post_list.\n");
             exit(1);
         }
     }
@@ -1147,8 +1144,8 @@ int check_local_cfg(perftest_config_t *cfg)
         if (cfg->cq_mod == 0) {
             cfg->cq_mod = 1;
         } else if (cfg->cq_mod > 1) {
-            (void)printf("Warning: Large message requested and CQ moderation enabled\n");
-            (void)printf("Warning: It can lead to inaccurate results\n");
+            LOG_INFO("Warning: Large message requested and CQ moderation enabled\n");
+            LOG_INFO("Warning: It can lead to inaccurate results\n");
         }
     }
 
@@ -1157,11 +1154,11 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (cfg->tp_type != URMA_TRANSPORT_UB && cfg->token_policy != URMA_TOKEN_NONE) {
-        (void)printf("Warning: only UB can be configured token_policy.\n");
+        LOG_INFO("Warning: only UB can be configured token_policy.\n");
     }
 
     if (cfg->order_type > URMA_NO) {
-        (void)fprintf(stderr, "Only support 0 - 4 for order_type.\n");
+        LOG_ERROR("Only support 0 - 4 for order_type.\n");
         exit(1);
     }
 
@@ -1174,48 +1171,48 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (cfg->api_type == PERFTEST_ATOMIC && cfg->size != PERFTEST_DEF_ATOMIC_SIZE) {
-        (void)fprintf(stderr, "Message size should not be changed for Atomic tests.\n");
+        LOG_ERROR("Message size should not be changed for Atomic tests.\n");
         exit(1);
     }
     if (cfg->jfs_post_list == 0 || cfg->jfr_post_list == 0) {
-        (void)fprintf(stderr, "Invalid parameter with jfs_post_list: %u, jfr_post_list: %u.\n",
-                      cfg->jfs_post_list, cfg->jfr_post_list);
+        LOG_ERROR("Invalid parameter with jfs_post_list: %u, jfr_post_list: %u.\n",
+                  cfg->jfs_post_list, cfg->jfr_post_list);
         exit(1);
     }
 
     if (cfg->jfs_post_list > 1) {
         if (cfg->time_type.bs.iterations == 1 &&
             (cfg->iters < cfg->jfs_post_list || (cfg->iters % cfg->jfs_post_list) != 0)) {
-            (void)fprintf(stderr, "Number of iterations must be a multiple of jfs post list size\n");
+            LOG_ERROR("Number of iterations must be a multiple of jfs post list size\n");
             exit(1);
         }
 
         if (cfg->time_type.bs.iterations == 1 &&
             (cfg->type == PERFTEST_LAT && cfg->iters < cfg->jfs_post_list * PERFTEST_ITERS_MIN)) {
-            (void)fprintf(stderr, "Number of iterations must be at least 5 times of jfs post list size in LAT tests\n");
+            LOG_ERROR("Number of iterations must be at least 5 times of jfs post list size in LAT tests\n");
             exit(1);
         }
 
         if (cfg->jfs_post_list > cfg->jfs_depth) {
-            (void)fprintf(stderr, "jfs depth must be greater than jfs_post_list.\n");
+            LOG_ERROR("jfs depth must be greater than jfs_post_list.\n");
             exit(1);
         }
 
         if (cfg->cq_mod == 0) {
             cfg->cq_mod = cfg->jfs_post_list;
-            (void)printf("JFS post List requested - CQ moderation will be the size of the post list\n");
+            LOG_INFO("JFS post List requested - CQ moderation will be the size of the post list\n");
         } else if (cfg->jfs_post_list < cfg->cq_mod || (cfg->jfs_post_list % cfg->cq_mod) != 0) {
-            (void)fprintf(stderr, "JFS post list size must be a multiple of CQ moderation\n");
+            LOG_ERROR("JFS post list size must be a multiple of CQ moderation\n");
             exit(1);
         }
 
         if (cfg->type == PERFTEST_LAT && cfg->use_flat_api) {
-            (void)fprintf(stderr, "JFS post List must be 1 when use flat api.\n");
+            LOG_ERROR("JFS post List must be 1 when use flat api.\n");
             exit(1);
         }
     } else {
         if (cfg->type == PERFTEST_LAT && cfg->cmd != PERFTEST_SEND_LAT) {
-            (void)printf("Warning: cq_mod should set to 1 in READ/WRITE/ATOMIC_LAT test\n");
+            LOG_INFO("Warning: cq_mod should set to 1 in READ/WRITE/ATOMIC_LAT test\n");
             cfg->cq_mod = 1;
         }
     }
@@ -1224,11 +1221,11 @@ int check_local_cfg(perftest_config_t *cfg)
         if (cfg->type == PERFTEST_BW || cfg->cmd == PERFTEST_SEND_LAT) {
             if (cfg->time_type.bs.iterations == 1 &&
                 (cfg->iters < cfg->jfr_post_list || (cfg->iters % cfg->jfr_post_list) != 0)) {
-                (void)fprintf(stderr, "Number of iterations must be a multiple of jfr post list size\n");
+                LOG_ERROR("Number of iterations must be a multiple of jfr post list size\n");
                 exit(1);
             }
         } else {
-            (void)fprintf(stderr, "jfr post list is supported in BW tests and SEND_LAT tests only\n");
+            LOG_ERROR("jfr post list is supported in BW tests and SEND_LAT tests only\n");
             exit(1);
         }
     }
@@ -1241,12 +1238,12 @@ int check_local_cfg(perftest_config_t *cfg)
         cfg->no_peak = true;
 
         if (cfg->use_jfce == true) {
-            (void)fprintf(stderr, "Duration mode doesn't work with events.\n");
+            LOG_ERROR("Duration mode doesn't work with events.\n");
             exit(1);
         }
 
         if (cfg->all) {
-            (void)fprintf(stderr, "Duration mode doesn't support running on all sizes.\n");
+            LOG_ERROR("Duration mode doesn't support running on all sizes.\n");
             exit(1);
         }
     }
@@ -1267,7 +1264,7 @@ int check_local_cfg(perftest_config_t *cfg)
     }
 
     if (cfg->jetty_mode != PERFTEST_JETTY_SIMPLEX && cfg->use_flat_api) {
-        (void)fprintf(stderr, "use_flat_api is noly available in SIMPLEX mode, do not open it in other modes.\n");
+        LOG_ERROR("use_flat_api is noly available in SIMPLEX mode, do not open it in other modes.\n");
         exit(1);
     }
 
@@ -1277,8 +1274,8 @@ int check_local_cfg(perftest_config_t *cfg)
             uint32_t corr_jfr_depth = (cfg->jfr_depth / cfg->jfr_post_list + 1) * cfg->jfr_post_list;
             cfg->jfr_depth = corr_jfr_depth;
             cfg->jfs_depth = corr_jfr_depth;
-            (void)printf("Warning: jfr_depth/jfs_depth should be multiple of jfr_post_list.\n");
-            (void)printf("jfr_depth/jfs_depth has been changed to %u.\n", corr_jfr_depth);
+            LOG_INFO("Warning: jfr_depth/jfs_depth should be multiple of jfr_post_list.\n");
+            LOG_INFO("jfr_depth/jfs_depth has been changed to %u.\n", corr_jfr_depth);
         }
     }
 
@@ -1288,85 +1285,85 @@ int check_local_cfg(perftest_config_t *cfg)
         uint32_t jfr_mul = cfg->jfc_depth / cfg->jfr_depth;
         uint32_t jfs_mul = cfg->jfc_depth / cfg->jfs_depth;
         if (jfr_mul < PERFTEST_JFC_MUL_THRESHOLD || jfs_mul < PERFTEST_JFC_MUL_THRESHOLD) {
-            (void)printf("Warning: jfc_depth too SMALL, which may lead to urma_poll_jfc ERROR.\n");
+            LOG_INFO("Warning: jfc_depth too SMALL, which may lead to urma_poll_jfc ERROR.\n");
         }
     }
 
     if (cfg->time_type.bs.infinite == 1) {
         cfg->no_peak = true;
         if (cfg->type == PERFTEST_LAT) {
-            (void)fprintf(stderr, "Infinite only supports BW test currently.\n");
+            LOG_ERROR("Infinite only supports BW test currently.\n");
             exit(1);
         }
         if (cfg->all) {
-            (void)fprintf(stderr, "Infinite and All function conflict, please check and retry.\n");
+            LOG_ERROR("Infinite and All function conflict, please check and retry.\n");
             exit(1);
         }
         if (cfg->time_type.bs.duration == 1) {
             if (cfg->duration <= cfg->inf_period) {
-                (void)fprintf(stderr, "Duration period should be larger than inf_period.\n");
+                LOG_ERROR("Duration period should be larger than inf_period.\n");
                 exit(1);
             }
-            (void)printf("Info: Infinite with duration, period: %u, inf_period: %u.\n",
-                         cfg->duration, cfg->inf_period);
+            LOG_INFO("Info: Infinite with duration, period: %u, inf_period: %u.\n",
+                     cfg->duration, cfg->inf_period);
         }
         if (cfg->bidirection == true && (cfg->api_type == PERFTEST_SEND ||
                                          (cfg->api_type == PERFTEST_WRITE && cfg->enable_imm == true))) {
-            (void)fprintf(stderr, "run_infinitely does not support SEND or WRITE_IMM "
-                                  "Bidirectional BW test\n");
+            LOG_ERROR("run_infinitely does not support SEND or WRITE_IMM "
+                      "Bidirectional BW test\n");
             exit(1);
         }
     }
 
     if (cfg->jfs_depth > (cfg->jfc_depth * cfg->cq_mod)) {
-        (void)fprintf(stderr, "Invalid config, try to decrease jfs depth or increase jfc depth.\n");
+        LOG_ERROR("Invalid config, try to decrease jfs depth or increase jfc depth.\n");
         exit(1);
     }
     if (cfg->trans_mode == URMA_TM_UM && cfg->api_type != PERFTEST_SEND) {
-        (void)fprintf(stderr, "UM transport mode only supports SEND operation.\n");
+        LOG_ERROR("UM transport mode only supports SEND operation.\n");
         exit(1);
     }
     if (cfg->trans_mode == URMA_TM_RC && cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
-        (void)fprintf(stderr, "RC transport mode does NOT support SIMPLEX jetty mode.\n");
+        LOG_ERROR("RC transport mode does NOT support SIMPLEX jetty mode.\n");
         exit(1);
     }
     if (cfg->burst_size > 0 && cfg->is_rate_limit == false) {
-        (void)fprintf(stderr, "Can't enable burst mode when rate limiter is off\n");
+        LOG_ERROR("Can't enable burst mode when rate limiter is off\n");
         exit(1);
     }
     if (cfg->burst_size == 0 && cfg->is_rate_limit == true) {
         cfg->burst_size = cfg->jfs_depth;
-        (void)fprintf(stderr, "Setting burst size to jfs depth = %u\n", cfg->jfs_depth);
+        LOG_ERROR("Setting burst size to jfs depth = %u\n", cfg->jfs_depth);
     }
     if (cfg->is_rate_limit == true) {
         if (calc_rate_limit_gap(cfg) != 0) {
-            (void)fprintf(stderr, "Calculate rate limit gap failed.\n");
+            LOG_ERROR("Calculate rate limit gap failed.\n");
             exit(1);
         }
         if (cfg->type != PERFTEST_BW || cfg->api_type == PERFTEST_ATOMIC ||
             (cfg->cmd == PERFTEST_SEND_BW && cfg->bidirection == true)) {
-            (void)fprintf(stderr, "Rate limiter cann't be executed on non-BW, ATOMIC or bidirectional SEND tests\n");
+            LOG_ERROR("Rate limiter cann't be executed on non-BW, ATOMIC or bidirectional SEND tests\n");
             exit(1);
         }
     }
 
     if (cfg->enable_credit == true && (cfg->cmd != PERFTEST_SEND_BW)) {
-        (void)fprintf(stderr, "Credit takes effect only in SEND_BW test.\n");
+        LOG_ERROR("Credit takes effect only in SEND_BW test.\n");
         exit(1);
     }
     if (cfg->enable_credit == true) {
         if (cfg->credit_notify_cnt == 0 || cfg->credit_notify_cnt > cfg->jfr_depth) {
             cfg->credit_notify_cnt = cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE;
-            (void)fprintf(stderr, "credit_notify_cnt out of range (1 ~ %u), change to %u.\n",
-                          cfg->jfr_depth, cfg->credit_notify_cnt);
+            LOG_ERROR("credit_notify_cnt out of range (1 ~ %u), change to %u.\n",
+                      cfg->jfr_depth, cfg->credit_notify_cnt);
         }
         if (cfg->credit_threshold == 0 || cfg->credit_threshold + cfg->jfs_post_list > cfg->jfr_depth) {
             cfg->credit_threshold = cfg->jfr_depth - (cfg->jfr_depth / PERFTEST_DEF_CREDIT_RATE);
-            (void)fprintf(stderr, "credit_threshold out of range (1 ~ %u), change to %u.\n",
-                          cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_threshold);
+            LOG_ERROR("credit_threshold out of range (1 ~ %u), change to %u.\n",
+                      cfg->jfr_depth - cfg->jfs_post_list, cfg->credit_threshold);
         }
         if (cfg->trans_mode == URMA_TM_UM) {
-            (void)fprintf(stderr, "Credit DOES NOT take effect in UM trans_mode.\n");
+            LOG_ERROR("Credit DOES NOT take effect in UM trans_mode.\n");
             exit(1);
         }
     }
@@ -1376,78 +1373,78 @@ int check_local_cfg(perftest_config_t *cfg)
             cfg->jfr_depth = PERFTEST_DEF_JFR_DEPTH_SEND;
         }
         if (cfg->api_type != PERFTEST_WRITE && cfg->api_type != PERFTEST_SEND) {
-            (void)fprintf(stderr, "immediate takes effect only in write or send test.\n");
+            LOG_ERROR("immediate takes effect only in write or send test.\n");
             exit(1);
         }
     }
     if (cfg->enable_notify == true &&
         (cfg->api_type != PERFTEST_WRITE || cfg->enable_imm == true)) {
-        (void)fprintf(stderr, "notify takes effect only in write test, and conflicts with immediate.\n");
+        LOG_ERROR("notify takes effect only in write test, and conflicts with immediate.\n");
         exit(1);
     }
     if (cfg->inf_period_ms != 0) {
         if (cfg->time_type.bs.infinite != 1) {
-            (void)fprintf(stderr, "inf_period_ms takes effect only in infinite mode.\n");
+            LOG_ERROR("inf_period_ms takes effect only in infinite mode.\n");
             exit(1);
         }
         if (cfg->inf_period_ms < PERFTEST_DEF_INF_PERIOD_MS || cfg->inf_period_ms % PERFTEST_DEF_INF_PERIOD_MS != 0) {
-            (void)fprintf(stderr, "inf_period_ms must be a multiple of 50.\n");
+            LOG_ERROR("inf_period_ms must be a multiple of 50.\n");
             exit(1);
         }
     } else {
         cfg->inf_period_ms = cfg->inf_period * PERFTEST_SEC_TO_MS;
     }
     if (cfg->enable_err_continue == true && cfg->type != PERFTEST_BW) {
-        (void)fprintf(stderr, "enable err continue takes effect only in bw test.\n");
+        LOG_ERROR("enable err continue takes effect only in bw test.\n");
         exit(1);
     }
     if (cfg->enable_user_tp == true) {
         cfg->trans_mode = URMA_TM_RC;
         if (cfg->jetty_mode != PERFTEST_JETTY_DUPLEX) {
-            (void)fprintf(stderr, "enable_user_tp: wrong jetty_mode.\n");
+            LOG_ERROR("enable_user_tp: wrong jetty_mode.\n");
             exit(1);
         }
     }
     if (cfg->size % cfg->sge_num != 0) {
-        (void)fprintf(stderr, "pkt size must be a multiple of sge_num.\n");
+        LOG_ERROR("pkt size must be a multiple of sge_num.\n");
         exit(1);
     }
     if (cfg->pair_flag == true && cfg->seg_pre_jetty == false) {
-        (void)fprintf(stderr, "multiplayer mode, seg_pre_jetty must be true\n");
+        LOG_ERROR("multiplayer mode, seg_pre_jetty must be true\n");
         exit(1);
     }
     if (cfg->pair_flag == true && cfg->type == PERFTEST_LAT) {
         cfg->jettys_pre_jfr = 1;
-        (void)fprintf(stderr, "multiplayer mode, jettys_pre_jfr must be 1.\n");
+        LOG_ERROR("multiplayer mode, jettys_pre_jfr must be 1.\n");
     }
 
     if (cfg->tp_aware == false) {
         if (cfg->tp_reuse == true) {
-            (void)fprintf(stderr, "Warning: tp_reuse feature only work when set tp_aware.\n");
+            LOG_ERROR("Warning: tp_reuse feature only work when set tp_aware.\n");
         }
     }
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
-        (void)fprintf(stderr, "UM transport mode is not recommended for ctp.\n");
+        LOG_ERROR("UM transport mode is not recommended for ctp.\n");
     }
     if (cfg->api_type == PERFTEST_SEND) {
         if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with rtp for send opcode, max size: %u.\n",
-                          cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
+            LOG_ERROR("Invalid size: %u with rtp for send opcode, max size: %u.\n",
+                      cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
             exit(1);
         }
         if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
-            (void)fprintf(stderr, "Invalid size: %u with ctp for send opcode, max size: %u.\n",
-                          cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
+            LOG_ERROR("Invalid size: %u with ctp for send opcode, max size: %u.\n",
+                      cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
             exit(1);
         }
         if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
-                          cfg->order, PERFTEST_RTP_MAX_ORDER);
+            LOG_ERROR("Invalid order: %u with for send opcode, max order: %u.\n",
+                      cfg->order, PERFTEST_RTP_MAX_ORDER);
             exit(1);
         }
         if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) {
-            (void)fprintf(stderr, "Invalid order: %u with for send opcode, max order: %u.\n",
-                          cfg->order, PERFTEST_CTP_MAX_ORDER);
+            LOG_ERROR("Invalid order: %u with for send opcode, max order: %u.\n",
+                      cfg->order, PERFTEST_CTP_MAX_ORDER);
             exit(1);
         }
     }
@@ -1455,9 +1452,9 @@ int check_local_cfg(perftest_config_t *cfg)
     const int MIN_CQ_MOD_RATIO = 2;
     if ((cfg->iters % cfg->cq_mod != 0) && (cfg->cq_mod >= cfg->iters / MIN_CQ_MOD_RATIO) &&
         (cfg->bidirection) && (cfg->enable_credit)) {
-        (void)fprintf(stderr, "The cq_mod parameter must be divisible by iters and "
-                              "must be less than half of the iters parameter when "
-                              "bidirection and credit are enabled.\n");
+        LOG_ERROR("The cq_mod parameter must be divisible by iters and "
+                  "must be less than half of the iters parameter when "
+                  "bidirection and credit are enabled.\n");
     }
     return 0;
 }
@@ -1469,118 +1466,118 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
     }
 
     if (local_cfg->cmd != remote_cfg->cmd) {
-        (void)fprintf(stderr, "Config inconsistent[cmd],local: %s, remote: %s.\n",
-                      g_cmd[local_cfg->cmd].cmd, g_cmd[remote_cfg->cmd].cmd);
+        LOG_ERROR("Config inconsistent[cmd],local: %s, remote: %s.\n",
+                  g_cmd[local_cfg->cmd].cmd, g_cmd[remote_cfg->cmd].cmd);
         return -1;
     }
 
     if (local_cfg->all != remote_cfg->all) {
-        (void)fprintf(stderr, "Config inconsistent[all],local: %s, remote: %s.\n",
-                      PERFTEST_BOOL_TO_STR(local_cfg->all), PERFTEST_BOOL_TO_STR(remote_cfg->all));
+        LOG_ERROR("Config inconsistent[all],local: %s, remote: %s.\n",
+                  PERFTEST_BOOL_TO_STR(local_cfg->all), PERFTEST_BOOL_TO_STR(remote_cfg->all));
         return -1;
     }
 
     if (local_cfg->atomic_type != remote_cfg->atomic_type) {
-        (void)fprintf(stderr, "Config inconsistent[atomic_type],local: %s, remote: %s.\n",
-                      g_atomic_types_str[local_cfg->atomic_type], g_atomic_types_str[remote_cfg->atomic_type]);
+        LOG_ERROR("Config inconsistent[atomic_type],local: %s, remote: %s.\n",
+                  g_atomic_types_str[local_cfg->atomic_type], g_atomic_types_str[remote_cfg->atomic_type]);
         return -1;
     }
 
     if (local_cfg->duration != remote_cfg->duration) {
-        (void)fprintf(stderr, "Config inconsistent[duration],local: %u, remote: %u.\n",
-                      local_cfg->duration, remote_cfg->duration);
+        LOG_ERROR("Config inconsistent[duration],local: %u, remote: %u.\n",
+                  local_cfg->duration, remote_cfg->duration);
         return -1;
     }
 
     if (local_cfg->time_type.value != remote_cfg->time_type.value) {
-        (void)fprintf(stderr, "Config inconsistent[time_type],local: %u, remote: %u.\n",
-                      local_cfg->time_type.value, remote_cfg->time_type.value);
+        LOG_ERROR("Config inconsistent[time_type],local: %u, remote: %u.\n",
+                  local_cfg->time_type.value, remote_cfg->time_type.value);
         return -1;
     }
 
     if (local_cfg->jettys != remote_cfg->jettys && local_cfg->pair_flag == false) {
-        (void)fprintf(stderr, "Config inconsistent[jettys],local: %u, remote: %u.\n",
-                      local_cfg->jettys, remote_cfg->jettys);
+        LOG_ERROR("Config inconsistent[jettys],local: %u, remote: %u.\n",
+                  local_cfg->jettys, remote_cfg->jettys);
         return -1;
     }
 
     if (local_cfg->token_policy != remote_cfg->token_policy) {
-        (void)fprintf(stderr, "Config inconsistent[token_policy],local: %u, remote: %u.\n",
-                      local_cfg->token_policy, remote_cfg->token_policy);
+        LOG_ERROR("Config inconsistent[token_policy],local: %u, remote: %u.\n",
+                  local_cfg->token_policy, remote_cfg->token_policy);
         return -1;
     }
 
     if (local_cfg->iters != remote_cfg->iters) {
-        (void)fprintf(stderr, "Config inconsistent[iters],local: %lu, remote: %lu.\n",
-                      local_cfg->iters, remote_cfg->iters);
+        LOG_ERROR("Config inconsistent[iters],local: %lu, remote: %lu.\n",
+                  local_cfg->iters, remote_cfg->iters);
         return -1;
     }
 
     if (local_cfg->jetty_mode != remote_cfg->jetty_mode) {
-        (void)fprintf(stderr, "Config inconsistent[jetty_mode],local: %s, remote: %s.\n",
-                      g_jetty_mode_str[local_cfg->jetty_mode], g_jetty_mode_str[remote_cfg->jetty_mode]);
+        LOG_ERROR("Config inconsistent[jetty_mode],local: %s, remote: %s.\n",
+                  g_jetty_mode_str[local_cfg->jetty_mode], g_jetty_mode_str[remote_cfg->jetty_mode]);
         return -1;
     }
 
     if (local_cfg->size != remote_cfg->size) {
-        (void)fprintf(stderr, "Config inconsistent[size],local: %u, remote: %u.\n",
-                      local_cfg->size, remote_cfg->size);
+        LOG_ERROR("Config inconsistent[size],local: %u, remote: %u.\n",
+                  local_cfg->size, remote_cfg->size);
         return -1;
     }
 
     if (local_cfg->trans_mode != remote_cfg->trans_mode) {
-        (void)fprintf(stderr, "Config inconsistent[trans_mode],local: %s, remote: %s.\n",
-                      g_trans_mode_str[local_cfg->trans_mode], g_trans_mode_str[remote_cfg->trans_mode]);
+        LOG_ERROR("Config inconsistent[trans_mode],local: %s, remote: %s.\n",
+                  g_trans_mode_str[local_cfg->trans_mode], g_trans_mode_str[remote_cfg->trans_mode]);
         return -1;
     }
 
     if (local_cfg->use_flat_api != remote_cfg->use_flat_api) {
-        (void)fprintf(stderr, "Config inconsistent[use_flat_api],local: %s, remote: %s.\n",
-                      PERFTEST_BOOL_TO_STR(local_cfg->use_flat_api), PERFTEST_BOOL_TO_STR(remote_cfg->use_flat_api));
+        LOG_ERROR("Config inconsistent[use_flat_api],local: %s, remote: %s.\n",
+                  PERFTEST_BOOL_TO_STR(local_cfg->use_flat_api), PERFTEST_BOOL_TO_STR(remote_cfg->use_flat_api));
         return -1;
     }
 
     if (local_cfg->order != remote_cfg->order) {
-        (void)fprintf(stderr, "Config inconsistent[order],local: %u, remote: %u.\n",
-                      local_cfg->order, remote_cfg->order);
+        LOG_ERROR("Config inconsistent[order],local: %u, remote: %u.\n",
+                  local_cfg->order, remote_cfg->order);
         return -1;
     }
     if (local_cfg->comm.enable_ipv6 != remote_cfg->comm.enable_ipv6) {
-        (void)fprintf(stderr, "Config inconsistent[enable_ipv6].\n");
+        LOG_ERROR("Config inconsistent[enable_ipv6].\n");
         return -1;
     }
     if (local_cfg->enable_credit != remote_cfg->enable_credit) {
-        (void)fprintf(stderr, "Config inconsistent[enable_credit].\n");
+        LOG_ERROR("Config inconsistent[enable_credit].\n");
         return -1;
     }
     if (local_cfg->seg_pre_jetty != remote_cfg->seg_pre_jetty) {
-        (void)fprintf(stderr, "Config inconsistent[seg_pre_jetty], local: %d, remote: %d.\n",
-                      (int)local_cfg->seg_pre_jetty, (int)remote_cfg->seg_pre_jetty);
+        LOG_ERROR("Config inconsistent[seg_pre_jetty], local: %d, remote: %d.\n",
+                  (int)local_cfg->seg_pre_jetty, (int)remote_cfg->seg_pre_jetty);
         return -1;
     }
     if (local_cfg->enable_imm != remote_cfg->enable_imm) {
-        (void)fprintf(stderr, "Config inconsistent[enable_imm].\n");
+        LOG_ERROR("Config inconsistent[enable_imm].\n");
         return -1;
     }
     if (local_cfg->inf_period_ms != remote_cfg->inf_period_ms) {
-        (void)fprintf(stderr, "Config inconsistent[inf_period_ms].\n");
+        LOG_ERROR("Config inconsistent[inf_period_ms].\n");
         return -1;
     }
     if (local_cfg->enable_err_continue != remote_cfg->enable_err_continue) {
-        (void)fprintf(stderr, "Config inconsistent[enable_err_continue].\n");
+        LOG_ERROR("Config inconsistent[enable_err_continue].\n");
         return -1;
     }
     if (local_cfg->enable_user_tp != remote_cfg->enable_user_tp) {
-        (void)fprintf(stderr, "Config inconsistent[enable_user_tp].\n");
+        LOG_ERROR("Config inconsistent[enable_user_tp].\n");
         return -1;
     }
     if (local_cfg->sge_num != remote_cfg->sge_num) {
-        (void)fprintf(stderr, "Config inconsistent[sge_num].\n");
+        LOG_ERROR("Config inconsistent[sge_num].\n");
         return -1;
     }
 
     if (local_cfg->write_dirty_period != remote_cfg->write_dirty_period) {
-        (void)fprintf(stderr, "Config inconsistent[write_dirty_period].\n");
+        LOG_ERROR("Config inconsistent[write_dirty_period].\n");
         return -1;
     }
     return 0;
@@ -1595,13 +1592,13 @@ int check_remote_cfg(perftest_config_t *cfg)
         int sock_fd = cfg->comm.sock_fd[i];
         int ret = sock_sync_data(sock_fd, OFF_SET, (char *)cfg, (char *)&remote_cfg);
         if (ret != 0) {
-            (void)fprintf(stderr, "Failed to sync remote configuration, pair_num:%u, errno:%s.\n", i, strerror(errno));
+            LOG_ERROR("Failed to sync remote configuration, pair_num:%u, errno:%s.\n", i, strerror(errno));
             return ret;
         }
 
         ret = check_both_side_cfg(cfg, &remote_cfg);
         if (ret != 0) {
-            (void)fprintf(stderr, "i: %u, Failed to check remote configuration.\n", i);
+            LOG_ERROR("i: %u, Failed to check remote configuration.\n", i);
             return ret;
         }
     }
