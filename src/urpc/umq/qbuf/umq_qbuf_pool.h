@@ -35,7 +35,6 @@ extern "C" {
 #define UMQ_QBUF_SIZE_POW_32K           (15)
 #define UMQ_QBUF_SIZE_POW_64K           (16)
 // middle = small * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL, and big = middle * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL
-#define UMQ_QBUF_SIZE_POW_INTERVAL      (2)
 #define UMQ_QBUF_SIZE_MULTIPLE_INTERVAL (4)
 #define QBUF_ALLOC_STATE_FREE      0            // define qbuf free state
 #define QBUF_ALLOC_STATE_ALLOCATED 1            // define qbuf allocated state
