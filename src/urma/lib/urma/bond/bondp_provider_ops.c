@@ -294,6 +294,7 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
         g_bondp_global_ctx = NULL;
         return URMA_FAIL;
     }
+    URMA_LOG_INFO("Bond provider initialized successfully.\n");
     return URMA_SUCCESS;
 }
 
@@ -434,12 +435,12 @@ static int set_fd_noblock(int fd)
     int ret, flags;
     flags = fcntl(fd, F_GETFL);
     if (flags == -1) {
-        URMA_LOG_ERR("flags=%d\n", flags);
+        URMA_LOG_ERR("Failed to get fd flags, fd=%d, errno=%d\n", fd, errno);
         return -1;
     }
     ret = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     if (ret != 0) {
-        URMA_LOG_ERR("ret=%d\n", ret);
+        URMA_LOG_ERR("Failed to set fd nonblocking, fd=%d, errno=%d\n", fd, errno);
         return ret;
     }
     return 0;
@@ -536,6 +537,8 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
 
         int fd = ctx->async_fd;
         if (set_fd_noblock(fd) != 0) {
+            URMA_LOG_ERR("Failed to set async fd nonblocking, dev=%s, eid_idx=%u, fd=%d\n",
+                         m->dev->name, m->eid_index, fd);
             return -1;
         }
         struct epoll_event ev = {
@@ -544,7 +547,8 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
             .data.ptr = (void *)ctx,
         };
         if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
-            URMA_LOG_ERR("failed to add fd=%u, errno=%d.\n", fd, errno);
+            URMA_LOG_ERR("Failed to add fd to epoll, dev=%s, eid_idx=%u, fd=%d, epoll_fd=%d, errno=%d\n",
+                         m->dev->name, m->eid_index, fd, bdp_ctx->v_ctx.async_fd, errno);
             return -1;
         }
     }
