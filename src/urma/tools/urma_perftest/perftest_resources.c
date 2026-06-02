@@ -22,6 +22,7 @@
 #include "urma_api.h"
 #include "urma_provider.h"
 #include "urma_ubagg.h"
+#include "urma_provider.h"
 
 #include "perftest_resources.h"
 
@@ -186,9 +187,17 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         goto uninit;
     }
 
+    ctx->urma_ctx = urma_create_context(urma_dev, cfg->eid_idx);
+    if (ctx->urma_ctx == NULL) {
+        (void)fprintf(stderr, "Failed to create urma instance!\n");
+        goto uninit;
+    }
+
     union urma_tp_type_en tp_type = {0};
     if (cfg->priority == PERFTEST_INVALID_PRIORITY) {
-        if (cfg->use_ctp) {
+        if (ctx->urma_ctx->ops->import_jetty_ex == NULL) {
+            cfg->priority = 0;
+        } else if (cfg->use_ctp) {
             tp_type.bs.ctp = 1;
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
         } else {
@@ -202,13 +211,13 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
             (void)fprintf(stderr, "The priority parameter %hhu is invalid; it should be 0-15.\n",
                           cfg->priority);
         }
-        if (cfg->use_ctp) {
+        if (cfg->use_ctp && ctx->urma_ctx->ops->import_jetty_ex != NULL) {
             tp_type.bs.ctp = 1;
             if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
                 (void)fprintf(stderr, "You should set the priority of type CTP\n");
                 goto uninit;
             }
-        } else {
+        } else if (ctx->urma_ctx->ops->import_jetty_ex != NULL) {
             tp_type.bs.rtp = 1;
             if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
                 (void)fprintf(stderr, "You should set the priority of type RTP\n");
@@ -222,11 +231,6 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         goto uninit;
     }
 
-    ctx->urma_ctx = urma_create_context(urma_dev, cfg->eid_idx);
-    if (ctx->urma_ctx == NULL) {
-        (void)fprintf(stderr, "Failed to create urma instance!\n");
-        goto uninit;
-    }
     ctx->eid = ctx->urma_ctx->eid;
 
     if (strncmp(ctx->urma_ctx->dev->name, "bonding", strlen("bonding")) == 0) {
