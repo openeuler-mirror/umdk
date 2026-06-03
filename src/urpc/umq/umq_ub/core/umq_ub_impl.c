@@ -22,6 +22,7 @@
 #include "urpc_util.h"
 #include "urpc_list.h"
 #include "urpc_timer.h"
+#include "urpc_id_generator.h"
 #include "urma_api.h"
 #include "urma_perf.h"
 #include "umq_symbol_private.h"
@@ -63,6 +64,7 @@ typedef struct umq_ub_monitor_slots_array {
 } umq_ub_monitor_slots_array_t;
 
 static umq_ub_monitor_slots_array_t g_umq_monitor_slots = {0};
+static urpc_id_generator_t g_umq_id_allocator;
 
 static int huge_qbuf_pool_memory_init(uint16_t mempool_id, huge_qbuf_pool_size_type_t type, void **buffer_addr)
 {
@@ -597,10 +599,16 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         return NULL;
     }
 
+    ret = urpc_id_generator_init(&g_umq_id_allocator, URPC_ID_GENERATOR_TYPE_BITMAP_AUTO_INC, UMQ_ID_ALLOC_SIZE);
+    if (ret != URPC_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "id generator init failed, status: %d\n", ret);
+        goto UNINIT_ALLOCATOR;
+    }
+
     g_ub_ctx = (umq_ub_ctx_t *)calloc(MAX_UMQ_TRANS_INFO_NUM, sizeof(umq_ub_ctx_t));
     if (g_ub_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "memory alloc failed\n");
-        goto UNINIT_ALLOCATOR;
+        goto UNINIT_UMQ_ID_ALLOCATOR;
     }
 
     urma_init_attr_t init_attr = {0};
@@ -742,6 +750,9 @@ FREE_CTX:
     free(g_ub_ctx);
     g_ub_ctx = NULL;
 
+UNINIT_UMQ_ID_ALLOCATOR:
+    urpc_id_generator_uninit(&g_umq_id_allocator);
+
 UNINIT_ALLOCATOR:
     umq_ub_id_allocator_uninit();
     return NULL;
@@ -785,6 +796,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     g_ub_ctx_count = 0;
     g_umq_ub_inited = false;
     umq_symbol_urma()->urma_uninit();
+    urpc_id_generator_uninit(&g_umq_id_allocator);
 }
 
 static int umq_ub_idle_checker_init(ub_queue_t *queue)
@@ -981,8 +993,14 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         queue->share_rq_umqh = option->share_rq_umqh;
     }
 
-    if (umq_ub_jfr_ctx_get(queue, dev_ctx, option, share_rq, UB_QUEUE_JETTY_IO) != UMQ_SUCCESS) {
+    ret = urpc_id_generator_alloc(&g_umq_id_allocator, 0, &queue->umq_id);
+    if (ret != 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq create failed, umq id allocator failed. error code=%d\n", ret);
         goto FREE_QUEUE;
+    }
+
+    if (umq_ub_jfr_ctx_get(queue, dev_ctx, option, share_rq, UB_QUEUE_JETTY_IO) != UMQ_SUCCESS) {
+        goto FREE_QUEUE_ID;
     }
 
     if (umq_ub_flow_control_init(&queue->flow_control, queue, dev_ctx->feature, &dev_ctx->flow_control) !=
@@ -1047,19 +1065,19 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->umqh = umqh;
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     if (queue->flow_control.enabled) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u, jetty_id[1]: %u,%s create "
+        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u, jetty_id[1]: %u,%s create UMQ(ID:%u)"
             "success, jfr_id[0]: %u, jfr_id[1]: %u, urma transmode %d, tp_type %d, priority %d, rnr_retry %d, "
             "err_timeout %d, flowcontrol use %s window\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
             queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id,
-            port_str, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id,
+            port_str, queue->umq_id, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id,
             queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr->jfr_id.id, queue->tp_mode, queue->tp_type,
             queue->priority, queue->rnr_retry, queue->err_timeout,
             dev_ctx->flow_control.use_atomic_window ? "atomic" : "non-atomic");
     } else {
-        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u,%s create success, jfr_id[0]: %u, "
+        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u,%s create UMQ(ID:%u) success, jfr_id[0]: %u, "
             "urma transmode %d, tp_type %d, priority %d, rnr_retry %d, err_timeout %d\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-            port_str, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id, queue->tp_mode, queue->tp_type,
+            port_str, queue->umq_id, queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr->jfr_id.id, queue->tp_mode, queue->tp_type,
             queue->priority, queue->rnr_retry, queue->err_timeout);
     }
     return (uint64_t)(uintptr_t)queue;
@@ -1083,6 +1101,8 @@ UNINIT_FLOW_CONTROL:
     umq_ub_flow_control_uninit(&queue->flow_control);
 DESTROY_JFR_CTX:
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
+FREE_QUEUE_ID:
+    urpc_id_generator_free(&g_umq_id_allocator, queue->umq_id);
 FREE_QUEUE:
     if (queue->used_port != NULL) {
         free(queue->used_port);
@@ -1100,6 +1120,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     urma_eid_t *io_eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t io_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     int ret = UMQ_SUCCESS;
+
     if (queue->umq_trans_mode != UMQ_TRANS_MODE_UB && queue->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
         queue->umq_trans_mode != UMQ_TRANS_MODE_UBMM && queue->umq_trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, destroy umq failed, trans mode %d is not UB\n",
@@ -1197,6 +1218,8 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     if (queue->used_port != NULL) {
         free(queue->used_port);
     }
+
+    urpc_id_generator_free(&g_umq_id_allocator, queue->umq_id);
     free(queue);
     return UMQ_SUCCESS;
 }
