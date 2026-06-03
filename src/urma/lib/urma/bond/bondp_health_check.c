@@ -993,6 +993,11 @@ static void *bondp_health_check_thread(void *arg)
             bondp_health_task_t *task = NULL;
             HMAP_FOR_EACH(task, hmap_node, &health->task_table.hmap) {
                 bool is_balance = (task->bondp_jetty->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE);
+
+                if (task->bdp_tjetty->v_tjetty.trans_mode == URMA_TM_RC) {
+                    URMA_LOG_DEBUG("Skip RC mode\n");
+                    continue;
+                }
                 if (!is_balance) {
                     bondp_health_task_check_mode(task, cfg, now_us);
                 }
