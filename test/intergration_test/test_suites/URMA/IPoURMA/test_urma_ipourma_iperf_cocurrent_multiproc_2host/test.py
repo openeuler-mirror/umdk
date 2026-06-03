@@ -52,17 +52,17 @@ class Test(UBUSFeature):
     @pytest.mark.timeout(600)
     def test_urma_ipourma_iperf_cocurrent_multiproc_2host(self):
         """多打一场景：多个client同时向一个server发流，client使用多个nic并发打流"""
-        # 获取host2和host3的所有test_nic
+        # 获取host2和host1的所有test_nic
         host2_nics = list(self.host2.test_nic.values())
-        host3_nics = list(self.host3.test_nic.values())
+        host1_nics = list(self.host1.test_nic.values())
         duration = 30
 
         log.info(f"host2 test_nics count: {len(host2_nics)}")
-        log.info(f"host3 test_nics count: {len(host3_nics)}")
+        log.info(f"host1 test_nics count: {len(host1_nics)}")
         # 清理旧进程
         self.host2.exec_cmd("pkill -9 iperf3 || true", silence=2)
-        self.host3.exec_cmd("pkill -9 iperf3 || true", silence=2)
-        # 场景一：多打一 - host3多个nic -> host2一个nic
+        self.host1.exec_cmd("pkill -9 iperf3 || true", silence=2)
+        # 场景一：多打一 - host1多个nic -> host2一个nic
         log.info("========== Multi-to-One Testing ==========")
         server_nic = host2_nics[0]
         server_ip = server_nic.get('ipv6')
@@ -75,7 +75,7 @@ class Test(UBUSFeature):
 
         # 每个nic启动num_procs个进程
         num_procs = 4
-        for client_nic in host3_nics:
+        for client_nic in host1_nics:
             client_ip = client_nic.get('ipv6')
             if not client_ip:
                 continue
@@ -85,22 +85,22 @@ class Test(UBUSFeature):
                 self.host2.exec_cmd(f"iperf3 -s -B {server_ip} -p {base_port}", background=True)
                 time.sleep(2)
                 cmd = f"iperf3 -c {server_ip} -B {client_ip} -p {base_port} -t {duration}"
-                handle = self.host3.exec_cmd(cmd, background=True, timeout=duration + 10)
+                handle = self.host1.exec_cmd(cmd, background=True, timeout=duration + 10)
                 client_handles.append(handle)
         time.sleep(duration + 5)
         for i, ret in enumerate(client_handles):
             self.assertEqual(ret.ret, 0, f"Multi-to-One Client {i} failed (Port {base_port+i})")
 
-        # 场景二：一打多 - host2一个nic -> host3多个nic
+        # 场景二：一打多 - host2一个nic -> host1多个nic
         log.info("========== One-to-Multi Testing ==========")
-        client_nic = host3_nics[0]
+        client_nic = host1_nics[0]
         client_ip = client_nic.get('ipv6')
         if not client_ip:
             log.error("No ipv6 address for client nic")
             return
 
         self.host2.exec_cmd("pkill -9 iperf3 || true", silence=2)
-        self.host3.exec_cmd("pkill -9 iperf3 || true", silence=2)
+        self.host1.exec_cmd("pkill -9 iperf3 || true", silence=2)
         time.sleep(1)
 
         client_handles = []
@@ -115,7 +115,7 @@ class Test(UBUSFeature):
                 self.host2.exec_cmd(f"iperf3 -s -B {server_ip} -p {base_port}", background=True)
                 time.sleep(2)
                 cmd = f"iperf3 -c {server_ip} -B {client_ip} -p {base_port} -t {duration}"
-                handle = self.host3.exec_cmd(cmd, background=True, timeout=duration + 10)
+                handle = self.host1.exec_cmd(cmd, background=True, timeout=duration + 10)
                 client_handles.append(handle)
         time.sleep(duration + 5)
         for i, ret in enumerate(client_handles):

@@ -34,10 +34,10 @@ class Test(UBUSFeature):
 
     def test_urma_ipourma_iperf_concurrent_streams(self):    
         total_mbps = 5
-        server = self.host3
+        server = self.host1
         client = self.host2
-        server_ip = server.test_nic2_ipv6
-        client_ip = client.test_nic2_ipv6
+        server_ip = server.test_nic1_ipv6
+        client_ip = client.test_nic1_ipv6
         parallel_levels = [1, 4, 8, 16, 32, 64, 128]
 
         # Step 1: 清理旧进程

@@ -41,10 +41,10 @@ class Test(UBUSFeature):
     @pytest.mark.timeout(36000)
     def test_urma_ipourma_abnormal_ifconfig_updown_in_perf(self): 
         duration = 10
-        server_ip = self.host2.test_nic2_ipv6
-        client_ip = self.host3.test_nic2_ipv6
+        server_ip = self.host2.test_nic1_ipv6
+        client_ip = self.host1.test_nic1_ipv6
 
-        for host in [self.host2, self.host3]:
+        for host in [self.host2, self.host1]:
             ret = host.exec_cmd("pkill iperf3 || true")
             self.assertEqual(ret.ret, 0, msg=f"Failed to kill iperf3 on {host}")
 
@@ -59,16 +59,16 @@ class Test(UBUSFeature):
             time.sleep(2)
 
             client_cmd = f"iperf3 -c {server_ip} -B {client_ip} -t {duration}"
-            ret = self.host3.exec_cmd(client_cmd, background=True)
+            ret = self.host1.exec_cmd(client_cmd, background=True)
 
-            ret = self.host2.exec_cmd(f"ifconfig {self.host2.test_nic2_name} down")
-            self.assertEqual(ret.ret, 0, msg=f"Failed to bring {self.host2.test_nic2_name} down")
+            ret = self.host2.exec_cmd(f"ifconfig {self.host2.test_nic1} down")
+            self.assertEqual(ret.ret, 0, msg=f"Failed to bring {self.host2.test_nic1} down")
             time.sleep(4)
 
-            ret = self.host2.exec_cmd(f"ifconfig {self.host2.test_nic2_name} up")
-            self.assertEqual(ret.ret, 0, msg=f"Failed to bring {self.host2.test_nic2_name} up")
+            ret = self.host2.exec_cmd(f"ifconfig {self.host2.test_nic1} up")
+            self.assertEqual(ret.ret, 0, msg=f"Failed to bring {self.host2.test_nic1} up")
 
-            for host in [self.host2, self.host3]:
+            for host in [self.host2, self.host1]:
                 ret = host.exec_cmd("pkill iperf3 || true")
                 self.assertEqual(ret.ret, 0, msg=f"Failed to kill iperf3 on {host}")
             time.sleep(5)
@@ -77,10 +77,10 @@ class Test(UBUSFeature):
             time.sleep(2)
 
             client_cmd = f"iperf3 -c {server_ip} -B {client_ip} -t {duration}"
-            ret = self.host3.exec_cmd(client_cmd)
+            ret = self.host1.exec_cmd(client_cmd)
             self.assertEqual(ret.ret, 0, msg=f"iperf3 connection failed before down:\n{ret.stdout}")
 
-            for host in [self.host2, self.host3]:
+            for host in [self.host2, self.host1]:
                 ret = host.exec_cmd("pkill iperf3 || true")
                 self.assertEqual(ret.ret, 0, msg=f"Failed to kill iperf3 on {host}")
 
