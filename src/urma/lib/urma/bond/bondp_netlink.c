@@ -113,6 +113,8 @@ static int bondp_nl_parse_cb(struct nl_msg *nlmsg, void *arg)
 
 int bondp_nl_init(void)
 {
+    int ret = 0;
+
     pthread_mutex_lock(&g_bondp_nl_ctx.lock);
     if (g_bondp_nl_ctx.sock != NULL) {
         pthread_mutex_unlock(&g_bondp_nl_ctx.lock);
@@ -122,13 +124,15 @@ int bondp_nl_init(void)
     struct nl_sock *sock = nl_socket_alloc();
     if (sock == NULL) {
         pthread_mutex_unlock(&g_bondp_nl_ctx.lock);
+        URMA_LOG_ERR("Failed to allocate netlink socket.\n");
         return -ENOMEM;
     }
 
-    int ret = genl_connect(sock);
+    ret = genl_connect(sock);
     if (ret < 0) {
         nl_socket_free(sock);
         pthread_mutex_unlock(&g_bondp_nl_ctx.lock);
+        URMA_LOG_ERR("Failed to connect generic netlink, ret=%d\n", ret);
         return ret;
     }
 
@@ -137,6 +141,7 @@ int bondp_nl_init(void)
         nl_close(sock);
         nl_socket_free(sock);
         pthread_mutex_unlock(&g_bondp_nl_ctx.lock);
+        URMA_LOG_ERR("Failed to resolve netlink family '%s', ret=%d\n", UBCORE_GENL_FAMILY_NAME, ret);
         return ret;
     }
 
@@ -144,6 +149,7 @@ int bondp_nl_init(void)
     g_bondp_nl_ctx.sock = sock;
     g_bondp_nl_ctx.genl_id = ret;
     pthread_mutex_unlock(&g_bondp_nl_ctx.lock);
+    URMA_LOG_INFO("Bond netlink initialized, genl_id=%d\n", ret);
     return 0;
 }
 

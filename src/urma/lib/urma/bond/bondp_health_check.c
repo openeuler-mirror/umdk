@@ -224,7 +224,8 @@ static int bondp_register_health_ctx_global(bondp_context_t *bond_ctx)
 
     bondp_health_ctx_node_t *new_node = calloc(1, sizeof(bondp_health_ctx_node_t));
     if (new_node == NULL) {
-        URMA_LOG_ERR("Failed to alloc health ctx node\n");
+        URMA_LOG_ERR("Failed to alloc health ctx node, dev=%s, eid_idx=%u\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
         return -1;
     }
 
@@ -1624,19 +1625,22 @@ int bondp_create_health_check_ctx(bondp_context_t *bond_ctx)
     }
 
     if (pthread_spin_init(&health->event_lock, PTHREAD_PROCESS_PRIVATE) != 0) {
-        URMA_LOG_ERR("Failed to init health event lock\n");
+        URMA_LOG_ERR("Failed to init health event lock, dev=%s, eid_idx=%u\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
         return -1;
     }
 
     if (bondp_hash_table_create(&health->task_table, BONDP_HEALTH_TASK_TABLE_SIZE,
         bondp_health_task_comp_f, bondp_health_task_free_f, bondp_health_task_hash_f) != 0) {
-        URMA_LOG_ERR("Failed to create health task table\n");
+        URMA_LOG_ERR("Failed to create health task table, dev=%s, eid_idx=%u\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
         goto ERR_EVENT_LOCK;
     }
 
     health->health_check_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (health->health_check_fd < 0) {
-        URMA_LOG_ERR("Failed to create health_check_fd, errno=%d\n", errno);
+        URMA_LOG_ERR("Failed to create health eventfd, dev=%s, eid_idx=%u, errno=%d\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index, errno);
         goto DEL_TASK_TABLE;
     }
 
@@ -1644,12 +1648,15 @@ int bondp_create_health_check_ctx(bondp_context_t *bond_ctx)
     ev.data.ptr = (void *)bond_ctx;
     if (epoll_ctl(global_ctx->health_thread_ctx.health_epoll_fd,
         EPOLL_CTL_ADD, health->health_check_fd, &ev) != 0) {
-        URMA_LOG_ERR("Failed to add ctx async fd to health epoll, errno=%d\n", errno);
+        URMA_LOG_ERR("Failed to add health fd to epoll, dev=%s, eid_idx=%u, fd=%d, epoll_fd=%d, errno=%d\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index,
+                     health->health_check_fd, global_ctx->health_thread_ctx.health_epoll_fd, errno);
         goto DEL_FD;
     }
 
     if (bondp_register_health_ctx_global(bond_ctx) != 0) {
-        URMA_LOG_ERR("Failed to register health ctx globally\n");
+        URMA_LOG_ERR("Failed to register health ctx globally, dev=%s, eid_idx=%u\n",
+                     bond_ctx->v_ctx.dev->name, bond_ctx->v_ctx.eid_index);
         goto DEL_EPOLL;
     }
 
