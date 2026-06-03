@@ -134,6 +134,11 @@ enum {
     UBCORE_ATTR_DEV_NAME,
     UBCORE_ATTR_NS_FD,
     UBCORE_ATTR_EID_IDX,
+    UBCORE_ATTR_EID = 15,
+    UBCORE_ATTR_MAIN_UE_EID,
+    UBCORE_ATTR_EID_NUM,
+    UBCORE_ATTR_EID_LIST,
+    UBCORE_ATTR_STATUS,
     UBCORE_ATTR_AFTER_LAST
 };
 
@@ -248,6 +253,7 @@ int admin_cmd_main(admin_config_t *cfg);
 int admin_cmd_agg(admin_config_t *cfg);
 int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
+int admin_cmd_main_ue_eid(admin_config_t *cfg);
 int admin_cmd_show(admin_config_t *cfg);
 
 #endif
