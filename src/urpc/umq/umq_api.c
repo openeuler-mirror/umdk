@@ -354,6 +354,7 @@ int umq_log_config_get(umq_log_config_t *config)
     config->log_flag = log_config->log_flag;
     config->level = (umq_log_level_t)log_config->ctx.level;
     config->func = log_config->ctx.vlog_output_func;
+    config->ext_func = log_config->ctx.vlog_output_ext_func;
     config->rate_limited.interval_ms = log_config->ctx.rate_limited.interval_ms;
     config->rate_limited.num = log_config->ctx.rate_limited.num;
     if (config->func == default_vlog_output) {
