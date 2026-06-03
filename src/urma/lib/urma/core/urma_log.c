@@ -270,8 +270,8 @@ static int urma_vlog_loc(const char *file, const char *function, int line, urma_
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "[URMA][liburma][thread_id=tid][thread_tag][file:function:line][format]" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s][thread_id=%ld][%s][%s:%s:%d][%s]",
+    /* add log head info, "[URMA][liburma][thread_id=tid][thread_tag][file:function:line]format" */
+    ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s][thread_id=%ld][%s][%s:%s:%d]%s",
                    URMA_LOG_TAG, LIBURMA_LOG, (long)syscall(__NR_gettid), g_thread_tag, file,
                    function, line, format);
     if (ret <= 0 || ret >= sizeof(newformat)) {
