@@ -13,10 +13,13 @@ StartLimitBurst=5
 Type=notify
 User=ums
 Group=ums
+KeyringMode=shared
 
-# ExecStartPre: (Optional) Import private key decryption passphrase to keyring @u
-# Example: ExecStartPre=/etc/ums_agent/ums_prkey_pwd_init.sh
+ExecStartPre=+/bin/sh -c 'id -u ums > /sys/module/ums/parameters/ums_agent_uid'
+ExecStartPre=+/bin/sh -c 'id -g ums > /sys/module/ums/parameters/ums_agent_gid'
 ExecStart=/usr/sbin/ums_agent --config /etc/ums_agent/ums_agent.conf
+ExecStopPost=+/bin/sh -c 'echo 0 > /sys/module/ums/parameters/ums_agent_uid'
+ExecStopPost=+/bin/sh -c 'echo 0 > /sys/module/ums/parameters/ums_agent_gid'
 
 CapabilityBoundingSet=CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_ADMIN

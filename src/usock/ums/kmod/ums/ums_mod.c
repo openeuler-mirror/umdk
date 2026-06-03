@@ -109,8 +109,7 @@ static int ums_agent_uid_param_set(const char *val, const struct kernel_param *k
 
 	WRITE_ONCE(g_ums_sys_tuning_config.ums_agent_uid, new_uid);
 
-	UMS_LOGI("ums_agent_uid updated: %u (%s)", new_uid,
-		new_uid != UMS_AGENT_UID_UNSET ? "strict verification" : "auto-learn");
+	UMS_LOGI("ums_agent_uid updated: %u", new_uid);
 	return 0;
 }
 
@@ -125,9 +124,7 @@ static const struct kernel_param_ops ums_agent_uid_ops = {
 };
 module_param_cb(ums_agent_uid, &ums_agent_uid_ops, NULL, 0644);
 MODULE_PARM_DESC(ums_agent_uid,
-	"Expected UID of the process registering as UMS agent. "
-	"UINT_MAX: auto-learn from first agent registration (default), "
-	"A valid UID: strict verification");
+	"Expected UID of the process registering as UMS agent (default: 0, root only)");
 
 static int ums_agent_gid_param_set(const char *val, const struct kernel_param *kp)
 {
@@ -150,8 +147,7 @@ static int ums_agent_gid_param_set(const char *val, const struct kernel_param *k
 
 	WRITE_ONCE(g_ums_sys_tuning_config.ums_agent_gid, new_gid);
 
-	UMS_LOGI("ums_agent_gid updated: %u (%s)", new_gid,
-		new_gid != UMS_AGENT_GID_UNSET ? "strict verification" : "auto-learn");
+	UMS_LOGI("ums_agent_gid updated: %u", new_gid);
 	return 0;
 }
 
@@ -166,9 +162,7 @@ static const struct kernel_param_ops ums_agent_gid_ops = {
 };
 module_param_cb(ums_agent_gid, &ums_agent_gid_ops, NULL, 0644);
 MODULE_PARM_DESC(ums_agent_gid,
-	"Expected GID of the process registering as UMS agent. "
-	"UINT_MAX: auto-learn from first agent registration (default), "
-	"A valid GID: strict verification");
+	"Expected GID of the process registering as UMS agent (default: 0, root only)");
 
 static void ums_tcp_listen_work(struct work_struct *work);
 
@@ -1272,17 +1266,8 @@ static void ums_init_sys_config(void)
 		ums_token_mode_name(g_ums_sys_tuning_config.ub_token_mode),
 		g_ums_sys_tuning_config.ub_token_mode);
 
-	if (g_ums_sys_tuning_config.ums_agent_uid != UMS_AGENT_UID_UNSET)
-		UMS_LOGI("ums_agent_uid=%u (strict verification enabled)",
-			g_ums_sys_tuning_config.ums_agent_uid);
-	else
-		UMS_LOGI("ums_agent_uid=auto-learn (from first agent registration)");
-
-	if (g_ums_sys_tuning_config.ums_agent_gid != UMS_AGENT_GID_UNSET)
-		UMS_LOGI("ums_agent_gid=%u (strict verification enabled)",
-			g_ums_sys_tuning_config.ums_agent_gid);
-	else
-		UMS_LOGI("ums_agent_gid=auto-learn (from first agent registration)");
+	UMS_LOGI("ums_agent_uid=%u", g_ums_sys_tuning_config.ums_agent_uid);
+	UMS_LOGI("ums_agent_gid=%u", g_ums_sys_tuning_config.ums_agent_gid);
 }
 
 static int __init ums_init(void)

@@ -62,8 +62,8 @@ static atomic_t g_clc_session_id = ATOMIC_INIT(0);
 
 struct ums_sys_tuning_config g_ums_sys_tuning_config = {
 	.ub_token_mode = UMS_TOKEN_MODE_SECURE,
-	.ums_agent_uid = UMS_AGENT_UID_UNSET,
-	.ums_agent_gid = UMS_AGENT_GID_UNSET,
+	.ums_agent_uid = 0,
+	.ums_agent_gid = 0,
 };
 
 static atomic_t g_lgr_cnt = ATOMIC_INIT(0); /* number of existing link groups */

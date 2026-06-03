@@ -59,9 +59,6 @@
 #define UMSPROTO_UMS 0  /* UMS protocol, IPv4 */
 #define UMSPROTO_UMS6 1 /* UMS protocol, IPv6 */
 
-#define UMS_AGENT_UID_UNSET	UINT_MAX
-#define UMS_AGENT_GID_UNSET	UINT_MAX
-
 struct ums_ip_addr {
 	sa_family_t family;
 	union {
@@ -656,10 +653,11 @@ struct ums_sock { /* ums sock container */
 	struct rw_semaphore clcsock_release_lock;
 };
 
+/* UB token exchange mode */
 enum ums_token_mode {
-	UMS_TOKEN_MODE_SECURE  = 0,
-	UMS_TOKEN_MODE_LEGACY  = 1,
-	UMS_TOKEN_MODE_DISABLE = 2,
+	UMS_TOKEN_MODE_SECURE  = 0, /* out-of-band via ums_agent TLS */
+	UMS_TOKEN_MODE_LEGACY  = 1, /* in-band via CLC msg plaintext */
+	UMS_TOKEN_MODE_DISABLE = 2, /* no UB token access control */
 	UMS_TOKEN_MODE_MAX,
 };
 

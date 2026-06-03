@@ -27,7 +27,6 @@
 #define UMS_AGENT_MIN_LISTEN_PORT     1024
 #define UMS_AGENT_MAX_LISTEN_PORT     65535
 #define UMS_AGENT_DEFAULT_LISTEN_PORT 61080
-#define UMS_AGENT_DEFAULT_LISTEN_ADDR  "0.0.0.0"
 #define UMS_AGENT_DEFAULT_CIPHER_SUITE "TLS_AES_256_GCM_SHA384"
 
 #define UMS_AGENT_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -55,7 +54,6 @@ static void ums_agent_set_defaults(struct ums_agent_config *config)
     config->log_level = UMS_AGENT_LOG_LEVEL_INFO;
     config->listen_port = UMS_AGENT_DEFAULT_LISTEN_PORT;
     config->max_conns = UMS_AGENT_MAX_CONNS_DEFAULT;
-    (void)ums_agent_ip_addr_from_str(&config->listen_addr, UMS_AGENT_DEFAULT_LISTEN_ADDR);
     (void)snprintf(config->cipher_suite, sizeof(config->cipher_suite), "%s", UMS_AGENT_DEFAULT_CIPHER_SUITE);
 
     memset(&config->client, 0, sizeof(config->client));
@@ -282,11 +280,18 @@ static int ums_agent_load_network_listen_addr(GKeyFile *kf, struct ums_agent_con
 {
     gchar *value = g_key_file_get_string(kf, "network", "listen_addr", NULL);
     if (!value) {
-        return 0;
+        UMS_AGENT_LOG_ERR("network.listen_addr must be configured");
+        return -1;
+    }
+
+    if (value[0] == '\0') {
+        UMS_AGENT_LOG_ERR("network.listen_addr must be configured (empty value is not allowed)");
+        g_free(value);
+        return -1;
     }
 
     if (ums_agent_ip_addr_from_str(&cfg->listen_addr, value) != 0) {
-        UMS_AGENT_LOG_ERR("invalid listen_addr: %s", value);
+        UMS_AGENT_LOG_ERR("invalid listen_addr, expected IPv4 or IPv6 address");
         g_free(value);
         return -1;
     }
@@ -421,10 +426,12 @@ int ums_agent_config_init(const char *path, struct ums_agent_config **config)
         goto out;
     }
 
-    if (g_key_file_has_group(kf, "network")) {
-        if (ums_agent_load_network_config(kf, cfg) != 0) {
-            goto out;
-        }
+    if (!g_key_file_has_group(kf, "network")) {
+        UMS_AGENT_LOG_ERR("config missing required section [network]");
+        goto out;
+    }
+    if (ums_agent_load_network_config(kf, cfg) != 0) {
+        goto out;
     }
 
     if (g_key_file_has_group(kf, "tls")) {

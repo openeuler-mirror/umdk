@@ -109,25 +109,15 @@ static const struct nla_policy g_ums_nl_policy[__UMS_ATTR_MAX] = {
 static int ums_nl_verify_sender_uid(kuid_t sender_uid)
 {
 	unsigned int expected_uid = READ_ONCE(g_ums_sys_tuning_config.ums_agent_uid);
-	if (expected_uid != UMS_AGENT_UID_UNSET)
-		return uid_eq(sender_uid, make_kuid(&init_user_ns, expected_uid)) ? 0 : -EPERM;
 
-	if (uid_valid(g_ums_nl_state.agent.uid))
-		return uid_eq(sender_uid, g_ums_nl_state.agent.uid) ? 0 : -EPERM;
-
-	return 0;
+	return uid_eq(sender_uid, make_kuid(&init_user_ns, expected_uid)) ? 0 : -EPERM;
 }
 
 static int ums_nl_verify_sender_gid(kgid_t sender_gid)
 {
 	unsigned int expected_gid = READ_ONCE(g_ums_sys_tuning_config.ums_agent_gid);
-	if (expected_gid != UMS_AGENT_GID_UNSET)
-		return gid_eq(sender_gid, make_kgid(&init_user_ns, expected_gid)) ? 0 : -EPERM;
 
-	if (gid_valid(g_ums_nl_state.agent.gid))
-		return gid_eq(sender_gid, g_ums_nl_state.agent.gid) ? 0 : -EPERM;
-
-	return 0;
+	return gid_eq(sender_gid, make_kgid(&init_user_ns, expected_gid)) ? 0 : -EPERM;
 }
 
 static int ums_nl_check_agent_portid(struct genl_info *info)
@@ -178,19 +168,17 @@ static int ums_nl_ready(struct sk_buff *skb, struct genl_info *info)
 	sender_gid = NETLINK_CB(skb).creds.gid;
 
 	if (ums_nl_verify_sender_uid(sender_uid) != 0) {
-		UMS_LOGW_LIMITED("READY rejected: uid mismatch, sender=%u, expected=%u, learned=%u",
+		UMS_LOGW_LIMITED("READY rejected: uid mismatch, sender=%u, expected=%u",
 			from_kuid(&init_user_ns, sender_uid),
-			READ_ONCE(g_ums_sys_tuning_config.ums_agent_uid),
-			from_kuid(&init_user_ns, g_ums_nl_state.agent.uid));
+			READ_ONCE(g_ums_sys_tuning_config.ums_agent_uid));
 		mutex_unlock(&g_ums_nl_state.agent_mutex);
 		return -EPERM;
 	}
 
 	if (ums_nl_verify_sender_gid(sender_gid) != 0) {
-		UMS_LOGW_LIMITED("READY rejected: gid mismatch, sender=%u, expected=%u, learned=%u",
+		UMS_LOGW_LIMITED("READY rejected: gid mismatch, sender=%u, expected=%u",
 			from_kgid(&init_user_ns, sender_gid),
-			READ_ONCE(g_ums_sys_tuning_config.ums_agent_gid),
-			from_kgid(&init_user_ns, g_ums_nl_state.agent.gid));
+			READ_ONCE(g_ums_sys_tuning_config.ums_agent_gid));
 		mutex_unlock(&g_ums_nl_state.agent_mutex);
 		return -EPERM;
 	}
