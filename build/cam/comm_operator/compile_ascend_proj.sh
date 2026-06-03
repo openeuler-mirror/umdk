@@ -7,7 +7,6 @@
 # History: 2025-07-20 create cam building script
 
 # 定义全局屏蔽列表
-# cam_feature的shmem dispatch/combine未适配最新shmem，暂不启用
 exclude_list=()
 if [ -z "${SHMEM_HOME_PATH}" ]; then
     echo "Skipping shmem (SHMEM_HOME_PATH not set)"
@@ -81,7 +80,7 @@ BuildAscendProj() {
     if [ -n "${SHMEM_HOME_PATH}" ]; then
         cp -rf ./ascend_kernels/pregen/cmake ./${proj_name}
     else
-        rm -f ./${proj_name}/pregen/build_out/autogen/*shmem*
+        rm -f ./${proj_name}/pregen/build_out/autogen/*fused_deep_moe*
     fi
 
     source $ASCEND_HOME_PATH/bin/setenv.bash
