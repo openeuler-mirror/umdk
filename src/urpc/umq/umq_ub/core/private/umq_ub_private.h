@@ -44,17 +44,14 @@ extern "C" {
 
 #define UMQ_CONTINUE_FLAG 1
 #define UMQ_MAX_TSEG_NUM (1024)
-#define UMQ_UB_RW_SEGMENT_LEN 64 // ub_queue read/write buf splited 64B for each module, such as mem import/flow control
 #define HUGE_QBUF_BUFFER_INC_BATCH 64
 #define UMQ_QBUF_ALIGN_SIZE 4096
 
 #define UMQ_UB_MAX_REMOTE_EID_NUM 1024
-#define UMQ_UB_MIN_EID_ID 0
 
 #define MEMPOOL_UBVA_SIZE 28
 #define UMQ_IMM_VERSION 0
 #define UMQ_UB_FLOW_CONTORL_JETTY_DEPTH 2
-#define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
 #define UMQ_UB_DEV_STR_LENGTH 64
 #define UMQ_UB_NAMESPACE_SIZE 256
