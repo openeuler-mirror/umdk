@@ -251,7 +251,7 @@ uint64_t umq_ubmm_create_impl(uint64_t umqh, uint8_t *ubmm_ctx, umq_create_optio
     if (option->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
         if (option->tx_depth == 0) {
             UMQ_VLOG_ERR(VLOG_UMQ, "tx_depth must be greater than 0\n");
-            return -UMQ_ERR_EINVAL;
+            goto DESTROY_UB;
         }
         tp->local_ring.tx_depth = option->tx_depth;
     } else {
