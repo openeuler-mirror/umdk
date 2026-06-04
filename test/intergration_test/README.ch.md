@@ -16,6 +16,7 @@
   yum install -y gcc-c++
   yum install -y openssl-devel
   yum install -y glib2-devel
+  yum install -y iperf3
   pip install pytest==8.0.2
   pip install pytest-timeout
   pip install fabric==2.7.1
@@ -45,7 +46,9 @@
               ip: x.x.x.x
           test_nic1:
               name: xxx
+              dev: xxx
               ip: x.x.x.x
+              ipv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
       host2:
           user: root
@@ -55,7 +58,9 @@
               ip: x.x.x.x
           test_nic1:
               name: xxx
+              dev: xxx
               ip: x.x.x.x
+              ipv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
 ```
 **Notes:** 

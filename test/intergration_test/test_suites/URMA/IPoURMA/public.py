@@ -1,13 +1,13 @@
 import logging
 import itertools
 import time
-from app.urma.urma_test import URMAFeature
 import re
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
+from ubus_test.base_test import BaseTest
 
-class UBUSFeature(URMAFeature):
+class UBUSFeature(BaseTest):
 
     def setup(self):
         log.info('---------- [ UBUSFeature setup ] ----------')
@@ -74,11 +74,11 @@ class UBUSFeature(URMAFeature):
         )
 
     def run_iperf_test(self, extra_cmd, is_udp=False):
-        server_ip = self.host2.test_nic2_ipv6
-        client_ip = self.host3.test_nic2_ipv6
+        server_ip = self.host2.test_nic1_ipv6
+        client_ip = self.host1.test_nic1_ipv6
         test_type = "UDP" if is_udp else "TCP"
 
-        for host in [self.host2, self.host3]:
+        for host in [self.host2, self.host1]:
             host.exec_cmd("pkill -9 iperf3 || true")
         time.sleep(1)
 
@@ -91,7 +91,7 @@ class UBUSFeature(URMAFeature):
         full_cmd = f"iperf3 -c {server_ip} -B {client_ip} {udp_flag} {extra_cmd} {duration}"
 
         log.info(f"Starting {test_type} stress test: {full_cmd}")
-        ret = self.host3.exec_cmd(full_cmd)
+        ret = self.host1.exec_cmd(full_cmd)
 
         self.assertEqual(ret.ret, 0, 
             f"{test_type} process exited with non-zero code: {ret.ret}. Stderr: {ret.stderr}")
