@@ -23,7 +23,7 @@ extern "C" {
 #define UVS_MAX_ROUTES     (16)
 #define EID_LEN            (16)
 #define MAX_PORT_NUM       (9)
-#define MAX_NODE_NUM       (64)
+#define MAX_NODE_NUM       (1024)
 #define IODIE_NUM_PER_CHIP (1)
 #define PORT_NUM           (9)
 #define CHIP_NUM           (2)

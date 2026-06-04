@@ -23,7 +23,7 @@
 #include "urma_types.h"
 #include "urma_types_str.h"
 
-#define MAX_NODE_NUM            (64)
+#define MAX_NODE_NUM            (1024)
 #define EID_LEN                 (16)
 #define PORT_NUM                (9)
 #define CHIP_NUM                (2)
