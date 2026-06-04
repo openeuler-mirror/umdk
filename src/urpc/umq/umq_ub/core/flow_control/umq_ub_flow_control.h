@@ -28,7 +28,7 @@ typedef union umq_ub_fc_user_ctx {
     } bs;
 } umq_ub_fc_user_ctx_t;
 
-uint16_t umq_ub_fc_threashold_modify(uint16_t threashold, uint8_t ratio);
+uint16_t umq_ub_flow_control_threashold_modify(uint16_t threashold, uint8_t ratio);
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
 void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
@@ -70,7 +70,7 @@ static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t 
         queue->checker->last_send = get_timestamp_us();
     }
     if (fc->ops.remote_rx_window_load(fc) <=
-        umq_ub_fc_threashold_modify(fc->credit_request_threshold, fc->peer_ratio)) {
+        umq_ub_flow_control_threashold_modify(fc->credit_request_threshold, fc->peer_ratio)) {
         return umq_ub_shared_credit_req_send(queue);
     }
     return UMQ_SUCCESS;
