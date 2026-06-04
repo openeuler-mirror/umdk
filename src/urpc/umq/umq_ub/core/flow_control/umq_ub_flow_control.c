@@ -53,7 +53,7 @@ static uint8_t umq_ub_fc_imm_to_ratio(uint8_t ratio)
     return g_umq_ub_credit_ratio[ratio];
 }
 
-uint16_t umq_ub_fc_threashold_modify(uint16_t threashold, uint8_t ratio)
+uint16_t umq_ub_flow_control_threashold_modify(uint16_t threashold, uint8_t ratio)
 {
     uint16_t ret = threashold * umq_ub_fc_imm_to_ratio(ratio) / UMQ_UB_CREDIT_PERCENT;
     if (ret == 0) {
@@ -778,7 +778,7 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     * the rounded result is still 2, the credit count will remain permanently at 2.
     * Therefore, an increment of 1 is required.
     */
-    fc->credits_per_request = umq_ub_fc_threashold_modify((uint16_t)new_request, fc->peer_ratio) + 1;
+    fc->credits_per_request = umq_ub_flow_control_threashold_modify((uint16_t)new_request, fc->peer_ratio) + 1;
     umq_ub_window_inc(fc, reply_credits);
     return;
 }
@@ -799,7 +799,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     if (fc->peer_ratio == 0) {
         return_threshold = 0;
     } else {
-        return_threshold = umq_ub_fc_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
+        return_threshold = umq_ub_flow_control_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
     }
     if (diff < queue->flow_control.timeout_us || remote_credit <= return_threshold) {
         return UMQ_SUCCESS;
