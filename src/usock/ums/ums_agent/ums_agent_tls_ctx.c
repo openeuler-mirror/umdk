@@ -41,23 +41,23 @@ static int ums_agent_keyring_get_password(const char *desc, char *pwd_buf, size_
     key_serial_t key = request_key(UMS_AGENT_TLS_KEY_TYPE, desc, NULL,
         KEY_SPEC_USER_KEYRING);
     if (key < 0) {
-        UMS_AGENT_LOG_ERR("request_key '%s' from @u keyring failed: %s (errno=%d)",
-            desc, strerror(errno), errno);
+        UMS_AGENT_LOG_ERR("request_key from @u keyring failed: %s (errno=%d)",
+            strerror(errno), errno);
         return -1;
     }
 
     long ret = keyctl_read(key, pwd_buf, pwd_buf_len - 1);
     if (ret < 0) {
-        UMS_AGENT_LOG_ERR("keyctl_read for key desc '%s' failed: %s (errno=%d)",
-            desc, strerror(errno), errno);
+        UMS_AGENT_LOG_ERR("keyctl_read for key desc failed: %s (errno=%d)",
+            strerror(errno), errno);
         ums_agent_secure_zero(pwd_buf, pwd_buf_len);
         return -1;
     }
 
     if (ret > (long)(pwd_buf_len - 1)) {
         ums_agent_secure_zero(pwd_buf, pwd_buf_len);
-        UMS_AGENT_LOG_ERR("private key password (key desc '%s') too long (>= %zu chars)",
-            desc, pwd_buf_len - 1);
+        UMS_AGENT_LOG_ERR("private key password too long (>= %zu chars)",
+            pwd_buf_len - 1);
         return -1;
     }
 
@@ -81,8 +81,7 @@ static int ums_agent_tls_password_cb(char *buf, int size, int rwflag, void *user
 
     size_t len = strlen(pwd_buf);
     if (len >= (size_t)size) {
-        UMS_AGENT_LOG_ERR("password for '%s' too long for OpenSSL buffer "
-            "(%zu >= %d)", desc, len, size);
+        UMS_AGENT_LOG_ERR("password exceeds OpenSSL buffer size");
         ums_agent_secure_zero(pwd_buf, sizeof(pwd_buf));
         return 0;
     }
@@ -281,17 +280,17 @@ static int ums_agent_setup_ssl_ctx(SSL_CTX *ctx,
     }
 
     if (SSL_CTX_set_ciphersuites(ctx, cipher_suite) != 1) {
-        UMS_AGENT_LOG_ERR("SSL_CTX_set_ciphersuites '%s' failed", cipher_suite);
+        UMS_AGENT_LOG_ERR("SSL_CTX_set_ciphersuites failed");
         return -1;
     }
 
     if (SSL_CTX_load_verify_locations(ctx, x509->truststore, NULL) != 1) {
-        UMS_AGENT_LOG_ERR("SSL_CTX_load_verify_locations '%s' failed", x509->truststore);
+        UMS_AGENT_LOG_ERR("SSL_CTX_load_verify_locations failed");
         return -1;
     }
 
     if (SSL_CTX_use_certificate_file(ctx, x509->certificate, SSL_FILETYPE_PEM) != 1) {
-        UMS_AGENT_LOG_ERR("SSL_CTX_use_certificate_file '%s' failed", x509->certificate);
+        UMS_AGENT_LOG_ERR("SSL_CTX_use_certificate_file failed");
         return -1;
     }
 
@@ -299,7 +298,7 @@ static int ums_agent_setup_ssl_ctx(SSL_CTX *ctx,
     SSL_CTX_set_default_passwd_cb_userdata(ctx, (void *)x509->prkey_pwd_desc);
 
     if (SSL_CTX_use_PrivateKey_file(ctx, x509->private_key, SSL_FILETYPE_PEM) != 1) {
-        UMS_AGENT_LOG_ERR("SSL_CTX_use_PrivateKey_file '%s' failed", x509->private_key);
+        UMS_AGENT_LOG_ERR("SSL_CTX_use_PrivateKey_file failed");
         return -1;
     }
 
@@ -440,4 +439,3 @@ SSL_CTX *ums_agent_tls_get_client_ssl_ctx(void)
     }
     return g_ums_agent_tls_ctx.client_ssl_ctx;
 }
-
