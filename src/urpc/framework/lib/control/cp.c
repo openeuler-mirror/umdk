@@ -172,7 +172,8 @@ static int check_set_cfg(urpc_config_t *cfg)
     }
 
     /* uRPC supports multi-eid only when URPC_FEATURE_MULTI_EID is enabled */
-    if (cfg->trans_info_num == 0 || ((cfg->feature & URPC_FEATURE_MULTI_EID) == 0 && cfg->trans_info_num != 1)) {
+    if (cfg->trans_info_num == 0 || cfg->trans_info_num > MAX_TRANS_INFO_NUM ||
+        ((cfg->feature & URPC_FEATURE_MULTI_EID) == 0 && cfg->trans_info_num != 1)) {
         URPC_LIB_LOG_ERR("the number of transmission information(%u) is invalid\n", cfg->trans_info_num);
         return -URPC_ERR_EINVAL;
     }
@@ -181,6 +182,13 @@ static int check_set_cfg(urpc_config_t *cfg)
         /* uRPC supports multi-eid only when DEV_ASSIGN_MODE_DEV assign mode is used to set all trans_info */
         if ((cfg->feature & URPC_FEATURE_MULTI_EID) != 0 && cfg->trans_info[i].assign_mode != DEV_ASSIGN_MODE_DEV) {
             URPC_LIB_LOG_ERR("multi-eid feature should initialize transmission information by device assign mode\n");
+            return -URPC_ERR_EINVAL;
+        }
+        if (((cfg->trans_info[i].assign_mode == DEV_ASSIGN_MODE_IPV4) &&
+            strnlen(cfg->trans_info[i].ipv4.ip_addr, URPC_IPV4_SIZE) == URPC_IPV4_SIZE) ||
+            ((cfg->trans_info[i].assign_mode == DEV_ASSIGN_MODE_IPV6) &&
+            strnlen(cfg->trans_info[i].ipv6.ip_addr, URPC_IPV6_SIZE) == URPC_IPV6_SIZE)) {
+            URPC_LIB_LOG_ERR("ip length exceeds max value\n");
             return -URPC_ERR_EINVAL;
         }
     }
