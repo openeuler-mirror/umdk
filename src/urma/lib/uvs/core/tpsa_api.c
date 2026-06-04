@@ -18,8 +18,6 @@
 #include <string.h>
 #include <sys/syscall.h>
 
-#define UVS_MAX_TOPO_NUM 64
-
 static inline bool uvs_eid_is_valid(const uvs_eid_t *eid)
 {
     return !(eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0);
@@ -161,7 +159,7 @@ static int uvs_set_topo_info_inner(struct urma_topo_node *topo, uint32_t topo_nu
 {
     int ret;
 
-    if (!topo || topo_num > UVS_MAX_TOPO_NUM || topo_num == 0) {
+    if (!topo || topo_num > MAX_NODE_NUM || topo_num == 0) {
         TPSA_LOG_ERR("topo is NULL or topo_num is invalid.\n");
         return -EINVAL;
     }
