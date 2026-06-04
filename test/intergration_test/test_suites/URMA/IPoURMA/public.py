@@ -5,9 +5,9 @@ import re
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
-from app.urma.urma_test import URMAFeature
+from ubus_test.base_test import BaseTest
 
-class UBUSFeature(URMAFeature):
+class UBUSFeature(BaseTest):
 
     def setup(self):
         log.info('---------- [ UBUSFeature setup ] ----------')
