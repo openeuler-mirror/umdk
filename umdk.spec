@@ -55,7 +55,7 @@
 
 Name          : umdk
 Summary       : Unified memory development kit
-Version       : 25.12.0
+Version       : 26.06.0
 Release       : %{rpm_release}%{?dist}
 Group         : umdk
 License       : Proprietary
@@ -565,5 +565,7 @@ fi
 %endif
 
 %changelog
+* Fri May 29 2026 umdk wujie <wujie66@huawei.com>
+-Change package version to 26.06.0.
 * Tue Dec 30 2025 umdk
 -Initial UMDK-25.12.0 rpm spec file.

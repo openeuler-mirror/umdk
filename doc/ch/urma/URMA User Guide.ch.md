@@ -163,7 +163,7 @@ UB over Ethernet, UBoE是指UB事务层和传输层语义承载在Ethernet/IP上
 2. 打包源码：
 
 ```bash
-tar -czf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git `ls -A`
+tar -czf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git `ls -A`
 ```
 
 3. 编译RPM包：

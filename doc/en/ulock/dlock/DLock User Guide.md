@@ -11,7 +11,7 @@ The externally APIs of DLock are located in the "src/ulock/dlock/lib/include" di
 **Compile DLock Separately**
 Navigate to the root directory of the UMDK project
 ```bash
-tar -czf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git `ls -A`
+tar -czf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git `ls -A`
 rpmbuild -ba umdk.spec --with dlock
 ```
 

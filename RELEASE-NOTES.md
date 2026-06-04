@@ -2,6 +2,22 @@ Release Notes
 ===================
 Version
 ------------
+*   v26.06.0 - 2026/06/30
+New Features
+------------
+* URMA
+* UMQ
+  * Support CTP transport mode
+  * Support time-division multiplexing of jetty pool
+  * Support application layer transmission order
+  * Support latency statistics in detail
+  * Support small memory pool
+* UMS
+  * Support UB TokenValue secure transmission
+    UMS provides ums_agent to exchange tokenValue through TLS channel to provide strict security solution.
+    Recommend to use only in cases with extreme security requirement. For performance critical cases please turn off the config for this feature.
+Version
+------------
 *   v25.12.0 - 2025/12/30
 
 New Features

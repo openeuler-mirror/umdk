@@ -28,7 +28,7 @@ cat /boot/config-$(uname -r) | grep CONFIG_SMC
 
 **单独编译UMS**
 1. 进入UMDK工程根目录下
-2. tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
+2. tar -cvf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git $(ls -A)
 3. rpmbuild -ba umdk.spec --with ums
 
 **UMS 额外编译选项说明**

@@ -40,7 +40,7 @@
 
 ```bash
   mkdir -p /root/rpmbuild/SOURCES/
-  tar -czf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git `ls -A`
+  tar -czf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git `ls -A`
   rpmbuild -ba umdk.spec
 ```
 
