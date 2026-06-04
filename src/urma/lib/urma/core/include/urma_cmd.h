@@ -60,11 +60,6 @@ typedef enum urma_core_cmd {
     URMA_CORE_SHOW_SYSTEM,
 } urma_core_cmd_t;
 
-typedef enum uram_ubagg_cmd {
-    UBAGG_NL_GET_PHYSICAL_DEVICE = 4,
-    UBAGG_NL_CMD_GET_V2P_RES,
-} uram_ubagg_cmd_t;
-
 /* only for uburma device ioctl */
 #define URMA_CMD_MAGIC 'U'
 #define URMA_CMD       _IOWR(URMA_CMD_MAGIC, 1, urma_cmd_hdr_t)

@@ -271,6 +271,16 @@ typedef enum ubagg_genl_attr {
     UBAGG_ATTR_AFTER_LAST
 } ubagg_genl_attr_t;
 
+typedef enum ubagg_genl_cmd {
+    UBAGG_NL_CMD_UNSPEC,
+    UBAGG_NL_GET_TOPO,
+    UBAGG_NL_GET_SLAVE_EID,
+    UBAGG_NL_USER_PAYLOAD,
+    UBAGG_NL_GET_PHYSICAL_DEVICE,
+    UBAGG_NL_CMD_GET_V2P_RES,
+    UBAGG_NL_CMD_MAX,
+} ubagg_genl_cmd_t;
+
 enum {
     UBCORE_RES_TPG_TP_CNT,
     UBCORE_RES_TPG_DSCP,
