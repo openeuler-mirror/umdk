@@ -94,9 +94,9 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
     tp_kind_dict = {'TP': 0, 'CTP': 1}
 
     host_list = _get_host_list_for_type(self, host_list, app_num=app_num)
-    # Get device name list
+    # Get device dev list
     dev_list = [
-        host_list[i].test_nic[1]['name']
+        host_list[i].test_nic[1]['dev']
         for i in range(app_num)
     ]
 
@@ -106,7 +106,7 @@ def exec_test_case(self, path, app_num=2, mode=None, tp_kind=None, env=None, hos
             tp_mode = tp_mode_dict[m]
 
             # Bonding device single path only supports RC+TP. Chip does not support UM type CTP.
-            if host_list[0].test_nic[1]['name'] == 'bonding_dev_0':
+            if host_list[0].test_nic[1]['dev'] == 'bonding_dev_0':
                 if (k == 'TP' and m != 'RC') or (k == 'CTP' and m == 'UM'):
                     continue
 
