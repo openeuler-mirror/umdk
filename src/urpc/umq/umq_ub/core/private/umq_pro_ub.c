@@ -594,7 +594,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
-        return -UMQ_ERR_EAGAIN;
+        return umq_status_convert(status);
     }
     umq_ub_rqe_posted_cnt_inc(queue, wr_index);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
@@ -1235,11 +1235,6 @@ static int umq_ub_flush_sqe(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_cou
     return cnt;
 }
 
-static int umq_ub_fc_process_tx(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
-{
-    return UMQ_SUCCESS;
-}
-
 static void umq_ub_fc_process_tx_error(ub_queue_t *queue, umq_ub_fc_user_ctx_t *obj)
 {
     uint32_t type = obj->bs.type;
@@ -1297,7 +1292,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
     uint32_t success_cnt = 0;
     int32_t qbuf_cnt = 0;
     for (int i = 0; i < tx_cr_cnt; i++) {
-        umq_ub_fc_user_ctx_t  obj = {.value = cr[i].user_ctx};
+        umq_ub_fc_user_ctx_t obj = {.value = cr[i].user_ctx};
         if (cr[i].status != URMA_CR_SUCCESS) {
             umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND_ERROR);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE || cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
@@ -1312,11 +1307,6 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
             if (buf != NULL) {
                 qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
             }
-            continue;
-        }
-
-        if (umq_ub_fc_process_tx(queue, &obj) != UMQ_SUCCESS) {
-            ret = -UMQ_ERR_EFLOWCTL;
             continue;
         }
 

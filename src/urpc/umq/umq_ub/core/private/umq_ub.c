@@ -1491,7 +1491,7 @@ static int umq_ub_rqe_post_factor_query(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx)
 {
     bool enable_token = (dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
-    uint32_t jetty_token;
+    uint32_t jetty_token = 0;
     int ret = umq_ub_token_generate(enable_token, &jetty_token);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "generate jetty token failed, status: %d\n", ret);
@@ -1623,7 +1623,6 @@ uint32_t token_policy_get(bool enable)
 int umq_ub_token_generate(bool enable_token, uint32_t *token)
 {
     if (!enable_token) {
-        *token = get_timestamp();
         return 0;
     }
 
@@ -1637,7 +1636,7 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint
         return UMQ_SUCCESS;
     }
     bool enable_token = (ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
-    uint32_t mem_token;
+    uint32_t mem_token = 0;
     int ret = umq_ub_token_generate(enable_token, &mem_token);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "generate memory token failed, status: %d\n", ret);
