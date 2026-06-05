@@ -1,0 +1,59 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+UMMU_SRCS = glob(["*.c", "*.cpp"])
+
+UMMU_HDRS = glob([
+    "*.h",
+    "include/*.h",
+    "kernel_headers/*.h",
+])
+
+UMMU_INCLUDES = [
+    "include",
+    "kernel_headers",
+]
+
+UMMU_COPTS = [
+    "-U_FORTIFY_SOURCE",
+    "-D_FORTIFY_SOURCE=2",
+    "-fstack-protector-all",
+    "-fno-common",
+]
+
+cc_library(
+    name = "ummu_internal",
+    srcs = UMMU_SRCS,
+    hdrs = UMMU_HDRS,
+    includes = UMMU_INCLUDES,
+    copts = UMMU_COPTS,
+    cxxopts = [
+        "-std=c++11",
+        "-Wno-error",
+    ],
+    alwayslink = True,
+    linkstatic = True,
+)
+
+cc_binary(
+    name = "ummu",
+    linkshared = True,
+    deps = [":ummu_internal"],
+    linkopts = [
+        "-Wl,-z,relro,-z,now",
+    ],
+)
+
+genrule(
+    name = "ummu_linklib",
+    srcs = [":ummu"],
+    outs = ["linklib/libummu.so"],
+    cmd = "mkdir -p $(@D) && cp $(location :ummu) $@",
+)
+
+cc_library(
+    name = "ummu_api",
+    hdrs = UMMU_HDRS,
+    includes = UMMU_INCLUDES,
+)

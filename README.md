@@ -90,61 +90,59 @@ chmod 777 /dev/ummu/tid
 chmod 755 /usr/lib64/liburma*
 ```
 
-4. Build URMA with Bazel (workspace root: `src/urma`)
+4. Build, package, install, and remove URMA with the Bazel script (workspace root: `src/urma`)
 
-From the UMDK repository root, install Bazel plus headers/libs used by the URMA Bazel graph. If you already ran the package list in step 1, you still need `bazel` (and ensure `libnl3-devel` is present; it is required by `urma_ubagg`/UVS paths).
-
-```bash
-yum install -y bazel libnl3-devel openssl-devel zlib-devel
-
-cd src/urma
-# Typical release build for AArch64, including UDMA hardware glue (liburma_udma.so)
-bazel build --config=release --config=arm64 --define=build_udma=true //...
-```
-
-If **libummu** was built and installed manually (not via `libummu-devel` RPM), configure the linker before using `--define=build_udma=true`:
-
-- Installed to the system default path (e.g. `make install` with `CMAKE_INSTALL_PREFIX=/usr`, then `sudo ldconfig`): no extra Bazel flags; the command above is enough.
-- Installed to a custom prefix (e.g. `/usr/local/lib64`): pass the library directory to Bazel and set rpath for runtime loading:
+From the UMDK repository root, run the script from `src/urma`. The script checks build dependencies before compiling and runtime dependencies before installing. Already satisfied dependencies are left untouched; missing dependencies are installed with `yum install -y`, so make sure yum repositories are configured and the command is run with sufficient privileges when dependencies are absent.
 
 ```bash
 cd src/urma
-bazel build --config=release --config=arm64 --define=build_udma=true \
-  --linkopt=-L/usr/local/lib64 \
-  --linkopt=-Wl,-rpath,/usr/local/lib64 \
-  //...
+# Typical release package for AArch64, including UDMA and libummu.
+./urma_bazel.sh compile --config=release --config=arm64 --define=build_udma=true
 ```
 
-Replace `/usr/local/lib64` with your actual `libummu.so` directory. After install, run `sudo ldconfig` if the path is listed in `/etc/ld.so.conf.d/`.
+The `compile` command builds the fixed URMA package payload with Bazel, stages RPM-equivalent install content, writes `metadata/urma_version`, and creates `urma-bazel-<timestamp>.tar.gz` in `src/urma`. It also removes intermediate files after packaging, including `urma_version`, `bazel-urma-package`, and Bazel convenience symlinks.
 
-Optional Bazel configurations (pick the architecture config that matches the host; `x86_64` is also defined in `.bazelrc`):
+Do not install or link against a manually built system `libummu` for this flow. The script reads `LIBUMMU_REMOTE`, `LIBUMMU_COMMIT`, `LIBUMMU_VERSION`, and `LIBUMMU_ABI_VERSION` from `src/urma/WORKSPACE` or `src/urma/bazel/urma_deps.bzl`, fetches that commit into `src/urma/third_party/libummu`, builds it with Bazel, and packages libummu together with URMA.
+
+If `libummu` already exists on the environment, the behavior is:
+
+- `compile` ignores the system-installed `libummu`; it always uses `src/urma/third_party/libummu` at the configured commit.
+- `install` installs the bundled `libummu` files from the tarball. Existing files or symlinks at the same paths, such as `/usr/lib64/libummu.so*`, are replaced by the packaged payload.
+- `remove` does not uninstall third-party yum dependencies and does not remove the bundled `libummu` payload.
+
+Extra arguments after `compile` are passed to `bazel build`, so architecture and diagnostic configurations can still be selected by the caller:
 
 ```bash
-# Release without UDMA user library (AArch64)
-bazel build --config=release --config=arm64 //...
+cd src/urma
 
-# Release with UDMA on x86_64 (on AArch64 hosts use `--config=arm64` instead)
-bazel build --config=release --config=x86_64 --define=build_udma=true //...
+# Release package for x86_64.
+./urma_bazel.sh compile --config=release --config=x86_64 --define=build_udma=true
 
-# Debug + AddressSanitizer / LeakSanitizer (useful for local diagnosis)
-bazel build --config=debug --config=asan //...
+# Debug + AddressSanitizer / LeakSanitizer.
+./urma_bazel.sh compile --config=debug --config=asan --define=build_udma=true
 
-# ThreadSanitizer on urma_common with cycle profiling enabled
-bazel build --config=tsan --define=perf_cycle=true //:urma_common
-
-# Build only the hardware abstraction target with UDMA enabled
-bazel build --define=build_udma=true //:hw
+# ThreadSanitizer with cycle profiling enabled.
+./urma_bazel.sh compile --config=tsan --define=perf_cycle=true --define=build_udma=true
 ```
 
-Install built shared libraries (run as root or with `sudo`; create `/usr/lib64/urma` if it does not exist). `liburma_udma.so` is produced only when `build_udma=true` was used in the build command.
+Copy the generated tarball to the target environment, extract it, and install with the packaged script. Run `install` and `remove` as root or with `sudo`; the script installs files according to `metadata/install_manifest`, refreshes `ldconfig`, restores SELinux contexts when `restorecon` is available, and restarts rsyslog when available. The `remove` command removes the URMA/UDMA/TPSA payload from the manifest, but leaves third-party libraries installed by yum and the bundled libummu payload in place.
 
 ```bash
-cd src/urma/bazel-bin
-install -D -m 0755 libtpsa.so /usr/lib64/libtpsa.so
-install -D -m 0755 liburma.so /usr/lib64/liburma.so
-install -D -m 0755 liburma_common.so /usr/lib64/liburma_common.so
-install -D -m 0755 liburma_ubagg.so /usr/lib64/urma/liburma_ubagg.so
-install -D -m 0755 liburma_udma.so /usr/lib64/urma/liburma_udma.so
+# On the target environment.
+mkdir -p /tmp/urma-bazel
+tar -xzf urma-bazel-<timestamp>.tar.gz -C /tmp/urma-bazel
+/tmp/urma-bazel/urma_bazel.sh install
+
+# Remove the installed URMA/UDMA/TPSA payload later.
+/tmp/urma-bazel/urma_bazel.sh remove
+```
+
+The script can also install or remove directly from an archive:
+
+```bash
+cd src/urma
+./urma_bazel.sh install urma-bazel-<timestamp>.tar.gz
+./urma_bazel.sh remove urma-bazel-<timestamp>.tar.gz
 ```
 
 #### 4. Contributing
