@@ -254,6 +254,36 @@ umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode)
     return umq_fw->dfx_tp_ops;
 }
 
+static int umq_dev_assign_validate(umq_dev_assign_t *dev_info)
+{
+    switch (dev_info->assign_mode) {
+        case UMQ_DEV_ASSIGN_MODE_DEV:
+            if (strnlen(dev_info->dev.dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "dev name has no terminator\n");
+                return -UMQ_ERR_EINVAL;
+            }
+            return UMQ_SUCCESS;
+        case UMQ_DEV_ASSIGN_MODE_IPV4:
+            if (strnlen(dev_info->ipv4.ip_addr, UMQ_IPV4_SIZE) >= UMQ_IPV4_SIZE) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "ipv4 addr has no terminator\n");
+                return -UMQ_ERR_EINVAL;
+            }
+            return UMQ_SUCCESS;
+        case UMQ_DEV_ASSIGN_MODE_IPV6:
+            if (strnlen(dev_info->ipv6.ip_addr, UMQ_IPV6_SIZE) >= UMQ_IPV6_SIZE) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "ipv6 addr has no terminator\n");
+                return -UMQ_ERR_EINVAL;
+            }
+            return UMQ_SUCCESS;
+        case UMQ_DEV_ASSIGN_MODE_EID:
+        case UMQ_DEV_ASSIGN_MODE_DUMMY:
+            return UMQ_SUCCESS;
+        default:
+            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %d is not supported\n", dev_info->assign_mode);
+            return -UMQ_ERR_EINVAL;
+    }
+}
+
 static int umq_fw_log_config_set(umq_log_config_t *config)
 {
     uint8_t fw_i = 0;
@@ -670,6 +700,9 @@ int umq_init(umq_init_cfg_t *cfg)
 
     for (uint8_t trans_info_i = 0; trans_info_i < cfg->trans_info_num; trans_info_i++) {
         umq_trans_info_t *info = &cfg->trans_info[trans_info_i];
+        if (umq_dev_assign_validate(&info->dev_info) != UMQ_SUCCESS) {
+            return -UMQ_ERR_EINVAL;
+        }
 #ifdef UMQ_STATIC_LIB
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
             UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
@@ -679,7 +712,6 @@ int umq_init(umq_init_cfg_t *cfg)
         if (info->trans_mode >= UMQ_TRANS_MODE_MAX || info->trans_mode < 0) {
             continue;
         }
-
         g_umq_fws[info->trans_mode].enable = true;
     }
 
@@ -746,7 +778,9 @@ uint64_t umq_create(umq_create_option_t *option)
         UMQ_VLOG_ERR(VLOG_UMQ, "trans_mode[%d] not support or name is null\n", option->trans_mode);
         return UMQ_INVALID_HANDLE;
     }
-
+    if (umq_dev_assign_validate(&option->dev_info) != UMQ_SUCCESS) {
+        return UMQ_INVALID_HANDLE;
+    }
     umq_framework_t *umq_fw = &g_umq_fws[option->trans_mode];
     if (!umq_fw->enable) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans_mode[%d] is not enabled on initialize\n", option->trans_mode);
@@ -1215,6 +1249,10 @@ int umq_async_event_fd_get(umq_trans_info_t *trans_info)
         return UMQ_INVALID_FD;
     }
 
+    if (umq_dev_assign_validate(&trans_info->dev_info) != UMQ_SUCCESS) {
+        return UMQ_INVALID_FD;
+    }
+
     umq_framework_t *umq_fw = &g_umq_fws[trans_info->trans_mode];
 
     if (!umq_fw->enable) {
@@ -1243,6 +1281,9 @@ int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event)
         return -UMQ_ERR_EINVAL;
     }
 
+    if (umq_dev_assign_validate(&trans_info->dev_info) != UMQ_SUCCESS) {
+        return -UMQ_ERR_EINVAL;
+    }
     umq_framework_t *umq_fw = &g_umq_fws[trans_info->trans_mode];
 
     if (!umq_fw->enable) {
@@ -1302,6 +1343,10 @@ int umq_dev_add(umq_trans_info_t *trans_info)
 
     if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans info invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (umq_dev_assign_validate(&trans_info->dev_info) != UMQ_SUCCESS) {
         return -UMQ_ERR_EINVAL;
     }
 
