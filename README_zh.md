@@ -90,61 +90,59 @@ chmod 777 /dev/ummu/tid
 chmod 755 /usr/lib64/liburma*
 ```
 
-4. 使用 Bazel 编译 URMA（工作区根目录：`src/urma`）
+4. 使用 Bazel 脚本编译、打包、安装和卸载 URMA（工作区根目录：`src/urma`）
 
-在 UMDK 仓库根目录下，安装 Bazel 以及 URMA Bazel 依赖图所需的头文件与开发库。若已按上文「1. 编译环境要求」安装过依赖，仍需单独安装 **bazel**，并确认已安装 **libnl3-devel**（`urma_ubagg`/UVS 相关路径需要）。
-
-```bash
-yum install -y bazel libnl3-devel openssl-devel zlib-devel
-
-cd src/urma
-# 典型 AArch64 Release 构建，并生成 UDMA 用户态胶水库 liburma_udma.so
-bazel build --config=release --config=arm64 --define=build_udma=true //...
-```
-
-若 **libummu** 为手动编译、手动安装（未通过 `libummu-devel` RPM 安装），在使用 `--define=build_udma=true` 前需确认链接器能找到该库：
-
-- 安装到系统默认路径（例如 `CMAKE_INSTALL_PREFIX=/usr` 后执行 `sudo ldconfig`）：无需额外 Bazel 参数，使用上文命令即可。
-- 安装到自定义前缀（例如 `/usr/local/lib64`）：向 Bazel 传入库搜索路径，并设置运行时 rpath：
+在 UMDK 仓库根目录下，进入 `src/urma` 运行脚本。脚本会在编译前检查编译依赖，并在安装前检查运行依赖；已满足的依赖不会处理，缺失的依赖会通过 `yum install -y` 安装。因此请确认 yum 源可用，并在存在缺失依赖时使用具备安装权限的用户执行。
 
 ```bash
 cd src/urma
-bazel build --config=release --config=arm64 --define=build_udma=true \
-  --linkopt=-L/usr/local/lib64 \
-  --linkopt=-Wl,-rpath,/usr/local/lib64 \
-  //...
+# 典型 AArch64 Release 包构建，包含 UDMA 和 libummu。
+./urma_bazel.sh compile --config=release --config=arm64 --define=build_udma=true
 ```
 
-请将 `/usr/local/lib64` 替换为 `libummu.so` 所在目录。若该路径已写入 `/etc/ld.so.conf.d/`，安装后请执行 `sudo ldconfig`。
+`compile` 命令会通过 Bazel 构建固定的 URMA 打包产物，生成与 RPM 安装效果对齐的 rootfs，写入 `metadata/urma_version`，并在 `src/urma` 下生成 `urma-bazel-<timestamp>.tar.gz`。打包完成后，脚本会清理中间产物，包括 `urma_version`、`bazel-urma-package` 和 Bazel 便捷软链接。
 
-可选 Bazel 配置（请根据主机架构选用 `--config=arm64` 或 `--config=x86_64`；二者均在 `src/urma/.bazelrc` 中定义）：
+该流程不需要手动安装或链接系统中的 `libummu`。脚本会从 `src/urma/WORKSPACE` 或 `src/urma/bazel/urma_deps.bzl` 读取 `LIBUMMU_REMOTE`、`LIBUMMU_COMMIT`、`LIBUMMU_VERSION` 和 `LIBUMMU_ABI_VERSION`，将指定 commit 拉取到 `src/urma/third_party/libummu`，通过 Bazel 编译，并随 URMA 一起打入 tar 包。
+
+如果环境上已经存在 `libummu`，当前逻辑如下：
+
+- `compile` 不使用系统已安装的 `libummu`，始终使用 `src/urma/third_party/libummu` 中配置 commit 对应的源码。
+- `install` 会安装 tar 包内置的 `libummu` 文件；如果 `/usr/lib64/libummu.so*` 等同路径文件或软链接已存在，会被包内产物替换。
+- `remove` 不会卸载通过 yum 安装的三方依赖，也不会删除随包安装的 `libummu` 内容。
+
+`compile` 后面的参数会继续传给 `bazel build`，因此仍可按需选择架构和诊断配置：
 
 ```bash
-# Release，不包含 UDMA 用户态库（AArch64）
-bazel build --config=release --config=arm64 //...
+cd src/urma
 
-# 在 x86_64 主机上带 UDMA 的 Release（AArch64 主机请将 --config 换为 arm64）
-bazel build --config=release --config=x86_64 --define=build_udma=true //...
+# x86_64 Release 包构建。
+./urma_bazel.sh compile --config=release --config=x86_64 --define=build_udma=true
 
-# Debug + AddressSanitizer / LeakSanitizer（便于本地问题定位）
-bazel build --config=debug --config=asan //...
+# Debug + AddressSanitizer / LeakSanitizer。
+./urma_bazel.sh compile --config=debug --config=asan --define=build_udma=true
 
-# 对 urma_common 开启 ThreadSanitizer，并启用周期性能统计
-bazel build --config=tsan --define=perf_cycle=true //:urma_common
-
-# 仅构建硬件抽象目标，并启用 UDMA
-bazel build --define=build_udma=true //:hw
+# 开启 ThreadSanitizer，并启用周期性能统计。
+./urma_bazel.sh compile --config=tsan --define=perf_cycle=true --define=build_udma=true
 ```
 
-安装生成的共享库（需 **root** 或 **sudo**；`install -D` 会在目标路径不存在时创建父目录，例如 `/usr/lib64/urma`）。**`liburma_udma.so` 仅在构建命令中使用 `build_udma=true` 时才会生成。**
+将生成的 tar 包复制到目标环境后，解压并使用包内脚本安装。`install` 和 `remove` 需要使用 **root** 或 **sudo** 执行；脚本会按 `metadata/install_manifest` 安装文件，刷新 `ldconfig`，在存在 `restorecon` 时恢复 SELinux 上下文，并在可用时重启 rsyslog。`remove` 命令只卸载 manifest 中的 URMA/UDMA/TPSA 自有安装内容，不会卸载通过 yum 安装的三方库，也会保留随包安装的 libummu 内容。
 
 ```bash
-cd src/urma/bazel-bin
-install -D -m 0755 libtpsa.so /usr/lib64/libtpsa.so
-install -D -m 0755 liburma.so /usr/lib64/liburma.so
-install -D -m 0755 liburma_common.so /usr/lib64/liburma_common.so
-install -D -m 0755 liburma_ubagg.so /usr/lib64/urma/liburma_ubagg.so
-install -D -m 0755 liburma_udma.so /usr/lib64/urma/liburma_udma.so
+# 在目标环境执行。
+mkdir -p /tmp/urma-bazel
+tar -xzf urma-bazel-<timestamp>.tar.gz -C /tmp/urma-bazel
+/tmp/urma-bazel/urma_bazel.sh install
+
+# 后续卸载 URMA/UDMA/TPSA 打包安装内容。
+/tmp/urma-bazel/urma_bazel.sh remove
+```
+
+也可以直接从归档文件执行安装或卸载：
+
+```bash
+cd src/urma
+./urma_bazel.sh install urma-bazel-<timestamp>.tar.gz
+./urma_bazel.sh remove urma-bazel-<timestamp>.tar.gz
 ```
 
 #### 四、参与贡献

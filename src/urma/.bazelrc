@@ -11,7 +11,7 @@ build --copt=-Wtrampolines
 build --copt=-fno-strict-aliasing
 build --copt=-fstack-protector-strong
 build --copt=-fPIC
-build --copt=-std=gnu99
+build --conlyopt=-std=gnu99
 build --linkopt=-Wl,-z,noexecstack
 build --linkopt=-Wl,-z,relro
 build --linkopt=-Wl,-z,now
