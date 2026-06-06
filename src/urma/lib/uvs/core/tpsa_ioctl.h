@@ -51,6 +51,7 @@ typedef enum uvs_global_cmd {
     UVS_CMD_LOOKUP_MAIN_UE_EID = 7,
     UVS_CMD_FLUSH_MAIN_UE_EID = 8,
     UVS_CMD_INSERT_MAIN_UE_EID_BATCH = 9,
+    UVS_CMD_INSERT_HOST_EID_BATCH = 10,
     UVS_CMD_GLOBAL_LAST
 } uvs_global_cmd_t;
 
@@ -100,6 +101,20 @@ typedef struct uvs_cmd_main_ue_eid_batch {
     } in;
 } uvs_cmd_main_ue_eid_batch_t;
 
+#define UVS_HOST_EID_BATCH_EID_MAX 32U
+
+typedef struct uvs_host_eid_batch_entry {
+    uvs_eid_t host_eid;
+    uint32_t eid_num;
+    uvs_eid_t eids[UVS_HOST_EID_BATCH_EID_MAX];
+} uvs_host_eid_batch_entry_t;
+
+typedef struct uvs_cmd_host_eid_batch {
+    struct {
+        uvs_host_eid_batch_entry_t entry;
+    } in;
+} uvs_cmd_host_eid_batch_t;
+
 typedef struct uvs_cmd_get_route_list {
     uvs_route_t in;
     uvs_route_list_t out;
@@ -129,6 +144,8 @@ int uvs_ioctl_lookup_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx,
 int uvs_ioctl_flush_main_ue_eid(tpsa_ioctl_ctx_t *ioctl_ctx);
 int uvs_ioctl_insert_main_ue_eid_batch(tpsa_ioctl_ctx_t *ioctl_ctx,
     uvs_cmd_main_ue_eid_batch_t *arg);
+int uvs_ioctl_insert_host_eid_batch(tpsa_ioctl_ctx_t *ioctl_ctx,
+    uvs_cmd_host_eid_batch_t *arg);
 #ifdef __cplusplus
 }
 #endif

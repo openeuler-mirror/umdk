@@ -11,5 +11,7 @@
 
 int uvs_update_main_ue_eid_table_by_topo(const struct urma_topo_node *topo,
     uint32_t topo_num);
+int uvs_update_host_eid_table_by_share_topo(
+    const struct urma_topo_node *share_topo, uint32_t share_topo_num);
 
 #endif
