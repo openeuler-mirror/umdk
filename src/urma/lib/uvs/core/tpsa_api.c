@@ -189,6 +189,25 @@ static int uvs_set_topo_info_inner(struct urma_topo_node *topo, uint32_t topo_nu
     return ret;
 }
 
+static int uvs_set_share_topo_info_inner(struct urma_topo_node *topo, uint32_t topo_num)
+{
+    int ret;
+
+    if (!topo || topo_num > MAX_NODE_NUM || topo_num == 0) {
+        TPSA_LOG_ERR("share topo is NULL or topo_num is invalid.\n");
+        return -EINVAL;
+    }
+
+    ret = uvs_update_host_eid_table_by_share_topo(topo, topo_num);
+    if (ret != 0) {
+        TPSA_LOG_ERR("failed to update host eid table by share topo, ret = %d.\n", ret);
+        return ret;
+    }
+
+    TPSA_LOG_INFO("successfully updated host eid table by share topo\n");
+    return 0;
+}
+
 static int uvs_get_topo_info_inner(void *topo)
 {
     int ret;
@@ -221,6 +240,22 @@ int uvs_set_topo_info(void *topo_buf, uint32_t node_size, uint32_t node_num)
 
     uvs_get_api_rdlock();
     ret = uvs_set_topo_info_inner(topo_buf, node_num);
+    put_uvs_lock();
+    return ret;
+}
+
+int uvs_set_share_topo_info(void *topo_buf, uint32_t node_size, uint32_t node_num)
+{
+    uint32_t size = sizeof(struct urma_topo_node);
+    int ret;
+
+    if (size != node_size) {
+        TPSA_LOG_ERR("node size not match, urma=%u, ubse=%u\n", size, node_size);
+        return -EINVAL;
+    }
+
+    uvs_get_api_rdlock();
+    ret = uvs_set_share_topo_info_inner(topo_buf, node_num);
     put_uvs_lock();
     return ret;
 }
