@@ -12,7 +12,6 @@
 #define UMS_AGENT_TLS_CTX_H
 
 #include <stdbool.h>
-#include <stddef.h>
 
 #include <openssl/ssl.h>
 

@@ -269,7 +269,7 @@ static void ums_agent_tp_deserialize_token_transfer(const struct ums_agent_token
     memcpy(out->reserved, raw->reserved, sizeof(out->reserved));
 }
 
-static bool ums_agent_tp_conn_has_pending_send(struct ums_agent_conn_ctx *ctx)
+static bool ums_agent_tp_conn_has_pending_send(const struct ums_agent_conn_ctx *ctx)
 {
     return ctx && ctx->send_len > ctx->send_offset;
 }

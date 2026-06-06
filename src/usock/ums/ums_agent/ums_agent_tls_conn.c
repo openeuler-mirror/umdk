@@ -94,7 +94,7 @@ static int ums_agent_tls_conn_set_nonblocking(int fd)
         UMS_AGENT_LOG_ERR("fcntl F_GETFL failed: %s (errno=%d)", strerror(errno), errno);
         return -1;
     }
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    if (fcntl(fd, F_SETFL, (unsigned int)flags | O_NONBLOCK) < 0) {
         UMS_AGENT_LOG_ERR("fcntl F_SETFL O_NONBLOCK failed: %s (errno=%d)",
             strerror(errno), errno);
         return -1;
@@ -661,7 +661,7 @@ static void ums_agent_tls_conn_notify_writable(struct ums_agent_tls_conn *conn)
 static void ums_agent_tls_conn_handle_handshaking(struct ums_agent_tls_conn *conn,
     uint32_t events)
 {
-    if (!conn->is_server && (events & EPOLLOUT)) {
+    if (!conn->is_server && (events & EPOLLOUT) != 0) {
         if (ums_agent_tls_conn_check_connect_result(conn) != 0) {
             ums_agent_tls_conn_notify_connect_complete(conn, -1);
             ums_agent_tls_conn_close(conn);
@@ -695,7 +695,7 @@ static void ums_agent_tls_conn_handle_shutting_down(struct ums_agent_tls_conn *c
 static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
     uint32_t events)
 {
-    if (events & EPOLLERR) {
+    if ((events & EPOLLERR) != 0) {
         UMS_AGENT_LOG_WARN("connection error, peer=%s:%u, events=0x%x",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port, events);
         conn->state = UMS_AGENT_TLS_CONN_ERROR;
@@ -703,13 +703,13 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
         return;
     }
 
-    if (events & EPOLLIN) {
+    if ((events & EPOLLIN) != 0) {
         ums_agent_tls_conn_notify_data_available(conn);
         if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
             return;
         }
     }
-    if (events & EPOLLOUT) {
+    if ((events & EPOLLOUT) != 0) {
         ums_agent_epoll_mod_fd(conn->fd, EPOLLIN);
         ums_agent_tls_conn_notify_writable(conn);
         if (conn->state != UMS_AGENT_TLS_CONN_CONNECTED) {
@@ -721,7 +721,7 @@ static void ums_agent_tls_conn_handle_connected(struct ums_agent_tls_conn *conn,
         }
     }
 
-    if (events & EPOLLHUP) {
+    if ((events & EPOLLHUP) != 0) {
         UMS_AGENT_LOG_WARN("peer hangup on TLS connection, peer=%s:%u",
             ums_agent_ip_addr_fmt(&conn->peer_addr).str, conn->peer_port);
         conn->state = UMS_AGENT_TLS_CONN_SHUTTING_DOWN;
