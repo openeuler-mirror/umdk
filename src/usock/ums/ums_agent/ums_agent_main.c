@@ -201,7 +201,7 @@ static void ums_agent_request_stop(void)
 
 static void ums_agent_handle_signal_event(int sfd, uint32_t events)
 {
-    if (events & EPOLLIN) {
+    if ((events & EPOLLIN) != 0) {
         struct signalfd_siginfo si;
         ssize_t n = read(sfd, &si, sizeof(si));
         if (n < 0) {
@@ -220,7 +220,7 @@ static void ums_agent_handle_signal_event(int sfd, uint32_t events)
         }
     }
 
-    if (events & (EPOLLERR | EPOLLHUP)) {
+    if ((events & (EPOLLERR | EPOLLHUP)) != 0) {
         UMS_AGENT_LOG_WARN("signal_fd received error event 0x%x, re-setting up", events);
         ums_agent_teardown_signal_fd();
         if (ums_agent_setup_signal_fd() < 0) {
@@ -232,7 +232,7 @@ static void ums_agent_handle_signal_event(int sfd, uint32_t events)
 
 static void ums_agent_handle_timer_event(int tfd, uint32_t events)
 {
-    if (events & EPOLLIN) {
+    if ((events & EPOLLIN) != 0) {
         uint64_t expirations;
         ssize_t n = read(tfd, &expirations, sizeof(expirations));
         if (n < 0) {
@@ -247,7 +247,7 @@ static void ums_agent_handle_timer_event(int tfd, uint32_t events)
         }
     }
 
-    if (events & (EPOLLERR | EPOLLHUP)) {
+    if ((events & (EPOLLERR | EPOLLHUP)) != 0) {
         UMS_AGENT_LOG_WARN("timer_fd received error event 0x%x, re-setting up", events);
         if (g_ums_agent_ctx.timer_fd >= 0) {
             (void)ums_agent_epoll_del_fd(g_ums_agent_ctx.timer_fd);

@@ -50,6 +50,9 @@ target_compile_definitions(ums_agent
         _GNU_SOURCE
 )
 
+target_compile_options(ums_agent PRIVATE -fPIE)
+target_link_options(ums_agent PRIVATE -pie)
+
 target_link_libraries(ums_agent
     PRIVATE
         PkgConfig::GLIB

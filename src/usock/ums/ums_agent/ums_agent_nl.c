@@ -208,7 +208,7 @@ static int ums_agent_nl_validate_token_submit(struct nlattr *attrs[])
     }
 
     uint8_t first_contact = nla_get_u8(attrs[UMS_ATTR_FIRST_CONTACT]);
-    if (first_contact && !attrs[UMS_ATTR_JETTY_TOKEN]) {
+    if ((first_contact != 0) && !attrs[UMS_ATTR_JETTY_TOKEN]) {
         UMS_AGENT_LOG_WARN("TOKEN_SUBMIT first_contact=1 but missing JETTY_TOKEN");
         return -1;
     }
@@ -612,7 +612,7 @@ static void ums_agent_nl_handle_ums_event(uint32_t events)
         return;
     }
 
-    if (events & (EPOLLIN | EPOLLERR)) {
+    if ((events & (EPOLLIN | EPOLLERR)) != 0) {
         int ret = nl_recvmsgs_default(g_ums_agent_nl.ums_sock);
         if (ret < 0 && ret != -NLE_AGAIN) {
             UMS_AGENT_LOG_WARN("nl_recvmsgs_default ums failed: %s (%d)",
@@ -630,7 +630,7 @@ static void ums_agent_nl_handle_ums_event(uint32_t events)
         }
     }
 
-    if (events & EPOLLHUP) {
+    if ((events & EPOLLHUP) != 0) {
         UMS_AGENT_LOG_WARN("ums fd received EPOLLHUP, disconnecting");
         ums_agent_nl_disconnect_and_probe();
     }
@@ -651,7 +651,7 @@ static void ums_agent_nl_handle_nlctrl_event(uint32_t events)
         return;
     }
 
-    if (events & EPOLLIN) {
+    if ((events & EPOLLIN) != 0) {
         int ret = nl_recvmsgs_default(g_ums_agent_nl.nlctrl_sock);
         if (ret < 0 && ret != -NLE_AGAIN) {
             UMS_AGENT_LOG_WARN(
@@ -662,7 +662,7 @@ static void ums_agent_nl_handle_nlctrl_event(uint32_t events)
         }
     }
 
-    if (events & (EPOLLERR | EPOLLHUP)) {
+    if ((events & (EPOLLERR | EPOLLHUP)) != 0) {
         UMS_AGENT_LOG_WARN("nlctrl fd received error/hangup event 0x%x", events);
         ums_agent_nl_reconnect_nlctrl("EPOLLERR/EPOLLHUP");
     }
@@ -697,7 +697,7 @@ static void ums_agent_nl_handle_probe_timer(uint32_t events)
         return;
     }
 
-    if (events & EPOLLIN) {
+    if ((events & EPOLLIN) != 0) {
         uint64_t expirations;
         ssize_t n = read(g_ums_agent_nl.probe_fd, &expirations,
             sizeof(expirations));
@@ -722,7 +722,7 @@ static void ums_agent_nl_handle_probe_timer(uint32_t events)
         }
     }
 
-    if (events & (EPOLLERR | EPOLLHUP)) {
+    if ((events & (EPOLLERR | EPOLLHUP)) != 0) {
         UMS_AGENT_LOG_WARN("probe timer fd received error event 0x%x", events);
         ums_agent_nl_teardown_probe_timer();
         if (ums_agent_nl_setup_probe_timer() < 0) {
@@ -864,7 +864,7 @@ int ums_agent_nl_send_token_deliver(uint32_t clc_session_id,
         goto err_free;
     }
 
-    if (first_contact) {
+    if (first_contact != 0) {
         ret = nla_put_u32(msg, UMS_ATTR_JETTY_TOKEN, peer_jetty_token);
         if (ret < 0) {
             UMS_AGENT_LOG_ERR("nla_put JETTY_TOKEN failed: %s",

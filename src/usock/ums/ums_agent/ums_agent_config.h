@@ -11,7 +11,6 @@
 #ifndef UMS_AGENT_CONFIG_H
 #define UMS_AGENT_CONFIG_H
 
-#include <stdint.h>
 #include <limits.h>
 
 #include "ums_agent_log.h"

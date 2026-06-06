@@ -61,30 +61,6 @@ int ums_agent_ip_addr_from_str(struct ums_agent_ip_addr *addr, const char *str)
     return -1;
 }
 
-int ums_agent_ip_addr_to_str(const struct ums_agent_ip_addr *addr,
-    char *buf, size_t buf_len)
-{
-    if (!addr || !buf || buf_len == 0) {
-        return -1;
-    }
-
-    if (addr->family == AF_INET) {
-        if (inet_ntop(AF_INET, &addr->ip.in4, buf, buf_len)) {
-            return 0;
-        }
-        return -1;
-    }
-
-    if (addr->family == AF_INET6) {
-        if (inet_ntop(AF_INET6, &addr->ip.in6, buf, buf_len)) {
-            return 0;
-        }
-        return -1;
-    }
-
-    return -1;
-}
-
 bool ums_agent_ip_addr_equal(const struct ums_agent_ip_addr *a,
     const struct ums_agent_ip_addr *b)
 {

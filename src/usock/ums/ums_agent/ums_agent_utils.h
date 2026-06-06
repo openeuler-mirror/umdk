@@ -27,8 +27,6 @@ int64_t ums_agent_timespec_diff_sec(const struct timespec *start,
     const struct timespec *end);
 
 int ums_agent_ip_addr_from_str(struct ums_agent_ip_addr *addr, const char *str);
-int ums_agent_ip_addr_to_str(const struct ums_agent_ip_addr *addr,
-    char *buf, size_t buf_len);
 bool ums_agent_ip_addr_equal(const struct ums_agent_ip_addr *a,
     const struct ums_agent_ip_addr *b);
 void ums_agent_ip_addr_normalize(struct ums_agent_ip_addr *addr);

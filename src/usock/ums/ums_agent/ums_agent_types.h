@@ -12,7 +12,6 @@
 #define UMS_AGENT_TYPES_H
 
 #include <netinet/in.h>
-#include <stdbool.h>
 #include <sys/socket.h>
 
 #define UMS_SYSTEMID_LEN 8
