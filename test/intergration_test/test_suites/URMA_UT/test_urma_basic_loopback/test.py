@@ -31,7 +31,7 @@ class TestUrmaLoopback(UBUSFeature):
         host1 = self.host_list[0]
         host2 = self.host_list[1]
 
-        dev_name = host1.test_nic1
+        dev_name = host1.test_nic1_dev
         msg_size = 4096
         opt = f"--ctp -d {dev_name} -s {msg_size}"
 
