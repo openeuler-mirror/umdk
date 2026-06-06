@@ -1178,13 +1178,13 @@ int dlock_server::check_cmd_msg_common_field(const struct lock_cmd_msg &msg) con
 int dlock_server::do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len)
 {
     dlock_status_t ret;
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct lock_cmd_msg *msg = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     uint32_t cmd_num = (msg_len - rx_data_offset) / sizeof(struct lock_cmd_msg);
     int i;
     dlock_status_t cipher_ret;
 
-    p_rx_buf->p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_IV_LEN;
+    p_rx_buf->p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_EXTRA_LEN;
     cipher_ret = p_rx_buf->p_jetty_mgr->cmd_msg_cipher(static_cast<int>(DECRYPTION),
         p_rx_buf->buf, msg_len, m_ssl_enable);
     if (cipher_ret != DLOCK_SUCCESS) {
@@ -1327,7 +1327,7 @@ int dlock_server::check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable)
 {
     struct urma_buf *p_rx_buf = nullptr;
     int ret = 0;
-    uint32_t iv_len = ssl_enable ? AES_IV_LEN : 0;
+    uint32_t aes_extra_len = ssl_enable ? AES_EXTRA_LEN : 0;
 
     /*
      * If cr->status is URMA_CR_WR_SUSPEND_DONE or URMA_CR_WR_FLUSH_ERR_DONE,
@@ -1388,7 +1388,7 @@ int dlock_server::check_recv_cr_status(urma_cr_t *cr, int idx, bool ssl_enable)
     p_rx_buf->p_jetty_mgr->replenish_rx_buf();
 
     if ((cr[idx].completion_len == 0u) ||
-        ((cr[idx].completion_len - iv_len) % sizeof(struct lock_cmd_msg) != 0u)) {
+        ((cr[idx].completion_len - aes_extra_len) % sizeof(struct lock_cmd_msg) != 0u)) {
         DLOCK_LOG_ERR("invalid length %u", cr[idx].completion_len);
         p_rx_buf->p_jetty_mgr->recycle_rx_buf(p_rx_buf);
         ret = -1;
@@ -1404,13 +1404,13 @@ out:
 int dlock_server::primary_preinit_func(const urma_cr_t &cr) const
 {
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(cr.user_ctx);
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct lock_cmd_msg *p_cmd_msg = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     uint32_t msg_len = cr.completion_len;
     uint32_t cmd_num = (msg_len - rx_data_offset) / sizeof(struct lock_cmd_msg);
     dlock_status_t cipher_ret;
 
-    p_rx_buf->p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_IV_LEN;
+    p_rx_buf->p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_EXTRA_LEN;
     cipher_ret = p_rx_buf->p_jetty_mgr->cmd_msg_cipher(static_cast<int>(DECRYPTION),
         p_rx_buf->buf, msg_len, m_ssl_enable);
     if (cipher_ret != DLOCK_SUCCESS) {

@@ -79,7 +79,7 @@ bool dlock_cipher::check_cipher_op_param(int op_type, const unsigned char *out, 
         DLOCK_LOG_ERR("invalid buffer params to be ciphered, pointer nullptr");
         return false;
     }
-    if ((in_len <= 0) || ((static_cast<unsigned int>(in_len) + AES_IV_LEN - m_data_offset) > URMA_MTU)) {
+    if ((in_len <= 0) || ((static_cast<unsigned int>(in_len) + AES_EXTRA_LEN - m_data_offset) > URMA_MTU)) {
         DLOCK_LOG_ERR("invalid buffer len to be ciphered");
         return false;
     }
@@ -151,6 +151,7 @@ dlock_status_t dlock_cipher::cipher_op(int op_type, unsigned char *out, int *out
 {
     dlock_status_t ret = DLOCK_SUCCESS;
     const unsigned char *iv;
+    int padding_len = 0;
 
     if (!check_cipher_op_param(op_type, out, out_len, in, in_len)) {
         ret = DLOCK_EINVAL;
@@ -162,16 +163,44 @@ dlock_status_t dlock_cipher::cipher_op(int op_type, unsigned char *out, int *out
         goto err;
     }
     if (EVP_CipherInit_ex(m_ctx, m_cipher, nullptr, m_key->key, iv, op_type) == 0) {
+        ret = DLOCK_FAIL;
         DLOCK_LOG_ERR("Cipher init failed: %d", op_type);
         goto err;
     }
     *out_len = 0;
-    // As default block size is 1 for EVP_aes_256_gcm(), there is no need to call EVP_CipherFinal
-    if (EVP_CipherUpdate(m_ctx, out + AES_IV_LEN, out_len, in + m_data_offset,
+    if (EVP_CipherUpdate(m_ctx, out + AES_EXTRA_LEN, out_len, in + m_data_offset,
         in_len - static_cast<int>(m_data_offset)) != 1) {
         ret = DLOCK_FAIL;
         goto err;
     }
+    if (op_type == ENCRYPTION) {
+        /* As default block size is 1 for EVP_aes_256_gcm(), EVP_CipherFinal will not add any padding.
+        *  Call EVP_CipherFinal_ex only for TAG verification
+        */
+        if ((EVP_CipherFinal_ex(m_ctx, out + AES_EXTRA_LEN + (*out_len), &padding_len) != 1) || (padding_len != 0)) {
+            ret = DLOCK_FAIL;
+            DLOCK_LOG_ERR("Cipher final failed");
+            goto err;
+        }
+        if (EVP_CIPHER_CTX_ctrl(m_ctx, EVP_CTRL_GCM_GET_TAG, AES_GCM_TAG_LEN, out + AES_IV_LEN) != 1) {
+            ret = DLOCK_FAIL;
+            DLOCK_LOG_ERR("Cipher get tag failed");
+            goto err;
+        }
+    } else {
+        if (EVP_CIPHER_CTX_ctrl(m_ctx, EVP_CTRL_GCM_SET_TAG, AES_GCM_TAG_LEN,
+            const_cast<unsigned char *>(in) + AES_IV_LEN) != 1) {
+            ret = DLOCK_FAIL;
+            DLOCK_LOG_ERR("Cipher set tag failed");
+            goto err;
+        }
+        if ((EVP_CipherFinal_ex(m_ctx, out + AES_EXTRA_LEN + (*out_len), &padding_len) != 1) || (padding_len != 0)) {
+            ret = DLOCK_FAIL;
+            DLOCK_LOG_ERR("Cipher final failed");
+            goto err;
+        }
+    }
+
     return DLOCK_SUCCESS;
 err:
     if (EVP_CIPHER_CTX_reset(m_ctx) == 0) {
