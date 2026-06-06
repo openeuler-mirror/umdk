@@ -1112,7 +1112,9 @@ int dlock_client::update_locks_response_handler(client_entry_c &p_client_entry, 
         }
 
         last_is_eagain = false;
-        ret = process_update_locks_response(p_client_entry, buf, buf_len);
+        struct dlock_control_hdr *msg_hdr = reinterpret_cast<struct dlock_control_hdr *>(buf);
+        /* msg len has been checked in recv_update_locks_response to ensure msg is not larger than buf_len */
+        ret = process_update_locks_response(p_client_entry, buf, msg_hdr->total_len);
         if (ret != 0) {
             break;
         }
@@ -1197,6 +1199,10 @@ int dlock_client::process_update_locks_response(client_entry_c &p_client_entry,
     struct update_lock_body *p_msg_update = nullptr;
     uint32_t offset = DLOCK_FIXED_CTRL_MSG_HDR_LEN + DLOCK_BATCH_UPDATE_LOCK_BODY_LEN;
 
+    if (offset > buf_len) {
+        DLOCK_LOG_ERR("invalid msg with incomplete DLOCK_BATCH_UPDATE_LOCK_BODY header");
+        return static_cast<int>(DLOCK_BAD_RESPONSE);
+    }
     uint32_t lock_num = msg_batch_update_lock_body->lock_num;
     if (lock_num > MAX_LOCK_BATCH_SIZE) {
         DLOCK_LOG_ERR("invalid message lock_num");
