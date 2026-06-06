@@ -332,7 +332,7 @@ void dlock_client::batch_trylock_update_state_with_cmd_msg(client_entry_c &p_cli
     lock_map_t::iterator lock_iter;
     lock_entry_c *p_lock_entry = nullptr;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(p_client_entry.m_p_jetty_mgr->m_cr_data);
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct lock_cmd_msg *p_cmd_ret =
         reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     unsigned long pos;
@@ -553,7 +553,7 @@ void dlock_client::batch_unlock_update_state_with_cmd_msg(client_entry_c &p_clie
     lock_map_t::iterator lock_iter;
     lock_entry_c *p_lock_entry = nullptr;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(p_client_entry.m_p_jetty_mgr->m_cr_data);
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct lock_cmd_msg *p_cmd_ret = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     unsigned long pos;
 
@@ -715,7 +715,7 @@ void dlock_client::batch_lock_extend_update_state_with_cmd_msg(client_entry_c &p
     lock_map_t::iterator lock_iter;
     lock_entry_c *p_lock_entry = nullptr;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(p_client_entry.m_p_jetty_mgr->m_cr_data);
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct lock_cmd_msg *p_cmd_ret = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     unsigned long pos;
 
@@ -808,7 +808,8 @@ int dlock_client::async_request(client_entry_c &client_entry, lock_entry_c &lock
     int ret;
     struct lock_cmd_msg cmd_msg = {0};
     uint8_t *encrypted_req;
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    /* In package format: IV|TAG|cipheredText */
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     uint32_t expected_len = sizeof(struct lock_cmd_msg) + rx_data_offset;
     uint16_t message_id = client_entry.m_p_jetty_mgr->generate_message_id();
 
@@ -913,7 +914,7 @@ int dlock_client::get_lock_entry(client_entry_c &client_entry, lock_entry_c **p_
 int dlock_client::trylock_result_check(client_entry_c &client_entry, void *result)
 {
     int ret = 0;
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(client_entry.m_p_jetty_mgr->m_cr_data);
     struct lock_cmd_msg *p_cmd_ret = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     lock_entry_c *p_lock_entry = nullptr;
@@ -935,7 +936,7 @@ int dlock_client::trylock_result_check(client_entry_c &client_entry, void *resul
 
 int dlock_client::unlock_or_extend_result_check(client_entry_c &client_entry, void *result)
 {
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(client_entry.m_p_jetty_mgr->m_cr_data);
     struct lock_cmd_msg *p_cmd_ret = reinterpret_cast<struct lock_cmd_msg *>(p_rx_buf->buf + rx_data_offset);
     lock_entry_c *p_lock_entry = nullptr;
@@ -950,7 +951,7 @@ int dlock_client::unlock_or_extend_result_check(client_entry_c &client_entry, vo
 
 int dlock_client::async_result_check(int client_id, void *result)
 {
-    uint32_t expected_len = m_ssl_enable ? (AES_IV_LEN + sizeof(struct lock_cmd_msg)) :
+    uint32_t expected_len = m_ssl_enable ? (AES_EXTRA_LEN + sizeof(struct lock_cmd_msg)) :
         sizeof(struct lock_cmd_msg);
 
     if (!m_is_inited) {
@@ -993,7 +994,7 @@ int dlock_client::async_result_check(int client_id, void *result)
         return static_cast<int>(DLOCK_BAD_RESPONSE);
     }
     p_client_entry->m_async_flag = false;
-    p_client_entry->m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_IV_LEN;
+    p_client_entry->m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_EXTRA_LEN;
     struct urma_buf *p_rx_buf = reinterpret_cast<struct urma_buf *>(p_client_entry->m_p_jetty_mgr->m_cr_data);
     ret = p_client_entry->m_p_jetty_mgr->cmd_msg_cipher(static_cast<int>(DECRYPTION),
         p_rx_buf->buf, comp_len, m_ssl_enable);
@@ -1044,7 +1045,7 @@ dlock_status_t dlock_client::xchg_cmd_msg(client_entry_c &p_client_entry, T &req
     uint8_t *encrypted_req;
     uint32_t comp_len;
     struct urma_buf *p_rx_buf = nullptr;
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     uint32_t expected_len = sizeof(T) + rx_data_offset;
 
     encrypted_req = (uint8_t *)malloc(sizeof(uint8_t) * expected_len);
@@ -1081,7 +1082,7 @@ dlock_status_t dlock_client::xchg_cmd_msg(client_entry_c &p_client_entry, T &req
     p_rx_buf = reinterpret_cast<struct urma_buf *>(p_client_entry.m_p_jetty_mgr->m_cr_data);
     T *p_resp_temp = reinterpret_cast<T *>(p_rx_buf->buf + rx_data_offset);
 
-    p_client_entry.m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_IV_LEN;
+    p_client_entry.m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_EXTRA_LEN;
     ret = p_client_entry.m_p_jetty_mgr->cmd_msg_cipher(static_cast<int>(DECRYPTION),
         p_rx_buf->buf, comp_len, m_ssl_enable);
     if (ret != DLOCK_SUCCESS) {
@@ -1105,7 +1106,7 @@ dlock_status_t dlock_client::xchg_batch_lock_cmd_msg(client_entry_c &p_client_en
 {
     dlock_status_t ret;
     uint32_t comp_len;
-    uint32_t rx_data_offset = m_ssl_enable ? AES_IV_LEN : 0;
+    uint32_t rx_data_offset = m_ssl_enable ? AES_EXTRA_LEN : 0;
     uint32_t expected_len = msg_len + rx_data_offset;
 
     struct urma_buf *p_encrypted_tx_buf = m_p_urma_ctx->get_memory();
@@ -1141,7 +1142,7 @@ dlock_status_t dlock_client::xchg_batch_lock_cmd_msg(client_entry_c &p_client_en
     }
 
     struct urma_buf *p_rx_buf_temp = reinterpret_cast<struct urma_buf *>(p_client_entry.m_p_jetty_mgr->m_cr_data);
-    p_client_entry.m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_IV_LEN;
+    p_client_entry.m_p_jetty_mgr->m_dlock_cipher->m_data_offset = AES_EXTRA_LEN;
     ret = p_client_entry.m_p_jetty_mgr->cmd_msg_cipher(static_cast<int>(DECRYPTION),
         p_rx_buf_temp->buf, comp_len, m_ssl_enable);
     if (ret != DLOCK_SUCCESS) {

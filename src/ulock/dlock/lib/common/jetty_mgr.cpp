@@ -361,7 +361,8 @@ dlock_status_t jetty_mgr::cmd_msg_cipher(int op_type, uint8_t *buf, uint32_t len
         return DLOCK_SUCCESS;
     }
 
-    out_len = len + AES_IV_LEN - m_dlock_cipher->m_data_offset;
+    /* In format, IV|cihperedText|TAG */
+    out_len = len + AES_EXTRA_LEN - m_dlock_cipher->m_data_offset;
     buf_out = (uint8_t *)malloc(sizeof(uint8_t) * out_len);
     if (buf_out == nullptr) {
         DLOCK_LOG_ERR("cmd msg cipher buf: malloc error (errno=%d %m)", errno);
@@ -379,7 +380,7 @@ dlock_status_t jetty_mgr::cmd_msg_cipher(int op_type, uint8_t *buf, uint32_t len
         free(buf_out);
         return DLOCK_FAIL;
     }
-    out_len = len + AES_IV_LEN - m_dlock_cipher->m_data_offset;
+    out_len = len + AES_EXTRA_LEN - m_dlock_cipher->m_data_offset;
     static_cast<void>(memcpy(buf, buf_out, out_len));
     free(buf_out);
     return DLOCK_SUCCESS;
@@ -389,8 +390,8 @@ dlock_status_t jetty_mgr::cmd_msg_cipher(int op_type, uint8_t *buf_in, uint32_t 
     bool ssl_enable) const
 {
     dlock_status_t ret;
-    uint32_t out_len = len + AES_IV_LEN - m_dlock_cipher->m_data_offset;
 
+    uint32_t out_len = len + AES_EXTRA_LEN - m_dlock_cipher->m_data_offset;
     if (!ssl_enable) {
         return DLOCK_SUCCESS;
     }

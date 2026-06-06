@@ -20,6 +20,8 @@
 namespace dlock {
 constexpr unsigned int AES_KEY_BYTES = 32;
 constexpr unsigned int AES_IV_LEN = 12;
+constexpr unsigned int AES_GCM_TAG_LEN = 16;
+constexpr unsigned int AES_EXTRA_LEN = AES_IV_LEN + AES_GCM_TAG_LEN;
 
 struct dlock_key {
     unsigned char *key;
@@ -41,6 +43,7 @@ public:
     dlock_status_t secure_rand_gen(unsigned char *rand_key, unsigned int key_len) const;
     struct dlock_key *m_key;
     EVP_CIPHER_CTX *m_ctx;
+    /* m_data_offset is the start offset of actual msg */
     unsigned int m_data_offset;
 private:
     dlock_status_t iv_gen(unsigned char *iv, size_t iv_len) const;
