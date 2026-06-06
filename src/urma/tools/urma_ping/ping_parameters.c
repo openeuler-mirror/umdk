@@ -94,7 +94,7 @@ void usage(const char *filename)
               "  urma_ping [option] <destination>\n"
               "\n"
               "Options:\n"
-              "  <destination>    Primary eid or bonding eid\n"
+              "  <destination>    Primary EID or bonding EID\n"
               "  -c <count>       Packet count (default: INT_MAX)\n"
               "  -i <interval>    Interval between packets in seconds (default: 1)\n"
               "  -s <size>        Send buffer size in bytes (default: 4)\n"
@@ -116,7 +116,7 @@ int parse_args(ping_cfg_t *cfg)
     };
 
     int opt, ret = 0;
-    while ((opt = getopt_long(cfg->argc, cfg->argv, "c:i:s:qw:W:ShVv", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(cfg->argc, cfg->argv, ":c:i:s:qw:W:ShVv", long_options, NULL)) != -1) {
         switch (opt) {
             case 'c':
                 ret = str_to_u32(optarg, &cfg->count);
@@ -146,29 +146,28 @@ int parse_args(ping_cfg_t *cfg)
                 version();
                 return -EINVAL;
             case ':':
-                LOG_ERROR("Option -%c requires an argument\n", optopt);
+                LOG_ERROR("Missing argument for option -%c\n", optopt);
                 return -EINVAL;
             default:
-                LOG_ERROR("Unknown option\n");
+                LOG_ERROR("Unknown option %s\n", cfg->argv[optind - 1]);
                 usage(cfg->filename);
                 return -EINVAL;
         }
         if (ret != 0) {
-            const int option_offset = 2;
-            LOG_ERROR("Invalid option %s\n", cfg->argv[optind - option_offset]);
+            LOG_ERROR("Invalid value for -%c: %s\n", opt, optarg);
             return -EINVAL;
         }
     }
 
     if (optind >= cfg->argc) {
-        LOG_ERROR("Destination is required\n");
+        LOG_ERROR("Destination EID is required\n");
         usage(cfg->filename);
         return -EINVAL;
     }
 
-    ret = str_to_eid(cfg->argv[optind], &cfg->dest);
+    ret = str_to_eid(cfg->argv[optind], &cfg->dst_eid);
     if (ret != 0) {
-        LOG_ERROR("Invalid dest eid %s\n", cfg->argv[optind]);
+        LOG_ERROR("Invalid destination EID: %s\n", cfg->argv[optind]);
         return -EINVAL;
     }
     return 0;
