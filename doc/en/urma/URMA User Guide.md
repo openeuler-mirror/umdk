@@ -1522,23 +1522,23 @@ Based on the logical device management mechanism, URMA in containers supports th
 
 URMA provides a set of commands to configure devices and EIDs.
 
-Create/delete a logical device:
+Enable or disable device sharing:
 
-urma_admin dev create_logic_dev <dev_name\> <netns\>
-
-urma_admin dev delete_logic_dev <dev_name\> <netns\>
-
-Set the namespace of an EID:
-
-urma_admin dev set_logic_dev_eid <dev_name\> <netns\> <eid_idx\>
-
-Set logical device mode: manual mode, automatic mode:
-
-urma_admin dev set_logic_dev_mode <dev_name\> <ns_mode\>
+urma_admin system set dev_sharing {on|off}
 
 Set the namespace of a physical device:
 
-urma_admin dev set_ns <dev_name\> <netns\>
+urma_admin dev set <dev_name\> ns <netns\>
+
+Expose or unexpose a device in a namespace:
+
+urma_admin dev expose <dev_name\> <netns\>
+
+urma_admin dev unexpose <dev_name\> <netns\>
+
+Set the namespace of an EID:
+
+urma_admin eid set <dev_name\> <eid_idx\> ns <netns\>
 
 ### 6.3.2 Virtual Machines
 
@@ -1599,12 +1599,13 @@ urma_perftest parameters:
 
 ```
 Options:
-  -a, --all[order]            Run sizes from 2 till 2^23 (default 2^16), order: exponent of 2.
+  -a, --all[order]            Run sizes from 2 till 2^23,
+                              default 2^12 for send, 2^16 for others, order: exponent of 2.
   -A, --atomic_type <type>    Specify atomic type, {cas|faa}.
   -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.
   -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).
   -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.
-  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat).
+  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.
   -d, --dev <dev_name>        The name of ubep device.
   -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.
   -e, --use_jfce              use jfc event.
@@ -1614,7 +1615,7 @@ Options:
   -f, --use_flat_api          Choose to use flat API, only works in SIMPLEX mode.
   -F, --cpu_freq_f            To report warnings when CPU frequency drifts, default as NOT.
   -h, --help                  Show help info.
-  -I, --inline_size <size>    Max size of message to be sent in inline.
+  -I, --inline_size <size>    Max size of message to be sent in inline (default 0).
   -j, --share_jfr <true/false> share jfr on create jetty.
   -J, --jettys <num of jetty> Num of jettys(default 1).
   -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.
@@ -1625,44 +1626,48 @@ Options:
   -O, --priority              set the priority of JFS, ranging from [0, 15].
   -p, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM.
   -P, --port <id>             Server port for bind or connect, default 21115.
-  -Q, --cq_mod <num>          Generate Cqe only after <--cq-mod> completion.
+  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.
   -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.
   -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).
   -s, --size <size>           Size of message to exchange (default 2).
   -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .
   -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).
+  -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.
+                                                                            dscp, vlan, sl are optional
   -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.
   -y, --infinite[second]      Run perftest infinitely, only available for BW test.
                               Print period for infinite mode, default 2 seconds.
-  --single_path               Bonding device works in single path mode.
   --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.
                               if set, value of infinite will be overwrite.
   --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].
   --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).
   --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.
-  --sub_trans_mode <sub_mode> Sub transport mode: 0 for non ordering(default),
-                              1 for TA dest ordering (only valid for trans_mode RC).
+  --order_type <type>         Order type: 0 for default order,
+                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).
   --enable_ipv6               enable ipv6 for server ip. default disable.
   --enable_credit             enable send credit, default: disable.
   --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.
   --credit_notify_cnt <num>   Notify the send side after recv packets, default: jfr_depth / 4.
-  --jettys_pre_jfr <num>      How many jettys share a jfr.
-  --seg_pre_jetty             enable a segment for each Jetty, default: disable.
-  --enable_imm                enable immediate data for write or send, default: disable.
-  --enable_err_continue       Enable continue running when cr errors, default: disable.
+  --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.
+  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.
+  --enable_imm                Enable immediate data for write or send, default: disable.
+  --enable_err_continue       Enable continue running when cr erros, default: disable.
   --notify_data <value>       enable write_with_notify, value is ensured by hardware.
-  --enable_user_tp            Enable user tp for UB device, if enable, UVS is not required.
-                              default: disable.
+  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.
   --oor_en                    Enable out of order for user_tp, default: disable.
   --spray_en                  Enable multipathing for user_tp, default: disable.
   --cc_en                     Enable congestion control for user_tp, default: disable.
   --cc_alg <num>              Set congestion Control Algorithm for user_tp, [0, 7], default: 0.
-  --retry_num <num>           Set retry num for user_tp, default: 7.
+  --retry_num  <num>          Set retry num for user_tp, default: 7.
   --ack_timeout <num>         Set ack timeout for user_tp, default: 15.
   --sge_num <num>             Set sge_num for wr, default: 1.
   --enable_write_dirty <time> Enable write dirty and set the period of write dirty, default: disable.
-  --pair_num <num>            Enable multiplayer model and set the number of connection,
-                              default: disable.
+  --pair_num <num>            Enable multiplayer model and set the number of connection, default: disable.
+  --sip <ip>                  Set source ip address.
+  --dip <ip>                  Set dest ip address.
+  --dscp <dscp>               Set dscp .
+  --vlan <vlan_id>            Set vlan_id .
+  --sl <sl>                   Set sl .
   --async_import              Enable asynchronous connection establishment
   --tp_aware                  Enable tp aware connect, default: disable.
   --tp_reuse                  Reuse tp in RM mode if enable tp aware, default: disable.
@@ -1672,6 +1677,11 @@ Options:
                               timeout = 0: return immediately even if no events are ready,
                               timeout = -1: an infinite timeout,
                               default: 1000(1s).
+  --page_size                 Set page size, default: 4096.
+  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.
+  --bind_ip <ip>              The ip for bind.
+  --bond_mode                 Set bonding device mode, support: standalone, active_backup, balance.
+  --bond_level                Set bonding device level, support: iodie, port.
 ```
 
 
@@ -1716,7 +1726,7 @@ Options:
 | -             | rate_limit          | uint32_t | Rate limit value. Default unit: Gbps.                                                                                                                                                                                                                      | Optional     | Unrestricted                         | 0                              |
 | -             | rate_units          | char     | Rate limit units: MBps (M), Gbps (G)(default), or Kpps (P).                                                                                                                                                                                               | Optional     | [MGP]                                | G                              |
 | -             | burst_size          | uint32_t | Number of packets to send consecutively per burst when using rate limiter.                                                                                                                                                                                | Optional     | Unrestricted (large values reduce accuracy) | jfs_depth config value     |
-|               | sub_trans_mode      | uint32_t | Sub transport mode, only valid in RC mode. 0 = non-ordering (default), 1 = TA dest ordering.                                                                                                                                                              | Optional     | 0~2                                  | 0                              |
+|               | order_type          | uint32_t | Order type. 0 = default order, 1 = OT (target order), 2 = OI (initiator order), 3 = OL (layer order), 4 = NO (no order).                                                                                                                                  | Optional     | 0~4                                  | 0                              |
 |               | enable_ipv6         | bool     | Enable IPv6 for server IP. Must be set when -S uses an IPv6 address.                                                                                                                                                                                      | Optional     |                                      | Disabled                       |
 |               | enable_credit       | bool     | Enable credit-based flow control in send tests. Enabling may reduce throughput.                                                                                                                                                                           | No           |                                      | Disabled                       |
 |               | credit_threshold    | uint32_t | Threshold at which sender stops sending. Setting too high may cause packet loss.                                                                                                                                                                          | Yes          | Unrestricted                         | jfr_depth * 3 / 4              |
@@ -1794,7 +1804,7 @@ urma_perftest parameter values are generally not validated; users should configu
 
 19. Infinite mode (-y) conflicts with write_imm and send test bidirectional mode (-B).
 
-20. User-mode connection setup (enable_user_tp) is only supported on certain chips. enable_user_tp is used with sub_trans_mode 2. Other connection parameters must be coordinated with the driver, otherwise flow interruption may occur.
+20. User-mode connection setup (enable_user_tp) is only supported on certain chips. Other connection parameters must be coordinated with the driver, otherwise flow interruption may occur.
 
 21. The write_imm test model is consistent with send_recv.
 
@@ -1804,7 +1814,7 @@ urma_perftest parameter values are generally not validated; users should configu
 
 24. When using shared JFR: cfg->jfr_depth * (cfg->jettys / cfg->jettys_pre_jfr) must be >= (cfg->jettys * cfg->jfr_post_list).
 
-25. To enable secure authentication connection setup, the ca_path, cert_path, and prkey_path options must all be configured, and IB/IP devices must be used.
+25. UBoE connection setup requires --uboe with --sip and --dip. --dscp, --vlan, and --sl can be configured as needed.
 
 26. jfs_post_list, jfr_post_list, and jfr_depth parameters affect flow control thresholds. The use_jfce parameter affects the -B bidirectional flow and is temporarily not supported.
 
@@ -1859,104 +1869,79 @@ The URMA framework presents the attributes of resources at different granulariti
 1.  Command Format
 
 ```
-Usage: urma_admin command [command options]
- urma_admin URMA configuration tool, chips do not support some values, which might be invalid.
-Command syntax:
-  show [--dev] [--whole]                                  show all UB devices info.
-  show topo [node_id]                                     show topo_info of the specified node.
-                                                          when node_id is empty, will show the current node.
-  add_eid <--dev> <--idx> [--ns /proc/$pid/ns/net]      add eid of UB device, only for uvs,
-                                                          control plane not support.
-  del_eid <--dev> <--idx>                                 del eid of UB device, only for uvs,
-                                                          control plane not support.
-  set_eid_mode <--dev> [--eid_mode]                       change eid mode of MUE device, only for
-                                                          uvs, control plane not support.
-  set_reserved_jetty <--dev> <--min_id> <--max_id>       set reserved jetty id range.
-  show_stats <--dev> <--resource_type> <--key>            show run stats of UB device,
-                                                          control plane not support.
-  show_res <--dev> <--resource_type> <--key> [--key_ext]
-           <--key_cnt>                                    show resources of UB device.
-  list_res <--dev> <--resource_type> [--key] [--key_ext]
-           [--key_cnt]                                    list resources of UB device.
-  set_ns_mode <--ns_mode (exclusive: 0) | (shared: 1)>   set ns mode for UB devices.
-  set_dev_ns <--dev> <--ns /proc/$pid/ns/net>             set net namespace of UB device.
+Usage: urma_admin <command> [options]
+
+Commands:
+  show          Show information
+  dev           Device management operations
+  eid           EID management operations
+  main_ue_eid   Main UE EID query table operations
+  system        System configuration operations
+  agg           Aggregation device operations
+  perf          Control plane DFX latency tracer operations
+
 Options:
-  -h, --help                                  show help info.
-  -d, --dev <dev_name>                        the name of UB device.
-  -e, --eid <eid>                             the eid of UB device.
-  -m, --eid_mode <eid_mode>                   the eid mode of UB device,/
-                                              (change to dynamic_mode: cmd with -m,
-                                              change to static_mode: cmd without -m).
-  -v, --ue_idx <ue_idx>                       the ue_idx of ubep device.
-                                              when ue_idx == 0xffff or empty, it refers to MUE.
-  -i, --idx <idx>                             idx defaults to 0.
-  -w, --whole                                 show whole information.
-  -R, --resource_type <type>                  config stats type with 1(tp_id/vtp, not support)/
-                                                2(tp, not support)/3(tpg, not support)/4(jfs)/
-                                                5(jfr)/6(jetty)/
-                                                7(jetty group, not support)/8(dev).
-                                              config res type with 1(tp_id/vtp, not support)/
-                                                2(tp, not support)/3(tpg, not support)/
-                                                4(utp, not support)/5(jfs)/6(jfr)/7(jetty)/
-                                                8(jetty group)/9(jfc)/10(rc)/11(seg)/
-                                                12(dev ta, not support)/13(dev tp, not support).
-  -k, --key <key>                             config stats/res key, config stats key with:
-                                                1(tp_id/vtpn, not support)/2(tpn, not support)/
-                                                3(tpgn, not support)/4(jfs_id)/5(jfr_id)/
-                                                6(jetty_id)/7(jetty group id, not support)/
-                                                8(dev, no key)
-                                              config res key with:
-                                                1(tp_id/vtpn, not support)/2(tpn, not support)/
-                                                3(tpgn, not support)/4(utpn, not support)/
-                                                5(jfs_id)/6(jfr_id)/7(jetty_id)/
-                                                8(jetty group id)/9(jfc_id)/
-                                                10(rc_id, not support)/11(token_id)/
-                                                12(eid, not support)/13(eid, not support).
-  -K, --key_ext <key_ext>                     config key_ext for tp_id/vtp res.
-  -C, --key_cnt <key>                         config key_cnt for rc res.
-  -n, --ns </proc/$pid/ns/net>                ns path.
-  -M, --ns_mode <0 or 1>                      ns_mode with (exclusive: 0) | (shared: 1).
-  -l, --min_id <0 - U32_MAX>                  min reserved jetty id, U32_MAX means invalid.
-  -u, --max_id <0 - U32_MAX>                  max reserved jetty id, U32_MAX means invalid.
+  -h, --help     Show help and exit
+  -V, --version  Show version and exit
 ```
 
 2.  Function Description
 
 ```
-urma_admin show --dev <DEV_NAME> --whole                         Query device attribute information
-urma_admin show dev <DEV_NAME> tp [TP_ID]                        Query TPID list or a single TPID state of the device
-urma_admin show dev <DEV_NAME> tpreuse                           Query TPID reuse entries of the device
-urma_admin add_eid --dev <DEV_NAME> --idx [NUM] --ns [netns]     Set a static eid for the device
-urma_admin del_eid --dev <DEV_NAME> --idx [NUM]                   Delete a static eid from the device
-urma_admin set_eid_mode --dev <DEV_NAME> -m/--eid_mode           Switch eid mode (-m dynamic, no -m static)
-urma_admin set_reserved_jetty --dev <DEV_NAME> -l/--min_id <MIN_ID> -u/--max_id <MAX_ID>  Set reserved jetty id range
-urma_admin show_stats --dev <DEV_NAME> --resource_type [TYPE] --key [KEY]  Query tx/rx stats for jfs/jfr/jetty/jetty_group
-urma_admin show_topo                                               Display bonding device topology
-urma_admin show_res --dev <DEV_NAME> --resource_type <TYPE> --key <KEY> --key_ext [KEY_EXT] --key_cnt [KEY_CNT]  Query resource attributes
-urma_admin list_res --dev <DEV_NAME> --resource_type <TYPE> --key <KEY> --key_ext [KEY_EXT] --key_cnt [KEY_CNT]  Query resource list
-urma_admin set_ns_mode --ns_mode <NS_MODE>                        Set namespace mode
-urma_admin set_dev_ns --dev <DEV_NAME> --ns <NS>                  Set device namespace
+urma_admin show [--dev <dev>] [--brief|--all] [--whole]          Show URMA devices information
+urma_admin show topo [NODE_ID]                                   Show topology of specified node, default is current node
+urma_admin show dev <dev> jfc [JFC_ID]                           Show JFC resources
+urma_admin show dev <dev> jfs [JFS_ID]                           Show JFS resources
+urma_admin show dev <dev> jfr [JFR_ID]                           Show JFR resources
+urma_admin show dev <dev> jetty [JETTY_ID]                       Show Jetty resources
+urma_admin show dev <dev> jetty_group [JETTY_GROUP_ID]           Show Jetty Group resources
+urma_admin show dev <dev> rc [RC_ID]                             Show RC resources
+urma_admin show dev <dev> seg [TOKEN_ID]                         Show SEG resources
+urma_admin show dev <dev> tp [TP_ID]                             Show TPID list or a single TPID state of the device
+urma_admin show dev <dev> tpreuse                                Show TPID reuse entries of the device
+urma_admin dev set <dev> ns <netns>                              Set net namespace of UB device
+urma_admin dev set <dev> sl --sl <sl> --priority <priority>      Configure SL and priority mapping
+urma_admin dev expose <dev> <netns>                              Expose UB device to a network namespace
+urma_admin dev unexpose <dev> <netns>                            Unexpose UB device from a network namespace
+urma_admin eid add <dev> <eid_idx> <eid> [--ns <netns>] [--mode <eid_mode>]  Add static EID
+urma_admin eid del <dev> <eid_idx>                               Delete static EID
+urma_admin eid set <dev> <eid_idx> ns <netns>                    Set namespace of an EID
+urma_admin eid set <dev> <eid_idx> mode {static|dynamic}         Set EID mode
+urma_admin main_ue_eid insert <eid> <main_ue_eid>                Insert a main UE EID mapping
+urma_admin main_ue_eid insert_batch <main_ue_eid> <eid> [eid...] Insert main UE EID mappings in batch
+urma_admin main_ue_eid delete <eid>                              Delete a main UE EID mapping
+urma_admin main_ue_eid lookup <eid>                              Query a main UE EID mapping
+urma_admin main_ue_eid flush                                     Clear the main UE EID table
+urma_admin system show                                           Show system configuration
+urma_admin system set dev_sharing {on|off}                       Enable or disable UB device sharing
+urma_admin system set eid_sharing {on|off}                       Enable or disable EID sharing
+urma_admin agg add <eid> <dev_name>                              Add an aggregation device
+urma_admin agg del <eid>                                         Delete an aggregation device
+urma_admin agg expose <eid> <netns>                              Expose an aggregation device and related EIDs
+urma_admin perf start                                            Start DFX collection
+urma_admin perf stop                                             Stop DFX collection
+urma_admin perf show                                             Show DFX statistics results
 ```
 
 3.  Parameter Description
 
-| Flag | Full Name | Description | Required | Valid Range | Default |
-|---|---|---|---|---|---|
-| -h | --help | Query help information | Optional | Unrestricted | None |
-| -d | --dev | Specify a device name | Required | String up to 63 bytes | None |
-| -e | --eid | Specify an eid value | Required | 4-16 | None |
-| -m | --eid_mode | Specify eid dynamic mode switch; configured = use dynamic eid mode | Not entered | N/A | None |
-| -v | --ue_idx | Specify UB device idx | Required | 0~65535 | None |
-| -i | --idx | Specify an idx value | Required | 0~65535 | None |
-| -w | --whole | Query complete device information | Not entered | N/A | None |
-| -R | --resource_type | Specify resource type. show_stats type [4-8]: jfs/jfr/jetty/jetty group(not support)/dev. show_res type [5-12]: jfs/jfr/jetty/jetty_grp/jfc/rc/seg/dev_ta_ctx | Required | show_stats [4-8]; show_res [5-12] | None |
-| -k | --key | Specify key value. show_stats key: 1-8. show_res key: 1-13. See type definitions | Required | See description | None |
-| -K | --key_ext | Specify extended key information | Required | 0~UINT_MAX | None |
-| -C | --key_cnt | Specify key count | Required(show_res); Optional(list_res) | 0~UINT_MAX (upper bound depends on resource_type and chip spec) | None |
-| -n | --ns | Specify eid namespace, format: /proc/$pid/ns/net | Required | String < 128 chars | None |
-| -M | --ns_mode | Specify namespace mode | Required | exclusive: 0 \| shared: 1 | None |
-| -l | --min_id | Jetties with jetty_id in [min_id, max_id] are well-known jetties; configure min_id | Required | 0 - U32_MAX | None |
-| -u | --max_id | Jetties with jetty_id in [min_id, max_id] are well-known jetties; configure max_id | Required | 0 - U32_MAX | None |
+| Command Element | Description | Required | Valid Range | Default |
+|---|---|---|---|---|
+| <dev> | Device name, for example udma1 | Required | String up to 63 bytes | None |
+| <netns> | Network namespace path, for example /proc/$pid/ns/net | Required | Valid namespace path | None |
+| <eid_idx> | EID index | Required | 0~65535 | None |
+| <eid> | EID value | Required | IPv4, IPv6, or mapped EID string | None |
+| <main_ue_eid> | Main UE EID mapped from one or more EIDs | Required | IPv4, IPv6, or mapped EID string | None |
+| <node_id> | Topology node ID | Optional | uint32_t | Current node |
+| --brief | In show command, show bonding devices first if they exist | Optional | - | Enabled |
+| --all | In show command, show all devices | Optional | - | Disabled |
+| --whole | In show command, show complete device information | Optional | - | Disabled |
+| --sl | Service level for dev set sl | Required for dev set sl | 0~255 | None |
+| --priority | Priority for dev set sl | Required for dev set sl | 0~255 | None |
+| dev_sharing | Device namespace sharing mode | Required for system set | - | None |
+| eid_sharing | EID namespace sharing mode | Required for system set | - | None |
+| {on\|off} | Sharing switch | Required for system set dev_sharing/eid_sharing | on/off | None |
+| {static\|dynamic} | EID mode | Required for eid set mode | static/dynamic | None |
 
 [] indicates optional parameters; <\> indicates required parameters.
 
@@ -1992,8 +1977,6 @@ urma_admin show -w parameter notes:
 Example:
 
 ```
-# urma_admin set_upi -d ubep_beta -v 1 --i 2 --upi 10
-# urma_admin show_upi -d ubep_beta -v 1
 # urma_admin add_eid --dev ubep_beta --idx 1
 # urma_admin add_eid --dev ubep_beta --idx 1 --ns /proc/11962/ns/net
 # urma_admin del_eid --dev ubep_beta --idx 1
@@ -2003,17 +1986,21 @@ Example:
 # urma_admin show_res -d ubep_beta --resource_type 5 --key 1 -C 1
 # urma_admin list_res -d ubep_beta --resource_type 5 --key 1
 # urma_admin set_ns_mode -M 0
-# urma_admin set_reserved_jetty -d bonding_dev_0 -l 0 -u 4294967295
 # urma_admin show dev ubep_beta tp
 # urma_admin show dev ubep_beta tp 1001
 # urma_admin show dev ubep_beta tpreuse
+# urma_admin system show
+# urma_admin system set dev_sharing on
+# urma_admin system set eid_sharing off
+# urma_admin agg add 192.168.1.100 bonding_dev_0
+# urma_admin agg expose 192.168.1.100 /proc/11962/ns/net
+# urma_admin perf start
+# urma_admin perf show
 ```
 
 ![](figures/urma_caution.png)
 
-urma_admin operations use rsyslog to log to /var/log/umdk/urma/urma_admin.log. Its logging, log rotation, and archival capabilities depend on the rsyslog and logrotate tools. Frequent short-interval command invocations may prevent log rotation.
-
-The -e/--eid parameter currently has no practical effect; it is retained for now but planned for removal.
+urma_admin operations use rsyslog to redirect logs to /var/log/umdk/urma/urma_admin.log. Size-based rotation, compression, and retention depend on logrotate. Frequent short-interval command invocations may prevent log rotation.
 
 ## 6.5 DFX Diagnostics
 
@@ -2021,13 +2008,13 @@ URMA DFX capabilities primarily include URMA logging. Additionally, urma_admin a
 
 ### 6.5.1 URMA Logging
 
-URMA uses the OS's built-in rsyslog tool to implement log redirection and printing, with the corresponding configuration path at /etc/rsyslog.d/*.conf. It uses the OS's built-in logrotate to implement log rotation, compression, and archival, with the corresponding configuration path at /etc/logrotate.d/**. Products can modify the configuration files as needed to meet different requirements.
+URMA uses the OS's built-in rsyslog tool to implement log redirection and printing, with the corresponding configuration path at /etc/rsyslog.d/*.conf. Size-based log rotation, compression, and retention depend on the OS's built-in logrotate tool, with the corresponding configuration path at /etc/logrotate.d/**. Products can modify the configuration files as needed to meet different requirements.
 
 ![](figures/urma_caution.png)
 
-1.  Log file rotation by size threshold depends on the system's rsyslog tool, which must be installed and configured separately.
+1.  Log redirection depends on the system's rsyslog tool, which must be installed and configured separately.
 
-2.  Automatic deletion of old compressed files when log partition space is insufficient also depends on the rsyslog tool, which must be installed and configured separately.
+2.  Size-based rotation, compression, retention, and automatic deletion of old compressed files depend on the system's logrotate tool, which must be installed and configured separately.
 
 3.  The user group and permissions of log files can also be configured by modifying the /etc/rsyslog.d/*.conf file. See the example below.
 

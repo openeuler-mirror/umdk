@@ -50,6 +50,7 @@ yum install -y git rpm-build make cmake gcc glibc-devel kernel-devel libnl3-deve
 2. Download the source code, navigate to `src/`, and create and enter a `build` directory
 
 ```bash
+cd src
 mkdir build
 cd build
 ```
@@ -71,7 +72,7 @@ make -j$(nproc)
 
 - `-DCMAKE_VERBOSE_MAKEFILE=on`: Displays detailed compilation information for easier troubleshooting
 
-- `-DCMAKE_INSTALL_PREFIX=/usr`: Specifies the installation path as the system directory
+- `-DCMAKE_INSTALL_PREFIX=/usr`: Keeps the layout aligned with the current scripts/RPMs; many URMA install targets are fixed in CMake under `/usr`, `/etc`, and related system paths
 
 - `-DBUILD_URMA=enable`: Explicitly enables URMA module compilation
 
@@ -150,7 +151,7 @@ URMA installation packages are available for both aarch64 and x86_64 architectur
 </tr>
 <tr>
 <td>umdk-urma-bin-xxx.rpm</td>
-<td>URMA kernel module installation package; must be paired with the corresponding kernel</td>
+<td>URMA TPSA/UVS runtime package, including libtpsa.so and related configuration files</td>
 </tr>
 <tr>
 <td>umdk-urma-devel-xxx.rpm</td>
@@ -158,10 +159,10 @@ URMA installation packages are available for both aarch64 and x86_64 architectur
 </tr>
 <tr>
 <td>umdk-urma-tools-xxx.rpm</td>
-<td>URMA tools package, including urma_admin, urma_perftest, and other auxiliary commands</td>
+<td>URMA tools package, including urma_admin, urma_perftest, urma_ping, and other auxiliary commands</td>
 </tr>
 <tr>
-<td>umdk-urma-examples-xxx.rpm</td>
+<td>umdk-urma-example-xxx.rpm</td>
 <td>Contains usage examples for the URMA user-mode programming API</td>
 </tr>
 </tbody>
@@ -194,7 +195,7 @@ yum install -y kernel-devel  # ubcore dependency, from the openEuler kernel
 cd src
 mkdir build
 cd build
-cmake .. -D BUILD_ALL=disable -D BUILD_URMA=enable
+cmake .. -D BUILD_ALL=disable -D BUILD_URMA=enable -D BUILD_UDMA=disable
 make install -j
 ```
 
@@ -258,12 +259,20 @@ rpm -ivh umdk-urma-lib-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-bin-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-devel-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-tools-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-examples-26.06.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-example-26.06.0-B004.oe2403sp3.aarch64.rpm
+```
+
+### Method 4: Build, package, and install using the Bazel script
+
+```bash
+cd src/urma
+./urma_bazel.sh compile --config=release --config=arm64 --define=build_udma=true
+./urma_bazel.sh install urma-bazel-<timestamp>.tar.gz
 ```
 
 ## 2.5 Kernel-mode ko Installation
 
-After installing the RPM packages, the kernel modules must be loaded. ubcore, ubagg, and uburma are mandatory modules. Additionally, the HiSilicon kernel module udma.ko must be loaded (using modprobe or insmod; follow the specific loading command provided by HiSilicon).
+After installing the URMA user-mode RPM packages, load the kernel modules provided by the matching kernel/vendor driver stack. ubcore, ubagg, and uburma are mandatory modules. Additionally, load the HiSilicon kernel module udma.ko using modprobe or insmod; follow the exact command provided by HiSilicon.
 
 ```bash
 modprobe ubcore
@@ -307,14 +316,14 @@ modprobe ubagg
 Use the `urma_admin` tool to verify that devices are properly detected:
 
 ```bash
-urma_admin show
+urma_admin show --all
 ```
 
 Example output:
 
 ```
-num ubep_dev tp_type eid link
---- ---------------- -------- -------------------------------------------- --------
+num  ubep_dev            tp_type     eid                                             link
+---  ----------------    --------    --------------------------------------------    --------
 0 udma3 UB eid0 0000:0000:0000:00xx:00xx:00xx:00xx:1001 ACTIVE
 1 udma3 UB eid1 0000:0000:0000:00xx:00xx:00xx:00xx:1002 ACTIVE
 2 udma5 UB eid0 0000:0000:0000:00xx:00xx:00xx:00xx:1003 ACTIVE
@@ -326,6 +335,7 @@ num ubep_dev tp_type eid link
 ## 4.2 Performance Test Example
 
 ```bash
+# If the platform provides and requires scbus-daemon, start it first
 systemctl start scbus-daemon.service
 
 # Start the server
@@ -334,3 +344,5 @@ urma_perftest send_bw -d bonding_dev_0 -s 2 -n 10 -I 128 -p 1
 # Start the client (replace <server_ip> with the actual server IP)
 urma_perftest send_bw -d bonding_dev_0 -s 2 -n 10 -I 128 -p 1 -S <server_ip>
 ```
+
+> `-p 1` sets the transport mode to RC. To specify a port, use `-P <port>`; the default port is 21115.

@@ -50,6 +50,7 @@ yum install -y git rpm-build make cmake gcc glibc-devel kernel-devel libnl3-deve
 2. 下载源码，进入源码src/路径下，创建并进入build构建目录
 
 ```bash
+cd src
 mkdir build
 cd build
 ```
@@ -71,7 +72,7 @@ make -j$(nproc)
 
 - `-DCMAKE_VERBOSE_MAKEFILE=on`：显示详细的编译信息，便于排查问题
 
-- `-DCMAKE_INSTALL_PREFIX=/usr`：指定安装路径为系统目录
+- `-DCMAKE_INSTALL_PREFIX=/usr`：保持与当前脚本/RPM布局一致；URMA部分安装目标在CMake中已固定到 `/usr`、`/etc` 等系统路径
 
 - `-DBUILD_URMA=enable`：明确启用URMA模块编译
 
@@ -150,7 +151,7 @@ URMA安装包分为aarch64和x86_64两种，分别支持ARM平台和X86平台。
 </tr>
 <tr>
 <td>umdk-urma-bin-xxx.rpm</td>
-<td>urma内核模块安装包，需要与内核配套使用</td>
+<td>urma TPSA/UVS运行时包，包含libtpsa.so及相关配置</td>
 </tr>
 <tr>
 <td>umdk-urma-devel-xxx.rpm</td>
@@ -158,10 +159,10 @@ URMA安装包分为aarch64和x86_64两种，分别支持ARM平台和X86平台。
 </tr>
 <tr>
 <td>umdk-urma-tools-xxx.rpm</td>
-<td>urma工具包，包含urma_admin、urma_perftest等辅助命令</td>
+<td>urma工具包，包含urma_admin、urma_perftest、urma_ping等辅助命令</td>
 </tr>
 <tr>
-<td>umdk-urma-examples-xxx.rpm</td>
+<td>umdk-urma-example-xxx.rpm</td>
 <td>包含urma用户态编程API的使用示例</td>
 </tr>
 </tbody>
@@ -194,7 +195,7 @@ yum install -y kernel-devel  # ubcore依赖，来自openEuler内核
 cd src
 mkdir build
 cd build
-cmake .. -D BUILD_ALL=disable -D BUILD_URMA=enable
+cmake .. -D BUILD_ALL=disable -D BUILD_URMA=enable -D BUILD_UDMA=disable
 make install -j
 ```
 
@@ -258,12 +259,20 @@ rpm -ivh umdk-urma-lib-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-bin-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-devel-26.06.0-B004.oe2403sp3.aarch64.rpm
 rpm -ivh umdk-urma-tools-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-examples-26.06.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-example-26.06.0-B004.oe2403sp3.aarch64.rpm
+```
+
+### 方法4：使用 Bazel 脚本编译、打包和安装
+
+```bash
+cd src/urma
+./urma_bazel.sh compile --config=release --config=arm64 --define=build_udma=true
+./urma_bazel.sh install urma-bazel-<timestamp>.tar.gz
 ```
 
 ## 2.5 内核态ko安装
 
-安装RPM包后需要加载内核模块，ubcore、ubagg和uburma模块为必选加载，另外需要加载海思内核模块udma.ko（通过modprobe或insmod加载udma.ko，具体加载命令以海思提供为准）。
+安装URMA用户态RPM包后，还需要加载与当前内核/厂商驱动配套提供的内核模块。ubcore、ubagg和uburma模块为必选加载，另外需要加载海思内核模块udma.ko（通过modprobe或insmod加载udma.ko，具体加载命令以海思提供为准）。
 
 ```bash
 modprobe ubcore
@@ -307,14 +316,14 @@ modprobe ubagg
 使用 urma_admin 工具检查设备是否正常扫描：
 
 ```bash
-urma_admin show
+urma_admin show --all
 ```
 
 输出示例：
 
 ```
-num ubep_dev tp_type eid link
---- ---------------- -------- -------------------------------------------- --------
+num  ubep_dev            tp_type     eid                                             link
+---  ----------------    --------    --------------------------------------------    --------
 0 udma3 UB eid0 0000:0000:0000:00xx:00xx:00xx:00xx:1001 ACTIVE
 1 udma3 UB eid1 0000:0000:0000:00xx:00xx:00xx:00xx:1002 ACTIVE
 2 udma5 UB eid0 0000:0000:0000:00xx:00xx:00xx:00xx:1003 ACTIVE
@@ -326,6 +335,7 @@ num ubep_dev tp_type eid link
 ## 4.2 性能测试示例
 
 ```bash
+# 如平台提供并要求启动 scbus-daemon，则先启动该服务
 systemctl start scbus-daemon.service
 
 # 启动服务端
@@ -334,3 +344,5 @@ urma_perftest send_bw -d bonding_dev_0 -s 2 -n 10 -I 128 -p 1
 # 启动客户端（替换 <server_ip> 为实际服务端IP）
 urma_perftest send_bw -d bonding_dev_0 -s 2 -n 10 -I 128 -p 1 -S <server_ip>
 ```
+
+> `-p 1` 表示传输模式为 RC；如需指定端口，请使用 `-P <port>`，默认端口为 21115。
