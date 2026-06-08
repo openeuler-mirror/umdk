@@ -5,7 +5,6 @@
  */
 
 #include <errno.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
