@@ -1313,11 +1313,7 @@ int channel_info_get(uint32_t urpc_chid, char **output, uint32_t *output_size)
 
     (void)pthread_rwlock_rdlock(&channel->rw_lock);
     size_t server_cnt = urpc_list_size(&channel->server_nodes_list);
-    uint64_t cqi_size = (uint32_t)sizeof(channel_query_info_t) + server_cnt * (uint32_t)sizeof(channel_server_info_t);
-    if (cqi_size > UINT32_MAX) {
-        URPC_LIB_LOG_ERR("cqi_size exceeds max value\n");
-        return URPC_FAIL;
-    }
+    uint32_t cqi_size = (uint32_t)sizeof(channel_query_info_t) + server_cnt * (uint32_t)sizeof(channel_server_info_t);
     channel_query_info_t *cqi = (channel_query_info_t *)urpc_dbuf_calloc(URPC_DBUF_TYPE_CHANNEL, 1, cqi_size);
     if (cqi == NULL) {
         (void)pthread_rwlock_unlock(&channel->rw_lock);
