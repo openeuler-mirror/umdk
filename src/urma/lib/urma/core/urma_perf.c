@@ -345,8 +345,10 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
     cur_record->type_record[type].bucket[bucket_idx]++;
     cur_record->type_record[type].cnt++;
     cur_record->type_record[type].accumulation += delta;
-    cur_record->type_record[type].min = (delta < cur_record->type_record[type].min) ? delta : cur_record->type_record[type].min;
-    cur_record->type_record[type].max = (delta > cur_record->type_record[type].max) ? delta : cur_record->type_record[type].max;
+    cur_record->type_record[type].min = (delta < cur_record->type_record[type].min) ?
+                                         delta : cur_record->type_record[type].min;
+    cur_record->type_record[type].max = (delta > cur_record->type_record[type].max) ?
+                                         delta : cur_record->type_record[type].max;
     return URMA_SUCCESS;
 }
 

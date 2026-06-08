@@ -11,7 +11,6 @@
 #define URMA_UBAGG_H
 
 #include "urma_types.h"
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -134,10 +133,10 @@ typedef struct bondp_jfs_wr {
 } bondp_jfs_wr_t;
 
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
-                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
-                        uint64_t dst, uint64_t src, uint32_t len,
-                        urma_jfs_wr_flag_t flag, uint64_t user_ctx,
-                        uint32_t src_chip_id, uint32_t dst_chip_id);
+                                  urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
+                                  uint64_t dst, uint64_t src, uint32_t len,
+                                  urma_jfs_wr_flag_t flag, uint64_t user_ctx,
+                                  uint32_t src_chip_id, uint32_t dst_chip_id);
 
 #ifdef __cplusplus
 }
