@@ -21,7 +21,7 @@
 #include "bondp_datapath_schedule.h"
 
 static void select_least_load_path(const bondp_comp_t *bdp_comp, uint32_t min_active_count,
-                                   int min_idx, int max_idx, uint32_t *least_load_pos,
+                                   uint32_t min_idx, uint32_t max_idx, uint32_t *least_load_pos,
                                    uint32_t *least_load_cnt)
 {
     uint32_t least_load = UINT32_MAX;
@@ -29,7 +29,7 @@ static void select_least_load_path(const bondp_comp_t *bdp_comp, uint32_t min_ac
     *least_load_cnt = 0;
     for (uint32_t i = 0; i < min_active_count; i++) {
         uint32_t active_idx = bdp_comp->active_indices[i];
-        if (!bdp_comp->valid[active_idx] || active_idx < (uint32_t)min_idx || active_idx > (uint32_t)max_idx) {
+        if (!bdp_comp->valid[active_idx] || active_idx < min_idx || active_idx >= max_idx) {
             continue;
         }
 
@@ -94,6 +94,33 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
     return -1;
 }
 
+static int get_affinity_path_range(const bondp_comp_t *bdp_comp, const bondp_chip_id_info_t *info,
+                                   uint32_t *min, uint32_t *max)
+{
+    switch (bdp_comp->bondp_ctx->bonding_level) {
+        case BONDP_BONDING_LEVEL_IODIE:
+            *min = info->src_chip_id - BONDP_CHIP_ID_MIN;
+            *max = *min + 1;
+            return 0;
+        case BONDP_BONDING_LEVEL_PORT:
+            if (info->src_chip_id == BONDP_CHIP_ID_MIN) {
+                const uint32_t affinity_port_start = 2;
+                const uint32_t affinity_port_end = 11;
+                *min = affinity_port_start;
+                *max = affinity_port_end;
+            } else {
+                const uint32_t affinity_port_start = 11;
+                const uint32_t affinity_port_end = 20;
+                *min = affinity_port_start;
+                *max = affinity_port_end;
+            }
+            return 0;
+        default:
+            URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
+            return URMA_EINVAL;
+    }
+}
+
 static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                  int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
 {
@@ -101,20 +128,19 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     uint32_t least_load_pos[URMA_UBAGG_DEV_MAX_NUM] = {0};
     uint32_t least_load_cnt = 0;
     bool enable_info_fallback = true;
-    int min, max;
+    int ret;
+    uint32_t min = 0;
+    uint32_t max = 0;
 
     if (min_active_count == 0) {
         URMA_LOG_ERR("Invalid min_active_count.\n");
         return URMA_EINVAL;
     }
 
-    if (info != NULL && bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
-        if (info->src_chip_id == BONDP_CHIP_ID_MIN) {
-            min = BONDP_CHIP_ID_MIN_START_PORT;
-            max = BONDP_CHIP_ID_MIN_END_PORT;
-        } else {
-            min = BONDP_CHIP_ID_MAX_START_PORT;
-            max = BONDP_CHIP_ID_MAX_END_PORT;
+    if (info != NULL) {
+        ret = get_affinity_path_range(bdp_comp, info, &min, &max);
+        if (ret != 0) {
+            return ret;
         }
         select_least_load_path(bdp_comp, min_active_count, min, max, least_load_pos, &least_load_cnt);
         if (least_load_cnt == 0 && !enable_info_fallback) {
@@ -125,10 +151,10 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     if (least_load_cnt == 0) {
         if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
             min = 0;
-            max = IODIE_NUM - 1;
+            max = IODIE_NUM;
         } else if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
             min = IODIE_NUM;
-            max = URMA_UBAGG_DEV_MAX_NUM - 1;
+            max = URMA_UBAGG_DEV_MAX_NUM;
         } else {
             URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
             return URMA_EINVAL;
