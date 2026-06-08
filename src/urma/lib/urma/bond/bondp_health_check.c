@@ -1596,7 +1596,6 @@ void bondp_destroy_health_check_ctx(bondp_context_t *bond_ctx)
     }
 
     health = &bond_ctx->bondp_heath_check_ctx;
-    bondp_hash_table_destroy(&health->task_table);
     bondp_unregister_health_ctx_global(bond_ctx);
 
     if (global_ctx->health_thread_ctx.health_epoll_fd >= 0 && health->health_check_fd >= 0) {
@@ -1607,6 +1606,7 @@ void bondp_destroy_health_check_ctx(bondp_context_t *bond_ctx)
     }
 
     bondp_unregister_health_check_seg(bond_ctx);
+    bondp_hash_table_destroy(&health->task_table);
     bondp_free_health_event_list(&health->event_list);
     pthread_spin_destroy(&health->event_lock);
 
