@@ -316,7 +316,7 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
     bool ret = false;
 
     /* Check if initialized first (without lock) */
-    if (!(rs->flags & URMA_LOG_RL_INITIALIZED)) {
+    if ((rs->flags & URMA_LOG_RL_INITIALIZED) == 0) {
         /* Not initialized yet, need to initialize spinlock first */
         if (pthread_spin_init(&rs->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
             /* Spinlock initialization failed, allow log output (safe fallback) */

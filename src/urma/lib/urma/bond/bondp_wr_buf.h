@@ -13,6 +13,8 @@
 
 #include <stdint.h>
 
+#include "urma_types.h"
+
 struct bondp_comp;
 struct bondp_target_jetty;
 

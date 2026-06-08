@@ -104,6 +104,6 @@ uint32_t urma_ubagg_switch_get(void);
 
 bool urma_perf_is_enabled(void);
 uint64_t urma_get_perf_timestamp(void);
-urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t latency);
+urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta);
 
 #endif // URMA_PRIVATE_H
