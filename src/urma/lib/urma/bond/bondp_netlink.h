@@ -6,6 +6,10 @@
 #ifndef BONDP_NETLINK_H
 #define BONDP_NETLINK_H
 
+#include <stdint.h>
+
+typedef struct bondp_context bondp_context_t;
+
 #define SEND_SWITCHBACK_REQ 0
 
 typedef struct bondp_switchback_req {
