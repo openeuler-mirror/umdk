@@ -253,6 +253,8 @@ static void urma_perf_dump_info(urma_perf_stats_t *perf_info)
         }
         urma_perf_fill_type_stats(perf_info, &total_perf_record, i);
     }
+
+    perf_info->retry_count = urma_ubagg_switch_get();
 }
 
 bool urma_perf_is_enabled()
