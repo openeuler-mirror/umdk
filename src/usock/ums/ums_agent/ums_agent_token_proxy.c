@@ -30,6 +30,7 @@
 #define UMS_AGENT_RECV_BUF_SIZE                      (UMS_AGENT_MAX_MSG_LEN * 2)
 #define UMS_AGENT_SEND_BUF_SIZE                      (UMS_AGENT_MSG_HDR_LEN + UMS_AGENT_TOKEN_TRANSFER_LEN)
 #define UMS_AGENT_MAX_RECV_ITERATIONS                16
+#define UMS_AGNET_MAX_PENDING_ENTRY_NUM              1000
 
 enum ums_agent_cipher_id {
     UMS_AGENT_CIPHER_TLS_AES_256_GCM_SHA384 = 1,
@@ -100,6 +101,7 @@ struct ums_agent_token_proxy {
     bool initialized;
     uint16_t listen_port;
     struct ums_agent_list_node pending_list;
+    uint32_t pending_entry_num;
     GHashTable *conn_ctx_ht;
 };
 
@@ -152,11 +154,18 @@ static void ums_agent_pending_entry_destroy(struct ums_agent_pending_entry *p)
 static void ums_agent_pending_entry_enqueue(struct ums_agent_pending_entry *p)
 {
     ums_agent_list_add_tail(&p->node, &g_ums_agent_tp.pending_list);
+    g_ums_agent_tp.pending_entry_num += 1;
 }
 
 static void ums_agent_pending_entry_dequeue(struct ums_agent_pending_entry *target)
 {
     ums_agent_list_remove(&target->node);
+    g_ums_agent_tp.pending_entry_num -= 1;
+}
+
+static uint32_t ums_agent_pending_entry_num_get()
+{
+    return g_ums_agent_tp.pending_entry_num;
 }
 
 static bool ums_agent_pending_entry_match(const struct ums_agent_pending_entry *p,
@@ -708,25 +717,11 @@ static void ums_agent_tp_on_conn_close(
     ums_agent_conn_ctx_remove(conn);
 }
 
-static int ums_agent_tp_on_token_submit(struct ums_token_entry *entry)
+static int ums_agent_pending_entry_handler(struct ums_token_entry *entry)
 {
-    if (!g_ums_agent_tp.initialized) {
-        UMS_AGENT_LOG_WARN("token proxy not initialized, rejecting submit");
-        return -EINVAL;
-    }
-
-    if (!entry) {
-        UMS_AGENT_LOG_ERR("entry is NULL");
-        return -EINVAL;
-    }
-
-    int ret;
-    struct ums_agent_tls_conn *conn = ums_agent_tls_conn_pool_get(
-        &entry->dst_addr);
-    if (conn) {
-        ret = ums_agent_tp_send_entry(conn, entry);
-        ums_agent_tls_conn_pool_put(conn);
-        return ret < 0 ? ret : 0;
+    if (ums_agent_pending_entry_num_get() >= UMS_AGNET_MAX_PENDING_ENTRY_NUM) {
+        UMS_AGENT_LOG_ERR("the length of the pending list has reached its maximum limit");
+        return -EAGAIN;
     }
 
     bool need_connect = !ums_agent_tp_has_pending_for_peer(
@@ -747,7 +742,7 @@ static int ums_agent_tp_on_token_submit(struct ums_token_entry *entry)
         return 0;
     }
 
-    ret = ums_agent_tls_conn_connect(&entry->dst_addr, g_ums_agent_tp.listen_port);
+    int ret = ums_agent_tls_conn_connect(&entry->dst_addr, g_ums_agent_tp.listen_port);
     if (ret < 0) {
         UMS_AGENT_LOG_ERR("TLS connect failed for %s:%u",
             ums_agent_ip_addr_fmt(&entry->dst_addr).str,
@@ -761,6 +756,38 @@ static int ums_agent_tp_on_token_submit(struct ums_token_entry *entry)
         entry->clc_session_id, ums_agent_ip_addr_fmt(&entry->dst_addr).str,
         g_ums_agent_tp.listen_port);
     return 0;
+}
+
+static int ums_agent_tp_on_token_submit(struct ums_token_entry *entry)
+{
+    if (!g_ums_agent_tp.initialized) {
+        UMS_AGENT_LOG_WARN("token proxy not initialized, rejecting submit");
+        return -EINVAL;
+    }
+
+    if (!entry) {
+        UMS_AGENT_LOG_ERR("entry is NULL");
+        return -EINVAL;
+    }
+
+    struct ums_agent_tls_conn *conn = ums_agent_tls_conn_pool_get(
+        &entry->dst_addr);
+    
+    if (conn) {
+        struct ums_agent_conn_ctx *ctx = ums_agent_conn_ctx_find(conn);
+        if (ctx && !ctx->in_flight_entry) {
+            int ret = ums_agent_tp_send_entry(conn, entry);
+            if (ret == 1) {
+                struct ums_agent_pending_entry *in_flight_entry =
+                    ums_agent_pending_entry_create(entry);
+                ctx->in_flight_entry = in_flight_entry;
+            }
+            ums_agent_tls_conn_pool_put(conn);
+            return ret < 0 ? ret : 0;
+        }
+    }
+
+    return ums_agent_pending_entry_handler(entry);
 }
 
 static void ums_agent_tp_check_pending_timeout(void)
@@ -816,6 +843,7 @@ int ums_agent_tp_init(uint16_t listen_port)
     ums_agent_tls_conn_register_ops(&g_ums_agent_tp_conn_ops);
     ums_agent_nl_set_token_submit_cb(ums_agent_tp_on_token_submit);
     g_ums_agent_tp.initialized = true;
+    g_ums_agent_tp.pending_entry_num = 0;
     return 0;
 }
 
