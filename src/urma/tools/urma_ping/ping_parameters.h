@@ -19,7 +19,7 @@ typedef struct ping_cfg {
     int argc;
     char **argv;
     char *filename;
-    urma_eid_t dest;
+    urma_eid_t dst_eid;
     uint32_t count;    /* UINT32_MAX means unlimited */
     uint32_t interval; /* seconds */
     uint32_t size;     /* bytes */
