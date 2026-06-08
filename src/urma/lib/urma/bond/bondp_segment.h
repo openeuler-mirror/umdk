@@ -10,8 +10,6 @@
 #ifndef BONDP_SEGMENT_H
 #define BONDP_SEGMENT_H
 
-#include <stdbool.h>
-
 #include "urma_types.h"
 
 /* Bonding segment ops */

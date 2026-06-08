@@ -7,7 +7,6 @@
 #ifndef BONDP_WORKER_H
 #define BONDP_WORKER_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
