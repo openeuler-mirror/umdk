@@ -1979,6 +1979,8 @@ Options:
 
 ```
 urma_admin show --dev <DEV_NAME> --whole                         查询设备属性信息
+urma_admin show dev <DEV_NAME> tp [TP_ID]                        查询设备的TPID列表或单个TPID状态
+urma_admin show dev <DEV_NAME> tpreuse                           查询设备的TPID复用表项
 urma_admin add_eid --dev <DEV_NAME> --idx [NUM] --ns [进程net路径] 给设备设置静态eid
 urma_admin del_eid --dev <DEV_NAME> --idx [NUM]                   删除设备的静态eid
 urma_admin set_eid_mode --dev <DEV_NAME> -m/--eid_mode           切换eid模式（带-m为动态，不带为静态）
@@ -2079,6 +2081,9 @@ urma_admin show -w参数说明：
 # urma_admin list_res -d ubep_beta --resource_type 5 --key 1
 # urma_admin set_ns_mode -M 0
 # urma_admin set_reserved_jetty -d bonding_dev_0 -l 0 -u 4294967295
+# urma_admin show dev ubep_beta tp
+# urma_admin show dev ubep_beta tp 1001
+# urma_admin show dev ubep_beta tpreuse
 ```
 
 ![](figures/urma_caution.png)
