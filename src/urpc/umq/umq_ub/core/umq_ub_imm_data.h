@@ -50,7 +50,8 @@ typedef union umq_ub_imm {
         uint64_t type : 4;
         uint64_t window : 10;
         uint64_t ratio : 2;     // 0: 10%, 1: 30%, 2: 50%, 3: 70%, min reserved credit: modify to 70%
-        uint64_t rsvd1 : 48;
+        uint64_t rsvd1 : 32;
+        uint64_t seq : 16;
     } flow_control;
     struct {
         uint64_t type : 4;
