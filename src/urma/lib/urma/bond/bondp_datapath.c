@@ -250,7 +250,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
     }
 
     int send_idx = -1, target_idx = -1;
-    if (!wr->flag.bs.has_drv_ext) {
+    if (wr->flag.bs.has_drv_ext == 0) {
         ret = schedule_send(wr->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
     } else {
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
@@ -318,7 +318,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         return URMA_EINVAL;
     }
 
-    if (!cur->flag.bs.has_drv_ext) {
+    if (cur->flag.bs.has_drv_ext == 0) {
         ret = schedule_send(cur->tjetty, bdp_comp, &send_idx, &target_idx, NULL);
     } else {
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(cur, bondp_jfs_wr_t, base);
@@ -715,7 +715,6 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
 
     urma_jfs_wr_t *bad_wr = NULL;
     int ret = comp_post_send(wr_entry->bdp_comp, send_idx, wr, &bad_wr, 1);
-
     if (ret != URMA_SUCCESS) {
         convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
         release_vwr_use_cnt(wr);

@@ -95,7 +95,7 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
 }
 
 static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
-                                 int *send_idx, int *target_idx, bondp_chip_id_info_t *info)
+                                 int *send_idx, int *target_idx, const bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
     uint32_t least_load_pos[URMA_UBAGG_DEV_MAX_NUM] = {0};
