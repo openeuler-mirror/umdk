@@ -15,7 +15,6 @@
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
