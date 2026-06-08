@@ -114,6 +114,8 @@ typedef enum ub_packet_stats_type {
     UB_PACKET_STATS_TYPE_SEND_EAGAIN,
     UB_PACKET_STATS_TYPE_SEND_ERROR,
     UB_PACKET_STATS_TYPE_RECV_ERROR,
+    UB_PACKET_STATS_TYPE_RECV_DUP_REQ,
+    UB_PACKET_STATS_TYPE_RECV_DUP_RSP,
     UB_PACKET_STATS_TYPE_MAX,
 } ub_packet_stats_type_t;
 
@@ -185,8 +187,10 @@ typedef struct ub_flow_control {
     bool remote_get;
     bool enabled;
     volatile bool is_credit_applying;
-    volatile uint16_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
+    volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     umq_ub_flow_control_sge_slot_t recv_sge;
+    uint16_t local_req_seq;
+    uint16_t remote_expect_seq;
 } ub_flow_control_t;
 
 typedef struct umq_ub_flow_control_sge_mgr {
