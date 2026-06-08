@@ -4,12 +4,14 @@
 workspace(name = "com_atomgit_openeuler_umdk_urma")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
+load("//bazel:urma_deps.bzl", "LIBUMMU_ABI_VERSION", "LIBUMMU_COMMIT", "LIBUMMU_REMOTE", "LIBUMMU_VERSION")
+load("//bazel:libummu_repo.bzl", "libummu_local_repository")
 
-# libummu source tree (sibling of umdk checkout under urma_workspace).
-local_repository(
+# libummu source tree managed by urma_bazel.sh.
+libummu_local_repository(
     name = "libummu",
-    path = "../../../libummu",
+    path = "third_party/libummu",
+    build_file = "//bazel:libummu.BUILD.bazel",
 )
 
 # Preload repositories that Bazel 7+ pulls from `DEFAULT.WORKSPACE.SUFFIX`

@@ -40,6 +40,7 @@ def urma_shared_library(
         linkopts = [],
         dynamic_lib_names = [],
         extra_link_dirs = None,
+        soname = None,
         visibility = None):
     """Emit ``{name}_internal``, ``{name}`` (.so), and ``{name}_linklib``."""
     internal = name + "_internal"
@@ -60,15 +61,21 @@ def urma_shared_library(
 
     shared_linkopts = linkopts
     shared_inputs = []
+    soname_linkopts = []
+    if soname:
+        soname_linkopts = ["-Wl,-soname," + soname]
+
     if dynamic_lib_names:
         shared_inputs = urma_linklib_inputs(dynamic_lib_names)
         shared_linkopts = urma_dynamic_linkopts(
             dynamic_lib_names,
             extra_dirs = extra_link_dirs,
-            extra_libs = linkopts,
+            extra_libs = soname_linkopts + linkopts,
         )
     elif linkopts:
-        shared_linkopts = _LINK_NO_AS_NEEDED + linkopts + _LINK_AS_NEEDED
+        shared_linkopts = _LINK_NO_AS_NEEDED + soname_linkopts + linkopts + _LINK_AS_NEEDED
+    elif soname_linkopts:
+        shared_linkopts = soname_linkopts
 
     cc_binary(
         name = name,
@@ -96,6 +103,7 @@ def urma_shared_library_static_dep(
         cxxopts = [],
         static_deps = [],
         linkopts = [],
+        soname = None,
         visibility = None):
     """Shared library that statically links ``static_deps`` (e.g. tpsa + urma_common)."""
     internal = name + "_internal"
@@ -114,9 +122,13 @@ def urma_shared_library_static_dep(
         visibility = vis,
     )
 
-    static_linkopts = linkopts
+    soname_linkopts = []
+    if soname:
+        soname_linkopts = ["-Wl,-soname," + soname]
+
+    static_linkopts = soname_linkopts + linkopts
     if linkopts:
-        static_linkopts = _LINK_NO_AS_NEEDED + linkopts + _LINK_AS_NEEDED
+        static_linkopts = _LINK_NO_AS_NEEDED + soname_linkopts + linkopts + _LINK_AS_NEEDED
 
     cc_binary(
         name = name,
