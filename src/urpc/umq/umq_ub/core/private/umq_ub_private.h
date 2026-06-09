@@ -189,8 +189,8 @@ typedef struct ub_flow_control {
     volatile bool is_credit_applying;
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     umq_ub_flow_control_sge_slot_t recv_sge;
-    uint16_t local_req_seq;
-    uint16_t remote_expect_seq;
+    uint8_t local_req_seq;
+    uint8_t remote_expect_seq;
 } ub_flow_control_t;
 
 typedef struct umq_ub_flow_control_sge_mgr {
