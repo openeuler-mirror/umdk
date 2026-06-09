@@ -256,5 +256,12 @@ int admin_cmd_eid(admin_config_t *cfg);
 int admin_cmd_main_ue_eid(admin_config_t *cfg);
 int admin_cmd_show(admin_config_t *cfg);
 int admin_cmd_perf(admin_config_t *cfg);
+int admin_cmd_show_dev_jfc(admin_config_t *cfg);
+int admin_cmd_show_dev_jfs(admin_config_t *cfg);
+int admin_cmd_show_dev_jfr(admin_config_t *cfg);
+int admin_cmd_show_dev_jetty(admin_config_t *cfg);
+int admin_cmd_show_dev_jetty_group(admin_config_t *cfg);
+int admin_cmd_show_dev_rc(admin_config_t *cfg);
+int admin_cmd_show_dev_seg(admin_config_t *cfg);
 
 #endif
