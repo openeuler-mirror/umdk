@@ -60,7 +60,7 @@ extern "C" {
 #define UMQ_UB_ENABLE_SHARE_FC_JFR (true)
 
 #define UMQ_UB_FLOW_CONTROL_SGE_QBUF_COUNT_MAX 64 // per-device flow control sge mgr qbuf array
-#define UMQ_UB_FLOW_CONTROL_SGE_SHARED_RECV_QBUF_MAX 32 // per-jetty shared recv qbuf array
+#define UMQ_UB_FLOW_CONTROL_SGE_SHARED_RECV_QBUF_MAX 256 // per-jetty shared recv qbuf array
 
 typedef enum umq_size_interval {
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
@@ -565,7 +565,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm);
 int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_wr_ptr,
                         urma_sge_t *sges, uint32_t remain_tx);
 
-int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
+int umq_ub_fill_fc_rx_buf(ub_queue_t *queue, uint64_t user_ctx);
 int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint32_t batch);
 int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 
@@ -628,6 +628,12 @@ static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t jett
 {
     __atomic_store_n(&queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[jetty_idx]->jetty_id.id],
         (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
+}
+
+static inline bool is_umq_ub_post_jfr(ub_queue_t *queue)
+{
+    // bondp with shared_jfr should use urma_post_jfr_wr
+    return (queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) != 0 && queue->used_port_num > 0;
 }
 
 #ifdef __cplusplus
