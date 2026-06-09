@@ -917,7 +917,7 @@ DEL_P_VJFR_ID:
         if (bdp_jfr->p_jfr[j] == NULL) {
             continue;
         }
-        urma_jfr_id_t pjfr_id = bdp_jfr->p_jfr[i]->jfr_id;
+        urma_jfr_id_t pjfr_id = bdp_jfr->p_jfr[j]->jfr_id;
         (void)bdp_p_vjetty_id_table_del_without_lock(&bdp_ctx->p_vjetty_id_table, pjfr_id, JFR);
     }
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
@@ -1903,6 +1903,7 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
     }
 
     bdp_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
+    bondp_tjetty_get(&bdp_tjetty->v_tjetty);
     return URMA_SUCCESS;
 
 UNBIND:
@@ -1931,11 +1932,15 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
             if (urma_unbind_jetty(bdp_jetty->p_jetty[local_idx]) != URMA_SUCCESS) {
                 URMA_LOG_ERR("Failed to unbind tjetty [%u](%d, %d)\n", bdp_tjetty->v_tjetty.id.id, local_idx, local_idx);
                 ret = URMA_FAIL;
+                continue;
             }
             bdp_jetty->p_jetty[local_idx]->remote_jetty = NULL;
         }
     }
-    bdp_jetty->v_jetty.remote_jetty = NULL;
+    if (ret == URMA_SUCCESS) {
+        bdp_jetty->v_jetty.remote_jetty = NULL;
+        bondp_tjetty_put(tjetty);
+    }
     return ret;
 }
 
@@ -2050,12 +2055,12 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
     if (cfg_jfs == NULL) {
         if (rjfr->trans_mode == URMA_TM_RM && bdp_ctx->bonding_mode == BONDP_BONDING_MODE_ACTIVE_BACKUP) {
             URMA_LOG_ERR("RM jfr import requires drv_ext.vjfs\n");
-            return NULL;
+            goto UNIMPORT_VJFR;
         }
         cfg_jfs = &fake_jfs;
         if (init_active_indices(bdp_ctx, &fake_jfs, NULL, 0) != 0) {
             URMA_LOG_ERR("Failed to init active indices\n");
-            return NULL;
+            goto UNIMPORT_VJFR;
         }
     }
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &udata_out, cfg_jfs) != 0) {
