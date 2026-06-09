@@ -1202,6 +1202,11 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jfc for flowcontrol jfs_jfc "
                 "failed, status: %d\n", EID_ARGS(*fc_eid), fc_id, ret);
         }
+
+        if (!is_umq_ub_post_jfr(queue)) {
+            umq_ub_flow_control_sge_free(&queue->dev_ctx->fc_sge_mgr, &queue->flow_control.recv_sge);
+        }
+
         umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL);
     }
 
