@@ -704,7 +704,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     return -UMQ_ERR_EFLOWCTL;
 }
 
-static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, uint16_t seq)
+static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, uint8_t seq)
 {
     if (queue->bind_ctx == NULL) {
         return -UMQ_ERR_EINVAL;
@@ -875,7 +875,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     return -UMQ_ERR_EFLOWCTL;
 }
 
-static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_credit, uint16_t seq)
+static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_credit, uint8_t seq)
 {
     ub_flow_control_t *fc = &queue->flow_control;
     if (!fc->enabled || queue->bind_ctx == NULL) {
