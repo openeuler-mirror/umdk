@@ -54,7 +54,7 @@ UMDK/
 |Requirements|Type|Version|Description|
 |---|---|---|---|
 |Ascend Chip|Required|A2/A3|You can run CAM now only in an Ascend A2 or A3 SuperPod.|
-|CANN|Required|8.3/8.5/9.0|Before using CAM, you need to install CANN 8.3, 8.5 or 9.0 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
+|CANN|Required|8.5/9.0|Before using CAM, you need to install CANN 8.5 or 9.0 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
 |Torch|Required|2.8.0|To compile Pybind whl packet in CAM, you need to install Torch first.|
 |Torch-Npu|Required|2.8.0 post1~post4|Torch-Npu version depends on CANN version. See `docker/cam/Dockerfile` for the matched wheel of each CANN preset.|
 |gtest|Required|1.16.0|gtest is used for UT.|
@@ -66,7 +66,7 @@ For quickly start, we support a docker compose file sample in "umdk/docker/cam" 
 cd umdk
 docker build --build-arg BUILD_ARG=a3_9.0_open -t cam-dev:a3_9.0_open -f docker/cam/Dockerfile .
 ```
-Supported `BUILD_ARG` values: `a3_8.3_open`, `a3_8.5_open`, `a3_9.0_open`. The `BUILD_ARG` must match `IMAGE_NAME` in `.env`.
+Supported `BUILD_ARG` values: `a3_8.5_open`, `a3_9.0_open`. The `BUILD_ARG` must match `IMAGE_NAME` in `.env`.
 
 Then change `COMPOSE_PROJECT_NAME`, `IMAGE_NAME` and `CONTAINER_NAME` in `docker/cam/.env` if needed, and run:
 ```bash
@@ -101,7 +101,7 @@ output/cam/comm_operator/run/cam_ascend910XXX.run
 To install these two packets, you may follow the commands below:
 ```bash
 # Step 1: install run packet. The recommended install path is the opp folder in your environment.
-./output/cam/comm_operator/run/cam_ascend910XXX.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
+./output/cam/comm_operator/run/cam_ascendXXX.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
 # Step 2: enable environment variables. The path is provided from the output that you install run packet. 
 source /usr/local/Ascend/ascend-toolkit/lateset/opp/vendors/CAM/bin/set_env.bash
 # Step 3: install whl packet.
