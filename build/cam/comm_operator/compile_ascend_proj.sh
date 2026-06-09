@@ -7,7 +7,7 @@
 # History: 2025-07-20 create cam building script
 
 # 定义全局屏蔽列表
-exclude_list=()
+exclude_list=("fused_deep_moe_w4a8")
 if [ -z "${SHMEM_HOME_PATH}" ]; then
     echo "Skipping shmem (SHMEM_HOME_PATH not set)"
     exclude_list+=("fused_deep_moe")
