@@ -77,12 +77,13 @@ build_ascend_proj() {
     fi
 
     # 创建新npu_op_*编译体系的项目目录
-    mkdir -p ${MODULE_BUILD_PATH}/${proj_name}/op_host
-    mkdir -p ${MODULE_BUILD_PATH}/${proj_name}/op_kernel
+    echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}"	 
+    msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}	 
+    rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*	 
+    rm  -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
 
     # 复制顶层CMakeLists.txt和CMakePresets.json
     cp ./ascend_kernels/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/
-    cp ./ascend_kernels/CMakePresets.json ${MODULE_BUILD_PATH}/${proj_name}/
 
     # 复制op_host和op_kernel的CMakeLists.txt（新npu_op_*版本）
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
@@ -90,6 +91,8 @@ build_ascend_proj() {
 
     # 复制所有算子的op_host源文件
     copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
+    # 设置build_type到CMakePresets.json
+    python3 $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
 
     # 复制pregen目录（包含预生成的aclnn stub文件）
     cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}/
@@ -98,9 +101,6 @@ build_ascend_proj() {
     if [ -z "${SHMEM_HOME_PATH}" ]; then
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*shmem*
     fi
-
-    # 设置build_type到CMakePresets.json
-    python3 $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
 
     # CANN package path: try setenv first, then derive from ASCEND_TOOLKIT_HOME
     if [ -z "${ASCEND_CANN_PACKAGE_PATH}" ]; then
