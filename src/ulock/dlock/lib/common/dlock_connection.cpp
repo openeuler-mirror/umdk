@@ -9,12 +9,15 @@
  * Modification  : Created file
  */
 #include <openssl/rand.h>
+#include <cerrno>
 
 #include "dlock_log.h"
 #include "dlock_connection.h"
 
 namespace dlock {
-dlock_connection::dlock_connection() : m_next_message_id(0)
+dlock_connection::dlock_connection()
+    : m_next_message_id(0), m_recv_state(dlock_recv_state_t::RECV_STATE_IDLE),
+      m_recv_buf(nullptr), m_recv_offset(0), m_expected_total_len(0)
 {
     DLOCK_LOG_DEBUG("dlock_connection construct");
     m_peer_info.peer_type = DLOCK_CONN_PEER_DEFAULT;
@@ -24,6 +27,10 @@ dlock_connection::dlock_connection() : m_next_message_id(0)
 dlock_connection::~dlock_connection()
 {
     DLOCK_LOG_DEBUG("dlock_connection deconstruct");
+    if (m_recv_buf != nullptr) {
+        free(m_recv_buf);
+        m_recv_buf = nullptr;
+    }
 }
 
 ssize_t dlock_connection::send(const void *buf, size_t len, int flags)
@@ -93,5 +100,105 @@ uint16_t dlock_connection::get_next_message_id(void) const
 void dlock_connection::set_next_message_id(uint16_t next_message_id)
 {
     m_next_message_id = next_message_id;
+}
+
+int dlock_connection::init_recv_buf()
+{
+    if (m_recv_buf != nullptr) {
+        return 0;
+    }
+    m_recv_buf = static_cast<uint8_t *>(malloc(DLOCK_MAX_CTRL_MSG_SIZE));
+    if (m_recv_buf == nullptr) {
+        DLOCK_LOG_ERR("malloc error (errno=%d %m)", errno);
+        return -1;
+    }
+    return 0;
+}
+
+void dlock_connection::set_recv_state(dlock_recv_state_t state)
+{
+    m_recv_state = state;
+}
+
+dlock_recv_state_t dlock_connection::get_recv_state() const
+{
+    return m_recv_state;
+}
+
+uint8_t *dlock_connection::get_recv_buf()
+{
+    return m_recv_buf;
+}
+
+size_t dlock_connection::get_recv_offset() const
+{
+    return m_recv_offset;
+}
+
+void dlock_connection::set_recv_offset(size_t offset)
+{
+    m_recv_offset = offset;
+}
+
+void dlock_connection::advance_recv_offset(size_t len)
+{
+    m_recv_offset += len;
+}
+
+size_t dlock_connection::get_expected_total_len() const
+{
+    return m_expected_total_len;
+}
+
+void dlock_connection::set_expected_total_len(size_t len)
+{
+    m_expected_total_len = len;
+}
+
+void dlock_connection::discard_current_msg()
+{
+    size_t consume_len = m_expected_total_len < m_recv_offset ? m_expected_total_len : m_recv_offset;
+    shift_recv_buf(consume_len);
+    m_recv_state = dlock_recv_state_t::RECV_STATE_IDLE;
+    m_expected_total_len = 0;
+}
+
+void dlock_connection::complete_current_msg()
+{
+    shift_recv_buf(m_expected_total_len);
+    m_recv_state = dlock_recv_state_t::RECV_STATE_IDLE;
+    m_expected_total_len = 0;
+}
+
+void dlock_connection::shift_recv_buf(size_t consumed)
+{
+    if (consumed >= m_recv_offset) {
+        m_recv_offset = 0;
+        return;
+    }
+
+    size_t remaining = m_recv_offset - consumed;
+    memmove(m_recv_buf, m_recv_buf + consumed, remaining);
+    m_recv_offset = remaining;
+}
+
+bool dlock_connection::is_msg_recv_complete() const
+{
+    return m_recv_offset >= m_expected_total_len;
+}
+
+bool dlock_connection::is_recv_buf_full() const
+{
+    return m_recv_offset >= DLOCK_MAX_CTRL_MSG_SIZE;
+}
+
+size_t dlock_connection::get_recv_space() const
+{
+    return DLOCK_MAX_CTRL_MSG_SIZE - m_recv_offset;
+}
+
+uint8_t *dlock_connection::get_recv_write_ptr()
+{
+    return m_recv_buf + m_recv_offset;
 }
 };

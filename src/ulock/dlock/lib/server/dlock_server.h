@@ -125,13 +125,12 @@ private:
     int primary_get_addr_and_ports(const struct server_cfg &cfg,
         struct in_addr &ip_addr, uint16_t &server_port) const;
     int create_listen_fd(const struct in_addr &ip_addr, uint16_t port, int &listen_fd);
-    int recv_msg_hdr(dlock_connection *p_conn, struct dlock_control_hdr *msg_hdr);
-    int recv_msg_ext_hdr_and_body(dlock_connection *p_conn,
-        uint8_t ext_hdr_len, uint16_t body_len, uint8_t **msg_ext_hdr, uint8_t **msg_body);
-    void free_msg_ext_hdr_and_body_recv_buf(uint8_t *msg_ext_hdr, uint8_t *msg_body) const;
+    int try_recv_nonblocking(dlock_connection *p_conn);
+    int process_complete_msg(dlock_connection *p_conn, uint8_t min_type, uint8_t max_type);
     int process_control_msg(dlock_connection *p_conn, uint8_t min_type, uint8_t max_type);
-    void process_control_msg_err(struct dlock_control_hdr &msg_hdr,
-        dlock_connection *p_conn, int32_t ret_status);
+    int recv_control_msg_hdr(dlock_connection *p_conn);
+    int recv_control_msg_body(dlock_connection *p_conn);
+    void process_control_msg_err(dlock_connection *p_conn, uint8_t orig_type, int32_t ret_status);
     int do_lock(struct urma_buf *p_rx_buf, uint32_t msg_len);
     int update_client(int32_t client_id, dlock_connection *p_conn, jetty_mgr *p_jetty_mgr, bool reinit_flag);
     jetty_mgr *init_client_primary(struct urma_init_body *jetty_info, bool /* reinit_flag */);
