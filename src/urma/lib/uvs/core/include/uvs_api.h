@@ -120,6 +120,11 @@ struct urma_topo_node {
     struct urma_topo_agg_dev agg_devs[DEV_NUM];
 };
 
+typedef struct urma_topo_map {
+    struct urma_topo_node topo_infos[MAX_NODE_NUM];
+    uint32_t node_num;
+} urma_topo_map_t;
+
 typedef struct uvs_main_ue_eid_entry {
     uvs_eid_t eid;
     uvs_eid_t main_ue_eid;
@@ -175,7 +180,7 @@ int uvs_flush_main_ue_eid(void);
 
 /**
  * UVS get topo info.
- * @param[out] topo: topo map
+ * @param[out] topo: topo map, refers to urma_topo_map_t
  * Return: 0 on success, other value on error
  */
 int uvs_get_topo_info(void *topo);
