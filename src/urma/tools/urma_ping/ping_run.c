@@ -8,6 +8,7 @@
  * History: 2026-02-03 Create file
  */
 
+#include <limits.h>
 #include <malloc.h>
 #include <signal.h>
 #include <stdint.h>
@@ -36,6 +37,7 @@ typedef struct ping_urma_resource {
     void *buf;
     urma_target_seg_t *seg;
     urma_jfc_t *send_jfc;
+    urma_jfce_t *recv_jfce;
     urma_jfc_t *recv_jfc;
     urma_jfr_t *jfr;
     urma_jetty_t *jetty;
@@ -387,14 +389,29 @@ static int init_urma_resource(ping_cfg_t *cfg, ping_urma_resource_t *res)
         goto unregister_seg;
     }
 
+    res->recv_jfce = urma_create_jfce(res->ctx);
+    if (res->recv_jfce == NULL) {
+        LOG_ERROR("Failed to create urma jfce for recv.\n");
+        ret = -EINVAL;
+        goto delete_send_jfc;
+    }
+
     urma_jfc_cfg_t recv_jfc_cfg = {
         .depth = PING_RECV_DEPTH,
+        .jfce = res->recv_jfce,
     };
     res->recv_jfc = urma_create_jfc(res->ctx, &recv_jfc_cfg);
     if (res->recv_jfc == NULL) {
         LOG_ERROR("Failed to create urma jfc for recv.\n");
         ret = -EINVAL;
-        goto delete_send_jfc;
+        goto delete_recv_jfce;
+    }
+
+    ret = urma_rearm_jfc(res->recv_jfc, false);
+    if (ret != URMA_SUCCESS) {
+        LOG_ERROR("Failed to rearm recv jfc, ret:%d\n", ret);
+        ret = -EINVAL;
+        goto delete_recv_jfc;
     }
 
     urma_jfr_cfg_t jfr_cfg = {
@@ -453,6 +470,8 @@ delete_jfr:
     urma_delete_jfr(res->jfr);
 delete_recv_jfc:
     urma_delete_jfc(res->recv_jfc);
+delete_recv_jfce:
+    urma_delete_jfce(res->recv_jfce);
 delete_send_jfc:
     urma_delete_jfc(res->send_jfc);
 unregister_seg:
@@ -473,6 +492,7 @@ static void uninit_urma_resource(ping_urma_resource_t *res)
     urma_delete_jetty(res->jetty);
     urma_delete_jfr(res->jfr);
     urma_delete_jfc(res->recv_jfc);
+    urma_delete_jfce(res->recv_jfce);
     urma_delete_jfc(res->send_jfc);
     urma_unregister_seg(res->seg);
     free(res->buf);
@@ -538,52 +558,108 @@ static int send_ping_msg(ping_cfg_t *cfg, ping_urma_resource_t *res, ping_per_se
     return 0;
 }
 
-static int recv_ping_msg(ping_cfg_t *cfg, ping_urma_resource_t *res, ping_per_seq_info_t *seq_info)
+static int get_wait_timeout_ms(const ping_cfg_t *cfg, const ping_per_seq_info_t *seq_info)
 {
-    bool timed_out = false;
-    urma_cr_t cr = {0};
-    while (true) {
-        int ret = urma_poll_jfc(res->recv_jfc, 1, &cr);
-
-        seq_info->end_time = get_time_in_ms();
-        seq_info->rtt = seq_info->end_time - seq_info->start_time;
-
-        bool unmatched = (ret > 0 && cr.imm_data != seq_info->seq);
-        bool received = (ret > 0 && cr.imm_data == seq_info->seq);
-        timed_out = ((seq_info->rtt >= cfg->timeout * 1000) && (cfg->timeout != 0));
-
-        if (unmatched) {
-            LOG_VERBOSE("Unmatched reply received: expected seq=%d, got seq=%d\n",
-                        seq_info->seq, cr.imm_data);
-        }
-        if (received || timed_out) {
-            break;
-        }
+    if (cfg->timeout == 0) {
+        return -1;
     }
 
-    if (timed_out) {
-        // timeout
-        LOG_NORMAL("Request timeout for seq=%d\n", seq_info->seq);
-    } else {
-        int ret = fill_recv_wr(cfg, res);
+    uint64_t timeout_ms = (uint64_t)cfg->timeout * 1000;
+    double elapsed_ms = get_time_in_ms() - seq_info->start_time;
+    if (elapsed_ms >= (double)timeout_ms) {
+        return 0;
+    }
+
+    uint64_t remaining_ms = timeout_ms - (uint64_t)elapsed_ms;
+    return remaining_ms > (uint64_t)INT_MAX ? INT_MAX : (int)remaining_ms;
+}
+
+static int wait_for_recv_jfc(ping_urma_resource_t *res, int wait_timeout_ms, urma_cr_t *cr)
+{
+    urma_jfc_t *event_jfc = NULL;
+    int ret = urma_wait_jfc(res->recv_jfce, 1, wait_timeout_ms, &event_jfc);
+    if (ret < 0) {
+        LOG_ERROR("Failed to wait recv jfc event, ret:%d\n", ret);
+        return ret;
+    }
+    if (ret == 0) {
+        return 0;
+    }
+    if (event_jfc != res->recv_jfc) {
+        LOG_ERROR("Unexpected recv jfc event.\n");
+        return -EINVAL;
+    }
+
+    ret = urma_poll_jfc(res->recv_jfc, 1, cr);
+    if (ret < 0) {
+        LOG_ERROR("Failed to poll recv jfc, ret:%d\n", ret);
+        return ret;
+    }
+    if (ret == 0) {
+        LOG_ERROR("No CQE found after recv jfc event.\n");
+        return -EIO;
+    }
+
+    uint32_t ack_cnt = 1;
+    urma_ack_jfc(&event_jfc, &ack_cnt, 1);
+    ret = urma_rearm_jfc(res->recv_jfc, false);
+    if (ret != URMA_SUCCESS) {
+        LOG_ERROR("Failed to rearm recv jfc after event, ret:%d\n", ret);
+        return -EINVAL;
+    }
+
+    return 1;
+}
+
+static int recv_ping_msg(ping_cfg_t *cfg, ping_urma_resource_t *res, ping_per_seq_info_t *seq_info)
+{
+    while (true) {
+        int wait_timeout_ms = get_wait_timeout_ms(cfg, seq_info);
+        if (wait_timeout_ms == 0) {
+            seq_info->end_time = get_time_in_ms();
+            seq_info->rtt = seq_info->end_time - seq_info->start_time;
+            LOG_NORMAL("Request timeout for seq=%d\n", seq_info->seq);
+            return 0;
+        }
+
+        urma_cr_t cr = {0};
+        int ret = wait_for_recv_jfc(res, wait_timeout_ms, &cr);
+        if (ret == 0) {
+            seq_info->end_time = get_time_in_ms();
+            seq_info->rtt = seq_info->end_time - seq_info->start_time;
+            LOG_NORMAL("Request timeout for seq=%d\n", seq_info->seq);
+            return 0;
+        }
+        if (ret < 0) {
+            return ret;
+        }
+
+        ret = fill_recv_wr(cfg, res);
         if (ret != 0) {
             LOG_ERROR("Failed to fill recv wr, ret:%d\n", ret);
             return ret;
         }
 
+        if (cr.imm_data != seq_info->seq) {
+            LOG_ERROR("Unmatched reply received: expected seq=%d, got seq=%d\n",
+                      seq_info->seq, cr.imm_data);
+            continue;
+        }
+
+        seq_info->end_time = get_time_in_ms();
+        seq_info->rtt = seq_info->end_time - seq_info->start_time;
+
         if (cr.status == URMA_CR_SUCCESS) {
-            // success
             update_stat_on_recv(seq_info->rtt);
             LOG_NORMAL("%d bytes from " EID_FMT ": seq=%d time=%.3f ms\n",
                        cfg->size, EID_ARGS(cfg->dst_eid), seq_info->seq, seq_info->rtt);
         } else {
-            // failure
             LOG_NORMAL("From " EID_FMT " seq=%d cr_status=%d\n",
                        EID_ARGS(cfg->dst_eid), seq_info->seq, cr.status);
         }
-    }
 
-    return 0;
+        return 0;
+    }
 }
 
 static void signal_handler(int signum)
@@ -606,7 +682,7 @@ int start_ping(ping_cfg_t *cfg)
 
     if ((ret = fill_recv_wr(cfg, &res)) != 0) {
         LOG_ERROR("Failed to prepare recv wr, ret:%d\n", ret);
-        return ret;
+        goto out;
     }
 
     LOG_QUIET("URMA_PING " EID_FMT " %u bytes of data.\n", EID_ARGS(cfg->dst_eid), cfg->size);
@@ -651,8 +727,7 @@ int start_ping(ping_cfg_t *cfg)
         }
     }
 
-    if (false) {
-        uninit_urma_resource(&res);
-    }
+out:
+    uninit_urma_resource(&res);
     return ret;
 }
