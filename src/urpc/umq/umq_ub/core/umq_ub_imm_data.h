@@ -34,6 +34,27 @@ typedef enum umq_ub_imm_type {
     IMM_TYPE_MAX,                   // max type should not exceed 16, for type is 4 bit
 } umq_ub_imm_type_t;
 
+typedef union umq_ub_fc_sge_data {
+    uint32_t value;
+    struct {
+        uint32_t type : 4;
+        uint32_t window : 10;
+        uint32_t ratio : 2;
+        uint32_t rsvd : 16;
+    } bs;
+} umq_ub_fc_sge_data_t;
+
+typedef union umq_ub_flow_control_data {
+    uint64_t value;
+    struct {
+        uint64_t type : 4;
+        uint64_t window : 10;
+        uint64_t ratio : 2;
+        uint64_t rsvd1 : 40;
+        uint64_t seq : 8;
+    } bs;
+} umq_ub_flow_control_data_t;
+
 typedef union umq_ub_imm {
     uint64_t value;
     struct {
