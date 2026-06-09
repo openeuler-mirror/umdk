@@ -8,10 +8,12 @@
  * History: 2025-12-31   create file
  */
 
+#include <errno.h>
 #include <netlink/genl/genl.h>
 #include <stdio.h>
 
 #include "admin_netlink.h"
+#include "admin_parameters.h"
 
 #include "admin_cmd.h"
 
@@ -261,10 +263,14 @@ static void admin_print_res_dev(struct nlattr *head, int len)
     (void)printf("\n");
 }
 
-static void print_query_res(struct nlattr *attr_ptr, const admin_config_t *cfg, int len)
+typedef struct admin_query_res_cb_arg {
+    tool_res_key_type_t type;
+} admin_query_res_cb_arg_t;
+
+static void print_query_res(struct nlattr *attr_ptr, tool_res_key_type_t type, int len)
 {
-    (void)printf("**********%s**********\n", g_query_res_type[cfg->key.type]);
-    switch (cfg->key.type) {
+    (void)printf("**********%s**********\n", g_query_res_type[type]);
+    switch (type) {
         case TOOL_RES_KEY_JETTY_GROUP:
             admin_print_res_jetty_grp(attr_ptr, len);
             break;
@@ -301,8 +307,8 @@ static int cb_handler(struct nl_msg *msg, void *arg)
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
     int len = genlmsg_attrlen(genlhdr, 0);
 
-    const admin_config_t *cfg = (const admin_config_t *)arg;
-    print_query_res(attr_ptr, cfg, len);
+    const admin_query_res_cb_arg_t *cb_arg = (const admin_query_res_cb_arg_t *)arg;
+    print_query_res(attr_ptr, cb_arg->type, len);
 
     return 0;
 }
@@ -455,10 +461,10 @@ static void admin_list_res_seg(struct nlattr *head, int len)
     }
 }
 
-static void print_list_res(struct nlattr *attr_ptr, const admin_config_t *cfg, int len)
+static void print_list_res(struct nlattr *attr_ptr, tool_res_key_type_t type, int len)
 {
-    (void)printf("**********%s**********\n", g_query_res_type[cfg->key.type]);
-    switch (cfg->key.type) {
+    (void)printf("**********%s**********\n", g_query_res_type[type]);
+    switch (type) {
         case TOOL_RES_KEY_JETTY_GROUP:
             admin_list_res_jetty_grp(attr_ptr, len);
             break;
@@ -492,56 +498,129 @@ static int cb_handler_list(struct nl_msg *msg, void *arg)
     struct nlattr *attr_ptr = genlmsg_data(genlhdr);
     int len = genlmsg_attrlen(genlhdr, 0);
 
-    const admin_config_t *cfg = (const admin_config_t *)arg;
-    print_list_res(attr_ptr, cfg, len);
+    const admin_query_res_cb_arg_t *cb_arg = (const admin_query_res_cb_arg_t *)arg;
+    print_list_res(attr_ptr, cb_arg->type, len);
 
     return 0;
 }
 
-int admin_cmd_show_res_legacy(admin_config_t *cfg)
+static int admin_nl_query_res(const admin_cmd_query_res_t *arg, int (*cb)(struct nl_msg *msg, void *arg), void *cb_arg)
 {
-    if (cfg->key.type < TOOL_RES_KEY_VTP || cfg->key.type > TOOL_RES_KEY_DEV_TA) {
-        (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
-        return -1;
-    }
-    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
-        cfg->key.type == TOOL_RES_KEY_DEV_TP) {
-        (void)printf("urma_admin do not support query tp stats.\n");
-        return -1;
-    }
-    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TA) {
-        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
-        return -1;
-    }
-
-    admin_cmd_query_res_t arg = {0};
-    arg.in.key = cfg->key.key;
-    arg.in.type = cfg->key.type;
-    arg.in.key_ext = cfg->key.key_ext;
-    if (arg.in.type == TOOL_RES_KEY_DEV_TA && cfg->key.key_cnt == 0) {
-        arg.in.key_cnt = 1;
-    } else {
-        arg.in.key_cnt = cfg->key.key_cnt;
-    }
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(*arg));
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
 
-    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg, UBCORE_GENL);
+    int ret = admin_nl_send_recv_msg(msg, cb, cb_arg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
 
+static int admin_cmd_show_res(const char *dev_name, tool_res_key_type_t type, uint32_t key,
+                              uint32_t key_ext, uint32_t key_cnt)
+{
+    admin_cmd_query_res_t arg = {0};
+    admin_query_res_cb_arg_t cb_arg = {.type = type};
+    arg.in.key = key;
+    arg.in.type = type;
+    arg.in.key_ext = key_ext;
+    arg.in.key_cnt = key_cnt;
+    (void)memcpy(arg.in.dev_name, dev_name, strlen(dev_name));
+    return admin_nl_query_res(&arg, cb_handler, &cb_arg);
+}
+
+static int admin_cmd_list_res(const char *dev_name, tool_res_key_type_t type, uint32_t key,
+                              uint32_t key_ext)
+{
+    admin_cmd_query_res_t arg = {0};
+    admin_query_res_cb_arg_t cb_arg = {.type = type};
+    arg.in.key = key;
+    arg.in.type = type;
+    arg.in.key_ext = key_ext;
+    arg.in.key_cnt = 0;
+    (void)memcpy(arg.in.dev_name, dev_name, strlen(dev_name));
+    return admin_nl_query_res(&arg, cb_handler_list, &cb_arg);
+}
+
+static int cmd_show_dev_res(admin_config_t *cfg, tool_res_key_type_t type, const char *id_name)
+{
+    uint32_t id;
+    char *arg = pop_arg(cfg);
+
+    if (arg == NULL) {
+        return admin_cmd_list_res(cfg->dev_name, type, 0, 0);
+    }
+
+    if (admin_str_to_u32(arg, &id) != 0) {
+        (void)printf("Invalid %s '%s'.\n", id_name, arg);
+        return -EINVAL;
+    }
+    return admin_cmd_show_res(cfg->dev_name, type, id, 0, 1);
+}
+
+int admin_cmd_show_dev_jfc(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_JFC, "JFC_ID");
+}
+
+int admin_cmd_show_dev_jfs(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_JFS, "JFS_ID");
+}
+
+int admin_cmd_show_dev_jfr(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_JFR, "JFR_ID");
+}
+
+int admin_cmd_show_dev_jetty(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_JETTY, "JETTY_ID");
+}
+
+int admin_cmd_show_dev_jetty_group(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_JETTY_GROUP, "JETTY_GROUP_ID");
+}
+
+int admin_cmd_show_dev_rc(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_RC, "RC_ID");
+}
+
+int admin_cmd_show_dev_seg(admin_config_t *cfg)
+{
+    return cmd_show_dev_res(cfg, TOOL_RES_KEY_SEG, "TOKEN_ID");
+}
+
+int admin_cmd_show_res_legacy(admin_config_t *cfg)
+{
+    tool_res_key_type_t type = cfg->key.type;
+    uint32_t key_cnt = cfg->key.key_cnt;
+
+    if (type < TOOL_RES_KEY_JFS || type > TOOL_RES_KEY_DEV_TA) {
+        (void)printf("Invalid type: %d.\n", (int)type);
+        return -1;
+    }
+    if (key_cnt == 0 && type != TOOL_RES_KEY_DEV_TA) {
+        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
+        return -1;
+    }
+    if (key_cnt == 0 && type == TOOL_RES_KEY_DEV_TA) {
+        key_cnt = 1;
+    }
+
+    return admin_cmd_show_res(cfg->dev_name, type, cfg->key.key, cfg->key.key_ext, key_cnt);
+}
+
 int admin_cmd_list_res_legacy(admin_config_t *cfg)
 {
-    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
-        cfg->key.type >= TOOL_RES_KEY_DEV_TA) {
+    tool_res_key_type_t type = cfg->key.type;
+
+    if (type < TOOL_RES_KEY_JFS || type > TOOL_RES_KEY_SEG) {
         (void)printf("urma_admin do not support query tp and dev stats.\n");
         return -1;
     }
@@ -549,23 +628,5 @@ int admin_cmd_list_res_legacy(admin_config_t *cfg)
         (void)printf("key_cnt in list_res should equal 0.\n");
         return -1;
     }
-
-    admin_cmd_query_res_t arg = {0};
-    arg.in.key = cfg->key.key;
-    arg.in.type = cfg->key.type;
-    arg.in.key_ext = cfg->key.key_ext;
-    arg.in.key_cnt = cfg->key.key_cnt;
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_RES, NLM_F_DUMP, UBCORE_GENL);
-    if (msg == NULL) {
-        return -ENOMEM;
-    }
-
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
-
-    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg, UBCORE_GENL);
-    admin_nl_free_msg(msg);
-    return ret;
+    return admin_cmd_list_res(cfg->dev_name, type, cfg->key.key, cfg->key.key_ext);
 }
