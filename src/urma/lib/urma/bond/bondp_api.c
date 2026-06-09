@@ -40,6 +40,14 @@ typedef struct bondp_create_vjetty_udata {
     urma_bond_seg_info_out_t health_check_seg;
 } bondp_create_vjetty_udata_t;
 
+typedef struct bondp_create_vjfc_udata {
+    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
+} bondp_create_vjfc_udata_t;
+
+typedef struct bondp_create_vjfs_udata {
+    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
+} bondp_create_vjfs_udata_t;
+
 typedef struct bondp_import_vobj_udata_in {
     uint32_t ue_idx;
 } bondp_import_vobj_udata_in_t;
@@ -218,7 +226,7 @@ urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
 
 static int bondp_create_vjfc(urma_context_t *ctx, bondp_jfc_t *bdp_jfc, urma_jfc_cfg_t *jfc_cfg)
 {
-    urma_cmd_udrv_priv_t udata = {0};
+    bondp_create_vjfc_udata_t jfc_info = {0};
     urma_jfc_cfg_t tmp_cfg = *jfc_cfg;
     /* We need to set jfce to NULL because the kernel-mode uobj is not created when the vjfce is created. */
     /* If a pointer to vjfce is passed here, */
@@ -227,6 +235,18 @@ static int bondp_create_vjfc(urma_context_t *ctx, bondp_jfc_t *bdp_jfc, urma_jfc
     /* then it is needed to set the fd of vjfce to the fd allocated in the kernel space. */
     /* Currently, the fd in vjfce is a brand new epoll_fd, so we need to change it to the kernel-allocated one. */
     tmp_cfg.jfce = NULL;
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_jfc->p_jfc[i] != NULL) {
+            jfc_info.slave_id[i] = bdp_jfc->p_jfc[i]->jfc_id;
+            URMA_LOG_ERR("PJFC ID is %u.\n", bdp_jfc->p_jfc[i]->jfc_id.id);
+        }
+    }
+
+    urma_cmd_udrv_priv_t udata = {
+        .in_addr = (uint64_t)&jfc_info,
+        .in_len = sizeof(bondp_create_vjfc_udata_t),
+    };
+
     int ret = urma_cmd_create_jfc(ctx, &bdp_jfc->v_jfc, &tmp_cfg, &udata);
     if (ret != 0) {
         return ret;
@@ -552,7 +572,18 @@ FIND_FINISH:
 
 static int bondp_create_vjfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg, bondp_comp_t *bdp_jfs)
 {
-    urma_cmd_udrv_priv_t udata = {0};
+    bondp_create_vjfs_udata_t jfs_info = {0};
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_jfs->p_jfs[i] != NULL) {
+            jfs_info.slave_id[i] = bdp_jfs->p_jfs[i]->jfs_id;
+        }
+    }
+
+    urma_cmd_udrv_priv_t udata = {
+        .in_addr = (uint64_t)&jfs_info,
+        .in_len = sizeof(bondp_create_vjfs_udata_t),
+    };
     if (urma_cmd_create_jfs(ctx, &bdp_jfs->v_jfs, cfg, &udata) != 0) {
         URMA_LOG_ERR("ubcore create jfs failed.\n");
         return -1;
