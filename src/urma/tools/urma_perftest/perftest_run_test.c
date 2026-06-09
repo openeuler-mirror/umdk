@@ -83,12 +83,12 @@ void catch_alarm(int sig)
         case END_STATE:
             break;
         default:
-            LOG_ERROR("unknown state.\n");
             break;
     }
 }
 
-static uint32_t get_rqe_prefill_multiple_simplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jfr_t *jfr)
+static uint32_t get_rqe_prefill_multiple_simplex(
+    const perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jfr_t *jfr)
 {
     if (!cfg->enable_bond_mode || cfg->bond_mode == BONDP_BONDING_MODE_STANDALONE) {
         return 1;
@@ -116,7 +116,8 @@ static uint32_t get_rqe_prefill_multiple_simplex(perftest_config_t *cfg, urma_co
     return 1;
 }
 
-static uint32_t get_rqe_prefill_multiple_duplex(perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jetty_t *jetty)
+static uint32_t get_rqe_prefill_multiple_duplex(
+    const perftest_config_t *cfg, urma_context_t *urma_ctx, urma_jetty_t *jetty)
 {
     if (!cfg->enable_bond_mode || cfg->bond_mode == BONDP_BONDING_MODE_STANDALONE) {
         return 1;

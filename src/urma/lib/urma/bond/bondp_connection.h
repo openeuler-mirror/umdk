@@ -24,6 +24,6 @@ typedef struct bondp_conn {
 
 int bondp_conn_table_create(bondp_hash_table_t *tbl, uint32_t size);
 
-int bondp_conn_table_get_or_create(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bondp_conn_t **v_conn_out);
+int bondp_conn_table_get_or_create(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bondp_conn_t **conn);
 
 #endif // BONDP_CONNECTION_H
