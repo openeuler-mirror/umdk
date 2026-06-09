@@ -46,7 +46,7 @@ static int udma_u_init_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entr
 	q->baseblk_cnt = q->qbuf_size >> q->baseblk_shift;
 	q->baseblk_mask = q->baseblk_cnt - 1U;
 
-	q->wrid = (uintptr_t *)malloc(q->baseblk_cnt * sizeof(uint64_t));
+	q->wrid = (uintptr_t *)calloc(q->baseblk_cnt, sizeof(uint64_t));
 	if (!q->wrid) {
 		UDMA_LOG_ERR("failed to alloc STARS buffer for work request id!\n");
 		return ENOMEM;
@@ -80,7 +80,7 @@ static int udma_u_init_jfs_queue_buf(struct udma_u_jetty_queue *q,
 	}
 	q->qbuf_size = cstm ? buf_size : q->baseblk_cnt << q->baseblk_shift;
 
-	q->wrid = (uintptr_t *)malloc(q->baseblk_cnt * sizeof(uint64_t));
+	q->wrid = (uintptr_t *)calloc(q->baseblk_cnt, sizeof(uint64_t));
 	if (q->wrid == NULL) {
 		UDMA_LOG_ERR("failed to alloc STARS buffer for work request id!\n");
 		return ENOMEM;
