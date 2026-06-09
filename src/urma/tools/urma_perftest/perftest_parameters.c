@@ -148,7 +148,7 @@ static void usage(const char *argv0)
         "  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n"
         "  --rate_units <units>        Set the units for rate, MBps (M), Gbps (G)(default) or Kpps (P).\n"
         "  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n"
-        " --order_type <type>          Order type: 0 for default order,"
+        "  --order_type <type>         Order type: 0 for default order,"
         "                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n"
         "  --enable_ipv6               enable ipv6 for server ip. default disable.\n"
         "  --enable_credit             enable send credit, default: disable.\n"
@@ -187,7 +187,8 @@ static void usage(const char *argv0)
         "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
         "  --bind_ip <ip>              The ip for bind.\n"
         "  --bond_mode                 Set bonding device mode, support: standalone, active_backup, balance.\n"
-        "  --bond_level                Set bonding device level, support: iodie, port.\n");
+        "                                                       default: standalone.\n"
+        "  --bond_level                Set bonding device level, support: iodie, port, default: iodie.\n");
 }
 
 static perftest_cmd_type_t parse_command(const char *argv1)
