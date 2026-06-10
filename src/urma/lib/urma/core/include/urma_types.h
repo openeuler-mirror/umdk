@@ -39,8 +39,8 @@ extern "C" {
 #define URMA_MAX_PRIORITY_CNT       16
 #define URMA_IPV4_MAP_IPV6_PREFIX   (0x0000ffff)
 #define URMA_MAX_EID_CNT            1024 /* refer to UBCORE_MAX_SIP */
-#define URMA_CC_IDX_TABLE_SIZE      81   /* support 9 priorities and 9 algorithms */
-                                         /* same as UBCORE_CC_IDX_TABLE_SIZE */
+#define URMA_CC_IDX_TABLE_SIZE      80   /* support 8 priorities and 10 algorithms */
+                                        /* same as UBCORE_CC_IDX_TABLE_SIZE */
 #define URMA_OPT_REVERSED_NUM 4
 
 #define URMA_EID_STR_LEN (39)
@@ -322,6 +322,10 @@ struct urma_provider_ops;
 typedef enum urma_transport_type {
     URMA_TRANSPORT_INVALID = -1,
     URMA_TRANSPORT_UB = 0,
+    URMA_TRANSPORT_IB = 1,
+    URMA_TRANSPORT_IP = 2,
+    URMA_TRANSPORT_SOFTUB = 3,
+    URMA_TRANSPORT_HNS_UB = 5,
     URMA_TRANSPORT_MAX
 } urma_transport_type_t;
 
@@ -334,26 +338,28 @@ typedef enum urma_transport_mode {
 typedef enum urma_tp_cc_alg {
     URMA_TP_CC_NONE = 0,
     URMA_TP_CC_DCQCN,
-    URMA_TP_CC_DCQCN_AND_NETWORK_CC,
-    URMA_TP_CC_LDCP,
-    URMA_TP_CC_LDCP_AND_CAQM,
-    URMA_TP_CC_LDCP_AND_OPEN_CC,
-    URMA_TP_CC_HC3,
+    URMA_TP_CC_CAQM,
+    URMA_TP_CC_LDCP = 3,
+    URMA_TP_CC_LDCP_L2_HEADER,
+    URMA_TP_CC_LDCP_TP_HEADER,
     URMA_TP_CC_DIP,
     URMA_TP_CC_ACC,
+    URMA_TP_CC_CUSTOM_1,
+    URMA_TP_CC_CUSTOM_2,
     URMA_TP_CC_NUM,
 } urma_tp_cc_alg_t; /* larger means better */
 
 typedef enum urma_congestion_ctrl_alg {
     URMA_CC_NONE = 0x1 << URMA_TP_CC_NONE,
     URMA_CC_DCQCN = 0x1 << URMA_TP_CC_DCQCN,
-    URMA_CC_DCQCN_AND_NETWORK_CC = 0x1 << URMA_TP_CC_DCQCN_AND_NETWORK_CC,
+    URMA_CC_CAQM = 0x1 << URMA_TP_CC_CAQM,
     URMA_CC_LDCP = 0x1 << URMA_TP_CC_LDCP,
-    URMA_CC_LDCP_AND_CAQM = 0x1 << URMA_TP_CC_LDCP_AND_CAQM,
-    URMA_CC_LDCP_AND_OPEN_CC = 0x1 << URMA_TP_CC_LDCP_AND_OPEN_CC,
-    URMA_CC_HC3 = 0x1 << URMA_TP_CC_HC3,
+    URMA_CC_LDCP_L2_HEADER = 0x1 << URMA_TP_CC_LDCP_L2_HEADER,
+    URMA_CC_LDCP_TP_HEADER = 0x1 << URMA_TP_CC_LDCP_TP_HEADER,
     URMA_CC_DIP = 0x1 << URMA_TP_CC_DIP,
-    URMA_CC_ACC = 0x1 << URMA_TP_CC_ACC
+    URMA_CC_ACC = 0x1 << URMA_TP_CC_ACC,
+    URMA_CC_CUSTOM_1 = 0x1 << URMA_TP_CC_CUSTOM_1,
+    URMA_CC_CUSTOM_2 = 0x1 << URMA_TP_CC_CUSTOM_2,
 } urma_congestion_ctrl_alg_t;
 
 typedef struct urma_cc_entry {
@@ -604,7 +610,8 @@ typedef union urma_jfr_flag {
                                    /* (0x3): OL, low layer ordering */
                                    /* (0x4): UNO, unreliable non ordering */
         uint32_t has_drv_ext  : 1;
-        uint32_t reserved     : 18;
+        uint32_t non_blocking : 1;
+        uint32_t reserved     : 17;
     } bs;
     uint32_t value;
 } urma_jfr_flag_t;
@@ -1034,10 +1041,10 @@ typedef union urma_jfs_wr_flag {
                                           1: Notify local process after the task is completed. */
         uint32_t inline_flag      : 1; /* 0: not inline.
                                           1: inline data. */
-
         uint32_t db_bypass        : 1;
+        uint32_t udf : 1;
         uint32_t has_drv_ext      : 1;
-        uint32_t reserved         : 23;
+        uint32_t reserved         : 22;
     } bs;
     uint32_t value;
 } urma_jfs_wr_flag_t;
