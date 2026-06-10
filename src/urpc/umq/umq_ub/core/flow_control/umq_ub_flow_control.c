@@ -687,7 +687,8 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
 
     urma_sge_t fc_sge = {
         .addr = (uint64_t)(uintptr_t)&sge_data,
-        .len = sizeof(umq_ub_fc_sge_data_t)
+        .len = sizeof(umq_ub_fc_sge_data_t),
+        .tseg = queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
     };
 
     umq_ub_fc_user_ctx_t obj = {
@@ -749,7 +750,8 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
 
     urma_sge_t fc_sge = {
         .addr = (uint64_t)(uintptr_t)&sge_data,
-        .len = sizeof(umq_ub_fc_sge_data_t)
+        .len = sizeof(umq_ub_fc_sge_data_t),
+        .tseg = queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
     };
 
     umq_ub_fc_user_ctx_t obj = {
@@ -887,7 +889,8 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 
     urma_sge_t fc_sge = {
         .addr = (uint64_t)(uintptr_t)&sge_data,
-        .len = sizeof(umq_ub_fc_sge_data_t)
+        .len = sizeof(umq_ub_fc_sge_data_t),
+        .tseg = queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
     };
 
     umq_ub_fc_user_ctx_t obj = {
@@ -954,7 +957,8 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
 
     urma_sge_t fc_sge = {
         .addr = (uint64_t)(uintptr_t)&sge_data,
-        .len = sizeof(umq_ub_fc_sge_data_t)
+        .len = sizeof(umq_ub_fc_sge_data_t),
+        .tseg = queue->dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID]
     };
 
     umq_ub_fc_user_ctx_t obj = {
