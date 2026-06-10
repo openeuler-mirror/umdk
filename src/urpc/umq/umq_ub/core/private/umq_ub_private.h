@@ -59,7 +59,7 @@ extern "C" {
 
 #define UMQ_UB_ENABLE_SHARE_FC_JFR (true)
 
-#define UMQ_UB_FLOW_CONTROL_SGE_QBUF_COUNT_MAX 64 // per-device flow control sge mgr qbuf array
+#define UMQ_UB_FLOW_CONTROL_SGE_QBUF_COUNT_MAX 512 // per-device flow control sge mgr qbuf array
 #define UMQ_UB_FLOW_CONTROL_SGE_SHARED_RECV_QBUF_MAX 256 // per-jetty shared recv qbuf array
 
 typedef enum umq_size_interval {
