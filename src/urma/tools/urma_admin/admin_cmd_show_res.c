@@ -630,3 +630,75 @@ int admin_cmd_list_res_legacy(admin_config_t *cfg)
     }
     return admin_cmd_list_res(cfg->dev_name, type, cfg->key.key, cfg->key.key_ext);
 }
+
+int admin_cmd_show_v2p_res(admin_config_t *cfg)
+{
+    if (cfg->key.type < TOOL_RES_KEY_VTP || cfg->key.type > TOOL_RES_KEY_DEV_TA) {
+        (void)printf("Invalid type: %d.\n", (int)cfg->key.type);
+        return -1;
+    }
+    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
+        cfg->key.type == TOOL_RES_KEY_DEV_TP) {
+        (void)printf("urma_admin do not support query tp stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt == 0 && cfg->key.type != TOOL_RES_KEY_DEV_TA) {
+        (void)printf("key_cnt in show_res cannot be 0 when type is not dev.\n");
+        return -1;
+    }
+
+    admin_cmd_query_res_t arg = {0};
+    arg.in.key = cfg->key.key;
+    arg.in.type = cfg->key.type;
+    arg.in.key_ext = cfg->key.key_ext;
+    if (arg.in.type == TOOL_RES_KEY_DEV_TA && cfg->key.key_cnt == 0) {
+        arg.in.key_cnt = 1;
+    } else {
+        arg.in.key_cnt = cfg->key.key_cnt;
+    }
+    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+
+    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    return ret;
+}
+
+int admin_cmd_list_v2p_res(admin_config_t *cfg)
+{
+    if ((cfg->key.type >= TOOL_RES_KEY_VTP && cfg->key.type <= TOOL_RES_KEY_UTP) ||
+        cfg->key.type >= TOOL_RES_KEY_DEV_TA) {
+        (void)printf("urma_admin do not support query tp and dev stats.\n");
+        return -1;
+    }
+    if (cfg->key.key_cnt != 0) {
+        (void)printf("key_cnt in list_res should equal 0.\n");
+        return -1;
+    }
+
+    admin_cmd_query_res_t arg = {0};
+    arg.in.key = cfg->key.key;
+    arg.in.type = cfg->key.type;
+    arg.in.key_ext = cfg->key.key_ext;
+    arg.in.key_cnt = cfg->key.key_cnt;
+    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+
+    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    return ret;
+}

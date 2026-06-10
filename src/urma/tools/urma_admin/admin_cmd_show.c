@@ -42,6 +42,9 @@ static int cmd_show_usage(admin_config_t *cfg)
            "Options:\n"
            "  <dev>      Device name (e.g., udma1)\n"
            "  <node_id>  Node ID (e.g., 1)\n"
+           "  <dev_name> Device name (e.g., bonding_dev_0)\n"
+           "  <jfx>      Resource type: jfs|jfr|jetty|jfc|seg\n"
+           "  <jfx_id>   Resource ID (e.g., 0)\n"
            "  --brief    Default behavior. If bonding devices exist, show bonding devices only;\n"
            "             otherwise show all udma devices.\n"
            "  --all      Show all devices\n"
@@ -50,6 +53,66 @@ static int cmd_show_usage(admin_config_t *cfg)
 }
 
 #define UINT8_INVALID (0xff)
+
+#define UBAGG_DEV_MAX_NUM       (20)
+#define UBAGG_MAX_PORT_NUM      (9)
+#define ADMIN_V2P_RES_BUF_SIZE (64 * 1024)
+
+enum admin_show_res_type {
+    ADMIN_SHOW_RES_JETTY = 0,
+    ADMIN_SHOW_RES_JFS,
+    ADMIN_SHOW_RES_JFR,
+    ADMIN_SHOW_RES_JFC,
+    ADMIN_SHOW_RES_SEG,
+};
+
+typedef struct admin_ubagg_ubva {
+    urma_eid_t eid;
+    uint32_t uasid;
+    uint64_t va;
+} __attribute__((packed)) admin_ubagg_ubva_t;
+
+typedef struct admin_ubagg_seg_info {
+    admin_ubagg_ubva_t ubva;
+    uint64_t len;
+    uint32_t seg_attr;
+    uint32_t token_id;
+} admin_ubagg_seg_info_t;
+
+typedef struct admin_ubagg_seg_exchange_info {
+    admin_ubagg_seg_info_t base;
+    admin_ubagg_seg_info_t slaves[UBAGG_DEV_MAX_NUM];
+    int dev_num;
+} admin_ubagg_seg_exchange_info_t;
+
+typedef struct admin_ubagg_jetty_id {
+    urma_eid_t eid;
+    uint32_t uasid;
+    uint32_t id;
+} admin_ubagg_jetty_id_t;
+
+typedef struct admin_ubagg_jetty_exchange_info {
+    admin_ubagg_jetty_id_t slaves[UBAGG_DEV_MAX_NUM];
+    bool is_multipath;
+    uint8_t enabled_indices[UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    bool is_health_check_enable;
+    admin_ubagg_seg_exchange_info_t health_check_seg;
+} admin_ubagg_jetty_exchange_info_t;
+
+typedef struct admin_core_cmd_show_res {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+        uint32_t type;
+        uint32_t key;
+        uint32_t key_cnt;
+    } in;
+    struct {
+        uint64_t addr;
+        uint32_t len;
+        uint64_t save_ptr;
+    } out;
+} admin_core_cmd_show_res_t;
 
 typedef struct admin_show_ubep {
     struct ub_list node;
@@ -821,32 +884,6 @@ static int cmd_show_dev_usage(admin_config_t *cfg)
     return 0;
 }
 
-static int cmd_show_dev(admin_config_t *cfg)
-{
-    int ret;
-
-    if ((ret = pop_arg_dev(cfg)) != 0) {
-        return ret;
-    }
-
-    if (cfg->argc == 0) {
-        return cmd_show_default(cfg);
-    }
-
-    static const admin_cmd_t cmds[] = {
-        {NULL, cmd_show_dev_usage},
-        {"jfc", admin_cmd_show_dev_jfc},
-        {"jfs", admin_cmd_show_dev_jfs},
-        {"jfr", admin_cmd_show_dev_jfr},
-        {"jetty", admin_cmd_show_dev_jetty},
-        {"jetty_group", admin_cmd_show_dev_jetty_group},
-        {"rc", admin_cmd_show_dev_rc},
-        {"seg", admin_cmd_show_dev_seg},
-        {0},
-    };
-    return exec_cmd(cfg, cmds);
-}
-
 static bool is_eid_equal(const urma_eid_t *eid1, const urma_eid_t *eid2)
 {
     for (int i = 0; i < URMA_EID_SIZE; i++) {
@@ -1261,16 +1298,227 @@ free_topo:
     return ret;
 }
 
+static int parse_jfx_type(const char *arg, uint32_t *type)
+{
+    if (arg == NULL || type == NULL) {
+        return -EINVAL;
+    }
+    if (strcmp(arg, "jfs") == 0) {
+        *type = ADMIN_SHOW_RES_JFS;
+    } else if (strcmp(arg, "jfr") == 0) {
+        *type = ADMIN_SHOW_RES_JFR;
+    } else if (strcmp(arg, "jetty") == 0) {
+        *type = ADMIN_SHOW_RES_JETTY;
+    } else if (strcmp(arg, "jfc") == 0) {
+        *type = ADMIN_SHOW_RES_JFC;
+    } else if (strcmp(arg, "seg") == 0) {
+        *type = ADMIN_SHOW_RES_SEG;
+    } else {
+        (void)printf("Invalid res type: %s, supported: jfs|jfr|jetty|jfc|seg\n", arg);
+        return -EINVAL;
+    }
+    return 0;
+}
+
+static void print_v2p_list_res(const uint8_t *buf, uint32_t len, uint32_t type)
+{
+    uint32_t id_count = len / sizeof(uint32_t);
+    const uint32_t *ids = (const uint32_t *)buf;
+    const char *type_name = (type == ADMIN_SHOW_RES_JETTY) ? "jetty" :
+                            (type == ADMIN_SHOW_RES_JFS) ? "jfs" :
+                            (type == ADMIN_SHOW_RES_JFR) ? "jfr" :
+                            (type == ADMIN_SHOW_RES_JFC) ? "jfc" :
+                            (type == ADMIN_SHOW_RES_SEG) ? "seg" : "unknown";
+
+    (void)printf("---------- %s list ----------\n", type_name);
+    (void)printf("count: %u\n", id_count);
+    for (uint32_t i = 0; i < id_count; i++) {
+        (void)printf("%s_id[%u] = %u\n", type_name, i, ids[i]);
+    }
+}
+
+static void print_v2p_jetty_detail(const admin_ubagg_jetty_exchange_info_t *info)
+{
+    (void)printf("enabled_count      : %u\n", info->enabled_count);
+    (void)printf("is_health_check    : %s\n", info->is_health_check_enable ? "true" : "false");
+    (void)printf("slaves:\n");
+    for (uint32_t i = 0; i < UBAGG_DEV_MAX_NUM; i++) {
+        if (info->slaves[i].id == 0) {
+            continue;
+        }
+        (void)printf("  slave[%u]: eid=" EID_FMT " uasid=%u id=%u\n",
+                     i, EID_ARGS(info->slaves[i].eid),
+                     info->slaves[i].uasid, info->slaves[i].id);
+    }
+}
+
+static void print_v2p_jfc_jfs_detail(const uint8_t *buf, uint32_t len)
+{
+    uint32_t slave_count = len / sizeof(admin_ubagg_jetty_id_t);
+    const admin_ubagg_jetty_id_t *slaves = (const admin_ubagg_jetty_id_t *)buf;
+    (void)printf("slaves:\n");
+    for (uint32_t i = 0; i < slave_count; i++) {
+        if (slaves[i].id == 0) {
+            continue;
+        }
+        (void)printf("  slave[%u]: eid=" EID_FMT " uasid=%u id=%u\n",
+                     i, EID_ARGS(slaves[i].eid),
+                     slaves[i].uasid, slaves[i].id);
+    }
+}
+
+static void print_v2p_seg_detail(const admin_ubagg_seg_exchange_info_t *info)
+{
+    (void)printf("base: eid=" EID_FMT " uasid=%u va=0x%lx len=%lu token_id=%u\n",
+                 EID_ARGS(info->base.ubva.eid), info->base.ubva.uasid,
+                 info->base.ubva.va, info->base.len, info->base.token_id);
+    (void)printf("slaves:\n");
+    for (uint32_t i = 0; i < UBAGG_DEV_MAX_NUM; i++) {
+        if (info->slaves[i].len == 0) {
+            continue;
+        }
+        (void)printf("  slave[%u]: eid=" EID_FMT " uasid=%u va=0x%lx len=%lu token_id=%u\n",
+                     i, EID_ARGS(info->slaves[i].ubva.eid), info->slaves[i].ubva.uasid,
+                     info->slaves[i].ubva.va, info->slaves[i].len, info->slaves[i].token_id);
+    }
+}
+
+static void print_v2p_show_res(const uint8_t *buf, uint32_t len, uint32_t type)
+{
+    switch (type) {
+        case ADMIN_SHOW_RES_JETTY:
+        case ADMIN_SHOW_RES_JFR:
+            print_v2p_jetty_detail((const admin_ubagg_jetty_exchange_info_t *)buf);
+            break;
+        case ADMIN_SHOW_RES_JFS:
+        case ADMIN_SHOW_RES_JFC:
+            print_v2p_jfc_jfs_detail(buf, len);
+            break;
+        case ADMIN_SHOW_RES_SEG:
+            print_v2p_seg_detail((const admin_ubagg_seg_exchange_info_t *)buf);
+            break;
+        default:
+            (void)printf("Unsupported res type: %u\n", type);
+            break;
+    }
+}
+
+static int admin_cmd_show_dev_res(const char *dev_name, uint32_t type,
+    uint32_t key, uint32_t key_cnt)
+{
+    int ret;
+    uint8_t *out_buf = NULL;
+    admin_core_cmd_show_res_t arg = {0};
+
+    out_buf = calloc(1, ADMIN_V2P_RES_BUF_SIZE);
+    if (out_buf == NULL) {
+        return -ENOMEM;
+    }
+
+    (void)strncpy(arg.in.dev_name, dev_name, URMA_MAX_NAME - 1);
+    arg.in.type = type;
+    arg.in.key = key;
+    arg.in.key_cnt = key_cnt;
+    arg.out.addr = (uint64_t)(uintptr_t)out_buf;
+    arg.out.len = ADMIN_V2P_RES_BUF_SIZE;
+
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    if (msg == NULL) {
+        free(out_buf);
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_show_res_t));
+    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+
+    ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    if (ret != 0) {
+        (void)printf("Failed to query v2p res, ret=%d.\n", ret);
+        free(out_buf);
+        return ret;
+    }
+
+    if (key_cnt == 0) {
+        print_v2p_list_res(out_buf, arg.out.len, type);
+    } else {
+        print_v2p_show_res(out_buf, arg.out.len, type);
+    }
+
+    free(out_buf);
+    return 0;
+}
+
+static int cmd_show_dev_bonding(admin_config_t *cfg)
+{
+    int ret;
+    char *arg;
+
+    uint32_t type;
+    arg = pop_arg(cfg);
+    if (arg == NULL) {
+        (void)printf("No res type specified.\n");
+        return -EINVAL;
+    }
+    ret = parse_jfx_type(arg, &type);
+    if (ret != 0) {
+        return ret;
+    }
+
+    arg = pop_arg(cfg);
+    if (arg != NULL) {
+        uint32_t jfx_id;
+        ret = admin_str_to_u32(arg, &jfx_id);
+        if (ret != 0) {
+            (void)printf("Invalid jfx_id: %s\n", arg);
+            return -EINVAL;
+        }
+        return admin_cmd_show_dev_res(cfg->dev_name, type, jfx_id, 1);
+    }
+
+    return admin_cmd_show_dev_res(cfg->dev_name, type, 0, 0);
+}
+
+static int cmd_show_dev(admin_config_t *cfg)
+{
+    int ret;
+
+    if ((ret = pop_arg_dev(cfg)) != 0) {
+        return ret;
+    }
+
+    if (cfg->argc == 0) {
+        return cmd_show_default(cfg);
+    }
+
+    if (strncmp(cfg->dev_name, "bonding_dev", strlen("bonding_dev")) == 0) {
+        return cmd_show_dev_bonding(cfg);
+    }
+
+    static const admin_cmd_t cmds[] = {
+        {NULL, cmd_show_dev_usage},
+        {"jfc", admin_cmd_show_dev_jfc},
+        {"jfs", admin_cmd_show_dev_jfs},
+        {"jfr", admin_cmd_show_dev_jfr},
+        {"jetty", admin_cmd_show_dev_jetty},
+        {"jetty_group", admin_cmd_show_dev_jetty_group},
+        {"rc", admin_cmd_show_dev_rc},
+        {"seg", admin_cmd_show_dev_seg},
+        {0},
+    };
+    return exec_cmd(cfg, cmds);
+}
+
 int admin_cmd_show(admin_config_t *cfg)
 {
     if (cfg->help) {
         return cmd_show_usage(cfg);
     }
     static const admin_cmd_t cmds[] = {
-        {NULL, cmd_show_default}, //
-        {"dev", cmd_show_dev},    //
-        {"topo", cmd_show_topo},  //
-        {0},                      //
+        {NULL, cmd_show_default},  //
+        {"dev", cmd_show_dev},     //
+        {"topo", cmd_show_topo},   //
+        {0},                       //
     };
     return exec_cmd(cfg, cmds);
 }
