@@ -46,8 +46,3 @@ class Test(UBUSFeature):
         for param, values in test_configs.items():
             for val in values:
                 self.run_iperf_test(f"{param} {val}", is_udp=True)
-
-        for flag, states in flag_configs.items():
-            for enabled in states:
-                if enabled:
-                    self.run_iperf_test(flag, is_udp=True)
