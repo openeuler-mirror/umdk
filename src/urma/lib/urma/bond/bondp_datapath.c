@@ -203,9 +203,9 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
     }
     if (wr->flag.bs.has_drv_ext) {
         bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(wr, bondp_jfs_wr_t, base);
-        /* currently only check src_chip_id */
-        if (bwr->src_chip_id < BONDP_CHIP_ID_MIN || bwr->src_chip_id > BONDP_CHIP_ID_MAX) {
-            URMA_LOG_ERR("Invalid src_chip_id=%u.\n", bwr->src_chip_id);
+        if (bwr->src_chip_id < BONDP_CHIP_ID_MIN || bwr->src_chip_id > BONDP_CHIP_ID_MAX
+            || bwr->dst_chip_id < BONDP_CHIP_ID_MIN || bwr->dst_chip_id > BONDP_CHIP_ID_MAX) {
+            URMA_LOG_ERR("Invalid src_chip_id=%u or dst_chip_id=%u.\n", bwr->src_chip_id, bwr->dst_chip_id);
             return URMA_EINVAL;
         }
     }
