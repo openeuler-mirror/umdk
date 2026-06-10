@@ -17,17 +17,23 @@ extern "C" {
 #define UMQ_UB_IMM_BITS (0xFFFFFFFFFFFFFFFF)
 #define UMQ_UB_IMM_IN_USER_BUF 1  // user buffer with umq defined imm data
 
-typedef enum umq_ub_imm_type {
-    IMM_TYPE_USER,
-    IMM_TYPE_UB_PLUS_DEFAULT,
-    IMM_TYPE_REVERSE_PULL_MEM,
-    IMM_TYPE_REVERSE_PULL_MEM_FREE,
-    IMM_TYPE_REVERSE_PULL_MEM_DONE,
-    IMM_TYPE_FC_CREDIT_INIT,
+typedef enum umq_ub_fc_credit_type {
+    IMM_TYPE_FC_CREDIT_INIT = 0,
     IMM_TYPE_FC_CREDIT_REQ,
     IMM_TYPE_FC_CREDIT_REP,
     IMM_TYPE_FC_CREDIT_RETURN_REQ,
     IMM_TYPE_FC_CREDIT_RETURN_ACK,
+} umq_ub_fc_credit_type_t;
+
+typedef enum umq_ub_imm_type {
+    IMM_TYPE_USER = 0,
+    IMM_TYPE_USER_WITHOUT_IMM,
+    IMM_TYPE_CONTROL_MSG,
+    IMM_TYPE_RESERVER,
+    IMM_TYPE_UB_PLUS_DEFAULT,
+    IMM_TYPE_REVERSE_PULL_MEM,
+    IMM_TYPE_REVERSE_PULL_MEM_FREE,
+    IMM_TYPE_REVERSE_PULL_MEM_DONE,
     IMM_TYPE_MEM_IMPORT,
     IMM_TYPE_MEM_IMPORT_DONE,
     IMM_TYPE_NOTIFY,
@@ -58,22 +64,31 @@ typedef union umq_ub_flow_control_data {
 typedef union umq_ub_imm {
     uint64_t value;
     struct {
+        uint64_t type : 2;
+        uint64_t rsvd1 : 62;
+    } bs;
+    struct {
+        uint64_t type : 2;
+        uint64_t umq_id : 18;
+        uint64_t rsvd1 : 20;
+        uint64_t user_data : 24;
+    } io_imm;
+    struct {
+        uint64_t type : 2;
+        uint64_t umq_id : 18;
+        uint64_t rsvd1 : 36;
+        uint64_t seq : 8;
+    } flow_control;
+    struct {
         uint64_t type : 4;
         uint64_t rsvd1 : 60;
-    } bs;
+    } bs_ext;
     struct {
         uint64_t type : 4;
         uint64_t msg_id : 5;
         uint64_t msg_num : 5;
         uint64_t rsvd1 : 50;
     } ub_plus;
-    struct {
-        uint64_t type : 4;
-        uint64_t window : 10;
-        uint64_t ratio : 2;     // 0: 10%, 1: 30%, 2: 50%, 3: 70%, min reserved credit: modify to 70%
-        uint64_t rsvd1 : 40;
-        uint64_t seq : 8;
-    } flow_control;
     struct {
         uint64_t type : 4;
         uint64_t rsvd1 : 2;
