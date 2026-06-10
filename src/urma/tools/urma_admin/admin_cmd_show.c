@@ -28,10 +28,16 @@
 static int cmd_show_usage(admin_config_t *cfg)
 {
     (void)cfg;
-    printf("Usage:"
-           "  urma_admin show [--dev <dev>] [--brief|--all] [--whole]  Show URMA devices information\n"
-           "  urma_admin show topo [-d <dev>]          Show topology of current node\n"
-           "  urma_admin show topo <node_id> [-d <dev>] Show topology of specified node\n"
+    printf("Usage:\n"
+           "  urma_admin show [--dev <DEV>] [--brief|--all] [--whole]  Show URMA devices information\n"
+           "  urma_admin show topo [NODE_ID]           Show topology of specified node, default is current node\n"
+           "  urma_admin show dev <DEV> jfc         [JFC_ID]\n"
+           "  urma_admin show dev <DEV> jfs         [JFS_ID]\n"
+           "  urma_admin show dev <DEV> jfr         [JFR_ID]\n"
+           "  urma_admin show dev <DEV> jetty       [JETTY_ID]\n"
+           "  urma_admin show dev <DEV> jetty_group [JETTY_GROUP_ID]\n"
+           "  urma_admin show dev <DEV> rc          [RC_ID]\n"
+           "  urma_admin show dev <DEV> seg         [TOKEN_ID]\n"
            "\n"
            "Options:\n"
            "  <dev>      Device name (e.g., udma1)\n"
@@ -800,6 +806,47 @@ free_list:
     return ret;
 }
 
+static int cmd_show_dev_usage(admin_config_t *cfg)
+{
+    (void)cfg;
+    printf("Usage:\n"
+           "  urma_admin show dev <DEV>\n"
+           "  urma_admin show dev <DEV> jfc   [JFC_ID]\n"
+           "  urma_admin show dev <DEV> jfs   [JFS_ID]\n"
+           "  urma_admin show dev <DEV> jfr   [JFR_ID]\n"
+           "  urma_admin show dev <DEV> jetty [JETTY_ID]\n"
+           "  urma_admin show dev <DEV> jetty_group [JETTY_GROUP_ID]\n"
+           "  urma_admin show dev <DEV> rc    [RC_ID]\n"
+           "  urma_admin show dev <DEV> seg   [TOKEN_ID]\n");
+    return 0;
+}
+
+static int cmd_show_dev(admin_config_t *cfg)
+{
+    int ret;
+
+    if ((ret = pop_arg_dev(cfg)) != 0) {
+        return ret;
+    }
+
+    if (cfg->argc == 0) {
+        return cmd_show_default(cfg);
+    }
+
+    static const admin_cmd_t cmds[] = {
+        {NULL, cmd_show_dev_usage},
+        {"jfc", admin_cmd_show_dev_jfc},
+        {"jfs", admin_cmd_show_dev_jfs},
+        {"jfr", admin_cmd_show_dev_jfr},
+        {"jetty", admin_cmd_show_dev_jetty},
+        {"jetty_group", admin_cmd_show_dev_jetty_group},
+        {"rc", admin_cmd_show_dev_rc},
+        {"seg", admin_cmd_show_dev_seg},
+        {0},
+    };
+    return exec_cmd(cfg, cmds);
+}
+
 static bool is_eid_equal(const urma_eid_t *eid1, const urma_eid_t *eid2)
 {
     for (int i = 0; i < URMA_EID_SIZE; i++) {
@@ -1221,6 +1268,7 @@ int admin_cmd_show(admin_config_t *cfg)
     }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_show_default}, //
+        {"dev", cmd_show_dev},    //
         {"topo", cmd_show_topo},  //
         {0},                      //
     };
