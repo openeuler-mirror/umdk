@@ -680,13 +680,13 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
         buf_pro->umq_ctx = 0;
     }
     umq_ub_imm_t imm = {.value = cr->imm_data};
-    if (imm.bs.type == IMM_TYPE_USER) {
+    if (imm.bs_ext.type == IMM_TYPE_USER) {
         buf_pro->imm_data = imm.value;
         umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, rx_buf);
         goto OUT;
     }
 
-    switch (imm.bs.type) {
+    switch (imm.bs_ext.type) {
         case IMM_TYPE_MEM_IMPORT:
             if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0, false) != UMQ_SUCCESS) {
                 *qbuf_status = UMQ_IMPORT_TSEG_FAILED;
@@ -732,7 +732,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                 ret = UMQ_CONTINUE_FLAG;
             } else {
                 umq_ub_imm_t imm = {.value = cr->imm_data};
-                if (imm.bs.type == IMM_TYPE_USER) {
+                if (imm.bs_ext.type == IMM_TYPE_USER) {
                     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
                     buf_pro->opcode = UMQ_OPC_WRITE_IMM;
                     buf_pro->imm_data = imm.value;
@@ -1389,16 +1389,16 @@ static int process_tx_msg(umq_buf_t *buf, ub_queue_t *queue)
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
     umq_ub_imm_t imm = {.value = buf_pro->imm_data};
-    if (imm.bs.type == IMM_TYPE_USER) {
+    if (imm.bs_ext.type == IMM_TYPE_USER) {
         return UMQ_SUCCESS;
     }
 
     switch (buf_pro->opcode) {
         case UMQ_OPC_SEND_IMM:
-            if (imm.bs.type == IMM_TYPE_MEM_IMPORT) {
+            if (imm.bs_ext.type == IMM_TYPE_MEM_IMPORT) {
                 umq_buf_free(buf);
                 return UMQ_CONTINUE_FLAG;
-            } else if (imm.bs.type == IMM_TYPE_MEM_IMPORT_DONE) {
+            } else if (imm.bs_ext.type == IMM_TYPE_MEM_IMPORT_DONE) {
                 return UMQ_CONTINUE_FLAG;
             }
             break;
