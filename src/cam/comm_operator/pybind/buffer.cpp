@@ -10,7 +10,9 @@
 #include "buffer.h"
 #include <iostream>
 #include <stdexcept>
+#ifdef SHMEM_ENABLED
 #include "shmem.h"
+#endif
 #include "pytorch_npu_helper.hpp"
 
 using TensorVector = std::vector<at::Tensor>;
@@ -20,6 +22,7 @@ constexpr uint64_t EXT_INFO_SIZE = 2 * 1024 * 1024;
 
 Buffer::~Buffer() noexcept(false)
 {
+#ifdef SHMEM_ENABLED
     if (initialized_) {
         if (ext_info_ptr_ != nullptr) {
             shmem_free(ext_info_ptr_);
@@ -32,8 +35,10 @@ Buffer::~Buffer() noexcept(false)
         shmem_finalize();
         initialized_ = false;
     }
+#endif
 }
 
+#ifdef SHMEM_ENABLED
 int32_t shmem_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_size,
                        const char *ip_port, aclshmemx_uniqueid_t default_flag_uid,
                        aclshmemx_init_attr_t *attributes)
@@ -56,10 +61,12 @@ int32_t shmem_set_attr(int32_t my_pe, int32_t n_pes, uint64_t local_mem_size,
     attributes->comm_args = reinterpret_cast<void *>(&default_flag_uid);
     return ACLSHMEM_SUCCESS;
 }
+#endif
                                      
 
 void Buffer::init(int rank, int num_ranks, uint64_t memsize, const std::string &ip_port)
 {
+#ifdef SHMEM_ENABLED
     if (initialized_) {
         return;
     }
@@ -98,6 +105,9 @@ void Buffer::init(int rank, int num_ranks, uint64_t memsize, const std::string &
     }
 
     initialized_ = true;
+#else
+    throw std::runtime_error("SHMEM is not enabled. Please set SHMEM_HOME_PATH and recompile.");
+#endif
 }
 
 int64_t Buffer::get_ext_info() const

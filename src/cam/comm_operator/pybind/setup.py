@@ -26,7 +26,8 @@ torch_path = os.path.dirname(torch.__file__)
 torch_npu_spec = importlib.util.find_spec("torch_npu")
 torch_npu_path = os.path.dirname(torch_npu_spec.origin)
 cam_comm_path = os.environ["CAM_COMM_PATH"]
-shmem_home_path = os.environ["SHMEM_HOME_PATH"]
+
+shmem_home_path = os.environ.get("SHMEM_HOME_PATH")
 print(f"torch_path: {torch_path}")
 print(f"torch_npu_path: {torch_npu_path}")
 print(f"cam_comm_path: {cam_comm_path}")
@@ -56,49 +57,64 @@ if "ENABLE_COV" in os.environ and os.environ.get("ENABLE_COV") == "1":
 print(compile_args)
 
 exts = []
+
+include_dirs = [
+    os.path.join(os.environ["CAM_COMM_PATH"], 'include/'),
+    os.path.join(os.environ["CAM_COMM_PATH"], 'framework/communicator'),
+    os.path.join(torch_npu_path, "include"),
+    os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
+    os.path.join(torch_npu_path, "include/third_party/acl/inc"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "hccl"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "runtime"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "msprof"),
+    os.path.join(torch_path, "include"),
+    os.path.join(os.path.dirname(__file__), "./", "pytorch_extension")
+]
+
+library_dirs = [
+    os.path.join(os.environ["CAM_COMM_PATH"], 'build/'),
+    os.path.join(torch_path, "lib"),
+    os.path.join(torch_npu_path, "lib"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64")
+]
+
+sources = [
+    "./fused_deep_moe.cpp",
+    "./moe_dispatch_normal.cpp",
+    "./moe_combine_normal.cpp",
+    "./a2e.cpp",
+    "./e2a.cpp",
+    "./pybind.cpp",
+    "./ext_utils.cpp",
+    "./all2_all_detour.cpp",
+    "./reduce_scatter_detour.cpp",
+    "./buffer.cpp"
+]
+
+libraries = [
+    'cam_static',
+    "torch_npu",
+    "gcov",
+    "runtime",
+    "torch",
+    "ascendcl",
+    "profapi",
+    "nnopbase"
+]
+
+if shmem_home_path:
+    include_dirs.append(os.path.join(shmem_home_path, 'shmem', 'include'))
+    library_dirs.append(os.path.join(shmem_home_path, 'shmem', 'lib'))
+    libraries.append("shmem")
+    compile_args.append("-DSHMEM_ENABLED")
+
 ext1 = NpuExtension(
     name="umdk_cam_op_lib",
-    include_dirs=[
-        os.path.join(os.environ["CAM_COMM_PATH"], 'include/'),
-        os.path.join(os.environ["CAM_COMM_PATH"], 'framework/communicator'),
-        os.path.join(torch_npu_path, "include"),
-        os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
-        os.path.join(torch_npu_path, "include/third_party/acl/inc"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "hccl"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "runtime"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "msprof"),
-        os.path.join(torch_path, "include"),
-        os.path.join(os.path.dirname(__file__), "./", "pytorch_extension"),
-        os.path.join(os.environ["SHMEM_HOME_PATH"], 'shmem', 'include')],
-
-    library_dirs=[
-        os.path.join(os.environ["CAM_COMM_PATH"], 'build/'),
-        os.path.join(torch_path, "lib"),
-        os.path.join(torch_npu_path, "lib"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64"),
-        os.path.join(os.environ["SHMEM_HOME_PATH"], 'shmem', 'lib')],
-    libraries=[
-        'cam_static',
-        "torch_npu",
-        "gcov",
-        "runtime",
-        "torch",
-        "ascendcl",
-        "profapi",
-        "nnopbase",
-        "shmem"],
-    sources=["./fused_deep_moe.cpp",
-             "./moe_dispatch_normal.cpp",
-             "./moe_combine_normal.cpp",
-             "./a2e.cpp",
-             "./e2a.cpp",
-             "./pybind.cpp",
-             "./ext_utils.cpp",
-             "./all2_all_detour.cpp",
-             "./reduce_scatter_detour.cpp",
-             "./buffer.cpp"
-            ],
+    include_dirs=include_dirs,
+    library_dirs=library_dirs,
+    libraries=libraries,
+    sources=sources,
     
     extra_compile_args = compile_args,
     extra_link_args = [
