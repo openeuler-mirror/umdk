@@ -401,7 +401,7 @@ urma_status_t udma_u_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint3
 		return udma_u_set_jfc_flag(jfc, opt, buf, len);
 	case URMA_JFC_BIND_JFCE:
 		break;
-	 case URMA_JFC_USER_CTX:
+	case URMA_JFC_USER_CTX:
 		break;
 	case URMA_JFC_CQE_BASE_ADDR:
 		return udma_u_set_jfc_cqe_base_addr(jfc, opt, buf, len);

@@ -934,9 +934,9 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 	struct udma_u_target_jetty *udma_tjetty;
 	urma_target_jetty_t *tjetty;
 
-	if (udma_check_sq_overflow(sq, wr, wqe_info)) {
+	if (sq->db_status == 0 && udma_check_sq_overflow(sq, wr, wqe_info)) {
 		UDMA_LOG_ERR("JFS overflow.\n");
-		return URMA_EINVAL;
+		return URMA_ENOMEM;
 	}
 
 	(void)memset(wqe_ctl, 0, sizeof(*wqe_ctl));

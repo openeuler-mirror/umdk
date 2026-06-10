@@ -13,6 +13,6 @@
 #include "urma_provider.h"
 #include "udma_u_common.h"
 
-extern urma_provider_ops_t g_udma_provider_ops;
+extern const urma_provider_ops_t g_udma_provider_ops;
 
 #endif /* __UDMA_U_OPS_H__ */

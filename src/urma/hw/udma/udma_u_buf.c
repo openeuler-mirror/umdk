@@ -48,7 +48,7 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 
 	if (wrid_en) {
 		if (!q->wrid) {
-			q->wrid = (uintptr_t *)calloc(1, q->baseblk_cnt * sizeof(uint64_t));
+			q->wrid = (uintptr_t *)calloc(q->baseblk_cnt, sizeof(uint64_t));
 			if (!q->wrid) {
 				UDMA_LOG_ERR("failed to alloc buffer for work request id.\n");
 				return false;
