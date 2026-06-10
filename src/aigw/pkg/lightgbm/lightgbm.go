@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: chown implementation in linux platform
+ * Description: lightgbm for decode length prediction
  * Create: 2025-5-13
  */
 

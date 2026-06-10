@@ -19,6 +19,9 @@ const (
 	huggingFaceTokenizerType tokenizerType = iota
 )
 
+// DefaultTokenizationRatio is the default tokenizationRatio, use to convert rune length to token length
+const DefaultTokenizationRatio = 0.35
+
 // todo: define model name as const variable
 var modelToTokenizeTypeMap = map[string]tokenizerType{
 	"DeepSeek-R1-Distill-Qwen-7B": huggingFaceTokenizerType,

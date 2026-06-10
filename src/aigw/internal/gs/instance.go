@@ -10,67 +10,39 @@ package gs
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
+	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/pkg/log"
 	"huawei.com/aigw/pkg/utils"
 )
 
-type instanceRole int
-
-const (
-	mixedRoleInstance instanceRole = iota
-	prefillRoleInstance
-	decodeRoleInstance
-	invalidRoleInstance
-)
-
-var roleToString = map[instanceRole]string{
-	mixedRoleInstance:   "mixed",
-	prefillRoleInstance: "prefill",
-	decodeRoleInstance:  "decode",
-}
-
-var stringToRole = map[string]instanceRole{
-	"mixed":   mixedRoleInstance,
-	"prefill": prefillRoleInstance,
-	"decode":  decodeRoleInstance,
-}
-
-func (r instanceRole) String() string {
-	if s, ok := roleToString[r]; ok {
-		return s
-	}
-	return "invalid"
-}
-
-func toInstanceRole(s string) (instanceRole, error) {
-	if role, ok := stringToRole[s]; ok {
-		return role, nil
-	}
-	return invalidRoleInstance, fmt.Errorf("%s is not a valid instance role", s)
-}
-
 type instance struct {
-	insMgr         *instanceManager
-	insUrl         string
-	freeBlocks     int
-	reqSet         map[string]*LlmRequest // record requests on the instance. k is the request ID. v is llmRequest
-	prefillTokens  int
-	reqNum         int
-	preloadMap     map[string]int // record the forward load of each request in this instance
-	tokenNum       int            // record the total number of forward tokens
-	preBlocks      int            // record the total forward load
-	ttft           float64        // ms
-	tbt            float64        // ms
-	queueLength    int            // waiting request num
-	avgWaitingTime float64        // average wait time
-	insRole        instanceRole
-	groupID        string
+	insMgr             *InstanceManager
+	insUrl             string
+	freeBlocks         int
+	reqSet             map[string]*LlmRequest // record requests on the instance. k is the request ID. v is llmRequest
+	reqQueue           *requestQueue
+	headReq            *LlmRequest
+	prefillTokens      int
+	prefillTime        float64 // cumulative prefill execution time
+	lastPrefillFinTime int64   // record the timestamp of the last request finish prefill, unit is ms
+	reqNum             int
+	preloadMap         map[string]int // record the forward load of each request in this instance
+	tokenNum           int            // record the total number of forward tokens
+	preBlocks          int            // record the total forward load
+	ttft               float64        // ms
+	tbt                float64        // ms
+	queueLength        int            // waiting request num
+	avgWaitingTime     float64        // average wait time
+	insRole            base.InstanceRole
+	groupID            string
 
 	reqStatusChan chan *ControlMessage // pass prompt token to GS
 	ctx           context.Context
@@ -84,6 +56,8 @@ type instance struct {
 type insSnapshot struct {
 	insUrl         string
 	prefillTokens  int
+	headReq        *LlmRequest
+	prefillTime    float64 // cumulative prefill execution time
 	freeBlocks     int
 	preBlocks      int
 	tokenNum       int
@@ -92,23 +66,43 @@ type insSnapshot struct {
 	queueLength    int
 	avgWaitingTime float64
 	reqNum         int
-	insRole        instanceRole
+	insRole        base.InstanceRole
 	groupID        string
 }
 
+// addReq adds a request to the instance and updates resource usage.
 func (ins *instance) addReq(req *LlmRequest) {
 	ins.rwLock.Lock()
 	defer ins.rwLock.Unlock()
-	ins.reqSet[req.ReqId] = req
-	ins.reqNum += 1
-	ins.tokenNum += req.predictTokens
-	ins.prefillTokens += req.promptLen
-	if ins.insRole == decodeRoleInstance {
-		ins.preloadMap[req.ReqId] = req.predictBlocks
-		ins.preBlocks += req.predictBlocks
-	} else {
-		ins.freeBlocks -= req.predictBlocks
+
+	log.Debug().Msgf("start to add req, instance: %v, role: %v, freeBlocks: %v, preBlocks: %v, req.promptLen: %v,"+
+		" req.PredictBlocks: %v, req.PrefillBlocks: %v",
+		ins.insUrl, ins.insRole, ins.freeBlocks, ins.preBlocks, req.PromptLen, req.PredictBlocks, req.PrefillBlocks)
+
+	if ins.reqSet != nil {
+		ins.reqSet[req.ReqId] = req
 	}
+	if ins.reqQueue != nil {
+		ins.reqQueue.enqueue(req)
+	}
+
+	ins.reqNum++
+	ins.tokenNum += req.PredictTokens
+	ins.prefillTime += req.PredictPrefillTime
+	ins.prefillTokens += req.PromptLen
+
+	if ins.insRole == base.DecodeRoleInstance && ins.preloadMap != nil {
+		ins.preloadMap[req.ReqId] = req.PredictBlocks
+		ins.preBlocks += req.PredictBlocks
+	} else if ins.insRole == base.PrefillRoleInstance {
+		ins.freeBlocks -= req.PrefillBlocks
+	} else {
+		ins.freeBlocks -= req.PredictBlocks
+	}
+
+	log.Debug().Msgf("after add req, instance: %v, role: %v, freeBlocks: %v, preBlocks: %v, req.promptLen: %v, "+
+		"req.PredictBlocks: %v, req.PrefillBlocks: %v",
+		ins.insUrl, ins.insRole, ins.freeBlocks, ins.preBlocks, req.PromptLen, req.PredictBlocks, req.PrefillBlocks)
 }
 
 func (ins *instance) delReq(inReq *LlmRequest, withDraw bool) {
@@ -119,22 +113,32 @@ func (ins *instance) delReq(inReq *LlmRequest, withDraw bool) {
 		log.Debug().Msgf("[instance]req %v is not in this ins", inReq.ReqId)
 		return
 	}
-	ins.tokenNum -= req.predictTokens
-	ins.prefillTokens -= req.promptLen
+	log.Debug().Msgf("start to del req, instance: %v, role: %v, freeBlocks: %v, preBlocks: %v, req promptLen: %v, "+
+		"req.PredictBlocks: %v, req.PrefillBlocks: %v",
+		ins.insUrl, ins.insRole, ins.freeBlocks, ins.preBlocks, req.PromptLen, req.PredictBlocks, req.PrefillBlocks)
+
+	ins.tokenNum -= req.PredictTokens
+	ins.prefillTime -= req.PredictPrefillTime
+	ins.prefillTokens -= req.PromptLen
 	if withDraw {
-		ins.freeBlocks += req.predictBlocks
+		ins.freeBlocks += req.PredictBlocks
 	}
 	delete(ins.reqSet, req.ReqId)
+	ins.reqQueue.dequeue(req.ReqId)
 	ins.reqNum -= 1
 	_, exists = ins.preloadMap[req.ReqId]
-	if exists && ins.insRole == decodeRoleInstance {
-		ins.preBlocks -= req.predictBlocks
+	if exists && ins.insRole == base.DecodeRoleInstance {
+		ins.preBlocks -= req.PredictBlocks
 		delete(ins.preloadMap, req.ReqId)
 	}
+
+	log.Debug().Msgf("after del req, instance: %v, role: %v, freeBlocks: %v, preBlocks: %v, req promptLen: %v, "+
+		"req.PredictBlocks: %v, req.PrefillBlocks: %v",
+		ins.insUrl, ins.insRole, ins.freeBlocks, ins.preBlocks, req.PromptLen, req.PredictBlocks, req.PrefillBlocks)
 }
 
-func newInstance(insUrl string, insRole instanceRole, groupID string, reqStatusChan chan *ControlMessage,
-	insMgr *instanceManager) (*instance, error) {
+func newInstance(insUrl string, insRole base.InstanceRole, groupID string, reqStatusChan chan *ControlMessage,
+	insMgr *InstanceManager) (*instance, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ins := &instance{
@@ -145,6 +149,7 @@ func newInstance(insUrl string, insRole instanceRole, groupID string, reqStatusC
 		preBlocks:      0,
 		tokenNum:       0,
 		reqSet:         make(map[string]*LlmRequest),
+		reqQueue:       newRequestQueue(),
 		ttft:           0.0,
 		tbt:            0.0,
 		queueLength:    0,
@@ -206,11 +211,10 @@ func (ins *instance) mixUpdateReq(data ReqStatusData) {
 			return
 		}
 
-		reqType := req.reqType
+		reqType := req.ReqType
 		ins.insMgr.updateEmaPredictLen(reqType, data.DecodeLen)
 		ins.rwLock.Unlock()
 		ins.delReq(req, false)
-
 	} else {
 		log.Debug().Msgf("[instance]reqStatus is error: %+v", data)
 	}
@@ -254,7 +258,7 @@ func (ins *instance) decodeUpdateReq(data ReqStatusData) {
 			return
 		}
 
-		reqType := req.reqType
+		reqType := req.ReqType
 		ins.insMgr.updateEmaPredictLen(reqType, data.DecodeLen)
 		ins.rwLock.Unlock()
 
@@ -267,11 +271,11 @@ func (ins *instance) decodeUpdateReq(data ReqStatusData) {
 
 func (ins *instance) processReqStatus(data ReqStatusData) {
 	switch ins.insRole {
-	case mixedRoleInstance:
+	case base.MixedRoleInstance:
 		ins.mixUpdateReq(data)
-	case prefillRoleInstance:
+	case base.PrefillRoleInstance:
 		ins.prefillUpdateReq(data)
-	case decodeRoleInstance:
+	case base.DecodeRoleInstance:
 		ins.decodeUpdateReq(data)
 	default:
 		log.Error().Msgf("[instance]the role of instance is error: %v", ins.insRole)
@@ -347,7 +351,21 @@ func (ins *instance) processInsData(jsonStr string) {
 }
 
 func (ins *instance) getSnapShot() *insSnapshot {
-	return &insSnapshot{
+	var headReq *LlmRequest
+	if ins.reqQueue == nil {
+		headReq = ins.headReq
+	} else {
+		head := ins.reqQueue.getHeadReq()
+		if head != nil {
+			headReq = &LlmRequest{
+				ReqId:              head.ReqId,
+				PredictPrefillTime: head.PredictPrefillTime,
+				PrefillTimeStampMs: head.PrefillTimeStampMs,
+			}
+		}
+	}
+
+	insSnapshot := &insSnapshot{
 		insUrl:         ins.insUrl,
 		freeBlocks:     ins.freeBlocks,
 		preBlocks:      ins.preBlocks,
@@ -359,6 +377,66 @@ func (ins *instance) getSnapShot() *insSnapshot {
 		reqNum:         ins.reqNum,
 		insRole:        ins.insRole,
 		prefillTokens:  ins.prefillTokens,
+		prefillTime:    ins.prefillTime,
 		groupID:        ins.groupID,
+		headReq:        headReq,
 	}
+	return insSnapshot
+}
+
+// requestQueue is a reqeust queue implementation using linked list + map
+type requestQueue struct {
+	reqList *list.List
+	reqMap  map[string]*list.Element
+}
+
+// newRequestQueue creates a new request queue
+func newRequestQueue() *requestQueue {
+	return &requestQueue{
+		reqList: list.New(),
+		reqMap:  make(map[string]*list.Element),
+	}
+}
+
+// enqueue adds a request to the back of the queue
+func (rq *requestQueue) enqueue(req *LlmRequest) {
+	element := rq.reqList.PushBack(req)
+	rq.reqMap[req.ReqId] = element
+}
+
+// dequeue removes a request by ID from the queue
+// Correctly updates prefill timestamp when the head request is removed
+func (rq *requestQueue) dequeue(reqId string) {
+	element, exists := rq.reqMap[reqId]
+	if !exists {
+		return
+	}
+	oldHead := rq.reqList.Front()
+
+	rq.reqList.Remove(element)
+	delete(rq.reqMap, reqId)
+
+	// If the removed req was the HEAD, update new head req's timestamp, indicate this req is going to start
+	if oldHead == element && rq.reqList.Len() > 0 {
+		newHead := rq.reqList.Front()
+		if newHeadRequest, ok := newHead.Value.(*LlmRequest); ok {
+			newHeadRequest.PrefillTimeStampMs = time.Now().UnixMilli()
+		} else {
+			log.Error().Msg("Queue contains non-LlmReqeust type")
+		}
+	}
+}
+
+// len returns the reqeust queue's length
+func (rq *requestQueue) len() int {
+	return rq.reqList.Len()
+}
+
+// getHeadReq returns the head request of the queue without removing it
+func (rq *requestQueue) getHeadReq() *LlmRequest {
+	if rq.reqList.Len() == 0 {
+		return nil
+	}
+	frontElement := rq.reqList.Front()
+	return frontElement.Value.(*LlmRequest)
 }
