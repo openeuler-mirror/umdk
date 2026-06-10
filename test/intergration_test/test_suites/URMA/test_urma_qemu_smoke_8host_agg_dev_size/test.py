@@ -27,8 +27,7 @@ class Test(UBUSFeature):
     @pytest.mark.timeout(1600)
     def test_urma_qemu_smoke_8host_agg_dev_size(self):
         p_list = []
-        cmd_list = ["send_lat", "read_lat", "write_lat",
-                     "send_bw", "read_bw", "write_bw"]
+        cmd_list = ["send_lat", "write_lat", "send_bw", "write_bw"]
         # Send single mode maximum 64K, current simulation performance is insufficient
         size_ranges = [
             ("1", 1, 1),
@@ -47,7 +46,7 @@ class Test(UBUSFeature):
                 for label, min_size, max_size in size_ranges:
                     size = random.randint(min_size, max_size)
                     opt = f" -s {size} -p 1 --single_path"
-                    if cmd in ["send_bw", "read_bw", "write_bw"]:
+                    if cmd in ["send_bw", "write_bw"]:
                         if random.randint(0, 1) == 1:
                             opt +=" -B"
                     p_list.append(

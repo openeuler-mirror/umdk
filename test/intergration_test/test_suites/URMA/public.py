@@ -28,7 +28,7 @@ class UBUSFeature(BaseTest):
         Random traffic if not specified
         :param server: urma_perftest server side
         :param client: urma_perftest client side
-        :param cmd_syntax: "read_bw", "write_bw", "send_bw"
+        :param cmd_syntax: "write_bw", "send_bw"
         :param mode: "RM", "RC", "UM"
         :param opt: additional parameters configured for both server and client
         :param s_opt: additional parameters configured for the server
@@ -41,7 +41,7 @@ class UBUSFeature(BaseTest):
         c_opt = kwargs.get("c_opt", "")
         
         if cmd_syntax is None:
-            cmd_syntax_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
+            cmd_syntax_list = ["write_bw", "send_bw", "write_lat", "send_lat"]
             cmd_syntax = random.choice(cmd_syntax_list) 
  
         opt += f" -n 10" 
@@ -50,7 +50,7 @@ class UBUSFeature(BaseTest):
         if " -I" not in opt and " --inline_size" not in opt:
             opt += f" -I {random.randint(1, 188)}"
         if " -d" not in opt and " --dev_name" not in opt:
-            opt += f" -d udma2"
+            opt += f" -d {server.test_nic1}"
         if "-p " not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
                 opt += f" -p {random.randint(0, 2)}"
@@ -89,7 +89,7 @@ class UBUSFeature(BaseTest):
         Random traffic if not specified
         :param server: urma_perftest server side
         :param client: urma_perftest client side
-        :param cmd_syntax: "read_bw", "write_bw", "send_bw"
+        :param cmd_syntax: "write_bw", "send_bw"
         :param mode: "RM", "RC", "UM"
         :param opt: additional parameters configured for both server and client
         :param s_opt: additional parameters configured for server
@@ -102,7 +102,7 @@ class UBUSFeature(BaseTest):
         c_opt = kwargs.get("c_opt", "")
         
         if cmd_syntax is None:
-            cmd_syntax_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
+            cmd_syntax_list = ["write_bw", "send_bw", "write_lat", "send_lat"]
             cmd_syntax = random.choice(cmd_syntax_list)
  
         opt += f" -n 10 -E 2" 

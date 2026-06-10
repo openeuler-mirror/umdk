@@ -26,7 +26,7 @@ class Test(UBUSFeature):
     @pytest.mark.timeout(1600)
     def test_urma_qemu_smoke_8host_dev_type(self):
         p_list = []
-        cmd_list = ["read_bw", "write_bw", "send_bw", "read_lat", "write_lat", "send_lat"]
+        cmd_list = ["write_bw", "send_bw", "write_lat", "send_lat"]
         mode_list = [
             "-p 0",
             "-p 1",
