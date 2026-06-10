@@ -39,7 +39,8 @@ class UBUSFeature(BaseTest):
         expect_failed = kwargs.get("expect_failed", False)
         s_opt = kwargs.get("s_opt", "")
         c_opt = kwargs.get("c_opt", "")
-        
+        s_dev_opt = ""
+        c_dev_opt = ""
         if cmd_syntax is None:
             cmd_syntax_list = ["write_bw", "send_bw", "write_lat", "send_lat"]
             cmd_syntax = random.choice(cmd_syntax_list) 
@@ -50,7 +51,8 @@ class UBUSFeature(BaseTest):
         if " -I" not in opt and " --inline_size" not in opt:
             opt += f" -I {random.randint(1, 188)}"
         if " -d" not in opt and " --dev_name" not in opt:
-            opt += f" -d {server.test_nic1}"
+            s_dev_opt = f" -d {server.test_nic1}"
+            c_dev_opt = f" -d {client.test_nic1}"
         if "-p " not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
                 opt += f" -p {random.randint(0, 2)}"
@@ -69,8 +71,8 @@ class UBUSFeature(BaseTest):
         if expect_failed:
             opt +=" --enable_err_continue"  
         _cmd = f"urma_perftest {cmd_syntax} {opt} -P {self.get_free_port()}"
-        s_cmd = f"{_cmd} {s_opt}"
-        c_cmd = f"{_cmd} {c_opt} -S {server.test_nic1_ip}"
+        s_cmd = f"{_cmd} {s_dev_opt} {s_opt}"
+        c_cmd = f"{_cmd} {c_dev_opt} {c_opt} -S {server.test_nic1_ip}"
         
         p1 = server.exec_cmd(s_cmd, background=True)
         p2 = client.exec_cmd(c_cmd, background=True)
