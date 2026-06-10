@@ -551,6 +551,7 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_ENOMEM;
     }
 
+    queue->remote_umq_id = info->queue_info->umq_id;
     ctx->tjetty[UB_QUEUE_JETTY_IO] = umq_ub_connect_jetty(queue, info, UB_QUEUE_JETTY_IO);
     if (ctx->tjetty[UB_QUEUE_JETTY_IO] == NULL) {
         ret = UMQ_FAIL;
@@ -716,6 +717,7 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
     queue_info->tx_depth = queue->tx_depth;
     queue_info->rx_buf_size = queue->rx_buf_size;
     queue_info->state = queue->state;
+    queue_info->umq_id = queue->umq_id;
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_QUEUE;
     info_tlv_head->len = sizeof(umq_ub_bind_queue_info_t);
     return urpc_tlv_get_total_len(info_tlv_head);

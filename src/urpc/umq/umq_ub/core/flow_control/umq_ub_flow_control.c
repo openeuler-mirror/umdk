@@ -680,8 +680,8 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     };
     umq_ub_imm_t imm = {
         .flow_control = {
-            .type = IMM_TYPE_FC_CREDIT_REQ,
-            .window = credits_per_request,
+            .type = IMM_TYPE_CONTROL_MSG,
+            .umq_id = queue->remote_umq_id,
             .seq = fc->local_req_seq}
     };
 
@@ -742,9 +742,8 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
     };
     umq_ub_imm_t imm = {
         .flow_control = {
-            .type = IMM_TYPE_FC_CREDIT_REP,
-            .window = notify,
-            .ratio = umq_ub_fc_raito_to_imm(available, queue->flow_control.local_rx_depth),
+            .type = IMM_TYPE_CONTROL_MSG,
+            .umq_id = queue->remote_umq_id,
             .seq = seq,
         }};
 
@@ -882,8 +881,8 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     };
     umq_ub_imm_t imm = {
         .flow_control = {
-            .type = IMM_TYPE_FC_CREDIT_RETURN_REQ,
-            .window = return_credit,
+            .type = IMM_TYPE_CONTROL_MSG,
+            .umq_id = queue->remote_umq_id,
             .seq = fc->local_req_seq}
     };
 
@@ -948,9 +947,8 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     };
     umq_ub_imm_t imm = {
         .flow_control = {
-            .type = IMM_TYPE_FC_CREDIT_RETURN_ACK,
-            .window = return_credit,
-            .ratio = umq_ub_fc_raito_to_imm(available, queue->flow_control.local_rx_depth),
+            .type = IMM_TYPE_CONTROL_MSG,
+            .umq_id = queue->remote_umq_id,
             .seq = seq
         }
     };
