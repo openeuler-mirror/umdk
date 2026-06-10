@@ -1182,6 +1182,14 @@ static int umq_ub_fill_fc_rx_post_jfr(ub_queue_t *queue, uint32_t batch,
 static int umq_ub_fill_fc_rx_post_jetty(ub_queue_t *queue, uint32_t batch,
     urma_jfr_wr_t *recv_wr, urma_sge_t *fc_sges)
 {
+    uint32_t max_entries_per_slot = UMQ_UB_FLOW_CONTROL_SGE_BYTES_PER_SLOT / sizeof(umq_ub_fc_sge_data_t);
+    if (batch > max_entries_per_slot) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
+            "eid: " EID_FMT ", jetty_id: %u, batch %u exceeds max entries per slot %u\n",
+            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
+            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, batch, max_entries_per_slot);
+        return -UMQ_ERR_EINVAL;
+    }
     int ret = umq_ub_flow_control_sge_alloc(&queue->dev_ctx->fc_sge_mgr, &queue->flow_control.recv_sge);
     if (ret != UMQ_SUCCESS) {
         return ret;
@@ -1206,7 +1214,7 @@ static int umq_ub_fill_fc_rx_post_jetty(ub_queue_t *queue, uint32_t batch,
     }
     for (uint32_t i = 0; i < batch; i++) {
         uint64_t addr = (uint64_t)(uintptr_t)((char *)queue->flow_control.recv_sge.addr +
-                                               (i % 2) * sizeof(umq_ub_fc_sge_data_t));
+                                               (i % max_entries_per_slot) * sizeof(umq_ub_fc_sge_data_t));
         fc_sges[i].addr = addr;
         fc_sges[i].len = sizeof(umq_ub_fc_sge_data_t);
         fc_sges[i].tseg = tseg;

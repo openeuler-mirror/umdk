@@ -16,8 +16,8 @@
 extern "C" {
 #endif
 
-#define UMQ_UB_FLOW_CONTROL_SGE_BITMAP_SIZE 32768 // max 64K jetties per host, each jetty uses one 8B slot
-#define UMQ_UB_FLOW_CONTROL_SGE_BYTES_PER_SLOT 8   // bytes per slot, 4B req + 4B rsp
+#define UMQ_UB_FLOW_CONTROL_SGE_BITMAP_SIZE 32768 // max 64K jetties per host, each jetty uses one 64B slot
+#define UMQ_UB_FLOW_CONTROL_SGE_BYTES_PER_SLOT 64  // bytes per slot, (4B req + 4B rsp) * 8
 
 /* Flow control SGE memory management APIs */
 int umq_ub_flow_control_sge_mgr_init(umq_ub_flow_control_sge_mgr_t *mgr);
