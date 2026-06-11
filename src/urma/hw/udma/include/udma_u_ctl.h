@@ -91,11 +91,28 @@ enum udma_u_jfc_type {
 	UDMA_U_NORMAL_JFC_TYPE,
 	UDMA_U_STARS_JFC_TYPE,
 	UDMA_U_CCU_JFC_TYPE,
+	UDMA_RVS_TYPE,
+	UDMA_U_LOCK_CCU_JFC_TYPE,
 };
 
 struct udma_u_jfc_cfg_ex {
 	urma_jfc_cfg_t base_cfg;
 	enum udma_u_jfc_type jfc_mode;
+};
+
+struct udma_u_lock_jetty_cfg {
+	urma_jetty_cfg_t base_cfg;
+	bool jetty_type; /* 1:wqe lock buffer jetty, 0:normal jetty, defualt: 1 */
+	uint32_t buf_idx; /* buf offset addres idx */
+};
+
+struct udma_u_jfc_ccu_cfg {
+    uint32_t ccu_cqe_flag;
+};
+
+struct udma_u_lock_jfc_cfg {
+	urma_jfc_cfg_t base_cfg;
+	struct udma_u_jfc_ccu_cfg ccu_cfg;
 };
 
 struct udma_u_jfs_wr_ex {
@@ -166,6 +183,10 @@ enum udma_u_user_ctl_opcode {
 	UDMA_U_USER_CTL_QUERY_TP_SPORT,
 	UDMA_U_USER_CTL_QUERY_CQE_AUX_INFO,
 	UDMA_U_USER_CTL_QUERY_AE_AUX_INFO,
+	UDMA_U_USER_CTL_CREATE_LOCK_BUFFER_JETTY_EX,
+	UDMA_U_USER_CTL_DELETE_LOCK_BUFFER_JETTY_EX,
+	UDMA_U_USER_CTL_CREATE_CCU_JFC_EX,
+	UDMA_U_USER_CTL_DELETE_CCU_JFC_EX,
 	UDMA_U_USER_CTL_MAX,
 };
 

@@ -605,6 +605,8 @@ static int udma_u_jfc_cmd_ex(urma_context_t *ctx, struct udma_u_jfc *jfc,
 
 	cmd.mode = (uint32_t)jfc->mode;
 	cmd.buf_len = jfc_depth;
+	if (jfc->mode == UDMA_U_LOCK_CCU_JFC_TYPE)
+		cmd.ccu_cqe_flag = !!jfc->ccu_flag;
 
 	udma_u_set_udata(&udata, &cmd, sizeof(cmd), NULL, 0);
 
@@ -633,7 +635,7 @@ static int udma_u_verify_jfc_param_ex(urma_context_t *ctx, urma_jfc_cfg_t *base_
 }
 
 static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t *base_cfg,
-					     enum udma_u_jfc_type jfc_mode)
+					     enum udma_u_jfc_type jfc_mode, uint32_t ccu_cqe_flag)
 {
 	struct udma_u_jfc *jfc;
 	uint32_t depth;
@@ -658,6 +660,9 @@ static urma_jfc_t *udma_u_create_base_jfc_ex(urma_context_t *ctx, urma_jfc_cfg_t
 
 	depth = base_cfg->depth < UDMA_U_MIN_JFC_DEPTH ?
 		UDMA_U_MIN_JFC_DEPTH : roundup_pow_of_two(base_cfg->depth);
+
+	if (jfc->mode == UDMA_U_LOCK_CCU_JFC_TYPE)
+		jfc->ccu_flag = ccu_cqe_flag;
 
 	ret = udma_u_jfc_cmd_ex(ctx, jfc, base_cfg, depth);
 	if (ret) {
@@ -688,7 +693,7 @@ static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
 		return NULL;
 	}
 
-	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, cfg_ex->jfc_mode);
+	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, cfg_ex->jfc_mode, NULL);
 }
 
 static int udma_u_jfr_ops_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
@@ -832,6 +837,168 @@ static int udma_u_jetty_ops_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 		(void)memcpy(&cfg_ex, (void *)in->addr, sizeof(struct udma_u_jetty_cfg_ex));
 		jetty = udma_u_create_jetty_ex(ctx, &cfg_ex);
+		if (jetty == NULL)
+			return EFAULT;
+
+		udma_fill_create_jetty_ex_out(out, jetty);
+		atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
+	} else {
+		if (!udma_u_user_ctl_check_param(in->addr, in->len, (uint32_t)sizeof(urma_jetty_t *), op))
+			return EINVAL;
+
+		(void)memcpy(&jetty, (void *)in->addr, sizeof(urma_jetty_t *));
+		if (jetty == NULL)
+			return EINVAL;
+
+		if (udma_u_delete_jetty(jetty))
+			return EFAULT;
+
+		atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
+	}
+
+	return 0;
+}
+
+static int udma_u_verify_lock_buffer_jetty_param(urma_context_t *ctx,
+						 struct udma_u_lock_jetty_cfg *lock_cfg)
+{
+#define WQE_LOCK_BUFFER_JETTY_SIZE 4096
+#define WQE_LOCK_BUFFER_JETTY_DEPTH_SHIFT 5
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+
+	if (!udma_ctx->lock_buffer_en) {
+		UDMA_LOG_ERR("no support create lock buffer JETTY.\n");
+		return EINVAL;
+	}
+
+	if (lock_cfg->base_cfg.jfs_cfg.priority >= UDMA_MAX_PRIORITY) {
+		UDMA_LOG_ERR("user mode JETTY priority is out of range, priority is %u.\n",
+			     lock_cfg->base_cfg.jfs_cfg.priority);
+		return EINVAL;
+	}
+
+	if (udma_u_check_jetty_param_ex(ctx, &lock_cfg->base_cfg))
+		return EINVAL;
+
+	if (lock_cfg->buf_idx >= WQE_LOCK_BUFFER_JETTY_SIZE) {
+		UDMA_LOG_ERR("buffer index is out of range.\n");
+		return EINVAL;
+	}
+
+	if (udma_ctx->lock_buf_bb_shift > WQE_LOCK_BUFFER_JETTY_DEPTH_SHIFT) {
+		UDMA_LOG_ERR("lock buffer bit block shift is out of range.\n");
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static int udma_u_init_lock_jetty_queue_buf(struct udma_u_jetty_queue *q,
+					    struct udma_u_lock_jetty_cfg *lock_cfg, uint32_t jetty_depth)
+{
+	uint32_t buf_shift;
+
+	q->baseblk_shift = UDMA_JFS_WQEBB_SHIFT;
+	buf_shift = align_power2(jetty_depth * q->sqe_bb_cnt * UDMA_JFS_WQEBB);
+	q->qbuf_size = (1U << buf_shift);
+	q->baseblk_cnt = q->qbuf_size >> q->baseblk_shift;
+	q->baseblk_mask = q->baseblk_cnt - 1U;
+
+	q->wrid = (uintptr_t *)calloc(q->baseblk_cnt, sizeof(uint64_t));
+	if (q->wrid == NULL) {
+		UDMA_LOG_ERR("failed to alloc lock buffer for work request id!\n");
+		return ENOMEM;
+	}
+
+	q->qbuf = (void *)(uintptr_t)lock_cfg->buf_idx;
+
+	return 0;
+}
+
+static int udma_u_create_lock_sq(struct udma_u_jetty_queue *sq,
+			         struct udma_u_lock_jetty_cfg *lock_cfg, uint32_t jetty_depth)
+{
+#define LOCK_SQE_BB_CNT 2
+	urma_jetty_cfg_t *base_cfg = &lock_cfg->base_cfg;
+	int ret;
+
+	sq->lock_free = !!base_cfg->jfs_cfg.flag.bs.lock_free;
+	if (!sq->lock_free &&
+	    pthread_spin_init(&sq->lock, PTHREAD_PROCESS_PRIVATE))
+		return EINVAL;
+
+	sq->max_inline_size = base_cfg->jfs_cfg.max_inline_data;
+	sq->max_sge_num = base_cfg->jfs_cfg.max_sge;
+	sq->sqe_bb_cnt = LOCK_SQE_BB_CNT;
+	ret = udma_u_init_lock_jetty_queue_buf(sq, lock_cfg, jetty_depth);
+	if (ret) {
+		UDMA_LOG_ERR("init queue buffer wrong, ret = %d.\n", ret);
+		goto err_init_sq_buf;
+	}
+
+	return 0;
+
+err_init_sq_buf:
+	if (!sq->lock_free)
+		(void)pthread_spin_destroy(&sq->lock);
+	return EFAULT;
+}
+
+urma_jetty_t *udma_u_create_lock_buffer_jetty(urma_context_t *ctx, struct udma_u_lock_jetty_cfg *lock_cfg)
+{
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+	urma_jetty_cfg_t *cfg = &lock_cfg->base_cfg;
+	struct udma_u_jetty *jetty;
+	uint32_t jetty_depth = 0;
+	int ret;
+
+	if (udma_u_verify_lock_buffer_jetty_param(ctx, lock_cfg))
+		return NULL;
+
+	jetty = (struct udma_u_jetty *)calloc(1, sizeof(struct udma_u_jetty));
+	if (jetty == NULL) {
+		UDMA_LOG_ERR("memory allocation failed.\n");
+		return NULL;
+	}
+
+	jetty->sq.sq_reserved = udma_ctx->sq_reserved;
+	if (init_jetty_trans_mode(jetty, cfg))
+		goto err_init_jetty_trans_mode;
+	jetty_depth = (1 << udma_ctx->lock_buf_bb_shift);
+	ret = udma_u_create_lock_sq(&jetty->sq, lock_cfg, jetty_depth);
+	if (ret) {
+		UDMA_LOG_ERR("jetty create lock sq failed, ret = %d.\n", ret);
+		goto err_init_jetty_trans_mode;
+	}
+
+	jetty->jfr = to_udma_u_jfr(cfg->shared.jfr);
+	jetty->jetty_type = UDMA_LOCK_BUFFER_JETTY_TYPE;
+	jetty->sq.cstm = 1;
+	if (udma_u_create_common_jetty(ctx, jetty, cfg))
+		goto err_jetty_create_common_jetty;
+
+	return &jetty->base;
+err_jetty_create_common_jetty:
+	udma_u_lock_delete_sq(&jetty->sq);
+err_init_jetty_trans_mode:
+	free(jetty);
+
+	return NULL;
+}
+
+static int udma_u_jetty_lock_buffer_ops(urma_context_t *ctx, urma_user_ctl_in_t *in,
+					urma_user_ctl_out_t *out, enum udma_u_user_ctl_opcode op)
+{
+	struct udma_u_lock_jetty_cfg cfg_ex;
+	urma_jetty_t *jetty = NULL;
+
+	if (op == UDMA_U_USER_CTL_CREATE_LOCK_BUFFER_JETTY_EX) {
+		if (!udma_u_user_ctl_check_param(in->addr, in->len, (uint32_t)sizeof(struct udma_u_lock_jetty_cfg), op) ||
+		    !udma_u_user_ctl_check_param(out->addr, out->len, (uint32_t)sizeof(struct udma_u_jetty_info), op))
+			return EINVAL;
+
+		(void)memcpy(&cfg_ex, (void *)in->addr, sizeof(struct udma_u_lock_jetty_cfg));
+		jetty = udma_u_create_lock_buffer_jetty(ctx, &cfg_ex);
 		if (jetty == NULL)
 			return EFAULT;
 
@@ -1146,6 +1313,54 @@ static int udma_u_query_ae_aux_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 	return ret;
 }
 
+urma_jfc_t *udma_u_create_ccu_jfc(urma_context_t *ctx, struct udma_u_lock_jfc_cfg *cfg_ex)
+{
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+
+	if (!udma_ctx->ccu_jfc_property_en) {
+		UDMA_LOG_ERR("no support create CCU JFC.\n");
+		return NULL;
+	}
+
+	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, UDMA_U_LOCK_CCU_JFC_TYPE,
+					 cfg_ex->ccu_cfg.ccu_cqe_flag);
+}
+
+static int udma_u_ccu_jfc_ops(urma_context_t *ctx, urma_user_ctl_in_t *in,
+			      urma_user_ctl_out_t *out, enum udma_u_user_ctl_opcode op)
+{
+	struct udma_u_lock_jfc_cfg cfg_ex;
+	urma_jfc_t *jfc = NULL;
+
+	if (op == UDMA_U_USER_CTL_CREATE_CCU_JFC_EX) {
+		if (!udma_u_user_ctl_check_param(in->addr, in->len, (uint32_t)sizeof(struct udma_u_lock_jfc_cfg), op) ||
+		    !udma_u_user_ctl_check_param(out->addr, out->len, (uint32_t)sizeof(urma_jfc_t *), op))
+			return EINVAL;
+
+		(void)memcpy(&cfg_ex, (void *)(uintptr_t)in->addr, sizeof(struct udma_u_lock_jfc_cfg));
+		jfc = udma_u_create_ccu_jfc(ctx, &cfg_ex);
+		if (jfc == NULL)
+			return EFAULT;
+
+		memcpy((void *)out->addr, &jfc, sizeof(urma_jfc_t *));
+		atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
+	} else {
+		if (!udma_u_user_ctl_check_param(in->addr, in->len, (uint32_t)sizeof(urma_jfc_t *), op))
+			return EINVAL;
+
+		(void)memcpy(&jfc, (void *)(uintptr_t)in->addr, sizeof(urma_jfc_t *));
+		if (jfc == NULL)
+			return EFAULT;
+
+		if (udma_u_delete_jfc(jfc))
+			return EFAULT;
+
+		atomic_fetch_sub(&ctx->ref.atomic_cnt, 1);
+	}
+
+	return 0;
+}
+
 static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
 	[UDMA_U_USER_CTL_CREATE_JFR_EX] = udma_u_jfr_ops_ex,
 	[UDMA_U_USER_CTL_DELETE_JFR_EX] = udma_u_jfr_ops_ex,
@@ -1161,6 +1376,10 @@ static udma_u_user_ctl_ops g_udma_u_user_ctl_ops[] = {
 	[UDMA_U_USER_CTL_QUERY_TP_SPORT] = udma_u_ctrlq_query_tp_sport,
 	[UDMA_U_USER_CTL_QUERY_CQE_AUX_INFO] = udma_u_query_cqe_aux_info,
 	[UDMA_U_USER_CTL_QUERY_AE_AUX_INFO] = udma_u_query_ae_aux_info,
+	[UDMA_U_USER_CTL_CREATE_LOCK_BUFFER_JETTY_EX] = udma_u_jetty_lock_buffer_ops,
+	[UDMA_U_USER_CTL_DELETE_LOCK_BUFFER_JETTY_EX] = udma_u_jetty_lock_buffer_ops,
+	[UDMA_U_USER_CTL_CREATE_CCU_JFC_EX] = udma_u_ccu_jfc_ops,
+	[UDMA_U_USER_CTL_DELETE_CCU_JFC_EX] = udma_u_ccu_jfc_ops,
 };
 
 bool udma_u_user_ctl_check_param(uint64_t addr, uint32_t in_len, uint32_t len,

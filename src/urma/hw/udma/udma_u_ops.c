@@ -150,6 +150,9 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->dump_aux_info = resp->dump_aux_info;
 	udma_ctx->jfr_sge = resp->jfr_sge;
 	udma_ctx->sq_reserved = resp->sq_reserved;
+	udma_ctx->lock_buffer_en = resp->lock_buffer_en;
+	udma_ctx->ccu_jfc_property_en = resp->ccu_jfc_property_en;
+	udma_ctx->lock_buf_bb_shift = resp->lock_buf_bb_shift;
 	udma_ctx->dtu_va_base = resp->dtu_va_base;
 	udma_ctx->dtu_va_size = resp->dtu_va_size;
 	udma_ctx->dtu_enable = resp->u_dtu_enable;

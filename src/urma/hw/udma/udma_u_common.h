@@ -24,6 +24,7 @@
 #include "udma_u_abi.h"
 #include "udma_u_log.h"
 
+#define UDMA_WQE_LOCK_BUFFER_JETTY_IDX 4096
 #define UDMA_JFS_WQEBB 64
 #define UDMA_JFR_WQEBB 16U
 #define UDMA_MIN_JFS_WQEBB_CNT 64
@@ -35,6 +36,8 @@
 #define UDMA_BITS_PER_LONG_SHIFT 6
 #define UDMA_JFS_WQEBB_SHIFT 6
 #define UDMA_SGE_SIZE 16
+#define UDMA_CCU_SQE_BB_CNT 2
+#define SQE_VA_L_OFFSET 12U
 
 #define UDMA_JFC_DB_OFFSET 0
 #define UDMA_MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -101,6 +104,9 @@ struct udma_u_context {
 	uint32_t		jfr_sge;
 	bool			sq_reserved;
 	bool			st64b_en;
+	bool			lock_buffer_en;
+	bool			ccu_jfc_property_en;
+	uint8_t 		lock_buf_bb_shift;
 	bool			dtu_enable;
 	uint64_t		dtu_va_base;
 	uint64_t		dtu_va_size;
@@ -162,6 +168,8 @@ struct udma_u_jetty_queue {
 	bool pi_type;
 	bool dtu_en;
 	uint32_t aligned_size;
+	bool is_jetty;
+	bool is_wqe_lock_buf_jetty;
 };
 
 struct udma_wqe_sge {
@@ -215,6 +223,7 @@ struct udma_u_jfc {
 	uint32_t arm_sn;
 	uint32_t mode;
 	uint32_t cq_shift;
+	uint32_t ccu_flag;
 };
 
 struct udma_u_tid {
