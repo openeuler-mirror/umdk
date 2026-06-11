@@ -9,7 +9,6 @@
  */
 
 #include <errno.h>
-#include <netlink/errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +17,6 @@
 #include "urma_private.h"
 #include "urma_types.h"
 
-#include "admin_log.h"
 #include "admin_netlink.h"
 #include "admin_parameters.h"
 #include "admin_cmd.h"
