@@ -80,7 +80,7 @@ npu_op_code_gen(
 # Step 2: ACLNN single-operator invocation library
 # =====================================================
 # Copy pre-generated autogen files from pregen/build_out/autogen/
-file(GLOB pregen_files "${CMAKE_CURRENT_SOURCE_DIR}/../../pregen/build_out/autogen/*")
+file(GLOB pregen_files "${CMAKE_CURRENT_SOURCE_DIR}/../pregen/build_out/autogen/*")
 file(COPY ${pregen_files} DESTINATION ${ASCEND_AUTOGEN_PATH})
 
 # Copy any op_api/ files that exist locally

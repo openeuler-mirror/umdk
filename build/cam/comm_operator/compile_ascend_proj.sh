@@ -77,12 +77,14 @@ build_ascend_proj() {
     fi
 
     # 创建新npu_op_*编译体系的项目目录
+    export OPS_PROJECT_NAME=aclnnInner
+
     echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}"	 
     msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}	 
     rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*	 
     rm  -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
 
-    # 复制顶层CMakeLists.txt和CMakePresets.json
+    # 复制顶层CMakeLists.txt
     cp ./ascend_kernels/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/
 
     # 复制op_host和op_kernel的CMakeLists.txt（新npu_op_*版本）
