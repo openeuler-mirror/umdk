@@ -290,7 +290,9 @@ typedef struct admin_config {
     char ns[URMA_ADMIN_MAX_NS_PATH]; /* /proc/$pid/ns/net */
     /* eid end */
     tool_query_key_t key;
-    uint8_t ns_mode; /* 0: exclusive, 1: shared */
+    bool sharing_on;
+    uint8_t dev_ns_mode;
+    uint8_t eid_ns_mode;
     uint8_t priority;
     uint8_t SL;
 } admin_config_t;

@@ -74,7 +74,7 @@ static int usage(admin_config_t *cfg)
            "           <--key_cnt>                                   show resources of UB device.\n"
            "  list_res <--dev> <--resource_type> [--key] [--key_ext]                               \n"
            "           [--key_cnt]                                   list resources of UB device.\n"
-           "  set_ns_mode <--ns_mode (exclusive: 0) | (shared: 1) >  set ns mode for UB devices.\n"
+           "  set_ns_mode <--ns_mode (exclusive: 0) | (shared: 1) >  set dev ns mode for UB devices.\n"
            "  set_dev_ns <--dev> <--ns /proc/$pid/ns/net>            set net namespace of UB device.\n"
            "\n"
            "Legacy Options (deprecated):\n"
@@ -186,7 +186,7 @@ static int parse_args(admin_config_t *cfg)
                 ret = admin_parse_ns(optarg, cfg);
                 break;
             case 'M':
-                ret = admin_str_to_u8(optarg, &cfg->ns_mode);
+                ret = admin_str_to_u8(optarg, &cfg->dev_ns_mode);
                 break;
             case 'p':
                 ret = admin_str_to_u8(optarg, &cfg->priority);

@@ -37,7 +37,7 @@ typedef enum urma_core_cmd {
     URMA_CORE_CMD_ADD_EID,
     URMA_CORE_CMD_DEL_EID,
     URMA_CORE_CMD_SET_EID_MODE,
-    URMA_CORE_SET_NS_MODE,
+    URMA_CORE_SET_DEV_NS_MODE,
     URMA_CORE_SET_DEV_NS,
     URMA_CORE_EXPOSE_DEV_NS,
     URMA_CORE_UNEXPOSE_DEV_NS,
@@ -53,6 +53,7 @@ typedef enum urma_core_cmd {
     URMA_CORE_PERF_STOP,
     URMA_CORE_PERF_SHOW,
     URMA_CORE_GET_V2P_RES,
+    URMA_CORE_SET_EID_NS_MODE,
 } urma_core_cmd_t;
 
 typedef enum uram_ubagg_cmd {
