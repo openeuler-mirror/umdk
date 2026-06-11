@@ -169,7 +169,7 @@ def {}({}, kernel_name="{}", impl_mode=""):
         SHMEM_HOME_PATH = os.path.realpath("/usr/local/Ascend/shmem/latest")
 
     options.append("-I" + SHMEM_HOME_PATH + "/shmem/include")
-    options.append("-I" + SHMEM_HOME_PATH + "shmem/include/device")
+    options.append("-I" + SHMEM_HOME_PATH + "/shmem/include/device")
     #options.append("-I" + SHMEM_HOME_PATH +"/shmem/include/host")
     options.append("-I" + SHMEM_HOME_PATH + "/shmem/include/host_device")
     options.append("-I" + SHMEM_HOME_PATH + "/shmem/include/internal")
