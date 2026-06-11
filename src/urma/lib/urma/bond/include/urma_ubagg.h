@@ -21,6 +21,7 @@ extern "C" {
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
 
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
+#define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
 #define URMA_UBAGG_WR_BUF_SIZE        (3)
 #define URMA_UBAGG_MAX_CR_CNT_PER_DEV (16)
 
@@ -131,6 +132,11 @@ typedef struct bondp_jfs_wr {
     uint32_t src_chip_id;
     uint32_t dst_chip_id;
 } bondp_jfs_wr_t;
+
+typedef struct bondp_path {
+    uint32_t local_idx;
+    uint32_t target_idx;
+} bondp_path_t;
 
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
                                   urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,

@@ -159,6 +159,8 @@ typedef struct bondp_context {
     bondp_hash_table_t remote_v2p_token_id_table;
     bool msn_enable;
     bool seg_cache_enable;
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
 #ifndef __cplusplus
     atomic_ulong token_id_cnt;
 #else
@@ -243,9 +245,9 @@ typedef struct bondp_comp {
     uint32_t msn;
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
 #ifndef __cplusplus
-    atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #else
-    std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #endif
     // recv
     wr_buf_t recv_wr_buf;
