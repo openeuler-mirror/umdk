@@ -42,10 +42,10 @@ typedef struct ping_urma_resource {
     urma_target_jetty_t *tjetty;
 } ping_urma_resource_t;
 
-static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid)
+static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid, uint32_t chip_id)
 {
     int ret;
-    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return;
@@ -84,7 +84,8 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid)
 
     for (int j = 0; j < DEV_NUM; j++) {
         for (int k = 0; k < IODIE_NUM; k++) {
-            if (topo_map->topo_infos[target_node_id].agg_devs[j].ues[k].entity_id == target_entity_id) {
+            if (topo_map->topo_infos[target_node_id].agg_devs[j].ues[k].entity_id == target_entity_id &&
+                topo_map->topo_infos[target_node_id].agg_devs[j].ues[k].chip_id == chip_id) {
                 if (memcmp(topo_map->topo_infos[target_node_id].agg_devs[j].ues[k].primary_eid,
                            empty_eid.raw,
                            EID_LEN) == 0) {
@@ -103,12 +104,13 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid)
     free(topo_map);
 }
 
-static bool is_primary_eid(urma_eid_t *eid, urma_ping_ubcore_topo_map_t *topo_map)
+static bool get_chip_id_by_primary_eid(urma_eid_t *eid, urma_topo_map_t *topo_map, uint32_t *chip_id)
 {
     for (int i = 0; i < (int)topo_map->node_num; i++) {
         for (int j = 0; j < DEV_NUM; j++) {
             for (int k = 0; k < IODIE_NUM; k++) {
                 if (memcmp(eid->raw, topo_map->topo_infos[i].agg_devs[j].ues[k].primary_eid, EID_LEN) == 0) {
+                    *chip_id = topo_map->topo_infos[i].agg_devs[j].ues[k].chip_id;
                     return true;
                 }
             }
@@ -117,24 +119,10 @@ static bool is_primary_eid(urma_eid_t *eid, urma_ping_ubcore_topo_map_t *topo_ma
     return false;
 }
 
-static uint32_t get_chip_id_by_primary_eid(urma_eid_t *eid, urma_ping_ubcore_topo_map_t *topo_map)
-{
-    for (int i = 0; i < (int)topo_map->node_num; i++) {
-        for (int j = 0; j < DEV_NUM; j++) {
-            for (int k = 0; k < IODIE_NUM; k++) {
-                return topo_map->topo_infos[i].agg_devs[j].ues[k].chip_id;
-            }
-        }
-    }
-
-    LOG_ERROR("Failed to get chip ID for primary EID.\n");
-    return 0;
-}
-
 static bool get_primary_eid_and_chip_id_by_bonding(urma_eid_t *original_eid, urma_eid_t *primary_eid, uint32_t *chip_id)
 {
     int ret;
-    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return false;
@@ -147,9 +135,8 @@ static bool get_primary_eid_and_chip_id_by_bonding(urma_eid_t *original_eid, urm
         return false;
     }
 
-    if (is_primary_eid(original_eid, topo_map)) {
+    if (get_chip_id_by_primary_eid(original_eid, topo_map, chip_id)) {
         memcpy(primary_eid->raw, original_eid->raw, EID_LEN);
-        (*chip_id) = get_chip_id_by_primary_eid(original_eid, topo_map);
         free(topo_map);
         return true;
     }
@@ -175,7 +162,7 @@ static bool get_primary_eid_and_chip_id_by_bonding(urma_eid_t *original_eid, urm
 static bool get_source_eid_by_bonding_eid_and_chip_id(urma_eid_t *eid, uint32_t chip_id)
 {
     int ret;
-    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return false;
@@ -259,10 +246,15 @@ static int get_src_and_dst_eid(ping_cfg_t *cfg, urma_eid_t *src_eid, urma_eid_t 
         return -ENODEV;
     }
 
-    primary_eid_to_main_primary_eid(dst_eid);
+    primary_eid_to_main_primary_eid(dst_eid, chip_id);
 
-    LOG_VERBOSE("Destination EID resolved to primary EID " EID_FMT " (chip_id=%u)\n",
+    LOG_VERBOSE("Destination EID resolved to " EID_FMT " (chip_id=%u)\n",
                 EID_ARGS(*dst_eid), chip_id);
+
+    if (cfg->has_src_eid) {
+        *src_eid = cfg->src_eid;
+        return 0;
+    }
 
     urma_device_t *dev = find_first_bonding_device();
     if (dev == NULL) {
@@ -284,13 +276,14 @@ static int get_src_and_dst_eid(ping_cfg_t *cfg, urma_eid_t *src_eid, urma_eid_t 
 
     *src_eid = eid_list[0].eid;
     urma_free_eid_list(eid_list);
-    eid_list = NULL;
 
     if (!get_source_eid_by_bonding_eid_and_chip_id(src_eid, chip_id)) {
         LOG_ERROR("Failed to resolve the source primary EID.\n");
         return -ENODEV;
     }
 
+    LOG_VERBOSE("Source EID resolved to " EID_FMT " (chip_id=%u)\n",
+                EID_ARGS(*src_eid), chip_id);
     return 0;
 }
 

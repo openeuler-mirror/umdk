@@ -11,6 +11,7 @@
 #ifndef URMA_PING_PARAMETERS_H
 #define URMA_PING_PARAMETERS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "urma_types.h"
@@ -20,6 +21,8 @@ typedef struct ping_cfg {
     char **argv;
     char *filename;
     urma_eid_t dst_eid;
+    urma_eid_t src_eid;
+    bool has_src_eid;
     uint32_t count;    /* UINT32_MAX means unlimited */
     uint32_t interval; /* seconds */
     uint32_t size;     /* bytes */
