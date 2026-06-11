@@ -795,7 +795,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case 'v':
                 if (verbose_get_level() < VLOG_LEVEL_VVERBOSE) {
-                    verbose_set_level(verbose_get_level() + 1);
+                    verbose_set_level((int)verbose_get_level() + 1);
                 }
                 break;
             case 'y':
