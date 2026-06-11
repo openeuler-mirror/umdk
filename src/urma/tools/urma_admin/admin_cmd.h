@@ -115,6 +115,104 @@ typedef struct admin_core_cmd_sl_info {
     } in;
 } admin_core_cmd_sl_info_t;
 
+/* record types streamed back during a tpid show dumpit, mirror of kernel enum */
+enum admin_tpid_show_rec_type {
+    ADMIN_TPID_SHOW_REC_LIST_HDR = 0,
+    ADMIN_TPID_SHOW_REC_AWARE_NODE,
+    ADMIN_TPID_SHOW_REC_UNAWARE_NODE,
+    ADMIN_TPID_SHOW_REC_TPID_STATE,
+    ADMIN_TPID_SHOW_REC_REUSE_ENTRY,
+};
+
+/* netlink attributes carried by the tpid show dumpit messages */
+enum {
+    ADMIN_TPID_SHOW_ATTR_UNSPEC = 0,
+    ADMIN_TPID_SHOW_ATTR_REC_TYPE,
+    ADMIN_TPID_SHOW_ATTR_REC_DATA,
+    ADMIN_TPID_SHOW_ATTR_MAX_PLUS,
+};
+#define ADMIN_TPID_SHOW_ATTR_MAX (ADMIN_TPID_SHOW_ATTR_MAX_PLUS - 1)
+
+/* mirror of union ubcore_tp_handle */
+typedef union admin_tp_handle {
+    struct {
+        uint64_t tpid : 24;
+        uint64_t tpn_start : 24;
+        uint64_t tp_cnt : 5;
+        uint64_t ctp : 1;
+        uint64_t rtp : 1;
+        uint64_t utp : 1;
+        uint64_t uboe : 1;
+        uint64_t pre_defined : 1;
+        uint64_t dynamic_defined : 1;
+        uint64_t trans_mode : 3;
+        uint64_t reserved : 2;
+    } bs;
+    uint64_t value;
+} admin_tp_handle_t;
+
+/* mirror of struct ubcore_show_tpid_node */
+typedef struct admin_show_tpid_node {
+    uint64_t tp_handle;
+} admin_show_tpid_node_t;
+
+/* mirror of struct ubcore_show_tpid_list_hdr */
+typedef struct admin_show_tpid_list_hdr {
+    urma_eid_t local_eid;
+    urma_eid_t peer_eid;
+    uint32_t trans_mode;
+    uint32_t share_mode;
+    uint32_t tp_type;
+    uint32_t link_type;
+    uint32_t acnt;
+    uint32_t ucnt;
+    uint32_t capacity;
+    uint32_t ref_cnt;
+    uint32_t aware_node_cnt;
+    uint32_t unaware_node_cnt;
+} admin_show_tpid_list_hdr_t;
+
+/* mirror of struct ubcore_show_tpid_state */
+typedef struct admin_show_tpid_state {
+    uint8_t found;
+    uint32_t status;
+    uint32_t owner_type;
+    uint8_t alloced;
+    uint32_t ref_cnt;
+} admin_show_tpid_state_t;
+
+/* input args for "show dev <dev> tp [tp_id]" */
+typedef struct admin_core_cmd_show_tpid_list {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+        uint8_t query_tpid;
+        uint64_t tpid;
+    } in;
+} admin_core_cmd_show_tpid_list_t;
+
+/* mirror of struct ubcore_show_tpid_reuse_entry */
+typedef struct admin_show_tpid_reuse_entry {
+    urma_eid_t local_eid;
+    urma_eid_t peer_eid;
+    uint32_t trans_mode;
+    uint32_t share_mode;
+    uint32_t tp_type;
+    uint32_t link_type;
+    uint64_t stag;
+    uint64_t dtag;
+    uint64_t tp_handle;
+    uint32_t reuse_state;
+    uint32_t ref_cnt;
+    int32_t use_cnt;
+} admin_show_tpid_reuse_entry_t;
+
+/* input args for "show dev <dev> tpreuse" */
+typedef struct admin_core_cmd_show_tpid_reuse {
+    struct {
+        char dev_name[URMA_MAX_NAME];
+    } in;
+} admin_core_cmd_show_tpid_reuse_t;
+
 #define UBCORE_GENL_FAMILY_NAME    "UBCORE_GENL"
 #define UBAGG_GENL_FAMILY_NAME     "UBAGG_GENL"
 #define GENL_FAMILY_VERSION  1

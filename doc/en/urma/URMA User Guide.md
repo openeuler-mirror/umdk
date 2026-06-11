@@ -1924,6 +1924,8 @@ Options:
 
 ```
 urma_admin show --dev <DEV_NAME> --whole                         Query device attribute information
+urma_admin show dev <DEV_NAME> tp [TP_ID]                        Query TPID list or a single TPID state of the device
+urma_admin show dev <DEV_NAME> tpreuse                           Query TPID reuse entries of the device
 urma_admin add_eid --dev <DEV_NAME> --idx [NUM] --ns [netns]     Set a static eid for the device
 urma_admin del_eid --dev <DEV_NAME> --idx [NUM]                   Delete a static eid from the device
 urma_admin set_eid_mode --dev <DEV_NAME> -m/--eid_mode           Switch eid mode (-m dynamic, no -m static)
@@ -2002,6 +2004,9 @@ Example:
 # urma_admin list_res -d ubep_beta --resource_type 5 --key 1
 # urma_admin set_ns_mode -M 0
 # urma_admin set_reserved_jetty -d bonding_dev_0 -l 0 -u 4294967295
+# urma_admin show dev ubep_beta tp
+# urma_admin show dev ubep_beta tp 1001
+# urma_admin show dev ubep_beta tpreuse
 ```
 
 ![](figures/urma_caution.png)

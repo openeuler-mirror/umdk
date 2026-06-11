@@ -54,6 +54,8 @@ typedef enum urma_core_cmd {
     URMA_CORE_PERF_SHOW,
     URMA_CORE_GET_V2P_RES,
     URMA_CORE_SET_EID_NS_MODE,
+    URMA_CORE_SHOW_TPID_LIST,
+    URMA_CORE_SHOW_TPID_REUSE,
 } urma_core_cmd_t;
 
 typedef enum uram_ubagg_cmd {
