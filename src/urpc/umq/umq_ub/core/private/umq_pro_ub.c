@@ -114,6 +114,12 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     urma_target_seg_t *tseg = NULL;
+
+    umq_ub_imm_t imm_data = {
+        .io_imm.type = IMM_TYPE_USER_WITHOUT_IMM,
+        .io_imm.umq_id = queue->remote_umq_id,
+        .io_imm.user_data = 0
+    };
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
@@ -185,11 +191,14 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             break;
         case UMQ_OPC_SEND_IMM:
             buf_pro->imm.rsvd0 = 0;
-            urma_wr_ptr->send.imm_data = buf_pro->imm_data;
+            imm_data.io_imm.type = IMM_TYPE_USER;
+            imm_data.io_imm.user_data = buf_pro->imm.user_data;
             /* fall-through */
         case UMQ_OPC_SEND:
             urma_wr_ptr->send.src.sge = sges_ptr;
             urma_wr_ptr->send.src.num_sge = sge_num;
+            urma_wr_ptr->send.imm_data = imm_data.value;
+            urma_wr_ptr->opcode = URMA_OPC_SEND_IMM;
             break;
         default:
             break;
@@ -342,13 +351,13 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
             ret = -UMQ_ERR_ENOMEM;
             goto ERROR;
         }
+        urma_wr_ptr->opcode = transform_op_code(opcode);
         ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, sges[wr_index], sge_num, &src_sge, &dst_sge);
         if (ret != UMQ_SUCCESS) {
             *bad_qbuf = qbuf;
             goto ERROR;
         }
         urma_wr_ptr->user_ctx = user_ctx;
-        urma_wr_ptr->opcode = transform_op_code(opcode);
         urma_wr_ptr->flag.value = buf_pro->flag.value;
         urma_wr_ptr->tjetty = tjetty;
         opcode_consume_rqe = (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM ||
@@ -626,10 +635,11 @@ int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 
 static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, const urma_cr_t *cr)
 {
-    if (cr->local_id >= queue->dev_ctx->dev_attr.dev_cap.max_jetty) {
+    umq_ub_imm_t imm = {.value = cr->imm_data};
+    if (imm.io_imm.umq_id >= UMQ_ID_ALLOC_SIZE) {
         return NULL;
     }
-    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_jetty_table[cr->local_id];
+    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_table[imm.io_imm.umq_id];
 }
 
 static void process_rx_mem_import_done(umq_ub_imm_t imm, ub_queue_t *queue, ub_queue_t *real_queue,
@@ -679,24 +689,38 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     } else {
         buf_pro->umq_ctx = 0;
     }
+    
     umq_ub_imm_t imm = {.value = cr->imm_data};
-    if (imm.bs_ext.type == IMM_TYPE_USER) {
-        buf_pro->imm_data = imm.value;
-        umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, rx_buf);
-        goto OUT;
+    if (queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_EXTEND_IMM) {
+        switch (imm.bs_ext.type) {
+            case IMM_TYPE_MEM_IMPORT:
+                if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0, false) != UMQ_SUCCESS) {
+                    *qbuf_status = UMQ_IMPORT_TSEG_FAILED;
+                    break;
+                }
+                *qbuf_status = UMQ_IMPORT_TSEG_SUCCESS;
+                break;
+            case IMM_TYPE_MEM_IMPORT_DONE:
+                process_rx_mem_import_done(imm, queue, real_queue, buf_pro, qbuf_status);
+                break;
+            default:
+                break;
+        }
+        if (imm.bs_ext.type >= IMM_TYPE_RESERVER) {
+            goto OUT;
+        }
     }
 
-    switch (imm.bs_ext.type) {
-        case IMM_TYPE_MEM_IMPORT:
-            if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0, false) != UMQ_SUCCESS) {
-                *qbuf_status = UMQ_IMPORT_TSEG_FAILED;
-                break;
-            }
-            *qbuf_status = UMQ_IMPORT_TSEG_SUCCESS;
+    switch (imm.bs.type) {
+        case IMM_TYPE_USER:
+            buf_pro->opcode = UMQ_OPC_SEND_IMM;
+            buf_pro->imm.user_data = imm.io_imm.user_data;
+            umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, rx_buf);
             break;
-        case IMM_TYPE_MEM_IMPORT_DONE:
-            process_rx_mem_import_done(imm, queue, real_queue, buf_pro, qbuf_status);
+        case IMM_TYPE_USER_WITHOUT_IMM:
+            buf_pro->opcode = UMQ_OPC_SEND;
             break;
+        case IMM_TYPE_CONTROL_MSG:
         default:
             break;
     }
@@ -720,13 +744,13 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                 /* on condition of base feature, write imm is used for ubmm event notify,
                  * and it counsumes one rqe, so fill rx buffer here.
                  * on condition of pro feature, report it to user.
-                */
+                 */
                 umq_buf_t *write_qbuf = umq_get_buf_by_user_ctx(queue, cr->user_ctx, UB_QUEUE_JETTY_IO);
                 umq_buf_t *bad_qbuf = NULL;
                 ret = umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf);
                 if (ret != UMQ_SUCCESS) {
                     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, ub post rx failed, status: %d\n",
-                        EID_ARGS(*eid), id, ret);
+                    EID_ARGS(*eid), id, ret);
                     umq_buf_free(write_qbuf);
                 }
                 ret = UMQ_CONTINUE_FLAG;
@@ -938,10 +962,10 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
         fc_data.bs.ratio = sge_data->bs.ratio;
         fc_data.bs.seq = imm.flow_control.seq;
         (void)umq_ub_fill_fc_rx_buf(queue, cr[i].user_ctx);
-        real_queue = umq_ub_get_real_queue_by_jetty_id(queue, cr[i].local_id);
+        real_queue = umq_ub_get_real_queue_by_umq_id(queue, imm.flow_control.umq_id);
         if (real_queue == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sub queue has been destroyed\n",
-                EID_ARGS(*eid), id);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq_id: %u, sub queue has been destroyed\n",
+                EID_ARGS(*eid), id, imm.flow_control.umq_id);
             continue;
         }
 
@@ -952,30 +976,30 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
                 "remote jetty_id: %u, urma_poll_jfc reports rx cr[%d] status: %d\n",
                 EID_ARGS(*eid), id, EID_ARGS(cr[i].remote_id.eid), cr[i].remote_id.id, i, (int)cr[i].status);
             qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(real_queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
-            umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+            umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
             continue;
         }
 
         // Flow control messages sent to the main umq are processed directly.
         if (real_queue == queue) {
             if (is_umq_ub_flow_control_msg_duplicate(queue, &fc_data)) {
-                umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+                umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
                 continue;
             }
             qbuf_cnt += (int32_t)umq_ub_process_fc_msg(queue, &fc_data, &buf[qbuf_cnt]);
             umq_ub_fill_rx_buff_post_process(queue, &fc_data);
-            umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+            umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
             continue;
         }
 
         if (is_umq_ub_flow_control_msg_duplicate(real_queue, &fc_data)) {
             // Duplicate packet, discard
-            umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+            umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
             continue;
         }
 
         qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(real_queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_MSG);
-        umq_ub_put_real_queue(real_queue, UB_QUEUE_JETTY_FLOW_CONTROL);
+        umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
     }
     return qbuf_cnt;
 }
