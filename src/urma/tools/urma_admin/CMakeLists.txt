@@ -11,6 +11,7 @@ add_executable(urma_admin
     admin_cmd_perf.c
     admin_cmd_show.c
     admin_cmd_show_res.c
+    admin_cmd_system.c
     admin_cmd.c
     admin_file_ops.c
     admin_log.c

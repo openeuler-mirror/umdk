@@ -52,6 +52,7 @@ static int usage(admin_config_t *cfg)
            "  dev   Device management operations\n"
            "  eid   EID management operations\n"
            "  main_ue_eid  Main UE EID query table operations\n"
+           "  system  System configuration operations\n"
            "Run '%s <command> --help' for more information on a specific command.\n"
            "\n"
            "Options:\n"
@@ -283,6 +284,7 @@ int admin_cmd_main(admin_config_t *cfg)
         {"eid", admin_cmd_eid},
         {"main_ue_eid", admin_cmd_main_ue_eid},
         {"perf", admin_cmd_perf},
+        {"system", admin_cmd_system},
         {0},
     };
     return exec_cmd(cfg, cmds);

@@ -326,6 +326,7 @@ typedef struct admin_device_info {
 
 bool is_ubc(const char *dev_name);
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
+int admin_nl_set_dev_sharing(bool enabled);
 int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd);
@@ -354,6 +355,7 @@ int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
 int admin_cmd_main_ue_eid(admin_config_t *cfg);
 int admin_cmd_show(admin_config_t *cfg);
+int admin_cmd_system(admin_config_t *cfg);
 int admin_cmd_perf(admin_config_t *cfg);
 int admin_cmd_show_dev_jfc(admin_config_t *cfg);
 int admin_cmd_show_dev_jfs(admin_config_t *cfg);
