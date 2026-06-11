@@ -163,7 +163,7 @@ static void ums_agent_pending_entry_dequeue(struct ums_agent_pending_entry *targ
     g_ums_agent_tp.pending_entry_num -= 1;
 }
 
-static uint32_t ums_agent_pending_entry_num_get()
+static uint32_t ums_agent_pending_entry_num_get(void)
 {
     return g_ums_agent_tp.pending_entry_num;
 }
