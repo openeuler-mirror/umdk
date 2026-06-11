@@ -70,7 +70,7 @@ def get_test_eid(test_host, host_idx):
     return test_eid
 
 def get_test_dev(test_host, host_idx):
-    test_dev = test_host[host_idx].test_nic1
+    test_dev = test_host[host_idx].test_nic1_dev
     return test_dev
 
 def exec_test_case(host_list, path, server_num=1, client_num=1, random_host=True, **kwargs):
