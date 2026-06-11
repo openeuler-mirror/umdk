@@ -44,8 +44,11 @@ using object_desc_map_t = std::unordered_map<dlock_descriptor*, object_entry_s*,
 using connection_map_t = std::unordered_map<int, dlock_connection*>;
 using jetty_mgr_map_t = std::unordered_map<uint32_t, jetty_mgr*>;
 using exception_client_set_t = std::set<int32_t>;
+using conn_sockfd_set_t = std::set<int>;
 
 constexpr size_t MAX_OBJECT_SIZE = 102400;  /* maximum alive object number */
+/* This limit can protect unlimited consume of system fd */
+constexpr int MAX_FD_LIMIT_NUM = MAX_NUM_CLIENT << 2;
 
 struct jetty_mgr_invalid_info {
     jetty_mgr *p_jetty_mgr;
@@ -176,6 +179,7 @@ private:
     void delete_dlock_connection(dlock_connection *p_conn);
     int negotiate_proto_version(const struct client_init_req_body &req_body) const;
     int check_cmd_msg_common_field(const struct lock_cmd_msg &msg) const;
+    int fd_exceed_process(int new_fd);
 
     object_entry_s* create_object_by_msg(struct object_create_body *body, int32_t client_id);
     void destroy_object_entry(object_entry_s *entry);
@@ -209,6 +213,7 @@ private:
     unsigned int m_recovery_client_num;
     int m_listen_fd;
     connection_map_t m_fd2conn_map;
+    conn_sockfd_set_t m_empty_sock_set;
     bool m_ssl_enable;
     ssl_init_attr_t m_ssl_init_attr;
     bool m_is_cpu_ctrl_affnty_set;
@@ -227,6 +232,7 @@ private:
     dlock_server_state_t m_server_state;
     int m_control_epfd;
     int m_lock_num;
+    int m_fd_num;
 #if defined(MEASURE_ENABLE) && (MEASURE_ENABLE != 0)
     struct timeval m_tv_start;
     uint32_t m_measure_count;
