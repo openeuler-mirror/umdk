@@ -103,14 +103,15 @@ FORCE_INLINE_AICORE void SetWaitEvent(event_t eventId)
 
 template <typename K, typename U = K>
 FORCE_INLINE_AICORE void CpGM2GMPingPong(int64_t dataSizeRemain,
-                                        const GlobalTensor<U> &sendDataInputGt,
+    const GlobalTensor<U> &sendDataInputGt,
+
                                         const GlobalTensor<K> &recvDataOutputGT, int op)
 {
     // General case (U = K), input/output are the same, share one UB
     // Only when conversion is needed (U->K), UB will be divided into two parts according to the ratio of
     // sizeof(U):sizeof(K) and aligned to 32 bytes
     constexpr int32_t ubBlockSize = UB_SINGLE_PING_PONG_ADD_SIZE_MAX;
-    constexpr int32_t ubAlignNum = ubBlockSize / (sizeof(K) + sizeof(U)) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
+    constexpr int32_t ubAlignNum = ubBlockSize / (sizeof(K) + sizeof(U)) / Moe::UB_ALIGN_SIZE * Moe::UB_ALIGN_SIZE;
     constexpr int32_t inputUbBlockSize = std::is_same_v<K, U> ? ubBlockSize : ubAlignNum * sizeof(U);
     constexpr int32_t outputUbBlockSize = std::is_same_v<K, U> ? ubBlockSize : ubAlignNum * sizeof(K);
 
@@ -141,7 +142,8 @@ FORCE_INLINE_AICORE void CpGM2GMPingPong(int64_t dataSizeRemain,
         if constexpr (!std::is_same_v<K, U>) {
             SetWaitEvent<HardEvent::MTE2_V>(eventId);
             CastImpl((i & 1) ? outputUB[0] : outputUB[1], (i & 1) ? inputUB[0] : inputUB[1], RoundMode::CAST_NONE,
-                     size / sizeof(K));
+                size / sizeof(K));
+
             SetWaitEvent<HardEvent::V_MTE3>(eventId);
         }
         AscendC::SetFlag<HardEvent::MTE2_MTE3>(eventId);
@@ -165,15 +167,17 @@ FORCE_INLINE_AICORE void CpGM2GMPingPong(int64_t dataSizeRemain,
 
 template<typename T>
 FORCE_INLINE_AICORE void camCpUB2GM(GlobalTensor<T> outputGt, LocalTensor<T> inputLt, uint16_t count, uint32_t size,
-                                    uint32_t srcStride = 0, uint32_t dstStride = 0)
+    uint32_t srcStride = 0, uint32_t dstStride = 0)
+
 {
-    DataCopyExtParams dataCopyParams(count, size, srcStride / UB_ALIGN_SIZE, dstStride, 0);
+    DataCopyExtParams dataCopyParams(count, size, srcStride / Moe::UB_ALIGN_SIZE, dstStride, 0);
     DataCopyPad(outputGt, inputLt, dataCopyParams);
 }
 
 template<typename T>
 FORCE_INLINE_AICORE void camCpGM2UB(LocalTensor<T> outputLt, GlobalTensor <T> inputGt, uint32_t size,
-                                    uint32_t srcStride = 0, uint32_t dstStride = 0)
+    uint32_t srcStride = 0, uint32_t dstStride = 0)
+
 {
     DataCopyExtParams dataCopyParams(1, size, 0, 0, 0);
     DataCopyPadExtParams<T> padParams;
