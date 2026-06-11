@@ -282,6 +282,7 @@ int admin_cmd_main(admin_config_t *cfg)
         {"dev", admin_cmd_dev},
         {"eid", admin_cmd_eid},
         {"main_ue_eid", admin_cmd_main_ue_eid},
+        {"perf", admin_cmd_perf},
         {0},
     };
     return exec_cmd(cfg, cmds);

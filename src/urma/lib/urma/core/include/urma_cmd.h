@@ -49,6 +49,9 @@ typedef enum urma_core_cmd {
     URMA_CORE_ADMIN_LOOKUP_MAIN_UE_EID,
     URMA_CORE_ADMIN_FLUSH_MAIN_UE_EID,
     URMA_CORE_ADMIN_INSERT_MAIN_UE_EID_BATCH,
+    URMA_CORE_PERF_START,
+    URMA_CORE_PERF_STOP,
+    URMA_CORE_PERF_SHOW
 } urma_core_cmd_t;
 
 typedef enum uram_ubagg_cmd {
