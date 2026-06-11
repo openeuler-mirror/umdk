@@ -100,7 +100,7 @@ dlock_server::dlock_server(int server_id) noexcept
       m_recovery_client_num(0), m_listen_fd(-1), m_ssl_enable(false), m_is_cpu_ctrl_affnty_set(false),
       m_is_cpu_cmd_affnty_set(false), m_time_current({0}), m_num_reqs(0), m_sleep_cfg_enable(true),
       m_sleep_mode(false), m_client_num(0), m_tp_mode(SEPERATE_CONN), m_server_state(SERVER_INIT),
-      m_control_epfd(-1), m_lock_num(0), m_object_memory(nullptr), m_obj_mem_dma_tseg(nullptr),
+      m_control_epfd(-1), m_lock_num(0), m_fd_num(0), m_object_memory(nullptr), m_obj_mem_dma_tseg(nullptr),
       m_curr_object_id(1), m_curr_object_num(0)
 {
     DLOCK_LOG_DEBUG("server %d construct", server_id);
@@ -205,6 +205,7 @@ void dlock_server::clear_m_fd2conn_map(void)
             static_cast<void>(iter++);
         }
         m_fd2conn_map.clear();
+        m_fd_num = 0;
     }
 }
 
@@ -229,6 +230,11 @@ void dlock_server::delete_sockfd(int sockfd) const
 void dlock_server::delete_dlock_connection(dlock_connection *p_conn)
 {
     static_cast<void>(m_fd2conn_map.erase(p_conn->get_fd()));
+    if (m_fd_num > 0) {
+        m_fd_num--;
+    } else {
+        DLOCK_LOG_ERR("fd num count state err");
+    }
     static_cast<void>(epoll_ctl(m_control_epfd, EPOLL_CTL_DEL, p_conn->get_fd(), nullptr));
     delete p_conn;
 }
@@ -251,6 +257,7 @@ void dlock_server::deinit_server_proc(void)
     clear_m_lock_map();
     clear_m_object_map();
     m_except_client_set.clear();
+    m_empty_sock_set.clear();
 
     if (m_p_urma_ctx != nullptr) {
         delete m_p_urma_ctx;
@@ -1024,6 +1031,10 @@ int dlock_server::primary_control_func(int control_epfd, int ev_fd)
             DLOCK_LOG_ERR("Failed to find dlock_connection corresponding to the sockfd %d", ev_fd);
             return -1;
         }
+        conn_sockfd_set_t::iterator empty_sock_iter = m_empty_sock_set.find(ev_fd);
+        if (empty_sock_iter != m_empty_sock_set.end()) {
+            static_cast<void>(m_empty_sock_set.erase(ev_fd));
+        }
         get_process_control_msg_range(min_type, max_type);
         static_cast<void>(process_control_msg(conn_iter->second, min_type, max_type));
         return 0;
@@ -1042,6 +1053,13 @@ int dlock_server::primary_control_func(int control_epfd, int ev_fd)
         DLOCK_LOG_ERR("The dlock_connection corresponding to the sockfd %d already exists.", new_sock);
         (void)close(new_sock);
         return -1;
+    }
+
+    if (m_fd_num >= MAX_FD_LIMIT_NUM) {
+        ret = fd_exceed_process(new_sock);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
     epoll_event new_ev = {0, {.ptr = nullptr}};
@@ -1072,6 +1090,9 @@ int dlock_server::primary_control_func(int control_epfd, int ev_fd)
         delete p_conn;
         return -1;
     }
+    /* Insert initial empty sock to the set, to record sockets which has not received any msg yet */
+    static_cast<void>(m_empty_sock_set.insert(new_sock));
+    m_fd_num++;
     m_fd2conn_map[new_sock] = p_conn;
     return 0;
 }
@@ -1199,6 +1220,28 @@ int dlock_server::check_cmd_msg_common_field(const struct lock_cmd_msg &msg) con
         return -1;
     }
 
+    return 0;
+}
+
+/* This processing logic can prevent from out of service */
+int dlock_server::fd_exceed_process(int new_sock)
+{
+    if (m_empty_sock_set.empty()) {
+        DLOCK_LOG_ERR("Connections accepted by server exceed limit");
+        (void)close(new_sock);
+        return -1;
+    }
+    conn_sockfd_set_t::iterator empty_sock_iter = m_empty_sock_set.begin();
+    int empty_sockfd = *empty_sock_iter;
+    connection_map_t::iterator conn_iter = m_fd2conn_map.find(empty_sockfd);
+    if (conn_iter == m_fd2conn_map.end()) {
+        /* This case should not happen */
+        DLOCK_LOG_ERR("Failed to find dlock_connection corresponding to empty sockfd");
+        (void)close(new_sock);
+        return -1;
+    }
+    delete_dlock_connection(conn_iter->second);
+    static_cast<void>(m_empty_sock_set.erase(empty_sockfd));
     return 0;
 }
 
