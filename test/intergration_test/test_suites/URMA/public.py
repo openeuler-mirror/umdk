@@ -51,8 +51,8 @@ class UBUSFeature(BaseTest):
         if " -I" not in opt and " --inline_size" not in opt:
             opt += f" -I {random.randint(1, 188)}"
         if " -d" not in opt and " --dev_name" not in opt:
-            s_dev_opt = f" -d {server.test_nic1}"
-            c_dev_opt = f" -d {client.test_nic1}"
+            s_dev_opt = f" -d {server.test_nic1_dev}"
+            c_dev_opt = f" -d {client.test_nic1_dev}"
         if "-p " not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
                 opt += f" -p {random.randint(0, 2)}"
