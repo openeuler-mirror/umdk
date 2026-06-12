@@ -909,8 +909,10 @@ int test_import_resource(test_urma_ctx_t *ctx)
         }
 
         // import资源
-        for (int i = 0; i < (int)ctx->r_ctx[app].num_jfr; i++) {
-            test_ctx_import_jfr(ctx, app, i);
+        if (ctx -> tp_mode != URMA_TM_RC) {
+            for (int i = 0; i < (int)ctx->r_ctx[app].num_jfr; i++) {
+                test_ctx_import_jfr(ctx, app, i);
+            }
         }
         for (int i = 0; i < (int)ctx->r_ctx[app].num_jetty; i++) {
             test_ctx_import_jetty(ctx, app, i);

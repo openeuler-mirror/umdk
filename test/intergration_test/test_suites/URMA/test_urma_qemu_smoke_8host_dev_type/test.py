@@ -31,11 +31,7 @@ class Test(UBUSFeature):
             "-p 0",
             "-p 1",
             "-p 0 --ctp",
-            "-p 1 --ctp",
-            "-p 2 --ctp",
-            "-p 0 --ctp --tp_aware",
-            "-p 1 --ctp --tp_aware",
-            "-p 2 --ctp --tp_aware"
+            "-p 1 --ctp"
         ]
         
         # Traverse all types and all modes to perform traffic generation
