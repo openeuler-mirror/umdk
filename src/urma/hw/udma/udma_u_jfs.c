@@ -190,6 +190,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *ctx = sq->ctx;
+	uint32_t jetty_depth = cfg->depth;
 	uint32_t aligned_size;
 	uint32_t sqe_bb_cnt;
 	bool is_ccu_jetty;
@@ -208,6 +209,13 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	if (sqe_bb_cnt > MAX_SQE_BB_NUM)
 		sqe_bb_cnt = MAX_SQE_BB_NUM;
 	sq->sqe_bb_cnt = sqe_bb_cnt;
+	if (sq->is_wqe_lock_buf_jetty) {
+		sq->sqe_bb_cnt = UDMA_CCU_SQE_BB_CNT;
+		jetty_depth = (1 << ctx->lock_buf_bb_shift);
+		sq->qbuf = (void *)(((uint64_t)sq->qbuf) << SQE_VA_L_OFFSET);
+		sq->qbuf_size = sq->sqe_bb_cnt * jetty_depth * UDMA_JFS_WQEBB;
+		return 0;
+	}
 	sq->max_sge_num = cfg->max_sge;
 
 	is_ccu_jetty = ctx->ccu_jetty_max_cnt &&
@@ -216,7 +224,7 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	aligned_size = is_ccu_jetty ?
 		(UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB) : UDMA_HW_PAGE_SIZE;
 	sq->aligned_size = aligned_size;
-	if (!udma_u_alloc_queue_buf(sq, sqe_bb_cnt * cfg->depth,
+	if (!udma_u_alloc_queue_buf(sq, sq->sqe_bb_cnt * jetty_depth,
 				    UDMA_JFS_WQEBB, aligned_size, true)) {
 		UDMA_LOG_ERR("failed to alloc JFS work queue entry buffer.\n");
 		goto err_alloc_buf;

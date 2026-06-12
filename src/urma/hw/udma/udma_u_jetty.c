@@ -212,6 +212,7 @@ static int udma_u_active_jetty_prepare(urma_jetty_t *jetty, urma_jetty_cfg_t *cf
 
 	udma_jetty->sq.sq_reserved = udma_jetty->sq.ctx->sq_reserved;
 	udma_jetty->sq.db.id = jetty->jetty_cfg.id;
+	udma_jetty->sq.is_jetty = true;
 	ret = udma_u_create_sq(&udma_jetty->sq, &cfg->jfs_cfg);
 	if (ret) {
 		UDMA_LOG_ERR("active JETTY create SQ failed, ret = %d.\n", ret);
@@ -347,7 +348,10 @@ static void udma_u_free_jetty_prepare(urma_jetty_t* jetty)
 
 	udma_u_jetty_table_remove(udma_ctx, udma_jetty);
 	udma_u_free_db(jetty->urma_ctx, &udma_jetty->sq.db);
-	udma_u_delete_sq(&udma_jetty->sq);
+	if (udma_jetty->jetty_type == UDMA_LOCK_BUFFER_JETTY_TYPE)
+		udma_u_lock_delete_sq(&udma_jetty->sq);
+	else
+		udma_u_delete_sq(&udma_jetty->sq);
 	remove_jetty_from_grp(udma_jetty);
 }
 
@@ -901,8 +905,8 @@ urma_status_t udma_u_set_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt
 	switch (opt) {
 	case URMA_JFS_SQE_BASE_ADDR:
 		sq->qbuf = (void *)(uintptr_t)(*((uint64_t *)buf));
-		if (!sq->qbuf) {
-			UDMA_LOG_ERR("set SQE base address is null.\n");
+		if (!sq->qbuf && !sq->ctx->lock_buffer_en) {
+			UDMA_LOG_ERR("set SQE base address is null and no support wqe lock buffer.\n");
 			return URMA_EINVAL;
 		}
 		sq->cstm = true;
@@ -1103,6 +1107,32 @@ static int udma_u_active_jetty_after(urma_jetty_t *jetty)
 	return ret;
 }
 
+static int udma_u_check_wqe_lock_buffer_jetty(struct udma_u_jetty *udma_jetty)
+{
+	if (!udma_jetty->sq.cstm) {
+		UDMA_LOG_ERR("ccu jetty no support address not configured.\n");
+		return URMA_EINVAL;
+	}
+
+	if (((uint64_t)udma_jetty->sq.qbuf) >= UDMA_WQE_LOCK_BUFFER_JETTY_IDX) {
+		UDMA_LOG_ERR("buffer index is out of range, buffer index = %lu.\n",
+			     (uint64_t)udma_jetty->sq.qbuf);
+		return URMA_EINVAL;
+	}
+
+	return 0;
+}
+
+static int udma_u_check_normal_jetty(struct udma_u_jetty *udma_jetty)
+{
+	if (udma_jetty->sq.cstm && !udma_jetty->sq.qbuf) {
+		UDMA_LOG_ERR("set SQE base address is null.\n");
+		return URMA_EINVAL;
+	}
+
+	return 0;
+}
+
 urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(jetty->urma_ctx);
@@ -1110,6 +1140,16 @@ urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 	urma_jetty_cfg_t *cfg = &jetty->jetty_cfg;
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
+
+    udma_jetty->sq.is_wqe_lock_buf_jetty =
+		is_support_wqe_lock_buffer_jetty(udma_jetty->sq.ctx, jetty->jetty_cfg.id, true);
+	if (udma_jetty->sq.is_wqe_lock_buf_jetty) {
+		if (udma_u_check_wqe_lock_buffer_jetty(udma_jetty))
+			return URMA_EINVAL;
+	} else {
+		if (udma_u_check_normal_jetty(udma_jetty))
+			return URMA_EINVAL;
+	}
 
 	udma_jetty->sq.dtu_en = udma_ctx->dtu_enable;
 	ret = udma_u_active_jetty_prepare(jetty, cfg);
