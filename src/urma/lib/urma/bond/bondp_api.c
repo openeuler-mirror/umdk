@@ -220,6 +220,7 @@ urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
         ret = URMA_FAIL;
     }
 
+    URMA_LOG_INFO("Deleting jfce, fd=%d, ret=%d\n", jfce->fd, ret);
     free(bdp_jfce);
     return ret;
 }
@@ -1721,10 +1722,12 @@ static int bondp_import_vjetty(
 
         ret = urma_cmd_import_jetty(ctx, &bdp_tjetty->v_tjetty, &cfg, &udata);
         if (ret == 0) {
+            URMA_LOG_DEBUG("Imported vjetty successfully, jetty_id=%u\n", rjetty->jetty_id.id);
             return 0;
         }
     }
 
+    URMA_LOG_ERR("Failed to import vjetty, jetty_id=%u, ret=%d\n", rjetty->jetty_id.id, ret);
     return ret;
 }
 
@@ -1744,6 +1747,8 @@ static int bondp_import_pjetty(
             URMA_LOG_ERR("Failed to import tjetty %u %u\n", local_idx, target_idx);
             return -1;
         }
+        URMA_LOG_DEBUG("Imported pjetty successfully, local_idx=%u, target_idx=%u, jetty_id=%u\n",
+                       local_idx, target_idx, p_rjetty.jetty_id.id);
         bdp_tjetty->p_tjetty[local_idx][target_idx] = tjetty;
         bdp_tjetty->valid[target_idx] = true;
     }
@@ -1853,8 +1858,8 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         }
     }
 
-    URMA_LOG_INFO("Successfully imported target jetty=" URMA_JETTY_ID_FMT "\n",
-                  URMA_JETTY_ID_ARGS(&rjetty->jetty_id));
+    URMA_LOG_DEBUG("Successfully imported target jetty=" URMA_JETTY_ID_FMT "\n",
+                    URMA_JETTY_ID_ARGS(&rjetty->jetty_id));
 
     return &bdp_tjetty->v_tjetty;
 
@@ -1931,6 +1936,8 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
         if (urma_bind_jetty(pjetty, ptjetty) != 0) {
             goto UNBIND;
         }
+        URMA_LOG_DEBUG("Binded pjetty successfully, local_idx=%u, target_idx=%u, jetty_id=%u, tjetty_id=%u\n",
+                       local_idx, target_idx, pjetty->jetty_id.id, ptjetty->id.id);
     }
 
     bdp_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
@@ -1965,6 +1972,8 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
                 ret = URMA_FAIL;
                 continue;
             }
+            URMA_LOG_INFO("Unbinded pjetty successfully, local_idx=%u, jetty_id=%u, tjetty_id=%u\n",
+                          local_idx, bdp_jetty->p_jetty[local_idx]->jetty_id.id, bdp_tjetty->v_tjetty.id.id);
             bdp_jetty->p_jetty[local_idx]->remote_jetty = NULL;
         }
     }
@@ -2044,11 +2053,15 @@ static int bondp_unimport_pjfr(bondp_target_jetty_t *bdp_tjetty)
             if (!bdp_tjetty->p_tjetty[i][j]) {
                 continue;
             }
+            uint32_t jfr_id = bdp_tjetty->p_tjetty[i][j]->id.id;
             int p_ret = urma_unimport_jfr(bdp_tjetty->p_tjetty[i][j]);
             if (p_ret != URMA_SUCCESS) {
-                URMA_LOG_ERR("Failed to unimport pjfr, tjetty_id=%u, idx=%d/%d, ret=%d\n",
-                             tjetty_id, i, j, p_ret);
+                URMA_LOG_ERR("Failed to unimport pjfr, tjetty_id=%u, idx=%d/%d, jfr_id=%u, ret=%d\n",
+                             tjetty_id, i, j, jfr_id, p_ret);
                 ret = URMA_FAIL;
+            } else {
+                URMA_LOG_INFO_RL("Unimported pjfr successfully, tjetty_id=%u, idx=%d/%d, jfr_id=%u\n",
+                                 tjetty_id, i, j, jfr_id);
             }
             bdp_tjetty->p_tjetty[i][j] = NULL;
         }
@@ -2323,6 +2336,7 @@ urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_e
         }
         status = urma_get_async_event(p_contex, p_event);
         if (status != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to get async event, status=%d\n", status);
             free(p_event);
             return status;
         }
@@ -2334,6 +2348,7 @@ urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *v_e
         }
         v_event->event_type = p_event->event_type;
         v_event->priv = p_event;
+        URMA_LOG_DEBUG("Got async event successfully, event_type=%u\n", v_event->event_type);
         return URMA_SUCCESS;
     }
     return URMA_FAIL;
@@ -2347,6 +2362,7 @@ void bondp_ack_async_event(urma_async_event_t *event)
     }
     urma_async_event_t *p_event = (urma_async_event_t *)event->priv;
     urma_ack_async_event(p_event);
+    URMA_LOG_DEBUG("Acked async event, event_type=%u\n", event->event_type);
     event->priv = NULL;
     free(p_event);
 }
