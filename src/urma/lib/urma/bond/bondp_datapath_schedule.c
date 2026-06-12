@@ -217,3 +217,50 @@ int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx)
             return -1;
     }
 }
+
+int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cnt[URMA_UBAGG_DEV_MAX_NUM])
+{
+    uint32_t current_load[URMA_UBAGG_DEV_MAX_NUM] = {0};
+
+    if (recv_wr_cnt == NULL) {
+        URMA_LOG_ERR("Invalid recv_wr_cnt: NULL\n");
+        return URMA_EINVAL;
+    }
+
+    if (bdp_comp->active_count == 0) {
+        URMA_LOG_ERR("No active port\n");
+        return -1;
+    }
+
+    (void)memset(recv_wr_cnt, 0, sizeof(uint32_t) * URMA_UBAGG_DEV_MAX_NUM);
+    if (wr_num == 0) {
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
+        uint32_t active_idx = bdp_comp->active_indices[i];
+        current_load[active_idx] = bdp_comp->rqe_cnt[active_idx];
+    }
+
+    for (uint32_t wr_idx = 0; wr_idx < wr_num; wr_idx++) {
+        int least_load_idx = -1;
+        uint32_t least_load = UINT32_MAX;
+
+        for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
+            uint32_t active_idx = bdp_comp->active_indices[i];
+            if (current_load[active_idx] < least_load) {
+                least_load = current_load[active_idx];
+                least_load_idx = (int)active_idx;
+            }
+        }
+
+        if (least_load_idx < 0) {
+            return -1;
+        }
+
+        recv_wr_cnt[least_load_idx]++;
+        current_load[least_load_idx]++;
+    }
+
+    return 0;
+}
