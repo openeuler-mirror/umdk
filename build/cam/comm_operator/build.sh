@@ -74,6 +74,7 @@ if [ $ENABLE_SRC_BUILD -eq 1 ]; then
         mkdir -p ${MODULE_BUILD_OUT_PATH}/run
     fi
     if [[ "$SOC_VERSION" == "all" ]]; then
+        echo "Default SOC version: ascend910_93"
         bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE
     else
         bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE

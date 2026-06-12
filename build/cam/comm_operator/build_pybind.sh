@@ -19,6 +19,10 @@ build_pybind() {
     # 拷贝源码到临时编译路径
     cp -r $MODULE_SRC_PATH/pybind "${build_tmp_dir}"
     
+    # 限制 C++ 编译并行度：可通过 CAM_BUILD_JOBS 环境变量配置，默认 4
+    # Jenkins ECS 等内存受限环境建议设置为 2~4
+    export MAX_JOBS=${CAM_BUILD_JOBS:-8}
+
     # 在临时目录中编译
     cd "${build_tmp_dir}"
     if python3 setup.py bdist_wheel --dist-dir="${wheel_out_dir}"; then
