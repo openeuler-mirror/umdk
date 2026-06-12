@@ -295,27 +295,24 @@ typedef struct umq_ub_bind_dev_info {
 } umq_ub_bind_dev_info_t;
 
 typedef struct umq_ub_bind_queue_info {
-    uint8_t is_binded;
-    urma_jetty_grp_policy_t policy;
-    urma_jetty_id_t jetty_id;
     urma_order_type_t order_type;
-    urma_target_type_t type;
-    urma_transport_mode_t tp_mode;
-    urma_tp_type_t tp_type;
     urma_token_t token;
     uint32_t umq_id;
-    uint32_t rsvd;
+    uint32_t is_binded : 1;
+    uint32_t rsvd : 31;
     uint32_t rx_depth;
     uint32_t tx_depth;
     uint32_t rx_buf_size;
     umq_state_t state;
+    uint32_t rjetty_size;
+    urma_rjetty_t rjetty[0];
 } umq_ub_bind_queue_info_t;
 
 typedef struct umq_ub_bind_fc_info {
-    urma_jetty_id_t jetty_id;
     urma_token_t token;
-    uint64_t rsvd1;
-    uint32_t rsvd2;
+    uint32_t rsvd;
+    uint32_t rjetty_size;
+    urma_rjetty_t rjetty[0];
 } umq_ub_bind_fc_info_t;
 
 typedef struct umq_ub_bind_info {
