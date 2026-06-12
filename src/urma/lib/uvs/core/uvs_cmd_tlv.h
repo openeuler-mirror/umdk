@@ -92,6 +92,11 @@ typedef enum uvs_cmd_insert_main_ue_eid_batch_type {
     INSERT_MAIN_UE_EID_BATCH_IN_NUM
 } uvs_cmd_insert_main_ue_eid_batch_type_t;
 
+typedef enum uvs_cmd_insert_host_eid_batch_type {
+    INSERT_HOST_EID_BATCH_IN_ENTRY,
+    INSERT_HOST_EID_BATCH_IN_NUM
+} uvs_cmd_insert_host_eid_batch_type_t;
+
 #ifdef __cplusplus
 }
 #endif
