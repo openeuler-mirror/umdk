@@ -16,19 +16,6 @@
 
 #include "admin_cmd.h"
 
-static int admin_nl_set_dev_sharing(bool enabled)
-{
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS_MODE, 0, UBCORE_GENL);
-    if (msg == NULL) {
-        return -ENOMEM;
-    }
-
-    admin_nl_put_u8(msg, UBCORE_ATTR_DEV_NS_MODE, (uint8_t)enabled);
-    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
-    admin_nl_free_msg(msg);
-    return ret;
-}
-
 static int admin_nl_set_dev_ns(const char *dev_name, int ns_fd)
 {
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_DEV_NS, 0, UBCORE_GENL);
@@ -74,7 +61,6 @@ int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd)
 static int cmd_dev_usage(admin_config_t *cfg)
 {
     printf("Usage:\n"
-           "  urma_admin dev set-sharing {on|off}\n"
            "  urma_admin dev set <dev> ns <netns>\n"
            "  urma_admin dev set <dev> sl --sl <sl> --priority <priority>\n"
            "  urma_admin dev expose <dev> <netns>\n"
@@ -84,17 +70,6 @@ static int cmd_dev_usage(admin_config_t *cfg)
            "  <dev>    Device name (e.g., udma1)\n"
            "  <netns>  Network namespace path (e.g., /proc/$pid/ns/net)\n");
     return 0;
-}
-
-static int cmd_dev_toggle_sharing(admin_config_t *cfg)
-{
-    int ret;
-
-    if ((ret = pop_arg_sharing(cfg)) != 0) {
-        return ret;
-    }
-
-    return admin_nl_set_dev_sharing(cfg->sharing_on);
 }
 
 static int cmd_dev_set_ns(admin_config_t *cfg)
@@ -217,7 +192,6 @@ int admin_cmd_dev(admin_config_t *cfg)
     }
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_dev_usage},
-        {"set-sharing", cmd_dev_toggle_sharing},
         {"set", cmd_dev_set},
         {"expose", cmd_dev_expose},
         {"unexpose", cmd_dev_unexpose},
