@@ -106,6 +106,7 @@ static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
             URMA_LOG_ERR("Failed to register pseg %d\n", i);
             goto DELETE_PSEG;
         }
+        URMA_LOG_INFO("Registered pseg successfully, idx=%d, token_id=%u\n", i, p_tseg->seg.token_id);
 
         if (p_tseg->token_id == NULL) {
             p_tseg->token_id = seg_cfg->token_id;
@@ -362,6 +363,7 @@ static int bondp_import_vseg(urma_context_t *ctx, urma_seg_t *seg,
 
         ret = urma_cmd_import_seg(ctx, &bdp_tseg->v_tseg, &cfg, &udata);
         if (ret == 0) {
+            URMA_LOG_DEBUG("Imported vseg successfully, token_id=%u\n", seg->token_id);
             // Hacky
             bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
             bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
@@ -410,8 +412,18 @@ static int bondp_import_pseg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
 
 static int bondp_unimport_vseg(bondp_import_tseg_t *bdp_tseg)
 {
+    int ret;
+
     bdp_tseg->v_tseg.handle = bdp_tseg->v_orig_handle;
-    return urma_cmd_unimport_seg(&bdp_tseg->v_tseg);
+    ret = urma_cmd_unimport_seg(&bdp_tseg->v_tseg);
+    if (ret != URMA_SUCCESS) {
+        URMA_LOG_ERR_RL("Failed to unimport vseg, token_id=%u, ret=%d\n",
+                        bdp_tseg->v_tseg.seg.token_id, ret);
+        return ret;
+    }
+
+    URMA_LOG_INFO("Unimported vseg successfully, token_id=%u\n", bdp_tseg->v_tseg.seg.token_id);
+    return URMA_SUCCESS;
 }
 
 static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
@@ -426,6 +438,8 @@ static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
             bdp_tseg->p_tseg[i][j]->handle = bdp_tseg->p_orig_handle[i][j];
             if (urma_unimport_seg(bdp_tseg->p_tseg[i][j]) != URMA_SUCCESS) {
                 ret = URMA_FAIL;
+            } else {
+                URMA_LOG_INFO("Unimported pseg successfully, idx=%d/%d\n", i, j);
             }
             bdp_tseg->p_tseg[i][j] = NULL;
         }
