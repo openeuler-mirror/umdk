@@ -91,9 +91,9 @@ def get_test_dev(case_name, mode, test_host, host_idx):
     test_dev2 = None
 
     if hasattr(test_host[0], "test_nic2"):
-        test_dev = test_host[host_idx].test_nic2 if mode == 'IB' or mode == 'UB' else test_host[host_idx].test_nic2_dev
+        test_dev = test_host[host_idx].test_nic2_dev if mode == 'IB' or mode == 'UB' else test_host[host_idx].test_nic2
     else:
-        test_dev = test_host[host_idx].test_nic1 if mode == 'IB' or mode == 'UB' else test_host[host_idx].test_nic1_dev
+        test_dev = test_host[host_idx].test_nic1_dev if mode == 'IB' or mode == 'UB' else test_host[host_idx].test_nic1
         test_dev2 = test_host[host_idx].test_nic1_dev if mode == 'IB' or mode == 'UB' else test_host[host_idx].test_nic1
     return test_dev, test_dev2
 
