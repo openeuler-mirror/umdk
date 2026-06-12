@@ -93,6 +93,9 @@ BuildAscendProj() {
     # if need to compile zero-buffer opts: replace msopgen camke files with pregen {.ascend_kernels/pregen/cmake}
     if [ -n "${SHMEM_HOME_PATH}" ]; then
         cp -rf ./ascend_kernels/pregen/cmake ./${proj_name}
+        # zb dispatch_layout replaces stock HCCL version (same op name, extended outputs).
+        rm -f ./${proj_name}/pregen/build_out/autogen/aclnn_dispatch_layout.cpp
+        rm -f ./${proj_name}/pregen/build_out/autogen/aclnn_dispatch_layout.h
     else
         rm -f ./${proj_name}/pregen/build_out/autogen/*fused_deep_moe*
         rm -f ./${proj_name}/pregen/build_out/autogen/*zero_buffer*
