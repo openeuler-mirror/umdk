@@ -1114,6 +1114,7 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
             URMA_LOG_ERR("Failed to flush pjetty[%d], pcr_cnt=%d\n", i, pcr_cnt);
             return pcr_cnt;
         }
+        URMA_LOG_DEBUG("flush pjetty[%d], pcr_cnt=%d\n", i, pcr_cnt);
         if (pcr_cnt == 0) {
             continue;
         }
