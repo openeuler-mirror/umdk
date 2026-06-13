@@ -95,7 +95,6 @@ int uvs_ubcore_ioctl_insert_main_ue_eid_batch(
     const uvs_main_ue_eid_batch_entry_t *entry);
 int uvs_ubcore_ioctl_insert_host_eid_batch(
     const uvs_host_eid_batch_entry_t *entry);
-int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
 int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
                                   const uvs_eid_t *dst_bonding_eid,
                                   enum uvs_tp_type tp_type, bool iodie_level,

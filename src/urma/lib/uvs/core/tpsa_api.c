@@ -269,20 +269,6 @@ int uvs_get_topo_info(void *topo)
     return ret;
 }
 
-int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
-{
-    int ret = 0;
-    if (route == NULL || route_list == NULL) {
-        TPSA_LOG_ERR("Invalid parameter.\n");
-        return -EINVAL;
-    }
-    ret = uvs_ubcore_ioctl_get_route_list(route, route_list);
-    if (ret != 0) {
-        TPSA_LOG_ERR("Failed to get route list, ret = %d.\n", ret);
-    }
-    return ret;
-}
-
 int uvs_get_path_set(const uvs_eid_t *src_bondind_eid,
                      const uvs_eid_t *dst_bonding_eid,
                      enum uvs_tp_type tp_type, bool iodie_level,

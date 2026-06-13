@@ -195,16 +195,6 @@ int uvs_flush_main_ue_eid(void);
 int uvs_get_topo_info(void *topo);
 
 /**
- * Get primary and port eid from topo info.
- * @param[in] route: parameter that contains src_v_eid and dst_v_eid,
-                            src_v_eid and dst_v_eid can only be eids of bonding devices.
- *                          refers to uvs_route_t;
- * @param[out] route_list: a list buffer, containing all routes returned;
- * Return: 0 on success, other value on error
- */
-int uvs_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list);
-
-/**
  * UVS get path set between two bonding devices.
  * @param[in] src_bondind_eid: eid of the source bonding device.
  * @param[in] dst_bonding_eid: eid of the destination bonding device.

@@ -413,35 +413,6 @@ int uvs_ubcore_ioctl_insert_host_eid_batch(
     return 0;
 }
 
-int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
-{
-    tpsa_ioctl_ctx_t ioctl_ctx = {0};
-    uvs_cmd_get_route_list_t arg = {0};
-    int ret = 0;
-
-    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
-        return -1;
-    }
-
-    ioctl_ctx.ubcore_fd = dev_fd;
-    arg.in = *route;
-
-    ret = uvs_ioctl_get_route_list(&ioctl_ctx, &arg);
-    if (ret != 0) {
-        TPSA_LOG_ERR("Failed to get route list, ret: %d, errno: %d.\n",
-                     ret, errno);
-        close(dev_fd);
-        return ret;
-    }
-
-    *route_list = arg.out;
-
-    close(dev_fd);
-    return 0;
-}
-
 int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
                                   const uvs_eid_t *dst_bonding_eid,
                                   enum uvs_tp_type tp_type, bool iodie_level,
@@ -471,7 +442,7 @@ int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
         return ret;
     }
 
-    *uvs_path_set = arg.out;
+    *uvs_path_set = arg.out.path_set;
 
     close(dev_fd);
     return 0;

@@ -48,12 +48,6 @@ typedef enum uvs_cmd_get_topo_type {
     GET_TOPO_OUT_NUM /* Only for calculating number of types */
 } uvs_cmd_get_topo_type_t;
 
-typedef enum uvs_cmd_get_route_list_type {
-    GET_ROUTE_LIST_IN_ROUTE_PAIR,
-    GET_ROUTE_LIST_IN_NUM,
-    GET_ROUTE_LIST_OUT_ROUTE_LIST = UVS_CMD_OUT_TYPE_INIT,
-    GET_ROUTE_LIST_OUT_NUM
-} uvs_cmd_get_route_list_type_t;
 
 typedef enum uvs_cmd_set_path_set_type {
     GET_PATH_SET_IN_SRC_BONDING_EID,
@@ -61,12 +55,19 @@ typedef enum uvs_cmd_set_path_set_type {
     GET_PATH_SET_IN_TP_TYPE,
     GET_PATH_SET_IN_IODIE_LEVEL,
     GET_PATH_SET_IN_NUM,
-    GET_PATH_LIST_OUT_PATH_SET = UVS_CMD_OUT_TYPE_INIT,
+    GET_PATH_SET_OUT_PATH_SET_TOPO_TYPE = UVS_CMD_OUT_TYPE_INIT,
+    GET_PATH_SET_OUT_PATH_SET_SRC_NODE,
+    GET_PATH_SET_OUT_PATH_SET_DST_NODE,
+    GET_PATH_SET_OUT_PATH_SET_CHIP_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_DIE_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_PATH_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_PATHS,
     GET_PATH_SET_OUT_NUM
 } uvs_cmd_set_path_set_type_t;
 
 typedef enum uvs_cmd_insert_main_ue_eid_type {
-    INSERT_MAIN_UE_EID_IN_ENTRY,
+    INSERT_MAIN_UE_EID_IN_ENTRY_EID,
+    INSERT_MAIN_UE_EID_IN_ENTRY_MAIN_UE_EID,
     INSERT_MAIN_UE_EID_IN_NUM
 } uvs_cmd_insert_main_ue_eid_type_t;
 
@@ -88,7 +89,9 @@ typedef enum uvs_cmd_flush_main_ue_eid_type {
 } uvs_cmd_flush_main_ue_eid_type_t;
 
 typedef enum uvs_cmd_insert_main_ue_eid_batch_type {
-    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY,
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_MAIN_UE_EID,
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_EID_NUM,
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_EIDS,
     INSERT_MAIN_UE_EID_BATCH_IN_NUM
 } uvs_cmd_insert_main_ue_eid_batch_type_t;
 
