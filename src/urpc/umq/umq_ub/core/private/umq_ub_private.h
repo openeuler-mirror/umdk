@@ -249,7 +249,7 @@ typedef struct umq_ub_ctx {
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
-    volatile uint64_t *umq_ctx_jetty_table;
+    volatile uint64_t *umq_ctx_table;
     volatile uint64_t *rx_consumed_jetty_table;
     umq_ub_flow_control_sge_mgr_t fc_sge_mgr;
 } umq_ub_ctx_t;
@@ -612,19 +612,19 @@ static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 }
 
 // for exclusive acquisition of umq, it needs to be put back after use
-static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_jetty_id(ub_queue_t *queue, const uint32_t jetty_id)
+static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *queue, const uint32_t umq_id)
 {
-    if (jetty_id >= queue->dev_ctx->dev_attr.dev_cap.max_jetty) {
+    if (umq_id >= UMQ_ID_ALLOC_SIZE) {
         return NULL;
     }
 
     return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
-        &queue->dev_ctx->umq_ctx_jetty_table[jetty_id], 0, __ATOMIC_ACQUIRE);
+        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQUIRE);
 }
 
-static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t jetty_idx)
+static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
 {
-    __atomic_store_n(&queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[jetty_idx]->jetty_id.id],
+    __atomic_store_n(&queue->dev_ctx->umq_ctx_table[umq_id],
         (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
 }
 
