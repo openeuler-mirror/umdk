@@ -1246,34 +1246,65 @@ free_topo:
     return ret;
 }
 
+static int cmd_show_physical_dev_cb(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attrs[UBCORE_ATTR_AFTER_LAST] = {0};
+    admin_show_physical_dev_ctx_t *ctx = (admin_show_physical_dev_ctx_t *)arg;
+    struct nlattr *attr;
+    int ret;
+ 
+    ret = nla_parse(attrs, UBCORE_ATTR_AFTER_LAST - 1,
+                    genlmsg_attrdata(genlhdr, 0),
+                    genlmsg_attrlen(genlhdr, 0), NULL);
+    if (ret != 0) {
+        ctx->ret = ret;
+        return NL_STOP;
+    }
+
+    attr = attrs[UBAGG_ATTR_BONDING_PHYSICAL_DEVICE];
+    if (attr == NULL || nla_len(attr) != sizeof(ctx->bonding_dev)) {
+        ctx->ret = -EINVAL;
+        return NL_STOP;
+    }
+    (void)memcpy(&ctx->bonding_dev, nla_data(attr), sizeof(ctx->bonding_dev));
+    ctx->received = true;
+ 
+    return NL_STOP;
+}
+
 int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
     admin_urma_topo_bonding_dev_t *out)
 {
     int ret;
-    admin_core_cmd_topo_bonding_dev_t *arg = NULL;
 
     if (agg_eid == NULL || out == NULL) {
         return -EINVAL;
     }
 
-    arg = calloc(1, sizeof(admin_core_cmd_topo_bonding_dev_t));
-    if (arg == NULL) {
-        return -ENOMEM;
-    }
-    arg->in.agg_eid = *agg_eid;
-
+    admin_show_physical_dev_ctx_t ctx = {0};
     struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_GET_PHYSICAL_DEVICE, 0, UBAGG_GENL);
     if (msg == NULL) {
-        free(arg);
         return -ENOMEM;
     }
-    admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-    ret = admin_nl_send_recv_msg_default_silent_errno(msg, -NLE_OBJ_NOTFOUND, UBAGG_GENL);
-    if (ret == 0) {
-        memcpy(out, &arg->out.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
+
+    ret = nla_put(msg, UBAGG_ATTR_EID, sizeof(urma_eid_t), agg_eid);
+    if (ret != 0) {
+        admin_nl_free_msg(msg);
+        return ret;
     }
+
+    ret = admin_nl_send_recv_msg(msg, cmd_show_physical_dev_cb, &ctx, UBAGG_GENL);
     admin_nl_free_msg(msg);
-    free(arg);
+
+    if (ret != 0 || ctx.ret != 0 || !ctx.received) {
+        ret = (ret != 0) ? ret : (ctx.ret != 0 ? ctx.ret : -ENODATA);
+        printf("Failed to show_stats, ret: %d\n", ret);
+        return ret;
+    }
+
+    memcpy(out, &ctx.bonding_dev, sizeof(admin_urma_topo_bonding_dev_t));
     return ret;
 }
 
@@ -1746,16 +1777,15 @@ static int admin_cmd_show_dev_res(const char *dev_name, uint32_t type,
     arg.out.addr = (uint64_t)(uintptr_t)out_buf;
     arg.out.len = ADMIN_V2P_RES_BUF_SIZE;
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_CMD_GET_V2P_RES, 0, UBAGG_GENL);
     if (msg == NULL) {
         free(out_buf);
         return -ENOMEM;
     }
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_show_res_t));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    ret = admin_nl_send_recv_msg_default(msg, UBAGG_GENL);
     admin_nl_free_msg(msg);
     if (ret != 0) {
         (void)printf("Failed to query v2p res, ret=%d.\n", ret);

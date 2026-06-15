@@ -690,7 +690,7 @@ int admin_cmd_show_v2p_res(admin_config_t *cfg)
     }
     (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_CMD_GET_V2P_RES, 0, UBAGG_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -698,7 +698,7 @@ int admin_cmd_show_v2p_res(admin_config_t *cfg)
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg, UBCORE_GENL);
+    int ret = admin_nl_send_recv_msg(msg, cb_handler, cfg, UBAGG_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
@@ -722,7 +722,7 @@ int admin_cmd_list_v2p_res(admin_config_t *cfg)
     arg.in.key_cnt = cfg->key.key_cnt;
     (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
 
-    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_V2P_RES, 0, UBCORE_GENL);
+    struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_CMD_GET_V2P_RES, 0, UBAGG_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
@@ -730,7 +730,7 @@ int admin_cmd_list_v2p_res(admin_config_t *cfg)
     admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_res_t));
     admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
 
-    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg, UBCORE_GENL);
+    int ret = admin_nl_send_recv_msg(msg, cb_handler_list, cfg, UBAGG_GENL);
     admin_nl_free_msg(msg);
     return ret;
 }
