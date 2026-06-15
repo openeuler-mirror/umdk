@@ -84,9 +84,7 @@ typedef struct admin_ubagg_seg_info {
 } admin_ubagg_seg_info_t;
 
 typedef struct admin_ubagg_seg_exchange_info {
-    admin_ubagg_seg_info_t base;
     admin_ubagg_seg_info_t slaves[UBAGG_DEV_MAX_NUM];
-    int dev_num;
 } admin_ubagg_seg_exchange_info_t;
 
 typedef struct admin_ubagg_jetty_id {
@@ -1724,9 +1722,6 @@ static void print_v2p_jfc_jfs_detail(const uint8_t *buf, uint32_t len)
 
 static void print_v2p_seg_detail(const admin_ubagg_seg_exchange_info_t *info)
 {
-    (void)printf("base: eid=" EID_FMT " uasid=%u va=0x%lx len=%lu token_id=%u\n",
-                 EID_ARGS(info->base.ubva.eid), info->base.ubva.uasid,
-                 info->base.ubva.va, info->base.len, info->base.token_id);
     (void)printf("slaves:\n");
     for (uint32_t i = 0; i < UBAGG_DEV_MAX_NUM; i++) {
         if (info->slaves[i].len == 0) {

@@ -163,8 +163,6 @@ static int bondp_create_vseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
     bdp_seg->v_tseg.user_ctx = seg_cfg->user_ctx;
     bdp_seg->v_tseg.token_id = seg_cfg->token_id;
 
-    in_seg_info.base = bdp_seg->v_tseg.seg;
-    in_seg_info.dev_num = bdp_seg->dev_num;
     for (int i = 0; i < bdp_seg->dev_num; ++i) {
         if (bdp_seg->p_tseg[i] == NULL) {
             continue;
