@@ -204,7 +204,6 @@ typedef struct umq_trans_info {
 #define UMQ_FEATURE_ENABLE_PERF                 (1 << 3)    // enable performance collection
 #define UMQ_FEATURE_ENABLE_FLOW_CONTROL         (1 << 4)    // enable flow control
 #define UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS    (1 << 5)    // enable single side memory access
-#define UMQ_FEATURE_ENABLE_EXTEND_IMM           (1 << 6)    // enable extended immediate number capability
 
 typedef struct umq_flow_control_cfg {
     // initial available credit for each umq

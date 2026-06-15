@@ -2166,7 +2166,11 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     }
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)send_buf->qbuf_ext;
-    umq_ub_imm_t imm = {.mem_import = {.type = IMM_TYPE_MEM_IMPORT}};
+    umq_ub_imm_t imm = {.mem_import = {
+        .type = IMM_TYPE_CONTROL_MSG,
+        .umq_id = queue->remote_umq_id,
+        .extend_type = IMM_TYPE_EXTEND_MEM_IMPORT
+    }};
     buf_pro->imm_data = imm.value;
     buf_pro->opcode = UMQ_OPC_SEND_IMM;
 
