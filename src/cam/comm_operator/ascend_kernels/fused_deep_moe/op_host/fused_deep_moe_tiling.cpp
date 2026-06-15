@@ -644,47 +644,50 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     size_t *workSpaces = context.GetWorkspaceSizes(1);
     OPS_ERR_IF(workSpaces == nullptr, OPS_LOG_E(nodeName, "workSpaces is nullptr."), return ge::GRAPH_FAILED);
     uint64_t shmemWorkspacePtr = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr;
-    if (shmemWorkspacePtr == 0) {
-        size_t maxTokenNum;
-        size_t maxHandleTokenNum;
-        uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-        uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
-        uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
-        uint32_t globalBs = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
-        uint32_t maxBatchSize = globalBs / epRankSize;
-        uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
-        uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
-        uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
-        uint32_t aicNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
-        uint32_t shareExpertTokenNum = calShareExpert ? batchSize : 0;
-        uint64_t shareGmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
-        uint64_t shareGmm2HLen = shareGmm1HLen / 2;
-        uint64_t gmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
-        uint64_t gmm2HLen = gmm1HLen / 2;
-        maxTokenNum = maxBatchSize * epRankSize * std::min(topK, moeExpertNumPerRank);
-        maxHandleTokenNum = shareExpertTokenNum + maxTokenNum;
+    size_t maxTokenNum;
+    size_t maxHandleTokenNum;
+    uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
+    uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
+    uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
+    uint32_t globalBs = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
+    uint32_t maxBatchSize = globalBs / epRankSize;
+    uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
+    uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
+    uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
+    uint32_t aicNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
+    uint32_t shareExpertTokenNum = calShareExpert ? batchSize : 0;
+    uint64_t shareGmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
+    uint64_t shareGmm2HLen = shareGmm1HLen / 2;
+    uint64_t gmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
+    uint64_t gmm2HLen = gmm1HLen / 2;
+    maxTokenNum = maxBatchSize * epRankSize * std::min(topK, moeExpertNumPerRank);
+    maxHandleTokenNum = shareExpertTokenNum + maxTokenNum;
 
-        size_t x1TokenSize = maxHandleTokenNum * h * sizeof(int8_t);
-        size_t x2TokenSize = (maxTokenNum * gmm2HLen + shareExpertTokenNum * shareGmm2HLen) * sizeof(int8_t);
-        size_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
-        maxTokenSize = CeilUp(maxTokenSize, GM_ALIGN_SIZE);
-        size_t tokenScaleSize = CeilUp(maxHandleTokenNum * sizeof(float), GM_ALIGN_SIZE);
-        size_t CVSwapBufferSize =
-            CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
-        size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
-        size_t gmm2DepOutSize = maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE;
-        size_t maxSwigluGmm2Size = swigluOutSize < gmm2DepOutSize ? gmm2DepOutSize : swigluOutSize;
-        maxSwigluGmm2Size = CeilUp(maxSwigluGmm2Size, GM_ALIGN_SIZE);
-        size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
-        size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
-        size_t epSendCountSize = CeilUp(epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
-        size_t resveredSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
+    size_t x1TokenSize = maxHandleTokenNum * h * sizeof(int8_t);
+    size_t x2TokenSize = (maxTokenNum * gmm2HLen + shareExpertTokenNum * shareGmm2HLen) * sizeof(int8_t);
+    size_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
+    maxTokenSize = CeilUp(maxTokenSize, GM_ALIGN_SIZE);
+    size_t tokenScaleSize = CeilUp(maxHandleTokenNum * sizeof(float), GM_ALIGN_SIZE);
+    size_t CVSwapBufferSize =
+        CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
+    size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
+    size_t gmm2DepOutSize = maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE;
+    size_t maxSwigluGmm2Size = swigluOutSize < gmm2DepOutSize ? gmm2DepOutSize : swigluOutSize;
+    maxSwigluGmm2Size = CeilUp(maxSwigluGmm2Size, GM_ALIGN_SIZE);
+    size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
+    size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
+    size_t epSendCountSize = CeilUp(epRankSize * epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
+    size_t resveredSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
+    size_t allEpRecvCountSize = CeilUp(epRankSize * epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
+    if (shmemWorkspacePtr == 0) {
         size_t usrSize = maxTokenSize + tokenScaleSize + CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
                         expandIdxSize + epSendCountSize + resveredSize;
 
         workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     } else {
-        workSpaces[0] = SYSTEM_NEED_WORKSPACE;
+        size_t usrSize = CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
+                        expandIdxSize + epSendCountSize + resveredSize + allEpRecvCountSize;
+        workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     }
     return ge::GRAPH_SUCCESS;
 }
