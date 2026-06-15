@@ -166,7 +166,11 @@ static inline const char *urma_trans_mode_to_string(urma_transport_mode_t mode)
 }
 
 static const char *const g_urma_tp_type_str[] = {
-    [URMA_TRANSPORT_UB] = "UB",
+    [URMA_TRANSPORT_UB] =      "UB",
+    [URMA_TRANSPORT_IB] =      "IB",
+    [URMA_TRANSPORT_IP] =      "IP",
+    [URMA_TRANSPORT_SOFTUB] = "SOFTUB",
+    [URMA_TRANSPORT_HNS_UB] =  "HNS_UB",
 };
 
 static inline const char *urma_tp_type_to_string(urma_transport_type_t type)
@@ -180,18 +184,19 @@ static inline const char *urma_tp_type_to_string(urma_transport_type_t type)
 static const char *const g_urma_congestion_ctrl_alg_str[] = {
     [URMA_TP_CC_NONE] = "NONE",
     [URMA_TP_CC_DCQCN] = "DCQCN",
-    [URMA_TP_CC_DCQCN_AND_NETWORK_CC] = "DCQCN_AND_NETWORK_CC",
+    [URMA_TP_CC_CAQM] = "CAQM",
     [URMA_TP_CC_LDCP] = "LDCP",
-    [URMA_TP_CC_LDCP_AND_CAQM] = "LDCP_AND_CAQM",
-    [URMA_TP_CC_LDCP_AND_OPEN_CC] = "LDCP_AND_OPEN_CC",
-    [URMA_TP_CC_HC3] = "HC3",
+    [URMA_TP_CC_LDCP_L2_HEADER] = "LDCP_L2_HEADER",
+    [URMA_TP_CC_LDCP_TP_HEADER] = "LDCP_TP_HEADER",
     [URMA_TP_CC_DIP] = "DIP",
     [URMA_TP_CC_ACC] = "ACC",
+    [URMA_TP_CC_CUSTOM_1] = "CUSTOM_1",
+    [URMA_TP_CC_CUSTOM_2] = "CUSTOM_2",
 };
 
 static inline const char *urma_congestion_ctrl_alg_to_string(uint8_t bit)
 {
-    if (bit > URMA_TP_CC_DIP) {
+    if (bit >= URMA_TP_CC_NUM) {
         return "Invalid Value";
     }
     return g_urma_congestion_ctrl_alg_str[bit];
