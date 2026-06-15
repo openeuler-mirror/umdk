@@ -11,11 +11,7 @@
 #ifndef BONDP_TYPES_H
 #define BONDP_TYPES_H
 
-#ifndef __cplusplus
 #include <stdatomic.h>
-#else
-#include <atomic>
-#endif
 #include <stdbool.h>
 
 #include "bondp_hash_table.h"
@@ -28,7 +24,6 @@
 #define BONDP_MAX_NUM_JETTYS          (10240)
 #define BONDP_MAX_NUM_RSEGS           (10240)
 #define BONDP_MAX_WR_LIST_NUM         (300)
-#define BONDP_MAX_SGE_NUM             (32)
 #define PRIMARY_EID_NUM               (2)
 #define PORT_EID_MAX_NUM_PER_DEV      (9)
 #define PORT_EID_MAX_NUM              (PORT_EID_MAX_NUM_PER_DEV * PRIMARY_EID_NUM)
@@ -238,18 +233,12 @@ typedef struct bondp_comp {
     bool modify_to_error;
     pthread_spinlock_t send_lock;
     wr_buf_t send_wr_buf;
-    pthread_spinlock_t send_wr_lock;
-    bool valid[URMA_UBAGG_DEV_MAX_NUM];
-    uint32_t msn;
+    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_uint msn;
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
-#ifndef __cplusplus
     atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
-#else
-    std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
-#endif
     // recv
     wr_buf_t recv_wr_buf;
-    pthread_spinlock_t recv_wr_lock;
     uint32_t rqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 } bondp_comp_t;
 
@@ -264,7 +253,7 @@ typedef struct bondp_target_jetty {
     uint32_t local_active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
-    bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     urma_ref_t use_cnt;
 } bondp_target_jetty_t;
 
