@@ -156,8 +156,8 @@ static void read_all_env(bondp_global_context_t *ctx)
     const uint64_t default_health_check_active_start_ms = 2000;
     const uint64_t default_health_check_active_interval_ms = 1000;
     const uint32_t default_health_check_active_max_backoff = 13;
-
-    thread_ctx->enable_health_check = read_env_bool(BONDP_ENV_ENABLE_HEALTH_CHECK, default_enable_health_check);
+    // disable default_enable_health_check
+    thread_ctx->enable_health_check = default_enable_health_check;
 
     bondp_health_check_cfg_t *cfg = &thread_ctx->cfg;
     ctx->enable_failover = read_env_bool(

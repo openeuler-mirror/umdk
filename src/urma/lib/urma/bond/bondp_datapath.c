@@ -79,8 +79,8 @@ static pthread_spinlock_t *get_recv_wr_lock(bondp_comp_t *bdp_comp)
     return NULL;
 }
 
-static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, urma_jfs_wr_t *send_wr, urma_jfs_wr_t **bad_wr,
-    int wr_count)
+static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, int target_idx,
+                                    urma_jfs_wr_t *send_wr, urma_jfs_wr_t **bad_wr, int wr_count)
 {
     urma_status_t ret;
     if (comp->comp_type == BONDP_COMP_JETTY) {
@@ -92,7 +92,7 @@ static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, urma_jfs_w
         ret = URMA_EINVAL;
     }
     if (ret == URMA_SUCCESS) {
-        atomic_fetch_add(&comp->sqe_cnt[send_idx], wr_count);
+        atomic_fetch_add(&comp->sqe_cnt[send_idx][target_idx], wr_count);
     }
     return ret;
 }
@@ -285,7 +285,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         }
     }
 
-    ret = comp_post_send(bdp_comp, send_idx, prealloc_wr_list, bad_wr, 1);
+    ret = comp_post_send(bdp_comp, send_idx, target_idx, prealloc_wr_list, bad_wr, 1);
     return ret;
 }
 
@@ -384,7 +384,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         processed++;
     }
 
-    ret = comp_post_send(bdp_comp, send_idx, &wr_entries[0]->wr, bad_wr, wr_count);
+    ret = comp_post_send(bdp_comp, send_idx, target_idx, &wr_entries[0]->wr, bad_wr, wr_count);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to post send wr batch, ret: %d.\n", ret);
         goto ROLLBACK;
@@ -397,7 +397,7 @@ ROLLBACK:
         success_node++;
         cur = cur->next;
     }
-    atomic_fetch_add(&bdp_comp->sqe_cnt[send_idx], success_node); // submit success node
+    atomic_fetch_add(&bdp_comp->sqe_cnt[send_idx][target_idx], success_node); // submit success node
 CLEANUP:
     for (int j = success_node; j < processed; j++) {
         convert_jfs_pwr_to_vwr_resend(&wr_entries[j]->wr, &wr_entries[j]->target_vjetty->v_tjetty);
@@ -714,7 +714,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
     urma_jfs_wr_t *bad_wr = NULL;
-    int ret = comp_post_send(wr_entry->bdp_comp, send_idx, wr, &bad_wr, 1);
+    int ret = comp_post_send(wr_entry->bdp_comp, send_idx, target_idx, wr, &bad_wr, 1);
     if (ret != URMA_SUCCESS) {
         convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
         release_vwr_use_cnt(wr);
@@ -851,7 +851,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_DEBUG("Resend from %d to %d\n", send_idx, new_send_idx);
+        URMA_LOG_DEBUG("Resend from [%u, %u] to [%d, %d]\n", send_idx, target_idx,
+                       new_send_idx, new_target_idx);
         urma_ubagg_switch_inc();
 
         for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
@@ -864,7 +865,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
                 resend_wr_entry->target_idx != target_idx) {
                 continue;
             }
-            atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
+            atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
             if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
                 URMA_LOG_ERR("Failed to resend jfs wr, wr_id=%lu\n", resend_wr_id);
             }
@@ -895,7 +896,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     }
 
 CONVERT_CR:
-    atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx], 1);
+    atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
 
     uint32_t msn = 0;
     convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
@@ -1007,7 +1008,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
     if (is_recv_cr(cr)) {
         comp->rqe_cnt[idx] -= 1;
     } else {
-        atomic_fetch_sub(&comp->sqe_cnt[idx], 1);
+        atomic_fetch_sub(&comp->sqe_cnt[idx][0], 1);
     }
 
     uint32_t msn = 0;
