@@ -392,8 +392,6 @@ int bondp_fill_vjetty_health_info(bondp_context_t *bond_ctx, bondp_comp_t *bdp_j
         return 0;
     }
 
-    health_check_seg->dev_num = bond_ctx->dev_num;
-
     for (int i = 0; i < bond_ctx->dev_num; ++i) {
         if (bdp_jetty->p_jetty[i] == NULL || bdp_jetty->check_tseg[i] == NULL) {
             continue;
@@ -421,7 +419,6 @@ static int import_check_tseg_by_import_result(const bondp_context_t *bdp_ctx, bo
         uint32_t target_idx = bdp_tjetty->active_indices[n];
 
         if (local_idx >= (uint32_t)bdp_ctx->dev_num ||
-            target_idx >= (uint32_t)rvjetty_info->health_check_seg.dev_num ||
             bdp_ctx->p_ctxs[local_idx] == NULL ||
             bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL) {
             URMA_LOG_DEBUG("BONDP skip check seg route (%u %u)\n", local_idx, target_idx);

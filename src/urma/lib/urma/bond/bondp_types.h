@@ -282,14 +282,12 @@ typedef struct bondp_import_target_seg {
 } bondp_import_tseg_t;
 
 typedef struct urma_bond_seg_info_out {
-    urma_seg_t base;
     urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
 } urma_bond_seg_info_out_t;
 
 typedef struct urma_bond_id_info_out {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    bool is_multipath; // deprecated
+    bool is_msn_enabled; // deprecated
     uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;
