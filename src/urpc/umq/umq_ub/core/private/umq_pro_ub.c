@@ -961,7 +961,10 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
         fc_data.bs.window = sge_data->bs.window;
         fc_data.bs.ratio = sge_data->bs.ratio;
         fc_data.bs.seq = imm.flow_control.seq;
-        (void)umq_ub_fill_fc_rx_buf(queue, cr[i].user_ctx);
+        if (umq_ub_fill_fc_rx_buf(queue, cr[i].user_ctx) != UMQ_SUCCESS) {
+            qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
+            /* fall through: current FC msg is valid, must process it */
+        }
         real_queue = umq_ub_get_real_queue_by_umq_id(queue, imm.flow_control.umq_id);
         if (real_queue == NULL) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq_id: %u, sub queue has been destroyed\n",
@@ -1058,7 +1061,13 @@ static int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_co
         fc_data.bs.window = sge_data->bs.window;
         fc_data.bs.ratio = sge_data->bs.ratio;
         fc_data.bs.seq = imm.flow_control.seq;
-        (void)umq_ub_fill_fc_rx_buf(queue, cr[i].user_ctx);
+        if (umq_ub_fill_fc_rx_buf(queue, cr[i].user_ctx) != UMQ_SUCCESS) {
+            ret = -UMQ_ERR_EFLOWCTL;
+            if (buf != NULL) {
+                qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
+            }
+            /* fall through: current FC msg is valid, must process it */
+        }
         if (cr[i].status != URMA_CR_SUCCESS) {
             umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_RECV_ERROR);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE,
