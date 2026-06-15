@@ -132,8 +132,7 @@ typedef struct admin_core_cmd_sl_info {
 /* record types streamed back during a tpid show dumpit, mirror of kernel enum */
 enum admin_tpid_show_rec_type {
     ADMIN_TPID_SHOW_REC_LIST_HDR = 0,
-    ADMIN_TPID_SHOW_REC_AWARE_NODE,
-    ADMIN_TPID_SHOW_REC_UNAWARE_NODE,
+    ADMIN_TPID_SHOW_REC_TP_LIST,
     ADMIN_TPID_SHOW_REC_TPID_STATE,
     ADMIN_TPID_SHOW_REC_REUSE_ENTRY,
 };
@@ -141,8 +140,30 @@ enum admin_tpid_show_rec_type {
 /* netlink attributes carried by the tpid show dumpit messages */
 enum {
     ADMIN_TPID_SHOW_ATTR_UNSPEC = 0,
-    ADMIN_TPID_SHOW_ATTR_REC_TYPE,
-    ADMIN_TPID_SHOW_ATTR_REC_DATA,
+    ADMIN_TPID_SHOW_ATTR_REC_TYPE,          /* u32: admin_tpid_show_rec_type */
+    /* common fields */
+    ADMIN_TPID_SHOW_ATTR_LOCAL_EID,         /* binary, EID_LEN */
+    ADMIN_TPID_SHOW_ATTR_PEER_EID,          /* binary, EID_LEN */
+    ADMIN_TPID_SHOW_ATTR_TRANS_MODE,        /* u32 */
+    ADMIN_TPID_SHOW_ATTR_SHARE_MODE,        /* u32 */
+    ADMIN_TPID_SHOW_ATTR_TP_TYPE,           /* u32 */
+    ADMIN_TPID_SHOW_ATTR_LINK_TYPE,         /* u32 */
+    ADMIN_TPID_SHOW_ATTR_REF_CNT,           /* u32 */
+    ADMIN_TPID_SHOW_ATTR_TP_HANDLE,         /* u64 */
+    /* LIST_HDR specific */
+    ADMIN_TPID_SHOW_ATTR_LIST_NODE_CNT,    /* u32 */
+    /* TPID_STATE specific */
+    ADMIN_TPID_SHOW_ATTR_FOUND,             /* u8 */
+    ADMIN_TPID_SHOW_ATTR_STATUS,            /* u32 */
+    ADMIN_TPID_SHOW_ATTR_ALLOCED,           /* u8 */
+    /* REUSE_ENTRY specific */
+    ADMIN_TPID_SHOW_ATTR_STAG,              /* u64 */
+    ADMIN_TPID_SHOW_ATTR_DTAG,              /* u64 */
+    ADMIN_TPID_SHOW_ATTR_REUSE_STATE,       /* u32 */
+    ADMIN_TPID_SHOW_ATTR_USE_CNT,           /* s32 */
+    ADMIN_TPID_SHOW_ATTR_PEER_TP_HANDLE,    /* u64 */
+    ADMIN_TPID_SHOW_ATTR_TX_PSN,            /* u32 */
+    ADMIN_TPID_SHOW_ATTR_IS_REF,            /* u8 */
     ADMIN_TPID_SHOW_ATTR_MAX_PLUS,
 };
 #define ADMIN_TPID_SHOW_ATTR_MAX (ADMIN_TPID_SHOW_ATTR_MAX_PLUS - 1)
@@ -178,54 +199,17 @@ typedef struct admin_show_tpid_list_hdr {
     uint32_t share_mode;
     uint32_t tp_type;
     uint32_t link_type;
-    uint32_t acnt;
-    uint32_t ucnt;
-    uint32_t capacity;
     uint32_t ref_cnt;
-    uint32_t aware_node_cnt;
-    uint32_t unaware_node_cnt;
+    uint32_t node_cnt;
 } admin_show_tpid_list_hdr_t;
 
 /* mirror of struct ubcore_show_tpid_state */
 typedef struct admin_show_tpid_state {
     uint8_t found;
     uint32_t status;
-    uint32_t owner_type;
     uint8_t alloced;
     uint32_t ref_cnt;
 } admin_show_tpid_state_t;
-
-/* input args for "show dev <dev> tp [tp_id]" */
-typedef struct admin_core_cmd_show_tpid_list {
-    struct {
-        char dev_name[URMA_MAX_NAME];
-        uint8_t query_tpid;
-        uint64_t tpid;
-    } in;
-} admin_core_cmd_show_tpid_list_t;
-
-/* mirror of struct ubcore_show_tpid_reuse_entry */
-typedef struct admin_show_tpid_reuse_entry {
-    urma_eid_t local_eid;
-    urma_eid_t peer_eid;
-    uint32_t trans_mode;
-    uint32_t share_mode;
-    uint32_t tp_type;
-    uint32_t link_type;
-    uint64_t stag;
-    uint64_t dtag;
-    uint64_t tp_handle;
-    uint32_t reuse_state;
-    uint32_t ref_cnt;
-    int32_t use_cnt;
-} admin_show_tpid_reuse_entry_t;
-
-/* input args for "show dev <dev> tpreuse" */
-typedef struct admin_core_cmd_show_tpid_reuse {
-    struct {
-        char dev_name[URMA_MAX_NAME];
-    } in;
-} admin_core_cmd_show_tpid_reuse_t;
 
 #define UBCORE_GENL_FAMILY_NAME    "UBCORE_GENL"
 #define UBAGG_GENL_FAMILY_NAME     "UBAGG_GENL"
@@ -260,6 +244,8 @@ enum {
     UBCORE_ATTR_TOOL_QUERY_KEY_EXT,
     UBCORE_ATTR_TOOL_QUERY_KEY_CNT,
     UBCORE_ATTR_STATS,
+    UBCORE_ATTR_TPID_QUERY_FLAG,   /* u8: non-zero = query single tpid state */
+    UBCORE_ATTR_TPID,              /* u64: tpid to query (valid with QUERY_FLAG) */
     UBCORE_ATTR_AFTER_LAST
 };
 
