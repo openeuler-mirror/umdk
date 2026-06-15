@@ -3355,7 +3355,7 @@ void umq_flush_tx(ub_queue_t *queue, uint32_t max_retry_times)
     uint32_t retry_times = 0;
     umq_buf_t *buf[UMQ_BATCH_SIZE];
     while (!queue->tx_flush_done && retry_times < max_retry_times) {
-        tx_cnt = umq_ub_poll_tx((uint64_t)(uintptr_t)queue, buf, UMQ_BATCH_SIZE);
+        tx_cnt = umq_ub_poll_tx((uint64_t)(uintptr_t)queue, buf, UMQ_BATCH_SIZE, 0);
         if (tx_cnt < 0) {
             return;
         }

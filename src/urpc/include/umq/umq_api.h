@@ -345,6 +345,37 @@ int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops);
  */
 int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops);
 
+/**
+ * Get eventfd for the global transport pool. Caller can epoll on this fd to be notified.
+ * @param[in] umqh: umq handle; used to locate the matching transport framework ops
+ * Return fd >= 0 on success, < 0 on failure
+ */
+int umq_transport_pool_eventfd_get(uint64_t umqh);
+
+/**
+ * Modify share transport node state to err.
+ * @param[in] umqh: umq handle
+ * @param[in] tp_handle_idx: tp_handle_index
+ * Return 0 on success, error code on failure
+ */
+int umq_transport_pool_resource_modify(uint64_t umqh, uint32_t tp_handle_idx);
+
+/**
+ * create transport resources (jetty pairs) for SHARE_TRANSPORT mode
+ * Only valid on a Main UMQ created with SHARE_TRANSPORT flag.
+ * @param[in] umqh: umq handle
+ * Return tp handle index on success, UINT32_MAX on failure
+ */
+uint32_t umq_transport_pool_resource_create(uint64_t umqh);
+
+/**
+ * Destry transport resource.
+ * @param[in] umqh: umq handle
+ * @param[in] tp_handle_index: tp_handle_index
+ * Return 0 on success, error code on failure
+ */
+int umq_transport_pool_resource_destroy(uint64_t umqh, uint32_t tp_handle_idx);
+
 #ifdef __cplusplus
 }
 #endif
