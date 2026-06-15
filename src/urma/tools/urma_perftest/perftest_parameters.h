@@ -105,6 +105,7 @@
 #define PERFTEST_CHAR_MAX_VALUE          (256)
 #define PERFTEST_SET_ATTR_BITMAP_UBOE    0x1FC
 #define PERFTEST_SET_ATTR_BITMAP_SL_FLAG 0x400
+#define PERFTEST_SET_ATTR_BITMAP_SPRAY_FLAG (1 << 15)
 #define PERFTEST_SET_ATTR_CNT_UBOE       (7)
 
 #define PERFTEST_RESULT_LINE      "---------------------------------------------------------------------------------------\n"
@@ -169,7 +170,7 @@ enum perftest_opts {
     PERFTEST_OPT_ENABLE_IMM,
     PERFTEST_OPT_INF_PERIOD_MS,
     PERFTEST_OPT_ENABLE_ERR_CONTINUE,
-    PERFTEST_OPT_NOTIFY_DATA,
+    PERFTEST_OPT_ENABLE_NOTIFY,
     PERFTEST_OPT_ENABLE_USER_TP,
     PERFTEST_OPT_OOR_EN,
     PERFTEST_OPT_SPRAY_EN,
@@ -195,6 +196,7 @@ enum perftest_opts {
     PERFTEST_OPT_DSCP,
     PERFTEST_OPT_SL,
     PERFTEST_OPT_BIND_IP,
+    PERFTEST_OPT_ENABLE_SYNC_STREAM,
     PERFTEST_OPT_AGGR_MODE,
     PERFTEST_OPT_BOND_MODE,
     PERFTEST_OPT_BOND_LEVEL,
@@ -282,7 +284,6 @@ typedef struct perftest_config {
 
     bool enable_imm;
     bool enable_notify;
-    uint64_t notify_data;
     bool enable_err_continue;
 
     /* user tp */
@@ -303,6 +304,7 @@ typedef struct perftest_config {
     uint8_t group_id;
 
     bool enable_async_import;
+    bool enable_sync_stream;
     bool use_bonding;
     bool tp_aware;
     bool tp_reuse;

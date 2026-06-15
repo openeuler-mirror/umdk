@@ -44,6 +44,7 @@
 #define INF_BI_FACTOR_OTHER    (2)
 #define NON_INF_BI_FACTOR      (1)
 #define PERFTEST_IMM_DATA      (0x20230416)
+#define PERFTEST_NOTIFY_DATA   (0x20230416)
 #define PERFTEST_FLAG_USER_CTX (63)
 
 run_test_ctx_t *g_duration_ctx;
@@ -668,7 +669,7 @@ static void init_jfs_write_wr_opcode(urma_jfs_wr_t *wr, const perftest_config_t 
     }
     if (cfg->enable_notify == true) {
         wr->opcode = URMA_OPC_WRITE_NOTIFY;
-        wr->rw.notify_data = cfg->notify_data;
+        wr->rw.notify_data = PERFTEST_NOTIFY_DATA;
         return;
     }
     wr->opcode = URMA_OPC_WRITE;
@@ -809,8 +810,11 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
                        ? (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size
                        : (uint64_t)ctx->remote_seg[i].ubva.va;
 
-    uint32_t local_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
-    uint32_t remote_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
+    uint32_t sge_block_idx = (i * cfg->jfs_post_list + j) * (PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num +
+         (cfg->enable_notify ? 1 : 0));
+
+    uint32_t local_sge_idx = sge_block_idx + (cfg->sge_num + (cfg->enable_notify ? 1 : 0));
+    uint32_t remote_sge_idx = sge_block_idx;
     urma_sge_t *local_sge = &run_ctx->jfs_sge[local_sge_idx];   // First sge in sge arrays
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[remote_sge_idx]; // First sge in sge arrays
 
@@ -820,8 +824,10 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
     // it is only need to calculate sge addr offset when j > 0, for the offset is 0 when j == 0.
     // the following remote_sge addr judgement is the same.
     if (j > 0) {
-        uint32_t l_idx = (i * cfg->jfs_post_list + j - 1) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
-        uint32_t r_idx = (i * cfg->jfs_post_list + j - 1) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
+        uint32_t idx = (i * cfg->jfs_post_list + j - 1) * (PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num +
+             (cfg->enable_notify ? 1 : 0));
+        uint32_t l_idx = idx + cfg->sge_num + (cfg->enable_notify ? 1 : 0);
+        uint32_t r_idx = idx;
         local_sge[0].addr = run_ctx->jfs_sge[l_idx].addr;
         remote_sge[0].addr = run_ctx->jfs_sge[r_idx].addr;
         if (cfg->cmd == PERFTEST_WRITE_BW && cfg->size <= (ctx->page_size / PERFTEST_BUF_NUM)) {
@@ -845,6 +851,13 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
     wr->rw.dst.sge = remote_sge;
     wr->rw.dst.num_sge = cfg->sge_num;
 
+    if (cfg->enable_notify) {
+        remote_sge[cfg->sge_num].addr = ctx->import_notify_seg[i]->seg.ubva.va
+            + sizeof(uint64_t) * ctx->remote_jetty_idx;
+        remote_sge[cfg->sge_num].len = sizeof(uint64_t);
+        remote_sge[cfg->sge_num].tseg = ctx->import_notify_seg[i];
+        wr->rw.dst.num_sge ++;
+    }
     wr->rw.notify_data = 0;
 }
 
@@ -1048,8 +1061,10 @@ static int prepare_jfs_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     if (run_ctx->jfs_wr == NULL) {
         return -1;
     }
-    run_ctx->jfs_sge = calloc(1, sizeof(urma_sge_t) * cfg->jettys *
-                                     cfg->jfs_post_list * cfg->sge_num * PERFTEST_SGE_NUM_PRE_WR);
+    uint32_t sge_num = cfg->jettys * cfg->jfs_post_list * cfg->sge_num *
+         PERFTEST_SGE_NUM_PRE_WR +                   // local + remote
+         (cfg->enable_notify ? cfg->jettys * cfg->jfs_post_list : 0);
+    run_ctx->jfs_sge = calloc(1, sizeof(urma_sge_t) * sge_num);
     if (run_ctx->jfs_sge == NULL) {
         goto free_wr;
     }
@@ -1817,6 +1832,14 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         is_send_burst = false;
                     }
                 }
+
+                /* * Execution Flow with sync_stream=true:
+                 * Jetty 1 (post 1) -> Break -> Jetty 2 (post 1) -> Break -> ... -> Round back to Jetty 1
+                 * This ensures all streams progress simultaneously for BW testing
+                 */
+                if (cfg->enable_sync_stream == true) {
+                    break;
+                }
             }
         }
 
@@ -2570,6 +2593,62 @@ static void print_bw_report(perftest_context_t *ctx, perftest_config_t *cfg,
     }
 }
 
+static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t *cfg,
+                                      bw_report_data_t *local_bw_report, uint64_t tposted_0, double cpu_mhz)
+{
+    double cycles_to_units;
+    run_test_ctx_t* run_ctx = &ctx->run_ctx;
+    uint32_t jettys_count = cfg->jettys;
+    uint64_t num_of_cal_iters = cfg->iters;
+    uint64_t size, inf_bi_factor;
+    double total_bw_avg = 0;
+    double total_msg_rate = 0;
+
+    if (cfg->time_type.bs.infinite == 1) {
+        run_ctx->tcompleted[0] = get_cycles();
+        num_of_cal_iters = cfg->iters - cfg->last_iters;
+    }
+
+    cycles_to_units = cpu_mhz * PERFTEST_M;
+    if (cycles_to_units <= 0.0) return;
+
+    inf_bi_factor = (cfg->bidirection && cfg->time_type.bs.infinite == 1) ?
+                   (cfg->api_type == PERFTEST_SEND ? INF_BI_FACTOR_SEND : INF_BI_FACTOR_OTHER) : NON_INF_BI_FACTOR;
+    size = inf_bi_factor * cfg->size;
+
+    uint64_t tot_iters = num_of_cal_iters * jettys_count;
+    uint64_t tcompleted_last = run_ctx->tcompleted[cfg->no_peak == true ? 0 : tot_iters - 1];
+
+    for (uint32_t index = 0; index < jettys_count; index++) {
+        uint64_t jetty_start_idx = index;
+        double jetty_cycles = (double)(tcompleted_last - run_ctx->tposted[jetty_start_idx]);
+
+        double jetty_bw = ((double)size * num_of_cal_iters * cycles_to_units) / (jetty_cycles * PERFTEST_BW_MB);
+        double jetty_msg_rate = ((double)num_of_cal_iters * cycles_to_units * inf_bi_factor) /
+                (jetty_cycles * PERFTEST_M);
+
+        total_bw_avg += jetty_bw;
+        total_msg_rate += jetty_msg_rate;
+
+        LOG_QUIET("Jetty %-2u: ", index);
+        LOG_QUIET(REPORT_BW_FMT, cfg->size, cfg->iters, 0.0, jetty_bw, jetty_msg_rate);
+        LOG_QUIET("\n");
+    }
+
+    LOG_QUIET("---------------------------------------------------------------------------------------\n");
+    LOG_QUIET("TOTAL   : ");
+    LOG_QUIET(REPORT_BW_FMT, cfg->size, cfg->iters * cfg->jettys, 0.0, total_bw_avg, total_msg_rate);
+    LOG_QUIET("\n");
+
+    if (local_bw_report != NULL) {
+        local_bw_report->size = cfg->size;
+        local_bw_report->iters = cfg->iters * cfg->jettys;
+        local_bw_report->bw_avg = total_bw_avg;
+        local_bw_report->msg_rate_avg = total_msg_rate;
+    }
+    (void)fflush(stdout);
+}
+
 static void print_bi_bw_report(const bw_report_data_t *local_bw_report,
                                const bw_report_data_t *remote_bw_report)
 {
@@ -3007,7 +3086,12 @@ static int prepare_run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg,
     if (cpu_mhz <= 0.0) {
         LOG_ERROR("Failed: couldn't acquire cpu frequency for rate limiter.\n");
     }
-    print_bw_report(ctx, cfg, local_bw_report, ctx->run_ctx.tposted[0], cpu_mhz);
+    if (cfg->enable_sync_stream == true && cfg->no_peak == false) {
+        // todo: add per_jetty_print flag
+        print_bw_report_per_jetty(ctx, cfg, local_bw_report, ctx->run_ctx.tposted[0], cpu_mhz);
+    } else {
+        print_bw_report(ctx, cfg, local_bw_report, ctx->run_ctx.tposted[0], cpu_mhz);
+    }
     if (cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
             if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(bw_report_data_t), (char *)(local_bw_report),

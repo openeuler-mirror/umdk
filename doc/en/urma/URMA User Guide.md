@@ -1348,7 +1348,8 @@ The following scenarios trigger the JFC to generate a completion record:
 | DFX Interface | urma_perftest | Run param config | seg_pre_jetty | — | SGE count per jetty | √ | √ |
 | DFX Interface | urma_perftest | Run param config | enable_imm | — | Enable immediate data | √ | √ |
 | DFX Interface | urma_perftest | Run param config | enable_err_continue | — | Continue on error | √ | √ |
-| DFX Interface | urma_perftest | Run param config | notify_data | — | write_with_notify | √ | √ |
+| DFX Interface | urma_perftest | Run param config | enable_notify | — | Enable write_with_notify | √ | √ |
+| DFX Interface | urma_perftest | Run param config | enable_sync_stream | — | Enable synchronized multi-stream | √ | √ |
 | DFX Interface | urma_perftest | Run param config | sge_num | — | SGE count per WR | √ | √ |
 | DFX Interface | urma_perftest | Run param config | enable_write_dirty | — | Write dirty | √ | √ |
 | DFX Interface | urma_perftest | Run param config | pair_num | — | Multi-path connection count | √ | √ |
@@ -1652,7 +1653,8 @@ Options:
   --seg_pre_jetty             Enable a segment for each Jetty, default: disable.
   --enable_imm                Enable immediate data for write or send, default: disable.
   --enable_err_continue       Enable continue running when cr erros, default: disable.
-  --notify_data <value>       enable write_with_notify, value is ensured by hardware.
+  --enable_notify            Enable write_with_notify for WRITE tests, default: disable.
+  --enable_sync_stream       Enable synchronized multi-stream in multi-Jetty bandwidth tests, default: disable.
   --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.
   --oor_en                    Enable out of order for user_tp, default: disable.
   --spray_en                  Enable multipathing for user_tp, default: disable.
@@ -1735,7 +1737,8 @@ Options:
 |               | seg_pre_jetty       | bool     | Enable one segment per jetty for testing.                                                                                                                                                                                                                 | Optional     |                                      | Disabled                       |
 |               | enable_imm          | bool     | Enable immediate data test.                                                                                                                                                                                                                               | Optional     |                                      | Disabled                       |
 |               | enable_err_continue | bool     | Continue sending when CR errors occur.                                                                                                                                                                                                                    | Optional     |                                      | Disabled                       |
-|               | notify_data         | uint64_t | Enable write_notify. Value must be compatible with hardware, otherwise exceptions may occur.                                                                                                                                                              | Optional     | Unrestricted                         | 0                              |
+|               | enable_notify       | bool     | Enable write_with_notify for WRITE tests. The tool fills a fixed notify data value.                                                                                                                                                                      | Optional     |                                      | Disabled                       |
+|               | enable_sync_stream  | bool     | Enable synchronized multi-stream transmission in multi-Jetty bandwidth tests.                                                                                                                                                                            | Optional     |                                      | Disabled                       |
 |               | enable_user_tp      | bool     | Enable user-mode connection setup. When enabled, user TP can be used without UVS.                                                                                                                                                                         | Optional     |                                      | Disabled                       |
 |               | oor_en              | bool     | Enable out-of-order for user-mode connection setup.                                                                                                                                                                                                       | Optional     |                                      | Disabled                       |
 |               | spray_en            | bool     | Enable multipathing for user-mode connection setup.                                                                                                                                                                                                       | Optional     |                                      | Disabled                       |

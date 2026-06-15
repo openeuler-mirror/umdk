@@ -1390,7 +1390,8 @@ UMDK支持向接收端发送立即数，见urma_post_jfs_wr接口，所发送的
 | DFX接口 | urma_perftest | perftest运行参数配置 | seg_pre_jetty | — | jetty的sge个数 | √ | √ |
 | DFX接口 | urma_perftest | perftest运行参数配置 | enable_imm | — | 使能immediate语义 | √ | √ |
 | DFX接口 | urma_perftest | perftest运行参数配置 | enable_err_continue | — | 异常继续特性 | √ | √ |
-| DFX接口 | urma_perftest | perftest运行参数配置 | notify_data | — | write_with_notify | √ | √ |
+| DFX接口 | urma_perftest | perftest运行参数配置 | enable_notify | — | 使能write_with_notify | √ | √ |
+| DFX接口 | urma_perftest | perftest运行参数配置 | enable_sync_stream | — | 使能同步多流发送 | √ | √ |
 | DFX接口 | urma_perftest | perftest运行参数配置 | sge_num | — | wr内sge个数 | √ | √ |
 | DFX接口 | urma_perftest | perftest运行参数配置 | enable_write_dirty | — | 写脏功能 | √ | √ |
 | DFX接口 | urma_perftest | perftest运行参数配置 | pair_num | — | 多路径连接个数 | √ | √ |
@@ -1699,7 +1700,8 @@ Options:
   --seg_pre_jetty             Enable a segment for each Jetty, default: disable.
   --enable_imm                Enable immediate data for write or send, default: disable.
   --enable_err_continue       Enable continue running when cr erros, default: disable.
-  --notify_data <value>       enable write_with_notify, value is ensured by hardware.
+  --enable_notify            Enable write_with_notify for WRITE tests, default: disable.
+  --enable_sync_stream       Enable synchronized multi-stream in multi-Jetty bandwidth tests, default: disable.
   --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.
   --oor_en                    Enable out of order for user_tp, default: disable.
   --spray_en                  Enable multipathing for user_tp, default: disable.
@@ -1782,7 +1784,8 @@ Options:
 |               | seg_pre_jetty       | bool     | 使能每个jetty都配置一个seg用于测试                                                                                                                                                                                                                         | 可选         |                                      | 默认关闭                       |
 |               | enable_imm          | bool     | 使能imm测试                                                                                                                                                                                                                                                | 可选         |                                      | 默认关闭                       |
 |               | enable_err_continue | bool     | 当发生cr错误时，使能继续发包                                                                                                                                                                                                                               | 可选         |                                      | 默认关闭                       |
-|               | notify_data         | uint64_t | 使能 write_notify操作，地址必须与硬件相适配，否者会有异常                                                                                                                                                                                                  | 可选         | 无限定                               | 0                              |
+|               | enable_notify       | bool     | 在WRITE测试中使能write_with_notify，通知数据由工具固定填充                                                                                                                                                                                                 | 可选         |                                      | 默认关闭                       |
+|               | enable_sync_stream  | bool     | 在多Jetty带宽测试中使能同步多流发送                                                                                                                                                                                                                         | 可选         |                                      | 默认关闭                       |
 |               | enable_user_tp      | bool     | 使能用户态建链，当这个选项被启用时，用户 TP 可以用于数据传输，而无需使用通用虚拟交换机（UVS）                                                                                                                                                              | 可选         |                                      | 默认关闭                       |
 |               | oor_en              | bool     | 用户态建链开启乱序选择                                                                                                                                                                                                                                     | 可选         |                                      | 默认关闭                       |
 |               | spray_en            | bool     | 用户态建链开启多路径                                                                                                                                                                                                                                       | 可选         |                                      | 默认关闭                       |
