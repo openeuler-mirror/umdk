@@ -217,12 +217,12 @@ static int uvs_get_topo_info_inner(void *topo)
         return -EINVAL;
     }
 
-    ret = uvs_ubcore_ioctl_get_topo(topo);
+    ret = uvs_ubagg_ioctl_get_topo_info((uvs_ubagg_topo_info_out_t *)topo);
     if (ret != 0) {
-        TPSA_LOG_ERR("failed to get topo info in ubcore.\n");
+        TPSA_LOG_ERR("failed to get topo info in ubagg.\n");
         return ret;
     } else {
-        TPSA_LOG_INFO("successfully got topo info in ubcore\n");
+        TPSA_LOG_INFO("successfully got topo info in ubagg\n");
     }
 
     return ret;

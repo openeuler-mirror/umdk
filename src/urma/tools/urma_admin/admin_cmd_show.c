@@ -1211,6 +1211,11 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
     int ret = 0;
     admin_core_cmd_topo_info_t *arg = NULL;
     uint32_t node_num = MAX_NODE_NUM;
+
+    if (topo_map == NULL) {
+        return -EINVAL;
+    }
+
     for (uint32_t i = 0; i < node_num; ++i) {
         arg = calloc(1, sizeof(admin_core_cmd_topo_info_t));
         if (arg == NULL) {
@@ -1219,15 +1224,14 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
         }
         arg->in.node_idx = i;
 
-        struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_GET_TOPO_INFO, 0, UBCORE_GENL);
+        struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_GET_TOPO, 0, UBAGG_GENL);
         if (msg == NULL) {
             ret = -ENOMEM;
             goto free_topo;
         }
 
-        admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_topo_info_t));
-        admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-        ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+        admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+        ret = admin_nl_send_recv_msg_default(msg, UBAGG_GENL);
         admin_nl_free_msg(msg);
         if (ret < 0) {
             goto free_topo;
@@ -1237,6 +1241,7 @@ int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
         topo_map->node_num = arg->out.node_num;
         node_num = arg->out.node_num;
         free(arg);
+        arg = NULL;
     }
     return ret;
 free_topo:
