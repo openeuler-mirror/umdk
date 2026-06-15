@@ -97,18 +97,15 @@ static int cmd_dev_set_ns(admin_config_t *cfg)
 static int cmd_dev_set_sl(admin_config_t *cfg)
 {
     int ret = 0;
-    admin_core_cmd_sl_info_t arg = {0};
-    arg.in.priority = cfg->priority;
-    arg.in.SL = cfg->SL;
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, URMA_ADMIN_MAX_DEV_NAME);
 
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_SET_SL, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_core_cmd_sl_info_t));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_PRIORITY, (uint32_t)cfg->priority);
+    admin_nl_put_u32(msg, UBCORE_ATTR_SL, (uint32_t)cfg->SL);
     ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     if (ret < 0) {

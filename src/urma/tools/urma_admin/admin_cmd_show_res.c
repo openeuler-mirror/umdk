@@ -17,14 +17,42 @@
 
 #include "admin_cmd.h"
 
-static inline void admin_print_stats(const admin_cmd_query_stats_t *arg)
+static inline void admin_print_stats(const admin_stats_t *arg)
 {
-    (void)printf("tx_pkt              : %lu\n", arg->out.tx_pkt);
-    (void)printf("rx_pkt              : %lu\n", arg->out.rx_pkt);
-    (void)printf("tx_bytes            : %lu\n", arg->out.tx_bytes);
-    (void)printf("rx_bytes            : %lu\n", arg->out.rx_bytes);
-    (void)printf("tx_pkt_err          : %lu\n", arg->out.tx_pkt_err);
-    (void)printf("rx_pkt_err          : %lu\n", arg->out.rx_pkt_err);
+    (void)printf("tx_pkt              : %lu\n", arg->tx_pkt);
+    (void)printf("rx_pkt              : %lu\n", arg->rx_pkt);
+    (void)printf("tx_bytes            : %lu\n", arg->tx_bytes);
+    (void)printf("rx_bytes            : %lu\n", arg->rx_bytes);
+    (void)printf("tx_pkt_err          : %lu\n", arg->tx_pkt_err);
+    (void)printf("rx_pkt_err          : %lu\n", arg->rx_pkt_err);
+}
+
+static int cmd_show_stats_cb(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attrs[UBCORE_ATTR_AFTER_LAST] = {0};
+    admin_stats_show_ctx_t *ctx = (admin_stats_show_ctx_t *)arg;
+    struct nlattr *attr;
+    int ret;
+ 
+    ret = nla_parse(attrs, UBCORE_ATTR_AFTER_LAST - 1,
+                    genlmsg_attrdata(genlhdr, 0),
+                    genlmsg_attrlen(genlhdr, 0), NULL);
+    if (ret != 0) {
+        ctx->ret = ret;
+        return NL_STOP;
+    }
+
+    attr = attrs[UBCORE_ATTR_STATS];
+    if (attr == NULL || nla_len(attr) != sizeof(ctx->stats)) {
+        ctx->ret = -EINVAL;
+        return NL_STOP;
+    }
+    (void)memcpy(&ctx->stats, nla_data(attr), sizeof(ctx->stats));
+    ctx->received = true;
+ 
+    return NL_STOP;
 }
 
 int admin_cmd_show_stats_legacy(admin_config_t *cfg)
@@ -42,25 +70,26 @@ int admin_cmd_show_stats_legacy(admin_config_t *cfg)
         return -1;
     }
 
-    admin_cmd_query_stats_t arg = {0};
-    (void)memcpy(arg.in.dev_name, cfg->dev_name, strlen(cfg->dev_name));
-    arg.in.key = cfg->key.key;
-    arg.in.type = (uint32_t)cfg->key.type;
+    admin_stats_show_ctx_t ctx = {0};
 
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_CMD_QUERY_STATS, 0, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY, cfg->key.key);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_TYPE, cfg->key.type);
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(admin_cmd_query_stats_t));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
-
-    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    int ret = admin_nl_send_recv_msg(msg, cmd_show_stats_cb, &ctx, UBCORE_GENL);
     admin_nl_free_msg(msg);
 
-    if (ret == 0) {
-        admin_print_stats(&arg);
+    if (ret != 0 || ctx.ret != 0 || !ctx.received) {
+        ret = (ret != 0) ? ret : (ctx.ret != 0 ? ctx.ret : -ENODATA);
+        printf("Failed to show_stats, ret: %d\n", ret);
+        return ret;
     }
+
+    admin_print_stats(&ctx.stats);
     return ret;
 }
 
@@ -511,8 +540,11 @@ static int admin_nl_query_res(const admin_cmd_query_res_t *arg, int (*cb)(struct
         return -ENOMEM;
     }
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(*arg));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, arg->in.dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY, arg->in.key);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_TYPE, arg->in.type);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_EXT, arg->in.key_ext);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_CNT, arg->in.key_cnt);
 
     int ret = admin_nl_send_recv_msg(msg, cb, cb_arg, UBCORE_GENL);
     admin_nl_free_msg(msg);

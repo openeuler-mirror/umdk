@@ -9,6 +9,8 @@
  */
 
 #include <errno.h>
+#include <netlink/attr.h>
+#include <netlink/genl/genl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -207,11 +209,11 @@ typedef struct admin_core_latency_stat {
     admin_perf_record_stat_t perf_stat_table[PERF_RECORD_TYPE_MAX];
 } admin_core_latency_stat_t;
 
-typedef struct admin_core_cmd_perf_show {
-    struct {
-        admin_core_latency_stat_t stat;
-    } out;
-} admin_core_cmd_perf_show_t;
+typedef struct admin_perf_show_ctx {
+    admin_core_latency_stat_t stat;
+    int ret;
+    bool received;
+} admin_perf_show_ctx_t;
 
 static int cmd_perf_usage(admin_config_t *cfg)
 {
@@ -291,10 +293,38 @@ static void cmd_perf_print_stat(const admin_core_latency_stat_t *stat)
            "----------+----------+----------+\n");
 }
 
+static int cmd_perf_show_cb(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attrs[UBCORE_ATTR_AFTER_LAST] = {0};
+    admin_perf_show_ctx_t *ctx = (admin_perf_show_ctx_t *)arg;
+    struct nlattr *attr;
+    int ret;
+
+    ret = nla_parse(attrs, UBCORE_ATTR_AFTER_LAST - 1,
+                    genlmsg_attrdata(genlhdr, 0),
+                    genlmsg_attrlen(genlhdr, 0), NULL);
+    if (ret != 0) {
+        ctx->ret = ret;
+        return NL_STOP;
+    }
+
+    attr = attrs[UBCORE_ATTR_PERF_STAT];
+    if (attr == NULL || nla_len(attr) != sizeof(ctx->stat)) {
+        ctx->ret = -EINVAL;
+        return NL_STOP;
+    }
+    (void)memcpy(&ctx->stat, nla_data(attr), sizeof(ctx->stat));
+    ctx->received = true;
+
+    return NL_STOP;
+}
+
 static int cmd_perf_show(admin_config_t *cfg)
 {
     (void)cfg;
-    admin_core_cmd_perf_show_t arg = {0};
+    admin_perf_show_ctx_t ctx = {0};
 
     struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_PERF_SHOW, 0, UBCORE_GENL);
     if (msg == NULL) {
@@ -302,17 +332,16 @@ static int cmd_perf_show(admin_config_t *cfg)
         return -ENOMEM;
     }
 
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(arg));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
-
-    int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
-    if (ret != 0) {
+    int ret = admin_nl_send_recv_msg(msg, cmd_perf_show_cb, &ctx, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    if (ret != 0 || ctx.ret != 0 || !ctx.received) {
+        ret = (ret != 0) ? ret : (ctx.ret != 0 ? ctx.ret : -ENODATA);
         printf("Failed to show perf, ret: %d\n", ret);
         return ret;
     }
 
-    printf("\n[Kernel DFX Statistics] version: %u\n", arg.out.stat.version);
-    cmd_perf_print_stat(&arg.out.stat);
+    printf("\n[Kernel DFX Statistics] version: %u\n", ctx.stat.version);
+    cmd_perf_print_stat(&ctx.stat);
 
     return 0;
 }
