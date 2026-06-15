@@ -1624,3 +1624,43 @@ void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf)
 
     func(record_type, qbuf);
 }
+
+int umq_transport_pool_eventfd_get(uint64_t umqh)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->tp_ops == NULL || umq->tp_ops->umq_tp_transport_pool_eventfd_get == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "get transport pool eventfd failed\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq->tp_ops->umq_tp_transport_pool_eventfd_get();
+}
+
+int umq_transport_pool_resource_modify(uint64_t umqh, uint32_t tp_handle_idx)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->tp_ops == NULL || umq->tp_ops->umq_tp_transport_pool_resource_modify == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify UMQ to err failed, transport ops not available\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq->tp_ops->umq_tp_transport_pool_resource_modify(umq->umqh_tp, tp_handle_idx);
+}
+
+uint32_t umq_transport_pool_resource_create(uint64_t umqh)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->tp_ops == NULL || umq->tp_ops->umq_tp_transport_pool_resource_create == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "create transport resource failed, transport ops not available\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq->tp_ops->umq_tp_transport_pool_resource_create(umq->umqh_tp);
+}
+
+int umq_transport_pool_resource_destroy(uint64_t umqh, uint32_t tp_handle_idx)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->tp_ops == NULL || umq->tp_ops->umq_tp_transport_pool_resource_destroy == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "destroy transport resource failed, transport ops not available\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq->tp_ops->umq_tp_transport_pool_resource_destroy(umq->umqh_tp, tp_handle_idx);
+}

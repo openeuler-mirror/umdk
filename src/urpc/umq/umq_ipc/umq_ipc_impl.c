@@ -530,7 +530,7 @@ int32_t umq_ipc_unbind_impl(uint64_t umqh_tp)
     return UMQ_SUCCESS;
 }
 
-int umq_ipc_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_direction_t io_direction, umq_buf_t **bad_qbuf)
+int umq_ipc_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option, umq_buf_t **bad_qbuf)
 {
     return UMQ_FAIL;
 }

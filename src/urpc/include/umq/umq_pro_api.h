@@ -22,24 +22,25 @@ extern "C" {
  * Post tx/rx buf to umq
  * @param[in] umqh: umq handle
  * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requeses in one call
- * @param[in] io_direction: Set post direction : tx or rx
+ * @param[in] option: Set post direction : tx or rx
  * @param[out] bad_qbuf: qbuf list faild to post. user should free these buf
  * Return: UMQ_SUCCESS on success, error code on failure, the specific error code is as follows.
  * -UMQ_ERR_EFLOWCTL: flow control error detected during post
  */
-int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_direction_t io_direction, umq_buf_t **bad_qbuf);
+int umq_post(uint64_t umqh, umq_buf_t *qbuf, umq_io_option_t *option, umq_buf_t **bad_qbuf);
 
 /**
  * User should ensure thread safety if io_lock_free is true
  * Poll tx/rx buf from umq
  * @param[in] umqh: umq handle
- * @param[in] io_direction: Set poll direction : tx or rx, or both
+ * @param[in] option: 1. Set poll direction : tx or rx, or both
+ *                    2. Set tp handle idx (for share transport main umq)
  * @param[out] buf: buffer polled. user should assure length not less than max_buf_count.
  *         buf with status UMQ_FAKE_BUF_FC_ERR indicates flow control error.
  * @param[in] max_buf_count: max count of buf, if UMQ_IO_ALL is used, max_buf_count must be at least 2
  * Return: count of qbuf polled on success, error code on failure
  */
-int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count);
+int umq_poll(uint64_t umqh, umq_io_option_t *option, umq_buf_t **buf, uint32_t max_buf_count);
 
 /**
  * User should ensure thread safety if io_lock_free is true
@@ -50,6 +51,20 @@ int umq_poll(uint64_t umqh, umq_io_direction_t io_direction, umq_buf_t **buf, ui
  * Return fd >= 0 on success, error code < 0 on failure
  */
 int umq_interrupt_fd_get(uint64_t umqh, umq_interrupt_option_t *option);
+
+/**
+ * User should ensure thread safety if io_lock_free is true
+ * Query umq interrupt fd table
+ * @param[in] umqh: umq handle
+ * @param[in] option: option param
+ *                    1. user get io fd should specify UMQ_IO_TX or UMQ_IO_RX
+ *                    2. user get tp handle fd should specify tp_handle_idx
+ *                    otherwise UMQ_FAIL will be returned
+ * @param[out] fd_list: interrupt fd list
+ * if get event fd, fd_type set UMQ_FD_EVENT, return event fd (used to notify the user to return credit)
+ * Return: 0 on success, other value on error
+ */
+int umq_interrupt_fd_list_get(uint64_t umqh, umq_interrupt_option_t *option, umq_interrupt_fd_list_t *fd_list);
 
 /**
  * User should ensure thread safety if io_lock_free is true

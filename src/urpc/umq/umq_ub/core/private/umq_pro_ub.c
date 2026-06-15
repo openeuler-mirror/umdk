@@ -1555,8 +1555,9 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count)
     return (buf != NULL) ? qbuf_cnt : ret;
 }
 
-int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
+int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx)
 {
+    (void)tp_handle_idx;
     if (buf_count == 0) {
         return 0;
     }

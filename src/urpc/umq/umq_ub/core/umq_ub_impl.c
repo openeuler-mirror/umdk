@@ -1373,20 +1373,20 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *
     return UMQ_SUCCESS;
 }
 
-int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_direction_t io_direction, umq_buf_t **bad_qbuf)
+int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option, umq_buf_t **bad_qbuf)
 {
     int ret;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
-    if (io_direction == UMQ_IO_TX) {
+    if (option->io_direction == UMQ_IO_TX) {
         ret = umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf);
-    } else if (io_direction == UMQ_IO_RX) {
+    } else if (option->io_direction == UMQ_IO_RX) {
         ret = umq_ub_post_rx(umqh_tp, qbuf, bad_qbuf);
     } else {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, io_direction[%d] is not supported when post\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-            io_direction);
+            option->io_direction);
         ret = -UMQ_ERR_EINVAL;
     }
 
@@ -1395,19 +1395,19 @@ int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_direction_t io_di
     return ret;
 }
 
-int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count)
+int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf, uint32_t max_buf_count)
 {
     int ret;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
-    if (io_direction == UMQ_IO_RX) {
+    if (option->io_direction == UMQ_IO_RX) {
         ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
-    } else if (io_direction == UMQ_IO_TX) {
-        ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count);
-    } else if (io_direction == UMQ_IO_ALL) {
+    } else if (option->io_direction == UMQ_IO_TX) {
+        ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count, option->tp_handle_idx);
+    } else if (option->io_direction == UMQ_IO_ALL) {
         uint32_t tx_max_cnt = max_buf_count > 1 ? max_buf_count >> 1 : 1;
-        int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt);
+        int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt, option->tp_handle_idx);
         if (tx_cnt < 0) {
             ret = tx_cnt;
             goto OUT;
@@ -1424,7 +1424,7 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_
     } else {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, invalid io direction[%d]\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-            io_direction);
+            option->io_direction);
         ret = -UMQ_ERR_EINVAL;
     }
 
