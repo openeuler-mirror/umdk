@@ -33,5 +33,6 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
     bondp_chip_id_info_t *info);
 
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx);
+int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cnt[URMA_UBAGG_DEV_MAX_NUM]);
 
 #endif // BONDP_DATAPATH_SCHEDULE_H
