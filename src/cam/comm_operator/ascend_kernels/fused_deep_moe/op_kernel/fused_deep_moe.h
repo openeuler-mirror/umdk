@@ -317,6 +317,7 @@ private:
     GM_ADDR gmShareOutput_;
     GM_ADDR gmExpertTokenNums_;
     GM_ADDR workspaceGM_;
+    GM_ADDR shmemWorkspaceGM_;
     GM_ADDR metaInfoGm_;
     GM_ADDR gmSmoothScales_;
     GM_ADDR gmShareSmoothScales_;
@@ -380,10 +381,9 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     gmShareOutput_ = share_output;
     gmExpertTokenNums_ = expertTokenNums;
     if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        workspaceGM_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr);
-    } else {
-        workspaceGM_ = workspaceGM;
+        shmemWorkspaceGM_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr);
     }
+    workspaceGM_ = workspaceGM;
     metaInfoGm_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.metaInfoPtr);
     gmexpertScales_ = expert_scales;
     xActiveMask_ = x_active_mask;
@@ -453,21 +453,25 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     }
     size_t maxHandleTokenNum = maxTokenNum_ + shareExpertTokenNum;
     size_t workspaceOffset = 0;
+    size_t shmemWorkspaceOffset = 0;
     constexpr int32_t resveredWorkSpaceSize = 256 * 1024;
     int64_t x1TokenSize = maxHandleTokenNum * tokenHiddenSize_ * sizeof(int8_t);
     int64_t x2TokenSize = (maxTokenNum_ * gmm2InputDim_ + shareExpertTokenNum * shareGmm2InputDim_) * sizeof(int8_t);
     int64_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
     int64_t tokenScaleSize = maxHandleTokenNum * sizeof(float);
-    gmShareX1 = workspaceGM_ + workspaceOffset;
-    gmShareX2 = workspaceGM_ + workspaceOffset;
+    gmShareX1 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    gmShareX2 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     gmX1 = gmShareX1 + (static_cast<size_t>(shareExpertTokenNum) * tokenHiddenSize_ * sizeof(int8_t));
     gmX2 = gmShareX2 + (static_cast<size_t>(shareExpertTokenNum) * shareGmm2InputDim_ * sizeof(int8_t));
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxTokenSize);
-    gmShareX1Scale = workspaceGM_ + workspaceOffset;
-    gmShareX2Scale = workspaceGM_ + workspaceOffset;
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxTokenSize);
+    gmShareX1Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    gmShareX2Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     gmX1Scale = gmShareX1Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
     gmX2Scale = gmShareX2Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(tokenScaleSize);
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(tokenScaleSize);
+    gmTokenFlag = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxHandleTokenNum * sizeof(int32_t));
+
 
     GM_ADDR gmWorkspace = workspaceGM_ + workspaceOffset;
     GM_ADDR gmCVSwap = workspaceGM_ + workspaceOffset;
@@ -478,9 +482,6 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     int64_t maxSwigluGmm2Size = swigluOutSize < gmm2OutSize ? gmm2OutSize : swigluOutSize;
     gmShareSwigluOut = workspaceGM_ + workspaceOffset;
     gmSwigluOut = gmShareSwigluOut + (static_cast<size_t>(shareExpertTokenNum) * shareGmm1OutputDim_ * sizeof(float));
-    uint32_t maxTokenNum1 = maxBs_ * epRankSize_ * ((topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_) - 1);
-    gmTokenFlag = gmSwigluOut + (maxTokenNum1 * gmm1OutputDim_ + shareExpertTokenNum * shareGmm1OutputDim_) *
-        sizeof(float);
     GM_ADDR gmGmm2DepOut = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxSwigluGmm2Size);
 
@@ -493,11 +494,11 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int32_t));
     GM_ADDR gmResvered = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(resveredWorkSpaceSize);
-    GM_ADDR gmAllExpertTokenNums = workspaceGM_ + workspaceOffset;
-    workspaceOffset +=
+    GM_ADDR gmAllExpertTokenNums = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    shmemWorkspaceOffset +=
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
-    GM_ADDR gmCombineSend = workspaceGM_ + workspaceOffset;
-    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
+    GM_ADDR gmCombineSend = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
     GM_ADDR gmAllEpRecvCount = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * moeExpertNum_ * sizeof(int32_t));
 
