@@ -113,6 +113,41 @@ static inline size_t urpc_list_size(const struct urpc_list *list)
     return count;
 }
 
+// Move up to n nodes from src list to dst list (at the back of dst)
+// Returns actual number of nodes moved
+static ALWAYS_INLINE uint32_t urpc_list_move_n(urpc_list_t *src, urpc_list_t *dst, uint32_t n)
+{
+    if (urpc_list_is_empty(src) || n == 0) {
+        return 0;
+    }
+
+    // Find the nth node (or end of list)
+    struct urpc_list *last = src;
+    uint32_t count = 0;
+
+    while (last->next != src && count < n) {
+        last = last->next;
+        count++;
+    }
+
+    // Connect src head to node after last (skip moved portion)
+    struct urpc_list *first = src->next;
+    struct urpc_list *node_after_last = last->next;
+    src->next = node_after_last;
+    node_after_last->prev = src;
+
+    // Connect dst tail to first moved node, last moved node to dst head
+    if (count > 0) {
+        struct urpc_list *dst_tail = dst->prev;
+        dst_tail->next = first;
+        first->prev = dst_tail;
+        last->next = dst;
+        dst->prev = last;
+    }
+
+    return count;
+}
+
 #define URPC_LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
     for (INIT_CONTAINER_PTR(ITER, (LIST)->prev, MEMBER);                    \
          &(ITER)->MEMBER != (LIST);                                         \
