@@ -115,6 +115,12 @@ typedef struct admin_core_cmd_topo_bonding_dev {
     } out;
 } admin_core_cmd_topo_bonding_dev_t;
 
+typedef struct admin_show_physical_dev_ctx {
+    admin_urma_topo_bonding_dev_t bonding_dev;
+    int ret;
+    bool received;
+} admin_show_physical_dev_ctx_t;
+
 typedef struct admin_core_cmd_sl_info {
     struct {
         char dev_name[URMA_MAX_NAME];
@@ -260,6 +266,8 @@ enum {
 typedef enum ubagg_genl_attr {
     UBAGG_ATTR_UNSPEC,
     UBAGG_HDR_ARGS_ADDR = 4,
+    UBAGG_ATTR_EID,
+    UBAGG_ATTR_BONDING_PHYSICAL_DEVICE,
     UBAGG_ATTR_AFTER_LAST
 } ubagg_genl_attr_t;
 
