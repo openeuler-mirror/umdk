@@ -25,6 +25,28 @@
 # add --with dlock option, i.e. disable dlock by default
 %bcond_with dlock
 
+%ifarch aarch64
+%define with_64kb  %{?_with_64kb: 1} %{?!_with_64kb: 0}
+%else
+%define with_64kb  0
+%endif
+
+%if %{with_64kb}
+%define kernel_devel_pkg kernel-64k-devel
+%define ums_suffix -64kb
+%define ums_summary kmod file of UMS (64KB page size)
+%define ums_desc UMS kernel module for transparent TCP acceleration via shared memory over UB
+%define ums_conflict umdk-ums
+%define ums_kernel_req kernel-64k
+%else
+%define kernel_devel_pkg kernel-devel
+%define ums_suffix %{nil}
+%define ums_summary kmod file of ums
+%define ums_desc UMS kernel module for transparent TCP acceleration via shared memory over UB
+%define ums_conflict umdk-ums-64kb
+%define ums_kernel_req kernel
+%endif
+
 %define build_all 1
 
 %if %{with ums} || %{with urma} || %{with urpc} || %{with dlock}
@@ -38,9 +60,9 @@
     %define kernel_build_path /lib/modules/%{kernel_version}/build
 %else
     %define kernel_version %(
-        KERNEL_DEVEL_COUNT=$(rpm -qa kernel-devel 2>/dev/null | wc -l);
+        KERNEL_DEVEL_COUNT=$(rpm -qa %{kernel_devel_pkg} 2>/dev/null | wc -l);
         if [ "$KERNEL_DEVEL_COUNT" -eq 1 ]; then
-            rpm -q --qf '%%{VERSION}-%%{RELEASE}.%%{ARCH}' kernel-devel 2>/dev/null;
+            rpm -q --qf '%%{VERSION}-%%{RELEASE}.%%{ARCH}' %{kernel_devel_pkg} 2>/dev/null;
         else
             uname -r;
         fi
@@ -65,6 +87,9 @@ BuildRoot     : %{_buildirootdir}/%{name}-%{version}-build
 buildArch     : x86_64 aarch64
 
 BuildRequires : rpm-build, make, cmake, gcc, gcc-c++, glibc-devel
+%if %{build_all} || %{with ums}
+BuildRequires : %{kernel_devel_pkg}
+%endif
 Requires: glibc, glib2
 %if %{with asan}
 Requires: libasan
@@ -85,7 +110,7 @@ Requires: umdk-urpc-umq-devel = %{version}
 Requires: umdk-urpc-umq-tools = %{version}
 Requires: umdk-dlock-lib = %{version}
 Requires: umdk-dlock-devel = %{version}
-Requires: umdk-ums = %{version}
+Requires: umdk-ums-kmod = %{version}
 Requires: umdk-ums-tools = %{version}
 Requires: umdk-ums-agent = %{version}
 %files
@@ -230,12 +255,14 @@ This package contains all the executable examples of dlock.
 %endif
 
 %if %{build_all} || %{with ums}
-%package ums
-Summary:        kmod file of ums
-BuildRequires:  glib2-devel, libnl3-devel, kernel-devel
-Requires:       glib2, libnl3
-%description ums
-kmod file of ums
+%package ums%{ums_suffix}
+Summary:        %{ums_summary}
+BuildRequires:  glib2-devel, libnl3-devel, %{kernel_devel_pkg}
+Requires:       glib2, libnl3, %{ums_kernel_req}
+Provides:       umdk-ums-kmod = %{version}
+Conflicts:      %{ums_conflict}
+%description ums%{ums_suffix}
+%{ums_desc}
 
 %package ums-tools
 Summary:        tools of ums
@@ -492,13 +519,28 @@ fi
 %endif
 
 %if %{build_all} || %{with ums}
-%files ums
+%files ums%{ums_suffix}
 %defattr(-,root,root)
     %dir /lib/modules/%{kernel_version}/extra/ums/
     /lib/modules/%{kernel_version}/extra/ums/ums.ko
     /etc/modules-load.d/ums.conf
 
-%post ums
+%pre ums%{ums_suffix}
+RUNTIME_PAGESIZE=$(getconf PAGESIZE)
+%if %{with_64kb}
+EXPECTED_PAGESIZE=65536
+%else
+EXPECTED_PAGESIZE=4096
+%endif
+if [ "$RUNTIME_PAGESIZE" != "$EXPECTED_PAGESIZE" ]; then
+    fmt_size() { [ $1 -ge 1024 ] && echo "$(( $1 / 1024 ))KB" || echo "${1}B"; }
+    echo "ERROR: umdk-ums%{ums_suffix} requires $(fmt_size $EXPECTED_PAGESIZE) page size kernel," \
+         "but current is $(fmt_size $RUNTIME_PAGESIZE)." >&2
+    exit 1
+fi
+exit 0
+
+%post ums%{ums_suffix}
 if [ -d /lib/modules/$(uname -r)/kernel/net/smc ]; then
     %{__rm} -rf /lib/modules/$(uname -r)/kernel/net/smc
 fi
@@ -511,7 +553,7 @@ echo "omit_drivers+=\" ums \"" > /etc/dracut.conf.d/ums.conf
 
 /sbin/depmod -a $(uname -r)
 
-%postun ums
+%postun ums%{ums_suffix}
 if [ $1 -eq 0 ]; then
     if [[ %{kernel_version} != $(uname -r) ]]; then
         if [ -d /lib/modules/$(uname -r)/weak-updates/drivers ]; then
@@ -565,7 +607,9 @@ fi
 %endif
 
 %changelog
+* Tue Jun 16 2026 huying <huying21@huawei.com>
+- ums: support building umdk-ums-64kb for 64KB page size kernel
 * Fri May 29 2026 umdk wujie <wujie66@huawei.com>
--Change package version to 26.06.0.
+- Change package version to 26.06.0.
 * Tue Dec 30 2025 umdk
--Initial UMDK-25.12.0 rpm spec file.
+- Initial UMDK-25.12.0 rpm spec file.
