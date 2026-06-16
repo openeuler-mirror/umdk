@@ -8,6 +8,7 @@
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
+#include "umq_tiny_qbuf_pool.h"
 #include "perf.h"
 #include "umq_inner.h"
 
@@ -145,6 +146,12 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
             UMQ_VLOG_ERR(VLOG_UMQ, "umq huge qbuf pool info get failed\n");
             return ret;
         }
+
+        ret = umq_tiny_qbuf_pool_info_get(qbuf_pool_stats);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "umq tiny qbuf pool info get failed\n");
+            return ret;
+        }
         return UMQ_SUCCESS;
     }
 
@@ -158,6 +165,23 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
     return umq->dfx_tp_ops->umq_tp_stats_qbuf_pool_get(umq->umqh_tp, qbuf_pool_stats);
 }
 
+static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
+{
+    static const char qbuf_pool_type[UMQ_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
+        [UMQ_QBUF_POOL_TYPE_SMALL] = "Small",
+        [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
+        [UMQ_QBUF_POOL_TYPE_BIG] = "Big",
+        [UMQ_QBUF_POOL_TYPE_HUGE] = "Huge",
+        [UMQ_QBUF_POOL_TYPE_GIGANTIC] = "Gigantic",
+        [UMQ_QBUF_POOL_TYPE_TINY] = "Tiny",
+    };
+
+    if (type >= UMQ_QBUF_POOL_TYPE_MAX) {
+        return "Unknown";
+    }
+    return qbuf_pool_type[type];
+}
+
 int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, char *buf, int max_buf_len)
 {
     if (qbuf_pool_stats == NULL || buf == NULL || max_buf_len <= 0 ||
@@ -166,14 +190,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
-
-    static const char qbuf_pool_type[UMQ_STATS_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
-        "Small",
-        "Medium",
-        "Big",
-        "Huge",
-        "Gigantic",
-    };
 
     int str_size = 0;
     (void)memset(buf, 0, max_buf_len);
@@ -195,7 +211,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
             "%-16s %-9s %-11lu %-8lu %-8u %-8u %-8u %-8u %-11u %-14lu %-14lu\n",
-            qbuf_pool_type[i],
+            umq_qbuf_pool_type_name(info->type),
             info->mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE",
             info->total_size,
             info->total_block_num,
@@ -258,9 +274,10 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         "%s\n", "                                             Per-Thread TLS Pool Stats (WithData)");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
-        "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf", "AccAlloc", "AccFree");
-
+        "%-13s %-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
+        "Type", "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf",
+        "AccAlloc", "AccFree");
+   
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
         total_tls_capacity_with_data += s->capacity_with_data;
@@ -273,8 +290,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         total_free_cnt_with_data += s->free_cnt_with_data;
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-        "total",
+        "%-13s %-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
+        "total", "-",
         total_tls_capacity_with_data, total_tls_buf_cnt_with_data,
         total_tls_fetch_cnt_with_data, total_tls_fetch_buf_cnt_with_data,
         total_tls_return_cnt_with_data, total_tls_return_buf_cnt_with_data,
@@ -283,8 +300,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-            s->tid, s->capacity_with_data, s->buf_cnt_with_data,
+            "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
+            umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_with_data, s->buf_cnt_with_data,
             s->tls_fetch_cnt_with_data, s->tls_fetch_buf_cnt_with_data,
             s->tls_return_cnt_with_data, s->tls_return_buf_cnt_with_data,
             s->alloc_cnt_with_data, s->free_cnt_with_data);
@@ -296,8 +313,9 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         "%s\n", "                                             Per-Thread TLS Pool Stats (WithoutData)");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
-        "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf", "AccAlloc", "AccFree");
+        "%-13s %-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
+        "Type", "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf",
+        "AccAlloc", "AccFree");
 
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
@@ -311,8 +329,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         total_free_cnt_without_data += s->free_cnt_without_data;
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-        "total",
+        "%-13s %-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
+        "total", "-",
         total_tls_capacity_without_data, total_tls_buf_cnt_without_data,
         total_tls_fetch_cnt_without_data, total_tls_fetch_buf_cnt_without_data,
         total_tls_return_cnt_without_data, total_tls_return_buf_cnt_without_data,
@@ -321,8 +339,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-            s->tid, s->capacity_without_data, s->buf_cnt_without_data,
+            "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
+            umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_without_data, s->buf_cnt_without_data,
             s->tls_fetch_cnt_without_data, s->tls_fetch_buf_cnt_without_data,
             s->tls_return_cnt_without_data, s->tls_return_buf_cnt_without_data,
             s->alloc_cnt_without_data, s->free_cnt_without_data);

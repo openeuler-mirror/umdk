@@ -109,17 +109,12 @@ uint8_t *umq_ubmm_ctx_init_impl(umq_init_cfg_t *cfg)
         goto UNINIT_ALLOCATOR;
     }
 
-    uint64_t total_io_buf_size = 0;
     uint8_t *ub_init_ctx = NULL;
     for (uint32_t i = 0; i < cfg->trans_info_num; ++i) {
         umq_trans_info_t *info = &cfg->trans_info[i];
         if (info->trans_mode != UMQ_TRANS_MODE_UBMM && info->trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
             UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %d not UBMM, skip it\n", info->trans_mode);
             continue;
-        }
-
-        if (total_io_buf_size == 0) {
-            total_io_buf_size = info->mem_cfg.total_size;
         }
 
         if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
@@ -148,7 +143,7 @@ uint8_t *umq_ubmm_ctx_init_impl(umq_init_cfg_t *cfg)
         goto UNINIT_UB;
     }
 
-    if (umq_io_buf_malloc(cfg->buf_mode, total_io_buf_size) == NULL) {
+    if (umq_io_buf_malloc(cfg->buf_mode, cfg->buf_pool_cfg.umq_mem_pool_init_size) == NULL) {
         goto UNINIT_UB;
     }
 

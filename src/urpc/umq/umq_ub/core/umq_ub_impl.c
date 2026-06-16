@@ -29,6 +29,8 @@
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
+#include "umq_qbuf_pool_helper.h"
+#include "umq_tiny_qbuf_pool.h"
 #include "umq_inner.h"
 #include "umq_huge_qbuf_pool.h"
 #include "util_id_generator.h"
@@ -200,7 +202,7 @@ int umq_ub_bind_impl(uint64_t umqh, uint8_t *bind_info_buf, uint32_t bind_info_s
     return umq_ub_bind_inner_impl(queue, &bind_info);
 }
 
-int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
+static int32_t umq_ub_register_memory_with_id(uint16_t mempool_id, void *buf, uint64_t size)
 {
     if (g_ub_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "no device is available to register memory\n");
@@ -215,7 +217,7 @@ int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
     uint32_t failed_idx;
     int ret = 0;
     for (uint32_t i = 0; i < g_ub_ctx_count; i++) {
-        ret = umq_ub_register_seg(&g_ub_ctx[i], UMQ_QBUF_DEFAULT_MEMPOOL_ID, buf, size);
+        ret = umq_ub_register_seg(&g_ub_ctx[i], mempool_id, buf, size);
         if (ret != UMQ_SUCCESS) {
             failed_idx = i;
             UMQ_VLOG_ERR(VLOG_UMQ, "ub ctx[%u] register segment failed, status: %d\n", i, ret);
@@ -225,8 +227,18 @@ int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
     return UMQ_SUCCESS;
 
 UNREGISTER_MEM:
-    umq_ub_unregister_seg(g_ub_ctx, failed_idx, UMQ_QBUF_DEFAULT_MEMPOOL_ID);
+    umq_ub_unregister_seg(g_ub_ctx, failed_idx, mempool_id);
     return ret;
+}
+
+int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
+{
+    return umq_ub_register_memory_with_id(UMQ_QBUF_DEFAULT_MEMPOOL_ID, buf, size);
+}
+
+int32_t umq_ub_register_tiny_memory_impl(void)
+{
+    return umq_ub_register_memory_with_id(UMQ_TINY_QBUF_MEMPOOL_ID, umq_tiny_io_buf_addr(), umq_tiny_io_buf_size());
 }
 
 void umq_ub_unregister_memory_impl(void)
@@ -239,37 +251,24 @@ void umq_ub_unregister_memory_impl(void)
 umq_buf_t *umq_ub_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
     umq_alloc_option_t *option)
 {
+    (void)umqh_tp;
     umq_buf_list_t head;
     QBUF_LIST_INIT(&head);
     if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
         return NULL;
     }
-
     return QBUF_LIST_FIRST(&head);
 }
 
 umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
     umq_alloc_option_t *option)
 {
-    uint32_t headroom_size = umq_qbuf_headroom_get();
-    umq_buf_mode_t mode = umq_qbuf_mode_get();
-    uint32_t factor = (mode == UMQ_BUF_SPLIT) ? 0 : sizeof(umq_buf_t);
+    (void)umqh_tp;
     umq_buf_list_t head;
-
     QBUF_LIST_INIT(&head);
-    uint32_t buf_size = request_size + headroom_size + factor;
-
-    if (buf_size < umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID)) {
-        if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
-            return NULL;
-        }
-    } else {
-        huge_qbuf_pool_size_type_t type = umq_huge_qbuf_get_type_by_size(buf_size);
-        if (umq_huge_qbuf_alloc(type, request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
-            return NULL;
-        }
+    if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+        return NULL;
     }
-
     return QBUF_LIST_FIRST(&head);
 }
 
@@ -277,7 +276,7 @@ void umq_ub_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
 {
     umq_buf_list_t head;
     QBUF_LIST_FIRST(&head) = qbuf;
-    umq_qbuf_free(&head);
+    umq_invalid_handle_buf_free(&head, umq_pool_type_get(qbuf->mempool_id));
 }
 
 void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
@@ -285,12 +284,7 @@ void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
     umq_buf_list_t head;
     QBUF_LIST_FIRST(&head) = qbuf;
     if (QBUF_LIST_NEXT(qbuf) == NULL) {
-        if (is_huge_mempool_pool(qbuf->mempool_id)) {
-            umq_huge_qbuf_free(&head);
-        } else {
-            umq_qbuf_free(&head);
-        }
-
+        umq_invalid_handle_buf_free(&head, umq_pool_type_get(qbuf->mempool_id));
         return;
     }
 
@@ -302,14 +296,12 @@ void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
     umq_buf_list_t free_head;
     umq_buf_t *last_node = qbuf;
     umq_buf_t *free_node = qbuf; // head of the list to be released
-    bool is_huge = is_huge_mempool_pool(qbuf->mempool_id); // Specify the list to be released currently
-                                                                    // belongs to large or general pool.
+    umq_pool_type_t type = umq_pool_type_get(qbuf->mempool_id);
     QBUF_LIST_FIRST(&head) = QBUF_LIST_NEXT(qbuf);
 
     QBUF_LIST_FOR_EACH_SAFE(cur_node, &head, next_node)
     {
-        if ((is_huge && is_huge_mempool_pool(cur_node->mempool_id)) ||
-            (!is_huge && !is_huge_mempool_pool(cur_node->mempool_id))) {
+        if (type == umq_pool_type_get(cur_node->mempool_id)) {
             // current qbuf is in the same pool, scan the next one directly
             last_node = cur_node;
             continue;
@@ -318,24 +310,16 @@ void umq_ub_plus_buf_free_impl(umq_buf_t *qbuf, uint64_t umqh_tp)
         // free qbuf list in the same pool
         QBUF_LIST_NEXT(last_node) = NULL;
         QBUF_LIST_FIRST(&free_head) = free_node;
-        if (is_huge_mempool_pool(free_node->mempool_id)) {
-            umq_huge_qbuf_free(&free_head);
-        } else {
-            umq_qbuf_free(&free_head);
-        }
+        umq_invalid_handle_buf_free(&free_head, type);
 
         // update variables
         free_node = cur_node;
         last_node = cur_node;
-        is_huge = is_huge_mempool_pool(cur_node->mempool_id);
+        type = umq_pool_type_get(cur_node->mempool_id);
     }
 
     QBUF_LIST_FIRST(&free_head) = free_node;
-    if (is_huge_mempool_pool(free_node->mempool_id)) {
-        umq_huge_qbuf_free(&free_head);
-    } else {
-        umq_qbuf_free(&free_head);
-    }
+    umq_invalid_handle_buf_free(&free_head, type);
     return;
 }
 
@@ -681,17 +665,12 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto URMA_UNINIT;
     }
 
-    uint64_t total_io_buf_size = 0;
     for (uint32_t i = 0; i < cfg->trans_info_num; i++) {
         umq_trans_info_t *info = &cfg->trans_info[i];
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS &&
             info->trans_mode != UMQ_TRANS_MODE_UBMM && info->trans_mode != UMQ_TRANS_MODE_UBMM_PLUS) {
             UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %d not UB, skip it\n", info->trans_mode);
             continue;
-        }
-
-        if (total_io_buf_size == 0) {
-            total_io_buf_size = info->mem_cfg.total_size;
         }
 
         if (info->dev_info.assign_mode == UMQ_DEV_ASSIGN_MODE_DUMMY) {
@@ -706,7 +685,13 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         ++g_ub_ctx_count;
     }
 
-    if (umq_io_buf_malloc(cfg->buf_mode, total_io_buf_size) == NULL) {
+    umq_qbuf_pool_plan_t buf_pool_plan;
+    ret = umq_qbuf_pool_cfg_check(cfg, &buf_pool_plan);
+    if (ret != UMQ_SUCCESS) {
+        goto ROLLBACK_UB_CTX;
+    }
+
+    if (umq_io_buf_malloc(cfg->buf_mode, buf_pool_plan.normal_io_buf_size) == NULL) {
         goto ROLLBACK_UB_CTX;
     }
 
@@ -716,7 +701,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .data_size = umq_buf_size_small(),
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
-        .umq_buf_pool_max_size = cfg->buf_pool_cfg.umq_buf_pool_max_size,
+        .umq_buf_pool_max_size = buf_pool_plan.normal_pool_budget_size,
         .expansion_block_count = cfg->buf_pool_cfg.expansion_block_count,
         .seg_ops = {
             .register_seg_callback = umq_ub_register_seg_callback,
@@ -724,7 +709,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         },
         .disable_scale_cap = cfg->buf_pool_cfg.disable_scale_cap,
         .expansion_pool_id_min = HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
-        .expansion_pool_cnt_max = QBUF_POOL_MEMPOOL_ID_MAX - HUGE_QBUF_POOL_MEMPOOL_ID_MAX,
+        .expansion_pool_cnt_max = UMQ_EXPANSION_POOL_CNT_MAX,
         .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
         .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
         .disable_malloc_escape = cfg->buf_pool_cfg.disable_malloc_escape,
@@ -734,10 +719,29 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool init failed, status: %d\n", ret);
         goto IO_BUF_FREE;
     }
+
+    if (cfg->buf_pool_cfg.enable_tiny_pool) {
+        if (umq_tiny_io_buf_malloc(cfg->buf_mode, buf_pool_plan.tiny_io_buf_size) == NULL) {
+            goto QBUF_POOL_UNINIT;
+        }
+
+        qbuf_pool_cfg_t tiny_qbuf_cfg = qbuf_cfg;
+        tiny_qbuf_cfg.buf_addr = umq_tiny_io_buf_addr();
+        tiny_qbuf_cfg.total_size = umq_tiny_io_buf_size();
+        tiny_qbuf_cfg.data_size = buf_pool_plan.tiny_block_size;
+        tiny_qbuf_cfg.tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_tiny_pool_depth;
+        tiny_qbuf_cfg.tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_tiny_pool_depth;
+        ret = umq_tiny_qbuf_pool_init(&tiny_qbuf_cfg);
+        if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tiny qbuf pool init failed, status: %d\n", ret);
+            goto TINY_IO_BUF_FREE;
+        }
+    }
+
     ret = umq_ub_queue_ctx_list_init();
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "ub queue ctx list init failed, status: %d\n", ret);
-        goto QBUF_POOL_UNINIT;
+        goto TINY_QBUF_POOL_UNINIT;
     }
     if (umq_ub_check_idle_queue_timer_create(cfg) != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq check idle queue timer create failed\n");
@@ -762,6 +766,12 @@ DELETE_TIMER:
 
 QUEUE_CTX_LIST_UNINIT:
     umq_ub_queue_ctx_list_uninit();
+
+TINY_QBUF_POOL_UNINIT:
+    umq_tiny_qbuf_pool_uninit();
+
+TINY_IO_BUF_FREE:
+    umq_tiny_io_buf_free();
 
 QBUF_POOL_UNINIT:
     umq_qbuf_pool_uninit();
@@ -817,6 +827,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     umq_ub_jetty_pool_uninit();
     umq_ub_check_idle_queue_timer_delete();
     umq_ub_queue_ctx_list_uninit();
+    umq_tiny_qbuf_pool_uninit();
     umq_qbuf_pool_uninit();
 
     for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
@@ -831,6 +842,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         (void)pthread_spin_destroy(&context[i].tseg_list_lock);
     }
 
+    umq_tiny_io_buf_free();
     umq_io_buf_free();
     umq_ub_id_allocator_uninit();
     umq_ub_dev_info_uninit();
@@ -2505,16 +2517,28 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf register seg failed, status: %d\n", ret);
         goto UNREGISTER_MEM;
     }
+    if (cfg->buf_pool_cfg.enable_tiny_pool) {
+        ret = umq_tiny_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tiny qbuf register seg failed, status: %d\n", ret);
+            goto UNREGISTER_HUGE_MEM;
+        }
+    }
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
     ret = umq_ub_flow_control_sge_mgr_init(&g_ub_ctx[g_ub_ctx_count].fc_sge_mgr);
     if (ret != UMQ_SUCCESS) {
-        goto UNREGISTER_HUGE_MEM;
+        goto UNREGISTER_TINY_MEM;
     }
     (void)pthread_spin_init(&g_ub_ctx[g_ub_ctx_count].tseg_list_lock, PTHREAD_PROCESS_PRIVATE);
 
     g_ub_ctx_count++;
 
     return UMQ_SUCCESS;
+
+UNREGISTER_TINY_MEM:
+    if (cfg->buf_pool_cfg.enable_tiny_pool) {
+        umq_tiny_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+    }
 
 UNREGISTER_HUGE_MEM:
     umq_huge_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
@@ -2852,6 +2876,11 @@ int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbu
         UMQ_VLOG_ERR(VLOG_UMQ, "umq huge qbuf pool info get failed\n");
         return ret;
     }
+    ret = umq_tiny_qbuf_pool_info_get(qbuf_pool_stats);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq tiny qbuf pool info get failed\n");
+        return ret;
+    }
     return UMQ_SUCCESS;
 }
 
@@ -3003,4 +3032,3 @@ int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats)
     stats->acc_free_num = pool_stats.acc_free_num;
     return UMQ_SUCCESS;
 }
-

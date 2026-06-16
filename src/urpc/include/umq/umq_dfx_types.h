@@ -91,7 +91,18 @@ typedef struct umq_expansion_pool_stats {
     uint64_t total_shrink_count;            // cumulative number of contractions
 } umq_expansion_pool_stats_t;
 
+typedef enum umq_qbuf_pool_type {
+    UMQ_QBUF_POOL_TYPE_SMALL,
+    UMQ_QBUF_POOL_TYPE_MEDIUM,
+    UMQ_QBUF_POOL_TYPE_BIG,
+    UMQ_QBUF_POOL_TYPE_HUGE,
+    UMQ_QBUF_POOL_TYPE_GIGANTIC,
+    UMQ_QBUF_POOL_TYPE_TINY,
+    UMQ_QBUF_POOL_TYPE_MAX,
+} umq_qbuf_pool_type_t;
+
 typedef struct umq_local_qbuf_pool_stats {
+    umq_qbuf_pool_type_t type;                 // qbuf pool type
     uint64_t tid;                              // thread ID
     uint64_t capacity_with_data;               // capacity of with-data buffer in the local memory pool
     uint64_t buf_cnt_with_data;                // number of with-data buffer in the local memory pool
@@ -112,6 +123,7 @@ typedef struct umq_local_qbuf_pool_stats {
 } umq_local_qbuf_pool_stats_t;
 
 typedef struct umq_qbuf_pool_info {
+    umq_qbuf_pool_type_t type;                 // qbuf pool type
     umq_buf_mode_t mode;                      // split or combine
     uint64_t total_size;                      // qbuf pool total size
     uint64_t total_block_num;                 // total number of blocks

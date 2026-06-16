@@ -16,7 +16,7 @@
 #include "qbuf_list.h"
 #include "umq_dfx_types.h"
 #include "umq_types.h"
-#include "umq_qbuf_pool.h"
+#include "umq_qbuf_pool_base.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,6 +57,8 @@ static inline bool is_huge_mempool_pool(uint32_t mempool_id)
 int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg);
 
 void umq_huge_qbuf_pool_uninit(void);
+
+bool umq_huge_qbuf_pool_is_inited(void);
 
 int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, uint32_t num,
     umq_alloc_option_t *option, umq_buf_list_t *list);
