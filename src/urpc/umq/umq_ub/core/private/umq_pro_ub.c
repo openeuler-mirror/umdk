@@ -1167,7 +1167,7 @@ static int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_co
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue, uint64_t user_ctx)
 {
     urma_sge_t fc_sge = {.addr = user_ctx, .len = sizeof(umq_ub_fc_sge_data_t)};
-    umq_buf_t *qbuf = umq_qbuf_data_to_head((void *)(uintptr_t)user_ctx);
+    umq_buf_t *qbuf = umq_data_to_head((void *)(uintptr_t)user_ctx);
     if (qbuf == NULL || qbuf->mempool_id >= QBUF_POOL_MEMPOOL_ID_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
             "eid: " EID_FMT ", jetty_id: %u, fc rx buf mempool invalid\n",
