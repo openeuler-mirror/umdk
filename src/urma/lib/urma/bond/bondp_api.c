@@ -618,7 +618,7 @@ static int bondp_create_pjfs(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfs, ur
         }
         bdp_jfs->p_jfs[i] = jfs;
         bdp_jfs->p_jfs[i]->jfs_cfg.user_ctx = (uint64_t)bdp_jfs;
-        bdp_jfs->valid[i] = true;
+        atomic_store(&bdp_jfs->valid[i], true);
         URMA_LOG_DEBUG("Created pjfs successfully, idx=%u, jfs_id=%u, dev=%s, eid_idx=%u\n",
                        i, jfs->jfs_id.id, bdp_ctx->p_ctxs[i]->dev->name, bdp_ctx->p_ctxs[i]->eid_index);
     }
@@ -722,7 +722,6 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     bdp_jfs->comp_type = BONDP_COMP_JFS;
     atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
     (void)pthread_spin_init(&bdp_jfs->send_lock, PTHREAD_PROCESS_PRIVATE);
-    (void)pthread_spin_init(&bdp_jfs->send_wr_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jfs->modify_to_error = false;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
@@ -788,7 +787,6 @@ DELETE_PJFS:
     bondp_delete_pjfs(bdp_jfs);
 FREE_JFS:
     bondp_uninit_wr_buf(&bdp_jfs->send_wr_buf);
-    (void)pthread_spin_destroy(&bdp_jfs->send_wr_lock);
     (void)pthread_spin_destroy(&bdp_jfs->send_lock);
     free(bdp_jfs);
     return NULL;
@@ -835,7 +833,6 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
         ret = URMA_FAIL;
     }
 
-    (void)pthread_spin_destroy(&bdp_jfs->send_wr_lock);
     (void)pthread_spin_destroy(&bdp_jfs->send_lock);
     free(bdp_jfs);
 
@@ -906,7 +903,7 @@ static int bondp_create_pjfr(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jfr, ur
         }
         jfr->jfr_cfg.user_ctx = (uint64_t)bdp_jfr;
         bdp_jfr->p_jfr[i] = jfr;
-        bdp_jfr->valid[i] = true;
+        atomic_store(&bdp_jfr->valid[i], true);
         URMA_LOG_DEBUG("Created pjfr successfully, idx=%u, jfr_id=%u, dev=%s, eid_idx=%u\n",
                        i, jfr->jfr_id.id, bdp_ctx->p_ctxs[i]->dev->name, bdp_ctx->p_ctxs[i]->eid_index);
     }
@@ -1005,7 +1002,6 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
     bdp_jfr->bondp_ctx = bdp_ctx;
     bdp_jfr->comp_type = BONDP_COMP_JFR;
     atomic_init(&bdp_jfr->use_cnt.atomic_cnt, 0);
-    (void)pthread_spin_init(&bdp_jfr->recv_wr_lock, PTHREAD_PROCESS_PRIVATE);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
@@ -1065,7 +1061,6 @@ DELETE_PJFR:
     bondp_delete_pjfr(bdp_jfr);
 FREE_JFR:
     bondp_uninit_wr_buf(&bdp_jfr->recv_wr_buf);
-    (void)pthread_spin_destroy(&bdp_jfr->recv_wr_lock);
     free(bdp_jfr);
     return NULL;
 }
@@ -1108,7 +1103,6 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("Failed to delete pjfr\n");
         ret = URMA_FAIL;
     }
-    (void)pthread_spin_destroy(&bdp_jfr->recv_wr_lock);
     free(bdp_jfr);
 
     atomic_fetch_sub(&bdp_jfc->use_cnt.atomic_cnt, 1);
@@ -1259,7 +1253,7 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
         }
         jetty->jetty_cfg.user_ctx = (uint64_t)bdp_jetty;
         bdp_jetty->p_jetty[i] = jetty;
-        bdp_jetty->valid[i] = true;
+        atomic_store(&bdp_jetty->valid[i], true);
         URMA_LOG_DEBUG("Created pjetty successfully, idx=%u, jetty_id=%u, dev=%s, eid_idx=%u\n",
                        i, jetty->jetty_id.id, bdp_ctx->p_ctxs[i]->dev->name, bdp_ctx->p_ctxs[i]->eid_index);
     }
@@ -1378,8 +1372,6 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     bdp_jetty->comp_type = BONDP_COMP_JETTY;
     atomic_init(&bdp_jetty->use_cnt.atomic_cnt, 0);
     (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
-    (void)pthread_spin_init(&bdp_jetty->send_wr_lock, PTHREAD_PROCESS_PRIVATE);
-    (void)pthread_spin_init(&bdp_jetty->recv_wr_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jetty->modify_to_error = false;
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
@@ -1458,8 +1450,6 @@ DELETE_PJETTY:
 FREE_JETTY:
     bondp_uninit_wr_buf(&bdp_jetty->recv_wr_buf);
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
-    (void)pthread_spin_destroy(&bdp_jetty->recv_wr_lock);
-    (void)pthread_spin_destroy(&bdp_jetty->send_wr_lock);
     (void)pthread_spin_destroy(&bdp_jetty->send_lock);
     free(bdp_jetty);
     return NULL;
@@ -1508,8 +1498,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
         URMA_LOG_ERR("Failed to delete pjetty\n");
         ret = URMA_FAIL;
     }
-    (void)pthread_spin_destroy(&bdp_jetty->recv_wr_lock);
-    (void)pthread_spin_destroy(&bdp_jetty->send_wr_lock);
     (void)pthread_spin_destroy(&bdp_jetty->send_lock);
     free(bdp_jetty);
 
@@ -1772,7 +1760,7 @@ static int bondp_import_pjetty(
                              local_idx, target_idx, rvjetty_info->slave_id[target_idx].id);
                 return -1;
             }
-            bdp_tjetty->valid[target_idx] = true;
+            atomic_store(&bdp_tjetty->valid[target_idx], true);
         }
     }
     return 0;
@@ -2054,7 +2042,7 @@ static int bondp_import_pjfr(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
                              local_idx, target_idx, udata_out->slave_id[target_idx].id);
                 return -1;
             }
-            bdp_tjetty->valid[target_idx] = true;
+            atomic_store(&bdp_tjetty->valid[target_idx], true);
         }
     }
     return 0;

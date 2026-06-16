@@ -44,12 +44,12 @@ static void select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_tar
     *least_load_cnt = 0;
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t local_idx = bdp_comp->active_indices[i];
-        if (!bdp_comp->valid[local_idx] || local_idx < min_idx[0] || local_idx >= max_idx[0]) {
+        if (!atomic_load(&bdp_comp->valid[local_idx]) || local_idx < min_idx[0] || local_idx >= max_idx[0]) {
             continue;
         }
         for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
             uint32_t target_idx = bdp_tjetty->active_indices[j];
-            if (!bdp_tjetty->valid[target_idx] || target_idx < min_idx[1] || target_idx >= max_idx[1] ||
+            if (!atomic_load(&bdp_tjetty->valid[target_idx]) || target_idx < min_idx[1] || target_idx >= max_idx[1] ||
                 bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL) {
                 continue;
             }
@@ -100,12 +100,12 @@ static int schedule_send_standalone(const bondp_comp_t *bdp_comp, const bondp_ta
 {
     uint32_t loc_idx = bdp_comp->active_indices[0];
 
-    if (!bdp_comp->valid[loc_idx]) {
+    if (!atomic_load(&bdp_comp->valid[loc_idx])) {
         return -1;
     }
     for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
         uint32_t tar_idx = bdp_tjetty->active_indices[j];
-        if (!bdp_tjetty->valid[tar_idx] || bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL) {
+        if (!atomic_load(&bdp_tjetty->valid[tar_idx]) || bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL) {
             continue;
         }
         *send_idx = (int)loc_idx;
@@ -125,12 +125,12 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
         uint32_t loc_idx = bdp_comp->active_indices[i];
         for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
             uint32_t tar_idx = bdp_tjetty->active_indices[j];
-            if (!bdp_tjetty->valid[tar_idx] ||
+            if (!atomic_load(&bdp_tjetty->valid[tar_idx]) ||
                 bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL ||
                 target_used[tar_idx]) {
                 continue;
             }
-            if (bdp_comp->valid[loc_idx]) {
+            if (atomic_load(&bdp_comp->valid[loc_idx])) {
                 *send_idx = (int)loc_idx;
                 *target_idx = (int)tar_idx;
                 return 0;
