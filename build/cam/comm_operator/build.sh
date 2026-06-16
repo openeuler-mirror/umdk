@@ -6,6 +6,8 @@
 # Note:
 # History: 2025-07-20 create cam building script
 
+set -e
+
 export MODULE_NAME="comm_operator"
 export MODULE_SRC_PATH="${SRC_PATH}/${MODULE_NAME}"
 export MODULE_SCRIPTS_PATH="${SCRIPTS_PATH}/${MODULE_NAME}"
@@ -17,15 +19,16 @@ SOC_VERSION="all"
 ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
+ENABLE_CAM_COMM_BUILD=1
 
 build_cam_comm() {
-    cd $MODULE_SRC_PATH
+    cd "$MODULE_SRC_PATH"
     if [ -d "./build" ]; then
         rm -rf "./build"
     fi
-    mkdir build
+    mkdir -p build
     cd build
-    cmake .. -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+    cmake .. -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
         && make && make install || {
             echo "build_cam_comm fail"
             return 1
@@ -33,11 +36,11 @@ build_cam_comm() {
 }
 
 BuildTest() {
-    cd ${MODULE_TEST_PATH}/ut_gtest
+    cd "${MODULE_TEST_PATH}/ut_gtest"
     if [ -d "./build" ]; then
         rm -rf "./build"
     fi
-    mkdir ./build
+    mkdir -p ./build
     cd build
     cmake .. && make -j && make install
     if [ $? -ne 0 ]; then
@@ -46,7 +49,7 @@ BuildTest() {
     fi
 }
 
-PrintHelp() {
+print_help() {
     echo "
     ./build.sh comm_operator <opt>...
     -x Extract the run package
@@ -83,31 +86,30 @@ while getopts "c:xdtprh" opt; do
         export ENABLE_COV=1
         ;;
     h)
-        PrintHelp
+        print_help
         exit 0
         ;;
     esac
 done
 
 if [ ! -d "$BUILD_OUT_PATH/${MODULE_NAME}" ]; then
-    mkdir $BUILD_OUT_PATH/${MODULE_NAME}
+    mkdir -p "$BUILD_OUT_PATH/${MODULE_NAME}"
 fi
 
 # 目前whl包和UT的编译暂时需要先将CAM算子包并安装到环境
 # 在编译whl包和UT时屏蔽算子包编译，加快编译速度
 if [ $ENABLE_SRC_BUILD -eq 1 ]; then
-    build_cam_comm
+    if [ $ENABLE_CAM_COMM_BUILD -eq 1 ]; then
+        build_cam_comm
+    fi
     if [ ! -d "./build_out/comm_operator/run/" ]; then
         mkdir -p ${MODULE_BUILD_OUT_PATH}/run
     fi
     if [[ "$SOC_VERSION" == "all" ]]; then
-        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE && \
-        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910b4 $IS_EXTRACT $BUILD_TYPE
+        echo "Default SOC version: ascend910_93"
+        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE
     else
         bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE
-    fi
-    if [ $? -ne 0 ]; then
-        exit 1
     fi
 fi
 
@@ -117,7 +119,4 @@ fi
 
 if [ $ENABLE_UT_BUILD -eq 1 ]; then
     BuildTest
-    if [ $? -ne 0 ]; then
-        exit 1
-    fi
 fi

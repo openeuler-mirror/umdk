@@ -25,6 +25,11 @@ build_pybind() {
         CAM_COMM_PATH=$MODULE_SRC_PATH
         export CAM_COMM_PATH
     fi
+
+    # 限制 C++ 编译并行度：可通过 CAM_BUILD_JOBS 环境变量配置，默认 8
+    # Jenkins ECS 等内存受限环境建议设置为 2~4
+    export MAX_JOBS=${CAM_BUILD_JOBS:-8}
+
     rm -rf build/ dist/ umdk_cam_op_lib_custom.egg-info/
     python3 setup.py bdist_wheel
     DIST_GEN_PATH=$EXT_PATH/dist
