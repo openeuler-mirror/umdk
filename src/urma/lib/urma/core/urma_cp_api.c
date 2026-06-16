@@ -20,6 +20,9 @@
 #include "urma_provider.h"
 #include "urma_types.h"
 
+#define BONDP_USER_CTL_GET_RJETTY  9
+#define BONDP_USER_CTL_GET_SEG_CTX 10
+
 #define URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx)                                                                 \
     do {                                                                                                               \
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL)) {               \
@@ -1981,6 +1984,78 @@ urma_status_t urma_unimport_jetty(urma_target_jetty_t *tjetty)
     return URMA_SUCCESS;
 }
 
+/* Kernel user_ctl opcodes for fetching remote jetty / seg context info. */
+
+urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length)
+{
+    if (jetty == NULL || rjetty == NULL || length == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_context_t *urma_ctx = jetty->urma_ctx;
+    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
+        urma_ctx->ops == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_rjetty_t *new_rjetty = NULL;
+
+    if (urma_is_bonding_dev(urma_ctx->dev->name)) {
+        if (urma_ctx->ops->user_ctl == NULL) {
+            URMA_LOG_ERR("Invalid parameter.\n");
+            return URMA_EINVAL;
+        }
+
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)(uintptr_t)&jetty->jetty_id,
+            .len = sizeof(urma_jetty_id_t),
+            .opcode = BONDP_USER_CTL_GET_RJETTY,
+        };
+        urma_user_ctl_out_t out = {
+            .addr = (uint64_t)(uintptr_t)&new_rjetty,
+            .len = sizeof(urma_rjetty_t *),
+        };
+
+        int ret = urma_ctx->ops->user_ctl(urma_ctx, &in, &out);
+        if (ret != 0) {
+            return URMA_FAIL;
+        }
+    } else {
+        new_rjetty = (urma_rjetty_t *)calloc(1, sizeof(urma_rjetty_t));
+        if (new_rjetty == NULL) {
+            URMA_LOG_ERR("Failed to alloc rjetty.\n");
+            return URMA_ENOMEM;
+        }
+    }
+
+    if (new_rjetty == NULL) {
+        URMA_LOG_ERR("Failed to get rjetty.\n");
+        return URMA_FAIL;
+    }
+
+    new_rjetty->jetty_id = jetty->jetty_id;
+    new_rjetty->trans_mode = jetty->jetty_cfg.jfs_cfg.trans_mode;
+    new_rjetty->policy = jetty->jetty_cfg.jetty_grp != NULL ?
+        jetty->jetty_cfg.jetty_grp->cfg.policy : URMA_JETTY_GRP_POLICY_RR;
+    new_rjetty->type = URMA_JETTY;
+    new_rjetty->flag.bs.order_type = jetty->jetty_cfg.jfs_cfg.flag.bs.order_type;
+    
+    *rjetty = new_rjetty;
+    *length = sizeof(urma_rjetty_t) + new_rjetty->ext.length;
+    return URMA_SUCCESS;
+}
+
+void urma_put_rjetty(urma_rjetty_t *rjetty)
+{
+    if (rjetty == NULL) {
+        return;
+    }
+
+    free(rjetty);
+}
+
 static urma_status_t urma_bind_jetty_compat(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
 {
     urma_context_t *ctx = jetty->urma_ctx;
@@ -2674,6 +2749,73 @@ urma_status_t urma_unimport_seg(urma_target_seg_t *tseg)
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     }
     return ret;
+}
+
+urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32_t *size)
+{
+    if (tseg == NULL || seg == NULL || size == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_context_t *urma_ctx = tseg->urma_ctx;
+    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
+        urma_ctx->ops == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_seg_t *new_seg = NULL;
+
+    if (urma_is_bonding_dev(urma_ctx->dev->name)) {
+        if (urma_ctx->ops->user_ctl == NULL) {
+            URMA_LOG_ERR("Invalid parameter.\n");
+            return URMA_EINVAL;
+        }
+
+        urma_user_ctl_in_t in = {
+            .addr = (uint64_t)(uintptr_t)&tseg->seg,
+            .len = sizeof(urma_seg_t),
+            .opcode = BONDP_USER_CTL_GET_SEG_CTX,
+        };
+        urma_user_ctl_out_t out = {
+            .addr = (uint64_t)(uintptr_t)&new_seg,
+            .len = sizeof(urma_seg_t *),
+        };
+
+        int ret = urma_ctx->ops->user_ctl(urma_ctx, &in, &out);
+        if (ret != 0) {
+            return URMA_FAIL;
+        }
+    } else {
+        new_seg = (urma_seg_t *)calloc(1, sizeof(urma_seg_t));
+        if (new_seg == NULL) {
+            URMA_LOG_ERR("Failed to alloc seg.\n");
+            return URMA_ENOMEM;
+        }
+    }
+
+    if (new_seg == NULL) {
+        URMA_LOG_ERR("Failed to get seg.\n");
+        return URMA_FAIL;
+    }
+
+    new_seg->ubva = tseg->seg.ubva;
+    new_seg->len = tseg->seg.len;
+    new_seg->attr = tseg->seg.attr;
+    new_seg->token_id = tseg->seg.token_id;
+    *seg = new_seg;
+    *size = sizeof(urma_seg_t) + new_seg->ext.length;
+    return URMA_SUCCESS;
+}
+
+void urma_put_seg_ctx(urma_seg_t *seg)
+{
+    if (seg == NULL) {
+        return;
+    }
+
+    free(seg);
 }
 
 urma_token_id_t *urma_alloc_token_id(urma_context_t *ctx)

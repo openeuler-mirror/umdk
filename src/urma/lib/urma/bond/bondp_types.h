@@ -252,6 +252,7 @@ typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
     urma_token_t import_token_value;
     bool import_token_valid;
+    bool skip_import_vjetty;
     urma_target_jetty_t *p_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
@@ -269,13 +270,14 @@ typedef struct bondp_import_target_seg {
     int local_dev_num;
     int target_dev_num;
     bool is_reused;
+    bool skip_import_vseg;
     urma_ref_t use_cnt;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_import_tseg_t;
 
 typedef struct urma_bond_seg_info_out {
-    urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
+    urma_seg_base_t slaves[URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_seg_info_out_t;
 
 typedef struct urma_bond_id_info_out {
@@ -287,6 +289,24 @@ typedef struct urma_bond_id_info_out {
     urma_bond_seg_info_out_t health_check_seg;
     bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_id_info_out_t;
+
+static inline void bondp_seg_to_base(const urma_seg_t *seg, urma_seg_base_t *base)
+{
+    base->ubva = seg->ubva;
+    base->len = seg->len;
+    base->attr.value = seg->attr.value;
+    base->token_id = seg->token_id;
+}
+
+static inline void bondp_seg_base_to_seg(const urma_seg_base_t *base, urma_seg_t *seg)
+{
+    seg->ubva = base->ubva;
+    seg->len = base->len;
+    seg->attr.value = base->attr.value;
+    seg->token_id = base->token_id;
+    seg->ext.flag.value = 0;
+    seg->ext.length = 0;
+}
 
 static inline bool is_empty_eid(urma_eid_t *eid)
 {

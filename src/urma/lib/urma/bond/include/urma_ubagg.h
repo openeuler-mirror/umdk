@@ -31,6 +31,8 @@ typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_QUERY_PORT,
     BONDP_USER_CTL_SET_BONDING_MODE,
     BONDP_USER_CTL_GET_JFCE_FD_LIST,
+    BONDP_USER_CTL_OPCODE_GET_RJETTY,
+    BONDP_USER_CTL_OPCODE_GET_SEG_CTX,
     BONDP_USER_CTL_DISABLE_MSN,
 } bondp_user_ctl_opcode_t;
 
@@ -47,6 +49,17 @@ typedef enum bondp_bonding_level {
     BONDP_BONDING_LEVEL_PORT,
     BONDP_BONDING_LEVEL_MAX,
 } bondp_bonding_level_t;
+
+/*
+ * Base segment info without the user-space-only ext field.
+ * Layout-compatible with kernel struct ubagg_seg_info.
+ */
+typedef struct urma_seg_base {
+    urma_ubva_t ubva;
+    uint64_t len;
+    urma_seg_attr_t attr;
+    uint32_t token_id;
+} urma_seg_base_t;
 
 typedef struct bondp_set_bonding_mode_in {
     bondp_bonding_mode_t bonding_mode;
@@ -111,8 +124,30 @@ typedef struct bondp_jetty_cfg {
     uint32_t port_count;
 } bondp_jetty_cfg_t;
 
+typedef struct urma_bond_jetty_ext {
+    uint8_t version;
+    uint64_t mask;
+    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
+    bool is_multipath;
+    uint8_t enable_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enable_count;
+    bool is_health_check_enable;
+    struct {
+        urma_seg_base_t slaves[URMA_UBAGG_DEV_MAX_NUM];
+    } health_check_seg;
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+} urma_bond_jetty_ext_t;
+
+typedef struct urma_bond_seg_ext {
+    uint8_t version;
+    uint64_t mask;
+    urma_seg_base_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+} urma_bond_seg_ext_t;
+
 typedef struct bondp_rjetty {
     urma_rjetty_t base;
+    urma_bond_jetty_ext_t ext;
     union {
         urma_jfs_t *jfs;
         urma_jetty_t *jetty;

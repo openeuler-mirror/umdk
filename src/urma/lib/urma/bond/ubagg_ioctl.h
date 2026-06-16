@@ -27,6 +27,8 @@ struct ubagg_set_topo_info {
 typedef enum ubagg_userctl_opcode {
     GET_SLAVE_DEVICE = 1,
     GET_TOPO_INFO    = 2,
+    GET_RJETTY       = 9,
+    GET_SEG_CTX      = 10,
 } ubagg_userctl_opcode_t;
 
 typedef struct bondp_physical_device {
