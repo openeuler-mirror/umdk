@@ -32,6 +32,15 @@ void free_jfs_wr(urma_jfs_wr_t *wr)
             free(wr->send.src.sge);
             wr->send.src.sge = NULL;
         }
+    } else if (is_atomic_wr(wr)) {
+        if (wr->cas.src != NULL) {
+            free(wr->cas.src);
+            wr->cas.src = NULL;
+        }
+        if (wr->cas.dst != NULL) {
+            free(wr->cas.dst);
+            wr->cas.dst = NULL;
+        }
     }
 }
 
@@ -67,6 +76,25 @@ static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *preall
     return 0;
 }
 
+static int copy_atomic_sge(const urma_sge_t *src, urma_sge_t **dst, urma_sge_t *prealloc_sge)
+{
+    if (src == NULL) {
+        *dst = NULL;
+        return 0;
+    }
+
+    if (prealloc_sge != NULL) {
+        *dst = prealloc_sge;
+    } else {
+        *dst = (urma_sge_t *)malloc(sizeof(urma_sge_t));
+        if (*dst == NULL) {
+            return -1;
+        }
+    }
+    (void)memcpy(*dst, src, sizeof(urma_sge_t));
+    return 0;
+}
+
 /**
  * Performs a deep copy of a JFS work request.
  *
@@ -76,6 +104,7 @@ static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *preall
  * Supported opcodes:
  *   URMA_OPC_WRITE, URMA_OPC_WRITE_IMM, URMA_OPC_WRITE_NOTIFY, URMA_OPC_READ
  *   URMA_OPC_SEND, URMA_OPC_SEND_IMM, URMA_OPC_SEND_INVALIDATE
+ *   URMA_OPC_CAS, URMA_OPC_FADD
  */
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
                           urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge)
@@ -90,6 +119,11 @@ urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
         }
     } else if (is_send_wr(src)) {
         if (copy_sg_list(&src->send.src, &dst->send.src, prealloc_src_sge) != 0) {
+            return URMA_ENOMEM;
+        }
+    } else if (is_atomic_wr(src)) {
+        if (copy_atomic_sge(src->cas.src, &dst->cas.src, prealloc_src_sge) != 0 ||
+            copy_atomic_sge(src->cas.dst, &dst->cas.dst, prealloc_dst_sge) != 0) {
             return URMA_ENOMEM;
         }
     } else {
@@ -236,6 +270,28 @@ static void restore_write_pwr_to_vwr(urma_jfs_wr_t *send_wr, urma_target_jetty_t
     send_wr->tjetty = vtjetty;
 }
 
+static void restore_cas_pwr_to_vwr(urma_jfs_wr_t *send_wr, urma_target_jetty_t *vtjetty)
+{
+    if (send_wr->cas.src != NULL) {
+        send_wr->cas.src->tseg = get_v_tseg(send_wr->cas.src->tseg);
+    }
+    if (send_wr->cas.dst != NULL) {
+        send_wr->cas.dst->tseg = get_v_tseg(send_wr->cas.dst->tseg);
+    }
+    send_wr->tjetty = vtjetty;
+}
+
+static void restore_faa_pwr_to_vwr(urma_jfs_wr_t *send_wr, urma_target_jetty_t *vtjetty)
+{
+    if (send_wr->faa.src != NULL) {
+        send_wr->faa.src->tseg = get_v_tseg(send_wr->faa.src->tseg);
+    }
+    if (send_wr->faa.dst != NULL) {
+        send_wr->faa.dst->tseg = get_v_tseg(send_wr->faa.dst->tseg);
+    }
+    send_wr->tjetty = vtjetty;
+}
+
 static void map_cas_vwr_to_path(urma_jfs_wr_t *send_wr, int send_idx, int target_idx)
 {
     send_wr->cas.src->tseg = get_p_tseg(send_wr->cas.src->tseg, send_idx, target_idx);
@@ -348,6 +404,12 @@ void convert_jfs_pwr_to_vwr_resend(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjet
         case URMA_OPC_READ:
             restore_write_pwr_to_vwr(wr, vtjetty);
             return;
+        case URMA_OPC_CAS:
+            restore_cas_pwr_to_vwr(wr, vtjetty);
+            return;
+        case URMA_OPC_FADD:
+            restore_faa_pwr_to_vwr(wr, vtjetty);
+            return;
         default:
             return;
     }
@@ -366,6 +428,12 @@ void convert_jfs_vwr_to_pwr_for_resend(urma_jfs_wr_t *wr, int send_idx, int targ
         case URMA_OPC_WRITE_NOTIFY:
         case URMA_OPC_READ:
             map_write_vwr_to_path(wr, send_idx, target_idx);
+            return;
+        case URMA_OPC_CAS:
+            map_cas_vwr_to_path(wr, send_idx, target_idx);
+            return;
+        case URMA_OPC_FADD:
+            map_fadd_vwr_to_path(wr, send_idx, target_idx);
             return;
         default:
             return;
@@ -399,6 +467,15 @@ void add_vwr_use_cnt(urma_jfs_wr_t *wr)
                 bondp_tseg_get(wr->rw.dst.sge[i].tseg);
             }
             return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_get(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_get(wr->cas.dst->tseg);
+            }
+            return;
         default:
             return;
     }
@@ -429,6 +506,15 @@ void release_vwr_use_cnt(urma_jfs_wr_t *wr)
             }
             for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
                 bondp_tseg_put(wr->rw.dst.sge[i].tseg);
+            }
+            return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_put(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_put(wr->cas.dst->tseg);
             }
             return;
         default:
