@@ -761,6 +761,20 @@ typedef enum urma_target_type {
     URMA_JETTY_GROUP
 } urma_target_type_t;
 
+typedef union urma_ext_flag {
+    struct {
+        uint32_t enable : 1;
+        uint32_t reserved : 31;
+    } bs;
+    uint32_t value;
+} urma_ext_flag_t;
+
+typedef struct urma_ext {
+    urma_ext_flag_t flag;
+    uint32_t length;
+    char buf[0];
+} urma_ext_t;
+
 typedef struct urma_rjetty {
     urma_jetty_id_t jetty_id;
     urma_transport_mode_t trans_mode;
@@ -768,6 +782,7 @@ typedef struct urma_rjetty {
     urma_target_type_t type;
     urma_import_jetty_flag_t flag;
     urma_tp_type_t tp_type;
+    urma_ext_t ext;
 } urma_rjetty_t;
 
 typedef struct urma_target_jetty {
@@ -974,6 +989,7 @@ typedef struct urma_seg {
     uint64_t len;         /* [Public] length of segment. */
     urma_seg_attr_t attr; /* [Public] include: access flag, token policy, cacheability. */
     uint32_t token_id;    /* [Private] match token */
+    urma_ext_t ext;
 } urma_seg_t;
 
 typedef struct urma_target_seg {

@@ -396,7 +396,7 @@ int bondp_fill_vjetty_health_info(bondp_context_t *bond_ctx, bondp_comp_t *bdp_j
         if (bdp_jetty->p_jetty[i] == NULL || bdp_jetty->check_tseg[i] == NULL) {
             continue;
         }
-        health_check_seg->slaves[i] = bdp_jetty->check_tseg[i]->seg;
+        bondp_seg_to_base(&bdp_jetty->check_tseg[i]->seg, &health_check_seg->slaves[i]);
     }
 
     URMA_LOG_INFO("Successfully filled health check seg info to kernel, dev_num=%d\n", bond_ctx->dev_num);
@@ -430,9 +430,10 @@ static int import_check_tseg_by_import_result(const bondp_context_t *bdp_ctx, bo
             continue;
         }
 
-        urma_seg_t *check_seg = &rvjetty_info->health_check_seg.slaves[target_idx];
+        urma_seg_t check_seg = {0};
+        bondp_seg_base_to_seg(&rvjetty_info->health_check_seg.slaves[target_idx], &check_seg);
         bdp_tjetty->p_check_tseg[local_idx][target_idx] =
-            urma_import_seg(bdp_ctx->p_ctxs[local_idx], check_seg, NULL, 0, flag);
+            urma_import_seg(bdp_ctx->p_ctxs[local_idx], &check_seg, NULL, 0, flag);
         if (bdp_tjetty->p_check_tseg[local_idx][target_idx] == NULL) {
             URMA_LOG_ERR("Failed to import health check seg (%u, %u)\n", local_idx, target_idx);
             return -1;

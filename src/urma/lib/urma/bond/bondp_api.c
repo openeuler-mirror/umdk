@@ -1680,6 +1680,146 @@ static int bondp_toggle_msn(urma_context_t *ctx, bool enable)
     return 0;
 }
 
+static void bondp_convert_bond_id_info_to_ext(const urma_bond_id_info_out_t *src,
+                                              urma_bond_jetty_ext_t *dst)
+{
+    dst->version = 0;
+    dst->mask = 0;
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i)
+        dst->slave_id[i] = src->slave_id[i];
+    dst->is_multipath = src->is_msn_enabled;
+    (void)memcpy(dst->enable_indices, src->enabled_indices, sizeof(dst->enable_indices));
+    dst->enable_count = src->enabled_count;
+    dst->is_health_check_enable = src->is_health_check_enable;
+    (void)memcpy(&dst->health_check_seg, &src->health_check_seg, sizeof(dst->health_check_seg));
+    (void)memcpy(dst->connected, src->connected, sizeof(dst->connected));
+}
+
+static void bondp_convert_seg_exchange_info_to_seg_ext(const urma_bond_seg_info_out_t *src,
+                                                       urma_bond_seg_ext_t *dst)
+{
+    dst->version = 0;
+    dst->mask = 0;
+    (void)memcpy(dst->peer_p_seg, src->slaves, sizeof(dst->peer_p_seg));
+}
+
+static int bondp_user_ctl_get_rjetty(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                     urma_user_ctl_out_t *out)
+{
+    if (in == NULL || out == NULL || in->addr == 0 ||
+        in->len < sizeof(urma_jetty_id_t) || out->addr == 0 ||
+        out->len < sizeof(urma_rjetty_t *)) {
+        URMA_LOG_ERR("Invalid parameter for get rjetty.\n");
+        return -EINVAL;
+    }
+
+    urma_rjetty_t *new_rjetty = (urma_rjetty_t *)calloc(1, sizeof(urma_rjetty_t) +
+                                                        sizeof(urma_bond_jetty_ext_t));
+    if (new_rjetty == NULL) {
+        URMA_LOG_ERR("Failed to alloc rjetty.\n");
+        return -ENOMEM;
+    }
+
+    size_t kern_out_size = sizeof(urma_bond_id_info_out_t);
+    urma_bond_id_info_out_t *kern_out =
+        (urma_bond_id_info_out_t *)calloc(1, kern_out_size);
+    if (kern_out == NULL) {
+        URMA_LOG_ERR("Failed to alloc kern jetty out.\n");
+        free(new_rjetty);
+        return -ENOMEM;
+    }
+
+    urma_user_ctl_in_t ioctl_in = {
+        .addr = in->addr,
+        .len = in->len,
+        .opcode = GET_RJETTY,
+    };
+    urma_user_ctl_out_t ioctl_out = {
+        .addr = (uint64_t)(uintptr_t)kern_out,
+        .len = kern_out_size,
+    };
+    urma_udrv_t udrv = {0};
+
+    int ret = urma_cmd_user_ctl(ctx, &ioctl_in, &ioctl_out, &udrv);
+    if (ret != 0) {
+        free(kern_out);
+        free(new_rjetty);
+        return ret;
+    }
+
+    urma_bond_jetty_ext_t *ext = (urma_bond_jetty_ext_t *)new_rjetty->ext.buf;
+    bondp_convert_bond_id_info_to_ext(kern_out, ext);
+
+    free(kern_out);
+
+    new_rjetty->ext.flag.bs.enable = true;
+    new_rjetty->ext.length = sizeof(urma_bond_jetty_ext_t);
+
+    urma_rjetty_t **out_rjetty = (urma_rjetty_t **)(uintptr_t)out->addr;
+    *out_rjetty = new_rjetty;
+    return 0;
+}
+
+static int bondp_user_ctl_get_seg_ctx(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                      urma_user_ctl_out_t *out)
+{
+    if (in == NULL || out == NULL || in->addr == 0 || in->len < sizeof(urma_seg_t) ||
+        out->addr == 0 || out->len < sizeof(urma_seg_t *)) {
+        URMA_LOG_ERR("Invalid parameter for get seg ctx.\n");
+        return -EINVAL;
+    }
+
+    urma_seg_t *new_seg = (urma_seg_t *)calloc(1, sizeof(urma_seg_t) +
+                                               sizeof(urma_bond_seg_ext_t));
+    if (new_seg == NULL) {
+        URMA_LOG_ERR("Failed to alloc seg.\n");
+        return -ENOMEM;
+    }
+
+    size_t kern_out_size = sizeof(urma_bond_seg_info_out_t) +
+                           sizeof(bool) * URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM;
+    urma_bond_seg_info_out_t *kern_out =
+        (urma_bond_seg_info_out_t *)calloc(1, kern_out_size);
+    if (kern_out == NULL) {
+        URMA_LOG_ERR("Failed to alloc kern seg out.\n");
+        free(new_seg);
+        return -ENOMEM;
+    }
+
+    urma_user_ctl_in_t ioctl_in = {
+        .addr = in->addr,
+        .len = in->len,
+        .opcode = GET_SEG_CTX,
+    };
+    urma_user_ctl_out_t ioctl_out = {
+        .addr = (uint64_t)(uintptr_t)kern_out,
+        .len = kern_out_size,
+    };
+    urma_udrv_t udrv = {0};
+
+    int ret = urma_cmd_user_ctl(ctx, &ioctl_in, &ioctl_out, &udrv);
+    if (ret != 0) {
+        free(kern_out);
+        free(new_seg);
+        return ret;
+    }
+
+    urma_bond_seg_ext_t *ext = (urma_bond_seg_ext_t *)new_seg->ext.buf;
+    bondp_convert_seg_exchange_info_to_seg_ext(kern_out, ext);
+    (void)memcpy(ext->connected,
+                 (char *)kern_out + sizeof(urma_bond_seg_info_out_t),
+                 sizeof(ext->connected));
+
+    free(kern_out);
+
+    new_seg->ext.flag.bs.enable = true;
+    new_seg->ext.length = sizeof(urma_bond_seg_ext_t);
+
+    urma_seg_t **out_seg = (urma_seg_t **)(uintptr_t)out->addr;
+    *out_seg = new_seg;
+    return 0;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     if (in == NULL) {
@@ -1700,6 +1840,10 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_user_ctl_get_jfce_fd_list(ctx, in, out);
         case BONDP_USER_CTL_DISABLE_MSN:
             return bondp_toggle_msn(ctx, false);
+        case BONDP_USER_CTL_OPCODE_GET_RJETTY:
+            return bondp_user_ctl_get_rjetty(ctx, in, out);
+        case BONDP_USER_CTL_OPCODE_GET_SEG_CTX:
+            return bondp_user_ctl_get_seg_ctx(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;
@@ -1814,6 +1958,17 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
     return ret;
 }
 
+static void bondp_fill_bond_id_info_from_ext(const urma_bond_jetty_ext_t *ext, urma_bond_id_info_out_t *info)
+{
+    (void)memcpy(info->slave_id, ext->slave_id, sizeof(info->slave_id));
+    info->is_msn_enabled = ext->is_multipath;
+    (void)memcpy(info->enabled_indices, ext->enable_indices, sizeof(info->enabled_indices));
+    info->enabled_count = ext->enable_count;
+    info->is_health_check_enable = ext->is_health_check_enable;
+    (void)memcpy(&info->health_check_seg, &ext->health_check_seg, sizeof(info->health_check_seg));
+    (void)memcpy(info->connected, ext->connected, sizeof(info->connected));
+}
+
 urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
@@ -1832,10 +1987,28 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     atomic_init(&bdp_tjetty->use_cnt.atomic_cnt, 1);
 
     urma_bond_id_info_out_t rvjetty_info = {0};
-    if (bondp_import_vjetty(ctx, rjetty, token_value, bdp_tjetty, &rvjetty_info) != 0) {
-        URMA_LOG_ERR("Failed to import vjetty, [" EID_FMT "]=%u\n",
-                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id);
-        goto FREE_TJETTY;
+    if (rjetty->ext.flag.bs.enable) {
+        bdp_tjetty->skip_import_vjetty = true;
+        if (rjetty->ext.length < sizeof(urma_bond_jetty_ext_t)) {
+            URMA_LOG_ERR("Invalid rjetty ext length=%u.\n", rjetty->ext.length);
+            goto FREE_TJETTY;
+        }
+        const urma_bond_jetty_ext_t *bond_ext =
+            (const urma_bond_jetty_ext_t *)rjetty->ext.buf;
+        bondp_fill_bond_id_info_from_ext(bond_ext, &rvjetty_info);
+        bdp_tjetty->v_tjetty.urma_ctx = ctx;
+        bdp_tjetty->v_tjetty.id = rjetty->jetty_id;
+        bdp_tjetty->v_tjetty.trans_mode = rjetty->trans_mode;
+        bdp_tjetty->v_tjetty.type = rjetty->type;
+        bdp_tjetty->v_tjetty.flag = rjetty->flag;
+        bdp_tjetty->v_tjetty.policy = rjetty->policy;
+        bdp_tjetty->v_tjetty.tp_type = rjetty->tp_type;
+    } else {
+        if (bondp_import_vjetty(ctx, rjetty, token_value, bdp_tjetty, &rvjetty_info) != 0) {
+            URMA_LOG_ERR("Failed to import vjetty, [" EID_FMT "]=%u\n",
+                         EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id);
+            goto FREE_TJETTY;
+        }
     }
 
     (void)init_all_indices(bdp_ctx, bdp_ctx->enabled_indices, &bdp_ctx->enabled_count, NULL, NULL);
@@ -1875,7 +2048,9 @@ UNIMPORT_TSEG:
 UNIMPORT_PJETTY:
     bondp_unimport_pjetty(bdp_tjetty);
 UNIMPORT_VJETTY:
-    bondp_unimport_vjetty(bdp_tjetty);
+    if (!bdp_tjetty->skip_import_vjetty) {
+        bondp_unimport_vjetty(bdp_tjetty);
+    }
 FREE_TJETTY:
     free(bdp_tjetty);
     return NULL;
@@ -1892,8 +2067,10 @@ static urma_status_t bondp_unimport_jetty_inner(urma_target_jetty_t *target_jett
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;
     }
-    if (bondp_unimport_vjetty(bdp_tjetty) != URMA_SUCCESS) {
-        ret = URMA_FAIL;
+    if (!bdp_tjetty->skip_import_vjetty) {
+        if (bondp_unimport_vjetty(bdp_tjetty) != URMA_SUCCESS) {
+            ret = URMA_FAIL;
+        }
     }
     free(bdp_tjetty);
     return ret;
