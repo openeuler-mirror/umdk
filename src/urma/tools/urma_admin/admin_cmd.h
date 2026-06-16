@@ -151,7 +151,7 @@ enum {
     ADMIN_TPID_SHOW_ATTR_REF_CNT,           /* u32 */
     ADMIN_TPID_SHOW_ATTR_TP_HANDLE,         /* u64 */
     /* LIST_HDR specific */
-    ADMIN_TPID_SHOW_ATTR_LIST_NODE_CNT,    /* u32 */
+    ADMIN_TPID_SHOW_ATTR_TP_LIST_CNT,       /* u32 */
     /* TPID_STATE specific */
     ADMIN_TPID_SHOW_ATTR_FOUND,             /* u8 */
     ADMIN_TPID_SHOW_ATTR_STATUS,            /* u32 */
@@ -164,6 +164,8 @@ enum {
     ADMIN_TPID_SHOW_ATTR_PEER_TP_HANDLE,    /* u64 */
     ADMIN_TPID_SHOW_ATTR_TX_PSN,            /* u32 */
     ADMIN_TPID_SHOW_ATTR_IS_REF,            /* u8 */
+    ADMIN_TPID_SHOW_ATTR_LOCAL_CNA,         /* binary EID_SIZE */
+	ADMIN_TPID_SHOW_ATTR_PEER_CNA,          /* binary EID_SIZE */
     ADMIN_TPID_SHOW_ATTR_MAX_PLUS,
 };
 #define ADMIN_TPID_SHOW_ATTR_MAX (ADMIN_TPID_SHOW_ATTR_MAX_PLUS - 1)
@@ -185,31 +187,6 @@ typedef union admin_tp_handle {
     } bs;
     uint64_t value;
 } admin_tp_handle_t;
-
-/* mirror of struct ubcore_show_tpid_node */
-typedef struct admin_show_tpid_node {
-    uint64_t tp_handle;
-} admin_show_tpid_node_t;
-
-/* mirror of struct ubcore_show_tpid_list_hdr */
-typedef struct admin_show_tpid_list_hdr {
-    urma_eid_t local_eid;
-    urma_eid_t peer_eid;
-    uint32_t trans_mode;
-    uint32_t share_mode;
-    uint32_t tp_type;
-    uint32_t link_type;
-    uint32_t ref_cnt;
-    uint32_t node_cnt;
-} admin_show_tpid_list_hdr_t;
-
-/* mirror of struct ubcore_show_tpid_state */
-typedef struct admin_show_tpid_state {
-    uint8_t found;
-    uint32_t status;
-    uint8_t alloced;
-    uint32_t ref_cnt;
-} admin_show_tpid_state_t;
 
 #define UBCORE_GENL_FAMILY_NAME    "UBCORE_GENL"
 #define UBAGG_GENL_FAMILY_NAME     "UBAGG_GENL"
