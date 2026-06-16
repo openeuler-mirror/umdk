@@ -488,7 +488,7 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
 int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
 int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
-int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
+int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
 
 // token
 uint32_t token_policy_get(bool enable);

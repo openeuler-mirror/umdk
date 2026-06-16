@@ -270,6 +270,11 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
     // pro mode，need alloc rx buf
     uint32_t require_rx_count = cfg->config.rx_depth;
     uint32_t cur_batch_count = 0;
+
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
+
     umq_buf_t *bad_buf = NULL;
     do {
         cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
@@ -280,7 +285,7 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
             return -1;
         }
 
-        if (umq_post(g_umq_perftest_ctx.umqh, buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+        if (umq_post(g_umq_perftest_ctx.umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
             LOG_PRINT("post rx failed\n");
             umq_buf_free(bad_buf);
             return -1;
@@ -289,9 +294,13 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
         require_rx_count -= cur_batch_count;
     } while (require_rx_count > 0);
 
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+
 WAIT_UMQ_READY:
     do {
-        int ret = umq_poll(g_umq_perftest_ctx.umqh, UMQ_IO_TX, &buf, 1);
+        int ret = umq_poll(g_umq_perftest_ctx.umqh, &io_tx_option, &buf, 1);
         if (ret != 0) {
             LOG_PRINT("poll tx get unexpected result %d\n", ret);
             break;
