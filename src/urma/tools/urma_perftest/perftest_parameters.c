@@ -159,6 +159,7 @@ static void usage(const char *argv0)
         "  --enable_imm                Enable immediate data for write or send, default: disable.\n"
         "  --enable_err_continue       Enable continue running when cr erros, default: disable.\n"
         "  --notify_data <value>       enable write_with_notify, value is ensured by hardware.\n"
+        "  --enable_notify             Enable write_with_notify, default: disable.\n"
         "  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.\n"
         "  --oor_en                    Enable out of order for user_tp, default: disable.\n"
         "  --spray_en                  Enable multipathing for user_tp, default: disable.\n"
@@ -186,6 +187,7 @@ static void usage(const char *argv0)
         "  --page_size                 Set page size, default: 4096.\n"
         "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
         "  --bind_ip <ip>              The ip for bind.\n"
+        "  --enable_sync_stream        Enable synchronized multi-stream transmission. \n"
         "  --bond_mode                 Set bonding device mode, support: standalone, active_backup, balance.\n"
         "                                                       default: standalone.\n"
         "  --bond_level                Set bonding device level, support: iodie, port, default: iodie.\n");
@@ -340,7 +342,6 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->enable_imm = false;
     cfg->enable_err_continue = false;
     cfg->enable_notify = false;
-    cfg->notify_data = 0;
     cfg->enable_user_tp = false;
     cfg->oor_en = false;
     cfg->spray_en = false;
@@ -361,6 +362,7 @@ static void init_cfg(perftest_config_t *cfg)
 
     cfg->wait_jfc_timeout = PERFTEST_DEF_WAIT_JFC_TIME;
     cfg->use_huge_page = false;
+    cfg->enable_sync_stream = false;
     cfg->enable_bond_mode = false;
     cfg->bond_mode = BONDP_BONDING_MODE_STANDALONE;
     cfg->bond_level = BONDP_BONDING_LEVEL_IODIE;
@@ -592,7 +594,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"enable_imm",          no_argument,       NULL, PERFTEST_OPT_ENABLE_IMM},
         {"inf_period_ms",       required_argument, NULL, PERFTEST_OPT_INF_PERIOD_MS},
         {"enable_err_continue", no_argument,       NULL, PERFTEST_OPT_ENABLE_ERR_CONTINUE},
-        {"notify_data",         required_argument, NULL, PERFTEST_OPT_NOTIFY_DATA},
+        {"enable_notify",   no_argument,     NULL, PERFTEST_OPT_ENABLE_NOTIFY},
         {"enable_user_tp",      no_argument,       NULL, PERFTEST_OPT_ENABLE_USER_TP},
         {"oor_en",              no_argument,       NULL, PERFTEST_OPT_OOR_EN},
         {"spray_en",            no_argument,       NULL, PERFTEST_OPT_SPRAY_EN},
@@ -617,6 +619,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"vlan",                required_argument, NULL, PERFTEST_OPT_VLAN},
         {"sl",                  required_argument, NULL, PERFTEST_OPT_SL},
         {"bind_ip",             required_argument, NULL, PERFTEST_OPT_BIND_IP},
+        {"enable_sync_stream",  no_argument, NULL, PERFTEST_OPT_ENABLE_SYNC_STREAM},
         {"aggr_mode",           required_argument, NULL, PERFTEST_OPT_AGGR_MODE},
         {"stdout",              no_argument,       NULL, PERFTEST_OPT_STDOUT},
         {"bond_mode",           required_argument, NULL, PERFTEST_OPT_BOND_MODE},
@@ -863,9 +866,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_ENABLE_ERR_CONTINUE:
                 cfg->enable_err_continue = true;
                 break;
-            case PERFTEST_OPT_NOTIFY_DATA:
+            case PERFTEST_OPT_ENABLE_NOTIFY:
                 cfg->enable_notify = true;
-                (void)ub_str_to_u64(optarg, &cfg->notify_data);
                 break;
             case PERFTEST_OPT_ENABLE_USER_TP:
                 cfg->enable_user_tp = true;
@@ -927,7 +929,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     } else if (strcmp("ANY", optarg) == 0) {
                         cfg->huge_page = UB_HUGE_PAGE_SIZE_ANY;
                     } else {
-                        LOG_ERROR("Huge_page only support 2MB1GB and ANY\n");
+                        LOG_ERROR("Huge_page only support 2MB, 1GB and ANY\n");
                         return -1;
                     }
                 }
@@ -980,6 +982,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     LOG_ERROR("failed to allocate bind ip memory.\n");
                     return -1;
                 }
+                break;
+            case PERFTEST_OPT_ENABLE_SYNC_STREAM:
+                cfg->enable_sync_stream = true;
                 break;
             case PERFTEST_OPT_STDOUT:
                 verbose_set_level(VLOG_LEVEL_VVERBOSE);
