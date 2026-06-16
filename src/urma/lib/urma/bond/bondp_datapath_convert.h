@@ -25,6 +25,10 @@ static inline bool is_send_wr(const urma_jfs_wr_t *wr)
     return wr->opcode == URMA_OPC_SEND || wr->opcode == URMA_OPC_SEND_IMM ||
            wr->opcode == URMA_OPC_SEND_INVALIDATE;
 }
+static inline bool is_atomic_wr(const urma_jfs_wr_t *wr)
+{
+    return wr->opcode == URMA_OPC_CAS || wr->opcode == URMA_OPC_FADD;
+}
 
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
                           urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge);
