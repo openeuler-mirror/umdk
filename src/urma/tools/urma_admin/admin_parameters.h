@@ -226,6 +226,7 @@ typedef struct tool_topo_ue {
     uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
+    char cna[PORT_NUM][EID_LEN]; // Only for CTP
 } tool_topo_ue_t;
 
 typedef struct tool_topo_agg_dev {
