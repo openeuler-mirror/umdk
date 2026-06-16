@@ -86,11 +86,10 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
     }
 
     urma_jetty_id_t old_id = old_jetty->jetty_id;
-    atomic_store(&bdp_jetty->valid[local_idx], false);
+    /* Clear the slot before delete so concurrent readers never observe a freed jetty. */
     bdp_jetty->p_jetty[local_idx] = NULL;
     if (urma_delete_jetty(old_jetty) != URMA_SUCCESS) {
         bdp_jetty->p_jetty[local_idx] = old_jetty;
-        atomic_store(&bdp_jetty->valid[local_idx], true);
         URMA_LOG_ERR("Failed to delete pjetty at idx=%d\n", local_idx);
         return -1;
     }
@@ -101,9 +100,11 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
         return -1;
     }
 
+    /* Recreated pjetty should not keep stale peer binding. */
     new_jetty->remote_jetty = NULL;
     new_jetty->jetty_cfg.user_ctx = (uint64_t)bdp_jetty;
     bdp_jetty->p_jetty[local_idx] = new_jetty;
+    bdp_jetty->valid[local_idx] = false;
 
     if (bondp_update_pjetty_id_mapping(bdp_ctx, old_id, new_jetty->jetty_id, bdp_jetty) != 0) {
         return -1;
@@ -112,8 +113,7 @@ int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx)
     if (sub_task != NULL) {
         sub_task->valid = true;
         sub_task->probe_pending = false;
-        sub_task->need_check = true;
-        atomic_store(&sub_task->link_ok, false);
+        atomic_store(&sub_task->link_ok, true);
     }
     URMA_LOG_INFO("Health link pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
         local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
