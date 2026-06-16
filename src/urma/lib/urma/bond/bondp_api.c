@@ -1622,11 +1622,12 @@ static int bondp_user_ctl_get_jfce_fd_list(urma_context_t *ctx, urma_user_ctl_in
     get_out->count = 0;
     for (int i = 0; i < bdp_jfce->dev_num && i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jfce->p_jfce[i] != NULL) {
-            get_out->fd_list[i] = bdp_jfce->p_jfce[i]->fd;
+            get_out->fd_list[get_out->count] = bdp_jfce->p_jfce[i]->fd;
             get_out->count++;
-        } else {
-            get_out->fd_list[i] = -1;
         }
+    }
+    for (uint32_t i = get_out->count; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        get_out->fd_list[i] = -1;
     }
     return 0;
 }
