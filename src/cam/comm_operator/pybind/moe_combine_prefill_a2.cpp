@@ -110,7 +110,7 @@ at::Tensor MoeCombinePrefillA2ImplNpu(MOE_COMBINE_PREFILL_A2_DEF)
     int64_t sharedExpertNum = 1;
     int64_t sharedExpertRankNum = 0; // not support shared expert now;
     EXEC_NPU_CMD(
-        aclnnMoeDistributeCombineA2,
+        aclnnMoeCombineNormalA2,
         recvX,
         expertIds,
         expandIdx,

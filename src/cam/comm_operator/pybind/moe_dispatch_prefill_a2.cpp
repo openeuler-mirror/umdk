@@ -191,7 +191,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     auto expandScales = at::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
 
     EXEC_NPU_CMD(
-        aclnnDispatchNormalA2,
+        aclnnMoeDispatchNormalA2,
         newX,
         expertIds,
         xScales,

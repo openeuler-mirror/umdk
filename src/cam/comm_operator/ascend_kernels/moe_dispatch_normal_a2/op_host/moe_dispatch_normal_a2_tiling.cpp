@@ -27,7 +27,7 @@
 #include "ops_log.h"
 #include "ops_error.h"
 #include "tiling_args.h"
-#include "../op_kernel/cam_moe_distribute_dispatch_tiling.h"
+#include "../op_kernel/moe_dispatch_normal_a2_tiling.h"
 
 #ifdef USE_CANN83_PATH
 #include "platform/platform_infos_def.h"
@@ -125,7 +125,7 @@ constexpr uint64_t TILING_KEY_LAYERED_COMM_A2 = 100000000;
 }  // namespace
 
 namespace optiling {
-static void PrintTilingDataInfo(const char *nodeName, const CamMoeDistributeDispatchTilingData &tilingData)
+static void PrintTilingDataInfo(const char *nodeName, const MoeDispatchNormalA2NonA2TilingData &tilingData)
 {
     OPS_LOG_D(nodeName, "epWorldSize is %u.", tilingData.moeDistributeDispatchInfo.epWorldSize);
     OPS_LOG_D(nodeName, "tpWorldSize is %u.", tilingData.moeDistributeDispatchInfo.tpWorldSize);
@@ -155,7 +155,7 @@ static void CalTilingKey(uint64_t &tilingKey, const bool isScales, const uint32_
     return;
 }
 
-static void SetHcommCfg(const gert::TilingContext &context, CamMoeDistributeDispatchTilingData &tiling,
+static void SetHcommCfg(const gert::TilingContext &context, MoeDispatchNormalA2NonA2TilingData &tiling,
                         const std::string groupEp, const std::string groupTp)
 {
     const char *nodeName = context.GetNodeName();
@@ -199,7 +199,7 @@ static bool CheckIsA2(const gert::TilingContext &context)
 }
 
 static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert::TilingContext &context,
-                                                                     CamMoeDistributeDispatchA2Info &info)
+                                                                     MoeDispatchNormalA2Info &info)
 {
     const char *nodeName = context.GetNodeName();
     OPS_LOG_I(nodeName, "MoeDistributeDispatchA2 MoeDistributeDispatchA2CheckShapeAndSetTiling.");
@@ -207,13 +207,14 @@ static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert:
     const gert::StorageShape *expertIdStorageShape = context.GetInputShape(EXPERT_IDS_INDEX);
     const gert::StorageShape *scalesStorageShape = context.GetOptionalInputShape(SCALES_INDEX);
 
-    OPS_ERR_IF(xStorageShape == nullptr, OPS_LOG_E(K_INNER_DEBUG, "xShape is null."), return GRAPH_FAILED);
+    OPS_ERR_IF(xStorageShape == nullptr, OPS_LOG_E(K_INNER_DEBUG, "xShape is null."),
+               return GRAPH_FAILED);
     OPS_ERR_IF(expertIdStorageShape == nullptr, OPS_LOG_E(K_INNER_DEBUG, "expertIdShape is null."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     OPS_ERR_IF(xStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
-                    OPS_LOG_E(K_INNER_DEBUG, "x dims is invalid."), return false);
+               OPS_LOG_E(K_INNER_DEBUG, "x dims is invalid."), return false);
     OPS_ERR_IF(expertIdStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
-                    OPS_LOG_E(K_INNER_DEBUG, "expertId dims is invalid."), return false);
+               OPS_LOG_E(K_INNER_DEBUG, "expertId dims is invalid."), return false);
     OPS_LOG_D(nodeName, "X dim0 = %ld", xStorageShape->GetStorageShape().GetDim(0));
     OPS_LOG_D(nodeName, "X dim1 = %ld", xStorageShape->GetStorageShape().GetDim(1));
     OPS_LOG_D(nodeName, "expertId dim0 = %ld", expertIdStorageShape->GetStorageShape().GetDim(0));
@@ -228,32 +229,35 @@ static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert:
     auto quantModePtr = attrs->GetAttrPointer<int>(ATTR_QUANT_MODE_INDEX);
     OPS_ERR_IF(quantModePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "quantModePtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(h % BLOCK_SIZE_A2 != 0 || h <= 0 || h > MAX_HIDDEN_SIZE_A2,
-                    OPS_LOG_E(K_INNER_DEBUG, "hiddensize is invalid."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "hiddensize is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(
         bs <= 0 || bs > BS_UPPER_BOUND,
         OPS_LOG_E(K_INNER_DEBUG, "batchsize is invalid. bs: %u, should satisfy 0<bs<=%ld", bs, BS_UPPER_BOUND),
         return GRAPH_FAILED);
-    OPS_ERR_IF(k < MIN_K_VALUE_A2 || k > MAX_K_VALUE_A2, OPS_LOG_E(K_INNER_DEBUG, "k is invalid, only support [%u, %u].", MIN_K_VALUE_A2, MAX_K_VALUE_A2), return GRAPH_FAILED);
+    OPS_ERR_IF(k < MIN_K_VALUE_A2 || k > MAX_K_VALUE_A2,
+               OPS_LOG_E(K_INNER_DEBUG, "k is invalid, only support [%u, %u].",
+                         MIN_K_VALUE_A2, MAX_K_VALUE_A2),
+               return GRAPH_FAILED);
     OPS_ERR_IF(*quantModePtr == UNQUANT_MODE && isScales,
-                    OPS_LOG_E(K_INNER_DEBUG, "scales should be null when quantMode is unQuant."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "scales should be null when quantMode is unQuant."), return GRAPH_FAILED);
 
     const gert::StorageShape *tokenServerIdxStorageShape = context.GetInputShape(TOKEN_SERVER_IDX_INDEX);
     OPS_ERR_IF(tokenServerIdxStorageShape == nullptr,
-                    OPS_LOG_E(K_INNER_DEBUG, "tokenServerIdxStorageShape is null."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "tokenServerIdxStorageShape is null."), return GRAPH_FAILED);
     const gert::StorageShape *tokenServerCntStorageShape = context.GetInputShape(TOKEN_SERVER_CNT_INDEX);
     OPS_ERR_IF(tokenServerCntStorageShape == nullptr,
-                    OPS_LOG_E(K_INNER_DEBUG, "tokenServerCntStorageShape is null."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "tokenServerCntStorageShape is null."), return GRAPH_FAILED);
     const gert::StorageShape *epRankTokenCntStorageShape = context.GetInputShape(EP_RANK_TOKEN_CNT_INDEX);
     OPS_ERR_IF(epRankTokenCntStorageShape == nullptr,
-                    OPS_LOG_E(K_INNER_DEBUG, "epRankTokenCntStorageShape is null."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "epRankTokenCntStorageShape is null."), return GRAPH_FAILED);
     const gert::StorageShape *srcOffsetRankTokenIdxStorageShape =
         context.GetInputShape(SRC_OFFSET_RANK_TOKEN_IDX_INDEX);
     OPS_ERR_IF(srcOffsetRankTokenIdxStorageShape == nullptr,
-                    OPS_LOG_E(K_INNER_DEBUG, "srcOffsetRankTokenIdxStorageShape is null."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "srcOffsetRankTokenIdxStorageShape is null."), return GRAPH_FAILED);
     const gert::StorageShape *dstOffsetRankTokenIdxStorageShape =
         context.GetInputShape(DST_OFFSET_RANK_TOKEN_IDX_INDEX);
     OPS_ERR_IF(dstOffsetRankTokenIdxStorageShape == nullptr,
-                    OPS_LOG_E(K_INNER_DEBUG, "dstOffsetRankTokenIdxStorageShape is null."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "dstOffsetRankTokenIdxStorageShape is null."), return GRAPH_FAILED);
 
     info.isQuant = isScales;
     info.bs = bs;
@@ -269,7 +273,7 @@ static ge::graphStatus MoeDistributeDispatchA2CheckShapeAndSetTiling(const gert:
 }
 
 static ge::graphStatus MoeDistributeDispatchA2CheckAttrAndSetTiling(const gert::TilingContext &context,
-                                                                    CamMoeDistributeDispatchA2Info &info)
+                                                                    MoeDispatchNormalA2Info &info)
 {
     auto attrs = context.GetAttrs();
     OPS_ERR_IF(attrs == nullptr, OPS_LOG_E(K_INNER_DEBUG, "attrs is null."), return ge::GRAPH_FAILED);
@@ -288,34 +292,34 @@ static ge::graphStatus MoeDistributeDispatchA2CheckAttrAndSetTiling(const gert::
 
     const gert::StorageShape *expertIdStorageShape = context.GetInputShape(EXPERT_IDS_INDEX);
     OPS_ERR_IF(expertIdStorageShape == nullptr, OPS_LOG_E(K_INNER_DEBUG, "expertIdShape is null."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     int32_t bs = expertIdStorageShape->GetStorageShape().GetDim(0);
 
     OPS_ERR_IF(groupEpPtr == nullptr || strlen(groupEpPtr) == 0, OPS_LOG_E(K_INNER_DEBUG, "groupEp is invalid."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     OPS_ERR_IF(epWorldSizePtr == nullptr || *epWorldSizePtr <= 0 || *epWorldSizePtr > MAX_EP_WORLD_SIZE_A2 ||
-                        *epWorldSizePtr % RANK_NUM_PER_NODE_A2 != 0,
-                    OPS_LOG_E(K_INNER_DEBUG, "epWorldSize is invalid."), return GRAPH_FAILED);
+                   *epWorldSizePtr % RANK_NUM_PER_NODE_A2 != 0,
+               OPS_LOG_E(K_INNER_DEBUG, "epWorldSize is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(epRankIdPtr == nullptr || *epRankIdPtr < 0 || *epRankIdPtr >= *epWorldSizePtr,
-                    OPS_LOG_E(K_INNER_DEBUG, "epRankId is invalid."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "epRankId is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(moeExpertNumPtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "moeExpertNumPtr is null."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     OPS_ERR_IF(
         *moeExpertNumPtr % *epWorldSizePtr != 0 || *moeExpertNumPtr <= 0 || *moeExpertNumPtr > MAX_MOE_EXPERT_NUMS_A2,
         OPS_LOG_E(K_INNER_DEBUG, "moeExpertNum is invalid, only support (0, %d], but got moeExpertNum=%d.",
-                MAX_MOE_EXPERT_NUMS_A2, *moeExpertNumPtr),
+                  MAX_MOE_EXPERT_NUMS_A2, *moeExpertNumPtr),
         return GRAPH_FAILED);
     OPS_ERR_IF(tpWorldSizePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "tpWorldSize is null."), return GRAPH_FAILED);
     OPS_ERR_IF(tpRankIdPtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "tpRankId is null."), return GRAPH_FAILED);
     OPS_ERR_IF(expertSharedTypePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "expertSharedType is null."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     OPS_ERR_IF(sharedExpertRankNumPtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "sharedExpertRankNum is null."),
-                    return GRAPH_FAILED);
+               return GRAPH_FAILED);
     OPS_ERR_IF(quantModePtr == nullptr || (*quantModePtr != UNQUANT_MODE && *quantModePtr != DYNAMIC_QUANT_MODE),
-                    OPS_LOG_E(K_INNER_DEBUG, "quantMode is invalid."), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "quantMode is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(globalBsPtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "globalBs is null."), return GRAPH_FAILED);
     OPS_ERR_IF(expertTokenNumsTypePtr == nullptr || *expertTokenNumsTypePtr < 0 || *expertTokenNumsTypePtr > 1,
-                    OPS_LOG_E(K_INNER_DEBUG, "expertTokenNumsType is invalid. Must be 0 or 1. "), return GRAPH_FAILED);
+               OPS_LOG_E(K_INNER_DEBUG, "expertTokenNumsType is invalid. Must be 0 or 1. "), return GRAPH_FAILED);
 
     info.epWorldSize = *epWorldSizePtr;
     info.tpWorldSize = static_cast<uint32_t>(0);
@@ -343,7 +347,7 @@ static ge::graphStatus MoeDistributeDispatchA2CheckAttrAndSetTiling(const gert::
 }
 
 static ge::graphStatus MoeDistributeDispatchA2GetPlatformInfoAndSetTiling(const gert::TilingContext &context,
-                                                                          CamMoeDistributeDispatchA2Info &info)
+                                                                          MoeDispatchNormalA2Info &info)
 {
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());
     uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
@@ -406,11 +410,11 @@ static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext
     OPS_LOG_I(nodeName, "Enter MoeDistributeDispatchA2 tiling func.");
 
     // 1. tilingData
-    CamMoeDistributeDispatchA2TilingData *tilingData = context.GetTilingData<CamMoeDistributeDispatchA2TilingData>();
+    MoeDispatchNormalA2TilingData *tilingData = context.GetTilingData<MoeDispatchNormalA2TilingData>();
     OPS_ERR_IF(tilingData == nullptr, VECTOR_INNER_ERR_REPORT_TILIING(nodeName, "tilingData is nullptr."),
-                    return ge::GRAPH_FAILED);
+               return ge::GRAPH_FAILED);
     OPS_LOG_I(nodeName, "MoeDistributeDispatchA2 get tilingData.");
-    CamMoeDistributeDispatchA2Info &info = tilingData->moeDistributeDispatchInfo;
+    MoeDispatchNormalA2Info &info = tilingData->moeDistributeDispatchInfo;
     OPS_LOG_I(nodeName, "MoeDistributeDispatchA2 get tilingData info.");
 
     OPS_ERR_IF(
@@ -421,10 +425,11 @@ static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext
         MoeDistributeDispatchA2CheckAttrAndSetTiling(context, info) != ge::GRAPH_SUCCESS,
         VECTOR_INNER_ERR_REPORT_TILIING(context.GetNodeName(), "MoeDistributeDispatchA2 CheckAttrAndSetTiling Failed"),
         return ge::GRAPH_FAILED);
-    OPS_ERR_IF(MoeDistributeDispatchA2GetPlatformInfoAndSetTiling(context, info) != ge::GRAPH_SUCCESS,
-                    VECTOR_INNER_ERR_REPORT_TILIING(context.GetNodeName(),
-                                                    "MoeDistributeDispatchA2 GetPlatformInfoAndSetTiling Failed"),
-                    return ge::GRAPH_FAILED);
+    OPS_ERR_IF(
+        MoeDistributeDispatchA2GetPlatformInfoAndSetTiling(context, info) != ge::GRAPH_SUCCESS,
+        VECTOR_INNER_ERR_REPORT_TILIING(context.GetNodeName(),
+                                        "MoeDistributeDispatchA2 GetPlatformInfoAndSetTiling Failed"),
+        return ge::GRAPH_FAILED);
 
     uint32_t blockDim = 1U;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());
@@ -442,7 +447,7 @@ static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext
     // 2. workspace
     size_t *workSpaces = context.GetWorkspaceSizes(1);
     OPS_ERR_IF(workSpaces == nullptr, VECTOR_INNER_ERR_REPORT_TILIING(nodeName, "workSpaces is nullptr."),
-                    return ge::GRAPH_FAILED);
+               return ge::GRAPH_FAILED);
     // wyl second USER_WORKSPACE_A2 is for dumpprof
     workSpaces[0] = SYSTEM_NEED_WORKSPACE + USER_WORKSPACE_A2 + USER_WORKSPACE_A2;
 
@@ -460,20 +465,20 @@ static ge::graphStatus MoeDistributeDispatchA2TilingFuncImpl(gert::TilingContext
     return ge::GRAPH_SUCCESS;
 }
 
-static ge::graphStatus DispatchNormalA2TilingFunc(gert::TilingContext *context)
+static ge::graphStatus MoeDispatchNormalA2TilingFunc(gert::TilingContext *context)
 {
     ge::graphStatus ret = MoeDistributeDispatchA2TilingFuncImpl(*context);
     return ret;
 }
 
-struct DispatchNormalA2CompileInfo {};
-ge::graphStatus TilingParseForDispatchNormalA2(gert::TilingParseContext *context)
+struct MoeDispatchNormalA2CompileInfo {};
+ge::graphStatus TilingParseForMoeDispatchNormalA2(gert::TilingParseContext *context)
 {
     (void)context;
     return ge::GRAPH_SUCCESS;
 }
 
-IMPL_OP_OPTILING(DispatchNormalA2)
-    .Tiling(DispatchNormalA2TilingFunc)
-    .TilingParse<DispatchNormalA2CompileInfo>(TilingParseForDispatchNormalA2);
+IMPL_OP_OPTILING(MoeDispatchNormalA2)
+    .Tiling(MoeDispatchNormalA2TilingFunc)
+    .TilingParse<MoeDispatchNormalA2CompileInfo>(TilingParseForMoeDispatchNormalA2);
 }  // namespace optiling

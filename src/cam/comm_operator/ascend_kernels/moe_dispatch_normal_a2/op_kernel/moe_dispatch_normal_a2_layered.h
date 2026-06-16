@@ -7,12 +7,12 @@
  * History: 2026-01-15 create dispatch normal A2 kernel part operator implement
  */
 
-#ifndef CAM_MOE_DISTRIBUTE_DISPATCH_A2_LAYERED_H
-#define CAM_MOE_DISTRIBUTE_DISPATCH_A2_LAYERED_H
+#ifndef MOE_DISPATCH_NORMAL_A2_LAYERED_H
+#define MOE_DISPATCH_NORMAL_A2_LAYERED_H
 
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
-#include "cam_moe_distribute_dispatch_tiling.h"
+#include "moe_dispatch_normal_a2_tiling.h"
 #include "moe_distribute_base.h"
 #include "comm_args.h"
 
@@ -53,10 +53,12 @@ constexpr uint32_t BUFFER_BLOCK_NUM = 2;
     typename XType, typename ExpandXOutType, bool StaticQuant, bool DynamicQuant, bool IsSmoothScaleExist
 #define TemplateMC2TypeA2layeredFunc XType, ExpandXOutType, StaticQuant, DynamicQuant, IsSmoothScaleExist
 
-using namespace AscendC;
+
 using namespace Cam;
+using namespace AscendC;
+
 template <TemplateMC2TypeA2layeredClass>
-class CamMoeDistributeDispatchA2Layered {
+class MoeDispatchNormalA2Layered {
     template <typename T>
     inline __aicore__ T RoundUp(const T val, const T align)
     {
@@ -68,7 +70,7 @@ class CamMoeDistributeDispatchA2Layered {
     }
 
 public:
-    __aicore__ inline CamMoeDistributeDispatchA2Layered(){};
+    __aicore__ inline MoeDispatchNormalA2Layered(){};
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR expertScales,
                                 GM_ADDR tokenServerIdx, GM_ADDR tokenServerCnt, GM_ADDR epRankTokenCnt,
                                 GM_ADDR srcOffsetRankTokenIdx, GM_ADDR dstOffsetRankTokenIdx, GM_ADDR expandXOut,
@@ -205,18 +207,18 @@ private:
 };
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::Init(
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Init(
     GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR expertScales, GM_ADDR tokenServerIdx, GM_ADDR tokenServerCnt,
     GM_ADDR epRankTokenCnt, GM_ADDR srcOffsetRankTokenIdx, GM_ADDR dstOffsetRankTokenIdx, GM_ADDR expandXOut,
     GM_ADDR dynamicScalesOut, GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut, GM_ADDR epRecvCountsOut,
     GM_ADDR expandScales, GM_ADDR workspaceGM, TPipe *pipe, GM_ADDR tilingGM)
 {
     tpipe_ = pipe;
-    REGISTER_TILING_DEFAULT(CamMoeDistributeDispatchA2TilingData);
-    auto tiling = (__gm__ CamMoeDistributeDispatchA2TilingData *)tilingGM;
+    REGISTER_TILING_DEFAULT(MoeDispatchNormalA2TilingData);
+    auto tiling = (__gm__ MoeDispatchNormalA2TilingData *)tilingGM;
     __gm__ void *mc2InitTiling = (__gm__ void *)(&(tiling->mc2InitTiling));
     __gm__ void *mc2CcTiling = (__gm__ void *)(&(tiling->mc2CcTiling));
-    GET_TILING_DATA_WITH_STRUCT(CamMoeDistributeDispatchA2TilingData, tilingData, tilingGM);
+    GET_TILING_DATA_WITH_STRUCT(MoeDispatchNormalA2TilingData, tilingData, tilingGM);
 
     auto contextGM0 = AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
     hccl_.Init(contextGM0, mc2InitTiling);
@@ -368,7 +370,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::Input2Win()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Input2Win()
 {
     uint32_t sendTokenNum = axisBS_ / aivNum_;
     uint32_t remainderTokenNum = axisBS_ % aivNum_;
@@ -469,7 +471,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::QuantProcess(
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::QuantProcess(
     uint32_t sendTokenNum, LocalTensor<XType> xTokenLt, LocalTensor<float> tokenCastLt)
 {
     constexpr uint32_t maxArrUbOffset = 6 * 1024;
@@ -527,7 +529,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::WriteRdmaCntInfo()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::WriteRdmaCntInfo()
 {
     uint32_t destServerNum = serverNum / aivNum_;  // server num for each core
     uint32_t remaServerNum = serverNum % aivNum_;
@@ -562,7 +564,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 // build data info sending to other servers
 template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline void
-CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::ConstructDataAndFlagBatchWriteInfo()
+MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::ConstructDataAndFlagBatchWriteInfo()
 {
     // calculate the servers that current core will handle
     uint32_t batchWriteItemNum = serverNum / aivNum_;     // server num per aiv
@@ -625,7 +627,7 @@ CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::ConstructDataAn
 
 // RDMA communication between servers
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::DispatchBetweenServer()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::DispatchBetweenServer()
 {
     ConstructDataAndFlagBatchWriteInfo();
     PipeBarrier<PIPE_ALL>();
@@ -643,27 +645,27 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 
 template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline uint32_t
-CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::GetExpRank(uint32_t expertId)
+MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::GetExpRank(uint32_t expertId)
 {
     return expertId / localMoeExpertNum_;
 }
 
 template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline bool
-CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::IsInSameServer(uint32_t targetRankId)
+MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::IsInSameServer(uint32_t targetRankId)
 {
     return targetRankId / SERVER_RANK_SIZE == rankId_ / SERVER_RANK_SIZE;
 }
 
 template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline uint64_t
-CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::MergeMagicWithValue(uint64_t magic, uint64_t value)
+MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::MergeMagicWithValue(uint64_t magic, uint64_t value)
 {
     return (magic * 2ULL + value);
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::SetIpcFlag(uint64_t flagVal)
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SetIpcFlag(uint64_t flagVal)
 {
     if (aivId_ >= SERVER_RANK_SIZE) {
         return;
@@ -680,7 +682,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::WaitIpcFlag(uint64_t flagVal)
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::WaitIpcFlag(uint64_t flagVal)
 {
     uint64_t waitVal = MergeMagicWithValue(magicVal_, flagVal);
     if (aivId_ >= SERVER_RANK_SIZE) {
@@ -706,7 +708,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 
 template <TemplateMC2TypeA2layeredClass>
 __aicore__ inline void
-CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::SetTokenCnt(GlobalTensor<int32_t> globalSet)
+MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SetTokenCnt(GlobalTensor<int32_t> globalSet)
 {
     AscendC::SetAtomicAdd<int32_t>();
     LocalTensor<int32_t> localSet = tBuf.GetWithOffset<int32_t>(EXP_TOKEN_COUNT_FLAG_CNT, 0);
@@ -718,7 +720,7 @@ CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::SetTokenCnt(Glo
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::WaitWindow()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::WaitWindow()
 {
     // first ServerNum rank wait，keep the one waiting the local rank
     if (aivId_ >= serverNum || aivId_ == (rankId_ / SERVER_RANK_SIZE)) {
@@ -739,7 +741,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 
 // each expert gather data from different servers
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::Ipc2Out()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Ipc2Out()
 {
     uint32_t curRankExpertStart = rankId_ * localMoeExpertNum_;               // 9*8=72
     uint32_t curRankExpertEnd = curRankExpertStart + localMoeExpertNum_ - 1;  // 72+8-1=79
@@ -838,7 +840,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::CleanUp()  // clean status
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::CleanUp()  // clean status
 {
     uint32_t cleanBuffSize = worldSize_ * localMoeExpertNum_ * TOKEN_COUNT_SIZE;
     if (cleanBuffSize < STATE_OFFSET * serverNum) {
@@ -854,7 +856,7 @@ __aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layere
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void CamMoeDistributeDispatchA2Layered<TemplateMC2TypeA2layeredFunc>::Process()
+__aicore__ inline void MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Process()
 {
     if ASCEND_IS_AIV {
         Input2Win();

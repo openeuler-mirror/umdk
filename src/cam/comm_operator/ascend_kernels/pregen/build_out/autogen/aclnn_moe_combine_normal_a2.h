@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-/* function: aclnnMoeDistributeCombineA2GetWorkspaceSize
+/* function: aclnnMoeCombineNormalA2GetWorkspaceSize
  * expandX : required
  * expertIds : required
  * expandIdx : required
@@ -49,7 +49,7 @@ extern "C" {
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
-__attribute__((visibility("default"))) aclnnStatus aclnnMoeDistributeCombineA2GetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalA2GetWorkspaceSize(
     const aclTensor *expandX,
     const aclTensor *expertIds,
     const aclTensor *expandIdx,
@@ -82,13 +82,13 @@ __attribute__((visibility("default"))) aclnnStatus aclnnMoeDistributeCombineA2Ge
     uint64_t *workspaceSize,
     aclOpExecutor **executor);
 
-/* function: aclnnMoeDistributeCombineA2
+/* function: aclnnMoeCombineNormalA2
  * workspace : workspace memory addr(input).
  * workspaceSize : size of workspace(input).
  * executor : executor context(input).
  * stream : acl stream.
  */
-__attribute__((visibility("default"))) aclnnStatus aclnnMoeDistributeCombineA2(
+__attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalA2(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,

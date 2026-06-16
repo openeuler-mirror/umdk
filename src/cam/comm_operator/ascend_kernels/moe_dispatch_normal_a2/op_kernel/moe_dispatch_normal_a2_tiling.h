@@ -7,14 +7,14 @@
  * History: 2026-01-15 create dispatch normal A2 kernel part
  */
 
-#ifndef ASCENDC_CAM_H_COMM_MOE_DISTRIBUTE_DISPATCH_TILING_H
-#define ASCENDC_CAM_H_COMM_MOE_DISTRIBUTE_DISPATCH_TILING_H
+#ifndef MOE_DISPATCH_NORMAL_A2_TILING_H
+#define MOE_DISPATCH_NORMAL_A2_TILING_H
 
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
 namespace Cam {
-struct CamMoeDistributeDispatchA2Info {
+struct MoeDispatchNormalA2Info {
     uint32_t epWorldSize;          // epWorldSize
     uint32_t tpWorldSize;          // tpWorldSize
     uint32_t epRankId;             // epRankId
@@ -37,13 +37,13 @@ struct CamMoeDistributeDispatchA2Info {
     uint32_t expertTokenNumsType;  // expert token nums type, support 0: cumsum mode, 1: count mode
 };
 
-struct CamMoeDistributeDispatchA2TilingData {
+struct MoeDispatchNormalA2TilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
-    CamMoeDistributeDispatchA2Info moeDistributeDispatchInfo;
+    MoeDispatchNormalA2Info moeDistributeDispatchInfo;
 };
 
-struct CamMoeDistributeDispatchInfo {
+struct MoeDispatchNormalA2NonA2Info {
     uint32_t epWorldSize;          // epWorldSize
     uint32_t tpWorldSize;          // tpWorldSize
     uint32_t epRankId;             // epRankId
@@ -67,11 +67,11 @@ struct CamMoeDistributeDispatchInfo {
     uint64_t magic;
 };
 
-struct CamMoeDistributeDispatchTilingData {
+struct MoeDispatchNormalA2NonA2TilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling1;
     Mc2CcTiling mc2CcTiling2;
-    CamMoeDistributeDispatchInfo moeDistributeDispatchInfo;
+    MoeDispatchNormalA2NonA2Info moeDistributeDispatchInfo;
 };
 }  // namespace Cam
 
