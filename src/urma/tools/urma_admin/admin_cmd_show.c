@@ -1370,55 +1370,62 @@ static const char *tpid_link_type_to_string(uint32_t link_type)
     }
 }
 
-static const char *tpid_owner_type_to_string(uint32_t owner_type)
-{
-    static const char * const owner_type_str[] = {
-        "NONE", "USER_AWARE", "USER_UNAWARE",
-    };
-    if (owner_type >= (sizeof(owner_type_str) / sizeof(owner_type_str[0]))) {
-        return "UNKNOWN";
-    }
-    return owner_type_str[owner_type];
-}
-
-static void print_tpid_list_hdr(const admin_show_tpid_list_hdr_t *hdr, uint32_t index)
+static void print_tpid_list_hdr(struct nlattr **tb, uint32_t index)
 {
     char local_eid_str[INET6_ADDRSTRLEN] = {0};
     char peer_eid_str[INET6_ADDRSTRLEN] = {0};
 
-    urma_eid_to_ipv6_str(&hdr->local_eid, local_eid_str, sizeof(local_eid_str));
-    urma_eid_to_ipv6_str(&hdr->peer_eid, peer_eid_str, sizeof(peer_eid_str));
+    uint32_t trans_mode = tb[ADMIN_TPID_SHOW_ATTR_TRANS_MODE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TRANS_MODE]) : 0;
+    uint32_t share_mode = tb[ADMIN_TPID_SHOW_ATTR_SHARE_MODE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_SHARE_MODE]) : 0;
+    uint32_t tp_type    = tb[ADMIN_TPID_SHOW_ATTR_TP_TYPE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TP_TYPE]) : 0;
+    uint32_t link_type  = tb[ADMIN_TPID_SHOW_ATTR_LINK_TYPE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_LINK_TYPE]) : 0;
+    uint32_t ref_cnt    = tb[ADMIN_TPID_SHOW_ATTR_REF_CNT] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_REF_CNT]) : 0;
+    uint32_t list_cnt  = tb[ADMIN_TPID_SHOW_ATTR_LIST_NODE_CNT] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_LIST_NODE_CNT]) : 0;
+
+    if (tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID] &&
+        (size_t)nla_len(tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID]) >= sizeof(urma_eid_t))
+        urma_eid_to_ipv6_str((urma_eid_t *)nla_data(tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID]),
+                             local_eid_str, sizeof(local_eid_str));
+    if (tb[ADMIN_TPID_SHOW_ATTR_PEER_EID] &&
+        (size_t)nla_len(tb[ADMIN_TPID_SHOW_ATTR_PEER_EID]) >= sizeof(urma_eid_t))
+        urma_eid_to_ipv6_str((urma_eid_t *)nla_data(tb[ADMIN_TPID_SHOW_ATTR_PEER_EID]),
+                             peer_eid_str, sizeof(peer_eid_str));
 
     (void)printf("==================== tpid_list[%u] ====================\n", index);
     (void)printf("local_eid     : %s\n", local_eid_str);
     (void)printf("peer_eid      : %s\n", peer_eid_str);
-    (void)printf("trans_mode    : %u [%s]\n", hdr->trans_mode, tpid_trans_mode_to_string(hdr->trans_mode));
-    (void)printf("share_mode    : %u [%s]\n", hdr->share_mode, tpid_share_mode_to_string(hdr->share_mode));
-    (void)printf("tp_type       : %u [%s]\n", hdr->tp_type, tpid_tp_type_to_string(hdr->tp_type));
-    (void)printf("link_type     : %u [%s]\n", hdr->link_type, tpid_link_type_to_string(hdr->link_type));
-    (void)printf("acnt          : %u\n", hdr->acnt);
-    (void)printf("ucnt          : %u\n", hdr->ucnt);
-    (void)printf("capacity      : %u\n", hdr->capacity);
-    (void)printf("ref_cnt       : %u\n", hdr->ref_cnt);
-    (void)printf("aware_list    : %u node(s)\n", hdr->aware_node_cnt);
-    (void)printf("unaware_list  : %u node(s)\n", hdr->unaware_node_cnt);
+    (void)printf("trans_mode    : %u [%s]\n", trans_mode, tpid_trans_mode_to_string(trans_mode));
+    (void)printf("share_mode    : %u [%s]\n", share_mode, tpid_share_mode_to_string(share_mode));
+    (void)printf("tp_type       : %u [%s]\n", tp_type, tpid_tp_type_to_string(tp_type));
+    (void)printf("link_type     : %u [%s]\n", link_type, tpid_link_type_to_string(link_type));
+    (void)printf("tp_cnt        : %u node(s)\n", list_cnt);
+    (void)printf("ref_cnt       : %u\n", ref_cnt);
 }
 
-static void print_tpid_node(const admin_show_tpid_node_t *node, const char *kind)
+static void print_tpid_node(struct nlattr **tb)
 {
     admin_tp_handle_t h;
 
-    h.value = node->tp_handle;
-    (void)printf("  [%-7s] tp_handle=0x%-16llx tpid=%-10llu\n", kind,
-                 (unsigned long long)node->tp_handle, (unsigned long long)h.bs.tpid);
-    (void)printf("            tpn_start=%-10llu tp_cnt=%-5llu trans_mode=%llu [%s]\n",
-                 (unsigned long long)h.bs.tpn_start, (unsigned long long)h.bs.tp_cnt,
-                 (unsigned long long)h.bs.trans_mode,
+    h.value = tb[ADMIN_TPID_SHOW_ATTR_TP_HANDLE] ?
+        nla_get_u64(tb[ADMIN_TPID_SHOW_ATTR_TP_HANDLE]) : 0;
+    (void)printf("  [NODE] tp_handle=0x%llx\n", (unsigned long long)h.value);
+    (void)printf("    tpid            : %llu\n", (unsigned long long)h.bs.tpid);
+    (void)printf("    tpn_start       : %llu\n", (unsigned long long)h.bs.tpn_start);
+    (void)printf("    tp_cnt          : %llu\n", (unsigned long long)h.bs.tp_cnt);
+    (void)printf("    ctp             : %llu\n", (unsigned long long)h.bs.ctp);
+    (void)printf("    rtp             : %llu\n", (unsigned long long)h.bs.rtp);
+    (void)printf("    utp             : %llu\n", (unsigned long long)h.bs.utp);
+    (void)printf("    uboe            : %llu\n", (unsigned long long)h.bs.uboe);
+    (void)printf("    pre_defined     : %llu\n", (unsigned long long)h.bs.pre_defined);
+    (void)printf("    dynamic_defined : %llu\n", (unsigned long long)h.bs.dynamic_defined);
+    (void)printf("    trans_mode      : %llu [%s]\n", (unsigned long long)h.bs.trans_mode,
                  tpid_trans_mode_to_string((uint32_t)h.bs.trans_mode));
-    (void)printf("            ctp=%llu rtp=%llu utp=%llu uboe=%llu pre_defined=%llu dynamic_defined=%llu\n",
-                 (unsigned long long)h.bs.ctp, (unsigned long long)h.bs.rtp,
-                 (unsigned long long)h.bs.utp, (unsigned long long)h.bs.uboe,
-                 (unsigned long long)h.bs.pre_defined, (unsigned long long)h.bs.dynamic_defined);
 }
 
 static const char *tpid_reuse_state_to_string(uint32_t state)
@@ -1432,27 +1439,62 @@ static const char *tpid_reuse_state_to_string(uint32_t state)
     return reuse_state_str[state];
 }
 
-static void print_tpid_reuse_one(const admin_show_tpid_reuse_entry_t *entry, uint32_t index)
+static void print_tpid_reuse_one(struct nlattr **tb, uint32_t index)
 {
     char local_eid_str[INET6_ADDRSTRLEN] = {0};
     char peer_eid_str[INET6_ADDRSTRLEN] = {0};
+    uint32_t trans_mode  = tb[ADMIN_TPID_SHOW_ATTR_TRANS_MODE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TRANS_MODE]) : 0;
+    uint32_t share_mode  = tb[ADMIN_TPID_SHOW_ATTR_SHARE_MODE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_SHARE_MODE]) : 0;
+    uint32_t tp_type     = tb[ADMIN_TPID_SHOW_ATTR_TP_TYPE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TP_TYPE]) : 0;
+    uint32_t link_type   = tb[ADMIN_TPID_SHOW_ATTR_LINK_TYPE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_LINK_TYPE]) : 0;
+    uint64_t stag        = tb[ADMIN_TPID_SHOW_ATTR_STAG] ?
+        nla_get_u64(tb[ADMIN_TPID_SHOW_ATTR_STAG]) : 0;
+    uint64_t dtag        = tb[ADMIN_TPID_SHOW_ATTR_DTAG] ?
+        nla_get_u64(tb[ADMIN_TPID_SHOW_ATTR_DTAG]) : 0;
+    uint64_t tp_handle   = tb[ADMIN_TPID_SHOW_ATTR_TP_HANDLE] ?
+        nla_get_u64(tb[ADMIN_TPID_SHOW_ATTR_TP_HANDLE]) : 0;
+    uint32_t reuse_state = tb[ADMIN_TPID_SHOW_ATTR_REUSE_STATE] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_REUSE_STATE]) : 0;
+    uint32_t ref_cnt     = tb[ADMIN_TPID_SHOW_ATTR_REF_CNT] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_REF_CNT]) : 0;
+    int32_t use_cnt      = tb[ADMIN_TPID_SHOW_ATTR_USE_CNT] ?
+        nla_get_s32(tb[ADMIN_TPID_SHOW_ATTR_USE_CNT]) : 0;
+    uint64_t peer_tp_handle = tb[ADMIN_TPID_SHOW_ATTR_PEER_TP_HANDLE] ?
+        nla_get_u64(tb[ADMIN_TPID_SHOW_ATTR_PEER_TP_HANDLE]) : 0;
+    uint32_t tx_psn      = tb[ADMIN_TPID_SHOW_ATTR_TX_PSN] ?
+        nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TX_PSN]) : 0;
+    uint8_t is_ref       = tb[ADMIN_TPID_SHOW_ATTR_IS_REF] ?
+        nla_get_u8(tb[ADMIN_TPID_SHOW_ATTR_IS_REF]) : 0;
 
-    urma_eid_to_ipv6_str(&entry->local_eid, local_eid_str, sizeof(local_eid_str));
-    urma_eid_to_ipv6_str(&entry->peer_eid, peer_eid_str, sizeof(peer_eid_str));
+    if (tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID] &&
+        (size_t)nla_len(tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID]) >= sizeof(urma_eid_t))
+        urma_eid_to_ipv6_str((urma_eid_t *)nla_data(tb[ADMIN_TPID_SHOW_ATTR_LOCAL_EID]),
+                             local_eid_str, sizeof(local_eid_str));
+    if (tb[ADMIN_TPID_SHOW_ATTR_PEER_EID] &&
+        (size_t)nla_len(tb[ADMIN_TPID_SHOW_ATTR_PEER_EID]) >= sizeof(urma_eid_t))
+        urma_eid_to_ipv6_str((urma_eid_t *)nla_data(tb[ADMIN_TPID_SHOW_ATTR_PEER_EID]),
+                             peer_eid_str, sizeof(peer_eid_str));
 
     (void)printf("==================== tpid_reuse[%u] ====================\n", index);
     (void)printf("local_eid     : %s\n", local_eid_str);
     (void)printf("peer_eid      : %s\n", peer_eid_str);
-    (void)printf("trans_mode    : %u [%s]\n", entry->trans_mode, tpid_trans_mode_to_string(entry->trans_mode));
-    (void)printf("share_mode    : %u [%s]\n", entry->share_mode, tpid_share_mode_to_string(entry->share_mode));
-    (void)printf("tp_type       : %u [%s]\n", entry->tp_type, tpid_tp_type_to_string(entry->tp_type));
-    (void)printf("link_type     : %u [%s]\n", entry->link_type, tpid_link_type_to_string(entry->link_type));
-    (void)printf("stag          : 0x%llx\n", (unsigned long long)entry->stag);
-    (void)printf("dtag          : 0x%llx\n", (unsigned long long)entry->dtag);
-    (void)printf("tp_handle     : 0x%llx\n", (unsigned long long)entry->tp_handle);
-    (void)printf("reuse_state   : %u [%s]\n", entry->reuse_state, tpid_reuse_state_to_string(entry->reuse_state));
-    (void)printf("ref_cnt       : %u\n", entry->ref_cnt);
-    (void)printf("use_cnt       : %d\n", entry->use_cnt);
+    (void)printf("trans_mode    : %u [%s]\n", trans_mode, tpid_trans_mode_to_string(trans_mode));
+    (void)printf("share_mode    : %u [%s]\n", share_mode, tpid_share_mode_to_string(share_mode));
+    (void)printf("tp_type       : %u [%s]\n", tp_type, tpid_tp_type_to_string(tp_type));
+    (void)printf("link_type     : %u [%s]\n", link_type, tpid_link_type_to_string(link_type));
+    (void)printf("stag          : 0x%llx\n", (unsigned long long)stag);
+    (void)printf("dtag          : 0x%llx\n", (unsigned long long)dtag);
+    (void)printf("tp_handle     : 0x%llx\n", (unsigned long long)tp_handle);
+    (void)printf("peer_tp_handle: 0x%llx\n", (unsigned long long)peer_tp_handle);
+    (void)printf("reuse_state   : %u [%s]\n", reuse_state, tpid_reuse_state_to_string(reuse_state));
+    (void)printf("tx_psn        : %u\n", tx_psn);
+    (void)printf("is_ref        : %u\n", is_ref);
+    (void)printf("ref_cnt       : %u\n", ref_cnt);
+    (void)printf("use_cnt       : %d\n", use_cnt);
 }
 
 typedef struct tpid_show_print_ctx {
@@ -1468,71 +1510,54 @@ static int tpid_show_msg_cb(struct nl_msg *msg, void *arg)
 {
     tpid_show_print_ctx_t *ctx = (tpid_show_print_ctx_t *)arg;
     struct nlmsghdr *nlh = nlmsg_hdr(msg);
-    struct nlattr *attrs[ADMIN_TPID_SHOW_ATTR_MAX + 1];
+    struct nlattr *tb[ADMIN_TPID_SHOW_ATTR_MAX + 1];
     uint32_t rec_type;
-    uint32_t dlen;
-    void *data;
 
     if (nlh->nlmsg_type == NLMSG_DONE || nlh->nlmsg_type == NLMSG_ERROR) {
         return NL_OK;
     }
-    if (genlmsg_parse(nlh, 0, attrs, ADMIN_TPID_SHOW_ATTR_MAX, NULL) < 0) {
+    if (genlmsg_parse(nlh, 0, tb, ADMIN_TPID_SHOW_ATTR_MAX, NULL) < 0) {
         return NL_OK;
     }
-    if (attrs[ADMIN_TPID_SHOW_ATTR_REC_TYPE] == NULL || attrs[ADMIN_TPID_SHOW_ATTR_REC_DATA] == NULL) {
+    if (tb[ADMIN_TPID_SHOW_ATTR_REC_TYPE] == NULL) {
         return NL_OK;
     }
-    rec_type = nla_get_u32(attrs[ADMIN_TPID_SHOW_ATTR_REC_TYPE]);
-    data = nla_data(attrs[ADMIN_TPID_SHOW_ATTR_REC_DATA]);
-    dlen = (uint32_t)nla_len(attrs[ADMIN_TPID_SHOW_ATTR_REC_DATA]);
+    rec_type = nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_REC_TYPE]);
     ctx->any = true;
 
     switch (rec_type) {
-        case ADMIN_TPID_SHOW_REC_LIST_HDR: {
-            admin_show_tpid_list_hdr_t hdr = {0};
-            if (dlen < sizeof(hdr)) {
-                break;
-            }
-            (void)memcpy(&hdr, data, sizeof(hdr));
-            print_tpid_list_hdr(&hdr, ctx->list_idx++);
+        case ADMIN_TPID_SHOW_REC_LIST_HDR:
+            print_tpid_list_hdr(tb, ctx->list_idx++);
             break;
-        }
-        case ADMIN_TPID_SHOW_REC_AWARE_NODE:
-        case ADMIN_TPID_SHOW_REC_UNAWARE_NODE: {
-            admin_show_tpid_node_t node = {0};
-            if (dlen < sizeof(node)) {
-                break;
-            }
-            (void)memcpy(&node, data, sizeof(node));
-            print_tpid_node(&node, rec_type == ADMIN_TPID_SHOW_REC_AWARE_NODE ? "aware" : "unaware");
+        case ADMIN_TPID_SHOW_REC_TP_LIST:
+            print_tpid_node(tb);
             break;
-        }
         case ADMIN_TPID_SHOW_REC_TPID_STATE: {
-            admin_show_tpid_state_t st = {0};
-            if (dlen < sizeof(st)) {
-                break;
-            }
-            (void)memcpy(&st, data, sizeof(st));
-            if (st.found == 0) {
-                (void)printf("TP_ID %llu not found on dev %s.\n", (unsigned long long)ctx->tpid, ctx->dev_name);
+            uint8_t found = tb[ADMIN_TPID_SHOW_ATTR_FOUND] ?
+                nla_get_u8(tb[ADMIN_TPID_SHOW_ATTR_FOUND]) : 0;
+            if (found == 0) {
+                (void)printf("TP_ID %llu not found on dev %s.\n",
+                             (unsigned long long)ctx->tpid, ctx->dev_name);
             } else {
-                (void)printf("status        : %u [%s]\n", st.status, tpid_status_to_string(st.status));
-                (void)printf("owner_type    : %u [%s]\n", st.owner_type,
-                             tpid_owner_type_to_string(st.owner_type));
-                (void)printf("alloced       : %u\n", st.alloced);
-                (void)printf("ref_cnt       : %u\n", st.ref_cnt);
+                uint32_t status = tb[ADMIN_TPID_SHOW_ATTR_STATUS] ?
+                    nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_STATUS]) : 0;
+                uint8_t alloced = tb[ADMIN_TPID_SHOW_ATTR_ALLOCED] ?
+                    nla_get_u8(tb[ADMIN_TPID_SHOW_ATTR_ALLOCED]) : 0;
+                uint32_t ref_cnt = tb[ADMIN_TPID_SHOW_ATTR_REF_CNT] ?
+                    nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_REF_CNT]) : 0;
+                uint32_t tx_psn = tb[ADMIN_TPID_SHOW_ATTR_TX_PSN] ?
+                    nla_get_u32(tb[ADMIN_TPID_SHOW_ATTR_TX_PSN]) : 0;
+                (void)printf("status        : %u [%s]\n", status,
+                             tpid_status_to_string(status));
+                (void)printf("alloced       : %u\n", alloced);
+                (void)printf("tx_psn        : %u\n", tx_psn);
+                (void)printf("ref_cnt       : %u\n", ref_cnt);
             }
             break;
         }
-        case ADMIN_TPID_SHOW_REC_REUSE_ENTRY: {
-            admin_show_tpid_reuse_entry_t entry = {0};
-            if (dlen < sizeof(entry)) {
-                break;
-            }
-            (void)memcpy(&entry, data, sizeof(entry));
-            print_tpid_reuse_one(&entry, ctx->reuse_idx++);
+        case ADMIN_TPID_SHOW_REC_REUSE_ENTRY:
+            print_tpid_reuse_one(tb, ctx->reuse_idx++);
             break;
-        }
         default:
             break;
     }
@@ -1541,21 +1566,19 @@ static int tpid_show_msg_cb(struct nl_msg *msg, void *arg)
 
 static int admin_cmd_show_tpid_list(admin_config_t *cfg, bool query_tpid, uint64_t tpid)
 {
-    admin_core_cmd_show_tpid_list_t arg = {0};
     tpid_show_print_ctx_t ctx = {0};
     struct nl_msg *msg;
     int ret;
-
-    (void)snprintf(arg.in.dev_name, URMA_MAX_NAME, "%s", cfg->dev_name);
-    arg.in.query_tpid = query_tpid ? 1 : 0;
-    arg.in.tpid = tpid;
 
     msg = admin_nl_alloc_msg(URMA_CORE_SHOW_TPID_LIST, NLM_F_DUMP, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(arg));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
+    if (query_tpid) {
+        admin_nl_put_u8(msg, UBCORE_ATTR_TPID_QUERY_FLAG, 1);
+        admin_nl_put_u64(msg, UBCORE_ATTR_TPID, tpid);
+    }
 
     ctx.dev_name = cfg->dev_name;
     ctx.tpid = tpid;
@@ -1595,19 +1618,15 @@ static int cmd_show_dev_tp(admin_config_t *cfg)
 
 static int admin_cmd_show_tpid_reuse(admin_config_t *cfg)
 {
-    admin_core_cmd_show_tpid_reuse_t arg = {0};
     tpid_show_print_ctx_t ctx = {0};
     struct nl_msg *msg;
     int ret;
-
-    (void)snprintf(arg.in.dev_name, URMA_MAX_NAME, "%s", cfg->dev_name);
 
     msg = admin_nl_alloc_msg(URMA_CORE_SHOW_TPID_REUSE, NLM_F_DUMP, UBCORE_GENL);
     if (msg == NULL) {
         return -ENOMEM;
     }
-    admin_nl_put_u32(msg, UBCORE_HDR_ARGS_LEN, (uint32_t)sizeof(arg));
-    admin_nl_put_u64(msg, UBCORE_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)&arg);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, cfg->dev_name);
 
     ctx.dev_name = cfg->dev_name;
     (void)printf("dev_name        : %s\n", cfg->dev_name);
