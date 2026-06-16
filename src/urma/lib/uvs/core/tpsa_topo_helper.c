@@ -504,7 +504,7 @@ static uvs_host_eid_batch_entry_t *uvs_find_host_eid_batch(
 }
 
 static int uvs_append_host_eid_mapping(uvs_host_eid_batch_table_t *table,
-    const char *host_eid, const char *eid)
+    const char *host_eid, const char *eid, const char *cna)
 {
     uvs_host_eid_batch_entry_t *batch;
 
@@ -533,6 +533,7 @@ static int uvs_append_host_eid_mapping(uvs_host_eid_batch_table_t *table,
     }
 
     (void)memcpy(batch->eids[batch->eid_num].raw, eid, EID_LEN);
+    (void)memcpy(batch->cnas[batch->eid_num].raw, cna, EID_LEN);
     batch->eid_num++;
     table->eid_num++;
     return 0;
@@ -602,7 +603,7 @@ static int uvs_collect_host_eid_by_share_port(
             }
 
             ret = uvs_append_host_eid_mapping(table,
-                share_ue->port_eid[port_idx], ue->port_eid[port_idx]);
+                share_ue->port_eid[port_idx], ue->port_eid[port_idx], ue->cna[port_idx]);
             if (ret != 0) {
                 return ret;
             }

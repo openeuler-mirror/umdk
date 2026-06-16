@@ -163,6 +163,7 @@ typedef struct uvs_host_eid_batch_entry {
     uvs_eid_t host_eid;
     uint32_t eid_num;
     uvs_eid_t eids[UVS_HOST_EID_BATCH_EID_MAX];
+    uvs_eid_t cnas[UVS_HOST_EID_BATCH_EID_MAX];
 } uvs_host_eid_batch_entry_t;
 
 typedef struct uvs_cmd_host_eid_batch {
