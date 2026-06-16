@@ -39,12 +39,12 @@ void free_jfr_wr(urma_jfr_wr_t *wr);
 void free_jfs_wr(urma_jfs_wr_t *wr);
 
 urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                                     bondp_comp_t *bdp_comp);
+                                     bondp_comp_t *bdp_comp, bool msn_enable);
 
 /**
  * Encode MSN into WR's imm_data and change opcode if needed.
  */
-urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn);
+urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, bool enable_msn);
 
 /**
  * Map virtual tseg/tjetty pointers to physical ones based on send_idx/target_idx.

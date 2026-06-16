@@ -33,7 +33,7 @@
 
 typedef struct bondp_create_vjetty_udata {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    bool is_multipath; // deprecated
+    bool is_msn_enabled; // deprecated
     uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;
@@ -1210,6 +1210,7 @@ static int bondp_create_vjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
         jetty_info.enabled_indices[i] = bdp_jetty->enabled_indices[i];
     }
     jetty_info.enabled_count = bdp_jetty->enabled_count;
+    jetty_info.is_msn_enabled = bdp_ctx->msn_enable;
 
     urma_cmd_udrv_priv_t udata = {
         .in_addr = (uint64_t)&jetty_info,
@@ -1998,6 +1999,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
             goto FREE_TJETTY;
         }
     }
+    bdp_tjetty->is_msn_enabled = rvjetty_info.is_msn_enabled;
 
     (void)init_all_indices(bdp_ctx, bdp_ctx->enabled_indices, &bdp_ctx->enabled_count, NULL, NULL);
 

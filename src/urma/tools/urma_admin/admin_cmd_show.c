@@ -95,7 +95,7 @@ typedef struct admin_ubagg_jetty_id {
 
 typedef struct admin_ubagg_jetty_exchange_info {
     admin_ubagg_jetty_id_t slaves[UBAGG_DEV_MAX_NUM];
-    bool is_multipath;
+    bool is_msn_enabled;
     uint8_t enabled_indices[UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;

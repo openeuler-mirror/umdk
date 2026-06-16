@@ -261,7 +261,8 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                 return ret;
             }
             uint32_t wr_msn = (base_msn + index) % BONDP_MAX_BITMAP_SIZE;
-            ret = encode_jfs_wr_msn(pwr, bdp_comp, wr_msn);
+            bool msn_enable = bdp_tjetty->is_msn_enabled;
+            ret = encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             if (ret != 0) {
                 return ret;
             }
@@ -349,7 +350,8 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             }
             add_vwr_use_cnt(pwr);
             uint32_t wr_msn = (base_msn + i) % BONDP_MAX_BITMAP_SIZE;
-            ret = encode_jfs_wr_msn(pwr, bdp_comp, wr_msn);
+            bool msn_enable = bdp_tjetty->is_msn_enabled;
+            ret = encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             if (ret != 0) {
                 URMA_LOG_ERR("Failed to encode jfs wr msn at index %d\n", i);
                 convert_jfs_pwr_to_vwr_resend(pwr, &wr_entry->target_vjetty->v_tjetty);

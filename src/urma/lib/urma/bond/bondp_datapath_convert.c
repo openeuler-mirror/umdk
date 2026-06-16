@@ -306,10 +306,9 @@ static void map_fadd_vwr_to_path(urma_jfs_wr_t *send_wr, int send_idx, int targe
     send_wr->tjetty = get_p_tjetty(send_wr->tjetty, send_idx, target_idx);
 }
 
-urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn)
+urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, bool msn_enable)
 {
     uint64_t opcode_tag = 0;
-    bool msn_enable = bdp_comp->bondp_ctx->msn_enable;
 
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -379,10 +378,10 @@ void map_jfs_vwr_to_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
 }
 
 urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                                     bondp_comp_t *bdp_comp)
+                                     bondp_comp_t *bdp_comp, bool msn_enable)
 {
     uint32_t msn = atomic_fetch_add(&bdp_comp->msn, 1) % BONDP_MAX_BITMAP_SIZE;
-    urma_status_t ret = encode_jfs_wr_msn(wr, bdp_comp, msn);
+    urma_status_t ret = encode_jfs_wr_msn(wr, bdp_comp, msn, msn_enable);
     if (ret != URMA_SUCCESS) {
         return ret;
     }
