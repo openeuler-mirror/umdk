@@ -98,6 +98,7 @@ typedef struct perftest_context {
     uint64_t buf_size;
     uint64_t buf_len; // buf_len = buf_size * PERFTEST_BUF_NUM
     urma_target_seg_t **local_tseg;
+    uint64_t sum_size;
 
     // remote info
     urma_seg_t *remote_seg;

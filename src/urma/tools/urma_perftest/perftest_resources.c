@@ -403,8 +403,12 @@ delete_jfc:
 
 static inline void destroy_jfs(perftest_context_t *ctx, const int idx)
 {
-    for (int k = 0; k < idx; k++) {
-        (void)urma_delete_jfs(ctx->jfs[k]);
+    if (idx > 1 && ctx->jfs[0] != ctx->jfs[1]) {
+        for (int k = 0; k < idx; k++) {
+            (void)urma_delete_jfs(ctx->jfs[k]);
+        }
+    } else {
+        (void)urma_delete_jfs(ctx->jfs[0]);
     }
 
     free(ctx->jfs);
@@ -440,7 +444,11 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
 
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         jfs_cfg.jfc = ctx->jfc_s[i];
-        ctx->jfs[i] = urma_create_jfs(ctx->urma_ctx, &jfs_cfg);
+        if (!cfg->share_jfs || i == 0) {
+            ctx->jfs[i] = urma_create_jfs(ctx->urma_ctx, &jfs_cfg);
+        } else {
+            ctx->jfs[i] = ctx->jfs[0];
+        }
         if (ctx->jfs[i] == NULL) {
             LOG_ERROR("Failed to create jfs: %u!\n", i);
             goto delete_jfs;
@@ -548,6 +556,9 @@ static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
 static void destroy_jetty(perftest_context_t *ctx)
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        if (ctx->jetty_num > 1 && i > 0 && ctx->jetty[i] == ctx->jetty[0]) {
+            break;
+        }
         if (ctx->jetty[i] != NULL) {
             (void)urma_delete_jetty(ctx->jetty[i]);
         }
@@ -602,6 +613,10 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
         goto err_delete_jfr;
     }
     for (uint32_t i = 0; i < cfg->jettys; i++) {
+        if (cfg->share_jfs && i > 0) {
+            ctx->jetty[i] = ctx->jetty[0];
+            continue;
+        }
         jetty_cfg.jfs_cfg.jfc = ctx->jfc_s[i];
         if (cfg->share_jfr == false) {
             jetty_cfg.jfr_cfg->jfc = ctx->jfc_r[i];
@@ -615,8 +630,10 @@ static int create_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
             LOG_ERROR("Failed to create jetty: %d!\n", i);
             goto err_delete_jetty;
         }
-        LOG_ERROR("Set jetty id %u, actually jetty id %d\n",
-                  cfg->jetty_id, ctx->jetty[i]->jetty_id.id);
+        if (cfg->jetty_id != 0 && cfg->jetty_id != ctx->jetty[i]->jetty_id.id) {
+            LOG_ERROR("Set jetty id %u, actually jetty id %d\n",
+                      cfg->jetty_id, ctx->jetty[i]->jetty_id.id);
+        }
     }
 
     return 0;
@@ -775,9 +792,11 @@ static int register_mem(perftest_context_t *ctx, perftest_config_t *cfg)
             } else {
                 ctx->local_buf[i] = ctx->local_buf[0];
             }
-            if (ctx->local_buf[i] == NULL) {
-                LOG_ERROR("Failed to alloc local buffer, i: %u.\n", i);
-                goto free_memory;
+        } else if (cfg->enable_va) {
+            if (i < seg_num) {
+                ctx->local_buf[i] = (void *)(cfg->v_address);
+            } else {
+                ctx->local_buf[i] = ctx->local_buf[0];
             }
         } else {
             if (i < seg_num) {
@@ -1076,6 +1095,32 @@ static void free_tp_info(perftest_context_t *ctx)
     ctx->tp_info = NULL;
 }
 
+static void create_tp_info_get_attr_uboe(perftest_config_t *cfg, urma_tp_attr_value_t *tp_attr,
+    uint8_t *set_tp_attr_cnt, uint32_t *set_tp_attr_flag)
+{
+    memcpy(tp_attr->sip, cfg->sip.raw, URMA_IP_ADDR_BYTES);
+    memcpy(tp_attr->dip, cfg->dip.raw, URMA_IP_ADDR_BYTES);
+    memcpy(tp_attr->sma, cfg->smac, URMA_MAC_BYTES);
+    memcpy(tp_attr->dma, cfg->dmac, URMA_MAC_BYTES);
+    if (cfg->uboe_vlan) {
+        tp_attr->vlan_en = 1;
+        tp_attr->vlan_id = cfg->vlan_id;
+    }
+    if (cfg->uboe_dscp) {
+        tp_attr->dscp = cfg->dscp;
+    }
+    if (cfg->uboe_sl) {
+        tp_attr->sl = cfg->sl;
+        (*set_tp_attr_cnt)++;
+        (*set_tp_attr_flag) |= PERFTEST_SET_ATTR_BITMAP_SL_FLAG;
+    }
+    if (cfg->spray_en) {
+        tp_attr->spray_en = cfg->spray_en;
+        (*set_tp_attr_cnt)++;
+        (*set_tp_attr_flag) |= PERFTEST_SET_ATTR_BITMAP_SPRAY_FLAG;
+    }
+}
+
 static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
 {
     if (!cfg->tp_aware) {
@@ -1156,27 +1201,8 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
         }
 
         urma_tp_attr_value_t tp_attr = {0};
-        memcpy(tp_attr.sip, cfg->sip.raw, URMA_IP_ADDR_BYTES);
-        memcpy(tp_attr.dip, cfg->dip.raw, URMA_IP_ADDR_BYTES);
-        memcpy(tp_attr.sma, cfg->smac, URMA_MAC_BYTES);
-        memcpy(tp_attr.dma, cfg->dmac, URMA_MAC_BYTES);
-        if (cfg->uboe_vlan) {
-            tp_attr.vlan_en = 1;
-            tp_attr.vlan_id = cfg->vlan_id;
-        }
-        if (cfg->uboe_dscp) {
-            tp_attr.dscp = cfg->dscp;
-        }
-        if (cfg->uboe_sl) {
-            tp_attr.sl = cfg->sl;
-            set_tp_attr_cnt++;
-            set_tp_attr_flag |= PERFTEST_SET_ATTR_BITMAP_SL_FLAG;
-        }
-        if (cfg->spray_en) {
-            tp_attr.spray_en = cfg->spray_en;
-            set_tp_attr_cnt++;
-            set_tp_attr_flag |= PERFTEST_SET_ATTR_BITMAP_SPRAY_FLAG;
-        }
+        create_tp_info_get_attr_uboe(cfg, &tp_attr, &set_tp_attr_cnt, &set_tp_attr_flag);
+
         uint32_t set_cnt = (cfg->trans_mode == URMA_TM_RM && cfg->tp_reuse) ? 1 : ctx->jetty_num;
         for (uint32_t i = 0; i < set_cnt; i++) {
             ret = urma_set_tp_attr(ctx->urma_ctx, ctx->tp_info[i].tp_handle, set_tp_attr_cnt,
