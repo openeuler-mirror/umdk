@@ -70,12 +70,8 @@ function prepare_cam_third_party() {
     local third_party="$1"
     local catlass_dir="${third_party}/catlass"
 
-    if [[ ! -d "${third_party}" ]]; then
-        mkdir -p "${third_party}"
-    fi
-
-    if [[ -d "${catlass_dir}" ]]; then
-        echo "catlass has existed: ${catlass_dir}"
+    if [[ -d "${catlass_dir}" && -d "${catlass_dir}/include" ]]; then
+        echo "catlass submodule has existed: ${catlass_dir}"
         return 0
     fi
 

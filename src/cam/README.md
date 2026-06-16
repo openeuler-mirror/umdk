@@ -25,5 +25,67 @@
 # Performance
 (To be done)
 
+# Directory Structures
+```text
+UMDK/
+|--- build/
+|    |--- cam/                      # build script for cam project
+|    |    |--- comm_operator/       # build script for cam communication operator
+|--- doc/
+|    |--- ch/  
+|    |    |--- cam/                 # cam doc in Chinese
+|    |--- en/  
+|    |    |--- cam/                 # cam doc in English
+|--- src/
+|    |--- cam/  
+|    |    |--- comm_operator/       # code of communication operator
+|    |    |    |--- ascend_kernels/ # code of ascend kernels
+|    |    |    |--- pybind/         # code of python interface bindings
+|    |    |--- examples/            # examples for different kernels
+|    |    |--- third_party/         # third party dependencies (git submodules)
+|    |    |    |--- catlass/        # catlass (git submodule, pinned commit)
+|--- test/
+|    |--- cam/                      # UT test code of cam
+```
+
 # Quick Start
-(To be done)
+## 1. Basic Environment Requirements
+|Requirements|Type|Version|Description|
+|---|---|---|---|
+|Ascend Chip|Required|A2/A3|You can run CAM now only in an Ascend A2 or A3 SuperPod.|
+|CANN|Required|8.3.RC1|Before using CAM, you need to install CANN ≥ 8.3.RC1 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
+|Torch|Required|2.8.0|To compile Pybind whl packet in CAM, you need to install Torch first.|
+|Torch-Npu|Required|2.8.0-7.2.0|Torch-Npu supports torch framework in Ascend Platform.|
+|Ascend-SHMEM|Optional|1.0.0|If you want to compile and run SHMEM kernels, you need to install Ascend-SHMEM first. Please refer to "[Huawei Ascend-SHMEM](https://gitee.com/ascend/shmem)".
+## 2. Compile and Install
+### · Compile
+CAM offers a basic ".run" packet for kernels and a ".whl" packet for python interface. You can easily compile these two packets with the command below:
+```bash
+# enter UMDK folder
+cd UMDK/
+# initialize git submodules (catlass, etc.)
+git submodule update --init --recursive
+# build
+./build/cam/build.sh
+```
+To enable debug mode, use the following command instead:
+```bash
+./build/cam/build.sh -d
+```
+If we get final output like `Build packet successful!`, then we can find the two packets in:
+```bash
+# whl packet, XXX depends on the compile environment.
+output/cam/comm_operator/dist/umdk_cam_op_lib_XXX.whl
+# run packet, XXX depends on the compile environment.
+output/cam/comm_operator/run/cam_ascend910XXX.run
+```
+### · Install
+To install these two packets, you may follow the commands below:
+```bash
+# Step 1: install run packet. The recommended install path is the opp folder in your environment.
+./output/cam/comm_operator/run/cam_ascend910XXX.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
+# Step 2: enable environment variables. The path is provided from the output that you install run packet. 
+source /usr/local/Ascend/ascend-toolkit/lateset/opp/vendors/CAM/bin/set_env.bash
+# Step 3: install whl packet.
+pip install --force-reinstall ./output/cam/comm_operator/dist/umdk_cam_op_lib_XXX.whl
+```
