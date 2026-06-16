@@ -50,14 +50,14 @@ public:
 
     __aicore__ inline MoeCombineNormalZeroBuffer(){};
     __aicore__ inline void Init(GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx,
-        GM_ADDR sendTokenIdx, GM_ADDR XOut, GM_ADDR sendCostStatsOut, GM_ADDR workspaceGM, TPipe *pipe,
-        const MoeCombineNormalZeroBufferTilingData *tilingData);
+        GM_ADDR sendTokenIdx, GM_ADDR probGrad, GM_ADDR XOut, GM_ADDR sendCostStatsOut, GM_ADDR gradOut,
+        GM_ADDR workspaceGM, TPipe *pipe, const MoeCombineNormalZeroBufferTilingData *tilingData);
     __aicore__ inline void Process();
 
 private:
     __aicore__ inline void InitMagic();
     __aicore__ inline void InitGlobalBuffer(GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx,
-        GM_ADDR sendTokenIdx, GM_ADDR XOut, GM_ADDR sendCostStatsOut);
+        GM_ADDR sendTokenIdx, GM_ADDR probGrad, GM_ADDR XOut, GM_ADDR sendCostStatsOut, GM_ADDR gradOut);
 
     __aicore__ inline void InitTilingData(const MoeCombineNormalZeroBufferTilingData *tilingData);
     __aicore__ inline void InitBuffLen();
@@ -107,8 +107,10 @@ private:
     uint32_t sendCostStatsBufSize_{0};
     uint32_t k32AlignFloatLen_{0};
     uint32_t k32AlignLen_{0};
+    uint32_t probAlignLen_{0};
 
     bool isEnableDiagnose_{false};
+    bool isGetProbGrad_{false};
 
     TPipe *tpipe_{nullptr};
     TQue<QuePosition::VECIN, 1> weightedSumQueue_;
@@ -126,6 +128,7 @@ private:
     TBuf<> baseAddrFlagBuf_;
     TBuf<> allRecvCountBuf_;
     TBuf<> topkIdxBuf_;
+    TBuf<> probGradBuf_;
 
     LocalTensor<uint64_t> baseAddrLT_;
 
@@ -138,6 +141,8 @@ private:
     GlobalTensor<XType> xOutGlobal_;
     GlobalTensor<int32_t> sendCostStatsGT_;
     GlobalTensor<uint64_t> xOutAddrGT_;
+    GlobalTensor<RecvXType> probGradGT_;
+    GlobalTensor<RecvXType> probOutGT_;
 
     GM_ADDR recvXGM_;
     GM_ADDR localRankGM_;
@@ -146,6 +151,7 @@ private:
     GM_ADDR metaDataGvaGM_;
     GM_ADDR metaStateGvaGM_;
     GM_ADDR dataStateGvaGM_;
+    GM_ADDR probGradGM_;
 
     TBuf<QuePosition::VECCALC> syncFlagBuf_;
     ZeroBufferSyncFlagImpl::ZeroBufferSyncFlag syncFlag_;
@@ -158,6 +164,7 @@ private:
     LocalTensor<uint32_t> stateTensorLocal;
     LocalTensor<int32_t> allRecvCountLocal;
     LocalTensor<int32_t> topkIdxLocal;
+    LocalTensor<RecvXType> probGradLocal;
 };
 
 template <TemplateMC2TypeClass>
@@ -174,8 +181,8 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::InitMagi
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::InitGlobalBuffer(
-    GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx, GM_ADDR sendTokenIdx, GM_ADDR XOut,
-    GM_ADDR sendCostStatsOut)
+    GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx, GM_ADDR sendTokenIdx, GM_ADDR probGrad,
+    GM_ADDR XOut, GM_ADDR sendCostStatsOut, GM_ADDR gradOut)
 {
     recvXGT_.SetGlobalBuffer((__gm__ RecvXType *)recvX);
     epRecvCountGT_.SetGlobalBuffer((__gm__ int32_t *)epRecvCount);  // 放置allReccvCount信息，num_ranks * num_experts
@@ -185,6 +192,9 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::InitGlob
     xOutGlobal_.SetGlobalBuffer((__gm__ XType *)XOut);
     if (isEnableDiagnose_) {
         sendCostStatsGT_.SetGlobalBuffer((__gm__ int32_t *)sendCostStatsOut);
+    }
+    if (isGetProbGrad_) {
+        probOutGT_.SetGlobalBuffer((__gm__ RecvXType *)gradOut);
     }
 }
 
@@ -202,6 +212,7 @@ MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::InitTilingData(const MoeCombine
     epRankId_ = tilingData->moeCombineNormalInfo.epRankId;
     isEnableDiagnose_ = tilingData->moeCombineNormalInfo.isEnableDiagnose;
     metaDataGvaGM_ = (GM_ADDR)tilingData->zeroBufferPtr;
+    isGetProbGrad_ = tilingData->moeCombineNormalInfo.isGetProb;
 }
 
 template <TemplateMC2TypeClass>
@@ -224,8 +235,9 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::InitBuff
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::Init(
-    GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx, GM_ADDR sendTokenIdx, GM_ADDR XOut,
-    GM_ADDR sendCostStatsOut, GM_ADDR workspaceGM, TPipe *pipe, const MoeCombineNormalZeroBufferTilingData *tilingData)
+    GM_ADDR recvX, GM_ADDR epRecvCount, GM_ADDR topkWeights, GM_ADDR topkIdx, GM_ADDR sendTokenIdx, GM_ADDR probGrad,
+    GM_ADDR XOut, GM_ADDR sendCostStatsOut, GM_ADDR gradOut, GM_ADDR workspaceGM, TPipe *pipe,
+    const MoeCombineNormalZeroBufferTilingData *tilingData)
 {
     workspaceGM_ = workspaceGM;
     recvXGM_ = recvX;
@@ -234,7 +246,7 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::Init(
     coreIdx_ = GetBlockIdx();
 
     InitTilingData(tilingData);
-    InitGlobalBuffer(recvX, epRecvCount, topkWeights, topkIdx, sendTokenIdx, XOut, sendCostStatsOut);
+    InitGlobalBuffer(recvX, epRecvCount, topkWeights, topkIdx, sendTokenIdx, probGrad, XOut, sendCostStatsOut, gradOut);
     InitBuffLen();
 
     InitMagic();
@@ -243,7 +255,9 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::Init(
     dataStateWinOffset_ = metaStateWinOffset_ + magic_ * COMBINE_WIN_STATE_OFFSET;
     metaStateGvaGM_ = (GM_ADDR)(metaDataGvaGM_ + metaStateWinOffset_);
     dataStateGvaGM_ = (GM_ADDR)(metaDataGvaGM_ + dataStateWinOffset_);
-
+    if (isGetProbGrad_) {
+        probGradGM_ = probGrad;
+    }
     // Init ZeroBufferSyncFlag — per-core granularity (slotsPerRank = aivNum)
     tpipe_->InitBuffer(syncFlagBuf_, ZeroBufferSyncFlagImpl::FLAG_SLOT_SIZE);
     syncFlag_.Init(metaDataGvaGM_, epRankId_, epWorldSize_, aivNum_, syncFlagBuf_);
@@ -254,6 +268,9 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::ReadBuff
     uint32_t startTokenIndex)
 {
     const DataCopyExtParams xOutCopyParams{1U, static_cast<uint32_t>(hRecvXTypeLen_), 0U, 0U, 0U};
+    const DataCopyExtParams probGradCopyParams{1U, sizeof(RecvXType), 0U, 0U, 0U};
+    const DataCopyExtParams probOutCopyParams{1U, static_cast<uint32_t>(axisK_ * sizeof(RecvXType)), 0U, 0U, 0U};
+    const DataCopyPadExtParams<RecvXType> probGradPadExtParams{false, 0U, 0U, 0U};
     const DataCopyPadExtParams<RecvXType> copyPadExtParams{false, 0U, 0U, 0U};
     Duplicate(sumFloatBufLocal, static_cast<float>(0), axisH_);
 
@@ -285,6 +302,32 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::ReadBuff
     Cast(xOutLocal, sumFloatBufLocal, AscendC::RoundMode::CAST_RINT, axisH_);
     SyncFunc<AscendC::HardEvent::V_MTE3>();
     DataCopyPad(xOutGlobal_[tokenIndex * axisH_], xOutLocal, xOutCopyParams);
+
+    if (!isGetProbGrad_) {
+        return;
+    }
+
+    uint32_t floatOffset = probAlignLen_ / sizeof(RecvXType);
+    LocalTensor<RecvXType> tmpSingleBuf = probGradLocal[floatOffset];
+    SyncFunc<AscendC::HardEvent::MTE3_MTE2>();
+    for (uint32_t topkId = 0U; topkId < axisK_; topkId++) {
+        int32_t expertId = topkIdxLocal.GetValue(topkId);
+        int32_t remoteReadOffset = sendTokenIdxLocal(topkId);
+        int32_t remoteReadBase = allRecvCountLocal(expertId * epWorldSize_ + epRankId_);
+        uint64_t remoteReadAddr = static_cast<uint64_t>(remoteReadBase + remoteReadOffset) * sizeof(RecvXType);
+        int32_t dstRankId = expertId / moeExpertPerRankNum_;
+        auto probGradPtr = reinterpret_cast<__gm__ uint8_t *>(shmem_ptr(probGradGM_, dstRankId));
+
+        probGradGT_.SetGlobalBuffer((__gm__ RecvXType *)(probGradPtr + remoteReadAddr));
+        DataCopyPad(tmpSingleBuf, probGradGT_, probGradCopyParams, probGradPadExtParams);
+        SyncFunc<AscendC::HardEvent::MTE2_S>();
+        RecvXType actualVal = tmpSingleBuf(0);
+        probGradLocal(topkId) = actualVal;
+        SyncFunc<AscendC::HardEvent::S_MTE2>();
+    }
+
+    SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
+    DataCopyPad(probOutGT_[tokenIndex * axisK_], probGradLocal, probOutCopyParams);
 }
 
 template <TemplateMC2TypeClass>
@@ -314,6 +357,10 @@ __aicore__ inline void MoeCombineNormalZeroBuffer<TemplateMC2TypeFunc>::ReadBuff
     uint32_t recvCountAlignLen_ = Ceil(epWorldSize_ * moeExpertNum_ * sizeof(int32_t), UB_32_ALIGN) * UB_32_ALIGN;
     tpipe_->InitBuffer(allRecvCountBuf_, recvCountAlignLen_);
 
+    if (isGetProbGrad_) {
+        probAlignLen_ = Ceil(axisK_ * static_cast<uint32_t>(sizeof(RecvXType)), UB_32_ALIGN) * UB_32_ALIGN;
+        tpipe_->InitBuffer(probGradBuf_, probAlignLen_ * 2);
+    }
     topkWeightsLocal = topkWeightsBuf_.Get<float>();
     tokenFloatLocal = tokenFloatBuf_.Get<float>();
     weightedMulBufLocal = weightedMulBuf_.Get<float>();
