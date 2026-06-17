@@ -891,6 +891,8 @@ void test_data_args_fill(test_data_args_t *data_args)
 int test_umq_post_rx_buf(umqh_ops_t *umqh_ops, uint32_t depth, uint32_t size, uint64_t *status)
 {
     umq_cfg_get_t cfg;
+    umq_io_option_t io_option = {0};
+    io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTON;
     umq_cfg_get(umqh_ops->qh, &cfg);
     uint32_t rx_depth = (depth == 0) ? cfg.rx_depth * cfg.rqe_post_factor : depth;
     uint32_t buf_size = (size == 0) ? cfg.rx_buf_size : size;
@@ -903,7 +905,8 @@ int test_umq_post_rx_buf(umqh_ops_t *umqh_ops, uint32_t depth, uint32_t size, ui
         }
 
         umq_buf_t *bad_buf = nullptr;
-        if (umq_post(umqh_ops->qh, buf, UMQ_IO_RX, &bad_buf) != TEST_SUCCESS) {
+        io_option.io_direction = UMQ_IO_RX;
+        if (umq_post(umqh_ops->qh, buf, &io_option, &bad_buf) != TEST_SUCCESS) {
             TEST_LOG_ERROR("umq_post rx failed\n");
             umq_buf_free(bad_buf);
             return TEST_FAILED;
@@ -944,6 +947,8 @@ int test_umq_post_rx(test_umq_ctx_t *ctx, uint32_t depth, umqh_ops_t *umqh_ops, 
 int test_umq_post_tx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_size, uint64_t *status)
 {
     umq_buf_t *buf = nullptr;
+    umq_io_option_t io_option = {0};
+    io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTON;
     if (g_test_umq_ctx.cfg.headroom_size == 0) {
         buf = test_umq_buf_alloc(umqh_ops, nullptr, data, data_size);
     } else {
@@ -971,7 +976,8 @@ int test_umq_post_tx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_s
     
 
     umq_buf_t *bad_buf = nullptr;
-    if (umq_post(umqh_ops->qh, buf, UMQ_IO_TX, &bad_buf) != TEST_SUCCESS) {
+    io_option.io_direction = UMQ_IO_TX;
+    if (umq_post(umqh_ops->qh, buf, &io_option, &bad_buf) != TEST_SUCCESS) {
         TEST_LOG_ERROR("umq_post failed\n");
         umq_buf_free(bad_buf);
         return TEST_FAILED;
@@ -984,12 +990,12 @@ int test_umq_post_tx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_s
     return TEST_SUCCESS;
 }
 
-int test_umq_poll(uint64_t umqh, umq_io_direction_t direction, umq_buf_t **buf, uint32_t buf_count, uint64_t timeout)
+int test_umq_poll(uint64_t umqh, umq_io_option_t *option, umq_buf_t **buf, uint32_t buf_count, uint64_t timeout)
 {
     int ret = 0;
     uint64_t start = get_timestamp_ms();
     while (ret == 0 && get_timestamp_ms() - start < timeout) {
-        ret = umq_poll(umqh, direction, buf, TEST_MAX_POLL_BATCH);
+        ret = umq_poll(umqh, option, buf, TEST_MAX_POLL_BATCH);
         usleep(DEQUEUE_SLEEP_TIME_US);
     }
     if (ret <= 0 || buf[0] == nullptr) {
@@ -1003,7 +1009,10 @@ int test_umq_poll(uint64_t umqh, umq_io_direction_t direction, umq_buf_t **buf, 
 int test_umq_poll_tx_buf(umqh_ops_t *umqh_ops, uint64_t timeout, uint64_t *status)
 {
     umq_buf_t **buf = (umq_buf_t **)calloc(TEST_MAX_POLL_BATCH, sizeof(umq_buf_t *));
-    int ret = test_umq_poll(umqh_ops->qh, UMQ_IO_TX, buf, {}, timeout);
+    umq_io_option_t io_option = {0};
+    io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTON;
+    io_option.io_direction = UMQ_IO_TX;
+    int ret = test_umq_poll(umqh_ops->qh, &io_option, buf, {}, timeout);
     if (ret == TEST_FAILED) {
         return TEST_FAILED;
     }
@@ -1032,7 +1041,10 @@ int test_umq_poll_tx_buf(umqh_ops_t *umqh_ops, uint64_t timeout, uint64_t *statu
 int test_umq_poll_rx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_size, uint64_t timeout, uint64_t *status)
 {
     umq_buf_t **buf = (umq_buf_t **)calloc(TEST_MAX_POLL_BATCH, sizeof(umq_buf_t *));
-    int ret = test_umq_poll(umqh_ops->qh, UMQ_IO_RX, buf, {}, timeout);
+    umq_io_option_t io_option = {0};
+    io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTON;
+    io_option.io_direction = UMQ_IO_RX;
+    int ret = test_umq_poll(umqh_ops->qh, &io_option, buf, {}, timeout);
     if (ret == TEST_FAILED) {
         return TEST_FAILED;
     }
@@ -1062,10 +1074,13 @@ int test_umq_poll_rx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_s
 void test_umq_flush(umqh_ops_t *umqh_ops, umq_io_direction_t direction, uint64_t timeout)
 {
     int ret = 0;
+    umq_io_option_t io_option = {0};
+    io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTON;
     umq_buf_t *buf[TEST_MAX_POLL_BATCH];
     uint64_t start = get_timestamp_ms();
     while (get_timestamp_ms() - start < DEFAULT_FLUSH_TIME_MS) {
-        ret = umq_poll(umqh_ops->qh, direction, buf, TEST_MAX_POLL_BATCH);
+        io_option.io_direction = direction;
+        ret = umq_poll(umqh_ops->qh, &io_option, buf, TEST_MAX_POLL_BATCH);
         if (ret > 0) {
             for (int i = 0; i < ret; ++i) {
                 umq_buf_t *tmp_buf = buf[i];
