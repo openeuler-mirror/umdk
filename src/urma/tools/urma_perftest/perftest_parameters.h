@@ -201,13 +201,24 @@ enum perftest_opts {
     PERFTEST_OPT_BOND_MODE,
     PERFTEST_OPT_BOND_LEVEL,
     PERFTEST_OPT_STDOUT,
+    PERFTEST_OPT_SET_BW_UNIT,
+    PERFTEST_OPT_V_ADDRESS,
+    PERFTEST_OPT_SHARE_JFS,
+    PERFTEST_OPT_SET_MIN_SIZE,
+    PERFTEST_OPT_SET_MAX_SIZE
 };
 
 typedef enum perftest_rate_limiter_units {
     PERFTEST_RATE_LIMIT_MEGA_BYTE,
     PERFTEST_RATE_LIMIT_GIGA_BIT,
     PERFTEST_RATE_LIMIT_PS
-} perftest_rate_limiter_units_t;
+} perftest_rate_limiter_unit_t;
+
+typedef enum perftest_bw_unit {
+    PERFTEST_KB,
+    PERFTEST_MB,
+    PERFTEST_GB,
+} perftest_bw_unit_t;
 
 typedef union perftest_net_addr {
     uint8_t raw[URMA_IP_ADDR_BYTES]; /* Network Order */
@@ -250,6 +261,10 @@ typedef struct perftest_config {
     uint32_t jfs_depth;
     urma_transport_mode_t trans_mode;
     uint32_t order_type;
+    perftest_bw_unit_t bw_unit;
+    uint32_t min_size;
+    uint32_t max_size;
+    uint8_t enable_random_size;
 
     uint32_t cache_line_size;
     uint64_t page_size;
@@ -272,7 +287,7 @@ typedef struct perftest_config {
     bool is_rate_limit;
     double rate_limit;
     uint32_t burst_size;
-    perftest_rate_limiter_units_t rate_units;
+    perftest_rate_limiter_unit_t rate_units;
     uint64_t gap_cycles;
 
     /* send credit */
@@ -329,6 +344,9 @@ typedef struct perftest_config {
     bool uboe_dscp;
     uint8_t sl;
     bool uboe_sl;
+    bool enable_va;
+    uint64_t v_address;
+    bool share_jfs;
 } perftest_config_t;
 
 typedef struct perftest_value_range {
@@ -348,7 +366,7 @@ typedef struct bw_report_data {
 
 static inline bool perftest_check_rs_mode(const perftest_config_t *cfg)
 {
-    return cfg->trans_mode == URMA_TM_RC && (cfg->order_type & URMA_OT);
+    return cfg->trans_mode == URMA_TM_RC && ((cfg->order_type & URMA_OT) != 0);
 };
 
 void print_cfg(const perftest_config_t *cfg);
@@ -359,5 +377,6 @@ int check_remote_cfg(perftest_config_t *cfg);
 bool is_jfr_depth_valid(perftest_config_t *cfg);
 int establish_connection(perftest_config_t *cfg);
 void close_connection(perftest_config_t *cfg);
+int parse_va(const char *s, uint64_t *out);
 
 #endif
