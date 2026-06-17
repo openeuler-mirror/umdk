@@ -27,7 +27,7 @@ static int umq_tp_ub_interrupt_fd_get(uint64_t umqh_tp, umq_interrupt_option_t *
 static int umq_tp_ub_interrupt_fd_list_get(uint64_t umqh_tp,
     umq_interrupt_option_t *option, umq_interrupt_fd_list_t *fd_list)
 {
-    return UMQ_SUCCESS;
+    return umq_ub_interrupt_fd_list_get_impl(umqh_tp, option, fd_list);
 }
 
 static int umq_tp_ub_get_cq_event(uint64_t umqh_tp, umq_interrupt_option_t *option)

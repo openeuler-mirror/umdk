@@ -535,7 +535,7 @@ int umq_ipc_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option
     return UMQ_FAIL;
 }
 
-int umq_ipc_poll_impl(uint64_t umqh_tp, umq_io_direction_t io_direction, umq_buf_t **buf, uint32_t max_buf_count)
+int umq_ipc_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf, uint32_t max_buf_count)
 {
     return UMQ_FAIL;
 }

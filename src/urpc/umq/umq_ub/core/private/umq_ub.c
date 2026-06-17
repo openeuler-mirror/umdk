@@ -43,11 +43,6 @@ static inline bool umq_ub_bind_feature_check(uint32_t local_feature, uint32_t re
     return ((local_feature ^ remote_feature) & (~umq_ub_bind_fature_allowlist_get())) == 0;
 }
 
-static inline bool is_umq_ub_bonding_dev(const char *name)
-{
-    return strstr(name, "bonding") != NULL;
-}
-
 static inline uint32_t umq_ub_pjfr_depth(ub_queue_t *queue)
 {
     return queue->rqe_post_factor * queue->rx_depth;
@@ -481,10 +476,9 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
     }
     urma_target_jetty_t *tjetty = umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, rjetty, &token);
     if (tjetty == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), remote eid: " EID_FMT ", "
                                         "remote jetty_id: %u, urma_import_jetty failed, jetty[%d], errno: %d\n",
-                     EID_ARGS(queue->jetty[i]->jetty_id.eid), queue->jetty[i]->jetty_id.id,
-                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, errno);
+                     queue->umq_id, EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, errno);
         return NULL;
     }
     if (queue->tp_mode != URMA_TM_RC) {
@@ -493,10 +487,9 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
 
     urma_status_t status = umq_symbol_urma()->urma_bind_jetty(queue->jetty[i], tjetty);
     if (status != URMA_SUCCESS && status != URMA_EEXIST) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), local jetty_id: %u, remote eid: " EID_FMT ", "
                      "remote jetty_id: %u, urma_bind_jetty failed, jetty[%d], status: %d, errno %d\n",
-                     EID_ARGS(queue->jetty[i]->jetty_id.eid), queue->jetty[i]->jetty_id.id,
-                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, (int)status, errno);
+                     queue->umq_id, EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, (int)status, errno);
         goto UNIMPORT_JETTY;
     }
 

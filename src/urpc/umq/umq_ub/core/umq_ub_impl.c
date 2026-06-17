@@ -1600,6 +1600,102 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
     return -1;
 }
 
+static int umq_ub_get_fd_list(umq_ub_ctx_t *dev_ctx, urma_jfce_t *jfce, umq_interrupt_fd_list_t *fd_list)
+{
+    bondp_get_jfce_fd_list_in_t bond_in = {
+        .jfce = jfce,
+    };
+    urma_user_ctl_in_t in = {
+        .addr = (uint64_t)(uintptr_t)&bond_in,
+        .len = sizeof(bond_in),
+        .opcode = BONDP_USER_CTL_GET_JFCE_FD_LIST};
+    bondp_get_jfce_fd_list_out_t bond_out = {0};
+    urma_user_ctl_out_t out = {
+        .addr = (uint64_t)(uintptr_t)&bond_out,
+        .len = sizeof(bond_out),
+    };
+    urma_status_t status = umq_symbol_urma()->urma_user_ctl(dev_ctx->urma_ctx, &in, &out);
+    if (status != URMA_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_user_ctl query fd list for device %s failed, status: %d\n",
+                     dev_ctx->urma_ctx->dev->name, (int)status);
+        return umq_status_convert(status);
+    }
+
+    uint32_t valid_cnt = 0;
+    for (uint32_t i = 0; valid_cnt < bond_out.count; i++) {
+        if (bond_out.fd_list[i] < 0) {
+            continue;
+        }
+        fd_list->fd[valid_cnt] = bond_out.fd_list[i];
+        valid_cnt++;
+    }
+    fd_list->fd_num = valid_cnt;
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
+    umq_interrupt_option_t *option, umq_interrupt_fd_list_t *fd_list)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (option->fd_type == UMQ_FD_EVENT) {
+        if (queue->checker == NULL) {
+            return -UMQ_ERR_EINVAL;
+        }
+
+        fd_list->fd[0] = queue->checker->event_fd;
+        fd_list->fd_num = 1;
+        return UMQ_SUCCESS;
+    }
+
+    if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
+        option->direction >= UMQ_IO_MAX) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if ((option->flag & UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX) != 0) {
+        if (!(is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) &&
+            (option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) != 0 && option->direction == UMQ_IO_TX)) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "enable tp handle idx only obtaining the tx fd of tp resources\n");
+            return UMQ_INVALID_FD;
+        }
+        umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+        if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+            return UMQ_INVALID_FD;
+        }
+        return umq_ub_get_fd_list(queue->dev_ctx,
+            jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce, fd_list);
+    }
+
+    if (queue->jfs_jfce == NULL || queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, get interrupt fd error, jfce is NULL\n",
+            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    urma_jfce_t *jfce = NULL;
+    if (option->direction == UMQ_IO_TX) {
+        jfce = queue->jfs_jfce;
+    } else if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
+        jfce = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce;
+    } else if (!UMQ_UB_ENABLE_SHARE_FC_JFR && queue->flow_control.enabled) {
+        jfce = queue->jfr_ctx[UB_QUEUE_JETTY_FLOW_CONTROL]->jfr_jfce;
+    }
+
+    if (jfce == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (!is_umq_ub_bonding_dev(queue->dev_ctx->urma_ctx->dev->name)) {
+        fd_list->fd[0] = jfce->fd;
+        fd_list->fd_num = 1;
+        return UMQ_SUCCESS;
+    }
+
+    return umq_ub_get_fd_list(queue->dev_ctx, jfce, fd_list);
+}
+
 int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
 {
     uint64_t start_timestamp;
