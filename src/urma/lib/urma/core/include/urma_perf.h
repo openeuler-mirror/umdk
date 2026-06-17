@@ -14,6 +14,10 @@
 #include <stdint.h>
 #include "urma_opcode.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define URMA_PERF_THREAD_MAX_NUM        (128u)
 
 typedef enum urma_perf_type {
@@ -68,5 +72,9 @@ urma_status_t urma_stop_perf(void);
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

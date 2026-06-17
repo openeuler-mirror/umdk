@@ -14,6 +14,10 @@
 #include "urma_types.h"
 #include "urma_ubagg.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd);
 
 urma_status_t bondp_delete_context(urma_context_t *ctx);
@@ -25,4 +29,7 @@ urma_status_t bondp_init(urma_init_attr_t *conf);
 
 urma_status_t bondp_uninit(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif // BONDP_PROVIDER_OPS_H

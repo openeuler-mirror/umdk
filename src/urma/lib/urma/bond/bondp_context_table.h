@@ -13,6 +13,10 @@
 #include "urma_ubagg.h"
 #include "bondp_hash_table.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* == bdp_p_vjetty_id_table == */
 /**
  * Record the mapping relationship from pjetty_id.jetty_id.id to vjetty_id.jetty_id.id,
@@ -79,5 +83,9 @@ int bdp_r_v2p_token_id_tabl_lookup(bondp_hash_table_t *tbl, uint32_t v_token_id,
     urma_eid_t v_remote_eid, bondp_v2p_token_id_t *item);
 int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index);
 int bdp_r_v2p_token_id_table_add_lockless(bondp_hash_table_t *tbl, bondp_v2p_token_id_t *item);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_CONTEXT_TABLE

@@ -9,6 +9,14 @@
 
 #include "bondp_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int bondp_rebuild_local_pjetty(bondp_health_task_t *task, int local_idx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_LINK_RECOVERY_H

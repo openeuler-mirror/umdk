@@ -11,7 +11,11 @@
 #ifndef BONDP_TYPES_H
 #define BONDP_TYPES_H
 
+#ifndef __cplusplus
 #include <stdatomic.h>
+#else
+#include <atomic>
+#endif
 #include <stdbool.h>
 
 #include "bondp_hash_table.h"
@@ -235,8 +239,13 @@ typedef struct bondp_comp {
     bool modify_to_error;
     pthread_spinlock_t send_lock;
     wr_buf_t send_wr_buf;
+#ifndef __cplusplus
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     atomic_uint msn;
+#else
+    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_uint msn;
+#endif
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
 #ifndef __cplusplus
     atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
@@ -260,7 +269,11 @@ typedef struct bondp_target_jetty {
     uint32_t local_active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
+#ifndef __cplusplus
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+#else
+    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+#endif
     urma_ref_t use_cnt;
     bool is_msn_enabled;
 } bondp_target_jetty_t;

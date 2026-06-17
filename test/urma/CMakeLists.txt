@@ -1,31 +1,83 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
-#
+# Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
 
-# URMA test code makefile
-cmake_minimum_required(VERSION 3.12.1)
+cmake_minimum_required(VERSION 3.13)
+
 project(urma_test)
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}")
 
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/lib/urma/core/include)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/common/include)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/lib/urma/core)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/lib/urma/bond)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/lib/urma/bond/include)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/urma/lib/urma/bond/utils)
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# gtest executable file
-add_executable(urma_gtest
-    bond/bondp_bitmap_gtest.cpp
-    bond/bondp_gtest_basic.h
-    bond/bondp_topo_info_gtest.cpp
-    bond/common.h
-    bond/urma_gtest_basic.h
-    bond/urma_gtest_main.cpp
+include(FetchContent)
+
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://gitee.com/mirrors/googletest.git
+        GIT_TAG v1.14.0
+        GIT_SHALLOW TRUE
+    )
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+endif()
+
+if(NOT DEFINED URMA_SRC_DIR)
+    set(URMA_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/../../src/urma)
+endif()
+
+if(NOT DEFINED URMA_BUILD_DIR)
+    message(FATAL_ERROR "URMA_BUILD_DIR must point to the URMA source build directory")
+endif()
+
+set(URMA_COMMON_INCLUDE_DIR ${URMA_SRC_DIR}/common/include)
+set(URMA_CORE_DIR ${URMA_SRC_DIR}/lib/urma/core)
+set(URMA_CORE_INCLUDE_DIR ${URMA_CORE_DIR}/include)
+set(URMA_BOND_DIR ${URMA_SRC_DIR}/lib/urma/bond)
+set(URMA_BOND_UTILS_DIR ${URMA_BOND_DIR}/utils)
+
+set(URMA_COMMON_STATIC ${URMA_BUILD_DIR}/urma/common/liburma_common_static.a)
+set(URMA_COMMON_SO ${URMA_BUILD_DIR}/urma/common/liburma_common.so)
+set(URMA_STATIC ${URMA_BUILD_DIR}/urma/lib/urma/core/liburma_static.a)
+set(URMA_SO ${URMA_BUILD_DIR}/urma/lib/urma/core/liburma.so)
+set(URMA_UBAGG_SO ${URMA_BUILD_DIR}/urma/lib/urma/bond/liburma_ubagg.so)
+
+add_library(urma_test_common INTERFACE)
+target_include_directories(urma_test_common INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}/include
+    ${URMA_COMMON_INCLUDE_DIR}
+    ${URMA_CORE_DIR}
+    ${URMA_CORE_INCLUDE_DIR}
+    ${URMA_BOND_DIR}
+    ${URMA_BOND_UTILS_DIR}
+    ${URMA_BOND_DIR}/include
 )
+target_compile_options(urma_test_common INTERFACE
+    -Wall -Werror -O0 -g -fsanitize=address -fno-omit-frame-pointer --coverage
+)
+target_link_options(urma_test_common INTERFACE -fsanitize=address --coverage)
 
-target_compile_features(urma_gtest PRIVATE cxx_std_17)
-target_compile_definitions(urma_gtest PRIVATE PROJECT_DIR=${PROJECT_SOURCE_DIR})
+add_executable(urma_common_ut common/common_test.cpp)
+target_link_libraries(urma_common_ut PRIVATE urma_test_common ${URMA_COMMON_STATIC} GTest::gtest_main)
 
-target_include_directories(urma_gtest PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(urma_gtest PRIVATE libgtest.a libmockcpp.a -lurma /lib64/urma/liburma_ubagg.so)
+add_executable(urma_core_ut core/core_test.cpp)
+target_link_options(urma_core_ut PRIVATE -Wl,--wrap=ioctl)
+target_link_libraries(urma_core_ut PRIVATE urma_test_common ${URMA_STATIC} ${URMA_COMMON_STATIC}
+    GTest::gtest_main dl rt pthread)
+
+add_executable(urma_cmd_tlv_ut cmd_tlv/cmd_tlv_test.cpp)
+target_link_options(urma_cmd_tlv_ut PRIVATE -Wl,--wrap=ioctl -Wl,--wrap=urma_query_eid)
+target_link_libraries(urma_cmd_tlv_ut PRIVATE urma_test_common ${URMA_STATIC} ${URMA_COMMON_STATIC}
+    GTest::gtest_main dl rt pthread)
+
+add_executable(urma_bond_ut bond/bond_test.cpp)
+target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${URMA_SO} ${URMA_COMMON_SO}
+    GTest::gtest_main nl-genl-3 nl-3 dl rt pthread)
+
+enable_testing()
+add_test(NAME urma_common_ut COMMAND urma_common_ut)
+add_test(NAME urma_core_ut COMMAND urma_core_ut)
+add_test(NAME urma_cmd_tlv_ut COMMAND urma_cmd_tlv_ut)
+add_test(NAME urma_bond_ut COMMAND urma_bond_ut)

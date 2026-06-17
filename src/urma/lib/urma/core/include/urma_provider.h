@@ -15,6 +15,10 @@
 
 #include "urma_api.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define URMA_SYSFS_DEV_FLAG_DRIVER_CREATED (0x1)
 #define URMA_CFG_MASK 0
 
@@ -408,5 +412,9 @@ int urma_cmd_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net
 int urma_cmd_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
 int urma_cmd_get_smac(const urma_context_t *ctx, uint8_t *mac);
 int urma_cmd_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

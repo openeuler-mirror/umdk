@@ -13,6 +13,10 @@
 
 #include "urma_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Bonding jetty ops */
 urma_jfce_t *bondp_create_jfce(urma_context_t *ctx);
 
@@ -75,4 +79,8 @@ void bondp_ack_async_event(urma_async_event_t *event);
 
 /* Other ops */
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
+
+#ifdef __cplusplus
+}
+#endif
 #endif // BONDP_API_H
