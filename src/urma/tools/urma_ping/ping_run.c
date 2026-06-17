@@ -20,9 +20,8 @@
 #include "urma_api.h"
 #include "urma_types.h"
 
-#include "uvs_api.h"
-
 #include "ping_log.h"
+#include "ping_netlink.h"
 #include "ping_stat.h"
 
 #include "ping_run.h"
@@ -47,13 +46,13 @@ typedef struct ping_urma_resource {
 static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid, uint32_t chip_id)
 {
     int ret;
-    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return;
     }
 
-    ret = uvs_get_topo_info(topo_map);
+    ret = ping_get_topo_info(topo_map);
     if (ret != 0) {
         LOG_ERROR("Failed to get ubagg topo, ret:%d\n", ret);
         free(topo_map);
@@ -106,7 +105,7 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid, uint32_t ch
     free(topo_map);
 }
 
-static bool get_chip_id_by_primary_eid(urma_eid_t *eid, urma_topo_map_t *topo_map, uint32_t *chip_id)
+static bool get_chip_id_by_primary_eid(urma_eid_t *eid, urma_ping_ubcore_topo_map_t *topo_map, uint32_t *chip_id)
 {
     for (int i = 0; i < (int)topo_map->node_num; i++) {
         for (int j = 0; j < DEV_NUM; j++) {
@@ -124,13 +123,13 @@ static bool get_chip_id_by_primary_eid(urma_eid_t *eid, urma_topo_map_t *topo_ma
 static bool get_primary_eid_and_chip_id_by_bonding(urma_eid_t *original_eid, urma_eid_t *primary_eid, uint32_t *chip_id)
 {
     int ret;
-    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return false;
     }
 
-    ret = uvs_get_topo_info(topo_map);
+    ret = ping_get_topo_info(topo_map);
     if (ret != 0) {
         LOG_ERROR("Failed to get ubagg topo, ret:%d\n", ret);
         free(topo_map);
@@ -164,13 +163,13 @@ static bool get_primary_eid_and_chip_id_by_bonding(urma_eid_t *original_eid, urm
 static bool get_source_eid_by_bonding_eid_and_chip_id(urma_eid_t *eid, uint32_t chip_id)
 {
     int ret;
-    urma_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
+    urma_ping_ubcore_topo_map_t *topo_map = calloc(1, sizeof(*topo_map));
     if (topo_map == NULL) {
         LOG_ERROR("Failed to alloc topo map buffer\n");
         return false;
     }
 
-    ret = uvs_get_topo_info(topo_map);
+    ret = ping_get_topo_info(topo_map);
     if (ret != 0) {
         LOG_ERROR("Failed to get ubagg topo, ret:%d\n", ret);
         free(topo_map);
