@@ -8,8 +8,8 @@
  */
 
 #include "kernel_operator.h"
-#include "cam_moe_distribute_dispatch_a2_layered.h"
-#include "cam_moe_distribute_dispatch_tiling.h"
+#include "moe_dispatch_normal_a2_layered.h"
+#include "moe_dispatch_normal_a2_tiling.h"
 
 #define TILING_KEY_FLOAT16 20
 #define TILING_KEY_BFLOAT16 21
@@ -26,14 +26,14 @@ using namespace AscendC;
 using namespace MoeDistributeDispatchA2Impl;
 using namespace Cam;
 
-extern "C" __global__ __aicore__ void dispatch_normal_a2(
+extern "C" __global__ __aicore__ void moe_dispatch_normal_a2(
     GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales, GM_ADDR xActiveMask, GM_ADDR expertScales, GM_ADDR tokenServerIdx,
     GM_ADDR tokenServerCnt, GM_ADDR epRankTokenCnt, GM_ADDR srcOffsetRankTokenIdx, GM_ADDR dstOffsetRankTokenIdx,
     GM_ADDR recvX, GM_ADDR dynamicScalesOut, GM_ADDR expandIdxOut, GM_ADDR expertTokenNumsOut, GM_ADDR epRecvCountOut,
     GM_ADDR expandScalesOut, GM_ADDR dispatchWaitRecvCostStatsOut, GM_ADDR workspace, GM_ADDR tiling)
 {
-    REGISTER_TILING_DEFAULT(CamMoeDistributeDispatchA2TilingData);
-    GET_TILING_DATA_WITH_STRUCT(CamMoeDistributeDispatchA2TilingData, tilingData, tiling);
+    REGISTER_TILING_DEFAULT(MoeDispatchNormalA2TilingData);
+    GET_TILING_DATA_WITH_STRUCT(MoeDispatchNormalA2TilingData, tilingData, tiling);
 
     // hcomm will set magic later in init
     uint32_t magic = 1;
@@ -51,19 +51,19 @@ extern "C" __global__ __aicore__ void dispatch_normal_a2(
 
     TPipe pipe;
     if (TILING_KEY_IS(2100001000)) {
-        CamMoeDistributeDispatchA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
+        MoeDispatchNormalA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
         op.Init(x, expertIds, scales, expertScales, tokenServerIdx, tokenServerCnt, epRankTokenCnt,
                 srcOffsetRankTokenIdx, dstOffsetRankTokenIdx, recvX, dynamicScalesOut, expandIdxOut, expertTokenNumsOut,
                 epRecvCountOut, expandScalesOut, workspace, &pipe, tiling);
         op.Process();
     } else if (TILING_KEY_IS(2000000000)) {
-        CamMoeDistributeDispatchA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
+        MoeDispatchNormalA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
         op.Init(x, expertIds, scales, expertScales, tokenServerIdx, tokenServerCnt, epRankTokenCnt,
                 srcOffsetRankTokenIdx, dstOffsetRankTokenIdx, recvX, dynamicScalesOut, expandIdxOut, expertTokenNumsOut,
                 epRecvCountOut, expandScalesOut, workspace, &pipe, tiling);
         op.Process();
     } else if (TILING_KEY_IS(2000001000)) {
-        CamMoeDistributeDispatchA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
+        MoeDispatchNormalA2Layered<bfloat16_t, bfloat16_t, false, false, false> op;
         op.Init(x, expertIds, scales, expertScales, tokenServerIdx, tokenServerCnt, epRankTokenCnt,
                 srcOffsetRankTokenIdx, dstOffsetRankTokenIdx, recvX, dynamicScalesOut, expandIdxOut, expertTokenNumsOut,
                 epRecvCountOut, expandScalesOut, workspace, &pipe, tiling);

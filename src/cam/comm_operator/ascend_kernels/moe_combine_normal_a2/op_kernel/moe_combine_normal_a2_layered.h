@@ -7,15 +7,15 @@
  * History: 2026-01-15 create combine normal A2 kernel part operator implementation
  */
 
-#ifndef MOE_DISTRIBUTE_COMBINE_A2_LAYERED_H
-#define MOE_DISTRIBUTE_COMBINE_A2_LAYERED_H
+#ifndef MOE_COMBINE_NORMAL_A2_LAYERED_H
+#define MOE_COMBINE_NORMAL_A2_LAYERED_H
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
-#include "moe_distribute_combine_a2_tiling.h"
+#include "moe_combine_normal_a2_tiling.h"
 #include "moe_distribute_base.h"
 
 using namespace Moe;
-namespace MoeDistributeCombineA2Impl {
+namespace MoeCombineNormalA2Impl {
 
 #define COMBINE_2SERVER_VERSION
 
@@ -23,7 +23,7 @@ namespace MoeDistributeCombineA2Impl {
 #define TemplateMC2TypeA2layeredFunc ExpandXType, ExpandIdxType
 using namespace AscendC;
 template <TemplateMC2TypeA2layeredClass>
-class MoeDistributeCombineA2Layered {
+class MoeCombineNormalA2Layered {
 public:
     constexpr static uint32_t BUFFER_NUM = 2U;                   // multiple buf
     constexpr static uint32_t STATE_OFFSET = 512U;               // state offset address
@@ -73,10 +73,10 @@ public:
         return (val + align - 1) / align * align;
     }
 
-    __aicore__ inline MoeDistributeCombineA2Layered(){};
+    __aicore__ inline MoeCombineNormalA2Layered(){};
     __aicore__ inline void Init(GM_ADDR expandX, GM_ADDR expandIdx, GM_ADDR sendCount, GM_ADDR offsetInner,
                                 GM_ADDR offsetOuter, GM_ADDR countOuter, GM_ADDR scales, GM_ADDR XOut,
-                                GM_ADDR workspaceGM, TPipe *pipe, const MoeDistributeCombineA2TilingData *tilingData,
+                                GM_ADDR workspaceGM, TPipe *pipe, const MoeCombineNormalA2TilingData *tilingData,
                                 __gm__ void *mc2InitTiling, __gm__ void *mc2CcTiling);
     __aicore__ inline void Process();
 
@@ -203,9 +203,9 @@ private:
 };
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::Init(
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Init(
     GM_ADDR expandX, GM_ADDR expandIdx, GM_ADDR sendCount, GM_ADDR offsetInner, GM_ADDR offsetOuter, GM_ADDR countOuter,
-    GM_ADDR scales, GM_ADDR XOut, GM_ADDR workspaceGM, TPipe *pipe, const MoeDistributeCombineA2TilingData *tilingData,
+    GM_ADDR scales, GM_ADDR XOut, GM_ADDR workspaceGM, TPipe *pipe, const MoeCombineNormalA2TilingData *tilingData,
     __gm__ void *mc2InitTiling, __gm__ void *mc2CcTiling)
 {
     tpipe_ = pipe;
@@ -214,15 +214,15 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
     sendCountGM_ = sendCount;
     scalesGM_ = scales;
     XOutGM_ = XOut;
-    rankId_ = tilingData->moeDistributeCombineInfo.epRankId;
-    axisBS_ = tilingData->moeDistributeCombineInfo.bs;
-    globalBs = tilingData->moeDistributeCombineInfo.globalBs;
+    rankId_ = tilingData->moeCombineNormalInfo.epRankId;
+    axisBS_ = tilingData->moeCombineNormalInfo.bs;
+    globalBs = tilingData->moeCombineNormalInfo.globalBs;
 
-    axisH_ = tilingData->moeDistributeCombineInfo.h;
-    axisK_ = tilingData->moeDistributeCombineInfo.k;
-    aivNum_ = tilingData->moeDistributeCombineInfo.aivNum;
-    moeExpertNum_ = tilingData->moeDistributeCombineInfo.moeExpertNum;
-    worldSize_ = tilingData->moeDistributeCombineInfo.epWorldSize;
+    axisH_ = tilingData->moeCombineNormalInfo.h;
+    axisK_ = tilingData->moeCombineNormalInfo.k;
+    aivNum_ = tilingData->moeCombineNormalInfo.aivNum;
+    moeExpertNum_ = tilingData->moeCombineNormalInfo.moeExpertNum;
+    worldSize_ = tilingData->moeCombineNormalInfo.epWorldSize;
 
     auto contextGM = AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
     winContext_ = (__gm__ HcclOpResParam *)contextGM;
@@ -268,12 +268,12 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
            "The HCCL_BUFFSIZE is %lluMB, the min value should be %lluMB. \
         epWorldSize:%u, epRankId:%u, moeExpertNum:%u, globalBs:%u, bs:%u, k:%u, h:%u, aivNum:%u, \
         totalUbSize:%llu, hcclBufferSize:%u\n",
-           winContext_->winSize / MB_SIZE, winSizeMin / MB_SIZE, tilingData->moeDistributeCombineInfo.epWorldSize,
-           tilingData->moeDistributeCombineInfo.epRankId, tilingData->moeDistributeCombineInfo.moeExpertNum,
-           tilingData->moeDistributeCombineInfo.globalBs, tilingData->moeDistributeCombineInfo.bs,
-           tilingData->moeDistributeCombineInfo.k, tilingData->moeDistributeCombineInfo.h,
-           tilingData->moeDistributeCombineInfo.aivNum, tilingData->moeDistributeCombineInfo.totalUbSize,
-           tilingData->moeDistributeCombineInfo.hcclBufferSize);
+           winContext_->winSize / MB_SIZE, winSizeMin / MB_SIZE, tilingData->moeCombineNormalInfo.epWorldSize,
+           tilingData->moeCombineNormalInfo.epRankId, tilingData->moeCombineNormalInfo.moeExpertNum,
+           tilingData->moeCombineNormalInfo.globalBs, tilingData->moeCombineNormalInfo.bs,
+           tilingData->moeCombineNormalInfo.k, tilingData->moeCombineNormalInfo.h,
+           tilingData->moeCombineNormalInfo.aivNum, tilingData->moeCombineNormalInfo.totalUbSize,
+           tilingData->moeCombineNormalInfo.hcclBufferSize);
 
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusSpaceGm_ + SELF_STATE_OFFSET));
@@ -304,7 +304,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::BuffInit()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::BuffInit()
 {
     tpipe_->InitBuffer(moeQueue_, BUFFER_NUM, (axisHExpandXTypeSize_ + SCALE_SIZE_IN_QUEUE));  // 7168 * 2 * 2 = 28672
     tpipe_->InitBuffer(statusBuf_, worldSize_ * UB_ALIGN);
@@ -322,7 +322,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
     batchWriteItemLocalB32 = batchWriteItemLocalB64.template ReinterpretCast<uint32_t>();
 }
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::SplitCoreCal()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SplitCoreCal()
 {
     // split worldSize
     sendRankNum_ = worldSize_ / aivNum_;
@@ -337,7 +337,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
     endRankId_ = startRankId_ + sendRankNum_;
 }
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::AlltoAllDispatch()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::AlltoAllDispatch()
 {
     rowTmpFloatLocal_ = rowTmpFloatBuf_.Get<float>();
     ipcSliceSize = IPC_DATA_SIZE / worldSize_;
@@ -413,7 +413,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::WaitFlagEq(
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::WaitFlagEq(
     uint32_t waitFlagAddr, int64_t expectVal, LocalTensor<int64_t> &flagUb)
 {
     while (true) {
@@ -426,7 +426,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::SumToWindow()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SumToWindow()
 {
     // Assumpt only one core handles one rank. only serverNum ranks with the same local rank id
     if (coreIdx_ < serverNum) {
@@ -523,7 +523,9 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
         SyncFunc<AscendC::HardEvent::MTE2_S>();
         for (uint32_t j = 0U; j < static_cast<uint32_t>(localMoeExpertNum_ * SERVER_RANK_SIZE); j++) {
             int32_t offsetValue = offsetReduceLt.GetValue(j);
-            if (offsetValue < 0) continue;
+            if (offsetValue < 0) {
+                continue;
+            }
             isTokenInServer = true;
             tmpUb_ = moeSumQueue_.AllocTensor<ExpandXType>();
             uint32_t offsetOnIpc =
@@ -562,7 +564,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::AlltoAllServerDispatch()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::AlltoAllServerDispatch()
 {
     uint64_t selfTotalNum = 0U;
     if (coreIdx_ < serverNum) {
@@ -616,7 +618,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::SetStatus()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SetStatus()
 {
     if (coreIdx_ != 0U) {
         SyncAll<true>();
@@ -655,10 +657,10 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::WaitDispatch()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::WaitDispatch()
 {
     if (coreIdx_ < serverNum) {
-        uint32_t targetRank = rankId_ % SERVER_RANK_SIZE + (coreIdx_)*SERVER_RANK_SIZE;
+        uint32_t targetRank = rankId_ % SERVER_RANK_SIZE + (coreIdx_) * SERVER_RANK_SIZE;
         LocalTensor<int32_t> statusTensor = statusBuf_.Get<int32_t>();
         uint32_t readNum = 1U;
         DataCopyParams intriParams{static_cast<uint16_t>(readNum), 1, STATUS_COPY_SRC_STRIDE_BLUCK_NUM, 0};
@@ -677,7 +679,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::Preload()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Preload()
 {
     if (coreIdx_ >= SUM_TO_SERVER_CORE_NUM) {
         return;
@@ -706,7 +708,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
     }
 }
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::SumToServer()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::SumToServer()
 {
     if (coreIdx_ >= SUM_TO_SERVER_CORE_NUM) {
         SyncAll<true>();
@@ -758,7 +760,7 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
 }
 
 template <TemplateMC2TypeA2layeredClass>
-__aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFunc>::Process()
+__aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::Process()
 {
     if ASCEND_IS_AIV {
         AlltoAllDispatch();        // all cores
@@ -772,5 +774,5 @@ __aicore__ inline void MoeDistributeCombineA2Layered<TemplateMC2TypeA2layeredFun
     }
 }
 
-}  // namespace MoeDistributeCombineA2Impl
-#endif  // MOE_DISTRIBUTE_COMBINE_A2_LAYERED_H
+}  // namespace MoeCombineNormalA2Impl
+#endif  // MOE_COMBINE_NORMAL_A2_LAYERED_H

@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- * Description: dispatch combine A2 interface part
+ * Description: combine normal A2 interface part
  * Create: 2026-01-15
  * Note:
  * History: 2026-01-15 create combine normal A2 interface part
@@ -9,8 +9,8 @@
 
 #include <string.h>
 #include "graph/types.h"
-#include "aclnnInner_moe_distribute_combine_a2.h"
-#include "aclnn_moe_distribute_combine_a2.h"
+#include "aclnnInner_moe_combine_normal_a2.h"
+#include "aclnn_moe_combine_normal_a2.h"
 
 namespace {
 static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
@@ -23,7 +23,7 @@ extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, 
 extern "C" {
 #endif
 
-aclnnStatus aclnnMoeDistributeCombineA2GetWorkspaceSize(
+aclnnStatus aclnnMoeCombineNormalA2GetWorkspaceSize(
     const aclTensor *expandX,
     const aclTensor *expertIds,
     const aclTensor *expandIdx,
@@ -56,7 +56,7 @@ aclnnStatus aclnnMoeDistributeCombineA2GetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerMoeDistributeCombineA2GetWorkspaceSize(
+    return aclnnInnerMoeCombineNormalA2GetWorkspaceSize(
         expandX,
         expertIds,
         expandIdx,
@@ -90,7 +90,7 @@ aclnnStatus aclnnMoeDistributeCombineA2GetWorkspaceSize(
         executor);
 }
 
-aclnnStatus aclnnMoeDistributeCombineA2(
+aclnnStatus aclnnMoeCombineNormalA2(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,
@@ -99,7 +99,7 @@ aclnnStatus aclnnMoeDistributeCombineA2(
     if (NnopbaseSetHcclServerType) {
         NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_AICPU);
     }
-    return aclnnInnerMoeDistributeCombineA2(
+    return aclnnInnerMoeCombineNormalA2(
         workspace,
         workspaceSize,
         executor,

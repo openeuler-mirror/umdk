@@ -9,8 +9,8 @@
 
 #include <string.h>
 #include "graph/types.h"
-#include "aclnnInner_dispatch_normal_a2.h"
-#include "aclnn_dispatch_normal_a2.h"
+#include "aclnnInner_moe_dispatch_normal_a2.h"
+#include "aclnn_moe_dispatch_normal_a2.h"
 
 namespace {
 static constexpr int32_t NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0;
@@ -23,7 +23,7 @@ extern "C" void __attribute__((weak)) NnopbaseSetHcclServerType(void *executor, 
 extern "C" {
 #endif
 
-aclnnStatus aclnnDispatchNormalA2GetWorkspaceSize(
+aclnnStatus aclnnMoeDispatchNormalA2GetWorkspaceSize(
     const aclTensor *x,
     const aclTensor *expertIds,
     const aclTensor *scalesOptional,
@@ -57,7 +57,7 @@ aclnnStatus aclnnDispatchNormalA2GetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerDispatchNormalA2GetWorkspaceSize(
+    return aclnnInnerMoeDispatchNormalA2GetWorkspaceSize(
         x,
         expertIds,
         scalesOptional,
@@ -92,7 +92,7 @@ aclnnStatus aclnnDispatchNormalA2GetWorkspaceSize(
         executor);
 }
 
-aclnnStatus aclnnDispatchNormalA2(
+aclnnStatus aclnnMoeDispatchNormalA2(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,
@@ -101,7 +101,7 @@ aclnnStatus aclnnDispatchNormalA2(
     if (NnopbaseSetHcclServerType) {
         NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_AICPU);
     }
-    return aclnnInnerDispatchNormalA2(
+    return aclnnInnerMoeDispatchNormalA2(
         workspace,
         workspaceSize,
         executor,

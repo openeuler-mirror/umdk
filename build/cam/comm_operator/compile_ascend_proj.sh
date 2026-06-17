@@ -110,14 +110,8 @@ build_ascend_proj() {
     cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}/
 
     # 根据屏蔽列表移除pregen中对应算子的autogen文件
-    # pregen文件名与op_host中OpDef类名绑定，部分算子目录名与pregen文件名不一致需单独映射
     for excluded_dir in "${exclude_list[@]}"; do
-        case "$excluded_dir" in
-            moe_combine_normal_a2) pregen_name="moe_distribute_combine_a2" ;;
-            moe_dispatch_normal_a2) pregen_name="dispatch_normal_a2" ;;
-            *) pregen_name="$excluded_dir" ;;
-        esac
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${pregen_name}.*
+        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
     done
 
     # 如果不需要编译shmem算子，移除相关的pregen文件

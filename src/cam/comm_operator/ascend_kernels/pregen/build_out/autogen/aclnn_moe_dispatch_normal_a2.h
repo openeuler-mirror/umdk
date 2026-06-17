@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-/* function: aclnnDispatchNormalA2GetWorkspaceSize
+/* function: aclnnMoeDispatchNormalA2GetWorkspaceSize
  * x : required
  * expertIds : required
  * scalesOptional : optional
@@ -50,7 +50,7 @@ extern "C" {
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
-__attribute__((visibility("default"))) aclnnStatus aclnnDispatchNormalA2GetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnMoeDispatchNormalA2GetWorkspaceSize(
     const aclTensor *x,
     const aclTensor *expertIds,
     const aclTensor *scalesOptional,
@@ -84,13 +84,13 @@ __attribute__((visibility("default"))) aclnnStatus aclnnDispatchNormalA2GetWorks
     uint64_t *workspaceSize,
     aclOpExecutor **executor);
 
-/* function: aclnnDispatchNormalA2
+/* function: aclnnMoeDispatchNormalA2
  * workspace : workspace memory addr(input).
  * workspaceSize : size of workspace(input).
  * executor : executor context(input).
  * stream : acl stream.
  */
-__attribute__((visibility("default"))) aclnnStatus aclnnDispatchNormalA2(
+__attribute__((visibility("default"))) aclnnStatus aclnnMoeDispatchNormalA2(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,

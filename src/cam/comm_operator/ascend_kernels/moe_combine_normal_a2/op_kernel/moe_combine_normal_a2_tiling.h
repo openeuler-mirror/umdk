@@ -7,14 +7,14 @@
  * History: 2026-01-15 create combine normal A2 kernel part tiling
  */
 
-#ifndef MOE_DISTRIBUTE_COMBINE_A2_TILING_H
-#define MOE_DISTRIBUTE_COMBINE_A2_TILING_H
+#ifndef MOE_COMBINE_NORMAL_A2_TILING_H
+#define MOE_COMBINE_NORMAL_A2_TILING_H
 
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
 namespace Moe {
-struct MoeDistributeCombineA2Info {
+struct MoeCombineNormalA2Info {
     uint32_t epWorldSize;          // epWorldSize
     uint32_t tpWorldSize;          // tpWorldSize
     uint32_t epRankId;             // epRankId
@@ -32,10 +32,10 @@ struct MoeDistributeCombineA2Info {
     uint32_t rsd;
 };
 
-struct MoeDistributeCombineA2TilingData {
+struct MoeCombineNormalA2TilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
-    MoeDistributeCombineA2Info moeDistributeCombineInfo;
+    MoeCombineNormalA2Info moeCombineNormalInfo;
 };
 } // namespace Moe
-#endif  //__MOE_DISTRIBUTE_COMBINE_A2_TILING_H__
+#endif  //__MOE_COMBINE_NORMAL_A2_TILING_H__
