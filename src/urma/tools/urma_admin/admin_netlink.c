@@ -101,6 +101,10 @@ static int admin_nl_recv_msg_inner(int (*cb)(struct nl_msg *msg, void *arg),
 
 static int init_sock_and_genl_id(genl_family_t family)
 {
+    if (family >= GENL_FAMILY_COUNT || family < 0) {
+        printf("Invalid family\n");
+        return -EINVAL;
+    }
     const genl_info_t *info = &genl_info_table[family];
     if (*info->sock_ptr != NULL) {
         return 0;
