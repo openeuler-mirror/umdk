@@ -720,7 +720,7 @@ void umq_ipc_notify_impl(uint64_t umqh_tp)
     futex_wake(&tp->local_msg_ring->shm_tx_ring_hdr->cq_event_flag, 1);
 }
 
-int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
+int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option)
 {
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {

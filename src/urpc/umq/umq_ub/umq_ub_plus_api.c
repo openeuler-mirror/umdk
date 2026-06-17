@@ -137,9 +137,9 @@ static void umq_tp_ub_plus_notify(uint64_t umqh_tp)
     return;
 }
 
-static int umq_tp_ub_plus_rearm_interrupt(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
+static int umq_tp_ub_plus_rearm_interrupt(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option)
 {
-    return umq_ub_rearm_impl(umqh_tp, solicated, option);
+    return umq_ub_rearm_impl(umqh_tp, solicited, option);
 }
 
 static int umq_tp_ub_plus_wait_interrupt(uint64_t wait_umqh_tp, int time_out, umq_interrupt_option_t *option)

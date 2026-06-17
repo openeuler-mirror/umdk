@@ -23,9 +23,9 @@ typedef struct umq_pro_ops {
     * User should ensure thread safety if io_lock_free is true
     * Post tx/rx buf to umq
     * @param[in] umqh_tp: umq handle
-    * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requeses once
+    * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requests once
     * @param[in] option: Set post direction : tx or rx
-    * @param[out] bad_qbuf: qbuf list faild to post. user should free these buf
+    * @param[out] bad_qbuf: qbuf list failed to post. user should free these buf
     * Return 0 on success, error code on failure
     */
     int (*umq_tp_post)(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option, umq_buf_t **bad_qbuf);

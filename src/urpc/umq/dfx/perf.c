@@ -38,7 +38,7 @@ typedef struct umq_perf_record {
         uint64_t max; // max latency
         uint64_t cnt; // statistical count
         uint64_t bucket[UMQ_PERF_QUANTILE_MAX_NUM + 1]; // sample count in each quantile bin
-    } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe poin
+    } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe point
     bool is_used; // the statistic item valid
 } umq_perf_record_t;
 
