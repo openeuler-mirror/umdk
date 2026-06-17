@@ -166,6 +166,26 @@ int umq_stats_tp_perf_info_get(umq_trans_mode_t trans_mode, char *perf_buf, uint
  */
 int umq_io_perf_callback_register(umq_io_perf_callback_t func);
 
+/**
+ * Thread safety function
+ * Get transport pool statistical results.
+ * @param[in] umqh: umq handle
+ * @param[out] umq_transport_pool_stats: transport pool statistical results
+ * Return 0 on success, error code on failure
+ */
+int umq_stats_transport_pool_get(uint64_t umqh, umq_transport_pool_stats_t *umq_transport_pool_stats);
+
+/**
+ * Thread safety function
+ * Convert the transport pool statistics result to a string.
+ * @param[in] umq_transport_pool_stats: transport pool statistical results
+ * @param[in] buf: buffer to store the string
+ * @param[in] max_buf_len: length of the buffer
+ * Return string len on success, error code on failure.
+ */
+int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transport_pool_stats,
+    char *buf, int max_buf_len);
+
 #ifdef __cplusplus
 }
 #endif

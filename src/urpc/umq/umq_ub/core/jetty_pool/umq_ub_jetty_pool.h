@@ -55,6 +55,20 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node);
 int umq_ub_jetty_pool_get_eventfd(void);
 umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
+void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
+
+// DFX statistics
+typedef struct umq_ub_jetty_pool_stats {
+    uint64_t total_num;         // Total nodes currently tracked (node_count)
+    uint64_t global_num;        // IDLE nodes in global active_q
+    uint64_t cache_num;         // IDLE nodes in thread-local caches
+    uint64_t in_use_num;        // Nodes currently borrowed by a Logic UMQ (state == IN_USE)
+    uint64_t err_num;           // Nodes marked is_jetty_err == true
+    uint64_t acc_alloc_num;     // Cumulative allocs (nodes borrowed by Logic UMQ)
+    uint64_t acc_free_num;      // Cumulative frees (nodes returned to pool)
+} umq_ub_jetty_pool_stats_t;
+
+int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats);
 
 #ifdef __cplusplus
 }

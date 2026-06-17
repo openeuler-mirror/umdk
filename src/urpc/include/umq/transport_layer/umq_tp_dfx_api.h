@@ -80,6 +80,14 @@ typedef struct umq_dfx_ops {
      * Return: 0 on success, other value on error
      */
     int (*umq_tp_stats_tp_perf_info_get)(char *perf_buf, uint32_t *length);
+
+    /**
+     * Thread safety function
+     * Get transport pool statistics.
+     * @param[out] pool_stats: transport pool statistical results
+     * Return 0 on success, error code on failure
+     */
+    int (*umq_tp_stats_transport_pool_get)(umq_transport_pool_stats_t *pool_stats);
 } umq_dfx_ops_t;
 
 typedef umq_dfx_ops_t* (*umq_dfx_ops_get_t)(void);

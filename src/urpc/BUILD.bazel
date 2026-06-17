@@ -28,6 +28,7 @@ cc_library(
         "umq/umq_ub/core",
         "umq/umq_ub/core/flow_control",
         "umq/umq_ub/core/private",
+        "umq/umq_ub/core/jetty_pool",
         "umq",
         "util",
     ],
