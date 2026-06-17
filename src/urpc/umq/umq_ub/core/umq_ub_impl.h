@@ -63,6 +63,8 @@ void umq_ub_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt
 
 int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *option);
 
+int umq_ub_transport_pool_eventfd_get_impl(void);
+
 int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint64_t imm_value);
 
 // ubmm rendezvous related functions
@@ -93,6 +95,10 @@ int umq_ub_stats_io_reset_impl(uint64_t umqh_tp);
 int umq_ub_stats_tp_perf_start_impl(void);
 int umq_ub_stats_tp_perf_stop_impl(void);
 int umq_ub_stats_tp_perf_info_get_impl(char *perf_buf, uint32_t *length);
+
+int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_handle_idx);
+uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp);
+int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_handle_idx);
 
 #ifdef __cplusplus
 }
