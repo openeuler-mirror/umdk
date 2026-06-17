@@ -32,11 +32,13 @@
   yum install -y openssl-devel
   yum install -y glib2-devel
   yum install -y libnl3-devel
+  yum install -y libummu-devel
   yum install -y kernel-devel  # ubcore is necessary from openEuler kernel
 ```
 
 2. 编译指导
 - 您可以通过以下方式构建和安装umdk rpm包：
+- 下面的命令需要在源码根目录执行：
 
 ```bash
   mkdir -p /root/rpmbuild/SOURCES/

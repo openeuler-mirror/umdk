@@ -31,11 +31,13 @@ It offers two types of interfaces: one is the northbound application programming
   yum install -y openssl-devel
   yum install -y glib2-devel
   yum install -y libnl3-devel
+  yum install -y libummu-devel
   yum install -y kernel-devel  # ubcore is necessary from openEuler kernel
 ```
 
 2. Build Instructions
 - You can build and install the UMDK RPM package using the following methods:
+- Run the following commands from the source tree root:
 
 ```bash
   mkdir -p /root/rpmbuild/SOURCES/
