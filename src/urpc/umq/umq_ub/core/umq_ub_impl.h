@@ -62,6 +62,10 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
 void umq_ub_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt_option_t *option);
 
 int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *option);
+int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
+    umq_interrupt_option_t *option, umq_interrupt_fd_list_t *fd_list);
+
+int umq_ub_jetty_pool_eventfd_get_impl(void);
 
 int umq_ub_transport_pool_eventfd_get_impl(void);
 
