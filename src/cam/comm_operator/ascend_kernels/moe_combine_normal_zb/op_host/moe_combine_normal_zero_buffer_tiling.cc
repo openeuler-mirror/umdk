@@ -40,9 +40,11 @@ constexpr uint32_t EP_RECV_COUNTS_INDEX = 1;
 constexpr uint32_t TOPK_WEIGHTS_INDEX = 2;
 constexpr uint32_t TOPK_IDX_INDEX = 3;
 constexpr uint32_t SEND_TOPKEN_IDX_INDEX = 4;
+constexpr uint32_t PROB_GRAD_IDX_INDEX = 5;
 
 constexpr uint32_t OUTPUT_X_INDEX = 0;
 constexpr uint32_t OUTPUT_SEND_COST_INDEX = 1;
+constexpr uint32_t GRAD_OUTPUT_INDEX = 2;
 
 constexpr uint32_t ATTR_META_DATA_PTR_INDEX = 0;
 constexpr uint32_t ATTR_EP_WORLD_SIZE_INDEX = 1;
@@ -163,6 +165,12 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context,
     tilingData.moeCombineNormalInfo.epRankId = static_cast<uint32_t>(*epRankIdPtr);
     tilingData.moeCombineNormalInfo.tpRankId = static_cast<uint32_t>(*tpRankIdPtr);
     tilingData.moeCombineNormalInfo.moeExpertNum = static_cast<uint32_t>(moeExpertNum);
+    const gert::StorageShape *probGradStorageShape = context->GetInputShape(PROB_GRAD_IDX_INDEX);
+    if (probGradStorageShape == nullptr || probGradStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS) {
+        tilingData.moeCombineNormalInfo.isGetProb = false;
+    } else {
+        tilingData.moeCombineNormalInfo.isGetProb = true;
+    }
     return ge::GRAPH_SUCCESS;
 }
 

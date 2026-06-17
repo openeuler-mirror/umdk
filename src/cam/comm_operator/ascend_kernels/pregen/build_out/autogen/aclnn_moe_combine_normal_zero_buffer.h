@@ -17,8 +17,9 @@ extern "C" {
 
 __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalZeroBufferGetWorkspaceSize(
     const aclTensor *recvX, const aclTensor *epRecvCounts, const aclTensor *recvTopkWeights, const aclTensor *topkIdx,
-    const aclTensor *sendTokenIdx, uint64_t meta_data_ptr, int64_t epWorldSize, int64_t epRankId, int64_t tpWorldSize,
-    int64_t tpRankId, int64_t moeExpertNum, int64_t globalBs, const aclTensor *out, const aclTensor *sendCostStats,
+    const aclTensor *sendTokenIdx, const aclTensor *probGrad, uint64_t meta_data_ptr, int64_t epWorldSize,
+    int64_t epRankId, int64_t tpWorldSize, int64_t tpRankId, int64_t moeExpertNum, int64_t globalBs,
+    const aclTensor *out, const aclTensor *sendCostStats, const aclTensor *gradOut,
     uint64_t *workspaceSize, aclOpExecutor **executor);
 
 __attribute__((visibility("default"))) aclnnStatus aclnnMoeCombineNormalZeroBuffer(

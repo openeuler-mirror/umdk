@@ -30,6 +30,7 @@ struct MoeCombineNormalZeroBufferInfo {
     float armAvgFactor;
     float epsilon;
     bool isEnableDiagnose;
+    bool isGetProb;
 };
 struct MoeCombineNormalZeroBufferTilingData {
     MoeCombineNormalZeroBufferInfo moeCombineNormalInfo;
