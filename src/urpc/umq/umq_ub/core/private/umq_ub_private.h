@@ -468,6 +468,10 @@ typedef struct ub_queue {
     bondp_port_id_t *used_port;
     uint32_t umq_id;
     uint32_t remote_umq_id;
+
+    // umq_ub_jetty_node_list_t jetty_node_list;
+    umq_ub_jetty_node_list_t *jetty_node_list;
+    jetty_pool_node_t *jetty_node;
 } ub_queue_t;
 
 typedef struct user_ctx {
@@ -522,7 +526,7 @@ int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_qu
 remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void);
 void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx);
 urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx,
-    const char *port_str);
+    const char *port_str, urma_jfc_t *jfs_jfc);
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue);
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id);
@@ -589,6 +593,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
+int umq_ub_wait_tp_handle_tx_interrupt(urma_jfce_t *jfs_jfce, int time_out, urma_jfc_t *jfc[], bool fc_enable);
 int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats);
 uint32_t umq_ub_timer_timeout_get(void);
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
@@ -609,6 +614,9 @@ int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, um
 umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t ub_ctx_cnt, umq_dev_assign_t *dev_info);
 int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
+
+int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt);
+void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t fialed_cnt);
 
 static ALWAYS_INLINE void umq_ub_io_packet_stats(
     ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt, bool lock_free)
@@ -652,6 +660,34 @@ static inline bool is_umq_ub_post_jfr(ub_queue_t *queue)
 {
     // bondp with shared_jfr should use urma_post_jfr_wr
     return (queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) != 0 && queue->used_port_num > 0;
+}
+static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) != 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_sub_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0;
+}
+
+// Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
+static ALWAYS_INLINE bool is_umq_ub_logic_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_share_transport(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_share_rq(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0;
 }
 
 #ifdef __cplusplus

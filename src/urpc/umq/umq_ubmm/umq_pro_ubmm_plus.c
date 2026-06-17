@@ -12,7 +12,7 @@ static int umq_tp_ubmm_plus_post(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_optio
     return -1;
 }
 
-static int umq_tp_ubmm_plus_poll(uint64_t umqh_tp, umq_io_direction_t io_direction,
+static int umq_tp_ubmm_plus_poll(uint64_t umqh_tp, umq_poll_option_t *poll_option,
     umq_buf_t **buf, uint32_t max_buf_count)
 {
     return -1;
