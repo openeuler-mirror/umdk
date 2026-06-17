@@ -4,6 +4,9 @@
 #
 
 find_package(KernelHeaders REQUIRED)
+if("${BUILD_EXTRA_UBCORE_SYMBOLS}" STREQUAL "enable")
+    find_package(UBcore REQUIRED)
+endif()
 
 #Get config_SMC
 execute_process(COMMAND bash -c

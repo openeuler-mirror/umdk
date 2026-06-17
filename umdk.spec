@@ -25,6 +25,9 @@
 # add --with dlock option, i.e. disable dlock by default
 %bcond_with dlock
 
+# add --with extra_ubcore_symbols option, i.e. disable by default
+%bcond_with extra_ubcore_symbols
+
 %ifarch aarch64
 %define with_64kb  %{?_with_64kb: 1} %{?!_with_64kb: 0}
 %else
@@ -338,6 +341,9 @@ between UMS kernel modules via TLS 1.3 channel.
 %endif
 %if %{without udma}
     -DBUILD_UDMA="disable" \
+%endif
+%if %{with extra_ubcore_symbols}
+    -DBUILD_EXTRA_UBCORE_SYMBOLS="enable" \
 %endif
 
 make %{?_smp_mflags}
