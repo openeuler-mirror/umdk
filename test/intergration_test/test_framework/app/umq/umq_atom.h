@@ -226,7 +226,7 @@ void test_data_args_fill(test_data_args_t *data_args);
 int test_umq_post_rx_buf(umqh_ops_t *umqh_ops, uint32_t depth = 0, uint32_t size = 0, uint64_t *status = NULL);
 int test_umq_post_rx(test_umq_ctx_t *ctx, uint32_t depth = 0, umqh_ops_t *umqh_ops = nullptr, uint64_t *status = NULL);
 int test_umq_post_tx_buf(umqh_ops_t *umqh_ops, const char *data = POST_DATA_DEFAUT, uint32_t data_size = post_data_len, uint64_t *status = NULL);
-int test_umq_poll(uint64_t umqh, umq_io_direction_t direction, umq_buf_t **buf, uint32_t buf_count = TEST_MAX_POLL_BATCH, uint64_t timeout  = DEQUEUE_TIMEOUT_MS);
+int test_umq_poll(uint64_t umqh, umq_io_option_t *option, umq_buf_t **buf, uint32_t buf_count = TEST_MAX_POLL_BATCH, uint64_t timeout  = DEQUEUE_TIMEOUT_MS);
 int test_umq_poll_tx_buf(umqh_ops_t *umqh_ops, uint64_t timeout = DEQUEUE_TIMEOUT_MS, uint64_t *status = NULL);
 int test_umq_poll_rx_buf(umqh_ops_t *umqh_ops, const char *data = POST_DATA_DEFAUT, uint32_t data_size = post_data_len, uint64_t timeout = DEQUEUE_TIMEOUT_MS, uint64_t *status = NULL);
 void test_umq_flush(umqh_ops_t *umqh_ops, umq_io_direction_t direction = UMQ_IO_ALL, uint64_t timeout = DEFAULT_FLUSH_TIME_MS);
