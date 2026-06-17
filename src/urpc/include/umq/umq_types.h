@@ -636,7 +636,7 @@ typedef struct umq_cfg_get {
     umq_tp_mode_t tp_mode;        // transport mode of queue
 } umq_cfg_get_t;
 
-#define UMQ_IO_OPTION_FLAG_DIRECTON         (1)         // enable io_direcation
+#define UMQ_IO_OPTION_FLAG_DIRECTION        (1)         // enable io_direcation
 #define UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX    (1 << 1)    // enable tp_handle_idx
 
 typedef struct umq_io_option {
