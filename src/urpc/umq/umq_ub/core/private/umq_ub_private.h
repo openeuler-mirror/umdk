@@ -32,6 +32,7 @@
 #include "umq_inner.h"
 #include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
+#include "umq_ub_jetty_pool.h"
 #include "umq_ub_imm_data.h"
 #include "util_lock.h"
 
@@ -393,6 +394,26 @@ typedef struct ub_queue_idle_check {
     int event_fd;
     util_external_mutex_lock *lock;
 } ub_queue_idle_check_t;
+
+typedef enum jetty_pool_node_state {
+    JETTY_POOL_NODE_IDLE,             // node is in free_q/active_q or thread-local cache
+    JETTY_POOL_NODE_IN_USE,           // node is borrowed by a Logic UMQ
+    JETTY_POOL_NODE_ERR,              // node has error, should not be allocated
+} jetty_pool_node_state_t;
+
+typedef struct jetty_pool_node {
+    urpc_list_t node;                   // For list linkage (cache / free_q / active_q / err_q)
+    urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
+    urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
+    urma_jfce_t *jfs_jfce;
+    volatile uint32_t tx_outstanding;
+    volatile uint32_t state;            // Track node state (atomic CAS operations)
+    volatile uint64_t umq_ref;          // Logic UMQ handle (atomic, used for poll/post coordination)
+    uint32_t borrow_count;              // WRs posted in current borrow cycle
+    uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
+    bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
+    bool is_jetty_err;
+} jetty_pool_node_t;
 
 typedef struct ub_queue {
     urpc_list_t qctx_node;
