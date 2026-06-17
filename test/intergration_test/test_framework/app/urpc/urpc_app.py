@@ -88,9 +88,9 @@ def get_test_dev(case_name, test_host, host_idx):
     test_dev2 = None
 
     if case_name.startswith("test_urpclib") and hasattr(test_host[0], "test_nic2"):
-        test_dev = test_host[host_idx].test_nic2
+        test_dev = test_host[host_idx].test_nic2_dev
     else:
-        test_dev = test_host[host_idx].test_nic1
+        test_dev = test_host[host_idx].test_nic1_dev
         test_dev2 = test_host[host_idx].test_nic1_dev
 
     return test_dev, test_dev2
