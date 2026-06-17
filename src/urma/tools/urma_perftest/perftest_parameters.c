@@ -1259,6 +1259,10 @@ int check_local_cfg(perftest_config_t *cfg)
         LOG_ERROR("Message size should not be changed for Atomic tests.\n");
         exit(1);
     }
+    if (cfg->size == 0 || cfg->sge_num == 0) {
+        (void)fprintf(stderr, "Invalid parameter with size: %u, sge_num: %u.\n", cfg->size, cfg->sge_num);
+        exit(1);
+    }
     if (cfg->jfs_post_list == 0 || cfg->jfr_post_list == 0) {
         LOG_ERROR("Invalid parameter with jfs_post_list: %u, jfr_post_list: %u.\n",
                   cfg->jfs_post_list, cfg->jfr_post_list);
