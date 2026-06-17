@@ -17,6 +17,10 @@
 #define BONDP_RECV_WND_SIZE   (1U << 12)
 #define BONDP_MAX_BITMAP_SIZE (1U << 16)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct bondp_conn {
     /* de-duplication */
     bdp_slide_wnd_t recv_wnd;
@@ -25,5 +29,9 @@ typedef struct bondp_conn {
 int bondp_conn_table_create(bondp_hash_table_t *tbl, uint32_t size);
 
 int bondp_conn_table_get_or_create(bondp_hash_table_t *tbl, urma_jetty_id_t *target_id, bondp_conn_t **conn);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_CONNECTION_H

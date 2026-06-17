@@ -19,6 +19,10 @@
 #define BONDP_MAX_SGE_NUM             (32)
 #define BONDP_BATCH_POST_MAX_NUM      (280)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct bondp_comp;
 struct bondp_target_jetty;
 
@@ -130,5 +134,9 @@ void jfr_wr_buf_release(wr_buf_t *buf, jfr_wr_entry_t *entry);
  */
 void jfs_wr_buf_release_batch(wr_buf_t *buf, jfs_wr_entry_t **entries, uint32_t count);
 void jfr_wr_buf_release_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_t count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_WR_BUF_H

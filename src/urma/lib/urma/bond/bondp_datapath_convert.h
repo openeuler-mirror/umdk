@@ -15,6 +15,10 @@
 
 #include "bondp_connection.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline bool is_rw_wr(const urma_jfs_wr_t *wr)
 {
     return wr->opcode == URMA_OPC_WRITE || wr->opcode == URMA_OPC_WRITE_IMM ||
@@ -114,5 +118,9 @@ static inline bool is_ctrl_cr(const urma_cr_t *cr)
         return (cr->user_ctx & BONDP_CTRL_USER_CTX_MASK) != 0;
     }
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_DATAPATH_CONVERT_H

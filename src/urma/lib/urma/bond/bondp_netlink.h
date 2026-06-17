@@ -8,6 +8,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct bondp_context bondp_context_t;
 
 #define SEND_SWITCHBACK_REQ 0
@@ -41,4 +45,9 @@ int bondp_nl_send_switchback_req(const bondp_switchback_req_t *req);
 int bondp_nl_recv_switchback_msg(bondp_switchback_msg_t *msg);
 int bondp_fallback_ctrl_send_default(bondp_context_t *bdp_ctx, uint32_t vjetty_id,
     int local_idx, int target_idx, uint8_t ctrl_type, uint8_t req_seq, uint32_t payload);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // BONDP_NETLINK_H

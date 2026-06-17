@@ -4,8 +4,9 @@
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(CMAKE_FLAGS_PUBILC " -Wall -Werror -Wformat -Wfloat-equal -Wtrampolines -g -O2 -rdynamic -Wl,-z,noexecstack,-z,relro,-z,now \
--fno-strict-aliasing -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -fPIC")
+set(CMAKE_FLAGS_PUBILC " -Wall -Werror -Wformat -Wfloat-equal -Wtrampolines -g -O2 -rdynamic \
+-Wl,-z,noexecstack,-z,relro,-z,now -fno-strict-aliasing -fstack-protector-strong \
+-D_FORTIFY_SOURCE=2 -fPIE -pie -fPIC")
 
 if(CROSS_COMPILE)
     set(CMAKE_C_COMPILER "${CROSS_COMPILE}")
@@ -39,6 +40,14 @@ endif()
 if("${ASAN}" STREQUAL "enable")
     set(CMAKE_FLAGS_ASAN "-fsanitize=address -fsanitize-recover=address -fsanitize=leak -fno-omit-frame-pointer")
     set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} ${CMAKE_FLAGS_ASAN}")
+endif()
+
+# CODE_COVERAGE ENABLE
+if("${CODE_COVERAGE}" STREQUAL "enable")
+    set(CMAKE_FLAGS_COVERAGE "--coverage -fprofile-arcs -ftest-coverage")
+    set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} ${CMAKE_FLAGS_COVERAGE}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --coverage")
 endif()
 
 set(CMAKE_FLAGS_ARM64 " -march=armv8-a+crc -DUB_ARCH_ARM64")

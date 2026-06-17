@@ -17,6 +17,10 @@
 #include "urma_provider.h"
 #include "urma_perf.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define URMA_MAX_SYSFS_PATH 256
 #define URMA_UBAGG_DEV_PREFIX "bonding_dev"
 
@@ -50,6 +54,11 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 int urma_open_cdev(char *path);
+urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
+    size_t table_cnt, uint64_t opt, uint32_t len);
+urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
+    size_t table_cnt, uint64_t opt, void *buf, uint32_t len,
+    void *cfg_base, void *opt_base, void *jfs_cfg_base);
 
 static inline bool urma_is_bonding_dev(char *dev_name)
 {
@@ -105,5 +114,9 @@ uint32_t urma_ubagg_switch_get(void);
 bool urma_perf_is_enabled(void);
 uint64_t urma_get_perf_timestamp(void);
 urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // URMA_PRIVATE_H

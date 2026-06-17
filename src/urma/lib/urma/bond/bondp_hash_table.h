@@ -17,6 +17,10 @@
 #include "urma_types.h"
 #include "urma_ubagg.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BONDP_HASH_MAP_COLLIDE_ERROR (-2)
 #define BONDP_HASH_MAP_ALLOC_ERROR (-3)
 #define BONDP_HASH_MAP_NOT_FOUND_ERROR (-4)
@@ -91,4 +95,9 @@ void bondp_hash_table_destroy(bondp_hash_table_t *tbl);
 hmap_node_t *bondp_hash_table_lookup(bondp_hash_table_t *tbl, void *key, uint32_t hash);
 
 hmap_node_t *bondp_hash_table_lookup_without_lock(bondp_hash_table_t *tbl, void *key, uint32_t hash);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // BONDP_HASH_TABLE_H
