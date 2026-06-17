@@ -142,11 +142,20 @@ typedef enum umq_dev_assign_mode {
 #define UMQ_MAX_BUF_REQUEST_SIZE     (10485760) // 10M
 
 #define UMQ_INTERRUPT_FLAG_IO_DIRECTION         (1)         // enable arg direction
+#define UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX        (1 << 1)    // enable arg tp_handle_idx
+
+#define UMQ_INTERRUPT_FD_LIST_LEN 20
+
+typedef struct umq_interrupt_fd_list {
+    int fd[UMQ_INTERRUPT_FD_LIST_LEN];
+    uint32_t fd_num;
+} umq_interrupt_fd_list_t;
 
 typedef struct umq_interrupt_option {
     uint32_t flag;                      // indicates which below property takes effect
     umq_io_direction_t direction;
     umq_fd_type_t fd_type;
+    uint32_t tp_handle_idx;
 } umq_interrupt_option_t;
 
 typedef union umq_eid {
@@ -251,6 +260,11 @@ typedef struct umq_buf_pool_cfg {
     bool disable_malloc_escape; // disable the escape mechanism
 } umq_buf_pool_cfg_t;
 
+typedef struct umq_tp_pool_cfg {
+    uint32_t notify_threshold;     // Eventfd notify threshold (0 means use default 16)
+    uint32_t borrow_limit;         // Max WRs per borrow (0 means use default 1024)
+} umq_tp_pool_cfg_t;
+
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
     uint32_t feature;               // feature flags
@@ -263,6 +277,7 @@ typedef struct umq_init_cfg {
     uint32_t ubmm_eid;
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];
     umq_buf_pool_cfg_t buf_pool_cfg;
+    umq_tp_pool_cfg_t tp_pool_cfg;
 } umq_init_cfg_t;
 
 typedef union umq_port_id {
@@ -298,6 +313,7 @@ typedef struct umq_used_ports {
 #define UMQ_CREATE_FLAG_MAIN_UMQ            (1 << 11)       // indicate that the umq creates shared jfr
 #define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 12)       // indicate that the umq uses shared jfr from main queue,
                                                             // associated with UMQ_CREATE_FLAG_SHARE_RQ
+#define UMQ_CREATE_FLAG_SHARE_TRANSPORT     (1 << 13)      // jetty pool mode: creates shared jetty pool
 
 typedef struct umq_create_option {
     /*************Required paramenters start*****************/
@@ -619,6 +635,15 @@ typedef struct umq_cfg_get {
     umq_tp_type_t tp_type;        // tp_type of queue
     umq_tp_mode_t tp_mode;        // transport mode of queue
 } umq_cfg_get_t;
+
+#define UMQ_IO_OPTION_FLAG_DIRECTON         (1)         // enable io_direcation
+#define UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX    (1 << 1)    // enable tp_handle_idx
+
+typedef struct umq_io_option {
+    uint32_t flag;                      // indicates which below property takes effect
+    umq_io_direction_t io_direction;
+    uint32_t tp_handle_idx;
+} umq_io_option_t;
 
 #ifdef __cplusplus
 }

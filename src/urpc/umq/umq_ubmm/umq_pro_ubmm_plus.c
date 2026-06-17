@@ -7,8 +7,7 @@
 
 #include "umq_ubmm_api.h"
 
-static int umq_tp_ubmm_plus_post(uint64_t umqh_tp, umq_buf_t *qbuf,
-    umq_io_direction_t io_direction, umq_buf_t **bad_qbuf)
+static int umq_tp_ubmm_plus_post(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option, umq_buf_t **bad_qbuf)
 {
     return -1;
 }
