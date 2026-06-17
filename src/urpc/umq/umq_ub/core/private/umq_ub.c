@@ -482,27 +482,21 @@ int umq_ub_remote_tseg_info_release(remote_imported_tseg_info_t *remote_imported
 
 static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_info_t *info, ub_queue_jetty_index_t i)
 {
-    bondp_rjetty_t bondp_rjetty = {
-        .base = {
-            .jetty_id = i == UB_QUEUE_JETTY_IO ? info->queue_info->rjetty->jetty_id : info->fc_info->rjetty->jetty_id,
-            .trans_mode = info->queue_info->rjetty->trans_mode,
-            .type = info->queue_info->rjetty->type,
-            .flag.bs.token_policy =
-                token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0),
-            .flag.bs.order_type = info->queue_info->order_type,
-            .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0),
-            .tp_type = info->queue_info->rjetty->tp_type},
-        .jetty = queue->jetty[i],
-    };
-
-    urma_token_t token = i == UB_QUEUE_JETTY_IO ? info->queue_info->token : info->fc_info->token;
-    urma_target_jetty_t *tjetty =
-        umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, &bondp_rjetty.base, &token);
+    urma_rjetty_t *rjetty = NULL;
+    urma_token_t token;
+    if (i == UB_QUEUE_JETTY_IO) {
+        rjetty = info->queue_info->rjetty;
+        token = info->queue_info->token;
+    } else {
+        rjetty = info->fc_info->rjetty;
+        token = info->fc_info->token;
+    }
+    urma_target_jetty_t *tjetty = umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, rjetty, &token);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
                                         "remote jetty_id: %u, urma_import_jetty failed, jetty[%d], errno: %d\n",
                      EID_ARGS(queue->jetty[i]->jetty_id.eid), queue->jetty[i]->jetty_id.id,
-                     EID_ARGS(bondp_rjetty.base.jetty_id.eid), bondp_rjetty.base.jetty_id.id, i, errno);
+                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, errno);
         return NULL;
     }
     if (queue->tp_mode != URMA_TM_RC) {
@@ -514,7 +508,7 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
                      "remote jetty_id: %u, urma_bind_jetty failed, jetty[%d], status: %d, errno %d\n",
                      EID_ARGS(queue->jetty[i]->jetty_id.eid), queue->jetty[i]->jetty_id.id,
-                     EID_ARGS(bondp_rjetty.base.jetty_id.eid), bondp_rjetty.base.jetty_id.id, i, (int)status, errno);
+                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id, i, (int)status, errno);
         goto UNIMPORT_JETTY;
     }
 
@@ -698,19 +692,27 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
 int umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
     uint32_t left_buf_size, ub_queue_t *queue)
 {
-    uint32_t length = sizeof(urma_rjetty_t);
-    if (left_buf_size < length) {
+    urma_rjetty_t *rjetty = NULL;
+    uint32_t length = 0;
+    urma_status_t status = umq_symbol_urma()->urma_get_rjetty(queue->jetty[index], &rjetty, &length);
+    if (status != URMA_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_get_rjetty failed, status: %u\n",
+            EID_ARGS(queue->jetty[index]->jetty_id.eid),
+            queue->jetty[index]->jetty_id.id, (int)status);
+        return 0;
+    }
+    if (left_buf_size < length || length == 0) {
         errno = UMQ_ERR_ENOMEM;
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, bind info size insufficient, cannot "
             "serialize, index: %d, left_buf_size: %u, length: %u, errno: %d\n",
             EID_ARGS(queue->jetty[index]->jetty_id.eid),
             queue->jetty[index]->jetty_id.id, index, left_buf_size, length, errno);
+        umq_symbol_urma()->urma_put_rjetty(rjetty);
         return 0;
     }
-    dst_rjetty->jetty_id = queue->jetty[index]->jetty_id;
-    dst_rjetty->type = URMA_JETTY;
-    dst_rjetty->trans_mode = queue->tp_mode;
+    memcpy((char *)dst_rjetty, (char *)rjetty, length);
     dst_rjetty->tp_type = queue->tp_type;
+    umq_symbol_urma()->urma_put_rjetty(rjetty);
     return length;
 }
 
@@ -731,7 +733,6 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
     queue_info->is_binded = queue->bind_ctx != NULL ? 1 : 0;
     queue_info->token = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_cfg.shared.jfr->jfr_cfg.token_value;
     queue_info->rsvd = 0;
-    queue_info->order_type = queue->order_type;
     queue_info->rx_depth = queue->rx_depth;
     queue_info->tx_depth = queue->tx_depth;
     queue_info->rx_buf_size = queue->rx_buf_size;

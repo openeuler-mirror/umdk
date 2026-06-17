@@ -296,7 +296,6 @@ typedef struct umq_ub_bind_dev_info {
 } umq_ub_bind_dev_info_t;
 
 typedef struct umq_ub_bind_queue_info {
-    urma_order_type_t order_type;
     urma_token_t token;
     uint32_t umq_id;
     uint32_t is_binded : 1;

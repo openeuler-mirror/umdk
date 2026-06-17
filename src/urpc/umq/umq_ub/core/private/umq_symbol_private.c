@@ -93,6 +93,8 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jetty_send_wr_t, urma_post_jetty_send_wr);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jetty_recv_wr_t, urma_post_jetty_recv_wr);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_post_jfr_wr_t, urma_post_jfr_wr);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_get_rjetty_t, urma_get_rjetty);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_put_rjetty_t, urma_put_rjetty);
 
     // Segment functions
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_seg_t, urma_register_seg);
