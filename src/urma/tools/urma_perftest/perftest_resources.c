@@ -157,18 +157,18 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         .uasid = 0,
     };
 
-    status = urma_init(&init_attr);
-    if (status != URMA_SUCCESS) {
-        LOG_ERROR("Failed to urma init, status:%d!\n", (int)status);
-        return -1;
-    }
-
     if (verbose_get_level() >= VLOG_LEVEL_VVERBOSE) {
         status = urma_register_log_func(print_log);
         if (status != URMA_SUCCESS) {
             LOG_ERROR("Failed to register log func, status:%d!\n", (int)status);
-            goto uninit;
+            return -1;
         }
+    }
+
+    status = urma_init(&init_attr);
+    if (status != URMA_SUCCESS) {
+        LOG_ERROR("Failed to urma init, status:%d!\n", (int)status);
+        return -1;
     }
 
     if (strlen(cfg->dev_name) == 0 || strnlen(cfg->dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
