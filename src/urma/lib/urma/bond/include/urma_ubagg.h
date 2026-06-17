@@ -171,6 +171,7 @@ typedef struct bondp_jfs_wr {
 typedef struct bondp_path {
     uint32_t local_idx;
     uint32_t target_idx;
+    uint32_t least_load;
 } bondp_path_t;
 
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,

@@ -2086,14 +2086,14 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     bool target_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    bool bind_done = false;
 
     if (jetty->remote_jetty) {
         URMA_LOG_ERR("Jetty already has a binded target jetty\n");
         return URMA_EINVAL;
     }
 
-    uint32_t min_active_count = MIN(bdp_jetty->active_count, bdp_tjetty->active_count);
-    if (min_active_count == 0) {
+    if (bdp_jetty->active_count == 0 || bdp_tjetty->active_count == 0) {
         URMA_LOG_ERR("No valid active slice to bind\n");
         return URMA_FAIL;
     }
@@ -2114,10 +2114,15 @@ urma_status_t bondp_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
             if (urma_bind_jetty(pjetty, ptjetty) != 0) {
                 goto UNBIND;
             }
+            bind_done = true;
             URMA_LOG_DEBUG("Binded pjetty successfully, local_idx=%u, target_idx=%u, jetty_id=%u, tjetty_id=%u\n",
                            local_idx, target_idx, pjetty->jetty_id.id, ptjetty->id.id);
             break;
         }
+    }
+
+    if (!bind_done) {
+        return URMA_FAIL;
     }
 
     bdp_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;

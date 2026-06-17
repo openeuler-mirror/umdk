@@ -1016,7 +1016,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         atomic_store(&bdp_comp->valid[send_idx], false);
 
         int new_send_idx = -1, new_target_idx = -1;
-        if (schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
+        if (!g_bondp_global_ctx->enable_failover ||
+            schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx, NULL) != 0) {
             /*
              * When all ports are invalid and no port is available to resend the wr,
