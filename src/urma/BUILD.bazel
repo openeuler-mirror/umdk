@@ -367,20 +367,20 @@ cc_binary(
 cc_binary(
     name = "urma_ping",
     srcs = glob([
-        "lib/uvs/core/include/*.h",
         "tools/urma_ping/*.c",
         "tools/urma_ping/*.h",
     ]),
     includes = [
         "common/include",
         "lib/urma/core/include",
-        "lib/uvs/core/include",
         "tools/urma_ping",
     ],
-    copts = URMA_TOOL_COPTS,
-    additional_linker_inputs = urma_linklib_inputs(["urma", "tpsa", "urma_common"]),
+    copts = URMA_TOOL_COPTS + [
+        "-I/usr/include/libnl3",
+    ],
+    additional_linker_inputs = urma_linklib_inputs(["urma", "urma_common"]),
     linkopts = URMA_TOOL_LINKOPTS + urma_dynamic_linkopts(
-        ["urma", "tpsa", "urma_common"],
+        ["urma", "urma_common"],
         extra_libs = [
             "-lm",
             "-lnl-genl-3",

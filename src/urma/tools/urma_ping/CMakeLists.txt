@@ -3,6 +3,7 @@
 
 add_executable(urma_ping
     ping_log.c
+    ping_netlink.c
     ping_parameters.c
     ping_run.c
     ping_stat.c
@@ -16,13 +17,13 @@ set_target_properties(urma_ping
 
 target_include_directories(urma_ping
     PRIVATE
-        ${CMAKE_SOURCE_DIR}/urma/lib/uvs/core/include
+        /usr/include/libnl3
 )
 
 target_link_libraries(urma_ping
     PRIVATE
         urma
-        tpsa
+        nl-genl-3 nl-3
         m
 )
 
