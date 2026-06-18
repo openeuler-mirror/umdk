@@ -34,14 +34,18 @@ static urma_transport_mode_t get_comp_urma_trans_mode(const bondp_comp_t *bdp_co
     }
 }
 
-static void select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
-                                   uint32_t min_idx[], uint32_t max_idx[], bondp_path_t least_load_path[],
-                                   uint32_t *least_load_cnt)
+static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                                       uint32_t min_idx[], uint32_t max_idx[], bondp_path_t least_load_path[],
+                                       uint32_t *least_load_cnt)
 {
     uint32_t least_load = UINT32_MAX;
+    uint32_t valid_route = 0;
     urma_transport_mode_t trans_mode = get_comp_urma_trans_mode(bdp_comp);
 
-    *least_load_cnt = 0;
+    if (*least_load_cnt != 0) {
+        least_load = least_load_path[0].least_load;
+    }
+
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t local_idx = bdp_comp->active_indices[i];
         if (!atomic_load(&bdp_comp->valid[local_idx]) || local_idx < min_idx[0] || local_idx >= max_idx[0]) {
@@ -60,16 +64,21 @@ static void select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_tar
             uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
             if (sqe_cnt < least_load) {
                 least_load = sqe_cnt;
+                least_load_path[0].least_load = least_load;
                 least_load_path[0].local_idx = local_idx;
                 least_load_path[0].target_idx = target_idx;
                 *least_load_cnt = 1;
+                valid_route ++;
             } else if (sqe_cnt == least_load) {
+                least_load_path[(*least_load_cnt)].least_load = least_load;
                 least_load_path[(*least_load_cnt)].local_idx = local_idx;
                 least_load_path[(*least_load_cnt)].target_idx = target_idx;
                 (*least_load_cnt)++;
+                valid_route ++;
             }
         }
     }
+    return valid_route;
 }
 
 static __thread struct random_data schedule_rand_data;
@@ -180,13 +189,31 @@ static int get_affinity_path_range(const bondp_comp_t *bdp_comp, const bondp_chi
     return 0;
 }
 
+static inline uint32_t switch_iodie(uint32_t iodie_num)
+{
+    return iodie_num == BONDP_CHIP_ID_MIN ? BONDP_CHIP_ID_MAX : BONDP_CHIP_ID_MIN;
+}
+
+static void init_chip_priority(bondp_chip_id_info_t chip_priority[], const bondp_chip_id_info_t *info)
+{
+    uint32_t src_id = info->src_chip_id;
+    uint32_t dst_id = info->dst_chip_id;
+
+    chip_priority[0] = *info;
+
+    chip_priority[1].src_chip_id = src_id;
+    chip_priority[1].dst_chip_id = switch_iodie(dst_id);
+
+    chip_priority[CHIP_ROUTE_NUM - 1].src_chip_id = switch_iodie(src_id);
+    chip_priority[CHIP_ROUTE_NUM - 1].dst_chip_id = dst_id;
+}
+
 static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                  int *send_idx, int *target_idx, const bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
     bondp_path_t least_load_path[URMA_UBAGG_MAX_CONNECTION] = {{0, 0}};
     uint32_t least_load_cnt = 0;
-    bool enable_info_fallback = true;
     int ret;
     uint32_t min[2] = { 0 };
     uint32_t max[2] = { 0 };
@@ -197,12 +224,23 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     }
 
     if (info != NULL) {
-        ret = get_affinity_path_range(bdp_comp, info, min, max);
-        if (ret != 0) {
-            return ret;
+        uint32_t valid_route = 0;
+        bondp_chip_id_info_t chip_priority[CHIP_ROUTE_NUM];
+
+        init_chip_priority(chip_priority, info);
+
+        for (int i = 0; i < CHIP_ROUTE_NUM ; i++) {
+            ret = get_affinity_path_range(bdp_comp, &chip_priority[i], min, max);
+            if (ret != 0) {
+                return ret;
+            }
+            valid_route += select_least_load_path(bdp_comp, bdp_tjetty, min, max,
+                                                  least_load_path, &least_load_cnt);
+            if (valid_route >= ACTIVE_PORT_PER_CHIP) {
+                break;
+            }
         }
-        select_least_load_path(bdp_comp, bdp_tjetty, min, max, least_load_path, &least_load_cnt);
-        if (least_load_cnt == 0 && !enable_info_fallback) {
+        if (least_load_cnt == 0 && !g_bondp_global_ctx->enable_failover) {
             return URMA_FAIL;
         }
     }
@@ -212,7 +250,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
             min[0] = min[1] = 0;
             max[0] = max[1] = IODIE_NUM;
         } else if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
-            min[0] = min[1]  = IODIE_NUM;
+            min[0] = min[1] = IODIE_NUM;
             max[0] = max[1] = URMA_UBAGG_DEV_MAX_NUM;
         } else {
             URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);

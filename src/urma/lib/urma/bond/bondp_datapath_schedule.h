@@ -19,8 +19,10 @@
 extern "C" {
 #endif
 
-#define BONDP_CHIP_ID_MIN 1
-#define BONDP_CHIP_ID_MAX 2
+#define BONDP_CHIP_ID_MIN      1
+#define BONDP_CHIP_ID_MAX      2
+#define ACTIVE_PORT_PER_CHIP   2
+#define CHIP_ROUTE_NUM         3
 
 typedef struct bondp_chip_id_info {
     uint32_t src_chip_id;
