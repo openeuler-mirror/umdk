@@ -3120,6 +3120,10 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg)
 {
     *p = *cfg;
 
+    if (cfg->flag.bs.share_jfr == URMA_SHARE_JFR && cfg->shared.jfc == NULL) {
+        p->shared.jfc = cfg->shared.jfr->jfr_cfg.jfc;
+    }
+
     /* deep copy of jfr cfg */
     if (cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR) {
         p->jfr_cfg = calloc(1, sizeof(urma_jfr_cfg_t));
