@@ -176,6 +176,7 @@ typedef struct bondp_jfc {
     uint32_t enabled_count;
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
+    uint32_t polled_mask; /* Bitmask of p_jfc indices that produced CRs since last rearm */
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
 
