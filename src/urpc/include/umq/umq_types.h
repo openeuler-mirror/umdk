@@ -242,7 +242,7 @@ typedef enum umq_buf_block_size {
 } umq_buf_block_size_t;
 
 typedef struct umq_buf_block_cfg {
-    // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automically
+    // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automatically
     // adjusted
     umq_buf_block_size_t small_block_size;
 } umq_buf_block_cfg_t;
@@ -636,7 +636,7 @@ typedef struct umq_cfg_get {
     umq_tp_mode_t tp_mode;        // transport mode of queue
 } umq_cfg_get_t;
 
-#define UMQ_IO_OPTION_FLAG_DIRECTION        (1)         // enable io_direcation
+#define UMQ_IO_OPTION_FLAG_DIRECTION        (1)         // enable io_direction
 #define UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX    (1 << 1)    // enable tp_handle_idx
 
 typedef struct umq_io_option {

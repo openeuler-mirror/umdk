@@ -21,9 +21,9 @@ extern "C" {
  * ensure the outstanding does't exceed the maximum depth
  * Post tx/rx buf to umq
  * @param[in] umqh: umq handle
- * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requeses in one call
+ * @param[in] qbuf: qbuf need to post. no more than UMQ_BATCH_SIZE work requests in one call
  * @param[in] option: Set post direction : tx or rx
- * @param[out] bad_qbuf: qbuf list faild to post. user should free these buf
+ * @param[out] bad_qbuf: qbuf list failed to post. user should free these buf
  * Return: UMQ_SUCCESS on success, error code on failure, the specific error code is as follows.
  * -UMQ_ERR_EFLOWCTL: flow control error detected during post
  */

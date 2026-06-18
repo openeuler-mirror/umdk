@@ -101,7 +101,7 @@ static int pre_dp_start_callback(void)
     }
 
     if (is_feature_enable(URPC_FEATURE_TIMEOUT) && urpc_notify_table_init() != URPC_SUCCESS) {
-        URPC_LIB_LOG_ERR("msg table init fialed\n");
+        URPC_LIB_LOG_ERR("msg table init failed\n");
         goto UNINIT_TIMER;
     }
 

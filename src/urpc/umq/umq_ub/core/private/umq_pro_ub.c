@@ -1647,17 +1647,17 @@ int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt)
 }
 
 // FC release: restore umq_ref on success, or rollback on failure.
-void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t fialed_cnt)
+void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
 {
     if (!is_umq_ub_logic_queue(queue->create_flag) || queue->jetty_node == NULL) {
         return;
     }
 
     jetty_pool_node_t *node = queue->jetty_node;
-    if (fialed_cnt == 0) {
+    if (failed_cnt == 0) {
         __atomic_store_n(&node->umq_ref, (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
     } else {
-        if (__atomic_sub_fetch(&node->tx_outstanding, fialed_cnt, __ATOMIC_ACQ_REL) == 0) {
+        if (__atomic_sub_fetch(&node->tx_outstanding, failed_cnt, __ATOMIC_ACQ_REL) == 0) {
             queue->jetty_node = NULL;
             umq_ub_jetty_node_free(node);
             return;

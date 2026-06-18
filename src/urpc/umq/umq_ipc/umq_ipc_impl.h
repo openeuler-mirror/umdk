@@ -48,7 +48,7 @@ umq_buf_t *umq_ipc_dequeue_impl(uint64_t umqh_tp);
 
 void umq_ipc_notify_impl(uint64_t umqh_tp);
 
-int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option);
+int umq_ipc_rearm_interrupt_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option);
 
 int32_t umq_ipc_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrupt_option_t *option);
 

@@ -151,8 +151,8 @@ typedef struct umq_ops {
     * User should ensure thread safety if io_lock_free is true
     * Enqueue umq buf
     * @param[in] umqh_tp: umq handle
-    * @param[in] qbuf: qbuf need to enqueue. no more than UMQ_BATCH_SIZE work requeses once
-    * @param[out] bad_qbuf: qbuf list faild to enqueue. user should free these buf
+    * @param[in] qbuf: qbuf need to enqueue. no more than UMQ_BATCH_SIZE work requests once
+    * @param[out] bad_qbuf: qbuf list failed to enqueue. user should free these buf
     * Return 0 on success, error code on failure
     */
     int (*umq_tp_enqueue)(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
@@ -176,16 +176,16 @@ typedef struct umq_ops {
     * User should ensure thread safety if io_lock_free is true
     * Arm interrupt of umq
     * @param[in] umqh_tp: umq handle
-    * @param[in] solicated: solicated flag
+    * @param[in] solicited: solicited flag
     * @param[in] option: option param. user should specify UMQ_IO_TX or UMQ_IO_RX, or UMQ_FAIL will be returned
     * Return 0 on success, error code on failure
     */
-    int (*umq_tp_rearm_interrupt)(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option);
+    int (*umq_tp_rearm_interrupt)(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option);
 
     /**
     * User should ensure thread safety if io_lock_free is true
     * Sleep and wait for interrupt
-    * @param[in] wait_umqh_tp: umq handle which is waitting for interrupt
+    * @param[in] wait_umqh_tp: umq handle which is waiting for interrupt
     * @param[in] time_out: max time to wait (milliseconds),
     *            timeout = 0: return immediately event if no events are ready,
     *            timeout = -1: an infinite timeout
@@ -212,7 +212,7 @@ typedef struct umq_ops {
     int (*umq_tp_async_event_fd_get)(umq_trans_info_t *trans_info);
 
     /**
-     *  Get asyn event.
+     *  Get async event.
      * @param[in] dev_info: device info;
      * @param[out] event: the address to put event
      * Return: 0 on success, other value on error
@@ -220,7 +220,7 @@ typedef struct umq_ops {
     int (*umq_tp_async_event_get)(umq_trans_info_t *trans_info, umq_async_event_t *event);
 
     /**
-     *  Ack asyn event.
+     *  Ack async event.
      * @param[in] event: the address to ack event;
      * Return: void
      */
@@ -247,7 +247,7 @@ typedef struct umq_ops {
      * User defined control of the context.
      * @param[in] umqh_tp: umq tp handle
      * @param[in] in: user ctl cmd
-     * @param[out] out: result of excution
+     * @param[out] out: result of execution
      * Return 0 on success, error code on failure
      */
     int (*umq_tp_user_ctl)(uint64_t umqh_tp, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out);
@@ -272,7 +272,7 @@ typedef struct umq_ops {
     /**
      * Get device information.
      * @param[in] dev_name: device name
-     * @param[in] umq_trans_mode: umq trans mdoe
+     * @param[in] umq_trans_mode: umq trans mode
      * @param[out] umq_dev_info: device information
      * Return: 0 on success, other value on error
      */
@@ -280,7 +280,7 @@ typedef struct umq_ops {
 
     /**
      * Get all devices information, umq_tp_dev_info_list_free needs to be called to free memory.
-     * @param[in] umq_trans_mode: umq trans mdoe
+     * @param[in] umq_trans_mode: umq trans mode
      * @param[out] dev_num: device information array size
      * Return: devices information, NULL on failure (get error code from errno)
      */
@@ -288,7 +288,7 @@ typedef struct umq_ops {
 
     /**
      * Free devices information allocated by umq_tp_dev_info_list_get.
-     * @param[in] umq_trans_mode: umq trans mdoe
+     * @param[in] umq_trans_mode: umq trans mode
      * @param[in] umq_dev_info: device information to free
      * Return: void
      */
@@ -324,7 +324,7 @@ typedef struct umq_ops {
     uint32_t (*umq_tp_transport_pool_resource_create)(uint64_t umqh_tp);
 
     /**
-     * Destry transport resource.
+     * Destroy transport resource.
      * @param[in] umqh_tp: Main UMQ tp handle
      * @param[in] tp_handle_idx: transport handle index
      * Return 0 on success, error code on failure

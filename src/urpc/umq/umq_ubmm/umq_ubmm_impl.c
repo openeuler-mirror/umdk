@@ -842,10 +842,10 @@ void umq_ubmm_notify_impl(uint64_t umqh_tp)
     umq_ub_write_imm(tp->ub_handle, tp->bind_ctx->remote_notify_addr, 1, imm.value);
 }
 
-int umq_ubmm_rearm_interrupt_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option)
+int umq_ubmm_rearm_interrupt_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option)
 {
     umq_ubmm_info_t *tp = (umq_ubmm_info_t *)(uintptr_t)umqh_tp;
-    return umq_ub_rearm_impl(tp->ub_handle, solicated, option);
+    return umq_ub_rearm_impl(tp->ub_handle, solicited, option);
 }
 
 int32_t umq_ubmm_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrupt_option_t *option)

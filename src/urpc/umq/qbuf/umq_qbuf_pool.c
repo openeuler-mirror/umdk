@@ -353,7 +353,7 @@ static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansio
 
     if (!try_inc_atomic_exp_mem_size(total_size)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-            "expand mem size max: %llu, now expand mem size: %llu, expand buf pool need: %llu, expand fialed\n",
+            "expand mem size max: %llu, now expand mem size: %llu, expand buf pool need: %llu, expand failed\n",
             g_qbuf_pool.expansion_mem_size_max, g_qbuf_pool.exp_total_mem_pool_size, total_size);
         return -UMQ_ERR_ENOMEM;
     }

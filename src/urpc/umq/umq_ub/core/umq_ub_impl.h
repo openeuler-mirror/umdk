@@ -53,7 +53,7 @@ int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_q
 int32_t umq_ub_enqueue_impl_plus(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
 umq_buf_t *umq_ub_dequeue_impl(uint64_t umqh_tp);
 umq_buf_t *umq_ub_dequeue_impl_plus(uint64_t umqh_tp);
-int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicated, umq_interrupt_option_t *option);
+int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *option);
 
 int umq_ub_get_cq_event_impl(uint64_t umqh_tp, umq_interrupt_option_t *option);
 

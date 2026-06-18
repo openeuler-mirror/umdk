@@ -616,7 +616,7 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
 
 int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt);
-void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t fialed_cnt);
+void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt);
 
 static ALWAYS_INLINE void umq_ub_io_packet_stats(
     ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt, bool lock_free)

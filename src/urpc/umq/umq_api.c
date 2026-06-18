@@ -1137,7 +1137,7 @@ void umq_notify(uint64_t umqh)
     return;
 }
 
-int umq_rearm_interrupt(uint64_t umqh, bool solicated, umq_interrupt_option_t *option)
+int umq_rearm_interrupt(uint64_t umqh, bool solicited, umq_interrupt_option_t *option)
 {
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
@@ -1148,7 +1148,7 @@ int umq_rearm_interrupt(uint64_t umqh, bool solicated, umq_interrupt_option_t *o
         return -UMQ_ERR_EINVAL;
     }
 
-    int ret = umq->tp_ops->umq_tp_rearm_interrupt(umq->umqh_tp, solicated, option);
+    int ret = umq->tp_ops->umq_tp_rearm_interrupt(umq->umqh_tp, solicited, option);
     umq_perf_record_write_interrupt_with_direction(UMQ_PERF_RECORD_REARM_TX, start_timestamp, option->direction);
     return ret;
 }
