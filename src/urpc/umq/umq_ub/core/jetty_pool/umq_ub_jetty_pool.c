@@ -34,6 +34,10 @@ typedef struct jetty_pool {
 
     uint32_t free_count;            // Current count in free_q (protected by lock)
     uint32_t active_count;          // Current count in active_q (protected by lock)
+    uint64_t in_use_count;          // Nodes currently borrowed by a Logic UMQ (state == IN_USE)
+    uint64_t err_count;             // Nodes marked with is_jetty_err == true
+    uint64_t acc_alloc_count;        // Cumulative allocs (nodes borrowed by Logic UMQ)
+    uint64_t acc_free_count;         // Cumulative frees (nodes returned to pool)
     uint32_t node_count;            // Total allocated nodes
     uint32_t max_nodes;             // Max nodes allowed in pool (0 means use default JETTY_POOL_MAX_NODES)
 
@@ -102,8 +106,6 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 
     (void)pthread_spin_lock(&g_jetty_pool.lock);
     urpc_list_remove(&g_thread_jetty_cache.registry_node);
-    (void)pthread_spin_unlock(&g_jetty_pool.lock);
-
     if (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
         while (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
             jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(
@@ -118,6 +120,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
         }
         g_thread_jetty_cache.cached_count = 0;
     }
+    (void)pthread_spin_unlock(&g_jetty_pool.lock);
 
     g_thread_jetty_cache.inited = false;
 }
@@ -336,6 +339,9 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
     }
     pool->node_count--;
     (void)pthread_spin_unlock(&pool->lock);
+    if (node->is_jetty_err) {
+        (void)__atomic_sub_fetch(&pool->err_count, 1, __ATOMIC_RELAXED);
+    }
     return UMQ_SUCCESS;
 }
 
@@ -388,6 +394,8 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
 
             node->borrow_count = 0;
             node->borrow_limit = pool->borrow_limit;
+            (void)__atomic_add_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
+            (void)__atomic_add_fetch(&pool->acc_alloc_count, 1, __ATOMIC_RELAXED);
             return node;
         }
     }
@@ -406,6 +414,8 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
     }
 
     jetty_pool_t *pool = &g_jetty_pool;
+    (void)__atomic_sub_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
+    (void)__atomic_add_fetch(&pool->acc_free_count, 1, __ATOMIC_RELAXED);
     if (node->is_jetty_err) {
         (void)pthread_spin_lock(&pool->lock);
         recycle_node_to_relay_q(pool, node);
@@ -470,5 +480,45 @@ umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void)
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list)
 {
     return __atomic_sub_fetch(&jetty_node_list->ref_cnt, 1, __ATOMIC_ACQUIRE);
+}
+
+void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node)
+{
+    if (node == NULL) {
+        return;
+    }
+    bool expected = false;
+    if (!__atomic_compare_exchange_n(&node->is_jetty_err, &expected, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return; // was already true
+    }
+    (void)__atomic_add_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
+}
+
+int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats)
+{
+    if (stats == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "stats is NULL\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    if (!g_jetty_pool_inited) {
+        memset(stats, 0, sizeof(*stats));
+        return UMQ_SUCCESS;
+    }
+    jetty_pool_t *pool = &g_jetty_pool;
+    (void)pthread_spin_lock(&pool->lock);
+    stats->total_num = pool->node_count;
+    stats->global_num = pool->active_count;
+    uint32_t thread_cache_total = 0;
+    thread_local_jetty_cache_t *cache = NULL;
+    URPC_LIST_FOR_EACH(cache, registry_node, &pool->thread_cache_list) {
+        thread_cache_total += cache->cached_count;
+    }
+    (void)pthread_spin_unlock(&pool->lock);
+    stats->cache_num = thread_cache_total;
+    stats->in_use_num = __atomic_load_n(&pool->in_use_count, __ATOMIC_RELAXED);
+    stats->err_num = __atomic_load_n(&pool->err_count, __ATOMIC_RELAXED);
+    stats->acc_alloc_num = __atomic_load_n(&pool->acc_alloc_count, __ATOMIC_RELAXED);
+    stats->acc_free_num = __atomic_load_n(&pool->acc_free_count, __ATOMIC_RELAXED);
+    return UMQ_SUCCESS;
 }
 

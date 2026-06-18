@@ -448,6 +448,44 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
     return str_size;
 }
 
+int umq_stats_transport_pool_get(uint64_t umqh, umq_transport_pool_stats_t *umq_transport_pool_stats)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_transport_pool_get == NULL || umq_transport_pool_stats == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umqh or transport pool stats parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return umq->dfx_tp_ops->umq_tp_stats_transport_pool_get(umq_transport_pool_stats);
+}
+
+int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transport_pool_stats,
+    char *buf, int max_buf_len)
+{
+    if (umq_transport_pool_stats == NULL || buf == NULL || max_buf_len <= 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    int str_size = 0;
+    (void)memset(buf, 0, max_buf_len);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+        "%s\n", "                                         Transport Pool Statistics");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+        "%-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+        "TotalTpCnt", "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt", "AccAllocTpCnt", "AccFreeTpCnt");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+        "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
+        umq_transport_pool_stats->total_num, umq_transport_pool_stats->global_num,
+        umq_transport_pool_stats->cache_num, umq_transport_pool_stats->in_use_num,
+        umq_transport_pool_stats->error_num, umq_transport_pool_stats->acc_alloc_num,
+        umq_transport_pool_stats->acc_free_num);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+    return str_size;
+}
+
 int umq_stats_perf_get(umq_perf_stats_t *umq_perf_stats)
 {
     return umq_perf_info_get(umq_perf_stats);

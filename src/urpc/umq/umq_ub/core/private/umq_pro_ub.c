@@ -1712,9 +1712,9 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
         if (cr[i].status != URMA_CR_SUCCESS) {
             if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
                 umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
-                jetty_node_list->node_list[tp_handle_idx]->is_jetty_err = true;
+                umq_ub_jetty_node_mark_err(jetty_node_list->node_list[tp_handle_idx]);
             } else if (is_umq_ub_logic_queue(queue->create_flag)) {
-                queue->jetty_node->is_jetty_err = true;
+                umq_ub_jetty_node_mark_err(queue->jetty_node);
             }
             umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND_ERROR);
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE || cr[i].status == URMA_CR_WR_SUSPEND_DONE) {
@@ -1813,9 +1813,9 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, uint32_t 
         if (cr[i].status != URMA_CR_SUCCESS) {
             if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
                 umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
-                jetty_node_list->node_list[tp_handle_idx]->is_jetty_err = true;
+                umq_ub_jetty_node_mark_err(jetty_node_list->node_list[tp_handle_idx]);
             } else if (is_umq_ub_logic_queue(queue->create_flag)) {
-                queue->jetty_node->is_jetty_err = true;
+                umq_ub_jetty_node_mark_err(queue->jetty_node);
             }
             if (cr[i].status == URMA_CR_WR_FLUSH_ERR_DONE) {
                 UMQ_LIMIT_VLOG_INFO(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx "
