@@ -1186,6 +1186,7 @@ TEST(UrmaCoreTest, CmdWrappersFillObjectsWhenIoctlSucceeds)
     urma_jfs_t jfs = {};
     urma_jfr_t jfr = {};
     urma_jetty_t jetty = {};
+    urma_jetty_cfg_t jettyCfgNoRxJfc = fixture.jetty.jetty_cfg;
     urma_target_jetty_t tjfr = {};
     urma_target_jetty_t tjetty = {};
     urma_notifier_t notifier = {};
@@ -1226,6 +1227,7 @@ TEST(UrmaCoreTest, CmdWrappersFillObjectsWhenIoctlSucceeds)
     tjettyCfg.token = &importToken;
     notifier.urma_ctx = &fixture.ctx;
     notifier.fd = 19;
+    jettyCfgNoRxJfc.shared.jfc = nullptr;
     std::snprintf(jettyGrpCfg.name, sizeof(jettyGrpCfg.name), "cmd_success_grp");
 
     SetCoreIoctlResult(0, 0);
@@ -1247,8 +1249,11 @@ TEST(UrmaCoreTest, CmdWrappersFillObjectsWhenIoctlSucceeds)
     EXPECT_EQ(0, urma_cmd_deactive_jfr(&jfr, &udata));
     EXPECT_FALSE(jfr.urma_jfr_opt.is_actived);
 
-    EXPECT_EQ(0, urma_cmd_create_jetty(&fixture.ctx, &jetty, &fixture.jetty.jetty_cfg, &udata));
-    EXPECT_EQ(0, urma_cmd_alloc_jetty(&fixture.ctx, &fixture.jetty.jetty_cfg, &jetty, &udata));
+    EXPECT_EQ(0, urma_cmd_create_jetty(&fixture.ctx, &jetty, &jettyCfgNoRxJfc, &udata));
+    EXPECT_EQ(&fixture.jfc, jetty.jetty_cfg.shared.jfc);
+    jetty.jetty_cfg.shared.jfc = nullptr;
+    EXPECT_EQ(0, urma_cmd_alloc_jetty(&fixture.ctx, &jettyCfgNoRxJfc, &jetty, &udata));
+    EXPECT_EQ(&fixture.jfc, jetty.jetty_cfg.shared.jfc);
     EXPECT_EQ(0, urma_cmd_active_jetty(&jetty, &udata));
     EXPECT_EQ(0, urma_cmd_deactive_jetty(&jetty, &udata));
     EXPECT_EQ(0, urma_cmd_import_jfr(&fixture.ctx, &tjfr, &tjfrCfg, &udata));
