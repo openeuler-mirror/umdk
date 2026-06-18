@@ -287,7 +287,7 @@ enum {
 };
 
 typedef enum admin_agg_cmd {
-    CMD_AGG_ADD = 4,
+    CMD_AGG_ADD = 3,
     CMD_AGG_DEL,
 } admin_agg_cmd_t;
 
