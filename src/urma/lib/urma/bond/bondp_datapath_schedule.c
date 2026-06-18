@@ -354,6 +354,13 @@ int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cn
         URMA_LOG_ERR("No active port\n");
         return -1;
     }
+    uint32_t *rqe_cnt;
+    if (bdp_comp->comp_type == BONDP_COMP_JETTY && bdp_comp->v_jetty.jetty_cfg.shared.jfr != NULL) {
+        bondp_comp_t *jfr = CONTAINER_OF_FIELD(bdp_comp->v_jetty.jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
+        rqe_cnt = jfr->rqe_cnt;
+    } else {
+        rqe_cnt = bdp_comp->rqe_cnt;
+    }
 
     (void)memset(recv_wr_cnt, 0, sizeof(uint32_t) * URMA_UBAGG_DEV_MAX_NUM);
     if (wr_num == 0) {
@@ -362,7 +369,7 @@ int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cn
 
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t active_idx = bdp_comp->active_indices[i];
-        current_load[active_idx] = bdp_comp->rqe_cnt[active_idx];
+        current_load[active_idx] = rqe_cnt[active_idx];
     }
 
     for (uint32_t wr_idx = 0; wr_idx < wr_num; wr_idx++) {

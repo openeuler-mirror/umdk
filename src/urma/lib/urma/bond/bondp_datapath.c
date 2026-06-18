@@ -60,6 +60,17 @@ static wr_buf_t *get_recv_wr_buf(bondp_comp_t *bdp_comp)
     return NULL;
 }
 
+static bondp_comp_t *get_recv_count_comp(bondp_comp_t *recv_comp)
+{
+    if (recv_comp == NULL) {
+        return NULL;
+    }
+    if (recv_comp->comp_type == BONDP_COMP_JETTY && recv_comp->v_jetty.jetty_cfg.shared.jfr != NULL) {
+        return CONTAINER_OF_FIELD(recv_comp->v_jetty.jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
+    }
+    return recv_comp;
+}
+
 static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, int target_idx,
                                     urma_jfs_wr_t *send_wr, urma_jfs_wr_t **bad_wr, int wr_count)
 {
@@ -91,8 +102,9 @@ static urma_status_t comp_post_recv(bondp_comp_t *comp, int recv_idx, urma_jfr_w
         URMA_LOG_ERR("Invalid post jfr wr type=%d\n", comp->comp_type);
         ret = URMA_EINVAL;
     }
+    uint32_t *rqe_cnt = get_recv_count_comp(comp)->rqe_cnt;
     if (ret == URMA_SUCCESS) {
-        comp->rqe_cnt[recv_idx] += wr_count;
+        rqe_cnt[recv_idx] += wr_count;
     }
     return ret;
 }
@@ -795,7 +807,7 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
     if (is_single_dev_mode(bdp_jetty->bondp_ctx)) {
         ret = bondp_post_recv_wr_no_store(bdp_jetty, wr, bad_wr);
     } else {
-        ret = bdp_jetty->bondp_ctx->msn_enable ? bondp_post_recv_wr_list_and_store(bdp_jetty, wr, bad_wr)
+        ret = (bdp_jetty->bondp_ctx->msn_enable) ? bondp_post_recv_wr_list_and_store(bdp_jetty, wr, bad_wr)
                                                : bondp_post_recv_wr_list_without_backup(bdp_jetty, wr, bad_wr);
     }
     PERF_PROFILING_END(BOND_JETTY_POST_RECV);
@@ -818,7 +830,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     if (is_single_dev_mode(bdp_jfr->bondp_ctx)) {
         ret = bondp_post_recv_wr_no_store(bdp_jfr, wr, bad_wr);
     } else {
-        ret = bdp_jfr->bondp_ctx->msn_enable ? bondp_post_recv_wr_list_and_store(bdp_jfr, wr, bad_wr)
+        ret = (bdp_jfr->bondp_ctx->msn_enable) ? bondp_post_recv_wr_list_and_store(bdp_jfr, wr, bad_wr)
                                              : bondp_post_recv_wr_list_without_backup(bdp_jfr, wr, bad_wr);
     }
     PERF_PROFILING_END(BOND_POST_JFR_RECV);
@@ -892,17 +904,6 @@ static inline void put_comp(bondp_comp_t *bdp_comp)
     atomic_fetch_sub(&bdp_comp->use_cnt.atomic_cnt, 1);
 }
 
-static bondp_comp_t *get_recv_count_comp(bondp_comp_t *recv_comp)
-{
-    if (recv_comp == NULL) {
-        return NULL;
-    }
-    if (recv_comp->comp_type == BONDP_COMP_JETTY && recv_comp->v_jetty.jetty_cfg.shared.jfr != NULL) {
-        return CONTAINER_OF_FIELD(recv_comp->v_jetty.jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
-    }
-    return recv_comp;
-}
-
 static cr_convert_ret_t handle_recv_cr_without_backup(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
     bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
@@ -916,7 +917,6 @@ static cr_convert_ret_t handle_recv_cr_without_backup(bondp_context_t *bdp_ctx, 
         put_comp(recv_comp);
         return CONVERT_FAIL;
     }
-
     if (idx < 0 || idx >= URMA_UBAGG_DEV_MAX_NUM) {
         URMA_LOG_ERR("Invalid idx=%d in recv cr without backup.\n", idx);
         put_comp(recv_comp);
@@ -1195,7 +1195,7 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int
     } else if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, idx, cr);
     } else if (is_recv_cr(cr)) {
-        return bdp_ctx->msn_enable ? handle_recv_cr_with_store(bdp_ctx, idx, cr)
+        return (bdp_ctx->msn_enable) ? handle_recv_cr_with_store(bdp_ctx, idx, cr)
                                    : handle_recv_cr_without_backup(bdp_ctx, idx, cr);
     } else {
         return handle_send_cr_with_store(bdp_ctx, idx, cr);
@@ -1227,7 +1227,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
                               ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
                               : cr_cnt_remaining;
         int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[idx], pcr_cnt_max, pcr_buf);
-
         if (pcr_cnt < 0) {
             PERF_PROFILING_END(BOND_POLL_JFC);
             return pcr_cnt;
