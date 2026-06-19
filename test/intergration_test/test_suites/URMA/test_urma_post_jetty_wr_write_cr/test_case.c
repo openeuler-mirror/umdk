@@ -41,7 +41,7 @@ static int run_test(test_context_t *test_ctx)
             jfs_wr[i]->rw.src.num_sge = 1;
             jfs_wr[i]->rw.dst.num_sge = 1;
             jfs_wr[i]->next = NULL;
-            jfs_wr[i]->tjetty = ctx->r_ctx[PROC_2 - 1].tjetty[i];
+            jfs_wr[i]->tjetty = ctx->r_ctx[PROC_2 - 1].tjetty[0];
 
             jfs_wr[i]->rw.src.sge = calloc(jfs_wr[i]->rw.src.num_sge, sizeof(urma_sge_t));
             CHECK_JUMP(jfs_wr[i]->rw.src.sge == NULL, EXIT, "calloc err!\n");
@@ -67,7 +67,7 @@ static int run_test(test_context_t *test_ctx)
 
     if (ctx->app_id == PROC_1) {
         for (int i = 0; i < WR_NUM; i++) {
-            ret = test_urma_post_jetty_send_wr(ctx->l_ctx.jetty[i], jfs_wr[i], &bad_jfs_wr);
+            ret = test_urma_post_jetty_send_wr(ctx->l_ctx.jetty[0], jfs_wr[i], &bad_jfs_wr);
             TEST_LOG_INFO("test_urma_post_jetty_send_wr ret=%d\n", ret);
             ret = test_poll_jfc_wait(ctx->l_ctx.jfc[0], 1, cr, 1);
             TEST_LOG_INFO("status                = %u\n", cr[0].status);
@@ -81,7 +81,7 @@ static int run_test(test_context_t *test_ctx)
             TEST_LOG_INFO("flag.bs.flush_err_done= %u\n", cr[0].flag.bs.flush_err_done);
             TEST_LOG_INFO("completion_len        = %u\n", cr[0].completion_len);
             TEST_LOG_INFO("local_id              = %u\n", cr[0].local_id);
-            CHECK_JUMP(cr[0].local_id != ctx->l_ctx.jetty[i]->jetty_id.id, EXIT, "post_jetty_wr cr.local_id=%d\n",
+            CHECK_JUMP(cr[0].local_id != ctx->l_ctx.jetty[0]->jetty_id.id, EXIT, "post_jetty_wr cr.local_id=%d\n",
                        cr[0].local_id);
             TEST_LOG_INFO("remote_id.eid         = " EID_FMT "\n", EID_ARGS(cr[0].remote_id.eid));
             TEST_LOG_INFO("remote_id.uasid       = %u\n", cr[0].remote_id.uasid);
