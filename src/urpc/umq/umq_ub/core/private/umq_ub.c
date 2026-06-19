@@ -687,6 +687,8 @@ int umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
         return 0;
     }
     memcpy((char *)dst_rjetty, (char *)rjetty, length);
+    dst_rjetty->flag.bs.token_policy =
+        token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0);
     dst_rjetty->tp_type = queue->tp_type;
     umq_symbol_urma()->urma_put_rjetty(rjetty);
     return length;
