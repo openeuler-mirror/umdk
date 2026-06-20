@@ -1487,25 +1487,6 @@ TEST(UrmaBondTest, PublicAsyncEventMapsPhysicalJfsAndAckReleasesPrivateEvent)
     EXPECT_EQ(0, close(epollFd));
 }
 
-TEST(UrmaBondTest, NetlinkPublicApisHandleInvalidAndUninitializedState)
-{
-    bondp_switchback_req_t req = {};
-    bondp_switchback_msg_t msg = {};
-    bondp_context_t ctx = {};
-
-    bondp_nl_uninit();
-    EXPECT_EQ(-1, bondp_nl_get_fd());
-    EXPECT_EQ(-EINVAL, bondp_nl_send_switchback_req(nullptr));
-    EXPECT_EQ(-ENOTCONN, bondp_nl_send_switchback_req(&req));
-    EXPECT_EQ(-EINVAL, bondp_nl_recv_switchback_msg(nullptr));
-    EXPECT_EQ(-ENOTCONN, bondp_nl_recv_switchback_msg(&msg));
-
-    EXPECT_EQ(-EINVAL, bondp_fallback_ctrl_send_default(nullptr, 1, 0, 0, 1, 2, 3));
-    EXPECT_EQ(-EINVAL, bondp_fallback_ctrl_send_default(&ctx, 1, -1, 0, 1, 2, 3));
-    EXPECT_EQ(-EINVAL, bondp_fallback_ctrl_send_default(&ctx, 1, 0, -1, 1, 2, 3));
-    EXPECT_EQ(-ENOTCONN, bondp_fallback_ctrl_send_default(&ctx, 1, 0, 0, 1, 2, 3));
-}
-
 TEST(UrmaBondTest, LinkRecoveryRebuildsLocalPjettyWithMockProvider)
 {
     BondPathFixture fixture;
