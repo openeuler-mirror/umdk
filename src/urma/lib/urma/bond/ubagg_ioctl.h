@@ -29,6 +29,8 @@ typedef enum ubagg_userctl_opcode {
     GET_TOPO_INFO    = 2,
     GET_RJETTY       = 9,
     GET_SEG_CTX      = 10,
+    FAILBACK_START   = 11,
+    FAILBACK_RESULT  = 12,
 } ubagg_userctl_opcode_t;
 
 typedef struct bondp_physical_device {

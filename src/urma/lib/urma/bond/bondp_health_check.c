@@ -19,7 +19,6 @@
 #include "bondp_datapath_convert.h"
 #include "bondp_health_check.h"
 #include "bondp_link_recovery.h"
-#include "bondp_netlink.h"
 #include "urma_private.h"
 
 #define UBAGG_MAX_EVENT 1
