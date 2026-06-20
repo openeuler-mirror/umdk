@@ -105,6 +105,17 @@ static void init_cfg(umq_perftest_config_t *cfg)
     cfg->tp_type = UMQ_TP_TYPE_CTP;
 }
 
+static int copy_optarg_to_buf(char *dst, size_t dst_size, const char *opt_name, const char *opt_arg)
+{
+    int ret = snprintf(dst, dst_size, "%s", opt_arg);
+    if (ret < 0 || (size_t)ret >= dst_size) {
+        LOG_PRINT("%s is too long\n", opt_name);
+        return -1;
+    }
+
+    return 0;
+}
+
 int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *cfg)
 {
     if (argc == 1) {
@@ -122,7 +133,9 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
 
         switch (c) {
             case 'd':
-                memcpy(cfg->config.dev_name, optarg, strlen(optarg));
+                if (copy_optarg_to_buf(cfg->config.dev_name, sizeof(cfg->config.dev_name), "--dev", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 'c':
                 cfg->config.case_type = (uint32_t)strtoul(optarg, NULL, 0);
@@ -138,10 +151,16 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                 cfg->config.tcp_port = (uint16_t)strtoul(optarg, NULL, 0);
                 break;
             case 'l':
-                memcpy(cfg->config.local_ip, optarg, strlen(optarg));
+                if (copy_optarg_to_buf(cfg->config.local_ip, sizeof(cfg->config.local_ip),
+                    "--local-ip", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 'r':
-                memcpy(cfg->config.remote_ip, optarg, strlen(optarg));
+                if (copy_optarg_to_buf(cfg->config.remote_ip, sizeof(cfg->config.remote_ip),
+                    "--remote-ip", optarg) != 0) {
+                    return -1;
+                }
                 break;
             case 's':
                 cfg->config.size = (uint32_t)strtoul(optarg, NULL, 0);
