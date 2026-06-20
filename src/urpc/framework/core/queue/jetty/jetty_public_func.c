@@ -1471,12 +1471,13 @@ int jetty_provider_import_mem(provider_t *provider, xchg_mem_info_t *mem_info, u
         return -URPC_ERR_EEXIST;
     }
 
-    urma_seg_t remote_seg;
-    remote_seg.attr.value = mem_info->seg_flag.value;
-    remote_seg.len = mem_info->seg_len;
-    remote_seg.token_id = mem_info->seg_token_id;
+    urma_seg_t remote_seg = {
+        .attr.value = mem_info->seg_flag.value,
+        .len = mem_info->seg_len,
+        .token_id = mem_info->seg_token_id,
+        .ubva = mem_info->ubva,
+    };
     urma_token_t token = mem_info->token;
-    remote_seg.ubva = mem_info->ubva;
     urma_import_seg_flag_t flag = {
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.mapping = URMA_SEG_NOMAP,
