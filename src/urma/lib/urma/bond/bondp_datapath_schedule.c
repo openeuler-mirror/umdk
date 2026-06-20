@@ -68,13 +68,13 @@ static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp
                 least_load_path[0].local_idx = local_idx;
                 least_load_path[0].target_idx = target_idx;
                 *least_load_cnt = 1;
-                valid_route ++;
+                valid_route++;
             } else if (sqe_cnt == least_load) {
                 least_load_path[(*least_load_cnt)].least_load = least_load;
                 least_load_path[(*least_load_cnt)].local_idx = local_idx;
                 least_load_path[(*least_load_cnt)].target_idx = target_idx;
                 (*least_load_cnt)++;
-                valid_route ++;
+                valid_route++;
             }
         }
     }
@@ -107,19 +107,20 @@ static uint32_t select_random_path(uint32_t candidate_cnt)
 static int schedule_send_standalone(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                     int *send_idx, int *target_idx)
 {
-    uint32_t loc_idx = bdp_comp->active_indices[0];
-
-    if (!atomic_load(&bdp_comp->valid[loc_idx])) {
-        return -1;
-    }
-    for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
-        uint32_t tar_idx = bdp_tjetty->active_indices[j];
-        if (!atomic_load(&bdp_tjetty->valid[tar_idx]) || bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL) {
+    for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
+        uint32_t loc_idx = bdp_comp->active_indices[i];
+        if (!atomic_load(&bdp_comp->valid[loc_idx])) {
             continue;
         }
-        *send_idx = (int)loc_idx;
-        *target_idx = (int)tar_idx;
-        return 0;
+        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
+            uint32_t tar_idx = bdp_tjetty->active_indices[j];
+            if (!atomic_load(&bdp_tjetty->valid[tar_idx]) || bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL) {
+                continue;
+            }
+            *send_idx = (int)loc_idx;
+            *target_idx = (int)tar_idx;
+            return 0;
+        }
     }
     return -1;
 }
@@ -215,8 +216,8 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     bondp_path_t least_load_path[URMA_UBAGG_MAX_CONNECTION] = {{0, 0}};
     uint32_t least_load_cnt = 0;
     int ret;
-    uint32_t min[2] = { 0 };
-    uint32_t max[2] = { 0 };
+    uint32_t min[2] = {0};
+    uint32_t max[2] = {0};
 
     if (min_active_count == 0) {
         URMA_LOG_ERR("Invalid min_active_count.\n");
@@ -229,7 +230,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
 
         init_chip_priority(chip_priority, info);
 
-        for (int i = 0; i < CHIP_ROUTE_NUM ; i++) {
+        for (int i = 0; i < CHIP_ROUTE_NUM; i++) {
             ret = get_affinity_path_range(bdp_comp, &chip_priority[i], min, max);
             if (ret != 0) {
                 return ret;
@@ -271,8 +272,29 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
 
 static int schedule_recv_standalone(const bondp_comp_t *bdp_comp, int *recv_idx)
 {
-    *recv_idx = (int)bdp_comp->active_indices[0];
-    return 0;
+    if (bdp_comp->comp_type != BONDP_COMP_JETTY || bdp_comp->v_jetty.remote_jetty == NULL) {
+        *recv_idx = (int)bdp_comp->active_indices[0];
+        return 0;
+    }
+
+    const bondp_target_jetty_t *bdp_tjetty =
+        CONTAINER_OF_FIELD(bdp_comp->v_jetty.remote_jetty, bondp_target_jetty_t, v_tjetty);
+
+    for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
+        uint32_t loc_idx = bdp_comp->active_indices[i];
+        if (!atomic_load(&bdp_comp->valid[loc_idx])) {
+            continue;
+        }
+        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
+            uint32_t tar_idx = bdp_tjetty->active_indices[j];
+            if (!atomic_load(&bdp_tjetty->valid[tar_idx]) || bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL) {
+                continue;
+            }
+            *recv_idx = (int)loc_idx;
+            return 0;
+        }
+    }
+    return -1;
 }
 
 static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
