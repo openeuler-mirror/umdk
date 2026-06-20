@@ -411,10 +411,18 @@ TEST_F(UmqIPCTest, test_pro_umq_post_failure)
     qbuf = umq_buf_alloc(4096, 1, test_ipc_umqh(), nullptr);
     ASSERT_NE(qbuf, nullptr);
 
-    ASSERT_LT(umq_post(0, nullptr, UMQ_IO_MAX, nullptr), 0);
-    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, UMQ_IO_ALL, &bad), 0);
-    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, UMQ_IO_TX, &bad), 0);
-    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, UMQ_IO_RX, &bad), 0);
+    umq_io_option_t opt = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
+        .io_direction = UMQ_IO_MAX,
+    };
+
+    ASSERT_LT(umq_post(0, nullptr, &opt, nullptr), 0);
+    opt.io_direction = UMQ_IO_ALL;
+    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, &opt, &bad), 0);
+    opt.io_direction = UMQ_IO_TX;
+    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, &opt, &bad), 0);
+    opt.io_direction = UMQ_IO_RX;
+    ASSERT_LT(umq_post(test_ipc_umqh(), qbuf, &opt, &bad), 0);
 
     umq_buf_free(qbuf);
 }
@@ -423,9 +431,14 @@ TEST_F(UmqIPCTest, test_pro_umq_post_failure)
 TEST_F(UmqIPCTest, test_pro_umq_poll_failure)
 {
     umq_buf_t *buf[2];
-    ASSERT_LT(umq_poll(0, UMQ_IO_MAX, nullptr, 0), 0);
-    ASSERT_LT(umq_poll(test_ipc_umqh(), UMQ_IO_ALL, buf, 1), 0);
-    ASSERT_LT(umq_poll(test_ipc_umqh(), UMQ_IO_ALL, buf, 2), 0);
+    umq_io_option_t opt = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
+        .io_direction = UMQ_IO_MAX,
+    };
+    ASSERT_LT(umq_poll(0, &opt, nullptr, 0), 0);
+    opt.io_direction = UMQ_IO_ALL;
+    ASSERT_LT(umq_poll(test_ipc_umqh(), &opt, buf, 1), 0);
+    ASSERT_LT(umq_poll(test_ipc_umqh(), &opt, buf, 2), 0);
 }
 
 // IPC umq not support
