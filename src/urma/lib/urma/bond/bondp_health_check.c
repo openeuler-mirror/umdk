@@ -539,44 +539,6 @@ static void bondp_handle_health_queued_events(bondp_context_t *bond_ctx)
     bondp_free_health_event_list(&event_list);
 }
 
-static void bondp_handle_netlink_events(void)
-{
-    while (true) {
-        bondp_switchback_msg_t msg = {0};
-        int ret = bondp_nl_recv_switchback_msg(&msg);
-        if (ret == -EAGAIN) {
-            break;
-        }
-        if (ret != 0) {
-            URMA_LOG_WARN("Failed to recv switchback msg from netlink, ret=%d\n", ret);
-            break;
-        }
-
-        bool consumed = false;
-        bondp_global_context_t *global_ctx = g_bondp_global_ctx;
-        if (global_ctx == NULL) {
-            break;
-        }
-        pthread_rwlock_rdlock(&global_ctx->health_thread_ctx.health_ctx_lock);
-        bondp_health_ctx_node_t *ctx_node = NULL;
-        UB_LIST_FOR_EACH(ctx_node, node, &global_ctx->health_thread_ctx.health_ctx_list) {
-            if (ctx_node->bdp_ctx == NULL) {
-                continue;
-            }
-            if (bondp_health_handle_fallback_ctrl_rx_impl(ctx_node->bdp_ctx, msg.in.recv_local_id,
-                msg.in.ctrl_type, msg.in.req_seq, msg.in.payload, true)) {
-                consumed = true;
-                break;
-            }
-        }
-        pthread_rwlock_unlock(&global_ctx->health_thread_ctx.health_ctx_lock);
-        if (!consumed) {
-            URMA_LOG_WARN("Drop switchback netlink msg: local_id=%u type=%u seq=%u payload=%u not matched\n",
-                msg.in.recv_local_id, msg.in.ctrl_type, msg.in.req_seq, msg.in.payload);
-        }
-    }
-}
-
 static void bondp_handle_epoll_event(const struct epoll_event *event)
 {
     if (event == NULL) {
@@ -589,12 +551,6 @@ static void bondp_handle_epoll_event(const struct epoll_event *event)
     }
 
     if ((event->events & EPOLLIN) == 0) {
-        return;
-    }
-
-    int nl_fd = bondp_nl_get_fd();
-    if (nl_fd >= 0 && event->data.fd == nl_fd) {
-        bondp_handle_netlink_events();
         return;
     }
 
@@ -706,16 +662,8 @@ static int bondp_send_fallback_ctrl_msg(
         return -1;
     }
 
-    int ret = bondp_fallback_ctrl_send_default(bdp_ctx, task->vjetty_id, local_idx, target_idx,
-        ctrl_type, req_seq, (uint32_t)payload);
-    if (ret != 0) {
-        URMA_LOG_WARN("Failed to send fallback ctrl msg by netlink, vjetty=%u lidx=%d tidx=%d type=%u seq=%u ret=%d\n",
-            task->vjetty_id, local_idx, target_idx, ctrl_type, req_seq, ret);
-        return -1;
-    }
-    URMA_LOG_INFO("Fallback ctrl sent by netlink, vjetty=%u lidx=%d tidx=%d type=%u seq=%u payload=%u\n",
-        task->vjetty_id, local_idx, target_idx, ctrl_type, req_seq, (uint32_t)payload);
-    return 0;
+    // Not support
+    return -1;
 }
 
 static int bondp_relink_primary_import(bondp_health_task_t *task)
@@ -1547,8 +1495,6 @@ int bondp_start_health_check_thread(void)
 {
     bondp_global_context_t *global_ctx = g_bondp_global_ctx;
     int health_epoll_fd;
-    int nl_fd;
-    struct epoll_event ev = {0};
 
     if (!bondp_health_check_enabled()) {
         return 0;
@@ -1561,15 +1507,6 @@ int bondp_start_health_check_thread(void)
     }
 
     global_ctx->health_thread_ctx.health_epoll_fd = health_epoll_fd;
-
-    nl_fd = bondp_nl_get_fd();
-    if (nl_fd >= 0) {
-        ev.events = EPOLLIN;
-        ev.data.fd = nl_fd;
-        if (epoll_ctl(health_epoll_fd, EPOLL_CTL_ADD, nl_fd, &ev) != 0) {
-            URMA_LOG_WARN("Failed to add bondp netlink fd to health epoll, errno=%d\n", errno);
-        }
-    }
 
     atomic_store(&global_ctx->health_thread_ctx.health_thread_stop, false);
     if (pthread_create(&global_ctx->health_thread_ctx.health_thread, NULL, bondp_health_check_thread,
