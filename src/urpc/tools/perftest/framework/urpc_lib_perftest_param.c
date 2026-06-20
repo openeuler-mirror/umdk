@@ -242,7 +242,9 @@ int urpc_perftest_parse_arguments(int argc, char **argv, perftest_framework_conf
                 cfg->data_trans_mode = (data_trans_mode_t)strtoul(optarg, NULL, 0);
                 break;
             case 'e':
-                strcpy(cfg->eid, optarg);
+                if (copy_optarg_to_buf(cfg->eid, sizeof(cfg->eid), "--eid", optarg) != 0) {
+                    return -1;
+                }
                 break;
             default:
                 usage();
