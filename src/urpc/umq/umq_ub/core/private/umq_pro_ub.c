@@ -459,7 +459,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
         ret = -UMQ_ERR_ENOBUFS;
     }
 
-    return UMQ_SUCCESS;
+    return ret;
 
 RECOVER_JETTY_NODE:
     umq_ub_post_release_jetty_node(queue, failed_num);
