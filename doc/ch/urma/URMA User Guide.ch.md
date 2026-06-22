@@ -1985,12 +1985,12 @@ urma_admin perf show                                             查询DFX统计
 
 | 命令元素 | 描述 | 是否输入参数 | 取值范围 | 默认取值 |
 |---|---|---|---|---|
-| <dev> | 设备名称，例如udma1 | 必选 | 不超过63字节的字符串 | 无 |
-| <netns> | 网络命名空间路径，例如/proc/$pid/ns/net | 必选 | 有效命名空间路径 | 无 |
-| <eid_idx> | EID索引 | 必选 | 0~65535 | 无 |
-| <eid> | EID值 | 必选 | IPv4、IPv6或映射EID字符串 | 无 |
-| <main_ue_eid> | 一个或多个EID映射到的main UE EID | 必选 | IPv4、IPv6或映射EID字符串 | 无 |
-| <node_id> | 拓扑节点ID | 可选 | uint32_t | 当前节点 |
+| `<dev>` | 设备名称，例如udma1 | 必选 | 不超过63字节的字符串 | 无 |
+| `<netns>` | 网络命名空间路径，例如/proc/$pid/ns/net | 必选 | 有效命名空间路径 | 无 |
+| `<eid_idx>` | EID索引 | 必选 | 0~65535 | 无 |
+| `<eid>` | EID值 | 必选 | IPv4、IPv6或映射EID字符串 | 无 |
+| `<main_ue_eid>` | 一个或多个EID映射到的main UE EID | 必选 | IPv4、IPv6或映射EID字符串 | 无 |
+| `<node_id>` | 拓扑节点ID | 可选 | uint32_t | 当前节点 |
 | --brief | show命令中优先显示bonding设备 | 可选 | \- | 默认开启 |
 | --all | show命令中显示所有设备 | 可选 | \- | 默认关闭 |
 | --whole | show命令中显示设备完整信息 | 可选 | \- | 默认关闭 |
