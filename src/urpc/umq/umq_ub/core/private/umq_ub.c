@@ -893,7 +893,7 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
 int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_queue_jetty_index_t jetty_idx)
 {
     urma_status_t urma_status = URMA_EINVAL;
-    if (direction == UMQ_IO_ALL || direction == UMQ_IO_TX) {
+    if (!is_umq_ub_logic_queue(queue->create_flag) && (direction == UMQ_IO_ALL || direction == UMQ_IO_TX)) {
         urma_jetty_attr_t jetty_attr = {
             .mask = JETTY_STATE,
             .state = URMA_JETTY_STATE_ERROR,
@@ -906,7 +906,7 @@ int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_qu
         }
     }
 
-    if (direction == UMQ_IO_ALL || direction == UMQ_IO_RX) {
+    if (!is_umq_ub_logic_queue(queue->create_flag) && (direction == UMQ_IO_ALL || direction == UMQ_IO_RX)) {
         urma_jfr_attr_t jfr_attr = {
             .mask = JETTY_STATE,
             .state = URMA_JFR_STATE_ERROR,
