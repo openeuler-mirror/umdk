@@ -86,7 +86,7 @@ static ALWAYS_INLINE bool umq_ub_permission_acquire(struct ub_flow_control *fc)
 
 static ALWAYS_INLINE void umq_ub_permission_release(struct ub_flow_control *fc)
 {
-    __atomic_store_n(&fc->is_credit_applying, false, __ATOMIC_RELAXED);
+    __atomic_store_n(&fc->is_credit_applying, false, __ATOMIC_RELEASE);
 }
 
 static ALWAYS_INLINE void umq_ub_fc_packet_stats(ub_flow_control_t *fc, uint32_t cnt, ub_packet_stats_type_t type)
