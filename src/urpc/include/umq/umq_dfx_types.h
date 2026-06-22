@@ -196,6 +196,20 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_ACK_RX,
     /* record point for umq_notify */
     UMQ_PERF_RECORD_NOTIFY,
+
+    /* record point for umq_create */
+    UMQ_PERF_RECORD_CREATE,
+    /* record point for umq_destroy */
+    UMQ_PERF_RECORD_DESTROY,
+    /* record point for umq_get_route_list */
+    UMQ_PERF_RECORD_ROUTE_LIST_GET,
+    /* record point for umq_bind_info_get */
+    UMQ_PERF_RECORD_BIND_INFO_GET,
+    /* record point for umq_bind */
+    UMQ_PERF_RECORD_BIND,
+    /* record point for umq_unbind */
+    UMQ_PERF_RECORD_UNBIND,
+
     /* record point for transport post send in umq_enqueue and umq_post */
     UMQ_PERF_RECORD_TRANSPORT_POST_SEND,
     /* record point for transport post recv in umq_enqueue and umq_post */
@@ -222,6 +236,37 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_ACK_TX,
     /* record point for transport ack interrupt rx */
     UMQ_PERF_RECORD_TRANSPORT_ACK_RX,
+
+    /* record point for transport JFCE create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFCE,
+    /* record point for transport JFC create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFC,
+    /* record point for transport JFR create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFR,
+    /* record point for transport JETTY create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JETTY,
+    /* record point for transport JFCE destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE,
+    /* record point for transport JFC destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC,
+    /* record point for transport JFR destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFR,
+    /* record point for transport JETTY destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JETTY,
+    /* record point for transport rjetty get */
+    UMQ_PERF_RECORD_TRANSPORT_RJETTY_GET,
+    /* record point for transport rjetty put */
+    UMQ_PERF_RECORD_TRANSPORT_RJETTY_PUT,
+    /* record point for transport route path get */
+    UMQ_PERF_RECORD_TRANSPORT_PATH_GET,
+    /* record point for transport import */
+    UMQ_PERF_RECORD_TRANSPORT_IMPORT_JETTY,
+    /* record point for transport bind */
+    UMQ_PERF_RECORD_TRANSPORT_BIND_JETTY,
+    /* record point for transport import */
+    UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY,
+    /* record point for transport bind */
+    UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY,
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
 

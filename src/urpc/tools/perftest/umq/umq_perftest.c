@@ -29,7 +29,7 @@
 #define PERFTEST_WAIT_TIMEOUT_US 100
 #define PERFTEST_WAIT_UMQ_READY_ROUND 10000
 
-#define UMQ_PERFTEST_ERTF_INFO_STR_SIZE (8189)
+#define UMQ_PERFTEST_ERTF_INFO_STR_SIZE (16384)
 
 typedef struct umq_perftest_worker_arg {
     perftest_thread_arg_t thd_arg;
@@ -326,7 +326,6 @@ static inline void umq_perftest_server_qps_work_load(perftest_thread_arg_t *args
     umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->qps_arg.cfg = arg->cfg;
     umq_perftest_run_qps(arg->umqh, &arg->qps_arg);
-    umq_perftest_finish_perf(arg->cfg);
 }
 
 static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
@@ -335,7 +334,6 @@ static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
     arg->lat_arg.cfg = arg->cfg;
     umq_perftest_run_latency(arg->umqh, &arg->lat_arg);
     // finish ferf and out reslut
-    umq_perftest_finish_perf(arg->cfg);
 }
 
 static int umq_perftest_start_test_threads(umq_perftest_config_t *cfg)
@@ -573,6 +571,8 @@ DESTROY:
     // destroy umqh
     (void)umq_destroy(g_umq_perftest_ctx.umqh);
 
+    umq_perftest_finish_perf(cfg);
+
 CLOSE_SOC:
     // destroy socket
     (void)close(g_umq_perftest_ctx.fd);
@@ -728,6 +728,8 @@ UNBIND:
 DESTROY:
     // destroy umqh
     (void)umq_destroy(g_umq_perftest_ctx.umqh);
+
+    umq_perftest_finish_perf(cfg);
 
 CLOSE_ACCEPT_FD:
     // destroy socket

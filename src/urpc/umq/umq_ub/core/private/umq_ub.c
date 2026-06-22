@@ -474,7 +474,10 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
         rjetty = info->fc_info->rjetty;
         token = info->fc_info->token;
     }
+
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_target_jetty_t *tjetty = umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, rjetty, &token);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_IMPORT_JETTY, start_timestamp);
     if (tjetty == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), remote eid: " EID_FMT ", "
                                         "remote jetty_id: %u, urma_import_jetty failed, jetty[%d], errno: %d\n",
@@ -485,7 +488,9 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
         return tjetty;
     }
 
+    start_timestamp = umq_perf_get_start_timestamp();
     urma_status_t status = umq_symbol_urma()->urma_bind_jetty(queue->jetty[i], tjetty);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_BIND_JETTY, start_timestamp);
     if (status != URMA_SUCCESS && status != URMA_EEXIST) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), local jetty_id: %u, remote eid: " EID_FMT ", "
                      "remote jetty_id: %u, urma_bind_jetty failed, jetty[%d], status: %d, errno %d\n",
@@ -502,10 +507,15 @@ UNIMPORT_JETTY:
 
 static void umq_ub_disconnect_jetty(ub_queue_t *queue, ub_bind_ctx_t *ctx, ub_queue_jetty_index_t i)
 {
+    uint64_t start_timestamp;
     if (queue->tp_mode == URMA_TM_RC) {
+        start_timestamp = umq_perf_get_start_timestamp();
         umq_symbol_urma()->urma_unbind_jetty(queue->jetty[i]);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY, start_timestamp);
     }
+    start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_unimport_jetty(ctx->tjetty[i]);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY, start_timestamp);
     ctx->tjetty[i] = NULL;
 }
 
@@ -672,7 +682,9 @@ int umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
 {
     urma_rjetty_t *rjetty = NULL;
     uint32_t length = 0;
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_status_t status = umq_symbol_urma()->urma_get_rjetty(jetty, &rjetty, &length);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_RJETTY_GET, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_get_rjetty failed, status: %u\n",
             EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id, (int)status);
@@ -683,14 +695,18 @@ int umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, bind info size insufficient, cannot "
             "serialize, index: %d, left_buf_size: %u, length: %u, errno: %d\n",
             EID_ARGS(jetty->jetty_id.eid), jetty->jetty_id.id, index, left_buf_size, length, errno);
+        start_timestamp = umq_perf_get_start_timestamp();
         umq_symbol_urma()->urma_put_rjetty(rjetty);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_RJETTY_PUT, start_timestamp);
         return 0;
     }
     memcpy((char *)dst_rjetty, (char *)rjetty, length);
     dst_rjetty->flag.bs.token_policy =
         token_policy_get((queue->dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0);
     dst_rjetty->tp_type = queue->tp_type;
+    start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_put_rjetty(rjetty);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_RJETTY_PUT, start_timestamp);
     return length;
 }
 
@@ -1140,7 +1156,9 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queu
     bondp_jetty_cfg.base.flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0);
     bondp_jetty_cfg.base.shared.jfr = queue->jfr_ctx[jetty_idx]->jfr;
 
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_jetty_t *jetty = umq_symbol_urma()->urma_create_jetty(dev_ctx->urma_ctx, &bondp_jetty_cfg.base);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_CREATE_JETTY, start_timestamp);
     if (jetty == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jetty failed,%s errno: %d\n", port_str, errno);
         return NULL;
@@ -1460,11 +1478,16 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
 {
     UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jfr_id: %u, destroy jfr_ctx\n",
                   EID_ARGS(queue->jfr_ctx[jetty_idx]->jfr->jfr_id.eid), queue->jfr_ctx[jetty_idx]->jfr->jfr_id.id);
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_status_t status = umq_symbol_urma()->urma_delete_jfr(queue->jfr_ctx[jetty_idx]->jfr);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFR, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfr failed, status: %d\n", (int)status);
     }
+
+    start_timestamp = umq_perf_get_start_timestamp();
     status = umq_symbol_urma()->urma_delete_jfc(queue->jfr_ctx[jetty_idx]->jfr_jfc);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfc failed, status: %d\n", (int)status);
     }
@@ -1472,7 +1495,9 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     // only delete the jfce of io and the jfce of sub_umq flow control
     if (queue->mode == UMQ_MODE_INTERRUPT &&
         (jetty_idx == UB_QUEUE_JETTY_IO || (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0)) {
+        start_timestamp = umq_perf_get_start_timestamp();
         status = umq_symbol_urma()->urma_delete_jfce(queue->jfr_ctx[jetty_idx]->jfr_jfce);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfce failed, status: %d\n", (int)status);
         }
@@ -1540,6 +1565,7 @@ static int umq_ub_rqe_post_factor_query(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx
 
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx)
 {
+    uint64_t start_timestamp;
     bool enable_token = (dev_ctx->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0;
     uint32_t jetty_token = 0;
     int ret = umq_ub_token_generate(enable_token, &jetty_token);
@@ -1556,7 +1582,9 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
     // create jfce
     if (queue->mode == UMQ_MODE_INTERRUPT) {
         if (jetty_idx == UB_QUEUE_JETTY_IO || (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
+            start_timestamp = umq_perf_get_start_timestamp();
             jfr_ctx->jfr_jfce = umq_symbol_urma()->urma_create_jfce(dev_ctx->urma_ctx);
+            umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_CREATE_JFCE, start_timestamp);
         } else {
             jfr_ctx->jfr_jfce = queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr_jfce;
         }
@@ -1579,7 +1607,9 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
         .port_ids = queue->used_port,
         .port_count = queue->used_port_num,
     };
+    start_timestamp = umq_perf_get_start_timestamp();
     jfr_ctx->jfr_jfc = umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &bondp_jfc_cfg.base);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_CREATE_JFC, start_timestamp);
     if (jfr_ctx->jfr_jfc == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfc failed, errno: %d\n", errno);
         goto DELETE_JFR_JFCE;
@@ -1603,7 +1633,9 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
     };
 
     bondp_jfr_cfg.base.flag.bs.order_type = queue->order_type;
+    start_timestamp = umq_perf_get_start_timestamp();
     jfr_ctx->jfr = umq_symbol_urma()->urma_create_jfr(dev_ctx->urma_ctx, &bondp_jfr_cfg.base);
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_CREATE_JFR, start_timestamp);
     if (jfr_ctx->jfr == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jfr failed, errno: %d\n", errno);
         goto DELETE_JFR_JFC;

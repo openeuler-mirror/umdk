@@ -23,6 +23,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${URPC_ROOT_DIR}/umq/umq_ub/core
     ${URPC_ROOT_DIR}/umq/umq_ub/core/private
     ${URPC_ROOT_DIR}/umq/umq_ub/core/flow_control
+    ${URPC_ROOT_DIR}/umq/umq_ub/core/jetty_pool
     ${URPC_ROOT_DIR}/util
 )
 

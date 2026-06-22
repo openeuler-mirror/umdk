@@ -757,6 +757,7 @@ LOCK_DESTROY:
 
 uint64_t umq_create(umq_create_option_t *option)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (option == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "create option is null\n");
         return UMQ_INVALID_HANDLE;
@@ -801,6 +802,7 @@ uint64_t umq_create(umq_create_option_t *option)
     }
     umq->dfx_tp_ops = umq_fw->dfx_tp_ops;
 
+    umq_perf_record_write(UMQ_PERF_RECORD_CREATE, start_timestamp);
     return (uint64_t)(uintptr_t)umq;
 ERR:
     free(umq);
@@ -810,6 +812,7 @@ ERR:
 int umq_destroy(uint64_t umqh)
 {
     int ret;
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
@@ -824,11 +827,14 @@ int umq_destroy(uint64_t umqh)
     }
 
     free(umq);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_DESTROY, start_timestamp);
     return ret;
 }
 
 uint32_t umq_bind_info_get(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((bind_info == NULL) || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
@@ -838,11 +844,15 @@ uint32_t umq_bind_info_get(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info
         return 0;
     }
 
-    return umq->tp_ops->umq_tp_bind_info_get(umq->umqh_tp, bind_info, bind_info_size);
+    uint32_t ret = umq->tp_ops->umq_tp_bind_info_get(umq->umqh_tp, bind_info, bind_info_size);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_BIND_INFO_GET, start_timestamp);
+    return ret;
 }
 
 int umq_bind(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((bind_info == NULL) || (umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
@@ -851,11 +861,15 @@ int umq_bind(uint64_t umqh, uint8_t *bind_info, uint32_t bind_info_size)
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq->tp_ops->umq_tp_bind(umq->umqh_tp, bind_info, bind_info_size);
+    int ret = umq->tp_ops->umq_tp_bind(umq->umqh_tp, bind_info, bind_info_size);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_BIND, start_timestamp);
+    return ret;
 }
 
 int umq_unbind(uint64_t umqh)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
 
     if ((umq == NULL) || (umq->umqh_tp == UMQ_INVALID_HANDLE) || (umq->tp_ops == NULL) ||
@@ -864,7 +878,10 @@ int umq_unbind(uint64_t umqh)
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq->tp_ops->umq_tp_unbind(umq->umqh_tp);
+    int ret = umq->tp_ops->umq_tp_unbind(umq->umqh_tp);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_UNBIND, start_timestamp);
+    return ret;
 }
 
 umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh, umq_alloc_option_t *option)
@@ -1394,6 +1411,7 @@ UNLOCK:
 
 int umq_get_route_list(const umq_route_key_t *route_key, umq_trans_mode_t umq_trans_mode, umq_route_list_t *route_list)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (route_key == NULL || route_list == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
@@ -1422,7 +1440,10 @@ int umq_get_route_list(const umq_route_key_t *route_key, umq_trans_mode_t umq_tr
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq_fw->tp_ops->umq_tp_get_topo(route_key, route_list);
+    int ret = umq_fw->tp_ops->umq_tp_get_topo(route_key, route_list);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_ROUTE_LIST_GET, start_timestamp);
+    return ret;
 }
 
 int umq_user_ctl(uint64_t umqh, umq_user_ctl_in_t *in, umq_user_ctl_out_t *out)
