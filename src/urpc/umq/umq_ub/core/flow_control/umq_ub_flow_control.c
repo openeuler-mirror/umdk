@@ -12,6 +12,7 @@
 #include "umq_types.h"
 #include "umq_ub_imm_data.h"
 #include "umq_ub_jetty_pool.h"
+#include "perf.h"
 #include "umq_ub_flow_control.h"
 
 #define UMQ_UB_FLOW_CONTROL_NOTIFY_THR 4
@@ -715,7 +716,11 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
+    /* record FC urma_post_jetty_send_wr as sub_time when called from a traced context */
+    uint64_t tp_start = umq_trace_timestamp_get();
     urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    uint64_t delta_ns = umq_trace_write_delta(tp_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
@@ -785,7 +790,10 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
+    uint64_t tp_start = umq_trace_timestamp_get();
     urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    uint64_t delta_ns = umq_trace_write_delta(tp_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
@@ -1008,7 +1016,10 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
+    uint64_t tp_start = umq_trace_timestamp_get();
     urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    uint64_t delta_ns = umq_trace_write_delta(tp_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);

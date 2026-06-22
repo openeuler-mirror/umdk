@@ -19,6 +19,7 @@ typedef enum urpc_thread_closure_type {
     THREAD_CLOSURE_QBUF,
     THREAD_CLOSURE_POOL,
     THREAD_CLOSURE_UMQ_PERF,
+    THREAD_CLOSURE_UMQ_DATA_PERF,
     THREAD_CLOSURE_JETTY_POOL,
     THREAD_CLOSURE_MAX,
 } urpc_thread_closure_type_t;

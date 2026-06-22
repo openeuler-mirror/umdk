@@ -127,6 +127,19 @@ int umq_stats_perf_start(void);
 int umq_stats_perf_stop(void);
 
 /**
+ * Start trace statistics.
+ * @param[in] cfg: trace cfg
+ * Return 0 on success, error code on failure
+ */
+int umq_stats_trace_start(umq_trace_cfg_t *cfg);
+
+/**
+ * Stop trace statistics.
+ * Return 0 on success, error code on failure
+ */
+int umq_stats_trace_stop(void);
+
+/**
  * Thread safety function
  * Convert the perf statistics result to a string.
  * @param[in] umq_perf_stats: perf statistical results
