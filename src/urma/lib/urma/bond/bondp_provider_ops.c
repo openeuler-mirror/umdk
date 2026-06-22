@@ -19,6 +19,7 @@
 #include "bondp_api.h"
 #include "bondp_context_table.h"
 #include "bondp_datapath.h"
+#include "bondp_failback.h"
 #include "bondp_health_check.h"
 #include "bondp_netlink.h"
 #include "bondp_segment.h"
@@ -278,10 +279,16 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
         return URMA_FAIL;
     }
 
+    ret = bondp_fb_init();
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to init failback context, ret=%d.\n", ret);
+        return URMA_FAIL;
+    }
+
     ret = bondp_nl_sock_init();
     if (ret != 0) {
         URMA_LOG_ERR("Failed to init bond netlink socket, ret=%d.\n", ret);
-        return URMA_FAIL;
+        goto ERR_FB_UNINIT;
     }
 
     ret = bondp_worker_create();
@@ -317,6 +324,8 @@ ERR_WORKER_DESTROY:
     bondp_worker_destroy();
 ERR_SOCK_UNINIT:
     bondp_nl_sock_uninit();
+ERR_FB_UNINIT:
+    bondp_fb_uninit();
     return URMA_FAIL;
 }
 
@@ -338,6 +347,7 @@ urma_status_t bondp_uninit(void)
     bondp_nl_worker_uninit();
     bondp_worker_destroy();
     bondp_nl_sock_uninit();
+    bondp_fb_uninit();
 
     return URMA_SUCCESS;
 }
