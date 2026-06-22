@@ -110,13 +110,13 @@ static ge::graphStatus MoeCombineNormalA2CheckAttrAndSetTiling(const gert::Tilin
     auto globalBsPtr = attrs->GetAttrPointer<int>(ATTR_GLOBAL_BS_INDEX);
 
     OPS_ERR_IF(epWorldSizePtr == nullptr || *epWorldSizePtr <= 0 || *epWorldSizePtr > MAX_EP_WORLD_SIZE_A2 ||
-                   *epWorldSizePtr % RANK_NUM_PER_NODE_A2 != 0,
-               OPS_LOG_E(K_INNER_DEBUG, "epWorldSize is invalid."), return GRAPH_FAILED);
+        *epWorldSizePtr % RANK_NUM_PER_NODE_A2 != 0,
+        OPS_LOG_E(K_INNER_DEBUG, "epWorldSize is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(epRankIdPtr == nullptr || *epRankIdPtr < 0 || *epRankIdPtr >= *epWorldSizePtr,
-               OPS_LOG_E(K_INNER_DEBUG, "epRankId is invalid."), return GRAPH_FAILED);
+        OPS_LOG_E(K_INNER_DEBUG, "epRankId is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(moeExpertNumPtr == nullptr || *moeExpertNumPtr <= 0 || *moeExpertNumPtr > MAX_MOE_EXPERT_NUMS_A2 ||
-                   *moeExpertNumPtr % *epWorldSizePtr != 0,
-               OPS_LOG_E(K_INNER_DEBUG, "moeExpertNum is invalid."), return GRAPH_FAILED);
+        *moeExpertNumPtr % *epWorldSizePtr != 0,
+        OPS_LOG_E(K_INNER_DEBUG, "moeExpertNum is invalid."), return GRAPH_FAILED);
     OPS_ERR_IF(tpWorldSizePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "tpWorldSize is null."), return GRAPH_FAILED);
     OPS_ERR_IF(tpRankIdPtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "tpRankId is null."), return GRAPH_FAILED);
     OPS_ERR_IF(expertSharedTypePtr == nullptr, OPS_LOG_E(K_INNER_DEBUG, "expertSharedType is null."),
@@ -266,7 +266,7 @@ static ge::graphStatus MoeCombineNormalA2TilingFuncImpl(gert::TilingContext &con
     OPS_ERR_IF(
         MoeCombineNormalA2GetPlatformInfoAndSetTiling(context, info) != ge::GRAPH_SUCCESS,
         OPS_REPORT_VECTOR_INNER_ERR(context.GetNodeName(),
-                                    "MoeCombineNormalA2 GetPlatformInfoAndSetTiling Failed"),
+            "MoeCombineNormalA2 GetPlatformInfoAndSetTiling Failed"),
         return ge::GRAPH_FAILED);
 
     uint32_t blockDim = 1U;
@@ -307,9 +307,9 @@ static ge::graphStatus MoeDistributeCombineTilingFunc(gert::TilingContext *conte
     OPS_ERR_IF(expandXDesc == nullptr, OPS_LOG_E(nodeName, "expandxDesc is null."), return ge::GRAPH_FAILED);
     // check expandX dataType
     OPS_ERR_IF((expandXDesc->GetDataType() == ge::DT_INT32),
-               OPS_LOG_E(nodeName, "expandX dataType is invalid, dataType should be bf16 or float16, but is %d",
-                         static_cast<ge::DataType>(expandXDesc->GetDataType())),
-               return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "expandX dataType is invalid, dataType should be bf16 or float16, but is %d",
+            static_cast<ge::DataType>(expandXDesc->GetDataType())),
+        return ge::GRAPH_FAILED);
 
     return MoeCombineNormalA2TilingFuncImpl(*context);
 }

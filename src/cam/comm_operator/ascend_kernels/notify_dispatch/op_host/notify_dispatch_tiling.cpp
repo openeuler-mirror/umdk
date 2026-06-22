@@ -107,28 +107,28 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     auto localRankIdPtr = attrs->GetAttrPointer<int64_t>(ATTR_LOCAL_RANK_ID_INDEX);
 
     OPS_ERR_IF((commGroupPtr == nullptr) || (strnlen(commGroupPtr, MAX_GROUP_NAME_LENGTH) == 0) ||
-                        (strnlen(commGroupPtr, MAX_GROUP_NAME_LENGTH) == MAX_GROUP_NAME_LENGTH),
-                    OPS_LOG_E(nodeName, "commGroupPtr is null."), return ge::GRAPH_FAILED);
+        (strnlen(commGroupPtr, MAX_GROUP_NAME_LENGTH) == MAX_GROUP_NAME_LENGTH),
+            OPS_LOG_E(nodeName, "commGroupPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(sendCountPtr == nullptr, OPS_LOG_E(nodeName, "sendCountPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(numTokenPtr == nullptr, OPS_LOG_E(nodeName, "numTokenPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(rankSizePtr == nullptr, OPS_LOG_E(nodeName, "rankSizePtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(rankIdPtr == nullptr, OPS_LOG_E(nodeName, "rankIdPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(localRankSizePtr == nullptr, OPS_LOG_E(nodeName, "localRankSizePtr is null."),
-                    return ge::GRAPH_FAILED);
+        return ge::GRAPH_FAILED);
     OPS_ERR_IF(localRankIdPtr == nullptr, OPS_LOG_E(nodeName, "localRankIdPtr is null."), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF((*rankSizePtr <= 0) || (*rankSizePtr > MAX_COMM_WORLD_SIZE),
-                    OPS_LOG_E(nodeName, "rankSize is invalid, only support (0, %ld], but got rankSize=%ld.",
-                            MAX_COMM_WORLD_SIZE, *rankSizePtr),
-                    return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "rankSize is invalid, only support (0, %ld], but got rankSize=%ld.",
+            MAX_COMM_WORLD_SIZE, *rankSizePtr),
+            return ge::GRAPH_FAILED);
     OPS_ERR_IF(
         (*rankIdPtr < 0) || (*rankIdPtr >= *rankSizePtr),
         OPS_LOG_E(nodeName, "rankId is invalid, only support [0, %ld), but got rankId=%ld.", *rankSizePtr, *rankIdPtr),
         return ge::GRAPH_FAILED);
     OPS_ERR_IF((*sendCountPtr <= 0),
-                    OPS_LOG_E(nodeName,
-                        "sendCount is invalid, only support > 0, but got sendCount=%ld.", *sendCountPtr),
-                    return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName,
+            "sendCount is invalid, only support > 0, but got sendCount=%ld.", *sendCountPtr),
+        return ge::GRAPH_FAILED);
     OPS_ERR_IF(
         (*numTokenPtr <= 0),
         OPS_LOG_E(nodeName, "numTokenPtr is invalid, only support > 0, but got numTokenPtr=%ld.", *numTokenPtr),
@@ -172,10 +172,10 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
     OPS_ERR_IF(sendData == nullptr, OPS_LOG_E(nodeName, "sendData is null."), return false);
     OPS_ERR_IF(
         (sendData->GetDataType() != ge::DT_BF16) && (sendData->GetDataType() != ge::DT_FLOAT16) &&
-            (sendData->GetDataType() != ge::DT_FLOAT) && (sendData->GetDataType() != ge::DT_INT32),
+        (sendData->GetDataType() != ge::DT_FLOAT) && (sendData->GetDataType() != ge::DT_INT32),
         OPS_LOG_E(nodeName,
-                "sendData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
-                static_cast<ge::DataType>(sendData->GetDataType())),
+            "sendData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
+            static_cast<ge::DataType>(sendData->GetDataType())),
         return false);
     uint64_t dataSize;
     if ((sendData->GetDataType() == ge::DT_BF16) || (sendData->GetDataType() == ge::DT_FLOAT16)) {
@@ -187,7 +187,7 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
     OPS_ERR_IF(tokenPerExpertData == nullptr, OPS_LOG_E(nodeName, "tokenPerExpertData is null."), return false);
     OPS_ERR_IF(
         (tokenPerExpertData->GetDataType() != ge::DT_BF16) && (tokenPerExpertData->GetDataType() != ge::DT_FLOAT16) &&
-            (tokenPerExpertData->GetDataType() != ge::DT_FLOAT) && (tokenPerExpertData->GetDataType() != ge::DT_INT32),
+        (tokenPerExpertData->GetDataType() != ge::DT_FLOAT) && (tokenPerExpertData->GetDataType() != ge::DT_INT32),
         OPS_LOG_E(
             nodeName,
             "tokenPerExpertData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
@@ -198,20 +198,20 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
     OPS_ERR_IF(sendDataOffset == nullptr, OPS_LOG_E(nodeName, "sendDataOffset is null."), return false);
     OPS_ERR_IF(
         (sendDataOffset->GetDataType() != ge::DT_BF16) && (sendDataOffset->GetDataType() != ge::DT_FLOAT16) &&
-            (sendDataOffset->GetDataType() != ge::DT_FLOAT) && (sendDataOffset->GetDataType() != ge::DT_INT32),
+        (sendDataOffset->GetDataType() != ge::DT_FLOAT) && (sendDataOffset->GetDataType() != ge::DT_INT32),
         OPS_LOG_E(nodeName,
-                "sendDataOffset datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
-                static_cast<ge::DataType>(sendDataOffset->GetDataType())),
+            "sendDataOffset datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
+            static_cast<ge::DataType>(sendDataOffset->GetDataType())),
         return false);
 
     auto recvData = context.GetInputDesc(OUTPUT_RECV_DATA_INDEX);
     OPS_ERR_IF(recvData == nullptr, OPS_LOG_E(nodeName, "recvData is null."), return false);
     OPS_ERR_IF(
         (recvData->GetDataType() != ge::DT_BF16) && (recvData->GetDataType() != ge::DT_FLOAT16) &&
-            (recvData->GetDataType() != ge::DT_FLOAT) && (recvData->GetDataType() != ge::DT_INT32),
+        (recvData->GetDataType() != ge::DT_FLOAT) && (recvData->GetDataType() != ge::DT_INT32),
         OPS_LOG_E(nodeName,
-                "recvData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
-                static_cast<ge::DataType>(recvData->GetDataType())),
+            "recvData datatype is invalid, datatype should be bf16 or float16 or float or int, but is %d.",
+            static_cast<ge::DataType>(recvData->GetDataType())),
         return false);
 
     // Verify the size of the win area
@@ -229,7 +229,7 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
 static ge::graphStatus TilingCheckTensor(gert::TilingContext &context, const char *nodeName)
 {
     OPS_ERR_IF(!CheckTensorDataType(context, nodeName), OPS_LOG_E(nodeName, "params dataType is invalid."),
-                    return ge::GRAPH_FAILED);
+        return ge::GRAPH_FAILED);
 
     return ge::GRAPH_SUCCESS;
 }
@@ -244,13 +244,13 @@ static ge::graphStatus NotifyDispatchTilingFuncImpl(gert::TilingContext &context
     OPS_LOG_I(nodeName, "Enter NotifyDispatch tiling check func.");
 
     OPS_ERR_IF(GetAttrAndSetTilingData(context, nodeName, *tilingData, commGroup) != ge::GRAPH_SUCCESS,
-                    OPS_LOG_E(nodeName, "Get attr and set tiling data failed."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "Get attr and set tiling data failed."), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(TilingCheckTensor(context, nodeName) != ge::GRAPH_SUCCESS,
-                    OPS_LOG_E(nodeName, "Tiling check param failed."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "Tiling check param failed."), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(SetWorkSpace(context, nodeName) != ge::GRAPH_SUCCESS,
-                    OPS_LOG_E(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
+        OPS_LOG_E(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
     SetHcommCfg(context, *tilingData, commGroup);
 
     int tilingKey = TILING_KEY_INT;
