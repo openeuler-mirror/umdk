@@ -111,10 +111,7 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
 {
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
     uint16_t mempool_id = buf_pro->remote_sge.mempool_id;
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     urma_target_seg_t *tseg = NULL;
-
     umq_ub_imm_t imm_data = {
         .io_imm.type = IMM_TYPE_USER_WITHOUT_IMM,
         .io_imm.umq_id = queue->remote_umq_id,
@@ -123,26 +120,26 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, "
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) "
                     "UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS is not enabled, read is not supported\n",
-                    EID_ARGS(*eid), id);
+                    queue->umq_id);
                 return -UMQ_ERR_EPERM;
             }
             if (buf_pro->remote_sge.length > buffer->total_data_size) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, local buffer size[%u] is smaller than "
-                    "remote buffer size[%u]\n", EID_ARGS(*eid), id, buffer->total_data_size,
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) local buffer size[%u] is smaller than "
+                    "remote buffer size[%u]\n", queue->umq_id, buffer->total_data_size,
                     buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
             if (mempool_id >= UMQ_MAX_TSEG_NUM) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u invalid\n",
-                    EID_ARGS(*eid), id, mempool_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u invalid\n",
+                    queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
             if (tseg == NULL) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u has not been imported\n",
-                    EID_ARGS(*eid), id, mempool_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u has not been imported\n",
+                    queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             src_sge->addr = buf_pro->remote_sge.addr;
@@ -159,26 +156,26 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             /* fall-through */
         case UMQ_OPC_WRITE:
             if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, "
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), "
                     "UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS is not enabled, write or write imm is not supported\n",
-                    EID_ARGS(*eid), id);
+                    queue->umq_id);
                 return -UMQ_ERR_EPERM;
             }
             if (buf_pro->remote_sge.length < buffer->total_data_size) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, local buffer size[%u] is larger than "
-                    "remote buffer size[%u]\n", EID_ARGS(*eid), id, buffer->total_data_size,
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), local buffer size[%u] is larger than "
+                    "remote buffer size[%u]\n", queue->umq_id, buffer->total_data_size,
                     buf_pro->remote_sge.length);
                 return -UMQ_ERR_EINVAL;
             }
             if (mempool_id >= UMQ_MAX_TSEG_NUM) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u invalid\n",
-                    EID_ARGS(*eid), id, mempool_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u invalid\n",
+                    queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
             if (tseg == NULL) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool_id %u has not been imported\n",
-                    EID_ARGS(*eid), id, mempool_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u has not been imported\n",
+                    queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
             dst_sge->addr = buf_pro->remote_sge.addr;

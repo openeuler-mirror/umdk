@@ -1947,7 +1947,6 @@ int umq_ub_unbind_impl(uint64_t umqh)
     }
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-
     if (queue->flow_control.enabled) {
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
         UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind flowcontrol jetty\n",
@@ -2228,34 +2227,28 @@ util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp)
 int umq_ub_state_set_impl(uint64_t umqh_tp, umq_state_t state)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    if (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, set state only support main umq\n", EID_ARGS(*eid), id);
+    if (!is_umq_ub_main_queue(queue->create_flag)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) set state only support main umq\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     if (state != QUEUE_STATE_ERR) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, set state only support error state\n",
-            EID_ARGS(*eid), id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), set state only support error state\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->state == QUEUE_STATE_ERR) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue state already in error state\n",
-            EID_ARGS(*eid), id);
+        UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), queue state already in error state\n", queue->umq_id);
         return UMQ_SUCCESS;
     }
 
     int ret = umq_modify_ubq_to_err(queue, UMQ_IO_ALL, UB_QUEUE_JETTY_IO);
     if (ret) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, modify queue state failed, status: %d\n",
-            EID_ARGS(*eid), id, ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), modify queue state failed, status: %d\n", queue->umq_id, ret);
         return ret;
     }
 
-    UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, modify queue state %d success\n",
-        EID_ARGS(*eid), id, state);
+    UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), modify queue state %d success\n", queue->umq_id, state);
     return UMQ_SUCCESS;
 }
 
