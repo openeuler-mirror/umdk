@@ -151,6 +151,34 @@ static int umq_perftest_start_perf(umq_perftest_config_t *cfg)
     return 0;
 }
 
+static void umq_perftest_show_perf(umq_perftest_config_t *cfg)
+{
+    // get perf record
+    umq_perf_stats_t umq_perf_stats;
+    if (umq_stats_perf_get(&umq_perf_stats) != 0) {
+        LOG_PRINT("get perf result failed\n");
+        return;
+    }
+
+    // procrss raw data and output
+    char *perf_info_str_buf = (char *)malloc(UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
+    if (perf_info_str_buf == NULL) {
+        LOG_PRINT("malloc perf info str failed\n");
+        return;
+    }
+
+    umq_perf_stats_cfg_t perf_stats_cfg;
+    (void)memcpy(perf_stats_cfg.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
+    perf_stats_cfg.thresh_num = cfg->thresh_num;
+    int str_size = umq_stats_perf_to_str(&umq_perf_stats, perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
+    if (str_size >= UMQ_PERFTEST_ERTF_INFO_STR_SIZE) {
+        perf_info_str_buf[UMQ_PERFTEST_ERTF_INFO_STR_SIZE - 1] = '\0';
+        LOG_PRINT("perf info str buf too small, str_size %d\n", str_size);
+    }
+    printf("%s\n", perf_info_str_buf);
+    free(perf_info_str_buf);
+}
+
 static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
 {
     if (cfg->enable_perf) {
@@ -160,30 +188,7 @@ static void umq_perftest_finish_perf(umq_perftest_config_t *cfg)
             return;
         }
 
-        // get perf record
-        umq_perf_stats_t umq_perf_stats;
-        if (umq_stats_perf_get(&umq_perf_stats) != 0) {
-            LOG_PRINT("get perf result failed\n");
-            return;
-        }
-
-        // procrss raw data and output
-        char *perf_info_str_buf = (char *)malloc(UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
-        if (perf_info_str_buf == NULL) {
-            LOG_PRINT("malloc perf info str failed\n");
-            return;
-        }
-
-        umq_perf_stats_cfg_t perf_stats_cfg;
-        (void)memcpy(perf_stats_cfg.thresh_array, cfg->thresh_array, sizeof(uint64_t) * cfg->thresh_num);
-        perf_stats_cfg.thresh_num = cfg->thresh_num;
-        int str_size = umq_stats_perf_to_str(&umq_perf_stats, perf_info_str_buf, UMQ_PERFTEST_ERTF_INFO_STR_SIZE);
-        if (str_size >= UMQ_PERFTEST_ERTF_INFO_STR_SIZE) {
-            perf_info_str_buf[UMQ_PERFTEST_ERTF_INFO_STR_SIZE - 1] = '\0';
-            LOG_PRINT("perf info str buf too small, str_size %d\n", str_size);
-        }
-        printf("%s\n", perf_info_str_buf);
-        free(perf_info_str_buf);
+        umq_perftest_show_perf(cfg);
     }
 }
 
@@ -326,6 +331,7 @@ static inline void umq_perftest_server_qps_work_load(perftest_thread_arg_t *args
     umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->qps_arg.cfg = arg->cfg;
     umq_perftest_run_qps(arg->umqh, &arg->qps_arg);
+    umq_perftest_show_perf(arg->cfg);
 }
 
 static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
@@ -333,7 +339,7 @@ static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
     umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->lat_arg.cfg = arg->cfg;
     umq_perftest_run_latency(arg->umqh, &arg->lat_arg);
-    // finish ferf and out reslut
+    umq_perftest_show_perf(arg->cfg);
 }
 
 static int umq_perftest_start_test_threads(umq_perftest_config_t *cfg)
