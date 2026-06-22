@@ -67,8 +67,8 @@ if [ ! -d "$BUILD_OUT_PATH/${MODULE_NAME}" ]; then
     mkdir $BUILD_OUT_PATH/${MODULE_NAME}
 fi
 
-# 目前whl包和UT的编译暂时需要先将CAM算子包并安装到环境
-# 在编译whl包和UT时屏蔽算子包编译，加快编译速度
+# Currently, building the whl package and UT requires the CAM operator package to be compiled and installed first
+# Skip operator package compilation when building the whl package and UT to speed up compilation
 if [ $ENABLE_SRC_BUILD -eq 1 ]; then
     if [ ! -d "./build_out/comm_operator/run/" ]; then
         mkdir -p ${MODULE_BUILD_OUT_PATH}/run

@@ -49,7 +49,7 @@ public:
     constexpr static uint32_t FLAG_VALUE = 12345;
     constexpr static uint32_t SCALE_IPC_BYTE_SIZE = 16U;
     constexpr static int32_t SINGLE_COPY_INT64_NUM = 4; // reason for 4: Single copy 256 bytes = 4 × int64.
-    constexpr static int32_t STATUS_COPY_SRC_STRIDE_BLUCK_NUM = 15; // srcStride为15个block
+    constexpr static int32_t STATUS_COPY_SRC_STRIDE_BLUCK_NUM = 15; // srcStride is 15 blocks
     constexpr static int32_t BATCH_WRITE_ITEM_B64_SIZE_PER_SERVER = 4;
     constexpr static int32_t BATCH_WRITE_ITEM_B64_IDX_2 = 2;
     constexpr static int32_t BATCH_WRITE_ITEM_B32_SIZE_PER_SERVER = 8;
@@ -313,7 +313,7 @@ __aicore__ inline void MoeCombineNormalA2Layered<TemplateMC2TypeA2layeredFunc>::
     tpipe_->InitBuffer(sumFloatBuf_, axisHFloatSize_);  //  // 7168 * 4 = 28672
     // global sendCount, everyexpert receive token num from each rank
     tpipe_->InitBuffer(sendCountBuf_, RoundUp(moeExpertNum_ * worldSize_, B32_PER_BLOCK) *
-                                          sizeof(int32_t));
+        sizeof(int32_t));
     tpipe_->InitBuffer(moeSumQueue_, BUFFER_NUM, (axisHExpandXTypeSize_ + SCALE_SIZE_IN_QUEUE));
     tpipe_->InitBuffer(statusSumOutBuf_, sizeof(float));
     tpipe_->InitBuffer(batchWriteItemBuf_, BATCH_WRITE_ITEM_SIZE * worldSize_);

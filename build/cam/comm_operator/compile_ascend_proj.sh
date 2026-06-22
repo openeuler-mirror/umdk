@@ -8,7 +8,7 @@
 
 set -e
 
-# 定义全局屏蔽列表
+# Define global exclusion list
 exclude_list=()
 if [ -z "${SHMEM_HOME_PATH}" ]; then
     echo "Skipping shmem (SHMEM_HOME_PATH not set)"
@@ -16,19 +16,19 @@ if [ -z "${SHMEM_HOME_PATH}" ]; then
 fi
 
 copy_ops() {
-    local src_dir="$1" # 源目录
-    local dst_dir="$2" # 目标目录
+    local src_dir="$1" # Source directory
+    local dst_dir="$2" # Destination directory
 
-    # 确保目标目录的op_host和op_kernel存在
+    # Ensure op_host and op_kernel exist in destination directory
     mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel"
 
-    # 遍历源目录下所有直接子目录（包括含空格的目录）
+    # Iterate over all direct subdirectories under source directory (including directories with spaces)
     find "$src_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' subdir; do
-        # 检查子目录是否存在（双重验证）
+        # Verify subdirectory exists (double check)
         subdir_name=$(basename "$subdir")
 
         if [ -d "$subdir" ]; then
-            # 检查当前子目录是否在屏蔽列表中
+            # Check if current subdirectory is in the exclusion list
             skip=false
             for excluded_dir in "${exclude_list[@]}"; do
                 if [ "$subdir_name" = "$excluded_dir" ]; then
@@ -37,17 +37,17 @@ copy_ops() {
                 fi
             done
 
-            # 如果在屏蔽列表中，则跳过处理
+            # Skip processing if in exclusion list
             if [ "$skip" = true ]; then
                 continue
             fi
 
-            # 处理op_host目录
+            # Process op_host directory
             if [ -d "$subdir/op_host" ]; then
                 cp -rf "$subdir/op_host/"* "$dst_dir/op_host/"
             fi
 
-            # 处理op_kernel目录
+            # Process op_kernel directory
             if [ -d "$subdir/op_kernel" ]; then
                 cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
             fi
@@ -55,7 +55,7 @@ copy_ops() {
     done
 }
 
-# 构建算子工程并将其产物传到指定地点
+# Build operator project and deliver artifacts to specified location
 build_ascend_proj() {
     local src_path=$1
     local soc_version=$2
@@ -67,7 +67,7 @@ build_ascend_proj() {
 
     cd "$src_path"
 
-    # 确保 MODULE_BUILD_PATH 目录存在
+    # Ensure MODULE_BUILD_PATH directory exists
     if [ ! -d "${MODULE_BUILD_PATH}" ]; then
         mkdir -p ${MODULE_BUILD_PATH}
     fi
@@ -76,22 +76,26 @@ build_ascend_proj() {
         rm -rf ${MODULE_BUILD_PATH}/${proj_name}
     fi
 
-    # 创建新npu_op_*编译体系的项目目录
+    # Create project directory for new npu_op_* build system
     export OPS_PROJECT_NAME=aclnnInner
 
-    echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}"	 
-    msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}	 
-    rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*	 
+    echo "msopgen gen -i ./ascend_kernels/AddCustom.json" \
+        " -c ai_core-${soc_version} -f pytorch -lan cpp" \
+        " -out ${MODULE_BUILD_PATH}/${proj_name}"
+    msopgen gen -i ./ascend_kernels/AddCustom.json \
+        -c ai_core-${soc_version} -f pytorch -lan cpp \
+        -out ${MODULE_BUILD_PATH}/${proj_name}
+    rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*
     rm  -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
 
-    # 复制顶层CMakeLists.txt
+    # Copy top-level CMakeLists.txt
     cp ./ascend_kernels/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # 复制op_host和op_kernel的CMakeLists.txt（新npu_op_*版本）
+    # Copy op_host and op_kernel CMakeLists.txt (new npu_op_* version)
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
     cp ./ascend_kernels/cmake_files/op_kernel/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/
 
-    # 根据 SOC 版本过滤不参与编译的算子
+    # Filter out operators not participating in compilation based on SOC version
     if [[ "$soc_version" == "ascend910b4" ]]; then
         echo "SOC ascend910b4: excluding 910_93-only operators"
         exclude_list+=("moe_combine_normal" "moe_dispatch_normal" "notify_dispatch" \
@@ -101,20 +105,21 @@ build_ascend_proj() {
         exclude_list+=("moe_combine_normal_a2" "moe_dispatch_normal_a2" "notify_dispatch_a2")
     fi
 
-    # 复制所有算子的op_host源文件
+    # Copy op_host source files for all operators
     copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
-    # 设置build_type到CMakePresets.json
-    python3 $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
+    # Set build_type in CMakePresets.json
+    python3 $SCRIPTS_PATH/comm_operator/set_conf.py \
+        ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
 
-    # 复制pregen目录（包含预生成的aclnn stub文件）
+    # Copy pregen directory (contains pre-generated aclnn stub files)
     cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # 根据屏蔽列表移除pregen中对应算子的autogen文件
+    # Remove autogen files of excluded operators from pregen based on exclusion list
     for excluded_dir in "${exclude_list[@]}"; do
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
     done
 
-    # 如果不需要编译shmem算子，移除相关的pregen文件
+    # Remove shmem-related pregen files if shmem operators are not compiled
     if [ -z "${SHMEM_HOME_PATH}" ]; then
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*shmem*
     fi
@@ -153,16 +158,17 @@ build_ascend_proj() {
     fi
     if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
         echo "Patching kernel compile options: ${KERNEL_COMPILE_OPTS}"
-        find build_out/op_kernel/CMakeFiles -name "build.make" -exec sed -i "s|--compile-options=\"\"|--compile-options=\\\"${KERNEL_COMPILE_OPTS}\\\"|g" {} +
+        find build_out/op_kernel/CMakeFiles -name "build.make" \
+            -exec sed -i "s|--compile-options=\"\"|--compile-options=\\\"${KERNEL_COMPILE_OPTS}\\\"|g" {} +
     fi
 
-    # 构建并行度：可通过 CAM_BUILD_JOBS 环境变量配置，默认 8
-    # Jenkins ECS 等内存受限环境建议设置为 2~4
+    # Build parallelism: configurable via CAM_BUILD_JOBS env variable, default 8
+    # Recommend 2~4 for memory-constrained environments such as Jenkins ECS
     BUILD_JOBS=${CAM_BUILD_JOBS:-8}
     cmake --build build_out --target binary -j${BUILD_JOBS}
     cmake --build build_out --target package -j${BUILD_JOBS}
 
-    # 根据is_extract判断是否抽取run包
+    # Decide whether to extract the run package based on is_extract
     if [ $is_extract -eq 1 ]; then
         if [ ! -d "$BUILD_OUT_PATH/comm_operator/extract" ]; then
             mkdir -p "$BUILD_OUT_PATH/comm_operator/extract"

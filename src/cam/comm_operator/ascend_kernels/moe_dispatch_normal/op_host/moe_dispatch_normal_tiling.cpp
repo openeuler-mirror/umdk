@@ -73,7 +73,7 @@ constexpr size_t MAX_GROUP_NAME_LENGTH = 128UL;
 constexpr int64_t MAX_EP_WORLD_SIZE = 384;
 constexpr int64_t MIN_EP_WORLD_SIZE = 2;
 constexpr int64_t MAX_TP_WORLD_SIZE = 2;
-constexpr int64_t BS_UPPER_BOUND = 8000; // 最大bs
+constexpr int64_t BS_UPPER_BOUND = 8000; // Max bs
 
 constexpr uint32_t TILINGKEY_TP_WORLD_SIZE = 100;
 constexpr uint32_t TP_WORLD_SIZE_TWO = 2;
@@ -295,7 +295,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     auto moeExpertNumPtr = attrs->GetAttrPointer<int64_t>(ATTR_MOE_EXPERT_NUM_INDEX);
     auto quantModePtr = attrs->GetAttrPointer<int64_t>(ATTR_QUANT_MODE_INDEX);
 
-    // 判空
+    // Null check
     OPS_ERR_IF((groupEpPtr == nullptr) || (strnlen(groupEpPtr, MAX_GROUP_NAME_LENGTH) == 0) ||
         (strnlen(groupEpPtr, MAX_GROUP_NAME_LENGTH) == MAX_GROUP_NAME_LENGTH),
         OPS_LOG_E(nodeName, "groupEpPtr is null."), return ge::GRAPH_FAILED);
@@ -306,7 +306,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     OPS_ERR_IF(moeExpertNumPtr == nullptr, OPS_LOG_E(nodeName, "moeExpertNumPtr is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(quantModePtr == nullptr, OPS_LOG_E(nodeName, "quantModePtr is null."), return ge::GRAPH_FAILED);
 
-    // 判断是否满足uint32_t及其他限制
+    // Check if uint32_t and other constraints are satisfied
     int64_t moeExpertNum = *moeExpertNumPtr;
     int64_t epWorldSize = *epWorldSizePtr;
     OPS_ERR_IF((epWorldSize < MIN_EP_WORLD_SIZE) || (epWorldSize > MAX_EP_WORLD_SIZE),
@@ -374,7 +374,7 @@ static ge::graphStatus CheckAttrs(const gert::TilingContext &context, const char
     uint32_t tpWorldSize = tilingData.moeDispatchNormalInfo.tpWorldSize;
     uint32_t moeExpertNum = tilingData.moeDispatchNormalInfo.moeExpertNum;
 
-    // 校验moe专家数量能否均分给多机
+    // Check if moe expert count can be evenly divided across machines
     localMoeExpertNum = moeExpertNum / epWorldSize;
     OPS_ERR_IF(moeExpertNum % epWorldSize != 0,
         OPS_LOG_E(nodeName,
@@ -386,7 +386,7 @@ static ge::graphStatus CheckAttrs(const gert::TilingContext &context, const char
         OPS_LOG_E(nodeName, "localMoeExpertNum is invalid, localMoeExpertNum = %u", localMoeExpertNum),
         return ge::GRAPH_FAILED);
 
-    // 校验输入x的dim 0并设bs
+    // Validate x input dim0 and set bs
     const gert::StorageShape *xStorageShape = context.GetInputShape(X_INDEX);
     OPS_ERR_IF(xStorageShape == nullptr, OPS_LOG_E(nodeName, "xStorageShape is null."), return ge::GRAPH_FAILED);
     const int64_t xDim0 = xStorageShape->GetStorageShape().GetDim(0);
@@ -396,7 +396,7 @@ static ge::graphStatus CheckAttrs(const gert::TilingContext &context, const char
         return ge::GRAPH_FAILED);
     tilingData.moeDispatchNormalInfo.bs = static_cast<uint32_t>(xDim0);
 
-    // 校验globalBS
+    // Validate globalBS
     auto attrs = context.GetAttrs();
     OPS_ERR_IF(attrs == nullptr, OPS_LOG_E(nodeName, "attrs is nullptr."), return ge::GRAPH_FAILED);
     auto globalBsPtr = attrs->GetAttrPointer<int64_t>(ATTR_GLOBAL_BS_INDEX);
@@ -418,17 +418,17 @@ static ge::graphStatus CheckTensorShape(const gert::TilingContext &context, cons
     uint32_t A = 0U;
     uint32_t globalBs = tilingData.moeDispatchNormalInfo.globalBs;
 
-    // 校验输入x的维度1并设h, bs已校验过
+    // Validate x input dim1 and set h, bs already validated
     const gert::StorageShape *xStorageShape = context.GetInputShape(X_INDEX);
     OPS_ERR_IF(xStorageShape == nullptr, OPS_LOG_E(nodeName, "xStorageShape is null."), return ge::GRAPH_FAILED);
     const int64_t xDim0 = xStorageShape->GetStorageShape().GetDim(0);
     const int64_t xDim1 = xStorageShape->GetStorageShape().GetDim(1);
     OPS_ERR_IF((xDim1 < H_MIN) || (xDim1 > H_MAX),
         OPS_LOG_E(nodeName, "xShape dims1(H) should be in [%ld, %ld], but got %ld.", H_MIN, H_MAX, xDim1),
-        return ge::GRAPH_FAILED); // 32字节对齐
+        return ge::GRAPH_FAILED); // 32-byte aligned
     tilingData.moeDispatchNormalInfo.h = static_cast<uint32_t>(xDim1);
 
-    // 校验expert_id的维度并设k
+    // Validate expertIds dimensions and set k
     int64_t moeExpertNum = static_cast<int64_t>(tilingData.moeDispatchNormalInfo.moeExpertNum);
     const gert::StorageShape *expertIdStorageShape = context.GetInputShape(EXPERT_IDS_INDEX);
     OPS_ERR_IF(expertIdStorageShape == nullptr, OPS_LOG_E(nodeName, "expertIdStorageShape is null."),
@@ -451,7 +451,7 @@ static ge::graphStatus CheckTensorShape(const gert::TilingContext &context, cons
 
     A = globalBs;
 
-    // 校验expandX的维度
+    // Validate expandX dimensions
     const gert::StorageShape *expandXStorageShape = context.GetOutputShape(OUTPUT_EXPAND_X_INDEX);
     OPS_ERR_IF(expandXStorageShape == nullptr, OPS_LOG_E(nodeName, "expandXStorageShape is null."),
         return ge::GRAPH_FAILED);
@@ -465,7 +465,7 @@ static ge::graphStatus CheckTensorShape(const gert::TilingContext &context, cons
             xDim1, expandXDim1),
         return ge::GRAPH_FAILED);
 
-    // 校验dynamicScales的维度
+    // Validate dynamicScales dimensions
     if (quantMode != NO_SCALES) {
         const gert::StorageShape *dynamicScalesStorageShape = context.GetOutputShape(OUTPUT_DYNAMIC_SCALES_INDEX);
         OPS_ERR_IF(dynamicScalesStorageShape == nullptr,
@@ -473,7 +473,7 @@ static ge::graphStatus CheckTensorShape(const gert::TilingContext &context, cons
         const int64_t dynamicScalesDim0 = dynamicScalesStorageShape->GetStorageShape().GetDim(0);
     }
 
-    // 校验assistInfo的维度
+    // Validate assistInfo dimensions
     const gert::StorageShape *assistInfoStorageShape = context.GetOutputShape(OUTPUT_ASSIST_INFO_INDEX);
     OPS_ERR_IF(assistInfoStorageShape == nullptr, OPS_LOG_E(nodeName, "assistInfoStorageShape is null."),
         return ge::GRAPH_FAILED);
@@ -546,7 +546,7 @@ static ge::graphStatus MoeDispatchNormalA3TilingFuncImpl(gert::TilingContext &co
     uint32_t localMoeExpertNum = 1;
     OPS_LOG_I(nodeName, "Enter MoeDispatchNormal tiling check func.");
 
-    // 获取入参属性
+    // Get input attributes
     OPS_ERR_IF(GetAttrAndSetTilingData(context, nodeName, *tilingData, groupEp, groupTp) != ge::GRAPH_SUCCESS,
         OPS_LOG_E(nodeName, "Get attr and set tiling data failed."), return ge::GRAPH_FAILED);
 
@@ -556,34 +556,34 @@ static ge::graphStatus MoeDispatchNormalA3TilingFuncImpl(gert::TilingContext &co
     bool isEnableDiagnose = (waitRecvcostStatsStorageShape != nullptr);
     tilingData->moeDispatchNormalInfo.isEnableDiagnose = isEnableDiagnose;
 
-    // 检查输入输出的dim、format、dataType
+    // Validate dims, format, and dataType of inputs and outputs
     OPS_ERR_IF(TilingCheckMoeDispatchNormal(context, nodeName, quantMode, isEnableDiagnose) !=
         ge::GRAPH_SUCCESS,
         OPS_LOG_E(nodeName, "Tiling check param failed."), return ge::GRAPH_FAILED);
 
-    // 检查属性的取值是否合法
+    // Check if attribute values are valid
     OPS_ERR_IF(CheckAttrs(context, nodeName, *tilingData, localMoeExpertNum) != ge::GRAPH_SUCCESS,
         OPS_LOG_E(nodeName, "Check attr failed."), return ge::GRAPH_FAILED);
 
     uint32_t epRankId = tilingData->moeDispatchNormalInfo.epRankId;
 
-    // 检查shape各维度并赋值h,k
+    // Check shape dimensions and set h, k
     OPS_ERR_IF(CheckTensorShape(context, nodeName, *tilingData, quantMode) != ge::GRAPH_SUCCESS,
         OPS_LOG_E(nodeName, "Check tensor shape failed."), return ge::GRAPH_FAILED);
 
-    // 校验win区大小
+    // Validate window area size
     uint64_t maxWindowSize = Mc2TilingUtils::GetMaxWindowSize();
     uint64_t h = static_cast<uint64_t>(tilingData->moeDispatchNormalInfo.h);
     uint64_t k = static_cast<uint64_t>(tilingData->moeDispatchNormalInfo.k);
     uint64_t epWorldSize = static_cast<uint64_t>(tilingData->moeDispatchNormalInfo.epWorldSize);
     uint64_t maxBs = static_cast<uint64_t>(tilingData->moeDispatchNormalInfo.globalBs) / epWorldSize;
 
-    // dispatch数据区 token首对齐512，有效token长度h_align_32b + scale(32b) + 三元组(3*4b)
+    // Dispatch data area: token start aligned to 512, valid token length h_align_32b + scale(32b) + triplet(3*4b)
     uint64_t tokenActualLen =
         ((h * MAX_OUT_DTYPE_SIZE + UB_ALIGN - 1UL) / UB_ALIGN) * UB_ALIGN + SCALE_EXPAND_IDX_BUFFER;
     uint64_t tokenNeedSizeDispatch = ((tokenActualLen + WIN_ADDR_ALIGN - 1UL) / WIN_ADDR_ALIGN) * WIN_ADDR_ALIGN;
     uint64_t tokenNeedSizeCombine = ((h * MAX_OUT_DTYPE_SIZE + WIN_ADDR_ALIGN - 1UL) / WIN_ADDR_ALIGN) * WIN_ADDR_ALIGN;
-    // 未考虑双流时大小
+    // Size without considering dual-stream
     uint64_t actualSize = (maxBs * k * (tokenNeedSizeCombine + tokenNeedSizeDispatch) + COMBINE_STATE_WIN_OFFSET +
                            NOTIFY_DISPATCH_WIN_OFFSET) *
                           DOUBLE_DATA_BUFFER;

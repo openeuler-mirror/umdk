@@ -37,21 +37,22 @@ using namespace Moe;
     } while (0)
 
 namespace MoeDistributeCombineImpl {
-constexpr uint8_t BUFFER_NUM = 2;             // 多buf
-constexpr uint32_t STATE_OFFSET = 512;        // 状态空间偏移地址
+constexpr uint8_t BUFFER_NUM = 2;             // Multi-buffer
+constexpr uint32_t STATE_OFFSET = 512;        // State space offset address
 constexpr uint32_t STATE_SIZE = 1024 * 1024;  // 1M
 constexpr uint32_t RANK_SIZE_ON_WIN_512 = 512 * 1024;
 constexpr uint32_t RANK_SIZE_ON_WIN_256 = 256 * 1024;
 constexpr uint32_t TP_RANK_SIZE_ON_WIN = 0;
-constexpr uint32_t UB_ALIGN = 32;                   // UB按32字节对齐
-constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;  // 本卡状态空间偏移地址
+constexpr uint32_t UB_ALIGN = 32;                   // UB aligned to 32 bytes
+constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;  // Local card state space offset address
 constexpr uint8_t EP_DOMAIN = 0;
 constexpr uint8_t TP_DOMAIN = 1;
 constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint32_t VEC_LEN = 256U;
 constexpr float SCALE_PARAM = 127.0;
-constexpr uint32_t BLOCK_NUM = 256U / UB_ALIGN;       // BlockReduceMax 256字节对齐，计算每256字节block数量
+// BlockReduceMax 256-byte aligned, compute block count per 256 bytes
+constexpr uint32_t BLOCK_NUM = 256U / UB_ALIGN;
 constexpr int CAM_MAX_RANK_SIZE = 384;                // cam max rank size
 constexpr int64_t IPC_DATA_OFFSET = 2 * 1024 * 1024;  // first 2MB for flag.
 
@@ -118,9 +119,9 @@ private:
     GlobalTensor<ExpandIdxType> tpSendCountGM_;
     GlobalTensor<float> expandScalesGM_;
     GlobalTensor<ExpandXType> expandOutGlobal_;
-    GlobalTensor<ExpandXType> rankWindow_;           // 用于存对端window的变量
-    GlobalTensor<int32_t> rankStates_;               // 用于存对端状态window的变量
-    GlobalTensor<float> epStatusSpaceGlobalTensor_;  // win区状态位置拷入相关参数
+    GlobalTensor<ExpandXType> rankWindow_;           // Variable for storing peer window
+    GlobalTensor<int32_t> rankStates_;               // Variable for storing peer state window
+    GlobalTensor<float> epStatusSpaceGlobalTensor_;  // Parameters for copying into window state region
     GlobalTensor<float> tpStatusSpaceGlobalTensor_;
     GlobalTensor<ExpandXType> tpRankWindow_;
     GlobalTensor<ExpandXType> rowTmpGlobal_;
@@ -139,7 +140,7 @@ private:
     LocalTensor<float> gmTpSendCountFloatTensor_;
     LocalTensor<ExpandIdxType> epSendCountLocal_;
 
-    // tiling侧已确保数据上限， 相乘不会越界，因此统一采用uint32_t进行处理
+    // Tiling side ensures data upper bounds, multiplication won't overflow, so uint32_t is used uniformly
     uint32_t axisBS_{0};
     uint32_t axisMaxBS_{0};
     uint32_t axisH_{0};
@@ -150,9 +151,9 @@ private:
     uint32_t epRankId_{0};
     uint32_t tpRankId_{0};
     uint32_t coreIdx_{0};              // aiv id
-    uint32_t sharedExpertRankNum_{0};  // 共享专家卡数
-    uint32_t moeExpertNum_{0};         // moe专家数
-    uint32_t moeExpertPerRankNum_{0};  // 每张卡部署的moe专家数
+    uint32_t sharedExpertRankNum_{0};  // Shared expert card count
+    uint32_t moeExpertNum_{0};         // MOE expert count
+    uint32_t moeExpertPerRankNum_{0};  // MOE expert count per card
     uint32_t moeSendNum_{0};           // moeExpertPerRankNum_ * epWorldSize_
     uint32_t tpScatterNum_{0};
     uint32_t firstTpTokenEndIdx_{0};
@@ -195,14 +196,14 @@ private:
     TBuf<> gmTpSendCountFloatBuf_;
     TBuf<> tokenBuf_;
     TBuf<> statusBuf_;
-    TBuf<> gatherMaskOutBuf_;  // gather mask输出buf
-    TBuf<> gatherTmpBuf_;      // 辅助gather tensor定义
+    TBuf<> gatherMaskOutBuf_;  // Gather mask output buffer
+    TBuf<> gatherTmpBuf_;      // Auxiliary gather tensor definition
     TBuf<> statusSumOutBuf_;
     float sumTarget_{0.0};
     int32_t epStateValue_;
     bool isShardExpert_{false};
 
-    // int8量化
+    // Int8 quantization
     TBuf<> xAbsBuf_;
     TBuf<> xInt8Buf_;
     TBuf<> xMaxBuf_;
@@ -298,7 +299,8 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::Init(
 
     if constexpr (IsQuant) {
         scaleValFloat_ = static_cast<float>(1.0f / SCALE_PARAM);
-        scaleGranu_ = UB_ALIGN / static_cast<uint32_t>(sizeof(float));  // 计算每个block得到的reducemax结果数量
+        // Compute the number of reduceMax results per block
+        scaleGranu_ = UB_ALIGN / static_cast<uint32_t>(sizeof(float));
         scaleNum_ = axisH_ / scaleGranu_;
         scaleLen_ = scaleNum_;
         repeatNum_ = static_cast<uint32_t>(axisH_ / (VEC_LEN / sizeof(float)));
@@ -328,11 +330,11 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::Init(
     SplitCoreCal();
 }
 
-// 在1M中选择512K偏移后的1.5k空间记录本卡历史状态
+// Select 1.5K space at 512K offset within 1M to record local card historical state
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::InitStatusTargetSum()
 {
-    // ep域状态
+    // EP domain state
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(epStatusSpaceGm_ + SELF_STATE_OFFSET));
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
@@ -356,8 +358,8 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::BuffInit()
 {
     tpipe_->Reset();
     tpipe_->InitBuffer(readStateBuf_, UB_ALIGN);                                       // 32
-    uint32_t sendNumAlign = Ceil(moeSendNum_ * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;  // 32B向上取整
-    tpipe_->InitBuffer(sendCountBuf_, sendNumAlign);  // epWorldSize_ * moeExpertPerRankNum_ * 4，且32B向上取整
+    uint32_t sendNumAlign = Ceil(moeSendNum_ * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;  // Round up to 32B
+    tpipe_->InitBuffer(sendCountBuf_, sendNumAlign);  // epWorldSize_ * moeExpertPerRankNum_ * 4, rounded up to 32B
     if constexpr (IsNeedReduceScatter) {
         tpipe_->InitBuffer(winTpSendCountInQueue_, BUFFER_NUM, axisHExpandXTypeSize_);  // 28K
         tpipe_->InitBuffer(gmTpSendCountInQueue_, BUFFER_NUM, axisHExpandXTypeSize_);   // 28K
@@ -418,7 +420,8 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::AlltoAllBuffInit()
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SplitCoreCal()
 {
-    // 对worldsize 按卡分核，得到每个核上处理的卡的数量，用于置状态、清状态核moe发送
+    // Split worldSize across cores by card, get the number of cards each core handles,
+    // for setting/clearing state and MOE sending
     sendRankNum_ = epWorldSize_ / aivNum_;
     uint32_t remainderRankNum = epWorldSize_ % aivNum_;
     startRankId_ = sendRankNum_ * coreIdx_;
@@ -431,14 +434,14 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SplitCoreCal()
     endRankId_ = startRankId_ + sendRankNum_;
 }
 
-// 当前逻辑为tp=2场景，泛化待重新适配，本卡token在最前面
-// 当tp为 2 时，直接把对端tp 的数据分核处理发送
-// tp 还是在local rank 上，不需要用 shmem
+// Current logic assumes tp=2 scenario, generalization needs re-adaptation, local card tokens are at the front
+// When tp=2, directly distribute peer TP data across cores for sending
+// TP remains on local rank, no shmem needed
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ReduceScatterTrans()
 {
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(tpSendCountGM_[tpRankId_]);
-    // 基于 tpRankId 取 dataCopyInGM 的 offset
+    // Get dataCopyInGM offset based on tpRankId
     uint32_t offset = tpSendCountGM_.GetValue(tpRankId_) * axisH_;
     GlobalTensor<ExpandXType> dataCopyInGM = expandXGM_[offset];
     GM_ADDR rankGM = GetWinAddrByRankId(1 - tpRankId_, TP_DOMAIN) + tpDataOffsetOnWin_;
@@ -458,7 +461,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ReduceScatterTrans(
     LocalTensor<ExpandXType> tmpUb;
     for (uint32_t tokenNumIdx = copyStartIdx; tokenNumIdx < copyEndIdx; tokenNumIdx++) {
         tmpUb = moeQueue_.AllocTensor<ExpandXType>();
-        // dataCopyInGM 是从 expandXGM_ 上取了一个 offset 得到的 input data
+        // dataCopyInGM is the input data obtained by taking an offset from expandXGM_
         // GM --> UB
         DataCopy(tmpUb, dataCopyInGM[tokenNumIdx * axisH_], axisH_);
         moeQueue_.EnQue(tmpUb);
@@ -469,10 +472,10 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ReduceScatterTrans(
     }
 }
 
-// 流水流程
+// Pipeline flow
 // 46 -> gm -> ub syncall win->gm add -> alltoall
 // 2 -> win wait syncall gm -> ub win ->gm add -> alltoall
-// 参考 Dispatch_a3，这里的 DataCopy 也不需要用 shmem
+// Reference Dispatch_a3, DataCopy here also does not need shmem
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetWaitTpStatusAndDisPatch()
 {
@@ -481,7 +484,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetWaitTpStatusAndD
         return;
     }
     if constexpr (IsNeedReduceScatter) {
-        uint32_t tpToRankId = 1 - tpRankId_;  // 当前适配按tpWorldSize_==2来写
+        uint32_t tpToRankId = 1 - tpRankId_;  // Currently adapted for tpWorldSize_==2
         pipe_barrier(PIPE_ALL);
         LocalTensor<float> statusFlagUb = readStateBuf_.Get<float>();
         statusFlagUb(0) = sumTarget_;
@@ -493,11 +496,11 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetWaitTpStatusAndD
 #endif
         tpWindowInstatusFp32Tensor_.SetGlobalBuffer((__gm__ float *)stateGM_);
         // UB --> GM
-        DataCopy<float>(tpWindowInstatusFp32Tensor_, statusFlagUb, 8UL);  // 8是数据大小，按32对齐拷贝
+        DataCopy<float>(tpWindowInstatusFp32Tensor_, statusFlagUb, 8UL);  // 8 is data size, copy with 32-byte alignment
         SyncFunc<AscendC::HardEvent::MTE3_S>();
         LocalTensor<float> statusFp32Tensor_ = readStateBuf_.Get<float>();
         float sumOfFlag = static_cast<float>(-1.0);
-        uint32_t statusRankOffset = coreIdx_ * stateOffset_ / sizeof(float);  // tp = 2 场景
+        uint32_t statusRankOffset = coreIdx_ * stateOffset_ / sizeof(float);  // tp = 2 scenario
         while (sumOfFlag != sumTarget_) {
             DataCopy<float>(statusFp32Tensor_, tpStatusSpaceGlobalTensor_[statusRankOffset], 8);
             SyncFunc<AscendC::HardEvent::MTE2_S>();
@@ -513,13 +516,13 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetWaitTpStatusAndD
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispatchCopyAdd()
 {
-    if (startRankId_ >= epWorldSize_) {  // 空闲核，直接返回
+    if (startRankId_ >= epWorldSize_) {  // Idle core, return directly
         return;
     }
     uint32_t curRankExpertNum = 0;
     DataCopyExtParams epSendCntParams;
     if (isShardExpert_) {
-        curRankExpertNum = 1;  // 对于共享专家来说epSendCount输入维度为epWordSize个
+        curRankExpertNum = 1;  // For shared expert, epSendCount input dimension is epWorldSize
         epSendCntParams = {1U, static_cast<uint32_t>(epWorldSize_ * sizeof(uint32_t)), 0U, 0U, 0U};
     } else {
         curRankExpertNum = moeExpertPerRankNum_;
@@ -532,7 +535,9 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
     uint32_t preCount = 0;
     uint32_t startTokenIdx = 0;
     uint32_t curTokenNum = 0;
-    // 分核是按照卡数去分的，先循环单卡上每个专家，再循环处理当前核处理的卡号，因为网络中一个专家的放在一起处理
+    // Core assignment is based on card count; first loop over each expert on a single card,
+    // then loop over the card IDs handled by this core,
+    // because one expert's data in the network is processed together
     for (uint32_t expertIdx = 0U; expertIdx < curRankExpertNum; expertIdx++) {
 #ifdef USE_WRITE_SHUFFLE
 #pragma message("use write shuffle")
@@ -561,7 +566,9 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
 }
 
 /*
-    接口功能：量化一条token数据，前H个字节保存量化后的int8数据，后scaleNum_个fp16/bf16数据保存量化参数
+    Interface function: Quantize one token data,
+    The first H bytes store the quantized int8 data,
+    the last scaleNum_ fp16/bf16 values store the quantization parameters
 */
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::QuantProcess()
@@ -612,7 +619,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
     xOutQueue_.EnQue(outTensor_);
 
     outTensor_ = xOutQueue_.DeQue<ExpandXType>();
-    // UB --> GM [这个要写到对应的 rank idx]
+    // UB --> GM [This should be written to the corresponding rank index]
     SHMEM_PUT_BY_DTYPE(ExpandXType, rankWindow_[loopIdx * dataCnt], outTensor_, dataCnt, ep);
 }
 
@@ -620,12 +627,12 @@ template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispatchInnerCopyAdd(
     uint32_t tokenNumLoop, uint32_t srcStartTokenIdx, uint32_t ep, uint32_t expertIdx)
 {
-    // 获取对应卡上 window 的首地址
+    // Get the base address of the corresponding card's window
     GM_ADDR rankGM = GetWinAddrByRankId(ep, EP_DOMAIN, expertIdx) + epDataOffsetOnWin_;
 #if defined(ASCENDC_OOM) && ASCENDC_OOM == 1
     OOMCheckAddrRange<ExpandXType>((__gm__ ExpandXType *)(GetWinAddrByRankId(ep, EP_DOMAIN)), totalWinSize_);
 #endif
-    if ((isShardExpert_) && (ep < sharedExpertRankNum_)) {  // 这部分数据为本卡数据，模拟为ep发过来的
+    if ((isShardExpert_) && (ep < sharedExpertRankNum_)) {  // This is local card data, simulating data sent from EP
         rankGM = GetWinAddrByRankId(epRankId_, EP_DOMAIN, expertIdx) + ep * moeExpertPerRankNum_ * expertPerSizeOnWin_;
 #if defined(ASCENDC_OOM) && ASCENDC_OOM == 1
         OOMCheckAddrRange<ExpandXType>((__gm__ ExpandXType *)(GetWinAddrByRankId(epRankId_, EP_DOMAIN)), totalWinSize_);
@@ -664,9 +671,9 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::ExpertAlltoAllDispa
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::CustomAdd(LocalTensor<ExpandXType> &dst,
-                                                                                 LocalTensor<ExpandXType> &src0,
-                                                                                 LocalTensor<ExpandXType> &src1,
-                                                                                 uint32_t dataCnt)
+    LocalTensor<ExpandXType> &src0,
+    LocalTensor<ExpandXType> &src1,
+    uint32_t dataCnt)
 {
     if constexpr (AscendC::IsSameType<ExpandXType, bfloat16_t>::value) {
         Cast(winTpSendCountFloatTensor_, src0, RoundMode::CAST_NONE, dataCnt);
@@ -685,7 +692,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::SetStatus()
 {
     pipe_barrier(PIPE_ALL);
     if (startRankId_ >= epWorldSize_) {
-        // 空闲核，直接返回
+        // Idle core, return directly
         return;
     }
     LocalTensor<int32_t> statusFlagUb = readStateBuf_.Get<int32_t>();
@@ -712,10 +719,10 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::WaitDispatch()
     LocalTensor<uint32_t> gatherTmpTensor = gatherTmpBuf_.Get<uint32_t>();
     LocalTensor<float> statusSumOutTensor = statusSumOutBuf_.Get<float>();
     gatherTmpTensor.SetValue(0, 1);
-    uint32_t mask = 1;  // gatherMask + sum 相关参数
+    uint32_t mask = 1;  // gatherMask + sum related parameters
     uint64_t rsvdCnt = 0;
     DataCopyParams intriParams{static_cast<uint16_t>(sendRankNum_), 1,
-                               static_cast<uint16_t>((moeSendNum_ > 512) ? 7 : 15), 0};  // srcStride为15个block
+                               static_cast<uint16_t>((moeSendNum_ > 512) ? 7 : 15), 0};  // srcStride is 15 blocks
     float sumOfFlag = static_cast<float>(-1.0);
     float minTarget = (sumTarget_ * sendRankNum_) - (float)0.5;
     float maxTarget = (sumTarget_ * sendRankNum_) + (float)0.5;
@@ -737,7 +744,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::WaitDispatch()
 }
 
 /*
-    接口功能：将量化后的int8 token反量化
+    Interface function: Dequantize the quantized int8 token
 */
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::DequantProcess(LocalTensor<ExpandXType> &src)
@@ -766,21 +773,22 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
     uint32_t endIndex = 0;
     uint32_t processLen = 0;
     uint32_t tokenOffset = 0;
-    uint32_t quantCopyLen = axisH_ / 2U + scaleLen_;  // int8量化时，1个token对应长度
+    uint32_t quantCopyLen = axisH_ / 2U + scaleLen_;  // Length per token in int8 quantization
 
     if (axisBS_ < aivNum_) {
-        uint32_t aivNumPerToken = aivNum_ / axisBS_;  // 需要约束axisBS_ < aivNum_
+        uint32_t aivNumPerToken = aivNum_ / axisBS_;  // Requires axisBS_ < aivNum_
         if constexpr (IsQuant) {
-            aivNumPerToken = 1U;  // int8量化时不需要切H
+            aivNumPerToken = 1U;  // No need to split H in int8 quantization
         }
         if (coreIdx_ >= (axisBS_ * aivNumPerToken)) {
             return;
         }
-        uint32_t tokenIndex = coreIdx_ / aivNumPerToken;  // 处理第几个token
-        // 切H，按UB_ALIGN对齐
+        uint32_t tokenIndex = coreIdx_ / aivNumPerToken;  // Which token to process
+        // Split H, aligned by UB_ALIGN
         processLen = ((axisH_ / UB_ALIGN) / aivNumPerToken) * UB_ALIGN;
-        tokenOffset = processLen * (coreIdx_ % aivNumPerToken);     // 偏移位置
-        if ((coreIdx_ % aivNumPerToken) == (aivNumPerToken - 1)) {  // aivNumPerToken中的最后一个核处理剩余的
+        tokenOffset = processLen * (coreIdx_ % aivNumPerToken);     // Offset position
+        // The last core in aivNumPerToken handles the remainder
+        if ((coreIdx_ % aivNumPerToken) == (aivNumPerToken - 1)) {
             processLen = axisH_ - ((aivNumPerToken - 1) * processLen);
         }
         beginIndex = tokenIndex;
@@ -821,7 +829,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
         int32_t moeExpert = 0;
         float scaleVal = 0.0;
         GM_ADDR wAddr;
-        SyncFunc<AscendC::HardEvent::MTE3_V>();  // 与结果搬出datacopy同tensor
+        SyncFunc<AscendC::HardEvent::MTE3_V>();  // Same tensor as result output DataCopy
         Duplicate(sumFloatBufLocal, (float)0, axisH_);
         LocalTensor<ExpandXType> tmpUb;
         for (uint32_t i = 0; i < axisK_; i++) {
@@ -856,11 +864,12 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
         }
         LocalTensor<ExpandXType> rowTmpLocal = tokenBuf_.Get<ExpandXType>();
         if (sharedExpertRankNum_ > 0U) {
-            // 累加共享专家，当前bs范围，一个核处理一个token，根据当前tokenId反推对应的共享专家
+            // Accumulate shared expert data, within current BS range, one core processes one token,
+            // deduce the corresponding shared expert from the current tokenId
             uint32_t temp = (epRankId_ * axisBS_) / sharedExpertRankNum_;
             uint32_t moeOnShareRank = Ceil((tokenIndex + 1 + temp) * sharedExpertRankNum_, axisBS_) - 1 - epRankId_;
             uint32_t preCnt = (moeOnShareRank + epRankId_) * axisBS_ / sharedExpertRankNum_ -
-                              epRankId_ * axisBS_ / sharedExpertRankNum_;
+                epRankId_ * axisBS_ / sharedExpertRankNum_;
             __gm__ ExpandXType *shareAddr =
                 (__gm__ ExpandXType *)(epWindowGM_ + moeOnShareRank * expertPerSizeOnWin_ * moeExpertPerRankNum_) +
                 (tokenIndex - preCnt) * axisH_ + tokenOffset;
@@ -871,7 +880,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
             }
             GlobalTensor<ExpandXType> shareTokGlobal;
             shareTokGlobal.SetGlobalBuffer((__gm__ ExpandXType *)(shareAddr));
-            SyncFunc<AscendC::HardEvent::V_MTE2>();  // 与结果搬出Cast同地址
+            SyncFunc<AscendC::HardEvent::V_MTE2>();  // Same address as result output Cast
             if constexpr (IsQuant) {
                 SHMEM_GET_BY_DTYPE(ExpandXType, rowTmpLocal, shareTokGlobal, quantCopyLen, epRankId_);
                 DequantProcess(rowTmpLocal);
@@ -884,7 +893,7 @@ __aicore__ inline void MoeCombineShmem<TemplateMC2TypeFunc>::LocalWindowCopy()
             pipe_barrier(PIPE_V);
             AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, rowTmpFloatLocal, processLen);
         }
-        // 结果搬出
+        // Output results
         pipe_barrier(PIPE_V);
         LocalTensor<ExpandXType> sumBufLocal = tokenBuf_.Get<ExpandXType>();
         Cast(sumBufLocal, sumFloatBufLocal, AscendC::RoundMode::CAST_RINT, processLen);

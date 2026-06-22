@@ -73,12 +73,12 @@ at::Tensor MoeCombinePrefillImpl(const at::Tensor &x, const at::Tensor &topkIdx,
                                  int64_t rank, int64_t numRanks)
 {
     static auto op = torch::Dispatcher::singleton()
-                         .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_prefill", "")
-                         .typed<decltype(MoeCombinePrefillImpl)>();
+        .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_prefill", "")
+        .typed<decltype(MoeCombinePrefillImpl)>();
     return op.call(x, topkIdx, topkWeights, srcIdx, sendHead, groupEp, rank, numRanks);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
+// Bind forward and backward by inheriting torch::autograd::Function
 class MoeCombinePrefill : public torch::autograd::Function<MoeCombinePrefill> {
 public:
     static at::Tensor forward(AutogradContext *ctx, const at::Tensor &x, const at::Tensor &topkIdx,

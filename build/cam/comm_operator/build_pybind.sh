@@ -12,18 +12,18 @@ build_pybind() {
     local build_tmp_dir="${MODULE_BUILD_PATH}/pybind"
     local wheel_out_dir="${MODULE_BUILD_OUT_PATH}/dist"
 
-    # 清理之前的构建输出并重建
+    # Clean up previous build output and rebuild
     rm -rf "${build_tmp_dir}" "${wheel_out_dir}"
     mkdir -p "${wheel_out_dir}"
     
-    # 拷贝源码到临时编译路径
+    # Copy source code to temporary build directory
     cp -r $MODULE_SRC_PATH/pybind "${build_tmp_dir}"
     
-    # 限制 C++ 编译并行度：可通过 CAM_BUILD_JOBS 环境变量配置，默认 4
-    # Jenkins ECS 等内存受限环境建议设置为 2~4
+    # Limit C++ compilation parallelism: configurable via CAM_BUILD_JOBS env variable, default 4
+    # For Jenkins ECS and other memory-constrained environments, recommended to set 2~4
     export MAX_JOBS=${CAM_BUILD_JOBS:-8}
 
-    # 在临时目录中编译
+    # Build in the temporary directory
     cd "${build_tmp_dir}"
     if python3 setup.py bdist_wheel --dist-dir="${wheel_out_dir}"; then
         if [ -d "${wheel_out_dir}" ] && [ "$(ls -A ${wheel_out_dir})" ]; then

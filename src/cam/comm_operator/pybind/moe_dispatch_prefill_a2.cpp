@@ -186,7 +186,7 @@ tensorList MoeDispatchPrefillA2ImplNpu(
     int totalCount = totalRecvToken.item<int>();
     int numRecvTokens = (totalCount == 0) ? 1 : totalCount;
     auto expandxOut = useQuant ? at::empty({numRecvTokens, hidden}, at::dtype(at::kChar).device(x.device()))
-                                 : at::empty({numRecvTokens, hidden}, x.options());
+        : at::empty({numRecvTokens, hidden}, x.options());
     auto dynamicScalesOut = at::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
     auto expandScales = at::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
 

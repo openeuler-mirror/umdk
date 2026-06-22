@@ -569,7 +569,7 @@ MoeDispatchNormalA2Layered<TemplateMC2TypeA2layeredFunc>::ConstructDataAndFlagBa
     // calculate the servers that current core will handle
     uint32_t batchWriteItemNum = serverNum / aivNum_;     // server num per aiv
     uint32_t remainderItemNum = serverNum % aivNum_;      // remainder servers
-    uint32_t startServerId = batchWriteItemNum * aivId_;  // current aiv handles [startServerId,endServerId)个server
+    uint32_t startServerId = batchWriteItemNum * aivId_;  // current aiv handles [startServerId,endServerId) servers
     uint32_t curServerId = rankId_ / SERVER_RANK_SIZE;    // current serverId
 
     if (aivId_ < remainderItemNum) {

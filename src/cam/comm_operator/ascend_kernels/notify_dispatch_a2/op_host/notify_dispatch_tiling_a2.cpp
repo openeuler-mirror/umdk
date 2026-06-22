@@ -372,7 +372,7 @@ static bool CheckTensorDataType(gert::TilingContext &context, const char *nodeNa
     NotifyDispatchA2TilingData *tilingData = context.GetTilingData<NotifyDispatchA2TilingData>();
     OPS_ERR_IF(tilingData == nullptr, OPS_LOG_E(nodeName, "tilingData is nullptr."), return false);
     uint64_t maxWindowSize = Mc2TilingUtils::GetMaxWindowSize();
-    uint64_t actualSize = 2 * dataSize * tilingData->notifyDispatchInfoA2.sendCount + 2 * 1024 * 1024;  // 2MB flag位
+    uint64_t actualSize = 2 * dataSize * tilingData->notifyDispatchInfoA2.sendCount + 2 * 1024 * 1024;  // 2MB flag bits
     if (actualSize > maxWindowSize) {
         OPS_LOG_E(nodeName, "HCCL_BUFFSIZE is too SMALL, should larger than %luMB", actualSize / MB_SIZE);
         return false;

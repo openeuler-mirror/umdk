@@ -317,7 +317,7 @@ template <TemplateMC2TypeClass>
 __aicore__ inline void MoeCombineNormal<TemplateMC2TypeFunc>::WaitBuffCopy(uint32_t tokenIndex)
 {
     uint32_t calCount = axisK_ * FLOAT_NUM_PER_ALIGN;
-    GM_ADDR stateGM = GetStateAddrByRankId(epRankId_) + tokenIndex * axisK_ * UB_32_ALIGN; // 计算地址偏移
+    GM_ADDR stateGM = GetStateAddrByRankId(epRankId_) + tokenIndex * axisK_ * UB_32_ALIGN; // Calculate address offset
     GlobalTensor<float> stateGMTensor;
     stateGMTensor.SetGlobalBuffer((__gm__ float *)stateGM);
     float current = (float)0.0;
@@ -406,14 +406,14 @@ template <TemplateMC2TypeClass> __aicore__ inline void MoeCombineNormal<Template
 
     for (uint32_t tokenIndex = startTokenIndex; tokenIndex < endTokenIndex; tokenIndex++) {
         WaitBuffCopy(tokenIndex);
-        SyncFunc<AscendC::HardEvent::MTE3_V>(); // 与结果搬出datacopy同tensor
+        SyncFunc<AscendC::HardEvent::MTE3_V>(); // Same tensor as the result datacopy out
         ReadBufferAndWeightedSum(tokenIndex, startTokenIndex);
     }
 }
 
 template <TemplateMC2TypeClass> __aicore__ inline void MoeCombineNormal<TemplateMC2TypeFunc>::Process()
 {
-    if ASCEND_IS_AIV { // 全aiv处理
+    if ASCEND_IS_AIV { // Full AIV processing
         CopyBufferToShareAndSetStatus();
         ReadBufferFromRemote();
     }

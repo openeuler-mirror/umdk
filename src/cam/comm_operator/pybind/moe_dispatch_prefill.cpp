@@ -111,7 +111,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     int64_t trt = totalRecvToken.item<int>();
     int numRecvTokens = (trt == 0) ? 1 : trt;
     auto expandxOut = useQuant ? torch::empty({numRecvTokens, hidden}, at::dtype(at::kChar).device(x.device()))
-                               : torch::empty({numRecvTokens, hidden}, x.options());
+        : torch::empty({numRecvTokens, hidden}, x.options());
     auto dynamicScalesOut = torch::empty({numRecvTokens}, at::dtype(at::kFloat).device(x.device()));
     auto expandIdxOut = torch::empty({numRecvTokens * 3}, at::dtype(at::kInt).device(x.device()));
 
@@ -128,11 +128,11 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
 
 TensorVector MoeDispatchPrefillBackwardImplNpu(const at::Tensor &self)
 {
-    at::Tensor result = at::Tensor(self); // 创建输出内存
+    at::Tensor result = at::Tensor(self); // Create output memory
     return {result, result, result, result, result};
 }
 
-/* Normal类算子形状无法提前推导，不支持meta设备注册不支持GE使用 */
+/* Normal operators cannot infer shapes ahead of time, so Meta device registration and GE usage are not supported */
 std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispatchPrefillImpl(
     const at::Tensor &x,
     const at::Tensor &topkIdx,
@@ -145,12 +145,12 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     bool useQuant)
 {
     static auto op = torch::Dispatcher::singleton()
-                         .findSchemaOrThrow("umdk_cam_op_lib::moe_dispatch_prefill", "")
-                         .typed<decltype(MoeDispatchPrefillImpl)>();
+        .findSchemaOrThrow("umdk_cam_op_lib::moe_dispatch_prefill", "")
+        .typed<decltype(MoeDispatchPrefillImpl)>();
     return op.call(x, topkIdx, topkWeights, numTokensPerExpert, sendTokenIdxSmall, groupEp, rank, numRanks, useQuant);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
+// Bind forward and backward by inheriting torch::autograd::Function
 class MoeDispatchPrefill : public torch::autograd::Function<MoeDispatchPrefill> {
 public:
     static TensorVector forward(AutogradContext *ctx, const at::Tensor &x, const at::Tensor &topkIdx,
