@@ -479,7 +479,7 @@ umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void)
 
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list)
 {
-    return __atomic_sub_fetch(&jetty_node_list->ref_cnt, 1, __ATOMIC_ACQUIRE);
+    return __atomic_sub_fetch(&jetty_node_list->ref_cnt, 1, __ATOMIC_ACQ_REL);
 }
 
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node)

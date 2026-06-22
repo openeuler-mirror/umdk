@@ -1512,7 +1512,7 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
 
 void umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
 {
-    uint32_t new_value = __atomic_sub_fetch(&queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_RELAXED);
+    uint32_t new_value = __atomic_sub_fetch(&queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_ACQ_REL);
     UMQ_VLOG_DEBUG(VLOG_UMQ, "jfr_ctx ref_cnt %u\n", new_value);
     if (new_value > 0) {
         return;
@@ -1676,12 +1676,12 @@ int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_opti
                        ub_queue_t *share_queue, ub_queue_jetty_index_t jetty_idx)
 {
     if (is_umq_ub_share_rq(option->create_flag) && (jetty_idx == UB_QUEUE_JETTY_IO || UMQ_UB_ENABLE_SHARE_FC_JFR)) {
-        uint32_t ref_cnt = __atomic_add_fetch(&share_queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_ACQUIRE);
+        uint32_t ref_cnt = __atomic_add_fetch(&share_queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_ACQ_REL);
         if (jetty_idx == UB_QUEUE_JETTY_FLOW_CONTROL &&
             ref_cnt * UMQ_UB_FLOW_CONTORL_JETTY_DEPTH > share_queue->fc_rx_depth) {
             UMQ_VLOG_ERR(VLOG_UMQ, "number of shared flow control JFRs has reached the upper limit %u\n",
                 share_queue->fc_rx_depth / UMQ_UB_FLOW_CONTORL_JETTY_DEPTH);
-            (void)__atomic_sub_fetch(&share_queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_RELEASE);
+            (void)__atomic_sub_fetch(&share_queue->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_ACQ_REL);
             return UMQ_FAIL;
         }
         queue->fc_rx_depth = share_queue->fc_rx_depth;
@@ -2868,7 +2868,7 @@ static int umq_report_incomplete_and_merge_rx(
 
 void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
 {
-    __atomic_fetch_add(&queue->require_rx_count, rx_cnt, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&queue->require_rx_count, rx_cnt, __ATOMIC_ACQ_REL);
     uint32_t require_rx_count = umq_get_post_rx_num(queue->rx_depth, &queue->require_rx_count);
     if (require_rx_count > 0) {
         uint32_t cur_batch_count = 0;
@@ -2879,7 +2879,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
             cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
             umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size, cur_batch_count, UMQ_INVALID_HANDLE, NULL);
             if (qbuf == NULL) {
-                __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_RELAXED);
+                __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_ACQ_REL);
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, alloc rx failed\n", EID_ARGS(*eid), id);
                 break;
             }
@@ -2895,7 +2895,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
                     tmp_buf = tmp_buf->qbuf_next;
                 }
                 umq_buf_free(bad_buf);
-                __atomic_fetch_add(&queue->require_rx_count, fail_count, __ATOMIC_RELAXED);
+                __atomic_fetch_add(&queue->require_rx_count, fail_count, __ATOMIC_ACQ_REL);
                 break;
             }
             require_rx_count -= cur_batch_count;

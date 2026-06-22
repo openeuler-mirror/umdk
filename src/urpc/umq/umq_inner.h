@@ -41,15 +41,15 @@ typedef struct umq {
 static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, volatile uint32_t *require_rx_count)
 {
     if (rx_depth <= UMQ_BATCH_SIZE) {
-        return __atomic_exchange_n(require_rx_count, 0, __ATOMIC_RELAXED);
+        return __atomic_exchange_n(require_rx_count, 0, __ATOMIC_ACQ_REL);
     }
 
-    unsigned int rx_num = (uint32_t)__atomic_load_n(require_rx_count, __ATOMIC_RELAXED);
+    unsigned int rx_num = (uint32_t)__atomic_load_n(require_rx_count, __ATOMIC_ACQUIRE);
     do {
         if (rx_num < UMQ_BATCH_SIZE) {
             return 0;
         }
-    } while (!__atomic_compare_exchange_n(require_rx_count, &rx_num, 0, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
+    } while (!__atomic_compare_exchange_n(require_rx_count, &rx_num, 0, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
     return rx_num;
 }
 
@@ -58,7 +58,7 @@ static inline void umq_inc_ref(bool lock_free, volatile uint32_t *ref_cnt, uint3
     if (lock_free) {
         *ref_cnt = *ref_cnt + n;
     } else {
-        (void)__atomic_fetch_add(ref_cnt, n, __ATOMIC_RELAXED);
+        (void)__atomic_fetch_add(ref_cnt, n, __ATOMIC_ACQ_REL);
     }
 }
 
@@ -67,7 +67,7 @@ static inline void umq_dec_ref(bool lock_free, volatile uint32_t *ref_cnt, uint3
     if (lock_free) {
         *ref_cnt = *ref_cnt - n;
     } else {
-        (void)__atomic_fetch_sub(ref_cnt, n, __ATOMIC_RELAXED);
+        (void)__atomic_fetch_sub(ref_cnt, n, __ATOMIC_ACQ_REL);
     }
 }
 
@@ -76,7 +76,7 @@ static inline uint32_t umq_fetch_ref(bool lock_free, volatile uint32_t *ref_cnt)
     if (lock_free) {
         return *ref_cnt;
     } else {
-        return (uint32_t)__atomic_load_n(ref_cnt, __ATOMIC_SEQ_CST);
+        return (uint32_t)__atomic_load_n(ref_cnt, __ATOMIC_ACQUIRE);
     }
 }
 
