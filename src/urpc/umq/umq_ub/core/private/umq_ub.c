@@ -3153,9 +3153,12 @@ int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
+    uint64_t tp_start = umq_trace_timestamp_get();
     urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(queue->jetty[UB_QUEUE_JETTY_IO],
         &urma_wr, &bad_wr);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp);
+    uint64_t delta_ns = umq_trace_write_delta(tp_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status != URMA_SUCCESS) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
             "remote jetty_id: %u, urma_post_jetty_send_wr failed, status: %d\n", EID_ARGS(*eid), id,
@@ -3396,9 +3399,12 @@ int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
     }
 
     urma_jfc_t *temp_jfc[jfc_cnt];
+    uint64_t tp_wait_start = umq_trace_timestamp_get();
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     int p_num = umq_symbol_urma()->urma_wait_jfc(jfr_jfce, jfc_cnt, time_out, temp_jfc);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_WAIT_RX, start_timestamp);
+    uint64_t wait_delta = umq_trace_write_delta(tp_wait_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_WAIT_JFC, tp_wait_start, wait_delta);
     if (p_num <= 0) {
         return p_num;
     }
@@ -3413,9 +3419,12 @@ int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
             queue->interrupt_ctx.rx_fc_interrupt = true;
         }
     }
+    uint64_t tp_ack_start = umq_trace_timestamp_get();
     start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_ack_jfc(temp_jfc, nevents, p_num);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ACK_RX, start_timestamp);
+    uint64_t ack_delta = umq_trace_write_delta(tp_ack_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_ACK_JFC, tp_ack_start, ack_delta);
     return p_num;
 }
 
@@ -3427,9 +3436,12 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
     }
 
     urma_jfc_t *temp_jfc[jfc_cnt];
+    uint64_t tp_wait_start = umq_trace_timestamp_get();
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     int p_num = umq_symbol_urma()->urma_wait_jfc(queue->jfs_jfce, jfc_cnt, time_out, temp_jfc);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_WAIT_TX, start_timestamp);
+    uint64_t wait_delta = umq_trace_write_delta(tp_wait_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_WAIT_JFC, tp_wait_start, wait_delta);
     if (p_num <= 0) {
         return p_num;
     }
@@ -3443,9 +3455,12 @@ int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[])
             queue->interrupt_ctx.tx_fc_interrupt = true;
         }
     }
+    uint64_t tp_ack_start = umq_trace_timestamp_get();
     start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_ack_jfc(temp_jfc, nevents, p_num);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ACK_TX, start_timestamp);
+    uint64_t ack_delta = umq_trace_write_delta(tp_ack_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_ACK_JFC, tp_ack_start, ack_delta);
     return p_num;
 }
 
@@ -3457,9 +3472,12 @@ int umq_ub_wait_tp_handle_tx_interrupt(urma_jfce_t *jfs_jfce, int time_out, urma
     }
 
     urma_jfc_t *temp_jfc[jfc_cnt];
+    uint64_t tp_wait_start = umq_trace_timestamp_get();
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     int p_num = umq_symbol_urma()->urma_wait_jfc(jfs_jfce, jfc_cnt, time_out, temp_jfc);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_WAIT_TX, start_timestamp);
+    uint64_t wait_delta = umq_trace_write_delta(tp_wait_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_WAIT_JFC, tp_wait_start, wait_delta);
     if (p_num <= 0) {
         return p_num;
     }
@@ -3468,9 +3486,12 @@ int umq_ub_wait_tp_handle_tx_interrupt(urma_jfce_t *jfs_jfce, int time_out, urma
         nevents[i] = 1;
         jfc[i] = temp_jfc[i];
     }
+    uint64_t tp_ack_start = umq_trace_timestamp_get();
     start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_ack_jfc(temp_jfc, nevents, p_num);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ACK_TX, start_timestamp);
+    uint64_t ack_delta = umq_trace_write_delta(tp_ack_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_WAIT, UMQ_URMA_FUNC_ACK_JFC, tp_ack_start, ack_delta);
     return p_num;
 }
 
