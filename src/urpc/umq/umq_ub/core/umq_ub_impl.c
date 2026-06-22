@@ -1660,6 +1660,12 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
 
 static int umq_ub_get_fd_list(umq_ub_ctx_t *dev_ctx, urma_jfce_t *jfce, umq_interrupt_fd_list_t *fd_list)
 {
+    if (!is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
+        fd_list->fd[0] = jfce->fd;
+        fd_list->fd_num = 1;
+        return UMQ_SUCCESS;
+    }
+
     bondp_get_jfce_fd_list_in_t bond_in = {
         .jfce = jfce,
     };
@@ -1743,12 +1749,6 @@ int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
 
     if (jfce == NULL) {
         return -UMQ_ERR_EINVAL;
-    }
-
-    if (!is_umq_ub_bonding_dev(queue->dev_ctx->urma_ctx->dev->name)) {
-        fd_list->fd[0] = jfce->fd;
-        fd_list->fd_num = 1;
-        return UMQ_SUCCESS;
     }
 
     return umq_ub_get_fd_list(queue->dev_ctx, jfce, fd_list);
