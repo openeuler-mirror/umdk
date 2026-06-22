@@ -113,6 +113,8 @@ int bondp_nl_sock_init(void)
         return -ENOMEM;
     }
 
+    nl_socket_disable_seq_check(sock);
+
     int ret = genl_connect(sock);
     if (ret < 0) {
         URMA_LOG_ERR("Failed to connect generic netlink, ret=%d\n", ret);

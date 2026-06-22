@@ -15,6 +15,9 @@ extern "C" {
 void bondp_fb_handle_notify_nl_msg(struct nlattr *attrs[]);
 void bondp_fb_handle_done_nl_msg(struct nlattr *attrs[]);
 
+int bondp_fb_init(void);
+void bondp_fb_uninit(void);
+
 #ifdef __cplusplus
 }
 #endif
