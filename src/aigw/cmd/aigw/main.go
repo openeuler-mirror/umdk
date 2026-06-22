@@ -1,9 +1,11 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- * Description: Package main is the entrance of AIGW.
- * Create: 2025-5-13
+ * Description: this file provides the main function for AIGW.
+ * Create: 2025-05-13
  */
+
+// Package main is the entrance of AIGW.
 package main
 
 import (

@@ -11,10 +11,12 @@ package gs
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"huawei.com/aigw/internal/base"
+	"huawei.com/aigw/internal/cachecenter"
 	"huawei.com/aigw/internal/stats"
 	"huawei.com/aigw/internal/tokenizers"
 	"huawei.com/aigw/internal/vectorizer"
@@ -34,39 +36,45 @@ const (
 	defaultReqLifeCycle = 10 * time.Second
 )
 
-type deploymentPolicy int
+// DeploymentPolicy is the deployment mode
+type DeploymentPolicy int
 
+// definition for DeploymentPolicy
 const (
-	mixedDeployment deploymentPolicy = iota
-	separatedDeployment
+	MixedDeployment DeploymentPolicy = iota
+	SeparatedDeployment
 )
 
-func (d deploymentPolicy) String() string {
+// String returns the description of DeploymentPolicy
+func (d DeploymentPolicy) String() string {
 	switch d {
-	case mixedDeployment:
+	case MixedDeployment:
 		return "mixed"
-	case separatedDeployment:
+	case SeparatedDeployment:
 		return "separated"
 	default:
 		return "unknown"
 	}
 }
 
-type predictorType int
+// PredictorType is the type of predictor
+type PredictorType int
 
+// definition for PredictorType
 const (
-	predictTypeNone predictorType = iota
-	predictTypeEma
-	predictTypeLightgbm
+	PredictTypeNone PredictorType = iota
+	PredictTypeEma
+	PredictTypeLightgbm
 )
 
-func (p predictorType) String() string {
+// String returns the description of PredictorType
+func (p PredictorType) String() string {
 	switch p {
-	case predictTypeNone:
+	case PredictTypeNone:
 		return "none"
-	case predictTypeEma:
+	case PredictTypeEma:
 		return "ema"
-	case predictTypeLightgbm:
+	case PredictTypeLightgbm:
 		return "lightgbm"
 	default:
 		return "unknown"
@@ -76,15 +84,20 @@ func (p predictorType) String() string {
 // globalSchedulerManagerConfig describes the configuration of GS Manager.
 type globalSchedulerManagerConfig struct {
 	model        string
-	deployPolicy deploymentPolicy
-	predictType  predictorType
+	deployPolicy DeploymentPolicy
+	predictType  PredictorType
 
 	lbConfig AlgorithmParams
 
 	insSnapShotFreq time.Duration
-	hmacMgr         *crypto.HmacManager
-	aesMgr          *crypto.AesManager
 	insConnectType  string
+	maxInsNumPerGS  int
+
+	tokenizationRatio float64
+
+	reqSurvivalDuration time.Duration // the survival duration for request
+
+	skipInstanceConnection bool // skip connecting to instances during registration
 }
 
 // GlobalSchedulerManager is the GS manager
@@ -93,72 +106,88 @@ type GlobalSchedulerManager struct {
 	cancel context.CancelFunc
 	wg     *sync.WaitGroup
 
-	config *globalSchedulerManagerConfig
+	config globalSchedulerManagerConfig
 
 	controlChannel   chan *ControlMessage
 	scheduleChannel  chan *ControlMessage
 	reqStatusChannel chan *ControlMessage
 
-	dispatcher        *globalScheduleDispatcher
-	instanceManager   *instanceManager
-	prefillInsManager *instanceManager
-	decodeInsManager  *instanceManager
+	hmacMgr *crypto.HmacManager
+	aesMgr  *crypto.AesManager
+
+	dispatcher      *globalScheduleDispatcher
+	instanceManager *InstanceManager
+	cacheManager    *cachecenter.CacheManager
 
 	scheduler loadBalancer
+	tokenizer tokenizers.Tokenizer
+	lgm       *lightgbm.Booster
+	stats     *stats.DataPlaneStats
 
-	tokenizer      tokenizers.Tokenizer
-	lgm            *lightgbm.Booster
-	stats          *stats.DataPlaneStats
-	maxInsNumPerGS int
+	lastAccessTime time.Time // last access timestamp of this gs
 
-	reqSurvivalDuration int64 // the survival duration for request, unit is second
+	cacheDriverOps *cachecenter.CacheDriverOps
+	runtimeMode    base.RuntimeMode
+	metricProvider MetricProvider
 }
 
 // AlgorithmParams when pdMode=mixedDeployment, decodeScheduler is not effective
 type AlgorithmParams struct {
-	pdMode    deploymentPolicy
-	pdMixedLB loadBalancerType
-	prefillLB loadBalancerType
-	decodeLB  loadBalancerType
+	PdMode    DeploymentPolicy
+	PdMixedLB LoadBalancerType
+	PrefillLB LoadBalancerType
+	DecodeLB  LoadBalancerType
 
-	blockSize         int
-	batchSize         int
-	minBlockThreshold int
-	tbtThreshold      float64 // ms
-	ttftThreshold     float64 // ms
+	InstanceRoleType base.InstanceRole // role type of instances used in load balancing
 
-	statsFunc func(statType stats.StatType)
+	BlockSize         int
+	BatchSize         int
+	MinBlockThreshold int
+	TbtThreshold      float64 // ms
+	TtftThreshold     float64 // ms
 
-	powerOfTwo  bool
-	predictType predictorType
+	StatsFunc func(statType stats.StatType)
+
+	PowerOfTwo  bool
+	PredictType PredictorType
 	// each algorithm has its own parameters
+	PretrainTTFTPath string // for prefillTimeAware
+
+	// Consistent hash parameters
+	VirtualNodes int // Number of virtual nodes per worker (default: 160)
+	FallbackNum  int // Number of fallback workers to try on failure (default: 3)
+	DpSize       int // DP size for DP-aware workers (default: 1)
 }
 
 // NewGlobalSchedulerManager creates a new GS with options
-func NewGlobalSchedulerManager(parentCtx context.Context,
+func NewGlobalSchedulerManager(parentCtx context.Context, gsConfig *base.GlobalSchedulerConfig,
 	opts ...GlobalSchedulerManagerOption) (*GlobalSchedulerManager, error) {
 
 	manager := &GlobalSchedulerManager{
 		wg: new(sync.WaitGroup),
 
-		config: &globalSchedulerManagerConfig{
-			model:        "",
-			deployPolicy: mixedDeployment,
-			predictType:  predictTypeNone,
+		config: globalSchedulerManagerConfig{
+			insSnapShotFreq:   insSnapShotFreq,
+			tokenizationRatio: tokenizers.DefaultTokenizationRatio,
+			maxInsNumPerGS:    defaultInsNumPerGs,
 		},
 
 		controlChannel:   make(chan *ControlMessage, chanBufferSize),
 		scheduleChannel:  make(chan *ControlMessage, chanBufferSize),
 		reqStatusChannel: make(chan *ControlMessage, chanBufferSize),
 
-		instanceManager:   newInstanceManager(),
-		prefillInsManager: newInstanceManager(),
-		decodeInsManager:  newInstanceManager(),
-		scheduler:         nil,
-		stats:             stats.NewDataPlaneStats(),
-		maxInsNumPerGS:    defaultInsNumPerGs,
+		scheduler: nil,
+		stats:     stats.NewDataPlaneStats(),
+
+		lastAccessTime: time.Now(),
+
+		cacheDriverOps: nil,
 	}
 	manager.ctx, manager.cancel = context.WithCancel(parentCtx)
+
+	if e := manager.setConfig(gsConfig); e != nil {
+		return nil, e
+	}
 
 	for _, opt := range opts {
 		if e := opt(manager); e != nil {
@@ -166,27 +195,33 @@ func NewGlobalSchedulerManager(parentCtx context.Context,
 		}
 	}
 
-	manager.config.lbConfig.pdMode = manager.config.deployPolicy
-	manager.config.lbConfig.predictType = manager.config.predictType
-	manager.config.lbConfig.statsFunc = func(statType stats.StatType) {
-		manager.stats.Record(statType)
+	var cacheOptions []cachecenter.ManagerOption
+	if manager.cacheDriverOps != nil {
+		adp := cachecenter.NewRedisCacheCenter(manager.cacheDriverOps, int(manager.config.reqSurvivalDuration))
+		cacheOptions = append(cacheOptions, cachecenter.WithRemoteCache(adp))
+		cacheOptions = append(cacheOptions, cachecenter.WithRefreshInterval(gsConfig.CacheRefreshIntervalMs))
+		cacheOptions = append(cacheOptions, cachecenter.WithReqTtl(manager.config.reqSurvivalDuration))
 	}
-	manager.instanceManager.insSnapShotFreq = manager.config.insSnapShotFreq
-	manager.instanceManager.aesMgr = manager.config.aesMgr
-	manager.instanceManager.insConnectType = manager.config.insConnectType
-	manager.instanceManager.hmacMgr = manager.config.hmacMgr
 
-	manager.prefillInsManager.insSnapShotFreq = manager.config.insSnapShotFreq
-	manager.prefillInsManager.aesMgr = manager.config.aesMgr
-	manager.prefillInsManager.insConnectType = manager.config.insConnectType
-	manager.prefillInsManager.hmacMgr = manager.config.hmacMgr
+	manager.cacheManager = cachecenter.NewCacheManager(manager.ctx, manager.config.model, cacheOptions...)
+	manager.instanceManager = NewInstanceManagerWithOptions(manager.cacheManager,
+		withCrypto(manager.hmacMgr, manager.aesMgr),
+		withSnapShotUpdateInterval(manager.config.insSnapShotFreq),
+		withConnectType(manager.config.insConnectType),
+		withRuntimeMode(manager.runtimeMode),
+		WithSkipInstanceConnection(manager.config.skipInstanceConnection),
+	)
 
-	manager.decodeInsManager.insSnapShotFreq = manager.config.insSnapShotFreq
-	manager.decodeInsManager.aesMgr = manager.config.aesMgr
-	manager.decodeInsManager.insConnectType = manager.config.insConnectType
-	manager.decodeInsManager.hmacMgr = manager.config.hmacMgr
+	// Create MetricProvider based on runtime mode
+	var metricProvider MetricProvider
+	if manager.runtimeMode == base.ServiceMode {
+		metricProvider = NewInstanceMetricProvider(manager.instanceManager)
+	} else {
+		metricProvider = NewCacheMetricProvider(manager.cacheManager)
+	}
+	manager.metricProvider = metricProvider
 
-	gsLB, err := newLoadBalancer(manager, &manager.config.lbConfig)
+	gsLB, err := newLoadBalancer(metricProvider, &manager.config.lbConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -197,22 +232,52 @@ func NewGlobalSchedulerManager(parentCtx context.Context,
 	return manager, nil
 }
 
+func (m *GlobalSchedulerManager) setConfig(gsConfig *base.GlobalSchedulerConfig) error {
+	lbCfg := &gsConfig.LoadBalancer
+	// set mandatory options
+	options := []GlobalSchedulerManagerOption{
+		WithModel(gsConfig.Model),
+		WithDeploymentPolicy(gsConfig.DeployPolicy),
+		WithSLOThreshold(gsConfig.MaxTimeToFirstToken, gsConfig.MaxTimeBetweenTokens),
+		WithLBType(lbCfg.Mixed, lbCfg.Prefill, lbCfg.Decode),
+		WithAlgorithmThreshold(lbCfg.ReservedBlockNumber, lbCfg.BatchSize, lbCfg.PowerOfTwo, gsConfig.BlockSize),
+		WithInsConnectType(gsConfig.InsConnectType),
+		WithPretrainTTFTPath(lbCfg.PretrainTTFTPath),
+	}
+
+	for _, opt := range options {
+		if e := opt(m); e != nil {
+			return e
+		}
+	}
+
+	// Set skipInstanceConnection from config
+	m.config.skipInstanceConnection = gsConfig.SkipInstanceConnection
+	log.Info().Msgf("[GSManager] skipInstanceConnection = %v", m.config.skipInstanceConnection)
+
+	m.config.lbConfig.StatsFunc = func(statType stats.StatType) {
+		m.stats.Record(statType)
+	}
+
+	return nil
+}
+
+// LastAccessAt returns gs last accessed time
+func (m *GlobalSchedulerManager) LastAccessAt() time.Time {
+	return m.lastAccessTime
+}
+
+// Access update lastAccessTime when gs is accessed
+func (m *GlobalSchedulerManager) Access() {
+	m.lastAccessTime = time.Now()
+}
+
 // Start the GS
 func (m *GlobalSchedulerManager) Start() error {
 	log.Info().Msgf("starting global scheduler, model %v.", m.config.model)
 
-	if m.config.deployPolicy == mixedDeployment {
-		m.instanceManager.start()
-		log.Info().Msgf("start mixInsManager successfully, model %v.", m.config.model)
-	} else if m.config.deployPolicy == separatedDeployment {
-		m.prefillInsManager.start()
-		log.Info().Msgf("start prefillInsManager successfully, model %v.", m.config.model)
-		m.decodeInsManager.start()
-		log.Info().Msgf("start decodeInsManager successfully, model %v.", m.config.model)
-	} else {
-		return fmt.Errorf("error deploy policy: %v", m.config.deployPolicy)
-	}
-
+	m.instanceManager.start()
+	m.cacheManager.Start()
 	m.dispatcher.start()
 
 	m.wg.Add(1)
@@ -238,7 +303,12 @@ func (m *GlobalSchedulerManager) Stop() {
 	if m.dispatcher != nil {
 		m.dispatcher.stop()
 	}
-	m.instanceManager.stop()
+
+	m.cacheManager.Stop()
+
+	if m.instanceManager != nil {
+		m.instanceManager.stop()
+	}
 
 	log.Info().Msgf("stop GlobalScheduler successfully, model %v.", m.config.model)
 }
@@ -249,92 +319,86 @@ func (m *GlobalSchedulerManager) GetStats() map[string]uint64 {
 }
 
 func (m *GlobalSchedulerManager) registerInstance(ctrlMsg *ControlMessage) {
-	if m.GetInsNum() >= m.maxInsNumPerGS {
-		err := fmt.Errorf("the number of instance exceeds the maximum limit of gs(%v)",
-			m.maxInsNumPerGS)
+	var err error
+	defer func() { ctrlMsg.Response <- err }()
+
+	if m.GetInsNum() >= m.config.maxInsNumPerGS {
+		err = fmt.Errorf("the number of instance exceeds the maximum limit of gs(%v)",
+			m.config.maxInsNumPerGS)
 		log.ErrorAlarmMsgf(log.PerGSInstanceLimitExceeded, log.Report, fmt.Sprintf("%v", err))
-		ctrlMsg.Response <- err
 		return
 	}
 	registerMsg, ok := ctrlMsg.Request.(*RegisterInstanceMsg)
 	if !ok {
-		ctrlMsg.Response <- fmt.Errorf("invalid register instance msg, req %v", ctrlMsg.Request)
+		err = fmt.Errorf("invalid register instance msg, req %v", ctrlMsg.Request)
 		return
 	}
 
-	role, err := toInstanceRole(registerMsg.Role)
+	role, err := base.ToInstanceRole(registerMsg.Role)
 	if err != nil {
-		ctrlMsg.Response <- err
 		return
 	}
-	ip := net.ParseIP(registerMsg.IP)
-	insUrl := net.JoinHostPort(ip.String(), registerMsg.Port)
 
-	if m.config.deployPolicy == separatedDeployment && registerMsg.GroupID == "" {
-		ctrlMsg.Response <- fmt.Errorf("groupId can't be empty in separated")
+	if m.config.deployPolicy == SeparatedDeployment && registerMsg.GroupID == "" {
+		err = fmt.Errorf("groupId can't be empty in separated")
 		return
 	}
 
 	switch role {
-	case mixedRoleInstance:
-		if m.config.deployPolicy != mixedDeployment {
+	case base.MixedRoleInstance:
+		if m.config.deployPolicy != MixedDeployment {
 			err = fmt.Errorf("the deployPolicy of model is %v, can't add mixed", m.config.deployPolicy)
 			break
 		}
-		err = m.instanceManager.addInstance(insUrl, role, registerMsg.GroupID, m.reqStatusChannel)
-		m.instanceManager.updatePoolShot()
-	case prefillRoleInstance:
-		if m.config.deployPolicy != separatedDeployment {
+	case base.PrefillRoleInstance:
+		if m.config.deployPolicy != SeparatedDeployment {
 			err = fmt.Errorf("the deployPolicy of model is %v, can't add prefill", m.config.deployPolicy)
 			break
 		}
-		err = m.prefillInsManager.addInstance(insUrl, role, registerMsg.GroupID, m.reqStatusChannel)
-		m.prefillInsManager.updatePoolShot()
-	case decodeRoleInstance:
-		if m.config.deployPolicy != separatedDeployment {
+	case base.DecodeRoleInstance:
+		if m.config.deployPolicy != SeparatedDeployment {
 			err = fmt.Errorf("the deployPolicy of model is %v, can't add decode", m.config.deployPolicy)
 			break
 		}
-		err = m.decodeInsManager.addInstance(insUrl, role, registerMsg.GroupID, m.reqStatusChannel)
-		m.decodeInsManager.updatePoolShot()
 	default:
 		err = fmt.Errorf("register instance failed, error ins role %v", role)
 	}
 	if err != nil {
 		log.Error().Msgf("%v", err)
-		ctrlMsg.Response <- err
 		return
 	}
 
+	insAddr := base.BuildInstanceAddress(registerMsg.IP, registerMsg.Port, registerMsg.DpRank)
+	err = m.instanceManager.addInstance(insAddr, role, registerMsg.GroupID, m.reqStatusChannel)
+	if err != nil {
+		log.Error().Msgf("%v", err)
+		return
+	}
+	m.instanceManager.updatePoolShot()
+
 	log.Info().Msgf("instance %s registered successfully", registerMsg.Name)
-	ctrlMsg.Response <- nil
 }
 
 func (m *GlobalSchedulerManager) unregisterInstance(ctrlMsg *ControlMessage) {
+	var err error
+	defer func() { ctrlMsg.Response <- err }()
+
 	unregisterMsg, ok := ctrlMsg.Request.(*UnregisterInstanceMsg)
 	if !ok {
-		ctrlMsg.Response <- fmt.Errorf("invalid unregister instance msg, req %v", ctrlMsg.Request)
+		err = fmt.Errorf("invalid unregister instance msg, req %v", ctrlMsg.Request)
 		return
 	}
-	ip := net.ParseIP(unregisterMsg.IP)
-	insUrl := net.JoinHostPort(ip.String(), unregisterMsg.Port)
 
-	removed := false
-	if m.config.deployPolicy == mixedDeployment {
-		removed = m.instanceManager.removeInstance(insUrl)
-	} else {
-		removed = m.prefillInsManager.removeInstance(insUrl) || m.decodeInsManager.removeInstance(insUrl)
-	}
-
+	insAddr := base.BuildInstanceAddress(unregisterMsg.IP, unregisterMsg.Port, unregisterMsg.DpRank)
+	removed := m.instanceManager.removeInstance(insAddr)
 	if !removed {
-		log.Error().Msgf("instance %s not found", insUrl)
-		ctrlMsg.Response <- fmt.Errorf("instance %s not found", insUrl)
+		log.Error().Msgf("instance %s not found", insAddr)
+		err = fmt.Errorf("instance %s not found", insAddr)
 		return
 	}
 	m.instanceManager.updatePoolShot()
 
 	log.Info().Msgf("instance (%v:%v) unregistered successfully", unregisterMsg.IP, unregisterMsg.Port)
-	ctrlMsg.Response <- nil
 }
 
 // PutControlMessage sends control message to GS.
@@ -386,25 +450,100 @@ func (m *GlobalSchedulerManager) PutScheduleMessage(ctrMsg *ControlMessage) {
 	}
 }
 
-func (m *GlobalSchedulerManager) recordScheduleStats(result *scheduleResult) {
-	var statType stats.StatType
-	switch m.config.deployPolicy {
-	case mixedDeployment:
-		if result.prefillUrl == "" {
-			statType = stats.ScheduleFailure
-		} else {
-			statType = stats.ScheduleSuccess
+func (m *GlobalSchedulerManager) recordScheduleStats(result *ScheduleResult) {
+	if result.PrefillUrl != "" {
+		m.stats.Record(stats.ScheduleSuccess)
+		return
+	}
+	m.stats.Record(stats.ScheduleFailure)
+}
+
+// handleSchedule handles schedule request with context cancellation check.
+func (m *GlobalSchedulerManager) handleSchedule(msg *ControlMessage) {
+	switch request := msg.Request.(type) {
+	case *ScheduleRequestMsg:
+		// check if context has been canceled
+		if request.ReqCTX != nil {
+			select {
+			case <-request.ReqCTX.Done():
+				log.Debug().Msgf("request %v cancelled, skip processing", request.Request.ReqId)
+				msg.Response <- fmt.Errorf("request cancelled due to timeout")
+				return
+			default:
+			}
 		}
-	case separatedDeployment:
-		if result.prefillUrl != "" && result.decodeUrl != "" {
-			statType = stats.ScheduleSuccess
-		} else {
-			statType = stats.ScheduleFailure
+
+		result := m.scheduler.schedule(request, nil)
+		m.recordScheduleStats(result)
+
+		// Add request to metric provider after scheduling
+		if result.PrefillUrl != "" {
+			if err := m.metricProvider.AddRequest(request.Request, &InstanceContext{
+				InstanceID:       result.PrefillUrl,
+				GroupID:          result.PrefillGroupID,
+				DecodeInstanceID: result.DecodeUrl,
+			}); err != nil {
+				msg.Response <- fmt.Errorf("failed to add request to provider with err: %v", err)
+				return
+			}
+		}
+
+		dispatchMsg := &ControlMessage{
+			Request: &ExecuteDispatchMsg{
+				Result: result,
+			},
+			Response: msg.Response,
+		}
+
+		m.dispatcher.dispatchChan <- dispatchMsg
+
+		// clear request after schedule
+		request.Request.Prompt = ""
+		request.Request.PromptToken = nil
+	default:
+		log.Warn().Msgf("unknown schedule message type: %v", request)
+		msg.Response <- fmt.Errorf("unknown schedule message type: %v", request)
+	}
+}
+
+// Type of request event
+const (
+	EventDecodeReceivedKVC = "DECODE_RECEIVED_KVC"
+	EventRequestIsFinished = "REQUEST_IS_FINISHED"
+)
+
+// HandleReqEvent handle request event
+func (m *GlobalSchedulerManager) HandleReqEvent(reqId, eventDesc string) error {
+	switch eventDesc {
+	case EventDecodeReceivedKVC:
+		if err := m.onPrefillFinished(reqId); err != nil {
+			return fmt.Errorf("handle %s event failed for reqId=%s, err: %v", EventDecodeReceivedKVC, reqId, err)
+		}
+	case EventRequestIsFinished:
+		if err := m.onDecodeFinished(reqId); err != nil {
+			return fmt.Errorf("handle %s event failed for reqId=%s, err: %v", EventRequestIsFinished, reqId, err)
 		}
 	default:
-		statType = stats.ScheduleFailure
+		return fmt.Errorf("invalid event type %v for reqId=%s", eventDesc, reqId)
 	}
-	m.stats.Record(statType)
+	return nil
+}
+
+func (m *GlobalSchedulerManager) onPrefillFinished(reqId string) error {
+	return m.cacheManager.UpdateRequestOnPrefillFinished(reqId)
+}
+
+func (m *GlobalSchedulerManager) onDecodeFinished(reqId string) error {
+	return m.cacheManager.RemoveRequest(reqId)
+}
+
+// LoadInstanceFromCache loads instance from local cache
+func (m *GlobalSchedulerManager) LoadInstanceFromCache(instances []*RegisterInstanceMsg) {
+	start := time.Now()
+
+	m.instanceManager.loadInsFromCache(instances)
+
+	log.Debug().Msgf("gs %v load instance from cache cost %v", m.config.model, time.Since(start))
 }
 
 func (m *GlobalSchedulerManager) scheduleLoop() {
@@ -412,28 +551,7 @@ func (m *GlobalSchedulerManager) scheduleLoop() {
 	for {
 		select {
 		case msg := <-m.scheduleChannel:
-			switch request := msg.Request.(type) {
-			case *ScheduleRequestMsg:
-				result := m.scheduler.schedule(request, "", nil)
-				m.recordScheduleStats(result)
-
-				dispatchMsg := &ControlMessage{
-					Request: &ExecuteDispatchMsg{
-						Result: result,
-					},
-					Response: msg.Response,
-				}
-
-				m.dispatcher.dispatchChan <- dispatchMsg
-
-				// clear request after schedule
-				request.Request.Prompt = ""
-				request.Request.promptToken = nil
-
-			default:
-				log.Warn().Msgf("unknown schedule message type: %v", request)
-				msg.Response <- fmt.Errorf("unknown schedule message type: %v", request)
-			}
+			m.handleSchedule(msg)
 		case <-m.ctx.Done():
 			log.Info().Msg("stop GS schedule loop")
 			return
@@ -452,6 +570,15 @@ func (m *GlobalSchedulerManager) executeTokenizer(req *LlmRequest, result *prepr
 
 	defer preWg.Done()
 
+	if m.tokenizer == nil {
+		runeCount := utf8.RuneCountInString(req.Prompt)
+		req.PromptLen = int(m.config.tokenizationRatio * float64(runeCount))
+		req.ReqType = GetRequestType(req.PromptLen)
+		result.tokenizerError = nil
+		log.Debug().Msgf("req %v, promptLen %v,  ratio %v", req.ReqId, req.PromptLen, m.config.tokenizationRatio)
+		return
+	}
+
 	tokenIds, err := m.tokenizer.Encode(req.Prompt)
 	if err != nil {
 		log.Debug().Msgf("failed to encode in tokenizer, err: %v", err)
@@ -459,8 +586,8 @@ func (m *GlobalSchedulerManager) executeTokenizer(req *LlmRequest, result *prepr
 		m.stats.Record(stats.TokenizerEncodeError)
 	} else {
 		if tokenIds != nil {
-			log.Debug().Msgf("[tokenizer] req %v has %v tokens", req.ReqId, len(tokenIds))
 			req.SetPromptAttrs(tokenIds)
+			log.Debug().Msgf("[tokenizer] req %v has %v tokens", req.ReqId, len(tokenIds))
 			result.tokenizerError = nil
 		} else {
 			result.tokenizerError = fmt.Errorf("empty token ids")
@@ -488,7 +615,7 @@ func (m *GlobalSchedulerManager) executePredict(req *LlmRequest, result *preproc
 		m.stats.Record(stats.LightGbmPredictError)
 	}
 	decodeLen := utils.IndexOfMaxFloat(preds)*predictInterval + halfInterval
-	req.predictDecodeLen = decodeLen
+	req.PredictDecodeLen = decodeLen
 	result.predictError = nil
 	log.Debug().Msgf("execute prediction finished, decodeLen %v, cost time: %v", decodeLen, time.Since(start))
 }
@@ -512,7 +639,7 @@ func (m *GlobalSchedulerManager) PreprocessForSchedule(req *LlmRequest) error {
 	preWg.Add(1)
 	go m.executeTokenizer(req, result, preWg)
 
-	if m.config.predictType == predictTypeLightgbm {
+	if m.config.predictType == PredictTypeLightgbm {
 		preWg.Add(1)
 		go m.executePredict(req, result, preWg)
 	}
@@ -531,24 +658,11 @@ func (m *GlobalSchedulerManager) PreprocessForSchedule(req *LlmRequest) error {
 
 // GetInsNum get the number of instances in the instance pool
 func (m *GlobalSchedulerManager) GetInsNum() int {
-	if m.config.deployPolicy == mixedDeployment {
-		return m.instanceManager.getInsNum()
-	}
-
-	if m.config.deployPolicy == separatedDeployment {
-		return m.prefillInsManager.getInsNum() + m.decodeInsManager.getInsNum()
-	}
-	return 0
+	return m.instanceManager.getInsNum()
 }
 
 func (m *GlobalSchedulerManager) checkReqSurvival() {
-	if m.config.deployPolicy == mixedDeployment {
-		m.instanceManager.checkReqSurvival(m.reqSurvivalDuration)
-	}
-	if m.config.deployPolicy == separatedDeployment {
-		m.prefillInsManager.checkReqSurvival(m.reqSurvivalDuration)
-		m.decodeInsManager.checkReqSurvival(m.reqSurvivalDuration)
-	}
+	m.instanceManager.checkReqSurvival(m.config.reqSurvivalDuration)
 }
 
 func (m *GlobalSchedulerManager) reqManagerLoop() {
@@ -571,13 +685,12 @@ func (m *GlobalSchedulerManager) CheckReqExists(reqId string) bool {
 	if m.instanceManager == nil {
 		return true
 	}
-	if m.config.deployPolicy == mixedDeployment {
-		return m.instanceManager.isReqExists(reqId)
-	}
 
-	if m.config.deployPolicy == separatedDeployment {
-		return m.prefillInsManager.isReqExists(reqId) || m.decodeInsManager.isReqExists(reqId)
-	}
+	return m.instanceManager.isReqExists(reqId)
+}
 
-	return false
+// EnsureInstanceMetrics ensures instance metrics exist in cache
+// This is useful for SDK mode where instances are provided directly
+func (m *GlobalSchedulerManager) EnsureInstanceMetrics(instanceID string, role base.InstanceRole, groupID string) {
+	m.cacheManager.EnsureInstanceMetrics(instanceID, role, groupID)
 }

@@ -24,10 +24,6 @@ import (
 	"huawei.com/aigw/pkg/log"
 )
 
-const (
-	hgTokenizerMaxToken = 128 * 1024
-)
-
 type huggingFaceTokenizer struct {
 	base               Tokenizer
 	hgTokenizerHandler unsafe.Pointer
@@ -80,10 +76,6 @@ func (h *huggingFaceTokenizer) Encode(input string) ([]uint32, error) {
 	length := int(result.len)
 	if length <= 0 {
 		return []uint32{}, fmt.Errorf("failed to Encode by huggingFaceTokenizer, Encode length is zero")
-	}
-	if length > hgTokenizerMaxToken {
-		log.Warn().Msgf("Encode output exceeds the max, output len %v, reset to %v", length, hgTokenizerMaxToken)
-		length = hgTokenizerMaxToken
 	}
 
 	slice := unsafe.Slice((*C.uint32_t)(result.ids), length)

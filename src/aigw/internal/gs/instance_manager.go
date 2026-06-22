@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"huawei.com/aigw/internal/base"
+	"huawei.com/aigw/internal/cachecenter"
 	"huawei.com/aigw/pkg/crypto"
 	"huawei.com/aigw/pkg/log"
 )
@@ -25,13 +27,14 @@ const (
 	defaultFreq int     = 1
 )
 
-type instanceManager struct {
+// InstanceManager is the manager for instance
+type InstanceManager struct {
 	poolRWLock      sync.RWMutex
 	insPool         map[string]*instance
 	snapshotRWLock  sync.RWMutex
 	insSnapshots    []*insSnapshot
 	emaRWLock       sync.RWMutex
-	emaPredictLen   map[requestType]int // ema predicted length
+	emaPredictLen   map[RequestType]int // ema predicted length
 	insWG           *sync.WaitGroup
 	snapWG          *sync.WaitGroup
 	ctx             context.Context
@@ -41,13 +44,22 @@ type instanceManager struct {
 
 	hmacMgr *crypto.HmacManager
 	aesMgr  *crypto.AesManager
+
+	cacheManager *cachecenter.CacheManager
+	runtimeMode  base.RuntimeMode
+
+	// DP (Data Parallel) support
+	dpSize int // DP size for fine-grained load balancing
+
+	// Skip instance connection for testing
+	skipInstanceConnection bool
 }
 
-func newInstanceManager() *instanceManager {
+func newInstanceManager() *InstanceManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	newManager := &instanceManager{
+	newManager := &InstanceManager{
 		insPool:         make(map[string]*instance),
-		emaPredictLen:   make(map[requestType]int),
+		emaPredictLen:   make(map[RequestType]int),
 		insWG:           new(sync.WaitGroup),
 		snapWG:          new(sync.WaitGroup),
 		ctx:             ctx,
@@ -60,7 +72,20 @@ func newInstanceManager() *instanceManager {
 	return newManager
 }
 
-func (insManager *instanceManager) addInstance(insUrl string, insRole instanceRole, groupID string,
+// NewInstanceManagerWithOptions creates new instance manager with options
+func NewInstanceManagerWithOptions(cacheMgr *cachecenter.CacheManager,
+	options ...instanceManagerOption) *InstanceManager {
+	mgr := newInstanceManager()
+	mgr.cacheManager = cacheMgr
+
+	for _, opt := range options {
+		opt(mgr)
+	}
+
+	return mgr
+}
+
+func (insManager *InstanceManager) addInstance(insUrl string, insRole base.InstanceRole, groupID string,
 	statusChan chan *ControlMessage) error {
 	newIns, err := newInstance(insUrl, insRole, groupID, statusChan, insManager)
 	if err != nil {
@@ -90,18 +115,28 @@ func (insManager *instanceManager) addInstance(insUrl string, insRole instanceRo
 	return nil
 }
 
-func (insManager *instanceManager) startIns(ins *instance) bool {
-	err := ins.connect() // connect to instance
-	if err != nil {
-		log.Error().Msgf("%v start error: %v", ins.insUrl, err)
-		return false
+func (insManager *InstanceManager) startIns(ins *instance) bool {
+	if !insManager.skipInstanceConnection {
+		err := ins.connect() // connect to instance
+		if err != nil {
+			log.Error().Msgf("%v start error: %v", ins.insUrl, err)
+			return false
+		}
+		insManager.insWG.Add(1)
+		go ins.run(insManager.insWG) // start process connection loop
+	} else {
+		log.Info().Msgf("[instanceManager] skipping instance connection for %v (skipInstanceConnection=true)", ins.insUrl)
+		// Don't start the run loop since there's no actual connection
+		// The instance will be registered but won't process any messages
 	}
-	insManager.insWG.Add(1)
-	go ins.run(insManager.insWG) // start process connection loop
+
+	// Ensure instance metrics exist in cache manager so it's available for scheduling
+	insManager.cacheManager.EnsureInstanceMetrics(ins.insUrl, ins.insRole, ins.groupID)
+	log.Info().Msgf("[instanceManager] ensured metrics for instance %v (role=%v, groupID=%v)", ins.insUrl, ins.insRole, ins.groupID)
 	return true
 }
 
-func (insManager *instanceManager) removeInstance(insUrl string) bool {
+func (insManager *InstanceManager) removeInstance(insUrl string) bool {
 	insManager.poolRWLock.Lock()
 	defer insManager.poolRWLock.Unlock()
 
@@ -115,7 +150,7 @@ func (insManager *instanceManager) removeInstance(insUrl string) bool {
 	}
 }
 
-func (insManager *instanceManager) updatePoolShot() {
+func (insManager *InstanceManager) updatePoolShot() {
 	insManager.poolRWLock.RLock()
 	instances := make([]*instance, 0, len(insManager.insPool))
 	for _, ins := range insManager.insPool {
@@ -151,7 +186,7 @@ func (insManager *instanceManager) updatePoolShot() {
 
 }
 
-func (insManager *instanceManager) snapShotLoop() {
+func (insManager *InstanceManager) snapShotLoop() {
 	log.Info().Msgf("[instanceManager]start instance snapshots loop.")
 	timer := time.NewTicker(insManager.insSnapShotFreq)
 	defer insManager.snapWG.Done()
@@ -168,45 +203,89 @@ func (insManager *instanceManager) snapShotLoop() {
 
 }
 
-func (insManager *instanceManager) getSnapByGroupID(targetGroupID string,
+func (insManager *InstanceManager) getSpecifiedSnaps(role base.InstanceRole, targetGroupID string,
 	excludeGroupId map[string]bool) []*insSnapshot {
+
 	snapGroup := make([]*insSnapshot, 0)
+
+	// First filter by targetGroupID or excludeGroupId to get candidate list
+	candidates := insManager.insSnapshots
 	if targetGroupID != "" {
+		tempGroup := make([]*insSnapshot, 0)
 		for _, snap := range insManager.insSnapshots {
 			if snap.groupID == targetGroupID {
-				snapGroup = append(snapGroup, snap)
+				tempGroup = append(tempGroup, snap)
 			}
 		}
-		return snapGroup
+		candidates = tempGroup
+	} else if len(excludeGroupId) > 0 {
+		tempGroup := make([]*insSnapshot, 0)
+		for _, snap := range insManager.insSnapshots {
+			if !excludeGroupId[snap.groupID] {
+				tempGroup = append(tempGroup, snap)
+			}
+		}
+		candidates = tempGroup
 	}
-	if len(excludeGroupId) == 0 {
-		return insManager.insSnapshots
+
+	// Then filter by role
+	// If role is invalidRoleInstance, it means any role is acceptable, return all candidates directly
+	if role == base.InvalidRoleInstance {
+		return candidates
 	}
-	for _, snap := range insManager.insSnapshots {
-		if !excludeGroupId[snap.groupID] {
+
+	// Otherwise, only return instances with the specified role
+	for _, snap := range candidates {
+		if snap.insRole == role {
 			snapGroup = append(snapGroup, snap)
 		}
 	}
+
 	return snapGroup
 }
 
-func (insManager *instanceManager) addReq(insUrl string, req *LlmRequest) {
+func (insManager *InstanceManager) addReq(insUrl string, req *LlmRequest) {
 	insManager.poolRWLock.Lock()
-	defer insManager.poolRWLock.Unlock()
 	ins, exists := insManager.insPool[insUrl]
 	if exists {
+		// Release the pool lock before calling ins.addReq to reduce lock contention
+		insManager.poolRWLock.Unlock()
 		ins.addReq(req)
 	} else {
+		insManager.poolRWLock.Unlock()
 		log.Error().Msgf("[instanceManager]Instance %v not in inspool when schedule.", insUrl)
 	}
 }
 
-func (insManager *instanceManager) start() {
+// AddReqToCache adds schedule result to cache
+func (insManager *InstanceManager) AddReqToCache(req *LlmRequest, res *ScheduleResult) error {
+	if err := insManager.cacheManager.AddRequest(&cachecenter.RequestInfo{
+		ReqId:              req.ReqId,
+		PrefillInstance:    res.PrefillUrl,
+		DecodeInstance:     res.DecodeUrl,
+		IsPrefill:          true,
+		PromptTokenLen:     req.PromptLen,
+		DecodeTokenLen:     req.PredictDecodeLen,
+		PredictPrefillTime: req.PredictPrefillTime,
+		PrefillStartTimeMs: req.PrefillTimeStampMs,
+		TimeStamp:          req.TimeStamp,
+	}); err != nil {
+		return fmt.Errorf("failed to add request to cache, err: %v", err)
+	}
+
+	return nil
+}
+
+func (insManager *InstanceManager) start() {
+	if insManager.runtimeMode == base.SdkMode {
+		log.Info().Msgf("[instanceManager]sdk mode disable snapShot loop.")
+		return
+	}
 	insManager.snapWG.Add(1)
 	go insManager.snapShotLoop()
 }
 
-func (insManager *instanceManager) stop() {
+func (insManager *InstanceManager) stop() {
 	insManager.cancel()
 	insManager.snapWG.Wait()
 	log.Info().Msgf("[instanceManager]end instance snapshots loop.")
@@ -214,14 +293,16 @@ func (insManager *instanceManager) stop() {
 	insManager.poolRWLock.Lock()
 	log.Info().Msgf("[instanceManager]start to delete instance pool.")
 	for _, ins := range insManager.insPool {
-		ins.cancel()
+		if ins.cancel != nil {
+			ins.cancel()
+		}
 	}
 	insManager.insWG.Wait()
 	insManager.poolRWLock.Unlock()
 	log.Info().Msgf("[instanceManager]delete instance pool completed.")
 }
 
-func (insManager *instanceManager) updateEmaPredictLen(reqType requestType, decodeLen int) {
+func (insManager *InstanceManager) updateEmaPredictLen(reqType RequestType, decodeLen int) {
 	var predictLen int
 	insManager.emaRWLock.Lock()
 	if historyDecodeLen, exists := insManager.emaPredictLen[reqType]; !exists {
@@ -235,17 +316,17 @@ func (insManager *instanceManager) updateEmaPredictLen(reqType requestType, deco
 	log.Debug().Msgf("[instanceManager]update reqType: %d ema predict decode len: %d", reqType, predictLen)
 }
 
-func (insManager *instanceManager) predictTokensByEMA(req *LlmRequest) int {
+func (insManager *InstanceManager) predictTokensByEMA(req *LlmRequest) int {
 	insManager.emaRWLock.Lock()
-	decodeLen, exists := insManager.emaPredictLen[req.reqType]
+	decodeLen, exists := insManager.emaPredictLen[req.ReqType]
 	insManager.emaRWLock.Unlock()
 	if !exists {
-		return req.promptLen
+		return req.PromptLen
 	}
-	return req.promptLen + decodeLen
+	return req.PromptLen + decodeLen
 }
 
-func (insManager *instanceManager) isReqExists(reqId string) bool {
+func (insManager *InstanceManager) isReqExists(reqId string) bool {
 	insManager.poolRWLock.RLock()
 	defer insManager.poolRWLock.RUnlock()
 
@@ -258,22 +339,22 @@ func (insManager *instanceManager) isReqExists(reqId string) bool {
 	return false
 }
 
-func (insManager *instanceManager) getInsNum() int {
+func (insManager *InstanceManager) getInsNum() int {
 	insManager.poolRWLock.RLock()
 	defer insManager.poolRWLock.RUnlock()
 
 	return len(insManager.insPool)
 }
 
-func (insManager *instanceManager) checkReqSurvival(duration int64) {
-	now := time.Now().UTC().Unix()
+func (insManager *InstanceManager) checkReqSurvival(duration time.Duration) {
+	now := time.Now()
 	insManager.poolRWLock.RLock()
 	defer insManager.poolRWLock.RUnlock()
 	for _, ins := range insManager.insPool {
 		var toDel []*LlmRequest
 		ins.rwLock.RLock()
 		for _, req := range ins.reqSet {
-			if now-req.timeStamp > duration {
+			if now.Sub(time.UnixMilli(req.TimeStamp)) > duration {
 				toDel = append(toDel, req)
 				log.Warn().Msgf("[gs]the req %v is deleted due to timeout", req.ReqId)
 			}
@@ -283,4 +364,151 @@ func (insManager *instanceManager) checkReqSurvival(duration int64) {
 			ins.delReq(r, false)
 		}
 	}
+}
+
+func (insManager *InstanceManager) loadInsFromCache(instances []*RegisterInstanceMsg) {
+	if insManager.cacheManager == nil {
+		log.Error().Msgf("Failed to load instance from cache, cache manager is nil")
+		return
+	}
+
+	idToGroup := func(insList []*RegisterInstanceMsg) map[string]string {
+		m := make(map[string]string)
+		for _, ins := range insList {
+			instanceId := base.BuildInstanceAddress(ins.IP, ins.Port, ins.DpRank)
+			m[instanceId] = ins.GroupID
+		}
+		return m
+	}
+
+	idMap := idToGroup(instances)
+
+	insManager.poolRWLock.Lock()
+	defer insManager.poolRWLock.Unlock()
+
+	// clean up old instances that don't exist in the new instance list first
+	for instanceId := range insManager.insPool {
+		if _, exists := idMap[instanceId]; !exists {
+			delete(insManager.insPool, instanceId)
+		}
+	}
+
+	metrics := make(map[string]*cachecenter.InstanceMetrics)
+	insManager.cacheManager.RangeMetrics(func(insId string, metric *cachecenter.InstanceMetrics) bool {
+		metrics[insId] = metric
+		return true
+	})
+
+	for _, ins := range instances {
+		role, _ := base.ToInstanceRole(ins.Role)
+		instanceId := base.BuildInstanceAddress(ins.IP, ins.Port, ins.DpRank)
+		if _, exists := insManager.insPool[instanceId]; !exists {
+			insManager.insPool[instanceId] = &instance{
+				insUrl:      instanceId,
+				headReq:     nil,
+				insRole:     role,
+				tokenNum:    0,
+				prefillTime: 0.0,
+				freeBlocks:  math.MaxInt,
+				tbt:         math.Inf(-1),
+				ttft:        math.Inf(-1),
+				groupID:     ins.GroupID,
+			}
+		}
+		ins := insManager.insPool[instanceId]
+		if metric, exists := metrics[instanceId]; exists {
+			var headReq *LlmRequest
+			if metric == nil {
+				log.Error().Msgf("instance %v metric from cache is nil.", instanceId)
+			}
+			metricCopy := metric.Copy()
+			if metricCopy.HeadReq != nil {
+				headReq = &LlmRequest{
+					ReqId:              metricCopy.HeadReq.ReqId,
+					PredictPrefillTime: metricCopy.HeadReq.PredictPrefillTime,
+					PrefillTimeStampMs: metricCopy.HeadReq.PrefillStartTimeMs,
+				}
+			}
+
+			// update instance metric from cache
+			ins.tokenNum = metricCopy.TokenLoad
+			ins.prefillTime = metricCopy.QueueTime
+			ins.headReq = headReq
+
+		} else {
+			// if not exist in remote db.
+			ins.tokenNum = 0
+			ins.prefillTime = 0
+			ins.headReq = nil
+		}
+	}
+}
+
+// SetDpSize sets the DP size for fine-grained load balancing.
+// DP size determines how many virtual DP-aware workers are created per physical worker.
+func (insManager *InstanceManager) SetDpSize(dpSize int) {
+	insManager.poolRWLock.Lock()
+	defer insManager.poolRWLock.Unlock()
+	insManager.dpSize = dpSize
+}
+
+// GetDpSize returns the current DP size.
+func (insManager *InstanceManager) GetDpSize() int {
+	insManager.poolRWLock.RLock()
+	defer insManager.poolRWLock.RUnlock()
+	return insManager.dpSize
+}
+
+// GetDPAwareWorkers returns all DP-aware workers for the specified role.
+// Each physical instance is expanded into dpSize DP-aware workers.
+func (insManager *InstanceManager) GetDPAwareWorkers(role base.InstanceRole) []*DPAwareWorker {
+	insManager.poolRWLock.RLock()
+	defer insManager.poolRWLock.RUnlock()
+
+	var workers []*DPAwareWorker
+	for _, ins := range insManager.insPool {
+		if ins.insRole == role || role == base.InvalidRoleInstance {
+			// Create dpSize DP-aware workers for each physical instance
+			for rank := 0; rank < insManager.dpSize; rank++ {
+				dw := &DPAwareWorker{
+					BaseURL: ins.insUrl,
+					DpRank:  rank,
+					DpSize:  insManager.dpSize,
+					InsRole: ins.insRole,
+					GroupID: ins.groupID,
+				}
+				workers = append(workers, dw)
+			}
+		}
+	}
+	return workers
+}
+
+// GetDPAwareSnapshot returns DP-aware snapshots for the specified role.
+// Each physical instance snapshot is expanded into dpSize DP-aware snapshots.
+func (insManager *InstanceManager) GetDPAwareSnapshot(role base.InstanceRole) []*DPAwareSnapshot {
+	insManager.snapshotRWLock.RLock()
+	defer insManager.snapshotRWLock.RUnlock()
+
+	var snapshots []*DPAwareSnapshot
+	for _, snap := range insManager.insSnapshots {
+		if snap.insRole == role || role == base.InvalidRoleInstance {
+			for rank := 0; rank < insManager.dpSize; rank++ {
+				dpSnap := &DPAwareSnapshot{
+					InsUrl:     fmt.Sprintf("%s@%d", snap.insUrl, rank),
+					BaseURL:    snap.insUrl,
+					DpRank:     rank,
+					DpSize:     insManager.dpSize,
+					FreeBlocks: snap.freeBlocks,
+					TokenNum:   snap.tokenNum,
+					TBT:        snap.tbt,
+					TTFT:       snap.ttft,
+					InsRole:    snap.insRole,
+					GroupID:    snap.groupID,
+				}
+				snapshots = append(snapshots, dpSnap)
+			}
+		}
+	}
+	return snapshots
 }

@@ -8,6 +8,8 @@
 // Package base contains the core functions for AIGW.
 package base
 
+import "encoding/json"
+
 // OpenAiMessage specified the input format of OpenAI
 type OpenAiMessage struct {
 	Role    string `json:"role"`
@@ -25,6 +27,7 @@ type OpenAiRequest struct {
 type GetSuggestionOut struct {
 	TargetPrefillUrl string `json:"targetPrefill"`
 	TargetDecodeUrl  string `json:"targetDecode"`
+	DpRank           *int   `json:"dpRank,omitempty"` // DP rank for data parallel routing
 }
 
 // RegisterInstanceIn specified the input parameters for RegisterInstance.
@@ -36,13 +39,15 @@ type RegisterInstanceIn struct {
 	Role  string `json:"role"`
 
 	GroupID string `json:"groupID"`
+	DpRank  int    `json:"dpRank"` // DP rank for data parallel routing
 }
 
 // UnregisterInstanceIn specified the input parameters for UnregisterInstance.
 type UnregisterInstanceIn struct {
-	Model string `json:"model"`
-	IP    string `json:"instanceIp"`
-	Port  string `json:"port"`
+	Model  string `json:"model"`
+	IP     string `json:"instanceIp"`
+	Port   string `json:"port"`
+	DpRank int    `json:"dpRank"` // DP rank for data parallel routing
 }
 
 // ZookeeperConfig struct contains configuration details for Zookeeper
@@ -57,6 +62,34 @@ type ZookeeperConfig struct {
 	CaFile                string `json:"tlsCaFile"`
 	CrtFile               string `json:"tlsCrtFile"`
 	ServerName            string `json:"tlsServerName"`
+}
+
+// DiscoveryConfig struct contains configuration for service discovery
+type DiscoveryConfig struct {
+	Type                  string `json:"type"`                  // Discovery type: "k8s", "dns", "zk"
+	KubeconfigPath        string `json:"kubeconfigPath"`        // K8s kubeconfig path (optional, use in-cluster config if empty)
+	Namespace             string `json:"namespace"`             // K8s namespace to watch
+	ResyncPeriod          int    `json:"resyncPeriod"`          // Resync period in seconds
+	Enable                bool   `json:"enable"`                // Enable service discovery
+	SkipInstanceConnection bool  `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing)
+}
+
+// ProxyConfig struct contains configuration for request proxy/forwarding
+type ProxyConfig struct {
+	Timeout           int  `json:"timeout"`           // Request timeout in seconds
+	MaxRetry          int  `json:"maxRetry"`          // Maximum retry attempts
+	RetryBaseInterval int  `json:"retryBaseInterval"` // Retry base interval in milliseconds
+	RetryMaxInterval  int  `json:"retryMaxInterval"`  // Retry max interval in milliseconds
+	Enable            bool `json:"enable"`            // Enable request forwarding
+	CircuitBreaker    CircuitBreakerConfig `json:"circuitBreaker"` // Circuit breaker configuration
+}
+
+// CircuitBreakerConfig struct contains configuration for circuit breaker
+type CircuitBreakerConfig struct {
+	Enabled          bool `json:"enabled"`          // Enable circuit breaker
+	FailureThreshold int  `json:"failureThreshold"` // Number of failures before opening circuit
+	SuccessThreshold int  `json:"successThreshold"` // Number of successes before closing circuit
+	Timeout          int  `json:"timeout"`          // Circuit open timeout in seconds
 }
 
 // MonitorConfig struct contains configuration detail for Monitor
@@ -96,6 +129,11 @@ type LoadBalancerConfig struct {
 	ReservedBlockNumber int    `json:"reservedBlockNumber"`
 	MinMatchedLength    int    `json:"minMatchedLength"`
 	PowerOfTwo          bool   `json:"enablePowerOfTwo"`
+	PretrainTTFTPath    string `json:"pretrainTTFTPath"`
+	// Consistent hash load balancer configuration
+	VirtualNodes int `json:"virtualNodes"` // Number of virtual nodes per worker (default: 160)
+	FallbackNum  int `json:"fallbackNum"`  // Number of fallback nodes on hash miss (default: 3)
+	DpSize       int `json:"dpSize"`       // Data parallel size for DP-aware routing
 }
 
 // GlobalSchedulerConfig struct contains configuration for a global scheduler
@@ -107,7 +145,53 @@ type GlobalSchedulerConfig struct {
 	MaxTimeBetweenTokens float64            `json:"maxTimeBetweenTokens"`
 	TokenizeModelName    string             `json:"tokenizeModelName"`
 	LoadBalancer         LoadBalancerConfig `json:"loadBalancer"`
+	// Mode selects scheduling path: "instance" (default when empty) | "provider".
+	Mode string `json:"mode,omitempty"`
+	// ProviderPool holds config for mode=provider.
+	ProviderPool *ProviderPoolConfig `json:"providerPool,omitempty"`
 	InsConnectType       string             `json:"instanceConnectType"`
+	SkipInstanceConnection bool             `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing with mock instances)
+
+	CacheRefreshIntervalMs uint32  `json:"cacheRefreshIntervalMs"`
+	TokenizationRatio      float64 `json:"tokenizationRatio"`
+}
+
+// ProviderPoolConfig configures a provider (SaaS API) pool for mode=provider.
+type ProviderPoolConfig struct {
+	Strategy        string             `json:"strategy"`
+	StrategyOptions map[string]any     `json:"strategyOptions,omitempty"`
+	Cooldown        *CooldownConfig    `json:"cooldown,omitempty"`
+	Retry           *RetryConfig       `json:"retry,omitempty"`
+	Deployments     []DeploymentConfig `json:"deployments"`
+}
+
+// CooldownConfig configures per-endpoint cooldown behavior.
+type CooldownConfig struct {
+	FailureThreshold     int `json:"failureThreshold"`
+	DurationSec          int `json:"durationSec"`
+	RateLimitDurationSec int `json:"rateLimitDurationSec"`
+	Auth401FloorSec      int `json:"auth401FloorSec"`
+}
+
+// RetryConfig configures cross-endpoint failover and per-endpoint retry caps.
+type RetryConfig struct {
+	MaxFailoverEndpoints  int `json:"maxFailoverEndpoints"`
+	MaxRetriesPerEndpoint int `json:"maxRetriesPerEndpoint"`
+}
+
+// DeploymentConfig is one provider endpoint in a ProviderPoolConfig.
+type DeploymentConfig struct {
+	ID               string   `json:"id,omitempty"`
+	Provider         string   `json:"provider"`
+	APIBase          string   `json:"apiBase"`
+	APIKey           string   `json:"apiKey"`
+	TPM              int      `json:"tpm,omitempty"`
+	RPM              int      `json:"rpm,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	Timeout          int      `json:"timeout,omitempty"`
+	VerifySSL        *bool    `json:"verifySsl,omitempty"`
+	AuthHeaderName   string   `json:"authHeaderName,omitempty"`
+	AuthHeaderPrefix string   `json:"authHeaderPrefix,omitempty"`
 }
 
 // GlobalConfig is the global config of AIGW.
@@ -142,6 +226,17 @@ type AigwConfig struct {
 	Tokenizers     []TokenizerConfig       `json:"tokenizers"`
 	GlobalConfig   GlobalConfig            `json:"global"`
 	Limits         Limits                  `json:"limits"`
+	Discovery      DiscoveryConfig         `json:"discovery"` // Service discovery configuration
+	Proxy          ProxyConfig             `json:"proxy"`     // Request proxy/forwarding configuration
+}
+
+// String is the string method of AigwConfig
+func (cfg *AigwConfig) String() string {
+	cfgJson, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(cfgJson)
 }
 
 // AigwAllStats is the stats info for Aigw
@@ -174,3 +269,13 @@ type DataSyncConfig struct {
 	Path     string `json:"path"`
 	Interval int    `json:"interval"`
 }
+
+// RuntimeMode is the mode of aigw runtime
+type RuntimeMode int
+
+const (
+	// ServiceMode is the standalone service mode for aigw
+	ServiceMode RuntimeMode = iota
+	// SdkMode it sdk mode for aigw
+	SdkMode
+)

@@ -69,7 +69,7 @@ func SetLogLevel(level string) error {
 	return nil
 }
 
-// InitLogger init logger
+// InitLogger  init logger
 func InitLogger(options ...AigwLogOption) error {
 	for _, opt := range options {
 		if e := opt(); e != nil {

@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"time"
 
+	"huawei.com/aigw/internal/base"
+	"huawei.com/aigw/internal/cachecenter"
 	"huawei.com/aigw/internal/tokenizers"
 	"huawei.com/aigw/pkg/crypto"
 	"huawei.com/aigw/pkg/lightgbm"
@@ -33,13 +35,14 @@ func WithDeploymentPolicy(deploy string) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
 		switch deploy {
 		case "mixed":
-			gs.config.deployPolicy = mixedDeployment
+			gs.config.deployPolicy = MixedDeployment
 		case "separated":
-			gs.config.deployPolicy = separatedDeployment
+			gs.config.deployPolicy = SeparatedDeployment
 		default:
 			return fmt.Errorf("invalid deployment policy: %s", deploy)
 		}
 
+		gs.config.lbConfig.PdMode = gs.config.deployPolicy
 		return nil
 	}
 }
@@ -49,17 +52,19 @@ func WithPredict(predictType string, gbm *lightgbm.Booster) GlobalSchedulerManag
 	return func(gs *GlobalSchedulerManager) error {
 		switch predictType {
 		case "none":
-			gs.config.predictType = predictTypeNone
+			gs.config.predictType = PredictTypeNone
 		case "ema":
-			gs.config.predictType = predictTypeEma
+			gs.config.predictType = PredictTypeEma
 		case "lightgbm":
 			{
-				gs.config.predictType = predictTypeLightgbm
+				gs.config.predictType = PredictTypeLightgbm
 				gs.lgm = gbm
 			}
 		default:
 			return fmt.Errorf("invalid predict type: %s", predictType)
 		}
+
+		gs.config.lbConfig.PredictType = gs.config.predictType
 		return nil
 	}
 }
@@ -75,8 +80,8 @@ func WithTokenizer(tk tokenizers.Tokenizer) GlobalSchedulerManagerOption {
 // WithSLOThreshold supplies slo threshold
 func WithSLOThreshold(maxTTFT float64, maxTBT float64) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.config.lbConfig.ttftThreshold = maxTTFT
-		gs.config.lbConfig.tbtThreshold = maxTBT
+		gs.config.lbConfig.TtftThreshold = maxTTFT
+		gs.config.lbConfig.TbtThreshold = maxTBT
 
 		return nil
 	}
@@ -85,10 +90,10 @@ func WithSLOThreshold(maxTTFT float64, maxTBT float64) GlobalSchedulerManagerOpt
 // WithAlgorithmThreshold supplies algorithm threshold
 func WithAlgorithmThreshold(minBlocks int, batchSize int, powerOfTwo bool, blockSize int) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.config.lbConfig.minBlockThreshold = minBlocks
-		gs.config.lbConfig.batchSize = batchSize
-		gs.config.lbConfig.powerOfTwo = powerOfTwo
-		gs.config.lbConfig.blockSize = blockSize
+		gs.config.lbConfig.MinBlockThreshold = minBlocks
+		gs.config.lbConfig.BatchSize = batchSize
+		gs.config.lbConfig.PowerOfTwo = powerOfTwo
+		gs.config.lbConfig.BlockSize = blockSize
 		return nil
 	}
 }
@@ -96,27 +101,31 @@ func WithAlgorithmThreshold(minBlocks int, batchSize int, powerOfTwo bool, block
 // WithLBType supplies loadBalancer type
 func WithLBType(mixed string, prefill string, decode string) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.config.lbConfig.pdMixedLB = convertLBType(mixed)
-		gs.config.lbConfig.prefillLB = convertLBType(prefill)
-		gs.config.lbConfig.decodeLB = convertLBType(decode)
+		gs.config.lbConfig.PdMixedLB = convertLBType(mixed)
+		gs.config.lbConfig.PrefillLB = convertLBType(prefill)
+		gs.config.lbConfig.DecodeLB = convertLBType(decode)
 		return nil
 	}
 }
 
-func convertLBType(lb string) loadBalancerType {
+func convertLBType(lb string) LoadBalancerType {
 	switch lb {
 	case "roundRobin":
-		return loadBalancerRoundRobin
+		return LoadBalancerRoundRobin
 	case "leastConn":
-		return loadBalancerLeastConn
+		return LoadBalancerLeastConn
 	case "capacity":
-		return loadBalancerCapacity
+		return LoadBalancerCapacity
 	case "token":
-		return loadBalancerToken
+		return LoadBalancerToken
 	case "decode":
-		return loadBalancerDecode
+		return LoadBalancerDecode
+	case "prefillTimeAware":
+		return LoadBalancerPrefillTimeAware
+	case "consistentHash":
+		return LoadBalancerConsistentHash
 	default:
-		return loadBalancerNone
+		return LoadBalancerNone
 	}
 }
 
@@ -131,8 +140,8 @@ func WithSnapFreq(t int) GlobalSchedulerManagerOption {
 // WithCrypto supplies hmac and aes
 func WithCrypto(hm *crypto.HmacManager, am *crypto.AesManager) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.config.hmacMgr = hm
-		gs.config.aesMgr = am
+		gs.hmacMgr = hm
+		gs.aesMgr = am
 		return nil
 	}
 }
@@ -151,15 +160,47 @@ func WithInsConnectType(t string) GlobalSchedulerManagerOption {
 // WithInsNumLimit set insNumPerGS
 func WithInsNumLimit(insNum int) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.maxInsNumPerGS = insNum
+		gs.config.maxInsNumPerGS = insNum
 		return nil
 	}
 }
 
-// WithReqSurvivalDuration request Survival Duration, unit is second
-func WithReqSurvivalDuration(timeout int64) GlobalSchedulerManagerOption {
+// WithReqSurvivalDuration request Survival Duration
+func WithReqSurvivalDuration(timeout time.Duration) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
-		gs.reqSurvivalDuration = timeout
+		gs.config.reqSurvivalDuration = timeout
+		return nil
+	}
+}
+
+// WithTokenizationRatio setup tokenization ratio
+func WithTokenizationRatio(tokenizationRatio float64) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.config.tokenizationRatio = tokenizationRatio
+		return nil
+	}
+}
+
+// WithCacheDriverOps register cache driver ops
+func WithCacheDriverOps(ops *cachecenter.CacheDriverOps) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.cacheDriverOps = ops
+		return nil
+	}
+}
+
+// WithPretrainTTFTPath set pretrain ttft data path
+func WithPretrainTTFTPath(path string) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.config.lbConfig.PretrainTTFTPath = path
+		return nil
+	}
+}
+
+// WithRuntimeMode set runtime mode for gs
+func WithRuntimeMode(runtimeMode base.RuntimeMode) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.runtimeMode = runtimeMode
 		return nil
 	}
 }

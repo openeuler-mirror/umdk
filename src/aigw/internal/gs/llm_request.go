@@ -20,50 +20,57 @@ const (
 	longLimit       = 4000
 )
 
-type requestType int
+// RequestType is the type of request
+type RequestType int
 
+// definition for RequestType
 const (
-	reqTypeUltraShort requestType = iota // ultraShort[0, 100)
-	reqTypeShort                         // short[100, 500)
-	reqTypeMiddle                        // middle[500, 1000)
-	reqTypeLong                          // long[1000, 4000)
-	reqTypeUltraLong                     // ultraLong[4000, ~)
+	ReqTypeUltraShort RequestType = iota // ultraShort[0, 100)
+	ReqTypeShort                         // short[100, 500)
+	ReqTypeMiddle                        // middle[500, 1000)
+	ReqTypeLong                          // long[1000, 4000)
+	ReqTypeUltraLong                     // ultraLong[4000, ~)
 )
 
 // LlmRequest is wrapper of inference request
 type LlmRequest struct {
 	Prompt  string
 	ReqId   string
-	reqType requestType
+	ReqType RequestType
 
-	promptToken      []uint32
-	promptLen        int
-	predictTokens    int // predict total tokens, include prefill and decode
-	predictBlocks    int // predict total blocks, include prefill and decode
-	predictDecodeLen int
+	PromptToken   []uint32
+	PromptLen     int
+	PrefillBlocks int // number of input blocks for prefill
 
-	timeStamp int64 // unit is second
+	PredictTokens    int // predict total tokens, include prefill and decode
+	PredictBlocks    int // predict total blocks, include prefill and decode
+	PredictDecodeLen int
+
+	PredictPrefillTime float64 // predict prefill time, unit is ms
+	PrefillTimeStampMs int64   // record the start timestamp of prefill, unit is ms
+	TimeStamp          int64   // unit is second
 }
 
-func getRequestType(promptLen int) requestType {
+// GetRequestType returns the type of request
+func GetRequestType(promptLen int) RequestType {
 	if promptLen < ultraShortLimit {
-		return reqTypeUltraShort
+		return ReqTypeUltraShort
 	} else if promptLen < shortLimit {
-		return reqTypeShort
+		return ReqTypeShort
 	} else if promptLen < middleLimit {
-		return reqTypeMiddle
+		return ReqTypeMiddle
 	} else if promptLen < longLimit {
-		return reqTypeLong
+		return ReqTypeLong
 	} else {
-		return reqTypeUltraLong
+		return ReqTypeUltraLong
 	}
 }
 
 // SetPromptAttrs sets the attributes for request
 func (req *LlmRequest) SetPromptAttrs(promptToken []uint32) {
-	req.promptToken = promptToken
-	req.promptLen = len(promptToken)
-	req.reqType = getRequestType(len(promptToken))
+	req.PromptToken = promptToken
+	req.PromptLen = len(promptToken)
+	req.ReqType = GetRequestType(len(promptToken))
 }
 
 // NewLlmRequest creates the new LlmRequest
@@ -73,8 +80,9 @@ func NewLlmRequest(reqId string, prompt string) (*LlmRequest, error) {
 	}
 
 	return &LlmRequest{
-		Prompt:    prompt,
-		ReqId:     reqId,
-		timeStamp: time.Now().UTC().Unix(),
+		Prompt:             prompt,
+		ReqId:              reqId,
+		TimeStamp:          time.Now().UnixMilli(),
+		PrefillTimeStampMs: time.Now().UnixMilli(),
 	}, nil
 }

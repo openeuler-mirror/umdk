@@ -27,6 +27,10 @@ function build_open_source () {
 
   cmake_command+=(-DBUILD_STATIC_LIB=ON -DBUILD_CLI=OFF -DUSE_OPENMP=OFF)
   cmake_command+=(-DCMAKE_INSTALL_PREFIX=${ROOT_DIR}/output/opensource)
+  # Eigen 3.4 NEON path triggers -Wclass-memaccess on GCC 12/13 (memcpy of
+  # non-trivial Eigen::internal::Packet4c). Disable -Werror for these so the
+  # LightGBM build doesn't fail on warnings-as-errors.
+  cmake_command+=(-DCMAKE_CXX_FLAGS="-Wno-error=class-memaccess -Wno-error=stringop-overflow -Wno-error")
 
   # checking ccache
   if command -v ccache &> /dev/null; then
