@@ -1981,8 +1981,8 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
         }
 
         urma_user_ctl_in_t in = {
-            .addr = (uint64_t)(uintptr_t)&jetty->jetty_id,
-            .len = sizeof(urma_jetty_id_t),
+            .addr = (uint64_t)(uintptr_t)jetty,
+            .len = sizeof(urma_jetty_t),
             .opcode = BONDP_USER_CTL_GET_RJETTY,
         };
         urma_user_ctl_out_t out = {
@@ -2729,8 +2729,8 @@ urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32
         }
 
         urma_user_ctl_in_t in = {
-            .addr = (uint64_t)(uintptr_t)&tseg->seg,
-            .len = sizeof(urma_seg_t),
+            .addr = (uint64_t)(uintptr_t)tseg,
+            .len = sizeof(urma_target_seg_t),
             .opcode = BONDP_USER_CTL_GET_SEG_CTX,
         };
         urma_user_ctl_out_t out = {
