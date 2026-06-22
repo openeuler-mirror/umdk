@@ -78,6 +78,10 @@ target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${U
 
 enable_testing()
 add_test(NAME urma_common_ut COMMAND urma_common_ut)
+set_tests_properties(urma_common_ut PROPERTIES LABELS phase_common)
 add_test(NAME urma_core_ut COMMAND urma_core_ut)
+set_tests_properties(urma_core_ut PROPERTIES LABELS phase_core)
 add_test(NAME urma_cmd_tlv_ut COMMAND urma_cmd_tlv_ut)
+set_tests_properties(urma_cmd_tlv_ut PROPERTIES LABELS phase_cmd_tlv)
 add_test(NAME urma_bond_ut COMMAND urma_bond_ut)
+set_tests_properties(urma_bond_ut PROPERTIES LABELS phase_bond)

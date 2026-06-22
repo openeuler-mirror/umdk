@@ -859,7 +859,7 @@ TEST(UrmaCoreTest, CheckOptValidUpdatesOnlyOptionMask)
     EXPECT_EQ(URMA_TEST_ID_MASK, mask);
 }
 
-TEST(UrmaCoreTest, CheckOptValidRejectsUnknownOrWrongLength)
+TEST(UrmaCoreTest, CheckOptValidRejectsWrongLengthAndIgnoresUnknownOpt)
 {
     uint64_t mask = 0;
 
@@ -867,7 +867,8 @@ TEST(UrmaCoreTest, CheckOptValidRejectsUnknownOrWrongLength)
         ARRAY_SIZE(TEST_OPT_TABLE), URMA_TEST_ID_OPT, sizeof(uint64_t)));
     EXPECT_EQ(0U, mask);
 
-    EXPECT_EQ(URMA_EINVAL, urma_check_opt_valid(&mask, TEST_OPT_TABLE,
+    /* Unknown options are ignored by the public helper, but must not set target bits. */
+    EXPECT_EQ(URMA_SUCCESS, urma_check_opt_valid(&mask, TEST_OPT_TABLE,
         ARRAY_SIZE(TEST_OPT_TABLE), 0xff, sizeof(uint32_t)));
     EXPECT_EQ(0U, mask);
 }
