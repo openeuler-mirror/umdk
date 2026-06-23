@@ -76,6 +76,10 @@ make -j$(nproc)
 
 - `-DBUILD_URMA=enable`: Explicitly enables URMA module compilation
 
+- `-DBUILD_UMS=disable`: Disables UMS build when only URMA is required
+
+- `-DURMA_PERF_USE_CNTVCT=on`: Uses the AArch64 `CNTVCT_EL0` register for URMA perf timestamps; set it to `off` on non-AArch64 builds or when `clock_gettime` timestamps are required
+
 ## 1.3 Separate Compilation of Kernel-mode Components
 
 **Prerequisites**

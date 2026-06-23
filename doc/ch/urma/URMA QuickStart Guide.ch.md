@@ -76,6 +76,10 @@ make -j$(nproc)
 
 - `-DBUILD_URMA=enable`：明确启用URMA模块编译
 
+- `-DBUILD_UMS=disable`：仅构建URMA时关闭UMS构建
+
+- `-DURMA_PERF_USE_CNTVCT=on`：URMA perf时间戳使用AArch64 `CNTVCT_EL0`寄存器；非AArch64构建或需要使用`clock_gettime`时间戳时设置为`off`
+
 ## 1.3 内核态组件单独编译
 
 **前提条件**
