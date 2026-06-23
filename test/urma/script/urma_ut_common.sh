@@ -25,7 +25,7 @@ URMA_UT_PHASE="all"
 function urma_ut_usage()
 {
     cat <<EOF
-Usage: $0 [--phase common|core|cmd_tlv|bond|all] [--no-coverage]
+Usage: $0 [--phase common|core|cmd_tlv|bond|uvs|all] [--no-coverage]
 EOF
 }
 
@@ -82,7 +82,7 @@ function parse_urma_phase_script_args()
 function validate_urma_ut_phase()
 {
     case "$1" in
-        all|common|core|cmd_tlv|bond)
+        all|common|core|cmd_tlv|bond|uvs)
             return 0
             ;;
         *)
@@ -99,6 +99,7 @@ function phase_target()
         core) echo "urma_core_ut" ;;
         cmd_tlv) echo "urma_cmd_tlv_ut" ;;
         bond) echo "urma_bond_ut" ;;
+        uvs) echo "urma_uvs_ut" ;;
         *) return 1 ;;
     esac
 }
@@ -110,6 +111,7 @@ function phase_label()
         core) echo "phase_core" ;;
         cmd_tlv) echo "phase_cmd_tlv" ;;
         bond) echo "phase_bond" ;;
+        uvs) echo "phase_uvs" ;;
         *) return 1 ;;
     esac
 }
@@ -243,6 +245,13 @@ function generate_bond_phase_report()
         '*/urma/lib/urma/bond/*'
 }
 
+function generate_uvs_phase_report()
+{
+    extract_phase_coverage phase_uvs \
+        '*/src/urma/lib/uvs/*' \
+        '*/urma/lib/uvs/*'
+}
+
 function generate_non_udma_phase_report()
 {
     extract_phase_coverage phase_urma_non_udma \
@@ -262,6 +271,7 @@ function generate_all_phase_reports()
     generate_core_phase_report
     generate_cmd_tlv_phase_report
     generate_bond_phase_report
+    generate_uvs_phase_report
     generate_non_udma_phase_report
 }
 
@@ -272,6 +282,7 @@ function generate_one_phase_report()
         core) generate_core_phase_report ;;
         cmd_tlv) generate_cmd_tlv_phase_report ;;
         bond) generate_bond_phase_report ;;
+        uvs) generate_uvs_phase_report ;;
         *) return 1 ;;
     esac
 }

@@ -37,12 +37,15 @@ set(URMA_CORE_DIR ${URMA_SRC_DIR}/lib/urma/core)
 set(URMA_CORE_INCLUDE_DIR ${URMA_CORE_DIR}/include)
 set(URMA_BOND_DIR ${URMA_SRC_DIR}/lib/urma/bond)
 set(URMA_BOND_UTILS_DIR ${URMA_BOND_DIR}/utils)
+set(URMA_UVS_CORE_DIR ${URMA_SRC_DIR}/lib/uvs/core)
+set(URMA_UVS_INCLUDE_DIR ${URMA_UVS_CORE_DIR}/include)
 
 set(URMA_COMMON_STATIC ${URMA_BUILD_DIR}/urma/common/liburma_common_static.a)
 set(URMA_COMMON_SO ${URMA_BUILD_DIR}/urma/common/liburma_common.so)
 set(URMA_STATIC ${URMA_BUILD_DIR}/urma/lib/urma/core/liburma_static.a)
 set(URMA_SO ${URMA_BUILD_DIR}/urma/lib/urma/core/liburma.so)
 set(URMA_UBAGG_SO ${URMA_BUILD_DIR}/urma/lib/urma/bond/liburma_ubagg.so)
+set(URMA_TPSA_SO ${URMA_BUILD_DIR}/urma/lib/uvs/core/libtpsa.so)
 
 add_library(urma_test_common INTERFACE)
 target_include_directories(urma_test_common INTERFACE
@@ -53,6 +56,8 @@ target_include_directories(urma_test_common INTERFACE
     ${URMA_BOND_DIR}
     ${URMA_BOND_UTILS_DIR}
     ${URMA_BOND_DIR}/include
+    ${URMA_UVS_CORE_DIR}
+    ${URMA_UVS_INCLUDE_DIR}
 )
 target_compile_options(urma_test_common INTERFACE
     -Wall -Werror -O0 -g -fsanitize=address -fno-omit-frame-pointer --coverage
@@ -64,20 +69,15 @@ target_link_options(urma_core_ut PRIVATE -Wl,--wrap=ioctl)
 target_link_libraries(urma_core_ut PRIVATE urma_test_common ${URMA_STATIC} ${URMA_COMMON_STATIC}
     GTest::gtest_main dl rt pthread)
 
-add_executable(urma_cmd_tlv_ut cmd_tlv/cmd_tlv_test.cpp)
-target_link_options(urma_cmd_tlv_ut PRIVATE -Wl,--wrap=ioctl -Wl,--wrap=urma_query_eid)
-target_link_libraries(urma_cmd_tlv_ut PRIVATE urma_test_common ${URMA_STATIC} ${URMA_COMMON_STATIC}
-    GTest::gtest_main dl rt pthread)
-
 add_executable(urma_bond_ut bond/bond_test.cpp)
 target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${URMA_SO} ${URMA_COMMON_SO}
     GTest::gtest_main nl-genl-3 nl-3 dl rt pthread)
 
 enable_testing()
 add_subdirectory(common)
+add_subdirectory(cmd_tlv)
+add_subdirectory(uvs)
 add_test(NAME urma_core_ut COMMAND urma_core_ut)
 set_tests_properties(urma_core_ut PROPERTIES LABELS phase_core)
-add_test(NAME urma_cmd_tlv_ut COMMAND urma_cmd_tlv_ut)
-set_tests_properties(urma_cmd_tlv_ut PROPERTIES LABELS phase_cmd_tlv)
 add_test(NAME urma_bond_ut COMMAND urma_bond_ut)
 set_tests_properties(urma_bond_ut PROPERTIES LABELS phase_bond)
