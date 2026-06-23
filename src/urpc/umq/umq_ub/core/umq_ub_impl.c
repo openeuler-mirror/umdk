@@ -1604,7 +1604,6 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     } else if (cnt == 0) {
         return 0;
     }
-
     return 1;
 }
 
@@ -1796,7 +1795,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             uint64_t tp_rearm_start = umq_trace_timestamp_get();
             status = umq_symbol_urma()->urma_rearm_jfc(
                 jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfc[UB_QUEUE_JETTY_IO], solicited);
-            uint64_t rearm_delta = umq_trace_timestamp_get() - tp_rearm_start;
+            uint64_t rearm_delta = umq_trace_write_delta(tp_rearm_start);
             umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_REARM_JFC, tp_rearm_start, rearm_delta);
             if (status != URMA_SUCCESS) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, "
@@ -1809,7 +1808,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
                 uint64_t fc_rearm_start = umq_trace_timestamp_get();
                 status = umq_symbol_urma()->urma_rearm_jfc(jetty_node_list->node_list[
                     option->tp_handle_idx]->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL], solicited);
-                rearm_delta = umq_trace_timestamp_get() - fc_rearm_start;
+                rearm_delta = umq_trace_write_delta(fc_rearm_start);
                 umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_FC_REARM_JFC, fc_rearm_start, rearm_delta);
                 if (status != URMA_SUCCESS) {
                     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, "
