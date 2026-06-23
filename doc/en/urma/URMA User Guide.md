@@ -1912,7 +1912,6 @@ urma_admin eid del <dev> <eid_idx>                               Delete static E
 urma_admin eid set <dev> <eid_idx> ns <netns>                    Set namespace of an EID
 urma_admin eid set <dev> <eid_idx> mode {static|dynamic}         Set EID mode
 urma_admin main_ue_eid insert <eid> <main_ue_eid>                Insert a main UE EID mapping
-urma_admin main_ue_eid insert_batch <main_ue_eid> <eid> [eid...] Insert main UE EID mappings in batch
 urma_admin main_ue_eid delete <eid>                              Delete a main UE EID mapping
 urma_admin main_ue_eid lookup <eid>                              Query a main UE EID mapping
 urma_admin main_ue_eid flush                                     Clear the main UE EID table

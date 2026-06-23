@@ -1967,7 +1967,6 @@ urma_admin eid del <dev> <eid_idx>                               删除静态EID
 urma_admin eid set <dev> <eid_idx> ns <netns>                    设置EID命名空间
 urma_admin eid set <dev> <eid_idx> mode {static|dynamic}         设置EID模式
 urma_admin main_ue_eid insert <eid> <main_ue_eid>                插入main UE EID映射
-urma_admin main_ue_eid insert_batch <main_ue_eid> <eid> [eid...] 批量插入main UE EID映射
 urma_admin main_ue_eid delete <eid>                              删除main UE EID映射
 urma_admin main_ue_eid lookup <eid>                              查询main UE EID映射
 urma_admin main_ue_eid flush                                     清空main UE EID表

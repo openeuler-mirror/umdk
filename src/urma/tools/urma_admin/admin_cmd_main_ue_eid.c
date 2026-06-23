@@ -27,8 +27,6 @@
 #include "admin_cmd.h"
 #include "admin_netlink.h"
 
-#define ADMIN_MAIN_UE_EID_BATCH_MAX 128U
-
 typedef enum admin_main_ue_eid_reply_type {
     ADMIN_MAIN_UE_EID_REPLY_LOOKUP,
     ADMIN_MAIN_UE_EID_REPLY_STATUS,
@@ -365,45 +363,11 @@ static int admin_main_ue_eid_flush(void)
     return ctx.status;
 }
 
-static int admin_main_ue_eid_insert_batch(const urma_eid_t *main_ue_eid,
-                                          const urma_eid_t *eids,
-                                          uint32_t eid_num)
-{
-    struct nl_msg *msg;
-    int ret;
-
-    if (eid_num == 0 || eid_num > ADMIN_MAIN_UE_EID_BATCH_MAX) {
-        return -EINVAL;
-    }
-
-    msg = admin_nl_alloc_msg(URMA_CORE_ADMIN_INSERT_MAIN_UE_EID_BATCH, 0, UBCORE_GENL);
-    if (msg == NULL) {
-        return -ENOMEM;
-    }
-
-    ret = admin_main_ue_eid_put_eid(msg, UBCORE_ATTR_MAIN_UE_EID, main_ue_eid);
-    if (ret == 0) {
-        ret = admin_nl_put_u32(msg, UBCORE_ATTR_EID_NUM, eid_num);
-    }
-    if (ret == 0) {
-        ret = admin_main_ue_eid_put_binary(msg, UBCORE_ATTR_EID_LIST,
-                                           (const uint8_t *)eids,
-                                           (size_t)eid_num * sizeof(*eids));
-    }
-    if (ret == 0) {
-        ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
-    }
-
-    admin_nl_free_msg(msg);
-    return ret;
-}
-
 static int cmd_main_ue_eid_usage(admin_config_t *cfg)
 {
     (void)cfg;
     printf("Usage:\n"
            "  urma_admin main_ue_eid insert <eid> <main_ue_eid>\n"
-           "  urma_admin main_ue_eid insert_batch <main_ue_eid> <eid> [eid...]\n"
            "  urma_admin main_ue_eid delete <eid>\n"
            "  urma_admin main_ue_eid lookup <eid>\n"
            "  urma_admin main_ue_eid flush\n"
@@ -433,44 +397,6 @@ static int cmd_main_ue_eid_insert(admin_config_t *cfg)
     if (ret != 0) {
         printf("Failed to insert main_ue_eid entry, ret:%d\n", ret);
     }
-    return ret;
-}
-
-static int cmd_main_ue_eid_insert_batch(admin_config_t *cfg)
-{
-    urma_eid_t main_ue_eid = {0};
-    urma_eid_t *eids;
-    uint32_t eid_num;
-    int ret;
-
-    ret = admin_main_ue_eid_pop_eid(cfg, "main_ue_eid", &main_ue_eid);
-    if (ret != 0) {
-        return ret;
-    }
-    if (cfg->argc <= 0 || cfg->argc > ADMIN_MAIN_UE_EID_BATCH_MAX) {
-        printf("Invalid eid num: %d, which is not belong to 1 - 128.\n", cfg->argc);
-        return -EINVAL;
-    }
-
-    eid_num = (uint32_t)cfg->argc;
-    eids = calloc(eid_num, sizeof(*eids));
-    if (eids == NULL) {
-        return -ENOMEM;
-    }
-
-    for (uint32_t i = 0; i < eid_num; i++) {
-        ret = admin_main_ue_eid_pop_eid(cfg, "eid", &eids[i]);
-        if (ret != 0) {
-            free(eids);
-            return ret;
-        }
-    }
-
-    ret = admin_main_ue_eid_insert_batch(&main_ue_eid, eids, eid_num);
-    if (ret != 0) {
-        printf("Failed to insert main_ue_eid batch, ret:%d\n", ret);
-    }
-    free(eids);
     return ret;
 }
 
@@ -544,7 +470,6 @@ int admin_cmd_main_ue_eid(admin_config_t *cfg)
     static const admin_cmd_t cmds[] = {
         {NULL, cmd_main_ue_eid_usage},
         {"insert", cmd_main_ue_eid_insert},
-        {"insert_batch", cmd_main_ue_eid_insert_batch},
         {"delete", cmd_main_ue_eid_delete},
         {"lookup", cmd_main_ue_eid_lookup},
         {"flush", cmd_main_ue_eid_flush},
