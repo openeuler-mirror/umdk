@@ -137,10 +137,32 @@ test_umq_ctx_t *test_umq_ctx_init(int argc, char * argv[], int thread_num)
             g_test_umq_ctx.trans_mode = static_cast<umq_trans_mode_t>(ctx->mode);
     }
 
+    g_test_umq_ctx.tp_mode = (ctx->tp_mode) ? static_cast<umq_tp_mode_t>(ctx->tp_mode) : UMQ_TM_RC;
+    if (g_test_umq_ctx.tp_mode == UMQ_TM_RC) {
+        TEST_LOG_INFO("tp_mode=%d is UMQ_TM_RC\n", g_test_umq_ctx.tp_mode);
+    } else if (g_test_umq_ctx.tp_mode == UMQ_TM_RM) {
+        TEST_LOG_INFO("tp_mode=%d is UMQ_TM_RM\n", g_test_umq_ctx.tp_mode);
+    } else {
+        TEST_LOG_INFO("tp_mode=%d not support\n", g_test_umq_ctx.tp_mode);
+    }
+
+    g_test_umq_ctx.tp_type = (ctx->tp_kind) ? static_cast<umq_tp_type_t>(ctx->tp_kind) : UMQ_TP_TYPE_RTP;
+    if (g_test_umq_ctx.tp_type == UMQ_TP_TYPE_RTP) {
+        TEST_LOG_INFO("tp_type=%d is UMQ_TP_TYPE_RTP\n", g_test_umq_ctx.tp_type);
+    } else if (g_test_umq_ctx.tp_type == UMQ_TP_TYPE_CTP) {
+        TEST_LOG_INFO("tp_type=%d is UMQ_TP_TYPE_CTP\n", g_test_umq_ctx.tp_type);
+    } else {
+        TEST_LOG_INFO("tp_type=%d not support\n", g_test_umq_ctx.tp_type);
+    }
+
     g_test_umq_ctx.umqh_num = 1;
     if (strncmp(ctx->device_name, "bonding_dev", 11) == 0) {
         g_test_umq_ctx.is_bonding = true;
     }
+
+    g_test_umq_ctx.priority = test_get_umq_normal_priority(&g_test_umq_ctx);
+    TEST_LOG_INFO("g_test_umq_ctx.priority:%d\n", g_test_umq_ctx.priority);
+
     return &g_test_umq_ctx;
 }
 
@@ -233,6 +255,64 @@ void test_umq_uninit(test_umq_ctx_t *ctx)
     TEST_LOG_INFO("umq_uninit\n");
     umq_uninit();
     ctx->ctx_flag &= ~CTX_FLAG_UMQ_INIT;
+}
+
+void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN])
+{
+    memset(priority_list, 0, sizeof(priority_list));
+    const char *tp_type_start = strstr(input_str, "tp_type");
+    if (tp_type_start == NULL) {
+        TEST_LOG_ERROR("错误：未找到tp_type行\n");
+        return;
+    }
+
+    while (*tp_type_start != '\0' && !(*tp_type_start == 'R' || *tp_type_start == 'C')) {
+        tp_type_start++;
+    }
+
+    char buffer[TP_TYPE_LEN];
+    int idx = 0;
+    while (*tp_type_start != '\0' && idx < MAX_PRIORITY_NUM) {
+        while (*tp_type_start != '\0' && isspace((unsigned char)*tp_type_start)) {
+            tp_type_start++;
+        }
+        if (*tp_type_start == '\0')
+            break;
+        strncpy(buffer, tp_type_start, 3);
+        buffer[3] = '\0';
+
+        if (strcmp(buffer, "RTP") == 0 || strcmp(buffer, "CTP") == 0) {
+            strcpy(priority_list[idx], buffer);
+            idx++;
+        }
+        tp_type_start += 3;
+    }
+
+    for (int i = idx; i < MAX_PRIORITY_NUM; i++) {
+        strcpy(priority_list[i], "");
+    }
+
+}
+
+uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
+{
+    char buf[PRIORITY_BUF_LEN];
+    char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN] = {0};
+    exec_cmd(buf, PRIORITY_BUF_LEN, "urma_admin show --whole -d %s", ctx->ctx->device_name);
+    parse_priority_sl_tp_type_map(buf, priority_list);
+    for (uint8_t i = 0; i < MAX_PRIORITY_NUM; i++) {
+        if (ctx->tp_type == UMQ_TP_TYPE_RTP) {
+            if (strncmp(priority_list[i], "RTP", 3) == 0) {
+                return i;
+            }
+        } else if (ctx->tp_type == UMQ_TP_TYPE_CTP) {
+            if (strncmp(priority_list[i], "CTP", 3) == 0) {
+                return i;
+            }
+        }
+    }
+    return 0;
+
 }
 
 int print_route_list(umqh_ops_t *umqh_ops, const umq_route_key_t *route_key, umq_route_list_t *route_list)
@@ -355,11 +435,14 @@ int set_umq_creat_option(test_umq_ctx_t *ctx, bool all_interrupt)
                 rc++;
             }
             ctx->umqh_ops[i].option.create_flag = UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_RX_DEPTH | UMQ_CREATE_FLAG_TX_BUF_SIZE |
-                UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_QUEUE_MODE;
+                UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE | UMQ_CREATE_FLAG_TP_TYPE | UMQ_CREATE_FLAG_PRIORITY;
             ctx->umqh_ops[i].option.tx_depth = UMQ_DEFAULT_TX_DEPTH;
             ctx->umqh_ops[i].option.rx_depth = UMQ_DEFAULT_RX_DEPTH;
             ctx->umqh_ops[i].option.tx_buf_size = UMQ_DEFAULT_TX_BUF_SIZE;
             ctx->umqh_ops[i].option.rx_buf_size = UMQ_DEFAULT_RX_BUF_SIZE;
+            ctx->umqh_ops[i].option.tp_mode = ctx->tp_mode ? ctx->tp_mode : UMQ_TM_RC;
+            ctx->umqh_ops[i].option.tp_type = ctx->tp_type ? ctx->tp_type : UMQ_TP_TYPE_RTP;
+            ctx->umqh_ops[i].option.priority = ctx->priority;
 
             if (ctx->is_bonding) {
                 ret = get_used_ports(ctx, &ctx->umqh_ops[i]);
