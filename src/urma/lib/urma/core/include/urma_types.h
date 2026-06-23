@@ -57,6 +57,8 @@ extern "C" {
 
 #define URMA_IP_ADDR_BYTES 16 /* refer to UBCORE_IP_ADDR_BYTES */
 #define URMA_MAC_BYTES     6  /* refer to UBCORE_MAC_BYTES */
+#define URMA_MAX_TIMEOUT_COUNT 31
+#define URMA_MAX_RNR_RETRY 7
 
 #define URMA_JFS_SQE_BASE_ADDR_MASK       (1ULL << 0)
 #define URMA_JFS_ID_MASK                  (1ULL << 1)
