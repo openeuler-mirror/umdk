@@ -1782,7 +1782,11 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         }
     }
 
-    return sync_time(cfg->comm.sock_fd[0], "tp aware connect finished");
+    if (sync_time(cfg->comm.sock_fd[0], "tp aware connect finished") != 0) {
+        goto disconnect_jetty;
+    }
+
+    return 0;
 
 disconnect_jetty:
     disconnect_jetty_default(ctx, cfg);
