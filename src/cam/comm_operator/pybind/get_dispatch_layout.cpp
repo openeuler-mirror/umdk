@@ -61,7 +61,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImplNpu(const at::Tensor &to
 
 TensorVector GetDispatchLayoutBackwardImplNpu(const at::Tensor &self)
 {
-    at::Tensor result = at::Tensor(self); // 创建输出内存
+    at::Tensor result = at::Tensor(self); // Create output memory
     return {result, result};
 }
 
@@ -69,12 +69,12 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImpl(const at::Tensor &topkI
                                                          int64_t numRanks)
 {
     static auto op = torch::Dispatcher::singleton()
-                         .findSchemaOrThrow("umdk_cam_op_lib::get_dispatch_layout", "")
-                         .typed<decltype(GetDispatchLayoutImpl)>();
+        .findSchemaOrThrow("umdk_cam_op_lib::get_dispatch_layout", "")
+        .typed<decltype(GetDispatchLayoutImpl)>();
     return op.call(topkIdx, numExperts, numRanks);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
+// Bind forward and backward by inheriting torch::autograd::Function
 class GetDispatchLayout : public torch::autograd::Function<GetDispatchLayout> {
 public:
     static TensorVector forward(AutogradContext *ctx, const at::Tensor &topkIdx, int64_t numExperts, int64_t numRanks)

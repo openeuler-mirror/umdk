@@ -49,7 +49,7 @@ class NotifyDispatchA2 {
     constexpr static int32_t FLAG_VALUE = 0xFFFFFFFF;
     constexpr static uint32_t STATUS_ENTRY_SIZE = 32;  // each status entry size, bytes
     constexpr static uint32_t U32_STATUS_ENTRY = STATUS_ENTRY_SIZE / sizeof(int32_t);
-    constexpr static uint32_t FLAG_OFFSET = 8;          // status_flag offset in statusTensor中, bytes
+    constexpr static uint32_t FLAG_OFFSET = 8;          // status_flag offset in statusTensor, bytes
     constexpr static uint32_t SOURCE_RANK_OFFSET = 16;  // sourceRankId offset in statusTensor, bytes
     constexpr static uint32_t DEST_RANK_OFFSET = 20;    // destRankId offset in statusTensor, bytes
     constexpr static uint32_t DATALEN_OFFSET = 24;      // dataLen offset in statusTensor, bytes
@@ -219,7 +219,8 @@ private:
 
         pipe.InitBuffer(this->tBuf, TEMP_BUF_LEN);
         LocalTensor<uint64_t> tempLocal = tBuf.Get<uint64_t>();
-        tempLocal(0) = 1;
+        PipeBarrier<PIPE_ALL>();
+        tempLocal(0) = magicTensor_.GetValue(blockIdx * EXP_TOKEN_COUNT_FLAG_CNT) + 1;
         // +1 by atomic add
         AscendC::SetAtomicAdd<uint64_t>();
         AscendC::SetFlag<HardEvent::S_MTE3>(EVENT_ID0);

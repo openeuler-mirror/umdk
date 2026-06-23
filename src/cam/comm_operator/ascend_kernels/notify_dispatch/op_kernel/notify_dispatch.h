@@ -305,7 +305,7 @@ private:
 
     __aicore__ inline void BuildTotalRecvTokens()
     {
-        // 只需要sendCountTensor
+        // Only needs sendCountTensor
         if (blockIdx > 0) {
             return;
         }
@@ -330,7 +330,7 @@ private:
         PipeBarrier<PIPE_V>();
         SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
 
-        // 拷贝到outputGT
+        // Copy to outputGT
         GlobalTensor<int32_t> totalCntGt;
         totalCntGt.SetGlobalBuffer((__gm__ int32_t *)totalRecvTokens_);
         DataCopyExtParams copyParams{1, static_cast<uint32_t>(1 * sizeof(int32_t)), 0, 0, 0};
@@ -339,7 +339,7 @@ private:
 
     __aicore__ inline void BuildRecvCount()
     {
-        // 只需要sendCountTensor
+        // Only needs sendCountTensor
         if (blockIdx != 1) {
             return;
         }
@@ -361,7 +361,7 @@ private:
 
     __aicore__ inline void BuildRecvOffset()
     {
-        // 只需要sendOffsetTensor
+        // Only needs sendOffsetTensor
         if (blockIdx != SECOND) {
             return;
         }
@@ -375,7 +375,7 @@ private:
 
     __aicore__ inline void BuildMaxBs()
     {
-        // 只需要maxBsNum
+        // Only needs maxBsNum
         if (blockIdx != THIRD) {
             return;
         }
@@ -388,7 +388,7 @@ private:
 
     __aicore__ inline void BuildRecvTokenPerExp()
     {
-        // 只需要sendCountTensor
+        // Only needs sendCountTensor
         if (blockIdx != FOURTH) {
             return;
         }

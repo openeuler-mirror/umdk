@@ -19,7 +19,7 @@ from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension
 from torch_npu.utils.cpp_extension import NpuExtension
 
-# 格式: V版本.R版本.C版本.B版本
+# Format: V_version.R_version.C_version.B_version
 env_version = os.getenv("CAM_WHL_VERSION", "209.0.0.B001")
 
 torch_path = os.path.dirname(torch.__file__)

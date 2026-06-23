@@ -73,7 +73,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2ImplNpu(const at::Tensor &
 
 TensorVector GetDispatchLayoutA2BackwardImplNpu(const at::Tensor &self)
 {
-    at::Tensor result = at::Tensor(self); // 创建输出内存
+    at::Tensor result = at::Tensor(self); // Create output memory
     return {result, result};
 }
 
@@ -81,8 +81,8 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutA2Impl(const at::Tensor &top
     int64_t numRanks)
 {
     static auto op = torch::Dispatcher::singleton()
-                         .findSchemaOrThrow("umdk_cam_op_lib::get_dispatch_layout_a2", "")
-                         .typed<decltype(GetDispatchLayoutA2Impl)>();
+        .findSchemaOrThrow("umdk_cam_op_lib::get_dispatch_layout_a2", "")
+        .typed<decltype(GetDispatchLayoutA2Impl)>();
     return op.call(topkIdx, numExperts, numRanks);
 }
 

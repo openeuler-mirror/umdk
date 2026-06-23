@@ -62,6 +62,9 @@ at::Tensor MoeCombinePrefillA2ImplNpu(MOE_COMBINE_PREFILL_A2_DEF)
     // topkIdx dtype must be int or long
     TORCH_BIND_ASSERT(topkIdx.scalar_type() == at::kInt || topkIdx.scalar_type() == at::kLong);
 
+    // topkWeights dtype must be float
+    TORCH_BIND_ASSERT(topkWeights.scalar_type() == at::kFloat);
+
     at::Tensor newTopkIdx = topkIdx;
     TORCH_BIND_ASSERT(x.dim() == X_DIM and x.is_contiguous());
     at::Tensor recvX = x;

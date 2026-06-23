@@ -69,10 +69,10 @@ private:
         uint32_t curRankId = ((ctxIdx == COMM_EP_IDX) ? epRankId : tpRankId);
         if (curRankId == rankId) {
             return (GM_ADDR)(winContext_[ctxIdx]->localWindowsIn) + winDataSizeOffset + COMBINE_STATE_WIN_OFFSET +
-                   Moe::NOTIFY_DISPATCH_BUFF_OFFSET;
+                Moe::NOTIFY_DISPATCH_BUFF_OFFSET;
         }
         return (GM_ADDR)(((HcclRankRelationResV2 *)(winContext_[ctxIdx]->remoteRes[rankId].nextDevicePtr))->windowsIn) +
-               winDataSizeOffset + COMBINE_STATE_WIN_OFFSET + Moe::NOTIFY_DISPATCH_BUFF_OFFSET;
+            winDataSizeOffset + COMBINE_STATE_WIN_OFFSET + Moe::NOTIFY_DISPATCH_BUFF_OFFSET;
     }
 
     __aicore__ inline GM_ADDR GetWindStateAddrByRankId(uint8_t ctxIdx, const int32_t rankId)
@@ -81,9 +81,9 @@ private:
         if (curRankId == rankId) {
             return (GM_ADDR)(winContext_[ctxIdx]->localWindowsExp) + dataState * WIN_STATE_OFFSET;
         }
-        return (GM_ADDR)(((HcclRankRelationResV2 *)(winContext_[ctxIdx]->remoteRes[rankId].nextDevicePtr))
-                             ->windowsExp) +
-               dataState * WIN_STATE_OFFSET;
+        return (GM_ADDR)(
+            ((HcclRankRelationResV2 *)(winContext_[ctxIdx]->remoteRes[rankId].nextDevicePtr))->windowsExp) +
+            dataState * WIN_STATE_OFFSET;
     }
 
     TPipe *tpipe_{nullptr};
@@ -528,7 +528,7 @@ template <TemplateTypeClass> __aicore__ inline void MoeDispatchNormal<TemplateTy
         waitRecvCostStatsOutQueue.FreeTensor<int32_t>(waitRecvCostStatsTensor);
     }
 
-    // 清状态
+    // Clear status
     SyncFunc<AscendC::HardEvent::MTE3_S>();
     DataCopyParams intriOutParams{static_cast<uint16_t>(statusNumPerCore), 1, 0, 0};
     uint64_t duplicateMask[2] = {0x101010101010101, 0};

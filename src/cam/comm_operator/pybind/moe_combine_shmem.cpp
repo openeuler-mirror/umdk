@@ -9,12 +9,11 @@
 
 #include <unistd.h>
 #include <hccl/hccl.h>
+#include <iostream>
 #include <torch/extension.h>
 #include <torch/csrc/autograd/custom_function.h>
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "pytorch_npu_helper.hpp"
-#include <hccl/hccl.h>
-#include <iostream>
 
 using torch::autograd::AutogradContext;
 using torch::autograd::Function;
@@ -182,7 +181,7 @@ at::Tensor MoeCombineShmemImpl(
         extInfo, outDtype, groupListType, windowSize);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
+// Bind forward and backward by inheriting torch::autograd::Function
 class MoeCombineShmem : public torch::autograd::Function<MoeCombineShmem> {
 public:
     static at::Tensor forward(
@@ -275,7 +274,7 @@ TORCH_LIBRARY_IMPL(umdk_cam_op_lib, AutogradPrivateUse1, m)
     m.impl("moe_combine_shmem", &MoeCombineShmemImplAutograd);
 }
 
-// 为Meta设备注册前反向实现
+// Register forward and backward implementations for Meta device
 TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m)
 {
     m.impl("moe_combine_shmem", &MoeCombineShmemImplMeta);

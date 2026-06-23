@@ -15,17 +15,17 @@ using namespace AscendC;
 using namespace MoeDistributeDispatchImpl;
 
 /*
- * A3 tilingkey说明
- * 5位的十进制数
- * 第1位（个位）：quantMode:
- *     0: 不量化, 1: 静态量化, 2: 动态量化
- * 第2位（十位）：是否有smoothScale:
- *     0: 无, 1: 有
- * 第3位（百位）：是否做tp域allgather:
- *     0: 不做, 1: 做
- * 第4位（千位）：是否是共享专家卡:
- *     0: 不是, 1: 是
- * 第5位（万位）：无实际意义
+ * A3 tilingKey description
+ * 5-digit decimal number
+ * 1st digit (ones): quantMode:
+ *     0: no quantization, 1: static quantization, 2: dynamic quantization
+ * 2nd digit (tens): whether smoothScale exists:
+ *     0: no, 1: yes
+ * 3rd digit (hundreds): whether to do tp-domain allgather:
+ *     0: no, 1: yes
+ * 4th digit (thousands): whether it is a shared expert card:
+ *     0: no, 1: yes
+ * 5th digit (ten-thousands): no actual meaning
  */
 
 extern "C" __global__ __aicore__ void moe_dispatch_shmem(GM_ADDR x, GM_ADDR expertIds, GM_ADDR scales,

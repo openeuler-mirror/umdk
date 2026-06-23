@@ -9,12 +9,11 @@
 
 #include <unistd.h>
 #include <hccl/hccl.h>
+#include <iostream>
 #include <torch/extension.h>
 #include <torch/csrc/autograd/custom_function.h>
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "pytorch_npu_helper.hpp"
-#include <hccl/hccl.h>
-#include <iostream>
 
 using torch::autograd::AutogradContext;
 using torch::autograd::Function;
@@ -61,7 +60,7 @@ inline TensorVector GenerateDispatchOutputTensor(
         expandXOutNum = bs * epWorldSize / sharedExpertRankNum;
     }
 
-    // 申请输出Tensor资源
+    // Allocate output tensor resources
     at::Tensor expandXOut;
     at::Tensor dynamicScalesOut;
     at::Tensor expandIdxOut;
@@ -69,9 +68,9 @@ inline TensorVector GenerateDispatchOutputTensor(
     at::Tensor epSendCountOut;
     at::Tensor tpSendCountOut;
 
-    if (isMeta) { // 每个输出变量都需要指定为mata设备类型
+    if (isMeta) { // Each output variable must be set to meta device type
         at::TensorOptions options = at::TensorOptions(at::kMeta);
-        // 当前只支持动态量化
+        // Currently only dynamic quantization is supported
         if (quantMode == DYNAMIC_QUANT_MODE) {
             expandXOut = at::empty({expandXOutNum, h}, x.options().dtype((at::kChar)).device(at::kMeta));
         } else {
@@ -86,7 +85,7 @@ inline TensorVector GenerateDispatchOutputTensor(
         tpSendCountOut = at::empty({tpWorldSize}, expertIds.options().device(at::kMeta));
     } else {
         at::TensorOptions options = at::TensorOptions(torch_npu::utils::get_npu_device_type());
-        // 当前只支持动态量化
+        // Currently only dynamic quantization is supported
         if (quantMode == DYNAMIC_QUANT_MODE) {
             expandXOut = at::empty({expandXOutNum, h}, x.options().dtype((at::kChar)));
         } else {
@@ -155,7 +154,7 @@ TensorVector MoeDispatchShmemImplNpu(
 
 TensorVector MoeDispatchShmemBackwardImplNpu(const at::Tensor &self)
 {
-    at::Tensor result = at::Tensor(self); // 创建输出内存
+    at::Tensor result = at::Tensor(self); // Create output memory
     return {result, result, result};
 }
 
@@ -219,7 +218,7 @@ TensorVector MoeDispatchShmemImpl(
         sharedExpertNum, sharedExpertRankNum, quantMode, globalBS, expertTokenNumsType, extInfo, windowSize);
 }
 
-// 通过继承torch::autograd::Function类实现前反向绑定
+// Bind forward and backward by inheriting torch::autograd::Function
 class MoeDispatchShmem : public torch::autograd::Function<MoeDispatchShmem> {
 public:
     static TensorVector forward(
@@ -295,7 +294,7 @@ TORCH_LIBRARY_IMPL(umdk_cam_op_lib, AutogradPrivateUse1, m)
     m.impl("moe_dispatch_shmem", &MoeDispatchShmemImplAutograd);
 }
 
-// 为Meta设备注册前反向实现
+// Register forward and backward implementations for Meta device
 TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m)
 {
     m.impl("moe_dispatch_shmem", &MoeDispatchShmemImplMeta);
