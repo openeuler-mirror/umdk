@@ -10,7 +10,7 @@ import random
 
 from common.constants import const
 
-logging.basicConfig(levev=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 local_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,7 +30,7 @@ def prepare_test_case(host_list, case_path, case_name="test_case"):
     p_list = []
     for host in host_list:
         p_list.append(host.exec_cmd(_cmd, background=True))
-    
+
     for p in p_list:
         p.wait()
         if p.ret != 0:
@@ -71,7 +71,7 @@ def get_test_dev(test_host, host_idx):
 def exec_test_case(host_list, path, server_num=1, client_num=1, **kwargs):
     log.info(f'---------- [Test path = {path} ] ----------')
     _test_port = gen_random_port(host_list)
-    check = kwargs.get("check", False)
+    check = kwargs.get("check", True)
     app_num = server_num + client_num
     timeout = kwargs.get("timeout", 1800)
     test_port = kwargs.get("test_port", _test_port)
@@ -106,10 +106,8 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, **kwargs):
         for i in range(app_num):
             log.info(f'---------- [Test p{i + 1}.wait() ] ----------')
             p_list[i].wait()
-        for i in range(app_num):
-            log.info(f'---------- [Test assert p{i + 1} ] ----------')
             if p_list[i].ret != 0:
                 log.error(f"exec_test_case failed!  p_list[{i}],ret={p_list[i].ret}!")
-                raise
-        p_list = []
+                raise RuntimeError(f"Test case failed with return code: {p_list[i].ret}")
+        return []
     return p_list

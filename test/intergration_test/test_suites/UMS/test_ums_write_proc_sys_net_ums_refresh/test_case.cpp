@@ -17,7 +17,12 @@ static int run_test(test_ums_ctx_t *ctx)
     int ret = 0;
     int rc = TEST_FAILED;
     char test_ip_str[10]={0};
+    char setup_env[MAX_EXEC_CMD_RET_LEN];
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
+
+    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+
+    sync_time("----------------------------0");
 
     for (int i=0; i<vec_random.size(); i++) {
         char cmd_revise_snd[MAX_EXEC_CMD_RET_LEN];
