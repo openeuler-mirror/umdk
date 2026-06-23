@@ -211,9 +211,9 @@ static int umq_tp_ub_transport_pool_resource_modify(uint64_t umqh_tp, uint32_t t
     return umq_ub_transport_pool_resource_modify_impl(umqh_tp, tp_handle_idx);
 }
 
-static uint32_t umq_tp_ub_transport_pool_resource_create(uint64_t umqh_tp)
+static uint32_t umq_tp_ub_transport_pool_resource_create(uint64_t umqh_tp, umq_tp_resource_create_option_t *option)
 {
-    return umq_ub_transport_pool_resource_create_impl(umqh_tp);
+    return umq_ub_transport_pool_resource_create_impl(umqh_tp, option);
 }
 
 static int umq_tp_ub_transport_pool_resource_destroy(uint64_t umqh_tp, uint32_t tp_handle_idx)
