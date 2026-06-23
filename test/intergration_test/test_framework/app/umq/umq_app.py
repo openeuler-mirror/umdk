@@ -192,6 +192,9 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, rand_host=True, 
                 continue
             t_mode = get_tp_mode(_tp_mode)
             for _tp_type in tp_type:
+                # 当前不支持CTP + RC
+                if _tp_type not in const.TP_KIND or (_tp_type == 'CTP' and _tp_mode == 'RC'):
+                    continue
                 t_type = get_tp_type(_tp_type)
 
                 _appid = 1
@@ -232,6 +235,6 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, rand_host=True, 
                         if p_list[i].ret != 0:
                             log.error(f"exec_test_case failed! p_list[{i}].ret={p_list[i].ret}!")
                             raise
-            p_list = []
+                    p_list = []
         return p_list
             
