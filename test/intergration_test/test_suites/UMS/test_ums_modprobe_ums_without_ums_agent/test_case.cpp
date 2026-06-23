@@ -15,7 +15,7 @@ static int run_test(test_ums_ctx_t *ctx)
     int rc = TEST_FAILED;
     int check_num;
     char setup_env[MAX_EXEC_CMD_RET_LEN];
-    char test_ip_str[10]={0};
+    char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
     char recover_env[MAX_EXEC_CMD_RET_LEN];
 
@@ -57,7 +57,7 @@ static int run_test(test_ums_ctx_t *ctx)
 
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------2");
+    sync_time("----------------------------5");
     return rc;
 }
 
