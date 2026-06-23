@@ -8,6 +8,8 @@
 
 #include <netlink/msg.h>
 
+#include "bondp_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,8 +17,10 @@ extern "C" {
 void bondp_fb_handle_notify_nl_msg(struct nlattr *attrs[]);
 void bondp_fb_handle_done_nl_msg(struct nlattr *attrs[]);
 
-int bondp_fb_init(void);
-void bondp_fb_uninit(void);
+int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx);
+
+int bondp_fb_init(bondp_context_t *bond_ctx);
+void bondp_fb_uninit(bondp_context_t *bond_ctx);
 
 #ifdef __cplusplus
 }

@@ -103,6 +103,8 @@ typedef struct bondp_health_check_cfg {
     uint32_t active_max_backoff;
 } bondp_health_check_cfg_t;
 
+typedef struct bondp_fb_ctx bondp_fb_ctx_t;
+
 typedef struct bondp_health_thread_ctx {
     bool enable_health_check;
     int health_epoll_fd;
@@ -154,6 +156,7 @@ typedef struct bondp_context {
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
     int real_async_fd; /* vcontex async_fd */
+    bondp_fb_ctx_t *fb_ctx;
     bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
     bool msn_enable;

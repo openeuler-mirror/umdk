@@ -18,6 +18,7 @@
 
 #include "bondp_netlink.h"
 #include "bondp_types.h"
+#include "bondp_worker.h"
 #include "ub_hmap.h"
 #include "ubagg_ioctl.h"
 #include "urma_log.h"
@@ -46,7 +47,6 @@ typedef struct bondp_nl_fb_result {
 } bondp_nl_fb_result_t;
 
 typedef struct bondp_fb_task_key {
-    urma_eid_t src_eid;
     uint32_t vjetty_id;
     uint32_t pjetty_idx;
 } bondp_fb_task_key_t;
@@ -54,25 +54,32 @@ typedef struct bondp_fb_task_key {
 typedef struct bondp_fb_task {
     struct ub_hmap_node hmap_node;
     urma_ref_t use_cnt;
+    bondp_context_t *bond_ctx;
+    bondp_worker_task_id_t worker_task_id;
     uint32_t request_id;
-    urma_eid_t src_eid;
     uint32_t vjetty_id;
     uint32_t pjetty_idx;
 } bondp_fb_task_t;
 
+struct bondp_fb_ctx {
+    struct ub_hmap task_map;
+    pthread_rwlock_t task_lock;
+#ifndef __cplusplus
+    atomic_uint request_id;
+#else
+    std::atomic_uint request_id;
+#endif
+};
+
 #define BONDP_FB_TASK_HASH_BASIS 0x9d4f21U
 #define BONDP_FB_TASK_TABLE_SIZE 1024U
 
-static struct ub_hmap g_task_map;
-static pthread_rwlock_t g_task_lock = PTHREAD_RWLOCK_INITIALIZER;
-static atomic_uint g_request_id = 0;
-
-static uint32_t next_request_id(void)
+static uint32_t next_request_id(bondp_fb_ctx_t *fb_ctx)
 {
-    return atomic_fetch_add(&g_request_id, 1) + 1;
+    return atomic_fetch_add(&fb_ctx->request_id, 1) + 1;
 }
 
-static void init_request_id(void)
+static void init_request_id(bondp_fb_ctx_t *fb_ctx)
 {
     struct timespec ts = {0};
     uint32_t seed;
@@ -83,181 +90,237 @@ static void init_request_id(void)
         seed = (uint32_t)ts.tv_nsec ^ (uint32_t)ts.tv_sec ^ (uint32_t)getpid();
     }
 
-    atomic_store(&g_request_id, seed);
+    atomic_store(&fb_ctx->request_id, seed);
 }
 
-static bool fb_task_comp_f(struct ub_hmap_node *node, void *key)
+static bool fb_task_matches_key(const struct ub_hmap_node *node, const bondp_fb_task_key_t *key)
 {
-    bondp_fb_task_t *fb_task = CONTAINER_OF_FIELD(node, bondp_fb_task_t, hmap_node);
-    bondp_fb_task_key_t *fb_key = key;
+    const bondp_fb_task_t *fb_task = CONTAINER_OF_FIELD(node, bondp_fb_task_t, hmap_node);
 
-    return memcmp(&fb_task->src_eid, &fb_key->src_eid, sizeof(fb_task->src_eid)) == 0 &&
-           fb_task->vjetty_id == fb_key->vjetty_id &&
-           fb_task->pjetty_idx == fb_key->pjetty_idx;
+    return fb_task->vjetty_id == key->vjetty_id &&
+           fb_task->pjetty_idx == key->pjetty_idx;
 }
 
-static uint32_t fb_task_hash_f(void *key)
+static uint32_t fb_task_hash_key(const bondp_fb_task_key_t *key)
 {
     return ub_hash_bytes(key, sizeof(bondp_fb_task_key_t), BONDP_FB_TASK_HASH_BASIS);
 }
 
-static int bondp_fb_task_table_create(void)
+static bondp_fb_ctx_t *fb_task_table_create(void)
 {
-    return ub_hmap_init(&g_task_map, BONDP_FB_TASK_TABLE_SIZE);
+    bondp_fb_ctx_t *fb_ctx = calloc(1, sizeof(*fb_ctx));
+    if (fb_ctx == NULL) {
+        return NULL;
+    }
+
+    if (pthread_rwlock_init(&fb_ctx->task_lock, NULL) != 0) {
+        free(fb_ctx);
+        return NULL;
+    }
+
+    if (ub_hmap_init(&fb_ctx->task_map, BONDP_FB_TASK_TABLE_SIZE) != 0) {
+        (void)pthread_rwlock_destroy(&fb_ctx->task_lock);
+        free(fb_ctx);
+        return NULL;
+    }
+
+    return fb_ctx;
 }
 
-static void bondp_fb_task_free(bondp_fb_task_t *fb_task)
+static void fb_task_free(bondp_fb_task_t *fb_task)
 {
     free(fb_task);
 }
 
-static __attribute__((unused)) void bondp_fb_task_put(bondp_fb_task_t *fb_task)
+static void fb_task_get(bondp_fb_task_t *fb_task)
 {
-    if (fb_task == NULL) {
-        return;
-    }
+    (void)atomic_fetch_add(&fb_task->use_cnt.atomic_cnt, 1);
+}
 
-    (void)pthread_rwlock_wrlock(&g_task_lock);
-    unsigned long use_cnt = atomic_fetch_sub(&fb_task->use_cnt.atomic_cnt, 1);
-    (void)pthread_rwlock_unlock(&g_task_lock);
-    if (use_cnt == 1) {
-        bondp_fb_task_free(fb_task);
+static void fb_task_put(bondp_fb_task_t *fb_task)
+{
+    if (atomic_fetch_sub(&fb_task->use_cnt.atomic_cnt, 1) == 1) {
+        fb_task_free(fb_task);
     }
 }
 
-static void bondp_fb_task_table_destroy(void)
+static void fb_task_table_destroy(bondp_fb_ctx_t *fb_ctx)
 {
     bondp_fb_task_t *fb_task = NULL;
     bondp_fb_task_t *next = NULL;
 
-    (void)pthread_rwlock_wrlock(&g_task_lock);
-    HMAP_FOR_EACH_SAFE (fb_task, next, hmap_node, &g_task_map) {
-        ub_hmap_remove(&g_task_map, &fb_task->hmap_node);
-        bondp_fb_task_free(fb_task);
+    (void)pthread_rwlock_wrlock(&fb_ctx->task_lock);
+    HMAP_FOR_EACH_SAFE (fb_task, next, hmap_node, &fb_ctx->task_map) {
+        if (fb_task->worker_task_id != 0) {
+            int ret = bondp_worker_cancel(fb_task->worker_task_id);
+            if (ret != 0 && ret != -ENOENT) {
+                URMA_LOG_WARN("Failed to cancel failback task, task_id=%lu, ret=%d.\n",
+                              fb_task->worker_task_id, ret);
+            }
+        }
+        ub_hmap_remove(&fb_ctx->task_map, &fb_task->hmap_node);
+        fb_task_put(fb_task);
     }
-    ub_hmap_destroy(&g_task_map);
-    (void)pthread_rwlock_unlock(&g_task_lock);
+    ub_hmap_destroy(&fb_ctx->task_map);
+    (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
+    (void)pthread_rwlock_destroy(&fb_ctx->task_lock);
+    free(fb_ctx);
 }
 
-static __attribute__((unused)) bondp_fb_task_t *bondp_fb_task_lookup(
-    const urma_eid_t *src_eid, uint32_t vjetty_id, uint32_t pjetty_idx)
+static bondp_fb_task_t *fb_task_lookup(bondp_fb_ctx_t *fb_ctx, const bondp_fb_task_key_t *key)
 {
+    uint32_t hash = fb_task_hash_key(key);
     bondp_fb_task_t *fb_task = NULL;
-    bondp_fb_task_key_t key = {0};
-    uint32_t hash;
 
-    if (src_eid == NULL) {
-        return NULL;
-    }
-
-    key.src_eid = *src_eid;
-    key.vjetty_id = vjetty_id;
-    key.pjetty_idx = pjetty_idx;
-
-    hash = fb_task_hash_f(&key);
-    (void)pthread_rwlock_wrlock(&g_task_lock);
-    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &g_task_map) {
-        if (!fb_task_comp_f(&fb_task->hmap_node, &key)) {
+    (void)pthread_rwlock_rdlock(&fb_ctx->task_lock);
+    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &fb_ctx->task_map) {
+        if (!fb_task_matches_key(&fb_task->hmap_node, key)) {
             continue;
         }
-        (void)atomic_fetch_add(&fb_task->use_cnt.atomic_cnt, 1);
+        fb_task_get(fb_task);
         break;
     }
-    (void)pthread_rwlock_unlock(&g_task_lock);
+    (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
     return fb_task;
 }
 
-static __attribute__((unused)) int bondp_fb_task_add(const bondp_nl_fb_task_t *task)
+static int fb_task_add(bondp_fb_ctx_t *fb_ctx, bondp_fb_task_t *task)
 {
-    bondp_fb_task_t *new_task = NULL;
+    bondp_fb_task_key_t key = {
+        .vjetty_id = task->vjetty_id,
+        .pjetty_idx = task->pjetty_idx,
+    };
+    uint32_t hash = fb_task_hash_key(&key);
     bondp_fb_task_t *fb_task = NULL;
-    bondp_fb_task_key_t key = {0};
-    uint32_t hash;
 
-    if (task == NULL) {
-        return -EINVAL;
-    }
-
-    key.src_eid = task->src_eid;
-    key.vjetty_id = task->vjetty_id;
-    key.pjetty_idx = task->pjetty_idx;
-
-    new_task = calloc(1, sizeof(*new_task));
-    if (new_task == NULL) {
-        return -ENOMEM;
-    }
-
-    new_task->request_id = next_request_id();
-    new_task->src_eid = task->src_eid;
-    new_task->vjetty_id = task->vjetty_id;
-    new_task->pjetty_idx = task->pjetty_idx;
-    atomic_init(&new_task->use_cnt.atomic_cnt, 1);
-
-    hash = fb_task_hash_f(&key);
-    (void)pthread_rwlock_wrlock(&g_task_lock);
-    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &g_task_map) {
-        if (!fb_task_comp_f(&fb_task->hmap_node, &key)) {
+    (void)pthread_rwlock_wrlock(&fb_ctx->task_lock);
+    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &fb_ctx->task_map) {
+        if (!fb_task_matches_key(&fb_task->hmap_node, &key)) {
             continue;
         }
-        (void)pthread_rwlock_unlock(&g_task_lock);
-        free(new_task);
+        (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
         return -EEXIST;
     }
-    ub_hmap_insert(&g_task_map, &new_task->hmap_node, hash);
-    (void)pthread_rwlock_unlock(&g_task_lock);
+    ub_hmap_insert(&fb_ctx->task_map, &task->hmap_node, hash);
+    (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
     return 0;
 }
 
-static __attribute__((unused)) int bondp_fb_task_del(
-    const urma_eid_t *src_eid, uint32_t vjetty_id, uint32_t pjetty_idx)
+static int fb_task_del(bondp_fb_ctx_t *fb_ctx, const bondp_fb_task_key_t *key)
 {
+    uint32_t hash = fb_task_hash_key(key);
     bondp_fb_task_t *fb_task = NULL;
-    bondp_fb_task_key_t key = {0};
-    uint32_t hash;
 
-    if (src_eid == NULL) {
-        return -EINVAL;
-    }
-
-    key.src_eid = *src_eid;
-    key.vjetty_id = vjetty_id;
-    key.pjetty_idx = pjetty_idx;
-
-    hash = fb_task_hash_f(&key);
-    (void)pthread_rwlock_wrlock(&g_task_lock);
-    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &g_task_map) {
-        if (!fb_task_comp_f(&fb_task->hmap_node, &key)) {
+    (void)pthread_rwlock_wrlock(&fb_ctx->task_lock);
+    HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &fb_ctx->task_map) {
+        if (!fb_task_matches_key(&fb_task->hmap_node, key)) {
             continue;
         }
 
-        unsigned long use_cnt = atomic_fetch_sub(&fb_task->use_cnt.atomic_cnt, 1);
-        ub_hmap_remove(&g_task_map, &fb_task->hmap_node);
-        (void)pthread_rwlock_unlock(&g_task_lock);
-        if (use_cnt == 1) {
-            bondp_fb_task_free(fb_task);
-        }
+        ub_hmap_remove(&fb_ctx->task_map, &fb_task->hmap_node);
+        (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
+        fb_task_put(fb_task);
         return 0;
     }
-    (void)pthread_rwlock_unlock(&g_task_lock);
+    (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
     return -ENOENT;
 }
 
-static __attribute__((unused)) int bondp_fb_user_ctl_start(
-    bondp_context_t *bdp_ctx, const bondp_nl_fb_task_t *task)
+typedef struct bondp_fb_async_arg {
+    bondp_fb_ctx_t *fb_ctx;
+    bondp_fb_task_key_t key;
+} bondp_fb_async_arg_t;
+
+static void bondp_rebuild_jetty(void *arg)
 {
-    if (bdp_ctx == NULL || task == NULL) {
+    bondp_fb_async_arg_t *arg_typed = arg;
+
+    if (arg_typed == NULL) {
+        return;
+    }
+
+    if (arg_typed->fb_ctx == NULL) {
+        free(arg_typed);
+        return;
+    }
+
+    bondp_fb_task_t *fb_task = NULL;
+    fb_task = fb_task_lookup(arg_typed->fb_ctx, &arg_typed->key);
+    free(arg_typed);
+    if (fb_task == NULL) {
+        return;
+    }
+
+    fb_task_put(fb_task);
+}
+
+int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx)
+{
+    if (bond_ctx == NULL || bond_ctx->fb_ctx == NULL) {
         return -EINVAL;
     }
 
+    bondp_fb_ctx_t *fb_ctx = bond_ctx->fb_ctx;
+    bondp_fb_task_t *fb_task = calloc(1, sizeof(*fb_task));
+    if (fb_task == NULL) {
+        return -ENOMEM;
+    }
+
+    fb_task->bond_ctx = bond_ctx;
+    fb_task->request_id = next_request_id(fb_ctx);
+    fb_task->vjetty_id = vjetty_id;
+    fb_task->pjetty_idx = pjetty_idx;
+    atomic_init(&fb_task->use_cnt.atomic_cnt, 1);
+
+    int ret = fb_task_add(fb_ctx, fb_task);
+    if (ret != 0) {
+        free(fb_task);
+        return ret;
+    }
+
+    bondp_fb_task_key_t key = {
+        .vjetty_id = vjetty_id,
+        .pjetty_idx = pjetty_idx,
+    };
+    bondp_fb_async_arg_t *async_arg = calloc(1, sizeof(*async_arg));
+    if (async_arg == NULL) {
+        (void)fb_task_del(fb_ctx, &key);
+        return -ENOMEM;
+    }
+    async_arg->fb_ctx = fb_ctx;
+    async_arg->key = key;
+
+    ret = bondp_worker_schedule(1, bondp_rebuild_jetty, async_arg, &fb_task->worker_task_id);
+    if (ret != 0) {
+        free(async_arg);
+        (void)fb_task_del(fb_ctx, &key);
+        URMA_LOG_ERR("Failed to schedule failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d.\n",
+                     vjetty_id, pjetty_idx, ret);
+        return ret;
+    }
+
+    return 0;
+}
+
+static __attribute__((unused)) int bondp_fb_user_ctl_start(
+    bondp_fb_task_t *task, uint32_t node_idx)
+{
+    bondp_nl_fb_task_t nl_task = {
+        .request_id = task->request_id,
+        .vjetty_id = task->vjetty_id,
+        .pjetty_idx = task->pjetty_idx,
+    };
+
     urma_user_ctl_in_t in = {
         .opcode = FAILBACK_START,
-        .addr = (uint64_t)(uintptr_t)task,
-        .len = sizeof(*task),
+        .addr = (uint64_t)(uintptr_t)&nl_task,
+        .len = sizeof(nl_task),
     };
     urma_user_ctl_out_t out = {0};
     urma_udrv_t udrv = {0};
 
-    return urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &udrv);
+    bondp_context_t *bond_ctx = task->bond_ctx;
+    return urma_cmd_user_ctl(&bond_ctx->v_ctx, &in, &out, &udrv);
 }
 
 static __attribute__((unused)) int bondp_fb_user_ctl_result(
@@ -326,17 +389,27 @@ void bondp_fb_handle_done_nl_msg(struct nlattr *attrs[])
     bondp_fb_handle_done(&result);
 }
 
-int bondp_fb_init(void)
+int bondp_fb_init(bondp_context_t *bond_ctx)
 {
-    if (bondp_fb_task_table_create() != 0) {
+    if (bond_ctx == NULL) {
+        return -EINVAL;
+    }
+
+    bond_ctx->fb_ctx = fb_task_table_create();
+    if (bond_ctx->fb_ctx == NULL) {
         return -ENOMEM;
     }
 
-    init_request_id();
+    init_request_id(bond_ctx->fb_ctx);
     return 0;
 }
 
-void bondp_fb_uninit(void)
+void bondp_fb_uninit(bondp_context_t *bond_ctx)
 {
-    bondp_fb_task_table_destroy();
+    if (bond_ctx == NULL || bond_ctx->fb_ctx == NULL) {
+        return;
+    }
+
+    fb_task_table_destroy(bond_ctx->fb_ctx);
+    bond_ctx->fb_ctx = NULL;
 }
