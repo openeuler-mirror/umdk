@@ -351,6 +351,7 @@ static const char *umq_urma_func_str(umq_urma_func_type_t func_type)
         [UMQ_URMA_FUNC_REARM_JFC]     = "urma_rearm_jfc",
         [UMQ_URMA_FUNC_FC_REARM_JFC]  = "urma_rearm_jfc(fc)",
         [UMQ_URMA_FUNC_FC_POST_TX]    = "urma_post_jetty_send_wr(fc)",
+        [UMQ_URMA_FUNC_FC_POST_RX]    = "urma_post_jetty_recv_wr(fc)",
         [UMQ_URMA_FUNC_FC_POLL_RX]    = "urma_poll_jfc(fc rx)",
     };
     return (func_type < UMQ_URMA_FUNC_MAX) ? func_str[func_type] : "UNKNOWN";
