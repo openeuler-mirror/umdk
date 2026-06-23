@@ -630,6 +630,32 @@ static inline int urma_check_order_type(urma_transport_mode_t trans_mode,
     return 0;
 }
 
+static int urma_convert_order_type(urma_transport_mode_t trans_mode, uint32_t *order_type)
+{
+    if (order_type == NULL) {
+        return -1;
+    }
+
+    // If order_type is 0 (URMA_DEF_ORDER), convert based on trans_mode
+    if (*order_type == URMA_DEF_ORDER) {
+        switch (trans_mode) {
+            case URMA_TM_RM:
+                *order_type = URMA_OI;
+                break;
+            case URMA_TM_RC:
+                *order_type = URMA_OL;
+                break;
+            case URMA_TM_UM:
+                *order_type = URMA_NO;
+                break;
+            default:
+                return -1;
+        }
+    }
+
+    return 0;
+}
+
 urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
 {
     if (ctx == NULL || jfs_cfg == NULL || jfs_cfg->jfc == NULL) {
@@ -646,11 +672,19 @@ urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
 
     uint32_t order_type = jfs_cfg->flag.bs.order_type;
     if (urma_check_order_type(jfs_cfg->trans_mode, order_type) != 0) {
-        URMA_LOG_ERR("Invalid parameter, trans_mode=%d, order_type=%u.\n", (int)jfs_cfg->flag.bs.order_type,
-                     order_type);
+        URMA_LOG_ERR("Invalid order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jfs_cfg->trans_mode, order_type);
         errno = EINVAL;
         return NULL;
     }
+
+    if (urma_convert_order_type(jfs_cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jfs_cfg->trans_mode, jfs_cfg->flag.bs.order_type);
+        errno = EINVAL;
+        return NULL;
+    }
+    jfs_cfg->flag.bs.order_type = order_type;
 
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jfs);
@@ -844,6 +878,14 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
         return URMA_EINVAL;
     }
 
+    uint32_t order_type = cfg->flag.bs.order_type;
+    if (urma_convert_order_type(cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)cfg->trans_mode, cfg->flag.bs.order_type);
+        return URMA_EINVAL;
+    }
+    cfg->flag.bs.order_type = order_type;
+
     /* urma_alloc_jfs alloc memory for jetty context, so we just check the validity of input parameters,
      * while detailed cfg parameters will be check in urma_active_jfs.
      */
@@ -937,10 +979,17 @@ urma_status_t urma_active_jfs(urma_jfs_t *jfs)
 
     uint32_t order_type = jfs_cfg->flag.bs.order_type;
     if (urma_check_order_type(jfs_cfg->trans_mode, order_type) != 0) {
-        URMA_LOG_ERR("Invalid parameter, trans_mode=%d, order_type=%u.\n", (int)jfs_cfg->flag.bs.order_type,
-                     order_type);
+        URMA_LOG_ERR("Invalid order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jfs_cfg->trans_mode, order_type);
         return URMA_EINVAL;
     }
+
+    if (urma_convert_order_type(jfs_cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jfs_cfg->trans_mode, jfs_cfg->flag.bs.order_type);
+        return URMA_EINVAL;
+    }
+    jfs_cfg->flag.bs.order_type = order_type;
 
     urma_context_t *urma_ctx = jfs->urma_ctx;
     urma_jfs_cfg_t *cfg = &jfs->jfs_cfg;
@@ -1008,6 +1057,15 @@ urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *jfr_cfg)
         errno = EINVAL;
         return NULL;
     }
+
+    uint32_t order_type = jfr_cfg->flag.bs.order_type;
+    if (urma_convert_order_type(jfr_cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jfr_cfg->trans_mode, jfr_cfg->flag.bs.order_type);
+        errno = EINVAL;
+        return NULL;
+    }
+    jfr_cfg->flag.bs.order_type = order_type;
 
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jfr);
@@ -1208,6 +1266,15 @@ urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urm
         return NULL;
     }
 
+    uint32_t order_type = rjfr->flag.bs.order_type;
+    if (urma_convert_order_type(rjfr->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)rjfr->trans_mode, rjfr->flag.bs.order_type);
+        errno = EINVAL;
+        return NULL;
+    }
+    rjfr->flag.bs.order_type = order_type;
+
     urma_ops_t *ops = ctx->ops;
     if (urma_check_ctrlplane_compat(ops->import_jfr)) {
         return urma_import_jfr_compat(ctx, rjfr, token_value);
@@ -1229,6 +1296,16 @@ urma_target_jetty_t *urma_import_jfr_ex(urma_context_t *ctx, urma_rjfr_t *rjfr, 
         errno = EINVAL;
         return NULL;
     }
+
+    uint32_t order_type = rjfr->flag.bs.order_type;
+    if (urma_convert_order_type(rjfr->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)rjfr->trans_mode, rjfr->flag.bs.order_type);
+        errno = EINVAL;
+        return NULL;
+    }
+    rjfr->flag.bs.order_type = order_type;
+
     urma_ops_t *ops = NULL;
 
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, import_jfr_ex);
@@ -1266,6 +1343,14 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+
+    uint32_t order_type = cfg->flag.bs.order_type;
+    if (urma_convert_order_type(cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)cfg->trans_mode, cfg->flag.bs.order_type);
+        return URMA_EINVAL;
+    }
+    cfg->flag.bs.order_type = order_type;
 
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfr);
@@ -1352,6 +1437,14 @@ urma_status_t urma_active_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("Invalid parameter, trans_mode=%d.\n", (int)cfg->trans_mode);
         return URMA_EINVAL;
     }
+
+    uint32_t order_type = cfg->flag.bs.order_type;
+    if (urma_convert_order_type(cfg->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)cfg->trans_mode, cfg->flag.bs.order_type);
+        return URMA_EINVAL;
+    }
+    cfg->flag.bs.order_type = order_type;
 
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, active_jfr);
 
@@ -1474,9 +1567,28 @@ static int urma_create_jetty_check_trans_mode(urma_context_t *ctx, urma_jetty_cf
 
     uint32_t order_type = jetty_cfg->jfs_cfg.flag.bs.order_type;
     if (urma_check_order_type(jetty_cfg->jfs_cfg.trans_mode, order_type) != 0) {
-        URMA_LOG_ERR("Invalid parameter, trans_mode=%d, order_type=%u.\n", (int)jetty_cfg->jfs_cfg.trans_mode,
-                     order_type);
+        URMA_LOG_ERR("Invalid order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jetty_cfg->jfs_cfg.trans_mode, order_type);
         return -1;
+    }
+
+    if (urma_convert_order_type(jetty_cfg->jfs_cfg.trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)jetty_cfg->jfs_cfg.trans_mode, jetty_cfg->jfs_cfg.flag.bs.order_type);
+        return -1;
+    }
+    jetty_cfg->jfs_cfg.flag.bs.order_type = order_type;
+
+    // Convert jfr order_type before comparison
+    uint32_t jfr_order_type;
+    if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR && jetty_cfg->jfr_cfg != NULL) {
+        jfr_order_type = jetty_cfg->jfr_cfg->flag.bs.order_type;
+        if (urma_convert_order_type(jetty_cfg->jfr_cfg->trans_mode, &jfr_order_type) != 0) {
+            URMA_LOG_ERR("Failed to convert jfr order_type for trans_mode=%d, order_type=%u.\n",
+                         (int)jetty_cfg->jfr_cfg->trans_mode, jetty_cfg->jfr_cfg->flag.bs.order_type);
+            return -1;
+        }
+        jetty_cfg->jfr_cfg->flag.bs.order_type = jfr_order_type;
     }
 
     if (jetty_cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR &&
@@ -1898,6 +2010,14 @@ urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjett
         return NULL;
     }
 
+    uint32_t order_type = rjetty->flag.bs.order_type;
+    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)rjetty->trans_mode, rjetty->flag.bs.order_type);
+        return NULL;
+    }
+    rjetty->flag.bs.order_type = order_type;
+
     if (urma_check_tp_type_valid(rjetty->trans_mode, rjetty->tp_type) != 0) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return NULL;
@@ -1924,6 +2044,15 @@ urma_target_jetty_t *urma_import_jetty_ex(urma_context_t *ctx, urma_rjetty_t *rj
         errno = EINVAL;
         return NULL;
     }
+
+    uint32_t order_type = rjetty->flag.bs.order_type;
+    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)rjetty->trans_mode, rjetty->flag.bs.order_type);
+        return NULL;
+    }
+    rjetty->flag.bs.order_type = order_type;
+
     urma_ops_t *ops = NULL;
     urma_target_jetty_t *tjetty = NULL;
 
@@ -2272,6 +2401,26 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
     if (urma_ctx == NULL || cfg == NULL || urma_ctx->dev == NULL || jetty == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
+    }
+
+    // Convert jfs order_type
+    uint32_t jfs_order_type = cfg->jfs_cfg.flag.bs.order_type;
+    if (urma_convert_order_type(cfg->jfs_cfg.trans_mode, &jfs_order_type) != 0) {
+        URMA_LOG_ERR("Failed to convert jfs order_type for trans_mode=%d, order_type=%u.\n",
+                     (int)cfg->jfs_cfg.trans_mode, cfg->jfs_cfg.flag.bs.order_type);
+        return URMA_EINVAL;
+    }
+    cfg->jfs_cfg.flag.bs.order_type = jfs_order_type;
+
+    // Convert jfr order_type if not shared
+    if (cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR && cfg->jfr_cfg != NULL) {
+        uint32_t jfr_order_type = cfg->jfr_cfg->flag.bs.order_type;
+        if (urma_convert_order_type(cfg->jfr_cfg->trans_mode, &jfr_order_type) != 0) {
+            URMA_LOG_ERR("Failed to convert jfr order_type for trans_mode=%d, order_type=%u.\n",
+                         (int)cfg->jfr_cfg->trans_mode, cfg->jfr_cfg->flag.bs.order_type);
+            return URMA_EINVAL;
+        }
+        cfg->jfr_cfg->flag.bs.order_type = jfr_order_type;
     }
 
     urma_ops_t *ops = NULL;
