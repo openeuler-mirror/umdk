@@ -151,7 +151,7 @@ static void read_all_env(bondp_global_context_t *ctx)
 {
     bondp_health_thread_ctx_t *thread_ctx = &ctx->health_thread_ctx;
     const bool default_enable_health_check = false;
-    const bool default_enable_failback = true;
+    const bool default_enable_failback = false;
     const bool default_enable_failover = true;
     const uint64_t default_health_check_backup_start_ms = 2000;
     const uint64_t default_health_check_backup_interval_ms = 32000;
