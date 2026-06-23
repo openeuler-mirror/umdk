@@ -1336,6 +1336,7 @@ UMDK支持向接收端发送立即数，见urma_post_jfs_wr接口，所发送的
 | DFX接口 | urma_admin查询 | 设备属性 | port_attr | active_width | 活跃链路宽度 | √ | √ |
 | DFX接口 | urma_admin查询 | 设备属性 | port_attr | active_speed | 活跃速率 | √ | √ |
 | DFX接口 | urma_admin查询 | 设备属性 | port_attr | active_mtu | 活跃MTU | √ | √ |
+| DFX接口 | urma_admin查询 | 拓扑信息 | UE | cna | `urma_admin show topo [NODE_ID]` 按 UE 端口打印的 CNA EID；`Invalid EID` 表示该端口没有有效 CNA EID。 | √ | √ |
 | DFX接口 | urma_admin查询 | upi | — | — | UPI查询 | — | — |
 | DFX接口 | urma_perftest | perftest测试类型配置 | send_lat | — | 发送时延测试 | √ | √ |
 | DFX接口 | urma_perftest | perftest测试类型配置 | read_lat | — | 读时延测试 | √ | √ |

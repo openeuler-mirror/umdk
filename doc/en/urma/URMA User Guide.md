@@ -1294,6 +1294,7 @@ The following scenarios trigger the JFC to generate a completion record:
 | DFX Interface | urma_admin Query | Device attributes | port_attr | active_width | Active link width | √ | √ |
 | DFX Interface | urma_admin Query | Device attributes | port_attr | active_speed | Active link speed | √ | √ |
 | DFX Interface | urma_admin Query | Device attributes | port_attr | active_mtu | Active MTU | √ | √ |
+| DFX Interface | urma_admin Query | Topology information | UE | cna | CNA EID of each UE port printed by `urma_admin show topo [NODE_ID]`; `Invalid EID` means the port has no valid CNA EID. | √ | √ |
 | DFX Interface | urma_admin Query | upi | — | — | UPI query | — | — |
 | DFX Interface | urma_perftest | Test type config | send_lat | — | Send latency test | √ | √ |
 | DFX Interface | urma_perftest | Test type config | read_lat | — | Read latency test | √ | √ |

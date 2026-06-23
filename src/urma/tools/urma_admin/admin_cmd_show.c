@@ -1187,6 +1187,16 @@ static int admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id, con
                     (void)printf("\t\t\t Port %d: %s\n", port_idx, eid_str);
                 }
             }
+
+            printf("\t\t Cna:\n");
+            for (uint32_t port_idx = 0; port_idx < PORT_NUM; port_idx++) {
+                if (!admin_is_eid_valid(ue->cna[port_idx])) {
+                    (void)printf("\t\t\t Port %d: Invalid EID\n", port_idx);
+                } else {
+                    urma_eid_to_ipv6_str((urma_eid_t *)ue->cna[port_idx], eid_str, sizeof(eid_str));
+                    (void)printf("\t\t\t Port %d: %s\n", port_idx, eid_str);
+                }
+            }
         }
     }
     (void)printf("========================== topo map end =============================\n");
