@@ -276,7 +276,7 @@ void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX
         while (*tp_type_start != '\0' && isspace((unsigned char)*tp_type_start)) {
             tp_type_start++;
         }
-        if (*tp_type_start != '\0')
+        if (*tp_type_start == '\0')
             break;
         strncpy(buffer, tp_type_start, 3);
         buffer[3] = '\0';
@@ -285,7 +285,7 @@ void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX
             strcpy(priority_list[idx], buffer);
             idx++;
         }
-        tp_type_start+= 3;
+        tp_type_start += 3;
     }
 
     for (int i = idx; i < MAX_PRIORITY_NUM; i++) {
@@ -306,7 +306,7 @@ uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
                 return i;
             }
         } else if (ctx->tp_type == UMQ_TP_TYPE_CTP) {
-            if (strncmp(priority_list[i], "cTP", 3) == 0) {
+            if (strncmp(priority_list[i], "CTP", 3) == 0) {
                 return i;
             }
         }
@@ -435,13 +435,14 @@ int set_umq_creat_option(test_umq_ctx_t *ctx, bool all_interrupt)
                 rc++;
             }
             ctx->umqh_ops[i].option.create_flag = UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_RX_DEPTH | UMQ_CREATE_FLAG_TX_BUF_SIZE |
-                UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_QUEUE_MODE;
+                UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE | UMQ_CREATE_FLAG_TP_TYPE | UMQ_CREATE_FLAG_PRIORITY;
             ctx->umqh_ops[i].option.tx_depth = UMQ_DEFAULT_TX_DEPTH;
             ctx->umqh_ops[i].option.rx_depth = UMQ_DEFAULT_RX_DEPTH;
             ctx->umqh_ops[i].option.tx_buf_size = UMQ_DEFAULT_TX_BUF_SIZE;
             ctx->umqh_ops[i].option.rx_buf_size = UMQ_DEFAULT_RX_BUF_SIZE;
             ctx->umqh_ops[i].option.tp_mode = ctx->tp_mode ? ctx->tp_mode : UMQ_TM_RC;
             ctx->umqh_ops[i].option.tp_type = ctx->tp_type ? ctx->tp_type : UMQ_TP_TYPE_RTP;
+            ctx->umqh_ops[i].option.priority = ctx->priority;
 
             if (ctx->is_bonding) {
                 ret = get_used_ports(ctx, &ctx->umqh_ops[i]);
