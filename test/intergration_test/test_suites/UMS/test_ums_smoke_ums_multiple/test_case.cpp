@@ -15,8 +15,14 @@ static int run_test(test_ums_ctx_t *ctx)
 {
     int ret = 0;
     int rc = TEST_FAILED;
+    char setup_env[MAX_EXEC_CMD_RET_LEN];
     char test_ip_str[100]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
+
+    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+    
+    sync_time("----------------------------0");
+
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf -lp ${i} & done", ctx->test_port,  ctx->test_port + 10);
@@ -29,10 +35,12 @@ static int run_test(test_ums_ctx_t *ctx)
     sync_time("----------------------------2");
     
     // 校验流量走ums
-    sprintf(test_ip_str, "%d", ctx->test_ip);
-    int check_num = query_proc_net_ums_detail_stream_num("False", test_ip_str);
-    if (ctx->app_id == PROC_2 && check_num != 20) {
-        ret = -1;
+    if (ctx->app_id == PROC_2) {
+        sprintf(test_ip_str, "%d", ctx->test_ip);
+        int check_num = query_proc_net_ums_detail_stream_num("False", test_ip_str);
+        if (check_num != 20) {
+            ret = -1;
+        }
     }
     CHKERR_JUMP(ret != TEST_SUCCESS, "ums multiple connect failed", EXIT);
 
