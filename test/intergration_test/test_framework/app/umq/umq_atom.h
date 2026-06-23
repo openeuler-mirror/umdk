@@ -19,6 +19,7 @@
 #include <sys/time.h>
 #include <openssl/md5.h>
 #include <openssl/evp.h>
+#include <ctype.h>
 
 #include "../common/common.h"
 
@@ -52,6 +53,10 @@
 
 #define CQ_EVENT_FLAG_DISABLE 0
 #define CQ_EVENT_FLAG_ENABLE 1
+
+#define PRIORITY_BUF_LEN 8192
+#define MAX_PRIORITY_NUM 16
+#define TP_TYPE_LEN 4
 
 typedef enum {
     TEST_TRANS_MODE_IP = 0,
@@ -142,6 +147,7 @@ typedef struct {
     umq_tp_type_t tp_type;
     bool is_lock_free;
     bool is_bonding;
+    uint8_t priority;
 
 } test_umq_ctx_t;
 
@@ -233,5 +239,7 @@ void test_umq_flush(umqh_ops_t *umqh_ops, umq_io_direction_t direction = UMQ_IO_
 int test_umq_pro_func_req(test_data_args_t *data_args);
 int test_umq_pro_func_rsp(test_data_args_t *data_args);
 int get_used_ports(test_umq_ctx_t *ctx, umqh_ops_t *umqh_ops);
+void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN]);
+uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx);
 
 #endif

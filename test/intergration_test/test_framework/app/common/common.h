@@ -104,6 +104,8 @@ typedef struct test_context {
     uint16_t test_port;
     uint32_t seed;
     uint32_t mode;
+    uint32_t tp_mode;
+    uint32_t tp_type;
     uint32_t tp_kind;
     char *ubsc_ip;
     void *xargs; /* 传入特定参数 */

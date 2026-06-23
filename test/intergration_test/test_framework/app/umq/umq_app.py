@@ -27,6 +27,11 @@ UMQ_TRANS_MODE_IPC = 3
 UMQ_TRANS_MODE_UB_PLUS = 5
 UMQ_TRANS_MODE_UBMM_PLUS = 7
 
+UMQ_TM_RC = 0
+UMQ_TM_RM = 1
+UMQ_TP_TYPE_RTP = 0
+UMQ_TP_TYPE_CTP = 1
+
 def prepare_test_case(host_list, case_path):
     case_cpp = os.path.join(case_path, "test_case.cpp")
     public_cpp = os.path.join(case_path, "../public.cpp")
@@ -87,6 +92,24 @@ def get_trans_mode(mode):
     return trans_mode
 
 
+def get_tp_mode(mode):
+    tp_mode = UMQ_TM_RC
+    if mode == 'RC':
+        tp_mode = UMQ_TM_RC
+    if mode == 'RM':
+        tp_mode = UMQ_TM_RM
+    return tp_mode
+
+
+def get_tp_type(mode):
+    tp_type = UMQ_TP_TYPE_RTP
+    if mode == 'TP':
+        tp_type = UMQ_TP_TYPE_RTP
+    if mode == 'CTP':
+        tp_type = UMQ_TP_TYPE_CTP
+    return tp_type
+
+
 def get_test_dev(case_name, mode, test_host, host_idx):
     test_dev2 = None
 
@@ -130,6 +153,11 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, rand_host=True, 
     test_port = kwargs.get("test_port", _test_port)
     single_host = kwargs.get("single_host", False)
     mode = kwargs.get("mode", [])
+    _tp_mode = kwargs.get("tp_mode", []) or const.URMA_MODE
+    _tp_type = kwargs.get("tp_type", []) or const.TP_KIND
+    tp_mode = [item for item in _tp_mode if item != 'UM']
+    tp_type = [item for item in _tp_type]
+
 
     ip_addrs = kwargs.get("ip_addrs", None)
     ip_addrs_cmd = get_ip_addrs_cmd(ip_addrs)
@@ -152,54 +180,58 @@ def exec_test_case(host_list, path, server_num=1, client_num=1, rand_host=True, 
             for i in range(server_num):
                 test_host.append(host_list[0])
             for i in range(server_num, app_num):
-                if 'IPC' in _mode:
-                    test_host.append(host_list[0])
-                else:
-                    test_host.append(host_list[1])
+                test_host.append(host_list[1])
         
         _test_ip = f'-i {test_host[0].test_nic1_ip},{test_host[-1].test_nic1_ip} ' \
             f'-I {test_host[0].test_nic1_ipv6},{test_host[-1].test_nic1_ipv6} '
 
         trans_mode = get_trans_mode(_mode)
 
-        _appid = 1
-        test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, 0)
-        test_eid = get_test_eid(_case_name, dev_type, test_host, 0)
-        _cmd = f'{path}/test_case -a {app_num}:{_appid}:{tcp_port} -d {test_dev} -D {test_dev2}' \
-            f' -e {test_eid} -p {test_port} -s {seed} {_test_ip} -x {case_path} -m {trans_mode}{ip_addrs_cmd}'
-        p_list.append(test_host[0].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
+        for _tp_mode in tp_mode:
+            if _tp_mode not in const.URMA_MODE:
+                continue
+            t_mode = get_tp_mode(_tp_mode)
+            for _tp_type in tp_type:
+                t_type = get_tp_type(_tp_type)
+
+                _appid = 1
+                test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, 0)
+                test_eid = get_test_eid(_case_name, dev_type, test_host, 0)
+                _cmd = f'{path}/test_case -a {app_num}:{_appid}:{tcp_port} -d {test_dev} -D {test_dev2}' \
+                    f' -e {test_eid} -p {test_port} -s {seed} {_test_ip} -x {case_path} -m {trans_mode} -T {t_mode} -k {t_type} {ip_addrs_cmd}'
+                p_list.append(test_host[0].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
 
 
-        for i in range(1, server_num):
-            log.info(f'-------------------- start app{i} server ---------------------')
-            _appid = i + 1
-            test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, i)
-            test_eid = get_test_eid(_case_name, dev_type, test_host, i)
-            _cmd = f'{path}/test_case -a {app_num}:{i + 1}:{tcp_port}:{test_host[0].manage_ip}' \
-                f' -d {test_dev} -D {test_dev2} -e {test_eid} -p {test_port + i} -s {seed} {_test_ip}' \
-                f'-x {case_path} -m {trans_mode}{ip_addrs_cmd}'
-            p_list.append(test_host[i].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
+                for i in range(1, server_num):
+                    log.info(f'-------------------- start app{i} server ---------------------')
+                    _appid = i + 1
+                    test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, i)
+                    test_eid = get_test_eid(_case_name, dev_type, test_host, i)
+                    _cmd = f'{path}/test_case -a {app_num}:{i + 1}:{tcp_port}:{test_host[0].manage_ip}' \
+                        f' -d {test_dev} -D {test_dev2} -e {test_eid} -p {test_port + i} -s {seed} {_test_ip}' \
+                        f'-x {case_path} -m {trans_mode} -T {t_mode} -k {t_type} {ip_addrs_cmd}'
+                    p_list.append(test_host[i].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
 
-        for i in range(server_num, app_num):
-            log.info(f'-------------------- start app{i} client ---------------------')
-            _appid = i + 1
-            test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, i)
-            test_eid = get_test_eid(_case_name, dev_type, test_host, i)
-            _cmd = f'{path}/test_case -a {app_num}:{i + 1}:{tcp_port}:{test_host[0].manage_ip}' \
-                f' -d {test_dev} -D {test_dev2} -e {test_eid} -p {test_port} -s {seed} {_test_ip} -x {case_path} ' \
-                f'-m {trans_mode}{ip_addrs_cmd}'
-            p_list.append(test_host[i].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
+                for i in range(server_num, app_num):
+                    log.info(f'-------------------- start app{i} client ---------------------')
+                    _appid = i + 1
+                    test_dev, test_dev2 = get_test_dev(_case_name, dev_type, test_host, i)
+                    test_eid = get_test_eid(_case_name, dev_type, test_host, i)
+                    _cmd = f'{path}/test_case -a {app_num}:{i + 1}:{tcp_port}:{test_host[0].manage_ip}' \
+                        f' -d {test_dev} -D {test_dev2} -e {test_eid} -p {test_port} -s {seed} {_test_ip} -x {case_path} ' \
+                        f'-m {trans_mode} -T {t_mode} -k {t_type} {ip_addrs_cmd}'
+                    p_list.append(test_host[i].exec_cmd(_cmd, background=True, timeout=timeout, port=test_port))
 
-        if check is True:
-            for i in range(app_num):
-                log.info(f'----------------- [ Test p{i + 1}.wait() ] ------------------')
-                p_list[i].wait()
+                if check is True:
+                    for i in range(app_num):
+                        log.info(f'----------------- [ Test p{i + 1}.wait() ] ------------------')
+                        p_list[i].wait()
 
-            for i in range(app_num):
-                log.info(f'----------------- [ Test assert p{i + 1} ] ------------------')
-                if p_list[i].ret != 0:
-                    log.error(f"exec_test_case failed! p_list[{i}].ret={p_list[i].ret}!")
-                    raise
+                    for i in range(app_num):
+                        log.info(f'----------------- [ Test assert p{i + 1} ] ------------------')
+                        if p_list[i].ret != 0:
+                            log.error(f"exec_test_case failed! p_list[{i}].ret={p_list[i].ret}!")
+                            raise
             p_list = []
         return p_list
             

@@ -42,7 +42,7 @@ static uint32_t parse_eid_htobe32(char *eid)
 
 int parse_config(int argc, char *argv[])
 {
-    const char *const short_options = "a:d:D:e:s:p:i:u:x:m:k:I:t:M:";
+    const char *const short_options = "a:d:D:e:s:p:i:u:x:m:k:I:t:M:T:";
     struct option long_options[] = {{"app_info", required_argument, NULL, 'a'},
                                     {"device_name", required_argument, NULL, 'd'},
                                     {"device_name2", required_argument, NULL, 'D'},
@@ -55,6 +55,7 @@ int parse_config(int argc, char *argv[])
                                     {"xargs", required_argument, NULL, 'x'},
                                     {"mode", required_argument, NULL, 'm'},
                                     {"tp_kind", required_argument, NULL, 'k'},
+                                    {"tp_mode", required_argument, NULL, 'T'},
                                     {"test_ipv6", required_argument, NULL, 'I'},
                                     // NIC supports multiple IP address configurations
                                     {"ip_num", required_argument, NULL, 1},
@@ -167,6 +168,10 @@ int parse_config(int argc, char *argv[])
             case 'm':
                 g_test_ctx.mode = atoi(optarg);
                 TEST_LOG_INFO("### g_test_ctx.mode = %u\n", g_test_ctx.mode);
+                break;
+            case 'T':
+                g_test_ctx.tp_mode = atoi(optarg);
+                TEST_LOG_INFO("### g_test_ctx.tp_mode = %u\n", g_test_ctx.tp_mode);
                 break;
             case 'k':
                 g_test_ctx.tp_kind = atoi(optarg);
