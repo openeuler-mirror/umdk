@@ -16,7 +16,7 @@ static int run_test(test_ums_ctx_t *ctx)
     vector<int> vec_random = {131072, 262144, 524288, 1048576, 2097152, 4194304};
     int ret = 0;
     int rc = TEST_FAILED;
-    char test_ip_str[10]={0};
+    char test_ip_str[128]={0};
     char setup_env[MAX_EXEC_CMD_RET_LEN];
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
 

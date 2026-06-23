@@ -14,7 +14,7 @@ static int run_test(test_ums_ctx_t *ctx)
     int ret = 0;
     int rc = TEST_FAILED;
     char setup_env[MAX_EXEC_CMD_RET_LEN];
-    char port_str[10]={0};
+    char port_str[128]={0};
     int check_num_ums;
     int check_num_fallback;
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
