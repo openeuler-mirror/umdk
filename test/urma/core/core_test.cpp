@@ -129,6 +129,7 @@ struct CoreApiFixture {
         jfr.jfr_cfg.depth = 4;
         jfr.jfr_cfg.jfc = &jfc;
         jfr.jfr_cfg.trans_mode = URMA_TM_RC;
+        jfr.jfr_cfg.flag.bs.order_type = URMA_OL;
         jfr.jfr_cfg.max_sge = 1;
         jfr.urma_jfr_opt.is_actived = true;
 
@@ -1720,7 +1721,9 @@ TEST(UrmaCoreTest, CpApiJettyAndJfceApisValidateAndDispatch)
     ASSERT_NE(nullptr, jettyGrp.jetty_list);
     jettyCfg.jetty_grp = &jettyGrp;
     jettyCfg.jfs_cfg.trans_mode = URMA_TM_RM;
+    jettyCfg.jfs_cfg.flag.bs.order_type = URMA_DEF_ORDER;
     jettyCfg.shared.jfr->jfr_cfg.trans_mode = URMA_TM_RM;
+    jettyCfg.shared.jfr->jfr_cfg.flag.bs.order_type = URMA_OI;
     fixture.ops.create_jetty = MockCreateJetty;
     urma_jetty_t *groupedJetty = urma_create_jetty(&fixture.ctx, &jettyCfg);
     if (groupedJetty == nullptr) {
@@ -1735,7 +1738,9 @@ TEST(UrmaCoreTest, CpApiJettyAndJfceApisValidateAndDispatch)
     free(jettyGrp.jetty_list);
     jettyCfg.jetty_grp = nullptr;
     jettyCfg.jfs_cfg.trans_mode = URMA_TM_RC;
+    jettyCfg.jfs_cfg.flag.bs.order_type = URMA_DEF_ORDER;
     fixture.jfr.jfr_cfg.trans_mode = URMA_TM_RC;
+    fixture.jfr.jfr_cfg.flag.bs.order_type = URMA_OL;
     (void)pthread_mutex_destroy(&jettyGrp.list_mutex);
 
     fixture.jetty.jetty_cfg.jfs_cfg.depth = 1;

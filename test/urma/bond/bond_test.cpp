@@ -1534,6 +1534,7 @@ TEST(UrmaBondTest, LinkRecoveryRebuildsLocalPjettyWithMockProvider)
     fixture.phyJfr[0].jfr_cfg.depth = 4;
     fixture.phyJfr[0].jfr_cfg.max_sge = 1;
     fixture.phyJfr[0].jfr_cfg.trans_mode = URMA_TM_RC;
+    fixture.phyJfr[0].jfr_cfg.flag.bs.order_type = URMA_OL;
     fixture.comp.bondp_ctx = &fixture.ctx;
     fixture.comp.comp_type = BONDP_COMP_JETTY;
     fixture.comp.v_jetty.urma_ctx = &fixture.ctx.v_ctx;
