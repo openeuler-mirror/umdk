@@ -89,6 +89,19 @@ void catch_alarm(int sig)
     }
 }
 
+static double get_bw_unit_ratio(perftest_bw_unit_t bw_unit)
+{
+    switch (bw_unit) {
+        case PERFTEST_KB:
+            return PERFTEST_BW_KB;
+        case PERFTEST_GB:
+            return PERFTEST_BW_GB;
+        case PERFTEST_MB:
+        default:
+            return PERFTEST_BW_MB;
+    }
+}
+
 static void print_bw_header(const perftest_config_t *cfg)
 {
     switch (cfg->bw_unit) {
@@ -2585,7 +2598,7 @@ static void print_bw_report(perftest_context_t *ctx, perftest_config_t *cfg,
     uint64_t size;
     uint32_t print_size;
     double bw_avg;
-    uint32_t unit_ratio;
+    double unit_ratio;
 
     if (cfg->time_type.bs.infinite == 1) {
         run_ctx->tcompleted[0] = get_cycles();
@@ -2606,29 +2619,18 @@ static void print_bw_report(perftest_context_t *ctx, perftest_config_t *cfg,
     /* Exception iters equals last_iters, causing iters_sum to be 0 */
     uint64_t run_ctx_iters_sum = iters_sum == 0 ? 0 : iters_sum - 1;
     cycles_sum = (double)(run_ctx->tcompleted[cfg->no_peak == true ? 0 : run_ctx_iters_sum] - tposted_0);
-    switch (cfg->bw_unit) {
-        case PERFTEST_KB:
-            unit_ratio = PERFTEST_BW_KB;
-            break;
-        case PERFTEST_GB:
-            unit_ratio = PERFTEST_BW_GB;
-            break;
-        case PERFTEST_MB:
-        default:
-            unit_ratio = PERFTEST_BW_MB;
-            break;
-    }
+    unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
     bw_avg = ((double)size * iters_sum * cycles_to_units) / (cycles_sum * unit_ratio);
     double msg_rate_avg = ((double)iters_sum * cycles_to_units * inf_bi_factor) / (cycles_sum * PERFTEST_M);
 
     peak_up = (cfg->no_peak == true ? 0 : 1) * size * cycles_to_units;
-    peak_down = opt_delta * PERFTEST_MBS;
+    peak_down = opt_delta * unit_ratio;
 
     if (local_bw_report != NULL) {
         local_bw_report->size = (cfg->enable_random_size != 0) ? (uint32_t)size : cfg->size;
         local_bw_report->iters = iters_sum;
-        local_bw_report->bw_peak = (double)peak_up / peak_down;
-        local_bw_report->bw_avg = bw_avg;
+        local_bw_report->bw_peak = ((double)peak_up / peak_down) * unit_ratio;
+        local_bw_report->bw_avg = bw_avg * unit_ratio;
         local_bw_report->msg_rate_avg = msg_rate_avg;
     }
     // print need to be flushed from flowbuffer to output, especially for infinite mode
@@ -2652,6 +2654,7 @@ static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t
     uint32_t jettys_count = cfg->jettys;
     uint64_t num_of_cal_iters = cfg->iters;
     uint64_t size, inf_bi_factor;
+    double unit_ratio;
     double total_bw_avg = 0;
     double total_msg_rate = 0;
 
@@ -2666,6 +2669,7 @@ static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t
     inf_bi_factor = (cfg->bidirection && cfg->time_type.bs.infinite == 1) ?
                    (cfg->api_type == PERFTEST_SEND ? INF_BI_FACTOR_SEND : INF_BI_FACTOR_OTHER) : NON_INF_BI_FACTOR;
     size = inf_bi_factor * cfg->size;
+    unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
 
     uint64_t tot_iters = num_of_cal_iters * jettys_count;
     uint64_t tcompleted_last = run_ctx->tcompleted[cfg->no_peak == true ? 0 : tot_iters - 1];
@@ -2674,7 +2678,7 @@ static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t
         uint64_t jetty_start_idx = index;
         double jetty_cycles = (double)(tcompleted_last - run_ctx->tposted[jetty_start_idx]);
 
-        double jetty_bw = ((double)size * num_of_cal_iters * cycles_to_units) / (jetty_cycles * PERFTEST_BW_MB);
+        double jetty_bw = ((double)size * num_of_cal_iters * cycles_to_units) / (jetty_cycles * unit_ratio);
         double jetty_msg_rate = ((double)num_of_cal_iters * cycles_to_units * inf_bi_factor) /
                 (jetty_cycles * PERFTEST_M);
 
@@ -2694,7 +2698,7 @@ static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t
     if (local_bw_report != NULL) {
         local_bw_report->size = cfg->size;
         local_bw_report->iters = cfg->iters * cfg->jettys;
-        local_bw_report->bw_avg = total_bw_avg;
+        local_bw_report->bw_avg = total_bw_avg * unit_ratio;
         local_bw_report->msg_rate_avg = total_msg_rate;
     }
     (void)fflush(stdout);
@@ -2709,23 +2713,10 @@ static void print_bi_bw_report(const bw_report_data_t *local_bw_report,
     uint64_t iters = (local_bw_report->iters > remote_bw_report->iters)
                          ? local_bw_report->iters
                          : remote_bw_report->iters;
-    double unit_ratio;
-    switch (cfg->bw_unit) {
-        case PERFTEST_KB:
-            unit_ratio = PERFTEST_BW_KB;
-            break;
-        case PERFTEST_GB:
-            unit_ratio = PERFTEST_BW_GB;
-            break;
-        case PERFTEST_MB:
-        default:
-            unit_ratio = PERFTEST_BW_MB;
-            break;
-    }
-    double bw_peak = (local_bw_report->bw_peak + remote_bw_report->bw_peak) * PERFTEST_BW_KB / unit_ratio;
-    double bw_avg = (local_bw_report->bw_avg + remote_bw_report->bw_avg) * PERFTEST_BW_KB / unit_ratio;
+    double unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
+    double bw_peak = (local_bw_report->bw_peak + remote_bw_report->bw_peak) / unit_ratio;
+    double bw_avg = (local_bw_report->bw_avg + remote_bw_report->bw_avg) / unit_ratio;
     double msg_rate_avg = local_bw_report->msg_rate_avg + remote_bw_report->msg_rate_avg;
-    // " %-7u    %-10lu       %-7.3lf            %-7.3lf         %-7.6lf"
     LOG_QUIET(REPORT_BW_FMT, size, iters, bw_peak, bw_avg, msg_rate_avg);
     LOG_QUIET("\n");
 }
