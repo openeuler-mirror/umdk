@@ -319,9 +319,10 @@ typedef struct umq_ops {
     /**
      * Expand create resources (jetty pairs) for SHARE_TRANSPORT mode.
      * @param[in] umqh_tp: Main UMQ tp handle
+     * @param[in] option: Configuration information for tp handle
      * Return tp handle index on success, UINT32_MAX on failure
      */
-    uint32_t (*umq_tp_transport_pool_resource_create)(uint64_t umqh_tp);
+    uint32_t (*umq_tp_transport_pool_resource_create)(uint64_t umqh_tp, umq_tp_resource_create_option_t *option);
 
     /**
      * Destroy transport resource.

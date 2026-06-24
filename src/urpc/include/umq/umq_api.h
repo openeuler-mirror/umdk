@@ -364,9 +364,10 @@ int umq_transport_pool_resource_modify(uint64_t umqh, uint32_t tp_handle_idx);
  * create transport resources (jetty pairs) for SHARE_TRANSPORT mode
  * Only valid on a Main UMQ created with SHARE_TRANSPORT flag.
  * @param[in] umqh: umq handle
+ * @param[in] option: Configuration information for tp handle
  * Return tp handle index on success, UINT32_MAX on failure
  */
-uint32_t umq_transport_pool_resource_create(uint64_t umqh);
+uint32_t umq_transport_pool_resource_create(uint64_t umqh, umq_tp_resource_create_option_t *option);
 
 /**
  * Destroy transport resource.

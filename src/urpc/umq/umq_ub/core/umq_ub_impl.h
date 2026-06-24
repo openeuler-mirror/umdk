@@ -101,7 +101,7 @@ int umq_ub_stats_tp_perf_stop_impl(void);
 int umq_ub_stats_tp_perf_info_get_impl(char *perf_buf, uint32_t *length);
 
 int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_handle_idx);
-uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp);
+uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp, umq_tp_resource_create_option_t *option);
 int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_handle_idx);
 
 int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats);

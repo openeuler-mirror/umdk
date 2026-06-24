@@ -220,17 +220,17 @@ static int umq_tp_ub_plus_transport_pool_eventfd_get(void)
     return umq_ub_transport_pool_eventfd_get_impl();
 }
 
-static int umq_tp_ub_transport_pool_resource_modify(uint64_t umqh_tp, uint32_t tp_handle_idx)
+static int umq_tp_ub_plus_transport_pool_resource_modify(uint64_t umqh_tp, uint32_t tp_handle_idx)
 {
     return umq_ub_transport_pool_resource_modify_impl(umqh_tp, tp_handle_idx);
 }
 
-static uint32_t umq_tp_ub_transport_pool_resource_create(uint64_t umqh_tp)
+static uint32_t umq_tp_ub_plus_transport_pool_resource_create(uint64_t umqh_tp, umq_tp_resource_create_option_t *option)
 {
-    return umq_ub_transport_pool_resource_create_impl(umqh_tp);
+    return umq_ub_transport_pool_resource_create_impl(umqh_tp, option);
 }
 
-static int umq_tp_ub_transport_pool_resource_destroy(uint64_t umqh_tp, uint32_t tp_handle_idx)
+static int umq_tp_ub_plus_transport_pool_resource_destroy(uint64_t umqh_tp, uint32_t tp_handle_idx)
 {
     return umq_ub_transport_pool_resource_destroy_impl(umqh_tp, tp_handle_idx);
 }
@@ -259,9 +259,9 @@ static umq_ops_t g_umq_ub_plus_ops = {
     .umq_tp_dev_info_list_free = umq_tp_ub_plus_dev_info_list_free,
     .umq_tp_cfg_get = umq_tp_ub_plus_cfg_get,
     .umq_tp_transport_pool_eventfd_get = umq_tp_ub_plus_transport_pool_eventfd_get,
-    .umq_tp_transport_pool_resource_modify = umq_tp_ub_transport_pool_resource_modify,
-    .umq_tp_transport_pool_resource_create = umq_tp_ub_transport_pool_resource_create,
-    .umq_tp_transport_pool_resource_destroy = umq_tp_ub_transport_pool_resource_destroy,
+    .umq_tp_transport_pool_resource_modify = umq_tp_ub_plus_transport_pool_resource_modify,
+    .umq_tp_transport_pool_resource_create = umq_tp_ub_plus_transport_pool_resource_create,
+    .umq_tp_transport_pool_resource_destroy = umq_tp_ub_plus_transport_pool_resource_destroy,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_plus_buf_alloc,

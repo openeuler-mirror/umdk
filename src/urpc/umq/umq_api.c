@@ -1661,14 +1661,15 @@ int umq_transport_pool_resource_modify(uint64_t umqh, uint32_t tp_handle_idx)
     return umq->tp_ops->umq_tp_transport_pool_resource_modify(umq->umqh_tp, tp_handle_idx);
 }
 
-uint32_t umq_transport_pool_resource_create(uint64_t umqh)
+uint32_t umq_transport_pool_resource_create(uint64_t umqh, umq_tp_resource_create_option_t *option)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->tp_ops == NULL || umq->tp_ops->umq_tp_transport_pool_resource_create == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "create transport resource failed, transport ops not available\n");
+    if (option == NULL || umq == NULL || umq->tp_ops == NULL ||
+        umq->tp_ops->umq_tp_transport_pool_resource_create == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "create transport resource failed, option or transport ops not available\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->tp_ops->umq_tp_transport_pool_resource_create(umq->umqh_tp);
+    return umq->tp_ops->umq_tp_transport_pool_resource_create(umq->umqh_tp, option);
 }
 
 int umq_transport_pool_resource_destroy(uint64_t umqh, uint32_t tp_handle_idx)

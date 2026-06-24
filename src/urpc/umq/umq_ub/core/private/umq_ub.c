@@ -1131,36 +1131,35 @@ void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx)
     ub_ctx->remote_imported_info = NULL;
 }
 
-urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx,
-    const char *port_str, urma_jfc_t *jfs_jfc)
+urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_jetty_config_t *config)
 {
     bondp_jetty_cfg_t bondp_jetty_cfg = {
         .base = {
             .jfs_cfg = {
                 .flag.bs.order_type = queue->order_type,
                 .trans_mode = queue->tp_mode,
-                .depth = jetty_idx == UB_QUEUE_JETTY_IO ? queue->tx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
+                .depth = config->jetty_idx == UB_QUEUE_JETTY_IO ? queue->tx_depth : UMQ_UB_FLOW_CONTORL_JETTY_DEPTH,
                 .priority = queue->priority,
                 .max_sge = queue->max_tx_sge,
                 .max_inline_data = dev_ctx->dev_attr.dev_cap.max_jfs_inline_len,
-                .jfc = jfs_jfc,
+                .jfc = config->jfs_jfc,
                 .rnr_retry = queue->rnr_retry,
                 .err_timeout = queue->err_timeout,
             },
             .id = 0,
         },
-        .port_ids = queue->used_port,
-        .port_count = queue->used_port_num,
+        .port_ids = config->used_port,
+        .port_count = config->used_port_num,
     };
     bondp_jetty_cfg.base.flag.bs.share_jfr = true;
     bondp_jetty_cfg.base.flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0);
-    bondp_jetty_cfg.base.shared.jfr = queue->jfr_ctx[jetty_idx]->jfr;
+    bondp_jetty_cfg.base.shared.jfr = queue->jfr_ctx[config->jetty_idx]->jfr;
 
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_jetty_t *jetty = umq_symbol_urma()->urma_create_jetty(dev_ctx->urma_ctx, &bondp_jetty_cfg.base);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_CREATE_JETTY, start_timestamp);
     if (jetty == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jetty failed,%s errno: %d\n", port_str, errno);
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_create_jetty failed,%s errno: %d\n", config->port_str, errno);
         return NULL;
     }
     return jetty;
@@ -1219,20 +1218,29 @@ static int umq_default_priority_get(umq_ub_ctx_t *dev_ctx, umq_tp_type_t actual_
     return UMQ_FAIL;
 }
 
-static int umq_bondp_port_id_set(umq_create_option_t *option, ub_queue_t *queue)
+int umq_bondp_port_id_set(umq_used_ports_t *used_ports, bondp_port_id_t *used_port, uint8_t used_port_num)
 {
-    for (uint8_t i = 0; i < option->used_ports.num; i++) {
-        for (uint8_t j = i + 1; j < option->used_ports.num; j++) {
-            if (option->used_ports.port[i].bs.chip_id == option->used_ports.port[j].bs.chip_id &&
-                option->used_ports.port[i].bs.die_id == option->used_ports.port[j].bs.die_id &&
-                option->used_ports.port[i].bs.port_idx == option->used_ports.port[j].bs.port_idx) {
-                UMQ_VLOG_ERR(VLOG_UMQ, "chip_id %d, die_id %d, port_idx %d are duplicated\n");
+    if (used_ports->num > used_port_num) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "insufficient used port buf, used_port_num %u, expected %u\n",
+            used_port_num, used_ports->num);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    for (uint8_t i = 0; i < used_ports->num; i++) {
+        for (uint8_t j = i + 1; j < used_ports->num; j++) {
+            if (used_ports->port[i].bs.chip_id == used_ports->port[j].bs.chip_id &&
+                used_ports->port[i].bs.die_id == used_ports->port[j].bs.die_id &&
+                used_ports->port[i].bs.port_idx == used_ports->port[j].bs.port_idx) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "chip_id %d, die_id %d, port_idx %d are duplicated\n",
+                    used_ports->port[i].bs.chip_id, used_ports->port[i].bs.die_id,
+                    used_ports->port[i].bs.port_idx);
                 return -UMQ_ERR_EINVAL;
             }
         }
-        queue->used_port[i].chip_id = option->used_ports.port[i].bs.chip_id;
-        queue->used_port[i].die_id = option->used_ports.port[i].bs.die_id;
-        queue->used_port[i].port_idx = option->used_ports.port[i].bs.port_idx;
+
+        used_port[i].chip_id = used_ports->port[i].bs.chip_id;
+        used_port[i].die_id = used_ports->port[i].bs.die_id;
+        used_port[i].port_idx = used_ports->port[i].bs.port_idx;
     }
     return UMQ_SUCCESS;
 }
@@ -1398,7 +1406,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
             return -UMQ_ERR_ENOMEM;
         }
 
-        if (umq_bondp_port_id_set(option, queue) != UMQ_SUCCESS) {
+        if (umq_bondp_port_id_set(&option->used_ports, queue->used_port, queue->used_port_num) != UMQ_SUCCESS) {
             return -UMQ_ERR_EINVAL;
         }
     } else if (is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
