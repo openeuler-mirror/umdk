@@ -603,3 +603,195 @@ TEST_F(SocketInterfaceTest, test_ulp_init)
     usleep(1000000);
     close(sockfd);
 }
+
+TEST_F(SocketInterfaceTest, error_handling_bind_port_in_use)
+{
+    int32_t ret;
+    int32_t reuse = 0;
+    int32_t tempSockFd = socket(AF_SMC, SOCK_STREAM, 0);
+    EXPECT_TRUE(tempSockFd >= 0);
+
+    struct sockaddr_in servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(LOCAL_IP);
+    servaddr.sin_port = htons(g_port);
+
+    ret = setsockopt(tempSockFd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+    EXPECT_TRUE(ret == 0);
+
+    ret = bind(tempSockFd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    EXPECT_TRUE(ret < 0);
+    EXPECT_TRUE(errno == EADDRINUSE);
+
+    close(tempSockFd);
+}
+
+TEST_F(SocketInterfaceTest, boundary_listen_queue_full)
+{
+    int32_t ret;
+    int32_t tempSockFd = socket(AF_SMC, SOCK_STREAM, 0);
+    EXPECT_TRUE(tempSockFd >= 0);
+
+    int32_t reuse = 1;
+    ret = setsockopt(tempSockFd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+    EXPECT_TRUE(ret == 0);
+
+    struct sockaddr_in servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(LOCAL_IP);
+    servaddr.sin_port = htons(g_port + 1);
+
+    ret = bind(tempSockFd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    EXPECT_TRUE(ret == 0);
+
+    ret = listen(tempSockFd, 1);
+    EXPECT_TRUE(ret == 0);
+
+    const int CLIENT_NUM = 3;
+    int32_t clientFds[CLIENT_NUM];
+    struct sockaddr_in clientServaddr;
+    bzero(&clientServaddr, sizeof(clientServaddr));
+    clientServaddr.sin_family = AF_INET;
+    clientServaddr.sin_addr.s_addr = inet_addr(LOCAL_IP);
+    clientServaddr.sin_port = htons(g_port + 1);
+
+    for (int i = 0; i < CLIENT_NUM; i++) {
+        clientFds[i] = socket(AF_SMC, SOCK_STREAM, 0);
+        SetSocketNonBlock(clientFds[i]);
+        connect(clientFds[i], (struct sockaddr *)&clientServaddr, sizeof(clientServaddr));
+    }
+
+    usleep(100000);
+
+    for (int i = 0; i < CLIENT_NUM; i++) {
+        if (clientFds[i] >= 0) {
+            close(clientFds[i]);
+        }
+    }
+
+    close(tempSockFd);
+}
+
+TEST_F(SocketInterfaceTest, multi_client_connection_test)
+{
+    const int MAX_CLIENTS = 5;
+    int32_t acceptFd[MAX_CLIENTS];
+    int32_t clientFd[MAX_CLIENTS];
+    int32_t ret;
+
+    struct sockaddr_in servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(LOCAL_IP);
+    servaddr.sin_port = htons(g_port);
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clientFd[i] = socket(AF_SMC, SOCK_STREAM, 0);
+        EXPECT_TRUE(clientFd[i] >= 0);
+        SetSocketNonBlock(clientFd[i]);
+        ret = connect(clientFd[i], (struct sockaddr *)&servaddr, sizeof(servaddr));
+        EXPECT_TRUE(ret == 0 || errno == EINPROGRESS);
+    }
+
+    usleep(100000);
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        acceptFd[i] = ServerAccept(g_listenFd);
+        EXPECT_TRUE(acceptFd[i] >= 0);
+    }
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (acceptFd[i] >= 0) {
+            close(acceptFd[i]);
+        }
+        if (clientFd[i] >= 0) {
+            close(clientFd[i]);
+        }
+    }
+}
+
+TEST_F(SocketInterfaceTest, socket_option_tcp_keepalive)
+{
+    int32_t ret;
+    int enable = 1;
+    int value = 0;
+    socklen_t optLen = sizeof(int);
+
+    ret = setsockopt(g_listenFd, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable));
+    EXPECT_TRUE(ret == 0);
+
+    ret = getsockopt(g_listenFd, SOL_SOCKET, SO_KEEPALIVE, &value, &optLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(value == enable);
+
+    int keepidle = 30;
+    int keepintvl = 5;
+    int keepcnt = 3;
+
+    ret = setsockopt(g_listenFd, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+    EXPECT_TRUE(ret == 0);
+
+    ret = setsockopt(g_listenFd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+    EXPECT_TRUE(ret == 0);
+
+    ret = setsockopt(g_listenFd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+    EXPECT_TRUE(ret == 0);
+}
+
+TEST_F(SocketInterfaceTest, ipv6_boundary_listen_ipv6_address)
+{
+    int32_t ret;
+    int32_t tempSockFd = socket(AF_SMC, SOCK_STREAM, 1);
+    EXPECT_TRUE(tempSockFd >= 0);
+
+    int32_t reuse = 1;
+    ret = setsockopt(tempSockFd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+    EXPECT_TRUE(ret == 0);
+
+    struct sockaddr_in6 servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin6_family = AF_INET6;
+    servaddr.sin6_addr = in6addr_any;
+    servaddr.sin6_port = htons(g_port + 2);
+
+    ret = bind(tempSockFd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    EXPECT_TRUE(ret == 0);
+
+    ret = listen(tempSockFd, 5);
+    EXPECT_TRUE(ret == 0);
+
+    close(tempSockFd);
+}
+
+TEST_F(SocketInterfaceTest, server_getsockopt_acceptconn)
+{
+    int32_t ret;
+    int acceptConn = 0;
+    socklen_t optLen = sizeof(int);
+
+    ret = getsockopt(g_listenFd, SOL_SOCKET, SO_ACCEPTCONN, &acceptConn, &optLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(acceptConn != 0);
+}
+
+TEST_F(SocketInterfaceTest, bidirectional_transfer_test)
+{
+    int32_t acceptFd;
+    int32_t ret;
+    size_t dataLen = 512;
+
+    acceptFd = ServerAccept(g_listenFd);
+    EXPECT_TRUE(acceptFd >= 0);
+
+    usleep(1000000);
+
+    ret = read(acceptFd, g_recvBuff, dataLen);
+    EXPECT_TRUE(ret == (int32_t)dataLen);
+
+    ret = write(acceptFd, g_recvBuff, dataLen);
+    EXPECT_TRUE(ret == (int32_t)dataLen);
+
+    close(acceptFd);
+}
