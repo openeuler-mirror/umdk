@@ -1313,7 +1313,6 @@ int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
 
     if (ret != 0 || ctx.ret != 0 || !ctx.received) {
         ret = (ret != 0) ? ret : (ctx.ret != 0 ? ctx.ret : -ENODATA);
-        printf("Failed to show_stats, ret: %d\n", ret);
         return ret;
     }
 
