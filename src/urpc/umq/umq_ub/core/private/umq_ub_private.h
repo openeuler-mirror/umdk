@@ -402,15 +402,21 @@ typedef enum jetty_pool_node_state {
     JETTY_POOL_NODE_ERR,              // node has error, should not be allocated
 } jetty_pool_node_state_t;
 
+// umq_ref encoding: u32_hi = umq_id (owner), u32_lo = ref_cnt (concurrent users).
+// 0 means "unowned, 0 refs" — freeable.
+#define UMQ_JETTY_NODE_REF_CNT_MASK 0xFFFFFFFFULL
+#define UMQ_JETTY_NODE_REF_CNT_INC  1ULL
+#define UMQ_JETTY_NODE_UMQ_ID_SHIFT 32
+
 typedef struct jetty_pool_node {
     urpc_list_t node;                   // For list linkage (cache / free_q / active_q / err_q)
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
     urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
     urma_jfce_t *jfs_jfce;
     volatile uint32_t tx_outstanding;
+    volatile uint64_t umq_ref;          // owner umq_id (hi 32) + ref_cnt (lo 32), single atomic access
     volatile uint32_t state;            // Track node state (atomic CAS operations)
-    volatile uint64_t umq_ref;          // Logic UMQ handle (atomic, used for poll/post coordination)
-    uint32_t borrow_count;              // WRs posted in current borrow cycle
+    volatile uint32_t borrow_count;     // WRs posted in current borrow cycle (atomic — concurrent post)
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
     bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
     bool is_jetty_err;
@@ -472,7 +478,8 @@ typedef struct ub_queue {
 
     // umq_ub_jetty_node_list_t jetty_node_list;
     umq_ub_jetty_node_list_t *jetty_node_list;
-    jetty_pool_node_t *jetty_node;
+    volatile uint64_t jetty_node;       // jetty_pool_node_t *, atomically accessed
+    pthread_spinlock_t get_jetty_node_lock;
 } ub_queue_t;
 
 typedef struct user_ctx {
@@ -521,7 +528,7 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
 int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
 int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
-int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
+int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option);
 
 // token
 uint32_t token_policy_get(bool enable);
