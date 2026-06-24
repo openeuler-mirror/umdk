@@ -21,7 +21,6 @@
 #include <linux/if_vlan.h>
 
 #include <ub/urma/ubcore_types.h>
-#include <ub/urma/ubcore_uapi.h>
 
 #ifndef KERNEL_VERSION_4
 #include "ums_dim.h"
@@ -255,24 +254,47 @@ static int ums_ubcore_get_route_eid(union ubcore_eid *src_v_eid, union ubcore_ei
 	union ubcore_eid *src_p_eid, union ubcore_eid *dst_p_eid)
 {
 	int ret = -1;
-	struct ubcore_path_set path_set = {0};
+	uint32_t i = 0;
+	uint32_t route_idx = 0;
+	bool route_found = false;
+	uint32_t min_hops = UINT32_MAX;
+	struct ubcore_route_list route_list = {0};
 
-	ret = ubcore_get_path_set(src_v_eid, dst_v_eid, UBCORE_RTP, false, &path_set);
+	struct ubcore_route route_v = {
+		.src = *src_v_eid,
+		.dst = *dst_v_eid,
+	};
+
+	ret = ubcore_get_route_list(&route_v, &route_list);
 	if (ret != 0) {
-		UMS_LOGE("ubcore_get_path_set failed, ret: %d, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
+		UMS_LOGE("ubcore_get_route_list failed, ret: %d, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
 			ret, src_v_eid->raw, dst_v_eid->raw);
 		return -ENETUNREACH;
 	}
 
-	if (path_set.path_count == 0) {
-		UMS_LOGE("path_set is empty, src_v_eid: %pI6c, dst_v_eid: %pI6c.",
-			src_v_eid->raw, dst_v_eid->raw);
+	for (i = 0; i < route_list.route_num; i++) {
+		if (route_list.buf[i].hops >= min_hops) {
+			continue;
+		}
+
+		if (route_list.buf[i].flag.bs.rtp == 0) { /* only supports UBCORE_RTP */
+			continue;
+		}
+
+		route_found = true;
+		route_idx = i;
+		if (route_list.buf[i].hops == 0) {
+			break;
+		}
+		min_hops = route_list.buf[i].hops;
+	}
+
+	if (!route_found) {
 		return -ENETUNREACH;
 	}
 
-	/* The path selection needs to be optimized later; for now, use paths[0] */
-	*src_p_eid = path_set.paths[0].src_eid;
-	*dst_p_eid = path_set.paths[0].dst_eid;
+	*src_p_eid = route_list.buf[route_idx].src;
+	*dst_p_eid = route_list.buf[route_idx].dst;
 	return 0;
 }
 
