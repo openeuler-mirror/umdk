@@ -193,7 +193,7 @@ static int alloc_expansion_pool_slot(qbuf_expansion_pool_t *exp_pool, qbuf_expan
 
 static ALWAYS_INLINE bool try_inc_atomic_exp_mem_size(uint64_t add_size)
 {
-    uint64_t before = __atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED);
+    uint64_t before = __atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_ACQUIRE);
     uint64_t sum;
     do {
         sum = before + add_size;
@@ -212,7 +212,7 @@ static void slot_uninit(bool with_data, qbuf_expansion_pool_t *exp_pool, qbuf_ex
             NULL, (uint16_t)(slot->slot_id + exp_pool->expansion_pool_id_min));
     }
 
-    __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, slot->total_buf_size, __ATOMIC_RELEASE);
+    __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, slot->total_buf_size, __ATOMIC_ACQ_REL);
 
     if (slot->buffer != NULL) {
         free(slot->buffer);
@@ -290,7 +290,7 @@ static int slot_with_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansion_p
     uint64_t sub_slot_count = exp_pool->sub_slot_count;
     uint64_t total_size = QBUF_MEMALIGN_SIZE * sub_slot_count;
     if (!try_inc_atomic_exp_mem_size(total_size)) {
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_ACQUIRE) == 0) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
                 "expand mem size max: %llu, now expand mem size: %llu, expand buf pool need: %llu, expand failed\n",
                 g_qbuf_pool.expansion_mem_size_max, g_qbuf_pool.exp_total_mem_pool_size, total_size);
@@ -341,7 +341,7 @@ FREE_BUFFER:
     slot->buffer = NULL;
 
 ROLLBACK_MEM_SIZE:
-    __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, total_size, __ATOMIC_RELEASE);
+    __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, total_size, __ATOMIC_ACQ_REL);
 
     return ret;
 }
@@ -360,7 +360,7 @@ static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansio
 
     slot->buffer = (void *)memalign(umq_buf_size_small(), total_size);
     if (slot->buffer == NULL) {
-        __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, total_size, __ATOMIC_RELEASE);
+        __atomic_fetch_sub(&g_qbuf_pool.exp_total_mem_pool_size, total_size, __ATOMIC_ACQ_REL);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to alloc expansion pool memory\n");
         return -UMQ_ERR_ENOMEM;
     }
@@ -732,8 +732,8 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
     }
     (void)pthread_spin_unlock(&g_qbuf_pool.block_pool.global_mutex);
 
-    __atomic_fetch_sub(&g_total_local_cap_with_data, local_pool->capacity_with_data, __ATOMIC_RELAXED);
-    __atomic_fetch_sub(&g_total_local_cap_without_data, local_pool->capacity_without_data, __ATOMIC_RELAXED);
+    __atomic_fetch_sub(&g_total_local_cap_with_data, local_pool->capacity_with_data, __ATOMIC_ACQ_REL);
+    __atomic_fetch_sub(&g_total_local_cap_without_data, local_pool->capacity_without_data, __ATOMIC_ACQ_REL);
 
     g_thread_cache.inited = false;
 }
@@ -1046,8 +1046,8 @@ void umq_qbuf_pool_uninit(void)
     umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool);
     memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
 
-    __atomic_store_n(&g_total_local_cap_with_data, 0, __ATOMIC_RELAXED);
-    __atomic_store_n(&g_total_local_cap_without_data, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_total_local_cap_with_data, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_total_local_cap_without_data, 0, __ATOMIC_RELEASE);
 }
 
 // expand local pool capacity and fetch bufs from global
@@ -1109,7 +1109,7 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(
     while (fetch_count < batch_cnt) {
         ret = fetch_from_global(&g_qbuf_pool.block_pool, local_pool, with_data, umq_qbuf_pool_batch_cnt());
         if (ret <= 0) {
-            if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+            if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_ACQUIRE) == 0) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, fetch count: %u\n", batch_cnt);
             }
             goto ROLLBACK;
@@ -1119,7 +1119,7 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(
 
     if (grow > 0) {
         *cap = (*cap) + grow;
-        __atomic_fetch_add(g_total, grow, __ATOMIC_RELAXED);
+        __atomic_fetch_add(g_total, grow, __ATOMIC_ACQ_REL);
     }
 
     *stats_fetch_buf_cnt += fetch_count;
@@ -1155,7 +1155,7 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data)
         return;
     }
     *cap_ptr = (*cap_ptr) - shrink;
-    __atomic_fetch_sub(g_total, shrink, __ATOMIC_RELAXED);
+    __atomic_fetch_sub(g_total, shrink, __ATOMIC_ACQ_REL);
 
     if ((*cap_ptr) < remaining) {
         return_to_global(&g_qbuf_pool.block_pool, &g_thread_cache.block_pool,
@@ -1181,7 +1181,7 @@ int expand_global_pool(bool with_data)
 
     ret = with_data ? slot_with_data_init(exp_pool, slot) : slot_without_data_init(exp_pool, slot);
     if (ret != UMQ_SUCCESS) {
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_ACQUIRE) == 0) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "init %s slot failed\n", with_data ? "with data" : "without_data\n");
         }
         goto FREE_SLOT;
@@ -1312,7 +1312,7 @@ static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list)
     qbuf->mempool_without_data = 0;
 
     QBUF_LIST_FIRST(list) = qbuf;
-    (void)__atomic_add_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_RELAXED);
+    (void)__atomic_add_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_ACQ_REL);
     return UMQ_SUCCESS;
 }
 
@@ -1407,7 +1407,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
 
     if (QBUF_LIST_FIRST(list)->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX && !g_qbuf_pool.disable_malloc_escape) {
         free(QBUF_LIST_FIRST(list)->buf_data);
-        (void)__atomic_sub_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_RELAXED);
+        (void)__atomic_sub_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_ACQ_REL);
         return;
     }
 
@@ -1502,7 +1502,7 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
             return (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_buffer + id * sizeof(umq_buf_t));
         }
 
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) > 0) {
+        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_ACQUIRE) > 0) {
             return umq_qbuf_data_to_head_escape(data);
         }
 
@@ -1518,7 +1518,7 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
         return (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_buffer + id * g_qbuf_pool.block_size);
     }
 
-    if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) > 0) {
+    if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_ACQUIRE) > 0) {
         return umq_qbuf_data_to_head_escape(data);
     }
 

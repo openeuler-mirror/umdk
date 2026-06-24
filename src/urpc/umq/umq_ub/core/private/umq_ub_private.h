@@ -656,7 +656,7 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
     }
 
     return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
-        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQUIRE);
+        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQ_REL);
 }
 
 static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
