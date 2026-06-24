@@ -167,10 +167,11 @@ uint32_t jfr_wr_buf_alloc_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_
  */
 static void wr_buf_release_entry(wr_buf_t *buf, uint32_t idx)
 {
-    /* Clear the entry */
+    /* Only clear the header (wr_id + entry_type) to mark the entry free */
     void *e = __wr_buf_idx(buf, idx);
-    memset(e, 0, buf->wr_entry_size);
-
+    wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
+    hdr->wr_id = 0;
+    hdr->entry_type = 0;
     pthread_spin_lock(&buf->lock);
     buf->next_free[idx] = buf->free_head;
     buf->free_head = idx;
@@ -197,10 +198,12 @@ static void wr_buf_release_batch(wr_buf_t *buf, uint32_t *indices, uint32_t coun
     if (count == 0) {
         return;
     }
-    /* Clear all entries first */
+    /* Only clear headers (wr_id + entry_type) to mark entries free */
     for (uint32_t i = 0; i < count; i++) {
         void *e = __wr_buf_idx(buf, indices[i]);
-        memset(e, 0, buf->wr_entry_size);
+        wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
+        hdr->wr_id = 0;
+        hdr->entry_type = 0;
     }
     /* Push all entries back to free list */
     pthread_spin_lock(&buf->lock);

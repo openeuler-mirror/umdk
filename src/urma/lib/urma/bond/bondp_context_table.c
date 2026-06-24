@@ -177,7 +177,7 @@ int bdp_r_v2p_token_id_del_idx_lockless(bondp_hash_table_t *tbl, uint32_t index)
         item = CONTAINER_OF_FIELD(node, bondp_v2p_token_id_t, hmap_node);
         next = ub_hmap_next(&tbl->hmap, node);
         if (item->index == index) {
-            ub_hmap_remove(&tbl->hmap, node);
+            bondp_hash_table_remove_without_lock(tbl, node);
             if (tbl->free_f != NULL) {
                 tbl->free_f(node);
             }
