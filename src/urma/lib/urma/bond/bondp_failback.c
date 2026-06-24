@@ -16,11 +16,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bondp_context_table.h"
 #include "bondp_netlink.h"
 #include "bondp_types.h"
 #include "bondp_worker.h"
 #include "ub_hmap.h"
 #include "ubagg_ioctl.h"
+#include "urma_api.h"
 #include "urma_log.h"
 #include "urma_provider.h"
 #include "urma_types.h"
@@ -226,32 +228,135 @@ static int fb_task_del(bondp_fb_ctx_t *fb_ctx, const bondp_fb_task_key_t *key)
     return -ENOENT;
 }
 
+static int bondp_update_pjetty_id_mapping(
+    bondp_context_t *bdp_ctx, urma_jetty_id_t old_id,
+    urma_jetty_id_t new_id, bondp_comp_t *bdp_jetty)
+{
+    int ret = 0;
+
+    pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
+    ret = bdp_p_vjetty_id_table_del_without_lock(&bdp_ctx->p_vjetty_id_table, old_id, JETTY);
+    if (ret != 0) {
+        pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+        URMA_LOG_ERR("Failed to delete stale pjetty id mapping: " URMA_JETTY_ID_FMT ", ret=%d\n",
+                     URMA_JETTY_ID_ARGS(&old_id), ret);
+        return -1;
+    }
+    ret = bdp_p_vjetty_id_table_add_without_lock(
+        &bdp_ctx->p_vjetty_id_table, new_id, JETTY, bdp_jetty->v_jetty.jetty_id.id, bdp_jetty);
+    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to add recreated pjetty id mapping: " URMA_JETTY_ID_FMT ", ret=%d\n",
+                     URMA_JETTY_ID_ARGS(&new_id), ret);
+        return -1;
+    }
+    return 0;
+}
+
+static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx)
+{
+    int ret;
+
+    if (bdp_jetty == NULL || bdp_jetty->bondp_ctx == NULL ||
+        local_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return -1;
+    }
+
+    bondp_context_t *bdp_ctx = bdp_jetty->bondp_ctx;
+
+    urma_jetty_t *old_jetty = bdp_jetty->p_jetty[local_idx];
+    urma_jetty_cfg_t p_cfg = old_jetty->jetty_cfg;
+    urma_jetty_id_t old_id = old_jetty->jetty_id;
+
+    urma_jetty_t *new_jetty = urma_create_jetty(bdp_ctx->p_ctxs[local_idx], &p_cfg);
+    if (new_jetty == NULL) {
+        URMA_LOG_ERR("Failed to recreate pjetty at idx=%d\n", local_idx);
+        return -1;
+    }
+
+    new_jetty->remote_jetty = NULL;
+    new_jetty->jetty_cfg.user_ctx = (uint64_t)bdp_jetty;
+    bdp_jetty->p_jetty[local_idx] = new_jetty;
+
+    ret = bondp_update_pjetty_id_mapping(bdp_ctx, old_id, new_jetty->jetty_id, bdp_jetty);
+    if (ret != 0) {
+        bdp_jetty->p_jetty[local_idx] = old_jetty;
+        (void)urma_delete_jetty(new_jetty);
+        return -1;
+    }
+
+    ret = urma_delete_jetty(old_jetty);
+    if (ret != URMA_SUCCESS) {
+        URMA_LOG_WARN("Failed to delete old pjetty at idx=%d\n", local_idx);
+    }
+
+    atomic_store(&bdp_jetty->rebuild_done[local_idx], true);
+    URMA_LOG_INFO("Failback pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
+                  local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
+    return 0;
+}
+
+static bondp_comp_t *bondp_find_jetty_by_vjetty_id(bondp_context_t *bond_ctx, uint32_t vjetty_id)
+{
+    bondp_comp_t *bdp_jetty = NULL;
+
+    if (bond_ctx == NULL) {
+        return NULL;
+    }
+
+    pthread_rwlock_rdlock(&bond_ctx->p_vjetty_id_table.lock);
+    bdp_p_vjetty_id_t *item = NULL;
+    HMAP_FOR_EACH (item, hmap_node, &bond_ctx->p_vjetty_id_table.hmap) {
+        if (item->key.type != JETTY || item->vjetty_id != vjetty_id) {
+            continue;
+        }
+        bdp_jetty = item->comp;
+        break;
+    }
+    pthread_rwlock_unlock(&bond_ctx->p_vjetty_id_table.lock);
+    return bdp_jetty;
+}
+
 typedef struct bondp_fb_async_arg {
     bondp_fb_ctx_t *fb_ctx;
     bondp_fb_task_key_t key;
 } bondp_fb_async_arg_t;
 
-static void bondp_rebuild_jetty(void *arg)
+static void bondp_rebuild_pjetty_async(void *arg)
 {
     bondp_fb_async_arg_t *arg_typed = arg;
-
     if (arg_typed == NULL) {
         return;
     }
 
-    if (arg_typed->fb_ctx == NULL) {
-        free(arg_typed);
-        return;
+    bondp_fb_ctx_t *fb_ctx = arg_typed->fb_ctx;
+    if (fb_ctx == NULL) {
+        goto free_arg;
     }
 
-    bondp_fb_task_t *fb_task = NULL;
-    fb_task = fb_task_lookup(arg_typed->fb_ctx, &arg_typed->key);
-    free(arg_typed);
+    bondp_fb_task_t *fb_task = fb_task_lookup(fb_ctx, &arg_typed->key);
     if (fb_task == NULL) {
-        return;
+        goto free_arg;
     }
 
+    bondp_comp_t *bdp_jetty = bondp_find_jetty_by_vjetty_id(fb_task->bond_ctx, fb_task->vjetty_id);
+    if (bdp_jetty == NULL) {
+        URMA_LOG_ERR("Failed to rebuild failback pjetty, vjetty_id=%u, pjetty_idx=%u.\n",
+                     fb_task->vjetty_id, fb_task->pjetty_idx);
+        goto put_task;
+    }
+
+    int ret = bondp_rebuild_pjetty(bdp_jetty, (int)fb_task->pjetty_idx);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to rebuild failback pjetty, vjetty_id=%u, pjetty_idx=%u.\n",
+                     fb_task->vjetty_id, fb_task->pjetty_idx);
+    }
+
+put_task:
     fb_task_put(fb_task);
+free_arg:
+    free(arg_typed);
+    return;
 }
 
 int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx)
@@ -290,7 +395,7 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
     async_arg->fb_ctx = fb_ctx;
     async_arg->key = key;
 
-    ret = bondp_worker_schedule(1, bondp_rebuild_jetty, async_arg, &fb_task->worker_task_id);
+    ret = bondp_worker_schedule(1, bondp_rebuild_pjetty_async, async_arg, &fb_task->worker_task_id);
     if (ret != 0) {
         free(async_arg);
         (void)fb_task_del(fb_ctx, &key);
@@ -302,6 +407,11 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
     return 0;
 }
 
+/* In the current failback design, send and receive jettys are user-separated.
+ * Since failures are limited to send jettys, which are not imported by peers,
+ * rebuilding the local pjetty does not require cluster-wide notifications.
+ * The following helpers are retained solely for backward compatibility.
+ */
 static __attribute__((unused)) int bondp_fb_user_ctl_start(
     bondp_fb_task_t *task, uint32_t node_idx)
 {
