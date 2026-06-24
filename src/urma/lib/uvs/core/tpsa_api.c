@@ -101,18 +101,14 @@ int uvs_insert_main_ue_eid(const uvs_main_ue_eid_entry_t *entry)
 
 int uvs_insert_main_ue_eid_batch(const uvs_main_ue_eid_batch_entry_t *entry)
 {
-    int ret;
-
     if (entry == NULL || entry->eid_num == 0 ||
         entry->eid_num > UVS_MAIN_UE_EID_BATCH_EID_MAX) {
         TPSA_LOG_ERR("Invalid main ue eid batch entry.\n");
         return -EINVAL;
     }
 
-    uvs_get_api_rdlock();
-    ret = uvs_ubcore_ioctl_insert_main_ue_eid_batch(entry);
-    put_uvs_lock();
-    return ret;
+    TPSA_LOG_ERR("insert main ue eid batch is not supported.\n");
+    return -EOPNOTSUPP;
 }
 
 int uvs_delete_main_ue_eid(const uvs_eid_t *eid)
