@@ -279,34 +279,16 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
         return URMA_FAIL;
     }
 
-    ret = bondp_fb_init();
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to init failback context, ret=%d.\n", ret);
-        return URMA_FAIL;
-    }
-
-    ret = bondp_nl_sock_init();
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to init bond netlink socket, ret=%d.\n", ret);
-        goto ERR_FB_UNINIT;
-    }
-
     ret = bondp_worker_create();
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create bond worker, ret=%d.\n", ret);
-        goto ERR_SOCK_UNINIT;
-    }
-
-    ret = bondp_nl_worker_init();
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to attach bond netlink socket to worker, ret=%d.\n", ret);
-        goto ERR_WORKER_DESTROY;
+        return URMA_FAIL;
     }
 
     ret = bondp_global_ctx_init(&g_bondp_global_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create global context.\n");
-        goto ERR_NL_WORKER_UNINIT;
+        goto ERR_WORKER_DESTROY;
     }
 
     if (bondp_start_health_check_thread() != 0) {
@@ -322,10 +304,6 @@ ERR_NL_WORKER_UNINIT:
     bondp_nl_worker_uninit();
 ERR_WORKER_DESTROY:
     bondp_worker_destroy();
-ERR_SOCK_UNINIT:
-    bondp_nl_sock_uninit();
-ERR_FB_UNINIT:
-    bondp_fb_uninit();
     return URMA_FAIL;
 }
 
@@ -344,10 +322,7 @@ urma_status_t bondp_uninit(void)
         return URMA_FAIL;
     }
     g_bondp_global_ctx = NULL;
-    bondp_nl_worker_uninit();
     bondp_worker_destroy();
-    bondp_nl_sock_uninit();
-    bondp_fb_uninit();
 
     return URMA_SUCCESS;
 }
@@ -399,6 +374,11 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
         goto DESTROY_P_VJETTY_ID_TABLE;
     }
 
+    if (bondp_fb_init(bdp_ctx) != 0) {
+        URMA_LOG_ERR("Failed to init failback context\n");
+        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
+    }
+
     urma_context_cfg_t cfg = {
         .dev = dev,
         .dev_fd = dev_fd,
@@ -410,7 +390,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     int ret = urma_cmd_create_context(&bdp_ctx->v_ctx, &cfg, &udata);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create context, ret=%d\n", ret);
-        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
+        goto FB_UNINIT;
     }
 
     const int max_event = 1;
@@ -431,6 +411,8 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
 
 UNINIT_CTX_TABLE:
     urma_cmd_delete_context(&bdp_ctx->v_ctx);
+FB_UNINIT:
+    bondp_fb_uninit(bdp_ctx);
 DESTROY_R_V2P_TOKEN_ID_TABLE:
     bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
 DESTROY_P_VJETTY_ID_TABLE:
@@ -453,6 +435,8 @@ static int bondp_delete_vcontext(bondp_context_t *bdp_ctx)
     bdp_ctx->real_async_fd = -1;
     URMA_LOG_INFO("bondp delete_vctx, eid_idx is %d, ref_cnt is %lu, dev_num is %d, bonding_model is %d, bonding_level is %d.\n",
                   bdp_ctx->v_ctx.eid_index, ref_cnt, bdp_ctx->dev_num, bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
+
+    bondp_fb_uninit(bdp_ctx);
 
     if (urma_cmd_delete_context(&bdp_ctx->v_ctx) != 0) {
         URMA_LOG_ERR("Failed to urma_cmd_delete_context\n");
