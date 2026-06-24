@@ -60,7 +60,7 @@ TEST_F(UrmaUvsTest, PublicApisPropagateMissingDeviceFailure)
     EXPECT_EQ(-1, uvs_set_share_topo_info(node, sizeof(*node), 1));
     EXPECT_EQ(-1, uvs_get_topo_info(topo));
     EXPECT_EQ(-1, uvs_insert_main_ue_eid(&entry));
-    EXPECT_EQ(-1, uvs_insert_main_ue_eid_batch(&batch));
+    EXPECT_EQ(-EOPNOTSUPP, uvs_insert_main_ue_eid_batch(&batch));
     EXPECT_EQ(-1, uvs_delete_main_ue_eid(&eid));
     EXPECT_EQ(-1, uvs_lookup_main_ue_eid(&eid, &outEid));
     EXPECT_EQ(-1, uvs_flush_main_ue_eid());

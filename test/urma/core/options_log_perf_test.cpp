@@ -4,62 +4,9 @@
  * Description: URMA core option, log and perf unit tests.
  */
 
-#include <cstdlib>
-#include <cstring>
-#include <string>
+#include "core_fixture.h"
 
-#include <gtest/gtest.h>
-
-#include "urma_api.h"
-#include "urma_log.h"
-#include "urma_perf.h"
-#include "urma_private.h"
-
-typedef struct urma_test_cfg {
-    uint32_t depth;
-    uint64_t userCtx;
-} urma_test_cfg_t;
-
-typedef struct urma_test_opt {
-    uint32_t id;
-    uint64_t addr;
-} urma_test_opt_t;
-
-static const uint64_t URMA_TEST_DEPTH_OPT = 1;
-static const uint64_t URMA_TEST_ID_OPT = 2;
-static const uint64_t URMA_TEST_JFS_OPT = 3;
-static const uint64_t URMA_TEST_ID_MASK = 0x10;
-static const uint64_t URMA_TEST_JFS_MASK = 0x20;
-
-static const opt_map_t TEST_OPT_TABLE[] = {
-    { URMA_TEST_DEPTH_OPT, URMA_CFG_MASK, TARGET_CFG, offsetof(urma_test_cfg_t, depth), sizeof(uint32_t) },
-    { URMA_TEST_ID_OPT, URMA_TEST_ID_MASK, TARGET_OPT, offsetof(urma_test_opt_t, id), sizeof(uint32_t) },
-    { URMA_TEST_JFS_OPT, URMA_TEST_JFS_MASK, TARGET_JFS_CFG, offsetof(urma_test_cfg_t, userCtx),
-      sizeof(uint64_t) },
-};
-
-namespace {
-
-static int g_logCallbackCount = 0;
-static int g_locLogCallbackCount = 0;
-static int g_lastLogLevel = -1;
-
-static void MockLogCallback(int level, char *message)
-{
-    g_logCallbackCount++;
-    g_lastLogLevel = level;
-    EXPECT_NE(nullptr, message);
-}
-
-static void MockLocLogCallback(int level, const char *file, const char *function, int line, char *message)
-{
-    g_locLogCallbackCount++;
-    g_lastLogLevel = level;
-    EXPECT_NE(nullptr, file);
-    EXPECT_NE(nullptr, function);
-    EXPECT_GT(line, 0);
-    EXPECT_NE(nullptr, message);
-}
+using namespace urma_test_core;
 
 TEST(UrmaCoreTest, CheckOptValidUpdatesOnlyOptionMask)
 {
@@ -82,7 +29,6 @@ TEST(UrmaCoreTest, CheckOptValidRejectsWrongLengthAndIgnoresUnknownOpt)
         ARRAY_SIZE(TEST_OPT_TABLE), URMA_TEST_ID_OPT, sizeof(uint64_t)));
     EXPECT_EQ(0U, mask);
 
-    /* Unknown options are ignored by the public helper, but must not set target bits. */
     EXPECT_EQ(URMA_SUCCESS, urma_check_opt_valid(&mask, TEST_OPT_TABLE,
         ARRAY_SIZE(TEST_OPT_TABLE), 0xff, sizeof(uint32_t)));
     EXPECT_EQ(0U, mask);
@@ -232,4 +178,12 @@ TEST(UrmaCoreTest, PerfApisRecordAndFormatStats)
     EXPECT_FALSE(urma_perf_is_enabled());
 }
 
-} // namespace
+TEST(UrmaCoreTest, PerfThreadCleanupRunsOnWorkerExit)
+{
+    pthread_t thread;
+
+    EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+    ASSERT_EQ(0, pthread_create(&thread, nullptr, CorePerfWorker, nullptr));
+    ASSERT_EQ(0, pthread_join(thread, nullptr));
+    EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+}
