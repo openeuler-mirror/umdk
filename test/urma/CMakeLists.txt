@@ -64,20 +64,9 @@ target_compile_options(urma_test_common INTERFACE
 )
 target_link_options(urma_test_common INTERFACE -fsanitize=address --coverage)
 
-add_executable(urma_core_ut core/core_test.cpp)
-target_link_options(urma_core_ut PRIVATE -Wl,--wrap=ioctl)
-target_link_libraries(urma_core_ut PRIVATE urma_test_common ${URMA_STATIC} ${URMA_COMMON_STATIC}
-    GTest::gtest_main dl rt pthread)
-
-add_executable(urma_bond_ut bond/bond_test.cpp)
-target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${URMA_SO} ${URMA_COMMON_SO}
-    GTest::gtest_main nl-genl-3 nl-3 dl rt pthread)
-
 enable_testing()
+add_subdirectory(bond)
 add_subdirectory(common)
+add_subdirectory(core)
 add_subdirectory(cmd_tlv)
 add_subdirectory(uvs)
-add_test(NAME urma_core_ut COMMAND urma_core_ut)
-set_tests_properties(urma_core_ut PROPERTIES LABELS phase_core)
-add_test(NAME urma_bond_ut COMMAND urma_bond_ut)
-set_tests_properties(urma_bond_ut PROPERTIES LABELS phase_bond)
