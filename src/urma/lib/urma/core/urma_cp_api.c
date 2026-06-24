@@ -300,45 +300,6 @@ static inline bool urma_check_trans_mode_valid(urma_transport_mode_t trans_mode)
     return trans_mode == URMA_TM_RM || trans_mode == URMA_TM_RC || trans_mode == URMA_TM_UM;
 }
 
-static int urma_check_jfr_cfg_valid(urma_jfr_cfg_t *jfr_cfg, const urma_device_cap_t *cap)
-{
-    if (jfr_cfg->depth == 0 || jfr_cfg->min_rnr_timer > URMA_MAX_TIMEOUT_COUNT ||
-        jfr_cfg->flag.bs.token_policy > URMA_TOKEN_RESERVED) {
-        URMA_LOG_ERR("jfr_cfg is out of range, and depth: %d, min_rnr_timer: %d, token_policy: %d\n",
-                     jfr_cfg->depth, jfr_cfg->min_rnr_timer, jfr_cfg->flag.bs.token_policy);
-        return URMA_EINVAL;
-    }
-
-    if (jfr_cfg->depth > cap->max_jfr_depth || jfr_cfg->max_sge > cap->max_jfr_sge) {
-        URMA_LOG_ERR("jfr_cfg is out of range, depth: %u, max_depth: %u, sge: %u, max_sge: %u\n",
-                     jfr_cfg->depth, cap->max_jfr_depth, jfr_cfg->max_sge, cap->max_jfr_sge);
-        return URMA_EINVAL;
-    }
-    return URMA_SUCCESS;
-}
-
-static int urma_check_jfs_cfg_valid(urma_jfs_cfg_t *jfs_cfg, const urma_device_cap_t *cap)
-{
-    if (jfs_cfg->depth == 0 || jfs_cfg->priority > URMA_MAX_PRIORITY || jfs_cfg->rnr_retry > URMA_MAX_RNR_RETRY ||
-        jfs_cfg->err_timeout > URMA_MAX_TIMEOUT_COUNT) {
-        URMA_LOG_ERR("jfs cfg is out of range, and depth = %d, priority = %d, rnr_retry = %d, err_timeout = %d\n",
-                     jfs_cfg->depth, jfs_cfg->priority, jfs_cfg->rnr_retry, jfs_cfg->err_timeout);
-        return URMA_EINVAL;
-    }
-
-    if ((jfs_cfg->depth > cap->max_jfs_depth) ||
-        (jfs_cfg->max_inline_data > cap->max_jfs_inline_len) ||
-        (jfs_cfg->max_sge > cap->max_jfs_sge) || (jfs_cfg->max_rsge > cap->max_jfs_rsge)) {
-        URMA_LOG_ERR("jfs cfg is out of range, depth:%u, max_depth:%u, inline_data:%u, max_inline_len:%u, "
-                     "sge:%hhu, max_sge:%u, rsge:%hhu, max_rsge:%u.\n",
-                     jfs_cfg->depth, cap->max_jfs_depth, jfs_cfg->max_inline_data,
-                     cap->max_jfs_inline_len, jfs_cfg->max_sge, cap->max_jfs_sge, jfs_cfg->max_rsge,
-                     cap->max_jfs_rsge);
-        return URMA_EINVAL;
-    }
-    return URMA_SUCCESS;
-}
-
 urma_jfc_t *urma_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *jfc_cfg)
 {
     if (ctx == NULL || jfc_cfg == NULL) {
@@ -729,7 +690,14 @@ urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg)
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jfs);
 
     urma_device_attr_t *attr = &ctx->dev->sysfs_dev->dev_attr;
-    if (urma_check_jfs_cfg_valid(jfs_cfg, &attr->dev_cap) != URMA_SUCCESS) {
+    if ((jfs_cfg->depth == 0 || jfs_cfg->depth > attr->dev_cap.max_jfs_depth) ||
+        (jfs_cfg->max_inline_data > attr->dev_cap.max_jfs_inline_len) ||
+        (jfs_cfg->max_sge > attr->dev_cap.max_jfs_sge) || (jfs_cfg->max_rsge > attr->dev_cap.max_jfs_rsge)) {
+        URMA_LOG_ERR("jfs cfg out of range, depth=%u, max_depth=%u, inline_data=%u, max_inline_len=%u, "
+                     "sge=%hhu, max_sge=%u, rsge=%hhu, max_rsge=%u.\n",
+                     jfs_cfg->depth, attr->dev_cap.max_jfs_depth, jfs_cfg->max_inline_data,
+                     attr->dev_cap.max_jfs_inline_len, jfs_cfg->max_sge, attr->dev_cap.max_jfs_sge, jfs_cfg->max_rsge,
+                     attr->dev_cap.max_jfs_rsge);
         errno = EINVAL;
         return NULL;
     }
@@ -1103,10 +1071,13 @@ urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *jfr_cfg)
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, create_jfr);
 
     urma_device_attr_t *attr = &ctx->dev->sysfs_dev->dev_attr;
-    if (urma_check_jfr_cfg_valid(jfr_cfg, &attr->dev_cap) != URMA_SUCCESS) {
+    if (jfr_cfg->depth == 0 || jfr_cfg->depth > attr->dev_cap.max_jfr_depth ||
+        jfr_cfg->max_sge > attr->dev_cap.max_jfr_sge) {
+        URMA_LOG_ERR("jfr cfg out of range, depth=%u, max_depth=%u, sge=%u, max_sge=%u.\n", jfr_cfg->depth,
+                     attr->dev_cap.max_jfr_depth, jfr_cfg->max_sge, attr->dev_cap.max_jfr_sge);
         errno = EINVAL;
         return NULL;
-    }
+        }
 
     atomic_fetch_add(&ctx->ref.atomic_cnt, 1);
     urma_jfr_t *jfr = ops->create_jfr(ctx, jfr_cfg);
@@ -1653,8 +1624,17 @@ static int urma_create_jetty_check_dev_cap(urma_context_t *ctx, urma_jetty_cfg_t
         }
         (void)pthread_mutex_unlock(&jetty_cfg->jetty_grp->list_mutex);
     }
-    if (urma_check_jfr_cfg_valid(jfr_cfg, cap) != URMA_SUCCESS ||
-        urma_check_jfs_cfg_valid(jfs_cfg, cap) != URMA_SUCCESS) {
+    if ((jfs_cfg->depth == 0 || jfs_cfg->depth > cap->max_jfs_depth) ||
+        (jfs_cfg->max_inline_data > cap->max_jfs_inline_len) ||
+        (jfr_cfg->depth == 0 || jfr_cfg->depth > cap->max_jfr_depth) ||
+        (jfs_cfg->max_sge > cap->max_jfs_sge || jfs_cfg->max_rsge > cap->max_jfs_rsge ||
+         jfr_cfg->max_sge > cap->max_jfr_sge)) {
+        URMA_LOG_ERR("jetty cfg out of range, jfs_depth=%u, max_jfs_depth=%u, "
+                     "inline_data=%u, max_jfs_inline_len=%u, jfr_depth=%u, max_jfr_depth=%u, "
+                     "jfs_sge=%hhu, max_jfs_sge=%u, jfs_rsge=%hhu, max_jfs_rsge=%u, jfr_sge=%hhu, max_jfr_sge=%u.\n",
+                     jfs_cfg->depth, cap->max_jfs_depth, jfs_cfg->max_inline_data, cap->max_jfs_inline_len,
+                     jfr_cfg->depth, cap->max_jfr_depth, jfs_cfg->max_sge, cap->max_jfs_sge, jfs_cfg->max_rsge,
+                     cap->max_jfs_rsge, jfr_cfg->max_sge, cap->max_jfr_sge);
         return -1;
     }
     return 0;
