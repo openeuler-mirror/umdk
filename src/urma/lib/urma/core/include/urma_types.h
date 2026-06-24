@@ -694,11 +694,6 @@ typedef union urma_import_jetty_flag {
         uint32_t reserved     : 19;
     } bs;
     uint32_t value;
-    struct {
-        uint64_t reserved;
-        uint64_t stag;
-        uint64_t dtag;
-    } user_tag;
 } urma_import_jetty_flag_t;
 
 typedef enum urma_tp_type {
