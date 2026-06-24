@@ -467,14 +467,23 @@ static urma_target_jetty_t *umq_ub_connect_jetty(ub_queue_t *queue, umq_ub_bind_
 {
     urma_rjetty_t *rjetty = NULL;
     urma_token_t token;
+    uint32_t length;
     if (i == UB_QUEUE_JETTY_IO) {
         rjetty = info->queue_info->rjetty;
         token = info->queue_info->token;
+        length = info->queue_info->rjetty_size;
     } else {
         rjetty = info->fc_info->rjetty;
         token = info->fc_info->token;
+        length = info->fc_info->rjetty_size;
     }
 
+    if (length < sizeof(urma_rjetty_t)) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), umq_ub_connect_jetty failed, jetty[%d], length[%u] invalid\n",
+            queue->umq_id, i, length);
+        errno = UMQ_ERR_EINVAL;
+        return NULL;
+    }
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     urma_target_jetty_t *tjetty = umq_symbol_urma()->urma_import_jetty(queue->dev_ctx->urma_ctx, rjetty, &token);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_IMPORT_JETTY, start_timestamp);
