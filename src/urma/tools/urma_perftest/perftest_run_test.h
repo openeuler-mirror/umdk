@@ -11,8 +11,12 @@
 #ifndef PERFTEST_RUN_TEST_H
 #define PERFTEST_RUN_TEST_H
 
+#include <signal.h>
+
 #include "perftest_parameters.h"
 #include "perftest_resources.h"
+
+extern volatile sig_atomic_t g_exit_flag;
 
 int run_read_lat(perftest_context_t *ctx, perftest_config_t *cfg);
 int run_write_lat(perftest_context_t *ctx, perftest_config_t *cfg);

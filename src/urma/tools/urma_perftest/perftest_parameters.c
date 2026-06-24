@@ -144,6 +144,7 @@ static void usage(const char *argv0)
         "  -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.\n"
         "  -y, --infinite[second]      Run perftest infinitely, only available for BW test.\n"
         "                              Print period for infinite mode, default 2 seconds.\n"
+        "                              In infinite BW mode, pressing Ctrl-C on either side notifies the peer to exit.\n"
         "  --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.\n"
         "                              if set, value of infinite will be overwrite.\n"
         "  --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].\n"

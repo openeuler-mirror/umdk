@@ -1639,6 +1639,7 @@ Options:
   -w, --warm_up               Choose to use warm_up function, only for read/write/atomic bw test.
   -y, --infinite[second]      Run perftest infinitely, only available for BW test.
                               Print period for infinite mode, default 2 seconds.
+                              In infinite BW mode, pressing Ctrl-C on either side notifies the peer to exit.
   --inf_period_ms             Print period (ms) for infinite mode. Must be a multiple of 50.
                               if set, value of infinite will be overwrite.
   --rate_limit <rate>         Set the maximum rate of sent packages. default unit is [Gbps].

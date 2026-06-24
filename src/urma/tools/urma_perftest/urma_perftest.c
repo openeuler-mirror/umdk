@@ -73,12 +73,13 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
         LOG_ERROR("Failed to run test: %d.\n", (int)cfg->cmd);
         return ret;
     }
-
-    for (i = 0; i < cfg->pair_num; i++) {
-        ret = sync_time(cfg->comm.sock_fd[i], "End test");
-        if (ret != 0) {
-            LOG_ERROR("Failed to sync time, End test.\n");
-            return ret;
+    if (!g_exit_flag) {
+        for (i = 0; i < cfg->pair_num; i++) {
+            ret = sync_time(cfg->comm.sock_fd[i], "End test");
+            if (ret != 0) {
+                LOG_ERROR("Failed to sync time, End test.\n");
+                return ret;
+            }
         }
     }
     return ret;
