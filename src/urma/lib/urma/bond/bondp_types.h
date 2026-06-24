@@ -244,9 +244,11 @@ typedef struct bondp_comp {
     wr_buf_t send_wr_buf;
 #ifndef __cplusplus
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     atomic_uint msn;
 #else
     std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_uint msn;
 #endif
     urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
