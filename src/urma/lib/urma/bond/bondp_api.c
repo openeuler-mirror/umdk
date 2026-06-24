@@ -239,7 +239,7 @@ static int bondp_create_vjfc(urma_context_t *ctx, bondp_jfc_t *bdp_jfc, urma_jfc
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfc->p_jfc[i] != NULL) {
             jfc_info.slave_id[i] = bdp_jfc->p_jfc[i]->jfc_id;
-            URMA_LOG_ERR("PJFC ID is %u.\n", bdp_jfc->p_jfc[i]->jfc_id.id);
+            URMA_LOG_INFO_RL("PJFC ID is %u.\n", bdp_jfc->p_jfc[i]->jfc_id.id);
         }
     }
 
