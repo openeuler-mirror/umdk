@@ -9,14 +9,14 @@
   - [x] Support A3
   - [ ] Support low latency mode
   - [x] Support high throughput mode
-  - [ ] Support BF16/FP16 input
+  - [x] Support BF16/FP16 input
   - [x] Support SHMEM
 - [x]  **FusedDeepMoE: Dispatch + GEMM + Combine** 
   - [ ] Support A2
   - [x] Support A3
   - [x] Support low latency mode
   - [ ] Support high throughput mode
-  - [ ] Support BF16/FP16 input
+  - [x] Support BF16/FP16 input
   - [x] Support W8A8 for GEMM
   - [ ] Support W4A8 for GEMM
 - [ ]  **KVCache Transfer** 
@@ -103,7 +103,7 @@ To install these two packets, you may follow the commands below:
 # Step 1: install run packet. The recommended install path is the opp folder in your environment.
 ./output/cam/comm_operator/run/cam_ascendXXX.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
 # Step 2: enable environment variables. The path is provided from the output that you install run packet. 
-source /usr/local/Ascend/ascend-toolkit/lateset/opp/vendors/CAM/bin/set_env.bash
+source /usr/local/Ascend/ascend-toolkit/latest/opp/vendors/CAM/bin/set_env.bash
 # Step 3: install whl packet.
 pip install --force-reinstall ./output/cam/comm_operator/dist/umdk_cam_op_lib_XXX.whl
 ```
