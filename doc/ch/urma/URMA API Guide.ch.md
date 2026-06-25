@@ -4,6 +4,7 @@
 
 | 修订时间 | 修订章节 | 修订内容简介 | 修复问题单连接或问题背景 | 修订人员 |
 | --- | --- | --- | --- | --- |
+| 2026.6.25 | 2.3.1.5、2.3.1.6、2.3.2、2.4.4、2.5.2 | 对齐用户态API函数原型和缺失辅助接口，与当前代码保持一致 | | @Codex |
 | 2026.2.12 | ALL | 文档基线 | | @qianguoxin、@jerry_lilijun、@wuyuyan_98、@pinchen2025、@autoreconf、@heyu_1014、@wdmmsyf |
 
 ---
@@ -101,6 +102,8 @@
                 - [2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)
                 - [2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty)
                 - [2.3.1.6.14 urma_flush_jetty](#231614-urma_flush_jetty)
+                - [urma_get_rjetty](#urma_get_rjetty)
+                - [urma_put_rjetty](#urma_put_rjetty)
                 - [2.3.1.6.15 urma_import_jetty_async](#231615-urma_import_jetty_async)
                 - [2.3.1.6.16 urma_unimport_jetty_async](#231616-urma_unimport_jetty_async)
                 - [2.3.1.6.17 urma_bind_jetty_async](#231617-urma_bind_jetty_async)
@@ -125,6 +128,8 @@
             - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
                 - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
             - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
+            - [urma_get_seg_ctx](#urma_get_seg_ctx)
+            - [urma_put_seg_ctx](#urma_put_seg_ctx)
         - [2.3.3 TP Channel](#233-tp-channel)
             - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
             - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
@@ -1043,7 +1048,7 @@ typedef int urma_status_t;
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_uninit(void);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -2191,7 +2196,7 @@ typedef union urma_token_id_flag {
 
 [3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -2340,7 +2345,7 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, urma_jfc_attr_t *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3760,7 +3765,7 @@ Return: 0 on success, other value on error.
 
 3.  描述
 
-构造JFS与远端JFR之间的传输通道。
+构造JFS与远端JFR之间的传输通道。JFS和target JFR必须均为RM传输模式。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3770,7 +3775,7 @@ Return: 0 on success, other value on error.
 
 5.  返回值
 
-Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on error.
+Return: 0 on success, URMA_EEXIST if the jfr has been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ##### 2.3.1.5.10 urma_advise_jfr_async
 
@@ -3786,7 +3791,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 3.  描述
 
-[3.3.1.5.9](#23159-urma_advise_jfr) [urma_advise_jfr](#23159-urma_advise_jfr)的异步版本，构造JFS与远端JFR之间的传输通道。
+[3.3.1.5.9](#23159-urma_advise_jfr) [urma_advise_jfr](#23159-urma_advise_jfr)的异步版本，构造JFS与远端JFR之间的传输通道。JFS和target JFR必须均为RM传输模式，并且属于同一个URMA context。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3800,11 +3805,11 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 5.  返回值
 
-Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on error.
+Return: 0 on success, URMA_EEXIST if the jfr has been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ![](figures/urma_notice.png)
 
-用户必须定义回调函数处理异步结果，异步响应会调用cb_fun并传入处理结果。
+用户必须定义非NULL的回调函数和回调参数处理异步结果，异步响应会调用cb_fun并传入处理结果。
 
 ##### 2.3.1.5.11 urma_unadvise_jfr
 
@@ -3820,7 +3825,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 3.  描述
 
-断开JFS与远端JFR之间的传输通道，可选优化接口。
+断开JFS与远端JFR之间的传输通道，可选优化接口。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3830,7 +3835,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ##### urma_alloc_jfr
 
@@ -4605,6 +4610,62 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
 若执行成功，则出参cr status为URMA_CR_WR_FLUSH_ERR。
 
+##### urma_get_rjetty
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_rjetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) **rjetty, uint32_t *length);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+获取本端Jetty对应的远端Jetty上下文副本，用于与对端交换后执行Jetty导入或绑定。对于bonding设备，返回内容可能包含provider扩展数据。
+
+4.  参数
+
+@param[in] [Required] jetty: local Jetty used to build the remote Jetty context;
+
+@param[out] [Required] rjetty: address used to return the allocated remote Jetty context;
+
+@param[out] [Required] length: length of the returned remote Jetty context, including any extension data;
+
+5.  返回值
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+rjetty返回的内存由本接口分配，调用者必须调用[urma_put_rjetty](#urma_put_rjetty)释放。
+
+##### urma_put_rjetty
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+void urma_put_rjetty([urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+释放[urma_get_rjetty](#urma_get_rjetty)返回的远端Jetty上下文。
+
+4.  参数
+
+@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#urma_get_rjetty). If rjetty is NULL, this API returns directly.
+
+5.  返回值
+
+void
+
 ##### 2.3.1.6.15 urma_import_jetty_async
 
 1.  头文件
@@ -5056,7 +5117,7 @@ Jetty group管理API包括创建、删除Jetty group等API。
 
 2.  原型
 
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg)；
+[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5289,7 +5350,7 @@ typedef struct urma_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *target_seg)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -5382,7 +5443,7 @@ typedef union urma_import_seg_flag {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -5403,6 +5464,62 @@ Return: 0 on success, other value on error.
 ![](figures/urma_notice.png)
 
 由调用者保证参数tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+
+#### urma_get_seg_ctx
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_seg_ctx([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) **seg, uint32_t *size);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+从target segment获取segment上下文副本。对于bonding设备，返回内容可能包含provider扩展数据。
+
+4.  参数
+
+@param[in] [Required] tseg: target segment returned by [urma_register_seg](#2321-urma_register_seg) or [urma_import_seg](#2323-urma_import_seg);
+
+@param[out] [Required] seg: address used to return the allocated segment context;
+
+@param[out] [Required] size: length of the returned segment context, including any extension data;
+
+5.  返回值
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+seg返回的内存由本接口分配，调用者必须调用[urma_put_seg_ctx](#urma_put_seg_ctx)释放。
+
+#### urma_put_seg_ctx
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+void urma_put_seg_ctx([3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+释放[urma_get_seg_ctx](#urma_get_seg_ctx)返回的segment上下文。
+
+4.  参数
+
+@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#urma_get_seg_ctx). If seg is NULL, this API returns directly.
+
+5.  返回值
+
+void
 
 ### 2.3.3 TP Channel
 
@@ -5604,7 +5721,7 @@ typedef union urma_tp_attr_mask {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6272,7 +6389,7 @@ typedef struct urma_cr_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, bool solicited_only)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6472,7 +6589,7 @@ Return: 0 on success, other value on error
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3.  描述
 
@@ -6616,9 +6733,9 @@ typedef struct urma_user_ctl_out {
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6674,7 +6791,7 @@ Return: 0 on success, other value on error
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_log_func(void)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6738,7 +6855,7 @@ typedef enum urma_vlog_level {
 
 void urma_log_set_level([3.5.2.3.1](#25231-urma_vlog_level_t) [urma_vlog_level_t](#25231-urma_vlog_level_t) level)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
