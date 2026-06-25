@@ -21,7 +21,7 @@ class TestBondingVmMigration(UBUSFeature):
         log.info('---------- [ Test environment cleanup: VM Migration ] ----------')
         super(TestBondingVmMigration, self).teardown()
 
-    def test_bonding_vm_migration_send_bw(self):
+    def test_bonding_vm_migration(self):
         """
         Bonding Traffic Test: VM Migration Scenario (RM + CTP + balance + simplex)
         """

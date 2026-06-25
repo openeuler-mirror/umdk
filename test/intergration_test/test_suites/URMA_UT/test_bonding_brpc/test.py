@@ -21,7 +21,7 @@ class TestBondingBrpc(UBUSFeature):
         log.info('---------- [ Test environment cleanup: BRPC ] ----------')
         super(TestBondingBrpc, self).teardown()
 
-    def test_bonding_brpc_send_bw(self):
+    def test_bonding_brpc(self):
         """
         Bonding Traffic Test: BRPC Scenario (RM + single_path + active_backup)
         """

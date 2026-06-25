@@ -21,7 +21,7 @@ class TestBondingKvache(UBUSFeature):
         log.info('---------- [ Test environment cleanup: KVACHE ] ----------')
         super(TestBondingKvache, self).teardown()
 
-    def test_bonding_kvache_send_bw(self):
+    def test_bonding_kvache(self):
         """
         Bonding Traffic Test: KVACHE Scenario (RM + CTP + balance)
         """
