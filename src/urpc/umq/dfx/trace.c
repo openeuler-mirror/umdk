@@ -15,8 +15,8 @@
 #include "urpc_util.h"
 #include "perf.h"
 
-#define UMQ_TRACE_DEFAULT_RECORD_NUM   65536
-#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 1000
+#define UMQ_TRACE_DEFAULT_RECORD_NUM   10240
+#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 1
 
 /*
  * Thread-local trace state — one per thread, no lock needed.
@@ -242,7 +242,7 @@ void umq_trace_start_record(umq_trace_type_t type, uint64_t time)
     uint32_t idx = cur_rec->record_cnt % g_umq_trace_record_num;
     umq_data_record_t *rec = &cur_rec->data_record[idx];
 
-    rec->timestamp = umq_trace_timestamp_get();
+    rec->timestamp = get_timestamp_ns();
     rec->type = type;
     rec->start_time = time;
     rec->end_time = 0;
@@ -268,7 +268,7 @@ void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
         return;
     }
     umq_data_record_t *rec = &cur_rec->data_record[idx];
-    if (rec->type != type || rec->sub_time_cnt >= UMQ_PERF_MAX_SUB_TIME_NUM) {
+    if (rec->sub_time_cnt >= UMQ_PERF_MAX_SUB_TIME_NUM) {
         return;
     }
     umq_sub_time_t *sub = &rec->sub_time[rec->sub_time_cnt];
@@ -351,6 +351,7 @@ static const char *umq_urma_func_str(umq_urma_func_type_t func_type)
         [UMQ_URMA_FUNC_REARM_JFC]     = "urma_rearm_jfc",
         [UMQ_URMA_FUNC_FC_REARM_JFC]  = "urma_rearm_jfc(fc)",
         [UMQ_URMA_FUNC_FC_POST_TX]    = "urma_post_jetty_send_wr(fc)",
+        [UMQ_URMA_FUNC_FC_POLL_TX]    = "urma_poll_jfc(fc tx)",
         [UMQ_URMA_FUNC_FC_POST_RX]    = "urma_post_jetty_recv_wr(fc)",
         [UMQ_URMA_FUNC_FC_POLL_RX]    = "urma_poll_jfc(fc rx)",
     };
@@ -467,7 +468,7 @@ int umq_trace_start(umq_trace_cfg_t *cfg)
 int umq_trace_stop(void)
 {
     if (!g_umq_trace_enable || g_umq_trace_ctx == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umq trace already started\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq trace already stopped\n");
         return -UMQ_ERR_EINVAL;
     }
     if (g_umq_trace_ctx->timer != NULL) {
