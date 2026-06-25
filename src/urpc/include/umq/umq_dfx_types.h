@@ -292,6 +292,7 @@ typedef enum umq_urma_func_type {
     UMQ_URMA_FUNC_REARM_JFC,                /* urma_rearm_jfc */
     UMQ_URMA_FUNC_FC_REARM_JFC,             /* urma_rearm_jfc (fc) */
     UMQ_URMA_FUNC_FC_POST_TX,               /* urma_post_jetty_send_wr (fc) */
+    UMQ_URMA_FUNC_FC_POLL_TX,               /* urma_poll_jfc (fc tx) */
     UMQ_URMA_FUNC_FC_POST_RX,               /* urma_post_jetty_recv_wr/urma_post_jfr_wr (fc) */
     UMQ_URMA_FUNC_FC_POLL_RX,               /* urma_poll_jfc (fc rx) */
     UMQ_URMA_FUNC_MAX,
