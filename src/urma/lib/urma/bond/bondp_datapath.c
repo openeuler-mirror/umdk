@@ -1041,8 +1041,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_DEBUG("Resend from [%u, %u] to [%d, %d]\n", send_idx, target_idx,
-                       new_send_idx, new_target_idx);
+        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d]\n", send_idx, target_idx,
+                      new_send_idx, new_target_idx);
         urma_ubagg_switch_inc();
 
         for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
