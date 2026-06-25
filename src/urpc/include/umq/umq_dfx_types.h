@@ -276,6 +276,8 @@ typedef enum umq_trace_type {
     UMQ_TRACE_TYPE_POLL,                /* umq_poll */
     UMQ_TRACE_TYPE_WAIT,                /* umq_wait_interrupt */
     UMQ_TRACE_TYPE_REARM,               /* umq_rearm_interrupt */
+    UMQ_TRACE_TYPE_ALLOC,               /* umq_buf_alloc */
+    UMQ_TRACE_TYPE_FREE,                /* umq_buf_free */
     UMQ_TRACE_TYPE_MAX,
 } umq_trace_type_t;
 
@@ -285,8 +287,10 @@ typedef enum umq_urma_func_type {
     UMQ_URMA_FUNC_POST_RX,                  /* urma_post_jetty_recv_wr/urma_post_jfr_wr */
     UMQ_URMA_FUNC_POLL_TX,                  /* urma_poll_jfc (tx) */
     UMQ_URMA_FUNC_POLL_RX,                  /* urma_poll_jfc (rx) */
-    UMQ_URMA_FUNC_WAIT_JFC,                 /* urma_wait_jfc */
-    UMQ_URMA_FUNC_ACK_JFC,                  /* urma_ack_jfc */
+    UMQ_URMA_FUNC_WAIT_TX_JFC,              /* urma_wait_jfc (tx) */
+    UMQ_URMA_FUNC_WAIT_RX_JFC,              /* urma_wait_jfc (rx) */
+    UMQ_URMA_FUNC_ACK_TX_JFC,               /* urma_ack_jfc (tx) */
+    UMQ_URMA_FUNC_ACK_RX_JFC,               /* urma_ack_jfc (rx) */
     UMQ_URMA_FUNC_REARM_JFC,                /* urma_rearm_jfc */
     UMQ_URMA_FUNC_FC_REARM_JFC,             /* urma_rearm_jfc (fc) */
     UMQ_URMA_FUNC_FC_POST_TX,               /* urma_post_jetty_send_wr (fc) */
