@@ -58,8 +58,19 @@ static void ums_listen_out(struct ums_sock *new_ums)
 
 	if (lums->sk.sk_state == (unsigned char)UMS_LISTEN) {
 		lock_sock_nested(&lums->sk, SINGLE_DEPTH_NESTING);
-		ums_accept_enqueue(&lums->sk, newumssk);
-		release_sock(&lums->sk);
+		/*
+		 * Re-check state after acquiring lock; listen socket may have been
+		 * closed while we were blocked on lock_sock_nested. Without this
+		 * check, the new socket would be enqueued as an orphan and leak
+		 * (never unhashed, module refcount leaked).
+		 */
+		if (lums->sk.sk_state == (unsigned char)UMS_LISTEN) {
+			ums_accept_enqueue(&lums->sk, newumssk);
+			release_sock(&lums->sk);
+		} else {
+			release_sock(&lums->sk);
+			ums_close_non_accepted(newumssk);
+		}
 	} else { /* no longer listening */
 		ums_close_non_accepted(newumssk);
 	}
