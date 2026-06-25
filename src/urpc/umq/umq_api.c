@@ -1089,7 +1089,12 @@ umq_buf_t *umq_data_to_head(void *data)
         return NULL;
     }
 
-    return umq_qbuf_data_to_head(data);
+    umq_buf_t *buf = umq_qbuf_data_to_head(data);
+    if (buf != NULL) {
+        return buf;
+    }
+
+    return umq_qbuf_expansion_data_to_head(data);
 }
 
 int umq_enqueue(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)

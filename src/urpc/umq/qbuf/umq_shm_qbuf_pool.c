@@ -525,7 +525,7 @@ int umq_shm_qbuf_alloc(
     if (_pool->mode == UMQ_BUF_SPLIT) {
         umq_shm_qbuf_alloc_data_with_split(lblk_pool, request_size, &param, list, _pool);
     } else {
-        umq_qbuf_alloc_data_with_combine(lblk_pool, request_size, &param, list);
+        umq_qbuf_alloc_data_with_combine(lblk_pool, request_size, &param, list, _pool->block_size);
     }
 
     return UMQ_SUCCESS;
