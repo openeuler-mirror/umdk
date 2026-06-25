@@ -109,7 +109,8 @@ static urma_status_t comp_post_recv(bondp_comp_t *comp, int recv_idx, urma_jfr_w
     return ret;
 }
 
-static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx, const urma_jfs_wr_t *wr)
+static urma_status_t post_send_check_jfs_wr_valid(const urma_jfs_wr_t *wr,
+                                                  uint32_t max_jfs_sge, uint32_t max_jfs_rsge)
 {
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -118,11 +119,11 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
             /* No need to handle cases where num_sge == 0 or sge == NULL;
                UDMA will take care of it, as SEND_WITH_IMM may allow NULL to be passed.
             */
-            if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->send.src.num_sge) {
+            if (max_jfs_sge < wr->send.src.num_sge) {
                 URMA_LOG_WARN("The number of sge %u the destination segment is greater than the maximum supported=%u"
                               "by the device.\n",
                               wr->send.src.num_sge,
-                              bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                              max_jfs_sge);
             }
             break;
         case URMA_OPC_WRITE:
@@ -138,30 +139,30 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
             /* The limitation of rsge is the number of *remote sge* that can be accessed,
                whether for write or read operations. */
             if (wr->opcode == URMA_OPC_READ) {
-                if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.src.num_sge) {
+                if (max_jfs_rsge < wr->rw.src.num_sge) {
                     URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.src.num_sge,
-                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
+                                  max_jfs_rsge);
                 }
-                if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.dst.num_sge) {
+                if (max_jfs_sge < wr->rw.dst.num_sge) {
                     URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.dst.num_sge,
-                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                                  max_jfs_sge);
                 }
             } else {
-                if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge < wr->rw.src.num_sge) {
+                if (max_jfs_sge < wr->rw.src.num_sge) {
                     URMA_LOG_WARN("The number of local sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.src.num_sge,
-                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge);
+                                  max_jfs_sge);
                 }
-                if (bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge < wr->rw.dst.num_sge) {
+                if (max_jfs_rsge < wr->rw.dst.num_sge) {
                     URMA_LOG_WARN("The number of remote sge %u is greater than the maximum supported=%u"
                                   " by the device.\n",
                                   wr->rw.dst.num_sge,
-                                  bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge);
+                                  max_jfs_rsge);
                 }
             }
             break;
@@ -185,14 +186,11 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_context_t *bdp_ctx
     return URMA_SUCCESS;
 }
 
-static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_target_jetty_t *bdp_tjetty,
-                                           const urma_jfs_wr_t *wr)
+static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp,
+                                           const urma_jfs_wr_t *wr, uint32_t max_jfs_sge,
+                                           uint32_t max_jfs_rsge)
 {
-    if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
-        URMA_LOG_ERR("Try to call post_send api by invalid comp_type=%d\n", bdp_send_comp->comp_type);
-        return URMA_EINVAL;
-    }
-    urma_status_t ret = post_send_check_jfs_wr_valid(bdp_send_comp->bondp_ctx, wr);
+    urma_status_t ret = post_send_check_jfs_wr_valid(wr, max_jfs_sge, max_jfs_rsge);
     if (ret != URMA_SUCCESS) {
         return ret;
     }
@@ -208,23 +206,32 @@ static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, bondp_ta
 }
 
 static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, const urma_jfs_wr_t *wr,
-                                                   urma_jfs_wr_t **bad_wr)
+                                                   urma_jfs_wr_t **bad_wr, int *wr_total)
 {
-    bondp_target_jetty_t *bdp_tjetty = NULL;
     urma_status_t ret = URMA_SUCCESS;
     urma_jfs_wr_t *cur = (urma_jfs_wr_t *)wr;
+    int count = 0;
+
+    if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
+        URMA_LOG_ERR("Try to call post_send api by invalid comp_type=%d\n", bdp_send_comp->comp_type);
+        return URMA_EINVAL;
+    }
+
+    const urma_device_cap_t *dev_cap = &bdp_send_comp->bondp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap;
+    uint32_t max_jfs_sge = dev_cap->max_jfs_sge;
+    uint32_t max_jfs_rsge = dev_cap->max_jfs_rsge;
 
     while (cur != NULL) {
-        /* No need to check NULL for tjetty of each wr */
-        bdp_tjetty = CONTAINER_OF_FIELD(cur->tjetty, bondp_target_jetty_t, v_tjetty);
-        ret = post_send_check_valid(bdp_send_comp, bdp_tjetty, cur);
+        ret = post_send_check_valid(bdp_send_comp, cur, max_jfs_sge, max_jfs_rsge);
         if (ret != URMA_SUCCESS) {
             *bad_wr = cur;
             return ret;
         }
         cur = cur->next;
+        count++;
     }
 
+    *wr_total = count;
     return URMA_SUCCESS;
 }
 
@@ -240,7 +247,8 @@ static urma_status_t schedule_send_wr(const urma_jfs_wr_t *wr, bondp_comp_t *bdp
 }
 
 static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
-                                                 const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
+                                                 const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
+                                                 int wr_total)
 {
     static thread_local urma_jfs_wr_t prealloc_wr_list[BONDP_MAX_WR_LIST_NUM];
     static thread_local urma_sge_t prealloc_src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
@@ -251,11 +259,10 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         URMA_LOG_ERR("WR->tjetty is NULL\n");
         return URMA_EINVAL;
     }
-    int wr_total = 0;
-    for (urma_jfs_wr_t *c = (urma_jfs_wr_t *)wr; c != NULL; c = c->next) {
-        wr_total++;
+    uint32_t base_msn = 0;
+    if (bdp_tjetty->is_msn_enabled) {
+        base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
     }
-    uint32_t base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         urma_status_t ret = URMA_SUCCESS;
         int send_idx = -1;
@@ -305,7 +312,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
  * converts the WRs, then submits them as a batch to comp_post_send.
  */
 static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
-    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
+    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr, int wr_total)
 {
     if (bdp_comp->comp_type != BONDP_COMP_JFS && bdp_comp->comp_type != BONDP_COMP_JETTY) {
         URMA_LOG_ERR("Try to call post_send api by invalid comp_type=%d\n", bdp_comp->comp_type);
@@ -317,15 +324,14 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         URMA_LOG_ERR("WR->tjetty is NULL\n");
         return URMA_EINVAL;
     }
-    int wr_total = 0;
-    for (urma_jfs_wr_t *c = wr; c != NULL; c = c->next) {
-        wr_total++;
-    }
     if (wr_total > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
         return URMA_EINVAL;
     }
-    uint32_t base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
+    uint32_t base_msn = 0;
+    if (bdp_tjetty->is_msn_enabled) {
+        base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
+    }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         urma_status_t ret = URMA_SUCCESS;
         int wr_count = 0;
@@ -456,18 +462,19 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
 {
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     urma_status_t ret = URMA_SUCCESS;
+    int wr_total = 0;
 
     PERF_PROFILING_START(BOND_JETTY_POST_SEND);
-    ret = post_send_check_wr_list_valid(bdp_jetty, wr, bad_wr);
+    ret = post_send_check_wr_list_valid(bdp_jetty, wr, bad_wr, &wr_total);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JETTY_POST_SEND);
         return ret;
     }
 
     if (is_single_dev_mode(bdp_jetty->bondp_ctx)) {
-        ret = bondp_post_send_wr_no_store(bdp_jetty, wr, bad_wr);
+        ret = bondp_post_send_wr_no_store(bdp_jetty, wr, bad_wr, wr_total);
     } else {
-        ret = bondp_post_send_wr_list_and_store(bdp_jetty, wr, bad_wr);
+        ret = bondp_post_send_wr_list_and_store(bdp_jetty, wr, bad_wr, wr_total);
     }
     PERF_PROFILING_END(BOND_JETTY_POST_SEND);
 
@@ -478,17 +485,18 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
 {
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
     urma_status_t ret = URMA_SUCCESS;
+    int wr_total = 0;
 
     PERF_PROFILING_START(BOND_JFS_POST_SEND);
-    ret = post_send_check_wr_list_valid(bdp_jfs, wr, bad_wr);
+    ret = post_send_check_wr_list_valid(bdp_jfs, wr, bad_wr, &wr_total);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JFS_POST_SEND);
         return ret;
     }
     if (is_single_dev_mode(bdp_jfs->bondp_ctx)) {
-        ret = bondp_post_send_wr_no_store(bdp_jfs, wr, bad_wr);
+        ret = bondp_post_send_wr_no_store(bdp_jfs, wr, bad_wr, wr_total);
     } else {
-        ret = bondp_post_send_wr_list_and_store(bdp_jfs, wr, bad_wr);
+        ret = bondp_post_send_wr_list_and_store(bdp_jfs, wr, bad_wr, wr_total);
     }
     PERF_PROFILING_END(BOND_JFS_POST_SEND);
 
