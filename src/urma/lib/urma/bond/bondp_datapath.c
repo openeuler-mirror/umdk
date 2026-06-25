@@ -1124,13 +1124,19 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
     }
 
     bondp_comp_t *post_comp = wr_entry->bdp_comp;
+    bondp_comp_t *jfr = get_recv_count_comp(post_comp);
     uint32_t recv_idx = wr_entry->recv_idx;
     uint32_t msn = 0;
     convert_pcr_to_vcr(cr, bdp_ctx, &msn);
     cr->local_id = recv_comp->v_jetty.jetty_id.id;
     cr->user_ctx = wr_entry->user_ctx;
 
-    post_comp->rqe_cnt[recv_idx] -= 1;
+    if (jfr->rqe_cnt[recv_idx] == 0) {
+        URMA_LOG_WARN("recv cr with store rqe_cnt underflow risk, idx=%u, local_id=%u\n",
+                      recv_idx, cr->local_id);
+    } else {
+        jfr->rqe_cnt[recv_idx] -= 1;
+    }
 
     bool msn_enable = bdp_ctx->msn_enable;
     if (!msn_enable) {
