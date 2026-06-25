@@ -335,6 +335,8 @@ static const char *umq_trace_type_str(umq_trace_type_t type)
         [UMQ_TRACE_TYPE_POLL]  = "POLL",
         [UMQ_TRACE_TYPE_WAIT]  = "WAIT",
         [UMQ_TRACE_TYPE_REARM] = "REARM",
+        [UMQ_TRACE_TYPE_ALLOC] = "ALLOC",
+        [UMQ_TRACE_TYPE_FREE]  = "FREE",
     };
     return (type < UMQ_TRACE_TYPE_MAX) ? type_str[type] : "UNKNOWN";
 }
@@ -346,8 +348,10 @@ static const char *umq_urma_func_str(umq_urma_func_type_t func_type)
         [UMQ_URMA_FUNC_POST_RX]       = "urma_post_jetty_recv_wr",
         [UMQ_URMA_FUNC_POLL_TX]       = "urma_poll_jfc(tx)",
         [UMQ_URMA_FUNC_POLL_RX]       = "urma_poll_jfc(rx)",
-        [UMQ_URMA_FUNC_WAIT_JFC]      = "urma_wait_jfc",
-        [UMQ_URMA_FUNC_ACK_JFC]       = "urma_ack_jfc",
+        [UMQ_URMA_FUNC_WAIT_TX_JFC]   = "urma_wait_jfc(tx)",
+        [UMQ_URMA_FUNC_WAIT_RX_JFC]   = "urma_wait_jfc(rx)",
+        [UMQ_URMA_FUNC_ACK_TX_JFC]    = "urma_ack_jfc(tx)",
+        [UMQ_URMA_FUNC_ACK_RX_JFC]    = "urma_ack_jfc(rx)",
         [UMQ_URMA_FUNC_REARM_JFC]     = "urma_rearm_jfc",
         [UMQ_URMA_FUNC_FC_REARM_JFC]  = "urma_rearm_jfc(fc)",
         [UMQ_URMA_FUNC_FC_POST_TX]    = "urma_post_jetty_send_wr(fc)",
