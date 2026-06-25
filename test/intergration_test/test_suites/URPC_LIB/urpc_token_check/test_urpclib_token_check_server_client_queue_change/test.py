@@ -49,6 +49,6 @@ class Test(UBUSFeature):
         log.info('---------- [ Test teardown ] ----------')
         super(Test, self).teardown()
 
-    def test_urpc_lib_timeout_normal(self):
+    def test_urpclib_token_check_server_client_queue_change(self):
         log.info(f'---------- [ Test local_path = {local_path} ] ----------')
         exec_test_case(self.host_list, local_path, rand_host=False)
