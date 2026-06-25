@@ -114,6 +114,10 @@ int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_s
         "%-40s %-40lu\n", "Send Error Cnt", flow_control_stats->packet_stats.send_error_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
         "%-40s %-40lu\n", "Recv Error Cnt", flow_control_stats->packet_stats.recv_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+        "%-40s %-40lu\n", "Recv Duplicate Req Cnt", flow_control_stats->packet_stats.recv_duplicate_req_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+        "%-40s %-40lu\n", "Recv Duplicate Rsp Cnt", flow_control_stats->packet_stats.recv_duplicate_rsp_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
 
@@ -256,7 +260,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
         "%-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
         "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf", "AccAlloc", "AccFree");
-   
+
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
         total_tls_capacity_with_data += s->capacity_with_data;
@@ -442,6 +446,10 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
         "send_error_cnt", packet_stats->send_error_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
         "recv_error_cnt", packet_stats->recv_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
+        "recv_duplicate_req_cnt", packet_stats->recv_duplicate_req_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
+        "recv_duplicate_rsp_cnt", packet_stats->recv_duplicate_rsp_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
 

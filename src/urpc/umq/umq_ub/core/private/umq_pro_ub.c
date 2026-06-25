@@ -962,7 +962,7 @@ static bool is_umq_ub_flow_control_msg_duplicate(ub_queue_t *real_queue, umq_ub_
         case IMM_TYPE_FC_CREDIT_REQ:
         case IMM_TYPE_FC_CREDIT_RETURN_REQ:
             if (flow_control_data->bs.seq != fc->remote_expect_seq) {
-                umq_ub_fc_packet_stats(fc, 1, UB_PACKET_STATS_TYPE_RECV_DUP_REQ);
+                umq_ub_fc_packet_stats(fc, 1, UB_PACKET_STATS_TYPE_RECV_DUPLICATE_REQ);
                 return true;
             }
             fc->remote_expect_seq = umq_ub_fc_seq_inc(fc->remote_expect_seq);
@@ -973,7 +973,7 @@ static bool is_umq_ub_flow_control_msg_duplicate(ub_queue_t *real_queue, umq_ub_
         case IMM_TYPE_FC_CREDIT_REP:
         case IMM_TYPE_FC_CREDIT_RETURN_ACK:
             if (flow_control_data->bs.seq != fc->local_req_seq) {
-                umq_ub_fc_packet_stats(fc, 1, UB_PACKET_STATS_TYPE_RECV_DUP_RSP);
+                umq_ub_fc_packet_stats(fc, 1, UB_PACKET_STATS_TYPE_RECV_DUPLICATE_RSP);
                 return true;
             }
             __atomic_store_n((uint64_t *)&fc->imm[UB_QUEUE_FC_MSG_TYPE_RSP],
