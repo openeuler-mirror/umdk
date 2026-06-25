@@ -21,7 +21,7 @@ class TestBondingHcom(UBUSFeature):
         log.info('---------- [ Test environment cleanup: HCOM ] ----------')
         super(TestBondingHcom, self).teardown()
 
-    def test_bonding_hcom_send_bw(self):
+    def test_bonding_hcom(self):
         """
         Bonding Traffic Test: HCOM Scenario (RC + single_path + active_backup)
         """

@@ -35,7 +35,7 @@ class Test(UBUSFeature):
         log.info('---------- [ Test teardown ] ----------')
         super(Test, self).teardown()
 
-    def test_urma_ipourma_iperf_udp_param(self):
+    def test_urma_ipourma_iperf_basic_udp_param(self):
         test_configs = {
             "-b": ["1M", "100M", "0"],
             "-l": [64, 1400],

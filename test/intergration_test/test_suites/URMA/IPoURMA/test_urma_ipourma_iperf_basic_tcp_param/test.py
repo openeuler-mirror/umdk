@@ -34,7 +34,7 @@ class Test(UBUSFeature):
         log.info('---------- [ Test teardown ] ----------')
         super(Test, self).teardown()
 
-    def test_urma_ipourma_iperf_tcp_param(self):
+    def test_urma_ipourma_iperf_basic_tcp_param(self):
         test_configs = {
             "-l": [1, 64],
             "-w": ["1K", "4K"],
