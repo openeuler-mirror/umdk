@@ -712,3 +712,112 @@ TEST_F(SocketInterfaceTest, test_sockopt)
     getsockopt(g_connectFd, SOL_TCP, TCP_FASTOPEN, &get_val, &opt_len);
     EXPECT_TRUE(set_val == get_val);
 }
+
+TEST_F(SocketInterfaceTest, ipv6_error_handling_invalid_address)
+{
+    int32_t ret;
+    int32_t tempSockFd = socket(AF_SMC, SOCK_STREAM, 1);
+    EXPECT_TRUE(tempSockFd >= 0);
+
+    ret = SetSocketNonBlock(tempSockFd);
+    EXPECT_TRUE(ret == 0);
+
+    struct sockaddr_in6 servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin6_family = AF_INET6;
+    inet_pton(AF_INET6, "2001:db8::1", &(servaddr.sin6_addr));
+    servaddr.sin6_port = htons(9999);
+
+    ret = connect(tempSockFd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    EXPECT_TRUE(ret < 0);
+    EXPECT_TRUE(errno == EINPROGRESS || errno == ECONNREFUSED || errno == ENETUNREACH);
+
+    close(tempSockFd);
+}
+
+TEST_F(SocketInterfaceTest, error_handling_invalid_sockopt)
+{
+    int32_t ret;
+    int32_t invalidOpt = 9999;
+    int32_t value = 1;
+    socklen_t optLen = sizeof(int);
+
+    ret = setsockopt(g_connectFd, SOL_SOCKET, invalidOpt, &value, sizeof(value));
+    EXPECT_TRUE(ret < 0);
+    EXPECT_TRUE(errno == EINVAL || errno == ENOPROTOOPT);
+
+    ret = getsockopt(g_connectFd, SOL_SOCKET, invalidOpt, &value, &optLen);
+    EXPECT_TRUE(ret < 0);
+    EXPECT_TRUE(errno == EINVAL || errno == ENOPROTOOPT);
+}
+
+TEST_F(SocketInterfaceTest, timeout_handling_connect_timeout)
+{
+    int32_t ret;
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    ret = setsockopt(g_connectFd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    EXPECT_TRUE(ret == 0);
+
+    ret = setsockopt(g_connectFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    EXPECT_TRUE(ret == 0);
+}
+
+TEST_F(SocketInterfaceTest, address_reuse_test)
+{
+    int32_t ret;
+    int32_t reuse = 1;
+    int32_t getReuse = 0;
+    socklen_t optLen = sizeof(int);
+
+    ret = setsockopt(g_connectFd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    EXPECT_TRUE(ret == 0);
+
+    ret = getsockopt(g_connectFd, SOL_SOCKET, SO_REUSEADDR, &getReuse, &optLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(getReuse != 0);
+}
+
+TEST_F(SocketInterfaceTest, fcntl_nonblock_flag_test)
+{
+    int32_t flags;
+
+    flags = fcntl(g_connectFd, F_GETFL, 0);
+    EXPECT_TRUE(flags >= 0);
+    EXPECT_TRUE((flags & O_NONBLOCK) != 0);
+}
+
+TEST_F(SocketInterfaceTest, getpeername_after_connect)
+{
+    int32_t ret;
+    struct sockaddr_in peerAddr;
+    socklen_t addrLen = sizeof(peerAddr);
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(1000000);
+
+    ret = getpeername(g_connectFd, (struct sockaddr *)&peerAddr, &addrLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(peerAddr.sin_family == AF_INET);
+    EXPECT_TRUE(peerAddr.sin_port == htons(g_port));
+}
+
+TEST_F(SocketInterfaceTest, so_error_after_nonblock_connect)
+{
+    int32_t ret;
+    int error = 0;
+    socklen_t optLen = sizeof(error);
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(1000000);
+
+    ret = getsockopt(g_connectFd, SOL_SOCKET, SO_ERROR, &error, &optLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(error == 0);
+}

@@ -18,7 +18,9 @@
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/sendfile.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <net/if.h>
 
 #include "gtest/gtest.h"
@@ -398,4 +400,161 @@ TEST_F(SocketInterfaceTest, io_multiplex_epoll)
 
     close(acceptFd);
     close(epollFd);
+}
+
+TEST_F(SocketInterfaceTest, error_handling_connect_failure)
+{
+    int32_t ret;
+    int32_t tempSockFd = socket(AF_SMC, SOCK_STREAM, 0);
+    EXPECT_TRUE(tempSockFd >= 0);
+
+    ret = SetSocketNonBlock(tempSockFd);
+    EXPECT_TRUE(ret == 0);
+
+    struct sockaddr_in servaddr;
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr("192.0.2.1");
+    servaddr.sin_port = htons(9999);
+
+    ret = connect(tempSockFd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    EXPECT_TRUE(ret < 0);
+    EXPECT_TRUE(errno == EINPROGRESS || errno == ECONNREFUSED);
+
+    close(tempSockFd);
+}
+
+TEST_F(SocketInterfaceTest, boundary_zero_byte_transfer)
+{
+    int32_t acceptFd;
+    int32_t ret;
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(100000);
+
+    acceptFd = ServerAccept(g_listenFd);
+    EXPECT_TRUE(acceptFd >= 0);
+
+    ret = write(g_connectFd, g_sendBuff, 0);
+    EXPECT_TRUE(ret == 0);
+
+    ret = read(acceptFd, g_recvBuff, 0);
+    EXPECT_TRUE(ret == 0);
+
+    close(acceptFd);
+}
+
+TEST_F(SocketInterfaceTest, boundary_partial_read_write)
+{
+    int32_t acceptFd;
+    int32_t ret;
+    size_t totalLen = DATA_LENGTH;
+    size_t chunkLen = 2000;
+    size_t received = 0;
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(100000);
+
+    acceptFd = ServerAccept(g_listenFd);
+    EXPECT_TRUE(acceptFd >= 0);
+
+    for (size_t offset = 0; offset < totalLen; offset += chunkLen) {
+        size_t sendLen = (totalLen - offset < chunkLen) ? (totalLen - offset) : chunkLen;
+        ret = write(g_connectFd, g_sendBuff + offset, sendLen);
+        EXPECT_TRUE(ret == (int32_t)sendLen);
+    }
+
+    usleep(200000);
+
+    while (received < totalLen) {
+        size_t toRead = (totalLen - received < chunkLen) ? (totalLen - received) : chunkLen;
+        ret = read(acceptFd, g_recvBuff + received, toRead);
+        EXPECT_TRUE(ret > 0);
+        received += (size_t)ret;
+    }
+    EXPECT_TRUE(received == totalLen);
+
+    close(acceptFd);
+}
+
+TEST_F(SocketInterfaceTest, socket_option_tcp_nodelay)
+{
+    int32_t ret;
+    int enable = 1;
+    int value = 0;
+    socklen_t optLen = sizeof(int);
+
+    ret = setsockopt(g_connectFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+    EXPECT_TRUE(ret == 0);
+
+    ret = getsockopt(g_connectFd, IPPROTO_TCP, TCP_NODELAY, &value, &optLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(value == enable);
+}
+
+TEST_F(SocketInterfaceTest, half_close_test)
+{
+    int32_t acceptFd;
+    int32_t ret;
+    size_t dataLen = 1000;
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(100000);
+
+    acceptFd = ServerAccept(g_listenFd);
+    EXPECT_TRUE(acceptFd >= 0);
+
+    ret = shutdown(g_connectFd, SHUT_WR);
+    EXPECT_TRUE(ret == 0);
+
+    ret = read(acceptFd, g_recvBuff, dataLen);
+    EXPECT_TRUE(ret == 0);
+
+    close(acceptFd);
+}
+
+TEST_F(SocketInterfaceTest, getsockname_and_getpeername)
+{
+    int32_t acceptFd;
+    int32_t ret;
+    struct sockaddr_in localAddr;
+    struct sockaddr_in peerAddr;
+    socklen_t addrLen;
+
+    ret = ClientConnect(g_connectFd);
+    EXPECT_TRUE(ret == 0);
+
+    usleep(100000);
+
+    acceptFd = ServerAccept(g_listenFd);
+    EXPECT_TRUE(acceptFd >= 0);
+
+    addrLen = sizeof(localAddr);
+    ret = getsockname(g_connectFd, (struct sockaddr *)&localAddr, &addrLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(localAddr.sin_family == AF_INET);
+
+    addrLen = sizeof(peerAddr);
+    ret = getpeername(g_connectFd, (struct sockaddr *)&peerAddr, &addrLen);
+    EXPECT_TRUE(ret == 0);
+    EXPECT_TRUE(peerAddr.sin_port == htons(g_port));
+
+    ret = send(g_connectFd, g_sendBuff, 100, 0);
+    EXPECT_TRUE(ret == 100);
+
+    usleep(100000);
+
+    ret = recv(acceptFd, g_recvBuff, 100, MSG_PEEK);
+    EXPECT_TRUE(ret == 100);
+
+    ret = recv(acceptFd, g_recvBuff, 100, 0);
+    EXPECT_TRUE(ret == 100);
+
+    close(acceptFd);
 }
