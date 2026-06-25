@@ -31,6 +31,8 @@ typedef struct umq_packet_stats {
     uint64_t send_eagain_cnt;       // number of packets failed to send due to flowcontrol eagain
     uint64_t send_error_cnt;        // number of packets failed to send
     uint64_t recv_error_cnt;        // number of packets failed to receive
+    uint64_t recv_duplicate_req_cnt;      // number of duplicate flow control request packets received
+    uint64_t recv_duplicate_rsp_cnt;      // number of duplicate flow control response packets received
 } umq_packet_stats_t;
 
 typedef struct umq_credit_pool_stats {
