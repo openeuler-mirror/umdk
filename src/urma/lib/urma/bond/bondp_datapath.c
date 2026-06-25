@@ -577,6 +577,9 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
 static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_comp, urma_jfr_wr_t *wr,
                                                             urma_jfr_wr_t **bad_wr)
 {
+    static thread_local urma_jfr_wr_t prealloc_wr_list[BONDP_MAX_WR_LIST_NUM];
+    static thread_local urma_sge_t prealloc_src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
+
     if (bdp_comp == NULL) {
         URMA_LOG_ERR("Invalid bdp_comp: NULL in recv post without backup.\n");
         return URMA_EINVAL;
@@ -600,6 +603,7 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
         return URMA_FAIL;
     }
 
+    int index = 0;
     cur = wr;
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t recv_idx_u = bdp_comp->active_indices[i];
@@ -614,7 +618,7 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
             continue;
         }
 
-        urma_jfr_wr_t *post_wr_head = cur;
+        urma_jfr_wr_t *post_wr_head = &prealloc_wr_list[index];
         urma_jfr_wr_t *post_wr_tail = NULL;
         for (uint32_t j = 0; j < recv_cnt; j++) {
             if (cur == NULL) {
@@ -622,13 +626,22 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
                              recv_idx, recv_cnt, j);
                 return URMA_EINVAL;
             }
-            ret = convert_jfr_vwr_to_pwr(cur, recv_idx);
+            urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
+            ret = copy_jfr_wr(cur, pwr, prealloc_src_sge[index]);
+            if (ret != 0) {
+                return ret;
+            }
+            ret = convert_jfr_vwr_to_pwr(pwr, recv_idx);
             if (ret != 0) {
                 URMA_LOG_ERR("Failed to convert recv wr without backup, recv_idx=%d, ret=%d\n", recv_idx, ret);
                 return ret;
             }
-            post_wr_tail = cur;
+            if (post_wr_tail != NULL) {
+                post_wr_tail->next = pwr;
+            }
+            post_wr_tail = pwr;
             cur = cur->next;
+            index++;
         }
 
         if (post_wr_tail == NULL) {
