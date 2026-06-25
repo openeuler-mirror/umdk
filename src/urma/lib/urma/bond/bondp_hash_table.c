@@ -18,6 +18,7 @@ int bondp_hash_table_create(bondp_hash_table_t *tbl, uint32_t size,
     tbl->free_f = free_f;
     tbl->comp_f = comp_f;
     tbl->hash_f = hash_f;
+    atomic_init(&tbl->gen, 0);
     return 0;
 }
 
@@ -38,6 +39,8 @@ void bondp_hash_table_destroy(bondp_hash_table_t *tbl)
     ub_hmap_destroy(&tbl->hmap);
     (void)pthread_rwlock_unlock(&tbl->lock);
     (void)pthread_rwlock_destroy(&tbl->lock);
+    /* Invalidate all thread-local caches that may still reference this table */
+    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
 }
 
 struct ub_hmap_node *bondp_hash_table_lookup(bondp_hash_table_t *tbl, void *key, uint32_t hash)

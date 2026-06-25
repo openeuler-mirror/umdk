@@ -882,11 +882,24 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
 
 static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
 {
-    urma_jetty_id_t pjetty_id = {
-        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
-        .id = cr->local_id,
-    };
+    /*
+     * Thread-local cache: in active/backup and most workloads, consecutive
+     * CRs from the same device index map to the same bondp_comp_t.  The cache
+     * eliminates the rwlock + hash-table lookup on every CQE
+     */
+    static __thread bondp_context_t *tl_ctx;
+    static __thread int tl_dev_idx;
+    static __thread uint32_t tl_local_id;
+    static __thread bondp_comp_t *tl_comp;
+    static __thread uint32_t tl_gen;
+    static __thread bdp_p_vjetty_type_t tl_vjetty_type;
 
+    /*
+     * Compute p_vjetty_type before the cache check so it can be used as
+     * part of the cache key.  Without it, JFS and JFR CRs with the same
+     * local_id from the same device can hit the cache and return the
+     * wrong bondp_comp_t (ABA-like type confusion).
+     */
     bdp_p_vjetty_type_t p_vjetty_type;
     if (cr->flag.bs.jetty != 0) {
         p_vjetty_type = JETTY;
@@ -895,6 +908,18 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
     } else {
         p_vjetty_type = JFR;
     }
+
+    if (tl_comp != NULL && tl_ctx == bdp_ctx && tl_dev_idx == dev_idx &&
+        tl_local_id == cr->local_id && tl_vjetty_type == p_vjetty_type &&
+        atomic_load(&bdp_ctx->p_vjetty_id_table.gen) == tl_gen) {
+        atomic_fetch_add(&tl_comp->use_cnt.atomic_cnt, 1);
+        return tl_comp;
+    }
+
+    urma_jetty_id_t pjetty_id = {
+        .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
+        .id = cr->local_id,
+    };
 
     pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(
@@ -905,7 +930,16 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
         return NULL;
     }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
+    uint32_t cur_gen = atomic_load(&bdp_ctx->p_vjetty_id_table.gen);
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    /* Update thread-local cache */
+    tl_ctx = bdp_ctx;
+    tl_dev_idx = dev_idx;
+    tl_local_id = cr->local_id;
+    tl_vjetty_type = p_vjetty_type;
+    tl_comp = comp;
+    tl_gen = cur_gen;
+
     return comp;
 }
 
