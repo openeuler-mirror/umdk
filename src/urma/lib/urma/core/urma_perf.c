@@ -20,6 +20,103 @@
 #include "urma_perf.h"
 #include "urma_private.h"
 
+#ifdef URMA_PERF_USE_CNTVCT
+#ifndef __aarch64__
+#error "URMA_PERF_USE_CNTVCT is only supported on AArch64"
+#endif
+
+#define URMA_NS_PER_SEC 1000000000ULL
+/* Maximum seconds of uptime the mult/shift conversion handles without overflow */
+#define URMA_CNTVCT_MAX_SEC 600
+/* Width of mult (uint32_t) */
+#define URMA_CNTVCT_MULT_BITS 32
+/* Divisor for round-to-nearest when computing the mult value */
+#define URMA_CNTVCT_ROUND_DIVISOR 2
+
+static inline uint64_t urma_read_cntvct_el0(void)
+{
+    uint64_t val;
+    /*
+     * Read CNTVCT_EL0 without isb; Isb serializes the pipeline and costs
+     * ~15-20ns, which increases the profiling overhead;
+     * Without isb, the measured result may have 10~20ns jitter
+     */
+    __asm__ __volatile__("mrs %0, cntvct_el0"
+                         : "=r" (val)
+                         :
+                         : "memory");
+    return val;
+}
+
+static inline uint64_t urma_read_cntfrq_el0(void)
+{
+    uint64_t val;
+    __asm__ __volatile__("mrs %0, cntfrq_el0" : "=r" (val));
+    return val;
+}
+
+/*
+ * mult/shift use atomic types to guarantee cross-core visibility in
+ * high-concurrency scenarios.
+ */
+static atomic_uint g_cntvct_mult;
+static atomic_uint g_cntvct_shift;
+static atomic_bool g_cntvct_mult_shift_inited = ATOMIC_VAR_INIT(false);
+
+/*
+ * Calculate mult/shift for tick-to-ns conversion, following the same
+ * algorithm as the Linux kernel's clocks_calc_mult_shift().
+ */
+static void urma_cntvct_calc_mult_shift(void)
+{
+    uint64_t freq = urma_read_cntfrq_el0();
+    uint64_t tmp;
+    uint32_t sftacc = URMA_CNTVCT_MULT_BITS;
+    uint32_t sft;
+
+    if (freq == 0) {
+        atomic_store_explicit(&g_cntvct_mult, 0, memory_order_relaxed);
+        atomic_store_explicit(&g_cntvct_shift, 0, memory_order_relaxed);
+        return;
+    }
+
+    /* Determine the maximum safe mult value to avoid overflow */
+    tmp = ((uint64_t)URMA_CNTVCT_MAX_SEC * freq) >> URMA_CNTVCT_MULT_BITS;
+    while (tmp > 0) {
+        tmp >>= 1;
+        sftacc--;
+    }
+
+    /* Find the best mult/shift pair for the conversion */
+    for (sft = URMA_CNTVCT_MULT_BITS; sft > 0; sft--) {
+        tmp = (uint64_t)URMA_NS_PER_SEC << sft;
+        tmp += freq / URMA_CNTVCT_ROUND_DIVISOR;
+        tmp /= freq;
+        if ((tmp >> sftacc) == 0)
+            break;
+    }
+    atomic_store_explicit(&g_cntvct_mult, (uint32_t)tmp, memory_order_relaxed);
+    atomic_store_explicit(&g_cntvct_shift, sft, memory_order_relaxed);
+}
+
+
+static inline uint64_t urma_cntvct_to_ns(uint64_t cntvct)
+{
+    uint32_t mult = atomic_load_explicit(&g_cntvct_mult, memory_order_relaxed);
+    uint32_t shift = atomic_load_explicit(&g_cntvct_shift, memory_order_relaxed);
+    return (cntvct * (uint64_t)mult) >> shift;
+}
+
+static inline uint64_t urma_cntvct_avg_to_ns(uint64_t cntvct_sum, uint64_t cnt)
+{
+    uint32_t mult = atomic_load_explicit(&g_cntvct_mult, memory_order_relaxed);
+    uint32_t shift = atomic_load_explicit(&g_cntvct_shift, memory_order_relaxed);
+
+    return (uint64_t)(((__uint128_t)cntvct_sum * mult) >> shift) / cnt;
+}
+
+#endif /* URMA_PERF_USE_CNTVCT */
+
 // Control sampling range（1ns ~ 4s）
 #define UBCORE_PERF_BUCKET_SHIFT        32
 // Control sampling precision（1/2^4）
@@ -65,7 +162,7 @@ static const char* perf_type_names[] = {
 
 static atomic_bool g_urma_perf_context_inited = ATOMIC_VAR_INIT(false);
 static pthread_mutex_t g_urma_perf_init_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool g_urma_perf_record_enable = false;
+static atomic_bool g_urma_perf_record_enable = ATOMIC_VAR_INIT(false);
 static urma_perf_record_ctx_t g_urma_perf_record_ctx = {0};
 static pthread_spinlock_t g_urma_perf_record_lock;
 static pthread_key_t perf_record_clean_key;
@@ -118,7 +215,7 @@ static int urma_perf_allocate_record_slot(void)
     for (int i = 0; i < URMA_PERF_THREAD_MAX_NUM; ++i) {
         if (!g_urma_perf_record_ctx.record_table[i].is_used) {
             g_urma_perf_record_ctx.record_table[i].is_used = true;
-            g_urma_perf_record_ctx.thread_initialized[i] = g_thread_initialized;
+            g_urma_perf_record_ctx.thread_initialized[i] = true;
             (void)pthread_spin_unlock(&g_urma_perf_record_lock);
             return i;
         }
@@ -127,7 +224,7 @@ static int urma_perf_allocate_record_slot(void)
     for (int i = 0; i < URMA_PERF_THREAD_MAX_NUM; ++i) {
         if (!g_urma_perf_record_ctx.thread_initialized[i]) {
             g_urma_perf_record_ctx.record_table[i].is_used = true;
-            g_urma_perf_record_ctx.thread_initialized[i] = g_thread_initialized;
+            g_urma_perf_record_ctx.thread_initialized[i] = true;
             (void)pthread_spin_unlock(&g_urma_perf_record_lock);
             return i;
         }
@@ -197,16 +294,28 @@ static uint64_t urma_perf_cal_quantile(urma_perf_record_t *record, uint32_t type
 static void urma_perf_fill_type_stats(urma_perf_stats_t *perf_info, urma_perf_record_t *record, uint32_t type)
 {
     uint64_t cnt = record->type_record[type].cnt;
+#ifdef URMA_PERF_USE_CNTVCT
+    uint64_t maxinum = urma_cntvct_to_ns(record->type_record[type].max);
+    uint64_t mininum = urma_cntvct_to_ns(record->type_record[type].min);
+    uint64_t p90 = urma_cntvct_to_ns(urma_perf_cal_quantile(record, type, (uint64_t)(0.9 * cnt + 0.99)));
+    uint64_t p99 = urma_cntvct_to_ns(urma_perf_cal_quantile(record, type, (uint64_t)(0.99 * cnt + 0.999)));
+    uint64_t p9999 = urma_cntvct_to_ns(urma_perf_cal_quantile(record, type, (uint64_t)(0.9999 * cnt + 0.99999)));
+#else
     uint64_t maxinum = record->type_record[type].max;
     uint64_t mininum = record->type_record[type].min;
-    // ceiling
     uint64_t p90 = urma_perf_cal_quantile(record, type, (uint64_t)(0.9 * cnt + 0.99));
     uint64_t p99 = urma_perf_cal_quantile(record, type, (uint64_t)(0.99 * cnt + 0.999));
     uint64_t p9999 = urma_perf_cal_quantile(record, type, (uint64_t)(0.9999 * cnt + 0.99999));
+#endif
 
     perf_info->type_record[type].type = type;
     perf_info->type_record[type].sample_num = cnt;
+#ifdef URMA_PERF_USE_CNTVCT
+    perf_info->type_record[type].average = cnt != 0 ?
+        urma_cntvct_avg_to_ns(record->type_record[type].accumulation, cnt) : 0;
+#else
     perf_info->type_record[type].average = cnt != 0 ? (record->type_record[type].accumulation / cnt) : 0;
+#endif
     perf_info->type_record[type].maxinum = maxinum;
     perf_info->type_record[type].mininum = mininum;
     // Ignore the impact of excessive interpolation errors
@@ -259,12 +368,12 @@ static void urma_perf_dump_info(urma_perf_stats_t *perf_info)
 
 bool urma_perf_is_enabled()
 {
-    return g_urma_perf_record_enable;
+    return atomic_load_explicit(&g_urma_perf_record_enable, memory_order_relaxed);
 }
 
 urma_status_t urma_start_perf(void)
 {
-    g_urma_perf_record_enable = false;
+    atomic_store_explicit(&g_urma_perf_record_enable, false, memory_order_relaxed);
     if (!atomic_load(&g_urma_perf_context_inited)) {
         (void)pthread_mutex_lock(&g_urma_perf_init_lock);
         if (!atomic_load(&g_urma_perf_context_inited)) {
@@ -273,20 +382,38 @@ urma_status_t urma_start_perf(void)
         }
         (void)pthread_mutex_unlock(&g_urma_perf_init_lock);
     }
+#ifdef URMA_PERF_USE_CNTVCT
+    if (!atomic_load_explicit(&g_cntvct_mult_shift_inited, memory_order_acquire)) {
+        urma_cntvct_calc_mult_shift();
+        atomic_store_explicit(&g_cntvct_mult_shift_inited, true, memory_order_release);
+    }
+#endif
     // reset context
     urma_perf_reset_record_item(true, 0);
-    g_urma_perf_record_enable = true;
+    atomic_store_explicit(&g_urma_perf_record_enable, true, memory_order_relaxed);
     return URMA_SUCCESS;
 }
 
 urma_status_t urma_stop_perf(void)
 {
-    g_urma_perf_record_enable = false;
+    atomic_store_explicit(&g_urma_perf_record_enable, false, memory_order_relaxed);
     return URMA_SUCCESS;
 }
 
 uint64_t urma_get_perf_timestamp(void)
 {
+#ifdef URMA_PERF_USE_CNTVCT
+    /*
+     * Return raw CNTVCT ticks directly. The tick-to-ns conversion is
+     * deferred to urma_step_perf() where it is done once per measurement
+     * (on the delta), instead of twice per measurement (on each timestamp).
+     */
+    if (urma_perf_is_enabled() && !g_thread_initialized) {
+        urma_perf_thread_context_init();
+    }
+
+    return urma_read_cntvct_el0();
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
 
@@ -295,6 +422,7 @@ uint64_t urma_get_perf_timestamp(void)
     }
 
     return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+#endif
 }
 
 #define MAX_BIT_POS 63
@@ -334,9 +462,12 @@ urma_status_t urma_step_perf(urma_perf_record_type_t type, uint64_t delta)
     if ((!urma_perf_is_enabled()) || (g_perf_record_index >= URMA_PERF_THREAD_MAX_NUM)) {
         return URMA_ENOPERM;
     }
-    if ((type >= URMA_PERF_RECORD_TYPE_MAX) || (delta == 0)) {
+    if (type >= URMA_PERF_RECORD_TYPE_MAX) {
         URMA_LOG_ERR("Urma perf step invalid param\n");
         return URMA_EINVAL;
+    }
+    if (delta == 0) {
+        return URMA_SUCCESS;
     }
 
     cur_record = &g_urma_perf_record_ctx.record_table[g_perf_record_index];
