@@ -278,8 +278,6 @@ typedef enum umq_trace_type {
     UMQ_TRACE_TYPE_POLL,                /* umq_poll */
     UMQ_TRACE_TYPE_WAIT,                /* umq_wait_interrupt */
     UMQ_TRACE_TYPE_REARM,               /* umq_rearm_interrupt */
-    UMQ_TRACE_TYPE_ALLOC,               /* umq_buf_alloc */
-    UMQ_TRACE_TYPE_FREE,                /* umq_buf_free */
     UMQ_TRACE_TYPE_MAX,
 } umq_trace_type_t;
 
