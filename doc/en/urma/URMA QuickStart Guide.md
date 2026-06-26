@@ -210,24 +210,24 @@ RPM packages are generated under `/root/rpmbuild/RPMS/aarch64`:
 ```bash
 mkdir -p /root/rpmbuild/SOURCES/
 cd /UMDK
-tar -czf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git `ls -A`
+tar -czf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git `ls -A`
 rpmbuild -ba umdk.spec --with urma
 cd /root/rpmbuild/RPMS/aarch64
-rpm -Uvh umdk-urma-lib-26.06.0-0.aarch64.rpm --force --nodeps
-rpm -Uvh umdk-urma-bin-26.06.0-0.aarch64.rpm --force --nodeps
-rpm -Uvh umdk-urma-tools-26.06.0-0.aarch64.rpm --force --nodeps
-rpm -Uvh umdk-urma-example-26.06.0-0.aarch64.rpm --force --nodeps
-rpm -Uvh umdk-urma-devel-26.06.0-0.aarch64.rpm --force --nodeps
+rpm -Uvh umdk-urma-lib-25.12.0-0.aarch64.rpm --force --nodeps
+rpm -Uvh umdk-urma-bin-25.12.0-0.aarch64.rpm --force --nodeps
+rpm -Uvh umdk-urma-tools-25.12.0-0.aarch64.rpm --force --nodeps
+rpm -Uvh umdk-urma-example-25.12.0-0.aarch64.rpm --force --nodeps
+rpm -Uvh umdk-urma-devel-25.12.0-0.aarch64.rpm --force --nodeps
 ```
 
 ### Method 3: Install via yum
 
 ```bash
-yum install -y umdk-urma-lib-26.06.0-0.aarch64
-yum install -y umdk-urma-bin-26.06.0-0.aarch64
-yum install -y umdk-urma-example-26.06.0-0.aarch64
-yum install -y umdk-urma-tools-26.06.0-0.aarch64
-yum install -y umdk-urma-devel-26.06.0-0.aarch64
+yum install -y umdk-urma-lib-25.12.0-0.aarch64
+yum install -y umdk-urma-bin-25.12.0-0.aarch64
+yum install -y umdk-urma-example-25.12.0-0.aarch64
+yum install -y umdk-urma-tools-25.12.0-0.aarch64
+yum install -y umdk-urma-devel-25.12.0-0.aarch64
 ```
 
 ## 2.4 URMA RPM Package Installation
@@ -259,11 +259,11 @@ The unified runtime components provided by the URMA subsystem are two RPM packag
 **RPM Installation Commands:**
 
 ```bash
-rpm -ivh umdk-urma-lib-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-bin-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-devel-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-tools-26.06.0-B004.oe2403sp3.aarch64.rpm
-rpm -ivh umdk-urma-example-26.06.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-lib-25.12.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-bin-25.12.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-devel-25.12.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-tools-25.12.0-B004.oe2403sp3.aarch64.rpm
+rpm -ivh umdk-urma-example-25.12.0-B004.oe2403sp3.aarch64.rpm
 ```
 
 ### Method 4: Build, package, and install using the Bazel script

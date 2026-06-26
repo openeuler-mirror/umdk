@@ -80,7 +80,7 @@
 
 Name          : umdk
 Summary       : Unified memory development kit
-Version       : 26.06.0
+Version       : 25.12.0
 Release       : %{rpm_release}%{?dist}
 Group         : umdk
 License       : Proprietary
@@ -613,6 +613,8 @@ fi
 %endif
 
 %changelog
+* Fri Jun 26 2026 umdk wujie <wujie66@huawei.com>
+- Change package version to 25.12.0 to keep package version consistency for sp3 branch.
 * Tue Jun 16 2026 huying <huying21@huawei.com>
 - ums: support building umdk-ums-64kb for 64KB page size kernel
 * Fri May 29 2026 umdk wujie <wujie66@huawei.com>

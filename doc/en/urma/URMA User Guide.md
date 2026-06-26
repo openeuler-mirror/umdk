@@ -161,7 +161,7 @@ UB over Ethernet (UBoE) refers to the packet format in which UB transaction laye
 2. Package the source code:
 
 ```bash
-tar -czf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git `ls -A`
+tar -czf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git `ls -A`
 ```
 
 3. Compile the RPM package:
