@@ -1194,10 +1194,14 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
         urma_net_addr_t net_addr;
         net_addr.sin_family = AF_INET;
         net_addr.in4.s_addr = cfg->dip.in4.addr;
-        ret = urma_get_dmac(ctx->urma_ctx, &net_addr, cfg->dmac);
-        if (ret != URMA_SUCCESS) {
-            LOG_ERROR("Failed to get dmac, ret:%d\n", ret);
-            goto free_buf;
+        if (memcmp(cfg->sip.raw, cfg->dip.raw, URMA_IP_ADDR_BYTES) == 0) {
+            (void)memcpy(cfg->dmac, cfg->smac, URMA_MAC_BYTES);
+        } else {
+            ret = urma_get_dmac(ctx->urma_ctx, &net_addr, cfg->dmac);
+            if (ret != URMA_SUCCESS) {
+                LOG_ERROR("Failed to get dmac by dip, ret:%d\n", ret);
+                goto free_buf;
+            }
         }
 
         urma_tp_attr_value_t tp_attr = {0};
