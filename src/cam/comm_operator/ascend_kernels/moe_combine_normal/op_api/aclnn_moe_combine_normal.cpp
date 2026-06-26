@@ -64,9 +64,9 @@ aclnnStatus aclnnMoeCombineNormalGetWorkspaceSize(
     aclOpExecutor **executor)
 {
     return aclnnInnerMoeCombineNormalGetWorkspaceSize(recvX, tokenSrcInfo, epRecvCounts, recvTopkWeights,
-                                                         tpRecvCountsOptional, epGroupName, epWorldSize, epRankId,
-                                                         tpGroupNameOptional, tpWorldSize, tpRankId, moeExpertNum,
-                                                         globalBs, out, workspaceSize, executor);
+        tpRecvCountsOptional, epGroupName, epWorldSize, epRankId,
+        tpGroupNameOptional, tpWorldSize, tpRankId, moeExpertNum,
+        globalBs, out, workspaceSize, executor);
 }
 
 aclnnStatus aclnnMoeCombineNormal(

@@ -32,8 +32,7 @@ extern "C" {
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnNotifyDispatchGetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnNotifyDispatchGetWorkspaceSize(
     const aclTensor *sendData,
     const aclTensor *tokenPerExpertData,
     int64_t sendCount,
@@ -55,8 +54,7 @@ aclnnStatus aclnnNotifyDispatchGetWorkspaceSize(
  * executor : executor context(input).
  * stream : acl stream.
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnNotifyDispatch(
+__attribute__((visibility("default"))) aclnnStatus aclnnNotifyDispatch(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,
@@ -65,5 +63,4 @@ aclnnStatus aclnnNotifyDispatch(
 #ifdef __cplusplus
 }
 #endif
-
 #endif

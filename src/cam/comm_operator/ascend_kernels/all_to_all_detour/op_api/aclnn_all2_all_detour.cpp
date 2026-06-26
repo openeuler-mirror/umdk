@@ -10,8 +10,8 @@
 #include <string.h>
 #include "graph/types.h"
 #include "aclnn/opdev/platform.h"
-#include "aclnn_all2_all_detour.h"
 #include "aclnnInner_all2_all_detour.h"
+#include "aclnn_all2_all_detour.h"
 
 enum NnopbaseHcclServerType {
     NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0,
@@ -33,7 +33,8 @@ aclnnStatus aclnnAll2AllDetourGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerAll2AllDetourGetWorkspaceSize(sendData, commRankIds, commArgs, magic, out, workspaceSize, executor);
+    return aclnnInnerAll2AllDetourGetWorkspaceSize(sendData,
+        commRankIds, commArgs, magic, out, workspaceSize, executor);
 }
 
 aclnnStatus aclnnAll2AllDetour(

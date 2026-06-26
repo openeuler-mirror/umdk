@@ -31,7 +31,7 @@ __attribute__((visibility("default"))) aclnnStatus aclnnAll2AllDetour(
     aclOpExecutor *executor,
     aclrtStream stream);
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 }
 #endif
 #endif
