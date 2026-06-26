@@ -25,6 +25,61 @@
 
 #include "perftest_communication.h"
 
+static int get_sock_fd(const perftest_config_t *cfg, uint32_t index)
+{
+    if (cfg == NULL || cfg->comm.sock_fd == NULL || index >= cfg->pair_num) {
+        errno = EINVAL;
+        return -1;
+    }
+    return cfg->comm.sock_fd[index];
+}
+
+static int send_all(int sock_fd, const char *buf, int size)
+{
+    ssize_t send_bytes;
+    int total_send_bytes = 0;
+
+    while (total_send_bytes < size) {
+        send_bytes = send(sock_fd, buf + total_send_bytes, (size_t)(size - total_send_bytes), MSG_NOSIGNAL);
+        if (send_bytes <= 0) {
+            if (send_bytes < 0 && errno == EINTR) {
+                continue;
+            }
+            LOG_ERROR("Failed to send data, errno: [%d]%s, total_size:%d, expect_size:%d.\n",
+                      errno, strerror(errno), total_send_bytes, size);
+            return -1;
+        }
+        total_send_bytes += (int)send_bytes;
+    }
+
+    return 0;
+}
+
+static int recv_all(int sock_fd, char *buf, int size)
+{
+    ssize_t recv_bytes;
+    int total_recv_bytes = 0;
+
+    while (total_recv_bytes < size) {
+        recv_bytes = recv(sock_fd, buf + total_recv_bytes, (size_t)(size - total_recv_bytes), 0);
+        if (recv_bytes == 0) {
+            LOG_ERROR("Peer closed connection, total_size:%d, expect_size:%d.\n", total_recv_bytes, size);
+            return -1;
+        }
+        if (recv_bytes < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            LOG_ERROR("Failed to recv data, errno: [%d]%s, total_size:%d, expect_size:%d.\n",
+                      errno, strerror(errno), total_recv_bytes, size);
+            return -1;
+        }
+        total_recv_bytes += (int)recv_bytes;
+    }
+
+    return 0;
+}
+
 static int ip_set_sockopts(int sockfd)
 {
     int ret;
@@ -306,38 +361,27 @@ void close_connection(perftest_config_t *cfg)
     }
 }
 
-int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data)
+int sock_sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data)
 {
-    int rc;
-    int read_bytes = 0;
-    int total_read_bytes = 0;
-
-    rc = write(sock_fd, local_data, (size_t)size);
-    if (rc < size) {
-        LOG_ERROR("Failed writing data during sock_sync_data, errno: %s.\n", strerror(errno));
-    } else {
-        rc = 0;
+    int sock_fd = get_sock_fd(cfg, index);
+    if (sock_fd < 0) {
+        return -1;
     }
 
-    while (total_read_bytes < size) {
-        read_bytes = read(sock_fd, remote_data + total_read_bytes, (size_t)size - total_read_bytes);
-        if (read_bytes > 0) {
-            total_read_bytes += read_bytes;
-        } else {
-            break;
-        }
+    if (send_all(sock_fd, local_data, size) != 0) {
+        LOG_ERROR("Failed to send data during sock_sync_data.\n");
+        return -1;
     }
 
-    if (total_read_bytes == size) {
-        return 0;
+    if (recv_all(sock_fd, remote_data, size) != 0) {
+        LOG_ERROR("Failed to recv data during sock_sync_data.\n");
+        return -1;
     }
 
-    LOG_ERROR("Failed to read data during sock_sync_data, errno: %s total_size:%d, expect_size:%d.\n",
-              strerror(errno), total_read_bytes, size);
-    return -1;
+    return 0;
 }
 
-int sync_time(int sock_fd, char *a)
+int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a)
 {
     if (a == NULL) {
         LOG_ERROR("Invalid parameter with a nullptr.\n");
@@ -349,7 +393,7 @@ int sync_time(int sock_fd, char *a)
     if (b == NULL) {
         return -ENOMEM;
     }
-    ret = sock_sync_data(sock_fd, len, a, b);
+    ret = sock_sync_data(cfg, index, len, (char *)a, b);
     if (ret != 0) {
         LOG_ERROR("sync time error, %s, ret: %d.\n", a, ret);
         goto sync_ret;
@@ -360,23 +404,37 @@ int sync_time(int sock_fd, char *a)
         LOG_ERROR("sync time error, %s != %s.\n", a, b);
         goto sync_ret;
     }
+
 sync_ret:
     free(b);
     return ret;
 }
 
-ssize_t sock_write(int sock_fd, const void *buf, size_t size)
+ssize_t comm_send(const perftest_config_t *cfg, uint32_t index, const void *buf, size_t size)
 {
-    return write(sock_fd, buf, size);
+    int sock_fd = get_sock_fd(cfg, index);
+    if (sock_fd < 0) {
+        return -1;
+    }
+    return send(sock_fd, buf, size, MSG_NOSIGNAL);
 }
 
-ssize_t sock_read(int sock_fd, void *buf, size_t size)
+ssize_t comm_recv(const perftest_config_t *cfg, uint32_t index, void *buf, size_t size)
 {
-    return read(sock_fd, buf, size);
+    int sock_fd = get_sock_fd(cfg, index);
+    if (sock_fd < 0) {
+        return -1;
+    }
+    return recv(sock_fd, buf, size, 0);
 }
 
-int sock_poll(int sock_fd, int timeout_ms)
+int comm_poll(const perftest_config_t *cfg, uint32_t index, int timeout_ms)
 {
+    int sock_fd = get_sock_fd(cfg, index);
+    if (sock_fd < 0) {
+        return -1;
+    }
+
     struct pollfd pfd = {
         .fd = sock_fd,
         .events = POLLIN,
