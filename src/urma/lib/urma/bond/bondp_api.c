@@ -2365,15 +2365,21 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
         return URMA_EINVAL;
     }
 
-    for (int i = 0; i < bdp_jfc->dev_num; ++i) {
-        if (!bdp_jfc->p_jfc[i]) {
+    uint32_t mask = bdp_jfc->polled_mask;
+    bdp_jfc->polled_mask = 0;
+
+    /**
+     * When mask == 0, rearm all enabled p_jfcs
+     * When mask != 0, only rearm p_jfcs that produced CRs in the last poll cycle.
+     */
+    for (uint32_t n = 0; n < bdp_jfc->enabled_count; ++n) {
+        uint32_t i = bdp_jfc->enabled_indices[n];
+        if (mask != 0 && !(mask & (1U << i))) {
             continue;
         }
-        urma_status_t ret = urma_rearm_jfc(bdp_jfc->p_jfc[i], solicited_only);
-        if (ret != URMA_SUCCESS) {
-            continue;
+        if (urma_rearm_jfc(bdp_jfc->p_jfc[i], solicited_only) == URMA_SUCCESS) {
+            success_once = true;
         }
-        success_once = true;
     }
 
     PERF_PROFILING_END(BOND_REARM_JFC);
