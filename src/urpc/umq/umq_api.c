@@ -475,7 +475,7 @@ THREAD_CTX_UNINIT:
     return UMQ_FAIL;
 }
 
-static void umq_thread_uninit(umq_init_cfg_t *cfg)
+static void umq_thread_uninit(void)
 {
     umq_post_dp_end();
     urpc_thread_ctx_uninit();
@@ -490,11 +490,11 @@ void umq_uninit(void)
 
     umq_trace_remain_output();
     umq_perf_uninit();
-    umq_trace_uninit();
     framework_uninit();
-
+    umq_trace_timer_delete();
+    umq_thread_uninit();
+    umq_trace_uninit();
     if (g_umq_config != NULL) {
-        umq_thread_uninit(g_umq_config);
         free(g_umq_config);
         g_umq_config = NULL;
     }
@@ -748,7 +748,7 @@ int umq_init(umq_init_cfg_t *cfg)
 
 FW_UNINIT:
     framework_uninit();
-    umq_thread_uninit(cfg);
+    umq_thread_uninit();
 LOCK_DESTROY:
     (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
     g_umq_config_mutex_lock = NULL;
