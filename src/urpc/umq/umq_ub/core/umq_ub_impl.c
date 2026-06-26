@@ -1201,7 +1201,6 @@ uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp, umq_tp_res
     if (ret != UMQ_SUCCESS) {
         (void)pthread_spin_unlock(&jetty_node_list->lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "create jetty node failed, ret %d\n", ret);
-        errno = -ret;
         return UINT32_MAX;
     }
     urpc_bitmap_set1(jetty_node_list->bitmap, offset);
@@ -1382,6 +1381,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
+    (void)pthread_spin_init(&queue->get_jetty_node_lock, PTHREAD_PROCESS_PRIVATE);
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         UMQ_VLOG_INFO(VLOG_UMQ, "create Logic UMQ(ID:%u) success, tp_mode %d, flowcontrol use %s window\n",
@@ -1556,7 +1556,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
     (void)util_rwlock_destroy(queue->wait_ack_import.lock);
     queue->wait_ack_import.lock = NULL;
-
+    (void)pthread_spin_destroy(&queue->get_jetty_node_lock);
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
     umq_ub_queue_ctx_list_remove(&queue->qctx_node);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->dev_ctx->ref_cnt, 1);
@@ -1949,10 +1949,10 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf,
     if (option->io_direction == UMQ_IO_RX) {
         ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
     } else if (option->io_direction == UMQ_IO_TX) {
-        ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count, option->tp_handle_idx);
+        ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count, option);
     } else if (option->io_direction == UMQ_IO_ALL) {
         uint32_t tx_max_cnt = max_buf_count > 1 ? max_buf_count >> 1 : 1;
-        int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt, option->tp_handle_idx);
+        int32_t tx_cnt = umq_ub_poll_tx(umqh_tp, buf, tx_max_cnt, option);
         if (tx_cnt < 0) {
             ret = tx_cnt;
             goto OUT;
