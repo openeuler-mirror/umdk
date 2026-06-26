@@ -31,6 +31,10 @@ std::vector<at::Tensor> FusedDeepMoeImplAutograd(
     const c10::optional<at::Tensor> &expertSmoothScales, \
     const c10::optional<at::Tensor> &shareSmoothScales, \
     const c10::optional<at::Tensor> &xActiveMask, \
+    const at::TensorList &gmm1BiasOptional, \
+    const at::TensorList &gmm2BiasOptional, \
+    const c10::optional<at::Tensor> &shareGmm1BiasOptional, \
+    const c10::optional<at::Tensor> &shareGmm2BiasOptional, \
     c10::string_view groupEp, \
     int64_t epRankSize, \
     int64_t epRankId, \

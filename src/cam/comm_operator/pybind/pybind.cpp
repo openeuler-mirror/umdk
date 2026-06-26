@@ -41,6 +41,8 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     Tensor? share_gmm1_weight, Tensor? share_gmm1_weight_scale, \
     Tensor? share_gmm2_weight, Tensor? share_gmm2_weight_scale, \
     Tensor? expert_smooth_scales, Tensor? share_smooth_scales, Tensor? x_active_mask, \
+    Tensor[] gmm1_bias, Tensor[] gmm2_bias, \
+    Tensor? share_gmm1_bias, Tensor? share_gmm2_bias, \
     str group_ep, int ep_rank_size, int ep_rank_id, int moe_expert_num, \
     int quant_mode, int global_bs) -> Tensor[]");
     m.def("all2_all_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId) -> Tensor");

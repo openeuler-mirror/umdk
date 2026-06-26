@@ -27,7 +27,7 @@ elseif(DEFINED ENV{CPATH} AND "$ENV{CPATH}" MATCHES "catlass")
 endif()
 
 # Common options: add current source dir as global header search path (from cam_feature)
-list(APPEND KERNEL_COMPILE_OPTS -I${CMAKE_CURRENT_SOURCE_DIR} -DASCENDC_DUMP=0 --cce-auto-sync=off)
+list(APPEND KERNEL_COMPILE_OPTS -I${CMAKE_CURRENT_SOURCE_DIR} -DASCENDC_DUMP=0 --cce-auto-sync=off -DCATLASS_ARCH=2201)
 
 # set custom compile options (single call to avoid overwriting)
 if ("${CMAKE_BUILD_TYPE}x" STREQUAL "Debugx")

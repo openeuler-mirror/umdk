@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  * Description: FusedDeepMoe tilingData definition file
- * Create: 2026-06-09
+ * Create: 2025-07-19
  * Note:
- * History: 2026-06-09 create FusedDeepMoe tilingData definition file
+ * History: 2025-07-19 create FusedDeepMoe tilingData definition file
  */
 
 #ifndef FUSED_DEEP_MOE_TILING_H
@@ -13,32 +13,7 @@
 #include <cstdint>
 #include "kernel_tiling/kernel_tiling.h"
 
-#define ENABLE_REUSE_MEMORY
-
 namespace Cam {
-struct WorkSpaceOffset {
-    // MM1/GMM1-Swiglu input
-    int64_t shareX1TokenOffset;
-    int64_t x1TokenOffset;
-    int64_t shareX1ScaleOffset;
-    int64_t x1ScaleOffset;
-    // MM1/GMM1-Swiglu output
-    int64_t shareSwigluOffset;
-    int64_t swigluOffset;
-    // MM2/GMM2 input
-    int64_t shareX2TokenOffset;
-    int64_t x2TokenOffset;
-    int64_t shareX2ScaleOffset;
-    int64_t x2ScaleOffset;
-
-    int64_t swapSpaceOffset;   // Swap space for C->V data exchange
-    int64_t y2TokenOffset;     // Used by shallow fusion, already dequantized without scale
-    int64_t groupListOffset;   // Prefix sum of token counts per expert
-    int64_t expandIdxOffset;   // Remote token index during dispatch
-    int64_t epSendCountOffset; // Token count received by each expert from each rank
-    int64_t reservedOffset;    // Reserved space
-};
-
 struct FusedDeepMoeInfo {
     uint32_t epRankSize;           // epRankSize
     uint32_t epRankId;             // epRankId
@@ -61,8 +36,7 @@ struct FusedDeepMoeInfo {
 struct FusedDeepMoeTilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
-    FusedDeepMoeInfo fusedDeepMoeInfo;
-    WorkSpaceOffset workSpaceOffset;
+    FusedDeepMoeInfo disGmmDeqSwigluQuantGmmDeqComInfo;
 };
 
 constexpr uint32_t GM_ALIGN_BYTE = 512;
@@ -76,8 +50,8 @@ constexpr bool CUSTOM_ENABLE_SHUFFLE_K = true;
 
 constexpr uint32_t GMM1_L1M = 256;
 constexpr uint32_t GMM1_L1N = 128;
-constexpr uint32_t GMM1_L1K = 512;
-constexpr uint32_t GMM1_L0K = 128;
+constexpr uint32_t GMM1_L1K = 1024;
+constexpr uint32_t GMM1_L0K = 256;
 constexpr uint32_t GMM1_EPIM = 64;
 constexpr uint32_t GMM1_SWIZZLE_OFFSET = 3;
 constexpr uint32_t GMM1_SWIZZLE_DIRECTION = 0;
@@ -88,8 +62,8 @@ constexpr uint32_t GMM2_L0A_STAGES = 4;
 constexpr uint32_t GMM2_L0B_STAGES = 2;
 constexpr uint32_t GMM2_L1M = 128;
 constexpr uint32_t GMM2_L1N = 256;
-constexpr uint32_t GMM2_L1K = 512;
-constexpr uint32_t GMM2_L0K = 128;
+constexpr uint32_t GMM2_L1K = 1024;
+constexpr uint32_t GMM2_L0K = 256;
 constexpr uint32_t GMM2_EPIM = 32;
 constexpr uint32_t GMM2_SWIZZLE_OFFSET = 3;
 constexpr uint32_t GMM2_SWIZZLE_DIRECTION = 0;
