@@ -13,6 +13,7 @@
 #include "ub_hash.h"
 #include "urma_api.h"
 #include "urma_log.h"
+#include "urma_private.h"
 #include "urma_provider.h"
 
 #include "bondp_context_table.h"
@@ -326,6 +327,7 @@ static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t
                               uint64_t handle, urma_context_t *ctx)
 {
     tseg->seg.attr = seg->attr;
+    bondp_seg_set_user_info(&tseg->seg, false);
     tseg->seg.ubva = seg->ubva;
     tseg->seg.len = seg->len;
     tseg->seg.token_id = seg->token_id;
@@ -487,14 +489,15 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     }
 
     if (!bdp_tseg->is_reused) {
-        if (seg->ext.flag.bs.enable) {
+        if (bondp_seg_has_user_info(seg)) {
             bdp_tseg->skip_import_vseg = true;
-            if (seg->ext.length < sizeof(urma_bond_seg_ext_t)) {
-                URMA_LOG_ERR("Invalid seg ext length=%u.\n", seg->ext.length);
+            const bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext_const(seg);
+            if (seg_ext->len < sizeof(urma_bond_seg_ext_t)) {
+                URMA_LOG_ERR("Invalid seg ext length=%u.\n", seg_ext->len);
                 goto free_bdp_tseg;
             }
             const urma_bond_seg_ext_t *bond_ext =
-                (const urma_bond_seg_ext_t *)seg->ext.buf;
+                (const urma_bond_seg_ext_t *)seg_ext->data;
             (void)memcpy(&udata_out.peer_p_seg, bond_ext->peer_p_seg,
                          sizeof(udata_out.peer_p_seg));
             (void)memcpy(&udata_out.connected, bond_ext->connected,
@@ -538,7 +541,7 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     return &bdp_tseg->v_tseg;
 unimport_pseg:
     bondp_unimport_pseg(bdp_tseg);
-    if (!bdp_tseg->is_reused && !(seg->ext.flag.bs.enable)) {
+    if (!bdp_tseg->is_reused && !bondp_seg_has_user_info(seg)) {
         bondp_unimport_vseg(bdp_tseg);
     }
 free_bdp_tseg:
