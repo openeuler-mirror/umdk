@@ -904,6 +904,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
 {
     EnvGuard failover("BOND_ENABLE_FAILOVER", "true");
     EnvGuard failback("BOND_ENABLE_FAILBACK", "false");
+    EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "true");
     EnvGuard backupStart("BOND_HEALTH_CHECK_BACKUP_START", "100");
     EnvGuard backupInterval("BOND_HEALTH_CHECK_BACKUP_INTERVAL", "1000");
     EnvGuard activeStart("BOND_HEALTH_CHECK_ACTIVE_START", "100");
@@ -915,6 +916,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     g_mockNetlinkConnectFail = true;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
+    EXPECT_TRUE(g_bondp_global_ctx->health_thread_ctx.enable_health_check);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
     bondp_nl_sock_uninit();
