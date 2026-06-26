@@ -148,6 +148,7 @@ typedef enum urma_cmd {
     URMA_CMD_GET_JETTY_OPT,
     URMA_CMD_ACTIVE_JETTY,
     URMA_CMD_DEACTIVE_JETTY,
+    URMA_CMD_GET_JFCE_CNT = 85,
     URMA_CMD_MAX
 } urma_cmd_t;
 
@@ -1188,6 +1189,16 @@ typedef struct urma_cmd_create_notifier {
         int fd;
     } out;
 } urma_cmd_create_notifier_t;
+
+typedef struct urma_cmd_get_jfce_cnt {
+    struct {
+        uint32_t threshold;
+    } in;
+    struct {
+        uint64_t jfce_total_cnt;
+        uint64_t jfce_thresh_cnt;
+    } out;
+} urma_cmd_get_jfce_cnt_t;
 
 /* only for event ioctl */
 #define MAX_JFCE_EVENT_CNT   16

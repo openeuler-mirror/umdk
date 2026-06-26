@@ -322,6 +322,28 @@ static int cmd_perf_show_cb(struct nl_msg *msg, void *arg)
     return NL_STOP;
 }
 
+static void cmd_perf_print_jfce_cnt(void)
+{
+    urma_jfce_cnt_info_t jfce_info[URMA_JFCE_CNT_MAX_DEV_NUM] = {0};
+    uint32_t jfce_cnt = 0;
+    urma_status_t ret = urma_get_jfce_cnt_info(jfce_info, &jfce_cnt);
+    if (ret != URMA_SUCCESS || jfce_cnt == 0) {
+        return;
+    }
+
+    printf("\n[JFCE Count Statistics]\n");
+    printf("+----------------------+----------+----------+\n");
+    printf("  Device               | total_cnt| thresh_cnt\n");
+    printf("+----------------------+----------+----------+\n");
+    for (uint32_t i = 0; i < jfce_cnt; i++) {
+        printf("  %-20s | %-8lu | %-8lu\n",
+            jfce_info[i].dev_name,
+            jfce_info[i].jfce_total_cnt,
+            jfce_info[i].jfce_thresh_cnt);
+    }
+    printf("+----------------------+----------+----------+\n");
+}
+
 static int cmd_perf_show(admin_config_t *cfg)
 {
     (void)cfg;
@@ -343,6 +365,8 @@ static int cmd_perf_show(admin_config_t *cfg)
 
     printf("\n[Kernel DFX Statistics] version: %u\n", ctx.stat.version);
     cmd_perf_print_stat(&ctx.stat);
+
+    cmd_perf_print_jfce_cnt();
 
     return 0;
 }
