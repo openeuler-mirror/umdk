@@ -281,7 +281,6 @@ typedef struct umq_buf_pool_cfg {
 
 typedef struct umq_tp_pool_cfg {
     uint32_t notify_threshold;     // Eventfd notify threshold (0 means use default 16)
-    uint32_t borrow_limit;         // Max WRs per borrow (0 means use default 1024)
 } umq_tp_pool_cfg_t;
 
 typedef struct umq_init_cfg {
