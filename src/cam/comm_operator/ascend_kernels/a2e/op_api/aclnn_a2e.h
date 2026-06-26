@@ -16,8 +16,7 @@
 extern "C" {
 #endif
 
-__attribute__((visibility("default")))
-aclnnStatus aclnnA2eGetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnA2eGetWorkspaceSize(
     const aclTensor *x,
     const aclTensor *expertIds,
     const aclTensor *scales,
@@ -38,8 +37,7 @@ aclnnStatus aclnnA2eGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor);
 
-__attribute__((visibility("default")))
-aclnnStatus aclnnA2e(
+__attribute__((visibility("default"))) aclnnStatus aclnnA2e(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,

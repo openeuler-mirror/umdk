@@ -33,7 +33,7 @@ __attribute__((visibility("default"))) aclnnStatus aclnnReduceScatterDetour(
     aclOpExecutor *executor,
     aclrtStream stream);
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 }
 #endif
 #endif

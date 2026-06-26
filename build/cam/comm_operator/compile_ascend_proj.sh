@@ -31,8 +31,8 @@ copy_ops() {
     local src_dir="$1" # 源目录
     local dst_dir="$2" # 目标目录
 
-    # 确保目标目录的op_host和op_kernel存在
-    mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel"
+    # 确保目标目录的op_host、op_kernel和pregen autogen存在
+    mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel" "$dst_dir/pregen/build_out/autogen"
 
     # 遍历源目录下所有直接子目录（包括含空格的目录）
     find "$src_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' subdir; do
@@ -62,6 +62,11 @@ copy_ops() {
             # 处理op_kernel目录
             if [ -d "$subdir/op_kernel" ]; then
                 cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
+            fi
+
+            # 处理op_api目录（将aclnn接口文件复制到pregen/build_out/autogen）
+            if [ -d "$subdir/op_api" ]; then
+                cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
             fi
         fi
     done
@@ -111,13 +116,14 @@ build_ascend_proj() {
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
     cp ./ascend_kernels/cmake_files/op_kernel/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/
 
-    # 复制所有算子的op_host源文件
+    # 复制所有算子的op_host/op_kernel源文件和op_api接口文件
     copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
 
-    # 复制pregen目录（包含预生成的aclnn stub文件）
-    cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}/
+    # 复制cmake_files/cmake目录（包含自定义编译函数，替换msopgen默认cmake）
+    cp -rf ./ascend_kernels/cmake_files/cmake ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # 根据屏蔽列表移除pregen中对应算子的autogen文件
+    # copy_ops中的exclude_list在find|while子shell中可能不完全生效，
+    # 因此在此处补充移除屏蔽列表中对应算子的autogen文件
     for excluded_dir in "${exclude_list[@]}"; do
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
     done

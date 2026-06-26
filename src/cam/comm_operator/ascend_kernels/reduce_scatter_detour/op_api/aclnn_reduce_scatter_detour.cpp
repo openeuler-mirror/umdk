@@ -10,8 +10,8 @@
 #include <string.h>
 #include "graph/types.h"
 #include "aclnn/opdev/platform.h"
-#include "aclnn_reduce_scatter_detour.h"
 #include "aclnnInner_reduce_scatter_detour.h"
+#include "aclnn_reduce_scatter_detour.h"
 
 enum NnopbaseHcclServerType {
     NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0,
@@ -35,7 +35,8 @@ aclnnStatus aclnnReduceScatterDetourGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerReduceScatterDetourGetWorkspaceSize(sendData, commRankIds, commArgs, magic, rankSize, op, out, workspaceSize, executor);
+    return aclnnInnerReduceScatterDetourGetWorkspaceSize(sendData,
+        commRankIds, commArgs, magic, rankSize, op, out, workspaceSize, executor);
 }
 
 aclnnStatus aclnnReduceScatterDetour(
