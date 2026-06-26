@@ -100,16 +100,16 @@
                 - [2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)
                 - [2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty)
                 - [2.3.1.6.14 urma_flush_jetty](#231614-urma_flush_jetty)
-                - [urma_get_rjetty](#urma_get_rjetty)
-                - [urma_put_rjetty](#urma_put_rjetty)
-                - [2.3.1.6.15 urma_import_jetty_async](#231615-urma_import_jetty_async)
-                - [2.3.1.6.16 urma_unimport_jetty_async](#231616-urma_unimport_jetty_async)
-                - [2.3.1.6.17 urma_bind_jetty_async](#231617-urma_bind_jetty_async)
-                - [2.3.1.6.18 urma_unbind_jetty_async](#231618-urma_unbind_jetty_async)
-                - [2.3.1.6.19 urma_create_notifier](#231619-urma_create_notifier)
-                - [2.3.1.6.20 urma_delete_notifier](#231620-urma_delete_notifier)
-                - [2.3.1.6.21 urma_wait_notify](#231621-urma_wait_notify)
-                - [2.3.1.6.22 urma_ack_notify](#231622-urma_ack_notify)
+                - [2.3.1.6.15 urma_get_rjetty](#231615-urma_get_rjetty)
+                - [2.3.1.6.16 urma_put_rjetty](#231616-urma_put_rjetty)
+                - [2.3.1.6.17 urma_import_jetty_async](#231617-urma_import_jetty_async)
+                - [2.3.1.6.18 urma_unimport_jetty_async](#231618-urma_unimport_jetty_async)
+                - [2.3.1.6.19 urma_bind_jetty_async](#231619-urma_bind_jetty_async)
+                - [2.3.1.6.20 urma_unbind_jetty_async](#231620-urma_unbind_jetty_async)
+                - [2.3.1.6.21 urma_create_notifier](#231621-urma_create_notifier)
+                - [2.3.1.6.22 urma_delete_notifier](#231622-urma_delete_notifier)
+                - [2.3.1.6.23 urma_wait_notify](#231623-urma_wait_notify)
+                - [2.3.1.6.24 urma_ack_notify](#231624-urma_ack_notify)
             - [2.3.1.7 Jetty Group](#2317-jetty-group)
                 - [2.3.1.7.1 urma_create_jetty_grp](#23171-urma_create_jetty_grp)
                 - [2.3.1.7.2 urma_delete_jetty_grp](#23172-urma_delete_jetty_grp)
@@ -4609,7 +4609,7 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
 If execution is successful, the output parameter cr status will be URMA_CR_WR_FLUSH_ERR.
 
-##### urma_get_rjetty
+##### 2.3.1.6.15 urma_get_rjetty
 
 1. Header File
 
@@ -4639,9 +4639,9 @@ Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocati
 
 ![](figures/urma_notice.png)
 
-The memory returned in rjetty is allocated by this API. The caller must call [urma_put_rjetty](#urma_put_rjetty) to release it.
+The memory returned in rjetty is allocated by this API. The caller must call [urma_put_rjetty](#231616-urma_put_rjetty) to release it.
 
-##### urma_put_rjetty
+##### 2.3.1.6.16 urma_put_rjetty
 
 1. Header File
 
@@ -4655,17 +4655,17 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 3. Description
 
-Release the remote Jetty context returned by [urma_get_rjetty](#urma_get_rjetty).
+Release the remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty).
 
 4. Parameters
 
-@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#urma_get_rjetty). If rjetty is NULL, this API returns directly.
+@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty). If rjetty is NULL, this API returns directly.
 
 5. Return Value
 
 void
 
-##### 2.3.1.6.15 urma_import_jetty_async
+##### 2.3.1.6.17 urma_import_jetty_async
 
 1. Header File
 
@@ -4709,7 +4709,7 @@ typedef struct urma_notifier {
 } urma_notifier_t;
 \`\`\`
 
-##### 2.3.1.6.16 urma_unimport_jetty_async
+##### 2.3.1.6.18 urma_unimport_jetty_async
 
 1. Header File
 
@@ -4733,7 +4733,7 @@ Asynchronous version of [3.3.1.6.8](#23168-urma_unimport_jetty) [urma_unimport_j
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.17 urma_bind_jetty_async
+##### 2.3.1.6.19 urma_bind_jetty_async
 
 1. Header File
 
@@ -4765,7 +4765,7 @@ Asynchronous version of [3.3.1.6.11](#231611-urma_bind_jetty) [urma_bind_jetty](
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-##### 2.3.1.6.18 urma_unbind_jetty_async
+##### 2.3.1.6.20 urma_unbind_jetty_async
 
 1. Header File
 
@@ -4799,9 +4799,9 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty) interface and tjetty comes from the [3.3.1.6.18](#231618-urma_unbind_jetty_async) [urma_unbind_jetty_async](#231618-urma_unbind_jetty_async) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty) interface; the validity of internal pointers and other parameters is guaranteed by this interface, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
-##### 2.3.1.6.19 urma_create_notifier
+##### 2.3.1.6.21 urma_create_notifier
 
 1. Header File
 
@@ -4825,7 +4825,7 @@ Create a structure variable for notifying asynchronous link establishment result
 
 Return: the address of urma notifier, not NULL on success, NULL on error.
 
-##### 2.3.1.6.20 urma_delete_notifier
+##### 2.3.1.6.22 urma_delete_notifier
 
 1. Header File
 
@@ -4847,13 +4847,13 @@ Delete the structure variable for notifying asynchronous link establishment resu
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter notifier comes from the [3.3.1.6.19](#231619-urma_create_notifier) [urma_create_notifier](#231619-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+The caller must ensure that the parameter notifier comes from the [3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
 5. Return Value
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.21 urma_wait_notify
+##### 2.3.1.6.23 urma_wait_notify
 
 1. Header File
 
@@ -4910,7 +4910,7 @@ typedef enum urma_notify_type {
 } urma_notify_type_t;
 \`\`\`
 
-##### 2.3.1.6.22 urma_ack_notify
+##### 2.3.1.6.24 urma_ack_notify
 
 1. Header File
 

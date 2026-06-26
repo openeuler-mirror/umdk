@@ -102,16 +102,16 @@
                 - [2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)
                 - [2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty)
                 - [2.3.1.6.14 urma_flush_jetty](#231614-urma_flush_jetty)
-                - [urma_get_rjetty](#urma_get_rjetty)
-                - [urma_put_rjetty](#urma_put_rjetty)
-                - [2.3.1.6.15 urma_import_jetty_async](#231615-urma_import_jetty_async)
-                - [2.3.1.6.16 urma_unimport_jetty_async](#231616-urma_unimport_jetty_async)
-                - [2.3.1.6.17 urma_bind_jetty_async](#231617-urma_bind_jetty_async)
-                - [2.3.1.6.18 urma_unbind_jetty_async](#231618-urma_unbind_jetty_async)
-                - [2.3.1.6.19 urma_create_notifier](#231619-urma_create_notifier)
-                - [2.3.1.6.20 urma_delete_notifier](#231620-urma_delete_notifier)
-                - [2.3.1.6.21 urma_wait_notify](#231621-urma_wait_notify)
-                - [2.3.1.6.22 urma_ack_notify](#231622-urma_ack_notify)
+                - [2.3.1.6.15 urma_get_rjetty](#231615-urma_get_rjetty)
+                - [2.3.1.6.16 urma_put_rjetty](#231616-urma_put_rjetty)
+                - [2.3.1.6.17 urma_import_jetty_async](#231617-urma_import_jetty_async)
+                - [2.3.1.6.18 urma_unimport_jetty_async](#231618-urma_unimport_jetty_async)
+                - [2.3.1.6.19 urma_bind_jetty_async](#231619-urma_bind_jetty_async)
+                - [2.3.1.6.20 urma_unbind_jetty_async](#231620-urma_unbind_jetty_async)
+                - [2.3.1.6.21 urma_create_notifier](#231621-urma_create_notifier)
+                - [2.3.1.6.22 urma_delete_notifier](#231622-urma_delete_notifier)
+                - [2.3.1.6.23 urma_wait_notify](#231623-urma_wait_notify)
+                - [2.3.1.6.24 urma_ack_notify](#231624-urma_ack_notify)
             - [2.3.1.7 Jetty Group](#2317-jetty-group)
                 - [2.3.1.7.1 urma_create_jetty_grp](#23171-urma_create_jetty_grp)
                 - [2.3.1.7.2 urma_delete_jetty_grp](#23172-urma_delete_jetty_grp)
@@ -4610,7 +4610,7 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
 若执行成功，则出参cr status为URMA_CR_WR_FLUSH_ERR。
 
-##### urma_get_rjetty
+##### 2.3.1.6.15 urma_get_rjetty
 
 1.  头文件
 
@@ -4640,9 +4640,9 @@ Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocati
 
 ![](figures/urma_notice.png)
 
-rjetty返回的内存由本接口分配，调用者必须调用[urma_put_rjetty](#urma_put_rjetty)释放。
+rjetty返回的内存由本接口分配，调用者必须调用[urma_put_rjetty](#231616-urma_put_rjetty)释放。
 
-##### urma_put_rjetty
+##### 2.3.1.6.16 urma_put_rjetty
 
 1.  头文件
 
@@ -4656,17 +4656,17 @@ void urma_put_rjetty([urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rje
 
 3.  描述
 
-释放[urma_get_rjetty](#urma_get_rjetty)返回的远端Jetty上下文。
+释放[urma_get_rjetty](#231615-urma_get_rjetty)返回的远端Jetty上下文。
 
 4.  参数
 
-@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#urma_get_rjetty). If rjetty is NULL, this API returns directly.
+@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty). If rjetty is NULL, this API returns directly.
 
 5.  返回值
 
 void
 
-##### 2.3.1.6.15 urma_import_jetty_async
+##### 2.3.1.6.17 urma_import_jetty_async
 
 1.  头文件
 
@@ -4710,7 +4710,7 @@ typedef struct urma_notifier {
 } urma_notifier_t;
 ```
 
-##### 2.3.1.6.16 urma_unimport_jetty_async
+##### 2.3.1.6.18 urma_unimport_jetty_async
 
 1.  头文件
 
@@ -4734,7 +4734,7 @@ typedef struct urma_notifier {
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.17 urma_bind_jetty_async
+##### 2.3.1.6.19 urma_bind_jetty_async
 
 1.  头文件
 
@@ -4766,7 +4766,7 @@ Return: 0 on success, other value on error.
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-##### 2.3.1.6.18 urma_unbind_jetty_async
+##### 2.3.1.6.20 urma_unbind_jetty_async
 
 1.  头文件
 
@@ -4800,9 +4800,9 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，tjetty来自[3.3.1.6.16](#231616-urma_unbind_jetty_async) [urma_unbind_jetty_async](#231616-urma_unbind_jetty_async)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，参数内部指针等合法性由该接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-##### 2.3.1.6.19 urma_create_notifier
+##### 2.3.1.6.21 urma_create_notifier
 
 1.  头文件
 
@@ -4826,7 +4826,7 @@ Return: 0 on success, other value on error
 
 Return: the address of urma notifier, not NULL on success, NULL on error.
 
-##### 2.3.1.6.20 urma_delete_notifier
+##### 2.3.1.6.22 urma_delete_notifier
 
 1.  头文件
 
@@ -4848,13 +4848,13 @@ Return: the address of urma notifier, not NULL on success, NULL on error.
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.17](#231617-urma_create_notifier) [urma_create_notifier](#231617-urma_create_notifier)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数notifier来自[3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier)接口返回，参数内部指针等合法性由该接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.21 urma_wait_notify
+##### 2.3.1.6.23 urma_wait_notify
 
 1.  头文件
 
@@ -4911,7 +4911,7 @@ typedef enum urma_notify_type {
 } urma_notify_type_t;
 ```
 
-##### 2.3.1.6.22 urma_ack_notify
+##### 2.3.1.6.24 urma_ack_notify
 
 1.  头文件
 
