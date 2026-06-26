@@ -87,8 +87,6 @@ TensorVector FusedDeepMoeImplNpu(
         shareGmm1BiasOptional, shareGmm2BiasOptional, \
         // attr
         groupEpPtr, epRankSize, epRankId, moeExpertNum, quantMode, globalBs, \
-        // extInfo, shmemWorkspace, \
-        // output
         output, shareOutput, expertTokenNums);
     return {output, shareOutput, expertTokenNums};
 }

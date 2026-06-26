@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: FusedDeepMoe operator kernel function implementation file
- * Create: 2025-07-19
+ * Create: 2026-06-29
  * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function implementation file
+ * History: 2026-06-29 create FusedDeepMoe operator kernel function implementation file
  */
 #ifndef GEMM_BLOCK_BLOCK_MMAD_PRELOAD_ASYNC_WITH_CALLBACK_RESIDENT_A_H
 #define GEMM_BLOCK_BLOCK_MMAD_PRELOAD_ASYNC_WITH_CALLBACK_RESIDENT_A_H
@@ -17,7 +17,6 @@
 #include "catlass/gemm/dispatch_policy.hpp"
 #include "catlass/gemm/helper.hpp"
 
-#define TWO 2
 
 namespace Catlass::Gemm::Block {
 
@@ -71,11 +70,15 @@ public:
     static constexpr bool ENABLE_SHUFFLE_K = DispatchPolicy::ENABLE_SHUFFLE_K;
 
     // L1 tile size
-    static constexpr uint32_t L1A_TILE_SIZE = L1TileShape::M * L1TileShape::K * sizeof(ElementA) / TWO;
-    static constexpr uint32_t L1B_TILE_SIZE = L1TileShape::N * L1TileShape::K * sizeof(ElementB) / TWO;
+    static constexpr uint32_t L1A_TILE_SIZE =
+        L1TileShape::M * L1TileShape::K * sizeof(ElementA) / CONSTANT_INT4_PACKING_RATIO;
+    static constexpr uint32_t L1B_TILE_SIZE =
+        L1TileShape::N * L1TileShape::K * sizeof(ElementB) / CONSTANT_INT4_PACKING_RATIO;
     // L0 tile size
-    static constexpr uint32_t L0A_TILE_SIZE = L0TileShape::M * L0TileShape::K * sizeof(ElementA) / TWO;
-    static constexpr uint32_t L0B_TILE_SIZE = L0TileShape::K * L0TileShape::N * sizeof(ElementB) / TWO;
+    static constexpr uint32_t L0A_TILE_SIZE =
+        L0TileShape::M * L0TileShape::K * sizeof(ElementA) / CONSTANT_INT4_PACKING_RATIO;
+    static constexpr uint32_t L0B_TILE_SIZE =
+        L0TileShape::K * L0TileShape::N * sizeof(ElementB) / CONSTANT_INT4_PACKING_RATIO;
     static constexpr uint32_t L0C_TILE_SIZE = L1TileShape::M * L1TileShape::N * sizeof(ElementAccumulator);
 
     // Check LayoutC

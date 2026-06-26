@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: FusedDeepMoe operator kernel function implementation file
- * Create: 2025-07-19
+ * Create: 2026-06-29
  * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function implementation file
+ * History: 2026-06-29 create FusedDeepMoe operator kernel function implementation file
  */
 #ifndef ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
 #define ACT_GEMM_KERNEL_GROUPED_MATMUL_M_PER_TOKEN_DEQUANT_MULTISTAGE_WORKSPACE_HPP
@@ -19,7 +19,6 @@
 #include "catlass/gemm_coord.hpp"
 #include "catlass/matrix_coord.hpp"
 
-#define TWO 2
 
 using namespace Cam;
 // Use this to make a callback
@@ -222,8 +221,8 @@ public:
                     gmBlistTensorDesc.GetDataPtr<int32_t>(groupIdx)));
             }
             
-            uint32_t currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx) * TWO
-                : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1)) * TWO;
+            uint32_t currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx) * CONSTANT_TWO
+                : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1)) * CONSTANT_TWO;
             GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
             LayoutA layoutA = params.layoutA.GetTileLayout(inGroupProblemShape.GetCoordMK());
             LayoutB layoutB = params.layoutB;
@@ -282,7 +281,7 @@ public:
             gmA.SetGlobalBuffer(params.ptrSharedA);
             gmB.SetGlobalBuffer(params.ptrSharedB);
             uint32_t softStageUsed = 0;
-            GemmCoord inGroupProblemShape{params.sharedGmm2ProblemShape.m() * TWO,
+            GemmCoord inGroupProblemShape{params.sharedGmm2ProblemShape.m() * CONSTANT_TWO,
                 params.sharedGmm2ProblemShape.n(),
                 params.problemShape.k()};
             LayoutA layoutA = params.sharedLayoutA;
@@ -409,7 +408,8 @@ public:
                 uint32_t currentM = (groupIdx == 0) ?
                     groupList.GetValue(groupIdx) :
                     (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
-                GemmCoord inGroupProblemShape{currentM * TWO, params.problemShape.n(), params.problemShape.k()};
+                GemmCoord inGroupProblemShape{
+                    currentM * CONSTANT_TWO, params.problemShape.n(), params.problemShape.k()};
                 GemmCoord pertokenGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
                 LayoutScale layoutScale = params.layoutScale;
                 LayoutPerTokenScale layoutPerTokenScale =
@@ -475,7 +475,7 @@ public:
                     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
                         AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
                     }
-                    GemmCoord inGroupProblemShape{params.sharedGmm2ProblemShape.m() * TWO,
+                    GemmCoord inGroupProblemShape{params.sharedGmm2ProblemShape.m() * CONSTANT_TWO,
                         params.sharedGmm2ProblemShape.n(),
                         params.problemShape.k()};
                     LayoutScale layoutScale = params.layoutScale;

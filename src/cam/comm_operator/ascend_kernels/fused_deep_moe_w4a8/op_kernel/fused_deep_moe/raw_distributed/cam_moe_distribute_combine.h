@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: add combine kernel implement
- * Create: 2025-07-21
+ * Create: 2026-06-29
  * Note:
- * History: 2025-07-21 add combine kernel implement
+ * History: 2026-06-29 add combine kernel implement
  */
 #ifndef CAM_MOE_DISTRIBUTE_COMBINE_H
 #define CAM_MOE_DISTRIBUTE_COMBINE_H
@@ -15,7 +15,6 @@
 #include "../../fused_deep_moe_base.h"
 #include "../../fused_deep_moe_tiling.h"
 
-#define TWO 2
 
 using namespace Cam;
 namespace MoeDistributeCombineImpl {
@@ -289,7 +288,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     tpWorldSize_ = 1;
     tpRankId_ = 0;
     totalWinSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalWinSize;
-    stateOffset_ = (moeSendNum_ > 512) ? (STATE_OFFSET / TWO) : STATE_OFFSET;
+    stateOffset_ = (moeSendNum_ > 512) ? (STATE_OFFSET / CONSTANT_TWO) : STATE_OFFSET;
     expertPerSizeOnWin_ =
         static_cast<uint64_t>(axisMaxBs_) * static_cast<uint64_t>(axisH_) * static_cast<uint64_t>(sizeof(ExpandXType));
     winDataSizeOffset_ = static_cast<uint64_t>(dataState_) * static_cast<uint64_t>(moeSendNum_) * expertPerSizeOnWin_;

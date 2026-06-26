@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: FusedDeepMoe operator kernel function header file, for a3
- * Create: 2025-07-19
+ * Create: 2026-06-29
  * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function header file, for a3
+ * History: 2026-06-29 create FusedDeepMoe operator kernel function header file, for a3
  */
 #ifndef FUSED_DEEP_MOE_H
 #define FUSED_DEEP_MOE_H
@@ -30,7 +30,6 @@
 #include "fused_deep_moe_tiling.h"
 #include "fused_deep_moe_base.h"
 
-#define TWO 2
 
 using namespace Catlass;
 using namespace Cam;
@@ -407,8 +406,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     tokenHiddenSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
     groupCount_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
     gmm2OutputDim_ = tokenHiddenSize_;
-    shareGmm2InputDim_ = shareGmm1OutputDim_ / TWO;
-    gmm2InputDim_ = gmm1OutputDim_ / TWO;
+    shareGmm2InputDim_ = shareGmm1OutputDim_ / CONSTANT_TWO;
+    gmm2InputDim_ = gmm1OutputDim_ / CONSTANT_TWO;
 }
 
 template <TemplateMC2TypeClass>

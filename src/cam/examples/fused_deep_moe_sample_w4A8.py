@@ -1,13 +1,29 @@
 #
 # SPDX-License-Identifier: MIT
-# Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
-# Description: Example for fused_deep_moe operator.
-# This sample gives an example for using FusedDeepMoe operator and "small" operators, 
-# where "small" means the operators taking the same effect with FusedDeepMoe Operator but
-# using small operator combination (dispatch + gmm1 + swiglu + gmm2 + combine).
-# Create: 2025-12-11
+# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+# Description: Example for the FusedDeepMoe W4A8 operator.
+#
+# This sample demonstrates two equivalent approaches for the W4A8 Mixture-of-Experts computation:
+#
+#   1. FusionOp: A single fused operator that performs dispatch, quantized GMM1 with
+#      SiLU activation, quantized GMM2, dequantization, and combine all on the NPU.
+#      Supports both shared experts and routed experts.
+#
+#   2. SmallOps: A combination of smaller operators achieving the same result:
+#      dispatch (NPU) + int8-to-int4 conversion (CPU) + GMM1 (CPU) + SiLU (CPU) +
+#      dequant (CPU) + int8-to-int4 conversion (CPU) + GMM2 (CPU) + dequant (CPU) +
+#      combine (NPU).
+#
+# The sample also includes precision validation between shared experts and routed
+# experts outputs, and compares FusionOp results against SmallOps for correctness.
+#
+# Note: Weight matrices have been converted to NZ format but are not tagged with
+# the NZ label. This should be kept consistent with the operator host-side NZ
+# format validation relaxed accordingly.
+#
+# Create: 2026-06-29
 # Note:
-# History: 2025-12-11 create example file
+# History: 2026-06-29 create example file
 #
 
 import gc
