@@ -38,8 +38,6 @@ typedef struct umq_perftest_config {
     bool buf_multiplex;
     bool use_atomic_window;
     bool enable_perf;
-    uint64_t thresh_array[UMQ_PERF_QUANTILE_MAX_NUM];
-    uint16_t thresh_num;
     uint32_t blk_mode;
 } umq_perftest_config_t;
 
