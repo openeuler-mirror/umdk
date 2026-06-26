@@ -12,7 +12,11 @@
 #define BONDP_HASH_TABLE_H
 
 #include <pthread.h>
+#ifndef __cplusplus
 #include <stdatomic.h>
+#else
+#include <atomic>
+#endif
 #include "ub_hmap.h"
 #include "ub_hash.h"
 #include "urma_types.h"
@@ -66,35 +70,48 @@ typedef struct bondp_hash_table {
     free_func_t free_f;
     hash_func_t hash_f;
     /* Generation counter: incremented on every add/remove */
+#ifndef __cplusplus
     atomic_uint gen;
+#else
+    std::atomic_uint gen;
+#endif
 } bondp_hash_table_t;
 
 int bondp_hash_table_create(bondp_hash_table_t *tbl, uint32_t size,
     comp_func_t comp_f, free_func_t free_f, hash_func_t hash_f);
 
+static inline void bondp_hash_table_inc_gen(bondp_hash_table_t *tbl)
+{
+#ifndef __cplusplus
+    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+#else
+    std::atomic_fetch_add_explicit(&tbl->gen, 1U, std::memory_order_release);
+#endif
+}
+
 static inline void bondp_hash_table_add_with_hash(bondp_hash_table_t *tbl, hmap_node_t *node, uint32_t hash)
 {
     bondp_hmap_insert(&tbl->hmap, node, hash, &tbl->lock);
-    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+    bondp_hash_table_inc_gen(tbl);
 }
 
 static inline void bondp_hash_table_add_with_hash_without_lock(bondp_hash_table_t *tbl, hmap_node_t *node,
     uint32_t hash)
 {
     ub_hmap_insert(&tbl->hmap, node, hash);
-    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+    bondp_hash_table_inc_gen(tbl);
 }
 
 static inline void bondp_hash_table_remove(bondp_hash_table_t *tbl, hmap_node_t *node)
 {
     bondp_hmap_remove(&tbl->hmap, node, &tbl->lock);
-    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+    bondp_hash_table_inc_gen(tbl);
 }
 
 static inline void bondp_hash_table_remove_without_lock(bondp_hash_table_t *tbl, hmap_node_t *node)
 {
     ub_hmap_remove(&tbl->hmap, node);
-    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+    bondp_hash_table_inc_gen(tbl);
 }
 
 void bondp_hash_table_destroy(bondp_hash_table_t *tbl);

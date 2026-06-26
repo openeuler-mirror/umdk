@@ -40,7 +40,7 @@ void bondp_hash_table_destroy(bondp_hash_table_t *tbl)
     (void)pthread_rwlock_unlock(&tbl->lock);
     (void)pthread_rwlock_destroy(&tbl->lock);
     /* Invalidate all thread-local caches that may still reference this table */
-    atomic_fetch_add_explicit(&tbl->gen, 1, memory_order_release);
+    bondp_hash_table_inc_gen(tbl);
 }
 
 struct ub_hmap_node *bondp_hash_table_lookup(bondp_hash_table_t *tbl, void *key, uint32_t hash)
