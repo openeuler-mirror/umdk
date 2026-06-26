@@ -663,10 +663,10 @@ TEST(UrmaBondTest, PublicDatapathApisRejectInvalidWorkRequests)
     fixture.jfs.comp_type = BONDP_COMP_JFR;
     fixture.jetty.comp_type = BONDP_COMP_JFR;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &sendWr, &badSend));
-    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(nullptr, badSend);
     badSend = nullptr;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr(&fixture.jetty.v_jetty, &sendWr, &badSend));
-    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(nullptr, badSend);
 
     fixture.jfr.comp_type = BONDP_COMP_JFS;
     fixture.jetty.comp_type = BONDP_COMP_JFS;
