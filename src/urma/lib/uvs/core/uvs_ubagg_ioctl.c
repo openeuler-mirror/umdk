@@ -387,7 +387,7 @@ int uvs_ubcore_ioctl_insert_host_eid_batch(
     return 0;
 }
 
-int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
+int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bonding_eid,
                                   const uvs_eid_t *dst_bonding_eid,
                                   enum uvs_tp_type tp_type, bool iodie_level,
                                   uvs_path_set_t *uvs_path_set)
@@ -403,7 +403,7 @@ int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
     }
 
     ioctl_ctx.ubcore_fd = dev_fd;
-    memcpy(&arg.in.src_bonding_eid, src_bondind_eid, sizeof(uvs_eid_t));
+    memcpy(&arg.in.src_bonding_eid, src_bonding_eid, sizeof(uvs_eid_t));
     memcpy(&arg.in.dst_bonding_eid, dst_bonding_eid, sizeof(uvs_eid_t));
     arg.in.tp_type = tp_type;
     arg.in.iodie_level = iodie_level;

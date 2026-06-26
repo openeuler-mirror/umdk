@@ -265,14 +265,14 @@ int uvs_get_topo_info(void *topo)
     return ret;
 }
 
-int uvs_get_path_set(const uvs_eid_t *src_bondind_eid,
+int uvs_get_path_set(const uvs_eid_t *src_bonding_eid,
                      const uvs_eid_t *dst_bonding_eid,
                      enum uvs_tp_type tp_type, bool iodie_level,
                      uvs_path_set_t *uvs_path_set)
 {
     int ret = 0;
 
-    if (src_bondind_eid == NULL || dst_bonding_eid == NULL) {
+    if (src_bonding_eid == NULL || dst_bonding_eid == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
@@ -282,13 +282,13 @@ int uvs_get_path_set(const uvs_eid_t *src_bondind_eid,
         return -EINVAL;
     }
 
-    if (!uvs_eid_is_valid(src_bondind_eid) ||
+    if (!uvs_eid_is_valid(src_bonding_eid) ||
         !uvs_eid_is_valid(dst_bonding_eid) ||
         uvs_path_set == NULL) {
         TPSA_LOG_ERR("Invalid parameter.\n");
         return -EINVAL;
     }
-    ret = uvs_ubcore_ioctl_get_path_set(src_bondind_eid,
+    ret = uvs_ubcore_ioctl_get_path_set(src_bonding_eid,
                                         dst_bonding_eid, tp_type, iodie_level, uvs_path_set);
     if (ret != 0) {
         TPSA_LOG_ERR("Failed to get path set, ret = %d.\n", ret);
