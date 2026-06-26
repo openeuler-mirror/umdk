@@ -2087,6 +2087,48 @@ urma_status_t urma_unimport_jetty(urma_target_jetty_t *tjetty)
 
 /* Kernel user_ctl opcodes for fetching remote jetty / seg context info. */
 
+static urma_status_t urma_validate_ctx_for_remote_query(const urma_context_t *urma_ctx)
+{
+    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
+        urma_ctx->ops == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+    return URMA_SUCCESS;
+}
+
+static urma_status_t urma_fetch_bond_user_info(urma_context_t *urma_ctx, uint32_t opcode,
+                                               uint64_t in_addr, uint32_t in_len, uint64_t out_addr)
+{
+    if (urma_ctx->ops->user_ctl == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_user_ctl_in_t in = {
+        .addr = in_addr,
+        .len = in_len,
+        .opcode = opcode,
+    };
+    urma_user_ctl_out_t out = {
+        .addr = out_addr,
+        .len = sizeof(uint64_t),
+    };
+
+    return (urma_ctx->ops->user_ctl(urma_ctx, &in, &out) == 0) ? URMA_SUCCESS : URMA_FAIL;
+}
+
+static uint32_t urma_calc_user_info_total_len(const void *base, uint32_t base_len, bool has_user_info)
+{
+    if (!has_user_info) {
+        return base_len;
+    }
+
+    const urma_user_info_ext_hdr_t *ext_hdr =
+        (const urma_user_info_ext_hdr_t *)((uintptr_t)base + base_len);
+    return base_len + (uint32_t)sizeof(*ext_hdr) + ext_hdr->len;
+}
+
 urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length)
 {
     if (jetty == NULL || rjetty == NULL || length == NULL) {
@@ -2095,32 +2137,17 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
     }
 
     urma_context_t *urma_ctx = jetty->urma_ctx;
-    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
-        urma_ctx->ops == NULL) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
+    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
+    if (status != URMA_SUCCESS) {
+        return status;
     }
 
     urma_rjetty_t *new_rjetty = NULL;
-
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
-        if (urma_ctx->ops->user_ctl == NULL) {
-            URMA_LOG_ERR("Invalid parameter.\n");
-            return URMA_EINVAL;
-        }
-
-        urma_user_ctl_in_t in = {
-            .addr = (uint64_t)(uintptr_t)jetty,
-            .len = sizeof(urma_jetty_t),
-            .opcode = BONDP_USER_CTL_GET_RJETTY,
-        };
-        urma_user_ctl_out_t out = {
-            .addr = (uint64_t)(uintptr_t)&new_rjetty,
-            .len = sizeof(urma_rjetty_t *),
-        };
-
-        int ret = urma_ctx->ops->user_ctl(urma_ctx, &in, &out);
-        if (ret != 0) {
+        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_RJETTY,
+                                           (uint64_t)(uintptr_t)jetty, sizeof(urma_jetty_t),
+                                           (uint64_t)(uintptr_t)&new_rjetty);
+        if (status != URMA_SUCCESS) {
             return URMA_FAIL;
         }
     } else {
@@ -2142,9 +2169,10 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
         jetty->jetty_cfg.jetty_grp->cfg.policy : URMA_JETTY_GRP_POLICY_RR;
     new_rjetty->type = URMA_JETTY;
     new_rjetty->flag.bs.order_type = jetty->jetty_cfg.jfs_cfg.flag.bs.order_type;
-    
+
     *rjetty = new_rjetty;
-    *length = sizeof(urma_rjetty_t) + new_rjetty->ext.length;
+    *length = urma_calc_user_info_total_len(new_rjetty, sizeof(urma_rjetty_t),
+                                            new_rjetty->flag.bs.has_user_info != 0);
     return URMA_SUCCESS;
 }
 
@@ -2863,32 +2891,17 @@ urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32
     }
 
     urma_context_t *urma_ctx = tseg->urma_ctx;
-    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
-        urma_ctx->ops == NULL) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
+    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
+    if (status != URMA_SUCCESS) {
+        return status;
     }
 
     urma_seg_t *new_seg = NULL;
-
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
-        if (urma_ctx->ops->user_ctl == NULL) {
-            URMA_LOG_ERR("Invalid parameter.\n");
-            return URMA_EINVAL;
-        }
-
-        urma_user_ctl_in_t in = {
-            .addr = (uint64_t)(uintptr_t)tseg,
-            .len = sizeof(urma_target_seg_t),
-            .opcode = BONDP_USER_CTL_GET_SEG_CTX,
-        };
-        urma_user_ctl_out_t out = {
-            .addr = (uint64_t)(uintptr_t)&new_seg,
-            .len = sizeof(urma_seg_t *),
-        };
-
-        int ret = urma_ctx->ops->user_ctl(urma_ctx, &in, &out);
-        if (ret != 0) {
+        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_SEG_CTX,
+                                           (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
+                                           (uint64_t)(uintptr_t)&new_seg);
+        if (status != URMA_SUCCESS) {
             return URMA_FAIL;
         }
     } else {
@@ -2904,12 +2917,17 @@ urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32
         return URMA_FAIL;
     }
 
+    bool has_user_info = (new_seg->attr.bs.has_user_info != 0);
     new_seg->ubva = tseg->seg.ubva;
     new_seg->len = tseg->seg.len;
     new_seg->attr = tseg->seg.attr;
+    if (has_user_info) {
+        new_seg->attr.bs.has_user_info = 1;
+    }
     new_seg->token_id = tseg->seg.token_id;
     *seg = new_seg;
-    *size = sizeof(urma_seg_t) + new_seg->ext.length;
+    *size = urma_calc_user_info_total_len(new_seg, sizeof(urma_seg_t),
+                                          new_seg->attr.bs.has_user_info != 0);
     return URMA_SUCCESS;
 }
 

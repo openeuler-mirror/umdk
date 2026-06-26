@@ -609,7 +609,8 @@ typedef union urma_jfr_flag {
                                    /* (0x2): OI, initiator ordering */
                                    /* (0x3): OL, low layer ordering */
                                    /* (0x4): UNO, unreliable non ordering */
-        uint32_t has_drv_ext  : 1;
+        uint32_t has_drv_ext  : 1; /* 0: no extension data.
+                                      1: extension data is appended after urma_rjetty_t. */
         uint32_t non_blocking : 1;
         uint32_t reserved     : 17;
     } bs;
@@ -690,8 +691,10 @@ typedef union urma_import_jetty_flag {
                                    /* (0x4): UNO, unreliable non ordering */
         uint32_t share_tp     : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
                                          this flag can only be set to 0. */
-        uint32_t has_drv_ext  : 1;
-        uint32_t reserved     : 19;
+        uint32_t has_drv_ext  : 1; /* Driver-defined behavior for import_jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after urma_rjetty_t. */
+        uint32_t reserved     : 18;
     } bs;
     uint32_t value;
 } urma_import_jetty_flag_t;
@@ -718,8 +721,10 @@ typedef union urma_jetty_flag {
         uint32_t share_jfr    : 1; /* 0: URMA_NO_SHARE_JFR.
                                       1: URMA_SHARE_JFR. */
         uint32_t non_blocking : 1;
-        uint32_t has_drv_ext  : 1;
-        uint32_t reserved     : 29;
+        uint32_t has_drv_ext  : 1; /* Driver-defined behavior for create/import jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after jetty object. */
+        uint32_t reserved     : 28;
     } bs;
     uint32_t value;
 } urma_jetty_flag_t;
@@ -777,7 +782,6 @@ typedef struct urma_rjetty {
     urma_target_type_t type;
     urma_import_jetty_flag_t flag;
     urma_tp_type_t tp_type;
-    urma_ext_t ext;
 } urma_rjetty_t;
 
 typedef struct urma_target_jetty {
@@ -932,7 +936,9 @@ typedef union urma_seg_attr {
                                        1: segment with user iova addr. */
         uint32_t user_token_id : 1; /* 0: token_id is allocated and should be freed by urma.
                                        1: token_id is allocated by user in urma_seg_cfg. */
-        uint32_t reserved      : 18;
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data appended after urma_seg_t. */
+        uint32_t reserved      : 17;
     } bs;
     uint32_t value;
 } urma_seg_attr_t;
@@ -984,7 +990,6 @@ typedef struct urma_seg {
     uint64_t len;         /* [Public] length of segment. */
     urma_seg_attr_t attr; /* [Public] include: access flag, token policy, cacheability. */
     uint32_t token_id;    /* [Private] match token */
-    urma_ext_t ext;
 } urma_seg_t;
 
 typedef struct urma_target_seg {

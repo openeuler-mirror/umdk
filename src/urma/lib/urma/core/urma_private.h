@@ -24,6 +24,11 @@ extern "C" {
 #define URMA_MAX_SYSFS_PATH 256
 #define URMA_UBAGG_DEV_PREFIX "bonding_dev"
 
+typedef struct urma_user_info_ext_hdr {
+    uint32_t len;
+    char data[0];
+} urma_user_info_ext_hdr_t;
+
 typedef struct urma_driver {
     struct urma_provider_ops *ops;
     struct ub_list node; /* Add to driver list */

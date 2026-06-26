@@ -132,7 +132,7 @@ TEST(UrmaBondTest, HeaderInlineHelpersCoverStablePureLogic)
     EXPECT_EQ(base.ubva.va, converted.ubva.va);
     EXPECT_EQ(base.ubva.uasid, converted.ubva.uasid);
     EXPECT_EQ(base.len, converted.len);
-    EXPECT_EQ(0U, converted.ext.flag.value);
+    EXPECT_FALSE(bondp_seg_has_user_info(&converted));
     EXPECT_TRUE(is_empty_eid(&eid));
     eid.in6.interface_id = 1;
     EXPECT_FALSE(is_empty_eid(&eid));
