@@ -335,8 +335,6 @@ static const char *umq_trace_type_str(umq_trace_type_t type)
         [UMQ_TRACE_TYPE_POLL]  = "POLL",
         [UMQ_TRACE_TYPE_WAIT]  = "WAIT",
         [UMQ_TRACE_TYPE_REARM] = "REARM",
-        [UMQ_TRACE_TYPE_ALLOC] = "ALLOC",
-        [UMQ_TRACE_TYPE_FREE]  = "FREE",
     };
     return (type < UMQ_TRACE_TYPE_MAX) ? type_str[type] : "UNKNOWN";
 }
