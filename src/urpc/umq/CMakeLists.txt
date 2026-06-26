@@ -21,6 +21,7 @@ aux_source_directory(${CMAKE_CURRENT_LIST_DIR} UMQ_LIB_DIR_SRCS)
 add_library(umq SHARED
     $<TARGET_OBJECTS:common_util>
     ${UMQ_LIB_DIR_SRCS}
+    ${UMQ_DFX_LIB_DIR_SRCS}
 )
 
 set_target_properties(umq PROPERTIES

@@ -555,19 +555,23 @@ int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_b
         "                                                                    Analyse Function Execution Time Records");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_EQUALS);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-20s %-20s %-20s %-20s %-20s %-20s %-20s %-20s\n",
-        "Type", "Sample Num", "Average (ns)", "Minimum (ns)", "Maxinum (ns)", "Median (ns)", "P90 (ns)", "P99 (ns)");
+        "%-20s %-12s %-14s %-14s %-14s %-14s %-14s %-14s %-14s\n",
+        "Type", "Sample Num", "Average (ns)", "Minimum (ns)", "Maxinum (ns)", "P50 (ns)", "P90 (ns)",
+        "P99 (ns)", "P9999 (ns)");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_UNDERLINE);
     for (uint32_t type = 0; type < UMQ_PERF_RECORD_TYPE_MAX; type++) {
         if (type == UMQ_PERF_RECORD_TRANSPORT_POST_SEND_EAGAIN) {
             continue;
         }
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-20s %-20lu %-20lu %-20lu %-20lu %-20lu %-20lu %-20lu\n",
+            "%-20s %-12lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu\n",
             perf_record_type_name[type], umq_perf_stats->type_record[type].sample_num,
             umq_perf_stats->type_record[type].average, umq_perf_stats->type_record[type].mininum,
-            umq_perf_stats->type_record[type].maxinum, umq_perf_stats->type_record[type].median,
-            umq_perf_stats->type_record[type].p90, umq_perf_stats->type_record[type].p99);
+            umq_perf_stats->type_record[type].maxinum,
+            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P50],
+            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P90],
+            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P99],
+            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P9999]);
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_EQUALS);
