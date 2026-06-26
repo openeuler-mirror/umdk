@@ -176,3 +176,116 @@ int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, 
     *output = entry->bonding_eid;
     return 0;
 }
+
+static const bondp_topo_node_t *find_current_topo_node(const topo_map_t *topo_map)
+{
+    if (topo_map == NULL) {
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < topo_map->node_num; ++i) {
+        if (topo_map->topo_infos[i].is_current) {
+            return &topo_map->topo_infos[i];
+        }
+    }
+    return NULL;
+}
+
+static const bondp_topo_node_t *find_topo_node_by_agg_eid(const topo_map_t *topo_map, const urma_eid_t *eid)
+{
+    if (topo_map == NULL || eid == NULL) {
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < topo_map->node_num; ++i) {
+        const bondp_topo_node_t *node = &topo_map->topo_infos[i];
+        for (uint32_t j = 0; j < DEV_NUM; ++j) {
+            if (memcmp(node->agg_devs[j].agg_eid, eid, EID_LEN) == 0) {
+                return node;
+            }
+        }
+    }
+    return NULL;
+}
+
+static inline bool topo_connected_index_valid(uint32_t idx)
+{
+    return idx < TOPO_CONNECTED_MAX_NUM;
+}
+
+static void topo_fill_port_links_from_dst(const bondp_topo_node_t *dst_node,
+                                          bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM])
+{
+    for (uint32_t local_idx = 0; local_idx < IODIE_NUM * PORT_NUM; ++local_idx) {
+        uint32_t local_indice = IODIE_NUM + local_idx;
+        if (!topo_connected_index_valid(local_indice)) {
+            continue;
+        }
+        for (uint32_t remote_idx = 0; remote_idx < IODIE_NUM * PORT_NUM; ++remote_idx) {
+            uint32_t remote_indice = IODIE_NUM + remote_idx;
+            if (!topo_connected_index_valid(remote_indice)) {
+                continue;
+            }
+            connected[local_indice][remote_indice] = dst_node->links[local_idx][remote_idx];
+        }
+    }
+}
+
+static bool topo_has_port_link(const bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM],
+                               uint32_t local_iodie, uint32_t remote_iodie)
+{
+    for (uint32_t local_port = 0; local_port < PORT_NUM; ++local_port) {
+        uint32_t local_indice = IODIE_NUM + local_iodie * PORT_NUM + local_port;
+        if (!topo_connected_index_valid(local_indice)) {
+            continue;
+        }
+        for (uint32_t remote_port = 0; remote_port < PORT_NUM; ++remote_port) {
+            uint32_t remote_indice = IODIE_NUM + remote_iodie * PORT_NUM + remote_port;
+            if (!topo_connected_index_valid(remote_indice)) {
+                continue;
+            }
+            if (connected[local_indice][remote_indice]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void topo_fill_primary_links(bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM])
+{
+    for (uint32_t local_iodie = 0; local_iodie < IODIE_NUM; ++local_iodie) {
+        for (uint32_t remote_iodie = 0; remote_iodie < IODIE_NUM; ++remote_iodie) {
+            if (topo_has_port_link(connected, local_iodie, remote_iodie)) {
+                connected[local_iodie][remote_iodie] = true;
+            }
+        }
+    }
+}
+
+int bondp_find_linked_port_by_topo(const topo_map_t *topo_map, const urma_eid_t *dst_eid,
+                                   bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM])
+{
+    if (topo_map == NULL || dst_eid == NULL || connected == NULL) {
+        URMA_LOG_ERR("Invalid parameter for linked port query.\n");
+        return -1;
+    }
+
+    const bondp_topo_node_t *src_node = find_current_topo_node(topo_map);
+    const bondp_topo_node_t *dst_node = find_topo_node_by_agg_eid(topo_map, dst_eid);
+    if (src_node == NULL) {
+        URMA_LOG_ERR("Failed to find current topo node.\n");
+        return -1;
+    }
+    if (dst_node == NULL) {
+        URMA_LOG_ERR("Failed to find target topo node.\n");
+        return -1;
+    }
+
+    (void)memset(connected, 0,
+                 sizeof(bool) * TOPO_CONNECTED_MAX_NUM * TOPO_CONNECTED_MAX_NUM);
+    topo_fill_port_links_from_dst(dst_node, connected);
+    topo_fill_primary_links(connected);
+
+    return 0;
+}

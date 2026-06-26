@@ -26,6 +26,7 @@
 #define CHIP_NUM           (2)
 #define IODIE_NUM          (2)
 #define DEV_NUM            (256)
+#define TOPO_CONNECTED_MAX_NUM (IODIE_NUM + IODIE_NUM * PORT_NUM)
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,14 @@ void delete_topo_map(topo_map_t *topo_map);
  * @return 0 for success, other for error or not found
  */
 int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, urma_eid_t *output);
+
+/*
+ * Build connection matrix between local bonding context and dst node in topo map.
+ * Primary-primary connectivity is derived from port-port connectivity:
+ * if any local port can reach any target port, this primary pair is connected.
+ */
+int bondp_find_linked_port_by_topo(const topo_map_t *topo_map, const urma_eid_t *dst_eid,
+                                   bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM]);
 
 #ifdef __cplusplus
 }
