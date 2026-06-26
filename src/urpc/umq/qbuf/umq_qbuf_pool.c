@@ -49,8 +49,8 @@ typedef struct async_shrink_pool_param_list {
 typedef struct expansion_qbuf_pool {
     bool inited;
     pthread_spinlock_t expansion_pool_lock;
-    volatile uint32_t is_async_expanding;
-    volatile uint32_t is_async_shrinking;
+    volatile uint32_t is_expanding;
+    volatile uint32_t is_shrinking;
     uint64_t trigger_expand_block_num;
     uint32_t expansion_block_count; // number of blocks per expansion
     uint32_t expansion_pool_id_min; // minimum id for dynamically expanding qbuf pool
@@ -360,7 +360,7 @@ static void *async_shrink_global_pool_callback(void *arg)
         exp_pool->total_shrink_count++;
     }
 
-    __atomic_store_n(&exp_pool->is_async_shrinking, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&exp_pool->is_shrinking, 0, __ATOMIC_RELEASE);
     return NULL;
 }
 
@@ -373,13 +373,13 @@ void async_shrink_global_pool(bool with_data, qbuf_expansion_pool_t *exp_pool, u
     async_shrink_push_param(with_data, exp_pool, slot_id);
     uint32_t async_shrink_expected = 0;
     if (!__atomic_compare_exchange_n(
-        &exp_pool->is_async_shrinking, &async_shrink_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        &exp_pool->is_shrinking, &async_shrink_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
         return;
     }
 
     pthread_t tid;
     if (pthread_create(&tid, NULL, async_shrink_global_pool_callback, (void*)exp_pool) != 0) {
-        __atomic_store_n(&exp_pool->is_async_shrinking, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&exp_pool->is_shrinking, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async shrink global pool create failed, errno: %d\n", errno);
     } else {
         pthread_detach(tid);
@@ -623,7 +623,7 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
     uint64_t start_time = urpc_get_cpu_cycles();
     uint32_t async_expand_expected = 0;
     while (!__atomic_compare_exchange_n(
-        &exp_pool->is_async_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
+        &exp_pool->is_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
         ((urpc_get_cpu_cycles() - start_time) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
         async_expand_expected = 0;
         // wait 1 ms
@@ -633,7 +633,7 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
     // wait async shrink
     async_expand_expected = 0;
     while (!__atomic_compare_exchange_n(
-        &exp_pool->is_async_shrinking, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
+        &exp_pool->is_shrinking, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
         ((urpc_get_cpu_cycles() - start_time) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
         async_expand_expected = 0;
         usleep(QBUF_POOL_CHECK_ASYNC_PERIOD_US);
@@ -643,8 +643,8 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
     (void)pthread_spin_destroy(&exp_pool->shrink_task_list.lock);
 
-    __atomic_store_n(&exp_pool->is_async_expanding, 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&exp_pool->is_async_shrinking, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&exp_pool->is_shrinking, 0, __ATOMIC_RELEASE);
 }
 
 static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const qbuf_pool_cfg_t *cfg, bool with_data)
@@ -1008,7 +1008,7 @@ static void *async_expand_global_pool_callback(void *arg)
         return NULL;
     }
     (void)expand_global_pool(async_param->with_data);
-    __atomic_store_n(&async_param->exp_pool->is_async_expanding, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&async_param->exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
     free(arg);
     return NULL;
 }
@@ -1026,21 +1026,21 @@ void async_expand_global_pool(bool with_data, uint64_t g_buf_cnt, bool disable_s
 
     uint32_t async_expand_expected = 0;
     if (!__atomic_compare_exchange_n(
-        &exp_pool->is_async_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        &exp_pool->is_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
         return;
     }
 
     pthread_t tid;
     async_expand_pool_param_t *arg = (async_expand_pool_param_t *)malloc(sizeof(async_expand_pool_param_t));
     if (arg == NULL) {
-        __atomic_store_n(&exp_pool->is_async_expanding, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "malloc async_expand_pool_param failed\n");
         return;
     }
     arg->exp_pool = exp_pool;
     arg->with_data = with_data;
     if (pthread_create(&tid, NULL, async_expand_global_pool_callback, arg) != 0) {
-        __atomic_store_n(&exp_pool->is_async_expanding, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);
     } else {
         pthread_detach(tid);
@@ -1358,4 +1358,19 @@ void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
         ops->unregister_seg_callback(ctx, mempool_id);
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+}
+
+bool umq_qbuf_try_expansion_pool(bool with_data, uint64_t *global_buf_cnt, bool disable_scale_cap)
+{
+    qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_date : &g_qbuf_pool.exp_pool_without_date;
+    uint32_t async_expand_expected = 0;
+    if (!__atomic_compare_exchange_n(
+        &exp_pool->is_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        // expansion in progress
+        return true;
+    }
+
+    int ret = expand_global_pool(with_data);
+    __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+    return ret == UMQ_SUCCESS;
 }
