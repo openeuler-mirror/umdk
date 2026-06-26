@@ -9,7 +9,7 @@
 ```bash
 rm -rf .git*
 mkdir -p /root/rpmbuild/SOURCES/
-tar -cvf /root/rpmbuild/SOURCES/umdk-26.06.0.tar.gz --exclude=.git $(ls -A)
+tar -cvf /root/rpmbuild/SOURCES/umdk-25.12.0.tar.gz --exclude=.git $(ls -A)
 rpmbuild -bb umdk.spec --with urpc
 ```
 
