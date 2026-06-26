@@ -749,7 +749,6 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
 
     jetty_pool_config_t config = {
         .notify_threshold = cfg->tp_pool_cfg.notify_threshold,
-        .borrow_limit = cfg->tp_pool_cfg.borrow_limit,
     };
     ret = umq_ub_jetty_pool_init(&config);
     if (ret != UMQ_SUCCESS) {
