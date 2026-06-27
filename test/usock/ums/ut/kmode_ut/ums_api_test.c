@@ -33,6 +33,9 @@
 #include "ums_listen.h"
 #include "ums_clc.h"
 
+/* token exchange netlink layer kmod UT (see ums_token_kmod_test.c) */
+extern void ums_token_kmod_test_run(void);
+
 #define UMS_TEST_SNDBUF_DEFAULT_SIZE (1 * 1024 * 1024) /* 1MB by default */
 #define UMS_TEST_RCVBUF_DEFAULT_SIZE (1 * 1024 * 1024) /* 1MB by default */
 #define UMS_TEST_AUTOCORKING_DEFAULT_SIZE ((UMS_TEST_SNDBUF_DEFAULT_SIZE) >> 1)
@@ -370,6 +373,7 @@ static int __init ums_test_init(void)
     ums_test_cli_delete_link();
     ums_test_srv_delete_link();
     ums_test_close_passive_abort();
+    ums_token_kmod_test_run();
     sock_release(socket);
 
     return 0;

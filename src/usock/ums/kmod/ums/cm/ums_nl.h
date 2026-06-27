@@ -59,4 +59,12 @@ int ums_nl_submit_tokens(struct ums_token_xchg_ctx *ctx,
 	const struct ums_ip_addr *peer_addr, bool first_contact);
 void ums_nl_unregister_clc_session(struct ums_token_xchg_ctx *token_ctx);
 
+#ifdef UMS_UT_TEST
+/* Ownership-transfer helpers for the clc_ht; external only in test builds so
+ * ums_test.ko can validate the register/claim/duplicate/unregister refcount
+ * model directly. */
+struct ums_token_xchg_ctx *ums_nl_claim_token_ctx(u32 clc_session_id,
+	const u8 *initiator_id);
+void ums_token_ctx_nl_put(struct ums_token_xchg_ctx *ctx);
+#endif
 #endif /* UMS_NL_H */

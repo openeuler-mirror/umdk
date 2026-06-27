@@ -88,7 +88,11 @@ static struct ums_nl_state g_ums_nl_state = {
  *   ums_nl_claim_token_ctx transfers ownership from A to B without changing the count.
  *   Each holder is responsible for calling ums_token_ctx_nl_put when done.
  */
+#ifdef UMS_UT_TEST
+void ums_token_ctx_nl_put(struct ums_token_xchg_ctx *ctx)
+#else
 static void ums_token_ctx_nl_put(struct ums_token_xchg_ctx *ctx)
+#endif
 {
 	if (refcount_dec_and_test(&ctx->nl_refcnt))
 		wake_up(&ctx->nl_free_wait);
@@ -273,8 +277,13 @@ static struct ums_nl_clc_entry *ums_nl_find_clc_entry(u32 clc_session_id,
  * Returns NULL if the entry was already removed (e.g., by unregister or a
  * prior claim), which also prevents duplicate callbacks on the same session.
  */
+#ifdef UMS_UT_TEST
+struct ums_token_xchg_ctx *ums_nl_claim_token_ctx(u32 clc_session_id,
+	const u8 *initiator_id)
+#else
 static struct ums_token_xchg_ctx *ums_nl_claim_token_ctx(u32 clc_session_id,
 	const u8 *initiator_id)
+#endif
 {
 	struct ums_token_xchg_ctx *token_ctx;
 	struct ums_nl_clc_entry *entry;
@@ -729,3 +738,12 @@ void ums_nl_exit(void)
 		ums_token_ctx_nl_put(token_ctx);
 	}
 }
+
+#ifdef UMS_UT_TEST
+EXPORT_SYMBOL_GPL(ums_nl_register_clc_session);
+EXPORT_SYMBOL_GPL(ums_nl_unregister_clc_session);
+EXPORT_SYMBOL_GPL(ums_nl_submit_tokens);
+EXPORT_SYMBOL_GPL(ums_nl_agent_available);
+EXPORT_SYMBOL_GPL(ums_nl_claim_token_ctx);
+EXPORT_SYMBOL_GPL(ums_token_ctx_nl_put);
+#endif
