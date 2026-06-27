@@ -140,7 +140,7 @@ static void notify_peer_exit(void)
     if (g_perftest_cfg != NULL) {
         char cmd = PERFTEST_EXIT_CMD;
         ssize_t __attribute__((unused)) wr_ret =
-            write(g_perftest_cfg->comm.sock_fd[0], &cmd, sizeof(cmd));
+            sock_write(g_perftest_cfg->comm.sock_fd[0], &cmd, sizeof(cmd));
     }
 }
 
@@ -2817,22 +2817,20 @@ static void *infinite_print_thread(void *duration)
     }
 
     /* Poll peer-exit socket between print slices; short slice so main can stop us quickly. */
-    int sock_fd = g_perftest_cfg->comm.sock_fd[0];
     int poll_slice_ms = ((int)*inf_duration < 100) ? (int)*inf_duration : 100;
     uint32_t elapsed_ms = 0;
 
     while (g_perftest_ctx->infinite_print == true) {
-        struct pollfd pfd = { .fd = sock_fd, .events = POLLIN };
-        int pr = poll(&pfd, 1, poll_slice_ms);
+        int pr = sock_poll(g_perftest_cfg->comm.sock_fd[0], poll_slice_ms);
         if (pr < 0) {
             if (errno == EINTR) {
                 continue;
             }
             break;
         }
-        if (pr > 0 && (pfd.revents & (POLLIN | POLLHUP | POLLERR))) {
+        if (pr > 0) {
             char buf[1];
-            ssize_t n = read(sock_fd, buf, sizeof(buf));
+            ssize_t n = sock_read(g_perftest_cfg->comm.sock_fd[0], buf, sizeof(buf));
             if (n <= 0 || buf[0] == PERFTEST_EXIT_CMD) {
                 request_exit();
                 break;
