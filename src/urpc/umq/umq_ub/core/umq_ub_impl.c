@@ -800,10 +800,6 @@ UNINIT_ALLOCATOR:
 
 void umq_ub_ctx_uninit_impl(uint8_t *ctx)
 {
-    umq_ub_jetty_pool_uninit();
-    umq_ub_check_idle_queue_timer_delete();
-    umq_ub_queue_ctx_list_uninit();
-    umq_qbuf_pool_uninit();
     umq_ub_ctx_t *context = (umq_ub_ctx_t *)ctx;
     if (context != g_ub_ctx) {
         UMQ_VLOG_ERR(VLOG_UMQ, "uninit failed, ub_ctx is invalid\n");
@@ -817,6 +813,11 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
             return;
         }
     }
+
+    umq_ub_jetty_pool_uninit();
+    umq_ub_check_idle_queue_timer_delete();
+    umq_ub_queue_ctx_list_uninit();
+    umq_qbuf_pool_uninit();
 
     for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
         umq_ub_flow_control_sge_mgr_uninit(&context[i].fc_sge_mgr);
