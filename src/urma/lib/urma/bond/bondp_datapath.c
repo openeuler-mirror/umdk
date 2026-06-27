@@ -943,6 +943,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
     urma_jfs_wr_t *bad_wr = NULL;
+    wr->next = NULL;
     int ret = comp_post_send(wr_entry->bdp_comp, send_idx, target_idx, wr, &bad_wr, 1);
     if (ret != URMA_SUCCESS) {
         convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
