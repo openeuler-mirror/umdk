@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -361,5 +362,30 @@ int sync_time(int sock_fd, char *a)
     }
 sync_ret:
     free(b);
+    return ret;
+}
+
+ssize_t sock_write(int sock_fd, const void *buf, size_t size)
+{
+    return write(sock_fd, buf, size);
+}
+
+ssize_t sock_read(int sock_fd, void *buf, size_t size)
+{
+    return read(sock_fd, buf, size);
+}
+
+int sock_poll(int sock_fd, int timeout_ms)
+{
+    struct pollfd pfd = {
+        .fd = sock_fd,
+        .events = POLLIN,
+        .revents = 0,
+    };
+    int ret = poll(&pfd, 1, timeout_ms);
+    if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP | POLLERR)) == 0) {
+        errno = EIO;
+        return -1;
+    }
     return ret;
 }
