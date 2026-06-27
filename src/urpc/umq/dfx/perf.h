@@ -36,7 +36,7 @@ void umq_trace_uninit(void);
 void umq_trace_timer_delete(void);
 int umq_trace_stop(void);
 int umq_trace_start(umq_trace_cfg_t *cfg);
-void umq_trace_start_record(umq_trace_type_t type, uint64_t time);
+void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t interrupt_timestamp);
 void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
                           uint64_t start_time, uint64_t exec_time);
 void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t umq_id);
