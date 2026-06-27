@@ -142,4 +142,38 @@ struct aclshmemi_rdma_send_wr {
 
 ACLSHMEM_DEVICE __gm__ aclshmemi_rdma_info *aclshmemi_qp_info_fetch();
 
+/**
+ * @brief Asynchronous RDMA Write function.
+ *
+ * @param dst                    [in] destination address in remote HBM
+ * @param src                    [in] source address in local HBM
+ * @param pe                     [in] PE number of the remote PE.
+ * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
+ * @param message_len            [in] message length in Bytes
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ */
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_write(
+    __gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
+    AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+
+/**
+ * @brief Asynchronous RDMA READ function.
+ *
+ * @param dst                    [in] destination address in local HBM
+ * @param src                    [in] source address in remote HBM
+ * @param pe                     [in] PE number of the remote PE.
+ * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
+ * @param message_len            [in] message length in Bytes
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ */
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_read(
+    __gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
+    AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+
 #endif // ACLSHMEMI_DEVICE_RDMA_H
