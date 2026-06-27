@@ -52,8 +52,6 @@ if "BUILD_TYPE" in os.environ and os.environ.get("BUILD_TYPE") == "Debug":
     compile_args.extend(["-g", "-O0"])
 else:
     compile_args.extend(["-O2"])
-if "ENABLE_COV" in os.environ and os.environ.get("ENABLE_COV") == "1":
-    compile_args.extend(["-coverage"])
 print(compile_args)
 
 exts = []
@@ -81,8 +79,6 @@ library_dirs = [
 
 sources = [
     "./fused_deep_moe.cpp",
-    "./moe_dispatch_normal.cpp",
-    "./moe_combine_normal.cpp",
     "./a2e.cpp",
     "./e2a.cpp",
     "./pybind.cpp",
@@ -95,7 +91,6 @@ sources = [
 libraries = [
     'cam_static',
     "torch_npu",
-    "gcov",
     "runtime",
     "torch",
     "ascendcl",

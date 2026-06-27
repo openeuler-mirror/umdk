@@ -5,71 +5,97 @@
 # Create: 2025-07-20
 # History: 2025-07-20 create cam building script
 #          2026-06-08 migrate from legacy opbuild/msopgen to npu_op_* build system
+#          2026-06-26 switch from exclude-list copy to include-list build with
+#                     operator_registry.json + select_ops.py selection
 
 set -e
 
-# 定义全局屏蔽列表
-exclude_list=("fused_deep_moe_w4a8")
+# 算子注册表路径（算子身份 = ascend_kernels/ 下的目录名）
+REGISTRY_PATH="${MODULE_SRC_PATH}/ascend_kernels/operator_registry.json"
+# select_ops.py 路径
+SELECT_OPS_SCRIPT="${SCRIPTS_PATH}/comm_operator/select_ops.py"
+
+# SHMEM 是否安装（由环境变量 SHMEM_HOME_PATH 判定）
+shmem_installed=1
 if [ -z "${SHMEM_HOME_PATH}" ]; then
-    echo "Skipping shmem (SHMEM_HOME_PATH not set)"
-    exclude_list+=("fused_deep_moe")
-    exclude_list+=(
-        "moe_combine_lowlatency_zb"
-        "moe_combine_normal_zb"
-        "moe_dispatch_lowlatency_zb"
-        "moe_dispatch_normal_zb"
-        "moe_dispatch_layout_zb"
-        "moe_notify_dispatch_zb"
-    )
-else
-    echo "Building zero-buffer operators (SHMEM_HOME_PATH set)"
-    # zb dispatch_layout shares filenames with HCCL dispatch_layout; use zb version.
-    exclude_list+=("dispatch_layout")
+    shmem_installed=0
 fi
 
-copy_ops() {
-    local src_dir="$1" # 源目录
-    local dst_dir="$2" # 目标目录
+# -q (量化) 标志由 build.sh 通过 CAM_USE_W4A8=1 透传
+use_w4a8=0
+if [ "${CAM_USE_W4A8}" = "1" ]; then
+    use_w4a8=1
+fi
 
-    # 确保目标目录的op_host、op_kernel和pregen autogen存在
+# -a 算子列表由 build.sh 通过 CAM_OP_SELECT 透传（分号分隔；为空=全量）
+user_ops="${CAM_OP_SELECT:-}"
+
+# 复制指定算子目录的 op_host/op_kernel/op_api 到目标工程。
+# utils 为公共头目录，始终复制；其余按 ops 数组（算子目录名）复制。
+# 与旧版全量拷贝+exclude_list 不同，这里只复制 select_ops.py 求解出的算子，
+# 从根本上避免同名算子（fused_deep_moe 家族）文件互相覆盖的问题。
+copy_ops_include() {
+    local src_dir="$1" # 源目录 (ascend_kernels)
+    local dst_dir="$2" # 目标目录 (工程根)
+    local ops=($3)     # 空格分隔的算子目录名列表
+
+    # 确保目标目录的 op_host、op_kernel 和 pregen autogen 存在
     mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel" "$dst_dir/pregen/build_out/autogen"
 
-    # 遍历源目录下所有直接子目录（包括含空格的目录）
-    find "$src_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' subdir; do
-        # 检查子目录是否存在（双重验证）
-        subdir_name=$(basename "$subdir")
+    # 始终复制公共头目录 utils（op_host/op_kernel 下的 .h）
+    if [ -d "$src_dir/utils/op_host" ]; then
+        cp -rf "$src_dir/utils/op_host/"* "$dst_dir/op_host/" 2>/dev/null || true
+    fi
+    if [ -d "$src_dir/utils/op_kernel" ]; then
+        cp -rf "$src_dir/utils/op_kernel/"* "$dst_dir/op_kernel/" 2>/dev/null || true
+    fi
 
-        if [ -d "$subdir" ]; then
-            # 检查当前子目录是否在屏蔽列表中
-            skip=false
-            for excluded_dir in "${exclude_list[@]}"; do
-                if [ "$subdir_name" = "$excluded_dir" ]; then
-                    skip=true
-                    break
-                fi
-            done
-
-            # 如果在屏蔽列表中，则跳过处理
-            if [ "$skip" = true ]; then
-                continue
-            fi
-
-            # 处理op_host目录
-            if [ -d "$subdir/op_host" ]; then
-                cp -rf "$subdir/op_host/"* "$dst_dir/op_host/"
-            fi
-
-            # 处理op_kernel目录
-            if [ -d "$subdir/op_kernel" ]; then
-                cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
-            fi
-
-            # 处理op_api目录（将aclnn接口文件复制到pregen/build_out/autogen）
-            if [ -d "$subdir/op_api" ]; then
-                cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
-            fi
+    # 复制每个选中算子的 op_host/op_kernel/op_api
+    for name in "${ops[@]}"; do
+        local subdir="$src_dir/$name"
+        if [ ! -d "$subdir" ]; then
+            echo "Warning: operator dir not found, skipping: $name"
+            continue
+        fi
+        if [ -d "$subdir/op_host" ]; then
+            cp -rf "$subdir/op_host/"* "$dst_dir/op_host/"
+        fi
+        if [ -d "$subdir/op_kernel" ]; then
+            cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
+        fi
+        # op_api 接口文件复制到 pregen/build_out/autogen
+        if [ -d "$subdir/op_api" ]; then
+            cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
         fi
     done
+}
+
+# 调用 select_ops.py 求解最终算子列表，返回空格分隔的算子目录名。
+# 失败时（注册表/校验错误）select_ops.py 已打印错误并以非零退出，set -e 会中止。
+resolve_ops() {
+    local soc=$1
+    local quant_arg=""
+    local ops_arg=""
+    if [ "$use_w4a8" = "1" ]; then
+        quant_arg="--quant"
+    fi
+    if [ -n "$user_ops" ]; then
+        ops_arg="--ops $user_ops"
+    fi
+    python3 "$SELECT_OPS_SCRIPT" \
+        --registry "$REGISTRY_PATH" \
+        --soc "$soc" \
+        --shmem "$shmem_installed" \
+        $quant_arg $ops_arg | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//'
+}
+
+# 读取注册表中所有已注册代际（空格分隔）
+list_soc_versions() {
+    python3 -c "
+import json
+d = json.load(open('$REGISTRY_PATH'))
+print(' '.join(d.get('soc_versions', {}).keys()))
+"
 }
 
 # 构建算子工程并将其产物传到指定地点
@@ -93,13 +119,15 @@ build_ascend_proj() {
         rm -rf ${MODULE_BUILD_PATH}/${proj_name}
     fi
 
-    # 当前分支所有算子均为 ascend910_93 版本，不支持 ascend910b4
-    if [[ "$soc_version" == "ascend910b4" ]]; then
-        echo "Warning: ascend910b4 SOC version is not supported on this branch."
-        echo "All operators on this branch are ascend910_93 versions only."
-        echo "Skipping build for ascend910b4."
-        return 0
+    # 求解本次要编译的算子列表（include 模式，由 select_ops.py 校验+过滤）
+    # select_ops.py 在 soc 未注册/算子名非法/-q 冲突等情况下会报错并退出。
+    local selected_ops
+    selected_ops=$(resolve_ops "$soc_version")
+    if [ -z "$selected_ops" ]; then
+        echo "ERROR: no operators resolved for SOC ${soc_version}"
+        return 1
     fi
+    echo "Selected operators for ${soc_version}: ${selected_ops}"
 
     # 使用 msopgen 生成不同代际的算子工程及 CMakePresets.json 文件
     export OPS_PROJECT_NAME=aclnnInner
@@ -116,24 +144,11 @@ build_ascend_proj() {
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
     cp ./ascend_kernels/cmake_files/op_kernel/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/
 
-    # 复制所有算子的op_host/op_kernel源文件和op_api接口文件
-    copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
+    # 复制选中算子的 op_host/op_kernel 源文件和 op_api 接口文件（include 模式）
+    copy_ops_include "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}" "$selected_ops"
 
     # 复制cmake_files/cmake目录（包含自定义编译函数，替换msopgen默认cmake）
     cp -rf ./ascend_kernels/cmake_files/cmake ${MODULE_BUILD_PATH}/${proj_name}/
-
-    # copy_ops中的exclude_list在find|while子shell中可能不完全生效，
-    # 因此在此处补充移除屏蔽列表中对应算子的autogen文件
-    for excluded_dir in "${exclude_list[@]}"; do
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
-    done
-
-    # 如果不需要编译shmem/fused_deep_moe/zero_buffer算子，移除相关的pregen文件
-    if [ -z "${SHMEM_HOME_PATH}" ]; then
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*shmem*
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*fused_deep_moe*
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*zero_buffer*
-    fi
 
     # 设置build_type到CMakePresets.json（在msopgen生成之后调用）
     python3 $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
@@ -193,4 +208,40 @@ build_ascend_proj() {
     fi
 }
 
-build_ascend_proj $1 $2 $3 $4
+# ---- 入口 ----
+# 用法: compile_ascend_proj.sh <src_path> <soc_version|all> <is_extract> <build_type>
+src_path=$1
+soc_arg=$2
+is_extract=${3:-0}
+build_type=${4:-Release}
+
+if [ -z "$src_path" ] || [ -z "$soc_arg" ]; then
+    echo "Usage: $0 <src_path> <soc_version|all> <is_extract> <build_type>"
+    exit 1
+fi
+
+# 构建输出 run 目录
+if [ ! -d "$BUILD_OUT_PATH/comm_operator/run" ]; then
+    mkdir -p "$BUILD_OUT_PATH/comm_operator/run"
+fi
+
+if [ "$soc_arg" = "all" ]; then
+    # 默认：遍历注册表中所有已注册代际，每代际编译全量算子
+    # （select_ops.py 会按 SHMEM 安装情况自动剔除相应算子）
+    all_socs=$(list_soc_versions)
+    if [ -z "$all_socs" ]; then
+        echo "ERROR: no SOC versions registered in ${REGISTRY_PATH}"
+        exit 1
+    fi
+    # -a 选择与默认 all 不兼容：all 模式下遍历每代际的全量集，不接受单算子指定
+    if [ -n "$user_ops" ]; then
+        echo "ERROR: -a requires a specific -c SOC; cannot use -a with default (all) build"
+        exit 1
+    fi
+    for soc in $all_socs; do
+        echo "======== Building SOC: ${soc} ========"
+        build_ascend_proj "$src_path" "$soc" "$is_extract" "$build_type"
+    done
+else
+    build_ascend_proj "$src_path" "$soc_arg" "$is_extract" "$build_type"
+fi

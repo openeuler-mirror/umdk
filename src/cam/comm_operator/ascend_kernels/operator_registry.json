@@ -1,0 +1,56 @@
+{
+  "_comment": "CAM operator registry. soc_versions maps a SOC generation to the operator directory names it supports. operator_meta holds per-operator build metadata. To support a new SOC generation, add an entry under soc_versions. To add an operator, append its directory name to the relevant soc list and (optionally) add meta. Operator identity = source directory name under ascend_kernels/.",
+  "soc_versions": {
+    "ascend910_93": [
+      "a2e",
+      "all_to_all_detour",
+      "e2a",
+      "fused_deep_moe",
+      "fused_deep_moe_fwk",
+      "fused_deep_moe_w4a8",
+      "moe_combine_lowlatency_zb",
+      "moe_combine_normal_zb",
+      "moe_dispatch_layout_zb",
+      "moe_dispatch_lowlatency_zb",
+      "moe_dispatch_normal_zb",
+      "moe_notify_dispatch_zb",
+      "reduce_scatter_detour"
+    ]
+  },
+  "operator_meta": {
+    "fused_deep_moe": {
+      "requires_shmem": true,
+      "family": "fused_deep_moe",
+      "variant": "base"
+    },
+    "fused_deep_moe_w4a8": {
+      "requires_shmem": false,
+      "family": "fused_deep_moe",
+      "variant": "w4a8"
+    },
+    "fused_deep_moe_fwk": {
+      "requires_shmem": false,
+      "family": "fused_deep_moe",
+      "variant": "fwk",
+      "_note": "independent operator; files are fused_deep_moe_fwk.*, do NOT conflict with base/w4a8, can coexist"
+    },
+    "moe_combine_lowlatency_zb": {
+      "requires_shmem": true
+    },
+    "moe_combine_normal_zb": {
+      "requires_shmem": true
+    },
+    "moe_dispatch_layout_zb": {
+      "requires_shmem": true
+    },
+    "moe_dispatch_lowlatency_zb": {
+      "requires_shmem": true
+    },
+    "moe_dispatch_normal_zb": {
+      "requires_shmem": true
+    },
+    "moe_notify_dispatch_zb": {
+      "requires_shmem": true
+    }
+  }
+}

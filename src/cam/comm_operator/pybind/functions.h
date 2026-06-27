@@ -38,40 +38,6 @@ std::vector<at::Tensor> FusedDeepMoeImplAutograd(
     int64_t quantMode, \
     int64_t globalBs);
 
-std::tuple<at::Tensor, at::Tensor, at::Tensor>
-moe_dispatch_normal_impl_autograd(
-    const at::Tensor &x, \
-    const at::Tensor &topkIdx, \
-    const at::Tensor &sendOffset, \
-    const at::Tensor &sendTokenIdx, \
-    const at::Tensor &recvOffset, \
-    const at::Tensor &recvCount, \
-    c10::string_view groupEp, \
-    int64_t epWorldSize, \
-    int64_t epRankId, \
-    c10::string_view groupTp, \
-    int64_t tpWorldSize, \
-    int64_t tpRankId, \
-    int64_t moeExpertNum, \
-    int64_t quantMode, \
-    int64_t globalBs);
-
-at::Tensor
-moe_combine_normal_impl_autograd(
-    const at::Tensor &recvX, \
-    const at::Tensor &tokenSrcInfo, \
-    const at::Tensor &epRecvCounts, \
-    const at::Tensor &recvTopkWeights, \
-    const c10::optional<at::Tensor> &tpRecvCounts, \
-    c10::string_view epGroupName, \
-    int64_t epWorldSize, \
-    int64_t epRankId, \
-    c10::string_view tpGroupName, \
-    int64_t tpWorldSize, \
-    int64_t tpRankId, \
-    int64_t moeExpertNum, \
-    int64_t globalBs);
-
 at::Tensor all2_all_detour_impl_autograd( \
     const at::Tensor &sendData, \
     const at::Tensor &commArgs1, \
