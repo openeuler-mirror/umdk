@@ -126,8 +126,8 @@
             - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
                 - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
             - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
-            - [urma_get_seg_ctx](#urma_get_seg_ctx)
-            - [urma_put_seg_ctx](#urma_put_seg_ctx)
+            - [2.3.2.5 urma_get_seg_ctx](#2325-urma_get_seg_ctx)
+            - [2.3.2.6 urma_put_seg_ctx](#2326-urma_put_seg_ctx)
         - [2.3.3 TP Channel](#233-tp-channel)
             - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
             - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
@@ -5464,7 +5464,7 @@ Return: 0 on success, other value on error.
 
 The caller must ensure that the parameter tseg comes from the [3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
-#### urma_get_seg_ctx
+#### 2.3.2.5 urma_get_seg_ctx
 
 1. Header File
 
@@ -5494,9 +5494,9 @@ Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocati
 
 ![](figures/urma_notice.png)
 
-The memory returned in seg is allocated by this API. The caller must call [urma_put_seg_ctx](#urma_put_seg_ctx) to release it.
+The memory returned in seg is allocated by this API. The caller must call [urma_put_seg_ctx](#2326-urma_put_seg_ctx) to release it.
 
-#### urma_put_seg_ctx
+#### 2.3.2.6 urma_put_seg_ctx
 
 1. Header File
 
@@ -5510,11 +5510,11 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 3. Description
 
-Release the segment context returned by [urma_get_seg_ctx](#urma_get_seg_ctx).
+Release the segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx).
 
 4. Parameters
 
-@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#urma_get_seg_ctx). If seg is NULL, this API returns directly.
+@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx). If seg is NULL, this API returns directly.
 
 5. Return Value
 

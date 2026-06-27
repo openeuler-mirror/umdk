@@ -128,8 +128,8 @@
             - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
                 - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
             - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
-            - [urma_get_seg_ctx](#urma_get_seg_ctx)
-            - [urma_put_seg_ctx](#urma_put_seg_ctx)
+            - [2.3.2.5 urma_get_seg_ctx](#2325-urma_get_seg_ctx)
+            - [2.3.2.6 urma_put_seg_ctx](#2326-urma_put_seg_ctx)
         - [2.3.3 TP Channel](#233-tp-channel)
             - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
             - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
@@ -5465,7 +5465,7 @@ Return: 0 on success, other value on error.
 
 由调用者保证参数tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
-#### urma_get_seg_ctx
+#### 2.3.2.5 urma_get_seg_ctx
 
 1.  头文件
 
@@ -5495,9 +5495,9 @@ Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocati
 
 ![](figures/urma_notice.png)
 
-seg返回的内存由本接口分配，调用者必须调用[urma_put_seg_ctx](#urma_put_seg_ctx)释放。
+seg返回的内存由本接口分配，调用者必须调用[urma_put_seg_ctx](#2326-urma_put_seg_ctx)释放。
 
-#### urma_put_seg_ctx
+#### 2.3.2.6 urma_put_seg_ctx
 
 1.  头文件
 
@@ -5511,11 +5511,11 @@ void urma_put_seg_ctx([3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_se
 
 3.  描述
 
-释放[urma_get_seg_ctx](#urma_get_seg_ctx)返回的segment上下文。
+释放[urma_get_seg_ctx](#2325-urma_get_seg_ctx)返回的segment上下文。
 
 4.  参数
 
-@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#urma_get_seg_ctx). If seg is NULL, this API returns directly.
+@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx). If seg is NULL, this API returns directly.
 
 5.  返回值
 
