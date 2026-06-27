@@ -25,18 +25,18 @@ static int run_test(test_ums_ctx_t *ctx)
 
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup qperf -lp ${i} & done", ctx->test_port, ctx->test_port + 10);
+        exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup qperf -lp ${i} > /tmp/qperf_server_${i}.log 2>&1 & done", ctx->test_port + 1, ctx->test_port + 11);
     }
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf %s -lp ${i} -m 8192 -t 0 tcp_bw 2>&1 & done", ctx->test_port, ctx->test_port + 10, ctx->test_ip);
+        exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf %s -lp ${i} -m 8192 -t 0 tcp_bw > /tmp/qperf_client_${i}.log 2>&1 & done", ctx->test_port + 1, ctx->test_port + 11, ctx->test_ip);
     }
     sync_time("----------------------------2");
     
     // 校验流量走ums
     if (ctx->app_id == PROC_2) {
-        sprintf(test_ip_str, "%d", ctx->test_ip);
+        sprintf(test_ip_str, "%s", ctx->test_ip);
         check_num = query_proc_net_ums_detail_stream_num("True", test_ip_str);
         if (check_num != 20) {
             ret = -1;
