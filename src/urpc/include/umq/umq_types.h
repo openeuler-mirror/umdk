@@ -143,6 +143,7 @@ typedef enum umq_dev_assign_mode {
 
 #define UMQ_INTERRUPT_FLAG_IO_DIRECTION         (1)         // enable arg direction
 #define UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX        (1 << 1)    // enable arg tp_handle_idx
+#define UMQ_INTERRUPT_FLAG_TIMESTAMP            (1 << 2)    // enable arg timestamp
 
 #define UMQ_INTERRUPT_FD_LIST_LEN 20
 
@@ -156,6 +157,7 @@ typedef struct umq_interrupt_option {
     umq_io_direction_t direction;
     umq_fd_type_t fd_type;
     uint32_t tp_handle_idx;
+    uint64_t timestamp;
 } umq_interrupt_option_t;
 
 typedef union umq_eid {

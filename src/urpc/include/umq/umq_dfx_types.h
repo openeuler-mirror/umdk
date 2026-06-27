@@ -338,6 +338,7 @@ typedef struct umq_data_record {
     umq_trace_item_t items[UMQ_BATCH_SIZE]; /* per-buffer/per-completion data */
     uint32_t item_cnt;                      /* number of valid items[] entries */
     uint64_t timestamp;                     /* record creation timestamp (ns) */
+    uint64_t interrupt_timestamp;           /* interrupt record timestamp (ns) */
 
     /* timing */
     uint64_t start_time;                    /* UMQ operation start (ns) */

@@ -256,7 +256,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     ub_flow_control_t *fc = &queue->flow_control;
 
     /* record start before flow control so FC URMA calls can be captured as sub_time */
-    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0);
 
     ret = umq_ub_credit_check_and_request_send(fc, queue);
     if (ret != UMQ_SUCCESS) {
@@ -1418,7 +1418,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 
     /* one POLL record for the entire poll operation (FC + IO) */
     uint64_t poll_start = umq_trace_start_timestamp_get();
-    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0);
 
     if (queue->flow_control.enabled) {
         int fc_qbuf_cnt = 0;
@@ -1876,7 +1876,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
 
     /* one POLL record for the entire poll operation (FC + IO) */
     uint64_t poll_start = umq_trace_start_timestamp_get();
-    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0);
     uint32_t tp_handle_idx = option->tp_handle_idx;
 
     if (queue->flow_control.enabled) {
