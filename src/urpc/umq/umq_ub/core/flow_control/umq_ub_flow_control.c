@@ -289,7 +289,7 @@ static ALWAYS_INLINE void flow_control_stats_query_non_atomic(struct ub_flow_con
     umq_credit_private_stats_t *queue_credit = &out->queue_credit;
     queue_credit->queue_idle = fc->local_rx_posted;
     queue_credit->queue_be_allocated = fc->stats_u64[ALLOCATED_SUCCESS] -
-        queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id];
+        queue->dev_ctx->rx_consumed_jetty_table[queue->umq_id];
     queue_credit->queue_acquired = fc->remote_rx_window;
     queue_credit->total_queue_idle = fc->total_local_rx_posted;
     queue_credit->total_queue_be_allocated = fc->stats_u64[ALLOCATED_TOTAL];
@@ -426,7 +426,7 @@ static ALWAYS_INLINE void flow_control_stats_query_atomic(struct ub_flow_control
     umq_credit_private_stats_t *queue_credit = &out->queue_credit;
     queue_credit->queue_idle = __atomic_load_n(&fc->local_rx_posted, __ATOMIC_RELAXED);
     uint64_t consumed_credit = __atomic_load_n(
-        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id], __ATOMIC_RELAXED);
+        &queue->dev_ctx->rx_consumed_jetty_table[queue->umq_id], __ATOMIC_RELAXED);
     queue_credit->queue_be_allocated =
         __atomic_load_n(&fc->stats_u64[ALLOCATED_SUCCESS], __ATOMIC_RELAXED) - consumed_credit;
     queue_credit->queue_acquired = __atomic_load_n(&fc->remote_rx_window, __ATOMIC_RELAXED);
@@ -1049,21 +1049,16 @@ int umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_flow_contro
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t return_credit = flow_control_data->bs.window;
     uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
-        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id]);
+        &queue->dev_ctx->rx_consumed_jetty_table[queue->umq_id]);
     uint64_t allocated_credit = fc->ops.local_rx_allocated_load(fc);
     if (allocated_credit < consumed_credit) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, "
-            "allocated_credit less than consumed credit\n",
-            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
-            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u) allocated_credit less than consumed credit\n", queue->umq_id);
         return umq_ub_shared_credit_return_ack(queue, 0, (uint16_t)flow_control_data->bs.seq);
     }
     uint64_t unconsumed = allocated_credit - consumed_credit;
     if (return_credit > unconsumed) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, "
-            "return credit: %u > unconsumed credit: %u\n",
-            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
-            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, return_credit, (uint32_t)unconsumed);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u) "
+            "return credit: %u > unconsumed credit: %u\n", queue->umq_id, return_credit, (uint32_t)unconsumed);
         return_credit = unconsumed;
     }
 
@@ -1098,13 +1093,12 @@ void umq_ub_credit_clean_up(ub_queue_t *queue)
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t actual_return_credit = __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_ACQ_REL);
     uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
-        &queue->dev_ctx->rx_consumed_jetty_table[queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id]);
+        &queue->dev_ctx->rx_consumed_jetty_table[queue->umq_id]);
     uint64_t allocated_credit = fc->ops.local_rx_allocated_load(fc);
     uint64_t unconsumed = allocated_credit - consumed_credit;
     if (unconsumed > UINT16_MAX) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, unconsumed credit exceed UINT16_MAX, "
-            "unconsumed credit %llu, capacity %d\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.eid),
-            queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id, unconsumed, credit->capacity);
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "UMQ(ID: %u), unconsumed credit exceed UINT16_MAX, "
+            "unconsumed credit %llu, capacity %d\n", queue->umq_id, unconsumed, credit->capacity);
         return;
     }
     (void)credit->ops.available_credit_return(credit, actual_return_credit + unconsumed);
