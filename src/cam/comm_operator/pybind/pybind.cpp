@@ -15,8 +15,6 @@
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
     m.def("fused_deep_moe", &FusedDeepMoeImplAutograd, "fused_deep_moe");
-    m.def("moe_dispatch_normal", &moe_dispatch_normal_impl_autograd, "moe_dispatch_normal");
-    m.def("moe_combine_normal", &moe_combine_normal_impl_autograd, "moe_combine_normal");
     m.def("all2_all_detour", &all2_all_detour_impl_autograd, "all2_all_detour");
     m.def("reduce_scatter_detour", &reduce_scatter_detour_impl_autograd, "reduce_scatter_detour");
     m.def("cam_get_comm", &cam_get_comm, "cam_get_comm");
@@ -45,12 +43,6 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     Tensor? expert_smooth_scales, Tensor? share_smooth_scales, Tensor? x_active_mask, \
     str group_ep, int ep_rank_size, int ep_rank_id, int moe_expert_num, \
     int quant_mode, int global_bs) -> Tensor[]");
-    m.def("moe_dispatch_normal(Tensor x, Tensor topkIdx, Tensor sendOffset, Tensor sendTokenIdx, Tensor recvOffset, \
-    Tensor recvCount, str groupEp, int epWorldSize, int epRankId, str groupTp, int tpWorldSize, int tpRankId, \
-    int moeExpertNum, int quantMode, int globalBs) -> (Tensor, Tensor, Tensor)");
-    m.def("moe_combine_normal(Tensor recvX, Tensor tokenSrcInfo, Tensor epRecvCounts, Tensor recvTopkWeights, \
-    Tensor? tpRecvCounts, str epGroupName, int epWorldSize, int epRankId, str tpGroupName, int tpWorldSize, \
-    int tpRankId, int moeExpertNum, int globalBs) -> Tensor");
     m.def("all2_all_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId) -> Tensor");
     m.def("reduce_scatter_detour(Tensor sendData, Tensor commRankIds, Tensor commArgs, int commId, int op) -> Tensor");
     m.def("cam_get_comm(int comm_id, int rank, int group_size, str server_ip_port) -> Tensor");
