@@ -238,7 +238,7 @@ uint64_t umq_trace_write_delta(uint64_t start)
     return get_timestamp_ns() - start;
 }
 
-void umq_trace_start_record(umq_trace_type_t type, uint64_t time)
+void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t interrupt_timestamp)
 {
     if (!g_umq_trace_enable) {
         return;
@@ -253,6 +253,7 @@ void umq_trace_start_record(umq_trace_type_t type, uint64_t time)
     umq_data_record_t *rec = &cur_rec->data_record[idx];
 
     rec->timestamp = get_timestamp_ns();
+    rec->interrupt_timestamp = interrupt_timestamp;
     rec->type = type;
     rec->start_time = time;
     rec->end_time = 0;
@@ -397,8 +398,8 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
         uint64_t umq_exec = (rec->end_time > rec->start_time) ? (rec->end_time - rec->start_time) : 0;
 
         /* header line: record index + type + meta */
-        UMQ_VLOG_INFO(VLOG_UMQ, "#%u type=%s item_cnt=%u ts=%lu\n",
-                      i, umq_trace_type_str(rec->type), rec->item_cnt, rec->timestamp);
+        UMQ_VLOG_INFO(VLOG_UMQ, "#%u type=%s item_cnt=%u ts=%lu interrupt_ts=%lu\n",
+                      i, umq_trace_type_str(rec->type), rec->item_cnt, rec->timestamp, rec->interrupt_timestamp);
         /* item lines */
         for (uint32_t k = 0; k < rec->item_cnt; k++) {
             UMQ_VLOG_INFO(VLOG_UMQ, "  item[%u] msn=%u size=%u umq_id=%u \n",
