@@ -4847,7 +4847,7 @@ Delete the structure variable for notifying asynchronous link establishment resu
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter notifier comes from the [3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+The caller must ensure that the parameter notifier comes from the [3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by this interface, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
 5. Return Value
 
