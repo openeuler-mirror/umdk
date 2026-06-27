@@ -19,7 +19,7 @@ static int run_test(test_ums_ctx_t *ctx)
 
 
     exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, "tail -n 10 /proc/net/ums | head -n 1 | awk '{print $1, $2, $3, $4, $5, $6, $7, $8, $9}' 2>&1");
-    if (srtcmp (cmd, "Index SRC_IP:Port DEST_IP:Port State Fallback SRC_EID, JETTY_ID DEST_EID, JETTY_ID\n") != 0) {
+    if (strcmp (cmd, "Index SRC_IP:Port DEST_IP:Port State Fallback SRC_EID, JETTY_ID DEST_EID, JETTY_ID\n") != 0) {
         ret = -1;
     }
     CHKERR_JUMP(ret != TEST_SUCCESS, "para num name error", EXIT);

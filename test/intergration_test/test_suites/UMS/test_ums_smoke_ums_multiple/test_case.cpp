@@ -30,7 +30,7 @@ static int run_test(test_ums_ctx_t *ctx)
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf %s -lp ${i} -m 8192 -t 0 tcp_bw > /tmp/qperf_client_${i}.log 2>&1 done", ctx->test_port + 1,  ctx->test_port + 11, ctx->test_ip);
+        exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf %s -lp ${i} -m 8192 -t 0 tcp_bw > /tmp/qperf_client_${i}.log 2>&1 & done", ctx->test_port + 1,  ctx->test_port + 11, ctx->test_ip);
     }
     sync_time("----------------------------2");
     
