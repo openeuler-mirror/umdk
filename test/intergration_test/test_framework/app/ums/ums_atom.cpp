@@ -31,7 +31,7 @@ test_ums_ctx_t *test_ums_ctx_init(int argc, char *argv[], int thread_num)
 int query_proc_net_ums_detail_stream_num(const char *fbk, const char *msg)
 {
     char cmd[1024];
-    exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums | awk '/%s/ {if ($5==\"%s\") print $0}' | wc -l", msg, fbk);
+    exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums | awk '/%s/ {if ($5==\"%s\") print $0}' | wc -l 2>&1", msg, fbk);
 
     return atoi(cmd);
 }

@@ -25,16 +25,16 @@ static int run_test(test_ums_ctx_t *ctx)
 
     if (ctx->app_id == PROC_1) {
         char buf0[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf0, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d &", ctx->test_port);
+        exec_cmd(buf0, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port);
         char buf1[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf1, MAX_EXEC_CMD_RET_LEN, "nohup qperf -lp %d &", ctx->test_port + 1);
+        exec_cmd(buf1, MAX_EXEC_CMD_RET_LEN, "nohup qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port + 1);
     }
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char buf2[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf2, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat &", ctx->test_ip,  ctx->test_port);
+        exec_cmd(buf2, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat > /tmp/qperf_server.log 2>&1 &", ctx->test_ip,  ctx->test_port);
         char buf3[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf3, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat &", ctx->test_ip, ctx->test_port + 1);
+        exec_cmd(buf3, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat > /tmp/qperf_server.log 2>&1 &", ctx->test_ip, ctx->test_port + 1);
     }
     sync_time("----------------------------2");
     sprintf(port_str, "%d", ctx->test_port);
