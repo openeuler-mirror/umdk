@@ -11,6 +11,7 @@
 
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
+#include "umq_qbuf_pool_helper.h"
 #include "umq_types.h"
 
 class QbufPoolTest : public ::testing::Test {

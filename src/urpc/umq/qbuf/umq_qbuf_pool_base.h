@@ -40,10 +40,11 @@ extern "C" {
 #define UMQ_QBUF_SIZE_MULTIPLE_INTERVAL (4)
 #define QBUF_ALLOC_STATE_FREE      0            // define qbuf free state
 #define QBUF_ALLOC_STATE_ALLOCATED 1            // define qbuf allocated state
-#define UMQ_TINY_QBUF_MEMPOOL_ID        (1022U)
+#define UMQ_EXPANSION_POOL_CNT_MAX (256)        // expansion pool id 257-512
+#define UMQ_TINY_QBUF_MEMPOOL_ID (1022U)
 #define QBUF_POOL_MEMPOOL_ID_MAX (1023)         // escape mempool id: 1023, other memopool id must not exceed 1023
 
-#define QBUF_POOL_TLS_MAX (2048)     // max count of thread local buffer storage
+#define QBUF_POOL_TLS_MAX (2048) // max count of thread local buffer storage
 #define QBUF_POOL_BATCH_CNT (64) // batch size when fetch from global or return to global
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
@@ -870,7 +871,7 @@ void umq_qbuf_base_free(qbuf_pool_base_t *base, thread_local_qbuf_pool_t *thread
 umq_buf_t *umq_qbuf_base_data_to_head(qbuf_pool_base_t *base, void *data);
 
 int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *qbuf_pool_stats,
-    bool reset_local_stats);
+    bool reset_local_stats, umq_qbuf_pool_type_t type);
 
 #ifdef __cplusplus
 }

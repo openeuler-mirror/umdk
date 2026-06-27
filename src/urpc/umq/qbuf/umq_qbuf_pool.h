@@ -49,7 +49,7 @@ void umq_qbuf_pool_uninit(void);
  * try to alloc from thread local pool.
  * if not enough, fetch some more memory fragments from global pool to thread local pool first.
  */
-int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list);
+int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list);
 
 int umq_qbuf_escape_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list);
 

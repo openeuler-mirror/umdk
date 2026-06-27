@@ -10,6 +10,7 @@
 #include "umq_errno.h"
 #include "umq_vlog.h"
 #include "util_lock.h"
+#include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
 
 #define HUGE_QBUF_POOL_IDX_SHIFT (1)
@@ -130,6 +131,11 @@ huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_size(uint32_t buf_size)
 uint32_t umq_huge_qbuf_get_size_by_type(huge_qbuf_pool_size_type_t type)
 {
     return (g_buf_size_multiplier_array[type] * umq_buf_size_small());
+}
+
+bool umq_huge_qbuf_pool_is_inited(void)
+{
+    return g_huge_pool_ctx.inited;
 }
 
 static int do_umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
@@ -507,6 +513,7 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         qbuf_pool_info = &qbuf_pool_stats->qbuf_pool_info[qbuf_pool_stats->num];
         pool = &g_huge_pool_ctx.pool[i];
         block_size = pool->block_size;
+        qbuf_pool_info->type = UMQ_QBUF_POOL_TYPE_MEDIUM + i;
         qbuf_pool_info->mode = g_huge_pool_ctx.mode;
         qbuf_pool_info->total_size = pool->total_size;
         qbuf_pool_info->headroom_size = g_huge_pool_ctx.headroom_size;

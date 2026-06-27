@@ -38,8 +38,18 @@ static uint8_t *umq_tp_ub_init(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %d\n", ret);
         goto UNINIT;
     }
+    if (cfg->buf_pool_cfg.enable_tiny_pool) {
+        ret = umq_ub_register_tiny_memory_impl();
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "register tiny memory failed, status: %d\n", ret);
+            goto UNREGISTER_MEM;
+        }
+    }
 
     return ub_ctx;
+
+UNREGISTER_MEM:
+    umq_ub_unregister_memory_impl();
 
 UNINIT:
     umq_ub_ctx_uninit_impl(ub_ctx);

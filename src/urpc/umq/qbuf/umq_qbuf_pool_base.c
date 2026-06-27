@@ -247,7 +247,7 @@ umq_buf_t *umq_qbuf_base_data_to_head(qbuf_pool_base_t *base, void *data)
 }
 
 int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *qbuf_pool_stats,
-    bool reset_local_stats)
+    bool reset_local_stats, umq_qbuf_pool_type_t type)
 {
     if (base == NULL || qbuf_pool_stats == NULL) {
         return -UMQ_ERR_EINVAL;
@@ -259,6 +259,7 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
     umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[qbuf_pool_stats->num];
     uint32_t block_size = base->block_size;
     uint32_t umq_buf_t_size = (uint32_t)sizeof(umq_buf_t);
+    info->type = type;
     info->mode = base->mode;
     info->total_size = base->total_size;
     info->headroom_size = base->headroom_size;
@@ -292,6 +293,7 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
         }
         umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[qbuf_pool_stats->local_qbuf_pool_num];
         (void)memset(s, 0, sizeof(*s));
+        s->type = type;
         s->capacity_with_data = pool_iter->block_pool.capacity_with_data;
         s->buf_cnt_with_data = pool_iter->block_pool.buf_cnt_with_data;
         s->capacity_without_data = pool_iter->block_pool.capacity_without_data;
