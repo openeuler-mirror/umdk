@@ -39,6 +39,13 @@ static uint8_t *umq_tp_ub_plus_init(umq_init_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %u\n", ret);
         goto UNINIT;
     }
+    if (cfg->buf_pool_cfg.enable_tiny_pool) {
+        ret = umq_ub_register_tiny_memory_impl();
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "register tiny memory failed, status: %d\n", ret);
+            goto UNINIT_MEM;
+        }
+    }
     ret = umq_ub_huge_qbuf_pool_init(cfg);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "init huge qbuf pool configuration failed, status: %d\n", ret);
@@ -281,4 +288,3 @@ umq_ops_t *umq_ub_plus_ops_get(void)
 {
     return &g_umq_ub_plus_ops;
 }
-

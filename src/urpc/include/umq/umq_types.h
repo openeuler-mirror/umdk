@@ -190,17 +190,9 @@ typedef struct umq_dev_assign {
     };
 } umq_dev_assign_t;
 
-typedef struct umq_memory_cfg {
-    // Total size will be malloced for umq buf pool, user should ensure the system has enough available memory,
-    // set to 1024MB if total_size == 0 in UB/UB_PLUS/UBMM/UBMM_PLUS mode, these modes share same total_size config.
-    // And total_size config is not used in IPC mode for now.
-    uint64_t total_size;
-} umq_memory_cfg_t;
-
 typedef struct umq_trans_info {
     umq_trans_mode_t trans_mode;
     umq_dev_assign_t dev_info;
-    umq_memory_cfg_t mem_cfg;
 } umq_trans_info_t;
 
 #define MAX_UMQ_TRANS_INFO_NUM (128)
@@ -241,13 +233,32 @@ typedef enum umq_buf_block_size {
     BLOCK_SIZE_MAX,
 } umq_buf_block_size_t;
 
-typedef struct umq_buf_block_cfg {
+typedef enum umq_tiny_buf_block_size {
+    TINY_BLOCK_SIZE_512,
+    TINY_BLOCK_SIZE_1K,
+    TINY_BLOCK_SIZE_2K,
+    TINY_BLOCK_SIZE_4K,
+    TINY_BLOCK_SIZE_8K,
+    TINY_BLOCK_SIZE_MAX,
+} umq_tiny_buf_block_size_t;
+
+typedef enum umq_alloc_pool_type {
+    UMQ_ALLOC_POOL_NORMAL = 0,
+    UMQ_ALLOC_POOL_TINY = 1,
+    UMQ_ALLOC_POOL_HUGE = 2,
+    UMQ_ALLOC_POOL_ESCAPE = 3,
+    UMQ_ALLOC_POOL_AUTO = 4,
+    UMQ_ALLOC_POOL_MAX,
+} umq_alloc_pool_type_t;
+
+typedef struct umq_buf_pool_cfg {
     // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automatically
     // adjusted
     umq_buf_block_size_t small_block_size;
-} umq_buf_block_cfg_t;
-
-typedef struct umq_buf_pool_cfg {
+    // Total initial size of normal and tiny pools. Set to 1024MB if 0 in UB/UB_PLUS/UBMM/UBMM_PLUS mode.
+    uint64_t umq_mem_pool_init_size;
+    // Minimum initial normal-pool block count. 0 means no validation.
+    uint32_t normal_pool_block_count;
     // global pool
     uint32_t expansion_block_count;  // number of blocks per expansion, default 8K
     uint64_t umq_buf_pool_max_size; // maximum memory allowed for umq buf pool, default 2G
@@ -258,6 +269,12 @@ typedef struct umq_buf_pool_cfg {
     bool disable_scale_cap; // expansion and shrink switch
     // escape
     bool disable_malloc_escape; // disable the escape mechanism
+    // tiny pool
+    bool enable_tiny_pool;
+    umq_tiny_buf_block_size_t tiny_pool_block_size;
+    uint32_t tiny_pool_block_count;
+    uint64_t tls_tiny_pool_depth;
+    uint64_t tls_expand_tiny_pool_depth;
 } umq_buf_pool_cfg_t;
 
 typedef struct umq_tp_pool_cfg {
@@ -272,7 +289,6 @@ typedef struct umq_init_cfg {
     bool io_lock_free;              // true: user should ensure thread safety when call io function
     uint8_t trans_info_num;
     umq_flow_control_cfg_t flow_control; // used when UMQ_FEATURE_ENABLE_FLOW_CONTROL is set
-    umq_buf_block_cfg_t block_cfg;
     uint16_t cna;
     uint32_t ubmm_eid;
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];
@@ -388,10 +404,12 @@ struct umq_buf {
 };
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE         (1)             // enable arg headroom_size
+#define UMQ_ALLOC_FLAG_POOL_TYPE              (2)             // enable arg pool_type
 
 typedef struct umq_alloc_option {
     uint32_t flag;                          // indicates which below property takes effect
     uint16_t headroom_size;
+    umq_alloc_pool_type_t pool_type;
 } umq_alloc_option_t;
 
 typedef enum umq_dfx_module_id {

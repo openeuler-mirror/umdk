@@ -435,7 +435,7 @@ uint64_t return_list_to_pools(umq_buf_t *local_head,
             batch_cnt++;
         } else {
             QBUF_LIST_NEXT(batch_tail) = NULL;
-            if (batch_mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+            if (batch_mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID && batch_mempool_id != UMQ_TINY_QBUF_MEMPOOL_ID) {
                 return_batch_to_expansion_pool(batch_mempool_id, batch_head, batch_tail, batch_cnt, with_data);
             } else {
                 QBUF_LIST_NEXT(batch_tail) = QBUF_LIST_FIRST(global_head);
@@ -453,7 +453,7 @@ uint64_t return_list_to_pools(umq_buf_t *local_head,
 
     if (batch_head != NULL) {
         QBUF_LIST_NEXT(batch_tail) = NULL;
-        if (batch_mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID) {
+        if (batch_mempool_id != UMQ_QBUF_DEFAULT_MEMPOOL_ID && batch_mempool_id != UMQ_TINY_QBUF_MEMPOOL_ID) {
             return_batch_to_expansion_pool(batch_mempool_id, batch_head, batch_tail, batch_cnt, with_data);
         } else {
             QBUF_LIST_NEXT(batch_tail) = QBUF_LIST_FIRST(global_head);
@@ -1103,7 +1103,7 @@ int umq_qbuf_escape_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
     }
-    if (g_qbuf_pool.disable_malloc_escape || num != 1 || list == NULL) {
+    if (g_qbuf_pool.disable_malloc_escape || request_size == 0 || num != 1 || list == NULL) {
         return -UMQ_ERR_EINVAL;
     }
     uint32_t headroom_size = (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
@@ -1114,7 +1114,7 @@ int umq_qbuf_escape_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
     return umq_qbuf_alloc_escape(list);
 }
 
-int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
+int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
     if (((uint64_t)request_size * (uint64_t)num) > QBUF_POOL_MEM_SIZE_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
@@ -1133,7 +1133,9 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
         return UMQ_SUCCESS;
     }
 
-    if (request_size != 0 && param.actual_buf_count == 1 && !g_qbuf_pool.disable_malloc_escape) {
+    bool explicit_normal = option != NULL && (option->flag & UMQ_ALLOC_FLAG_POOL_TYPE) != 0 &&
+        option->pool_type == UMQ_ALLOC_POOL_NORMAL;
+    if (request_size != 0 && !explicit_normal && param.actual_buf_count == 1 && !g_qbuf_pool.disable_malloc_escape) {
         return umq_qbuf_alloc_escape(list);
     }
 
@@ -1248,7 +1250,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         return -UMQ_ERR_EINVAL;
     }
 
-    int ret = umq_qbuf_pool_base_info_get(&g_qbuf_pool.base, qbuf_pool_stats, true);
+    int ret = umq_qbuf_pool_base_info_get(&g_qbuf_pool.base, qbuf_pool_stats, true, UMQ_QBUF_POOL_TYPE_SMALL);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "failed to get qbuf pool base info, ret: %d\n", ret);
         return ret;

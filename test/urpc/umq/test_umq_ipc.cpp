@@ -107,10 +107,10 @@ TEST_F(UmqIPCTest, test_umq_init_failure)
     cfg.feature = 0;
     GlobalMockObject::verify();
 
-    cfg.block_cfg.small_block_size = BLOCK_SIZE_MAX;
+    cfg.buf_pool_cfg.small_block_size = BLOCK_SIZE_MAX;
     ret = umq_init(&cfg);
     ASSERT_NE(ret, 0);
-    cfg.block_cfg.small_block_size = BLOCK_SIZE_8K;
+    cfg.buf_pool_cfg.small_block_size = BLOCK_SIZE_8K;
 
     cfg.trans_info_num = 32;
     ret = umq_init(&cfg);
