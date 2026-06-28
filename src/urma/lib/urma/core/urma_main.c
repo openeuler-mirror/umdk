@@ -657,7 +657,13 @@ urma_status_t urma_get_jfce_cnt_info(urma_jfce_cnt_info_t *info_arr, uint32_t *c
             continue;
         }
 
-        (void)snprintf(info_arr[*cnt].dev_name, URMA_MAX_NAME, "%s", entry->d_name);
+        if (strlen(entry->d_name) >= URMA_MAX_NAME) {
+            URMA_LOG_WARN("Device name %s is too long.\n", entry->d_name);
+            (void)close(dev_fd);
+            continue;
+        }
+
+        (void)strcpy(info_arr[*cnt].dev_name, entry->d_name);
         info_arr[*cnt].jfce_total_cnt = arg.out.jfce_total_cnt;
         info_arr[*cnt].jfce_thresh_cnt = arg.out.jfce_thresh_cnt;
         (*cnt)++;

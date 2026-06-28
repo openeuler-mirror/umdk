@@ -785,7 +785,7 @@ inline urma_jfs_t *MockCreatePhysicalJfs(urma_context_t *ctx, urma_jfs_cfg_t *cf
     }
     jfs->urma_ctx = ctx;
     jfs->jfs_cfg = *cfg;
-    jfs->jfs_id.id = 0x202;
+    jfs->jfs_id.id = urma_test::GetHwMockState().ioctlId != 0 ? urma_test::GetHwMockState().ioctlId : 0x202;
     return jfs;
 }
 
@@ -808,7 +808,7 @@ inline urma_jfr_t *MockCreatePhysicalJfr(urma_context_t *ctx, urma_jfr_cfg_t *cf
     }
     jfr->urma_ctx = ctx;
     jfr->jfr_cfg = *cfg;
-    jfr->jfr_id.id = 0x303;
+    jfr->jfr_id.id = urma_test::GetHwMockState().ioctlId != 0 ? urma_test::GetHwMockState().ioctlId : 0x303;
     return jfr;
 }
 
@@ -844,7 +844,7 @@ inline urma_jetty_t *MockCreatePhysicalJetty(urma_context_t *ctx, urma_jetty_cfg
     }
     jetty->urma_ctx = ctx;
     jetty->jetty_cfg = *cfg;
-    jetty->jetty_id.id = 0x505;
+    jetty->jetty_id.id = urma_test::GetHwMockState().ioctlId != 0 ? urma_test::GetHwMockState().ioctlId : 0x505;
     return jetty;
 }
 
