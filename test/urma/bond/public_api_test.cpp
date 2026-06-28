@@ -965,6 +965,147 @@ TEST(UrmaBondTest, PublicCreateAndDeleteJettyCoverVirtualPhysicalIdMapping)
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
 
+TEST(UrmaBondTest, PublicCreateAndDeleteSharedJfcChildrenFollowIssueCleanupOrder)
+{
+    BondPublicApiFixture fixture;
+    bondp_global_context_t fakeGlobal = {};
+    urma_jfs_cfg_t jfsCfg = {};
+    urma_jfr_cfg_t jfrCfg = {};
+    urma_jetty_cfg_t jettyCfg = {};
+
+    fixture.InitSinglePhysicalMember();
+    fixture.ctx.v_ctx.dev_fd = 7;
+    fixture.ctx.enabled_count = 1;
+    fixture.ctx.enabled_indices[0] = 0;
+    ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 16));
+
+    SetRefCount(&fixture.jfc.use_cnt, 0);
+
+    jfsCfg.jfc = &fixture.jfc.v_jfc;
+    jfsCfg.depth = 4;
+    jfsCfg.max_sge = 1;
+    jfsCfg.max_rsge = 1;
+    jfsCfg.trans_mode = URMA_TM_RC;
+    jfsCfg.flag.bs.order_type = URMA_OL;
+
+    jfrCfg.jfc = &fixture.jfc.v_jfc;
+    jfrCfg.depth = 4;
+    jfrCfg.max_sge = 1;
+    jfrCfg.trans_mode = URMA_TM_RC;
+    jfrCfg.flag.bs.order_type = URMA_OL;
+
+    jettyCfg.flag.bs.share_jfr = URMA_SHARE_JFR;
+    jettyCfg.jfs_cfg = jfsCfg;
+    jettyCfg.shared.jfc = nullptr;
+
+    bondp_health_check_global_ctx_init(&fakeGlobal);
+    fakeGlobal.health_thread_ctx.enable_health_check = false;
+    g_bondp_global_ctx = &fakeGlobal;
+
+    urma_jfs_t *createdJfsList[3] = {};
+    urma_jfr_t *createdJfrList[3] = {};
+    for (uint32_t i = 0; i < 3; i++) {
+        urma_test::SetHwMockIoctl(true, 0xb40 + i, 0xb400 + i);
+        createdJfsList[i] = bondp_create_jfs(&fixture.ctx.v_ctx, &jfsCfg);
+        ASSERT_NE(nullptr, createdJfsList[i]);
+        EXPECT_EQ(i + 1UL, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+
+    for (uint32_t i = 0; i < 3; i++) {
+        urma_test::SetHwMockIoctl(true, 0xb55 + i, 0xb550 + i);
+        createdJfrList[i] = bondp_create_jfr(&fixture.ctx.v_ctx, &jfrCfg);
+        ASSERT_NE(nullptr, createdJfrList[i]);
+        EXPECT_EQ(i + 4UL, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+
+    urma_jetty_t *createdJettyList[3] = {};
+    for (uint32_t i = 0; i < 3; i++) {
+        jettyCfg.shared.jfr = createdJfrList[i];
+        urma_test::SetHwMockIoctl(true, 0xb70 + i, 0xb700 + i);
+        createdJettyList[i] = bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg);
+        ASSERT_NE(nullptr, createdJettyList[i]);
+        EXPECT_EQ(&fixture.jfc.v_jfc, createdJettyList[i]->jetty_cfg.shared.jfc);
+        EXPECT_EQ(i + 7UL, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+
+    for (uint32_t i = 0; i < 3; i++) {
+        createdJettyList[i]->async_events_acked = 0;
+        SetRefCount(&CONTAINER_OF_FIELD(createdJettyList[i], bondp_comp_t, v_jetty)->use_cnt, 0);
+        EXPECT_EQ(URMA_SUCCESS, bondp_delete_jetty(createdJettyList[i]));
+        EXPECT_EQ(8UL - i, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+
+    for (uint32_t i = 0; i < 3; i++) {
+        createdJfsList[i]->async_events_acked = 0;
+        SetRefCount(&CONTAINER_OF_FIELD(createdJfsList[i], bondp_comp_t, v_jfs)->use_cnt, 0);
+        EXPECT_EQ(URMA_SUCCESS, bondp_delete_jfs(createdJfsList[i]));
+        EXPECT_EQ(5UL - i, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+
+    for (uint32_t i = 0; i < 3; i++) {
+        createdJfrList[i]->async_events_acked = 0;
+        SetRefCount(&CONTAINER_OF_FIELD(createdJfrList[i], bondp_comp_t, v_jfr)->use_cnt, 0);
+        EXPECT_EQ(URMA_SUCCESS, bondp_delete_jfr(createdJfrList[i]));
+        EXPECT_EQ(2UL - i, fixture.jfc.use_cnt.atomic_cnt.load());
+    }
+    EXPECT_EQ(0UL, fixture.jfc.use_cnt.atomic_cnt.load());
+
+    g_bondp_global_ctx = nullptr;
+    bondp_health_check_global_ctx_uninit(&fakeGlobal);
+    EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
+}
+
+TEST(UrmaBondTest, PublicCreateJettyUsesEffectiveSharedJfcForRefcount)
+{
+    BondPublicApiFixture fixture;
+    bondp_global_context_t fakeGlobal = {};
+    urma_jetty_cfg_t jettyCfg = {};
+
+    fixture.InitSinglePhysicalMember();
+    fixture.InitActiveComp(&fixture.jfr, 0);
+    fixture.ctx.v_ctx.dev_fd = 7;
+    fixture.ctx.enabled_count = 1;
+    fixture.ctx.enabled_indices[0] = 0;
+    ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 16));
+
+    fixture.jfr.v_jfr.jfr_cfg.jfc = &fixture.jfc.v_jfc;
+    fixture.jfr.v_jfr.jfr_cfg.depth = 4;
+    fixture.jfr.v_jfr.jfr_cfg.max_sge = 1;
+    fixture.jfr.v_jfr.jfr_cfg.trans_mode = URMA_TM_RC;
+    fixture.jfr.v_jfr.jfr_cfg.flag.bs.order_type = URMA_OL;
+    fixture.phyJfr.jfr_cfg = fixture.jfr.v_jfr.jfr_cfg;
+
+    jettyCfg.flag.bs.share_jfr = URMA_SHARE_JFR;
+    jettyCfg.jfs_cfg.jfc = &fixture.jfc.v_jfc;
+    jettyCfg.jfs_cfg.depth = 4;
+    jettyCfg.jfs_cfg.max_sge = 1;
+    jettyCfg.jfs_cfg.max_rsge = 1;
+    jettyCfg.jfs_cfg.trans_mode = URMA_TM_RC;
+    jettyCfg.jfs_cfg.flag.bs.order_type = URMA_OL;
+    jettyCfg.shared.jfr = &fixture.jfr.v_jfr;
+    jettyCfg.shared.jfc = nullptr;
+
+    bondp_health_check_global_ctx_init(&fakeGlobal);
+    fakeGlobal.health_thread_ctx.enable_health_check = false;
+    g_bondp_global_ctx = &fakeGlobal;
+    urma_test::SetHwMockIoctl(true, 0xb55, 0xb550);
+    SetRefCount(&fixture.jfc.use_cnt, 0);
+
+    urma_jetty_t *createdJetty = bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg);
+    ASSERT_NE(nullptr, createdJetty);
+    EXPECT_EQ(&fixture.jfc.v_jfc, createdJetty->jetty_cfg.shared.jfc);
+    EXPECT_EQ(1UL, fixture.jfc.use_cnt.atomic_cnt.load());
+
+    createdJetty->async_events_acked = 0;
+    SetRefCount(&CONTAINER_OF_FIELD(createdJetty, bondp_comp_t, v_jetty)->use_cnt, 0);
+    EXPECT_EQ(URMA_SUCCESS, bondp_delete_jetty(createdJetty));
+    EXPECT_EQ(0UL, fixture.jfc.use_cnt.atomic_cnt.load());
+
+    g_bondp_global_ctx = nullptr;
+    bondp_health_check_global_ctx_uninit(&fakeGlobal);
+    EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
+}
+
 TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
 {
     BondPublicApiFixture fixture;

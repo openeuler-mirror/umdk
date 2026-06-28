@@ -579,10 +579,9 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
     bondp_topo_node_t topo[2] = {};
     urma_token_t token = {};
     urma_target_jetty_t *target = nullptr;
-    auto *remote = static_cast<urma_rjetty_t *>(std::calloc(
-        1, sizeof(urma_rjetty_t) + sizeof(bondp_rjetty_ext_priv_t) +
-        sizeof(urma_bond_jetty_ext_v0_t) + 1 + sizeof(bondp_rjetty_target_ctx_t)));
-    ASSERT_NE(nullptr, remote);
+    auto *bondRemote = static_cast<bondp_rjetty_t *>(std::calloc(1, sizeof(bondp_rjetty_t)));
+    ASSERT_NE(nullptr, bondRemote);
+    urma_rjetty_t *remote = &bondRemote->base;
     auto *jettyExt = bondp_rjetty_get_priv_ext(remote);
 
     fixture.InitSinglePhysicalMember();
@@ -630,7 +629,7 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
     g_bondp_global_ctx = nullptr;
     delete_topo_map(fixture.ctx.topo_map);
     fixture.ctx.topo_map = nullptr;
-    std::free(remote);
+    std::free(bondRemote);
 }
 
 TEST(UrmaBondTest, PublicImportJettyUsesMockIoctlAndPhysicalProvider)

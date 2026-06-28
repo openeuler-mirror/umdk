@@ -91,6 +91,17 @@ static void bondp_uninit_wr_buf(wr_buf_t *wr_buf)
     wr_buf_uninit(wr_buf);
 }
 
+static urma_jfc_t *bondp_get_effective_shared_jfc(const urma_jetty_cfg_t *jetty_cfg)
+{
+    if (jetty_cfg->shared.jfc != NULL) {
+        return jetty_cfg->shared.jfc;
+    }
+    if (jetty_cfg->shared.jfr == NULL) {
+        return NULL;
+    }
+    return jetty_cfg->shared.jfr->jfr_cfg.jfc;
+}
+
 typedef bondp_create_vjetty_udata_t bondp_create_vjfr_udata_t;
 
 #define BOND_EPOLL_NUM (32)
@@ -1224,6 +1235,7 @@ static int bondp_create_vjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
     int ret = urma_cmd_create_jetty(&bdp_ctx->v_ctx, &bdp_jetty->v_jetty, jetty_cfg, &udata);
     if (ret == 0) {
         bdp_jetty->v_jetty.jetty_cfg.shared.jfr->jfr_cfg = jetty_cfg->shared.jfr->jfr_cfg;
+        bdp_jetty->v_jetty.jetty_cfg.shared.jfc = bondp_get_effective_shared_jfc(jetty_cfg);
         URMA_LOG_DEBUG("Created vjetty successfully, jetty_id=%u, dev=%s, eid_idx=%u\n",
                        bdp_jetty->v_jetty.jetty_id.id, bdp_ctx->v_ctx.dev->name, bdp_ctx->v_ctx.eid_index);
     } else {
@@ -1237,9 +1249,12 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
 {
     bondp_jfc_t *bdp_jfs_jfc = CONTAINER_OF_FIELD(jetty_cfg->jfs_cfg.jfc, bondp_jfc_t, v_jfc);
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, base);
-    bondp_jfc_t *bdp_rplc_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    bondp_jfc_t *bdp_rplc_jfc = NULL;
     urma_jetty_cfg_t p_cfg = *jetty_cfg;
 
+    if (jetty_cfg->shared.jfc != NULL) {
+        bdp_rplc_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    }
     for (uint32_t n = 0; n < bdp_jetty->enabled_count; ++n) {
         uint32_t i = bdp_jetty->enabled_indices[n];
         p_cfg.jfs_cfg.jfc = bdp_jfs_jfc->p_jfc[i];
@@ -1432,8 +1447,10 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     /* Validate bdp_jfr below at the function entry point to ensure they are not empty. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, v_jfr);
     atomic_fetch_add(&bdp_jfr->use_cnt.atomic_cnt, 1);
-    if (jetty_cfg->shared.jfc != NULL) {
-        bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    urma_jfc_t *shared_jfc = bondp_get_effective_shared_jfc(&bdp_jetty->v_jetty.jetty_cfg);
+    bdp_jetty->v_jetty.jetty_cfg.shared.jfc = shared_jfc;
+    if (shared_jfc != NULL) {
+        bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
         atomic_fetch_add(&bdp_jfc->use_cnt.atomic_cnt, 1);
     }
 
@@ -1467,8 +1484,9 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     /* When creating bondp_jetty, jetty_cfg.shared.jfr has been validated and is non-null. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
     bondp_jfc_t *bdp_jfc = NULL;
-    if (jetty->jetty_cfg.shared.jfc != NULL) {
-        bdp_jfc = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfc, bondp_jfc_t, v_jfc);
+    urma_jfc_t *shared_jfc = bondp_get_effective_shared_jfc(&jetty->jetty_cfg);
+    if (shared_jfc != NULL) {
+        bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
     }
     /*
     ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
