@@ -5,6 +5,7 @@
 # Create: 2025-07-20
 # History: 2025-07-20 create cam building script
 #          2026-05-30 migrate from legacy opbuild/add_kernels_compile to npu_op_* build system
+#          2026-06-27 migrate pregen autogen to per-operator op_api directories
 
 set -e
 
@@ -19,8 +20,8 @@ copy_ops() {
     local src_dir="$1" # Source directory
     local dst_dir="$2" # Destination directory
 
-    # Ensure op_host and op_kernel exist in destination directory
-    mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel"
+    # Ensure op_host, op_kernel and pregen autogen exist in destination directory
+    mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel" "$dst_dir/pregen/build_out/autogen"
 
     # Iterate over all direct subdirectories under source directory (including directories with spaces)
     find "$src_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' subdir; do
@@ -50,6 +51,11 @@ copy_ops() {
             # Process op_kernel directory
             if [ -d "$subdir/op_kernel" ]; then
                 cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
+            fi
+
+            # Process op_api directory (copy aclnn interface files to pregen/build_out/autogen)
+            if [ -d "$subdir/op_api" ]; then
+                cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
             fi
         fi
     done
@@ -105,16 +111,17 @@ build_ascend_proj() {
         exclude_list+=("moe_combine_normal_a2" "moe_dispatch_normal_a2" "notify_dispatch_a2")
     fi
 
-    # Copy op_host source files for all operators
+    # Copy op_host/op_kernel source files and op_api interface files for all operators
     copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
     # Set build_type in CMakePresets.json
     python3 $SCRIPTS_PATH/comm_operator/set_conf.py \
         ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
 
-    # Copy pregen directory (contains pre-generated aclnn stub files)
-    cp -rf ./ascend_kernels/pregen ${MODULE_BUILD_PATH}/${proj_name}/
+    # Copy cmake_files/cmake directory (custom cmake functions, replaces msopgen default cmake)
+    cp -rf ./ascend_kernels/cmake_files/cmake ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # Remove autogen files of excluded operators from pregen based on exclusion list
+    # copy_ops runs in a find|while subshell where exclude_list may not fully take effect,
+    # so remove autogen files of excluded operators here as a supplement
     for excluded_dir in "${exclude_list[@]}"; do
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
     done
