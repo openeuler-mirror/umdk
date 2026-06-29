@@ -21,6 +21,7 @@ test_ums_ctx_t *test_ums_ctx_init(int argc, char *argv[], int thread_num)
     g_test_ums_ctx.app_num = ctx->app_num;
     g_test_ums_ctx.test_port = ctx->test_port;
     g_test_ums_ctx.test_ip = ctx->test_ip[0];
+    g_test_ums_ctx.test_ip_host2 = ctx->test_ip[1];
     g_test_ums_ctx.log_level = 4;
     g_test_ums_ctx.ssl_enable = false;
     g_test_ums_ctx.client_num = 1;

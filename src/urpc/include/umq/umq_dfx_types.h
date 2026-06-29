@@ -214,6 +214,12 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_ACK_RX,
     /* record point for umq_notify */
     UMQ_PERF_RECORD_NOTIFY,
+    /* record point for umq_buf_alloc */
+    UMQ_PERF_RECORD_BUF_ALLOC,
+    /* record point for umq_buf_free */
+    UMQ_PERF_RECORD_BUF_FREE,
+    /* record point for umq_data_to_head */
+    UMQ_PERF_RECORD_BUF_DATA_TO_HEAD,
 
     /* record point for umq_create */
     UMQ_PERF_RECORD_CREATE,

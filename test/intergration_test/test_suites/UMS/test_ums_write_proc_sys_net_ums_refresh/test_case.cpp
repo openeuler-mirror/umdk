@@ -40,16 +40,18 @@ static int run_test(test_ums_ctx_t *ctx)
             char cmd1[MAX_EXEC_CMD_RET_LEN];
             exec_cmd(cmd1, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat > /tmp/qperf_client.log 2>&1 &", ctx->test_ip, ctx->test_port + 1);
         }
+        sleep(2);
         sync_time("----------------------------2");
-        sprintf(test_ip_str, "%s", ctx->test_ip);
+        sprintf(test_ip_str, "%s", ctx->test_ip_host2);
         int check_num = query_proc_net_ums_detail_stream_num("False", test_ip_str);
         if (ctx->app_id == PROC_2 && check_num != 2) {
             ret = -1;
         }
         CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
+        exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+        sleep(2);
     }
 
-    exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     rc = TEST_SUCCESS;
 EXIT:
     sync_time("----------------------------3");

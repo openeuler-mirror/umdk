@@ -27,6 +27,7 @@ typedef struct {
     uint64_t pid;
     uint64_t test_port;
     char *test_ip;
+    char *test_ip_host2;
     int server_id;
     bool ssl_enable;
     int log_level;
