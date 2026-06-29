@@ -22,7 +22,7 @@ class Test(UBUSFeature):
 
     def setup(self):
         super(Test, self).setup()
-        log.info('---------- [ Test setup ] ----------')
+        log.info('---------- [ Test setup ] -----------')
         prepare_test_case_new(self.host_list, local_path)
 
     def teardown(self):
