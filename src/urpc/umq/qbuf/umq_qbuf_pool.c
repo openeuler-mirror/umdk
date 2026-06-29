@@ -96,25 +96,22 @@ static uint64_t g_total_len = 0;
 
 static inline uint32_t umq_qbuf_pool_batch_cnt(void)
 {
-    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ? (QBUF_POOL_BATCH_CNT << 1) : QBUF_POOL_BATCH_CNT;
+    return QBUF_POOL_BATCH_CNT;
 }
 
 static inline uint32_t umq_qbuf_pool_tls_depth(void)
 {
-    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
-        (QBUF_POOL_TLS_QBUF_POOL_DEPTH << 1) : QBUF_POOL_TLS_QBUF_POOL_DEPTH;
+    return QBUF_POOL_TLS_QBUF_POOL_DEPTH;
 }
 
 static inline uint32_t umq_qbuf_pool_shrink_threshold(void)
 {
-    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
-        (QBUF_POOL_SHRINK_THRESHOLD << 1) : QBUF_POOL_SHRINK_THRESHOLD;
+    return QBUF_POOL_SHRINK_THRESHOLD;
 }
 
 static inline uint32_t umq_qbuf_expansion_count(void)
 {
-    return (g_umq_qbuf_size_pow_small == UMQ_QBUF_SIZE_POW_4K) ?
-        (QBUF_POOL_DEFAULT_EXPANSION_COUNT << 1) : QBUF_POOL_DEFAULT_EXPANSION_COUNT;
+    return QBUF_POOL_DEFAULT_EXPANSION_COUNT;
 }
 
 static int normal_qbuf_base_fetch(uint32_t needed, local_block_pool_t *local_pool, bool with_data);
