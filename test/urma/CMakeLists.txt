@@ -65,8 +65,5 @@ target_compile_options(urma_test_common INTERFACE
 target_link_options(urma_test_common INTERFACE -fsanitize=address --coverage)
 
 enable_testing()
-add_subdirectory(bond)
-add_subdirectory(common)
-add_subdirectory(core)
-add_subdirectory(cmd_tlv)
-add_subdirectory(uvs)
+add_subdirectory(ut)
+add_subdirectory(fuzz)

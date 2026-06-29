@@ -1150,10 +1150,16 @@ TEST(UrmaCoreTest, CpApiRemoteJettyAndSegContextHelpersUseLocalAndProviderPaths)
     urma_put_seg_ctx(nullptr);
 
     std::snprintf(fixture.dev.name, sizeof(fixture.dev.name), "bonding_dev_core_ut");
-    EXPECT_EQ(URMA_EINVAL, urma_get_rjetty(&fixture.jetty, &rjetty, &length));
-    EXPECT_EQ(URMA_EINVAL, urma_get_seg_ctx(&fixture.tseg, &seg, &size));
+    rjetty = nullptr;
+    seg = nullptr;
+    EXPECT_EQ(URMA_FAIL, urma_get_rjetty(&fixture.jetty, &rjetty, &length));
+    EXPECT_EQ(nullptr, rjetty);
+    EXPECT_EQ(URMA_FAIL, urma_get_seg_ctx(&fixture.tseg, &seg, &size));
+    EXPECT_EQ(nullptr, seg);
     fixture.ops.user_ctl = MockUserCtl;
     urma_test::GetHwMockState().userCtlReturn = URMA_ENOPERM;
+    rjetty = nullptr;
+    seg = nullptr;
     EXPECT_EQ(URMA_FAIL, urma_get_rjetty(&fixture.jetty, &rjetty, &length));
     EXPECT_EQ(URMA_FAIL, urma_get_seg_ctx(&fixture.tseg, &seg, &size));
     urma_test::GetHwMockState().userCtlReturn = 0;
