@@ -65,6 +65,9 @@ struct ums_sys_tuning_config g_ums_sys_tuning_config = {
 	.ums_agent_uid = 0,
 	.ums_agent_gid = 0,
 };
+#ifdef UMS_UT_TEST
+EXPORT_SYMBOL_GPL(g_ums_sys_tuning_config);
+#endif
 
 static atomic_t g_lgr_cnt = ATOMIC_INIT(0); /* number of existing link groups */
 static DECLARE_WAIT_QUEUE_HEAD(g_lgrs_deleted);
@@ -1752,6 +1755,12 @@ int ums_wait_token_xchg(struct ums_token_xchg_ctx *ctx)
 
 	return 0;
 }
+
+#ifdef UMS_UT_TEST
+EXPORT_SYMBOL_GPL(ums_clc_session_id_generate);
+EXPORT_SYMBOL_GPL(ums_token_xchg_ctx_init);
+EXPORT_SYMBOL_GPL(ums_wait_token_xchg);
+#endif
 
 /* save rkey and dma_addr received from peer during clc handshake */
 int ums_rmb_import_seg(struct ums_connection *conn, struct ums_clc_msg_accept_confirm *clc)

@@ -15,7 +15,7 @@ set(KBUILD_CMD $(MAKE) -C ${KERNELHEADERS_DIR} modules M=${CMAKE_CURRENT_BINARY_
 
 # Generate the Kbuild file through cmake.
 FILE(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "obj-m := ums_test.o\n")
-FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums_test-objs := ums_api_test.o\n")
+FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ums_test-objs := ums_api_test.o ums_token_kmod_test.o\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ccflags-y += -I${CMAKE_SOURCE_DIR}/../../../src/usock/ums/kmod/ums\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ccflags-y += -I${CMAKE_SOURCE_DIR}/../../../src/usock/ums/kmod/ums/utils\n")
 FILE(APPEND ${CMAKE_CURRENT_SOURCE_DIR}/Kbuild "ccflags-y += -I${CMAKE_SOURCE_DIR}/../../../src/usock/ums/kmod/ums/sockops\n")
