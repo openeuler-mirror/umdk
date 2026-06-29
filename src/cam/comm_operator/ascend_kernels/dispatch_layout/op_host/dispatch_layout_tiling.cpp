@@ -54,16 +54,12 @@ constexpr uint32_t ATTR_NUM_TOPK_INDEX = 3;
 constexpr uint32_t ATTR_LOCAL_RANKSIZE_INDEX = 4;
 const int64_t MAX_COMM_WORLD_SIZE = 384;
 const int64_t MAX_MOE_EXPERTS_NUM = 512;
-const int64_t MAX_LOCAL_RANKSIZE = 8;
-const int64_t A2_MAX_BATCH_SIZE = 4096;
 const int64_t A3_MAX_BATCH_SIZE = 8000;
 
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
 constexpr uint32_t KERNEL_USE_WORKSPACE = 1 * 1024 * 1024;
-constexpr uint32_t KERNEL_A2_ARG_SIZE = 1 * 1024 * 1024;
 
 constexpr static int TILING_KEY_INT = 23;
-constexpr static int TILING_KEY_A2_TYPE = 100;
 
 constexpr uint32_t TWO_DIMS = 2;
 constexpr uint32_t K_MAX = 16;
@@ -78,25 +74,6 @@ static void PrintTilingDataInfo(const char *nodeName, const DispatchLayoutTiling
     OPS_LOG_D(nodeName, "numTopk is %u.", tilingData.dispatchLayoutInfo.numTopk);
     OPS_LOG_D(nodeName, "localRankSize is %u.", tilingData.dispatchLayoutInfo.localRankSize);
     OPS_LOG_D(nodeName, "totalUbSize is %lu.", tilingData.dispatchLayoutInfo.totalUbSize);
-}
-
-static bool CheckIfA2MultiMachine(const gert::TilingContext &context, const char *nodeName,
-                                  const DispatchLayoutTilingData &tilingData)
-{
-    fe::PlatFormInfos *platformInfoPtr = context.GetPlatformInfo();
-    OPS_ERR_IF(platformInfoPtr == nullptr, OPS_LOG_E(nodeName, "platformInfoPtr is nullptr."), return false);
-    fe::PlatFormInfos &platformInfo = *platformInfoPtr;
-
-    std::string socVersion;
-    (void)platformInfo.GetPlatformResWithLock("version", "Short_SoC_version", socVersion);
-
-    uint32_t numRanks = tilingData.dispatchLayoutInfo.numRanks;
-    uint32_t localRankSize = tilingData.dispatchLayoutInfo.localRankSize;
-
-    if (socVersion == "Ascend910B" && numRanks > localRankSize) {
-        return true;
-    }
-    return false;
 }
 
 static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &context, const char *nodeName,
@@ -140,28 +117,10 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     tilingData.dispatchLayoutInfo.numTopk = static_cast<uint32_t>(*numTopkPtr);
     tilingData.dispatchLayoutInfo.localRankSize = static_cast<uint32_t>(*localRankSizePtr);
 
-    if (CheckIfA2MultiMachine(context, nodeName, tilingData)) {
-        OPS_ERR_IF(
-            (*localRankSizePtr <= 0) || (*localRankSizePtr > MAX_LOCAL_RANKSIZE),
-            OPS_LOG_E(nodeName, "localRankSizePtr is invalid, only support (0, %ld], but got localRankSize=%ld.",
-                      MAX_LOCAL_RANKSIZE, *localRankSizePtr),
-            return ge::GRAPH_FAILED);
-        OPS_ERR_IF(
-            (*numRanksPtr % *localRankSizePtr != 0),
-            OPS_LOG_E(nodeName,
-                      "localRankSizePtr isn't an aliquot of numRanks, numRanks=%ld, but got localRankSize=%ld.",
-                      *numRanksPtr, *localRankSizePtr),
-            return ge::GRAPH_FAILED);
-        OPS_ERR_IF((*numTokensPtr <= 0) || (*numTokensPtr > A2_MAX_BATCH_SIZE),
-                   OPS_LOG_E(nodeName, "tokenNum is invalid, only support (0, %ld], but got tokenNum=%ld.",
-                             A2_MAX_BATCH_SIZE, *numTokensPtr),
-                   return ge::GRAPH_FAILED);
-    } else {
-        OPS_ERR_IF((*numTokensPtr <= 0) || (*numTokensPtr > A3_MAX_BATCH_SIZE),
-                   OPS_LOG_E(nodeName, "tokenNum is invalid, only support (0, %ld], but got tokenNum=%ld.",
-                             A3_MAX_BATCH_SIZE, *numTokensPtr),
-                   return ge::GRAPH_FAILED);
-    }
+    OPS_ERR_IF((*numTokensPtr <= 0) || (*numTokensPtr > A3_MAX_BATCH_SIZE),
+               OPS_LOG_E(nodeName, "tokenNum is invalid, only support (0, %ld], but got tokenNum=%ld.",
+                         A3_MAX_BATCH_SIZE, *numTokensPtr),
+               return ge::GRAPH_FAILED);
     tilingData.dispatchLayoutInfo.numTokens = static_cast<uint32_t>(*numTokensPtr);
 
     return ge::GRAPH_SUCCESS;
@@ -171,7 +130,7 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
 {
     size_t *workSpaces = context.GetWorkspaceSizes(1);
     OPS_ERR_IF(workSpaces == nullptr, OPS_LOG_E(nodeName, "workSpaces is nullptr."), return ge::GRAPH_FAILED);
-    workSpaces[0] = SYSTEM_NEED_WORKSPACE + KERNEL_USE_WORKSPACE + KERNEL_A2_ARG_SIZE;
+    workSpaces[0] = SYSTEM_NEED_WORKSPACE + KERNEL_USE_WORKSPACE;
     return ge::GRAPH_SUCCESS;
 }
 
@@ -254,11 +213,7 @@ static ge::graphStatus DispatchLayoutTilingFuncImpl(gert::TilingContext &context
     OPS_ERR_IF(SetWorkSpace(context, nodeName) != ge::GRAPH_SUCCESS,
                OPS_LOG_E(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
 
-    int tilingKey = TILING_KEY_INT;
-    if (CheckIfA2MultiMachine(context, nodeName, *tilingData)) {
-        tilingKey = tilingKey + TILING_KEY_A2_TYPE;
-    }
-    context.SetTilingKey(tilingKey);
+    context.SetTilingKey(TILING_KEY_INT);
 
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context.GetPlatformInfo());
     uint32_t blockDim;

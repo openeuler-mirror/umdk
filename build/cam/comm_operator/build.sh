@@ -25,7 +25,7 @@ print_help() {
     ./build.sh comm_operator <opt>...
     -x Extract the run package
     -c Target SOC VERSION
-    Support Soc: [ascend910_93, ascend910b4]
+    Support Soc: [ascend910_93]
     -d Enable debug
     -t Enable UT build
     -p Enable pybind build

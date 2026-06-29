@@ -5,12 +5,11 @@
 # Roadmap
 
 - [x]  **EP Communication: Dispatch & Combine** 
-  - [x] Support A2
+  - [ ] Support A2
   - [x] Support A3
   - [ ] Support low latency mode
   - [x] Support high throughput mode
   - [x] Support BF16/FP16 input
-  - [x] Support SHMEM
 - [x]  **FusedDeepMoE: Dispatch + GEMM + Combine** 
   - [ ] Support A2
   - [x] Support A3
@@ -53,13 +52,12 @@ UMDK/
 ## 1. Basic Environment Requirements
 |Requirements|Type|Version|Description|
 |---|---|---|---|
-|Ascend Chip|Required|A2/A3|You can run CAM now only in an Ascend A2 or A3 SuperPod.|
+|Ascend Chip|Required|A3|You can run CAM now only in an Ascend A3 SuperPod.|
 |CANN|Required|8.5/9.0|Before using CAM, you need to install CANN 8.5 or 9.0 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
 |Torch|Required|2.8.0|To compile Pybind whl packet in CAM, you need to install Torch first.|
 |Torch-Npu|Required|2.8.0 post1~post4|Torch-Npu version depends on CANN version. See `docker/cam/Dockerfile` for the matched wheel of each CANN preset.|
 |gtest|Required|1.16.0|gtest is used for UT.|
 |OpenMPI|Required|5.0.7|MPI interfaces are used for multi-thread tests.|
-|Ascend-SHMEM|Optional|1.3.0|If you want to compile and run SHMEM kernels, you need to install Ascend-SHMEM first. Please refer to "[Huawei Ascend-SHMEM](https://gitcode.com/cann/shmem)".
 
 For quickly start, we support a docker compose file sample in "umdk/docker/cam" folder. In ubuntu system with aarch64 architecture, you can build the image first:
 ```bash
