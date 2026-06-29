@@ -1779,7 +1779,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
     uint32_t tp_handle_idx = option->tp_handle_idx;
 
     if (queue->flow_control.enabled) {
-        if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0) {
+        if ((queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
             uint64_t count;
             ub_queue_idle_check_t *checker = queue->checker;
             if (__atomic_load_n(&checker->need_return_credit, __ATOMIC_ACQUIRE)) {
