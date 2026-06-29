@@ -21,7 +21,8 @@
 #define THREAD_LOCAL_JETTY_RETURN_BATCH_SIZE 1 // Default batch size for returning from cache to global pool
 #define JETTY_POOL_NOTIFY_THRESHOLD 1
 #define JETTY_POOL_MAX_NODES 65536
-#define JETTY_POOL_BORROW_LIMIT 1024  // Max WRs per borrow (prevents jetty hogging)
+#define UMQ_JETTY_NODE_MIN_BORROW_LIMIT 2
+#define UMQ_JETTY_NODE_BORROW_LIMIT_RATIO 1024
 
 typedef struct jetty_pool {
     umq_ub_jetty_node_list_t jetty_node_list;
@@ -45,7 +46,6 @@ typedef struct jetty_pool {
     uint32_t cache_size;            // Thread-local cache size (default 16)
     uint32_t notify_threshold;      // Notify via eventfd when active_count >= threshold (default 16)
     uint32_t return_batch_size;     // Batch size for returning from cache to active_q (default 1)
-    uint32_t borrow_limit;          // Max WRs per borrow (default JETTY_POOL_BORROW_LIMIT)
 } jetty_pool_t;
 
 static __thread thread_local_jetty_cache_t g_thread_jetty_cache = {0};
@@ -175,7 +175,6 @@ int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
     g_jetty_pool.return_batch_size = THREAD_LOCAL_JETTY_RETURN_BATCH_SIZE;
     g_jetty_pool.notify_threshold = (config->notify_threshold > 0) ?
         config->notify_threshold : JETTY_POOL_NOTIFY_THRESHOLD;
-    g_jetty_pool.borrow_limit = (config->borrow_limit > 0) ? config->borrow_limit : JETTY_POOL_BORROW_LIMIT;
 
     int ret = umq_ub_jetty_node_list_init(&g_jetty_pool.jetty_node_list, g_jetty_pool.max_nodes);
     if (ret != UMQ_SUCCESS) {
@@ -345,6 +344,15 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
     return UMQ_SUCCESS;
 }
 
+static inline uint32_t get_borrow_limit(uint32_t total_jetty_num, uint32_t remaining_jetty_num)
+{
+    uint32_t borrow_limit = 0;
+    if (total_jetty_num != 0) {
+        borrow_limit = UMQ_JETTY_NODE_BORROW_LIMIT_RATIO * remaining_jetty_num / total_jetty_num;
+    }
+    return borrow_limit > UMQ_JETTY_NODE_MIN_BORROW_LIMIT ? borrow_limit : UMQ_JETTY_NODE_MIN_BORROW_LIMIT;
+}
+
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
 {
     if (!g_jetty_pool_inited) {
@@ -393,7 +401,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
             }
 
             node->borrow_count = 0;
-            node->borrow_limit = pool->borrow_limit;
+            node->borrow_limit = get_borrow_limit(pool->node_count, pool->active_count);
             (void)__atomic_add_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
             (void)__atomic_add_fetch(&pool->acc_alloc_count, 1, __ATOMIC_RELAXED);
             return node;

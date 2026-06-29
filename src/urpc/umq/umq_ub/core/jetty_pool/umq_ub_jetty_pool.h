@@ -33,7 +33,6 @@ typedef struct umq_ub_jetty_node_list {
 // Jetty pool configuration
 typedef struct jetty_pool_config {
     uint32_t notify_threshold;     // Notify via eventfd when idle_count >= threshold (0 means use default 16)
-    uint32_t borrow_limit;         // Max WRs per borrow (0 means use default 1024)
 } jetty_pool_config_t;
 
 // Thread-local jetty cache (linked list based on user config)
