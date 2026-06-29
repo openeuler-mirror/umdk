@@ -31,6 +31,7 @@ static int run_test(test_ums_ctx_t *ctx)
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -m 8192 -t 0 tcp_bw > /tmp/qperf_client.log 2>&1 &", ctx->test_ip, ctx->test_port + 1);
     }
+    sleep(3);
     sync_time("----------------------------2");
     
     // 校验流量走ums
@@ -44,6 +45,7 @@ static int run_test(test_ums_ctx_t *ctx)
     CHKERR_JUMP(ret != TEST_SUCCESS, "fallback single connect failed", EXIT);
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+    sleep(3);
     rc = TEST_SUCCESS;
 EXIT:
     sync_time("----------------------------3");

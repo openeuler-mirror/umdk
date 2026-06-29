@@ -46,6 +46,7 @@ static int run_test(test_ums_ctx_t *ctx)
     CHKERR_JUMP(ret != TEST_SUCCESS, "fallback multiple connect failed", EXIT);
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+    sleep(3);
     rc = TEST_SUCCESS;
 EXIT:
     sync_time("----------------------------3");
