@@ -84,5 +84,7 @@ add_ut(ums_test_ut_client)
 add_ut(ums_test_ut_server)
 
 add_agent_ut(ums_agent_token_proxy_ut)
+add_agent_ut(ums_agent_nl_ut)
+add_ut(ums_token_e2e_ut)
 
 add_subdirectory(kmode_ut)
