@@ -602,7 +602,7 @@ int umq_ub_read(uint64_t umqh_tp, umq_buf_t *rx_buf, umq_ub_imm_t imm);
 int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_wr_ptr,
                         urma_sge_t *sges, uint32_t remain_tx);
 
-int umq_ub_fill_fc_rx_buf(ub_queue_t *queue, uint64_t user_ctx);
+int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
 int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor);
 int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
 
