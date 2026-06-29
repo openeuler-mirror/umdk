@@ -352,6 +352,11 @@ static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_combine(huge_pool_t *poo
 int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, uint32_t num,
     umq_alloc_option_t *option, umq_buf_list_t *list)
 {
+    if (request_size == 0 || num == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf invalid request_size: %u, num: %u\n", request_size, num);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!g_huge_pool_ctx.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
