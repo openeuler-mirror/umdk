@@ -888,6 +888,8 @@ int umq_unbind(uint64_t umqh)
 
 umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh, umq_alloc_option_t *option)
 {
+    umq_buf_t *qbuf = NULL;
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (!g_umq_inited || request_qbuf_num == 0 || request_size > UMQ_MAX_BUF_REQUEST_SIZE) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "param invalid or umq not initialized\n");
         return NULL;
@@ -905,6 +907,7 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
             return NULL;
         }
 
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_ALLOC, start_timestamp);
         return QBUF_LIST_FIRST(&head);
     }
 
@@ -915,11 +918,14 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
         return NULL;
     }
 
-    return umq->tp_ops->umq_tp_buf_alloc(request_size, request_qbuf_num, umq->umqh_tp, option);
+    qbuf = umq->tp_ops->umq_tp_buf_alloc(request_size, request_qbuf_num, umq->umqh_tp, option);
+    umq_perf_record_write(UMQ_PERF_RECORD_BUF_ALLOC, start_timestamp);
+    return qbuf;
 }
 
 void umq_buf_free(umq_buf_t *qbuf)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (!g_umq_inited || qbuf == NULL) {
         return;
     }
@@ -929,6 +935,8 @@ void umq_buf_free(umq_buf_t *qbuf)
     if (qbuf->umqh == UMQ_INVALID_HANDLE) {
         if (QBUF_LIST_NEXT(qbuf) == NULL) {
             umq_invalid_handle_buf_free(&head, umq_pool_type_get(qbuf->mempool_id));
+
+            umq_perf_record_write(UMQ_PERF_RECORD_BUF_FREE, start_timestamp);
             return;
         }
 
@@ -962,6 +970,8 @@ void umq_buf_free(umq_buf_t *qbuf)
 
         QBUF_LIST_FIRST(&free_head) = free_node;
         umq_invalid_handle_buf_free(&free_head, type);
+
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_FREE, start_timestamp);
         return;
     }
 
@@ -973,6 +983,7 @@ void umq_buf_free(umq_buf_t *qbuf)
     }
 
     umq->tp_ops->umq_tp_buf_free(qbuf, umq->umqh_tp);
+    umq_perf_record_write(UMQ_PERF_RECORD_BUF_FREE, start_timestamp);
 }
 
 umq_buf_t *umq_buf_break_and_free(umq_buf_t *qbuf)
@@ -1064,21 +1075,27 @@ int umq_buf_reset(umq_buf_t *qbuf)
 
 umq_buf_t *umq_data_to_head(void *data)
 {
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (!g_umq_inited || data == NULL) {
         return NULL;
     }
 
     umq_buf_t *buf = umq_qbuf_data_to_head(data);
     if (buf != NULL) {
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
         return buf;
     }
 
     buf = umq_tiny_qbuf_data_to_head(data);
     if (buf != NULL) {
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
         return buf;
     }
 
-    return umq_qbuf_expansion_data_to_head(data);
+    buf = umq_qbuf_expansion_data_to_head(data);
+
+    umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
+    return buf;
 }
 
 int umq_enqueue(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)

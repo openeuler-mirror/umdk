@@ -556,6 +556,7 @@ int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_b
         "umq_enqueue", "umq_dequeue", "umq_dequeue_empty", "umq_post_all", "umq_post_tx", "umq_post_rx",
         "umq_poll_all", "umq_poll_tx", "umq_poll_rx", "umq_poll_all_empty", "umq_poll_tx_empty", "umq_poll_rx_empty",
         "umq_rearm_tx", "umq_rearm_rx", "umq_wait_tx", "umq_wait_rx", "umq_ack_tx", "umq_ack_rx", "umq_notify",
+        "umq_buf_alloc", "umq_buf_free", "umq_data_to_head",
         "umq_create", "umq_destroy", "umq_get_route_list", "umq_bind_info_get", "umq_bind", "umq_unbind",
         "tp_post_send", "tp_post_recv", "tp_post_send_eagain", "tp_poll_tx", "tp_poll_rx", "tp_poll_tx_empty",
         "tp_poll_rx_empty", "tp_rearm_tx", "tp_rearm_rx", "tp_wait_tx", "tp_wait_rx", "tp_ack_tx", "tp_ack_rx",
