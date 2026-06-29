@@ -489,6 +489,9 @@ static void *run_send_lat_simplex(void *arg)
         return NULL;
     }
 
+    uint32_t recv_inflight_baseline =
+        (cfg->jfr_depth / cfg->jfr_post_list) * cfg->jfr_post_list * rqe_multiple;
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
@@ -541,7 +544,8 @@ static void *run_send_lat_simplex(void *arg)
                      */
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
-                        (cfg->time_type.bs.duration == 1 || rcnt + cfg->jfr_depth - used_recv_wr < cfg->iters)) {
+                        (cfg->time_type.bs.duration == 1 ||
+                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
                         if (send_lat_post_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -1267,7 +1271,6 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     if (cfg->share_jfr == true) {
         size_per_jetty /= cfg->jettys;
     }
-    run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     uint32_t rqe_multiple;
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
@@ -1280,6 +1283,8 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
         return -1;
     }
     size_per_jetty *= rqe_multiple;
+
+    run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     if (alloc_jfr_ctx_buffer(ctx, cfg) != 0) {
         LOG_ERROR("Failed to calloc jfr ctx buffer.\n");
@@ -1645,6 +1650,9 @@ static void *run_send_lat_duplex(void *arg)
         return NULL;
     }
 
+    uint32_t recv_inflight_baseline =
+        (cfg->jfr_depth / cfg->jfr_post_list) * cfg->jfr_post_list * rqe_multiple;
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
@@ -1697,7 +1705,8 @@ static void *run_send_lat_duplex(void *arg)
                      */
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
-                        (cfg->time_type.bs.duration == 1 || rcnt + cfg->jfr_depth - used_recv_wr < cfg->iters)) {
+                        (cfg->time_type.bs.duration == 1 ||
+                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
                         if (send_lat_post_jetty_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
