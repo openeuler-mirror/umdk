@@ -11,10 +11,6 @@ set -e
 
 # Define global exclusion list
 exclude_list=()
-if [ -z "${SHMEM_HOME_PATH}" ]; then
-    echo "Skipping shmem (SHMEM_HOME_PATH not set)"
-    exclude_list+=("moe_combine_shmem" "moe_dispatch_shmem")
-fi
 
 copy_ops() {
     local src_dir="$1" # Source directory
@@ -71,6 +67,14 @@ build_ascend_proj() {
     local arch=$(uname -m)
     local proj_name="ascend_kernels_${soc_version}_proj"
 
+    # SOC version gate: 910b4 (a2) operators have been removed from master,
+    # only ascend910_93 is supported now. Reject anything else early.
+    if [[ "$soc_version" != "ascend910_93" ]]; then
+        echo "ERROR: unsupported SOC version '$soc_version'. Only 'ascend910_93' is supported on this branch." >&2
+        echo "       (ascend910b4 a2 operators have been removed; rebuild on a branch that carries them if needed.)" >&2
+        exit 1
+    fi
+
     cd "$src_path"
 
     # Ensure MODULE_BUILD_PATH directory exists
@@ -101,15 +105,10 @@ build_ascend_proj() {
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
     cp ./ascend_kernels/cmake_files/op_kernel/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/
 
-    # Filter out operators not participating in compilation based on SOC version
-    if [[ "$soc_version" == "ascend910b4" ]]; then
-        echo "SOC ascend910b4: excluding 910_93-only operators"
-        exclude_list+=("moe_combine_normal" "moe_dispatch_normal" "notify_dispatch" \
-                       "fused_deep_moe" "moe_combine_shmem" "moe_dispatch_shmem")
-    elif [[ "$soc_version" == "ascend910_93" ]]; then
-        echo "SOC ascend910_93: excluding a2-only operators"
-        exclude_list+=("moe_combine_normal_a2" "moe_dispatch_normal_a2" "notify_dispatch_a2")
-    fi
+    # Only ascend910_93 is supported (see SOC gate above). All remaining operators
+    # (fused_deep_moe, moe_dispatch_normal, moe_combine_normal, notify_dispatch,
+    # dispatch_layout) are 910_93 compatible, so no exclusion is needed.
+    echo "SOC ascend910_93: compiling all operators"
 
     # Copy op_host/op_kernel source files and op_api interface files for all operators
     copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
@@ -125,11 +124,6 @@ build_ascend_proj() {
     for excluded_dir in "${exclude_list[@]}"; do
         rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
     done
-
-    # Remove shmem-related pregen files if shmem operators are not compiled
-    if [ -z "${SHMEM_HOME_PATH}" ]; then
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/*shmem*
-    fi
 
     # CANN package path: try setenv first, then derive from ASCEND_TOOLKIT_HOME
     if [ -z "${ASCEND_CANN_PACKAGE_PATH}" ]; then
