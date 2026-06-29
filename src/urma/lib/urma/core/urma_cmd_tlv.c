@@ -717,6 +717,18 @@ int urma_ioctl_create_jfce(int ioctl_fd, urma_cmd_create_jfce_t *arg)
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_CREATE_JFCE, attrs, sizeof(attrs));
 }
 
+int urma_ioctl_get_jfce_cnt(int ioctl_fd, urma_cmd_get_jfce_cnt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JFCE_CNT_IN_NUM + GET_JFCE_CNT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JFCE_CNT_IN_THRESHOLD, arg->in.threshold);
+    ATTR(a++, GET_JFCE_CNT_OUT_JFCE_TOTAL_CNT, arg->out.jfce_total_cnt);
+    ATTR(a++, GET_JFCE_CNT_OUT_JFCE_THRESH_CNT, arg->out.jfce_thresh_cnt);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JFCE_CNT, attrs, sizeof(attrs));
+}
+
 int urma_ioctl_import_jfr(int ioctl_fd, urma_cmd_import_jfr_t *arg)
 {
     urma_cmd_attr_t attrs[IMPORT_JFR_IN_NUM + IMPORT_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};

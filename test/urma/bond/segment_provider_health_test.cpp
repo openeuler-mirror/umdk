@@ -27,6 +27,31 @@ struct MockFailbackResultPayload {
     uint32_t newPjettyId;
     int32_t result;
 };
+
+static size_t FillSingleConnectedRjettyExt(urma_rjetty_t *remote, uint32_t localIdx, uint32_t targetIdx,
+                                           const urma_jetty_id_t &slaveId)
+{
+    auto *extHdr = bondp_rjetty_get_priv_ext(remote);
+    auto *ext = reinterpret_cast<urma_bond_jetty_ext_v0_t *>(extHdr->data);
+    auto *localIndices = reinterpret_cast<uint8_t *>(ext->data);
+    auto *targetEntry = reinterpret_cast<bondp_rjetty_target_ctx_t *>(ext->data + 1);
+    uint32_t bitIdx = localIdx * URMA_UBAGG_DEV_MAX_NUM + targetIdx;
+
+    std::memset(ext, 0, sizeof(*ext) + 1 + sizeof(*targetEntry));
+    ext->version = BONDP_RJETTY_EXT_VERSION_V0;
+    ext->mask = BONDP_RJETTY_EXT_MASK_LOCAL_CTX | BONDP_RJETTY_EXT_MASK_TARGET_CTX |
+                BONDP_RJETTY_EXT_MASK_CONNECTED_BITMAP;
+    ext->local_ctx_cnt = 1;
+    ext->target_ctx_cnt = 1;
+    localIndices[0] = static_cast<uint8_t>(localIdx);
+    targetEntry->target_idx = static_cast<uint8_t>(targetIdx);
+    targetEntry->slave_id = slaveId;
+    ext->connected_bitmap[bitIdx >> 3U] |= static_cast<uint8_t>(1U << (bitIdx & 0x7U));
+
+    remote->flag.bs.has_user_info = 1;
+    extHdr->len = static_cast<uint32_t>(sizeof(*ext) + 1 + sizeof(*targetEntry));
+    return extHdr->len;
+}
 } // namespace
 
 TEST(UrmaBondTest, LinkRecoveryRebuildsLocalPjettyWithMockProvider)
@@ -506,9 +531,12 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
     urma_token_t token = {};
     urma_import_seg_flag_t flag = {};
     urma_target_seg_t *target = nullptr;
-    auto *remote = static_cast<urma_seg_t *>(std::calloc(1, sizeof(urma_seg_t) + sizeof(urma_bond_seg_ext_t)));
+    auto *remote = static_cast<urma_seg_t *>(std::calloc(1, sizeof(urma_seg_t) +
+        sizeof(bondp_seg_ext_priv_t) + sizeof(urma_bond_seg_ext_t)));
     ASSERT_NE(nullptr, remote);
-    auto *ext = reinterpret_cast<urma_bond_seg_ext_t *>(remote->ext.buf);
+    bondp_seg_set_user_info(remote, true);
+    auto *segExt = bondp_seg_get_priv_ext(remote);
+    auto *ext = reinterpret_cast<urma_bond_seg_ext_t *>(segExt->data);
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.seg_cache_enable = true;
@@ -517,10 +545,9 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
     remote->ubva.va = 0x100000;
     remote->len = 4096;
     remote->token_id = 0x71;
-    remote->ext.flag.bs.enable = 1;
-    remote->ext.length = sizeof(*ext) - 1;
+    segExt->len = sizeof(*ext) - 1;
     EXPECT_EQ(nullptr, bondp_import_seg(&fixture.ctx.v_ctx, remote, &token, 0x300000, flag));
-    remote->ext.length = sizeof(*ext);
+    segExt->len = sizeof(*ext);
     ext->peer_p_seg[0].ubva.eid = MakeEid(0x802);
     ext->peer_p_seg[0].ubva.va = 0x200000;
     ext->peer_p_seg[0].len = 4096;
@@ -549,26 +576,34 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
 {
     BondPublicApiFixture fixture;
     bondp_global_context_t fakeGlobal = {};
+    bondp_topo_node_t topo[2] = {};
     urma_token_t token = {};
     urma_target_jetty_t *target = nullptr;
-    auto *remote = static_cast<urma_rjetty_t *>(std::calloc(1, sizeof(urma_rjetty_t) + sizeof(urma_bond_jetty_ext_t)));
-    ASSERT_NE(nullptr, remote);
-    auto *ext = reinterpret_cast<urma_bond_jetty_ext_t *>(remote->ext.buf);
+    auto *bondRemote = static_cast<bondp_rjetty_t *>(std::calloc(1, sizeof(bondp_rjetty_t)));
+    ASSERT_NE(nullptr, bondRemote);
+    urma_rjetty_t *remote = &bondRemote->base;
+    auto *jettyExt = bondp_rjetty_get_priv_ext(remote);
 
     fixture.InitSinglePhysicalMember();
+    fixture.ctx.enabled_count = 1;
+    fixture.ctx.enabled_indices[0] = 0;
+    topo[0].is_current = true;
+    CopyEidToTopo(topo[0].agg_devs[0].agg_eid, MakeEid(0x810));
+    CopyEidToTopo(topo[0].agg_devs[0].ues[0].primary_eid, MakeEid(0x820));
+    CopyEidToTopo(topo[0].agg_devs[0].ues[0].port_eid[0], MakeEid(0x821));
+    CopyEidToTopo(topo[1].agg_devs[0].agg_eid, MakeEid(0x811));
+    topo[1].links[0][0] = true;
+    fixture.ctx.topo_map = create_topo_map(topo, 2);
+    ASSERT_NE(nullptr, fixture.ctx.topo_map);
     g_bondp_global_ctx = &fakeGlobal;
     bondp_health_check_global_ctx_init(&fakeGlobal);
     fakeGlobal.health_thread_ctx.enable_health_check = false;
 
     remote->jetty_id = MakeJettyId(0x811);
+    remote->jetty_id.eid = MakeEid(0x811);
     remote->trans_mode = URMA_TM_RC;
     remote->type = URMA_JETTY;
-    remote->ext.flag.bs.enable = 1;
-    remote->ext.length = sizeof(*ext);
-    ext->slave_id[0] = MakeJettyId(0x812);
-    ext->enable_indices[0] = 0;
-    ext->enable_count = 1;
-    ext->connected[0][0] = true;
+    size_t extLength = FillSingleConnectedRjettyExt(remote, 0, 0, MakeJettyId(0x812));
 
     target = bondp_import_jetty(&fixture.ctx.v_ctx, remote, &token);
     EXPECT_EQ(1, urma_test::GetHwMockState().importJettyCount);
@@ -578,20 +613,23 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
     bondp_tjetty_put(target);
     EXPECT_EQ(URMA_SUCCESS, bondp_unimport_jetty(target));
 
-    remote->ext.length = sizeof(*ext) - 1;
+    jettyExt->len = static_cast<uint32_t>(sizeof(urma_bond_jetty_ext_v0_t) - 1);
     EXPECT_EQ(nullptr, bondp_import_jetty(&fixture.ctx.v_ctx, remote, &token));
-    remote->ext.length = sizeof(*ext);
+    jettyExt->len = static_cast<uint32_t>(extLength);
 
-    ext->enable_count = 0;
+    auto *ext = reinterpret_cast<urma_bond_jetty_ext_v0_t *>(jettyExt->data);
+    ext->target_ctx_cnt = 0;
     EXPECT_EQ(nullptr, bondp_import_jetty(&fixture.ctx.v_ctx, remote, &token));
-    ext->enable_count = 1;
+    ext->target_ctx_cnt = 1;
 
     urma_test::SetHwMockStatus(URMA_FAIL);
     EXPECT_EQ(nullptr, bondp_import_jetty(&fixture.ctx.v_ctx, remote, &token));
 
     bondp_health_check_global_ctx_uninit(&fakeGlobal);
     g_bondp_global_ctx = nullptr;
-    std::free(remote);
+    delete_topo_map(fixture.ctx.topo_map);
+    fixture.ctx.topo_map = nullptr;
+    std::free(bondRemote);
 }
 
 TEST(UrmaBondTest, PublicImportJettyUsesMockIoctlAndPhysicalProvider)
@@ -865,6 +903,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
 {
     EnvGuard failover("BOND_ENABLE_FAILOVER", "true");
     EnvGuard failback("BOND_ENABLE_FAILBACK", "false");
+    EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "true");
     EnvGuard backupStart("BOND_HEALTH_CHECK_BACKUP_START", "100");
     EnvGuard backupInterval("BOND_HEALTH_CHECK_BACKUP_INTERVAL", "1000");
     EnvGuard activeStart("BOND_HEALTH_CHECK_ACTIVE_START", "100");
@@ -876,6 +915,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     g_mockNetlinkConnectFail = true;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
+    EXPECT_TRUE(g_bondp_global_ctx->health_thread_ctx.enable_health_check);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
     bondp_nl_sock_uninit();
@@ -1052,7 +1092,7 @@ TEST(UrmaBondTest, HealthCheckImportTsegUsesMockProviderRoutes)
 
     fixture.InitSinglePhysicalMember();
     fixture.jetty.v_jetty.urma_ctx = &fixture.ctx.v_ctx;
-    rjetty.base.flag.bs.has_drv_ext = 1;
+    rjetty.base.flag.bs.has_user_info = 1;
     rjetty.jetty = &fixture.jetty.v_jetty;
     physicalTarget.urma_ctx = &fixture.phyCtx;
     fixture.targetJetty.active_count = 1;

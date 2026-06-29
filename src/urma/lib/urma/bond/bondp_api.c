@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <time.h>
 
 #include "ub_util.h"
 #include "ubagg_ioctl.h"
@@ -30,6 +31,8 @@
 #include "bondp_api.h"
 #include "bondp_health_check.h"
 #include "ub_get_clock.h"
+
+#define BONDP_NS_PER_MS 1000000ULL
 
 typedef struct bondp_create_vjetty_udata {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
@@ -86,6 +89,17 @@ static int bondp_init_wr_buf(const bondp_comp_t *bdp_comp, wr_buf_t *wr_buf, uin
 static void bondp_uninit_wr_buf(wr_buf_t *wr_buf)
 {
     wr_buf_uninit(wr_buf);
+}
+
+static urma_jfc_t *bondp_get_effective_shared_jfc(const urma_jetty_cfg_t *jetty_cfg)
+{
+    if (jetty_cfg->shared.jfc != NULL) {
+        return jetty_cfg->shared.jfc;
+    }
+    if (jetty_cfg->shared.jfr == NULL) {
+        return NULL;
+    }
+    return jetty_cfg->shared.jfr->jfr_cfg.jfc;
 }
 
 typedef bondp_create_vjetty_udata_t bondp_create_vjfr_udata_t;
@@ -1221,6 +1235,7 @@ static int bondp_create_vjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
     int ret = urma_cmd_create_jetty(&bdp_ctx->v_ctx, &bdp_jetty->v_jetty, jetty_cfg, &udata);
     if (ret == 0) {
         bdp_jetty->v_jetty.jetty_cfg.shared.jfr->jfr_cfg = jetty_cfg->shared.jfr->jfr_cfg;
+        bdp_jetty->v_jetty.jetty_cfg.shared.jfc = bondp_get_effective_shared_jfc(jetty_cfg);
         URMA_LOG_DEBUG("Created vjetty successfully, jetty_id=%u, dev=%s, eid_idx=%u\n",
                        bdp_jetty->v_jetty.jetty_id.id, bdp_ctx->v_ctx.dev->name, bdp_ctx->v_ctx.eid_index);
     } else {
@@ -1234,9 +1249,12 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
 {
     bondp_jfc_t *bdp_jfs_jfc = CONTAINER_OF_FIELD(jetty_cfg->jfs_cfg.jfc, bondp_jfc_t, v_jfc);
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, base);
-    bondp_jfc_t *bdp_rplc_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    bondp_jfc_t *bdp_rplc_jfc = NULL;
     urma_jetty_cfg_t p_cfg = *jetty_cfg;
 
+    if (jetty_cfg->shared.jfc != NULL) {
+        bdp_rplc_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    }
     for (uint32_t n = 0; n < bdp_jetty->enabled_count; ++n) {
         uint32_t i = bdp_jetty->enabled_indices[n];
         p_cfg.jfs_cfg.jfc = bdp_jfs_jfc->p_jfc[i];
@@ -1429,8 +1447,10 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     /* Validate bdp_jfr below at the function entry point to ensure they are not empty. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, v_jfr);
     atomic_fetch_add(&bdp_jfr->use_cnt.atomic_cnt, 1);
-    if (jetty_cfg->shared.jfc != NULL) {
-        bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
+    urma_jfc_t *shared_jfc = bondp_get_effective_shared_jfc(&bdp_jetty->v_jetty.jetty_cfg);
+    bdp_jetty->v_jetty.jetty_cfg.shared.jfc = shared_jfc;
+    if (shared_jfc != NULL) {
+        bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
         atomic_fetch_add(&bdp_jfc->use_cnt.atomic_cnt, 1);
     }
 
@@ -1464,8 +1484,9 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     /* When creating bondp_jetty, jetty_cfg.shared.jfr has been validated and is non-null. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
     bondp_jfc_t *bdp_jfc = NULL;
-    if (jetty->jetty_cfg.shared.jfc != NULL) {
-        bdp_jfc = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfc, bondp_jfc_t, v_jfc);
+    urma_jfc_t *shared_jfc = bondp_get_effective_shared_jfc(&jetty->jetty_cfg);
+    if (shared_jfc != NULL) {
+        bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
     }
     /*
     ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
@@ -1929,15 +1950,20 @@ static int bondp_fill_bond_id_info_from_compact_ext(const urma_bond_jetty_ext_v0
 
 static int bondp_fill_bond_id_info_from_rjetty_ext(const urma_rjetty_t *rjetty, urma_bond_id_info_out_t *info)
 {
-    if (rjetty->ext.length < sizeof(urma_bond_jetty_ext_v0_t)) {
-        URMA_LOG_ERR("Invalid rjetty ext length=%u.\n", rjetty->ext.length);
+    if (!bondp_rjetty_has_user_info(rjetty)) {
+        URMA_LOG_ERR("rjetty user_info ext is not enabled.\n");
         return -EINVAL;
     }
-    const urma_bond_jetty_ext_v0_t *compact_ext = (const urma_bond_jetty_ext_v0_t *)rjetty->ext.buf;
+    const bondp_rjetty_ext_priv_t *ext_hdr = bondp_rjetty_get_priv_ext_const(rjetty);
+    if (ext_hdr->len < sizeof(urma_bond_jetty_ext_v0_t)) {
+        URMA_LOG_ERR("Invalid rjetty ext length=%u.\n", ext_hdr->len);
+        return -EINVAL;
+    }
+    const urma_bond_jetty_ext_v0_t *compact_ext = (const urma_bond_jetty_ext_v0_t *)ext_hdr->data;
     if (compact_ext->version != BONDP_RJETTY_EXT_VERSION_V0) {
         URMA_LOG_DEBUG("rjetty ext version=%u, parse by mask only.\n", compact_ext->version);
     }
-    return bondp_fill_bond_id_info_from_compact_ext(compact_ext, rjetty->ext.length, info);
+    return bondp_fill_bond_id_info_from_compact_ext(compact_ext, ext_hdr->len, info);
 }
 
 static void bondp_fill_seg_ext_from_import_tseg(const bondp_import_tseg_t *bdp_tseg, urma_bond_seg_ext_t *ext)
@@ -1991,21 +2017,22 @@ static int bondp_user_ctl_get_rjetty(urma_context_t *ctx, urma_user_ctl_in_t *in
     uint32_t target_ctx_cnt = bdp_jetty->enabled_count;
     size_t ext_len = bondp_calc_rjetty_ext_len(local_ctx_cnt, target_ctx_cnt);
 
-    urma_rjetty_t *new_rjetty = (urma_rjetty_t *)calloc(1, sizeof(urma_rjetty_t) + ext_len);
+    urma_rjetty_t *new_rjetty = (urma_rjetty_t *)calloc(1, sizeof(urma_rjetty_t) +
+                                                         sizeof(bondp_rjetty_ext_priv_t) + ext_len);
     if (new_rjetty == NULL) {
         URMA_LOG_ERR("Failed to alloc rjetty.\n");
         return -ENOMEM;
     }
 
-    urma_bond_jetty_ext_v0_t *ext = (urma_bond_jetty_ext_v0_t *)new_rjetty->ext.buf;
+    new_rjetty->flag.bs.has_user_info = 1;
+    bondp_rjetty_ext_priv_t *ext_hdr = bondp_rjetty_get_priv_ext(new_rjetty);
+    ext_hdr->len = (uint32_t)ext_len;
+    urma_bond_jetty_ext_v0_t *ext = (urma_bond_jetty_ext_v0_t *)ext_hdr->data;
     int ret = bondp_fill_compact_rjetty_ext(bdp_ctx, bdp_jetty, ext, ext_len);
     if (ret != 0) {
         free(new_rjetty);
         return ret;
     }
-
-    new_rjetty->ext.flag.bs.enable = true;
-    new_rjetty->ext.length = (uint32_t)ext_len;
 
     urma_rjetty_t **out_rjetty = (urma_rjetty_t **)(uintptr_t)out->addr;
     *out_rjetty = new_rjetty;
@@ -2030,17 +2057,18 @@ static int bondp_user_ctl_get_seg_ctx(urma_context_t *ctx, urma_user_ctl_in_t *i
     bondp_import_tseg_t *bdp_tseg = CONTAINER_OF_FIELD(tseg, bondp_import_tseg_t, v_tseg);
 
     urma_seg_t *new_seg = (urma_seg_t *)calloc(1, sizeof(urma_seg_t) +
+                                               sizeof(bondp_seg_ext_priv_t) +
                                                sizeof(urma_bond_seg_ext_t));
     if (new_seg == NULL) {
         URMA_LOG_ERR("Failed to alloc seg.\n");
         return -ENOMEM;
     }
 
-    urma_bond_seg_ext_t *ext = (urma_bond_seg_ext_t *)new_seg->ext.buf;
+    bondp_seg_set_user_info(new_seg, true);
+    bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext(new_seg);
+    seg_ext->len = sizeof(urma_bond_seg_ext_t);
+    urma_bond_seg_ext_t *ext = (urma_bond_seg_ext_t *)seg_ext->data;
     bondp_fill_seg_ext_from_import_tseg(bdp_tseg, ext);
-
-    new_seg->ext.flag.bs.enable = true;
-    new_seg->ext.length = sizeof(urma_bond_seg_ext_t);
 
     urma_seg_t **out_seg = (urma_seg_t **)(uintptr_t)out->addr;
     *out_seg = new_seg;
@@ -2121,6 +2149,7 @@ static int bondp_import_pjetty(
     urma_bond_id_info_out_t *rvjetty_info)
 {
     urma_rjetty_t p_rjetty = *rjetty;
+    p_rjetty.flag.bs.has_user_info = 0;
 
     for (uint32_t m = 0; m < rvjetty_info->enabled_count; ++m) {
             uint32_t target_idx = rvjetty_info->enabled_indices[m];
@@ -2203,10 +2232,17 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     atomic_init(&bdp_tjetty->use_cnt.atomic_cnt, 1);
 
     urma_bond_id_info_out_t rvjetty_info = {0};
-    if (rjetty->ext.flag.bs.enable) {
+    if (rjetty != NULL && bondp_rjetty_has_user_info(rjetty)) {
+        const bondp_rjetty_t *bdp_rjetty = (const bondp_rjetty_t *)rjetty;
+        if (bdp_rjetty->jetty != NULL) {
+            cfg_jetty = CONTAINER_OF_FIELD(bdp_rjetty->jetty, bondp_comp_t, v_jetty);
+        }
+    }
+    if (rjetty != NULL && bondp_rjetty_has_user_info(rjetty)) {
         bdp_tjetty->skip_import_vjetty = true;
         if (bondp_fill_bond_id_info_from_rjetty_ext(rjetty, &rvjetty_info) != 0) {
-            URMA_LOG_ERR("Invalid rjetty ext, length=%u.\n", rjetty->ext.length);
+            const bondp_rjetty_ext_priv_t *ext_hdr = bondp_rjetty_get_priv_ext_const(rjetty);
+            URMA_LOG_ERR("Invalid rjetty ext, length=%u.\n", ext_hdr->len);
             goto FREE_TJETTY;
         }
         if (bondp_rebuild_connected_by_topo(bdp_ctx, &rjetty->jetty_id.eid, &rvjetty_info) != 0) {
@@ -2246,7 +2282,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_TSEG;
     }
 
-    if (rjetty->trans_mode == URMA_TM_RM && (rjetty->flag.bs.has_drv_ext != 0) && cfg_jetty != NULL) {
+    if (rjetty->trans_mode == URMA_TM_RM && bondp_rjetty_has_user_info(rjetty) && cfg_jetty != NULL) {
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
 
@@ -2613,56 +2649,156 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
     return success_once ? URMA_SUCCESS : URMA_FAIL;
 }
 
+static inline int bondp_get_monotonic_ms(uint64_t *now_ms)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return -1;
+    }
+    *now_ms = (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / BONDP_NS_PER_MS;
+    return 0;
+}
+
+static inline void bondp_record_jfc_event_source(urma_jfc_t *v_jfc, int dev_idx)
+{
+    if (v_jfc == NULL || dev_idx < 0 || dev_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return;
+    }
+
+    bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(v_jfc, bondp_jfc_t, v_jfc);
+    bdp_jfc->polled_mask |= (1U << (uint32_t)dev_idx);
+}
+
+static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int fd, int *dev_idx)
+{
+    for (int i = 0; i < bdp_jfce->dev_num; i++) {
+        if (bdp_jfce->p_jfce[i] != NULL && bdp_jfce->p_jfce[i]->fd == fd) {
+            *dev_idx = i;
+            return bdp_jfce->p_jfce[i];
+        }
+    }
+    return NULL;
+}
+
+static urma_jfc_t *bondp_wait_one_jfc_event(bondp_jfce_t *bdp_jfce, int fd)
+{
+    int p_jfce_idx = -1;
+    urma_jfce_t *p_jfce = bondp_find_p_jfce_by_fd(bdp_jfce, fd, &p_jfce_idx);
+    if (p_jfce == NULL) {
+        URMA_LOG_WARN("Failed to find fd=%d from p_jfce array.\n", fd);
+        return NULL;
+    }
+
+    urma_jfc_t *p_jfc = NULL;
+    int p_num = urma_wait_jfc(p_jfce, 1, 0, &p_jfc);
+    if (p_num <= 0) {
+        return NULL;
+    }
+
+    uint32_t nevents = 1;
+    urma_ack_jfc(&p_jfc, &nevents, 1);
+
+    urma_jfc_t *v_jfc = (urma_jfc_t *)p_jfc->jfc_cfg.user_ctx;
+    if (v_jfc == NULL) {
+        URMA_LOG_WARN("v_jfc is NULL, pjfc_id=%u.\n", p_jfc->jfc_id.id);
+        return NULL;
+    }
+    bondp_record_jfc_event_source(v_jfc, p_jfce_idx);
+    return v_jfc;
+}
+
+static int bondp_collect_jfc_events(bondp_jfce_t *bdp_jfce, const struct epoll_event events[], int num,
+                                    uint32_t jfc_cnt, urma_jfc_t *jfc[])
+{
+    int actual_num = 0;
+
+    for (int i = 0; i < num; i++) {
+        if ((uint32_t)actual_num >= jfc_cnt) {
+            break;
+        }
+        urma_jfc_t *v_jfc = bondp_wait_one_jfc_event(bdp_jfce, events[i].data.fd);
+        if (v_jfc == NULL) {
+            continue;
+        }
+        jfc[actual_num++] = v_jfc;
+    }
+    return actual_num;
+}
+
+static inline int bondp_get_epoll_event_limit(bondp_jfce_t *bdp_jfce, uint32_t jfc_cnt)
+{
+    int epoll_event_limit = bdp_jfce->dev_num < BOND_EPOLL_NUM ? bdp_jfce->dev_num : BOND_EPOLL_NUM;
+
+    if (epoll_event_limit > 0) {
+        return epoll_event_limit;
+    }
+    return jfc_cnt < BOND_EPOLL_NUM ? jfc_cnt : BOND_EPOLL_NUM;
+}
+
+static inline bool bondp_update_retry_timeout(int time_out, uint64_t deadline_ms, int *wait_timeout)
+{
+    uint64_t now_ms = 0;
+
+    if (time_out < 0) {
+        *wait_timeout = time_out;
+        return true;
+    }
+    if (bondp_get_monotonic_ms(&now_ms) != 0 || now_ms >= deadline_ms) {
+        *wait_timeout = 0;
+        return false;
+    }
+    *wait_timeout = (int)(deadline_ms - now_ms);
+    return *wait_timeout != 0;
+}
+
 int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[])
 {
     bondp_jfce_t *bdp_jfce = CONTAINER_OF_FIELD(jfce, bondp_jfce_t, v_jfce);
 
     PERF_PROFILING_START(BOND_WAIT_JFC);
     struct epoll_event events[BOND_EPOLL_NUM] = {0};
-    int epoll_event_limit = jfc_cnt < BOND_EPOLL_NUM ? jfc_cnt : BOND_EPOLL_NUM;
-    int num = epoll_wait(bdp_jfce->v_jfce.fd, events, epoll_event_limit, time_out);
-    if (num < 0 || num > epoll_event_limit) {
-        URMA_LOG_ERR("Epoll wait err, ret=%d.\n", num);
-        PERF_PROFILING_END(BOND_WAIT_JFC);
-        return -1;
-    } else if (num == 0) {
+    int epoll_event_limit = bondp_get_epoll_event_limit(bdp_jfce, jfc_cnt);
+    uint64_t deadline_ms = 0;
+    int wait_timeout = time_out;
+
+    if (jfc_cnt == 0) {
         PERF_PROFILING_END(BOND_WAIT_JFC);
         return 0;
     }
-
-    int actual_num = 0;
-    for (int i = 0; i < num; i++) {
-        int fd = events[i].data.fd;
-        urma_jfce_t *p_jfce = NULL;
-        for (int j = 0; j < bdp_jfce->dev_num; j++) {
-            if (bdp_jfce->p_jfce[j] != NULL && bdp_jfce->p_jfce[j]->fd == fd) {
-                p_jfce = bdp_jfce->p_jfce[j];
-                break;
-            }
+    if (time_out > 0) {
+        if (bondp_get_monotonic_ms(&deadline_ms) != 0) {
+            URMA_LOG_ERR("Failed to get monotonic time.\n");
+            PERF_PROFILING_END(BOND_WAIT_JFC);
+            return -1;
         }
-        if (p_jfce == NULL) {
-            URMA_LOG_WARN("Failed to find fd=%d from p_jfce array.\n", fd);
-            continue;
-        }
-
-        urma_jfc_t *p_jfc = NULL;
-        int p_num = urma_wait_jfc(p_jfce, 1, 0, &p_jfc);
-        if (p_num <= 0) {
-            continue;
-        }
-
-        uint32_t nevents = 1;
-        urma_ack_jfc(&p_jfc, &nevents, 1);
-
-        urma_jfc_t *v_jfc = (urma_jfc_t *)p_jfc->jfc_cfg.user_ctx;
-        if (v_jfc == NULL) {
-            URMA_LOG_WARN("v_jfc is NULL, pjfc_id=%u.\n", p_jfc->jfc_id.id);
-            continue;
-        }
-        jfc[actual_num++] = v_jfc;
+        deadline_ms += (uint64_t)time_out;
     }
+
+    do {
+        int num = epoll_wait(bdp_jfce->v_jfce.fd, events, epoll_event_limit, wait_timeout);
+        if (num < 0 || num > epoll_event_limit) {
+            URMA_LOG_ERR("Epoll wait err, ret=%d.\n", num);
+            PERF_PROFILING_END(BOND_WAIT_JFC);
+            return -1;
+        } else if (num == 0) {
+            PERF_PROFILING_END(BOND_WAIT_JFC);
+            return 0;
+        }
+
+        int actual_num = bondp_collect_jfc_events(bdp_jfce, events, num, jfc_cnt, jfc);
+        if (actual_num > 0 || time_out == 0) {
+            PERF_PROFILING_END(BOND_WAIT_JFC);
+            return actual_num;
+        }
+
+        if (!bondp_update_retry_timeout(time_out, deadline_ms, &wait_timeout)) {
+            break;
+        }
+    } while (time_out != 0 && wait_timeout != 0);
+
     PERF_PROFILING_END(BOND_WAIT_JFC);
-    return actual_num;
+    return 0;
 }
 
 void bondp_ack_jfc(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt)

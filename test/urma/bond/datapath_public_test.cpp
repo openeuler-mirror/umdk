@@ -663,10 +663,10 @@ TEST(UrmaBondTest, PublicDatapathApisRejectInvalidWorkRequests)
     fixture.jfs.comp_type = BONDP_COMP_JFR;
     fixture.jetty.comp_type = BONDP_COMP_JFR;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &sendWr, &badSend));
-    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(nullptr, badSend);
     badSend = nullptr;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr(&fixture.jetty.v_jetty, &sendWr, &badSend));
-    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(nullptr, badSend);
 
     fixture.jfr.comp_type = BONDP_COMP_JFS;
     fixture.jetty.comp_type = BONDP_COMP_JFS;
@@ -683,6 +683,7 @@ TEST(UrmaBondTest, PublicDatapathApisRejectInvalidWorkRequests)
 TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
 {
     BondPublicApiFixture fixture;
+    bondp_global_context_t fakeGlobal = {};
     urma_jfs_wr_t *badSend = nullptr;
     urma_jfs_wr_t writeWr = {};
     urma_jfs_wr_t readWr = {};
@@ -692,6 +693,9 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
     bondp_jfs_wr_t affinityWr = {};
     urma_sge_t srcSge = {};
     urma_sge_t dstSge = {};
+
+    fakeGlobal.enable_failback = false;
+    g_bondp_global_ctx = &fakeGlobal;
 
     writeWr.opcode = URMA_OPC_WRITE;
     writeWr.tjetty = &fixture.targetJetty.v_tjetty;
@@ -752,6 +756,8 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
     faddWr.faa.src = &srcSge;
     faddWr.faa.dst = &dstSge;
     EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &faddWr, &badSend));
+
+    g_bondp_global_ctx = nullptr;
 }
 
 TEST(UrmaBondTest, PublicDatapathApisRejectRecvStateBeforeProviderAccess)

@@ -653,6 +653,16 @@ typedef enum urma_cmd_create_jfce_type {
     CREATE_JFCE_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_create_jfce_type_t;
 
+typedef enum urma_cmd_get_jfce_cnt_type {
+    GET_JFCE_CNT_IN_THRESHOLD,
+    GET_JFCE_CNT_IN_NUM,
+    GET_JFCE_CNT_OUT_JFCE_TOTAL_CNT = URMA_CMD_OUT_TYPE_INIT,
+    GET_JFCE_CNT_OUT_JFCE_THRESH_CNT,
+    GET_JFCE_CNT_OUT_NUM,
+} urma_cmd_get_jfce_cnt_type_t;
+
+int urma_ioctl_get_jfce_cnt(int ioctl_fd, urma_cmd_get_jfce_cnt_t *arg);
+
 /* See urma_cmd_import_jfr_t, consistent with enum uburma_cmd_import_jfr_type */
 typedef enum urma_cmd_import_jfr_type {
     /* In type */

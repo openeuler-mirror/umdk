@@ -23,6 +23,12 @@ extern "C" {
 
 #define URMA_MAX_SYSFS_PATH 256
 #define URMA_UBAGG_DEV_PREFIX "bonding_dev"
+#define URMA_JFCE_CNT_MAX_DEV_NUM 64
+
+typedef struct urma_user_info_ext_hdr {
+    uint32_t len;
+    char data[0];
+} urma_user_info_ext_hdr_t;
 
 typedef struct urma_driver {
     struct urma_provider_ops *ops;
@@ -73,6 +79,14 @@ static inline bool urma_is_bonding_dev(char *dev_name)
 void urma_ubagg_switch_init(void);
 void urma_ubagg_switch_inc(void);
 uint32_t urma_ubagg_switch_get(void);
+
+typedef struct urma_jfce_cnt_info {
+    char dev_name[URMA_MAX_NAME];
+    uint64_t jfce_total_cnt;
+    uint64_t jfce_thresh_cnt;
+} urma_jfce_cnt_info_t;
+
+urma_status_t urma_get_jfce_cnt_info(urma_jfce_cnt_info_t *info_arr, uint32_t *cnt);
 
 
 /**

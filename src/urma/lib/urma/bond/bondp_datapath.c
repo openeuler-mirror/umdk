@@ -8,12 +8,14 @@
  * History: 2025-02-19   Create File
  */
 
+#include <errno.h>
 #include <threads.h>
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
+#include "bondp_failback.h"
 #include "bondp_health_check.h"
 #include "bondp_types.h"
 #include "ub_get_clock.h"
@@ -25,6 +27,8 @@
 #include "bondp_datapath.h"
 
 #define BONDP_POST_SEND_MAX_RETRY     3
+
+static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx);
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
 {
@@ -246,6 +250,65 @@ static urma_status_t schedule_send_wr(const urma_jfs_wr_t *wr, bondp_comp_t *bdp
     return schedule_send(wr->tjetty, bdp_comp, send_idx, target_idx, &info);
 }
 
+static void try_failback(bondp_comp_t *bdp_comp)
+{
+    if (!g_bondp_global_ctx->enable_failback) {
+        return;
+    }
+
+    pthread_spin_lock(&bdp_comp->send_lock);
+
+    uint32_t rebuilt_cnt = 0;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (!atomic_exchange(&bdp_comp->rebuild_done[i], false)) {
+            continue;
+        }
+        rebuilt_cnt++;
+        atomic_store(&bdp_comp->valid[i], true);
+    }
+
+    if (rebuilt_cnt == 0) {
+        pthread_spin_unlock(&bdp_comp->send_lock);
+        return;
+    }
+
+    URMA_LOG_INFO("Failback triggered on post, vjetty_id=%u rebuilt_cnt=%u\n",
+                  bdp_comp->v_jetty.jetty_id.id, rebuilt_cnt);
+
+    for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; ++i) {
+        const uint64_t resend_wr_id = (uint64_t)i + 1;
+        jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
+        if (resend_wr_entry == NULL ||
+            resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            resend_wr_entry->bdp_comp != bdp_comp) {
+            continue;
+        }
+
+        uint32_t old_send_idx = resend_wr_entry->send_idx;
+        uint32_t old_target_idx = resend_wr_entry->target_idx;
+        int new_send_idx = -1;
+        int new_target_idx = -1;
+        if (schedule_send(&resend_wr_entry->target_vjetty->v_tjetty, bdp_comp,
+                          &new_send_idx, &new_target_idx, NULL) != 0) {
+            URMA_LOG_DEBUG("Skip failback resend on post, no valid route for wr_id=%lu vjetty_id=%u\n",
+                           resend_wr_id, resend_wr_entry->target_vjetty->v_tjetty.id.id);
+            continue;
+        }
+
+        if (old_send_idx == (uint32_t)new_send_idx && old_target_idx == (uint32_t)new_target_idx) {
+            continue;
+        }
+
+        atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
+        if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+            URMA_LOG_ERR("Failed failback resend on post, wr_id=%lu new_send_idx=%d new_target_idx=%d\n",
+                         resend_wr_id, new_send_idx, new_target_idx);
+            continue;
+        }
+    }
+    pthread_spin_unlock(&bdp_comp->send_lock);
+}
+
 static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                                                  const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
                                                  int wr_total)
@@ -324,6 +387,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         URMA_LOG_ERR("WR->tjetty is NULL\n");
         return URMA_EINVAL;
     }
+    try_failback(bdp_comp);
     if (wr_total > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
         return URMA_EINVAL;
@@ -493,6 +557,7 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
         PERF_PROFILING_END(BOND_JFS_POST_SEND);
         return ret;
     }
+
     if (is_single_dev_mode(bdp_jfs->bondp_ctx)) {
         ret = bondp_post_send_wr_no_store(bdp_jfs, wr, bad_wr, wr_total);
     } else {
@@ -878,6 +943,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     convert_jfs_vwr_to_pwr_for_resend(wr, send_idx, target_idx);
 
     urma_jfs_wr_t *bad_wr = NULL;
+    wr->next = NULL;
     int ret = comp_post_send(wr_entry->bdp_comp, send_idx, target_idx, wr, &bad_wr, 1);
     if (ret != URMA_SUCCESS) {
         convert_jfs_pwr_to_vwr_resend(wr, vtjetty);
@@ -1107,20 +1173,10 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         /* Update active link after failover is finished. */
         bondp_health_update_active_idx(bdp_comp->bondp_ctx, wr_entry->target_vjetty, new_send_idx);
 
-        bool is_primary_failover = (bdp_comp->active_count > 0 &&
-                                    send_idx == (uint32_t)bdp_comp->active_indices[0] &&
-                                    new_send_idx != (int)bdp_comp->active_indices[0]);
-        if (is_primary_failover) {
-            bondp_health_event_info_t event_info = {
-                .local_idx = -1,
-                .target_idx = -1,
-                .user_ctx = 0,
-                .cr_status = 0,
-                .new_active_idx = -1,
-                .bdp_jetty = NULL,
-                .bdp_tjetty = wr_entry->target_vjetty,
-            };
-            bondp_notify_health_event(bdp_comp->bondp_ctx, BONDP_HEALTH_EVENT_FALLBACK_TASK_KICK, &event_info);
+        int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx);
+        if (ret != 0 && ret != -EEXIST) {
+            URMA_LOG_WARN("Failed to add failback task, vjetty_id=%u pjetty_idx=%u ret=%d\n",
+                          wr_entry->target_vjetty->v_tjetty.id.id, send_idx, ret);
         }
         (void)pthread_spin_unlock(&bdp_comp->send_lock);
         put_comp(bdp_comp);
