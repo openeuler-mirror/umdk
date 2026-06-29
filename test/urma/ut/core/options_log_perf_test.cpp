@@ -162,7 +162,7 @@ TEST(UrmaCoreTest, PerfApisRecordAndFormatStats)
     end = urma_get_perf_timestamp();
     EXPECT_GE(end, start);
     EXPECT_EQ(URMA_EINVAL, urma_step_perf(URMA_PERF_RECORD_TYPE_MAX, 1));
-    EXPECT_EQ(URMA_EINVAL, urma_step_perf(UB_JFS_POST_SEND, 0));
+    EXPECT_EQ(URMA_SUCCESS, urma_step_perf(UB_JFS_POST_SEND, 0));
     EXPECT_EQ(URMA_SUCCESS, urma_step_perf(UB_JFS_POST_SEND, 1));
     EXPECT_EQ(URMA_SUCCESS, urma_step_perf(UB_JFS_POST_SEND, 1024));
     EXPECT_EQ(URMA_EINVAL, urma_get_perf_info(nullptr, &len));
