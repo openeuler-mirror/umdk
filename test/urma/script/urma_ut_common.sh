@@ -25,7 +25,7 @@ URMA_UT_PHASE="all"
 function urma_ut_usage()
 {
     cat <<EOF
-Usage: $0 [--phase common|core|cmd_tlv|bond|uvs|all] [--no-coverage]
+Usage: $0 [--phase common|core|cmd_tlv|bond|uvs|fuzz|all] [--no-coverage]
 EOF
 }
 
@@ -82,7 +82,7 @@ function parse_urma_phase_script_args()
 function validate_urma_ut_phase()
 {
     case "$1" in
-        all|common|core|cmd_tlv|bond|uvs)
+        all|common|core|cmd_tlv|bond|uvs|fuzz)
             return 0
             ;;
         *)
@@ -100,6 +100,7 @@ function phase_target()
         cmd_tlv) echo "urma_cmd_tlv_ut" ;;
         bond) echo "urma_bond_ut" ;;
         uvs) echo "urma_uvs_ut" ;;
+        fuzz) echo "urma_fuzz" ;;
         *) return 1 ;;
     esac
 }
@@ -112,6 +113,7 @@ function phase_label()
         cmd_tlv) echo "phase_cmd_tlv" ;;
         bond) echo "phase_bond" ;;
         uvs) echo "phase_uvs" ;;
+        fuzz) echo "phase_fuzz" ;;
         *) return 1 ;;
     esac
 }
@@ -265,6 +267,44 @@ function generate_non_udma_phase_report()
         '*/urma/lib/uvs/*'
 }
 
+function generate_fuzz_api_case_report()
+{
+    python3 "$SCRIPT_PATH/check_fuzz_api_coverage.py" \
+        --urma-header "$SRC_PATH/urma/lib/urma/core/include/urma_api.h" \
+        --uvs-header "$SRC_PATH/urma/lib/uvs/core/include/uvs_api.h" \
+        --urma-fuzz "$TEST_PATH/fuzz/urma_api_fuzz.c" \
+        --uvs-fuzz "$TEST_PATH/fuzz/uvs_api_fuzz.c" \
+        --report "$REPORTS_PATH/phase_fuzz_api_coverage.txt"
+}
+
+function generate_fuzz_entry_line_report()
+{
+    local raw_info="$REPORTS_PATH/phase_fuzz_entry_raw.info"
+    local phase_info="$REPORTS_PATH/phase_fuzz_entry.info"
+
+    lcov --capture --directory "$TEST_BUILD_PATH/fuzz" --output-file "$raw_info" --branch-coverage \
+        --rc geninfo_unexecuted_blocks=1
+    lcov --extract "$raw_info" '*/test/urma/fuzz/*' --output-file "$phase_info" \
+        --branch-coverage --ignore-errors unused,empty
+    summarize_phase_coverage "$phase_info" "phase_fuzz_entry"
+    genhtml "$phase_info" --output-directory "$REPORTS_PATH/fuzz_entry_lcov_html" \
+        --branch-coverage
+}
+
+function generate_fuzz_reached_src_phase_report()
+{
+    extract_phase_coverage phase_fuzz_reached_src \
+        '*/src/urma/lib/urma/core/*' \
+        '*/urma/lib/urma/core/*' \
+        '*/src/urma/lib/uvs/*' \
+        '*/urma/lib/uvs/*'
+    if [ -f "$REPORTS_PATH/phase_fuzz_reached_src.info" ]; then
+        genhtml "$REPORTS_PATH/phase_fuzz_reached_src.info" \
+            --output-directory "$REPORTS_PATH/fuzz_line_lcov_html" \
+            --branch-coverage
+    fi
+}
+
 function generate_all_phase_reports()
 {
     generate_common_phase_report
@@ -272,6 +312,8 @@ function generate_all_phase_reports()
     generate_cmd_tlv_phase_report
     generate_bond_phase_report
     generate_uvs_phase_report
+    generate_fuzz_api_case_report
+    generate_fuzz_entry_line_report
     generate_non_udma_phase_report
 }
 
@@ -283,6 +325,11 @@ function generate_one_phase_report()
         cmd_tlv) generate_cmd_tlv_phase_report ;;
         bond) generate_bond_phase_report ;;
         uvs) generate_uvs_phase_report ;;
+        fuzz)
+            generate_fuzz_api_case_report
+            generate_fuzz_entry_line_report
+            generate_fuzz_reached_src_phase_report
+            ;;
         *) return 1 ;;
     esac
 }
