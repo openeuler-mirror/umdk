@@ -693,7 +693,7 @@ static urma_jfc_t *udma_u_create_jfc_ex(urma_context_t *ctx,
 		return NULL;
 	}
 
-	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, cfg_ex->jfc_mode, NULL);
+	return udma_u_create_base_jfc_ex(ctx, &cfg_ex->base_cfg, cfg_ex->jfc_mode, 0);
 }
 
 static int udma_u_jfr_ops_ex(urma_context_t *ctx, urma_user_ctl_in_t *in,
