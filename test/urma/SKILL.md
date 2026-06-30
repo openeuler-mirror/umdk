@@ -39,12 +39,14 @@ git branch --show-current
 - core public API：使用内存态 `urma_context_t`、`urma_device_t`、`urma_ops_t` 覆盖参数校验和 ops 返回传播。
 - bond 纯逻辑：构造内存态 context、target、segment、WR、CR。
 - bond 对外 API：优先覆盖非法输入、非法状态、引用计数保护、空成员集合和失败回收。
+- liburma/libuvs 对外 API fuzz：只覆盖 `urma_api.h` 和 `uvs_api.h` 中声明的接口。
 
 新增用例必须先查已有数据：
 
 - command/TLV 数据优先复用 `test/urma/include/urma_cmd_mock.h`。
 - bonding 路径优先复用 `BondPathFixture` 或 `BondPublicApiFixture`。
-- core API 优先在 `test/urma/core/core_test.cpp` 复用或扩展本地 fixture。
+- core API 优先在 `test/urma/ut/core/` 复用或扩展本地 fixture。
+- 对外 API fuzz 放在 `test/urma/fuzz/`，`urma_api.h` 和 `uvs_api.h` 分别维护独立入口文件。
 - 只有已有 mock/fixture 无法表达可复用场景时，才补共享数据集。
 - 一次性非法输入留在单个 test 文件内，例如 `nullptr`、`UINT32_MAX`、`dev_fd=-1`、空数组。
 
@@ -245,6 +247,10 @@ Phase 分组：
 - `phase_urma_core`: `src/urma/lib/urma/core`
 - `phase_urma_bond`: `src/urma/lib/urma/bond`
 - `phase_uvs`: `src/urma/lib/uvs`
+- `phase_fuzz`: `test/urma/fuzz` 中 liburma/libuvs 对外 API case 覆盖率，按
+  `urma_api.h`、`uvs_api.h` 声明和 fuzz case 表计算。
+- `phase_fuzz_reached_src`: 单独运行 `--phase fuzz` 时 fuzz 触达的 liburma/libuvs
+  生产源码 lcov 覆盖率，仅用于观察。
 
 恢复 phase 强门禁前必须满足：
 
