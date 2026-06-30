@@ -5656,6 +5656,12 @@ typedef union urma_get_tp_cfg_flag {
 } urma_get_tp_cfg_flag_t;
 ```
 
+![](figures/urma_info.png)
+
+若使能 `uboe`，需要同时使能 `ctp`、`rtp`、`utp` 中的某一个，以显式指定 TP 类型。当前支持的组合类型如下：
+1. 使能 `uboe` 和 `rtp`
+2. 使能 `uboe` 和 `utp`
+
 ##### 2.3.3.3.3 urma_tp_info_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)

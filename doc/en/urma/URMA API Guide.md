@@ -5569,6 +5569,12 @@ typedef union urma_get_tp_cfg_flag {
 } urma_get_tp_cfg_flag_t;
 ```
 
+![](figures/urma_info.png)
+
+If `uboe` is enabled, one of `ctp`, `rtp`, or `utp` must also be enabled to explicitly specify the TP type. The currently supported combinations are:
+1. Enable `uboe` and `rtp`
+2. Enable `uboe` and `utp`
+
 ##### 2.3.3.3.3 urma_tp_info_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
