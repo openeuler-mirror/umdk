@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: FusedDeepMoe operator kernel function implementation file
- * Create: 2025-07-19
+ * Create: 2026-06-29
  * Note:
- * History: 2025-07-19 create FusedDeepMoe operator kernel function implementation file
+ * History: 2026-06-29 create FusedDeepMoe operator kernel function implementation file
  */
 #ifndef EPILOGUE_TILE_TILE_STRIDE_MULS_H
 #define EPILOGUE_TILE_TILE_STRIDE_MULS_H
