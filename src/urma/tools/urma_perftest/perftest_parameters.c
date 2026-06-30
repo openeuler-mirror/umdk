@@ -400,6 +400,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->min_size = 0;
     cfg->max_size = 0;
     cfg->enable_random_size = 0;
+    verbose_set_level(VLOG_LEVEL_INFO);
 }
 
 void print_cfg(const perftest_config_t *cfg)
