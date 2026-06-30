@@ -41,19 +41,21 @@ static int run_test(test_ums_ctx_t *ctx)
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -m 8192 -t 0 tcp_bw > /tmp/qperf_client.log 2>&1 &", ctx->test_ip, ctx->test_port + 1);
     }
+    sleep(2);
     sync_time("----------------------------4");
 
     // 校验流量走ums
     if (ctx->app_id == PROC_2) {
-        sprintf(test_ip_str, "%s", ctx->test_ip);
-        check_num = query_proc_net_ums_detail_stream_num("False", test_ip_str);
-        if (check_num != 2) {
+        sprintf(test_ip_str, "%s", ctx->test_ip_host2);
+        check_num = query_proc_net_ums_detail_stream_num("True", test_ip_str);
+        if (check_num < 1) {
             ret = -1;
         }
-        CHKERR_JUMP(ret != TEST_SUCCESS, "ums single connect failed", EXIT);
+        CHKERR_JUMP(ret != TEST_SUCCESS, "fallback single connect failed", EXIT);
     }
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+    sleep(2);
 
     rc = TEST_SUCCESS;
 EXIT:

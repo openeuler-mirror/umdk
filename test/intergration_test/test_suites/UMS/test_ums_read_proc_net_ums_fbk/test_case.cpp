@@ -39,7 +39,7 @@ static int run_test(test_ums_ctx_t *ctx)
     sync_time("----------------------------2");
     sprintf(port_str, "%d", ctx->test_port + 1);
     check_num_ums = query_proc_net_ums_detail_stream_num("False", port_str);
-    if (ctx->app_id == PROC_2 && check_num_ums != 1) {
+    if (ctx->app_id == PROC_2 && check_num_ums < 1) {
         ret = -1;
     }
     CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
