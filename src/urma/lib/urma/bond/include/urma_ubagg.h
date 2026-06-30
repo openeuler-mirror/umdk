@@ -24,6 +24,12 @@ extern "C" {
 #define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
 #define URMA_UBAGG_WR_BUF_SIZE        (3)
 #define URMA_UBAGG_MAX_CR_CNT_PER_DEV (32)
+#define URMA_UBAGG_CHIP_LINK_NUM      (4)
+#define URMA_ACTIVE_PORT_PER_DIE      (2)
+#define URMA_ACTIVE_PORT_MIN          (4)
+#define URMA_ACTIVE_PORT_MAX          (5)
+
+#define URMA_FAILOVER_LINK_NUM        (IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE)
 
 typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_SET_BONDING_MODE_LEGACY = 4,
