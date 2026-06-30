@@ -32,6 +32,7 @@ constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint16_t SEND_SYNC_EVENT_ID = 6;
 constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
+constexpr uint32_t A3_AIV_NUM = 48;
 
 template <AscendC::HardEvent event>
 __aicore__ inline void SyncFunc()
@@ -60,6 +61,7 @@ struct CombineCalcInfo {
     GM_ADDR allExpertTokenNums_;
     // (combine send前)根据allExpertTokenNums计算allEpRecvCount
     GM_ADDR allEpRecvCount_;
+    GM_ADDR combineSend_;
 };
 
 template <TemplateMC2TypeClass>
@@ -147,6 +149,32 @@ private:
     __aicore__ GM_ADDR GetShmemStateAddrByRankId(int64_t rankId)
     {
         return GetShmemAddrByRankId(metaInfoGm_ + statusDataSpaceOffset_ + dataState_ * WIN_STATE_OFFSET, rankId);
+    }
+
+    __aicore__ inline GM_ADDR GetShmemLocalNotifyDataAddr(int64_t rankId)
+    {
+        uint64_t offset = A3_AIV_NUM * UB_ALIGN + epWorldSize_ * UB_ALIGN;
+        return GetShmemAddrByRankId(metaInfoGm_ + offset, rankId);
+    }
+
+    CATLASS_DEVICE
+    void ShmemCleanUp()
+    {
+        if (coreIdx_ != 0) {
+            return;
+        }
+
+        AscendC::LocalTensor<int32_t> cleanTempLt = cleanUpBuf_.Get<int32_t>();
+        AscendC::Duplicate(cleanTempLt, (int32_t)0, moeExpertNum_);
+        AscendC::PipeBarrier<PIPE_ALL>();
+
+        AscendC::GlobalTensor<int32_t> localNotifyDataTensor;
+        GM_ADDR localNotifyDataAddr = GetShmemLocalNotifyDataAddr(epRankId_);
+        localNotifyDataTensor.SetGlobalBuffer((__gm__ int32_t *)localNotifyDataAddr);
+        AscendC::DataCopyExtParams dataCopyParams = {1U, static_cast<uint32_t>(moeExpertNum_ * sizeof(int32_t)),
+            0U, 0U, 0U};
+        AscendC::DataCopyPad(localNotifyDataTensor, cleanTempLt, dataCopyParams);
+        AscendC::PipeBarrier<PIPE_ALL>();
     }
 
     __aicore__ inline uint32_t MIN(uint32_t x, uint32_t y)
@@ -263,6 +291,7 @@ private:
     TBuf<> xActMaskCastTBuf_;
     TBuf<> xActMaskSumTBuf_;
     TBuf<> allEpRecvCountBuf_;
+    TBuf<> cleanUpBuf_;
     float sumTarget_{0.0};
     int32_t epStateValue_;
 };
@@ -381,6 +410,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     calcInfo_.metaInfoGm_ = metaInfoGm_;
     calcInfo_.allExpertTokenNums_ = allExpertTokenNums;
     calcInfo_.allEpRecvCount_ = allEpRecvCount;
+    calcInfo_.combineSend_ = combineSend;
 }
 
 template <TemplateMC2TypeClass>
@@ -475,6 +505,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     tpipe_->InitBuffer(gatherTmpBuf_, sizeof(uint32_t));
     tpipe_->InitBuffer(statusSumOutBuf_, sizeof(float));
     tpipe_->InitBuffer(allEpRecvCountBuf_, epWorldSize_ * moeExpertNum_ * sizeof(uint32_t));
+    tpipe_->InitBuffer(cleanUpBuf_, moeExpertNum_ * sizeof(int32_t));
 
     if constexpr (EXEC_FLAG & EXEC_FLAG_X_ACTIVE_MASK) {
         axisBsAlignSize_ = Ceil(axisBS_ * sizeof(bool), UB_ALIGN) * UB_ALIGN;
@@ -984,6 +1015,10 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermu
     if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
         AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
     }
+
+    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
+        ShmemCleanUp();
+    }
 }
 
 template <TemplateMC2TypeClass>
@@ -1002,6 +1037,10 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ProcessComb
         LocalShmemCopy();
     } else {
         LocalWindowCopy();
+    }
+
+    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
+        ShmemCleanUp();
     }
 }
 }  // namespace MoeDistributeCombineImpl

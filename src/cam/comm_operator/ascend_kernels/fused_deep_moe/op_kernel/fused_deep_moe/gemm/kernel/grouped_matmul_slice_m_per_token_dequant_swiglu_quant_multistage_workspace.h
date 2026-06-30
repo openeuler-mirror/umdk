@@ -654,82 +654,6 @@ public:
     }
 
     CATLASS_DEVICE
-    void PutShareAddr(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmSwigluOut, GM_ADDR gmCombineSend)
-    {
-        if (sendCoreIdx != sendCoreNum - 1) {
-            return;
-        }
-
-        uint64_t tensorAddrOffset = aivNum * UB_32B_ALIGN + epRankSize * UB_32B_ALIGN +
-                                    moeExpertNum * sizeof(int32_t);
-
-        AscendC::LocalTensor<uint64_t> addrTensor1 = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-        ubOffset += UB_32B_ALIGN;
-        AscendC::LocalTensor<uint64_t> addrTensor2 = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-        ubOffset += UB_32B_ALIGN;
-        AscendC::LocalTensor<uint64_t> addrTensor3 = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-        ubOffset += UB_32B_ALIGN;
-        AscendC::LocalTensor<uint64_t> addrTensor4 = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-        ubOffset += UB_32B_ALIGN;
-        AscendC::DataCopyExtParams addrCopyParams = {1U, sizeof(uint64_t), 0U, 0U, 0U};
-
-        addrTensor1.SetValue(0, (uint64_t)gmX1);
-        addrTensor2.SetValue(0, (uint64_t)gmX1Scale);
-        addrTensor3.SetValue(0, (uint64_t)gmSwigluOut);
-        addrTensor4.SetValue(0, (uint64_t)gmCombineSend);
-        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-
-        AscendC::GlobalTensor<uint64_t> gmX1Tensor;
-        gmX1Tensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset + epRankId * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmX1Tensor, addrTensor1, addrCopyParams);
-
-        AscendC::GlobalTensor<uint64_t> gmX1ScaleTensor;
-        gmX1ScaleTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-            epRankSize * sizeof(uint64_t) + epRankId * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmX1ScaleTensor, addrTensor2, addrCopyParams);
-
-        AscendC::GlobalTensor<uint64_t> gmSwigluOutTensor;
-        gmSwigluOutTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-            2 * epRankSize * sizeof(uint64_t) + epRankId * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmSwigluOutTensor, addrTensor3, addrCopyParams);
-
-        AscendC::GlobalTensor<uint64_t> gmCombineSendTensor;
-        gmCombineSendTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-            3 * epRankSize * sizeof(uint64_t) + epRankId * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmCombineSendTensor, addrTensor4, addrCopyParams);
-    }
-
-    CATLASS_DEVICE
-    void GetShareAddr(AscendC::LocalTensor<uint64_t> &gmX1AddrList,
-                      AscendC::LocalTensor<uint64_t> &gmX1ScaleAddrList,
-                      AscendC::LocalTensor<uint64_t> &gmSwigluOutAddrList)
-    {
-        uint64_t tensorAddrOffset = aivNum * UB_32B_ALIGN + epRankSize * UB_32B_ALIGN +
-                                    moeExpertNum * sizeof(int32_t);
-
-        AscendC::GlobalTensor<uint64_t> gmX1ListGMTensor;
-        gmX1ListGMTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset));
-        AscendC::DataCopyExtParams addrListCopyParams = {1U, static_cast<uint32_t>(epRankSize * sizeof(uint64_t)),
-            0U, 0U, 0U};
-        AscendC::DataCopyPadExtParams<uint64_t> addrListCopyPadParams{false, 0U, 0U, 0U};
-        AscendC::DataCopyPad(gmX1AddrList, gmX1ListGMTensor, addrListCopyParams, addrListCopyPadParams);
-
-        AscendC::GlobalTensor<uint64_t> gmX1ScaleListGMTensor;
-        gmX1ScaleListGMTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-            epRankSize * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmX1ScaleAddrList, gmX1ScaleListGMTensor, addrListCopyParams, addrListCopyPadParams);
-
-        AscendC::GlobalTensor<uint64_t> gmSwigluOutListGMTensor;
-        gmSwigluOutListGMTensor.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-            2 * epRankSize * sizeof(uint64_t)));
-        AscendC::DataCopyPad(gmSwigluOutAddrList, gmSwigluOutListGMTensor, addrListCopyParams, addrListCopyPadParams);
-
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-    }
-
-    CATLASS_DEVICE
     void ShmemLocalLayout(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmSwigluOut, GM_ADDR gmCombineSend)
     {
         if (startTokenId_ >= expertIdsCnt) {
@@ -742,8 +666,6 @@ public:
 
         AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
-
-        PutShareAddr(gmX1, gmX1Scale, gmSwigluOut, gmCombineSend);
 
         for (uint32_t i = startTokenId_; i < endTokenId_; ++i) {
             int32_t expertIdx = useFullExpertIdsCopy_ ? expertIdsTensor_(i) : expertIdsTensor_(i - startTokenId_);
@@ -863,37 +785,6 @@ public:
             CpGM2GMMTE<int32_t>(localNotifyDataTensor, allExpertTokenNumsTensor[targetRankId * moeExpertNum],
                 moeExpertNum);
             AscendC::PipeBarrier<PIPE_ALL>();
-
-            GM_ADDR addrPtr1 = GetShmemAddrByRankId(metaInfoGm + tensorAddrOffset, targetRankId);
-            remoteMetaAddrGt1.SetGlobalBuffer((__gm__ uint64_t *)(addrPtr1 + targetRankId * sizeof(uint64_t)));
-            localMetaAddrGt1.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-                targetRankId * sizeof(uint64_t)));
-            CpGM2GMMTE<uint64_t>(remoteMetaAddrGt1, localMetaAddrGt1, 1);
-            AscendC::PipeBarrier<PIPE_ALL>();
-
-            GM_ADDR addrPtr2 = GetShmemAddrByRankId(metaInfoGm + tensorAddrOffset + epRankSize * sizeof(uint64_t),
-                targetRankId);
-            remoteMetaAddrGt2.SetGlobalBuffer((__gm__ uint64_t *)(addrPtr2 + targetRankId * sizeof(uint64_t)));
-            localMetaAddrGt2.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-                epRankSize * sizeof(uint64_t) + targetRankId * sizeof(uint64_t)));
-            CpGM2GMMTE<uint64_t>(remoteMetaAddrGt2, localMetaAddrGt2, 1);
-            AscendC::PipeBarrier<PIPE_ALL>();
-
-            GM_ADDR addrPtr3 = GetShmemAddrByRankId(metaInfoGm + tensorAddrOffset + 2 * epRankSize * sizeof(uint64_t),
-                targetRankId);
-            remoteMetaAddrGt3.SetGlobalBuffer((__gm__ uint64_t *)(addrPtr3 + targetRankId * sizeof(uint64_t)));
-            localMetaAddrGt3.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-                2 * epRankSize * sizeof(uint64_t) + targetRankId * sizeof(uint64_t)));
-            CpGM2GMMTE<uint64_t>(remoteMetaAddrGt3, localMetaAddrGt3, 1);
-            AscendC::PipeBarrier<PIPE_ALL>();
-
-            GM_ADDR addrPtr4 = GetShmemAddrByRankId(metaInfoGm + tensorAddrOffset + 3 * epRankSize * sizeof(uint64_t),
-                targetRankId);
-            remoteMetaAddrGt4.SetGlobalBuffer((__gm__ uint64_t *)(addrPtr4 + targetRankId * sizeof(uint64_t)));
-            localMetaAddrGt4.SetGlobalBuffer((__gm__ uint64_t *)(metaInfoGm + tensorAddrOffset +
-                3 * epRankSize * sizeof(uint64_t) + targetRankId * sizeof(uint64_t)));
-            CpGM2GMMTE<uint64_t>(remoteMetaAddrGt4, localMetaAddrGt4, 1);
-            AscendC::PipeBarrier<PIPE_ALL>();
         }
         AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
@@ -965,9 +856,7 @@ public:
 
     CATLASS_DEVICE
     void ShmemSendToMoeExprt(GM_ADDR gmX, GM_ADDR gmExpandIdx, GM_ADDR gmMoeSmoothScales, GM_ADDR gmEpSendCount,
-                             AscendC::LocalTensor<uint64_t> &gmX1AddrList,
-                             AscendC::LocalTensor<uint64_t> &gmX1ScaleAddrList,
-                             AscendC::LocalTensor<uint64_t> &gmSwigluOutAddrList)
+            GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmSwigluOut)
     {
         if (startTokenId_ >= expertIdsCnt) {
             return;
@@ -1025,11 +914,22 @@ public:
         AscendC::GlobalTensor<int32_t> dstTokenFlagGMTensor;
         AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
         sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)gmEpSendCount);
+        AscendC::LocalTensor<int32_t> sendCountsTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += CEIL_UP(moeExpertNum * epRankSize * sizeof(int32_t));
+        AscendC::DataCopyExtParams sendCountsCopyParams = {
+            1U,
+            static_cast<uint32_t>(moeExpertNum * epRankSize * sizeof(int32_t)),
+            0U, 0U, 0U
+        };
+        AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
+        AscendC::DataCopyPad(sendCountsTensor, sendCountsGlobalTensor, sendCountsCopyParams, copyPadParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+
         AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
         AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(1);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(1);
-
         uint32_t sendValidTokenIndex = 0;
         for (uint32_t sendGroupIndex = 0; sendGroupIndex < moeExpertNumPerRank; ++sendGroupIndex) {
             for (uint32_t tokenIndex = startTokenId_; tokenIndex < endTokenId_; ++tokenIndex) {
@@ -1045,9 +945,9 @@ public:
                 int32_t eventId = (sendValidTokenIndex & 1) ? 0 : 1;
                 sendValidTokenIndex += 1;
                 int32_t curExpertCnt = dstExpertCntTensor.GetValue(dstExpertId);
-                curExpertCnt = 0;
                 if (!useFullExpertIdsCopy_) {
                     if (curExpertCnt == -1) {
+                        curExpertCnt = 0;
                         CalExpandxIdxInRound(dstExpertId, tokenIndex, curExpertCnt, ubOffset);
                     } else {
                         curExpertCnt++;
@@ -1056,6 +956,7 @@ public:
                     AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(1);
                     AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(1);
                 } else {
+                    curExpertCnt = 0;
                     CalExpandxIdx(dstExpertId, tokenIndex, curExpertCnt, ubOffset);
                 }
                 expertCountTensor(tokenIndex - startTokenId_) = curExpertCnt;
@@ -1063,11 +964,11 @@ public:
                 uint32_t tempRankId = dstExpertId / moeExpertNumPerRank;
                 uint32_t offsetIdx = dstExpertId * epRankSize + epRankId;
                 uint32_t col = offsetIdx % moeExpertNum;
-                int32_t dstExpertOffset = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(offsetIdx - 1);
+                int32_t dstExpertOffset = (col == 0) ? 0 : sendCountsTensor.GetValue(offsetIdx - 1);
 
-                GM_ADDR dstX1Addr = (GM_ADDR)gmX1AddrList.GetValue(tempRankId);
-                GM_ADDR dstX1ScaleAddr = (GM_ADDR)gmX1ScaleAddrList.GetValue(tempRankId);
-                GM_ADDR dstSwigluOutAddr = (GM_ADDR)gmSwigluOutAddrList.GetValue(tempRankId);
+                auto dstX1Addr = reinterpret_cast<__gm__ uint8_t *>(aclshmem_ptr(gmX1, tempRankId));
+                auto dstX1ScaleAddr = reinterpret_cast<__gm__ uint8_t *>(aclshmem_ptr(gmX1Scale, tempRankId));
+                auto dstSwigluOutAddr = reinterpret_cast<__gm__ uint8_t *>(aclshmem_ptr(gmSwigluOut, tempRankId));
 
                 dstWinGMTensor.SetGlobalBuffer((__gm__ int8_t *)(dstX1Addr + hOutSize *
                     (dstExpertOffset + curExpertCnt)));
@@ -1847,7 +1748,6 @@ public:
             AscendC::SyncAll<true>();
             ShmemWaitNotify(gmEpSendCount, gmAllExpertTokenNums);
             AscendC::SyncAll<true>();
-            ShmemCleanUp();
         } else {
             CalAndSendTokenCount();
             AscendC::PipeBarrier<PIPE_ALL>();
@@ -1855,17 +1755,7 @@ public:
         sendToMoeAivNum = sendCoreNum;
         AscendC::SetDeqScale((half)1.000000e+00f);
         if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-            AscendC::LocalTensor<uint64_t> gmX1AddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            AscendC::LocalTensor<uint64_t> gmX1ScaleAddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(
-                ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            AscendC::LocalTensor<uint64_t> gmSwigluOutAddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(
-                ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            GetShareAddr(gmX1AddrList, gmX1ScaleAddrList, gmSwigluOutAddrList);
-            ShmemSendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales, gmEpSendCount,
-                gmX1AddrList, gmX1ScaleAddrList, gmSwigluOutAddrList);
+            ShmemSendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales, gmEpSendCount, gmX1, gmX1Scale, gmTokenFlagGm);
         } else {
             SendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales);
         }
@@ -1930,7 +1820,6 @@ public:
             AscendC::SyncAll<true>();
             ShmemWaitNotify(gmEpSendCount, gmAllExpertTokenNums);
             AscendC::SyncAll<true>();
-            ShmemCleanUp();
         } else {
             CalAndSendTokenCount();
             AscendC::PipeBarrier<PIPE_ALL>();
@@ -1938,7 +1827,8 @@ public:
     }
 
     CATLASS_DEVICE void
-    SendCoreDataFunc(GM_ADDR gmX, GM_ADDR gmExpandIdx, GM_ADDR gmMoeSmoothScales, GM_ADDR gmEpSendCount)
+    SendCoreDataFunc(GM_ADDR gmX, GM_ADDR gmExpandIdx, GM_ADDR gmMoeSmoothScales, GM_ADDR gmEpSendCount, GM_ADDR gmX1,
+                    GM_ADDR gmX1Scale)
     {
         // Phase 2: 36 cores do ShmemSendToMoeExprt
         // recalculate startTokenId_/endTokenId_ for 36 distribution
@@ -1973,17 +1863,7 @@ public:
         sendToMoeAivNum = sendCoreNum;
         AscendC::SetDeqScale((half)1.000000e+00f);
         if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-            AscendC::LocalTensor<uint64_t> gmX1AddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            AscendC::LocalTensor<uint64_t> gmX1ScaleAddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(
-                ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            AscendC::LocalTensor<uint64_t> gmSwigluOutAddrList = resource.ubBuf.template GetBufferByByte<uint64_t>(
-                ubOffset);
-            ubOffset += CEIL_UP(epRankSize * sizeof(uint64_t));
-            GetShareAddr(gmX1AddrList, gmX1ScaleAddrList, gmSwigluOutAddrList);
-            ShmemSendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales, gmEpSendCount,
-                gmX1AddrList, gmX1ScaleAddrList, gmSwigluOutAddrList);
+            ShmemSendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales, gmEpSendCount, gmX1, gmX1Scale, gmTokenFlagGm);
         } else {
             SendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales);
         }
@@ -2720,7 +2600,8 @@ public:
             recvCoreNum = DISPATCH_RECV_CORE_NUM;
             if (!isRecvCore) {
                 SendCoreDataFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpandIdx,
-                            (GM_ADDR)params.gmMoeSmoothScales, (GM_ADDR)params.gmEpSendCount);
+                            (GM_ADDR)params.gmMoeSmoothScales, (GM_ADDR)params.gmEpSendCount,
+                            (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale);
             } else {
                 ShmemRecvCoreFunc((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale,
                     (GM_ADDR)params.gmEpSendCount);

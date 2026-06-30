@@ -127,33 +127,6 @@ public:
     }
 
     CATLASS_DEVICE
-    void ShmemReadTensorAddrList(AscendC::LocalTensor<uint64_t> &gmCombineSendAddrList)
-    {
-        constexpr uint32_t UB_32B_ALIGN = 32;
-        uint64_t tensorAddrOffset = calcInfo.aivNum_ * 2 * UB_32B_ALIGN + calcInfo.epWorldSize_ *
-                                    UB_32B_ALIGN + calcInfo.moeExpertNum_ * sizeof(int32_t);
-
-        AscendC::GlobalTensor<uint64_t> gmCombineSendListGMTensor;
-        GM_ADDR gmCombineSendListAddr = GetShmemAddrByRankId(calcInfo.metaInfoGm_ + tensorAddrOffset +
-                                                             3 * calcInfo.epWorldSize_ * sizeof(uint64_t),
-                                                             calcInfo.epRankId_);
-        gmCombineSendListGMTensor.SetGlobalBuffer((__gm__ uint64_t *)gmCombineSendListAddr);
-        AscendC::DataCopyExtParams addrListCopyParams = {
-            1U,
-            static_cast<uint32_t>(calcInfo.epWorldSize_ * sizeof(uint64_t)),
-            0U,
-            0U,
-            0U
-        };
-        AscendC::DataCopyPadExtParams<uint64_t> addrListCopyPadParams{false, 0U, 0U, 0U};
-        AscendC::DataCopyPad(gmCombineSendAddrList, gmCombineSendListGMTensor, addrListCopyParams,
-            addrListCopyPadParams);
-
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-    }
-
-    CATLASS_DEVICE
     void ShmemCalRecv(int64_t ubOffset, GM_ADDR gmAllEpRecvCount, GM_ADDR gmAllExpertTokenNums)
     {
         AscendC::LocalTensor<int32_t> allExpertTokenNumsTensor = resource.ubBuf.template GetBufferByByte<int32_t>(
@@ -259,10 +232,6 @@ public:
 
             if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
                 AlignUbOffset();
-                gmCombineSendAddrList_ = resource.ubBuf.template GetBufferByByte<uint64_t>(ubOffset);
-                ubOffset += calcInfo.epWorldSize_ * sizeof(uint64_t);
-                AlignUbOffset();
-                ShmemReadTensorAddrList(gmCombineSendAddrList_);
                 ShmemCalRecv(ubOffset, calcInfo.allEpRecvCount_, calcInfo.allExpertTokenNums_);
 
                 AlignUbOffset();
@@ -361,7 +330,7 @@ public:
     // tile根据目的rank不同而分小块发送，小块粒度为rank粒度
     CATLASS_DEVICE void ShmemDoCombineSend(AscendC::LocalTensor<ElementD> &ubD, layout::RowMajor &layoutGmTileD,
                                       LayoutD &layoutUbD, int64_t groupOffsetD, uint32_t expertIdx,
-                                      uint32_t tileOffsetD)
+                                      uint32_t tileOffsetD, GM_ADDR combineSend)
     {
         const uint32_t copyTokenLen = layoutGmTileD.shape(1) * sizeof(ElementD);
         const uint32_t copyTokenSrcStride =
@@ -386,7 +355,7 @@ public:
                 uint32_t copyTokenCount = (sendCount < endToken ? sendCount : endToken) - itToken;
                 AscendC::DataCopyExtParams dataCopyParams(copyTokenCount, copyTokenLen, copyTokenSrcStride,
                                                           copyTokenDstStride, 0);
-                GM_ADDR dstCombinSendAddr = (GM_ADDR)gmCombineSendAddrList_.GetValue(epRank) +
+                GM_ADDR dstCombinSendAddr = (GM_ADDR)aclshmem_ptr(combineSend, epRank) +
                                                      dstExpertOffset * calcInfo.axisH_ * sizeof(ElementD);
                 AscendC::GlobalTensor<ElementD> dstComBineSendGMTensor;
                 dstComBineSendGMTensor.SetGlobalBuffer((__gm__ ElementD *)dstCombinSendAddr);
@@ -516,7 +485,8 @@ public:
                     auto gmTileD = gmD[tileOffsetD];
                     copyUbToGmD(gmTileD, ubD, layoutGmTileD, layoutUbD);
                 } else if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-                    ShmemDoCombineSend(ubD, layoutGmTileD, layoutUbD, groupOffsetD, expertIdx, tileOffsetD);
+                    ShmemDoCombineSend(ubD, layoutGmTileD, layoutUbD, groupOffsetD, expertIdx, tileOffsetD,
+                        calcInfo.combineSend_);
                 } else {
                     DoCombineSend(ubD, layoutGmTileD, layoutUbD, groupOffsetD, expertIdx, tileOffsetD);
                 }
@@ -552,7 +522,6 @@ private:
     int32_t eventUbDVMTE3List[UB_STAGES];
 
     AscendC::LocalTensor<int32_t> epSendCountLocal_;
-    AscendC::LocalTensor<uint64_t> gmCombineSendAddrList_;
     AscendC::LocalTensor<int32_t> allEpRecvCountLocal_;
 
     size_t ubOffset{0};
