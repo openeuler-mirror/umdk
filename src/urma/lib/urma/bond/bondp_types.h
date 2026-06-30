@@ -173,6 +173,8 @@ typedef struct bondp_global_context {
     bool enable_failover;
     bool enable_failback;
     bondp_health_thread_ctx_t health_thread_ctx;
+    uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
+    bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
 } bondp_global_context_t;
 
 extern bondp_global_context_t *g_bondp_global_ctx;

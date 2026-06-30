@@ -401,8 +401,8 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         urma_status_t ret = URMA_SUCCESS;
         int wr_count = 0;
-        int send_idx = 0;
-        int target_idx = 0;
+        int send_idx = -1;
+        int target_idx = -1;
         jfs_wr_entry_t *wr_entries[BONDP_BATCH_POST_MAX_NUM];
         ret = schedule_send_wr(wr, bdp_comp, &send_idx, &target_idx);
         if (ret != 0) {
@@ -1171,8 +1171,9 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         atomic_store(&bdp_comp->valid[send_idx], false);
-
-        int new_send_idx = -1, new_target_idx = -1;
+        /* choose the failover route(0 or 1) through send_idx */
+        int new_send_idx = send_idx;
+        int new_target_idx = -1;
         if (!g_bondp_global_ctx->enable_failover ||
             schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx, NULL) != 0) {

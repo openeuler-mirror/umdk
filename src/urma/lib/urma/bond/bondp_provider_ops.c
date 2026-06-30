@@ -41,6 +41,10 @@
 #define BONDP_ENV_HEALTH_CHECK_ACTIVE_START       "BOND_HEALTH_CHECK_ACTIVE_START"
 #define BONDP_ENV_HEALTH_CHECK_ACTIVE_INTERVAL    "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
 #define BONDP_ENV_HEALTH_CHECK_ACTIVE_MAX_BACKOFF "BOND_HEALTH_CHECK_ACTIVE_MAX_BACKOFF"
+#define BONDP_ENV_LEN_MAX                         (128)
+/*
+ * #define BONDP_ENV_FAILOVER_DIEX_Y_ROUTEZ          "BOND_FAILOVER_DIEX_Y_ROUTEZ"
+ */
 
 /* manager of global table in bonding device */
 bondp_global_context_t *g_bondp_global_ctx = NULL;
@@ -147,6 +151,93 @@ static uint64_t read_env_uint64(const char *env_name, uint64_t default_val)
     return (uint64_t)parsed;
 }
 
+static void filter_balance_route_env(char *value, const char *origin_val)
+{
+    int i = 0;
+    int j = 0;
+    while (origin_val[j] != '\0') {
+        if (origin_val[j] == ',' || (origin_val[j] > '0' && origin_val[j] < '9')) {
+            value[i] = origin_val[j];
+            i++;
+        }
+        j++;
+    }
+    value[i] = '\0';
+}
+
+static void read_env_balance_route(
+    const char *env_name,
+    uint32_t route[URMA_FAILOVER_LINK_NUM],
+    const uint32_t default_route[URMA_FAILOVER_LINK_NUM])
+{
+    if (env_name == NULL) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+    const char *value = getenv(env_name);
+    if (value == NULL || strlen(value) > BONDP_ENV_LEN_MAX) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+
+    char filtered_val[BONDP_ENV_LEN_MAX + 1] = {0};
+    filter_balance_route_env(filtered_val, value);
+    int ret = 0;
+    ret = sscanf(filtered_val, "%u,%u,%u,%u", &route[0], &route[1], &route[2], &route[3]);
+    if (ret <= 0) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+    for (int i = ret; i < URMA_FAILOVER_LINK_NUM; i++) {
+        route[i] = UINT32_MAX;
+    }
+}
+
+static void read_env_balance_route_all(bondp_global_context_t *ctx)
+{
+    char env_name[BONDP_ENV_LEN_MAX] = {0};
+    int ret = 0;
+    const uint32_t route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM] = {
+        {
+            {
+                {1, 6, 7, 4},
+                {2, 5, 8, 3}
+            },
+            {
+                {5, 2, 4, 7},
+                {6, 1, 3, 8}
+            }
+        },
+        {
+            {
+                {7, 4, 1, 6},
+                {8, 3, 2, 5}
+            },
+            {
+                {3, 8, 5, 2},
+                {4, 7, 6, 1}
+            }
+        }
+    };
+
+    for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
+        for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
+            for (int route_id = 0; route_id < URMA_ACTIVE_PORT_PER_DIE; route_id++) {
+                ret = snprintf(env_name, sizeof(env_name), "BOND_FAILOVER_DIE%d_%d_ROUTE%d",
+                               src_die + 1, dst_die + 1, route_id + 1);
+                char *env_name_tmp = (ret < 0 || ret >= sizeof(env_name)) ? NULL : env_name;
+                read_env_balance_route(env_name_tmp, ctx->failover_route[src_die][dst_die][route_id],
+                                       route[src_die][dst_die][route_id]);
+                uint32_t *ctx_route = ctx->failover_route[src_die][dst_die][route_id];
+                URMA_LOG_DEBUG("src_die=%d, dst_die=%d, route_id=%d, route={%u,%u,%u,%u}\n",
+                               src_die + 1, dst_die + 1, route_id + 1,
+                               ctx_route[0], ctx_route[1], ctx_route[2], ctx_route[3]);
+            }
+        }
+    }
+}
+
+
 static void read_all_env(bondp_global_context_t *ctx)
 {
     bondp_health_thread_ctx_t *thread_ctx = &ctx->health_thread_ctx;
@@ -176,6 +267,7 @@ static void read_all_env(bondp_global_context_t *ctx)
         BONDP_ENV_HEALTH_CHECK_ACTIVE_INTERVAL, default_health_check_active_interval_ms);
     cfg->active_max_backoff = (uint32_t)read_env_uint64(
         BONDP_ENV_HEALTH_CHECK_ACTIVE_MAX_BACKOFF, default_health_check_active_max_backoff);
+    read_env_balance_route_all(ctx);
 
     const uint64_t time_100ms = 100;
     const uint64_t time_1s = 1000;
@@ -245,6 +337,22 @@ static void bondp_global_ctx_read_env(bondp_global_context_t *ctx)
     print_all_env(ctx);
 }
 
+static void bondp_global_ctx_real_path_init(bondp_global_context_t *ctx)
+{
+    bondp_path_t *path = ctx->path;
+    for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
+        for (int port = URMA_ACTIVE_PORT_MIN; port <= URMA_ACTIVE_PORT_MAX; port++) {
+            for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
+                int idx = (src_die ^ dst_die) * URMA_FAILOVER_LINK_NUM +
+                          src_die * IODIE_NUM + port - URMA_ACTIVE_PORT_MIN + 1;
+                path[idx].local_idx = IODIE_NUM + src_die * PORT_NUM + port;
+                path[idx].target_idx = IODIE_NUM + dst_die * PORT_NUM + port;
+                URMA_LOG_DEBUG("path[%d]={%u,%u}\n", idx, path[idx].local_idx, path[idx].target_idx);
+            }
+        }
+    }
+}
+
 static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
 {
     bondp_global_context_t *ctx = (bondp_global_context_t *)calloc(1, sizeof(bondp_global_context_t));
@@ -256,6 +364,7 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
     ctx->pid = (uint32_t)getpid();
     bondp_health_check_global_ctx_init(ctx);
     bondp_global_ctx_read_env(ctx);
+    bondp_global_ctx_real_path_init(ctx);
     *bondp_global_ctx = ctx;
     return 0;
 }
