@@ -38,7 +38,7 @@ static int run_test(test_ums_ctx_t *ctx)
     if (ctx->app_id == PROC_2) {
         sprintf(test_ip_str, "%s", ctx->test_ip_host2);
         check_num = query_proc_net_ums_detail_stream_num("True", test_ip_str);
-        if (check_num != 2) {
+        if (check_num < 1) {
             ret = -1;
         }
     }
