@@ -193,7 +193,6 @@ typedef struct thread_closure_callback_args {
     umq_trans_mode_t trans_mode;
     umq_thread_closure_func func;
     uint64_t id;
-    void *dlhandler;
 } thread_closure_callback_args_t;
 
 typedef struct umq_thread_closure {
@@ -216,13 +215,14 @@ umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode)
 static void umq_thread_closure_callback(uint64_t id)
 {
     thread_closure_callback_args_t *args = (thread_closure_callback_args_t *)id;
-    if (args->func != NULL && args->dlhandler != NULL) {
+    if (args->func != NULL) {
         args->func(args->id);
     }
 
-    if (args->trans_mode < UMQ_TRANS_MODE_MAX && args->dlhandler != NULL &&
+    if (args->trans_mode < UMQ_TRANS_MODE_MAX && g_umq_thread_closure[args->trans_mode].dlhandler != NULL &&
         __atomic_sub_fetch(&g_umq_thread_closure[args->trans_mode].dlhandler_ref_cnt, 1, __ATOMIC_ACQ_REL) == 0) {
-        dlclose(args->dlhandler);
+        dlclose(g_umq_thread_closure[args->trans_mode].dlhandler);
+        g_umq_thread_closure[args->trans_mode].dlhandler = NULL;
     }
     free(args);
 }
