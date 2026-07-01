@@ -1,0 +1,31 @@
+{
+  "_comment": "CAM operator registry. soc_versions maps a SOC generation to the operator directory names it supports. operator_meta holds per-operator build metadata. To support a new SOC generation, add an entry under soc_versions. To add an operator, append its directory name to the relevant soc list and (optionally) add meta. Operator identity = source directory name under ascend_kernels/.",
+  "soc_versions": {
+    "ascend910_93": [
+      "dispatch_layout",
+      "fused_deep_moe",
+      "moe_combine_normal",
+      "moe_dispatch_normal",
+      "notify_dispatch"
+    ]
+  },
+  "operator_meta": {
+    "dispatch_layout": {
+      "requires_shmem": false
+    },
+    "fused_deep_moe": {
+      "requires_shmem": false,
+      "family": "fused_deep_moe",
+      "variant": "base"
+    },
+    "moe_combine_normal": {
+      "requires_shmem": false
+    },
+    "moe_dispatch_normal": {
+      "requires_shmem": false
+    },
+    "notify_dispatch": {
+      "requires_shmem": false
+    }
+  }
+}

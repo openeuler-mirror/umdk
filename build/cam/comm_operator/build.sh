@@ -1,10 +1,12 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
-# Description: cam building script
+# Description: cam comm_operator build script (include-list build with operator selection)
 # Create: 2025-07-20
 # Note:
 # History: 2025-07-20 create cam building script
+#          2026-06-26 add -c/-a/-q operator selection via operator_registry.json +
+#                     select_ops.py; drop coverage (-r) support
 
 set -e
 
@@ -19,24 +21,35 @@ SOC_VERSION="all"
 ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
+OP_SELECT=""        # -a operator list (semicolon-separated); empty = full set
+USE_W4A8=0          # -q flag: 1 = compile the fused_deep_moe_w4a8 quantization variant
 
 print_help() {
     echo "
     ./build.sh comm_operator <opt>...
     -x Extract the run package
-    -c Target SOC VERSION
-    Support Soc: [ascend910_93]
+    -c Target SOC VERSION (e.g. ascend910_93). If omitted, all registered
+       SOC generations are built. Supported: [ascend910_93]
+    -a Semicolon-separated operator list to compile (requires -c). Names must
+       match the SOC support list in operator_registry.json. Omit to compile
+       the full SOC set.
+    -q Select the fused_deep_moe_w4a8 (quantization) variant instead of
+       fused_deep_moe. The two share source filenames and are mutually exclusive.
+       fused_deep_moe_fwk is independent and can coexist with either.
+       Note: master has no w4a8 variant yet; -q takes effect once it is added.
     -d Enable debug
     -t Enable UT build
     -p Enable pybind build
-    -r Enable code coverage
     "
 }
 
-while getopts "c:xdtprh" opt; do
+while getopts "c:a:xdtqph" opt; do
     case $opt in
     c)
         SOC_VERSION=$OPTARG
+        ;;
+    a)
+        OP_SELECT=$OPTARG
         ;;
     x)
         IS_EXTRACT=1
@@ -48,13 +61,12 @@ while getopts "c:xdtprh" opt; do
         ENABLE_UT_BUILD=1
         ENABLE_SRC_BUILD=0
         ;;
+    q)
+        USE_W4A8=1
+        ;;
     p)
         ENABLE_PYBIND_BUILD=1
         ENABLE_SRC_BUILD=0
-        ;;
-    r)
-        export BUILD_TYPE="Debug"
-        export ENABLE_COV=1
         ;;
     h)
         print_help
@@ -67,18 +79,25 @@ if [ ! -d "$BUILD_OUT_PATH/${MODULE_NAME}" ]; then
     mkdir $BUILD_OUT_PATH/${MODULE_NAME}
 fi
 
+# -a (operator selection) requires -c (SOC generation); -q also depends on -c
+if [ -n "$OP_SELECT" ] && [ "$SOC_VERSION" = "all" ]; then
+    echo "ERROR: -a requires -c (specify a SOC generation first)"
+    exit 1
+fi
+
+# Forward the operator selection and quantization flag to compile_ascend_proj.sh
+export CAM_OP_SELECT="$OP_SELECT"
+export CAM_USE_W4A8="$USE_W4A8"
+
 # Currently, building the whl package and UT requires the CAM operator package to be compiled and installed first
 # Skip operator package compilation when building the whl package and UT to speed up compilation
 if [ $ENABLE_SRC_BUILD -eq 1 ]; then
     if [ ! -d "./build_out/comm_operator/run/" ]; then
         mkdir -p ${MODULE_BUILD_OUT_PATH}/run
     fi
-    if [[ "$SOC_VERSION" == "all" ]]; then
-        echo "Default SOC version: ascend910_93"
-        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH ascend910_93 $IS_EXTRACT $BUILD_TYPE
-    else
-        bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE
-    fi
+    # When SOC_VERSION=all, iterate over all registered SOC generations; otherwise build the specified SOC.
+    # Operator selection / SHMEM / family mutex are handled by compile_ascend_proj.sh + select_ops.py.
+    bash $MODULE_SCRIPTS_PATH/compile_ascend_proj.sh $MODULE_SRC_PATH $SOC_VERSION $IS_EXTRACT $BUILD_TYPE
 fi
 
 if [ $ENABLE_PYBIND_BUILD -eq 1 ]; then

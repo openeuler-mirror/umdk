@@ -37,9 +37,10 @@ UMDK/
 |    |--- en/  
 |    |    |--- cam/                 # cam doc in English
 |--- src/
-|    |--- cam/  
+|    |--- cam/
 |    |    |--- comm_operator/       # code of communication operator
 |    |    |    |--- ascend_kernels/ # code of ascend kernels
+|    |    |    |    |--- operator_registry.json  # operator -> SOC mapping + build metadata
 |    |    |    |--- pybind/         # code of python interface bindings
 |    |    |--- examples/            # examples for different kernels
 |    |    |--- third_party/         # third party dependencies (git submodules)
@@ -75,32 +76,56 @@ to create a runnable docker container quickly. Other system configurations may n
 
 ## 2. Compile and Install
 ### · Compile
-CAM offers a basic ".run" packet for kernels and a ".whl" packet for python interface. You can easily compile these two packets with the command below:
+CAM offers a basic ".run" packet for kernels and a ".whl" packet for python interface.
+
+**Basic usage:**
 ```bash
 # enter UMDK folder
 cd UMDK/
 # initialize git submodules (catlass, etc.)
 git submodule update --init --recursive
-# build
+# build: all registered SOC generations, full operator set
 ./build/cam/build.sh
 ```
-To enable debug mode, use the following command instead:
+
+**Options:**
+|Option|Description|
+|---|---|
+|`-c <soc>`|Target SOC generation. Supported: `ascend910_93`. Omit to build all registered generations.|
+|`-a <ops>`|Semicolon-separated operator list to compile (requires `-c`). Names must match the SOC support list in `operator_registry.json`. Omit to compile the full set.|
+|`-q`|Select the `fused_deep_moe_w4a8` (quantization) variant instead of `fused_deep_moe`. Note: master has no w4a8 variant yet; `-q` takes effect once it is added.|
+|`-d`|Enable debug build.|
+|`-x`|Extract the run package instead of packing it.|
+|`-t`|Build unit tests only.|
+|`-p`|Build pybind whl only.|
+
+**Examples:**
 ```bash
-./build/cam/build.sh -d
+./build/cam/build.sh -c ascend910_93                                # full set for ascend910_93
+./build/cam/build.sh -c ascend910_93 -a "moe_dispatch_normal;moe_combine_normal"   # only these two
+./build/cam/build.sh -d                                             # debug, all SOCs
 ```
-If we get final output like `Build packet successful!`, then we can find the two packets in:
+
+**Rules:**
+- `-a` requires `-c` (specify a SOC generation first); `-a` cannot be used with the default all-SOC build.
+- `-c` must be a registered SOC (`ascend910_93`). Unregistered values (e.g. `ascend910b4`) exit with an error.
+- Each `-a` entry must be in the SOC's support list; unknown names exit with an error.
+- `fused_deep_moe` and `fused_deep_moe_w4a8` are mutually exclusive (they share source filenames); `-q` switches to the w4a8 variant. `fused_deep_moe_fwk` is an independent operator and can always coexist with either. (master currently has only the base variant.)
+- Operators that require SHMEM are automatically skipped when `SHMEM_HOME_PATH` is unset.
+
+If the build succeeds, the two packets are placed under:
 ```bash
-# whl packet, XXX depends on the compile environment.
+# whl packet, version/arch depend on the compile environment.
 output/cam/comm_operator/dist/umdk_cam_op_lib_XXX.whl
-# run packet, XXX depends on the compile environment.
-output/cam/comm_operator/run/cam_ascend910XXX.run
+# run packet, <soc>_<os>_<arch> depend on the compile environment.
+output/cam/comm_operator/run/CAM_<soc>_<os>_<arch>.run
 ```
 ### · Install
 To install these two packets, you may follow the commands below:
 ```bash
 # Step 1: install run packet. The recommended install path is the opp folder in your environment.
-./output/cam/comm_operator/run/cam_ascendXXX.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
-# Step 2: enable environment variables. The path is provided from the output that you install run packet. 
+./output/cam/comm_operator/run/CAM_<soc>_<os>_<arch>.run --install-path=/usr/local/Ascend/ascend-toolkit/latest/opp
+# Step 2: enable environment variables. The path is provided from the output that install run packet.
 source /usr/local/Ascend/ascend-toolkit/latest/opp/vendors/CAM/bin/set_env.bash
 # Step 3: install whl packet.
 pip install --force-reinstall ./output/cam/comm_operator/dist/umdk_cam_op_lib_XXX.whl
