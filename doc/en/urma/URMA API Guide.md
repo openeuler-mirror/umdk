@@ -631,6 +631,8 @@
 
 3. Management plane parameter pointer validation follows the basic principle of "whoever uses it validates it" for URMA and drivers, and malicious impacts on the environment outside the API caller's authorized scope are not permitted.
 
+4. Fork operations with any URMA resources are not supported. When using fork without URMA resources, if there are cyclic scenarios, it is necessary to wait for the URMA and system resources to be released before forking again.
+
 ![](figures/urma_info.png)
 
 The URMA framework APIs do not support arbitrary concurrent calls. For example, concurrent use of a jetty object with its destruction will lead to unpredictable exceptions. Users must ensure the correctness of the calling logic.
