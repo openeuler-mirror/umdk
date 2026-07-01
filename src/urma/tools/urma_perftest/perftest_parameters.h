@@ -101,12 +101,12 @@
 #define PERFTEST_BW_GB     0x40000000 // 2^30
 #define PERFTEST_BYTE_SIZE 8
 
-#define PERFTEST_WRITE_DIRTY_PERIOD      (50)
-#define PERFTEST_CHAR_MAX_VALUE          (256)
-#define PERFTEST_SET_ATTR_BITMAP_UBOE    0x1FC
-#define PERFTEST_SET_ATTR_BITMAP_SL_FLAG 0x400
+#define PERFTEST_WRITE_DIRTY_PERIOD         (50)
+#define PERFTEST_CHAR_MAX_VALUE             (256)
+#define PERFTEST_SET_ATTR_BITMAP_UBOE       0x1FC
+#define PERFTEST_SET_ATTR_BITMAP_SL_FLAG    0x400
 #define PERFTEST_SET_ATTR_BITMAP_SPRAY_FLAG (1 << 15)
-#define PERFTEST_SET_ATTR_CNT_UBOE       (7)
+#define PERFTEST_SET_ATTR_CNT_UBOE          (7)
 
 #define PERFTEST_RESULT_LINE      "---------------------------------------------------------------------------------------\n"
 #define PERFTEST_INVALID_PRIORITY (255)
@@ -375,8 +375,6 @@ void destroy_cfg(perftest_config_t *cfg);
 int check_local_cfg(perftest_config_t *cfg);
 int check_remote_cfg(perftest_config_t *cfg);
 bool is_jfr_depth_valid(perftest_config_t *cfg);
-int establish_connection(perftest_config_t *cfg);
-void close_connection(perftest_config_t *cfg);
 int parse_va(const char *s, uint64_t *out);
 
 #endif
