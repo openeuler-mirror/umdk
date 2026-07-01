@@ -482,4 +482,76 @@ ACLSHMEM_DEVICE uint32_t aclshmemi_roce_poll_cq<aclshmemi_rdma_backend_t::XSCALE
     return status;
 }
 
+ACLSHMEM_DEVICE __gm__ uint8_t *aclshmemi_roce_xscale_fill_wqe_ctrl_seg(
+    __gm__ uint8_t *wqe_addr, uint32_t ds_data_num, uint32_t cur_head, aclshmemi_xscdv_msg_type_t opcode,
+    uint32_t msg_len, uint32_t inline_mode)
+{
+    __gm__ aclshmemi_xscdv_wqe_ctrl_seg_t *ctrl_seg = (__gm__ aclshmemi_xscdv_wqe_ctrl_seg_t *)wqe_addr;
+    uint32_t wqe_id = cur_head << (ACLSHMEMI_XSCALE_SND_WQE_SHIFT - ACLSHMEMI_XSCALE_BASE_WQE_SHIFT);
+    if constexpr (ACLSHMEMI_XSCALE_API_VERSION_VAR == 1) {
+        ctrl_seg->wqe_id = wqe_id & 0xFFFF;
+    } else {
+        ctrl_seg->wqe_id = wqe_id & 0xFFFFF;
+    }
+    ctrl_seg->with_imm = 0;
+    ctrl_seg->ds_data_num = ds_data_num;
+    ctrl_seg->ce = 1;
+    ctrl_seg->msg_opcode = (uint8_t)opcode;
+    ctrl_seg->msg_len = msg_len;
+    ctrl_seg->in_line = inline_mode;
+
+    return wqe_addr + sizeof(aclshmemi_xscdv_wqe_ctrl_seg_t);
+}
+
+ACLSHMEM_DEVICE __gm__ uint8_t *aclshmemi_roce_xscale_fill_wqe_data_seg(
+    __gm__ uint8_t *wqe_addr, uint32_t rkey, __gm__ uint8_t *remote_addr, uint32_t lkey, __gm__ uint8_t *local_addr,
+    uint32_t data_len)
+{
+    __gm__ aclshmemi_xscdv_diamond_data_seg_t *rdata_seg = (__gm__ aclshmemi_xscdv_diamond_data_seg_t *)wqe_addr;
+    rdata_seg->length = data_len;
+    rdata_seg->key = rkey;
+    rdata_seg->addr = (uint64_t)remote_addr;
+
+    __gm__ aclshmemi_xscdv_diamond_data_seg_t *ldata_seg = (__gm__ aclshmemi_xscdv_diamond_data_seg_t *)(rdata_seg + 1);
+    ldata_seg->length = data_len;
+    ldata_seg->key = lkey;
+    ldata_seg->addr = (uint64_t)local_addr;
+    return wqe_addr + sizeof(aclshmemi_xscdv_diamond_data_seg_t) + sizeof(aclshmemi_xscdv_diamond_data_seg_t);
+}
+
+ACLSHMEM_DEVICE uint32_t aclshmemi_roce_xscale_fill_wqe_write_read(
+    aclshmemi_rdma_send_wr &wr, __gm__ aclshmemi_rdma_sq_ctx *&sq_context, __gm__ uint8_t *wqe_addr, uint32_t cur_head,
+    aclshmemi_xscdv_msg_type_t opcode)
+{
+    constexpr uint32_t ACLSHMEMI_XSCDV_WRITE_READ_DS_DATA_NUM = 2;
+    constexpr uint32_t XSCDV_WRITE_READ_WQE_SIZE = 128;
+
+    __gm__ uint8_t *cur_wqe_addr = wqe_addr;
+
+    cur_wqe_addr = aclshmemi_roce_xscale_fill_wqe_ctrl_seg(
+        cur_wqe_addr, ACLSHMEMI_XSCDV_WRITE_READ_DS_DATA_NUM, cur_head, opcode, wr.message_len, 0);
+    cur_wqe_addr = aclshmemi_roce_xscale_fill_wqe_data_seg(
+        cur_wqe_addr, wr.rkey, wr.remote_addr, wr.lkey, wr.local_addr, wr.message_len);
+
+    return XSCDV_WRITE_READ_WQE_SIZE;
+}
+
+template <>
+ACLSHMEM_DEVICE uint32_t
+aclshmemi_roce_fill_wqe<aclshmemi_rdma_backend_t::XSCALE, aclshmemi_rdma_opcode_t::OP_RDMA_WRITE>(
+    aclshmemi_rdma_send_wr &wr, __gm__ aclshmemi_rdma_sq_ctx *&sq_context, __gm__ uint8_t *wqe_addr, uint32_t cur_head)
+{
+    return aclshmemi_roce_xscale_fill_wqe_write_read(
+        wr, sq_context, wqe_addr, cur_head, aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_WRITE);
+}
+
+template <>
+ACLSHMEM_DEVICE uint32_t
+aclshmemi_roce_fill_wqe<aclshmemi_rdma_backend_t::XSCALE, aclshmemi_rdma_opcode_t::OP_RDMA_READ>(
+    aclshmemi_rdma_send_wr &wr, __gm__ aclshmemi_rdma_sq_ctx *&sq_context, __gm__ uint8_t *wqe_addr, uint32_t cur_head)
+{
+    return aclshmemi_roce_xscale_fill_wqe_write_read(
+        wr, sq_context, wqe_addr, cur_head, aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_READ);
+}
+
 #endif // ACLSHMEM_RDMA_DEVICE_BACKEND_XSCALE_HPP
