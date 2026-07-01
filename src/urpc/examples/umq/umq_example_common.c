@@ -54,8 +54,6 @@ static struct option g_long_options[] = {
     /* Long options only */
     {"server",             no_argument,       NULL, 'r'},
     {"client",             no_argument,       NULL, 'l'},
-    {"cna",                required_argument, NULL, 'C'},
-    {"deid",               required_argument, NULL, 'D'},
     {"tp-mode",            required_argument, NULL, 'M'},
     {"tp-type",            required_argument, NULL, 'P'},
     {"queue_cnt",          required_argument, NULL, 'q'},
@@ -73,8 +71,6 @@ int example_init_umq(struct urpc_example_config *cfg)
         return -1;
     }
     init_cfg->feature = cfg->feature;
-    init_cfg->cna = cfg->cna;
-    init_cfg->ubmm_eid = cfg->deid;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
         free(init_cfg);
@@ -648,7 +644,7 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
         int c;
         unsigned long param;
 
-        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:D:M:P:", g_long_options, NULL);
+        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:M:P:", g_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -708,12 +704,6 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
             case 'E':
                 param = strtoul(optarg, NULL, 0);
                 cfg->eid_idx = (uint16_t)param;
-                break;
-            case 'C':
-                cfg->cna = (uint16_t)strtoul(optarg, NULL, 0);
-                break;
-            case 'D':
-                cfg->deid = (uint32_t)strtoul(optarg, NULL, 0);
                 break;
             case 'M':
                 param = (uint32_t)strtoul(optarg, NULL, 0);

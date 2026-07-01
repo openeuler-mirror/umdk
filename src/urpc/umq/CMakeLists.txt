@@ -12,9 +12,6 @@ include(${CMAKE_SOURCE_DIR}/urpc/umq/dfx/CMakeLists.txt)
 
 add_subdirectory(qbuf)
 add_subdirectory(umq_ub)
-if("${ASAN}" STREQUAL "enable")
-    add_subdirectory(umq_ipc)
-endif()
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} UMQ_LIB_DIR_SRCS)
 
