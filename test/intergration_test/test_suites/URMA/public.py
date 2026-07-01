@@ -55,7 +55,7 @@ class UBUSFeature(BaseTest):
             c_dev_opt = f" -d {client.test_nic1_dev}"
         if "-p " not in opt and " --trans_mode" not in opt:
             if cmd_syntax in ["send_bw", "send_lat"]:
-                opt += f" -p {random.randint(0, 2)}"
+                opt += f" -p {random.randint(0, 1)}"
             else:
                 opt += f" -p {random.randint(0, 1)}"
         if " -e" not in opt and cmd_syntax not in ["write_bw", "write_lat"]:
