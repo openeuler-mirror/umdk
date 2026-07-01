@@ -4,60 +4,102 @@
 # Description: cam building script - migrated to npu_op_* build system
 # Create: 2025-07-20
 # History: 2025-07-20 create cam building script
-#          2026-05-30 migrate from legacy opbuild/add_kernels_compile to npu_op_* build system
-#          2026-06-27 migrate pregen autogen to per-operator op_api directories
+#          2026-06-08 migrate from legacy opbuild/msopgen to npu_op_* build system
+#          2026-06-26 switch from exclude-list copy to include-list build with
+#                     operator_registry.json + select_ops.py selection
 
 set -e
 
-# Define global exclusion list
-exclude_list=()
+# Operator registry path (operator identity = directory name under ascend_kernels/)
+REGISTRY_PATH="${MODULE_SRC_PATH}/ascend_kernels/operator_registry.json"
+# select_ops.py path
+SELECT_OPS_SCRIPT="${SCRIPTS_PATH}/comm_operator/select_ops.py"
 
-copy_ops() {
-    local src_dir="$1" # Source directory
-    local dst_dir="$2" # Destination directory
+# Whether SHMEM is installed (determined by the SHMEM_HOME_PATH env variable)
+shmem_installed=1
+if [ -z "${SHMEM_HOME_PATH}" ]; then
+    shmem_installed=0
+fi
 
-    # Ensure op_host, op_kernel and pregen autogen exist in destination directory
+# -q (quantization) flag is forwarded by build.sh via CAM_USE_W4A8=1
+use_w4a8=0
+if [ "${CAM_USE_W4A8}" = "1" ]; then
+    use_w4a8=1
+fi
+
+# -a operator list is forwarded by build.sh via CAM_OP_SELECT (semicolon-separated; empty = full set)
+user_ops="${CAM_OP_SELECT:-}"
+
+# Copy the op_host/op_kernel/op_api of the selected operator directories into the target project.
+# utils is a shared header directory and is always copied; the rest are copied per the ops array
+# (operator directory names). Unlike the old full-copy + exclude_list approach, only the operators
+# resolved by select_ops.py are copied here, which fundamentally avoids same-name operators
+# (the fused_deep_moe family) overwriting each other's files.
+copy_ops_include() {
+    local src_dir="$1" # source directory (ascend_kernels)
+    local dst_dir="$2" # target directory (project root)
+    local ops=($3)     # space-separated list of operator directory names
+
+    # Ensure the target op_host, op_kernel and pregen autogen directories exist
     mkdir -p "$dst_dir/op_host" "$dst_dir/op_kernel" "$dst_dir/pregen/build_out/autogen"
 
-    # Iterate over all direct subdirectories under source directory (including directories with spaces)
-    find "$src_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' subdir; do
-        # Verify subdirectory exists (double check)
-        subdir_name=$(basename "$subdir")
+    # Always copy the shared header directory utils (.h under op_host/op_kernel)
+    if [ -d "$src_dir/utils/op_host" ]; then
+        cp -rf "$src_dir/utils/op_host/"* "$dst_dir/op_host/" 2>/dev/null || true
+    fi
+    if [ -d "$src_dir/utils/op_kernel" ]; then
+        cp -rf "$src_dir/utils/op_kernel/"* "$dst_dir/op_kernel/" 2>/dev/null || true
+    fi
 
-        if [ -d "$subdir" ]; then
-            # Check if current subdirectory is in the exclusion list
-            skip=false
-            for excluded_dir in "${exclude_list[@]}"; do
-                if [ "$subdir_name" = "$excluded_dir" ]; then
-                    skip=true
-                    break
-                fi
-            done
-
-            # Skip processing if in exclusion list
-            if [ "$skip" = true ]; then
-                continue
-            fi
-
-            # Process op_host directory
-            if [ -d "$subdir/op_host" ]; then
-                cp -rf "$subdir/op_host/"* "$dst_dir/op_host/"
-            fi
-
-            # Process op_kernel directory
-            if [ -d "$subdir/op_kernel" ]; then
-                cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
-            fi
-
-            # Process op_api directory (copy aclnn interface files to pregen/build_out/autogen)
-            if [ -d "$subdir/op_api" ]; then
-                cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
-            fi
+    # Copy op_host/op_kernel/op_api of each selected operator
+    for name in "${ops[@]}"; do
+        local subdir="$src_dir/$name"
+        if [ ! -d "$subdir" ]; then
+            echo "Warning: operator dir not found, skipping: $name"
+            continue
+        fi
+        if [ -d "$subdir/op_host" ]; then
+            cp -rf "$subdir/op_host/"* "$dst_dir/op_host/"
+        fi
+        if [ -d "$subdir/op_kernel" ]; then
+            cp -rf "$subdir/op_kernel/"* "$dst_dir/op_kernel/"
+        fi
+        # op_api interface files are copied to pregen/build_out/autogen
+        if [ -d "$subdir/op_api" ]; then
+            cp -rf "$subdir/op_api/"* "$dst_dir/pregen/build_out/autogen/"
         fi
     done
 }
 
-# Build operator project and deliver artifacts to specified location
+# Call select_ops.py to resolve the final operator list, returned as space-separated directory names.
+# On failure (registry/validation errors) select_ops.py prints the error and exits non-zero; set -e aborts.
+resolve_ops() {
+    local soc=$1
+    local quant_arg=""
+    local ops_arg=""
+    if [ "$use_w4a8" = "1" ]; then
+        quant_arg="--quant"
+    fi
+    if [ -n "$user_ops" ]; then
+        ops_arg="--ops $user_ops"
+    fi
+    python3 "$SELECT_OPS_SCRIPT" \
+        --registry "$REGISTRY_PATH" \
+        --soc "$soc" \
+        --shmem "$shmem_installed" \
+        $quant_arg $ops_arg | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//'
+}
+
+# Read all registered SOC generations from the registry (space-separated)
+list_soc_versions() {
+    python3 -c "
+import json
+d = json.load(open('$REGISTRY_PATH'))
+print(' '.join(d.get('soc_versions', {}).keys()))
+"
+}
+
+# Build the operator project and deliver its artifacts to the specified location
 build_ascend_proj() {
     local src_path=$1
     local soc_version=$2
@@ -67,17 +109,9 @@ build_ascend_proj() {
     local arch=$(uname -m)
     local proj_name="ascend_kernels_${soc_version}_proj"
 
-    # SOC version gate: 910b4 (a2) operators have been removed from master,
-    # only ascend910_93 is supported now. Reject anything else early.
-    if [[ "$soc_version" != "ascend910_93" ]]; then
-        echo "ERROR: unsupported SOC version '$soc_version'. Only 'ascend910_93' is supported on this branch." >&2
-        echo "       (ascend910b4 a2 operators have been removed; rebuild on a branch that carries them if needed.)" >&2
-        exit 1
-    fi
-
     cd "$src_path"
 
-    # Ensure MODULE_BUILD_PATH directory exists
+    # Ensure the MODULE_BUILD_PATH directory exists
     if [ ! -d "${MODULE_BUILD_PATH}" ]; then
         mkdir -p ${MODULE_BUILD_PATH}
     fi
@@ -86,44 +120,39 @@ build_ascend_proj() {
         rm -rf ${MODULE_BUILD_PATH}/${proj_name}
     fi
 
-    # Create project directory for new npu_op_* build system
+    # Resolve the operator list to compile this run (include mode, validated+filtered by select_ops.py)
+    # select_ops.py errors out on unregistered SOC / invalid operator name / -q conflicts.
+    local selected_ops
+    selected_ops=$(resolve_ops "$soc_version")
+    if [ -z "$selected_ops" ]; then
+        echo "ERROR: no operators resolved for SOC ${soc_version}"
+        return 1
+    fi
+    echo "Selected operators for ${soc_version}: ${selected_ops}"
+
+    # Use msopgen to generate the SOC-specific operator project and CMakePresets.json
     export OPS_PROJECT_NAME=aclnnInner
 
-    echo "msopgen gen -i ./ascend_kernels/AddCustom.json" \
-        " -c ai_core-${soc_version} -f pytorch -lan cpp" \
-        " -out ${MODULE_BUILD_PATH}/${proj_name}"
-    msopgen gen -i ./ascend_kernels/AddCustom.json \
-        -c ai_core-${soc_version} -f pytorch -lan cpp \
-        -out ${MODULE_BUILD_PATH}/${proj_name}
+    echo "msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}"
+    msopgen gen -i ./ascend_kernels/AddCustom.json -c ai_core-${soc_version} -f pytorch -lan cpp -out ${MODULE_BUILD_PATH}/${proj_name}
     rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_host/add_custom*
-    rm  -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
+    rm -rf ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/add_custom*
 
-    # Copy top-level CMakeLists.txt
+    # Copy the top-level CMakeLists.txt (CMakePresets.json is generated by msopgen)
     cp ./ascend_kernels/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # Copy op_host and op_kernel CMakeLists.txt (new npu_op_* version)
+    # Copy the op_host and op_kernel CMakeLists.txt (new npu_op_* version)
     cp ./ascend_kernels/cmake_files/op_host/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_host/
     cp ./ascend_kernels/cmake_files/op_kernel/CMakeLists.txt ${MODULE_BUILD_PATH}/${proj_name}/op_kernel/
 
-    # Only ascend910_93 is supported (see SOC gate above). All remaining operators
-    # (fused_deep_moe, moe_dispatch_normal, moe_combine_normal, notify_dispatch,
-    # dispatch_layout) are 910_93 compatible, so no exclusion is needed.
-    echo "SOC ascend910_93: compiling all operators"
+    # Copy the op_host/op_kernel sources and op_api interface files of the selected operators (include mode)
+    copy_ops_include "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}" "$selected_ops"
 
-    # Copy op_host/op_kernel source files and op_api interface files for all operators
-    copy_ops "./ascend_kernels" "${MODULE_BUILD_PATH}/${proj_name}"
-    # Set build_type in CMakePresets.json
-    python3 $SCRIPTS_PATH/comm_operator/set_conf.py \
-        ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
-
-    # Copy cmake_files/cmake directory (custom cmake functions, replaces msopgen default cmake)
+    # Copy the cmake_files/cmake directory (custom cmake functions, replaces the msopgen default cmake)
     cp -rf ./ascend_kernels/cmake_files/cmake ${MODULE_BUILD_PATH}/${proj_name}/
 
-    # copy_ops runs in a find|while subshell where exclude_list may not fully take effect,
-    # so remove autogen files of excluded operators here as a supplement
-    for excluded_dir in "${exclude_list[@]}"; do
-        rm -f ${MODULE_BUILD_PATH}/${proj_name}/pregen/build_out/autogen/aclnn_${excluded_dir}.*
-    done
+    # Set build_type into CMakePresets.json (called after msopgen generates it)
+    python3 $SCRIPTS_PATH/comm_operator/set_conf.py ${MODULE_BUILD_PATH}/${proj_name}/CMakePresets.json $build_type True CAM
 
     # CANN package path: try setenv first, then derive from ASCEND_TOOLKIT_HOME
     if [ -z "${ASCEND_CANN_PACKAGE_PATH}" ]; then
@@ -144,7 +173,7 @@ build_ascend_proj() {
     # Configure cmake
     cmake -S . -B build_out --preset=default -DCMAKE_BUILD_TYPE=$build_type
 
-    # Patch generated kernel compile .make files to pass custom include paths to OPC tool.
+    # Patch kernel compile .make files to pass custom include paths to OPC tool.
     # The npu_op_* build system's simple_kernel_compile doesn't read custom_compile_options.ini,
     # so --compile-options="" is empty. We patch it here to include shmem/catlass paths.
     KERNEL_COMPILE_OPTS=""
@@ -159,17 +188,16 @@ build_ascend_proj() {
     fi
     if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
         echo "Patching kernel compile options: ${KERNEL_COMPILE_OPTS}"
-        find build_out/op_kernel/CMakeFiles -name "build.make" \
-            -exec sed -i "s|--compile-options=\"\"|--compile-options=\\\"${KERNEL_COMPILE_OPTS}\\\"|g" {} +
+        find build_out/op_kernel/CMakeFiles -name "build.make" -exec sed -i "s|--compile-options=\"\"|--compile-options=\\\"${KERNEL_COMPILE_OPTS}\\\"|g" {} +
     fi
 
-    # Build parallelism: configurable via CAM_BUILD_JOBS env variable, default 8
-    # Recommend 2~4 for memory-constrained environments such as Jenkins ECS
+    # Build parallelism: configurable via the CAM_BUILD_JOBS env variable, default 8
+    # For memory-constrained environments such as Jenkins ECS, 2~4 is recommended
     BUILD_JOBS=${CAM_BUILD_JOBS:-8}
     cmake --build build_out --target binary -j${BUILD_JOBS}
     cmake --build build_out --target package -j${BUILD_JOBS}
 
-    # Decide whether to extract the run package based on is_extract
+    # Extract the run package based on is_extract
     if [ $is_extract -eq 1 ]; then
         if [ ! -d "$BUILD_OUT_PATH/comm_operator/extract" ]; then
             mkdir -p "$BUILD_OUT_PATH/comm_operator/extract"
@@ -181,4 +209,41 @@ build_ascend_proj() {
     fi
 }
 
-build_ascend_proj $1 $2 $3 $4
+# ---- Entry point ----
+# Usage: compile_ascend_proj.sh <src_path> <soc_version|all> <is_extract> <build_type>
+src_path=$1
+soc_arg=$2
+is_extract=${3:-0}
+build_type=${4:-Release}
+
+if [ -z "$src_path" ] || [ -z "$soc_arg" ]; then
+    echo "Usage: $0 <src_path> <soc_version|all> <is_extract> <build_type>"
+    exit 1
+fi
+
+# Build output run directory
+if [ ! -d "$BUILD_OUT_PATH/comm_operator/run" ]; then
+    mkdir -p "$BUILD_OUT_PATH/comm_operator/run"
+fi
+
+if [ "$soc_arg" = "all" ]; then
+    # Default: iterate over all registered SOC generations, compiling the full operator set for each
+    # (select_ops.py drops SHMEM-requiring operators based on SHMEM availability)
+    all_socs=$(list_soc_versions)
+    if [ -z "$all_socs" ]; then
+        echo "ERROR: no SOC versions registered in ${REGISTRY_PATH}"
+        exit 1
+    fi
+    # -a selection is incompatible with the default all build: all mode iterates the full set per SOC
+    # and does not accept a single-operator selection
+    if [ -n "$user_ops" ]; then
+        echo "ERROR: -a requires a specific -c SOC; cannot use -a with default (all) build"
+        exit 1
+    fi
+    for soc in $all_socs; do
+        echo "======== Building SOC: ${soc} ========"
+        build_ascend_proj "$src_path" "$soc" "$is_extract" "$build_type"
+    done
+else
+    build_ascend_proj "$src_path" "$soc_arg" "$is_extract" "$build_type"
+fi

@@ -1,10 +1,11 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
-# Description: cam building script
+# Description: cam building script (top-level entry, forwards options to the module script)
 # Create: 2025-07-20
 # Note:
 # History: 2025-07-20 create cam building script
+#          2026-06-26 forward -c/-a/-q to comm_operator build, update help
 
 set -e
 
@@ -18,10 +19,10 @@ export SRC_PATH="${ROOT_PATH}/src/cam"
 export BUILD_OUT_PATH="${ROOT_PATH}/output/cam"
 export SCRIPTS_PATH="${ROOT_PATH}/build/cam"
 export TEST_PATH="${ROOT_PATH}/test/cam"
-export BUILD_PATH="${ROOT_PATH}/build/cam/build_tmp"
+export BUILD_PATH="${ROOT_PATH}/build/cam/build_master"
 export CAM_THIRD_PARTY_PATH="${ROOT_PATH}/src/cam/third_party"
 
-export CPATH=${CAM_THIRD_PARTY_PATH}/catlass/include:${CPATH}
+export CPATH=${CAM_THIRD_PARTY_PATH}:${CAM_THIRD_PARTY_PATH}/catlass/include:${CPATH}
 
 export BUILD_TYPE="Release"
 MODULE_NAME="all"
@@ -34,13 +35,22 @@ function print_help() {
     If there are no parameters, all modules are compiled in default mode
     module list: [comm_operator]
 
-    opt:
+    opt (forwarded to the module build script):
     -d: Enable debug
+    -c <soc>: Target SOC generation (e.g. ascend910_93). Omit to build all
+        registered generations. Supported: [ascend910_93]
+    -a <ops>: Semicolon-separated operator list (requires -c)
+    -q: Select the fused_deep_moe_w4a8 quantization variant
+    -h: Show this help
     "
 }
 
+# The top level only consumes -d / -h; other options (including -c/-a/-q) are forwarded as-is
+# to the submodule script. The shift inside the function does not affect the caller's positional
+# parameters, so the caller's $@ stays intact and is passed to the submodule below.
+# The leading ':' silences getopts' default error output for unknown options (-c/-a/-q).
 function process_arg() {
-    while getopts "dh" opt; do
+    while getopts ":dh" opt; do
         case $opt in
         d)
             export BUILD_TYPE="Debug"
@@ -49,9 +59,11 @@ function process_arg() {
             print_help
             exit 0
             ;;
+        \?)
+            # Silently skip unknown options; let the submodule handle them
+            ;;
         esac
     done
-    shift $(($OPTIND-1))
 }
 
 function is_module_name() {
