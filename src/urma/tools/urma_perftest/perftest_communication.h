@@ -31,7 +31,10 @@ typedef struct perftest_comm {
 
 typedef struct perftest_config perftest_config_t;
 
-int sock_sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data);
+int establish_connection(perftest_config_t *cfg);
+void close_connection(perftest_config_t *cfg);
+
+int sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data);
 int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a);
 ssize_t comm_send(const perftest_config_t *cfg, uint32_t index, const void *buf, size_t size);
 ssize_t comm_recv(const perftest_config_t *cfg, uint32_t index, void *buf, size_t size);
