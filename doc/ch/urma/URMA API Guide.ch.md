@@ -14,6 +14,10 @@
 
 - [1 使用约束与限制](#1-使用约束与限制)
     - [1.1 版本配套约束](#11-版本配套约束)
+    - [1.2 参数组合约束](#12-参数组合约束)
+        - [1.2.1 trans_mode、tp_type、order_type 组合拦截总表](#121-trans_modetp_typeorder_type-组合拦截总表)
+        - [1.2.2 校验规则说明](#122-校验规则说明)
+        - [1.2.3 其他约束](#123-其他约束)
 
 - [2 URMA用户态API](#2-urma用户态api)
     - [2.1 编程示例](#21-编程示例)
@@ -641,6 +645,84 @@ urma框架的API不支持任意并发调用，如使用jetty对象与销毁jetty
 ## 1.1 版本配套约束
 
 ---
+
+## 1.2 参数组合约束
+
+URMA 在创建 JFS、JFR、Jetty 以及导入远端 Jetty 等资源时会校验 `trans_mode`、`tp_type`、`order_type` 三个参数的组合合法性，不符合下表中规则的组合将被**拦截**（返回错误）。
+
+**参数说明与UB协议概念对齐**
+- `trans_mode`：URMA软件定义概念，代表事务层支持一对一、多对多连接的类型，并且组合可靠传输和非可靠传输，当前包括RM（Reliable Message）、RC（Reliable connection）和UM（Unreliable Message）三类；
+- `tp_type`：UB协议定义的TP类型，包括RTP（Reliable Transport）、CTP（Compact Transport）和UTP（Unreliable transport）三类；
+- `order_type`：UB协议定义的保序模式，包括ROI（Reliable and Ordered by Initiator，URMA定义为URMA_OI）、ROL（Reliable and Ordered by Low Layer，URMA定义为URMA_OL）、ROT（Reliable and Ordered by Target，URMA定义为OT），以及UNO（Unreliable and Non-Ordering，URMA定义为URMA_NO）四种，U出于易用性考虑，RMA软件增加了DEF_ORDER的类型定义。
+
+### 1.2.1 trans_mode、tp_type、order_type 组合拦截总表
+
+| trans_mode | tp_type | order_type | 是否允许 | 说明 |
+|---|---:|---|---|---|
+| URMA_TM_RM | URMA_RTP | URMA_DEF_ORDER (0) | 允许 | 默认 order_type 按照trans_mode自动转换，不支持灵活配置 |
+| URMA_TM_RM | URMA_RTP | URMA_OI | 允许 | RM 模式支持 initiator ordering |
+| URMA_TM_RM | URMA_RTP | URMA_OT | 允许 | **驱动根据芯片类型做拦截**，为防止引入功能问题，当前URMA拦截，应用有诉求可开放 |
+| URMA_TM_RM | URMA_RTP | URMA_OL | 允许 | URMA允许 |
+| URMA_TM_RM | URMA_RTP | URMA_NO | **拦截** | RM 为可靠模式，不支持 unreliable non ordering |
+| URMA_TM_RM | URMA_CTP | URMA_DEF_ORDER (0) | 允许 | 同 RTP |
+| URMA_TM_RM | URMA_CTP | URMA_OI | 允许 | 同 RTP |
+| URMA_TM_RM | URMA_CTP | URMA_OT | 允许 | **驱动根据芯片类型做拦截**，为防止引入功能问题，当前URMA拦截，应用有诉求可开放 |
+| URMA_TM_RM | URMA_CTP | URMA_OL | 允许 | URMA允许 |
+| URMA_TM_RM | URMA_CTP | URMA_NO | **拦截** | 同 RTP，RM 为可靠模式 |
+| URMA_TM_RM | URMA_UTP | 任意 order_type | **拦截** | UTP 仅在 UM 模式下允许，创建jetty或建链阶段拦截 |
+| URMA_TM_RC | URMA_RTP | URMA_DEF_ORDER (0) | 允许 | 默认 order_type 自动转换为 URMA_OL |
+| URMA_TM_RC | URMA_RTP | URMA_OT | 允许 | RC 模式支持 target ordering，**驱动根据芯片类型做拦截** |
+| URMA_TM_RC | URMA_RTP | URMA_OL | 允许 | RC 模式支持 low layer ordering |
+| URMA_TM_RC | URMA_RTP | URMA_OI | 允许 | 驱动传递到芯片，按照order_type适配 |
+| URMA_TM_RC | URMA_RTP | URMA_NO | **拦截** | RC 为可靠模式，不支持 unreliable non ordering |
+| URMA_TM_RC | URMA_CTP | URMA_DEF_ORDER (0) | 允许 | 同 RTP |
+| URMA_TM_RC | URMA_CTP | URMA_OT | 允许 | **驱动根据芯片类型拦截** |
+| URMA_TM_RC | URMA_CTP | URMA_OL | 允许 | 同 RTP |
+| URMA_TM_RC | URMA_CTP | URMA_OI | 允许 | 驱动传递到芯片，按照order_type适配 |
+| URMA_TM_RC | URMA_CTP | URMA_NO | **拦截** | 同 RTP，RC 为可靠模式 |
+| URMA_TM_RC | URMA_UTP | 任意 order_type | **拦截** | UTP 仅在 UM 模式下允许，在创建jetty或建链阶段拦截 |
+| URMA_TM_UM | URMA_RTP | 任意 order_type | **拦截** | RTP 不允许在 UM 模式下使用 |
+| URMA_TM_UM | URMA_CTP | URMA_DEF_ORDER (0) | **拦截** | 默认 order_type 自动转换为 URMA_NO，但是UM + CTP + UNO组合不支持 |
+| URMA_TM_UM | URMA_CTP | URMA_NO | **拦截** | 协议未定义行为 |
+| URMA_TM_UM | URMA_CTP | URMA_OI | **拦截** | OI (initiator ordering) 仅 RM 模式支持 |
+| URMA_TM_UM | URMA_CTP | URMA_OT | **拦截** | OT (target ordering) 仅 RC 模式支持 |
+| URMA_TM_UM | URMA_CTP | URMA_OL | 支持 | 当前用户态拦截，内核态支持，用户态由此诉求未来会开放此配置 |
+| URMA_TM_UM | URMA_UTP | URMA_DEF_ORDER (0) | 允许 | UM 模式允许 UTP |
+| URMA_TM_UM | URMA_UTP | URMA_NO | 允许 | UM + UTP 仅支持 unreliable non ordering |
+| URMA_TM_UM | URMA_UTP | URMA_OI | **拦截** | OI 仅 RM 模式支持 |
+| URMA_TM_UM | URMA_UTP | URMA_OT | **拦截** | OT 仅 RC 模式支持 |
+| URMA_TM_UM | URMA_UTP | URMA_OL | **拦截** | OL 仅 RC 模式支持 |
+
+### 1.2.2 校验规则说明
+
+**trans_mode 与 tp_type 的约束**：
+
+- `URMA_UTP` 仅在 `URMA_TM_UM` 传输模式下允许，RM / RC 模式下使用 UTP 将被拦截。
+- `URMA_RTP` 不允许在 `URMA_TM_UM` 模式下使用，RTP 用于 RM / RC 可靠传输。
+
+**trans_mode 与 order_type 的约束**：
+
+- `URMA_OT` (target ordering)、`URMA_OL` (low layer ordering)：仅 `URMA_TM_RC` 支持。
+- `URMA_OI` (initiator ordering)：仅 `URMA_TM_RM`、`URMA_TM_RC` 支持。
+- `URMA_NO` (unreliable non ordering)：RM / RC 为可靠模式，不允许配置，仅在 `URMA_TM_UM` 下允许。
+
+**order_type 默认值转换规则**：
+
+`order_type` 设置为 `URMA_DEF_ORDER` (0) 时，URMA 根据 `trans_mode` 自动转换为：
+
+| trans_mode | 默认 order_type |
+|---|---|
+| URMA_TM_RM | URMA_OI (initiator ordering) |
+| URMA_TM_RC | URMA_OL (low layer ordering) |
+| URMA_TM_UM | URMA_NO (unreliable non ordering) |
+
+### 1.2.3 其他约束
+
+- UM 模式（`URMA_TM_UM`）下的 WR 不支持 fence、place_order 和 comp_order。
+- 完成乱序模式（`outorder_comp=1`）下的 WR 不支持 fence、place_order 和 comp_order。
+
+---
+
 # 2 URMA用户态API
 
 ## 2.1 编程示例
