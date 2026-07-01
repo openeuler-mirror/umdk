@@ -133,46 +133,6 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .dfx_ops_get_func = NULL,
         .dfx_tp_ops = NULL,
     },
-    [UMQ_TRANS_MODE_IPC] = {
-        .mode = UMQ_TRANS_MODE_IPC,
-        .enable = false,
-
-        .dlopen_so_name = "libumq_ipc.so",
-        .dlhandler = NULL,
-
-        .ops_get_funcname = "umq_ipc_ops_get",
-        .ops_get_func = NULL,
-        .tp_ops = NULL,
-        .ctx = NULL,
-
-        .pro_ops_get_funcname = "umq_pro_ipc_ops_get",
-        .pro_ops_get_func = NULL,
-        .pro_tp_ops = NULL,
-
-        .dfx_ops_get_funcname = "umq_ipc_dfx_ops_get",
-        .dfx_ops_get_func = NULL,
-        .dfx_tp_ops = NULL,
-    },
-    [UMQ_TRANS_MODE_UBMM] = {
-        .mode = UMQ_TRANS_MODE_UBMM,
-        .enable = false,
-
-        .dlopen_so_name = "libumq_ubmm.so",
-        .dlhandler = NULL,
-
-        .ops_get_funcname = "umq_ubmm_ops_get",
-        .ops_get_func = NULL,
-        .tp_ops = NULL,
-        .ctx = NULL,
-
-        .pro_ops_get_funcname = "umq_pro_ubmm_ops_get",
-        .pro_ops_get_func = NULL,
-        .pro_tp_ops = NULL,
-
-        .dfx_ops_get_funcname = "umq_ubmm_dfx_ops_get",
-        .dfx_ops_get_func = NULL,
-        .dfx_tp_ops = NULL,
-    },
     [UMQ_TRANS_MODE_UB_PLUS] = {
         .mode = UMQ_TRANS_MODE_UB_PLUS,
         .enable = false,
@@ -222,25 +182,6 @@ static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
         .pro_tp_ops = NULL,
 
         .dfx_ops_get_funcname = "umq_ib_plus_dfx_ops_get",
-        .dfx_ops_get_func = NULL,
-        .dfx_tp_ops = NULL,
-    },
-    [UMQ_TRANS_MODE_UBMM_PLUS] = {
-        .mode = UMQ_TRANS_MODE_UBMM_PLUS,
-        .enable = false,
-
-        .dlopen_so_name = "libumq_ubmm.so",
-        .dlhandler = NULL,
-
-        .ops_get_funcname = "umq_ubmm_plus_ops_get",
-        .ops_get_func = NULL,
-        .tp_ops = NULL,
-        .ctx = NULL,
-
-        .pro_ops_get_funcname = "umq_pro_ubmm_plus_ops_get",
-        .pro_ops_get_func = NULL,
-        .pro_tp_ops = NULL,
-        .dfx_ops_get_funcname = "umq_ubmm_plus_dfx_ops_get",
         .dfx_ops_get_func = NULL,
         .dfx_tp_ops = NULL,
     },

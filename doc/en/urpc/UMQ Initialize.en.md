@@ -29,8 +29,6 @@ The Unified Message Queue (UMQ) initialization interface is responsible for load
 - trans_info_num: The number of data plane transmission device information entries, supports up to 128
 - flow_control: Configures flow control parameters
 - block_cfg: Configures the size of blocks in the small memory pool, supports four types: 8K, 16K, 32K, 64K
-- cna: The CNA address of the UB controller for memory imported by the user, only valid for UMQ_TRANS_MODE_UBMM and UMQ_TRANS_MODE_UBMM_PLUS modes
-- ubmm_eid: The EID of the UB controller for memory imported by the user, only valid for UMQ_TRANS_MODE_UBMM and UMQ_TRANS_MODE_UBMM_PLUS modes
 - trans_info: Data plane transmission device information, used to initialize the corresponding device
 
 # Description
