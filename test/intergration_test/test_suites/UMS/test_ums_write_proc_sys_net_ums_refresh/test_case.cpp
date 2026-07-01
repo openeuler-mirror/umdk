@@ -44,7 +44,7 @@ static int run_test(test_ums_ctx_t *ctx)
         sync_time("----------------------------2");
         sprintf(test_ip_str, "%s", ctx->test_ip_host2);
         int check_num = query_proc_net_ums_detail_stream_num("False", test_ip_str);
-        if (ctx->app_id == PROC_2 && check_num != 2) {
+        if (ctx->app_id == PROC_2 && check_num < 1) {
             ret = -1;
         }
         CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);

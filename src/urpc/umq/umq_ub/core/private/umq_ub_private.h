@@ -61,9 +61,6 @@ extern "C" {
 
 #define UMQ_UB_ENABLE_SHARE_FC_JFR (true)
 
-#define UMQ_UB_FLOW_CONTROL_SGE_QBUF_COUNT_MAX 512 // per-device flow control sge mgr qbuf array
-#define UMQ_UB_FLOW_CONTROL_SGE_SHARED_RECV_QBUF_MAX 512 // per-jetty shared recv qbuf array
-
 typedef enum umq_size_interval {
     UMQ_SIZE_0K_SMALL_INTERVAL,     // (0K, umq_buf_size_small()] size
     UMQ_SIZE_SMALL_MID_INTERVAL,    // (umq_buf_size_small(), umq_buf_size_middle()] size
@@ -153,11 +150,6 @@ typedef enum ub_queue_fc_msg_type {
     UB_QUEUE_FC_MSG_TYPE_MAX = 2
 } ub_queue_fc_msg_type_t;
 
-typedef struct umq_ub_flow_control_sge_slot {
-    void *addr;
-    uint32_t bitmap_idx;
-} umq_ub_flow_control_sge_slot_t;
-
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
     volatile uint64_t total_local_rx_posted;
@@ -190,21 +182,9 @@ typedef struct ub_flow_control {
     bool enabled;
     volatile bool is_credit_applying;
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
-    umq_ub_flow_control_sge_slot_t recv_sge;
     uint8_t local_req_seq;
     uint8_t remote_expect_seq;
 } ub_flow_control_t;
-
-typedef struct umq_ub_flow_control_sge_mgr {
-    umq_buf_t *qbuf_array[UMQ_UB_FLOW_CONTROL_SGE_QBUF_COUNT_MAX];
-    util_external_mutex_lock *lock;
-    urpc_bitmap_t bitmap;
-} umq_ub_flow_control_sge_mgr_t;
-
-typedef struct umq_ub_flow_control_share_recv {
-    umq_buf_t *qbuf_array[UMQ_UB_FLOW_CONTROL_SGE_SHARED_RECV_QBUF_MAX];
-    uint32_t qbuf_cnt;
-} umq_ub_flow_control_share_recv_t;
 
 typedef struct imported_tseg_node {
     struct urpc_hmap_node node;
@@ -253,7 +233,6 @@ typedef struct umq_ub_ctx {
     umq_trans_info_t trans_info;
     volatile uint64_t *umq_ctx_table;
     volatile uint64_t *rx_consumed_jetty_table;
-    umq_ub_flow_control_sge_mgr_t fc_sge_mgr;
 } umq_ub_ctx_t;
 
 typedef struct rx_buf_ctx {
@@ -370,7 +349,6 @@ typedef struct jfr_ctx {
     volatile uint32_t ref_cnt;
     rx_buf_ctx_list_t rx_buf_ctx_list;
     ub_credit_pool_t credit;
-    umq_ub_flow_control_share_recv_t share_rq_sge;
 } jfr_ctx_t;
 
 typedef struct ub_queue_interrupt_ctx {

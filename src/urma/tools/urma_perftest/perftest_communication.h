@@ -29,10 +29,12 @@ typedef struct perftest_comm {
     int *sock_fd;
 } perftest_comm_t;
 
-int sock_sync_data(int sock_fd, int size, char *local_data, char *remote_data);
-int sync_time(int sock_fd, char *a);
-ssize_t sock_write(int sock_fd, const void *buf, size_t size);
-ssize_t sock_read(int sock_fd, void *buf, size_t size);
-int sock_poll(int sock_fd, int timeout_ms);
+typedef struct perftest_config perftest_config_t;
+
+int sock_sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data);
+int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a);
+ssize_t comm_send(const perftest_config_t *cfg, uint32_t index, const void *buf, size_t size);
+ssize_t comm_recv(const perftest_config_t *cfg, uint32_t index, void *buf, size_t size);
+int comm_poll(const perftest_config_t *cfg, uint32_t index, int timeout_ms);
 
 #endif

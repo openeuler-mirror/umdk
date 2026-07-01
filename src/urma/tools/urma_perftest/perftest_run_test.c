@@ -139,8 +139,7 @@ static void notify_peer_exit(void)
 {
     if (g_perftest_cfg != NULL) {
         char cmd = PERFTEST_EXIT_CMD;
-        ssize_t __attribute__((unused)) wr_ret =
-            sock_write(g_perftest_cfg->comm.sock_fd[0], &cmd, sizeof(cmd));
+        (void)comm_send(g_perftest_cfg, 0, &cmd, sizeof(cmd));
     }
 }
 
@@ -489,6 +488,9 @@ static void *run_send_lat_simplex(void *arg)
         return NULL;
     }
 
+    uint32_t recv_inflight_baseline =
+        (cfg->jfr_depth / cfg->jfr_post_list) * cfg->jfr_post_list * rqe_multiple;
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
@@ -496,7 +498,7 @@ static void *run_send_lat_simplex(void *arg)
     if (send_lat_post_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list * rqe_multiple)) != 0) {
         goto free_cr;
     }
-    if (sync_time(cfg->comm.sock_fd[id], "send_lat_post_recv") != 0) {
+    if (sync_time(cfg, id, "send_lat_post_recv") != 0) {
         goto free_cr;
     }
 
@@ -541,7 +543,8 @@ static void *run_send_lat_simplex(void *arg)
                      */
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
-                        (cfg->time_type.bs.duration == 1 || rcnt + cfg->jfr_depth - used_recv_wr < cfg->iters)) {
+                        (cfg->time_type.bs.duration == 1 ||
+                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
                         if (send_lat_post_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -1267,7 +1270,6 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
     if (cfg->share_jfr == true) {
         size_per_jetty /= cfg->jettys;
     }
-    run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     uint32_t rqe_multiple;
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
@@ -1280,6 +1282,8 @@ static int prepare_jfr_wr(perftest_context_t *ctx, perftest_config_t *cfg)
         return -1;
     }
     size_per_jetty *= rqe_multiple;
+
+    run_ctx->rposted = (int)(size_per_jetty * cfg->jfr_post_list);
 
     if (alloc_jfr_ctx_buffer(ctx, cfg) != 0) {
         LOG_ERROR("Failed to calloc jfr ctx buffer.\n");
@@ -1645,6 +1649,9 @@ static void *run_send_lat_duplex(void *arg)
         return NULL;
     }
 
+    uint32_t recv_inflight_baseline =
+        (cfg->jfr_depth / cfg->jfr_post_list) * cfg->jfr_post_list * rqe_multiple;
+
     /*
      * Sync between the client and server so the client won't send packets
      * before the server has posted his receive wqes.
@@ -1652,7 +1659,7 @@ static void *run_send_lat_duplex(void *arg)
     if (send_lat_post_jetty_recv(ctx, cfg, id, (int)(cfg->jfr_depth / cfg->jfr_post_list * rqe_multiple)) != 0) {
         goto free_cr;
     }
-    if (sync_time(cfg->comm.sock_fd[id], "send_lat_post_recv") != 0) {
+    if (sync_time(cfg, id, "send_lat_post_recv") != 0) {
         goto free_cr;
     }
 
@@ -1697,7 +1704,8 @@ static void *run_send_lat_duplex(void *arg)
                      */
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
-                        (cfg->time_type.bs.duration == 1 || rcnt + cfg->jfr_depth - used_recv_wr < cfg->iters)) {
+                        (cfg->time_type.bs.duration == 1 ||
+                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
                         if (send_lat_post_jetty_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -2821,7 +2829,7 @@ static void *infinite_print_thread(void *duration)
     uint32_t elapsed_ms = 0;
 
     while (g_perftest_ctx->infinite_print == true) {
-        int pr = sock_poll(g_perftest_cfg->comm.sock_fd[0], poll_slice_ms);
+        int pr = comm_poll(g_perftest_cfg, 0, poll_slice_ms);
         if (pr < 0) {
             if (errno == EINTR) {
                 continue;
@@ -2830,7 +2838,7 @@ static void *infinite_print_thread(void *duration)
         }
         if (pr > 0) {
             char buf[1];
-            ssize_t n = sock_read(g_perftest_cfg->comm.sock_fd[0], buf, sizeof(buf));
+            ssize_t n = comm_recv(g_perftest_cfg, 0, buf, sizeof(buf));
             if (n <= 0 || buf[0] == PERFTEST_EXIT_CMD) {
                 request_exit();
                 break;
@@ -3236,7 +3244,7 @@ static int prepare_run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg,
     }
     if (cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
-            ret = sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].before);
+            ret = sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before);
             if (ret != 0) {
                 LOG_ERROR("Failed to sync time before bw test.\n");
                 goto err_dest_jfs_wr;
@@ -3251,7 +3259,7 @@ static int prepare_run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg,
     }
     if (cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
-            ret = sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].after);
+            ret = sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].after);
             if (ret != 0) {
                 LOG_ERROR("Failed to sync time after bw test.\n");
                 goto err_dest_jfs_wr;
@@ -3270,7 +3278,7 @@ static int prepare_run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg,
     }
     if (cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
-            if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(bw_report_data_t), (char *)(local_bw_report),
+            if (sock_sync_data(cfg, i, sizeof(bw_report_data_t), (char *)(local_bw_report),
                                (char *)(remote_bw_report)) != 0) {
                 LOG_ERROR("Failed to exchange local and remote report data.\n");
                 goto err_dest_jfs_wr;
@@ -3296,15 +3304,15 @@ static int run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
     /* Handle half bidirectional test */
     if (cfg->comm.server_ip == NULL && !cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
-            if (sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].before) != 0 ||
-                sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].after) != 0) {
+            if (sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before) != 0 ||
+                sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].after) != 0) {
                 LOG_ERROR("Failed to sync time in bw test in server.\n");
                 return -1;
             }
             /* Size and iterations of local READ/WRITE/ATOMIC bw test should be filled before sync data */
             local_bw_report.size = cfg->size;
             local_bw_report.iters = cfg->iters;
-            if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(bw_report_data_t), (char *)(&local_bw_report),
+            if (sock_sync_data(cfg, i, sizeof(bw_report_data_t), (char *)(&local_bw_report),
                                (char *)(&remote_bw_report)) != 0) {
                 LOG_ERROR("Failed to exchange local and remote data in server.\n");
                 return -1;
@@ -3339,12 +3347,12 @@ static int run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
     /* Handle half bidirectional test */
     if (cfg->comm.server_ip != NULL && !cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
-            if (sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].before) != 0 ||
-                sync_time(cfg->comm.sock_fd[i], g_bi_exchange_info[cfg->api_type].after) != 0) {
+            if (sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before) != 0 ||
+                sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].after) != 0) {
                 LOG_ERROR("Failed to sync time in bw test in client.\n");
                 return -1;
             }
-            if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(bw_report_data_t), (char *)(&local_bw_report),
+            if (sock_sync_data(cfg, i, sizeof(bw_report_data_t), (char *)(&local_bw_report),
                                (char *)(&remote_bw_report)) != 0) {
                 LOG_ERROR("Failed to exchange local and remote data in client.\n");
                 return -1;
@@ -3405,7 +3413,7 @@ static int exchange_sum_len(perftest_context_t *ctx, perftest_config_t *cfg)
     int len = (int)sizeof(ctx->sum_size);
     uint64_t b;
     int ret = 0;
-    ret = sock_sync_data(cfg->comm.sock_fd[0], len, (char *)&a, (char *)&b);
+    ret = sock_sync_data(cfg, 0, len, (char *)&a, (char *)&b);
     if (b != 0) {
         ctx->sum_size = b;
     }
@@ -3421,7 +3429,7 @@ static int run_send_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
     int ret;
 
     for (i = 0; i < cfg->pair_num; i++) {
-        ret = sync_time(cfg->comm.sock_fd[i], "send_bw_post_recv");
+        ret = sync_time(cfg, i, "send_bw_post_recv");
         if (ret != 0) {
             LOG_ERROR("Failed to sync time, send_recv test.\n");
             return -1;
@@ -3464,7 +3472,7 @@ static int run_send_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
 
     if (cfg->bidirection && cfg->time_type.bs.duration == 0) {
         for (i = 0; i < cfg->pair_num; i++) {
-            if (sock_sync_data(cfg->comm.sock_fd[i], sizeof(bw_report_data_t), (char *)(&local_bw_report),
+            if (sock_sync_data(cfg, i, sizeof(bw_report_data_t), (char *)(&local_bw_report),
                                (char *)(&remote_bw_report)) != 0) {
                 LOG_ERROR("Failed to exchange local and remote data.\n");
                 return -1;
@@ -3481,7 +3489,7 @@ static int run_send_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
     uint32_t i;
 
     for (i = 0; i < cfg->pair_num; i++) {
-        ret = sync_time(cfg->comm.sock_fd[i], "run_send_bw_infinite");
+        ret = sync_time(cfg, i, "run_send_bw_infinite");
         if (ret != 0) {
             LOG_ERROR("Failed to sync time, run_send_bw_infinite, ret: %d.\n", ret);
             return -1;
