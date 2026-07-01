@@ -8,6 +8,8 @@
  * History: 2026-04-02   Create File
  */
 
+#include <string.h>
+
 #include "bondp_api.h"
 #include "bondp_segment.h"
 #include "bondp_types.h"
@@ -529,6 +531,61 @@ urma_status_t convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
     return URMA_SUCCESS;
 }
 
+/* Thread-local cache for EID mapping lookup in convert_pcr_to_vcr */
+#define TL_EID_CACHE_SLOTS 8
+
+static urma_eid_t lookup_bonding_eid_cached(topo_map_t *topo_map, const urma_eid_t *target_eid)
+{
+    static __thread topo_map_t *tl_topo;
+    static __thread uint32_t   tl_gen;
+    static __thread int        tl_fill_pos;
+    static __thread int        tl_evict_pos;
+    static __thread struct {
+        urma_eid_t target;
+        urma_eid_t bonding;
+        bool       valid;
+    } tl_slots[TL_EID_CACHE_SLOTS];
+
+    if (topo_map == NULL) {
+        return *target_eid;
+    }
+    /* Invalidate entire cache if topo_map pointer or gen changed. */
+    uint32_t cur_gen = atomic_load(&topo_map->eid_mapping_hash_table.gen);
+    if (tl_topo != topo_map || tl_gen != cur_gen) {
+        for (int i = 0; i < TL_EID_CACHE_SLOTS; i++) {
+            tl_slots[i].valid = false;
+        }
+        tl_topo      = topo_map;
+        tl_gen       = cur_gen;
+        tl_fill_pos  = 0;
+        tl_evict_pos = 0;
+    }
+    /* Fast path: TL cache hit */
+    for (int i = 0; i < TL_EID_CACHE_SLOTS; i++) {
+        if (tl_slots[i].valid &&
+            memcmp(&tl_slots[i].target, target_eid, sizeof(urma_eid_t)) == 0) {
+            return tl_slots[i].bonding;
+        }
+    }
+    /* Slow path: rwlock + hash-table lookup */
+    urma_eid_t bonding;
+    if (get_bonding_eid_by_target_eid(topo_map, (urma_eid_t *)target_eid, &bonding) != 0) {
+        return *target_eid;
+    }
+    int slot;
+    if (tl_fill_pos < TL_EID_CACHE_SLOTS) {
+        slot = tl_fill_pos++;
+    } else {
+        slot = tl_evict_pos;
+        tl_evict_pos = (tl_evict_pos + 1) & (TL_EID_CACHE_SLOTS - 1);
+    }
+    tl_slots[slot].target  = *target_eid;
+    tl_slots[slot].bonding = bonding;
+    tl_slots[slot].valid   = true;
+
+    return bonding;
+}
+
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn)
 {
     bool msn_enable = bdp_ctx->msn_enable;
@@ -536,9 +593,7 @@ void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn)
     if (is_recv_cr(cr)) {
         decode_imm_data(cr->imm_data, &cr->opcode, msn, &cr->remote_id.id, &cr->imm_data, msn_enable);
 
-        urma_eid_t target_eid;
-        (void)get_bonding_eid_by_target_eid(bdp_ctx->topo_map, &cr->remote_id.eid, &target_eid);
-        cr->remote_id.eid = target_eid;
+        cr->remote_id.eid = lookup_bonding_eid_cached(bdp_ctx->topo_map, &cr->remote_id.eid);
     } else {
         /*
          * NOTE: imm_data should only be valid for RECV CR.
