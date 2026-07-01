@@ -1191,7 +1191,7 @@ static int admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id, con
             printf("\t\t Cna:\n");
             for (uint32_t port_idx = 0; port_idx < PORT_NUM; port_idx++) {
                 if (!admin_is_eid_valid(ue->cna[port_idx])) {
-                    (void)printf("\t\t\t Port %d: Invalid EID\n", port_idx);
+                    (void)printf("\t\t\t Port %d: Invalid CNA\n", port_idx);
                 } else {
                     urma_eid_to_ipv6_str((urma_eid_t *)ue->cna[port_idx], eid_str, sizeof(eid_str));
                     (void)printf("\t\t\t Port %d: %s\n", port_idx, eid_str);
@@ -1267,7 +1267,7 @@ static int cmd_show_physical_dev_cb(struct nl_msg *msg, void *arg)
     admin_show_physical_dev_ctx_t *ctx = (admin_show_physical_dev_ctx_t *)arg;
     struct nlattr *attr;
     int ret;
- 
+
     ret = nla_parse(attrs, UBCORE_ATTR_AFTER_LAST - 1,
                     genlmsg_attrdata(genlhdr, 0),
                     genlmsg_attrlen(genlhdr, 0), NULL);
@@ -1283,7 +1283,7 @@ static int cmd_show_physical_dev_cb(struct nl_msg *msg, void *arg)
     }
     (void)memcpy(&ctx->bonding_dev, nla_data(attr), sizeof(ctx->bonding_dev));
     ctx->received = true;
- 
+
     return NL_STOP;
 }
 
@@ -1307,8 +1307,9 @@ int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
         admin_nl_free_msg(msg);
         return ret;
     }
-
+    admin_nl_disable_auto_ack(UBAGG_GENL);
     ret = admin_nl_send_recv_msg(msg, cmd_show_physical_dev_cb, &ctx, UBAGG_GENL);
+    admin_nl_enable_auto_ack(UBAGG_GENL);
     admin_nl_free_msg(msg);
 
     if (ret != 0 || ctx.ret != 0 || !ctx.received) {
