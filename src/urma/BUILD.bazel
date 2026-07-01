@@ -92,6 +92,7 @@ URMA_TOOL_LINKOPTS = [
 URMA_UDMA_COPTS = URMA_COMMON_COPTS + [
     "-fno-common",
     "-Werror=implicit-function-declaration",
+    "-Wno-error=discarded-qualifiers",
     "-ftrapv",
 ] + select({
     ":udma_st64b_disabled": [],
