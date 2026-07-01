@@ -72,12 +72,6 @@ int umq_ub_transport_pool_eventfd_get_impl(void);
 
 int umq_ub_write_imm(uint64_t umqh_tp, uint64_t target_addr, uint32_t len, uint64_t imm_value);
 
-// ubmm rendezvous related functions
-int umq_ub_record_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id, umq_buf_t *buf);
-void umq_ub_remove_rendezvous_buf(uint64_t umqh_tp, uint16_t msg_id);
-util_id_allocator_t *umq_ub_get_msg_id_generator(uint64_t umqh_tp);
-
-void ubmm_fill_umq_imm_head(void *imm_head_buf, umq_buf_t *buffer);
 
 int umq_ub_async_event_fd_get(umq_trans_info_t *trans_info);
 int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *event);
