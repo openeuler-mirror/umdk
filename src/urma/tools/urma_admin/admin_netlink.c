@@ -60,6 +60,37 @@ static int get_genl_id_by_family(genl_family_t family)
 
 static int init_sock_and_genl_id(genl_family_t family);
 
+static int admin_nl_set_auto_ack(genl_family_t family, bool enable)
+{
+    int ret = init_sock_and_genl_id(family);
+    if (ret != 0) {
+        return ret;
+    }
+
+    struct nl_sock *target_sock = get_nl_sock_by_family(family);
+    if (target_sock == NULL) {
+        printf("Invalid sock\n");
+        return -EINVAL;
+    }
+
+    if (enable) {
+        nl_socket_enable_auto_ack(target_sock);
+    } else {
+        nl_socket_disable_auto_ack(target_sock);
+    }
+    return 0;
+}
+
+int admin_nl_disable_auto_ack(genl_family_t family)
+{
+    return admin_nl_set_auto_ack(family, false);
+}
+
+int admin_nl_enable_auto_ack(genl_family_t family)
+{
+    return admin_nl_set_auto_ack(family, true);
+}
+
 static int admin_nl_recv_msg_inner(int (*cb)(struct nl_msg *msg, void *arg),
     void *arg, int silent_errno, genl_family_t family)
 {
