@@ -12,6 +12,10 @@
 
 - [1 Usage Constraints and Limitations](#1-usage-constraints-and-limitations)
     - [1.1 Version Compatibility Constraints](#11-version-compatibility-constraints)
+    - [1.2 Parameter Combination Constraints](#12-parameter-combination-constraints)
+        - [1.2.1 trans_mode, tp_type, order_type Combination Interception Table](#121-trans_mode-tp_type-order_type-combination-interception-table)
+        - [1.2.2 Validation Rule Description](#122-validation-rule-description)
+        - [1.2.3 Other Constraints](#123-other-constraints)
 
 - [2 URMA User-mode API](#2-urma-user-mode-api)
     - [2.1 Programming Examples](#21-programming-examples)
@@ -640,6 +644,84 @@ These objects include urma_context, jetty, segment, jfc, jfr, jfs, etc.
 ## 1.1 Version Compatibility Constraints
 
 ---
+
+## 1.2 Parameter Combination Constraints
+
+URMA validates the combination of three parameters — `trans_mode`, `tp_type`, and `order_type` — when creating resources such as JFS, JFR, Jetty, and importing remote Jetty. Combinations that do not comply with the rules in the table below will be **intercepted** (an error is returned).
+
+**Parameter Description and UB Protocol Concept Alignment**
+- `trans_mode`: A URMA software-defined concept representing the connection types (one-to-one, many-to-many) supported by the transaction layer, combining reliable and unreliable transport. Currently includes three types: RM (Reliable Message), RC (Reliable connection), and UM (Unreliable Message).
+- `tp_type`: TP type defined by the UB protocol, including three types: RTP (Reliable Transport), CTP (Compact Transport), and UTP (Unreliable Transport).
+- `order_type`: ordering mode defined by the UB protocol, including four types: ROI (Reliable and Ordered by Initiator, defined as URMA_OI in URMA), ROL (Reliable and Ordered by Low Layer, defined as URMA_OL in URMA), ROT (Reliable and Ordered by Target, defined as URMA_OT in URMA), and UNO (Unreliable and Non-Ordering, defined as URMA_NO in URMA). For ease of use, URMA software additionally defines the DEF_ORDER type.
+
+### 1.2.1 trans_mode, tp_type, order_type Combination Interception Table
+
+| trans_mode | tp_type | order_type | Allowed | Description |
+|---|---:|---|---|---|
+| URMA_TM_RM | URMA_RTP | URMA_DEF_ORDER (0) | Allowed | Default order_type is auto-converted based on trans_mode; flexible configuration is not supported |
+| URMA_TM_RM | URMA_RTP | URMA_OI | Allowed | RM mode supports initiator ordering |
+| URMA_TM_RM | URMA_RTP | URMA_OT | Allowed | **Driver intercepts based on chip type**; to prevent functional issues, URMA currently intercepts this; can be opened upon application request |
+| URMA_TM_RM | URMA_RTP | URMA_OL | Allowed | Allowed by URMA |
+| URMA_TM_RM | URMA_RTP | URMA_NO | **Intercepted** | RM is a reliable mode; unreliable non ordering is not supported |
+| URMA_TM_RM | URMA_CTP | URMA_DEF_ORDER (0) | Allowed | Same as RTP |
+| URMA_TM_RM | URMA_CTP | URMA_OI | Allowed | Same as RTP |
+| URMA_TM_RM | URMA_CTP | URMA_OT | Allowed | **Driver intercepts based on chip type**; to prevent functional issues, URMA currently intercepts this; can be opened upon application request |
+| URMA_TM_RM | URMA_CTP | URMA_OL | Allowed | Allowed by URMA |
+| URMA_TM_RM | URMA_CTP | URMA_NO | **Intercepted** | Same as RTP; RM is reliable |
+| URMA_TM_RM | URMA_UTP | Any order_type | **Intercepted** | UTP is only allowed in UM mode; intercepted during jetty creation or connection establishment |
+| URMA_TM_RC | URMA_RTP | URMA_DEF_ORDER (0) | Allowed | Default order_type is auto-converted to URMA_OL |
+| URMA_TM_RC | URMA_RTP | URMA_OT | Allowed | RC mode supports target ordering; **driver intercepts based on chip type** |
+| URMA_TM_RC | URMA_RTP | URMA_OL | Allowed | RC mode supports low layer ordering |
+| URMA_TM_RC | URMA_RTP | URMA_OI | Allowed | Driver passes to chip; adapted according to order_type |
+| URMA_TM_RC | URMA_RTP | URMA_NO | **Intercepted** | RC is a reliable mode; unreliable non ordering is not supported |
+| URMA_TM_RC | URMA_CTP | URMA_DEF_ORDER (0) | Allowed | Same as RTP |
+| URMA_TM_RC | URMA_CTP | URMA_OT | Allowed | **Driver intercepts based on chip type** |
+| URMA_TM_RC | URMA_CTP | URMA_OL | Allowed | Same as RTP |
+| URMA_TM_RC | URMA_CTP | URMA_OI | Allowed | Driver passes to chip; adapted according to order_type |
+| URMA_TM_RC | URMA_CTP | URMA_NO | **Intercepted** | Same as RTP; RC is reliable |
+| URMA_TM_RC | URMA_UTP | Any order_type | **Intercepted** | UTP is only allowed in UM mode; intercepted during jetty creation or connection establishment |
+| URMA_TM_UM | URMA_RTP | Any order_type | **Intercepted** | RTP is not allowed in UM mode |
+| URMA_TM_UM | URMA_CTP | URMA_DEF_ORDER (0) | **Intercepted** | Default order_type is auto-converted to URMA_NO, but the UM + CTP + UNO combination is not supported |
+| URMA_TM_UM | URMA_CTP | URMA_NO | **Intercepted** | Undefined behavior by the protocol |
+| URMA_TM_UM | URMA_CTP | URMA_OI | **Intercepted** | OI (initiator ordering) is only supported in RM mode |
+| URMA_TM_UM | URMA_CTP | URMA_OT | **Intercepted** | OT (target ordering) is only supported in RC mode |
+| URMA_TM_UM | URMA_CTP | URMA_OL | Supported | Currently intercepted at the user-mode level; supported at the kernel level; this configuration will be opened in the future based on user-mode requirements |
+| URMA_TM_UM | URMA_UTP | URMA_DEF_ORDER (0) | Allowed | UM mode allows UTP |
+| URMA_TM_UM | URMA_UTP | URMA_NO | Allowed | UM + UTP only supports unreliable non ordering |
+| URMA_TM_UM | URMA_UTP | URMA_OI | **Intercepted** | OI is only supported in RM mode |
+| URMA_TM_UM | URMA_UTP | URMA_OT | **Intercepted** | OT is only supported in RC mode |
+| URMA_TM_UM | URMA_UTP | URMA_OL | **Intercepted** | OL is only supported in RC mode |
+
+### 1.2.2 Validation Rule Description
+
+**Constraints between trans_mode and tp_type**:
+
+- `URMA_UTP` is only allowed in `URMA_TM_UM` transport mode. Using UTP in RM / RC mode will be intercepted.
+- `URMA_RTP` is not allowed in `URMA_TM_UM` mode. RTP is intended for RM / RC reliable transport.
+
+**Constraints between trans_mode and order_type**:
+
+- `URMA_OT` (target ordering) and `URMA_OL` (low layer ordering): only supported by `URMA_TM_RC`.
+- `URMA_OI` (initiator ordering): supported by both `URMA_TM_RM` and `URMA_TM_RC`.
+- `URMA_NO` (unreliable non ordering): RM / RC are reliable modes and do not allow this; only permitted under `URMA_TM_UM`.
+
+**Default order_type conversion rules**:
+
+When `order_type` is set to `URMA_DEF_ORDER` (0), URMA automatically converts it based on `trans_mode`:
+
+| trans_mode | Default order_type |
+|---|---|
+| URMA_TM_RM | URMA_OI (initiator ordering) |
+| URMA_TM_RC | URMA_OL (low layer ordering) |
+| URMA_TM_UM | URMA_NO (unreliable non ordering) |
+
+### 1.2.3 Other Constraints
+
+- WRs under UM mode (`URMA_TM_UM`) do not support fence, place_order, and comp_order.
+- WRs under out-of-order completion mode (`outorder_comp=1`) do not support fence, place_order, and comp_order.
+
+---
+
 # 2 URMA User-mode API
 
 ## 2.1 Programming Examples
