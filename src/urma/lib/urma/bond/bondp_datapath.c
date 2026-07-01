@@ -27,6 +27,8 @@
 #include "bondp_datapath.h"
 
 #define BONDP_POST_SEND_MAX_RETRY     3
+/* Max consecutive fast returns before forcing a full scan */
+#define BONDP_FAST_RETURN_THRESHOLD   64
 
 static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx);
 
@@ -954,26 +956,24 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     return ret;
 }
 
+/*
+ * Thread-local 16-slot cache for get_comp_by_cr.
+ */
+#define TL_COMP_CACHE_SLOTS 16
+
 static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_cr_t *cr)
 {
-    /*
-     * Thread-local cache: in active/backup and most workloads, consecutive
-     * CRs from the same device index map to the same bondp_comp_t.  The cache
-     * eliminates the rwlock + hash-table lookup on every CQE
-     */
-    static __thread bondp_context_t *tl_ctx;
-    static __thread int tl_dev_idx;
-    static __thread uint32_t tl_local_id;
-    static __thread bondp_comp_t *tl_comp;
-    static __thread uint32_t tl_gen;
-    static __thread bdp_p_vjetty_type_t tl_vjetty_type;
+    static thread_local bondp_context_t *tl_ctx;
+    static thread_local uint32_t tl_gen;
+    static thread_local int tl_fill_pos;
+    static thread_local int tl_evict_pos;
+    static thread_local struct {
+        int           dev_idx;
+        uint32_t      local_id;
+        uint8_t       type;
+        bondp_comp_t *comp;
+    } tl_slots[TL_COMP_CACHE_SLOTS];
 
-    /*
-     * Compute p_vjetty_type before the cache check so it can be used as
-     * part of the cache key.  Without it, JFS and JFR CRs with the same
-     * local_id from the same device can hit the cache and return the
-     * wrong bondp_comp_t (ABA-like type confusion).
-     */
     bdp_p_vjetty_type_t p_vjetty_type;
     if (cr->flag.bs.jetty != 0) {
         p_vjetty_type = JETTY;
@@ -982,19 +982,49 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
     } else {
         p_vjetty_type = JFR;
     }
-
-    if (tl_comp != NULL && tl_ctx == bdp_ctx && tl_dev_idx == dev_idx &&
-        tl_local_id == cr->local_id && tl_vjetty_type == p_vjetty_type &&
-        atomic_load(&bdp_ctx->p_vjetty_id_table.gen) == tl_gen) {
-        atomic_fetch_add(&tl_comp->use_cnt.atomic_cnt, 1);
-        return tl_comp;
+    /* Invalidate whole cache only if ctx or gen changed */
+    bool cache_valid = true;
+    uint32_t cur_gen = atomic_load(&bdp_ctx->p_vjetty_id_table.gen);
+    if (tl_ctx != bdp_ctx || tl_gen != cur_gen) {
+        for (int i = 0; i < TL_COMP_CACHE_SLOTS; i++) {
+            tl_slots[i].comp = NULL;
+        }
+        tl_ctx       = bdp_ctx;
+        tl_gen       = cur_gen;
+        tl_fill_pos  = 0;
+        tl_evict_pos = 0;
+        cache_valid  = false;
     }
 
+    /* Fast path */
+    if (cache_valid) {
+        for (int i = 0; i < TL_COMP_CACHE_SLOTS; i++) {
+            if (tl_slots[i].comp == NULL) {
+                break;
+            }
+            if (tl_slots[i].dev_idx == dev_idx &&
+                tl_slots[i].local_id == cr->local_id &&
+                tl_slots[i].type == (uint8_t)p_vjetty_type) {
+                bondp_comp_t *comp = tl_slots[i].comp;
+                atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
+                if (atomic_load(&bdp_ctx->p_vjetty_id_table.gen) != tl_gen) {
+                    atomic_fetch_sub(&comp->use_cnt.atomic_cnt, 1);
+                    for (int j = 0; j < TL_COMP_CACHE_SLOTS; j++) {
+                        tl_slots[j].comp = NULL;
+                    }
+                    tl_fill_pos  = 0;
+                    tl_evict_pos = 0;
+                    break;
+                }
+                return comp;
+            }
+        }
+    }
+    /* Slow path: cache miss → rwlock + hash-table lookup. */
     urma_jetty_id_t pjetty_id = {
         .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
         .id = cr->local_id,
     };
-
     pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_comp_t *comp = bdp_p_vjetty_id_table_lookup_comp_without_lock(
         &bdp_ctx->p_vjetty_id_table, pjetty_id, p_vjetty_type);
@@ -1004,15 +1034,21 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
         return NULL;
     }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
-    uint32_t cur_gen = atomic_load(&bdp_ctx->p_vjetty_id_table.gen);
+    cur_gen = atomic_load(&bdp_ctx->p_vjetty_id_table.gen);
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-    /* Update thread-local cache */
-    tl_ctx = bdp_ctx;
-    tl_dev_idx = dev_idx;
-    tl_local_id = cr->local_id;
-    tl_vjetty_type = p_vjetty_type;
-    tl_comp = comp;
+
     tl_gen = cur_gen;
+    int slot;
+    if (tl_fill_pos < TL_COMP_CACHE_SLOTS) {
+        slot = tl_fill_pos++;
+    } else {
+        slot = tl_evict_pos;
+        tl_evict_pos = (tl_evict_pos + 1) & (TL_COMP_CACHE_SLOTS - 1);
+    }
+    tl_slots[slot].dev_idx  = dev_idx;
+    tl_slots[slot].local_id = cr->local_id;
+    tl_slots[slot].type     = (uint8_t)p_vjetty_type;
+    tl_slots[slot].comp     = comp;
 
     return comp;
 }
@@ -1321,25 +1357,73 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int
 
 int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
+    PERF_PROFILING_START(BOND_POLL_JFC);
     static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
-
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_jfc_t, v_jfc);
-
     int cr_cnt_remaining = cr_cnt;
+    bool single_dev = is_single_dev_mode(bdp_ctx);
+    uint32_t enabled_count = bdp_jfc->enabled_count;
 
-    PERF_PROFILING_START(BOND_POLL_JFC);
-
-    /* Start polling from the next device index to avoid starvation. */
-    int start_idx = bdp_jfc->lasted_polled_jfc_idx + 1;
-
-    for (int i = 0; i < bdp_jfc->dev_num && cr_cnt_remaining > 0; i++) {
-        int idx = ((start_idx + i) % bdp_jfc->dev_num);
-
-        if (bdp_jfc->p_jfc[idx] == NULL) {
+    int hot_idx = bdp_jfc->lasted_polled_jfc_idx;
+    bool need_full_scan = false;
+    bool hot_polled = false;
+    /* Hot path is active-backup only */
+    if (bdp_ctx->bonding_mode != BONDP_BONDING_MODE_BALANCE &&
+        hot_idx >= 0 && bdp_jfc->p_jfc[hot_idx] != NULL) {
+        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+                              : cr_cnt_remaining;
+        int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[hot_idx], pcr_cnt_max, pcr_buf);
+        if (pcr_cnt < 0) {
+            PERF_PROFILING_END(BOND_POLL_JFC);
+            return pcr_cnt;
+        }
+        if (pcr_cnt > 0) {
+            hot_polled = true;
+            bdp_jfc->polled_mask |= (1U << (uint32_t)hot_idx);
+            for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
+                urma_cr_t *pcr = &pcr_buf[cr_id];
+                if (!need_full_scan && (is_failover_cr(pcr) || is_fake_cr(pcr))) {
+                    need_full_scan = true;
+                }
+                cr_convert_ret_t conv_ret = single_dev
+                    ? bondp_handle_cr_no_store(bdp_ctx, hot_idx, pcr)
+                    : bondp_handle_cr_with_store(bdp_ctx, hot_idx, pcr);
+                if (conv_ret == CONVERT_FAIL) {
+                    PERF_PROFILING_END(BOND_POLL_JFC);
+                    return -1;
+                }
+                if (conv_ret == CONVERT_SUCCESS) {
+                    cr[cr_cnt - cr_cnt_remaining] = *pcr;
+                    cr_cnt_remaining--;
+                }
+            }
+            if (!need_full_scan &&
+                cr_cnt_remaining < cr_cnt &&
+                bdp_jfc->fast_return_count < BONDP_FAST_RETURN_THRESHOLD) {
+                bdp_jfc->fast_return_count++;
+                bdp_jfc->lasted_polled_jfc_idx = hot_idx;
+                PERF_PROFILING_END(BOND_POLL_JFC);
+                return cr_cnt - cr_cnt_remaining;
+            }
+        }
+    }
+    /* Full scan: hot_idx returned 0 or balance mode needs all paths. */
+    bdp_jfc->fast_return_count = 0;
+    uint32_t start_n = 0;
+    for (uint32_t n = 0; n < enabled_count; n++) {
+        if ((int)bdp_jfc->enabled_indices[n] == hot_idx) {
+            start_n = (n + 1) % enabled_count;
+            break;
+        }
+    }
+    for (uint32_t i = 0; i < enabled_count && cr_cnt_remaining > 0; i++) {
+        uint32_t n = (start_n + i) % enabled_count;
+        int idx = (int)bdp_jfc->enabled_indices[n];
+        if (hot_polled && idx == hot_idx) {
             continue;
         }
-
         int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
                               ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
                               : cr_cnt_remaining;
@@ -1351,19 +1435,17 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         if (pcr_cnt == 0) {
             continue;
         }
-
         bdp_jfc->polled_mask |= (1U << (uint32_t)idx);
-
         for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
             urma_cr_t *pcr = &pcr_buf[cr_id];
             cr_convert_ret_t conv_ret;
-
-            if (is_single_dev_mode(bdp_ctx)) {
+            if (single_dev) {
                 conv_ret = bondp_handle_cr_no_store(bdp_ctx, idx, pcr);
             } else {
                 conv_ret = bondp_handle_cr_with_store(bdp_ctx, idx, pcr);
             }
             if (conv_ret == CONVERT_FAIL) {
+                PERF_PROFILING_END(BOND_POLL_JFC);
                 return -1;
             }
             if (conv_ret == CONVERT_SUCCESS) {
@@ -1371,10 +1453,8 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
                 cr_cnt_remaining--;
             }
         }
-
         bdp_jfc->lasted_polled_jfc_idx = idx;
     }
-
     PERF_PROFILING_END(BOND_POLL_JFC);
     return cr_cnt - cr_cnt_remaining;
 }
