@@ -224,10 +224,10 @@ TEST_F(PerfTest, QuantileOutputOrdered) {
     ASSERT_EQ(umq_perf_info_get(&info), 0);
     EXPECT_EQ(info.type_record[type].sample_num, (uint64_t)N);
 
-    uint64_t p50 = info.type_record[type].quantile_val[0];
-    uint64_t p90 = info.type_record[type].quantile_val[1];
-    uint64_t p99 = info.type_record[type].quantile_val[2];
-    uint64_t p9999 = info.type_record[type].quantile_val[3];
+    uint64_t p50 = info.type_record[type].quantile[0];
+    uint64_t p90 = info.type_record[type].quantile[1];
+    uint64_t p99 = info.type_record[type].quantile[2];
+    uint64_t p9999 = info.type_record[type].quantile[3];
     EXPECT_GT(p50, 0u);
     EXPECT_LE(p50, p90);
     EXPECT_LE(p90, p99);
