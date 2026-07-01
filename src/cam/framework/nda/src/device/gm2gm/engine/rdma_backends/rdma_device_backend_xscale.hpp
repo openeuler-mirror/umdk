@@ -386,4 +386,100 @@ ACLSHMEM_DEVICE void aclshmemi_roce_write_ub_to_gm_with_sync(uint64_t addr, Asce
     AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(sync_id);
 }
 
+ACLSHMEM_DEVICE bool aclshmemi_roce_xscale_check_cqe_owner(
+    __gm__ aclshmemi_xscdv_cqe64_t *cqe64, uint32_t cur_tail, uint32_t depth)
+{
+    bool owner_bit = (cqe64->cqe.owner & ACLSHMEMI_XSC_CQE_OWNER_MASK);
+    // ! For performance reasons, depth should be a power of two, which will be optimized to bitwise operations by the
+    // ! compiler at compile time
+    bool expect_bit = ((cur_tail / depth) & 1); // same as (cur_tail >> log2(depth)) & 1
+    return owner_bit == expect_bit;
+}
+template <>
+ACLSHMEM_DEVICE void aclshmemi_roce_ring_cq_doorbell<aclshmemi_rdma_backend_t::XSCALE>(
+    uint32_t pe, uint32_t qp_idx, uint32_t cur_tail, AscendC::LocalTensor<uint64_t> &ub_local64,
+    AscendC::LocalTensor<uint32_t> &ub_local32, uint32_t sync_id)
+{
+    __gm__ aclshmemi_rdma_info *rdma_info = aclshmemi_qp_info_fetch();
+
+    uint32_t qp_num = rdma_info->qp_num;
+    __gm__ aclshmemi_rdma_cq_ctx *cq_context =
+        (__gm__ aclshmemi_rdma_cq_ctx *)(rdma_info->scq_ptr +
+                                         ((uint64_t)pe * qp_num + qp_idx) * sizeof(aclshmemi_rdma_cq_ctx));
+    // Update cur_tail in global memory
+    ub_local32.SetValue(0, cur_tail);
+    aclshmemi_roce_write_ub_to_gm_with_sync(cq_context->tail_addr, ub_local32, sizeof(uint32_t), sync_id);
+
+    aclshmemi_xscdv_diamond_cq_doorbell_t cq_db_buf;
+    cq_db_buf.raw = 0;
+    cq_db_buf.cq_next_cid = cur_tail;
+    cq_db_buf.cq_id = cq_context->cqn;
+    cq_db_buf.cq_sta = 0;
+    ub_local64.SetValue(0, cq_db_buf.raw);
+
+    aclshmemi_roce_write_ub_to_gm_with_sync(
+        cq_context->db_addr, ub_local64, sizeof(aclshmemi_xscdv_diamond_cq_doorbell_t), sync_id);
+}
+
+// This function expects cur_tail to reach target_idx within the internally set timeout period. If this requirement is
+// not met when exiting, the function is considered to have an error.
+template <>
+ACLSHMEM_DEVICE uint32_t aclshmemi_roce_poll_cq<aclshmemi_rdma_backend_t::XSCALE>(
+    uint32_t pe, uint32_t qp_idx, uint32_t target_idx, AscendC::LocalTensor<uint64_t> &ub_local64,
+    AscendC::LocalTensor<uint32_t> &ub_local32, uint32_t sync_id)
+{
+    __gm__ aclshmemi_rdma_info *rdma_info = aclshmemi_qp_info_fetch();
+    uint32_t qp_num = rdma_info->qp_num;
+    __gm__ aclshmemi_rdma_cq_ctx *cq_context =
+        (__gm__ aclshmemi_rdma_cq_ctx *)(rdma_info->scq_ptr +
+                                         ((uint64_t)pe * qp_num + qp_idx) * sizeof(aclshmemi_rdma_cq_ctx));
+    auto cq_base_addr = cq_context->buf_addr;
+    auto cqe_size = cq_context->cqe_size;
+    auto depth = cq_context->depth;
+    auto cur_hardware_tail_addr = cq_context->tail_addr;
+    dcci_cachelines((__gm__ uint8_t *)cur_hardware_tail_addr, 8);
+    uint32_t cur_tail = *(__gm__ uint32_t *)(cur_hardware_tail_addr);
+    uint32_t original_cur_tail = cur_tail;
+    uint64_t run_cycles = 0;
+    uint32_t status = 0;
+    uint32_t wqn = 0;
+
+    while (cur_tail != target_idx) {
+        run_cycles = 0;
+        __gm__ aclshmemi_xscdv_cqe64_t *cqe_addr =
+            (__gm__ aclshmemi_xscdv_cqe64_t *)(cq_base_addr + cqe_size * (cur_tail % depth));
+        while (!aclshmemi_roce_xscale_check_cqe_owner(cqe_addr, cur_tail, depth) &&
+               run_cycles < ACLSHMEMI_XSC_POLL_CQ_TIMEOUT_CYCLES) {
+            run_cycles++;
+            dcci_cachelines((__gm__ uint8_t *)cqe_addr, sizeof(aclshmemi_xscdv_cqe64_t));
+        }
+        if (run_cycles >= ACLSHMEMI_XSC_POLL_CQ_TIMEOUT_CYCLES) {
+            // timeout and not received CQE with owner bit set
+            status = ACLSHMEMI_XSC_POLL_CQ_TIMEOUT_ERROR;
+            ACLSHMEM_DEBUG_FUNC(
+                aclshmemi_kernel_printf,
+                "Poll CQE timeout: pe=%u, qp_idx=%u, cur_tail=%u, target_idx=%u, original_tail=%u, backend=%u\n", pe,
+                qp_idx, cur_tail, target_idx, original_cur_tail, (uint32_t)aclshmemi_rdma_backend_t::XSCALE);
+            break;
+        }
+        cur_tail++;
+        wqn = cqe_addr->cqe.qp_id & 0x7FFF; // reserved for multi WQ share the same CQ
+        // Check CQE status
+        status = cqe_addr->cqe.error_code;
+        if (status) {
+            // when we receive CQE with error, return
+            ACLSHMEM_DEBUG_FUNC(
+                aclshmemi_kernel_printf,
+                "Receive CQE with error: %d in pe %u, cur_tail: %u, wqn: %u, qp_idx: %u, backend %u\n", status, pe,
+                cur_tail, wqn, qp_idx, (uint32_t)aclshmemi_rdma_backend_t::XSCALE);
+            break;
+        }
+    }
+
+    aclshmemi_roce_ring_cq_doorbell<aclshmemi_rdma_backend_t::XSCALE>(
+        pe, qp_idx, cur_tail, ub_local64, ub_local32, sync_id);
+
+    return status;
+}
+
 #endif // ACLSHMEM_RDMA_DEVICE_BACKEND_XSCALE_HPP
