@@ -77,7 +77,7 @@ static ALWAYS_INLINE thread_local_jetty_cache_t *get_thread_jetty_cache(void)
         urpc_list_init(&g_thread_jetty_cache.registry_node);
         g_thread_jetty_cache.cached_count = 0;
         g_thread_jetty_cache.inited = true;
-        urpc_thread_closure_register(THREAD_CLOSURE_JETTY_POOL, 0, release_thread_cache);
+        (void)umq_thread_closure_register(UMQ_TRANS_MODE_UB, THREAD_CLOSURE_JETTY_POOL, 0, release_thread_cache);
         (void)pthread_spin_lock(&g_jetty_pool.lock);
         urpc_list_push_back(&g_jetty_pool.thread_cache_list, &g_thread_jetty_cache.registry_node);
         (void)pthread_spin_unlock(&g_jetty_pool.lock);

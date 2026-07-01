@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include "urpc_util.h"
+#include "urpc_thread_closure.h"
 #include "umq_api.h"
 #include "umq_pro_api.h"
 #include "umq_tp_api.h"
@@ -95,6 +96,8 @@ static ALWAYS_INLINE bool is_timeout(const struct timespec *last, uint32_t timeo
 umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode);
 
 void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf);
+int umq_thread_closure_register(umq_trans_mode_t trans_mode,
+    urpc_thread_closure_type_t type, uint64_t id, void (*closure)(uint64_t id));
 
 #ifdef __cplusplus
 }
