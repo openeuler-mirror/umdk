@@ -105,6 +105,7 @@ static int tiny_qbuf_base_fetch(uint32_t needed, local_block_pool_t *local_pool,
         }
         fetch_count += (uint32_t)ret;
     }
+    local_pool->capacity_with_data = g_tiny_qbuf_pool.tls_pools.tls_qbuf_pool_depth;
     g_thread_tiny_cache.stats.tls_fetch_buf_cnt_with_data += fetch_count;
     return UMQ_SUCCESS;
 }
