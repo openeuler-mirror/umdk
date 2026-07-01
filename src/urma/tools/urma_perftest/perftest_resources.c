@@ -1143,72 +1143,51 @@ static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perfte
     tp_cfg.flag.bs.uboe = cfg->uboe;
     tp_cfg.trans_mode = cfg->trans_mode;
 
-    // All jfs/jetty within the same urma_ctx share the same eid
-    tp_cfg.local_eid =
-        cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
-            ? ctx->jfs[0]->jfs_id.eid
-            : ctx->jetty[0]->jetty_id.eid;
-
-    tp_cfg.peer_eid = ctx->remote_jetty_id[0].eid;
-
-    // Step 1: Get TP list
-    if (cfg->trans_mode == URMA_TM_RM && cfg->tp_reuse) {
+    for (uint32_t i = 0; i < ctx->jetty_num; i++) {
+        if (cfg->tp_reuse && cfg->trans_mode == URMA_TM_RM && i > 0) {
+            ctx->tp_info[i] = ctx->tp_info[0];
+            continue;
+        }
+        tp_cfg.local_eid =
+            cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX
+                ? ctx->jfs[i]->jfs_id.eid
+                : ctx->jetty[i]->jetty_id.eid;
+        tp_cfg.peer_eid = ctx->remote_jetty_id[i].eid;
         uint32_t tp_cnt = 1;
-        int ret = urma_get_tp_list(ctx->urma_ctx, &tp_cfg, &tp_cnt, &ctx->tp_info[0]);
+        int ret = urma_get_tp_list(ctx->urma_ctx, &tp_cfg, &tp_cnt, &ctx->tp_info[i]);
         if (ret != URMA_SUCCESS || tp_cnt != 1) {
             LOG_ERROR("Failed to get tpid list, ret:%d, tp_cnt:%u!\n", ret, tp_cnt);
             goto free_buf;
         }
-    } else {
-        uint32_t tp_cnt = ctx->jetty_num;
-        int ret = urma_get_tp_list(ctx->urma_ctx, &tp_cfg, &tp_cnt, &ctx->tp_info[0]);
-        if (ret != URMA_SUCCESS || tp_cnt != ctx->jetty_num) {
-            LOG_ERROR("Failed to get tpid list, ret:%d, tp_cnt:%u!\n", ret, tp_cnt);
-            goto free_buf;
-        }
-    }
-
-    // Step 2: Assign tp_info for tp_reuse and set tp attributes
-    if (cfg->trans_mode == URMA_TM_RM && cfg->tp_reuse) {
-        for (uint32_t i = 1; i < ctx->jetty_num; i++) {
-            ctx->tp_info[i] = ctx->tp_info[0];
-        }
-    }
-
-    if (cfg->uboe) {
-        uint32_t set_tp_attr_flag = PERFTEST_SET_ATTR_BITMAP_UBOE;
-        uint8_t set_tp_attr_cnt = PERFTEST_SET_ATTR_CNT_UBOE;
-        if (cfg->use_ctp) {
-            LOG_ERROR("ctp is not supported by uboe!\n");
-            goto free_buf;
-        }
-        if (!cfg->uboe_dip || !cfg->uboe_sip) {
-            LOG_ERROR("uboe module need parametres: sip, dip, optional parametres: dscp, vlan, sl\n");
-            goto free_buf;
-        }
-        int ret = urma_get_smac(ctx->urma_ctx, cfg->smac);
-        if (ret != URMA_SUCCESS) {
-            LOG_ERROR("Failed to get smac, ret:%d\n", ret);
-            goto free_buf;
-        }
-        urma_net_addr_t net_addr;
-        net_addr.sin_family = AF_INET;
-        net_addr.in4.s_addr = cfg->dip.in4.addr;
-        if (memcmp(cfg->sip.raw, cfg->dip.raw, URMA_IP_ADDR_BYTES) == 0) {
-            (void)memcpy(cfg->dmac, cfg->smac, URMA_MAC_BYTES);
-        } else {
-            ret = urma_get_dmac(ctx->urma_ctx, &net_addr, cfg->dmac);
+        if (cfg->uboe) {
+            uint32_t set_tp_attr_flag = PERFTEST_SET_ATTR_BITMAP_UBOE;
+            uint8_t set_tp_attr_cnt = PERFTEST_SET_ATTR_CNT_UBOE;
+            if (cfg->use_ctp) {
+                LOG_ERROR("ctp is not supported by uboe!\n");
+                goto free_buf;
+            }
+            if (!cfg->uboe_dip || !cfg->uboe_sip) {
+                LOG_ERROR("uboe module need parametres: sip, dip, optional parametres: dscp, vlan, sl\n");
+                goto free_buf;
+            }
+            ret = urma_get_smac(ctx->urma_ctx, cfg->smac);
             if (ret != URMA_SUCCESS) {
+                LOG_ERROR("Failed to get smac, ret:%d\n", ret);
+                goto free_buf;
+            }
+            urma_net_addr_t net_addr;
+            net_addr.sin_family = AF_INET;
+            net_addr.in4.s_addr = cfg->dip.in4.addr;
+            if (memcmp(cfg->sip.raw, cfg->dip.raw, URMA_IP_ADDR_BYTES) == 0) {
+                (void)memcpy(cfg->dmac, cfg->smac, URMA_MAC_BYTES);
+            } else if (urma_get_dmac(ctx->urma_ctx, &net_addr, cfg->dmac) != URMA_SUCCESS) {
                 LOG_ERROR("Failed to get dmac by dip, ret:%d\n", ret);
                 goto free_buf;
             }
-        }
 
-        urma_tp_attr_value_t tp_attr = {0};
-        create_tp_info_get_attr_uboe(cfg, &tp_attr, &set_tp_attr_cnt, &set_tp_attr_flag);
+            urma_tp_attr_value_t tp_attr = {0};
+            create_tp_info_get_attr_uboe(cfg, &tp_attr, &set_tp_attr_cnt, &set_tp_attr_flag);
 
-        uint32_t set_cnt = (cfg->trans_mode == URMA_TM_RM && cfg->tp_reuse) ? 1 : ctx->jetty_num;
-        for (uint32_t i = 0; i < set_cnt; i++) {
             ret = urma_set_tp_attr(ctx->urma_ctx, ctx->tp_info[i].tp_handle, set_tp_attr_cnt,
                                    set_tp_attr_flag, &tp_attr);
             if (ret != URMA_SUCCESS) {
