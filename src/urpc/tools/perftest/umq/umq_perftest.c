@@ -264,6 +264,10 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
     umq_buf_t *buf = NULL;
     umq_state_t umq_state = QUEUE_STATE_MAX;
     int poll_cnt = 0;
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
         goto WAIT_UMQ_READY;
     }
@@ -294,10 +298,6 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 
         require_rx_count -= cur_batch_count;
     } while (require_rx_count > 0);
-
-    umq_io_option_t io_tx_option = {
-        .io_direction = UMQ_IO_TX,
-    };
 
 WAIT_UMQ_READY:
     do {
