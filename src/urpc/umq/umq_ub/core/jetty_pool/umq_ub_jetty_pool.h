@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include "urpc_list.h"
 #include "urpc_bitmap.h"
+#include "util_lock.h"
 #include "urma_api.h"
 
 #ifdef __cplusplus
@@ -27,7 +28,7 @@ typedef struct umq_ub_jetty_node_list {
     uint32_t list_len;
     urpc_bitmap_t bitmap;
     volatile uint32_t ref_cnt;
-    pthread_spinlock_t lock;       // serializes bitmap + node_list slot mutation (create/destroy)
+    util_external_mutex_lock *lock;       // serializes bitmap + node_list slot mutation (create/destroy)
 } umq_ub_jetty_node_list_t;
 
 // Jetty pool configuration
