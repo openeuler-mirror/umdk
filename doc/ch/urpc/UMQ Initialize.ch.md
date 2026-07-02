@@ -29,8 +29,6 @@
 - trans_info_num: 数据面传输设备信息的数量，最多支持128个
 - flow_control: 配置流控参数
 - block_cfg: 配置小型内存池block的大小，支持8K, 16K, 32K, 64K 4种类型。
-- cna：使用方导入内存的UB控制器的CNA地址，仅UMQ_TRANS_MODE_UBMM和UMQ_TRANS_MODE_UBMM_PLUS模式有效
-- ubmm_eid: 用方导入内存的UB控制器的EID，仅UMQ_TRANS_MODE_UBMM和UMQ_TRANS_MODE_UBMM_PLUS模式有效
 - trans_info：数据面传输设备信息，用于初始化对应得设备
 
 ### 说明

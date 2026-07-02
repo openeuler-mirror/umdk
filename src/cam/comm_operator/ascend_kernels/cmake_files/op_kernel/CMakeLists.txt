@@ -36,11 +36,6 @@ else()
     npu_op_kernel_options("" ALL OPTIONS ${KERNEL_COMPILE_OPTS})
 endif()
 
-# Code coverage configuration
-if (DEFINED ENV{ENABLE_COV})
-    npu_op_kernel_options(ALL OPTIONS --save-temp-files)
-endif()
-
 # Collect AscendC kernel source files
 npu_op_kernel_sources(ascendc_kernels
     KERNEL_DIR ./

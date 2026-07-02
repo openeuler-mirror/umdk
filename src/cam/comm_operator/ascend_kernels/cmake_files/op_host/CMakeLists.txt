@@ -56,13 +56,6 @@ if(DEFINED ENV{SHMEM_HOME_PATH})
     include_directories($ENV{SHMEM_HOME_PATH}/shmem/include)
 endif()
 
-# Coverage option
-if(DEFINED ENV{ENABLE_COV})
-    message(STATUS "Coverage enabled via ENABLE_COV environment variable")
-    add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
-    add_link_options(--coverage -lgcov)
-endif()
-
 # Collect all host-side source files
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} ops_srcs)
 

@@ -204,8 +204,6 @@ static int umq_perftest_init_umq(umq_perftest_config_t *cfg)
     umq_config->io_lock_free = true;
     umq_config->trans_info_num = 1;
     umq_config->trans_info[0].trans_mode = (umq_trans_mode_t)cfg->trans_mode;
-    umq_config->cna = cfg->cna;
-    umq_config->ubmm_eid = cfg->deid;
     umq_config->buf_pool_cfg.small_block_size = cfg->blk_mode;
     if (fill_dev_info(&umq_config->trans_info[0].dev_info, cfg) != 0) {
         free(umq_config);
@@ -266,6 +264,10 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
     umq_buf_t *buf = NULL;
     umq_state_t umq_state = QUEUE_STATE_MAX;
     int poll_cnt = 0;
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
         goto WAIT_UMQ_READY;
     }
@@ -296,10 +298,6 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 
         require_rx_count -= cur_batch_count;
     } while (require_rx_count > 0);
-
-    umq_io_option_t io_tx_option = {
-        .io_direction = UMQ_IO_TX,
-    };
 
 WAIT_UMQ_READY:
     do {

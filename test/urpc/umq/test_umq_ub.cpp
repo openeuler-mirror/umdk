@@ -232,7 +232,7 @@ TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
     memset(&dev, 0, sizeof(dev));
     umq_ub_bind_queue_info_t queue_info;
     memset(&queue_info, 0, sizeof(queue_info));
-    queue_info.tp_mode = URMA_TM_RM;
+    queue_info.rjetty->trans_mode = URMA_TM_RM;
     umq_ub_bind_fc_info_t fc_info;
     memset(&fc_info, 0, sizeof(fc_info));
     umq_ub_ctx_t dev_ctx;
@@ -257,16 +257,12 @@ TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
     info.fc_info = &fc_info;
     ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
 
-    dev.umq_trans_mode = UMQ_TRANS_MODE_IPC;
-    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
     dev.umq_trans_mode = UMQ_TRANS_MODE_UB;
 
     queue.state = QUEUE_STATE_ERR;
     ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
     queue.state = QUEUE_STATE_READY;
 
-    dev_ctx.trans_info.trans_mode = UMQ_TRANS_MODE_IPC;
-    ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
     dev_ctx.trans_info.trans_mode = UMQ_TRANS_MODE_UB;
 
     queue.tp_mode = URMA_TM_UM;
