@@ -8,6 +8,16 @@
 
 using namespace urma_test_bond;
 
+static void InitSingleEnabledPollJfc(bondp_jfc_t *jfc, BondPathFixture *fixture)
+{
+    jfc->v_jfc.urma_ctx = &fixture->ctx.v_ctx;
+    jfc->dev_num = 1;
+    jfc->enabled_count = 1;
+    jfc->enabled_indices[0] = 0;
+    jfc->lasted_polled_jfc_idx = -1;
+    jfc->p_jfc[0] = &fixture->phyJfc;
+}
+
 TEST(UrmaBondTest, DatapathPublicPostSendPropagatesSingleDeviceNoStoreFailure)
 {
     BondPathFixture fixture;
@@ -117,10 +127,7 @@ TEST(UrmaBondTest, DatapathPollJfcConvertsSingleDeviceSendCr)
     ASSERT_EQ(0, bdp_p_vjetty_id_table_add_without_lock(
         &fixture.ctx.p_vjetty_id_table, physicalJfsId, JFS, fixture.comp.v_jfs.jfs_id.id, &fixture.comp));
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
 
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
@@ -198,10 +205,7 @@ TEST(UrmaBondTest, DatapathPollJfcConvertsRecvCrWithoutBackup)
     ASSERT_EQ(0, bdp_p_vjetty_id_table_add_without_lock(
         &fixture.ctx.p_vjetty_id_table, physicalJfrId, JFR, fixture.comp.v_jfr.jfr_id.id, &fixture.comp));
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
 
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
@@ -250,10 +254,7 @@ TEST(UrmaBondTest, DatapathPollRecvCrWithStoreUsesBufferedWr)
     entry->user_ctx = 0xcafe;
     fixture.comp.rqe_cnt[0] = 1;
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
 
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
@@ -297,10 +298,7 @@ TEST(UrmaBondTest, DatapathPollJfcConvertsFakeCrWithStore)
     ASSERT_EQ(0, bdp_p_vjetty_id_table_add_without_lock(
         &fixture.ctx.p_vjetty_id_table, physicalJettyId, JETTY, fixture.comp.v_jetty.jetty_id.id, &fixture.comp));
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
 
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
@@ -385,10 +383,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_SUCCESS;
@@ -509,10 +504,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_SUCCESS;
@@ -631,10 +623,7 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
 
-    vJfc.v_jfc.urma_ctx = &fixture.ctx.v_ctx;
-    vJfc.dev_num = 1;
-    vJfc.lasted_polled_jfc_idx = -1;
-    vJfc.p_jfc[0] = &fixture.phyJfc;
+    InitSingleEnabledPollJfc(&vJfc, &fixture);
     g_mockDatapathCr = {};
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_ACK_TIMEOUT_ERR;
