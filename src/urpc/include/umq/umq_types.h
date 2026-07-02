@@ -287,7 +287,9 @@ typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
     uint32_t feature;               // feature flags
     uint16_t headroom_size;         // header size of umq buffer, [0, UMQ_HEADROOM_SIZE_LIMIT]
-    bool io_lock_free;              // true: user should ensure thread safety when call io function
+    uint8_t io_lock_free : 1;       // true: user should ensure thread safety when call io function
+    uint8_t rq_lock_free : 1;       // true: user should ensure thread safety when call umq_poll in RX direction
+    uint8_t rsvd : 6;
     uint8_t trans_info_num;
     umq_flow_control_cfg_t flow_control; // used when UMQ_FEATURE_ENABLE_FLOW_CONTROL is set
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];
