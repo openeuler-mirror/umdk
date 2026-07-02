@@ -23,8 +23,6 @@
 #include "urma_types_str.h"
 #include "urma_ubagg.h"
 
-#include "perftest_communication.h"
-
 #include "perftest_parameters.h"
 
 #define PERFTEST_CACHE_LINE_FILE_SIZE (10)
@@ -331,8 +329,6 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->comm.server_ip = NULL;
     cfg->comm.bind_ip = NULL;
     cfg->comm.port = PERFTEST_DEF_PORT;
-    cfg->comm.listen_fd = -1;
-    cfg->comm.sock_fd = NULL;
     cfg->jfs_depth = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_JFS_DEPTH_BW : PERFTEST_DEF_JFS_DEPTH_LAT;
     cfg->trans_mode = URMA_TM_RM;
 

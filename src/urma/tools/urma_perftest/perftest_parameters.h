@@ -17,7 +17,7 @@
 #include "ub_util.h"
 #include "urma_types.h"
 
-#include "perftest_communication.h"
+#include "perftest_mgmt.h"
 #include "perftest_log.h"
 
 /* Default Values of perftest parameters */

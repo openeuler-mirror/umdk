@@ -12,7 +12,7 @@
 
 #include "urma_api.h"
 
-#include "perftest_communication.h"
+#include "perftest_mgmt.h"
 #include "perftest_parameters.h"
 #include "perftest_resources.h"
 #include "perftest_run_test.h"
