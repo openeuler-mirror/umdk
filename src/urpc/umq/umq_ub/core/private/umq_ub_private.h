@@ -219,7 +219,9 @@ typedef struct remote_imported_tseg_info {
 } remote_imported_tseg_info_t;
 
 typedef struct umq_ub_ctx {
-    bool io_lock_free;
+    uint8_t io_lock_free : 1;
+    uint8_t rq_lock_free : 1;
+    uint8_t rsvd : 6;
     volatile uint32_t ref_cnt;
     uint32_t feature;
     umq_flow_control_cfg_t flow_control;

@@ -599,6 +599,7 @@ static int umq_ub_ctx_init_one(umq_ub_ctx_t *ctx, umq_trans_info_t *info, umq_in
     }
 
     ctx->io_lock_free = cfg->io_lock_free;
+    ctx->rq_lock_free = cfg->rq_lock_free;
     ctx->feature = cfg->feature;
     ctx->flow_control = cfg->flow_control;
     ctx->ref_cnt = 1;
@@ -2454,6 +2455,7 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     }
 
     g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
+    g_ub_ctx[g_ub_ctx_count].rq_lock_free = cfg->rq_lock_free;
     g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
     g_ub_ctx[g_ub_ctx_count].flow_control = cfg->flow_control;
 
