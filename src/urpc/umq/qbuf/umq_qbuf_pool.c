@@ -812,6 +812,12 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         goto EXPANSION_POOL_UNINIT;
     }
     g_total_escape_buf_cnt = 0;
+
+    /* move without data expansion to control plane for reduce the first-packet I/O latency */
+    ret = expand_global_pool(false);
+    if (ret != UMQ_SUCCESS) {
+        goto EXPANSION_POOL_UNINIT;
+    }
     return UMQ_SUCCESS;
 
 EXPANSION_POOL_UNINIT:
