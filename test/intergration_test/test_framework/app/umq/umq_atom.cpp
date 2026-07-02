@@ -1225,14 +1225,3 @@ int test_umq_pro_func_rsp(test_data_args_t *data_args)
     test_umq_ack_interrupt(data_args->umqh_ops, UMQ_IO_RX, nevents);
     return TEST_SUCCESS;
 }
-
-int test_poll_one_buf(uint64_t qh, umq_buf_t **polled_buf_out, umq_io_option_t *option, bool is_free)
-{
-    int cnt = 0;
-    int ret = 0;
-    uint64_t start = get_timestamp_ms();
-    while (cnt < 1 && (get_timestamp_ms() - start < 100000)) {
-        ret = umq_poll(qh, option, polled_buf_out, 1);
-        cnt += ret;
-    }
-}
