@@ -569,13 +569,12 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
 
     (void)memset(cfg, 0, sizeof(perftest_config_t));
     static const struct option first_options[] = {
-        {"help",          no_argument, NULL, 'h'},
-        {"version",       no_argument, NULL, 'V'},
-        {NULL,            no_argument, NULL, '\0'},
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'V'},
+        {NULL, no_argument, NULL, '\0'},
     };
     while (1) {
-        int c = getopt_long(argc, argv, "+hV",
-            first_options, NULL);
+        int c = getopt_long(argc, argv, "+hV", first_options, NULL);
         if (c == -1) {
             break;
         }
@@ -584,11 +583,11 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 usage(argv[0]);
                 return -1;
             case 'V':
-                #ifdef PERFTEST_VERSION
+#ifdef PERFTEST_VERSION
                 (void)printf("perftest_version: Version: A5-%s\n", PERFTEST_VERSION);
-                #else
+#else
                 (void)printf("The version remains undefined.\n");
-                #endif
+#endif
                 return -1;
             default:
                 break;
@@ -1724,7 +1723,7 @@ int check_remote_cfg(perftest_config_t *cfg)
 {
     perftest_config_t remote_cfg;
     for (uint32_t i = 0; i < cfg->pair_num; i++) {
-        int ret = sock_sync_data(cfg, i, OFF_SET, (char *)cfg, (char *)&remote_cfg);
+        int ret = sync_data(cfg, i, OFF_SET, (char *)cfg, (char *)&remote_cfg);
         if (ret != 0) {
             LOG_ERROR("Failed to sync remote configuration, pair_num:%u, errno:%s.\n", i, strerror(errno));
             return ret;

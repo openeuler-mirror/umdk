@@ -361,7 +361,7 @@ void close_connection(perftest_config_t *cfg)
     }
 }
 
-int sock_sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data)
+int sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data)
 {
     int sock_fd = get_sock_fd(cfg, index);
     if (sock_fd < 0) {
@@ -369,12 +369,12 @@ int sock_sync_data(const perftest_config_t *cfg, uint32_t index, int size, char 
     }
 
     if (send_all(sock_fd, local_data, size) != 0) {
-        LOG_ERROR("Failed to send data during sock_sync_data.\n");
+        LOG_ERROR("Failed to send data during sync_data.\n");
         return -1;
     }
 
     if (recv_all(sock_fd, remote_data, size) != 0) {
-        LOG_ERROR("Failed to recv data during sock_sync_data.\n");
+        LOG_ERROR("Failed to recv data during sync_data.\n");
         return -1;
     }
 
@@ -393,7 +393,7 @@ int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a)
     if (b == NULL) {
         return -ENOMEM;
     }
-    ret = sock_sync_data(cfg, index, len, (char *)a, b);
+    ret = sync_data(cfg, index, len, (char *)a, b);
     if (ret != 0) {
         LOG_ERROR("sync time error, %s, ret: %d.\n", a, ret);
         goto sync_ret;

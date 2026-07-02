@@ -130,7 +130,7 @@ typedef struct perftest_context {
     urma_token_id_t *notify_token_id;
     urma_seg_t *remote_notify_seg;
     uint32_t remote_jetty_idx;
-    urma_target_seg_t **import_notify_seg;   // be processed for different remote seg
+    urma_target_seg_t **import_notify_seg; // be processed for different remote seg
 
     /* user tp */
     user_tp_ctx_t *user_tp;
