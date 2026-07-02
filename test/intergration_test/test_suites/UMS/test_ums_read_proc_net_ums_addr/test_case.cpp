@@ -13,7 +13,7 @@ static int run_test(test_ums_ctx_t *ctx)
 {
     int ret = 0;
     int rc = TEST_FAILED;
-    char setup_env[MAX_EXEC_CMD_RET_LEN];
+    // char setup_env[MAX_EXEC_CMD_RET_LEN];
     int check_num_ums;
     int check_num_fallback;
     char test_ip_str[128]={0};
@@ -21,7 +21,7 @@ static int run_test(test_ums_ctx_t *ctx)
     char recover_env[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+    // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(3);
     sync_time("----------------------------0");
 
@@ -55,8 +55,6 @@ static int run_test(test_ums_ctx_t *ctx)
 
     sync_time("----------------------------3");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    sleep(2);
-    exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(2);
     rc = TEST_SUCCESS;
 EXIT:

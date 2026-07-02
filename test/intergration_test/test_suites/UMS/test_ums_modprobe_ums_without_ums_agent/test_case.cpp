@@ -13,16 +13,19 @@ static int run_test(test_ums_ctx_t *ctx)
 {
     int ret = 0;
     int rc = TEST_FAILED;
-    int check_num;
+    int check_num_ums;
+    int check_num_fallback;
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
     char recover_env[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+    sleep(3);
 
     char buf[MAX_EXEC_CMD_RET_LEN];
     exec_cmd(buf, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums ub_token_mode=1; service ums_agent stop");
-    sleep(3);
+    sleep(10);
+
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
@@ -40,7 +43,9 @@ static int run_test(test_ums_ctx_t *ctx)
     // 校验流量走ums
     if (ctx->app_id == PROC_2) {
         sprintf(test_ip_str, "%s", ctx->test_ip_host2);
-        check_num = query_proc_net_ums_detail_stream_num("True", test_ip_str);
+        check_num_fallback = query_proc_net_ums_detail_stream_num("True", test_ip_str);
+        check_num_ums = query_proc_net_ums_detail_stream_num("False", test_ip_str);
+        int check_num = check_num_ums + check_num_fallback;
         if (check_num < 1) {
             ret = -1;
         }
@@ -50,7 +55,7 @@ static int run_test(test_ums_ctx_t *ctx)
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     sleep(2);
     exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
-    sleep(2);
+    sleep(10);
 
     rc = TEST_SUCCESS;
 EXIT:

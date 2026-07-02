@@ -17,12 +17,13 @@ static int run_test(test_ums_ctx_t *ctx)
     int ret = 0;
     int rc = TEST_FAILED;
     char test_ip_str[128]={0};
-    char setup_env[MAX_EXEC_CMD_RET_LEN];
+    // char setup_env[MAX_EXEC_CMD_RET_LEN];
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
-
+    // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+    sleep(3);
+    
     sync_time("----------------------------0");
 
     for (int i=0; i<vec_random.size(); i++) {
@@ -36,6 +37,7 @@ static int run_test(test_ums_ctx_t *ctx)
             exec_cmd(cmd0, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port + 1);
 
         }
+        sleep(2);
         sync_time("----------------------------1");
         if (ctx->app_id == PROC_2) {
             char cmd1[MAX_EXEC_CMD_RET_LEN];

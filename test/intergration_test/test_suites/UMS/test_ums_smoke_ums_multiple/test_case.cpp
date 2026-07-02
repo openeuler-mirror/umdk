@@ -15,13 +15,13 @@ static int run_test(test_ums_ctx_t *ctx)
     int ret = 0;
     int rc = TEST_FAILED;
     int check_num;
-    char setup_env[MAX_EXEC_CMD_RET_LEN];
+    // char setup_env[MAX_EXEC_CMD_RET_LEN];
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
-    
+    // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
+    sleep(3);
     sync_time("----------------------------0");
 
     if (ctx->app_id == PROC_1) {
