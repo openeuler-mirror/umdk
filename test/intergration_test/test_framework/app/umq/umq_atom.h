@@ -198,8 +198,6 @@ static inline uint64_t get_timestamp_s(void)
 }
 
 int test_umq_str_to_eid(const char *buf, umq_eid_t *eid);
-void test_get_ubmm_cna(test_umq_ctx_t *ctx);
-void test_get_ubmm_eid(test_umq_ctx_t *ctx);
 test_umq_ctx_t *test_umq_ctx_init(int argc, char *argv[], int thread_num = 1);
 int test_umq_ctx_uninit(test_umq_ctx_t *ctx);
 int set_trans_dev_info(test_umq_ctx_t *ctx, umq_dev_assign_t *dev_info, umq_dev_assign_mode_t assign_mode);
