@@ -59,7 +59,7 @@ static inline void umq_inc_ref(bool lock_free, volatile uint32_t *ref_cnt, uint3
     if (lock_free) {
         *ref_cnt = *ref_cnt + n;
     } else {
-        (void)__atomic_fetch_add(ref_cnt, n, __ATOMIC_ACQ_REL);
+        (void)__atomic_fetch_add(ref_cnt, n, __ATOMIC_RELAXED);
     }
 }
 
