@@ -272,11 +272,11 @@ static int cmd_perf_stop(admin_config_t *cfg)
 
 static void cmd_perf_print_stat(const admin_core_latency_stat_t *stat)
 {
-    printf("+----------------------+----------+----------+----------+----------+"
+    printf("+--------------------------+----------+----------+----------+----------+"
            "----------+----------+----------+\n");
-    printf("  Type                 | samples  | avg[ns]  | min[ns]  | max[ns]  |"
+    printf("  Type                     | samples  | avg[ns]  | min[ns]  | max[ns]  |"
            " p90[ns]  | p99[ns]  | p9999[ns]\n");
-    printf("+----------------------+----------+----------+----------+----------+"
+    printf("+--------------------------+----------+----------+----------+----------+"
            "----------+----------+----------+\n");
 
     for (uint32_t i = 0; i < PERF_RECORD_TYPE_MAX; i++) {
@@ -285,12 +285,12 @@ static void cmd_perf_print_stat(const admin_core_latency_stat_t *stat)
             continue;
         }
         const char *name = (i < PERF_RECORD_TYPE_MAX) ? ub_perf_type_names[i] : "unknown";
-        printf("  %-20s | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu\n",
+        printf("  %-24s | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu | %-8lu\n",
                name, rec->count, rec->avg_ns, rec->min_ns, rec->max_ns,
                rec->p90_ns, rec->p99_ns, rec->p9999_ns);
     }
 
-    printf("+----------------------+----------+----------+----------+----------+"
+    printf("+--------------------------+----------+----------+----------+----------+"
            "----------+----------+----------+\n");
 }
 
@@ -332,16 +332,16 @@ static void cmd_perf_print_jfce_cnt(void)
     }
 
     printf("\n[JFCE Count Statistics]\n");
-    printf("+----------------------+----------+----------+\n");
-    printf("  Device               | total_cnt| thresh_cnt\n");
-    printf("+----------------------+----------+----------+\n");
+    printf("+----------------------+----------------------+----------------------+\n");
+    printf("  Device               | total_cnt            | thresh_cnt\n");
+    printf("+----------------------+----------------------+----------------------+\n");
     for (uint32_t i = 0; i < jfce_cnt; i++) {
-        printf("  %-20s | %-8lu | %-8lu\n",
+        printf("  %-20s | %-20lu | %-20lu\n",
             jfce_info[i].dev_name,
             jfce_info[i].jfce_total_cnt,
             jfce_info[i].jfce_thresh_cnt);
     }
-    printf("+----------------------+----------+----------+\n");
+    printf("+----------------------+----------------------+----------------------+\n");
 }
 
 static int cmd_perf_show(admin_config_t *cfg)
