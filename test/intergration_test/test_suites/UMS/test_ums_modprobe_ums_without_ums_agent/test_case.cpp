@@ -14,36 +14,28 @@ static int run_test(test_ums_ctx_t *ctx)
     int ret = 0;
     int rc = TEST_FAILED;
     int check_num;
-    char setup_env[MAX_EXEC_CMD_RET_LEN];
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
     char recover_env[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
-    
-    sync_time("----------------------------1");
 
-    if (ctx->app_id == PROC_1) {
-        char buf0[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf0, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums ub_token_mode=1; service ums_agent stop");
-    }
-    if (ctx->app_id == PROC_2) {
-        char buf1[MAX_EXEC_CMD_RET_LEN];
-        exec_cmd(buf1, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums ub_token_mode=1; service ums_agent stop");
-    }
-    sync_time("----------------------------2");
+    char buf[MAX_EXEC_CMD_RET_LEN];
+    exec_cmd(buf, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums ub_token_mode=1; service ums_agent stop");
+    sleep(3);
+    sync_time("----------------------------1");
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port + 1);
     }
-    sync_time("----------------------------3");
+    sleep(3);
+    sync_time("----------------------------2");
     if (ctx->app_id == PROC_2) {
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -m 8192 -t 0 tcp_bw > /tmp/qperf_client.log 2>&1 &", ctx->test_ip, ctx->test_port + 1);
     }
-    sleep(2);
-    sync_time("----------------------------4");
+    sleep(10);
+    sync_time("----------------------------3");
 
     // 校验流量走ums
     if (ctx->app_id == PROC_2) {
@@ -54,14 +46,15 @@ static int run_test(test_ums_ctx_t *ctx)
         }
         CHKERR_JUMP(ret != TEST_SUCCESS, "fallback single connect failed", EXIT);
     }
-    sync_time("----------------------------5");
+    sync_time("----------------------------4");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+    sleep(2);
     exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(2);
 
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------6");
+    sync_time("----------------------------5");
     return rc;
 }
 
