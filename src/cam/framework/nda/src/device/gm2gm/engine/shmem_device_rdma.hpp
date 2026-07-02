@@ -34,4 +34,22 @@ ACLSHMEM_DEVICE __gm__ aclshmemi_rdma_info *aclshmemi_qp_info_fetch()
     return rdma_info;
 }
 
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_write(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx,
+                                          uint64_t message_len, AscendC::LocalTensor<uint64_t> ub_local64,
+                                          AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id)
+{
+    aclshmemi_roce_write<T, ACLSHMEMI_K_RDMA_BACKEND>(dst, src, pe, qp_idx, message_len, ub_local64, ub_local32,
+                                                      sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_read(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx,
+                                         uint64_t message_len, AscendC::LocalTensor<uint64_t> ub_local64,
+                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id)
+{
+    aclshmemi_roce_read<T, ACLSHMEMI_K_RDMA_BACKEND>(dst, src, pe, qp_idx, message_len, ub_local64, ub_local32,
+                                                     sync_id);
+}
+
 #endif // ACLSHMEM_DEVICE_RDMA_HPP
