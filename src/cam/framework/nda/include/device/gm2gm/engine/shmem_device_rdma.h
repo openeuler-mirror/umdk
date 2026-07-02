@@ -55,8 +55,8 @@ ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(__gm__ T *dst, __gm__ T *src, __ubuf
  * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(
-    __gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe, uint32_t sync_id);
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe,
+                                            uint32_t sync_id);
 
 /**
  * @brief Asynchronous interface. Copy contiguous data on symmetric memory from the specified
@@ -71,9 +71,8 @@ ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(
  * @param pe                [in] PE number of the remote PE.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(
-    AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src, AscendC::LocalTensor<T> buf, uint32_t elem_size,
-    int pe);
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe);
 
 /**
  * @brief Asynchronous interface. Copy contiguous data on symmetric memory from the specified
@@ -89,9 +88,8 @@ ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(
  * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(
-    AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src, AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe,
-    uint32_t sync_id);
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe, uint32_t sync_id);
 #define shmem_roce_get_mem_nbi aclshmemx_roce_get_nbi
 /**
  * @brief Asynchronous interface. Copy contiguous data on local PE to symmetric address on the specified PE.
@@ -120,8 +118,8 @@ ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(__gm__ T *dst, __gm__ T *src, __ubuf
  * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(
-    __gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe, uint32_t sync_id);
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe,
+                                            uint32_t sync_id);
 
 /**
  * @brief Asynchronous interface. Copy contiguous data on local PE to symmetric address on the specified PE.
@@ -135,9 +133,8 @@ ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(
  * @param pe                [in] PE number of the remote PE.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(
-    AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src, AscendC::LocalTensor<T> buf, uint32_t elem_size,
-    int pe);
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe);
 
 /**
  * @brief Asynchronous interface. Copy contiguous data on local PE to symmetric address on the specified PE.
@@ -152,9 +149,18 @@ ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(
  * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
  */
 template <typename T>
-ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(
-    AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src, AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe,
-    uint32_t sync_id);
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe, uint32_t sync_id);
 #define shmem_roce_put_mem_nbi aclshmemx_roce_put_nbi
+
+/**
+ * @brief RDMA Quiet function. This synchronous function ensures all previous RDMA WQEs are completed
+ * (data has arrived at the destination NIC).
+ *
+ * @param pe                [in] PE number of the remote PE.
+ * @param buf               [in] Pointer on local UB, available space larger than 64 Bytes.
+ * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
+ */
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_quiet(uint32_t pe, __ubuf__ T *buf, uint32_t sync_id);
 
 #endif
