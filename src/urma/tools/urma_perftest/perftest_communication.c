@@ -25,13 +25,25 @@
 
 #include "perftest_communication.h"
 
+typedef struct comm_tcp_ctx {
+    int listen_fd;
+    int *sock_fd;
+    uint32_t sock_num;
+} comm_tcp_ctx_t;
+
+static comm_tcp_ctx_t comm_ctx = {
+    .listen_fd = -1,
+    .sock_fd = NULL,
+    .sock_num = 0,
+};
+
 static int get_sock_fd(const perftest_config_t *cfg, uint32_t index)
 {
-    if (cfg == NULL || cfg->comm.sock_fd == NULL || index >= cfg->pair_num) {
+    if (cfg == NULL || comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num) {
         errno = EINVAL;
         return -1;
     }
-    return cfg->comm.sock_fd[index];
+    return comm_ctx.sock_fd[index];
 }
 
 static int send_all(int sock_fd, const char *buf, int size)
@@ -80,6 +92,47 @@ static int recv_all(int sock_fd, char *buf, int size)
     return 0;
 }
 
+static int alloc_comm_sock(uint32_t sock_num)
+{
+    if (comm_ctx.listen_fd >= 0 || comm_ctx.sock_fd != NULL) {
+        errno = EBUSY;
+        return -1;
+    }
+
+    comm_ctx.listen_fd = -1;
+    comm_ctx.sock_fd = (int *)calloc(sock_num, sizeof(int));
+    if (comm_ctx.sock_fd == NULL) {
+        comm_ctx.sock_num = 0;
+        return -1;
+    }
+
+    comm_ctx.sock_num = sock_num;
+    for (uint32_t i = 0; i < sock_num; i++) {
+        comm_ctx.sock_fd[i] = -1;
+    }
+    return 0;
+}
+
+static void cleanup_comm_ctx(void)
+{
+    if (comm_ctx.listen_fd >= 0) {
+        (void)close(comm_ctx.listen_fd);
+        comm_ctx.listen_fd = -1;
+    }
+    if (comm_ctx.sock_fd != NULL) {
+        for (uint32_t i = 0; i < comm_ctx.sock_num; i++) {
+            if (comm_ctx.sock_fd[i] >= 0) {
+                (void)close(comm_ctx.sock_fd[i]);
+                comm_ctx.sock_fd[i] = -1;
+            }
+        }
+        free(comm_ctx.sock_fd);
+    }
+    comm_ctx.listen_fd = -1;
+    comm_ctx.sock_fd = NULL;
+    comm_ctx.sock_num = 0;
+}
+
 static int ip_set_sockopts(int sockfd)
 {
     int ret;
@@ -90,7 +143,7 @@ static int ip_set_sockopts(int sockfd)
      * the problem of the connection failure of the client is solved */
     ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &enable_reuse, sizeof(enable_reuse));
     if (ret < 0) {
-        LOG_ERROR("server socket set_opt failed. enable_reuse:%d, ret: %d, err: [%d]%s.\n",
+        LOG_ERROR("socket set_opt failed. enable_reuse:%d, ret: %d, err: [%d]%s.\n",
                   SO_REUSEPORT, ret, errno, strerror(errno));
         return ret;
     }
@@ -98,7 +151,7 @@ static int ip_set_sockopts(int sockfd)
     // Close Nagle algorithm, and fix 42ms delay problem.
     ret = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &enable_nodelay, sizeof(enable_nodelay));
     if (ret < 0) {
-        LOG_ERROR("server socket set_opt failed. opt:%d, ret: %d, err: [%d]%s.\n",
+        LOG_ERROR("socket set_opt failed. opt:%d, ret: %d, err: [%d]%s.\n",
                   TCP_NODELAY, ret, errno, strerror(errno));
         return ret;
     }
@@ -112,7 +165,12 @@ static int check_add_port(int port, const char *server_ip, struct addrinfo *hint
     int num;
     char service[PERFTEST_PORT_LEN_MAX] = {0};
 
-    if (sprintf(service, "%d", port) <= 0) {
+    if (port < 0 || port > UINT16_MAX) {
+        LOG_ERROR("Invalid port: %d.\n", port);
+        return -1;
+    }
+
+    if (snprintf(service, sizeof(service), "%d", port) <= 0) {
         return -1;
     }
 
@@ -146,9 +204,7 @@ static int client_connect(perftest_config_t *cfg)
     uint32_t i = 0;
 
     perftest_comm_t *comm = &cfg->comm;
-    comm->listen_fd = -1;
-    comm->sock_fd = (int *)calloc(1, sizeof(int) * cfg->pair_num);
-    if (comm->sock_fd == NULL) {
+    if (alloc_comm_sock(cfg->pair_num) != 0) {
         return -1;
     }
     hints.ai_family = comm->enable_ipv6 ? AF_INET6 : AF_INET;
@@ -179,27 +235,26 @@ static int client_connect(perftest_config_t *cfg)
     for (i = 0; i < cfg->pair_num; i++) {
         if (check_add_port((comm->port + i), comm->server_ip, &hints, &res)) {
             LOG_ERROR("Problem in resolving basic address and port\n");
-            free(comm->sock_fd);
-            return -1;
+            goto create_client_error;
         }
 
         for (tmp = res; tmp != NULL; tmp = tmp->ai_next) {
             bool try_connect = true;
-            comm->sock_fd[i] = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
-            if (comm->sock_fd[i] < 0) {
+            comm_ctx.sock_fd[i] = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
+            if (comm_ctx.sock_fd[i] < 0) {
                 continue;
             }
             if (comm->bind_ip != NULL) {
-                if (bind(comm->sock_fd[i], client_tmp->ai_addr, client_tmp->ai_addrlen) != 0) {
+                if (bind(comm_ctx.sock_fd[i], client_tmp->ai_addr, client_tmp->ai_addrlen) != 0) {
                     try_connect = false;
                     LOG_ERROR("Failed to bind ip: %s\n", comm->bind_ip);
                 }
             }
-            if (try_connect && connect_retry(comm->sock_fd[i], tmp->ai_addr, tmp->ai_addrlen) == 0) {
+            if (try_connect && connect_retry(comm_ctx.sock_fd[i], tmp->ai_addr, tmp->ai_addrlen) == 0) {
                 break;
             }
-            close(comm->sock_fd[i]);
-            comm->sock_fd[i] = -1;
+            close(comm_ctx.sock_fd[i]);
+            comm_ctx.sock_fd[i] = -1;
         }
 
         if (res != NULL) {
@@ -207,14 +262,15 @@ static int client_connect(perftest_config_t *cfg)
             res = NULL;
         }
 
-        if (comm->sock_fd[i] < 0) {
+        if (comm_ctx.sock_fd[i] < 0) {
             LOG_ERROR("Failed to connect %s:%d\n\n", comm->server_ip, (comm->port + i));
             goto create_client_error;
         }
 
-        if (ip_set_sockopts(comm->sock_fd[i]) != 0) {
-            LOG_ERROR("Failed to set_sockopts, sockfd:%d, errno: %s\n", comm->sock_fd[i], strerror(errno));
-            (void)close(comm->sock_fd[i]);
+        if (ip_set_sockopts(comm_ctx.sock_fd[i]) != 0) {
+            LOG_ERROR("Failed to set_sockopts, sockfd:%d, errno: %s\n", comm_ctx.sock_fd[i], strerror(errno));
+            (void)close(comm_ctx.sock_fd[i]);
+            comm_ctx.sock_fd[i] = -1;
             goto create_client_error;
         }
     }
@@ -227,28 +283,25 @@ static int client_connect(perftest_config_t *cfg)
 
     return 0;
 create_client_error:
-    for (uint32_t j = 0; j < i; j++) {
-        (void)close(comm->sock_fd[j]);
-    }
-    free(comm->sock_fd);
+    cleanup_comm_ctx();
     if (client_res != NULL) {
         freeaddrinfo(client_res);
     }
+    return -1;
 bind_client_error:
+    cleanup_comm_ctx();
     return -1;
 }
 
 static int server_connect(perftest_config_t *cfg)
 {
-    struct addrinfo *res, *tmp;
+    struct addrinfo *res = NULL, *tmp = NULL;
     struct addrinfo hints = {0};
     uint32_t accept_num = 0;
 
     perftest_comm_t *comm = &cfg->comm;
-    comm->listen_fd = -1;
     comm->server_ip = NULL;
-    comm->sock_fd = (int *)calloc(1, sizeof(int) * cfg->pair_num);
-    if (comm->sock_fd == NULL) {
+    if (alloc_comm_sock(cfg->pair_num) != 0) {
         return -1;
     }
     hints.ai_flags = AI_PASSIVE;
@@ -257,8 +310,7 @@ static int server_connect(perftest_config_t *cfg)
 
     if (check_add_port(comm->port, comm->bind_ip, &hints, &res)) {
         LOG_ERROR("Problem in resolving basic address and port\n");
-        free(comm->sock_fd);
-        return -1;
+        goto free_sock;
     }
 
     for (tmp = res; tmp != NULL; tmp = tmp->ai_next) {
@@ -266,62 +318,61 @@ static int server_connect(perftest_config_t *cfg)
             continue;
         }
 
-        comm->listen_fd = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
-        if (comm->listen_fd >= 0) {
-            if (ip_set_sockopts(comm->listen_fd) != 0) {
+        comm_ctx.listen_fd = socket(tmp->ai_family, tmp->ai_socktype, tmp->ai_protocol);
+        if (comm_ctx.listen_fd >= 0) {
+            if (ip_set_sockopts(comm_ctx.listen_fd) != 0) {
                 LOG_ERROR("Failed to set_sockopts, sockfd:%d, errno: %s\n",
-                          comm->listen_fd, strerror(errno));
-                goto close_listen_fd;
+                          comm_ctx.listen_fd, strerror(errno));
+                goto free_res;
             }
-            if (bind(comm->listen_fd, tmp->ai_addr, tmp->ai_addrlen) == 0) {
+            if (bind(comm_ctx.listen_fd, tmp->ai_addr, tmp->ai_addrlen) == 0) {
                 break;
             }
-            close(comm->listen_fd);
-            comm->listen_fd = -1;
+            (void)close(comm_ctx.listen_fd);
+            comm_ctx.listen_fd = -1;
         }
     }
 
-    if (comm->listen_fd < 0) {
+    if (comm_ctx.listen_fd < 0) {
         LOG_ERROR("Failed to bind, port:%d.\n", comm->port);
-        goto close_listen_fd;
+        goto free_res;
     }
 
-    if (listen(comm->listen_fd, PERFTEST_MAX_CONNECTIONS) != 0) {
+    if (listen(comm_ctx.listen_fd, PERFTEST_MAX_CONNECTIONS) != 0) {
         LOG_ERROR("Failed to listen, listenfd:%d, errno: [%d]%s\n",
-                  comm->listen_fd, errno, strerror(errno));
-        goto close_listen_fd;
+                  comm_ctx.listen_fd, errno, strerror(errno));
+        goto free_res;
     }
 
     while (accept_num < cfg->pair_num) {
-        comm->sock_fd[accept_num] = accept(comm->listen_fd, NULL, 0);
-        if (comm->sock_fd[accept_num] < 0) {
+        comm_ctx.sock_fd[accept_num] = accept(comm_ctx.listen_fd, NULL, 0);
+        if (comm_ctx.sock_fd[accept_num] < 0) {
             LOG_ERROR("Failed to accept, listenfd:%d, errno: [%d]%s\n",
-                      comm->listen_fd, errno, strerror(errno));
-            goto create_server_error;
+                      comm_ctx.listen_fd, errno, strerror(errno));
+            goto free_res;
         }
 
-        if (ip_set_sockopts(comm->sock_fd[accept_num]) != 0) {
+        if (ip_set_sockopts(comm_ctx.sock_fd[accept_num]) != 0) {
             LOG_ERROR("Failed to set_sockopts, sockfd:%d, errno: [%d]%s\n",
-                      comm->sock_fd[accept_num], errno, strerror(errno));
-            (void)close(comm->sock_fd[accept_num]);
-            goto create_server_error;
+                      comm_ctx.sock_fd[accept_num], errno, strerror(errno));
+            (void)close(comm_ctx.sock_fd[accept_num]);
+            comm_ctx.sock_fd[accept_num] = -1;
+            goto free_res;
         }
         accept_num++;
     }
 
     freeaddrinfo(res);
-    (void)close(comm->listen_fd); // No other connections need to be accepted.
-    comm->listen_fd = -1;
+    (void)close(comm_ctx.listen_fd); // No other connections need to be accepted.
+    comm_ctx.listen_fd = -1;
     return 0;
 
-create_server_error:
-    for (uint32_t j = 0; j < accept_num; j++) {
-        (void)close(comm->sock_fd[j]);
+free_res:
+    if (res != NULL) {
+        freeaddrinfo(res);
     }
-    free(comm->sock_fd);
-close_listen_fd:
-    freeaddrinfo(res);
-    (void)close(comm->listen_fd);
+free_sock:
+    cleanup_comm_ctx();
     return -1;
 }
 
@@ -344,15 +395,9 @@ int establish_connection(perftest_config_t *cfg)
 
 void close_connection(perftest_config_t *cfg)
 {
-    uint32_t i = 0;
     perftest_comm_t *comm = &cfg->comm;
 
-    for (i = 0; i < cfg->pair_num; i++) {
-        (void)close(comm->sock_fd[i]);
-        comm->sock_fd[i] = -1;
-    }
-    free(comm->sock_fd);
-    comm->sock_fd = NULL;
+    cleanup_comm_ctx();
     free(comm->server_ip);
     comm->server_ip = NULL;
     if (comm->bind_ip) {
