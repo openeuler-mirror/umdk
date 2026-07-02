@@ -127,6 +127,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 
 static int umq_ub_jetty_node_list_init(umq_ub_jetty_node_list_t *jetty_node_list, uint32_t node_cnt)
 {
+    int ret = UMQ_SUCCESS;
     if (node_cnt == 0 || node_cnt > JETTY_POOL_MAX_NODES) {
         UMQ_VLOG_ERR(VLOG_UMQ, "node cnt %u invalid\n", node_cnt);
         return -UMQ_ERR_EINVAL;
@@ -135,19 +136,34 @@ static int umq_ub_jetty_node_list_init(umq_ub_jetty_node_list_t *jetty_node_list
     jetty_node_list->list_len = node_cnt;
     jetty_node_list->bitmap = urpc_bitmap_alloc(node_cnt);
     if (jetty_node_list->bitmap == NULL) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "alloc bitmap failed\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "alloc bitmap failed\n");
         return -UMQ_ERR_ENOMEM;
     }
 
     jetty_node_list->node_list = (jetty_pool_node_t **)calloc(node_cnt, sizeof(jetty_pool_node_t *));
     if (jetty_node_list->node_list == NULL) {
-        urpc_bitmap_free(jetty_node_list->bitmap);
-        UMQ_VLOG_INFO(VLOG_UMQ, "calloc node list failed\n");
-        return -UMQ_ERR_ENOMEM;
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc node list failed\n");
+        ret = -UMQ_ERR_ENOMEM;
+        goto FREE_BITMAP;
     }
 
-    (void)pthread_spin_init(&jetty_node_list->lock, PTHREAD_PROCESS_PRIVATE);
+    jetty_node_list->lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (jetty_node_list->lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "jetty node list mutex create failed\n");
+        ret = -UMQ_ERR_ENOMEM;
+        goto FREE_NODE_LIST;
+    }
     return UMQ_SUCCESS;
+
+FREE_NODE_LIST:
+    free(jetty_node_list->node_list);
+    jetty_node_list->node_list = NULL;
+
+FREE_BITMAP:
+    urpc_bitmap_free(jetty_node_list->bitmap);
+    jetty_node_list->bitmap = NULL;
+
+    return ret;
 }
 
 int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
@@ -195,12 +211,15 @@ static void umq_ub_jetty_node_list_uninit(umq_ub_jetty_node_list_t *jetty_node_l
     if (jetty_node_list->node_list != NULL) {
         jetty_node_list->list_len = 0;
         free(jetty_node_list->node_list);
+        jetty_node_list->node_list = NULL;
     }
 
     if (jetty_node_list->bitmap != NULL) {
         urpc_bitmap_free(jetty_node_list->bitmap);
+        jetty_node_list->bitmap = NULL;
     }
-    (void)pthread_spin_destroy(&jetty_node_list->lock);
+    (void)util_mutex_lock_destroy(jetty_node_list->lock);
+    jetty_node_list->lock = NULL;
 }
 
 void umq_ub_jetty_pool_uninit(void)
