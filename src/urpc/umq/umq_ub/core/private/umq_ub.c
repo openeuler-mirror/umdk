@@ -1612,6 +1612,7 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
         .base = {
             .depth = jfr_depth,
             .jfce = jfr_ctx->jfr_jfce,
+            .flag.bs.lock_free = dev_ctx->rq_lock_free,
             .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0) &&
                 ((queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0)
         },
@@ -1636,6 +1637,7 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
             .min_rnr_timer = queue->min_rnr_timer,
             .jfc = jfr_ctx->jfr_jfc,
             .token_value = {.token = jetty_token},
+            .flag.bs.lock_free = dev_ctx->rq_lock_free,
             .flag.bs.has_drv_ext = ((queue->create_flag & UMQ_CREATE_FLAG_USED_PORTS) != 0) &&
                 ((queue->create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0)
         },
