@@ -18,10 +18,11 @@ static int run_test(test_ums_ctx_t *ctx)
     int check_num_fallback;
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
+    char recover_env[MAX_EXEC_CMD_RET_LEN];
 
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
-
+    sleep(3);
     sync_time("----------------------------0");
 
     if (ctx->app_id == PROC_1) {
@@ -30,6 +31,7 @@ static int run_test(test_ums_ctx_t *ctx)
         char buf1[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(buf1, MAX_EXEC_CMD_RET_LEN, "nohup qperf -lp %d > /tmp/qperf_server1.log 2>&1 &", ctx->test_port + 2);
     }
+    sleep(3);
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char buf2[MAX_EXEC_CMD_RET_LEN];
@@ -37,7 +39,7 @@ static int run_test(test_ums_ctx_t *ctx)
         char buf3[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(buf3, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf %s -lp %d -t 0 -m 8192 tcp_lat > /tmp/qperf_client1.log 2>&1 &", ctx->test_ip, ctx->test_port + 2);
     }
-    sleep(2);
+    sleep(10);
     sync_time("----------------------------2");
     sprintf(test_ip_str, "%s", ctx->test_ip_host2);
     check_num_ums = query_proc_net_ums_detail_stream_num("False", test_ip_str);
@@ -53,6 +55,8 @@ static int run_test(test_ums_ctx_t *ctx)
 
     sync_time("----------------------------3");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+    sleep(2);
+    exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(2);
     rc = TEST_SUCCESS;
 EXIT:
