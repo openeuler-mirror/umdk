@@ -86,22 +86,6 @@ static uint16_t hexStringToUint16(const char *hexString)
     return (uint16_t)result;
 }
 
-void test_get_ubmm_cna(test_umq_ctx_t *ctx)
-{
-    char cmd_cna[MAX_LINE_LENGTH];
-    exec_cmd(cmd_cna, MAX_LINE_LENGTH, "cat /sys/bus/ub/devices/00001/primary_cna");
-    ctx->cna = static_cast<uint32_t>(hexStringToUint16(cmd_cna));
-    TEST_LOG_INFO("this host cna=%u\n", ctx->cna);
-}
-
-void test_get_ubmm_eid(test_umq_ctx_t *ctx)
-{
-    char cmd_eid[MAX_LINE_LENGTH];
-    exec_cmd(cmd_eid, MAX_LINE_LENGTH, "cat /sys/bus/ub/devices/00001/eid");
-    ctx->eid = static_cast<uint32_t>(atoi(cmd_eid));
-    TEST_LOG_INFO("this host eid=%u\n", ctx->eid);
-}
-
 test_umq_ctx_t *test_umq_ctx_init(int argc, char * argv[], int thread_num)
 {
     (void)memset(&g_test_umq_ctx, 0, sizeof(test_umq_ctx_t));
@@ -217,12 +201,6 @@ int set_umq_init_cfg(test_umq_ctx_t *ctx, umq_dev_assign_mode_t assign_mode, umq
     ctx->cfg.trans_info_num = 1;
     ctx->cfg.trans_info[0].trans_mode = trans_mode;
 
-    if (trans_mode == UMQ_TRANS_MODE_UBMM_PLUS) {
-        test_get_ubmm_cna(ctx);
-        ctx->cfg.cna = ctx->cna;
-        test_get_ubmm_eid(ctx);
-        ctx->cfg.ubmm_eid = ctx->eid;
-    }
     return set_trans_dev_info(ctx, &ctx->cfg.trans_info[0].dev_info, assign_mode);
 }
 
@@ -863,17 +841,7 @@ EXIT:
 uint64_t get_buf_alloc_umqh(umqh_ops_t *umqh_ops, uint32_t data_size)
 {
     uint64_t umqh = 0;
-    if (g_test_umq_ctx.trans_mode == UMQ_TRANS_MODE_UBMM_PLUS) {
-        if (data_size <= UMQ_QBUF_BLOCK_SIZE) {
-            umqh = umqh_ops->qh;
-        } else {
-            umqh = 0;
-        }
-    } else if (g_test_umq_ctx.trans_mode == UMQ_TRANS_MODE_IPC) {
-        umqh = umqh_ops->qh;
-    } else {
-        umqh = 0;
-    }
+    umqh = 0;
     return umqh;
 }
 
@@ -1256,4 +1224,15 @@ int test_umq_pro_func_rsp(test_data_args_t *data_args)
     CHECK_FREE(data_args->data);
     test_umq_ack_interrupt(data_args->umqh_ops, UMQ_IO_RX, nevents);
     return TEST_SUCCESS;
+}
+
+int test_poll_one_buf(uint64_t qh, umq_buf_t **polled_buf_out, umq_io_option_t *option, bool is_free)
+{
+    int cnt = 0;
+    int ret = 0;
+    uint64_t start = get_timestamp_ms();
+    while (cnt < 1 && (get_timestamp_ms() - start < 100000)) {
+        ret = umq_poll(qh, option, polled_buf_out, 1);
+        cnt += ret;
+    }
 }
