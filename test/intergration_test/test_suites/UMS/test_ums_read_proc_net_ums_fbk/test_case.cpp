@@ -50,10 +50,11 @@ static int run_test(test_ums_ctx_t *ctx)
     // }
     // CHKERR_JUMP(ret != TEST_SUCCESS, "fallback connection error", EXIT);
     
+    sync_time("----------------------------3");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------3");
+    sync_time("----------------------------4");
     return rc;
 }
 

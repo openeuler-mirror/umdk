@@ -49,13 +49,15 @@ static int run_test(test_ums_ctx_t *ctx)
             ret = -1;
         }
         CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
+
+        sync_time("----------------------------3");
         exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
         sleep(2);
     }
 
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------3");
+    sync_time("----------------------------4");
     return rc;
 }
 
