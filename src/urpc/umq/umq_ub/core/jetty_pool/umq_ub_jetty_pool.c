@@ -428,7 +428,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     }
 
     // 3. No available jettys.
-    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "No available jetty\n");
+    UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "No available jetty\n");
     errno = UMQ_ERR_EMLINK;
     return NULL;
 }
