@@ -893,7 +893,7 @@ static inline void free_remote_seg(perftest_context_t *ctx)
     ctx->remote_seg = NULL;
 }
 
-static int exchange_seg_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_seg_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_seg_t *local_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
     urma_seg_t *remote_seg_buf = calloc(ctx->jetty_num, sizeof(urma_seg_t));
@@ -937,7 +937,7 @@ static inline void free_remote_jetty(perftest_context_t *ctx)
     ctx->remote_jetty_id = NULL;
 }
 
-static int exchange_jetty_id(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_jetty_id(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_jetty_id_t *local_jetty_id_buf = calloc(ctx->jetty_num, sizeof(urma_jetty_id_t));
     urma_jetty_id_t *remote_jetty_id_buf = calloc(ctx->jetty_num, sizeof(urma_jetty_id_t));
@@ -987,7 +987,7 @@ static void free_remote_credit(perftest_context_t *ctx)
     ctx->remote_credit_seg = NULL;
 }
 
-static int exchange_credit_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_credit_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     if (!cfg->enable_credit) {
         return 0;
@@ -1038,7 +1038,7 @@ static void free_remote_notify(perftest_context_t *ctx)
     ctx->remote_notify_seg = NULL;
 }
 
-static int exchange_notify_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_notify_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     if (!cfg->enable_notify) {
         return 0;
@@ -1120,7 +1120,7 @@ static void create_tp_info_get_attr_uboe(perftest_config_t *cfg, urma_tp_attr_va
     }
 }
 
-static int create_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int create_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     if (!cfg->tp_aware) {
         return 0;
@@ -1213,7 +1213,7 @@ static inline void free_remote_tp_info(perftest_context_t *ctx)
     ctx->local_tp_info = NULL;
 }
 
-static int exchange_tp_info(perftest_context_t *ctx, perftest_comm_t *comm, perftest_config_t *cfg)
+static int exchange_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     if (!cfg->tp_aware || cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
         return 0;
@@ -1260,36 +1260,36 @@ static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *
 {
     int ret;
 
-    ret = exchange_seg_info(ctx, &cfg->comm, cfg);
+    ret = exchange_seg_info(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to exchange_seg_info, ret: %d\n", ret);
         return -1;
     }
 
-    ret = exchange_jetty_id(ctx, &cfg->comm, cfg);
+    ret = exchange_jetty_id(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to exchange jetty id, ret: %d\n", ret);
         goto exchange_jetty_id_fail;
     }
 
-    ret = exchange_credit_info(ctx, &cfg->comm, cfg);
+    ret = exchange_credit_info(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to exchange_credit_info, ret: %d\n", ret);
         goto exchange_credit_fail;
     }
 
-    ret = exchange_notify_info(ctx, &cfg->comm, cfg);
+    ret = exchange_notify_info(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to exchange_notify_info, ret: %d\n", ret);
         goto exchange_notify_fail;
     }
 
-    ret = create_tp_info(ctx, &cfg->comm, cfg);
+    ret = create_tp_info(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to create tp info, ret: %d\n", ret);
         goto create_tp_info_fail;
     }
-    ret = exchange_tp_info(ctx, &cfg->comm, cfg);
+    ret = exchange_tp_info(ctx, cfg);
     if (ret != 0) {
         LOG_ERROR("Failed to create tp info, ret: %d\n", ret);
         goto exchange_tp_info_fail;
