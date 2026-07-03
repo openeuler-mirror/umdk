@@ -65,9 +65,9 @@ typedef struct eid_mapping_entry {
 } eid_mapping_entry_t;
 
 typedef struct topo_map {
-    bondp_topo_node_t topo_infos[MAX_NODE_NUM];
     uint32_t node_num;
     bondp_hash_table_t eid_mapping_hash_table;
+    bondp_topo_node_t topo_infos[];
 } topo_map_t;
 
 /* The following functions needs the caller to check the validity of the parameters */
@@ -77,9 +77,8 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num);
 void delete_topo_map(topo_map_t *topo_map);
 
 /**
- * This function requires traversing all EIDS in the topo_map to return a result,
- * with a maximum time complexity of O(MAX_NODE_NUM(1024) * (BONDING_EID_NUM(1) +
- * IODIE_NUM(2) * (PRIMARY_EID_NUM(1) + PORT_NUM(9)))) = O(336).
+ * create_topo_map builds the EID mapping from the actual node_num.
+ * This function looks up the prebuilt mapping hash table.
  * @return 0 for success, other for error or not found
  */
 int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, urma_eid_t *output);

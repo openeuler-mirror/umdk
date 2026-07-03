@@ -49,6 +49,28 @@ static int eid_mapping_hash_table_create(bondp_hash_table_t *tbl, uint32_t size)
     return bondp_hash_table_create(tbl, size, eid_comp_func, eid_free_func, eid_hash_func);
 }
 
+static bool get_topo_map_alloc_size(uint32_t node_num, size_t *size)
+{
+    if (node_num > (SIZE_MAX - sizeof(topo_map_t)) / sizeof(bondp_topo_node_t)) {
+        return false;
+    }
+
+    *size = sizeof(topo_map_t) + node_num * sizeof(bondp_topo_node_t);
+    return true;
+}
+
+static bool get_eid_mapping_hash_size(uint32_t node_num, uint32_t *size)
+{
+    const uint32_t per_node = DEV_NUM * (1 + IODIE_NUM * (1 + PORT_NUM));
+
+    if (node_num > UINT32_MAX / per_node) {
+        return false;
+    }
+
+    *size = node_num * per_node;
+    return true;
+}
+
 static int eid_mapping_hash_table_add(bondp_hash_table_t *tbl, urma_eid_t *key, urma_eid_t *bonding_eid)
 {
     hmap_node_t *node = NULL;
@@ -121,7 +143,15 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num)
         URMA_LOG_ERR("Invalid topo info to create topo map\n");
         return NULL;
     }
-    topo_map_t *topo_map = calloc(1, sizeof(topo_map_t));
+    size_t topo_map_size;
+    uint32_t hash_size;
+    if (!get_topo_map_alloc_size(node_num, &topo_map_size) ||
+        !get_eid_mapping_hash_size(node_num, &hash_size)) {
+        URMA_LOG_ERR("Invalid topo info size to create topo map\n");
+        return NULL;
+    }
+
+    topo_map_t *topo_map = calloc(1, topo_map_size);
     if (topo_map == NULL) {
         URMA_LOG_ERR("Failed to alloc topo_map\n");
         return NULL;
@@ -142,15 +172,18 @@ topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num)
         return NULL;
     }
 
-    int ret = eid_mapping_hash_table_create(&topo_map->eid_mapping_hash_table,
-        MAX_NODE_NUM * DEV_NUM * (1 + IODIE_NUM * (1 + PORT_NUM)));
+    int ret = eid_mapping_hash_table_create(&topo_map->eid_mapping_hash_table, hash_size);
     if (ret) {
         URMA_LOG_ERR("Failed to create eid_mapping_hash_table\n");
         free(topo_map);
         return NULL;
     }
 
-    update_mapping_hash_table(topo_map);
+    if (update_mapping_hash_table(topo_map) != 0) {
+        bondp_hash_table_destroy(&topo_map->eid_mapping_hash_table);
+        free(topo_map);
+        return NULL;
+    }
 
     return topo_map;
 }
