@@ -554,4 +554,136 @@ aclshmemi_roce_fill_wqe<aclshmemi_rdma_backend_t::XSCALE, aclshmemi_rdma_opcode_
         wr, sq_context, wqe_addr, cur_head, aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_READ);
 }
 
+// Helper functions for FA (Fetch and Add) atomic segment filling
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE uint32_t aclshmemi_rdma_xscdv_fill_fa_atomic_seg(__gm__ uint8_t *cur_wqe_addr,
+                                                                 aclshmemi_rdma_send_wr &wr)
+{
+    constexpr uint8_t TYPE_BYTES = sizeof(T);
+    if constexpr (TYPE_BYTES == BYTES_64 && IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_64_masked_fa_seg_t *fa_seg =
+            (__gm__ aclshmemi_xsc_wqe_atomic_64_masked_fa_seg_t *)cur_wqe_addr;
+        fa_seg->add_data = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_data);
+        fa_seg->field_boundary = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_mask);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else if constexpr (TYPE_BYTES == BYTES_64 && !IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_seg_t *atomic_seg = (__gm__ aclshmemi_xsc_wqe_atomic_seg_t *)cur_wqe_addr;
+        atomic_seg->swap_add = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_data);
+        atomic_seg->compare = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_mask);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else if constexpr (TYPE_BYTES <= BYTES_32 && IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_32_masked_fa_seg_t *fa_seg =
+            (__gm__ aclshmemi_xsc_wqe_atomic_32_masked_fa_seg_t *)cur_wqe_addr;
+        fa_seg->add_data = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.swap_add_data & UINT32_MAX);
+        fa_seg->field_boundary = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.swap_add_mask & UINT32_MAX);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else {
+        return 0;
+    }
+}
+
+// Currently only support 8B and 4B
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE uint32_t aclshmemi_rdma_xscdv_fill_wqe_fa(aclshmemi_rdma_send_wr &wr,
+                                                          __gm__ aclshmemi_rdma_sq_ctx *&sq_context,
+                                                          __gm__ uint8_t *wqe_addr, uint32_t cur_head)
+{
+    constexpr uint8_t TYPE_BYTES = sizeof(T);
+    static_assert(TYPE_BYTES == BYTES_64 || TYPE_BYTES == BYTES_32,
+                  "XSCALE backend only support fetch and add operation with type size of 8B or 4B\n");
+    static_assert(!(TYPE_BYTES <= BYTES_32 && !IS_MASKED),
+                  "XSCALE backend doesn't support fetch and add operation with type size of 4B without mask\n");
+
+    constexpr uint32_t DS_DATA_NUM = 3;
+    constexpr uint32_t MSG_LEN = (TYPE_BYTES == BYTES_32 && IS_MASKED) ? 8 : 16;
+    constexpr uint32_t DATA_LEN = (TYPE_BYTES <= BYTES_32) ? BYTES_32 : BYTES_64;
+    constexpr aclshmemi_xscdv_msg_type_t OPCODE =
+        (TYPE_BYTES == BYTES_64 && IS_MASKED)
+            ? aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_8B_MSK_FETCH_AND_ADD
+        : (TYPE_BYTES == BYTES_64 && !IS_MASKED)
+            ? aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_FETCH_AND_ADD
+            : aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_4B_MSK_FETCH_AND_ADD;
+
+    __gm__ uint8_t *cur_wqe_addr =
+        aclshmemi_roce_xscale_fill_wqe_ctrl_seg(wqe_addr, DS_DATA_NUM, cur_head, OPCODE, MSG_LEN, 1);
+    cur_wqe_addr = aclshmemi_roce_xscale_fill_wqe_data_seg(
+        cur_wqe_addr, wr.rkey, wr.remote_addr, wr.lkey, wr.local_addr, DATA_LEN);
+    return aclshmemi_rdma_xscdv_fill_fa_atomic_seg<T, IS_MASKED>(cur_wqe_addr, wr);
+}
+
+// Helper functions for CAS (Compare and Swap) atomic segment filling
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE uint32_t aclshmemi_rdma_xscdv_fill_cas_atomic_seg(__gm__ uint8_t *cur_wqe_addr,
+                                                                  aclshmemi_rdma_send_wr &wr)
+{
+    constexpr uint8_t TYPE_BYTES = sizeof(T);
+    if constexpr (TYPE_BYTES == BYTES_64 && IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_64_masked_cas_seg_t *atomic_seg0 =
+            (__gm__ aclshmemi_xsc_wqe_atomic_64_masked_cas_seg_t *)cur_wqe_addr;
+        atomic_seg0->swap_add = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_data);
+        atomic_seg0->compare = aclshmemi_htobe64(wr.atomic.masked_common.compare_data);
+        __gm__ aclshmemi_xsc_wqe_atomic_64_masked_cas_seg_t *atomic_seg1 = atomic_seg0 + 1;
+        atomic_seg1->swap_add = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_mask);
+        atomic_seg1->compare = aclshmemi_htobe64(wr.atomic.masked_common.compare_mask);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else if constexpr (TYPE_BYTES == BYTES_64 && !IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_seg_t *atomic_seg = (__gm__ aclshmemi_xsc_wqe_atomic_seg_t *)cur_wqe_addr;
+        atomic_seg->swap_add = aclshmemi_htobe64(wr.atomic.masked_common.swap_add_data);
+        atomic_seg->compare = aclshmemi_htobe64(wr.atomic.masked_common.compare_data);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else if constexpr (TYPE_BYTES <= BYTES_32 && IS_MASKED) {
+        __gm__ aclshmemi_xsc_wqe_atomic_32_masked_cas_seg_t *cas_seg =
+            (__gm__ aclshmemi_xsc_wqe_atomic_32_masked_cas_seg_t *)cur_wqe_addr;
+        cas_seg->swap_data = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.swap_add_data & UINT32_MAX);
+        cas_seg->compare_data = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.compare_data & UINT32_MAX);
+        cas_seg->swap_mask = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.swap_add_mask & UINT32_MAX);
+        cas_seg->compare_mask = aclshmemi_htobe32((uint32_t)wr.atomic.masked_common.compare_mask & UINT32_MAX);
+        return ACLSHMEMI_XSCALE_SND_WQE_SIZE;
+    } else {
+        return 0;
+    }
+}
+
+// Currently only support 8B and 4B
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE uint32_t aclshmemi_rdma_xscdv_fill_wqe_cas(aclshmemi_rdma_send_wr &wr,
+                                                           __gm__ aclshmemi_rdma_sq_ctx *&sq_context,
+                                                           __gm__ uint8_t *wqe_addr, uint32_t cur_head)
+{
+    constexpr uint8_t TYPE_BYTES = sizeof(T);
+    static_assert(TYPE_BYTES == BYTES_64 || TYPE_BYTES == BYTES_32,
+                  "XSCALE backend only support compare and swap operation with type size of 8B or 4B\n");
+    static_assert(!(TYPE_BYTES <= BYTES_32 && !IS_MASKED),
+                  "XSCALE backend doesn't support compare and swap operation with type size of 4B without mask\n");
+
+    constexpr uint32_t DS_DATA_NUM = (TYPE_BYTES == BYTES_64 && IS_MASKED) ? 4 : 3;
+    constexpr uint32_t MSG_LEN = (TYPE_BYTES == BYTES_64 && IS_MASKED) ? 32 : 16;
+    constexpr uint32_t DATA_LEN = (TYPE_BYTES <= BYTES_32) ? BYTES_32 : BYTES_64;
+    constexpr aclshmemi_xscdv_msg_type_t OPCODE =
+        (TYPE_BYTES == BYTES_64 && IS_MASKED)
+            ? aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_8B_MSK_CMP_AND_SWAP
+        : (TYPE_BYTES == BYTES_64 && !IS_MASKED)
+            ? aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_CMP_AND_SWAP
+            : aclshmemi_xscdv_msg_type_t::ACLSHMEMI_XSCALE_MSG_OPCODE_RDMA_ATOMIC_4B_MSK_CMP_AND_SWAP;
+
+    __gm__ uint8_t *cur_wqe_addr =
+        aclshmemi_roce_xscale_fill_wqe_ctrl_seg(wqe_addr, DS_DATA_NUM, cur_head, OPCODE, MSG_LEN, 1);
+    cur_wqe_addr = aclshmemi_roce_xscale_fill_wqe_data_seg(cur_wqe_addr, wr.rkey, wr.remote_addr, wr.lkey,
+                                                           wr.local_addr, DATA_LEN);
+    return aclshmemi_rdma_xscdv_fill_cas_atomic_seg<T, IS_MASKED>(cur_wqe_addr, wr);
+}
+
+template <typename T, bool IS_MASKED, aclshmemi_rdma_atomic_op_t ATOMIC_OP_CODE>
+ACLSHMEM_DEVICE uint32_t aclshmemi_roce_xscale_fill_wqe_atomic(
+    aclshmemi_rdma_send_wr &wr, __gm__ aclshmemi_rdma_sq_ctx *&sq_context, __gm__ uint8_t *wqe_addr, uint32_t cur_head)
+{
+    if constexpr (ATOMIC_OP_CODE == aclshmemi_rdma_atomic_op_t::OP_ATOMIC_FA) {
+        return aclshmemi_rdma_xscdv_fill_wqe_fa<T, IS_MASKED>(wr, sq_context, wqe_addr, cur_head);
+    } else if constexpr (ATOMIC_OP_CODE == aclshmemi_rdma_atomic_op_t::OP_ATOMIC_CAS) {
+        return aclshmemi_rdma_xscdv_fill_wqe_cas<T, IS_MASKED>(wr, sq_context, wqe_addr, cur_head);
+    } else {
+        return 0;
+    }
+}
+
 #endif // ACLSHMEM_RDMA_DEVICE_BACKEND_XSCALE_HPP
