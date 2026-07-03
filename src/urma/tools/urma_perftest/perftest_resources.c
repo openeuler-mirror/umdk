@@ -23,6 +23,7 @@
 #include "urma_provider.h"
 #include "urma_ubagg.h"
 
+#include "perftest_parameters.h"
 #include "perftest_resources.h"
 
 #define PERFTEST_DEF_ACCESS (URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC)
@@ -1199,18 +1200,16 @@ static int create_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
 
 free_buf:
     free(ctx->tp_info);
+    ctx->tp_info = NULL;
     return -1;
 }
 
 static inline void free_remote_tp_info(perftest_context_t *ctx)
 {
-    if (ctx->remote_jetty_id == NULL) {
-        return;
-    }
-    free(ctx->remote_jetty_id);
-    ctx->remote_jetty_id = NULL;
     free(ctx->local_tp_info);
     ctx->local_tp_info = NULL;
+    free(ctx->remote_tp_info);
+    ctx->remote_tp_info = NULL;
 }
 
 static int exchange_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
@@ -1602,6 +1601,9 @@ disconnect_jfr:
 
 static void disconnect_jfr(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
+    if (ctx->import_tjfr == NULL) {
+        return;
+    }
     disconnect_jfr_default(ctx, cfg);
     free(ctx->import_tjfr);
     ctx->import_tjfr = NULL;
@@ -1907,6 +1909,9 @@ disconnect_jetty:
 
 static void disconnect_jetty(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
+    if (ctx->import_tjetty == NULL) {
+        return;
+    }
     if (cfg->enable_async_import) {
         disconnect_jetty_async(ctx, cfg);
     } else {
@@ -1939,6 +1944,88 @@ static int connect_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
 disconnect:
     free(ctx->import_tjetty);
     ctx->import_tjetty = NULL;
+    return -1;
+}
+
+static int modify_user_tp(perftest_context_t *ctx, perftest_config_t *cfg);
+
+int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
+{
+    if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
+        disconnect_jfr(ctx, cfg);
+    } else {
+        disconnect_jetty(ctx, cfg);
+    }
+    free_remote_tp_info(ctx);
+    free_tp_info(ctx);
+    free_remote_jetty(ctx);
+
+    for (uint32_t i = 0; i < cfg->pair_num; i++) {
+        if (sync_time(cfg, i, "recreate_jetty_disconnect") != 0) {
+            return -1;
+        }
+    }
+
+    if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
+        destroy_simplex_jettys(ctx, cfg);
+        if (create_simplex_jettys(ctx, cfg) != 0) {
+            return -1;
+        }
+    } else {
+        destroy_duplex_jettys(ctx, cfg);
+        if (create_duplex_jettys(ctx, cfg) != 0) {
+            return -1;
+        }
+    }
+
+    if (exchange_jetty_id(ctx, cfg) != 0) {
+        LOG_ERROR("Failed to exchange jetty id!\n");
+        goto free_jetty_info;
+    }
+    if (create_tp_info(ctx, cfg) != 0) {
+        LOG_ERROR("Failed to create tp info!\n");
+        goto free_jetty_info;
+    }
+    if (exchange_tp_info(ctx, cfg) != 0) {
+        LOG_ERROR("Failed to exchange tp info!\n");
+        goto free_tp;
+    }
+    if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
+        if (connect_jfr(ctx, cfg) != 0) {
+            goto free_remote_tp;
+        }
+    } else {
+        if (connect_jetty(ctx, cfg) != 0) {
+            goto free_remote_tp;
+        }
+        if (cfg->enable_user_tp && modify_user_tp(ctx, cfg)) {
+            goto disconnect_jettys;
+        }
+    }
+
+    if (sync_time(cfg, 0, "recreate_jetty_connect") != 0) {
+        goto disconnect_jettys;
+    }
+
+    if (cfg->use_jfce == true) {
+        if (rearm_jfc(ctx, cfg) != 0) {
+            goto disconnect_jettys;
+        }
+    }
+    return 0;
+
+disconnect_jettys:
+    if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
+        disconnect_jfr(ctx, cfg);
+    } else {
+        disconnect_jetty(ctx, cfg);
+    }
+free_remote_tp:
+    free_remote_tp_info(ctx);
+free_tp:
+    free_tp_info(ctx);
+free_jetty_info:
+    free_remote_jetty(ctx);
     return -1;
 }
 
