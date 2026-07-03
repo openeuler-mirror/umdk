@@ -4,8 +4,9 @@
 add_executable(urma_perftest
     urma_perftest.c
     perftest_log.c
+    perftest_mgmt.c
+    perftest_mgmt_tcp.c
     perftest_parameters.c
-    perftest_communication.c
     perftest_resources.c
     perftest_run_test.c
 )
