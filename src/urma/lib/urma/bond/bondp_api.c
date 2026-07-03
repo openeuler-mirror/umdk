@@ -2244,7 +2244,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     atomic_init(&bdp_tjetty->use_cnt.atomic_cnt, 1);
 
     urma_bond_id_info_out_t rvjetty_info = {0};
-    if (rjetty != NULL && bondp_rjetty_has_user_info(rjetty)) {
+    if (rjetty != NULL && rjetty->flag.bs.has_drv_ext) {
         const bondp_rjetty_t *bdp_rjetty = (const bondp_rjetty_t *)rjetty;
         if (bdp_rjetty->jetty != NULL) {
             cfg_jetty = CONTAINER_OF_FIELD(bdp_rjetty->jetty, bondp_comp_t, v_jetty);
@@ -2294,7 +2294,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_TSEG;
     }
 
-    if (rjetty->trans_mode == URMA_TM_RM && bondp_rjetty_has_user_info(rjetty) && cfg_jetty != NULL) {
+    if (rjetty->trans_mode == URMA_TM_RM && rjetty->flag.bs.has_drv_ext && cfg_jetty != NULL) {
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
 
