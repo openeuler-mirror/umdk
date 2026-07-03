@@ -11,6 +11,7 @@
 #include "umq_qbuf_pool.h"
 #include "umq_ub_flow_control.h"
 #include "umq_ub_private.h"
+#include "umq_ub_impl.h"
 #include "urma_api.h"
 #include "util_id_generator.h"
 
@@ -289,4 +290,134 @@ TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
 
     queue.jetty[0]->jetty_id.id++;
     ASSERT_EQ(umq_ub_bind_info_check(&queue, &info), 0);
+}
+
+TEST_F(UmqUBTest, test_share_rq_param_check_tx_buf_size_match)
+{
+    ub_queue_t queue;
+    ub_queue_t share_rq;
+    memset(&queue, 0, sizeof(queue));
+    memset(&share_rq, 0, sizeof(share_rq));
+
+    share_rq.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    share_rq.state = QUEUE_STATE_READY;
+    share_rq.dev_ctx = (umq_ub_ctx_t *)1;
+    share_rq.tx_buf_size = EXAMPLE_BUFFER_SIZE;
+
+    queue.create_flag = UMQ_CREATE_FLAG_SHARE_RQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    queue.dev_ctx = (umq_ub_ctx_t *)1;
+
+    ASSERT_EQ(share_rq_param_check(&queue, &share_rq), 0);
+    ASSERT_EQ(queue.tx_buf_size, share_rq.tx_buf_size);
+}
+
+TEST_F(UmqUBTest, test_share_rq_param_check_tx_buf_size_mismatch)
+{
+    ub_queue_t queue;
+    ub_queue_t share_rq;
+    memset(&queue, 0, sizeof(queue));
+    memset(&share_rq, 0, sizeof(share_rq));
+
+    share_rq.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    share_rq.state = QUEUE_STATE_READY;
+    share_rq.dev_ctx = (umq_ub_ctx_t *)1;
+    share_rq.tx_buf_size = EXAMPLE_BUFFER_SIZE;
+
+    queue.create_flag = UMQ_CREATE_FLAG_SHARE_RQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT |
+                        UMQ_CREATE_FLAG_TX_BUF_SIZE;
+    queue.dev_ctx = (umq_ub_ctx_t *)1;
+    queue.tx_buf_size = EXAMPLE_BUFFER_SIZE * 2;
+
+    ASSERT_NE(share_rq_param_check(&queue, &share_rq), 0);
+}
+
+TEST_F(UmqUBTest, test_share_rq_param_check_tx_depth_mismatch)
+{
+    ub_queue_t queue;
+    ub_queue_t share_rq;
+    memset(&queue, 0, sizeof(queue));
+    memset(&share_rq, 0, sizeof(share_rq));
+
+    share_rq.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    share_rq.state = QUEUE_STATE_READY;
+    share_rq.dev_ctx = (umq_ub_ctx_t *)1;
+    share_rq.tx_depth = EXAMPLE_DEPTH;
+
+    queue.create_flag = UMQ_CREATE_FLAG_SHARE_RQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT |
+                        UMQ_CREATE_FLAG_TX_DEPTH;
+    queue.dev_ctx = (umq_ub_ctx_t *)1;
+    queue.tx_depth = EXAMPLE_DEPTH * 2;
+
+    ASSERT_NE(share_rq_param_check(&queue, &share_rq), 0);
+}
+
+TEST_F(UmqUBTest, test_share_rq_param_check_share_transport_creating_has_share_rq_no)
+{
+    ub_queue_t queue;
+    ub_queue_t share_rq;
+    memset(&queue, 0, sizeof(queue));
+    memset(&share_rq, 0, sizeof(share_rq));
+
+    share_rq.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ;
+    share_rq.state = QUEUE_STATE_READY;
+    share_rq.dev_ctx = (umq_ub_ctx_t *)1;
+
+    queue.create_flag = UMQ_CREATE_FLAG_SHARE_RQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    queue.dev_ctx = (umq_ub_ctx_t *)1;
+
+    ASSERT_NE(share_rq_param_check(&queue, &share_rq), 0);
+}
+
+TEST_F(UmqUBTest, test_share_rq_param_check_share_transport_share_rq_has_creating_no)
+{
+    ub_queue_t queue;
+    ub_queue_t share_rq;
+    memset(&queue, 0, sizeof(queue));
+    memset(&share_rq, 0, sizeof(share_rq));
+
+    share_rq.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    share_rq.state = QUEUE_STATE_READY;
+    share_rq.dev_ctx = (umq_ub_ctx_t *)1;
+
+    queue.create_flag = UMQ_CREATE_FLAG_SHARE_RQ;
+    queue.dev_ctx = (umq_ub_ctx_t *)1;
+
+    ASSERT_NE(share_rq_param_check(&queue, &share_rq), 0);
+}
+
+TEST_F(UmqUBTest, test_interrupt_fd_get_polling_mode_null_jfce)
+{
+    ub_queue_t queue;
+    memset(&queue, 0, sizeof(queue));
+
+    queue.create_flag = UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_SHARE_TRANSPORT;
+    queue.jetty_node_list = (umq_ub_jetty_node_list_t *)calloc(1, sizeof(umq_ub_jetty_node_list_t));
+    ASSERT_NE(queue.jetty_node_list, nullptr);
+
+    queue.jetty_node_list->list_len = 4;
+    queue.jetty_node_list->node_list = (jetty_pool_node_t **)calloc(4, sizeof(jetty_pool_node_t *));
+    ASSERT_NE(queue.jetty_node_list->node_list, nullptr);
+
+    queue.jetty_node_list->bitmap = urpc_bitmap_alloc(4);
+    ASSERT_NE(queue.jetty_node_list->bitmap, nullptr);
+    urpc_bitmap_set1(queue.jetty_node_list->bitmap, 0);
+
+    jetty_pool_node_t *node = (jetty_pool_node_t *)calloc(1, sizeof(jetty_pool_node_t));
+    ASSERT_NE(node, nullptr);
+    node->jfs_jfce = NULL;
+    queue.jetty_node_list->node_list[0] = node;
+
+    umq_interrupt_option_t option;
+    memset(&option, 0, sizeof(option));
+    option.flag = UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX | UMQ_INTERRUPT_FLAG_IO_DIRECTION;
+    option.direction = UMQ_IO_TX;
+    option.tp_handle_idx = 0;
+
+    int fd = umq_ub_interrupt_fd_get_impl((uint64_t)(uintptr_t)&queue, &option);
+    ASSERT_EQ(fd, UMQ_INVALID_FD);
+
+    urpc_bitmap_free(queue.jetty_node_list->bitmap);
+    free(node);
+    free(queue.jetty_node_list->node_list);
+    free(queue.jetty_node_list);
 }
