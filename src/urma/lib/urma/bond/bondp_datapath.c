@@ -1030,7 +1030,7 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
         &bdp_ctx->p_vjetty_id_table, pjetty_id, p_vjetty_type);
     if (comp == NULL) {
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to get comp, local_id=%d\n", pjetty_id.id);
+        URMA_LOG_WARN_RL("Bond comp not found, local_id=%d\n", pjetty_id.id);
         return NULL;
     }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
