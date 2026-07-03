@@ -85,7 +85,7 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
     return ret;
 }
 
-static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
+int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     urma_status_t status;
     if (cfg->api_type == PERFTEST_WRITE) {
