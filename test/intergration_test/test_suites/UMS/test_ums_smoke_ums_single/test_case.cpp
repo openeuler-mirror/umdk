@@ -18,6 +18,7 @@ static int run_test(test_ums_ctx_t *ctx)
     char test_ip_str[128]={0};
     // char setup_env[MAX_EXEC_CMD_RET_LEN];
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
+    char proc_net_ums6[MAX_EXEC_CMD_RET_LEN];
     char proc_net_ums[MAX_EXEC_CMD_RET_LEN];
     char check_perf[MAX_EXEC_CMD_RET_LEN];
 
@@ -29,7 +30,7 @@ static int run_test(test_ums_ctx_t *ctx)
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port + 1);
         sleep(3);
-        exec_cmd(proc_net_ums, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
+        exec_cmd(proc_net_ums6, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
     }
     sleep(3);
     sync_time("----------------------------1");

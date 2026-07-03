@@ -16,6 +16,7 @@ static int run_test(test_ums_ctx_t *ctx)
     int rc = TEST_FAILED;
     int check_num;
     // char setup_env[MAX_EXEC_CMD_RET_LEN];
+    char proc_net_ums6[MAX_EXEC_CMD_RET_LEN];
     char proc_net_ums[MAX_EXEC_CMD_RET_LEN];
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
@@ -30,7 +31,7 @@ static int run_test(test_ums_ctx_t *ctx)
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup qperf -lp ${i} > /tmp/qperf_server_${i}.log 2>&1 & done", ctx->test_port + 1, ctx->test_port + 11);
         sleep(3)
-        exec_cmd(proc_net_ums, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
+        exec_cmd(proc_net_ums6, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
     }
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
