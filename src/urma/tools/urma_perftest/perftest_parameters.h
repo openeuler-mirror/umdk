@@ -161,6 +161,7 @@ enum perftest_opts {
     PERFTEST_OPT_BURST_SIZE,
     PERFTEST_OPT_RATE_UNITS,
     PERFTEST_OPT_ORDER_TYPE,
+    PERFTEST_OPT_MGMT,
     PERFTEST_OPT_ENABLE_IPV6,
     PERFTEST_OPT_ENABLE_CREDIT,
     PERFTEST_OPT_CREDIT_THRESHOLD,
@@ -355,6 +356,7 @@ typedef struct perftest_config {
     bool enable_va;
     uint64_t v_address;
     bool share_jfs;
+    perftest_mgmt_type_t mgmt_type;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

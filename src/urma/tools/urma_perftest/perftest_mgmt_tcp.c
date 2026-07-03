@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "perftest_log.h"
 #include "perftest_parameters.h"
 
 #include "perftest_mgmt_tcp.h"
