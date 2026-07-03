@@ -1045,6 +1045,11 @@ static int umq_ub_create_jetty_node(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx,
         return -UMQ_ERR_EINVAL;
     }
 
+    if (!is_umq_ub_main_queue(queue->create_flag) || !is_umq_ub_share_transport(queue->create_flag)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tp handle can only be created on main queue with SHARE_TRANSPORT\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     jetty_pool_node_t *jetty_node = umq_ub_jetty_pool_get_free_node();
     if (jetty_node == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "get free jetty node failed, errno %d\n", errno);
@@ -1761,6 +1766,11 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
+        if (jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce == NULL) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
+                               option->tp_handle_idx);
+            return UMQ_INVALID_FD;
+        }
         return jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce->fd;
     }
 
@@ -1871,6 +1881,11 @@ int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
 
         if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+            return UMQ_INVALID_FD;
+        }
+        if (jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce == NULL) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
+                               option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
         return umq_ub_get_fd_list(queue->dev_ctx,
