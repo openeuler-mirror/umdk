@@ -1013,9 +1013,12 @@ int umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
         return_credit = unconsumed;
     }
 
-    credit->ops.available_credit_return(credit, return_credit);
-    (void)fc->ops.local_rx_allocated_dec(fc, return_credit);
-    return umq_ub_shared_credit_return_ack(queue, return_credit, (uint16_t)imm->flow_control.seq);
+    int ret = umq_ub_shared_credit_return_ack(queue, return_credit, (uint16_t)imm->flow_control.seq);
+    if (ret == UMQ_SUCCESS) {
+        credit->ops.available_credit_return(credit, return_credit);
+        (void)fc->ops.local_rx_allocated_dec(fc, return_credit);
+    }
+    return ret;
 }
 
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count)
