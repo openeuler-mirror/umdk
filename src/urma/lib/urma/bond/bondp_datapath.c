@@ -311,6 +311,27 @@ static void try_failback(bondp_comp_t *bdp_comp)
     pthread_spin_unlock(&bdp_comp->send_lock);
 }
 
+static void bondp_translate_bad_wr(bondp_comp_t *bdp_comp, int send_idx, int target_idx,
+                                   urma_jfs_wr_t *prealloc_wr_list, const urma_jfs_wr_t *wr,
+                                   urma_jfs_wr_t **bad_wr)
+{
+    int bad_idx = 0;
+    urma_jfs_wr_t *pcur = prealloc_wr_list;
+    while (pcur != NULL && pcur != *bad_wr) {
+        bad_idx++;
+        pcur = pcur->next;
+    }
+    if (pcur == NULL) {
+        return;
+    }
+    atomic_fetch_add(&bdp_comp->sqe_cnt[send_idx][target_idx], bad_idx);
+    urma_jfs_wr_t *user_cur = (urma_jfs_wr_t *)wr;
+    for (int i = 0; i < bad_idx && user_cur != NULL; i++) {
+        user_cur = user_cur->next;
+    }
+    *bad_wr = user_cur;
+}
+
 static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                                                  const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
                                                  int wr_total)
@@ -365,6 +386,9 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
             continue;
         }
         ret = comp_post_send(bdp_comp, send_idx, target_idx, prealloc_wr_list, bad_wr, wr_total);
+        if (ret != URMA_SUCCESS && bad_wr != NULL && *bad_wr != NULL) {
+            bondp_translate_bad_wr(bdp_comp, send_idx, target_idx, prealloc_wr_list, wr, bad_wr);
+        }
         return ret;
     }
     URMA_LOG_WARN("Post send failed after %d retries due to path invalidation\n", BONDP_POST_SEND_MAX_RETRY);
@@ -509,6 +533,16 @@ ROLLBACK:
         }
         jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, &wr_entries[success_node],
             allocated - success_node);
+        /* The provider pointed *bad_wr at an internal copy that has just been
+         * released; translate it back to the user's original WR using the
+         * index computed above (success_node), without touching freed memory. */
+        if (bad_wr != NULL && *bad_wr != NULL && success_node < wr_total) {
+            urma_jfs_wr_t *user_cur = wr;
+            for (int i = 0; i < success_node && user_cur != NULL; i++) {
+                user_cur = user_cur->next;
+            }
+            *bad_wr = user_cur;
+        }
         return ret;
 CLEANUP:
         for (int j = 0; j < wr_count; j++) {
