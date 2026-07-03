@@ -353,7 +353,7 @@ static void *run_write_lat_simplex(void *arg)
         return NULL;
     }
 
-    bool is_server = cfg->comm.server_ip == NULL;
+    bool is_server = cfg->server_ip == NULL;
 
     volatile char *post_buf = (char *)ctx->local_buf[id] + ctx->buf_size + cfg->size - 1;
     volatile char *poll_buf = (char *)ctx->local_buf[id] + cfg->size - 1;
@@ -480,7 +480,7 @@ static void *run_send_lat_simplex(void *arg)
         return NULL;
     }
 
-    bool is_server = cfg->comm.server_ip == NULL;
+    bool is_server = cfg->server_ip == NULL;
 
     uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(cfg, ctx->urma_ctx, ctx->jfr[id]);
     if (rqe_multiple == 0) {
@@ -1110,7 +1110,7 @@ static int prepare_credit_wr(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     run_test_ctx_t *run_ctx = &ctx->run_ctx;
     /* Handle half bidirectional test */
-    if (!cfg->bidirection && cfg->type == PERFTEST_BW && cfg->comm.server_ip == NULL && cfg->enable_credit == false &&
+    if (!cfg->bidirection && cfg->type == PERFTEST_BW && cfg->server_ip == NULL && cfg->enable_credit == false &&
         perftest_check_rs_mode(cfg) == false && !cfg->tp_aware) {
         return 0;
     }
@@ -1449,7 +1449,7 @@ static int run_read_lat_once(perftest_context_t *ctx, perftest_config_t *cfg)
 int run_read_lat(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     /* Only Client read test. */
-    if (cfg->comm.server_ip == NULL) {
+    if (cfg->server_ip == NULL) {
         return 0;
     }
 
@@ -1492,7 +1492,7 @@ static void *run_write_lat_duplex(void *arg)
         return NULL;
     }
 
-    bool is_server = cfg->comm.server_ip == NULL;
+    bool is_server = cfg->server_ip == NULL;
 
     volatile char *post_buf = (char *)ctx->local_buf[id] + ctx->buf_size + cfg->size - 1;
     volatile char *poll_buf = (char *)ctx->local_buf[id] + cfg->size - 1;
@@ -1641,7 +1641,7 @@ static void *run_send_lat_duplex(void *arg)
         return NULL;
     }
 
-    bool is_server = cfg->comm.server_ip == NULL;
+    bool is_server = cfg->server_ip == NULL;
 
     uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(cfg, ctx->urma_ctx, ctx->jetty[id]);
     if (rqe_multiple == 0) {
@@ -2327,7 +2327,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
         run_ctx->tposted[0] = get_cycles();
     }
 
-    if (cfg->comm.server_ip != NULL) {
+    if (cfg->server_ip != NULL) {
         before_first_recv = false;
         if (cfg->time_type.bs.duration == 1) {
             update_duration_state(ctx, cfg);
@@ -2421,7 +2421,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
 
         recv_cqe_cnt = urma_poll_jfc(ctx->jfc_r[0], (int)cfg->jfr_depth, cr_recv);
         if (recv_cqe_cnt > 0) {
-            if (cfg->comm.server_ip == NULL && before_first_recv) {
+            if (cfg->server_ip == NULL && before_first_recv) {
                 before_first_recv = false;
                 if (cfg->time_type.bs.duration == 1) {
                     update_duration_state(ctx, cfg);
@@ -3305,7 +3305,7 @@ static int run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
     bw_report_data_t remote_bw_report = {0};
     uint32_t i = 0;
     /* Handle half bidirectional test */
-    if (cfg->comm.server_ip == NULL && !cfg->bidirection) {
+    if (cfg->server_ip == NULL && !cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
             if (sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before) != 0 ||
                 sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].after) != 0) {
@@ -3348,7 +3348,7 @@ static int run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     /* Handle half bidirectional test */
-    if (cfg->comm.server_ip != NULL && !cfg->bidirection) {
+    if (cfg->server_ip != NULL && !cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
             if (sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before) != 0 ||
                 sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].after) != 0) {
@@ -3446,7 +3446,7 @@ static int run_send_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
             LOG_ERROR("Failed to run once bi bw, size: %u.\n", cfg->size);
             return -1;
         }
-    } else if (cfg->comm.server_ip != NULL) {
+    } else if (cfg->server_ip != NULL) {
         if (cfg->enable_random_size != 0) {
             exchange_sum_len(ctx, cfg);
         }
@@ -3502,7 +3502,7 @@ static int run_send_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
     g_exit_flag = 0;
     (void)signal(SIGINT, catch_sigint);
 
-    if (cfg->comm.server_ip != NULL) {
+    if (cfg->server_ip != NULL) {
         ret = run_once_bw_infinite(ctx, cfg);
         if (ret != 0) {
             LOG_ERROR("Failed to run run_once_bw_infinite in client, ret: %d.\n", ret);
@@ -3523,13 +3523,13 @@ static int run_send_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
 static int run_send_bw_one_size(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     int ret = 0;
-    if (cfg->comm.server_ip != NULL || cfg->bidirection) {
+    if (cfg->server_ip != NULL || cfg->bidirection) {
         ret = prepare_jfs_wr(ctx, cfg);
         if (ret != 0) {
             return -1;
         }
     }
-    if (cfg->comm.server_ip == NULL || cfg->bidirection) {
+    if (cfg->server_ip == NULL || cfg->bidirection) {
         ret = prepare_jfr_wr(ctx, cfg);
         if (ret != 0) {
             goto err_destroy_jfs_wr;
@@ -3557,11 +3557,11 @@ err_destroy_credit_wr:
         destroy_credit_wr(ctx);
     }
 err_destroy_jfr_wr:
-    if (cfg->bidirection || cfg->comm.server_ip == NULL) {
+    if (cfg->bidirection || cfg->server_ip == NULL) {
         destroy_jfr_wr(ctx);
     }
 err_destroy_jfs_wr:
-    if (cfg->bidirection || cfg->comm.server_ip != NULL) {
+    if (cfg->bidirection || cfg->server_ip != NULL) {
         destroy_jfs_wr(ctx);
     }
     return ret;
