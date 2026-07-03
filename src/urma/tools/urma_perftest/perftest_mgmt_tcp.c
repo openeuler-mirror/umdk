@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2025. All rights reserved.
- * Description: communication for urma_perftest
+ * Description: tcp management for urma_perftest
  * Author: Qian Guoxin
  * Create: 2022-04-03
  * Note:
@@ -23,7 +23,11 @@
 
 #include "perftest_parameters.h"
 
-#include "perftest_communication.h"
+#include "perftest_mgmt_tcp.h"
+
+#define PERFTEST_MAX_CONNECTIONS (10)
+#define PERFTEST_CONNECT_COUNT   (5)
+#define ERFTEST_SLEEP_TIME       (100 * 1000) /* Sleep for 100 ms */
 
 typedef struct comm_tcp_ctx {
     int listen_fd;
@@ -36,15 +40,6 @@ static comm_tcp_ctx_t comm_ctx = {
     .sock_fd = NULL,
     .sock_num = 0,
 };
-
-static int get_sock_fd(const perftest_config_t *cfg, uint32_t index)
-{
-    if (cfg == NULL || comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num) {
-        errno = EINVAL;
-        return -1;
-    }
-    return comm_ctx.sock_fd[index];
-}
 
 static int send_all(int sock_fd, const char *buf, int size)
 {
@@ -197,14 +192,13 @@ static int connect_retry(int sockfd, struct sockaddr *addr, uint32_t size)
     return -1;
 }
 
-static int client_connect(perftest_config_t *cfg)
+static int client_connect(const comm_tcp_cfg_t *comm)
 {
     struct addrinfo *res = NULL, *tmp = NULL, *client_res = NULL, *client_tmp = NULL;
     struct addrinfo hints = {0}, client_hints = {0};
     uint32_t i = 0;
 
-    perftest_comm_t *comm = &cfg->comm;
-    if (alloc_comm_sock(cfg->pair_num) != 0) {
+    if (alloc_comm_sock(comm->sock_num) != 0) {
         return -1;
     }
     hints.ai_family = comm->enable_ipv6 ? AF_INET6 : AF_INET;
@@ -232,7 +226,7 @@ static int client_connect(perftest_config_t *cfg)
         }
     }
 
-    for (i = 0; i < cfg->pair_num; i++) {
+    for (i = 0; i < comm->sock_num; i++) {
         if (check_add_port((comm->port + i), comm->server_ip, &hints, &res)) {
             LOG_ERROR("Problem in resolving basic address and port\n");
             goto create_client_error;
@@ -293,15 +287,13 @@ bind_client_error:
     return -1;
 }
 
-static int server_connect(perftest_config_t *cfg)
+static int server_connect(const comm_tcp_cfg_t *comm)
 {
     struct addrinfo *res = NULL, *tmp = NULL;
     struct addrinfo hints = {0};
     uint32_t accept_num = 0;
 
-    perftest_comm_t *comm = &cfg->comm;
-    comm->server_ip = NULL;
-    if (alloc_comm_sock(cfg->pair_num) != 0) {
+    if (alloc_comm_sock(comm->sock_num) != 0) {
         return -1;
     }
     hints.ai_flags = AI_PASSIVE;
@@ -344,7 +336,7 @@ static int server_connect(perftest_config_t *cfg)
         goto free_res;
     }
 
-    while (accept_num < cfg->pair_num) {
+    while (accept_num < comm->sock_num) {
         comm_ctx.sock_fd[accept_num] = accept(comm_ctx.listen_fd, NULL, 0);
         if (comm_ctx.sock_fd[accept_num] < 0) {
             LOG_ERROR("Failed to accept, listenfd:%d, errno: [%d]%s\n",
@@ -376,11 +368,11 @@ free_sock:
     return -1;
 }
 
-int establish_connection(perftest_config_t *cfg)
+int tcp_establish_connection(const comm_tcp_cfg_t *cfg)
 {
     int ret;
 
-    if (cfg->comm.server_ip != NULL) {
+    if (cfg->server_ip != NULL) {
         /* client side */
         ret = client_connect(cfg);
     } else {
@@ -393,40 +385,39 @@ int establish_connection(perftest_config_t *cfg)
     return ret;
 }
 
-void close_connection(perftest_config_t *cfg)
+void tcp_close_connection(void)
 {
-    perftest_comm_t *comm = &cfg->comm;
-
     cleanup_comm_ctx();
-    free(comm->server_ip);
-    comm->server_ip = NULL;
-    if (comm->bind_ip) {
-        free(comm->bind_ip);
-        comm->bind_ip = NULL;
-    }
 }
 
-int sync_data(const perftest_config_t *cfg, uint32_t index, int size, char *local_data, char *remote_data)
+int tcp_sync_data(uint32_t index, int size, char *local_data, char *remote_data)
 {
-    int sock_fd = get_sock_fd(cfg, index);
+    int sock_fd;
+
+    if (comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num) {
+        errno = EINVAL;
+        return -1;
+    }
+    sock_fd = comm_ctx.sock_fd[index];
     if (sock_fd < 0) {
+        errno = EINVAL;
         return -1;
     }
 
     if (send_all(sock_fd, local_data, size) != 0) {
-        LOG_ERROR("Failed to send data during sync_data.\n");
+        LOG_ERROR("Failed to send data during tcp_sync_data.\n");
         return -1;
     }
 
     if (recv_all(sock_fd, remote_data, size) != 0) {
-        LOG_ERROR("Failed to recv data during sync_data.\n");
+        LOG_ERROR("Failed to recv data during tcp_sync_data.\n");
         return -1;
     }
 
     return 0;
 }
 
-int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a)
+int tcp_sync_time(uint32_t index, const char *a)
 {
     if (a == NULL) {
         LOG_ERROR("Invalid parameter with a nullptr.\n");
@@ -438,7 +429,7 @@ int sync_time(const perftest_config_t *cfg, uint32_t index, const char *a)
     if (b == NULL) {
         return -ENOMEM;
     }
-    ret = sync_data(cfg, index, len, (char *)a, b);
+    ret = tcp_sync_data(index, len, (char *)a, b);
     if (ret != 0) {
         LOG_ERROR("sync time error, %s, ret: %d.\n", a, ret);
         goto sync_ret;
@@ -455,33 +446,33 @@ sync_ret:
     return ret;
 }
 
-ssize_t comm_send(const perftest_config_t *cfg, uint32_t index, const void *buf, size_t size)
+ssize_t tcp_comm_send(uint32_t index, const void *buf, size_t size)
 {
-    int sock_fd = get_sock_fd(cfg, index);
-    if (sock_fd < 0) {
+    if (comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num || comm_ctx.sock_fd[index] < 0) {
+        errno = EINVAL;
         return -1;
     }
-    return send(sock_fd, buf, size, MSG_NOSIGNAL);
+    return send(comm_ctx.sock_fd[index], buf, size, MSG_NOSIGNAL);
 }
 
-ssize_t comm_recv(const perftest_config_t *cfg, uint32_t index, void *buf, size_t size)
+ssize_t tcp_comm_recv(uint32_t index, void *buf, size_t size)
 {
-    int sock_fd = get_sock_fd(cfg, index);
-    if (sock_fd < 0) {
+    if (comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num || comm_ctx.sock_fd[index] < 0) {
+        errno = EINVAL;
         return -1;
     }
-    return recv(sock_fd, buf, size, 0);
+    return recv(comm_ctx.sock_fd[index], buf, size, 0);
 }
 
-int comm_poll(const perftest_config_t *cfg, uint32_t index, int timeout_ms)
+int tcp_comm_poll(uint32_t index, int timeout_ms)
 {
-    int sock_fd = get_sock_fd(cfg, index);
-    if (sock_fd < 0) {
+    if (comm_ctx.sock_fd == NULL || index >= comm_ctx.sock_num || comm_ctx.sock_fd[index] < 0) {
+        errno = EINVAL;
         return -1;
     }
 
     struct pollfd pfd = {
-        .fd = sock_fd,
+        .fd = comm_ctx.sock_fd[index],
         .events = POLLIN,
         .revents = 0,
     };
