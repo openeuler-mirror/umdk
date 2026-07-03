@@ -1761,6 +1761,11 @@ int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
         return UMQ_SUCCESS;
     }
 
+    if (is_umq_ub_logic_queue(queue->create_flag)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), logic umq not have io interrupt fd\n", queue->umq_id);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if ((option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) == 0 || option->direction <= UMQ_IO_ALL ||
         option->direction >= UMQ_IO_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "option invalid\n");

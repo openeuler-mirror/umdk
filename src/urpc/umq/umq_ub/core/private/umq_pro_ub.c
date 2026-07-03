@@ -395,7 +395,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         ret = umq_ub_get_jetty_node(queue, 0);
         if (ret != UMQ_SUCCESS) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) get jetty node failed\n", queue->umq_id);
+            UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u) get jetty node failed\n", queue->umq_id);
             *bad_qbuf = qbuf;
             goto RECOVER_WINDOW;
         }
