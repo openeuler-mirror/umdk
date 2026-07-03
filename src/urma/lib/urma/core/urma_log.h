@@ -30,11 +30,12 @@ extern "C" {
 #define LOG_VA_ARG_IDX 5 /* index of variable argument of urma_log */
 
 /* Rate limit parameters */
-#define URMA_LOG_RL_WINDOW_SEC  5   /* Rate limit time window (seconds) */
-#define URMA_LOG_RL_LIMIT       100 /* Max logs per window */
+#define URMA_LOG_RL_WINDOW_SEC     1   /* Rate limit time window (seconds) */
+#define URMA_LOG_RL_LIMIT          20  /* Max logs per window */
 
 /* Rate limit state flags */
-#define URMA_LOG_RL_INITIALIZED 0x01
+#define URMA_LOG_RL_INITIALIZED    0x01
+#define URMA_LOG_RL_INITIALIZING   0x02
 
 int urma_log_init(void);
 void urma_getenv_log_level(void);
@@ -58,7 +59,11 @@ typedef struct urma_log_rl_state {
         std::atomic_ulong missed;
     #endif
     time_t             begin;        /* Window start time */
-    uint32_t           flags;        /* State flags */
+    #ifndef __cplusplus
+        atomic_uint    flags;        /* State flags (atomic) */
+    #else
+        std::atomic_uint flags;
+    #endif
     const char        *file;         /* Log point file name for summary output */
     const char        *function;     /* Log point function name for summary output */
     int                line;         /* Log point line number for summary output */
