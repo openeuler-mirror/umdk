@@ -83,6 +83,9 @@ void wr_buf_uninit(wr_buf_t *buf)
     pthread_spin_destroy(&buf->lock);
     free(buf->next_free);
     buf->next_free = NULL;
+    const uint32_t max_entry_size = MAX(sizeof(jfs_wr_entry_t),
+        sizeof(jfr_wr_entry_t));
+    memset(buf->entries, 0, buf->max_wr_num * max_entry_size);
     free(buf->entries);
     buf->entries = NULL;
     buf->max_wr_num = 0;
@@ -141,13 +144,13 @@ static uint32_t wr_buf_alloc_batch(wr_buf_t *buf,
         buf->free_head = buf->next_free[buf->free_head];
         allocated++;
     }
-    pthread_spin_unlock(&buf->lock);
     for (uint32_t i = 0; i < allocated; i++) {
         char *e = (char *)__wr_buf_idx(buf, indices[i]);
         wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
         hdr->wr_id = __idx_to_wr_id(indices[i]);
         entries[i] = e;
     }
+    pthread_spin_unlock(&buf->lock);
 
     return allocated;
 }
@@ -168,11 +171,11 @@ uint32_t jfr_wr_buf_alloc_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_
 static void wr_buf_release_entry(wr_buf_t *buf, uint32_t idx)
 {
     /* Only clear the header (wr_id + entry_type) to mark the entry free */
+    pthread_spin_lock(&buf->lock);
     void *e = __wr_buf_idx(buf, idx);
     wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
     hdr->wr_id = 0;
     hdr->entry_type = 0;
-    pthread_spin_lock(&buf->lock);
     buf->next_free[idx] = buf->free_head;
     buf->free_head = idx;
     pthread_spin_unlock(&buf->lock);
@@ -198,6 +201,7 @@ static void wr_buf_release_batch(wr_buf_t *buf, uint32_t *indices, uint32_t coun
     if (count == 0) {
         return;
     }
+    pthread_spin_lock(&buf->lock);
     /* Only clear headers (wr_id + entry_type) to mark entries free */
     for (uint32_t i = 0; i < count; i++) {
         void *e = __wr_buf_idx(buf, indices[i]);
@@ -206,7 +210,6 @@ static void wr_buf_release_batch(wr_buf_t *buf, uint32_t *indices, uint32_t coun
         hdr->entry_type = 0;
     }
     /* Push all entries back to free list */
-    pthread_spin_lock(&buf->lock);
     for (uint32_t i = 0; i < count; i++) {
         buf->next_free[indices[i]] = buf->free_head;
         buf->free_head = indices[i];
