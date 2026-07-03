@@ -17,10 +17,10 @@
 int establish_connection(const perftest_config_t *cfg)
 {
     comm_tcp_cfg_t tcp_cfg = {
-        .server_ip = cfg->comm.server_ip,
-        .bind_ip = cfg->comm.bind_ip,
-        .enable_ipv6 = cfg->comm.enable_ipv6,
-        .port = cfg->comm.port,
+        .server_ip = cfg->server_ip,
+        .bind_ip = cfg->bind_ip,
+        .enable_ipv6 = cfg->enable_ipv6,
+        .port = cfg->port,
         .sock_num = cfg->pair_num,
     };
 
@@ -29,14 +29,12 @@ int establish_connection(const perftest_config_t *cfg)
 
 void close_connection(perftest_config_t *cfg)
 {
-    perftest_comm_t *comm = &cfg->comm;
-
     tcp_close_connection();
-    free(comm->server_ip);
-    comm->server_ip = NULL;
-    if (comm->bind_ip != NULL) {
-        free(comm->bind_ip);
-        comm->bind_ip = NULL;
+    free(cfg->server_ip);
+    cfg->server_ip = NULL;
+    if (cfg->bind_ip != NULL) {
+        free(cfg->bind_ip);
+        cfg->bind_ip = NULL;
     }
 }
 

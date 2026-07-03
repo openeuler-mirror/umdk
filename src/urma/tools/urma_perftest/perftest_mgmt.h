@@ -13,15 +13,6 @@
 
 #include "perftest_mgmt_tcp.h"
 
-typedef struct perftest_comm {
-    char *server_ip;
-    char *bind_ip;
-    bool enable_ipv6;
-    uint16_t port; /* Server port for bind or connect, default 21115. */
-    int listen_fd;
-    int *sock_fd;
-} perftest_comm_t;
-
 typedef struct perftest_config perftest_config_t;
 
 int establish_connection(const perftest_config_t *cfg);
