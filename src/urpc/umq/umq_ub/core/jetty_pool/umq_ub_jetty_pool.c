@@ -39,6 +39,7 @@ typedef struct jetty_pool {
     uint64_t err_count;             // Nodes marked with is_jetty_err == true
     uint64_t acc_alloc_count;        // Cumulative allocs (nodes borrowed by Logic UMQ)
     uint64_t acc_free_count;         // Cumulative frees (nodes returned to pool)
+    uint64_t acc_miss_count;         // Cumulative allocation misses (no available jetty)
     uint32_t node_count;            // Total allocated nodes
     uint32_t max_nodes;             // Max nodes allowed in pool (0 means use default JETTY_POOL_MAX_NODES)
 
@@ -428,6 +429,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     }
 
     // 3. No available jettys.
+    (void)__atomic_add_fetch(&pool->acc_miss_count, 1, __ATOMIC_RELAXED);
     UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "No available jetty\n");
     errno = UMQ_ERR_EMLINK;
     return NULL;
@@ -546,6 +548,7 @@ int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats)
     stats->err_num = __atomic_load_n(&pool->err_count, __ATOMIC_RELAXED);
     stats->acc_alloc_num = __atomic_load_n(&pool->acc_alloc_count, __ATOMIC_RELAXED);
     stats->acc_free_num = __atomic_load_n(&pool->acc_free_count, __ATOMIC_RELAXED);
+    stats->acc_miss_num = __atomic_load_n(&pool->acc_miss_count, __ATOMIC_RELAXED);
     return UMQ_SUCCESS;
 }
 

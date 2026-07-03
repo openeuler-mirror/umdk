@@ -391,6 +391,7 @@ typedef struct umq_transport_pool_stats {
     uint64_t error_num;
     uint64_t acc_alloc_num;
     uint64_t acc_free_num;
+    uint64_t acc_miss_num;
 } umq_transport_pool_stats_t;
 
 #ifdef __cplusplus

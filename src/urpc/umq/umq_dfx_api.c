@@ -500,14 +500,15 @@ int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transp
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
-        "TotalTpCnt", "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt", "AccAllocTpCnt", "AccFreeTpCnt");
+        "%-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+        "TotalTpCnt", "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt",
+        "AccAllocTpCnt", "AccFreeTpCnt", "AccMissTpCnt");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
+        "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
         umq_transport_pool_stats->total_num, umq_transport_pool_stats->global_num,
         umq_transport_pool_stats->cache_num, umq_transport_pool_stats->in_use_num,
         umq_transport_pool_stats->error_num, umq_transport_pool_stats->acc_alloc_num,
-        umq_transport_pool_stats->acc_free_num);
+        umq_transport_pool_stats->acc_free_num, umq_transport_pool_stats->acc_miss_num);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     return str_size;
 }
