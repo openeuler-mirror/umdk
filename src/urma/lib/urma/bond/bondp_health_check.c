@@ -482,17 +482,6 @@ int bondp_import_health_check_tseg(const bondp_context_t *bdp_ctx, bondp_target_
         return 0;
     }
 
-    bondp_comp_t *cfg_jetty = NULL;
-    if (bondp_rjetty_has_user_info(rjetty)) {
-        const bondp_rjetty_t *bdp_rjetty = (const bondp_rjetty_t *)rjetty;
-        cfg_jetty = CONTAINER_OF_FIELD(bdp_rjetty->jetty, bondp_comp_t, v_jetty);
-    }
-
-    if (!bondp_rjetty_has_user_info(rjetty) || cfg_jetty == NULL) {
-        URMA_LOG_ERR("Invalid rjetty for health check seg import, health check disabled\n");
-        return 0;
-    }
-
     return import_check_tseg_by_import_result(bdp_ctx, bdp_tjetty, rvjetty_info);
 }
 
