@@ -218,7 +218,7 @@ static void umq_thread_closure_callback(uint64_t id)
 {
     thread_closure_callback_args_t *args = (thread_closure_callback_args_t *)id;
 #ifndef UMQ_STATIC_LIB
-    if (args->trans_mode < UMQ_TRANS_MODE_MAX && g_umq_thread_closure[args->trans_mode].dlhandler != NULL) {
+    if (args->trans_mode >= UMQ_TRANS_MODE_MAX || g_umq_thread_closure[args->trans_mode].dlhandler == NULL) {
         free(args);
         return;
     }
