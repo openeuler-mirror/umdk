@@ -16,7 +16,6 @@ static int run_test(test_ums_ctx_t *ctx)
     int rc = TEST_FAILED;
     int check_num;
     // char setup_env[MAX_EXEC_CMD_RET_LEN];
-    char proc_net_ums6[MAX_EXEC_CMD_RET_LEN];
     char proc_net_ums[MAX_EXEC_CMD_RET_LEN];
     char test_ip_str[128]={0};
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
@@ -30,19 +29,18 @@ static int run_test(test_ums_ctx_t *ctx)
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup qperf -lp ${i} > /tmp/qperf_server_${i}.log 2>&1 & done", ctx->test_port + 1, ctx->test_port + 11);
-        sleep(3)
-        exec_cmd(proc_net_ums6, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
+        sleep(3);
     }
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(clnt_cmd, MAX_EXEC_CMD_RET_LEN, "for i in $(seq %d %d); do nohup ums_run qperf %s -lp ${i} -m 8192 -t 0 tcp_bw > /tmp/qperf_client_${i}.log 2>&1 & done", ctx->test_port + 1, ctx->test_port + 11, ctx->test_ip);
-        sleep(3)
+        sleep(3);
         exec_cmd(proc_net_ums, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums");
     }
     sync_time("----------------------------2");
     
-    // 校验流量走ums
+    // 校验流量走fallback
     if (ctx->app_id == PROC_2) {
         sprintf(test_ip_str, "%s", ctx->test_ip_host2);
         check_num = query_proc_net_ums_detail_stream_num("True", test_ip_str);
@@ -53,12 +51,14 @@ static int run_test(test_ums_ctx_t *ctx)
     CHKERR_JUMP(ret != TEST_SUCCESS, "fallback multiple connect failed", EXIT);
 
     sync_time("----------------------------3");
-    exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    sleep(3);
-    exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
+    exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf 2>&1");
+    sync_time("----------------------------4");
+    exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf 2>&1");
+    sync_time("----------------------------5");
+    CHKERR_JUMP(ret != TEST_SUCCESS, "fallback multiple connect failed", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------4");
+    sync_time("----------------------------6");
     return rc;
 }
 

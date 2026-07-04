@@ -57,14 +57,13 @@ static int run_test(test_ums_ctx_t *ctx)
         if (ctx->app_id == PROC_2 && check_num < 1) {
             ret = -1;
         }
-        CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
 
         sync_time("----------------------------3");
         exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-        sleep(3);
+        sync_time("----------------------------4");
         exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
     }
-
+    CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
     sync_time("----------------------------4");
