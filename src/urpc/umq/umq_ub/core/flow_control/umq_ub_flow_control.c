@@ -640,8 +640,11 @@ int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info)
     umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)bind_info->queue_info;
     fc->remote_rx_depth = queue_info->rx_depth;
     fc->remote_tx_depth = queue_info->tx_depth;
-    fc->remote_rx_window = 0; // remote window need to be updated after remote rx_posted
-
+    if (bind_info->fc_info != NULL && bind_info->fc_info->initial_credit > 0) {
+        fc->remote_rx_window = bind_info->fc_info->initial_credit;
+    } else {
+        fc->remote_rx_window = 0;
+    }
     return UMQ_SUCCESS;
 }
 
