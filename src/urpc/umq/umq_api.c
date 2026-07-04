@@ -758,8 +758,8 @@ int umq_init(umq_init_cfg_t *cfg)
     return UMQ_SUCCESS;
 
 FW_UNINIT:
-    framework_uninit();
     umq_post_dp_end();
+    framework_uninit();
     umq_thread_uninit();
 
 LOCK_DESTROY:
