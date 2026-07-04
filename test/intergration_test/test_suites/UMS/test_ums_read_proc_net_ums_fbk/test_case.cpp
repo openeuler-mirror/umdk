@@ -52,7 +52,7 @@ static int run_test(test_ums_ctx_t *ctx)
     if (ctx->app_id == PROC_2 && check_num_ums < 1) {
         ret = -1;
     }
-    CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
+
     // check_num_fallback = query_proc_net_ums_detail_stream_num("True", port_str+1);
     // if (ctx->app_id == PROC_2 && check_num_fallback != 2) {
     //     ret = -1;
@@ -61,11 +61,13 @@ static int run_test(test_ums_ctx_t *ctx)
     
     sync_time("----------------------------3");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    sleep(3);
+    sync_time("----------------------------4");
     exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
+    sync_time("----------------------------5");
+    CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------4");
+    sync_time("----------------------------6");
     return rc;
 }
 

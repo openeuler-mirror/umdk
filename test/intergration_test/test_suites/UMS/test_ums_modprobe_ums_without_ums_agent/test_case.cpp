@@ -51,18 +51,18 @@ static int run_test(test_ums_ctx_t *ctx)
         if (check_num_ums < 1) {
             ret = -1;
         }
-        CHKERR_JUMP(ret != TEST_SUCCESS, "fallback single connect failed", EXIT);
     }
     sync_time("----------------------------4");
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    sleep(2);
+    sync_time("----------------------------5");
     exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
     exec_cmd(recover_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(10);
-
+    sync_time("----------------------------6");
+    CHKERR_JUMP(ret != TEST_SUCCESS, "fallback single connect failed", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------5");
+    sync_time("----------------------------7");
     return rc;
 }
 

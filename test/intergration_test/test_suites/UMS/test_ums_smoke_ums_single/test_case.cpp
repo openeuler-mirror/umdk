@@ -26,13 +26,13 @@ static int run_test(test_ums_ctx_t *ctx)
     // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(3);
     sync_time("----------------------------0");
+
     if (ctx->app_id == PROC_1) {
         char serv_cmd[MAX_EXEC_CMD_RET_LEN];
         exec_cmd(serv_cmd, MAX_EXEC_CMD_RET_LEN, "nohup ums_run qperf -lp %d > /tmp/qperf_server.log 2>&1 &", ctx->test_port + 1);
         sleep(3);
         exec_cmd(proc_net_ums6, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums6");
     }
-    sleep(3);
     sync_time("----------------------------1");
     if (ctx->app_id == PROC_2) {
         char clnt_cmd[MAX_EXEC_CMD_RET_LEN];
@@ -40,7 +40,6 @@ static int run_test(test_ums_ctx_t *ctx)
         sleep(3);
         exec_cmd(proc_net_ums, MAX_EXEC_CMD_RET_LEN, "cat /proc/net/ums");
     }
-    sleep(3);
     sync_time("----------------------------2");
     
     // 校验流量走ums
@@ -51,15 +50,16 @@ static int run_test(test_ums_ctx_t *ctx)
             ret = -1;
         }
     }
-    CHKERR_JUMP(ret != TEST_SUCCESS, "ums single connect failed", EXIT);
 
     sync_time("----------------------------3");
-    exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
-    sleep(3);
-    exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
+    exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf 2>&1");
+    sync_time("----------------------------4");
+    exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf 2>&1");
+    sync_time("----------------------------5");
+    CHKERR_JUMP(ret != TEST_SUCCESS, "ums single connect failed", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
-    sync_time("----------------------------4");
+    sync_time("----------------------------6");
     return rc;
 }
 
