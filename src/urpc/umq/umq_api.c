@@ -463,7 +463,6 @@ TIMER_UNINIT:
 static void umq_post_dp_end(void)
 {
     urpc_manage_uninit();
-    urpc_timing_wheel_uninit();
 }
 
 static int umq_thread_init(umq_init_cfg_t *cfg)
@@ -486,7 +485,7 @@ THREAD_CTX_UNINIT:
 
 static void umq_thread_uninit(void)
 {
-    umq_post_dp_end();
+    urpc_timing_wheel_uninit();
     urpc_thread_ctx_uninit();
 }
 
@@ -496,6 +495,9 @@ void umq_uninit(void)
         UMQ_VLOG_ERR(VLOG_UMQ, "umq has not been inited\n");
         return;
     }
+
+    // stop timeout thread first
+    umq_post_dp_end();
 
     umq_trace_remain_output();
     umq_perf_uninit();
@@ -757,7 +759,9 @@ int umq_init(umq_init_cfg_t *cfg)
 
 FW_UNINIT:
     framework_uninit();
+    umq_post_dp_end();
     umq_thread_uninit();
+
 LOCK_DESTROY:
     (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
     g_umq_config_mutex_lock = NULL;
