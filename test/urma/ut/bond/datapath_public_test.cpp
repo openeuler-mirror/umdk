@@ -366,7 +366,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     EXPECT_EQ(0, scheduledSendIdx);
     EXPECT_EQ(0, scheduledTargetIdx);
     EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&wr, &copiedWr, copiedSrc, copiedDst));
-    EXPECT_EQ(URMA_SUCCESS, encode_jfs_wr_msn(&copiedWr, &fixture.comp, 0, fixture.target.is_msn_enabled));
+    encode_jfs_wr_msn(&copiedWr, &fixture.comp, 0, fixture.target.is_msn_enabled);
     ASSERT_EQ(URMA_SUCCESS, urma_post_jfs_wr(fixture.comp.p_jfs[0], &wr, &badWr));
     urma_test::GetHwMockState().postJfsCount = 0;
     badWr = nullptr;
