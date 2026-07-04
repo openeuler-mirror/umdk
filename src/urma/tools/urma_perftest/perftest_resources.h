@@ -160,6 +160,8 @@ static inline void increase_loc_addr(urma_sge_t *sge, uint32_t size, uint64_t rc
 
 int create_ctx(perftest_context_t *ctx, perftest_config_t *cfg);
 void destroy_ctx(perftest_context_t *ctx, perftest_config_t *cfg);
+int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg);
+int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg);
 
 /* Warm_up function is only available for READ/WRITE/ATOMIC bw test. */
 int perform_warm_up(perftest_context_t *ctx, perftest_config_t *cfg);
