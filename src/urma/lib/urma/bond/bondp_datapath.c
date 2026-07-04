@@ -1030,7 +1030,6 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
         &bdp_ctx->p_vjetty_id_table, pjetty_id, p_vjetty_type);
     if (comp == NULL) {
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_WARN_RL("Bond comp not found, local_id=%d\n", pjetty_id.id);
         return NULL;
     }
     atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
@@ -1065,7 +1064,7 @@ static cr_convert_ret_t handle_recv_cr_without_backup(bondp_context_t *bdp_ctx, 
 {
     bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (recv_comp == NULL) {
-        URMA_LOG_ERR("Failed to find local jetty, idx=%u, id=%u\n", idx, cr->local_id);
+        URMA_LOG_WARN_RL("Local jetty not found, skip recv cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
     bondp_comp_t *count_comp = get_recv_count_comp(recv_comp);
@@ -1101,8 +1100,7 @@ static cr_convert_ret_t handle_fake_cr_with_store(bondp_context_t *bdp_ctx, int 
 {
     bondp_comp_t *comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (comp == NULL) {
-        URMA_LOG_ERR("Skip fake cr because vjetty is not found, idx=%d, local_id=%u\n",
-                     idx, cr->local_id);
+        URMA_LOG_WARN_RL("Local jetty not found, skip fake cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
 
@@ -1143,7 +1141,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     const uint64_t wr_id = cr->user_ctx;
     bondp_comp_t *bdp_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (bdp_comp == NULL) {
-        URMA_LOG_ERR("Failed to find jetty when handle send cr, cr.local_id=%u.\n", cr->local_id);
+        URMA_LOG_WARN_RL("Local jetty not found, skip send cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
 
@@ -1238,7 +1236,7 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
 {
     bondp_comp_t *recv_comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (recv_comp == NULL) {
-        URMA_LOG_ERR("Failed to find local jetty, idx=%u, id=%u\n", idx, cr->local_id);
+        URMA_LOG_WARN_RL("Local jetty not found, skip recv cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
 
@@ -1315,6 +1313,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 {
     bondp_comp_t *comp = get_comp_by_cr(bdp_ctx, idx, cr);
     if (comp == NULL) {
+        URMA_LOG_WARN_RL("Local jetty not found, skip cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
     }
 
