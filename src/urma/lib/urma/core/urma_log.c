@@ -316,10 +316,16 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
     bool ret = false;
 
     /* Check if initialized first (without lock) */
-    if ((rs->flags & URMA_LOG_RL_INITIALIZED) == 0) {
+    if (atomic_load(&rs->flags) != URMA_LOG_RL_INITIALIZED) {
+        /* Double-check: another thread may have raced with us */
+        uint32_t expected = 0;
+        if (!atomic_compare_exchange_strong(&rs->flags, &expected, URMA_LOG_RL_INITIALIZING)) {
+            return true; /* Allow first log through */
+        }
         /* Not initialized yet, need to initialize spinlock first */
         if (pthread_spin_init(&rs->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
             /* Spinlock initialization failed, allow log output (safe fallback) */
+            atomic_store(&rs->flags, 0);
             return true;
         }
 
@@ -332,7 +338,7 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
         rs->function = function;
         rs->line = line;
         /* Set INITIALIZED flag last (acts as memory barrier) */
-        rs->flags |= URMA_LOG_RL_INITIALIZED;
+        atomic_store(&rs->flags, URMA_LOG_RL_INITIALIZED);
 
         return true;  /* First call always allows log output */
     }
