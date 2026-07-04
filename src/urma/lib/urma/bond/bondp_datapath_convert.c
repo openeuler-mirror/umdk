@@ -308,7 +308,7 @@ static void map_fadd_vwr_to_path(urma_jfs_wr_t *send_wr, int send_idx, int targe
     send_wr->tjetty = get_p_tjetty(send_wr->tjetty, send_idx, target_idx);
 }
 
-urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, bool msn_enable)
+void encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, bool msn_enable)
 {
     uint64_t opcode_tag = 0;
 
@@ -330,7 +330,7 @@ urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint3
                 bdp_comp->v_jetty.jetty_id.id,
                 wr->send.imm_data,
                 msn_enable);
-            return URMA_SUCCESS;
+            return;
         case URMA_OPC_WRITE_IMM:
             opcode_tag = URMA_CR_OPC_WRITE_WITH_IMM;
             wr->rw.notify_data = encode_imm_data(
@@ -339,22 +339,21 @@ urma_status_t encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint3
                 bdp_comp->v_jetty.jetty_id.id,
                 wr->rw.notify_data,
                 msn_enable);
-            return URMA_SUCCESS;
+            return;
         case URMA_OPC_WRITE:
         case URMA_OPC_WRITE_NOTIFY:
         case URMA_OPC_READ:
         case URMA_OPC_CAS:
         case URMA_OPC_FADD:
             /* No MSN encoding needed for these opcodes */
-            return URMA_SUCCESS;
+            return;
         default:
             URMA_LOG_ERR("Unsupported send opcode\n");
-            return URMA_EINVAL;
+            return;
     }
-    return URMA_SUCCESS;
 }
 
-void map_jfs_vwr_to_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
+void bind_jfs_wr_to_send_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
 {
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -379,19 +378,7 @@ void map_jfs_vwr_to_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
     }
 }
 
-urma_status_t convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx,
-                                     bondp_comp_t *bdp_comp, bool msn_enable)
-{
-    uint32_t msn = atomic_fetch_add(&bdp_comp->msn, 1) % BONDP_MAX_BITMAP_SIZE;
-    urma_status_t ret = encode_jfs_wr_msn(wr, bdp_comp, msn, msn_enable);
-    if (ret != URMA_SUCCESS) {
-        return ret;
-    }
-    map_jfs_vwr_to_path(wr, send_idx, target_idx);
-    return URMA_SUCCESS;
-}
-
-void convert_jfs_pwr_to_vwr_resend(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty)
+void unbind_jfs_wr_from_send_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty)
 {
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -410,31 +397,6 @@ void convert_jfs_pwr_to_vwr_resend(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjet
             return;
         case URMA_OPC_FADD:
             restore_faa_pwr_to_vwr(wr, vtjetty);
-            return;
-        default:
-            return;
-    }
-}
-
-void convert_jfs_vwr_to_pwr_for_resend(urma_jfs_wr_t *wr, int send_idx, int target_idx)
-{
-    switch (wr->opcode) {
-        case URMA_OPC_SEND:
-        case URMA_OPC_SEND_IMM:
-        case URMA_OPC_SEND_INVALIDATE:
-            map_send_vwr_to_path(wr, send_idx, target_idx);
-            return;
-        case URMA_OPC_WRITE:
-        case URMA_OPC_WRITE_IMM:
-        case URMA_OPC_WRITE_NOTIFY:
-        case URMA_OPC_READ:
-            map_write_vwr_to_path(wr, send_idx, target_idx);
-            return;
-        case URMA_OPC_CAS:
-            map_cas_vwr_to_path(wr, send_idx, target_idx);
-            return;
-        case URMA_OPC_FADD:
-            map_fadd_vwr_to_path(wr, send_idx, target_idx);
             return;
         default:
             return;
