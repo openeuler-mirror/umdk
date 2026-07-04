@@ -47,6 +47,8 @@ void free_jfs_wr(urma_jfs_wr_t *wr);
  */
 void encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, bool enable_msn);
 
+urma_status_t check_jfs_wr_path(urma_jfs_wr_t *wr, int send_idx, int target_idx);
+
 /**
  * Bind a stored virtual-form WR to the physical path identified by
  * send_idx/target_idx in place.

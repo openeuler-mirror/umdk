@@ -237,12 +237,6 @@ static urma_status_t bondp_unregister_seg_inner(urma_target_seg_t *target_seg)
         ret = URMA_FAIL;
     }
 
-    if (bondp_delete_pseg(bdp_seg) != 0) {
-        URMA_LOG_ERR("Failed to delete pseg for vseg, token_id=%u, handle=%lu.\n",
-                     target_seg->seg.token_id, target_seg->handle);
-        ret = URMA_FAIL;
-    }
-
     free(bdp_seg);
     return ret;
 }
@@ -263,8 +257,17 @@ static void bondp_put_local_seg(urma_target_seg_t *target_seg)
 
 urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 {
+    int ret = URMA_SUCCESS;
+    bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_tseg_t, v_tseg);
+
+    if (bondp_delete_pseg(bdp_seg) != 0) {
+        URMA_LOG_ERR("Failed to delete pseg for vseg, token_id=%u, handle=%lu.\n",
+                     target_seg->seg.token_id, target_seg->handle);
+        ret = URMA_FAIL;
+    }
+
     bondp_put_local_seg(target_seg);
-    return URMA_SUCCESS;
+    return ret;
 }
 
 static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cfg,
