@@ -928,21 +928,32 @@ typedef enum cr_convert_ret {
 
 static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
 {
+    int ret;
+
     wr_entry->send_idx = send_idx;
     wr_entry->target_idx = target_idx;
     urma_jfs_wr_t *wr = &wr_entry->wr;
     urma_target_jetty_t *vtjetty = &wr_entry->target_vjetty->v_tjetty;
+
+    ret = check_jfs_wr_path(wr, send_idx, target_idx);
+    if (ret != URMA_SUCCESS) {
+        goto release_wr_entry;
+    }
     bind_jfs_wr_to_send_path(wr, send_idx, target_idx);
 
     urma_jfs_wr_t *bad_wr = NULL;
     wr->next = NULL;
-    int ret = comp_post_send(wr_entry->bdp_comp, send_idx, target_idx, wr, &bad_wr, 1);
+    ret = comp_post_send(wr_entry->bdp_comp, send_idx, target_idx, wr, &bad_wr, 1);
     unbind_jfs_wr_from_send_path(wr, vtjetty);
     if (ret != URMA_SUCCESS) {
-        release_vwr_use_cnt(wr);
-        jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
+        goto release_wr_entry;
     }
 
+    return ret;
+
+release_wr_entry:
+    release_vwr_use_cnt(wr);
+    jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
     return ret;
 }
 

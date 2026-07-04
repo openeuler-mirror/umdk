@@ -211,11 +211,17 @@ static inline void decode_imm_data(uint64_t imm_data, uint32_t *cr_opcode, uint3
 
 static inline urma_target_jetty_t *get_p_tjetty(urma_target_jetty_t *tjetty, int send_idx, int target_idx)
 {
+    if (tjetty == NULL) {
+        return NULL;
+    }
     return CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty)->p_tjetty[send_idx][target_idx];
 }
 
 static inline urma_target_seg_t *get_p_tseg(urma_target_seg_t *tseg, int local_idx, int remote_idx)
 {
+    if (tseg == NULL) {
+        return NULL;
+    }
     /* Use token_id to distinguish local register seg and imported seg
        This is useful for write ops */
     if (tseg->token_id != NULL) {
@@ -228,6 +234,83 @@ static inline urma_target_seg_t *get_p_tseg(urma_target_seg_t *tseg, int local_i
 static inline urma_target_seg_t *get_v_tseg(urma_target_seg_t *tseg)
 {
     return (urma_target_seg_t *)(uintptr_t)tseg->handle;
+}
+
+static int check_tseg_path(urma_target_seg_t *tseg, int send_idx, int target_idx)
+{
+    if (get_p_tseg(tseg, send_idx, target_idx) == NULL) {
+        URMA_LOG_ERR("Failed to bind WR to path, pseg is NULL, send_idx=%d, target_idx=%d.\n",
+                     send_idx, target_idx);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_sg_path(const urma_sg_t *sg, int send_idx, int target_idx)
+{
+    for (int i = 0; i < sg->num_sge; ++i) {
+        if (check_tseg_path(sg->sge[i].tseg, send_idx, target_idx) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int check_send_wr_path(urma_jfs_wr_t *send_wr, int send_idx, int target_idx)
+{
+    if (send_wr->send.src.num_sge > 0 && send_wr->send.src.sge != NULL &&
+        check_sg_path(&send_wr->send.src, send_idx, target_idx) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int check_write_wr_path(urma_jfs_wr_t *send_wr, int send_idx, int target_idx)
+{
+    if (check_sg_path(&send_wr->rw.src, send_idx, target_idx) != 0 ||
+        check_sg_path(&send_wr->rw.dst, send_idx, target_idx) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int check_atomic_wr_path(const urma_sge_t *src, const urma_sge_t *dst, int send_idx, int target_idx)
+{
+    if (src == NULL || dst == NULL ||
+        check_tseg_path(src->tseg, send_idx, target_idx) != 0 ||
+        check_tseg_path(dst->tseg, send_idx, target_idx) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+urma_status_t check_jfs_wr_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
+{
+    if (get_p_tjetty(wr->tjetty, send_idx, target_idx) == NULL) {
+        URMA_LOG_ERR("Failed to bind WR to path, pjetty is NULL, send_idx=%d, target_idx=%d.\n",
+                     send_idx, target_idx);
+        return URMA_EINVAL;
+    }
+
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            return (check_send_wr_path(wr, send_idx, target_idx) == 0) ? URMA_SUCCESS : URMA_EINVAL;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            return (check_write_wr_path(wr, send_idx, target_idx) == 0) ? URMA_SUCCESS : URMA_EINVAL;
+        case URMA_OPC_CAS:
+            return (check_atomic_wr_path(wr->cas.src, wr->cas.dst, send_idx, target_idx) == 0) ?
+                URMA_SUCCESS : URMA_EINVAL;
+        case URMA_OPC_FADD:
+            return (check_atomic_wr_path(wr->faa.src, wr->faa.dst, send_idx, target_idx) == 0) ?
+                URMA_SUCCESS : URMA_EINVAL;
+        default:
+            return URMA_SUCCESS;
+    }
 }
 
 static void map_send_vwr_to_path(urma_jfs_wr_t *send_wr, int send_idx, int target_idx)
