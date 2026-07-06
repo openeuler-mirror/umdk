@@ -1053,7 +1053,7 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
         goto DEL_P_VJFR_ID;
     }
 
-    if (bondp_init_wr_buf(bdp_jfr, &bdp_jfr->recv_wr_buf, cfg->depth) != 0) {
+    if (bdp_ctx->msn_enable && bondp_init_wr_buf(bdp_jfr, &bdp_jfr->recv_wr_buf, cfg->depth) != 0) {
         URMA_LOG_ERR("Failed to init jfr wr buf\n");
         goto UNINIT_JFR_CONNECTION_TABLE;
     }
@@ -1074,7 +1074,9 @@ DELETE_VJFR:
 DELETE_PJFR:
     bondp_delete_pjfr(bdp_jfr);
 FREE_JFR:
-    bondp_uninit_wr_buf(&bdp_jfr->recv_wr_buf);
+    if (bdp_ctx->msn_enable) {
+        bondp_uninit_wr_buf(&bdp_jfr->recv_wr_buf);
+    }
     free(bdp_jfr);
     return NULL;
 }
@@ -1107,7 +1109,9 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_uninit_connection_table(bdp_jfr);
-    bondp_uninit_wr_buf(&bdp_jfr->recv_wr_buf);
+    if (bdp_ctx->msn_enable) {
+        bondp_uninit_wr_buf(&bdp_jfr->recv_wr_buf);
+    }
 
     if (bondp_delete_vjfr(bdp_jfr) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete_vjfr\n");
