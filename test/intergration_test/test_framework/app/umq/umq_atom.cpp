@@ -7,10 +7,10 @@
 
 test_umq_ctx_t g_test_umq_ctx;
 
-const char *ENQUEUE_DATA_DEFAUT = "hello, this is umq enqueue";
-size_t enqueue_data_len = strlen(ENQUEUE_DATA_DEFAUT);
-const char *POST_DATA_DEFAUT = "hello, this is umq post";
-size_t post_data_len = strlen(POST_DATA_DEFAUT);
+const char *ENQUEUE_DATA_DEFAULT = "hello, this is umq enqueue";
+size_t enqueue_data_len = strlen(ENQUEUE_DATA_DEFAULT);
+const char *POST_DATA_DEFAULT = "hello, this is umq post";
+size_t post_data_len = strlen(POST_DATA_DEFAULT);
 
 int test_str_to_u32(const char *buf, uint32_t *u32)
 {
@@ -313,12 +313,12 @@ int print_route_list(umqh_ops_t *umqh_ops, const umq_route_key_t *route_key, umq
         TEST_LOG_DEBUG("[%d] | src chip %d die %d port %d | dst chip %d die %d port %d | src eid " EID_FMT " |"
             "dst eid " EID_FMT " \n",
             i, route_list->routes[i].src_port.bs.chip_id, route_list->routes[i].src_port.bs.die_id,
-            route_list->routes[i].src_port.bs.port_idx, 
+            route_list->routes[i].src_port.bs.port_idx,
             route_list->routes[i].dst_port.bs.chip_id, route_list->routes[i].dst_port.bs.die_id,
             route_list->routes[i].dst_port.bs.port_idx, EID_ARGS(route_list->routes[i].src_eid), EID_ARGS(route_list->routes[i].dst_eid));
     }
     return TEST_SUCCESS;
-    
+
 }
 
 int get_used_ports(test_umq_ctx_t *ctx, umqh_ops_t *umqh_ops)
@@ -406,7 +406,7 @@ int set_umq_creat_option(test_umq_ctx_t *ctx, bool all_interrupt)
         struct tm log_time;
         (void)gettimeofday(&tval, NULL);
         (void)localtime_r(&tval.tv_sec, &log_time);
-        ret = sprintf(ctx->umqh_ops[i].option.name, "%u-%u-%4d%02d%02d%02d%02d%02d", ctx->app_id, i, log_time.tm_year + 1900, 
+        ret = sprintf(ctx->umqh_ops[i].option.name, "%u-%u-%4d%02d%02d%02d%02d%02d", ctx->app_id, i, log_time.tm_year + 1900,
             log_time.tm_mon + 1, log_time.tm_mday, log_time.tm_hour, log_time.tm_min, log_time.tm_sec);
             if (ret <= 0) {
                 TEST_LOG_ERROR("ctx->umqh_ops[%u] set create option name failed\n", i);
@@ -673,12 +673,12 @@ int test_umq_prepare(test_umq_ctx_t *ctx)
     CHKERR_JUMP(ret != TEST_SUCCESS, "test_umq_create", EXIT);
     ret = test_umq_bind_info_get(ctx);
     CHKERR_JUMP(ret != TEST_SUCCESS, "test_umq_bind_info_get", EXIT);
-    
+
     test_umq_bind_info_exchange(ctx);
 
     ret = test_umq_bind(ctx);
     CHKERR_JUMP(ret != TEST_SUCCESS, "test_umq_bind", EXIT);
-    
+
     if ((ctx->cfg.feature & UMQ_FEATURE_API_PRO) != 0) {
         ret = test_umq_post_rx(ctx);
         CHKERR_JUMP(ret != TEST_SUCCESS, "test_umq_post_rx", EXIT);
@@ -704,7 +704,7 @@ static void md5_hash(const char *str, uint8_t digest[MD5_DIGEST_LENGTH])
     const EVP_MD *md = EVP_md5();
     if (ctx == NULL || md == NULL) {
         TEST_LOG_ERROR("Error initializing MD5 context\n");
-        if (ctx) 
+        if (ctx)
             EVP_MD_CTX_free(ctx);
         return;
     }
@@ -786,7 +786,7 @@ int test_umq_buf_fill(umqh_ops_t *umqh_ops, umq_buf_t *buf, const char *data, ui
     if (data != nullptr) {
         md5_hash(data, header->digest);
     }
-    
+
 
     buf->buf_data += TEST_DATA_HEADER_SIZE;
     buf->headroom_size = TEST_DATA_HEADER_SIZE;
@@ -968,7 +968,7 @@ int test_umq_post_rx_buf(umqh_ops_t *umqh_ops, uint32_t depth, uint32_t size, ui
         }
     }
 
-    
+
     return TEST_SUCCESS;
 }
 
@@ -991,7 +991,7 @@ int test_umq_post_rx(test_umq_ctx_t *ctx, uint32_t depth, umqh_ops_t *umqh_ops, 
             return TEST_FAILED;
         }
     }
-    
+
     return TEST_SUCCESS;
 }
 
@@ -1024,7 +1024,7 @@ int test_umq_post_tx_buf(umqh_ops_t *umqh_ops, const char *data, uint32_t data_s
         pro->opcode = UMQ_OPC_SEND;
         TEST_LOG_INFO("UMQ_OPC_SEND:%d\n", pro->opcode);
     }
-    
+
 
     umq_buf_t *bad_buf = nullptr;
     io_option.io_direction = UMQ_IO_TX;
