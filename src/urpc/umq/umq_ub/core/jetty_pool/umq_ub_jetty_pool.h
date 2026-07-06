@@ -66,6 +66,7 @@ typedef struct umq_ub_jetty_pool_stats {
     uint64_t err_num;           // Nodes marked is_jetty_err == true
     uint64_t acc_alloc_num;     // Cumulative allocs (nodes borrowed by Logic UMQ)
     uint64_t acc_free_num;      // Cumulative frees (nodes returned to pool)
+    uint64_t acc_miss_num;      // Cumulative allocation misses (no available jetty)
 } umq_ub_jetty_pool_stats_t;
 
 int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats);
