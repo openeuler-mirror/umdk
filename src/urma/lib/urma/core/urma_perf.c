@@ -177,7 +177,6 @@ static void urma_perf_reset_record_item(bool reset_all_thread, uint32_t thread_i
     (void)pthread_spin_lock(&g_urma_perf_record_lock);
     for (int i = thread_start; i < (thread_start + thread_num); ++i) {
         g_urma_perf_record_ctx.record_table[i].is_used = false;
-        g_urma_perf_record_ctx.thread_initialized[i] = false;
         for (int j = 0; j < URMA_PERF_RECORD_TYPE_MAX; ++j) {
             g_urma_perf_record_ctx.record_table[i].type_record[j].min = UINT64_MAX;
             g_urma_perf_record_ctx.record_table[i].type_record[j].accumulation = 0;
@@ -408,8 +407,12 @@ uint64_t urma_get_perf_timestamp(void)
      * deferred to urma_step_perf() where it is done once per measurement
      * (on the delta), instead of twice per measurement (on each timestamp).
      */
-    if (urma_perf_is_enabled() && !g_thread_initialized) {
-        urma_perf_thread_context_init();
+    if (urma_perf_is_enabled()) {
+        if (g_perf_record_index == URMA_PERF_THREAD_MAX_NUM) {
+            urma_perf_thread_context_init();
+        } else {
+            g_urma_perf_record_ctx.record_table[g_perf_record_index].is_used = true;
+        }
     }
 
     return urma_read_cntvct_el0();
@@ -417,8 +420,12 @@ uint64_t urma_get_perf_timestamp(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
 
-    if (urma_perf_is_enabled() && !g_thread_initialized) {
-        urma_perf_thread_context_init();
+    if (urma_perf_is_enabled()) {
+        if (g_perf_record_index == URMA_PERF_THREAD_MAX_NUM) {
+            urma_perf_thread_context_init();
+        } else {
+            g_urma_perf_record_ctx.record_table[g_perf_record_index].is_used = true;
+        }
     }
 
     return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
