@@ -553,13 +553,13 @@ typedef struct urma_jfs_opt {
 } urma_jfs_opt_t;
 
 typedef struct urma_jfs_cfg {
-    uint32_t depth;                   /* [Required] the depth of jfs, defaut urma_device_cap_t->jfs_depth */
+    uint32_t depth;                   /* [Required] the depth of jfs, default urma_device_cap_t->jfs_depth */
     urma_jfs_flag_t flag;             /* [Optional] see urma_jfs_flag_t definition */
     urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
     uint8_t priority;                 /* [Optional] set the priority of JFS, ranging from [0, 15]
                                          Services with low delay need to set high priority. */
-    uint8_t max_sge;                  /* [Optional] max sge count in one wr, defaut urma_device_cap_t->max_jfs_sge */
-    uint8_t max_rsge;         /* [Optional] max remote sge count in one wr, defaut urma_device_cap_t->max_jfs_sge */
+    uint8_t max_sge;                  /* [Optional] max sge count in one wr, default urma_device_cap_t->max_jfs_sge */
+    uint8_t max_rsge;         /* [Optional] max remote sge count in one wr, default urma_device_cap_t->max_jfs_sge */
     uint32_t max_inline_data; /* [Optional] the max inline data size of JFS. if the parameter is 0,
                                  the system will assign device's max inline data length. */
     uint8_t rnr_retry;        /* [Optional] number of times that jfs will resend packets before report error,
@@ -648,10 +648,10 @@ typedef struct urma_jfr_opt {
 typedef struct urma_jfr_cfg {
     uint32_t id;                      /* [Optional] specify jfr id. If the parameter is 0,
                                          the system will randomly assign a non-0 value. */
-    uint32_t depth;                   /* [Required] total depth, include berth, defaut urma_device_cap_t->jfr_depth. */
+    uint32_t depth;                   /* [Required] total depth, include berth, default urma_device_cap_t->jfr_depth. */
     urma_jfr_flag_t flag;             /* [Optional] whether is in TAG_matching, whether is in DC/IDC mode. */
     urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
-    uint8_t max_sge;                  /* [Optional] max sge count in one wr, defaut urma_device_cap_t->max_jfr_sge. */
+    uint8_t max_sge;                  /* [Optional] max sge count in one wr, default urma_device_cap_t->max_jfr_sge. */
     uint8_t min_rnr_timer;            /* [Optional] the minimum RNR NACK timer, ranging from [0, 31], i.e.
                                          the time before jfr sends NACK to the sender for the reason of "ready to receive" */
     urma_jfc_t *jfc;                  /* [Required] need to specify jfc. */
