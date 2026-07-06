@@ -553,6 +553,8 @@ static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
 
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
+    uint64_t post_start = umq_trace_start_timestamp_get();
+    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0);
     uint32_t max_sge_num = queue->max_rx_sge;
     urma_jfr_wr_t recv_wr[UMQ_BATCH_SIZE] = {0};
     urma_jfr_wr_t *recv_wr_ptr = recv_wr;
@@ -649,11 +651,14 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     urma_status_t status;
 
     bool post_jfr = is_umq_ub_main_queue(queue->create_flag);
+    uint64_t tp_start = umq_trace_timestamp_get();
     if (post_jfr) {
         status = umq_symbol_urma()->urma_post_jfr_wr(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, recv_wr, &bad_wr);
     } else {
         status = umq_symbol_urma()->urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], recv_wr, &bad_wr);
     }
+    uint64_t delta_ns = umq_trace_write_delta(tp_start);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_POST_RX, tp_start, delta_ns);
     if (status != URMA_SUCCESS) {
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
         if (post_jfr) {
@@ -672,10 +677,12 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
+        umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
         return umq_status_convert(status);
     }
     umq_ub_rqe_posted_cnt_inc(queue, wr_index);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
+    umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
     return UMQ_SUCCESS;
 
 PUT_CUR_RX_CTX:
@@ -692,6 +699,7 @@ PUT_ALL_RX_CTX:
     } else {
         *bad_qbuf = qbuf;
     }
+    umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
     return ret;
 }
 
