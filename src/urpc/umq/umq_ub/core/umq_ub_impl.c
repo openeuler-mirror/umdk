@@ -2968,5 +2968,6 @@ int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats)
     stats->error_num = pool_stats.err_num;
     stats->acc_alloc_num = pool_stats.acc_alloc_num;
     stats->acc_free_num = pool_stats.acc_free_num;
+    stats->acc_miss_num = pool_stats.acc_miss_num;
     return UMQ_SUCCESS;
 }
