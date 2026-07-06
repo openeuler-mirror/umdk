@@ -1439,10 +1439,6 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         URMA_LOG_ERR("Failed to init jetty send wr buf\n");
         goto UNINIT_JETTY_CONNECTION_TABLE;
     }
-    if (bondp_init_wr_buf(bdp_jetty, &bdp_jetty->recv_wr_buf, jetty_cfg->shared.jfr->jfr_cfg.depth) != 0) {
-        URMA_LOG_ERR("Failed to init jetty recv wr buf\n");
-        goto UNINIT_JETTY_SEND_WR_BUF;
-    }
 
     /* Validate bdp_jfr below at the function entry point to ensure they are not empty. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty_cfg->shared.jfr, bondp_comp_t, v_jfr);
@@ -1456,8 +1452,6 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
 
     return &bdp_jetty->v_jetty;
 
-UNINIT_JETTY_SEND_WR_BUF:
-    bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
 UNINIT_JETTY_CONNECTION_TABLE:
     bondp_uninit_connection_table(bdp_jetty);
 DEL_P_VJETTY_ID:
@@ -1469,7 +1463,6 @@ UNREGISTER_HEALTH_SEG:
 DELETE_PJETTY:
     bondp_delete_pjetty(bdp_jetty);
 FREE_JETTY:
-    bondp_uninit_wr_buf(&bdp_jetty->recv_wr_buf);
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
     (void)pthread_spin_destroy(&bdp_jetty->send_lock);
     free(bdp_jetty);
@@ -1510,7 +1503,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
     bondp_uninit_connection_table(bdp_jetty);
-    bondp_uninit_wr_buf(&bdp_jetty->recv_wr_buf);
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
     if (bondp_delete_vjetty(bdp_jetty) != URMA_SUCCESS) {
         URMA_LOG_ERR("Failed to delete vjetty\n");
