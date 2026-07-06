@@ -176,4 +176,65 @@ ACLSHMEM_DEVICE void aclshmemi_roce_read(
     __gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
     AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
 
+/**
+ * @brief RDMA Quiet function. This synchronous function ensures all previous RDMA WQEs are completed
+ * (data has arrived at the destination NIC).
+ *
+ * @param pe                     [in] PE number of the remote PE.
+ * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ */
+ACLSHMEM_DEVICE void aclshmemi_roce_quiet(uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> ub_local64,
+                                          AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+
+/**
+ * @brief Asynchronous RDMA Atomic Fetch and Add function.
+ *
+ * @tparam T                     [in] data type of the atomic fetch and add operation
+ * @tparam IS_MASKED             [in] whether the atomic fetch and add operation is masked
+ * @param dst                    [in] destination address in remote HBM
+ * @param src                    [in] Reserved field, not used in atomic fetch and add operation. It is recommended to
+ * pass nullptr when called externally.
+ * @param src                    [in] reserved field, not used in atomic fetch and add operation
+ * @param pe                     [in] PE number of the remote PE.
+ * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
+ * @param add_val                [in] add val for atomic fetch and add operation
+ * @param boundary               [in] boundary value for masked atomic fetch and add operation
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ * @return T 0 for success, non-zero for failure
+ */
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_add(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t add_val,
+                                         uint64_t boundary, AscendC::LocalTensor<uint64_t> ub_local64,
+                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+
+/**
+ * @brief Asynchronous RDMA Atomic Compare and Swap function.
+ *
+ * @tparam T                     [in] data type of the atomic compare and swap operation
+ * @tparam IS_MASKED             [in] whether the atomic compare and swap operation is masked
+ * @param dst                    [in] destination address in remote HBM
+ * @param src                    [in] Reserved field, not used in atomic compare and swap operation. It is recommended
+ * to pass nullptr when called externally.
+ * @param pe                     [in] PE number of the remote PE.
+ * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
+ * @param swap_val               [in] swap val for atomic compare and swap operation
+ * @param comp_val               [in] compare val for atomic compare and swap operation
+ * @param swap_mask              [in] swap mask for masked atomic compare and swap operation
+ * @param comp_mask              [in] compare mask for masked atomic compare and swap operation
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ * @return T 0 for success, non-zero for failure
+ */
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_cas(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t swap_val,
+                                         uint64_t comp_val, uint64_t swap_mask, uint64_t comp_mask,
+                                         AscendC::LocalTensor<uint64_t> ub_local64,
+                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+
 #endif // ACLSHMEMI_DEVICE_RDMA_H
