@@ -75,6 +75,11 @@ struct bondp_fb_ctx {
 
 #define BONDP_FB_TASK_HASH_BASIS 0x9d4f21U
 #define BONDP_FB_TASK_TABLE_SIZE 1024U
+/* Delay (ms) before rebuilding a failed-back pjetty on the bond worker. */
+#define BONDP_FB_REBUILD_DELAY_MS 2000U
+/* Delay (ms) before publishing the rebuild_done flag after a rebuild; the
+ * worker enforces a minimum of one tick. */
+#define BONDP_FB_MARK_DONE_DELAY_MS 0U
 
 static uint32_t next_request_id(bondp_fb_ctx_t *fb_ctx)
 {
@@ -134,11 +139,6 @@ static void fb_task_free(bondp_fb_task_t *fb_task)
     free(fb_task);
 }
 
-static void fb_task_get(bondp_fb_task_t *fb_task)
-{
-    (void)atomic_fetch_add(&fb_task->use_cnt.atomic_cnt, 1);
-}
-
 static void fb_task_put(bondp_fb_task_t *fb_task)
 {
     if (atomic_fetch_sub(&fb_task->use_cnt.atomic_cnt, 1) == 1) {
@@ -169,21 +169,22 @@ static void fb_task_table_destroy(bondp_fb_ctx_t *fb_ctx)
     free(fb_ctx);
 }
 
-static bondp_fb_task_t *fb_task_lookup(bondp_fb_ctx_t *fb_ctx, const bondp_fb_task_key_t *key)
+static bondp_fb_task_t *fb_task_take(bondp_fb_ctx_t *fb_ctx, const bondp_fb_task_key_t *key)
 {
     uint32_t hash = fb_task_hash_key(key);
     bondp_fb_task_t *fb_task = NULL;
 
-    (void)pthread_rwlock_rdlock(&fb_ctx->task_lock);
+    (void)pthread_rwlock_wrlock(&fb_ctx->task_lock);
     HMAP_FOR_EACH_WITH_HASH (fb_task, hmap_node, hash, &fb_ctx->task_map) {
         if (!fb_task_matches_key(&fb_task->hmap_node, key)) {
             continue;
         }
-        fb_task_get(fb_task);
-        break;
+        ub_hmap_remove(&fb_ctx->task_map, &fb_task->hmap_node);
+        (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
+        return fb_task;
     }
     (void)pthread_rwlock_unlock(&fb_ctx->task_lock);
-    return fb_task;
+    return NULL;
 }
 
 static int fb_task_add(bondp_fb_ctx_t *fb_ctx, bondp_fb_task_t *task)
@@ -294,7 +295,6 @@ static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx)
         URMA_LOG_WARN("Failed to delete old pjetty at idx=%d\n", local_idx);
     }
 
-    atomic_store(&bdp_jetty->rebuild_done[local_idx], true);
     URMA_LOG_INFO("Failback pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
                   local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
     return 0;
@@ -326,9 +326,31 @@ typedef struct bondp_fb_async_arg {
     bondp_fb_task_key_t key;
 } bondp_fb_async_arg_t;
 
+typedef struct bondp_fb_mark_done_arg {
+    bondp_fb_task_t *fb_task;
+    bondp_comp_t *bdp_jetty;
+    uint32_t pjetty_idx;
+} bondp_fb_mark_done_arg_t;
+
+static void bondp_mark_rebuild_done_async(bondp_fb_mark_done_arg_t *arg)
+{
+    if (arg == NULL) {
+        return;
+    }
+
+    if (arg->bdp_jetty != NULL && arg->pjetty_idx < URMA_UBAGG_DEV_MAX_NUM) {
+        atomic_store(&arg->bdp_jetty->rebuild_done[arg->pjetty_idx], true);
+    }
+
+    if (arg->fb_task != NULL) {
+        fb_task_put(arg->fb_task);
+    }
+    free(arg);
+}
+
 static void bondp_rebuild_pjetty_async(void *arg)
 {
-    bondp_fb_async_arg_t *arg_typed = arg;
+    bondp_fb_async_arg_t *arg_typed = (bondp_fb_async_arg_t *)arg;
     if (arg_typed == NULL) {
         return;
     }
@@ -338,7 +360,7 @@ static void bondp_rebuild_pjetty_async(void *arg)
         goto free_arg;
     }
 
-    bondp_fb_task_t *fb_task = fb_task_lookup(fb_ctx, &arg_typed->key);
+    bondp_fb_task_t *fb_task = fb_task_take(fb_ctx, &arg_typed->key);
     if (fb_task == NULL) {
         goto free_arg;
     }
@@ -354,7 +376,33 @@ static void bondp_rebuild_pjetty_async(void *arg)
     if (ret != 0) {
         URMA_LOG_ERR("Failed to rebuild failback pjetty, vjetty_id=%u, pjetty_idx=%u.\n",
                      fb_task->vjetty_id, fb_task->pjetty_idx);
+        goto put_task;
     }
+
+    bondp_fb_mark_done_arg_t *mark_arg = calloc(1, sizeof(*mark_arg));
+    if (mark_arg == NULL) {
+        URMA_LOG_ERR("Failed to alloc mark-done arg, vjetty_id=%u, pjetty_idx=%u, flag stays unset.\n",
+                     fb_task->vjetty_id, fb_task->pjetty_idx);
+        goto put_task;
+    }
+    mark_arg->fb_task = fb_task;
+    mark_arg->bdp_jetty = bdp_jetty;
+    mark_arg->pjetty_idx = fb_task->pjetty_idx;
+
+    uint64_t mark_done_task_id = 0;
+    ret = bondp_worker_schedule(BONDP_FB_MARK_DONE_DELAY_MS,
+                                (bondp_worker_task_fn_t)bondp_mark_rebuild_done_async, mark_arg,
+                                &mark_done_task_id);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to schedule mark-done task, vjetty_id=%u, pjetty_idx=%u, ret=%d\n",
+                     fb_task->vjetty_id, fb_task->pjetty_idx, ret);
+        free(mark_arg);
+        goto put_task;
+    }
+
+    /* The mark-done task now owns fb_task; only free arg_typed and return. */
+    free(arg_typed);
+    return;
 
 put_task:
     fb_task_put(fb_task);
@@ -399,7 +447,8 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
     async_arg->fb_ctx = fb_ctx;
     async_arg->key = key;
 
-    ret = bondp_worker_schedule(1, bondp_rebuild_pjetty_async, async_arg, &fb_task->worker_task_id);
+    ret = bondp_worker_schedule(BONDP_FB_REBUILD_DELAY_MS, bondp_rebuild_pjetty_async, async_arg,
+                                &fb_task->worker_task_id);
     if (ret != 0) {
         free(async_arg);
         (void)fb_task_del(fb_ctx, &key);
