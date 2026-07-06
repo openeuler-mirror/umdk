@@ -852,4 +852,38 @@ ACLSHMEM_DEVICE void aclshmemi_rdma_xscdv_post_send_atomic(aclshmemi_rdma_send_w
                                                                       sync_id);
 }
 
+/*
+ *  =====================================================================================================
+ *  XSCALE Backend Atomic Operations Traits Specialization
+ *  =====================================================================================================
+ *  This specialization provides the atomic operations implementation for XSCALE backend.
+ *  By specializing aclshmemi_backend_traits once, all combinations of T and IS_MASKED are
+ *  automatically supported through the template functions below.
+ *  =====================================================================================================
+ */
+
+template <>
+struct aclshmemi_backend_traits<aclshmemi_rdma_backend_t::XSCALE> {
+    template <typename T, bool IS_MASKED>
+    struct atomic_op_traits {
+        template <aclshmemi_rdma_atomic_op_t ATOMIC_OP_CODE>
+        static ACLSHMEM_DEVICE uint32_t fill_wqe(
+            aclshmemi_rdma_send_wr &wr, __gm__ aclshmemi_rdma_sq_ctx *&sq_context, __gm__ uint8_t *wqe_addr,
+            uint32_t cur_head)
+        {
+            return aclshmemi_roce_xscale_fill_wqe_atomic<T, IS_MASKED, ATOMIC_OP_CODE>(
+                wr, sq_context, wqe_addr, cur_head);
+        }
+
+        template <aclshmemi_rdma_atomic_op_t ATOMIC_OP_CODE>
+        static ACLSHMEM_DEVICE void post_send(
+            aclshmemi_rdma_send_wr &wr, uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> &ub_local64,
+            AscendC::LocalTensor<uint32_t> &ub_local32, uint32_t sync_id)
+        {
+            aclshmemi_rdma_xscdv_post_send_atomic<T, IS_MASKED, ATOMIC_OP_CODE>(
+                wr, pe, qp_idx, ub_local64, ub_local32, sync_id);
+        }
+    };
+};
+
 #endif // ACLSHMEM_RDMA_DEVICE_BACKEND_XSCALE_HPP
