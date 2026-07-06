@@ -34,6 +34,76 @@ static urma_transport_mode_t get_comp_urma_trans_mode(const bondp_comp_t *bdp_co
     }
 }
 
+static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
+                                        const bondp_target_jetty_t *bdp_tjetty,
+                                        const bondp_chip_id_info_t *chip_pri,
+                                        bondp_path_t *path)
+{
+    uint32_t local_idx = 0;
+    uint32_t target_idx = 0;
+    for (int i = 0; i < CHIP_ROUTE_NUM; i++) {
+        local_idx = chip_pri[i].src_chip_id - BONDP_CHIP_ID_MIN;
+        if (!atomic_load(&bdp_comp->valid[local_idx])) {
+            continue;
+        }
+        target_idx = chip_pri[i].dst_chip_id - BONDP_CHIP_ID_MIN;
+        if (!atomic_load(&bdp_tjetty->valid[target_idx]) ||
+            bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL) {
+            continue;
+        }
+        if (get_comp_urma_trans_mode(bdp_comp) == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
+            bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjetty[local_idx][target_idx]) {
+            continue;
+        }
+        path->local_idx = local_idx;
+        path->target_idx = target_idx;
+        path->least_load = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
+        return URMA_SUCCESS;
+    }
+    return URMA_FAIL;
+}
+
+static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
+                                    const bondp_target_jetty_t *bdp_tjetty,
+                                    const bondp_chip_id_info_t *info,
+                                    uint32_t route_id,
+                                    bondp_path_t *path)
+{
+    uint32_t src_chip_id = info->src_chip_id - 1;
+    uint32_t dst_chip_id = info->dst_chip_id - 1;
+    uint32_t path_idx = 0;
+    uint32_t local_idx = 0;
+    uint32_t target_idx = 0;
+
+    // printf("src_chip_id=%u, dst_chip_id=%u\n", info->src_chip_id, info->dst_chip_id);
+    const uint32_t *failover_route =
+        g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
+    for (int i = 0 ; i < URMA_FAILOVER_LINK_NUM; i++) {
+        path_idx = failover_route[i];
+        if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1) {
+            break;
+        }
+        local_idx = g_bondp_global_ctx->path[path_idx].local_idx;
+        if (!atomic_load(&bdp_comp->valid[local_idx])) {
+            continue;
+        }
+        target_idx = g_bondp_global_ctx->path[path_idx].target_idx;
+        if (!atomic_load(&bdp_tjetty->valid[target_idx]) ||
+            bdp_tjetty->p_tjetty[local_idx][target_idx] == NULL) {
+            continue;
+        }
+        if (get_comp_urma_trans_mode(bdp_comp) == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
+            bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjetty[local_idx][target_idx]) {
+            continue;
+        }
+        path->local_idx = local_idx;
+        path->target_idx = target_idx;
+        path->least_load = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
+        return URMA_SUCCESS;
+    }
+    return URMA_FAIL;
+}
+
 static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                        uint32_t min_idx[], uint32_t max_idx[], bondp_path_t least_load_path[],
                                        uint32_t *least_load_cnt)
@@ -153,43 +223,6 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
     return -1;
 }
 
-static int get_affinity_path_range_ex(const bondp_comp_t *bdp_comp, const uint32_t chip_id,
-                                      uint32_t *min, uint32_t *max)
-{
-    switch (bdp_comp->bondp_ctx->bonding_level) {
-        case BONDP_BONDING_LEVEL_IODIE:
-            *min = chip_id - BONDP_CHIP_ID_MIN;
-            *max = *min + 1;
-            return 0;
-        case BONDP_BONDING_LEVEL_PORT:
-            if (chip_id == BONDP_CHIP_ID_MIN) {
-                const uint32_t affinity_port_start = 2;
-                const uint32_t affinity_port_end = 11;
-                *min = affinity_port_start;
-                *max = affinity_port_end;
-            } else {
-                const uint32_t affinity_port_start = 11;
-                const uint32_t affinity_port_end = 20;
-                *min = affinity_port_start;
-                *max = affinity_port_end;
-            }
-            return 0;
-        default:
-            URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
-            return URMA_EINVAL;
-    }
-}
-
-static int get_affinity_path_range(const bondp_comp_t *bdp_comp, const bondp_chip_id_info_t *info,
-                                   uint32_t min[], uint32_t max[])
-{
-    if (get_affinity_path_range_ex(bdp_comp, info->src_chip_id, &min[0], &max[0]) != 0 ||
-        get_affinity_path_range_ex(bdp_comp, info->dst_chip_id, &min[1], &max[1]) != 0) {
-        return URMA_EINVAL;
-    }
-    return 0;
-}
-
 static inline uint32_t switch_iodie(uint32_t iodie_num)
 {
     return iodie_num == BONDP_CHIP_ID_MIN ? BONDP_CHIP_ID_MAX : BONDP_CHIP_ID_MIN;
@@ -209,13 +242,42 @@ static void init_chip_priority(bondp_chip_id_info_t chip_priority[], const bondp
     chip_priority[CHIP_ROUTE_NUM - 1].dst_chip_id = dst_id;
 }
 
+static uint32_t select_affinity_path(
+    const bondp_comp_t *bdp_comp,
+    const bondp_target_jetty_t *bdp_tjetty,
+    const bondp_chip_id_info_t *info,
+    bondp_path_t least_load_path[],
+    int *send_idx)
+{
+    bondp_chip_id_info_t chip_priority[CHIP_ROUTE_NUM];
+    uint32_t least_load_cnt = 0;
+
+    if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
+        init_chip_priority(chip_priority, info);
+        if (select_path_by_priority(bdp_comp, bdp_tjetty, chip_priority,
+                                    &least_load_path[least_load_cnt]) == URMA_SUCCESS) {
+            least_load_cnt++;
+        }
+    } else if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
+        for (int i = 0; i < ACTIVE_PORT_PER_CHIP; i++) {
+            if (*send_idx >= 0 && *send_idx != URMA_ACTIVE_PORT_MIN + i) {
+                continue;
+            }
+            if (select_path_by_chip(bdp_comp, bdp_tjetty, info,
+                                    i, &least_load_path[least_load_cnt]) == URMA_SUCCESS) {
+                least_load_cnt++;
+            }
+        }
+    }
+    return least_load_cnt;
+}
+
 static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
                                  int *send_idx, int *target_idx, const bondp_chip_id_info_t *info)
 {
     uint32_t min_active_count = MIN(bdp_comp->active_count, bdp_tjetty->active_count);
     bondp_path_t least_load_path[URMA_UBAGG_MAX_CONNECTION] = {{0, 0}};
     uint32_t least_load_cnt = 0;
-    int ret;
     uint32_t min[2] = {0};
     uint32_t max[2] = {0};
 
@@ -225,22 +287,8 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     }
 
     if (info != NULL) {
-        uint32_t valid_route = 0;
-        bondp_chip_id_info_t chip_priority[CHIP_ROUTE_NUM];
-
-        init_chip_priority(chip_priority, info);
-
-        for (int i = 0; i < CHIP_ROUTE_NUM; i++) {
-            ret = get_affinity_path_range(bdp_comp, &chip_priority[i], min, max);
-            if (ret != 0) {
-                return ret;
-            }
-            valid_route += select_least_load_path(bdp_comp, bdp_tjetty, min, max,
-                                                  least_load_path, &least_load_cnt);
-            if (valid_route >= ACTIVE_PORT_PER_CHIP) {
-                break;
-            }
-        }
+        least_load_cnt = select_affinity_path(bdp_comp, bdp_tjetty, info,
+                                              least_load_path, send_idx);
         if (least_load_cnt == 0 && !g_bondp_global_ctx->enable_failover) {
             return URMA_FAIL;
         }
