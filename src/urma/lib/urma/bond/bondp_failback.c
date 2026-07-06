@@ -265,6 +265,10 @@ static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx)
     bondp_context_t *bdp_ctx = bdp_jetty->bondp_ctx;
 
     urma_jetty_t *old_jetty = bdp_jetty->p_jetty[local_idx];
+    if (old_jetty == NULL) {
+        URMA_LOG_ERR("pjetty at idx=%u is NULL, cannot rebuild\n", local_idx);
+        return -1;
+    }
     urma_jetty_cfg_t p_cfg = old_jetty->jetty_cfg;
     urma_jetty_id_t old_id = old_jetty->jetty_id;
 
