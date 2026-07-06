@@ -67,4 +67,507 @@ ACLSHMEM_DEVICE void aclshmemi_roce_quiet(uint32_t pe, uint32_t qp_idx, AscendC:
     aclshmemi_roce_poll_cq<ACLSHMEMI_K_RDMA_BACKEND>(pe, qp_idx, cur_head, ub_local64, ub_local32, sync_id);
 }
 
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_add(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t add_val,
+                                         uint64_t boundary, AscendC::LocalTensor<uint64_t> ub_local64,
+                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id)
+{
+    if constexpr (ACLSHMEMI_K_RDMA_BACKEND == aclshmemi_rdma_backend_t::XSCALE) {
+        return aclshmemi_roce_atomic_fetch_and_add<T, IS_MASKED, ACLSHMEMI_K_RDMA_BACKEND>(
+            dst, src, pe, qp_idx, add_val, boundary, ub_local64, ub_local32, sync_id);
+    } else {
+        ACLSHMEM_DEBUG_FUNC(aclshmemi_kernel_abort, "ROCE atomic add is only supported on XSCALE backend.\n");
+        return T(0);
+    }
+}
+
+template <typename T, bool IS_MASKED>
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_cas(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t swap_val,
+                                         uint64_t comp_val, uint64_t swap_mask, uint64_t comp_mask,
+                                         AscendC::LocalTensor<uint64_t> ub_local64,
+                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id)
+{
+    if constexpr (ACLSHMEMI_K_RDMA_BACKEND == aclshmemi_rdma_backend_t::XSCALE) {
+        return aclshmemi_roce_atomic_compare_and_swap<T, IS_MASKED, ACLSHMEMI_K_RDMA_BACKEND>(
+            dst, src, pe, qp_idx, swap_val, comp_val, swap_mask, comp_mask, ub_local64, ub_local32, sync_id);
+    } else {
+        ACLSHMEM_DEBUG_FUNC(aclshmemi_kernel_abort, "ROCE atomic cas is only supported on XSCALE backend.\n");
+        return T(0);
+    }
+}
+
+ACLSHMEM_DEVICE __gm__ void *aclshmem_roce_ptr(__gm__ void *ptr, int pe)
+{
+    // Get Global State
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+
+    // Back to root address
+    uint64_t offset = reinterpret_cast<uint64_t>(ptr) - reinterpret_cast<uint64_t>(device_state->heap_base);
+    uint64_t remote_ptr = reinterpret_cast<uint64_t>(device_state->p2p_device_heap_base[pe]) + offset;
+
+    return reinterpret_cast<__gm__ void *>(remote_ptr);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto ptr = aclshmem_ptr(src, pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_read((__gm__ uint8_t *)dst, (__gm__ uint8_t *)ptr, pe, 0, elem_size * sizeof(T), ub_tensor_64,
+                        ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe,
+                                            uint32_t sync_id)
+{
+    auto ptr = aclshmem_ptr(src, pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_read((__gm__ uint8_t *)dst, (__gm__ uint8_t *)ptr, pe, 0, elem_size * sizeof(T), ub_tensor_64,
+                        ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto ptr = aclshmem_ptr((__gm__ void *)src.GetPhyAddr(), pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr());
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr()) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_read((__gm__ uint8_t *)dst.GetPhyAddr(), (__gm__ uint8_t *)ptr, pe, 0, elem_size * sizeof(T),
+                        ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_get_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe, uint32_t sync_id)
+{
+    auto ptr = aclshmem_ptr((__gm__ void *)src.GetPhyAddr(), pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr());
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr()) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_read((__gm__ uint8_t *)dst.GetPhyAddr(), (__gm__ uint8_t *)ptr, pe, 0, elem_size * sizeof(T),
+                        ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto ptr = aclshmem_ptr(dst, pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_write((__gm__ uint8_t *)ptr, (__gm__ uint8_t *)src, pe, 0, elem_size * sizeof(T), ub_tensor_64,
+                         ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(__gm__ T *dst, __gm__ T *src, __ubuf__ T *buf, uint32_t elem_size, int pe,
+                                            uint32_t sync_id)
+{
+    auto ptr = aclshmem_ptr(dst, pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_write((__gm__ uint8_t *)ptr, (__gm__ uint8_t *)src, pe, 0, elem_size * sizeof(T), ub_tensor_64,
+                         ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto ptr = aclshmem_ptr((__gm__ void *)dst.GetPhyAddr(), pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr());
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr()) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_write((__gm__ uint8_t *)ptr, (__gm__ uint8_t *)(src.GetPhyAddr()), pe, 0, elem_size * sizeof(T),
+                         ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemx_roce_put_nbi(AscendC::GlobalTensor<T> dst, AscendC::GlobalTensor<T> src,
+                                            AscendC::LocalTensor<T> buf, uint32_t elem_size, int pe, uint32_t sync_id)
+{
+    auto ptr = aclshmem_ptr((__gm__ void *)dst.GetPhyAddr(), pe);
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr());
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf.GetPhyAddr()) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    aclshmemi_roce_write((__gm__ uint8_t *)ptr, (__gm__ uint8_t *)(src.GetPhyAddr()), pe, 0, elem_size * sizeof(T),
+                         ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_quiet(uint32_t pe, __ubuf__ T *buf, uint32_t sync_id)
+{
+    __gm__ aclshmemi_rdma_info *rdma_info = aclshmemi_qp_info_fetch();
+    uint32_t qp_num = rdma_info->qp_num;
+
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(buf);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(buf) + UB_ALIGN_SIZE;
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+
+    for (uint32_t qp_idx = 0; qp_idx < qp_num; qp_idx++) {
+        __gm__ aclshmemi_rdma_sq_ctx *sq_context =
+            (__gm__ aclshmemi_rdma_sq_ctx *)(rdma_info->sq_ptr +
+                                             (pe * qp_num + qp_idx) * sizeof(aclshmemi_rdma_sq_ctx));
+        auto sq_pi_addr = sq_context->head_addr;
+        dcci_cachelines((__gm__ uint8_t *)sq_pi_addr, 8);
+        uint32_t cur_head = *(__gm__ uint32_t *)(sq_pi_addr);
+        aclshmemi_roce_poll_cq<ACLSHMEMI_K_RDMA_BACKEND>(pe, qp_idx, cur_head, ub_tensor_64, ub_tensor_32, sync_id);
+    }
+}
+
+ACLSHMEM_DEVICE uint64_t aclshmemi_roce_get_atomic_fetch_addr(uint32_t pe, uint32_t qp_idx)
+{
+    __gm__ aclshmemi_rdma_info *rdma_info = aclshmemi_qp_info_fetch();
+    uint32_t qp_num = rdma_info->qp_num;
+    __gm__ aclshmemi_rdma_sq_ctx *qp_context =
+        (__gm__ aclshmemi_rdma_sq_ctx *)(rdma_info->sq_ptr + (pe * qp_num + qp_idx) * sizeof(aclshmemi_rdma_sq_ctx));
+    auto amo_addr = qp_context->amo_addr;
+    return amo_addr;
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemi_roce_get_atomic_fetch_data(uint32_t pe, uint32_t qp_idx)
+{
+    auto amo_addr = aclshmemi_roce_get_atomic_fetch_addr(pe, qp_idx);
+    dcci_cachelines((__gm__ uint8_t *)amo_addr, sizeof(T));
+    __gm__ T *fetch_addr = reinterpret_cast<__gm__ T *>(amo_addr);
+    if constexpr (sizeof(T) == 4 && ACLSHMEMI_K_RDMA_BACKEND == aclshmemi_rdma_backend_t::XSCALE) {
+        // When the XSCALE backend performs a fetch or swap operation on 4B size data, it will get data in little-endian
+        // order, which needs to be converted
+        uint32_t fetch_bytes = *fetch_addr;
+        return (T)aclshmemi_htobe32(fetch_bytes);
+    } else {
+        return (T)*fetch_addr;
+    }
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch(__gm__ T *src, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(src, pe);
+    aclshmemi_roce_amo_add<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, 0, 0, ub_tensor_64,
+                                    ub_tensor_32, sync_id);
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_set(__gm__ T *dst, T value, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, value, 0, UINT64_MAX, 0,
+                                    ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_compare_swap(__gm__ T *dst, T cond, T value, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    if constexpr (sizeof(T) == 4) {
+        aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value,
+                                        (uint64_t)cond, UINT64_MAX, UINT64_MAX, ub_tensor_64, ub_tensor_32, sync_id);
+    } else {
+        aclshmemi_roce_amo_cas<T, false>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value,
+                                         (uint64_t)cond, UINT64_MAX, UINT64_MAX, ub_tensor_64, ub_tensor_32, sync_id);
+    }
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_swap(__gm__ T *dst, T value, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                    UINT64_MAX, 0, ub_tensor_64, ub_tensor_32, sync_id);
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_add(__gm__ T *dst, T value, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_add<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, value, 0, ub_tensor_64,
+                                    ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_inc(__gm__ T *dst, int32_t pe)
+{
+    aclshmemx_roce_atomic_add(dst, (T)1, pe);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch_add(__gm__ T *dst, T value, int32_t pe)
+{
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    if constexpr (sizeof(T) == 4) {
+        aclshmemi_roce_amo_add<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                        ub_tensor_64, ub_tensor_32, sync_id);
+    } else {
+        aclshmemi_roce_amo_add<T, false>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                         ub_tensor_64, ub_tensor_32, sync_id);
+    }
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch_inc(__gm__ T *dst, int32_t pe)
+{
+    return aclshmemx_roce_atomic_fetch_add(dst, (T)1, pe);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_and(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_and only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    uint64_t swap_mask = ~(uint64_t)value;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                    swap_mask, 0, ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_or(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_or only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                    (uint64_t)value, 0, ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE void aclshmemx_roce_atomic_xor(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_xor only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_add<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value,
+                                    UINT64_MAX, ub_tensor_64, ub_tensor_32, sync_id);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch_and(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_fetch_and only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    uint64_t swap_mask = ~(uint64_t)value;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                    swap_mask, 0, ub_tensor_64, ub_tensor_32, sync_id);
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch_or(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_fetch_or only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_cas<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value, 0,
+                                    (uint64_t)value, 0, ub_tensor_64, ub_tensor_32, sync_id);
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
+template <typename T> ACLSHMEM_DEVICE T aclshmemx_roce_atomic_fetch_xor(__gm__ T *dst, T value, int32_t pe)
+{
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value ||
+                      std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value,
+                  "aclshmemx_roce_atomic_fetch_xor only supports int32, uint32, int64, uint64 types");
+    __gm__ aclshmem_device_host_state_t *device_state = aclshmemi_get_state();
+    AscendC::LocalTensor<uint32_t> ub_tensor_32;
+    AscendC::LocalTensor<uint64_t> ub_tensor_64;
+    uint64_t copy_ub = device_state->rdma_config.aclshmem_ub;
+    ub_tensor_32.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_32.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub);
+    ub_tensor_32.address_.dataLen = UB_ALIGN_SIZE;
+    ub_tensor_64.address_.logicPos = static_cast<uint8_t>(AscendC::TPosition::VECOUT);
+    ub_tensor_64.address_.bufferAddr = reinterpret_cast<uint64_t>(copy_ub + UB_ALIGN_SIZE);
+    ub_tensor_64.address_.dataLen = UB_ALIGN_SIZE;
+    uint32_t sync_id = device_state->rdma_config.sync_id;
+    auto remote_ptr = aclshmem_ptr(dst, pe);
+    aclshmemi_roce_amo_add<T, true>(reinterpret_cast<__gm__ T *>(remote_ptr), nullptr, pe, 0, (uint64_t)value,
+                                    UINT64_MAX, ub_tensor_64, ub_tensor_32, sync_id);
+    aclshmemx_roce_quiet(pe, reinterpret_cast<__ubuf__ char *>(copy_ub), sync_id);
+    return aclshmemi_roce_get_atomic_fetch_data<T>(pe, 0);
+}
+
 #endif // ACLSHMEM_DEVICE_RDMA_HPP
