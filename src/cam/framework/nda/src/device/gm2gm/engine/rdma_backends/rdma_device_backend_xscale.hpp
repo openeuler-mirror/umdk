@@ -852,6 +852,24 @@ ACLSHMEM_DEVICE void aclshmemi_rdma_xscdv_post_send_atomic(aclshmemi_rdma_send_w
                                                                       sync_id);
 }
 
+template <>
+ACLSHMEM_DEVICE void aclshmemi_roce_post_send<aclshmemi_rdma_backend_t::XSCALE, aclshmemi_rdma_opcode_t::OP_RDMA_WRITE>(
+    aclshmemi_rdma_send_wr &wr, uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> &ub_local64,
+    AscendC::LocalTensor<uint32_t> &ub_local32, uint32_t sync_id)
+{
+    aclshmemi_xscale_post_send_read_write<aclshmemi_rdma_opcode_t::OP_RDMA_WRITE>(
+        wr, pe, qp_idx, ub_local64, ub_local32, sync_id);
+}
+
+template <>
+ACLSHMEM_DEVICE void aclshmemi_roce_post_send<aclshmemi_rdma_backend_t::XSCALE, aclshmemi_rdma_opcode_t::OP_RDMA_READ>(
+    aclshmemi_rdma_send_wr &wr, uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> &ub_local64,
+    AscendC::LocalTensor<uint32_t> &ub_local32, uint32_t sync_id)
+{
+    aclshmemi_xscale_post_send_read_write<aclshmemi_rdma_opcode_t::OP_RDMA_READ>(
+        wr, pe, qp_idx, ub_local64, ub_local32, sync_id);
+}
+
 /*
  *  =====================================================================================================
  *  XSCALE Backend Atomic Operations Traits Specialization
