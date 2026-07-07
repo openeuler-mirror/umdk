@@ -221,6 +221,8 @@ typedef struct umq_flow_control_cfg {
     uint16_t min_reserved_credit;
     // timeout duration, if no I/O is sent within timeout_ms, the system notifies the user to return credit
     uint32_t timeout_ms;
+    // accumulated replenish credit threshold to trigger pending queue processing, 0 means disabled
+    uint16_t pending_credit_threshold;
     // use atomic variables as flow control window
     bool use_atomic_window;
 } umq_flow_control_cfg_t;

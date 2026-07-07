@@ -1526,6 +1526,10 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfce failed, status: %d\n", (int)status);
         }
     }
+    if (jetty_idx == UB_QUEUE_JETTY_IO && queue->flow_control.enabled &&
+        (queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0) {
+        umq_ub_credit_pending_queue_uninit(&queue->jfr_ctx[jetty_idx]->credit.pending_queue);
+    }
     rx_buf_ctx_list_uninit(&queue->jfr_ctx[jetty_idx]->rx_buf_ctx_list);
     free(queue->jfr_ctx[jetty_idx]);
     queue->jfr_ctx[jetty_idx] = NULL;
