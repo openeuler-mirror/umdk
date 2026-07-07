@@ -138,29 +138,29 @@ TEST(UrmaBondTest, DatapathBindUnbindAndUseCountsCoverRwAndAtomicPaths)
     faddWr.faa.dst = &faddDst;
     faddWr.tjetty = &fixture.target.v_tjetty;
 
-    bind_jfs_wr_to_send_path(&casWr, 0, 0);
+    convert_jfs_vwr_to_pwr(&casWr, 0, 0);
     EXPECT_EQ(&fixture.localPhy[0], casWr.cas.src->tseg);
     EXPECT_EQ(&fixture.remotePhy[0][0], casWr.cas.dst->tseg);
-    unbind_jfs_wr_from_send_path(&casWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&casWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, casWr.cas.src->tseg);
     EXPECT_EQ(&fixture.remoteSeg.v_tseg, casWr.cas.dst->tseg);
 
-    bind_jfs_wr_to_send_path(&faddWr, 1, 1);
+    convert_jfs_vwr_to_pwr(&faddWr, 1, 1);
     EXPECT_EQ(&fixture.localPhy[1], faddWr.faa.src->tseg);
     EXPECT_EQ(&fixture.remotePhy[1][1], faddWr.faa.dst->tseg);
-    unbind_jfs_wr_from_send_path(&faddWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&faddWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, faddWr.faa.src->tseg);
     EXPECT_EQ(&fixture.remoteSeg.v_tseg, faddWr.faa.dst->tseg);
 
     SetRefCount(&fixture.target.use_cnt, 1);
     SetRefCount(&fixture.localSeg.use_cnt, 1);
     SetRefCount(&fixture.remoteSeg.use_cnt, 1);
-    add_vwr_use_cnt(&rw);
-    release_vwr_use_cnt(&rw);
-    add_vwr_use_cnt(&casWr);
-    release_vwr_use_cnt(&casWr);
-    add_vwr_use_cnt(&faddWr);
-    release_vwr_use_cnt(&faddWr);
+    get_jfs_vwr_refs(&rw);
+    put_jfs_vwr_refs(&rw);
+    get_jfs_vwr_refs(&casWr);
+    put_jfs_vwr_refs(&casWr);
+    get_jfs_vwr_refs(&faddWr);
+    put_jfs_vwr_refs(&faddWr);
     EXPECT_EQ(1UL, fixture.target.use_cnt.atomic_cnt.load());
     EXPECT_EQ(1UL, fixture.localSeg.use_cnt.atomic_cnt.load());
     EXPECT_EQ(1UL, fixture.remoteSeg.use_cnt.atomic_cnt.load());
@@ -187,35 +187,35 @@ TEST(UrmaBondTest, DatapathEncodeBindAndUnbindWorkRequests)
     faddDst.tseg = &fixture.remoteSeg.v_tseg;
 
     encode_jfs_wr_msn(&sendWr, &fixture.comp, 0, true);
-    bind_jfs_wr_to_send_path(&sendWr, 0, 0);
+    convert_jfs_vwr_to_pwr(&sendWr, 0, 0);
     EXPECT_EQ(URMA_OPC_SEND_IMM, sendWr.opcode);
     EXPECT_EQ(&fixture.phyTarget[0][0], sendWr.tjetty);
-    unbind_jfs_wr_from_send_path(&sendWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&sendWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.target.v_tjetty, sendWr.tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, sendWr.send.src.sge[0].tseg);
 
     encode_jfs_wr_msn(&writeWr, &fixture.comp, 1, true);
-    bind_jfs_wr_to_send_path(&writeWr, 1, 1);
+    convert_jfs_vwr_to_pwr(&writeWr, 1, 1);
     EXPECT_EQ(&fixture.phyTarget[1][1], writeWr.tjetty);
     EXPECT_EQ(&fixture.localPhy[1], writeWr.rw.src.sge[0].tseg);
     EXPECT_EQ(&fixture.remotePhy[1][1], writeWr.rw.dst.sge[0].tseg);
-    unbind_jfs_wr_from_send_path(&writeWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&writeWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.target.v_tjetty, writeWr.tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, writeWr.rw.src.sge[0].tseg);
     EXPECT_EQ(&fixture.remoteSeg.v_tseg, writeWr.rw.dst.sge[0].tseg);
-    bind_jfs_wr_to_send_path(&writeWr, 0, 0);
+    convert_jfs_vwr_to_pwr(&writeWr, 0, 0);
     EXPECT_EQ(&fixture.phyTarget[0][0], writeWr.tjetty);
-    unbind_jfs_wr_from_send_path(&writeWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&writeWr, &fixture.target.v_tjetty);
 
     casWr.opcode = URMA_OPC_CAS;
     casWr.tjetty = &fixture.target.v_tjetty;
     casWr.cas.src = &casSrc;
     casWr.cas.dst = &casDst;
     encode_jfs_wr_msn(&casWr, &fixture.comp, 2, true);
-    bind_jfs_wr_to_send_path(&casWr, 0, 0);
+    convert_jfs_vwr_to_pwr(&casWr, 0, 0);
     EXPECT_EQ(&fixture.localPhy[0], casWr.cas.src->tseg);
     EXPECT_EQ(&fixture.remotePhy[0][0], casWr.cas.dst->tseg);
-    unbind_jfs_wr_from_send_path(&casWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&casWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, casWr.cas.src->tseg);
     EXPECT_EQ(&fixture.remoteSeg.v_tseg, casWr.cas.dst->tseg);
 
@@ -224,24 +224,25 @@ TEST(UrmaBondTest, DatapathEncodeBindAndUnbindWorkRequests)
     faddWr.faa.src = &faddSrc;
     faddWr.faa.dst = &faddDst;
     encode_jfs_wr_msn(&faddWr, &fixture.comp, 3, true);
-    bind_jfs_wr_to_send_path(&faddWr, 0, 0);
+    convert_jfs_vwr_to_pwr(&faddWr, 0, 0);
     EXPECT_EQ(&fixture.localPhy[0], faddWr.faa.src->tseg);
     EXPECT_EQ(&fixture.remotePhy[0][0], faddWr.faa.dst->tseg);
-    unbind_jfs_wr_from_send_path(&faddWr, &fixture.target.v_tjetty);
+    convert_jfs_pwr_to_vwr(&faddWr, &fixture.target.v_tjetty);
     EXPECT_EQ(&fixture.localSeg.v_tseg, faddWr.faa.src->tseg);
     EXPECT_EQ(&fixture.remoteSeg.v_tseg, faddWr.faa.dst->tseg);
 
     sendWr.opcode = URMA_OPC_NOP;
     sendWr.tjetty = nullptr;
     encode_jfs_wr_msn(&sendWr, &fixture.comp, 4, true);
-    bind_jfs_wr_to_send_path(&sendWr, 0, 0);
-    unbind_jfs_wr_from_send_path(&sendWr, &fixture.target.v_tjetty);
-    add_vwr_use_cnt(&sendWr);
-    release_vwr_use_cnt(&sendWr);
+    convert_jfs_vwr_to_pwr(&sendWr, 0, 0);
+    convert_jfs_pwr_to_vwr(&sendWr, &fixture.target.v_tjetty);
+    get_jfs_vwr_refs(&sendWr);
+    put_jfs_vwr_refs(&sendWr);
 
     recvWr.src.sge = fixture.srcSge;
     recvWr.src.num_sge = 1;
-    EXPECT_EQ(URMA_SUCCESS, convert_jfr_vwr_to_pwr(&recvWr, 0));
+    convert_jfr_vwr_to_pwr(&recvWr, 0);
+    EXPECT_EQ(&fixture.localPhy[0], recvWr.src.sge[0].tseg);
 
     cr.flag.bs.s_r = 0;
     cr.imm_data = 0x123456789ULL;
