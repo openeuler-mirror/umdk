@@ -1503,6 +1503,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         }
         umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL);
     } else if (queue->flow_control.enabled && is_umq_ub_logic_queue(queue->create_flag)) {
+        umq_ub_credit_clean_up(queue);
         umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL);
     }
 
