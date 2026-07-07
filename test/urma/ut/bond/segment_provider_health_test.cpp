@@ -642,6 +642,8 @@ TEST(UrmaBondTest, PublicImportJettyUsesMockIoctlAndPhysicalProvider)
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.v_ctx.dev_fd = 7;
+    fixture.ctx.enabled_count = 1;
+    fixture.ctx.enabled_indices[0] = 0;
     g_bondp_global_ctx = &fakeGlobal;
     bondp_health_check_global_ctx_init(&fakeGlobal);
     fakeGlobal.health_thread_ctx.enable_health_check = false;
@@ -669,6 +671,8 @@ TEST(UrmaBondTest, PublicImportJfrUsesMockIoctlAndPhysicalProvider)
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.v_ctx.dev_fd = 7;
+    fixture.ctx.enabled_count = 1;
+    fixture.ctx.enabled_indices[0] = 0;
     urma_test::SetHwMockIoctl(true, 0xa20, 0xa200);
     rjfr.jfr_id = MakeJettyId(0xa21);
     rjfr.trans_mode = URMA_TM_RC;
@@ -692,6 +696,7 @@ TEST(UrmaBondTest, PublicProviderOpsRejectInvalidOrUninitializedState)
     bondp_global_context_t fakeGlobal = {};
     urma_device_t dev = {};
 
+    g_bondp_global_ctx = nullptr;
     std::snprintf(dev.name, sizeof(dev.name), "bond_ut");
     fixture.ctx.v_ctx.dev = &dev;
     fixture.ctx.v_ctx.ref.atomic_cnt.store(0);
@@ -1014,9 +1019,9 @@ TEST(UrmaBondTest, FailbackTaskTableCoversScheduleFailureDuplicateAndLookup)
     ASSERT_EQ(0, bondp_worker_create());
     EXPECT_EQ(0, bondp_fb_add_task(&fixture.ctx, 0x921, 1));
     EXPECT_EQ(-EEXIST, bondp_fb_add_task(&fixture.ctx, 0x921, 1));
-    usleep(20000);
-    bondp_worker_destroy();
+    usleep(2100000);
     bondp_fb_uninit(&fixture.ctx);
+    bondp_worker_destroy();
     bondp_fb_uninit(&fixture.ctx);
 }
 

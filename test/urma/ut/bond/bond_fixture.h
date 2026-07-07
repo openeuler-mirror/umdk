@@ -78,6 +78,7 @@ extern int g_mockNetlinkFd;
 extern int g_mockNetlinkRecvReturn;
 extern int g_mockNetlinkRecvCount;
 extern size_t g_mockCallocFailNmemb;
+extern size_t g_mockCallocFailSize;
 
 void ResetMockNetlinkCallback();
 int InvokeMockNetlinkMsg(bondp_nl_cmd_t cmd, const void *payload, size_t payloadLen);
@@ -104,6 +105,7 @@ struct BondProviderMockGuard {
     int savedNetlinkRecvReturn;
     int savedNetlinkRecvCount;
     size_t savedCallocFailNmemb;
+    size_t savedCallocFailSize;
 
     BondProviderMockGuard(bondp_global_context_t *globalCtx, urma_device_t *namedDevice, urma_ops_t *createContextOps)
         : savedGlobalCtx(g_bondp_global_ctx),
@@ -126,7 +128,8 @@ struct BondProviderMockGuard {
           savedNetlinkFd(g_mockNetlinkFd),
           savedNetlinkRecvReturn(g_mockNetlinkRecvReturn),
           savedNetlinkRecvCount(g_mockNetlinkRecvCount),
-          savedCallocFailNmemb(g_mockCallocFailNmemb)
+          savedCallocFailNmemb(g_mockCallocFailNmemb),
+          savedCallocFailSize(g_mockCallocFailSize)
     {
         g_bondp_global_ctx = globalCtx;
         g_mockNamedDevice = namedDevice;
@@ -149,6 +152,7 @@ struct BondProviderMockGuard {
         g_mockNetlinkRecvReturn = 0;
         g_mockNetlinkRecvCount = 0;
         g_mockCallocFailNmemb = 0;
+        g_mockCallocFailSize = 0;
         ResetMockNetlinkCallback();
     }
 
@@ -175,6 +179,7 @@ struct BondProviderMockGuard {
         g_mockNetlinkRecvReturn = savedNetlinkRecvReturn;
         g_mockNetlinkRecvCount = savedNetlinkRecvCount;
         g_mockCallocFailNmemb = savedCallocFailNmemb;
+        g_mockCallocFailSize = savedCallocFailSize;
         ResetMockNetlinkCallback();
     }
 };
