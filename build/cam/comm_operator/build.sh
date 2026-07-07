@@ -7,6 +7,8 @@
 # History: 2025-07-20 create cam building script
 #          2026-06-26 add -c/-a/-q operator selection via operator_registry.json +
 #                     select_ops.py; drop coverage (-r) support
+#          2026-07-07 repurpose -r as "run package only" (skip whl) for
+#                     incremental Jenkins builds; mutually exclusive with -p
 
 set -e
 
@@ -21,6 +23,7 @@ SOC_VERSION="all"
 ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
+ENABLE_RUN_ONLY=0    # -r flag: 1 = build only the run package, skip the whl
 OP_SELECT=""        # -a operator list (semicolon-separated); empty = full set
 USE_W4A8=0          # -q flag: 1 = compile the fused_deep_moe_w4a8 quantization variant
 
@@ -39,11 +42,13 @@ print_help() {
        Note: master has no w4a8 variant yet; -q takes effect once it is added.
     -d Enable debug
     -t Enable UT build
-    -p Enable pybind build
+    -p Build only the pybind (whl) package; skip the run package build
+    -r Build only the run package; skip the whl package build.
+       Mutually exclusive with -p.
     "
 }
 
-while getopts "c:a:xdtqph" opt; do
+while getopts "c:a:xdtqprh" opt; do
     case $opt in
     c)
         SOC_VERSION=$OPTARG
@@ -68,12 +73,25 @@ while getopts "c:a:xdtqph" opt; do
         ENABLE_PYBIND_BUILD=1
         ENABLE_SRC_BUILD=0
         ;;
+    r)
+        ENABLE_RUN_ONLY=1
+        ;;
     h)
         print_help
         exit 0
         ;;
     esac
 done
+
+# -r (run only) and -p (pybind only) are mutually exclusive: -p requests only
+# the whl while -r requests skipping the whl, which is contradictory.
+if [ "$ENABLE_RUN_ONLY" -eq 1 ] && [ "$ENABLE_PYBIND_BUILD" -eq 1 ] && [ "$ENABLE_SRC_BUILD" -eq 0 ]; then
+    echo "ERROR: -r (run only) and -p (pybind only) are mutually exclusive"
+    exit 1
+fi
+if [ "$ENABLE_RUN_ONLY" -eq 1 ]; then
+    ENABLE_PYBIND_BUILD=0
+fi
 
 if [ ! -d "$BUILD_OUT_PATH/${MODULE_NAME}" ]; then
     mkdir $BUILD_OUT_PATH/${MODULE_NAME}
