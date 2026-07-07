@@ -9,12 +9,14 @@ import logging
 import random
 
 from ubus_test.base_test import BaseTest
+from app.urma.urma_test import URMAFeature
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
 
-class UBUSFeature(BaseTest):
+class UBUSFeature(URMAFeature):
     def setup(self):
         log.info('---------- [ UBUSFeature setup ] ----------')
         super(UBUSFeature, self).setup()

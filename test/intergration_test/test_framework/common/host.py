@@ -347,6 +347,14 @@ class UBUSHost(BaseObject):
         _cmd = f"scp -P {src_host.ssh_port} -r  {src_host.ssh_ip}:{src_path}/tsan* {dst_path}"
         self.exec_cmd(_cmd)
 
+    def get_file(self, src_file, src_host, dst_path):
+        _cmd = f"scp -P {src_host.ssh_port} {src_host.ssh_ip}:{src_file} {dst_path}"
+        self.exec_cmd(_cmd)
+
+    def put_file(self, src_file, dst_host, dst_path):
+        _cmd = f"scp -P {dst_host.ssh_port} {src_file} {dst_host.ssh_ip}:{dst_path}"
+        self.exec_cmd(_cmd)
+
     def capture_log(self, log_path, output=None, silence=2):
         return self.exec_cmd(f"tail -n 0 -F {log_path}", background=True, log_path=output, silence=silence)
 
