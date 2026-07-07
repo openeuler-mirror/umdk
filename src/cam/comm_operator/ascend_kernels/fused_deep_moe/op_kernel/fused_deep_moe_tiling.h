@@ -65,6 +65,11 @@ struct FusedDeepMoeTilingData {
     WorkSpaceOffset workSpaceOffset;
 };
 
+// Path-specific tiling struct aliases (kept isomorphic for now, to be diverged later).
+// Routing is driven by ASCENDC_TPL_TILING_STRUCT_SEL in fused_deep_moe_tiling_key.h.
+using FusedDeepMoeTilingDataPlain = FusedDeepMoeTilingData;
+using FusedDeepMoeTilingDataShared = FusedDeepMoeTilingData;
+
 constexpr uint32_t GM_ALIGN_BYTE = 512;
 constexpr uint32_t CUSTOM_PRELOAD_STAGES = 1;
 constexpr uint32_t CUSTOM_L1_STAGES = 2;
