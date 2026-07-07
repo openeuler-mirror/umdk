@@ -24,6 +24,13 @@ def run_git(repo_root, args):
     return subprocess.check_output(["git", "-C", str(repo_root), *args], text=True)
 
 
+def try_run_git(repo_root, args):
+    try:
+        return run_git(repo_root, args).strip()
+    except subprocess.CalledProcessError:
+        return ""
+
+
 def get_repo_root():
     return Path(run_git(Path.cwd(), ["rev-parse", "--show-toplevel"]).strip())
 
@@ -32,6 +39,10 @@ def get_default_base(repo_root):
     env_base = os.environ.get("URMA_UT_DIFF_BASE")
     if env_base:
         return env_base
+
+    upstream = try_run_git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    if upstream:
+        return run_git(repo_root, ["merge-base", "HEAD", upstream]).strip()
 
     return run_git(repo_root, ["merge-base", "HEAD", "origin/master"]).strip()
 
