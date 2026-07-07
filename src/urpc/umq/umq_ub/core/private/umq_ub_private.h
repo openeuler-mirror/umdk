@@ -150,6 +150,13 @@ typedef enum ub_queue_fc_msg_type {
     UB_QUEUE_FC_MSG_TYPE_MAX = 2
 } ub_queue_fc_msg_type_t;
 
+typedef struct ub_pending_credit_req {
+    urpc_list_t req_node;
+    struct ub_queue *queue;
+    uint16_t requested;
+    uint8_t seq;
+} ub_pending_credit_req_t;
+
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
     volatile uint64_t total_local_rx_posted;
@@ -177,6 +184,7 @@ typedef struct ub_flow_control {
     uint16_t remote_tx_depth;
     uint16_t remote_rx_depth;
     uint32_t timeout_us;
+    ub_pending_credit_req_t pending_req;
     bool local_set;
     bool remote_get;
     bool enabled;
@@ -338,11 +346,20 @@ typedef enum ub_credit_stat_u16 {
     CREDIT_COUNTER_MAX_U16
 } ub_credit_stat_u16_t;
 
+typedef struct ub_credit_pending_queue {
+    urpc_list_t pending_list;
+    uint32_t pending_count;
+    uint32_t max_pending;
+    uint16_t pending_credit_threshold;
+    util_external_mutex_lock *lock;
+} ub_credit_pending_queue_t;
+
 typedef struct ub_credit_pool {
     ub_credit_pool_ops_t ops;
     volatile uint64_t stats_u64[CREDIT_COUNTER_MAX_U64];
     volatile uint16_t stats_u16[CREDIT_COUNTER_MAX_U16];
     uint16_t capacity;
+    ub_credit_pending_queue_t pending_queue;
 } ub_credit_pool_t;
 
 typedef struct jfr_ctx {
