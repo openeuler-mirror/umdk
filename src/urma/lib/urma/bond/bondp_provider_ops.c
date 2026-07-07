@@ -709,6 +709,29 @@ static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
     return ret;
 }
 
+static void bondp_init_ctx_enabled_indices(bondp_context_t *bdp_ctx)
+{
+    bdp_ctx->enabled_count = 0;
+
+    int start = 0;
+    int end = 0;
+    if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
+        start = 0;
+        end = IODIE_NUM;
+    } else {
+        start = IODIE_NUM;
+        end = URMA_UBAGG_DEV_MAX_NUM;
+    }
+
+    for (int i = start; i < end; i++) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        bdp_ctx->enabled_indices[bdp_ctx->enabled_count] = (uint32_t)i;
+        bdp_ctx->enabled_count++;
+    }
+}
+
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd)
 {
     if (g_bondp_global_ctx == NULL) {
@@ -743,6 +766,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         URMA_LOG_ERR("Failed to create pctx\n");
         goto DELETE_PCONTEXT;
     }
+
+    bondp_init_ctx_enabled_indices(bdp_ctx);
 
     if (bondp_create_health_check_ctx(bdp_ctx) != 0) {
         URMA_LOG_ERR("Failed to create health check scene\n");
@@ -839,6 +864,8 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
         URMA_LOG_ERR("Failed to create pctx when set bonding mode, ret=%d\n", ret);
         goto EXIT;
     }
+
+    bondp_init_ctx_enabled_indices(bdp_ctx);
 
 EXIT:
     (void)pthread_mutex_unlock(&ctx->mutex);

@@ -479,53 +479,19 @@ static int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, 
     return 0;
 }
 
-static int init_all_indices(bondp_context_t *bdp_ctx,
-                            uint32_t enabled_indices[], uint32_t *enabled_count,
-                            uint32_t active_indices[], uint32_t *active_count)
-{
-    int start = 0;
-    int end = 0;
-    if (enabled_count != NULL) {
-        *enabled_count = 0;
-    }
-
-    if (active_count != NULL) {
-        *active_count = 0;
-    }
-
-    if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
-        start = 0;
-        end = IODIE_NUM;
-    } else {
-        start = IODIE_NUM;
-        end = URMA_UBAGG_DEV_MAX_NUM;
-    }
-
-    for (int i = start; i < end; i++) {
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        if (enabled_indices != NULL) {
-            enabled_indices[*enabled_count] = (uint32_t)i;
-            *enabled_count += 1;
-        }
-        if (active_indices != NULL) {
-            active_indices[*active_count] = (uint32_t)i;
-            *active_count += 1;
-        }
-    }
-    return 0;
-}
-
 static int init_active_indices_ex(bondp_context_t *bdp_ctx,
                                   uint32_t enabled_indices[], uint32_t *enabled_count,
                                   uint32_t active_indices[], uint32_t *active_count,
                                   const bondp_port_id_t *port_ids, uint32_t port_count)
 {
     if (port_ids == NULL || port_count == 0) {
-        return init_all_indices(bdp_ctx,
-                                enabled_indices, enabled_count,
-                                active_indices, active_count);
+        *enabled_count = bdp_ctx->enabled_count;
+        *active_count = bdp_ctx->enabled_count;
+        for (uint32_t i = 0; i < bdp_ctx->enabled_count; i++) {
+            enabled_indices[i] = bdp_ctx->enabled_indices[i];
+            active_indices[i] = bdp_ctx->enabled_indices[i];
+        }
+        return 0;
     }
 
     if (port_count > URMA_UBAGG_DEV_MAX_NUM) {
@@ -2273,8 +2239,6 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     }
     bdp_tjetty->is_msn_enabled = rvjetty_info.is_msn_enabled;
 
-    (void)init_all_indices(bdp_ctx, bdp_ctx->enabled_indices, &bdp_ctx->enabled_count, NULL, NULL);
-
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to init target active indices\n");
         goto UNIMPORT_VJETTY;
@@ -2553,8 +2517,6 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
                      EID_ARGS(rjfr->jfr_id.eid), rjfr->jfr_id.id);
         goto FREE_TJFR;
     }
-
-    (void)init_all_indices(bdp_ctx, bdp_ctx->enabled_indices, &bdp_ctx->enabled_count, NULL, NULL);
 
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &udata_out) != 0) {
         URMA_LOG_ERR("Failed to init target active indices\n");
