@@ -436,7 +436,7 @@ void encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, 
     }
 }
 
-void bind_jfs_wr_to_send_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
+void convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx)
 {
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -461,7 +461,7 @@ void bind_jfs_wr_to_send_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
     }
 }
 
-void unbind_jfs_wr_from_send_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty)
+void convert_jfs_pwr_to_vwr(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty)
 {
     switch (wr->opcode) {
         case URMA_OPC_SEND:
@@ -486,7 +486,7 @@ void unbind_jfs_wr_from_send_path(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjett
     }
 }
 
-void add_vwr_use_cnt(urma_jfs_wr_t *wr)
+void get_jfs_vwr_refs(urma_jfs_wr_t *wr)
 {
     if (wr->tjetty != NULL) {
         bondp_tjetty_get(wr->tjetty);
@@ -527,7 +527,7 @@ void add_vwr_use_cnt(urma_jfs_wr_t *wr)
     }
 }
 
-void release_vwr_use_cnt(urma_jfs_wr_t *wr)
+void put_jfs_vwr_refs(urma_jfs_wr_t *wr)
 {
     if (wr->tjetty != NULL) {
         bondp_tjetty_put(wr->tjetty);
@@ -568,12 +568,11 @@ void release_vwr_use_cnt(urma_jfs_wr_t *wr)
     }
 }
 
-urma_status_t convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
+void convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx)
 {
     for (int i = 0; i < wr->src.num_sge; ++i) {
         wr->src.sge[i].tseg = get_p_tseg(wr->src.sge[i].tseg, recv_idx, 0);
     }
-    return URMA_SUCCESS;
 }
 
 /* Thread-local cache for EID mapping lookup in convert_pcr_to_vcr */

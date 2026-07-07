@@ -73,7 +73,7 @@ void wr_buf_uninit(wr_buf_t *buf)
 
         if (entry_hdr->entry_type == WR_BUF_ENTRY_JFS) {
             jfs_wr_entry_t *entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, idx);
-            release_vwr_use_cnt(&entry->wr);
+            put_jfs_vwr_refs(&entry->wr);
         } else if (entry_hdr->entry_type == WR_BUF_ENTRY_JFR) {
             /* sge is embedded in jfr_wr_entry_t, no need to free */
         }
