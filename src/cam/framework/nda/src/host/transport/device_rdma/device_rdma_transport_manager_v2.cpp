@@ -58,10 +58,12 @@ Result RdmaTransportManagerV2::OpenDevice(const TransportOptions& options)
         ACLSHMEM_INNER_ERROR);
 
     int32_t phyId = -1;
-    ret = DlAclApi::AclrtGetPhyDevIdByLogicDevId(static_cast<int32_t>(logicId), &phyId);
+    // HCCP/topo use global phyId; pass userId to deprecated API (MR !407), not logicId.
+    ret = DlAclApi::AclrtGetPhyDevIdByLogicDevId(userId, &phyId);
     SHM_ASSERT_LOG_AND_RETURN(
         ret == 0 && phyId >= 0,
-        "AclrtGetPhyDevIdByLogicDevId() return=" << ret << ", input logicId=" << logicId << ", output phyId=" << phyId,
+        "AclrtGetPhyDevIdByLogicDevId() return=" << ret << ", userId=" << userId << ", logicDeviceId=" << logicId
+                                                   << ", output phyId=" << phyId,
         ACLSHMEM_INNER_ERROR);
     phyId_ = static_cast<uint32_t>(phyId);
 
