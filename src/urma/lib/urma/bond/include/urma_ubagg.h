@@ -141,7 +141,6 @@ typedef struct urma_bond_jetty_ext {
     struct {
         urma_seg_base_t slaves[URMA_UBAGG_DEV_MAX_NUM];
     } health_check_seg;
-    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_jetty_ext_t;
 
 typedef enum bondp_rjetty_ext_version {
@@ -153,7 +152,6 @@ typedef enum bondp_rjetty_ext_mask {
     BONDP_RJETTY_EXT_MASK_HEALTH_CHECK = 1ULL << 1,
     BONDP_RJETTY_EXT_MASK_LOCAL_CTX = 1ULL << 2,
     BONDP_RJETTY_EXT_MASK_TARGET_CTX = 1ULL << 3,
-    BONDP_RJETTY_EXT_MASK_CONNECTED_BITMAP = 1ULL << 4,
 } bondp_rjetty_ext_mask_t;
 
 typedef struct bondp_rjetty_target_ctx {
@@ -161,9 +159,6 @@ typedef struct bondp_rjetty_target_ctx {
     urma_jetty_id_t slave_id;
     urma_seg_base_t health_check_seg;
 } bondp_rjetty_target_ctx_t;
-
-#define BONDP_RJETTY_CONNECTED_BITS (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
-#define BONDP_RJETTY_CONNECTED_BYTES ((BONDP_RJETTY_CONNECTED_BITS + 7) / 8)
 
 /*
  * Compact variable-length rjetty ext layout (version 0):
@@ -180,8 +175,6 @@ typedef struct urma_bond_jetty_ext_v0 {
     uint32_t local_ctx_cnt;
     /* Number of bondp_rjetty_target_ctx_t entries stored after local indices. */
     uint32_t target_ctx_cnt;
-    /* Bit-compressed connected matrix, index = local_idx * MAX + target_idx. */
-    uint8_t connected_bitmap[BONDP_RJETTY_CONNECTED_BYTES];
     char data[0];
 } urma_bond_jetty_ext_v0_t;
 
@@ -189,7 +182,6 @@ typedef struct urma_bond_seg_ext {
     uint8_t version;
     uint64_t mask;
     urma_seg_base_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
-    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_seg_ext_t;
 
 typedef struct bondp_rjetty {
