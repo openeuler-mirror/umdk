@@ -2138,6 +2138,10 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
+    if (jetty->jetty_cfg.shared.jfr == NULL) {
+        URMA_LOG_ERR("Invalid parameter, jetty has no shared jfr.\n");
+        return URMA_EINVAL;
+    }
 
     urma_context_t *urma_ctx = jetty->urma_ctx;
     urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
@@ -2172,6 +2176,7 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
         jetty->jetty_cfg.jetty_grp->cfg.policy : URMA_JETTY_GRP_POLICY_RR;
     new_rjetty->type = URMA_JETTY;
     new_rjetty->flag.bs.order_type = jetty->jetty_cfg.jfs_cfg.flag.bs.order_type;
+    new_rjetty->flag.bs.token_policy = jetty->jetty_cfg.shared.jfr->jfr_cfg.flag.bs.token_policy;
 
     *rjetty = new_rjetty;
     *length = urma_calc_user_info_total_len(new_rjetty, sizeof(urma_rjetty_t),
