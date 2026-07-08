@@ -729,14 +729,13 @@ static __attribute__((constructor)) void liburma_init(void)
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     urma_discover_sysfs_path();
 #endif
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Start to init liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    /* URMA_LOG_X should be used after the above log operations finish */
+    URMA_LOG_INFO("Start to init liburma.\n");
     return;
 }
 
 static __attribute__((destructor)) void liburma_uninit(void)
 {
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Finish to uninit liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    URMA_LOG_INFO("Finish to uninit liburma.\n");
     return;
 }

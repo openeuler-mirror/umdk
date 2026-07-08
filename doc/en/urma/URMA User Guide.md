@@ -2014,6 +2014,14 @@ URMA DFX capabilities primarily include URMA logging. Additionally, urma_admin a
 
 URMA uses the OS's built-in rsyslog tool to implement log redirection and printing, with the corresponding configuration path at /etc/rsyslog.d/*.conf. Size-based log rotation, compression, and retention depend on the OS's built-in logrotate tool, with the corresponding configuration path at /etc/logrotate.d/**. Products can modify the configuration files as needed to meet different requirements.
 
+User-mode log headers use the following formats:
+
+```
+[URMA][liburma][thread_id=<tid>][<thread_tag>][<file>:<function>:<line>]<message>
+[URMA][libuvs][<tid>][<process_name>][work_<idx>|-][<file>:<function>:<line>]<message>
+[URMA][urma_admin][thread_id=<tid>][-][<file>:<function>:<line>]<message>
+```
+
 ![](figures/urma_caution.png)
 
 1.  Log redirection depends on the system's rsyslog tool, which must be installed and configured separately.
