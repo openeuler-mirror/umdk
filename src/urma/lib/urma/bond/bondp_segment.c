@@ -206,6 +206,7 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
     bdp_seg->bondp_ctx = bdp_ctx;
     bdp_seg->dev_num = bdp_ctx->dev_num;
     atomic_init(&bdp_seg->use_cnt.atomic_cnt, 1);
+    atomic_init(&bdp_seg->deleting, false);
 
     if (bondp_create_pseg(bdp_ctx, bdp_seg, seg_cfg) != 0) {
         URMA_LOG_ERR("Failed to create pseg\n");
@@ -260,6 +261,15 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
     int ret = URMA_SUCCESS;
     bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_tseg_t, v_tseg);
 
+    atomic_store(&bdp_seg->deleting, true);
+    unsigned long use_cnt = atomic_load(&bdp_seg->use_cnt.atomic_cnt);
+    if (use_cnt > 1) {
+        /* In-flight WRs still reference this seg; caller must stop posting and retry. */
+        atomic_store(&bdp_seg->deleting, false);
+        URMA_LOG_ERR("Failed to unregister seg, still in use. token_id=%u, use_cnt=%lu\n",
+                     target_seg->seg.token_id, use_cnt);
+        return URMA_EAGAIN;
+    }
     if (bondp_delete_pseg(bdp_seg) != 0) {
         URMA_LOG_ERR("Failed to delete pseg for vseg, token_id=%u, handle=%lu.\n",
                      target_seg->seg.token_id, target_seg->handle);
@@ -591,6 +601,10 @@ urma_status_t bondp_unimport_seg(urma_target_seg_t *target_seg)
 
 void bondp_tseg_get(urma_target_seg_t *target_seg)
 {
+    if (target_seg == NULL) {
+        URMA_LOG_WARN_RL("bondp_tseg_get called with NULL target_seg; in-flight WR holds a NULL tseg\n");
+        return;
+    }
     if (target_seg->token_id != NULL) {
         bondp_get_local_seg(target_seg);
     } else {
@@ -600,6 +614,10 @@ void bondp_tseg_get(urma_target_seg_t *target_seg)
 
 void bondp_tseg_put(urma_target_seg_t *target_seg)
 {
+    if (target_seg == NULL) {
+        URMA_LOG_WARN_RL("bondp_tseg_put called with NULL target_seg; in-flight WR holds a NULL tseg\n");
+        return;
+    }
     if (target_seg->token_id != NULL) {
         bondp_put_local_seg(target_seg);
     } else {
