@@ -24,14 +24,6 @@
 
 #include "ums_types.h"
 
-static inline int ums_clcsock_enable_fastopen(struct ums_sock *ums, int is_server)
-{
-	int val = 1;
-
-	return ums->clcsock->ops->setsockopt(ums->clcsock, SOL_TCP,
-		is_server != 0 ? TCP_FASTOPEN : TCP_FASTOPEN_CONNECT, KERNEL_SOCKPTR(&val), sizeof(val));
-}
-
 #if IS_ENABLED(CONFIG_SMC)
 static inline bool ums_get_syn_smc(struct ums_sock *ums)
 {
