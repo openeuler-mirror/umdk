@@ -461,11 +461,106 @@ static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
     return ret;
 }
 
+static int bondp_fill_udata_connected_from_topo(const bondp_context_t *bdp_ctx, urma_eid_t dst_eid,
+                                                bondp_udata_import_seg_t *udata_out)
+{
+    bool topo_connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM] = {0};
+
+    if (bondp_find_linked_port_by_topo(bdp_ctx->topo_map, &dst_eid, topo_connected) != 0) {
+        return -1;
+    }
+
+    for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
+        for (uint32_t target_idx = 0; target_idx < URMA_UBAGG_DEV_MAX_NUM; ++target_idx) {
+            if (local_idx < TOPO_CONNECTED_MAX_NUM && target_idx < TOPO_CONNECTED_MAX_NUM &&
+                topo_connected[local_idx][target_idx]) {
+                udata_out->connected[local_idx][target_idx] = true;
+            }
+        }
+    }
+    return 0;
+}
+
+static int bondp_try_reuse_seg_cache(bondp_context_t *bdp_ctx, urma_seg_t *seg, uint64_t addr,
+                                     urma_context_t *ctx, bondp_import_tseg_t *bdp_tseg,
+                                     bondp_udata_import_seg_t *udata_out)
+{
+    bondp_v2p_token_id_t v2p_token_id = {0};
+    int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
+                                             seg->ubva.eid, &v2p_token_id);
+    if (ret == BONDP_HASH_MAP_NOT_FOUND_ERROR) {
+        return 0;
+    }
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to lookup v2p_token_id, ret=%d.\n", ret);
+        return -1;
+    }
+
+    (void)memcpy(&udata_out->peer_p_seg, v2p_token_id.peer_p_seg, sizeof(udata_out->peer_p_seg));
+    (void)memcpy(&udata_out->connected, v2p_token_id.connected, sizeof(udata_out->connected));
+    bdp_tseg->is_reused = true;
+    bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
+    bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
+    bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
+    return 0;
+}
+
+static int bondp_import_seg_from_user_ext(bondp_context_t *bdp_ctx, urma_context_t *ctx, urma_seg_t *seg,
+                                          uint64_t addr, bondp_import_tseg_t *bdp_tseg,
+                                          bondp_udata_import_seg_t *udata_out)
+{
+    const bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext_const(seg);
+
+    bdp_tseg->skip_import_vseg = true;
+    if (seg_ext->len < sizeof(urma_bond_seg_ext_t)) {
+        URMA_LOG_ERR("Invalid seg ext length=%u.\n", seg_ext->len);
+        return -1;
+    }
+
+    const urma_bond_seg_ext_t *bond_ext = (const urma_bond_seg_ext_t *)seg_ext->data;
+    (void)memcpy(&udata_out->peer_p_seg, bond_ext->peer_p_seg, sizeof(udata_out->peer_p_seg));
+    bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, 0, ctx);
+
+    urma_eid_t dst_eid = seg->ubva.eid;
+    if (bondp_fill_udata_connected_from_topo(bdp_ctx, dst_eid, udata_out) != 0) {
+        URMA_LOG_ERR("Failed to rebuild connected matrix by topo.\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int bondp_prepare_import_udata(bondp_context_t *bdp_ctx, urma_context_t *ctx, urma_seg_t *seg,
+                                      urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag,
+                                      bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
+{
+    if (bondp_seg_has_user_info(seg)) {
+        return bondp_import_seg_from_user_ext(bdp_ctx, ctx, seg, addr, bdp_tseg, udata_out);
+    }
+
+    if (bondp_import_vseg(ctx, seg, token, addr, flag, bdp_tseg, udata_out) != 0) {
+        URMA_LOG_ERR("Failed to import vseg\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int bondp_cache_imported_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
+    bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
+{
+    bondp_v2p_token_id_t v2p_token_id = {0};
+
+    v2p_token_id.key.v_remote_eid = seg->ubva.eid;
+    v2p_token_id.key.v_token_id = seg->token_id;
+    (void)memcpy(v2p_token_id.peer_p_seg, udata_out->peer_p_seg, sizeof(v2p_token_id.peer_p_seg));
+    (void)memcpy(v2p_token_id.connected, udata_out->connected, sizeof(v2p_token_id.connected));
+    v2p_token_id.v_handle = bdp_tseg->v_tseg.handle;
+    return bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
+}
+
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
                                     urma_token_t *token, uint64_t addr, urma_import_seg_flag_t flag)
 {
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    int ret = 0;
 
     bondp_import_tseg_t *bdp_tseg = calloc(1, sizeof(bondp_import_tseg_t));
     if (bdp_tseg == NULL) {
@@ -480,50 +575,15 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
     atomic_init(&bdp_tseg->use_cnt.atomic_cnt, 1);
 
     bondp_udata_import_seg_t udata_out = {0};
-    bool seg_cache_enable = bdp_ctx->seg_cache_enable;
-    URMA_LOG_DEBUG("seg_cache_enable is %d.\n", seg_cache_enable);
-    if (seg_cache_enable) {
-        bondp_v2p_token_id_t v2p_token_id = {0};
-        ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
-                                                 seg->ubva.eid, &v2p_token_id);
-        if (ret == 0) {
-            (void)memcpy(&udata_out.peer_p_seg, v2p_token_id.peer_p_seg, sizeof(udata_out.peer_p_seg));
-            (void)memcpy(&udata_out.connected, v2p_token_id.connected, sizeof(udata_out.connected));
-            bdp_tseg->is_reused = true;
-            bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
-            // Hacky
-            bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
-            bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
-        } else if (ret != BONDP_HASH_MAP_NOT_FOUND_ERROR) {
-            URMA_LOG_ERR("Failed to lookup v2p_token_id, ret=%d.\n", ret);
-            free(bdp_tseg);
-            return NULL;
-        }
+    URMA_LOG_DEBUG("seg_cache_enable is %d.\n", bdp_ctx->seg_cache_enable);
+    if (bdp_ctx->seg_cache_enable &&
+        bondp_try_reuse_seg_cache(bdp_ctx, seg, addr, ctx, bdp_tseg, &udata_out) != 0) {
+        goto free_bdp_tseg;
     }
 
-    if (!bdp_tseg->is_reused) {
-        if (bondp_seg_has_user_info(seg)) {
-            bdp_tseg->skip_import_vseg = true;
-            const bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext_const(seg);
-            if (seg_ext->len < sizeof(urma_bond_seg_ext_t)) {
-                URMA_LOG_ERR("Invalid seg ext length=%u.\n", seg_ext->len);
-                goto free_bdp_tseg;
-            }
-            const urma_bond_seg_ext_t *bond_ext =
-                (const urma_bond_seg_ext_t *)seg_ext->data;
-            (void)memcpy(&udata_out.peer_p_seg, bond_ext->peer_p_seg,
-                         sizeof(udata_out.peer_p_seg));
-            (void)memcpy(&udata_out.connected, bond_ext->connected,
-                         sizeof(udata_out.connected));
-            bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr,
-                              0, ctx);
-        } else {
-            ret = bondp_import_vseg(ctx, seg, token, addr, flag, bdp_tseg, &udata_out);
-            if (ret != 0) {
-                URMA_LOG_ERR("Failed to import vseg\n");
-                goto free_bdp_tseg;
-            }
-        }
+    if (!bdp_tseg->is_reused &&
+        bondp_prepare_import_udata(bdp_ctx, ctx, seg, token, addr, flag, bdp_tseg, &udata_out) != 0) {
+        goto free_bdp_tseg;
     }
 
     bondp_seg_cfg_t bondp_seg_cfg = {
@@ -538,17 +598,9 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         goto unimport_pseg;
     }
 
-    if (seg_cache_enable && !bdp_tseg->is_reused) {
-        bondp_v2p_token_id_t v2p_token_id = {0};
-        v2p_token_id.key.v_remote_eid = seg->ubva.eid;
-        v2p_token_id.key.v_token_id = seg->token_id;
-        (void)memcpy(v2p_token_id.peer_p_seg, udata_out.peer_p_seg, sizeof(udata_out.peer_p_seg));
-        (void)memcpy(v2p_token_id.connected, udata_out.connected, sizeof(udata_out.connected));
-        v2p_token_id.v_handle = bdp_tseg->v_tseg.handle;
-        ret = bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
-        if (ret != 0) {
-            goto unimport_pseg;
-        }
+    if (bdp_ctx->seg_cache_enable && !bdp_tseg->is_reused &&
+        bondp_cache_imported_seg(bdp_ctx, seg, bdp_tseg, &udata_out) != 0) {
+        goto unimport_pseg;
     }
 
     return &bdp_tseg->v_tseg;
