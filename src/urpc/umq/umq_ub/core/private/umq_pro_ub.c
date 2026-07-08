@@ -551,14 +551,8 @@ static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
     }
 }
 
-int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option)
+int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
-    uint64_t post_start = umq_trace_start_timestamp_get();
-    uint64_t tag_timestamp = 0;
-    if (option != NULL && (option->flag & UMQ_IO_OPTION_FLAG_TAG_TIMESTAMP) != 0) {
-        tag_timestamp = option->tag_timestamp;
-    }
-    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, tag_timestamp, queue->umq_id);
     uint32_t max_sge_num = queue->max_rx_sge;
     urma_jfr_wr_t recv_wr[UMQ_BATCH_SIZE] = {0};
     urma_jfr_wr_t *recv_wr_ptr = recv_wr;
@@ -681,12 +675,10 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
-        umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
         return umq_status_convert(status);
     }
     umq_ub_rqe_posted_cnt_inc(queue, wr_index);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_RECV, start_timestamp);
-    umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
     return UMQ_SUCCESS;
 
 PUT_CUR_RX_CTX:
@@ -703,14 +695,18 @@ PUT_ALL_RX_CTX:
     } else {
         *bad_qbuf = qbuf;
     }
-    umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
     return ret;
 }
 
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-    return umq_ub_post_rx_inner_impl(queue, qbuf, bad_qbuf, option);
+    uint64_t post_start = umq_trace_start_timestamp_get();
+    uint64_t tag_timestamp = (option->flag & UMQ_IO_OPTION_FLAG_TAG_TIMESTAMP) == 0 ? 0 : option->tag_timestamp;
+    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, tag_timestamp, queue->umq_id);
+    int ret = umq_ub_post_rx_inner_impl(queue, qbuf, bad_qbuf);
+    umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
+    return ret;
 }
 
 static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, const urma_cr_t *cr)
@@ -829,7 +825,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                  */
                 umq_buf_t *write_qbuf = umq_get_buf_by_user_ctx(queue, cr->user_ctx, UB_QUEUE_JETTY_IO);
                 umq_buf_t *bad_qbuf = NULL;
-                ret = umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf, NULL);
+                ret = umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf);
                 if (ret != UMQ_SUCCESS) {
                     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, ub post rx failed, status: %d\n",
                     EID_ARGS(*eid), id, ret);
