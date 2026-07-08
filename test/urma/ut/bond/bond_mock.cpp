@@ -30,6 +30,7 @@ int g_mockNetlinkFd = -1;
 int g_mockNetlinkRecvReturn = 0;
 int g_mockNetlinkRecvCount = 0;
 size_t g_mockCallocFailNmemb = 0;
+size_t g_mockCallocFailSize = 0;
 static nl_recvmsg_msg_cb_t g_mockNetlinkMsgCb = nullptr;
 static void *g_mockNetlinkMsgCbArg = nullptr;
 
@@ -72,7 +73,8 @@ extern "C" void *calloc(size_t nmemb, size_t size)
 {
     using RealFn = void *(*)(size_t, size_t);
 
-    if (g_mockCallocFailNmemb != 0 && nmemb == g_mockCallocFailNmemb) {
+    if ((g_mockCallocFailNmemb != 0 && nmemb == g_mockCallocFailNmemb) ||
+        (g_mockCallocFailSize != 0 && size == g_mockCallocFailSize)) {
         return nullptr;
     }
 
@@ -412,6 +414,27 @@ extern "C" urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjet
 }
 
 extern "C" urma_status_t urma_unimport_jetty(urma_target_jetty_t *)
+{
+    return urma_test::GetHwMockState().status;
+}
+
+extern "C" urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *)
+{
+    static urma_target_jetty_t target = {};
+
+    urma_test::GetHwMockState().importJfrCount++;
+    if (urma_test::GetHwMockState().status != URMA_SUCCESS) {
+        return nullptr;
+    }
+    target = {};
+    target.urma_ctx = ctx;
+    target.id = rjfr->jfr_id;
+    target.trans_mode = rjfr->trans_mode;
+    target.type = URMA_JFR;
+    return &target;
+}
+
+extern "C" urma_status_t urma_unimport_jfr(urma_target_jetty_t *)
 {
     return urma_test::GetHwMockState().status;
 }
