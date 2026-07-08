@@ -331,7 +331,7 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
 
         /* Mark as initialized (atomic operation to ensure visibility) */
         rs->begin = now;
-        atomic_store(&rs->n_left, URMA_LOG_RL_LIMIT);
+        atomic_store(&rs->n_left, URMA_LOG_RL_LIMIT - 1);
         atomic_store(&rs->missed, 0);
         /* Record log point location on first call */
         rs->file = file;
