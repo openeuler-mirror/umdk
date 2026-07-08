@@ -333,7 +333,6 @@ typedef struct umq_sub_time {
 
 /* one data item — a single buffer (POST) or completion (POLL) */
 typedef struct umq_trace_item {
-    uint32_t umq_id;
     uint32_t msn;                           /* imm msn for traceability */
     uint32_t size;                          /* data size of this item */
 } umq_trace_item_t;
@@ -344,7 +343,8 @@ typedef struct umq_data_record {
     umq_trace_item_t items[UMQ_BATCH_SIZE]; /* per-buffer/per-completion data */
     uint32_t item_cnt;                      /* number of valid items[] entries */
     uint64_t timestamp;                     /* record creation timestamp (ns) */
-    uint64_t interrupt_timestamp;           /* interrupt record timestamp (ns) */
+    uint64_t tag_timestamp;                 /* tag timestamp (ns) */
+    uint32_t umq_id;                        /* umq id */
 
     /* timing */
     uint64_t start_time;                    /* UMQ operation start (ns) */
