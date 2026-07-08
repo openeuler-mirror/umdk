@@ -83,12 +83,37 @@ static int umq_trace_init(umq_trace_cfg_t *cfg)
     g_umq_trace_ctx = (umq_trace_ctx_t *)calloc(1, sizeof(umq_trace_ctx_t));
     if (g_umq_trace_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc for umq_trace failed\n");
-        g_umq_trace_output_limit = UMQ_TRACE_DEFAULT_RECORD_LIMIT;
-        g_umq_trace_record_num = UMQ_TRACE_DEFAULT_RECORD_NUM;
-        return -UMQ_ERR_ENOMEM;
+        goto RESET_CFG;
     }
+
+    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+        g_umq_trace_ctx->trace_buf[i].data_record =
+            (umq_data_record_t *)calloc(g_umq_trace_record_num, sizeof(umq_data_record_t));
+        if (g_umq_trace_ctx->trace_buf[i].data_record == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "calloc for umq_trace data_record failed, trace_record_num %u\n",
+                g_umq_trace_record_num);
+            goto FREE_DATA_RECORD;
+        }
+    }
+
     (void)pthread_spin_init(&g_umq_trace_lock, PTHREAD_PROCESS_PRIVATE);
     return UMQ_SUCCESS;
+
+FREE_DATA_RECORD:
+    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+        if (g_umq_trace_ctx->trace_buf[i].data_record != NULL) {
+            free(g_umq_trace_ctx->trace_buf[i].data_record);
+            g_umq_trace_ctx->trace_buf[i].data_record = NULL;
+        }
+    }
+    free(g_umq_trace_ctx);
+    g_umq_trace_ctx = NULL;
+
+RESET_CFG:
+    g_umq_trace_output_limit = UMQ_TRACE_DEFAULT_RECORD_LIMIT;
+    g_umq_trace_record_num = UMQ_TRACE_DEFAULT_RECORD_NUM;
+
+    return -UMQ_ERR_ENOMEM;
 }
 
 void umq_trace_timer_delete(void)
@@ -140,10 +165,6 @@ static void umq_trace_closure(uint64_t idx)
     }
     g_umq_trace_ctx->trace_buf[idx].is_used = false;
     g_umq_trace_ctx->dp_thread_run_once[idx] = NULL;
-    if (g_umq_trace_ctx->trace_buf[idx].data_record != NULL) {
-        free(g_umq_trace_ctx->trace_buf[idx].data_record);
-        g_umq_trace_ctx->trace_buf[idx].data_record = NULL;
-    }
     (void)pthread_spin_unlock(&g_umq_trace_lock);
 }
 
@@ -174,17 +195,6 @@ void umq_trace_alloc(void)
         UMQ_VLOG_WARN(VLOG_UMQ, "trace buf capacity %u were exhausted, alloc trace_rec failed\n",
             UMQ_PERF_REC_MAX_NUM);
         return;
-    }
-
-    /* allocate ring buffer on first use */
-    if (g_umq_trace_ctx->trace_buf[idx].data_record == NULL) {
-        g_umq_trace_ctx->trace_buf[idx].data_record =
-            (umq_data_record_t *)calloc(g_umq_trace_record_num, sizeof(umq_data_record_t));
-        if (g_umq_trace_ctx->trace_buf[idx].data_record == NULL) {
-            (void)pthread_spin_unlock(&g_umq_trace_lock);
-            UMQ_VLOG_ERR(VLOG_UMQ, "calloc for data_record failed\n");
-            return;
-        }
     }
 
     umq_trace_record_clear(idx);

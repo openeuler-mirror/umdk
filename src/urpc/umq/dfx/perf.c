@@ -153,10 +153,10 @@ void umq_perf_record_alloc(void)
         return;
     }
 
-    umq_clear_perf_record_item(idx);
     g_umq_perf_record_ctx->perf_record_table[idx].is_used = true;
     (void)pthread_spin_unlock(&g_umq_perf_record_lock);
 
+    umq_clear_perf_record_item(idx);
     g_perf_record_index = idx;
     g_umq_perf_record_ctx->dp_thread_run_once[idx] = &g_dp_thread_run_once;
     urpc_thread_closure_register(THREAD_CLOSURE_UMQ_PERF, idx, umq_perf_record_closure);
