@@ -241,7 +241,7 @@ static ALWAYS_INLINE void umq_ub_tx_eagain_cnt(int ret, bool user_send_imm, ub_q
     }
 }
 
-int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
+int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option)
 {
     uint64_t post_start = umq_trace_start_timestamp_get();
     int ret = UMQ_SUCCESS;
@@ -255,7 +255,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     ub_flow_control_t *fc = &queue->flow_control;
 
     /* record start before flow control so FC URMA calls can be captured as sub_time */
-    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0, queue->umq_id);
 
     ret = umq_ub_credit_check_and_request_send(fc, queue);
     if (ret != UMQ_SUCCESS) {
@@ -282,7 +282,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
     umq_buf_t *real_buf = NULL;
     while (buffer) {
         umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
-        umq_trace_item_record(buf_pro->imm.user_data, buffer->total_data_size, queue->umq_id);
+        umq_trace_item_record(buf_pro->imm.user_data, buffer->total_data_size);
         umq_opcode_t opcode = buf_pro->opcode;
         uint32_t rest_size = buffer->total_data_size;
         if (rest_size > max_send_size && (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM)) {
@@ -551,10 +551,14 @@ static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
     }
 }
 
-int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
+int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option)
 {
     uint64_t post_start = umq_trace_start_timestamp_get();
-    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0);
+    uint64_t tag_timestamp = 0;
+    if (option != NULL && (option->flag & UMQ_IO_OPTION_FLAG_TAG_TIMESTAMP) != 0) {
+        tag_timestamp = option->tag_timestamp;
+    }
+    umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, tag_timestamp, queue->umq_id);
     uint32_t max_sge_num = queue->max_rx_sge;
     urma_jfr_wr_t recv_wr[UMQ_BATCH_SIZE] = {0};
     urma_jfr_wr_t *recv_wr_ptr = recv_wr;
@@ -703,10 +707,10 @@ PUT_ALL_RX_CTX:
     return ret;
 }
 
-int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
+int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
-    return umq_ub_post_rx_inner_impl(queue, qbuf, bad_qbuf);
+    return umq_ub_post_rx_inner_impl(queue, qbuf, bad_qbuf, option);
 }
 
 static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, const urma_cr_t *cr)
@@ -825,7 +829,7 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
                  */
                 umq_buf_t *write_qbuf = umq_get_buf_by_user_ctx(queue, cr->user_ctx, UB_QUEUE_JETTY_IO);
                 umq_buf_t *bad_qbuf = NULL;
-                ret = umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf);
+                ret = umq_ub_post_rx_inner_impl(queue, write_qbuf, &bad_qbuf, NULL);
                 if (ret != UMQ_SUCCESS) {
                     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, ub post rx failed, status: %d\n",
                     EID_ARGS(*eid), id, ret);
@@ -1034,7 +1038,6 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
     ub_queue_t *real_queue;
     for (int i = 0; i < rx_cr_cnt; i++) {
         imm.value = cr[i].imm_data;
-        umq_trace_item_record(0, 0, imm.flow_control.umq_id);
         if (umq_ub_fill_fc_rx_buf(queue) != UMQ_SUCCESS) {
             qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
             /* fall through: current FC msg is valid, must process it */
@@ -1132,7 +1135,6 @@ static int umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_co
 
     for (int i = 0; i < rx_cr_cnt; i++) {
         imm.value = cr[i].imm_data;
-        umq_trace_item_record(0, 0, imm.flow_control.umq_id);
         if (umq_ub_fill_fc_rx_buf(queue) != UMQ_SUCCESS) {
             ret = -UMQ_ERR_EFLOWCTL;
             if (buf != NULL) {
@@ -1260,7 +1262,7 @@ FREE_RECV_WR:
     return ret;
 }
 
-int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
+int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
 {
     if (buf_count == 0) {
         return 0;
@@ -1272,7 +1274,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
 
     /* one POLL record for the entire poll operation (FC + IO) */
     uint64_t poll_start = umq_trace_start_timestamp_get();
-    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0, queue->umq_id);
 
     if (queue->flow_control.enabled) {
         int fc_qbuf_cnt = 0;
@@ -1339,7 +1341,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count)
     uint32_t success_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         umq_ub_imm_t imm = {.value = cr[i].imm_data};
-        umq_trace_item_record(imm.io_imm.user_data, cr[i].completion_len, imm.io_imm.umq_id);
+        umq_trace_item_record(imm.io_imm.user_data, cr[i].completion_len);
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         if (imm.io_imm.umq_id < UMQ_ID_ALLOC_SIZE) {
             umq_ub_rx_consumed_inc(
@@ -1733,7 +1735,7 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
 
     /* one POLL record for the entire poll operation (FC + IO) */
     uint64_t poll_start = umq_trace_start_timestamp_get();
-    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0);
+    umq_trace_start_record(UMQ_TRACE_TYPE_POLL, poll_start, 0, queue->umq_id);
     uint32_t tp_handle_idx = option->tp_handle_idx;
 
     if (queue->flow_control.enabled) {

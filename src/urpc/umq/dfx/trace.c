@@ -238,7 +238,7 @@ uint64_t umq_trace_write_delta(uint64_t start)
     return get_timestamp_ns() - start;
 }
 
-void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t interrupt_timestamp)
+void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t tag_timestamp, uint32_t umq_id)
 {
     if (!g_umq_trace_enable) {
         return;
@@ -253,13 +253,16 @@ void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t inter
     umq_data_record_t *rec = &cur_rec->data_record[idx];
 
     rec->timestamp = get_timestamp_ns();
-    rec->interrupt_timestamp = interrupt_timestamp;
+    rec->tag_timestamp = tag_timestamp;
     rec->type = type;
     rec->start_time = time;
     rec->end_time = 0;
     rec->sub_time_cnt = 0;
     rec->item_cnt = 0;
-
+    rec->umq_id = umq_id;
+    if (cur_rec->record_cnt - cur_rec->previous_output_cnt >= g_umq_trace_record_num) {
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "new data num exceeds the capacity, resulting in data overwriting\n");
+    }
     cur_rec->record_cnt++;
     g_umq_trace_record_index = (int32_t)idx;
 }
@@ -289,7 +292,7 @@ void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
     rec->sub_time_cnt++;
 }
 
-void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t umq_id)
+void umq_trace_item_record(uint32_t msn, uint32_t size)
 {
     if (!g_umq_trace_enable || g_umq_trace_record_index < 0) {
         return;
@@ -309,7 +312,6 @@ void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t umq_id)
     }
     rec->items[rec->item_cnt].msn = msn;
     rec->items[rec->item_cnt].size = size;
-    rec->items[rec->item_cnt].umq_id = umq_id;
     rec->item_cnt++;
 }
 
@@ -398,21 +400,19 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
         uint64_t umq_exec = (rec->end_time > rec->start_time) ? (rec->end_time - rec->start_time) : 0;
 
         /* header line: record index + type + meta */
-        UMQ_VLOG_INFO(VLOG_UMQ, "#%u type=%s item_cnt=%u ts=%lu interrupt_ts=%lu\n",
-                      i, umq_trace_type_str(rec->type), rec->item_cnt, rec->timestamp, rec->interrupt_timestamp);
+        UMQ_VLOG_INFO(VLOG_UMQ, "#%u type=%s umq_id=%u umq_start=%lu umq_end=%lu umq_exec=%lu item_cnt=%u ts=%lu "
+            "tag_ts=%lu\n", i, umq_trace_type_str(rec->type), rec->umq_id, rec->start_time, rec->end_time, umq_exec,
+            rec->item_cnt, rec->timestamp, rec->tag_timestamp);
         /* item lines */
         for (uint32_t k = 0; k < rec->item_cnt; k++) {
-            UMQ_VLOG_INFO(VLOG_UMQ, "  item[%u] msn=%u size=%u umq_id=%u \n",
-                          k, rec->items[k].msn, rec->items[k].size, rec->items[k].umq_id);
+            UMQ_VLOG_INFO(VLOG_UMQ, "  item[%u] umq_id=%u msn=%u size=%u\n", k, rec->umq_id, rec->items[k].msn,
+                rec->items[k].size);
         }
-        /* timing line */
-        UMQ_VLOG_INFO(VLOG_UMQ, "  umq_start=%lu umq_end=%lu umq_exec=%lu\n",
-                      rec->start_time, rec->end_time, umq_exec);
         /* sub_time lines */
         for (uint32_t j = 0; j < rec->sub_time_cnt; j++) {
             umq_sub_time_t *sub = &rec->sub_time[j];
-            UMQ_VLOG_INFO(VLOG_UMQ, "  sub[%u] func=%s start=%lu exec=%lu\n",
-                          j, umq_urma_func_str(sub->func_type), sub->start_time, sub->exec_time);
+            UMQ_VLOG_INFO(VLOG_UMQ, "  sub[%u] umq_id=%u func=%s start=%lu exec=%lu\n",
+                          j, rec->umq_id, umq_urma_func_str(sub->func_type), sub->start_time, sub->exec_time);
         }
     }
     (void)pthread_spin_unlock(&g_umq_trace_lock);
