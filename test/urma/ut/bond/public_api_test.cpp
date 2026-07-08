@@ -8,6 +8,11 @@
 
 using namespace urma_test_bond;
 
+static size_t WrBufEntrySize()
+{
+    return sizeof(jfs_wr_entry_t) > sizeof(jfr_wr_entry_t) ? sizeof(jfs_wr_entry_t) : sizeof(jfr_wr_entry_t);
+}
+
 static urma_jfce_t *g_emptyEventJfce = nullptr;
 static urma_jfc_t *g_readyEventJfc = nullptr;
 static urma_jfc_t *g_rearmedPhysicalJfc[URMA_UBAGG_DEV_MAX_NUM] = {};
@@ -891,6 +896,8 @@ TEST(UrmaBondTest, PublicCreateAndDeleteApisUseMockPhysicalMembers)
     fixture.ctx.v_ctx.dev_fd = 7;
     fixture.ctx.enabled_count = 1;
     fixture.ctx.enabled_indices[0] = 0;
+    fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
+    fixture.ctx.msn_enable = true;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 16));
 
     jfsCfg.jfc = &fixture.jfc.v_jfc;
@@ -1119,11 +1126,13 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     fixture.ctx.v_ctx.dev_fd = 7;
     fixture.ctx.enabled_count = 1;
     fixture.ctx.enabled_indices[0] = 0;
+    fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
+    fixture.ctx.msn_enable = true;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 16));
 
     /*
-     * The calloc mock is scoped to nmemb=4, which is the wr_buf entry count here.
-     * Earlier object allocations use nmemb=1 and stay on the normal mocked path.
+     * JFS still uses the historical entry-count failure; JFR and Jetty use the
+     * WR entry size because their active count can vary with newer path logic.
      */
     jfsCfg.jfc = &fixture.jfc.v_jfc;
     jfsCfg.depth = 4;
@@ -1140,9 +1149,9 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     jfrCfg.max_sge = 1;
     jfrCfg.trans_mode = URMA_TM_RC;
     urma_test::SetHwMockIoctl(true, 0xb61, 0xb610);
-    g_mockCallocFailNmemb = 4;
+    g_mockCallocFailSize = WrBufEntrySize();
     EXPECT_EQ(nullptr, bondp_create_jfr(&fixture.ctx.v_ctx, &jfrCfg));
-    g_mockCallocFailNmemb = 0;
+    g_mockCallocFailSize = 0;
 
     fixture.jfr.v_jfr.jfr_cfg.jfc = &fixture.jfc.v_jfc;
     fixture.jfr.v_jfr.jfr_cfg.depth = 4;
@@ -1164,9 +1173,9 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     fakeGlobal.health_thread_ctx.enable_health_check = false;
     g_bondp_global_ctx = &fakeGlobal;
     urma_test::SetHwMockIoctl(true, 0xb62, 0xb620);
-    g_mockCallocFailNmemb = 4;
+    g_mockCallocFailSize = WrBufEntrySize();
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg));
-    g_mockCallocFailNmemb = 0;
+    g_mockCallocFailSize = 0;
     g_bondp_global_ctx = nullptr;
     bondp_health_check_global_ctx_uninit(&fakeGlobal);
 
@@ -1336,7 +1345,7 @@ TEST(UrmaBondTest, PublicUserCtlQueriesPortsAndJfceFds)
 TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
 {
     BondPublicApiFixture fixture;
-    bondp_import_tseg_t inputTseg = {};
+    bondp_tseg_t inputTseg = {};
     urma_target_seg_t physicalSeg = {};
     urma_rjetty_t *rjetty = nullptr;
     urma_seg_t *seg = nullptr;
@@ -1379,8 +1388,10 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     std::free(rjetty);
 
     inputTseg.v_tseg.urma_ctx = &fixture.ctx.v_ctx;
+    inputTseg.v_tseg.seg.ubva.eid = fixture.jetty.v_jetty.jetty_id.eid;
+    inputTseg.bondp_ctx = &fixture.ctx;
     physicalSeg.seg.token_id = 0x55;
-    inputTseg.p_tseg[0][0] = &physicalSeg;
+    inputTseg.p_tseg[0] = &physicalSeg;
     out = MakeUserCtlOut(&seg, sizeof(seg));
     EXPECT_EQ(0, CallBondUserCtl(&fixture.ctx.v_ctx, BONDP_USER_CTL_OPCODE_GET_SEG_CTX,
                                  &inputTseg.v_tseg, sizeof(inputTseg.v_tseg), &out));

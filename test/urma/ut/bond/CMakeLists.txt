@@ -12,6 +12,7 @@ add_executable(urma_bond_ut
 )
 target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${URMA_SO} ${URMA_COMMON_SO}
     GTest::gtest_main nl-genl-3 nl-3 dl rt pthread)
+target_link_options(urma_bond_ut PRIVATE -Wl,--export-dynamic)
 target_include_directories(urma_bond_ut PRIVATE /usr/include/libnl3)
 
 add_test(NAME urma_bond_ut COMMAND urma_bond_ut)
