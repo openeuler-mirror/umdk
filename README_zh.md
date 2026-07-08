@@ -17,6 +17,8 @@
 
 5. USOCK：UB通信生态构建，兼容标准Socket编程接口，使能TCP应用零修改提升网络通信性能。
 
+6. SNC：超节点网络控制器，面向主流昇腾超节点硬件和组网，提供路由计算、路由主被动收敛功能、租户隔离和pingmesh规划等能力，为超节点提供安全高效的网络互联支撑。
+
 #### 三、编译运行
 1. 编译环境要求
 - 编译环境：kernel 6.6
@@ -55,6 +57,22 @@
   $ --define 'kernel_version 6.6.92'         option, specify kernel version
   $ --define 'rpm_release  0'                option, specify release version
 ```
+
+- SNC (Java) 独立构建
+SNC 为 Java 项目，使用 Maven 构建，不依赖 rpmbuild。构建环境要求：
+  - JDK 21 或以上
+  - Maven 3.6 或以上
+```bash
+  # 完整构建（包含测试）
+  mvn -f src/snc/pom.xml clean package
+
+  # 跳过测试构建
+  mvn -f src/snc/pom.xml clean package -DskipTests
+
+  # 清理构建产物
+  mvn -f src/snc/pom.xml clean
+```
+构建产物为 `src/snc/target/snc-*.jar`。
 
 3. 部署指导
 - 运行时依赖请检查前置驱动已加载，如未加载请手动加载

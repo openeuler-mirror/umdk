@@ -16,6 +16,8 @@ It offers two types of interfaces: one is the northbound application programming
 
 5. USOCK: Compatible with standard socket API, enabling TCP applications to enhance network communication performance with zero modifications.
 
+6. SNC: Supernode Network Controller, designed for mainstream Ascend supernode hardware and networking infrastructures, provides route computation, active and passive route convergence, tenant isolation, and pingmesh planning. It delivers secure and efficient network interconnection support for supernodes.
+
 #### 3. Build and install
 1. Build Environment Requirements
 - Kernel version：kernel 6.6
@@ -54,6 +56,22 @@ It offers two types of interfaces: one is the northbound application programming
   $ --define 'kernel_version 6.6.92'         option, specify kernel version
   $ --define 'rpm_release  0'                option, specify release version
 ```
+
+- SNC (Java) independent build
+SNC is a Java project built with Maven, independent of rpmbuild. Build environment requirements:
+  - JDK 21 or later
+  - Maven 3.6 or later
+```bash
+  # Full build (with tests)
+  mvn -f src/snc/pom.xml clean package
+
+  # Skip tests
+  mvn -f src/snc/pom.xml clean package -DskipTests
+
+  # Clean build artifacts
+  mvn -f src/snc/pom.xml clean
+```
+The build output is `src/snc/target/snc-*.jar`.
 
 3. Install Instructions
 - Runtime Dependencies: Ensure that prerequisite drivers are loaded. If not, please load them manually
