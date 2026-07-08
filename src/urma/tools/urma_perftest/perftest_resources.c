@@ -296,11 +296,11 @@ static int alloc_jfc(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
 
-    ctx->jfc_s = calloc(1, sizeof(urma_jfce_t *) * cfg->jettys);
+    ctx->jfc_s = calloc(1, sizeof(urma_jfc_t *) * cfg->jettys);
     if (ctx->jfc_s == NULL) {
         goto free_jfce;
     }
-    ctx->jfc_r = calloc(1, sizeof(urma_jfce_t *) * cfg->jettys);
+    ctx->jfc_r = calloc(1, sizeof(urma_jfc_t *) * cfg->jettys);
     if (ctx->jfc_r == NULL) {
         free(ctx->jfc_s);
         goto free_jfce;
