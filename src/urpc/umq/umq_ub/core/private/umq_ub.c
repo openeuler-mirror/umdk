@@ -787,11 +787,14 @@ static ALWAYS_INLINE uint32_t umq_ub_fc_info_serialize(
         if (fc_info->rjetty_size == 0) {
             return 0;
         }
-        ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
-        uint16_t allocated = pool->ops.available_credit_dec(pool, UMQ_INITIAL_CREDIT);
-        fc_info->initial_credit = allocated;
-        (void)queue->flow_control.ops.local_rx_allocated_inc(&queue->flow_control, allocated);
-
+        // proactive defense to prevent resource exhaustion
+        ub_flow_control_t *fc = &queue->flow_control;
+        if (fc->ops.local_rx_allocated_load(fc) == 0) {
+            ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
+            uint16_t allocated = pool->ops.available_credit_dec(pool, UMQ_INITIAL_CREDIT);
+            fc_info->initial_credit = allocated;
+            (void)queue->flow_control.ops.local_rx_allocated_inc(&queue->flow_control, allocated);
+        }
     } else {
         fc_info->rjetty_size = 0;
         fc_info->token.token = 0;
@@ -829,7 +832,7 @@ uint32_t umq_ub_bind_info_serialize(ub_queue_t *queue, uint8_t *bind_info, uint3
     }
     info_data_size += data_size;
 
-    // fill fc info
+    // fill fc info, credit has been allocated, need to consider rollback
     data_size = umq_ub_fc_info_serialize(queue, bind_info + info_data_size, bind_info_size - info_data_size);
     if (data_size == 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), serialize fc info failed\n", queue->umq_id);
