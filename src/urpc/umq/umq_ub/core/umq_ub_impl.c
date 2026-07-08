@@ -1605,9 +1605,8 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     }
 
     /* record start before URMA calls so sub_time can be captured */
-    uint64_t interrupt_timestamp = (option->flag & UMQ_INTERRUPT_FLAG_TIMESTAMP) == 0 ? 0 : option->timestamp;
-    umq_trace_start_record(UMQ_TRACE_TYPE_WAIT, wait_start, interrupt_timestamp);
-    umq_trace_item_record(0, 0, queue->umq_id);
+    uint64_t tag_timestamp = (option->flag & UMQ_INTERRUPT_FLAG_TAG_TIMESTAMP) == 0 ? 0 : option->tag_timestamp;
+    umq_trace_start_record(UMQ_TRACE_TYPE_WAIT, wait_start, tag_timestamp, queue->umq_id);
 
     int cnt = 0;
     urma_jfc_t *jfc[UB_QUEUE_JETTY_NUM];
@@ -1840,9 +1839,8 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
     }
 
     /* record start */
-    uint64_t interrupt_timestamp = (option->flag & UMQ_INTERRUPT_FLAG_TIMESTAMP) == 0 ? 0 : option->timestamp;
-    umq_trace_start_record(UMQ_TRACE_TYPE_REARM, rearm_start, interrupt_timestamp);
-    umq_trace_item_record(0, 0, queue->umq_id);
+    uint64_t tag_timestamp = (option->flag & UMQ_INTERRUPT_FLAG_TAG_TIMESTAMP) == 0 ? 0 : option->tag_timestamp;
+    umq_trace_start_record(UMQ_TRACE_TYPE_REARM, rearm_start, tag_timestamp, queue->umq_id);
 
     urma_status_t status = URMA_SUCCESS;
     if ((option->flag & UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX) != 0) {
@@ -1953,9 +1951,9 @@ int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option,
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
     if (option->io_direction == UMQ_IO_TX) {
-        ret = umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf);
+        ret = umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf, option);
     } else if (option->io_direction == UMQ_IO_RX) {
-        ret = umq_ub_post_rx(umqh_tp, qbuf, bad_qbuf);
+        ret = umq_ub_post_rx(umqh_tp, qbuf, bad_qbuf, option);
     } else {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, io_direction[%d] is not supported when post\n",
             EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
@@ -1975,7 +1973,7 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf,
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
 
     if (option->io_direction == UMQ_IO_RX) {
-        ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count);
+        ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count, option);
     } else if (option->io_direction == UMQ_IO_TX) {
         ret = umq_ub_poll_tx(umqh_tp, buf, max_buf_count, option);
     } else if (option->io_direction == UMQ_IO_ALL) {
@@ -1986,7 +1984,7 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf,
             goto OUT;
         }
 
-        int32_t rx_cnt = umq_ub_poll_rx(umqh_tp, &buf[tx_cnt], max_buf_count - tx_cnt);
+        int32_t rx_cnt = umq_ub_poll_rx(umqh_tp, &buf[tx_cnt], max_buf_count - tx_cnt, option);
         if (rx_cnt < 0) {
             // notice: only report tx cqe qbuf in case of failure
             ret = tx_cnt;
@@ -2844,6 +2842,7 @@ int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info)
     }
 
     umq_info->trans_mode = queue->dev_ctx->trans_info.trans_mode;
+    umq_info->ub.umq_id = queue->umq_id;
     (void)memcpy(&umq_info->ub.eid, &queue->dev_ctx->urma_ctx->eid, sizeof(urma_eid_t));
     (void)memcpy(umq_info->ub.dev_name, queue->dev_ctx->urma_ctx->dev->name, URMA_MAX_NAME);
     return UMQ_SUCCESS;
