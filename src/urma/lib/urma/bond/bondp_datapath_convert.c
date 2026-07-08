@@ -234,6 +234,10 @@ static inline urma_target_seg_t *get_p_tseg(urma_target_seg_t *tseg, int local_i
 
 static inline urma_target_seg_t *get_v_tseg(urma_target_seg_t *tseg)
 {
+    if (tseg == NULL) {
+        URMA_LOG_WARN_RL("get_v_tseg called with NULL tseg; bind wrote a NULL p_tseg (path not ready or seg freed)\n");
+        return NULL;
+    }
     return (urma_target_seg_t *)(uintptr_t)tseg->handle;
 }
 

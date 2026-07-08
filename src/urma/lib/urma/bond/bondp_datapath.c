@@ -191,6 +191,73 @@ static urma_status_t post_send_check_jfs_wr_valid(const urma_jfs_wr_t *wr,
     return URMA_SUCCESS;
 }
 
+static urma_status_t check_tseg_not_deleting(const urma_sge_t *sge, uint32_t num_sge)
+{
+    for (uint32_t i = 0; i < num_sge; i++) {
+        urma_target_seg_t *tseg = sge[i].tseg;
+        if (tseg == NULL || tseg->token_id == NULL) {
+            continue;
+        }
+        bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(tseg, bondp_tseg_t, v_tseg);
+        if (atomic_load(&bdp_seg->deleting)) {
+            URMA_LOG_ERR("seg is being unregistered, reject post. token_id=%u\n",
+                         tseg->seg.token_id);
+            return URMA_EAGAIN;
+        }
+    }
+    return URMA_SUCCESS;
+}
+
+static urma_status_t check_wr_tseg_not_deleting(const urma_jfs_wr_t *wr)
+{
+    urma_status_t ret;
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            if (wr->send.src.sge != NULL) {
+                ret = check_tseg_not_deleting(wr->send.src.sge, wr->send.src.num_sge);
+                if (ret != URMA_SUCCESS) {
+                    return ret;
+                }
+            }
+            return URMA_SUCCESS;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            ret = check_tseg_not_deleting(wr->rw.src.sge, wr->rw.src.num_sge);
+            if (ret != URMA_SUCCESS) {
+                return ret;
+            }
+            return check_tseg_not_deleting(wr->rw.dst.sge, wr->rw.dst.num_sge);
+        case URMA_OPC_CAS:
+            if (wr->cas.src != NULL) {
+                ret = check_tseg_not_deleting(wr->cas.src, 1);
+                if (ret != URMA_SUCCESS) {
+                    return ret;
+                }
+            }
+            if (wr->cas.dst != NULL) {
+                return check_tseg_not_deleting(wr->cas.dst, 1);
+            }
+            return URMA_SUCCESS;
+        case URMA_OPC_FADD:
+            if (wr->faa.src != NULL) {
+                ret = check_tseg_not_deleting(wr->faa.src, 1);
+                if (ret != URMA_SUCCESS) {
+                    return ret;
+                }
+            }
+            if (wr->faa.dst != NULL) {
+                return check_tseg_not_deleting(wr->faa.dst, 1);
+            }
+            return URMA_SUCCESS;
+        default:
+            return URMA_SUCCESS;
+    }
+}
+
 static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp,
                                            const urma_jfs_wr_t *wr, uint32_t max_jfs_sge,
                                            uint32_t max_jfs_rsge)
@@ -455,6 +522,11 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 goto CLEANUP;
             }
             get_jfs_vwr_refs(pwr);
+            ret = check_wr_tseg_not_deleting(pwr);
+            if (ret != URMA_SUCCESS) {
+                put_jfs_vwr_refs(pwr);
+                goto CLEANUP;
+            }
             uint32_t wr_msn = (base_msn + i) % BONDP_MAX_BITMAP_SIZE;
             bool msn_enable = bdp_tjetty->is_msn_enabled;
             encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
@@ -557,9 +629,15 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
     int wr_total = 0;
 
     PERF_PROFILING_START(BOND_JETTY_POST_SEND);
+    atomic_fetch_add(&bdp_jetty->use_cnt.atomic_cnt, 1);
+    if (atomic_load(&bdp_jetty->deleting)) {
+        atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
+        return URMA_EAGAIN;
+    }
     ret = post_send_check_wr_list_valid(bdp_jetty, wr, bad_wr, &wr_total);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JETTY_POST_SEND);
+        atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
         return ret;
     }
 
@@ -568,6 +646,7 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, u
     } else {
         ret = bondp_post_send_wr_list_and_store(bdp_jetty, wr, bad_wr, wr_total);
     }
+    atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
     PERF_PROFILING_END(BOND_JETTY_POST_SEND);
 
     return ret;
@@ -580,9 +659,15 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
     int wr_total = 0;
 
     PERF_PROFILING_START(BOND_JFS_POST_SEND);
+    atomic_fetch_add(&bdp_jfs->use_cnt.atomic_cnt, 1);
+    if (atomic_load(&bdp_jfs->deleting)) {
+        atomic_fetch_sub(&bdp_jfs->use_cnt.atomic_cnt, 1);
+        return URMA_EAGAIN;
+    }
     ret = post_send_check_wr_list_valid(bdp_jfs, wr, bad_wr, &wr_total);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JFS_POST_SEND);
+        atomic_fetch_sub(&bdp_jfs->use_cnt.atomic_cnt, 1);
         return ret;
     }
 
@@ -591,6 +676,7 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_
     } else {
         ret = bondp_post_send_wr_list_and_store(bdp_jfs, wr, bad_wr, wr_total);
     }
+    atomic_fetch_sub(&bdp_jfs->use_cnt.atomic_cnt, 1);
     PERF_PROFILING_END(BOND_JFS_POST_SEND);
 
     return ret;
@@ -901,9 +987,15 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
     urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_JETTY_POST_RECV);
+    atomic_fetch_add(&bdp_jetty->use_cnt.atomic_cnt, 1);
+    if (atomic_load(&bdp_jetty->deleting)) {
+        atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
+        return URMA_EAGAIN;
+    }
     ret = post_recv_check_wr_list_valid(bdp_jetty, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_JETTY_POST_RECV);
+        atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
         return ret;
     }
 
@@ -913,6 +1005,7 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, u
         ret = (bdp_jetty->bondp_ctx->msn_enable) ? bondp_post_recv_wr_list_and_store(bdp_jetty, wr, bad_wr)
                                                : bondp_post_recv_wr_list_without_backup(bdp_jetty, wr, bad_wr);
     }
+    atomic_fetch_sub(&bdp_jetty->use_cnt.atomic_cnt, 1);
     PERF_PROFILING_END(BOND_JETTY_POST_RECV);
 
     return ret;
@@ -924,9 +1017,15 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
     urma_status_t ret = URMA_SUCCESS;
 
     PERF_PROFILING_START(BOND_POST_JFR_RECV);
+    atomic_fetch_add(&bdp_jfr->use_cnt.atomic_cnt, 1);
+    if (atomic_load(&bdp_jfr->deleting)) {
+        atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
+        return URMA_EAGAIN;
+    }
     ret = post_recv_check_wr_list_valid(bdp_jfr, wr, bad_wr);
     if (ret != URMA_SUCCESS) {
         PERF_PROFILING_END(BOND_POST_JFR_RECV);
+        atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
         return ret;
     }
 
@@ -936,6 +1035,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
         ret = (bdp_jfr->bondp_ctx->msn_enable) ? bondp_post_recv_wr_list_and_store(bdp_jfr, wr, bad_wr)
                                              : bondp_post_recv_wr_list_without_backup(bdp_jfr, wr, bad_wr);
     }
+    atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
     PERF_PROFILING_END(BOND_POST_JFR_RECV);
 
     return ret;
@@ -1031,6 +1131,9 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
                 tl_slots[i].local_id == cr->local_id &&
                 tl_slots[i].type == (uint8_t)p_vjetty_type) {
                 bondp_comp_t *comp = tl_slots[i].comp;
+                if (atomic_load(&bdp_ctx->p_vjetty_id_table.gen) != tl_gen) {
+                    break;
+                }
                 atomic_fetch_add(&comp->use_cnt.atomic_cnt, 1);
                 if (atomic_load(&bdp_ctx->p_vjetty_id_table.gen) != tl_gen) {
                     atomic_fetch_sub(&comp->use_cnt.atomic_cnt, 1);
@@ -1171,7 +1274,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     }
 
     jfs_wr_entry_t *wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
-    if (wr_entry == NULL) {
+    if ((wr_entry == NULL) || (wr_entry->entry_type != WR_BUF_ENTRY_JFS)) {
         /*
          * For backup path retransmission: the CR for the retransmitted WR may complete
          * before the error-reporting CR from the original path, causing premature WR
@@ -1182,7 +1285,6 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         put_comp(bdp_comp);
         return CONVERT_SKIP;
     }
-
     uint32_t send_idx = wr_entry->send_idx;
     uint32_t target_idx = wr_entry->target_idx;
 
@@ -1271,8 +1373,8 @@ static cr_convert_ret_t handle_recv_cr_with_store(bondp_context_t *bdp_ctx, int 
     }
 
     jfr_wr_entry_t *wr_entry = jfr_wr_buf_get(recv_wr_buf, wr_id);
-    if (wr_entry == NULL) {
-        // wr_entry could not be NULL
+    if (wr_entry == NULL || wr_entry->entry_type != WR_BUF_ENTRY_JFR) {
+        // entry_type must be JFR, otherwise it is a stale/reused entry
         put_comp(recv_comp);
         return CONVERT_FAIL;
     }
