@@ -184,7 +184,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
         }
 
         umq_buf_t *bad_buf = NULL;
-        ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf, NULL);
+        ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf);
         if (ret != UMQ_SUCCESS) {
             umq_buf_free(bad_buf);
             goto DEC_REF;
@@ -2904,7 +2904,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
                 break;
             }
             umq_buf_t *bad_buf = NULL;
-            ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf, NULL);
+            ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf);
             if (ret != UMQ_SUCCESS) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, status: %d\n",
                     EID_ARGS(*eid), id, ret);
