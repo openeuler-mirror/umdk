@@ -21,15 +21,16 @@
 #define ADMIN_LOG_TAG              "urma_admin"
 #define URMA_ADMIN_VLOG_LEVEL_INFO 6
 
-static int urma_admin_vlog(const char *function, int line, const char *format, va_list va)
+static int urma_admin_vlog(const char *file, const char *function, int line,
+    const char *format, va_list va)
 {
     int ret;
     char newformat[MAX_LOG_LEN + 1] = {0};
     char logmsg[MAX_LOG_LEN + 1] = {0};
 
-    /* add log head info, "URMA|urma_admin|thread_id|-|function|[line]|format" */
-    ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s|%ld|-|%s[%d]|%s",
-        URMA_LOG_TAG, ADMIN_LOG_TAG, (long)syscall(__NR_gettid), function, line, format);
+    /* add log head info, "[URMA][urma_admin][thread_id=tid][-][file:function:line]format" */
+    ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s][thread_id=%ld][-][%s:%s:%d]%s",
+        URMA_LOG_TAG, ADMIN_LOG_TAG, (long)syscall(__NR_gettid), file, function, line, format);
     if (ret <= 0 || ret >= (int)sizeof(newformat)) {
         return ret;
     }
@@ -43,11 +44,11 @@ static int urma_admin_vlog(const char *function, int line, const char *format, v
     return ret;
 }
 
-void urma_admin_log(const char *function, int line, const char *format, ...)
+void urma_admin_log(const char *file, const char *function, int line, const char *format, ...)
 {
     va_list va;
 
     va_start(va, format);
-    (void)urma_admin_vlog(function, line, format, va);
+    (void)urma_admin_vlog(file, function, line, format, va);
     va_end(va);
 }

@@ -153,7 +153,8 @@ void tpsa_getenv_log_level(void)
     }
 }
 
-static int tpsa_vlog(const char *function, int line, unsigned int level, const char *format, va_list va)
+static int tpsa_vlog(const char *file, const char *function, int line, unsigned int level,
+    const char *format, va_list va)
 {
     int ret;
     char newformat[MAX_LOG_LEN + 1] = {0};
@@ -169,14 +170,14 @@ static int tpsa_vlog(const char *function, int line, unsigned int level, const c
 
     int woker_idx = uvs_get_worker_idx();
     if (woker_idx != -1) {
-        /* add log head info, "URMA|libuvs|thread_id|*tpsaprocessname*|worker_idx|function|[line]|format" */
-        ret = snprintf(newformat, sizeof(newformat), "%s|%s|%ld|*%s*|work_%d|%s[%d]|%s",
+        /* add log head info, "[URMA][libuvs][thread_id][tpsaprocessname][worker_idx][file:func:line]format" */
+        ret = snprintf(newformat, sizeof(newformat), "[%s][%s][%ld][%s][work_%d][%s:%s:%d]%s",
             URMA_LOG_TAG, LIBUVS_LOG, (long)syscall(__NR_gettid), g_tpsa_process_name,
-            woker_idx, function, line, format);
+            woker_idx, file, function, line, format);
     } else {
-        /* add log head info, "URMA|libuvs|thread_id|*tpsaprocessname*|-|function|[line]|format" */
-        ret = snprintf(newformat, sizeof(newformat), "%s|%s|%ld|*%s*|-|%s[%d]|%s",
-            URMA_LOG_TAG, LIBUVS_LOG, (long)syscall(__NR_gettid), g_tpsa_process_name, function, line, format);
+        /* add log head info, "[URMA][libuvs][thread_id][tpsaprocessname][-][file:func:line]format" */
+        ret = snprintf(newformat, sizeof(newformat), "[%s][%s][%ld][%s][-][%s:%s:%d]%s",
+            URMA_LOG_TAG, LIBUVS_LOG, (long)syscall(__NR_gettid), g_tpsa_process_name, file, function, line, format);
     }
 
     if (ret < 0 || ret >= (int)sizeof(newformat)) {
@@ -193,11 +194,12 @@ static int tpsa_vlog(const char *function, int line, unsigned int level, const c
     return ret;
 }
 
-void tpsa_log(const char *function, int line, uint32_t level, const char *format, ...)
+void tpsa_log(const char *file, const char *function, int line, uint32_t level,
+    const char *format, ...)
 {
     va_list va;
 
     va_start(va, format);
-    (void)tpsa_vlog(function, line, level, format, va);
+    (void)tpsa_vlog(file, function, line, level, format, va);
     va_end(va);
 }
