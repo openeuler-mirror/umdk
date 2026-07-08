@@ -13,13 +13,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef __FILE_NAME__
+#define __FILE_NAME__ (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define LOG_FORMAT_IDX 4    /* index of 'format' of tpsa_log */
-#define LOG_VA_ARG_IDX 5    /* index of variable argument of tpsa_log */
+#define LOG_FORMAT_IDX 5    /* index of 'format' of tpsa_log */
+#define LOG_VA_ARG_IDX 6    /* index of variable argument of tpsa_log */
 
 enum tpsa_vlog_level {
     /* TPSA_VLOG_LEVEL_EMERG = 0, */
@@ -38,15 +42,15 @@ void tpsa_log_init(void);
 void tpsa_log_uninit(void);
 void tpsa_log_set_level(unsigned level);
 unsigned int tpsa_log_get_level(void);
-void __attribute__((format(printf, LOG_FORMAT_IDX, LOG_VA_ARG_IDX))) tpsa_log(const char *function, int line,
-    uint32_t level, const char *format, ...);
+void __attribute__((format(printf, LOG_FORMAT_IDX, LOG_VA_ARG_IDX))) tpsa_log(const char *file,
+    const char *function, int line, uint32_t level, const char *format, ...);
 bool tpsa_log_drop(unsigned int level);
 
 int uvs_get_worker_idx(void);
 void uvs_set_worker_idx(int idx);
 
-#define TPSA_LOG(l, ...) if (!tpsa_log_drop(TPSA_VLOG_LEVEL_##l)) {                          \
-        tpsa_log(__func__, __LINE__, TPSA_VLOG_LEVEL_##l, __VA_ARGS__); \
+#define TPSA_LOG(l, ...) if (!tpsa_log_drop(TPSA_VLOG_LEVEL_##l)) {                      \
+        tpsa_log(__FILE_NAME__, __func__, __LINE__, TPSA_VLOG_LEVEL_##l, __VA_ARGS__);   \
     }
 
 #define TPSA_LOG_INFO(...) TPSA_LOG(INFO, __VA_ARGS__)
