@@ -14,7 +14,14 @@ build_pybind() {
 
     # Clean up previous build output and rebuild
     rm -rf "${build_tmp_dir}" "${wheel_out_dir}"
-    mkdir -p "${wheel_out_dir}"
+    # Ensure the parent of build_tmp_dir (MODULE_BUILD_PATH) exists. It is
+    # normally created by compile_ascend_proj.sh during the run-package build;
+    # mkdir -p the parent here so -p (whl-only) works without a prior run build.
+    # NOTE: do NOT mkdir build_tmp_dir itself -- cp -r below copies pybind INTO
+    # build_tmp_dir only when build_tmp_dir already exists as a directory, which
+    # would nest an extra pybind/ layer. Leaving it absent lets cp -r rename
+    # pybind -> build_tmp_dir, placing setup.py at build_tmp_dir/setup.py.
+    mkdir -p "${wheel_out_dir}" "$(dirname "${build_tmp_dir}")"
     
     # Copy source code to temporary build directory
     cp -r $MODULE_SRC_PATH/pybind "${build_tmp_dir}"

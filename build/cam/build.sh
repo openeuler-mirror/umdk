@@ -6,6 +6,7 @@
 # Note:
 # History: 2025-07-20 create cam building script
 #          2026-06-26 forward -c/-a/-q to comm_operator build, update help
+#          2026-07-07 note -r (run package only) forwarding to comm_operator build
 
 set -e
 
@@ -41,14 +42,16 @@ function print_help() {
         registered generations. Supported: [ascend910_93]
     -a <ops>: Semicolon-separated operator list (requires -c)
     -q: Select the fused_deep_moe_w4a8 quantization variant
+    -p: Build only the pybind (whl) package; skip the run package
+    -r: Build only the run package; skip the whl package (mutually exclusive with -p)
     -h: Show this help
     "
 }
 
-# The top level only consumes -d / -h; other options (including -c/-a/-q) are forwarded as-is
+# The top level only consumes -d / -h; other options (including -c/-a/-q/-p/-r) are forwarded as-is
 # to the submodule script. The shift inside the function does not affect the caller's positional
 # parameters, so the caller's $@ stays intact and is passed to the submodule below.
-# The leading ':' silences getopts' default error output for unknown options (-c/-a/-q).
+# The leading ':' silences getopts' default error output for unknown options (-c/-a/-q/-p/-r).
 function process_arg() {
     while getopts ":dh" opt; do
         case $opt in
