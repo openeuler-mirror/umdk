@@ -344,6 +344,8 @@ static ALWAYS_INLINE void local_pool_rollback(umq_buf_t *buf_head_old, uint64_t 
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 }
 
+bool umq_qbuf_try_expansion_pool(bool with_data, uint64_t *global_buf_cnt, bool disable_scale_cap);
+
 static ALWAYS_INLINE int32_t fetch_from_global(
         global_block_pool_t *global_pool, local_block_pool_t *cache_pool, bool with_data, uint32_t batch_count)
 {
@@ -384,8 +386,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
 
     count += fetch_from_expansion_pools(with_data, batch_count - count, info.local_head, info.local_buf_cnt);
     while (count < batch_count) {
-        int ret = expand_global_pool(with_data);
-        if (ret != UMQ_SUCCESS) {
+        if (!umq_qbuf_try_expansion_pool(with_data, info.global_buf_cnt, global_pool->disable_scale_cap)) {
             goto ROLLBACK;
         }
 
