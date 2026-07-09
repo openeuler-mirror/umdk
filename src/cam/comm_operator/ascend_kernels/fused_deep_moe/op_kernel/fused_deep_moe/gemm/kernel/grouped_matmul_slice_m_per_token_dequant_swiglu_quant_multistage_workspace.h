@@ -2495,6 +2495,29 @@ public:
         AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                                           AscendC::DcciDst::CACHELINE_OUT>(selfStatusTensor[aivIdx * UB_ALIGN]);
         __asm__ __volatile__("");
+
+        // magicVal初始化
+        if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
+            AscendC::GlobalTensor<int32_t> magicValGTensor;
+            GM_ADDR magicValAddr = GetShmemMagicValAddr(aivIdx);
+            magicValGTensor.SetGlobalBuffer((__gm__ int32_t *)magicValAddr);
+
+            AscendC::LocalTensor<int32_t> tempLocal = resource.ubBuf.template GetBufferByByte<int32_t>(0);
+            tempLocal(0) = 1;
+
+            AscendC::SetAtomicAdd<int32_t>();
+            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::DataCopy(magicValGTensor, tempLocal, FLAG_CNT_ALIGN);
+            AscendC::SetAtomicNone();
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+
+            magicVal_ = magicValGTensor.GetValue(0);
+            AscendC::PipeBarrier<PIPE_ALL>();
+            exp_flag_ = static_cast<float>(magicVal_);
+            tokenFlag = magicVal_;
+        }
     }
 
     CATLASS_DEVICE

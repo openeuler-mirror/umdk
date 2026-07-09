@@ -549,12 +549,6 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
                         OPS_LOG_E(nodeName, "globalBatchSize must be divisible by epRankSize."),
                         return ge::GRAPH_FAILED);
     }
-    uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
-    uint32_t recvAivNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aivNum / 2;
-    OPS_ERR_IF(
-        moeExpertNumPerRank > recvAivNum,
-        OPS_LOG_E(nodeName, "moeExpertNumPerRank must <= (aivNum/2)(%u), but got %u", recvAivNum, moeExpertNumPerRank),
-        return ge::GRAPH_FAILED);
     return ge::GRAPH_SUCCESS;
 }
 
