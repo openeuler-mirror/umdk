@@ -292,7 +292,7 @@ void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
     rec->sub_time_cnt++;
 }
 
-void umq_trace_item_record(uint32_t msn, uint32_t size)
+void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t sub_umq_id)
 {
     if (!g_umq_trace_enable || g_umq_trace_record_index < 0) {
         return;
@@ -312,6 +312,7 @@ void umq_trace_item_record(uint32_t msn, uint32_t size)
     }
     rec->items[rec->item_cnt].msn = msn;
     rec->items[rec->item_cnt].size = size;
+    rec->items[rec->item_cnt].sub_umq_id = sub_umq_id;
     rec->item_cnt++;
 }
 
@@ -405,8 +406,8 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
             rec->item_cnt, rec->timestamp, rec->tag_timestamp);
         /* item lines */
         for (uint32_t k = 0; k < rec->item_cnt; k++) {
-            UMQ_VLOG_INFO(VLOG_UMQ, "  item[%u] umq_id=%u msn=%u size=%u\n", k, rec->umq_id, rec->items[k].msn,
-                rec->items[k].size);
+            UMQ_VLOG_INFO(VLOG_UMQ, "  item[%u] umq_id=%u sub_umq_id=%u msn=%u size=%u\n", k, rec->umq_id,
+                rec->items[k].sub_umq_id, rec->items[k].msn, rec->items[k].size);
         }
         /* sub_time lines */
         for (uint32_t j = 0; j < rec->sub_time_cnt; j++) {

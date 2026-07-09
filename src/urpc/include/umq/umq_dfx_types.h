@@ -333,6 +333,7 @@ typedef struct umq_sub_time {
 
 /* one data item — a single buffer (POST) or completion (POLL) */
 typedef struct umq_trace_item {
+    uint32_t sub_umq_id;                    /* sub umq id for poll_rx */
     uint32_t msn;                           /* imm msn for traceability */
     uint32_t size;                          /* data size of this item */
 } umq_trace_item_t;
