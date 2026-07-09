@@ -1390,7 +1390,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
     bool single_dev = is_single_dev_mode(bdp_ctx);
     uint32_t enabled_count = bdp_jfc->enabled_count;
 
-    int hot_idx = bdp_jfc->lasted_polled_jfc_idx;
+    int hot_idx = atomic_load(&bdp_jfc->lasted_polled_jfc_idx);
     bool need_full_scan = false;
     bool hot_polled = false;
     /* Hot path is active-backup only */
@@ -1406,7 +1406,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         }
         if (pcr_cnt > 0) {
             hot_polled = true;
-            bdp_jfc->polled_mask |= (1U << (uint32_t)hot_idx);
+            atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)hot_idx));
             for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
                 urma_cr_t *pcr = &pcr_buf[cr_id];
                 if (!need_full_scan && (is_failover_cr(pcr) || is_fake_cr(pcr))) {
@@ -1426,16 +1426,16 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
             }
             if (!need_full_scan &&
                 cr_cnt_remaining < cr_cnt &&
-                bdp_jfc->fast_return_count < BONDP_FAST_RETURN_THRESHOLD) {
-                bdp_jfc->fast_return_count++;
-                bdp_jfc->lasted_polled_jfc_idx = hot_idx;
+                atomic_load(&bdp_jfc->fast_return_count) < BONDP_FAST_RETURN_THRESHOLD) {
+                atomic_fetch_add(&bdp_jfc->fast_return_count, 1);
+                atomic_store(&bdp_jfc->lasted_polled_jfc_idx, hot_idx);
                 PERF_PROFILING_END(BOND_POLL_JFC);
                 return cr_cnt - cr_cnt_remaining;
             }
         }
     }
     /* Full scan: hot_idx returned 0 or balance mode needs all paths. */
-    bdp_jfc->fast_return_count = 0;
+    atomic_store(&bdp_jfc->fast_return_count, 0);
     uint32_t start_n = 0;
     for (uint32_t n = 0; n < enabled_count; n++) {
         if ((int)bdp_jfc->enabled_indices[n] == hot_idx) {
@@ -1460,7 +1460,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         if (pcr_cnt == 0) {
             continue;
         }
-        bdp_jfc->polled_mask |= (1U << (uint32_t)idx);
+        atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)idx));
         for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
             urma_cr_t *pcr = &pcr_buf[cr_id];
             cr_convert_ret_t conv_ret;
@@ -1478,7 +1478,7 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
                 cr_cnt_remaining--;
             }
         }
-        bdp_jfc->lasted_polled_jfc_idx = idx;
+        atomic_store(&bdp_jfc->lasted_polled_jfc_idx, idx);
     }
     PERF_PROFILING_END(BOND_POLL_JFC);
     return cr_cnt - cr_cnt_remaining;
