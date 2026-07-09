@@ -478,15 +478,6 @@ fallback:
 	return ums_connect_decline_fallback(ums, rc);
 }
 
-static inline bool ums_if_defer_connect(struct ums_sock *ums)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	return inet_test_bit(DEFER_CONNECT, ums->clcsock->sk);
-#else
-	return (inet_sk(ums->clcsock->sk)->defer_connect != 0);
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
-}
-
 void ums_connect_work(struct work_struct *work)
 {
 	struct ums_sock *ums = container_of(work, struct ums_sock, connect_work);
@@ -495,9 +486,6 @@ void ums_connect_work(struct work_struct *work)
 
 	if (timeo == 0)
 		timeo = MAX_SCHEDULE_TIMEOUT;
-
-	if (ums->ums_fastopen && ums_if_defer_connect(ums))
-		goto defer_connect;
 
 	lock_sock(ums->clcsock->sk);
 	if (ums->clcsock->sk->sk_err != 0) {
@@ -509,7 +497,7 @@ void ums_connect_work(struct work_struct *work)
 			rc = 0;
 	}
 	release_sock(ums->clcsock->sk);
-defer_connect:
+
 	lock_sock(&ums->sk);
 	if ((rc != 0) || (ums->sk.sk_err != 0)) {
 		ums->sk.sk_state = UMS_CLOSED;
@@ -602,10 +590,6 @@ static int ums_connect_process_clcsock(struct ums_sock *ums)
 
 	if (ums->connect_nonblock != 0)
 		return -EALREADY;
-
-	/* the param 0 represents the server */
-	if (ums->ums_fastopen && (ums_clcsock_enable_fastopen(ums, 0) != 0))
-		ums->ums_fastopen = 0; /* rollback when setsockopt failed */
 
 	return 0;
 }
