@@ -854,6 +854,7 @@ static int bondp_create_vjfr(bondp_context_t *bdp_ctx, urma_jfr_cfg_t *cfg, bond
         jfr_info.enabled_indices[i] = (uint8_t)bdp_jfr->enabled_indices[i];
     }
     jfr_info.enabled_count = bdp_jfr->enabled_count;
+    jfr_info.is_msn_enabled = bdp_ctx->msn_enable;
 
     urma_cmd_udrv_priv_t udata = {
         .in_addr = (uint64_t)&jfr_info,
@@ -2517,7 +2518,7 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
                      EID_ARGS(rjfr->jfr_id.eid), rjfr->jfr_id.id);
         goto FREE_TJFR;
     }
-
+    bdp_tjetty->is_msn_enabled = udata_out.is_msn_enabled;
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &udata_out) != 0) {
         URMA_LOG_ERR("Failed to init target active indices\n");
         goto UNIMPORT_VJFR;
