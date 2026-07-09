@@ -23,6 +23,7 @@ const.CASE_PATH = ""
 const.CASE_DIR = ""
 const.CASE_NAME = ""
 const.CORE_PATH = "/Images/core/"
+const.CASE_LOG_PATH = "/Images/case_log"
 const.IP_VERSION = ['ip', 'ipv6']
 const.URMA_MODE = ['RM', 'RC', 'UM']
 const.TP_KIND = ['TP', 'CTP']
