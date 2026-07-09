@@ -351,7 +351,7 @@ typedef struct urma_bond_seg_info_out {
 
 typedef struct urma_bond_id_info_out {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    bool is_msn_enabled; // deprecated
+    bool is_msn_enabled;
     uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;
