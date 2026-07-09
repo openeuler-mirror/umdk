@@ -228,6 +228,14 @@ static inline void update_duration_state(perftest_context_t *ctx, perftest_confi
     (void)alarm(g_duration_ctx->duration / PERFTEST_DEF_WARMUP_TIME);
 }
 
+static inline uint64_t get_remote_seg_va(const perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t i)
+{
+    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+        return ctx->remote_seg_duplex[i]->ubva.va;
+    }
+    return ctx->remote_seg[i].ubva.va;
+}
+
 static int poll_jfc_until_expected_cqe(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id, urma_cr_t *cr)
 {
     if (cfg->use_jfce == true) {
@@ -841,8 +849,8 @@ static void init_read_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perf
                        ? (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size
                        : (uint64_t)ctx->local_buf[i] + ctx->buf_size; // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false)
-                       ? (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size
-                       : (uint64_t)ctx->remote_seg[i].ubva.va;
+                       ? get_remote_seg_va(ctx, cfg, 0) + i * ctx->buf_size
+                       : get_remote_seg_va(ctx, cfg, i);
 
     uint32_t local_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
     uint32_t remote_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
@@ -899,8 +907,8 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
                        ? (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size
                        : (uint64_t)ctx->local_buf[i] + ctx->buf_size; // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false)
-                       ? (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size
-                       : (uint64_t)ctx->remote_seg[i].ubva.va;
+                       ? get_remote_seg_va(ctx, cfg, 0) + i * ctx->buf_size
+                       : get_remote_seg_va(ctx, cfg, i);
 
     uint32_t sge_block_idx = (i * cfg->jfs_post_list + j) * (PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num +
                                                              (cfg->enable_notify ? 1 : 0));
@@ -1020,8 +1028,8 @@ static void init_atomic_jfs_wr(urma_jfs_wr_t *wr, perftest_context_t *ctx, perft
                        ? (uint8_t *)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size + remainder * align_size
                        : (uint8_t *)ctx->local_buf[i] + ctx->buf_size + remainder * align_size;
     uint8_t *rva = (cfg->seg_pre_jetty == false)
-                       ? (uint8_t *)ctx->remote_seg[i].ubva.va + i * ctx->buf_size + remainder * align_size
-                       : (uint8_t *)ctx->remote_seg[i].ubva.va + remainder * align_size;
+                       ? (uint8_t *)get_remote_seg_va(ctx, cfg, i) + i * ctx->buf_size + remainder * align_size
+                       : (uint8_t *)get_remote_seg_va(ctx, cfg, i) + remainder * align_size;
 
     urma_sge_t *local_sge = &run_ctx->jfs_sge[local_sge_idx];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[remote_sge_idx];
@@ -1933,7 +1941,7 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         urma_sge_t *remote_sge =
                             &run_ctx->jfs_sge[(index * cfg->jfs_post_list) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num];
                         increase_loc_addr(remote_sge, cfg->size, run_ctx->scnt[index],
-                                          (uint64_t)ctx->remote_seg[index].ubva.va,
+                                          get_remote_seg_va(ctx, cfg, index),
                                           cfg->cache_line_size, ctx->page_size);
                     }
                 }
