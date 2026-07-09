@@ -339,7 +339,9 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
         return NULL;
     }
     bdp_jfc->dev_num = bdp_ctx->dev_num;
-    bdp_jfc->lasted_polled_jfc_idx = 0;
+    atomic_init(&bdp_jfc->lasted_polled_jfc_idx, 0);
+    atomic_init(&bdp_jfc->polled_mask, 0);
+    atomic_init(&bdp_jfc->fast_return_count, 0);
     atomic_init(&bdp_jfc->use_cnt.atomic_cnt, 0);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
@@ -2598,8 +2600,7 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
         return URMA_EINVAL;
     }
 
-    uint32_t mask = bdp_jfc->polled_mask;
-    bdp_jfc->polled_mask = 0;
+    uint32_t mask = atomic_exchange(&bdp_jfc->polled_mask, 0);
 
     /* Balance mode distributes sends across devices, must rearm all p_jfcs. */
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
@@ -2643,7 +2644,7 @@ static inline void bondp_record_jfc_event_source(urma_jfc_t *v_jfc, int dev_idx)
     }
 
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(v_jfc, bondp_jfc_t, v_jfc);
-    bdp_jfc->polled_mask |= (1U << (uint32_t)dev_idx);
+    atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)dev_idx));
 }
 
 static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int fd, int *dev_idx)
