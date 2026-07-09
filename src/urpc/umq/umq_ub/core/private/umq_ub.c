@@ -589,9 +589,9 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
         (max_msg_size > info->queue_info->rx_buf_size) ? info->queue_info->rx_buf_size : max_msg_size;
 
     queue->state = QUEUE_STATE_READY;
-    UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, remote pid: %u, "
-                  "remote namespace: %s, bind jetty success\n",
-                  queue->umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
+    UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u, "
+                  "remote pid: %u, remote namespace: %s, bind jetty success\n",
+                  queue->umq_id, queue->remote_umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
                   ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, info->dev_info->bind_namespace);
     return UMQ_SUCCESS;
 

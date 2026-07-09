@@ -282,7 +282,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     umq_buf_t *real_buf = NULL;
     while (buffer) {
         umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
-        umq_trace_item_record(buf_pro->imm.user_data, buffer->total_data_size);
+        umq_trace_item_record(buf_pro->imm.user_data, buffer->total_data_size, 0);
         umq_opcode_t opcode = buf_pro->opcode;
         uint32_t rest_size = buffer->total_data_size;
         if (rest_size > max_send_size && (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM)) {
@@ -1337,7 +1337,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
     uint32_t success_cnt = 0;
     for (int i = 0; i < rx_cr_cnt; i++) {
         umq_ub_imm_t imm = {.value = cr[i].imm_data};
-        umq_trace_item_record(imm.io_imm.user_data, cr[i].completion_len);
+        umq_trace_item_record(imm.io_imm.user_data, cr[i].completion_len, imm.io_imm.umq_id);
         buf[qbuf_cnt] = umq_get_buf_by_user_ctx(queue, cr[i].user_ctx, UB_QUEUE_JETTY_IO);
         if (imm.io_imm.umq_id < UMQ_ID_ALLOC_SIZE) {
             umq_ub_rx_consumed_inc(
