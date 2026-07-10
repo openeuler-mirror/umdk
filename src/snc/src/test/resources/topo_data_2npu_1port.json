@@ -1,0 +1,164 @@
+{
+    "_copyright": "SPDX-License-Identifier: MIT | Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved. | Description: snc superNode data test fixture - 2 NPU + 1 L1SW, each port has unique CNA/EID/UPI | Create: 2026-05-29 | History: 2026-05-29 create snc superNode data test fixture; 2026-06-17 add cna/eid/upi fields to NPU ports",
+    "name": "A5-superPod-1",
+    "version": "1.0",
+    "devices": {
+        "rack1#os0#npu1": {
+            "deviceName": "rack1#os0#npu1",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.1",
+            "rack": "rack1",
+            "boardId": 1,
+            "moduleId": 0,
+            "boardIndex": 1,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/0/1",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/1",
+                        "cna": "170.170.170.18",
+                        "eid": "AAAAAA12000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.66",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.1",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#os0#npu2": {
+            "deviceName": "rack1#os0#npu2",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.2",
+            "rack": "rack1",
+            "boardId": 2,
+            "moduleId": 0,
+            "boardIndex": 2,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/1/1",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/2",
+                        "cna": "221.221.221.66",
+                        "eid": "DDDDDD42000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.18",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/1/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.2",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#l1sw0": {
+            "deviceName": "rack1#l1sw0",
+            "deviceType": "SW",
+            "level": "L1",
+            "rack": "rack1",
+            "index": 0,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 0,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 1,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/1/1"
+                }
+            ]}],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.18",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.66",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.1.0",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        }
+    }
+}
