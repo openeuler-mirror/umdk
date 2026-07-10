@@ -54,16 +54,16 @@ void free_jfr_wr(urma_jfr_wr_t *wr)
     }
 }
 
-static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *prealloc_sge)
+static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *prealloc_sge, uint32_t max_sge)
 {
     dst->num_sge = src->num_sge;
     dst->sge = NULL;
 
     if (dst->num_sge > 0) {
         if (prealloc_sge != NULL) {
-            if (dst->num_sge > BONDP_MAX_SGE_NUM) {
+            if (dst->num_sge > max_sge) {
                 URMA_LOG_ERR("The number of SGE(%u) exceeds the limit(%u)",
-                    dst->num_sge, BONDP_MAX_SGE_NUM);
+                    dst->num_sge, max_sge);
                 return -1;
             }
             dst->sge = prealloc_sge;
@@ -109,18 +109,19 @@ static int copy_atomic_sge(const urma_sge_t *src, urma_sge_t **dst, urma_sge_t *
  *   URMA_OPC_CAS, URMA_OPC_FADD
  */
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
-                          urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge)
+                          urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge,
+                          uint32_t max_sge)
 {
     *dst = *src;
     dst->next = NULL;
 
     if (is_rw_wr(src)) {
-        if (copy_sg_list(&src->rw.src, &dst->rw.src, prealloc_src_sge) != 0 ||
-            copy_sg_list(&src->rw.dst, &dst->rw.dst, prealloc_dst_sge) != 0) {
+        if (copy_sg_list(&src->rw.src, &dst->rw.src, prealloc_src_sge, max_sge) != 0 ||
+            copy_sg_list(&src->rw.dst, &dst->rw.dst, prealloc_dst_sge, max_sge) != 0) {
             return URMA_ENOMEM;
         }
     } else if (is_send_wr(src)) {
-        if (copy_sg_list(&src->send.src, &dst->send.src, prealloc_src_sge) != 0) {
+        if (copy_sg_list(&src->send.src, &dst->send.src, prealloc_src_sge, max_sge) != 0) {
             return URMA_ENOMEM;
         }
     } else if (is_atomic_wr(src)) {
@@ -138,12 +139,12 @@ urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
  * Performs a deep copy of a JFR work request.
  */
 urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
-                          urma_sge_t *prealloc_src_sge)
+                          urma_sge_t *prealloc_src_sge, uint32_t max_sge)
 {
     *dst = *src;
     dst->next = NULL;
 
-    if (copy_sg_list(&src->src, &dst->src, prealloc_src_sge) != 0) {
+    if (copy_sg_list(&src->src, &dst->src, prealloc_src_sge, max_sge) != 0) {
         return URMA_ENOMEM;
     }
     return URMA_SUCCESS;
