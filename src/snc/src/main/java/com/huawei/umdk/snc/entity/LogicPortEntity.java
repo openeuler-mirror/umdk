@@ -1,5 +1,15 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: SNC (Supernode Network Controller) service
+ * Author: OpenCode
+ * Create: 2026-07-07
+ * Note:
+ * History: 2026-07-07  Create File
+ */
 package com.huawei.umdk.snc.entity;
 
+import java.util.Collections;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -19,4 +29,8 @@ public class LogicPortEntity {
     private String cna;
     private String eid;
     private List<String> ports;
+
+    public List<String> getPorts() {
+        return ports == null ? null : Collections.unmodifiableList(ports);
+    }
 }

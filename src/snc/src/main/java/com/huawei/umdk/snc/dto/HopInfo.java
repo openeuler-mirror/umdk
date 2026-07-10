@@ -7,7 +7,7 @@
  * Note:
  * History: 2026-07-07  Create File
  */
-package com.huawei.umdk.snc.entity;
+package com.huawei.umdk.snc.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -22,8 +22,10 @@ import lombok.ToString;
 @AllArgsConstructor
 @EqualsAndHashCode
 @ToString
-public class RoutingTableKey {
-    private String superNodeName;
+public class HopInfo {
     private String deviceName;
-    private Integer chipIndex;
+    private String inPort;
+    private String outPort;
+    private boolean multiPath;
+    private String deviceType;
 }
