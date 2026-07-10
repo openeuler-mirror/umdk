@@ -103,6 +103,8 @@ typedef struct perftest_context {
     // remote info
     urma_seg_t *remote_seg;
     urma_jetty_id_t *remote_jetty_id;
+    urma_rjetty_t **remote_rjetty;
+    urma_seg_t **remote_seg_duplex;
     perftest_tp_info_t *local_tp_info;
     perftest_tp_info_t *remote_tp_info;
 
