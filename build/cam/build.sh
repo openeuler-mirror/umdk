@@ -146,9 +146,9 @@ if [[ "$MODULE_NAME" == "all" || "$MODULE_NAME" == "comm_operator" ]]; then
 fi
 
 # Build nda unless -c restricts to comm_operator (ascend910_93).
-# With -c ascend950 or no -c, 'all'/'nda' builds nda.
+# Only with -c ascend950 , 'all'/'nda' builds nda.
 if [[ "$MODULE_NAME" == "all" || "$MODULE_NAME" == "nda" ]]; then
-    if [[ -z "${SOC_TYPE}" || "${SOC_TYPE}" == "ascend950" ]]; then
+    if [[ "${SOC_TYPE}" == "ascend950" ]]; then
         IS_MODULE_EXIST=1
         echo "${SCRIPTS_PATH}/framework/nda/build.sh $@"
         ${SCRIPTS_PATH}/framework/nda/build.sh $@
