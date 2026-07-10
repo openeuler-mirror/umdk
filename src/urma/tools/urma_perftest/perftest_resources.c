@@ -1589,8 +1589,10 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
         }
     }
 
-    if (sync_time(cfg, 0, "tp aware connect finished") != 0) {
-        goto disconnect_jfr;
+    for (uint32_t i = 0; i < cfg->pair_num; i++) {
+        if (sync_time(cfg, i, "tp aware connect finished") != 0) {
+            goto disconnect_jfr;
+        }
     }
     return 0;
 
@@ -1766,8 +1768,10 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         }
     }
 
-    if (sync_time(cfg, 0, "tp aware connect finished") != 0) {
-        goto disconnect_jetty;
+    for (uint32_t i = 0; i < cfg->pair_num; i++) {
+        if (sync_time(cfg, i, "tp aware connect finished") != 0) {
+            goto disconnect_jetty;
+        }
     }
 
     return 0;
