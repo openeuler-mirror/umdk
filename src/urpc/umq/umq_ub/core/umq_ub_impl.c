@@ -396,8 +396,10 @@ static uint32_t target_slot_id_calcuate(uint64_t expire_time, uint64_t current_t
 static void umq_ub_idle_checker_uninit(ub_queue_idle_check_t *checker)
 {
     checker->umq = NULL;
-    close(checker->event_fd);
-    checker->event_fd = UMQ_INVALID_FD;
+    if (checker->event_fd != UMQ_INVALID_FD) {
+        close(checker->event_fd);
+        checker->event_fd = UMQ_INVALID_FD;
+    }
     (void)util_mutex_lock_destroy(checker->lock);
     checker->lock = NULL;
     free(checker);
@@ -1563,6 +1565,8 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     if (queue->checker != NULL) {
         (void)util_mutex_lock(queue->checker->lock);
         queue->checker->umq = NULL;
+        close(queue->checker->event_fd);
+        queue->checker->event_fd = UMQ_INVALID_FD;
         (void)util_mutex_unlock(queue->checker->lock);
     }
     if (queue->used_port != NULL) {
