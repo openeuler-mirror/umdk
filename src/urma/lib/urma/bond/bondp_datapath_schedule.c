@@ -242,12 +242,28 @@ static void init_chip_priority(bondp_chip_id_info_t chip_priority[], const bondp
     chip_priority[CHIP_ROUTE_NUM - 1].dst_chip_id = dst_id;
 }
 
+static bool is_in_failover_route(const bondp_chip_id_info_t *info, uint32_t route_id, bondp_path_t *old_path)
+{
+    uint32_t src_chip_id = info->src_chip_id - 1;
+    uint32_t dst_chip_id = info->dst_chip_id - 1;
+    const uint32_t *failover_route =
+    g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
+    for (int i = 0; i < URMA_FAILOVER_LINK_NUM; i++) {
+        uint32_t path_idx = failover_route[i];
+        if (g_bondp_global_ctx->path[path_idx].local_idx == old_path->local_idx &&
+            g_bondp_global_ctx->path[path_idx].target_idx == old_path->target_idx) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static uint32_t select_affinity_path(
     const bondp_comp_t *bdp_comp,
     const bondp_target_jetty_t *bdp_tjetty,
     const bondp_chip_id_info_t *info,
     bondp_path_t least_load_path[],
-    int *send_idx)
+    bondp_path_t *old_path)
 {
     bondp_chip_id_info_t chip_priority[CHIP_ROUTE_NUM];
     uint32_t least_load_cnt = 0;
@@ -260,7 +276,8 @@ static uint32_t select_affinity_path(
         }
     } else if (bdp_comp->bondp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
         for (int i = 0; i < ACTIVE_PORT_PER_CHIP; i++) {
-            if (*send_idx >= 0 && *send_idx != URMA_ACTIVE_PORT_MIN + i) {
+            if (old_path->local_idx > 0 && old_path->target_idx > 0 &&
+                !is_in_failover_route(info, i, old_path)) {
                 continue;
             }
             if (select_path_by_chip(bdp_comp, bdp_tjetty, info,
@@ -287,8 +304,13 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     }
 
     if (info != NULL) {
+        bondp_path_t old_path = {0};
+        if (*send_idx >= 0 && *target_idx >= 0) {
+            old_path.local_idx = *send_idx;
+            old_path.target_idx = *target_idx;
+        }
         least_load_cnt = select_affinity_path(bdp_comp, bdp_tjetty, info,
-                                              least_load_path, send_idx);
+                                              least_load_path, &old_path);
         if (least_load_cnt == 0 && !g_bondp_global_ctx->enable_failover) {
             return URMA_FAIL;
         }
