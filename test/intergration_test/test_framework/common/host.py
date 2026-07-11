@@ -340,19 +340,19 @@ class UBUSHost(BaseObject):
         return res
 
     def try_put(self, src_path, dst_host, dst_path):
-        _cmd = f"scp -P {dst_host.ssh_port} -r {src_path} {dst_host.ssh_ip}:{dst_path}"
+        _cmd = f"scp -o StrictHostKeyChecking=no -P {dst_host.ssh_port} -r {src_path} {dst_host.ssh_ip}:{dst_path}"
         self.exec_cmd(_cmd)
 
     def try_get(self, src_path, src_host, dst_path):
-        _cmd = f"scp -P {src_host.ssh_port} -r  {src_host.ssh_ip}:{src_path}/tsan* {dst_path}"
+        _cmd = f"scp -o StrictHostKeyChecking=no -P {src_host.ssh_port} -r  {src_host.ssh_ip}:{src_path}/tsan* {dst_path}"
         self.exec_cmd(_cmd)
 
     def get_file(self, src_file, src_host, dst_path):
-        _cmd = f"scp -P {src_host.ssh_port} {src_host.ssh_ip}:{src_file} {dst_path}"
+        _cmd = f"scp -o StrictHostKeyChecking=no -P {src_host.ssh_port} {src_host.ssh_ip}:{src_file} {dst_path}"
         self.exec_cmd(_cmd)
 
     def put_file(self, src_file, dst_host, dst_path):
-        _cmd = f"scp -P {dst_host.ssh_port} {src_file} {dst_host.ssh_ip}:{dst_path}"
+        _cmd = f"scp -o StrictHostKeyChecking=no -P {dst_host.ssh_port} {src_file} {dst_host.ssh_ip}:{dst_path}"
         self.exec_cmd(_cmd)
 
     def capture_log(self, log_path, output=None, silence=2):
