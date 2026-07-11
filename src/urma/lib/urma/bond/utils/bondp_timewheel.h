@@ -18,7 +18,12 @@ extern "C" {
 
 typedef uint64_t tw_task_id_t;
 
-typedef void (*tw_task_fn_t)(void *arg);
+typedef enum tw_task_reason {
+    TW_TASK_EXECUTED = 0,
+    TW_TASK_CANCELED,
+} tw_task_reason_t;
+
+typedef void (*tw_task_fn_t)(tw_task_reason_t reason, void *arg);
 
 typedef struct tw tw_t;
 
@@ -54,6 +59,9 @@ void tw_destroy(tw_t *tw);
  * @param[in] arg user private data passed to callback.
  * @param[out] task_id returned task id used for later cancellation.
  * @return 0 on success, negative errno on error.
+ * @note Once successfully scheduled, fn is called exactly once, with either
+ * TW_TASK_EXECUTED when the delay expires or TW_TASK_CANCELED when the task is
+ * canceled or the timing wheel is destroyed.
  */
 int tw_schedule(tw_t *tw, uint64_t delay_ms, tw_task_fn_t fn, void *arg, tw_task_id_t *task_id);
 
@@ -62,8 +70,21 @@ int tw_schedule(tw_t *tw, uint64_t delay_ms, tw_task_fn_t fn, void *arg, tw_task
  * @param[in] tw timing wheel instance.
  * @param[in] task_id task id returned by tw_schedule().
  * @return 0 on success, negative errno on error.
+ * @note On success, the task callback is invoked synchronously with
+ * TW_TASK_CANCELED before this function returns.
  */
 int tw_cancel(tw_t *tw, tw_task_id_t task_id);
+
+/**
+ * @brief Cancel all scheduled tasks.
+ * @param[in] tw timing wheel instance.
+ * @note Every pending task callback is invoked with TW_TASK_CANCELED before
+ * this function returns.
+ * @note The caller must ensure no thread is concurrently calling
+ * tw_schedule(), tw_cancel(), tw_advance(), tw_cancel_all(), or tw_destroy()
+ * on the same timing wheel.
+ */
+void tw_cancel_all(tw_t *tw);
 
 /**
  * @brief Get the tick interval of the timing wheel.
