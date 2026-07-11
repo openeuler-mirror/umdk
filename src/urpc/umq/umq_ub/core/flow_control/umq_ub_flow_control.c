@@ -1139,6 +1139,10 @@ void umq_ub_credit_pending_queue_process(ub_credit_pool_t *pool)
         ub_queue_t *req_queue = head->queue;
         ub_flow_control_t *req_fc = &req_queue->flow_control;
         uint16_t allocated = pool->ops.available_credit_dec(pool, head->requested);
+        if (allocated == 0) {
+            urpc_list_push_back(&pq->pending_list, list_node);
+            break;
+        }
         (void)req_fc->ops.local_rx_allocated_inc(req_fc, allocated);
         int ret = umq_ub_shared_credit_resp_send(req_queue, allocated, head->seq);
         if (ret != UMQ_SUCCESS) {
@@ -1160,7 +1164,9 @@ int umq_ub_credit_pending_req_enqueue(ub_credit_pending_queue_t *pq, ub_queue_t 
     if (pq->lock == NULL) {
         return -UMQ_ERR_EINVAL;
     }
+    (void)util_mutex_lock(pq->lock);
     if (pq->pending_count >= pq->max_pending) {
+        (void)util_mutex_unlock(pq->lock);
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "pending credit queue is full, pending_count %u, max_pending %u\n",
             pq->pending_count, pq->max_pending);
         return -UMQ_ERR_ENOBUFS;
@@ -1172,8 +1178,6 @@ int umq_ub_credit_pending_req_enqueue(ub_credit_pending_queue_t *pq, ub_queue_t 
     node->seq = seq;
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-
-    (void)util_mutex_lock(pq->lock);
     urpc_list_push_back(&pq->pending_list, &node->req_node);
     pq->pending_count++;
     (void)util_mutex_unlock(pq->lock);
