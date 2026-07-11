@@ -1085,6 +1085,7 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
                 continue;
             }
             if (is_umq_ub_req_enqueue(real_queue, &imm)) {
+                umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
                 continue;
             }
             qbuf_cnt += (int32_t)umq_ub_process_fc_msg(queue, &imm, &buf[qbuf_cnt]);
