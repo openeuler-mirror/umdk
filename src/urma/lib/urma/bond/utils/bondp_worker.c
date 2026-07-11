@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/queue.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -33,6 +34,18 @@ typedef struct bondp_worker_event_handler {
     struct ub_hmap_node hmap_node;
 } bondp_worker_event_handler_t;
 
+typedef struct bondp_worker_cancel_cmd {
+    const bondp_worker_task_id_t *task_ids;
+    size_t task_num;
+    bool ignore_task_not_found; /* Treat an already absent task as successfully canceled. */
+    int ret;
+    bool done;
+    pthread_cond_t cond;
+    TAILQ_ENTRY(bondp_worker_cancel_cmd) entry;
+} bondp_worker_cancel_cmd_t;
+
+TAILQ_HEAD(bondp_worker_cancel_cmd_head, bondp_worker_cancel_cmd);
+
 typedef struct bondp_worker {
     pthread_t thread;
     pthread_mutex_t lock;
@@ -41,6 +54,7 @@ typedef struct bondp_worker {
     bool running;
     uint64_t last_tick_ms;
     struct ub_hmap handler_map;
+    struct bondp_worker_cancel_cmd_head cancel_cmds;
     tw_t *tw;
 } bondp_worker_t;
 
@@ -259,6 +273,35 @@ static void bondp_worker_handle_epoll_event(bondp_worker_t *worker, int fd, uint
     (void)pthread_mutex_unlock(&worker->lock);
 }
 
+static void bondp_worker_process_cancel_cmds(bondp_worker_t *worker)
+{
+    bondp_worker_cancel_cmd_t *cmd;
+
+    while (true) {
+        (void)pthread_mutex_lock(&worker->lock);
+        cmd = TAILQ_FIRST(&worker->cancel_cmds);
+        if (cmd == NULL) {
+            (void)pthread_mutex_unlock(&worker->lock);
+            return;
+        }
+        TAILQ_REMOVE(&worker->cancel_cmds, cmd, entry);
+        (void)pthread_mutex_unlock(&worker->lock);
+
+        cmd->ret = 0;
+        for (size_t i = 0; i < cmd->task_num; i++) {
+            int ret = tw_cancel(worker->tw, cmd->task_ids[i]);
+            if (ret != 0 && (!cmd->ignore_task_not_found || ret != -ENOENT) && cmd->ret == 0) {
+                cmd->ret = ret;
+            }
+        }
+
+        (void)pthread_mutex_lock(&worker->lock);
+        cmd->done = true;
+        (void)pthread_cond_signal(&cmd->cond);
+        (void)pthread_mutex_unlock(&worker->lock);
+    }
+}
+
 static void *bondp_worker_thread_main(void *arg)
 {
     bondp_worker_t *worker = arg;
@@ -277,6 +320,8 @@ static void *bondp_worker_thread_main(void *arg)
             (void)pthread_mutex_lock(&worker->lock);
             worker->running = false;
             (void)pthread_mutex_unlock(&worker->lock);
+            bondp_worker_process_cancel_cmds(worker);
+            tw_cancel_all(worker->tw);
             break;
         }
 
@@ -284,9 +329,12 @@ static void *bondp_worker_thread_main(void *arg)
             bondp_worker_handle_epoll_event(worker, events[i].data.fd, events[i].events);
         }
 
+        bondp_worker_process_cancel_cmds(worker);
+
         (void)pthread_mutex_lock(&worker->lock);
         if (!worker->running) {
             (void)pthread_mutex_unlock(&worker->lock);
+            tw_cancel_all(worker->tw);
             break;
         }
         (void)pthread_mutex_unlock(&worker->lock);
@@ -362,6 +410,7 @@ static bondp_worker_t *bondp_worker_create_instance(int *err_code)
     }
 
     worker->last_tick_ms = bondp_worker_now_ms();
+    TAILQ_INIT(&worker->cancel_cmds);
     worker->running = true;
     ret = pthread_create(&worker->thread, NULL, bondp_worker_thread_main, worker);
     if (ret != 0) {
@@ -475,28 +524,75 @@ int bondp_worker_schedule(uint64_t delay_ms, bondp_worker_task_fn_t fn, void *ar
     return ret;
 }
 
-int bondp_worker_cancel(bondp_worker_task_id_t task_id)
+static int bondp_worker_cancel_tasks(const bondp_worker_task_id_t *task_ids, size_t task_num,
+                                     bool ignore_task_not_found)
 {
     bondp_worker_t *worker = bondp_worker;
-    int ret = 0;
+    bondp_worker_cancel_cmd_t cmd = {
+        .task_ids = task_ids,
+        .task_num = task_num,
+        .ignore_task_not_found = ignore_task_not_found,
+    };
+    int ret;
 
+    if (task_ids == NULL || task_num == 0) {
+        return -EINVAL;
+    }
+    for (size_t i = 0; i < task_num; i++) {
+        if (task_ids[i] == 0) {
+            return -EINVAL;
+        }
+    }
     if (worker == NULL) {
         return -ENODEV;
     }
 
-    (void)pthread_mutex_lock(&worker->lock);
-    ret = worker->running ? 0 : -EIO;
-    (void)pthread_mutex_unlock(&worker->lock);
-    if (ret != 0) {
+    if (pthread_equal(pthread_self(), worker->thread) != 0) {
+        ret = 0;
+        for (size_t i = 0; i < task_num; i++) {
+            int cancel_ret = tw_cancel(worker->tw, task_ids[i]);
+            if (cancel_ret != 0 && (!ignore_task_not_found || cancel_ret != -ENOENT) && ret == 0) {
+                ret = cancel_ret;
+            }
+        }
         return ret;
     }
 
-    ret = tw_cancel(worker->tw, task_id);
-    if (ret == 0) {
-        (void)bondp_worker_wakeup(worker);
+    ret = pthread_cond_init(&cmd.cond, NULL);
+    if (ret != 0) {
+        return -ret;
     }
 
+    (void)pthread_mutex_lock(&worker->lock);
+    ret = worker->running ? 0 : -EIO;
+    if (ret != 0) {
+        goto out_unlock;
+    }
+    TAILQ_INSERT_TAIL(&worker->cancel_cmds, &cmd, entry);
+    (void)bondp_worker_wakeup(worker);
+    while (!cmd.done) {
+        (void)pthread_cond_wait(&cmd.cond, &worker->lock);
+    }
+    ret = cmd.ret;
+
+out_unlock:
+    (void)pthread_mutex_unlock(&worker->lock);
+    (void)pthread_cond_destroy(&cmd.cond);
     return ret;
+}
+
+int bondp_worker_cancel_batch(const bondp_worker_task_id_t *task_ids, size_t task_num)
+{
+    return bondp_worker_cancel_tasks(task_ids, task_num, true);
+}
+
+int bondp_worker_cancel(bondp_worker_task_id_t task_id)
+{
+    if (task_id == 0) {
+        return -EINVAL;
+    }
+
+    return bondp_worker_cancel_tasks(&task_id, 1, false);
 }
 
 int bondp_worker_add_fd(int fd, bondp_worker_event_fn_t handler, void *arg)
