@@ -98,8 +98,9 @@ typedef enum umq_io_direction {
 } umq_io_direction_t;
 
 typedef enum umq_fd_type {
-    UMQ_FD_IO = 0,      // get the fd related to I/O
-    UMQ_FD_EVENT,       // get the fd related to inner event, example return credit event
+    UMQ_FD_IO = 0,          // get the fd related to I/O
+    UMQ_FD_EVENT,           // get the fd related to inner event, example return credit event
+    UMQ_FD_RETRY,           // get the fd related to inner event, reprocess flow control messages
 } umq_fd_type_t;
 
 typedef enum umq_queue_mode {

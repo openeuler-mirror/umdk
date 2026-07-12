@@ -1416,7 +1416,7 @@ DELETE_JFCE:
         (void)umq_symbol_urma()->urma_delete_jfce(queue->jfs_jfce);
     }
 UNINIT_FLOW_CONTROL:
-    umq_ub_flow_control_uninit(&queue->flow_control);
+    umq_ub_flow_control_uninit(queue);
 DESTROY_JFR_CTX:
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
 FREE_QUEUE_ID:
@@ -1525,7 +1525,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
 
     umq_buf_free(queue->addr_list);
-    umq_ub_flow_control_uninit(&queue->flow_control);
+    umq_ub_flow_control_uninit(queue);
 
     if (!is_umq_ub_logic_queue(queue->create_flag)) {
         start_timestamp = umq_perf_get_start_timestamp();
@@ -1670,6 +1670,16 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
         return queue->checker->event_fd;
     }
 
+    if (option->fd_type == UMQ_FD_RETRY) {
+        // Only non-share_rq umq exposes this fd; sub/logic umq use the main umq's shared list.
+        if (is_umq_ub_share_rq(queue->create_flag) ||
+            queue->flow_control.fc_msg_retry_list == NULL ||
+            queue->flow_control.fc_msg_retry_list->fc_msg_retry_fd == UMQ_INVALID_FD) {
+            return -UMQ_ERR_EINVAL;
+        }
+        return queue->flow_control.fc_msg_retry_list->fc_msg_retry_fd;
+    }
+
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), logic umq not have io interrupt fd\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
@@ -1765,6 +1775,19 @@ int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp,
         }
 
         fd_list->fd[0] = queue->checker->event_fd;
+        fd_list->fd_num = 1;
+        return UMQ_SUCCESS;
+    }
+
+    if (option->fd_type == UMQ_FD_RETRY) {
+        // Only non-share_rq umq exposes this fd; sub/logic umq use the main umq's shared list.
+        if (is_umq_ub_share_rq(queue->create_flag) ||
+            queue->flow_control.fc_msg_retry_list == NULL ||
+            queue->flow_control.fc_msg_retry_list->fc_msg_retry_fd == UMQ_INVALID_FD) {
+            return -UMQ_ERR_EINVAL;
+        }
+
+        fd_list->fd[0] = queue->flow_control.fc_msg_retry_list->fc_msg_retry_fd;
         fd_list->fd_num = 1;
         return UMQ_SUCCESS;
     }

@@ -155,6 +155,38 @@ typedef struct ub_pending_credit_req {
     uint8_t seq;
 } ub_pending_credit_req_t;
 
+// Retry list for FC messages whose REP/ACK send failed. Three urpc lists: free pool + retry_list
+// (immediate-notify) + no_jetty_list (jetty-pool-callback-notify). Main=32K, standalone=2 nodes.
+#define UMQ_UB_FC_MSG_RETRY_LIST_SIZE_MAIN        32768
+#define UMQ_UB_FC_MSG_RETRY_LIST_SIZE_STANDALONE  2
+
+// Max retry time (us) before dropping the imm and returning a fake FC_ERR buf.
+#define UMQ_UB_FC_MSG_RETRY_TIMEOUT_US       100000
+
+typedef enum {
+    UMQ_UB_RETRY_TYPE_NO_JETTY = 0,   // get_jetty_node failed — wait for jetty-pool callback
+    UMQ_UB_RETRY_TYPE_EAGAIN,         // post_send EAGAIN — wait for jetty-pool callback
+    UMQ_UB_RETRY_TYPE_OTHER,          // other send failure — wake immediately
+} umq_ub_retry_type_t;
+
+typedef struct umq_ub_fc_msg_retry_entry {
+    urpc_list_t node;                    // linkage in free/retry/no-jetty list
+    umq_ub_imm_t imm;                    // received REQ/RETURN_REQ imm
+    umq_ub_retry_type_t retry_type;
+    uint64_t enqueue_us;                 // first-enqueue timestamp (preserved across retries)
+} umq_ub_fc_msg_retry_entry_t;
+
+typedef struct umq_ub_fc_msg_retry_list {
+    umq_ub_fc_msg_retry_entry_t *nodes; // pre-allocated node pool
+    urpc_list_t free_list;               // idle nodes
+    urpc_list_t retry_list;              // OTHER-retry_type entries (immediate-notify)
+    urpc_list_t no_jetty_list;           // NO_JETTY/EAGAIN entries (jetty-pool-callback-notify)
+    uint32_t node_cnt;                   // total nodes in pool
+    int fc_msg_retry_fd;                // eventfd; created by main/standalone, shared via pointer
+    umq_ub_jetty_avail_cb_node_t *avail_cb_node;  // jetty-pool availability callback
+    bool inited;
+} umq_ub_fc_msg_retry_list_t;
+
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
     volatile uint64_t total_local_rx_posted;
@@ -188,6 +220,7 @@ typedef struct ub_flow_control {
     bool enabled;
     volatile bool is_credit_applying;
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
+    umq_ub_fc_msg_retry_list_t *fc_msg_retry_list;
     uint8_t local_req_seq;
     uint8_t remote_expect_seq;
 } ub_flow_control_t;
@@ -549,6 +582,8 @@ int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_opti
                        ub_queue_t *share_queue, ub_queue_jetty_index_t jetty_idx);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
+void umq_ub_fc_msg_retry_notify(umq_ub_fc_msg_retry_list_t *retry_list);
+int umq_ub_fc_msg_retry_drain(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 int umq_status_convert(urma_status_t urma_status);
 umq_tp_mode_t umq_tp_mode_convert(urma_transport_mode_t tp_mode);
 umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type);

@@ -81,7 +81,7 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcAtomic)
     umq_flow_control_stats_t flow_control_stats = {0};
     ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
     EXPECT_EQ(ret, UMQ_SUCCESS);
-    umq_ub_flow_control_uninit(&queue.flow_control);
+    umq_ub_flow_control_uninit(&queue);
 }
 
 TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
@@ -112,5 +112,5 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
     umq_flow_control_stats_t flow_control_stats = {0};
     ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
     EXPECT_EQ(ret, UMQ_SUCCESS);
-    umq_ub_flow_control_uninit(&queue.flow_control);
+    umq_ub_flow_control_uninit(queue);
 }
