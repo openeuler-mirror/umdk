@@ -23,6 +23,14 @@ extern "C" {
 
 typedef struct jetty_pool_node jetty_pool_node_t;
 
+// Callback fired when jetty pool's available count rises.
+typedef void (*umq_ub_jetty_avail_cb_t)(void *user_data);
+typedef struct umq_ub_jetty_avail_cb_node {
+    urpc_list_t node;
+    umq_ub_jetty_avail_cb_t cb;
+    void *user_data;
+} umq_ub_jetty_avail_cb_node_t;
+
 typedef struct umq_ub_jetty_node_list {
     jetty_pool_node_t **node_list;
     uint32_t list_len;
@@ -53,6 +61,12 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node);
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void);
 int umq_ub_jetty_node_free(jetty_pool_node_t *node);
 int umq_ub_jetty_pool_get_eventfd(void);
+// Register a jetty-availability callback; returns the node (pass to unregister later) or NULL.
+umq_ub_jetty_avail_cb_node_t *umq_ub_jetty_pool_register_avail_cb(umq_ub_jetty_avail_cb_t cb, void *user_data);
+// Unregister and free a callback node. No-op if NULL.
+void umq_ub_jetty_pool_unregister_avail_cb(umq_ub_jetty_avail_cb_node_t *cb_node);
+// Query whether at least one jetty is currently available to borrow (active_count > 0).
+bool umq_ub_jetty_pool_has_avail(void);
 umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
