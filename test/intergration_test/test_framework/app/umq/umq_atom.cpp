@@ -946,7 +946,7 @@ int test_umq_post_rx_buf(umqh_ops_t *umqh_ops, uint32_t depth, uint32_t size, ui
     io_option.flag = UMQ_IO_OPTION_FLAG_DIRECTION;
     umq_cfg_get(umqh_ops->qh, &cfg);
     uint32_t rx_depth = (depth == 0) ? cfg.rx_depth * cfg.rqe_post_factor : depth;
-    uint32_t buf_size = (size == 0) ? cfg.rx_buf_size : size;
+    uint32_t buf_size = (size == 0) ? cfg.rx_buf_size - TEST_DATA_HEADER_SIZE : size;
 
     for (int i = 0; i <rx_depth; i++) {
         umq_buf_t *buf = umq_buf_alloc(buf_size, 1, 0, nullptr);
