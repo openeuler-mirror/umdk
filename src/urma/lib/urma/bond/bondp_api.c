@@ -22,6 +22,7 @@
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_failback.h"
 #include "bondp_hash_table.h"
 #include "bondp_provider_ops.h"
 #include "bondp_segment.h"
@@ -1454,6 +1455,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     if (shared_jfc != NULL) {
         bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
     }
+
     /*
     ! This locking mechanism is implemented to prevent other threads from accessing this bondp_comp through this table.
     ! Currently, the only multi-threaded access path to this bondp_comp is through this table.
@@ -1474,6 +1476,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    bondp_fb_cancel_tasks(bdp_ctx, jetty->jetty_id.id);
     bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
     bondp_uninit_connection_table(bdp_jetty);
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
