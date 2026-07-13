@@ -26,6 +26,8 @@
 #define UMQ_UB_MIN_CREDITS_PER_REQUEST      2
 #define UMQ_UB_FC_MAX_IMM_DATA 1023
 #define UMQ_UB_PENDING_QUEUE_MAX_DEFAULT 512
+#define UMQ_UB_FLOW_CONTROL_POLL_MAX_RETRY 128
+#define UMQ_UB_FLOW_CONTROL_POLL_MAX_TIME  256 // us
 
 static uint8_t g_umq_ub_credit_ratio[] = {1, 3, 5, 7};
 #define UMQ_UB_CREDIT_RATIO_SIZE (sizeof(g_umq_ub_credit_ratio) / sizeof(uint8_t))
@@ -670,6 +672,30 @@ void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count)
     }
 }
 
+static urma_status_t umq_ub_flow_control_try_post_send(ub_queue_t *queue, urma_jetty_t *jetty,
+    urma_jfs_wr_t *urma_wr, urma_jfs_wr_t **bad_wr)
+{
+    int cnt = 0;
+    uint64_t begin = urpc_get_cpu_cycles();
+    uint64_t time_cost = 0;
+    urma_status_t status;
+
+    do {
+        status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, urma_wr, bad_wr);
+        if (status != URMA_EAGAIN) {
+            break;
+        }
+
+        if (umq_ub_poll_fc_tx(queue, NULL, 0, 0) != 0) {
+            return URMA_FAIL;
+        }
+
+        time_cost = (urpc_get_cpu_cycles() - begin) * US_PER_SEC / urpc_get_cpu_hz();
+    } while (cnt++ < UMQ_UB_FLOW_CONTROL_POLL_MAX_RETRY && time_cost < UMQ_UB_FLOW_CONTROL_POLL_MAX_TIME);
+
+    return status;
+}
+
 int umq_ub_shared_credit_req_send(ub_queue_t *queue)
 {
     ub_flow_control_t *fc = &queue->flow_control;
@@ -727,7 +753,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     urma_jfs_wr_t *bad_wr = NULL;
     /* record FC urma_post_jetty_send_wr as sub_time when called from a traced context */
     uint64_t tp_start = umq_trace_timestamp_get();
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_ub_flow_control_try_post_send(queue, jetty, &urma_wr, &bad_wr);
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
@@ -787,7 +813,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t tp_start = umq_trace_timestamp_get();
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_ub_flow_control_try_post_send(queue, jetty, &urma_wr, &bad_wr);
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
@@ -928,7 +954,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t tp_start = umq_trace_timestamp_get();
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_ub_flow_control_try_post_send(queue, jetty, &urma_wr, &bad_wr);
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
@@ -992,7 +1018,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
     uint64_t tp_start = umq_trace_timestamp_get();
-    urma_status_t status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, &urma_wr, &bad_wr);
+    urma_status_t status = umq_ub_flow_control_try_post_send(queue, jetty, &urma_wr, &bad_wr);
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
