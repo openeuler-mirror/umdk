@@ -493,7 +493,7 @@ static void *run_send_lat_simplex(void *arg)
     uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(cfg, ctx->urma_ctx, ctx->jfr[id]);
     if (rqe_multiple == 0) {
         LOG_ERROR("Failed query port for bonding device\n");
-        return NULL;
+        goto free_cr;
     }
 
     uint32_t recv_inflight_baseline =
@@ -1654,7 +1654,7 @@ static void *run_send_lat_duplex(void *arg)
     uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(cfg, ctx->urma_ctx, ctx->jetty[id]);
     if (rqe_multiple == 0) {
         LOG_ERROR("Failed query port for bonding device\n");
-        return NULL;
+        goto free_cr;
     }
 
     uint32_t recv_inflight_baseline =
