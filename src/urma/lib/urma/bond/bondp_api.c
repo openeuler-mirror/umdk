@@ -341,7 +341,6 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
     }
     bdp_jfc->dev_num = bdp_ctx->dev_num;
     atomic_init(&bdp_jfc->lasted_polled_jfc_idx, 0);
-    atomic_init(&bdp_jfc->polled_mask, 0);
     atomic_init(&bdp_jfc->fast_return_count, 0);
     atomic_init(&bdp_jfc->use_cnt.atomic_cnt, 0);
 
@@ -2604,23 +2603,9 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
         return URMA_EINVAL;
     }
 
-    uint32_t mask = atomic_exchange(&bdp_jfc->polled_mask, 0);
-
-    /* Balance mode distributes sends across devices, must rearm all p_jfcs. */
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
-    if (bdp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE) {
-        mask = 0;
-    }
-
-    /**
-     * When mask == 0, rearm all enabled p_jfcs
-     * When mask != 0, only rearm p_jfcs that produced CRs in the last poll cycle.
-     */
+    /* Rearm writes the current CQ CI, so refresh standby JFCs as well. */
     for (uint32_t n = 0; n < bdp_jfc->enabled_count; ++n) {
         uint32_t i = bdp_jfc->enabled_indices[n];
-        if (mask != 0 && !(mask & (1U << i))) {
-            continue;
-        }
         if (urma_rearm_jfc(bdp_jfc->p_jfc[i], solicited_only) == URMA_SUCCESS) {
             success_once = true;
         }
@@ -2641,21 +2626,10 @@ static inline int bondp_get_monotonic_ms(uint64_t *now_ms)
     return 0;
 }
 
-static inline void bondp_record_jfc_event_source(urma_jfc_t *v_jfc, int dev_idx)
-{
-    if (v_jfc == NULL || dev_idx < 0 || dev_idx >= URMA_UBAGG_DEV_MAX_NUM) {
-        return;
-    }
-
-    bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(v_jfc, bondp_jfc_t, v_jfc);
-    atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)dev_idx));
-}
-
-static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int fd, int *dev_idx)
+static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int fd)
 {
     for (int i = 0; i < bdp_jfce->dev_num; i++) {
         if (bdp_jfce->p_jfce[i] != NULL && bdp_jfce->p_jfce[i]->fd == fd) {
-            *dev_idx = i;
             return bdp_jfce->p_jfce[i];
         }
     }
@@ -2664,8 +2638,7 @@ static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int f
 
 static urma_jfc_t *bondp_wait_one_jfc_event(bondp_jfce_t *bdp_jfce, int fd)
 {
-    int p_jfce_idx = -1;
-    urma_jfce_t *p_jfce = bondp_find_p_jfce_by_fd(bdp_jfce, fd, &p_jfce_idx);
+    urma_jfce_t *p_jfce = bondp_find_p_jfce_by_fd(bdp_jfce, fd);
     if (p_jfce == NULL) {
         URMA_LOG_WARN("Failed to find fd=%d from p_jfce array.\n", fd);
         return NULL;
@@ -2685,7 +2658,6 @@ static urma_jfc_t *bondp_wait_one_jfc_event(bondp_jfce_t *bdp_jfce, int fd)
         URMA_LOG_WARN("v_jfc is NULL, pjfc_id=%u.\n", p_jfc->jfc_id.id);
         return NULL;
     }
-    bondp_record_jfc_event_source(v_jfc, p_jfce_idx);
     return v_jfc;
 }
 

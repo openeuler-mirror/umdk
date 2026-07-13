@@ -1406,7 +1406,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         }
         if (pcr_cnt > 0) {
             hot_polled = true;
-            atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)hot_idx));
             for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
                 urma_cr_t *pcr = &pcr_buf[cr_id];
                 if (!need_full_scan && (is_failover_cr(pcr) || is_fake_cr(pcr))) {
@@ -1460,7 +1459,6 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         if (pcr_cnt == 0) {
             continue;
         }
-        atomic_fetch_or(&bdp_jfc->polled_mask, (1U << (uint32_t)idx));
         for (int cr_id = 0; cr_id < pcr_cnt; cr_id++) {
             urma_cr_t *pcr = &pcr_buf[cr_id];
             cr_convert_ret_t conv_ret;
