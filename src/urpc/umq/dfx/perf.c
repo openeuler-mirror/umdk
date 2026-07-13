@@ -12,6 +12,7 @@
 #include "umq_vlog.h"
 #include "urpc_thread_closure.h"
 #include "urpc_util.h"
+#include "urpc_bitmap.h"
 #include "umq_perf_hdr.h"
 #include "perf.h"
 
@@ -44,12 +45,12 @@ typedef struct umq_perf_record {
         uint64_t cnt; // statistical count
         umq_perf_hdr_t *hdr; // hdr histogram for quantile estimation
     } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe point
-    bool is_used; // the statistic item valid
 } umq_perf_record_t;
 
 typedef struct umq_perf_record_ctx {
     umq_perf_record_t perf_record_table[UMQ_PERF_REC_MAX_NUM];
     pthread_once_t *dp_thread_run_once[UMQ_PERF_REC_MAX_NUM];
+    urpc_bitmap_t used_bitmap;
 } umq_perf_record_ctx_t;
 
 static pthread_spinlock_t g_umq_perf_record_lock;
@@ -77,6 +78,13 @@ int umq_perf_init(void)
         UMQ_VLOG_ERR(VLOG_UMQ, "calloc for umq_perf_record failed\n");
         return -UMQ_ERR_ENOMEM;
     }
+    g_umq_perf_record_ctx->used_bitmap = urpc_bitmap_alloc(UMQ_PERF_REC_MAX_NUM);
+    if (g_umq_perf_record_ctx->used_bitmap == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "bitmap alloc for umq_perf_record failed\n");
+        free(g_umq_perf_record_ctx);
+        g_umq_perf_record_ctx = NULL;
+        return -UMQ_ERR_ENOMEM;
+    }
     (void)pthread_spin_init(&g_umq_perf_record_lock, PTHREAD_PROCESS_PRIVATE);
     /* convert default 1000ms to cycles via CPU frequency */
     g_umq_perf_hdr_max_cycles = (uint64_t)UMQ_PERF_HDR_DEFAULT_MAX_MS * urpc_get_cpu_hz() / MS_PER_SEC;
@@ -98,6 +106,7 @@ void umq_perf_uninit(void)
     }
 
     g_umq_perf_record_enable = false;
+    urpc_bitmap_free(g_umq_perf_record_ctx->used_bitmap);
     free(g_umq_perf_record_ctx);
     g_umq_perf_record_ctx = NULL;
     (void)pthread_spin_unlock(&g_umq_perf_record_lock);
@@ -126,7 +135,7 @@ static void umq_perf_record_closure(uint64_t idx)
         return;
     }
     umq_perf_destroy_all_hdrs(&g_umq_perf_record_ctx->perf_record_table[idx]);
-    g_umq_perf_record_ctx->perf_record_table[idx].is_used = false;
+    urpc_bitmap_set0(g_umq_perf_record_ctx->used_bitmap, (size_t)idx);
     g_umq_perf_record_ctx->dp_thread_run_once[idx] = NULL;
     (void)pthread_spin_unlock(&g_umq_perf_record_lock);
 }
@@ -141,19 +150,16 @@ void umq_perf_record_alloc(void)
         return;
     }
 
-    for (idx = 0; idx < UMQ_PERF_REC_MAX_NUM; ++idx) {
-        if (!g_umq_perf_record_ctx->perf_record_table[idx].is_used) {
-            break;
-        }
-    }
-    if (idx == UMQ_PERF_REC_MAX_NUM) {
+    idx = (uint32_t)urpc_bitmap_find_next_zero_bit(g_umq_perf_record_ctx->used_bitmap,
+        UMQ_PERF_REC_MAX_NUM, 0);
+    if (idx >= UMQ_PERF_REC_MAX_NUM) {
         (void)pthread_spin_unlock(&g_umq_perf_record_lock);
         UMQ_VLOG_WARN(VLOG_UMQ, "perf_rec table capacity %u were exhausted, alloc perf_rec failed\n",
             UMQ_PERF_REC_MAX_NUM);
         return;
     }
 
-    g_umq_perf_record_ctx->perf_record_table[idx].is_used = true;
+    urpc_bitmap_set1(g_umq_perf_record_ctx->used_bitmap, idx);
     (void)pthread_spin_unlock(&g_umq_perf_record_lock);
 
     umq_clear_perf_record_item(idx);
@@ -352,7 +358,7 @@ int umq_perf_info_get(umq_perf_stats_t *perf_info)
 
     umq_perf_record_t total_perf_record = {0};
     for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
-        if (!g_umq_perf_record_ctx->perf_record_table[i].is_used) {
+        if (!urpc_bitmap_is_set(g_umq_perf_record_ctx->used_bitmap, i)) {
             continue;
         }
 
