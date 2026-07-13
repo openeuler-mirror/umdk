@@ -1084,7 +1084,10 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
                 umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
                 continue;
             }
+
             if (is_umq_ub_req_enqueue(real_queue, &imm)) {
+                __atomic_store_n((uint64_t *)&real_queue->flow_control.imm[UB_QUEUE_FC_MSG_TYPE_REQ],
+                    0, __ATOMIC_RELEASE);
                 umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
                 continue;
             }
@@ -1100,6 +1103,7 @@ static int main_umq_ub_poll_fc_rx(ub_queue_t *queue, umq_buf_t **buf, uint32_t b
             continue;
         }
         if (is_umq_ub_req_enqueue(real_queue, &imm)) {
+            __atomic_store_n((uint64_t *)&real_queue->flow_control.imm[UB_QUEUE_FC_MSG_TYPE_REQ], 0, __ATOMIC_RELEASE);
             umq_ub_put_real_queue(real_queue, imm.flow_control.umq_id);
             continue;
         }
