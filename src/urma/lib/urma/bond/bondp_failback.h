@@ -18,6 +18,7 @@ void bondp_fb_handle_notify_nl_msg(struct nlattr *attrs[]);
 void bondp_fb_handle_done_nl_msg(struct nlattr *attrs[]);
 
 int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx);
+void bondp_fb_cancel_tasks(bondp_context_t *bond_ctx, uint32_t vjetty_id);
 
 int bondp_fb_init(bondp_context_t *bond_ctx);
 void bondp_fb_uninit(bondp_context_t *bond_ctx);

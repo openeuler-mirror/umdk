@@ -99,7 +99,7 @@ static void tw_process_tick(tw_t *tw)
 
     while ((task = TAILQ_FIRST(&due_tasks)) != NULL) {
         TAILQ_REMOVE(&due_tasks, task, slot_entry);
-        task->fn(task->arg);
+        task->fn(TW_TASK_EXECUTED, task->arg);
         tw_task_free(task);
     }
 }
@@ -190,6 +190,20 @@ err_mutex:
 
 void tw_destroy(tw_t *tw)
 {
+    if (tw == NULL) {
+        return;
+    }
+
+    tw_cancel_all(tw);
+
+    ub_hmap_destroy(&tw->task_map);
+    free(tw->slots);
+    (void)pthread_mutex_destroy(&tw->lock);
+    free(tw);
+}
+
+void tw_cancel_all(tw_t *tw)
+{
     tw_task_t *task = NULL;
     tw_task_t *next = NULL;
 
@@ -198,14 +212,11 @@ void tw_destroy(tw_t *tw)
     }
 
     HMAP_FOR_EACH_SAFE (task, next, hmap_node, &tw->task_map) {
+        TAILQ_REMOVE(&tw->slots[task->slot_idx].tasks, task, slot_entry);
         ub_hmap_remove(&tw->task_map, &task->hmap_node);
-        free(task);
+        task->fn(TW_TASK_CANCELED, task->arg);
+        tw_task_free(task);
     }
-
-    ub_hmap_destroy(&tw->task_map);
-    free(tw->slots);
-    (void)pthread_mutex_destroy(&tw->lock);
-    free(tw);
 }
 
 int tw_schedule(tw_t *tw, uint64_t delay_ms, tw_task_fn_t fn, void *arg, tw_task_id_t *task_id)
@@ -264,7 +275,10 @@ int tw_cancel(tw_t *tw, tw_task_id_t task_id)
 
     TAILQ_REMOVE(&tw->slots[task->slot_idx].tasks, task, slot_entry);
     ub_hmap_remove(&tw->task_map, &task->hmap_node);
+    (void)pthread_mutex_unlock(&tw->lock);
+    task->fn(TW_TASK_CANCELED, task->arg);
     tw_task_free(task);
+    return 0;
 
 out_unlock:
     (void)pthread_mutex_unlock(&tw->lock);
