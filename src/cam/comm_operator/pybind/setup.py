@@ -7,11 +7,15 @@
 # History: 2025-12-11 create pybind setup file
 #
 
-import os
-import sys
-import torch
-import platform
 import importlib.util
+import os
+import platform
+import subprocess
+import sys
+import sysconfig
+import tempfile
+
+import torch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "./pytorch_extension"))
 from bdist_wheel_build import BdistWheelBuild
@@ -38,11 +42,68 @@ env_names = ["ASCEND_HOME_PATH"]
 for env_name in env_names:
     if env_name not in os.environ:
         print(f"{env_name} is not in env, please export {env_name} first")
+
+
+def _acl_has_fp8_fp4():
+    """Probe whether the active acl_base.h declares the FP8/FP4 aclDataType enumerators.
+
+    The enumerators (ACL_FLOAT8_E5M2/E4M3FN/E8M0, ACL_FLOAT4_E2M1) are C enum members,
+    not macros, so they cannot be #ifdef-detected in the header. Older torch_npu (e.g.
+    2.8.0.post2 on CANN 8.5) ships an acl_base.h whose enum stops at ACL_BF16; newer
+    builds include the FP8/FP4 members. Compile a tiny translation unit referencing them
+    with the same include paths the extension uses; on success define CAM_ACL_HAS_FP8_FP4
+    so pytorch_npu_helper.hpp populates the low-precision dtype table, otherwise it
+    leaves those entries as ACL_DT_UNDEFINED (falling back to the view(int8) workaround).
+    """
+    if not os.environ.get("ASCEND_HOME_PATH"):
+        return False
+    # Mirror the include_dirs order passed to NpuExtension below so the probe resolves
+    # <acl/acl_base.h> from the same header (torch_npu's copy shadows the CANN toolkit's
+    # when its include dir comes first) that the real extension compilation will see.
+    toolkit_inc = os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include")
+    inc_dirs = [
+        os.path.join(torch_npu_path, "include"),
+        os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
+        os.path.join(torch_npu_path, "include/third_party/acl/inc"),
+        toolkit_inc,
+        os.path.join(torch_path, "include"),
+        os.path.join(torch_path, "include", "torch", "csrc", "api", "include"),
+    ]
+    py_inc = sysconfig.get_path("include")
+    if py_inc:
+        inc_dirs.append(py_inc)
+    src = (
+        "#include <acl/acl_base.h>\n"
+        "static aclDataType a = ACL_FLOAT8_E5M2;\n"
+        "static aclDataType b = ACL_FLOAT8_E8M0;\n"
+        "static aclDataType c = ACL_FLOAT4_E2M1;\n"
+        "int main() { return (int)a + (int)b + (int)c; }\n"
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        srcfile = os.path.join(tmp, "probe.cpp")
+        with open(srcfile, "w") as fh:
+            fh.write(src)
+        cxx = os.environ.get("CXX", "c++")
+        cmd = [cxx, "-fsyntax-only", "-std=c++17", "-w"]
+        cmd += ["-I" + d for d in inc_dirs]
+        cmd.append(srcfile)
+        try:
+            return subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL).returncode == 0
+        except OSError:
+            return False
+
+
+acl_has_fp8_fp4 = _acl_has_fp8_fp4()
+print(f"acl_has_fp8_fp4: {acl_has_fp8_fp4}")
+
 compile_args = [
     "-I" + os.path.join(PYTORCH_NPU_INSTALL_PATH, "include/third_party/acl/inc"),
     "-fPIC", "-fstack-protector-strong", "-w",
     "-D_FORTIFY_SOURCE=2",
 ]
+if acl_has_fp8_fp4:
+    compile_args.append("-DCAM_ACL_HAS_FP8_FP4")
 if "BUILD_TYPE" in os.environ and os.environ.get("BUILD_TYPE") == "Debug":
     compile_args.extend(["-g", "-O0"])
 else:
