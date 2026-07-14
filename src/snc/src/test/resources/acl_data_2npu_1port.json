@@ -1,0 +1,22 @@
+{
+    "_copyright": "SPDX-License-Identifier: MIT | Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved. | Description: snc acl data test fixture | Create: 2026-05-29 | History: 2026-05-29 create snc acl data test fixture; 2026-06-23 fix EID/CNA to match topo port data",
+    "superNodename": "A5-superPod-1",
+    "tpAcls": {
+        "AAAAAA12000000000000000000000002|DDDDDD42000000000000000000000002|RCTP": {
+            "srcEid": "AAAAAA12000000000000000000000002",
+            "dstEid": "DDDDDD42000000000000000000000002",
+            "transportType": "RCTP",
+            "sourceCna": "170.170.170.18",
+            "destCna": "221.221.221.66",
+            "templateId": 1
+        },
+        "DDDDDD42000000000000000000000002|AAAAAA12000000000000000000000002|RCTP": {
+            "srcEid": "DDDDDD42000000000000000000000002",
+            "dstEid": "AAAAAA12000000000000000000000002",
+            "transportType": "RCTP",
+            "sourceCna": "221.221.221.66",
+            "destCna": "170.170.170.18",
+            "templateId": 1
+        }
+    }
+}

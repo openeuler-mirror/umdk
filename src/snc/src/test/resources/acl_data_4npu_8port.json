@@ -1,0 +1,38 @@
+{
+    "_copyright": "SPDX-License-Identifier: MIT | Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved. | Description: snc acl data test fixture - 4 NPU ACL rules matching topo port EIDs | Create: 2026-06-23 | History: 2026-06-23 rewrite with correct EID/CNA matching topo_data_4npu_8port.json",
+    "superNodename": "A5-superPod-2",
+    "tpAcls": {
+        "AAAAAA12000000000000000000000001|DDDDDD42000000000000000000000001|RCTP": {
+            "srcEid": "AAAAAA12000000000000000000000001",
+            "dstEid": "DDDDDD42000000000000000000000001",
+            "transportType": "RCTP",
+            "sourceCna": "170.170.170.17",
+            "destCna": "221.221.221.68",
+            "templateId": 1
+        },
+        "DDDDDD42000000000000000000000001|AAAAAA12000000000000000000000001|RCTP": {
+            "srcEid": "DDDDDD42000000000000000000000001",
+            "dstEid": "AAAAAA12000000000000000000000001",
+            "transportType": "RCTP",
+            "sourceCna": "221.221.221.68",
+            "destCna": "170.170.170.17",
+            "templateId": 1
+        },
+        "AAAAAA12000000000000000000000002|EEEEEE55000000000000000000000002|RCTP": {
+            "srcEid": "AAAAAA12000000000000000000000002",
+            "dstEid": "EEEEEE55000000000000000000000002",
+            "transportType": "RCTP",
+            "sourceCna": "170.170.170.18",
+            "destCna": "238.238.238.86",
+            "templateId": 1
+        },
+        "EEEEEE55000000000000000000000002|AAAAAA12000000000000000000000002|RCTP": {
+            "srcEid": "EEEEEE55000000000000000000000002",
+            "dstEid": "AAAAAA12000000000000000000000002",
+            "transportType": "RCTP",
+            "sourceCna": "238.238.238.86",
+            "destCna": "170.170.170.18",
+            "templateId": 1
+        }
+    }
+}

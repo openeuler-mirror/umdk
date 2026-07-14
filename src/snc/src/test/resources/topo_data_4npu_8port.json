@@ -1,0 +1,1433 @@
+{
+    "_copyright": "SPDX-License-Identifier: MIT | Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved. | Description: snc superNode data test fixture - 4 NPU + 4 L1SW + 1 L2SW, each port has unique CNA/EID/UPI | Create: 2026-05-29 | History: 2026-05-29 create snc superNode data test fixture; 2026-06-17 add upi fields to NPU ports",
+    "name": "A5-superPod-2",
+    "version": "1.0",
+    "devices": {
+        "rack1#os0#npu1": {
+            "deviceName": "rack1#os0#npu1",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.1",
+            "rack": "rack1",
+            "boardId": 1,
+            "moduleId": 0,
+            "boardIndex": 1,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/0/0",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/0",
+                        "cna": "170.170.170.17",
+                        "eid": "AAAAAA12000000000000000000000001",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/1",
+                        "id": 1,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/0/0",
+                        "cna": "170.170.170.18",
+                        "eid": "AAAAAA12000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/2",
+                        "id": 2,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/0/0",
+                        "cna": "170.170.170.19",
+                        "eid": "AAAAAA12000000000000000000000003",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/3",
+                        "id": 3,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/0/0",
+                        "cna": "170.170.170.20",
+                        "eid": "AAAAAA12000000000000000000000004",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/4",
+                        "id": 4,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/1/0",
+                        "cna": "170.170.170.21",
+                        "eid": "AAAAAA12000000000000000000000005",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/5",
+                        "id": 5,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/1/0",
+                        "cna": "170.170.170.22",
+                        "eid": "AAAAAA12000000000000000000000006",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/6",
+                        "id": 6,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/1/0",
+                        "cna": "170.170.170.23",
+                        "eid": "AAAAAA12000000000000000000000007",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/7",
+                        "id": 7,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/1/0",
+                        "cna": "170.170.170.24",
+                        "eid": "AAAAAA12000000000000000000000008",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.68",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.85",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.102",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/3",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.1",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#os0#npu2": {
+            "deviceName": "rack1#os0#npu2",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.2",
+            "rack": "rack1",
+            "boardId": 2,
+            "moduleId": 0,
+            "boardIndex": 2,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/0/0",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/2",
+                        "cna": "221.221.221.68",
+                        "eid": "DDDDDD42000000000000000000000001",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/1",
+                        "id": 1,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/0/2",
+                        "cna": "221.221.221.66",
+                        "eid": "DDDDDD42000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/2",
+                        "id": 2,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/0/2",
+                        "cna": "221.221.221.69",
+                        "eid": "DDDDDD42000000000000000000000003",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/3",
+                        "id": 3,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/0/2",
+                        "cna": "221.221.221.70",
+                        "eid": "DDDDDD42000000000000000000000004",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/4",
+                        "id": 4,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/1/2",
+                        "cna": "221.221.221.71",
+                        "eid": "DDDDDD42000000000000000000000005",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/5",
+                        "id": 5,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/1/2",
+                        "cna": "221.221.221.72",
+                        "eid": "DDDDDD42000000000000000000000006",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/6",
+                        "id": 6,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/1/2",
+                        "cna": "221.221.221.73",
+                        "eid": "DDDDDD42000000000000000000000007",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/7",
+                        "id": 7,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/1/2",
+                        "cna": "221.221.221.74",
+                        "eid": "DDDDDD42000000000000000000000008",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.17",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.85",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.102",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/3",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.2",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#os0#npu3": {
+            "deviceName": "rack1#os0#npu3",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.3",
+            "rack": "rack1",
+            "boardId": 3,
+            "moduleId": 0,
+            "boardIndex": 3,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/0/0",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/4",
+                        "cna": "238.238.238.85",
+                        "eid": "EEEEEE55000000000000000000000001",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/1",
+                        "id": 1,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/0/4",
+                        "cna": "238.238.238.86",
+                        "eid": "EEEEEE55000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/2",
+                        "id": 2,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/0/4",
+                        "cna": "238.238.238.87",
+                        "eid": "EEEEEE55000000000000000000000003",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/3",
+                        "id": 3,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/0/4",
+                        "cna": "238.238.238.88",
+                        "eid": "EEEEEE55000000000000000000000004",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/4",
+                        "id": 4,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/1/4",
+                        "cna": "238.238.238.89",
+                        "eid": "EEEEEE55000000000000000000000005",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/5",
+                        "id": 5,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/1/4",
+                        "cna": "238.238.238.90",
+                        "eid": "EEEEEE55000000000000000000000006",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/6",
+                        "id": 6,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/1/4",
+                        "cna": "238.238.238.91",
+                        "eid": "EEEEEE55000000000000000000000007",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/7",
+                        "id": 7,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/1/4",
+                        "cna": "238.238.238.92",
+                        "eid": "EEEEEE55000000000000000000000008",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.17",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.68",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.102",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/3",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.3",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#os0#npu4": {
+            "deviceName": "rack1#os0#npu4",
+            "deviceType": "NPU",
+            "osName": "os0",
+            "osIp": "172.168.0.4",
+            "rack": "rack1",
+            "boardId": 4,
+            "moduleId": 0,
+            "boardIndex": 4,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                    {
+                        "portName": "400GE 0/0/0",
+                        "id": 0,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/0/6",
+                        "cna": "255.255.255.102",
+                        "eid": "FFFFFF66000000000000000000000001",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/1",
+                        "id": 1,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/0/6",
+                        "cna": "255.255.255.103",
+                        "eid": "FFFFFF66000000000000000000000002",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/2",
+                        "id": 2,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/0/6",
+                        "cna": "255.255.255.104",
+                        "eid": "FFFFFF66000000000000000000000003",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/3",
+                        "id": 3,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/0/6",
+                        "cna": "255.255.255.105",
+                        "eid": "FFFFFF66000000000000000000000004",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/4",
+                        "id": 4,
+                        "remoteDevice": "rack1#l1sw0",
+                        "remotePort": "400GE 1/1/6",
+                        "cna": "255.255.255.106",
+                        "eid": "FFFFFF66000000000000000000000005",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/5",
+                        "id": 5,
+                        "remoteDevice": "rack1#l1sw1",
+                        "remotePort": "400GE 1/1/6",
+                        "cna": "255.255.255.107",
+                        "eid": "FFFFFF66000000000000000000000006",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/6",
+                        "id": 6,
+                        "remoteDevice": "rack1#l1sw2",
+                        "remotePort": "400GE 1/1/6",
+                        "cna": "255.255.255.108",
+                        "eid": "FFFFFF66000000000000000000000007",
+                        "upi": "0A0A0A01"
+                    },
+                    {
+                        "portName": "400GE 0/0/7",
+                        "id": 7,
+                        "remoteDevice": "rack1#l1sw3",
+                        "remotePort": "400GE 1/1/6",
+                        "cna": "255.255.255.109",
+                        "eid": "FFFFFF66000000000000000000000008",
+                        "upi": "0A0A0A01"
+                    }
+                ],
+                "logicPorts": []
+            }],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.17",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.68",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/1",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.85",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 0/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.0.4",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "lc#0": {
+            "deviceName": "lc#0",
+            "deviceType": "SW",
+            "level": "L2",
+            "rack": "lc",
+            "index": 0,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/0",
+                    "id": 0,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 1,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 2,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/3",
+                    "id": 3,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/0/1"
+                },
+                {
+                    "portName": "400GE 1/1/0",
+                    "id": 4,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/1/1"
+                },
+                {
+                    "portName": "400GE 1/1/1",
+                    "id": 5,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/1/1"
+                },
+                {
+                    "portName": "400GE 1/1/2",
+                    "id": 6,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/1/1"
+                },
+                {
+                    "portName": "400GE 1/1/3",
+                    "id": 7,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/1/1"
+                },
+                {
+                    "portName": "400GE 1/2/0",
+                    "id": 8,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/0/3"
+                },
+                {
+                    "portName": "400GE 1/2/1",
+                    "id": 9,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/0/3"
+                },
+                {
+                    "portName": "400GE 1/2/2",
+                    "id": 10,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/0/3"
+                },
+                {
+                    "portName": "400GE 1/2/3",
+                    "id": 11,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/0/3"
+                },
+                {
+                    "portName": "400GE 1/3/0",
+                    "id": 12,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/1/3"
+                },
+                {
+                    "portName": "400GE 1/3/1",
+                    "id": 13,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/1/3"
+                },
+                {
+                    "portName": "400GE 1/3/2",
+                    "id": 14,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/1/3"
+                },
+                {
+                    "portName": "400GE 1/3/3",
+                    "id": 15,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/1/3"
+                },
+                {
+                    "portName": "400GE 1/4/0",
+                    "id": 16,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/0/5"
+                },
+                {
+                    "portName": "400GE 1/4/1",
+                    "id": 17,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/0/5"
+                },
+                {
+                    "portName": "400GE 1/4/2",
+                    "id": 18,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/0/5"
+                },
+                {
+                    "portName": "400GE 1/4/3",
+                    "id": 19,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/0/5"
+                },
+                {
+                    "portName": "400GE 1/5/0",
+                    "id": 20,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/1/5"
+                },
+                {
+                    "portName": "400GE 1/5/1",
+                    "id": 21,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/1/5"
+                },
+                {
+                    "portName": "400GE 1/5/2",
+                    "id": 22,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/1/5"
+                },
+                {
+                    "portName": "400GE 1/5/3",
+                    "id": 23,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/1/5"
+                },
+                {
+                    "portName": "400GE 1/6/0",
+                    "id": 24,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/0/7"
+                },
+                {
+                    "portName": "400GE 1/6/1",
+                    "id": 25,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/0/7"
+                },
+                {
+                    "portName": "400GE 1/6/2",
+                    "id": 26,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/0/7"
+                },
+                {
+                    "portName": "400GE 1/6/3",
+                    "id": 27,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/0/7"
+                },
+                {
+                    "portName": "400GE 1/7/0",
+                    "id": 28,
+                    "remoteDevice": "rack1#l1sw0",
+                    "remotePort": "400GE 1/1/7"
+                },
+                {
+                    "portName": "400GE 1/7/1",
+                    "id": 29,
+                    "remoteDevice": "rack1#l1sw1",
+                    "remotePort": "400GE 1/1/7"
+                },
+                {
+                    "portName": "400GE 1/7/2",
+                    "id": 30,
+                    "remoteDevice": "rack1#l1sw2",
+                    "remotePort": "400GE 1/1/7"
+                },
+                {
+                    "portName": "400GE 1/7/3",
+                    "id": 31,
+                    "remoteDevice": "rack1#l1sw3",
+                    "remotePort": "400GE 1/1/7"
+                }
+            ]}],
+            "routingTables": [],
+            "mgmtInfo": {
+                "ip": "198.168.2.0",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#l1sw0": {
+            "deviceName": "rack1#l1sw0",
+            "deviceType": "SW",
+            "level": "L1",
+            "rack": "rack1",
+            "index": 0,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/0",
+                    "id": 0,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/0"
+                },
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 1,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/0/0"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 2,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/0"
+                },
+                {
+                    "portName": "400GE 1/0/3",
+                    "id": 3,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/2/0"
+                },
+                {
+                    "portName": "400GE 1/0/4",
+                    "id": 4,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/0"
+                },
+                {
+                    "portName": "400GE 1/0/5",
+                    "id": 5,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/4/0"
+                },
+                {
+                    "portName": "400GE 1/0/6",
+                    "id": 6,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/0"
+                },
+                {
+                    "portName": "400GE 1/0/7",
+                    "id": 7,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/6/0"
+                },
+                {
+                    "portName": "400GE 1/1/0",
+                    "id": 8,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/4"
+                },
+                {
+                    "portName": "400GE 1/1/1",
+                    "id": 9,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/1/0"
+                },
+                {
+                    "portName": "400GE 1/1/2",
+                    "id": 10,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/4"
+                },
+                {
+                    "portName": "400GE 1/1/3",
+                    "id": 11,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/3/0"
+                },
+                {
+                    "portName": "400GE 1/1/4",
+                    "id": 12,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/4"
+                },
+                {
+                    "portName": "400GE 1/1/5",
+                    "id": 13,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/5/0"
+                },
+                {
+                    "portName": "400GE 1/1/6",
+                    "id": 14,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/4"
+                },
+                {
+                    "portName": "400GE 1/1/7",
+                    "id": 15,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/7/0"
+                }
+            ]}],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.17",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.68",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.85",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/4",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.102",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/6",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.1.0",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#l1sw1": {
+            "deviceName": "rack1#l1sw1",
+            "deviceType": "SW",
+            "level": "L1",
+            "rack": "rack1",
+            "index": 1,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/0",
+                    "id": 0,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 1,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 2,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/3",
+                    "id": 3,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/2/1"
+                },
+                {
+                    "portName": "400GE 1/0/4",
+                    "id": 4,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/5",
+                    "id": 5,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/4/1"
+                },
+                {
+                    "portName": "400GE 1/0/6",
+                    "id": 6,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/1"
+                },
+                {
+                    "portName": "400GE 1/0/7",
+                    "id": 7,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/6/1"
+                },
+                {
+                    "portName": "400GE 1/1/0",
+                    "id": 8,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/5"
+                },
+                {
+                    "portName": "400GE 1/1/1",
+                    "id": 9,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/1/1"
+                },
+                {
+                    "portName": "400GE 1/1/2",
+                    "id": 10,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/5"
+                },
+                {
+                    "portName": "400GE 1/1/3",
+                    "id": 11,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/3/1"
+                },
+                {
+                    "portName": "400GE 1/1/4",
+                    "id": 12,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/5"
+                },
+                {
+                    "portName": "400GE 1/1/5",
+                    "id": 13,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/5/1"
+                },
+                {
+                    "portName": "400GE 1/1/6",
+                    "id": 14,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/5"
+                },
+                {
+                    "portName": "400GE 1/1/7",
+                    "id": 15,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/7/1"
+                }
+            ]}],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.18",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.66",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.86",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/4",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.103",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/6",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.1.1",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#l1sw2": {
+            "deviceName": "rack1#l1sw2",
+            "deviceType": "SW",
+            "level": "L1",
+            "rack": "rack1",
+            "index": 2,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/0",
+                    "id": 0,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/2"
+                },
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 1,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/0/2"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 2,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/2"
+                },
+                {
+                    "portName": "400GE 1/0/3",
+                    "id": 3,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/2/2"
+                },
+                {
+                    "portName": "400GE 1/0/4",
+                    "id": 4,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/2"
+                },
+                {
+                    "portName": "400GE 1/0/5",
+                    "id": 5,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/4/2"
+                },
+                {
+                    "portName": "400GE 1/0/6",
+                    "id": 6,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/2"
+                },
+                {
+                    "portName": "400GE 1/0/7",
+                    "id": 7,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/6/2"
+                },
+                {
+                    "portName": "400GE 1/1/0",
+                    "id": 8,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/1/1",
+                    "id": 9,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/1/2"
+                },
+                {
+                    "portName": "400GE 1/1/2",
+                    "id": 10,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/1/3",
+                    "id": 11,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/3/2"
+                },
+                {
+                    "portName": "400GE 1/1/4",
+                    "id": 12,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/1/5",
+                    "id": 13,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/5/2"
+                },
+                {
+                    "portName": "400GE 1/1/6",
+                    "id": 14,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/1/7",
+                    "id": 15,
+                    "remoteDevice": "lc#0",
+                    "remotePort": "400GE 1/7/2"
+                }
+            ]}],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.19",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.69",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.87",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/4",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.104",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/6",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.1.2",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        },
+        "rack1#l1sw3": {
+            "deviceName": "rack1#l1sw3",
+            "deviceType": "SW",
+            "level": "L1",
+            "rack": "rack1",
+            "index": 3,
+            "forwardingChip": [{
+                "chipIndex": 0,
+                "ports": [
+                {
+                    "portName": "400GE 1/0/0",
+                    "id": 0,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/0/1",
+                    "id": 1,
+                    "remoteDevice": "rack1#os0#npu1",
+                    "remotePort": "400GE 0/0/7"
+                },
+                {
+                    "portName": "400GE 1/0/2",
+                    "id": 2,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/0/3",
+                    "id": 3,
+                    "remoteDevice": "rack1#os0#npu2",
+                    "remotePort": "400GE 0/0/7"
+                },
+                {
+                    "portName": "400GE 1/0/4",
+                    "id": 4,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/0/5",
+                    "id": 5,
+                    "remoteDevice": "rack1#os0#npu3",
+                    "remotePort": "400GE 0/0/7"
+                },
+                {
+                    "portName": "400GE 1/0/6",
+                    "id": 6,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/6"
+                },
+                {
+                    "portName": "400GE 1/0/7",
+                    "id": 7,
+                    "remoteDevice": "rack1#os0#npu4",
+                    "remotePort": "400GE 0/0/7"
+                }
+            ]}],
+            "routingTables": [
+                {
+                    "prefix": {
+                        "dstAddress": "170.170.170.20",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/0",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "221.221.221.70",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/2",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "238.238.238.88",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/4",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                },
+                {
+                    "prefix": {
+                        "dstAddress": "255.255.255.105",
+                        "maskLength": 32
+                    },
+                    "outPortInfos": [
+                        {
+                            "outInterface": "400GE 1/0/6",
+                            "nextHop": "",
+                            "preference": 60,
+                            "tag": 0,
+                            "protocol": "static"
+                        }
+                    ]
+                }
+            ],
+            "mgmtInfo": {
+                "ip": "198.168.1.3",
+                "port": 8443,
+                "username": "admin",
+                "password": "xxx"
+            }
+        }
+    }
+}
