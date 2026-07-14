@@ -44,13 +44,15 @@ function print_help() {
     -q: Select the fused_deep_moe_w4a8 quantization variant
     -p: Build only the pybind (whl) package; skip the run package
     -r: Build only the run package; skip the whl package (mutually exclusive with -p)
+    -m: Build only the cam_comm library (framework/communicator); skip operator/run/whl
+        (mutually exclusive with -p/-r; cam_feature only)
     -h: Show this help
     "
 }
 
 # 顶层只消费 -d / -h；其余选项（含 -c/-a/-q/-p/-r 及其参数）原样透传给子模块脚本。
 # 函数内 shift 不影响调用者位置参数，故调用者 $@ 保持完整，由下方统一调用子脚本。
-# 前导 ':' 静默 getopts 对未知选项（-c/-a/-q/-p/-r）的默认错误输出。
+# 前导 ':' 静默 getopts 对未知选项（-c/-a/-q/-p/-r/-m）的默认错误输出。
 function process_arg() {
     while getopts ":dh" opt; do
         case $opt in
