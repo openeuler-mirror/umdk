@@ -2,6 +2,7 @@
 
 | Revision Date | Revised Chapters | Revision Description | Bug Ticket Link or Background | Revised By |
 |---|---|---|---|---|
+| 2026.6.25 | 2.3.1.5, 2.3.1.6, 2.3.2, 2.4.4, 2.5.2 | Align user-mode API prototypes and missing helper APIs with the current code | | @Codex |
 | 2026.2.12 | ALL | Document baseline | | @qianguoxin、@jerry_lilijun、@wuyuyan_98、@pinchen2025、@autoreconf、@heyu_1014、@wdmmsyf |
 
 ---
@@ -103,14 +104,16 @@
                 - [2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)
                 - [2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty)
                 - [2.3.1.6.14 urma_flush_jetty](#231614-urma_flush_jetty)
-                - [2.3.1.6.15 urma_import_jetty_async](#231615-urma_import_jetty_async)
-                - [2.3.1.6.16 urma_unimport_jetty_async](#231616-urma_unimport_jetty_async)
-                - [2.3.1.6.17 urma_bind_jetty_async](#231617-urma_bind_jetty_async)
-                - [2.3.1.6.18 urma_unbind_jetty_async](#231618-urma_unbind_jetty_async)
-                - [2.3.1.6.19 urma_create_notifier](#231619-urma_create_notifier)
-                - [2.3.1.6.20 urma_delete_notifier](#231620-urma_delete_notifier)
-                - [2.3.1.6.21 urma_wait_notify](#231621-urma_wait_notify)
-                - [2.3.1.6.22 urma_ack_notify](#231622-urma_ack_notify)
+                - [2.3.1.6.15 urma_get_rjetty](#231615-urma_get_rjetty)
+                - [2.3.1.6.16 urma_put_rjetty](#231616-urma_put_rjetty)
+                - [2.3.1.6.17 urma_import_jetty_async](#231617-urma_import_jetty_async)
+                - [2.3.1.6.18 urma_unimport_jetty_async](#231618-urma_unimport_jetty_async)
+                - [2.3.1.6.19 urma_bind_jetty_async](#231619-urma_bind_jetty_async)
+                - [2.3.1.6.20 urma_unbind_jetty_async](#231620-urma_unbind_jetty_async)
+                - [2.3.1.6.21 urma_create_notifier](#231621-urma_create_notifier)
+                - [2.3.1.6.22 urma_delete_notifier](#231622-urma_delete_notifier)
+                - [2.3.1.6.23 urma_wait_notify](#231623-urma_wait_notify)
+                - [2.3.1.6.24 urma_ack_notify](#231624-urma_ack_notify)
             - [2.3.1.7 Jetty Group](#2317-jetty-group)
                 - [2.3.1.7.1 urma_create_jetty_grp](#23171-urma_create_jetty_grp)
                 - [2.3.1.7.2 urma_delete_jetty_grp](#23172-urma_delete_jetty_grp)
@@ -127,6 +130,8 @@
             - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
                 - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
             - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
+            - [2.3.2.5 urma_get_seg_ctx](#2325-urma_get_seg_ctx)
+            - [2.3.2.6 urma_put_seg_ctx](#2326-urma_put_seg_ctx)
         - [2.3.3 TP Channel](#233-tp-channel)
             - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
             - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
@@ -1128,7 +1133,7 @@ Definition file: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_op
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_uninit(void);
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -2276,7 +2281,7 @@ typedef union urma_token_id_flag {
 
 [3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -2425,7 +2430,7 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, urma_jfc_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3831,6 +3836,92 @@ The caller must ensure that the parameter target_jfr comes from the [3.3.1.5.6](
 
 Return: 0 on success, other value on error.
 
+##### 2.3.1.5.9 urma_advise_jfr
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_advise_jfr([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjfr);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Construct the transport channel between a JFS and a remote JFR. The JFS and target JFR must both use RM transport mode. For UB transport devices, this API returns URMA_SUCCESS without invoking a provider operation.
+
+4. Parameters
+
+@param[in] [Required] jfs: JFS used to construct the transport channel;
+
+@param[in] [Required] tjfr: target JFR information, including the fully qualified JFR ID;
+
+5. Return Value
+
+Return: 0 on success, URMA_EEXIST if the JFR has already been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
+
+##### 2.3.1.5.10 urma_advise_jfr_async
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_advise_jfr_async([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjfr, urma_advise_async_cb_func cb_fun, void *cb_arg);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Asynchronous version of [3.3.1.5.9](#23159-urma_advise_jfr) [urma_advise_jfr](#23159-urma_advise_jfr). It constructs the transport channel between a JFS and a remote JFR. The JFS and target JFR must both use RM transport mode and belong to the same URMA context. For UB transport devices, this API returns URMA_SUCCESS without invoking a provider operation.
+
+4. Parameters
+
+@param[in] [Required] jfs: JFS used to construct the transport channel;
+
+@param[in] [Required] tjfr: target JFR information, including the fully qualified JFR ID;
+
+@param[in] [Required] cb_fun: user-defined callback function;
+
+@param[in] [Required] cb_arg: user-defined argument for the callback function;
+
+5. Return Value
+
+Return: 0 on success, URMA_EEXIST if the JFR has already been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
+
+![](figures/urma_notice.png)
+
+The caller must provide a non-NULL callback function and callback argument to process the asynchronous result.
+
+##### 2.3.1.5.11 urma_unadvise_jfr
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unadvise_jfr([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjfr);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Deconstruct the transport channel between a JFS and a remote JFR. For UB transport devices, this API returns URMA_SUCCESS without invoking a provider operation.
+
+4. Parameters
+
+@param[in] [Required] jfs: JFS used to deconstruct the transport channel;
+
+@param[in] [Required] tjfr: target JFR information, including the fully qualified JFR ID;
+
+5. Return Value
+
+Return: 0 on success, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
+
 ##### urma_alloc_jfr
 
 1. Header File
@@ -4604,7 +4695,63 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
 If execution is successful, the output parameter cr status will be URMA_CR_WR_FLUSH_ERR.
 
-##### 2.3.1.6.15 urma_import_jetty_async
+##### 2.3.1.6.15 urma_get_rjetty
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_rjetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) **rjetty, uint32_t *length);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Get a copy of the remote Jetty context that can be exchanged with a peer before importing or binding a Jetty. For bonding devices, provider-specific extension data may be included.
+
+4. Parameters
+
+@param[in] [Required] jetty: local Jetty used to build the remote Jetty context;
+
+@param[out] [Required] rjetty: address used to return the allocated remote Jetty context;
+
+@param[out] [Required] length: length of the returned remote Jetty context, including any extension data;
+
+5. Return Value
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+The memory returned in rjetty is allocated by this API. The caller must call [urma_put_rjetty](#231616-urma_put_rjetty) to release it.
+
+##### 2.3.1.6.16 urma_put_rjetty
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+void urma_put_rjetty([urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Release the remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty).
+
+4. Parameters
+
+@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty). If rjetty is NULL, this API returns directly.
+
+5. Return Value
+
+void
+
+##### 2.3.1.6.17 urma_import_jetty_async
 
 1. Header File
 
@@ -4648,7 +4795,7 @@ typedef struct urma_notifier {
 } urma_notifier_t;
 \`\`\`
 
-##### 2.3.1.6.16 urma_unimport_jetty_async
+##### 2.3.1.6.18 urma_unimport_jetty_async
 
 1. Header File
 
@@ -4672,7 +4819,7 @@ Asynchronous version of [3.3.1.6.8](#23168-urma_unimport_jetty) [urma_unimport_j
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.17 urma_bind_jetty_async
+##### 2.3.1.6.19 urma_bind_jetty_async
 
 1. Header File
 
@@ -4704,7 +4851,7 @@ Asynchronous version of [3.3.1.6.11](#231611-urma_bind_jetty) [urma_bind_jetty](
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-##### 2.3.1.6.18 urma_unbind_jetty_async
+##### 2.3.1.6.20 urma_unbind_jetty_async
 
 1. Header File
 
@@ -4738,9 +4885,9 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty) interface and tjetty comes from the [3.3.1.6.18](#231618-urma_unbind_jetty_async) [urma_unbind_jetty_async](#231618-urma_unbind_jetty_async) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty) interface; the validity of internal pointers and other parameters is guaranteed by this interface, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
-##### 2.3.1.6.19 urma_create_notifier
+##### 2.3.1.6.21 urma_create_notifier
 
 1. Header File
 
@@ -4764,7 +4911,7 @@ Create a structure variable for notifying asynchronous link establishment result
 
 Return: the address of urma notifier, not NULL on success, NULL on error.
 
-##### 2.3.1.6.20 urma_delete_notifier
+##### 2.3.1.6.22 urma_delete_notifier
 
 1. Header File
 
@@ -4786,13 +4933,13 @@ Delete the structure variable for notifying asynchronous link establishment resu
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter notifier comes from the [3.3.1.6.19](#231619-urma_create_notifier) [urma_create_notifier](#231619-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+The caller must ensure that the parameter notifier comes from the [3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier) interface; the validity of internal pointers and other parameters is guaranteed by this interface, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
 
 5. Return Value
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.21 urma_wait_notify
+##### 2.3.1.6.23 urma_wait_notify
 
 1. Header File
 
@@ -4849,7 +4996,7 @@ typedef enum urma_notify_type {
 } urma_notify_type_t;
 \`\`\`
 
-##### 2.3.1.6.22 urma_ack_notify
+##### 2.3.1.6.24 urma_ack_notify
 
 1. Header File
 
@@ -5055,7 +5202,7 @@ Some chips do not support Jetty group management APIs.
 
 2. Prototype
 
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg)；
+[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5288,7 +5435,7 @@ typedef struct urma_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *target_seg)
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -5381,7 +5528,7 @@ typedef union urma_import_seg_flag {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg);
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -5402,6 +5549,62 @@ Return: 0 on success, other value on error.
 ![](figures/urma_notice.png)
 
 The caller must ensure that the parameter tseg comes from the [3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg) interface; the validity of internal pointers and other parameters is guaranteed by these interfaces, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+
+#### 2.3.2.5 urma_get_seg_ctx
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_seg_ctx([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) **seg, uint32_t *size);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Get a copy of the segment context from a target segment. For bonding devices, provider-specific extension data may be included.
+
+4. Parameters
+
+@param[in] [Required] tseg: target segment returned by [urma_register_seg](#2321-urma_register_seg) or [urma_import_seg](#2323-urma_import_seg);
+
+@param[out] [Required] seg: address used to return the allocated segment context;
+
+@param[out] [Required] size: length of the returned segment context, including any extension data;
+
+5. Return Value
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+The memory returned in seg is allocated by this API. The caller must call [urma_put_seg_ctx](#2326-urma_put_seg_ctx) to release it.
+
+#### 2.3.2.6 urma_put_seg_ctx
+
+1. Header File
+
+#include "urma_api.h"
+
+2. Prototype
+
+void urma_put_seg_ctx([3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg);
+
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3. Description
+
+Release the segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx).
+
+4. Parameters
+
+@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx). If seg is NULL, this API returns directly.
+
+5. Return Value
+
+void
 
 ### 2.3.3 TP Channel
 
@@ -5603,7 +5806,7 @@ typedef union urma_tp_attr_mask {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -6278,7 +6481,7 @@ typedef struct urma_cr_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, bool solicited_only)
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -6478,7 +6681,7 @@ The caller must ensure that the parameter jfs comes from the [3.3.1.4.1](#23141-
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3. Description
 
@@ -6620,9 +6823,9 @@ typedef struct urma_user_ctl_out {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func);
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -6682,7 +6885,7 @@ typedef void (*urma_loc_log_cb)(int level, const char *file, const char *functio
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_log_func(void)
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
@@ -6746,7 +6949,7 @@ typedef enum urma_vlog_level {
 
 void urma_log_set_level([3.5.2.4.1](#25241-urma_vlog_level_t) [urma_vlog_level_t](#25241-urma_vlog_level_t) level)
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
