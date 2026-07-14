@@ -1566,7 +1566,9 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
 
             if (umq_ref != 0 && ref_cnt == 0 &&
                 __atomic_compare_exchange_n(&node->umq_ref, &umq_ref, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-                __atomic_store_n(&queue->jetty_node, 0, __ATOMIC_RELEASE);
+                uint64_t old_node = (uint64_t)(uintptr_t)node;
+                __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
+                                            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
                 umq_ub_jetty_node_free(node);
             }
         }
@@ -1663,7 +1665,9 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
         uint32_t ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
         if (umq_ref != 0 && ref_cnt == 0 &&
             __atomic_compare_exchange_n(&node->umq_ref, &umq_ref, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-            __atomic_store_n(&queue->jetty_node, 0, __ATOMIC_RELEASE);
+            uint64_t old_node = (uint64_t)(uintptr_t)node;
+            __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
+                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
             umq_ub_jetty_node_free(node);
         }
     }
