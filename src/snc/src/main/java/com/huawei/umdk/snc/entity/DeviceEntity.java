@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: SNC (Supernode Network Controller) service
- * Author: OpenCode
  * Create: 2026-07-07
  * Note:
  * History: 2026-07-07  Create File
@@ -28,7 +27,6 @@ public abstract class DeviceEntity {
     private DeviceType deviceType;
     private MgmtInfo mgmtInfo;
     private String rack;
-    private Map<Integer, ForwardingChip> forwardingChips;
 
     protected DeviceEntity(String deviceName, DeviceType deviceType) {
         this.deviceName = deviceName;
@@ -36,12 +34,12 @@ public abstract class DeviceEntity {
     }
 
     protected DeviceEntity(String deviceName, DeviceType deviceType,
-                           MgmtInfo mgmtInfo, String rack,
-                           Map<Integer, ForwardingChip> forwardingChips) {
+                           MgmtInfo mgmtInfo, String rack) {
         this.deviceName = deviceName;
         this.deviceType = deviceType;
         this.mgmtInfo = mgmtInfo;
         this.rack = rack;
-        this.forwardingChips = forwardingChips;
     }
+
+    public abstract Map<Integer, ? extends ForwardingChip> getForwardingChips();
 }
