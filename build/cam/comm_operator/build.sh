@@ -24,6 +24,7 @@ ENABLE_UT_BUILD=0
 ENABLE_PYBIND_BUILD=1
 ENABLE_SRC_BUILD=1
 ENABLE_RUN_ONLY=0    # -r 标志：1=只编 run 包，跳过 whl
+ENABLE_CAM_COMM_ONLY=0  # -m 标志：1=只编 cam_comm 库(build_cam_comm)，跳过算子/whl
 ENABLE_CAM_COMM_BUILD=1
 OP_SELECT=""        # -a 指定的算子列表（分号分隔），为空=全量
 USE_W4A8=0          # -q 标志：1=编译 fused_deep_moe_w4a8 量化变体
@@ -73,10 +74,12 @@ print_help() {
     -p Build only the pybind (whl) package; skip the run package build
     -r Build only the run package; skip the whl package build.
        Mutually exclusive with -p.
+    -m Build only the cam_comm library (build_cam_comm); skip operator/run/whl.
+       Mutually exclusive with -p/-r.
     "
 }
 
-while getopts "c:a:xdtqprh" opt; do
+while getopts "c:a:xdtqprmh" opt; do
     case $opt in
     c)
         SOC_VERSION=$OPTARG
@@ -104,6 +107,9 @@ while getopts "c:a:xdtqprh" opt; do
     r)
         ENABLE_RUN_ONLY=1
         ;;
+    m)
+        ENABLE_CAM_COMM_ONLY=1
+        ;;
     h)
         print_help
         exit 0
@@ -120,6 +126,14 @@ if [ "$ENABLE_RUN_ONLY" -eq 1 ]; then
     ENABLE_PYBIND_BUILD=0
 fi
 
+# -m（只编 cam_comm）与 -r/-p 互斥：-m 只编 framework 库，不出 run/whl，与 -r/-p 矛盾。
+if [ "$ENABLE_CAM_COMM_ONLY" -eq 1 ]; then
+    if [ "$ENABLE_RUN_ONLY" -eq 1 ] || { [ "$ENABLE_PYBIND_BUILD" -eq 1 ] && [ "$ENABLE_SRC_BUILD" -eq 0 ]; }; then
+        echo "ERROR: -m (cam_comm only) is mutually exclusive with -r (run only) and -p (pybind only)"
+        exit 1
+    fi
+fi
+
 if [ ! -d "$BUILD_OUT_PATH/${MODULE_NAME}" ]; then
     mkdir -p "$BUILD_OUT_PATH/${MODULE_NAME}"
 fi
@@ -133,6 +147,13 @@ fi
 # 透传算子选择与量化标志给 compile_ascend_proj.sh
 export CAM_OP_SELECT="$OP_SELECT"
 export CAM_USE_W4A8="$USE_W4A8"
+
+# -m: 只编 cam_comm 库（build_cam_comm），不编算子/run/whl/UT。
+# cam_comm 编译快且与算子独立，用于 framework 增量编译场景。
+if [ $ENABLE_CAM_COMM_ONLY -eq 1 ]; then
+    build_cam_comm
+    exit 0
+fi
 
 # 目前whl包和UT的编译暂时需要先将CAM算子包并安装到环境
 # 在编译whl包和UT时屏蔽算子包编译，加快编译速度
