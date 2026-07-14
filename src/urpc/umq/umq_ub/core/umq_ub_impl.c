@@ -147,7 +147,7 @@ int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg)
         pool_cfg.type = i;
         ret = umq_huge_qbuf_config_init(&pool_cfg);
         if (ret != UMQ_SUCCESS) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "initialize configuration for huge qbuf pool type(%d) failed, status: %d\n",
+            UMQ_VLOG_ERR(VLOG_UMQ, "initialize configuration for huge qbuf pool type(%u) failed, status: %d\n",
                 i, ret);
             goto CONFIG_UNINIT;
         }
@@ -172,7 +172,7 @@ uint32_t umq_ub_bind_info_get_impl(uint64_t umqh, uint8_t *bind_info, uint32_t b
 {
     if (bind_info_size < sizeof(umq_ub_bind_info_t)) {
         errno = UMQ_ERR_EINVAL;
-        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size[%u] is less than required size[%u], errno: %d\n", bind_info_size,
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind_info_size[%u] is less than required size[%zu], errno: %d\n", bind_info_size,
             sizeof(umq_ub_bind_info_t), errno);
         return 0;
     }
@@ -1600,7 +1600,7 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)(wait_umqh_tp);
     if (is_umq_ub_logic_queue(queue->create_flag)) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), logic umq not support wait interrupt\n");
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), logic umq not support wait interrupt\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -2938,7 +2938,7 @@ int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_han
     urma_status_t urma_status = umq_symbol_urma()->urma_modify_jetty(jetty, &jetty_attr);
     if (urma_status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_modify_jetty to "
-            "URMA_JETTY_STATE_ERROR failed, status: %u\n",  EID_ARGS(jetty->jetty_id.eid),
+            "URMA_JETTY_STATE_ERROR failed, status: %d\n",  EID_ARGS(jetty->jetty_id.eid),
             jetty->jetty_id.id, (int)urma_status);
     }
 
@@ -2947,7 +2947,7 @@ int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_han
         urma_status = umq_symbol_urma()->urma_modify_jetty(jetty, &jetty_attr);
         if (urma_status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_modify_jetty to "
-                "URMA_JETTY_STATE_ERROR failed, status: %u\n",  EID_ARGS(jetty->jetty_id.eid),
+                "URMA_JETTY_STATE_ERROR failed, status: %d\n",  EID_ARGS(jetty->jetty_id.eid),
                 jetty->jetty_id.id, (int)urma_status);
         }
     }

@@ -36,7 +36,7 @@ static uint8_t *umq_tp_ub_plus_init(umq_init_cfg_t *cfg)
 
     int ret = umq_ub_register_memory_impl(umq_io_buf_addr(), umq_io_buf_size());
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %u\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "register memory failed, status: %d\n", ret);
         goto UNINIT;
     }
     if (cfg->buf_pool_cfg.enable_tiny_pool) {
