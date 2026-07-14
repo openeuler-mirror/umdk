@@ -30,6 +30,7 @@
 #include "urma_ubagg.h"
 
 #include "bondp_api.h"
+#include "bondp_health.h"
 #include "bondp_health_check.h"
 #include "ub_get_clock.h"
 
@@ -2189,7 +2190,12 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
             }
             URMA_LOG_INFO("bondp unimport pjetty is done, jetty id is %u.\n",
                           bdp_tjetty->p_tjetty[i][j]->id.id);
-            if (urma_unimport_jetty(bdp_tjetty->p_tjetty[i][j]) != URMA_SUCCESS) {
+            /* NULL the slot before freeing so concurrent readers (datapath
+             * scheduling, health probe) observe NULL instead of a dangling
+             * pointer once urma_unimport_jetty releases the object. */
+            urma_target_jetty_t *p_tjetty = bdp_tjetty->p_tjetty[i][j];
+            bdp_tjetty->p_tjetty[i][j] = NULL;
+            if (urma_unimport_jetty(p_tjetty) != URMA_SUCCESS) {
                 ret = URMA_FAIL;
             }
         }
@@ -2275,8 +2281,8 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
 
-    if (bondp_register_health_check_task(bdp_ctx, bdp_tjetty, cfg_jetty) != 0) {
-        URMA_LOG_ERR("Failed to register health check task\n");
+    if (bondp_hc_register_tjetty(bdp_ctx, bdp_tjetty) != 0) {
+        URMA_LOG_ERR("Failed to register health check tjetty\n");
         goto UNIMPORT_TSEG;
     }
 
@@ -2305,7 +2311,7 @@ static urma_status_t bondp_unimport_jetty_inner(urma_target_jetty_t *target_jett
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(target_jetty->urma_ctx, bondp_context_t, v_ctx);
     urma_status_t ret = URMA_SUCCESS;
 
-    bondp_unregister_health_check_task(bdp_ctx, bdp_tjetty);
+    bondp_hc_unregister_tjetty(bdp_ctx, bdp_tjetty);
 
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;
