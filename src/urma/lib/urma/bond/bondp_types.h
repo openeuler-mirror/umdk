@@ -149,6 +149,7 @@ typedef struct bondp_health_check_cfg {
     uint32_t active_max_backoff;
 } bondp_health_check_cfg_t;
 
+typedef struct bondp_hc_ctx bondp_hc_ctx_t;
 typedef struct bondp_fb_ctx bondp_fb_ctx_t;
 
 typedef struct bondp_health_thread_ctx {
@@ -204,6 +205,7 @@ typedef struct bondp_context {
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
     int real_async_fd; /* vcontex async_fd */
+    bondp_hc_ctx_t *hc_ctx;
     bondp_fb_ctx_t *fb_ctx;
     bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
@@ -331,6 +333,9 @@ typedef struct bondp_target_jetty {
 #endif
     urma_ref_t use_cnt;
     bool is_msn_enabled;
+    bool hc_registered;
+    uint32_t hc_node_idx;
+    struct ub_list hc_entry;
 } bondp_target_jetty_t;
 
 typedef struct bondp_import_target_seg {

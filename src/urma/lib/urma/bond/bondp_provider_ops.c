@@ -20,6 +20,7 @@
 #include "bondp_context_table.h"
 #include "bondp_datapath.h"
 #include "bondp_failback.h"
+#include "bondp_health.h"
 #include "bondp_health_check.h"
 #include "bondp_netlink.h"
 #include "bondp_segment.h"
@@ -362,7 +363,6 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
     }
 
     ctx->pid = (uint32_t)getpid();
-    bondp_health_check_global_ctx_init(ctx);
     bondp_global_ctx_read_env(ctx);
     bondp_global_ctx_real_path_init(ctx);
     *bondp_global_ctx = ctx;
@@ -371,7 +371,6 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
 
 static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 {
-    bondp_health_check_global_ctx_uninit(bondp_global_ctx);
     if (bondp_global_ctx->topo_map != NULL) {
         delete_topo_map(bondp_global_ctx->topo_map);
     }
@@ -400,17 +399,9 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
         goto ERR_WORKER_DESTROY;
     }
 
-    if (bondp_start_health_check_thread() != 0) {
-        URMA_LOG_ERR("Failed to start health check thread.\n");
-        (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
-        g_bondp_global_ctx = NULL;
-        goto ERR_NL_WORKER_UNINIT;
-    }
     URMA_LOG_INFO("Bond provider initialized successfully.\n");
     return URMA_SUCCESS;
 
-ERR_NL_WORKER_UNINIT:
-    bondp_nl_worker_uninit();
 ERR_WORKER_DESTROY:
     bondp_worker_destroy();
     return URMA_FAIL;
@@ -422,8 +413,6 @@ urma_status_t bondp_uninit(void)
         URMA_LOG_WARN("Deinitialized already.\n");
         return URMA_SUCCESS; /* Keep the same logic as urma_uninit */
     }
-
-    bondp_stop_health_check_thread();
 
     int ret = bondp_global_ctx_uninit(g_bondp_global_ctx);
     if (ret != 0) {
@@ -483,11 +472,6 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
         goto DESTROY_P_VJETTY_ID_TABLE;
     }
 
-    if (bondp_fb_init(bdp_ctx) != 0) {
-        URMA_LOG_ERR("Failed to init failback context\n");
-        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
-    }
-
     urma_context_cfg_t cfg = {
         .dev = dev,
         .dev_fd = dev_fd,
@@ -499,7 +483,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     int ret = urma_cmd_create_context(&bdp_ctx->v_ctx, &cfg, &udata);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create context, ret=%d\n", ret);
-        goto FB_UNINIT;
+        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
     }
 
     const int max_event = 1;
@@ -520,8 +504,6 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
 
 UNINIT_CTX_TABLE:
     urma_cmd_delete_context(&bdp_ctx->v_ctx);
-FB_UNINIT:
-    bondp_fb_uninit(bdp_ctx);
 DESTROY_R_V2P_TOKEN_ID_TABLE:
     bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
 DESTROY_P_VJETTY_ID_TABLE:
@@ -544,8 +526,6 @@ static int bondp_delete_vcontext(bondp_context_t *bdp_ctx)
     bdp_ctx->real_async_fd = -1;
     URMA_LOG_INFO("bondp delete_vctx, eid_idx is %d, ref_cnt is %lu, dev_num is %d, bonding_model is %d, bonding_level is %d.\n",
                   bdp_ctx->v_ctx.eid_index, ref_cnt, bdp_ctx->dev_num, bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
-
-    bondp_fb_uninit(bdp_ctx);
 
     if (urma_cmd_delete_context(&bdp_ctx->v_ctx) != 0) {
         URMA_LOG_ERR("Failed to urma_cmd_delete_context\n");
@@ -731,6 +711,13 @@ static void bondp_init_ctx_enabled_indices(bondp_context_t *bdp_ctx)
         bdp_ctx->enabled_count++;
     }
 }
+static int bondp_hc_init_from_env(bondp_context_t *bdp_ctx)
+{
+    bondp_hc_cfg_t cfg = {
+        .probe_interval_ms = g_bondp_global_ctx->health_thread_ctx.cfg.active_interval_ms,
+    };
+    return bondp_hc_init(bdp_ctx, &cfg);
+}
 
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd)
 {
@@ -769,9 +756,16 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 
     bondp_init_ctx_enabled_indices(bdp_ctx);
 
-    if (bondp_create_health_check_ctx(bdp_ctx) != 0) {
-        URMA_LOG_ERR("Failed to create health check scene\n");
-        goto DELETE_PCONTEXT;
+    if (bondp_health_check_enabled()) {
+        if (bondp_hc_init_from_env(bdp_ctx) != 0) {
+            URMA_LOG_ERR("Failed to create health check context\n");
+            goto DELETE_PCONTEXT;
+        }
+    }
+
+    if (bondp_fb_init(bdp_ctx) != 0) {
+        URMA_LOG_ERR("Failed to init failback context\n");
+        goto HC_UNINIT;
     }
 
     URMA_LOG_INFO("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
@@ -779,6 +773,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 
     return &bdp_ctx->v_ctx;
 
+HC_UNINIT:
+    bondp_hc_uninit(bdp_ctx);
 DELETE_PCONTEXT:
     bondp_delete_pcontext(bdp_ctx);
 DELETE_VCONTEXT:
@@ -796,7 +792,10 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     uint32_t eid_index = ctx->eid_index;
 
     (void)strcpy(dev_name, ctx->dev->name);
-    bondp_destroy_health_check_ctx(bdp_ctx);
+    bondp_fb_uninit(bdp_ctx);
+    bondp_hc_uninit(bdp_ctx);
+    free(bdp_ctx->bondp_heath_check_ctx.check_buf);
+    bdp_ctx->bondp_heath_check_ctx.check_buf = NULL;
 
     if (bondp_delete_pcontext(bdp_ctx) != 0) {
         URMA_LOG_ERR("Failed to delete pcontext\n");
@@ -853,6 +852,14 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
     bdp_ctx->bonding_mode = bonding_mode;
     bdp_ctx->bonding_level = bonding_level;
 
+    /* Health check and failback hold references to the physical contexts
+     * (p_ctxs). They must be torn down before deleting p_ctxs so that the
+     * p_ctxs can actually be released, and re-created afterwards against the
+     * new p_ctxs. Otherwise the old p_ctxs leak (urma_delete_context rejects
+     * them because atomic_cnt > 1) and the new p_ctxs have no probe paths. */
+    bondp_fb_uninit(bdp_ctx);
+    bondp_hc_uninit(bdp_ctx);
+
     ret = bondp_delete_pcontext(bdp_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to delete pctx when set bonding mode, ret=%d\n", ret);
@@ -866,6 +873,20 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
     }
 
     bondp_init_ctx_enabled_indices(bdp_ctx);
+
+    if (bondp_health_check_enabled()) {
+        ret = bondp_hc_init_from_env(bdp_ctx);
+        if (ret != 0) {
+            URMA_LOG_ERR("Failed to recreate health check context, ret=%d\n", ret);
+            goto EXIT;
+        }
+    }
+
+    ret = bondp_fb_init(bdp_ctx);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to recreate failback context, ret=%d\n", ret);
+        bondp_hc_uninit(bdp_ctx);
+    }
 
 EXIT:
     (void)pthread_mutex_unlock(&ctx->mutex);
