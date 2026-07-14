@@ -708,7 +708,7 @@ int umq_init(umq_init_cfg_t *cfg)
     if ((cfg->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0) {
         ret = urpc_rand_seed_init();
         if (ret != 0) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "rand seed init failed, status: %u\n", ret);
+            UMQ_VLOG_ERR(VLOG_UMQ, "rand seed init failed, status: %d\n", ret);
             return ret;
         }
     }

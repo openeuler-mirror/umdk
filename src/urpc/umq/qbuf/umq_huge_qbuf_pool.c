@@ -383,7 +383,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
             (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %u, status: %d\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %lu, status: %d\n",
                 pool->block_pool.buf_cnt_with_data, ret);
             return -UMQ_ERR_ENOMEM;
         }
