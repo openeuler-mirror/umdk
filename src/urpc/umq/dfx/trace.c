@@ -13,6 +13,7 @@
 #include "urpc_timer.h"
 #include "urpc_thread_closure.h"
 #include "urpc_util.h"
+#include "urpc_bitmap.h"
 #include "perf.h"
 
 #define UMQ_TRACE_DEFAULT_RECORD_NUM   8192
@@ -54,12 +55,12 @@ typedef struct umq_trace_buf {
     uint32_t record_cnt;
     uint32_t previous_output_cnt;
     umq_data_record_t *data_record;    /* dynamically allocated, size = g_umq_trace_record_num */
-    bool is_used;
 } umq_trace_buf_t;
 
 typedef struct umq_trace_ctx {
     pthread_once_t *dp_thread_run_once[UMQ_PERF_REC_MAX_NUM];
     umq_trace_buf_t trace_buf[UMQ_PERF_REC_MAX_NUM];
+    urpc_bitmap_t used_bitmap;
     urpc_timer_t *timer;
 } umq_trace_ctx_t;
 
@@ -96,6 +97,12 @@ static int umq_trace_init(umq_trace_cfg_t *cfg)
                 g_umq_trace_record_num);
             goto FREE_DATA_RECORD;
         }
+    }
+
+    g_umq_trace_ctx->used_bitmap = urpc_bitmap_alloc(UMQ_PERF_REC_MAX_NUM);
+    if (g_umq_trace_ctx->used_bitmap == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "bitmap alloc for umq_trace failed\n");
+        goto FREE_DATA_RECORD;
     }
 
     (void)pthread_spin_init(&g_umq_trace_lock, PTHREAD_PROCESS_PRIVATE);
@@ -149,6 +156,7 @@ void umq_trace_uninit(void)
     }
 
     g_umq_trace_enable = false;
+    urpc_bitmap_free(g_umq_trace_ctx->used_bitmap);
     free(g_umq_trace_ctx);
     g_umq_trace_ctx = NULL;
     (void)pthread_spin_unlock(&g_umq_trace_lock);
@@ -165,7 +173,7 @@ static void umq_trace_closure(uint64_t idx)
         (void)pthread_spin_unlock(&g_umq_trace_lock);
         return;
     }
-    g_umq_trace_ctx->trace_buf[idx].is_used = false;
+    urpc_bitmap_set0(g_umq_trace_ctx->used_bitmap, (size_t)idx);
     g_umq_trace_ctx->dp_thread_run_once[idx] = NULL;
     (void)pthread_spin_unlock(&g_umq_trace_lock);
     g_umq_trace_thread_inited = false;
@@ -188,12 +196,9 @@ void umq_trace_alloc(void)
         return;
     }
 
-    for (idx = 0; idx < UMQ_PERF_REC_MAX_NUM; ++idx) {
-        if (!g_umq_trace_ctx->trace_buf[idx].is_used) {
-            break;
-        }
-    }
-    if (idx == UMQ_PERF_REC_MAX_NUM) {
+    idx = (uint32_t)urpc_bitmap_find_next_zero_bit(g_umq_trace_ctx->used_bitmap,
+        UMQ_PERF_REC_MAX_NUM, 0);
+    if (idx >= UMQ_PERF_REC_MAX_NUM) {
         (void)pthread_spin_unlock(&g_umq_trace_lock);
         UMQ_VLOG_WARN(VLOG_UMQ, "trace buf capacity %u were exhausted, alloc trace_rec failed\n",
             UMQ_PERF_REC_MAX_NUM);
@@ -201,7 +206,7 @@ void umq_trace_alloc(void)
     }
 
     umq_trace_record_clear(idx);
-    g_umq_trace_ctx->trace_buf[idx].is_used = true;
+    urpc_bitmap_set1(g_umq_trace_ctx->used_bitmap, idx);
     (void)pthread_spin_unlock(&g_umq_trace_lock);
 
     g_umq_trace_buf_index = idx;
@@ -458,7 +463,7 @@ static void umq_trace_output(void *args __attribute__((unused)))
         return;
     }
     for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
-        if (!g_umq_trace_ctx->trace_buf[i].is_used) {
+        if (!urpc_bitmap_is_set(g_umq_trace_ctx->used_bitmap, i)) {
             continue;
         }
         umq_trace_buf_t *cur_rec = &g_umq_trace_ctx->trace_buf[i];
