@@ -35,9 +35,10 @@ static inline bool is_atomic_wr(const urma_jfs_wr_t *wr)
 }
 
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
-                          urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge);
+                          urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge,
+                          uint32_t max_sge);
 urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
-                          urma_sge_t *prealloc_src_sge);
+                          urma_sge_t *prealloc_src_sge, uint32_t max_sge);
 
 void free_jfr_wr(urma_jfr_wr_t *wr);
 void free_jfs_wr(urma_jfs_wr_t *wr);
