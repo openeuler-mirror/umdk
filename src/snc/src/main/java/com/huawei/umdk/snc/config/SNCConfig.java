@@ -7,7 +7,9 @@
  * Note:
  * History: 2026-07-07  Create File
  */
-package com.huawei.umdk.snc.entity;
+package com.huawei.umdk.snc.config;
+
+import java.util.logging.Level;
 
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -22,8 +24,6 @@ import lombok.ToString;
 @AllArgsConstructor
 @EqualsAndHashCode
 @ToString
-public class RoutingTableKey {
-    private String superNodeName;
-    private String deviceName;
-    private Integer chipIndex;
+public class SNCConfig {
+    private Level logLevel = Level.INFO;
 }

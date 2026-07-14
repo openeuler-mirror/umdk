@@ -1,8 +1,16 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: SNC (Supernode Network Controller) service
+ * Author: OpenCode
+ * Create: 2026-07-07
+ * Note:
+ * History: 2026-07-07  Create File
+ */
 package com.huawei.umdk.snc.entity;
 
 import java.util.Map;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,7 +20,6 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PROTECTED)
 @EqualsAndHashCode
 @ToString
 public abstract class DeviceEntity {
@@ -26,5 +33,15 @@ public abstract class DeviceEntity {
     protected DeviceEntity(String deviceName, DeviceType deviceType) {
         this.deviceName = deviceName;
         this.deviceType = deviceType;
+    }
+
+    protected DeviceEntity(String deviceName, DeviceType deviceType,
+                           MgmtInfo mgmtInfo, String rack,
+                           Map<Integer, ForwardingChip> forwardingChips) {
+        this.deviceName = deviceName;
+        this.deviceType = deviceType;
+        this.mgmtInfo = mgmtInfo;
+        this.rack = rack;
+        this.forwardingChips = forwardingChips;
     }
 }
