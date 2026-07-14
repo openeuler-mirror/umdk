@@ -4,7 +4,7 @@
  * Description: SNC (Supernode Network Controller) service
  * Create: 2026-07-07
  * Note:
- * History: 2026-07-07  Create File
+ * History: 2026-07-07  Create File; 2026-07-16 key=value log format
  */
 package com.huawei.umdk.snc.engine;
 
@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.ForwardingChip;
 import com.huawei.umdk.snc.entity.InternalPathHop;
@@ -24,9 +25,14 @@ import com.huawei.umdk.snc.exception.SuperNodeNotFoundException;
 
 public class PathEngine {
 
+    private static final Logger LOG = new Logger(PathEngine.class);
+
     public InternalPathInfo resolveDirectPath(NpuDevice srcDevice,
                                               NpuPortEntity srcPort, NpuDevice destDevice,
                                               NpuPortEntity destPort) {
+        LOG.debug("resolveDirectPath: srcDevice=" + srcDevice.getDeviceName()
+            + "/" + srcPort.getPortName() + ", dstDevice=" + destDevice.getDeviceName()
+            + "/" + destPort.getPortName());
         InternalPathInfo pathInfo = new InternalPathInfo();
         List<InternalPathHop> hops = new ArrayList<>();
 
@@ -56,6 +62,8 @@ public class PathEngine {
         pathInfo.setSourceCna(srcPort.getCna());
         pathInfo.setDestCna(destPort.getCna());
 
+        LOG.debug("resolveDirectPath: resolved, srcEid=" + pathInfo.getSrcEid() + ", dstEid=" + pathInfo.getDstEid());
+
         return pathInfo;
     }
 
@@ -64,6 +72,9 @@ public class PathEngine {
                                                 NpuPortEntity destPort,
                                                 Map<String, String> interDevices,
                                                 Map<String, DeviceEntity> allDevices) {
+        LOG.debug("resolveMultiHopPath: srcDevice=" + srcDevice.getDeviceName()
+            + "/" + srcPort.getPortName() + ", dstDevice=" + destDevice.getDeviceName()
+            + "/" + destPort.getPortName() + ", interDevicesCount=" + interDevices.size());
         List<InternalPathHop> hops = new ArrayList<>();
 
         Map<String, String> orderedInterDevices = new LinkedHashMap<>(interDevices);
@@ -79,6 +90,7 @@ public class PathEngine {
             String devName = orderedDevices.get(i);
             DeviceEntity device = allDevices.get(devName);
             if (device == null) {
+                LOG.error("resolveMultiHopPath: error=Device not found, device=" + devName);
                 throw new SuperNodeNotFoundException("Device not found: " + devName);
             }
 
@@ -104,6 +116,8 @@ public class PathEngine {
                 if (port == null) {
                     port = findPortByConnection(device);
                     if (port == null) {
+                        LOG.error("resolveMultiHopPath: error=Port not found, port=" + interPortName
+                            + ", device=" + devName);
                         throw new SuperNodeNotFoundException(
                             "Port not found: " + interPortName + " in " + devName); // NOPMD
                     }
@@ -133,6 +147,8 @@ public class PathEngine {
             InternalPathHop next = hops.get(i + 1);
             if (current.getRemoteDevice() != null) {
                 if (!current.getRemoteDevice().equals(next.getDeviceName())) {
+                    LOG.error("resolveMultiHopPath: error=Connection mismatch, device1=" + current.getDeviceName()
+                        + ", device2=" + next.getDeviceName());
                     throw new SuperNodeNotFoundException(
                         "Connection mismatch between " + current.getDeviceName()
                             + " and " + next.getDeviceName());
@@ -147,10 +163,14 @@ public class PathEngine {
         pathInfo.setSourceCna(srcPort.getCna());
         pathInfo.setDestCna(destPort.getCna());
 
+        LOG.debug("resolveMultiHopPath: resolved, hopCount=" + hops.size()
+            + ", srcEid=" + pathInfo.getSrcEid() + ", dstEid=" + pathInfo.getDstEid());
+
         return pathInfo;
     }
 
     public List<InternalPathHop> reverseHops(List<InternalPathHop> hops) {
+        LOG.debug("reverseHops: hopCount=" + hops.size());
         List<InternalPathHop> reversed = new ArrayList<>();
         for (int i = hops.size() - 1; i >= 0; i--) {
             InternalPathHop original = hops.get(i);

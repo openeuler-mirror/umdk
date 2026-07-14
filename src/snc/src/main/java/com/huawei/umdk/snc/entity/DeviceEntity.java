@@ -20,7 +20,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EqualsAndHashCode
-@ToString
+@ToString(exclude = "mgmtInfo")
 public abstract class DeviceEntity {
     private String deviceName;
     @Setter(AccessLevel.NONE)
