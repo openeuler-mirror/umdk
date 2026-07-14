@@ -26,7 +26,7 @@
 #define UMQ_LEN_ALIGNMENT_4 4
 #define TSEG_MAP_NUM 256
 #define UMQ_CTP_MAX_BUF_SIZE 4096
-#define UMQ_INITIAL_CREDIT 2
+#define UMQ_INITIAL_CREDIT 0
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
