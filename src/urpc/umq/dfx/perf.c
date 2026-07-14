@@ -339,7 +339,7 @@ static ALWAYS_INLINE void umq_perf_record_add(umq_perf_record_t *total_perf_reco
             }
             if (total_perf_record->type_record[i].hdr == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                    "umq_perf_hdr_create failed, quantile data of type %d missing\n", i);
+                    "umq_perf_hdr_create failed, quantile data of type %u missing\n", i);
                 continue;
             }
             umq_perf_hdr_merge(total_perf_record->type_record[i].hdr, perf_record->type_record[i].hdr);
