@@ -767,6 +767,95 @@ void bondp_hc_uninit(bondp_context_t *bdp_ctx)
     URMA_LOG_INFO("Health check resources cleaned up.\n");
 }
 
+int bondp_hc_fill_seg_info(const bondp_context_t *bdp_ctx,
+                           urma_bond_seg_info_out_t *seg_info, bool *enabled)
+{
+    if (bdp_ctx == NULL || seg_info == NULL || enabled == NULL) {
+        return -EINVAL;
+    }
+
+    *enabled = false;
+    (void)memset(seg_info, 0, sizeof(*seg_info));
+    if (bdp_ctx->hc_ctx == NULL) {
+        return 0;
+    }
+
+    const bondp_hc_ctx_t *hc_ctx = bdp_ctx->hc_ctx;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (hc_ctx->probes[i].seg == NULL) {
+            continue;
+        }
+        bondp_seg_to_base(&hc_ctx->probes[i].seg->seg, &seg_info->slaves[i]);
+        *enabled = true;
+    }
+    return 0;
+}
+
+urma_status_t bondp_hc_unimport_tseg(bondp_target_jetty_t *bdp_tjetty)
+{
+    if (bdp_tjetty == NULL) {
+        return URMA_FAIL;
+    }
+
+    urma_status_t ret = URMA_SUCCESS;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+            urma_target_seg_t *tseg = bdp_tjetty->p_check_tseg[i][j];
+            if (tseg == NULL) {
+                continue;
+            }
+            bdp_tjetty->p_check_tseg[i][j] = NULL;
+            if (urma_unimport_seg(tseg) != URMA_SUCCESS) {
+                URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+                ret = URMA_FAIL;
+            }
+        }
+    }
+    return ret;
+}
+
+int bondp_hc_import_tseg(const bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+                         const urma_bond_id_info_out_t *rjetty_info)
+{
+    if (bdp_ctx == NULL || bdp_tjetty == NULL || rjetty_info == NULL) {
+        return -EINVAL;
+    }
+    if (bdp_ctx->hc_ctx == NULL || !rjetty_info->is_health_check_enable) {
+        return 0;
+    }
+
+    urma_import_seg_flag_t flag = {
+        .bs.cacheable = URMA_NON_CACHEABLE,
+        .bs.mapping = URMA_SEG_NOMAP,
+        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
+    };
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+            if (bdp_tjetty->p_tjetty[i][j] == NULL) {
+                continue;
+            }
+            const urma_seg_base_t *base = &rjetty_info->health_check_seg.slaves[j];
+            if (base->len == 0) {
+                continue;
+            }
+
+            urma_seg_t seg = {0};
+            bondp_seg_base_to_seg(base, &seg);
+            bdp_tjetty->p_check_tseg[i][j] =
+                urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
+            if (bdp_tjetty->p_check_tseg[i][j] == NULL) {
+                URMA_LOG_ERR("Failed to import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+                (void)bondp_hc_unimport_tseg(bdp_tjetty);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int hc_find_node_idx_by_eid(topo_map_t *topo_map, const urma_eid_t *eid, uint32_t *node_idx)
 {
     if (topo_map == NULL || eid == NULL || node_idx == NULL) {
@@ -795,7 +884,7 @@ static bool hc_tjetty_has_probe_path(const bondp_target_jetty_t *bdp_tjetty)
 {
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
-            if (bdp_tjetty->p_tjetty[i][j] != NULL) {
+            if (bdp_tjetty->p_tjetty[i][j] != NULL && bdp_tjetty->p_check_tseg[i][j] != NULL) {
                 return true;
             }
         }
@@ -807,7 +896,8 @@ static void hc_register_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t 
 {
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
-            if (bdp_tjetty->p_tjetty[i][j] == NULL || node->hc_tjetty[i][j] != NULL) {
+            if (bdp_tjetty->p_tjetty[i][j] == NULL || bdp_tjetty->p_check_tseg[i][j] == NULL ||
+                node->hc_tjetty[i][j] != NULL) {
                 continue;
             }
             node->hc_tjetty[i][j] = bdp_tjetty;
@@ -821,7 +911,8 @@ static bondp_target_jetty_t *hc_find_tjetty_for_path(bondp_hc_node_t *node, uint
     bondp_target_jetty_t *tjetty = NULL;
 
     UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
-        if (tjetty->p_tjetty[local_idx][target_idx] != NULL) {
+        if (tjetty->p_tjetty[local_idx][target_idx] != NULL &&
+            tjetty->p_check_tseg[local_idx][target_idx] != NULL) {
             return tjetty;
         }
     }
