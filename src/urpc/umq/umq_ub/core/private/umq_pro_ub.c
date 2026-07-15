@@ -1533,6 +1533,10 @@ static ALWAYS_INLINE bool umq_ub_poll_get_jetty_node(ub_queue_t *queue)
     }
 
     if (umq_ub_is_jetty_node_owner(queue, node)) {
+        queue->jetty[UB_QUEUE_JETTY_IO] = node->jetty[UB_QUEUE_JETTY_IO];
+        queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] = node->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
+        queue->jfs_jfc[UB_QUEUE_JETTY_IO] = node->jfs_jfc[UB_QUEUE_JETTY_IO];
+        queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] = node->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL];
         return true;
     }
     return false;
