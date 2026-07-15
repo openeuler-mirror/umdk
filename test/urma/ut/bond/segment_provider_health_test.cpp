@@ -9,25 +9,6 @@
 using namespace urma_test_bond;
 
 namespace {
-struct MockFailbackTaskPayload {
-    uint32_t requestId;
-    uint32_t peerNodeId;
-    urma_eid_t srcEid;
-    uint32_t vjettyId;
-    uint32_t pjettyIdx;
-    uint32_t newPjettyId;
-};
-
-struct MockFailbackResultPayload {
-    uint32_t requestId;
-    uint32_t peerNodeId;
-    urma_eid_t srcEid;
-    uint32_t vjettyId;
-    uint32_t pjettyIdx;
-    uint32_t newPjettyId;
-    int32_t result;
-};
-
 static size_t FillSingleConnectedRjettyExt(urma_rjetty_t *remote, uint32_t localIdx, uint32_t targetIdx,
                                            const urma_jetty_id_t &slaveId)
 {
@@ -558,22 +539,19 @@ TEST(UrmaBondTest, PublicProviderInitReadsEnvAndCleansUp)
 {
     EnvGuard failover("BOND_ENABLE_FAILOVER", "false");
     EnvGuard failback("BOND_ENABLE_FAILBACK", "bad-bool");
-    EnvGuard backupStart("BOND_HEALTH_CHECK_BACKUP_START", "99");
-    EnvGuard backupInterval("BOND_HEALTH_CHECK_BACKUP_INTERVAL", "3600001");
-    EnvGuard activeStart("BOND_HEALTH_CHECK_ACTIVE_START", "200");
-    EnvGuard activeInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "bad-int");
-    EnvGuard activeBackoff("BOND_HEALTH_CHECK_ACTIVE_MAX_BACKOFF", "0");
+    EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", nullptr);
+    EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "bad-int");
 
     g_bondp_global_ctx = nullptr;
-    g_mockNetlink = true;
-    g_mockNetlinkConnectFail = true;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
+    EXPECT_FALSE(g_bondp_global_ctx->enable_failover);
+    EXPECT_FALSE(g_bondp_global_ctx->enable_failback);
+    EXPECT_FALSE(g_bondp_global_ctx->enable_health_check);
+    EXPECT_EQ(BONDP_HC_DEFAULT_PROBE_INTERVAL_MS,
+              g_bondp_global_ctx->health_check_interval_ms);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
-    bondp_nl_sock_uninit();
-    g_mockNetlinkConnectFail = false;
-    g_mockNetlink = false;
 }
 
 TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
@@ -581,99 +559,17 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     EnvGuard failover("BOND_ENABLE_FAILOVER", "true");
     EnvGuard failback("BOND_ENABLE_FAILBACK", "false");
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "true");
-    EnvGuard backupStart("BOND_HEALTH_CHECK_BACKUP_START", "100");
-    EnvGuard backupInterval("BOND_HEALTH_CHECK_BACKUP_INTERVAL", "1000");
-    EnvGuard activeStart("BOND_HEALTH_CHECK_ACTIVE_START", "100");
-    EnvGuard activeInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "60000");
-    EnvGuard activeBackoff("BOND_HEALTH_CHECK_ACTIVE_MAX_BACKOFF", "100");
+    EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "60000");
 
     g_bondp_global_ctx = nullptr;
-    g_mockNetlink = true;
-    g_mockNetlinkConnectFail = true;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
+    EXPECT_TRUE(g_bondp_global_ctx->enable_failover);
+    EXPECT_FALSE(g_bondp_global_ctx->enable_failback);
     EXPECT_TRUE(g_bondp_global_ctx->enable_health_check);
+    EXPECT_EQ(60000U, g_bondp_global_ctx->health_check_interval_ms);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
-    bondp_nl_sock_uninit();
-    g_mockNetlinkConnectFail = false;
-    g_mockNetlink = false;
-}
-
-TEST(UrmaBondTest, NetlinkInitUsesMockSocketAndCoversFailureBranches)
-{
-    g_mockNetlink = true;
-    g_mockNetlinkAllocFail = true;
-    EXPECT_EQ(-ENOMEM, bondp_nl_sock_init());
-
-    g_mockNetlinkAllocFail = false;
-    g_mockNetlinkConnectFail = true;
-    EXPECT_EQ(-EIO, bondp_nl_sock_init());
-
-    g_mockNetlinkConnectFail = false;
-    g_mockNetlinkResolveFail = true;
-    EXPECT_EQ(-ENOENT, bondp_nl_sock_init());
-
-    g_mockNetlinkResolveFail = false;
-    EXPECT_EQ(0, bondp_nl_sock_init());
-    EXPECT_EQ(0, bondp_nl_sock_init());
-    bondp_nl_sock_uninit();
-    bondp_nl_sock_uninit();
-    g_mockNetlink = false;
-}
-
-TEST(UrmaBondTest, NetlinkWorkerAndCallbackDispatchUseMockSocket)
-{
-    int evtFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-    ASSERT_GE(evtFd, 0);
-
-    MockFailbackTaskPayload task = {};
-    MockFailbackResultPayload result = {};
-    task.requestId = 1;
-    task.srcEid = MakeEid(0x910);
-    task.vjettyId = 0x911;
-    task.pjettyIdx = 0;
-    task.newPjettyId = 0x912;
-    result.requestId = task.requestId;
-    result.srcEid = task.srcEid;
-    result.vjettyId = task.vjettyId;
-    result.pjettyIdx = task.pjettyIdx;
-    result.newPjettyId = task.newPjettyId;
-    result.result = 0;
-
-    g_mockNetlink = true;
-    EXPECT_EQ(-ENODEV, bondp_nl_worker_init());
-    g_mockNetlinkFd = -1;
-    EXPECT_EQ(0, bondp_nl_sock_init());
-    EXPECT_EQ(-EINVAL, bondp_nl_worker_init());
-
-    g_mockNetlinkFd = evtFd;
-    g_mockNetlinkRecvReturn = -NLE_AGAIN;
-    ASSERT_EQ(0, bondp_worker_create());
-    EXPECT_EQ(0, bondp_nl_worker_init());
-    EXPECT_EQ(0, bondp_nl_worker_init());
-    ASSERT_EQ(0, eventfd_write(evtFd, 1));
-    for (int i = 0; i < 50 && g_mockNetlinkRecvCount == 0; i++) {
-        usleep(1000);
-    }
-    EXPECT_GT(g_mockNetlinkRecvCount, 0);
-    bondp_nl_worker_uninit();
-    bondp_nl_worker_uninit();
-    bondp_worker_destroy();
-
-    EXPECT_EQ(NL_OK, InvokeMockNetlinkMsg(BONDP_NL_CMD_FAILBACK_NOTIFY, &task, sizeof(task)));
-    EXPECT_EQ(NL_OK, InvokeMockNetlinkMsg(BONDP_NL_CMD_FAILBACK_NOTIFY, &task, sizeof(task) - 1));
-    EXPECT_EQ(NL_OK, InvokeMockNetlinkMsg(BONDP_NL_CMD_FAILBACK_DONE, &result, sizeof(result)));
-    EXPECT_EQ(NL_OK, InvokeMockNetlinkMsg(BONDP_NL_CMD_FAILBACK_DONE, nullptr, 0));
-    EXPECT_EQ(NL_OK, InvokeMockNetlinkMsg(static_cast<bondp_nl_cmd_t>(0xff), nullptr, 0));
-
-    bondp_nl_sock_uninit();
-    g_mockNetlink = false;
-    g_mockNetlinkFd = -1;
-    g_mockNetlinkRecvReturn = 0;
-    g_mockNetlinkRecvCount = 0;
-    ResetMockNetlinkCallback();
-    EXPECT_EQ(0, close(evtFd));
 }
 
 TEST(UrmaBondTest, FailbackTaskTableCoversScheduleFailureDuplicateAndLookup)
@@ -697,18 +593,16 @@ TEST(UrmaBondTest, FailbackTaskTableCoversScheduleFailureDuplicateAndLookup)
     bondp_fb_uninit(&fixture.ctx);
 }
 
-TEST(UrmaBondTest, PublicProviderInitSucceedsWithMockNetlinkAndDisabledHealth)
+TEST(UrmaBondTest, PublicProviderInitSucceedsWithDisabledHealth)
 {
     EnvGuard failover("BOND_ENABLE_FAILOVER", "false");
 
-    g_mockNetlink = true;
     g_bondp_global_ctx = nullptr;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
     EXPECT_EQ(URMA_FAIL, bondp_init(nullptr));
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
-    g_mockNetlink = false;
 }
 
 TEST(UrmaBondTest, HealthV2PublicApisHonorDisabledAndInvalidContracts)

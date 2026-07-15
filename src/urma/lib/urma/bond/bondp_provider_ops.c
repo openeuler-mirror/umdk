@@ -23,7 +23,6 @@
 #include "bondp_datapath.h"
 #include "bondp_failback.h"
 #include "bondp_health.h"
-#include "bondp_netlink.h"
 #include "bondp_segment.h"
 #include "bondp_types.h"
 #include "bondp_worker.h"
