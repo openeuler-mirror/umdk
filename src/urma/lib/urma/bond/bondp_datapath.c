@@ -1476,9 +1476,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
-    if (is_ctrl_cr(cr)) {
-        return CONVERT_SKIP;
-    } else if (is_fake_cr(cr)) {
+    if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, idx, cr);
     } else if (is_recv_cr(cr)) {
         return (bdp_ctx->msn_enable) ? handle_recv_cr_with_store(bdp_ctx, idx, cr)

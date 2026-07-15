@@ -25,10 +25,9 @@ target_include_directories(urma_ubagg
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/utils
-        /usr/include/libnl3
 )
 
-target_link_libraries(urma_ubagg urma nl-genl-3 nl-3)
+target_link_libraries(urma_ubagg urma)
 
 install(TARGETS urma_ubagg
     DESTINATION /usr/lib64/urma
