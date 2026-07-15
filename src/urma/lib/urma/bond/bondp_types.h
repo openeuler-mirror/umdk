@@ -239,6 +239,7 @@ typedef struct bondp_tseg {
     int dev_num;
     bondp_context_t *bondp_ctx;
     urma_ref_t use_cnt;
+    atomic_bool deleting;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_tseg_t;
@@ -289,6 +290,7 @@ typedef struct bondp_comp {
     bondp_hash_table_t v_conn_table;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
+    atomic_bool deleting;
     // send
     bool modify_to_error;
     pthread_spinlock_t send_lock;
