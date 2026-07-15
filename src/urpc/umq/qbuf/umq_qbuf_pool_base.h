@@ -17,6 +17,7 @@
 #include "umq_errno.h"
 #include "umq_dfx_types.h"
 #include "umq_types.h"
+#include "umq_inner.h"
 #include "umq_vlog.h"
 #include "urpc_util.h"
 #include "urpc_list.h"
