@@ -29,7 +29,6 @@
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "util_id_generator.h"
-#include "umq_inner.h"
 #include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_ub_jetty_pool.h"
@@ -47,7 +46,6 @@ extern "C" {
 #define UMQ_MAX_TSEG_NUM (1024)
 #define HUGE_QBUF_BUFFER_INC_BATCH 64
 #define UMQ_QBUF_ALIGN_SIZE 4096
-#define UMQ_MAX_SGE_NUM 1
 
 #define UMQ_UB_MAX_REMOTE_EID_NUM 1024
 

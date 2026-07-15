@@ -168,8 +168,12 @@ int umq_qbuf_base_alloc(qbuf_pool_base_t *base, thread_local_qbuf_pool_t *thread
             return -UMQ_ERR_ENOMEM;
         }
     } else {
-        param->actual_buf_count =
-            umq_qbuf_base_actual_buf_count(base, param->request_size, param->num, param->headroom_size);
+        uint32_t num = umq_qbuf_base_actual_buf_count(base, param->request_size, param->num, param->headroom_size);
+        if (UMQ_MAX_SGE_NUM == 1 && param->num != num) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "only one qbuf can be allocated when UMQ_MAX_SGE_NUM equals 1\n");
+            return -UMQ_ERR_EINVAL;
+        }
+        param->actual_buf_count = num;
     }
 
     local_block_pool_t *local_pool = get_thread_local_cache(thread_cache, &base->tls_pools);
