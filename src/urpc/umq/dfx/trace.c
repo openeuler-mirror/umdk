@@ -444,8 +444,14 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
         pos = 0;
         for (uint32_t j = 0; j < rec->sub_time_cnt; j++) {
             umq_sub_time_t *sub = &rec->sub_time[j];
-            pos += snprintf(buf + pos, UMQ_TRACE_LOG_BUF_SIZE - pos,
-                " sub[%u] umq_id=%u func=%s start=%lu exec=%lu;",
+            need = snprintf(NULL, 0, " sub[%u] umq_id=%u func=%s start=%lu exec=%lu;",
+                j, rec->umq_id, umq_urma_func_str(sub->func_type), sub->start_time, sub->exec_time);
+            if (pos + need >= UMQ_TRACE_LOG_BUF_SIZE - 1) {
+                buf[pos] = '\0';
+                UMQ_VLOG_INFO(VLOG_UMQ, "%s\n", buf);
+                pos = 0;
+            }
+            pos += snprintf(buf + pos, UMQ_TRACE_LOG_BUF_SIZE - pos, " sub[%u] umq_id=%u func=%s start=%lu exec=%lu;",
                 j, rec->umq_id, umq_urma_func_str(sub->func_type), sub->start_time, sub->exec_time);
         }
         if (pos > 0) {
