@@ -346,6 +346,13 @@ int umq_external_mutex_lock_ops_register(umq_external_mutex_lock_ops_t *ops);
 int umq_external_rwlock_ops_register(umq_external_rwlock_ops_t *ops);
 
 /**
+ * Register umq thread_key ops. Notice: Thread_key register API MUST be called before all other APIs are executed.
+ * @param[in] ops: thread_key ops
+ * Return 0 on success, error code on failure
+ */
+int umq_external_thread_key_ops_register(umq_external_thread_key_ops_t *ops);
+
+/**
  * Get eventfd for the global transport pool. Caller can epoll on this fd to be notified.
  * @param[in] umqh: umq handle; used to locate the matching transport framework ops
  * Return fd >= 0 on success, < 0 on failure

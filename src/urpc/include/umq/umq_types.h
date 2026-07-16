@@ -50,6 +50,15 @@ typedef struct umq_external_rw_lock_ops {
     int (*try_write_lock)(umq_external_rwlock_t *m);
 } umq_external_rwlock_ops_t;
 
+typedef void* util_external_thread_key_t;
+
+typedef struct umq_external_thread_key_ops {
+    util_external_thread_key_t *(*key_create)(void (*destr_function)(void *data));
+    int (*key_delete)(util_external_thread_key_t *key);
+    int (*setspecific)(util_external_thread_key_t *key, const void *data);
+    void *(*getspecific)(util_external_thread_key_t *key);
+} umq_external_thread_key_ops_t;
+
 typedef enum umq_log_level {
     UMQ_LOG_LEVEL_EMERG = 0,
     UMQ_LOG_LEVEL_ALERT,
