@@ -14,6 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bondp_health.h"
 #include "bondp_types.h"
 #include "urma_log.h"
 
@@ -221,19 +222,18 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
         uint32_t loc_idx = bdp_comp->active_indices[i];
         for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
             uint32_t tar_idx = bdp_tjetty->active_indices[j];
-            if (!target_path_available(bdp_tjetty, loc_idx, tar_idx) || target_used[tar_idx]) {
+            if (bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL || target_used[tar_idx]) {
                 continue;
             }
-            if (atomic_load(&bdp_comp->valid[loc_idx])) {
+            target_used[tar_idx] = true;
+            if (target_path_available(bdp_tjetty, loc_idx, tar_idx) && atomic_load(&bdp_comp->valid[loc_idx])) {
                 *send_idx = (int)loc_idx;
                 *target_idx = (int)tar_idx;
                 return 0;
             }
-            target_used[tar_idx] = true;
             break;
         }
     }
-
     return -1;
 }
 
