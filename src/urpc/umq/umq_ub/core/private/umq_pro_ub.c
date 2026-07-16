@@ -2102,6 +2102,9 @@ static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32
         current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap,
             jetty_node_list->list_len, current_idx);
         if (current_idx >= jetty_node_list->list_len) {
+            if (wrapped) {
+                break;
+            }
             wrapped = true;
             current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap, jetty_node_list->list_len, 0);
             if (current_idx >= jetty_node_list->list_len) {
@@ -2122,25 +2125,21 @@ static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32
             continue;
         }
 
-        option->tp_handle_idx = current_idx;
         uint32_t remaining = buf_count - (uint32_t)qbuf_cnt;
+        option->tp_handle_idx = current_idx;
         uint32_t poll_batch = remaining > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : remaining;
-        if ((uint32_t)qbuf_cnt >= buf_count) {
-            break;
-        }
         int result = umq_ub_poll_tx_single(queue, &buf[qbuf_cnt], poll_batch, option);
         if (result < 0) {
             current_idx++;
             continue;
         }
-        uint32_t next_idx = current_idx + 1;
-        if (next_idx >= jetty_node_list->list_len) {
-            next_idx = 0;
-        }
-        __atomic_store_n(&jetty_node_list->next_poll_idx, next_idx, __ATOMIC_RELEASE);
         qbuf_cnt += result;
         current_idx++;
     }
+    if (current_idx >= jetty_node_list->list_len) {
+        current_idx = 0;
+    }
+    __atomic_store_n(&jetty_node_list->next_poll_idx, current_idx, __ATOMIC_RELEASE);
     util_mutex_unlock(jetty_node_list->lock);
 
     return qbuf_cnt;
