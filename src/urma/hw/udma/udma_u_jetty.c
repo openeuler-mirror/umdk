@@ -1141,8 +1141,8 @@ urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
-    udma_jetty->sq.is_wqe_lock_buf_jetty =
-		is_support_wqe_lock_buffer_jetty(udma_jetty->sq.ctx, jetty->jetty_cfg.id, true);
+	udma_jetty->sq.is_wqe_lock_buf_jetty =
+		is_support_wqe_lock_buffer_jetty(udma_jetty->sq.ctx, jetty->jetty_cfg.id);
 	if (udma_jetty->sq.is_wqe_lock_buf_jetty) {
 		if (udma_u_check_wqe_lock_buffer_jetty(udma_jetty))
 			return URMA_EINVAL;
