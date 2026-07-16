@@ -1054,7 +1054,7 @@ DEL_CTX:
 
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
 {
-    if (ub_ctx == NULL || ub_ctx->urma_ctx) {
+    if (ub_ctx == NULL || ub_ctx->urma_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
         return -UMQ_ERR_EINVAL;
     }
