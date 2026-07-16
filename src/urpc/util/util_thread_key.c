@@ -11,6 +11,8 @@
 
 #include "util_thread_key.h"
 
+static bool g_util_thread_key_ops_registered = false;
+
 static util_thread_key_t *util_thread_key_create_impl(void (*destr_function)(void *data))
 {
     pthread_key_t *p_key = (pthread_key_t *)calloc(1, sizeof(pthread_key_t));
@@ -76,9 +78,12 @@ void util_thread_key_ops_register(const util_thread_key_ops_t *ops)
         g_util_thread_key_ops.key_delete = util_thread_key_delete_impl;
         g_util_thread_key_ops.setspecific = util_thread_setspecific_impl;
         g_util_thread_key_ops.getspecific = util_thread_getspecific_impl;
+
+        g_util_thread_key_ops_registered = false;
         return;
     }
 
+    g_util_thread_key_ops_registered = true;
     g_util_thread_key_ops = *ops;
 }
 
@@ -100,4 +105,9 @@ int util_thread_setspecific(util_thread_key_t *key, const void *data)
 void *util_thread_getspecific(util_thread_key_t *key)
 {
     return g_util_thread_key_ops.getspecific(key);
+}
+
+bool util_thread_key_ops_registered(void)
+{
+    return g_util_thread_key_ops_registered;
 }
