@@ -991,7 +991,7 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 
 	if (udma_check_sge_num_and_opcode(wr->opcode, sq, wr, &wqe_info.opcode,
 					  udma_ctx->atomic_add_en)) {
-		UDMA_LOG_ERR("WR SGE number or opcode is invalid.\n");
+		UDMA_LOG_ERR("WR SGE number or opcode: %u is invalid.\n", wr->opcode);
 		return URMA_EINVAL;
 	}
 
