@@ -157,6 +157,17 @@ static void hc_rebuild_probe_jetty(bondp_probe_res_t *res)
     }
 }
 
+static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t target_idx)
+{
+    bondp_target_jetty_t *bdp_tjetty = NULL;
+
+    pthread_rwlock_rdlock(&node->lock);
+    UB_LIST_FOR_EACH (bdp_tjetty, hc_entry, &node->tjetty_list) {
+        atomic_store(&bdp_tjetty->valid[target_idx], true);
+    }
+    pthread_rwlock_unlock(&node->lock);
+}
+
 static void hc_drain_probe_cq(bondp_probe_res_t *res)
 {
     if (res == NULL || res->jfc == NULL || res->jfce == NULL) {
@@ -199,8 +210,7 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
             bool prev = atomic_load(&node->valid[local_idx][target_idx]);
             atomic_store(&node->valid[local_idx][target_idx], ok);
             if (ok && !prev) {
-                bondp_target_jetty_t *bdp_tjetty = node->hc_tjetty[local_idx][target_idx];
-                atomic_store(&bdp_tjetty->valid[target_idx], true);
+                hc_set_tjetty_list_target_valid(node, target_idx);
             }
 
             node->probe_checked[local_idx][target_idx] = true;
