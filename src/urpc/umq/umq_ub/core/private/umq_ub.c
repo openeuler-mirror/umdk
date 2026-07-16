@@ -1475,6 +1475,15 @@ int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq)
     } else {
         queue->rx_buf_size = share_rq->rx_buf_size;
     }
+    if (queue->create_flag & UMQ_CREATE_FLAG_TX_BUF_SIZE) {
+        if (share_rq->tx_buf_size != queue->tx_buf_size) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "share_rq tx_buf_size %u and creating_queue tx_buf_size %u is different\n",
+                share_rq->tx_buf_size, queue->tx_buf_size);
+            goto ERR;
+        }
+    } else {
+        queue->tx_buf_size = share_rq->tx_buf_size;
+    }
     if (queue->create_flag & UMQ_CREATE_FLAG_RX_DEPTH) {
         if (share_rq->rx_depth != queue->rx_depth) {
             UMQ_VLOG_ERR(VLOG_UMQ, "share_rq rx_depth %u and creating_queue rx_depth %u is different\n",
@@ -1484,6 +1493,15 @@ int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq)
     } else {
         queue->rx_depth = share_rq->rx_depth;
     }
+    if (queue->create_flag & UMQ_CREATE_FLAG_TX_DEPTH) {
+        if (share_rq->tx_depth != queue->tx_depth) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "share_rq tx_depth %u and creating_queue tx_depth %u is different\n",
+                share_rq->tx_depth, queue->tx_depth);
+            goto ERR;
+        }
+    } else {
+        queue->tx_depth = share_rq->tx_depth;
+    }
     if (queue->create_flag & UMQ_CREATE_FLAG_QUEUE_MODE) {
         if (share_rq->mode != queue->mode) {
             UMQ_VLOG_ERR(VLOG_UMQ, "share_rq mode %u and creating_queue mode %u is different\n",
@@ -1492,6 +1510,16 @@ int share_rq_param_check(ub_queue_t *queue, ub_queue_t *share_rq)
         }
     } else {
         queue->mode = share_rq->mode;
+    }
+    if (is_umq_ub_share_transport(queue->create_flag) &&
+        !is_umq_ub_share_transport(share_rq->create_flag)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "creating_queue has SHARE_TRANSPORT, but share_rq does not have SHARE_TRANSPORT\n");
+        goto ERR;
+    }
+    if (is_umq_ub_share_transport(share_rq->create_flag) &&
+        !is_umq_ub_share_transport(queue->create_flag)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "share_rq has SHARE_TRANSPORT, but creating_queue does not have SHARE_TRANSPORT\n");
+        goto ERR;
     }
     queue->rqe_post_factor = share_rq->rqe_post_factor;
     return UMQ_SUCCESS;
