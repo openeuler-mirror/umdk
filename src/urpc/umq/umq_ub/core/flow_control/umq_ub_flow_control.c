@@ -7,6 +7,10 @@
  * History: 2025-12-22
  */
 
+#include <sys/eventfd.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #include "umq_pro_types.h"
 #include "umq_symbol_private.h"
 #include "umq_types.h"
@@ -551,6 +555,15 @@ static ALWAYS_INLINE uint16_t allocated_credit_dec_non_atomic(ub_credit_pool_t *
     return counter_dec_non_atomic_u64(&pool->stats_u64[CREDIT_POOL_ALLOCATED_UNLIMITED], count);
 }
 
+static void umq_ub_credit_pool_uninit(ub_queue_t *queue)
+{
+    jfr_ctx_t *io_jfr_ctx = queue->jfr_ctx[UB_QUEUE_JETTY_IO];
+    if (io_jfr_ctx == NULL) {
+        return;
+    }
+    umq_ub_credit_pending_queue_uninit(&io_jfr_ctx->credit.pending_queue);
+}
+
 static int umq_ub_credit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
 {
     ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
@@ -571,6 +584,104 @@ static int umq_ub_credit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flow
         pool->ops.stats_query = credit_pool_stats_query_non_atomic;
     }
     return umq_ub_credit_pending_queue_init(&pool->pending_queue, cfg->pending_credit_threshold);
+}
+
+// Jetty-pool callback: wake the user only if no_jetty_list is non-empty.
+static void umq_ub_fc_msg_retry_on_jetty_avail(void *user_data)
+{
+    umq_ub_fc_msg_retry_list_t *retry_list = (umq_ub_fc_msg_retry_list_t *)user_data;
+    if (retry_list != NULL && !urpc_list_is_empty(&retry_list->no_jetty_list)) {
+        umq_ub_fc_msg_retry_notify(retry_list);
+    }
+}
+
+// Init the fc_msg_retry list (main=32K, standalone=2 nodes). Sub/logic umq skip.
+static int umq_ub_fc_msg_retry_list_init(ub_queue_t *queue)
+{
+    int ret = 0;
+    uint32_t list_size = UMQ_UB_FC_MSG_RETRY_LIST_SIZE_STANDALONE;
+    if (is_umq_ub_share_rq(queue->create_flag)) {
+        umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
+        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        queue->flow_control.fc_msg_retry_list = main_queue->flow_control.fc_msg_retry_list;
+        return UMQ_SUCCESS;
+    } else if (is_umq_ub_main_queue(queue->create_flag)) {
+        list_size = UMQ_UB_FC_MSG_RETRY_LIST_SIZE_MAIN;
+    }
+
+    umq_ub_fc_msg_retry_list_t *retry_list =
+        (umq_ub_fc_msg_retry_list_t *)calloc(1, sizeof(umq_ub_fc_msg_retry_list_t));
+    if (retry_list == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc fc_msg_retry list struct failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    retry_list->nodes = (umq_ub_fc_msg_retry_entry_t *)calloc(list_size, sizeof(umq_ub_fc_msg_retry_entry_t));
+    if (retry_list->nodes == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc fc_msg_retry nodes (%u) failed\n", list_size);
+        ret = -UMQ_ERR_ENOMEM;
+        goto FREE_RETRY_LIST;
+    }
+    retry_list->node_cnt = list_size;
+    urpc_list_init(&retry_list->free_list);
+    urpc_list_init(&retry_list->retry_list);
+    urpc_list_init(&retry_list->no_jetty_list);
+    for (uint32_t i = 0; i < list_size; i++) {
+        urpc_list_push_back(&retry_list->free_list, &retry_list->nodes[i].node);
+    }
+
+    retry_list->fc_msg_retry_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (retry_list->fc_msg_retry_fd == UMQ_INVALID_FD) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "create fc_msg_retry eventfd failed, err: %s\n", strerror(errno));
+        ret = -UMQ_ERR_EINVAL;
+        goto FREE_RETRY_LIST_NODE;
+    }
+
+    if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
+        retry_list->avail_cb_node =
+            umq_ub_jetty_pool_register_avail_cb(umq_ub_fc_msg_retry_on_jetty_avail, (void *)retry_list);
+        if (retry_list->avail_cb_node == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "register jetty avail cb failed\n");
+            ret =  -UMQ_ERR_ENOMEM;
+            goto CLOSE_FD;
+        }
+    }
+
+    retry_list->inited = true;
+    queue->flow_control.fc_msg_retry_list = retry_list;
+    return UMQ_SUCCESS;
+
+CLOSE_FD:
+    (void)close(retry_list->fc_msg_retry_fd);
+
+FREE_RETRY_LIST_NODE:
+    free(retry_list->nodes);
+
+FREE_RETRY_LIST:
+    free(retry_list);
+    return ret;
+}
+
+// Free the fc_msg_retry list (only the owning umq; sub/logic umq share the main's).
+static void umq_ub_fc_msg_retry_list_uninit(ub_queue_t *queue)
+{
+    umq_ub_fc_msg_retry_list_t *retry_list = queue->flow_control.fc_msg_retry_list;
+    if (retry_list == NULL || !retry_list->inited || is_umq_ub_share_rq(queue->create_flag)) {
+        return;
+    }
+    if (retry_list->avail_cb_node != NULL) {
+        umq_ub_jetty_pool_unregister_avail_cb(retry_list->avail_cb_node);
+        retry_list->avail_cb_node = NULL;
+    }
+    if (retry_list->fc_msg_retry_fd != UMQ_INVALID_FD) {
+        (void)close(retry_list->fc_msg_retry_fd);
+        retry_list->fc_msg_retry_fd = UMQ_INVALID_FD;
+    }
+    free(retry_list->nodes);
+    retry_list->nodes = NULL;
+    retry_list->inited = false;
+    free(retry_list);
+    queue->flow_control.fc_msg_retry_list = NULL;
 }
 
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
@@ -655,14 +766,25 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     fc->local_req_seq = 1;
     fc->remote_expect_seq = 1;
 
+    ret = umq_ub_fc_msg_retry_list_init(queue);
+    if (ret != UMQ_SUCCESS) {
+        goto UNINIT_CREDIT_POOL;
+    }
     return UMQ_SUCCESS;
+
+UNINIT_CREDIT_POOL:
+    if ((queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0) {
+        umq_ub_credit_pool_uninit(queue);
+    }
+    return ret;
 }
 
-void umq_ub_flow_control_uninit(ub_flow_control_t *fc)
+void umq_ub_flow_control_uninit(ub_queue_t *queue)
 {
-    if (!fc->enabled) {
+    if (!queue->flow_control.enabled) {
         return;
     }
+    umq_ub_fc_msg_retry_list_uninit(queue);
 
     UMQ_VLOG_INFO(VLOG_UMQ, "umq flow control uninit success\n");
 }
@@ -790,6 +912,10 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
+    } else if (status == URMA_EAGAIN) {
+        umq_ub_post_release_jetty_node(queue, 1);
+        umq_ub_permission_release(fc);
+        return -UMQ_ERR_EAGAIN;
     }
     umq_ub_post_release_jetty_node(queue, 1);
     umq_ub_permission_release(fc);
@@ -849,8 +975,10 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
+    } else if (status == URMA_EAGAIN) {
+        umq_ub_post_release_jetty_node(queue, 1);
+        return -UMQ_ERR_EAGAIN;
     }
-
     umq_ub_post_release_jetty_node(queue, 1);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
         "remote jetty_id: %u, urma_post_jetty_send_wr for send credit req failed, status: %d\n",
@@ -998,7 +1126,13 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
+    } else if (status == URMA_EAGAIN) {
+        umq_ub_post_release_jetty_node(queue, 1);
+        umq_ub_permission_release(fc);
+        fc->ops.remote_rx_window_inc(fc, return_credit, true);
+        return -UMQ_ERR_EAGAIN;
     }
+
     umq_ub_post_release_jetty_node(queue, 1);
     umq_ub_permission_release(fc);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
@@ -1067,6 +1201,9 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
+    } else if (status == URMA_EAGAIN) {
+        umq_ub_post_release_jetty_node(queue, 1);
+        return -UMQ_ERR_EAGAIN;
     }
     umq_ub_post_release_jetty_node(queue, 1);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "

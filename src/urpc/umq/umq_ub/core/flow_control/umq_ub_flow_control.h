@@ -30,7 +30,7 @@ typedef union umq_ub_fc_user_ctx {
 
 uint16_t umq_ub_flow_control_threashold_modify(uint16_t threashold, uint8_t ratio);
 int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
-void umq_ub_flow_control_uninit(ub_flow_control_t *fc);
+void umq_ub_flow_control_uninit(ub_queue_t *queue);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count);
 uint64_t umq_ub_rx_consumed_exchange(bool lock_free, volatile uint64_t *var, uint64_t count);

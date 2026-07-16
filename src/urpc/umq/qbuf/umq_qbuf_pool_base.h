@@ -193,7 +193,7 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(
         (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
         thread_cache->stats.tid = (uint64_t)pthread_self();
         thread_cache->inited = true;
-        urpc_thread_closure_register(pools->type, 0, pools->closure);
+        // Todo: register closure
         // register TLS stats to global linked list
         (void)pthread_spin_lock(&pools->tls_stats_lock);
         urpc_list_push_back(&pools->tls_register_head, &thread_cache->tls_node);
