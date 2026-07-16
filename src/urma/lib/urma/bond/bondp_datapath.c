@@ -16,6 +16,7 @@
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
 #include "bondp_failback.h"
+#include "bondp_health.h"
 #include "bondp_types.h"
 #include "ub_get_clock.h"
 #include "urma_api.h"
@@ -1194,6 +1195,11 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         atomic_store(&bdp_comp->valid[send_idx], false);
+        if (g_bondp_global_ctx->enable_health_check) {
+            bondp_target_jetty_t *bdp_tjetty = wr_entry->target_vjetty;
+            bool target_any_valid = bondp_hc_tjetty_target_any_valid(bdp_tjetty, target_idx);
+            atomic_store(&bdp_tjetty->valid[target_idx], target_any_valid);
+        }
         /* choose the failover route(0 or 1) through send_idx and target_idx */
         int new_send_idx = send_idx;
         int new_target_idx = target_idx;
