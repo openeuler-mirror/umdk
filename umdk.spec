@@ -387,7 +387,6 @@ fi
     %{_includedir}/ub/umdk/urma/uvs_types.h
     %{_includedir}/ub/umdk/urma/uvs_api.h
 %if %{with udma}
-    %{_libdir}/urma/liburma-udma.so
     %dir %{_includedir}/ub/umdk/urma/udma
     %{_includedir}/ub/umdk/urma/udma/udma_u_ctl.h
 %endif
