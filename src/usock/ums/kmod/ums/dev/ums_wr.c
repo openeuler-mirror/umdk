@@ -17,6 +17,7 @@
 #include <linux/atomic.h>
 #include <linux/hashtable.h>
 #include <linux/wait.h>
+#include <linux/vmalloc.h>
 
 #ifndef KERNEL_VERSION_4
 #include "ums_dim.h"
