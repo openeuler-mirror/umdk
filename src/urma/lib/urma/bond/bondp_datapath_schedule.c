@@ -14,7 +14,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "bondp_health.h"
 #include "bondp_types.h"
 #include "urma_log.h"
 
@@ -38,8 +37,7 @@ static bool target_path_available(const bondp_target_jetty_t *bdp_tjetty,
                                   uint32_t local_idx, uint32_t target_idx)
 {
     return atomic_load(&bdp_tjetty->valid[target_idx]) &&
-           bdp_tjetty->p_tjetty[local_idx][target_idx] != NULL &&
-           bondp_hc_tjetty_path_valid(bdp_tjetty, local_idx, target_idx);
+           bdp_tjetty->p_tjetty[local_idx][target_idx] != NULL;
 }
 
 static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
