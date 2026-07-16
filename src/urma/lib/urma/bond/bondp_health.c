@@ -65,6 +65,7 @@ typedef struct bondp_hc_node {
     pthread_rwlock_t lock; /* Protects tjetty_list and hc_tjetty */
     struct bondp_target_jetty *hc_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     struct ub_list tjetty_list;
+    bool probe_checked[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } bondp_hc_node_t;
 
 /* Per-context health-check context */
@@ -184,10 +185,6 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
             uint32_t node_idx;
             uint32_t target_idx;
 
-            if (cr[k].status == URMA_CR_ACK_TIMEOUT_ERR) { /* status 9 */
-                need_rebuild = true;
-            }
-
             hc_decode_user_ctx(cr[k].user_ctx, &node_idx, &target_idx);
 
             if (node_idx >= hc_ctx->node_num) {
@@ -204,6 +201,13 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
             if (ok && !prev) {
                 bondp_target_jetty_t *bdp_tjetty = node->hc_tjetty[local_idx][target_idx];
                 atomic_store(&bdp_tjetty->valid[target_idx], true);
+            }
+
+            node->probe_checked[local_idx][target_idx] = true;
+
+            if (cr[k].status == URMA_CR_ACK_TIMEOUT_ERR) { /* status 9 */
+                need_rebuild = true;
+                break;
             }
         }
     }
@@ -316,18 +320,35 @@ static bool hc_probe_sq_has_room(bondp_hc_ctx_t *hc_ctx)
 
 static void hc_probe_node(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node)
 {
+    bool any_connected = false;
+    bool all_checked = true;
+
     pthread_rwlock_rdlock(&node->lock);
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (hc_ctx->probes[i].inflight >= HC_PROBE_INFLIGHT_HI) {
+            all_checked = false;
             continue;
         }
         for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             if (node->hc_tjetty[i][j] == NULL) {
                 continue;
             }
+            any_connected = true;
+            if (node->probe_checked[i][j]) {
+                continue;
+            }
+            all_checked = false;
             hc_probe_link(hc_ctx, node, i, j);
             if (hc_ctx->probes[i].inflight >= HC_PROBE_INFLIGHT_HI) {
                 break;
+            }
+        }
+    }
+
+    if (any_connected && all_checked) {
+        for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+            for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+                node->probe_checked[i][j] = false;
             }
         }
     }
