@@ -564,7 +564,7 @@ int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_b
         "tp_create_jfce", "tp_create_jfc", "tp_create_jfr", "tp_create_jetty",
         "tp_destroy_jfce", "tp_destroy_jfc", "tp_destroy_jfr", "tp_destroy_jetty",
         "tp_rjetty_get", "tp_rjetty_put", "tp_route_path_get", "tp_import_jetty", "tp_bind_jetty",
-        "tp_unimport_jetty", "tp_unbind_jetty",
+        "tp_unimport_jetty", "tp_unbind_jetty", "tp_alloc_jetty_node", "tp_free_jetty_node",
     };
 
     int str_size = 0;
