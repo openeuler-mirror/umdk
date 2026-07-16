@@ -225,6 +225,7 @@ typedef struct umq_flow_control_cfg {
     uint16_t pending_credit_threshold;
     // use atomic variables as flow control window
     bool use_atomic_window;
+    bool is_limited;
 } umq_flow_control_cfg_t;
 
 typedef enum umq_buf_block_size {

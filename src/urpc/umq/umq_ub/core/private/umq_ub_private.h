@@ -337,6 +337,7 @@ typedef enum ub_credit_stat_u64 {
     CREDIT_POOL_IDLE_TOTAL = 0,     // the total number of idle credit in the statistics pool
     CREDIT_POOL_ALLOCATED_TOTAL,    // the total number of credit allocated from the credit pool
     CREDIT_POOL_ERR_TOTAL,          // invalid total credit count (which will cause pool_idle statistics failure)
+    CREDIT_POOL_ALLOCATED_UNLIMITED,
     CREDIT_COUNTER_MAX_U64
 } ub_credit_stat_u64_t;
 
@@ -360,6 +361,7 @@ typedef struct ub_credit_pool {
     volatile uint16_t stats_u16[CREDIT_COUNTER_MAX_U16];
     uint16_t capacity;
     ub_credit_pending_queue_t pending_queue;
+    bool is_limited;
 } ub_credit_pool_t;
 
 typedef struct jfr_ctx {
