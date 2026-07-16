@@ -182,11 +182,14 @@ typedef struct ub_flow_control {
     uint16_t remote_tx_depth;
     uint16_t remote_rx_depth;
     uint32_t timeout_us;
+    uint32_t fc_req_timeout_us; // flow control credit req rsp timeout (us), 0 = never timeout
     ub_pending_credit_req_t pending_req;
     bool local_set;
     bool remote_get;
     bool enabled;
     volatile bool is_credit_applying;
+    volatile uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
+                                              // the link if the rsp does not return within the timeout
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     uint8_t local_req_seq;
     uint8_t remote_expect_seq;

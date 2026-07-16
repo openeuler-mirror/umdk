@@ -28,6 +28,8 @@
 #define UMQ_UB_PENDING_QUEUE_MAX_DEFAULT 512
 #define UMQ_UB_FLOW_CONTROL_POLL_MAX_RETRY 128
 #define UMQ_UB_FLOW_CONTROL_POLL_MAX_TIME  256 // us
+#define UMQ_UB_FC_REQ_TIMEOUT_MAX_MS      60000 // max value of cfg->fc_req_timeout_ms (ms, = 60s)
+#define UMQ_UB_FC_REQ_TIMEOUT_DEFAULT_MS  1000  // default cfg->fc_req_timeout_ms when 0 is passed (ms, = 1s)
 
 static uint8_t g_umq_ub_credit_ratio[] = {1, 3, 5, 7};
 #define UMQ_UB_CREDIT_RATIO_SIZE (sizeof(g_umq_ub_credit_ratio) / sizeof(uint8_t))
@@ -651,6 +653,23 @@ int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t 
     }
     fc->timeout_us = umq_ub_timer_timeout_get();
 
+    /* flow control credit req rsp timeout: <0 (e.g. -1) means never timeout, 0 means use default(1s),
+     * positive value is clamped to max 60000ms(60s) */
+    int32_t fc_req_timeout_ms = cfg->fc_req_timeout_ms;
+    if (fc_req_timeout_ms < 0) {
+        fc->fc_req_timeout_us = 0; /* never timeout */
+    } else {
+        if (fc_req_timeout_ms == 0) {
+            fc_req_timeout_ms = UMQ_UB_FC_REQ_TIMEOUT_DEFAULT_MS;
+        }
+        if (fc_req_timeout_ms > UMQ_UB_FC_REQ_TIMEOUT_MAX_MS) {
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "UMQ(ID:%u), fc_req_timeout_ms %d exceeds max %u, clamp to %u\n",
+                queue->umq_id, fc_req_timeout_ms, UMQ_UB_FC_REQ_TIMEOUT_MAX_MS, UMQ_UB_FC_REQ_TIMEOUT_MAX_MS);
+            fc_req_timeout_ms = UMQ_UB_FC_REQ_TIMEOUT_MAX_MS;
+        }
+        fc->fc_req_timeout_us = (uint32_t)fc_req_timeout_ms * US_PER_MS;
+    }
+
     /* Initialize REQ sequence for deduplication */
     fc->local_req_seq = 1;
     fc->remote_expect_seq = 1;
@@ -787,6 +806,8 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
+        /* record req send time so an unresponsive peer (rsp never returns) can be detected as timeout */
+        __atomic_store_n(&fc->credit_req_send_time, get_timestamp_us(), __ATOMIC_RELEASE);
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
@@ -995,6 +1016,8 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
+        /* record req send time so an unresponsive peer (rsp never returns) can be detected as timeout */
+        __atomic_store_n(&fc->credit_req_send_time, get_timestamp_us(), __ATOMIC_RELEASE);
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
