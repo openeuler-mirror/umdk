@@ -10,6 +10,7 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 
+#include "perf.h"
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "urpc_thread_closure.h"
@@ -380,6 +381,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
         return NULL;
     }
 
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     jetty_pool_t *pool = &g_jetty_pool;
 
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
@@ -424,6 +426,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
             node->borrow_limit = get_borrow_limit(pool->node_count, pool->active_count);
             (void)__atomic_add_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
             (void)__atomic_add_fetch(&pool->acc_alloc_count, 1, __ATOMIC_RELAXED);
+            umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE, start_timestamp);
             return node;
         }
     }
@@ -432,6 +435,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     (void)__atomic_add_fetch(&pool->acc_miss_count, 1, __ATOMIC_RELAXED);
     UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "No available jetty\n");
     errno = UMQ_ERR_EMLINK;
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE, start_timestamp);
     return NULL;
 }
 
@@ -442,6 +446,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         return -UMQ_ERR_EINVAL;
     }
 
+    uint64_t start_timestamp = umq_perf_get_start_timestamp();
     jetty_pool_t *pool = &g_jetty_pool;
     (void)__atomic_sub_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
     (void)__atomic_add_fetch(&pool->acc_free_count, 1, __ATOMIC_RELAXED);
@@ -449,6 +454,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         (void)pthread_spin_lock(&pool->lock);
         recycle_node_to_relay_q(pool, node);
         (void)pthread_spin_unlock(&pool->lock);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
         return UMQ_SUCCESS;
     }
 
@@ -488,6 +494,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         }
     }
 
+    umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
     return UMQ_SUCCESS;
 }
 
