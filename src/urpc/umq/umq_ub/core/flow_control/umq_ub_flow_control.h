@@ -67,6 +67,25 @@ static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queu
     return fc->ops.remote_rx_window_dec(fc, win, false);
 }
 
+/*
+ * A credit req (or credit return req) has been sent but the peer may be stuck or dead, so its
+ * rsp/ack never returns while the permission stays held. Detect the outstanding req timing out so
+ * the caller can report a timeout and tear the link down instead of blocking forever.
+ * Returns true when the outstanding req has exceeded the configured timeout (0 = never timeout).
+ */
+static ALWAYS_INLINE bool umq_ub_credit_req_timeout(struct ub_flow_control *fc)
+{
+    if (fc->fc_req_timeout_us == 0 || !__atomic_load_n(&fc->is_credit_applying, __ATOMIC_ACQUIRE)) {
+        return false;
+    }
+    uint64_t send_time = __atomic_load_n(&fc->credit_req_send_time, __ATOMIC_ACQUIRE);
+    if (send_time == 0) {
+        return false;
+    }
+    uint64_t now = get_timestamp_us();
+    return (now >= send_time && (now - send_time) >= fc->fc_req_timeout_us);
+}
+
 static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
     if (!fc->enabled) {
@@ -74,6 +93,11 @@ static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t 
     }
     if (queue->checker != NULL) {
         __atomic_store_n(&queue->checker->last_send, get_timestamp_us(), __ATOMIC_RELEASE);
+    }
+    if (umq_ub_credit_req_timeout(fc)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), credit response report timeout(%u us)\n", queue->umq_id,
+            fc->fc_req_timeout_us);
+        return -UMQ_ERR_ETIMEOUT;
     }
     if (fc->ops.remote_rx_window_load(fc) <=
         umq_ub_flow_control_threashold_modify(fc->credit_request_threshold, fc->peer_ratio)) {
@@ -92,6 +116,7 @@ static ALWAYS_INLINE bool umq_ub_permission_acquire(struct ub_flow_control *fc)
 
 static ALWAYS_INLINE void umq_ub_permission_release(struct ub_flow_control *fc)
 {
+    __atomic_store_n(&fc->credit_req_send_time, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&fc->is_credit_applying, false, __ATOMIC_RELEASE);
 }
 
