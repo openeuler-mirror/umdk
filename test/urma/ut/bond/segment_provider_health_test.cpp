@@ -729,8 +729,4 @@ TEST(UrmaBondTest, HealthV2PublicApisHonorDisabledAndInvalidContracts)
     EXPECT_EQ(URMA_SUCCESS, bondp_hc_unimport_tseg(&fixture.target));
     EXPECT_EQ(URMA_FAIL, bondp_hc_unimport_tseg(nullptr));
 
-    EXPECT_TRUE(bondp_hc_tjetty_path_valid(&fixture.target, 0, 0));
-    EXPECT_FALSE(bondp_hc_tjetty_path_valid(nullptr, 0, 0));
-    EXPECT_FALSE(bondp_hc_tjetty_path_valid(
-        &fixture.target, URMA_UBAGG_DEV_MAX_NUM, 0));
 }

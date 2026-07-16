@@ -173,13 +173,6 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
     bool need_rebuild = false;
     uint32_t drained = 0;
 
-    /* Poll the CQ directly rather than going through urma_wait_jfc(jfce).
-     * The wait() path is gated on a jfce fd event, which only fires for a CQ
-     * that was armed; between two jfce events the worker keeps posting probes
-     * (single-threaded), so relying on wait() would leave completions un-reaped
-     * and overflow the probe SQ (ENOMEM). Polling the jfc here drains all
-     * pending CQEs regardless of the jfce arm state, advancing sq->ci and
-     * freeing SQ space before the next batch is posted. */
     while (true) {
         int n = urma_poll_jfc(jfc, HC_CQE_BATCH, cr);
         if (n <= 0) {
@@ -206,7 +199,12 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
                 continue;
             }
             bool ok = (cr[k].status == URMA_CR_SUCCESS);
+            bool prev = atomic_load(&node->valid[local_idx][target_idx]);
             atomic_store(&node->valid[local_idx][target_idx], ok);
+            if (ok && !prev) {
+                bondp_target_jetty_t *bdp_tjetty = node->hc_tjetty[local_idx][target_idx];
+                atomic_store(&bdp_tjetty->valid[target_idx], true);
+            }
         }
     }
     if (drained >= res->inflight) {
@@ -989,11 +987,9 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     URMA_LOG_INFO("Health check tjetty unregistered, node_id=%u.\n", node->node_id);
 }
 
-bool bondp_hc_tjetty_path_valid(const bondp_target_jetty_t *bdp_tjetty,
-                                uint32_t local_idx, uint32_t target_idx)
+bool bondp_hc_tjetty_target_any_valid(const bondp_target_jetty_t *bdp_tjetty, uint32_t target_idx)
 {
-    if (bdp_tjetty == NULL ||
-        local_idx >= URMA_UBAGG_DEV_MAX_NUM || target_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+    if (bdp_tjetty == NULL || target_idx >= URMA_UBAGG_DEV_MAX_NUM) {
         return false;
     }
 
@@ -1013,5 +1009,21 @@ bool bondp_hc_tjetty_path_valid(const bondp_target_jetty_t *bdp_tjetty,
     }
 
     bondp_hc_node_t *node = &hc_ctx->nodes[node_idx];
-    return atomic_load(&node->valid[local_idx][target_idx]);
+    bool any_connected = false;
+    pthread_rwlock_rdlock(&node->lock);
+    for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
+        if (node->hc_tjetty[local_idx][target_idx] == NULL) {
+            continue;
+        }
+        any_connected = true;
+        if (atomic_load(&node->valid[local_idx][target_idx])) {
+            pthread_rwlock_unlock(&node->lock);
+            return true;
+        }
+    }
+    pthread_rwlock_unlock(&node->lock);
+
+    /* No connected path to this target: treat as still available rather than
+     * wrongly dropping it — matches the unregistered / no-hc fallback. */
+    return !any_connected;
 }
