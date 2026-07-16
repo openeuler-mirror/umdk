@@ -23,7 +23,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-@ToString
+@ToString(exclude = {"npuDevices", "swDevices"})
 public class SuperNode {
     private String name;
     private String version;
