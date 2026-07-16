@@ -17,6 +17,8 @@ extern "C" {
 
 struct bondp_context;
 struct bondp_target_jetty;
+struct urma_bond_seg_info_out;
+struct urma_bond_id_info_out;
 
 #define BONDP_HC_DEFAULT_PROBE_INTERVAL_MS (1000)
 #define BONDP_HC_DEFAULT_PROBE_NODE_NUM    (1024)
@@ -49,6 +51,14 @@ int bondp_hc_register_tjetty(struct bondp_context *bdp_ctx,
  */
 void bondp_hc_unregister_tjetty(struct bondp_context *bdp_ctx,
                                 struct bondp_target_jetty *bdp_tjetty);
+
+int bondp_hc_fill_seg_info(const struct bondp_context *bdp_ctx,
+                           struct urma_bond_seg_info_out *seg_info,
+                           bool *enabled);
+int bondp_hc_import_tseg(const struct bondp_context *bdp_ctx,
+                         struct bondp_target_jetty *bdp_tjetty,
+                         const struct urma_bond_id_info_out *rjetty_info);
+urma_status_t bondp_hc_unimport_tseg(struct bondp_target_jetty *bdp_tjetty);
 
 /**
  * Query health status for one target jetty path.

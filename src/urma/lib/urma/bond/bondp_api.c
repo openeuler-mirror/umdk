@@ -31,7 +31,6 @@
 
 #include "bondp_api.h"
 #include "bondp_health.h"
-#include "bondp_health_check.h"
 #include "ub_get_clock.h"
 
 #define BONDP_NS_PER_MS 1000000ULL
@@ -1188,9 +1187,8 @@ static int bondp_create_vjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
 {
     bondp_create_vjetty_udata_t jetty_info = {0};
 
-    if (bondp_fill_vjetty_health_info(bdp_ctx, bdp_jetty,
-                                      &jetty_info.health_check_seg,
-                                      &jetty_info.is_health_check_enable) != 0) {
+    if (bondp_hc_fill_seg_info(bdp_ctx, &jetty_info.health_check_seg,
+                               &jetty_info.is_health_check_enable) != 0) {
         URMA_LOG_ERR("Failed to fill health check seg info for vjetty\n");
         return -1;
     }
@@ -1393,14 +1391,9 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto DELETE_PJETTY;
     }
 
-    if (bondp_register_health_check_seg_for_jetty(bdp_ctx, bdp_jetty) != 0) {
-        URMA_LOG_ERR("Failed to register health check seg for jetty creation\n");
-        goto DELETE_PJETTY;
-    }
-
     if (bondp_create_vjetty(bdp_ctx, bdp_jetty, jetty_cfg) != 0) {
         URMA_LOG_ERR("Failed to create vjetty, %u\n", jetty_cfg->id);
-        goto UNREGISTER_HEALTH_SEG;
+        goto DELETE_PJETTY;
     }
 
     if (bondp_add_jetty_p_vjetty_id_info(bdp_ctx, bdp_jetty, bdp_jetty->v_jetty.jetty_id.id) != 0) {
@@ -1438,8 +1431,6 @@ DEL_P_VJETTY_ID:
     bondp_del_jetty_p_vjetty_info(bdp_jetty);
 DELETE_VJETTY:
     bondp_delete_vjetty(bdp_jetty);
-UNREGISTER_HEALTH_SEG:
-    bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
 DELETE_PJETTY:
     bondp_delete_pjetty(bdp_jetty);
 FREE_JETTY:
@@ -1483,7 +1474,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
     bondp_fb_cancel_tasks(bdp_ctx, jetty->jetty_id.id);
-    bondp_unregister_health_check_seg_for_jetty(bdp_jetty);
     bondp_uninit_connection_table(bdp_jetty);
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
     if (bondp_delete_vjetty(bdp_jetty) != URMA_SUCCESS) {
@@ -1831,6 +1821,12 @@ static int bondp_fill_compact_rjetty_ext(const bondp_context_t *bdp_ctx, const b
         local_indices[i] = (uint8_t)bdp_ctx->enabled_indices[i];
     }
 
+    urma_bond_seg_info_out_t health_info = {0};
+    bool health_enabled = false;
+    if (bondp_hc_fill_seg_info(bdp_ctx, &health_info, &health_enabled) != 0) {
+        return -EINVAL;
+    }
+
     for (uint32_t i = 0; i < ext->target_ctx_cnt; ++i) {
         uint32_t target_idx = bdp_jetty->enabled_indices[i];
         bondp_rjetty_target_ctx_t entry = {0};
@@ -1838,8 +1834,9 @@ static int bondp_fill_compact_rjetty_ext(const bondp_context_t *bdp_ctx, const b
         if (target_idx < URMA_UBAGG_DEV_MAX_NUM && bdp_jetty->p_jetty[target_idx] != NULL) {
             entry.slave_id = bdp_jetty->p_jetty[target_idx]->jetty_id;
         }
-        if (target_idx < URMA_UBAGG_DEV_MAX_NUM && bdp_jetty->check_tseg[target_idx] != NULL) {
-            bondp_seg_to_base(&bdp_jetty->check_tseg[target_idx]->seg, &entry.health_check_seg);
+        if (health_enabled && target_idx < URMA_UBAGG_DEV_MAX_NUM &&
+            health_info.slaves[target_idx].len != 0) {
+            entry.health_check_seg = health_info.slaves[target_idx];
             ext->is_health_check_enable = true;
         }
         bondp_set_rjetty_target_ctx_entry(ext, i, &entry);
@@ -2178,7 +2175,7 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
 {
     int ret = URMA_SUCCESS;
 
-    if (bondp_unimport_health_check_tseg(bdp_tjetty) != URMA_SUCCESS) {
+    if (bondp_hc_unimport_tseg(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;
     }
 
@@ -2272,7 +2269,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_PJETTY;
     }
 
-    if (bondp_import_health_check_tseg(bdp_ctx, bdp_tjetty, &rvjetty_info, rjetty) != 0) {
+    if (bondp_hc_import_tseg(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to import health check seg for jetty\n");
         goto UNIMPORT_TSEG;
     }
@@ -2292,7 +2289,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
     return &bdp_tjetty->v_tjetty;
 
 UNIMPORT_TSEG:
-    bondp_unimport_health_check_tseg(bdp_tjetty);
+    (void)bondp_hc_unimport_tseg(bdp_tjetty);
 
 UNIMPORT_PJETTY:
     bondp_unimport_pjetty(bdp_tjetty);

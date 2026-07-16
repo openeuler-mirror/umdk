@@ -86,85 +86,8 @@ static inline bool bondp_rjetty_has_user_info(const urma_rjetty_t *rjetty)
     return rjetty != NULL && rjetty->flag.bs.has_user_info != 0;
 }
 
-struct bondp_target_jetty;
-
-typedef enum bondp_health_mode {
-    HEALTH_MODE_BACKUP_CHECK,
-    HEALTH_MODE_PRIMARY_CHECK,
-} bondp_health_mode_t;
-
-typedef struct bondp_health_sub_task {
-    int local_idx;
-    int target_idx;
-    bool valid;
-    bool probe_pending;
-    bool need_check;
-#ifndef __cplusplus
-    atomic_bool link_ok;
-#else
-    std::atomic_bool link_ok;
-#endif
-    uint64_t user_ctx;
-} bondp_health_sub_task_t;
-
-typedef struct bondp_fallback_task {
-    bool pending;
-    bool local_rebuilt;
-    bool req_sent;
-    bool resp_received;
-    bool relink_done;
-    uint8_t req_seq;
-    uint32_t remote_primary_pjetty_id;
-    uint32_t primary_target_idx;
-} bondp_fallback_task_t;
-
-typedef struct bondp_health_task {
-    struct bondp_target_jetty *bdp_tjetty;
-    struct bondp_comp *bondp_jetty;
-    uint64_t next_probe_ts_us;
-    int primary_local_idx;
-    int active_local_idx;
-    bondp_health_mode_t mode;
-    uint32_t backoff_cnt;
-    bondp_fallback_task_t fallback_task;
-    uint32_t vjetty_id;
-    bondp_health_sub_task_t sub_tasks[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
-    hmap_node_t hmap_node;
-} bondp_health_task_t;
-
-typedef struct bondp_heath_check_ctx {
-    void *check_buf;
-    uint64_t check_buf_len;
-    int health_check_fd;
-    bondp_hash_table_t task_table;
-    pthread_spinlock_t event_lock;
-    struct ub_list event_list;
-} bondp_heath_check_ctx_t;
-
-typedef struct bondp_health_check_cfg {
-    uint64_t backup_start_ms;
-    uint64_t backup_interval_ms;
-    uint64_t active_start_ms;
-    uint64_t active_interval_ms;
-    uint32_t active_max_backoff;
-} bondp_health_check_cfg_t;
-
 typedef struct bondp_hc_ctx bondp_hc_ctx_t;
 typedef struct bondp_fb_ctx bondp_fb_ctx_t;
-
-typedef struct bondp_health_thread_ctx {
-    bool enable_health_check;
-    int health_epoll_fd;
-    pthread_t health_thread;
-    bondp_health_check_cfg_t cfg;
-    pthread_rwlock_t health_ctx_lock;
-    struct ub_list health_ctx_list;
-#ifndef __cplusplus
-    atomic_bool health_thread_stop;
-#else
-    std::atomic_bool health_thread_stop;
-#endif
-} bondp_health_thread_ctx_t;
 
 /** Process-granularity global variable */
 typedef struct bondp_global_context {
@@ -173,7 +96,8 @@ typedef struct bondp_global_context {
     bool skip_load_topo;
     bool enable_failover;
     bool enable_failback;
-    bondp_health_thread_ctx_t health_thread_ctx;
+    bool enable_health_check;
+    uint64_t health_check_interval_ms;
     uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
     bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
 } bondp_global_context_t;
@@ -207,7 +131,6 @@ typedef struct bondp_context {
     int real_async_fd; /* vcontex async_fd */
     bondp_hc_ctx_t *hc_ctx;
     bondp_fb_ctx_t *fb_ctx;
-    bondp_heath_check_ctx_t bondp_heath_check_ctx;
     bondp_hash_table_t remote_v2p_token_id_table;
     bool msn_enable;
     bool seg_cache_enable;
@@ -224,12 +147,20 @@ typedef struct bondp_jfc {
     urma_jfc_t v_jfc;
     urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
+#ifndef __cplusplus
     atomic_int lasted_polled_jfc_idx;
+#else
+    std::atomic_int lasted_polled_jfc_idx;
+#endif
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
+#ifndef __cplusplus
     atomic_uint fast_return_count;
+#else
+    std::atomic_uint fast_return_count;
+#endif
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
 
@@ -302,7 +233,6 @@ typedef struct bondp_comp {
     std::atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_uint msn;
 #endif
-    urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
 #ifndef __cplusplus
     atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #else
