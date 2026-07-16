@@ -93,7 +93,7 @@ static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
         g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
     for (int i = 0 ; i < URMA_FAILOVER_LINK_NUM; i++) {
         path_idx = failover_route[i];
-        if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1) {
+        if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
             break;
         }
         local_idx = g_bondp_global_ctx->path[path_idx].local_idx;
@@ -117,6 +117,27 @@ static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
         return URMA_SUCCESS;
     }
     return URMA_FAIL;
+}
+
+static void filter_least_load_path(bondp_path_t least_load_path[], uint32_t *least_load_cnt)
+{
+    if (*least_load_cnt <= 1) {
+        return;
+    }
+
+    uint32_t out_cnt = 1;
+    uint32_t min_load = least_load_path[0].least_load;
+    for (uint32_t i = 1; i < *least_load_cnt; i++) {
+        if (least_load_path[i].least_load < min_load) {
+            min_load = least_load_path[i].least_load;
+            out_cnt = 1;
+            least_load_path[0] = least_load_path[i];
+        } else if (least_load_path[i].least_load == min_load) {
+            least_load_path[out_cnt] = least_load_path[i];
+            out_cnt++;
+        }
+    }
+    *least_load_cnt = out_cnt;
 }
 
 static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
@@ -266,6 +287,9 @@ static bool is_in_failover_route(const bondp_chip_id_info_t *info, uint32_t rout
     g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
     for (int i = 0; i < URMA_FAILOVER_LINK_NUM; i++) {
         uint32_t path_idx = failover_route[i];
+        if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
+            break;
+        }
         if (g_bondp_global_ctx->path[path_idx].local_idx == old_path->local_idx &&
             g_bondp_global_ctx->path[path_idx].target_idx == old_path->target_idx) {
             return true;
@@ -330,6 +354,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
         if (least_load_cnt == 0 && !g_bondp_global_ctx->enable_failover) {
             return URMA_FAIL;
         }
+        filter_least_load_path(least_load_path, &least_load_cnt);
     }
 
     if (least_load_cnt == 0) {
