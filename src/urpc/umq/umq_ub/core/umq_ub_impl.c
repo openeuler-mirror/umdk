@@ -37,6 +37,7 @@
 #include "umq_ub_flow_control.h"
 #include "umq_ub_imm_data.h"
 #include "umq_ub_private.h"
+#include "umq_ub_thread_wr.h"
 #include "umq_ub_impl.h"
 
 #define UMQ_FLUSH_MAX_RETRY_TIMES 10000
@@ -748,8 +749,20 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto DELETE_TIMER;
     }
 
+    /* Pre-allocate the per-thread tx wr pool for the first UMQ_THREAD_ID_RANGE_DEFAULT
+     * ids; threads beyond that allocate lazily on the data path. Depends on the
+     * thread-id allocator, which umq_init initializes before this framework. */
+    ret = umq_ub_thread_wr_init();
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq ub thread buf init failed, status: %d\n", ret);
+        goto JETTY_POOL_UNINIT;
+    }
+
     g_umq_ub_inited = true;
     return (uint8_t *)(uintptr_t)g_ub_ctx;
+
+JETTY_POOL_UNINIT:
+    umq_ub_jetty_pool_uninit();
 
 DELETE_TIMER:
     umq_ub_check_idle_queue_timer_delete();
@@ -815,6 +828,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
 
     umq_ub_jetty_pool_uninit();
     umq_ub_check_idle_queue_timer_delete();
+    umq_ub_thread_wr_uninit();
     umq_ub_queue_ctx_list_uninit();
     umq_tiny_qbuf_pool_uninit();
     umq_qbuf_pool_uninit();
