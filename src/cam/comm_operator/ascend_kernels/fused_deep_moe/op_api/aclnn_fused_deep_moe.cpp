@@ -47,6 +47,7 @@ aclnnStatus aclnnFusedDeepMoeGetWorkspaceSize(
     int64_t globalBs,
     int64_t extInfo,
     int64_t shmemWorkspace,
+    int64_t shmemWorkspaceSize,
     const aclTensor *output,
     const aclTensor *shareOutput,
     const aclTensor *expertTokenNums,
@@ -59,7 +60,7 @@ aclnnStatus aclnnFusedDeepMoeGetWorkspaceSize(
         shareGmm2WeightOptional, shareGmm2WeightScaleOptional,
         expertSmoothScalesOptional, shareSmoothScalesOptional, xActiveMaskOptional,
         groupEp, epRankSize, epRankId, moeExpertNum, quantMode, globalBs,
-        extInfo, shmemWorkspace,
+        extInfo, shmemWorkspace, shmemWorkspaceSize,
         output, shareOutput, expertTokenNums, workspaceSize, executor);
 }
 

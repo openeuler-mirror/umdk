@@ -33,6 +33,7 @@ constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint16_t SEND_SYNC_EVENT_ID = 6;
 constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
 constexpr uint32_t A3_AIV_NUM = 48;
+constexpr uint32_t SHMEM_COMBINE_TOKEN_CHUNK = 512;
 
 template <AscendC::HardEvent event>
 __aicore__ inline void SyncFunc()
@@ -488,7 +489,11 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     }
 
     uint32_t localTokenNum = endIndex_ - beginIndex_;
-    uint32_t localBsKSize = localTokenNum * axisK_;
+    uint32_t bufferTokenNum = localTokenNum;
+    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
+        bufferTokenNum = MIN(bufferTokenNum, SHMEM_COMBINE_TOKEN_CHUNK);
+    }
+    uint32_t localBsKSize = bufferTokenNum * axisK_;
     uint32_t localBsKSizeAligned = Ceil(localBsKSize * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;
 
     tpipe_->InitBuffer(readStateBuf_, UB_ALIGN);
@@ -893,60 +898,64 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalShmemC
     LocalTensor<ExpandIdxType> indexCountsLocal = indexCountsBuf_.Get<ExpandIdxType>();
     LocalTensor<ExpandIdxType> allEpRecvCountLocal = allEpRecvCountBuf_.Get<ExpandIdxType>();
 
-    uint32_t localTokenNum = endIndex_ - beginIndex_;
-    uint32_t localBsKSize = localTokenNum * axisK_;
-    const DataCopyExtParams localBskParams = {1U, static_cast<uint32_t>(localBsKSize * sizeof(uint32_t)), 0U, 0U, 0U};
     const DataCopyPadExtParams<ExpandIdxType> copyPadParams{false, 0U, 0U, 0U};
     const DataCopyPadExtParams<float> copyPadFloatParams{false, 0U, 0U, 0U};
     uint32_t allEpRecvCountSize = epWorldSize_ * moeExpertNum_;
     const DataCopyExtParams allEpRecvCountParams = {1U, static_cast<uint32_t>(allEpRecvCountSize * sizeof(uint32_t)),
         0U, 0U, 0U};
 
-    DataCopyPad(indexCountsLocal, expandIdxGM_[beginIndex_ * axisK_], localBskParams, copyPadParams);
-    DataCopyPad(expertIdsLocal, expertIdsGM_[beginIndex_ * axisK_], localBskParams, copyPadParams);
-    DataCopyPad(expandScalesLocal, expandScalesGM_[beginIndex_ * axisK_], localBskParams, copyPadFloatParams);
     DataCopyPad(allEpRecvCountLocal, allEpRecvCountGM_, allEpRecvCountParams, copyPadParams);
     SyncFunc<AscendC::HardEvent::MTE2_S>();
 
-    for (uint32_t tokenIndex = beginIndex_; tokenIndex < endIndex_; tokenIndex++) {
-        uint32_t index = (tokenIndex - beginIndex_) * axisK_;
-        SyncFunc<AscendC::HardEvent::MTE3_V>();
-        Duplicate(sumFloatBufLocal, (float)0, axisH_);
-        for (uint32_t i = 0; i < axisK_; i++) {
-            int32_t moeExpert = expertIdsLocal.GetValue(index);
-            if (moeExpert < 0) {
-                index++;
-                continue;
-            }
-            float scaleVal = expandScalesLocal.GetValue(index);
-            // expert的偏移
-            uint32_t expertOffset =
-                moeExpert == 0 ? 0 : allEpRecvCountLocal.GetValue(epRankId_ * moeExpertNum_ + moeExpert - 1);
-            GM_ADDR shmemAddr = (__gm__ uint8_t *)(combineSendGM_) +
-                            expertOffset * axisHExpandXTypeSize_ +
-                            indexCountsLocal.GetValue(index) * axisHExpandXTypeSize_ +
-                            tokenOffset * sizeof(ExpandXType);
-            rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)shmemAddr);
-            ExpandXType val = rowTmpGlobal_.GetValue(0);
-            LocalTensor<ExpandXType> tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
-            DataCopy(tmpUb, rowTmpGlobal_, processLen);
-            moeSumQueue_.EnQue(tmpUb);
-            tmpUb = moeSumQueue_.DeQue<ExpandXType>();
-            Cast(rowTmpFloatLocal, tmpUb, AscendC::RoundMode::CAST_NONE, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Muls(mulBufLocal, rowTmpFloatLocal, scaleVal, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, mulBufLocal, processLen);
-            index++;
-            moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
-        }
-        LocalTensor<ExpandXType> rowTmpLocal = tokenBuf_.Get<ExpandXType>();
+    for (uint32_t chunkBegin = beginIndex_; chunkBegin < endIndex_; chunkBegin += SHMEM_COMBINE_TOKEN_CHUNK) {
+        uint32_t chunkEnd = MIN(chunkBegin + SHMEM_COMBINE_TOKEN_CHUNK, endIndex_);
+        uint32_t chunkTokenNum = chunkEnd - chunkBegin;
+        uint32_t chunkBsKSize = chunkTokenNum * axisK_;
+        const DataCopyExtParams chunkBskParams = {
+            1U, static_cast<uint32_t>(chunkBsKSize * sizeof(uint32_t)), 0U, 0U, 0U};
+        DataCopyPad(indexCountsLocal, expandIdxGM_[chunkBegin * axisK_], chunkBskParams, copyPadParams);
+        DataCopyPad(expertIdsLocal, expertIdsGM_[chunkBegin * axisK_], chunkBskParams, copyPadParams);
+        DataCopyPad(expandScalesLocal, expandScalesGM_[chunkBegin * axisK_], chunkBskParams, copyPadFloatParams);
+        SyncFunc<AscendC::HardEvent::MTE2_S>();
 
-        AscendC::PipeBarrier<PIPE_V>();
-        LocalTensor<ExpandXType> sumBufLocal = tokenBuf_.Get<ExpandXType>();
-        Cast(sumBufLocal, sumFloatBufLocal, AscendC::RoundMode::CAST_RINT, processLen);
-        SyncFunc<AscendC::HardEvent::V_MTE3>();
-        DataCopy(expandOutGlobal_[tokenIndex * axisH_ + tokenOffset], sumBufLocal, processLen);
+        for (uint32_t tokenIndex = chunkBegin; tokenIndex < chunkEnd; tokenIndex++) {
+            uint32_t index = (tokenIndex - chunkBegin) * axisK_;
+            SyncFunc<AscendC::HardEvent::MTE3_V>();
+            Duplicate(sumFloatBufLocal, (float)0, axisH_);
+            for (uint32_t i = 0; i < axisK_; i++) {
+                int32_t moeExpert = expertIdsLocal.GetValue(index);
+                if (moeExpert < 0) {
+                    index++;
+                    continue;
+                }
+                float scaleVal = expandScalesLocal.GetValue(index);
+                uint32_t expertOffset =
+                    moeExpert == 0 ? 0 : allEpRecvCountLocal.GetValue(epRankId_ * moeExpertNum_ + moeExpert - 1);
+                GM_ADDR shmemAddr = (__gm__ uint8_t *)(combineSendGM_) +
+                                expertOffset * axisHExpandXTypeSize_ +
+                                indexCountsLocal.GetValue(index) * axisHExpandXTypeSize_ +
+                                tokenOffset * sizeof(ExpandXType);
+                rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)shmemAddr);
+                LocalTensor<ExpandXType> tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
+                DataCopy(tmpUb, rowTmpGlobal_, processLen);
+                moeSumQueue_.EnQue(tmpUb);
+                tmpUb = moeSumQueue_.DeQue<ExpandXType>();
+                Cast(rowTmpFloatLocal, tmpUb, AscendC::RoundMode::CAST_NONE, processLen);
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Muls(mulBufLocal, rowTmpFloatLocal, scaleVal, processLen);
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, mulBufLocal, processLen);
+                index++;
+                moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
+            }
+
+            AscendC::PipeBarrier<PIPE_V>();
+            LocalTensor<ExpandXType> sumBufLocal = tokenBuf_.Get<ExpandXType>();
+            Cast(sumBufLocal, sumFloatBufLocal, AscendC::RoundMode::CAST_RINT, processLen);
+            SyncFunc<AscendC::HardEvent::V_MTE3>();
+            DataCopy(expandOutGlobal_[tokenIndex * axisH_ + tokenOffset], sumBufLocal, processLen);
+        }
+        AscendC::PipeBarrier<PIPE_ALL>();
     }
 }
 
