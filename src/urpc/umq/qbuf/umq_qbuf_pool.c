@@ -837,7 +837,7 @@ void umq_qbuf_pool_uninit(void)
         return;
     }
 
-    release_thread_cache(0);
+    // Toto: release thread cache
 
     umq_qbuf_expansion_pool_uninit();
 
