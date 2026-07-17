@@ -703,6 +703,7 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     bdp_jfs->bondp_ctx = bdp_ctx;
     bdp_jfs->comp_type = BONDP_COMP_JFS;
     atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
+    atomic_init(&bdp_jfs->deleting, false);
     (void)pthread_spin_init(&bdp_jfs->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jfs->modify_to_error = false;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
@@ -790,8 +791,16 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     ! the check use_cnt > 0 but before the lock is acquired.
      */
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
+    atomic_store(&bdp_jfs->deleting, true);
     unsigned long use_cnt = atomic_load(&bdp_jfs->use_cnt.atomic_cnt);
+    if (use_cnt == 0) {
+        /* Invalidate fast-path cache */
+        bondp_hash_table_inc_gen(&bdp_ctx->p_vjetty_id_table);
+        /* Re-check */
+        use_cnt = atomic_load(&bdp_jfs->use_cnt.atomic_cnt);
+    }
     if (use_cnt > 0) {
+        atomic_store(&bdp_jfs->deleting, false);
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
         URMA_LOG_ERR("Failed to delete jfs[%u], still in use. use_cnt=%lu\n", jfs_id, use_cnt);
         return URMA_EAGAIN;
@@ -987,6 +996,7 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
     bdp_jfr->bondp_ctx = bdp_ctx;
     bdp_jfr->comp_type = BONDP_COMP_JFR;
     atomic_init(&bdp_jfr->use_cnt.atomic_cnt, 0);
+    atomic_init(&bdp_jfr->deleting, false);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
     uint32_t cfg_active_port_count = 0;
@@ -1068,8 +1078,16 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     ! the check use_cnt > 0 but before the lock is acquired.
     */
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
+    atomic_store(&bdp_jfr->deleting, true);
     unsigned long use_cnt = atomic_load(&bdp_jfr->use_cnt.atomic_cnt);
+    if (use_cnt == 0) {
+        /* Invalidate fast-path cache */
+        bondp_hash_table_inc_gen(&bdp_ctx->p_vjetty_id_table);
+        /* Re-check */
+        use_cnt = atomic_load(&bdp_jfr->use_cnt.atomic_cnt);
+    }
     if (use_cnt > 0) {
+        atomic_store(&bdp_jfr->deleting, false);
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
         URMA_LOG_ERR("Failed to delete jfr[%u], still in use. use_cnt=%lu\n", jfr_id, use_cnt);
         return URMA_EAGAIN;
@@ -1366,6 +1384,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     bdp_jetty->bondp_ctx = bdp_ctx;
     bdp_jetty->comp_type = BONDP_COMP_JETTY;
     atomic_init(&bdp_jetty->use_cnt.atomic_cnt, 0);
+    atomic_init(&bdp_jetty->deleting, false);
     (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jetty->modify_to_error = false;
 
@@ -1460,8 +1479,16 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! the check use_cnt > 0 but before the lock is acquired.
     */
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
+    atomic_store(&bdp_jetty->deleting, true);
     unsigned long use_cnt = atomic_load(&bdp_jetty->use_cnt.atomic_cnt);
+    if (use_cnt == 0) {
+        /* Invalidate fast-path cache */
+        bondp_hash_table_inc_gen(&bdp_ctx->p_vjetty_id_table);
+        /* Re-check */
+        use_cnt = atomic_load(&bdp_jetty->use_cnt.atomic_cnt);
+    }
     if (use_cnt > 0) {
+        atomic_store(&bdp_jetty->deleting, false);
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
         URMA_LOG_ERR("Failed to delete jetty[%d], still in use. use_cnt=%lu\n", jetty->jetty_id.id, use_cnt);
         return URMA_EAGAIN;
