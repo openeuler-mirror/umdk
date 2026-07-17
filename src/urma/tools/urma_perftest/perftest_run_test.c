@@ -2176,7 +2176,7 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
                         cfg->iters++;
                     }
                     if ((cfg->time_type.bs.duration == 1 ||
-                         posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters) &&
+                         posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters + (uint64_t)run_ctx->rposted) &&
                         unused_recv_pre_jetty[cr_id] >= cfg->jfr_post_list) {
                         if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
                             status = urma_post_jfr_wr(ctx->jfr[cr_id],
@@ -2480,7 +2480,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 }
 
                 if ((cfg->time_type.bs.duration == 1 ||
-                     posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters) &&
+                     posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters + (uint64_t)run_ctx->rposted) &&
                     unused_recv_for_jetty[cr_id] >= cfg->jfr_post_list) {
                     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
                         status = urma_post_jfr_wr(ctx->jfr[cr_id], &run_ctx->jfr_wr[cr_id * cfg->jfr_post_list],
