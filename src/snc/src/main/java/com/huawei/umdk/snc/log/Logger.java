@@ -29,6 +29,10 @@ public class Logger {
         Logger.callback = callback;
     }
 
+    private String spliceLogInfo(String format , Object... args){
+        return (prefix() + " " + String.format(format, args));
+    }
+
 
     public static String mask(MgmtInfo info) {
         if (info == null) {
@@ -62,19 +66,19 @@ public class Logger {
         }
     }
 
-    public void debug(String msg) {
-        log(LogLevel.DEBUG, prefix() + " " + msg);
+    public void debug(String format , Object... args) {
+        log(LogLevel.DEBUG, spliceLogInfo(format , args));
     }
 
-    public void info(String msg) {
-        log(LogLevel.INFO, prefix() + " " + msg);
+    public void info(String format , Object... args) {
+        log(LogLevel.INFO, spliceLogInfo(format , args));
     }
 
-    public void warn(String msg) {
-        log(LogLevel.WARN, prefix() + " " + msg);
+    public void warn(String format , Object... args) {
+        log(LogLevel.WARN, spliceLogInfo(format , args));
     }
 
-    public void error(String msg) {
-        log(LogLevel.ERROR, prefix() + " " + msg);
+    public void error(String format , Object... args) {
+        log(LogLevel.ERROR, spliceLogInfo(format , args));
     }
 }
