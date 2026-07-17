@@ -36,6 +36,7 @@ typedef struct umq_ub_jetty_node_list {
     uint32_t list_len;
     urpc_bitmap_t bitmap;
     volatile uint32_t ref_cnt;
+    volatile uint32_t next_poll_idx;
     util_external_mutex_lock *lock;       // serializes bitmap + node_list slot mutation (create/destroy)
 } umq_ub_jetty_node_list_t;
 

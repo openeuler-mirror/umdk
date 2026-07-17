@@ -1916,14 +1916,13 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
     return (buf != NULL) ? qbuf_cnt : ret;
 }
 
-int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
+int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
 {
     if (buf_count == 0) {
         return 0;
     }
     int32_t qbuf_cnt = 0;
     uint32_t max_batch = buf_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : buf_count;
-    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
 
     /* one POLL record for the entire poll operation (FC + IO) */
     uint64_t poll_start = umq_trace_start_timestamp_get();
@@ -2054,5 +2053,86 @@ int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
     umq_ub_poll_release_jetty_node(queue, success_cnt + failed_cnt, tp_handle_idx);
 
     umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());
+    return qbuf_cnt;
+}
+
+static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
+{
+    umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+    if (jetty_node_list == NULL || jetty_node_list->bitmap == NULL) {
+        return 0;
+    }
+
+    int32_t qbuf_cnt = 0;
+    util_mutex_lock(jetty_node_list->lock);
+    uint32_t start_idx = __atomic_load_n(&jetty_node_list->next_poll_idx, __ATOMIC_ACQUIRE);
+    if (start_idx >= jetty_node_list->list_len) {
+        start_idx = 0;
+    }
+    uint32_t current_idx = start_idx;
+    bool wrapped = false;
+    for (uint32_t scanned = 0; scanned < jetty_node_list->list_len && (uint32_t)qbuf_cnt < buf_count; scanned++) {
+        current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap,
+            jetty_node_list->list_len, current_idx);
+        if (current_idx >= jetty_node_list->list_len) {
+            wrapped = true;
+            current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap, jetty_node_list->list_len, 0);
+            if (current_idx >= jetty_node_list->list_len) {
+                break;
+            }
+        }
+        if (wrapped && current_idx >= start_idx) {
+            break;
+        }
+        jetty_pool_node_t *node = jetty_node_list->node_list[current_idx];
+        if (node == NULL || node->is_jetty_err) {
+            current_idx++;
+            continue;
+        }
+
+        if (__atomic_load_n(&node->tx_outstanding, __ATOMIC_ACQUIRE) == 0) {
+            current_idx++;
+            continue;
+        }
+
+        option->tp_handle_idx = current_idx;
+        uint32_t remaining = buf_count - (uint32_t)qbuf_cnt;
+        uint32_t poll_batch = remaining > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : remaining;
+        if ((uint32_t)qbuf_cnt >= buf_count) {
+            break;
+        }
+        int result = umq_ub_poll_tx_single(queue, &buf[qbuf_cnt], poll_batch, option);
+        if (result < 0) {
+            current_idx++;
+            continue;
+        }
+        uint32_t next_idx = current_idx + 1;
+        if (next_idx >= jetty_node_list->list_len) {
+            next_idx = 0;
+        }
+        __atomic_store_n(&jetty_node_list->next_poll_idx, next_idx, __ATOMIC_RELEASE);
+        qbuf_cnt += result;
+        current_idx++;
+    }
+    util_mutex_unlock(jetty_node_list->lock);
+
+    return qbuf_cnt;
+}
+
+int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
+{
+    if (buf_count == 0) {
+        return 0;
+    }
+
+    int32_t qbuf_cnt = 0;
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
+    if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) &&
+        ((option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0)) {
+        qbuf_cnt = umq_ub_poll_tx_round_robin(queue, buf, buf_count, option);
+    } else {
+        qbuf_cnt = umq_ub_poll_tx_single(queue, buf, buf_count, option);
+    }
+
     return qbuf_cnt;
 }
