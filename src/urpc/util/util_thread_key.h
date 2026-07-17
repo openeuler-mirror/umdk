@@ -8,6 +8,9 @@
 #ifndef UTIL_THREAD_KEY_H
 #define UTIL_THREAD_KEY_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,6 +25,7 @@ typedef struct util_thread_key_ops {
 } util_thread_key_ops_t;
 
 void util_thread_key_ops_register(const util_thread_key_ops_t *ops);
+bool util_thread_key_ops_registered(void);
 
 util_thread_key_t *util_thread_key_create(void (*destr_function)(void *data));
 int util_thread_key_delete(util_thread_key_t *key);
