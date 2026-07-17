@@ -91,6 +91,8 @@ static urma_status_t comp_post_send(bondp_comp_t *comp, int send_idx, int target
     }
     if (ret == URMA_SUCCESS) {
         atomic_fetch_add(&comp->sqe_cnt[send_idx][target_idx], wr_count);
+    } else {
+        URMA_LOG_ERR("Bondp post send failed, ret=%d\n", ret);
     }
     return ret;
 }
@@ -1317,8 +1319,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d]\n", send_idx, target_idx,
-                      new_send_idx, new_target_idx);
+        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d], cr status=%d\n", send_idx, target_idx,
+                      new_send_idx, new_target_idx, cr->status);
         urma_ubagg_switch_inc();
 
         for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
