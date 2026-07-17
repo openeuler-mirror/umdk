@@ -99,6 +99,16 @@ inline aclDataType kATenScalarTypeToAclDataTypeTable[static_cast<int64_t>(at::Sc
 #undef DEFINE_ENUM
 };
 
+// FP8/FP4 ACL dtype enumerators (ACL_FLOAT8_E5M2/E4M3FN/E8M0, ACL_FLOAT4_E2M1) are C enum
+// members, not preprocessor macros, so they cannot be #ifdef-guarded directly. They are
+// absent from the acl_base.h bundled with older torch_npu (e.g. 2.8.0.post2 on CANN 8.5,
+// whose aclDataType enum stops at ACL_BF16) but present from post4 onward. build_pybind
+// / setup.py probes the active acl_base.h at build time and defines
+// CAM_ACL_HAS_FP8_FP4 when the enumerators are available. When the macro is unset the
+// table entries stay ACL_DT_UNDEFINED and callers fall back to the existing view(int8)
+// workaround, so the helper compiles on every CANN release that ships torch/torch_npu
+// with the low-precision ScalarTypes.
+#ifdef CAM_ACL_HAS_FP8_FP4
 static struct LowPrecisionDtypeMapInitializer {
     LowPrecisionDtypeMapInitializer()
     {
@@ -108,6 +118,7 @@ static struct LowPrecisionDtypeMapInitializer {
         kATenScalarTypeToAclDataTypeTable[static_cast<int64_t>(at::ScalarType::Float4_e2m1fn_x2)] = ACL_FLOAT4_E2M1;
     }
 } low_precision_dtype_map_initializer;
+#endif
 
 #define GET_OP_API_FUNC(apiName) reinterpret_cast<_##apiName>(GetOpApiFuncAddr(#apiName))
 
