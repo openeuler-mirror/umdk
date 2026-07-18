@@ -2182,7 +2182,7 @@ static int bondp_import_pjetty(
                              local_idx, target_idx, rvjetty_info->slave_id[target_idx].id);
                 return -1;
             }
-            atomic_store(&bdp_tjetty->valid[target_idx], true);
+            atomic_store(&bdp_tjetty->valid[local_idx][target_idx], true);
         }
     }
     return 0;
@@ -2509,7 +2509,7 @@ static int bondp_import_pjfr(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
                              local_idx, target_idx, udata_out->slave_id[target_idx].id);
                 return -1;
             }
-            atomic_store(&bdp_tjetty->valid[target_idx], true);
+            atomic_store(&bdp_tjetty->valid[local_idx][target_idx], true);
         }
     }
     return 0;

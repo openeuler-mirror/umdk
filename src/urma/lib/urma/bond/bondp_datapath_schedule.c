@@ -37,7 +37,7 @@ static urma_transport_mode_t get_comp_urma_trans_mode(const bondp_comp_t *bdp_co
 static bool target_path_available(const bondp_target_jetty_t *bdp_tjetty,
                                   uint32_t local_idx, uint32_t target_idx)
 {
-    return atomic_load(&bdp_tjetty->valid[target_idx]) &&
+    return atomic_load(&bdp_tjetty->valid[local_idx][target_idx]) &&
            bdp_tjetty->p_tjetty[local_idx][target_idx] != NULL;
 }
 
