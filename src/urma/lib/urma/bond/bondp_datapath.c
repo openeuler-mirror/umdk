@@ -1314,7 +1314,10 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
              * When all ports are invalid and no port is available to resend the wr,
              * this error CQE is returned directly to the upper layer.
              */
-            URMA_LOG_ERR("Failed to find valid port for retransmission.\n");
+            URMA_LOG_ERR("Failed to find valid port for retransmission, local veid: " EID_FMT
+                         ", remote veid: " EID_FMT ".\n",
+                         EID_ARGS(bdp_comp->v_jetty.jetty_id.eid),
+                         EID_ARGS(wr_entry->target_vjetty->v_tjetty.id.eid));
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
             goto CONVERT_CR;
         }
