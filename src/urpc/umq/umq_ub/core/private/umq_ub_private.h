@@ -270,7 +270,7 @@ typedef struct umq_ub_ctx {
     urma_context_t *urma_ctx;
     urma_device_attr_t dev_attr;
     umq_dev_assign_t dev_info;
-    pthread_spinlock_t tseg_list_lock;
+    util_external_mutex_lock *tseg_list_lock;
     urma_target_seg_t *tseg_list[UMQ_MAX_TSEG_NUM];
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
@@ -513,7 +513,7 @@ typedef struct ub_queue {
     // umq_ub_jetty_node_list_t jetty_node_list;
     umq_ub_jetty_node_list_t *jetty_node_list;
     volatile uint64_t jetty_node;       // jetty_pool_node_t *, atomically accessed
-    pthread_spinlock_t get_jetty_node_lock;
+    util_external_mutex_lock *get_jetty_node_lock;
 } ub_queue_t;
 
 typedef struct user_ctx {

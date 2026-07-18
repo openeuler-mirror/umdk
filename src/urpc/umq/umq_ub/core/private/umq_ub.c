@@ -1827,14 +1827,14 @@ void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t me
 {
     urma_target_seg_t *tseg;
     for (uint32_t i = 0; i < ctx_cnt; i++) {
-        pthread_spin_lock(&ctx_list[i].tseg_list_lock);
+        umq_thread_local_mutex_lock(ctx_list[i].tseg_list_lock);
         if (ctx_list[i].tseg_list[mempool_id] == NULL) {
-            pthread_spin_unlock(&ctx_list[i].tseg_list_lock);
+            umq_thread_local_mutex_unlock(ctx_list[i].tseg_list_lock);
             continue;
         }
         tseg = ctx_list[i].tseg_list[mempool_id];
         ctx_list[i].tseg_list[mempool_id] = NULL;
-        pthread_spin_unlock(&ctx_list[i].tseg_list_lock);
+        umq_thread_local_mutex_unlock(ctx_list[i].tseg_list_lock);
 
         urma_status_t status = umq_symbol_urma()->urma_unregister_seg(tseg);
         if (status != URMA_SUCCESS) {
