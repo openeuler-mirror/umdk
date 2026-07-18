@@ -1773,22 +1773,22 @@ int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt)
         goto GOT_NODE;
     }
 
-    pthread_spin_lock(&queue->get_jetty_node_lock);
+    (void)umq_thread_local_mutex_lock(queue->get_jetty_node_lock);
     node = (jetty_pool_node_t *)(uintptr_t)__atomic_load_n(&queue->jetty_node, __ATOMIC_ACQUIRE);
     if (node != NULL && umq_ub_is_jetty_node_owner(queue, node)) {
-        pthread_spin_unlock(&queue->get_jetty_node_lock);
+        (void)umq_thread_local_mutex_unlock(queue->get_jetty_node_lock);
         goto GOT_NODE;
     }
 
     node = umq_ub_jetty_node_alloc();
     if (node == NULL) {
-        pthread_spin_unlock(&queue->get_jetty_node_lock);
+        (void)umq_thread_local_mutex_unlock(queue->get_jetty_node_lock);
         return -errno;
     }
 
     __atomic_store_n(&node->umq_ref, our_ref, __ATOMIC_RELEASE);
     __atomic_store_n(&queue->jetty_node, (jetty_pool_node_t *)(uintptr_t)node, __ATOMIC_RELEASE);
-    pthread_spin_unlock(&queue->get_jetty_node_lock);
+    (void)umq_thread_local_mutex_unlock(queue->get_jetty_node_lock);
 
 GOT_NODE:
     queue->jetty[UB_QUEUE_JETTY_IO] = node->jetty[UB_QUEUE_JETTY_IO];

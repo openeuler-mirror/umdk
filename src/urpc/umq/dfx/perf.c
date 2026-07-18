@@ -5,7 +5,6 @@
  * Create: 2025-10-29
  */
 
-#include <pthread.h>
 #include <stdarg.h>
 
 #include "umq_errno.h"
