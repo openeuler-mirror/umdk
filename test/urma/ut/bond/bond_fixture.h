@@ -443,8 +443,8 @@ struct BondPathFixture {
         target.active_count = 2;
         target.active_indices[0] = 0;
         target.active_indices[1] = 1;
-        target.valid[0] = true;
-        target.valid[1] = true;
+        target.valid[0][0] = true;
+        target.valid[1][1] = true;
         target.p_tjetty[0][0] = &phyTarget[0][0];
         target.p_tjetty[1][1] = &phyTarget[1][1];
         comp.p_jetty[0]->remote_jetty = &phyTarget[0][0];

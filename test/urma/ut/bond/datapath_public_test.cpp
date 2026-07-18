@@ -345,7 +345,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     fixture.target.active_count = 1;
     fixture.target.active_indices[0] = 0;
     fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0] = true;
+    fixture.target.valid[0][0] = true;
     fixture.target.is_msn_enabled = true;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x8c;
@@ -419,7 +419,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreHandlesFullBufferAndInvalidPathRetry)
     fixture.target.active_count = 1;
     fixture.target.active_indices[0] = 0;
     fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0] = true;
+    fixture.target.valid[0][0] = true;
     fixture.target.is_msn_enabled = true;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.type = URMA_JETTY;
@@ -485,7 +485,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     fixture.target.active_count = 1;
     fixture.target.active_indices[0] = 0;
     fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0] = true;
+    fixture.target.valid[0][0] = true;
     fixture.target.is_msn_enabled = true;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x9c;
@@ -600,8 +600,8 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
     fixture.target.local_active_indices[0] = 0;
     fixture.target.active_indices[1] = 1;
     fixture.target.local_active_indices[1] = 1;
-    fixture.target.valid[0] = true;
-    fixture.target.valid[1] = true;
+    fixture.target.valid[0][0] = true;
+    fixture.target.valid[1][1] = true;
     fixture.target.is_msn_enabled = true;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x96;
@@ -877,7 +877,7 @@ TEST(UrmaBondTest, DatapathSendStoreRejectsOversizedList)
     fixture.target.active_count = 1;
     fixture.target.active_indices[0] = 0;
     fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0] = true;
+    fixture.target.valid[0][0] = true;
     fixture.target.is_msn_enabled = true;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.type = URMA_JETTY;
