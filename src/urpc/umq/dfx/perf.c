@@ -138,11 +138,11 @@ void umq_perf_uninit(void)
         return;
     }
 
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+    g_umq_perf_record_enable = false;
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; i++) {
         umq_perf_destroy_all_hdrs(i);
     }
 
-    g_umq_perf_record_enable = false;
     free(g_umq_perf_record_ctx);
     g_umq_perf_record_ctx = NULL;
 }
@@ -286,7 +286,7 @@ int umq_perf_reset(umq_perf_stats_cfg_t *perf_stats_cfg)
         return -UMQ_ERR_EINVAL;
     }
 
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; ++i) {
         umq_clear_perf_record_item(i);
     }
 
@@ -362,7 +362,7 @@ int umq_perf_info_get(umq_perf_stats_t *perf_info)
     }
 
     umq_perf_record_t total_perf_record = {0};
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; ++i) {
         if (!g_umq_perf_record_ctx->perf_record_table[i].inited) {
             continue;
         }
