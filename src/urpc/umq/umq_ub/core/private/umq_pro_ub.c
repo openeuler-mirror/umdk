@@ -975,6 +975,8 @@ static int umq_ub_process_fc_msg_with_retry(ub_queue_t *queue, umq_ub_imm_t *imm
         case -UMQ_ERR_EAGAIN:
             retry_type = UMQ_UB_RETRY_TYPE_EAGAIN;
             break;
+        case -UMQ_ERR_EFLOWCTL_FATAL:
+            return umq_ub_fill_fc_buf(queue, buf, UMQ_FAKE_BUF_FC_ERR_FATAL);
         default:
             return umq_ub_fill_fc_buf(queue, buf, UMQ_FAKE_BUF_FC_ERR);
     }
@@ -1165,7 +1167,11 @@ static int umq_ub_fc_msg_retry_dequeue(ub_queue_t *queue, umq_ub_fc_msg_retry_li
             urpc_list_remove(&entry->node);
             urpc_list_push_back(&retry_list->free_list, &entry->node);
             umq_ub_put_real_queue(real_queue, entry->imm.flow_control.umq_id);
-            return umq_ub_fill_fc_buf(real_queue, buf, UMQ_FAKE_BUF_FC_ERR);
+            umq_buf_status_t status = UMQ_FAKE_BUF_FC_ERR;
+            if (ret == -UMQ_ERR_EFLOWCTL_FATAL) {
+                status = UMQ_FAKE_BUF_FC_ERR_FATAL;
+            }
+            return umq_ub_fill_fc_buf(real_queue, buf, status);
         }
     }
 
@@ -1901,10 +1907,14 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
             }
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d] "
                 "status[%d] local_id[%u]\n", EID_ARGS(*eid), id, i, (int)cr[i].status, cr[i].local_id);
-            ret = -UMQ_ERR_EFLOWCTL;
+            bool is_fatal = (cr[i].status == URMA_CR_ACK_TIMEOUT_ERR ||
+                cr[i].status == URMA_CR_RNR_RETRY_CNT_EXC_ERR);
+            ret = is_fatal ? -UMQ_ERR_EFLOWCTL_FATAL : -UMQ_ERR_EFLOWCTL;
             umq_ub_fc_process_tx_error(queue, &obj);
+            umq_buf_status_t fc_err_status = is_fatal ?
+                    UMQ_FAKE_BUF_FC_ERR_FATAL : UMQ_FAKE_BUF_FC_ERR;
             if (buf != NULL &&
-                (fill_buf_cnt = (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR)) > 0) {
+                (fill_buf_cnt = (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], fc_err_status)) > 0) {
                 umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf[qbuf_cnt]->qbuf_ext;
                 buf_pro->umq_ctx = obj.bs.umq_ctx;
                 qbuf_cnt += fill_buf_cnt;
