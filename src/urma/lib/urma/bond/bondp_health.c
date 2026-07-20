@@ -53,7 +53,6 @@ typedef struct bondp_probe_res {
 } bondp_probe_res_t;
 
 typedef struct bondp_hc_node {
-    uint32_t node_id;
     uint32_t node_idx;
 
 #ifndef __cplusplus
@@ -312,8 +311,8 @@ static void hc_probe_link(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node,
     if (ret == URMA_SUCCESS) {
         res->inflight++;
     } else {
-        URMA_LOG_WARN("Failed to send health probe, node_id=%u, local_idx=%d, target_idx=%d, ret=%d.\n",
-                      node->node_id, local_idx, target_idx, ret);
+        URMA_LOG_WARN("Failed to send health probe, node_idx=%u, local_idx=%d, target_idx=%d, ret=%d.\n",
+                      node->node_idx, local_idx, target_idx, ret);
         atomic_store(&node->valid[local_idx][target_idx], false);
     }
 }
@@ -422,10 +421,8 @@ static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
     }
 }
 
-static int hc_init_node(bondp_hc_node_t *node, const topo_map_t *topo_map, uint32_t node_idx)
+static int hc_init_node(bondp_hc_node_t *node, uint32_t node_idx)
 {
-    const bondp_topo_node_t *topo_node = &topo_map->topo_infos[node_idx];
-    node->node_id = topo_node->node_id;
     node->node_idx = node_idx;
     ub_list_init(&node->tjetty_list);
     (void)memset(node->hc_tjetty, 0, sizeof(node->hc_tjetty));
@@ -470,22 +467,23 @@ static void hc_destroy_nodes(bondp_hc_ctx_t *hc_ctx)
     hc_ctx->node_num = 0;
 }
 
-static int hc_init_nodes(bondp_context_t *bdp_ctx, bondp_hc_ctx_t *hc_ctx, bool *has_nodes)
+static int hc_init_nodes(bondp_hc_ctx_t *hc_ctx, bool *has_nodes)
 {
+    uint32_t node_num = bondp_topo_get_node_num();
     uint32_t init_node_num = 0;
 
     *has_nodes = false;
-    if (bdp_ctx->topo_map == NULL || bdp_ctx->topo_map->node_num == 0) {
+    if (node_num == 0) {
         URMA_LOG_INFO("No topo node for health check, skip probe task.\n");
         return 0;
     }
-    if (bdp_ctx->topo_map->node_num > MAX_NODE_NUM) {
-        URMA_LOG_ERR("Invalid topo node num for health check, node_num=%u.\n", bdp_ctx->topo_map->node_num);
+    if (node_num > MAX_NODE_NUM) {
+        URMA_LOG_ERR("Invalid topo node num for health check, node_num=%u.\n", node_num);
         return -1;
     }
 
-    for (uint32_t i = 0; i < bdp_ctx->topo_map->node_num; ++i) {
-        int ret = hc_init_node(&hc_ctx->nodes[i], bdp_ctx->topo_map, i);
+    for (uint32_t i = 0; i < node_num; ++i) {
+        int ret = hc_init_node(&hc_ctx->nodes[i], i);
         if (ret != 0) {
             URMA_LOG_ERR("Failed to init health check node, node_idx=%u.\n", i);
             goto ERR_DESTROY_NODES;
@@ -493,7 +491,7 @@ static int hc_init_nodes(bondp_context_t *bdp_ctx, bondp_hc_ctx_t *hc_ctx, bool 
         init_node_num++;
     }
 
-    hc_ctx->node_num = bdp_ctx->topo_map->node_num;
+    hc_ctx->node_num = node_num;
     *has_nodes = true;
     return 0;
 
@@ -724,7 +722,7 @@ int bondp_hc_init(bondp_context_t *bdp_ctx, const bondp_hc_cfg_t *cfg)
                   hc_ctx->cfg.probe_interval_ms, hc_ctx->cfg.probe_node_num);
 
     bool has_nodes = false;
-    ret = hc_init_nodes(bdp_ctx, hc_ctx, &has_nodes);
+    ret = hc_init_nodes(hc_ctx, &has_nodes);
     if (ret != 0) {
         goto ERR_FREE_CTX;
     }
@@ -887,30 +885,6 @@ int bondp_hc_import_tseg(const bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
     return 0;
 }
 
-static int hc_find_node_idx_by_eid(topo_map_t *topo_map, const urma_eid_t *eid, uint32_t *node_idx)
-{
-    if (topo_map == NULL || eid == NULL || node_idx == NULL) {
-        return -1;
-    }
-
-    for (uint32_t i = 0; i < topo_map->node_num; ++i) {
-        bondp_topo_node_t *node = &topo_map->topo_infos[i];
-
-        for (int d = 0; d < DEV_NUM; ++d) {
-            bondp_topo_agg_dev_t *dev = &node->agg_devs[d];
-            if (is_empty_eid((urma_eid_t *)(dev->agg_eid))) {
-                continue;
-            }
-            if (!memcmp(dev->agg_eid, eid, EID_LEN)) {
-                *node_idx = i;
-                return 0;
-            }
-        }
-    }
-
-    return -1;
-}
-
 static bool hc_tjetty_has_probe_path(const bondp_target_jetty_t *bdp_tjetty)
 {
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
@@ -975,7 +949,7 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
 
     const urma_eid_t *dst_eid = &bdp_tjetty->v_tjetty.id.eid;
     uint32_t node_idx = 0;
-    if (hc_find_node_idx_by_eid(bdp_ctx->topo_map, dst_eid, &node_idx) != 0) {
+    if (bondp_topo_query_node_idx(dst_eid, &node_idx) != 0) {
         URMA_LOG_WARN("Failed to resolve node id from eid, skip health check registration.\n");
         return 0;
     }
@@ -989,7 +963,7 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
         hc_register_tjetty_path(node, bdp_tjetty);
     }
     pthread_rwlock_unlock(&node->lock);
-    URMA_LOG_INFO("Health check tjetty registered, node_id=%u.\n", node->node_id);
+    URMA_LOG_INFO("Health check tjetty registered, node_idx=%u.\n", node->node_idx);
     return 0;
 }
 
@@ -1017,7 +991,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     bdp_tjetty->hc_registered = false;
     bdp_tjetty->hc_node_idx = 0;
     pthread_rwlock_unlock(&node->lock);
-    URMA_LOG_INFO("Health check tjetty unregistered, node_id=%u.\n", node->node_id);
+    URMA_LOG_INFO("Health check tjetty unregistered, node_idx=%u.\n", node->node_idx);
 }
 
 void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty,

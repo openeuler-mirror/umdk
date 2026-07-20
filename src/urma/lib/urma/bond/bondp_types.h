@@ -92,7 +92,6 @@ typedef struct bondp_fb_ctx bondp_fb_ctx_t;
 /** Process-granularity global variable */
 typedef struct bondp_global_context {
     uint32_t pid;
-    topo_map_t *topo_map;
     bool skip_load_topo;
     bool enable_failover;
     bool enable_failback;
@@ -124,7 +123,6 @@ typedef struct bondp_context {
     int dev_num;
     bondp_bonding_mode_t bonding_mode;
     bondp_bonding_level_t bonding_level;
-    topo_map_t *topo_map;
     /* Record the mapping from the locally created jetty's pjetty.jetty_id.id to the vjetty.jetty_id.id, */
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
