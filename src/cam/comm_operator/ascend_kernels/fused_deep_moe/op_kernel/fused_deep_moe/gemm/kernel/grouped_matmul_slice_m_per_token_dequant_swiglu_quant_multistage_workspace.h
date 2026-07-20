@@ -1511,8 +1511,9 @@ public:
         uint32_t startCoreIdx = 0;
         uint32_t target = 1;
         aicSetFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
-                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};
+                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};  // AIV wait for flags in latter part
 
+        // wait AIV quantize needed tokens
         AscendC::GlobalTensor<int32_t> shareQuantTokenStateTensor;
         uint32_t waitFlagCount = params.bs < shareQuantCoreNum ? params.bs : shareQuantCoreNum;
         shareQuantTokenStateTensor.SetGlobalBuffer((__gm__ int32_t*)(
@@ -1525,15 +1526,18 @@ public:
         LayoutB layoutB = params.layoutShareB;
         blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
         uint32_t coreLoops = blockScheduler.GetCoreLoops();
+        // Determine the starting loopIdx of the current core under the current groupIdx
         uint32_t startLoopIdx = ((aicIdx < startCoreIdx) ? (aicIdx + aicNum) : aicIdx) - startCoreIdx;
+        // Loop through the matmul of each groupIdx
         for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += aicNum) {
+            // Compute block location
             GemmCoord blockCoord = blockScheduler.GetBlockCoord(loopIdx);
             GemmCoord actualBlockShape = blockScheduler.GetActualBlockShape(blockCoord);
 
             Callback callbackBeforeFixpipe{};
             if (stageUsed == WORKSPACE_STAGES) {
                 aicWaitFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(AscendC::GetBlockIdx()),
-                                target};
+                                target};  // AIC wait for flags in former part
                 target += 1;
                 callbackBeforeFixpipe = MakeCallback(&aicWaitFunc1);
             } else {
@@ -1541,6 +1545,7 @@ public:
             }
             Callback callbackAfterFixpipe = MakeCallback(&aicSetFunc1);
 
+            // Compute initial location in logical coordinates
             MatrixCoord offsetA{blockCoord.m() * L1TileShape::M, blockCoord.k() * L1TileShape::K};
             MatrixCoord offsetB{blockCoord.k() * L1TileShape::K, blockCoord.n() * L1TileShape::N};
             MatrixCoord offsetC{(stageId * aicNum + aicIdx) * L1TileShape::M, 0};
@@ -1548,6 +1553,7 @@ public:
             int64_t gmOffsetB = layoutB.GetOffset(offsetB);
             int64_t gmOffsetC = layoutC.GetOffset(offsetC);
 
+            // Compute block-scoped matrix multiply-add
             if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
                 blockMmad(gmA[gmOffsetA], layoutA, gmB[gmOffsetB], layoutB, gmC[gmOffsetC],
                     layoutC, actualBlockShape, callbackBeforeFixpipe, callbackAfterFixpipe);
@@ -1594,7 +1600,7 @@ public:
         uint32_t target = 1;
         AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
         aicSetFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
-                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};
+                       static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};  // AIV wait for flags in latter part
 
 
         int64_t gmGroupOffsetB = 0;
@@ -1618,6 +1624,7 @@ public:
 
             groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm +
                 GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
+            // wait AIV recv needed tokens
             uint32_t routingRecvCoreNum =
                 localExpertNum > 1 ? DISPATCH_RECV_CORE_NUM : aivNum;
             uint32_t expected = routingRecvCoreNum * vToCFlag;
@@ -1628,15 +1635,19 @@ public:
             LayoutB layoutB = params.layoutB;
             blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
             uint32_t coreLoops = blockScheduler.GetCoreLoops();
+            // Determine the starting loopIdx of the current core under the current groupIdx
             uint32_t startLoopIdx = ((aicIdx < startCoreIdx) ? (aicIdx + aicNum) : aicIdx) - startCoreIdx;
+            // Loop through the matmul of each groupIdx
             for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += aicNum) {
+                // Compute block location
                 GemmCoord blockCoord = blockScheduler.GetBlockCoord(loopIdx);
                 GemmCoord actualBlockShape = blockScheduler.GetActualBlockShape(blockCoord);
 
                 Callback callbackBeforeFixpipe{};
                 if (stageUsed == WORKSPACE_STAGES) {
                     aicWaitFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
-                                    static_cast<uint8_t>(AscendC::GetBlockIdx()), target};
+                                    static_cast<uint8_t>(AscendC::GetBlockIdx()),
+                                    target};  // AIC wait for flags in former part
                     target += 1;
                     callbackBeforeFixpipe = MakeCallback(&aicWaitFunc1);
                 } else {
@@ -1644,6 +1655,7 @@ public:
                 }
                 Callback callbackAfterFixpipe = MakeCallback(&aicSetFunc1);
 
+                // Compute initial location in logical coordinates
                 MatrixCoord offsetA{blockCoord.m() * L1TileShape::M, blockCoord.k() * L1TileShape::K};
                 MatrixCoord offsetB{blockCoord.k() * L1TileShape::K, blockCoord.n() * L1TileShape::N};
                 MatrixCoord offsetC{(stageId * aicNum + aicIdx) * L1TileShape::M, 0};
@@ -1653,6 +1665,7 @@ public:
                 uint32_t roundBufferStart = groupRoundStart - roundIdx * roundRecvTokenNum;
                 int64_t gmGroupOffsetA = static_cast<int64_t>(roundBufferStart) * params.problemShape.k();
 
+                // Compute block-scoped matrix multiply-add
                 if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
                     blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
                         layoutB, gmC[gmOffsetC], layoutC, actualBlockShape, callbackBeforeFixpipe,
