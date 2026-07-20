@@ -13,7 +13,7 @@
 #include "bondp_api.h"
 #include "bondp_segment.h"
 #include "bondp_types.h"
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_convert.h"
