@@ -27,10 +27,10 @@ cd "$MODULE_BUILD_OUT_PATH"
 
 rm -rf shmem
 # Download and build the shmem package
-SHMEM_COMMIT_HASH="0b779694e5e8cf024a6e7b39efb724cbed2d3a1b"
+SHMEM_COMMIT_HASH="6a5f4b09695d6c38421ec37a4ee7aa6f700fd77f"
 git clone https://gitcode.com/cann/shmem
 cd shmem
-git checkout "${SHMEM_COMMIT_HASH}"
+git checkout "${SHMEM_COMMIT_HASH}" -b nda-base
 cd ..
 
 # Override the rdma_backends
