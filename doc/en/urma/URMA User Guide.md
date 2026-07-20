@@ -80,6 +80,8 @@
         - [9.1.4 Permission Invalidation Flow](#914-permission-invalidation-flow)
     - [9.2 Memory Access Control](#92-memory-access-control)
 
+- [10 URMA Ecosystem Migration Skill](#10-urma-ecosystem-migration-skill)
+
 # 1 UMDK Overview
 
 ![](figures/urma-overview-01.png)
@@ -2404,3 +2406,7 @@ URMA's northbound interface memory permission configuration is consistent with t
 2. When URMA_ACCESS_LOCAL_ONLY is set to 0, in addition to local access having all permissions, external access permissions are determined by the subsequent three flags and take effect according to the user-configured combination of READ, WRITE, and ATOMIC.
 
 3. Write requires Read permission; Atomic requires Write + Read permission.
+
+# 10 URMA Ecosystem Migration Skill
+
+**verbs-to-urma-converter** is used to systematically refactor source code of projects based on RDMA verbs (libibverbs) and convert it to URMA API implementation. The refactoring includes API replacement, struct field updates, connection establishment process redesign, and more, with dual-layer verification at both file and project levels to ensure complete resource lifecycle and semantic correctness. For details, see [/skills/verbs-to-urma-converter](../../../skills/verbs-to-urma-converter/SKILL.md).
