@@ -17,7 +17,7 @@
 #include "perf.h"
 
 #define UMQ_TRACE_DEFAULT_RECORD_NUM   8192
-#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 1
+#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 0
 #define UMQ_TRACE_LOG_BUF_SIZE         512
 
 /*
@@ -482,9 +482,6 @@ static void umq_trace_output(void *args __attribute__((unused)))
 
 void umq_trace_remain_output(void)
 {
-    if (!g_umq_trace_enable) {
-        return;
-    }
     g_umq_trace_output_limit = 0;
     umq_trace_output(NULL);
 }
