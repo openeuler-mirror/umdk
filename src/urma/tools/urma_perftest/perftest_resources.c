@@ -1804,6 +1804,13 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
         urma_rjfr_t rjfr = {0};
         rjfr.jfr_id = ctx->remote_jetty_id[i];
         rjfr.trans_mode = cfg->trans_mode;
+        if (cfg->use_ctp) {
+            rjfr.tp_type = URMA_CTP;
+        } else if (rjfr.trans_mode == URMA_TM_UM) {
+            rjfr.tp_type = URMA_UTP;
+        } else {
+            rjfr.tp_type = URMA_RTP;
+        }
 
         ctx->import_tjfr[i] = urma_import_jfr_ex(ctx->urma_ctx, &rjfr, &g_perftest_token, &active_cfg);
         if (ctx->import_tjfr[i] == NULL) {
@@ -1953,6 +1960,8 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         }
         if (cfg->use_ctp) {
             rjetty->tp_type = URMA_CTP;
+        } else if (rjetty->trans_mode == URMA_TM_UM) {
+            rjetty->tp_type = URMA_UTP;
         } else {
             rjetty->tp_type = URMA_RTP;
         }
