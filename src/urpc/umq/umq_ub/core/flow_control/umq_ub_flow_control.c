@@ -913,7 +913,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
             .type = IMM_TYPE_FC_CREDIT_REQ,
             .notify = credits_per_request,
             .rsvd0 = 0,
-            .rsvd1 = 0
+            .umq_ctx = queue->umq_ctx
         }
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
@@ -979,7 +979,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
             .type = IMM_TYPE_FC_CREDIT_REP,
             .notify = notify,
             .rsvd0 = 0,
-            .rsvd1 = 0
+            .umq_ctx = queue->umq_ctx
         }
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
@@ -1129,7 +1129,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
             .type = IMM_TYPE_FC_CREDIT_RETURN_REQ,
             .notify = return_credit,
             .rsvd0 = 0,
-            .rsvd1 = 0
+            .umq_ctx = queue->umq_ctx
         }
     };
 
@@ -1207,7 +1207,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
             .type = IMM_TYPE_FC_CREDIT_RETURN_ACK,
             .notify = return_credit,
             .rsvd0 = 0,
-            .rsvd1 = 0
+            .umq_ctx = queue->umq_ctx
         }
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
