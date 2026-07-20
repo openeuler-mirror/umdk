@@ -258,9 +258,9 @@ typedef struct bondp_target_jetty {
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
 #ifndef __cplusplus
-    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #else
-    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #endif
     urma_ref_t use_cnt;
     bool is_msn_enabled;

@@ -1301,8 +1301,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         atomic_store(&bdp_comp->valid[send_idx], false);
         if (g_bondp_global_ctx->enable_health_check) {
             bondp_target_jetty_t *bdp_tjetty = wr_entry->target_vjetty;
-            bool target_any_valid = bondp_hc_tjetty_target_any_valid(bdp_tjetty, target_idx);
-            atomic_store(&bdp_tjetty->valid[target_idx], target_any_valid);
+            bondp_hc_tjetty_sync_valid(bdp_tjetty, send_idx, target_idx);
         }
         /* choose the failover route(0 or 1) through send_idx and target_idx */
         int new_send_idx = send_idx;
@@ -1322,8 +1321,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d], cr status=%d\n", send_idx, target_idx,
-                      new_send_idx, new_target_idx, cr->status);
+        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d]\n", send_idx, target_idx,
+                      new_send_idx, new_target_idx);
         urma_ubagg_switch_inc();
 
         for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
