@@ -26,7 +26,7 @@ struct FusedDeepMoeInfo {
     uint32_t h;                    // h
     uint32_t aicNum;               // aicNum
     uint32_t aivNum;               // aivNum
-    int32_t roundRecvTokenNum;     // positive: tokens per round; negative: original single-pass mode
+    int32_t roundRecvTokenNum;
     uint64_t totalUbSize;
     uint64_t totalWinSize;
     uint64_t gmm1HLen;

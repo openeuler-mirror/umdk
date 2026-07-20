@@ -68,9 +68,8 @@ constexpr float CROSS_RANK_SYNC_FLAG = 2.0f;
 #define TOTAL_COUNT_INDEX 4
 #define GROUP_TOKEN_COUNT 3  // equal to SELF_COUNT_INDEX
 #define GROUP_INFO_SIZE 32
-// Matmul high-level staging uses CrossCore flag IDs 0..7 when WORKSPACE_STAGES is 4.
-constexpr uint32_t FDM_GMM1_STATE_FLAG_ID = 8;
-constexpr uint32_t FDM_GMM1_DONE_FLAG_ID = 9;
+// Four-stage matmul reserves CrossCore flag IDs 0..7.
+constexpr uint32_t FDM_GMM1_SHARED_READY_FLAG_ID = 9;
 
 using namespace Cam;
 namespace Catlass::Gemm::Kernel {
@@ -1399,7 +1398,8 @@ public:
         if (params.roundIdx == 0) {
             AicInitParams(params);
 
-            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+            Arch::CrossCoreFlag gmm1SharedReady{
+                static_cast<Arch::FlagID>(FDM_GMM1_SHARED_READY_FLAG_ID)};
             RunSharedAic(params);
             Arch::CrossCoreWaitFlag(gmm1SharedReady);
             bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
@@ -3287,7 +3287,8 @@ public:
                 *(params.roundNum) = roundNum;
             }
 
-            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+            Arch::CrossCoreFlag gmm1SharedReady{
+                static_cast<Arch::FlagID>(FDM_GMM1_SHARED_READY_FLAG_ID)};
             RunSharedAiv(params);
             ClearSharedSoftSyncState();
             Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();

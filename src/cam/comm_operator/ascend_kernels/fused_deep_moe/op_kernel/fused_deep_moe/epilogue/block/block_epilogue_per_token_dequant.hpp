@@ -440,11 +440,9 @@ public:
 
             auto gmTilePerTokenScale = gmPerTokenScale[params.layoutPerTokenScale.GetOffset(perTokenScaleTileOffset)];
             auto layoutGmTilePerTokenScale = params.layoutPerTokenScale.GetTileLayout(perTokenScaleTileShape);
-
             auto &ubPerTokenScale = ubPerTokenScaleList[ubListId];
             auto layoutUbPerTokenScale =
                 LayoutScale::template MakeLayoutInUb<ElementPerTokenScale>(perTokenScaleTileShape);
-
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(eventUbPerTokenScaleVMTE2List[ubListId]);
             copyGmToUbPerTokenScale(ubPerTokenScale, gmTilePerTokenScale, layoutUbPerTokenScale,
                                     layoutGmTilePerTokenScale);

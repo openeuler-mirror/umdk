@@ -36,6 +36,9 @@ using namespace Catlass;
 using namespace Cam;
 
 constexpr uint32_t FDM_ROUND_SYNC_FLOATS_PER_RANK = 8;
+constexpr float FDM_ROUND_SYNC_INITIAL_GENERATION = 1.0f;
+// Float32 represents consecutive integer generations exactly through 2^24.
+constexpr float FDM_ROUND_SYNC_MAX_GENERATION = 16777215.0f;  // 2^24 - 1
 
 template <AscendC::HardEvent event>
 __aicore__ inline void FdmRoundSyncFunc()
@@ -407,7 +410,11 @@ __aicore__ inline float FusedDeepMoe<TemplateMC2TypeFunc>::SetRoundStatus(GM_ADD
                                       AscendC::DcciDst::CACHELINE_OUT>(ownRoundStatus);
     __asm__ __volatile__("");
     float currentStatus = ownRoundStatus.GetValue(0);
-    float expectedStatus = currentStatus >= 0.0f && currentStatus < 16777215.0f ? currentStatus + 1.0f : 1.0f;
+    bool canAdvanceGeneration =
+        currentStatus >= 0.0f && currentStatus < FDM_ROUND_SYNC_MAX_GENERATION;
+    float expectedStatus =
+        canAdvanceGeneration ? currentStatus + FDM_ROUND_SYNC_INITIAL_GENERATION
+                             : FDM_ROUND_SYNC_INITIAL_GENERATION;
 
     tpipe_->InitBuffer(roundStatusBuf_, epRankSize_ * UB_ALIGN);
     AscendC::LocalTensor<float> roundStatus = roundStatusBuf_.AllocTensor<float>();
