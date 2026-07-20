@@ -1195,14 +1195,14 @@ uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp, umq_tp_res
 {
     if (umqh_tp == UMQ_INVALID_HANDLE) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh_tp is invalid\n");
-        errno = -UMQ_ERR_EINVAL;
+        errno = UMQ_ERR_EINVAL;
         return UINT32_MAX;
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (!is_umq_ub_main_queue(queue->create_flag) || !is_umq_ub_share_transport(queue->create_flag)) {
         UMQ_VLOG_ERR(VLOG_UMQ,
             "transport resources can be expanded only if both main umq and share transport are available\n");
-        errno = -UMQ_ERR_EINVAL;
+        errno = UMQ_ERR_EINVAL;
         return UINT32_MAX;
     }
 
@@ -1214,7 +1214,7 @@ uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp, umq_tp_res
     if (offset >= jetty_node_list->list_len) {
         (void)util_mutex_unlock(jetty_node_list->lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "node list is full, no more jetty nodes can be added\n");
-        errno = -UMQ_ERR_EINVAL;
+        errno = UMQ_ERR_EINVAL;
         return UINT32_MAX;
     }
     ret = umq_ub_create_jetty_node(queue, dev_ctx, option, &jetty_node_list->node_list[offset]);
