@@ -205,33 +205,10 @@ public:
     template <int32_t CORE_TYPE = g_coreType>
     CATLASS_DEVICE void operator()(Params const &params);
 
-    CATLASS_DEVICE
-    void GetLocalBucketRange(Params const &params, uint32_t srcRank, uint32_t groupIdx,
-                             uint32_t &bucketStart, uint32_t &bucketEnd)
-    {
-        AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
-        sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)params.gmEpSendCount);
-        uint32_t globalExpertId = params.epRankId * params.moeExpertNumPerRank + groupIdx;
-        uint32_t offsetIdx = globalExpertId * params.epRankSize + srcRank;
-        uint32_t col = offsetIdx % params.moeExpertNum;
-
-        __asm__ __volatile__("");
-        AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
-                                          AscendC::DcciDst::CACHELINE_OUT>(sendCountsGlobalTensor[offsetIdx]);
-        if (col != 0) {
-            AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
-                                              AscendC::DcciDst::CACHELINE_OUT>(
-                sendCountsGlobalTensor[offsetIdx - 1]);
-        }
-        __asm__ __volatile__("");
-
-        bucketEnd = sendCountsGlobalTensor.GetValue(offsetIdx);
-        bucketStart = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(offsetIdx - 1);
-    }
 
     CATLASS_DEVICE
-    void GetLocalExpertRange(Params const &params, uint32_t groupIdx,
-                             uint32_t &expertStart, uint32_t &expertEnd)
+    void GetRoundExpertRange(Params const &params, uint32_t groupIdx, uint32_t roundIdx,
+                             uint32_t &expertRoundStart, uint32_t &expertRoundEnd)
     {
         AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
         sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)params.gmEpSendCount);
@@ -251,29 +228,17 @@ public:
         }
         __asm__ __volatile__("");
 
-        expertEnd = sendCountsGlobalTensor.GetValue(lastOffsetIdx);
-        expertStart = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(firstOffsetIdx - 1);
-    }
-
-    CATLASS_DEVICE
-    void GetRoundGroupRange(Params const &params, uint32_t srcRank, uint32_t groupIdx, uint32_t roundIdx,
-                            uint32_t &groupRoundStart, uint32_t &groupRoundEnd)
-    {
-        uint32_t bucketStart = 0;
-        uint32_t bucketEnd = 0;
-        GetLocalBucketRange(params, srcRank, groupIdx, bucketStart, bucketEnd);
+        uint32_t expertStart = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(firstOffsetIdx - 1);
+        uint32_t expertEnd = sendCountsGlobalTensor.GetValue(lastOffsetIdx);
         uint32_t roundStart = roundIdx * params.roundRecvTokenNum;
         uint32_t roundEnd = roundStart + params.roundRecvTokenNum;
-
-        if (roundStart >= bucketEnd || roundEnd <= bucketStart || bucketEnd <= bucketStart) {
-            groupRoundStart = bucketStart;
-            groupRoundEnd = bucketStart;
-            return;
+        expertRoundStart = roundStart > expertStart ? roundStart : expertStart;
+        expertRoundEnd = roundEnd < expertEnd ? roundEnd : expertEnd;
+        if (expertRoundEnd <= expertRoundStart) {
+            expertRoundEnd = expertRoundStart;
         }
-
-        groupRoundStart = roundStart > bucketStart ? roundStart : bucketStart;
-        groupRoundEnd = roundEnd < bucketEnd ? roundEnd : bucketEnd;
     }
+
 
     CATLASS_DEVICE
     void RunRoutingAicRound(Params const &params, uint32_t roundIdx)
@@ -298,76 +263,70 @@ public:
         uint32_t stageId = 0;
         uint32_t stageUsed = 0;
         uint32_t startCoreIdx = 0;
-        bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
-        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : params.epRankSize;
-        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
-            int64_t gmGroupOffsetB = 0;
-            for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
-                if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
-                    gmB.SetGlobalBuffer(reinterpret_cast<__gm__ ElementB *>(
-                            gmBlistTensorDesc.GetDataPtr<int32_t>(groupIdx)));
-                }
 
-                uint32_t groupRoundStart = 0;
-                uint32_t groupRoundEnd = 0;
-                if (guaranteedSingleRound) {
-                    GetLocalExpertRange(params, groupIdx, groupRoundStart, groupRoundEnd);
-                } else {
-                    GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
-                }
-                uint32_t currentM = groupRoundEnd - groupRoundStart;
-                if (currentM == 0) {
-                    if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
-                        gmGroupOffsetB += params.problemShape.k() * params.problemShape.n();
-                    }
-                    continue;
-                }
+        int64_t gmGroupOffsetB = 0;
+        for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
+            if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
+                gmB.SetGlobalBuffer(reinterpret_cast<__gm__ ElementB *>(
+                        gmBlistTensorDesc.GetDataPtr<int32_t>(groupIdx)));
+            }
 
-                GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
-                LayoutA layoutA = params.layoutA.GetTileLayout(inGroupProblemShape.GetCoordMK());
-                LayoutB layoutB = params.layoutB;
-                blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
-                uint32_t coreLoops = blockScheduler.GetCoreLoops();
-                uint32_t startLoopIdx = ((coreIdx < startCoreIdx) ? (coreIdx + coreNum) : coreIdx) - startCoreIdx;
-                for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += coreNum) {
-                    GemmCoord blockCoord = blockScheduler.GetBlockCoord(loopIdx);
-                    GemmCoord actualBlockShape = blockScheduler.GetActualBlockShape(blockCoord);
-
-                    Callback callbackBeforeFixpipe{};
-                    if (stageUsed == WORKSPACE_STAGES) {
-                        callbackBeforeFixpipe = MakeCallbackWithCall2(&aicWaitFuncList[stageId]);
-                    } else {
-                        ++stageUsed;
-                    }
-                    Callback callbackAfterFixpipe = MakeCallbackWithCall2(&aicSetFuncList[stageId]);
-
-                    MatrixCoord offsetA{blockCoord.m() * L1TileShape::M, blockCoord.k() * L1TileShape::K};
-                    MatrixCoord offsetB{blockCoord.k() * L1TileShape::K, blockCoord.n() * L1TileShape::N};
-                    MatrixCoord offsetC{(stageId * coreNum + coreIdx) * L1TileShape::M, 0};
-                    int64_t gmOffsetA = layoutA.GetOffset(offsetA);
-                    int64_t gmOffsetB = layoutB.GetOffset(offsetB);
-                    int64_t gmOffsetC = layoutC.GetOffset(offsetC);
-                    uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
-                    int64_t gmGroupOffsetA = static_cast<int64_t>(roundBufferStart) * params.problemShape.k();
-
-                    if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
-                        blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
-                                  layoutB, gmC[gmOffsetC], layoutC, actualBlockShape, callbackBeforeFixpipe,
-                                  callbackAfterFixpipe);
-                    } else {
-                        callbackBeforeFixpipe();
-                        blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
-                                  layoutB, gmC[gmOffsetC], layoutC, actualBlockShape);
-                        callbackAfterFixpipe();
-                    }
-                    stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
-                }
-                startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
+            uint32_t groupRoundStart = 0;
+            uint32_t groupRoundEnd = 0;
+            GetRoundExpertRange(params, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+            uint32_t currentM = groupRoundEnd - groupRoundStart;
+            if (currentM == 0) {
                 if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
                     gmGroupOffsetB += params.problemShape.k() * params.problemShape.n();
                 }
+                continue;
+            }
+
+            GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
+            LayoutA layoutA = params.layoutA.GetTileLayout(inGroupProblemShape.GetCoordMK());
+            LayoutB layoutB = params.layoutB;
+            blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
+            uint32_t coreLoops = blockScheduler.GetCoreLoops();
+            uint32_t startLoopIdx = ((coreIdx < startCoreIdx) ? (coreIdx + coreNum) : coreIdx) - startCoreIdx;
+            for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += coreNum) {
+                GemmCoord blockCoord = blockScheduler.GetBlockCoord(loopIdx);
+                GemmCoord actualBlockShape = blockScheduler.GetActualBlockShape(blockCoord);
+
+                Callback callbackBeforeFixpipe{};
+                if (stageUsed == WORKSPACE_STAGES) {
+                    callbackBeforeFixpipe = MakeCallbackWithCall2(&aicWaitFuncList[stageId]);
+                } else {
+                    ++stageUsed;
+                }
+                Callback callbackAfterFixpipe = MakeCallbackWithCall2(&aicSetFuncList[stageId]);
+
+                MatrixCoord offsetA{blockCoord.m() * L1TileShape::M, blockCoord.k() * L1TileShape::K};
+                MatrixCoord offsetB{blockCoord.k() * L1TileShape::K, blockCoord.n() * L1TileShape::N};
+                MatrixCoord offsetC{(stageId * coreNum + coreIdx) * L1TileShape::M, 0};
+                int64_t gmOffsetA = layoutA.GetOffset(offsetA);
+                int64_t gmOffsetB = layoutB.GetOffset(offsetB);
+                int64_t gmOffsetC = layoutC.GetOffset(offsetC);
+                uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
+                int64_t gmGroupOffsetA = static_cast<int64_t>(roundBufferStart) * params.problemShape.k();
+
+                if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
+                    blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
+                              layoutB, gmC[gmOffsetC], layoutC, actualBlockShape, callbackBeforeFixpipe,
+                              callbackAfterFixpipe);
+                } else {
+                    callbackBeforeFixpipe();
+                    blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
+                              layoutB, gmC[gmOffsetC], layoutC, actualBlockShape);
+                    callbackAfterFixpipe();
+                }
+                stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
+            }
+            startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
+            if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
+                gmGroupOffsetB += params.problemShape.k() * params.problemShape.n();
             }
         }
+
 
         if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
             blockMmad.SynchronizeBlock();
@@ -401,69 +360,63 @@ public:
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
         }
 
-        bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
-        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : params.epRankSize;
-        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
-            for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
-                uint32_t groupRoundStart = 0;
-                uint32_t groupRoundEnd = 0;
-                if (guaranteedSingleRound) {
-                    GetLocalExpertRange(params, groupIdx, groupRoundStart, groupRoundEnd);
-                } else {
-                    GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
-                }
-                uint32_t currentM = groupRoundEnd - groupRoundStart;
-                if (currentM == 0) {
-                    continue;
-                }
 
-                GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
-                LayoutScale layoutScale = params.layoutScale;
-                LayoutPerTokenScale layoutPerTokenScale = layout::VectorLayout{currentM};
-                LayoutD layoutD = layout::RowMajor{currentM, params.problemShape.n()};
-                uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
-                EpilogueParams epilogueParams;
-                if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
-                    gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(
-                                    gmScaleListTensor.GetDataPtr<int32_t>(groupIdx));
-                    epilogueParams = EpilogueParams {
-                            gmScalePtr, layoutScale,
-                            params.ptrPerTokenScale + roundBufferStart, layoutPerTokenScale,
-                            params.ptrD + static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), layoutD};
-                } else {
-                    epilogueParams = EpilogueParams{gmScalePtr + groupIdx * params.problemShape.n(),
-                                              layoutScale,
-                                              params.ptrPerTokenScale + roundBufferStart,
-                                              layoutPerTokenScale,
-                                              params.ptrD + static_cast<int64_t>(groupRoundStart) *
-                                                params.problemShape.n(),
-                                              layoutD};
-                }
-                blockScheduler.Update(inGroupProblemShape, L1TileShape::ToCoordMN());
-                blockEpilogue.UpdateParams(epilogueParams);
-                uint32_t coreLoops = blockScheduler.GetCoreLoops();
-                GemmCoord blockShapeMNK = L1TileShape::ToCoord();
-                uint32_t startLoopIdx = ((coreIdx < startCoreIdx) ? (coreIdx + coreNum) : coreIdx) - startCoreIdx;
-                for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += coreNum) {
-                    GemmCoord blockCoordMNK = blockScheduler.GetBlockCoord(loopIdx);
-                    GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
-
-                    MatrixCoord offsetC{(stageId * coreNum + coreIdx) * L1TileShape::M, 0};
-                    int64_t gmOffsetC = layoutC.GetOffset(offsetC);
-                    auto gmBlockC = gmC[gmOffsetC];
-                    auto layoutBlockC = layoutC.GetTileLayout(actualBlockShapeMNK.GetCoordMN());
-                    Callback callbackBeforeBlockEpilogue = MakeCallbackWithCall2(&aicWaitFuncList[stageId]);
-                    Callback callbackAfterBlockEpilogue = MakeCallbackWithCall2(&aicSetFuncList[stageId]);
-
-                    callbackBeforeBlockEpilogue();
-                    blockEpilogue(static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), groupIdx,
-                                  blockShapeMNK, blockCoordMNK, actualBlockShapeMNK, gmBlockC, layoutBlockC);
-                    callbackAfterBlockEpilogue();
-                    stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
-                }
-                startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
+        for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
+            uint32_t groupRoundStart = 0;
+            uint32_t groupRoundEnd = 0;
+            GetRoundExpertRange(params, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+            uint32_t currentM = groupRoundEnd - groupRoundStart;
+            if (currentM == 0) {
+                continue;
             }
+
+            GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
+            LayoutScale layoutScale = params.layoutScale;
+            LayoutPerTokenScale layoutPerTokenScale = layout::VectorLayout{currentM};
+            LayoutD layoutD = layout::RowMajor{currentM, params.problemShape.n()};
+            uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
+            EpilogueParams epilogueParams;
+            if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
+                gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(
+                                gmScaleListTensor.GetDataPtr<int32_t>(groupIdx));
+                epilogueParams = EpilogueParams {
+                        gmScalePtr, layoutScale,
+                        params.ptrPerTokenScale + roundBufferStart, layoutPerTokenScale,
+                        params.ptrD + static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), layoutD};
+            } else {
+                epilogueParams = EpilogueParams{gmScalePtr + groupIdx * params.problemShape.n(),
+                                          layoutScale,
+                                          params.ptrPerTokenScale + roundBufferStart,
+                                          layoutPerTokenScale,
+                                          params.ptrD + static_cast<int64_t>(groupRoundStart) *
+                                            params.problemShape.n(),
+                                          layoutD};
+            }
+            blockScheduler.Update(inGroupProblemShape, L1TileShape::ToCoordMN());
+            blockEpilogue.UpdateParams(epilogueParams);
+            uint32_t coreLoops = blockScheduler.GetCoreLoops();
+            GemmCoord blockShapeMNK = L1TileShape::ToCoord();
+            uint32_t startLoopIdx = ((coreIdx < startCoreIdx) ? (coreIdx + coreNum) : coreIdx) - startCoreIdx;
+            for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += coreNum) {
+                GemmCoord blockCoordMNK = blockScheduler.GetBlockCoord(loopIdx);
+                GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
+
+                MatrixCoord offsetC{(stageId * coreNum + coreIdx) * L1TileShape::M, 0};
+                int64_t gmOffsetC = layoutC.GetOffset(offsetC);
+                auto gmBlockC = gmC[gmOffsetC];
+                auto layoutBlockC = layoutC.GetTileLayout(actualBlockShapeMNK.GetCoordMN());
+                Callback callbackBeforeBlockEpilogue = MakeCallbackWithCall2(&aicWaitFuncList[stageId]);
+                Callback callbackAfterBlockEpilogue = MakeCallbackWithCall2(&aicSetFuncList[stageId]);
+
+                callbackBeforeBlockEpilogue();
+                blockEpilogue(static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), groupIdx,
+                              blockShapeMNK, blockCoordMNK, actualBlockShapeMNK, gmBlockC, layoutBlockC);
+                callbackAfterBlockEpilogue();
+                stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
+            }
+            startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
         }
+
         icache_preload(4);
     }
 
