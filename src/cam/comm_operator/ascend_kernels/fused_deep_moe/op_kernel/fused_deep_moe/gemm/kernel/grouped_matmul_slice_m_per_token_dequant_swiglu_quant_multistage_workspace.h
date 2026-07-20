@@ -605,12 +605,6 @@ public:
     CATLASS_DEVICE void operator()(Params const &params);
 
     CATLASS_DEVICE
-    bool IsRoundMode(Params const &params)
-    {
-        return params.roundIdx != 0xFFFFFFFFU;
-    }
-
-    CATLASS_DEVICE
     bool IsRoutingRound(Params const &params)
     {
         uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
@@ -1381,10 +1375,8 @@ public:
     CATLASS_DEVICE void operator()<AscendC::AIC>(Params const &params)
     {
         if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-            if (IsRoundMode(params)) {
-                RunRoundAic(params);
-                return;
-            }
+            RunRoundAic(params);
+            return;
         }
 
         aicIdx = AscendC::GetBlockIdx();
@@ -3463,10 +3455,8 @@ public:
     CATLASS_DEVICE void operator()<AscendC::AIV>(Params const &params)
     {
         if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-            if (IsRoundMode(params)) {
-                RunRoundAiv(params);
-                return;
-            }
+            RunRoundAiv(params);
+            return;
         }
 
         AivInitParams(params);

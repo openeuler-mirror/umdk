@@ -553,9 +553,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
         shareExpertTokenNum = bs_;
     }
-    constexpr bool supportRoundBuffer = (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE);
-    bool useRoundBuffer = supportRoundBuffer && roundRecvTokenNum_ > 0;
-    uint32_t roundBufferTokenNum = useRoundBuffer ? static_cast<uint32_t>(roundRecvTokenNum_) : maxTokenNum_;
+    uint32_t roundBufferTokenNum = static_cast<uint32_t>(roundRecvTokenNum_);
     size_t moeBufferTokenNum = roundBufferTokenNum;
     size_t maxHandleTokenNum = moeBufferTokenNum + shareExpertTokenNum;
     size_t workspaceOffset = 0;
@@ -636,7 +634,6 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     }
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-        if (useRoundBuffer) {
         uint32_t roundNum = 1;
         MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> combiner;
         for (uint32_t roundIdx = 0;; ++roundIdx) {
@@ -727,7 +724,6 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
             metaInfoGm_, statusDataSpaceOffset_, gmEpSendCount, epRankSize_, moeExpertNum_, moeExpertNumPerRank_,
             roundBufferTokenNum, roundNum, &roundNum);
         return;
-        }
     }
 
     GmmDeqSwigluQuant<TemplateMC2TypeFunc, Gmm1L1TileShape, Gmm1L0TileShape, Gmm1EpilogueTileShape,

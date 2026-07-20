@@ -206,12 +206,6 @@ public:
     CATLASS_DEVICE void operator()(Params const &params);
 
     CATLASS_DEVICE
-    bool IsRoundMode(Params const &params)
-    {
-        return params.roundIdx != 0xFFFFFFFFU;
-    }
-
-    CATLASS_DEVICE
     void GetLocalBucketRange(Params const &params, uint32_t srcRank, uint32_t groupIdx,
                              uint32_t &bucketStart, uint32_t &bucketEnd)
     {
@@ -599,10 +593,8 @@ public:
     CATLASS_DEVICE void operator()<AscendC::AIC>(Params const &params)
     {
         if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-            if (IsRoundMode(params)) {
-                RunRoundAic(params);
-                return;
-            }
+            RunRoundAic(params);
+            return;
         }
 
         BlockScheduler blockScheduler;
@@ -781,10 +773,8 @@ public:
     CATLASS_DEVICE void operator()<AscendC::AIV>(Params const &params)
     {
         if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-            if (IsRoundMode(params)) {
-                RunRoundAiv(params);
-                return;
-            }
+            RunRoundAiv(params);
+            return;
         }
 
         auto *combiner = (MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> *)params.combiner;

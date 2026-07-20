@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <string>
 
 #include "ops_log.h"
@@ -657,25 +656,6 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
     const uint64_t commonPerTokenSize = sizeof(float) + TOKEN_FLAG_SLOT_SIZE;
     const uint64_t x1PerTokenSize = info.h * sizeof(int8_t) + commonPerTokenSize;
     const uint64_t x2PerTokenSize = gmm2InputDim * sizeof(int8_t) + commonPerTokenSize;
-    const uint64_t maxBatchSize = info.globalBs / info.epRankSize;
-    const uint64_t maxTokenNum = maxBatchSize * info.epRankSize * std::min(info.k, info.moeExpertNumPerRank);
-    const char *singleRoundEnv = std::getenv("SINGLE_ROUND");
-    const bool singleRound = singleRoundEnv != nullptr && std::string(singleRoundEnv) != "0";
-    if (singleRound) {
-        const uint64_t singleRoundSize = std::max(x1FixedSize + maxTokenNum * x1PerTokenSize,
-                                                  x2FixedSize + maxTokenNum * x2PerTokenSize);
-        OPS_ERR_IF(shmemWorkspaceSize < singleRoundSize,
-                        OPS_LOG_E(nodeName,
-                                  "SINGLE_ROUND requires %lu bytes of SHMEM workspace, but only %lu are available.",
-                                  singleRoundSize, shmemWorkspaceSize),
-                        return ge::GRAPH_FAILED);
-        info.roundRecvTokenNum = -1;
-        OPS_LOG_D(nodeName,
-                  "SHMEM single-pass mode: workspaceSize=%lu, reservedSize=%lu, maxTokenNum=%lu.",
-                  shmemWorkspaceSize, singleRoundSize, maxTokenNum);
-        return ge::GRAPH_SUCCESS;
-    }
-
     const uint64_t x1RoundRecvTokenNum = (shmemWorkspaceSize - x1FixedSize) / x1PerTokenSize;
     const uint64_t x2RoundRecvTokenNum = (shmemWorkspaceSize - x2FixedSize) / x2PerTokenSize;
     uint64_t roundRecvTokenNum = std::min(x1RoundRecvTokenNum, x2RoundRecvTokenNum);
