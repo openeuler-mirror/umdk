@@ -184,20 +184,14 @@ struct BondProviderMockGuard {
 };
 
 struct BondTopoMapCleanup {
-    bondp_global_context_t *globalCtx;
-
-    explicit BondTopoMapCleanup(bondp_global_context_t *ctx) : globalCtx(ctx)
+    BondTopoMapCleanup()
     {
+        bondp_topo_uninit();
     }
 
     ~BondTopoMapCleanup()
     {
-        auto *sentinel = reinterpret_cast<topo_map_t *>(0x1);
-
-        if (globalCtx != nullptr && globalCtx->topo_map != nullptr && globalCtx->topo_map != sentinel) {
-            delete_topo_map(globalCtx->topo_map);
-            globalCtx->topo_map = nullptr;
-        }
+        bondp_topo_uninit();
     }
 };
 

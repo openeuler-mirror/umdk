@@ -122,8 +122,7 @@ TEST(UrmaBondTest, ConnectionTableGetOrCreateReusesExistingConnection)
 
 TEST(UrmaBondTest, TopoInfoMapsPhysicalAndAggregateEids)
 {
-    EXPECT_LT(sizeof(topo_map_t), sizeof(bondp_topo_node_t) * MAX_NODE_NUM);
-
+    BondTopoMapCleanup topoCleanup;
     bondp_topo_node_t topo = {};
     urma_eid_t aggEid = MakeEid(0x51);
     urma_eid_t primaryEid = MakeEid(0x52);
@@ -131,36 +130,37 @@ TEST(UrmaBondTest, TopoInfoMapsPhysicalAndAggregateEids)
     urma_eid_t missingEid = MakeEid(0x54);
     urma_eid_t output = {};
 
-    EXPECT_EQ(nullptr, create_topo_map(nullptr, 1));
-    EXPECT_EQ(nullptr, create_topo_map(&topo, 0));
-    EXPECT_EQ(nullptr, create_topo_map(&topo, MAX_NODE_NUM + 1));
-    EXPECT_EQ(nullptr, create_topo_map(&topo, 1));
-    delete_topo_map(nullptr);
+    EXPECT_EQ(-1, bondp_topo_init(nullptr, 1));
+    EXPECT_EQ(-1, bondp_topo_init(&topo, 0));
+    EXPECT_EQ(-1, bondp_topo_init(&topo, MAX_NODE_NUM + 1));
+    EXPECT_EQ(-1, bondp_topo_init(&topo, 1));
+    EXPECT_FALSE(bondp_topo_is_initialized());
+    EXPECT_EQ(0U, bondp_topo_get_node_num());
+    EXPECT_EQ(-1, bondp_topo_query_bonding_eid(&portEid, &output));
 
     topo.is_current = true;
     CopyEidToTopo(topo.agg_devs[0].agg_eid, aggEid);
     CopyEidToTopo(topo.agg_devs[0].ues[0].primary_eid, primaryEid);
     CopyEidToTopo(topo.agg_devs[0].ues[0].port_eid[0], portEid);
 
-    topo_map_t *map = create_topo_map(&topo, 1);
-    ASSERT_NE(nullptr, map);
-    EXPECT_EQ(1U, map->node_num);
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
+    EXPECT_TRUE(bondp_topo_is_initialized());
+    EXPECT_EQ(1U, bondp_topo_get_node_num());
 
-    ASSERT_EQ(0, get_bonding_eid_by_target_eid(map, &aggEid, &output));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&aggEid, &output));
     EXPECT_EQ(0, std::memcmp(&aggEid, &output, sizeof(output)));
-    ASSERT_EQ(0, get_bonding_eid_by_target_eid(map, &primaryEid, &output));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&primaryEid, &output));
     EXPECT_EQ(0, std::memcmp(&aggEid, &output, sizeof(output)));
-    ASSERT_EQ(0, get_bonding_eid_by_target_eid(map, &portEid, &output));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&portEid, &output));
     EXPECT_EQ(0, std::memcmp(&aggEid, &output, sizeof(output)));
-    EXPECT_EQ(-1, get_bonding_eid_by_target_eid(map, &missingEid, &output));
-    EXPECT_EQ(-1, get_bonding_eid_by_target_eid(nullptr, &portEid, &output));
-    EXPECT_EQ(-1, get_bonding_eid_by_target_eid(map, nullptr, &output));
-
-    delete_topo_map(map);
+    EXPECT_EQ(-1, bondp_topo_query_bonding_eid(&missingEid, &output));
+    EXPECT_EQ(-1, bondp_topo_query_bonding_eid(nullptr, &output));
+    EXPECT_EQ(-1, bondp_topo_query_bonding_eid(&portEid, nullptr));
 }
 
 TEST(UrmaBondTest, TopoInfoMapsMultipleNodes)
 {
+    BondTopoMapCleanup topoCleanup;
     bondp_topo_node_t topo[2] = {};
     urma_eid_t firstAggEid = MakeEid(0x55);
     urma_eid_t secondAggEid = MakeEid(0x56);
@@ -174,14 +174,11 @@ TEST(UrmaBondTest, TopoInfoMapsMultipleNodes)
     CopyEidToTopo(topo[1].agg_devs[0].agg_eid, secondAggEid);
     CopyEidToTopo(topo[1].agg_devs[0].ues[0].primary_eid, secondPrimaryEid);
 
-    topo_map_t *map = create_topo_map(topo, 2);
-    ASSERT_NE(nullptr, map);
-    EXPECT_EQ(2U, map->node_num);
+    ASSERT_EQ(0, bondp_topo_init(topo, 2));
+    EXPECT_EQ(2U, bondp_topo_get_node_num());
 
-    ASSERT_EQ(0, get_bonding_eid_by_target_eid(map, &secondPrimaryEid, &output));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&secondPrimaryEid, &output));
     EXPECT_EQ(0, std::memcmp(&secondAggEid, &output, sizeof(output)));
-
-    delete_topo_map(map);
 }
 
 TEST(UrmaBondTest, WorkerPublicApisScheduleCancelAndHandleFdEvents)

@@ -1361,6 +1361,7 @@ TEST(UrmaBondTest, PublicUserCtlQueriesPortsAndJfceFds)
 
 TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
 {
+    BondTopoMapCleanup topoCleanup;
     BondPublicApiFixture fixture;
     bondp_tseg_t inputTseg = {};
     urma_target_seg_t physicalSeg = {};
@@ -1383,8 +1384,7 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     CopyEidToTopo(topo[0].agg_devs[0].ues[0].port_eid[0], MakeEid(0xa05));
     CopyEidToTopo(topo[1].agg_devs[0].agg_eid, fixture.jetty.v_jetty.jetty_id.eid);
     topo[1].links[0][0] = true;
-    fixture.ctx.topo_map = create_topo_map(topo, 2);
-    ASSERT_NE(nullptr, fixture.ctx.topo_map);
+    ASSERT_EQ(0, bondp_topo_init(topo, 2));
 
     out = MakeUserCtlOut(&rjetty, sizeof(rjetty));
     EXPECT_EQ(0, CallBondUserCtl(&fixture.ctx.v_ctx, BONDP_USER_CTL_OPCODE_GET_RJETTY,
@@ -1420,8 +1420,6 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     EXPECT_EQ(0x55U, segExt->peer_p_seg[0].token_id);
     EXPECT_TRUE(segExt->connected[0][0]);
     std::free(seg);
-    delete_topo_map(fixture.ctx.topo_map);
-    fixture.ctx.topo_map = nullptr;
 }
 
 TEST(UrmaBondTest, PublicApiModifyDoesNotMarkErrorForNonErrorState)

@@ -353,9 +353,7 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
 
 static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 {
-    if (bondp_global_ctx->topo_map != NULL) {
-        delete_topo_map(bondp_global_ctx->topo_map);
-    }
+    bondp_topo_uninit();
     free(bondp_global_ctx);
     return 0;
 }
@@ -409,7 +407,7 @@ urma_status_t bondp_uninit(void)
 
 static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
 {
-    if (g_bondp_global_ctx->topo_map != NULL) {
+    if (bondp_topo_is_initialized()) {
         return 0;
     }
     struct ubagg_topo_info_out *info_out = calloc(1, sizeof(*info_out));
@@ -431,14 +429,12 @@ static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
         free(info_out);
         return -1;
     }
-    g_bondp_global_ctx->topo_map = create_topo_map(info_out->topo_info, info_out->node_num);
+    int ret = bondp_topo_init(info_out->topo_info, info_out->node_num);
     free(info_out);
-    if (g_bondp_global_ctx->topo_map == NULL) {
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to create topo map\n");
         return -1;
     }
-
-    bdp_ctx->topo_map = g_bondp_global_ctx->topo_map;
     return 0;
 }
 

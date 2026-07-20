@@ -461,12 +461,11 @@ static int bondp_unimport_pseg(bondp_import_tseg_t *bdp_tseg)
     return ret;
 }
 
-static int bondp_fill_udata_connected_from_topo(const bondp_context_t *bdp_ctx, urma_eid_t dst_eid,
-                                                bondp_udata_import_seg_t *udata_out)
+static int bondp_fill_udata_connected_from_topo(urma_eid_t dst_eid, bondp_udata_import_seg_t *udata_out)
 {
     bool topo_connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM] = {0};
 
-    if (bondp_find_linked_port_by_topo(bdp_ctx->topo_map, &dst_eid, topo_connected) != 0) {
+    if (bondp_topo_query_linked_port(&dst_eid, topo_connected) != 0) {
         return -1;
     }
 
@@ -522,7 +521,7 @@ static int bondp_import_seg_from_user_ext(bondp_context_t *bdp_ctx, urma_context
     bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, 0, ctx);
 
     urma_eid_t dst_eid = seg->ubva.eid;
-    if (bondp_fill_udata_connected_from_topo(bdp_ctx, dst_eid, udata_out) != 0) {
+    if (bondp_fill_udata_connected_from_topo(dst_eid, udata_out) != 0) {
         URMA_LOG_ERR("Failed to rebuild connected matrix by topo.\n");
         return -1;
     }
