@@ -9,6 +9,7 @@
  */
 
 #include <errno.h>
+#include <stdlib.h>
 #include <threads.h>
 
 #include "bondp_connection.h"
@@ -1490,7 +1491,18 @@ static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int
 int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 {
     PERF_PROFILING_START(BOND_POLL_JFC);
-    static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
+    static thread_local urma_cr_t *pcr_buf;
+
+    const int max_cr_cnt_per_dev = g_bondp_global_ctx->max_cr_cnt_per_dev;
+    if (pcr_buf == NULL) {
+        pcr_buf = (urma_cr_t *)malloc((size_t)max_cr_cnt_per_dev * sizeof(*pcr_buf));
+        if (pcr_buf == NULL) {
+            URMA_LOG_ERR("Failed to allocate thread CR buffer, count=%d\n", max_cr_cnt_per_dev);
+            PERF_PROFILING_END(BOND_POLL_JFC);
+            return -ENOMEM;
+        }
+    }
+
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jfc->urma_ctx, bondp_context_t, v_ctx);
     bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(jfc, bondp_jfc_t, v_jfc);
     int cr_cnt_remaining = cr_cnt;
@@ -1503,8 +1515,8 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
     /* Hot path is active-backup only */
     if (bdp_ctx->bonding_mode != BONDP_BONDING_MODE_BALANCE &&
         hot_idx >= 0 && bdp_jfc->p_jfc[hot_idx] != NULL) {
-        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
-                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+        int pcr_cnt_max = cr_cnt_remaining > max_cr_cnt_per_dev
+                              ? max_cr_cnt_per_dev
                               : cr_cnt_remaining;
         int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[hot_idx], pcr_cnt_max, pcr_buf);
         if (pcr_cnt < 0) {
@@ -1555,8 +1567,8 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
         if (hot_polled && idx == hot_idx) {
             continue;
         }
-        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
-                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+        int pcr_cnt_max = cr_cnt_remaining > max_cr_cnt_per_dev
+                              ? max_cr_cnt_per_dev
                               : cr_cnt_remaining;
         int pcr_cnt = urma_poll_jfc(bdp_jfc->p_jfc[idx], pcr_cnt_max, pcr_buf);
         if (pcr_cnt < 0) {
@@ -1591,7 +1603,16 @@ int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
 
 int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
 {
-    static thread_local urma_cr_t pcr_buf[URMA_UBAGG_MAX_CR_CNT_PER_DEV];
+    static thread_local urma_cr_t *pcr_buf;
+
+    const int max_cr_cnt_per_dev = g_bondp_global_ctx->max_cr_cnt_per_dev;
+    if (pcr_buf == NULL) {
+        pcr_buf = (urma_cr_t *)malloc((size_t)max_cr_cnt_per_dev * sizeof(*pcr_buf));
+        if (pcr_buf == NULL) {
+            URMA_LOG_ERR("Failed to allocate thread CR buffer, count=%d\n", max_cr_cnt_per_dev);
+            return -ENOMEM;
+        }
+    }
 
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jetty->urma_ctx, bondp_context_t, v_ctx);
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
@@ -1603,8 +1624,8 @@ int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr)
             continue;
         }
 
-        int pcr_cnt_max = cr_cnt_remaining > URMA_UBAGG_MAX_CR_CNT_PER_DEV
-                              ? URMA_UBAGG_MAX_CR_CNT_PER_DEV
+        int pcr_cnt_max = cr_cnt_remaining > max_cr_cnt_per_dev
+                              ? max_cr_cnt_per_dev
                               : cr_cnt_remaining;
         int pcr_cnt = urma_flush_jetty(bdp_jetty->p_jetty[i], pcr_cnt_max, pcr_buf);
         if (pcr_cnt < 0) {
