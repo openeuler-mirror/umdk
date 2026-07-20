@@ -1374,7 +1374,25 @@ public:
     template <>
     CATLASS_DEVICE void operator()<AscendC::AIC>(Params const &params)
     {
-        RunRoundAic(params);
+        uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
+        if (params.roundIdx == 0) {
+            AicInitParams(params);
+
+            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+            RunSharedAic(params);
+            Arch::CrossCoreWaitFlag(gmm1SharedReady);
+            roundNum = CalcRoundNum((GM_ADDR)params.gmEpSendCount);
+            if (params.roundNum != nullptr) {
+                *(params.roundNum) = roundNum;
+            }
+        } else {
+            AicRestoreRoundState(params);
+        }
+
+        if (params.roundIdx >= roundNum) {
+            return;
+        }
+        RunRoutingAicRound(params, params.roundIdx);
     }
 
     CATLASS_DEVICE
@@ -3238,47 +3256,6 @@ public:
     template <>
     CATLASS_DEVICE void operator()<AscendC::AIV>(Params const &params)
     {
-        RunRoundAiv(params);
-    }
-
-    CATLASS_DEVICE
-    void PrepareFinalizeAivState()
-    {
-        isRecvCore = ((aivIdx % ODD_EVEN_BASE) == 0);
-        isSendCore = ((aivIdx % ODD_EVEN_BASE) == 1);
-        recvCoreIdx = aivIdx / subBlockNum;
-        sendCoreIdx = aivIdx / subBlockNum;
-        sendCoreNum = aiCoreGroupNum;
-        recvCoreNum = aiCoreGroupNum;
-    }
-
-    CATLASS_DEVICE
-    void RunRoundAic(Params const &params)
-    {
-        uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
-        if (params.roundIdx == 0) {
-            AicInitParams(params);
-
-            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
-            RunSharedAic(params);
-            Arch::CrossCoreWaitFlag(gmm1SharedReady);
-            roundNum = CalcRoundNum((GM_ADDR)params.gmEpSendCount);
-            if (params.roundNum != nullptr) {
-                *(params.roundNum) = roundNum;
-            }
-        } else {
-            AicRestoreRoundState(params);
-        }
-
-        if (params.roundIdx >= roundNum) {
-            return;
-        }
-        RunRoutingAicRound(params, params.roundIdx);
-    }
-
-    CATLASS_DEVICE
-    void RunRoundAiv(Params const &params)
-    {
         uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
         if (params.roundIdx == 0) {
             PrepareAivDispatch(params);
@@ -3306,6 +3283,17 @@ public:
         }
 
         RunRoutingAivRound(params, params.roundIdx);
+    }
+
+    CATLASS_DEVICE
+    void PrepareFinalizeAivState()
+    {
+        isRecvCore = ((aivIdx % ODD_EVEN_BASE) == 0);
+        isSendCore = ((aivIdx % ODD_EVEN_BASE) == 1);
+        recvCoreIdx = aivIdx / subBlockNum;
+        sendCoreIdx = aivIdx / subBlockNum;
+        sendCoreNum = aiCoreGroupNum;
+        recvCoreNum = aiCoreGroupNum;
     }
 
 private:

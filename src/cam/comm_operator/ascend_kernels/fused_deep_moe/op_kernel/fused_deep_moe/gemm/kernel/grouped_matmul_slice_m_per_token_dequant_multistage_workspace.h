@@ -592,18 +592,6 @@ public:
     template <>
     CATLASS_DEVICE void operator()<AscendC::AIC>(Params const &params)
     {
-        RunRoundAic(params);
-    }
-
-    template <>
-    CATLASS_DEVICE void operator()<AscendC::AIV>(Params const &params)
-    {
-        RunRoundAiv(params);
-    }
-
-    CATLASS_DEVICE
-    void RunRoundAic(Params const &params)
-    {
         uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
         if (params.roundIdx >= roundNum) {
             RunFinalizeAic(params);
@@ -615,8 +603,8 @@ public:
         Arch::CrossCoreWaitFlag(gmm2RoundReady);
     }
 
-    CATLASS_DEVICE
-    void RunRoundAiv(Params const &params)
+    template <>
+    CATLASS_DEVICE void operator()<AscendC::AIV>(Params const &params)
     {
         uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
         if (params.roundIdx >= roundNum) {
