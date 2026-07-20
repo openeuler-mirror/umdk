@@ -1785,7 +1785,9 @@ public:
 
                 groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm +
                     GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
-                uint32_t expected = DISPATCH_RECV_CORE_NUM * vToCFlag;
+                uint32_t routingRecvCoreNum =
+                    localExpertNum > 1 ? DISPATCH_RECV_CORE_NUM : aivNum;
+                uint32_t expected = routingRecvCoreNum * vToCFlag;
                 WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
 
                 GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
@@ -3005,7 +3007,8 @@ public:
                            __gm__ ElementPerTokenScale *gmTokenScale, __gm__ float *gmSwigluOutput, uint32_t n,
                            uint32_t k, LayoutScale layoutScale, uint32_t roundIdx)
     {
-        uint32_t coreNumPerGroup = DISPATCH_RECV_CORE_NUM;
+        uint32_t coreNumPerGroup =
+            localExpertNum > 1 ? DISPATCH_RECV_CORE_NUM : aivNum;
         AscendC::GlobalTensor<ElementC> gmC;
         gmC.SetGlobalBuffer(reinterpret_cast<__gm__ ElementC *>(gmCVSwapBuff));
         auto layoutC = layout::RowMajor{L1TileShape::M * aiCoreGroupNum * WORKSPACE_STAGES, L1TileShape::N};
@@ -3156,24 +3159,17 @@ public:
                                     (GM_ADDR)params.gmShareX1, (GM_ADDR)params.gmShareX1Scale);
             }
         }
-        if (localExpertNum > 1 && (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER)) {
-            SendCoreLayoutFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmMoeSmoothScales,
+        SendCoreLayoutFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmMoeSmoothScales,
                         (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmExpandIdx,
                         (GM_ADDR)params.gmXActiveMask, (GM_ADDR)params.gmEpSendCount,
                         (GM_ADDR)params.gmAllExpertTokenNums, (GM_ADDR)params.gmCombineSend);
+        if (localExpertNum > 1) {
             isRecvCore = aivIdx >= DISPATCH_SEND_CORE_NUM;
             isSendCore = aivIdx < DISPATCH_SEND_CORE_NUM;
             recvCoreIdx = aivIdx - DISPATCH_SEND_CORE_NUM;
             sendCoreIdx = aivIdx;
             sendCoreNum = DISPATCH_SEND_CORE_NUM;
             recvCoreNum = DISPATCH_RECV_CORE_NUM;
-        } else {
-            if (isSendCore) {
-                SendCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmMoeSmoothScales,
-                            (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmExpandIdx,
-                            (GM_ADDR)params.gmXActiveMask, (GM_ADDR)params.gmEpSendCount,
-                            (GM_ADDR)params.gmAllExpertTokenNums, (GM_ADDR)params.gmCombineSend);
-            }
         }
         AscendC::PipeBarrier<PIPE_ALL>();
     }
@@ -3181,27 +3177,22 @@ public:
     CATLASS_DEVICE
     void RunRoutingAivRound(Params const &params, uint32_t roundIdx)
     {
-        if (localExpertNum > 1 && (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER)) {
+        if (localExpertNum > 1) {
             isRecvCore = aivIdx >= DISPATCH_SEND_CORE_NUM;
             isSendCore = aivIdx < DISPATCH_SEND_CORE_NUM;
             recvCoreIdx = aivIdx - DISPATCH_SEND_CORE_NUM;
             sendCoreIdx = aivIdx;
             sendCoreNum = DISPATCH_SEND_CORE_NUM;
             recvCoreNum = DISPATCH_RECV_CORE_NUM;
-            if (isSendCore) {
-                SendCoreDataFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpandIdx,
+        }
+        if (isSendCore) {
+            SendCoreDataFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpandIdx,
                     (GM_ADDR)params.gmMoeSmoothScales, (GM_ADDR)params.gmEpSendCount,
                     (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, roundIdx);
-            }
-
-            if (isRecvCore) {
-                ShmemRecvCoreRound((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale,
+        }
+        if (isRecvCore) {
+            ShmemRecvCoreRound((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale,
                     (GM_ADDR)params.gmEpSendCount, roundIdx);
-            }
-        } else {
-            if (isRecvCore) {
-                RecvCoreFunc((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmEpSendCount);
-            }
         }
 
         isRecvCore = ((aivIdx % ODD_EVEN_BASE) == 0);
