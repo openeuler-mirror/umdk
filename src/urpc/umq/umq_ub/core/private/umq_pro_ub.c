@@ -1883,6 +1883,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
     uint32_t success_cnt = 0;
     int32_t qbuf_cnt = 0;
     uint32_t failed_cnt = 0;
+    int32_t fill_buf_cnt = 0;
     for (int i = 0; i < tx_cr_cnt; i++) {
         umq_ub_fc_user_ctx_t obj = {.value = cr[i].user_ctx};
         if (cr[i].status != URMA_CR_SUCCESS) {
@@ -1902,8 +1903,11 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
                 "status[%d] local_id[%u]\n", EID_ARGS(*eid), id, i, (int)cr[i].status, cr[i].local_id);
             ret = -UMQ_ERR_EFLOWCTL;
             umq_ub_fc_process_tx_error(queue, &obj);
-            if (buf != NULL) {
-                qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR);
+            if (buf != NULL &&
+                (fill_buf_cnt = (int32_t)umq_ub_fill_fc_buf(queue, &buf[qbuf_cnt], UMQ_FAKE_BUF_FC_ERR)) > 0) {
+                umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf[qbuf_cnt]->qbuf_ext;
+                buf_pro->umq_ctx = obj.bs.umq_ctx;
+                qbuf_cnt += fill_buf_cnt;
             }
             failed_cnt++;
             continue;
