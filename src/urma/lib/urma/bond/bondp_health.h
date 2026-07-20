@@ -61,12 +61,13 @@ int bondp_hc_import_tseg(const struct bondp_context *bdp_ctx,
 urma_status_t bondp_hc_unimport_tseg(struct bondp_target_jetty *bdp_tjetty);
 
 /**
- * Query whether any health-check path to the given target_idx is still valid.
- * Returns true when at least one local path is healthy, or when health check
- * is not registered for this target jetty (degrades to "available").
+ * Synchronise the authoritative per-path node->valid matrix into the target
+ * jetty's own valid matrix, skipping the path (skip_local_idx, skip_target_idx)
+ * which is owned by the caller. No-op when health check is not registered for
+ * this target jetty.
  */
-bool bondp_hc_tjetty_target_any_valid(const struct bondp_target_jetty *bdp_tjetty,
-                                      uint32_t target_idx);
+void bondp_hc_tjetty_sync_valid(const struct bondp_target_jetty *bdp_tjetty,
+                                uint32_t skip_local_idx, uint32_t skip_target_idx);
 
 #ifdef __cplusplus
 }
