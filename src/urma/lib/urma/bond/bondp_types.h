@@ -20,7 +20,7 @@
 
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 #include "ub_list.h"
 #include "urma_private.h"
 #include "urma_types.h"

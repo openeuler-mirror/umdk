@@ -16,7 +16,7 @@
 
 #include "bondp_hash_table.h"
 
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 
 #define DIRECT_DEV_HASH_BASIS (9819876)
 #define TL_EID_CACHE_SLOTS    (8)
