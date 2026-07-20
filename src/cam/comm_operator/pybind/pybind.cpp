@@ -33,6 +33,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
         .def("is_initialized", &fused_deep_moe::Buffer::is_initialized)
         .def("get_ext_info", &fused_deep_moe::Buffer::get_ext_info)
         .def("get_shmem_workspace", &fused_deep_moe::Buffer::get_shmem_workspace);
+    m.def("gather_selection_kv_cache", &gather_selection_kv_cache, "gather_selection_kv_cache")
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -55,4 +56,12 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     m.def("e2a(Tensor expand_x, Tensor atten_batch_size, int batch_size, int hidden_size, \
     int topk, int expert_rank_size,  int attention_rank_size, int rank, str group_ep, \
     int aiv_num) -> Tensor");
+    m.def("gather_selection_kv_cache(Tensor(a!) selection_k_rope, Tensor(b!) selection_kv_cache, Tensor(c!) \
+        selection_kv_block_table, Tensor(d!) selection_kv_block_status, Tensor selection_topk_indices, Tensor full_k_rope, \
+        Tensor full_kv_cache, Tensor full_kv_block_table, Tensor full_kv_actual_seq, Tensor full_q_actual_seq, *, \
+        int selection_topk_block_size=64) -> Tensor");
+    m.def("gather_selection_kv_cache_functional(Tensor selection_k_rope, Tensor selection_kv_cache, \
+        Tensor selection_kv_block_table, Tensor selection_kv_block_status, Tensor selection_topk_indices, \
+        Tensor full_k_rope, Tensor full_kv_cache, Tensor full_kv_block_table, Tensor full_kv_actual_seq, \
+        Tensor full_q_actual_seq, *, int selection_topk_block_size=64) -> (Tensor, Tensor, Tensor, Tensor, Tensor)");
 }
