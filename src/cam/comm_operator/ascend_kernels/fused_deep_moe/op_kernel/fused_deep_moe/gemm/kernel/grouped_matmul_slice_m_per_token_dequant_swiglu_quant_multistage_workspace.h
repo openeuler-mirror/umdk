@@ -1399,11 +1399,9 @@ public:
         if (params.roundIdx == 0) {
             AicInitParams(params);
 
-            if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-                Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
-                RunSharedAic(params);
-                Arch::CrossCoreWaitFlag(gmm1SharedReady);
-            }
+            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+            RunSharedAic(params);
+            Arch::CrossCoreWaitFlag(gmm1SharedReady);
             bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
             roundNum = guaranteedSingleRound ? 1 : CalcRoundNum((GM_ADDR)params.gmEpSendCount);
             if (params.roundNum != nullptr) {
@@ -3289,13 +3287,11 @@ public:
                 *(params.roundNum) = roundNum;
             }
 
-            if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-                Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
-                RunSharedAiv(params);
-                ClearSharedSoftSyncState();
-                Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
-                Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1SharedReady);
-            }
+            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+            RunSharedAiv(params);
+            ClearSharedSoftSyncState();
+            Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
+            Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1SharedReady);
         } else {
             AivRestoreRoundState(params);
         }
