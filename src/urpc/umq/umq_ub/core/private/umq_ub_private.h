@@ -276,6 +276,7 @@ typedef struct umq_ub_ctx {
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
     volatile uint64_t *umq_ctx_table;
+    volatile uint32_t *umq_ctx_ref_cnt_table;
     volatile uint64_t *rx_consumed_jetty_table;
 } umq_ub_ctx_t;
 
@@ -699,14 +700,24 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
         return NULL;
     }
 
-    return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
-        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQ_REL);
+    uint32_t old_ref_cnt = __atomic_load_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], __ATOMIC_ACQUIRE);
+    do {
+        if (old_ref_cnt == 0) {
+            return NULL;
+        }
+    } while (__atomic_compare_exchange_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
+        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
+
+    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_table[umq_id];
 }
 
 static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
 {
-    __atomic_store_n(&queue->dev_ctx->umq_ctx_table[umq_id],
-        (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
+    if (umq_id >= UMQ_ID_ALLOC_SIZE) {
+        return;
+    }
+
+    (void)__atomic_fetch_sub(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], 1, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
