@@ -25,12 +25,18 @@ typedef struct eid_mapping_entry {
     hmap_node_t hmap_node;
     urma_eid_t key_eid;
     urma_eid_t bonding_eid;
+    uint32_t node_idx;
 } eid_mapping_entry_t;
+
+// Only stores links, used for in-memory topo_map storage
+typedef struct bondp_topo_links {
+    bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
+} bondp_topo_links_t;
 
 typedef struct topo_map {
     uint32_t node_num;
     bondp_hash_table_t eid_mapping_hash_table;
-    bondp_topo_node_t topo_infos[];
+    bondp_topo_links_t node_links[];
 } topo_map_t;
 
 static topo_map_t *g_topo_map;
@@ -71,11 +77,11 @@ static int eid_mapping_hash_table_create(bondp_hash_table_t *tbl, uint32_t size)
 
 static bool get_topo_map_alloc_size(uint32_t node_num, size_t *size)
 {
-    if (node_num > (SIZE_MAX - sizeof(topo_map_t)) / sizeof(bondp_topo_node_t)) {
+    if (node_num > (SIZE_MAX - sizeof(topo_map_t)) / sizeof(bondp_topo_links_t)) {
         return false;
     }
 
-    *size = sizeof(topo_map_t) + node_num * sizeof(bondp_topo_node_t);
+    *size = sizeof(topo_map_t) + node_num * sizeof(bondp_topo_links_t);
     return true;
 }
 
@@ -91,7 +97,8 @@ static bool get_eid_mapping_hash_size(uint32_t node_num, uint32_t *size)
     return true;
 }
 
-static int eid_mapping_hash_table_add(bondp_hash_table_t *tbl, urma_eid_t *key, urma_eid_t *bonding_eid)
+static int eid_mapping_hash_table_add(bondp_hash_table_t *tbl, urma_eid_t *key, urma_eid_t *bonding_eid,
+                                      uint32_t node_idx)
 {
     hmap_node_t *node = NULL;
     uint32_t hash = tbl->hash_f(key);
@@ -105,6 +112,7 @@ static int eid_mapping_hash_table_add(bondp_hash_table_t *tbl, urma_eid_t *key, 
     }
     entry->key_eid = *key;
     entry->bonding_eid = *bonding_eid;
+    entry->node_idx = node_idx;
     bondp_hash_table_add_with_hash(tbl, &entry->hmap_node, hash);
     return 0;
 }
@@ -119,26 +127,26 @@ static eid_mapping_entry_t *eid_mapping_hash_table_lookup(bondp_hash_table_t *tb
     return CONTAINER_OF_FIELD(node, eid_mapping_entry_t, hmap_node);
 }
 
-static int update_mapping_hash_table(topo_map_t *topo_map)
+static int update_mapping_hash_table(topo_map_t *topo_map, const bondp_topo_node_t *topo_infos)
 {
     for (int node_idx = 0; node_idx < topo_map->node_num; ++node_idx) {
-        bondp_topo_node_t *cur_node = &topo_map->topo_infos[node_idx];
+        const bondp_topo_node_t *cur_node = &topo_infos[node_idx];
         for (int dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
-            bondp_topo_agg_dev_t *cur_dev = &cur_node->agg_devs[dev_idx];
+            const bondp_topo_agg_dev_t *cur_dev = &cur_node->agg_devs[dev_idx];
             if (is_empty_eid((urma_eid_t *)cur_dev->agg_eid)) {
                 continue;
             }
             if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table, (urma_eid_t *)cur_dev->agg_eid,
-                                           (urma_eid_t *)cur_dev->agg_eid)) {
+                                           (urma_eid_t *)cur_dev->agg_eid, (uint32_t)node_idx)) {
                 URMA_LOG_ERR("Failed to add agg eid to mapping hash table\n");
                 return -1;
             }
             for (int iodie_idx = 0; iodie_idx < IODIE_NUM; ++iodie_idx) {
-                bondp_topo_ue_t *ue_info = &cur_dev->ues[iodie_idx];
+                const bondp_topo_ue_t *ue_info = &cur_dev->ues[iodie_idx];
                 if (!is_empty_eid((urma_eid_t *)ue_info->primary_eid)) {
                     if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table,
                                                    (urma_eid_t *)ue_info->primary_eid,
-                                                   (urma_eid_t *)cur_dev->agg_eid)) {
+                                                   (urma_eid_t *)cur_dev->agg_eid, (uint32_t)node_idx)) {
                         URMA_LOG_ERR("Failed to add primary eid to mapping hash table\n");
                         return -1;
                     }
@@ -147,7 +155,7 @@ static int update_mapping_hash_table(topo_map_t *topo_map)
                     if (!is_empty_eid((urma_eid_t *)ue_info->port_eid[port_idx])) {
                         if (eid_mapping_hash_table_add(&topo_map->eid_mapping_hash_table,
                                                        (urma_eid_t *)ue_info->port_eid[port_idx],
-                                                       (urma_eid_t *)cur_dev->agg_eid)) {
+                                                       (urma_eid_t *)cur_dev->agg_eid, (uint32_t)node_idx)) {
                             URMA_LOG_ERR("Failed to add port eid to mapping hash table\n");
                             return -1;
                         }
@@ -178,21 +186,25 @@ static topo_map_t *create_topo_map(const bondp_topo_node_t *topo_infos, uint32_t
         URMA_LOG_ERR("Failed to alloc topo_map\n");
         return NULL;
     }
-    (void)memcpy(topo_map->topo_infos, topo_infos, sizeof(bondp_topo_node_t) * node_num);
-    topo_map->node_num = node_num;
 
-    uint32_t cur_node_idx = UINT32_MAX;
+    bool has_current = false;
     for (uint32_t i = 0; i < node_num; ++i) {
-        if (topo_map->topo_infos[i].is_current) {
-            cur_node_idx = i;
+        if (topo_infos[i].is_current) {
+            has_current = true;
             break;
         }
     }
-    if (cur_node_idx == UINT32_MAX) {
+    if (!has_current) {
         URMA_LOG_ERR("topo info doesn't have cur_node\n");
         free(topo_map);
         return NULL;
     }
+
+    for (uint32_t i = 0; i < node_num; ++i) {
+        memcpy(topo_map->node_links[i].links, topo_infos[i].links,
+               sizeof(topo_map->node_links[i].links));
+    }
+    topo_map->node_num = node_num;
 
     int ret = eid_mapping_hash_table_create(&topo_map->eid_mapping_hash_table, hash_size);
     if (ret) {
@@ -201,7 +213,7 @@ static topo_map_t *create_topo_map(const bondp_topo_node_t *topo_infos, uint32_t
         return NULL;
     }
 
-    if (update_mapping_hash_table(topo_map) != 0) {
+    if (update_mapping_hash_table(topo_map, topo_infos) != 0) {
         bondp_hash_table_destroy(&topo_map->eid_mapping_hash_table);
         free(topo_map);
         return NULL;
@@ -246,53 +258,28 @@ int bondp_topo_query_node_idx(const urma_eid_t *bonding_eid, uint32_t *node_idx)
         return -1;
     }
 
-    for (uint32_t i = 0; i < g_topo_map->node_num; ++i) {
-        const bondp_topo_node_t *node = &g_topo_map->topo_infos[i];
-
-        for (int d = 0; d < DEV_NUM; ++d) {
-            const bondp_topo_agg_dev_t *dev = &node->agg_devs[d];
-            if (is_empty_eid((urma_eid_t *)dev->agg_eid)) {
-                continue;
-            }
-            if (memcmp(dev->agg_eid, bonding_eid, EID_LEN) == 0) {
-                *node_idx = i;
-                return 0;
-            }
-        }
+    eid_mapping_entry_t *entry = eid_mapping_hash_table_lookup(&g_topo_map->eid_mapping_hash_table,
+                                                               (urma_eid_t *)bonding_eid);
+    if (entry == NULL) {
+        return -1;
     }
-
-    return -1;
+    *node_idx = entry->node_idx;
+    return 0;
 }
 
-static const bondp_topo_node_t *find_current_topo_node(const topo_map_t *topo_map)
-{
-    if (topo_map == NULL) {
-        return NULL;
-    }
-
-    for (uint32_t i = 0; i < topo_map->node_num; ++i) {
-        if (topo_map->topo_infos[i].is_current) {
-            return &topo_map->topo_infos[i];
-        }
-    }
-    return NULL;
-}
-
-static const bondp_topo_node_t *find_topo_node_by_agg_eid(const topo_map_t *topo_map, const urma_eid_t *eid)
+static const bondp_topo_links_t *find_topo_links_by_eid(const topo_map_t *topo_map,
+                                                        const urma_eid_t *eid)
 {
     if (topo_map == NULL || eid == NULL) {
         return NULL;
     }
 
-    for (uint32_t i = 0; i < topo_map->node_num; ++i) {
-        const bondp_topo_node_t *node = &topo_map->topo_infos[i];
-        for (uint32_t j = 0; j < DEV_NUM; ++j) {
-            if (memcmp(node->agg_devs[j].agg_eid, eid, EID_LEN) == 0) {
-                return node;
-            }
-        }
+    eid_mapping_entry_t *entry = eid_mapping_hash_table_lookup(
+        (bondp_hash_table_t *)&topo_map->eid_mapping_hash_table, (urma_eid_t *)eid);
+    if (entry == NULL || entry->node_idx >= topo_map->node_num) {
+        return NULL;
     }
-    return NULL;
+    return &topo_map->node_links[entry->node_idx];
 }
 
 static inline bool topo_connected_index_valid(uint32_t idx)
@@ -300,7 +287,7 @@ static inline bool topo_connected_index_valid(uint32_t idx)
     return idx < TOPO_CONNECTED_MAX_NUM;
 }
 
-static void topo_fill_port_links_from_dst(const bondp_topo_node_t *dst_node,
+static void topo_fill_port_links_from_dst(const bondp_topo_links_t *dst_links,
                                           bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM])
 {
     for (uint32_t local_idx = 0; local_idx < IODIE_NUM * PORT_NUM; ++local_idx) {
@@ -313,7 +300,7 @@ static void topo_fill_port_links_from_dst(const bondp_topo_node_t *dst_node,
             if (!topo_connected_index_valid(remote_indice)) {
                 continue;
             }
-            connected[local_indice][remote_indice] = dst_node->links[local_idx][remote_idx];
+            connected[local_indice][remote_indice] = dst_links->links[local_idx][remote_idx];
         }
     }
 }
@@ -358,20 +345,15 @@ int bondp_topo_query_linked_port(
         return -1;
     }
 
-    const bondp_topo_node_t *src_node = find_current_topo_node(g_topo_map);
-    const bondp_topo_node_t *dst_node = find_topo_node_by_agg_eid(g_topo_map, bonding_eid);
-    if (src_node == NULL) {
-        URMA_LOG_ERR("Failed to find current topo node.\n");
-        return -1;
-    }
-    if (dst_node == NULL) {
-        URMA_LOG_ERR("Failed to find target topo node.\n");
+    const bondp_topo_links_t *dst_links = find_topo_links_by_eid(g_topo_map, bonding_eid);
+    if (dst_links == NULL) {
+        URMA_LOG_ERR("Failed to find target topo links.\n");
         return -1;
     }
 
     (void)memset(connected, 0,
                  sizeof(bool) * TOPO_CONNECTED_MAX_NUM * TOPO_CONNECTED_MAX_NUM);
-    topo_fill_port_links_from_dst(dst_node, connected);
+    topo_fill_port_links_from_dst(dst_links, connected);
     topo_fill_primary_links(connected);
 
     return 0;
