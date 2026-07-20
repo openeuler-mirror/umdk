@@ -249,6 +249,7 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
 
 TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
 {
+    BondTopoMapCleanup topoCleanup;
     BondPublicApiFixture fixture;
     bondp_global_context_t fakeGlobal = {};
     bondp_topo_node_t topo[2] = {};
@@ -268,8 +269,7 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
     CopyEidToTopo(topo[0].agg_devs[0].ues[0].port_eid[0], MakeEid(0x821));
     CopyEidToTopo(topo[1].agg_devs[0].agg_eid, MakeEid(0x811));
     topo[1].links[0][0] = true;
-    fixture.ctx.topo_map = create_topo_map(topo, 2);
-    ASSERT_NE(nullptr, fixture.ctx.topo_map);
+    ASSERT_EQ(0, bondp_topo_init(topo, 2));
     g_bondp_global_ctx = &fakeGlobal;
     fakeGlobal.enable_health_check = false;
 
@@ -300,8 +300,6 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
     EXPECT_EQ(nullptr, bondp_import_jetty(&fixture.ctx.v_ctx, remote, &token));
 
     g_bondp_global_ctx = nullptr;
-    delete_topo_map(fixture.ctx.topo_map);
-    fixture.ctx.topo_map = nullptr;
     std::free(bondRemote);
 }
 
@@ -425,9 +423,11 @@ TEST(UrmaBondTest, PublicProviderCreateContextUsesCachedTopoAndMockPhysicalConte
     urma_context_t *createdCtx = nullptr;
 
     fixture.ctx.v_ctx.dev_fd = 7;
-    fakeGlobal.topo_map = reinterpret_cast<topo_map_t *>(0x1);
     BondProviderMockGuard mockGuard(&fakeGlobal, &fixture.phyDev, &fixture.phyOps);
-    BondTopoMapCleanup topoCleanup(&fakeGlobal);
+    BondTopoMapCleanup topoCleanup;
+    bondp_topo_node_t topo = {};
+    topo.is_current = true;
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
     urma_test::SetHwMockIoctl(true, 0xd10, 0xd100);
 
     createdCtx = bondp_create_context(&fixture.dev, 0, 7);
@@ -445,17 +445,15 @@ TEST(UrmaBondTest, PublicProviderCreateContextLoadsTopoFromMockUserCtl)
     urma_context_t *createdCtx = nullptr;
 
     BondProviderMockGuard mockGuard(&fakeGlobal, &fixture.phyDev, &fixture.phyOps);
-    BondTopoMapCleanup topoCleanup(&fakeGlobal);
+    BondTopoMapCleanup topoCleanup;
     urma_test::SetHwMockIoctl(true, 0xd20, 0xd200);
 
     createdCtx = bondp_create_context(&fixture.dev, 0, 7);
     ASSERT_NE(nullptr, createdCtx);
-    ASSERT_NE(nullptr, fakeGlobal.topo_map);
-    EXPECT_EQ(fakeGlobal.topo_map, CONTAINER_OF_FIELD(createdCtx, bondp_context_t, v_ctx)->topo_map);
+    EXPECT_TRUE(bondp_topo_is_initialized());
+    EXPECT_EQ(1U, bondp_topo_get_node_num());
     EXPECT_FALSE(fakeGlobal.skip_load_topo);
     EXPECT_EQ(URMA_SUCCESS, bondp_delete_context(createdCtx));
-    delete_topo_map(fakeGlobal.topo_map);
-    fakeGlobal.topo_map = nullptr;
 }
 
 TEST(UrmaBondTest, PublicProviderCreateContextCleansVirtualContextOnStableFailures)
@@ -463,7 +461,7 @@ TEST(UrmaBondTest, PublicProviderCreateContextCleansVirtualContextOnStableFailur
     BondPublicApiFixture fixture;
     bondp_global_context_t fakeGlobal = {};
     BondProviderMockGuard mockGuard(&fakeGlobal, &fixture.phyDev, &fixture.phyOps);
-    BondTopoMapCleanup topoCleanup(&fakeGlobal);
+    BondTopoMapCleanup topoCleanup;
 
     urma_test::SetHwMockIoctl(true, 0xd30, 0xd300);
     g_mockEpollCreateFail = true;
@@ -483,10 +481,12 @@ TEST(UrmaBondTest, PublicProviderCreateContextPropagatesPhysicalContextFailures)
     BondPublicApiFixture fixture;
     bondp_global_context_t fakeGlobal = {};
     BondProviderMockGuard mockGuard(&fakeGlobal, &fixture.phyDev, &fixture.phyOps);
-    BondTopoMapCleanup topoCleanup(&fakeGlobal);
+    BondTopoMapCleanup topoCleanup;
 
     urma_test::SetHwMockIoctl(true, 0xd40, 0xd400);
-    fakeGlobal.topo_map = reinterpret_cast<topo_map_t *>(0x1);
+    bondp_topo_node_t topo = {};
+    topo.is_current = true;
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
 
     g_mockCreateContextFail = true;
     EXPECT_EQ(nullptr, bondp_create_context(&fixture.dev, 0, 7));
@@ -504,9 +504,11 @@ TEST(UrmaBondTest, PublicProviderDeleteContextPropagatesPhysicalDeleteFailure)
     bondp_global_context_t fakeGlobal = {};
     urma_context_t *createdCtx = nullptr;
 
-    fakeGlobal.topo_map = reinterpret_cast<topo_map_t *>(0x1);
     BondProviderMockGuard mockGuard(&fakeGlobal, &fixture.phyDev, &fixture.phyOps);
-    BondTopoMapCleanup topoCleanup(&fakeGlobal);
+    BondTopoMapCleanup topoCleanup;
+    bondp_topo_node_t topo = {};
+    topo.is_current = true;
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
     urma_test::SetHwMockIoctl(true, 0xd50, 0xd500);
 
     createdCtx = bondp_create_context(&fixture.dev, 0, 7);

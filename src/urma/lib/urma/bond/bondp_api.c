@@ -553,7 +553,7 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
             }
         }
     }
-    
+
     if (active_count == 0) {
         URMA_LOG_ERR("Failed to find connected port.\n");
         return -1;
@@ -1619,12 +1619,12 @@ static int bondp_user_ctl_get_jfce_fd_list(urma_context_t *ctx, urma_user_ctl_in
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     bondp_get_jfce_fd_list_in_t *get_in = (bondp_get_jfce_fd_list_in_t *)(uintptr_t)in->addr;
     bondp_get_jfce_fd_list_out_t *get_out = (bondp_get_jfce_fd_list_out_t *)(uintptr_t)out->addr;
-    
+
     if (get_in->jfce == NULL) {
         URMA_LOG_ERR("Invalid jfce.\n");
         return -EINVAL;
     }
-    
+
     bondp_jfce_t *bdp_jfce = CONTAINER_OF_FIELD(get_in->jfce, bondp_jfce_t, v_jfce);
     if (bdp_jfce->bondp_ctx != bdp_ctx) {
         URMA_LOG_ERR("The object does not belong to current context.\n");
@@ -1756,14 +1756,13 @@ typedef struct bondp_connected_bitmap_build_cfg {
     uint8_t *bitmap;
 } bondp_connected_bitmap_build_cfg_t;
 
-static int bondp_rebuild_connected_by_topo(const bondp_context_t *bdp_ctx, const urma_eid_t *dst_eid,
-                                           urma_bond_id_info_out_t *info)
+static int bondp_rebuild_connected_by_topo(const urma_eid_t *dst_eid, urma_bond_id_info_out_t *info)
 {
     bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM] = {0};
-    if (bdp_ctx == NULL || dst_eid == NULL || info == NULL || bdp_ctx->topo_map == NULL) {
+    if (dst_eid == NULL || info == NULL) {
         return -1;
     }
-    if (bondp_find_linked_port_by_topo(bdp_ctx->topo_map, dst_eid, connected) != 0) {
+    if (bondp_topo_query_linked_port(dst_eid, connected) != 0) {
         return -1;
     }
 
@@ -2203,7 +2202,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         }
     }
 
-    if (bondp_rebuild_connected_by_topo(bdp_ctx, &rjetty->jetty_id.eid, &rvjetty_info) != 0) {
+    if (bondp_rebuild_connected_by_topo(&rjetty->jetty_id.eid, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to rebuild connected matrix by topo.\n");
         goto UNIMPORT_VJETTY;
     }

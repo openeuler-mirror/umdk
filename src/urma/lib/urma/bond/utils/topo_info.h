@@ -14,18 +14,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "bondp_hash_table.h"
 #include "urma_types.h"
 
-#define CNA_LEN            (3)
-#define EID_LEN            (16)
-#define PORT_NUM           (9)
-#define MAX_ALL_PORT_NUM   (18)
-#define MAX_NODE_NUM       (1024)
-#define IODIE_NUM_PER_CHIP (1)
-#define CHIP_NUM           (2)
-#define IODIE_NUM          (2)
-#define DEV_NUM            (256)
+#define CNA_LEN                (3)
+#define EID_LEN                (16)
+#define PORT_NUM               (9)
+#define MAX_ALL_PORT_NUM       (18)
+#define MAX_NODE_NUM           (1024)
+#define IODIE_NUM_PER_CHIP     (1)
+#define CHIP_NUM               (2)
+#define IODIE_NUM              (2)
+#define DEV_NUM                (256)
 #define TOPO_CONNECTED_MAX_NUM (IODIE_NUM + IODIE_NUM * PORT_NUM)
 
 #ifdef __cplusplus
@@ -55,41 +54,27 @@ typedef struct bondp_topo_node {
     bondp_topo_agg_dev_t agg_devs[DEV_NUM];
 } bondp_topo_node_t;
 
-/**
- * Records information about all direct connections between the current device and the target device.
- */
-typedef struct eid_mapping_entry {
-    hmap_node_t hmap_node;
-    urma_eid_t key_eid;
-    urma_eid_t bonding_eid;
-} eid_mapping_entry_t;
+int bondp_topo_init(const bondp_topo_node_t *topo_infos, uint32_t node_num);
+void bondp_topo_uninit(void);
+bool bondp_topo_is_initialized(void);
 
-typedef struct topo_map {
-    uint32_t node_num;
-    bondp_hash_table_t eid_mapping_hash_table;
-    bondp_topo_node_t topo_infos[];
-} topo_map_t;
+uint32_t bondp_topo_get_node_num(void);
 
-/* The following functions needs the caller to check the validity of the parameters */
-
-topo_map_t *create_topo_map(bondp_topo_node_t *topo_infos, uint32_t node_num);
-
-void delete_topo_map(topo_map_t *topo_map);
-
-/**
- * create_topo_map builds the EID mapping from the actual node_num.
- * This function looks up the prebuilt mapping hash table.
- * @return 0 for success, other for error or not found
- */
-int get_bonding_eid_by_target_eid(topo_map_t *topo_map, urma_eid_t *target_eid, urma_eid_t *output);
+int bondp_topo_query_node_idx(const urma_eid_t *bonding_eid, uint32_t *node_idx);
 
 /*
- * Build connection matrix between local bonding context and dst node in topo map.
+ * Build connection matrix between local bonding context and target node in topo map.
  * Primary-primary connectivity is derived from port-port connectivity:
  * if any local port can reach any target port, this primary pair is connected.
  */
-int bondp_find_linked_port_by_topo(const topo_map_t *topo_map, const urma_eid_t *dst_eid,
-                                   bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM]);
+int bondp_topo_query_linked_port(const urma_eid_t *bonding_eid,
+                                 bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM]);
+
+/**
+ * bondp_topo_query_bonding_eid looks up the prebuilt EID mapping hash table.
+ * @return 0 for success, other for error or not found
+ */
+int bondp_topo_query_bonding_eid(const urma_eid_t *target_eid, urma_eid_t *output);
 
 #ifdef __cplusplus
 }
