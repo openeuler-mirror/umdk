@@ -230,6 +230,32 @@ public:
     }
 
     CATLASS_DEVICE
+    void GetLocalExpertRange(Params const &params, uint32_t groupIdx,
+                             uint32_t &expertStart, uint32_t &expertEnd)
+    {
+        AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
+        sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)params.gmEpSendCount);
+        uint32_t globalExpertId = params.epRankId * params.moeExpertNumPerRank + groupIdx;
+        uint32_t firstOffsetIdx = globalExpertId * params.epRankSize;
+        uint32_t lastOffsetIdx = firstOffsetIdx + params.epRankSize - 1;
+        uint32_t col = firstOffsetIdx % params.moeExpertNum;
+
+        __asm__ __volatile__("");
+        AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                          AscendC::DcciDst::CACHELINE_OUT>(
+            sendCountsGlobalTensor[lastOffsetIdx]);
+        if (col != 0) {
+            AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                              AscendC::DcciDst::CACHELINE_OUT>(
+                sendCountsGlobalTensor[firstOffsetIdx - 1]);
+        }
+        __asm__ __volatile__("");
+
+        expertEnd = sendCountsGlobalTensor.GetValue(lastOffsetIdx);
+        expertStart = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(firstOffsetIdx - 1);
+    }
+
+    CATLASS_DEVICE
     void GetRoundGroupRange(Params const &params, uint32_t srcRank, uint32_t groupIdx, uint32_t roundIdx,
                             uint32_t &groupRoundStart, uint32_t &groupRoundEnd)
     {
@@ -272,7 +298,9 @@ public:
         uint32_t stageId = 0;
         uint32_t stageUsed = 0;
         uint32_t startCoreIdx = 0;
-        for (uint32_t srcRank = 0; srcRank < params.epRankSize; ++srcRank) {
+        bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
+        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : params.epRankSize;
+        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
             int64_t gmGroupOffsetB = 0;
             for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
                 if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
@@ -282,7 +310,11 @@ public:
 
                 uint32_t groupRoundStart = 0;
                 uint32_t groupRoundEnd = 0;
-                GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+                if (guaranteedSingleRound) {
+                    GetLocalExpertRange(params, groupIdx, groupRoundStart, groupRoundEnd);
+                } else {
+                    GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+                }
                 uint32_t currentM = groupRoundEnd - groupRoundStart;
                 if (currentM == 0) {
                     if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
@@ -369,11 +401,17 @@ public:
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
         }
 
-        for (uint32_t srcRank = 0; srcRank < params.epRankSize; ++srcRank) {
+        bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
+        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : params.epRankSize;
+        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
             for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
                 uint32_t groupRoundStart = 0;
                 uint32_t groupRoundEnd = 0;
-                GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+                if (guaranteedSingleRound) {
+                    GetLocalExpertRange(params, groupIdx, groupRoundStart, groupRoundEnd);
+                } else {
+                    GetRoundGroupRange(params, srcRank, groupIdx, roundIdx, groupRoundStart, groupRoundEnd);
+                }
                 uint32_t currentM = groupRoundEnd - groupRoundStart;
                 if (currentM == 0) {
                     continue;
@@ -601,6 +639,9 @@ public:
         Arch::CrossCoreFlag gmm2RoundReady{static_cast<Arch::FlagID>(GMM2::ROUND_READY_FLAG_ID)};
         RunRoutingAicRound(params, params.roundIdx);
         Arch::CrossCoreWaitFlag(gmm2RoundReady);
+        if (params.roundRecvTokenNum >= params.problemShape.m()) {
+            RunFinalizeAic(params);
+        }
     }
 
     template <>
@@ -616,6 +657,9 @@ public:
         RunRoutingAivRound(params, params.roundIdx);
         Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
         Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm2RoundReady);
+        if (params.roundRecvTokenNum >= params.problemShape.m()) {
+            RunFinalizeAiv(params);
+        }
     }
 
 private:

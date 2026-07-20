@@ -717,6 +717,32 @@ public:
     }
 
     CATLASS_DEVICE
+    void GetLocalExpertRange(GM_ADDR gmEpSendCount, uint32_t groupIdx,
+                             uint32_t &expertStart, uint32_t &expertEnd)
+    {
+        AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
+        sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)gmEpSendCount);
+        uint32_t globalExpertId = epRankId * moeExpertNumPerRank + groupIdx;
+        uint32_t firstOffsetIdx = globalExpertId * epRankSize;
+        uint32_t lastOffsetIdx = firstOffsetIdx + epRankSize - 1;
+        uint32_t col = firstOffsetIdx % moeExpertNum;
+
+        __asm__ __volatile__("");
+        AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                          AscendC::DcciDst::CACHELINE_OUT>(
+            sendCountsGlobalTensor[lastOffsetIdx]);
+        if (col != 0) {
+            AscendC::DataCacheCleanAndInvalid<int32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                              AscendC::DcciDst::CACHELINE_OUT>(
+                sendCountsGlobalTensor[firstOffsetIdx - 1]);
+        }
+        __asm__ __volatile__("");
+
+        expertEnd = sendCountsGlobalTensor.GetValue(lastOffsetIdx);
+        expertStart = (col == 0) ? 0 : sendCountsGlobalTensor.GetValue(firstOffsetIdx - 1);
+    }
+
+    CATLASS_DEVICE
     uint32_t CalcRoundNum(GM_ADDR gmEpSendCount)
     {
         AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
@@ -1378,10 +1404,13 @@ public:
         if (params.roundIdx == 0) {
             AicInitParams(params);
 
-            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
-            RunSharedAic(params);
-            Arch::CrossCoreWaitFlag(gmm1SharedReady);
-            roundNum = CalcRoundNum((GM_ADDR)params.gmEpSendCount);
+            if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
+                Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+                RunSharedAic(params);
+                Arch::CrossCoreWaitFlag(gmm1SharedReady);
+            }
+            bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
+            roundNum = guaranteedSingleRound ? 1 : CalcRoundNum((GM_ADDR)params.gmEpSendCount);
             if (params.roundNum != nullptr) {
                 *(params.roundNum) = roundNum;
             }
@@ -1574,7 +1603,9 @@ public:
         aicSetFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
                        static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};
 
-        for (uint32_t srcRank = 0; srcRank < epRankSize; ++srcRank) {
+        bool guaranteedSingleRound = roundRecvTokenNum >= params.problemShape.m();
+        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : epRankSize;
+        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
             int64_t gmGroupOffsetB = 0;
             for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
                 if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
@@ -1584,8 +1615,12 @@ public:
 
                 uint32_t groupRoundStart = 0;
                 uint32_t groupRoundEnd = 0;
-                GetRoundGroupRange((GM_ADDR)params.gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
-                    groupRoundEnd);
+                if (guaranteedSingleRound) {
+                    GetLocalExpertRange((GM_ADDR)params.gmEpSendCount, groupIdx, groupRoundStart, groupRoundEnd);
+                } else {
+                    GetRoundGroupRange((GM_ADDR)params.gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
+                        groupRoundEnd);
+                }
                 uint32_t currentM = groupRoundEnd - groupRoundStart;
                 if (currentM == 0) {
                     if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
@@ -2816,7 +2851,8 @@ public:
     CATLASS_DEVICE
     void CompCoreFuncRound(GM_ADDR gmCVSwapBuff, GM_ADDR gmEpSendCount, __gm__ ElementScale *gmScale,
                            __gm__ ElementPerTokenScale *gmTokenScale, __gm__ float *gmSwigluOutput, uint32_t n,
-                           uint32_t k, LayoutScale layoutScale, uint32_t roundIdx)
+                           uint32_t k, LayoutScale layoutScale, uint32_t roundIdx,
+                           bool guaranteedSingleRound)
     {
         uint32_t coreNumPerGroup =
             localExpertNum > 1 ? DISPATCH_RECV_CORE_NUM : aivNum;
@@ -2837,12 +2873,17 @@ public:
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
         }
 
-        for (uint32_t srcRank = 0; srcRank < epRankSize; ++srcRank) {
+        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : epRankSize;
+        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
             for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
                 uint32_t groupRoundStart = 0;
                 uint32_t groupRoundEnd = 0;
-                GetRoundGroupRange(gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
-                    groupRoundEnd);
+                if (guaranteedSingleRound) {
+                    GetLocalExpertRange(gmEpSendCount, groupIdx, groupRoundStart, groupRoundEnd);
+                } else {
+                    GetRoundGroupRange(gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
+                        groupRoundEnd);
+                }
                 uint32_t currentM = groupRoundEnd - groupRoundStart;
                 if (currentM == 0) {
                     continue;
@@ -2917,12 +2958,18 @@ public:
         CalQuantRow(nOut, quantRowOnce);
         uint32_t startCoreIdx = 0;
 
-        for (uint32_t srcRank = 0; srcRank < epRankSize; ++srcRank) {
+        bool guaranteedSingleRound = roundRecvTokenNum >= params.problemShape.m();
+        uint32_t sourceBucketCount = guaranteedSingleRound ? 1 : epRankSize;
+        for (uint32_t srcRank = 0; srcRank < sourceBucketCount; ++srcRank) {
             for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
                 uint32_t groupRoundStart = 0;
                 uint32_t groupRoundEnd = 0;
-                GetRoundGroupRange((GM_ADDR)params.gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
-                    groupRoundEnd);
+                if (guaranteedSingleRound) {
+                    GetLocalExpertRange((GM_ADDR)params.gmEpSendCount, groupIdx, groupRoundStart, groupRoundEnd);
+                } else {
+                    GetRoundGroupRange((GM_ADDR)params.gmEpSendCount, srcRank, groupIdx, roundIdx, groupRoundStart,
+                        groupRoundEnd);
+                }
                 uint32_t currentM = groupRoundEnd - groupRoundStart;
                 if (currentM == 0) {
                     continue;
@@ -3017,7 +3064,8 @@ public:
             CompCoreFuncRound(params.ptrWorkspace, (GM_ADDR)params.gmEpSendCount, params.ptrScale,
                 (__gm__ ElementPerTokenScale*)params.ptrPerTokenScale,
                 (__gm__ float*)params.gmSwigluOut, params.problemShape.n(), params.problemShape.k(),
-                params.layoutScale, roundIdx);
+                params.layoutScale, roundIdx,
+                params.roundRecvTokenNum >= params.problemShape.m());
         }
         icache_preload(8);
         AscendC::SyncAll<false>();
@@ -3259,16 +3307,19 @@ public:
         uint32_t roundNum = params.roundNum == nullptr ? 1 : *(params.roundNum);
         if (params.roundIdx == 0) {
             PrepareAivDispatch(params);
-            roundNum = CalcRoundNum((GM_ADDR)params.gmEpSendCount);
+            bool guaranteedSingleRound = params.roundRecvTokenNum >= params.problemShape.m();
+            roundNum = guaranteedSingleRound ? 1 : CalcRoundNum((GM_ADDR)params.gmEpSendCount);
             if (params.roundNum != nullptr) {
                 *(params.roundNum) = roundNum;
             }
 
-            Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
-            RunSharedAiv(params);
-            ClearSharedSoftSyncState();
-            Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
-            Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1SharedReady);
+            if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
+                Arch::CrossCoreFlag gmm1SharedReady{static_cast<Arch::FlagID>(FDM_GMM1_DONE_FLAG_ID)};
+                RunSharedAiv(params);
+                ClearSharedSoftSyncState();
+                Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
+                Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1SharedReady);
+            }
         } else {
             AivRestoreRoundState(params);
         }
@@ -3283,6 +3334,13 @@ public:
         }
 
         RunRoutingAivRound(params, params.roundIdx);
+        if (params.roundRecvTokenNum >= params.problemShape.m()) {
+            PrepareFinalizeAivState();
+            UpdateAndCleanInfo(params.ptrGroupList,
+                params.gmEpSendCount + epRankId * epRankSize * moeExpertNumPerRank * sizeof(int32_t),
+                params.gmExpertTokenNums);
+            AscendC::PipeBarrier<PIPE_ALL>();
+        }
     }
 
     CATLASS_DEVICE

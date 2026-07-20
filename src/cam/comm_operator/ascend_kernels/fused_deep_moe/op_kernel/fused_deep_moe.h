@@ -692,6 +692,10 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
                 tpipe_->Destroy();
             }
         }
+        if (roundBufferTokenNum >= maxTokenNum_) {
+            return;
+        }
+
         // cleanup/finalize: aic skip, aiv PrepareFinalizeAivState() and UpdateAndCleanInfo()
         GmmDeqSwigluQuant<TemplateMC2TypeFunc, Gmm1L1TileShape, Gmm1L0TileShape, Gmm1EpilogueTileShape,
                           Gmm1BlockScheduler>(
