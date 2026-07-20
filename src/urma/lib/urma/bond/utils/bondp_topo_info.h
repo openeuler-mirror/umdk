@@ -8,8 +8,8 @@
  * History: 2025-06-04
  */
 
-#ifndef TOPO_INFO_H
-#define TOPO_INFO_H
+#ifndef BONDP_TOPO_INFO_H
+#define BONDP_TOPO_INFO_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -60,23 +60,37 @@ bool bondp_topo_is_initialized(void);
 
 uint32_t bondp_topo_get_node_num(void);
 
+/**
+ * @brief Query the topology node index of a bonding EID.
+ * @param[in] bonding_eid bonding EID used to identify the target node.
+ * @param[out] node_idx index of the target node in the topology information array.
+ * @return 0 on success, -1 when the topology is not initialized, a parameter is
+ * invalid, or the bonding EID is not found.
+ */
 int bondp_topo_query_node_idx(const urma_eid_t *bonding_eid, uint32_t *node_idx);
 
-/*
- * Build connection matrix between local bonding context and target node in topo map.
- * Primary-primary connectivity is derived from port-port connectivity:
- * if any local port can reach any target port, this primary pair is connected.
+/**
+ * @brief Query the connection matrix from the local node to a target node.
+ * @param[in] bonding_eid bonding EID used to identify the target node.
+ * @param[out] connected connection matrix. Indices [0, IODIE_NUM) represent
+ * primary EIDs, and the remaining indices represent port EIDs grouped by I/O die.
+ * Primary-to-primary connectivity is set when any corresponding port pair is linked.
+ * @return 0 on success, -1 when the topology is not initialized, a parameter is
+ * invalid, or the local or target node is not found.
  */
 int bondp_topo_query_linked_port(const urma_eid_t *bonding_eid,
                                  bool connected[TOPO_CONNECTED_MAX_NUM][TOPO_CONNECTED_MAX_NUM]);
 
 /**
- * bondp_topo_query_bonding_eid looks up the prebuilt EID mapping hash table.
- * @return 0 for success, other for error or not found
+ * @brief Query the bonding EID associated with a topology EID.
+ * @param[in] target_eid aggregate, primary, or port EID to query.
+ * @param[out] output bonding EID associated with target_eid.
+ * @return 0 on success, -1 when the topology is not initialized, a parameter is
+ * invalid, or target_eid is not found.
  */
 int bondp_topo_query_bonding_eid(const urma_eid_t *target_eid, urma_eid_t *output);
 
 #ifdef __cplusplus
 }
 #endif
-#endif // TOPO_INFO_H
+#endif // BONDP_TOPO_INFO_H
