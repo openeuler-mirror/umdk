@@ -10,7 +10,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -37,6 +39,7 @@
 #define BONDP_ENV_ENABLE_FAILBACK                 "BOND_ENABLE_FAILBACK"
 #define BONDP_ENV_ENABLE_HEALTH_CHECK             "BOND_ENABLE_HEALTH_CHECK"
 #define BONDP_ENV_HEALTH_CHECK_INTERVAL           "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
+#define BONDP_ENV_MAX_CR_CNT_PER_DEV               "BOND_MAX_CR_CNT_PER_DEV"
 #define BONDP_ENV_LEN_MAX                         (128)
 /*
  * #define BONDP_ENV_FAILOVER_DIEX_Y_ROUTEZ          "BOND_FAILOVER_DIEX_Y_ROUTEZ"
@@ -147,6 +150,46 @@ static uint64_t read_env_uint64(const char *env_name, uint64_t default_val)
     return (uint64_t)parsed;
 }
 
+static bool is_decimal_env_value(const char *value)
+{
+    if (value == NULL || value[0] == '\0') {
+        return false;
+    }
+    for (const char *cur = value; *cur != '\0'; cur++) {
+        if (*cur < '0' || *cur > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int read_env_max_cr_cnt_per_dev(void)
+{
+    static int s_max_cr_cnt_per_dev;
+
+    if (s_max_cr_cnt_per_dev != 0) {
+        return s_max_cr_cnt_per_dev;
+    }
+
+    const uint64_t default_value = URMA_UBAGG_MAX_CR_CNT_PER_DEV;
+    const char *env_value = getenv(BONDP_ENV_MAX_CR_CNT_PER_DEV);
+    if (env_value != NULL && !is_decimal_env_value(env_value)) {
+        URMA_LOG_WARN("Invalid value '%s' for env %s, using default %llu\n",
+                      env_value, BONDP_ENV_MAX_CR_CNT_PER_DEV, (unsigned long long)default_value);
+        s_max_cr_cnt_per_dev = (int)default_value;
+        return s_max_cr_cnt_per_dev;
+    }
+    uint64_t value = read_env_uint64(BONDP_ENV_MAX_CR_CNT_PER_DEV, default_value);
+    if (value == 0 || value > INT_MAX) {
+        URMA_LOG_WARN("Invalid value %llu for env %s, using default %llu\n",
+                      (unsigned long long)value, BONDP_ENV_MAX_CR_CNT_PER_DEV,
+                      (unsigned long long)default_value);
+        value = default_value;
+    }
+    s_max_cr_cnt_per_dev = (int)value;
+    return s_max_cr_cnt_per_dev;
+}
+
 static void filter_balance_route_env(char *value, const char *origin_val)
 {
     int i = 0;
@@ -248,6 +291,7 @@ static void read_all_env(bondp_global_context_t *ctx)
         BONDP_ENV_ENABLE_FAILBACK, default_enable_failback);
     ctx->health_check_interval_ms = read_env_uint64(
         BONDP_ENV_HEALTH_CHECK_INTERVAL, default_health_check_interval_ms);
+    ctx->max_cr_cnt_per_dev = read_env_max_cr_cnt_per_dev();
     read_env_balance_route_all(ctx);
 
     const uint64_t time_100ms = 100;
@@ -263,11 +307,11 @@ static void read_all_env(bondp_global_context_t *ctx)
 static void print_all_env(const bondp_global_context_t *ctx)
 {
     URMA_LOG_INFO("Health check config: enable_failover=%s, enable_failback=%s, enable_health_check=%s, "
-                  "interval=%lums\n",
+                  "interval=%lums, max_cr_cnt_per_dev=%d\n",
                   ctx->enable_failover ? "true" : "false",
                   ctx->enable_failback ? "true" : "false",
                   ctx->enable_health_check ? "true" : "false",
-                  ctx->health_check_interval_ms);
+                  ctx->health_check_interval_ms, ctx->max_cr_cnt_per_dev);
 }
 
 static void bondp_global_ctx_read_env(bondp_global_context_t *ctx)

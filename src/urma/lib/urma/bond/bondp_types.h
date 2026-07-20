@@ -100,6 +100,7 @@ typedef struct bondp_global_context {
     uint64_t health_check_interval_ms;
     uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
     bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
+    int max_cr_cnt_per_dev;
 } bondp_global_context_t;
 
 extern bondp_global_context_t *g_bondp_global_ctx;
