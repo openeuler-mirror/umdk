@@ -34,8 +34,21 @@
 #define UMQ_UB_FLOW_CONTROL_POLL_MAX_TIME  256 // us
 #define UMQ_UB_FC_REQ_TIMEOUT_MAX_MS      60000 // max value of cfg->fc_req_timeout_ms (ms, = 60s)
 #define UMQ_UB_FC_REQ_TIMEOUT_DEFAULT_MS  1000  // default cfg->fc_req_timeout_ms when 0 is passed (ms, = 1s)
+#define UMQ_UB_FC_CREDIT_STEP 2
 
-static uint8_t g_umq_ub_credit_ratio[] = {1, 3, 5, 7};
+enum {
+    UMQ_UB_CREDIT_RATIO_VERY_LOW,
+    UMQ_UB_CREDIT_RATIO_LOW,
+    UMQ_UB_CREDIT_RATIO_MID,
+    UMQ_UB_CREDIT_RATIO_HIGH,
+};
+
+static uint8_t g_umq_ub_credit_ratio[] = {
+    [UMQ_UB_CREDIT_RATIO_VERY_LOW] = 1,
+    [UMQ_UB_CREDIT_RATIO_LOW] = 3,
+    [UMQ_UB_CREDIT_RATIO_MID] = 5,
+    [UMQ_UB_CREDIT_RATIO_HIGH] = 7,
+};
 #define UMQ_UB_CREDIT_RATIO_SIZE (sizeof(g_umq_ub_credit_ratio) / sizeof(uint8_t))
 
 static uint8_t umq_ub_fc_raito_to_imm(uint64_t available, uint16_t total)
@@ -58,7 +71,7 @@ static uint8_t umq_ub_fc_raito_to_imm(uint64_t available, uint16_t total)
 static uint8_t umq_ub_fc_imm_to_ratio(uint8_t ratio)
 {
     if (ratio >= (uint8_t)UMQ_UB_CREDIT_RATIO_SIZE) {
-        return g_umq_ub_credit_ratio[0];
+        return g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_VERY_LOW];
     }
 
     return g_umq_ub_credit_ratio[ratio];
@@ -1005,6 +1018,38 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
     return -UMQ_ERR_EFLOWCTL;
 }
 
+static uint16_t allocate_credits_by_load(uint64_t pool_allocated, uint16_t rx_depth, uint16_t req_count)
+{
+    if (rx_depth == 0 || pool_allocated >= rx_depth) {
+        return UMQ_UB_MIN_CREDITS_PER_REQUEST;
+    }
+
+    uint64_t remaining = rx_depth - pool_allocated;
+    uint64_t remaining_ratio = (remaining * UMQ_UB_CREDIT_PERCENT) / rx_depth;
+    uint64_t credits = 0;
+
+    if (remaining_ratio >= g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_HIGH]) {
+        credits = req_count;
+    } else if (remaining_ratio >= g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_MID]) {
+        credits = (uint16_t)(req_count * g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_HIGH] / UMQ_UB_CREDIT_PERCENT);
+    } else if (remaining_ratio >= g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_LOW]) {
+        credits = (uint16_t)(req_count * g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_MID] / UMQ_UB_CREDIT_PERCENT);
+    } else if (remaining_ratio >= g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_VERY_LOW]) {
+        credits = (uint16_t)(req_count * g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_LOW] / UMQ_UB_CREDIT_PERCENT);
+    } else {
+        credits = (uint16_t)(req_count * g_umq_ub_credit_ratio[UMQ_UB_CREDIT_RATIO_VERY_LOW] / UMQ_UB_CREDIT_PERCENT);
+    }
+
+    if (credits > UINT16_MAX) {
+        credits = UINT16_MAX;
+    }
+    if (credits == 0 || credits == 1) {
+        credits = UMQ_UB_MIN_CREDITS_PER_REQUEST;
+    }
+
+    return credits;
+}
+
 int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 {
     ub_flow_control_t *fc = &queue->flow_control;
@@ -1017,7 +1062,9 @@ int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
         pool_allocated = __atomic_load_n(&credit->stats_u64[CREDIT_POOL_ALLOCATED_UNLIMITED], __ATOMIC_ACQUIRE);
     }
     uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, queue->flow_control.local_rx_depth);
-    uint16_t allocated_count = credit->ops.available_credit_dec(credit, credits_per_request);
+    uint16_t reply_count =
+        allocate_credits_by_load(pool_allocated, queue->flow_control.local_rx_depth, credits_per_request);
+    uint16_t allocated_count = credit->ops.available_credit_dec(credit, reply_count);
     (void)fc->ops.local_rx_allocated_inc(fc, allocated_count);
     int ret = umq_ub_shared_credit_resp_send(queue, allocated_count, (uint16_t)imm->flow_control.seq, ratio);
     if (ret != UMQ_SUCCESS) {
@@ -1028,28 +1075,36 @@ int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     return UMQ_SUCCESS;
 }
 
+static uint16_t umq_ub_next_credit_req_count_update(uint16_t reply_credits,
+    uint16_t request, uint8_t ratio, ub_flow_control_t *fc)
+{
+    uint32_t new_request;
+    if (reply_credits >= request) {
+        new_request = (uint32_t)(request * fc->credit_multiple);
+    } else {
+        if (ratio == 0) {
+            new_request = (uint32_t)(request / fc->credit_multiple);
+        } else {
+            new_request = request + UMQ_UB_FC_CREDIT_STEP;
+        }
+    }
+    if (new_request > fc->max_credits_request) {
+        new_request = fc->max_credits_request;
+    }
+    if (new_request == 0 || new_request == 1) {
+        new_request = UMQ_UB_MIN_CREDITS_PER_REQUEST;
+    }
+
+    return (uint16_t)new_request;
+}
+
 void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 {
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t reply_credits = imm->flow_control.window;
     uint16_t credits_per_request = fc->credits_per_request;
-    fc->peer_ratio = imm->flow_control.ratio;
-    ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
-    uint32_t new_request;
-    if (reply_credits < credits_per_request || (!pool->is_limited && fc->peer_ratio == 0)) {
-        new_request = (uint32_t)(credits_per_request / fc->credit_multiple);
-    } else {
-        new_request = (uint32_t)(credits_per_request * fc->credit_multiple);
-        if (new_request > fc->max_credits_request) {
-            new_request = fc->max_credits_request;
-        }
-    }
-    /*
-    * Prevent the current credit from being 2. If after doubling and multiplying by the idle ratio,
-    * the rounded result is still 2, the credit count will remain permanently at 2.
-    * Therefore, an increment of 1 is required.
-    */
-    fc->credits_per_request = umq_ub_flow_control_threashold_modify((uint16_t)new_request, fc->peer_ratio) + 1;
+    fc->credits_per_request =
+        umq_ub_next_credit_req_count_update(reply_credits, credits_per_request, imm->flow_control.ratio, fc);
     umq_ub_credit_received_inc(fc, reply_credits);
     return;
 }
