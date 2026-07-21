@@ -74,6 +74,7 @@ TensorVector FusedDeepMoeImplNpu(
     const char* groupEpPtr = groupEpStr.c_str();
     int64_t extInfo = 0;
     int64_t shmemWorkspace = 0;
+    int64_t shmemWorkspaceSize = 0;
 
     // 必须要求对齐fused_deep_moe.cpp 先input 跟着 attr, 然后output
     EXEC_NPU_CMD(aclnnFusedDeepMoe,
@@ -87,6 +88,8 @@ TensorVector FusedDeepMoeImplNpu(
         shareGmm1BiasOptional, shareGmm2BiasOptional, \
         // attr
         groupEpPtr, epRankSize, epRankId, moeExpertNum, quantMode, globalBs, \
+        extInfo, shmemWorkspace, shmemWorkspaceSize, \
+        // output
         output, shareOutput, expertTokenNums);
     return {output, shareOutput, expertTokenNums};
 }

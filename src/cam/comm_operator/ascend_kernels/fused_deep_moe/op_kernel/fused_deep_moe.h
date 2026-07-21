@@ -34,6 +34,19 @@
 
 using namespace Catlass;
 using namespace Cam;
+
+constexpr uint32_t FDM_ROUND_SYNC_FLOATS_PER_RANK = 8;
+constexpr float FDM_ROUND_SYNC_INITIAL_GENERATION = 1.0f;
+// Float32 represents consecutive integer generations exactly through 2^24.
+constexpr float FDM_ROUND_SYNC_MAX_GENERATION = 16777215.0f;  // 2^24 - 1
+
+template <AscendC::HardEvent event>
+__aicore__ inline void FdmRoundSyncFunc()
+{
+    int32_t eventId = static_cast<int32_t>(GetTPipePtr()->FetchEventID(event));
+    AscendC::SetFlag<event>(eventId);
+    AscendC::WaitFlag<event>(eventId);
+}
 using MmadAtlasA2Custom =
     Gemm::MmadAtlasA2PreloadAsyncWithCallback<CUSTOM_PRELOAD_STAGES, CUSTOM_L1_STAGES, CUSTOM_L0A_STAGES,
                                               CUSTOM_L0B_STAGES, CUSTOM_L0C_STAGES, CUSTOM_ENABLE_UNIT_FLAG,
@@ -68,7 +81,9 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
                                   GM_ADDR gmEpSendCount, GM_ADDR xActiveMask, GM_ADDR gmResvered,
                                   GM_ADDR gmExpertTokenNums, GM_ADDR gmAllExpertTokenNums,
                                   GM_ADDR metaInfoGm_, GM_ADDR gmTokenFlag,
-                                  const FusedDeepMoeInfo &disGmmDeqSwigluQuantGmmDeqComInfo, GM_ADDR gmCombineSend)
+                                  const FusedDeepMoeInfo &disGmmDeqSwigluQuantGmmDeqComInfo,
+                                  uint32_t roundRecvTokenNum, GM_ADDR gmCombineSend,
+                                  uint32_t roundIdx = 0xFFFFFFFFU, uint32_t *roundNum = nullptr)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
@@ -158,7 +173,10 @@ CATLASS_DEVICE void GmmDeqSwigluQuant(GemmCoord problemShape, uint32_t groupCoun
                                            gmAllExpertTokenNums,
                                            gmTokenFlag,
                                            disGmmDeqSwigluQuantGmmDeqComInfo,
-+                                          gmCombineSend};
+                                           roundRecvTokenNum,
+                                           gmCombineSend,
+                                           roundIdx,
+                                           roundNum};
         // call a kernel
         GemmKernel gemm;
         gemm(params);
@@ -209,7 +227,10 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                        layout::RowMajor sharedLayoutA, layout::zN sharedLayoutB,
                        layout::VectorLayout sharedLayoutPerTokenScale, layout::RowMajor sharedLayoutD,
                        uint32_t epRankId, GM_ADDR gmWorkspace, void *combiner, GM_ADDR metaInfoGm,
-                       uint64_t statusDataSpaceOffset)
+                       uint64_t statusDataSpaceOffset, GM_ADDR gmEpSendCount = nullptr,
+                       uint32_t epRankSize = 0, uint32_t moeExpertNum = 0, uint32_t moeExpertNumPerRank = 0,
+                       uint32_t roundRecvTokenNum = 0, uint32_t roundIdx = 0xFFFFFFFFU,
+                       uint32_t *roundNum = nullptr)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
@@ -277,7 +298,15 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                                        sharedLayoutPerTokenScale,
                                        sharedLayoutD,
                                        gmWorkspace,
-                                       combiner};
+                                       combiner,
+                                       gmEpSendCount,
+                                       epRankSize,
+                                       epRankId,
+                                       moeExpertNum,
+                                       moeExpertNumPerRank,
+                                       roundRecvTokenNum,
+                                       roundIdx,
+                                       roundNum};
 
     // call a kernel
     GemmKernel gemm{epRankId, metaInfoGm, statusDataSpaceOffset};
@@ -302,6 +331,10 @@ public:
     __aicore__ inline void Process();
 
 private:
+    __aicore__ inline GM_ADDR GetRoundStateAddrByRankId(GM_ADDR localRoundState, int32_t rankId);
+    __aicore__ inline float SetRoundStatus(GM_ADDR gmRoundInfo);
+    __aicore__ inline void WaitRoundStatus(GM_ADDR gmRoundInfo, float expectedStatus);
+
     GM_ADDR gmX_;
     GM_ADDR gmexpertIds_;
     GM_ADDR gmWeight1_;
@@ -342,12 +375,87 @@ private:
     uint32_t bs_{0};
     uint32_t maxBs_{0};
     uint32_t topK_{0};
+    int32_t roundRecvTokenNum_{0};
     uint64_t statusDataSpaceOffset_{0};
     uint32_t moeExpertNum_{0};
 
     AscendC::TPipe *tpipe_{nullptr};
     const FusedDeepMoeTilingData *tilingData_;
+    AscendC::TBuf<> roundStatusBuf_;
 };
+
+template <TemplateMC2TypeClass>
+__aicore__ inline GM_ADDR FusedDeepMoe<TemplateMC2TypeFunc>::GetRoundStateAddrByRankId(
+    GM_ADDR localRoundState, int32_t rankId)
+{
+    if (epRankId_ == static_cast<uint32_t>(rankId)) {
+        return localRoundState;
+    }
+    return (GM_ADDR)aclshmem_ptr(localRoundState, rankId);
+}
+
+template <TemplateMC2TypeClass>
+__aicore__ inline float FusedDeepMoe<TemplateMC2TypeFunc>::SetRoundStatus(GM_ADDR gmRoundInfo)
+{
+    if (AscendC::GetBlockIdx() != 0) {
+        return 0.0f;
+    }
+    AscendC::GlobalTensor<float> ownRoundStatus;
+    GM_ADDR ownRoundStatusAddr = GetRoundStateAddrByRankId(gmRoundInfo, epRankId_) + UB_ALIGN * epRankId_;
+    ownRoundStatus.SetGlobalBuffer((__gm__ float *)ownRoundStatusAddr);
+    // Keep barrier generations monotonic so a fast rank cannot overwrite a
+    // slower rank's next-round notification while clearing the previous one.
+    __asm__ __volatile__("");
+    AscendC::DataCacheCleanAndInvalid<float, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                      AscendC::DcciDst::CACHELINE_OUT>(ownRoundStatus);
+    __asm__ __volatile__("");
+    float currentStatus = ownRoundStatus.GetValue(0);
+    bool canAdvanceGeneration =
+        currentStatus >= 0.0f && currentStatus < FDM_ROUND_SYNC_MAX_GENERATION;
+    float expectedStatus =
+        canAdvanceGeneration ? currentStatus + FDM_ROUND_SYNC_INITIAL_GENERATION
+                             : FDM_ROUND_SYNC_INITIAL_GENERATION;
+
+    tpipe_->InitBuffer(roundStatusBuf_, epRankSize_ * UB_ALIGN);
+    AscendC::LocalTensor<float> roundStatus = roundStatusBuf_.AllocTensor<float>();
+    AscendC::Duplicate<float>(roundStatus, expectedStatus, FDM_ROUND_SYNC_FLOATS_PER_RANK);
+    AscendC::GlobalTensor<float> dstRoundStatus;
+    for (uint32_t rankId = 0; rankId < epRankSize_; ++rankId) {
+        GM_ADDR rankStatus = GetRoundStateAddrByRankId(gmRoundInfo, rankId) + UB_ALIGN * epRankId_;
+        dstRoundStatus.SetGlobalBuffer((__gm__ float *)rankStatus);
+        AscendC::DataCopy<float>(dstRoundStatus, roundStatus, FDM_ROUND_SYNC_FLOATS_PER_RANK);
+    }
+    FdmRoundSyncFunc<AscendC::HardEvent::MTE3_S>();
+    return expectedStatus;
+}
+
+template <TemplateMC2TypeClass>
+__aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::WaitRoundStatus(
+    GM_ADDR gmRoundInfo, float expectedStatus)
+{
+    if (AscendC::GetBlockIdx() != 0) {
+        return;
+    }
+    uint32_t count = epRankSize_ * FDM_ROUND_SYNC_FLOATS_PER_RANK;
+    AscendC::GlobalTensor<float> roundStatusGlobal;
+    roundStatusGlobal.SetGlobalBuffer((__gm__ float *)GetRoundStateAddrByRankId(gmRoundInfo, epRankId_));
+    AscendC::LocalTensor<float> roundStatus = roundStatusBuf_.Get<float>();
+    bool allRanksReady = false;
+    while (!allRanksReady) {
+        FdmRoundSyncFunc<AscendC::HardEvent::S_MTE2>();
+        AscendC::DataCopy<float>(roundStatus, roundStatusGlobal, count);
+        FdmRoundSyncFunc<AscendC::HardEvent::MTE2_S>();
+        allRanksReady = true;
+        for (uint32_t index = 0; index < count; ++index) {
+            if (roundStatus.GetValue(index) < expectedStatus) {
+                allRanksReady = false;
+                break;
+            }
+        }
+    }
+
+    roundStatusBuf_.FreeTensor(roundStatus);
+}
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
@@ -395,6 +503,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     globalBs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
     bs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
     topK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
+    roundRecvTokenNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.roundRecvTokenNum;
     maxBs_ = globalBs_ / epRankSize_;
 
     maxTokenNum_ = maxBs_ * epRankSize_ * (topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_);
@@ -451,12 +560,16 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
         shareExpertTokenNum = bs_;
     }
-    size_t maxHandleTokenNum = maxTokenNum_ + shareExpertTokenNum;
+    uint32_t roundBufferTokenNum = static_cast<uint32_t>(roundRecvTokenNum_);
+    size_t moeBufferTokenNum = roundBufferTokenNum;
+    size_t maxHandleTokenNum = moeBufferTokenNum + shareExpertTokenNum;
     size_t workspaceOffset = 0;
     size_t shmemWorkspaceOffset = 0;
     constexpr int32_t resveredWorkSpaceSize = 256 * 1024;
+    constexpr int32_t roundInfoWorkSpaceSize = 16 * 1024;
     int64_t x1TokenSize = maxHandleTokenNum * tokenHiddenSize_ * sizeof(int8_t);
-    int64_t x2TokenSize = (maxTokenNum_ * gmm2InputDim_ + shareExpertTokenNum * shareGmm2InputDim_) * sizeof(int8_t);
+    int64_t x2TokenSize = (moeBufferTokenNum * gmm2InputDim_ +
+                           shareExpertTokenNum * shareGmm2InputDim_) * sizeof(int8_t);
     int64_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
     int64_t tokenScaleSize = maxHandleTokenNum * sizeof(float);
     gmShareX1 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
@@ -470,7 +583,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     gmX2Scale = gmShareX2Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(tokenScaleSize);
     gmTokenFlag = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxHandleTokenNum * sizeof(int32_t));
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(moeBufferTokenNum * TOKEN_FLAG_SLOT_BYTES);
 
 
     GM_ADDR gmWorkspace = workspaceGM_ + workspaceOffset;
@@ -499,6 +612,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
     GM_ADDR gmCombineSend = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
+    GM_ADDR gmRoundInfo = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(roundInfoWorkSpaceSize);
     GM_ADDR gmAllEpRecvCount = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * moeExpertNum_ * sizeof(int32_t));
 
@@ -524,6 +639,104 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
             Arch::CrossCoreWaitFlag(gmm1AivFinished);
         }
     }
+
+    if constexpr ((EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
+        uint32_t roundNum = 1;
+        MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> combiner;
+        for (uint32_t roundIdx = 0;; ++roundIdx) {
+            if (roundIdx >= roundNum) {
+                break;
+            }
+            GmmDeqSwigluQuant<TemplateMC2TypeFunc, Gmm1L1TileShape, Gmm1L0TileShape, Gmm1EpilogueTileShape,
+                              Gmm1BlockScheduler>(
+                gmm1ProblemShape, groupCount_, gmGroupList, gmX1, layoutX1, gmShareWeight1_, layoutShareWeight1,
+                gmWeight1_, layoutWeight1, gmShareWeight1Scale_, layoutShareW1Scale, gmScale1_, layoutW1Scale,
+                gmX1Scale, layoutX1Scale, gmX2, layoutX2, gmX2Scale, layoutX2Scale, gmShareX1, gmShareX1Scale,
+                gmShareSwigluOut, gmShareX2, layoutShareX2, gmShareX2Scale, gmSwigluOut, gmWorkspace, gmX_,
+                gmSmoothScales_, gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_,
+                gmResvered, gmExpertTokenNums_, gmAllExpertTokenNums, metaInfoGm_, gmTokenFlag,
+                tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo, roundBufferTokenNum, gmCombineSend,
+                roundIdx, &roundNum);
+            AscendC::PipeBarrier<PIPE_ALL>();
+            Arch::CrossCoreFlag gmm1RoundAivFinished{0};
+            if constexpr (g_coreType == AscendC::AIV) {
+                Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
+                Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1RoundAivFinished);
+            } else {
+                Arch::CrossCoreWaitFlag(gmm1RoundAivFinished);
+            }
+
+            if constexpr (g_coreType == AscendC::AIV) {
+                if (roundIdx == 0) {
+                    combiner.Init(gmGmm2DepOut, gmexpertIds_, gmExpandIdx,
+                                  (GM_ADDR)(gmEpSendCount + epRankId_ * epRankSize_ * moeExpertNumPerRank_ *
+                                            sizeof(int32_t)),
+                                  nullptr, gmexpertScales_, xActiveMask_, gmOutput_, workspaceGM_, nullptr,
+                                  tilingData_, gmAllExpertTokenNums, gmAllEpRecvCount, gmCombineSend,
+                                  statusDataSpaceOffset_);
+                }
+            }
+            GmmDeq<TemplateMC2TypeFunc, Gmm2L1TileShape, Gmm2L0TileShape, Gmm2EpilogueTileShape,
+                   Gmm2BlockScheduler, Gmm2DispatchPolicy>(
+                gmm2ProblemShape, groupCount_, gmGroupList, gmX2, layoutX2, gmWeight2_, layoutWeight2,
+                gmScale2_, layoutW2Scale, gmX2Scale, layoutX2Scale, gmGmm2DepOut, layoutOutput, bs_,
+                shareGmm2ProblemShape, gmShareX2, gmShareWeight2_, gmShareOutput_, gmShareWeight2Scale_,
+                gmShareX2Scale, layoutShareX2, layoutShareWeight2, layoutShareX2Scale, layoutShareOutput,
+                epRankId_, gmWorkspace, &combiner, metaInfoGm_, statusDataSpaceOffset_, gmEpSendCount,
+                epRankSize_, moeExpertNum_, moeExpertNumPerRank_, roundBufferTokenNum, roundIdx,
+                &roundNum);
+            // The final round also needs a rank barrier before the out-of-loop combine consumes
+            // payloads written by every rank's in-loop GMM2 epilogue.
+            {
+                tpipe_ = GetTPipePtr();
+                tpipe_->Init();
+                AscendC::SyncAll<false>();
+                if constexpr (g_coreType == AscendC::AIV) {
+                    float expectedRoundStatus = SetRoundStatus(gmRoundInfo);
+                    WaitRoundStatus(gmRoundInfo, expectedRoundStatus);
+                }
+                AscendC::SyncAll<false>();
+                tpipe_->Destroy();
+            }
+        }
+        if (roundBufferTokenNum >= maxTokenNum_) {
+            return;
+        }
+
+        // cleanup/finalize: aic skip, aiv PrepareFinalizeAivState() and UpdateAndCleanInfo()
+        GmmDeqSwigluQuant<TemplateMC2TypeFunc, Gmm1L1TileShape, Gmm1L0TileShape, Gmm1EpilogueTileShape,
+                          Gmm1BlockScheduler>(
+            gmm1ProblemShape, groupCount_, gmGroupList, gmX1, layoutX1, gmShareWeight1_, layoutShareWeight1,
+            gmWeight1_, layoutWeight1, gmShareWeight1Scale_, layoutShareW1Scale, gmScale1_, layoutW1Scale,
+            gmX1Scale, layoutX1Scale, gmX2, layoutX2, gmX2Scale, layoutX2Scale, gmShareX1, gmShareX1Scale,
+            gmShareSwigluOut, gmShareX2, layoutShareX2, gmShareX2Scale, gmSwigluOut, gmWorkspace, gmX_,
+            gmSmoothScales_, gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_,
+            gmResvered, gmExpertTokenNums_, gmAllExpertTokenNums, metaInfoGm_, gmTokenFlag,
+            tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo, roundBufferTokenNum, gmCombineSend,
+            roundNum, &roundNum);
+        AscendC::PipeBarrier<PIPE_ALL>();
+
+
+        Arch::CrossCoreFlag gmm1RoundAivFinished{0};
+        if constexpr (g_coreType == AscendC::AIV) {
+            Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
+            Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1RoundAivFinished);
+        } else {
+            Arch::CrossCoreWaitFlag(gmm1RoundAivFinished);
+        }
+
+        // last combine reduce
+        GmmDeq<TemplateMC2TypeFunc, Gmm2L1TileShape, Gmm2L0TileShape, Gmm2EpilogueTileShape,
+               Gmm2BlockScheduler, Gmm2DispatchPolicy>(
+            gmm2ProblemShape, groupCount_, gmGroupList, gmX2, layoutX2, gmWeight2_, layoutWeight2, gmScale2_,
+            layoutW2Scale, gmX2Scale, layoutX2Scale, gmGmm2DepOut, layoutOutput, bs_, shareGmm2ProblemShape,
+            gmShareX2, gmShareWeight2_, gmShareOutput_, gmShareWeight2Scale_, gmShareX2Scale, layoutShareX2,
+            layoutShareWeight2, layoutShareX2Scale, layoutShareOutput, epRankId_, gmWorkspace, &combiner,
+            metaInfoGm_, statusDataSpaceOffset_, gmEpSendCount, epRankSize_, moeExpertNum_, moeExpertNumPerRank_,
+            roundBufferTokenNum, roundNum, &roundNum);
+        return;
+    }
+
     GmmDeqSwigluQuant<TemplateMC2TypeFunc, Gmm1L1TileShape, Gmm1L0TileShape, Gmm1EpilogueTileShape,
                       Gmm1BlockScheduler>(
         gmm1ProblemShape, groupCount_, gmGroupList, gmX1, layoutX1, gmShareWeight1_, layoutShareWeight1,
@@ -531,7 +744,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         gmX1Scale, layoutX1Scale, gmX2, layoutX2, gmX2Scale, layoutX2Scale, gmShareX1, gmShareX1Scale,
         gmShareSwigluOut, gmShareX2, layoutShareX2, gmShareX2Scale, gmSwigluOut, gmWorkspace, gmX_, gmSmoothScales_,
         gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_, gmResvered, gmExpertTokenNums_,
-        gmAllExpertTokenNums, metaInfoGm_, gmTokenFlag, tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo, gmCombineSend);
+        gmAllExpertTokenNums, metaInfoGm_, gmTokenFlag, tilingData_->disGmmDeqSwigluQuantGmmDeqComInfo,
+        roundBufferTokenNum, gmCombineSend);
     AscendC::PipeBarrier<PIPE_ALL>();
     Arch::CrossCoreFlag gmm1AivFinished{0};
     if constexpr (g_coreType == AscendC::AIV) {
@@ -554,6 +768,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
                                shareGmm2ProblemShape, gmShareX2, gmShareWeight2_, gmShareOutput_, gmShareWeight2Scale_,
                                gmShareX2Scale, layoutShareX2, layoutShareWeight2, layoutShareX2Scale,
                                layoutShareOutput, epRankId_, gmWorkspace, &combiner, metaInfoGm_,
-                               statusDataSpaceOffset_);
+                               statusDataSpaceOffset_, gmEpSendCount, epRankSize_, moeExpertNum_,
+                               moeExpertNumPerRank_, roundBufferTokenNum);
 }
 #endif  // FUSED_DEEP_MOE_H
