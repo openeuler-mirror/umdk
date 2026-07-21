@@ -53,6 +53,7 @@ namespace GMM2 {
     constexpr uint64_t SOFT_SYNC_OFFSET = 964 * 1024;
     constexpr int64_t AIV_NUM_PER_GROUP = 2;
     constexpr int64_t CORE_NUM_PER_GROUP = 3;
+    constexpr uint32_t ICACHE_PRELOAD_LEN = 4;
     // Matmul high-level staging uses CrossCore flag IDs 0..7 when WORKSPACE_STAGES is 4.
     constexpr uint32_t ROUND_READY_FLAG_ID = 10;
 }
@@ -205,7 +206,6 @@ public:
     template <int32_t CORE_TYPE = g_coreType>
     CATLASS_DEVICE void operator()(Params const &params);
 
-
     CATLASS_DEVICE
     void GetRoundExpertRange(Params const &params, uint32_t groupIdx, uint32_t roundIdx,
                              uint32_t &expertRoundStart, uint32_t &expertRoundEnd)
@@ -239,7 +239,6 @@ public:
         }
     }
 
-
     CATLASS_DEVICE
     void RunRoutingAicRound(Params const &params, uint32_t roundIdx)
     {
@@ -256,6 +255,9 @@ public:
 
         uint32_t coreIdx = AscendC::GetBlockIdx();
         uint32_t coreNum = AscendC::GetBlockNum();
+        if (coreNum == 0) {
+            return;
+        }
         AscendC::GlobalTensor<ElementC> gmC;
         gmC.SetGlobalBuffer(reinterpret_cast<__gm__ ElementC *>(params.ptrWorkspace));
         auto layoutC = layout::RowMajor{L1TileShape::M * coreNum * WORKSPACE_STAGES, L1TileShape::N};
@@ -327,7 +329,6 @@ public:
             }
         }
 
-
         if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
             blockMmad.SynchronizeBlock();
         }
@@ -348,6 +349,9 @@ public:
         BlockEpilogue blockEpilogue(resource, combiner->GetCalcInfo());
         uint32_t coreIdx = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
         uint32_t coreNum = AscendC::GetBlockNum();
+        if (coreNum == 0) {
+            return;
+        }
         AscendC::GlobalTensor<ElementC> gmC;
         gmC.SetGlobalBuffer(reinterpret_cast<__gm__ ElementC *>(params.ptrWorkspace));
         auto layoutC = layout::RowMajor{L1TileShape::M * coreNum * WORKSPACE_STAGES, L1TileShape::N};
@@ -359,7 +363,6 @@ public:
         if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
         }
-
 
         for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
             uint32_t groupRoundStart = 0;
@@ -417,7 +420,7 @@ public:
             startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
         }
 
-        icache_preload(4);
+        icache_preload(GMM2::ICACHE_PRELOAD_LEN);
     }
 
     CATLASS_DEVICE

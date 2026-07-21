@@ -51,6 +51,8 @@ constexpr uint32_t UB_PART_SIZE = 4;
 constexpr uint32_t DISPATCH_SEND_CORE_NUM = 36;
 constexpr uint32_t DISPATCH_RECV_CORE_NUM = 12;
 constexpr uint32_t COPY_FULL_EXPERT_IDS_BS = 512;
+constexpr uint32_t ROUND_SYNC_CLEAR_UB_OFFSET = 512;
+constexpr uint32_t GMM1_ICACHE_PRELOAD_LEN = 8;
 constexpr float CROSS_RANK_SYNC_FLAG = 2.0f;
 #define OPT_RANK_OFFSET 512
 
@@ -771,7 +773,6 @@ public:
         return roundNum == 0 ? 1 : roundNum;
     }
 
-
     __aicore__ inline void WaitGroupTokenNumReady(AscendC::GlobalTensor<int32_t>& groupTokenNumStateTensor,
                                                       uint32_t expected)
     {
@@ -953,7 +954,6 @@ public:
             CpGM2GMMTE<int32_t>(localNotifyDataTensor, allExpertTokenNumsTensor[targetRankId * moeExpertNum],
                 moeExpertNum);
             AscendC::PipeBarrier<PIPE_ALL>();
-
         }
         AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
@@ -1602,7 +1602,6 @@ public:
         aicSetFunc1 = {statusDataSpaceGm + SOFT_SYNC_OFFSET,
                        static_cast<uint8_t>(aicNum + AscendC::GetBlockIdx())};  // AIV wait for flags in latter part
 
-
         int64_t gmGroupOffsetB = 0;
         for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
             if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
@@ -1684,7 +1683,6 @@ public:
                 gmGroupOffsetB += params.problemShape.k() * params.problemShape.n();
             }
         }
-
 
         if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
             blockMmad.SynchronizeBlock();
@@ -2753,7 +2751,8 @@ public:
         if (aivIdx == aiCoreGroupNum * subBlockNum - 1) {
             AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
             groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET));
-            AscendC::LocalTensor<int32_t> tmpZeroLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(512);
+            AscendC::LocalTensor<int32_t> tmpZeroLocalTensor =
+                resource.ubBuf.template GetBufferByByte<int32_t>(ROUND_SYNC_CLEAR_UB_OFFSET);
             AscendC::Duplicate(tmpZeroLocalTensor, (int32_t)0, GROUP_INFO_SIZE * localExpertNum);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
@@ -2872,7 +2871,6 @@ public:
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
         }
 
-
         for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
             uint32_t groupRoundStart = 0;
             uint32_t groupRoundEnd = 0;
@@ -2952,7 +2950,6 @@ public:
         CalQuantRow(nOut, quantRowOnce);
         uint32_t startCoreIdx = 0;
 
-
         for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
             uint32_t groupRoundStart = 0;
             uint32_t groupRoundEnd = 0;
@@ -2991,7 +2988,6 @@ public:
             }
             startCoreIdx = (startCoreIdx + coreLoops) % aiCoreGroupNum;
         }
-
     }
 
     CATLASS_DEVICE
@@ -3002,13 +2998,13 @@ public:
         if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
             if (isShareQuantCore) {
                 shareQuantCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmShareSmoothScales,
-                                    (GM_ADDR)params.gmShareX1, (GM_ADDR)params.gmShareX1Scale);
+                    (GM_ADDR)params.gmShareX1, (GM_ADDR)params.gmShareX1Scale);
             }
         }
         SendCoreLayoutFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmMoeSmoothScales,
-                        (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmExpandIdx,
-                        (GM_ADDR)params.gmXActiveMask, (GM_ADDR)params.gmEpSendCount,
-                        (GM_ADDR)params.gmAllExpertTokenNums, (GM_ADDR)params.gmCombineSend);
+            (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmExpandIdx,
+            (GM_ADDR)params.gmXActiveMask, (GM_ADDR)params.gmEpSendCount,
+            (GM_ADDR)params.gmAllExpertTokenNums, (GM_ADDR)params.gmCombineSend);
         if (localExpertNum > 1) {
             isRecvCore = aivIdx >= DISPATCH_SEND_CORE_NUM;
             isSendCore = aivIdx < DISPATCH_SEND_CORE_NUM;
@@ -3033,12 +3029,12 @@ public:
         }
         if (isSendCore) {
             SendCoreDataFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpandIdx,
-                    (GM_ADDR)params.gmMoeSmoothScales, (GM_ADDR)params.gmEpSendCount,
-                    (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, roundIdx);
+                (GM_ADDR)params.gmMoeSmoothScales, (GM_ADDR)params.gmEpSendCount,
+                (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, roundIdx);
         }
         if (isRecvCore) {
             ShmemRecvCoreRound((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale,
-                    (GM_ADDR)params.gmEpSendCount, roundIdx);
+                (GM_ADDR)params.gmEpSendCount, roundIdx);
         }
 
         isRecvCore = ((aivIdx % ODD_EVEN_BASE) == 0);
@@ -3054,7 +3050,7 @@ public:
                 (__gm__ float*)params.gmSwigluOut, params.problemShape.n(), params.problemShape.k(),
                 params.layoutScale, roundIdx);
         }
-        icache_preload(8);
+        icache_preload(GMM1_ICACHE_PRELOAD_LEN);
         AscendC::SyncAll<false>();
         AscendC::PipeBarrier<PIPE_ALL>();
         ClearRoundSyncState();
@@ -3190,7 +3186,6 @@ public:
         }
     }
 
-
     CATLASS_DEVICE
     void AivRestoreRoundState(Params const &params)
     {
@@ -3239,7 +3234,8 @@ public:
             // clean
             AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
             groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET));
-            AscendC::LocalTensor<int32_t> tmpZeroLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(512);
+            AscendC::LocalTensor<int32_t> tmpZeroLocalTensor =
+                resource.ubBuf.template GetBufferByByte<int32_t>(ROUND_SYNC_CLEAR_UB_OFFSET);
             AscendC::Duplicate(tmpZeroLocalTensor, (int32_t)0, GROUP_INFO_SIZE * localExpertNum);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
