@@ -15,6 +15,7 @@
 #include "umq_ub_flow_control.h"
 #include "qbuf_list.h"
 #include "umq_ub_api.h"
+#include "umq_ub_jetty_pool.h"
 #include "umq_symbol_private.h"
 
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
@@ -1330,6 +1331,14 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         queue->tx_depth = option->tx_depth;
     } else {
         queue->tx_depth = min_dev_tx < UMQ_DEFAULT_DEPTH ? min_dev_tx : UMQ_DEFAULT_DEPTH;
+    }
+
+    // Jetty pool is process-wide and shared by all main+share_transport umqs; each main umq feeds jetty pool
+    // nodes whose jfs depth derives from queue->tx_depth. To keep shared nodes consistent across main umqs,
+    // tx_depth and tx_buf_size must match the baseline set by the first such umq; mismatch is a hard error.
+    if (is_umq_ub_main_queue(option->create_flag) && is_umq_ub_share_transport(option->create_flag) &&
+        umq_ub_jetty_pool_align_tx(queue->tx_depth, queue->tx_buf_size) != UMQ_SUCCESS) {
+            return -UMQ_ERR_EINVAL;
     }
 
     if ((dev_ctx->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0 &&
