@@ -24,7 +24,7 @@ typedef union umq_ub_fc_user_ctx {
         uint64_t type : 5;
         uint64_t notify : 16;
         uint64_t rsvd0 : 11;
-        uint64_t rsvd1 : 32;
+        uint64_t umq_ctx : 32;
     } bs;
 } umq_ub_fc_user_ctx_t;
 
