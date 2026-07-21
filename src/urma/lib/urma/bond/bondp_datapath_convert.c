@@ -13,7 +13,7 @@
 #include "bondp_api.h"
 #include "bondp_segment.h"
 #include "bondp_types.h"
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_convert.h"
@@ -485,88 +485,6 @@ void convert_jfs_pwr_to_vwr(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty)
             return;
         case URMA_OPC_FADD:
             restore_faa_pwr_to_vwr(wr, vtjetty);
-            return;
-        default:
-            return;
-    }
-}
-
-void get_jfs_vwr_refs(urma_jfs_wr_t *wr)
-{
-    if (wr->tjetty != NULL) {
-        bondp_tjetty_get(wr->tjetty);
-    }
-
-    switch (wr->opcode) {
-        case URMA_OPC_SEND:
-        case URMA_OPC_SEND_IMM:
-        case URMA_OPC_SEND_INVALIDATE:
-            if (wr->send.src.sge != NULL) {
-                for (int i = 0; i < wr->send.src.num_sge; ++i) {
-                    bondp_tseg_get(wr->send.src.sge[i].tseg);
-                }
-            }
-            return;
-        case URMA_OPC_WRITE:
-        case URMA_OPC_WRITE_IMM:
-        case URMA_OPC_WRITE_NOTIFY:
-        case URMA_OPC_READ:
-            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
-                bondp_tseg_get(wr->rw.src.sge[i].tseg);
-            }
-            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
-                bondp_tseg_get(wr->rw.dst.sge[i].tseg);
-            }
-            return;
-        case URMA_OPC_CAS:
-        case URMA_OPC_FADD:
-            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
-                bondp_tseg_get(wr->cas.src->tseg);
-            }
-            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
-                bondp_tseg_get(wr->cas.dst->tseg);
-            }
-            return;
-        default:
-            return;
-    }
-}
-
-void put_jfs_vwr_refs(urma_jfs_wr_t *wr)
-{
-    if (wr->tjetty != NULL) {
-        bondp_tjetty_put(wr->tjetty);
-    }
-
-    switch (wr->opcode) {
-        case URMA_OPC_SEND:
-        case URMA_OPC_SEND_IMM:
-        case URMA_OPC_SEND_INVALIDATE:
-            if (wr->send.src.sge != NULL) {
-                for (int i = 0; i < wr->send.src.num_sge; ++i) {
-                    bondp_tseg_put(wr->send.src.sge[i].tseg);
-                }
-            }
-            return;
-        case URMA_OPC_WRITE:
-        case URMA_OPC_WRITE_IMM:
-        case URMA_OPC_WRITE_NOTIFY:
-        case URMA_OPC_READ:
-            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
-                bondp_tseg_put(wr->rw.src.sge[i].tseg);
-            }
-            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
-                bondp_tseg_put(wr->rw.dst.sge[i].tseg);
-            }
-            return;
-        case URMA_OPC_CAS:
-        case URMA_OPC_FADD:
-            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
-                bondp_tseg_put(wr->cas.src->tseg);
-            }
-            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
-                bondp_tseg_put(wr->cas.dst->tseg);
-            }
             return;
         default:
             return;

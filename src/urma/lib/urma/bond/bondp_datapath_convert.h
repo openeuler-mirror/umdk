@@ -50,9 +50,6 @@ urma_status_t check_jfs_wr_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
 void convert_jfs_vwr_to_pwr(urma_jfs_wr_t *wr, int send_idx, int target_idx);
 void convert_jfs_pwr_to_vwr(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty);
 
-void get_jfs_vwr_refs(urma_jfs_wr_t *wr);
-void put_jfs_vwr_refs(urma_jfs_wr_t *wr);
-
 void convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx);
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn);
 
@@ -81,31 +78,6 @@ static inline bool is_failover_cr(const urma_cr_t *cr)
     return cr->status == URMA_CR_LOC_LEN_ERR ||
            cr->status == URMA_CR_LOC_ACCESS_ERR ||
            cr->status == URMA_CR_ACK_TIMEOUT_ERR;
-}
-
-/*
- * Control packet mark rules:
- * - A control WR is identified by setting bit 63 of user_ctx.
- * - A RECV CR is identified as control when opcode == URMA_CR_OPC_SEND.
- * - A SEND CR is identified as control when bit 63 of user_ctx is set.
- */
-#define BONDP_CTRL_USER_CTX_BIT  63
-#define BONDP_CTRL_USER_CTX_MASK (1ULL << BONDP_CTRL_USER_CTX_BIT)
-
-static inline void mark_jfs_wr_ctrl(urma_jfs_wr_t *wr)
-{
-    wr->user_ctx |= BONDP_CTRL_USER_CTX_MASK;
-}
-
-static inline bool is_ctrl_cr(const urma_cr_t *cr)
-{
-    if (is_recv_cr(cr)) {
-        // RECV CR
-        return cr->opcode == URMA_CR_OPC_SEND;
-    } else {
-        // SEND CR
-        return (cr->user_ctx & BONDP_CTRL_USER_CTX_MASK) != 0;
-    }
 }
 
 #ifdef __cplusplus

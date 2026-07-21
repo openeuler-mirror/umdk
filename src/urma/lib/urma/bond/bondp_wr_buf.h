@@ -123,6 +123,9 @@ static inline uint32_t wr_buf_idx_from_ptr(wr_buf_t *buf, char *ptr)
 int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge);
 void wr_buf_uninit(wr_buf_t *buf);
 
+void jfs_wr_get_refs(urma_jfs_wr_t *wr);
+void jfs_wr_put_refs(urma_jfs_wr_t *wr);
+
 static inline jfs_wr_entry_t *jfs_wr_buf_get(wr_buf_t *buf, uint64_t wr_id)
 {
     jfs_wr_entry_t *wr_entry;

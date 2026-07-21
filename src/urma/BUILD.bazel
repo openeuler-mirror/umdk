@@ -174,15 +174,12 @@ urma_shared_library(
         "lib/urma/bond/include",
         "lib/urma/bond/utils",
     ],
-    copts = URMA_COMMON_COPTS + [
-        "-I/usr/include/libnl3",
-    ],
+    copts = URMA_COMMON_COPTS,
     compile_deps = [
         ":urma_common_headers",
         ":urma_headers",
     ],
     dynamic_lib_names = ["urma", "urma_common"],
-    linkopts = ["-lnl-genl-3", "-lnl-3"],
     soname = "liburma_ubagg.so.0",
 )
 

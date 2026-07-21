@@ -5,62 +5,65 @@
  * Create: 2026-6-18
  */
 
-#include <pthread.h>
 #include <stdarg.h>
 
 #include "umq_errno.h"
 #include "umq_vlog.h"
+#include "umq_thread_local.h"
 #include "urpc_timer.h"
 #include "urpc_thread_closure.h"
 #include "urpc_util.h"
-#include "urpc_bitmap.h"
 #include "perf.h"
 
 #define UMQ_TRACE_DEFAULT_RECORD_NUM   8192
-#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 1
+#define UMQ_TRACE_DEFAULT_RECORD_LIMIT 0
 #define UMQ_TRACE_LOG_BUF_SIZE         512
 
 /*
- * Thread-local trace state — one per thread, no lock needed.
+ * Per-thread trace state mirrors the perf.c / umq_ub_thread_wr pattern: a
+ * thread's slot in trace_buf[] is indexed directly by umq_thread_id_get() --
+ * no private thread key, no bitmap, no per-thread encode. The thread id
+ * allocator (umq_thread_local.c) already provides an idempotent per-thread
+ * fast path and recycles ids on thread exit.
  *
- * g_umq_trace_buf_index:    slot index into g_umq_trace_ctx->trace_buf[], allocated once
- *                   by umq_trace_alloc() via pthread_once.  Persists for the
- *                   lifetime of the thread; all trace records for this thread
- *                   live in that single slot.
+ * trace_buf[] is sized UMQ_THREAD_ID_MAX so the id can index it directly. The
+ * first UMQ_THREAD_ID_RANGE_DEFAULT slots' data_record is pre-allocated at
+ * init (the common data path is allocation-free); ids beyond that allocate
+ * lazily on first use. Every data_record is freed ONLY in umq_trace_uninit,
+ * never on thread exit -- a recycled id reuses the still-live buffer (the data
+ * path rewrites contents each call). This is the umq_ub_thread_wr ownership
+ * model.
  *
- * g_umq_trace_record_index: ring-buffer index of the currently-open record, set by
- *                    umq_trace_start_record() and cleared to -1 by
- *                    umq_trace_end_record().  While >= 0, any call to
- *                    umq_trace_sub_record() or umq_trace_item_record() will
- *                    append to that record — no need to pass an explicit id
- *                    through intermediate call stacks.
+ * The currently-open record index (record_index) is one-per-slot, so it lives
+ * in the shared umq_trace_buf_t itself rather than per-thread: a slot is owned
+ * by exactly one thread at a time, so writing trace_buf[id] from the owning
+ * thread never races with another thread. When == -1 there is no active
+ * record; sub_record/item_record are then no-ops. This is how helper functions
+ * (e.g. the FC poll functions, shared-credit send) automatically skip tracing
+ * when called from outside a traced context.
  *
- *                    When == -1, there is no active record; sub_write /
- *                    data_write are immediate no-ops.  This is the
- *                    mechanism by which helper functions (e.g. the FC poll
- *                    functions, shared-credit send) automatically skip
- *                    tracing when called from outside a traced context.
+ * Thread-exit cleanup (resetting the slot's record_index/counters so a
+ * recycled id starts clean) is done by the THREAD_CLOSURE_UMQ_DATA_PERF
+ * closure, a thread_local C++ object -- same mechanism perf.c uses. Like
+ * perf.c, no lock is needed: uninit assumes the data-path threads have exited
+ * (framework teardown joins them first), and the only residual late-closure
+ * race is bounded by the ctx==NULL check, identical to perf.c's closure.
  */
-static __thread uint32_t g_umq_trace_buf_index = -1;
-static __thread int32_t g_umq_trace_record_index = -1;
-static __thread bool g_umq_trace_thread_inited = false;
-static __thread pthread_once_t g_umq_trace_thread_run_once = PTHREAD_ONCE_INIT;
 static uint32_t g_umq_trace_output_limit = UMQ_TRACE_DEFAULT_RECORD_LIMIT;
 static uint32_t g_umq_trace_record_num = UMQ_TRACE_DEFAULT_RECORD_NUM;
 static bool g_umq_trace_enable = false;
-static pthread_spinlock_t g_umq_trace_lock;
 
 /* unified trace — single ring buffer for all types, one per thread */
 typedef struct umq_trace_buf {
     uint32_t record_cnt;
     uint32_t previous_output_cnt;
+    int32_t record_index;              /* ring index of the currently-open record, -1 if none */
     umq_data_record_t *data_record;    /* dynamically allocated, size = g_umq_trace_record_num */
+    volatile bool inited;
 } umq_trace_buf_t;
 
 typedef struct umq_trace_ctx {
-    pthread_once_t *dp_thread_run_once[UMQ_PERF_REC_MAX_NUM];
-    umq_trace_buf_t trace_buf[UMQ_PERF_REC_MAX_NUM];
-    urpc_bitmap_t used_bitmap;
+    umq_trace_buf_t trace_buf[UMQ_THREAD_ID_MAX];
     urpc_timer_t *timer;
 } umq_trace_ctx_t;
 
@@ -89,7 +92,10 @@ static int umq_trace_init(umq_trace_cfg_t *cfg)
         goto RESET_CFG;
     }
 
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+    /* Pre-allocate the data_record ring for the first UMQ_THREAD_ID_RANGE_DEFAULT
+     * ids so the common data path is allocation-free; ids beyond that allocate
+     * lazily in umq_trace_alloc. */
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_RANGE_DEFAULT; i++) {
         g_umq_trace_ctx->trace_buf[i].data_record =
             (umq_data_record_t *)calloc(g_umq_trace_record_num, sizeof(umq_data_record_t));
         if (g_umq_trace_ctx->trace_buf[i].data_record == NULL) {
@@ -99,17 +105,10 @@ static int umq_trace_init(umq_trace_cfg_t *cfg)
         }
     }
 
-    g_umq_trace_ctx->used_bitmap = urpc_bitmap_alloc(UMQ_PERF_REC_MAX_NUM);
-    if (g_umq_trace_ctx->used_bitmap == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "bitmap alloc for umq_trace failed\n");
-        goto FREE_DATA_RECORD;
-    }
-
-    (void)pthread_spin_init(&g_umq_trace_lock, PTHREAD_PROCESS_PRIVATE);
     return UMQ_SUCCESS;
 
 FREE_DATA_RECORD:
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; i++) {
         if (g_umq_trace_ctx->trace_buf[i].data_record != NULL) {
             free(g_umq_trace_ctx->trace_buf[i].data_record);
             g_umq_trace_ctx->trace_buf[i].data_record = NULL;
@@ -130,12 +129,10 @@ void umq_trace_timer_delete(void)
     if (g_umq_trace_ctx == NULL) {
         return;
     }
-    (void)pthread_spin_lock(&g_umq_trace_lock);
     if (g_umq_trace_ctx->timer != NULL) {
         urpc_timer_destroy(g_umq_trace_ctx->timer);
         g_umq_trace_ctx->timer = NULL;
     }
-    (void)pthread_spin_unlock(&g_umq_trace_lock);
 }
 
 void umq_trace_uninit(void)
@@ -144,79 +141,72 @@ void umq_trace_uninit(void)
         return;
     }
 
-    (void)pthread_spin_lock(&g_umq_trace_lock);
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; i++) {
-        if (g_umq_trace_ctx->dp_thread_run_once[i] != NULL) {
-            *g_umq_trace_ctx->dp_thread_run_once[i] = PTHREAD_ONCE_INIT;
-        }
+    /* Caller guarantees data-path threads have exited (framework teardown
+     * joins them first), so no concurrent writers here. Free every slot's
+     * data_record uniformly -- both the init-time and lazily-allocated ones. */
+    g_umq_trace_enable = false;
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; i++) {
         if (g_umq_trace_ctx->trace_buf[i].data_record != NULL) {
             free(g_umq_trace_ctx->trace_buf[i].data_record);
             g_umq_trace_ctx->trace_buf[i].data_record = NULL;
         }
     }
-
-    g_umq_trace_enable = false;
-    urpc_bitmap_free(g_umq_trace_ctx->used_bitmap);
     free(g_umq_trace_ctx);
     g_umq_trace_ctx = NULL;
-    (void)pthread_spin_unlock(&g_umq_trace_lock);
-    (void)pthread_spin_destroy(&g_umq_trace_lock);
     g_umq_trace_output_limit = UMQ_TRACE_DEFAULT_RECORD_LIMIT;
     g_umq_trace_record_num = UMQ_TRACE_DEFAULT_RECORD_NUM;
 }
 
-
-static void umq_trace_closure(uint64_t idx)
-{
-    (void)pthread_spin_lock(&g_umq_trace_lock);
-    if (g_umq_trace_ctx == NULL) {
-        (void)pthread_spin_unlock(&g_umq_trace_lock);
-        return;
-    }
-    urpc_bitmap_set0(g_umq_trace_ctx->used_bitmap, (size_t)idx);
-    g_umq_trace_ctx->dp_thread_run_once[idx] = NULL;
-    (void)pthread_spin_unlock(&g_umq_trace_lock);
-    g_umq_trace_thread_inited = false;
-}
-
+/* Reset a slot's record state (not its data_record, which is freed only at
+ * uninit). Called at alloc and on thread exit so a recycled id starts clean. */
 static void umq_trace_record_clear(uint32_t idx)
 {
     umq_trace_buf_t *cur_record = &g_umq_trace_ctx->trace_buf[idx];
     cur_record->record_cnt = 0;
     cur_record->previous_output_cnt = 0;
+    cur_record->record_index = -1;
+}
+
+static void umq_trace_closure(uint64_t idx)
+{
+    /* Thread-exit cleanup: reset this thread's slot state so a recycled id
+     * (reclaimed by the umq_thread_id destructor) starts clean. The slot's
+     * data_record is NOT freed here -- it lives until umq_trace_uninit, per
+     * the umq_ub_thread_wr ownership model. No lock: like perf.c's closure,
+     * the only residual race vs uninit is bounded by the ctx==NULL check. */
+    if (g_umq_trace_ctx == NULL) {
+        return;
+    }
+    g_umq_trace_ctx->trace_buf[idx].inited = false;
 }
 
 void umq_trace_alloc(void)
 {
-    uint32_t idx;
-    (void)pthread_spin_lock(&g_umq_trace_lock);
-    if (g_umq_trace_ctx == NULL) {
-        (void)pthread_spin_unlock(&g_umq_trace_lock);
-        UMQ_VLOG_ERR(VLOG_UMQ, "trace ctx invalid\n");
+    /* umq_thread_id_get() is idempotent per thread (it caches the id in its own
+     * thread-key fast path), so this is lock-free on the steady state. Thread
+     * ids are unique per-thread, so each thread indexes a distinct trace_buf[id]. */
+    uint32_t id = umq_thread_id_get();
+    if (g_umq_trace_ctx == NULL || id >= UMQ_THREAD_ID_MAX) {
         return;
     }
 
-    idx = (uint32_t)urpc_bitmap_find_next_zero_bit(g_umq_trace_ctx->used_bitmap,
-        UMQ_PERF_REC_MAX_NUM, 0);
-    if (idx >= UMQ_PERF_REC_MAX_NUM) {
-        (void)pthread_spin_unlock(&g_umq_trace_lock);
-        UMQ_VLOG_WARN(VLOG_UMQ, "trace buf capacity %u were exhausted, alloc trace_rec failed\n",
-            UMQ_PERF_REC_MAX_NUM);
+    umq_trace_buf_t *cur_rec = &g_umq_trace_ctx->trace_buf[id];
+    if (cur_rec->data_record != NULL && cur_rec->inited) {
         return;
     }
 
-    umq_trace_record_clear(idx);
-    urpc_bitmap_set1(g_umq_trace_ctx->used_bitmap, idx);
-    (void)pthread_spin_unlock(&g_umq_trace_lock);
+    if (cur_rec->data_record == NULL) {
+        /* Slow path: id >= UMQ_THREAD_ID_RANGE_DEFAULT, first use by this thread. */
+        cur_rec->data_record = (umq_data_record_t *)calloc(g_umq_trace_record_num, sizeof(umq_data_record_t));
+        if (cur_rec->data_record == NULL) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq trace data_record alloc failed for id %u\n", id);
+            return;
+        }
+    }
 
-    g_umq_trace_buf_index = idx;
-    g_umq_trace_ctx->dp_thread_run_once[idx] = &g_umq_trace_thread_run_once;
-    urpc_thread_closure_register(THREAD_CLOSURE_UMQ_DATA_PERF, idx, umq_trace_closure);
-}
-
-static void umq_dp_thread_run_once(void)
-{
-    umq_trace_alloc();
+    umq_trace_record_clear(id);
+    cur_rec->inited = true;
+    urpc_thread_closure_register(THREAD_CLOSURE_UMQ_DATA_PERF, id, umq_trace_closure);
 }
 
 uint64_t umq_trace_start_timestamp_get(void)
@@ -224,10 +214,11 @@ uint64_t umq_trace_start_timestamp_get(void)
     if (!g_umq_trace_enable) {
         return 0;
     }
-    if (!g_umq_trace_thread_inited) {
-        pthread_once(&g_umq_trace_thread_run_once, umq_dp_thread_run_once);
-        g_umq_trace_thread_inited = true;
-    }
+    /* umq_thread_id_get() is idempotent per thread, so repeated calls take the
+     * fast path. On first use, lazily allocate this thread's data_record if the
+     * id was beyond the init-pre-allocated range; allocation is skipped on
+     * subsequent calls once data_record is non-NULL. */
+    umq_trace_alloc();
     return get_timestamp_ns();
 }
 
@@ -245,10 +236,14 @@ uint64_t umq_trace_timestamp_get(void)
 
 static ALWAYS_INLINE umq_trace_buf_t *umq_trace_buf_get(void)
 {
-    if (g_umq_trace_ctx == NULL || g_umq_trace_buf_index >= UMQ_PERF_REC_MAX_NUM) {
+    /* Index directly by the calling thread's umq id. umq_thread_id_get() is a
+     * lock-free thread-local read on the steady state (it caches the id in its
+     * own thread-key fast path). */
+    uint32_t id = umq_thread_id_get();
+    if (g_umq_trace_ctx == NULL || id >= UMQ_THREAD_ID_MAX) {
         return NULL;
     }
-    return &g_umq_trace_ctx->trace_buf[g_umq_trace_buf_index];
+    return &g_umq_trace_ctx->trace_buf[id];
 }
 
 uint64_t umq_trace_write_delta(uint64_t start)
@@ -285,20 +280,20 @@ void umq_trace_start_record(umq_trace_type_t type, uint64_t time, uint64_t tag_t
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "new data num exceeds the capacity, resulting in data overwriting\n");
     }
     cur_rec->record_cnt++;
-    g_umq_trace_record_index = (int32_t)idx;
+    cur_rec->record_index = (int32_t)idx;
 }
 
 void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
                           uint64_t start_time, uint64_t exec_time)
 {
-    if (!g_umq_trace_enable || g_umq_trace_record_index < 0) {
+    if (!g_umq_trace_enable) {
         return;
     }
     umq_trace_buf_t *cur_rec = umq_trace_buf_get();
-    if (cur_rec == NULL || cur_rec->data_record == NULL) {
+    if (cur_rec == NULL || cur_rec->data_record == NULL || cur_rec->record_index < 0) {
         return;
     }
-    uint32_t idx = (uint32_t)g_umq_trace_record_index;
+    uint32_t idx = (uint32_t)cur_rec->record_index;
     if (idx >= g_umq_trace_record_num) {
         return;
     }
@@ -315,15 +310,15 @@ void umq_trace_sub_record(umq_trace_type_t type, umq_urma_func_type_t func_type,
 
 void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t sub_umq_id)
 {
-    if (!g_umq_trace_enable || g_umq_trace_record_index < 0) {
+    if (!g_umq_trace_enable) {
         return;
     }
 
     umq_trace_buf_t *cur_rec = umq_trace_buf_get();
-    if (cur_rec == NULL || cur_rec->data_record == NULL) {
+    if (cur_rec == NULL || cur_rec->data_record == NULL || cur_rec->record_index < 0) {
         return;
     }
-    uint32_t idx = (uint32_t)g_umq_trace_record_index;
+    uint32_t idx = (uint32_t)cur_rec->record_index;
     if (idx >= g_umq_trace_record_num) {
         return;
     }
@@ -339,16 +334,16 @@ void umq_trace_item_record(uint32_t msn, uint32_t size, uint32_t sub_umq_id)
 
 void umq_trace_end_record(umq_trace_type_t type, uint64_t time)
 {
-    if (!g_umq_trace_enable || g_umq_trace_record_index < 0) {
+    if (!g_umq_trace_enable) {
         return;
     }
 
     umq_trace_buf_t *cur_rec = umq_trace_buf_get();
-    if (cur_rec == NULL || cur_rec->data_record == NULL) {
+    if (cur_rec == NULL || cur_rec->data_record == NULL || cur_rec->record_index < 0) {
         return;
     }
 
-    uint32_t idx = (uint32_t)g_umq_trace_record_index;
+    uint32_t idx = (uint32_t)cur_rec->record_index;
     if (idx >= g_umq_trace_record_num) {
         return;
     }
@@ -356,7 +351,7 @@ void umq_trace_end_record(umq_trace_type_t type, uint64_t time)
     if (rec->type == type && rec->end_time == 0) {
         rec->end_time = time;
     }
-    g_umq_trace_record_index = -1;
+    cur_rec->record_index = -1;
 }
 
 /* ================================================================
@@ -412,9 +407,7 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
     }
     UMQ_VLOG_INFO(VLOG_UMQ, "============ thread %u records: %u--%u ===========\n",
                   thread_id, previous_output_cnt, record_cnt);
-    (void)pthread_spin_lock(&g_umq_trace_lock);
     if (cur_rec->data_record == NULL) {
-        (void)pthread_spin_unlock(&g_umq_trace_lock);
         return;
     }
     for (uint32_t i = 0; i < new_records; i++) {
@@ -459,7 +452,6 @@ static void umq_trace_output_single(umq_trace_buf_t *cur_rec, uint32_t thread_id
             UMQ_VLOG_INFO(VLOG_UMQ, "%s\n", buf);
         }
     }
-    (void)pthread_spin_unlock(&g_umq_trace_lock);
     cur_rec->previous_output_cnt = record_cnt;
 }
 
@@ -468,12 +460,9 @@ static void umq_trace_output(void *args __attribute__((unused)))
     if (!g_umq_trace_enable) {
         return;
     }
-    for (uint32_t i = 0; i < UMQ_PERF_REC_MAX_NUM; ++i) {
-        if (!urpc_bitmap_is_set(g_umq_trace_ctx->used_bitmap, i)) {
-            continue;
-        }
+    for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; ++i) {
         umq_trace_buf_t *cur_rec = &g_umq_trace_ctx->trace_buf[i];
-        if (cur_rec->record_cnt == 0) {
+        if (cur_rec->data_record == NULL || cur_rec->record_cnt == 0) {
             continue;
         }
         umq_trace_output_single(cur_rec, i);
@@ -482,9 +471,6 @@ static void umq_trace_output(void *args __attribute__((unused)))
 
 void umq_trace_remain_output(void)
 {
-    if (!g_umq_trace_enable) {
-        return;
-    }
     g_umq_trace_output_limit = 0;
     umq_trace_output(NULL);
 }

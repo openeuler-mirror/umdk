@@ -525,10 +525,10 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 URMA_LOG_ERR("Failed to copy jfs wr at index %d\n", i);
                 goto CLEANUP;
             }
-            get_jfs_vwr_refs(pwr);
+            jfs_wr_get_refs(pwr);
             ret = check_wr_tseg_not_deleting(pwr);
             if (ret != URMA_SUCCESS) {
-                put_jfs_vwr_refs(pwr);
+                jfs_wr_put_refs(pwr);
                 goto CLEANUP;
             }
             uint32_t wr_msn = (base_msn + i) % BONDP_MAX_BITMAP_SIZE;
@@ -567,7 +567,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             }
             pthread_spin_unlock(&bdp_comp->send_lock);
             for (int j = 0; j < wr_count; j++) {
-                put_jfs_vwr_refs(&wr_entries[j]->wr);
+                jfs_wr_put_refs(&wr_entries[j]->wr);
             }
             jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
             continue;
@@ -598,7 +598,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         return URMA_SUCCESS;
 ROLLBACK:
         for (int j = success_node; j < wr_count; j++) {
-            put_jfs_vwr_refs(&wr_entries[j]->wr);
+            jfs_wr_put_refs(&wr_entries[j]->wr);
         }
         jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, &wr_entries[success_node],
             allocated - success_node);
@@ -615,7 +615,7 @@ ROLLBACK:
         return ret;
 CLEANUP:
         for (int j = 0; j < wr_count; j++) {
-            put_jfs_vwr_refs(&wr_entries[j]->wr);
+            jfs_wr_put_refs(&wr_entries[j]->wr);
         }
         jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
         if (ret != URMA_FAIL || atomic_load(&bdp_comp->valid[send_idx])) {
@@ -1080,7 +1080,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     return ret;
 
 release_wr_entry:
-    put_jfs_vwr_refs(wr);
+    jfs_wr_put_refs(wr);
     jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
     return ret;
 }
@@ -1360,7 +1360,7 @@ CONVERT_CR:
     cr->user_ctx = wr_entry->user_ctx;
 
     pthread_spin_lock(&bdp_comp->send_lock);
-    put_jfs_vwr_refs(&wr_entry->wr);
+    jfs_wr_put_refs(&wr_entry->wr);
     jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
     pthread_spin_unlock(&bdp_comp->send_lock);
     put_comp(bdp_comp);
@@ -1476,9 +1476,7 @@ static cr_convert_ret_t bondp_handle_cr_no_store(bondp_context_t *bdp_ctx, int i
 
 static cr_convert_ret_t bondp_handle_cr_with_store(bondp_context_t *bdp_ctx, int idx, urma_cr_t *cr)
 {
-    if (is_ctrl_cr(cr)) {
-        return CONVERT_SKIP;
-    } else if (is_fake_cr(cr)) {
+    if (is_fake_cr(cr)) {
         return handle_fake_cr_with_store(bdp_ctx, idx, cr);
     } else if (is_recv_cr(cr)) {
         return (bdp_ctx->msn_enable) ? handle_recv_cr_with_store(bdp_ctx, idx, cr)

@@ -20,7 +20,7 @@
 
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 #include "ub_list.h"
 #include "urma_private.h"
 #include "urma_types.h"
@@ -169,7 +169,11 @@ typedef struct bondp_tseg {
     int dev_num;
     bondp_context_t *bondp_ctx;
     urma_ref_t use_cnt;
+#ifndef __cplusplus
     atomic_bool deleting;
+#else
+    std::atomic_bool deleting;
+#endif
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_tseg_t;
@@ -220,7 +224,11 @@ typedef struct bondp_comp {
     bondp_hash_table_t v_conn_table;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
+#ifndef __cplusplus
     atomic_bool deleting;
+#else
+    std::atomic_bool deleting;
+#endif
     // send
     bool modify_to_error;
     pthread_spinlock_t send_lock;
@@ -308,11 +316,6 @@ static inline void bondp_seg_base_to_seg(const urma_seg_base_t *base, urma_seg_t
     seg->len = base->len;
     seg->attr.value = base->attr.value;
     seg->token_id = base->token_id;
-}
-
-static inline bool is_empty_eid(urma_eid_t *eid)
-{
-    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
 }
 
 static inline bool is_single_dev_mode(bondp_context_t *ctx)
