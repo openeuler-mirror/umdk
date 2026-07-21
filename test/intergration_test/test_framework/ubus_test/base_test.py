@@ -104,7 +104,14 @@ class BaseTest(BaseObject):
             for _core in _core_list[host].split():
                 if _core not in self.core_list_setup[host]:
                     core_name = self.rename_core(host, _core)
-                    _new_core_list.append(f"{self.host_list[host].manage_ip}_{core_name}")
+                    # 通过file命令获取该core的信息，如果core为当前用例的二进制产生，则判定为该core为有效需要抛出异常的文件
+                    file_result = self.host_list[host].exec_cmd(f"file {os.path.join(const.CORE_PATH, _core)}")
+                    log.error(f"file {_core} result: {file_result.stdout}")
+                    if const.CASE_DIR in file_result.stdout:
+                        log.error(f"new core file = {core_name}")
+                        _new_core_list.append(f"{self.host_list[host].manage_ip}_{core_name}")
+                    else:
+                        log.info(f"{const.CASE_DIR} not in result")
         if len(_new_core_list) != 0:
             log.error(f"new core list = {_new_core_list}")
             return -1
