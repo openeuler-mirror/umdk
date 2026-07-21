@@ -605,7 +605,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     shmemWorkspaceOffset +=
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
     GM_ADDR gmCombineSend = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
+    shmemWorkspaceOffset +=
+        RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(ExpandXType));
     GM_ADDR gmRoundInfo = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(roundInfoWorkSpaceSize);
     GM_ADDR gmAllEpRecvCount = workspaceGM_ + workspaceOffset;

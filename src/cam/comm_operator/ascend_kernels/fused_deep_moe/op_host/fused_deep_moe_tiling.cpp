@@ -629,7 +629,7 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
     const uint64_t allExpertTokenNumsSize = static_cast<uint64_t>(info.epRankSize) * info.epRankSize *
                                             info.moeExpertNumPerRank * sizeof(int64_t);
     const uint64_t combineSendSize = static_cast<uint64_t>(info.bs) * info.k *
-                                     info.h * sizeof(float);
+                                     info.h * TOKEN_DTYPE_BYTE_SIZE;
     const uint64_t fixedWorkspaceSize = CeilUp(allExpertTokenNumsSize, GM_ALIGN_SIZE) +
                                         CeilUp(combineSendSize, GM_ALIGN_SIZE) +
                                         CeilUp(static_cast<uint64_t>(ROUND_INFO_WORKSPACE_SIZE), GM_ALIGN_SIZE) +
