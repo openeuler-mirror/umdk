@@ -20,10 +20,6 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include <netlink/handlers.h>
-#include <netlink/errno.h>
-#include <netlink/msg.h>
-
 #include <gtest/gtest.h>
 
 #include "bondp_api.h"
@@ -35,7 +31,6 @@
 #include "bondp_hash_table.h"
 #include "bondp_health.h"
 #include "bondp_failback.h"
-#include "bondp_netlink.h"
 #include "bondp_provider_ops.h"
 #include "bondp_segment.h"
 #include "bondp_slide_window.h"
@@ -68,19 +63,8 @@ extern bool g_mockCreateContextFail;
 extern bool g_mockCreateContextBadFd;
 extern bool g_mockDeleteContextFail;
 extern bool g_mockUserCtlFail;
-extern bool g_mockNetlink;
-extern bool g_mockNetlinkAllocFail;
-extern bool g_mockNetlinkConnectFail;
-extern bool g_mockNetlinkResolveFail;
-extern struct nl_sock *g_mockNetlinkSock;
-extern int g_mockNetlinkFd;
-extern int g_mockNetlinkRecvReturn;
-extern int g_mockNetlinkRecvCount;
 extern size_t g_mockCallocFailNmemb;
 extern size_t g_mockCallocFailSize;
-
-void ResetMockNetlinkCallback();
-int InvokeMockNetlinkMsg(bondp_nl_cmd_t cmd, const void *payload, size_t payloadLen);
 
 struct BondProviderMockGuard {
     bondp_global_context_t *savedGlobalCtx;
@@ -96,13 +80,6 @@ struct BondProviderMockGuard {
     bool savedCreateContextBadFd;
     bool savedDeleteContextFail;
     bool savedUserCtlFail;
-    bool savedNetlink;
-    bool savedNetlinkAllocFail;
-    bool savedNetlinkConnectFail;
-    bool savedNetlinkResolveFail;
-    int savedNetlinkFd;
-    int savedNetlinkRecvReturn;
-    int savedNetlinkRecvCount;
     size_t savedCallocFailNmemb;
     size_t savedCallocFailSize;
 
@@ -120,13 +97,6 @@ struct BondProviderMockGuard {
           savedCreateContextBadFd(g_mockCreateContextBadFd),
           savedDeleteContextFail(g_mockDeleteContextFail),
           savedUserCtlFail(g_mockUserCtlFail),
-          savedNetlink(g_mockNetlink),
-          savedNetlinkAllocFail(g_mockNetlinkAllocFail),
-          savedNetlinkConnectFail(g_mockNetlinkConnectFail),
-          savedNetlinkResolveFail(g_mockNetlinkResolveFail),
-          savedNetlinkFd(g_mockNetlinkFd),
-          savedNetlinkRecvReturn(g_mockNetlinkRecvReturn),
-          savedNetlinkRecvCount(g_mockNetlinkRecvCount),
           savedCallocFailNmemb(g_mockCallocFailNmemb),
           savedCallocFailSize(g_mockCallocFailSize)
     {
@@ -143,16 +113,8 @@ struct BondProviderMockGuard {
         g_mockCreateContextBadFd = false;
         g_mockDeleteContextFail = false;
         g_mockUserCtlFail = false;
-        g_mockNetlink = false;
-        g_mockNetlinkAllocFail = false;
-        g_mockNetlinkConnectFail = false;
-        g_mockNetlinkResolveFail = false;
-        g_mockNetlinkFd = -1;
-        g_mockNetlinkRecvReturn = 0;
-        g_mockNetlinkRecvCount = 0;
         g_mockCallocFailNmemb = 0;
         g_mockCallocFailSize = 0;
-        ResetMockNetlinkCallback();
     }
 
     ~BondProviderMockGuard()
@@ -170,16 +132,8 @@ struct BondProviderMockGuard {
         g_mockCreateContextBadFd = savedCreateContextBadFd;
         g_mockDeleteContextFail = savedDeleteContextFail;
         g_mockUserCtlFail = savedUserCtlFail;
-        g_mockNetlink = savedNetlink;
-        g_mockNetlinkAllocFail = savedNetlinkAllocFail;
-        g_mockNetlinkConnectFail = savedNetlinkConnectFail;
-        g_mockNetlinkResolveFail = savedNetlinkResolveFail;
-        g_mockNetlinkFd = savedNetlinkFd;
-        g_mockNetlinkRecvReturn = savedNetlinkRecvReturn;
-        g_mockNetlinkRecvCount = savedNetlinkRecvCount;
         g_mockCallocFailNmemb = savedCallocFailNmemb;
         g_mockCallocFailSize = savedCallocFailSize;
-        ResetMockNetlinkCallback();
     }
 };
 
