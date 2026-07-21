@@ -432,8 +432,8 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
         return -1;
     }
 
-    if (bdp_r_v2p_token_id_table_create(&bdp_ctx->remote_v2p_token_id_table, BONDP_MAX_NUM_RSEGS) != 0) {
-        URMA_LOG_ERR("Failed to create remote_v2p_token_id_table\n");
+    if (bondp_seg_cache_init(bdp_ctx) != 0) {
+        URMA_LOG_ERR("Failed to initialize segment cache\n");
         goto DESTROY_P_VJETTY_ID_TABLE;
     }
 
@@ -448,7 +448,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     int ret = urma_cmd_create_context(&bdp_ctx->v_ctx, &cfg, &udata);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create context, ret=%d\n", ret);
-        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
+        goto UNINIT_SEG_CACHE;
     }
 
     const int max_event = 1;
@@ -464,13 +464,12 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     bdp_ctx->bonding_level = BONDP_BONDING_LEVEL_PORT;
     URMA_LOG_DEBUG("bondp create_vctx, eid_idx is %u, dev_num is %d.\n",
                    bdp_ctx->v_ctx.eid_index, bdp_ctx->dev_num);
-    atomic_init(&bdp_ctx->token_id_cnt, 0);
     return 0;
 
 UNINIT_CTX_TABLE:
     urma_cmd_delete_context(&bdp_ctx->v_ctx);
-DESTROY_R_V2P_TOKEN_ID_TABLE:
-    bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
+UNINIT_SEG_CACHE:
+    bondp_seg_cache_uninit(bdp_ctx);
 DESTROY_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bdp_ctx->p_vjetty_id_table);
     return -1;
@@ -497,7 +496,7 @@ static int bondp_delete_vcontext(bondp_context_t *bdp_ctx)
         ret = URMA_FAIL;
     }
 
-    bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
+    bondp_seg_cache_uninit(bdp_ctx);
     bdp_p_vjetty_id_table_destroy(&bdp_ctx->p_vjetty_id_table);
     return ret;
 }
