@@ -10,8 +10,9 @@
 
 #include <iostream>
 #include <torch/library.h>
-
-using namespace at_npu::native;
+#include <torch/extension.h>
+#include <torch/csrc/autograd/custom_function.h>
+#include "pytorch_npu_helper.hpp"
 
 // npu tensor max size
 const int SIZE = 8;
@@ -50,12 +51,12 @@ at::Tensor npu_gather_selection_kv_cache_npu(
                                                                                            selection_kv_block_status,
                                                                                            selection_topk_indices);
 
-    EXEC_NPU_CMD_V1(aclnnGatherSelectionKvCache,
-                    selection_k_rope, selection_kv_cache, selection_kv_block_table,
-                    selection_kv_block_status, selection_topk_indices, full_k_rope,
-                    full_kv_cache, full_kv_block_table,
-                    full_kv_actual_seq, full_q_actual_seq, selection_topk_block_size,
-                    selection_kv_actual_seq);
+    EXEC_NPU_CMD(aclnnGatherSelectionKvCache,
+                 selection_k_rope, selection_kv_cache, selection_kv_block_table,
+                 selection_kv_block_status, selection_topk_indices, full_k_rope,
+                 full_kv_cache, full_kv_block_table,
+                 full_kv_actual_seq, full_q_actual_seq, selection_topk_block_size,
+                 selection_kv_actual_seq);
 
     return selection_kv_actual_seq;
 }
@@ -107,7 +108,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> npu_gathe
     at::Tensor selection_kv_cache_inplace = selection_kv_cache.clone();
     at::Tensor selection_kv_block_table_inplace = selection_kv_block_table.clone();
     at::Tensor selection_kv_block_status_inplace = selection_kv_block_status.clone();
-    EXEC_NPU_CMD_V1(aclnnGatherSelectionKvCache, selection_k_rope_inplace, selection_kv_cache_inplace,
+    EXEC_NPU_CMD(aclnnGatherSelectionKvCache, selection_k_rope_inplace, selection_kv_cache_inplace,
         selection_kv_block_table_inplace, selection_kv_block_status_inplace, selection_topk_indices,
         full_k_rope, full_kv_cache, full_kv_block_table, full_kv_actual_seq, full_q_actual_seq,
         selection_topk_block_size, selection_kv_actual_seq);

@@ -21,12 +21,15 @@
 #ifndef GATHER_SELECTION_KV_CACHE_TILING_H_
 #define GATHER_SELECTION_KV_CACHE_TILING_H_
 
+#define OPS_UTILS_LOG_SUB_MOD_NAME "GATHER_SELECTION_KV_CACHE"
+#define OPS_UTILS_LOG_PACKAGE_TYPE "[CAM]"
+
 #include "exe_graph/runtime/tiling_context.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "register/op_def_registry.h"
 #include "register/tilingdata_base.h"
 #include "tiling/tiling_api.h"
-#include "error/ops_error.h"
+#include "ops_error.h"
 #include "platform/platform_info.h"
 
 namespace optiling {

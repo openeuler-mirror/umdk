@@ -33,7 +33,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
         .def("is_initialized", &fused_deep_moe::Buffer::is_initialized)
         .def("get_ext_info", &fused_deep_moe::Buffer::get_ext_info)
         .def("get_shmem_workspace", &fused_deep_moe::Buffer::get_shmem_workspace);
-    m.def("gather_selection_kv_cache", &gather_selection_kv_cache, "gather_selection_kv_cache")
+    m.def("gather_selection_kv_cache", &npu_gather_selection_kv_cache_npu, "gather_selection_kv_cache");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {

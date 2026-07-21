@@ -19,9 +19,12 @@
  * \brief
  */
 
+#define OPS_UTILS_LOG_SUB_MOD_NAME "GATHER_SELECTION_KV_CACHE"
+#define OPS_UTILS_LOG_PACKAGE_TYPE "[CAM]"
+
 #include <graph/utils/type_utils.h>
 #include <register/op_impl_registry.h>
-#include "error/ops_error.h"
+#include "ops_error.h"
 
 using namespace ge;
 namespace ops {
