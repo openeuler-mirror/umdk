@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "urma_types.h"
 
@@ -90,7 +91,18 @@ int bondp_topo_query_linked_port(const urma_eid_t *bonding_eid,
  */
 int bondp_topo_query_bonding_eid(const urma_eid_t *target_eid, urma_eid_t *output);
 
+static inline bool is_empty_eid(const urma_eid_t *eid)
+{
+    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
+}
+
+static inline bool is_eid_equal(const urma_eid_t *eid1, const urma_eid_t *eid2)
+{
+    return !memcmp(eid1, eid2, sizeof(urma_eid_t));
+}
+
 #ifdef __cplusplus
 }
 #endif
+
 #endif // BONDP_TOPO_INFO_H
