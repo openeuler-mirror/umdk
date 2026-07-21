@@ -45,6 +45,14 @@ typedef struct jetty_pool_config {
     uint32_t notify_threshold;     // Notify via eventfd when idle_count >= threshold (0 means use default 16)
 } jetty_pool_config_t;
 
+// Baseline umq config established by the first main+share_transport umq. All such umqs must share the same
+// tx_depth and tx_buf_size because they feed jetty pool nodes consumed by every main umq's sub/logic umq.
+typedef struct baseline_umq_cfg {
+    uint32_t tx_depth;             // tx_depth of the first main+share_transport umq
+    uint32_t tx_buf_size;          // tx_buf_size of the first main+share_transport umq
+    bool inited;                   // Whether the baseline has been established
+} baseline_umq_cfg_t;
+
 // Thread-local jetty cache (linked list based on user config)
 typedef struct thread_local_jetty_cache {
     urpc_list_t cache_list;     // Linked list of cached jetty nodes
@@ -71,6 +79,13 @@ bool umq_ub_jetty_pool_has_avail(void);
 umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
+
+// Enforce that a main umq's tx_depth and tx_buf_size match the jetty pool baseline.
+// The first main+share_transport umq to call establishes the baseline; every subsequent caller must match it
+// exactly (regardless of whether the user explicitly configured the values). Jetty pool nodes are shared, so
+// tx_depth/tx_buf_size must be uniform across all such umqs.
+// Returns UMQ_SUCCESS (baseline established / matched), -UMQ_ERR_EINVAL on mismatch.
+int umq_ub_jetty_pool_align_tx(uint32_t queue_tx_depth, uint32_t queue_tx_buf_size);
 
 // DFX statistics
 typedef struct umq_ub_jetty_pool_stats {
