@@ -639,8 +639,6 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
     const uint64_t sharedScaleSize = shareExpertTokenNum * sizeof(float);
     const uint64_t alignmentSlack = 3 * (GM_ALIGN_SIZE - 1);
 
-    // X1/X2 alias the same region. Compute the capacity for either side of the max()
-    // independently and take the smaller result so both layouts are guaranteed to fit.
     const uint64_t x1FixedSize = fixedWorkspaceSize + sharedScaleSize +
                                  shareExpertTokenNum * info.h * sizeof(int8_t) + alignmentSlack;
     const uint64_t x2FixedSize = fixedWorkspaceSize + sharedScaleSize +
