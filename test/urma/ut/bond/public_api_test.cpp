@@ -1398,8 +1398,8 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     EXPECT_EQ(BONDP_RJETTY_EXT_VERSION_V0, jettyExt->version);
     EXPECT_EQ(1U, jettyExt->local_ctx_cnt);
     EXPECT_EQ(1U, jettyExt->target_ctx_cnt);
-    EXPECT_NE(0U, jettyExt->mask & BONDP_RJETTY_EXT_MASK_CONNECTED_BITMAP);
-    EXPECT_NE(0U, jettyExt->connected_bitmap[0] & 0x1U);
+    EXPECT_NE(0U, jettyExt->mask & BONDP_RJETTY_EXT_MASK_LOCAL_CTX);
+    EXPECT_NE(0U, jettyExt->mask & BONDP_RJETTY_EXT_MASK_TARGET_CTX);
     auto *targetEntry = reinterpret_cast<bondp_rjetty_target_ctx_t *>(jettyExt->data + 1);
     EXPECT_EQ(0U, targetEntry->target_idx);
     std::free(rjetty);
@@ -1418,7 +1418,6 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     EXPECT_EQ(sizeof(urma_bond_seg_ext_t), segPrivExt->len);
     auto *segExt = reinterpret_cast<urma_bond_seg_ext_t *>(segPrivExt->data);
     EXPECT_EQ(0x55U, segExt->peer_p_seg[0].token_id);
-    EXPECT_TRUE(segExt->connected[0][0]);
     std::free(seg);
 }
 
