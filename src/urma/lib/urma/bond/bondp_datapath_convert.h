@@ -83,31 +83,6 @@ static inline bool is_failover_cr(const urma_cr_t *cr)
            cr->status == URMA_CR_ACK_TIMEOUT_ERR;
 }
 
-/*
- * Control packet mark rules:
- * - A control WR is identified by setting bit 63 of user_ctx.
- * - A RECV CR is identified as control when opcode == URMA_CR_OPC_SEND.
- * - A SEND CR is identified as control when bit 63 of user_ctx is set.
- */
-#define BONDP_CTRL_USER_CTX_BIT  63
-#define BONDP_CTRL_USER_CTX_MASK (1ULL << BONDP_CTRL_USER_CTX_BIT)
-
-static inline void mark_jfs_wr_ctrl(urma_jfs_wr_t *wr)
-{
-    wr->user_ctx |= BONDP_CTRL_USER_CTX_MASK;
-}
-
-static inline bool is_ctrl_cr(const urma_cr_t *cr)
-{
-    if (is_recv_cr(cr)) {
-        // RECV CR
-        return cr->opcode == URMA_CR_OPC_SEND;
-    } else {
-        // SEND CR
-        return (cr->user_ctx & BONDP_CTRL_USER_CTX_MASK) != 0;
-    }
-}
-
 #ifdef __cplusplus
 }
 #endif

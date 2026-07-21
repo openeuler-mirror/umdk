@@ -6,8 +6,6 @@
 
 #include "bond_fixture.h"
 
-#include <netlink/genl/genl.h>
-
 namespace urma_test_bond {
 bool g_mockEpollCreateFail = false;
 bool g_mockEpollCreate1Fail = false;
@@ -21,50 +19,8 @@ bool g_mockCreateContextFail = false;
 bool g_mockCreateContextBadFd = false;
 bool g_mockDeleteContextFail = false;
 bool g_mockUserCtlFail = false;
-bool g_mockNetlink = false;
-bool g_mockNetlinkAllocFail = false;
-bool g_mockNetlinkConnectFail = false;
-bool g_mockNetlinkResolveFail = false;
-struct nl_sock *g_mockNetlinkSock = reinterpret_cast<struct nl_sock *>(0x1234);
-int g_mockNetlinkFd = -1;
-int g_mockNetlinkRecvReturn = 0;
-int g_mockNetlinkRecvCount = 0;
 size_t g_mockCallocFailNmemb = 0;
 size_t g_mockCallocFailSize = 0;
-static nl_recvmsg_msg_cb_t g_mockNetlinkMsgCb = nullptr;
-static void *g_mockNetlinkMsgCbArg = nullptr;
-
-void ResetMockNetlinkCallback()
-{
-    g_mockNetlinkMsgCb = nullptr;
-    g_mockNetlinkMsgCbArg = nullptr;
-}
-
-int InvokeMockNetlinkMsg(bondp_nl_cmd_t cmd, const void *payload, size_t payloadLen)
-{
-    if (g_mockNetlinkMsgCb == nullptr) {
-        return -ENOENT;
-    }
-
-    nl_msg *msg = nlmsg_alloc();
-    if (msg == nullptr) {
-        return -ENOMEM;
-    }
-
-    void *hdr = genlmsg_put(msg, 0, 0, 0x33, 0, 0, cmd, 1);
-    if (hdr == nullptr) {
-        nlmsg_free(msg);
-        return -ENOMEM;
-    }
-    if (payload != nullptr && nla_put(msg, BONDP_NL_ATTR_PAYLOAD, payloadLen, payload) != 0) {
-        nlmsg_free(msg);
-        return -ENOMEM;
-    }
-
-    int ret = g_mockNetlinkMsgCb(msg, g_mockNetlinkMsgCbArg);
-    nlmsg_free(msg);
-    return ret;
-}
 } // namespace urma_test_bond
 
 using namespace urma_test_bond;
@@ -152,154 +108,6 @@ extern "C" int eventfd(unsigned int initval, int flags)
         return -1;
     }
     return static_cast<int>(syscall(SYS_eventfd2, initval, flags));
-}
-
-extern "C" struct nl_sock *nl_socket_alloc(void)
-{
-    using RealFn = struct nl_sock *(*)(void);
-
-    if (g_mockNetlink) {
-        return g_mockNetlinkAllocFail ? nullptr : g_mockNetlinkSock;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_alloc"));
-    return realFn();
-}
-
-extern "C" void nl_socket_free(struct nl_sock *sock)
-{
-    using RealFn = void (*)(struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_free"));
-    realFn(sock);
-}
-
-extern "C" void nl_close(struct nl_sock *sock)
-{
-    using RealFn = void (*)(struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_close"));
-    realFn(sock);
-}
-
-extern "C" int nl_socket_set_nonblocking(const struct nl_sock *sock)
-{
-    using RealFn = int (*)(const struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return 0;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_set_nonblocking"));
-    return realFn(sock);
-}
-
-extern "C" void nl_socket_disable_seq_check(struct nl_sock *sock)
-{
-    using RealFn = void (*)(struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_disable_seq_check"));
-    realFn(sock);
-}
-
-extern "C" int genl_connect(struct nl_sock *sock)
-{
-    using RealFn = int (*)(struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return g_mockNetlinkConnectFail ? -EIO : 0;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "genl_connect"));
-    return realFn(sock);
-}
-
-extern "C" int genl_ctrl_resolve(struct nl_sock *sock, const char *name)
-{
-    using RealFn = int (*)(struct nl_sock *, const char *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return g_mockNetlinkResolveFail ? -ENOENT : 0x33;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "genl_ctrl_resolve"));
-    return realFn(sock, name);
-}
-
-extern "C" int genl_ctrl_resolve_grp(struct nl_sock *sock, const char *family, const char *grp)
-{
-    using RealFn = int (*)(struct nl_sock *, const char *, const char *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return g_mockNetlinkResolveFail ? -ENOENT : 0x44;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "genl_ctrl_resolve_grp"));
-    return realFn(sock, family, grp);
-}
-
-extern "C" int nl_socket_add_membership(struct nl_sock *sock, int group)
-{
-    using RealFn = int (*)(struct nl_sock *, int);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return 0;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_add_membership"));
-    return realFn(sock, group);
-}
-
-extern "C" int nl_socket_modify_cb(struct nl_sock *sock, enum nl_cb_type type, enum nl_cb_kind kind,
-    nl_recvmsg_msg_cb_t cb, void *arg)
-{
-    using RealFn = int (*)(struct nl_sock *, enum nl_cb_type, enum nl_cb_kind, nl_recvmsg_msg_cb_t, void *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        g_mockNetlinkMsgCb = cb;
-        g_mockNetlinkMsgCbArg = arg;
-        return 0;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_modify_cb"));
-    return realFn(sock, type, kind, cb, arg);
-}
-
-extern "C" int nl_socket_get_fd(const struct nl_sock *sock)
-{
-    using RealFn = int (*)(const struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        return g_mockNetlinkFd;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_socket_get_fd"));
-    return realFn(sock);
-}
-
-extern "C" int nl_recvmsgs_default(struct nl_sock *sock)
-{
-    using RealFn = int (*)(struct nl_sock *);
-
-    if (g_mockNetlink && sock == g_mockNetlinkSock) {
-        g_mockNetlinkRecvCount++;
-        return g_mockNetlinkRecvReturn;
-    }
-
-    auto realFn = reinterpret_cast<RealFn>(dlsym(RTLD_NEXT, "nl_recvmsgs_default"));
-    return realFn(sock);
 }
 
 extern "C" int pthread_create(pthread_t *thread, const pthread_attr_t *attr,

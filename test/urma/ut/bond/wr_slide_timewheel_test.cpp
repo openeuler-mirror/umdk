@@ -143,18 +143,9 @@ TEST(UrmaBondTest, HeaderInlineHelpersCoverStablePureLogic)
     EXPECT_TRUE(is_rw_wr(&wr));
     wr.opcode = URMA_OPC_SEND;
     EXPECT_TRUE(is_send_wr(&wr));
-    mark_jfs_wr_ctrl(&wr);
 
     cr.status = URMA_CR_LOC_LEN_ERR;
     EXPECT_TRUE(is_failover_cr(&cr));
-    cr.status = URMA_CR_SUCCESS;
-    cr.flag.bs.s_r = 1;
-    cr.opcode = URMA_CR_OPC_SEND;
-    EXPECT_TRUE(is_ctrl_cr(&cr));
-    cr.flag.bs.s_r = 0;
-    cr.opcode = URMA_CR_OPC_SEND_WITH_IMM;
-    cr.user_ctx = BONDP_CTRL_USER_CTX_MASK;
-    EXPECT_TRUE(is_ctrl_cr(&cr));
 }
 
 TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfs)
