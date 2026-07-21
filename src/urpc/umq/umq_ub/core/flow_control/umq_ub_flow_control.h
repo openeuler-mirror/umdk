@@ -55,6 +55,15 @@ static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
         return;
     }
 
+    (void)fc->ops.remote_rx_window_inc(fc, win, true);
+}
+
+static inline void umq_ub_credit_received_inc(ub_flow_control_t *fc, uint16_t win)
+{
+    if (win == 0 || !fc->enabled) {
+        return;
+    }
+
     (void)fc->ops.remote_rx_window_inc(fc, win, false);
 }
 
