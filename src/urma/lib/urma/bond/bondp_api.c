@@ -201,8 +201,8 @@ urma_jfce_t *bondp_create_jfce(urma_context_t *ctx)
         URMA_LOG_ERR("Failed to create pjfce.\n");
         goto DELETE_PJFCE;
     }
-    URMA_LOG_INFO("Finish to create jfce, dev_name=%s, eid_idx=%u.\n",
-                  ctx->dev->name, ctx->eid_index);
+    URMA_LOG_DEBUG("Finish to create jfce, dev_name=%s, eid_idx=%u.\n",
+                   ctx->dev->name, ctx->eid_index);
 
     return &bdp_jfce->v_jfce;
 
