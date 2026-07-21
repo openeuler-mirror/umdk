@@ -181,6 +181,29 @@ TEST(UrmaBondTest, TopoInfoMapsMultipleNodes)
     EXPECT_EQ(0, std::memcmp(&secondAggEid, &output, sizeof(output)));
 }
 
+TEST(UrmaBondTest, TopoInfoInvalidatesThreadCacheAfterReinit)
+{
+    BondTopoMapCleanup topoCleanup;
+    bondp_topo_node_t topo = {};
+    urma_eid_t firstAggEid = MakeEid(0x58);
+    urma_eid_t secondAggEid = MakeEid(0x59);
+    urma_eid_t primaryEid = MakeEid(0x5a);
+    urma_eid_t output = {};
+
+    topo.is_current = true;
+    CopyEidToTopo(topo.agg_devs[0].agg_eid, firstAggEid);
+    CopyEidToTopo(topo.agg_devs[0].ues[0].primary_eid, primaryEid);
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&primaryEid, &output));
+    EXPECT_EQ(0, std::memcmp(&firstAggEid, &output, sizeof(output)));
+
+    bondp_topo_uninit();
+    CopyEidToTopo(topo.agg_devs[0].agg_eid, secondAggEid);
+    ASSERT_EQ(0, bondp_topo_init(&topo, 1));
+    ASSERT_EQ(0, bondp_topo_query_bonding_eid(&primaryEid, &output));
+    EXPECT_EQ(0, std::memcmp(&secondAggEid, &output, sizeof(output)));
+}
+
 TEST(UrmaBondTest, WorkerPublicApisScheduleCancelAndHandleFdEvents)
 {
     BondWorkerGuard guard;

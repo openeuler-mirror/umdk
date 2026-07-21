@@ -7,6 +7,7 @@
  * Note:
  * History: 2025-03-05
  */
+
 #ifndef BDP_SLIDE_WINDOW_H
 #define BDP_SLIDE_WINDOW_H
 
