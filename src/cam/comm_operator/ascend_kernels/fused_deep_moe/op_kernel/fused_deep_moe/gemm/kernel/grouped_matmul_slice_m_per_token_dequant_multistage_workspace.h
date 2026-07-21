@@ -54,7 +54,7 @@ namespace GMM2 {
     constexpr int64_t AIV_NUM_PER_GROUP = 2;
     constexpr int64_t CORE_NUM_PER_GROUP = 3;
     constexpr uint32_t ICACHE_PRELOAD_LEN = 4;
-    // Matmul high-level staging uses CrossCore flag IDs 0..7 when WORKSPACE_STAGES is 4.
+    // GMM uses CrossCore flag IDs 0..7 when WORKSPACE_STAGES is 4.
     constexpr uint32_t ROUND_READY_FLAG_ID = 10;
 }
 
