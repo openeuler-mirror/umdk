@@ -20,10 +20,12 @@
 
 #include "bondp_api.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
 #include "bondp_datapath.h"
+#include "bondp_dp_int.h"
 #include "bondp_failback.h"
 #include "bondp_health.h"
-#include "bondp_segment.h"
 #include "bondp_types.h"
 #include "bondp_worker.h"
 #include "ubagg_ioctl.h"
@@ -34,12 +36,12 @@
 
 #include "bondp_provider_ops.h"
 
-#define BONDP_ENV_ENABLE_FAILOVER                 "BOND_ENABLE_FAILOVER"
-#define BONDP_ENV_ENABLE_FAILBACK                 "BOND_ENABLE_FAILBACK"
-#define BONDP_ENV_ENABLE_HEALTH_CHECK             "BOND_ENABLE_HEALTH_CHECK"
-#define BONDP_ENV_HEALTH_CHECK_INTERVAL           "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
-#define BONDP_ENV_MAX_CR_CNT_PER_DEV               "BOND_MAX_CR_CNT_PER_DEV"
-#define BONDP_ENV_LEN_MAX                         (128)
+#define BONDP_ENV_ENABLE_FAILOVER       "BOND_ENABLE_FAILOVER"
+#define BONDP_ENV_ENABLE_FAILBACK       "BOND_ENABLE_FAILBACK"
+#define BONDP_ENV_ENABLE_HEALTH_CHECK   "BOND_ENABLE_HEALTH_CHECK"
+#define BONDP_ENV_HEALTH_CHECK_INTERVAL "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
+#define BONDP_ENV_MAX_CR_CNT_PER_DEV    "BOND_MAX_CR_CNT_PER_DEV"
+#define BONDP_ENV_LEN_MAX               (128)
 /*
  * #define BONDP_ENV_FAILOVER_DIEX_Y_ROUTEZ          "BOND_FAILOVER_DIEX_Y_ROUTEZ"
  */
@@ -236,27 +238,14 @@ static void read_env_balance_route_all(bondp_global_context_t *ctx)
     char env_name[BONDP_ENV_LEN_MAX] = {0};
     int ret = 0;
     const uint32_t route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM] = {
-        {
-            {
-                {1, 6, 7, 4},
-                {2, 5, 8, 3}
-            },
-            {
-                {5, 2, 4, 7},
-                {6, 1, 3, 8}
-            }
-        },
-        {
-            {
-                {7, 4, 1, 6},
-                {8, 3, 2, 5}
-            },
-            {
-                {3, 8, 5, 2},
-                {4, 7, 6, 1}
-            }
-        }
-    };
+        {{{1, 6, 7, 4},
+          {2, 5, 8, 3}},
+         {{5, 2, 4, 7},
+          {6, 1, 3, 8}}},
+        {{{7, 4, 1, 6},
+          {8, 3, 2, 5}},
+         {{3, 8, 5, 2},
+          {4, 7, 6, 1}}}};
 
     for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
         for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
@@ -274,7 +263,6 @@ static void read_env_balance_route_all(bondp_global_context_t *ctx)
         }
     }
 }
-
 
 static void read_all_env(bondp_global_context_t *ctx)
 {

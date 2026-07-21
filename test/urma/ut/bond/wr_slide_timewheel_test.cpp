@@ -55,10 +55,10 @@ TEST(UrmaBondTest, WrBufferAllocGetRelease)
     jfs_wr_entry_t *jfsEntry = nullptr;
     jfr_wr_entry_t *jfrEntry = nullptr;
 
-    EXPECT_EQ(-EINVAL, wr_buf_init(nullptr, 2));
-    EXPECT_EQ(-EINVAL, wr_buf_init(&buf, 0));
+    EXPECT_EQ(-EINVAL, wr_buf_init(nullptr, 2, BONDP_MAX_SGE_NUM));
+    EXPECT_EQ(-EINVAL, wr_buf_init(&buf, 0, BONDP_MAX_SGE_NUM));
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2));
+    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     jfsEntry = jfs_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, jfsEntry);
     EXPECT_EQ(1U, jfsEntry->wr_id);
@@ -84,7 +84,7 @@ TEST(UrmaBondTest, WrBufferReleaseJfrAndReuse)
     wr_buf_t buf = {};
     jfr_wr_entry_t *entry = nullptr;
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 1));
+    ASSERT_EQ(0, wr_buf_init(&buf, 1, BONDP_MAX_SGE_NUM));
     entry = jfr_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, entry);
     uint64_t wrId = entry->wr_id;
@@ -107,7 +107,7 @@ TEST(UrmaBondTest, HeaderInlineHelpersCoverStablePureLogic)
     urma_jfs_wr_t wr = {};
     urma_cr_t cr = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2));
+    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     jfs_wr_entry_t *jfsEntry = jfs_wr_buf_alloc(&buf);
     jfr_wr_entry_t *jfrEntry = jfr_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, jfsEntry);
@@ -153,7 +153,7 @@ TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfs)
     wr_buf_t buf = {};
     jfs_wr_entry_t *entries[3] = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2));
+    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(0U, jfs_wr_buf_alloc_batch(&buf, entries, 0));
     EXPECT_EQ(2U, jfs_wr_buf_alloc_batch(&buf, entries, 3));
     ASSERT_NE(nullptr, entries[0]);
@@ -173,7 +173,7 @@ TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfrAndRejectOversizedRelease)
     jfr_wr_entry_t *jfrEntries[2] = {};
     jfs_wr_entry_t *jfsEntries[BONDP_BATCH_POST_MAX_NUM + 1] = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2));
+    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(0U, jfr_wr_buf_alloc_batch(&buf, jfrEntries, 0));
     EXPECT_EQ(2U, jfr_wr_buf_alloc_batch(&buf, jfrEntries, 2));
     ASSERT_NE(nullptr, jfrEntries[0]);

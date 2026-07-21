@@ -25,14 +25,16 @@
 #include "bondp_api.h"
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
 #include "bondp_datapath.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
+#include "bondp_dp_int.h"
 #include "bondp_hash_table.h"
 #include "bondp_health.h"
 #include "bondp_failback.h"
 #include "bondp_provider_ops.h"
-#include "bondp_segment.h"
 #include "bondp_slide_window.h"
 #include "bondp_timewheel.h"
 #include "bondp_types.h"
@@ -1077,11 +1079,13 @@ inline uint32_t HashTableNodeHash(void *key)
     return *static_cast<uint32_t *>(key);
 }
 
-inline void TimewheelCountCallback(void *arg)
+inline void TimewheelCountCallback(tw_task_reason_t reason, void *arg)
 {
     uint32_t *count = static_cast<uint32_t *>(arg);
 
-    (*count)++;
+    if (reason == TW_TASK_EXECUTED) {
+        (*count)++;
+    }
 }
 
 inline urma_jetty_id_t MakeJettyId(uint32_t id)
@@ -1151,11 +1155,13 @@ struct EnvGuard {
     }
 };
 
-inline void CountWorkerTask(void *arg)
+inline void CountWorkerTask(tw_task_reason_t reason, void *arg)
 {
     WorkerCounter *counter = static_cast<WorkerCounter *>(arg);
 
-    counter->count.fetch_add(1);
+    if (reason == TW_TASK_EXECUTED) {
+        counter->count.fetch_add(1);
+    }
 }
 
 inline void CountReadableFd(void *arg)

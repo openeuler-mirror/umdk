@@ -15,8 +15,8 @@
 #include "ub_util.h"
 #include "urma_log.h"
 
-#include "bondp_api.h"
-#include "bondp_segment.h"
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
 
 #include "bondp_wr_buf.h"
 
