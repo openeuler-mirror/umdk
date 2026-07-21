@@ -8,13 +8,99 @@
  * History: 2026-03-17  Create file
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
+#include "ub_util.h"
 #include "urma_log.h"
-#include "bondp_datapath_convert.h"
+
+#include "bondp_api.h"
+#include "bondp_segment.h"
+
 #include "bondp_wr_buf.h"
+
+void jfs_wr_get_refs(urma_jfs_wr_t *wr)
+{
+    if (wr->tjetty != NULL) {
+        bondp_tjetty_get(wr->tjetty);
+    }
+
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            if (wr->send.src.sge != NULL) {
+                for (int i = 0; i < wr->send.src.num_sge; ++i) {
+                    bondp_tseg_get(wr->send.src.sge[i].tseg);
+                }
+            }
+            return;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
+                bondp_tseg_get(wr->rw.src.sge[i].tseg);
+            }
+            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
+                bondp_tseg_get(wr->rw.dst.sge[i].tseg);
+            }
+            return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_get(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_get(wr->cas.dst->tseg);
+            }
+            return;
+        default:
+            return;
+    }
+}
+
+void jfs_wr_put_refs(urma_jfs_wr_t *wr)
+{
+    if (wr->tjetty != NULL) {
+        bondp_tjetty_put(wr->tjetty);
+    }
+
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            if (wr->send.src.sge != NULL) {
+                for (int i = 0; i < wr->send.src.num_sge; ++i) {
+                    bondp_tseg_put(wr->send.src.sge[i].tseg);
+                }
+            }
+            return;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
+                bondp_tseg_put(wr->rw.src.sge[i].tseg);
+            }
+            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
+                bondp_tseg_put(wr->rw.dst.sge[i].tseg);
+            }
+            return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_put(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_put(wr->cas.dst->tseg);
+            }
+            return;
+        default:
+            return;
+    }
+}
 
 int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge)
 {
@@ -76,7 +162,7 @@ void wr_buf_uninit(wr_buf_t *buf)
 
         if (entry_hdr->entry_type == WR_BUF_ENTRY_JFS) {
             jfs_wr_entry_t *entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, idx);
-            put_jfs_vwr_refs(&entry->wr);
+            jfs_wr_put_refs(&entry->wr);
         } else if (entry_hdr->entry_type == WR_BUF_ENTRY_JFR) {
             /* sge is embedded in jfr_wr_entry_t, no need to free */
         }
@@ -132,7 +218,7 @@ jfr_wr_entry_t *jfr_wr_buf_alloc(wr_buf_t *buf)
  * Note: entry_type is NOT set here.
  */
 static uint32_t wr_buf_alloc_batch(wr_buf_t *buf,
-    char **entries, uint32_t count)
+                                   char **entries, uint32_t count)
 {
     if (count == 0) {
         return 0;
@@ -226,7 +312,7 @@ void jfs_wr_buf_release_batch(wr_buf_t *buf, jfs_wr_entry_t **entries, uint32_t 
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("JFS WR buf release failed: count = %u, limit = %u",
-            count, BONDP_BATCH_POST_MAX_NUM);
+                     count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {
@@ -243,7 +329,7 @@ void jfr_wr_buf_release_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_t 
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("JFR WR buf release failed: count = %u, limit = %u",
-            count, BONDP_BATCH_POST_MAX_NUM);
+                     count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {
