@@ -7557,6 +7557,26 @@
             ]
           }
         ]
+      },
+      {
+        "node_labels": [
+          "type:l2_sw"
+        ],
+        "policies": [
+          {
+            "dst_node_labels": [
+              "type:npu"
+            ],
+            "dst_address_types": [
+              "Port",
+              "PG"
+            ],
+            "dst_addresses": [],
+            "path_types": [
+              "Shortest"
+            ]
+          }
+        ]
       }
     ],
     "port_fwd_policies": [
