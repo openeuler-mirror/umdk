@@ -4,11 +4,12 @@
  * Description: Bond provider health check declarations
  */
 
-#ifndef BONDP_HEALTH_H
-#define BONDP_HEALTH_H
+#ifndef BONDP_DP_HEALTH_H
+#define BONDP_DP_HEALTH_H
 
 #include <stdbool.h>
 #include <stdint.h>
+
 #include "urma_types.h"
 
 #ifdef __cplusplus
@@ -73,4 +74,4 @@ void bondp_hc_tjetty_sync_valid(const struct bondp_target_jetty *bdp_tjetty,
 }
 #endif
 
-#endif // BONDP_HEALTH_H
+#endif // BONDP_DP_HEALTH_H

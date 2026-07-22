@@ -7,8 +7,8 @@
  * History: 2026-07-21  Create file
  */
 
-#ifndef BONDP_DP_INT_H
-#define BONDP_DP_INT_H
+#ifndef BONDP_DP_INTERRUPT_H
+#define BONDP_DP_INTERRUPT_H
 
 #include "urma_types.h"
 
@@ -30,4 +30,4 @@ void bondp_ack_async_event(urma_async_event_t *event);
 }
 #endif
 
-#endif // BONDP_DP_INT_H
+#endif // BONDP_DP_INTERRUPT_H

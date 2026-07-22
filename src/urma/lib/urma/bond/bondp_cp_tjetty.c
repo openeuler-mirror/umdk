@@ -17,7 +17,7 @@
 #include "urma_cmd.h"
 #include "urma_log.h"
 
-#include "bondp_health.h"
+#include "bondp_dp_health.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
 #include "urma_ubagg.h"
