@@ -818,9 +818,7 @@ int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info)
     fc->remote_rx_depth = queue_info->rx_depth;
     fc->remote_tx_depth = queue_info->tx_depth;
     if (bind_info->fc_info != NULL && bind_info->fc_info->initial_credit > 0) {
-        fc->remote_rx_window = bind_info->fc_info->initial_credit;
-    } else {
-        fc->remote_rx_window = 0;
+        umq_ub_credit_received_inc(fc, bind_info->fc_info->initial_credit);
     }
     return UMQ_SUCCESS;
 }
@@ -1052,7 +1050,7 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     * Therefore, an increment of 1 is required.
     */
     fc->credits_per_request = umq_ub_flow_control_threashold_modify((uint16_t)new_request, fc->peer_ratio) + 1;
-    umq_ub_window_inc(fc, reply_credits);
+    umq_ub_credit_received_inc(fc, reply_credits);
     return;
 }
 
