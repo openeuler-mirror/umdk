@@ -48,22 +48,57 @@ typedef enum uvs_cmd_get_topo_type {
     GET_TOPO_OUT_NUM /* Only for calculating number of types */
 } uvs_cmd_get_topo_type_t;
 
-typedef enum uvs_cmd_get_route_list_type {
-    GET_ROUTE_LIST_IN_ROUTE_PAIR,
-    GET_ROUTE_LIST_IN_NUM,
-    GET_ROUTE_LIST_OUT_ROUTE_LIST = UVS_CMD_OUT_TYPE_INIT,
-    GET_ROUTE_LIST_OUT_NUM
-} uvs_cmd_get_route_list_type_t;
 
 typedef enum uvs_cmd_set_path_set_type {
     GET_PATH_SET_IN_SRC_BONDING_EID,
     GET_PATH_SET_IN_DST_BONDING_EID,
     GET_PATH_SET_IN_TP_TYPE,
-    GET_PATH_SET_IN_MULTI_PATH,
+    GET_PATH_SET_IN_IODIE_LEVEL,
     GET_PATH_SET_IN_NUM,
-    GET_PATH_LIST_OUT_PATH_SET = UVS_CMD_OUT_TYPE_INIT,
+    GET_PATH_SET_OUT_PATH_SET_TOPO_TYPE = UVS_CMD_OUT_TYPE_INIT,
+    GET_PATH_SET_OUT_PATH_SET_SRC_NODE,
+    GET_PATH_SET_OUT_PATH_SET_DST_NODE,
+    GET_PATH_SET_OUT_PATH_SET_CHIP_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_DIE_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_PATH_COUNT,
+    GET_PATH_SET_OUT_PATH_SET_PATHS,
     GET_PATH_SET_OUT_NUM
 } uvs_cmd_set_path_set_type_t;
+
+typedef enum uvs_cmd_insert_main_ue_eid_type {
+    INSERT_MAIN_UE_EID_IN_ENTRY_EID,
+    INSERT_MAIN_UE_EID_IN_ENTRY_MAIN_UE_EID,
+    INSERT_MAIN_UE_EID_IN_NUM
+} uvs_cmd_insert_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_delete_main_ue_eid_type {
+    DELETE_MAIN_UE_EID_IN_EID,
+    DELETE_MAIN_UE_EID_IN_NUM
+} uvs_cmd_delete_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_lookup_main_ue_eid_type {
+    LOOKUP_MAIN_UE_EID_IN_EID,
+    LOOKUP_MAIN_UE_EID_IN_NUM,
+    LOOKUP_MAIN_UE_EID_OUT_MAIN_UE_EID = UVS_CMD_OUT_TYPE_INIT,
+    LOOKUP_MAIN_UE_EID_OUT_NUM
+} uvs_cmd_lookup_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_flush_main_ue_eid_type {
+    FLUSH_MAIN_UE_EID_OUT_STATUS = UVS_CMD_OUT_TYPE_INIT,
+    FLUSH_MAIN_UE_EID_OUT_NUM
+} uvs_cmd_flush_main_ue_eid_type_t;
+
+typedef enum uvs_cmd_insert_main_ue_eid_batch_type {
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_MAIN_UE_EID,
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_EID_NUM,
+    INSERT_MAIN_UE_EID_BATCH_IN_ENTRY_EIDS,
+    INSERT_MAIN_UE_EID_BATCH_IN_NUM
+} uvs_cmd_insert_main_ue_eid_batch_type_t;
+
+typedef enum uvs_cmd_insert_host_eid_batch_type {
+    INSERT_HOST_EID_BATCH_IN_ENTRY,
+    INSERT_HOST_EID_BATCH_IN_NUM
+} uvs_cmd_insert_host_eid_batch_type_t;
 
 #ifdef __cplusplus
 }

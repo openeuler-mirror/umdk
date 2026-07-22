@@ -18,11 +18,10 @@
 #include "perftest_parameters.h"
 #include "ub_get_clock.h"
 
-#define PERFTEST_BUF_NUM (2)
+#define PERFTEST_BUF_NUM     (2)
 #define PERFTEST_MAX_BUF_LEN (1UL << PERFTEST_SIZE_ORDER)
 
-#define PERFTEST_ALIGN_CACHELINE(size, cache_line_size) (((size) > (cache_line_size)) ? \
-    ROUND_UP((size), (cache_line_size)) : (cache_line_size))
+#define PERFTEST_ALIGN_CACHELINE(size, cache_line_size) (((size) > (cache_line_size)) ? ROUND_UP((size), (cache_line_size)) : (cache_line_size))
 
 typedef enum duration_states {
     WARMUP_STATE,
@@ -48,12 +47,25 @@ typedef struct run_test_ctx {
     volatile duration_states_t state;
     uint64_t rid;
     uint64_t *tposted;    // cycles
-    uint64_t *tcompleted;  // cycles
+    uint64_t *tcompleted; // cycles
     int rposted;
     uint64_t *scnt;
     uint64_t *ccnt;
     urma_jfs_wr_t *jfs_wr;
     urma_jfr_wr_t *jfr_wr;
+
+    /*           post_list
+      +--------------+--------------+--------------+ jetty0
+      | remote_sge   | remote_sge   | remote_sge   |
+      +--------------+--------------+--------------+
+      | local_sge    | local_sge    | local_sge    |
+      +--------------+--------------+--------------+
+      +--------------+--------------+--------------+ jetty1
+      | remote_sge   | remote_sge   | remote_sge   |
+      +--------------+--------------+--------------+
+      | local_sge    | local_sge    | local_sge    |
+      +--------------+--------------+--------------+
+    */
     urma_sge_t *jfs_sge;
     urma_sge_t *jfr_sge;
     uint64_t *rx_buf_addr;
@@ -84,12 +96,15 @@ typedef struct perftest_context {
     uint64_t page_size;
     void **local_buf;
     uint64_t buf_size;
-    uint64_t buf_len;     // buf_len = buf_size * PERFTEST_BUF_NUM
+    uint64_t buf_len; // buf_len = buf_size * PERFTEST_BUF_NUM
     urma_target_seg_t **local_tseg;
+    uint64_t sum_size;
 
     // remote info
     urma_seg_t *remote_seg;
     urma_jetty_id_t *remote_jetty_id;
+    urma_rjetty_t **remote_rjetty;
+    urma_seg_t **remote_seg_duplex;
     perftest_tp_info_t *local_tp_info;
     perftest_tp_info_t *remote_tp_info;
 
@@ -111,6 +126,14 @@ typedef struct perftest_context {
     urma_seg_t *remote_credit_seg;
     urma_target_seg_t **import_credit_seg;
 
+    // write notify
+    uint64_t *notify_buf;
+    urma_target_seg_t *notify_seg;
+    urma_token_id_t *notify_token_id;
+    urma_seg_t *remote_notify_seg;
+    uint32_t remote_jetty_idx;
+    urma_target_seg_t **import_notify_seg; // be processed for different remote seg
+
     /* user tp */
     user_tp_ctx_t *user_tp;
     user_tp_ctx_t *remote_user_tp;
@@ -128,7 +151,7 @@ typedef struct perftest_thread_arg {
 
 /* calculate sge addr offset and step forward. */
 static inline void increase_loc_addr(urma_sge_t *sge, uint32_t size, uint64_t rcnt, uint64_t prim_addr,
-    uint32_t cache_line_size, uint64_t page_size)
+                                     uint32_t cache_line_size, uint64_t page_size)
 {
     sge->addr += PERFTEST_ALIGN_CACHELINE(size, cache_line_size);
     /* if sge addr reaches the end of cycle buffer, it returns to primary address. */
@@ -139,6 +162,8 @@ static inline void increase_loc_addr(urma_sge_t *sge, uint32_t size, uint64_t rc
 
 int create_ctx(perftest_context_t *ctx, perftest_config_t *cfg);
 void destroy_ctx(perftest_context_t *ctx, perftest_config_t *cfg);
+int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg);
+int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg);
 
 /* Warm_up function is only available for READ/WRITE/ATOMIC bw test. */
 int perform_warm_up(perftest_context_t *ctx, perftest_config_t *cfg);

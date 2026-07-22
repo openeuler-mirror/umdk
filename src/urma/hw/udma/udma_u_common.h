@@ -24,6 +24,7 @@
 #include "udma_u_abi.h"
 #include "udma_u_log.h"
 
+#define UDMA_WQE_LOCK_BUFFER_JETTY_IDX 4096
 #define UDMA_JFS_WQEBB 64
 #define UDMA_JFR_WQEBB 16U
 #define UDMA_MIN_JFS_WQEBB_CNT 64
@@ -35,6 +36,8 @@
 #define UDMA_BITS_PER_LONG_SHIFT 6
 #define UDMA_JFS_WQEBB_SHIFT 6
 #define UDMA_SGE_SIZE 16
+#define UDMA_CCU_SQE_BB_CNT 2
+#define SQE_VA_L_OFFSET 12U
 
 #define UDMA_JFC_DB_OFFSET 0
 #define UDMA_MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -78,6 +81,10 @@ struct udma_u_hugepage {
 	struct udma_u_hugepage_priv *priv;
 };
 
+typedef int (*dtu_u_mmap_func)(uint64_t va_base, uint64_t va_size, void **dtu_va,
+		uint32_t *dtu_va_refcount);
+typedef void (*dtu_u_munmap_func)(void **g_dtu_va, uint64_t va_size, uint32_t *dtu_va_refcount);
+
 /* 32 */
 #define UDMA_JETTY_TABLE_NUM 1 << 5
 
@@ -97,7 +104,18 @@ struct udma_u_context {
 	bool			dump_aux_info;
 	uint32_t		jfr_sge;
 	bool			sq_reserved;
+	bool			st64b_en;
+	bool			lock_buffer_en;
+	bool			ccu_jfc_property_en;
+	uint8_t 		lock_buf_bb_shift;
+	bool			dtu_enable;
+	uint64_t		dtu_va_base;
+	uint64_t		dtu_va_size;
+	dtu_u_mmap_func		dtu_mmap_fun_ptr;
+	dtu_u_munmap_func	dtu_munmap_fun_ptr;
+	void			*dtu_provider_handle;
 	bool			sva_sep_mode_en;
+	bool			atomic_add_en;
 	uint32_t		ccu_jetty_start_id;
 	uint32_t		ccu_jetty_max_cnt;
 	bool			hugepage_enable;
@@ -149,6 +167,10 @@ struct udma_u_jetty_queue {
 	uint8_t db_status;
 	bool need_ring_db;
 	bool pi_type;
+	bool dtu_en;
+	uint32_t aligned_size;
+	bool is_jetty;
+	bool is_wqe_lock_buf_jetty;
 };
 
 struct udma_wqe_sge {
@@ -198,9 +220,11 @@ struct udma_u_jfc {
 	urma_jfc_t base;
 	struct udma_u_jetty_queue cq;
 	uint32_t *sw_db;
+	bool db_cstm;
 	uint32_t arm_sn;
 	uint32_t mode;
 	uint32_t cq_shift;
+	uint32_t ccu_flag;
 };
 
 struct udma_u_tid {

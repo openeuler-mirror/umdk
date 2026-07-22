@@ -20,9 +20,8 @@
 #include "umq_example_common.h"
 
 static const uint32_t EXAMPLE_MAX_POLL_BATCH = 64;
-static const uint32_t EXAMPLE_REQUEST_SIZE = 8192;
 static const uint32_t SOCKET_SEND_RECV_TIMEOUT = 5;
-static const uint32_t EXAMPLE_BUFFER_SIZE = 8192;
+static const uint32_t EXAMPLE_BUFFER_SIZE = 4096;
 static const uint32_t EXAMPLE_DEPTH = 128;
 
 typedef struct exchange_info {
@@ -55,8 +54,6 @@ static struct option g_long_options[] = {
     /* Long options only */
     {"server",             no_argument,       NULL, 'r'},
     {"client",             no_argument,       NULL, 'l'},
-    {"cna",                required_argument, NULL, 'C'},
-    {"deid",               required_argument, NULL, 'D'},
     {"tp-mode",            required_argument, NULL, 'M'},
     {"tp-type",            required_argument, NULL, 'P'},
     {"queue_cnt",          required_argument, NULL, 'q'},
@@ -74,8 +71,6 @@ int example_init_umq(struct urpc_example_config *cfg)
         return -1;
     }
     init_cfg->feature = cfg->feature;
-    init_cfg->cna = cfg->cna;
-    init_cfg->ubmm_eid = cfg->deid;
 
     if (parse_trans_info(cfg, init_cfg) != 0) {
         free(init_cfg);
@@ -112,12 +107,12 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
     if (cfg->instance_mode == SERVER) {
         if (sprintf(option.name, "%s", "server") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            return -1;
+            return UMQ_INVALID_HANDLE;
         }
     } else {
         if (sprintf(option.name, "%s", "client") <= 0) {
             LOG_PRINT_ERR("set name failed\n");
-            return -1;
+            return UMQ_INVALID_HANDLE;
         }
     }
 
@@ -131,7 +126,7 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
     uint64_t umqh = umq_create(&option);
     if (umqh == UMQ_INVALID_HANDLE) {
         LOG_PRINT_ERR("umq_create failed\n");
-        return -1;
+        return UMQ_INVALID_HANDLE;
     }
 
     *bind_info_size = umq_bind_info_get(umqh, local_bind_info, *bind_info_size);
@@ -258,7 +253,7 @@ int client_connect(const char *ip, uint16_t port)
         LOG_PRINT_ERR("ip[%s] not valid\n", ip);
         goto CLOSE_SOC;
     }
-    if (connect(client_fd, (struct sockaddr*)&server, sizeof(server)) != 0) {
+    if (connect(client_fd, (struct sockaddr*)(uintptr_t)&server, sizeof(server)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] connect failed\n", ip, port);
         goto CLOSE_SOC;
     }
@@ -327,7 +322,7 @@ int server_accept(const char *ip, uint16_t port)
         goto CLOSE_SVR;
     }
 
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    if (bind(server_fd, (struct sockaddr*)(uintptr_t)&addr, sizeof(addr)) != 0) {
         LOG_PRINT_ERR("ip[%s] port[%u] bind failed\n", ip, port);
         goto CLOSE_SVR;
     }
@@ -394,15 +389,19 @@ int parse_trans_info(struct urpc_example_config *cfg, umq_init_cfg_t *init_cfg)
 
 int example_post_rx(uint64_t umqh, uint32_t depth)
 {
-    uint32_t request_size = EXAMPLE_REQUEST_SIZE;
+    uint32_t request_size = EXAMPLE_BUFFER_SIZE;
     umq_buf_t *buf = umq_buf_alloc(request_size, depth, umqh, NULL);
     if (buf == NULL) {
         LOG_PRINT_ERR("alloc buf failed\n");
         return -1;
     }
 
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
+
     umq_buf_t *bad_buf = NULL;
-    if (umq_post(umqh, buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+    if (umq_post(umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
         LOG_PRINT_ERR("post rx failed\n");
         umq_buf_free(bad_buf);
         return -1;
@@ -420,8 +419,12 @@ int example_poll_rx(uint64_t umqh, const char *check_data, uint32_t data_size, b
     int ret = 0;
 
     uint64_t start = get_timestamp_ms();
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
+
     while (ret == 0 && get_timestamp_ms() - start < EXAMPLE_MAX_WAIT_TIME_MS) {
-        ret = umq_poll(umqh, UMQ_IO_RX, buf, EXAMPLE_MAX_POLL_BATCH);
+        ret = umq_poll(umqh, &io_rx_option, buf, EXAMPLE_MAX_POLL_BATCH);
         usleep(EXAMPLE_SLEEP_TIME_US);
     }
 
@@ -474,7 +477,11 @@ int example_post_tx(uint64_t umqh, const char *data, uint32_t data_size)
     pro->flag.bs.complete_enable = 1;
     pro->opcode = UMQ_OPC_SEND_IMM;
     umq_buf_t *bad_buf = NULL;
-    if (umq_post(umqh, buf, UMQ_IO_TX, &bad_buf) != UMQ_SUCCESS) {
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+
+    if (umq_post(umqh, buf, &io_tx_option, &bad_buf) != UMQ_SUCCESS) {
         umq_buf_free(bad_buf);
         LOG_PRINT_ERR("post tx failed\n");
         return -1;
@@ -489,7 +496,12 @@ int example_poll_tx(uint64_t umqh)
     if (buf == NULL) {
         return -1;
     }
-    int ret = umq_poll(umqh, UMQ_IO_TX, buf, EXAMPLE_MAX_POLL_BATCH);
+
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+
+    int ret = umq_poll(umqh, &io_tx_option, buf, EXAMPLE_MAX_POLL_BATCH);
     if (ret <= 0) {
         free(buf);
         return -1;
@@ -565,9 +577,13 @@ void example_flush(uint64_t umqh)
     umq_buf_t *buf[EXAMPLE_MAX_POLL_BATCH];
     int ret = 0;
 
+    umq_io_option_t io_all_option = {
+        .io_direction = UMQ_IO_ALL,
+    };
+
     uint64_t start = get_timestamp_ms();
     while (get_timestamp_ms() - start < EXAMPLE_FLUSH_TIME_MS) {
-        ret = umq_poll(umqh, UMQ_IO_ALL, buf, EXAMPLE_MAX_POLL_BATCH);
+        ret = umq_poll(umqh, &io_all_option, buf, EXAMPLE_MAX_POLL_BATCH);
         if (ret > 0) {
             LOG_PRINT("example flush rx count: %d\n", ret);
             for (int i = 0; i < ret; i++) {
@@ -628,7 +644,7 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
         int c;
         unsigned long param;
 
-        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:D:M:P:", g_long_options, NULL);
+        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:M:P:", g_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -688,12 +704,6 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
             case 'E':
                 param = strtoul(optarg, NULL, 0);
                 cfg->eid_idx = (uint16_t)param;
-                break;
-            case 'C':
-                cfg->cna = (uint16_t)strtoul(optarg, NULL, 0);
-                break;
-            case 'D':
-                cfg->deid = (uint32_t)strtoul(optarg, NULL, 0);
                 break;
             case 'M':
                 param = (uint32_t)strtoul(optarg, NULL, 0);

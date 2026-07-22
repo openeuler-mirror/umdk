@@ -1651,7 +1651,7 @@ PROTO_ERR:
 
 static int poll_queue_notify_msg(queue_t *queue, urpc_poll_msg_t *msgs, int num)
 {
-    if (URPC_LIKELY(!is_feature_enable(URPC_FEATURE_TIMEOUT) || is_manager_queue(queue->flag))) {
+    if (URPC_LIKELY(!is_feature_enable(URPC_FEATURE_TIMEOUT) || is_manager_queue(&queue->flag))) {
         return 0;
     }
 

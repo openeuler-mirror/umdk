@@ -56,31 +56,36 @@ static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
 
 int str_to_eid(const char *buf, urma_eid_t *eid)
 {
-    int ret;
+    bool parsed = false;
     uint32_t ipv4;
+
     if (buf == NULL || eid == NULL) {
         return -EINVAL;
     }
 
     // ipv6 addr
     if (inet_pton(AF_INET6, buf, eid) > 0) {
-        return 0;
+        parsed = true;
     }
 
     // ipv4 addr: xx.xx.xx.xx
-    if (inet_pton(AF_INET, buf, &ipv4) > 0) {
+    if (!parsed && inet_pton(AF_INET, buf, &ipv4) > 0) {
         ipv4_map_to_eid(be32toh(ipv4), eid);
-        return 0;
+        parsed = true;
     }
 
     // ipv4 value: 0x12345  or abcdef or 12345
-    ret = str_to_u32(buf, &ipv4);
-    if (ret == 0) {
+    if (!parsed && str_to_u32(buf, &ipv4) == 0) {
         ipv4_map_to_eid(ipv4, eid);
-        return 0;
+        parsed = true;
     }
 
-    return -EINVAL;
+    if (!parsed) {
+        return -EINVAL;
+    }
+
+    const urma_eid_t zero_eid = {0};
+    return memcmp(eid, &zero_eid, sizeof(zero_eid)) == 0 ? -EINVAL : 0;
 }
 
 void version()
@@ -94,11 +99,12 @@ void usage(const char *filename)
               "  urma_ping [option] <destination>\n"
               "\n"
               "Options:\n"
-              "  <destination>    Primary eid or bonding eid\n"
+              "  <destination>    Primary EID or bonding EID\n"
               "  -c <count>       Packet count (default: INT_MAX)\n"
+              "  -I <eid>         Local primary EID used to ping\n"
               "  -i <interval>    Interval between packets in seconds (default: 1)\n"
               "  -s <size>        Send buffer size in bytes (default: 4)\n"
-              "  -w <deadline>    Total execution time limit in seconds (default: umlimited)\n"
+              "  -w <deadline>    Total execution time limit in seconds (default: unlimited)\n"
               "  -W <timeout>     Per-reply timeout in seconds (default: 1)\n"
               "  -q               Quiet output\n"
               "  -v --verbose     Verbose output\n"
@@ -116,10 +122,14 @@ int parse_args(ping_cfg_t *cfg)
     };
 
     int opt, ret = 0;
-    while ((opt = getopt_long(cfg->argc, cfg->argv, "c:i:s:qw:W:ShVv", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(cfg->argc, cfg->argv, ":c:I:i:s:qw:W:ShVv", long_options, NULL)) != -1) {
         switch (opt) {
             case 'c':
                 ret = str_to_u32(optarg, &cfg->count);
+                break;
+            case 'I':
+                ret = str_to_eid(optarg, &cfg->src_eid);
+                cfg->has_src_eid = (ret == 0);
                 break;
             case 'i':
                 ret = str_to_u32(optarg, &cfg->interval);
@@ -146,29 +156,28 @@ int parse_args(ping_cfg_t *cfg)
                 version();
                 return -EINVAL;
             case ':':
-                LOG_ERROR("Option -%c requires an argument\n", optopt);
+                LOG_ERROR("Missing argument for option -%c\n", optopt);
                 return -EINVAL;
             default:
-                LOG_ERROR("Unknown option\n");
+                LOG_ERROR("Unknown option %s\n", cfg->argv[optind - 1]);
                 usage(cfg->filename);
                 return -EINVAL;
         }
         if (ret != 0) {
-            const int option_offset = 2;
-            LOG_ERROR("Invalid option %s\n", cfg->argv[optind - option_offset]);
+            LOG_ERROR("Invalid value for -%c: %s\n", opt, optarg);
             return -EINVAL;
         }
     }
 
     if (optind >= cfg->argc) {
-        LOG_ERROR("Destination is required\n");
+        LOG_ERROR("Destination EID is required\n");
         usage(cfg->filename);
         return -EINVAL;
     }
 
-    ret = str_to_eid(cfg->argv[optind], &cfg->dest);
+    ret = str_to_eid(cfg->argv[optind], &cfg->dst_eid);
     if (ret != 0) {
-        LOG_ERROR("Invalid dest eid %s\n", cfg->argv[optind]);
+        LOG_ERROR("Invalid destination EID: %s\n", cfg->argv[optind]);
         return -EINVAL;
     }
     return 0;

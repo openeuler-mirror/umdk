@@ -21,6 +21,7 @@ extern "C" {
 #define UMQ_LOG_FLAG_FUNC              (1U)
 #define UMQ_LOG_FLAG_LEVEL             (1U << 1)
 #define UMQ_LOG_FLAG_RATE_LIMITED      (1U << 2)
+#define UMQ_LOG_FLAG_EXT_FUNC          (1U << 3)
 
 typedef enum umq_external_mutex_attr {
     MUTEX_ATTR_EXCLUSIVE = 0,
@@ -49,6 +50,15 @@ typedef struct umq_external_rw_lock_ops {
     int (*try_write_lock)(umq_external_rwlock_t *m);
 } umq_external_rwlock_ops_t;
 
+typedef void* util_external_thread_key_t;
+
+typedef struct umq_external_thread_key_ops {
+    util_external_thread_key_t *(*key_create)(void (*destr_function)(void *data));
+    int (*key_delete)(util_external_thread_key_t *key);
+    int (*setspecific)(util_external_thread_key_t *key, const void *data);
+    void *(*getspecific)(util_external_thread_key_t *key);
+} umq_external_thread_key_ops_t;
+
 typedef enum umq_log_level {
     UMQ_LOG_LEVEL_EMERG = 0,
     UMQ_LOG_LEVEL_ALERT,
@@ -62,10 +72,12 @@ typedef enum umq_log_level {
 } umq_log_level_t;
 
 typedef void (*umq_log_func_t)(int level, char *log_msg);
+typedef void (*umq_log_ext_func_t)(int level, const char *file, const char *function, int line, char *log_msg);
 
 typedef struct umq_log_config {
     uint32_t log_flag;
     umq_log_func_t func;
+    umq_log_ext_func_t ext_func;
     umq_log_level_t level;
     struct {
         uint32_t interval_ms;    // rate-limited log output interval. If the value is 0, rate is not limited.
@@ -86,8 +98,9 @@ typedef enum umq_io_direction {
 } umq_io_direction_t;
 
 typedef enum umq_fd_type {
-    UMQ_FD_IO = 0,      // get the fd related to I/O
-    UMQ_FD_EVENT,       // get the fd related to inner event, example return credit event
+    UMQ_FD_IO = 0,          // get the fd related to I/O
+    UMQ_FD_EVENT,           // get the fd related to inner event, example return credit event
+    UMQ_FD_RETRY,           // get the fd related to inner event, reprocess flow control messages
 } umq_fd_type_t;
 
 typedef enum umq_queue_mode {
@@ -135,15 +148,26 @@ typedef enum umq_dev_assign_mode {
 #define UMQ_IPV4_SIZE                (16)
 #define UMQ_IPV6_SIZE                (46)
 #define UMQ_DEV_NAME_SIZE            (64)
-#define UMQ_BATCH_SIZE               (64)
+#define UMQ_BATCH_SIZE               (256)
 #define UMQ_MAX_BUF_REQUEST_SIZE     (10485760) // 10M
 
 #define UMQ_INTERRUPT_FLAG_IO_DIRECTION         (1)         // enable arg direction
+#define UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX        (1 << 1)    // enable arg tp_handle_idx
+#define UMQ_INTERRUPT_FLAG_TAG_TIMESTAMP        (1 << 2)    // enable arg tag timestamp
+
+#define UMQ_INTERRUPT_FD_LIST_LEN 20
+
+typedef struct umq_interrupt_fd_list {
+    int fd[UMQ_INTERRUPT_FD_LIST_LEN];
+    uint32_t fd_num;
+} umq_interrupt_fd_list_t;
 
 typedef struct umq_interrupt_option {
     uint32_t flag;                      // indicates which below property takes effect
     umq_io_direction_t direction;
     umq_fd_type_t fd_type;
+    uint32_t tp_handle_idx;
+    uint64_t tag_timestamp;
 } umq_interrupt_option_t;
 
 typedef union umq_eid {
@@ -178,17 +202,9 @@ typedef struct umq_dev_assign {
     };
 } umq_dev_assign_t;
 
-typedef struct umq_memory_cfg {
-    // Total size will be malloced for umq buf pool, user should ensure the system has enough available memory,
-    // set to 1024MB if total_size == 0 in UB/UB_PLUS/UBMM/UBMM_PLUS mode, these modes share same total_size config.
-    // And total_size config is not used in IPC mode for now.
-    uint64_t total_size;
-} umq_memory_cfg_t;
-
 typedef struct umq_trans_info {
     umq_trans_mode_t trans_mode;
     umq_dev_assign_t dev_info;
-    umq_memory_cfg_t mem_cfg;
 } umq_trans_info_t;
 
 #define MAX_UMQ_TRANS_INFO_NUM (128)
@@ -215,11 +231,19 @@ typedef struct umq_flow_control_cfg {
     uint16_t min_reserved_credit;
     // timeout duration, if no I/O is sent within timeout_ms, the system notifies the user to return credit
     uint32_t timeout_ms;
+    // accumulated replenish credit threshold to trigger pending queue processing, 0 means disabled
+    uint16_t pending_credit_threshold;
     // use atomic variables as flow control window
     bool use_atomic_window;
+    bool is_limited;
+    // flow control credit req rsp timeout in ms. <0 (e.g. -1) means never timeout, 0 means use default(1s),
+    // positive value is clamped to max 60000(60s). When the peer is stuck/dead and the credit rsp never returns
+    // within this duration, post_tx breaks the link.
+    int32_t fc_req_timeout_ms;
 } umq_flow_control_cfg_t;
 
 typedef enum umq_buf_block_size {
+    BLOCK_SIZE_4K,
     BLOCK_SIZE_8K,
     BLOCK_SIZE_16K,
     BLOCK_SIZE_32K,
@@ -228,13 +252,32 @@ typedef enum umq_buf_block_size {
     BLOCK_SIZE_MAX,
 } umq_buf_block_size_t;
 
-typedef struct umq_buf_block_cfg {
-    // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automically
-    // adjusted
-    umq_buf_block_size_t small_block_size;
-} umq_buf_block_cfg_t;
+typedef enum umq_tiny_buf_block_size {
+    TINY_BLOCK_SIZE_512,
+    TINY_BLOCK_SIZE_1K,
+    TINY_BLOCK_SIZE_2K,
+    TINY_BLOCK_SIZE_4K,
+    TINY_BLOCK_SIZE_8K,
+    TINY_BLOCK_SIZE_MAX,
+} umq_tiny_buf_block_size_t;
+
+typedef enum umq_alloc_pool_type {
+    UMQ_ALLOC_POOL_NORMAL = 0,
+    UMQ_ALLOC_POOL_TINY = 1,
+    UMQ_ALLOC_POOL_HUGE = 2,
+    UMQ_ALLOC_POOL_ESCAPE = 3,
+    UMQ_ALLOC_POOL_AUTO = 4,
+    UMQ_ALLOC_POOL_MAX,
+} umq_alloc_pool_type_t;
 
 typedef struct umq_buf_pool_cfg {
+    // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automatically
+    // adjusted
+    umq_buf_block_size_t small_block_size;
+    // Total initial size of normal and tiny pools. Set to 1024MB if 0 in UB/UB_PLUS mode.
+    uint64_t umq_mem_pool_init_size;
+    // Minimum initial normal-pool block count. 0 means no validation.
+    uint32_t normal_pool_block_count;
     // global pool
     uint32_t expansion_block_count;  // number of blocks per expansion, default 8K
     uint64_t umq_buf_pool_max_size; // maximum memory allowed for umq buf pool, default 2G
@@ -245,20 +288,30 @@ typedef struct umq_buf_pool_cfg {
     bool disable_scale_cap; // expansion and shrink switch
     // escape
     bool disable_malloc_escape; // disable the escape mechanism
+    // tiny pool
+    bool enable_tiny_pool;
+    umq_tiny_buf_block_size_t tiny_pool_block_size;
+    uint32_t tiny_pool_block_count;
+    uint64_t tls_tiny_pool_depth;
+    uint64_t tls_expand_tiny_pool_depth;
 } umq_buf_pool_cfg_t;
+
+typedef struct umq_tp_pool_cfg {
+    uint32_t notify_threshold;     // Eventfd notify threshold (0 means use default 16)
+} umq_tp_pool_cfg_t;
 
 typedef struct umq_init_cfg {
     umq_buf_mode_t buf_mode;
     uint32_t feature;               // feature flags
     uint16_t headroom_size;         // header size of umq buffer, [0, UMQ_HEADROOM_SIZE_LIMIT]
-    bool io_lock_free;              // true: user should ensure thread safety when call io function
+    uint8_t io_lock_free : 1;       // true: user should ensure thread safety when call io function
+    uint8_t rq_lock_free : 1;       // true: user should ensure thread safety when call umq_poll in RX direction
+    uint8_t rsvd : 6;
     uint8_t trans_info_num;
     umq_flow_control_cfg_t flow_control; // used when UMQ_FEATURE_ENABLE_FLOW_CONTROL is set
-    umq_buf_block_cfg_t block_cfg;
-    uint16_t cna;
-    uint32_t ubmm_eid;
     umq_trans_info_t trans_info[MAX_UMQ_TRANS_INFO_NUM];
     umq_buf_pool_cfg_t buf_pool_cfg;
+    umq_tp_pool_cfg_t tp_pool_cfg;
 } umq_init_cfg_t;
 
 typedef union umq_port_id {
@@ -294,6 +347,7 @@ typedef struct umq_used_ports {
 #define UMQ_CREATE_FLAG_MAIN_UMQ            (1 << 11)       // indicate that the umq creates shared jfr
 #define UMQ_CREATE_FLAG_SUB_UMQ             (1 << 12)       // indicate that the umq uses shared jfr from main queue,
                                                             // associated with UMQ_CREATE_FLAG_SHARE_RQ
+#define UMQ_CREATE_FLAG_SHARE_TRANSPORT     (1 << 13)      // jetty pool mode: creates shared jetty pool
 
 typedef struct umq_create_option {
     /*************Required paramenters start*****************/
@@ -368,10 +422,12 @@ struct umq_buf {
 };
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE         (1)             // enable arg headroom_size
+#define UMQ_ALLOC_FLAG_POOL_TYPE              (2)             // enable arg pool_type
 
 typedef struct umq_alloc_option {
     uint32_t flag;                          // indicates which below property takes effect
     uint16_t headroom_size;
+    umq_alloc_pool_type_t pool_type;
 } umq_alloc_option_t;
 
 typedef enum umq_dfx_module_id {
@@ -615,6 +671,24 @@ typedef struct umq_cfg_get {
     umq_tp_type_t tp_type;        // tp_type of queue
     umq_tp_mode_t tp_mode;        // transport mode of queue
 } umq_cfg_get_t;
+
+#define UMQ_IO_OPTION_FLAG_DIRECTION        (1)         // enable io_direction
+#define UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX    (1 << 1)    // enable tp_handle_idx
+#define UMQ_IO_OPTION_FLAG_TAG_TIMESTAMP    (1 << 2)    // enable tag timestamp
+
+typedef struct umq_io_option {
+    uint32_t flag;                      // indicates which below property takes effect
+    umq_io_direction_t io_direction;
+    uint32_t tp_handle_idx;
+    uint64_t tag_timestamp;
+} umq_io_option_t;
+
+#define UMQ_TP_CREATE_FLAG_USED_PORTS          (1)        // enable arg used ports when create transport pool resource
+
+typedef struct umq_tp_resource_create_option {
+    uint32_t create_flag;
+    umq_used_ports_t used_ports;
+} umq_tp_resource_create_option_t;
 
 #ifdef __cplusplus
 }

@@ -47,7 +47,7 @@ int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 	for (i = 0; i < bitmap_cnt && bitmap[i] == 0; ++i)
 		;
 	if (i == bitmap_cnt) {
-		UDMA_LOG_ERR("all bitmaps have been used! bitmap_cnt = %u\n",
+		UDMA_LOG_ERR("all bitmaps have been used! bitmap count = %u\n",
 			     bitmap_cnt);
 		return ENOMEM;
 	}
@@ -56,7 +56,7 @@ int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 	*idx = (i << UDMA_BITS_PER_LONG_SHIFT) + bit_num - 1;
 
 	if (*idx >= n_bits) {
-		UDMA_LOG_ERR("the idx exceeds the range of the bitmap!\n");
+		UDMA_LOG_ERR("the index exceeds the range of the bitmap!\n");
 		return ENOMEM;
 	}
 
@@ -88,7 +88,7 @@ static struct udma_u_db_page *udma_add_db_page(struct udma_u_context *ctx,
 	page_size = ctx->page_size;
 	db_page = (struct udma_u_db_page *)calloc(1, sizeof(*db_page));
 	if (!db_page) {
-		UDMA_LOG_ERR("failed to calloc sw db page!\n");
+		UDMA_LOG_ERR("failed to calloc SW DB page!\n");
 		return NULL;
 	}
 

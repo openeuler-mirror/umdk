@@ -51,6 +51,11 @@ static int umq_tp_ub_stats_tp_perf_info_get(char *perf_buf, uint32_t *length)
     return umq_ub_stats_tp_perf_info_get_impl(perf_buf, length);
 }
 
+static int umq_tp_ub_stats_transport_pool_get(umq_transport_pool_stats_t *pool_stats)
+{
+    return umq_ub_transport_pool_stats_get_impl(pool_stats);
+}
+
 static umq_dfx_ops_t g_umq_ub_dfx_ops = {
     .mode = UMQ_TRANS_MODE_UB,
     .umq_tp_stats_flow_control_get = umq_tp_ub_stats_flow_control_get,
@@ -61,6 +66,7 @@ static umq_dfx_ops_t g_umq_ub_dfx_ops = {
     .umq_tp_stats_tp_perf_start = umq_tp_ub_stats_tp_perf_start,
     .umq_tp_stats_tp_perf_stop = umq_tp_ub_stats_tp_perf_stop,
     .umq_tp_stats_tp_perf_info_get = umq_tp_ub_stats_tp_perf_info_get,
+    .umq_tp_stats_transport_pool_get = umq_tp_ub_stats_transport_pool_get,
 };
 
 umq_dfx_ops_t *umq_ub_dfx_ops_get(void)

@@ -262,7 +262,6 @@ DISCONNECT:
     client_dsiconnect();
 UNINIT:
     umq_uninit();
-
     return ret;
 }
 

@@ -45,9 +45,9 @@ Usage:
 - Here are the supported use cases:
 | **device**  | **trnas_mode(m)** | **multi_path(u)**      | **tp_type(t)**             | **server command**                     | **client command**                                        |
 |-------------|-------------------|------------------------|----------------------------|----------------------------------------|-----------------------------------------------------------|
-| **bonding** | RM（0）           | TRUE                   | unsupported param,warnning | ./urma_sample -m 0 -u -d bonding_dev_0 | ./urma_sample -m 0 -u -d bonding_dev_0 -i 192.168.100.100 |
-| **bonding** | RC（1）           | TRUE                   | unsupported param,warnning | ./urma_sample -m 1 -u -d bonding_dev_0 | ./urma_sample -m 1 -u -d bonding_dev_0 -i 192.168.100.100 |
-| **bonding** | RC（1）           | FALSE                  | unsupported param,warnning | ./urma_sample -m 1 -d bonding_dev_0    | ./urma_sample -m 1 -d bonding_dev_0 -i 192.168.100.100    |
+| **bonding** | RM（0）           | TRUE                   | unsupported param,warning  | ./urma_sample -m 0 -u -d bonding_dev_0 | ./urma_sample -m 0 -u -d bonding_dev_0 -i 192.168.100.100 |
+| **bonding** | RC（1）           | TRUE                   | unsupported param,warning  | ./urma_sample -m 1 -u -d bonding_dev_0 | ./urma_sample -m 1 -u -d bonding_dev_0 -i 192.168.100.100 |
+| **bonding** | RC（1）           | FALSE                  | unsupported param,warning  | ./urma_sample -m 1 -d bonding_dev_0    | ./urma_sample -m 1 -d bonding_dev_0 -i 192.168.100.100    |
 | **udma**    | RM（0）           | unsupported param,err! | URMA_RTP(0)                | ./urma_sample -m 0 -t 0 -d udma2       | ./urma_sample -m 0 -t 0 -d udma2 -i 192.168.100.100       |
 | **udma**    | RC（1）           | unsupported param,err! | URMA_RTP(0)                | ./urma_sample -m 1 -t 0 -d udma2       | ./urma_sample -m 1 -t 0 -d udma2 -i 192.168.100.100       |
 | **udma**    | RM（0）           | unsupported param,err! | URMA_CTP(1)                | ./urma_sample -m 0 -t 1 -d udma2       | ./urma_sample -m 0 -t 1 -d udma2 -i 192.168.100.100       |

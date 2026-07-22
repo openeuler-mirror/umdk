@@ -842,7 +842,7 @@ queue_t *server_channel_search_remote_queue(uint32_t server_chid, queue_t *l_que
 }
 
 // Once the r_queue is found, the corresponding server channel is read locked until the r_queue is not used anymore.
-queue_t *server_channel_search_remote_queue_by_flag(uint32_t server_chid, urpc_queue_flag_t flag)
+queue_t *server_channel_search_remote_queue_by_flag(uint32_t server_chid, urpc_queue_flag_t *flag)
 {
     if (server_chid == URPC_INVALID_ID_U32) {
         URPC_LIB_LOG_ERR("parameter invalid\n");
@@ -858,7 +858,7 @@ queue_t *server_channel_search_remote_queue_by_flag(uint32_t server_chid, urpc_q
     queue_node_t *cur_node;
     URPC_SLIST_FOR_EACH(cur_node, &server_channel->r_queue_nodes_head, node) {
         queue_t *queue = (queue_t *)(uintptr_t)cur_node->urpc_qh;
-        if (is_queue_flag_same(queue->flag, flag)) {
+        if (is_queue_flag_same(&queue->flag, flag)) {
             if (queue->status == QUEUE_STATUS_ERR) {
                 URPC_LIB_LOG_DEBUG("queue status not ready\n");
             } else {

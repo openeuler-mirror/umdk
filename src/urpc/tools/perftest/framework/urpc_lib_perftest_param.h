@@ -38,6 +38,7 @@ typedef enum data_trans_mode {
 #define DEFAULT_LISTEN_IP_ADDR "127.0.0.1"
 #define MAX_SGE_SIZE     32
 #define EID_LENGTH       64
+#define MAX_CONCURRENT_NUM 8
 
 typedef struct perftest_framework_config {
     char path[PATH_MAX + 1];

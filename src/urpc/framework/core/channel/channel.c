@@ -1234,7 +1234,7 @@ queue_t *channel_get_remote_queue_by_handle(urpc_channel_info_t *channel, uint64
 }
 
 // only used for search one manage queue, because manage channel only has one abort queue and one keepalive queue
-queue_t *channel_get_remote_queue_by_flag(urpc_channel_info_t *channel, urpc_queue_flag_t flag)
+queue_t *channel_get_remote_queue_by_flag(urpc_channel_info_t *channel, urpc_queue_flag_t *flag)
 {
     queue_t *queue = NULL;
     queue_node_t *cur_node;
@@ -1242,7 +1242,7 @@ queue_t *channel_get_remote_queue_by_flag(urpc_channel_info_t *channel, urpc_que
     (void)pthread_rwlock_rdlock(&channel->rw_lock);
     URPC_SLIST_FOR_EACH(cur_node, &channel->r_queue_nodes_head, node) {
         queue = (queue_t *)(uintptr_t)cur_node->urpc_qh;
-        if (is_queue_flag_same(queue->flag, flag)) {
+        if (is_queue_flag_same(&queue->flag, flag)) {
             if (queue->status != QUEUE_STATUS_READY) {
                 URPC_LIB_LOG_DEBUG("queue status not ready\n");
                 queue = NULL;

@@ -29,11 +29,15 @@ extern "C" {
 #define UMQ_ERR_EINVAL                             (EINVAL)
 #define UMQ_ERR_ENODEV                             (ENODEV)
 #define UMQ_ERR_ENOSR                              (ENOSR)  /* Out of streams resources, like Jetty/TP */
+#define UMQ_ERR_EFAULT                             (EFAULT)
+#define UMQ_ERR_EMLINK                             (EMLINK)
+#define UMQ_ERR_ENOBUFS                            (ENOBUFS)
 #define UMQ_ERR_ETIMEOUT                           (ETIMEDOUT)
 #define UMQ_ERR_EINPROGRESS                        (EINPROGRESS)
 #define UMQ_ERR_ETOOMANYREFS                       (ETOOMANYREFS)
 #define UMQ_ERR_ETSEG_NON_IMPORTED                 (0x0201)
 #define UMQ_ERR_EFLOWCTL                           (0x0202)  /* Umq flow control error */
+#define UMQ_ERR_EFLOWCTL_FATAL                     (0x0203)
 
 typedef enum umq_buf_status {
     UMQ_BUF_SUCCESS = 0,
@@ -64,6 +68,8 @@ typedef enum umq_buf_status {
     UMQ_FAKE_BUF_FC_UPDATE = 192,       /* Umq fake flow control window is updated, this is not error case */
     UMQ_FAKE_BUF_FC_MSG,                /* Umq fake flow control received request, this is not error case */
     UMQ_FAKE_BUF_FC_ERR,                /* Umq fake flow control error, CR status is abnormal */
+    UMQ_FAKE_BUF_FC_EMLINK,             /* Umq fake flow control error, no available transmission resources */
+    UMQ_FAKE_BUF_FC_ERR_FATAL,          /* Umq fake flow control fatal error */
     UMQ_FAKE_BUF_MAX = 256,
 } umq_buf_status_t;
 

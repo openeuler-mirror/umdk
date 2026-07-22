@@ -37,14 +37,26 @@ typedef enum urma_core_cmd {
     URMA_CORE_CMD_ADD_EID,
     URMA_CORE_CMD_DEL_EID,
     URMA_CORE_CMD_SET_EID_MODE,
-    URMA_CORE_SET_NS_MODE,
+    URMA_CORE_SET_DEV_NS_MODE,
     URMA_CORE_SET_DEV_NS,
     URMA_CORE_EXPOSE_DEV_NS,
     URMA_CORE_UNEXPOSE_DEV_NS,
     URMA_CORE_SET_DEV_EID_NS,
     URMA_CORE_GET_TOPO_INFO,
-    URMA_CORE_GET_TOPO_BONDING_DEV = 33,
     URMA_CORE_SET_SL,
+    URMA_CORE_SET_GENL_PID,
+    URMA_CORE_ADMIN_INSERT_MAIN_UE_EID = 35,
+    URMA_CORE_ADMIN_DELETE_MAIN_UE_EID,
+    URMA_CORE_ADMIN_LOOKUP_MAIN_UE_EID,
+    URMA_CORE_ADMIN_FLUSH_MAIN_UE_EID,
+    URMA_CORE_ADMIN_INSERT_MAIN_UE_EID_BATCH,
+    URMA_CORE_PERF_START,
+    URMA_CORE_PERF_STOP,
+    URMA_CORE_PERF_SHOW,
+    URMA_CORE_SET_EID_NS_MODE,
+    URMA_CORE_SHOW_TPID_LIST,
+    URMA_CORE_SHOW_TPID_REUSE,
+    URMA_CORE_SHOW_SYSTEM,
 } urma_core_cmd_t;
 
 /* only for uburma device ioctl */
@@ -136,6 +148,7 @@ typedef enum urma_cmd {
     URMA_CMD_GET_JETTY_OPT,
     URMA_CMD_ACTIVE_JETTY,
     URMA_CMD_DEACTIVE_JETTY,
+    URMA_CMD_GET_JFCE_CNT = 85,
     URMA_CMD_MAX
 } urma_cmd_t;
 
@@ -556,7 +569,7 @@ typedef struct urma_cmd_create_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
-        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+        uint32_t ceqn;     /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                             * set to 0 by default */
     } in;
     struct {
@@ -605,7 +618,7 @@ typedef struct urma_cmd_alloc_jfc {
         uint32_t flag;
         int jfce_fd;
         uint64_t urma_jfc; /* urma jfc pointer */
-        uint32_t ceqn;     /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+        uint32_t ceqn;     /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                             * set to 0 by default */
     } in;
     struct {
@@ -1176,6 +1189,16 @@ typedef struct urma_cmd_create_notifier {
         int fd;
     } out;
 } urma_cmd_create_notifier_t;
+
+typedef struct urma_cmd_get_jfce_cnt {
+    struct {
+        uint32_t threshold;
+    } in;
+    struct {
+        uint64_t jfce_total_cnt;
+        uint64_t jfce_thresh_cnt;
+    } out;
+} urma_cmd_get_jfce_cnt_t;
 
 /* only for event ioctl */
 #define MAX_JFCE_EVENT_CNT   16

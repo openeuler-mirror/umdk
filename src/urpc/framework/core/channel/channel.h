@@ -258,7 +258,7 @@ queue_t *channel_get_next_remote_queue(urpc_channel_info_t *channel);
 queue_t *channel_get_cur_poll_queue(urpc_channel_info_t *channel);
 queue_t *channel_get_local_queue_by_handle(urpc_channel_info_t *channel, uint64_t urpc_qh);
 queue_t *channel_get_remote_queue_by_handle(urpc_channel_info_t *channel, uint64_t urpc_qh);
-queue_t *channel_get_remote_queue_by_flag(urpc_channel_info_t *channel, urpc_queue_flag_t flag);
+queue_t *channel_get_remote_queue_by_flag(urpc_channel_info_t *channel, urpc_queue_flag_t *flag);
 queue_t *channel_get_remote_queue_by_qid(urpc_channel_info_t *channel, uint32_t qid);
 
 uint32_t channel_num_get(void);
@@ -276,7 +276,7 @@ urpc_server_channel_info_t *server_channel_get_with_rw_lock(uint32_t urpc_chid, 
 int server_channel_free(uint32_t urpc_chid, bool lock_free);
 
 queue_t *server_channel_search_remote_queue(uint32_t server_chid, queue_t *l_queue, queue_t *q_src);
-queue_t *server_channel_search_remote_queue_by_flag(uint32_t server_chid, urpc_queue_flag_t flag);
+queue_t *server_channel_search_remote_queue_by_flag(uint32_t server_chid, urpc_queue_flag_t *flag);
 void server_channel_unlock(uint32_t server_chid);
 int server_channel_get_queue_trans_info(uint32_t urpc_chid, char **output, uint32_t *output_size);
 

@@ -597,6 +597,21 @@ urma_status_t urma_unbind_jetty(urma_jetty_t *jetty);
 int urma_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
 
 /**
+ * Get remote jetty information for proxy transmission.
+ * @param[in] [Required] jetty: the jetty created before;
+ * @param[out] [Required] rjetty: pointer to the remote jetty information;
+ * @param[out] [Required] length: length of the encapsulated data structure;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length);
+
+/**
+ * Free the remote jetty information allocated by urma_get_rjetty.
+ * @param[in] [Required] rjetty: the remote jetty information to free;
+ */
+void urma_put_rjetty(urma_rjetty_t *rjetty);
+
+/**
  * Import a remote jetty asynchronously.
  * @param[in] [Required] notifier: data structure used for sensing asynchronous link establishment results;
  * @param[in] [Required] rjetty: information of remote jetty to import, including jetty id and trans_mode,
@@ -827,6 +842,21 @@ urma_target_seg_t *urma_import_seg(urma_context_t *ctx, urma_seg_t *seg, urma_to
 urma_status_t urma_unimport_seg(urma_target_seg_t *tseg);
 
 /**
+ * Get segment context for proxy transmission.
+ * @param[in] [Required] tseg: the target segment registered before;
+ * @param[out] [Required] seg: pointer to the segment context;
+ * @param[out] [Required] size: size of the encapsulated data structure;
+ * Return: 0 on success, other value on error
+ */
+urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32_t *size);
+
+/**
+ * Free the segment context allocated by urma_get_seg_ctx.
+ * @param[in] [Required] seg: the segment context to free;
+ */
+void urma_put_seg_ctx(urma_seg_t *seg);
+
+/**
  * post a request to read, write, atomic or send data.
  * @param[in] jfs: the jfs created before, which is used to put command;
  * @param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
@@ -986,6 +1016,15 @@ urma_status_t urma_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_us
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_register_log_func(urma_log_cb_t func);
+
+/**
+ * User register location log function with file, function and line info.
+ * @param[in] func: location log callback function;
+ * Return: 0 on success, other value on error
+ * Note: If both urma_register_log_func and urma_register_loc_log_func are called,
+ *       the last registered function will be used.
+ */
+urma_status_t urma_register_loc_log_func(urma_loc_log_cb func);
 
 /**
  * User unregister own log function, use rsyslog.

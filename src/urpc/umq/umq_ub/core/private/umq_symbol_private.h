@@ -11,7 +11,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
 #include "urma_types.h"
 
 // === URMA function pointer types - Device/Init ===
@@ -57,6 +56,8 @@ typedef urma_status_t (*urma_post_jetty_send_wr_t)(urma_jetty_t *jetty,
 typedef urma_status_t (*urma_post_jetty_recv_wr_t)(urma_jetty_t *jetty,
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
 typedef urma_status_t (*urma_post_jfr_wr_t)(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+typedef urma_status_t (*urma_get_rjetty_t)(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length);
+typedef void (*urma_put_rjetty_t)(urma_rjetty_t *rjetty);
 
 // === URMA function pointer types - Segment ===
 typedef urma_target_seg_t* (*urma_register_seg_t)(urma_context_t *ctx, urma_seg_cfg_t *seg_cfg);
@@ -72,6 +73,7 @@ typedef void (*urma_ack_async_event_t)(urma_async_event_t *event);
 // === URMA function pointer types - Log ===
 typedef urma_status_t (*urma_log_set_level_t)(urma_vlog_level_t level);
 typedef urma_status_t (*urma_register_log_func_t)(urma_log_cb_t func);
+typedef urma_status_t (*urma_register_loc_log_func_t)(urma_loc_log_cb func);
 typedef urma_status_t (*urma_unregister_log_func_t)(void);
 
 // === URMA function pointer types - UserCtl ===
@@ -131,6 +133,8 @@ typedef struct umq_symbol_urma {
     urma_post_jetty_send_wr_t urma_post_jetty_send_wr;
     urma_post_jetty_recv_wr_t urma_post_jetty_recv_wr;
     urma_post_jfr_wr_t urma_post_jfr_wr;
+    urma_get_rjetty_t urma_get_rjetty;
+    urma_put_rjetty_t urma_put_rjetty;
 
     // Segment
     urma_register_seg_t urma_register_seg;
@@ -145,6 +149,7 @@ typedef struct umq_symbol_urma {
     // Log
     urma_log_set_level_t urma_log_set_level;
     urma_register_log_func_t urma_register_log_func;
+    urma_register_loc_log_func_t urma_register_loc_log_func;
     urma_unregister_log_func_t urma_unregister_log_func;
 
     // UserCtl

@@ -18,6 +18,10 @@
 
 #include "urma_cmd.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define URMA_CMD_OUT_TYPE_INIT 0x80
 
 typedef enum urma_event_cmd {
@@ -649,6 +653,16 @@ typedef enum urma_cmd_create_jfce_type {
     CREATE_JFCE_OUT_NUM, /* Only for calculating number of types */
 } urma_cmd_create_jfce_type_t;
 
+typedef enum urma_cmd_get_jfce_cnt_type {
+    GET_JFCE_CNT_IN_THRESHOLD,
+    GET_JFCE_CNT_IN_NUM,
+    GET_JFCE_CNT_OUT_JFCE_TOTAL_CNT = URMA_CMD_OUT_TYPE_INIT,
+    GET_JFCE_CNT_OUT_JFCE_THRESH_CNT,
+    GET_JFCE_CNT_OUT_NUM,
+} urma_cmd_get_jfce_cnt_type_t;
+
+int urma_ioctl_get_jfce_cnt(int ioctl_fd, urma_cmd_get_jfce_cnt_t *arg);
+
 /* See urma_cmd_import_jfr_t, consistent with enum uburma_cmd_import_jfr_type */
 typedef enum urma_cmd_import_jfr_type {
     /* In type */
@@ -1111,6 +1125,7 @@ typedef enum urma_cmd_query_device_attr_type {
     QUERY_DEVICE_OUT_DEV_CAP_MAX_FETCH_AND_XOR_SIZE,
     QUERY_DEVICE_OUT_DEV_CAP_ATOMIC_FEAT,
     QUERY_DEVICE_OUT_DEV_CAP_TRANS_MODE,
+    QUERY_DEVICE_OUT_DEV_CAP_RESERVED,
     QUERY_DEVICE_OUT_DEV_CAP_CONGESTION_CTRL_ALG,
     QUERY_DEVICE_OUT_DEV_CAP_CEQ_CNT,
     QUERY_DEVICE_OUT_DEV_CAP_MAX_TP_IN_TPG,
@@ -1127,13 +1142,13 @@ typedef enum urma_cmd_query_device_attr_type {
     QUERY_DEVICE_OUT_PORT_ATTR_ACTIVE_MTU,
     QUERY_DEVICE_OUT_RESERVED_JETTY_ID_MIN,
     QUERY_DEVICE_OUT_RESERVED_JETTY_ID_MAX,
-	QUERY_DEVICE_OUT_DEV_CAP_RM_ORDER_CAP,
-	QUERY_DEVICE_OUT_DEV_CAP_RC_ORDER_CAP,
-	QUERY_DEVICE_OUT_DEV_CAP_RM_TP_CAP,
-	QUERY_DEVICE_OUT_DEV_CAP_RC_TP_CAP,
-	QUERY_DEVICE_OUT_DEV_CAP_UM_TP_CAP,
-	QUERY_DEVICE_OUT_DEV_CAP_TP_FEATURE,
-	QUERY_DEVICE_OUT_DEV_CAP_PRIORITY_INFO,
+    QUERY_DEVICE_OUT_DEV_CAP_RM_ORDER_CAP,
+    QUERY_DEVICE_OUT_DEV_CAP_RC_ORDER_CAP,
+    QUERY_DEVICE_OUT_DEV_CAP_RM_TP_CAP,
+    QUERY_DEVICE_OUT_DEV_CAP_RC_TP_CAP,
+    QUERY_DEVICE_OUT_DEV_CAP_UM_TP_CAP,
+    QUERY_DEVICE_OUT_DEV_CAP_TP_FEATURE,
+    QUERY_DEVICE_OUT_DEV_CAP_PRIORITY_INFO,
     QUERY_DEVICE_OUT_NUM, /* Only for calculating number of types */
 } uvs_cmd_set_upi_type_t;
 
@@ -1413,5 +1428,9 @@ int urma_ioctl_get_eid_by_ip(int ioctl_fd, urma_cmd_get_eid_by_ip_t *arg);
 int urma_ioctl_get_ip_by_eid(int ioctl_fd, urma_cmd_get_ip_by_eid_t *arg);
 int urma_ioctl_get_smac(int ioctl_fd, urma_cmd_get_smac_t *arg);
 int urma_ioctl_get_dmac(int ioctl_fd, urma_cmd_get_dmac_t *arg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -22,7 +22,6 @@ static struct {
 int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_len)
 {
     int ret;
-    char *ip_addr;
     switch (dev_info->assign_mode) {
         case UMQ_DEV_ASSIGN_MODE_DEV:
             ret = snprintf(dev_str, dev_str_len, "%s[%u]", dev_info->dev.dev_name, dev_info->dev.eid_idx);
@@ -39,12 +38,15 @@ int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_le
             }
             break;
         case UMQ_DEV_ASSIGN_MODE_IPV4:
-        /* fall-through */
+            ret = snprintf(dev_str, UMQ_IPV4_SIZE, "%s", dev_info->ipv4.ip_addr);
+            if (ret < 0 || ret >= UMQ_IPV4_SIZE) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+                return UMQ_FAIL;
+            }
+            break;
         case UMQ_DEV_ASSIGN_MODE_IPV6:
-            ip_addr =
-                dev_info->assign_mode == UMQ_DEV_ASSIGN_MODE_IPV4 ? dev_info->ipv4.ip_addr : dev_info->ipv6.ip_addr;
-            ret = snprintf(dev_str, dev_str_len, "%s", ip_addr);
-            if (ret < 0 || ret >= dev_str_len) {
+            ret = snprintf(dev_str, UMQ_IPV6_SIZE, "%s", dev_info->ipv6.ip_addr);
+            if (ret < 0 || ret >= UMQ_IPV6_SIZE) {
                 UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
                 return UMQ_FAIL;
             }

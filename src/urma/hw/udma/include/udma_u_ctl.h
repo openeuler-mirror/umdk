@@ -10,13 +10,14 @@
 #ifndef __UDMA_U_CTL_H__
 #define __UDMA_U_CTL_H__
 
+#include <stdbool.h>
 #include "urma_types.h"
 
 #define REDUCE_OPCODE_MIN 8
 #define REDUCE_OPCODE_MAX 11
 #define REDUCE_DATA_TYPE_MAX 9
 #define PARTITION_ALIGNMENT 0xfff
-#define UDMA_USER_CTL_QUERY_TP_SPORT 16
+#define UDMA_USER_CTL_QUERY_TP_SPORT 9
 
 struct udma_u_que_cfg_ex {
 	uint32_t buff_size;
@@ -90,11 +91,28 @@ enum udma_u_jfc_type {
 	UDMA_U_NORMAL_JFC_TYPE,
 	UDMA_U_STARS_JFC_TYPE,
 	UDMA_U_CCU_JFC_TYPE,
+	UDMA_RVS_TYPE,
+	UDMA_U_LOCK_CCU_JFC_TYPE,
 };
 
 struct udma_u_jfc_cfg_ex {
 	urma_jfc_cfg_t base_cfg;
 	enum udma_u_jfc_type jfc_mode;
+};
+
+struct udma_u_lock_jetty_cfg {
+	urma_jetty_cfg_t base_cfg;
+	bool jetty_type; /* 1:wqe lock buffer jetty, 0:normal jetty, defualt: 1 */
+	uint32_t buf_idx; /* buf offset addres idx */
+};
+
+struct udma_u_jfc_ccu_cfg {
+    uint32_t ccu_cqe_flag;
+};
+
+struct udma_u_lock_jfc_cfg {
+	urma_jfc_cfg_t base_cfg;
+	struct udma_u_jfc_ccu_cfg ccu_cfg;
 };
 
 struct udma_u_jfs_wr_ex {
@@ -165,6 +183,10 @@ enum udma_u_user_ctl_opcode {
 	UDMA_U_USER_CTL_QUERY_TP_SPORT,
 	UDMA_U_USER_CTL_QUERY_CQE_AUX_INFO,
 	UDMA_U_USER_CTL_QUERY_AE_AUX_INFO,
+	UDMA_U_USER_CTL_CREATE_LOCK_BUFFER_JETTY_EX,
+	UDMA_U_USER_CTL_DELETE_LOCK_BUFFER_JETTY_EX,
+	UDMA_U_USER_CTL_CREATE_CCU_JFC_EX,
+	UDMA_U_USER_CTL_DELETE_CCU_JFC_EX,
 	UDMA_U_USER_CTL_MAX,
 };
 
@@ -177,6 +199,8 @@ struct udma_u_ue_info {
 struct udma_u_cqe_info_in {
 	enum urma_cr_status status;
 	uint8_t s_r;
+	uint16_t rsv_bitmap;
+	uint32_t rsvd[8];
 };
 
 enum udma_u_cqe_aux_info_type {
@@ -229,10 +253,14 @@ struct udma_u_cqe_aux_info_out {
 	enum udma_u_cqe_aux_info_type *aux_info_type;
 	uint32_t *aux_info_value;
 	uint32_t aux_info_num;
+	uint32_t rsv_bitmap;
+	uint32_t rsvd[8];
 };
 
 struct udma_u_ae_info_in {
 	uint32_t event_type;
+	uint32_t rsv_bitmap;
+	uint32_t rsvd[8];
 };
 
 enum udma_u_ae_aux_info_type {
@@ -252,6 +280,11 @@ struct udma_u_ae_aux_info_out {
 	enum udma_u_ae_aux_info_type *aux_info_type;
 	uint32_t *aux_info_value;
 	uint32_t aux_info_num;
+};
+
+struct udma_u_fe_info {
+	uint32_t rsv_bitmap;
+	uint32_t rsvd[7];
 };
 
 #endif /* __UDMA_U_CTL_H__ */

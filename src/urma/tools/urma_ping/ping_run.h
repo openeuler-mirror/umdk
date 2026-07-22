@@ -15,7 +15,7 @@
 
 #define EID_LEN            (16)
 #define MAX_PORT_NUM       (9)
-#define MAX_NODE_NUM       (64)
+#define MAX_NODE_NUM       (1024)
 #define IODIE_NUM_PER_CHIP (1)
 #define IODIE_NUM          (2)
 #define PORT_NUM           (9)
@@ -28,6 +28,7 @@ struct urma_ping_ubcore_topo_ue {
     uint32_t entity_id;
     char primary_eid[EID_LEN];
     char port_eid[PORT_NUM][EID_LEN];
+    char cna[PORT_NUM][EID_LEN]; // Only for CTP
 };
 
 struct urma_ping_ubcore_topo_agg_dev {
@@ -35,18 +36,12 @@ struct urma_ping_ubcore_topo_agg_dev {
     struct urma_ping_ubcore_topo_ue ues[IODIE_NUM];
 };
 
-struct urma_ping_ubcore_topo_link {
-    uint32_t peer_node;  // node id
-    uint32_t peer_iodie; // iodie idx
-    uint32_t peer_port;  // port idx, UINT32_MAX indicates no connection
-};
-
 struct urma_ping_ubcore_topo_node {
     uint32_t type;
     uint32_t super_node_id;
     uint32_t node_id;
     uint32_t is_current;
-    struct urma_ping_ubcore_topo_link links[IODIE_NUM][PORT_NUM];
+    bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
     struct urma_ping_ubcore_topo_agg_dev agg_devs[DEV_NUM];
 };
 

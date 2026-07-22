@@ -350,7 +350,7 @@ typedef struct urpc_qcfg_create {
     uint8_t max_tx_sge;         // max sge number of send array
     uint8_t lock_free;          // whether the queue is lock free, 0 means locked, otherwise means lock free
     urpc_queue_mode_t mode;     // mode of queue, QUEUE_MODE_POLLING for default
-    uint8_t skip_post_rx;       // whether the queue is skip post rx buf, 0 means dont't skip, otherwise means skip
+    uint8_t skip_post_rx;       // whether the queue is skip post rx buf, 0 means don't skip, otherwise means skip
     uint8_t err_timeout;        // jetty timeout before report error
     uint8_t rnr_retry;          // number of times that jfs will resend packets before report error, when remote (RNR)
     uint8_t min_rnr_timer;      // minimum RNR NACK timer
@@ -373,7 +373,7 @@ typedef struct urpc_qcfg_get {
     uint8_t max_rx_sge;         // max sge number of receive array
     uint8_t max_tx_sge;         // max sge number of send array
     uint8_t lock_free;          // whether the queue is lock free, 0 means locked, otherwise means lock free
-    uint8_t skip_post_rx;       // whether the queue is skip post rx buf, 0 means dont't skip, otherwise means skip
+    uint8_t skip_post_rx;       // whether the queue is skip post rx buf, 0 means don't skip, otherwise means skip
     uint8_t err_timeout;        // jetty timeout before report error
     uint8_t rnr_retry;          // number of times that jfs will resend packets before report error, when remote (RNR)
     uint8_t min_rnr_timer;      // minimum RNR NACK timer

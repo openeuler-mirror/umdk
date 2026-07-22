@@ -178,7 +178,7 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 
 	ret = urma_cmd_unregister_seg(target_seg);
 	if (ret) {
-		UDMA_LOG_ERR("urma cmd unregister segment failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("URMA command unregister segment failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -206,7 +206,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
 	tseg = (struct udma_u_segment *)calloc(1, sizeof(*tseg));
 	if (!tseg) {
-		UDMA_LOG_ERR("alloc target seg failed.\n");
+		UDMA_LOG_ERR("alloc target segment failed.\n");
 		return NULL;
 	}
 

@@ -10,6 +10,7 @@
 #include "umq_errno.h"
 #include "umq_vlog.h"
 #include "util_lock.h"
+#include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
 
 #define HUGE_QBUF_POOL_IDX_SHIFT (1)
@@ -58,7 +59,7 @@ static int umq_huge_qbuf_pool_init(huge_qbuf_pool_size_type_t type, huge_pool_t 
     void *buf_addr = NULL;
     uint16_t mempool_id = pool->pool_idx + pool->pool_idx_shift;
     if (pool->pool_idx >= HUGE_QBUF_POOL_NUM_MAX_PER_TYPE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has reached its maximum expansion limit(%d)\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has reached its maximum expansion limit(%d)\n",
             HUGE_QBUF_POOL_NUM_MAX_PER_TYPE);
         return -UMQ_ERR_EINVAL;
     }
@@ -67,7 +68,7 @@ static int umq_huge_qbuf_pool_init(huge_qbuf_pool_size_type_t type, huge_pool_t 
 
     int ret = pool->memory_init_callback(mempool_id, type, &buf_addr);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "memory generation callback executes failed, status: %d\n", ret);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "memory generation callback executes failed, status: %d\n", ret);
         return ret;
     }
 
@@ -130,6 +131,11 @@ huge_qbuf_pool_size_type_t umq_huge_qbuf_get_type_by_size(uint32_t buf_size)
 uint32_t umq_huge_qbuf_get_size_by_type(huge_qbuf_pool_size_type_t type)
 {
     return (g_buf_size_multiplier_array[type] * umq_buf_size_small());
+}
+
+bool umq_huge_qbuf_pool_is_inited(void)
+{
+    return g_huge_pool_ctx.inited;
 }
 
 static int do_umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
@@ -346,6 +352,11 @@ static ALWAYS_INLINE void umq_huge_qbuf_alloc_data_with_combine(huge_pool_t *poo
 int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, uint32_t num,
     umq_alloc_option_t *option, umq_buf_list_t *list)
 {
+    if (request_size == 0 || num == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf invalid request_size: %u, num: %u\n", request_size, num);
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!g_huge_pool_ctx.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
@@ -372,7 +383,7 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
             (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
-            UMQ_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %u, status: %d\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %lu, status: %d\n",
                 pool->block_pool.buf_cnt_with_data, ret);
             return -UMQ_ERR_ENOMEM;
         }
@@ -507,6 +518,7 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         qbuf_pool_info = &qbuf_pool_stats->qbuf_pool_info[qbuf_pool_stats->num];
         pool = &g_huge_pool_ctx.pool[i];
         block_size = pool->block_size;
+        qbuf_pool_info->type = UMQ_QBUF_POOL_TYPE_MEDIUM + i;
         qbuf_pool_info->mode = g_huge_pool_ctx.mode;
         qbuf_pool_info->total_size = pool->total_size;
         qbuf_pool_info->headroom_size = g_huge_pool_ctx.headroom_size;

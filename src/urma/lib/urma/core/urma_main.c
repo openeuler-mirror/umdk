@@ -25,6 +25,7 @@
 #include "urma_private.h"
 #include "urma_provider.h"
 #include "urma_types.h"
+#include "urma_cmd_tlv.h"
 
 #if defined(__ANDROID__) || defined(__OHOS__)
 #define LIBURMA_DIR "/system/lib64/urma"
@@ -32,6 +33,7 @@
 #define LIBURMA_DIR "/usr/lib64/urma"
 #endif
 #define URMA_MAX_LIB_PATH 256
+#define URMA_DEV_PATH     "/dev/uburma"
 
 static struct ub_list g_driver_list = UB_LIST_INITIALIZER(&g_driver_list);
 static struct ub_list g_so_list = UB_LIST_INITIALIZER(&g_so_list);
@@ -211,10 +213,6 @@ static int urma_open_drivers(void)
 
 urma_status_t urma_init(urma_init_attr_t *conf)
 {
-    urma_log_init();
-    urma_getenv_log_separator();
-    urma_getenv_log_level();
-
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
         URMA_LOG_ERR("urma_init has been called before.\n");
@@ -610,6 +608,72 @@ urma_status_t urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name
     }
 }
 
+urma_status_t urma_get_jfce_cnt_info(urma_jfce_cnt_info_t *info_arr, uint32_t *cnt)
+{
+    if (info_arr == NULL || cnt == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    *cnt = 0;
+
+    DIR *dir = opendir(URMA_DEV_PATH);
+    if (dir == NULL) {
+        URMA_LOG_ERR("Failed to open %s directory.\n", URMA_DEV_PATH);
+        return URMA_FAIL;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (urma_is_bonding_dev(entry->d_name)) {
+            continue;
+        }
+
+        if (*cnt >= URMA_JFCE_CNT_MAX_DEV_NUM) {
+            break;
+        }
+
+        char dev_path[URMA_MAX_PATH] = {0};
+        if (snprintf(dev_path, URMA_MAX_PATH, "%s/%s", URMA_DEV_PATH, entry->d_name) <= 0) {
+            URMA_LOG_WARN("Failed to construct device path for %s.\n", entry->d_name);
+            continue;
+        }
+
+        int dev_fd = urma_open_cdev(dev_path);
+        if (dev_fd < 0) {
+            URMA_LOG_WARN("Failed to open device %s.\n", entry->d_name);
+            continue;
+        }
+
+        urma_cmd_get_jfce_cnt_t arg = {0};
+        int ret = urma_ioctl_get_jfce_cnt(dev_fd, &arg);
+        if (ret != 0) {
+            URMA_LOG_WARN("Failed to get jfce cnt for dev %s, ret=%d.\n", entry->d_name, ret);
+            (void)close(dev_fd);
+            continue;
+        }
+
+        if (strlen(entry->d_name) >= URMA_MAX_NAME) {
+            URMA_LOG_WARN("Device name %s is too long.\n", entry->d_name);
+            (void)close(dev_fd);
+            continue;
+        }
+
+        (void)strcpy(info_arr[*cnt].dev_name, entry->d_name);
+        info_arr[*cnt].jfce_total_cnt = arg.out.jfce_total_cnt;
+        info_arr[*cnt].jfce_thresh_cnt = arg.out.jfce_thresh_cnt;
+        (*cnt)++;
+        (void)close(dev_fd);
+    }
+
+    (void)closedir(dir);
+    return URMA_SUCCESS;
+}
+
 /* Temporarily use uasid allocated by provider */
 urma_status_t urma_get_uasid(uint32_t *uasid)
 {
@@ -659,17 +723,19 @@ int urma_register_sysfs_dev(struct urma_sysfs_dev *dev)
 
 static __attribute__((constructor)) void liburma_init(void)
 {
+    urma_log_init();
+    urma_getenv_log_separator();
+    urma_getenv_log_level();
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     urma_discover_sysfs_path();
 #endif
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Start to init liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    /* URMA_LOG_X should be used after the above log operations finish */
+    URMA_LOG_INFO("Start to init liburma.\n");
     return;
 }
 
 static __attribute__((destructor)) void liburma_uninit(void)
 {
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Finish to uninit liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    URMA_LOG_INFO("Finish to uninit liburma.\n");
     return;
 }

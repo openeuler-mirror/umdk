@@ -15,14 +15,14 @@
 
 #include "bondp_connection.h"
 
-#define BONDP_CHIP_ID_MIN 1
-#define BONDP_CHIP_ID_MAX 2
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#define BONDP_CHIP_ID_MIN_START_PORT 2
-#define BONDP_CHIP_ID_MIN_END_PORT   10
-
-#define BONDP_CHIP_ID_MAX_START_PORT 11
-#define BONDP_CHIP_ID_MAX_END_PORT   19
+#define BONDP_CHIP_ID_MIN      1
+#define BONDP_CHIP_ID_MAX      2
+#define ACTIVE_PORT_PER_CHIP   2
+#define CHIP_ROUTE_NUM         3
 
 typedef struct bondp_chip_id_info {
     uint32_t src_chip_id;
@@ -33,5 +33,10 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
     bondp_chip_id_info_t *info);
 
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx);
+int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cnt[URMA_UBAGG_DEV_MAX_NUM]);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BONDP_DATAPATH_SCHEDULE_H

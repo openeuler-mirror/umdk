@@ -29,9 +29,9 @@
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "util_id_generator.h"
-#include "umq_inner.h"
 #include "umq_qbuf_pool.h"
 #include "umq_huge_qbuf_pool.h"
+#include "umq_ub_jetty_pool.h"
 #include "umq_ub_imm_data.h"
 #include "util_lock.h"
 
@@ -40,19 +40,18 @@ extern "C" {
 #endif
 
 #define UMQ_MAX_MSG_ID_NUM (1 << 5)
+#define UMQ_ID_ALLOC_SIZE (256 * 1024)
+
 #define UMQ_CONTINUE_FLAG 1
 #define UMQ_MAX_TSEG_NUM (1024)
-#define UMQ_UB_RW_SEGMENT_LEN 64 // ub_queue read/write buf splited 64B for each module, such as mem import/flow control
 #define HUGE_QBUF_BUFFER_INC_BATCH 64
 #define UMQ_QBUF_ALIGN_SIZE 4096
 
 #define UMQ_UB_MAX_REMOTE_EID_NUM 1024
-#define UMQ_UB_MIN_EID_ID 0
 
 #define MEMPOOL_UBVA_SIZE 28
 #define UMQ_IMM_VERSION 0
 #define UMQ_UB_FLOW_CONTORL_JETTY_DEPTH 2
-#define UMQ_UB_FLOW_CONTORL_BIT_SHIFIT 16 // use (ack | notify) as flow control tx ctx
 
 #define UMQ_UB_DEV_STR_LENGTH 64
 #define UMQ_UB_NAMESPACE_SIZE 256
@@ -112,6 +111,8 @@ typedef enum ub_packet_stats_type {
     UB_PACKET_STATS_TYPE_SEND_EAGAIN,
     UB_PACKET_STATS_TYPE_SEND_ERROR,
     UB_PACKET_STATS_TYPE_RECV_ERROR,
+    UB_PACKET_STATS_TYPE_RECV_DUPLICATE_REQ,
+    UB_PACKET_STATS_TYPE_RECV_DUPLICATE_RSP,
     UB_PACKET_STATS_TYPE_MAX,
 } ub_packet_stats_type_t;
 
@@ -147,6 +148,45 @@ typedef enum ub_queue_fc_msg_type {
     UB_QUEUE_FC_MSG_TYPE_MAX = 2
 } ub_queue_fc_msg_type_t;
 
+typedef struct ub_pending_credit_req {
+    urpc_list_t req_node;
+    struct ub_queue *queue;
+    uint16_t requested;
+    uint8_t seq;
+} ub_pending_credit_req_t;
+
+// Retry list for FC messages whose REP/ACK send failed. Three urpc lists: free pool + retry_list
+// (immediate-notify) + no_jetty_list (jetty-pool-callback-notify). Main=32K, standalone=2 nodes.
+#define UMQ_UB_FC_MSG_RETRY_LIST_SIZE_MAIN        32768
+#define UMQ_UB_FC_MSG_RETRY_LIST_SIZE_STANDALONE  2
+
+// Max retry time (us) before dropping the imm and returning a fake FC_ERR buf.
+#define UMQ_UB_FC_MSG_RETRY_TIMEOUT_US       100000
+
+typedef enum {
+    UMQ_UB_RETRY_TYPE_NO_JETTY = 0,   // get_jetty_node failed — wait for jetty-pool callback
+    UMQ_UB_RETRY_TYPE_EAGAIN,         // post_send EAGAIN — wait for jetty-pool callback
+    UMQ_UB_RETRY_TYPE_OTHER,          // other send failure — wake immediately
+} umq_ub_retry_type_t;
+
+typedef struct umq_ub_fc_msg_retry_entry {
+    urpc_list_t node;                    // linkage in free/retry/no-jetty list
+    umq_ub_imm_t imm;                    // received REQ/RETURN_REQ imm
+    umq_ub_retry_type_t retry_type;
+    uint64_t enqueue_us;                 // first-enqueue timestamp (preserved across retries)
+} umq_ub_fc_msg_retry_entry_t;
+
+typedef struct umq_ub_fc_msg_retry_list {
+    umq_ub_fc_msg_retry_entry_t *nodes; // pre-allocated node pool
+    urpc_list_t free_list;               // idle nodes
+    urpc_list_t retry_list;              // OTHER-retry_type entries (immediate-notify)
+    urpc_list_t no_jetty_list;           // NO_JETTY/EAGAIN entries (jetty-pool-callback-notify)
+    uint32_t node_cnt;                   // total nodes in pool
+    int fc_msg_retry_fd;                // eventfd; created by main/standalone, shared via pointer
+    umq_ub_jetty_avail_cb_node_t *avail_cb_node;  // jetty-pool availability callback
+    bool inited;
+} umq_ub_fc_msg_retry_list_t;
+
 typedef struct ub_flow_control {
     ub_flow_control_window_ops_t ops;
     volatile uint64_t total_local_rx_posted;
@@ -158,8 +198,6 @@ typedef struct ub_flow_control {
     volatile uint64_t total_flow_controlled_wr;
     volatile uint64_t packet_stats[UB_PACKET_STATS_TYPE_MAX];
     volatile uint64_t stats_u64[FC_COUNTER_MAX_U64];
-    uint64_t remote_win_buf_addr;
-    uint32_t remote_win_buf_len;
     volatile uint16_t local_rx_posted;
     volatile uint16_t remote_rx_window;
     volatile uint16_t stats_u16[FC_COUNTER_MAX_U16];
@@ -176,11 +214,18 @@ typedef struct ub_flow_control {
     uint16_t remote_tx_depth;
     uint16_t remote_rx_depth;
     uint32_t timeout_us;
+    uint32_t fc_req_timeout_us; // flow control credit req rsp timeout (us), 0 = never timeout
+    ub_pending_credit_req_t pending_req;
     bool local_set;
     bool remote_get;
     bool enabled;
     volatile bool is_credit_applying;
-    volatile uint16_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
+    volatile uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
+                                              // the link if the rsp does not return within the timeout
+    volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
+    umq_ub_fc_msg_retry_list_t *fc_msg_retry_list;
+    uint8_t local_req_seq;
+    uint8_t remote_expect_seq;
 } ub_flow_control_t;
 
 typedef struct imported_tseg_node {
@@ -216,7 +261,9 @@ typedef struct remote_imported_tseg_info {
 } remote_imported_tseg_info_t;
 
 typedef struct umq_ub_ctx {
-    bool io_lock_free;
+    uint8_t io_lock_free : 1;
+    uint8_t rq_lock_free : 1;
+    uint8_t rsvd : 6;
     volatile uint32_t ref_cnt;
     uint32_t feature;
     umq_flow_control_cfg_t flow_control;
@@ -228,8 +275,7 @@ typedef struct umq_ub_ctx {
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
-    uint64_t remote_notify_addr;
-    volatile uint64_t *umq_ctx_jetty_table;
+    volatile uint64_t *umq_ctx_table;
     volatile uint64_t *rx_consumed_jetty_table;
 } umq_ub_ctx_t;
 
@@ -274,26 +320,24 @@ typedef struct umq_ub_bind_dev_info {
 } umq_ub_bind_dev_info_t;
 
 typedef struct umq_ub_bind_queue_info {
-    uint8_t is_binded;
-    urma_jetty_grp_policy_t policy;
-    urma_jetty_id_t jetty_id;
-    urma_order_type_t order_type;
-    urma_target_type_t type;
-    urma_transport_mode_t tp_mode;
-    urma_tp_type_t tp_type;
     urma_token_t token;
-    uint64_t notify_buf;
+    uint32_t umq_id;
+    uint32_t is_binded : 1;
+    uint32_t rsvd : 31;
     uint32_t rx_depth;
     uint32_t tx_depth;
     uint32_t rx_buf_size;
     umq_state_t state;
+    uint32_t rjetty_size;
+    urma_rjetty_t rjetty[0];
 } umq_ub_bind_queue_info_t;
 
 typedef struct umq_ub_bind_fc_info {
-    urma_jetty_id_t jetty_id;
     urma_token_t token;
-    uint64_t win_buf_addr;
-    uint32_t win_buf_len;
+    uint32_t initial_credit : 16;
+    uint32_t rsvd : 16;
+    uint32_t rjetty_size;
+    urma_rjetty_t rjetty[0];
 } umq_ub_bind_fc_info_t;
 
 typedef struct umq_ub_bind_info {
@@ -307,7 +351,6 @@ typedef struct ub_bind_ctx {
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
     char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
-    uint64_t remote_notify_addr;
     import_tseg_table_t *tseg_table;
     urpc_bitmap_t tseg_imported;
 } ub_bind_ctx_t;
@@ -328,6 +371,7 @@ typedef enum ub_credit_stat_u64 {
     CREDIT_POOL_IDLE_TOTAL = 0,     // the total number of idle credit in the statistics pool
     CREDIT_POOL_ALLOCATED_TOTAL,    // the total number of credit allocated from the credit pool
     CREDIT_POOL_ERR_TOTAL,          // invalid total credit count (which will cause pool_idle statistics failure)
+    CREDIT_POOL_ALLOCATED_UNLIMITED,
     CREDIT_COUNTER_MAX_U64
 } ub_credit_stat_u64_t;
 
@@ -337,11 +381,21 @@ typedef enum ub_credit_stat_u16 {
     CREDIT_COUNTER_MAX_U16
 } ub_credit_stat_u16_t;
 
+typedef struct ub_credit_pending_queue {
+    urpc_list_t pending_list;
+    uint32_t pending_count;
+    uint32_t max_pending;
+    uint16_t pending_credit_threshold;
+    util_external_mutex_lock *lock;
+} ub_credit_pending_queue_t;
+
 typedef struct ub_credit_pool {
     ub_credit_pool_ops_t ops;
     volatile uint64_t stats_u64[CREDIT_COUNTER_MAX_U64];
     volatile uint16_t stats_u16[CREDIT_COUNTER_MAX_U16];
     uint16_t capacity;
+    ub_credit_pending_queue_t pending_queue;
+    bool is_limited;
 } ub_credit_pool_t;
 
 typedef struct jfr_ctx {
@@ -375,6 +429,32 @@ typedef struct ub_queue_idle_check {
     int event_fd;
     util_external_mutex_lock *lock;
 } ub_queue_idle_check_t;
+
+typedef enum jetty_pool_node_state {
+    JETTY_POOL_NODE_IDLE,             // node is in free_q/active_q or thread-local cache
+    JETTY_POOL_NODE_IN_USE,           // node is borrowed by a Logic UMQ
+    JETTY_POOL_NODE_ERR,              // node has error, should not be allocated
+} jetty_pool_node_state_t;
+
+// umq_ref encoding: u32_hi = umq_id (owner), u32_lo = ref_cnt (concurrent users).
+// 0 means "unowned, 0 refs" — freeable.
+#define UMQ_JETTY_NODE_REF_CNT_MASK 0xFFFFFFFFULL
+#define UMQ_JETTY_NODE_REF_CNT_INC  1ULL
+#define UMQ_JETTY_NODE_UMQ_ID_SHIFT 32
+
+typedef struct jetty_pool_node {
+    urpc_list_t node;                   // For list linkage (cache / free_q / active_q / err_q)
+    urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
+    urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
+    urma_jfce_t *jfs_jfce;
+    volatile uint32_t tx_outstanding;
+    volatile uint64_t umq_ref;          // owner umq_id (hi 32) + ref_cnt (lo 32), single atomic access
+    volatile uint32_t state;            // Track node state (atomic CAS operations)
+    volatile uint32_t borrow_count;     // WRs posted in current borrow cycle (atomic — concurrent post)
+    uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
+    bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
+    bool is_jetty_err;
+} jetty_pool_node_t;
 
 typedef struct ub_queue {
     urpc_list_t qctx_node;
@@ -423,11 +503,17 @@ typedef struct ub_queue {
     bool prefill_done;          // until prefill_rqe_cnt = rqe_post_factor * rx_depth, prefill is done
     umq_queue_mode_t mode;      // mode of queue, QUEUE_MODE_POLLING for default
     umq_state_t state;
-    umq_buf_t *notify_buf;      // qbuf for manage message exchange, such as mem import/initial flow control window
     uint64_t umqh;
     uint64_t share_rq_umqh;
     ub_queue_idle_check_t *checker;
     bondp_port_id_t *used_port;
+    uint32_t umq_id;
+    uint32_t remote_umq_id;
+
+    // umq_ub_jetty_node_list_t jetty_node_list;
+    umq_ub_jetty_node_list_t *jetty_node_list;
+    volatile uint64_t jetty_node;       // jetty_pool_node_t *, atomically accessed
+    pthread_spinlock_t get_jetty_node_lock;
 } ub_queue_t;
 
 typedef struct user_ctx {
@@ -450,21 +536,19 @@ typedef struct xchg_mem_info {
     urma_ubva_t ubva;
 } __attribute__((packed)) xchg_mem_info_t;
 
-typedef enum umq_ub_rw_segment_offset {
-    OFFSET_MEM_IMPORT = 0,
-    OFFSET_FLOW_CONTROL, // 16bit local window, 16bit remote window
-} umq_ub_rw_segment_offset_t;
-
 typedef struct umq_ub_raw_dev {
     urma_device_t *urma_dev;
     umq_eid_t eid;
     uint32_t eid_index;
 } umq_ub_raw_dev_t;
 
-static inline uint64_t umq_ub_notify_buf_addr_get(ub_queue_t *queue, umq_ub_rw_segment_offset_t offset)
-{
-    return (uint64_t)((uintptr_t)queue->notify_buf->buf_data + offset * UMQ_UB_RW_SEGMENT_LEN);
-}
+typedef struct umq_create_jetty_config {
+    ub_queue_jetty_index_t jetty_idx;
+    const char *port_str;
+    urma_jfc_t *jfs_jfc;
+    bondp_port_id_t *used_port;
+    uint8_t used_port_num;
+} umq_create_jetty_config_t;
 
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num);
 void rx_buf_ctx_list_uninit(rx_buf_ctx_list_t *rx_buf_ctx_list);
@@ -475,10 +559,10 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
 int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num, bool send_ack);
 rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
 
-int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
-int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
-int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
-int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count);
+int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
+int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
+int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option);
+int umq_ub_poll_tx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option);
 
 // token
 uint32_t token_policy_get(bool enable);
@@ -491,7 +575,7 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
 int umq_modify_ubq_to_err(ub_queue_t *queue, umq_io_direction_t direction, ub_queue_jetty_index_t jetty_idx);
 remote_imported_tseg_info_t *umq_ub_ctx_imported_info_create(void);
 void umq_ub_ctx_imported_info_destroy(umq_ub_ctx_t *ub_ctx);
-urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
+urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_jetty_config_t *config);
 int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_queue_t *queue);
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id);
@@ -501,6 +585,8 @@ int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_opti
                        ub_queue_t *share_queue, ub_queue_jetty_index_t jetty_idx);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
+void umq_ub_fc_msg_retry_notify(umq_ub_fc_msg_retry_list_t *retry_list);
+int umq_ub_fc_msg_retry_drain(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 int umq_status_convert(urma_status_t urma_status);
 umq_tp_mode_t umq_tp_mode_convert(urma_transport_mode_t tp_mode);
 umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type);
@@ -553,10 +639,12 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
                         urma_sge_t *sges, uint32_t remain_tx);
 
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
-int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
+int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor);
+int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
+int umq_ub_wait_tp_handle_tx_interrupt(urma_jfce_t *jfs_jfce, int time_out, urma_jfc_t *jfc[], bool fc_enable);
 int umq_flow_control_stats_get(uint64_t umqh_tp, umq_flow_control_stats_t *flow_control_stats);
 uint32_t umq_ub_timer_timeout_get(void);
 int umq_ub_queue_addr_list_alloc(ub_queue_t *queue);
@@ -578,6 +666,11 @@ umq_ub_ctx_t *umq_ub_get_ub_ctx_by_dev_info(umq_ub_ctx_t *ub_ctx_list, uint32_t 
 int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_ctx_t *ub_ctx);
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx);
 
+int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt);
+void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt);
+
+int umq_bondp_port_id_set(umq_used_ports_t *used_ports, bondp_port_id_t *used_port, uint8_t used_port_num);
+
 static ALWAYS_INLINE void umq_ub_io_packet_stats(
     ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt, bool lock_free)
 {
@@ -592,7 +685,7 @@ static ALWAYS_INLINE void umq_ub_io_packet_stats(
     }
 }
 
-urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg, uint32_t mempool_id);
+urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg_table, uint32_t mempool_id);
 
 static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 {
@@ -600,20 +693,54 @@ static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 }
 
 // for exclusive acquisition of umq, it needs to be put back after use
-static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_jetty_id(ub_queue_t *queue, const uint32_t jetty_id)
+static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *queue, const uint32_t umq_id)
 {
-    if (jetty_id >= queue->dev_ctx->dev_attr.dev_cap.max_jetty) {
+    if (umq_id >= UMQ_ID_ALLOC_SIZE) {
         return NULL;
     }
- 
+
     return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
-        &queue->dev_ctx->umq_ctx_jetty_table[jetty_id], 0, __ATOMIC_ACQUIRE);
+        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQ_REL);
 }
 
-static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t jetty_idx)
+static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
 {
-    __atomic_store_n(&queue->dev_ctx->umq_ctx_jetty_table[queue->jetty[jetty_idx]->jetty_id.id],
+    __atomic_store_n(&queue->dev_ctx->umq_ctx_table[umq_id],
         (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
+}
+
+static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) != 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_sub_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0;
+}
+
+// Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
+static ALWAYS_INLINE bool is_umq_ub_logic_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_share_transport(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0;
+}
+
+static ALWAYS_INLINE bool is_umq_ub_share_rq(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0;
+}
+
+static inline bool is_umq_ub_bonding_dev(const char *name)
+{
+    return strstr(name, "bonding") != NULL;
 }
 
 #ifdef __cplusplus
