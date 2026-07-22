@@ -33,8 +33,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
         .def("is_initialized", &fused_deep_moe::Buffer::is_initialized)
         .def("get_ext_info", &fused_deep_moe::Buffer::get_ext_info)
         .def("get_shmem_workspace", &fused_deep_moe::Buffer::get_shmem_workspace);
-    m.def("gather_selection_kv_cache", &npu_gather_selection_kv_cache_npu, "gather_selection_kv_cache");
-    m.def("quant_lightning_indexer", &npu_quant_lightning_indexer, "quant_lightning_indexer");
+    m.def("gather_selection_kv_cache", &gather_selection_kv_cache_npu, "gather_selection_kv_cache");
+    m.def("quant_lightning_indexer", &quant_lightning_indexer_npu, "quant_lightning_indexer");
+    m.def("swiglu_clip_quant", &swiglu_clip_quant_npu, "swiglu_clip_quant");
+
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -70,4 +72,5 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
         "Tensor? block_table=None, Tensor? metadata=None, str layout_query='BSND', str layout_key='PA_BSND', int sparse_count=2048, int sparse_mode=3, "
         "int pre_tokens=9223372036854775807, int next_tokens=9223372036854775807, int cmp_ratio=1, "
         "bool return_value=False, int? query_dtype=None, int? key_dtype=None) -> (Tensor, Tensor)");
+    m.def("swiglu_clip_quant(Tensor x, Tensor group_index, Tensor group_alpha, *, bool activate_left=False, int quant_mode=1, int clamp_mode=1) -> (Tensor, Tensor)");
 }
