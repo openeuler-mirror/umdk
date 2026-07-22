@@ -130,16 +130,13 @@ typedef struct bondp_context {
     int real_async_fd; /* vcontex async_fd */
     bondp_hc_ctx_t *hc_ctx;
     bondp_fb_ctx_t *fb_ctx;
-    bondp_hash_table_t remote_v2p_token_id_table;
+    pthread_rwlock_t seg_cache_lock;
+    struct ub_hmap seg_cache_map;
+    unsigned long seg_cache_insert_cnt;
     bool msn_enable;
     bool seg_cache_enable;
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
-#ifndef __cplusplus
-    atomic_ulong token_id_cnt;
-#else
-    std::atomic_ulong token_id_cnt;
-#endif
 } bondp_context_t;
 
 typedef struct bondp_jfc {
