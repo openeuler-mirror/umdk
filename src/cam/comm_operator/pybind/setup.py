@@ -86,7 +86,8 @@ sources = [
     "./all2_all_detour.cpp",
     "./reduce_scatter_detour.cpp",
     "./buffer.cpp",
-    "./gather_selection_kv_cache.cpp"
+    "./gather_selection_kv_cache.cpp",
+    "./quant_lightning_indexer.cpp"
 ]
 
 libraries = [
