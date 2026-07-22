@@ -1026,7 +1026,9 @@ void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty,
                     continue;
                 }
                 bool v = atomic_load(&node->valid[li][ti]);
-                atomic_store(&cur->valid[li][ti], v);
+                if (!v) {
+                    atomic_store(&cur->valid[li][ti], v);
+                }
             }
         }
     }
