@@ -3,8 +3,9 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: Bond provider failback helpers.
  */
-#ifndef BONDP_FAILBACK_H
-#define BONDP_FAILBACK_H
+
+#ifndef BONDP_DP_FAILBACK_H
+#define BONDP_DP_FAILBACK_H
 
 #include "bondp_types.h"
 
@@ -22,4 +23,4 @@ void bondp_fb_uninit(bondp_context_t *bond_ctx);
 }
 #endif
 
-#endif // BONDP_FAILBACK_H
+#endif // BONDP_DP_FAILBACK_H

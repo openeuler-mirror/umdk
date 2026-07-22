@@ -48,9 +48,6 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty);
 
 urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
 
-/* Other ops */
-int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out);
-
 #ifdef __cplusplus
 }
 #endif

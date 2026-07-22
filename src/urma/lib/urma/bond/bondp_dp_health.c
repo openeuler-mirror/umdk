@@ -13,17 +13,19 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "bondp_types.h"
-#include "bondp_worker.h"
-#include "bondp_topo_info.h"
 #include "ub_list.h"
 #include "urma_api.h"
 #include "urma_log.h"
-#include "bondp_health.h"
 
-#define HC_CQE_BATCH     (8)
-#define HC_PROBE_BUF_LEN (1)
-#define HC_PROBE_DEPTH   (1024)
+#include "bondp_topo_info.h"
+#include "bondp_types.h"
+#include "bondp_worker.h"
+
+#include "bondp_dp_health.h"
+
+#define HC_CQE_BATCH         (8)
+#define HC_PROBE_BUF_LEN     (1)
+#define HC_PROBE_DEPTH       (1024)
 /* Stop posting probes when a local probe SQ has this many outstanding WRs,
  * leaving headroom so a batch cannot overflow the SQ (depth HC_PROBE_DEPTH) and
  * wedge urma_post_jetty_send_wr into ENOMEM. */
@@ -31,7 +33,7 @@
 /* ummu_grant requires page-aligned VA and a length multiple of the page size.
  * The probe payload is only HC_PROBE_BUF_LEN bytes, but the registered segment
  * must cover a full page; the data path keeps its 1-byte sge length. */
-#define HC_PROBE_SEG_LEN (getpagesize())
+#define HC_PROBE_SEG_LEN     (getpagesize())
 
 typedef struct bondp_hc_ctx bondp_hc_ctx_t;
 
@@ -72,7 +74,7 @@ struct bondp_hc_ctx {
     bondp_hc_cfg_t cfg;
     bondp_probe_res_t probes[URMA_UBAGG_DEV_MAX_NUM];
     atomic_uint_fast64_t probe_task_id;
-    atomic_bool stopping; /* Set by uninit to stop the probe task from rescheduling */
+    atomic_bool stopping;   /* Set by uninit to stop the probe task from rescheduling */
     uint32_t probe_cur_idx; /* Current polling position for batched node probing */
     uint32_t node_num;
     bondp_hc_node_t nodes[MAX_NODE_NUM];
@@ -207,8 +209,7 @@ static void hc_drain_probe_cq(bondp_probe_res_t *res)
             }
             bool ok = (cr[k].status == URMA_CR_SUCCESS);
             bondp_target_jetty_t *bdp_tjetty = node->hc_tjetty[local_idx][target_idx];
-            bool prev = (bdp_tjetty != NULL) ?
-                atomic_load(&bdp_tjetty->valid[local_idx][target_idx]) : true;
+            bool prev = (bdp_tjetty != NULL) ? atomic_load(&bdp_tjetty->valid[local_idx][target_idx]) : true;
             atomic_store(&node->valid[local_idx][target_idx], ok);
             if (ok && !prev) {
                 hc_set_tjetty_list_target_valid(node, local_idx, target_idx);
@@ -612,7 +613,7 @@ static int hc_init_probe_resource(bondp_hc_ctx_t *hc_ctx, urma_context_t *p_ctx,
         goto DELETE_JETTY;
     }
 
-    *res = (bondp_probe_res_t) {
+    *res = (bondp_probe_res_t){
         .hc_ctx = hc_ctx,
         .local_idx = local_idx,
         .buf = buf,
