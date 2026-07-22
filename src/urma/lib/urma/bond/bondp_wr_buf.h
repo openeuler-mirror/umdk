@@ -37,6 +37,11 @@ typedef struct wr_buf_entry_hdr {
     uint8_t entry_type;
 } wr_buf_entry_hdr_t;
 
+typedef struct bondp_chip_id_info {
+    uint32_t src_chip_id;
+    uint32_t dst_chip_id;
+} bondp_chip_id_info_t;
+
 /*
  * sge_data is a flexible array member at the end of the entry.
  * For jfs: [0 .. max_sge-1] = src_sge, [max_sge .. 2*max_sge-1] = dst_sge.
@@ -53,6 +58,7 @@ typedef struct jfs_wr_entry {
     struct bondp_target_jetty *target_vjetty;
     uint32_t send_idx;
     uint32_t target_idx;
+    bondp_chip_id_info_t info;
     urma_sge_t sge_data[];
 } jfs_wr_entry_t;
 
