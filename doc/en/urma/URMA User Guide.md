@@ -1477,6 +1477,8 @@ The bonding device is TP-unaware.
 
 4. When using aggregation devices, the choice of TP/CTP for the transport layer depends only on the parameters set when creating the jetty and jfs/jfr. The CTP parameter in the rjetty flag passed to urma_import_jetty will be ignored.
 
+5. Health check and fault failback are only supported by Jetty, not by JFR or JFS. Health check performs periodic probing of link status by creating an out-of-band probe Jetty for each path (reusing JFR receive resources); fault failback, after a recovery is detected, rebuilds the Jetty to switch traffic back to the primary path. Both paths depend on the Jetty object; independently created JFR or JFS do not provide health check or fault failback capabilities.
+
 - **Aggregation Device Feature List**
 
   1.  Aggregation Device Feature List

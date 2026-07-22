@@ -1522,6 +1522,8 @@ bonding设备不感知TP。
 
 4\. 在使用聚合设备的场景下，传输层使用 TP/CTP 的选择仅和创建 jetty 和 jfs/jfr 的时候设定的参数有关，urma_import_jetty 中传入的 rjetty flag 中的 CTP 参数会被忽略。
 
+5\. 健康检查与故障回切（failback）仅支持 Jetty，不支持 JFR、JFS。健康检查通过为每条路径创建带外探测 Jetty（复用 JFR 接收资源）实现对链路状态的周期性探测；故障回切在探测恢复后通过重建 Jetty 将流量切回主路径。上述两条路径均依赖 Jetty 对象，独立创建的 JFR、JFS 不具备健康检查与故障回切能力。
+
 - 聚合设备的特性列表
 
   1.  聚合设备的特性列表
