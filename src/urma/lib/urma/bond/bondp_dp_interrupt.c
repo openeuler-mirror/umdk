@@ -17,7 +17,7 @@
 
 #include "bondp_types.h"
 
-#include "bondp_dp_int.h"
+#include "bondp_dp_interrupt.h"
 
 #define BOND_EPOLL_NUM  (32)
 #define BONDP_NS_PER_MS 1000000ULL
