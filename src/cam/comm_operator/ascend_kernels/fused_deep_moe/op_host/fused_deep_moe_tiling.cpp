@@ -613,7 +613,7 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
 }
 
 static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTilingData &tilingData,
-                                            bool calShareExpert, uint64_t shmemWorkspaceSize)
+                                            uint64_t shmemWorkspaceSize)
 {
     auto &info = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo;
     if (info.shmemWorkspacePtr == 0) {
@@ -625,25 +625,17 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
                     OPS_LOG_E(nodeName, "shmemWorkspaceSize must be positive when shmemWorkspace is set."),
                     return ge::GRAPH_FAILED);
 
-    const uint64_t shareExpertTokenNum = calShareExpert ? info.bs : 0;
     const uint64_t gmm2InputDim = info.gmm1HLen / 2;
-    const uint64_t shareGmm2InputDim = calShareExpert ? info.shareGmm1HLen / 2 : 0;
     const uint64_t allExpertTokenNumsSize = static_cast<uint64_t>(info.epRankSize) * info.epRankSize *
                                             info.moeExpertNumPerRank * sizeof(int64_t);
     const uint64_t combineSendSize = static_cast<uint64_t>(info.bs) * info.k *
-                                     info.h * sizeof(float);
+                                     info.h * TOKEN_DTYPE_BYTE_SIZE;
     const uint64_t fixedWorkspaceSize = CeilUp(allExpertTokenNumsSize, GM_ALIGN_SIZE) +
                                         CeilUp(combineSendSize, GM_ALIGN_SIZE) +
                                         CeilUp(static_cast<uint64_t>(ROUND_INFO_WORKSPACE_SIZE), GM_ALIGN_SIZE) +
                                         SHMEM_WORKSPACE_SAFETY_MARGIN;
-    const uint64_t sharedScaleSize = shareExpertTokenNum * sizeof(float);
     const uint64_t alignmentSlack = 3 * (GM_ALIGN_SIZE - 1);
-
-    const uint64_t x1FixedSize = fixedWorkspaceSize + sharedScaleSize +
-                                 shareExpertTokenNum * info.h * sizeof(int8_t) + alignmentSlack;
-    const uint64_t x2FixedSize = fixedWorkspaceSize + sharedScaleSize +
-                                 shareExpertTokenNum * shareGmm2InputDim * sizeof(int8_t) + alignmentSlack;
-    const uint64_t fixedSize = std::max(x1FixedSize, x2FixedSize);
+    const uint64_t fixedSize = fixedWorkspaceSize + alignmentSlack;
 
     OPS_ERR_IF(shmemWorkspaceSize < fixedSize,
                     OPS_LOG_E(nodeName,
@@ -654,8 +646,8 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
     const uint64_t commonPerTokenSize = sizeof(float) + TOKEN_FLAG_SLOT_SIZE;
     const uint64_t x1PerTokenSize = info.h * sizeof(int8_t) + commonPerTokenSize;
     const uint64_t x2PerTokenSize = gmm2InputDim * sizeof(int8_t) + commonPerTokenSize;
-    const uint64_t x1RoundRecvTokenNum = (shmemWorkspaceSize - x1FixedSize) / x1PerTokenSize;
-    const uint64_t x2RoundRecvTokenNum = (shmemWorkspaceSize - x2FixedSize) / x2PerTokenSize;
+    const uint64_t x1RoundRecvTokenNum = (shmemWorkspaceSize - fixedSize) / x1PerTokenSize;
+    const uint64_t x2RoundRecvTokenNum = (shmemWorkspaceSize - fixedSize) / x2PerTokenSize;
     uint64_t roundRecvTokenNum = std::min(x1RoundRecvTokenNum, x2RoundRecvTokenNum);
     roundRecvTokenNum = roundRecvTokenNum / ROUND_RECV_TOKEN_ALIGN * ROUND_RECV_TOKEN_ALIGN;
     OPS_ERR_IF(roundRecvTokenNum < ROUND_RECV_TOKEN_ALIGN,
@@ -664,8 +656,8 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeTi
                               ROUND_RECV_TOKEN_ALIGN),
                     return ge::GRAPH_FAILED);
     info.roundRecvTokenNum = static_cast<int32_t>(roundRecvTokenNum);
-    const uint64_t reservedSize = std::max(x1FixedSize + roundRecvTokenNum * x1PerTokenSize,
-                                           x2FixedSize + roundRecvTokenNum * x2PerTokenSize);
+    const uint64_t reservedSize = fixedSize +
+        roundRecvTokenNum * std::max(x1PerTokenSize, x2PerTokenSize);
     OPS_LOG_D(nodeName,
               "SHMEM round buffer: workspaceSize=%lu, fixedSize=%lu, reservedSize=%lu, roundRecvTokenNum=%d.",
               shmemWorkspaceSize, fixedSize, reservedSize,
@@ -738,6 +730,10 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     size_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
     maxTokenSize = CeilUp(maxTokenSize, GM_ALIGN_SIZE);
     size_t tokenScaleSize = CeilUp(maxHandleTokenNum * sizeof(float), GM_ALIGN_SIZE);
+    size_t shareX1TokenSize = shareExpertTokenNum * h * sizeof(int8_t);
+    size_t shareX2TokenSize = shareExpertTokenNum * shareGmm2HLen * sizeof(int8_t);
+    size_t shareTokenSize = CeilUp(std::max(shareX1TokenSize, shareX2TokenSize), GM_ALIGN_SIZE);
+    size_t shareTokenScaleSize = CeilUp(shareExpertTokenNum * sizeof(float), GM_ALIGN_SIZE);
     size_t CVSwapBufferSize =
         CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
@@ -756,7 +752,8 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
         workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     } else {
         size_t usrSize = CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
-                        expandIdxSize + epSendCountSize + resveredSize + allEpRecvCountSize;
+                        expandIdxSize + epSendCountSize + resveredSize + allEpRecvCountSize +
+                        shareTokenSize + shareTokenScaleSize;
         workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     }
     return ge::GRAPH_SUCCESS;
@@ -825,7 +822,7 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
         OPS_ERR_IF(CheckShareExpertShapes(context, *tilingData) != ge::GRAPH_SUCCESS,
                 OPS_LOG_E(nodeName, "CheckShareExpertShapes failed."), return ge::GRAPH_FAILED);
     }
-    OPS_ERR_IF(SetRoundRecvTokenNum(nodeName, *tilingData, calShareExpert, shmemWorkspaceSize) !=
+    OPS_ERR_IF(SetRoundRecvTokenNum(nodeName, *tilingData, shmemWorkspaceSize) !=
                     ge::GRAPH_SUCCESS,
                 OPS_LOG_E(nodeName, "Set round receive token number failed."), return ge::GRAPH_FAILED);
     bool expertSmoothScalesExist = CheckOptionalInputExist(context, INPUT_SMOOTH_SCALE_INDEX);

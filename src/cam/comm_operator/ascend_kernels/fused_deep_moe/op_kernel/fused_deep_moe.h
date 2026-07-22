@@ -562,25 +562,19 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     }
     uint32_t roundBufferTokenNum = static_cast<uint32_t>(roundRecvTokenNum_);
     size_t moeBufferTokenNum = roundBufferTokenNum;
-    size_t maxHandleTokenNum = moeBufferTokenNum + shareExpertTokenNum;
     size_t workspaceOffset = 0;
     size_t shmemWorkspaceOffset = 0;
     constexpr int32_t resveredWorkSpaceSize = 256 * 1024;
     constexpr int32_t roundInfoWorkSpaceSize = 16 * 1024;
-    int64_t x1TokenSize = maxHandleTokenNum * tokenHiddenSize_ * sizeof(int8_t);
-    int64_t x2TokenSize = (moeBufferTokenNum * gmm2InputDim_ +
-                           shareExpertTokenNum * shareGmm2InputDim_) * sizeof(int8_t);
+    int64_t x1TokenSize = moeBufferTokenNum * tokenHiddenSize_ * sizeof(int8_t);
+    int64_t x2TokenSize = moeBufferTokenNum * gmm2InputDim_ * sizeof(int8_t);
     int64_t maxTokenSize = x1TokenSize < x2TokenSize ? x2TokenSize : x1TokenSize;
-    int64_t tokenScaleSize = maxHandleTokenNum * sizeof(float);
-    gmShareX1 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    gmShareX2 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    gmX1 = gmShareX1 + (static_cast<size_t>(shareExpertTokenNum) * tokenHiddenSize_ * sizeof(int8_t));
-    gmX2 = gmShareX2 + (static_cast<size_t>(shareExpertTokenNum) * shareGmm2InputDim_ * sizeof(int8_t));
+    int64_t tokenScaleSize = moeBufferTokenNum * sizeof(float);
+    gmX1 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    gmX2 = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxTokenSize);
-    gmShareX1Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    gmShareX2Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    gmX1Scale = gmShareX1Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
-    gmX2Scale = gmShareX2Scale + (static_cast<size_t>(shareExpertTokenNum) * sizeof(float));
+    gmX1Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
+    gmX2Scale = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(tokenScaleSize);
     gmTokenFlag = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(moeBufferTokenNum * TOKEN_FLAG_SLOT_BYTES);
@@ -611,11 +605,21 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     shmemWorkspaceOffset +=
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
     GM_ADDR gmCombineSend = shmemWorkspaceGM_ + shmemWorkspaceOffset;
-    shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(float));
+    shmemWorkspaceOffset +=
+        RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(ExpandXType));
     GM_ADDR gmRoundInfo = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset += RoundUp<GM_ALIGN_BYTE>(roundInfoWorkSpaceSize);
     GM_ADDR gmAllEpRecvCount = workspaceGM_ + workspaceOffset;
     workspaceOffset += RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * moeExpertNum_ * sizeof(int32_t));
+    int64_t shareX1TokenSize = shareExpertTokenNum * tokenHiddenSize_ * sizeof(int8_t);
+    int64_t shareX2TokenSize = shareExpertTokenNum * shareGmm2InputDim_ * sizeof(int8_t);
+    int64_t maxShareTokenSize = shareX1TokenSize < shareX2TokenSize ? shareX2TokenSize : shareX1TokenSize;
+    gmShareX1 = workspaceGM_ + workspaceOffset;
+    gmShareX2 = workspaceGM_ + workspaceOffset;
+    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(maxShareTokenSize);
+    gmShareX1Scale = workspaceGM_ + workspaceOffset;
+    gmShareX2Scale = workspaceGM_ + workspaceOffset;
+    workspaceOffset += RoundUp<GM_ALIGN_BYTE>(shareExpertTokenNum * sizeof(float));
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         if constexpr (g_coreType == AscendC::AIV) {
