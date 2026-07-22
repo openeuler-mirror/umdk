@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "bondp_connection.h"
+#include "bondp_wr_buf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,11 +24,6 @@ extern "C" {
 #define BONDP_CHIP_ID_MAX      2
 #define ACTIVE_PORT_PER_CHIP   2
 #define CHIP_ROUTE_NUM         3
-
-typedef struct bondp_chip_id_info {
-    uint32_t src_chip_id;
-    uint32_t dst_chip_id;
-} bondp_chip_id_info_t;
 
 int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx,
     bondp_chip_id_info_t *info);
