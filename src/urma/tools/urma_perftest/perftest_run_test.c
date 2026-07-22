@@ -552,7 +552,8 @@ static void *run_send_lat_simplex(void *arg)
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
                         (cfg->time_type.bs.duration == 1 ||
-                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
+                         rcnt + recv_inflight_baseline - used_recv_wr <
+                         cfg->iters + (uint64_t)recv_inflight_baseline)) {
                         if (send_lat_post_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -1713,7 +1714,8 @@ static void *run_send_lat_duplex(void *arg)
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
                         (cfg->time_type.bs.duration == 1 ||
-                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
+                         rcnt + recv_inflight_baseline - used_recv_wr <
+                         cfg->iters + (uint64_t)recv_inflight_baseline)) {
                         if (send_lat_post_jetty_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
