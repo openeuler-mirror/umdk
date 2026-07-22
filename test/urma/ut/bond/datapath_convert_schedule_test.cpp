@@ -21,30 +21,30 @@ TEST(UrmaBondTest, DatapathCopyAndFreeWorkRequests)
     urma_sge_t atomicDst = {};
     urma_jfs_wr_t atomicWr = {};
 
-    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, preallocSrc, preallocDst));
+    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, preallocSrc, preallocDst, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(preallocSrc, dst.rw.src.sge);
     EXPECT_EQ(preallocDst, dst.rw.dst.sge);
 
     src.opcode = URMA_OPC_SEND;
     src.send.src.sge = fixture.srcSge;
     src.send.src.num_sge = 1;
-    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, preallocSrc, nullptr));
+    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, preallocSrc, nullptr, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(preallocSrc, dst.send.src.sge);
     src.opcode = URMA_OPC_NOP;
-    EXPECT_EQ(URMA_EINVAL, copy_jfs_wr(&src, &dst, nullptr, nullptr));
+    EXPECT_EQ(URMA_EINVAL, copy_jfs_wr(&src, &dst, nullptr, nullptr, BONDP_MAX_SGE_NUM));
 
     atomicSrc.tseg = fixture.srcSge[0].tseg;
     atomicDst.tseg = fixture.dstSge[0].tseg;
     atomicWr.opcode = URMA_OPC_CAS;
     atomicWr.cas.src = &atomicSrc;
     atomicWr.cas.dst = &atomicDst;
-    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, preallocSrc, preallocDst));
+    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, preallocSrc, preallocDst, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(preallocSrc, dst.cas.src);
     EXPECT_EQ(preallocDst, dst.cas.dst);
 
     recvSrc.src.sge = fixture.srcSge;
     recvSrc.src.num_sge = 1;
-    EXPECT_EQ(URMA_SUCCESS, copy_jfr_wr(&recvSrc, &recvDst, preallocSrc));
+    EXPECT_EQ(URMA_SUCCESS, copy_jfr_wr(&recvSrc, &recvDst, preallocSrc, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(preallocSrc, recvDst.src.sge);
     dst = {};
     dst.opcode = URMA_OPC_SEND;
@@ -73,7 +73,7 @@ TEST(UrmaBondTest, DatapathCopyAndFreeAllocatedAndInvalidWorkRequests)
     urma_sge_t atomicSrc = {};
     urma_sge_t atomicDst = {};
 
-    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, nullptr, nullptr));
+    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&src, &dst, nullptr, nullptr, BONDP_MAX_SGE_NUM));
     ASSERT_NE(nullptr, dst.rw.src.sge);
     ASSERT_NE(nullptr, dst.rw.dst.sge);
     EXPECT_NE(fixture.srcSge, dst.rw.src.sge);
@@ -83,18 +83,18 @@ TEST(UrmaBondTest, DatapathCopyAndFreeAllocatedAndInvalidWorkRequests)
     EXPECT_EQ(nullptr, dst.rw.dst.sge);
 
     invalid.rw.src.num_sge = BONDP_MAX_SGE_NUM + 1;
-    EXPECT_EQ(URMA_ENOMEM, copy_jfs_wr(&invalid, &dst, preallocSrc, preallocDst));
+    EXPECT_EQ(URMA_ENOMEM, copy_jfs_wr(&invalid, &dst, preallocSrc, preallocDst, BONDP_MAX_SGE_NUM));
 
     invalid = fixture.MakeSendWr(URMA_OPC_SEND_INVALIDATE);
     invalid.send.src.num_sge = BONDP_MAX_SGE_NUM + 1;
-    EXPECT_EQ(URMA_ENOMEM, copy_jfs_wr(&invalid, &dst, preallocSrc, preallocDst));
+    EXPECT_EQ(URMA_ENOMEM, copy_jfs_wr(&invalid, &dst, preallocSrc, preallocDst, BONDP_MAX_SGE_NUM));
 
     atomicSrc.tseg = &fixture.localSeg.v_tseg;
     atomicDst.tseg = &fixture.remoteSeg.v_tseg;
     atomicWr.opcode = URMA_OPC_FADD;
     atomicWr.faa.src = &atomicSrc;
     atomicWr.faa.dst = &atomicDst;
-    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, nullptr, nullptr));
+    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, nullptr, nullptr, BONDP_MAX_SGE_NUM));
     ASSERT_NE(nullptr, dst.faa.src);
     ASSERT_NE(nullptr, dst.faa.dst);
     EXPECT_NE(&atomicSrc, dst.faa.src);
@@ -105,13 +105,13 @@ TEST(UrmaBondTest, DatapathCopyAndFreeAllocatedAndInvalidWorkRequests)
 
     atomicWr = {};
     atomicWr.opcode = URMA_OPC_CAS;
-    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, preallocSrc, preallocDst));
+    ASSERT_EQ(URMA_SUCCESS, copy_jfs_wr(&atomicWr, &dst, preallocSrc, preallocDst, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(nullptr, dst.cas.src);
     EXPECT_EQ(nullptr, dst.cas.dst);
 
     recvSrc.src.sge = fixture.srcSge;
     recvSrc.src.num_sge = BONDP_MAX_SGE_NUM + 1;
-    EXPECT_EQ(URMA_ENOMEM, copy_jfr_wr(&recvSrc, &recvDst, preallocSrc));
+    EXPECT_EQ(URMA_ENOMEM, copy_jfr_wr(&recvSrc, &recvDst, preallocSrc, BONDP_MAX_SGE_NUM));
 }
 
 TEST(UrmaBondTest, DatapathBindUnbindAndUseCountsCoverRwAndAtomicPaths)
@@ -155,12 +155,12 @@ TEST(UrmaBondTest, DatapathBindUnbindAndUseCountsCoverRwAndAtomicPaths)
     SetRefCount(&fixture.target.use_cnt, 1);
     SetRefCount(&fixture.localSeg.use_cnt, 1);
     SetRefCount(&fixture.remoteSeg.use_cnt, 1);
-    get_jfs_vwr_refs(&rw);
-    put_jfs_vwr_refs(&rw);
-    get_jfs_vwr_refs(&casWr);
-    put_jfs_vwr_refs(&casWr);
-    get_jfs_vwr_refs(&faddWr);
-    put_jfs_vwr_refs(&faddWr);
+    jfs_wr_get_refs(&rw);
+    jfs_wr_put_refs(&rw);
+    jfs_wr_get_refs(&casWr);
+    jfs_wr_put_refs(&casWr);
+    jfs_wr_get_refs(&faddWr);
+    jfs_wr_put_refs(&faddWr);
     EXPECT_EQ(1UL, fixture.target.use_cnt.atomic_cnt.load());
     EXPECT_EQ(1UL, fixture.localSeg.use_cnt.atomic_cnt.load());
     EXPECT_EQ(1UL, fixture.remoteSeg.use_cnt.atomic_cnt.load());
@@ -236,8 +236,8 @@ TEST(UrmaBondTest, DatapathEncodeBindAndUnbindWorkRequests)
     encode_jfs_wr_msn(&sendWr, &fixture.comp, 4, true);
     convert_jfs_vwr_to_pwr(&sendWr, 0, 0);
     convert_jfs_pwr_to_vwr(&sendWr, &fixture.target.v_tjetty);
-    get_jfs_vwr_refs(&sendWr);
-    put_jfs_vwr_refs(&sendWr);
+    jfs_wr_get_refs(&sendWr);
+    jfs_wr_put_refs(&sendWr);
 
     recvWr.src.sge = fixture.srcSge;
     recvWr.src.num_sge = 1;

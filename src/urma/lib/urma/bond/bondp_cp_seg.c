@@ -8,19 +8,22 @@
  * History: 2025-02-18
  */
 
+#include <errno.h>
+#include <stdatomic.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "ub_hash.h"
 #include "urma_api.h"
+#include "urma_cmd.h"
 #include "urma_log.h"
 #include "urma_private.h"
-#include "urma_provider.h"
 
 #include "bondp_context_table.h"
 #include "bondp_hash_table.h"
+#include "bondp_topo_info.h"
 #include "bondp_types.h"
 
-#include "bondp_segment.h"
+#include "bondp_cp_seg.h"
 
 typedef struct bondp_udata_import_seg {
     urma_seg_base_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
@@ -75,7 +78,7 @@ static int bondp_delete_pseg(bondp_tseg_t *bdp_seg)
             continue;
         }
         URMA_LOG_INFO("bondp delete_pseg token_id is %u.\n",
-            bdp_seg->p_tseg[i]->seg.token_id);
+                      bdp_seg->p_tseg[i]->seg.token_id);
         bdp_seg->p_tseg[i]->handle = bdp_seg->p_orig_handle[i];
         if (urma_unregister_seg(bdp_seg->p_tseg[i]) != URMA_SUCCESS) {
             URMA_LOG_ERR("Failed to unregister pseg %d\n", i);
@@ -136,7 +139,7 @@ static int bondp_delete_vseg(bondp_tseg_t *bdp_seg)
     urma_target_seg_t *target_seg = &bdp_seg->v_tseg;
     target_seg->handle = bdp_seg->v_orig_handle;
     URMA_LOG_INFO("bondp delete_vseg, token_id is %u, bdp_seg use_cnt is %lu.\n",
-            bdp_seg->v_tseg.seg.token_id, ref_cnt);
+                  bdp_seg->v_tseg.seg.token_id, ref_cnt);
 
     if (urma_cmd_unregister_seg(target_seg) != 0) {
         URMA_LOG_ERR("Failed to unregister segment, token_id=%u, handle=%lu.\n",
@@ -301,8 +304,8 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
     seg_cfg->bdp_imprt_tseg->p_tseg[local_idx][target_idx] = p_tseg;
 
     URMA_LOG_DEBUG("Import seg [%d](" EID_FMT ")<-[%d](" EID_FMT ")\n",
-                  local_idx, EID_ARGS(bdp_ctx->p_ctxs[local_idx]->eid),
-                  target_idx, EID_ARGS(p_tseg->seg.ubva.eid));
+                   local_idx, EID_ARGS(bdp_ctx->p_ctxs[local_idx]->eid),
+                   target_idx, EID_ARGS(p_tseg->seg.ubva.eid));
 
     return BONDP_SUCCESS;
 }
@@ -544,7 +547,7 @@ static int bondp_prepare_import_udata(bondp_context_t *bdp_ctx, urma_context_t *
 }
 
 static int bondp_cache_imported_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
-    bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
+                                    bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
 {
     bondp_v2p_token_id_t v2p_token_id = {0};
 

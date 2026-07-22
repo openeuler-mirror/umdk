@@ -8,12 +8,13 @@
  * History: 2026-04-02   Create File
  */
 
+#include <stdlib.h>
 #include <string.h>
 
-#include "bondp_api.h"
-#include "bondp_segment.h"
-#include "bondp_types.h"
+#include "ub_util.h"
+
 #include "bondp_topo_info.h"
+#include "bondp_types.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_convert.h"
@@ -63,7 +64,7 @@ static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *preall
         if (prealloc_sge != NULL) {
             if (dst->num_sge > max_sge) {
                 URMA_LOG_ERR("The number of SGE(%u) exceeds the limit(%u)",
-                    dst->num_sge, max_sge);
+                             dst->num_sge, max_sge);
                 return -1;
             }
             dst->sge = prealloc_sge;
@@ -308,11 +309,13 @@ urma_status_t check_jfs_wr_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
         case URMA_OPC_READ:
             return (check_write_wr_path(wr, send_idx, target_idx) == 0) ? URMA_SUCCESS : URMA_EINVAL;
         case URMA_OPC_CAS:
-            return (check_atomic_wr_path(wr->cas.src, wr->cas.dst, send_idx, target_idx) == 0) ?
-                URMA_SUCCESS : URMA_EINVAL;
+            return (check_atomic_wr_path(wr->cas.src, wr->cas.dst, send_idx, target_idx) == 0)
+                       ? URMA_SUCCESS
+                       : URMA_EINVAL;
         case URMA_OPC_FADD:
-            return (check_atomic_wr_path(wr->faa.src, wr->faa.dst, send_idx, target_idx) == 0) ?
-                URMA_SUCCESS : URMA_EINVAL;
+            return (check_atomic_wr_path(wr->faa.src, wr->faa.dst, send_idx, target_idx) == 0)
+                       ? URMA_SUCCESS
+                       : URMA_EINVAL;
         default:
             return URMA_SUCCESS;
     }
