@@ -18,8 +18,6 @@
 #include "urma_log.h"
 #include "urma_private.h"
 
-#include "bondp_context_table.h"
-#include "bondp_hash_table.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
 
@@ -47,6 +45,137 @@ typedef struct bondp_seg_cfg {
     bondp_udata_import_seg_t *udata_out;
     bondp_import_tseg_t *bdp_imprt_tseg;
 } bondp_seg_cfg_t;
+
+typedef struct bondp_seg_cache_key {
+    uint32_t token_id;
+    urma_eid_t remote_eid;
+} bondp_seg_cache_key_t;
+
+typedef struct bondp_seg_cache_entry {
+    struct ub_hmap_node hmap_node;
+    bondp_seg_cache_key_t key;
+    urma_seg_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
+    bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+    uint64_t v_handle;
+    uint32_t index;
+} bondp_seg_cache_entry_t;
+
+static bool seg_cache_key_equal(const bondp_seg_cache_entry_t *entry, const bondp_seg_cache_key_t *key)
+{
+    return entry->key.token_id == key->token_id &&
+        memcmp(&entry->key.remote_eid, &key->remote_eid, sizeof(urma_eid_t)) == 0;
+}
+
+int bondp_seg_cache_init(struct bondp_context *bdp_ctx)
+{
+    (void)pthread_rwlock_init(&bdp_ctx->seg_cache_lock, NULL);
+    if (ub_hmap_init(&bdp_ctx->seg_cache_map, BONDP_MAX_NUM_RSEGS) != 0) {
+        URMA_LOG_ERR("Failed to initialize segment cache map.\n");
+        (void)pthread_rwlock_destroy(&bdp_ctx->seg_cache_lock);
+        return -1;
+    }
+    bdp_ctx->seg_cache_insert_cnt = 0;
+    return 0;
+}
+
+void bondp_seg_cache_uninit(struct bondp_context *bdp_ctx)
+{
+    struct ub_hmap_node *node;
+
+    (void)pthread_rwlock_wrlock(&bdp_ctx->seg_cache_lock);
+    node = ub_hmap_first(&bdp_ctx->seg_cache_map);
+    while (node != NULL) {
+        struct ub_hmap_node *next = ub_hmap_next(&bdp_ctx->seg_cache_map, node);
+        bondp_seg_cache_entry_t *entry = CONTAINER_OF_FIELD(node, bondp_seg_cache_entry_t, hmap_node);
+        ub_hmap_remove(&bdp_ctx->seg_cache_map, node);
+        free(entry);
+        node = next;
+    }
+    ub_hmap_destroy(&bdp_ctx->seg_cache_map);
+    (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+    (void)pthread_rwlock_destroy(&bdp_ctx->seg_cache_lock);
+}
+
+static int seg_cache_lookup(bondp_context_t *bdp_ctx, uint32_t token_id,
+                            urma_eid_t remote_eid, bondp_seg_cache_entry_t *entry)
+{
+    bondp_seg_cache_key_t key = {
+        .token_id = token_id,
+        .remote_eid = remote_eid,
+    };
+
+    (void)pthread_rwlock_rdlock(&bdp_ctx->seg_cache_lock);
+    struct ub_hmap_node *node = ub_hmap_first_with_hash(&bdp_ctx->seg_cache_map, token_id);
+    while (node != NULL) {
+        bondp_seg_cache_entry_t *cached = CONTAINER_OF_FIELD(node, bondp_seg_cache_entry_t, hmap_node);
+        if (seg_cache_key_equal(cached, &key)) {
+            (void)memcpy(entry, cached, sizeof(*entry));
+            (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+            return 0;
+        }
+        node = ub_hmap_next_with_hash(node, token_id);
+    }
+    (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+    return -ENOENT;
+}
+
+static int seg_cache_remove_by_index_nolock(struct ub_hmap *map, uint32_t index)
+{
+    struct ub_hmap_node *node = ub_hmap_first(map);
+
+    while (node != NULL) {
+        bondp_seg_cache_entry_t *entry = CONTAINER_OF_FIELD(node, bondp_seg_cache_entry_t, hmap_node);
+        if (entry->index == index) {
+            ub_hmap_remove(map, node);
+            free(entry);
+            return 0;
+        }
+        node = ub_hmap_next(map, node);
+    }
+
+    URMA_LOG_ERR("Failed to find segment cache entry, index=%u.\n", index);
+    return -1;
+}
+
+static int seg_cache_add(bondp_context_t *bdp_ctx, const bondp_seg_cache_entry_t *entry)
+{
+    bondp_seg_cache_entry_t *new_entry = calloc(1, sizeof(*new_entry));
+    if (new_entry == NULL) {
+        return -ENOMEM;
+    }
+    (void)memcpy(new_entry->peer_p_seg, entry->peer_p_seg, sizeof(new_entry->peer_p_seg));
+    (void)memcpy(new_entry->connected, entry->connected, sizeof(new_entry->connected));
+    new_entry->v_handle = entry->v_handle;
+    new_entry->key = entry->key;
+
+    (void)pthread_rwlock_wrlock(&bdp_ctx->seg_cache_lock);
+    uint32_t hash = entry->key.token_id;
+    struct ub_hmap_node *node = ub_hmap_first_with_hash(&bdp_ctx->seg_cache_map, hash);
+    while (node != NULL) {
+        bondp_seg_cache_entry_t *cached = CONTAINER_OF_FIELD(node, bondp_seg_cache_entry_t, hmap_node);
+        if (seg_cache_key_equal(cached, &entry->key)) {
+            (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+            free(new_entry);
+            return 0;
+        }
+        node = ub_hmap_next_with_hash(node, hash);
+    }
+
+    uint32_t target_idx = (uint32_t)(bdp_ctx->seg_cache_insert_cnt % BONDP_MAX_NUM_RSEGS);
+    if (bdp_ctx->seg_cache_insert_cnt >= BONDP_MAX_NUM_RSEGS) {
+        int ret = seg_cache_remove_by_index_nolock(&bdp_ctx->seg_cache_map, target_idx);
+        if (ret != 0) {
+            (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+            free(new_entry);
+            return ret;
+        }
+    }
+    new_entry->index = target_idx;
+    ub_hmap_insert(&bdp_ctx->seg_cache_map, &new_entry->hmap_node, hash);
+    bdp_ctx->seg_cache_insert_cnt++;
+    (void)pthread_rwlock_unlock(&bdp_ctx->seg_cache_lock);
+    return 0;
+}
 
 /*
  * Since the actual token ID for bonding device is allocated by the kernel mode
@@ -310,35 +439,6 @@ static bondp_ret_t import_pseg(bondp_context_t *bdp_ctx, bondp_seg_cfg_t *seg_cf
     return BONDP_SUCCESS;
 }
 
-static int bondp_add_v2p_token_id(bondp_context_t *bdp_ctx, bondp_v2p_token_id_t *v2p_token_id)
-{
-    unsigned long token_id_cnt = atomic_load(&bdp_ctx->token_id_cnt);
-    uint32_t target_idx = (uint32_t)(token_id_cnt % BONDP_MAX_NUM_RSEGS);
-    bondp_hash_table_t *tbl = &bdp_ctx->remote_v2p_token_id_table;
-    int ret;
-
-    (void)pthread_rwlock_wrlock(&tbl->lock);
-    if (token_id_cnt >= BONDP_MAX_NUM_RSEGS) {
-        /* remove the token_id with target_idx */
-        ret = bdp_r_v2p_token_id_del_idx_lockless(tbl, target_idx);
-        if (ret != 0) {
-            (void)pthread_rwlock_unlock(&tbl->lock);
-            return ret;
-        }
-    }
-    /* add new v2p_token_id */
-    v2p_token_id->index = target_idx;
-    ret = bdp_r_v2p_token_id_table_add_lockless(tbl, v2p_token_id);
-    if (ret != 0) {
-        (void)pthread_rwlock_unlock(&tbl->lock);
-        return ret;
-    }
-    (void)pthread_rwlock_unlock(&tbl->lock);
-
-    atomic_fetch_add(&bdp_ctx->token_id_cnt, 1);
-    return 0;
-}
-
 static void bondp_fill_v_tseg(urma_target_seg_t *tseg, urma_seg_t *seg, uint64_t addr,
                               uint64_t handle, urma_context_t *ctx)
 {
@@ -487,21 +587,20 @@ static int bondp_try_reuse_seg_cache(bondp_context_t *bdp_ctx, urma_seg_t *seg, 
                                      urma_context_t *ctx, bondp_import_tseg_t *bdp_tseg,
                                      bondp_udata_import_seg_t *udata_out)
 {
-    bondp_v2p_token_id_t v2p_token_id = {0};
-    int ret = bdp_r_v2p_token_id_tabl_lookup(&bdp_ctx->remote_v2p_token_id_table, seg->token_id,
-                                             seg->ubva.eid, &v2p_token_id);
-    if (ret == BONDP_HASH_MAP_NOT_FOUND_ERROR) {
+    bondp_seg_cache_entry_t cache_entry = {0};
+    int ret = seg_cache_lookup(bdp_ctx, seg->token_id, seg->ubva.eid, &cache_entry);
+    if (ret == -ENOENT) {
         return 0;
     }
     if (ret != 0) {
-        URMA_LOG_ERR("Failed to lookup v2p_token_id, ret=%d.\n", ret);
+        URMA_LOG_ERR("Failed to look up segment cache, ret=%d.\n", ret);
         return -1;
     }
 
-    (void)memcpy(&udata_out->peer_p_seg, v2p_token_id.peer_p_seg, sizeof(udata_out->peer_p_seg));
-    (void)memcpy(&udata_out->connected, v2p_token_id.connected, sizeof(udata_out->connected));
+    (void)memcpy(&udata_out->peer_p_seg, cache_entry.peer_p_seg, sizeof(udata_out->peer_p_seg));
+    (void)memcpy(&udata_out->connected, cache_entry.connected, sizeof(udata_out->connected));
     bdp_tseg->is_reused = true;
-    bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, v2p_token_id.v_handle, ctx);
+    bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, cache_entry.v_handle, ctx);
     bdp_tseg->v_orig_handle = bdp_tseg->v_tseg.handle;
     bdp_tseg->v_tseg.handle = (uint64_t)&bdp_tseg->v_tseg;
     return 0;
@@ -549,14 +648,14 @@ static int bondp_prepare_import_udata(bondp_context_t *bdp_ctx, urma_context_t *
 static int bondp_cache_imported_seg(bondp_context_t *bdp_ctx, urma_seg_t *seg,
                                     bondp_import_tseg_t *bdp_tseg, bondp_udata_import_seg_t *udata_out)
 {
-    bondp_v2p_token_id_t v2p_token_id = {0};
+    bondp_seg_cache_entry_t cache_entry = {0};
 
-    v2p_token_id.key.v_remote_eid = seg->ubva.eid;
-    v2p_token_id.key.v_token_id = seg->token_id;
-    (void)memcpy(v2p_token_id.peer_p_seg, udata_out->peer_p_seg, sizeof(v2p_token_id.peer_p_seg));
-    (void)memcpy(v2p_token_id.connected, udata_out->connected, sizeof(v2p_token_id.connected));
-    v2p_token_id.v_handle = bdp_tseg->v_tseg.handle;
-    return bondp_add_v2p_token_id(bdp_ctx, &v2p_token_id);
+    cache_entry.key.remote_eid = seg->ubva.eid;
+    cache_entry.key.token_id = seg->token_id;
+    (void)memcpy(cache_entry.peer_p_seg, udata_out->peer_p_seg, sizeof(cache_entry.peer_p_seg));
+    (void)memcpy(cache_entry.connected, udata_out->connected, sizeof(cache_entry.connected));
+    cache_entry.v_handle = bdp_tseg->v_tseg.handle;
+    return seg_cache_add(bdp_ctx, &cache_entry);
 }
 
 urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,

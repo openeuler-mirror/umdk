@@ -20,6 +20,10 @@ extern "C" {
 void bondp_tseg_get(urma_target_seg_t *target_seg);
 void bondp_tseg_put(urma_target_seg_t *target_seg);
 
+struct bondp_context;
+int bondp_seg_cache_init(struct bondp_context *bdp_ctx);
+void bondp_seg_cache_uninit(struct bondp_context *bdp_ctx);
+
 /* Provider ops */
 urma_token_id_t *bondp_alloc_token_id(urma_context_t *ctx);
 urma_status_t bondp_free_token_id(urma_token_id_t *token_id);
