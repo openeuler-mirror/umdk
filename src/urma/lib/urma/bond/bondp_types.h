@@ -20,15 +20,15 @@
 
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
-#include "topo_info.h"
+#include "bondp_topo_info.h"
 #include "ub_list.h"
+#include "urma_private.h"
 #include "urma_types.h"
 #include "urma_ubagg.h"
 
 #define BONDP_MAX_NUM_JETTYS          (10240)
 #define BONDP_MAX_NUM_RSEGS           (10240)
 #define BONDP_MAX_WR_LIST_NUM         (300)
-#define BONDP_MAX_SGE_NUM             (32)
 #define PRIMARY_EID_NUM               (2)
 #define PORT_EID_MAX_NUM_PER_DEV      (9)
 #define PORT_EID_MAX_NUM              (PORT_EID_MAX_NUM_PER_DEV * PRIMARY_EID_NUM)
@@ -40,92 +40,66 @@
 #define URMA_JETTY_ID_UNPACK(...)     __VA_ARGS__
 #define URMA_JETTY_ID_ARGS(jetty_id)  URMA_JETTY_ID_UNPACK(EID_ARGS((jetty_id)->eid), \
                                                            (jetty_id)->uasid, (jetty_id)->id)
+typedef urma_user_info_ext_hdr_t bondp_seg_ext_priv_t;
+typedef urma_user_info_ext_hdr_t bondp_rjetty_ext_priv_t;
 
-struct bondp_target_jetty;
+static inline bool bondp_seg_has_user_info(const urma_seg_t *seg)
+{
+    return seg != NULL && seg->attr.bs.has_user_info != 0;
+}
 
-typedef enum bondp_health_mode {
-    HEALTH_MODE_BACKUP_CHECK,
-    HEALTH_MODE_PRIMARY_CHECK,
-} bondp_health_mode_t;
+static inline void bondp_seg_set_user_info(urma_seg_t *seg, bool enable)
+{
+    if (seg == NULL) {
+        return;
+    }
 
-typedef struct bondp_health_sub_task {
-    int local_idx;
-    int target_idx;
-    bool valid;
-    bool probe_pending;
-    bool need_check;
-#ifndef __cplusplus
-    atomic_bool link_ok;
-#else
-    std::atomic_bool link_ok;
-#endif
-    uint64_t user_ctx;
-} bondp_health_sub_task_t;
+    if (enable) {
+        seg->attr.bs.has_user_info = 1;
+    } else {
+        seg->attr.bs.has_user_info = 0;
+    }
+}
 
-typedef struct bondp_fallback_task {
-    bool pending;
-    bool local_rebuilt;
-    bool req_sent;
-    bool resp_received;
-    bool relink_done;
-    uint8_t req_seq;
-    uint32_t remote_primary_pjetty_id;
-    uint32_t primary_target_idx;
-} bondp_fallback_task_t;
+static inline bondp_seg_ext_priv_t *bondp_seg_get_priv_ext(urma_seg_t *seg)
+{
+    return (bondp_seg_ext_priv_t *)((uintptr_t)seg + sizeof(*seg));
+}
 
-typedef struct bondp_health_task {
-    struct bondp_target_jetty *bdp_tjetty;
-    struct bondp_comp *bondp_jetty;
-    uint64_t next_probe_ts_us;
-    int primary_local_idx;
-    int active_local_idx;
-    bondp_health_mode_t mode;
-    uint32_t backoff_cnt;
-    bondp_fallback_task_t fallback_task;
-    uint32_t vjetty_id;
-    bondp_health_sub_task_t sub_tasks[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
-    hmap_node_t hmap_node;
-} bondp_health_task_t;
+static inline const bondp_seg_ext_priv_t *bondp_seg_get_priv_ext_const(const urma_seg_t *seg)
+{
+    return (const bondp_seg_ext_priv_t *)((uintptr_t)seg + sizeof(*seg));
+}
 
-typedef struct bondp_heath_check_ctx {
-    void *check_buf;
-    uint64_t check_buf_len;
-    int health_check_fd;
-    bondp_hash_table_t task_table;
-    pthread_spinlock_t event_lock;
-    struct ub_list event_list;
-} bondp_heath_check_ctx_t;
+static inline bondp_rjetty_ext_priv_t *bondp_rjetty_get_priv_ext(urma_rjetty_t *rjetty)
+{
+    return (bondp_rjetty_ext_priv_t *)((uintptr_t)rjetty + sizeof(*rjetty));
+}
 
-typedef struct bondp_health_check_cfg {
-    uint64_t backup_start_ms;
-    uint64_t backup_interval_ms;
-    uint64_t active_start_ms;
-    uint64_t active_interval_ms;
-    uint32_t active_max_backoff;
-} bondp_health_check_cfg_t;
+static inline const bondp_rjetty_ext_priv_t *bondp_rjetty_get_priv_ext_const(const urma_rjetty_t *rjetty)
+{
+    return (const bondp_rjetty_ext_priv_t *)((uintptr_t)rjetty + sizeof(*rjetty));
+}
 
-typedef struct bondp_health_thread_ctx {
-    bool enable_health_check;
-    int health_epoll_fd;
-    pthread_t health_thread;
-    bondp_health_check_cfg_t cfg;
-    pthread_rwlock_t health_ctx_lock;
-    struct ub_list health_ctx_list;
-#ifndef __cplusplus
-    atomic_bool health_thread_stop;
-#else
-    std::atomic_bool health_thread_stop;
-#endif
-} bondp_health_thread_ctx_t;
+static inline bool bondp_rjetty_has_user_info(const urma_rjetty_t *rjetty)
+{
+    return rjetty != NULL && rjetty->flag.bs.has_user_info != 0;
+}
+
+typedef struct bondp_hc_ctx bondp_hc_ctx_t;
+typedef struct bondp_fb_ctx bondp_fb_ctx_t;
 
 /** Process-granularity global variable */
 typedef struct bondp_global_context {
     uint32_t pid;
-    topo_map_t *topo_map;
     bool skip_load_topo;
     bool enable_failover;
     bool enable_failback;
-    bondp_health_thread_ctx_t health_thread_ctx;
+    bool enable_health_check;
+    uint64_t health_check_interval_ms;
+    uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
+    bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
+    int max_cr_cnt_per_dev;
 } bondp_global_context_t;
 
 extern bondp_global_context_t *g_bondp_global_ctx;
@@ -150,25 +124,39 @@ typedef struct bondp_context {
     int dev_num;
     bondp_bonding_mode_t bonding_mode;
     bondp_bonding_level_t bonding_level;
-    topo_map_t *topo_map;
     /* Record the mapping from the locally created jetty's pjetty.jetty_id.id to the vjetty.jetty_id.id, */
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
     int real_async_fd; /* vcontex async_fd */
-    bondp_heath_check_ctx_t bondp_heath_check_ctx;
-    bondp_hash_table_t remote_v2p_token_id_table;
-#ifndef __cplusplus
-    atomic_ulong token_id_cnt;
-#else
-    std::atomic_ulong token_id_cnt;
-#endif
+    bondp_hc_ctx_t *hc_ctx;
+    bondp_fb_ctx_t *fb_ctx;
+    pthread_rwlock_t seg_cache_lock;
+    struct ub_hmap seg_cache_map;
+    unsigned long seg_cache_insert_cnt;
+    bool msn_enable;
+    bool seg_cache_enable;
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
 } bondp_context_t;
 
 typedef struct bondp_jfc {
     urma_jfc_t v_jfc;
     urma_jfc_t *p_jfc[URMA_UBAGG_DEV_MAX_NUM];
     int dev_num;
-    int lasted_polled_jfc_idx;
+#ifndef __cplusplus
+    atomic_int lasted_polled_jfc_idx;
+#else
+    std::atomic_int lasted_polled_jfc_idx;
+#endif
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t active_count;
+#ifndef __cplusplus
+    atomic_uint fast_return_count;
+#else
+    std::atomic_uint fast_return_count;
+#endif
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
 
@@ -178,6 +166,11 @@ typedef struct bondp_tseg {
     int dev_num;
     bondp_context_t *bondp_ctx;
     urma_ref_t use_cnt;
+#ifndef __cplusplus
+    atomic_bool deleting;
+#else
+    std::atomic_bool deleting;
+#endif
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_tseg_t;
@@ -228,22 +221,31 @@ typedef struct bondp_comp {
     bondp_hash_table_t v_conn_table;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
+#ifndef __cplusplus
+    atomic_bool deleting;
+#else
+    std::atomic_bool deleting;
+#endif
     // send
     bool modify_to_error;
     pthread_spinlock_t send_lock;
     wr_buf_t send_wr_buf;
-    pthread_spinlock_t send_wr_lock;
-    bool valid[URMA_UBAGG_DEV_MAX_NUM];
-    uint32_t msn;
-    urma_target_seg_t *check_tseg[URMA_UBAGG_DEV_MAX_NUM];
 #ifndef __cplusplus
-    atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
+    atomic_uint msn;
 #else
-    std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
+    std::atomic_uint msn;
+#endif
+#ifndef __cplusplus
+    atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+#else
+    std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #endif
     // recv
     wr_buf_t recv_wr_buf;
-    pthread_spinlock_t recv_wr_lock;
     uint32_t rqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 } bondp_comp_t;
 
@@ -251,6 +253,7 @@ typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
     urma_token_t import_token_value;
     bool import_token_valid;
+    bool skip_import_vjetty;
     urma_target_jetty_t *p_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     urma_target_seg_t *p_check_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     int local_dev_num;
@@ -258,8 +261,16 @@ typedef struct bondp_target_jetty {
     uint32_t local_active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t active_count;
-    bool valid[URMA_UBAGG_DEV_MAX_NUM];
+#ifndef __cplusplus
+    atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+#else
+    std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+#endif
     urma_ref_t use_cnt;
+    bool is_msn_enabled;
+    bool hc_registered;
+    uint32_t hc_node_idx;
+    struct ub_list hc_entry;
 } bondp_target_jetty_t;
 
 typedef struct bondp_import_target_seg {
@@ -268,20 +279,19 @@ typedef struct bondp_import_target_seg {
     int local_dev_num;
     int target_dev_num;
     bool is_reused;
+    bool skip_import_vseg;
     urma_ref_t use_cnt;
     uint64_t p_orig_handle[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     uint64_t v_orig_handle;
 } bondp_import_tseg_t;
 
 typedef struct urma_bond_seg_info_out {
-    urma_seg_t base;
-    urma_seg_t slaves[URMA_UBAGG_DEV_MAX_NUM];
-    int dev_num;
+    urma_seg_base_t slaves[URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_seg_info_out_t;
 
 typedef struct urma_bond_id_info_out {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
-    bool is_multipath; // deprecated
+    bool is_msn_enabled;
     uint8_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
     bool is_health_check_enable;
@@ -289,9 +299,20 @@ typedef struct urma_bond_id_info_out {
     bool connected[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } urma_bond_id_info_out_t;
 
-static inline bool is_empty_eid(urma_eid_t *eid)
+static inline void bondp_seg_to_base(const urma_seg_t *seg, urma_seg_base_t *base)
 {
-    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
+    base->ubva = seg->ubva;
+    base->len = seg->len;
+    base->attr.value = seg->attr.value;
+    base->token_id = seg->token_id;
+}
+
+static inline void bondp_seg_base_to_seg(const urma_seg_base_t *base, urma_seg_t *seg)
+{
+    seg->ubva = base->ubva;
+    seg->len = base->len;
+    seg->attr.value = base->attr.value;
+    seg->token_id = base->token_id;
 }
 
 static inline bool is_single_dev_mode(bondp_context_t *ctx)

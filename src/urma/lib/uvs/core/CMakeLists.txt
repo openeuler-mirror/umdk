@@ -7,22 +7,6 @@ add_library(tpsa SHARED
     ${TPSA_SO_DIR_SRCS}
 )
 
-if("${OPENSSL_LIBRARIES}" STREQUAL "")
-    find_package(OpenSSL REQUIRED)
-    if(OPENSSL_FOUND)
-        message(STATUS "OpenSSL found: ${OPENSSL_VERSION}")
-        message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
-    else()
-        message(FATAL_ERROR "OpenSSL not found.")
-    endif()
-else()
-    find_package(ZLIB REQUIRED)
-    if(ZLIB_FOUND)
-        include_directories(${ZLIB_INCLUDE_DIRS})
-    endif()
-endif()
-
-
 set(PROJECT_VERSION "0.0.3")
 set(PROJECT_VERSION_MAJOR "0")
 
@@ -42,7 +26,7 @@ target_include_directories(tpsa
         ${CMAKE_SOURCE_DIR}/urma/common/include
 )
 
-target_link_libraries(tpsa urma_common_static nl-genl-3 nl-3 ${ZLIB_LIBRARIES} ${OPENSSL_LIBRARIES})
+target_link_libraries(tpsa urma_common_static nl-genl-3 nl-3)
 
 install(TARGETS tpsa
     DESTINATION /usr/lib64

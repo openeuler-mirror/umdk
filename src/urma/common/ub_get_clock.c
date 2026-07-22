@@ -34,7 +34,7 @@ static double gettime_get_cpu_mhz(void)
     double b; /* cycles per microsecond */
     struct timeval tv1, tv2;
     uint64_t start_cycle;
-    double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+    double sx = 0, sy = 0, sxx = 0, sxy = 0;
     double tx, ty;
 
     /* y = a + b x */
@@ -70,7 +70,6 @@ static double gettime_get_cpu_mhz(void)
         sx += tx;
         sy += ty;
         sxx += tx * tx;
-        syy += ty * ty;
         sxy += tx * ty;
     }
 

@@ -13,6 +13,10 @@
 
 #include "urma_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
 
@@ -22,4 +26,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_
 int bondp_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr);
 int bondp_flush_jetty(urma_jetty_t *jetty, int cr_cnt, urma_cr_t *cr);
 
+#ifdef __cplusplus
+}
+#endif
 #endif // BONDP_DATAPATH_H

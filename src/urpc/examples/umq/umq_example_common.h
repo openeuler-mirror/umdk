@@ -59,8 +59,6 @@ struct urpc_example_config {
     uint32_t feature;
     umq_trans_mode_t trans_mode;
     int16_t eid_idx;
-    uint16_t cna;
-    uint32_t deid;
     umq_tp_mode_t tp_mode;
     umq_tp_type_t tp_type;
     uint32_t queue_num;

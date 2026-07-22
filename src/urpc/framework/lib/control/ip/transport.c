@@ -361,6 +361,8 @@ void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal
         }
     }
     connection_close(&entry->conn_handle);
+    transport_connect_timer_destroy(entry->connect_timer);
+    entry->connect_timer = NULL;
     if (normal) {
         // detaching the server, it should shut down normally
         if (entry->ref_cnt == 0 && urpc_list_is_empty(&entry->list)) {
@@ -374,8 +376,6 @@ void transport_acception_shutdown(urpc_server_accept_entry_t *entry, bool normal
     transport_server_task_clear(entry);
     URPC_LIB_LOG_INFO("acception force closed\n");
     server_accept_manager_remove(entry);
-    transport_connect_timer_destroy(entry->connect_timer);
-    entry->connect_timer = NULL;
 }
 
 static int transport_recv_socket_async(transport_handle_t *ctl_hdl, void *data, size_t data_size)
@@ -438,7 +438,7 @@ static int transport_recv_ssl_async(transport_handle_t *ctl_hdl, void *data, siz
         int err = SSL_get_error(ctl_hdl->ssl, done);
         if (err == SSL_ERROR_WANT_READ) {
             ctl_hdl->recv_record.offset = data_size - (size_t)total;
-            URPC_LIB_LOG_DEBUG("ssl reading data, total size: %zu, readed size: %zu, err: %s\n",
+            URPC_LIB_LOG_DEBUG("ssl reading data, total size: %zu, read size: %zu, err: %s\n",
                 data_size, ctl_hdl->recv_record.offset, strerror(errno));
             return URPC_RUNNING;
         }
@@ -733,7 +733,7 @@ static bool recv_one_message(transport_handle_t *ctl_hdl, bool *completed_msg)
         if (data == NULL) {
             URPC_LIB_LOG_ERR("malloc data memory failed\n");
             ctl_hdl->recv_record.data = NULL;
-            // shoud discard this msg
+            // should discard this msg
             ctl_hdl->state = TCP_ERROR;
             return true;
         }

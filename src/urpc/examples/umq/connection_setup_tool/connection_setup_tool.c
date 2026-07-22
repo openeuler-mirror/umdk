@@ -28,7 +28,7 @@
 #include "connection_setup_tool.h"
 
 #define TOOL_SOCKET_SEND_RECV_TIMEOUT   10
-#define TOOL_EXAMPLE_BUFFER_SIZE        8192
+#define TOOL_EXAMPLE_BUFFER_SIZE        4096
 #define TOOL_EXAMPLE_DEPTH              128
 #define TOOL_SERVER_RX_EXAMPLE_DEPTH    (2048 * 4)
 #define TOOL_MAX_POLL_BATCH             64
@@ -63,6 +63,9 @@ static uint64_t g_main_umq[MAIN_QUEUE_CNT];
 static int fill_umq_rx_buff(uint64_t umqh, uint32_t buf_cnt)
 {
     uint32_t need_post = buf_cnt;
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
     while (need_post > 0) {
         uint32_t alloc_rx_buf = need_post < TOOL_MAX_POLL_BATCH ? need_post : TOOL_MAX_POLL_BATCH;
         umq_buf_t *rx_buf = umq_buf_alloc(TOOL_EXAMPLE_BUFFER_SIZE, alloc_rx_buf, umqh, NULL);
@@ -71,7 +74,7 @@ static int fill_umq_rx_buff(uint64_t umqh, uint32_t buf_cnt)
             return -1;
         }
         umq_buf_t *bad_buf;
-        if (umq_post(umqh, rx_buf, UMQ_IO_RX, &bad_buf) != 0) {
+        if (umq_post(umqh, rx_buf, &io_rx_option, &bad_buf) != 0) {
             umq_buf_free(bad_buf);
             LOG_PRINT_ERR("umq_post failed\n");
             return -1;
@@ -624,8 +627,19 @@ static int send_req(umq_info_t *umq_info)
     umq_rearm_interrupt(umqh, false, &rx_option);
 
     umq_buf_t *bad_buf;
-    umq_buf_t *poll_buf[32];
-    int poll_cnt = umq_poll(umqh, UMQ_IO_ALL, poll_buf, 32);
+    umq_buf_t *poll_buf[TOOL_MAX_POLL_BATCH];
+    umq_io_option_t io_all_option = {
+        .io_direction = UMQ_IO_ALL,
+    };
+
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
+
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+    int poll_cnt = umq_poll(umqh, &io_all_option, poll_buf, TOOL_MAX_POLL_BATCH);
     for (int i = 0; i < poll_cnt; i++) {
         if (poll_buf[i]->status == UMQ_FAKE_BUF_FC_UPDATE) {
             g_tatal_umq_info_list.fc_update++;
@@ -635,7 +649,7 @@ static int send_req(umq_info_t *umq_info)
 
         if (poll_buf[i]->io_direction == UMQ_IO_RX) {
             umq_buf_reset(poll_buf[i]);
-            if (umq_post(umqh, poll_buf[i], UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            if (umq_post(umqh, poll_buf[i], &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
                 umq_buf_free(bad_buf);
                 LOG_PRINT_ERR("post rx failed\n");
                 return -1;
@@ -656,7 +670,7 @@ static int send_req(umq_info_t *umq_info)
     (void)sprintf(tx_post_buf->buf_data, "hello server i am client");
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
-    int ret = umq_post(umqh, tx_post_buf, UMQ_IO_TX, &bad_buf);
+    int ret = umq_post(umqh, tx_post_buf, &io_tx_option, &bad_buf);
     if (ret != UMQ_SUCCESS) {
         umq_buf_free(bad_buf);
         if (ret == -UMQ_ERR_EAGAIN) {
@@ -681,7 +695,11 @@ static void return_rsp(umq_ctx_t *umq_ctx)
     umq_buf_pro_t *pro = (umq_buf_pro_t *)tx_post_buf->qbuf_ext;
     pro->opcode = UMQ_OPC_SEND;
     umq_buf_t *bad_buf;
-    int ret = umq_post(umqh, tx_post_buf, UMQ_IO_TX, &bad_buf);
+
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
+    int ret = umq_post(umqh, tx_post_buf, &io_rx_option, &bad_buf);
     if (ret != UMQ_SUCCESS) {
         umq_buf_free(bad_buf);
         if (ret == -UMQ_ERR_EAGAIN) {
@@ -709,8 +727,11 @@ static void process_tx_interrupt(fd_ctx_t *fd_ctx)
 
     int tx_cnt = 0;
     umq_buf_t *buf;
+    umq_io_option_t io_tx_option = {
+        .io_direction = UMQ_IO_TX,
+    };
     do {
-        tx_cnt = umq_poll(umqh, UMQ_IO_TX, &buf, 1);
+        tx_cnt = umq_poll(umqh, &io_tx_option, &buf, 1);
         if (tx_cnt == 1) {
             umq_buf_free(buf);
         }
@@ -735,8 +756,11 @@ static void process_rx_interrupt(fd_ctx_t *fd_ctx)
 
     int rx_cnt = 0;
     umq_buf_t *buf;
+    umq_io_option_t io_rx_option = {
+        .io_direction = UMQ_IO_RX,
+    };
     do {
-        rx_cnt = umq_poll(umqh, UMQ_IO_RX, &buf, 1);
+        rx_cnt = umq_poll(umqh, &io_rx_option, &buf, 1);
         if (rx_cnt == 1) {
             if (buf->status == UMQ_FAKE_BUF_FC_UPDATE) {
                 umq_buf_free(buf);
@@ -749,7 +773,7 @@ static void process_rx_interrupt(fd_ctx_t *fd_ctx)
             return_rsp(umq_ctx);
             umq_buf_reset(buf);
             umq_buf_t *bad_buf;
-            if (umq_post(umq_ctx->umqh, buf, UMQ_IO_RX, &bad_buf) != UMQ_SUCCESS) {
+            if (umq_post(umq_ctx->umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
                 umq_buf_free(bad_buf);
                 LOG_PRINT_ERR("post rx failed\n");
             }
@@ -792,7 +816,7 @@ static int wait_work(void)
                     process_rx_interrupt(fd_ctx);
                     break;
                 default:
-                    LOG_PRINT_ERR("unknow type\n");
+                    LOG_PRINT_ERR("unknown type\n");
                     break;
             }
         }
@@ -896,6 +920,7 @@ UNINIT_UMQ:
 
 CLOSE_FD:
     close(g_epoll_fd);
+    g_epoll_fd = -1;
     return ret;
 }
 
@@ -985,6 +1010,7 @@ UNINIT_UMQ:
 
 CLOSE_FD:
     close(g_epoll_fd);
+    g_epoll_fd = -1;
     return 0;
 }
 

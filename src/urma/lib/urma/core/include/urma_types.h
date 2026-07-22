@@ -39,8 +39,8 @@ extern "C" {
 #define URMA_MAX_PRIORITY_CNT       16
 #define URMA_IPV4_MAP_IPV6_PREFIX   (0x0000ffff)
 #define URMA_MAX_EID_CNT            1024 /* refer to UBCORE_MAX_SIP */
-#define URMA_CC_IDX_TABLE_SIZE      81   /* support 9 priorities and 9 algorithms */
-                                         /* same as UBCORE_CC_IDX_TABLE_SIZE */
+#define URMA_CC_IDX_TABLE_SIZE      80   /* support 8 priorities and 10 algorithms */
+                                        /* same as UBCORE_CC_IDX_TABLE_SIZE */
 #define URMA_OPT_REVERSED_NUM 4
 
 #define URMA_EID_STR_LEN (39)
@@ -278,6 +278,7 @@ typedef struct urma_device_cap {
     uint32_t max_fetch_and_xor_size;
     urma_atomic_feature_t atomic_feat; /* [Public] support atomic feature of device */
     uint16_t trans_mode;               /* [Public] bit OR of supported transport modes */
+    uint16_t reserved;
     uint16_t congestion_ctrl_alg;      /* [Public] one or more mode from urma_congestion_ctrl_alg_t */
     uint32_t ceq_cnt;                  /* [Public] ceq_cnt */
     uint32_t max_tp_in_tpg;            /* [Public] max tp in tpg */
@@ -321,6 +322,10 @@ struct urma_provider_ops;
 typedef enum urma_transport_type {
     URMA_TRANSPORT_INVALID = -1,
     URMA_TRANSPORT_UB = 0,
+    URMA_TRANSPORT_IB = 1,
+    URMA_TRANSPORT_IP = 2,
+    URMA_TRANSPORT_SOFTUB = 3,
+    URMA_TRANSPORT_HNS_UB = 5,
     URMA_TRANSPORT_MAX
 } urma_transport_type_t;
 
@@ -333,26 +338,28 @@ typedef enum urma_transport_mode {
 typedef enum urma_tp_cc_alg {
     URMA_TP_CC_NONE = 0,
     URMA_TP_CC_DCQCN,
-    URMA_TP_CC_DCQCN_AND_NETWORK_CC,
-    URMA_TP_CC_LDCP,
-    URMA_TP_CC_LDCP_AND_CAQM,
-    URMA_TP_CC_LDCP_AND_OPEN_CC,
-    URMA_TP_CC_HC3,
+    URMA_TP_CC_CAQM,
+    URMA_TP_CC_LDCP = 3,
+    URMA_TP_CC_LDCP_L2_HEADER,
+    URMA_TP_CC_LDCP_TP_HEADER,
     URMA_TP_CC_DIP,
     URMA_TP_CC_ACC,
+    URMA_TP_CC_CUSTOM_1,
+    URMA_TP_CC_CUSTOM_2,
     URMA_TP_CC_NUM,
 } urma_tp_cc_alg_t; /* larger means better */
 
 typedef enum urma_congestion_ctrl_alg {
     URMA_CC_NONE = 0x1 << URMA_TP_CC_NONE,
     URMA_CC_DCQCN = 0x1 << URMA_TP_CC_DCQCN,
-    URMA_CC_DCQCN_AND_NETWORK_CC = 0x1 << URMA_TP_CC_DCQCN_AND_NETWORK_CC,
+    URMA_CC_CAQM = 0x1 << URMA_TP_CC_CAQM,
     URMA_CC_LDCP = 0x1 << URMA_TP_CC_LDCP,
-    URMA_CC_LDCP_AND_CAQM = 0x1 << URMA_TP_CC_LDCP_AND_CAQM,
-    URMA_CC_LDCP_AND_OPEN_CC = 0x1 << URMA_TP_CC_LDCP_AND_OPEN_CC,
-    URMA_CC_HC3 = 0x1 << URMA_TP_CC_HC3,
+    URMA_CC_LDCP_L2_HEADER = 0x1 << URMA_TP_CC_LDCP_L2_HEADER,
+    URMA_CC_LDCP_TP_HEADER = 0x1 << URMA_TP_CC_LDCP_TP_HEADER,
     URMA_CC_DIP = 0x1 << URMA_TP_CC_DIP,
-    URMA_CC_ACC = 0x1 << URMA_TP_CC_ACC
+    URMA_CC_ACC = 0x1 << URMA_TP_CC_ACC,
+    URMA_CC_CUSTOM_1 = 0x1 << URMA_TP_CC_CUSTOM_1,
+    URMA_CC_CUSTOM_2 = 0x1 << URMA_TP_CC_CUSTOM_2,
 } urma_congestion_ctrl_alg_t;
 
 typedef struct urma_cc_entry {
@@ -414,7 +421,8 @@ typedef union urma_jfc_flag {
         uint32_t lock_free  : 1;
         uint32_t jfc_inline : 1;
         uint32_t non_blocking : 1;
-        uint32_t reserved   : 29;
+        uint32_t has_drv_ext : 1;
+        uint32_t reserved   : 28;
     } bs;
     uint32_t value;
 } urma_jfc_flag_t;
@@ -422,7 +430,7 @@ typedef union urma_jfc_flag {
 typedef struct urma_jfc_cfg {
     uint32_t depth;       /* [Required] the depth of jfc, no greater than urma_device_cap_t->jfc_depth */
     urma_jfc_flag_t flag; /* [Optional] see urma_jfc_flag_t, set flag.value to be 0 by default */
-    uint32_t ceqn;        /* [Optional] event queue id, no greater than urma_device_cap_t->ceq_cnt
+    uint32_t ceqn;        /* [Optional] event queue id, less than urma_device_cap_t->ceq_cnt
                               set to 0 by default */
     urma_jfce_t *jfce;    /* [Required] the event of jfc */
     uint64_t user_ctx;    /* [Optional] private data of jfc, set to NULL by default */
@@ -545,13 +553,13 @@ typedef struct urma_jfs_opt {
 } urma_jfs_opt_t;
 
 typedef struct urma_jfs_cfg {
-    uint32_t depth;                   /* [Required] the depth of jfs, defaut urma_device_cap_t->jfs_depth */
+    uint32_t depth;                   /* [Required] the depth of jfs, default urma_device_cap_t->jfs_depth */
     urma_jfs_flag_t flag;             /* [Optional] see urma_jfs_flag_t definition */
     urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
     uint8_t priority;                 /* [Optional] set the priority of JFS, ranging from [0, 15]
                                          Services with low delay need to set high priority. */
-    uint8_t max_sge;                  /* [Optional] max sge count in one wr, defaut urma_device_cap_t->max_jfs_sge */
-    uint8_t max_rsge;         /* [Optional] max remote sge count in one wr, defaut urma_device_cap_t->max_jfs_sge */
+    uint8_t max_sge;                  /* [Optional] max sge count in one wr, default urma_device_cap_t->max_jfs_sge */
+    uint8_t max_rsge;         /* [Optional] max remote sge count in one wr, default urma_device_cap_t->max_jfs_sge */
     uint32_t max_inline_data; /* [Optional] the max inline data size of JFS. if the parameter is 0,
                                  the system will assign device's max inline data length. */
     uint8_t rnr_retry;        /* [Optional] number of times that jfs will resend packets before report error,
@@ -601,8 +609,9 @@ typedef union urma_jfr_flag {
                                    /* (0x2): OI, initiator ordering */
                                    /* (0x3): OL, low layer ordering */
                                    /* (0x4): UNO, unreliable non ordering */
+        uint32_t has_drv_ext  : 1; /* 0: no extension data.
+                                      1: extension data is appended after urma_rjetty_t. */
         uint32_t non_blocking : 1;
-        uint32_t has_drv_ext  : 1;
         uint32_t reserved     : 17;
     } bs;
     uint32_t value;
@@ -639,10 +648,10 @@ typedef struct urma_jfr_opt {
 typedef struct urma_jfr_cfg {
     uint32_t id;                      /* [Optional] specify jfr id. If the parameter is 0,
                                          the system will randomly assign a non-0 value. */
-    uint32_t depth;                   /* [Required] total depth, include berth, defaut urma_device_cap_t->jfr_depth. */
+    uint32_t depth;                   /* [Required] total depth, include berth, default urma_device_cap_t->jfr_depth. */
     urma_jfr_flag_t flag;             /* [Optional] whether is in TAG_matching, whether is in DC/IDC mode. */
     urma_transport_mode_t trans_mode; /* [Required] transport mode, must be supported by the device */
-    uint8_t max_sge;                  /* [Optional] max sge count in one wr, defaut urma_device_cap_t->max_jfr_sge. */
+    uint8_t max_sge;                  /* [Optional] max sge count in one wr, default urma_device_cap_t->max_jfr_sge. */
     uint8_t min_rnr_timer;            /* [Optional] the minimum RNR NACK timer, ranging from [0, 31], i.e.
                                          the time before jfr sends NACK to the sender for the reason of "ready to receive" */
     urma_jfc_t *jfc;                  /* [Required] need to specify jfc. */
@@ -682,15 +691,12 @@ typedef union urma_import_jetty_flag {
                                    /* (0x4): UNO, unreliable non ordering */
         uint32_t share_tp     : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
                                          this flag can only be set to 0. */
-        uint32_t has_drv_ext  : 1;
-        uint32_t reserved     : 19;
+        uint32_t has_drv_ext  : 1; /* Driver-defined behavior for import_jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after urma_rjetty_t. */
+        uint32_t reserved     : 18;
     } bs;
     uint32_t value;
-    struct {
-        uint64_t reserved;
-        uint64_t stag;
-        uint64_t dtag;
-    } user_tag;
 } urma_import_jetty_flag_t;
 
 typedef enum urma_tp_type {
@@ -715,8 +721,10 @@ typedef union urma_jetty_flag {
         uint32_t share_jfr    : 1; /* 0: URMA_NO_SHARE_JFR.
                                       1: URMA_SHARE_JFR. */
         uint32_t non_blocking : 1;
-        uint32_t has_drv_ext  : 1;
-        uint32_t reserved     : 29;
+        uint32_t has_drv_ext  : 1; /* Driver-defined behavior for create/import jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after jetty object. */
+        uint32_t reserved     : 28;
     } bs;
     uint32_t value;
 } urma_jetty_flag_t;
@@ -752,6 +760,20 @@ typedef enum urma_target_type {
     URMA_JETTY,
     URMA_JETTY_GROUP
 } urma_target_type_t;
+
+typedef union urma_ext_flag {
+    struct {
+        uint32_t enable : 1;
+        uint32_t reserved : 31;
+    } bs;
+    uint32_t value;
+} urma_ext_flag_t;
+
+typedef struct urma_ext {
+    urma_ext_flag_t flag;
+    uint32_t length;
+    char buf[0];
+} urma_ext_t;
 
 typedef struct urma_rjetty {
     urma_jetty_id_t jetty_id;
@@ -914,7 +936,9 @@ typedef union urma_seg_attr {
                                        1: segment with user iova addr. */
         uint32_t user_token_id : 1; /* 0: token_id is allocated and should be freed by urma.
                                        1: token_id is allocated by user in urma_seg_cfg. */
-        uint32_t reserved      : 18;
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data appended after urma_seg_t. */
+        uint32_t reserved      : 17;
     } bs;
     uint32_t value;
 } urma_seg_attr_t;
@@ -1033,10 +1057,10 @@ typedef union urma_jfs_wr_flag {
                                           1: Notify local process after the task is completed. */
         uint32_t inline_flag      : 1; /* 0: not inline.
                                           1: inline data. */
-
         uint32_t db_bypass        : 1;
+        uint32_t udf : 1;
         uint32_t has_drv_ext      : 1;
-        uint32_t reserved         : 23;
+        uint32_t reserved         : 22;
     } bs;
     uint32_t value;
 } urma_jfs_wr_flag_t;
@@ -1337,7 +1361,9 @@ typedef union urma_get_tp_cfg_flag {
         uint32_t uboe            : 1;
         uint32_t pre_defined     : 1;
         uint32_t dynamic_defined : 1;
-        uint32_t reserved        : 26;
+        uint32_t udp             : 5;
+        uint32_t group_id        : 15;
+        uint32_t reserved        : 6;
     } bs;
     uint32_t value;
 } urma_get_tp_cfg_flag_t;
@@ -1390,7 +1416,10 @@ typedef struct urma_tp_attr_value {
     uint8_t spray_en : 1;
     uint8_t udp_global_en : 1;
     uint8_t reserve_0 : 2;
-    uint8_t reserved[73];
+    uint16_t sl_bitmap;
+    uint8_t dscp_config_mode : 1;
+    uint8_t reserve_1 : 7;
+    uint8_t reserved[70];
 } urma_tp_attr_value_t;
 #pragma pack()
 
@@ -1414,6 +1443,9 @@ typedef enum urma_vlog_level {
 } urma_vlog_level_t;
 
 typedef void (*urma_log_cb_t)(int level, char *message);
+
+/* location log callback function definition */
+typedef void (*urma_loc_log_cb)(int level, const char *file, const char *function, int line, char *message);
 
 #ifdef __cplusplus
 }

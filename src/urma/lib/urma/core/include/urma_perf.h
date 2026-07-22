@@ -14,9 +14,11 @@
 #include <stdint.h>
 #include "urma_opcode.h"
 
-#define URMA_PERF_BUCKET_MAX_NUM        (32u)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define URMA_PERF_THREAD_MAX_NUM        (128u)
-#define URMA_PERF_MAX_THRESH_NS         (1000000u)
 
 typedef enum urma_perf_type {
     UB_JETTY_POST_SEND,
@@ -36,11 +38,6 @@ typedef enum urma_perf_type {
     BOND_REARM_JFC,
     URMA_PERF_RECORD_TYPE_MAX,
 } urma_perf_record_type_t;
-
-typedef struct urma_perf_attr {
-    uint32_t thresh_num;
-    uint64_t thresh_array[URMA_PERF_BUCKET_MAX_NUM];
-} urma_perf_attr_t;
 
 typedef struct urma_perf_stats {
     uint64_t retry_count;
@@ -69,22 +66,15 @@ urma_status_t urma_start_perf(void);
 urma_status_t urma_stop_perf(void);
 
 /**
- * Configure performance monitoring attributes.
- * @param[in] perf_attr: Pointer to performance attributes structure;
- * Return: 0 on success, other value on error
- * 
- * Constraints:
- * - This function can only be called after urma_start_perf()
- * - The param perf_attr->thresh_array must use nanosecond granularity
- */
-urma_status_t urma_config_perf_attr(urma_perf_attr_t *perf_attr);
-
-/**
  * Get performance statistics information.
  * @param[in] perf_buf: Buffer to store performance information, user needs to allocate the memory;
  * @param[in] length: Pointer to buffer length, input as buffer size, output as actual data length;
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_get_perf_info(char *perf_buf, uint32_t *length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

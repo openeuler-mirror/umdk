@@ -30,7 +30,7 @@ static int admin_check_cmd_len(int argc, char *argv[])
 
         len += tmp_len;
     }
-    if ((len > INT_MAX) || ((int)len + argc > MAX_CMDLINE_LEN)) {
+    if ((len > INT_MAX) || ((int)len + argc >= MAX_CMDLINE_LEN)) {
         URMA_ADMIN_LOG("user: %s, cmd len out of range.\n", getlogin());
         return -1;
     }

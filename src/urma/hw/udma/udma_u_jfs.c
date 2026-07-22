@@ -24,6 +24,8 @@ static uint32_t get_ctl_len(uint8_t opcode)
 		return SQE_WRITE_IMM_CTL_LEN;
 	case UDMA_OPCODE_WRITE_WITH_NOTIFY:
 		return SQE_WRITE_NOTIFY_CTL_LEN;
+	case UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD:
+		return SQE_WRITE_ATOMICADD_CTL_LEN;
 	default:
 		return SQE_NORMAL_CTL_LEN;
 	}
@@ -61,6 +63,8 @@ static uint32_t get_wqebb_cnt(struct udma_jfs_sqe_ctl *wqe_ctl)
 		break;
 	case UDMA_OPCODE_NOP:
 		return NOP_WQEBB_CNT;
+	case UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD:
+		return WRITE_WITH_ATOMICSTORE_ADD_WQEBB_CNT;
 	default:
 		break;
 	}
@@ -79,10 +83,10 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 	case UDMA_ATOMIC_LEN_16:
 		if (opcode == URMA_OPC_CAS)
 			return true;
-		UDMA_LOG_ERR("the atomic opcode must be CAS when len is 16.\n");
+		UDMA_LOG_ERR("the atomic opcode must be CAS when length is 16.\n");
 		return false;
 	default:
-		UDMA_LOG_ERR("invalid atomic len %u.\n", len);
+		UDMA_LOG_ERR("invalid atomic length %u.\n", len);
 		return false;
 	}
 }
@@ -90,11 +94,11 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 			  struct udma_create_jetty_resp *resp)
 {
-	if (!sq->sq_reserved || sq->cstm)
+	if (!sq->dtu_en && (!sq->sq_reserved || sq->cstm))
 		return 0;
 
 	if (resp->buf_addr == 0) {
-		UDMA_LOG_ERR("failed to get reserved addr.\n");
+		UDMA_LOG_ERR("failed to get reserved address.\n");
 		return EINVAL;
 	}
 
@@ -113,7 +117,7 @@ static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cf
 	int ret;
 
 	if (cfg->priority >= UDMA_MAX_PRIORITY) {
-		UDMA_LOG_ERR("user mode jfs priority is out of range, priority is %u.\n",
+		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
 			     cfg->priority);
 		return EINVAL;
 	}
@@ -130,7 +134,7 @@ static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cf
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_active_jfs(&jfs->base, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to urma cmd active jfs, ret is %d.\n", ret);
+		UDMA_LOG_ERR("failed to URMA command active JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -152,7 +156,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	int ret;
 
 	if (cfg->priority >= UDMA_MAX_PRIORITY) {
-		UDMA_LOG_ERR("user mode jfs priority is out of range, priority is %u.\n",
+		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
 			     cfg->priority);
 		return EINVAL;
 	}
@@ -166,10 +170,11 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	cmd.is_hugepage = jfs->sq.hugepage != NULL;
 	cmd.jetty_type = jfs->jfs_type;
 	cmd.jfs_id = jfs->sq.db.id;
+	cmd.dtu_en = jfs->sq.dtu_en;
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to urma cmd create jfs, ret is %d.\n", ret);
+		UDMA_LOG_ERR("failed to URMA command create JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -185,6 +190,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *ctx = sq->ctx;
+	uint32_t jetty_depth = cfg->depth;
 	uint32_t aligned_size;
 	uint32_t sqe_bb_cnt;
 	bool is_ccu_jetty;
@@ -203,6 +209,13 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	if (sqe_bb_cnt > MAX_SQE_BB_NUM)
 		sqe_bb_cnt = MAX_SQE_BB_NUM;
 	sq->sqe_bb_cnt = sqe_bb_cnt;
+	if (sq->is_wqe_lock_buf_jetty) {
+		sq->sqe_bb_cnt = UDMA_CCU_SQE_BB_CNT;
+		jetty_depth = (1 << ctx->lock_buf_bb_shift);
+		sq->qbuf = (void *)(((uint64_t)sq->qbuf) << SQE_VA_L_OFFSET);
+		sq->qbuf_size = sq->sqe_bb_cnt * jetty_depth * UDMA_JFS_WQEBB;
+		return 0;
+	}
 	sq->max_sge_num = cfg->max_sge;
 
 	is_ccu_jetty = ctx->ccu_jetty_max_cnt &&
@@ -210,9 +223,10 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 		       sq->db.id < ctx->ccu_jetty_start_id + ctx->ccu_jetty_max_cnt;
 	aligned_size = is_ccu_jetty ?
 		(UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB) : UDMA_HW_PAGE_SIZE;
-	if (!udma_u_alloc_queue_buf(sq, sqe_bb_cnt * cfg->depth,
+	sq->aligned_size = aligned_size;
+	if (!udma_u_alloc_queue_buf(sq, sq->sqe_bb_cnt * jetty_depth,
 				    UDMA_JFS_WQEBB, aligned_size, true)) {
-		UDMA_LOG_ERR("failed to alloc jfs wqe buf.\n");
+		UDMA_LOG_ERR("failed to alloc JFS work queue entry buffer.\n");
 		goto err_alloc_buf;
 	}
 
@@ -268,14 +282,27 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	jfs->sq.ctx = udma_ctx;
 	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
+	jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_sq(&jfs->sq, cfg)) {
-		UDMA_LOG_ERR("failed to create sq.\n");
+		UDMA_LOG_ERR("failed to create SQ.\n");
 		goto err_create_sq;
 	}
 
 	jfs->jfs_type = UDMA_URMA_NORMAL_JETTY_TYPE;
-	if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
-		goto err_exec_cmd;
+	if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg)) {
+		if (jfs->sq.dtu_en) {
+			jfs->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&jfs->sq, jfs->sq.sqe_bb_cnt * cfg->depth,
+			    UDMA_JFS_WQEBB, jfs->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
+				goto err_exec_cmd;
+			}
+			if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
+				goto err_exec_cmd;
+		} else {
+			goto err_exec_cmd;
+		}
+	}
 
 	jfs->sq.db.id = jfs->base.jfs_id.id;
 	jfs->sq.db.type = UDMA_MMAP_JETTY_DSQE;
@@ -332,7 +359,7 @@ urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t 
 	}
 
 	if (!jfs_cnt) {
-		UDMA_LOG_ERR("jfs cnt is 0.\n");
+		UDMA_LOG_ERR("JFS count is 0.\n");
 		return URMA_EINVAL;
 	}
 
@@ -345,7 +372,6 @@ urma_status_t udma_u_delete_jfs_batch(urma_jfs_t **jfs, int jfs_cnt, urma_jfs_t 
 	return URMA_SUCCESS;
 }
 
-#ifdef ST64B
 static void st64b(uint64_t *src, uint64_t *dst)
 {
 	asm volatile (
@@ -360,38 +386,45 @@ static void st64b(uint64_t *src, uint64_t *dst)
 		"ldr x6, [x9, #48]\n"
 		"ldr x7, [x9, #56]\n"
 		".inst 0xf83f9140\n"
-		::"r" (src), "r"(dst):"cc", "memory"
+		::"r" (src), "r"(dst)
+		: "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
+		  "x9", "x10", "cc", "memory"
 	);
 }
-#endif
 
-static void udma_write_dsqe(struct udma_u_jetty_queue *sq,
+static void udma_write_dsqe(struct udma_u_context *udma_ctx, struct udma_u_jetty_queue *sq,
 			    struct udma_jfs_sqe_ctl *ctrl)
 {
 	ctrl->sqe_bb_idx = sq->pi;
-#ifdef ST64B
-	st64b(((uint64_t *)ctrl), (uint64_t *)sq->dwqe_addr);
-#else
-	mmio_memcpy_x64((uint64_t *)sq->dwqe_addr, (uint64_t *)ctrl);
-#endif
+
+	if (udma_ctx->st64b_en)
+		st64b(((uint64_t *)ctrl), (uint64_t *)sq->dwqe_addr);
+	else
+		mmio_memcpy_x64((uint64_t *)sq->dwqe_addr, (uint64_t *)ctrl);
 }
 
 static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_jetty_queue *sq,
-					  urma_jfs_wr_t *wr, uint8_t *udma_opcode)
+					  urma_jfs_wr_t *wr, uint8_t *udma_opcode, bool is_atomic_add_en)
 {
 	switch (opcode) {
 	case URMA_OPC_READ:
 		*udma_opcode = UDMA_OPCODE_READ;
-		goto read_sge_check;
+		return wr->rw.dst.num_sge > UDMA_JFS_MAX_SGE_READ || wr->rw.dst.num_sge > sq->max_sge_num;
 	case URMA_OPC_WRITE:
 		*udma_opcode = UDMA_OPCODE_WRITE;
 		goto default_sge_num;
 	case URMA_OPC_WRITE_IMM:
 		*udma_opcode = UDMA_OPCODE_WRITE_WITH_IMM;
-		goto write_with_imm_sge_check;
+		return wr->rw.src.num_sge > UDMA_JFS_MAX_SGE_WRITE_IMM || wr->rw.src.num_sge > sq->max_sge_num;
 	case URMA_OPC_WRITE_NOTIFY:
 		*udma_opcode = UDMA_OPCODE_WRITE_WITH_NOTIFY;
-		goto write_with_notify_sge_check;
+		return wr->rw.src.num_sge > UDMA_JFS_MAX_SGE_NOTIFY || wr->rw.src.num_sge > sq->max_sge_num;
+	case URMA_OPC_WRITE_ATOMIC:
+		if (!is_atomic_add_en)
+			return true;
+		*udma_opcode = UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD;
+		return wr->rw.src.num_sge != UDMA_JFS_MAX_SGE_STOMICADD ||
+		       wr->rw.src.num_sge > sq->max_sge_num || wr->rw.dst.num_sge != WRITE_ATOMICADD_DSGE_NUM;
 	case URMA_OPC_SEND:
 		*udma_opcode = UDMA_OPCODE_SEND;
 		goto send_sge_check;
@@ -411,18 +444,12 @@ static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_je
 		*udma_opcode = UDMA_OPCODE_NOP;
 		goto default_sge_num;
 	default:
-		UDMA_LOG_ERR("invalid opcode :%u\n", (uint8_t)opcode);
+		UDMA_LOG_ERR("invalid opcode: %u\n", (uint8_t)opcode);
 		return true;
 	}
 
 cas_faa_sge_check:
 	return sq->max_sge_num == 0;
-read_sge_check:
-	return wr->rw.dst.num_sge > UDMA_JFS_MAX_SGE_READ || wr->rw.dst.num_sge > sq->max_sge_num;
-write_with_notify_sge_check:
-	return wr->rw.src.num_sge > UDMA_JFS_MAX_SGE_NOTIFY || wr->rw.src.num_sge > sq->max_sge_num;
-write_with_imm_sge_check:
-	return wr->rw.src.num_sge > UDMA_JFS_MAX_SGE_WRITE_IMM || wr->rw.src.num_sge > sq->max_sge_num;
 send_sge_check:
 	return wr->send.src.num_sge > sq->max_sge_num;
 default_sge_num:
@@ -450,6 +477,8 @@ static uint32_t get_max_inline_size(uint8_t opcode, uint32_t sq_inline_size)
 		return UDMA_MIN(sq_inline_size, SQE_WRITE_IMM_INLINE_SIZE);
 	case UDMA_OPCODE_WRITE_WITH_NOTIFY:
 		return UDMA_MIN(sq_inline_size, SQE_WRITE_NTF_INLINE_SIZE);
+	case UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD:
+		return UDMA_MIN(sq_inline_size, SQE_WRITE_ATOMICADD_INLINE_SIZE);
 	default:
 		return sq_inline_size;
 	}
@@ -474,7 +503,7 @@ static int udma_fill_send_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 	if (wr->flag.bs.inline_flag) {
 		for (i = 0; i < wr->send.src.num_sge; i++) {
 			if (total_len + sgl[i].len > sq->max_inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					     total_len + sgl[i].len, sq->max_inline_size);
 				return EINVAL;
 			}
@@ -532,7 +561,7 @@ static int udma_fill_write_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 	if (wr->flag.bs.inline_flag) {
 		for (i = 0; i < wr->rw.src.num_sge; i++) {
 			if (total_len + sgl[i].len > inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					     total_len + sgl[i].len, inline_size);
 				return EINVAL;
 			}
@@ -543,7 +572,7 @@ static int udma_fill_write_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 		}
 		ctrl->inline_msg_len = total_len;
 		wqe_info->wqe_cnt = (ctrl_len + total_len - 1) / UDMA_JFS_WQEBB + 1;
-	} else {
+	} else if (wqe_info->opcode != UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD) {
 		for (i = 0; i < wr->rw.src.num_sge; i++) {
 			if (sgl[i].len == 0)
 				continue;
@@ -554,15 +583,34 @@ static int udma_fill_write_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 								       (uint8_t *)sq->qbuf, (uint8_t *)sq->qbuf_end);
 			sge_num++;
 		}
+		ctrl->sge_num = sge_num;
 		wqe_info->wqe_cnt = (ctrl_len + (sge_num - 1) * UDMA_SGE_SIZE) / UDMA_JFS_WQEBB + 1;
+	} else {
+		if (sgl[0].len > SQE_CTL_ATOMICADD_LEN_BIT) {
+			UDMA_LOG_ERR("local payload length overflow.\n");
+			return EINVAL;
+		}
+		dst_addr = udma_inc_ptr_wrap((uint8_t *)ctrl,
+					     SQE_ATOMICADD_DATA_ADDR_FIELD,
+					     (uint8_t *)sq->qbuf, (uint8_t *)sq->qbuf_end);
+		memcpy(dst_addr, &sgl[0].addr, sizeof(uint64_t));
+		ctrl->sge_num = sgl[0].len & SQE_CTL_ATOMICADD_LEN_L_BIT;
+		ctrl->write_len = (sgl[0].len & SQE_CTL_ATOMICADD_LEN_H_BIT) >> WRITE_ATOMICADD_LEN_H_OFFSET;
+		wqe_info->wqe_cnt = WRITE_WITH_ATOMICSTORE_ADD_WQEBB_CNT;
 	}
 
 	sgl = wr->rw.dst.sge;
-	udma_seg = to_udma_u_seg(sgl[0].tseg);
-	ctrl->sge_num = sge_num;
-	ctrl->rmt_jetty_or_seg_id = udma_seg->tid;
-	ctrl->token_en = udma_seg->token_value_valid;
-	ctrl->rmt_token_value = udma_seg->token_value.token;
+	if (sgl[0].tseg) {
+		udma_seg = to_udma_u_seg(sgl[0].tseg);
+		ctrl->rmt_jetty_or_seg_id = udma_seg->tid;
+		ctrl->token_en = udma_seg->token_value_valid;
+		ctrl->rmt_token_value = udma_seg->token_value.token;
+	} else {
+		ctrl->rmt_jetty_or_seg_id = sgl[0].user_tseg->token_id >> UDMA_TID_SHIFT;
+		ctrl->token_en = !!(sgl[0].user_tseg->attr.bs.token_policy);
+		ctrl->rmt_token_value = sgl[0].user_tseg->token_value.token;
+	}
+
 	ctrl->target_hint = wr->rw.target_hint;
 	ctrl->rmt_addr_l_or_token_id = sgl[0].addr & UDMA_SQE_CTL_RMA_ADDR_BIT;
 	ctrl->rmt_addr_h_or_token_value = (sgl[0].addr >> UDMA_SQE_CTL_RMA_ADDR_OFFSET) & UDMA_SQE_CTL_RMA_ADDR_BIT;
@@ -599,14 +647,20 @@ static int udma_fill_read_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr,
 	*wqe_cnt = (SQE_NORMAL_CTL_LEN + (sge_num - 1) * UDMA_SGE_SIZE) / UDMA_JFS_WQEBB + 1;
 
 	sgl = wr->rw.src.sge;
-	udma_seg = to_udma_u_seg(sgl[0].tseg);
+	if (sgl[0].tseg) {
+		udma_seg = to_udma_u_seg(sgl[0].tseg);
+		ctrl->rmt_jetty_or_seg_id = udma_seg->tid;
+		ctrl->token_en = udma_seg->token_value_valid;
+		ctrl->rmt_token_value = udma_seg->token_value.token;
+	} else {
+		ctrl->rmt_jetty_or_seg_id = sgl[0].user_tseg->token_id >> UDMA_TID_SHIFT;
+		ctrl->token_en = !!(sgl[0].user_tseg->attr.bs.token_policy);
+		ctrl->rmt_token_value = sgl[0].user_tseg->token_value.token;
+	}
 
 	ctrl->rmt_addr_l_or_token_id = sgl[0].addr & UDMA_SQE_CTL_RMA_ADDR_BIT;
 	ctrl->rmt_addr_h_or_token_value = (sgl[0].addr >> UDMA_SQE_CTL_RMA_ADDR_OFFSET) & UDMA_SQE_CTL_RMA_ADDR_BIT;
 	ctrl->sge_num = sge_num;
-	ctrl->rmt_jetty_or_seg_id = udma_seg->tid;
-	ctrl->token_en = udma_seg->token_value_valid;
-	ctrl->rmt_token_value = udma_seg->token_value.token;
 
 	return 0;
 }
@@ -690,6 +744,78 @@ static int udma_fill_faa_sqe(struct udma_jfs_sqe_ctl *ctrl, urma_jfs_wr_t *wr, s
 	return 0;
 }
 
+static void udma_copy_atomic_add_sq(struct udma_jfs_sqe_ctl *wqe_ctl, struct udma_u_jetty_queue *sq,
+				    struct udma_u_target_jetty *udma_tjetty, urma_sge_t *sgl,
+				    urma_jfs_wr_t *wr)
+{
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_WRITE_ATOMICADD_EID_FIELD,
+				 (uint8_t *)sq->qbuf, (uint8_t *)sq->qbuf_end), (void *)udma_tjetty->le_eid.raw,
+				 sizeof(uint8_t) * UDMA_SQE_RMT_EID_SIZE);
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_WRITE_ATOMICADD_RMT_ADDR_FIELD,
+				 (uint8_t *)sq->qbuf, (uint8_t *)sq->qbuf_end), &sgl[0].addr, sizeof(uint64_t));
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_ATOMICADD_ADDR_FIELD, (uint8_t *)sq->qbuf,
+				 (uint8_t *)sq->qbuf_end), &sgl[1].addr, sizeof(uint64_t));
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_ATOMICADD_DATA_FIELD, (uint8_t *)sq->qbuf,
+				 (uint8_t *)sq->qbuf_end), &wr->rw.notify_data, sizeof(uint64_t));
+}
+
+static int udma_fill_write_with_atomic_add(struct udma_jfs_sqe_ctl *wqe_ctl,
+					   struct udma_u_jetty_queue *sq,
+					   urma_target_jetty_t *tjetty,
+					   struct udma_wqe_info *wqe_info,
+					   urma_jfs_wr_t *wr)
+{
+	struct udma_u_target_jetty *udma_tjetty = to_udma_u_target_jetty(tjetty);
+	struct udma_token_info *token_info;
+	struct udma_u_segment *udma_seg;
+	urma_sge_t *sgl;
+	int32_t ret;
+
+	ret = udma_fill_write_sqe(wqe_ctl, wr, wqe_info, sq);
+	if (ret)
+		return ret;
+	sgl = wr->rw.dst.sge;
+	udma_seg = to_udma_u_seg(sgl[0].tseg);
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_WRITE_ATOMICADD_RMT_TOKEN_FIELD,
+				 (uint8_t *)sq->qbuf, (uint8_t *)sq->qbuf_end), (void *)&udma_seg->token_value.token,
+				 sizeof(udma_seg->token_value.token));
+	udma_seg = to_udma_u_seg(sgl[1].tseg);
+	token_info = (struct udma_token_info *)((void *)wqe_ctl + WRITE_ATOMICADD_TOKEN_FIELD);
+	token_info->atomic_add.token_id = udma_seg->tid;
+	token_info->atomic_add.token_value = udma_seg->token_value.token & SQE_CTL_ATOMICADD_TOKEN_ID_BIT;
+
+	udma_copy_atomic_add_sq(wqe_ctl, sq, udma_tjetty, sgl, wr);
+
+	return 0;
+}
+
+static int udma_fill_write_with_notify(struct udma_jfs_sqe_ctl *wqe_ctl,
+				       struct udma_u_jetty_queue *sq,
+				       struct udma_wqe_info *wqe_info,
+				       urma_jfs_wr_t *wr)
+{
+	struct udma_token_info *token_info;
+	struct udma_u_segment *udma_seg;
+	urma_sge_t *sgl;
+	int32_t ret;
+
+	ret = udma_fill_write_sqe(wqe_ctl, wr, wqe_info, sq);
+	if (ret)
+		return ret;
+	sgl = wr->rw.dst.sge;
+	udma_seg = to_udma_u_seg(sgl[1].tseg);
+	token_info = (struct udma_token_info *)((void *)((char *)wqe_ctl + WRITE_NOTIFY_TOKEN_FIELD));
+	token_info->normal.token_id = udma_seg->tid;
+	token_info->normal.token_value = udma_seg->token_value.token;
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_NOTIFY_ADDR_FIELD, (uint8_t *)sq->qbuf,
+				 (uint8_t *)sq->qbuf_end), &sgl[1].addr,
+				 sizeof(uint64_t));
+	memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_NOTIFY_DATA_FIELD, (uint8_t *)sq->qbuf,
+				 (uint8_t *)sq->qbuf_end), &wr->rw.notify_data,
+				 sizeof(uint64_t));
+	return ret;
+}
+
 static int udma_parse_jfs_wr(struct udma_jfs_sqe_ctl *wqe_ctl,
 			     urma_jfs_wr_t *wr, struct udma_u_jetty_queue *sq,
 			     struct udma_wqe_info *wqe_info, urma_target_jetty_t *tjetty)
@@ -697,7 +823,6 @@ static int udma_parse_jfs_wr(struct udma_jfs_sqe_ctl *wqe_ctl,
 	struct udma_u_target_jetty *udma_tjetty;
 	struct udma_token_info *token_info;
 	struct udma_u_segment *udma_seg;
-	urma_sge_t *sgl;
 	int ret;
 
 	switch (wqe_info->opcode) {
@@ -725,30 +850,13 @@ static int udma_parse_jfs_wr(struct udma_jfs_sqe_ctl *wqe_ctl,
 		if (ret)
 			return ret;
 		udma_tjetty = to_udma_u_target_jetty(tjetty);
-		token_info = (struct udma_token_info *)
-			     ((void *)((char *)wqe_ctl + WRITE_IMM_TOKEN_FIELD));
-		memcpy((void *)((char *)wqe_ctl + SQE_WRITE_IMM_FIELD), &wr->rw.notify_data,
-		       sizeof(uint64_t));
-		token_info->token_id = tjetty->id.id;
-		token_info->token_value = udma_tjetty->token_value;
+		token_info = (struct udma_token_info *)((char *)((char *)wqe_ctl + WRITE_IMM_TOKEN_FIELD));
+		memcpy((void *)((char *)wqe_ctl + SQE_WRITE_IMM_FIELD), &wr->rw.notify_data, sizeof(uint64_t));
+		token_info->normal.token_id = tjetty->id.id;
+		token_info->normal.token_value = udma_tjetty->token_value;
 		return ret;
 	case UDMA_OPCODE_WRITE_WITH_NOTIFY:
-		ret = udma_fill_write_sqe(wqe_ctl, wr, wqe_info, sq);
-		if (ret)
-			return ret;
-		sgl = wr->rw.dst.sge;
-		udma_seg = to_udma_u_seg(sgl[1].tseg);
-		token_info = (struct udma_token_info *)
-			     ((void *)((char *)wqe_ctl + WRITE_NOTIFY_TOKEN_FIELD));
-		token_info->token_id = udma_seg->tid;
-		token_info->token_value = udma_seg->token_value.token;
-		memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_NOTIFY_ADDR_FIELD, (uint8_t *)sq->qbuf,
-					 (uint8_t *)sq->qbuf_end), &sgl[1].addr,
-					 sizeof(uint64_t));
-		memcpy(udma_inc_ptr_wrap((uint8_t *)wqe_ctl, SQE_NOTIFY_DATA_FIELD, (uint8_t *)sq->qbuf,
-					 (uint8_t *)sq->qbuf_end), &wr->rw.notify_data,
-					 sizeof(uint64_t));
-		return ret;
+		return udma_fill_write_with_notify(wqe_ctl, sq, wqe_info, wr);
 	case UDMA_OPCODE_READ:
 		return udma_fill_read_sqe(wqe_ctl, wr, &wqe_info->wqe_cnt, sq);
 	case UDMA_OPCODE_CAS:
@@ -757,6 +865,8 @@ static int udma_parse_jfs_wr(struct udma_jfs_sqe_ctl *wqe_ctl,
 	case UDMA_OPCODE_FAA:
 		wqe_info->wqe_cnt = UDMA_ATOMIC_WQE_BB_NUM;
 		return udma_fill_faa_sqe(wqe_ctl, wr, sq);
+	case UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD:
+		return udma_fill_write_with_atomic_add(wqe_ctl, sq, tjetty, wqe_info, wr);
 	default:
 		return 0;
 	}
@@ -795,7 +905,8 @@ static bool udma_check_sq_overflow(struct udma_u_jetty_queue *sq, urma_jfs_wr_t 
 	if (udma_opcode <= UDMA_OPCODE_SEND_WITH_INVALID) {
 		num_sge_wr = wr->send.src.num_sge;
 		sgl = wr->send.src.sge;
-	} else if (udma_opcode >= UDMA_OPCODE_WRITE && udma_opcode <= UDMA_OPCODE_WRITE_WITH_NOTIFY) {
+	} else if ((udma_opcode >= UDMA_OPCODE_WRITE && udma_opcode <= UDMA_OPCODE_WRITE_WITH_NOTIFY) ||
+		   udma_opcode == UDMA_OPCODE_WRITE_WITH_ATOMICSTORE_ADD) {
 		num_sge_wr = wr->rw.src.num_sge;
 		sgl = wr->rw.src.sge;
 	} else {
@@ -808,7 +919,7 @@ static bool udma_check_sq_overflow(struct udma_u_jetty_queue *sq, urma_jfs_wr_t 
 		for (i = 0; i < num_sge_wr; i++) {
 			total_len += sgl[i].len;
 			if (total_len > max_inline_size) {
-				UDMA_LOG_ERR("inline_size %u is over max_size %u.\n",
+				UDMA_LOG_ERR("inline size %u is over max size %u.\n",
 					      total_len, max_inline_size);
 				return true;
 			}
@@ -831,9 +942,9 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 	struct udma_u_target_jetty *udma_tjetty;
 	urma_target_jetty_t *tjetty;
 
-	if (udma_check_sq_overflow(sq, wr, wqe_info)) {
+	if (sq->db_status == 0 && udma_check_sq_overflow(sq, wr, wqe_info)) {
 		UDMA_LOG_ERR("JFS overflow.\n");
-		return URMA_EINVAL;
+		return URMA_ENOMEM;
 	}
 
 	(void)memset(wqe_ctl, 0, sizeof(*wqe_ctl));
@@ -860,7 +971,7 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 
 	wqe_ctl->rmt_jetty_type = (uint8_t)(tjetty->type);
 	if (udma_parse_jfs_wr(wqe_ctl, wr, sq, wqe_info, tjetty) != 0) {
-		UDMA_LOG_ERR("failed to parse wr\n");
+		UDMA_LOG_ERR("failed to parse work request.\n");
 		return URMA_EINVAL;
 	}
 
@@ -878,8 +989,9 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 	urma_status_t ret;
 	uint32_t i;
 
-	if (udma_check_sge_num_and_opcode(wr->opcode, sq, wr, &wqe_info.opcode)) {
-		UDMA_LOG_ERR("wr sge num or opcode is invalid.\n");
+	if (udma_check_sge_num_and_opcode(wr->opcode, sq, wr, &wqe_info.opcode,
+					  udma_ctx->atomic_add_en)) {
+		UDMA_LOG_ERR("WR SGE number or opcode: %u is invalid.\n", wr->opcode);
 		return URMA_EINVAL;
 	}
 
@@ -929,11 +1041,11 @@ urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 	if (wr_cnt) {
 		UDMA_TO_DEVICE_BARRIER();
 
-		if (UNLIKELY(sq->db_status)) {
+		if (UNLIKELY(sq->db_status || wr->flag.bs.db_bypass)) {
 			sq->need_ring_db = true;
 		} else {
 			if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
-				udma_write_dsqe(sq, wqe_addr);
+				udma_write_dsqe(udma_ctx, sq, wqe_addr);
 			else
 				udma_update_sq_db(sq);
 		}
@@ -984,7 +1096,7 @@ urma_status_t udma_u_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *jfs_attr)
 
 	ret = urma_cmd_modify_jfs(jfs, jfs_attr, NULL);
 	if (ret) {
-		UDMA_LOG_ERR("urma cmd modify jfs failed, ret = %d\n", ret);
+		UDMA_LOG_ERR("URMA command modify JFS failed, ret = %d\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1001,7 +1113,7 @@ urma_status_t udma_u_query_jfs(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg,
 
 	ret = urma_cmd_query_jfs(jfs, cfg, attr);
 	if (ret) {
-		UDMA_LOG_ERR("failed to query jfs in urma cmd, ret = %d.\n", ret);
+		UDMA_LOG_ERR("failed to query JFS in URMA command, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1054,7 +1166,7 @@ static void udma_u_process_opcode_for_cr(struct udma_jfs_sqe_ctl *wqe_ctl,
 		       sizeof(uint64_t));
 		break;
 	default:
-		UDMA_LOG_ERR("invalid opcode %u when flush jfs.\n", opcode);
+		UDMA_LOG_ERR("invalid opcode %u when flush JFS.\n", opcode);
 		break;
 	}
 
@@ -1093,7 +1205,7 @@ static void fill_cr_by_wqe_ctl(struct udma_jfs_sqe_ctl *wqe_ctl,
 
 	if (total_len > UINT32_MAX) {
 		cr->completion_len = UINT32_MAX;
-		UDMA_LOG_WARN("total_len %lu is overflow.\n", total_len);
+		UDMA_LOG_WARN("total length %lu is overflow.\n", total_len);
 	} else {
 		cr->completion_len = total_len;
 	}
@@ -1152,13 +1264,13 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 
 	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
 	if (udma_jfs == NULL) {
-		UDMA_LOG_ERR("udma jfs allocation failed.\n");
+		UDMA_LOG_ERR("UDMA JFS allocation failed.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = urma_cmd_alloc_jfs(ctx, cfg, &udma_jfs->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("alloc jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("alloc JFS failed, ret = %d.\n", ret);
 		free(udma_jfs);
 		return URMA_FAIL;
 	}
@@ -1176,7 +1288,7 @@ urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_free_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("free jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("free JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1210,7 +1322,7 @@ urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 
 	ret = urma_cmd_set_jfs_opt(jfs, opt, buf, len, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("set JFS option failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1231,7 +1343,7 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jfs_opt(jfs, opt, buf, len, &udata);
 		if (ret) {
-			UDMA_LOG_ERR("set jfs opt failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("set JFS option failed, ret = %d.\n", ret);
 			return URMA_FAIL;
 		}
 	}
@@ -1248,6 +1360,7 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 
 static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 	int ret;
 
@@ -1256,10 +1369,10 @@ static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 		return EINVAL;
 	}
 
-	udma_jfs->sq.sq_reserved = udma_jfs->sq.sq_reserved;
+	udma_jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq(&udma_jfs->sq, cfg);
 	if (ret)
-		UDMA_LOG_ERR("failed to create sq, ret = %d.\n", ret);
+		UDMA_LOG_ERR("failed to create SQ, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -1282,11 +1395,13 @@ static int udma_u_active_jfs_after(urma_jfs_t *jfs)
 
 urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 {
+	struct udma_u_context *udma_ctx = to_udma_u_ctx(jfs->urma_ctx);
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
 	urma_jfs_cfg_t *cfg = &jfs->jfs_cfg;
 	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
+	udma_jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	ret = udma_u_active_jfs_prepare(jfs, cfg);
 	if (ret)
 		return ret;
@@ -1294,8 +1409,18 @@ urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 	udma_jfs->jfs_type = UDMA_URMA_EX_JETTY_TYPE;
 	ret = udma_u_exec_jfs_active_cmd(udma_jfs, cfg);
 	if (ret) {
-		UDMA_LOG_ERR("exec active jfs cmd failed, ret = %d.\n", ret);
-		goto err_active_jfs_cmd;
+		if(udma_jfs->sq.dtu_en) {
+			udma_jfs->sq.dtu_en = false;
+			if (!udma_u_alloc_queue_buf(&udma_jfs->sq, udma_jfs->sq.sqe_bb_cnt * cfg->depth,
+			    UDMA_JFS_WQEBB, udma_jfs->sq.aligned_size, true)) {
+				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
+				goto err_active_jfs_cmd;
+			}
+			if (udma_u_exec_jfs_active_cmd(udma_jfs, cfg))
+				goto err_active_jfs_cmd;
+		} else {
+			goto err_active_jfs_cmd;
+		}
 	}
 
 	ret = udma_u_active_jfs_after(jfs);
@@ -1318,7 +1443,7 @@ urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_deactive_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("deactive jfs failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR("deactivate JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 

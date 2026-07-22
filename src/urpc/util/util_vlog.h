@@ -18,6 +18,10 @@
 extern "C" {
 #endif
 
+#ifndef __FILE_NAME__
+#define __FILE_NAME__  (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
+
 #define UTIL_VLOG_SIZE              (1024)
 #define UTIL_VLOG_NAME_STR_LEN      (64)
 #define UTIL_VLOG_PRINT_PERIOD_MS   (1000)
@@ -48,6 +52,7 @@ typedef struct util_vlog_ctx {
     util_vlog_level_t level;
     char vlog_name[UTIL_VLOG_NAME_STR_LEN];
     void (*vlog_output_func)(int level, char *log_msg);
+    void (*vlog_output_ext_func)(int level, const char *file, const char *function, int line, char *log_msg);
     struct {
         uint32_t interval_ms;    // rate-limited log output interval. If the value is 0, rate is not limited.
         uint32_t num;            // maximum number of rate-limited logs that can be output in a specified interval.
@@ -56,7 +61,7 @@ typedef struct util_vlog_ctx {
 
 #define UTIL_VLOG(__ctx, __level, __type, ...)  \
     if (!util_vlog_drop(__ctx, __level)) {  \
-        util_vlog_output(__ctx, __level, __type, __func__, __LINE__, ##__VA_ARGS__);    \
+        util_vlog_output(__ctx, __level, __FILE_NAME__, __type, __func__, __LINE__, ##__VA_ARGS__);    \
     }
 
 #define UTIL_LIMIT_VLOG(__ctx, __level, __type, ...)  \
@@ -64,7 +69,7 @@ typedef struct util_vlog_ctx {
         static uint32_t count_call = 0; \
         static uint64_t last_time = 0;  \
         if (util_vlog_limit(__ctx, &count_call, &last_time)) {  \
-            util_vlog_output(__ctx, __level, __type, __func__, __LINE__, ##__VA_ARGS__);    \
+            util_vlog_output(__ctx, __level, __FILE_NAME__, __type, __func__, __LINE__, ##__VA_ARGS__);    \
         }   \
     }
 
@@ -80,8 +85,8 @@ static inline bool util_vlog_drop(const util_vlog_ctx_t *ctx, util_vlog_level_t 
     return level > ctx->level;
 }
 
-void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_type_t type, const char *function,
-    int line, const char *format, ...);
+void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, const char *file, util_vlog_type_t type,
+    const char *function, int line, const char *format, ...);
 
 util_vlog_level_t util_vlog_level_converter_from_str(const char *str, util_vlog_level_t default_level);
 const char *util_vlog_level_converter_to_str(util_vlog_level_t level);

@@ -1019,20 +1019,9 @@ int urma_cmd_delete_jfr(urma_jfr_t *jfr)
         URMA_LOG_ERR("ioctl failed in urma_cmd_delete_jfr, ret=%d, errno=%d.\n", ret, errno);
     }
 
-    if (jfr->jfr_cfg.flag.bs.non_blocking == 1) {
-        (void)pthread_mutex_lock(&jfr->event_mutex);
-        if (jfr->async_events_acked != arg.out.async_events_reported) {
-            (void)pthread_mutex_unlock(&jfr->event_mutex);
-            return URMA_EAGAIN;
-        }
-
-        (void)pthread_mutex_unlock(&jfr->event_mutex);
-        return URMA_SUCCESS;
-    }
-
     wait_async_event_ack(&jfr->event_mutex, &jfr->event_cond, &jfr->async_events_acked, arg.out.async_events_reported);
 
-    return URMA_SUCCESS;
+    return ret;
 }
 
 int urma_cmd_delete_jfr_batch(urma_jfr_t **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr)
@@ -1549,9 +1538,8 @@ int urma_cmd_import_jfr_ex(urma_context_t *ctx, urma_target_jetty_t *tjfr, urma_
     arg.in.tag = ex_cfg->tag;
     arg.in.tx_psn = ex_cfg->tp_attr.tx_psn;
     arg.in.rx_psn = ex_cfg->tp_attr.rx_psn;
-    arg.in.stag = cfg->flag.user_tag.stag;
-    arg.in.dtag = cfg->flag.user_tag.dtag;
-
+    arg.in.stag = 0UL;
+    arg.in.dtag = 0UL;
     urma_cmd_set_udrv_priv(&arg.udata, udata);
 
     ret = urma_ioctl_import_jfr_ex(ctx->dev_fd, &arg);
@@ -2234,8 +2222,8 @@ int urma_cmd_import_jetty_ex(urma_context_t *ctx, urma_target_jetty_t *tjetty, u
     arg.in.tag = ex_cfg->tag;
     arg.in.tx_psn = ex_cfg->tp_attr.tx_psn;
     arg.in.rx_psn = ex_cfg->tp_attr.rx_psn;
-    arg.in.stag = cfg->flag.user_tag.stag;
-    arg.in.dtag = cfg->flag.user_tag.dtag;
+    arg.in.stag = 0UL;
+    arg.in.dtag = 0UL;
 
     urma_cmd_set_udrv_priv(&arg.udata, udata);
     int ret = urma_ioctl_import_jetty_ex(ctx->dev_fd, &arg);

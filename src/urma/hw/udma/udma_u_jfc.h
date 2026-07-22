@@ -18,6 +18,8 @@
 #define UDMA_U_JFC_DB_CI_IDX_M GENMASK(21, 0)
 #define UDMA_U_CQE_INV_TOKEN_ID GENMASK(19, 0)
 
+#define UDMA_JFC_CTX_SIZE 128
+
 struct udma_u_jfc_cqe {
 	/* DW0 */
 	uint32_t s_r : 1;

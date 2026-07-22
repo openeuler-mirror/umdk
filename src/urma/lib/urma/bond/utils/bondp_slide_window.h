@@ -7,11 +7,16 @@
  * Note:
  * History: 2025-03-05
  */
+
 #ifndef BDP_SLIDE_WINDOW_H
 #define BDP_SLIDE_WINDOW_H
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BDP_SLIDE_WND_OUT_OF_WND (-2)
 #define BDP_SLIDE_WND_DUPLICATE  (-3)
@@ -42,4 +47,9 @@ bool bdp_slide_wnd_seq_in_window(bdp_slide_wnd_t *wnd, uint32_t seq);
 int bdp_slide_wnd_add(bdp_slide_wnd_t *wnd, uint32_t seq);
 /** Check if the sequence number is in the window and mark it as 1. */
 bool bdp_slide_wnd_has(bdp_slide_wnd_t *wnd, uint32_t seq);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // BDP_SLIDE_WINDOW_H

@@ -10,35 +10,43 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 
-#include "bondp_api.h"
-#include "bondp_context_table.h"
-#include "bondp_datapath.h"
-#include "bondp_health_check.h"
-#include "bondp_netlink.h"
-#include "bondp_segment.h"
-#include "bondp_types.h"
-#include "ubagg_ioctl.h"
 #include "urma_device.h"
 #include "urma_log.h"
 #include "urma_provider.h"
 #include "urma_types.h"
 
+#include "bondp_api.h"
+#include "bondp_context_table.h"
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
+#include "bondp_cp_user_ctl.h"
+#include "bondp_datapath.h"
+#include "bondp_dp_failback.h"
+#include "bondp_dp_health.h"
+#include "bondp_dp_interrupt.h"
+#include "bondp_types.h"
+#include "bondp_worker.h"
+#include "ubagg_ioctl.h"
+
 #include "bondp_provider_ops.h"
 
-#define BONDP_ENV_ENABLE_FAILOVER                 "BOND_ENABLE_FAILOVER"
-#define BONDP_ENV_ENABLE_FAILBACK                 "BOND_ENABLE_FAILBACK"
-#define BONDP_ENV_ENABLE_HEALTH_CHECK             "BOND_ENABLE_HEALTH_CHECK"
-#define BONDP_ENV_HEALTH_CHECK_BACKUP_START       "BOND_HEALTH_CHECK_BACKUP_START"
-#define BONDP_ENV_HEALTH_CHECK_BACKUP_INTERVAL    "BOND_HEALTH_CHECK_BACKUP_INTERVAL"
-#define BONDP_ENV_HEALTH_CHECK_ACTIVE_START       "BOND_HEALTH_CHECK_ACTIVE_START"
-#define BONDP_ENV_HEALTH_CHECK_ACTIVE_INTERVAL    "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
-#define BONDP_ENV_HEALTH_CHECK_ACTIVE_MAX_BACKOFF "BOND_HEALTH_CHECK_ACTIVE_MAX_BACKOFF"
+#define BONDP_ENV_ENABLE_FAILOVER       "BOND_ENABLE_FAILOVER"
+#define BONDP_ENV_ENABLE_FAILBACK       "BOND_ENABLE_FAILBACK"
+#define BONDP_ENV_ENABLE_HEALTH_CHECK   "BOND_ENABLE_HEALTH_CHECK"
+#define BONDP_ENV_HEALTH_CHECK_INTERVAL "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
+#define BONDP_ENV_MAX_CR_CNT_PER_DEV    "BOND_MAX_CR_CNT_PER_DEV"
+#define BONDP_ENV_LEN_MAX               (128)
+/*
+ * #define BONDP_ENV_FAILOVER_DIEX_Y_ROUTEZ          "BOND_FAILOVER_DIEX_Y_ROUTEZ"
+ */
 
 /* manager of global table in bonding device */
 bondp_global_context_t *g_bondp_global_ctx = NULL;
@@ -145,102 +153,176 @@ static uint64_t read_env_uint64(const char *env_name, uint64_t default_val)
     return (uint64_t)parsed;
 }
 
+static bool is_decimal_env_value(const char *value)
+{
+    if (value == NULL || value[0] == '\0') {
+        return false;
+    }
+    for (const char *cur = value; *cur != '\0'; cur++) {
+        if (*cur < '0' || *cur > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int read_env_max_cr_cnt_per_dev(void)
+{
+    static int s_max_cr_cnt_per_dev;
+
+    if (s_max_cr_cnt_per_dev != 0) {
+        return s_max_cr_cnt_per_dev;
+    }
+
+    const uint64_t default_value = URMA_UBAGG_MAX_CR_CNT_PER_DEV;
+    const char *env_value = getenv(BONDP_ENV_MAX_CR_CNT_PER_DEV);
+    if (env_value != NULL && !is_decimal_env_value(env_value)) {
+        URMA_LOG_WARN("Invalid value '%s' for env %s, using default %llu\n",
+                      env_value, BONDP_ENV_MAX_CR_CNT_PER_DEV, (unsigned long long)default_value);
+        s_max_cr_cnt_per_dev = (int)default_value;
+        return s_max_cr_cnt_per_dev;
+    }
+    uint64_t value = read_env_uint64(BONDP_ENV_MAX_CR_CNT_PER_DEV, default_value);
+    if (value == 0 || value > INT_MAX) {
+        URMA_LOG_WARN("Invalid value %llu for env %s, using default %llu\n",
+                      (unsigned long long)value, BONDP_ENV_MAX_CR_CNT_PER_DEV,
+                      (unsigned long long)default_value);
+        value = default_value;
+    }
+    s_max_cr_cnt_per_dev = (int)value;
+    return s_max_cr_cnt_per_dev;
+}
+
+static void filter_balance_route_env(char *value, const char *origin_val)
+{
+    int i = 0;
+    int j = 0;
+    while (origin_val[j] != '\0') {
+        if (origin_val[j] == ',' || (origin_val[j] > '0' && origin_val[j] < '9')) {
+            value[i] = origin_val[j];
+            i++;
+        }
+        j++;
+    }
+    value[i] = '\0';
+}
+
+static void read_env_balance_route(
+    const char *env_name,
+    uint32_t route[URMA_FAILOVER_LINK_NUM],
+    const uint32_t default_route[URMA_FAILOVER_LINK_NUM])
+{
+    if (env_name == NULL) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+    const char *value = getenv(env_name);
+    if (value == NULL || strlen(value) > BONDP_ENV_LEN_MAX) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+
+    char filtered_val[BONDP_ENV_LEN_MAX + 1] = {0};
+    filter_balance_route_env(filtered_val, value);
+    int ret = 0;
+    ret = sscanf(filtered_val, "%u,%u,%u,%u", &route[0], &route[1], &route[2], &route[3]);
+    if (ret <= 0) {
+        memcpy(route, default_route, URMA_FAILOVER_LINK_NUM * sizeof(uint32_t));
+        return;
+    }
+    for (int i = ret; i < URMA_FAILOVER_LINK_NUM; i++) {
+        route[i] = UINT32_MAX;
+    }
+}
+
+static void read_env_balance_route_all(bondp_global_context_t *ctx)
+{
+    char env_name[BONDP_ENV_LEN_MAX] = {0};
+    int ret = 0;
+    const uint32_t route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM] = {
+        {{{1, 6, 7, 4},
+          {2, 5, 8, 3}},
+         {{5, 2, 4, 7},
+          {6, 1, 3, 8}}},
+        {{{7, 4, 1, 6},
+          {8, 3, 2, 5}},
+         {{3, 8, 5, 2},
+          {4, 7, 6, 1}}}};
+
+    for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
+        for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
+            for (int route_id = 0; route_id < URMA_ACTIVE_PORT_PER_DIE; route_id++) {
+                ret = snprintf(env_name, sizeof(env_name), "BOND_FAILOVER_DIE%d_%d_ROUTE%d",
+                               src_die + 1, dst_die + 1, route_id + 1);
+                char *env_name_tmp = (ret < 0 || ret >= sizeof(env_name)) ? NULL : env_name;
+                read_env_balance_route(env_name_tmp, ctx->failover_route[src_die][dst_die][route_id],
+                                       route[src_die][dst_die][route_id]);
+                uint32_t *ctx_route = ctx->failover_route[src_die][dst_die][route_id];
+                URMA_LOG_DEBUG("src_die=%d, dst_die=%d, route_id=%d, route={%u,%u,%u,%u}\n",
+                               src_die + 1, dst_die + 1, route_id + 1,
+                               ctx_route[0], ctx_route[1], ctx_route[2], ctx_route[3]);
+            }
+        }
+    }
+}
+
 static void read_all_env(bondp_global_context_t *ctx)
 {
-    bondp_health_thread_ctx_t *thread_ctx = &ctx->health_thread_ctx;
     const bool default_enable_health_check = false;
-    const bool default_enable_failback = true;
+    const bool default_enable_failback = false;
     const bool default_enable_failover = true;
-    const uint64_t default_health_check_backup_start_ms = 2000;
-    const uint64_t default_health_check_backup_interval_ms = 32000;
-    const uint64_t default_health_check_active_start_ms = 2000;
-    const uint64_t default_health_check_active_interval_ms = 1000;
-    const uint32_t default_health_check_active_max_backoff = 13;
-
-    thread_ctx->enable_health_check = read_env_bool(BONDP_ENV_ENABLE_HEALTH_CHECK, default_enable_health_check);
-
-    bondp_health_check_cfg_t *cfg = &thread_ctx->cfg;
+    const uint64_t default_health_check_interval_ms = BONDP_HC_DEFAULT_PROBE_INTERVAL_MS;
+    ctx->enable_health_check = read_env_bool(
+        BONDP_ENV_ENABLE_HEALTH_CHECK, default_enable_health_check);
     ctx->enable_failover = read_env_bool(
         BONDP_ENV_ENABLE_FAILOVER, default_enable_failover);
     ctx->enable_failback = read_env_bool(
         BONDP_ENV_ENABLE_FAILBACK, default_enable_failback);
-    cfg->backup_start_ms = read_env_uint64(
-        BONDP_ENV_HEALTH_CHECK_BACKUP_START, default_health_check_backup_start_ms);
-    cfg->backup_interval_ms = read_env_uint64(
-        BONDP_ENV_HEALTH_CHECK_BACKUP_INTERVAL, default_health_check_backup_interval_ms);
-    cfg->active_start_ms = read_env_uint64(
-        BONDP_ENV_HEALTH_CHECK_ACTIVE_START, default_health_check_active_start_ms);
-    cfg->active_interval_ms = read_env_uint64(
-        BONDP_ENV_HEALTH_CHECK_ACTIVE_INTERVAL, default_health_check_active_interval_ms);
-    cfg->active_max_backoff = (uint32_t)read_env_uint64(
-        BONDP_ENV_HEALTH_CHECK_ACTIVE_MAX_BACKOFF, default_health_check_active_max_backoff);
+    ctx->health_check_interval_ms = read_env_uint64(
+        BONDP_ENV_HEALTH_CHECK_INTERVAL, default_health_check_interval_ms);
+    ctx->max_cr_cnt_per_dev = read_env_max_cr_cnt_per_dev();
+    read_env_balance_route_all(ctx);
 
     const uint64_t time_100ms = 100;
-    const uint64_t time_1s = 1000;
     const uint64_t time_60s = 60000;
-    const uint64_t time_1h = 3600000;
-    const uint32_t min_backoff = 1;
-    const uint32_t max_backoff = 100;
-
-    if (cfg->backup_start_ms < time_100ms ||
-        cfg->backup_start_ms > time_1h) {
-        URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_BACKUP_START value %lu (range %lu~%lu), using default %lu\n",
-                      cfg->backup_start_ms, time_100ms, time_1h,
-                      default_health_check_backup_start_ms);
-        cfg->backup_start_ms = default_health_check_backup_start_ms;
-    }
-    if (cfg->backup_interval_ms < time_1s ||
-        cfg->backup_interval_ms > time_1h) {
-        URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_BACKUP_INTERVAL value %lu (range %lu~%lu), using default %lu\n",
-                      cfg->backup_interval_ms, time_1s, time_1h,
-                      default_health_check_backup_interval_ms);
-        cfg->backup_interval_ms = default_health_check_backup_interval_ms;
-    }
-    if (cfg->active_start_ms < time_100ms ||
-        cfg->active_start_ms > time_1h) {
-        URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_ACTIVE_START value %lu (range %lu~%lu), using default %lu\n",
-                      cfg->active_start_ms, time_100ms, time_1h,
-                      default_health_check_active_start_ms);
-        cfg->active_start_ms = default_health_check_active_start_ms;
-    }
-    if (cfg->active_interval_ms < time_100ms ||
-        cfg->active_interval_ms > time_60s) {
+    if (ctx->health_check_interval_ms < time_100ms || ctx->health_check_interval_ms > time_60s) {
         URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_ACTIVE_INTERVAL value %lu (range %lu~%lu), using default %lu\n",
-                      cfg->active_interval_ms, time_100ms, time_60s,
-                      default_health_check_active_interval_ms);
-        cfg->active_interval_ms = default_health_check_active_interval_ms;
-    }
-    if (cfg->active_max_backoff < min_backoff ||
-        cfg->active_max_backoff > max_backoff) {
-        URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_ACTIVE_MAX_BACKOFF value %u (range %u~%u), using default %u\n",
-                      cfg->active_max_backoff, min_backoff, max_backoff,
-                      default_health_check_active_max_backoff);
-        cfg->active_max_backoff = default_health_check_active_max_backoff;
+                      ctx->health_check_interval_ms, time_100ms, time_60s,
+                      default_health_check_interval_ms);
+        ctx->health_check_interval_ms = default_health_check_interval_ms;
     }
 }
 
 static void print_all_env(const bondp_global_context_t *ctx)
 {
-    const bondp_health_thread_ctx_t *thread_ctx = &ctx->health_thread_ctx;
-    const bondp_health_check_cfg_t *cfg = &thread_ctx->cfg;
-
     URMA_LOG_INFO("Health check config: enable_failover=%s, enable_failback=%s, enable_health_check=%s, "
-                  "health_check_backup: start=%lums, interval=%lums, "
-                  "health_check_active: start=%lums, interval=%lums, max_backoff=%u\n",
+                  "interval=%lums, max_cr_cnt_per_dev=%d\n",
                   ctx->enable_failover ? "true" : "false",
                   ctx->enable_failback ? "true" : "false",
-                  thread_ctx->enable_health_check ? "true" : "false",
-                  cfg->backup_start_ms,
-                  cfg->backup_interval_ms,
-                  cfg->active_start_ms,
-                  cfg->active_interval_ms,
-                  cfg->active_max_backoff);
+                  ctx->enable_health_check ? "true" : "false",
+                  ctx->health_check_interval_ms, ctx->max_cr_cnt_per_dev);
 }
 
 static void bondp_global_ctx_read_env(bondp_global_context_t *ctx)
 {
     read_all_env(ctx);
     print_all_env(ctx);
+}
+
+static void bondp_global_ctx_real_path_init(bondp_global_context_t *ctx)
+{
+    bondp_path_t *path = ctx->path;
+    for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
+        for (int port = URMA_ACTIVE_PORT_MIN; port <= URMA_ACTIVE_PORT_MAX; port++) {
+            for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
+                int idx = (src_die ^ dst_die) * URMA_FAILOVER_LINK_NUM +
+                          src_die * IODIE_NUM + port - URMA_ACTIVE_PORT_MIN + 1;
+                path[idx].local_idx = IODIE_NUM + src_die * PORT_NUM + port;
+                path[idx].target_idx = IODIE_NUM + dst_die * PORT_NUM + port;
+                URMA_LOG_DEBUG("path[%d]={%u,%u}\n", idx, path[idx].local_idx, path[idx].target_idx);
+            }
+        }
+    }
 }
 
 static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
@@ -252,49 +334,46 @@ static int bondp_global_ctx_init(bondp_global_context_t **bondp_global_ctx)
     }
 
     ctx->pid = (uint32_t)getpid();
-    bondp_health_check_global_ctx_init(ctx);
     bondp_global_ctx_read_env(ctx);
+    bondp_global_ctx_real_path_init(ctx);
     *bondp_global_ctx = ctx;
     return 0;
 }
 
 static int bondp_global_ctx_uninit(bondp_global_context_t *bondp_global_ctx)
 {
-    bondp_health_check_global_ctx_uninit(bondp_global_ctx);
-    if (bondp_global_ctx->topo_map) {
-        delete_topo_map(bondp_global_ctx->topo_map);
-    }
+    bondp_topo_uninit();
     free(bondp_global_ctx);
     return 0;
 }
 
 urma_status_t bondp_init(urma_init_attr_t *conf)
 {
+    int ret;
+
     if (g_bondp_global_ctx != NULL) {
         URMA_LOG_WARN("Initialized already\n");
         return URMA_FAIL;
     }
-    int ret = bondp_global_ctx_init(&g_bondp_global_ctx);
+
+    ret = bondp_worker_create();
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to create bond worker, ret=%d.\n", ret);
+        return URMA_FAIL;
+    }
+
+    ret = bondp_global_ctx_init(&g_bondp_global_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create global context.\n");
-        return URMA_FAIL;
+        goto ERR_WORKER_DESTROY;
     }
 
-    if (bondp_nl_init() != 0) {
-        URMA_LOG_ERR("Failed to init bondp netlink context.\n");
-        (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
-        g_bondp_global_ctx = NULL;
-        return URMA_FAIL;
-    }
-
-    if (bondp_start_health_check_thread() != 0) {
-        URMA_LOG_ERR("Failed to start health check thread.\n");
-        bondp_nl_uninit();
-        (void)bondp_global_ctx_uninit(g_bondp_global_ctx);
-        g_bondp_global_ctx = NULL;
-        return URMA_FAIL;
-    }
+    URMA_LOG_INFO("Bond provider initialized successfully.\n");
     return URMA_SUCCESS;
+
+ERR_WORKER_DESTROY:
+    bondp_worker_destroy();
+    return URMA_FAIL;
 }
 
 urma_status_t bondp_uninit(void)
@@ -304,57 +383,59 @@ urma_status_t bondp_uninit(void)
         return URMA_SUCCESS; /* Keep the same logic as urma_uninit */
     }
 
-    bondp_stop_health_check_thread();
-    bondp_nl_uninit();
-
     int ret = bondp_global_ctx_uninit(g_bondp_global_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to delete global context.\n");
         return URMA_FAIL;
     }
     g_bondp_global_ctx = NULL;
+    bondp_worker_destroy();
 
     return URMA_SUCCESS;
 }
 
 static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
 {
-    if (g_bondp_global_ctx->topo_map) {
+    if (bondp_topo_is_initialized()) {
         return 0;
     }
-    struct ubagg_topo_info_out info_out;
+    struct ubagg_topo_info_out *info_out = calloc(1, sizeof(*info_out));
+    if (info_out == NULL) {
+        URMA_LOG_ERR("Failed to alloc topo info buffer\n");
+        return -1;
+    }
     urma_user_ctl_in_t in = {
         .opcode = GET_TOPO_INFO,
     };
     urma_user_ctl_out_t out = {
-        .addr = (uint64_t)&info_out,
-        .len = sizeof(info_out),
+        .addr = (uint64_t)info_out,
+        .len = sizeof(*info_out),
     };
     urma_udrv_t data = {0};
-    if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data)) {
+    if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data) != 0) {
         URMA_LOG_ERR("Failed to get topo info, change to general mode\n");
         g_bondp_global_ctx->skip_load_topo = true;
+        free(info_out);
         return -1;
     }
-    g_bondp_global_ctx->topo_map = create_topo_map(info_out.topo_info, info_out.node_num);
-    if (g_bondp_global_ctx->topo_map == NULL) {
+    int ret = bondp_topo_init(info_out->topo_info, info_out->node_num);
+    free(info_out);
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to create topo map\n");
         return -1;
     }
-
-    bdp_ctx->topo_map = g_bondp_global_ctx->topo_map;
     return 0;
 }
 
 static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, uint32_t eid_index, int dev_fd)
 {
-    if (bdp_p_vjetty_id_table_create(&bdp_ctx->p_vjetty_id_table, BONDP_MAX_NUM_JETTYS)) {
+    if (bdp_p_vjetty_id_table_create(&bdp_ctx->p_vjetty_id_table, BONDP_MAX_NUM_JETTYS) != 0) {
         URMA_LOG_ERR("Failed to create p_vjetty_id_table\n");
         return -1;
     }
 
-    if (bdp_r_v2p_token_id_table_create(&bdp_ctx->remote_v2p_token_id_table, BONDP_MAX_NUM_RSEGS)) {
-        URMA_LOG_ERR("Failed to create remote_v2p_token_id_table\n");
+    if (bondp_seg_cache_init(bdp_ctx) != 0) {
+        URMA_LOG_ERR("Failed to initialize segment cache\n");
         goto DESTROY_P_VJETTY_ID_TABLE;
     }
 
@@ -369,7 +450,7 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     int ret = urma_cmd_create_context(&bdp_ctx->v_ctx, &cfg, &udata);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create context, ret=%d\n", ret);
-        goto DESTROY_R_V2P_TOKEN_ID_TABLE;
+        goto UNINIT_SEG_CACHE;
     }
 
     const int max_event = 1;
@@ -385,13 +466,12 @@ static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, u
     bdp_ctx->bonding_level = BONDP_BONDING_LEVEL_PORT;
     URMA_LOG_DEBUG("bondp create_vctx, eid_idx is %u, dev_num is %d.\n",
                    bdp_ctx->v_ctx.eid_index, bdp_ctx->dev_num);
-    atomic_init(&bdp_ctx->token_id_cnt, 0);
     return 0;
 
 UNINIT_CTX_TABLE:
     urma_cmd_delete_context(&bdp_ctx->v_ctx);
-DESTROY_R_V2P_TOKEN_ID_TABLE:
-    bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
+UNINIT_SEG_CACHE:
+    bondp_seg_cache_uninit(bdp_ctx);
 DESTROY_P_VJETTY_ID_TABLE:
     bdp_p_vjetty_id_table_destroy(&bdp_ctx->p_vjetty_id_table);
     return -1;
@@ -413,12 +493,12 @@ static int bondp_delete_vcontext(bondp_context_t *bdp_ctx)
     URMA_LOG_INFO("bondp delete_vctx, eid_idx is %d, ref_cnt is %lu, dev_num is %d, bonding_model is %d, bonding_level is %d.\n",
                   bdp_ctx->v_ctx.eid_index, ref_cnt, bdp_ctx->dev_num, bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
 
-    if (urma_cmd_delete_context(&bdp_ctx->v_ctx)) {
+    if (urma_cmd_delete_context(&bdp_ctx->v_ctx) != 0) {
         URMA_LOG_ERR("Failed to urma_cmd_delete_context\n");
         ret = URMA_FAIL;
     }
 
-    bdp_r_v2p_token_id_table_destroy(&bdp_ctx->remote_v2p_token_id_table);
+    bondp_seg_cache_uninit(bdp_ctx);
     bdp_p_vjetty_id_table_destroy(&bdp_ctx->p_vjetty_id_table);
     return ret;
 }
@@ -428,12 +508,12 @@ static int set_fd_noblock(int fd)
     int ret, flags;
     flags = fcntl(fd, F_GETFL);
     if (flags == -1) {
-        URMA_LOG_ERR("flags=%d\n", flags);
+        URMA_LOG_ERR("Failed to get fd flags, fd=%d, errno=%d\n", fd, errno);
         return -1;
     }
     ret = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     if (ret != 0) {
-        URMA_LOG_ERR("ret=%d\n", ret);
+        URMA_LOG_ERR("Failed to set fd nonblocking, fd=%d, errno=%d\n", fd, errno);
         return ret;
     }
     return 0;
@@ -458,7 +538,7 @@ static int bondp_init_member_eid_info_list(bondp_context_t *bdp_ctx,
         .len = sizeof(bondp_userctl_physical_device_out_t),
     };
     urma_udrv_t data = {0};
-    if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data)) {
+    if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data) != 0) {
         URMA_LOG_ERR("Failed to get slave device info\n");
         return -1;
     }
@@ -530,6 +610,8 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
 
         int fd = ctx->async_fd;
         if (set_fd_noblock(fd) != 0) {
+            URMA_LOG_ERR("Failed to set async fd nonblocking, dev=%s, eid_idx=%u, fd=%d\n",
+                         m->dev->name, m->eid_index, fd);
             return -1;
         }
         struct epoll_event ev = {
@@ -538,7 +620,8 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
             .data.ptr = (void *)ctx,
         };
         if (epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
-            URMA_LOG_ERR("failed to add fd=%u, errno=%d.\n", fd, errno);
+            URMA_LOG_ERR("Failed to add fd to epoll, dev=%s, eid_idx=%u, fd=%d, epoll_fd=%d, errno=%d\n",
+                         m->dev->name, m->eid_index, fd, bdp_ctx->v_ctx.async_fd, errno);
             return -1;
         }
     }
@@ -572,9 +655,39 @@ static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
     return ret;
 }
 
+static void bondp_init_ctx_enabled_indices(bondp_context_t *bdp_ctx)
+{
+    bdp_ctx->enabled_count = 0;
+
+    int start = 0;
+    int end = 0;
+    if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_IODIE) {
+        start = 0;
+        end = IODIE_NUM;
+    } else {
+        start = IODIE_NUM;
+        end = URMA_UBAGG_DEV_MAX_NUM;
+    }
+
+    for (int i = start; i < end; i++) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        bdp_ctx->enabled_indices[bdp_ctx->enabled_count] = (uint32_t)i;
+        bdp_ctx->enabled_count++;
+    }
+}
+static int bondp_hc_init_from_env(bondp_context_t *bdp_ctx)
+{
+    bondp_hc_cfg_t cfg = {
+        .probe_interval_ms = g_bondp_global_ctx->health_check_interval_ms,
+    };
+    return bondp_hc_init(bdp_ctx, &cfg);
+}
+
 urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int dev_fd)
 {
-    if (!g_bondp_global_ctx) {
+    if (g_bondp_global_ctx == NULL) {
         URMA_LOG_ERR("Uninitialized variables\n");
         return NULL;
     }
@@ -585,7 +698,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         return NULL;
     }
 
-    bondp_health_check_ctx_init(bdp_ctx);
+    bdp_ctx->msn_enable = true;
+    bdp_ctx->seg_cache_enable = false;
 
     int ret = 0;
     ret = bondp_create_vcontext(bdp_ctx, dev, eid_index, dev_fd);
@@ -600,14 +714,23 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     }
 
     ret = bondp_create_pcontext(bdp_ctx, bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
-    if (ret) {
+    if (ret != 0) {
         URMA_LOG_ERR("Failed to create pctx\n");
         goto DELETE_PCONTEXT;
     }
 
-    if (bondp_create_health_check_ctx(bdp_ctx) != 0) {
-        URMA_LOG_ERR("Failed to create health check scene\n");
-        goto DELETE_PCONTEXT;
+    bondp_init_ctx_enabled_indices(bdp_ctx);
+
+    if (g_bondp_global_ctx->enable_health_check) {
+        if (bondp_hc_init_from_env(bdp_ctx) != 0) {
+            URMA_LOG_ERR("Failed to create health check context\n");
+            goto DELETE_PCONTEXT;
+        }
+    }
+
+    if (bondp_fb_init(bdp_ctx) != 0) {
+        URMA_LOG_ERR("Failed to init failback context\n");
+        goto HC_UNINIT;
     }
 
     URMA_LOG_INFO("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
@@ -615,6 +738,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 
     return &bdp_ctx->v_ctx;
 
+HC_UNINIT:
+    bondp_hc_uninit(bdp_ctx);
 DELETE_PCONTEXT:
     bondp_delete_pcontext(bdp_ctx);
 DELETE_VCONTEXT:
@@ -632,8 +757,8 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     uint32_t eid_index = ctx->eid_index;
 
     (void)strcpy(dev_name, ctx->dev->name);
-    bondp_destroy_health_check_ctx(bdp_ctx);
-
+    bondp_fb_uninit(bdp_ctx);
+    bondp_hc_uninit(bdp_ctx);
     if (bondp_delete_pcontext(bdp_ctx) != 0) {
         URMA_LOG_ERR("Failed to delete pcontext\n");
         ret = URMA_FAIL;
@@ -689,6 +814,14 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
     bdp_ctx->bonding_mode = bonding_mode;
     bdp_ctx->bonding_level = bonding_level;
 
+    /* Health check and failback hold references to the physical contexts
+     * (p_ctxs). They must be torn down before deleting p_ctxs so that the
+     * p_ctxs can actually be released, and re-created afterwards against the
+     * new p_ctxs. Otherwise the old p_ctxs leak (urma_delete_context rejects
+     * them because atomic_cnt > 1) and the new p_ctxs have no probe paths. */
+    bondp_fb_uninit(bdp_ctx);
+    bondp_hc_uninit(bdp_ctx);
+
     ret = bondp_delete_pcontext(bdp_ctx);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to delete pctx when set bonding mode, ret=%d\n", ret);
@@ -699,6 +832,22 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create pctx when set bonding mode, ret=%d\n", ret);
         goto EXIT;
+    }
+
+    bondp_init_ctx_enabled_indices(bdp_ctx);
+
+    if (g_bondp_global_ctx->enable_health_check) {
+        ret = bondp_hc_init_from_env(bdp_ctx);
+        if (ret != 0) {
+            URMA_LOG_ERR("Failed to recreate health check context, ret=%d\n", ret);
+            goto EXIT;
+        }
+    }
+
+    ret = bondp_fb_init(bdp_ctx);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to recreate failback context, ret=%d\n", ret);
+        bondp_hc_uninit(bdp_ctx);
     }
 
 EXIT:

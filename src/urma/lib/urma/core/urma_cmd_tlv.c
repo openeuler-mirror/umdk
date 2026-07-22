@@ -717,6 +717,18 @@ int urma_ioctl_create_jfce(int ioctl_fd, urma_cmd_create_jfce_t *arg)
     return urma_tlv_ioctl(ioctl_fd, URMA_CMD_CREATE_JFCE, attrs, sizeof(attrs));
 }
 
+int urma_ioctl_get_jfce_cnt(int ioctl_fd, urma_cmd_get_jfce_cnt_t *arg)
+{
+    urma_cmd_attr_t attrs[GET_JFCE_CNT_IN_NUM + GET_JFCE_CNT_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
+    urma_cmd_attr_t *a = attrs;
+
+    ATTR(a++, GET_JFCE_CNT_IN_THRESHOLD, arg->in.threshold);
+    ATTR(a++, GET_JFCE_CNT_OUT_JFCE_TOTAL_CNT, arg->out.jfce_total_cnt);
+    ATTR(a++, GET_JFCE_CNT_OUT_JFCE_THRESH_CNT, arg->out.jfce_thresh_cnt);
+
+    return urma_tlv_ioctl(ioctl_fd, URMA_CMD_GET_JFCE_CNT, attrs, sizeof(attrs));
+}
+
 int urma_ioctl_import_jfr(int ioctl_fd, urma_cmd_import_jfr_t *arg)
 {
     urma_cmd_attr_t attrs[IMPORT_JFR_IN_NUM + IMPORT_JFR_OUT_NUM - URMA_CMD_OUT_TYPE_INIT] = {0};
@@ -1252,6 +1264,7 @@ int urma_ioctl_query_dev_attr(int ioctl_fd, urma_cmd_query_device_attr_t *arg)
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_MAX_FETCH_AND_XOR_SIZE, arg->out.attr.dev_cap.max_fetch_and_xor_size);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_ATOMIC_FEAT, arg->out.attr.dev_cap.atomic_feat);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_TRANS_MODE, arg->out.attr.dev_cap.trans_mode);
+    ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_RESERVED, arg->out.attr.dev_cap.reserved);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_CONGESTION_CTRL_ALG, arg->out.attr.dev_cap.congestion_ctrl_alg);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_CEQ_CNT, arg->out.attr.dev_cap.ceq_cnt);
     ATTR(a++, QUERY_DEVICE_OUT_DEV_CAP_MAX_TP_IN_TPG, arg->out.attr.dev_cap.max_tp_in_tpg);
@@ -1296,7 +1309,7 @@ int urma_ioctl_wait_jfc(int ioctl_fd, urma_cmd_jfce_wait_t *arg)
         .args_addr = (uint64_t)(uintptr_t)attrs,
      };
     int ret = ioctl(ioctl_fd, URMA_CMD_WAIT_JFC, &hdr);
-    if (ret != 0) {
+    if (ret != 0 && errno != EAGAIN) {
         URMA_LOG_ERR("wait jfc ioctl failed, ret=%d, errno=%d.\n", ret, errno);
     }
     return ret;

@@ -3,5 +3,6 @@
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} UMQ_UB_LIB_DIR_SRCS)
 
+include(${CMAKE_CURRENT_LIST_DIR}/jetty_pool/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/flow_control/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/private/CMakeLists.txt)

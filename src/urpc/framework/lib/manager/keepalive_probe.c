@@ -226,7 +226,7 @@ static void urpc_keepalive_server_reply(urpc_allocator_t *allocator, urpc_alloca
     uint32_t server_chid = server_channel_id_map_lookup(mapped_server_chid);
     // get remote keepalive queue
     urpc_queue_flag_t flag = {.is_remote = URPC_TRUE, .is_keepalive = URPC_TRUE};
-    queue_t *remote_q = server_channel_search_remote_queue_by_flag(server_chid, flag);
+    queue_t *remote_q = server_channel_search_remote_queue_by_flag(server_chid, &flag);
     if (remote_q == NULL) {
         (void)allocator->put(msg->req_recved.args, msg->req_recved.args_sge_num, option);
         URPC_LIB_LIMIT_LOG_ERR("server channel[%u] keepalive send reply get remote queue failed\n", server_chid);
@@ -447,7 +447,7 @@ int urpc_keepalive_request_send(urpc_keepalive_task_entry_t *entry)
 
     // get remote keepalive queue
     urpc_queue_flag_t flag = {.is_remote = URPC_TRUE, .is_keepalive = URPC_TRUE};
-    queue_t *r_q = channel_get_remote_queue_by_flag(channel, flag);
+    queue_t *r_q = channel_get_remote_queue_by_flag(channel, &flag);
     if (r_q == NULL) {
         URPC_LIB_LIMIT_LOG_ERR("get manage channel[%u] remote queue failed\n", entry->client_task_id.client_chid);
         return URPC_FAIL;

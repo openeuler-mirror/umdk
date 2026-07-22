@@ -17,6 +17,8 @@
 #define UDMA_U_MIN_JFR_DEPTH 64
 #define UDMA_JFR_LARGE_PACKAGE 4096
 
+#define UDMA_JFR_CTX_SIZE 64
+
 enum udma_set_get_jfr_opt_perm {
 	PERM_READ = 1,
 	PERM_WRITE = 1 << 1,

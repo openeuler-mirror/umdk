@@ -11,11 +11,14 @@ int bondp_hash_table_create(bondp_hash_table_t *tbl, uint32_t size,
 {
     (void)pthread_rwlock_init(&tbl->lock, NULL);
     if (ub_hmap_init(&tbl->hmap, size) != 0) {
+        URMA_LOG_ERR("Failed to init hash map, size=%u, errno=%d\n", size, errno);
+        (void)pthread_rwlock_destroy(&tbl->lock);
         return -1;
     }
     tbl->free_f = free_f;
     tbl->comp_f = comp_f;
     tbl->hash_f = hash_f;
+    atomic_init(&tbl->gen, 0);
     return 0;
 }
 
@@ -36,6 +39,8 @@ void bondp_hash_table_destroy(bondp_hash_table_t *tbl)
     ub_hmap_destroy(&tbl->hmap);
     (void)pthread_rwlock_unlock(&tbl->lock);
     (void)pthread_rwlock_destroy(&tbl->lock);
+    /* Invalidate all thread-local caches that may still reference this table */
+    bondp_hash_table_inc_gen(tbl);
 }
 
 struct ub_hmap_node *bondp_hash_table_lookup(bondp_hash_table_t *tbl, void *key, uint32_t hash)

@@ -441,9 +441,9 @@ int urpc_func_info_set(struct urpc_hmap *table, uint64_t addr, uint32_t len)
     }
 
     urpc_func_info_t *info = (urpc_func_info_t *)(uintptr_t)addr;
-    uint32_t info_size = (uint32_t)(sizeof(urpc_func_info_t) + sizeof(name_id_t) * info->count);
-    if (info_size != len) {
-        URPC_LIB_LOG_ERR("invalid func info len:%u\n", info_size);
+    uint64_t info_size = (uint64_t)(sizeof(urpc_func_info_t) + sizeof(name_id_t) * info->count);
+    if (info_size > UINT32_MAX || info_size != len) {
+        URPC_LIB_LOG_ERR("invalid func info len:%lu\n", info_size);
         return URPC_FAIL;
     }
 

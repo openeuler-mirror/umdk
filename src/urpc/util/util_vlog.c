@@ -25,7 +25,7 @@ static const char *g_warn_alias_names_def[] = { "warn", "warning", "4", NULL };
 static const char *g_notice_alias_names_def[] = { "notice", "5", NULL };
 static const char *g_info_alias_names_def[] = { "info", "informational", "6", NULL };
 static const char *g_debug_alias_names_def[] = { "debug", "7", NULL };
-static const char *g_log_type_to_str[VLOG_MAX] = {"", "", "[URMA_API]", "[URMA_CQE]", "[URMA_AE]"};
+static const char *g_log_type_to_str[VLOG_MAX] = {"", "", " URMA_API", " URMA_CQE", " URMA_AE"};
 
 static const util_vlog_level_def_t g_util_vlog_level_def[] = {
     { "EMERG", g_emerg_alias_names_def },
@@ -66,13 +66,23 @@ bool util_vlog_limit(util_vlog_ctx_t *ctx, uint32_t *print_count, uint64_t *last
     return false;
 }
 
-void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_type_t type, const char *function,
-    int line, const char *format, ...)
+void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, const char *file, util_vlog_type_t type,
+    const char *function, int line, const char *format, ...)
 {
     char log_msg[UTIL_VLOG_SIZE];
+    int len = 0;
+    void (*vlog_output_func)(int, char *);
+    void (*vlog_output_ext_func)(int, const char *, const char *, int, char *);
+    vlog_output_func = ctx->vlog_output_func;
+    vlog_output_ext_func = ctx->vlog_output_ext_func;
+    if (vlog_output_ext_func != NULL) {
+        len = snprintf(log_msg, UTIL_VLOG_SIZE, "[%s%s %ld]", ctx->vlog_name, g_log_type_to_str[type],
+            syscall(__NR_gettid));
+    } else {
+        len = snprintf(log_msg, UTIL_VLOG_SIZE, "[%s%s %ld]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
+            syscall(__NR_gettid), function, line);
+    }
 
-    int len = snprintf(log_msg, UTIL_VLOG_SIZE, "%s%s[%ld]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
-        syscall(__NR_gettid), function, line);
     if (len < 0 || len >= UTIL_VLOG_SIZE) {
         return;
     }
@@ -85,7 +95,11 @@ void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, util_vlog_t
         return;
     }
 
-    ctx->vlog_output_func(level, log_msg);
+    if (vlog_output_ext_func != NULL) {
+        vlog_output_ext_func(level, file, function, line, log_msg);
+    } else {
+        vlog_output_func(level, log_msg);
+    }
 }
 
 util_vlog_level_t util_vlog_level_converter_from_str(const char *str, util_vlog_level_t default_level)

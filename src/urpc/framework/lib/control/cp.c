@@ -101,7 +101,7 @@ static int pre_dp_start_callback(void)
     }
 
     if (is_feature_enable(URPC_FEATURE_TIMEOUT) && urpc_notify_table_init() != URPC_SUCCESS) {
-        URPC_LIB_LOG_ERR("msg table init fialed\n");
+        URPC_LIB_LOG_ERR("msg table init failed\n");
         goto UNINIT_TIMER;
     }
 
@@ -172,7 +172,8 @@ static int check_set_cfg(urpc_config_t *cfg)
     }
 
     /* uRPC supports multi-eid only when URPC_FEATURE_MULTI_EID is enabled */
-    if (cfg->trans_info_num == 0 || ((cfg->feature & URPC_FEATURE_MULTI_EID) == 0 && cfg->trans_info_num != 1)) {
+    if (cfg->trans_info_num == 0 || cfg->trans_info_num > MAX_TRANS_INFO_NUM ||
+        ((cfg->feature & URPC_FEATURE_MULTI_EID) == 0 && cfg->trans_info_num != 1)) {
         URPC_LIB_LOG_ERR("the number of transmission information(%u) is invalid\n", cfg->trans_info_num);
         return -URPC_ERR_EINVAL;
     }
@@ -181,6 +182,13 @@ static int check_set_cfg(urpc_config_t *cfg)
         /* uRPC supports multi-eid only when DEV_ASSIGN_MODE_DEV assign mode is used to set all trans_info */
         if ((cfg->feature & URPC_FEATURE_MULTI_EID) != 0 && cfg->trans_info[i].assign_mode != DEV_ASSIGN_MODE_DEV) {
             URPC_LIB_LOG_ERR("multi-eid feature should initialize transmission information by device assign mode\n");
+            return -URPC_ERR_EINVAL;
+        }
+        if (((cfg->trans_info[i].assign_mode == DEV_ASSIGN_MODE_IPV4) &&
+            strnlen(cfg->trans_info[i].ipv4.ip_addr, URPC_IPV4_SIZE) == URPC_IPV4_SIZE) ||
+            ((cfg->trans_info[i].assign_mode == DEV_ASSIGN_MODE_IPV6) &&
+            strnlen(cfg->trans_info[i].ipv6.ip_addr, URPC_IPV6_SIZE) == URPC_IPV6_SIZE)) {
+            URPC_LIB_LOG_ERR("ip length exceeds max value\n");
             return -URPC_ERR_EINVAL;
         }
     }
@@ -628,7 +636,7 @@ uint64_t queue_create(urpc_queue_trans_mode_t trans_mode, urpc_qcfg_create_t *cf
         goto CREATE_FINISH;
     }
 
-    if (is_feature_enable(URPC_FEATURE_TIMEOUT) && !is_manager_queue(q->flag) &&
+    if (is_feature_enable(URPC_FEATURE_TIMEOUT) && !is_manager_queue(&q->flag) &&
         add_queue_notify_msg_table((uint64_t)(uintptr_t)q)) {
         queue_slab_uninit(local_q);
         ops->delete_local_queue(q, NULL);
@@ -1765,7 +1773,7 @@ uint64_t urpc_mem_seg_register(uint64_t va, uint64_t len)
 
     uint32_t list_size = provider_get_list_size();
     if (list_size == 0) {
-        URPC_LIB_LOG_ERR("no provider is avaliable, please init urpc at first\n");
+        URPC_LIB_LOG_ERR("no provider is available, please init urpc at first\n");
         return URPC_INVALID_HANDLE;
     }
 
@@ -1824,7 +1832,7 @@ int urpc_mem_seg_unregister(uint64_t mem_h)
 
     uint32_t list_size = provider_get_list_size();
     if (list_size == 0) {
-        URPC_LIB_LOG_ERR("no provider is avaliable, please init urpc at first\n");
+        URPC_LIB_LOG_ERR("no provider is available, please init urpc at first\n");
         return URPC_FAIL;
     }
 

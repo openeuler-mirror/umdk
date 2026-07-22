@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <string.h>
+#include <dlfcn.h>
 #include "udma_u_jfc.h"
 #include "udma_u_jfs.h"
 #include "udma_u_jfr.h"
@@ -24,6 +25,9 @@
 #include "udma_u_buf.h"
 #include "udma_u_ops.h"
 
+#define LIBDTU_FILE "/usr/lib64/libdtu.so"
+static void *g_dtu_va = NULL;
+static uint32_t g_dtu_va_refcount = 0;
 static pthread_mutex_t g_sq_reserved_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t g_sq_reserved_refcount = 0;
 static void *g_sq_reserved_va = NULL;
@@ -147,8 +151,18 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->dump_aux_info = resp->dump_aux_info;
 	udma_ctx->jfr_sge = resp->jfr_sge;
 	udma_ctx->sq_reserved = resp->sq_reserved;
+	udma_ctx->lock_buffer_en = resp->lock_buffer_en;
+	udma_ctx->ccu_jfc_property_en = resp->ccu_jfc_property_en;
+	udma_ctx->lock_buf_bb_shift = resp->lock_buf_bb_shift;
+	udma_ctx->dtu_va_base = resp->dtu_va_base;
+	udma_ctx->dtu_va_size = resp->dtu_va_size;
+	udma_ctx->dtu_enable = resp->u_dtu_enable;
+	udma_ctx->atomic_add_en = resp->atomic_add_en;
+	udma_ctx->ccu_jetty_start_id = resp->ccu_jetty_start_id;
+	udma_ctx->ccu_jetty_max_cnt = resp->ccu_jetty_max_cnt;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
+	udma_ctx->st64b_en = resp->st64b_en;
 }
 
 static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_create_ctx_resp *resp)
@@ -168,7 +182,7 @@ static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_creat
 	if (g_sq_reserved_va == MAP_FAILED) {
 		g_sq_reserved_va = NULL;
 		(void)pthread_mutex_unlock(&g_sq_reserved_lock);
-		UDMA_LOG_ERR("failed to reserved sq, errno:%d, strerror:%s.\n",
+		UDMA_LOG_ERR("failed to reserve SQ, errno:%d, strerror:%s.\n",
 			     errno, strerror(errno));
 		return EINVAL;
 	}
@@ -211,6 +225,42 @@ static void udma_u_init_jetty_table(struct udma_u_context *udma_u_ctx)
 	(void)pthread_rwlock_init(&udma_u_ctx->jetty_table_lock, NULL);
 }
 
+static bool udma_open_dtu_provider(struct udma_u_context *udma_ctx)
+{
+	udma_ctx->dtu_provider_handle = dlopen(LIBDTU_FILE, RTLD_NOW);
+	if (!udma_ctx->dtu_provider_handle) {
+		UDMA_LOG_ERR("lib dtu dlopen failed.\n");
+		return false;
+	}
+
+	udma_ctx->dtu_mmap_fun_ptr = (dtu_u_mmap_func)dlsym(udma_ctx->dtu_provider_handle, "dtu_u_mmap");
+	if (!udma_ctx->dtu_mmap_fun_ptr) {
+		UDMA_LOG_ERR("dtu mmap dlsym failed.\n");
+		goto err_mmap_dlsym;
+	}
+
+	udma_ctx->dtu_munmap_fun_ptr = (dtu_u_munmap_func)dlsym(udma_ctx->dtu_provider_handle, "dtu_u_munmap");
+	if (!udma_ctx->dtu_munmap_fun_ptr) {
+		UDMA_LOG_ERR("dtu munmap dlsym failed.\n");
+		goto err_munmap_dlsym;
+	}
+
+	return true;
+err_munmap_dlsym:
+	udma_ctx->dtu_mmap_fun_ptr = NULL;
+err_mmap_dlsym:
+	dlclose(udma_ctx->dtu_provider_handle);
+
+	return false;
+}
+
+static void udma_close_dtu_provider(struct udma_u_context *udma_ctx)
+{
+	udma_ctx->dtu_munmap_fun_ptr = NULL;
+	udma_ctx->dtu_mmap_fun_ptr = NULL;
+	dlclose(udma_ctx->dtu_provider_handle);
+}
+
 static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_index,
 					     int dev_fd)
 {
@@ -226,17 +276,17 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 
 	udma_ctx = (struct udma_u_context *)calloc(1, sizeof(*udma_ctx));
 	if (!udma_ctx) {
-		UDMA_LOG_ERR("Failed to alloc memory for udma_ctx.\n");
+		UDMA_LOG_ERR("Failed to alloc memory for UDMA context.\n");
 		return NULL;
 	}
 
 	if (pthread_mutex_init(&udma_ctx->db_list_mutex, NULL)) {
-		UDMA_LOG_ERR("Failed to init db_list_mutex.\n");
+		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
 		goto err_db_list_mutex;
 	}
 
 	if (pthread_mutex_init(&udma_ctx->hugepage_lock, NULL)) {
-		UDMA_LOG_ERR("Failed to init db_list_mutex.\n");
+		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
 		goto err_hugepage_lock;
 	}
 	udma_ctx->hugepage_list = NULL;
@@ -249,9 +299,22 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	}
 
 	udma_u_init_context(udma_ctx, &resp);
+	if (udma_ctx->dtu_enable) {
+		if (udma_open_dtu_provider(udma_ctx)) {
+			if (udma_ctx->dtu_mmap_fun_ptr(udma_ctx->dtu_va_base,
+			    udma_ctx->dtu_va_size, &g_dtu_va, &g_dtu_va_refcount)) {
+				udma_close_dtu_provider(udma_ctx);
+				udma_ctx->dtu_enable = false;
+				UDMA_LOG_WARN("Could not mmap dtu, continuing with the normal process.\n");
+			}
+		} else {
+			udma_ctx->dtu_enable = false;
+			UDMA_LOG_WARN("Could not open dtu provider.\n");
+		}
+	}
 
 	if (udma_u_alloc_db(&udma_ctx->urma_ctx, &udma_ctx->db)) {
-		UDMA_LOG_ERR("Failed to alloc jfc db.\n");
+		UDMA_LOG_ERR("Failed to alloc JFC doorbell.\n");
 		goto err_alloc_db;
 	}
 
@@ -265,6 +328,10 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 err_reserved_sq:
 	udma_u_free_db(&udma_ctx->urma_ctx, &udma_ctx->db);
 err_alloc_db:
+	if (udma_ctx->dtu_enable) {
+		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size, &g_dtu_va_refcount);
+		udma_close_dtu_provider(udma_ctx);
+	}
 	(void)urma_cmd_delete_context(&udma_ctx->urma_ctx);
 err_create_ctx:
 	(void)pthread_mutex_destroy(&udma_ctx->hugepage_lock);
@@ -284,10 +351,14 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	udma_u_destroy_jt_table(udma_ctx);
 	udma_u_free_reserved_sq();
 	udma_u_free_db(ctx, &udma_ctx->db);
+	if (udma_ctx->dtu_enable) {
+		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size, &g_dtu_va_refcount);
+		udma_close_dtu_provider(udma_ctx);
+	}
 	udma_u_destroy_hugepage(udma_ctx);
 
 	if (urma_cmd_delete_context(&udma_ctx->urma_ctx)) {
-		UDMA_LOG_ERR("udma destroy ctx failed.\n");
+		UDMA_LOG_ERR("UDMA destroy context failed.\n");
 		ret = URMA_FAIL;
 	}
 
@@ -297,7 +368,7 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	return ret;
 }
 
-urma_provider_ops_t g_udma_provider_ops = {
+const urma_provider_ops_t g_udma_provider_ops = {
 	.name = "udma",
 	.attr = {
 		.version = 1,

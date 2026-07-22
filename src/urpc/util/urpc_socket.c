@@ -114,7 +114,7 @@ int urpc_socket_bind_assigned_addr(urpc_host_info_t *local, int socket_fd)
         return URPC_FAIL;
     }
 
-    if (bind(socket_fd, (struct sockaddr*)&addr, len) < 0) {
+    if (bind(socket_fd, (struct sockaddr*)(uintptr_t)&addr, len) < 0) {
         UTIL_LOG_ERR("bind assigned addr failed, ip %s port %d, errno: %d\n", ip_addr, port, errno);
         return URPC_FAIL;
     }

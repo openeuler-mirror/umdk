@@ -11,7 +11,6 @@
 #define URMA_UBAGG_H
 
 #include "urma_types.h"
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -22,14 +21,25 @@ extern "C" {
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
 
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
+#define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
 #define URMA_UBAGG_WR_BUF_SIZE        (3)
-#define URMA_UBAGG_MAX_CR_CNT_PER_DEV (16)
+#define URMA_UBAGG_MAX_CR_CNT_PER_DEV (32)
+#define URMA_UBAGG_CHIP_LINK_NUM      (4)
+#define URMA_ACTIVE_PORT_PER_DIE      (2)
+#define URMA_ACTIVE_PORT_MIN          (4)
+#define URMA_ACTIVE_PORT_MAX          (5)
+
+#define URMA_FAILOVER_LINK_NUM        (IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE)
 
 typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_SET_BONDING_MODE_LEGACY = 4,
     BONDP_USER_CTL_ENABLE_SEG_CACHE,
     BONDP_USER_CTL_QUERY_PORT,
     BONDP_USER_CTL_SET_BONDING_MODE,
+    BONDP_USER_CTL_GET_JFCE_FD_LIST,
+    BONDP_USER_CTL_OPCODE_GET_RJETTY,
+    BONDP_USER_CTL_OPCODE_GET_SEG_CTX,
+    BONDP_USER_CTL_DISABLE_MSN,
 } bondp_user_ctl_opcode_t;
 
 // URMA_USER_CTL_BOND_SET_BONDING_MODE,
@@ -45,6 +55,17 @@ typedef enum bondp_bonding_level {
     BONDP_BONDING_LEVEL_PORT,
     BONDP_BONDING_LEVEL_MAX,
 } bondp_bonding_level_t;
+
+/*
+ * Base segment info without the user-space-only ext field.
+ * Layout-compatible with kernel struct ubagg_seg_info.
+ */
+typedef struct urma_seg_base {
+    urma_ubva_t ubva;
+    uint64_t len;
+    urma_seg_attr_t attr;
+    uint32_t token_id;
+} urma_seg_base_t;
 
 typedef struct bondp_set_bonding_mode_in {
     bondp_bonding_mode_t bonding_mode;
@@ -66,6 +87,15 @@ typedef struct bondp_query_port_out {
     uint32_t active_count;
 } bondp_query_port_out_t;
 
+typedef struct bondp_get_jfce_fd_list_in {
+    urma_jfce_t *jfce;
+} bondp_get_jfce_fd_list_in_t;
+
+typedef struct bondp_get_jfce_fd_list_out {
+    int fd_list[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t count;
+} bondp_get_jfce_fd_list_out_t;
+
 typedef union bondp_port_id {
     struct {
         uint8_t chip_id;
@@ -82,9 +112,16 @@ typedef struct bondp_jfs_cfg {
     uint32_t port_count;
 } bondp_jfs_cfg_t;
 
+typedef struct bondp_jfc_cfg {
+    urma_jfc_cfg_t base;
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
+} bondp_jfc_cfg_t;
+
 typedef struct bondp_jfr_cfg {
     urma_jfr_cfg_t base;
-    bool multi_path;
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
 } bondp_jfr_cfg_t;
 
 typedef struct bondp_jetty_cfg {
@@ -93,8 +130,63 @@ typedef struct bondp_jetty_cfg {
     uint32_t port_count;
 } bondp_jetty_cfg_t;
 
+typedef struct urma_bond_jetty_ext {
+    uint8_t version;
+    uint64_t mask;
+    urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
+    bool is_multipath;
+    uint8_t enable_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enable_count;
+    bool is_health_check_enable;
+    struct {
+        urma_seg_base_t slaves[URMA_UBAGG_DEV_MAX_NUM];
+    } health_check_seg;
+} urma_bond_jetty_ext_t;
+
+typedef enum bondp_rjetty_ext_version {
+    BONDP_RJETTY_EXT_VERSION_V0 = 0,
+} bondp_rjetty_ext_version_t;
+
+typedef enum bondp_rjetty_ext_mask {
+    BONDP_RJETTY_EXT_MASK_MULTI_PATH = 1ULL << 0,
+    BONDP_RJETTY_EXT_MASK_HEALTH_CHECK = 1ULL << 1,
+    BONDP_RJETTY_EXT_MASK_LOCAL_CTX = 1ULL << 2,
+    BONDP_RJETTY_EXT_MASK_TARGET_CTX = 1ULL << 3,
+} bondp_rjetty_ext_mask_t;
+
+typedef struct bondp_rjetty_target_ctx {
+    uint8_t target_idx;
+    urma_jetty_id_t slave_id;
+    urma_seg_base_t health_check_seg;
+} bondp_rjetty_target_ctx_t;
+
+/*
+ * Compact variable-length rjetty ext layout (version 0):
+ *   data:
+ *     uint8_t local_indices[local_ctx_cnt]
+ *     bondp_rjetty_target_ctx_t target_ctx[target_ctx_cnt]
+ */
+typedef struct urma_bond_jetty_ext_v0 {
+    uint8_t version;
+    uint64_t mask;
+    bool is_multipath;
+    bool is_health_check_enable;
+    /* Number of uint8_t local indices stored in the first variable-length region. */
+    uint32_t local_ctx_cnt;
+    /* Number of bondp_rjetty_target_ctx_t entries stored after local indices. */
+    uint32_t target_ctx_cnt;
+    char data[0];
+} urma_bond_jetty_ext_v0_t;
+
+typedef struct urma_bond_seg_ext {
+    uint8_t version;
+    uint64_t mask;
+    urma_seg_base_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
+} urma_bond_seg_ext_t;
+
 typedef struct bondp_rjetty {
     urma_rjetty_t base;
+    urma_bond_jetty_ext_t ext;
     union {
         urma_jfs_t *jfs;
         urma_jetty_t *jetty;
@@ -115,11 +207,17 @@ typedef struct bondp_jfs_wr {
     uint32_t dst_chip_id;
 } bondp_jfs_wr_t;
 
+typedef struct bondp_path {
+    uint32_t local_idx;
+    uint32_t target_idx;
+    uint32_t least_load;
+} bondp_path_t;
+
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
-                        urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
-                        uint64_t dst, uint64_t src, uint32_t len,
-                        urma_jfs_wr_flag_t flag, uint64_t user_ctx,
-                        uint32_t src_chip_id, uint32_t dst_chip_id);
+                                  urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
+                                  uint64_t dst, uint64_t src, uint32_t len,
+                                  urma_jfs_wr_flag_t flag, uint64_t user_ctx,
+                                  uint32_t src_chip_id, uint32_t dst_chip_id);
 
 #ifdef __cplusplus
 }

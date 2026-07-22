@@ -279,7 +279,7 @@ static int send_recv_delete_local_queue(queue_t *l_queue, delete_queue_callback_
     send_recv_queue_local_t *local = CONTAINER_OF_FIELD(local_q, send_recv_queue_local_t, local_q);
     jetty_provider_t *provider = (jetty_provider_t *)(uintptr_t)l_queue->provider;
     int ret;
-    if (is_manager_queue(l_queue->flag)) {
+    if (is_manager_queue(&l_queue->flag)) {
         ret = send_recv_flush_jetty(local_q, local->jetty, local->jfs_jfc, true, NULL);
         if (ret != URPC_SUCCESS) {
             URPC_LIB_LOG_ERR("flush jetty failed, ret[%d]\n", ret);
@@ -406,7 +406,7 @@ static int send_recv_poll(queue_t *l_queue, queue_msgs_t *msgs, urpc_poll_direct
     int total_msg_cnt = 0;
     send_recv_queue_local_t *local_queue = (send_recv_queue_local_t *)(uintptr_t)l_queue;
     // manage queue use wait() outside
-    if (URPC_UNLIKELY(!is_manager_queue(l_queue->flag) && is_interrupt_mode(&local_queue->local_q) &&
+    if (URPC_UNLIKELY(!is_manager_queue(&l_queue->flag) && is_interrupt_mode(&local_queue->local_q) &&
                       send_recv_wait(l_queue, 1) < 0)) {
         goto JFC_ERR;
     }

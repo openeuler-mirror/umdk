@@ -12,8 +12,8 @@
 
 #include "urma_api.h"
 
+#include "perftest_mgmt.h"
 #include "perftest_parameters.h"
-#include "perftest_communication.h"
 #include "perftest_resources.h"
 #include "perftest_run_test.h"
 
@@ -28,9 +28,9 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
     uint32_t i = 0;
 
     for (i = 0; i < cfg->pair_num; i++) {
-        ret = sync_time(cfg->comm.sock_fd[i], "Start test");
+        ret = sync_time(cfg, i, "Start test");
         if (ret != 0) {
-            (void)fprintf(stderr, "Failed to sync time, start test.\n");
+            LOG_ERROR("Failed to sync time, start test.\n");
             return ret;
         }
     }
@@ -70,21 +70,22 @@ static int run_test(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     if (ret != 0) {
-        (void)fprintf(stderr, "Failed to run test: %d.\n", (int)cfg->cmd);
+        LOG_ERROR("Failed to run test: %d.\n", (int)cfg->cmd);
         return ret;
     }
-
-    for (i = 0; i < cfg->pair_num; i++) {
-        ret = sync_time(cfg->comm.sock_fd[i], "End test");
-        if (ret != 0) {
-            (void)fprintf(stderr, "Failed to sync time, End test.\n");
-            return ret;
+    if (!g_exit_flag) {
+        for (i = 0; i < cfg->pair_num; i++) {
+            ret = sync_time(cfg, i, "End test");
+            if (ret != 0) {
+                LOG_ERROR("Failed to sync time, End test.\n");
+                return ret;
+            }
         }
     }
     return ret;
 }
 
-static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
+int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
 {
     urma_status_t status;
     if (cfg->api_type == PERFTEST_WRITE) {
@@ -93,13 +94,13 @@ static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         status = urma_rearm_jfc(ctx->jfc_s[i], false);
         if (status != URMA_SUCCESS) {
-            (void)fprintf(stderr, "Couldn't rearm jfc_s %u\n", i);
+            LOG_ERROR("Couldn't rearm jfc_s %u\n", i);
             return -1;
         }
         if (cfg->api_type == PERFTEST_SEND) {
             status = urma_rearm_jfc(ctx->jfc_r[i], false);
             if (status != URMA_SUCCESS) {
-                (void)fprintf(stderr, "Couldn't rearm jfc_r %u\n", i);
+                LOG_ERROR("Couldn't rearm jfc_r %u\n", i);
                 return -1;
             }
         }
@@ -112,7 +113,7 @@ static int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg)
 
 static void *write_dirty_thread(void *args)
 {
-    context_cfg_t *ctx_cfg = (context_cfg_t*)args;
+    context_cfg_t *ctx_cfg = (context_cfg_t *)args;
     perftest_context_t *ctx = ctx_cfg->ctx;
     perftest_config_t *cfg = ctx_cfg->cfg;
 
@@ -147,7 +148,7 @@ static int prepare_test(perftest_context_t *ctx, perftest_config_t *cfg, context
 
     if (cfg->type == PERFTEST_BW && cfg->enable_write_dirty == true) {
         if (pthread_create(&ctx->write_dirty_thread_id, NULL, write_dirty_thread, args) != 0) {
-            (void)fprintf(stderr, "Failed to create write_dirty_thread.\n");
+            LOG_ERROR("Failed to create write_dirty_thread.\n");
             return -1;
         }
     }

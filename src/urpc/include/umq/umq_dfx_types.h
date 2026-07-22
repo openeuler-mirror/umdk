@@ -10,7 +10,6 @@
 #ifndef UMQ_DFX_TYPES_H
 #define UMQ_DFX_TYPES_H
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "umq_types.h"
@@ -20,7 +19,11 @@ extern "C" {
 #endif
 
 #define UMQ_STATS_QBUF_POOL_TYPE_MAX (16u)
-#define UMQ_PERF_QUANTILE_MAX_NUM (8u)
+#define UMQ_PERF_QUANTILE_CNT (4u)
+#define UMQ_PERF_QUANTILE_P50   (0u)
+#define UMQ_PERF_QUANTILE_P90   (1u)
+#define UMQ_PERF_QUANTILE_P99   (2u)
+#define UMQ_PERF_QUANTILE_P9999 (3u)
 #define UMQ_PERF_REC_MAX_NUM (64u)
 #define UMQ_DFX_TO_STRING_DEFAULT_LEN (20480)
 #define UMQ_LOCAL_QBUF_POOL_MAX_NUM (64)
@@ -32,6 +35,8 @@ typedef struct umq_packet_stats {
     uint64_t send_eagain_cnt;       // number of packets failed to send due to flowcontrol eagain
     uint64_t send_error_cnt;        // number of packets failed to send
     uint64_t recv_error_cnt;        // number of packets failed to receive
+    uint64_t recv_duplicate_req_cnt;      // number of duplicate flow control request packets received
+    uint64_t recv_duplicate_rsp_cnt;      // number of duplicate flow control response packets received
 } umq_packet_stats_t;
 
 typedef struct umq_credit_pool_stats {
@@ -73,7 +78,7 @@ typedef struct umq_credit_private_stats {
 typedef struct umq_flow_control_stats {
     umq_credit_pool_stats_t pool_credit; // credit-related statistics of a main queue
     umq_credit_private_stats_t queue_credit; // credit-related statistics of a specific queue
-    umq_packet_stats_t packet_stats; // flow control sacket statistics
+    umq_packet_stats_t packet_stats; // flow control packet statistics
 } umq_flow_control_stats_t;
 
 typedef struct umq_expansion_pool_stats {
@@ -86,7 +91,18 @@ typedef struct umq_expansion_pool_stats {
     uint64_t total_shrink_count;            // cumulative number of contractions
 } umq_expansion_pool_stats_t;
 
+typedef enum umq_qbuf_pool_type {
+    UMQ_QBUF_POOL_TYPE_SMALL,
+    UMQ_QBUF_POOL_TYPE_MEDIUM,
+    UMQ_QBUF_POOL_TYPE_BIG,
+    UMQ_QBUF_POOL_TYPE_HUGE,
+    UMQ_QBUF_POOL_TYPE_GIGANTIC,
+    UMQ_QBUF_POOL_TYPE_TINY,
+    UMQ_QBUF_POOL_TYPE_MAX,
+} umq_qbuf_pool_type_t;
+
 typedef struct umq_local_qbuf_pool_stats {
+    umq_qbuf_pool_type_t type;                 // qbuf pool type
     uint64_t tid;                              // thread ID
     uint64_t capacity_with_data;               // capacity of with-data buffer in the local memory pool
     uint64_t buf_cnt_with_data;                // number of with-data buffer in the local memory pool
@@ -107,6 +123,7 @@ typedef struct umq_local_qbuf_pool_stats {
 } umq_local_qbuf_pool_stats_t;
 
 typedef struct umq_qbuf_pool_info {
+    umq_qbuf_pool_type_t type;                 // qbuf pool type
     umq_buf_mode_t mode;                      // split or combine
     uint64_t total_size;                      // qbuf pool total size
     uint64_t total_block_num;                 // total number of blocks
@@ -197,6 +214,26 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_ACK_RX,
     /* record point for umq_notify */
     UMQ_PERF_RECORD_NOTIFY,
+    /* record point for umq_buf_alloc */
+    UMQ_PERF_RECORD_BUF_ALLOC,
+    /* record point for umq_buf_free */
+    UMQ_PERF_RECORD_BUF_FREE,
+    /* record point for umq_data_to_head */
+    UMQ_PERF_RECORD_BUF_DATA_TO_HEAD,
+
+    /* record point for umq_create */
+    UMQ_PERF_RECORD_CREATE,
+    /* record point for umq_destroy */
+    UMQ_PERF_RECORD_DESTROY,
+    /* record point for umq_get_route_list */
+    UMQ_PERF_RECORD_ROUTE_LIST_GET,
+    /* record point for umq_bind_info_get */
+    UMQ_PERF_RECORD_BIND_INFO_GET,
+    /* record point for umq_bind */
+    UMQ_PERF_RECORD_BIND,
+    /* record point for umq_unbind */
+    UMQ_PERF_RECORD_UNBIND,
+
     /* record point for transport post send in umq_enqueue and umq_post */
     UMQ_PERF_RECORD_TRANSPORT_POST_SEND,
     /* record point for transport post recv in umq_enqueue and umq_post */
@@ -223,8 +260,108 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_ACK_TX,
     /* record point for transport ack interrupt rx */
     UMQ_PERF_RECORD_TRANSPORT_ACK_RX,
+
+    /* record point for transport JFCE create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFCE,
+    /* record point for transport JFC create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFC,
+    /* record point for transport JFR create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JFR,
+    /* record point for transport JETTY create */
+    UMQ_PERF_RECORD_TRANSPORT_CREATE_JETTY,
+    /* record point for transport JFCE destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE,
+    /* record point for transport JFC destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC,
+    /* record point for transport JFR destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFR,
+    /* record point for transport JETTY destroy */
+    UMQ_PERF_RECORD_TRANSPORT_DESTROY_JETTY,
+    /* record point for transport rjetty get */
+    UMQ_PERF_RECORD_TRANSPORT_RJETTY_GET,
+    /* record point for transport rjetty put */
+    UMQ_PERF_RECORD_TRANSPORT_RJETTY_PUT,
+    /* record point for transport route path get */
+    UMQ_PERF_RECORD_TRANSPORT_PATH_GET,
+    /* record point for transport import */
+    UMQ_PERF_RECORD_TRANSPORT_IMPORT_JETTY,
+    /* record point for transport bind */
+    UMQ_PERF_RECORD_TRANSPORT_BIND_JETTY,
+    /* record point for transport import */
+    UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY,
+    /* record point for transport bind */
+    UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY,
+    /* record point for transport jetty_node alloc */
+    UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE,
+    /* record point for transport jetty_node free */
+    UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE,
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
+
+/* trace type — UMQ top-level operation categories */
+typedef enum umq_trace_type {
+    UMQ_TRACE_TYPE_POST,                /* umq_post */
+    UMQ_TRACE_TYPE_POLL,                /* umq_poll */
+    UMQ_TRACE_TYPE_WAIT,                /* umq_wait_interrupt */
+    UMQ_TRACE_TYPE_REARM,               /* umq_rearm_interrupt */
+    UMQ_TRACE_TYPE_MAX,
+} umq_trace_type_t;
+
+/* urma function type — identifies which URMA API is being timed */
+typedef enum umq_urma_func_type {
+    UMQ_URMA_FUNC_POST_TX,                  /* urma_post_jetty_send_wr */
+    UMQ_URMA_FUNC_POST_RX,                  /* urma_post_jetty_recv_wr/urma_post_jfr_wr */
+    UMQ_URMA_FUNC_POLL_TX,                  /* urma_poll_jfc (tx) */
+    UMQ_URMA_FUNC_POLL_RX,                  /* urma_poll_jfc (rx) */
+    UMQ_URMA_FUNC_WAIT_TX_JFC,              /* urma_wait_jfc (tx) */
+    UMQ_URMA_FUNC_WAIT_RX_JFC,              /* urma_wait_jfc (rx) */
+    UMQ_URMA_FUNC_ACK_TX_JFC,               /* urma_ack_jfc (tx) */
+    UMQ_URMA_FUNC_ACK_RX_JFC,               /* urma_ack_jfc (rx) */
+    UMQ_URMA_FUNC_REARM_JFC,                /* urma_rearm_jfc */
+    UMQ_URMA_FUNC_FC_REARM_JFC,             /* urma_rearm_jfc (fc) */
+    UMQ_URMA_FUNC_FC_POST_TX,               /* urma_post_jetty_send_wr (fc) */
+    UMQ_URMA_FUNC_FC_POLL_TX,               /* urma_poll_jfc (fc tx) */
+    UMQ_URMA_FUNC_FC_POST_RX,               /* urma_post_jetty_recv_wr/urma_post_jfr_wr (fc) */
+    UMQ_URMA_FUNC_FC_POLL_RX,               /* urma_poll_jfc (fc rx) */
+    UMQ_URMA_FUNC_MAX,
+} umq_urma_func_type_t;
+
+#define UMQ_PERF_MAX_SUB_TIME_NUM  (8u)
+
+/* sub-branch timing — one entry per URMA call within a UMQ operation */
+typedef struct umq_sub_time {
+    uint64_t start_time;                    /* URMA call start timestamp (ns) */
+    uint64_t exec_time;                     /* URMA call execution time (delta, ns) */
+    umq_urma_func_type_t func_type;         /* which URMA API */
+} umq_sub_time_t;
+
+/* one data item — a single buffer (POST) or completion (POLL) */
+typedef struct umq_trace_item {
+    uint32_t sub_umq_id;                    /* sub umq id for poll_rx */
+    uint32_t msn;                           /* imm msn for traceability */
+    uint32_t size;                          /* data size of this item */
+} umq_trace_item_t;
+
+/* core data record — abstracted from post/poll/interrupt specifics */
+typedef struct umq_data_record {
+    /* meta — traceability fields */
+    umq_trace_item_t items[UMQ_BATCH_SIZE]; /* per-buffer/per-completion data */
+    uint32_t item_cnt;                      /* number of valid items[] entries */
+    uint64_t timestamp;                     /* record creation timestamp (ns) */
+    uint64_t tag_timestamp;                 /* tag timestamp (ns) */
+    uint32_t umq_id;                        /* umq id */
+
+    /* timing */
+    uint64_t start_time;                    /* UMQ operation start (ns) */
+    uint64_t end_time;                      /* UMQ operation end (ns) */
+
+    /* sub-branch — URMA call timing */
+    uint32_t sub_time_cnt;
+    umq_sub_time_t sub_time[UMQ_PERF_MAX_SUB_TIME_NUM];
+
+    /* type */
+    umq_trace_type_t type;                  /* POST / POLL / WAIT / REARM */
+} umq_data_record_t;
 
 typedef struct umq_perf_stats {
     struct {
@@ -233,18 +370,34 @@ typedef struct umq_perf_stats {
         uint64_t average; // average latency
         uint64_t mininum; // min latency
         uint64_t maxinum; // max latency
-        uint64_t median; // median latency
-        uint64_t p90; // 90th percentile
-        uint64_t p99; // 99th percentile
-    } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe poin
+        uint64_t quantile[UMQ_PERF_QUANTILE_CNT]; // quantile values in ns (p50/p90/p99/p9999)
+    } type_record[UMQ_PERF_RECORD_TYPE_MAX]; // statistical results list for each type of probe point
 } umq_perf_stats_t;
 
 typedef struct umq_perf_stats_cfg {
-    uint64_t thresh_array[UMQ_PERF_QUANTILE_MAX_NUM]; // quantile values list
-    uint32_t thresh_num; // number of valid quantiles
 } umq_perf_stats_cfg_t;
 
+#define UMQ_TRACE_FLAG_RECORD_NUM              (1U)
+#define UMQ_TRACE_FLAG_OUTPUT_LIMIT            (1U << 1)
+
+typedef struct umq_trace_cfg {
+    uint32_t flag;
+    uint32_t record_num; // total number of record array
+    uint32_t output_limit; // log limit of data record
+} umq_trace_cfg_t;
+
 typedef void (*umq_io_perf_callback_t)(umq_perf_record_type_t record_type, umq_buf_t *qbuf);
+
+typedef struct umq_transport_pool_stats {
+    uint64_t total_num;
+    uint64_t global_num;
+    uint64_t cache_num;
+    uint64_t in_use_num;
+    uint64_t error_num;
+    uint64_t acc_alloc_num;
+    uint64_t acc_free_num;
+    uint64_t acc_miss_num;
+} umq_transport_pool_stats_t;
 
 #ifdef __cplusplus
 }

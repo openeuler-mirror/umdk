@@ -122,6 +122,46 @@ int uvs_ubagg_ioctl_get_dev_name_by_eid(uvs_eid_t *eid, char *buf, size_t len)
     return 0;
 }
 
+int uvs_ubagg_ioctl_get_topo_info(uvs_ubagg_topo_info_out_t *topo_info)
+{
+    struct uvs_ubagg_get_topo_info_arg args = {0};
+    struct uvs_ubagg_cmd_hdr hdr = {0};
+    int ret;
+
+    if (topo_info == NULL) {
+        TPSA_LOG_ERR("Invalid topo info buffer.\n");
+        return -EINVAL;
+    }
+
+    (void)memset(topo_info, 0, sizeof(*topo_info));
+    args.out.topo = topo_info->topo_info;
+    hdr.command = UVS_UBAGG_CMD_GET_TOPO_INFO;
+    hdr.args_addr = (uint64_t)(uintptr_t)&args;
+    hdr.args_len = sizeof(args);
+
+    int dev_fd = open(UVS_UBAGG_DEVICE_PATH, O_RDWR);
+    if (dev_fd < 0) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ret = ioctl(dev_fd, UVS_UBAGG_CMD, &hdr);
+    if (ret != 0) {
+        TPSA_LOG_ERR("Failed to get topo info, ret: %d, errno: %d.\n", ret, errno);
+        close(dev_fd);
+        return -1;
+    }
+    if (args.out.topo_num > MAX_NODE_NUM) {
+        TPSA_LOG_ERR("Invalid topo num from ubagg: %u.\n", args.out.topo_num);
+        close(dev_fd);
+        return -EINVAL;
+    }
+    topo_info->node_num = args.out.topo_num;
+
+    close(dev_fd);
+    return 0;
+}
+
 int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num)
 {
     struct uvs_ubagg_set_topo_info args = {0};
@@ -144,32 +184,6 @@ int uvs_ubagg_ioctl_set_topo(void *topo_info, int topo_num)
     ret = ioctl(dev_fd, UVS_UBAGG_CMD, &hdr);
     if (ret != 0) {
         TPSA_LOG_ERR("Failed to set topo info, ret: %d, errno: %d.\n", ret, errno);
-        close(dev_fd);
-        return -1;
-    }
-
-    close(dev_fd);
-    return 0;
-}
-
-int uvs_ubcore_ioctl_get_topo(void *topo_map)
-{
-    tpsa_ioctl_ctx_t ioctl_ctx = {0};
-    uvs_get_topo_t arg = {0};
-    int ret = 0;
-
-    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
-    if (dev_fd == -1) {
-        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
-        return -1;
-    }
-
-    ioctl_ctx.ubcore_fd = dev_fd;
-    arg.out.topo_map = topo_map;
-
-    ret = uvs_ioctl_get_topo(&ioctl_ctx, &arg);
-    if (ret != 0) {
-        TPSA_LOG_ERR("uvs_ubcore_ioctl_get_topo fail\n");
         close(dev_fd);
         return -1;
     }
@@ -205,10 +219,10 @@ int uvs_ubcore_ioctl_set_topo(void *topo_info, int topo_num)
     return 0;
 }
 
-int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *route_list)
+int uvs_ubcore_ioctl_insert_main_ue_eid(const uvs_main_ue_eid_entry_t *entry)
 {
     tpsa_ioctl_ctx_t ioctl_ctx = {0};
-    uvs_cmd_get_route_list_t arg = {0};
+    uvs_cmd_main_ue_eid_entry_t arg = {0};
     int ret = 0;
 
     int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
@@ -218,25 +232,164 @@ int uvs_ubcore_ioctl_get_route_list(const uvs_route_t *route, uvs_route_list_t *
     }
 
     ioctl_ctx.ubcore_fd = dev_fd;
-    arg.in = *route;
+    arg.in.entry = *entry;
 
-    ret = uvs_ioctl_get_route_list(&ioctl_ctx, &arg);
+    ret = uvs_ioctl_insert_main_ue_eid(&ioctl_ctx, &arg);
     if (ret != 0) {
-        TPSA_LOG_ERR("Failed to get route list, ret: %d, errno: %d.\n",
-                     ret, errno);
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_insert_main_ue_eid fail\n");
         close(dev_fd);
         return ret;
     }
-
-    *route_list = arg.out;
 
     close(dev_fd);
     return 0;
 }
 
-int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
+int uvs_ubcore_ioctl_delete_main_ue_eid(const uvs_eid_t *eid)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    uvs_cmd_main_ue_eid_delete_t arg = {0};
+    int ret = 0;
+
+    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+    arg.in.eid = *eid;
+
+    ret = uvs_ioctl_delete_main_ue_eid(&ioctl_ctx, &arg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_delete_main_ue_eid fail\n");
+        close(dev_fd);
+        return ret;
+    }
+
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_lookup_main_ue_eid(const uvs_eid_t *eid,
+    uvs_eid_t *main_ue_eid)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    uvs_cmd_main_ue_eid_lookup_t arg = {0};
+    int ret = 0;
+
+    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+    arg.in.eid = *eid;
+
+    ret = uvs_ioctl_lookup_main_ue_eid(&ioctl_ctx, &arg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_lookup_main_ue_eid fail\n");
+        close(dev_fd);
+        return ret;
+    }
+
+    *main_ue_eid = arg.out.main_ue_eid;
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_flush_main_ue_eid(void)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    int ret = 0;
+
+    int dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+
+    ret = uvs_ioctl_flush_main_ue_eid(&ioctl_ctx);
+    if (ret != 0) {
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_flush_main_ue_eid fail\n");
+        close(dev_fd);
+        return ret;
+    }
+
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_insert_main_ue_eid_batch(
+    const uvs_main_ue_eid_batch_entry_t *entry)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    uvs_cmd_main_ue_eid_batch_t arg = {0};
+    int ret = 0;
+    int dev_fd;
+
+    if (entry == NULL) {
+        return -EINVAL;
+    }
+
+    dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+    arg.in.entry = *entry;
+
+    ret = uvs_ioctl_insert_main_ue_eid_batch(&ioctl_ctx, &arg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_insert_main_ue_eid_batch fail\n");
+        close(dev_fd);
+        return ret;
+    }
+
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_insert_host_eid_batch(
+    const uvs_host_eid_batch_entry_t *entry)
+{
+    tpsa_ioctl_ctx_t ioctl_ctx = {0};
+    uvs_cmd_host_eid_batch_t arg = {0};
+    int ret = 0;
+    int dev_fd;
+
+    if (entry == NULL) {
+        return -EINVAL;
+    }
+
+    dev_fd = open(UVS_UBCORE_DEVICE_PATH, O_RDWR);
+    if (dev_fd == -1) {
+        TPSA_LOG_ERR("Failed to open dev_fd err: %s.\n", ub_strerror(errno));
+        return -1;
+    }
+
+    ioctl_ctx.ubcore_fd = dev_fd;
+    arg.in.entry = *entry;
+
+    ret = uvs_ioctl_insert_host_eid_batch(&ioctl_ctx, &arg);
+    if (ret != 0) {
+        TPSA_LOG_ERR("uvs_ubcore_ioctl_insert_host_eid_batch fail\n");
+        close(dev_fd);
+        return ret;
+    }
+
+    close(dev_fd);
+    return 0;
+}
+
+int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bonding_eid,
                                   const uvs_eid_t *dst_bonding_eid,
-                                  enum uvs_tp_type tp_type, bool multi_path,
+                                  enum uvs_tp_type tp_type, bool iodie_level,
                                   uvs_path_set_t *uvs_path_set)
 {
     tpsa_ioctl_ctx_t ioctl_ctx = {0};
@@ -250,10 +403,10 @@ int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
     }
 
     ioctl_ctx.ubcore_fd = dev_fd;
-    memcpy(&arg.in.src_bonding_eid, src_bondind_eid, sizeof(uvs_eid_t));
+    memcpy(&arg.in.src_bonding_eid, src_bonding_eid, sizeof(uvs_eid_t));
     memcpy(&arg.in.dst_bonding_eid, dst_bonding_eid, sizeof(uvs_eid_t));
     arg.in.tp_type = tp_type;
-    arg.in.multi_path = multi_path;
+    arg.in.iodie_level = iodie_level;
 
     ret = uvs_ioctl_get_path_set(&ioctl_ctx, &arg);
     if (ret != 0) {
@@ -263,7 +416,7 @@ int uvs_ubcore_ioctl_get_path_set(const uvs_eid_t *src_bondind_eid,
         return ret;
     }
 
-    *uvs_path_set = arg.out;
+    *uvs_path_set = arg.out.path_set;
 
     close(dev_fd);
     return 0;
