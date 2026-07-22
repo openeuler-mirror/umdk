@@ -31,7 +31,7 @@ at::Tensor construct_gather_selection_kv_cache_output_tensor(
 }
 
 // step2, 为NPU设备实现前向接口
-at::Tensor npu_gather_selection_kv_cache_npu(
+at::Tensor gather_selection_kv_cache_npu(
     const at::Tensor& selection_k_rope,
     const at::Tensor& selection_kv_cache,
     const at::Tensor& selection_kv_block_table,
@@ -62,7 +62,7 @@ at::Tensor npu_gather_selection_kv_cache_npu(
 }
 
 // step3, 为META设备实现前向接口
-at::Tensor npu_gather_selection_kv_cache_meta(
+at::Tensor gather_selection_kv_cache_meta(
     const at::Tensor& selection_k_rope,
     const at::Tensor& selection_kv_cache,
     const at::Tensor& selection_kv_block_table,
@@ -85,7 +85,7 @@ at::Tensor npu_gather_selection_kv_cache_meta(
 }
 
 // step4, 实现函数化前向接口
-std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> npu_gather_selection_kv_cache_functional(
+std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> gather_selection_kv_cache_functional(
     const at::Tensor& selection_k_rope,
     const at::Tensor& selection_kv_cache,
     const at::Tensor& selection_kv_block_table,
@@ -118,7 +118,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> npu_gathe
 }
 
 // step5, 为META设备实现函数化前向接口
-std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> npu_gather_selection_kv_cache_functional_meta(
+std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> gather_selection_kv_cache_functional_meta(
     const at::Tensor& selection_k_rope,
     const at::Tensor& selection_kv_cache,
     const at::Tensor& selection_kv_block_table,
@@ -149,12 +149,12 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> npu_gathe
 
 // step6, 为NPU设备注册前向实现
 TORCH_LIBRARY_IMPL(umdk_cam_op_lib, PrivateUse1, m) {
-    m.impl("npu_gather_selection_kv_cache", &npu_gather_selection_kv_cache_npu);
-    m.impl("npu_gather_selection_kv_cache_functional", &npu_gather_selection_kv_cache_functional);
+    m.impl("gather_selection_kv_cache", &gather_selection_kv_cache_npu);
+    m.impl("gather_selection_kv_cache_functional", &gather_selection_kv_cache_functional);
 }
 
 // step7, 为META设备注册前向实现
 TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m) {
-    m.impl("npu_gather_selection_kv_cache", &npu_gather_selection_kv_cache_meta);
-    m.impl("npu_gather_selection_kv_cache_functional", &npu_gather_selection_kv_cache_functional_meta);
+    m.impl("gather_selection_kv_cache", &gather_selection_kv_cache_meta);
+    m.impl("gather_selection_kv_cache_functional", &gather_selection_kv_cache_functional_meta);
 }
