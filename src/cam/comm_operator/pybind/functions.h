@@ -81,7 +81,7 @@ at::Tensor E2aImplAutograd(
     c10::string_view groupEp, \
     int64_t aivNum);
 
-at::Tensor npu_gather_selection_kv_cache_npu(
+at::Tensor gather_selection_kv_cache_npu(
     const at::Tensor& selection_k_rope, \
     const at::Tensor& selection_kv_cache, \
     const at::Tensor& selection_kv_block_table, \
@@ -93,5 +93,21 @@ at::Tensor npu_gather_selection_kv_cache_npu(
     const at::Tensor& full_kv_actual_seq, \
     const at::Tensor& full_q_actual_seq, \
     int64_t selection_topk_block_size);
+
+std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
+    const at::Tensor &query, const at::Tensor &key, const at::Tensor &weights,
+    const at::Tensor &query_dequant_scale, const at::Tensor &key_dequant_scale,
+    int64_t query_quant_mode, int64_t key_quant_mode,
+    const c10::optional<at::Tensor> &actual_seq_lengths_query,
+    const c10::optional<at::Tensor> &actual_seq_lengths_key,
+    const c10::optional<at::Tensor> &block_table,
+    const c10::optional<at::Tensor> &metadata,
+    c10::string_view layout_query, c10::string_view layout_key, int64_t sparse_count,
+    int64_t sparse_mode, int64_t pre_tokens, int64_t next_tokens, int64_t cmp_ratio, bool return_value,
+    c10::optional<int64_t> query_dtype, c10::optional<int64_t> key_dtype);
+
+std::tuple<at::Tensor, at::Tensor> swiglu_clip_quant_npu(
+    const at::Tensor& x, const at::Tensor& group_index, const at::Tensor& group_alpha,
+    bool activate_left, int64_t quant_mode, int64_t clamp_mode);
 
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_

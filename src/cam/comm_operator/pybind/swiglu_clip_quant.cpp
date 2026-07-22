@@ -10,6 +10,9 @@
 
 #include <iostream>
 #include <torch/library.h>
+#include <torch/extension.h>
+#include <torch/csrc/autograd/custom_function.h>
+#include "pytorch_npu_helper.hpp"
 
 
 // npu tensor max size
@@ -56,8 +59,8 @@ std::tuple<at::Tensor, at::Tensor> swiglu_clip_quant_npu(
     }
     char *quant_mode_ptr = const_cast<char *>(quant_mode_str.c_str());
 
-    EXEC_NPU_CMD_V1(aclnnSwigluClipQuant, x, group_index, group_alpha, 
-                    activate_left, quant_mode_ptr, clamp_mode, y, scale);
+    EXEC_NPU_CMD(aclnnSwigluClipQuant, x, group_index, group_alpha,
+                 activate_left, quant_mode_ptr, clamp_mode, y, scale);
 
     return std::tuple<at::Tensor, at::Tensor>(y, scale);
 }
@@ -76,11 +79,11 @@ std::tuple<at::Tensor, at::Tensor> swiglu_clip_quant_meta(
 }
 
 // step4, 为NPU设备注册前向实现
-TORCH_LIBRARY_IMPL(custom, PrivateUse1, m) {
+TORCH_LIBRARY_IMPL(umdk_cam_op_lib, PrivateUse1, m) {
     m.impl("swiglu_clip_quant", &swiglu_clip_quant_npu);
 }
 
 // step5, 为META设备注册前向实现
-TORCH_LIBRARY_IMPL(custom, Meta, m) {
+TORCH_LIBRARY_IMPL(umdk_cam_op_lib, Meta, m) {
     m.impl("swiglu_clip_quant", &swiglu_clip_quant_meta);
 }
