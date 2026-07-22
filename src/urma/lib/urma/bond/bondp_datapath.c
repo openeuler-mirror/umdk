@@ -516,7 +516,11 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             wr_entry->user_ctx = cur->user_ctx;
             wr_entry->target_vjetty = bdp_tjetty;
             wr_entry->bdp_comp = bdp_comp;
-
+            if (cur->flag.bs.has_drv_ext) {
+                bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(cur, bondp_jfs_wr_t, base);
+                wr_entry->info.src_chip_id = bwr->src_chip_id;
+                wr_entry->info.dst_chip_id = bwr->dst_chip_id;
+            }
             urma_jfs_wr_t *pwr = &wr_entry->wr;
             ret = copy_jfs_wr(cur, pwr, jfs_wr_entry_src_sge(wr_entry),
                               jfs_wr_entry_dst_sge(wr_entry, bdp_comp->send_wr_buf.max_sge),
@@ -1309,7 +1313,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         int new_target_idx = target_idx;
         if (!g_bondp_global_ctx->enable_failover ||
             schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
-                          &new_send_idx, &new_target_idx, NULL) != 0) {
+                          &new_send_idx, &new_target_idx,
+                          wr_entry->wr.flag.bs.has_drv_ext ? &wr_entry->info : NULL) != 0) {
             /*
              * When all ports are invalid and no port is available to resend the wr,
              * this error CQE is returned directly to the upper layer.
