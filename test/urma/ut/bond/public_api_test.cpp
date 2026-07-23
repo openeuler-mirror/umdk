@@ -852,7 +852,7 @@ TEST(UrmaBondTest, PublicCreateApisCleanupPhysicalMembersWhenVirtualCreateFails)
     urma_jfs_cfg_t jfsCfg = {};
     urma_jfr_cfg_t jfrCfg = {};
     urma_jetty_cfg_t jettyCfg = {};
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
 
     fixture.InitSinglePhysicalMember();
     fixture.InitJfceFdList();
@@ -889,9 +889,9 @@ TEST(UrmaBondTest, PublicCreateApisCleanupPhysicalMembersWhenVirtualCreateFails)
     jettyCfg.jfs_cfg.trans_mode = URMA_TM_RC;
     jettyCfg.shared.jfr = &fixture.jfr.v_jfr;
     jettyCfg.shared.jfc = &fixture.jfc.v_jfc;
-    g_bondp_global_ctx = &fakeGlobal;
+    g_bondp_env = fakeEnv;
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg));
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
 }
 
 TEST(UrmaBondTest, PublicCreateJfcCoversVirtualCreateWithMockIoctl)
@@ -956,7 +956,7 @@ TEST(UrmaBondTest, PublicCreateAndDeleteApisUseMockPhysicalMembers)
 TEST(UrmaBondTest, PublicCreateAndDeleteJettyCoverVirtualPhysicalIdMapping)
 {
     BondPublicApiFixture fixture;
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
     urma_jetty_cfg_t jettyCfg = {};
 
     fixture.InitSinglePhysicalMember();
@@ -983,8 +983,8 @@ TEST(UrmaBondTest, PublicCreateAndDeleteJettyCoverVirtualPhysicalIdMapping)
     jettyCfg.shared.jfr = &fixture.jfr.v_jfr;
     jettyCfg.shared.jfc = &fixture.jfc.v_jfc;
 
-    fakeGlobal.enable_health_check = false;
-    g_bondp_global_ctx = &fakeGlobal;
+    fakeEnv.enable_health_check = false;
+    g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xb50, 0xb500);
     urma_jetty_t *createdJetty = bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg);
     ASSERT_NE(nullptr, createdJetty);
@@ -993,14 +993,14 @@ TEST(UrmaBondTest, PublicCreateAndDeleteJettyCoverVirtualPhysicalIdMapping)
     SetRefCount(&CONTAINER_OF_FIELD(createdJetty, bondp_comp_t, v_jetty)->use_cnt, 0);
     EXPECT_EQ(URMA_SUCCESS, bondp_delete_jetty(createdJetty));
 
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
 
 TEST(UrmaBondTest, PublicCreateAndDeleteSharedJfcChildrenFollowIssueCleanupOrder)
 {
     BondPublicApiFixture fixture;
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
     urma_jfs_cfg_t jfsCfg = {};
     urma_jfr_cfg_t jfrCfg = {};
     urma_jetty_cfg_t jettyCfg = {};
@@ -1030,8 +1030,8 @@ TEST(UrmaBondTest, PublicCreateAndDeleteSharedJfcChildrenFollowIssueCleanupOrder
     jettyCfg.jfs_cfg = jfsCfg;
     jettyCfg.shared.jfc = nullptr;
 
-    fakeGlobal.enable_health_check = false;
-    g_bondp_global_ctx = &fakeGlobal;
+    fakeEnv.enable_health_check = false;
+    g_bondp_env = fakeEnv;
 
     urma_jfs_t *createdJfsList[3] = {};
     urma_jfr_t *createdJfrList[3] = {};
@@ -1081,14 +1081,14 @@ TEST(UrmaBondTest, PublicCreateAndDeleteSharedJfcChildrenFollowIssueCleanupOrder
     }
     EXPECT_EQ(0UL, fixture.jfc.use_cnt.atomic_cnt.load());
 
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
 
 TEST(UrmaBondTest, PublicCreateJettyUsesEffectiveSharedJfcForRefcount)
 {
     BondPublicApiFixture fixture;
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
     urma_jetty_cfg_t jettyCfg = {};
 
     fixture.InitSinglePhysicalMember();
@@ -1115,8 +1115,8 @@ TEST(UrmaBondTest, PublicCreateJettyUsesEffectiveSharedJfcForRefcount)
     jettyCfg.shared.jfr = &fixture.jfr.v_jfr;
     jettyCfg.shared.jfc = nullptr;
 
-    fakeGlobal.enable_health_check = false;
-    g_bondp_global_ctx = &fakeGlobal;
+    fakeEnv.enable_health_check = false;
+    g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xb55, 0xb550);
     SetRefCount(&fixture.jfc.use_cnt, 0);
 
@@ -1130,14 +1130,14 @@ TEST(UrmaBondTest, PublicCreateJettyUsesEffectiveSharedJfcForRefcount)
     EXPECT_EQ(URMA_SUCCESS, bondp_delete_jetty(createdJetty));
     EXPECT_EQ(0UL, fixture.jfc.use_cnt.atomic_cnt.load());
 
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
 
 TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
 {
     BondPublicApiFixture fixture;
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
     urma_jfs_cfg_t jfsCfg = {};
     urma_jfr_cfg_t jfrCfg = {};
     urma_jetty_cfg_t jettyCfg = {};
@@ -1190,13 +1190,13 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     jettyCfg.shared.jfr = &fixture.jfr.v_jfr;
     jettyCfg.shared.jfc = &fixture.jfc.v_jfc;
 
-    fakeGlobal.enable_health_check = false;
-    g_bondp_global_ctx = &fakeGlobal;
+    fakeEnv.enable_health_check = false;
+    g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xb62, 0xb620);
     g_mockCallocFailSize = WrBufEntrySize();
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg));
     g_mockCallocFailSize = 0;
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
 
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
@@ -1204,7 +1204,7 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
 TEST(UrmaBondTest, PublicCreateJettyHonorsExplicitPortIds)
 {
     BondPublicApiFixture fixture;
-    bondp_global_context_t fakeGlobal = {};
+    bondp_env_t fakeEnv = {};
     bondp_jetty_cfg_t jettyCfg = {};
     urma_jfs_cfg_t jfsCfg = {};
     urma_jfr_cfg_t jfrCfg = {};
@@ -1237,11 +1237,11 @@ TEST(UrmaBondTest, PublicCreateJettyHonorsExplicitPortIds)
     jettyCfg.port_ids = &portId;
     jettyCfg.port_count = 1;
 
-    fakeGlobal.enable_health_check = false;
-    g_bondp_global_ctx = &fakeGlobal;
+    fakeEnv.enable_health_check = false;
+    g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xb40, 0xb400);
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg.base));
-    g_bondp_global_ctx = nullptr;
+    g_bondp_env = {};
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
 }
 
