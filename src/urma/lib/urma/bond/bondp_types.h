@@ -18,6 +18,7 @@
 #endif
 #include <stdbool.h>
 
+#include "bondp_env.h"
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
 #include "bondp_topo_info.h"
@@ -88,20 +89,6 @@ static inline bool bondp_rjetty_has_user_info(const urma_rjetty_t *rjetty)
 
 typedef struct bondp_hc_ctx bondp_hc_ctx_t;
 typedef struct bondp_fb_ctx bondp_fb_ctx_t;
-
-/** Process-granularity global variable */
-typedef struct bondp_global_context {
-    uint32_t pid;
-    bool skip_load_topo;
-    bool enable_failover;
-    bool enable_failback;
-    bool enable_health_check;
-    uint64_t health_check_interval_ms;
-    uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
-    bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
-} bondp_global_context_t;
-
-extern bondp_global_context_t *g_bondp_global_ctx;
 
 typedef struct bondp_device {
     urma_device_t v_dev;
