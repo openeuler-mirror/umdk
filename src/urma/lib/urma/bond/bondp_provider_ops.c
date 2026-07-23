@@ -225,8 +225,8 @@ static void read_env_balance_route_all(bondp_global_context_t *ctx)
 
 static void read_all_env(bondp_global_context_t *ctx)
 {
-    const bool default_enable_health_check = false;
-    const bool default_enable_failback = false;
+    const bool default_enable_health_check = true;
+    const bool default_enable_failback = true;
     const bool default_enable_failover = true;
     const uint64_t default_health_check_interval_ms = BONDP_HC_DEFAULT_PROBE_INTERVAL_MS;
     ctx->enable_health_check = read_env_bool(
