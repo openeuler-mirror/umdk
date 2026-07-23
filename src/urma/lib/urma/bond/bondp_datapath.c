@@ -430,7 +430,8 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         urma_jfs_wr_t *vwr = (urma_jfs_wr_t *)wr;
         while (vwr != NULL) {
             urma_jfs_wr_t *pwr = &prealloc_wr_list[index];
-            ret = copy_jfs_wr(vwr, pwr, prealloc_src_sge[index], prealloc_dst_sge[index], BONDP_MAX_SGE_NUM);
+            ret = copy_jfs_wr(vwr, pwr, prealloc_src_sge[index], prealloc_dst_sge[index],
+                              BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM);
             if (ret != 0) {
                 return ret;
             }
@@ -523,7 +524,8 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             urma_jfs_wr_t *pwr = &wr_entry->wr;
             ret = copy_jfs_wr(cur, pwr, jfs_wr_entry_src_sge(wr_entry),
                               jfs_wr_entry_dst_sge(wr_entry, bdp_comp->send_wr_buf.max_sge),
-                              bdp_comp->send_wr_buf.max_sge);
+                              bdp_comp->send_wr_buf.max_sge,
+                              bdp_comp->send_wr_buf.max_rsge);
             if (ret != 0) {
                 URMA_LOG_ERR("Failed to copy jfs wr at index %d\n", i);
                 goto CLEANUP;
