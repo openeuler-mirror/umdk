@@ -917,9 +917,10 @@ void umq_qbuf_pool_uninit(void)
         return;
     }
 
+    release_thread_cache(umq_qbuf_pool_tls_cache_get());
+
     umq_qbuf_expansion_pool_uninit();
 
-    release_thread_cache(umq_qbuf_pool_tls_cache_get());
     umq_qbuf_base_uninit(&g_qbuf_pool.base);
     memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
 
