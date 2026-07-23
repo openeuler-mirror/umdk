@@ -160,7 +160,7 @@ static int parse_args(admin_config_t *cfg)
                 ret = admin_parse_dev_name(optarg, cfg);
                 break;
             case 'e':
-                (void)admin_str_to_eid(optarg, &cfg->eid);
+                (void)urma_str_to_eid(optarg, &cfg->eid);
                 break;
             case 'm':
                 cfg->dynamic_eid_mode = true;

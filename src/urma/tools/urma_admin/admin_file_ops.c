@@ -295,7 +295,7 @@ void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint
         }
         eid_list[i].eid_index = i;
         if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
-            admin_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
+            urma_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
             eid_list[i].eid.in4.prefix = 0; // invalid
         }
     }
@@ -319,7 +319,7 @@ bool admin_is_eid_idx_valid(const char *dev_name, uint32_t eid_index)
     }
     if (admin_merge_sysfs_path(sysfs_path, SYS_CLASS_PATH, dev_name) != 0 ||
         admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
-        admin_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
+        urma_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
         eid_info.eid.in4.prefix == 0) {
         goto free_sysfs_path;
     }

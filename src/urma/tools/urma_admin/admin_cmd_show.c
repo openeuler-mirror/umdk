@@ -202,7 +202,7 @@ static int admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ub
 
     urma_device_attr_t *dev_attr = &ubep->dev_attr;
     (void)admin_parse_file_str(sysfs_path, "guid", tmp_value, VALUE_LEN_MAX);
-    (void)admin_str_to_eid(tmp_value, (urma_eid_t *)&dev_attr->guid);
+    (void)urma_str_to_eid(tmp_value, (urma_eid_t *)&dev_attr->guid);
 
     (void)admin_parse_file_str(sysfs_path, "net_dev", ubep->net_dev_name, URMA_ADMIN_MAX_DEV_NAME);
     (void)admin_parse_file_value_u32(sysfs_path, "feature", &dev_attr->dev_cap.feature.value);

@@ -28,48 +28,6 @@
 
 #include "admin_parameters.h"
 
-#define IPV4_MAP_IPV6_PREFIX 0x0000ffff
-#define EID_STR_MIN_LEN      3
-static inline void ipv4_map_to_eid(uint32_t ipv4, urma_eid_t *eid)
-{
-    eid->in4.reserved = 0;
-    eid->in4.prefix = htobe32(IPV4_MAP_IPV6_PREFIX);
-    eid->in4.addr = htobe32(ipv4);
-}
-
-int admin_str_to_eid(const char *buf, urma_eid_t *eid)
-{
-    int ret;
-    uint32_t ipv4;
-    if (buf == NULL || strlen(buf) <= EID_STR_MIN_LEN || eid == NULL) {
-        (void)printf("Invalid argument.\n");
-        return -EINVAL;
-    }
-
-    // ipv6 addr
-    if (inet_pton(AF_INET6, buf, eid) > 0) {
-        return 0;
-    }
-    int err_ipv6 = errno;
-
-    // ipv4 addr: xx.xx.xx.xx
-    if (inet_pton(AF_INET, buf, &ipv4) > 0) {
-        ipv4_map_to_eid(be32toh(ipv4), eid);
-        return 0;
-    }
-    int err_ipv4 = errno;
-
-    // ipv4 value: 0x12345  or abcdef or 12345
-    ret = ub_str_to_u32(buf, &ipv4);
-    if (ret == 0) {
-        ipv4_map_to_eid(ipv4, eid);
-        return 0;
-    }
-
-    (void)printf("format error, ipv6: %d, ipv4:%d, errno:%d.\n", err_ipv6, err_ipv4, errno);
-    return -EINVAL;
-}
-
 static bool check_dev_name(char *dev_name)
 {
     bool ret = false;
@@ -188,7 +146,7 @@ int pop_arg_sharing(admin_config_t *cfg)
 int pop_arg_eid(admin_config_t *cfg)
 {
     char *arg = pop_arg(cfg);
-    int ret = admin_str_to_eid(arg, &cfg->eid);
+    int ret = urma_str_to_eid(arg, &cfg->eid);
     if (ret != 0) {
         printf("No eid specified.\n");
         return -EINVAL;
