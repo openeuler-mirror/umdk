@@ -202,7 +202,14 @@ int umq_tiny_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     g_tiny_qbuf_pool.support_without_data = false;
     g_tiny_qbuf_pool.fetch_fn = tiny_qbuf_base_fetch;
     g_tiny_qbuf_pool.self_shrink_fn = NULL;
-    return qbuf_pool_base_init(&g_tiny_qbuf_pool, cfg, 0);
+    int ret = qbuf_pool_base_init(&g_tiny_qbuf_pool, cfg, 0);
+    if (ret != UMQ_SUCCESS) {
+        (void)util_thread_key_delete(g_umq_tiny_qbuf_pool_key);
+        g_umq_tiny_qbuf_pool_key = NULL;
+        return ret;
+    }
+
+    return UMQ_SUCCESS;
 }
 
 void umq_tiny_qbuf_pool_uninit(void)
