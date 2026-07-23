@@ -529,9 +529,6 @@ void umq_uninit(void)
     (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
     g_umq_config_mutex_lock = NULL;
     umq_thread_id_uninit();
-    util_external_mutex_lock_ops_register(NULL);
-    util_external_rwlock_ops_register(NULL);
-    util_thread_key_ops_register(NULL);
 }
 
 #ifndef UMQ_STATIC_LIB
