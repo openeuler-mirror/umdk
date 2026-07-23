@@ -15,6 +15,7 @@
 #include <stdio.h>
 
 #include "ub_list.h"
+#include "ub_util.h"
 #include "urma_private.h"
 #include "urma_types.h"
 #include "urma_types_str.h"
@@ -1642,7 +1643,7 @@ static int cmd_show_dev_tp(admin_config_t *cfg)
 
     char *arg_tpid = pop_arg(cfg);
     if (arg_tpid != NULL) {
-        ret = admin_str_to_u64(arg_tpid, &tpid);
+        ret = ub_str_to_u64(arg_tpid, &tpid);
         if (ret != 0) {
             (void)printf("Invalid TP_ID: %s.\n", arg_tpid);
             return -EINVAL;
@@ -1697,7 +1698,7 @@ static int cmd_show_topo(admin_config_t *cfg)
         goto free_topo;
     }
     char *arg = pop_arg(cfg);
-    ret = admin_str_to_u16(arg, &cfg->idx);
+    ret = ub_str_to_u16(arg, &cfg->idx);
     if (ret == 0) {
         node_id = cfg->idx;
     } else {
@@ -1878,7 +1879,7 @@ static int cmd_show_dev_bonding(admin_config_t *cfg)
     arg = pop_arg(cfg);
     if (arg != NULL) {
         uint32_t jfx_id;
-        ret = admin_str_to_u32(arg, &jfx_id);
+        ret = ub_str_to_u32(arg, &jfx_id);
         if (ret != 0) {
             (void)printf("Invalid jfx_id: %s\n", arg);
             return -EINVAL;
