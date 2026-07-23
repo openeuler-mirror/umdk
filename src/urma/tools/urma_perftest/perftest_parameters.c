@@ -158,7 +158,6 @@ static void usage(const char *argv0)
         "  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.\n"
         "  --enable_imm                Enable immediate data for write or send, default: disable.\n"
         "  --enable_err_continue       Enable continue running when cr erros, default: disable.\n"
-        "  --notify_data <value>       enable write_with_notify, value is ensured by hardware.\n"
         "  --enable_notify             Enable write_with_notify, default: disable.\n"
         "  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.\n"
         "  --oor_en                    Enable out of order for user_tp, default: disable.\n"
