@@ -378,7 +378,11 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
         align_size -= (uint64_t)sizeof(umq_buf_t);
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / (align_size));
     }
-
+    if (UMQ_MAX_SGE_NUM == 1 && actual_buf_count != num) {
+        (void)umq_thread_local_mutex_unlock(pool->block_pool.global_mutex);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "only one qbuf can be allocated when UMQ_MAX_SGE_NUM equals 1\n");
+        return -UMQ_ERR_EINVAL;
+    }
     while (pool->block_pool.buf_cnt_with_data < actual_buf_count) {
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
