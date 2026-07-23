@@ -267,16 +267,6 @@ srcNPU端口.EID + "|" + destNPU端口.EID + "|RCTP" ∈ aclData.tpAcls
 
 `AclData.superNodeName` 必须等于 superNode 的 name，因为 `aclStore.getAclData(request.getSuperNodeName())` 使用 superNodeName 查找。JSON 中 ACL 的 `aclId` 字段值需在映射时赋值为 `superNodeName`。
 
-### 4.4 cnaToTargetAddr 公式确认
-
-当前实现：
-```
-parts = CNA.split(".")
-return parts[1] + "." + parts[1] + "." + parts[2] + "." + parts[3]
-```
-
-该公式对 CNA 中首两 octet 相同的地址（如 `221.221.221.x`）返回自身。路由前缀必须与该返回值匹配。
-
 ---
 
 ## 5. 覆盖率标注
