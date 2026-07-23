@@ -89,17 +89,17 @@ static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
 
     // printf("src_chip_id=%u, dst_chip_id=%u\n", info->src_chip_id, info->dst_chip_id);
     const uint32_t *failover_route =
-        g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
+        g_bondp_env.failover_route[src_chip_id][dst_chip_id][route_id];
     for (int i = 0 ; i < URMA_FAILOVER_LINK_NUM; i++) {
         path_idx = failover_route[i];
         if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
             break;
         }
-        local_idx = g_bondp_global_ctx->path[path_idx].local_idx;
+        local_idx = g_bondp_env.path[path_idx].local_idx;
         if (!atomic_load(&bdp_comp->valid[local_idx])) {
             continue;
         }
-        target_idx = g_bondp_global_ctx->path[path_idx].target_idx;
+        target_idx = g_bondp_env.path[path_idx].target_idx;
         if (!target_path_available(bdp_tjetty, local_idx, target_idx)) {
             continue;
         }
@@ -282,14 +282,14 @@ static bool is_in_failover_route(const bondp_chip_id_info_t *info, uint32_t rout
     uint32_t src_chip_id = info->src_chip_id - 1;
     uint32_t dst_chip_id = info->dst_chip_id - 1;
     const uint32_t *failover_route =
-    g_bondp_global_ctx->failover_route[src_chip_id][dst_chip_id][route_id];
+    g_bondp_env.failover_route[src_chip_id][dst_chip_id][route_id];
     for (int i = 0; i < URMA_FAILOVER_LINK_NUM; i++) {
         uint32_t path_idx = failover_route[i];
         if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
             break;
         }
-        if (g_bondp_global_ctx->path[path_idx].local_idx == old_path->local_idx &&
-            g_bondp_global_ctx->path[path_idx].target_idx == old_path->target_idx) {
+        if (g_bondp_env.path[path_idx].local_idx == old_path->local_idx &&
+            g_bondp_env.path[path_idx].target_idx == old_path->target_idx) {
             return true;
         }
     }
@@ -349,7 +349,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
         }
         least_load_cnt = select_affinity_path(bdp_comp, bdp_tjetty, info,
                                               least_load_path, &old_path);
-        if (least_load_cnt == 0 && !g_bondp_global_ctx->enable_failover) {
+        if (least_load_cnt == 0 && !g_bondp_env.enable_failover) {
             return URMA_FAIL;
         }
         filter_least_load_path(least_load_path, &least_load_cnt);

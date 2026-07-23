@@ -70,7 +70,7 @@ extern size_t g_mockCallocFailNmemb;
 extern size_t g_mockCallocFailSize;
 
 struct BondProviderMockGuard {
-    bondp_global_context_t *savedGlobalCtx;
+    bondp_env_t savedEnv;
     urma_device_t *savedNamedDevice;
     urma_ops_t *savedCreateContextOps;
     int savedCreateContextCount;
@@ -86,8 +86,8 @@ struct BondProviderMockGuard {
     size_t savedCallocFailNmemb;
     size_t savedCallocFailSize;
 
-    BondProviderMockGuard(bondp_global_context_t *globalCtx, urma_device_t *namedDevice, urma_ops_t *createContextOps)
-        : savedGlobalCtx(g_bondp_global_ctx),
+    BondProviderMockGuard(bondp_env_t *env, urma_device_t *namedDevice, urma_ops_t *createContextOps)
+        : savedEnv(g_bondp_env),
           savedNamedDevice(g_mockNamedDevice),
           savedCreateContextOps(g_mockCreateContextOps),
           savedCreateContextCount(g_mockCreateContextCount),
@@ -103,7 +103,7 @@ struct BondProviderMockGuard {
           savedCallocFailNmemb(g_mockCallocFailNmemb),
           savedCallocFailSize(g_mockCallocFailSize)
     {
-        g_bondp_global_ctx = globalCtx;
+        g_bondp_env = *env;
         g_mockNamedDevice = namedDevice;
         g_mockCreateContextOps = createContextOps;
         g_mockCreateContextCount = 0;
@@ -122,7 +122,7 @@ struct BondProviderMockGuard {
 
     ~BondProviderMockGuard()
     {
-        g_bondp_global_ctx = savedGlobalCtx;
+        g_bondp_env = savedEnv;
         g_mockNamedDevice = savedNamedDevice;
         g_mockCreateContextOps = savedCreateContextOps;
         g_mockCreateContextCount = savedCreateContextCount;
@@ -322,16 +322,16 @@ struct BondPathFixture {
     urma_target_seg_t remotePhy[2][2] = {};
     urma_sge_t srcSge[1] = {};
     urma_sge_t dstSge[1] = {};
-    bondp_global_context_t globalCtx = {};
-    bondp_global_context_t *savedGlobalCtx = nullptr;
+    bondp_env_t env = {};
+    bondp_env_t savedEnv = {};
 
     BondPathFixture()
     {
         urma_test::ResetHwMockState();
         /* Build a two-path virtual topology without creating real URMA devices. */
-        savedGlobalCtx = g_bondp_global_ctx;
-        g_bondp_global_ctx = &globalCtx;
-        globalCtx.enable_failover = true;
+        savedEnv = g_bondp_env;
+        g_bondp_env = env;
+        g_bondp_env.enable_failover = true;
         std::snprintf(dev.name, sizeof(dev.name), "bond_path_ut");
         sysfsDev.dev_attr.dev_cap.max_jfc_depth = 8;
         sysfsDev.dev_attr.dev_cap.max_jfs_depth = 8;
@@ -418,7 +418,7 @@ struct BondPathFixture {
 
     ~BondPathFixture()
     {
-        g_bondp_global_ctx = savedGlobalCtx;
+        g_bondp_env = savedEnv;
     }
 
     urma_jfs_wr_t MakeSendWr(urma_opcode_t opcode)
