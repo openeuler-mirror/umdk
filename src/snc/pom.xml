@@ -50,6 +50,12 @@
     </dependencies>
 
     <build>
+        <testSourceDirectory>${project.basedir}/../../test/snc/java</testSourceDirectory>
+        <testResources>
+            <testResource>
+                <directory>${project.basedir}/../../test/snc/resources</directory>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
