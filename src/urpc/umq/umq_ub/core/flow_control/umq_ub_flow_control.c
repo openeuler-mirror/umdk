@@ -1103,6 +1103,7 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     ub_flow_control_t *fc = &queue->flow_control;
     uint16_t reply_credits = imm->flow_control.window;
     uint16_t credits_per_request = fc->credits_per_request;
+    fc->peer_ratio = imm->flow_control.ratio;
     fc->credits_per_request =
         umq_ub_next_credit_req_count_update(reply_credits, credits_per_request, imm->flow_control.ratio, fc);
     umq_ub_credit_received_inc(fc, reply_credits);
