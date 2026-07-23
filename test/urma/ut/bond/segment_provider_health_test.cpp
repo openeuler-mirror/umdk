@@ -541,19 +541,19 @@ TEST(UrmaBondTest, PublicProviderUninitReleasesHeapGlobalContext)
     EXPECT_EQ(nullptr, g_bondp_global_ctx);
 }
 
-TEST(UrmaBondTest, PublicProviderInitReadsEnvAndCleansUp)
+TEST(UrmaBondTest, PublicProviderInitUsesDefaultEnvValuesAndCleansUp)
 {
-    EnvGuard failover("BOND_ENABLE_FAILOVER", "false");
-    EnvGuard failback("BOND_ENABLE_FAILBACK", "bad-bool");
+    EnvGuard failover("BOND_ENABLE_FAILOVER", nullptr);
+    EnvGuard failback("BOND_ENABLE_FAILBACK", nullptr);
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", nullptr);
     EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "bad-int");
 
     g_bondp_global_ctx = nullptr;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
     EXPECT_NE(nullptr, g_bondp_global_ctx);
-    EXPECT_FALSE(g_bondp_global_ctx->enable_failover);
-    EXPECT_FALSE(g_bondp_global_ctx->enable_failback);
-    EXPECT_FALSE(g_bondp_global_ctx->enable_health_check);
+    EXPECT_TRUE(g_bondp_global_ctx->enable_failover);
+    EXPECT_TRUE(g_bondp_global_ctx->enable_failback);
+    EXPECT_TRUE(g_bondp_global_ctx->enable_health_check);
     EXPECT_EQ(BONDP_HC_DEFAULT_PROBE_INTERVAL_MS,
               g_bondp_global_ctx->health_check_interval_ms);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
@@ -602,6 +602,7 @@ TEST(UrmaBondTest, FailbackTaskTableCoversScheduleFailureDuplicateAndLookup)
 TEST(UrmaBondTest, PublicProviderInitSucceedsWithDisabledHealth)
 {
     EnvGuard failover("BOND_ENABLE_FAILOVER", "false");
+    EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "false");
 
     g_bondp_global_ctx = nullptr;
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
