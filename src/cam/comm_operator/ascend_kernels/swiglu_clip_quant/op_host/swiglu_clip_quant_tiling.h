@@ -23,7 +23,6 @@
 #include <iostream>
 #include "register/op_impl_registry.h"
 #include "platform/platform_infos_def.h"
-#include "swiglu_clip_quant_def.cpp"
 #include "exe_graph/runtime/tiling_context.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "register/op_def_registry.h"
