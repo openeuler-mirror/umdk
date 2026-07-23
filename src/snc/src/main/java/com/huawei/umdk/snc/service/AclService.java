@@ -36,8 +36,9 @@ public class AclService {
             LOG.error("importAclData: error=AclData superNodeName must not be null or empty");
             throw new IllegalArgumentException("AclData superNodeName must not be null or empty");
         }
-        LOG.info("importAclData: superNode=" + aclData.getSuperNodeName()
-            + ", tpAclCount=" + (aclData.getTpAcls() != null ? aclData.getTpAcls().size() : 0));
+        LOG.info("importAclData: superNode=%s, tpAclCount=%d",
+            aclData.getSuperNodeName(),
+            aclData.getTpAcls() != null ? aclData.getTpAcls().size() : 0);
         store.replace(aclData);
     }
 
@@ -50,13 +51,15 @@ public class AclService {
             LOG.error("addAclRules: error=rules must not be null");
             throw new IllegalArgumentException("rules must not be null");
         }
-        LOG.info("addAclRules: superNode=" + superNodeName + ", count=" + rules.size());
+        LOG.info("addAclRules: superNode=%s, count=%d", superNodeName, rules.size());
         for (Map.Entry<AclKey, TpAclEntity> rule : rules.entrySet()) {
             if (rule.getKey() == null || rule.getValue() == null) {
                 LOG.error("addAclRules: error=rule key and value must not be null");
                 throw new IllegalArgumentException("rule key and value must not be null");
             }
-            LOG.debug("addAclRules: superNode=" + superNodeName);
+        }
+        for (Map.Entry<AclKey, TpAclEntity> rule : rules.entrySet()) {
+            LOG.debug("addAclRules: superNode=%s", superNodeName);
             store.addAclRule(superNodeName, rule.getKey(), rule.getValue());
         }
     }
@@ -70,24 +73,26 @@ public class AclService {
             LOG.error("removeAclRules: error=keys must not be null");
             throw new IllegalArgumentException("keys must not be null");
         }
-        LOG.info("removeAclRules: superNode=" + superNodeName + ", count=" + keys.size());
+        LOG.info("removeAclRules: superNode=%s, count=%d", superNodeName, keys.size());
         for (AclKey key : keys) {
             if (key == null) {
                 LOG.error("removeAclRules: error=key in list must not be null");
                 throw new IllegalArgumentException("key in list must not be null");
             }
-            LOG.debug("removeAclRules: superNode=" + superNodeName);
+        }
+        for (AclKey key : keys) {
+            LOG.debug("removeAclRules: superNode=%s", superNodeName);
             store.removeAclRule(superNodeName, key);
         }
     }
 
     public AclData getAclData(String superNodeName) {
-        LOG.debug("getAclData: superNode=" + superNodeName);
+        LOG.debug("getAclData: superNode=%s", superNodeName);
         return store.getAclData(superNodeName);
     }
 
     public void removeAclData(String superNodeName) {
-        LOG.info("removeAclData: superNode=" + superNodeName);
+        LOG.info("removeAclData: superNode=%s", superNodeName);
         store.removeAclData(superNodeName);
     }
 }

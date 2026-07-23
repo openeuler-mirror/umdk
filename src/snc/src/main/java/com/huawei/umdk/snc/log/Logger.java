@@ -30,7 +30,8 @@ public class Logger {
     }
 
     private String spliceLogInfo(String format , Object... args){
-        return (prefix() + " " + String.format(format, args));
+        String body = (args == null || args.length == 0) ? format : String.format(format, args);
+        return (prefix() + " " + body);
     }
 
 
