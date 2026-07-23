@@ -21,104 +21,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "ub_util.h"
+
 #include "admin_file_ops.h"
 #include "admin_log.h"
 
 #include "admin_parameters.h"
-
-int admin_str_to_u8(const char *buf, uint8_t *u8)
-{
-    unsigned long ret;
-    char *end = NULL;
-
-    if (buf == NULL || *buf == '-') {
-        return -EINVAL;
-    }
-
-    errno = 0;
-    ret = strtoul(buf, &end, 0);
-    if (errno == ERANGE && ret == ULONG_MAX) {
-        return -EFAULT;
-    }
-    if (end == NULL || *end != '\0' || end == buf) {
-        return -ENOEXEC;
-    }
-    if (ret > UCHAR_MAX) {
-        return -ERANGE;
-    }
-    *u8 = (uint8_t)ret;
-    return 0;
-}
-
-int admin_str_to_u16(const char *buf, uint16_t *u16)
-{
-    unsigned long ret;
-    char *end = NULL;
-
-    if (buf == NULL || *buf == '-') {
-        return -EINVAL;
-    }
-
-    errno = 0;
-    ret = strtoul(buf, &end, 0);
-    if (errno == ERANGE && ret == ULONG_MAX) {
-        return -EFAULT;
-    }
-    if (end == NULL || *end != '\0' || end == buf) {
-        return -ENOEXEC;
-    }
-    if (ret > USHRT_MAX) {
-        return -ERANGE;
-    }
-    *u16 = (uint16_t)ret;
-    return 0;
-}
-
-int admin_str_to_u32(const char *buf, uint32_t *u32)
-{
-    unsigned long ret;
-    char *end = NULL;
-
-    if (buf == NULL || *buf == '-') {
-        return -EINVAL;
-    }
-
-    errno = 0;
-    ret = strtoul(buf, &end, 0);
-    if (errno == ERANGE && ret == ULONG_MAX) {
-        return -EFAULT;
-    }
-    if (end == NULL || *end != '\0' || end == buf) {
-        return -ENOEXEC;
-    }
-    if (ret > UINT_MAX) {
-        return -ERANGE;
-    }
-    *u32 = (uint32_t)ret;
-    return 0;
-}
-
-int admin_str_to_u64(const char *buf, uint64_t *u64)
-{
-    unsigned long ret;
-    char *end = NULL;
-
-    if (buf == NULL || *buf == '-') {
-        return -EINVAL;
-    }
-
-    errno = 0;
-    ret = strtoul(buf, &end, 0);
-    if (errno == ERANGE && ret == ULONG_MAX) {
-        return -EFAULT;
-    }
-    if (end == NULL || *end != '\0' || end == buf) {
-        return -ENOEXEC;
-    }
-
-    *u64 = ret;
-    return 0;
-}
 
 #define IPV4_MAP_IPV6_PREFIX 0x0000ffff
 #define EID_STR_MIN_LEN      3
@@ -152,7 +60,7 @@ int admin_str_to_eid(const char *buf, urma_eid_t *eid)
     int err_ipv4 = errno;
 
     // ipv4 value: 0x12345  or abcdef or 12345
-    ret = admin_str_to_u32(buf, &ipv4);
+    ret = ub_str_to_u32(buf, &ipv4);
     if (ret == 0) {
         ipv4_map_to_eid(ipv4, eid);
         return 0;
@@ -291,7 +199,7 @@ int pop_arg_eid(admin_config_t *cfg)
 int pop_arg_eid_idx(admin_config_t *cfg)
 {
     char *arg = pop_arg(cfg);
-    int ret = admin_str_to_u16(arg, &cfg->idx);
+    int ret = ub_str_to_u16(arg, &cfg->idx);
     if (ret != 0) {
         printf("No eid idx specified.\n");
         return -EINVAL;
