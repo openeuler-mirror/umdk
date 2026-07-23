@@ -604,14 +604,23 @@ static int umq_ub_ctx_init_one(umq_ub_ctx_t *ctx, umq_trans_info_t *info, umq_in
         goto FREE_CTX_TABLE;
     }
 
+    ctx->tseg_list_lock = umq_thread_local_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (ctx->tseg_list_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tseg_list_lock create failed, errno %d\n", errno);
+        goto FREE_RX_CONSUMED_TABLE;
+    }
+
     ctx->io_lock_free = cfg->io_lock_free;
     ctx->rq_lock_free = cfg->rq_lock_free;
     ctx->feature = cfg->feature;
     ctx->flow_control = cfg->flow_control;
     ctx->ref_cnt = 1;
-    (void)pthread_spin_init(&ctx->tseg_list_lock, PTHREAD_PROCESS_PRIVATE);
 
     return UMQ_SUCCESS;
+
+FREE_RX_CONSUMED_TABLE:
+    free((void *)ctx->rx_consumed_jetty_table);
+    ctx->rx_consumed_jetty_table = NULL;
 
 FREE_CTX_TABLE:
     free((void *)ctx->umq_ctx_table);
@@ -793,7 +802,8 @@ ROLLBACK_UB_CTX:
         g_ub_ctx[i].umq_ctx_table = NULL;
         free((void*)g_ub_ctx[i].rx_consumed_jetty_table);
         g_ub_ctx[i].rx_consumed_jetty_table = NULL;
-        (void)pthread_spin_destroy(&g_ub_ctx[i].tseg_list_lock);
+        (void)umq_thread_local_mutex_lock_destroy(g_ub_ctx[i].tseg_list_lock);
+        g_ub_ctx[i].tseg_list_lock = NULL;
     }
     g_ub_ctx_count = 0;
     umq_ub_dev_info_uninit();
@@ -844,7 +854,8 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         context[i].umq_ctx_table = NULL;
         free((void*)context[i].rx_consumed_jetty_table);
         context[i].rx_consumed_jetty_table = NULL;
-        (void)pthread_spin_destroy(&context[i].tseg_list_lock);
+        (void)umq_thread_local_mutex_lock_destroy(context[i].tseg_list_lock);
+        context[i].tseg_list_lock = NULL;
     }
 
     umq_tiny_io_buf_free();
@@ -1381,6 +1392,12 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto CLEAR_TABLE;
     }
 
+    queue->get_jetty_node_lock = umq_thread_local_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (queue->get_jetty_node_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "get_jetty_node_lock create failed, errno %d\n", errno);
+        goto RWLOCK_DESTROY;
+    }
+
     char port_str[UMQ_PORT_STR_SIZE] = {0};
     umq_jetty_port_info(port_str, UMQ_PORT_STR_SIZE, queue);
     if (umq_ub_create_flow_control_resource(queue, share_rq, option, port_str) != UMQ_SUCCESS) {
@@ -1396,7 +1413,6 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control.enabled ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
     queue->umqh = umqh;
-    (void)pthread_spin_init(&queue->get_jetty_node_lock, PTHREAD_PROCESS_PRIVATE);
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         UMQ_VLOG_INFO(VLOG_UMQ, "create Logic UMQ(ID:%u) success, tp_mode %d, flowcontrol use %s window\n",
@@ -1420,6 +1436,10 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     return (uint64_t)(uintptr_t)queue;
 
 LOCK_DESTROY:
+    (void)umq_thread_local_mutex_lock_destroy(queue->get_jetty_node_lock);
+    queue->get_jetty_node_lock = NULL;
+
+RWLOCK_DESTROY:
     (void)util_rwlock_destroy(queue->wait_ack_import.lock);
     queue->wait_ack_import.lock = NULL;
 CLEAR_TABLE:
@@ -1588,7 +1608,10 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
     (void)util_rwlock_destroy(queue->wait_ack_import.lock);
     queue->wait_ack_import.lock = NULL;
-    (void)pthread_spin_destroy(&queue->get_jetty_node_lock);
+    if (queue->get_jetty_node_lock != NULL) {
+        (void)umq_thread_local_mutex_lock_destroy(queue->get_jetty_node_lock);
+        queue->get_jetty_node_lock = NULL;
+    }
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
     umq_ub_queue_ctx_list_remove(&queue->qctx_node);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->dev_ctx->ref_cnt, 1);
@@ -2552,6 +2575,12 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         goto FREE_UMQ_CTX_TBL;
     }
 
+    g_ub_ctx[g_ub_ctx_count].tseg_list_lock = umq_thread_local_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (g_ub_ctx[g_ub_ctx_count].tseg_list_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tseg_list_lock create failed, errno %d\n", errno);
+        goto FREE_UMQ_CTX_RX_CONSUMED_TBL;
+    }
+
     g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
     g_ub_ctx[g_ub_ctx_count].rq_lock_free = cfg->rq_lock_free;
     g_ub_ctx[g_ub_ctx_count].feature = cfg->feature;
@@ -2565,7 +2594,7 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     ret = umq_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf register seg failed\n");
-        goto FREE_UMQ_CTX_RX_CONSUMED_TBL;
+        goto DESTROY_TSEG_LIST_LOCK;
     }
 
     ret = umq_huge_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
@@ -2581,8 +2610,6 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         }
     }
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
-    (void)pthread_spin_init(&g_ub_ctx[g_ub_ctx_count].tseg_list_lock, PTHREAD_PROCESS_PRIVATE);
-
     g_ub_ctx_count++;
 
     return UMQ_SUCCESS;
@@ -2592,6 +2619,10 @@ UNREGISTER_HUGE_MEM:
 
 UNREGISTER_MEM:
     umq_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+
+DESTROY_TSEG_LIST_LOCK:
+    (void)umq_thread_local_mutex_lock_destroy(g_ub_ctx[g_ub_ctx_count].tseg_list_lock);
+    g_ub_ctx[g_ub_ctx_count].tseg_list_lock = NULL;
 
 FREE_UMQ_CTX_RX_CONSUMED_TBL:
     free((void*)g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table);

@@ -12,10 +12,8 @@
 
 int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint32_t split_extra_header_count)
 {
-    if (base == NULL || cfg == NULL) {
-        return -UMQ_ERR_EINVAL;
-    }
-    if (cfg->buf_addr == NULL || cfg->total_size == 0 || base->block_size <= sizeof(umq_buf_t)) {
+    if (base == NULL || base->block_size <= sizeof(umq_buf_t) || cfg == NULL || cfg->buf_addr == NULL ||
+        cfg->total_size == 0) {
         return -UMQ_ERR_EINVAL;
     }
 
@@ -48,8 +46,15 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
         base->header_buffer = NULL;
     } else {
         UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", cfg->mode);
-        umq_qbuf_block_pool_uninit(&base->block_pool);
-        return -UMQ_ERR_EINVAL;
+        ret = -UMQ_ERR_EINVAL;
+        goto BLOCK_POOL_UNINIT;
+    }
+
+    base->tls_pools.tls_stats_lock = umq_thread_local_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (base->tls_pools.tls_stats_lock == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf tls_stats_lock create failed, errno %d\n", errno);
+        ret = -UMQ_ERR_ENOMEM;
+        goto BLOCK_POOL_UNINIT;
     }
 
     buf_init_with_mode((char *)base->data_buffer, (char *)base->header_buffer, blk_num, base->block_size,
@@ -57,10 +62,13 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
     base->total_block_num = blk_num;
     base->block_pool.buf_cnt_with_data = blk_num;
     base->block_pool.buf_cnt_without_data = 0;
-    (void)pthread_spin_init(&base->tls_pools.tls_stats_lock, PTHREAD_PROCESS_PRIVATE);
     urpc_list_init(&base->tls_pools.tls_register_head);
     base->inited = true;
     return UMQ_SUCCESS;
+
+BLOCK_POOL_UNINIT:
+    umq_qbuf_block_pool_uninit(&base->block_pool);
+    return ret;
 }
 
 void *umq_qbuf_base_io_buf_malloc(uint64_t total_len, uint64_t min_size)
@@ -77,16 +85,16 @@ void *umq_qbuf_base_io_buf_malloc(uint64_t total_len, uint64_t min_size)
     return buffer_addr;
 }
 
-void umq_qbuf_base_uninit(qbuf_pool_base_t *base, void (*release_thread_cache)(uint64_t))
+void umq_qbuf_base_uninit(qbuf_pool_base_t *base)
 {
     if (base == NULL || !base->inited) {
         return;
     }
 
-    if (release_thread_cache != NULL) {
-        release_thread_cache(0);
+    if (base->tls_pools.tls_stats_lock != NULL) {
+        (void)umq_thread_local_mutex_lock_destroy(base->tls_pools.tls_stats_lock);
+        base->tls_pools.tls_stats_lock = NULL;
     }
-    (void)pthread_spin_destroy(&base->tls_pools.tls_stats_lock);
     umq_qbuf_block_pool_uninit(&base->block_pool);
     (void)memset(base, 0, sizeof(*base));
 }
@@ -176,7 +184,7 @@ int umq_qbuf_base_alloc(qbuf_pool_base_t *base, thread_local_qbuf_pool_t *thread
         param->actual_buf_count = num;
     }
 
-    local_block_pool_t *local_pool = get_thread_local_cache(thread_cache, &base->tls_pools);
+    local_block_pool_t *local_pool = &thread_cache->block_pool;
     if (param->request_size == 0) {
         return umq_qbuf_base_alloc_without_data(base, thread_cache, local_pool, param);
     }
@@ -191,7 +199,7 @@ void umq_qbuf_base_free(qbuf_pool_base_t *base, thread_local_qbuf_pool_t *thread
         return;
     }
 
-    local_block_pool_t *local_pool = get_thread_local_cache(thread_cache, &base->tls_pools);
+    local_block_pool_t *local_pool = &thread_cache->block_pool;
     umq_buf_list_t *local_head = NULL;
     uint64_t *local_buf_cnt = NULL;
     uint64_t *free_cnt = NULL;
@@ -289,7 +297,7 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
         qbuf_pool_stats->local_qbuf_pool_num = 0;
     }
 
-    (void)pthread_spin_lock(&base->tls_pools.tls_stats_lock);
+    (void)umq_thread_local_mutex_lock(base->tls_pools.tls_stats_lock);
     thread_local_qbuf_pool_t *pool_iter = NULL;
     URPC_LIST_FOR_EACH(pool_iter, tls_node, &base->tls_pools.tls_register_head) {
         if (qbuf_pool_stats->local_qbuf_pool_num >= UMQ_LOCAL_QBUF_POOL_MAX_NUM) {
@@ -317,6 +325,6 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
         s->free_cnt_without_data = pool_iter->stats.free_cnt_without_data;
         qbuf_pool_stats->local_qbuf_pool_num++;
     }
-    (void)pthread_spin_unlock(&base->tls_pools.tls_stats_lock);
+    (void)umq_thread_local_mutex_unlock(base->tls_pools.tls_stats_lock);
     return UMQ_SUCCESS;
 }

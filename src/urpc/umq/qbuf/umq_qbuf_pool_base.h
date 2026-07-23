@@ -10,6 +10,7 @@
 #ifndef UMQ_QBUF_POOL_BASE_H
 #define UMQ_QBUF_POOL_BASE_H
 
+#include <errno.h>
 #include <pthread.h>
 #include <string.h>
 
@@ -18,11 +19,12 @@
 #include "umq_dfx_types.h"
 #include "umq_types.h"
 #include "umq_inner.h"
+#include "umq_thread_local.h"
 #include "umq_vlog.h"
 #include "urpc_util.h"
 #include "urpc_list.h"
-#include "urpc_thread_closure.h"
 #include "util_lock.h"
+#include "util_thread_key.h"
 #include "urpc_id_generator.h"
 
 #ifdef __cplusplus
@@ -133,7 +135,7 @@ typedef struct thread_local_qbuf_pool {
 } thread_local_qbuf_pool_t;
 
 typedef struct global_block_pool {
-    pthread_spinlock_t global_mutex;
+    util_external_mutex_lock *global_mutex;
     umq_buf_list_t head_with_data;
     uint64_t buf_cnt_with_data;
     umq_buf_list_t head_without_data;
@@ -148,9 +150,8 @@ typedef struct local_qbuf_pool_ctrl {
     uint32_t batch_count;
     bool enable_tls_expand_qbuf_pool;
     urpc_list_t tls_register_head;
-    pthread_spinlock_t tls_stats_lock;
+    util_external_mutex_lock *tls_stats_lock;
     urpc_thread_closure_type_t type;
-    void (*closure)(uint64_t id);
 } local_qbuf_pool_ctrl_t;
 
 typedef struct qbuf_pool_base {
@@ -178,29 +179,6 @@ typedef struct qbuf_pool_base {
 static ALWAYS_INLINE uint64_t umq_qbuf_pool_expand_max(uint64_t total_size)
 {
     return ((total_size) - (total_size) / QBUF_POOL_EXPAND_MAX_RATIO);
-}
-
-static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(
-    thread_local_qbuf_pool_t *thread_cache, local_qbuf_pool_ctrl_t *pools)
-{
-    if (!thread_cache->inited) {
-        thread_cache->block_pool.capacity_with_data = 0;
-        thread_cache->block_pool.capacity_without_data = 0;
-        QBUF_LIST_INIT(&thread_cache->block_pool.head_with_data);
-        thread_cache->block_pool.buf_cnt_with_data = 0;
-        QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
-        thread_cache->block_pool.buf_cnt_without_data = 0;
-        (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
-        thread_cache->stats.tid = (uint64_t)pthread_self();
-        thread_cache->inited = true;
-        // Todo: register closure
-        // register TLS stats to global linked list
-        (void)pthread_spin_lock(&pools->tls_stats_lock);
-        urpc_list_push_back(&pools->tls_register_head, &thread_cache->tls_node);
-        (void)pthread_spin_unlock(&pools->tls_stats_lock);
-    }
-
-    return &thread_cache->block_pool;
 }
 
 static ALWAYS_INLINE uint64_t round_up(uint64_t size, uint64_t align)
@@ -340,9 +318,9 @@ static ALWAYS_INLINE void local_pool_rollback(umq_buf_t *buf_head_old, uint64_t 
         tail = QBUF_LIST_NEXT(tail);
     }
     tail->qbuf_next = NULL;
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_lock(global_pool->global_mutex);
     *info.local_buf_cnt -= return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data);
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
 }
 
 bool umq_qbuf_try_expansion_pool(bool with_data, uint64_t *global_buf_cnt, bool disable_scale_cap);
@@ -355,7 +333,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     uint64_t local_cnt_before;
     umq_qbuf_pool_req_info_t info;
 
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_lock(global_pool->global_mutex);
     get_pool_req_info(cache_pool, global_pool, &info, with_data);
 
     local_head_before = QBUF_LIST_FIRST(info.local_head);
@@ -365,7 +343,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
         count = allocate_batch(info.global_head, batch_count, info.local_head);
         *info.global_buf_cnt -= count;
         *info.local_buf_cnt += count;
-        (void)pthread_spin_unlock(&global_pool->global_mutex);
+        (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
         async_expand_global_pool(with_data, *info.global_buf_cnt, global_pool->disable_scale_cap);
         return count;
     }
@@ -373,7 +351,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
     if (global_pool->disable_scale_cap) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "%s not enough suggestion: increase total_size\n",
             with_data ? "buf with data" : "buf with no data");
-        (void)pthread_spin_unlock(&global_pool->global_mutex);
+        (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -383,7 +361,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(
         *info.local_buf_cnt += take;
         count += take;
     }
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
 
     count += fetch_from_expansion_pools(with_data, batch_count - count, info.local_head, info.local_buf_cnt);
     while (count < batch_count) {
@@ -408,7 +386,7 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
     umq_qbuf_pool_req_info_t info;
     uint64_t return_buf_cnt;
     uint64_t *tls_return_buf_cnt;
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_lock(global_pool->global_mutex);
     get_pool_req_info(cache, global_pool, &info, with_data);
     if (with_data) {
         tls_return_buf_cnt = &stats->tls_return_buf_cnt_with_data;
@@ -422,7 +400,7 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data);
         *info.local_buf_cnt -= return_buf_cnt;
         *tls_return_buf_cnt += return_buf_cnt;
-        (void)pthread_spin_unlock(&global_pool->global_mutex);
+        (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
         return;
     }
 
@@ -442,7 +420,7 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         *tls_return_buf_cnt += return_buf_cnt;
     }
 
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
 }
 
 static ALWAYS_INLINE void release_thread_cache_impl(
@@ -452,13 +430,13 @@ static ALWAYS_INLINE void release_thread_cache_impl(
         return;
     }
 
-    (void)pthread_spin_lock(&tls_pools->tls_stats_lock);
+    (void)umq_thread_local_mutex_lock(tls_pools->tls_stats_lock);
     urpc_list_remove(&thread_cache->tls_node);
-    (void)pthread_spin_unlock(&tls_pools->tls_stats_lock);
+    (void)umq_thread_local_mutex_unlock(tls_pools->tls_stats_lock);
 
-    local_block_pool_t *local_pool = get_thread_local_cache(thread_cache, tls_pools);
+    local_block_pool_t *local_pool = &thread_cache->block_pool;
     uint64_t return_buf_cnt;
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_lock(global_pool->global_mutex);
     if (local_pool->head_with_data.first != NULL) {
         return_buf_cnt = return_list_to_pools(QBUF_LIST_FIRST(&local_pool->head_with_data),
             &global_pool->head_with_data, &global_pool->buf_cnt_with_data, true);
@@ -472,7 +450,7 @@ static ALWAYS_INLINE void release_thread_cache_impl(
         local_pool->buf_cnt_without_data -= return_buf_cnt;
         thread_cache->stats.tls_return_buf_cnt_without_data += return_buf_cnt;
     }
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
 
     thread_cache->inited = false;
 }
@@ -548,7 +526,7 @@ static ALWAYS_INLINE void return_qbuf_to_global(global_block_pool_t *global_pool
     uint64_t *global_buf_cnt;
     umq_buf_list_t *global_head;
 
-    (void)pthread_spin_lock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_lock(global_pool->global_mutex);
     if (with_data) {
         global_buf_cnt = &global_pool->buf_cnt_with_data;
         global_head = &global_pool->head_with_data;
@@ -569,7 +547,7 @@ static ALWAYS_INLINE void return_qbuf_to_global(global_block_pool_t *global_pool
     QBUF_LIST_NEXT(last_node) = head; // append head node to last node
     *global_buf_cnt += cnt;
 
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
+    (void)umq_thread_local_mutex_unlock(global_pool->global_mutex);
 }
 
 static ALWAYS_INLINE umq_buf_t *id_to_buf_with_data_split(char *addr, uint64_t id)
@@ -853,18 +831,25 @@ static ALWAYS_INLINE int umq_qbuf_block_pool_init(global_block_pool_t *block_poo
     QBUF_LIST_INIT(&block_pool->head_without_data);
     block_pool->buf_cnt_with_data = 0;
     block_pool->buf_cnt_without_data = 0;
-    (void)pthread_spin_init(&block_pool->global_mutex, PTHREAD_PROCESS_PRIVATE);
+    block_pool->global_mutex = umq_thread_local_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+    if (block_pool->global_mutex == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf global_mutex create failed, errno %d\n", errno);
+        return -UMQ_ERR_ENOMEM;
+    }
     return UMQ_SUCCESS;
 }
 
 static ALWAYS_INLINE void umq_qbuf_block_pool_uninit(global_block_pool_t *block_pool)
 {
-    (void)pthread_spin_destroy(&block_pool->global_mutex);
+    if (block_pool->global_mutex != NULL) {
+        (void)umq_thread_local_mutex_lock_destroy(block_pool->global_mutex);
+        block_pool->global_mutex = NULL;
+    }
 }
 
 int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint32_t split_extra_header_count);
 void *umq_qbuf_base_io_buf_malloc(uint64_t total_len, uint64_t min_size);
-void umq_qbuf_base_uninit(qbuf_pool_base_t *base, void (*release_thread_cache)(uint64_t));
+void umq_qbuf_base_uninit(qbuf_pool_base_t *base);
 
 int umq_qbuf_base_alloc(qbuf_pool_base_t *base, thread_local_qbuf_pool_t *thread_cache,
     umq_alloc_option_t *option, qbuf_alloc_param_t *param);
