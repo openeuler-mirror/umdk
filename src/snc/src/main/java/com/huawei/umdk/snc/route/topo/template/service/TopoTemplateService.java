@@ -30,6 +30,9 @@ import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -103,13 +106,27 @@ public class TopoTemplateService {
 
         loadPolicy(topology, templateLoader.getRoutePolicies());
 
+        log.info("generate snc topology success");
+
         return topology;
     }
 
-    public static SncTopology parseTemplateJson(String jsonStr) {
-        if (jsonStr == null || jsonStr.isEmpty()) {
+    public static SncTopology parseTemplateFile(String name) {
+        if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("jsonStr is null or empty");
         }
+
+        String jsonStr;
+        log.info("begin to parse template file");
+        try (InputStream inputStream = TopoTemplateService.class.getResourceAsStream("/" + name)) {
+            if (inputStream == null) {
+                throw new IllegalArgumentException("find file failed");
+            }
+            jsonStr = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("read file failed");
+        }
+        log.info("parse template file success");
 
         TemplateLoader templateLoader = JSON.parseObject(jsonStr, TemplateLoader.class);
         return genTopology(templateLoader);
