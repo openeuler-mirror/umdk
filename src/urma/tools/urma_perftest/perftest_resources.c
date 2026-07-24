@@ -167,7 +167,8 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     status = urma_init(&init_attr);
-    if (status != URMA_SUCCESS) {
+    /* Tolerate URMA_EEXIST: UB mgmt channel may have already urma_init'd. */
+    if (status != URMA_SUCCESS && status != URMA_EEXIST) {
         LOG_ERROR("Failed to urma init, status:%d!\n", (int)status);
         return -1;
     }
@@ -2819,6 +2820,9 @@ static void destroy_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     unregister_mem(ctx, cfg);
     destroy_simplex_jettys(ctx, cfg);
+    /* Close mgmt channel BEFORE uninit_device: urma_uninit is not refcounted
+     * and dlclose()'s provider .so, after which mgmt ctx->ops dangles. */
+    close_connection(cfg);
     uninit_device(ctx);
     return;
 }
@@ -2850,6 +2854,8 @@ static void destroy_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     unregister_mem(ctx, cfg);
     destroy_duplex_jettys(ctx, cfg);
+    /* See destroy_simplex_ctx for ordering rationale. */
+    close_connection(cfg);
     uninit_device(ctx);
     return;
 }

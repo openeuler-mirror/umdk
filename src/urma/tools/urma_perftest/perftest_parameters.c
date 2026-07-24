@@ -152,7 +152,7 @@ static void usage(const char *argv0)
         "  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n"
         "  --order_type <type>         Order type: 0 for default order,"
         "                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n"
-        "  --mgmt <tcp|ub>             Management channel protocol, default: tcp.\n"
+        "  --mgmt_proto <tcp|ub>       Management channel protocol, default: tcp.\n"
         "  --enable_ipv6               enable ipv6 for server ip. default disable.\n"
         "  --enable_credit             enable send credit, default: disable.\n"
         "  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n"
@@ -188,7 +188,8 @@ static void usage(const char *argv0)
         "                                                default: 1000(1s).\n"
         "  --page_size                 Set page size, default: 4096.\n"
         "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
-        "  --bind_ip <ip>              The ip for bind.\n"
+        "  --bind_ip <ip>              TCP only: local ip for bind (default 0.0.0.0).\n"
+        "  --mgmt_addr <eid>           UB only: local eid string for mgmt channel (required in UB mode).\n"
         "  --enable_sync_stream        Enable synchronized multi-stream transmission. \n"
         "  --bw_unit <unit>            Set bandwidth display unit: KB, MB, or GB (default: MB).\n"
         "  --va <address>              Allow user to set address for local_buf, (Both decimal and hexadecimal).\n"
@@ -330,6 +331,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->enable_ipv6 = false;
     cfg->server_ip = NULL;
     cfg->bind_ip = NULL;
+    cfg->mgmt_addr = NULL;
     cfg->port = PERFTEST_DEF_PORT;
     cfg->mgmt_type = PERFTEST_MGMT_TCP;
     cfg->jfs_depth = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_JFS_DEPTH_BW : PERFTEST_DEF_JFS_DEPTH_LAT;
@@ -660,7 +662,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"rate_units",          required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
         {"burst_size",          required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
         {"order_type",          required_argument, NULL, PERFTEST_OPT_ORDER_TYPE},
-        {"mgmt",                required_argument, NULL, PERFTEST_OPT_MGMT},
+        {"mgmt_proto",          required_argument, NULL, PERFTEST_OPT_MGMT},
+        {"mgmt_addr",           required_argument, NULL, PERFTEST_OPT_MGMT_ADDR},
         {"enable_ipv6",         no_argument,       NULL, PERFTEST_OPT_ENABLE_IPV6},
         {"enable_credit",       no_argument,       NULL, PERFTEST_OPT_ENABLE_CREDIT},
         {"credit_threshold",    required_argument, NULL, PERFTEST_OPT_CREDIT_THRESHOLD},
@@ -1066,6 +1069,13 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                     return -1;
                 }
                 break;
+            case PERFTEST_OPT_MGMT_ADDR:
+                cfg->mgmt_addr = strdup(optarg);
+                if (cfg->mgmt_addr == NULL) {
+                    LOG_ERROR("failed to allocate mgmt_addr memory.\n");
+                    return -1;
+                }
+                break;
             case PERFTEST_OPT_ENABLE_SYNC_STREAM:
                 cfg->enable_sync_stream = true;
                 break;
@@ -1140,6 +1150,10 @@ void destroy_cfg(perftest_config_t *cfg)
     if (cfg->bind_ip != NULL) {
         free(cfg->bind_ip);
         cfg->bind_ip = NULL;
+    }
+    if (cfg->mgmt_addr != NULL) {
+        free(cfg->mgmt_addr);
+        cfg->mgmt_addr = NULL;
     }
     return;
 }
@@ -1293,7 +1307,11 @@ int check_local_cfg(perftest_config_t *cfg)
             return -1;
         }
         if (cfg->bind_ip != NULL) {
-            LOG_INFO("Warning: bind_ip is only available for tcp management channel.\n");
+            LOG_ERROR("bind_ip is TCP-only and not supported in UB management mode.\n");
+            return -1;
+        }
+        if (cfg->mgmt_addr == NULL) {
+            LOG_ERROR("--mgmt_addr <eid> is required in UB management mode (provides local EID for mgmt channel).\n");
             return -1;
         }
     }
