@@ -15,10 +15,17 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#define UB_MGMT_JETTY_ID_DEFAULT        (123)
+#define UB_MGMT_JETTY_ID_CLIENT_OFFSET  (0x1000)  /* client's local jetty id offset from server's well-known base */
+#define UB_MGMT_JFC_DEPTH               (64)
+#define UB_MGMT_JFS_DEPTH               (8)
+#define UB_MGMT_JFR_DEPTH               (8)
+#define UB_MGMT_MSG_MAX_SIZE            (4096)
+
 typedef struct comm_ub_cfg {
-    char *src_eid;
-    char *dst_eid;
-    uint32_t dst_jetty_id;
+    char     *src_eid;      /* Local EID string for mgmt channel (from --mgmt_addr). Required. */
+    char     *dst_eid;      /* Server EID string (client side). NULL on server side. */
+    uint32_t  dst_jetty_id; /* Server well-known jetty id. 0 means use UB_MGMT_JETTY_ID_DEFAULT. */
 } comm_ub_cfg_t;
 
 int ub_establish_connection(const comm_ub_cfg_t *cfg);
