@@ -929,7 +929,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
         .send = {.imm_data = imm.value},
-        .flag = {.bs = {.complete_enable = 1, .inline_flag = 1}},
+        .flag = {.bs = {.complete_enable = 1, .inline_flag = 0}},
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
@@ -995,7 +995,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
         .send = {.imm_data = imm.value},
-        .flag = {.bs = {.complete_enable = 1, .inline_flag = 1}},
+        .flag = {.bs = {.complete_enable = 1, .inline_flag = 0}},
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
@@ -1189,7 +1189,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
         .send = {.imm_data = imm.value},
-        .flag = {.bs = {.complete_enable = 1, .inline_flag = 1}},
+        .flag = {.bs = {.complete_enable = 1, .inline_flag = 0}},
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
@@ -1266,7 +1266,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     };
     urma_jfs_wr_t urma_wr = {.user_ctx = obj.value,
         .send = {.imm_data = imm.value},
-        .flag = {.bs = {.complete_enable = 1, .inline_flag = 1}},
+        .flag = {.bs = {.complete_enable = 1, .inline_flag = 0}},
         .tjetty = tjetty,
         .opcode = URMA_OPC_SEND_IMM};
     urma_jfs_wr_t *bad_wr = NULL;
