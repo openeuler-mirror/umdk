@@ -61,7 +61,7 @@ static int admin_main_ue_eid_pop_eid(admin_config_t *cfg, const char *name,
         return -EINVAL;
     }
 
-    ret = admin_str_to_eid(arg, eid);
+    ret = urma_str_to_eid(arg, eid);
     if (ret != 0) {
         printf("Invalid %s: %s.\n", name, arg);
         return ret;

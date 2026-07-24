@@ -12,6 +12,8 @@
 #include <netlink/genl/genl.h>
 #include <stdio.h>
 
+#include "ub_util.h"
+
 #include "admin_netlink.h"
 #include "admin_parameters.h"
 
@@ -586,7 +588,7 @@ static int cmd_show_dev_res(admin_config_t *cfg, tool_res_key_type_t type, const
         return admin_cmd_list_res(cfg->dev_name, type, 0, 0);
     }
 
-    if (admin_str_to_u32(arg, &id) != 0) {
+    if (ub_str_to_u32(arg, &id) != 0) {
         (void)printf("Invalid %s '%s'.\n", id_name, arg);
         return -EINVAL;
     }
