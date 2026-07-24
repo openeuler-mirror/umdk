@@ -32,7 +32,7 @@ int establish_connection(const perftest_config_t *cfg)
         case PERFTEST_MGMT_UB: {
             const bool port_specified = cfg->port != PERFTEST_DEF_PORT;
             comm_ub_cfg_t ub_cfg = {
-                .src_eid = NULL,
+                .src_eid = cfg->mgmt_addr,
                 .dst_eid = cfg->server_ip,
                 .dst_jetty_id = port_specified ? cfg->port : 0,
             };
@@ -61,6 +61,10 @@ void close_connection(perftest_config_t *cfg)
     if (cfg->bind_ip != NULL) {
         free(cfg->bind_ip);
         cfg->bind_ip = NULL;
+    }
+    if (cfg->mgmt_addr != NULL) {
+        free(cfg->mgmt_addr);
+        cfg->mgmt_addr = NULL;
     }
 }
 
