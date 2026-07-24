@@ -375,8 +375,8 @@ static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
         }
         (void)epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_DEL,
                         bdp_ctx->p_ctxs[i]->async_fd, NULL);
-        URMA_LOG_INFO("bondp delete_pctx, eid_idx is %u.\n",
-                      bdp_ctx->p_ctxs[i]->eid_index);
+        URMA_LOG_DEBUG("bondp delete_pctx, eid_idx is %u.\n",
+                       bdp_ctx->p_ctxs[i]->eid_index);
 
         sub_ret = urma_delete_context(bdp_ctx->p_ctxs[i]);
         if (sub_ret != 0) {
@@ -461,8 +461,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         goto HC_UNINIT;
     }
 
-    URMA_LOG_INFO("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
-                  dev->name, eid_index);
+    URMA_LOG_DEBUG("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
+                   dev->name, eid_index);
 
     return &bdp_ctx->v_ctx;
 
@@ -499,8 +499,8 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
 
     free(bdp_ctx);
 
-    URMA_LOG_INFO("Finish to delete ctx, dev_name=%s, eid_idx=%u.\n",
-                  dev_name, eid_index);
+    URMA_LOG_DEBUG("Finish to delete ctx, dev_name=%s, eid_idx=%u.\n",
+                   dev_name, eid_index);
 
     return ret;
 }
