@@ -16,6 +16,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ub_util.h"
+
 #include "admin_parameters.h"
 
 #include "admin_file_ops.h"
@@ -181,7 +183,7 @@ uint32_t admin_read_dev_file_value_u32(const char *dev_name, const char *file)
     }
 
     free(sysfs_path);
-    ret = admin_str_to_u32(tmp_value, &value);
+    ret = ub_str_to_u32(tmp_value, &value);
     if (ret != 0) {
         (void)printf("file %s: str %s to u64 failed, ret:%d.\n", file, tmp_value, ret);
         return 0;
@@ -230,7 +232,7 @@ int admin_parse_file_value_u8(const char *file_path, char *file, uint8_t *u8)
         (void)printf("read file %s/%s failed.\n", file_path, file);
         return -1;
     }
-    return admin_str_to_u8(tmp_value, u8);
+    return ub_str_to_u8(tmp_value, u8);
 }
 
 int admin_parse_file_value_u16(const char *file_path, char *file, uint16_t *u16)
@@ -240,7 +242,7 @@ int admin_parse_file_value_u16(const char *file_path, char *file, uint16_t *u16)
         (void)printf("read file %s/%s failed.\n", file_path, file);
         return -1;
     }
-    return admin_str_to_u16(tmp_value, u16);
+    return ub_str_to_u16(tmp_value, u16);
 }
 
 int admin_parse_file_value_u32(const char *file_path, char *file, uint32_t *u32)
@@ -250,7 +252,7 @@ int admin_parse_file_value_u32(const char *file_path, char *file, uint32_t *u32)
         (void)printf("read file %s/%s failed.\n", file_path, file);
         return -1;
     }
-    return admin_str_to_u32(tmp_value, u32);
+    return ub_str_to_u32(tmp_value, u32);
 }
 
 int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64)
@@ -260,7 +262,7 @@ int admin_parse_file_value_u64(const char *file_path, char *file, uint64_t *u64)
         (void)printf("read file %s/%s failed.\n", file_path, file);
         return -1;
     }
-    return admin_str_to_u64(tmp_value, u64);
+    return ub_str_to_u64(tmp_value, u64);
 }
 
 void admin_parse_reserved_jetty(const char *file_path, char *file, uint32_t *min, uint32_t *max)
@@ -293,7 +295,7 @@ void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint
         }
         eid_list[i].eid_index = i;
         if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
-            admin_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
+            urma_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
             eid_list[i].eid.in4.prefix = 0; // invalid
         }
     }
@@ -317,7 +319,7 @@ bool admin_is_eid_idx_valid(const char *dev_name, uint32_t eid_index)
     }
     if (admin_merge_sysfs_path(sysfs_path, SYS_CLASS_PATH, dev_name) != 0 ||
         admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
-        admin_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
+        urma_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
         eid_info.eid.in4.prefix == 0) {
         goto free_sysfs_path;
     }

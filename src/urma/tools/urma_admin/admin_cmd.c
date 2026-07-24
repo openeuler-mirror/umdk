@@ -154,46 +154,46 @@ static int parse_args(admin_config_t *cfg)
                 cfg->brief_info = true;
                 break;
             case 'C':
-                ret = admin_str_to_u32(optarg, &cfg->key.key_cnt);
+                ret = ub_str_to_u32(optarg, &cfg->key.key_cnt);
                 break;
             case 'd':
                 ret = admin_parse_dev_name(optarg, cfg);
                 break;
             case 'e':
-                (void)admin_str_to_eid(optarg, &cfg->eid);
+                (void)urma_str_to_eid(optarg, &cfg->eid);
                 break;
             case 'm':
                 cfg->dynamic_eid_mode = true;
                 break;
             case 'v':
-                ret = admin_str_to_u16(optarg, &cfg->ue_idx);
+                ret = ub_str_to_u16(optarg, &cfg->ue_idx);
                 break;
             case 'i':
-                ret = admin_str_to_u16(optarg, &cfg->idx);
+                ret = ub_str_to_u16(optarg, &cfg->idx);
                 break;
             case 'w':
                 cfg->whole_info = true;
                 break;
             case 'R':
-                ret = admin_str_to_u32(optarg, &cfg->key.type);
+                ret = ub_str_to_u32(optarg, &cfg->key.type);
                 break;
             case 'k':
-                ret = admin_str_to_u32(optarg, &cfg->key.key);
+                ret = ub_str_to_u32(optarg, &cfg->key.key);
                 break;
             case 'K':
-                ret = admin_str_to_u32(optarg, &cfg->key.key_ext);
+                ret = ub_str_to_u32(optarg, &cfg->key.key_ext);
                 break;
             case 'n':
                 ret = admin_parse_ns(optarg, cfg);
                 break;
             case 'M':
-                ret = admin_str_to_u8(optarg, &cfg->dev_ns_mode);
+                ret = ub_str_to_u8(optarg, &cfg->dev_ns_mode);
                 break;
             case 'p':
-                ret = admin_str_to_u8(optarg, &cfg->priority);
+                ret = ub_str_to_u8(optarg, &cfg->priority);
                 break;
             case 's':
-                ret = admin_str_to_u8(optarg, &cfg->SL);
+                ret = ub_str_to_u8(optarg, &cfg->SL);
                 break;
             case 'h':
                 cfg->help = true;
