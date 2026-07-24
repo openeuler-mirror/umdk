@@ -31,9 +31,10 @@ aclnnStatus aclnnGatherSelectionKvCacheGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerGatherSelectionKvCacheGetWorkspaceSize(selectionKRopeRef, selectionKvCacheRef, selectionKvBlockTableRef,
-        selectionKvBlockStatusRef, selectionTopkIndices, fullKRope, fullKvCache, fullKvBlockTable, fullKvActualSeq,
-        fullQActualSeq, selectionTopkBlockSize, selectionKvActualSeqOut, workspaceSize, executor);
+    return aclnnInnerGatherSelectionKvCacheGetWorkspaceSize(selectionKRopeRef, selectionKvCacheRef,
+        selectionKvBlockTableRef, selectionKvBlockStatusRef, selectionTopkIndices, fullKRope, fullKvCache,
+        fullKvBlockTable, fullKvActualSeq, fullQActualSeq, selectionTopkBlockSize, selectionKvActualSeqOut,
+        workspaceSize, executor);
 }
 
 aclnnStatus aclnnGatherSelectionKvCache(

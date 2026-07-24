@@ -27,8 +27,8 @@ aclnnStatus aclnnSwigluClipQuantGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerSwigluClipQuantGetWorkspaceSize(x, groupIndex, groupAlpha, activateLeft, quantModeOptional, clampMode,
-        yOut, scaleOut, workspaceSize, executor);
+    return aclnnInnerSwigluClipQuantGetWorkspaceSize(x, groupIndex, groupAlpha, activateLeft, quantModeOptional,
+        clampMode, yOut, scaleOut, workspaceSize, executor);
 }
 
 aclnnStatus aclnnSwigluClipQuant(

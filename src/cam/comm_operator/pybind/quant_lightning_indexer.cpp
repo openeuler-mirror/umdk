@@ -1,4 +1,4 @@
-/**
+2/**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -24,9 +24,9 @@ const int DIM_3 = 3;
 const int G_TO_AClOFFSET = 256;
 
 // 工具函数，推导输出shape
-std::tuple<at::Tensor, at::Tensor> construct_quant_lightning_indexer_output_tensor(const at::Tensor& query, const at::Tensor& key,
-                                                           int64_t sparse_count, std::string query_layout_str,
-                                                           std::string key_layout_str, bool return_value)
+std::tuple<at::Tensor, at::Tensor> construct_quant_lightning_indexer_output_tensor(
+    const at::Tensor& query, const at::Tensor& key, int64_t sparse_count, std::string query_layout_str,
+    std::string key_layout_str, bool return_value)
 {
     at::SmallVector<int64_t, SIZE> output_size;
     for (size_t i = 0; i < query.sizes().size(); i++) {
@@ -94,10 +94,10 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
     std::string key_layout_str = std::string(layout_key);
 
     // construct the output tensor
-    std::tuple<at::Tensor, at::Tensor>  quant_lightning_indexer_output = construct_quant_lightning_indexer_output_tensor(
+    std::tuple<at::Tensor, at::Tensor> output_tensor = construct_quant_lightning_indexer_output_tensor(
             query, key, sparse_count, query_layout_str, key_layout_str, return_value);
-    at::Tensor sparse_indices_out = std::get<0>(quant_lightning_indexer_output);
-    at::Tensor sparse_values_out = std::get<1>(quant_lightning_indexer_output);
+    at::Tensor sparse_indices_out = std::get<0>(output_tensor);
+    at::Tensor sparse_values_out = std::get<1>(output_tensor);
     // convert str
     char *query_layout_ptr = const_cast<char *>(query_layout_str.c_str());
     char *key_layout_ptr = const_cast<char *>(key_layout_str.c_str());
@@ -107,9 +107,11 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
 
     if (key_layout_str == "PA_BSND") {
         auto contiguous_axes_result_key = is_contiguous_axes_qli(key);
-        TORCH_CHECK(contiguous_axes_result_key[1] && contiguous_axes_result_key[2], "key must be contiguous on all axes except axis 0");
+        TORCH_CHECK(contiguous_axes_result_key[1] && contiguous_axes_result_key[2],
+            "key must be contiguous on all axes except axis 0");
         auto contiguous_axes_result_keyScale = is_contiguous_axes_qli(key_dequant_scale);
-        TORCH_CHECK(contiguous_axes_result_keyScale[1] && contiguous_axes_result_keyScale[2], "key_dequant_scale must be contiguous on all axes except axis 0");
+        TORCH_CHECK(contiguous_axes_result_keyScale[1] && contiguous_axes_result_keyScale[2],
+            "key_dequant_scale must be contiguous on all axes except axis 0");
     }
 
     EXEC_NPU_CMD(aclnnQuantLightningIndexer, query,
@@ -117,7 +119,6 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
         block_table, metadata, query_quant_mode, key_quant_mode, query_layout_ptr, key_layout_ptr, sparse_count,
         sparse_mode, pre_tokens, next_tokens, cmp_ratio, return_value, key_stride0, key_dequant_scale_stride0,
         sparse_indices_out, sparse_values_out);
-
 
     return std::tuple<at::Tensor, at::Tensor>(sparse_indices_out, sparse_values_out);
 }
@@ -138,10 +139,10 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_meta(
     std::string query_layout_str = std::string(layout_query);
     std::string key_layout_str = std::string(layout_key);
     // construct the output tensor
-    std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_output = construct_quant_lightning_indexer_output_tensor(
+    std::tuple<at::Tensor, at::Tensor> output_tensor = construct_quant_lightning_indexer_output_tensor(
             query, key, sparse_count, query_layout_str, key_layout_str, return_value);
-    at::Tensor sparse_indices_out = std::get<0>(quant_lightning_indexer_output);
-    at::Tensor sparse_values_out = std::get<1>(quant_lightning_indexer_output);
+    at::Tensor sparse_indices_out = std::get<0>(output_tensor);
+    at::Tensor sparse_values_out = std::get<1>(output_tensor);
 
     return std::tuple<at::Tensor, at::Tensor>(sparse_indices_out, sparse_values_out);
 }
