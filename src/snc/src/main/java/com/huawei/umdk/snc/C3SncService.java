@@ -9,6 +9,7 @@
 
 package com.huawei.umdk.snc;
 
+import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.route.model.RouteTable;
 import com.huawei.umdk.snc.route.service.RouteMspService;
@@ -24,6 +25,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +35,8 @@ import java.util.stream.Stream;
 public class C3SncService {
     private static final Logger log = new Logger(C3SncService.class);
 
-    private static final String TOPO_TEMPLATE_FILE_PATH = "src/main/resources";
+    private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList("128_npu_rack.json",
+        "128_npu_inter_rack.json");
 
     private static final Integer TOPOLOGY_NODE_MAX_COUNT = 8192;
 
@@ -47,6 +51,11 @@ public class C3SncService {
         checkTopology(topology);
         this.topology = topology;
         log.info("create snc service success with topology");
+    }
+
+    public static void registerLogCallback(LogCallback logCallback) {
+        Logger.registerLogCallback(logCallback);
+        log.info("register snc log callback success");
     }
 
     private void checkSncPort(SncNode node) {
@@ -132,28 +141,15 @@ public class C3SncService {
     public static Map<String, Map<String, RouteTable>> routeMSP() {
         // Map<topology_type, <node label, route>>
         Map<String, Map<String, RouteTable>> topologyRouteMap = new HashMap<>();
-        List<String> filePathList = new ArrayList<>();
-        try (Stream<Path> stream = Files.list(Paths.get(TOPO_TEMPLATE_FILE_PATH))){
-            stream.filter(Files::isRegularFile)
-                .filter(path -> path.toString().endsWith(".json"))
-                .forEach(path -> filePathList.add(path.toString()));
-        } catch (IOException e) {
-            throw new IllegalArgumentException("find invalid json file");
-        }
 
-        for (String filePath : filePathList) {
-            try {
-                String jsonStr = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
-                SncTopology topology = TopoTemplateService.parseTemplateJson(jsonStr);
-                String xpodType = topology.getLabel().getNames().get("type");
-                if (xpodType == null) {
-                    throw new IllegalArgumentException("find invalid xpod type");
-                }
-                Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
-                topologyRouteMap.put(xpodType, routeMap);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        for (String filePath : TOPO_TEMPLATE_FILES) {
+            SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
+            Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
+            String xpodType = topology.getLabel().getNames().get("type");
+            if (xpodType == null) {
+                throw new IllegalArgumentException("find invalid xpod type");
             }
+            topologyRouteMap.put(xpodType, routeMap);
         }
 
         return topologyRouteMap;
