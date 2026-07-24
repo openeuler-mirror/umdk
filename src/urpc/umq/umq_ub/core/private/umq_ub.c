@@ -15,7 +15,6 @@
 #include "umq_ub_flow_control.h"
 #include "qbuf_list.h"
 #include "umq_ub_api.h"
-#include "umq_ub_jetty_pool.h"
 #include "umq_symbol_private.h"
 
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
@@ -1828,14 +1827,14 @@ void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t me
 {
     urma_target_seg_t *tseg;
     for (uint32_t i = 0; i < ctx_cnt; i++) {
-        umq_thread_local_mutex_lock(ctx_list[i].tseg_list_lock);
+        pthread_spin_lock(&ctx_list[i].tseg_list_lock);
         if (ctx_list[i].tseg_list[mempool_id] == NULL) {
-            umq_thread_local_mutex_unlock(ctx_list[i].tseg_list_lock);
+            pthread_spin_unlock(&ctx_list[i].tseg_list_lock);
             continue;
         }
         tseg = ctx_list[i].tseg_list[mempool_id];
         ctx_list[i].tseg_list[mempool_id] = NULL;
-        umq_thread_local_mutex_unlock(ctx_list[i].tseg_list_lock);
+        pthread_spin_unlock(&ctx_list[i].tseg_list_lock);
 
         urma_status_t status = umq_symbol_urma()->urma_unregister_seg(tseg);
         if (status != URMA_SUCCESS) {
