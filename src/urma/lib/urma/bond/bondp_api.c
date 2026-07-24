@@ -76,23 +76,46 @@ static void bondp_uninit_connection_table(bondp_comp_t *bdp_comp)
     bondp_hash_table_destroy(&bdp_comp->v_conn_table);
 }
 
-static int bondp_init_wr_buf(const bondp_comp_t *bdp_comp, wr_buf_t *wr_buf, uint32_t depth,
-                             uint32_t max_sge, uint32_t max_rsge, bool is_send)
+static int bondp_init_wr_buf(bondp_comp_t *bdp_comp, wr_buf_t *wr_buf, uint32_t depth, bool is_send)
 {
     if (bdp_comp->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE) {
         return 0;
     }
 
-    // Send: 1 wr_buf entry per WR regardless of port count; recv: all ports need entries for failover
-    uint32_t port_cnt = is_send
-                            ? 1
-                            : bdp_comp->enabled_count;
-    return wr_buf_init(wr_buf, depth * port_cnt, max_sge, max_rsge, is_send);
+    if (!is_send && !bdp_comp->bondp_ctx->msn_enable) {
+        return 0;
+    }
+
+    if (is_send) {
+        return jfs_wr_buf_init(wr_buf, depth, bdp_comp->max_send_sge, bdp_comp->max_send_rsge);
+    }
+    return jfr_wr_buf_init(wr_buf, depth * bdp_comp->enabled_count, bdp_comp->max_recv_sge);
 }
 
 static void bondp_uninit_wr_buf(wr_buf_t *wr_buf)
 {
     wr_buf_uninit(wr_buf);
+}
+
+static uint32_t bondp_get_jfs_max_sge(const bondp_context_t *bdp_ctx, const urma_jfs_cfg_t *cfg)
+{
+    uint32_t max_sge = bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_sge;
+    max_sge = cfg->max_sge != 0 ? cfg->max_sge : max_sge;
+    return max_sge > BONDP_MAX_SGE_NUM ? BONDP_MAX_SGE_NUM : max_sge;
+}
+
+static uint32_t bondp_get_jfs_max_rsge(const bondp_context_t *bdp_ctx, const urma_jfs_cfg_t *cfg)
+{
+    uint32_t max_sge = bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfs_rsge;
+    max_sge = cfg->max_rsge != 0 ? cfg->max_rsge : max_sge;
+    return max_sge > BONDP_MAX_SGE_NUM ? BONDP_MAX_SGE_NUM : max_sge;
+}
+
+static uint32_t bondp_get_jfr_max_sge(const bondp_context_t *bdp_ctx, const urma_jfr_cfg_t *cfg)
+{
+    uint32_t max_sge = bdp_ctx->v_ctx.dev->sysfs_dev->dev_attr.dev_cap.max_jfr_sge;
+    max_sge = cfg->max_sge != 0 ? cfg->max_sge : max_sge;
+    return max_sge > BONDP_MAX_SGE_NUM ? BONDP_MAX_SGE_NUM : max_sge;
 }
 
 static urma_jfc_t *bondp_get_effective_shared_jfc(const urma_jetty_cfg_t *jetty_cfg)
@@ -722,13 +745,9 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
         goto DEL_P_VJFS_ID;
     }
 
-    uint32_t cfg_max_sge = (cfg->max_sge == 0 || cfg->max_sge > BONDP_MAX_SGE_NUM)
-                               ? BONDP_MAX_SGE_NUM
-                               : cfg->max_sge;
-    uint32_t cfg_max_rsge = (cfg->max_rsge == 0 || cfg->max_rsge > BONDP_MAX_SGE_NUM)
-                                ? BONDP_MAX_SGE_NUM
-                                : cfg->max_rsge;
-    if (bondp_init_wr_buf(bdp_jfs, &bdp_jfs->send_wr_buf, cfg->depth, cfg_max_sge, cfg_max_rsge, true) != 0) {
+    bdp_jfs->max_send_sge = bondp_get_jfs_max_sge(bdp_ctx, cfg);
+    bdp_jfs->max_send_rsge = bondp_get_jfs_max_rsge(bdp_ctx, cfg);
+    if (bondp_init_wr_buf(bdp_jfs, &bdp_jfs->send_wr_buf, cfg->depth, true) != 0) {
         URMA_LOG_ERR("Failed to init jfs wr buf\n");
         goto UNINIT_CONNECTION_TABLE;
     }
@@ -1012,11 +1031,8 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
         goto DEL_P_VJFR_ID;
     }
 
-    uint32_t cfg_max_sge = (cfg->max_sge == 0 || cfg->max_sge > BONDP_MAX_SGE_NUM)
-                               ? BONDP_MAX_SGE_NUM
-                               : cfg->max_sge;
-    if (bdp_ctx->msn_enable &&
-        bondp_init_wr_buf(bdp_jfr, &bdp_jfr->recv_wr_buf, cfg->depth, cfg_max_sge, cfg_max_sge, false) != 0) {
+    bdp_jfr->max_recv_sge = bondp_get_jfr_max_sge(bdp_ctx, cfg);
+    if (bondp_init_wr_buf(bdp_jfr, &bdp_jfr->recv_wr_buf, cfg->depth, false) != 0) {
         URMA_LOG_ERR("Failed to init jfr wr buf\n");
         goto UNINIT_JFR_CONNECTION_TABLE;
     }
@@ -1405,14 +1421,9 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto DEL_P_VJETTY_ID;
     }
 
-    uint32_t cfg_max_sge = (jetty_cfg->jfs_cfg.max_sge == 0 || jetty_cfg->jfs_cfg.max_sge > BONDP_MAX_SGE_NUM)
-                               ? BONDP_MAX_SGE_NUM
-                               : jetty_cfg->jfs_cfg.max_sge;
-    uint32_t cfg_max_rsge = (jetty_cfg->jfs_cfg.max_rsge == 0 || jetty_cfg->jfs_cfg.max_rsge > BONDP_MAX_SGE_NUM)
-                                ? BONDP_MAX_SGE_NUM
-                                : jetty_cfg->jfs_cfg.max_rsge;
-    if (bondp_init_wr_buf(bdp_jetty, &bdp_jetty->send_wr_buf, jetty_cfg->jfs_cfg.depth,
-                          cfg_max_sge, cfg_max_rsge, true) != 0) {
+    bdp_jetty->max_send_sge = bondp_get_jfs_max_sge(bdp_ctx, &jetty_cfg->jfs_cfg);
+    bdp_jetty->max_send_rsge = bondp_get_jfs_max_rsge(bdp_ctx, &jetty_cfg->jfs_cfg);
+    if (bondp_init_wr_buf(bdp_jetty, &bdp_jetty->send_wr_buf, jetty_cfg->jfs_cfg.depth, true) != 0) {
         URMA_LOG_ERR("Failed to init jetty send wr buf\n");
         goto UNINIT_JETTY_CONNECTION_TABLE;
     }

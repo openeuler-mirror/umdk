@@ -102,15 +102,12 @@ void jfs_wr_put_refs(urma_jfs_wr_t *wr)
     }
 }
 
-int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge, uint32_t max_rsge, bool is_send)
+static int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t entry_size)
 {
-    if (buf == NULL || max_wr_num == 0 || max_sge == 0 || max_rsge == 0) {
+    if (buf == NULL || max_wr_num == 0 || entry_size == 0) {
         return -EINVAL;
     }
 
-    const uint32_t entry_size = is_send
-                                    ? sizeof(jfs_wr_entry_t) + (max_sge + max_rsge) * sizeof(urma_sge_t)
-                                    : sizeof(jfr_wr_entry_t) + max_sge * sizeof(urma_sge_t);
     buf->entries = calloc(max_wr_num, entry_size);
     if (buf->entries == NULL) {
         goto WR_BUF_FAIL;
@@ -127,8 +124,6 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge, uint32_t m
 
     buf->max_wr_num = max_wr_num;
     buf->wr_entry_size = entry_size;
-    buf->max_sge = max_sge;
-    buf->max_rsge = max_rsge;
     buf->latest_used = max_wr_num - 1;
 
     /* Build single free list: 0 -> 1 -> 2 -> ... -> max_wr_num-1 -> UINT32_MAX */
@@ -147,6 +142,26 @@ WR_BUF_FREE_ENTRIES:
     buf->entries = NULL;
 WR_BUF_FAIL:
     return -ENOMEM;
+}
+
+int jfs_wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge, uint32_t max_rsge)
+{
+    if (max_sge == 0 || max_rsge == 0) {
+        return -EINVAL;
+    }
+
+    uint32_t entry_size = sizeof(jfs_wr_entry_t) + (max_sge + max_rsge) * sizeof(urma_sge_t);
+    return wr_buf_init(buf, max_wr_num, entry_size);
+}
+
+int jfr_wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge)
+{
+    if (max_sge == 0) {
+        return -EINVAL;
+    }
+
+    uint32_t entry_size = sizeof(jfr_wr_entry_t) + max_sge * sizeof(urma_sge_t);
+    return wr_buf_init(buf, max_wr_num, entry_size);
 }
 
 void wr_buf_uninit(wr_buf_t *buf)
@@ -177,8 +192,6 @@ void wr_buf_uninit(wr_buf_t *buf)
     buf->entries = NULL;
     buf->max_wr_num = 0;
     buf->wr_entry_size = 0;
-    buf->max_sge = 0;
-    buf->max_rsge = 0;
     buf->latest_used = 0;
     buf->free_head = UINT32_MAX;
 }
