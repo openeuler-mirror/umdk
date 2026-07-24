@@ -121,9 +121,9 @@ static thread_local_qbuf_pool_t *umq_tiny_qbuf_pool_tls_cache_get(void)
     tls_cache->inited = true;
 
     // register TLS stats to global linked list
-    (void)umq_thread_local_mutex_lock(g_tiny_qbuf_pool.tls_pools.tls_stats_lock);
+    (void)pthread_spin_lock(&g_tiny_qbuf_pool.tls_pools.tls_stats_lock);
     urpc_list_push_back(&g_tiny_qbuf_pool.tls_pools.tls_register_head, &tls_cache->tls_node);
-    (void)umq_thread_local_mutex_unlock(g_tiny_qbuf_pool.tls_pools.tls_stats_lock);
+    (void)pthread_spin_unlock(&g_tiny_qbuf_pool.tls_pools.tls_stats_lock);
 
     return tls_cache;
 }
