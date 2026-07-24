@@ -170,10 +170,11 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
 {
     uint32_t headroom_size = umq_qbuf_headroom_get();
-    if (queue->rx_buf_size <= headroom_size) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, rx_buf_size(%u) <= headroom_size(%u)\n",
-            EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-            queue->rx_buf_size, headroom_size);
+    uint32_t factor = (umq_qbuf_mode_get() == UMQ_BUF_SPLIT) ? 0 : sizeof(umq_buf_t);
+    if (queue->rx_buf_size <= headroom_size + factor) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, rx_buf_size(%u) <= "
+            "headroom_size(%u) + factor(%u)\n", EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid),
+            queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id, queue->rx_buf_size, headroom_size, factor);
         return -UMQ_ERR_EINVAL;
     }
     uint32_t require_rx_count = umq_ub_pjfr_depth(queue);
@@ -183,7 +184,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     do {
         cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
-        umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size, cur_batch_count, 0, NULL);
+        umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size - factor, cur_batch_count, 0, NULL);
         if (qbuf == NULL) {
             UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, alloc rx failed\n",
                 EID_ARGS(queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid), queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id);
@@ -2943,9 +2944,10 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     uint32_t headroom_size = umq_qbuf_headroom_get();
-    if (queue->rx_buf_size <= headroom_size) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, "
-            "rx_buf_size(%u) <= headroom_size(%u)\n", EID_ARGS(*eid), id, queue->rx_buf_size, headroom_size);
+    uint32_t factor = (umq_qbuf_mode_get() == UMQ_BUF_SPLIT) ? 0 : sizeof(umq_buf_t);
+    if (queue->rx_buf_size <= headroom_size + factor) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, rx_buf_size(%u) <= "
+            "headroom_size(%u) + factor(%u)\n", EID_ARGS(*eid), id, queue->rx_buf_size, headroom_size, factor);
         return;
     }
     __atomic_fetch_add(&queue->require_rx_count, rx_cnt, __ATOMIC_ACQ_REL);
@@ -2955,7 +2957,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
         int ret = UMQ_SUCCESS;
         do {
             cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
-            umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size, cur_batch_count,
+            umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size - factor, cur_batch_count,
                 UMQ_INVALID_HANDLE, NULL);
             if (qbuf == NULL) {
                 __atomic_fetch_add(&queue->require_rx_count, cur_batch_count, __ATOMIC_ACQ_REL);
