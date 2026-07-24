@@ -56,10 +56,10 @@ urma_status_t urma_register_log_func(urma_log_cb_t func)
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
-    URMA_LOG_INFO("registered log successfully.\n");
     g_urma_log_func = func;
     g_urma_loc_log_func = NULL;
     g_use_loc_log = false;
+    URMA_LOG_INFO("registered log successfully.\n");
     return URMA_SUCCESS;
 }
 
