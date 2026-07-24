@@ -56,7 +56,6 @@ static int bondp_init_connection_table(bondp_comp_t *bdp_comp)
     }
 
     if (!bdp_comp->bondp_ctx->msn_enable) {
-        URMA_LOG_INFO("MSN is not enabled, skip creating connection table\n");
         return 0;
     }
 
@@ -239,7 +238,7 @@ urma_status_t bondp_delete_jfce(urma_jfce_t *jfce)
         ret = URMA_FAIL;
     }
 
-    URMA_LOG_INFO("Deleting jfce, fd=%d, ret=%d\n", jfce->fd, ret);
+    URMA_LOG_DEBUG("Deleting jfce, fd=%d, ret=%d\n", jfce->fd, ret);
     free(bdp_jfce);
     return ret;
 }
@@ -258,7 +257,7 @@ static int bondp_create_vjfc(urma_context_t *ctx, bondp_jfc_t *bdp_jfc, urma_jfc
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_jfc->p_jfc[i] != NULL) {
             jfc_info.slave_id[i] = bdp_jfc->p_jfc[i]->jfc_id;
-            URMA_LOG_INFO_RL("PJFC ID is %u.\n", bdp_jfc->p_jfc[i]->jfc_id.id);
+            URMA_LOG_DEBUG_RL("PJFC ID is %u.\n", bdp_jfc->p_jfc[i]->jfc_id.id);
         }
     }
 
@@ -322,7 +321,7 @@ static int bondp_delete_pjfc(bondp_jfc_t *bdp_jfc)
                          i, jfc_id, p_ret);
             ret = p_ret;
         } else {
-            URMA_LOG_INFO("Deleted pjfc, idx=%d, jfc_id=%u\n", i, jfc_id);
+            URMA_LOG_DEBUG("Deleted pjfc, idx=%d, jfc_id=%u\n", i, jfc_id);
         }
         bdp_jfc->p_jfc[i] = NULL;
     }
@@ -445,7 +444,7 @@ urma_status_t bondp_delete_jfc(urma_jfc_t *jfc)
     if (bdp_jfce != NULL) {
         atomic_fetch_sub(&bdp_jfce->use_cnt.atomic_cnt, 1);
     }
-    URMA_LOG_INFO("Deleted jfc, jfc_id=%u, ret=%d\n", jfc_id, ret);
+    URMA_LOG_DEBUG("Deleted jfc, jfc_id=%u, ret=%d\n", jfc_id, ret);
     return ret;
 }
 
@@ -604,7 +603,7 @@ static int bondp_delete_pjfs(bondp_comp_t *bdp_jfs)
                          i, jfs_id, p_ret);
             ret = p_ret;
         } else {
-            URMA_LOG_INFO("Deleted pjfs, idx=%d, jfs_id=%u\n", i, jfs_id);
+            URMA_LOG_DEBUG("Deleted pjfs, idx=%d, jfs_id=%u\n", i, jfs_id);
         }
         bdp_jfs->p_jfs[i] = NULL;
     }
@@ -806,7 +805,7 @@ urma_status_t bondp_delete_jfs(urma_jfs_t *jfs)
     free(bdp_jfs);
 
     atomic_fetch_sub(&bdp_jfc->use_cnt.atomic_cnt, 1);
-    URMA_LOG_INFO("Deleted jfs, jfs_id=%u, ret=%d\n", jfs_id, ret);
+    URMA_LOG_DEBUG("Deleted jfs, jfs_id=%u, ret=%d\n", jfs_id, ret);
     return ret;
 }
 
@@ -899,7 +898,7 @@ static int bondp_delete_pjfr(bondp_comp_t *bdp_jfr)
                          i, jfr_id, p_ret);
             ret = p_ret;
         } else {
-            URMA_LOG_INFO("Deleted pjfr, idx=%d, jfr_id=%u\n", i, jfr_id);
+            URMA_LOG_DEBUG("Deleted pjfr, idx=%d, jfr_id=%u\n", i, jfr_id);
         }
         bdp_jfr->p_jfr[i] = NULL;
     }
@@ -1092,7 +1091,7 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     free(bdp_jfr);
 
     atomic_fetch_sub(&bdp_jfc->use_cnt.atomic_cnt, 1);
-    URMA_LOG_INFO("Deleted jfr, jfr_id=%u, ret=%d\n", jfr_id, ret);
+    URMA_LOG_DEBUG("Deleted jfr, jfr_id=%u, ret=%d\n", jfr_id, ret);
     return ret;
 }
 
@@ -1269,8 +1268,8 @@ static int bondp_delete_pjetty(bondp_comp_t *bdp_jetty)
             continue;
         }
 
-        URMA_LOG_INFO("bondp delete, p_jetty id is %u.\n",
-                      bdp_jetty->p_jetty[i]->jetty_id.id);
+        URMA_LOG_DEBUG("bondp delete, p_jetty id is %u.\n",
+                       bdp_jetty->p_jetty[i]->jetty_id.id);
         int p_ret = urma_delete_jetty(bdp_jetty->p_jetty[i]);
         if (p_ret != 0) {
             URMA_LOG_ERR("Failed to delete pjetty %d, ret=%d.\n", i, ret);

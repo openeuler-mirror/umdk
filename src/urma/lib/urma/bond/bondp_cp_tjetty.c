@@ -343,8 +343,8 @@ static int bondp_unimport_vjetty(bondp_target_jetty_t *bdp_tjetty)
     unsigned long ref_cnt;
 
     ref_cnt = atomic_load(&(bdp_tjetty->use_cnt.atomic_cnt));
-    URMA_LOG_INFO("bondp vjetty id is %u, v_jetty use_cnt before import is %lu.\n",
-                  bdp_tjetty->v_tjetty.id.id, ref_cnt);
+    URMA_LOG_DEBUG("bondp vjetty id is %u, v_jetty use_cnt before import is %lu.\n",
+                   bdp_tjetty->v_tjetty.id.id, ref_cnt);
     return urma_cmd_unimport_jetty(&bdp_tjetty->v_tjetty);
 }
 
@@ -362,8 +362,8 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
             if (bdp_tjetty->p_tjetty[i][j] == NULL) {
                 continue;
             }
-            URMA_LOG_INFO("bondp unimport pjetty is done, jetty id is %u.\n",
-                          bdp_tjetty->p_tjetty[i][j]->id.id);
+            URMA_LOG_DEBUG("bondp unimport pjetty is done, jetty id is %u.\n",
+                           bdp_tjetty->p_tjetty[i][j]->id.id);
             /* NULL the slot before freeing so concurrent readers (datapath
              * scheduling, health probe) observe NULL instead of a dangling
              * pointer once urma_unimport_jetty releases the object. */
@@ -375,7 +375,7 @@ static int bondp_unimport_pjetty(bondp_target_jetty_t *bdp_tjetty)
         }
     }
 
-    URMA_LOG_INFO("Finish to unimport pjetty.\n");
+    URMA_LOG_DEBUG("Finish to unimport pjetty.\n");
     return ret;
 }
 
@@ -613,8 +613,8 @@ urma_status_t bondp_unbind_jetty(urma_jetty_t *jetty)
                 ret = URMA_FAIL;
                 continue;
             }
-            URMA_LOG_INFO("Unbinded pjetty successfully, local_idx=%u, jetty_id=%u, tjetty_id=%u\n",
-                          local_idx, bdp_jetty->p_jetty[local_idx]->jetty_id.id, bdp_tjetty->v_tjetty.id.id);
+            URMA_LOG_DEBUG("Unbinded pjetty successfully, local_idx=%u, jetty_id=%u, tjetty_id=%u\n",
+                           local_idx, bdp_jetty->p_jetty[local_idx]->jetty_id.id, bdp_tjetty->v_tjetty.id.id);
             bdp_jetty->p_jetty[local_idx]->remote_jetty = NULL;
         }
     }
@@ -711,13 +711,13 @@ static int bondp_unimport_pjfr(bondp_target_jetty_t *bdp_tjetty)
                              tjetty_id, i, j, jfr_id, p_ret);
                 ret = URMA_FAIL;
             } else {
-                URMA_LOG_INFO_RL("Unimported pjfr successfully, tjetty_id=%u, idx=%d/%d, jfr_id=%u\n",
-                                 tjetty_id, i, j, jfr_id);
+                URMA_LOG_DEBUG_RL("Unimported pjfr successfully, tjetty_id=%u, idx=%d/%d, jfr_id=%u\n",
+                                  tjetty_id, i, j, jfr_id);
             }
         }
     }
 
-    URMA_LOG_INFO("Unimported pjfr, tjetty_id=%u, ret=%d\n", tjetty_id, ret);
+    URMA_LOG_DEBUG("Unimported pjfr, tjetty_id=%u, ret=%d\n", tjetty_id, ret);
     return ret;
 }
 

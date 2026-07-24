@@ -475,7 +475,7 @@ static int hc_init_nodes(bondp_hc_ctx_t *hc_ctx, bool *has_nodes)
 
     *has_nodes = false;
     if (node_num == 0) {
-        URMA_LOG_INFO("No topo node for health check, skip probe task.\n");
+        URMA_LOG_DEBUG("No topo node for health check, skip probe task.\n");
         return 0;
     }
     if (node_num > MAX_NODE_NUM) {
@@ -687,7 +687,7 @@ static int hc_init_probe_resources(bondp_context_t *bdp_ctx, bondp_hc_ctx_t *hc_
     }
 
     if (!has_res) {
-        URMA_LOG_INFO("No health probe resource, skip probe task.\n");
+        URMA_LOG_DEBUG("No health probe resource, skip probe task.\n");
         hc_destroy_probe_resources(hc_ctx);
         return 0;
     }
@@ -719,8 +719,6 @@ int bondp_hc_init(bondp_context_t *bdp_ctx, const bondp_hc_cfg_t *cfg)
     }
 
     hc_init_cfg(hc_ctx, cfg);
-    URMA_LOG_INFO("Health check config, probe_interval=%lums, probe_node_num=%u.\n",
-                  hc_ctx->cfg.probe_interval_ms, hc_ctx->cfg.probe_node_num);
 
     bool has_nodes = false;
     ret = hc_init_nodes(hc_ctx, &has_nodes);
@@ -786,10 +784,6 @@ void bondp_hc_uninit(bondp_context_t *bdp_ctx)
     while ((task_id = atomic_exchange(&hc_ctx->probe_task_id, 0)) != 0) {
         (void)bondp_worker_cancel(task_id);
     }
-    if (task_id == 0) {
-        URMA_LOG_INFO("Health probe task cancelled.\n");
-    }
-
     hc_destroy_probe_resources(hc_ctx);
     hc_destroy_nodes(hc_ctx);
 
@@ -964,7 +958,7 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
         hc_register_tjetty_path(node, bdp_tjetty);
     }
     pthread_rwlock_unlock(&node->lock);
-    URMA_LOG_INFO("Health check tjetty registered, node_idx=%u.\n", node->node_idx);
+    URMA_LOG_DEBUG("Health check tjetty registered, node_idx=%u.\n", node->node_idx);
     return 0;
 }
 
@@ -992,7 +986,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     bdp_tjetty->hc_registered = false;
     bdp_tjetty->hc_node_idx = 0;
     pthread_rwlock_unlock(&node->lock);
-    URMA_LOG_INFO("Health check tjetty unregistered, node_idx=%u.\n", node->node_idx);
+    URMA_LOG_DEBUG("Health check tjetty unregistered, node_idx=%u.\n", node->node_idx);
 }
 
 void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty,
