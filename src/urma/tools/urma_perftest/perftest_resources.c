@@ -466,13 +466,14 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
         .trans_mode = cfg->trans_mode,
         .priority = cfg->priority, /* Highest priority */
         .max_sge = 1,
+        .max_rsge = 1,
         .max_inline_data = cfg->inline_size,
         .rnr_retry = URMA_TYPICAL_RNR_RETRY,
         .err_timeout = cfg->err_timeout,
         .user_ctx = (uint64_t)NULL,
     };
-    if (cfg->use_bonding) {
-        jfs_cfg.max_sge += 1; /* there is one more sge in bonding mode */
+    if (cfg->enable_notify) {
+        jfs_cfg.max_rsge += 1; /* one more remote sge for notify */
     }
 
     ctx->jfs = calloc(1, sizeof(urma_jfs_t *) * cfg->jettys);
@@ -563,8 +564,8 @@ static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
         jfs_cfg->max_sge = cfg->sge_num;
         jfs_cfg->max_rsge = cfg->sge_num;
     }
-    if (cfg->use_bonding) {
-        jfs_cfg->max_sge += 1; /* there is one more sge in bonding mode */
+    if (cfg->enable_notify) {
+        jfs_cfg->max_rsge += 1; /* there is one more remote sge for notify */
     }
     jfs_cfg->flag.bs.order_type = cfg->order_type;
     if (jfs_cfg->trans_mode == URMA_TM_RC &&
@@ -585,9 +586,6 @@ static void fill_jfr_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     jfr_cfg->id = 0;
     if (cfg->sge_num != 1) {
         jfr_cfg->max_sge = cfg->sge_num;
-    }
-    if (cfg->use_bonding) {
-        jfr_cfg->max_sge += 1; /* there is one more sge in bonding mode */
     }
 }
 
