@@ -111,14 +111,14 @@ static int copy_atomic_sge(const urma_sge_t *src, urma_sge_t **dst, urma_sge_t *
  */
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
                           urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge,
-                          uint32_t max_sge)
+                          uint32_t max_sge, uint32_t max_rsge)
 {
     *dst = *src;
     dst->next = NULL;
 
     if (is_rw_wr(src)) {
         if (copy_sg_list(&src->rw.src, &dst->rw.src, prealloc_src_sge, max_sge) != 0 ||
-            copy_sg_list(&src->rw.dst, &dst->rw.dst, prealloc_dst_sge, max_sge) != 0) {
+            copy_sg_list(&src->rw.dst, &dst->rw.dst, prealloc_dst_sge, max_rsge) != 0) {
             return URMA_ENOMEM;
         }
     } else if (is_send_wr(src)) {
