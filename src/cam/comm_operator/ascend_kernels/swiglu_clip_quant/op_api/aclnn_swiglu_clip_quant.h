@@ -24,8 +24,7 @@ extern "C" {
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnSwigluClipQuantGetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnSwigluClipQuantGetWorkspaceSize(
     const aclTensor *x,
     const aclTensor *groupIndex,
     const aclTensor *groupAlpha,
@@ -44,8 +43,7 @@ aclnnStatus aclnnSwigluClipQuantGetWorkspaceSize(
  * executor : executor context(input).
  * stream : acl stream.
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnSwigluClipQuant(
+__attribute__((visibility("default"))) aclnnStatus aclnnSwigluClipQuant(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,

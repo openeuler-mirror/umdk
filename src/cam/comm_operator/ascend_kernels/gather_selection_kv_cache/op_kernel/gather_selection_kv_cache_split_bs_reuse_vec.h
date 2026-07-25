@@ -428,7 +428,7 @@ private:
         LocalTensor<int32_t> sortedTopKLocal = sortBuf_;
         LocalTensor<uint32_t> sortedTopKIdxLocal = sortBuf_[topkSortAlign_].template ReinterpretCast<uint32_t>();
         LocalTensor<int32_t> sortedStatTopKLocal = sortBuf_[topkSortAlign_ * SORTED_STAT_TOPK_OFFSET];
-        LocalTensor<uint32_t> sortedStatTopKIdxLocal = 
+        LocalTensor<uint32_t> sortedStatTopKIdxLocal =
             sortBuf_[topkSortAlign_ * SORTED_STAT_TOPK_IDX_OFFSET].template ReinterpretCast<uint32_t>();
 
         // 会改变 selTopKIdxLocal 中的值，有效数据都在前面

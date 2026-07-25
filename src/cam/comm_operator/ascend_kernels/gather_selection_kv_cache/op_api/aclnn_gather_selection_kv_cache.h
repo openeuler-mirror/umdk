@@ -32,8 +32,7 @@ extern "C" {
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnGatherSelectionKvCacheGetWorkspaceSize(
+__attribute__((visibility("default"))) aclnnStatus aclnnGatherSelectionKvCacheGetWorkspaceSize(
     aclTensor *selectionKRopeRef,
     aclTensor *selectionKvCacheRef,
     aclTensor *selectionKvBlockTableRef,
@@ -56,8 +55,7 @@ aclnnStatus aclnnGatherSelectionKvCacheGetWorkspaceSize(
  * executor : executor context(input).
  * stream : acl stream.
  */
-__attribute__((visibility("default")))
-aclnnStatus aclnnGatherSelectionKvCache(
+__attribute__((visibility("default"))) aclnnStatus aclnnGatherSelectionKvCache(
     void *workspace,
     uint64_t workspaceSize,
     aclOpExecutor *executor,

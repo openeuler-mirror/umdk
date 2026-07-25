@@ -60,7 +60,6 @@ std::vector<bool> is_contiguous_axes_qli(const at::Tensor &tensor)
     auto sizes = tensor.sizes();
     auto strides = tensor.strides();
     int64_t ndim = sizes.size();
-
     if (ndim == 0) {
         return {};
     }
@@ -95,7 +94,7 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
 
     // construct the output tensor
     std::tuple<at::Tensor, at::Tensor> output_tensor = construct_quant_lightning_indexer_output_tensor(
-            query, key, sparse_count, query_layout_str, key_layout_str, return_value);
+        query, key, sparse_count, query_layout_str, key_layout_str, return_value);
     at::Tensor sparse_indices_out = std::get<0>(output_tensor);
     at::Tensor sparse_values_out = std::get<1>(output_tensor);
     // convert str
@@ -107,10 +106,10 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
 
     if (key_layout_str == "PA_BSND") {
         auto contiguous_axes_result_key = is_contiguous_axes_qli(key);
-        TORCH_CHECK(contiguous_axes_result_key[1] && contiguous_axes_result_key[2],
+        TORCH_CHECK(contiguous_axes_result_key[DIM_1] && contiguous_axes_result_key[DIM_2],
             "key must be contiguous on all axes except axis 0");
         auto contiguous_axes_result_keyScale = is_contiguous_axes_qli(key_dequant_scale);
-        TORCH_CHECK(contiguous_axes_result_keyScale[1] && contiguous_axes_result_keyScale[2],
+        TORCH_CHECK(contiguous_axes_result_keyScale[DIM_1] && contiguous_axes_result_keyScale[DIM_2],
             "key_dequant_scale must be contiguous on all axes except axis 0");
     }
 
@@ -140,7 +139,7 @@ std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_meta(
     std::string key_layout_str = std::string(layout_key);
     // construct the output tensor
     std::tuple<at::Tensor, at::Tensor> output_tensor = construct_quant_lightning_indexer_output_tensor(
-            query, key, sparse_count, query_layout_str, key_layout_str, return_value);
+        query, key, sparse_count, query_layout_str, key_layout_str, return_value);
     at::Tensor sparse_indices_out = std::get<0>(output_tensor);
     at::Tensor sparse_values_out = std::get<1>(output_tensor);
 
