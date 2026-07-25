@@ -505,7 +505,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             if (!atomic_load(&bdp_comp->valid[send_idx])) {
                 continue; /* Path invalidated, retry */
             }
-            return URMA_EAGAIN;
+            return URMA_ENOMEM;
         }
         /* Copy + encode MSN + link.
          * NOTE: send_idx/target_idx/entry_type are NOT set here —
