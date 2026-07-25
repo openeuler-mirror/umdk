@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: add gather selection kv cache kernel
+ * Create: 2026-07-25
+ * Note:
+ * History: 2026-07-25 create file
+ */
+
 #include <string.h>
 #include "graph/types.h"
 #include "aclnn/opdev/platform.h"

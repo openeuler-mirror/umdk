@@ -1,6 +1,11 @@
 /*
- * calution: this file was generated automaticlly donot change it.
-*/
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: add gather selection kv cache kernel
+ * Create: 2026-07-25
+ * Note:
+ * History: 2026-07-25 create file
+ */
 
 #ifndef ACLNN_GATHER_SELECTION_KV_CACHE_H_
 #define ACLNN_GATHER_SELECTION_KV_CACHE_H_

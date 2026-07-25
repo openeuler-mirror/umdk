@@ -1,6 +1,11 @@
 /*
- * calution: this file was generated automaticlly donot change it.
-*/
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: add swiglu clip quant kernel
+ * Create: 2026-07-25
+ * Note:
+ * History: 2026-07-25 create file
+ */
 
 #ifndef ACLNN_SWIGLU_CLIP_QUANT_H_
 #define ACLNN_SWIGLU_CLIP_QUANT_H_
