@@ -16,6 +16,7 @@
 
 #include "bondp_dp_health.h"
 #include "bondp_types.h"
+#include "bondp_cp_tjetty.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_schedule.h"
@@ -34,12 +35,6 @@ static urma_transport_mode_t get_comp_urma_trans_mode(const bondp_comp_t *bdp_co
     }
 }
 
-static bool target_path_available(const bondp_target_jetty_t *bdp_tjetty,
-                                  uint32_t local_idx, uint32_t target_idx)
-{
-    return atomic_load(&bdp_tjetty->valid[local_idx][target_idx]) &&
-           bdp_tjetty->p_tjetty[local_idx][target_idx] != NULL;
-}
 
 static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
                                         const bondp_target_jetty_t *bdp_tjetty,
@@ -54,7 +49,8 @@ static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
             continue;
         }
         target_idx = chip_pri[i].dst_chip_id - BONDP_CHIP_ID_MIN;
-        if (!target_path_available(bdp_tjetty, local_idx, target_idx)) {
+        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(bdp_tjetty, local_idx, target_idx);
+        if (!bondp_p_tjetty_available(p_tjetty)) {
             continue;
         }
         /* p_jetty[local_idx] may be transiently NULL during a concurrent
@@ -64,7 +60,7 @@ static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
             continue;
         }
         if (get_comp_urma_trans_mode(bdp_comp) == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
-            bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjetty[local_idx][target_idx]) {
+            bdp_comp->p_jetty[local_idx]->remote_jetty != p_tjetty->p_tjetty) {
             continue;
         }
         path->local_idx = local_idx;
@@ -100,14 +96,15 @@ static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
             continue;
         }
         target_idx = g_bondp_env.path[path_idx].target_idx;
-        if (!target_path_available(bdp_tjetty, local_idx, target_idx)) {
+        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(bdp_tjetty, local_idx, target_idx);
+        if (!bondp_p_tjetty_available(p_tjetty)) {
             continue;
         }
         if (bdp_comp->p_jetty[local_idx] == NULL) {
             continue;
         }
         if (get_comp_urma_trans_mode(bdp_comp) == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
-            bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjetty[local_idx][target_idx]) {
+            bdp_comp->p_jetty[local_idx]->remote_jetty != p_tjetty->p_tjetty) {
             continue;
         }
         path->local_idx = local_idx;
@@ -156,17 +153,20 @@ static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp
         if (!atomic_load(&bdp_comp->valid[local_idx]) || local_idx < min_idx[0] || local_idx >= max_idx[0]) {
             continue;
         }
-        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
-            uint32_t target_idx = bdp_tjetty->active_indices[j];
+        for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
+            if (bdp_tjetty->p_tjettys[j].local_indice != local_idx) {
+                continue;
+            }
+            uint32_t target_idx = bdp_tjetty->p_tjettys[j].remote_indice;
             if (target_idx < min_idx[1] || target_idx >= max_idx[1] ||
-                !target_path_available(bdp_tjetty, local_idx, target_idx)) {
+                !bondp_p_tjetty_available(&bdp_tjetty->p_tjettys[j])) {
                 continue;
             }
             if (bdp_comp->p_jetty[local_idx] == NULL) {
                 continue;
             }
             if (trans_mode == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
-                bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjetty[local_idx][target_idx]) {
+                bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjettys[j].p_tjetty) {
                 continue;
             }
             uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
@@ -220,9 +220,12 @@ static int schedule_send_standalone(const bondp_comp_t *bdp_comp, const bondp_ta
         if (!atomic_load(&bdp_comp->valid[loc_idx])) {
             continue;
         }
-        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
-            uint32_t tar_idx = bdp_tjetty->active_indices[j];
-            if (!target_path_available(bdp_tjetty, loc_idx, tar_idx)) {
+        for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
+            if (bdp_tjetty->p_tjettys[j].local_indice != loc_idx) {
+                continue;
+            }
+            uint32_t tar_idx = bdp_tjetty->p_tjettys[j].remote_indice;
+            if (!bondp_p_tjetty_available(&bdp_tjetty->p_tjettys[j])) {
                 continue;
             }
             *send_idx = (int)loc_idx;
@@ -241,13 +244,16 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
     // active_backup mode only use 4 paths
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t loc_idx = bdp_comp->active_indices[i];
-        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
-            uint32_t tar_idx = bdp_tjetty->active_indices[j];
-            if (bdp_tjetty->p_tjetty[loc_idx][tar_idx] == NULL || target_used[tar_idx]) {
+        for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
+            if (bdp_tjetty->p_tjettys[j].local_indice != loc_idx) {
+                continue;
+            }
+            uint32_t tar_idx = bdp_tjetty->p_tjettys[j].remote_indice;
+            if (bdp_tjetty->p_tjettys[j].p_tjetty == NULL || target_used[tar_idx]) {
                 continue;
             }
             target_used[tar_idx] = true;
-            if (target_path_available(bdp_tjetty, loc_idx, tar_idx) && atomic_load(&bdp_comp->valid[loc_idx])) {
+            if (atomic_load(&bdp_tjetty->p_tjettys[j].valid) && atomic_load(&bdp_comp->valid[loc_idx])) {
                 *send_idx = (int)loc_idx;
                 *target_idx = (int)tar_idx;
                 return 0;
@@ -394,9 +400,11 @@ static int schedule_recv_standalone(const bondp_comp_t *bdp_comp, int *recv_idx)
         if (!atomic_load(&bdp_comp->valid[loc_idx])) {
             continue;
         }
-        for (uint32_t j = 0; j < bdp_tjetty->active_count; j++) {
-            uint32_t tar_idx = bdp_tjetty->active_indices[j];
-            if (!target_path_available(bdp_tjetty, loc_idx, tar_idx)) {
+        for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
+            if (bdp_tjetty->p_tjettys[j].local_indice != loc_idx) {
+                continue;
+            }
+            if (!bondp_p_tjetty_available(&bdp_tjetty->p_tjettys[j])) {
                 continue;
             }
             *recv_idx = (int)loc_idx;

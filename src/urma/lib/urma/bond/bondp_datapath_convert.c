@@ -15,6 +15,7 @@
 
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
+#include "bondp_cp_tjetty.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_convert.h"
@@ -216,7 +217,9 @@ static inline urma_target_jetty_t *get_p_tjetty(urma_target_jetty_t *tjetty, int
     if (tjetty == NULL) {
         return NULL;
     }
-    return CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty)->p_tjetty[send_idx][target_idx];
+    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
+    const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(bdp_tjetty, send_idx, target_idx);
+    return p_tjetty != NULL ? p_tjetty->p_tjetty : NULL;
 }
 
 static inline urma_target_seg_t *get_p_tseg(urma_target_seg_t *tseg, int local_idx, int remote_idx)
