@@ -667,8 +667,6 @@ urma_target_seg_t *bondp_import_seg(urma_context_t *ctx, urma_seg_t *seg,
         errno = ENOMEM;
         return NULL;
     }
-    bdp_tseg->local_dev_num = bdp_ctx->dev_num;
-    bdp_tseg->target_dev_num = URMA_UBAGG_DEV_MAX_NUM;
     bdp_tseg->is_reused = false;
     bdp_tseg->skip_import_vseg = false;
     atomic_init(&bdp_tseg->use_cnt.atomic_cnt, 1);
