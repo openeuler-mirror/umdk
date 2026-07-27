@@ -3,6 +3,8 @@
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} UMQ_QBUF_SRC)
 
+add_compile_definitions(_GNU_SOURCE)
+
 add_library(umq_buf SHARED
     ${UMQ_QBUF_SRC}
 )
