@@ -1,0 +1,32 @@
+model_name: "deepseek_v3.2_exp"
+model_path: "/mnt/xds/sfs/DeepSeek-V3.2-W8A8-M12/v1"
+exe_mode: "eager"          # ["ge_graph", "eager", "acl_graph"], mode of decode
+world_size: 16              # world_size = 2 * chip_num in A3
+
+model_config:
+  next_n: 0
+  pa_block_size: 128
+  enable_weight_nz: True
+  with_ckpt: True             # [False, True]
+  enable_multi_streams: False  # [False, True]
+  enable_profiler: True      # [False, True]
+  perfect_eplb: False         # [False, True]
+  enable_cache_compile: False # [False, True]
+  prefill_mini_batch_size: 1
+  enable_online_split_weight: True # [False, True]
+  enable_offload: True
+
+data_config:
+  dataset: InfiniteBench
+  input_max_len: 65536
+  max_new_tokens: 30
+  batch_size: 256
+
+parallel_config:
+  cp_size: 16
+  attn_tp_size: 1
+  oproj_tp_size: 4    # only support when attn_tp_size == 1
+  dense_tp_size: 4
+  moe_tp_size: 1
+  embed_tp_size: 16
+  lmhead_tp_size: 16
