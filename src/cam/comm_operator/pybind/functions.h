@@ -94,6 +94,19 @@ at::Tensor gather_selection_kv_cache_npu(
     const at::Tensor& full_q_actual_seq, \
     int64_t selection_topk_block_size);
 
+at::Tensor gather_selection_kv_cache_custom_npu(
+    const at::Tensor& selection_k_rope, \
+    const at::Tensor& selection_kv_cache, \
+    const at::Tensor& selection_kv_block_table, \
+    const at::Tensor& selection_kv_block_status, \
+    const at::Tensor& selection_topk_indices, \
+    const at::Tensor& full_k_rope, \
+    const at::Tensor& full_kv_cache, \
+    const at::Tensor& full_kv_block_table, \
+    const at::Tensor& full_kv_actual_seq, \
+    const at::Tensor& full_q_actual_seq, \
+    int64_t selection_topk_block_size);
+
 std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
     const at::Tensor &query, const at::Tensor &key, const at::Tensor &weights,
     const at::Tensor &query_dequant_scale, const at::Tensor &key_dequant_scale,
