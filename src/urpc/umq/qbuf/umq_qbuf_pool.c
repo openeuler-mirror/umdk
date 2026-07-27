@@ -7,6 +7,7 @@
  * History: 2025-7-26
  */
 
+#include <pthread.h>
 #include <malloc.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -23,6 +24,9 @@
 
 #define QBUF_POOL_CHECK_ASYNC_PERIOD_US (1000)
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
+
+#define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
+#define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
 
 typedef struct qbuf_expansion_pool_slot {
     uint32_t slot_id;
@@ -360,6 +364,11 @@ static async_shrink_pool_param_t *async_shrink_pop_param(qbuf_expansion_pool_t *
 
 static void *async_shrink_global_pool_callback(void *arg)
 {
+    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
+            QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME, errno);
+    }
+
     qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
     if (exp_pool == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
@@ -1072,6 +1081,11 @@ typedef struct async_expand_pool_param {
 
 static void *async_expand_global_pool_callback(void *arg)
 {
+    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
+            QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME, errno);
+    }
+
     async_expand_pool_param_t *async_param = (async_expand_pool_param_t *)arg;
     if (async_param == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async param invalid\n");
