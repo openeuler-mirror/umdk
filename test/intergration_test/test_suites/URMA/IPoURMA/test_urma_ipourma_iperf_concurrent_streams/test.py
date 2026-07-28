@@ -48,9 +48,9 @@ class Test(UBUSFeature):
         port = self.get_free_port()
         for p in parallel_levels:
             b_val =  total_mbps / p
-            server.exec_cmd("iperf3 -s", background=True)
+            server.exec_cmd(f"iperf3 -s -p {port}", background=True)
             time.sleep(2)
-            cmd = f"iperf3 -c {server_ip} -B {client_ip} -b {b_val}M -P {p}"
+            cmd = f"iperf3 -c {server_ip} -B {client_ip} -b {b_val}M -P {p} -p {port}"
             ret = client.exec_cmd(cmd)
 
             self.assertEqual(
