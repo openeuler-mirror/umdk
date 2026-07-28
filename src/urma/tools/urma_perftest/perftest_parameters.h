@@ -287,7 +287,6 @@ typedef struct perftest_config {
     struct {
         char *server_ip;
         char *bind_ip;   /* TCP only: local ip for bind. NULL = default 0.0.0.0. */
-        char *mgmt_addr; /* UB only: local eid string for mgmt channel. Required in UB mode. */
         bool enable_ipv6;
         uint16_t port;          /* Server port for bind or connect, default 21115. */
         int reserved_listen_fd; /* Unused, kept only for forward compatibility. */
@@ -359,6 +358,7 @@ typedef struct perftest_config {
     uint64_t v_address;
     bool share_jfs;
     perftest_mgmt_type_t mgmt_type;
+    char *mgmt_addr; /* UB only: local eid string for mgmt channel. Required in UB mode. */
 } perftest_config_t;
 
 typedef struct perftest_value_range {
