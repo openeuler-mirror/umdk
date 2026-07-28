@@ -20,6 +20,7 @@
 #include "urma_api.h"
 #include "perftest_log.h"
 #include "perftest_parameters.h"
+#include "perftest_run_test.h"
 
 #include "perftest_mgmt_ub.h"
 
@@ -75,9 +76,12 @@ static void fill_rjetty(urma_eid_t peer_eid, uint32_t jetty_id, urma_rjetty_t *r
     rjetty->tp_type = URMA_CTP;
 }
 
-static int poll_one_cqe(urma_jfc_t *jfc, urma_cr_t *cr)
+static int poll_one_cqe(urma_jfc_t *jfc, urma_cr_t *cr, bool interruptible)
 {
     while (true) {
+        if (interruptible && g_exit_flag) {
+            return -EINTR;
+        }
         int n = urma_poll_jfc(jfc, 1, cr);
         if (n < 0) {
             LOG_ERROR("Failed to poll jfc.\n");
@@ -301,24 +305,10 @@ static int ub_create_local_resources(const comm_ub_cfg_t *cfg, ub_mgmt_ctx_t **c
     ctx->tseg_recv_hs = tseg_recv_hs;
     ctx->is_server = (cfg->dst_eid == NULL);
 
-    /*
-     * Jetty id assignment (mgmt channel):
-     *
-     * Server's mgmt jetty uses the well-known base id (123 default, or user
-     * override via -P). Client imports that same id to reach the server.
-     *
-     * Client's *local* mgmt jetty must use a different id to avoid collision
-     * when client and server share the same device (e.g. running both on one
-     * box with --mgmt_addr eid_A and --mgmt_addr eid_B against the same dev).
-     * We bump the client's local id by UB_MGMT_JETTY_ID_CLIENT_OFFSET (0x1000)
-     * so it lands in a free region regardless of the well-known base.
-     *
-     * If they run on separate devices, this offset is harmless (the bumped id
-     * just isn't used by the server side).
-     */
-    local_jetty_id = (cfg->dst_jetty_id == 0) ? UB_MGMT_JETTY_ID_DEFAULT : cfg->dst_jetty_id;
-    if (!ctx->is_server) {
-        local_jetty_id += UB_MGMT_JETTY_ID_CLIENT_OFFSET;
+    if (ctx->is_server) {
+        local_jetty_id = cfg->dst_jetty_id;
+    } else {
+        local_jetty_id = 0;
     }
 
     jetty_cfg.id = local_jetty_id;
@@ -404,7 +394,7 @@ static int ub_server_handshake(ub_mgmt_ctx_t *ctx)
         return -1;
     }
 
-    if (poll_one_cqe(ctx->jfc, &cr) != 0) {
+    if (poll_one_cqe(ctx->jfc, &cr, true) != 0) {
         return -1;
     }
 
@@ -459,7 +449,7 @@ static int ub_client_handshake(ub_mgmt_ctx_t *ctx, const char *peer_eid_str, uin
         return -1;
     }
 
-    if (poll_one_cqe(ctx->jfc, &cr) != 0) {
+    if (poll_one_cqe(ctx->jfc, &cr, true) != 0) {
         return -1;
     }
     return 0;
@@ -468,7 +458,6 @@ static int ub_client_handshake(ub_mgmt_ctx_t *ctx, const char *peer_eid_str, uin
 int ub_establish_connection(const comm_ub_cfg_t *cfg)
 {
     ub_mgmt_ctx_t *ctx = NULL;
-    uint32_t base_jetty_id = 0;
     urma_init_attr_t init_attr = { .token = 0, .uasid = 0 };
     urma_status_t status;
 
@@ -496,7 +485,10 @@ int ub_establish_connection(const comm_ub_cfg_t *cfg)
         return -EEXIST;
     }
 
-    base_jetty_id = (cfg->dst_jetty_id == 0) ? UB_MGMT_JETTY_ID_DEFAULT : cfg->dst_jetty_id;
+    if (cfg->dst_eid == NULL && cfg->dst_jetty_id == 0) {
+        LOG_ERROR("UB mgmt server requires -P for jetty id.\n");
+        return -EINVAL;
+    }
 
     if (ub_create_local_resources(cfg, &ctx) != 0) {
         return -1;
@@ -507,7 +499,7 @@ int ub_establish_connection(const comm_ub_cfg_t *cfg)
             goto rollback_handshake;
         }
     } else {
-        if (ub_client_handshake(ctx, cfg->dst_eid, base_jetty_id) != 0) {
+        if (ub_client_handshake(ctx, cfg->dst_eid, cfg->dst_jetty_id) != 0) {
             goto rollback_handshake;
         }
     }
@@ -653,6 +645,9 @@ int ub_sync_data(uint32_t index, int size, char *local_data, char *remote_data)
 
     /* poll for 2 CQEs (send + recv); refill recv immediately on recv CQE. */
     while (pending > 0) {
+        if (g_exit_flag) {
+            return -EINTR;
+        }
         int n = urma_poll_jfc(g_ub_ctx->jfc, 1, &cr);
         if (n < 0) {
             LOG_ERROR("Failed to poll jfc.\n");
@@ -746,7 +741,8 @@ ssize_t ub_comm_send(uint32_t index, const void *buf, size_t size)
         LOG_ERROR("Failed to post comm_send wr.\n");
         return -1;
     }
-    if (poll_one_cqe(g_ub_ctx->jfc, &cr) != 0) {
+
+    if (poll_one_cqe(g_ub_ctx->jfc, &cr, false) != 0) {
         return -1;
     }
     return (ssize_t)size;
@@ -795,7 +791,7 @@ ssize_t ub_comm_recv(uint32_t index, void *buf, size_t size)
         g_ub_ctx->pair.have_pending_recv = false;
     }
 
-    if (poll_one_cqe(g_ub_ctx->jfc, &cr) != 0) {
+    if (poll_one_cqe(g_ub_ctx->jfc, &cr, true) != 0) {
         return -1;
     }
     uint32_t got = cr.completion_len;
