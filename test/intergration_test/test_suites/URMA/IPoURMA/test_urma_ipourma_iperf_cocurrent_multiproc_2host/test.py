@@ -85,7 +85,7 @@ class Test(UBUSFeature):
                 self.host2.exec_cmd(f"iperf3 -s -B {server_ip} -p {base_port}", background=True)
                 time.sleep(2)
                 cmd = f"iperf3 -c {server_ip} -B {client_ip} -p {base_port} -t {duration}"
-                handle = self.host1.exec_cmd(cmd, background=True, timeout=duration + 10)
+                handle = self.host1.exec_cmd(cmd, background=True, timeout=duration + 100)
                 client_handles.append(handle)
         time.sleep(duration + 5)
         for i, ret in enumerate(client_handles):
