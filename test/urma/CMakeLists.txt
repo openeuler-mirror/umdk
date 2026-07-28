@@ -60,9 +60,9 @@ target_include_directories(urma_test_common INTERFACE
     ${URMA_UVS_INCLUDE_DIR}
 )
 target_compile_options(urma_test_common INTERFACE
-    -Wall -Werror -O0 -g -fsanitize=address -fno-omit-frame-pointer --coverage
+    -Wall -Werror -O0 -g -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer --coverage
 )
-target_link_options(urma_test_common INTERFACE -fsanitize=address --coverage)
+target_link_options(urma_test_common INTERFACE -fsanitize=address -fsanitize=undefined --coverage)
 
 enable_testing()
 add_subdirectory(ut)
