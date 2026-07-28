@@ -27,7 +27,7 @@ cd "$MODULE_BUILD_OUT_PATH"
 
 rm -rf shmem
 # Download and build the shmem package
-SHMEM_COMMIT_HASH="6a5f4b09695d6c38421ec37a4ee7aa6f700fd77f"
+SHMEM_COMMIT_HASH="7573f42e06259d538d52652858bbcc950d58da2e"
 git clone https://gitcode.com/cann/shmem
 cd shmem
 git checkout "${SHMEM_COMMIT_HASH}" -b nda-base
