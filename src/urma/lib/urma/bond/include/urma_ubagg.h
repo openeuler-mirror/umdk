@@ -166,11 +166,21 @@ typedef enum bondp_rjetty_ext_mask {
     BONDP_RJETTY_EXT_MASK_TARGET_CTX = 1ULL << 3,
 } bondp_rjetty_ext_mask_t;
 
+/*
+ * Compact packed target ctx:
+ * - slave jetty: eid + id (uasid omitted, reuse outer rjetty->jetty_id.uasid)
+ * - health probe: eid + va + token_id (uasid/len/attr omitted;
+ *   len/attr shared in urma_bond_jetty_ext_v0 when HEALTH_CHECK is set)
+ */
+#pragma pack(push, 1)
 typedef struct bondp_rjetty_target_ctx {
     uint8_t target_idx;
-    urma_jetty_id_t slave_id;
-    urma_seg_base_t health_check_seg;
-} bondp_rjetty_target_ctx_t;
+    urma_eid_t eid;
+    uint32_t jetty_id;
+    urma_eid_t health_eid;
+    uint64_t health_va;
+    uint32_t health_token_id;
+} __attribute__((packed)) bondp_rjetty_target_ctx_t;
 
 /*
  * Compact variable-length rjetty ext layout (version 0):
@@ -187,14 +197,33 @@ typedef struct urma_bond_jetty_ext_v0 {
     uint32_t local_ctx_cnt;
     /* Number of bondp_rjetty_target_ctx_t entries stored after local indices. */
     uint32_t target_ctx_cnt;
+    /* Shared health seg fields (valid when HEALTH_CHECK mask is set). */
+    uint64_t health_len;
+    urma_seg_attr_t health_attr;
     char data[0];
-} urma_bond_jetty_ext_v0_t;
+} __attribute__((packed)) urma_bond_jetty_ext_v0_t;
+#pragma pack(pop)
 
-typedef struct urma_bond_seg_ext {
+/*
+ * Compact variable-length seg ext layout (version 0):
+ *   data: bondp_seg_peer_ctx_t entries[peer_cnt]
+ * Peer entries omit va/len/attr/uasid (reused from outer vseg); only eid+token_id differ.
+ * Packed to drop alignment padding in the on-wire / user_info buffer.
+ */
+#pragma pack(push, 1)
+typedef struct bondp_seg_peer_ctx {
+    uint8_t peer_idx; /* absolute device index; import writes back to peer_p_seg[peer_idx] */
+    urma_eid_t eid;
+    uint32_t token_id;
+} __attribute__((packed)) bondp_seg_peer_ctx_t;
+
+typedef struct urma_bond_seg_ext_v0 {
     uint8_t version;
     uint64_t mask;
-    urma_seg_base_t peer_p_seg[URMA_UBAGG_DEV_MAX_NUM];
-} urma_bond_seg_ext_t;
+    uint32_t peer_cnt;
+    char data[0];
+} __attribute__((packed)) urma_bond_seg_ext_v0_t;
+#pragma pack(pop)
 
 typedef struct bondp_rjetty {
     urma_rjetty_t base;

@@ -37,12 +37,13 @@ static inline size_t bondp_calc_rjetty_ext_len(uint32_t local_ctx_cnt, uint32_t 
 
 static inline uint8_t *bondp_rjetty_ext_v0_local_indices(urma_bond_jetty_ext_v0_t *ext)
 {
-    return (uint8_t *)ext->data;
+    /* Use sizeof(*ext) instead of ext->data: GCC -Wstringop-overflow treats data[0] as size 0. */
+    return (uint8_t *)ext + sizeof(*ext);
 }
 
 static inline const uint8_t *bondp_rjetty_ext_v0_local_indices_const(const urma_bond_jetty_ext_v0_t *ext)
 {
-    return (const uint8_t *)ext->data;
+    return (const uint8_t *)ext + sizeof(*ext);
 }
 
 static inline uint8_t *bondp_rjetty_ext_v0_target_ctx_bytes(urma_bond_jetty_ext_v0_t *ext)
@@ -85,11 +86,14 @@ static int bondp_fill_compact_rjetty_ext(const bondp_context_t *bdp_ctx, const b
     ext->is_health_check_enable = false;
     ext->local_ctx_cnt = bdp_ctx->enabled_count;
     ext->target_ctx_cnt = bdp_jetty->enabled_count;
+    ext->health_len = 0;
+    ext->health_attr.value = 0;
     if (ext_len < bondp_calc_rjetty_ext_len(ext->local_ctx_cnt, ext->target_ctx_cnt)) {
         URMA_LOG_ERR("Invalid compact ext len=%zu.\n", ext_len);
         return -EINVAL;
     }
 
+    uint32_t v_uasid = bdp_jetty->v_jetty.jetty_id.uasid;
     uint8_t *local_indices = bondp_rjetty_ext_v0_local_indices(ext);
     for (uint32_t i = 0; i < ext->local_ctx_cnt; ++i) {
         local_indices[i] = (uint8_t)bdp_ctx->enabled_indices[i];
@@ -106,11 +110,31 @@ static int bondp_fill_compact_rjetty_ext(const bondp_context_t *bdp_ctx, const b
         bondp_rjetty_target_ctx_t entry = {0};
         entry.target_idx = (uint8_t)target_idx;
         if (target_idx < URMA_UBAGG_DEV_MAX_NUM && bdp_jetty->p_jetty[target_idx] != NULL) {
-            entry.slave_id = bdp_jetty->p_jetty[target_idx]->jetty_id;
+            const urma_jetty_id_t *slave_id = &bdp_jetty->p_jetty[target_idx]->jetty_id;
+            if (slave_id->uasid != v_uasid) {
+                URMA_LOG_ERR("slave jetty uasid mismatch, idx=%u, p_uasid=%u, v_uasid=%u.\n",
+                             target_idx, slave_id->uasid, v_uasid);
+                return -EINVAL;
+            }
+            entry.eid = slave_id->eid;
+            entry.jetty_id = slave_id->id;
         }
         if (health_enabled && target_idx < URMA_UBAGG_DEV_MAX_NUM &&
             health_info.slaves[target_idx].len != 0) {
-            entry.health_check_seg = health_info.slaves[target_idx];
+            const urma_seg_base_t *hc_seg = &health_info.slaves[target_idx];
+            if (hc_seg->ubva.uasid != v_uasid) {
+                URMA_LOG_ERR("health seg uasid mismatch, idx=%u, p_uasid=%u, v_uasid=%u.\n",
+                             target_idx, hc_seg->ubva.uasid, v_uasid);
+                return -EINVAL;
+            }
+            entry.health_eid = hc_seg->ubva.eid;
+            entry.health_va = hc_seg->ubva.va;
+            entry.health_token_id = hc_seg->token_id;
+            if (ext->health_len == 0) {
+                ext->health_len = hc_seg->len;
+                ext->health_attr = hc_seg->attr;
+                ext->health_attr.bs.has_user_info = 0;
+            }
             ext->is_health_check_enable = true;
         }
         bondp_set_rjetty_target_ctx_entry(ext, i, &entry);
@@ -240,6 +264,7 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
 }
 
 static int bondp_fill_bond_id_info_from_compact_ext(const urma_bond_jetty_ext_v0_t *ext, uint32_t ext_len,
+                                                    const urma_rjetty_t *rjetty,
                                                     urma_bond_id_info_out_t *info)
 {
     uint32_t known_mask = BONDP_RJETTY_EXT_MASK_MULTI_PATH |
@@ -279,9 +304,18 @@ static int bondp_fill_bond_id_info_from_compact_ext(const urma_bond_jetty_ext_v0
             return -EINVAL;
         }
         info->enabled_indices[info->enabled_count++] = (uint8_t)target_idx;
-        info->slave_id[target_idx] = entry.slave_id;
-        if (info->is_health_check_enable) {
-            info->health_check_seg.slaves[target_idx] = entry.health_check_seg;
+        info->slave_id[target_idx].eid = entry.eid;
+        info->slave_id[target_idx].uasid = rjetty->jetty_id.uasid;
+        info->slave_id[target_idx].id = entry.jetty_id;
+        if (info->is_health_check_enable && entry.health_va != 0) {
+            urma_seg_base_t *hc_seg = &info->health_check_seg.slaves[target_idx];
+            hc_seg->ubva.eid = entry.health_eid;
+            hc_seg->ubva.uasid = rjetty->jetty_id.uasid;
+            hc_seg->ubva.va = entry.health_va;
+            hc_seg->len = ext->health_len;
+            hc_seg->attr = ext->health_attr;
+            hc_seg->attr.bs.has_user_info = 0;
+            hc_seg->token_id = entry.health_token_id;
         }
     }
 
@@ -303,7 +337,7 @@ static int bondp_fill_bond_id_info_from_rjetty_ext(const urma_rjetty_t *rjetty, 
     if (compact_ext->version != BONDP_RJETTY_EXT_VERSION_V0) {
         URMA_LOG_DEBUG("rjetty ext version=%u, parse by mask only.\n", compact_ext->version);
     }
-    return bondp_fill_bond_id_info_from_compact_ext(compact_ext, ext_hdr->len, info);
+    return bondp_fill_bond_id_info_from_compact_ext(compact_ext, ext_hdr->len, rjetty, info);
 }
 
 static int bondp_import_vjetty(
