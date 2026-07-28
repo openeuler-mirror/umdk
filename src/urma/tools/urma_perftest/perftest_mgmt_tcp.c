@@ -462,7 +462,7 @@ ssize_t tcp_comm_recv(uint32_t index, void *buf, size_t size)
         errno = EINVAL;
         return -1;
     }
-    return recv(comm_ctx.sock_fd[index], buf, size, 0);
+    return recv(comm_ctx.sock_fd[index], buf, size, MSG_PEEK);
 }
 
 int tcp_comm_poll(uint32_t index, int timeout_ms)
