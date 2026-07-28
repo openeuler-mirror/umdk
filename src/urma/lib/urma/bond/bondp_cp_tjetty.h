@@ -11,10 +11,40 @@
 #define BONDP_CP_TJETTY_H
 
 #include "urma_types.h"
+#include "bondp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+static inline bondp_p_target_jetty_t *bondp_find_p_tjetty(bondp_target_jetty_t *t,
+                                                          uint32_t local_idx, uint32_t target_idx)
+{
+    for (uint32_t i = 0; i < t->p_tjetty_count; i++) {
+        if (t->p_tjettys[i].local_indice == (uint8_t)local_idx &&
+            t->p_tjettys[i].remote_indice == (uint8_t)target_idx) {
+            return &t->p_tjettys[i];
+        }
+    }
+    return NULL;
+}
+
+static inline const bondp_p_target_jetty_t *bondp_find_p_tjetty_const(const bondp_target_jetty_t *t,
+                                                                      uint32_t local_idx, uint32_t target_idx)
+{
+    for (uint32_t i = 0; i < t->p_tjetty_count; i++) {
+        if (t->p_tjettys[i].local_indice == (uint8_t)local_idx &&
+            t->p_tjettys[i].remote_indice == (uint8_t)target_idx) {
+            return &t->p_tjettys[i];
+        }
+    }
+    return NULL;
+}
+
+static inline bool bondp_p_tjetty_available(const bondp_p_target_jetty_t *path)
+{
+    return path != NULL && atomic_load(&path->valid) && path->p_tjetty != NULL;
+}
 
 void bondp_tjetty_get(urma_target_jetty_t *target_jetty);
 void bondp_tjetty_put(urma_target_jetty_t *target_jetty);
