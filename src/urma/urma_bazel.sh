@@ -214,6 +214,9 @@ dependency_satisfied()
         libasan)
             library_glob_exists "libasan.so*"
             ;;
+        libubsan)
+            library_glob_exists "libubsan.so*"
+            ;;
         libtsan)
             library_glob_exists "libtsan.so*"
             ;;
@@ -292,7 +295,10 @@ ensure_build_dependencies()
     for package in "${build_args[@]}"; do
         case "${package}" in
             --config=asan|--config=*asan*|--copt=-fsanitize=address|--linkopt=-fsanitize=address)
-                packages+=("libasan")
+                packages+=("libasan" "libubsan")
+                ;;
+            --copt=-fsanitize=undefined|--linkopt=-fsanitize=undefined)
+                packages+=("libubsan")
                 ;;
             --config=tsan|--config=*tsan*|--copt=-fsanitize=thread|--linkopt=-fsanitize=thread)
                 packages+=("libtsan")
@@ -318,7 +324,10 @@ ensure_runtime_dependencies()
 
     case "${build_command}" in
         *--config=asan*|*--copt=-fsanitize=address*|*--linkopt=-fsanitize=address*)
-            packages+=("libasan")
+            packages+=("libasan" "libubsan")
+            ;;
+        *--copt=-fsanitize=undefined*|*--linkopt=-fsanitize=undefined*)
+            packages+=("libubsan")
             ;;
         *)
             ;;
